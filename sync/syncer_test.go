@@ -39,6 +39,21 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
+type alwaysOkAtxDb struct {
+}
+
+func (alwaysOkAtxDb) ProcessAtx(atx *types.ActivationTx) error {
+	return nil
+}
+
+func (alwaysOkAtxDb) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
+	return &types.ActivationTx{}, nil
+}
+
+func (alwaysOkAtxDb) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
+	return []types.ATXID{*types.EmptyATXID}
+}
+
 const (
 	levelDB  = "LevelDB"
 	memoryDB = "MemoryDB"
@@ -985,6 +1000,15 @@ func TestFetchLayerBlockIds(t *testing.T) {
 func TestFetchLayerBlockIdsNoResponse(t *testing.T) {
 	// check tx validation
 	types.SetLayersPerEpoch(1)
+	signer := signing.NewEdSigner()
+	atx := atx(signer.PublicKey().String())
+	atx.PubLayerID = 1
+	atx.CalcAndSetID()
+	err := activation.SignAtx(signer, atx)
+	assert.NoError(t, err)
+	atxDb := activation.NewAtxMemPool()
+	atxDb.Put(atx)
+
 	clk := &mockClock{Layer: 6}
 	syncs, nodes := SyncMockFactoryManClock(5, conf, t.Name(), memoryDB, newMockPoetDb, clk)
 	pm1 := getPeersMock([]p2ppeers.Peer{nodes[2].PublicKey()})
@@ -993,24 +1017,37 @@ func TestFetchLayerBlockIdsNoResponse(t *testing.T) {
 	pm4 := getPeersMock([]p2ppeers.Peer{nodes[2].PublicKey()})
 	pm5 := getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})
 
-	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
-	block2 := types.NewExistingBlock(2, []byte(rand.String(8)))
-	block31 := types.NewExistingBlock(3, []byte(rand.String(8)))
-	block32 := types.NewExistingBlock(3, []byte(rand.String(8)))
-	block4 := types.NewExistingBlock(4, []byte(rand.String(8)))
-	block5 := types.NewExistingBlock(5, []byte(rand.String(8)))
+	block1 := createBlock(*atx, signer)
+	block2 := createBlock(*atx, signer)
+	block2.LayerIndex = 2
+	block2.Initialize()
+	block31 := createBlock(*atx, signer)
+	block31.LayerIndex = 3
+	block31.Initialize()
+	block32 := createBlock(*atx, signer)
+	block32.LayerIndex = 3
+	block32.Initialize()
+	block4 := createBlock(*atx, signer)
+	block4.LayerIndex = 4
+	block4.Initialize()
+	block5 := createBlock(*atx, signer)
+	block5.LayerIndex = 5
+	block5.Initialize()
 
 	syncObj1 := syncs[0]
 	syncObj1.peers = pm1 //override peers with mock
+	syncObj1.atxDb = atxDb
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
 	syncObj2.peers = pm2 //override peers with mock
 	defer syncObj2.Close()
 	syncObj3 := syncs[2]
 	syncObj3.peers = pm3 //override peers with mock
+	syncObj3.atxDb = atxDb
 	defer syncObj3.Close()
 	syncObj4 := syncs[3]
 	syncObj4.peers = pm4 //override peers with mock
+	syncObj4.atxDb = atxDb
 	defer syncObj4.Close()
 
 	syncObj5 := syncs[4]
@@ -1581,6 +1618,7 @@ func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 	r := require.New(t)
 	syncs, _, _ := SyncMockFactory(2, conf, "TestSyncProtocol_NilResponse", memoryDB, newMemPoetDb)
 	s := syncs[0]
+	s.atxDb = alwaysOkAtxDb{}
 	b := &types.Block{}
 	b.TxIDs = []types.TransactionID{txid1, txid2, txid1}
 	_, _, err := s.blockSyntacticValidation(b)
@@ -1598,13 +1636,20 @@ func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 func TestSyncer_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	r := require.New(t)
 	syncs, _, _ := SyncMockFactory(2, conf, "BlockSyntacticValidation_syncRefBlock", memoryDB, newMemPoetDb)
+	atxpool := activation.NewAtxMemPool()
 	s := syncs[0]
+	s.atxDb = atxpool
+	a := atx("")
+	atxpool.Put(a)
 	b := &types.Block{}
 	b.TxIDs = []types.TransactionID{}
 	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block1.ActiveSet = &[]types.ATXID{a.ID()}
+	block1.ATXID = a.ID()
 	block1.Initialize()
 	block1ID := block1.ID()
 	b.RefBlock = &block1ID
+	b.ATXID = a.ID()
 	_, _, err := s.blockSyntacticValidation(b)
 	r.Equal(err, fmt.Errorf("failed to fetch ref block %v", *b.RefBlock))
 
@@ -1616,11 +1661,15 @@ func TestSyncer_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 
 func TestSyncer_fetchBlock(t *testing.T) {
 	r := require.New(t)
+	atxPool := activation.NewAtxMemPool()
 	syncs, _, _ := SyncMockFactory(2, conf, "fetchBlock", memoryDB, newMemPoetDb)
 	s := syncs[0]
-	b := &types.Block{}
-	b.TxIDs = []types.TransactionID{}
+	s.atxDb = atxPool
+	atx := atx("")
+	atxPool.Put(atx)
 	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block1.ActiveSet = &[]types.ATXID{atx.ID()}
+	block1.ATXID = atx.ID()
 	block1.Initialize()
 	block1ID := block1.ID()
 	res := s.fetchBlock(block1ID)

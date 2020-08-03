@@ -284,7 +284,7 @@ func Test_DBSanity(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, atx1.ID(), id)
 	assert.Equal(t, types.EpochID(1), atx1.TargetEpoch())
-	id, err = atxdb.GetNodeAtxIDForEpoch(id1, atx1.TargetEpoch())
+	id, err = atxdb.GetNodeAtxIDForEpoch(id1, atx1.PubLayerID.GetEpoch())
 	assert.NoError(t, err)
 	assert.Equal(t, atx1.ID(), id)
 
@@ -298,7 +298,7 @@ func Test_DBSanity(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, atx2.ID(), id)
 	assert.Equal(t, types.EpochID(2), atx2.TargetEpoch())
-	id, err = atxdb.GetNodeAtxIDForEpoch(id2, atx2.TargetEpoch())
+	id, err = atxdb.GetNodeAtxIDForEpoch(id2, atx2.PubLayerID.GetEpoch())
 	assert.NoError(t, err)
 	assert.Equal(t, atx2.ID(), id)
 
@@ -306,7 +306,7 @@ func Test_DBSanity(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, atx3.ID(), id)
 	assert.Equal(t, types.EpochID(3), atx3.TargetEpoch())
-	id, err = atxdb.GetNodeAtxIDForEpoch(id1, atx3.TargetEpoch())
+	id, err = atxdb.GetNodeAtxIDForEpoch(id1, atx3.PubLayerID.GetEpoch())
 	assert.NoError(t, err)
 	assert.Equal(t, atx3.ID(), id)
 

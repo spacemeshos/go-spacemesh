@@ -236,13 +236,14 @@ func newAtxQueue(s *Syncer, fetchPoetProof fetchPoetProofFunc) *atxQueue {
 		},
 	}
 
-	q.handleFetch = updateAtxDependencies(q.invalidate, s.SyntacticallyValidateAtx, s.FetchAtxReferences, s.atxpool, fetchPoetProof, q.Log)
+	q.handleFetch = updateAtxDependencies(q.invalidate, s.SyntacticallyValidateAtx, s.FetchAtxReferences, s.atxDb, fetchPoetProof, q.Log)
 	go q.work()
 	return q
 }
 
 //we could get rid of this if we had a unified id type
 func (atx atxQueue) HandleAtxs(atxids []types.ATXID) ([]*types.ActivationTx, error) {
+	atx.Log.Info("going to fetch %v", atxids)
 	atxItems := make([]types.Hash32, 0, len(atxids))
 	for _, i := range atxids {
 		atxItems = append(atxItems, i.Hash32())
@@ -250,6 +251,7 @@ func (atx atxQueue) HandleAtxs(atxids []types.ATXID) ([]*types.ActivationTx, err
 
 	atxres, err := atx.handle(atxItems)
 	if err != nil {
+		atx.Log.Error("cannot fetch all atxs for block %v", err)
 		return nil, err
 	}
 
@@ -273,28 +275,31 @@ func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValida
 
 		for _, id := range fj.ids {
 			if atx, ok := mp[id]; ok {
-				logger.Info("atx queue work item %v atx %v", id, atx)
+				logger.Info("atx queue work item %v atx %v", id.String(), atx)
 				err := fetchAtxRefs(atx)
 				if err != nil {
-					log.Info("failed to fetch referenced atxs of %s %s", id.ShortString(), err)
+					logger.Warning("failed to fetch referenced atxs of %s %s", id.ShortString(), err)
 					invalidate(id, false)
 					continue
 				}
 				err = sValidateAtx(atx)
 				if err != nil {
-					logger.Info("failed to validate %s %s", id.ShortString(), err)
+					logger.Warning("failed to validate %s %s", id.ShortString(), err)
 					invalidate(id, false)
 					continue
 				}
 				err = atxDB.ProcessAtx(atx)
 				if err != nil {
-					logger.Info("failed to add atx to db %s %s", id.ShortString(), err)
+					logger.Warning("failed to add atx to db %s %s", id.ShortString(), err)
 					invalidate(id, false)
 					continue
 				}
+				logger.Info("atx queue work item ok %v atx %v", id.String(), atx)
 				invalidate(id, true)
+			} else {
+				logger.Error("job returned with no response %v", id.String())
+				invalidate(id, false)
 			}
-			invalidate(id, false)
 		}
 	}
 

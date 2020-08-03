@@ -30,6 +30,7 @@ type txMemPool interface {
 type atxDB interface {
 	ProcessAtx(atx *types.ActivationTx) error
 	GetFullAtx(id types.ATXID) (*types.ActivationTx, error)
+	GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID)
 }
 
 type poetDb interface {
@@ -110,14 +111,17 @@ const (
 	inProgress status = 1
 	done       status = 2
 
-	blockMsg            server.MessageType = 1
-	layerHashMsg        server.MessageType = 2
-	layerIdsMsg         server.MessageType = 3
-	txMsg               server.MessageType = 4
-	atxMsg              server.MessageType = 5
-	poetMsg             server.MessageType = 6
-	syncProtocol                           = "/sync/1.0/"
-	validatingLayerNone types.LayerID      = 0
+	blockMsg      server.MessageType = 1
+	layerHashMsg  server.MessageType = 2
+	layerIdsMsg   server.MessageType = 3
+	txMsg         server.MessageType = 4
+	atxMsg        server.MessageType = 5
+	poetMsg       server.MessageType = 6
+	atxIdsMsg     server.MessageType = 7
+	atxIdrHashMsg server.MessageType = 8
+
+	syncProtocol                      = "/sync/1.0/"
+	validatingLayerNone types.LayerID = 0
 )
 
 // Syncer is used to sync the node with the network
@@ -131,9 +135,9 @@ type Syncer struct {
 	*net
 	ticker
 
-	poetDb  poetDb
-	txpool  txMemPool
-	atxpool atxDB
+	poetDb poetDb
+	txpool txMemPool
+	atxDb  atxDB
 
 	validatingLayer      types.LayerID
 	validatingLayerMutex sync.Mutex
@@ -173,7 +177,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxpool a
 		syncLock:                  types.TryMutex{},
 		poetDb:                    poetdb,
 		txpool:                    txpool,
-		atxpool:                   atxpool,
+		atxDb:                     atxpool,
 		startLock:                 types.TryMutex{},
 		forceSync:                 make(chan bool),
 		validatingLayer:           validatingLayerNone,
@@ -192,6 +196,8 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxpool a
 	srvr.RegisterBytesMsgHandler(txMsg, newTxsRequestHandler(s, logger))
 	srvr.RegisterBytesMsgHandler(atxMsg, newAtxsRequestHandler(s, logger))
 	srvr.RegisterBytesMsgHandler(poetMsg, newPoetRequestHandler(s, logger))
+	srvr.RegisterBytesMsgHandler(atxIdsMsg, newEpochAtxsRequestHandler(s, logger))
+	srvr.RegisterBytesMsgHandler(atxIdrHashMsg, newAtxHashRequestHandler(s, logger))
 
 	return s
 }
@@ -332,6 +338,8 @@ func (s *Syncer) synchronise() {
 		s.handleNotSynced(s.ProcessedLayer() + 1)
 	}
 
+	s.syncAtxs(curr)
+
 }
 
 func (s *Syncer) handleWeaklySynced() {
@@ -400,7 +408,7 @@ func (s *Syncer) handleCurrentLayer() error {
 		}
 	}
 
-	if s.LatestLayer() + 1 == curr && curr.GetEpoch().IsGenesis() {
+	if s.LatestLayer()+1 == curr && curr.GetEpoch().IsGenesis() {
 		_, err := s.GetLayer(s.LatestLayer())
 		if err == database.ErrNotFound {
 			err := s.SetZeroBlockLayer(s.LatestLayer())
@@ -450,6 +458,16 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 	err := s.gossipSyncForOneFullLayer(currentSyncLayer)
 	if err != nil {
 		s.With().Error("Fatal: failed getting layer from db even though we listened to gossip", currentSyncLayer, log.Err(err))
+	}
+}
+
+func (s *Syncer) syncAtxs(currentSyncLayer types.LayerID) {
+	lastLayerOfEpoch := (currentSyncLayer.GetEpoch() + 1).FirstLayer(s.LayersPerEpoch) - 1
+	if currentSyncLayer == lastLayerOfEpoch {
+		err := s.syncEpochActivations(currentSyncLayer.GetEpoch())
+		if err != nil {
+			s.With().Error("cannot fetch epoch atxs ", currentSyncLayer, log.Err(err))
+		}
 	}
 }
 
@@ -554,6 +572,25 @@ func (s *Syncer) getLayerFromNeighbors(currentSyncLayer types.LayerID) (*types.L
 	return types.NewExistingLayer(types.LayerID(currentSyncLayer), blocksArr), nil
 }
 
+func (s *Syncer) syncEpochActivations(epoch types.EpochID) error {
+	s.Log.Info("syncing atxs for epoch %v", epoch)
+	hashes, err := s.fetchEpochAtxHashes(epoch)
+	if err != nil {
+		return err
+	}
+
+	atxIds, err := s.fetcEpochAtxs(hashes, epoch)
+	if err != nil {
+		return err
+	}
+
+	s.Info("fetched %v atxs for epoch %v actual map %v", len(atxIds), epoch, atxIds)
+
+	_, err = s.atxQueue.HandleAtxs(atxIds)
+
+	return err
+}
+
 func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*types.Block, error) {
 	ch := make(chan bool, 1)
 	foo := func(res bool) error {
@@ -639,7 +676,12 @@ func (s *Syncer) fetchRefBlock(block *types.Block) error {
 }
 
 func (s *Syncer) fetchAllReferencedAtxs(blk *types.Block) error {
-	atxs := []types.ATXID{blk.ATXID}
+	var atxs []types.ATXID
+
+	//todo: patch, remove when golden atx
+	//if blk.ATXID != *types.EmptyATXID{
+	atxs = append(atxs, blk.ATXID)
+	//}
 	if blk.ActiveSet != nil {
 		if len(*blk.ActiveSet) > 0 {
 			atxs = append(atxs, *blk.ActiveSet...)
@@ -816,35 +858,14 @@ func (s *Syncer) dataAvailability(blk *types.Block) ([]*types.Transaction, []*ty
 	var txres []*types.Transaction
 	var txerr error
 
-	go func() {
-		if len(blk.TxIDs) > 0 {
-			txres, txerr = s.txQueue.HandleTxs(blk.TxIDs)
-		}
-		wg.Done()
-	}()
-
-	var atxres []*types.ActivationTx
-	var atxerr error
-	/*if blk.ActiveSet != nil {
-		wg.Add(1)
-		go func() {
-			atxs := []types.ATXID{blk.ATXID}
-			if len(*blk.ActiveSet) > 0 {
-				atxs = append(atxs, *blk.ActiveSet...)
-			}
-			atxres, atxerr = s.atxQueue.HandleAtxs(atxs)
-			wg.Done()
-		}()
+	if len(blk.TxIDs) > 0 {
+		txres, txerr = s.txQueue.HandleTxs(blk.TxIDs)
 	}
 
-	wg.Wait()*/
+	var atxres []*types.ActivationTx
 
 	if txerr != nil {
 		return nil, nil, fmt.Errorf("failed fetching block %v transactions %v", blk.ID(), txerr)
-	}
-
-	if atxerr != nil {
-		return nil, nil, fmt.Errorf("failed fetching block %v activation transactions %v", blk.ID(), atxerr)
 	}
 
 	s.With().Info("fetched all block data", blk.Fields()...)
@@ -902,7 +923,56 @@ func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2ppeers.Peer, lyr type
 	return ids, nil
 }
 
+func (s *Syncer) fetcEpochAtxs(m map[types.Hash32][]p2ppeers.Peer, epoch types.EpochID) ([]types.ATXID, error) {
+	// send request to different users according to returned hashes
+	idSet := make(map[types.ATXID]struct{}, s.LayerSize)
+	ids := make([]types.ATXID, 0, s.LayerSize)
+	for h, peers := range m {
+	NextHash:
+		for _, peer := range peers {
+			s.Debug("send request Peer: %v", peer)
+			ch, err := getEpochAtxIds(epoch, s, peer)
+			if err != nil {
+				return nil, err
+			}
 
+			timeout := time.After(s.Configuration.RequestTimeout)
+			select {
+			case <-s.GetExit():
+				s.Debug("worker received interrupt")
+				return nil, fmt.Errorf("interupt")
+			case <-timeout:
+				s.Error("layer ids request to %v timed out", peer)
+				continue
+			case v := <-ch:
+				if v != nil {
+					s.Debug("Peer: %v responded to epoch atx ids request", peer)
+					// peer returned set with bad hash ask next peer
+					res := types.CalcATXIdsHash32(v.([]types.ATXID), nil)
+
+					if h != res {
+						s.Warning("Peer: %v epoch atx ids hash does not match request", peer)
+					}
+
+					for _, bid := range v.([]types.ATXID) {
+						if _, exists := idSet[bid]; !exists {
+							idSet[bid] = struct{}{}
+							ids = append(ids, bid)
+						}
+					}
+					// fetch for next hash
+					break NextHash
+				}
+			}
+		}
+	}
+
+	if len(ids) == 0 {
+		s.Info("could not get atx ids from any peer")
+	}
+
+	return ids, nil
+}
 
 type peerHashPair struct {
 	peer p2ppeers.Peer
@@ -938,6 +1008,35 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[types.Hash32][]p2ppeer
 	return m, nil
 }
 
+func (s *Syncer) fetchEpochAtxHashes(ep types.EpochID) (map[types.Hash32][]p2ppeers.Peer, error) {
+	// get layer hash from each peer
+	wrk := newPeersWorker(s, s.GetPeers(), &sync.Once{}, atxHashReqFactory(ep))
+	go wrk.Work()
+	m := make(map[types.Hash32][]p2ppeers.Peer)
+	layerHasBlocks := false
+	for out := range wrk.output {
+		pair, ok := out.(*peerHashPair)
+		if pair != nil && ok { // do nothing on close channel
+			if pair.hash != emptyLayer {
+				layerHasBlocks = true
+				m[pair.hash] = append(m[pair.hash], pair.peer)
+			}
+
+		}
+	}
+
+	if !layerHasBlocks {
+		s.Info("epoch %d has no atxs", ep)
+		return nil, errNoBlocksInLayer
+	}
+
+	if len(m) == 0 {
+		return nil, errors.New("could not get epoch hashes from any peer")
+	}
+	s.Info("epoch %d has atxs", ep)
+	return m, nil
+}
+
 func fetchWithFactory(wrk worker) chan interface{} {
 	// each worker goroutine tries to fetch a block iteratively from each peer
 	go wrk.Work()
@@ -969,7 +1068,7 @@ func (s *Syncer) atxCheckLocal(atxIds []types.Hash32) (map[types.Hash32]item, ma
 	missingInPool := make([]types.ATXID, 0, len(atxIds))
 	for _, t := range atxIds {
 		id := types.ATXID(t)
-		if x, err := s.atxpool.GetFullAtx(id); err == nil {
+		if x, err := s.atxDb.GetFullAtx(id); err == nil {
 			atx := x
 			s.Debug("found atx, %v in atx db", id.ShortString())
 			unprocessedItems[id.Hash32()] = atx

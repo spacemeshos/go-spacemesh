@@ -45,7 +45,7 @@ func (a mockActivationDB) GetIdentity(edID string) (types.NodeID, error) {
 }
 
 func (a mockActivationDB) GetNodeAtxIDForEpoch(nID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error) {
-	if nID.Key != nodeID.Key || targetEpoch.IsGenesis() {
+	if nID.Key != nodeID.Key || targetEpoch == 0 {
 		return *types.EmptyATXID, errors.New("not found")
 	}
 	return atxID, nil
@@ -255,7 +255,7 @@ func TestBlockOracleValidatorInvalidProof2(t *testing.T) {
 	block := newBlockWithEligibility(layerID, atxID, proof, validatorActivationDB, committeeSize)
 	eligible, err := validator.BlockSignedAndEligible(block)
 	r.False(eligible)
-	r.EqualError(err, fmt.Sprintf("proof counter (%d) must be less than number of eligible blocks (1)", proof.J))
+	r.EqualError(err, fmt.Sprintf("proof counter (%d) must be less than number of eligible blocks (1), activeset 10", proof.J))
 }
 
 func TestBlockOracleValidatorInvalidProof3(t *testing.T) {

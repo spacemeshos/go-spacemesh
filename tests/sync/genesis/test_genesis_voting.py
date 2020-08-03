@@ -22,8 +22,8 @@ from tests.utils import get_conf
 def test_unsync_while_genesis(init_session, setup_bootstrap, start_poet, add_curl):
     layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
 
-    time_to_create_block_since_startup = testconfig['client']['args']['layers-per-epoch'] * 2 * layer_duration
-    time_before_first_block = testconfig["genesis_delta"] + time_to_create_block_since_startup
+    time_to_create_block_since_startup = int(testconfig['client']['args']['layers-per-epoch']) * 2 * layer_duration
+    time_before_first_block = int(testconfig["genesis_delta"]) + time_to_create_block_since_startup
     layers_to_wait = 4
 
     bs_info = setup_bootstrap.pods[0]

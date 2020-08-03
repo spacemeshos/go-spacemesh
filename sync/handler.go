@@ -26,6 +26,16 @@ func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []by
 	}
 }
 
+func newAtxHashRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
+	return func(msg []byte) []byte {
+		ep := types.EpochID(util.BytesToUint64(msg))
+		logger.With().Info("handle atx hash request", ep)
+		atxs := s.atxDb.GetEpochAtxs(ep)
+
+		return types.CalcATXIdsHash32(atxs, nil).Bytes()
+	}
+}
+
 func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		logger.Debug("handle blockIds request")
@@ -54,6 +64,23 @@ func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg 
 		}
 
 		logger.Debug("send ids response layer %v", lyrid)
+		return idbytes
+	}
+}
+
+func newEpochAtxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
+	return func(msg []byte) []byte {
+		logger.Debug("handle atxId request")
+		ep := types.EpochID(util.BytesToUint64(msg))
+		atxs := s.atxDb.GetEpochAtxs(ep)
+
+		idbytes, err := types.ATXIdsToBytes(atxs)
+		if err != nil {
+			s.Log.With().Error("Error marshaling response message with atx IDs", types.AtxIdsField(atxs), log.Err(err))
+			return nil
+		}
+
+		logger.Debug("send atx ids response epoch %v", ep)
 		return idbytes
 	}
 }
@@ -136,7 +163,7 @@ func newAtxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 		logger.With().Info("handle atx request", types.AtxIdsField(atxids))
 		atxs, unknownAtx := s.GetATXs(atxids)
 		for _, t := range unknownAtx {
-			if tx, err := s.atxpool.GetFullAtx(t); err == nil {
+			if tx, err := s.atxDb.GetFullAtx(t); err == nil {
 				atxs[t] = tx
 			} else {
 				logger.With().Warning("unfamiliar atx requested", t)

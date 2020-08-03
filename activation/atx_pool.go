@@ -13,6 +13,10 @@ type AtxMemPool struct {
 	atxMap map[types.ATXID]*types.ActivationTx
 }
 
+func (mem *AtxMemPool) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
+	return nil
+}
+
 // ProcessAtx puts an atx into mem pool, this is just for testing
 func (mem *AtxMemPool) ProcessAtx(atx *types.ActivationTx) error {
 	mem.Put(atx)

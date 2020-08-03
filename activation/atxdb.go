@@ -496,7 +496,7 @@ func (db *DB) StoreAtx(ech types.EpochID, atx *types.ActivationTx) error {
 		return err
 	}
 
-	db.log.Debug("finished storing atx %v, in epoch %v", atx.ShortString(), ech)
+	db.log.Info("finished storing atx %v, in epoch %v", atx.ShortString(), ech)
 
 	return nil
 }
@@ -587,7 +587,7 @@ func (db *DB) getTopAtx() (atxIDAndLayer, error) {
 
 // addAtxToNodeID inserts activation atx id by node
 func (db *DB) addAtxToNodeID(nodeID types.NodeID, atx *types.ActivationTx) error {
-	err := db.atxs.Put(getNodeAtxKey(nodeID, atx.TargetEpoch()), atx.ID().Bytes())
+	err := db.atxs.Put(getNodeAtxKey(nodeID, atx.PubLayerID.GetEpoch()), atx.ID().Bytes())
 	if err != nil {
 		return fmt.Errorf("failed to store ATX ID for node: %v", err)
 	}
@@ -595,7 +595,8 @@ func (db *DB) addAtxToNodeID(nodeID types.NodeID, atx *types.ActivationTx) error
 }
 
 func (db *DB) addAtxToEpoch(epoch types.EpochID, nodeID types.NodeID, atx *types.ActivationTx) error {
-	err := db.atxs.Put(getAtxEpochKey(atx.TargetEpoch(), nodeID), atx.ID().Bytes())
+	db.log.Info("added atx %v to epoch %v", atx.ID().ShortString(), epoch)
+	err := db.atxs.Put(getAtxEpochKey(atx.PubLayerID.GetEpoch(), nodeID), atx.ID().Bytes())
 	if err != nil {
 		return fmt.Errorf("failed to store ATX ID for node: %v", err)
 	}
@@ -636,6 +637,7 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 		}
 		atxs = append(atxs, a)
 	}
+	db.log.Info("returned epoch %v atxs %v %v", epochID, len(atxs), atxs)
 	return atxs
 }
 

@@ -98,7 +98,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	counter := block.EligibilityProof.J
 	if counter >= numberOfEligibleBlocks {
 		return false, fmt.Errorf("proof counter (%d) must be less than number of eligible blocks (%d), activeset %v", counter,
-			numberOfEligibleBlocks, activeSetSize, v.committeeSize)
+			numberOfEligibleBlocks, activeSetSize)
 	}
 
 	epochBeacon := v.beaconProvider.GetBeacon(epochNumber)

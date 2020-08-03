@@ -73,7 +73,7 @@ func (bo *BlockOracle) BlockEligible(layerID types.LayerID) (types.ATXID, []type
 	if bo.proofsEpoch != epochNumber {
 		err := bo.calcEligibilityProofs(epochNumber)
 		if err != nil {
-			bo.log.Error("failed to calculate eligibility proofs: %v", err)
+			bo.log.Error("failed to calculate eligibility proofs for epoch %v : %v", epochNumber, err)
 			return *types.EmptyATXID, nil, err
 		}
 	}
@@ -164,7 +164,7 @@ func (bo *BlockOracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 }
 
 func (bo *BlockOracle) getValidAtxForEpoch(validForEpoch types.EpochID) (*types.ActivationTxHeader, error) {
-	atxID, err := bo.getATXIDForEpoch(validForEpoch)
+	atxID, err := bo.getATXIDForEpoch(validForEpoch - 1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ATX ID for target epoch %v: %v", validForEpoch, err)
 	}

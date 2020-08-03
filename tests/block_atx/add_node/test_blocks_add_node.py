@@ -62,7 +62,8 @@ def test_add_node_validate_atx(init_session, setup_network):
     # we should ignore those
     new_pod_id = get_pod_id(init_session, new_pod_name)
     ignore_lst = [new_pod_id]
-    validate_blocks_per_nodes(block_map, 0, last_layer, layers_per_epoch, layer_avg_size, num_miners,
+    first_layer = epochs_to_sleep * layers_per_epoch
+    validate_blocks_per_nodes(block_map, first_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners,
                               ignore_lst=ignore_lst)
 
     # wait an epoch
@@ -77,7 +78,7 @@ def test_add_node_validate_atx(init_session, setup_network):
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
     # assert that each node has created layer_avg/number_of_nodes
     print(f"-------- validating blocks per nodes up to layer {last_layer} --------")
-    validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners,
+    validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners +1,
                               ignore_lst=ignore_lst)
 
     print("-------- validating all nodes ATX creation in last epoch --------")
@@ -98,4 +99,4 @@ def test_add_node_validate_atx(init_session, setup_network):
     print(f"-------- validating blocks per nodes up to layer {last_layer} --------")
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
     prev_layer = last_layer - layers_per_epoch
-    validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners)
+    validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners + 1)

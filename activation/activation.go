@@ -201,7 +201,7 @@ func (b *Builder) buildNipstChallenge(currentLayer types.LayerID) error {
 	<-b.syncer.Await()
 	challenge := &types.NIPSTChallenge{NodeID: b.nodeID}
 	if posAtx, err := b.GetPositioningAtx(); err != nil {
-		if !b.currentEpoch().IsGenesis() {
+		if b.currentEpoch() != 0 {
 			return fmt.Errorf("failed to get positioning ATX: %v", err)
 		}
 		challenge.EndTick = b.tickProvider.NumOfTicks()

@@ -83,3 +83,13 @@ func InterfaceToBytes(i interface{}) ([]byte, error) {
 	}
 	return w.Bytes(), nil
 }
+
+// BlockIdsToBytes serializes a slice of BlockIDs.
+func ATXIdsToBytes(ids []ATXID) ([]byte, error) {
+	var w bytes.Buffer
+	SortAtxIDs(ids)
+	if _, err := xdr.Marshal(&w, &ids); err != nil {
+		return nil, errors.New("error marshalling block ids ")
+	}
+	return w.Bytes(), nil
+}

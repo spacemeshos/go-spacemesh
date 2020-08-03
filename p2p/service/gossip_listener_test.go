@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/stretchr/testify/assert"
@@ -11,6 +12,10 @@ import (
 
 type syncMock struct {
 	Synced bool
+}
+
+func (*syncMock) FetchAtxReferences(atx *types.ActivationTx) error {
+	return nil
 }
 
 func (*syncMock) FetchPoetProof(poetProofRef []byte) error {
