@@ -55,7 +55,7 @@ func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 	}
 
 	// validate role
-	res, err := ev.oracle.Eligible(layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nID, m.InnerMsg.RoleProof)
+	res, err := ev.oracle.Validate(layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nID, m.InnerMsg.RoleProof, m.InnerMsg.Witness)
 	if err != nil {
 		ev.With().Error("Eligibility validator: could not retrieve eligibility result", log.Err(err), log.String("sender_id", pub.ShortString()))
 		return false, err

@@ -28,7 +28,8 @@ const ( // constants of the different roles
 
 // Rolacle is the roles oracle provider.
 type Rolacle interface {
-	Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error)
+	Validate(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error)
+	CalcEligibility(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error)
 	Proof(layer types.LayerID, round int32) ([]byte, error)
 	IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error)
 }
@@ -170,6 +171,7 @@ type consensusProcess struct {
 	notifySent        bool            // flag to set in case a notification had already been sent by this instance
 	mTracker          *msgsTracker    // tracks valid messages
 	terminating       bool
+	eligibilityCount  uint16
 }
 
 // newConsensusProcess creates a new consensus process instance.
@@ -645,6 +647,7 @@ func (proc *consensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error
 		return nil, err
 	}
 	builder.SetRoleProof(proof)
+	builder.SetWitness(proc.eligibilityCount)
 
 	return builder, nil
 }
@@ -787,13 +790,14 @@ func (proc *consensusProcess) currentRole() role {
 		return passive
 	}
 
-	res, err := proc.oracle.Eligible(types.LayerID(proc.instanceID), proc.k, expectedCommitteeSize(proc.k, proc.cfg.N, proc.cfg.ExpectedLeaders), proc.nid, proof)
+	eligibilityCount, err := proc.oracle.CalcEligibility(types.LayerID(proc.instanceID), proc.k, expectedCommitteeSize(proc.k, proc.cfg.N, proc.cfg.ExpectedLeaders), proc.nid, proof)
 	if err != nil {
 		proc.With().Error("Could not check our eligibility", log.Err(err))
 		return passive
 	}
 
-	if res { // eligible
+	proc.eligibilityCount = eligibilityCount
+	if eligibilityCount > 0 { // eligible
 		if proc.currentRound() == proposalRound {
 			return leader
 		}

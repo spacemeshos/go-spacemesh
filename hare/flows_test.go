@@ -143,8 +143,12 @@ func (trueOracle) Register(bool, string) {
 func (trueOracle) Unregister(bool, string) {
 }
 
-func (trueOracle) Eligible(types.LayerID, int32, int, types.NodeID, []byte) (bool, error) {
+func (trueOracle) Validate(types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
 	return true, nil
+}
+
+func (trueOracle) CalcEligibility(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+	return 1, nil
 }
 
 func (trueOracle) Proof(types.LayerID, int32) ([]byte, error) {

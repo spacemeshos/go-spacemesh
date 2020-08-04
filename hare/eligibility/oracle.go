@@ -7,11 +7,11 @@ import (
 	"errors"
 	"github.com/hashicorp/golang-lru"
 	"github.com/nullstyle/go-xdr/xdr3"
+	"github.com/spacemeshos/fixed"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"math"
 	"sync"
 )
 
@@ -185,55 +185,116 @@ func (o *Oracle) totalWeight(layer types.LayerID) (uint64, error) {
 	return totalWeight, nil
 }
 
-// Eligible checks if ID is eligible on the given Layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
-func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
+func (o *Oracle) minerWeight(layer types.LayerID, id string) (uint64, error) {
+	actives, err := o.actives(layer)
+	if err != nil {
+		if err == errGenesis { // we are in genesis
+			return o.genesisTotalWeight, nil
+		}
+
+		o.With().Error("totalWeight erred while calling actives func", log.Err(err), layer)
+		return 0, err
+	}
+
+	w, ok := actives[id]
+	if !ok {
+		return 0, errors.New("miner is not active in specified layer")
+	}
+	return w, nil
+}
+
+var fracMask = fixed.One.Value() - 1
+
+func calcVrfFrac(sig []byte) int64 {
+	sha := sha256.Sum256(sig)
+	shaUint64 := binary.LittleEndian.Uint64(sha[:8])
+	return int64(shaUint64) & fracMask
+}
+
+func (o *Oracle) prepareEligibilityCheck(layer types.LayerID, round int32, sig []byte, id types.NodeID) (uint64, uint64, bool, error) {
 	msg, err := o.buildVRFMessage(layer, round)
 	if err != nil {
 		o.Error("eligibility: could not build VRF message")
-		return false, err
+		return 0, 0, true, err
 	}
 
 	// validate message
 	res, err := o.vrfVerifier(msg, sig, id.VRFPublicKey)
 	if err != nil {
 		o.Error("eligibility: VRF verification failed: %v", err)
-		return false, err
+		return 0, 0, true, err
 	}
 	if !res {
 		o.With().Info("eligibility: a node did not pass VRF signature verification",
 			id,
 			layer)
-		return false, nil
+		return 0, 0, true, nil
 	}
 
 	// get active set size
 	totalWeight, err := o.totalWeight(layer)
 	if err != nil {
-		return false, err
+		return 0, 0, true, err
 	}
 
 	// require totalWeight > 0
 	if totalWeight == 0 {
-		o.Warning("eligibility: active set size is zero")
-		return false, errors.New("active set size is zero")
+		o.Warning("eligibility: total weight is zero")
+		return 0, 0, true, errors.New("total weight is zero")
 	}
 
 	// calc hash & check threshold
-	sha := sha256.Sum256(sig)
-	shaUint32 := binary.LittleEndian.Uint32(sha[:4])
-	// avoid division (no floating point) & do operations on uint64 to avoid overflow
-	if totalWeight*uint64(shaUint32) > uint64(committeeSize)*uint64(math.MaxUint32) {
-		o.With().Info("eligibility: node did not pass VRF eligibility threshold",
-			id,
-			log.Int("committee_size", committeeSize),
-			log.Uint64("total_weight", totalWeight),
-			log.Int32("round", round),
-			layer)
-		return false, nil
+	minerWeight, err := o.minerWeight(layer, string(id.VRFPublicKey))
+	if err != nil {
+		return 0, 0, true, err
 	}
+	return totalWeight, minerWeight, false, nil
+}
 
-	// lower or equal
-	return true, nil
+// Validate validates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is the role
+// proof and assuming commSize as the expected committee size.
+func (o *Oracle) Validate(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
+	totalWeight, minerWeight, done, err := o.prepareEligibilityCheck(layer, round, sig, id)
+	if done {
+		return false, err
+	}
+	f := fixed.New
+	n := f(int(minerWeight))
+	p := f(committeeSize).Div(f(int(totalWeight)))
+	vrfFrac := calcVrfFrac(sig)
+
+	x := f(int(eligibilityCount))
+	if fixed.BinCDF(n, p, x.Sub(fixed.One)).Value() <= vrfFrac && vrfFrac < fixed.BinCDF(n, p, x).Value() {
+		return true, nil
+	}
+	o.With().Info("eligibility: node did not pass VRF eligibility threshold",
+		id,
+		log.Int("committee_size", committeeSize),
+		log.Uint64("total_weight", totalWeight),
+		log.Int32("round", round),
+		layer)
+	return false, nil
+}
+
+// CalcEligibility calculates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is
+// the role proof and assuming commSize as the expected committee size.
+func (o *Oracle) CalcEligibility(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+	totalWeight, minerWeight, done, err := o.prepareEligibilityCheck(layer, round, sig, id)
+	if done {
+		return 0, err
+	}
+	f := fixed.New
+	n := f(int(minerWeight))
+	p := f(committeeSize).Div(f(int(totalWeight)))
+	vrfFrac := calcVrfFrac(sig)
+
+	one := fixed.One
+	for x := fixed.New(0); x.Value() < n.Value(); x = x.Add(one) {
+		if fixed.BinCDF(n, p, x).Value() > vrfFrac {
+			return uint16(x.Floor()), nil
+		}
+	}
+	return uint16(n.Floor()), nil
 }
 
 // Proof returns the role proof for the current Layer & Round

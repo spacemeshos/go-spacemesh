@@ -42,8 +42,15 @@ type mockRolacle struct {
 	MockStateQuerier
 }
 
-func (mr *mockRolacle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
+func (mr *mockRolacle) Validate(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
 	return mr.isEligible, mr.err
+}
+
+func (mr *mockRolacle) CalcEligibility(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+	if mr.isEligible {
+		return 1, nil
+	}
+	return 0, mr.err
 }
 
 func (mr *mockRolacle) Proof(layer types.LayerID, round int32) ([]byte, error) {

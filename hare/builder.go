@@ -59,6 +59,7 @@ type innerMessage struct {
 	Ki         int32
 	Values     []types.BlockID     // the set S. optional for commit InnerMsg in a certificate
 	RoleProof  []byte              // role is implicit by InnerMsg type, this is the proof
+	Witness    uint16              // the number of claimed eligibilities
 	Svp        *aggregatedMessages // optional. only for proposal Messages
 	Cert       *certificate        // optional
 }
@@ -145,6 +146,11 @@ func (builder *messageBuilder) SetValues(set *Set) *messageBuilder {
 
 func (builder *messageBuilder) SetRoleProof(sig []byte) *messageBuilder {
 	builder.inner.RoleProof = sig
+	return builder
+}
+
+func (builder *messageBuilder) SetWitness(eligibilityCount uint16) *messageBuilder {
+	builder.inner.Witness = eligibilityCount
 	return builder
 }
 

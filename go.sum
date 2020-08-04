@@ -232,6 +232,8 @@ github.com/spacemeshos/api/release/go v0.0.0-20200626201759-603aac563f62 h1:Ow9X
 github.com/spacemeshos/api/release/go v0.0.0-20200626201759-603aac563f62/go.mod h1:vLEf1k/H7fz3c3Yi8luMuxANss0afBkSxs7ZJ5pIXj4=
 github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1 h1:INBIhbR/39yXEN8WVNfiGZehiKvkML+yrJfFuIwrmbU=
 github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1/go.mod h1:lyZLUyZXvd7gp6KHwGS5ZgtS2ZvV++lBjdE4MLqmLnU=
+github.com/spacemeshos/fixed v0.0.0-20200720162101-f281c97110e2 h1:Fx0Aqu+colPxKBxm1SiSz0IQl1Bqhyx0hzvYaFEv8M8=
+github.com/spacemeshos/fixed v0.0.0-20200720162101-f281c97110e2/go.mod h1:3SkkvXHU4Vm7yjpfgPu97PcZVvWweBmx0FOLRW7ek+g=
 github.com/spacemeshos/merkle-tree v0.0.0-20190612125135-48574fd5f419 h1:h01wKBJ33d4/4yRTyCZv/LKcLMokl6mLcZCfitQk7xw=
 github.com/spacemeshos/merkle-tree v0.0.0-20190612125135-48574fd5f419/go.mod h1:mPxjt4RONPxSUhxOq4bhSJyKVGQJ0VMSyRiE51dDLgE=
 github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82 h1:FmAao0SylhJiAkJfC1+Ots9SS71b8Upvxx6yoBFqEsY=
