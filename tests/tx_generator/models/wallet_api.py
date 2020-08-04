@@ -5,6 +5,9 @@ import re
 from tests.tx_generator import config as conf
 from tests.tx_generator.k8s_handler import api_call, aws_api_call
 
+from spacemesh.v1 import tx_pb2_grpc, tx_types_pb2, types_pb2
+import grpc
+
 
 class WalletAPI:
     """
@@ -32,11 +35,39 @@ class WalletAPI:
         self.fixed_node = fixed_node
         self.tx_ids = []
 
+    def _grpc_connect(self, host, port=9092):
+        channel = grpc.insecure_channel(host + ':' + port)
+        self._grpc_stub = tx_pb2_grpc.TransactionServiceStub(channel)
+
+    def _grpc_submit_tx(self):
+        if not self._grpc_stub:
+            self._grpc_connect()
+
+        # Serialize the tx
+        tx_bytes = None
+
+        # Submit it
+        submit_tx_req = tx_types_pb2.SubmitTransactionRequest(transaction=tx_bytes)
+        response = self._grpc_stub.SubmitTransaction(submit_tx_req)
+
+        # Check that it succeeded
+
     def submit_tx(self, to, src, gas_price, amount, tx_bytes):
         a_ok_pat = "[\'\"]value[\'\"]:\s?[\'\"]ok[\'\"]"
         print(f"\n{datetime.now()}: submit transaction\nfrom {src}\nto {to}")
         pod_ip, pod_name = self.random_node()
         print(f"amount: {amount}, gas-price: {gas_price}, total: {amount+gas_price}")
+
+
+
+
+
+
+
+
+
+
+
         tx_field = '{"tx":' + str(list(tx_bytes)) + '}'
         out = self.send_api_call(pod_ip, tx_field, self.submit_api)
         print(f"{datetime.now()}: submit result: {out}")
