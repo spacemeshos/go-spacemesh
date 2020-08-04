@@ -40,9 +40,8 @@ require (
 	google.golang.org/api v0.7.0
 	google.golang.org/genproto v0.0.0-20200618031413-b414f8b61790
 	google.golang.org/grpc v1.29.1
-	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	nanomsg.org/go-mangos v1.4.0
 )
 
-go 1.13
+go 1.14
