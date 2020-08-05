@@ -3,6 +3,7 @@ elasticsearch==6.3.1
 elasticsearch-dsl==6.3.1
 googleapis-common-protos==1.52.0
 grpcio==1.30.0
+grpcio-status==1.31.0
 httplib2==0.18.0
 kubernetes==9.0.0
 oauthlib==3.0.1
