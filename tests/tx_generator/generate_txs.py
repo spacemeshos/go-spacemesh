@@ -12,7 +12,6 @@ sys.path.insert(0, dir_path)
 from tests.convenience import sleep_print_backwards, str2bool
 from tests.tx_generator import actions
 from tests.tx_generator import config as conf
-from tests.tx_generator import k8s_handler
 from tests.tx_generator.models.wallet_api import WalletAPI
 from tests.tx_generator.models.accountant import Accountant
 
@@ -25,8 +24,6 @@ def set_parser():
     parser = argparse.ArgumentParser(description='This is a transactions generator program',
                                      usage='%(prog)s [-h]',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('-ns', '--namespace', dest="namespace", metavar='',
-                        help='namespace to interact with', required=True)
     parser.add_argument('-na', '--new_accounts', dest="new_accounts", default=NEW_ACCOUNTS, type=int, metavar='',
                         help='number of new accounts to create by sending coins from tap', required=False)
     parser.add_argument('-t', '--tx_num', dest="tx_num", default=TX_NUM, type=int, metavar='',
@@ -123,14 +120,13 @@ if __name__ == "__main__":
     
     """
 
-    k8s_handler.load_config()
     # Parse cmd arguments
     parsed_args = set_parser()
     print(f"\nreceived args:\n{parsed_args}\n")
 
     # Get a list of active pods
-    pods_lst = k8s_handler.get_clients_names_and_ips(parsed_args.namespace)
-    my_wallet = WalletAPI(parsed_args.namespace, pods_lst)
+    pods_lst = [{"name": "local", "pod_ip": "127.0.0.1"}]
+    my_wallet = WalletAPI(pods_lst)
     # Get TAP initial values
     tap_nonce = my_wallet.get_nonce_value(conf.acc_pub)
     tap_balance = my_wallet.get_balance_value(conf.acc_pub)

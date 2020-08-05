@@ -2,10 +2,7 @@ from datetime import datetime
 import random
 import re
 
-from tests.tx_generator import config as conf
-from tests.tx_generator.k8s_handler import api_call, aws_api_call
-
-from spacemesh.v1 import tx_pb2_grpc, tx_types_pb2, types_pb2
+from spacemesh.v1 import tx_pb2_grpc, tx_types_pb2, global_state_pb2_grpc, global_state_types_pb2, types_pb2
 import grpc
 
 
@@ -23,63 +20,66 @@ class WalletAPI:
     nonce_api = 'v1/nonce'
     submit_api = 'v1/submittransaction'
 
-    def __init__(self, namespace, clients_lst, fixed_node=None):
+    def __init__(self, clients_lst, fixed_node=None):
         """
 
-        :param namespace: string, namespace
         :param clients_lst: [{"pod_ip": ..., "name": ...}, ...]
         """
         # TODO make fixed node boolean and create a @property to choose index once
         self.clients_lst = clients_lst
-        self.namespace = namespace
         self.fixed_node = fixed_node
         self.tx_ids = []
 
-    def _grpc_connect(self, host, port=9092):
-        channel = grpc.insecure_channel(host + ':' + port)
-        self._grpc_stub = tx_pb2_grpc.TransactionServiceStub(channel)
+        # GRPC stuff
+        self._channel = None
+        self._grpc_gs_stub = None
+        self._grpc_tx_stub = None
 
-    def _grpc_submit_tx(self):
-        if not self._grpc_stub:
-            self._grpc_connect()
+    def _grpc_connect_channel(self, host, port=9092):
+        if not self._channel:
+            self._channel = grpc.insecure_channel(host + ':' + str(port))
 
-        # Serialize the tx
-        tx_bytes = None
+    def _grpc_connect_tx(self, host, port=9092):
+        self._grpc_connect_channel(host, port)
+        if not self._grpc_tx_stub:
+            self._grpc_tx_stub = tx_pb2_grpc.TransactionServiceStub(self._channel)
+
+    def _grpc_connect_gs(self, host, port=9092):
+        self._grpc_connect_channel(host, port)
+        if not self._grpc_gs_stub:
+            self._grpc_gs_stub = global_state_pb2_grpc.GlobalStateServiceStub(self._channel)
+
+    def _grpc_submit_tx(self, tx_bytes, pod_ip):
+        self._grpc_connect_tx(pod_ip)
 
         # Submit it
         submit_tx_req = tx_types_pb2.SubmitTransactionRequest(transaction=tx_bytes)
-        response = self._grpc_stub.SubmitTransaction(submit_tx_req)
+        response = self._grpc_tx_stub.SubmitTransaction(submit_tx_req)
 
         # Check that it succeeded
+        # see https://cloud.google.com/tasks/docs/reference/rpc/google.rpc#google.rpc.Status
+        # https://cloud.google.com/apis/design/errors#handling_errors
+        # https://grpc.github.io/grpc/python/grpc.html#grpc-status-code
+        from grpc_status import rpc_status
+        if rpc_status.to_status(response.status).code != grpc.StatusCode.OK:
+            print(f"SubmitTransaction call failed with message: {response.status.message}")
+            return False
+        return response.txstate
+
+    def _grpc_get_account(self, address, pod_ip):
+        self._grpc_connect_gs(pod_ip)
+        return self._grpc_gs_stub.Account(
+            global_state_types_pb2.AccountRequest(
+                account_id=types_pb2.AccountId(address=bytes.fromhex(address)))).account_wrapper
 
     def submit_tx(self, to, src, gas_price, amount, tx_bytes):
-        a_ok_pat = "[\'\"]value[\'\"]:\s?[\'\"]ok[\'\"]"
         print(f"\n{datetime.now()}: submit transaction\nfrom {src}\nto {to}")
         pod_ip, pod_name = self.random_node()
         print(f"amount: {amount}, gas-price: {gas_price}, total: {amount+gas_price}")
-
-
-
-
-
-
-
-
-
-
-
-        tx_field = '{"tx":' + str(list(tx_bytes)) + '}'
-        out = self.send_api_call(pod_ip, tx_field, self.submit_api)
-        print(f"{datetime.now()}: submit result: {out}")
-        if not out:
-            print("cannot parse submission result, result is none")
-            return False
-
-        if re.search(a_ok_pat, out):
-            self.tx_ids.append(self.extract_tx_id(out))
-            return True
-
-        return False
+        out = self._grpc_submit_tx(tx_bytes, pod_ip)
+        print(f"{datetime.now()}: submit result: state: {out.state} txid: {out.id.id.hex()}")
+        self.tx_ids.append(out.id.id)
+        return True
 
     def get_tx_by_id(self, tx_id):
         print(f"get transaction with id {tx_id}")
@@ -91,12 +91,10 @@ class WalletAPI:
         return self.extract_tx_id(out)
 
     def get_nonce_value(self, acc):
-        res = self._get_nonce(acc)
-        return WalletAPI.extract_nonce_from_resp(res)
+        return self._get_nonce(acc)
 
     def get_balance_value(self, acc):
-        res = self._get_balance(acc)
-        return WalletAPI.extract_balance_from_resp(res)
+        return self._get_balance(acc)
 
     def _get_nonce(self, acc):
         return self._make_address_api_call(acc, "nonce", self.nonce_api)
@@ -108,15 +106,14 @@ class WalletAPI:
         # check balance/nonce
         print(f"\ngetting {resource} for", acc)
         pod_ip, pod_name = self.random_node()
-        data = '{"address":"' + acc[-self.ADDRESS_SIZE_HEX:] + '"}'
-        if acc == conf.acc_pub:
-            data = '{"address":"' + acc + '"}'
-
-        print(f"querying for the {resource} of {acc}")
-        out = self.send_api_call(pod_ip, data, api_res)
-
-        print(f"{resource} output={out}")
-        return out
+        account = self._grpc_get_account(acc, pod_ip)
+        if resource == "nonce":
+            print(f"\ngot {account.counter}")
+            return account.counter
+        elif resource == "balance":
+            print(f"\ngot {account.balance.value}")
+            return account.balance.value
+        return None
 
     def random_node(self):
         """
@@ -135,19 +132,6 @@ class WalletAPI:
         print(f"selected pod: ip = {pod_ip}, name = {pod_name}")
         return pod_ip, pod_name
 
-    def send_api_call(self, pod_ip, data, api_resource):
-        if self.namespace:
-            out = api_call(pod_ip, data, api_resource, self.namespace)
-        else:
-            out = aws_api_call(pod_ip, data, api_resource)
-            if out.status_code == 200:
-                out = out.text
-            else:
-                print("status code != 200, output =", out.text)
-                out = None
-
-        return out
-
     # ======================= utils =======================
 
     @staticmethod
@@ -160,37 +144,6 @@ class WalletAPI:
         group_num = 1
 
         match = re.search(res_pat, val)
-        if match:
-            return match.group(group_num)
-
-        return None
-
-    @staticmethod
-    def extract_nonce_from_resp(nonce_res):
-        res = WalletAPI.extract_value_from_resp(nonce_res)
-        if res:
-            return int(res)
-
-        return None
-
-    @staticmethod
-    def extract_balance_from_resp(balance_res):
-        res = WalletAPI.extract_value_from_resp(balance_res)
-        if res:
-            return int(res)
-
-        return None
-
-    @staticmethod
-    def extract_tx_id(tx_output):
-        if not tx_output:
-            print("cannot extract id from output, input is None")
-            return None
-
-        id_pat = r"'value': 'ok', 'id': '([0-9a-f]{64})'"
-        group_num = 1
-
-        match = re.search(id_pat, tx_output)
         if match:
             return match.group(group_num)
 

@@ -52,6 +52,7 @@ def transfer(wallet_api, frm, to, amount, gas_price=1, gas_limit=None, curr_nonc
     # create a transaction
     tx_bytes = tx_gen.generate(to, nonce, gas_limit, gas_price, amount)
     # submit transaction
+    print(f"submit tx: from {frm} to {to} nonce {nonce} gas_limit {gas_limit} gas_price {gas_price} amount {amount}")
     success = wallet_api.submit_tx(to, frm, gas_price, amount, tx_bytes)
 
     if success:
