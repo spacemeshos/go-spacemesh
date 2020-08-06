@@ -34,7 +34,7 @@ def set_parser():
                         help='destination account to send coins to, a 64 character hex', required=False)
     parser.add_argument('-a', '--amount', dest='amount', type=int, metavar='',
                         help='the amount to send to each new account', required=True)
-    parser.add_argument('-p', '--priv', dest='priv', default=conf.acc_priv, metavar='',
+    parser.add_argument('-pk', '--priv', dest='priv', default=conf.acc_priv, metavar='',
                         help='the sending account\'s private key', required=False)
     parser.add_argument('-gp', '--gas_price', dest='gas_price', default=GAS_PRICE, type=int, metavar='',
                         help=f'the sending account\'s private key', required=False)
@@ -51,6 +51,10 @@ def set_parser():
     parser.add_argument('-lp', '--layers_per_epoch', dest='layers_per_epoch', default=4, type=int,
                         metavar='',
                         help='how many layers are there in one epoch', required=False)
+    parser.add_argument('-g', '--gateway', dest='host', default='127.0.0.1', metavar='',
+                        help='host name or IP address of gateway node', required=False)
+    parser.add_argument('-p', '--port', dest='port', default='9092', metavar='',
+                        help='GRPC port of gateway node (new API)', required=False)
 
     return parser.parse_args()
 
@@ -125,8 +129,7 @@ if __name__ == "__main__":
     print(f"\nreceived args:\n{parsed_args}\n")
 
     # Get a list of active pods
-    pods_lst = [{"name": "local", "pod_ip": "127.0.0.1"}]
-    my_wallet = WalletAPI(pods_lst)
+    my_wallet = WalletAPI(parsed_args.host, parsed_args.port)
     # Get TAP initial values
     tap_nonce = my_wallet.get_nonce_value(conf.acc_pub)
     tap_balance = my_wallet.get_balance_value(conf.acc_pub)

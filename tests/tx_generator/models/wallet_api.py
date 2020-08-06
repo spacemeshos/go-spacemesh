@@ -1,14 +1,14 @@
 from datetime import datetime
-import random
 import re
 
 from spacemesh.v1 import tx_pb2_grpc, tx_types_pb2, global_state_pb2_grpc, global_state_types_pb2, types_pb2
 import grpc
+from grpc_status import rpc_status
 
 
 class WalletAPI:
     """
-    WalletAPI communicates with a [random] miner pod for
+    WalletAPI communicates with a gateway node for
     information such as a wallet nonce, balance and
     submitting transactions
 
@@ -20,14 +20,15 @@ class WalletAPI:
     nonce_api = 'v1/nonce'
     submit_api = 'v1/submittransaction'
 
-    def __init__(self, clients_lst, fixed_node=None):
+    def __init__(self, host, port):
         """
 
-        :param clients_lst: [{"pod_ip": ..., "name": ...}, ...]
+        :param host: hostname/IP address of gateway node
+        :param port: port of GRPC server of gateway node
         """
         # TODO make fixed node boolean and create a @property to choose index once
-        self.clients_lst = clients_lst
-        self.fixed_node = fixed_node
+        self.host = host
+        self.port = port
         self.tx_ids = []
 
         # GRPC stuff
@@ -35,48 +36,51 @@ class WalletAPI:
         self._grpc_gs_stub = None
         self._grpc_tx_stub = None
 
-    def _grpc_connect_channel(self, host, port=9092):
+    def _grpc_connect_channel(self):
         if not self._channel:
-            self._channel = grpc.insecure_channel(host + ':' + str(port))
+            self._channel = grpc.insecure_channel(self.host + ':' + self.port)
 
-    def _grpc_connect_tx(self, host, port=9092):
-        self._grpc_connect_channel(host, port)
+    def _grpc_connect_tx(self):
+        self._grpc_connect_channel()
         if not self._grpc_tx_stub:
             self._grpc_tx_stub = tx_pb2_grpc.TransactionServiceStub(self._channel)
 
-    def _grpc_connect_gs(self, host, port=9092):
-        self._grpc_connect_channel(host, port)
+    def _grpc_connect_gs(self):
+        self._grpc_connect_channel()
         if not self._grpc_gs_stub:
             self._grpc_gs_stub = global_state_pb2_grpc.GlobalStateServiceStub(self._channel)
 
-    def _grpc_submit_tx(self, tx_bytes, pod_ip):
-        self._grpc_connect_tx(pod_ip)
+    def _grpc_submit_tx(self, tx_bytes):
+        self._grpc_connect_tx()
 
         # Submit it
         submit_tx_req = tx_types_pb2.SubmitTransactionRequest(transaction=tx_bytes)
-        response = self._grpc_tx_stub.SubmitTransaction(submit_tx_req)
+        try:
+            response = self._grpc_tx_stub.SubmitTransaction(submit_tx_req)
+        except grpc.RpcError as e:
+            print(f"SubmitTransaction GRPC call failed with error: {e}")
+            print("Is the connected node fully synced?")
+            return False
 
         # Check that it succeeded
         # see https://cloud.google.com/tasks/docs/reference/rpc/google.rpc#google.rpc.Status
         # https://cloud.google.com/apis/design/errors#handling_errors
         # https://grpc.github.io/grpc/python/grpc.html#grpc-status-code
-        from grpc_status import rpc_status
         if rpc_status.to_status(response.status).code != grpc.StatusCode.OK:
-            print(f"SubmitTransaction call failed with message: {response.status.message}")
+            print(f"SubmitTransaction GRPC call returned failure status with message: {response.status.message}")
             return False
         return response.txstate
 
-    def _grpc_get_account(self, address, pod_ip):
-        self._grpc_connect_gs(pod_ip)
+    def _grpc_get_account(self, address):
+        self._grpc_connect_gs()
         return self._grpc_gs_stub.Account(
             global_state_types_pb2.AccountRequest(
                 account_id=types_pb2.AccountId(address=bytes.fromhex(address)))).account_wrapper
 
     def submit_tx(self, to, src, gas_price, amount, tx_bytes):
         print(f"\n{datetime.now()}: submit transaction\nfrom {src}\nto {to}")
-        pod_ip, pod_name = self.random_node()
         print(f"amount: {amount}, gas-price: {gas_price}, total: {amount+gas_price}")
-        out = self._grpc_submit_tx(tx_bytes, pod_ip)
+        out = self._grpc_submit_tx(tx_bytes)
         print(f"{datetime.now()}: submit result: state: {out.state} txid: {out.id.id.hex()}")
         self.tx_ids.append(out.id.id)
         return True
@@ -84,9 +88,8 @@ class WalletAPI:
     def get_tx_by_id(self, tx_id):
         print(f"get transaction with id {tx_id}")
         tx_id_lst = self.convert_hex_str_to_bytes(tx_id)
-        pod_ip, pod_name = self.random_node()
         data = f'{{"id": {str(tx_id_lst)}}}'
-        out = self.send_api_call(pod_ip, data, self.get_tx_api)
+        out = self.send_api_call(data, self.get_tx_api)
         print(f"get tx output={out}")
         return self.extract_tx_id(out)
 
@@ -105,8 +108,7 @@ class WalletAPI:
     def _make_address_api_call(self, acc, resource, api_res):
         # check balance/nonce
         print(f"\ngetting {resource} for", acc)
-        pod_ip, pod_name = self.random_node()
-        account = self._grpc_get_account(acc, pod_ip)
+        account = self._grpc_get_account(acc)
         if resource == "nonce":
             print(f"\ngot {account.counter}")
             return account.counter
@@ -114,23 +116,6 @@ class WalletAPI:
             print(f"\ngot {account.balance.value}")
             return account.balance.value
         return None
-
-    def random_node(self):
-        """
-        gets a random node from nodes list
-        if fixed is set then the node at the nodes[fixed]
-        will be returned, this may be useful in stress tests
-
-        :return: string string, chosen pod ip and chosen pod name
-        """
-
-        rnd = random.randint(0, len(self.clients_lst)-1) if not self.fixed_node else self.fixed_node
-        pod_ip, pod_name = self.clients_lst[rnd]['pod_ip'], self.clients_lst[rnd]['name']
-        if not self.fixed_node:
-            print("randomly ", end="")
-
-        print(f"selected pod: ip = {pod_ip}, name = {pod_name}")
-        return pod_ip, pod_name
 
     # ======================= utils =======================
 
