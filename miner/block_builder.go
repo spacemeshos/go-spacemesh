@@ -322,7 +322,6 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 		bl.LayerIndex.GetEpoch(),
 		bl.MinerID(),
 		log.Int("tx_count", len(bl.TxIDs)),
-		//log.Int("atx_count", len(bl.ATXIDs)),
 		log.Int("view_edges", len(bl.ViewEdges)),
 		log.Int("vote_count", len(bl.BlockVotes)),
 		bl.ATXID,
@@ -360,7 +359,7 @@ func (t *BlockBuilder) createBlockLoop() {
 
 		case layerID := <-t.beginRoundEvent:
 			if !t.syncer.IsSynced() {
-				t.Info("builder got layer %v not synced yet", layerID)
+				t.Debug("builder got layer %v not synced yet", layerID)
 				continue
 			}
 

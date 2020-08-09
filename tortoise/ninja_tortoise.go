@@ -444,6 +444,7 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 			blocks, err := ni.db.LayerBlockIds(ex.Layer())
 			if err != nil {
 				if ex.Layer() == 0 {
+					//todo: fix this so that zero votes are ok
 					log.Warning("block %v int layer %v voted on zero layer", blk.ID().String(), blk.Layer())
 					continue
 				}

@@ -462,7 +462,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 }
 
 func (s *Syncer) syncAtxs(currentSyncLayer types.LayerID) {
-	lastLayerOfEpoch := (currentSyncLayer.GetEpoch() + 1).FirstLayer(s.LayersPerEpoch) - 1
+	lastLayerOfEpoch := (currentSyncLayer.GetEpoch() + 1).FirstLayer() - 1
 	if currentSyncLayer == lastLayerOfEpoch {
 		err := s.syncEpochActivations(currentSyncLayer.GetEpoch())
 		if err != nil {

@@ -302,6 +302,13 @@ loop:
 				break loop
 			}
 			layer := clock.GetCurrentLayer()
+
+			if layer.GetEpoch().IsGenesis() {
+				time.Sleep(20 * time.Second)
+				clock.Tick()
+				continue
+			}
+
 			if eventDb.GetBlockCreationDone(layer) < numOfInstances {
 				log.Info("blocks done in layer %v: %v", layer, eventDb.GetBlockCreationDone(layer))
 				time.Sleep(500 * time.Millisecond)

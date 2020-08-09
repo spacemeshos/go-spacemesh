@@ -94,7 +94,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 
 	path := app.Config.DataDir() + version
 
-	lg.Info("local db path: ", path)
+	lg.Info(" anton local db path: %v layers per epoch", path)
 
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, lg.WithName("p2p"), app.Config.DataDir())
 
@@ -113,6 +113,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		LayersPerEpoch:  uint16(app.Config.LayersPerEpoch),
 	}
 	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
+	lg.Info(" anton local db path: %v layers per epoch %v", path, app.Config.LayersPerEpoch)
 
 	if remote {
 		if err := getData(app.Config.DataDir(), version, lg); err != nil {
@@ -148,11 +149,15 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		log.Panic("error starting p2p err=%v", err)
 	}
 
-	i := 0
+	i := conf.LayersPerEpoch * 2
 	for ; ; i++ {
+		log.Info("getting layer %v", i)
 		if lyr, err2 := sync.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
-			lg.Info("loaded %v layers from disk %v", i-1, err2)
-			break
+			l := types.LayerID(i)
+			if !l.GetEpoch().IsGenesis() {
+				lg.Info("loaded %v layers from disk %v", i-1, err2)
+				break
+			}
 		} else {
 			lg.Info("loaded layer %v from disk ", i)
 			sync.ValidateLayer(lyr)

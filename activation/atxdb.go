@@ -26,7 +26,7 @@ func getNodeAtxPrefix(nodeID types.NodeID) []byte {
 	return []byte(fmt.Sprintf("n_%v_", nodeID.Key))
 }
 
-func getAtxEpochKey(epoch types.EpochID, nodeID types.NodeID) []byte {
+func getNodeAtxEpochKey(epoch types.EpochID, nodeID types.NodeID) []byte {
 	return append(getEpochPrefix(epoch), nodeID.ToBytes()...)
 }
 
@@ -57,7 +57,7 @@ type DB struct {
 	idStore
 	atxs              database.Database
 	atxHeaderCache    AtxCache
-	pool              *AtxMemPool
+	pool              *AtxMemDB
 	meshDb            *mesh.DB
 	LayersPerEpoch    uint16
 	nipstValidator    nipstValidator
@@ -71,7 +71,7 @@ type DB struct {
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
 // their validity
-func NewDB(dbStore database.Database, idStore idStore, atxPool *AtxMemPool, meshDb *mesh.DB, layersPerEpoch uint16, nipstValidator nipstValidator, log log.Log) *DB {
+func NewDB(dbStore database.Database, idStore idStore, atxPool *AtxMemDB, meshDb *mesh.DB, layersPerEpoch uint16, nipstValidator nipstValidator, log log.Log) *DB {
 	db := &DB{
 		idStore:          idStore,
 		atxs:             dbStore,
@@ -244,7 +244,7 @@ func (db *DB) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]st
 		return nil, errors.New("tried to retrieve active set for epoch 0")
 	}
 
-	firstLayerOfPrevEpoch := (epoch - 1).FirstLayer(db.LayersPerEpoch)
+	firstLayerOfPrevEpoch := (epoch - 1).FirstLayer()
 
 	countedAtxs := make(map[string]types.ATXID)
 	penalties := make(map[string]struct{})
@@ -491,7 +491,7 @@ func (db *DB) StoreAtx(ech types.EpochID, atx *types.ActivationTx) error {
 		return err
 	}
 
-	err = db.addAtxToEpoch(atx.PubLayerID.GetEpoch(), atx.NodeID, atx)
+	err = db.addNodeAtxToEpoch(atx.PubLayerID.GetEpoch(), atx.NodeID, atx)
 	if err != nil {
 		return err
 	}
@@ -594,9 +594,9 @@ func (db *DB) addAtxToNodeID(nodeID types.NodeID, atx *types.ActivationTx) error
 	return nil
 }
 
-func (db *DB) addAtxToEpoch(epoch types.EpochID, nodeID types.NodeID, atx *types.ActivationTx) error {
+func (db *DB) addNodeAtxToEpoch(epoch types.EpochID, nodeID types.NodeID, atx *types.ActivationTx) error {
 	db.log.Info("added atx %v to epoch %v", atx.ID().ShortString(), epoch)
-	err := db.atxs.Put(getAtxEpochKey(atx.PubLayerID.GetEpoch(), nodeID), atx.ID().Bytes())
+	err := db.atxs.Put(getNodeAtxEpochKey(atx.PubLayerID.GetEpoch(), nodeID), atx.ID().Bytes())
 	if err != nil {
 		return fmt.Errorf("failed to store ATX ID for node: %v", err)
 	}
@@ -632,7 +632,7 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 		var a types.ATXID
 		err := types.BytesToInterface(atxIterator.Value(), &a)
 		if err != nil {
-			// log error
+			db.log.Panic("cannot parse atx from DB")
 			break
 		}
 		atxs = append(atxs, a)

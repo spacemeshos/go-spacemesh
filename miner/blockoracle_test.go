@@ -61,7 +61,6 @@ func (a mockActivationDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeade
 				},
 				PubLayerID: a.atxPublicationLayer,
 			},
-			ActiveSetSize: a.activeSetSize,
 		}
 		atxHeader.SetID(&id)
 		return atxHeader, nil
@@ -310,8 +309,7 @@ func newBlockWithEligibility(layerID types.LayerID, atxID types.ATXID, proof typ
 
 func TestBlockEligibility_calc(t *testing.T) {
 	r := require.New(t)
-	atxH := types.NewActivationTx(types.NIPSTChallenge{PubLayerID: 0}, types.Address{}, 1, nil, nil)
-	atxH.ActiveSetSize = 10
+	atxH := types.NewActivationTx(types.NIPSTChallenge{PubLayerID: 0}, types.Address{}, nil, nil)
 	atxDb := &mockAtxDB{atxH: atxH.ActivationTxHeader}
 	genSetSize := uint32(0)
 	o := NewMinerBlockOracle(10, genSetSize, 1, atxDb, &EpochBeaconProvider{}, vrfsgn, nodeID, func() bool { return true }, log.NewDefault(t.Name()))

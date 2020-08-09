@@ -129,8 +129,8 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 	select {
 	// Got a timeout! fail with a timeout error
 	case <-timeout:
-		//		t.Error("timed out ")
-		//		return
+		t.Error("timed out ")
+		return
 	case <-ch:
 		t.Log("done!")
 		break

@@ -243,7 +243,7 @@ func newAtxQueue(s *Syncer, fetchPoetProof fetchPoetProofFunc) *atxQueue {
 
 //we could get rid of this if we had a unified id type
 func (atx atxQueue) HandleAtxs(atxids []types.ATXID) ([]*types.ActivationTx, error) {
-	atx.Log.Info("going to fetch %v", atxids)
+	atx.Log.Debug("going to fetch %v", atxids)
 	atxItems := make([]types.Hash32, 0, len(atxids))
 	for _, i := range atxids {
 		atxItems = append(atxItems, i.Hash32())

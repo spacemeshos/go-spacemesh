@@ -241,13 +241,13 @@ func TestActivationDb_GetNodeLastAtxId(t *testing.T) {
 	id1 := types.NodeID{Key: uuid.New().String()}
 	coinbase1 := types.HexToAddress("aaaa")
 	epoch1 := types.EpochID(2)
-	atx1 := types.NewActivationTx(newChallenge(id1, 0, *types.EmptyATXID, *types.EmptyATXID, epoch1.FirstLayer(atxdb.LayersPerEpoch)), coinbase1, 3, &types.NIPST{}, nil)
+	atx1 := types.NewActivationTx(newChallenge(id1, 0, *types.EmptyATXID, *types.EmptyATXID, epoch1.FirstLayer()), coinbase1, &types.NIPST{}, nil)
 	r.NoError(atxdb.StoreAtx(epoch1, atx1))
 
 	epoch2 := types.EpochID(1) + (1 << 8)
 	// This will fail if we convert the epoch id to bytes using LittleEndian, since LevelDB's lexicographic sorting will
 	// then sort by LSB instead of MSB, first.
-	atx2 := types.NewActivationTx(newChallenge(id1, 1, atx1.ID(), atx1.ID(), epoch2.FirstLayer(atxdb.LayersPerEpoch)), coinbase1, 3, &types.NIPST{}, nil)
+	atx2 := types.NewActivationTx(newChallenge(id1, 1, atx1.ID(), atx1.ID(), epoch2.FirstLayer()), coinbase1, &types.NIPST{}, nil)
 	r.NoError(atxdb.StoreAtx(epoch2, atx2))
 
 	id, err := atxdb.GetNodeLastAtxID(id1)
@@ -943,7 +943,7 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxdb := NewDB(database.NewMemDatabase(), idStore, nil, memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
 
-	atx := types.NewActivationTx(newChallenge(nodeID, 0, *types.EmptyATXID, *types.EmptyATXID, 0), [20]byte{}, 5, nil, nil)
+	atx := types.NewActivationTx(newChallenge(nodeID, 0, *types.EmptyATXID, *types.EmptyATXID, 0), [20]byte{}, nil, nil)
 	err := atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	r.NoError(err)
 }

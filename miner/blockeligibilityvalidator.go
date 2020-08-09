@@ -61,13 +61,11 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 		if err != nil {
 			//block should be present because we've synced it in the calling function
 			return false, fmt.Errorf("cannot get refrence block %v", *block.RefBlock)
-			//log.Warning("ref block %v not found - continuing old active set size calc", *block.RefBlock)
-			//activeSetBlock = block
 		}
 
 	}
 	if activeSetBlock.ActiveSet == nil {
-		return false, fmt.Errorf("cannot get acgive set from block %v", activeSetBlock.ID())
+		return false, fmt.Errorf("cannot get active set from block %v", activeSetBlock.ID())
 	}
 	//todo: optimise by using reference to active set size and cache active set size to not load all atxsIDs from db
 	activeSetSize = uint32(len(*activeSetBlock.ActiveSet))
@@ -82,7 +80,6 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 			return false, err
 		}
 		vrfPubkey = atx.NodeID.VRFPublicKey
-		//activeSetSize, vrfPubkey = atx.ActiveSetSize, atx.NodeID.VRFPublicKey
 	}
 	if epochNumber.IsGenesis() {
 		v.log.With().Info("using genesisActiveSetSize",

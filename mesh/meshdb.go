@@ -144,11 +144,6 @@ func (m *DB) AddBlock(bl *types.Block) error {
 
 // GetBlock gets a block from the database by id
 func (m *DB) GetBlock(id types.BlockID) (*types.Block, error) {
-	/*if id == GenesisBlock.ID() {
-		// todo fit real genesis here
-		return GenesisBlock, nil
-	}*/
-
 	if blkh := m.blockCache.Get(id); blkh != nil {
 		return blkh, nil
 	}
@@ -240,7 +235,6 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	if len(idsBytes) == 0 {
 		//zero block layer
 		return []types.BlockID{}, nil
-		//return nil, fmt.Errorf("no ids for layer %v in database ", index)
 	}
 
 	blockIds, err := types.BytesToBlockIds(idsBytes)

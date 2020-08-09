@@ -25,7 +25,7 @@ func (l EpochID) IsGenesis() bool {
 }
 
 // FirstLayer returns the layer ID of the first layer in the epoch.
-func (l EpochID) FirstLayer(layersPerEpoch uint16) LayerID {
+func (l EpochID) FirstLayer() LayerID {
 	return LayerID(uint64(l) * uint64(getLayersPerEpoch()))
 }
 
@@ -78,9 +78,8 @@ var EmptyATXID = &ATXID{}
 // well as the coinbase address and active set size.
 type ActivationTxHeader struct {
 	NIPSTChallenge
-	id            *ATXID // non-exported cache of the ATXID
-	Coinbase      Address
-	ActiveSetSize uint32
+	id       *ATXID // non-exported cache of the ATXID
+	Coinbase Address
 }
 
 // ShortString returns the first 5 characters of the ID, for logging purposes.
@@ -169,14 +168,13 @@ type ActivationTx struct {
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
-func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, activeSetSize uint32, nipst *NIPST, commitment *PostProof) *ActivationTx {
+func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, nipst *NIPST, commitment *PostProof) *ActivationTx {
 
 	atx := &ActivationTx{
 		InnerActivationTx: &InnerActivationTx{
 			ActivationTxHeader: &ActivationTxHeader{
 				NIPSTChallenge: nipstChallenge,
 				Coinbase:       coinbase,
-				ActiveSetSize:  activeSetSize,
 			},
 			Nipst:      nipst,
 			Commitment: commitment,
@@ -211,7 +209,6 @@ func (atx *ActivationTx) Fields(size int) []log.LoggableField {
 		log.FieldNamed("pos_atx_id", atx.PositioningATX),
 		atx.PubLayerID,
 		atx.PubLayerID.GetEpoch(),
-		log.Uint32("active_set", atx.ActiveSetSize),
 		log.Uint64("sequence_number", atx.Sequence),
 		log.String("NIPSTChallenge", challenge),
 		log.String("commitment", commitmentStr),

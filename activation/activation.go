@@ -373,7 +373,7 @@ func (b *Builder) PublishActivationTx() error {
 		return fmt.Errorf("getting challenge hash failed: %v", err)
 	}
 	// ⏳ the following method waits for a PoET proof, which should take ~1 epoch
-	atxExpired := b.layerClock.AwaitLayer((pubEpoch + 2).FirstLayer(b.layersPerEpoch)) // this fires when the target epoch is over
+	atxExpired := b.layerClock.AwaitLayer((pubEpoch + 2).FirstLayer()) // this fires when the target epoch is over
 	nipst, err := b.nipstBuilder.BuildNIPST(hash, atxExpired, b.stop)
 	if err != nil {
 		if _, stopRequested := err.(StopRequestedError); stopRequested {
@@ -384,10 +384,10 @@ func (b *Builder) PublishActivationTx() error {
 
 	b.log.With().Info("awaiting atx publication epoch",
 		log.FieldNamed("pub_epoch", pubEpoch),
-		log.FieldNamed("pub_epoch_first_layer", pubEpoch.FirstLayer(b.layersPerEpoch)),
+		log.FieldNamed("pub_epoch_first_layer", pubEpoch.FirstLayer()),
 		log.FieldNamed("current_layer", b.layerClock.GetCurrentLayer()),
 	)
-	if err := b.waitOrStop(b.layerClock.AwaitLayer(pubEpoch.FirstLayer(b.layersPerEpoch))); err != nil {
+	if err := b.waitOrStop(b.layerClock.AwaitLayer(pubEpoch.FirstLayer())); err != nil {
 		return err
 	}
 	b.log.Info("publication epoch has arrived!")
@@ -410,7 +410,7 @@ func (b *Builder) PublishActivationTx() error {
 		commitment = b.commitment
 	}
 
-	atx := types.NewActivationTx(*b.challenge, b.getCoinbaseAccount(), activeSetSize, nipst, commitment)
+	atx := types.NewActivationTx(*b.challenge, b.getCoinbaseAccount(), nipst, commitment)
 
 	b.log.With().Info("active ids seen for epoch", log.FieldNamed("atx_pub_epoch", pubEpoch),
 		log.Uint32("view_cnt", activeSetSize))
@@ -429,7 +429,7 @@ func (b *Builder) PublishActivationTx() error {
 	select {
 	case <-atxReceived:
 		b.log.Info("atx received in db")
-	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer(b.layersPerEpoch)):
+	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer()):
 		select {
 		case <-atxReceived:
 			b.log.Info("atx received in db (in the last moment)")

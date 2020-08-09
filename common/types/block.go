@@ -185,8 +185,6 @@ func (b *Block) Fields() []log.LoggableField {
 		log.Int("vote_count", len(b.BlockVotes)),
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
 		log.Int("tx_count", len(b.TxIDs)),
-		//log.Int("atx_count", len(b.ATXIDs)),
-		//AtxIdsField(b.ATXIDs),
 	}
 }
 

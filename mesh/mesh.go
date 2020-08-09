@@ -22,9 +22,6 @@ import (
 
 const (
 	layerSize = 200
-
-	// Genesis layer index
-	Genesis = types.LayerID(5)
 )
 
 var constTrue = []byte{1}

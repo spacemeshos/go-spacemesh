@@ -311,7 +311,7 @@ func publishAtx(b *Builder, meshLayer types.LayerID, clockEpoch types.EpochID, b
 		layerClockMock.currentLayer = layerClockMock.currentLayer.Add(buildNipstLayerDuration)
 		return NewNIPSTWithChallenge(challenge, poetRef), nil
 	}
-	layerClockMock.currentLayer = clockEpoch.FirstLayer(layersPerEpoch) + 3
+	layerClockMock.currentLayer = clockEpoch.FirstLayer() + 3
 	err = b.PublishActivationTx()
 	nipstBuilderMock.buildNipstFunc = nil
 	return net.lastTransmission != nil, builtNipst, err
@@ -662,7 +662,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 
 	setActivesetSizeInCache(t, defaultActiveSetSize)
 
-	layerClockMock.currentLayer = types.EpochID(1).FirstLayer(layersPerEpoch) + 3
+	layerClockMock.currentLayer = types.EpochID(1).FirstLayer() + 3
 	err = b.PublishActivationTx()
 	assert.EqualError(t, err, "target epoch has passed")
 
@@ -688,7 +688,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	b = NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
 	err = b.loadChallenge()
 	assert.NoError(t, err)
-	layerClockMock.currentLayer = types.EpochID(4).FirstLayer(layersPerEpoch) + 3
+	layerClockMock.currentLayer = types.EpochID(4).FirstLayer() + 3
 	err = b.PublishActivationTx()
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
 	assert.EqualError(t, err, "target epoch has passed")
@@ -840,5 +840,5 @@ func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, 
 		StartTick:      startTick,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipstChallenge, coinbase, activeSetSize, nipst, nil)
+	return types.NewActivationTx(nipstChallenge, coinbase, nipst, nil)
 }
