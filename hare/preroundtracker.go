@@ -26,6 +26,7 @@ func newPreRoundTracker(threshold int, expectedSize int) *preRoundTracker {
 // OnPreRound tracks pre-round messages
 func (pre *preRoundTracker) OnPreRound(msg *Msg) {
 	pub := msg.PubKey
+	eligibilityCount := uint32(msg.InnerMsg.EligibilityCount)
 	sToTrack := NewSet(msg.InnerMsg.Values) // assume track all Values
 	alreadyTracked := NewDefaultEmptySet()  // assume nothing tracked so far
 
@@ -37,7 +38,7 @@ func (pre *preRoundTracker) OnPreRound(msg *Msg) {
 
 	// record Values
 	for v := range sToTrack.values {
-		pre.tracker.Track(v)
+		pre.tracker.Track(v, eligibilityCount)
 	}
 
 	// update the union to include new Values
@@ -45,7 +46,7 @@ func (pre *preRoundTracker) OnPreRound(msg *Msg) {
 }
 
 // CanProveValue returns true if the given value is provable, false otherwise.
-// a value is said to be provable if it has at least threshold pre-round messages to support it.
+// a value is said to be provable if it has at least threshold pre-round votes to support it.
 func (pre *preRoundTracker) CanProveValue(value types.BlockID) bool {
 	// at least threshold occurrences of a given value
 	return pre.tracker.CountStatus(value) >= pre.threshold

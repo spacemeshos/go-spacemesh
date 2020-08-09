@@ -647,7 +647,7 @@ func (proc *consensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error
 		return nil, err
 	}
 	builder.SetRoleProof(proof)
-	builder.SetWitness(proc.eligibilityCount)
+	builder.SetEligibilityCount(proc.eligibilityCount)
 
 	return builder, nil
 }
