@@ -6,6 +6,7 @@ package api
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -387,10 +388,14 @@ func (s SpacemeshGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *
 
 	currentPBase := s.Tx.LatestLayerInState()
 
+	if txsSinceLayer.Account == nil || txsSinceLayer.Account.Address == "" {
+		return &pb.AccountTxs{}, errors.New("empty account information")
+	}
+
 	addr := types.HexToAddress(txsSinceLayer.Account.Address)
 	minLayer := types.LayerID(txsSinceLayer.StartLayer)
 	if minLayer > s.Tx.LatestLayer() {
-		return &pb.AccountTxs{}, fmt.Errorf("invalid start layer")
+		return &pb.AccountTxs{}, errors.New("invalid start layer")
 	}
 
 	txs := pb.AccountTxs{ValidatedLayer: currentPBase.Uint64()}
