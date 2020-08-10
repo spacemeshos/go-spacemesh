@@ -113,7 +113,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		LayersPerEpoch:  uint16(app.Config.LayersPerEpoch),
 	}
 	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
-	lg.Info(" anton local db path: %v layers per epoch %v", path, app.Config.LayersPerEpoch)
+	lg.Info("local db path: %v layers per epoch %v", path, app.Config.LayersPerEpoch)
 
 	if remote {
 		if err := getData(app.Config.DataDir(), version, lg); err != nil {

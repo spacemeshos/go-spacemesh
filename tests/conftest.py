@@ -85,7 +85,7 @@ def set_docker_images():
             print("Set docker clientv2 images to: {0}".format(docker_image))
             testconfig['clientv2']['image'] = docker_image
         else:
-            print("no other config", testconfig)
+            print("no other config")
 
 
 @pytest.fixture(scope='session')
