@@ -45,4 +45,4 @@ require (
 	nanomsg.org/go-mangos v1.4.0
 )
 
-go 1.13
+go 1.14
