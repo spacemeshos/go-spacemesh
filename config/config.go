@@ -158,7 +158,7 @@ func defaultBaseConfig() BaseConfig {
 		LayersPerEpoch:      3,
 		PoETServer:          "127.0.0.1",
 		Hdist:               5,
-		GenesisTotalWeight:  5 * 1024 * 128, // 5 miners * 1024 MB PoST * 128 PoET ticks
+		GenesisTotalWeight:  5 * 1024 * 1, // 5 miners * 1024 byte PoST * 1 PoET ticks
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,

@@ -120,7 +120,7 @@ func (clk *ManualClock) GetGenesisTime() time.Time {
 // Close does nothing because this clock is manual
 func (clk *ManualClock) Close() {}
 
-func getTestDefaultConfig() *config.Config {
+func getTestDefaultConfig(numOfInstances int) *config.Config {
 	cfg, err := LoadConfigFromFile()
 	if err != nil {
 		log.Error("cannot load config from file")
@@ -132,6 +132,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.POST.NumProvenLabels = 10
 	cfg.POST.SpacePerUnit = 1 << 10 // 1KB.
 	cfg.POST.NumFiles = 1
+	cfg.GenesisTotalWeight = cfg.POST.SpacePerUnit * uint64(numOfInstances) // * 1 PoET ticks
 
 	cfg.HARE.N = 5
 	cfg.HARE.F = 2
@@ -222,10 +223,9 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.
 
 // StartMultiNode Starts the run of a number of nodes, running in process consensus between them.
 // this also runs a single transaction between the nodes.
-func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPath string) {
-	cfg := getTestDefaultConfig()
+func StartMultiNode(numOfInstances, layerAvgSize int, runTillLayer uint32, dbPath string) {
+	cfg := getTestDefaultConfig(numOfInstances)
 	cfg.LayerAvgSize = layerAvgSize
-	numOfInstances := numOfinstances
 	net := service.NewSimulator()
 	path := dbPath + time.Now().Format(time.RFC3339)
 

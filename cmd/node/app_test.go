@@ -91,9 +91,12 @@ var tests = []TestScenario{txWithRunningNonceGenerator([]int{}), sameRootTester(
 func (suite *AppTestSuite) TestMultipleNodes() {
 	//EntryPointCreated <- true
 	net := service.NewSimulator()
-	const numberOfEpochs = 5 // first 2 epochs are genesis
+	const (
+		numberOfEpochs = 5 // first 2 epochs are genesis
+		numOfInstances = 5
+	)
 	//addr := address.BytesToAddress([]byte{0x01})
-	cfg := getTestDefaultConfig()
+	cfg := getTestDefaultConfig(numOfInstances)
 
 	path := "../tmp/test/state_" + time.Now().String()
 
@@ -113,7 +116,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}
 	ld := time.Duration(20) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
-	suite.initMultipleInstances(cfg, rolacle, rng, 5, path, genesisTime, poetHarness.HTTPPoetClient, false, clock, net)
+	suite.initMultipleInstances(cfg, rolacle, rng, numOfInstances, path, genesisTime, poetHarness.HTTPPoetClient, false, clock, net)
 	for _, a := range suite.apps {
 		a.startServices()
 	}
@@ -358,7 +361,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 		atxPerEpoch   map[types.EpochID]uint32
 	}
 
-	layersPerEpoch := int(suite.apps[0].Config.LayersPerEpoch)
+	layersPerEpoch := suite.apps[0].Config.LayersPerEpoch
 	datamap := make(map[string]*nodeData)
 
 	// assert all nodes validated untilLayer-1
