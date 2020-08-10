@@ -275,7 +275,7 @@ func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValida
 
 		for _, id := range fj.ids {
 			if atx, ok := mp[id]; ok {
-				logger.Info("atx queue work item %v atx %v", id.String(), atx)
+				logger.Info("atx queue work item %v atx %v", id.String(), atx.ShortString())
 				err := fetchAtxRefs(atx)
 				if err != nil {
 					logger.Warning("failed to fetch referenced atxs of %s %s", id.ShortString(), err)
@@ -284,7 +284,7 @@ func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValida
 				}
 				err = sValidateAtx(atx)
 				if err != nil {
-					logger.Warning("failed to validate %s %s", id.ShortString(), err)
+					logger.Warning("failed to validate atx %v job %s %s", atx.ShortString(), id.ShortString(), err)
 					invalidate(id, false)
 					continue
 				}
@@ -294,7 +294,7 @@ func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValida
 					invalidate(id, false)
 					continue
 				}
-				logger.Info("atx queue work item ok %v atx %v", id.String(), atx)
+				logger.Info("atx queue work item ok %v atx %v", id.String(), atx.ShortString())
 				invalidate(id, true)
 			} else {
 				logger.Error("job returned with no response %v", id.String())

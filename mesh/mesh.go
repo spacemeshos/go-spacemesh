@@ -87,7 +87,6 @@ type Mesh struct {
 	Validator
 	trtl               tortoise
 	txInvalidator      txMemPoolInValidator
-	atxInvalidator     atxMemPoolInValidator
 	config             Config
 	latestLayer        types.LayerID
 	latestLayerInState types.LayerID
@@ -105,12 +104,11 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh
-func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPoolInValidator, atxInvalidator atxMemPoolInValidator, pr txProcessor, logger log.Log) *Mesh {
+func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPoolInValidator, pr txProcessor, logger log.Log) *Mesh {
 	ll := &Mesh{
 		Log:                logger,
 		trtl:               mesh,
 		txInvalidator:      txInvalidator,
-		atxInvalidator:     atxInvalidator,
 		txProcessor:        pr,
 		done:               make(chan struct{}),
 		DB:                 db,
@@ -127,8 +125,8 @@ func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalida
 }
 
 // NewRecoveredMesh creates new instance of mesh with recovered mesh data fom database
-func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPoolInValidator, atxInvalidator atxMemPoolInValidator, pr txProcessor, logger log.Log) *Mesh {
-	msh := NewMesh(db, atxDb, rewardConfig, mesh, txInvalidator, atxInvalidator, pr, logger)
+func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPoolInValidator, pr txProcessor, logger log.Log) *Mesh {
+	msh := NewMesh(db, atxDb, rewardConfig, mesh, txInvalidator, pr, logger)
 
 	latest, err := db.general.Get(constLATEST)
 	if err != nil {
@@ -589,13 +587,6 @@ func (msh *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atx
 func (msh *Mesh) invalidateFromPools(blk *types.MiniBlock) {
 	for _, id := range blk.TxIDs {
 		msh.txInvalidator.Invalidate(id)
-	}
-	msh.atxInvalidator.Invalidate(blk.ATXID)
-	if blk.ActiveSet == nil {
-		return
-	}
-	for _, id := range *blk.ActiveSet {
-		msh.atxInvalidator.Invalidate(id)
 	}
 }
 

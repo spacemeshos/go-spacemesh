@@ -57,7 +57,6 @@ type DB struct {
 	idStore
 	atxs              database.Database
 	atxHeaderCache    AtxCache
-	pool              *AtxMemDB
 	meshDb            *mesh.DB
 	LayersPerEpoch    uint16
 	nipstValidator    nipstValidator
@@ -71,12 +70,11 @@ type DB struct {
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
 // their validity
-func NewDB(dbStore database.Database, idStore idStore, atxPool *AtxMemDB, meshDb *mesh.DB, layersPerEpoch uint16, nipstValidator nipstValidator, log log.Log) *DB {
+func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint16, nipstValidator nipstValidator, log log.Log) *DB {
 	db := &DB{
 		idStore:          idStore,
 		atxs:             dbStore,
 		atxHeaderCache:   NewAtxCache(600),
-		pool:             atxPool,
 		meshDb:           meshDb,
 		LayersPerEpoch:   layersPerEpoch,
 		nipstValidator:   nipstValidator,

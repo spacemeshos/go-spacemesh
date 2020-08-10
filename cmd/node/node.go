@@ -495,7 +495,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	}
 
 	app.txPool = state.NewTxMemPool()
-	atxpool := activation.NewAtxMemPool()
 	meshAndPoolProjector := pendingtxs.NewMeshAndPoolProjector(mdb, app.txPool)
 
 	appliedTxs, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "appliedTxs"), 0, 0, lg.WithName("appliedTxs"))
@@ -505,18 +504,18 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	app.closers = append(app.closers, appliedTxs)
 	processor := state.NewTransactionProcessor(db, appliedTxs, meshAndPoolProjector, app.txPool, lg.WithName("state"))
 
-	atxdb := activation.NewDB(atxdbstore, idStore, atxpool, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
+	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
 	beaconProvider := &miner.EpochBeaconProvider{}
 
 	var msh *mesh.Mesh
 	var trtl tortoise.Tortoise
 	if mdb.PersistentData() {
 		trtl = tortoise.NewRecoveredTortoise(mdb, app.addLogger(TrtlLogger, lg))
-		msh = mesh.NewRecoveredMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg))
+		msh = mesh.NewRecoveredMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
 		trtl = tortoise.NewTortoise(int(layerSize), mdb, app.Config.Hdist, app.addLogger(TrtlLogger, lg))
-		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg))
+		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		app.setupGenesis(processor, msh)
 	}
 	eValidator := miner.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, msh, app.addLogger(BlkEligibilityLogger, lg))

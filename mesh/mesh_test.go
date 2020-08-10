@@ -129,7 +129,7 @@ func (MockAtxMemPool) Invalidate(types.ATXID) {
 func getMesh(id string) *Mesh {
 	lg := log.New(id, "", "")
 	mmdb := NewMemMeshDB(lg)
-	layers := NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: mmdb}, MockTxMemPool{}, MockAtxMemPool{}, &MockState{}, lg)
+	layers := NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: mmdb}, MockTxMemPool{}, &MockState{}, lg)
 	return layers
 }
 
@@ -265,7 +265,7 @@ func TestLayers_WakeUp(t *testing.T) {
 	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
 	//assert.True(t, len(*rBlock1.ActiveSet) == len(*block1.ActiveSet))
 
-	recoveredMesh := NewMesh(layers.DB, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: layers.DB}, MockTxMemPool{}, MockAtxMemPool{}, &MockState{}, log.New("", "", ""))
+	recoveredMesh := NewMesh(layers.DB, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: layers.DB}, MockTxMemPool{}, &MockState{}, log.New("", "", ""))
 
 	rBlock2, err = recoveredMesh.GetBlock(block2.ID())
 	assert.NoError(t, err)
@@ -479,7 +479,7 @@ func TestMesh_AddBlockWithTxs(t *testing.T) {
 	r := require.New(t)
 	lg := log.New("id", "", "")
 	meshDB := NewMemMeshDB(lg)
-	mesh := NewMesh(meshDB, &FailingAtxDbMock{}, ConfigTst(), &MeshValidatorMock{mdb: meshDB}, MockTxMemPool{}, MockAtxMemPool{}, &MockState{}, lg)
+	mesh := NewMesh(meshDB, &FailingAtxDbMock{}, ConfigTst(), &MeshValidatorMock{mdb: meshDB}, MockTxMemPool{}, &MockState{}, lg)
 
 	blk := types.NewExistingBlock(1, []byte("data"))
 

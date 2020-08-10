@@ -131,8 +131,8 @@ func getAtxDb(id string) (*DB, *mesh.Mesh, database.Database) {
 	lg := log.NewDefault(id)
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxStore := database.NewMemDatabase()
-	atxdb := NewDB(atxStore, NewIdentityStore(database.NewMemDatabase()), nil, memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
-	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), &MeshValidatorMock{}, &MockTxMemPool{}, &MockAtxMemPool{}, &MockState{}, lg.WithName("mesh"))
+	atxdb := NewDB(atxStore, NewIdentityStore(database.NewMemDatabase()), memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
+	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), &MeshValidatorMock{}, &MockTxMemPool{}, &MockState{}, lg.WithName("mesh"))
 	return atxdb, layers, atxStore
 }
 
@@ -758,7 +758,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	msh := mesh.NewMemMeshDB(lg)
 	store, err := database.NewLDBDatabase(tmpPath, 0, 0, lg.WithName("atxLDB"))
 	r.NoError(err)
-	atxdb := NewDB(store, NewIdentityStore(store), nil, msh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewDB(store, NewIdentityStore(store), msh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
 
 	const (
 		numOfMiners = 300
@@ -854,7 +854,7 @@ func TestActivationDb_ValidateSignedAtx(t *testing.T) {
 	lg := log.NewDefault("sigValidation")
 	idStore := NewIdentityStore(database.NewMemDatabase())
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxdb := NewDB(database.NewMemDatabase(), idStore, nil, memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewDB(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
 
 	ed := signing.NewEdSigner()
 	nodeID := types.NodeID{Key: ed.PublicKey().String(), VRFPublicKey: []byte("bbbbb")}
@@ -900,7 +900,7 @@ func TestActivationDb_AwaitAtx(t *testing.T) {
 	lg := log.NewDefault("sigValidation")
 	idStore := NewIdentityStore(database.NewMemDatabase())
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxdb := NewDB(database.NewMemDatabase(), idStore, nil, memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewDB(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
 	id := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("vrf")}
 	atx := newActivationTx(id, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase, 3, []types.BlockID{}, &types.NIPST{})
 
@@ -941,7 +941,7 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 	lg := log.NewDefault("sigValidation")
 	idStore := NewIdentityStore(database.NewMemDatabase())
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxdb := NewDB(database.NewMemDatabase(), idStore, nil, memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewDB(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
 
 	atx := types.NewActivationTx(newChallenge(nodeID, 0, *types.EmptyATXID, *types.EmptyATXID, 0), [20]byte{}, nil, nil)
 	err := atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)

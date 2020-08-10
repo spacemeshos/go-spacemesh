@@ -156,7 +156,7 @@ type Syncer struct {
 }
 
 // NewSync fires a sync every sm.SyncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxpool atxDB, bv blockEligibilityValidator, poetdb poetDb, conf Configuration, clock ticker, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxDB atxDB, bv blockEligibilityValidator, poetdb poetDb, conf Configuration, clock ticker, logger log.Log) *Syncer {
 
 	exit := make(chan struct{})
 
@@ -177,7 +177,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxpool a
 		syncLock:                  types.TryMutex{},
 		poetDb:                    poetdb,
 		txpool:                    txpool,
-		atxDb:                     atxpool,
+		atxDb:                     atxDB,
 		startLock:                 types.TryMutex{},
 		forceSync:                 make(chan bool),
 		validatingLayer:           validatingLayerNone,

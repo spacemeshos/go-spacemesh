@@ -55,7 +55,7 @@ func getMeshWithMapState(id string, s txProcessor) (*Mesh, *AtxDbMock) {
 	lg := log.New(id, "", "")
 	mshDb := NewMemMeshDB(lg)
 	mshDb.contextualValidity = &ContextualValidityMock{}
-	return NewMesh(mshDb, atxDb, ConfigTst(), &MeshValidatorMock{}, &MockTxMemPool{}, &MockAtxMemPool{}, s, lg), atxDb
+	return NewMesh(mshDb, atxDb, ConfigTst(), &MeshValidatorMock{}, &MockTxMemPool{}, s, lg), atxDb
 }
 
 func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs int, fee int64) int64 {
