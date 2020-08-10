@@ -99,7 +99,7 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochID) err
 	}
 
 	if epochNumber.IsGenesis() {
-		weight, totalWeight = 131072, bo.genesisTotalWeight // TODO: replace 131072 with configured weight
+		weight, totalWeight = 1024, bo.genesisTotalWeight // TODO: replace 1024 with configured weight
 		bo.log.Info("genesis epoch detected, using genesisTotalWeight (%v)", totalWeight)
 	}
 

@@ -7,7 +7,7 @@ services:
           "--tcp-port", "${SMESH_PORT:-7513}",
           "--coinbase", "${SMESH_COINBASE:-0x1234}",
           "--poet-server", "${SMESH_POET_SERVER:?SMESH_POET_SERVER Must be specified}",
-          "--post-space", "${SMESH_POST_SPACE:-1048576}",
+          "--post-space", "${SMESH_POST_SPACE:-1024}",
           "--test-mode",
           "--start-mining",
           "--randcon",  "${SMESH_RANDCON:-8}",

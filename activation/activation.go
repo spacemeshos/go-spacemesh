@@ -32,7 +32,7 @@ type poetNumberOfTickProvider struct {
 }
 
 func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
-	return 1 << 7 // 128
+	return 1
 }
 
 type nipstBuilder interface {
