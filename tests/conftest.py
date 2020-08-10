@@ -78,11 +78,14 @@ def load_config():
 def set_docker_images():
     docker_image = os.getenv('CLIENT_DOCKER_IMAGE', '')
     if docker_image:
-        print("Set docker images to: {0}".format(docker_image))
+        print("++Set docker images to: {0}".format(docker_image))
         testconfig['bootstrap']['image'] = docker_image
         testconfig['client']['image'] = docker_image
         if 'clientv2' in testconfig.keys():
+            print("Set docker clientv2 images to: {0}".format(docker_image))
             testconfig['clientv2']['image'] = docker_image
+        else:
+            print("no other config", testconfig)
 
 
 @pytest.fixture(scope='session')
