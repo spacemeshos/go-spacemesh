@@ -81,7 +81,7 @@ func NewHarness(cfg *ServerConfig, args []string) (*Harness, error) {
 func main() {
 	// setup logger
 	log.JSONLog(true)
-	log.InitSpacemeshLoggingSystem("/tmp/", "spacemesh.log")
+	log.InitSpacemeshLoggingSystem()
 
 	dummyChan := make(chan string)
 	// os.Args[0] contains the current process path
