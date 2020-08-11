@@ -105,6 +105,7 @@ func init() {
 	block1.ActiveSet = &[]types.ATXID{globalAtx.ID(), globalAtx2.ID()}
 	txAPI.returnTx[globalTx.ID()] = globalTx
 	txAPI.returnTx[globalTx2.ID()] = globalTx2
+	types.SetLayersPerEpoch(layersPerEpoch)
 }
 
 func NewNIPSTWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPST {
