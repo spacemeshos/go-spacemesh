@@ -52,10 +52,17 @@ func (s GlobalStateService) GlobalStateHash(ctx context.Context, in *pb.GlobalSt
 func (s GlobalStateService) Account(ctx context.Context, in *pb.AccountRequest) (*pb.AccountResponse, error) {
 	log.Info("GRPC GlobalStateService.Account")
 
+	if in.AccountId == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "`AccountId` must be provided")
+	}
+
 	// Load data
 	addr := types.BytesToAddress(in.AccountId.Address)
 	balance := s.Mesh.GetBalance(addr)
 	counter := s.Mesh.GetNonce(addr)
+
+	log.With().Debug("GRPC GlobalStateService.Account",
+		addr, log.Uint64("balance", balance), log.Uint64("counter", counter))
 
 	return &pb.AccountResponse{AccountWrapper: &pb.Account{
 		AccountId: &pb.AccountId{Address: addr.Bytes()},
