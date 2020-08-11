@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/state"
 	"golang.org/x/net/context"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
@@ -19,7 +19,7 @@ import (
 type TransactionService struct {
 	Network api.NetworkAPI // P2P Swarm
 	Mesh    api.TxAPI      // Mesh
-	Mempool *miner.TxMempool
+	Mempool *state.TxMempool
 }
 
 // RegisterService registers this service with a grpc server instance
@@ -29,7 +29,7 @@ func (s TransactionService) RegisterService(server *Server) {
 
 // NewTransactionService creates a new grpc service using config data.
 func NewTransactionService(
-	net api.NetworkAPI, tx api.TxAPI, mempool *miner.TxMempool) *TransactionService {
+	net api.NetworkAPI, tx api.TxAPI, mempool *state.TxMempool) *TransactionService {
 	return &TransactionService{
 		Network: net,
 		Mesh:    tx,
@@ -67,7 +67,7 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 	log.Info("GRPC TransactionService.SubmitTransaction BROADCAST tx address %x (len %v), gas limit %v, fee %v id %v nonce %v",
 		tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.Fee, tx.ID().ShortString(), tx.AccountNonce)
 	go func() {
-		if err := s.Network.Broadcast(miner.IncomingTxProtocol, in.Transaction); err != nil {
+		if err := s.Network.Broadcast(state.IncomingTxProtocol, in.Transaction); err != nil {
 			log.Error("error broadcasting incoming tx: %v", err)
 		}
 	}()
