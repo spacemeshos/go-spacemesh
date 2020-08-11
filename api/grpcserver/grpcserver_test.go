@@ -13,8 +13,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/state"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -69,7 +69,7 @@ const (
 var (
 	networkMock = NetworkMock{}
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
-	txMempool   = miner.NewTxMemPool()
+	txMempool   = state.NewTxMemPool()
 	addr1       = types.HexToAddress("33333")
 	addr2       = types.HexToAddress("44444")
 	pub, _, _   = ed25519.GenerateKey(nil)
@@ -79,14 +79,13 @@ var (
 	poetRef     = []byte("66666")
 	npst        = NewNIPSTWithChallenge(&chlng, poetRef)
 	challenge   = newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-	globalAtx   = newAtx(challenge, 5, defaultView, npst, addr1)
-	globalAtx2  = newAtx(challenge, 5, defaultView, npst, addr2)
+	globalAtx   = newAtx(challenge, npst, addr1)
+	globalAtx2  = newAtx(challenge, npst, addr2)
 	globalTx    = NewTx(0, addr1, signing.NewEdSigner())
 	globalTx2   = NewTx(1, addr2, signing.NewEdSigner())
 	block1      = types.NewExistingBlock(0, []byte("11111"))
 	block2      = types.NewExistingBlock(0, []byte("22222"))
 	block3      = types.NewExistingBlock(0, []byte("33333"))
-	defaultView = []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
 	txAPI       = &TxAPIMock{
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),
@@ -103,7 +102,7 @@ func init() {
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
 	block1.TxIDs = []types.TransactionID{globalTx.ID(), globalTx2.ID()}
-	block1.ATXIDs = []types.ATXID{globalAtx.ID(), globalAtx2.ID()}
+	block1.ActiveSet = &[]types.ATXID{globalAtx.ID(), globalAtx2.ID()}
 	txAPI.returnTx[globalTx.ID()] = globalTx
 	txAPI.returnTx[globalTx2.ID()] = globalTx2
 }
@@ -314,16 +313,14 @@ func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID type
 	return challenge
 }
 
-func newAtx(challenge types.NIPSTChallenge, ActiveSetSize uint32, View []types.BlockID, nipst *types.NIPST, coinbase types.Address) *types.ActivationTx {
+func newAtx(challenge types.NIPSTChallenge, nipst *types.NIPST, coinbase types.Address) *types.ActivationTx {
 	activationTx := &types.ActivationTx{
 		InnerActivationTx: &types.InnerActivationTx{
 			ActivationTxHeader: &types.ActivationTxHeader{
 				NIPSTChallenge: challenge,
 				Coinbase:       coinbase,
-				ActiveSetSize:  ActiveSetSize,
 			},
 			Nipst: nipst,
-			View:  View,
 		},
 	}
 	activationTx.CalcAndSetID()
@@ -1383,7 +1380,7 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "end layer after last approved confirmed layer",
 					// expect difference + 1 return layers
-					run: generateRunFn(int(layerVerified)+2-layerFirst+1, &pb.LayersQueryRequest{
+					run: generateRunFn(layerVerified+2-layerFirst+1, &pb.LayersQueryRequest{
 						StartLayer: uint32(layerFirst),
 						EndLayer:   uint32(layerVerified + 2),
 					}),

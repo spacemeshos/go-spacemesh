@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/state"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -16,7 +16,7 @@ import (
 // MeshService exposes mesh data such as accounts, blocks, and transactions
 type MeshService struct {
 	Mesh             api.TxAPI // Mesh
-	Mempool          *miner.TxMempool
+	Mempool          *state.TxMempool
 	GenTime          api.GenesisTimeAPI
 	LayersPerEpoch   int
 	NetworkID        int8
@@ -32,7 +32,7 @@ func (s MeshService) RegisterService(server *Server) {
 
 // NewMeshService creates a new service using config data
 func NewMeshService(
-	tx api.TxAPI, mempool *miner.TxMempool, genTime api.GenesisTimeAPI,
+	tx api.TxAPI, mempool *state.TxMempool, genTime api.GenesisTimeAPI,
 	layersPerEpoch int, networkID int8, layerDurationSec int,
 	layerAvgSize int, txsPerBlock int) *MeshService {
 	return &MeshService{
@@ -68,7 +68,7 @@ func (s MeshService) CurrentEpoch(ctx context.Context, in *pb.CurrentEpochReques
 	log.Info("GRPC MeshService.CurrentEpoch")
 	curLayer := s.GenTime.GetCurrentLayer()
 	return &pb.CurrentEpochResponse{Epochnum: &pb.SimpleInt{
-		Value: uint64(curLayer.GetEpoch(uint16(s.LayersPerEpoch))),
+		Value: uint64(curLayer.GetEpoch()),
 	}}, nil
 }
 
@@ -135,7 +135,7 @@ func (s MeshService) getFilteredActivations(startLayer types.LayerID, addr types
 		}
 
 		for _, b := range layer.Blocks() {
-			atxids = append(atxids, b.ATXIDs...)
+			atxids = append(atxids, *b.ActiveSet...)
 		}
 	}
 
@@ -305,7 +305,7 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 			return nil, status.Errorf(codes.Internal, "error retrieving tx data")
 		}
 
-		activations = append(activations, b.ATXIDs...)
+		activations = append(activations, *b.ActiveSet...)
 
 		var pbTxs []*pb.Transaction
 		for _, t := range txs {
