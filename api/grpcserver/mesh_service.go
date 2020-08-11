@@ -1,6 +1,7 @@
 package grpcserver
 
 import (
+	"fmt"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -105,6 +106,54 @@ func (s MeshService) MaxTransactionsPerSecond(ctx context.Context, in *pb.MaxTra
 
 // QUERIES
 
+func (s MeshService) getFilteredTransactions(startLayer types.LayerID, addr types.Address) (txs []*types.Transaction, err error) {
+	meshTxIds := s.getTxIdsFromMesh(startLayer, addr)
+	mempoolTxIds := s.Mempool.GetTxIdsByAddress(addr)
+
+	// Look up full data for all unique txids
+	txs, missing := s.Mesh.GetTransactions(append(meshTxIds, mempoolTxIds...))
+
+	// TODO: Do we ever expect txs to be missing here?
+	// E.g., if this node has not synced/received them yet.
+	if len(missing) != 0 {
+		log.Error("could not find transactions %v", missing)
+		return nil, status.Errorf(codes.Internal, "error retrieving tx data")
+	}
+	return
+}
+
+func (s MeshService) getFilteredActivations(startLayer types.LayerID, addr types.Address) (activations []*types.ActivationTx, err error) {
+	// We have no way to look up activations by coinbase so we have no choice
+	// but to read all of them.
+	// TODO: index activations by layer (and maybe by coinbase)
+	// See https://github.com/spacemeshos/go-spacemesh/issues/2064.
+	var atxids []types.ATXID
+	for l := startLayer; l <= s.Mesh.LatestLayer(); l++ {
+		layer, err := s.Mesh.GetLayer(l)
+		if layer == nil || err != nil {
+			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
+		}
+
+		for _, b := range layer.Blocks() {
+			atxids = append(atxids, b.ATXIDs...)
+		}
+	}
+
+	// Look up full data
+	atxs, matxs := s.Mesh.GetATXs(atxids)
+	if len(matxs) != 0 {
+		log.Error("could not find activations %v", matxs)
+		return nil, status.Errorf(codes.Internal, "error retrieving activations data")
+	}
+	for _, atx := range atxs {
+		// Filter here, now that we have full data
+		if atx.Coinbase == addr {
+			activations = append(activations, atx)
+		}
+	}
+	return
+}
+
 // AccountMeshDataQuery returns account data
 func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMeshDataQueryRequest) (*pb.AccountMeshDataQueryResponse, error) {
 	log.Info("GRPC MeshService.AccountMeshDataQuery")
@@ -132,17 +181,9 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 	addr := types.BytesToAddress(in.Filter.AccountId.Address)
 	res := &pb.AccountMeshDataQueryResponse{}
 	if filterTx {
-		meshTxIds := s.getTxIdsFromMesh(startLayer, addr)
-		mempoolTxIds := s.Mempool.GetTxIdsByAddress(addr)
-
-		// Look up full data for all unique txids
-		txs, missing := s.Mesh.GetTransactions(append(meshTxIds, mempoolTxIds...))
-
-		// TODO: Do we ever expect txs to be missing here?
-		// E.g., if this node has not synced/received them yet.
-		if len(missing) != 0 {
-			log.Error("could not find transactions %v", missing)
-			return nil, status.Errorf(codes.Internal, "error retrieving tx data")
+		txs, err := s.getFilteredTransactions(startLayer, addr)
+		if err != nil {
+			return nil, err
 		}
 		for _, t := range txs {
 			res.Data = append(res.Data, &pb.AccountMeshData{
@@ -155,41 +196,20 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 
 	// Gather activation data
 	if filterActivations {
-		// We have no way to look up activations by coinbase so we have no choice
-		// but to read all of them.
-		// TODO: index activations by layer (and maybe by coinbase)
-		// See https://github.com/spacemeshos/go-spacemesh/issues/2064.
-		var activations []types.ATXID
-		for l := startLayer; l <= s.Mesh.LatestLayer(); l++ {
-			layer, err := s.Mesh.GetLayer(l)
-			if layer == nil || err != nil {
-				return nil, status.Errorf(codes.Internal, "error retrieving layer data")
-			}
-
-			for _, b := range layer.Blocks() {
-				activations = append(activations, b.ATXIDs...)
-			}
-		}
-
-		// Look up full data
-		atxs, matxs := s.Mesh.GetATXs(activations)
-		if len(matxs) != 0 {
-			log.Error("could not find activations %v", matxs)
-			return nil, status.Errorf(codes.Internal, "error retrieving activations data")
+		atxs, err := s.getFilteredActivations(startLayer, addr)
+		if err != nil {
+			return nil, err
 		}
 		for _, atx := range atxs {
-			// Filter here, now that we have full data
-			if atx.Coinbase == addr {
-				pbatx, err := convertActivation(atx)
-				if err != nil {
-					return nil, status.Errorf(codes.Internal, "error serializing activation data")
-				}
-				res.Data = append(res.Data, &pb.AccountMeshData{
-					Datum: &pb.AccountMeshData_Activation{
-						Activation: pbatx,
-					},
-				})
+			pbatx, err := convertActivation(atx)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "error serializing activation data")
 			}
+			res.Data = append(res.Data, &pb.AccountMeshData{
+				Datum: &pb.AccountMeshData_Activation{
+					Activation: pbatx,
+				},
+			})
 		}
 	}
 
@@ -423,8 +443,9 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 			if activation.Coinbase == addr {
 				pbActivation, err := convertActivation(activation)
 				if err != nil {
-					log.Error("error serializing activation data: ", err)
-					return status.Errorf(codes.Internal, "error serializing activation data")
+					errmsg := "error serializing activation data"
+					log.Error(fmt.Sprintf("%s: %s", errmsg, err))
+					return status.Errorf(codes.Internal, errmsg)
 				}
 				if err := stream.Send(&pb.AccountMeshDataStreamResponse{
 					Datum: &pb.AccountMeshData{
