@@ -120,7 +120,7 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
 
     # assert that each node has created layer_avg/number_of_nodes
-    validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners,
+    validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners -1,
                               ignore_lst=deleted_pods_lst)
 
     # wait an epoch
@@ -138,5 +138,5 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     # remove the removed node from nodes count
     num_miners -= 1
     # assert that each node has created layer_avg/number_of_nodes
-    validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners -1,
+    validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners,
                               ignore_lst=deleted_pods_lst)
