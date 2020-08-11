@@ -1,4 +1,4 @@
-package oracle
+package miner
 
 import (
 	"encoding/binary"
@@ -16,20 +16,21 @@ type activationDB interface {
 	GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error)
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
 	GetIdentity(edID string) (types.NodeID, error)
+	GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID)
 }
 
-type signer interface {
+type vrfSigner interface {
 	Sign(msg []byte) ([]byte, error)
 }
 
-// MinerBlockOracle is the oracle that provides block eligibility proofs for the miner.
-type MinerBlockOracle struct {
+// Oracle is the oracle that provides block eligibility proofs for the miner.
+type Oracle struct {
 	committeeSize        uint32
 	genesisActiveSetSize uint32
 	layersPerEpoch       uint16
 	atxDB                activationDB
 	beaconProvider       *EpochBeaconProvider
-	vrfSigner            signer
+	vrfSigner            vrfSigner
 	nodeID               types.NodeID
 
 	proofsEpoch       types.EpochID
@@ -40,10 +41,10 @@ type MinerBlockOracle struct {
 	log               log.Log
 }
 
-// NewMinerBlockOracle returns a new MinerBlockOracle.
-func NewMinerBlockOracle(committeeSize uint32, genesisActiveSetSize uint32, layersPerEpoch uint16, atxDB activationDB, beaconProvider *EpochBeaconProvider, vrfSigner signer, nodeID types.NodeID, isSynced func() bool, log log.Log) *MinerBlockOracle {
+// NewMinerBlockOracle returns a new Oracle.
+func NewMinerBlockOracle(committeeSize uint32, genesisActiveSetSize uint32, layersPerEpoch uint16, atxDB activationDB, beaconProvider *EpochBeaconProvider, vrfSigner vrfSigner, nodeID types.NodeID, isSynced func() bool, log log.Log) *Oracle {
 
-	return &MinerBlockOracle{
+	return &Oracle{
 		committeeSize:        committeeSize,
 		genesisActiveSetSize: genesisActiveSetSize,
 		layersPerEpoch:       layersPerEpoch,
@@ -59,16 +60,20 @@ func NewMinerBlockOracle(committeeSize uint32, genesisActiveSetSize uint32, laye
 
 // BlockEligible returns the ATXID and list of block eligibility proofs for the given layer. It caches proofs for a
 // single epoch and only refreshes the cache if eligibility is queried for a different epoch.
-func (bo *MinerBlockOracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.BlockEligibilityProof, error) {
+func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.BlockEligibilityProof, error) {
 	if !bo.isSynced() {
 		return types.ATXID{}, nil, fmt.Errorf("cannot calc eligibility, not synced yet")
 	}
-	epochNumber := layerID.GetEpoch(bo.layersPerEpoch)
+	epochNumber := layerID.GetEpoch()
 	bo.log.Info("asked for eligibility for epoch %d (cached: %d)", epochNumber, bo.proofsEpoch)
+	if epochNumber.IsGenesis() {
+		bo.log.Warning("asked for eligibility for epoch 0, cannot create blocks here")
+		return *types.EmptyATXID, nil, nil
+	}
 	if bo.proofsEpoch != epochNumber {
 		err := bo.calcEligibilityProofs(epochNumber)
 		if err != nil {
-			bo.log.Error("failed to calculate eligibility proofs: %v", err)
+			bo.log.Error("failed to calculate eligibility proofs for epoch %v : %v", epochNumber, err)
 			return *types.EmptyATXID, nil, err
 		}
 	}
@@ -83,23 +88,22 @@ func (bo *MinerBlockOracle) BlockEligible(layerID types.LayerID) (types.ATXID, [
 	return bo.atxID, proofs, nil
 }
 
-func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochID) error {
-	bo.log.Info("calculating eligibility")
+func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 	epochBeacon := bo.beaconProvider.GetBeacon(epochNumber)
 
-	var activeSetSize uint32
+	// get the previous epochs total ATXs
+	activeSetSize := uint32(len(bo.atxDB.GetEpochAtxs(epochNumber - 1)))
 	atx, err := bo.getValidAtxForEpoch(epochNumber)
 	if err != nil {
 		if !epochNumber.IsGenesis() {
 			return fmt.Errorf("failed to get latest ATX: %v", err)
 		}
 	} else {
-		activeSetSize = atx.ActiveSetSize
 		bo.atxID = atx.ID()
 	}
+	bo.log.Info("calculating eligibility for epoch %v, active set size %v", epochBeacon, activeSetSize)
 
 	if epochNumber.IsGenesis() {
-		activeSetSize = bo.genesisActiveSetSize
 		bo.log.Info("genesis epoch detected, using GenesisActiveSetSize (%v)", activeSetSize)
 	}
 
@@ -158,8 +162,8 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochID) err
 	return nil
 }
 
-func (bo *MinerBlockOracle) getValidAtxForEpoch(validForEpoch types.EpochID) (*types.ActivationTxHeader, error) {
-	atxID, err := bo.getATXIDForEpoch(validForEpoch)
+func (bo *Oracle) getValidAtxForEpoch(validForEpoch types.EpochID) (*types.ActivationTxHeader, error) {
+	atxID, err := bo.getATXIDForEpoch(validForEpoch - 1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ATX ID for target epoch %v: %v", validForEpoch, err)
 	}
@@ -174,7 +178,7 @@ func (bo *MinerBlockOracle) getValidAtxForEpoch(validForEpoch types.EpochID) (*t
 func calcEligibleLayer(epochNumber types.EpochID, layersPerEpoch uint16, vrfHash [32]byte) types.LayerID {
 	vrfInteger := binary.LittleEndian.Uint64(vrfHash[:8])
 	eligibleLayerOffset := vrfInteger % uint64(layersPerEpoch)
-	return epochNumber.FirstLayer(layersPerEpoch).Add(uint16(eligibleLayerOffset))
+	return epochNumber.FirstLayer().Add(uint16(eligibleLayerOffset))
 }
 
 func getNumberOfEligibleBlocks(activeSetSize, committeeSize uint32, layersPerEpoch uint16) (uint32, error) {
@@ -188,7 +192,7 @@ func getNumberOfEligibleBlocks(activeSetSize, committeeSize uint32, layersPerEpo
 	return numberOfEligibleBlocks, nil
 }
 
-func (bo *MinerBlockOracle) getATXIDForEpoch(targetEpoch types.EpochID) (types.ATXID, error) {
+func (bo *Oracle) getATXIDForEpoch(targetEpoch types.EpochID) (types.ATXID, error) {
 	latestATXID, err := bo.atxDB.GetNodeAtxIDForEpoch(bo.nodeID, targetEpoch)
 	if err != nil {
 		bo.log.With().Info("did not find ATX IDs for node", log.FieldNamed("atx_node_id", bo.nodeID), log.Err(err))
@@ -208,7 +212,7 @@ func serializeVRFMessage(epochBeacon []byte, epochNumber types.EpochID, counter 
 
 // GetEligibleLayers returns a list of layers in which the miner is eligible for at least one block. The list is
 // returned in arbitrary order.
-func (bo *MinerBlockOracle) GetEligibleLayers() []types.LayerID {
+func (bo *Oracle) GetEligibleLayers() []types.LayerID {
 	bo.eligibilityMutex.RLock()
 	layers := make([]types.LayerID, 0, len(bo.eligibilityProofs))
 	for layer := range bo.eligibilityProofs {

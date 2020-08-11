@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"sort"
+	"sync/atomic"
 )
 
 // BlockID is a 20-byte sha256 sum of the serialized block, used to identify it.
@@ -34,12 +35,33 @@ func (id BlockID) AsHash32() Hash32 {
 	return Hash20(id).ToHash32()
 }
 
+var layersPerEpoch int32 = 0
+
+// EffectiveGenesis marks when actual blocks would start being crated in the network, this will take account the first
+// genesis epoch and the following epoch in which ATXs are published
+var EffectiveGenesis int32 = 0
+
+func getLayersPerEpoch() int32 {
+	return atomic.LoadInt32(&layersPerEpoch)
+}
+
+// SetLayersPerEpoch sets global parameter of layers per epoch, all conversion from layer to epoch use this param
+func SetLayersPerEpoch(l int32) {
+	atomic.StoreInt32(&layersPerEpoch, l)
+	atomic.StoreInt32(&EffectiveGenesis, getLayersPerEpoch()*2-1)
+}
+
 // LayerID is a uint64 representing a layer number. It is zero-based.
 type LayerID uint64
 
 // GetEpoch returns the epoch number of this LayerID.
-func (l LayerID) GetEpoch(layersPerEpoch uint16) EpochID {
-	return EpochID(uint64(l) / uint64(layersPerEpoch))
+func (l LayerID) GetEpoch() EpochID {
+	return EpochID(uint64(l) / uint64(getLayersPerEpoch()))
+}
+
+// GetEffectiveGenesis returns when actual blocks would be created
+func GetEffectiveGenesis() LayerID {
+	return LayerID(atomic.LoadInt32(&EffectiveGenesis))
 }
 
 // Add returns the LayerID that's layers (the param passed into this method) after l (this LayerID).
@@ -129,8 +151,10 @@ func (b *BlockHeader) AddView(id BlockID) {
 // produce the block signature.
 type MiniBlock struct {
 	BlockHeader
-	TxIDs  []TransactionID
-	ATXIDs []ATXID
+	TxIDs []TransactionID
+	//ATXIDs    []ATXID
+	ActiveSet *[]ATXID
+	RefBlock  *BlockID
 }
 
 // Block includes all of a block's fields, including signature and a cache of the BlockID and MinerID.
@@ -161,8 +185,6 @@ func (b *Block) Fields() []log.LoggableField {
 		log.Int("vote_count", len(b.BlockVotes)),
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
 		log.Int("tx_count", len(b.TxIDs)),
-		log.Int("atx_count", len(b.ATXIDs)),
-		AtxIdsField(b.ATXIDs),
 	}
 }
 
@@ -236,7 +258,7 @@ func (l Layer) Hash() Hash32 {
 // AddBlock adds a block to this layer. Panics if the block's index doesn't match the layer.
 func (l *Layer) AddBlock(block *Block) {
 	if block.LayerIndex != l.index {
-		log.Panic("add block with wrong layer number")
+		log.Panic("add block with wrong layer number act %v exp %v", block.LayerIndex, l.index)
 	}
 	l.blocks = append(l.blocks, block)
 }

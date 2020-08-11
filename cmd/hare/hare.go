@@ -13,6 +13,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"net/http"
 	"os"
 	"runtime"
@@ -51,7 +53,6 @@ type mockBlockProvider struct {
 }
 
 func (mbp *mockBlockProvider) HandleValidatedLayer(validatedLayer types.LayerID, layer []types.BlockID) {
-	panic("implement me")
 }
 
 func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
@@ -90,7 +91,7 @@ func buildSet() []types.BlockID {
 	s := make([]types.BlockID, 200, 200)
 
 	for i := uint64(0); i < 200; i++ {
-		s = append(s, types.NewExistingBlock(1, util.Uint64ToBytes(i)).ID())
+		s = append(s, types.NewExistingBlock(types.GetEffectiveGenesis()+1, util.Uint64ToBytes(i)).ID())
 	}
 
 	return s
@@ -140,7 +141,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 			}
 		}()
 	}
-
+	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
 	log.Info("Initializing P2P services")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.NewDefault("p2p_haretest"), app.Config.DataDir())
 	app.p2p = swarm
@@ -150,7 +151,10 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 
 	pub := app.sgn.PublicKey()
 
-	lg := log.NewDefault(pub.String())
+	lg1 := log.NewDefault(pub.String())
+	lvl := zap.NewAtomicLevel()
+	lvl.SetLevel(zapcore.DebugLevel)
+	lg := lg1.SetLevel(&lvl)
 
 	setServerAddress(app.Config.OracleServer)
 	app.oracle = newClientWithWorldID(uint64(app.Config.OracleServerWorldID))
@@ -158,14 +162,16 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	hareOracle := newHareOracleFromClient(app.oracle)
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
-	if err != nil {
+	/*if err != nil {
 		log.Panic("error parsing config err=%v", err)
-	}
-	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	app.clock = timesync.NewClock(timesync.RealClock{}, ld, gTime, lg)
+	}*/
+	//ld := time.Duration(app.Config.LayerDurationSec) * time.Second
+	//app.clock = timesync.NewClock(timesync.RealClock{}, ld, gTime, lg)
+	lt := make(timesync.LayerTimer)
 
-	app.ha = hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, validateBlocks, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, app.clock.Subscribe(), lg)
+	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, validateBlocks, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, lt, lg)
 	log.Info("Starting hare service")
+	app.ha = hareI
 	err = app.ha.Start()
 	if err != nil {
 		log.Panic("error starting maatuf err=%v", err)
@@ -174,7 +180,12 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Panic("error starting p2p err=%v", err)
 	}
-	app.clock.StartNotifying()
+	if gTime.After(time.Now()) {
+		log.Info("sleeping until %v", gTime)
+		time.Sleep(time.Duration(gTime.Sub(time.Now())))
+	}
+	startLayer := types.GetEffectiveGenesis() + 1
+	lt <- types.LayerID(startLayer)
 }
 
 func main() {

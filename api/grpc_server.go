@@ -24,8 +24,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
+	"github.com/spacemeshos/go-spacemesh/state"
 )
 
 // SpacemeshGrpcService is a grpc server providing the Spacemesh api
@@ -35,7 +35,7 @@ type SpacemeshGrpcService struct {
 	StateAPI      StateAPI         // State DB
 	Network       NetworkAPI       // P2P Swarm
 	Tx            TxAPI            // Mesh
-	TxMempool     *miner.TxMempool // TX Mempool
+	TxMempool     *state.TxMempool // TX Mempool
 	Mining        MiningAPI        // ATX Builder
 	Oracle        OracleAPI
 	GenTime       GenesisTimeAPI
@@ -190,7 +190,7 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 	}
 	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gas limit %v, fee %v id %v nonce %v",
 		tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.Fee, tx.ID().ShortString(), tx.AccountNonce)
-	go s.Network.Broadcast(miner.IncomingTxProtocol, in.Tx)
+	go s.Network.Broadcast(state.IncomingTxProtocol, in.Tx)
 	log.Info("GRPC SubmitTransaction returned msg ok")
 	return &pb.TxConfirmation{Value: "ok", Id: hex.EncodeToString(tx.ID().Bytes())}, nil
 }
@@ -230,7 +230,7 @@ func (s SpacemeshGrpcService) Close() error {
 }
 
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, layerDurationSec int, syncer Syncer, cfg *config.Config, logging LoggingAPI) *SpacemeshGrpcService {
+func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempool *state.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, layerDurationSec int, syncer Syncer, cfg *config.Config, logging LoggingAPI) *SpacemeshGrpcService {
 	options := []grpc.ServerOption{
 		// XXX: this is done to prevent routers from cleaning up our connections (e.g aws load balances..)
 		// TODO: these parameters work for now but we might need to revisit or add them as configuration

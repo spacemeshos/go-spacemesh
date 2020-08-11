@@ -22,6 +22,12 @@ def test_transactions(init_session, setup_network):
     # validate all accounts balance/nonce
 
     namespace = init_session
+    layers_per_epoch = int(testconfig['client']['args']['layers-per-epoch'])
+    layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
+
+    tts = layer_duration * tx_gen_conf.num_layers_until_process
+    sleep_print_backwards(tts)
+
     wallet_api = WalletAPI(namespace, setup_network.clients.pods)
 
     tap_bal = wallet_api.get_balance_value(tx_gen_conf.acc_pub)
@@ -40,8 +46,8 @@ def test_transactions(init_session, setup_network):
     ass_err = "tap did not have the matching balance"
     assert actions.validate_acc_amount(wallet_api, acc, tx_gen_conf.acc_pub), ass_err
 
-    layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
-    tts = layer_duration * tx_gen_conf.num_layers_until_process
+    # wait for 2 genesis epochs that will not contain any blocks + one layer for tx execution
+    tts = layer_duration * layers_per_epoch * 2 + 1
     sleep_print_backwards(tts)
 
     print("\n\n------ create new accounts using the accounts created by tap ------")
