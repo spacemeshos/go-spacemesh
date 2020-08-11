@@ -760,7 +760,7 @@ func (db *DB) HandleGossipAtx(data service.GossipMessage, syncer service.Syncer)
 	}
 
 	err = db.SyntacticallyValidateAtx(atx)
-	events.Publish(events.ValidAtx{ID: atx.ShortString(), Valid: err == nil})
+	events.ReportValidActivation(atx, err == nil)
 	if err != nil {
 		db.log.Warning("received syntactically invalid ATX %v: %v", atx.ShortString(), err)
 		// TODO: blacklist peer
