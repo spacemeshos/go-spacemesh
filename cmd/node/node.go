@@ -461,8 +461,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 
 	app.nodeID = nodeID
 
-	name := nodeID.ShortString()
-
 	// This base logger must be debug level so that other, derived loggers are not a lower level.
 	lg := log.NewWithLevel(nodeID.ShortString(), zap.NewAtomicLevelAt(zapcore.DebugLevel)).WithFields(nodeID)
 
