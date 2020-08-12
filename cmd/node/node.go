@@ -5,6 +5,16 @@ import "C"
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"runtime"
+	"runtime/debug"
+	"runtime/pprof"
+	"time"
+
 	"github.com/spacemeshos/amcl"
 	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -30,15 +40,6 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"io/ioutil"
-	"net/http"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"runtime"
-	"runtime/debug"
-	"runtime/pprof"
-	"time"
 
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
@@ -50,9 +51,11 @@ import (
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	_ "net/http/pprof"
 )
 
-import _ "net/http/pprof" // import for memory and network profiling
+// import for memory and network profiling
 
 const edKeyFileName = "key.bin"
 
@@ -740,7 +743,7 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 		registerService(grpcserver.NewSmesherService(app.atxBuilder))
 	}
 	if apiConf.StartTransactionService {
-		registerService(grpcserver.NewTransactionService(net, app.mesh, app.txPool))
+		registerService(grpcserver.NewTransactionService(net, app.mesh, app.txPool, app.syncer))
 	}
 
 	// Now that the services are registered, start the server.
