@@ -48,7 +48,7 @@ func (s GlobalStateService) GlobalStateHash(ctx context.Context, in *pb.GlobalSt
 	}}, nil
 }
 
-// Account returns data for one account
+// Account returns counter and balance for one account
 func (s GlobalStateService) Account(ctx context.Context, in *pb.AccountRequest) (*pb.AccountResponse, error) {
 	log.Info("GRPC GlobalStateService.Account")
 
