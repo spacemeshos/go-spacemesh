@@ -2,6 +2,7 @@ package grpcserver
 
 import (
 	"bytes"
+
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -20,6 +21,12 @@ type TransactionService struct {
 	Network api.NetworkAPI // P2P Swarm
 	Mesh    api.TxAPI      // Mesh
 	Mempool *state.TxMempool
+	syncer  Syncer
+}
+
+type Syncer interface {
+	// IsSynced returns true if the node is synced false otherwise
+	IsSynced() bool
 }
 
 // RegisterService registers this service with a grpc server instance
@@ -29,17 +36,30 @@ func (s TransactionService) RegisterService(server *Server) {
 
 // NewTransactionService creates a new grpc service using config data.
 func NewTransactionService(
-	net api.NetworkAPI, tx api.TxAPI, mempool *state.TxMempool) *TransactionService {
+	net api.NetworkAPI,
+	tx api.TxAPI,
+	mempool *state.TxMempool,
+	syncer Syncer,
+) *TransactionService {
 	return &TransactionService{
 		Network: net,
 		Mesh:    tx,
 		Mempool: mempool,
+		syncer:  syncer,
 	}
 }
 
 // SubmitTransaction allows a new tx to be submitted
 func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.SubmitTransactionRequest) (*pb.SubmitTransactionResponse, error) {
 	log.Info("GRPC TransactionService.SubmitTransaction")
+
+	if len(in.Transaction) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "No transaction payload given")
+	}
+
+	if !s.syncer.IsSynced() {
+		return nil, status.Error(codes.FailedPrecondition, "Cannot submit transaction, node is not sync yet, try again later")
+	}
 
 	tx, err := types.BytesToTransaction(in.Transaction)
 	if err != nil {
