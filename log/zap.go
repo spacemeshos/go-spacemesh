@@ -9,42 +9,37 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// NilLogger is a not initialized logger it will panic if you'll call methods on it.
-var NilLogger Log
-
 // Log is an exported type that embeds our logger.
 type Log struct {
 	logger *zap.Logger
-	sugar  *zap.SugaredLogger
-	lvl    *zap.AtomicLevel
 }
 
 // Exported from Log basic logging options.
 
 // Info prints formatted info level log message.
 func (l Log) Info(format string, args ...interface{}) {
-	l.sugar.Infof(format, args...)
+	l.logger.Sugar().Infof(format, args...)
 }
 
 // Debug prints formatted debug level log message.
 func (l Log) Debug(format string, args ...interface{}) {
-	l.sugar.Debugf(format, args...)
+	l.logger.Sugar().Debugf(format, args...)
 }
 
 // Error prints formatted error level log message.
 func (l Log) Error(format string, args ...interface{}) {
-	l.sugar.Errorf(format, args...)
+	l.logger.Sugar().Errorf(format, args...)
 }
 
 // Warning prints formatted warning level log message.
 func (l Log) Warning(format string, args ...interface{}) {
-	l.sugar.Warnf(format, args...)
+	l.logger.Sugar().Warnf(format, args...)
 }
 
 // Panic prints the log message and then panics.
 func (l Log) Panic(format string, args ...interface{}) {
-	l.sugar.Error("Fatal: goroutine panicked. Stacktrace: ", string(debug.Stack()))
-	l.sugar.Panicf(format, args...)
+	l.logger.Sugar().Error("Fatal: goroutine panicked. Stacktrace: ", string(debug.Stack()))
+	l.logger.Sugar().Panicf(format, args...)
 }
 
 // Wrap and export field logic
@@ -120,7 +115,7 @@ func unpack(fields []LoggableField) []zap.Field {
 	return flds
 }
 
-// FieldLogger is a logger that only logs messages with fields. it does not support formatting.g
+// FieldLogger is a logger that only logs messages with fields. It does not support formatting.
 type FieldLogger struct {
 	l *zap.Logger
 }
@@ -132,57 +127,27 @@ func (l Log) With() FieldLogger {
 
 // SetLevel returns a logger with level as the log level derived from l.
 func (l Log) SetLevel(level *zap.AtomicLevel) Log {
-	lgr := l.logger.WithOptions(addDynamicLevel(level))
+	// Warn if the new level is lower than the parent level
+	if willWrite := l.logger.Check(level.Level(), "test"); willWrite == nil {
+		Warning("attempt to SetLevel of logger lower than parent level, this may result in " +
+			"log entries being dropped silently")
+	}
+	lgr := l.logger.WithOptions(zap.IncreaseLevel(zap.LevelEnablerFunc(level.Enabled)))
 	return Log{
 		lgr,
-		lgr.Sugar(),
-		level,
 	}
 }
 
 // WithName returns a logger the given fields
 func (l Log) WithName(prefix string) Log {
-	lgr := l.logger.Named(fmt.Sprintf("%-13s", prefix)).WithOptions(addDynamicLevel(l.lvl))
-	return Log{
-		lgr,
-		lgr.Sugar(),
-		l.lvl,
-	}
-}
-
-func addDynamicLevel(level *zap.AtomicLevel) zap.Option {
-	return zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-		return &coreWithLevel{
-			Core: core,
-			lvl:  level,
-		}
-	})
-}
-
-type coreWithLevel struct {
-	zapcore.Core
-	lvl *zap.AtomicLevel
-}
-
-func (c *coreWithLevel) Enabled(level zapcore.Level) bool {
-	return c.lvl.Enabled(level)
-}
-
-func (c *coreWithLevel) Check(e zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
-	if !c.lvl.Enabled(e.Level) {
-		return ce
-	}
-	return ce.AddCore(e, c.Core)
+	lgr := l.logger.Named(fmt.Sprintf("%-13s", prefix))
+	return Log{lgr}
 }
 
 // WithFields returns a logger with fields permanently appended to it.
 func (l Log) WithFields(fields ...LoggableField) Log {
-	lgr := l.logger.With(unpack(fields)...).WithOptions(addDynamicLevel(l.lvl))
-	return Log{
-		logger: lgr,
-		sugar:  lgr.Sugar(),
-		lvl:    l.lvl,
-	}
+	lgr := l.logger.With(unpack(fields)...)
+	return Log{logger: lgr}
 }
 
 const eventKey = "event"
@@ -201,11 +166,7 @@ var Nop = zap.WrapCore(func(zapcore.Core) zapcore.Core {
 // returns the resulting Logger. It's safe to use concurrently.
 func (l Log) WithOptions(opts ...zap.Option) Log {
 	lgr := l.logger.WithOptions(opts...)
-	return Log{
-		logger: lgr,
-		sugar:  lgr.Sugar(),
-		lvl:    l.lvl,
-	}
+	return Log{logger: lgr}
 }
 
 // Info prints message with fields

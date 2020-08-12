@@ -33,7 +33,6 @@ func logLevel() zap.LevelEnablerFunc {
 		return debugLevel
 	}
 	return infoLevel
-
 }
 
 // Level returns the zapcore level of logging.
@@ -79,6 +78,16 @@ func JSONLog(b bool) {
 	jsonLog = b
 }
 
+// NewWithLevel creates a logger with a fixed level
+func NewWithLevel(module string, level zap.AtomicLevel, hooks ...func(zapcore.Entry) error) Log {
+	consoleSyncer := zapcore.AddSync(os.Stdout)
+	enc := encoder()
+	consoleCore := zapcore.NewCore(enc, consoleSyncer, zap.LevelEnablerFunc(level.Enabled))
+	core := zapcore.RegisterHooks(consoleCore, hooks...)
+	log := zap.New(core).Named(module)
+	return Log{log}
+}
+
 // New creates a logger for a module. e.g. p2p instance logger.
 func New(module string, dataFolderPath string, logFileName string, hooks ...func(zapcore.Entry) error) Log {
 	var cores []zapcore.Core
@@ -98,13 +107,12 @@ func New(module string, dataFolderPath string, logFileName string, hooks ...func
 
 	log := zap.New(core)
 	log = log.Named(module)
-	lvl := zap.NewAtomicLevelAt(Level())
-	return Log{log, log.Sugar(), &lvl}
+	return Log{log}
 }
 
 // NewDefault creates a Log without file output
 func NewDefault(module string) Log {
-	return New(module, "", "")
+	return NewWithLevel(module, zap.NewAtomicLevelAt(Level()))
 }
 
 // getBackendLevelWithFileBackend returns backends level including log file backend
