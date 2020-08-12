@@ -4,6 +4,17 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"math"
+	"math/big"
+	"net/http"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
@@ -18,16 +29,6 @@ import (
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"io"
-	"io/ioutil"
-	"math"
-	"math/big"
-	"net/http"
-	"strconv"
-	"strings"
-	"sync"
-	"testing"
-	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -1426,8 +1427,39 @@ func TestMeshService(t *testing.T) {
 	}
 }
 
+func TestTransactionServiceSubmitUnsync(t *testing.T) {
+	require := require.New(t)
+	grpcService := NewTransactionService(&networkMock, txAPI, txMempool, &IsSyncerMock{})
+	shutDown := launchServer(t, grpcService)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(err)
+
+	defer func() { require.NoError(conn.Close()) }()
+	c := pb.NewTransactionServiceClient(conn)
+
+	serializedTx, err := types.InterfaceToBytes(globalTx)
+	require.NoError(err, "error serializing tx")
+	res, err := c.SubmitTransaction(
+		context.Background(),
+		&pb.SubmitTransactionRequest{Transaction: serializedTx},
+	)
+	require.Error(err)
+	require.Nil(res)
+}
+
+type IsSyncerMock struct{ isSync bool }
+
+func (i *IsSyncerMock) IsSynced() bool { return i.isSync }
+
 func TestTransactionService(t *testing.T) {
-	grpcService := NewTransactionService(&networkMock, txAPI, txMempool)
+
+	grpcService := NewTransactionService(&networkMock, txAPI, txMempool, &IsSyncerMock{isSync: true})
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
