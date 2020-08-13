@@ -24,6 +24,8 @@ type TransactionService struct {
 	syncer  Syncer
 }
 
+// Syncer defines ways of interacting with the node syncer
+// business logic
 type Syncer interface {
 	// IsSynced returns true if the node is synced false otherwise
 	IsSynced() bool
