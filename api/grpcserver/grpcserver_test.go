@@ -4,20 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/cmd"
-	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/state"
-	"google.golang.org/genproto/googleapis/rpc/code"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"io"
 	"io/ioutil"
 	"math"
@@ -29,15 +15,36 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/stretchr/testify/require"
-
+	"github.com/golang/protobuf/jsonpb"
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/go-spacemesh/api/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/ed25519"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
+	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver/server"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver/server/gateway"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver/service/global"
+	servicemesh "github.com/spacemeshos/go-spacemesh/api/grpcserver/service/mesh"
+	servicenode "github.com/spacemeshos/go-spacemesh/api/grpcserver/service/node"
+	servicesmesher "github.com/spacemeshos/go-spacemesh/api/grpcserver/service/smesher"
+	servicetransaction "github.com/spacemeshos/go-spacemesh/api/grpcserver/service/transaction"
+	"github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/state"
 )
 
 const (
@@ -375,14 +382,14 @@ type SyncerMock struct {
 func (SyncerMock) IsSynced() bool { return false }
 func (s *SyncerMock) Start()      { s.startCalled = true }
 
-func launchServer(t *testing.T, services ...ServiceAPI) func() {
+func launchServer(t *testing.T, services ...server.API) func() {
 	networkMock.Broadcast("", []byte{0x00})
-	grpcService := NewServerWithInterface(cfg.NewGrpcServerPort, "localhost")
-	jsonService := NewJSONHTTPServer(cfg.NewJSONServerPort, cfg.NewGrpcServerPort)
+	grpcService := server.New(cfg.NewGrpcServerPort)
+	jsonService := gateway.NewJSONHTTPServer(cfg.NewJSONServerPort, cfg.NewGrpcServerPort)
 
 	// attach services
 	for _, svc := range services {
-		svc.RegisterService(grpcService)
+		svc.Register(grpcService)
 	}
 
 	// start gRPC and json servers
@@ -416,8 +423,8 @@ func TestNewServersConfig(t *testing.T) {
 	port2, err := node.GetUnboundedPort()
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	grpcService := NewServerWithInterface(port1, "localhost")
-	jsonService := NewJSONHTTPServer(port2, port1)
+	grpcService := server.New(port1)
+	jsonService := gateway.NewJSONHTTPServer(port2, port1)
 
 	require.Equal(t, port2, jsonService.Port, "Expected same port")
 	require.Equal(t, port1, jsonService.GrpcPort, "Expected same port")
@@ -426,7 +433,7 @@ func TestNewServersConfig(t *testing.T) {
 
 func TestNodeService(t *testing.T) {
 	syncer := SyncerMock{}
-	grpcService := NewNodeService(&networkMock, txAPI, &genTime, &syncer)
+	grpcService := servicenode.New(&networkMock, txAPI, &genTime, &syncer)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -517,7 +524,7 @@ func TestNodeService(t *testing.T) {
 }
 
 func TestGlobalStateService(t *testing.T) {
-	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc := global.NewState(&networkMock, txAPI, &genTime, &SyncerMock{})
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -804,7 +811,7 @@ func TestGlobalStateService(t *testing.T) {
 }
 
 func TestSmesherService(t *testing.T) {
-	svc := NewSmesherService(&MiningAPIMock{})
+	svc := servicesmesher.New(&MiningAPIMock{})
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -925,7 +932,7 @@ func TestSmesherService(t *testing.T) {
 }
 
 func TestMeshService(t *testing.T) {
-	grpcService := NewMeshService(txAPI, txMempool, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	grpcService := servicemesh.New(txAPI, txMempool, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1427,7 +1434,7 @@ func TestMeshService(t *testing.T) {
 }
 
 func TestTransactionService(t *testing.T) {
-	grpcService := NewTransactionService(&networkMock, txAPI, txMempool)
+	grpcService := servicetransaction.New(&networkMock, txAPI, txMempool)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1770,7 +1777,8 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 }
 
 func TestAccountMeshDataStream_comprehensive(t *testing.T) {
-	grpcService := NewMeshService(txAPI, txMempool, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	grpcService := servicemesh.New(txAPI, txMempool, &genTime, layersPerEpoch,
+		networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1849,7 +1857,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 }
 
 func TestAccountDataStream_comprehensive(t *testing.T) {
-	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc := global.NewState(&networkMock, txAPI, &genTime, &SyncerMock{})
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -1942,7 +1950,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 }
 
 func TestGlobalStateStream_comprehensive(t *testing.T) {
-	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc := global.NewState(&networkMock, txAPI, &genTime, &SyncerMock{})
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -2040,7 +2048,8 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 }
 
 func TestLayerStream_comprehensive(t *testing.T) {
-	grpcService := NewMeshService(txAPI, txMempool, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	grpcService := servicemesh.New(txAPI, txMempool, &genTime, layersPerEpoch, networkID,
+		layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -2248,8 +2257,9 @@ func checkGlobalStateDataGlobalState(t *testing.T, dataItem interface{}) {
 }
 
 func TestMultiService(t *testing.T) {
-	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
-	svc2 := NewMeshService(txAPI, txMempool, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	svc1 := servicenode.New(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc2 := servicemesh.New(txAPI, txMempool, &genTime, layersPerEpoch,
+		networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, svc1, svc2)
 	defer shutDown()
 
@@ -2308,8 +2318,8 @@ func TestJsonApi(t *testing.T) {
 	shutDown()
 
 	// enable services and try again
-	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
-	svc2 := NewMeshService(txAPI, txMempool, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	svc1 := servicenode.New(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc2 := servicemesh.New(txAPI, txMempool, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	cfg.StartNodeService = true
 	cfg.StartMeshService = true
 	shutDown = launchServer(t, svc1, svc2)

@@ -1,47 +1,72 @@
-package grpcserver
+package global
 
 import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/spacemeshos/go-spacemesh/api"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver/server"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
-// GlobalStateService exposes global state data, output from the STF
-type GlobalStateService struct {
+// State exposes global state data, output from the STF
+type State struct {
 	Network     api.NetworkAPI // P2P Swarm
 	Mesh        api.TxAPI      // Mesh
 	GenTime     api.GenesisTimeAPI
 	PeerCounter api.PeerCounter
 	Syncer      api.Syncer
+
+	log log.Logger
 }
 
-// RegisterService registers this service with a grpc server instance
-func (s GlobalStateService) RegisterService(server *Server) {
-	pb.RegisterGlobalStateServiceServer(server.GrpcServer, s)
+var _ server.API = (*State)(nil)
+
+// Register registers this service with a grpc server instance
+func (s State) Register(ss *server.Server) {
+	pb.RegisterGlobalStateServiceServer(ss.GrpcServer, s)
 }
 
-// NewGlobalStateService creates a new grpc service using config data.
-func NewGlobalStateService(
-	net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI,
-	syncer api.Syncer) *GlobalStateService {
-	return &GlobalStateService{
+// Option type definds an callback that can set internal State fields
+type Option func(s *State)
+
+// WithLogger set's the underlying logger to a custom logger. By default the logger is NoOp
+func WithLogger(log log.Logger) Option {
+	return func(g *State) {
+		g.log = log
+	}
+}
+
+// NewState creates a new grpc service using config data.
+func NewState(
+	net api.NetworkAPI,
+	tx api.TxAPI,
+	genTime api.GenesisTimeAPI,
+	syncer api.Syncer,
+	options ...Option,
+) *State {
+	g := &State{
 		Network:     net,
 		Mesh:        tx,
 		GenTime:     genTime,
 		PeerCounter: peers.NewPeers(net, log.NewDefault("grpcserver.GlobalStateService")),
 		Syncer:      syncer,
+		log:         log.NewNop(),
 	}
+	for _, option := range options {
+		option(g)
+	}
+	return g
 }
 
 // GlobalStateHash returns the latest layer and its computed global state hash
-func (s GlobalStateService) GlobalStateHash(ctx context.Context, in *pb.GlobalStateHashRequest) (*pb.GlobalStateHashResponse, error) {
-	log.Info("GRPC GlobalStateService.GlobalStateHash")
+func (s State) GlobalStateHash(ctx context.Context, in *pb.GlobalStateHashRequest) (*pb.GlobalStateHashResponse, error) {
+	s.log.Info("GRPC GlobalStateService.GlobalStateHash")
 	return &pb.GlobalStateHashResponse{Response: &pb.GlobalStateHash{
 		RootHash:    s.Mesh.GetStateRoot().Bytes(),
 		LayerNumber: s.Mesh.LatestLayerInState().Uint64(),
@@ -49,8 +74,8 @@ func (s GlobalStateService) GlobalStateHash(ctx context.Context, in *pb.GlobalSt
 }
 
 // Account returns counter and balance for one account
-func (s GlobalStateService) Account(ctx context.Context, in *pb.AccountRequest) (*pb.AccountResponse, error) {
-	log.Info("GRPC GlobalStateService.Account")
+func (s State) Account(ctx context.Context, in *pb.AccountRequest) (*pb.AccountResponse, error) {
+	s.log.Info("GRPC GlobalStateService.Account")
 
 	if in.AccountId == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "`AccountId` must be provided")
@@ -61,7 +86,7 @@ func (s GlobalStateService) Account(ctx context.Context, in *pb.AccountRequest) 
 	balance := s.Mesh.GetBalance(addr)
 	counter := s.Mesh.GetNonce(addr)
 
-	log.With().Debug("GRPC GlobalStateService.Account",
+	s.log.With().Debug("GRPC GlobalStateService.Account",
 		addr, log.Uint64("balance", balance), log.Uint64("counter", counter))
 
 	return &pb.AccountResponse{AccountWrapper: &pb.Account{
@@ -72,8 +97,8 @@ func (s GlobalStateService) Account(ctx context.Context, in *pb.AccountRequest) 
 }
 
 // AccountDataQuery returns historical account data such as rewards and receipts
-func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.AccountDataQueryRequest) (*pb.AccountDataQueryResponse, error) {
-	log.Info("GRPC GlobalStateService.AccountDataQuery")
+func (s State) AccountDataQuery(ctx context.Context, in *pb.AccountDataQueryRequest) (*pb.AccountDataQueryResponse, error) {
+	s.log.Info("GRPC GlobalStateService.AccountDataQuery")
 
 	if in.Filter == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "`Filter` must be provided")
@@ -162,8 +187,8 @@ func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.Account
 }
 
 // SmesherDataQuery returns historical info on smesher rewards
-func (s GlobalStateService) SmesherDataQuery(ctx context.Context, in *pb.SmesherDataQueryRequest) (*pb.SmesherDataQueryResponse, error) {
-	log.Info("GRPC GlobalStateService.SmesherDataQuery")
+func (s State) SmesherDataQuery(ctx context.Context, in *pb.SmesherDataQueryRequest) (*pb.SmesherDataQueryResponse, error) {
+	s.log.Info("GRPC GlobalStateService.SmesherDataQuery")
 
 	// TODO: implement me! We don't currently have a way to read rewards per-smesher.
 	// See https://github.com/spacemeshos/go-spacemesh/issues/2068
@@ -174,8 +199,8 @@ func (s GlobalStateService) SmesherDataQuery(ctx context.Context, in *pb.Smesher
 // STREAMS
 
 // AccountDataStream exposes a stream of account-related data
-func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, stream pb.GlobalStateService_AccountDataStreamServer) error {
-	log.Info("GRPC GlobalStateService.AccountDataStream")
+func (s State) AccountDataStream(in *pb.AccountDataStreamRequest, stream pb.GlobalStateService_AccountDataStreamServer) error {
+	s.log.Info("GRPC GlobalStateService.AccountDataStream")
 
 	if in.Filter == nil {
 		return status.Errorf(codes.InvalidArgument, "`Filter` must be provided")
@@ -242,7 +267,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 				// to this stream but continuing to listen to the other stream,
 				// but in practice one should never be closed while the other is
 				// still running, so it doesn't matter
-				log.Info("reward channel closed, shutting down")
+				s.log.Info("reward channel closed, shutting down")
 				return nil
 			}
 			// Apply address filter
@@ -289,7 +314,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 				}
 			}
 		case <-stream.Context().Done():
-			log.Info("AccountDataStream closing stream, client disconnected")
+			s.log.Info("AccountDataStream closing stream, client disconnected")
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate
@@ -299,8 +324,8 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 }
 
 // SmesherRewardStream exposes a stream of smesher rewards
-func (s GlobalStateService) SmesherRewardStream(request *pb.SmesherRewardStreamRequest, stream pb.GlobalStateService_SmesherRewardStreamServer) error {
-	log.Info("GRPC GlobalStateService.SmesherRewardStream")
+func (s State) SmesherRewardStream(request *pb.SmesherRewardStreamRequest, stream pb.GlobalStateService_SmesherRewardStreamServer) error {
+	s.log.Info("GRPC GlobalStateService.SmesherRewardStream")
 
 	// TODO: implement me! We don't currently have a way to read rewards per-smesher.
 	// See https://github.com/spacemeshos/go-spacemesh/issues/2068
@@ -309,8 +334,8 @@ func (s GlobalStateService) SmesherRewardStream(request *pb.SmesherRewardStreamR
 }
 
 // AppEventStream exposes a stream of emitted app events
-func (s GlobalStateService) AppEventStream(request *pb.AppEventStreamRequest, stream pb.GlobalStateService_AppEventStreamServer) error {
-	log.Info("GRPC GlobalStateService.AppEventStream")
+func (s State) AppEventStream(request *pb.AppEventStreamRequest, stream pb.GlobalStateService_AppEventStreamServer) error {
+	s.log.Info("GRPC GlobalStateService.AppEventStream")
 
 	// TODO: implement me! We don't currently have any app events
 	// See https://github.com/spacemeshos/go-spacemesh/issues/2074
@@ -319,8 +344,8 @@ func (s GlobalStateService) AppEventStream(request *pb.AppEventStreamRequest, st
 }
 
 // GlobalStateStream exposes a stream of global data data items: rewards, receipts, account info, global state hash
-func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, stream pb.GlobalStateService_GlobalStateStreamServer) error {
-	log.Info("GRPC GlobalStateService.GlobalStateStream")
+func (s State) GlobalStateStream(in *pb.GlobalStateStreamRequest, stream pb.GlobalStateService_GlobalStateStreamServer) error {
+	s.log.Info("GRPC GlobalStateService.GlobalStateStream")
 
 	if in.GlobalStateDataFlags == uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_UNSPECIFIED) {
 		return status.Errorf(codes.InvalidArgument, "`GlobalStateDataFlags` must set at least one bitfield")
@@ -361,7 +386,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				// to this stream but continuing to listen to the other stream,
 				// but in practice one should never be closed while the other is
 				// still running, so it doesn't matter
-				log.Info("account channel closed, shutting down")
+				s.log.Info("account channel closed, shutting down")
 				return nil
 			}
 			// The Reporter service just sends us the account address. We are responsible
@@ -384,7 +409,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				// to this stream but continuing to listen to the other stream,
 				// but in practice one should never be closed while the other is
 				// still running, so it doesn't matter
-				log.Info("reward channel closed, shutting down")
+				s.log.Info("reward channel closed, shutting down")
 				return nil
 			}
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Reward{
@@ -408,7 +433,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				// to this stream but continuing to listen to the other stream,
 				// but in practice one should never be closed while the other is
 				// still running, so it doesn't matter
-				log.Info("receipt channel closed, shutting down")
+				s.log.Info("receipt channel closed, shutting down")
 				return nil
 			}
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Receipt{
@@ -430,12 +455,12 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				// to this stream but continuing to listen to the other stream,
 				// but in practice one should never be closed while the other is
 				// still running, so it doesn't matter
-				log.Info("layer channel closed, shutting down")
+				s.log.Info("layer channel closed, shutting down")
 				return nil
 			}
 			root, err := s.Mesh.GetLayerStateRoot(layer.Layer.Index())
 			if err != nil {
-				log.Error("error retrieving layer data: %s", err)
+				s.log.Error("error retrieving layer data: %s", err)
 				return status.Errorf(codes.Internal, "error retrieving layer data")
 			}
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_GlobalState{
@@ -447,7 +472,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				return err
 			}
 		case <-stream.Context().Done():
-			log.Info("AccountDataStream closing stream, client disconnected")
+			s.log.Info("AccountDataStream closing stream, client disconnected")
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate

@@ -3,11 +3,12 @@
 package log
 
 import (
-	"go.uber.org/zap/zapcore"
-	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"os"
 	"path/filepath"
+
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 
 	"go.uber.org/zap"
 )
@@ -51,6 +52,7 @@ type Logger interface {
 	Error(format string, args ...interface{})
 	Warning(format string, args ...interface{})
 	WithName(prefix string) Log
+	With() FieldLogger
 }
 
 func encoder() zapcore.Encoder {
@@ -62,6 +64,17 @@ func encoder() zapcore.Encoder {
 
 // AppLog is the local app singleton logger.
 var AppLog Log
+
+// NewNop returns a no-op logger.
+func NewNop() Log {
+	nop := zap.NewNop()
+	al := zap.NewAtomicLevel()
+	return Log{
+		logger: nop,
+		sugar:  nop.Sugar(),
+		lvl:    &al,
+	}
+}
 
 func init() {
 	// create a basic temp os.Stdout logger
