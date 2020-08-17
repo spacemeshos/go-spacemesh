@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"golang.org/x/net/context"
 	"google.golang.org/genproto/googleapis/rpc/code"
@@ -16,7 +17,8 @@ import (
 
 // SmesherService exposes endpoints to manage smeshing
 type SmesherService struct {
-	Mining api.MiningAPI
+	post     api.PostAPI
+	smeshing api.SmeshingAPI
 }
 
 // RegisterService registers this service with a grpc server instance
@@ -25,40 +27,34 @@ func (s SmesherService) RegisterService(server *Server) {
 }
 
 // NewSmesherService creates a new grpc service using config data.
-func NewSmesherService(miner api.MiningAPI) *SmesherService {
-	return &SmesherService{
-		Mining: miner,
-	}
+func NewSmesherService(post api.PostAPI, smeshing api.SmeshingAPI) *SmesherService {
+	return &SmesherService{post, smeshing}
 }
 
 // IsSmeshing reports whether the node is smeshing
 func (s SmesherService) IsSmeshing(ctx context.Context, in *empty.Empty) (*pb.IsSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.IsSmeshing")
 
-	stat, _, _, _ := s.Mining.MiningStats()
-	isSmeshing := stat == activation.InitDone
-	return &pb.IsSmeshingResponse{IsSmeshing: isSmeshing}, nil
+	return &pb.IsSmeshingResponse{IsSmeshing: s.smeshing.Smeshing()}, nil
 }
 
 // StartSmeshing requests that the node begin smeshing
 func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingRequest) (*pb.StartSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.StartSmeshing")
 
+	// TODO(moshababo): remove DataDir and CommitmentSize from the request proto definition.
+	// TODO(moshababo): check why JSON request via HTTP gateway doesn't decode `coinbase` properly
+
 	if in.Coinbase == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "`Coinbase` must be provided")
 	}
-	if in.DataDir == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "`DataDir` must be provided")
-	}
-	if in.CommitmentSize == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "`CommitmentSize` must be provided")
-	}
 
 	addr := types.BytesToAddress(in.Coinbase.Address)
-	if err := s.Mining.StartPost(addr, in.DataDir, in.CommitmentSize.Value); err != nil {
-		log.Error("error starting post: %s", err)
-		return nil, status.Errorf(codes.Internal, "error initializing smeshing")
+	if err := s.smeshing.StartSmeshing(addr); err != nil {
+		log.Error("StartSmeshing failure: %v", err) // TODO: should not crash nor print stacktrace.
+		return nil, status.Error(codes.Internal, err.Error())
 	}
+
 	return &pb.StartSmeshingResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
@@ -68,7 +64,9 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingRequest) (*pb.StopSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.StopSmeshing")
 
-	s.Mining.Stop()
+	if err := s.smeshing.StopSmeshing(); err != nil {
+		return nil, err
+	}
 	return &pb.StopSmeshingResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
@@ -78,21 +76,16 @@ func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingReq
 func (s SmesherService) SmesherID(ctx context.Context, in *empty.Empty) (*pb.SmesherIDResponse, error) {
 	log.Info("GRPC SmesherService.SmesherID")
 
-	smesherID := s.Mining.GetSmesherID()
-	return &pb.SmesherIDResponse{AccountId: &pb.AccountId{Address: smesherID.ToBytes()}}, nil
+	addr := util.Hex2Bytes(s.smeshing.SmesherID().Key)
+	return &pb.SmesherIDResponse{AccountId: &pb.AccountId{Address: addr}}, nil
 }
 
 // Coinbase returns the current coinbase setting of this node
 func (s SmesherService) Coinbase(ctx context.Context, in *empty.Empty) (*pb.CoinbaseResponse, error) {
 	log.Info("GRPC SmesherService.Coinbase")
 
-	_, _, coinbase, _ := s.Mining.MiningStats()
-	addr, err := types.StringToAddress(coinbase)
-	if err != nil {
-		log.Error("error converting coinbase: %s", err)
-		return nil, status.Errorf(codes.Internal, "error reading coinbase data")
-	}
-	return &pb.CoinbaseResponse{AccountId: &pb.AccountId{Address: addr.Bytes()}}, nil
+	addr := s.smeshing.Coinbase()
+	return &pb.CoinbaseResponse{AccountId: &pb.AccountId{Address: addr[:]}}, nil
 }
 
 // SetCoinbase sets the current coinbase setting of this node
@@ -104,7 +97,8 @@ func (s SmesherService) SetCoinbase(ctx context.Context, in *pb.SetCoinbaseReque
 	}
 
 	addr := types.BytesToAddress(in.Id.Address)
-	s.Mining.SetCoinbaseAccount(addr)
+	s.smeshing.SetCoinbase(addr)
+
 	return &pb.SetCoinbaseResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
@@ -125,25 +119,70 @@ func (s SmesherService) SetMinGas(ctx context.Context, in *pb.SetMinGasRequest) 
 // PostStatus returns post data status
 func (s SmesherService) PostStatus(ctx context.Context, in *empty.Empty) (*pb.PostStatusResponse, error) {
 	log.Info("GRPC SmesherService.PostStatus")
-	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
+
+	status, err := s.post.PostStatus()
+	if err != nil {
+		return nil, err
+	}
+	return &pb.PostStatusResponse{Status: statusToPbStatus(status)}, nil
 }
 
 // PostComputeProviders returns a list of available post compute providers
 func (s SmesherService) PostComputeProviders(ctx context.Context, in *empty.Empty) (*pb.PostComputeProvidersResponse, error) {
 	log.Info("GRPC SmesherService.PostComputeProviders")
-	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
+
+	providers := s.post.PostComputeProviders()
+
+	res := &pb.PostComputeProvidersResponse{}
+	res.PostComputeProvider = make([]*pb.PostComputeProvider, len(providers))
+	for i, p := range providers {
+		hs, err := p.Benchmark()
+		if err != nil {
+			return nil, err
+		}
+
+		res.PostComputeProvider[i] = &pb.PostComputeProvider{
+			Id:          uint32(p.Id),
+			Model:       p.Model,
+			ComputeApi:  pb.ComputeApiClass(p.ComputeAPI), // assuming enum values match.
+			Performance: uint64(hs),
+		}
+	}
+
+	return res, nil
 }
 
 // CreatePostData requests that the node begin post init
 func (s SmesherService) CreatePostData(ctx context.Context, in *pb.CreatePostDataRequest) (*pb.CreatePostDataResponse, error) {
 	log.Info("GRPC SmesherService.CreatePostData")
-	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
+
+	if _, err := s.post.CreatePostData(&activation.PostOptions{
+		DataDir:           in.Data.Path,
+		DataSize:          in.Data.DataSize,
+		Append:            in.Data.Append,
+		Throttle:          in.Data.Throttle,
+		ComputeProviderId: uint(in.Data.ProviderId),
+	}); err != nil {
+		return nil, err
+	}
+
+	return &pb.CreatePostDataResponse{
+		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
+	}, nil
 }
 
 // StopPostDataCreationSession requests that the node stop ongoing post data creation
 func (s SmesherService) StopPostDataCreationSession(ctx context.Context, in *pb.StopPostDataCreationSessionRequest) (*pb.StopPostDataCreationSessionResponse, error) {
 	log.Info("GRPC SmesherService.StopPostDataCreationSession")
-	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
+
+	if err := s.post.StopPostDataCreationSession(in.DeleteFiles); err != nil {
+		return nil, err
+	}
+
+	return &pb.StopPostDataCreationSessionResponse{
+		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
+	}, nil
+
 }
 
 // STREAMS
@@ -151,5 +190,32 @@ func (s SmesherService) StopPostDataCreationSession(ctx context.Context, in *pb.
 // PostDataCreationProgressStream exposes a stream of updates during post init
 func (s SmesherService) PostDataCreationProgressStream(request *empty.Empty, stream pb.SmesherService_PostDataCreationProgressStreamServer) error {
 	log.Info("GRPC SmesherService.PostDataCreationProgressStream")
-	return status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
+
+	for status := range s.post.PostDataCreationProgressStream() {
+		if err := stream.Send(&pb.PostDataCreationProgressStreamResponse{Status: statusToPbStatus(status)}); err != nil {
+			return err
+		}
+	}
+
+	// TODO(moshababo): check if stop streaming on stream.Context().Done() is required
+
+	return nil
+}
+
+func statusToPbStatus(status *activation.PostStatus) *pb.PostStatus {
+	pbStatus := &pb.PostStatus{}
+	pbStatus.InitInProgress = status.InitInProgress
+	pbStatus.BytesWritten = status.BytesWritten
+	pbStatus.ErrorType = pb.PostStatus_ErrorType(status.ErrorType) // assuming enum values match.
+	pbStatus.ErrorMessage = status.ErrorMessage
+	if status.LastOptions != nil {
+		pbStatus.PostData = &pb.PostData{
+			Path:       status.LastOptions.DataDir,
+			DataSize:   status.LastOptions.DataSize,
+			Append:     status.LastOptions.Append,
+			Throttle:   status.LastOptions.Throttle,
+			ProviderId: uint32(status.LastOptions.ComputeProviderId),
+		}
+	}
+	return pbStatus
 }

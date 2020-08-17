@@ -287,7 +287,7 @@ func convertActivation(a *types.ActivationTx) (*pb.Activation, error) {
 		SmesherId:      &pb.SmesherId{Id: a.NodeID.ToBytes()},
 		Coinbase:       &pb.AccountId{Address: a.Coinbase.Bytes()},
 		PrevAtx:        &pb.ActivationId{Id: a.PrevATXID.Bytes()},
-		CommitmentSize: a.Nipst.Space,
+		CommitmentSize: a.Nipst.NumLabels, // TODO(moshababo): multiply by label size
 	}, nil
 }
 

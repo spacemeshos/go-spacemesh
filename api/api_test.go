@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/post/initialization"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -215,11 +217,41 @@ const (
 	remainingBytes = 321
 )
 
+func (*MiningAPIMock) PostStatus() (*activation.PostStatus, error) {
+	return nil, nil
+}
+
+func (*MiningAPIMock) PostComputeProviders() []initialization.ComputeProvider {
+	return nil
+}
+
+func (*MiningAPIMock) CreatePostData(options *activation.PostOptions) error {
+	return nil
+}
+
+func (*MiningAPIMock) StopPostDataCreationSession() {
+}
+
+func (*MiningAPIMock) PostDataCreationProgressStream() {
+}
+
+func (*MiningAPIMock) IsSmeshing() (bool, error) {
+	return true, nil
+}
+
+func (*MiningAPIMock) StartSmeshing() error {
+	return nil
+}
+
+func (*MiningAPIMock) StopSmeshing() error {
+	return nil
+}
+
 func (*MiningAPIMock) MiningStats() (int, uint64, string, string) {
 	return miningStatus, remainingBytes, "123456", "/tmp"
 }
 
-func (*MiningAPIMock) StartPost(types.Address, string, uint64) error {
+func (*MiningAPIMock) StartPost(types.Address, string, uint64, uint) error {
 	return nil
 }
 

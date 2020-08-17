@@ -166,6 +166,7 @@ type SpacemeshApp struct {
 	gossipListener    *service.Listener
 	clock             TickProvider
 	hare              HareService
+	post              *activation.PostManager
 	atxBuilder        *activation.Builder
 	atxDb             *activation.DB
 	poetListener      *activation.PoetListener
@@ -453,7 +454,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	isFixedOracle bool,
 	rolacle hare.Rolacle,
 	layerSize uint32,
-	postClient activation.PostProverClient,
 	poetClient activation.PoetProvingServiceClient,
 	vrfSigner *BLS381.BlsSigner,
 	layersPerEpoch uint16, clock TickProvider) error {
@@ -467,8 +467,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
 
 	app.log = app.addLogger(AppLogger, lg)
-
-	postClient.SetLogger(app.addLogger(PostLogger, lg))
 
 	db, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "state"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
@@ -586,14 +584,14 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))
 
-	nipstBuilder := activation.NewNIPSTBuilder(util.Hex2Bytes(nodeID.Key), postClient, poetClient, poetDb, store, app.addLogger(NipstBuilderLogger, lg))
-
-	coinBase := types.HexToAddress(app.Config.CoinbaseAccount)
-
-	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
-		app.log.Panic("invalid Coinbase account")
+	postMgr, err := activation.NewPostManager(util.Hex2Bytes(nodeID.Key), app.Config.POST, store, log.AppLog) //app.addLogger(PostLogger, lg))
+	if err != nil {
+		log.Error("failed to create post manager: %v", err)
 	}
-	atxBuilder := activation.NewBuilder(nodeID, coinBase, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock, syncer, store, app.addLogger("atxBuilder", lg))
+
+	nipstBuilder := activation.NewNIPSTBuilder(util.Hex2Bytes(nodeID.Key), postMgr, poetClient, poetDb, store, app.addLogger(NipstBuilderLogger, lg))
+
+	atxBuilder := activation.NewBuilder(nodeID, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postMgr, clock, syncer, store, app.addLogger("atxBuilder", lg))
 
 	gossipListener.AddListener(state.IncomingTxProtocol, priorityq.Low, processor.HandleTxData)
 	gossipListener.AddListener(activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
@@ -609,6 +607,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	app.P2P = swarm
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
+	app.post = postMgr
 	app.oracle = blockOracle
 	app.txProcessor = processor
 	app.atxDb = atxdb
@@ -679,21 +678,43 @@ func (app *SpacemeshApp) startServices() {
 	app.poetListener.Start()
 
 	if app.Config.StartMining {
-		coinBase := types.HexToAddress(app.Config.CoinbaseAccount)
-		err := app.atxBuilder.StartPost(coinBase, app.Config.POST.DataDir, app.Config.POST.SpacePerUnit)
-		if err != nil {
-			log.Error("Error initializing post, err: %v", err)
-			log.Panic("Error initializing post")
+		coinbase := types.HexToAddress(app.Config.CoinbaseAccount)
+		if coinbase.Big().Uint64() == 0 {
+			app.log.Panic("invalid Coinbase account")
 		}
+
+		go func() {
+			if completedChan, ok := app.post.InitCompleted(); !ok {
+				// TODO(moshababo): apply args
+				options := &activation.PostOptions{
+					DataDir:           app.Config.POST.DataDir,
+					DataSize:          app.Config.POST.NumLabels,
+					Append:            true,
+					Throttle:          false,
+					ComputeProviderId: 0, // TODO(moshababo): benchmark and use highest score provider
+				}
+
+				// TODO(moshababo): retry mechanism. completedChan could block forever
+				// if a failure happened during the session.
+				if _, err := app.post.CreatePostData(options); err != nil {
+					log.Panic("Failed to start creating post data: %v", err)
+				}
+				<-completedChan
+			}
+
+			if err := app.atxBuilder.StartSmeshing(coinbase); err != nil {
+				log.Panic("Failed to start smeshing: %v", err)
+			}
+		}()
 	} else {
-		log.Info("Manual post init")
+		log.Info("Mining not started, waiting to be started via smesher API")
 	}
-	app.atxBuilder.Start()
+
 	app.clock.StartNotifying()
 	go app.checkTimeDrifts()
 }
 
-func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.NetworkAPI) {
+func (app *SpacemeshApp) startAPIServices(net api.NetworkAPI) {
 	apiConf := &app.Config.API
 
 	// OLD API SERVICES (deprecated)
@@ -701,7 +722,7 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
 		app.grpcAPIService = api.NewGrpcService(apiConf.GrpcServerPort, net, app.state, app.mesh, app.txPool,
-			app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app.syncer, app.Config, app)
+			app.oracle, app.clock, layerDuration, app.syncer, app.Config, app)
 		app.grpcAPIService.StartService()
 	}
 
@@ -735,7 +756,7 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 		registerService(grpcserver.NewGlobalStateService(net, app.mesh, app.clock, app.syncer))
 	}
 	if apiConf.StartSmesherService {
-		registerService(grpcserver.NewSmesherService(app.atxBuilder))
+		registerService(grpcserver.NewSmesherService(app.post, app.atxBuilder))
 	}
 	if apiConf.StartTransactionService {
 		registerService(grpcserver.NewTransactionService(net, app.mesh, app.txPool))
@@ -808,7 +829,7 @@ func (app *SpacemeshApp) stopServices() {
 
 	if app.atxBuilder != nil {
 		app.log.Info("closing atx builder")
-		app.atxBuilder.Stop()
+		app.atxBuilder.StopSmeshing()
 	}
 
 	if app.blockListener != nil {
@@ -972,11 +993,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
 	nodeID := types.NodeID{Key: app.edSgn.PublicKey().String(), VRFPublicKey: vrfPub}
 
-	postClient, err := activation.NewPostClient(&app.Config.POST, util.Hex2Bytes(nodeID.Key))
-	if err != nil {
-		log.Error("failed to create post client: %v", err)
-	}
-
 	/* Initialize all protocol services */
 	lg := log.NewDefault(nodeID.ShortString())
 
@@ -994,7 +1010,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("Error starting p2p services. err: %v", err)
 	}
 
-	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, false, nil, uint32(app.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(app.Config.LayersPerEpoch), clock)
+	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, false, nil, uint32(app.Config.LayerAvgSize), poetClient, vrfSigner, uint16(app.Config.LayersPerEpoch), clock)
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return
@@ -1016,7 +1032,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("Error starting p2p services: %v", err)
 	}
 
-	app.startAPIServices(postClient, app.P2P)
+	app.startAPIServices(app.P2P)
 	events.SubscribeToLayers(clock.Subscribe())
 	log.Info("App started.")
 

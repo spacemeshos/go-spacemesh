@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/collector"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
@@ -129,9 +128,7 @@ func getTestDefaultConfig() *config.Config {
 	}
 
 	cfg.POST = activation.DefaultConfig()
-	cfg.POST.Difficulty = 5
-	cfg.POST.NumProvenLabels = 10
-	cfg.POST.SpacePerUnit = 1 << 10 // 1KB.
+	cfg.POST.NumLabels = 1 << 10
 	cfg.POST.NumFiles = 1
 
 	cfg.HARE.N = 5
@@ -160,7 +157,7 @@ func getTestDefaultConfig() *config.Config {
 func ActivateGrpcServer(smApp *SpacemeshApp) {
 	smApp.Config.API.StartGrpcServer = true
 	layerDuration := smApp.Config.LayerDurationSec
-	smApp.grpcAPIService = api.NewGrpcService(smApp.Config.API.GrpcServerPort, smApp.P2P, smApp.state, smApp.mesh, smApp.txPool, smApp.atxBuilder, smApp.oracle, smApp.clock, nil, layerDuration, nil, nil, nil)
+	smApp.grpcAPIService = api.NewGrpcService(smApp.Config.API.GrpcServerPort, smApp.P2P, smApp.state, smApp.mesh, smApp.txPool, smApp.oracle, smApp.clock, layerDuration, nil, nil, nil)
 	smApp.grpcAPIService.StartService()
 }
 
@@ -209,12 +206,7 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.
 	hareOracle := newLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
-	postClient, err := activation.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))
-	if err != nil {
-		return nil, err
-	}
-
-	err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
+	err := smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
 	if err != nil {
 		return nil, err
 	}

@@ -116,14 +116,14 @@ func (atxh *ActivationTxHeader) SetID(id *ATXID) {
 // the sequence), the intended publication layer ID, the PoET's start and end ticks, the positioning ATX's ID and for
 // the first ATX in the sequence also the commitment Merkle root.
 type NIPSTChallenge struct {
-	NodeID               NodeID
-	Sequence             uint64
-	PrevATXID            ATXID
-	PubLayerID           LayerID
-	StartTick            uint64
-	EndTick              uint64
-	PositioningATX       ATXID
-	CommitmentMerkleRoot []byte
+	NodeID            NodeID
+	Sequence          uint64
+	PrevATXID         ATXID
+	PubLayerID        LayerID
+	StartTick         uint64
+	EndTick           uint64
+	PositioningATX    ATXID
+	CommitmentIndices []byte
 }
 
 // Hash serializes the NIPSTChallenge and returns its hash.
@@ -280,9 +280,9 @@ type PoetRound struct {
 // after learning the challenge C. (2) the prover did not know the NIPST until D time
 // after the prover learned C.
 type NIPST struct {
-	// space is the amount of storage which the prover
-	// requires to dedicate for generating the NIPST.
-	Space uint64
+	// NumLabels is the number of labels which the prover
+	// commits to store for generating the NIPoST.
+	NumLabels uint64
 
 	// nipstChallenge is the challenge for PoET which is
 	// constructed from fields in the activation transaction.
@@ -299,8 +299,8 @@ type PostProof proving.Proof
 // String returns a string representation of the PostProof, for logging purposes.
 // It implements the Stringer interface.
 func (p PostProof) String() string {
-	return fmt.Sprintf("challenge: %v, root: %v",
-		bytesToShortString(p.Challenge), bytesToShortString(p.MerkleRoot))
+	return fmt.Sprintf("challenge: %v, nonce: %v",
+		bytesToShortString(p.Challenge), p.Nonce)
 }
 
 func bytesToShortString(b []byte) string {

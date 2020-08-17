@@ -243,6 +243,8 @@ github.com/spacemeshos/poet v0.1.0 h1:WYBCUjwvjmITFOwUqXYT/kUF5Z2xJcJjpNoM9SUYl7
 github.com/spacemeshos/poet v0.1.0/go.mod h1:hxca04tOsB0MYhhQ3ydZID9KwlTaJauiKD81GBeNL4s=
 github.com/spacemeshos/post v0.0.0-20200707150818-013318bab6f4 h1:7JcHmiyOWSpVAlYX95OGDiYBT2iZAI2xTEj25A1QTcY=
 github.com/spacemeshos/post v0.0.0-20200707150818-013318bab6f4/go.mod h1:Xr3vr5eiA/n8cW0vM0j79g4HyNT6/0MbGqU8EAGLDJk=
+github.com/spacemeshos/post v0.0.0-20200806143424-aeefd21c691b h1:SLZh/lkES7hhoh/1ZlkR7BV/ts2uGMwwuBAeSC6z0pM=
+github.com/spacemeshos/post v0.0.0-20200806143424-aeefd21c691b/go.mod h1:Xr3vr5eiA/n8cW0vM0j79g4HyNT6/0MbGqU8EAGLDJk=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9 h1:Cc+np6ORem5wrvO+YHQ1sdu71ItiQVRiYB4ugazpgxM=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9/go.mod h1:Pz5LyRghtiEuSixOVGO0da5AxKBZa6+Yq8ZJfjTAPI0=
 github.com/spacemeshos/smutil v0.0.0-20190604133034-b5189449f5c5 h1:a+uIX0wjwWdK2JpsQnNhSdp3KDkqGg6P7Jp3nMZP8BM=
@@ -374,6 +376,7 @@ golang.org/x/tools v0.0.0-20190311212946-11955173bddd/go.mod h1:LCzVGOaR6xXOjkQ3
 golang.org/x/tools v0.0.0-20190312170243-e65039ee4138/go.mod h1:LCzVGOaR6xXOjkQ3onu1FJEFr0SW1gC7cKk1uF8kGRs=
 golang.org/x/tools v0.0.0-20190328211700-ab21143f2384/go.mod h1:LCzVGOaR6xXOjkQ3onu1FJEFr0SW1gC7cKk1uF8kGRs=
 golang.org/x/tools v0.0.0-20190506145303-2d16b83fe98c/go.mod h1:RgjU9mgBXZiqYHBnxXauZ1Gv1EHHAz9KjViQ78xBX0Q=
+golang.org/x/tools v0.0.0-20190524140312-2c0ae7006135 h1:5Beo0mZN8dRzgrMMkDp0jc8YXQKx9DiJ2k1dkvGsn5A=
 golang.org/x/tools v0.0.0-20190524140312-2c0ae7006135/go.mod h1:RgjU9mgBXZiqYHBnxXauZ1Gv1EHHAz9KjViQ78xBX0Q=
 golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543 h1:E7g+9GITq07hpfrRu66IVDexMakfv52eLZ2CXBWiKr4=
 golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=

@@ -34,19 +34,19 @@ func (v *Validator) Validate(minerID signing.PublicKey, nipst *types.NIPST, expe
 		return fmt.Errorf("PoET proof chain invalid: %v", err)
 	}
 
-	if nipst.Space < v.postCfg.SpacePerUnit {
-		return fmt.Errorf("PoST space (%d) is less than a single space unit (%d)", nipst.Space, v.postCfg.SpacePerUnit)
+	if nipst.NumLabels < v.postCfg.NumLabels {
+		return fmt.Errorf("invalid NumLabels; expected: >=%d, given: %d", v.postCfg.NumLabels, nipst.NumLabels)
 	}
 
-	if err := v.VerifyPost(minerID, nipst.PostProof, nipst.Space); err != nil {
-		return fmt.Errorf("PoST proof invalid: %v", err)
+	if err := v.VerifyPoST(nipst.PostProof, minerID, nipst.NumLabels); err != nil {
+		return fmt.Errorf("invalid PoST proof: %v", err)
 	}
 
 	return nil
 }
 
-// VerifyPost validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
+// VerifyPoST validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
 // validation failed.
-func (v *Validator) VerifyPost(minerID signing.PublicKey, proof *types.PostProof, space uint64) error {
-	return verifyPost(minerID, proof, space, v.postCfg.NumProvenLabels, v.postCfg.Difficulty)
+func (v *Validator) VerifyPoST(proof *types.PostProof, minerID signing.PublicKey, numLabels uint64) error {
+	return verifyPoST(proof, minerID.Bytes(), numLabels, v.postCfg.LabelSize, v.postCfg.K1, v.postCfg.K2)
 }

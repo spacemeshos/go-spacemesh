@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/post/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"io/ioutil"
 	"sort"
 	"sync"
 	"testing"
@@ -55,10 +56,9 @@ var (
 	postProver       = &postProverClientMock{}
 	npst             = NewNIPSTWithChallenge(&chlng, poetRef)
 	commitment       = &types.PostProof{
-		Challenge:    []byte(nil),
-		MerkleRoot:   []byte("1"),
-		ProofNodes:   [][]byte(nil),
-		ProvenLeaves: [][]byte(nil),
+		Challenge: make([]byte, 32),
+		Nonce:     0,
+		Indices:   make([]byte, 10),
 	}
 	lg = log.NewDefault(nodeID.Key[:5])
 )
@@ -155,7 +155,7 @@ func (*ValidatorMock) Validate(signing.PublicKey, *types.NIPST, types.Hash32) er
 	return nil
 }
 
-func (*ValidatorMock) VerifyPost(signing.PublicKey, *types.PostProof, uint64) error {
+func (*ValidatorMock) VerifyPoST(*types.PostProof, signing.PublicKey, uint64) error {
 	return nil
 }
 
@@ -283,12 +283,12 @@ func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTxHea
 		r.Equal(prevAtx.Sequence+1, atx.Sequence)
 		r.Equal(prevAtx.ID(), atx.PrevATXID)
 		r.Nil(atx.Commitment)
-		r.Nil(atx.CommitmentMerkleRoot)
+		r.Nil(atx.CommitmentIndices)
 	} else {
 		r.Zero(atx.Sequence)
 		r.Equal(*types.EmptyATXID, atx.PrevATXID)
 		r.NotNil(atx.Commitment)
-		r.NotNil(atx.CommitmentMerkleRoot)
+		//	r.NotNil(atx.CommitmentIndices)
 	}
 	r.Equal(posAtx.ID(), atx.PositioningATX)
 	r.Equal(posAtx.PubLayerID.Add(layersPerEpoch), atx.PubLayerID)
@@ -318,6 +318,143 @@ func publishAtx(b *Builder, meshLayer types.LayerID, clockEpoch types.EpochID, b
 }
 
 // ========== Tests ==========
+
+func TestStartPost(t *testing.T) {
+	req := require.New(t)
+
+	id := types.NodeID{Key: util.Bytes2Hex(make([]byte, 32)), VRFPublicKey: []byte("bbbbb")}
+	coinbase := types.HexToAddress("0xaaa")
+	layers := &MeshProviderMock{}
+	nipstBuilder := &NipstBuilderMock{}
+	layersPerEpoch := uint16(10)
+	lg := log.NewDefault(id.Key[:5])
+
+	datadir, _ := ioutil.TempDir("", "post-test")
+	coinbase2 := types.HexToAddress("0xabb")
+	db := NewMockDB()
+
+	postCfg := *config.DefaultConfig()
+	postCfg.LabelSize = 8
+	postCfg.NumFiles = 1
+
+	postProver, err := NewPostClient(&postCfg, util.Hex2Bytes(id.Key))
+	require.NoError(t, err)
+	require.NotNil(t, postProver)
+	//defer func() {
+	//	require.NoError(t, postProver.Reset())
+	//}()
+
+	activationDb := NewDB(database.NewMemDatabase(), &MockIDStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
+	builder := NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
+	req.NoError(builder.INITPOST())
+
+	// Check initial status.
+	status, err := builder.PostStatus()
+	req.NoError(err)
+	req.Equal(status, emptyStatus)
+
+	options := &PostOptions{
+		DataDir:           datadir,
+		DataSize:          1 << 15,
+		ComputeProviderId: CPUProviderId(builder.PostComputeProviders()),
+	}
+
+	doneChan := make(chan struct{})
+	var lastStatus = &PostStatus{}
+	go func() {
+		defer close(doneChan)
+
+		statusChan, err := builder.PostDataCreationProgressStream()
+		req.NoError(err)
+		for status := range statusChan {
+			req.Equal(options, status.LastOptions)
+			req.True(status.BytesWritten > lastStatus.BytesWritten)
+			req.Empty(status.ErrorMessage)
+			req.Empty(status.ErrorType)
+
+			var delayComparison bool
+			if status.BytesWritten != options.DataSize {
+				req.Equal(FilesStatusPartial, status.FilesStatus)
+				req.True(status.InitInProgress)
+			} else {
+				req.Equal(FilesStatusCompleted, status.FilesStatus)
+				req.False(status.InitInProgress)
+				delayComparison = true
+			}
+
+			// Compare the status provided by the progress updates to the one that is queried directly.
+			// If it's the last status, wait a bit for the on-disk state settlement.
+			if delayComparison {
+				time.Sleep(1 * time.Second)
+			}
+			dStatus, err := builder.PostStatus()
+			req.NoError(err)
+			req.Equal(status, dStatus)
+
+			lastStatus = status
+		}
+	}()
+
+	// Create PoST data.
+	time.Sleep(1 * time.Second) // Short delay, so that PostDataCreationProgressStream will be called *before* init has started.
+	err = builder.CreatePostData(options)
+	req.NoError(err)
+
+	// Check status once completed.
+	// It should be equal to the last status update.
+	<-doneChan
+	status, err = builder.PostStatus()
+	req.NoError(err)
+	req.Equal(lastStatus, status)
+
+	return
+
+	// Attempt to initialize with invalid space.
+	// This test verifies that the params are being set in the post client.
+	require.Nil(t, builder.commitment)
+	err = builder.StartPost(coinbase2, datadir, 31, 0)
+	require.EqualError(t, err, "invalid `NumLabels`; expected: >= 32, given: 31")
+	require.Nil(t, builder.commitment)
+	require.Equal(t, postProver.Cfg().NumLabels, uint64(31))
+
+	// Attempt to initialize again
+	require.Nil(t, builder.commitment)
+	err = builder.StartPost(coinbase2, datadir, 1024, 0)
+	require.EqualError(t, err, "already started")
+	require.Nil(t, builder.commitment)
+
+	// Reinitialize.
+	builder = NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder2"))
+	require.Nil(t, builder.commitment)
+	err = builder.StartPost(coinbase2, datadir, 1024, 0)
+	require.NoError(t, err)
+	time.Sleep(100 * time.Millisecond) // Introducing a small delay since the procedure is async.
+	require.NotNil(t, builder.commitment)
+	require.Equal(t, postProver.Cfg().NumLabels, uint64(1024))
+
+	// Attempt to initialize again.
+	err = builder.StartPost(coinbase2, datadir, 1024, 0)
+	require.EqualError(t, err, "already initialized")
+	require.NotNil(t, builder.commitment)
+
+	// Instantiate a new builder and call StartPost on the same datadir, which is already initialized,
+	// and so will result in running the execution phase instead of the initialization phase.
+	// This test verifies that a call to StartPost with a different space param will return an error.
+	execBuilder := NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
+	err = execBuilder.StartPost(coinbase2, datadir, 2048, 0)
+	require.EqualError(t, err, "config mismatch")
+
+	// Call StartPost with the correct space param.
+	require.Nil(t, execBuilder.commitment)
+	err = execBuilder.StartPost(coinbase2, datadir, 1024, 0)
+	time.Sleep(100 * time.Millisecond)
+	require.NoError(t, err)
+	require.NotNil(t, execBuilder.commitment)
+
+	// Verify both builders produced the same commitment proof - one from the initialization phase,
+	// the other from a zero-challenge execution phase.
+	require.Equal(t, builder.commitment, execBuilder.commitment)
+}
 
 func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	types.SetLayersPerEpoch(int32(layersPerEpoch))
@@ -456,7 +593,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
 
 	challenge = newChallenge(nodeID /*👀*/, 0, *types.EmptyATXID, posAtx.ID(), postGenesisEpochLayer)
-	challenge.CommitmentMerkleRoot = commitment.MerkleRoot
+	challenge.CommitmentIndices = commitment.Indices
 	prevAtx := newAtx(challenge, defaultView, npst)
 	prevAtx.Commitment = commitment
 	storeAtx(r, activationDb, prevAtx, log.NewDefault("storeAtx"))
@@ -693,81 +830,6 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
 	assert.EqualError(t, err, "target epoch has passed")
 	assert.True(t, db.hadNone)
-}
-
-func TestStartPost(t *testing.T) {
-	id := types.NodeID{Key: "aaaaaa", VRFPublicKey: []byte("bbbbb")}
-	coinbase := types.HexToAddress("0xaaa")
-	layers := &MeshProviderMock{}
-	nipstBuilder := &NipstBuilderMock{}
-	layersPerEpoch := uint16(10)
-	lg := log.NewDefault(id.Key[:5])
-
-	drive := "/tmp/anton"
-	coinbase2 := types.HexToAddress("0xabb")
-	db := NewMockDB()
-
-	postCfg := *config.DefaultConfig()
-	postCfg.Difficulty = 5
-	postCfg.NumProvenLabels = 10
-	postCfg.SpacePerUnit = 1 << 10 // 1KB.
-	postCfg.NumFiles = 1
-
-	postProver, err := NewPostClient(&postCfg, util.Hex2Bytes(id.Key))
-	assert.NoError(t, err)
-	assert.NotNil(t, postProver)
-	defer func() {
-		assert.NoError(t, postProver.Reset())
-	}()
-
-	activationDb := NewDB(database.NewMemDatabase(), &MockIDStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
-	builder := NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
-
-	// Attempt to initialize with invalid space.
-	// This test verifies that the params are being set in the post client.
-	assert.Nil(t, builder.commitment)
-	err = builder.StartPost(coinbase2, drive, 1000)
-	assert.EqualError(t, err, "space (1000) must be a power of 2")
-	assert.Nil(t, builder.commitment)
-	assert.Equal(t, postProver.Cfg().SpacePerUnit, uint64(1000))
-
-	// Attempt to initialize again
-	assert.Nil(t, builder.commitment)
-	err = builder.StartPost(coinbase2, drive, 1024)
-	assert.EqualError(t, err, "already started")
-	assert.Nil(t, builder.commitment)
-
-	// Reinitialize.
-	builder = NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder2"))
-	assert.Nil(t, builder.commitment)
-	err = builder.StartPost(coinbase2, drive, 1024)
-	assert.NoError(t, err)
-	time.Sleep(100 * time.Millisecond) // Introducing a small delay since the procedure is async.
-	assert.NotNil(t, builder.commitment)
-	assert.Equal(t, postProver.Cfg().SpacePerUnit, uint64(1024))
-
-	// Attempt to initialize again.
-	err = builder.StartPost(coinbase2, drive, 1024)
-	assert.EqualError(t, err, "already initialized")
-	assert.NotNil(t, builder.commitment)
-
-	// Instantiate a new builder and call StartPost on the same datadir, which is already initialized,
-	// and so will result in running the execution phase instead of the initialization phase.
-	// This test verifies that a call to StartPost with a different space param will return an error.
-	execBuilder := NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
-	err = execBuilder.StartPost(coinbase2, drive, 2048)
-	assert.EqualError(t, err, "config mismatch")
-
-	// Call StartPost with the correct space param.
-	assert.Nil(t, execBuilder.commitment)
-	err = execBuilder.StartPost(coinbase2, drive, 1024)
-	time.Sleep(100 * time.Millisecond)
-	assert.NoError(t, err)
-	assert.NotNil(t, execBuilder.commitment)
-
-	// Verify both builders produced the same commitment proof - one from the initialization phase,
-	// the other from a zero-challenge execution phase.
-	assert.Equal(t, builder.commitment, execBuilder.commitment)
 }
 
 func genView() []types.BlockID {

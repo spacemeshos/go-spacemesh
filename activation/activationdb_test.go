@@ -533,17 +533,17 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
-	assert.EqualError(t, err, "no prevATX declared, but commitment merkle root is not included in challenge")
+	assert.EqualError(t, err, "no prevATX declared, but commitment proof indices is not included in challenge")
 
 	// Challenge and commitment merkle root mismatch.
 	atx = newActivationTx(idx1, 0, *types.EmptyATXID, 1012, 0, posAtx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	atx.Commitment = commitment
-	atx.CommitmentMerkleRoot = append([]byte{}, commitment.MerkleRoot...)
-	atx.CommitmentMerkleRoot[0]++
+	atx.CommitmentIndices = append([]byte{}, commitment.Indices...)
+	atx.CommitmentIndices[0]++
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
-	assert.EqualError(t, err, "commitment merkle root included in challenge is not equal to the merkle root included in the proof")
+	assert.EqualError(t, err, "commitment proof indices included in challenge is not equal to the commitment proof indices included in the atx")
 
 	// Prev atx declared but commitment is included.
 	atx = newActivationTx(idx1, 1, prevAtx.ID(), 1012, 0, posAtx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
@@ -553,13 +553,13 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "prevATX declared, but commitment proof is included")
 
-	// Prev atx declared but commitment merkle root is included.
+	// Prev atx declared but commitment indices is included.
 	atx = newActivationTx(idx1, 1, prevAtx.ID(), 1012, 0, posAtx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
-	atx.CommitmentMerkleRoot = commitment.MerkleRoot
+	atx.CommitmentIndices = commitment.Indices
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
-	assert.EqualError(t, err, "prevATX declared, but commitment merkle root is included in challenge")
+	assert.EqualError(t, err, "prevATX declared, but commitment proof indices is included in challenge")
 
 	// Prev atx has publication layer in the same epoch as the atx.
 	atx = newActivationTx(idx1, 1, prevAtx.ID(), 100, 0, posAtx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
@@ -571,7 +571,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	// NodeID and etracted pubkey dont match
 	atx = newActivationTx(idx2, 0, *types.EmptyATXID, 1012, 0, posAtx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	atx.Commitment = commitment
-	atx.CommitmentMerkleRoot = append([]byte{}, commitment.MerkleRoot...)
+	atx.CommitmentIndices = append([]byte{}, commitment.Indices...)
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)

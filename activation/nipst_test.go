@@ -7,19 +7,21 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/config"
+	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
+	"io/ioutil"
 	"testing"
 )
 
-var minerID = []byte("id")
+var minerID = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
 var postCfg config.Config
 
 func init() {
 	postCfg = *config.DefaultConfig()
-	postCfg.Difficulty = 5
-	postCfg.NumProvenLabels = 10
-	postCfg.SpacePerUnit = 1 << 10 // 1KB.
+	postCfg.DataDir, _ = ioutil.TempDir("", "post-test")
+	postCfg.NumLabels = 1 << 10
+	postCfg.LabelSize = 8
 	postCfg.NumFiles = 1
 }
 
@@ -31,9 +33,13 @@ type postProverClientMock struct {
 // A compile time check to ensure that postProverClientMock fully implements PostProverClient.
 var _ PostProverClient = (*postProverClientMock)(nil)
 
-func (p *postProverClientMock) Initialize() (*types.PostProof, error) {
+func (p *postProverClientMock) ComputeProviders() []initialization.ComputeProvider {
+	return nil
+}
+
+func (p *postProverClientMock) Initialize(computeProviderId uint) error {
 	//p.called++
-	return &types.PostProof{}, nil
+	return nil
 }
 
 func (p *postProverClientMock) Execute(challenge []byte) (*types.PostProof, error) {
@@ -46,6 +52,18 @@ func (p *postProverClientMock) Execute(challenge []byte) (*types.PostProof, erro
 
 func (p *postProverClientMock) Reset() error {
 	p.called++
+	return nil
+}
+
+func (p *postProverClientMock) DiskState() (*initialization.DiskState, error) {
+	return nil, nil
+}
+
+func (p *postProverClientMock) Progress() <-chan float64 {
+	return nil
+}
+
+func (p *postProverClientMock) Stop() error {
 	return nil
 }
 
@@ -145,12 +163,12 @@ func TestInitializePost(t *testing.T) {
 
 	nb := NewNIPSTBuilder(minerID, postProver, poetProver,
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
-	datadir := "/tmp/anton"
+	datadir, _ := ioutil.TempDir("", "post-test")
 	space := uint64(2048)
 
 	err = postProver.SetParams(datadir, space)
 	assert.NoError(err)
-	_, err = postProver.Initialize()
+	err = postProver.Initialize(CPUProviderId(postProver.ComputeProviders()))
 	assert.NoError(err)
 	defer func() {
 		assert.NoError(postProver.Reset())
@@ -196,9 +214,8 @@ func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge typ
 		r.NoError(err)
 	}()
 
-	commitment, err := postProver.Initialize()
+	err = postProver.Initialize(CPUProviderId(postProver.ComputeProviders()))
 	r.NoError(err)
-	r.NotNil(commitment)
 
 	nb := NewNIPSTBuilder(minerID, postProver, poetProver,
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
@@ -237,7 +254,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	r.EqualError(err, "PoST not initialized")
 	r.Nil(npst)
 
-	commitment, err := postProver.Initialize()
+	err = postProver.Initialize(CPUProviderId(postProver.ComputeProviders()))
 	defer func() {
 		err := postProver.Reset()
 		r.NoError(err)
@@ -332,19 +349,19 @@ func TestValidator_Validate(t *testing.T) {
 	r.NoError(err)
 
 	newPostCfg := postCfg
-	newPostCfg.SpacePerUnit++
+	newPostCfg.NumLabels++
 	err = validateNIPST(npst, newPostCfg, nipstChallenge, poetDb, minerID)
 	r.EqualError(err, "PoST space (1024) is less than a single space unit (1025)")
 
-	newPostCfg = postCfg
-	newPostCfg.Difficulty++
-	err = validateNIPST(npst, newPostCfg, nipstChallenge, poetDb, minerID)
-	r.EqualError(err, "PoST proof invalid: validation failed: number of derived leaf indices (8) doesn't match number of included proven leaves (9)")
+	//newPostCfg = postCfg
+	//newPostCfg.LabelSize++
+	//err = validateNIPST(npst, newPostCfg, nipstChallenge, poetDb, minerID)
+	//r.EqualError(err, "PoST proof invalid: validation failed: number of derived leaf indices (8) doesn't match number of included proven leaves (9)")
 
-	newPostCfg = postCfg
-	newPostCfg.NumProvenLabels += 5
-	err = validateNIPST(npst, newPostCfg, nipstChallenge, poetDb, minerID)
-	r.EqualError(err, "PoST proof invalid: validation failed: number of derived leaf indices (12) doesn't match number of included proven leaves (9)")
+	//newPostCfg = postCfg
+	//newPostCfg.NumProvenLabels += 5
+	//err = validateNIPST(npst, newPostCfg, nipstChallenge, poetDb, minerID)
+	//r.EqualError(err, "PoST proof invalid: validation failed: number of derived leaf indices (12) doesn't match number of included proven leaves (9)")
 
 	err = validateNIPST(npst, postCfg, types.BytesToHash([]byte("lerner")), poetDb, minerID)
 	r.EqualError(err, "NIPST challenge is not equal to expected challenge")

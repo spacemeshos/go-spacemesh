@@ -125,7 +125,7 @@ func (*validatorMock) Validate(signing.PublicKey, *types.NIPST, types.Hash32) er
 	return nil
 }
 
-func (*validatorMock) VerifyPost(signing.PublicKey, *types.PostProof, uint64) error {
+func (*validatorMock) VerifyPoST(*types.PostProof, signing.PublicKey, uint64) error {
 	return nil
 }
 

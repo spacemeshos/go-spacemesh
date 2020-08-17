@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/state"
+	"github.com/spacemeshos/post/initialization"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -41,7 +42,7 @@ import (
 )
 
 const (
-	miningStatus          = activation.InitDone
+	miningStatus          = activation.statusCompleted
 	remainingBytes        = 321
 	commitmentSize        = 8826949
 	dataDir               = "/tmp"
@@ -110,13 +111,12 @@ func init() {
 
 func NewNIPSTWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPST {
 	return &types.NIPST{
-		Space:          commitmentSize,
+		NumLabels:      commitmentSize,
 		NipstChallenge: challenge,
 		PostProof: &types.PostProof{
-			Challenge:    poetRef,
-			MerkleRoot:   []byte(nil),
-			ProofNodes:   [][]byte(nil),
-			ProvenLeaves: [][]byte(nil),
+			Challenge: poetRef,
+			Nonce:     0,
+			Indices:   []byte(nil),
 		},
 	}
 }
@@ -331,11 +331,41 @@ func newAtx(challenge types.NIPSTChallenge, nipst *types.NIPST, coinbase types.A
 // MiningAPIMock is a mock for mining API
 type MiningAPIMock struct{}
 
+func (*MiningAPIMock) PostStatus() (*activation.PostStatus, error) {
+	return nil, nil
+}
+
+func (*MiningAPIMock) PostComputeProviders() []initialization.ComputeProvider {
+	return nil
+}
+
+func (*MiningAPIMock) CreatePostData(options *activation.PostOptions) error {
+	return nil
+}
+
+func (*MiningAPIMock) StopPostDataCreationSession() {
+}
+
+func (*MiningAPIMock) PostDataCreationProgressStream() {
+}
+
+func (*MiningAPIMock) IsSmeshing() (bool, error) {
+	return true, nil
+}
+
+func (*MiningAPIMock) StartSmeshing() error {
+	return nil
+}
+
+func (*MiningAPIMock) StopSmeshing() error {
+	return nil
+}
+
 func (*MiningAPIMock) MiningStats() (int, uint64, string, string) {
 	return miningStatus, remainingBytes, addr1.String(), dataDir
 }
 
-func (*MiningAPIMock) StartPost(types.Address, string, uint64) error {
+func (*MiningAPIMock) StartPost(types.Address, string, uint64, uint) error {
 	return nil
 }
 
@@ -1733,7 +1763,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if bytes.Compare(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) != 0 {
 				continue
 			}
-			if a.CommitmentSize != globalAtx.Nipst.Space {
+			if a.CommitmentSize != globalAtx.Nipst.NumLabels {
 				continue
 			}
 			// found a match

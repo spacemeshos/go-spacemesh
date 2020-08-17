@@ -377,8 +377,8 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 			return fmt.Errorf("prevATX declared, but commitment proof is included")
 		}
 
-		if atx.CommitmentMerkleRoot != nil {
-			return fmt.Errorf("prevATX declared, but commitment merkle root is included in challenge")
+		if atx.CommitmentIndices != nil {
+			return fmt.Errorf("prevATX declared, but commitment proof indices is included in challenge")
 		}
 	} else {
 		if atx.Sequence != 0 {
@@ -387,13 +387,13 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		if atx.Commitment == nil {
 			return fmt.Errorf("no prevATX declared, but commitment proof is not included")
 		}
-		if atx.CommitmentMerkleRoot == nil {
-			return fmt.Errorf("no prevATX declared, but commitment merkle root is not included in challenge")
+		if atx.CommitmentIndices == nil {
+			return fmt.Errorf("no prevATX declared, but commitment proof indices is not included in challenge")
 		}
-		if !bytes.Equal(atx.Commitment.MerkleRoot, atx.CommitmentMerkleRoot) {
-			return errors.New("commitment merkle root included in challenge is not equal to the merkle root included in the proof")
+		if !bytes.Equal(atx.Commitment.Indices, atx.CommitmentIndices) {
+			return errors.New("commitment proof indices included in challenge is not equal to the commitment proof indices included in the atx")
 		}
-		if err := db.nipstValidator.VerifyPost(*pub, atx.Commitment, atx.Nipst.Space); err != nil {
+		if err := db.nipstValidator.VerifyPoST(atx.Commitment, *pub, atx.Nipst.NumLabels); err != nil {
 			return fmt.Errorf("invalid commitment proof: %v", err)
 		}
 	}

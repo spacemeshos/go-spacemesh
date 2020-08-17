@@ -185,24 +185,8 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().StringVar(&config.POST.DataDir, "post-datadir",
 		config.POST.DataDir, "The directory that contains post data files")
-	cmd.PersistentFlags().Uint64Var(&config.POST.SpacePerUnit, "post-space",
-		config.POST.SpacePerUnit, "Space per unit, in bytes")
-	cmd.PersistentFlags().IntVar(&config.POST.NumFiles, "post-numfiles",
+	cmd.PersistentFlags().UintVar(&config.POST.NumFiles, "post-numfiles",
 		config.POST.NumFiles, "Number of files")
-	cmd.PersistentFlags().UintVar(&config.POST.Difficulty, "post-difficulty",
-		config.POST.Difficulty, "Computational cost of the initialization")
-	cmd.PersistentFlags().UintVar(&config.POST.NumProvenLabels, "post-labels",
-		config.POST.NumProvenLabels, "Number of labels to prove in non-interactive proof (security parameter)")
-	cmd.PersistentFlags().UintVar(&config.POST.LowestLayerToCacheDuringProofGeneration, "post-cachelayer",
-		config.POST.LowestLayerToCacheDuringProofGeneration, "Lowest layer to cache in-memory during proof generation (optimization parameter)")
-	cmd.PersistentFlags().Uint64Var(&config.POST.LabelsLogRate, "post-lograte",
-		config.POST.LabelsLogRate, "Labels construction progress log rate")
-	cmd.PersistentFlags().UintVar(&config.POST.MaxWriteFilesParallelism, "post-parallel-files",
-		config.POST.MaxWriteFilesParallelism, "Max degree of files write parallelism")
-	cmd.PersistentFlags().UintVar(&config.POST.MaxWriteInFileParallelism, "post-parallel-infile",
-		config.POST.MaxWriteInFileParallelism, "Max degree of cpu work parallelism per file write")
-	cmd.PersistentFlags().UintVar(&config.POST.MaxReadFilesParallelism, "post-parallel-read",
-		config.POST.MaxReadFilesParallelism, "Max degree of files read parallelism")
 
 	/**========================Consensus Flags ========================== **/
 
