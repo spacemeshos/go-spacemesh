@@ -21,7 +21,7 @@ require (
 	github.com/spacemeshos/amcl v0.0.2
 	github.com/spacemeshos/api/release/go v0.0.0-20200626201759-603aac563f62
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
-	github.com/spacemeshos/fixed v0.0.0-20200720162101-f281c97110e2
+	github.com/spacemeshos/fixed v0.0.0-20200815212823-62bc0ef99f93
 	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82
 	github.com/spacemeshos/poet v0.1.0
 	github.com/spacemeshos/post v0.0.0-20200707150818-013318bab6f4
@@ -30,7 +30,7 @@ require (
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.4.0
-	github.com/stretchr/testify v1.4.0
+	github.com/stretchr/testify v1.6.1
 	github.com/syndtr/goleveldb v1.0.1-0.20190318030020-c3a204f8e965
 	go.opencensus.io v0.22.0 // indirect
 	go.uber.org/zap v1.10.0

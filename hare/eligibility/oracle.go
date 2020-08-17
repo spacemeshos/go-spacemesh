@@ -3,8 +3,8 @@ package eligibility
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/binary"
 	"errors"
+	"fmt"
 	"github.com/hashicorp/golang-lru"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/fixed"
@@ -203,12 +203,9 @@ func (o *Oracle) minerWeight(layer types.LayerID, id string) (uint64, error) {
 	return w, nil
 }
 
-var fracMask = fixed.One.Value() - 1
-
-func calcVrfFrac(sig []byte) int64 {
+func calcVrfFrac(sig []byte) fixed.Fixed {
 	sha := sha256.Sum256(sig)
-	shaUint64 := binary.LittleEndian.Uint64(sha[:8])
-	return int64(shaUint64) & fracMask
+	return fixed.FracFromBytes(sha[:8])
 }
 
 func (o *Oracle) prepareEligibilityCheck(layer types.LayerID, round int32, sig []byte, id types.NodeID) (uint64, uint64, bool, error) {
@@ -258,13 +255,15 @@ func (o *Oracle) Validate(layer types.LayerID, round int32, committeeSize int, i
 	if done {
 		return false, err
 	}
-	f := fixed.New
-	n := f(int(minerWeight))
-	p := f(committeeSize).Div(f(int(totalWeight)))
+	if uint64(int(minerWeight)) != minerWeight {
+		return false, fmt.Errorf("minerWeight overflows int (%d)", minerWeight)
+	}
+	n := fixed.New(int(minerWeight))
+	p := fixed.DivUint64(uint64(committeeSize), totalWeight)
 	vrfFrac := calcVrfFrac(sig)
 
-	x := f(int(eligibilityCount))
-	if fixed.BinCDF(n, p, x.Sub(fixed.One)).Value() <= vrfFrac && vrfFrac < fixed.BinCDF(n, p, x).Value() {
+	x := fixed.New(int(eligibilityCount))
+	if !fixed.BinCDF(n, p, x.Sub(fixed.One)).GreaterThan(vrfFrac) && vrfFrac.LessThan(fixed.BinCDF(n, p, x)) {
 		return true, nil
 	}
 	o.With().Info("eligibility: node did not pass VRF eligibility threshold",
@@ -283,14 +282,16 @@ func (o *Oracle) CalcEligibility(layer types.LayerID, round int32, committeeSize
 	if done {
 		return 0, err
 	}
-	f := fixed.New
-	n := f(int(minerWeight))
-	p := f(committeeSize).Div(f(int(totalWeight)))
+	if uint64(int(minerWeight)) != minerWeight {
+		return 0, fmt.Errorf("minerWeight overflows int (%d)", minerWeight)
+	}
+	n := fixed.New(int(minerWeight))
+	p := fixed.DivUint64(uint64(committeeSize), totalWeight)
 	vrfFrac := calcVrfFrac(sig)
 
 	one := fixed.One
 	for x := fixed.New(0); x.Value() < n.Value(); x = x.Add(one) {
-		if fixed.BinCDF(n, p, x).Value() > vrfFrac {
+		if fixed.BinCDF(n, p, x).GreaterThan(vrfFrac) {
 			return uint16(x.Floor()), nil
 		}
 	}

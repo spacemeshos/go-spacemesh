@@ -5,7 +5,6 @@ import (
 	"fmt"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spacemeshos/amcl/BLS381"
-	"github.com/spacemeshos/fixed"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
@@ -561,15 +560,4 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	v, err = o.IsIdentityActiveOnConsensusView(edid, 100)
 	r.NoError(err)
 	r.True(v)
-}
-
-func TestFixed(t *testing.T) {
-	r := require.New(t)
-	r.PanicsWithValue(fixed.ErrOverflow, func() {
-		fixed.BinCDF(fixed.New(1<<20), fixed.From(.05), fixed.New(5))
-	})
-
-	r.NotPanics(func() {
-		fixed.BinCDF(fixed.New(10<<10), fixed.From(.05), fixed.New(5))
-	})
 }
