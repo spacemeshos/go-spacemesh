@@ -1,7 +1,5 @@
 module github.com/spacemeshos/go-spacemesh
 
-replace github.com/spacemeshos/post => /Users/moshababo/dev/post
-
 require (
 	cloud.google.com/go v0.38.0
 	github.com/Microsoft/go-winio v0.4.14 // indirect
@@ -26,7 +24,7 @@ require (
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82
 	github.com/spacemeshos/poet v0.1.0
-	github.com/spacemeshos/post v0.0.0-20200806143424-aeefd21c691b
+	github.com/spacemeshos/post v0.0.0-20200819094627-45eee302cee6
 	github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9
 	github.com/spf13/afero v1.2.0 // indirect
 	github.com/spf13/cobra v1.0.0
