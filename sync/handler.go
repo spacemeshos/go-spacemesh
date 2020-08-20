@@ -39,8 +39,8 @@ func newAtxHashRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte
 func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		logger.Debug("handle blockIds request")
-		lyrid := types.LayerID(util.BytesToUint64(msg))
-		layer, err := layers.GetLayer(lyrid)
+		lyrid := util.BytesToUint64(msg)
+		layer, err := layers.LayerBlockIds(types.LayerID(lyrid))
 		if err != nil {
 			if err == database.ErrNotFound {
 				logger.With().Warning("block ids requested for unfamiliar layer (id: %s)", lyrid)
@@ -50,16 +50,9 @@ func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg 
 			return nil
 		}
 
-		blocks := layer.Blocks()
-
-		ids := make([]types.BlockID, 0, len(blocks))
-		for _, b := range blocks {
-			ids = append(ids, b.ID())
-		}
-
-		idbytes, err := types.BlockIdsToBytes(ids)
+		idbytes, err := types.BlockIdsToBytes(layer)
 		if err != nil {
-			logger.Error("Error marshaling response message, with blocks IDs: %v and error:", ids, err)
+			logger.Error("Error marshaling response message, with blocks IDs: %v and error:", layer, err)
 			return nil
 		}
 
@@ -197,5 +190,23 @@ func newPoetRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 		}
 		logger.Info("returning PoET proof (id: %x) to neighbor", shortPoetRef)
 		return proofMessage
+	}
+}
+
+func newInputVecRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
+	return func(msg []byte) []byte {
+		lyrid := util.BytesToUint64(msg)
+		input, err := s.DB.GetLayerInputVector(types.LayerID(lyrid))
+		if err != nil {
+			logger.Warning("unfamiliar layer input vector was requested (id: %x): %v", lyrid, err)
+			return nil
+		}
+		logger.Info("returning input vector for (lyr: %x) to neighbor", lyrid)
+
+		blks, err := types.InterfaceToBytes(input)
+		if err != nil {
+			return nil
+		}
+		return blks
 	}
 }

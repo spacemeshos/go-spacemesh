@@ -177,7 +177,7 @@ func TestMesh_integration(t *testing.T) {
 
 		l, err := layers.GetLayer(types.LayerID(i))
 		assert.NoError(t, err)
-		layers.ValidateLayer(l)
+		layers.ValidateLayer(l, nil)
 	}
 	// since there can be a difference of up to x lerners where x is the number of blocks due to round up of penalties when distributed among all blocks
 	totalPayout := l3Rewards + ConfigTst().BaseReward.Int64()
@@ -203,7 +203,7 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 		createLayer(t, mesh, types.LayerID(i), numOfBlocks, maxTxs, atxDB)
 		l, err := mesh.GetLayer(types.LayerID(i))
 		assert.NoError(t, err)
-		mesh.ValidateLayer(l)
+		mesh.ValidateLayer(l, nil)
 	}
 
 	s2 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
@@ -220,7 +220,7 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	for i := 0; i < numOfLayers; i++ {
 		l, err := mesh.GetLayer(types.LayerID(i))
 		assert.NoError(t, err)
-		mesh2.ValidateLayer(l)
+		mesh2.ValidateLayer(l, nil)
 	}
 	// test state is the same if receiving result from tortoise after same result from hare received
 	assert.ObjectsAreEqualValues(s.Txs, s2.Txs)
@@ -277,7 +277,7 @@ type meshValidatorBatchMock struct {
 	processedLayer types.LayerID
 }
 
-func (m *meshValidatorBatchMock) ValidateLayer(lyr *types.Layer) {
+func (m *meshValidatorBatchMock) ValidateLayer(layer *types.Layer, inputVector []types.BlockID) {
 	m.SetProcessedLayer(lyr.Index())
 	layerID := lyr.Index()
 	if layerID == 0 {
@@ -320,19 +320,19 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 	l4, err := mesh.GetLayer(4)
 	assert.NoError(t, err)
 	// Test negative case
-	mesh.ValidateLayer(l4)
+	mesh.ValidateLayer(l4, nil)
 	assert.Equal(t, oldTotal, s.TotalReward)
 
 	l5, err := mesh.GetLayer(5)
 	assert.NoError(t, err)
 	// Since batch size is 6, rewards will not be applied yet at this point
-	mesh.ValidateLayer(l5)
+	mesh.ValidateLayer(l5, nil)
 	assert.Equal(t, oldTotal, s.TotalReward)
 
 	l6, err := mesh.GetLayer(6)
 	assert.NoError(t, err)
 	// Rewards will be applied at this point
-	mesh.ValidateLayer(l6)
+	mesh.ValidateLayer(l6, nil)
 
 	// When distributing rewards to blocks they are rounded down, so we have to allow up to numOfBlocks difference
 	totalPayout := firstLayerRewards + ConfigTst().BaseReward.Int64()
