@@ -10,9 +10,9 @@ import (
 
 type ThreadSafeVerifyingTortoise interface {
 	HandleLateBlock(b *types.Block) (types.LayerID, types.LayerID)
-	HandleIncomingLayer(ll *types.Layer) (types.LayerID, types.LayerID)
-	Verified() types.LayerID
-	BaseBlock() (types.BlockID, [][]types.BlockID, error)
+	HandleIncomingLayer(ll *types.Layer, inputVector []types.BlockID) (types.LayerID, types.LayerID)
+	LatestComplete() types.LayerID
+	BaseBlock(getres func(id types.LayerID) ([]types.BlockID, error)) (types.BlockID, [][]types.BlockID, error)
 	Persist() error
 }
 
@@ -21,15 +21,15 @@ type verifyingTortoiseWrapper struct {
 	mutex sync.Mutex
 }
 
-func NewVerifyingTortoise(layerSize int, mdb blockDataProvider, hrp hareResultsProvider, hdist int, lg log.Log) ThreadSafeVerifyingTortoise {
-	alg := &verifyingTortoiseWrapper{trtl: NewTurtle(mdb, hrp, hdist, layerSize)}
+func NewVerifyingTortoise(layerSize int, mdb blockDataProvider, hdist int, lg log.Log) ThreadSafeVerifyingTortoise {
+	alg := &verifyingTortoiseWrapper{trtl: NewTurtle(mdb, hdist, layerSize)}
 	alg.trtl.SetLogger(lg)
 	alg.trtl.init(mesh.GenesisLayer())
 	return alg
 }
 
 //NewRecoveredTortoise recovers a previously persisted tortoise copy from mesh.DB
-func NewRecoveredVerifyingTortoise(mdb blockDataProvider, hrp hareResultsProvider, lg log.Log) ThreadSafeVerifyingTortoise {
+func NewRecoveredVerifyingTortoise(mdb blockDataProvider, lg log.Log) ThreadSafeVerifyingTortoise {
 	tmp, err := RecoverVerifyingTortoise(mdb)
 	if err != nil {
 		lg.Panic("could not recover tortoise state from disc ", err)
@@ -39,22 +39,21 @@ func NewRecoveredVerifyingTortoise(mdb blockDataProvider, hrp hareResultsProvide
 
 	lg.Info("recovered tortoise from disc")
 	trtl.bdp = mdb
-	trtl.hrp = hrp
 	trtl.logger = lg
 
 	return &verifyingTortoiseWrapper{trtl: trtl}
 }
 
-func (trtl *verifyingTortoiseWrapper) Verified() types.LayerID {
+func (trtl *verifyingTortoiseWrapper) LatestComplete() types.LayerID {
 	trtl.mutex.Lock()
 	verified := trtl.trtl.Verified
 	trtl.mutex.Unlock()
 	return verified
 }
 
-func (trtl *verifyingTortoiseWrapper) BaseBlock() (types.BlockID, [][]types.BlockID, error) {
+func (trtl *verifyingTortoiseWrapper) BaseBlock(getres func(id types.LayerID) ([]types.BlockID, error)) (types.BlockID, [][]types.BlockID, error) {
 	trtl.mutex.Lock()
-	block, diffs, err := trtl.trtl.BaseBlock()
+	block, diffs, err := trtl.trtl.BaseBlock(getres)
 	trtl.mutex.Unlock()
 	if err != nil {
 		return types.BlockID{}, nil, err
@@ -64,11 +63,11 @@ func (trtl *verifyingTortoiseWrapper) BaseBlock() (types.BlockID, [][]types.Bloc
 
 //HandleIncomingLayer processes all layer block votes
 //returns the old pbase and new pbase after taking into account the blocks votes
-func (trtl *verifyingTortoiseWrapper) HandleIncomingLayer(ll *types.Layer) (types.LayerID, types.LayerID) {
+func (trtl *verifyingTortoiseWrapper) HandleIncomingLayer(ll *types.Layer, inputVector []types.BlockID) (types.LayerID, types.LayerID) {
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()
 	oldPbase := trtl.trtl.Verified
-	trtl.trtl.HandleIncomingLayer(ll)
+	trtl.trtl.HandleIncomingLayer(ll, inputVector)
 	newPbase := trtl.trtl.Verified
 	return oldPbase, newPbase
 }
@@ -79,7 +78,7 @@ func (trtl *verifyingTortoiseWrapper) HandleLateBlock(b *types.Block) (types.Lay
 	//todo feed all layers from b's layer to tortoise
 	l := types.NewLayer(b.Layer())
 	l.AddBlock(b)
-	oldPbase, newPbase := trtl.HandleIncomingLayer(l)
+	oldPbase, newPbase := trtl.HandleIncomingLayer(l, []types.BlockID{}) // block wasn't in input vector for sure.
 	log.With().Info("late block ", log.LayerID(uint64(b.Layer())), log.BlockID(b.ID().String()))
 	return oldPbase, newPbase
 }
