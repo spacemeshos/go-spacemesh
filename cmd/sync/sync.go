@@ -160,7 +160,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 			}
 		} else {
 			lg.Info("loaded layer %v from disk ", i)
-			sync.ValidateLayer(lyr)
+			sync.ValidateLayer(lyr, types.BlockIDs(lyr.Blocks()))
 		}
 	}
 
