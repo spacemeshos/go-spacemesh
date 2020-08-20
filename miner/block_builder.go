@@ -46,6 +46,10 @@ type blockOracle interface {
 	BlockEligible(layerID types.LayerID) (types.ATXID, []types.BlockEligibilityProof, error)
 }
 
+type baseBlockProvider interface {
+	BaseBlock(getres func(id types.LayerID) ([]types.BlockID, error)) (types.BlockID, [][]types.BlockID, error)
+}
+
 type atxDb interface {
 	GetEpochAtxs(epochID types.EpochID) []types.ATXID
 }
@@ -73,6 +77,7 @@ type BlockBuilder struct {
 	network         p2p.Service
 	weakCoinToss    weakCoinProvider
 	meshProvider    meshProvider
+	baseBlockP      baseBlockProvider
 	blockOracle     blockOracle
 	syncer          syncer
 	started         bool
@@ -94,7 +99,7 @@ type Config struct {
 }
 
 // NewBlockBuilder creates a struct of block builder type.
-func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin weakCoinProvider, orph meshProvider, hare hareResultProvider, blockOracle blockOracle, syncer syncer, projector projector, txPool txPool, atxDB atxDb, lg log.Log) *BlockBuilder {
+func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin weakCoinProvider, orph meshProvider, bbp baseBlockProvider, hare hareResultProvider, blockOracle blockOracle, syncer syncer, projector projector, txPool txPool, atxDB atxDb, lg log.Log) *BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(config.MinerID.Key)))
 
@@ -116,6 +121,7 @@ func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent
 		network:         net,
 		weakCoinToss:    weakCoin,
 		meshProvider:    orph,
+		baseBlockP:       bbp,
 		blockOracle:     blockOracle,
 		syncer:          syncer,
 		started:         false,
@@ -266,15 +272,16 @@ func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, 
 
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID) (*types.Block, error) {
 
-	votes, err := t.getVotes(id)
+	base, diffs, err := t.baseBlockP.BaseBlock(t.hareResult.GetResult)
 	if err != nil {
 		return nil, err
 	}
 
-	viewEdges, err := t.meshProvider.GetOrphanBlocksBefore(id)
-	if err != nil {
-		return nil, err
-	}
+	// TODO: Compare all orphans to input vector and add to diffs
+	//viewEdges, err := t.meshProvider.GetOrphanBlocksBefore(id)
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	b := types.MiniBlock{
 		BlockHeader: types.BlockHeader{
@@ -284,8 +291,10 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 			Data:             nil,
 			Coin:             t.weakCoinToss.GetResult(),
 			Timestamp:        time.Now().UnixNano(),
-			BlockVotes:       votes,
-			ViewEdges:        viewEdges,
+			BaseBlock:        base,
+			AgainstDiff:      diffs[0],
+			ForDiff:          diffs[1],
+			NeutralDiff:      diffs[2],
 		},
 		TxIDs: txids,
 	}
@@ -322,8 +331,10 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 		bl.LayerIndex.GetEpoch(),
 		bl.MinerID(),
 		log.Int("tx_count", len(bl.TxIDs)),
-		log.Int("view_edges", len(bl.ViewEdges)),
-		log.Int("vote_count", len(bl.BlockVotes)),
+		bl.BaseBlock.Field(),
+		log.Int("against_count", len(bl.AgainstDiff)),
+		log.Int("neutral_count", len(bl.NeutralDiff)),
+		log.Int("support_count", len(bl.ForDiff)),
 		bl.ATXID,
 		log.Uint32("eligibility_counter", bl.EligibilityProof.J),
 	)
