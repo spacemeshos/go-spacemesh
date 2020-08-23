@@ -39,8 +39,8 @@ func newAtxHashRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte
 func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		logger.Debug("handle blockIds request")
-		lyrid := util.BytesToUint64(msg)
-		layer, err := layers.LayerBlockIds(types.LayerID(lyrid))
+		lyrid := types.LayerID(util.BytesToUint64(msg))
+		layer, err := layers.LayerBlockIds(lyrid)
 		if err != nil {
 			if err == database.ErrNotFound {
 				logger.With().Warning("block ids requested for unfamiliar layer (id: %s)", lyrid)
