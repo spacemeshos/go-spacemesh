@@ -113,15 +113,15 @@ const (
 	inProgress status = 1
 	done       status = 2
 
-	blockMsg      server.MessageType = 1
-	layerHashMsg  server.MessageType = 2
-	layerIdsMsg   server.MessageType = 3
-	txMsg         server.MessageType = 4
-	atxMsg        server.MessageType = 5
-	poetMsg       server.MessageType = 6
-	atxIdsMsg     server.MessageType = 7
-	atxIdrHashMsg server.MessageType = 8
-	inputVecMessage     server.MessageType = 9
+	blockMsg        server.MessageType = 1
+	layerHashMsg    server.MessageType = 2
+	layerIdsMsg     server.MessageType = 3
+	txMsg           server.MessageType = 4
+	atxMsg          server.MessageType = 5
+	poetMsg         server.MessageType = 6
+	atxIdsMsg       server.MessageType = 7
+	atxIdrHashMsg   server.MessageType = 8
+	inputVecMessage server.MessageType = 9
 
 	syncProtocol                      = "/sync/1.0/"
 	validatingLayerNone types.LayerID = 0
@@ -440,7 +440,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 
 		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
 		if err != nil {
-			s.With().Info("could not get layer from neighbors", log.LayerID(currentSyncLayer.Uint64()), log.Err(err))
+			s.With().Info("could not get layer from neighbors", currentSyncLayer, log.Err(err))
 			return
 		}
 
