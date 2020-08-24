@@ -103,11 +103,21 @@ tidy:
 
 $(PLATFORMS): genproto
 ifeq ($(OS),Windows_NT)
-	set GOOS=$(os)&&set GOARCH=amd64&&go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
+	set GOOS=$(os)&&set GOARCH=amd64&&go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY).exe
 else
 	GOOS=$(os) GOARCH=amd64 go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
 endif
 .PHONY: $(PLATFORMS)
+
+
+docker-local-build: genproto
+	GOOS=linux GOARCH=amd64 go build ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)
+	cd cmd/hare ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-hare; cd ..
+	cd cmd/p2p ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-p2p; cd ..
+	cd cmd/sync ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-sync; cd ..
+	cd cmd/integration ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-harness; cd ..
+	cd build ; docker build -f ../DockerfilePrebuiltBinary -t $(DOCKER_IMAGE_REPO):$(BRANCH) . ; cd ..
+.PHONY: docker-local-build
 
 
 arm6: genproto
@@ -193,7 +203,10 @@ dockerbuild-test:
 .PHONY: dockerbuild-test
 
 
-dockerpush: dockerbuild-go
+dockerpush: dockerbuild-go dockerpush-only
+.PHONY: dockerpush
+
+dockerpush-only:
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
 	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
@@ -202,7 +215,11 @@ ifeq ($(BRANCH),develop)
 	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
 	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
 endif
-.PHONY: dockerpush
+.PHONY: dockerpush-only
+
+
+docker-local-push: docker-local-build dockerpush-only
+.PHONY: docker-local-push
 
 
 ifdef TEST
