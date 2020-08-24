@@ -769,7 +769,8 @@ func (proc *consensusProcess) shouldParticipate() bool {
 		return false
 	}
 
-	if role := proc.currentRole(); role == passive {
+	currentRole := proc.currentRole()
+	if currentRole == passive {
 		proc.With().Info("should not participate: passive",
 			log.Int32("round", proc.k), types.LayerID(proc.instanceID))
 		return false
@@ -777,8 +778,10 @@ func (proc *consensusProcess) shouldParticipate() bool {
 
 	// should participate
 	proc.With().Info("should participate",
-		log.Int32("round", proc.k),
-		types.LayerID(proc.instanceID))
+		log.Int32("round", proc.k), types.LayerID(proc.instanceID),
+		log.Bool("leader", currentRole == leader),
+		log.Uint32("eligibility_count", uint32(proc.eligibilityCount)),
+	)
 	return true
 }
 
