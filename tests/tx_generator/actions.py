@@ -52,7 +52,7 @@ def transfer(wallet_api, frm, to, amount, gas_price=1, gas_limit=None, curr_nonc
     # create a transaction
     tx_bytes = tx_gen.generate(to, nonce, gas_limit, gas_price, amount)
     # submit transaction
-    success = wallet_api.submit_tx(to, frm, gas_price, amount, tx_bytes)
+    success = wallet_api.submit_tx(to, frm, gas_price, amount, nonce, tx_bytes)
 
     if success:
         if accountant:
@@ -126,9 +126,15 @@ def send_coins_to_new_accounts(wallet_api, new_acc_num, amount, accountant, gas_
 
         if transfer(wallet_api, src, dst, amount, accountant=accountant, gas_price=gas_price):
             print("transaction succeeded!\n")
+
+            # sleep briefly to allow tx to be gossipped and projections to be updated
+            sleep_print_backwards(2)
+
             continue
 
         print("transaction FAILED!\n")
+        return False
+    return True
 
 
 def send_tx_from_each_account(wallet, accountant, tx_num, amount=1, gas_limit=None, is_new_acc=False,
