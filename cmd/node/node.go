@@ -281,7 +281,6 @@ func (app *SpacemeshApp) setupLogging() {
 	}
 
 	// app-level logging
-	log.InitSpacemeshLoggingSystem()
 	log.Info("%s", app.getAppInfo())
 
 	if app.Config.PublishEventsURL != "" {

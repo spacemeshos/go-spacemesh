@@ -131,11 +131,6 @@ func getFileWriter(dataFolderPath, logFileName string) io.Writer {
 	return fileLogger
 }
 
-// InitSpacemeshLoggingSystem initializes app logging system.
-func InitSpacemeshLoggingSystem() {
-	AppLog = NewDefault(mainLoggerName)
-}
-
 // public wrappers abstracting away logging lib impl
 
 // Info prints formatted info level log message.
