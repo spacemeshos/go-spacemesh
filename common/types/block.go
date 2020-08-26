@@ -35,11 +35,11 @@ func (id BlockID) AsHash32() Hash32 {
 	return Hash20(id).ToHash32()
 }
 
-var layersPerEpoch int32 = 0
+var layersPerEpoch int32
 
 // EffectiveGenesis marks when actual blocks would start being crated in the network, this will take account the first
 // genesis epoch and the following epoch in which ATXs are published
-var EffectiveGenesis int32 = 0
+var EffectiveGenesis int32
 
 func getLayersPerEpoch() int32 {
 	return atomic.LoadInt32(&layersPerEpoch)
