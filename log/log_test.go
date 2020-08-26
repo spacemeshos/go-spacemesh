@@ -23,9 +23,10 @@ func TestLogLevel(t *testing.T) {
 	// Set up a hooked function to test the hook
 	hooked := 0
 	hookedExpected := 0
+	expectedLevel := zapcore.InfoLevel
 	hookFn := func(entry zapcore.Entry) error {
 		hooked++
-		r.Equal(zapcore.InfoLevel, entry.Level, "got wrong log level")
+		r.Equal(expectedLevel, entry.Level, "got wrong log level")
 		return nil
 	}
 
@@ -80,11 +81,28 @@ func TestLogLevel(t *testing.T) {
 	subLogger.Info(teststr)
 	hookedExpected++
 	r.Equal(fmt.Sprintf("INFO\t%s\t%s\t%s\n", prefix, teststr, nidEncoded), buf.String())
+	buf.Reset()
 
+	// Test sublog level relative to parent logger. This should produce a warning.
+	lvl = zap.NewAtomicLevelAt(zapcore.DebugLevel)
+	lvlStored := &lvl
+	subLogger2 := logger.SetLevel(lvlStored)
+	r.Contains(buf.String(), "attempt to SetLevel of logger lower", "expected a warning about lower child log level")
+	buf.Reset()
 
-	// Test sublog level relative to parent logger
+	// This should not print anything
+	subLogger2.Debug("foobar")
+	r.Equal(0, buf.Len())
 
-	// Try changing the log level
+	// Try changing the log level the same way App.SetLogLevel does
+	r.NoError(lvlStored.UnmarshalText([]byte("WARN")))
+	subLogger2.Debug("foobar")
+	subLogger2.Info("foobar")
+	teststr = "test004"
+	expectedLevel = zapcore.WarnLevel
+	subLogger2.Warning(teststr)
+	hookedExpected++
+	r.Equal(fmt.Sprintf("WARN\t%s\t%s\t%s\n", loggerName, teststr, nidEncoded), buf.String())
 
 	r.Equal(hookedExpected, hooked, "hook function was not called the expected number of times")
 }
