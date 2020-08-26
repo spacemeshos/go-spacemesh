@@ -33,6 +33,6 @@ var atx3 = ATXID(three)
 func TestFields(t *testing.T) {
 	b := &Block{}
 	b.TxIDs = []TransactionID{txid1, txid2, txid1}
-	b.ATXIDs = []ATXID{atx1, atx2, atx3}
+	b.ActiveSet = &[]ATXID{atx1, atx2, atx3}
 	log.With().Info("got new block", b.Fields()...)
 }

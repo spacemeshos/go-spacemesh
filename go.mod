@@ -13,6 +13,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway v1.14.6
 	github.com/hashicorp/golang-lru v0.5.1
 	github.com/huin/goupnp v1.0.0
+	github.com/kr/pretty v0.2.1 // indirect
 	github.com/nullstyle/go-xdr v0.0.0-20180726165426-f4c839f75077
 	github.com/prometheus/client_golang v0.9.3
 	github.com/prometheus/common v0.4.0
@@ -44,4 +45,4 @@ require (
 	nanomsg.org/go-mangos v1.4.0
 )
 
-go 1.13
+go 1.14

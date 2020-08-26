@@ -9,10 +9,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/trie"
 	"math/big"
 	"sync"
 )
+
+// IncomingTxProtocol is the protocol identifier for tx received by gossip that is used by the p2p
+const IncomingTxProtocol = "TxGossip"
 
 // PreImages is a struct that contains a root hash and the transactions that are in store of this root hash
 type PreImages struct {
@@ -26,10 +31,16 @@ type Projector interface {
 	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
 }
 
+// Gossip is the interface to Gossip network provider
+type Gossip interface {
+	AddListener(channel string, priority priorityq.Priority, dataHandler func(data service.GossipMessage, syncer service.Syncer))
+}
+
 // TransactionProcessor is the struct containing state db and is responsible for applying transactions into it
 type TransactionProcessor struct {
 	log.Log
 	*DB
+	pool         *TxMempool
 	processorDb  database.Database
 	currentLayer types.LayerID
 	rootHash     types.Hash32
@@ -43,7 +54,7 @@ type TransactionProcessor struct {
 const newRootKey = "root"
 
 // NewTransactionProcessor returns a new state processor
-func NewTransactionProcessor(allStates, processorDb database.Database, projector Projector, logger log.Log) *TransactionProcessor {
+func NewTransactionProcessor(allStates, processorDb database.Database, projector Projector, txPool *TxMempool, logger log.Log) *TransactionProcessor {
 	stateDb, err := New(types.Hash32{}, NewDatabase(allStates))
 	if err != nil {
 		log.Panic("cannot load state db, %v", err)
@@ -59,6 +70,7 @@ func NewTransactionProcessor(allStates, processorDb database.Database, projector
 		stateQueue:   list.List{},
 		projector:    projector,
 		trie:         stateDb.TrieDB(),
+		pool:         txPool,
 		mu:           sync.Mutex{}, // sync between reset and apply mesh.Transactions
 		rootMu:       sync.RWMutex{},
 	}
@@ -294,4 +306,47 @@ func (tp *TransactionProcessor) GetStateRoot() types.Hash32 {
 func transfer(db *TransactionProcessor, sender, recipient types.Address, amount *big.Int) {
 	db.SubBalance(sender, amount)
 	db.AddBalance(recipient, amount)
+}
+
+// HandleTxData handles data received on TX gossip channel
+func (tp *TransactionProcessor) HandleTxData(data service.GossipMessage, syncer service.Syncer) {
+	tx, err := types.BytesToTransaction(data.Bytes())
+	if err != nil {
+		tp.With().Error("cannot parse incoming TX", log.Err(err))
+		return
+	}
+	if err := tx.CalcAndSetOrigin(); err != nil {
+		tp.With().Error("failed to calc transaction origin", tx.ID(), log.Err(err))
+		return
+	}
+	if !tp.AddressExists(tx.Origin()) {
+		tp.With().Error("transaction origin does not exist", log.String("transaction", tx.String()),
+			tx.ID(), log.String("origin", tx.Origin().Short()), log.Err(err))
+		return
+	}
+	if err := tp.ValidateNonceAndBalance(tx); err != nil {
+		tp.With().Error("nonce and balance validation failed", tx.ID(), log.Err(err))
+		return
+	}
+	tp.Log.With().Info("got new tx",
+		tx.ID(),
+		log.Uint64("nonce", tx.AccountNonce),
+		log.Uint64("amount", tx.Amount),
+		log.Uint64("fee", tx.Fee),
+		log.Uint64("gas", tx.GasLimit),
+		log.String("recipient", tx.Recipient.String()),
+		log.String("origin", tx.Origin().String()))
+	data.ReportValidation(IncomingTxProtocol)
+	tp.pool.Put(tx.ID(), tx)
+}
+
+// ValidateAndAddTxToPool validates the provided tx nonce and balance with projector and puts it in the transaction pool
+// it returns an error if the provided tx is not valid
+func (tp *TransactionProcessor) ValidateAndAddTxToPool(tx *types.Transaction) error {
+	err := tp.ValidateNonceAndBalance(tx)
+	if err != nil {
+		return err
+	}
+	tp.pool.Put(tx.ID(), tx)
+	return nil
 }

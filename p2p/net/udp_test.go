@@ -222,7 +222,7 @@ func TestUDPNet_Cache(t *testing.T) {
 	}})
 	require.Len(t, n.incomingConn, 1)
 
-	for i := 1; i < maxUDPConn; i++ {
+	for i := 1; i < maxUDPConn-1; i++ {
 		addrx := testUDPAddr()
 		_, ok := n.incomingConn[addrx.String()]
 		for ok {
@@ -234,7 +234,7 @@ func TestUDPNet_Cache(t *testing.T) {
 		}})
 	}
 
-	require.Len(t, n.incomingConn, maxUDPConn)
+	require.Len(t, n.incomingConn, maxUDPConn-1)
 
 	addrx := testUDPAddr()
 	_, ok := n.incomingConn[addrx.String()]
@@ -242,9 +242,23 @@ func TestUDPNet_Cache(t *testing.T) {
 		addrx = testUDPAddr()
 		_, ok = n.incomingConn[addrx.String()]
 	}
+
 	n.addConn(addrx, &udpConnMock{CreatedFunc: func() time.Time {
+		return time.Now().Add(-maxUDPLife - 1*time.Second)
+	}})
+
+	require.Len(t, n.incomingConn, maxUDPConn)
+
+	addrx2 := testUDPAddr()
+	_, ok2 := n.incomingConn[addrx2.String()]
+	for ok2 {
+		addrx2 = testUDPAddr()
+		_, ok = n.incomingConn[addrx2.String()]
+	}
+	n.addConn(addrx2, &udpConnMock{CreatedFunc: func() time.Time {
 		return time.Now()
 	}})
+
 	require.Len(t, n.incomingConn, maxUDPConn)
 
 	i := 0
