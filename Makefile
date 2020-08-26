@@ -62,36 +62,36 @@ endif
 
 hare:
 ifeq ($(OS),Windows_NT)
-	cd cmd/hare ; go build -o $(BIN_DIR_WIN)/go-hare.exe; cd ..
+	cd cmd/hare ; go build -o $(BIN_DIR_WIN)/go-hare.exe
 else
-	cd cmd/hare ; go build -o $(BIN_DIR)/go-hare; cd ..
+	cd cmd/hare ; go build -o $(BIN_DIR)/go-hare
 endif
 .PHONY: hare
 
 
 p2p:
 ifeq ($(OS),WINDOWS_NT)
-	cd cmd/p2p ; go build -o $(BIN_DIR_WIN)/go-p2p.exe; cd ..
+	cd cmd/p2p ; go build -o $(BIN_DIR_WIN)/go-p2p.exe
 else
-	cd cmd/p2p ; go build -o $(BIN_DIR)/go-p2p; cd ..
+	cd cmd/p2p ; go build -o $(BIN_DIR)/go-p2p
 endif
 .PHONY: p2p
 
 
 sync:
 ifeq ($(OS),WINDOWS_NT)
-	cd cmd/sync ; go build -o $(BIN_DIR_WIN)/go-sync.exe; cd ..
+	cd cmd/sync ; go build -o $(BIN_DIR_WIN)/go-sync.exe
 else
-	cd cmd/sync ; go build -o $(BIN_DIR)/go-sync; cd ..
+	cd cmd/sync ; go build -o $(BIN_DIR)/go-sync
 endif
 .PHONY: sync
 
 
 harness:
 ifeq ($(OS),WINDOWS_NT)
-	cd cmd/integration ; go build -o $(BIN_DIR_WIN)/go-harness.exe; cd ..
+	cd cmd/integration ; go build -o $(BIN_DIR_WIN)/go-harness.exe
 else
-	cd cmd/integration ; go build -o $(BIN_DIR)/go-harness; cd ..
+	cd cmd/integration ; go build -o $(BIN_DIR)/go-harness
 endif
 .PHONY: harness
 
@@ -112,11 +112,11 @@ endif
 
 docker-local-build: genproto
 	GOOS=linux GOARCH=amd64 go build ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)
-	cd cmd/hare ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-hare; cd ..
-	cd cmd/p2p ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-p2p; cd ..
-	cd cmd/sync ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-sync; cd ..
-	cd cmd/integration ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-harness; cd ..
-	cd build ; docker build -f ../DockerfilePrebuiltBinary -t $(DOCKER_IMAGE_REPO):$(BRANCH) . ; cd ..
+	cd cmd/hare ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-hare
+	cd cmd/p2p ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-p2p
+	cd cmd/sync ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-sync
+	cd cmd/integration ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-harness
+	cd build ; docker build -f ../DockerfilePrebuiltBinary -t $(DOCKER_IMAGE_REPO):$(BRANCH) .
 .PHONY: docker-local-build
 
 
