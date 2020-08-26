@@ -32,11 +32,11 @@ class WalletAPI:
         self.fixed_node = fixed_node
         self.tx_ids = []
 
-    def submit_tx(self, to, src, gas_price, amount, tx_bytes):
+    def submit_tx(self, to, src, gas_price, amount, nonce, tx_bytes):
         a_ok_pat = "[\'\"]value[\'\"]:\s?[\'\"]ok[\'\"]"
         print(f"\n{datetime.now()}: submit transaction\nfrom {src}\nto {to}")
         pod_ip, pod_name = self.random_node()
-        print(f"amount: {amount}, gas-price: {gas_price}, total: {amount+gas_price}")
+        print(f"nonce: {nonce}, amount: {amount}, gas-price: {gas_price}, total: {amount+gas_price}")
         tx_field = '{"tx":' + str(list(tx_bytes)) + '}'
         out = self.send_api_call(pod_ip, tx_field, self.submit_api)
         print(f"{datetime.now()}: submit result: {out}")
