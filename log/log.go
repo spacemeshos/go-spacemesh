@@ -21,6 +21,12 @@ var debugMode = false
 // should we format out logs in json
 var jsonLog = false
 
+// where logs go by default
+var logwriter io.Writer
+
+// default encoders
+var defaultEncoder = zap.NewDevelopmentEncoderConfig()
+
 var debugLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
 	return lvl >= zapcore.DebugLevel
 })
@@ -55,15 +61,17 @@ type Logger interface {
 
 func encoder() zapcore.Encoder {
 	if jsonLog {
-		return zapcore.NewJSONEncoder(zap.NewDevelopmentEncoderConfig())
+		return zapcore.NewJSONEncoder(defaultEncoder)
 	}
-	return zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
+	return zapcore.NewConsoleEncoder(defaultEncoder)
 }
 
 // AppLog is the local app singleton logger.
 var AppLog Log
 
 func init() {
+	logwriter = os.Stdout
+
 	// create a basic temp os.Stdout logger
 	// This logger is used until the app calls InitSpacemeshLoggingSystem().
 	AppLog = NewDefault(mainLoggerName)
@@ -79,9 +87,9 @@ func JSONLog(b bool) {
 	jsonLog = b
 }
 
-// NewWithLevel creates a logger with a fixed level
+// NewWithLevel creates a logger with a fixed level and with a set of (optional) hooks
 func NewWithLevel(module string, level zap.AtomicLevel, hooks ...func(zapcore.Entry) error) Log {
-	consoleSyncer := zapcore.AddSync(os.Stdout)
+	consoleSyncer := zapcore.AddSync(logwriter)
 	enc := encoder()
 	consoleCore := zapcore.NewCore(enc, consoleSyncer, zap.LevelEnablerFunc(level.Enabled))
 	core := zapcore.RegisterHooks(consoleCore, hooks...)
@@ -111,7 +119,7 @@ func New(module string, dataFolderPath string, logFileName string) Log {
 	return Log{log}
 }
 
-// NewDefault creates a Log with not file output.
+// NewDefault creates a Log without file output.
 func NewDefault(module string) Log {
 	return NewWithLevel(module, zap.NewAtomicLevelAt(Level()))
 }
