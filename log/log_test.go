@@ -9,11 +9,11 @@ import (
 	"testing"
 )
 
-type FakeNodeId struct {
+type FakeNodeID struct {
 	key string
 }
 
-func (id FakeNodeId) Field() Field {
+func (id FakeNodeID) Field() Field {
 	return String("node_id", id.key)
 }
 
@@ -39,7 +39,7 @@ func TestLogLevel(t *testing.T) {
 	AppLog = NewWithLevel(mainLoggerName, zap.NewAtomicLevelAt(zapcore.DebugLevel))
 
 	// Instantiate a logger and a sublogger
-	nid := FakeNodeId{key: "abc123"}
+	nid := FakeNodeID{key: "abc123"}
 	nidEncoded := fmt.Sprintf("{\"node_id\": \"%s\"}", nid.key)
 	loggerName := "logtest"
 	logger := NewWithLevel(loggerName, zap.NewAtomicLevelAt(zapcore.InfoLevel), hookFn).WithFields(nid)
