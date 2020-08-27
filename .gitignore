@@ -13,6 +13,7 @@ cmd/tmp
 .settings
 .idea
 .vagrant
+.python-version
 
 /go-spacemesh
 /go-hare
