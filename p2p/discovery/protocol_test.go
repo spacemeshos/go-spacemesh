@@ -20,7 +20,7 @@ func generateDiscNodes(n int) []*node.Info {
 }
 
 func GetTestLogger(name string) log.Log {
-	return log.New(name, "", "")
+	return log.NewDefault(name)
 }
 
 type testNode struct {
@@ -32,7 +32,7 @@ type testNode struct {
 func newTestNode(simulator *service.Simulator) *testNode {
 	nd := simulator.NewNode()
 	d := &mockAddrBook{}
-	disc := newProtocol(nd.Info.PublicKey(), d, nd, log.New(nd.String(), "", ""))
+	disc := newProtocol(nd.Info.PublicKey(), d, nd, log.NewDefault(nd.String()))
 	return &testNode{nd, d, disc}
 }
 

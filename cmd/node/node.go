@@ -215,7 +215,6 @@ func NewSpacemeshApp() *SpacemeshApp {
 	}
 
 	return node
-
 }
 
 func (app *SpacemeshApp) introduction() {
