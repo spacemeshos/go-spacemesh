@@ -28,7 +28,7 @@ jobs:
       matrix:
         # no freebsd support for now =\
         #os: [macos-latest, windows-latest, ubuntu-latest]
-        os: ubuntu-latest
+        os: [ubuntu-latest]
     steps:
     - name: checkout
       uses: actions/checkout@v2
@@ -64,7 +64,7 @@ jobs:
       matrix:
         # no freebsd support for now =\
         #os: [macos-latest, windows-latest, ubuntu-latest]
-        os: ubuntu-latest
+        os: [ubuntu-latest]
     steps:
     - name: checkout
       uses: actions/checkout@v2
@@ -82,7 +82,7 @@ jobs:
       matrix:
         # no freebsd support for now =\
         #os: [macos-latest, windows-latest, ubuntu-latest]
-        os: ubuntu-latest
+        os: [ubuntu-latest]
     steps:
     - name: checkout
       uses: actions/checkout@v2
@@ -100,7 +100,7 @@ jobs:
       matrix:
         # no freebsd support for now =\
         #os: [macos-latest, windows-latest, ubuntu-latest]
-        os: ubuntu-latest
+        os: [ubuntu-latest]
     steps:
     - name: checkout
       uses: actions/checkout@v2
@@ -118,7 +118,7 @@ jobs:
       matrix:
         # no freebsd support for now =\
         #os: [macos-latest, windows-latest, ubuntu-latest]
-        os: ubuntu-latest
+        os: [ubuntu-latest]
     steps:
     - name: checkout
       uses: actions/checkout@v2
@@ -136,7 +136,7 @@ jobs:
       matrix:
         # no freebsd support for now =\
         #os: [macos-latest, windows-latest, ubuntu-latest]
-        os: ubuntu-latest
+        os: [ubuntu-latest]
     steps:
     - name: checkout
       uses: actions/checkout@v2
