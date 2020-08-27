@@ -5,11 +5,8 @@ package log
 import (
 	"io"
 	"os"
-	"path/filepath"
 
 	"go.uber.org/zap/zapcore"
-	"gopkg.in/natefinch/lumberjack.v2"
-
 	"go.uber.org/zap"
 )
 
@@ -97,29 +94,7 @@ func NewWithLevel(module string, level zap.AtomicLevel, hooks ...func(zapcore.En
 	return Log{log}
 }
 
-// New creates a logger for a module. e.g. p2p instance logger.
-func New(module string, dataFolderPath string, logFileName string) Log {
-	var cores []zapcore.Core
-
-	consoleSyncer := zapcore.AddSync(os.Stdout)
-	enc := encoder()
-
-	cores = append(cores, zapcore.NewCore(enc, consoleSyncer, logLevel()))
-
-	if dataFolderPath != "" && logFileName != "" {
-		wr := getFileWriter(dataFolderPath, logFileName)
-		fs := zapcore.AddSync(wr)
-		cores = append(cores, zapcore.NewCore(enc, fs, debugLevel))
-	}
-
-	core := zapcore.NewTee(cores...)
-
-	log := zap.New(core)
-	log = log.Named(module)
-	return Log{log}
-}
-
-// NewDefault creates a Log without file output.
+// NewDefault creates a Log with the default log level
 func NewDefault(module string) Log {
 	return NewWithLevel(module, zap.NewAtomicLevelAt(Level()))
 }
@@ -127,21 +102,6 @@ func NewDefault(module string) Log {
 // NewFromLog creates a Log from an existing zap-compatible log.
 func NewFromLog(l *zap.Logger) Log {
 	return Log{l}
-}
-
-// getBackendLevelWithFileBackend returns backends level including log file backend
-func getFileWriter(dataFolderPath, logFileName string) io.Writer {
-	fileName := filepath.Join(dataFolderPath, logFileName)
-
-	fileLogger := &lumberjack.Logger{
-		Filename:   fileName,
-		MaxSize:    500, // megabytes
-		MaxBackups: 3,
-		MaxAge:     28, // days
-		Compress:   false,
-	}
-
-	return fileLogger
 }
 
 // public wrappers abstracting away logging lib impl
