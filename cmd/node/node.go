@@ -171,7 +171,6 @@ type SpacemeshApp struct {
 	closers           []interface{ Close() }
 	log               log.Log
 	txPool            *state.TxMempool
-	loggers           map[string]*zap.AtomicLevel
 	term              chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
 }
 
@@ -212,7 +211,6 @@ func NewSpacemeshApp() *SpacemeshApp {
 	defaultConfig := cfg.DefaultConfig()
 	node := &SpacemeshApp{
 		Config:  &defaultConfig,
-		loggers: make(map[string]*zap.AtomicLevel),
 		term:    make(chan struct{}),
 	}
 
@@ -413,21 +411,7 @@ func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
 		lvl.SetLevel(log.Level())
 	}
 
-	app.loggers[name] = &lvl
 	return logger.SetLevel(&lvl).WithName(name)
-}
-
-// SetLogLevel sets the specific log level for the specified logger name, Log level can be WARN, INFO, DEBUG
-func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
-	if lvl, ok := app.loggers[name]; ok {
-		err := lvl.UnmarshalText([]byte(loglevel))
-		if err != nil {
-			return err
-		}
-	} else {
-		return fmt.Errorf("cannot find logger %v", name)
-	}
-	return nil
 }
 
 func (app *SpacemeshApp) initServices(nodeID types.NodeID,
@@ -684,7 +668,7 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 		// start grpc if specified or if json rpc specified
 		layerDuration := app.Config.LayerDurationSec
 		app.grpcAPIService = api.NewGrpcService(apiConf.GrpcServerPort, net, app.state, app.mesh, app.txPool,
-			app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app.syncer, app.Config, app)
+			app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app.syncer, app.Config)
 		app.grpcAPIService.StartService()
 	}
 

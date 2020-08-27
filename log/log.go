@@ -124,6 +124,11 @@ func NewDefault(module string) Log {
 	return NewWithLevel(module, zap.NewAtomicLevelAt(Level()))
 }
 
+// NewFromLog creates a Log from an existing zap-compatible log.
+func NewFromLog(l *zap.Logger) Log {
+	return Log{l}
+}
+
 // getBackendLevelWithFileBackend returns backends level including log file backend
 func getFileWriter(dataFolderPath, logFileName string) io.Writer {
 	fileName := filepath.Join(dataFolderPath, logFileName)

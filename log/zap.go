@@ -138,7 +138,7 @@ func (l Log) SetLevel(level *zap.AtomicLevel) Log {
 	}
 }
 
-// WithName returns a logger the given fields
+// WithName returns a logger with the given name
 func (l Log) WithName(prefix string) Log {
 	lgr := l.logger.Named(fmt.Sprintf("%-13s", prefix))
 	return Log{lgr}
