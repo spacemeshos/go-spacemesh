@@ -210,8 +210,8 @@ func NewSpacemeshApp() *SpacemeshApp {
 
 	defaultConfig := cfg.DefaultConfig()
 	node := &SpacemeshApp{
-		Config:  &defaultConfig,
-		term:    make(chan struct{}),
+		Config: &defaultConfig,
+		term:   make(chan struct{}),
 	}
 
 	return node

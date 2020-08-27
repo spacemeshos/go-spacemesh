@@ -6,8 +6,8 @@ import (
 	"io"
 	"os"
 
-	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 const mainLoggerName = "00000.defaultLogger"
