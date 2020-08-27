@@ -94,15 +94,5 @@ func TestLogLevel(t *testing.T) {
 	subLogger2.Debug("foobar")
 	r.Equal(0, buf.Len())
 
-	// Try changing the log level the same way App.SetLogLevel does
-	r.NoError(lvlStored.UnmarshalText([]byte("WARN")))
-	subLogger2.Debug("foobar")
-	subLogger2.Info("foobar")
-	teststr = "test004"
-	expectedLevel = zapcore.WarnLevel
-	subLogger2.Warning(teststr)
-	hookedExpected++
-	r.Equal(fmt.Sprintf("WARN\t%s\t%s\t%s\n", loggerName, teststr, nidEncoded), buf.String())
-
 	r.Equal(hookedExpected, hooked, "hook function was not called the expected number of times")
 }
