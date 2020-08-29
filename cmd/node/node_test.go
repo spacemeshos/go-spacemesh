@@ -357,13 +357,6 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	r.Equal(1234, app.Config.API.JSONServerPort)
 }
 
-type PostMock struct {
-}
-
-func (PostMock) Reset() error {
-	return nil
-}
-
 type NetMock struct {
 }
 
@@ -405,7 +398,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
 		app.Config.API.GrpcServerPort = port
-		app.startAPIServices(PostMock{}, NetMock{})
+		app.startAPIServices(NetMock{})
 	}
 	defer app.stopServices()
 
@@ -471,7 +464,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	// Make sure the service is not running by default
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
-		app.startAPIServices(PostMock{}, NetMock{})
+		app.startAPIServices(NetMock{})
 	}
 	defer app.stopServices()
 	str, err := testArgs(app)

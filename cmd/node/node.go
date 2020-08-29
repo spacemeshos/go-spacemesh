@@ -690,7 +690,7 @@ func (app *SpacemeshApp) startServices() {
 	go app.checkTimeDrifts()
 }
 
-func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.NetworkAPI) {
+func (app *SpacemeshApp) startAPIServices(net api.NetworkAPI) {
 	apiConf := &app.Config.API
 	layerDuration := app.Config.LayerDurationSec
 
@@ -990,7 +990,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("Error starting p2p services: %v", err)
 	}
 
-	app.startAPIServices(postClient, app.P2P)
+	app.startAPIServices(app.P2P)
 	events.SubscribeToLayers(clock.Subscribe())
 	log.Info("App started.")
 
