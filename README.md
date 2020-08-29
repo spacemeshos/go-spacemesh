@@ -101,7 +101,7 @@ On Windows you need to install `make` via [msys2](https://www.msys2.org/), [Ming
 
 Ensure that `$GOPATH` is set correctly and that the `$GOPATH/bin` directory appears in `$PATH`.
 
-Before building we need to install `protoc` (ProtoBuf compiler) and some tools required to generate ProtoBufs. Do this by running:
+Before building we need to set up the golang environment. Do this by running:
 ```bash
 make install
 ```
@@ -116,7 +116,7 @@ make build
 
 (On FreeBSD, you should instead use `gmake build`. You can install `gmake` with `pkg install gmake` if it isn't already installed.)
 
-This will (re-)generate protobuf files and build the `go-spacemesh` binary, saving it in the `build/` directory.
+This will build the `go-spacemesh` binary, saving it in the `build/` directory.
 
 To build a binary for a specific architecture directory use:
 ```
@@ -141,14 +141,14 @@ You specify these parameters by providing go-spacemesh with a json config file. 
 3. Start go-spacemesh with the following arguments:
 
 ```bash
-./go-spacemesh --grpc-server --json-server --tcp-port [a_port] --config [configFileLocation] -d [nodeDataFilesPath]
+./go-spacemesh --tcp-port [a_port] --config [configFileLocation] -d [nodeDataFilesPath]
 ```
 
 ##### Example
 Assuming tn1.json is a testnet config file saved in the same directory as go-spacemesh, use the following command to join the testnet. The data folder will be created in the same directory as go-spacemesh. The node will use TCP port 7152 and UDP port 7152 for p2p connections:
 
 ```bash
-./go-spacemesh --grpc-server --json-server --tcp-port 7152 --config ./tn1.json -d ./sm_data
+./go-spacemesh --tcp-port 7152 --config ./tn1.json -d ./sm_data
 ```
 
 4. Build the [CLI Wallet](https://github.com/spacemeshos/CLIWallet) from source code and run it:
@@ -166,12 +166,12 @@ Assuming tn1.json is a testnet config file saved in the same directory as go-spa
 3. Stop go-spacemesh and start it with the following params:
 
 ```bash
-./go-spacemesh --grpc-server --json-server --tcp-port [a_port] --config [configFileLocation] -d [nodeDataFilesPath] --coinbase [coinbase_account] --start-mining --post-datadir [dir_for_post_data]
+./go-spacemesh --tcp-port [a_port] --config [configFileLocation] -d [nodeDataFilesPath] --coinbase [coinbase_account] --start-mining --post-datadir [dir_for_post_data]
 ```
 
 ##### Example
 ```bash
-./go-spacemesh --grpc-server --json-server --tcp-port 7152 --config ./tn1.json -d ./sm_data --coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --start-mining --post-datadir ./post_data
+./go-spacemesh --tcp-port 7152 --config ./tn1.json -d ./sm_data --coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --start-mining --post-datadir ./post_data
 ```
 
 4. Use the CLI wallet to check your coinbase account balance and to transact
@@ -212,7 +212,7 @@ On Windows you will need the following prerequisites:
 Close and reopen powershell to load the new PATH. You can then run the command `make install` followed by `make build` as on UNIX-based systems.
 
 ### Running a Local Testnet
-- You can run a local Spacemesh Testent with 6 full nodes, 6 user accounts, and 1 POET support service on your computer using docker.
+- You can run a local Spacemesh Testnet with 6 full nodes, 6 user accounts, and 1 POET support service on your computer using docker.
 - The local testnet full nodes are built from this repo.
 - This is a great way to get a feel for the protocol and the platform and to start hacking on Spacemesh.
 - Follow the steps in our [Local Testnet Guide](https://testnet.spacemesh.io/#/README)
