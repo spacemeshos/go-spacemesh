@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 
 	"google.golang.org/grpc"
@@ -32,7 +31,6 @@ func Contains(a []string, x string) int {
 type Harness struct {
 	server *server
 	conn   *grpc.ClientConn
-	pb.SpacemeshServiceClient
 }
 
 func newHarnessDefaultServerConfig(args []string) (*Harness, error) {

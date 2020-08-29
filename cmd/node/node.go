@@ -149,31 +149,33 @@ type TickProvider interface {
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
 	*cobra.Command
-	nodeID            types.NodeID
-	P2P               p2p.Service
-	Config            *cfg.Config
-	newgrpcAPIService *grpcserver.Server
-	newjsonAPIService *grpcserver.JSONHTTPServer
-	syncer            *sync.Syncer
-	blockListener     *sync.BlockListener
-	state             *state.TransactionProcessor
-	blockProducer     *miner.BlockBuilder
-	oracle            *miner.Oracle
-	txProcessor       *state.TransactionProcessor
-	mesh              *mesh.Mesh
-	gossipListener    *service.Listener
-	clock             TickProvider
-	hare              HareService
-	atxBuilder        *activation.Builder
-	atxDb             *activation.DB
-	poetListener      *activation.PoetListener
-	edSgn             *signing.EdSigner
-	closers           []interface{ Close() }
-	log               log.Log
-	txPool            *state.TxMempool
-	loggers           map[string]*zap.AtomicLevel
-	term              chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
-	started           chan struct{} // this channel is closed once the app has finished starting
+	nodeID         types.NodeID
+	P2P            p2p.Service
+	Config         *cfg.Config
+	grpcAPIService *grpcserver.Server
+	jsonAPIService *grpcserver.JSONHTTPServer
+	globalstateSvc *grpcserver.GlobalStateService
+	txService      *grpcserver.TransactionService
+	syncer         *sync.Syncer
+	blockListener  *sync.BlockListener
+	state          *state.TransactionProcessor
+	blockProducer  *miner.BlockBuilder
+	oracle         *miner.Oracle
+	txProcessor    *state.TransactionProcessor
+	mesh           *mesh.Mesh
+	gossipListener *service.Listener
+	clock          TickProvider
+	hare           HareService
+	atxBuilder     *activation.Builder
+	atxDb          *activation.DB
+	poetListener   *activation.PoetListener
+	edSgn          *signing.EdSigner
+	closers        []interface{ Close() }
+	log            log.Log
+	txPool         *state.TxMempool
+	loggers        map[string]*zap.AtomicLevel
+	term           chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
+	started        chan struct{} // this channel is closed once the app has finished starting
 }
 
 // LoadConfigFromFile tries to load configuration file if the config parameter was specified
@@ -700,10 +702,10 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 
 	// Make sure we only create the server once.
 	registerService := func(svc grpcserver.ServiceAPI) {
-		if app.newgrpcAPIService == nil {
-			app.newgrpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface)
+		if app.grpcAPIService == nil {
+			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface)
 		}
-		svc.RegisterService(app.newgrpcAPIService)
+		svc.RegisterService(app.grpcAPIService)
 	}
 
 	// Register the requested services one by one
@@ -724,19 +726,19 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 	}
 
 	// Now that the services are registered, start the server.
-	if app.newgrpcAPIService != nil {
-		app.newgrpcAPIService.Start()
+	if app.grpcAPIService != nil {
+		app.grpcAPIService.Start()
 	}
 
 	if apiConf.StartJSONServer {
-		if app.newgrpcAPIService == nil {
+		if app.grpcAPIService == nil {
 			// This panics because it should not happen.
 			// It should be caught inside apiConf.
 			log.Panic("one or more new GRPC services must be enabled with new JSON gateway server.")
 			return
 		}
-		app.newjsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
-		app.newjsonAPIService.StartService(
+		app.jsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
+		app.jsonAPIService.StartService(
 			apiConf.StartNodeService,
 			apiConf.StartMeshService,
 			apiConf.StartGlobalStateService,
@@ -751,16 +753,16 @@ func (app *SpacemeshApp) stopServices() {
 	// note: there is no guarantee that a listening go-routine will close before stopServices exits
 	close(app.term)
 
-	if app.newjsonAPIService != nil {
+	if app.jsonAPIService != nil {
 		log.Info("Stopping JSON gateway service...")
-		if err := app.newjsonAPIService.Close(); err != nil {
+		if err := app.jsonAPIService.Close(); err != nil {
 			log.Error("error stopping JSON gateway server: %s", err)
 		}
 	}
 
-	if app.newgrpcAPIService != nil {
+	if app.grpcAPIService != nil {
 		log.Info("Stopping GRPC service...")
-		app.newgrpcAPIService.Close()
+		app.grpcAPIService.Close()
 	}
 
 	if app.blockProducer != nil {

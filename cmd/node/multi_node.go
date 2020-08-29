@@ -4,6 +4,7 @@ import (
 	"github.com/spacemeshos/amcl"
 	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/collector"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -155,6 +156,21 @@ func getTestDefaultConfig() *config.Config {
 	return cfg
 }
 
+// ActivateGrpcServer starts a grpc server on the provided node
+func ActivateGrpcServer(smApp *SpacemeshApp) {
+	// Activate the two API services used by app_test
+	smApp.Config.API.StartTransactionService = true
+	smApp.Config.API.StartGlobalStateService = true
+	smApp.grpcAPIService = grpcserver.NewServerWithInterface(smApp.Config.API.GrpcServerPort, smApp.Config.API.GrpcServerInterface)
+	svcGlobalState := grpcserver.NewGlobalStateService(smApp.P2P, smApp.mesh, smApp.clock, smApp.syncer)
+	svcTx := grpcserver.NewTransactionService(smApp.P2P, smApp.mesh, smApp.txPool)
+	svcGlobalState.RegisterService(smApp.grpcAPIService)
+	smApp.globalstateSvc = svcGlobalState
+	svcTx.RegisterService(smApp.grpcAPIService)
+	smApp.txService = svcTx
+	smApp.grpcAPIService.Start()
+}
+
 // GracefulShutdown stops the current services running in apps
 func GracefulShutdown(apps []*SpacemeshApp) {
 	log.Info("Graceful shutdown begin")
@@ -265,6 +281,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 		a.startServices()
 	}
 	collect.Start(false)
+	ActivateGrpcServer(apps[0])
 
 	if err := poetHarness.Start([]string{"127.0.0.1:9091"}); err != nil {
 		log.Panic("failed to start poet server: %v", err)

@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"testing"
 	"time"
 
@@ -17,9 +16,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apicfg "github.com/spacemeshos/go-spacemesh/api/config"
-	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -187,8 +186,8 @@ func txWithUnorderedNonceGenerator(dependancies []int) TestScenario {
 				log.Panic("panicked creating signed tx err=%v", err)
 			}
 			txbytes, _ := types.InterfaceToBytes(tx)
-			pbMsg := pb.SignedTransaction{Tx: txbytes}
-			_, err = suite.apps[0].grpcAPIService.SubmitTransaction(nil, &pbMsg)
+			pbMsg := &pb.SubmitTransactionRequest{Transaction: txbytes}
+			_, err = suite.apps[0].txService.SubmitTransaction(nil, pbMsg)
 			assert.Error(suite.T(), err)
 		}
 	}
@@ -220,29 +219,28 @@ func txWithRunningNonceGenerator(dependancies []int) TestScenario {
 			log.Panic("Could not build ed signer err=%v", err)
 		}
 
-		account := pb.AccountId{}
-		account.Address = addr.String()
+		accountRequest := &pb.AccountRequest{AccountId: &pb.AccountId{Address: addr.Bytes()}}
+		getNonce := func() int {
+			accountResponse, err := suite.apps[0].globalstateSvc.Account(nil, accountRequest)
+			assert.NoError(suite.T(), err)
+			return int(accountResponse.AccountWrapper.Counter)
+		}
 
 		for i := 0; i < txsSent; i++ {
 
-			nonceStr, err := suite.apps[0].grpcAPIService.GetNonce(nil, &account)
-			assert.NoError(suite.T(), err)
-			actNonce, err := strconv.Atoi(nonceStr.Value)
+			actNonce := getNonce()
 			for actNonce != i {
-				log.Info("actual nonce: %v", nonceStr.Value)
+				log.Info("actual nonce: %d", actNonce)
 				time.Sleep(500 * time.Millisecond)
-				nonceStr, err = suite.apps[0].grpcAPIService.GetNonce(nil, &account)
-				assert.NoError(suite.T(), err)
-				actNonce, err = strconv.Atoi(nonceStr.Value)
+				actNonce = getNonce()
 			}
 			tx, err := types.NewSignedTx(uint64(i), dst, 10, 1, 1, acc1Signer)
 			if err != nil {
 				log.Panic("panicked creating signed tx err=%v", err)
 			}
 			txbytes, _ := types.InterfaceToBytes(tx)
-			pbMsg := pb.SignedTransaction{Tx: txbytes}
-			//_ = suite.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
-			_, err = suite.apps[0].grpcAPIService.SubmitTransaction(nil, &pbMsg)
+			pbMsg := &pb.SubmitTransactionRequest{Transaction: txbytes}
+			_, err = suite.apps[0].txService.SubmitTransaction(nil, pbMsg)
 			assert.NoError(suite.T(), err)
 		}
 	}
