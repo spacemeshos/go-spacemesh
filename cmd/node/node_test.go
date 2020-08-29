@@ -220,7 +220,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 
 	r := require.New(t)
 	app := NewSpacemeshApp()
-	r.Equal(9092, app.Config.API.NewGrpcServerPort)
+	r.Equal(9092, app.Config.API.GrpcServerPort)
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	// Try enabling an illegal service
@@ -233,7 +233,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	r.NoError(err)
 	r.Empty(str)
 	// This should still be set
-	r.Equal(port, app.Config.API.NewGrpcServerPort)
+	r.Equal(port, app.Config.API.GrpcServerPort)
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	resetFlags()
@@ -317,8 +317,8 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 
 	r := require.New(t)
 	app := NewSpacemeshApp()
-	r.Equal(9093, app.Config.API.NewJSONServerPort)
-	r.Equal(false, app.Config.API.StartNewJSONServer)
+	r.Equal(9093, app.Config.API.JSONServerPort)
+	r.Equal(false, app.Config.API.StartJSONServer)
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	// Try enabling just the JSON service (without the GRPC service)
@@ -330,7 +330,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	str, err := testArgs(app, "--json-server-new")
 	r.NoError(err)
 	r.Empty(str)
-	r.Equal(true, app.Config.API.StartNewJSONServer)
+	r.Equal(true, app.Config.API.StartJSONServer)
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	resetFlags()
@@ -343,7 +343,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.API.StartNodeService)
-	r.Equal(true, app.Config.API.StartNewJSONServer)
+	r.Equal(true, app.Config.API.StartJSONServer)
 
 	resetFlags()
 
@@ -353,8 +353,8 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(false, app.Config.API.StartNodeService)
-	r.Equal(false, app.Config.API.StartNewJSONServer)
-	r.Equal(1234, app.Config.API.NewJSONServerPort)
+	r.Equal(false, app.Config.API.StartJSONServer)
+	r.Equal(1234, app.Config.API.JSONServerPort)
 }
 
 type PostMock struct {
@@ -404,7 +404,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
-		app.Config.API.NewGrpcServerPort = port
+		app.Config.API.GrpcServerPort = port
 		app.startAPIServices(PostMock{}, NetMock{})
 	}
 	defer app.stopServices()
@@ -440,7 +440,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	str, err = testArgs(app, "--grpc-port-new", strconv.Itoa(port), "--grpc", "node")
 	r.Empty(str)
 	r.NoError(err)
-	r.Equal(port, app.Config.API.NewGrpcServerPort)
+	r.Equal(port, app.Config.API.GrpcServerPort)
 	r.Equal(true, app.Config.API.StartNodeService)
 
 	// Give the services a few seconds to start running - this is important on travis.
@@ -477,7 +477,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	str, err := testArgs(app)
 	r.Empty(str)
 	r.NoError(err)
-	r.Equal(false, app.Config.API.StartNewJSONServer)
+	r.Equal(false, app.Config.API.StartJSONServer)
 	r.Equal(false, app.Config.API.StartNodeService)
 	r.Equal(false, app.Config.API.StartMeshService)
 	r.Equal(false, app.Config.API.StartGlobalStateService)
@@ -491,12 +491,12 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
 
 	// We expect this one to fail
-	url := fmt.Sprintf("http://127.0.0.1:%d/%s", app.Config.API.NewJSONServerPort, "v1/node/echo")
+	url := fmt.Sprintf("http://127.0.0.1:%d/%s", app.Config.API.JSONServerPort, "v1/node/echo")
 	_, err = http.Post(url, "application/json", strings.NewReader(payload))
 	r.Error(err)
 	r.Contains(err.Error(), fmt.Sprintf(
 		"dial tcp 127.0.0.1:%d: connect: connection refused",
-		app.Config.API.NewJSONServerPort))
+		app.Config.API.JSONServerPort))
 
 	resetFlags()
 	events.CloseEventReporter()
@@ -511,15 +511,15 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	)
 	r.Empty(str)
 	r.NoError(err)
-	r.Equal(1234, app.Config.API.NewJSONServerPort)
-	r.Equal(true, app.Config.API.StartNewJSONServer)
+	r.Equal(1234, app.Config.API.JSONServerPort)
+	r.Equal(true, app.Config.API.StartJSONServer)
 	r.Equal(true, app.Config.API.StartNodeService)
 
 	// Give the server a chance to start up
 	time.Sleep(2 * time.Second)
 
 	// We expect this one to succeed
-	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload, app.Config.API.NewJSONServerPort)
+	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload, app.Config.API.JSONServerPort)
 	log.Info("Got echo response: %v", respBody)
 	var msg pb.EchoResponse
 	r.NoError(jsonpb.UnmarshalString(respBody, &msg))
@@ -722,8 +722,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		r.NoError(app.Initialize(cmd, args))
 
 		// GRPC configuration
-		app.Config.API.NewGrpcServerPort = port
-		app.Config.API.NewGrpcServerInterface = "localhost"
+		app.Config.API.GrpcServerPort = port
+		app.Config.API.GrpcServerInterface = "localhost"
 		app.Config.API.StartTransactionService = true
 
 		// Prevent obnoxious warning in macOS

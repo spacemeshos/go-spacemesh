@@ -3,7 +3,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/api"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
@@ -72,7 +71,6 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	app.p2p = swarm
 
 	// Testing stuff
-	api.ApproveAPIGossipMessages(cmdp.Ctx, app.p2p)
 	metrics.StartCollectingMetrics(app.Config.MetricsPort)
 
 	// start the node
@@ -90,22 +88,6 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 		pprof.Handler = nil
 		go func() { err := pprof.ListenAndServe(); log.Error("error running pprof server err=%v", err) }()
 		app.closers = append(app.closers, pprof)
-	}
-
-	// start api servers
-	if app.Config.API.StartGrpcServer || app.Config.API.StartJSONServer {
-		// start grpc if specified or if json rpc specified
-		log.Info("Started the GRPC Service")
-		grpc := api.NewGrpcService(app.Config.API.GrpcServerPort, app.p2p, nil, nil, nil, nil, nil, nil, nil, 0, nil, nil, nil)
-		grpc.StartService()
-		app.closers = append(app.closers, grpc)
-	}
-
-	if app.Config.API.StartJSONServer {
-		log.Info("Started the JSON Service")
-		json := api.NewJSONHTTPServer(app.Config.API.JSONServerPort, app.Config.API.GrpcServerPort)
-		json.StartService()
-		app.closers = append(app.closers, json)
 	}
 
 	<-cmdp.Ctx.Done()

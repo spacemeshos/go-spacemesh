@@ -6,14 +6,10 @@ import (
 )
 
 const (
-	defaultStartGRPCServer         = false
-	defaultGRPCServerPort          = 9091
-	defaultNewGRPCServerPort       = 9092
-	defaultNewGRPCServerInterface  = ""
+	defaultGRPCServerPort          = 9092
+	defaultGRPCServerInterface     = ""
 	defaultStartJSONServer         = false
-	defaultStartNewJSONServer      = false
-	defaultJSONServerPort          = 9090
-	defaultNewJSONServerPort       = 9093
+	defaultJSONServerPort          = 9093
 	defaultStartNodeService        = false
 	defaultStartMeshService        = false
 	defaultStartGlobalStateService = false
@@ -23,15 +19,11 @@ const (
 
 // Config defines the api config params
 type Config struct {
-	StartGrpcServer        bool     `mapstructure:"grpc-server"`
-	StartGrpcServices      []string `mapstructure:"grpc"`
-	GrpcServerPort         int      `mapstructure:"grpc-port"`
-	NewGrpcServerPort      int      `mapstructure:"grpc-port-new"`
-	NewGrpcServerInterface string   `mapstructure:"grpc-interface-new"`
-	StartJSONServer        bool     `mapstructure:"json-server"`
-	StartNewJSONServer     bool     `mapstructure:"json-server-new"`
-	JSONServerPort         int      `mapstructure:"json-port"`
-	NewJSONServerPort      int      `mapstructure:"json-port-new"`
+	StartGrpcServices   []string `mapstructure:"grpc"`
+	GrpcServerPort      int      `mapstructure:"grpc-port"`
+	GrpcServerInterface string   `mapstructure:"grpc-interface"`
+	StartJSONServer     bool     `mapstructure:"json-server"`
+	JSONServerPort      int      `mapstructure:"json-port"`
 	// no direct command line flags for these
 	StartNodeService        bool
 	StartMeshService        bool
@@ -47,15 +39,12 @@ func init() {
 // DefaultConfig defines the default configuration options for api
 func DefaultConfig() Config {
 	return Config{
-		StartGrpcServer:         defaultStartGRPCServer, // note: all bool flags default to false so don't set one of these to true here
-		StartGrpcServices:       nil,                    // note: cannot configure an array as a const
+		// note: all bool flags default to false so don't set one of these to true here
+		StartGrpcServices:       nil, // note: cannot configure an array as a const
 		GrpcServerPort:          defaultGRPCServerPort,
-		NewGrpcServerPort:       defaultNewGRPCServerPort,
-		NewGrpcServerInterface:  defaultNewGRPCServerInterface,
+		GrpcServerInterface:     defaultGRPCServerInterface,
 		StartJSONServer:         defaultStartJSONServer,
-		StartNewJSONServer:      defaultStartNewJSONServer,
 		JSONServerPort:          defaultJSONServerPort,
-		NewJSONServerPort:       defaultNewJSONServerPort,
 		StartNodeService:        defaultStartNodeService,
 		StartMeshService:        defaultStartMeshService,
 		StartGlobalStateService: defaultStartGlobalStateService,
@@ -86,7 +75,7 @@ func (s *Config) ParseServicesList() error {
 
 	// If JSON gateway server is enabled, make sure at least one
 	// GRPC service is also enabled
-	if s.StartNewJSONServer && !s.StartNodeService && !s.StartMeshService &&
+	if s.StartJSONServer && !s.StartNodeService && !s.StartMeshService &&
 		!s.StartGlobalStateService && !s.StartTransactionService && !s.StartSmesherService {
 		return errors.New("must enable at least one GRPC service along with JSON gateway service")
 	}
