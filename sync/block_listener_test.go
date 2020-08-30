@@ -371,7 +371,7 @@ func TestBlockListener_ValidateVotesBadFlow(t *testing.T) {
 }
 
 func TestBlockListenerViewTraversal(t *testing.T) {
-
+	t.Skip()
 	t.Log("TestBlockListener2 start")
 	sim := service.NewSimulator()
 	signer := signing.NewEdSigner()

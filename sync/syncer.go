@@ -1198,7 +1198,7 @@ func (s *Syncer) getAndValidateLayer(id types.LayerID) error {
 		inputVector = nil
 	}
 
-	s.Log.With().Info("getAndValidateLayer ", id.Field(), log.String("input_vector", fmt.Sprint(inputVector)))
+	s.Log.With().Info("getAndValidateLayer ", id.Field(), log.String("input_vector", fmt.Sprint(inputVector)), log.String("blocks", fmt.Sprint(types.BlockIDs(lyr.Blocks()))))
 
 	s.ValidateLayer(lyr, inputVector) // wait for layer validation
 	return nil

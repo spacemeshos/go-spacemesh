@@ -277,7 +277,7 @@ type meshValidatorBatchMock struct {
 	processedLayer types.LayerID
 }
 
-func (m *meshValidatorBatchMock) ValidateLayer(layer *types.Layer, inputVector []types.BlockID) {
+func (m *meshValidatorBatchMock) ValidateLayer(lyr *types.Layer, inputVector []types.BlockID) {
 	m.SetProcessedLayer(lyr.Index())
 	layerID := lyr.Index()
 	if layerID == 0 {

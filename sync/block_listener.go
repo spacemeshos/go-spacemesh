@@ -116,6 +116,7 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 	)
 	// check if known
 	if _, err := bl.GetBlock(blk.ID()); err == nil {
+		//todo: only do this if this is our block
 		data.ReportValidation(config.NewBlockProtocol)
 		bl.With().Info("we already know this block", blk.ID())
 		return

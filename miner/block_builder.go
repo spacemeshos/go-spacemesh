@@ -121,7 +121,7 @@ func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent
 		network:         net,
 		weakCoinToss:    weakCoin,
 		meshProvider:    orph,
-		baseBlockP:       bbp,
+		baseBlockP:      bbp,
 		blockOracle:     blockOracle,
 		syncer:          syncer,
 		started:         false,
@@ -273,6 +273,7 @@ func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, 
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID) (*types.Block, error) {
 
 	base, diffs, err := t.baseBlockP.BaseBlock(t.hareResult.GetResult)
+	t.Log.Info("the baseblock I choose %v", base)
 	if err != nil {
 		return nil, err
 	}
