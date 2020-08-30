@@ -79,7 +79,7 @@ func (trtl *verifyingTortoiseWrapper) HandleLateBlock(b *types.Block) (types.Lay
 	l := types.NewLayer(b.Layer())
 	l.AddBlock(b)
 	oldPbase, newPbase := trtl.HandleIncomingLayer(l, []types.BlockID{}) // block wasn't in input vector for sure.
-	log.With().Info("late block ", log.LayerID(uint64(b.Layer())), log.BlockID(b.ID().String()))
+	log.With().Info("late block ", b.Layer(), b.ID())
 	return oldPbase, newPbase
 }
 

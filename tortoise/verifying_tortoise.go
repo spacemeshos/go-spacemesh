@@ -81,19 +81,20 @@ func NewTurtle(bdp blockDataProvider, hdist, avgLayerSize int) *turtle {
 }
 
 func (t *turtle) init(genesisLayer *types.Layer) {
-	for _, blk := range genesisLayer.Blocks() {
+	for i, blk := range genesisLayer.Blocks() {
 		id := blk.ID()
 		t.BlocksToBlocks = append(t.BlocksToBlocks, opinion{
 			blockIDLayerTuple: blockIDLayerTuple{
 				id,
-				blk.LayerIndex,
+				genesisLayer.Index(),
 			},
 			blocksOpinion: make(map[types.BlockID]vec),
 		})
-		t.BlocksToBlocksIndex[blk.ID()] = 0
+		t.BlocksToBlocksIndex[blk.ID()] = i
 		t.GoodBlocksArr = append(t.GoodBlocksArr, id)
-		t.GoodBlocksIndex[id] = 0
+		t.GoodBlocksIndex[id] = i
 	}
+	t.Verified = genesisLayer.Index()
 }
 
 func (t *turtle) evict() {
@@ -110,7 +111,7 @@ func (t *turtle) evict() {
 		t.logger.Info("removing lyr %v", lyr)
 		ids, err := t.bdp.LayerBlockIds(lyr)
 		if err != nil {
-			t.logger.With().Error("could not get layer ids for layer ", log.LayerID(lyr.Uint64()), log.Err(err))
+			t.logger.With().Error("could not get layer ids for layer ", lyr, log.Err(err))
 			continue
 		}
 		for _, id := range ids {
@@ -304,62 +305,61 @@ func (t *turtle) opinionMatches(layerid types.LayerID, opinion2 opinion, getres 
 		return nil, errors.New(" matches too much exceptions")
 	}
 
-	if layerid == 0 {
+	if layerid == types.GetEffectiveGenesis() {
 		for _, i := range types.BlockIDs(mesh.GenesisLayer().Blocks()) {
 			f[i] = struct{}{}
 		}
 		return []map[types.BlockID]struct{}{a, f, n}, nil
 	}
 
-	bottom := types.LayerID(0)
-	top := layerid
+	// TODO: maybe we should vote back hdist but drill down check the base blocks ?
+	if layerid > types.GetEffectiveGenesis() {
 
-	if layerid > t.Hdist {
-		bottom = layerid - t.Hdist
-	}
+		for i := layerid; i <= t.Last; i++ {
+			t.logger.Debug("checking input vector results on lyr %v", i)
 
-	// TODO: maybe we can not vote back hdist but drill down check the base blocks ?
-	for i := bottom; i <= top; i++ {
-		t.logger.Debug("checking input vector results on lyr %v", i)
+			blks, err := t.bdp.LayerBlockIds(i)
+			if err != nil {
+				panic(fmt.Sprintf(" database err or layer not exist. %v", i))
+			}
 
-		blks, err := t.bdp.LayerBlockIds(i)
-		if err != nil {
-			panic(fmt.Sprintf(" database err or layer not exist. %v", i))
-		}
-
-		res, err := getres(i)
-		if err != nil {
-			for _, b := range blks {
-				if v, ok := opinion2.blocksOpinion[b]; !ok || v != abstain {
-					t.logger.Debug("added diff %v to neutral", b)
-					n[b] = struct{}{}
+			res, err := getres(i)
+			if err != nil {
+				for _, b := range blks {
+					if v, ok := opinion2.blocksOpinion[b]; !ok || v != abstain {
+						t.logger.Debug("added diff %v to neutral", b)
+						n[b] = struct{}{}
+					}
 				}
-			}
-			continue
-		}
 
-		inRes := make(map[types.BlockID]struct{})
-
-		for _, b := range res {
-			inRes[b] = struct{}{}
-			if v, ok := opinion2.blocksOpinion[b]; !ok || v != support {
-				t.logger.Debug("added diff %v to support", b)
-				f[b] = struct{}{}
-			}
-		}
-
-		for _, b := range blks {
-			if _, ok := inRes[b]; ok {
+				if len(a)+len(f)+len(n) > MaxExceptionList {
+					return nil, errors.New(" matches too much exceptions")
+				}
 				continue
 			}
-			// TODO: maybe we don't need this if it is not included.
-			if v, ok := opinion2.blocksOpinion[b]; !ok || v != against {
-				t.logger.Debug("added diff %v to against", b)
 
-				a[b] = struct{}{}
+			inRes := make(map[types.BlockID]struct{})
+
+			for _, b := range res {
+				inRes[b] = struct{}{}
+				if v, ok := opinion2.blocksOpinion[b]; !ok || v != support {
+					t.logger.Debug("added diff %v to support", b)
+					f[b] = struct{}{}
+				}
+			}
+
+			for _, b := range blks {
+				if _, ok := inRes[b]; ok {
+					continue
+				}
+				// TODO: maybe we don't need this if it is not included.
+				if v, ok := opinion2.blocksOpinion[b]; !ok || v != against {
+					t.logger.Debug("added diff %v to against", b)
+
+					a[b] = struct{}{}
+				}
 			}
 		}
-
 	}
 
 	if len(a)+len(f)+len(n) > MaxExceptionList {
@@ -405,11 +405,11 @@ func RecoverVerifyingTortoise(mdb retriever) (interface{}, error) {
 func (t *turtle) processBlock(block *types.Block) error {
 	baseidx, ok := t.BlocksToBlocksIndex[block.BaseBlock]
 	if !ok {
-		panic("base block not found")
+		return fmt.Errorf("base block not found %v", block.BaseBlock)
 	}
 
 	if len(t.BlocksToBlocks) < baseidx {
-		panic("base block not in array")
+		return fmt.Errorf("array is less than baseblock id %v idx:%v", block.BaseBlock, baseidx)
 	}
 
 	baseBlockOpinion := t.BlocksToBlocks[baseidx]
@@ -444,6 +444,14 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer, inputVector []types.Bl
 
 	if t.Last < newlyr.Index() {
 		t.Last = newlyr.Index()
+	}
+
+	if len(newlyr.Blocks()) == 0 {
+		return t.Verified, t.Verified
+	}
+
+	if newlyr.Index() <= types.GetEffectiveGenesis() {
+		return t.Verified, t.Verified
 	}
 	// TODO: handle late blocks
 
@@ -507,7 +515,7 @@ markingLoop:
 				continue markingLoop
 			}
 		}
-		t.logger.Info("marking %v of layer %v as good", b.ID(), b.LayerIndex)
+		t.logger.Debug("marking %v of layer %v as good", b.ID(), b.LayerIndex)
 		t.GoodBlocksArr = append(t.GoodBlocksArr, b.ID())
 		t.GoodBlocksIndex[b.ID()] = len(t.GoodBlocksArr) - 1
 	}
@@ -526,7 +534,19 @@ loop:
 			continue // Panic? can't get layer
 		}
 
-		input := t.inputVectorForLayer(blks, &inputVector)
+		var input map[types.BlockID]vec
+
+		if i == newlyr.Index() {
+			input = t.inputVectorForLayer(blks, &inputVector)
+		} else {
+			raw, err := t.bdp.GetLayerInputVector(i)
+			if err != nil {
+				// this sets the input to abstain
+				raw = nil
+			}
+			input = t.inputVectorForLayer(blks, &raw)
+		}
+
 		if len(input) == 0 {
 			break
 		}
@@ -555,8 +575,7 @@ loop:
 					continue
 				}
 
-				t.logger.Debug("adding %v opinion = %v to the vote sum on %v", vopinion.id, opinionVote, blk)
-				//t.logger.Info("block %v is good and voting vote %v", vopinion.id, opinionVote)
+				t.logger.Debug("adding %v opinion = %v to the vote sum on %v", vopinion.BlockID, opinionVote, blk)
 				sum = sum.Add(opinionVote.Multiply(t.BlockWeight(vopinion.BlockID, blk)))
 			}
 

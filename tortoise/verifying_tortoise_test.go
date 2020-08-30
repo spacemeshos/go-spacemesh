@@ -135,7 +135,6 @@ func turtleSanity(t testing.TB, layers types.LayerID, blocksPerLayer, voteNegati
 
 	trtl = NewTurtle(msh, defaultTestHdist, blocksPerLayer)
 	gen := mesh.GenesisLayer()
-	require.NoError(t, AddLayer(msh, gen))
 	trtl.init(gen)
 
 	var l types.LayerID
@@ -220,7 +219,7 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 
 	// next up two layers that didn't finish
 	newlastlyr := types.LayerID(len(layerfuncs))
-	for i := newlastlyr; i <= newlastlyr+2; i++ {
+	for i := newlastlyr; i < newlastlyr+2; i++ {
 		layerfuncs = append(layerfuncs, func(id types.LayerID) (ids []types.BlockID, err error) {
 			fmt.Println("Giving bad result for layer ", id)
 			return nil, errors.New("idontknow")
@@ -229,7 +228,7 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 
 	// more good layers
 	newlastlyr = types.LayerID(len(layerfuncs))
-	for i := newlastlyr; i <= newlastlyr+5; i++ {
+	for i := newlastlyr; i < newlastlyr+(layers-newlastlyr); i++ {
 		layerfuncs = append(layerfuncs, func(id types.LayerID) (ids []types.BlockID, err error) {
 			return msh.LayerBlockIds(id)
 		})
@@ -237,16 +236,15 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 
 	trtl := NewTurtle(msh, defaultTestHdist, blocksPerLayer)
 	gen := mesh.GenesisLayer()
-	require.NoError(t, AddLayer(msh, gen))
 	trtl.init(gen)
 
 	var l types.LayerID
-	for l = 1; l <= layers; l++ {
-		turtleMakeAndProcessLayer(l, trtl, blocksPerLayer, msh, layerfuncs[l])
-		fmt.Println("Handled ", l, "========================================================================")
+	for l = types.GetEffectiveGenesis() + 1; l < layers; l++ {
+		turtleMakeAndProcessLayer(l, trtl, blocksPerLayer, msh, layerfuncs[l-1])
+		fmt.Println("Handled ", l, " Verified ", trtl.Verified, "========================================================================")
 	}
 
-	require.Equal(t, 5, trtl.Verified, "verification should'nt go further after layer couldn't be Verified,"+
+	require.Equal(t, types.LayerID(5), trtl.Verified, "verification should'nt go further after layer couldn't be Verified,"+
 		"even if future layers were successfully Verified ")
 	//todo: also check votes with requireVote
 }
