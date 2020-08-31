@@ -34,7 +34,7 @@ func layerIdsReqFactory(lyr types.LayerID) requestFactory {
 			}
 			ch <- ids
 		}
-		if err := s.SendRequest(layerIdsMsg, lyr.Bytes(), peer, foo); err != nil {
+		if err := s.SendRequest(layerIdsMsg, lyr.Bytes(), peer, foo, func(err error) {}); err != nil {
 			return nil, err
 		}
 		return ch, nil
@@ -57,7 +57,7 @@ func getEpochAtxIds(epoch types.EpochID, s networker, peer p2ppeers.Peer) (chan 
 		}
 		ch <- atxIDs
 	}
-	if err := s.SendRequest(atxIdsMsg, epoch.ToBytes(), peer, foo); err != nil {
+	if err := s.SendRequest(atxIdsMsg, epoch.ToBytes(), peer, foo, func(err error) {}); err != nil {
 		return nil, err
 	}
 	return ch, nil
@@ -80,7 +80,7 @@ func hashReqFactory(lyr types.LayerID) requestFactory {
 			h.SetBytes(msg)
 			ch <- &peerHashPair{peer: peer, hash: h}
 		}
-		if err := s.SendRequest(layerHashMsg, lyr.Bytes(), peer, foo); err != nil {
+		if err := s.SendRequest(layerHashMsg, lyr.Bytes(), peer, foo, func(err error) {}); err != nil {
 			return nil, err
 		}
 
@@ -106,7 +106,7 @@ func atxHashReqFactory(ep types.EpochID) requestFactory {
 			h.SetBytes(msg)
 			ch <- &peerHashPair{peer: peer, hash: h}
 		}
-		if err := s.SendRequest(atxIdrHashMsg, ep.ToBytes(), peer, foo); err != nil {
+		if err := s.SendRequest(atxIdrHashMsg, ep.ToBytes(), peer, foo, func(err error) {}); err != nil {
 			return nil, err
 		}
 
@@ -230,7 +230,7 @@ func poetReqFactory(poetProofRef []byte) requestFactory {
 			ch <- proofMessage
 		}
 
-		if err := s.SendRequest(poetMsg, poetProofRef, peer, resHandler); err != nil {
+		if err := s.SendRequest(poetMsg, poetProofRef, peer, resHandler, func(err error) {}); err != nil {
 			return nil, err
 		}
 
@@ -278,7 +278,7 @@ func encodeAndSendRequest(req server.MessageType, ids []types.Hash32, s networke
 	if err != nil {
 		return err
 	}
-	if err := s.SendRequest(req, bts, peer, foo); err != nil {
+	if err := s.SendRequest(req, bts, peer, foo, func(err error) {}); err != nil {
 		return err
 	}
 	return nil

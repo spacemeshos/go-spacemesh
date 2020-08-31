@@ -36,7 +36,7 @@ func TestProtocol_SendRequest(t *testing.T) {
 		strCh <- string(msg)
 	}
 
-	err := fnd2.SendRequest(1, nil, n1.PublicKey(), callback)
+	err := fnd2.SendRequest(1, nil, n1.PublicKey(), callback, nil)
 	msg := <-strCh
 
 	assert.EqualValues(t, "some value to return", msg, "value received did not match correct value")
@@ -44,7 +44,7 @@ func TestProtocol_SendRequest(t *testing.T) {
 
 	// Now try sending to a bad address
 	randkey := p2pcrypto.NewRandomPubkey()
-	err = fnd2.SendRequest(1, nil, randkey, callback)
+	err = fnd2.SendRequest(1, nil, randkey, callback, nil)
 	assert.Error(t, err, "Sending to bad address should return error")
 }
 
@@ -72,7 +72,7 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 		strCh <- string(msg)
 	}
 
-	err := fnd2.SendRequest(1, nil, n1.PublicKey(), callback)
+	err := fnd2.SendRequest(1, nil, n1.PublicKey(), callback, nil)
 	assert.NoError(t, err, "Should not return error")
 	assert.EqualValues(t, 1, fnd2.pendingQueue.Len(), "value received did not match correct value1")
 
@@ -116,7 +116,7 @@ func TestProtocol_Close(t *testing.T) {
 		strCh <- string(msg)
 	}
 
-	err := fnd2.SendRequest(1, nil, n1.PublicKey(), callback)
+	err := fnd2.SendRequest(1, nil, n1.PublicKey(), callback, nil)
 	assert.NoError(t, err, "Should not return error")
 	assert.EqualValues(t, 1, fnd2.pendingQueue.Len(), "value received did not match correct value1")
 	fnd2.Close()

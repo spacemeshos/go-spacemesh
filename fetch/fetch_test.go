@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
 	"testing"
+	"time"
 )
 
 func randomHash() (hash types.Hash32) {
@@ -46,7 +47,9 @@ func (m *mockRequest) ErrCallback(hash types.Hash32, err error) {
 type mockNet struct {
 	SendCalled  map[types.Hash32]int
 	ReturnError bool
-	Responses   map[types.Hash32][]byte
+	Responses   map[types.Hash32]responseMessage
+	SendAck     bool
+	AckChannel  chan struct{}
 }
 
 func (m mockNet) GetPeers() []p2ppeers.Peer {
@@ -54,20 +57,31 @@ func (m mockNet) GetPeers() []p2ppeers.Peer {
 	return []p2ppeers.Peer{pub1}
 }
 
-func (m *mockNet) SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte)) error {
+func (m *mockNet) SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error {
 	if m.ReturnError {
+		if m.SendAck {
+			m.AckChannel <- struct{}{}
+		}
 		return fmt.Errorf("mock error")
 	}
-	var r requestMessage
+	var r []requestMessage
 	err := types.BytesToInterface(payload, &r)
 	if err != nil {
 		panic("invalid message")
 	}
-	m.SendCalled[r.Hash]++
-	if payload, ok := m.Responses[r.Hash]; ok {
-		resHandler(payload)
+	for _, req := range r {
+		m.SendCalled[req.Hash]++
+		var res []responseMessage
+		if r, ok := m.Responses[req.Hash]; ok {
+			res = append(res, r)
+		}
+		bts, _ := types.InterfaceToBytes(res)
+		resHandler(bts)
 	}
 
+	if m.SendAck {
+		m.AckChannel <- struct{}{}
+	}
 	return nil
 }
 
@@ -75,10 +89,26 @@ func defaultFetch() (*Fetch, *mockNet) {
 	cfg := Config{
 		3,
 		3,
+		3,
 	}
 
-	mckNet := &mockNet{make(map[types.Hash32]int), false, make(map[types.Hash32][]byte)}
+	mckNet := &mockNet{make(map[types.Hash32]int),
+		false,
+		make(map[types.Hash32]responseMessage),
+		false,
+		make(chan struct{}),
+	}
+	lg := log.NewDefault("fetch")
+	return NewFetch(cfg, mckNet, lg), mckNet
+}
 
+func customFetch(cfg Config) (*Fetch, *mockNet) {
+	mckNet := &mockNet{make(map[types.Hash32]int),
+		false,
+		make(map[types.Hash32]responseMessage),
+		false,
+		make(chan struct{}),
+	}
 	lg := log.NewDefault("fetch")
 	return NewFetch(cfg, mckNet, lg), mckNet
 }
@@ -101,8 +131,8 @@ func TestFetch_GetHash(t *testing.T) {
 	f.GetHash(h2, hint2, req.OkCallback, req.ErrCallback, true)
 
 	//test aggregation by hint
-	assert.Equal(t, 2, len(f.requests))
-	assert.Equal(t, 2, len(f.requests[hint]))
+
+	assert.Equal(t, 2, len(f.activeRequests[h1]))
 }
 
 func TestFetch_requestHashFromPeers_AggregateAndValidate(t *testing.T) {
@@ -111,7 +141,11 @@ func TestFetch_requestHashFromPeers_AggregateAndValidate(t *testing.T) {
 	req := newRequestMock()
 
 	// set response mock
-	net.Responses[h1] = []byte{}
+	res := responseMessage{
+		Hash: h1,
+		data: []byte("a"),
+	}
+	net.Responses[h1] = res
 
 	hint := Hint("db")
 	request1 := request{
@@ -122,8 +156,8 @@ func TestFetch_requestHashFromPeers_AggregateAndValidate(t *testing.T) {
 		validateResponse: false,
 		hint:             hint,
 	}
-	requests := []request{request1, request1, request1}
-	f.requestHashFromPeers(hint, requests)
+	f.activeRequests[h1] = []request{request1, request1, request1}
+	f.requestHashBatchFromPeers()
 
 	// test aggregation of messages before calling fetch from peer
 	assert.Equal(t, 3, req.OkCalledNum[h1])
@@ -131,8 +165,8 @@ func TestFetch_requestHashFromPeers_AggregateAndValidate(t *testing.T) {
 
 	// test incorrect hash fail
 	request1.validateResponse = true
-	requests = []request{request1, request1, request1}
-	f.requestHashFromPeers(hint, requests)
+	f.activeRequests[h1] = []request{request1, request1, request1}
+	f.requestHashBatchFromPeers()
 
 	assert.Equal(t, 3, req.ErrCalledNum[h1])
 	assert.Equal(t, 2, net.SendCalled[h1])
@@ -150,7 +184,12 @@ func TestFetch_GetHash_failNetwork(t *testing.T) {
 	req := newRequestMock()
 
 	// set response mock
-	net.Responses[h1] = []byte{}
+	// set response mock
+	bts := responseMessage{
+		Hash: h1,
+		data: []byte("a"),
+	}
+	net.Responses[h1] = bts
 
 	net.ReturnError = true
 
@@ -163,10 +202,72 @@ func TestFetch_GetHash_failNetwork(t *testing.T) {
 		validateResponse: false,
 		hint:             hint,
 	}
-	requests := []request{request1, request1, request1}
-	f.requestHashFromPeers(hint, requests)
+	f.activeRequests[h1] = []request{request1, request1, request1}
+	f.requestHashBatchFromPeers()
 
 	// test aggregation of messages before calling fetch from peer
 	assert.Equal(t, 3, req.ErrCalledNum[h1])
 	assert.Equal(t, 0, net.SendCalled[h1])
+}
+
+func TestFetch_requestHashFromPeers_BatchRequestMax(t *testing.T) {
+	h1 := randomHash()
+	h2 := randomHash()
+	h3 := randomHash()
+	f, net := customFetch(Config{
+		BatchTimeout:      1,
+		MaxRetiresForPeer: 2,
+		BatchSize:         2,
+	})
+	req := newRequestMock()
+
+	// set response mock
+	bts := responseMessage{
+		Hash: h1,
+		data: []byte("a"),
+	}
+	bts2 := responseMessage{
+		Hash: h2,
+		data: []byte("a"),
+	}
+	bts3 := responseMessage{
+		Hash: h3,
+		data: []byte("a"),
+	}
+	net.Responses[h1] = bts
+	net.Responses[h2] = bts2
+	net.Responses[h3] = bts3
+	net.SendAck = true
+
+	hint := Hint("db")
+
+	defer f.Stop()
+	f.Start()
+	//test hash aggregation
+	f.GetHash(h1, hint, req.OkCallback, req.ErrCallback, false)
+	f.GetHash(h2, hint, req.OkCallback, req.ErrCallback, false)
+	f.GetHash(h3, hint, req.OkCallback, req.ErrCallback, false)
+
+	//since we have a batch of 2 we should call send twice - of not we should fail
+	select {
+	case <-net.AckChannel:
+		break
+	case <-time.After(2 * time.Second):
+		assert.Fail(t, "timeout getting")
+	}
+
+	select {
+	case <-net.AckChannel:
+		break
+	case <-time.After(2 * time.Second):
+		assert.Fail(t, "timeout getting")
+	}
+
+	// test aggregation of messages before calling fetch from peer
+	assert.Equal(t, 1, req.OkCalledNum[h1])
+	assert.Equal(t, 1, req.OkCalledNum[h2])
+	assert.Equal(t, 1, req.OkCalledNum[h3])
+	assert.Equal(t, 1, net.SendCalled[h1])
+	assert.Equal(t, 1, net.SendCalled[h2])
+	assert.Equal(t, 1, net.SendCalled[h1])
 }

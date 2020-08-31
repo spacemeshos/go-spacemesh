@@ -10,6 +10,7 @@ import (
 	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"sync"
 	"time"
 )
 
@@ -30,7 +31,7 @@ type priority uint16
 // Message priority constants
 const (
 	// Low will perform batched calls
-	Low  = 0
+	Low = 0
 	// High will call fetch immediately
 	High = 1
 )
@@ -50,7 +51,7 @@ type Fetcher interface {
 
 type network interface {
 	GetPeers() []p2ppeers.Peer
-	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte)) error
+	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), errHandler func(err error)) error
 }
 
 /// request contains all relevant data for a single request for a specified hash
@@ -69,10 +70,17 @@ type requestMessage struct {
 	Hash types.Hash32
 }
 
+// responseMessage is the on the wire message that will be send to the this node as response
+type responseMessage struct {
+	Hash types.Hash32
+	data []byte
+}
+
 // Config is the configuration file of the Fetch component
 type Config struct {
 	BatchTimeout      int
 	MaxRetiresForPeer int
+	BatchSize         int
 }
 
 // Fetch is the main struct that contains network peers and logic to batch and dispatch hash fetch requests
@@ -80,24 +88,25 @@ type Fetch struct {
 	cfg             Config
 	log             log.Log
 	dbs             map[Hint]database.DB
-	requests        map[Hint][]request
+	activeRequests  map[types.Hash32][]request
 	net             network
 	requestReceiver chan request
 	batchTimeout    *time.Ticker
 	stop            chan struct{}
+	activeReqM      sync.RWMutex
 }
 
 // NewFetch creates a new FEtch struct
 func NewFetch(cfg Config, net network, logger log.Log) *Fetch {
 	return &Fetch{
 		cfg:             cfg,
+		log:             logger,
 		dbs:             make(map[Hint]database.DB),
-		requests:        make(map[Hint][]request),
+		activeRequests:  make(map[types.Hash32][]request),
 		net:             net,
 		requestReceiver: make(chan request),
 		batchTimeout:    time.NewTicker(time.Second * time.Duration(cfg.BatchTimeout)),
 		stop:            make(chan struct{}),
-		log:             logger,
 	}
 }
 
@@ -108,6 +117,7 @@ func (f *Fetch) Start() {
 
 // Stop handling fetch requests
 func (f *Fetch) Stop() {
+	f.batchTimeout.Stop()
 	f.stop <- struct{}{}
 }
 
@@ -117,86 +127,130 @@ func (f *Fetch) loop() {
 	for {
 		select {
 		case req := <-f.requestReceiver:
+			// group requests by hash
+			f.activeReqM.Lock()
+			f.activeRequests[req.hash] = append(f.activeRequests[req.hash], req)
+			f.activeReqM.Unlock()
 			if req.priority > Low {
-				f.requestHashFromPeers(req.hint, []request{req})
+				f.sendBatch([]types.Hash32{req.hash})
 				break
 			}
-			f.requests[req.hint] = append(f.requests[req.hint], req)
 		case <-f.batchTimeout.C:
-			//todo: limit requests per peer
-			for key, list := range f.requests {
-				if len(list) > 0 {
-					// todo: make pooled
-					f.requestHashFromPeers(key, list)
-				}
-			}
-			f.requests = make(map[Hint][]request)
+			f.requestHashBatchFromPeers() // Process the batch.
 		case <-f.stop:
 			return
 		}
+	}
+}
 
+func (f *Fetch) receiveResponse(data []byte) {
+	var responses []responseMessage
+	err := types.BytesToInterface(data, &responses)
+	if err != nil {
+		log.Error("we shold panic here, response was unclear, probably leaking")
+	}
+
+	// iterate all hash responses
+	for _, resID := range responses {
+		//take lock here to make handling of a single hash atomic
+		f.activeReqM.Lock()
+		// for each hash, call its callbacks
+		resCallbacks := f.activeRequests[resID.Hash]
+		for _, req := range resCallbacks {
+			if req.validateResponse == false {
+				req.success(resID.Hash, data)
+				continue
+			}
+
+			// check hash flow, if hash didn't match still call fail function
+			actual := types.CalcHash32(data)
+			if actual == resID.Hash {
+				req.success(resID.Hash, data)
+				continue
+			}
+			//todo: mark peer as malicious
+			req.fail(resID.Hash, fmt.Errorf("hash didnt match"))
+		}
+		// remove from active list
+		delete(f.activeRequests, resID.Hash)
+		f.activeReqM.Unlock()
 	}
 }
 
 // this is the main function that sends the hash request to the peer
-func (f *Fetch) requestHashFromPeers(h Hint, requests []request) {
-	// group requests by hash
-	byHash := make(map[types.Hash32][]request)
-	for _, req := range requests {
-		byHash[req.hash] = append(byHash[req.hash], req)
+func (f *Fetch) requestHashBatchFromPeers() {
+	var requestList []types.Hash32
+	f.activeReqM.RLock()
+	for hash := range f.activeRequests {
+		requestList = append(requestList, hash)
 	}
+	f.activeReqM.RUnlock()
 
-	//create a handler function for each hash, call each registered handler when receiving data
-	for hash, requests := range byHash {
-		receiverFunc := func(data []byte) {
-			for _, req := range requests {
-				if req.validateResponse == false {
-					req.success(hash, data)
-					continue
-				}
-
-				// check hash flow, if hash didn't match still call fail function
-				actual := types.CalcHash32(data)
-				if actual == hash {
-					req.success(hash, data)
-					continue
-				}
-				//todo: mark peer as malicious
-				req.fail(hash, fmt.Errorf("hash didnt match"))
-			}
+	// send in batches
+	for i := 0; i < len(requestList); i += f.cfg.BatchSize {
+		j := i + f.cfg.BatchSize
+		if j > len(requestList) {
+			j = len(requestList)
 		}
-		// create a network request and serialise to bytes
-		r := requestMessage{Hint: h, Hash: hash}
-		bytes, err := types.InterfaceToBytes(r)
-		if err != nil {
-			f.handleHashError(requests, err)
-		}
-		// try sending request to some random peer
-		retries := 0
-		for {
-			// get random peer
-			p := f.getPeer()
-			err := f.net.SendRequest(fetch, bytes, p, receiverFunc)
-			// if call succeeded, continue to other requests
-			if err == nil {
-				break
-			}
-			//todo: mark number of fails per peer to make it low priority
-			retries++
-			if retries > f.cfg.MaxRetiresForPeer {
-				f.handleHashError(requests, ErrCouldNotSend(fmt.Errorf("could not send message")))
-				break
-			}
-			f.log.Error("could not send message to peer %v , retrying, retries : %v", retries)
-		}
+		f.sendBatch(requestList[i:j])
 	}
 }
 
-func (f *Fetch) handleHashError(req []request, err error) {
-	f.log.Error("cannot send fetch message %v", err)
-	for _, r := range req {
-		r.fail(r.hash, err)
+func (f *Fetch) sendBatch(hashes []types.Hash32) { // create a network request and serialise to bytes
+	// build list of request messages
+	var requests []requestMessage
+	f.activeReqM.RLock()
+	for _, hash := range hashes {
+		req, ok := f.activeRequests[hash]
+		if !ok {
+			f.log.Error("message invalidated before sent in batch %v", hash)
+			continue
+		}
+		r := requestMessage{Hint: req[0].hint, Hash: hash}
+		requests = append(requests, r)
 	}
+	f.activeReqM.RUnlock()
+
+	// timeout function will be called if no response was received for the hashes sent
+	timeoutFunc := func(err error) {
+		f.handleHashError(hashes, err)
+	}
+
+	bytes, err := types.InterfaceToBytes(requests)
+	if err != nil {
+		f.handleHashError(hashes, err)
+	}
+	// try sending request to some random peer
+	retries := 0
+	for {
+		// get random peer
+		p := f.getPeer()
+		err := f.net.SendRequest(fetch, bytes, p, f.receiveResponse, timeoutFunc)
+		// if call succeeded, continue to other requests
+		if err == nil {
+			break
+		}
+		//todo: mark number of fails per peer to make it low priority
+		retries++
+		if retries > f.cfg.MaxRetiresForPeer {
+			f.handleHashError(hashes, ErrCouldNotSend(fmt.Errorf("could not send message")))
+			break
+		}
+		f.log.Error("could not send message to peer %v , retrying, retries : %v", p, retries)
+	}
+}
+
+// handleHashError is called when an error occurred processing batches of the following hashes
+func (f *Fetch) handleHashError(hashes []types.Hash32, err error) {
+	f.log.Error("cannot send fetch message %v", err)
+	f.activeReqM.Lock()
+	for _, h := range hashes {
+		for _, callback := range f.activeRequests[h] {
+			callback.fail(h, err)
+		}
+		delete(f.activeRequests, h)
+	}
+	f.activeReqM.Unlock()
 }
 
 // getPeer returns a random peer from current peer list

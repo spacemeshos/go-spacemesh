@@ -88,7 +88,7 @@ func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
 		ch <- sender.ID.Bytes()
 	}
 
-	err = p.msgServer.SendRequest(PingPong, data, peer, foo)
+	err = p.msgServer.SendRequest(PingPong, data, peer, foo, nil)
 
 	if err != nil {
 		return err

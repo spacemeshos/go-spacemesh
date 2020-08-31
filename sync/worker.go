@@ -17,7 +17,7 @@ type batchRequestFactory func(com networker, peer p2ppeers.Peer, id []types.Hash
 
 type networker interface {
 	GetPeers() []p2ppeers.Peer
-	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte)) error
+	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), errHandler func(err error)) error
 	GetTimeout() time.Duration
 	GetExit() chan struct{}
 	log.Logger
