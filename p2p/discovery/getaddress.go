@@ -74,7 +74,7 @@ func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]*node.Info, error
 		ch <- nodes
 	}
 
-	err = p.msgServer.SendRequest(GetAddresses, []byte(""), server, resHandler, nil)
+	err = p.msgServer.SendRequest(GetAddresses, []byte(""), server, resHandler, func(err error) {})
 
 	if err != nil {
 		return nil, err
