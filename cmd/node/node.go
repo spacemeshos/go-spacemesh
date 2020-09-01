@@ -186,7 +186,6 @@ type SpacemeshApp struct {
 	closers           []interface{ Close() }
 	log               log.Log
 	txPool            *state.TxMempool
-	loggers           map[string]*zap.AtomicLevel
 	term              chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
 	started           chan struct{} // this channel is closed once the app has finished starting
 }
@@ -228,7 +227,6 @@ func NewSpacemeshApp() *SpacemeshApp {
 	defaultConfig := cfg.DefaultConfig()
 	node := &SpacemeshApp{
 		Config:  &defaultConfig,
-		loggers: make(map[string]*zap.AtomicLevel),
 		term:    make(chan struct{}),
 		started: make(chan struct{}),
 	}
@@ -292,7 +290,6 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 
 // setupLogging configured the app logging system.
 func (app *SpacemeshApp) setupLogging() {
-
 	if app.Config.TestMode {
 		log.JSONLog(true)
 	}
@@ -380,8 +377,9 @@ func (weakCoinStub) GetResult() bool {
 	return true
 }
 
+// Wrap the top-level logger to add context info and set the level for a
+// specific module.
 func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
-	log.Level()
 	lvl := zap.NewAtomicLevel()
 	var err error
 
@@ -456,21 +454,8 @@ func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
 		log.Error("cannot parse logging for %v error %v", name, err)
 		lvl.SetLevel(log.Level())
 	}
-	app.loggers[name] = &lvl
-	return logger.SetLevel(&lvl).WithName(name)
-}
 
-// SetLogLevel sets the specific log level for the specified logger name, Log level can be WARN, INFO, DEBUG
-func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
-	if lvl, ok := app.loggers[name]; ok {
-		err := lvl.UnmarshalText([]byte(loglevel))
-		if err != nil {
-			return err
-		}
-	} else {
-		return fmt.Errorf("cannot find logger %v", name)
-	}
-	return nil
+	return logger.SetLevel(&lvl).WithName(name)
 }
 
 func (app *SpacemeshApp) initServices(nodeID types.NodeID,
@@ -489,7 +474,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 
 	name := nodeID.ShortString()
 
-	lg := log.NewDefault(name).WithFields(nodeID)
+	// This base logger must be debug level so that other, derived loggers are not a lower level.
+	lg := log.NewWithLevel(name, zap.NewAtomicLevelAt(zapcore.DebugLevel)).WithFields(nodeID)
 
 	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
 
@@ -727,10 +713,8 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 	layerDuration := app.Config.LayerDurationSec
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
-		app.grpcAPIService = api.NewGrpcService(
-			apiConf.GrpcServerPort, net, app.state, app.mesh, app.txPool,
-			app.atxBuilder, app.oracle, app.clock, postClient,
-			layerDuration, app.syncer, app.Config, app)
+		app.grpcAPIService = api.NewGrpcService(apiConf.GrpcServerPort, net, app.state, app.mesh, app.txPool,
+			app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app.syncer, app.Config)
 		app.grpcAPIService.StartService()
 	}
 
@@ -1030,8 +1014,10 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Error("failed to create post client: %v", err)
 	}
 
+	// This base logger must be debug level so that other, derived loggers are not a lower level.
+	lg := log.NewWithLevel(nodeID.ShortString(), zap.NewAtomicLevelAt(zapcore.DebugLevel)).WithFields(nodeID)
+
 	/* Initialize all protocol services */
-	lg := log.NewDefault(nodeID.ShortString())
 
 	dbStorepath := app.Config.DataDir()
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
