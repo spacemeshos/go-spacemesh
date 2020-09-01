@@ -180,8 +180,6 @@ list-versions:
 
 
 dockerbuild-go:
-	# Must remove binaries or they will be copied into the container
-	rm -rf devtools/
 	docker build -t $(DOCKER_IMAGE_REPO):$(BRANCH) .
 .PHONY: dockerbuild-go
 

@@ -1,4 +1,4 @@
-package miner
+package state
 
 import (
 	"encoding/binary"
@@ -13,6 +13,10 @@ import (
 	"time"
 )
 
+func getState(types.Address) (uint64, uint64, error) {
+	return 5, 1000, nil
+}
+
 func TestNewTxPoolWithAccounts(t *testing.T) {
 	r := require.New(t)
 
@@ -26,34 +30,34 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 	r.Equal(prevNonce, nonce)
 	r.Equal(prevBalance, balance)
 
-	tx1Id, tx1 := newTx(t, 4, 50, signer)
-	pool.Put(tx1Id, tx1)
+	tx1 := newTx(t, 4, 50, signer)
+	pool.Put(tx1.ID(), tx1)
 	nonce, balance = pool.GetProjection(origin, prevNonce, prevBalance)
 	r.Equal(prevNonce+1, nonce)
 	r.Equal(prevBalance-50, balance)
-	r.ElementsMatch([]types.TransactionID{tx1Id}, pool.GetTxIdsByAddress(origin))
-	r.ElementsMatch([]types.TransactionID{tx1Id}, pool.GetTxIdsByAddress(tx1.Recipient))
+	r.ElementsMatch([]types.TransactionID{tx1.ID()}, pool.GetTxIdsByAddress(origin))
+	r.ElementsMatch([]types.TransactionID{tx1.ID()}, pool.GetTxIdsByAddress(tx1.Recipient))
 
-	tx2Id, tx2 := newTx(t, 5, 150, signer)
-	pool.Put(tx2Id, tx2)
+	tx2 := newTx(t, 5, 150, signer)
+	pool.Put(tx2.ID(), tx2)
 	nonce, balance = pool.GetProjection(origin, prevNonce, prevBalance)
 	r.Equal(prevNonce+2, nonce)
 	r.Equal(prevBalance-50-150, balance)
-	r.ElementsMatch([]types.TransactionID{tx1Id, tx2Id}, pool.GetTxIdsByAddress(origin))
-	r.ElementsMatch([]types.TransactionID{tx1Id}, pool.GetTxIdsByAddress(tx1.Recipient))
-	r.ElementsMatch([]types.TransactionID{tx2Id}, pool.GetTxIdsByAddress(tx2.Recipient))
+	r.ElementsMatch([]types.TransactionID{tx1.ID(), tx2.ID()}, pool.GetTxIdsByAddress(origin))
+	r.ElementsMatch([]types.TransactionID{tx1.ID()}, pool.GetTxIdsByAddress(tx1.Recipient))
+	r.ElementsMatch([]types.TransactionID{tx2.ID()}, pool.GetTxIdsByAddress(tx2.Recipient))
 
-	pool.Invalidate(tx1Id)
+	pool.Invalidate(tx1.ID())
 	nonce, balance = pool.GetProjection(origin, prevNonce+1, prevBalance-50)
 	r.Equal(prevNonce+2, nonce)
 	r.Equal(prevBalance-50-150, balance)
-	r.ElementsMatch([]types.TransactionID{tx2Id}, pool.GetTxIdsByAddress(origin))
+	r.ElementsMatch([]types.TransactionID{tx2.ID()}, pool.GetTxIdsByAddress(origin))
 	r.Empty(pool.GetTxIdsByAddress(tx1.Recipient))
-	r.ElementsMatch([]types.TransactionID{tx2Id}, pool.GetTxIdsByAddress(tx2.Recipient))
+	r.ElementsMatch([]types.TransactionID{tx2.ID()}, pool.GetTxIdsByAddress(tx2.Recipient))
 
 	seed := []byte("seedseed")
 	rand.Seed(int64(binary.LittleEndian.Uint64(seed)))
-	items, err := pool.GetTxsForBlock(1, getState)
+	items, _, err := pool.GetTxsForBlock(1, getState)
 	r.NoError(err)
 	r.Len(items, 1)
 	r.Equal(tx2.ID(), items[0])
@@ -74,10 +78,10 @@ func TestTxPoolWithAccounts_GetRandomTxs(t *testing.T) {
 
 	ids := make([]types.TransactionID, numTxs)
 	for i := uint64(0); i < numTxs; i++ {
-		id, tx := newTx(t, prevNonce+i, 50, signer)
-		ids[i] = id
-		fmt.Printf("%d: %v\n", i, id.ShortString())
-		pool.Put(id, tx)
+		tx := newTx(t, prevNonce+i, 50, signer)
+		ids[i] = tx.ID()
+		fmt.Printf("%d: %v\n", i, ids[i].ShortString())
+		pool.Put(ids[i], tx)
 	}
 
 	nonce, balance := pool.GetProjection(origin, prevNonce, prevBalance)
@@ -86,7 +90,7 @@ func TestTxPoolWithAccounts_GetRandomTxs(t *testing.T) {
 
 	seed := []byte("seedseed")
 	rand.Seed(int64(binary.LittleEndian.Uint64(seed)))
-	txs, err := pool.GetTxsForBlock(5, getState)
+	txs, _, err := pool.GetTxsForBlock(5, getState)
 	r.NoError(err)
 	r.Len(txs, 5)
 	var txIds []types.TransactionID
@@ -122,14 +126,6 @@ func TestGetRandIdxs(t *testing.T) {
 		idsList = append(idsList, id)
 	}
 	require.ElementsMatch(t, []uint64{2, 5, 6, 7, 9}, idsList) // new call -> different indices
-}
-
-func newTx(t testing.TB, nonce, totalAmount uint64, signer *signing.EdSigner) (types.TransactionID, *types.Transaction) {
-	feeAmount := uint64(1)
-	rec := types.Address{byte(rand.Int()), byte(rand.Int()), byte(rand.Int()), byte(rand.Int())}
-	tx, err := mesh.NewSignedTx(nonce, rec, totalAmount-feeAmount, 3, feeAmount, signer)
-	require.NoError(t, err)
-	return tx.ID(), tx
 }
 
 func BenchmarkTxPoolWithAccounts(b *testing.B) {
@@ -177,9 +173,11 @@ func createBatch(t testing.TB, signer *signing.EdSigner) ([]*types.Transaction, 
 	var txBatch []*types.Transaction
 	var txIDBatch []types.TransactionID
 	for i := uint64(0); i < 10000; i++ {
-		txID, tx := newTx(t, 5+i, 50, signer)
+		tx, err := mesh.NewSignedTx(5+1, types.Address{}, 50, 100, 1, signer)
+		require.NoError(t, err)
+		//tx := newTx(t, 5+i, 50, signer)
 		txBatch = append(txBatch, tx)
-		txIDBatch = append(txIDBatch, txID)
+		txIDBatch = append(txIDBatch, tx.ID())
 	}
 	return txBatch, txIDBatch
 }

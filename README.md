@@ -1,14 +1,17 @@
 <h1 align="center">
   <a href="https://spacemesh.io"><img width="400" src="https://spacemesh.io/content/images/2019/05/black_logo_hp.png" alt="Spacemesh logo" /></a>
-  <p align="center">A programmable Cryptocurrency</p>
+  <p align="center">A Programmable Cryptocurrency</p>
 </h1>
 
 <p align="center">
 
 <a href="https://github.com/spacemeshos/go-spacemesh/blob/master/LICENSE"><img src="https://img.shields.io/packagist/l/doctrine/orm.svg"/></a>
 <a href="https://github.com/avive"><img src="https://img.shields.io/badge/maintainer-%40avive-green.svg"/></a>
-<img src="https://img.shields.io/badge/golang-%3E%3D%201.9.2-orange.svg"/>
-<a href="https://gitter.im/spacemesh-os/Lobby"><img src="https://img.shields.io/badge/gitter-%23spacemesh--os-blue.svg"/></a>
+<a href="https://github.com/spacemeshos/go-spacemesh/releases"><img src="https://img.shields.io/github/v/release/spacemeshos/go-spacemesh?include_prereleases"/></a>
+<img src="https://img.shields.io/badge/platform-win--64 | macos--64 | linux--64 | freebsd-lightgrey.svg"/>
+<a href="https://golang.org/"><img src="https://img.shields.io/github/go-mod/go-version/spacemeshos/go-spacemesh?logo=go"/></a>
+<a href="https://github.com/spacemeshos/go-spacemesh/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22"><img src="https://img.shields.io/github/issues-raw/spacemeshos/go-spacemesh/help%20wanted?logo=github"/></a>
+<a href="http://chat.spacemesh.io/"><img src="https://img.shields.io/discord/623195163510046732?label=discord&logo=discord"/></a>
 <a href="https://spacemesh.io"><img src="https://img.shields.io/badge/madeby-spacemeshos-blue.svg"/></a>
 [![Go Report Card](https://goreportcard.com/badge/github.com/spacemeshos/go-spacemesh)](https://goreportcard.com/report/github.com/spacemeshos/go-spacemesh)
 [![Bors enabled](https://bors.tech/images/badge_small.svg)](https://app.bors.tech/repositories/22421)
@@ -173,9 +176,9 @@ Assuming tn1.json is a testnet config file saved in the same directory as go-spa
 
 4. Use the CLI wallet to check your coinbase account balance and to transact
 
-#### Joining Spacemesh ([TweedleDee](https://testnet.spacemesh.io/#/?id=what-is-spacemesh-01-tweedledee)) Testnet (net id 116)
-1. Build go-spacemesh source code from this github release: [go-spacemesh 0.1.12](https://github.com/spacemeshos/go-spacemesh/releases/tag/v0.1.12).
-2. Follow the instructions on how to join a testnet with mining (above) and use [TweedleDee net id 116 config file](https://storage.googleapis.com/smapp/0.0.13/config.json) as your node's config file.  
+#### Joining Spacemesh ([TweedleDee](https://testnet.spacemesh.io/#/?id=what-is-spacemesh-01-tweedledee)) Testnet (net id 117)
+1. Build go-spacemesh source code from this github release: [go-spacemesh 0.1.13](https://github.com/spacemeshos/go-spacemesh/releases/tag/v0.1.13).
+2. Follow the instructions on how to join a testnet with mining (above) and use [TweedleDee net id 117 config file](https://raw.githubusercontent.com/spacemeshos/smapp/0.1.0/desktop/config.json) as your node's config file.  
 
 ---
 

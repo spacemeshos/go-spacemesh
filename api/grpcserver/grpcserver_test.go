@@ -8,7 +8,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/spacemeshos/go-spacemesh/cmd"
-	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/state"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -226,7 +226,7 @@ var (
 	mining      = MiningAPIMock{}
 	oracle      = OracleMock{}
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
-	txMempool   = miner.NewTxMemPool()
+	txMempool   = state.NewTxMemPool()
 	txAPI       = &TxAPIMock{
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),

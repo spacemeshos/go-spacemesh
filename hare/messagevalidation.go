@@ -44,7 +44,7 @@ func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 
 	pub := m.PubKey
 	layer := types.LayerID(m.InnerMsg.InstanceID)
-	if layer.GetEpoch(ev.layersPerEpoch).IsGenesis() {
+	if layer.GetEpoch().IsGenesis() {
 		return true, nil // TODO: remove this lie after inception problem is addressed
 	}
 

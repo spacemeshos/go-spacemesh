@@ -63,7 +63,7 @@ client:
     genesis-active-size: '51'
     executable-path: '/bin/go-spacemesh'
   deployment_type: deployment
-client_1:
+clientv2:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-harness'
   replicas: 1
