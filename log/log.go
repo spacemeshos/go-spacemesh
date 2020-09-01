@@ -24,21 +24,6 @@ var logwriter io.Writer
 // default encoders
 var defaultEncoder = zap.NewDevelopmentEncoderConfig()
 
-var debugLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
-	return lvl >= zapcore.DebugLevel
-})
-
-var infoLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
-	return lvl >= zapcore.InfoLevel
-})
-
-func logLevel() zap.LevelEnablerFunc {
-	if debugMode {
-		return debugLevel
-	}
-	return infoLevel
-}
-
 // Level returns the zapcore level of logging.
 func Level() zapcore.Level {
 	if debugMode {
@@ -88,7 +73,7 @@ func JSONLog(b bool) {
 func NewWithLevel(module string, level zap.AtomicLevel, hooks ...func(zapcore.Entry) error) Log {
 	consoleSyncer := zapcore.AddSync(logwriter)
 	enc := encoder()
-	consoleCore := zapcore.NewCore(enc, consoleSyncer, zap.LevelEnablerFunc(level.Enabled))
+	consoleCore := zapcore.NewCore(enc, consoleSyncer, level)
 	core := zapcore.RegisterHooks(consoleCore, hooks...)
 	log := zap.New(core).Named(module)
 	return Log{log}

@@ -73,19 +73,67 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r.EqualError(err, fmt.Sprintf("identity file path ('tmp/wrong name') does not match public key (%v)", sgn.PublicKey().String()))
 }
 
-func TestSpacemeshApp_AddLogger(t *testing.T) {
-	r := require.New(t)
-
-	// construct a fake logger so we can read from it directly
-	var buf bytes.Buffer
+func newLogger(buf *bytes.Buffer) log.Log {
 	lvl := zap.NewAtomicLevelAt(zapcore.InfoLevel)
-	syncer := zapcore.AddSync(&buf)
+	syncer := zapcore.AddSync(buf)
 	encConfig := zap.NewDevelopmentEncoderConfig()
 	encConfig.TimeKey = ""
 	enc := zapcore.NewConsoleEncoder(encConfig)
-	core := zapcore.NewCore(enc, syncer, zap.LevelEnablerFunc(lvl.Enabled))
-	lg := log.NewFromLog(zap.New(core))
+	core := zapcore.NewCore(enc, syncer, lvl)
+	return log.NewFromLog(zap.New(core))
+}
 
+func TestSpacemeshApp_SetLoggers(t *testing.T) {
+	r := require.New(t)
+
+	var buf1, buf2 bytes.Buffer
+
+	app := NewSpacemeshApp()
+	mylogger := "anton"
+	myLog := newLogger(&buf1)
+	myLog2 := newLogger(&buf2)
+
+	app.log = app.addLogger(mylogger, myLog)
+	msg1 := "hi there"
+	app.log.Info(msg1)
+	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\n", mylogger, msg1), buf1.String())
+	r.NoError(app.SetLogLevel(mylogger, "warn"))
+	r.Equal("warn", app.loggers[mylogger].String())
+	buf1.Reset()
+
+	msg1 = "other logger"
+	myLog2.Info(msg1)
+	msg2 := "hi again"
+	msg3 := "be careful"
+	// This one should not be printed
+	app.log.Info(msg2)
+	// This one should be printed
+	app.log.Warning(msg3)
+	r.Equal(fmt.Sprintf("WARN\t%-13s\t%s\n", mylogger, msg3), buf1.String())
+	r.Equal(fmt.Sprintf("INFO\t%s\n", msg1), buf2.String())
+	buf1.Reset()
+
+	r.NoError(app.SetLogLevel(mylogger, "info"))
+
+	msg4 := "nihao"
+	app.log.Info(msg4)
+	r.Equal("info", app.loggers[mylogger].String())
+	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\n", mylogger, msg4), buf1.String())
+
+	// test bad logger name
+	r.Error(app.SetLogLevel("anton3", "warn"))
+
+	// test bad loglevel
+	r.Error(app.SetLogLevel(mylogger, "lulu"))
+	r.Equal("info", app.loggers[mylogger].String())
+}
+
+func TestSpacemeshApp_AddLogger(t *testing.T) {
+	r := require.New(t)
+
+	var buf bytes.Buffer
+
+	lg := newLogger(&buf)
 	app := NewSpacemeshApp()
 	mylogger := "anton"
 	subLogger := app.addLogger(mylogger, lg)

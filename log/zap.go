@@ -132,7 +132,7 @@ func (l Log) SetLevel(level *zap.AtomicLevel) Log {
 		Warning("attempt to SetLevel of logger lower than parent level, this may result in " +
 			"log entries being dropped silently")
 	}
-	lgr := l.logger.WithOptions(zap.IncreaseLevel(zap.LevelEnablerFunc(level.Enabled)))
+	lgr := l.logger.WithOptions(zap.IncreaseLevel(level))
 	return Log{
 		lgr,
 	}
