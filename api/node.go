@@ -45,6 +45,11 @@ type GenesisTimeAPI interface {
 	GetCurrentLayer() types.LayerID
 }
 
+// LoggingAPI is an API to system loggers
+type LoggingAPI interface {
+	SetLogLevel(loggerName, severity string) error
+}
+
 // PostAPI is an API for post init module
 type PostAPI interface {
 	Reset() error

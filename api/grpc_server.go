@@ -44,6 +44,7 @@ type SpacemeshGrpcService struct {
 	PeerCounter   PeerCounter
 	Syncer        Syncer
 	Config        *config.Config
+	Logging       LoggingAPI
 }
 
 var _ pb.SpacemeshServiceServer = (*SpacemeshGrpcService)(nil)
@@ -229,7 +230,7 @@ func (s SpacemeshGrpcService) Close() error {
 }
 
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempool *state.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, layerDurationSec int, syncer Syncer, cfg *config.Config) *SpacemeshGrpcService {
+func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempool *state.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, layerDurationSec int, syncer Syncer, cfg *config.Config, logging LoggingAPI) *SpacemeshGrpcService {
 	options := []grpc.ServerOption{
 		// XXX: this is done to prevent routers from cleaning up our connections (e.g aws load balances..)
 		// TODO: these parameters work for now but we might need to revisit or add them as configuration
@@ -258,6 +259,7 @@ func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempoo
 		PeerCounter:   peers.NewPeers(net, log.NewDefault("grpc")),
 		Syncer:        syncer,
 		Config:        cfg,
+		Logging:       logging,
 	}
 }
 
@@ -373,7 +375,11 @@ func (s SpacemeshGrpcService) ResetPost(ctx context.Context, empty *empty.Empty)
 // SetLoggerLevel sets logger level for specific logger
 func (s SpacemeshGrpcService) SetLoggerLevel(ctx context.Context, msg *pb.SetLogLevel) (*pb.SimpleMessage, error) {
 	log.Info("GRPC SetLogLevel msg")
-	return nil, errors.New("this endpoint has been deprecated")
+	err := s.Logging.SetLogLevel(msg.LoggerName, msg.Severity)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.SimpleMessage{Value: "ok"}, nil
 }
 
 // GetAccountTxs returns transactions that were applied and pending by this account

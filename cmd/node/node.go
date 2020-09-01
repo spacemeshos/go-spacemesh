@@ -211,9 +211,9 @@ func NewSpacemeshApp() *SpacemeshApp {
 
 	defaultConfig := cfg.DefaultConfig()
 	node := &SpacemeshApp{
-		Config: &defaultConfig,
+		Config:  &defaultConfig,
 		loggers: make(map[string]*zap.AtomicLevel),
-		term:   make(chan struct{}),
+		term:    make(chan struct{}),
 	}
 
 	return node
@@ -683,7 +683,7 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 		// start grpc if specified or if json rpc specified
 		layerDuration := app.Config.LayerDurationSec
 		app.grpcAPIService = api.NewGrpcService(apiConf.GrpcServerPort, net, app.state, app.mesh, app.txPool,
-			app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app.syncer, app.Config)
+			app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app.syncer, app.Config, app)
 		app.grpcAPIService.StartService()
 	}
 
