@@ -272,6 +272,10 @@ func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, 
 
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID) (*types.Block, error) {
 
+	if id <= types.GetEffectiveGenesis() {
+		return nil, errors.New("cannot create blockBytes in genesis layer")
+	}
+
 	base, diffs, err := t.baseBlockP.BaseBlock(t.hareResult.GetResult)
 	t.Log.Info("the baseblock I choose %v", base)
 	if err != nil {
