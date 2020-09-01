@@ -45,12 +45,13 @@ type turtle struct {
 
 	avgLayerSize int
 
-	GoodBlocksArr   []types.BlockID
-	GoodBlocksIndex map[types.BlockID]int
+	GoodBlocksIndex map[types.BlockID]struct{}
 
 	Verified types.LayerID
 
-	BlocksToBlocks      []opinion // records hdist, for each block, its votes about every previous block
+	// using the array to be able to iterate from latest elements easily.
+	BlocksToBlocks []opinion // records hdist, for each block, its votes about every previous block
+	// Use this to be able to lookup blocks opinion without iterating the array.
 	BlocksToBlocksIndex map[types.BlockID]int
 
 	// TODO: Tal says - We keep a vector containing our vote totals (positive and negative) for every previous block
@@ -69,8 +70,7 @@ func NewTurtle(bdp blockDataProvider, hdist, avgLayerSize int) *turtle {
 		bdp:                 bdp,
 		Last:                0,
 		avgLayerSize:        avgLayerSize,
-		GoodBlocksArr:       make([]types.BlockID, 0, 10),
-		GoodBlocksIndex:     make(map[types.BlockID]int),
+		GoodBlocksIndex:     make(map[types.BlockID]struct{}),
 		BlocksToBlocks:      make([]opinion, 0, 1),
 		BlocksToBlocksIndex: make(map[types.BlockID]int),
 	}
@@ -89,8 +89,7 @@ func (t *turtle) init(genesisLayer *types.Layer) {
 			blocksOpinion: make(map[types.BlockID]vec),
 		})
 		t.BlocksToBlocksIndex[blk.ID()] = i
-		t.GoodBlocksArr = append(t.GoodBlocksArr, id)
-		t.GoodBlocksIndex[id] = i
+		t.GoodBlocksIndex[id] = struct{}{}
 	}
 	t.Verified = genesisLayer.Index()
 }
@@ -98,6 +97,7 @@ func (t *turtle) init(genesisLayer *types.Layer) {
 func (t *turtle) evict() {
 	// Don't evict before we've Verified more than hdist
 	// TODO: fix potential leak when we can't verify but keep receiving layers
+
 	if t.Verified <= t.Hdist {
 		return
 	}
@@ -123,69 +123,16 @@ func (t *turtle) evict() {
 			for i, op := range t.BlocksToBlocks {
 				t.BlocksToBlocksIndex[op.BlockID] = i
 			}
-			goodidx, ok := t.GoodBlocksIndex[id]
-			if !ok {
-				continue
-			}
 			delete(t.GoodBlocksIndex, id)
-			t.GoodBlocksArr = removeBlockIndex(t.GoodBlocksArr, goodidx)
-			for i, gb := range t.GoodBlocksArr {
-				t.GoodBlocksIndex[gb] = i
-			}
 			t.logger.Debug("evict block %v from maps ", id)
 		}
 	}
 	t.Evict = window
 }
 
-func removeBlockIndex(b []types.BlockID, i int) []types.BlockID {
-	return append(b[:i], b[i+1:]...)
-}
-
 func removeOpinion(o []opinion, i int) []opinion {
 	return append(o[:i], o[i+1:]...)
 }
-
-//func (t *turtle) oldInputVector(l types.LayerID, b types.BlockID) vec {
-//	v, err := t.bdp.GetLayerInputVector(l)
-//	if err != nil {
-//		return abstain
-//	}
-//
-//
-//
-//	calc := t.inputVectorForLayer()
-//
-//	return vi.Vec()
-//}
-
-//func (t *turtle) singleInputVector(l types.LayerID, b types.BlockID) vec {
-//	if l == 0 {
-//		return support
-//	}
-//
-//	// TODO: Pull these from db/sync if we are syncing
-//	res, err := t.hrp.GetResult(l)
-//	if err != nil {
-//		return abstain
-//	}
-//
-//	m := make(map[types.BlockID]vec, len(res))
-//	wasIncluded := false
-//
-//	for _, bl := range res {
-//		m[bl] = support
-//		if bl == b {
-//			wasIncluded = true
-//		}
-//	}
-//
-//	if !wasIncluded {
-//		return against
-//	}
-//
-//	return support
-//}
 
 func (t *turtle) singleInputVectorFromDB(lyrid types.LayerID, blockid types.BlockID) (vec, error) {
 	if lyrid == 0 {
@@ -526,8 +473,7 @@ markingLoop:
 			}
 		}
 		t.logger.Debug("marking %v of layer %v as good", b.ID(), b.LayerIndex)
-		t.GoodBlocksArr = append(t.GoodBlocksArr, b.ID())
-		t.GoodBlocksIndex[b.ID()] = len(t.GoodBlocksArr) - 1
+		t.GoodBlocksIndex[b.ID()] = struct{}{}
 	}
 
 	idx := newlyr.Index()
