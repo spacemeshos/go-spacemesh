@@ -39,7 +39,6 @@ jobs:
     if: branch = staging OR branch = trying OR type = pull_request
   - name: "tidy, fmt, lint"
     script:
-      - make genproto
       - make test-tidy
       - make test-fmt
       - make lint
