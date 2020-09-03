@@ -288,6 +288,7 @@ func (m *DB) SaveContextualValidity(id types.BlockID, valid bool) error {
 	return m.contextualValidity.Put(id.Bytes(), v)
 }
 
+// SaveLayerInputVector saves the input vote vector for a layer (hare results)
 func (m *DB) SaveLayerInputVector(lyrid types.LayerID, vector []types.BlockID) error {
 	i, err := types.InterfaceToBytes(vector)
 	if err != nil {
@@ -297,6 +298,7 @@ func (m *DB) SaveLayerInputVector(lyrid types.LayerID, vector []types.BlockID) e
 	return m.inputVector.Put(lyrid.Bytes(), i)
 }
 
+// GetLayerInputVector gets the input vote vector for a layer (hare results)
 func (m *DB) GetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
 
 	by, err := m.inputVector.Get(lyrid.Bytes())
@@ -310,16 +312,6 @@ func (m *DB) GetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
 	}
 
 	return v, nil
-}
-
-// SaveContextualValidity persists opinion on block to the database
-func (m *DB) SaveBlockVote(id types.BlockID, vote []byte) error {
-	m.Debug("save contextual validity %v %v", id, vote)
-	return m.contextualValidity.Put(id.Bytes(), vote)
-}
-
-func (m *DB) GetBlockVote(id types.BlockID) ([]byte, error) {
-	return m.contextualValidity.Get(id.Bytes())
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {

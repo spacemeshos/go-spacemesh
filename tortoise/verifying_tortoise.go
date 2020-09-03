@@ -62,8 +62,8 @@ func (t *turtle) SetLogger(log2 log.Log) {
 	t.logger = log2
 }
 
-// NewTurtle creates a new verifying tortoise algorithm instance. XXX: maybe rename?
-func NewTurtle(bdp blockDataProvider, hdist, avgLayerSize int) *turtle {
+// newTurtle creates a new verifying tortoise algorithm instance. XXX: maybe rename?
+func newTurtle(bdp blockDataProvider, hdist, avgLayerSize int) *turtle {
 	t := &turtle{
 		logger:              log.NewDefault("trtl"),
 		Hdist:               types.LayerID(hdist),
@@ -346,7 +346,7 @@ func (t *turtle) persist() error {
 	return t.bdp.Persist(mesh.TORTOISE, t)
 }
 
-//RecoverTortoise retrieve latest saved tortoise from the database
+// RecoverVerifyingTortoise retrieve latest saved tortoise from the database
 func RecoverVerifyingTortoise(mdb retriever) (interface{}, error) {
 	return mdb.Retrieve(mesh.TORTOISE, &turtle{})
 }

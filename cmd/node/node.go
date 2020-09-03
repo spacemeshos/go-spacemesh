@@ -526,7 +526,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	beaconProvider := &miner.EpochBeaconProvider{}
 
 	var msh *mesh.Mesh
-	var trtl tortoise.ThreadSafeVerifyingTortoise
+	var trtl *tortoise.ThreadSafeVerifyingTortoise
 
 	if mdb.PersistentData() {
 		trtl = tortoise.NewRecoveredVerifyingTortoise(mdb, app.addLogger(TrtlLogger, lg))

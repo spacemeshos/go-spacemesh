@@ -112,7 +112,7 @@ func turtleSanity(t testing.TB, layers types.LayerID, blocksPerLayer, voteNegati
 		}
 
 		if voteAbstain > 0 && abstainCount <= voteAbstain {
-			abstainCount += 1
+			abstainCount++
 		}
 
 		if voteAbstain > 0 && abstainCount >= int(layers)-voteAbstain {
@@ -133,7 +133,7 @@ func turtleSanity(t testing.TB, layers types.LayerID, blocksPerLayer, voteNegati
 		return blks[voteNegative:], nil
 	}
 
-	trtl = NewTurtle(msh, defaultTestHdist, blocksPerLayer)
+	trtl = newTurtle(msh, defaultTestHdist, blocksPerLayer)
 	gen := mesh.GenesisLayer()
 	trtl.init(gen)
 
@@ -234,7 +234,7 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 		})
 	}
 
-	trtl := NewTurtle(msh, defaultTestHdist, blocksPerLayer)
+	trtl := newTurtle(msh, defaultTestHdist, blocksPerLayer)
 	gen := mesh.GenesisLayer()
 	trtl.init(gen)
 

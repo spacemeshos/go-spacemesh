@@ -8,28 +8,22 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 )
 
-type ThreadSafeVerifyingTortoise interface {
-	HandleLateBlock(b *types.Block) (types.LayerID, types.LayerID)
-	HandleIncomingLayer(ll *types.Layer, inputVector []types.BlockID) (types.LayerID, types.LayerID)
-	LatestComplete() types.LayerID
-	BaseBlock(getres func(id types.LayerID) ([]types.BlockID, error)) (types.BlockID, [][]types.BlockID, error)
-	Persist() error
-}
-
-type verifyingTortoiseWrapper struct {
+// ThreadSafeVerifyingTortoise is a thread safe verifying tortoise wrapper, it just locks all actions.
+type ThreadSafeVerifyingTortoise struct {
 	trtl  *turtle
 	mutex sync.Mutex
 }
 
-func NewVerifyingTortoise(layerSize int, mdb blockDataProvider, hdist int, lg log.Log) ThreadSafeVerifyingTortoise {
-	alg := &verifyingTortoiseWrapper{trtl: NewTurtle(mdb, hdist, layerSize)}
+// NewVerifyingTortoise creates a new verifying tortoise wrapper
+func NewVerifyingTortoise(layerSize int, mdb blockDataProvider, hdist int, lg log.Log) *ThreadSafeVerifyingTortoise {
+	alg := &ThreadSafeVerifyingTortoise{trtl: newTurtle(mdb, hdist, layerSize)}
 	alg.trtl.SetLogger(lg)
 	alg.trtl.init(mesh.GenesisLayer())
 	return alg
 }
 
-//NewRecoveredTortoise recovers a previously persisted tortoise copy from mesh.DB
-func NewRecoveredVerifyingTortoise(mdb blockDataProvider, lg log.Log) ThreadSafeVerifyingTortoise {
+// NewRecoveredVerifyingTortoise recovers a previously persisted tortoise copy from mesh.DB
+func NewRecoveredVerifyingTortoise(mdb blockDataProvider, lg log.Log) *ThreadSafeVerifyingTortoise {
 	tmp, err := RecoverVerifyingTortoise(mdb)
 	if err != nil {
 		lg.Panic("could not recover tortoise state from disc ", err)
@@ -41,17 +35,19 @@ func NewRecoveredVerifyingTortoise(mdb blockDataProvider, lg log.Log) ThreadSafe
 	trtl.bdp = mdb
 	trtl.logger = lg
 
-	return &verifyingTortoiseWrapper{trtl: trtl}
+	return &ThreadSafeVerifyingTortoise{trtl: trtl}
 }
 
-func (trtl *verifyingTortoiseWrapper) LatestComplete() types.LayerID {
+// LatestComplete returns the latest verified layer. TODO: rename?
+func (trtl *ThreadSafeVerifyingTortoise) LatestComplete() types.LayerID {
 	trtl.mutex.Lock()
 	verified := trtl.trtl.Verified
 	trtl.mutex.Unlock()
 	return verified
 }
 
-func (trtl *verifyingTortoiseWrapper) BaseBlock(getres func(id types.LayerID) ([]types.BlockID, error)) (types.BlockID, [][]types.BlockID, error) {
+// BaseBlock chooses a base block and creates a differences list. needs the hare results for latest layers.
+func (trtl *ThreadSafeVerifyingTortoise) BaseBlock(getres func(id types.LayerID) ([]types.BlockID, error)) (types.BlockID, [][]types.BlockID, error) {
 	trtl.mutex.Lock()
 	block, diffs, err := trtl.trtl.BaseBlock(getres)
 	trtl.mutex.Unlock()
@@ -62,29 +58,29 @@ func (trtl *verifyingTortoiseWrapper) BaseBlock(getres func(id types.LayerID) ([
 }
 
 //HandleIncomingLayer processes all layer block votes
-//returns the old pbase and new pbase after taking into account the blocks votes
-func (trtl *verifyingTortoiseWrapper) HandleIncomingLayer(ll *types.Layer, inputVector []types.BlockID) (types.LayerID, types.LayerID) {
+// returns the old verified layer and new verified layer after taking into account the blocks votes
+func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ll *types.Layer, inputVector []types.BlockID) (types.LayerID, types.LayerID) {
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()
-	oldPbase := trtl.trtl.Verified
+	oldVerified := trtl.trtl.Verified
 	trtl.trtl.HandleIncomingLayer(ll, inputVector)
-	newPbase := trtl.trtl.Verified
-	return oldPbase, newPbase
+	newVerified := trtl.trtl.Verified
+	return oldVerified, newVerified
 }
 
-//HandleLateBlock processes a late blocks votes (for late block definition see white paper)
-//returns the old pbase and new pbase after taking into account the blocks votes
-func (trtl *verifyingTortoiseWrapper) HandleLateBlock(b *types.Block) (types.LayerID, types.LayerID) {
+// HandleLateBlock processes a late blocks votes (for late block definition see white paper)
+// returns the old verified layer and new verified layer after taking into account the blocks votes
+func (trtl *ThreadSafeVerifyingTortoise) HandleLateBlock(b *types.Block) (types.LayerID, types.LayerID) {
 	//todo feed all layers from b's layer to tortoise
 	l := types.NewLayer(b.Layer())
 	l.AddBlock(b)
-	oldPbase, newPbase := trtl.HandleIncomingLayer(l, []types.BlockID{}) // block wasn't in input vector for sure.
+	oldVerified, newVerified := trtl.HandleIncomingLayer(l, []types.BlockID{}) // block wasn't in input vector for sure.
 	log.With().Info("late block ", b.Layer(), b.ID())
-	return oldPbase, newPbase
+	return oldVerified, newVerified
 }
 
-//Persist saves a copy of the current tortoise state to the database
-func (trtl *verifyingTortoiseWrapper) Persist() error {
+// Persist saves a copy of the current tortoise state to the database
+func (trtl *ThreadSafeVerifyingTortoise) Persist() error {
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()
 	log.Info("persist tortoise ")
