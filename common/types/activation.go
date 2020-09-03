@@ -14,10 +14,10 @@ import (
 )
 
 // EpochID is the running epoch number. It's zero-based, so the genesis epoch has EpochID == 0.
-type EpochID uint64
+type EpochID uint32
 
 // ToBytes returns a byte-slice representation of the EpochID, using little endian encoding.
-func (l EpochID) ToBytes() []byte { return util.Uint64ToBytes(uint64(l)) }
+func (l EpochID) ToBytes() []byte { return util.Uint32ToBytes(uint32(l)) }
 
 // IsGenesis returns true if this epoch is in genesis. The first two epochs are considered genesis epochs.
 func (l EpochID) IsGenesis() bool {
@@ -26,11 +26,11 @@ func (l EpochID) IsGenesis() bool {
 
 // FirstLayer returns the layer ID of the first layer in the epoch.
 func (l EpochID) FirstLayer() LayerID {
-	return LayerID(uint64(l) * uint64(getLayersPerEpoch()))
+	return LayerID(uint32(l) * uint32(getLayersPerEpoch()))
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (l EpochID) Field() log.Field { return log.Uint64("epoch_id", uint64(l)) }
+func (l EpochID) Field() log.Field { return log.Uint32("epoch_id", uint32(l)) }
 
 // ATXID is a 32-bit hash used to identify an activation transaction.
 type ATXID Hash32

@@ -182,10 +182,10 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	}
 	if gTime.After(time.Now()) {
 		log.Info("sleeping until %v", gTime)
-		time.Sleep(time.Duration(gTime.Sub(time.Now())))
+		time.Sleep(gTime.Sub(time.Now()))
 	}
 	startLayer := types.GetEffectiveGenesis() + 1
-	lt <- types.LayerID(startLayer)
+	lt <- startLayer
 }
 
 func main() {

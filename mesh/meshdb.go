@@ -353,7 +353,7 @@ func (m *DB) getLayerMutex(index types.LayerID) *layerMutex {
 }
 
 func getRewardKey(l types.LayerID, account types.Address) []byte {
-	str := string(getRewardKeyPrefix(account)) + "_" + strconv.FormatUint(l.Uint64(), 10)
+	str := string(getRewardKeyPrefix(account)) + "_" + strconv.FormatUint(uint64(l), 10)
 	return []byte(str)
 }
 
@@ -373,12 +373,12 @@ func getTransactionDestKey(l types.LayerID, t *types.Transaction) []byte {
 }
 
 func getTransactionOriginKeyPrefix(l types.LayerID, account types.Address) []byte {
-	str := "a_o_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
+	str := "a_o_" + account.String() + "_" + strconv.FormatUint(uint64(l), 10)
 	return []byte(str)
 }
 
 func getTransactionDestKeyPrefix(l types.LayerID, account types.Address) []byte {
-	str := "a_d_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
+	str := "a_d_" + account.String() + "_" + strconv.FormatUint(uint64(l), 10)
 	return []byte(str)
 }
 

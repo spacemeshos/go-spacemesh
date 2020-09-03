@@ -51,12 +51,12 @@ func SetLayersPerEpoch(l int32) {
 	atomic.StoreInt32(&EffectiveGenesis, getLayersPerEpoch()*2-1)
 }
 
-// LayerID is a uint64 representing a layer number. It is zero-based.
-type LayerID uint64
+// LayerID is a uint representing a layer number. It is zero-based.
+type LayerID uint32
 
 // GetEpoch returns the epoch number of this LayerID.
 func (l LayerID) GetEpoch() EpochID {
-	return EpochID(uint64(l) / uint64(getLayersPerEpoch()))
+	return EpochID(uint32(l) / uint32(getLayersPerEpoch()))
 }
 
 // GetEffectiveGenesis returns when actual blocks would be created
@@ -66,16 +66,16 @@ func GetEffectiveGenesis() LayerID {
 
 // Add returns the LayerID that's layers (the param passed into this method) after l (this LayerID).
 func (l LayerID) Add(layers uint16) LayerID {
-	return LayerID(uint64(l) + uint64(layers))
+	return LayerID(uint32(l) + uint32(layers))
 }
 
-// Uint64 returns the LayerID as a uint64.
-func (l LayerID) Uint64() uint64 {
-	return uint64(l)
+// Uint32 returns the LayerID as a uint32.
+func (l LayerID) Uint32() uint32 {
+	return uint32(l)
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (l LayerID) Field() log.Field { return log.Uint64("layer_id", uint64(l)) }
+func (l LayerID) Field() log.Field { return log.Uint32("layer_id", uint32(l)) }
 
 // NodeID contains a miner's two public keys.
 type NodeID struct {

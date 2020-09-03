@@ -335,9 +335,9 @@ func (s SpacemeshGrpcService) GetNodeStatus(context.Context, *empty.Empty) (*pb.
 		MinPeers:      uint64(s.Config.P2P.SwarmConfig.RandomConnections),
 		MaxPeers:      uint64(s.Config.P2P.MaxInboundPeers + s.Config.P2P.SwarmConfig.RandomConnections),
 		Synced:        s.Syncer.IsSynced(),
-		SyncedLayer:   s.Tx.LatestLayer().Uint64(),
-		CurrentLayer:  s.GenTime.GetCurrentLayer().Uint64(),
-		VerifiedLayer: s.Tx.LatestLayerInState().Uint64(),
+		SyncedLayer:   s.Tx.LatestLayer().Uint32(),
+		CurrentLayer:  s.GenTime.GetCurrentLayer().Uint32(),
+		VerifiedLayer: s.Tx.LatestLayerInState().Uint32(),
 	}, nil
 }
 
@@ -398,7 +398,7 @@ func (s SpacemeshGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *
 		return &pb.AccountTxs{}, errors.New("invalid start layer")
 	}
 
-	txs := pb.AccountTxs{ValidatedLayer: currentPBase.Uint64()}
+	txs := pb.AccountTxs{ValidatedLayer: currentPBase.Uint32()}
 
 	meshTxIds := s.getTxIdsFromMesh(minLayer, addr)
 	for _, txID := range meshTxIds {
@@ -437,7 +437,7 @@ func (s SpacemeshGrpcService) GetAccountRewards(ctx context.Context, account *pb
 	rewardsOut := pb.AccountRewards{}
 	for _, x := range rewards {
 		rewardsOut.Rewards = append(rewardsOut.Rewards, &pb.Reward{
-			Layer:               x.Layer.Uint64(),
+			Layer:               x.Layer.Uint32(),
 			TotalReward:         x.TotalReward,
 			LayerRewardEstimate: x.LayerRewardEstimate,
 		})

@@ -608,7 +608,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 			if _, found := ni.TComplete[p]; complete && !found {
 				ni.TComplete[p] = struct{}{}
 				ni.PBase = p
-				ni.logger.Info("found new complete and good pattern for layer %d pattern %d with %d support ", p.Layer().Uint64(), p.id, ni.TSupport[p])
+				ni.logger.Info("found new complete and good pattern for layer %d pattern %d with %d support ", p.Layer().Uint32(), p.id, ni.TSupport[p])
 			}
 		}
 	}
