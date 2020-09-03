@@ -2,6 +2,7 @@ package log
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -95,4 +96,40 @@ func TestLogLevel(t *testing.T) {
 	r.Equal(0, buf.Len())
 
 	r.Equal(hookedExpected, hooked, "hook function was not called the expected number of times")
+}
+func TestJsonLog(t *testing.T) {
+	r := require.New(t)
+
+	// Make it easier to read the logs
+	defaultEncoder.TimeKey = ""
+
+	// Capture the log output
+	var buf bytes.Buffer
+	logwriter = &buf
+	AppLog = NewDefault(mainLoggerName)
+	//AppLog = NewWithLevel(mainLoggerName, zap.NewAtomicLevelAt(zapcore.DebugLevel))
+
+	// Expect output not to be in JSON format
+	teststr := "test001"
+	Info(teststr)
+	r.Equal(fmt.Sprintf("INFO\t%s\t%s\n", mainLoggerName, teststr), buf.String())
+	buf.Reset()
+
+	// Enable JSON mode
+	JSONLog(true)
+
+	// Expect output to be in JSON format
+	teststr = "test002"
+	type entry struct {
+		L, M, N string
+	}
+	expect := entry{
+		L: "INFO",
+		M: teststr,
+		N: mainLoggerName,
+	}
+	Info(teststr)
+	got := entry{}
+	r.NoError(json.Unmarshal(buf.Bytes(), &got))
+	r.Equal(expect, got)
 }
