@@ -53,7 +53,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/turbohare"
 )
 
-// import for memory and network profiling
+import _ "net/http/pprof" // import for memory and network profiling
 
 const edKeyFileName = "key.bin"
 
