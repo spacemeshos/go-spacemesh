@@ -371,10 +371,11 @@ var cfg = config.DefaultConfig()
 
 type SyncerMock struct {
 	startCalled bool
+	isSynced    bool
 }
 
-func (SyncerMock) IsSynced() bool { return false }
-func (s *SyncerMock) Start()      { s.startCalled = true }
+func (s *SyncerMock) IsSynced() bool { return s.isSynced }
+func (s *SyncerMock) Start()         { s.startCalled = true }
 
 func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	networkMock.Broadcast("", []byte{0x00})
@@ -1429,7 +1430,7 @@ func TestMeshService(t *testing.T) {
 
 func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	require := require.New(t)
-	syncer := &IsSyncerMock{}
+	syncer := &SyncerMock{}
 	grpcService := NewTransactionService(&networkMock, txAPI, txMempool, syncer)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
@@ -1453,7 +1454,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	require.Error(err)
 	require.Nil(res)
 
-	syncer.isSync = true
+	syncer.isSynced = true
 
 	_, err = c.SubmitTransaction(
 		context.Background(),
@@ -1463,13 +1464,9 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 
 }
 
-type IsSyncerMock struct{ isSync bool }
-
-func (i *IsSyncerMock) IsSynced() bool { return i.isSync }
-
 func TestTransactionService(t *testing.T) {
 
-	grpcService := NewTransactionService(&networkMock, txAPI, txMempool, &IsSyncerMock{isSync: true})
+	grpcService := NewTransactionService(&networkMock, txAPI, txMempool, &SyncerMock{isSynced: true})
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
