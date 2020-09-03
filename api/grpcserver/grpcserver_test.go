@@ -1429,7 +1429,8 @@ func TestMeshService(t *testing.T) {
 
 func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	require := require.New(t)
-	grpcService := NewTransactionService(&networkMock, txAPI, txMempool, &IsSyncerMock{})
+	syncer := &IsSyncerMock{}
+	grpcService := NewTransactionService(&networkMock, txAPI, txMempool, syncer)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1451,6 +1452,15 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	)
 	require.Error(err)
 	require.Nil(res)
+
+	syncer.isSync = true
+
+	_, err = c.SubmitTransaction(
+		context.Background(),
+		&pb.SubmitTransactionRequest{Transaction: serializedTx},
+	)
+	require.NoError(err)
+
 }
 
 type IsSyncerMock struct{ isSync bool }

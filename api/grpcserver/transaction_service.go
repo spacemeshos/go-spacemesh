@@ -60,7 +60,7 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 	}
 
 	if !s.syncer.IsSynced() {
-		return nil, status.Error(codes.FailedPrecondition, "Cannot submit transaction, node is not sync yet, try again later")
+		return nil, status.Error(codes.FailedPrecondition, "Cannot submit transaction, node is not in sync yet, try again later")
 	}
 
 	tx, err := types.BytesToTransaction(in.Transaction)
