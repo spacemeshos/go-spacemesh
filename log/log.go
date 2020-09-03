@@ -55,7 +55,10 @@ func init() {
 	logwriter = os.Stdout
 
 	// create a basic temp os.Stdout logger
-	// This logger is used until the app calls InitSpacemeshLoggingSystem().
+	initLogging()
+}
+
+func initLogging() {
 	AppLog = NewDefault(mainLoggerName)
 }
 
@@ -64,9 +67,12 @@ func DebugMode(mode bool) {
 	debugMode = mode
 }
 
-// JSONLog sets logging to be in JSON format or not.
+// JSONLog turns JSON format on or off
 func JSONLog(b bool) {
 	jsonLog = b
+
+	// Need to reinitialize
+	initLogging()
 }
 
 // NewWithLevel creates a logger with a fixed level and with a set of (optional) hooks
