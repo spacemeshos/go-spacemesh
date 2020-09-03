@@ -56,17 +56,18 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 	log.Info("GRPC TransactionService.SubmitTransaction")
 
 	if len(in.Transaction) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "No transaction payload given")
+		return nil, status.Error(codes.InvalidArgument, "`Transaction` payload empty")
 	}
 
 	if !s.syncer.IsSynced() {
-		return nil, status.Error(codes.FailedPrecondition, "Cannot submit transaction, node is not in sync yet, try again later")
+		return nil, status.Error(codes.FailedPrecondition,
+			"Cannot submit transaction, node is not in sync yet, try again later")
 	}
 
 	tx, err := types.BytesToTransaction(in.Transaction)
 	if err != nil {
 		log.Error("failed to deserialize tx, error: %v", err)
-		return nil, status.Errorf(codes.InvalidArgument,
+		return nil, status.Error(codes.InvalidArgument,
 			"`Transaction` must contain a valid, serialized transaction")
 	}
 	log.Info("GRPC TransactionService.SubmitTransaction to address: %s (len: %v), "+
@@ -74,17 +75,17 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 		tx.Recipient.String(), len(tx.Recipient), tx.Amount, tx.GasLimit, tx.Fee)
 	if err := tx.CalcAndSetOrigin(); err != nil {
 		log.Error("failed to calculate tx origin: %v", err)
-		return nil, status.Errorf(codes.InvalidArgument,
+		return nil, status.Error(codes.InvalidArgument,
 			"`Transaction` must contain a valid, serialized transaction")
 	}
 	if !s.Mesh.AddressExists(tx.Origin()) {
 		log.With().Error("tx origin address not found in global state",
 			tx.ID(), log.String("origin", tx.Origin().Short()))
-		return nil, status.Errorf(codes.InvalidArgument, "`Transaction` origin account not found")
+		return nil, status.Error(codes.InvalidArgument, "`Transaction` origin account not found")
 	}
 	if err := s.Mesh.ValidateNonceAndBalance(tx); err != nil {
 		log.Error("tx failed nonce and balance check: %v", err)
-		return nil, status.Errorf(codes.InvalidArgument, "`Transaction` incorrect counter or insufficient balance")
+		return nil, status.Error(codes.InvalidArgument, "`Transaction` incorrect counter or insufficient balance")
 	}
 	log.Info("GRPC TransactionService.SubmitTransaction BROADCAST tx address %x (len %v), gas limit %v, fee %v id %v nonce %v",
 		tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.Fee, tx.ID().ShortString(), tx.AccountNonce)
@@ -136,7 +137,8 @@ func (s TransactionService) TransactionsState(ctx context.Context, in *pb.Transa
 	log.Info("GRPC TransactionService.TransactionsState")
 
 	if in.TransactionId == nil || len(in.TransactionId) == 0 {
-		return nil, status.Errorf(codes.InvalidArgument, "`TransactionId` must include one or more transaction IDs")
+		return nil, status.Error(codes.InvalidArgument,
+			"`TransactionId` must include one or more transaction IDs")
 	}
 
 	res := &pb.TransactionsStateResponse{}
@@ -172,7 +174,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 	log.Info("GRPC TransactionService.TransactionsStateStream")
 
 	if in.TransactionId == nil || len(in.TransactionId) == 0 {
-		return status.Errorf(codes.InvalidArgument, "`TransactionId` must include one or more transaction IDs")
+		return status.Error(codes.InvalidArgument, "`TransactionId` must include one or more transaction IDs")
 	}
 
 	// The tx channel tells us about newly received and newly created transactions
@@ -256,7 +258,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 								tx, err := s.Mesh.GetTransaction(layerTxid)
 								if err != nil {
 									log.Error("could not find transaction %v from layer %v: %v", layerTxid, layer, err)
-									return status.Errorf(codes.Internal, "error retrieving tx data")
+									return status.Error(codes.Internal, "error retrieving tx data")
 								}
 
 								res.Transaction = convertTransaction(tx)
