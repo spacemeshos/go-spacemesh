@@ -14,11 +14,8 @@ import (
 
 // GlobalStateService exposes global state data, output from the STF
 type GlobalStateService struct {
-	Network     api.NetworkAPI // P2P Swarm
-	Mesh        api.TxAPI      // Mesh
-	GenTime     api.GenesisTimeAPI
+	Mesh        api.TxAPI
 	PeerCounter api.PeerCounter
-	Syncer      api.Syncer
 }
 
 // RegisterService registers this service with a grpc server instance
@@ -27,15 +24,10 @@ func (s GlobalStateService) RegisterService(server *Server) {
 }
 
 // NewGlobalStateService creates a new grpc service using config data.
-func NewGlobalStateService(
-	net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI,
-	syncer api.Syncer) *GlobalStateService {
+func NewGlobalStateService(net api.NetworkAPI, tx api.TxAPI) *GlobalStateService {
 	return &GlobalStateService{
-		Network:     net,
 		Mesh:        tx,
-		GenTime:     genTime,
 		PeerCounter: peers.NewPeers(net, log.NewDefault("grpcserver.GlobalStateService")),
-		Syncer:      syncer,
 	}
 }
 

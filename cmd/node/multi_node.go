@@ -162,7 +162,7 @@ func ActivateGrpcServer(smApp *SpacemeshApp) {
 	smApp.Config.API.StartTransactionService = true
 	smApp.Config.API.StartGlobalStateService = true
 	smApp.grpcAPIService = grpcserver.NewServerWithInterface(smApp.Config.API.GrpcServerPort, smApp.Config.API.GrpcServerInterface)
-	svcGlobalState := grpcserver.NewGlobalStateService(smApp.P2P, smApp.mesh, smApp.clock, smApp.syncer)
+	svcGlobalState := grpcserver.NewGlobalStateService(smApp.P2P, smApp.mesh)
 	svcTx := grpcserver.NewTransactionService(smApp.P2P, smApp.mesh, smApp.txPool)
 	svcGlobalState.RegisterService(smApp.grpcAPIService)
 	smApp.globalstateSvc = svcGlobalState

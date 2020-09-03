@@ -517,7 +517,7 @@ func TestNodeService(t *testing.T) {
 }
 
 func TestGlobalStateService(t *testing.T) {
-	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc := NewGlobalStateService(&networkMock, txAPI)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -1849,7 +1849,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 }
 
 func TestAccountDataStream_comprehensive(t *testing.T) {
-	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc := NewGlobalStateService(&networkMock, txAPI)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -1942,7 +1942,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 }
 
 func TestGlobalStateStream_comprehensive(t *testing.T) {
-	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc := NewGlobalStateService(&networkMock, txAPI)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
