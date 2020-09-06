@@ -91,6 +91,8 @@ func (t *turtle) init(genesisLayer *types.Layer) {
 		t.BlocksToBlocksIndex[blk.ID()] = i
 		t.GoodBlocksIndex[id] = struct{}{}
 	}
+	t.Last = genesisLayer.Index()
+	t.Evict = genesisLayer.Index()
 	t.Verified = genesisLayer.Index()
 }
 
