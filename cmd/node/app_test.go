@@ -516,6 +516,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.HareEligibility.ConfidenceParam = 3
 	smApp.Config.HareEligibility.EpochOffset = 0
 	smApp.Config.StartMining = true
+	smApp.Config.SyncRequestTimeout = 20000
 
 	rolacle := eligibility.New()
 	types.SetLayersPerEpoch(int32(smApp.Config.LayersPerEpoch))
