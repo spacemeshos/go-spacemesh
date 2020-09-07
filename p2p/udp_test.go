@@ -60,14 +60,14 @@ func (mun *mockUDPNetwork) SubscribeOnNewRemoteConnections(func(event net.NewCon
 func TestNewUDPMux(t *testing.T) {
 	nd, _ := node.NewNodeIdentity()
 	udpMock := &mockUDPNetwork{}
-	m := NewUDPMux(nd, nil, udpMock, 1, log.New("test", "", ""))
+	m := NewUDPMux(nd, nil, udpMock, 1, log.NewDefault("test"))
 	require.NotNil(t, m)
 }
 
 func TestUDPMux_RegisterDirectProtocolWithChannel(t *testing.T) {
 	nd, _ := node.NewNodeIdentity()
 	udpMock := &mockUDPNetwork{}
-	m := NewUDPMux(nd, nil, udpMock, 1, log.New(testStr, "", ""))
+	m := NewUDPMux(nd, nil, udpMock, 1, log.NewDefault(testStr))
 	require.NotNil(t, m)
 	c := make(chan service.DirectMessage, 1)
 	m.RegisterDirectProtocolWithChannel(testStr, c)
@@ -80,7 +80,7 @@ func TestUDPMux_RegisterDirectProtocolWithChannel(t *testing.T) {
 func TestUDPMux_Start(t *testing.T) {
 	nd, _ := node.NewNodeIdentity()
 	udpMock := &mockUDPNetwork{}
-	m := NewUDPMux(nd, nil, udpMock, 1, log.New(testStr, "", ""))
+	m := NewUDPMux(nd, nil, udpMock, 1, log.NewDefault(testStr))
 	require.NotNil(t, m)
 	err := m.Start()
 	require.NoError(t, err)
@@ -89,7 +89,7 @@ func TestUDPMux_Start(t *testing.T) {
 func TestUDPMux_ProcessDirectProtocolMessage(t *testing.T) {
 	nd, _ := node.NewNodeIdentity()
 	udpMock := &mockUDPNetwork{}
-	m := NewUDPMux(nd, nil, udpMock, 1, log.New(testStr, "", ""))
+	m := NewUDPMux(nd, nil, udpMock, 1, log.NewDefault(testStr))
 	require.NotNil(t, m)
 
 	data := service.DataBytes{Payload: []byte(testStr)}
@@ -120,7 +120,7 @@ func TestUDPMux_sendMessageImpl(t *testing.T) {
 		return nil, errors.New("nonode")
 	}
 
-	m := NewUDPMux(nd, f, udpMock, 1, log.New(testStr, "", ""))
+	m := NewUDPMux(nd, f, udpMock, 1, log.NewDefault(testStr))
 	require.NotNil(t, m)
 	data := service.DataBytes{Payload: []byte(testStr)}
 
@@ -183,7 +183,7 @@ func TestUDPMux_sendMessageImpl(t *testing.T) {
 func TestUDPMux_ProcessUDP(t *testing.T) {
 	nd, _ := node.NewNodeIdentity()
 	udpMock := &mockUDPNetwork{}
-	m := NewUDPMux(nd, nil, udpMock, 1, log.New(testStr, "", ""))
+	m := NewUDPMux(nd, nil, udpMock, 1, log.NewDefault(testStr))
 	require.NotNil(t, m)
 	data := service.DataBytes{Payload: []byte(testStr)}
 	msg := &ProtocolMessage{}
@@ -241,17 +241,17 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 
 func Test_RoundTrip(t *testing.T) {
 	nd, ndinfo := node.GenerateTestNode(t)
-	udpnet, err := net.NewUDPNet(config.DefaultConfig(), nd, log.New("", "", ""))
+	udpnet, err := net.NewUDPNet(config.DefaultConfig(), nd, log.NewDefault(""))
 	require.NoError(t, err)
 
-	m := NewUDPMux(nd, nil, udpnet, 0, log.New(testStr, "", ""))
+	m := NewUDPMux(nd, nil, udpnet, 0, log.NewDefault(testStr))
 	require.NotNil(t, m)
 
 	nd2, ndinfo2 := node.GenerateTestNode(t)
-	udpnet2, err := net.NewUDPNet(config.DefaultConfig(), nd2, log.New("", "", ""))
+	udpnet2, err := net.NewUDPNet(config.DefaultConfig(), nd2, log.NewDefault(""))
 	require.NoError(t, err)
 
-	m2 := NewUDPMux(nd2, nil, udpnet2, 0, log.New(testStr+"2", "", ""))
+	m2 := NewUDPMux(nd2, nil, udpnet2, 0, log.NewDefault(testStr+"2"))
 	require.NotNil(t, m2)
 
 	c := make(chan service.DirectMessage, 1)

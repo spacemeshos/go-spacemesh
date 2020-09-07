@@ -171,7 +171,7 @@ func (p *MessageServer) handleRequestMessage(msg Message, data *service.DataMsgW
 	p.Debug("handle request type %v", data.MsgType)
 	rmsg := &service.DataMsgWrapper{MsgType: data.MsgType, ReqID: data.ReqID, Payload: foo(msg)}
 	if sendErr := p.network.SendWrappedMessage(msg.Sender(), p.name, rmsg); sendErr != nil {
-		p.Error("Error sending response message, err:", sendErr)
+		p.Error("Error sending response message: %s", sendErr)
 	}
 	p.Debug("handleRequestMessage close")
 }

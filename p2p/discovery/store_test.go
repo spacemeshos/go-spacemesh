@@ -58,7 +58,7 @@ func assertAddrs(t *testing.T, addrMgr *addrBook,
 // deserialize the manager's current address cache.
 func TestAddrManagerSerialization(t *testing.T) {
 
-	lg := log.New("addrbook_serialize_test", "", "")
+	lg := log.NewDefault("addrbook_serialize_test")
 	cfg := config.DefaultConfig()
 
 	// We'll start by creating our address manager backed by a temporary

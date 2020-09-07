@@ -52,7 +52,7 @@ func ConfigTst() Config {
 
 func getMeshWithMapState(id string, s txProcessor) (*Mesh, *AtxDbMock) {
 	atxDb := NewAtxDbMock()
-	lg := log.New(id, "", "")
+	lg := log.NewDefault(id)
 	mshDb := NewMemMeshDB(lg)
 	mshDb.contextualValidity = &ContextualValidityMock{}
 	return NewMesh(mshDb, atxDb, ConfigTst(), &MeshValidatorMock{}, &MockTxMemPool{}, s, lg), atxDb

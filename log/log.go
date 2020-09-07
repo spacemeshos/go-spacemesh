@@ -5,12 +5,9 @@ package log
 import (
 	"io"
 	"os"
-	"path/filepath"
-
-	"go.uber.org/zap/zapcore"
-	"gopkg.in/natefinch/lumberjack.v2"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 const mainLoggerName = "00000.defaultLogger"
@@ -21,21 +18,11 @@ var debugMode = false
 // should we format out logs in json
 var jsonLog = false
 
-var debugLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
-	return lvl >= zapcore.DebugLevel
-})
+// where logs go by default
+var logwriter io.Writer
 
-var infoLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
-	return lvl >= zapcore.InfoLevel
-})
-
-func logLevel() zap.LevelEnablerFunc {
-	if debugMode {
-		return debugLevel
-	}
-	return infoLevel
-
-}
+// default encoders
+var defaultEncoder = zap.NewDevelopmentEncoderConfig()
 
 // Level returns the zapcore level of logging.
 func Level() zapcore.Level {
@@ -56,17 +43,22 @@ type Logger interface {
 
 func encoder() zapcore.Encoder {
 	if jsonLog {
-		return zapcore.NewJSONEncoder(zap.NewDevelopmentEncoderConfig())
+		return zapcore.NewJSONEncoder(defaultEncoder)
 	}
-	return zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
+	return zapcore.NewConsoleEncoder(defaultEncoder)
 }
 
 // AppLog is the local app singleton logger.
 var AppLog Log
 
 func init() {
+	logwriter = os.Stdout
+
 	// create a basic temp os.Stdout logger
-	// This logger is used until the app calls InitSpacemeshLoggingSystem().
+	initLogging()
+}
+
+func initLogging() {
 	AppLog = NewDefault(mainLoggerName)
 }
 
@@ -75,57 +67,32 @@ func DebugMode(mode bool) {
 	debugMode = mode
 }
 
-// JSONLog sets logging to be in JSON format or not.
+// JSONLog turns JSON format on or off
 func JSONLog(b bool) {
 	jsonLog = b
+
+	// Need to reinitialize
+	initLogging()
 }
 
-// New creates a logger for a module. e.g. p2p instance logger.
-func New(module string, dataFolderPath string, logFileName string) Log {
-	var cores []zapcore.Core
-
-	consoleSyncer := zapcore.AddSync(os.Stdout)
+// NewWithLevel creates a logger with a fixed level and with a set of (optional) hooks
+func NewWithLevel(module string, level zap.AtomicLevel, hooks ...func(zapcore.Entry) error) Log {
+	consoleSyncer := zapcore.AddSync(logwriter)
 	enc := encoder()
-
-	cores = append(cores, zapcore.NewCore(enc, consoleSyncer, logLevel()))
-
-	if dataFolderPath != "" && logFileName != "" {
-		wr := getFileWriter(dataFolderPath, logFileName)
-		fs := zapcore.AddSync(wr)
-		cores = append(cores, zapcore.NewCore(enc, fs, debugLevel))
-	}
-
-	core := zapcore.NewTee(cores...)
-
-	log := zap.New(core)
-	log = log.Named(module)
-	lvl := zap.NewAtomicLevelAt(Level())
-	return Log{log, log.Sugar(), &lvl}
+	consoleCore := zapcore.NewCore(enc, consoleSyncer, level)
+	core := zapcore.RegisterHooks(consoleCore, hooks...)
+	log := zap.New(core).Named(module)
+	return Log{log}
 }
 
-// NewDefault creates a Log with not file output.
+// NewDefault creates a Log with the default log level
 func NewDefault(module string) Log {
-	return New(module, "", "")
+	return NewWithLevel(module, zap.NewAtomicLevelAt(Level()))
 }
 
-// getBackendLevelWithFileBackend returns backends level including log file backend
-func getFileWriter(dataFolderPath, logFileName string) io.Writer {
-	fileName := filepath.Join(dataFolderPath, logFileName)
-
-	fileLogger := &lumberjack.Logger{
-		Filename:   fileName,
-		MaxSize:    500, // megabytes
-		MaxBackups: 3,
-		MaxAge:     28, // days
-		Compress:   false,
-	}
-
-	return fileLogger
-}
-
-// InitSpacemeshLoggingSystem initializes app logging system.
-func InitSpacemeshLoggingSystem() {
-	AppLog = NewDefault(mainLoggerName)
+// NewFromLog creates a Log from an existing zap-compatible log.
+func NewFromLog(l *zap.Logger) Log {
+	return Log{l}
 }
 
 // public wrappers abstracting away logging lib impl

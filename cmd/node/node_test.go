@@ -16,6 +16,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"io/ioutil"
 	inet "net"
@@ -71,56 +73,74 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r.EqualError(err, fmt.Sprintf("identity file path ('tmp/wrong name') does not match public key (%v)", sgn.PublicKey().String()))
 }
 
+func newLogger(buf *bytes.Buffer) log.Log {
+	lvl := zap.NewAtomicLevelAt(zapcore.InfoLevel)
+	syncer := zapcore.AddSync(buf)
+	encConfig := zap.NewDevelopmentEncoderConfig()
+	encConfig.TimeKey = ""
+	enc := zapcore.NewConsoleEncoder(encConfig)
+	core := zapcore.NewCore(enc, syncer, lvl)
+	return log.NewFromLog(zap.New(core))
+}
+
 func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	r := require.New(t)
 
+	var buf1, buf2 bytes.Buffer
+
 	app := NewSpacemeshApp()
 	mylogger := "anton"
-	tmpDir := os.TempDir()
-	tmpFile, err := ioutil.TempFile(tmpDir, "tmp_")
-	r.NoError(err)
-	myLog := log.New("logger", tmpDir, tmpFile.Name())
-	myLog2 := log.New("logger2", tmpDir, tmpFile.Name())
+	myLog := newLogger(&buf1)
+	myLog2 := newLogger(&buf2)
 
-	//myLog := log.NewDefault("logger")
 	app.log = app.addLogger(mylogger, myLog)
-	app.log.Info("hi there")
-	err = app.SetLogLevel("anton", "warn")
-	r.NoError(err)
-	r.Equal("warn", app.loggers["anton"].String())
+	msg1 := "hi there"
+	app.log.Info(msg1)
+	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\n", mylogger, msg1), buf1.String())
+	r.NoError(app.SetLogLevel(mylogger, "warn"))
+	r.Equal("warn", app.loggers[mylogger].String())
+	buf1.Reset()
 
-	myLog2.Info("other logger")
-	app.log.Info("hi again")
-	app.log.Warning("warn")
+	msg1 = "other logger"
+	myLog2.Info(msg1)
+	msg2 := "hi again"
+	msg3 := "be careful"
+	// This one should not be printed
+	app.log.Info(msg2)
+	// This one should be printed
+	app.log.Warning(msg3)
+	r.Equal(fmt.Sprintf("WARN\t%-13s\t%s\n", mylogger, msg3), buf1.String())
+	r.Equal(fmt.Sprintf("INFO\t%s\n", msg1), buf2.String())
+	buf1.Reset()
 
-	err = app.SetLogLevel("anton", "info")
-	r.NoError(err)
+	r.NoError(app.SetLogLevel(mylogger, "info"))
 
-	app.log.Info("hi again 2")
-	r.Equal("info", app.loggers["anton"].String())
+	msg4 := "nihao"
+	app.log.Info(msg4)
+	r.Equal("info", app.loggers[mylogger].String())
+	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\n", mylogger, msg4), buf1.String())
 
-	// test wrong logger called
-	err = app.SetLogLevel("anton3", "warn")
-	r.Error(err)
+	// test bad logger name
+	r.Error(app.SetLogLevel("anton3", "warn"))
 
-	// test wrong loglevel
-	err = app.SetLogLevel("anton", "lulu")
-	r.Error(err)
-	r.Equal("info", app.loggers["anton"].String())
+	// test bad loglevel
+	r.Error(app.SetLogLevel(mylogger, "lulu"))
+	r.Equal("info", app.loggers[mylogger].String())
 }
 
 func TestSpacemeshApp_AddLogger(t *testing.T) {
 	r := require.New(t)
 
+	var buf bytes.Buffer
+
+	lg := newLogger(&buf)
 	app := NewSpacemeshApp()
-	app.Config.LOGGING.HareLoggerLevel = "warn"
-	tmpDir := os.TempDir()
-	tmpFile, err := ioutil.TempFile(tmpDir, "tmp_")
-	r.NoError(err)
-	myLog := log.New("logger", tmpDir, tmpFile.Name())
-	l := app.addLogger(HareLogger, myLog)
-	r.Equal("warn", app.loggers["hare"].String())
-	l.Info("not supposed to be printed")
+	mylogger := "anton"
+	subLogger := app.addLogger(mylogger, lg)
+	subLogger.Debug("should not get printed")
+	teststr := "should get printed"
+	subLogger.Info(teststr)
+	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\n", mylogger, teststr), buf.String())
 }
 
 func testArgs(app *SpacemeshApp, args ...string) (string, error) {
