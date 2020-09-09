@@ -32,7 +32,7 @@ func TestCreateBaseline(t *testing.T) {
 	)
 
 	id := Path
-	lg := log.New(id, "", "")
+	lg := log.NewDefault(id)
 	mshdb, _ := mesh.NewPersistentMeshDB(id, 5, lg.WithOptions(log.Nop))
 	nipstStore, _ := database.NewLDBDatabase(id+"nipst", 0, 0, lg.WithName("nipstDbStore").WithOptions(log.Nop))
 	defer nipstStore.Close()
@@ -89,7 +89,7 @@ func atxs(num int) ([]*types.ActivationTx, []types.ATXID) {
 }
 
 func createBaseline(msh *mesh.Mesh, layers int, layerSize int, patternSize int, txPerBlock int, atxPerBlock int) {
-	lg := log.New("create_baseline", "", "")
+	lg := log.NewDefault("create_baseline")
 	l1 := mesh.GenesisLayer()
 	msh.AddBlockWithTxs(l1.Blocks()[0], nil, nil)
 	var lyrs []*types.Layer

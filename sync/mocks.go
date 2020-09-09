@@ -218,7 +218,7 @@ func (m *mockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
 // NewSyncWithMocks returns a syncer instance that is backed by mocks of other modules
 // for use in testing
 func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *state.TxMempool, atxpool *activation.AtxMemDB, swarm service.Service, poetDb *activation.PoetDb, conf Configuration, expectedLayers types.LayerID) *Syncer {
-	lg := log.New("sync_test", "", "")
+	lg := log.NewDefault("sync_test")
 	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, conf.LayersPerEpoch, &validatorMock{}, lg.WithOptions(log.Nop))
 	var msh *mesh.Mesh
 	if mshdb.PersistentData() {

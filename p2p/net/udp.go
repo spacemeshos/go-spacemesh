@@ -278,8 +278,8 @@ func (n *UDPNet) addConn(addr net.Addr, ucw udpConn) {
 			lastk = k
 			if time.Since(c.Created()) > maxUDPLife {
 				delete(n.incomingConn, k)
+				c.Close()
 				evicted = true
-				n.incomingConn[k].Close()
 				break
 			}
 

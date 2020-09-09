@@ -42,7 +42,7 @@ func (appliedTxsMock) NewBatch() database.Batch           { panic("implement me"
 func (appliedTxsMock) Find(key []byte) database.Iterator  { panic("implement me") }
 
 func (s *ProcessorStateSuite) SetupTest() {
-	lg := log.New("proc_logger", "", "")
+	lg := log.NewDefault("proc_logger")
 	s.db = database.NewMemDatabase()
 	s.projector = &ProjectorMock{}
 	s.processor = NewTransactionProcessor(s.db, appliedTxsMock{}, s.projector, NewTxMemPool(), lg)
@@ -263,7 +263,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
-	lg := log.New("proc_logger", "", "")
+	lg := log.NewDefault("proc_logger")
 	txDb := database.NewMemDatabase()
 	db := database.NewMemDatabase()
 	processor := NewTransactionProcessor(db, txDb, s.projector, NewTxMemPool(), lg)
@@ -363,7 +363,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	maxTransactions := 20
 	minTransactions := 1
 
-	lg := log.New("proc_logger", "", "")
+	lg := log.NewDefault("proc_logger")
 	txDb := database.NewMemDatabase()
 	db := database.NewMemDatabase()
 	processor := NewTransactionProcessor(db, txDb, s.projector, NewTxMemPool(), lg)
@@ -498,7 +498,7 @@ func createXdrSignedTransaction(t *testing.T, key ed25519.PrivateKey) *types.Tra
 
 func TestValidateTxSignature(t *testing.T) {
 	db := database.NewMemDatabase()
-	lg := log.New("proc_logger", "", "")
+	lg := log.NewDefault("proc_logger")
 	proc := NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{}, NewTxMemPool(), lg)
 
 	// positive flow
@@ -521,7 +521,7 @@ func TestTransactionProcessor_GetStateRoot(t *testing.T) {
 	r := require.New(t)
 
 	db := database.NewMemDatabase()
-	lg := log.New("proc_logger", "", "")
+	lg := log.NewDefault("proc_logger")
 	proc := NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{}, NewTxMemPool(), lg)
 
 	r.NotEqual(types.Hash32{}, proc.rootHash)
@@ -534,7 +534,7 @@ func TestTransactionProcessor_GetStateRoot(t *testing.T) {
 }
 
 func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
-	lg := log.New("proc_logger", "", "")
+	lg := log.NewDefault("proc_logger")
 	db := database.NewMemDatabase()
 	projector := &ProjectorMock{}
 	processor := NewTransactionProcessor(db, db, projector, NewTxMemPool(), lg)

@@ -38,7 +38,9 @@ def test_transactions(init_session, setup_network):
     print("\n\n----- create new accounts ------")
     new_acc_num = 10
     amount = 50
-    actions.send_coins_to_new_accounts(wallet_api, new_acc_num, amount, acc)
+    print("assert that we can send coin tx to new accounts")
+    ass_err = "error sending coin transactions to new accounts"
+    assert actions.send_coins_to_new_accounts(wallet_api, new_acc_num, amount, acc), ass_err
 
     print("assert tap's nonce and balance")
     ass_err = "tap did not have the matching nonce"
