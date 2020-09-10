@@ -3,23 +3,8 @@ name: CI
 env:
   go-version: '1.14.6'
 
-# Controls when the action will run. Triggers the workflow on pull requests to a set of branches.
-on:
-  pull_request:
-    branches: [
-      # This is our working branch
-      develop,
-      # This is where pull requests from "bors r+" are built.
-      staging,
-      # This is where pull requests from "bors try" are built. 
-      trying,
-    ]
-  push:
-    branches: [
-      develop,
-      staging,
-      trying,
-    ]
+# Controls when the action will run. Triggers the workflow on all pull requests.
+on: pull_request
 
 jobs:
   test:
@@ -50,100 +35,47 @@ jobs:
         make test-tidy
         make test-fmt
         make lint
-    - name: push to dockerhub
-      # only run this once, and only on push
-      if: github.event == 'push' && matrix.os == 'ubuntu-latest'
-      run: make dockerpush
 
   # run system tests as independent jobs so they can run in parallel
   systemtest-latenodes:
     needs: test
-    if: github.event == 'push' && (github.ref == 'staging' || github.ref == 'trying')
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        # no freebsd support for now =\
-        #os: [macos-latest, windows-latest, ubuntu-latest]
-        os: [ubuntu-latest]
+    # only run this once
+    runs-on: ubuntu-latest
     steps:
     - name: checkout
       uses: actions/checkout@v2
-    - name: set up go
-      uses: actions/setup-go@v2
-      with:
-        go-version: ${{ env.go-version }}
     - name: run late nodes system test
       run: make dockertest-late-nodes
   systemtest-blocks-add-node:
     needs: test
-    if: github.event == 'push' && (github.ref == 'staging' || github.ref == 'trying')
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        # no freebsd support for now =\
-        #os: [macos-latest, windows-latest, ubuntu-latest]
-        os: [ubuntu-latest]
+    runs-on: ubuntu-latest
     steps:
     - name: checkout
       uses: actions/checkout@v2
-    - name: set up go
-      uses: actions/setup-go@v2
-      with:
-        go-version: ${{ env.go-version }}
     - name: run blocks add node test
       run: make dockertest-blocks-add-node
   systemtest-hare-mining:
     needs: test
-    if: github.event == 'push' && (github.ref == 'staging' || github.ref == 'trying')
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        # no freebsd support for now =\
-        #os: [macos-latest, windows-latest, ubuntu-latest]
-        os: [ubuntu-latest]
+    runs-on: ubuntu-latest
     steps:
     - name: checkout
       uses: actions/checkout@v2
-    - name: set up go
-      uses: actions/setup-go@v2
-      with:
-        go-version: ${{ env.go-version }}
     - name: run hare+mining system tests
       run: make dockertest-hare-mining
   systemtest-sync-blocks:
     needs: test
-    if: github.event == 'push' && (github.ref == 'staging' || github.ref == 'trying')
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        # no freebsd support for now =\
-        #os: [macos-latest, windows-latest, ubuntu-latest]
-        os: [ubuntu-latest]
+    runs-on: ubuntu-latest
     steps:
     - name: checkout
       uses: actions/checkout@v2
-    - name: set up go
-      uses: actions/setup-go@v2
-      with:
-        go-version: ${{ env.go-version }}
     - name: run sync+blocks remove node test
       run: make dockertest-sync-blocks-remove-node
   systemtest-genesis-p2p:
     needs: test
-    if: github.event == 'push' && (github.ref == 'staging' || github.ref == 'trying')
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        # no freebsd support for now =\
-        #os: [macos-latest, windows-latest, ubuntu-latest]
-        os: [ubuntu-latest]
+    runs-on: ubuntu-latest
     steps:
     - name: checkout
       uses: actions/checkout@v2
-    - name: set up go
-      uses: actions/setup-go@v2
-      with:
-        go-version: ${{ env.go-version }}
     - name: run genesis+p2p system tests
       run: make dockertest-genesis-voting-p2p
 
