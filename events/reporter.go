@@ -66,7 +66,7 @@ func ReportNewActivation(activation *types.ActivationTx) {
 
 	Publish(NewAtx{
 		ID:      activation.ShortString(),
-		LayerID: uint64(activation.PubLayerID.GetEpoch()),
+		LayerID: uint32(activation.PubLayerID.GetEpoch()),
 	})
 
 	if reporter != nil {
@@ -114,7 +114,7 @@ func ReportNewBlock(blk *types.Block) {
 	Publish(NewBlock{
 		ID:    blk.ID().String(),
 		Atx:   blk.ATXID.ShortString(),
-		Layer: uint64(blk.LayerIndex),
+		Layer: uint32(blk.LayerIndex),
 	})
 }
 
@@ -127,7 +127,7 @@ func ReportValidBlock(blockID types.BlockID, valid bool) {
 }
 
 // ReportAtxCreated reports a created activation
-func ReportAtxCreated(created bool, layer uint64, id string) {
+func ReportAtxCreated(created bool, layer uint32, id string) {
 	Publish(AtxCreated{Created: created, Layer: layer, ID: id})
 }
 
@@ -137,7 +137,7 @@ func ReportValidActivation(activation *types.ActivationTx, valid bool) {
 }
 
 // ReportDoneCreatingBlock reports a created block
-func ReportDoneCreatingBlock(eligible bool, layer uint64, error string) {
+func ReportDoneCreatingBlock(eligible bool, layer uint32, error string) {
 	Publish(DoneCreatingBlock{
 		Eligible: eligible,
 		Layer:    layer,
