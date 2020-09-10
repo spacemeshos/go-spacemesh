@@ -59,7 +59,7 @@ func (s MeshService) GenesisTime(ctx context.Context, in *pb.GenesisTimeRequest)
 func (s MeshService) CurrentLayer(ctx context.Context, in *pb.CurrentLayerRequest) (*pb.CurrentLayerResponse, error) {
 	log.Info("GRPC MeshService.CurrentLayer")
 	return &pb.CurrentLayerResponse{Layernum: &pb.SimpleInt{
-		Value: s.GenTime.GetCurrentLayer().Uint64(),
+		Value: uint64(s.GenTime.GetCurrentLayer().Uint32()),
 	}}, nil
 }
 
@@ -283,7 +283,7 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 func convertActivation(a *types.ActivationTx) (*pb.Activation, error) {
 	return &pb.Activation{
 		Id:             &pb.ActivationId{Id: a.ID().Bytes()},
-		Layer:          a.PubLayerID.Uint64(),
+		Layer:          uint64(a.PubLayerID.Uint32()),
 		SmesherId:      &pb.SmesherId{Id: a.NodeID.ToBytes()},
 		Coinbase:       &pb.AccountId{Address: a.Coinbase.Bytes()},
 		PrevAtx:        &pb.ActivationId{Id: a.PrevATXID.Bytes()},
@@ -347,7 +347,7 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 			layer, log.String("status", layerStatus.String()), log.Err(err))
 	}
 	return &pb.Layer{
-		Number:        layer.Index().Uint64(),
+		Number:        uint64(layer.Index().Uint32()),
 		Status:        layerStatus,
 		Hash:          layer.Hash().Bytes(),
 		Blocks:        blocks,
@@ -365,15 +365,15 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 	lastLayerPassedTortoise := s.Mesh.ProcessedLayer()
 
 	layers := []*pb.Layer{}
-	for l := uint64(in.StartLayer); l <= uint64(in.EndLayer); l++ {
+	for l := in.StartLayer; l <= in.EndLayer; l++ {
 		layerStatus := pb.Layer_LAYER_STATUS_UNSPECIFIED
 
 		// First check if the layer passed the Hare, then check if it passed the Tortoise.
 		// It may be either, or both, but Tortoise always takes precedence.
-		if l <= lastLayerPassedHare.Uint64() {
+		if l <= lastLayerPassedHare.Uint32() {
 			layerStatus = pb.Layer_LAYER_STATUS_APPROVED
 		}
-		if l <= lastLayerPassedTortoise.Uint64() {
+		if l <= lastLayerPassedTortoise.Uint32() {
 			layerStatus = pb.Layer_LAYER_STATUS_CONFIRMED
 		}
 
