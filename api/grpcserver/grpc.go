@@ -18,28 +18,31 @@ type ServiceAPI interface {
 // Server is a very basic grpc server
 type Server struct {
 	Port       int
+	Interface  string
 	GrpcServer *grpc.Server
 }
 
-// NewServer creates and returns a new Server
-func NewServer(port int) *Server {
+// NewServerWithInterface creates and returns a new Server with port and interface
+func NewServerWithInterface(port int, intfce string) *Server {
 	return &Server{
 		Port:       port,
+		Interface:  intfce,
 		GrpcServer: grpc.NewServer(ServerOptions...),
 	}
 }
 
 // Start starts the server
 func (s *Server) Start() {
-	log.Info("starting new grpc server")
+	numServices := len(s.GrpcServer.GetServiceInfo())
+	log.Info("starting new grpc server with %d registered service(s)", numServices)
 	go s.startInternal()
 }
 
 // Blocking, should be called in a goroutine
 func (s *Server) startInternal() {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", s.Port))
+	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", s.Interface, s.Port))
 	if err != nil {
-		log.Error("error listening on port", err)
+		log.Error("error listening: %v", err)
 		return
 	}
 
@@ -47,7 +50,7 @@ func (s *Server) startInternal() {
 	reflection.Register(s.GrpcServer)
 
 	// start serving - this blocks until err or server is stopped
-	log.Info("starting new grpc server on port %d", s.Port)
+	log.Info("starting new grpc server on %s:%d", s.Interface, s.Port)
 	if err := s.GrpcServer.Serve(lis); err != nil {
 		log.Error("error stopping grpc server: %v", err)
 	}

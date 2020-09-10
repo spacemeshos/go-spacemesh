@@ -81,7 +81,7 @@ func (app *syncApp) Cleanup() {
 
 func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	// start p2p services
-	lg := log.New("sync_test", "", "")
+	lg := log.NewDefault("sync_test")
 	lg.Info("------------ Start sync test -----------")
 	lg.Info("data folder: ", app.Config.DataDir())
 	lg.Info("storage path: ", bucket)
