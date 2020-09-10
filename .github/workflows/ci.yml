@@ -25,6 +25,8 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: ${{ env.go-version }}
+    - name: setup env
+      run: make
     - name: fmt, tidy, lint
       # lint gets confused by windows line endings so skip it on windows
       if: matrix.os != 'windows-latest'
@@ -33,8 +35,6 @@ jobs:
         make test-tidy
         make test-fmt
         make lint
-    - name: test build
-      run: make
     - name: unit tests (except app test)
       run: make test-no-app-test
     - name: app test
