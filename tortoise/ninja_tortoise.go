@@ -367,7 +367,7 @@ func (ni *ninjaTortoise) getCorrEffCounter() (map[types.BlockID]vec, map[types.L
 // for all layers from pBase to i add b's votes, mark good layers
 // return new minimal good layer
 func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.LayerID {
-	minGood := types.LayerID(math.MaxUint64)
+	minGood := types.LayerID(math.MaxUint32)
 
 	var j types.LayerID
 	if window > lyr.Index() {
