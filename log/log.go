@@ -95,6 +95,12 @@ func NewFromLog(l *zap.Logger) Log {
 	return Log{l}
 }
 
+// InitSpacemeshLoggingSystemWithHooks sets up a logging system with one or more
+// registered hooks
+func InitSpacemeshLoggingSystemWithHooks(hooks ...func(zapcore.Entry) error) {
+	AppLog = NewWithLevel(mainLoggerName, zap.NewAtomicLevelAt(Level()), hooks...)
+}
+
 // public wrappers abstracting away logging lib impl
 
 // Info prints formatted info level log message.

@@ -286,14 +286,14 @@ func address() types.Address {
 
 func newTx(r *require.Assertions, signer *signing.EdSigner, nonce, totalAmount uint64) *types.Transaction {
 	feeAmount := uint64(1)
-	tx, err := NewSignedTx(nonce, types.Address{}, totalAmount-feeAmount, 3, feeAmount, signer)
+	tx, err := types.NewSignedTx(nonce, types.Address{}, totalAmount-feeAmount, 3, feeAmount, signer)
 	r.NoError(err)
 	return tx
 }
 
 func newTxWithDest(r *require.Assertions, signer *signing.EdSigner, dest types.Address, nonce, totalAmount uint64) *types.Transaction {
 	feeAmount := uint64(1)
-	tx, err := NewSignedTx(nonce, dest, totalAmount-feeAmount, 3, feeAmount, signer)
+	tx, err := types.NewSignedTx(nonce, dest, totalAmount-feeAmount, 3, feeAmount, signer)
 	r.NoError(err)
 	return tx
 }

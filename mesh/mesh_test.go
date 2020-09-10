@@ -98,6 +98,17 @@ func (MockState) AddressExists(types.Address) bool {
 	return true
 }
 
+func (MockState) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
+	panic("implement me")
+}
+
+func (MockState) GetBalance(addr types.Address) uint64 {
+	panic("implement me")
+}
+func (MockState) GetNonce(addr types.Address) uint64 {
+	panic("implement me")
+}
+
 type MockTxMemPool struct{}
 
 func (MockTxMemPool) Get(types.TransactionID) (*types.Transaction, error) {

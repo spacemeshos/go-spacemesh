@@ -23,10 +23,13 @@ func (s *MockMapState) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	return nil
 }
 
-func (s MockMapState) LoadState(types.LayerID) error                    { panic("implement me") }
-func (MockMapState) GetStateRoot() types.Hash32                         { return [32]byte{} }
-func (MockMapState) ValidateNonceAndBalance(*types.Transaction) error   { panic("implement me") }
-func (MockMapState) GetLayerApplied(types.TransactionID) *types.LayerID { panic("implement me") }
+func (s MockMapState) LoadState(types.LayerID) error                       { panic("implement me") }
+func (MockMapState) GetStateRoot() types.Hash32                            { return [32]byte{} }
+func (MockMapState) ValidateNonceAndBalance(*types.Transaction) error      { panic("implement me") }
+func (MockMapState) GetLayerApplied(types.TransactionID) *types.LayerID    { panic("implement me") }
+func (MockMapState) GetLayerStateRoot(types.LayerID) (types.Hash32, error) { panic("implement me") }
+func (MockMapState) GetBalance(types.Address) uint64                       { panic("implement me") }
+func (MockMapState) GetNonce(types.Address) uint64                         { panic("implement me") }
 
 func (s *MockMapState) ApplyTransactions(_ types.LayerID, txs []*types.Transaction) (int, error) {
 	s.Txs = append(s.Txs, txs...)
@@ -63,7 +66,7 @@ func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs in
 	var txs []*types.Transaction
 	for i := 0; i < numOfTxs; i++ {
 		// log.Info("adding tx with fee %v nonce %v", fee, i)
-		tx, err := NewSignedTx(1, types.HexToAddress("1"), 10, 100, uint64(fee), signing.NewEdSigner())
+		tx, err := types.NewSignedTx(1, types.HexToAddress("1"), 10, 100, uint64(fee), signing.NewEdSigner())
 		assert.NoError(t, err)
 		bl.TxIDs = append(bl.TxIDs, tx.ID())
 		totalFee += fee
