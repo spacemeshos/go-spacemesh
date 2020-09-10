@@ -5,14 +5,14 @@ name: push to dockerhub
 
 on:
   push:
-    branches: develop
+    branches:
+      - develop
 
 jobs:
-  test:
+  dockerpush:
     runs-on: ubuntu-latest
     steps:
     - name: checkout
       uses: actions/checkout@v2
     - name: push to dockerhub
       run: make dockerpush
-
