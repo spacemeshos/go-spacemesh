@@ -205,7 +205,7 @@ func (bo *Oracle) getATXIDForEpoch(targetEpoch types.EpochID) (types.ATXID, erro
 func serializeVRFMessage(epochBeacon []byte, epochNumber types.EpochID, counter uint32) []byte {
 	message := make([]byte, len(epochBeacon)+binary.Size(epochNumber)+binary.Size(counter))
 	copy(message, epochBeacon)
-	binary.LittleEndian.PutUint64(message[len(epochBeacon):], uint64(epochNumber))
+	binary.LittleEndian.PutUint32(message[len(epochBeacon):], uint32(epochNumber))
 	binary.LittleEndian.PutUint32(message[len(epochBeacon)+binary.Size(epochNumber):], counter)
 	return message
 }

@@ -804,7 +804,6 @@ func (s *Syncer) fetchBlock(ID types.BlockID) bool {
 		s.With().Info("single block fetched",
 			ID,
 			log.Bool("result", res))
-		//log.LayerID(uint64(blk.LayerIndex)))
 		ch <- res
 		return nil
 	}

@@ -253,7 +253,7 @@ func (h *Hare) onTick(id types.LayerID) {
 	}
 	h.With().Info("number of consensus processes", log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
 	// TODO: fix metrics
-	//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(id), 10)).Add(1)
+	//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint32(id), 10)).Add(1)
 }
 
 var (

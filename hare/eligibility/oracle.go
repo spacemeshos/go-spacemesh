@@ -126,6 +126,7 @@ type vrfMessage struct {
 }
 
 func buildKey(l types.LayerID, r int32) [2]uint64 {
+	// Note: layer is uint32, but there should be no harm in using 64 bits here
 	return [2]uint64{uint64(l), uint64(r)}
 }
 

@@ -33,6 +33,14 @@ func Uint64ToBytesBigEndian(i uint64) []byte {
 	return a
 }
 
+// Uint32ToBytesBigEndian returns the byte representation of a uint32, using big endian encoding (which is not the
+// default for spacemesh).
+func Uint32ToBytesBigEndian(i uint32) []byte {
+	a := make([]byte, 4)
+	binary.BigEndian.PutUint32(a, i)
+	return a
+}
+
 // CopyBytes returns an exact copy of the provided bytes.
 func CopyBytes(b []byte) (copiedBytes []byte) {
 	if b == nil {

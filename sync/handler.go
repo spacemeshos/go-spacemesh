@@ -10,7 +10,7 @@ import (
 
 func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
-		lyrid := types.LayerID(util.BytesToUint64(msg))
+		lyrid := types.LayerID(util.BytesToUint32(msg))
 		logger.With().Info("handle layer hash request", lyrid)
 		layer, err := layers.GetLayer(lyrid)
 		if err != nil {
@@ -28,7 +28,7 @@ func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []by
 
 func newAtxHashRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
-		ep := types.EpochID(util.BytesToUint64(msg))
+		ep := types.EpochID(util.BytesToUint32(msg))
 		logger.With().Info("handle atx hash request", ep)
 		atxs := s.atxDb.GetEpochAtxs(ep)
 
@@ -39,7 +39,7 @@ func newAtxHashRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte
 func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		logger.Debug("handle blockIds request")
-		lyrid := types.LayerID(util.BytesToUint64(msg))
+		lyrid := types.LayerID(util.BytesToUint32(msg))
 		layer, err := layers.GetLayer(lyrid)
 		if err != nil {
 			if err == database.ErrNotFound {
@@ -71,7 +71,7 @@ func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg 
 func newEpochAtxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		logger.Debug("handle atxId request")
-		ep := types.EpochID(util.BytesToUint64(msg))
+		ep := types.EpochID(util.BytesToUint32(msg))
 		atxs := s.atxDb.GetEpochAtxs(ep)
 
 		idbytes, err := types.ATXIdsToBytes(atxs)

@@ -134,14 +134,14 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, t
 	if err != nil {
 		logger.Panic("could not recover latest layer: %v", err)
 	}
-	msh.latestLayer = types.LayerID(util.BytesToUint64(latest))
+	msh.latestLayer = types.LayerID(util.BytesToUint32(latest))
 
 	processed, err := db.general.Get(constPROCESSED)
 	if err != nil {
 		logger.Panic("could not recover processed layer: %v", err)
 	}
 
-	msh.SetProcessedLayer(types.LayerID(util.BytesToUint64(processed)))
+	msh.SetProcessedLayer(types.LayerID(util.BytesToUint32(processed)))
 
 	if msh.layerHash, err = db.general.Get(constLAYERHASH); err != nil {
 		logger.With().Error("could not recover latest layer hash", log.Err(err))
@@ -151,7 +151,7 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, t
 	if err != nil {
 		logger.Panic("could not recover latest verified layer: %v", err)
 	}
-	msh.latestLayerInState = types.LayerID(util.BytesToUint64(verified))
+	msh.latestLayerInState = types.LayerID(util.BytesToUint32(verified))
 
 	err = pr.LoadState(msh.LatestLayerInState())
 	if err != nil {

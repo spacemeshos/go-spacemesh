@@ -84,9 +84,10 @@ func (s SpacemeshGrpcService) GetTransaction(ctx context.Context, txID *pb.Trans
 		return nil, err
 	}
 
-	var layerID, timestamp uint64
+	var layerID uint32
+	var timestamp uint64
 	if layerApplied != nil {
-		layerID = uint64(*layerApplied)
+		layerID = uint32(*layerApplied)
 		timestamp = uint64(s.GenTime.GetGenesisTime().Add(s.LayerDuration * time.Duration(layerID+1)).Unix())
 		// We use layerID + 1 so the timestamp is the end of the layer.
 	}
@@ -102,7 +103,7 @@ func (s SpacemeshGrpcService) GetTransaction(ctx context.Context, txID *pb.Trans
 		Amount:    tx.Amount,
 		Fee:       tx.Fee,
 		Status:    status,
-		LayerId:   layerID,
+		LayerId:   uint64(layerID),
 		Timestamp: timestamp,
 	}, nil
 }

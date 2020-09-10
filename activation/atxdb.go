@@ -19,7 +19,7 @@ import (
 const topAtxKey = "topAtxKey"
 
 func getNodeAtxKey(nodeID types.NodeID, targetEpoch types.EpochID) []byte {
-	return append(getNodeAtxPrefix(nodeID), util.Uint64ToBytesBigEndian(uint64(targetEpoch))...)
+	return append(getNodeAtxPrefix(nodeID), util.Uint32ToBytesBigEndian(uint32(targetEpoch))...)
 }
 
 func getNodeAtxPrefix(nodeID types.NodeID) []byte {
@@ -407,7 +407,7 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 			return fmt.Errorf("atx layer (%v) must be after positioning atx layer (%v)",
 				atx.PubLayerID, posAtx.PubLayerID)
 		}
-		if uint64(atx.PubLayerID-posAtx.PubLayerID) > uint64(db.LayersPerEpoch) {
+		if uint32(atx.PubLayerID-posAtx.PubLayerID) > uint32(db.LayersPerEpoch) {
 			return fmt.Errorf("expected distance of one epoch (%v layers) from pos ATX but found %v",
 				db.LayersPerEpoch, atx.PubLayerID-posAtx.PubLayerID)
 		}

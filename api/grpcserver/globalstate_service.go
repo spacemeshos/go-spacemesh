@@ -44,7 +44,7 @@ func (s GlobalStateService) GlobalStateHash(ctx context.Context, in *pb.GlobalSt
 	log.Info("GRPC GlobalStateService.GlobalStateHash")
 	return &pb.GlobalStateHashResponse{Response: &pb.GlobalStateHash{
 		RootHash:    s.Mesh.GetStateRoot().Bytes(),
-		LayerNumber: s.Mesh.LatestLayerInState().Uint64(),
+		LayerNumber: uint64(s.Mesh.LatestLayerInState().Uint32()),
 	}}, nil
 }
 
@@ -106,7 +106,7 @@ func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.Account
 		for _, r := range dbRewards {
 			res.AccountItem = append(res.AccountItem, &pb.AccountData{Datum: &pb.AccountData_Reward{
 				Reward: &pb.Reward{
-					Layer:       r.Layer.Uint64(),
+					Layer:       uint64(r.Layer.Uint32()),
 					Total:       &pb.Amount{Value: r.TotalReward},
 					LayerReward: &pb.Amount{Value: r.LayerRewardEstimate},
 					// Leave this out for now as this is changing
@@ -249,7 +249,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 			if reward.Coinbase == addr {
 				if err := stream.Send(&pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_Reward{
 					Reward: &pb.Reward{
-						Layer:       reward.Layer.Uint64(),
+						Layer:       uint64(reward.Layer.Uint32()),
 						Total:       &pb.Amount{Value: reward.Total},
 						LayerReward: &pb.Amount{Value: reward.LayerReward},
 						// Leave this out for now as this is changing
@@ -280,7 +280,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 						//Result:      receipt.Result,
 						GasUsed:     receipt.GasUsed,
 						Fee:         &pb.Amount{Value: receipt.Fee},
-						LayerNumber: receipt.Layer.Uint64(),
+						LayerNumber: uint64(receipt.Layer.Uint32()),
 						Index:       receipt.Index,
 						AppAddress:  &pb.AccountId{Address: receipt.Address.Bytes()},
 					},
@@ -389,7 +389,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			}
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Reward{
 				Reward: &pb.Reward{
-					Layer:       reward.Layer.Uint64(),
+					Layer:       uint64(reward.Layer.Uint32()),
 					Total:       &pb.Amount{Value: reward.Total},
 					LayerReward: &pb.Amount{Value: reward.LayerReward},
 					// Leave this out for now as this is changing
@@ -417,7 +417,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 					//Result:      receipt.Result,
 					GasUsed:     receipt.GasUsed,
 					Fee:         &pb.Amount{Value: receipt.Fee},
-					LayerNumber: receipt.Layer.Uint64(),
+					LayerNumber: uint64(receipt.Layer.Uint32()),
 					Index:       receipt.Index,
 					AppAddress:  &pb.AccountId{Address: receipt.Address.Bytes()},
 				},
@@ -441,7 +441,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_GlobalState{
 				GlobalState: &pb.GlobalStateHash{
 					RootHash:    root.Bytes(),
-					LayerNumber: layer.Layer.Index().Uint64(),
+					LayerNumber: uint64(layer.Layer.Index().Uint32()),
 				},
 			}}}); err != nil {
 				return err
