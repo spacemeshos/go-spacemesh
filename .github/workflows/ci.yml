@@ -25,12 +25,6 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: ${{ env.go-version }}
-    - name: test build
-      run: make
-    - name: unit tests (except app test)
-      run: make test-no-app-test
-    - name: app test
-      run: make test-only-app-test
     - name: fmt, tidy, lint
       # lint gets confused by windows line endings so skip it on windows
       if: matrix.os != 'windows-latest'
@@ -39,6 +33,12 @@ jobs:
         make test-tidy
         make test-fmt
         make lint
+    - name: test build
+      run: make
+    - name: unit tests (except app test)
+      run: make test-no-app-test
+    - name: app test
+      run: make test-only-app-test
 
   # run system tests as independent jobs so they can run in parallel
   systemtest-latenodes:
