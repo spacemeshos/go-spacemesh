@@ -142,7 +142,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.HARE.SuperHare = true
 	cfg.LayerAvgSize = 5
 	cfg.LayersPerEpoch = 3
-	cfg.TxsPerBlock = 200
+	cfg.TxsPerBlock = 100
 	cfg.Hdist = 5
 
 	cfg.LayerDurationSec = 20
@@ -251,7 +251,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 		log.Error("cannot parse genesis time %v", err)
 	}
 	pubsubAddr := "tcp://localhost:55666"
-	events.InitializeEventPubsub(pubsubAddr)
+	events.InitializeEventReporter(pubsubAddr)
 	clock := NewManualClock(gTime)
 
 	apps := make([]*SpacemeshApp, 0, numOfInstances)

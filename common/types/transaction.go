@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"strings"
 )
 
@@ -130,4 +131,32 @@ type Reward struct {
 	Layer               LayerID
 	TotalReward         uint64
 	LayerRewardEstimate uint64
+}
+
+// NewSignedTx is used in TESTS ONLY to generate signed txs
+func NewSignedTx(nonce uint64, rec Address, amount, gas, fee uint64, signer *signing.EdSigner) (*Transaction, error) {
+	inner := InnerTransaction{
+		AccountNonce: nonce,
+		Recipient:    rec,
+		Amount:       amount,
+		GasLimit:     gas,
+		Fee:          fee,
+	}
+
+	buf, err := InterfaceToBytes(&inner)
+	if err != nil {
+		return nil, err
+	}
+
+	sst := &Transaction{
+		InnerTransaction: inner,
+		Signature:        [64]byte{},
+	}
+
+	copy(sst.Signature[:], signer.Sign(buf))
+	addr := Address{}
+	addr.SetBytes(signer.PublicKey().Bytes())
+	sst.SetOrigin(addr)
+
+	return sst, nil
 }

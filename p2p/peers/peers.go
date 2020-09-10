@@ -1,6 +1,7 @@
 package peers
 
 import (
+	"github.com/spacemeshos/go-spacemesh/events"
 	"math/rand"
 	"sync/atomic"
 	"time"
@@ -33,6 +34,7 @@ func NewPeers(s PeerSubscriptionProvider, lg log.Log) *Peers {
 	pi := NewPeersImpl(&value, make(chan struct{}), lg)
 	newPeerC, expiredPeerC := s.SubscribePeerEvents()
 	go pi.listenToPeers(newPeerC, expiredPeerC)
+	events.ReportNodeStatusUpdate()
 	return pi
 }
 
@@ -93,5 +95,6 @@ func (p *Peers) listenToPeers(newPeerC, expiredPeerC chan p2pcrypto.PublicKey) {
 			keys = append(keys, k)
 		}
 		p.snapshot.Store(keys) //swap snapshot
+		events.ReportNodeStatusUpdate()
 	}
 }

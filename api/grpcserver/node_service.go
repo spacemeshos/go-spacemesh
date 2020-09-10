@@ -5,6 +5,7 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"golang.org/x/net/context"
@@ -18,8 +19,7 @@ import (
 // data such as node status, software version, errors, etc. It can also be used to start
 // the sync process, or to shut down the node.
 type NodeService struct {
-	Network     api.NetworkAPI // P2P Swarm
-	Tx          api.TxAPI      // Mesh
+	Mesh        api.TxAPI
 	GenTime     api.GenesisTimeAPI
 	PeerCounter api.PeerCounter
 	Syncer      api.Syncer
@@ -32,13 +32,11 @@ func (s NodeService) RegisterService(server *Server) {
 
 // NewNodeService creates a new grpc service using config data.
 func NewNodeService(
-	net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI,
-	syncer api.Syncer) *NodeService {
+	net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI, syncer api.Syncer) *NodeService {
 	return &NodeService{
-		Network:     net,
-		Tx:          tx,
+		Mesh:        tx,
 		GenTime:     genTime,
-		PeerCounter: peers.NewPeers(net, log.NewDefault("grpc_server.NodeService")),
+		PeerCounter: peers.NewPeers(net, log.NewDefault("grpcserver.NodeService")),
 		Syncer:      syncer,
 	}
 }
@@ -76,9 +74,9 @@ func (s NodeService) Status(ctx context.Context, request *pb.StatusRequest) (*pb
 		Status: &pb.NodeStatus{
 			ConnectedPeers: s.PeerCounter.PeerCount(),            // number of connected peers
 			IsSynced:       s.Syncer.IsSynced(),                  // whether the node is synced
-			SyncedLayer:    s.Tx.LatestLayer().Uint64(),          // latest layer we saw from the network
+			SyncedLayer:    s.Mesh.LatestLayer().Uint64(),        // latest layer we saw from the network
 			TopLayer:       s.GenTime.GetCurrentLayer().Uint64(), // current layer, based on time
-			VerifiedLayer:  s.Tx.LatestLayerInState().Uint64(),   // latest verified layer
+			VerifiedLayer:  s.Mesh.LatestLayerInState().Uint64(), // latest verified layer
 		},
 	}, nil
 }
@@ -103,14 +101,81 @@ func (s NodeService) Shutdown(ctx context.Context, request *pb.ShutdownRequest) 
 
 // STREAMS
 
-// StatusStream is a stub for a future server-side streaming RPC endpoint
+// StatusStream exposes a stream of node status updates
 func (s NodeService) StatusStream(request *pb.StatusStreamRequest, stream pb.NodeService_StatusStreamServer) error {
 	log.Info("GRPC NodeService.StatusStream")
-	return nil
+	statusStream := events.GetStatusChannel()
+
+	for {
+		select {
+		case _, ok := <-statusStream:
+			// statusStream works a bit differently than the other streams. It doesn't actually
+			// send us data. Instead, it just notifies us that there's new data to be read.
+			if !ok {
+				log.Info("StatusStream closed, shutting down")
+				return nil
+			}
+			if err := stream.Send(&pb.StatusStreamResponse{
+				Status: &pb.NodeStatus{
+					ConnectedPeers: s.PeerCounter.PeerCount(),            // number of connected peers
+					IsSynced:       s.Syncer.IsSynced(),                  // whether the node is synced
+					SyncedLayer:    s.Mesh.LatestLayer().Uint64(),        // latest layer we saw from the network
+					TopLayer:       s.GenTime.GetCurrentLayer().Uint64(), // current layer, based on time
+					VerifiedLayer:  s.Mesh.LatestLayerInState().Uint64(), // latest verified layer
+				},
+			}); err != nil {
+				return err
+			}
+		case <-stream.Context().Done():
+			log.Info("StatusStream closing stream, client disconnected")
+			return nil
+		}
+		// TODO: do we need an additional case here for a context to indicate
+		// that the service needs to shut down?
+	}
 }
 
-// ErrorStream is a stub for a future server-side streaming RPC endpoint
+// ErrorStream exposes a stream of node errors
 func (s NodeService) ErrorStream(request *pb.ErrorStreamRequest, stream pb.NodeService_ErrorStreamServer) error {
 	log.Info("GRPC NodeService.ErrorStream")
-	return nil
+	errorStream := events.GetErrorChannel()
+
+	for {
+		select {
+		case nodeError, ok := <-errorStream:
+			if !ok {
+				log.Info("ErrorStream closed, shutting down")
+				return nil
+			}
+			if err := stream.Send(&pb.ErrorStreamResponse{Error: &pb.NodeError{
+				ErrorType:  convertErrorType(nodeError.Type),
+				Message:    nodeError.Msg,
+				StackTrace: nodeError.Trace,
+			}}); err != nil {
+				return err
+			}
+		case <-stream.Context().Done():
+			log.Info("ErrorStream closing stream, client disconnected")
+			return nil
+		}
+		// TODO: do we need an additional case here for a context to indicate
+		// that the service needs to shut down?
+	}
+}
+
+func convertErrorType(errType int) pb.NodeError_NodeErrorType {
+	switch errType {
+	case events.NodeErrorTypePanic:
+		return pb.NodeError_NODE_ERROR_TYPE_PANIC
+	case events.NodeErrorTypePanicHare:
+		return pb.NodeError_NODE_ERROR_TYPE_PANIC_HARE
+	case events.NodeErrorTypePanicSync:
+		return pb.NodeError_NODE_ERROR_TYPE_PANIC_SYNC
+	case events.NodeErrorTypePanicP2P:
+		return pb.NodeError_NODE_ERROR_TYPE_PANIC_P2P
+	case events.NodeErrorTypeSignalShutdown:
+		return pb.NodeError_NODE_ERROR_TYPE_SIGNAL_SHUT_DOWN
+	default:
+		return pb.NodeError_NODE_ERROR_TYPE_UNSPECIFIED
+	}
 }

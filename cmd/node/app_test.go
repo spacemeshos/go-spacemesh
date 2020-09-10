@@ -26,7 +26,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -183,7 +182,7 @@ func txWithUnorderedNonceGenerator(dependancies []int) TestScenario {
 		}
 
 		for i := 0; i < txsSent; i++ {
-			tx, err := mesh.NewSignedTx(uint64(txsSent-i), dst, 10, 1, 1, acc1Signer)
+			tx, err := types.NewSignedTx(uint64(txsSent-i), dst, 10, 1, 1, acc1Signer)
 			if err != nil {
 				log.Panic("panicked creating signed tx err=%v", err)
 			}
@@ -236,7 +235,7 @@ func txWithRunningNonceGenerator(dependancies []int) TestScenario {
 				assert.NoError(suite.T(), err)
 				actNonce, err = strconv.Atoi(nonceStr.Value)
 			}
-			tx, err := mesh.NewSignedTx(uint64(i), dst, 10, 1, 1, acc1Signer)
+			tx, err := types.NewSignedTx(uint64(i), dst, 10, 1, 1, acc1Signer)
 			if err != nil {
 				log.Panic("panicked creating signed tx err=%v", err)
 			}
@@ -510,7 +509,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.CoinbaseAccount = "0x123"
 	smApp.Config.LayerAvgSize = 5
 	smApp.Config.LayersPerEpoch = 3
-	smApp.Config.TxsPerBlock = 200
+	smApp.Config.TxsPerBlock = 100
 	smApp.Config.Hdist = 5
 	smApp.Config.GenesisTime = genesisTime.Format(time.RFC3339)
 	smApp.Config.LayerDurationSec = 20

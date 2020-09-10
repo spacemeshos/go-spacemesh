@@ -9,20 +9,32 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"io"
 	"io/ioutil"
 	inet "net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -71,56 +83,74 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r.EqualError(err, fmt.Sprintf("identity file path ('tmp/wrong name') does not match public key (%v)", sgn.PublicKey().String()))
 }
 
+func newLogger(buf *bytes.Buffer) log.Log {
+	lvl := zap.NewAtomicLevelAt(zapcore.InfoLevel)
+	syncer := zapcore.AddSync(buf)
+	encConfig := zap.NewDevelopmentEncoderConfig()
+	encConfig.TimeKey = ""
+	enc := zapcore.NewConsoleEncoder(encConfig)
+	core := zapcore.NewCore(enc, syncer, lvl)
+	return log.NewFromLog(zap.New(core))
+}
+
 func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	r := require.New(t)
 
+	var buf1, buf2 bytes.Buffer
+
 	app := NewSpacemeshApp()
 	mylogger := "anton"
-	tmpDir := os.TempDir()
-	tmpFile, err := ioutil.TempFile(tmpDir, "tmp_")
-	r.NoError(err)
-	myLog := log.New("logger", tmpDir, tmpFile.Name())
-	myLog2 := log.New("logger2", tmpDir, tmpFile.Name())
+	myLog := newLogger(&buf1)
+	myLog2 := newLogger(&buf2)
 
-	//myLog := log.NewDefault("logger")
 	app.log = app.addLogger(mylogger, myLog)
-	app.log.Info("hi there")
-	err = app.SetLogLevel("anton", "warn")
-	r.NoError(err)
-	r.Equal("warn", app.loggers["anton"].String())
+	msg1 := "hi there"
+	app.log.Info(msg1)
+	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\n", mylogger, msg1), buf1.String())
+	r.NoError(app.SetLogLevel(mylogger, "warn"))
+	r.Equal("warn", app.loggers[mylogger].String())
+	buf1.Reset()
 
-	myLog2.Info("other logger")
-	app.log.Info("hi again")
-	app.log.Warning("warn")
+	msg1 = "other logger"
+	myLog2.Info(msg1)
+	msg2 := "hi again"
+	msg3 := "be careful"
+	// This one should not be printed
+	app.log.Info(msg2)
+	// This one should be printed
+	app.log.Warning(msg3)
+	r.Equal(fmt.Sprintf("WARN\t%-13s\t%s\n", mylogger, msg3), buf1.String())
+	r.Equal(fmt.Sprintf("INFO\t%s\n", msg1), buf2.String())
+	buf1.Reset()
 
-	err = app.SetLogLevel("anton", "info")
-	r.NoError(err)
+	r.NoError(app.SetLogLevel(mylogger, "info"))
 
-	app.log.Info("hi again 2")
-	r.Equal("info", app.loggers["anton"].String())
+	msg4 := "nihao"
+	app.log.Info(msg4)
+	r.Equal("info", app.loggers[mylogger].String())
+	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\n", mylogger, msg4), buf1.String())
 
-	// test wrong logger called
-	err = app.SetLogLevel("anton3", "warn")
-	r.Error(err)
+	// test bad logger name
+	r.Error(app.SetLogLevel("anton3", "warn"))
 
-	// test wrong loglevel
-	err = app.SetLogLevel("anton", "lulu")
-	r.Error(err)
-	r.Equal("info", app.loggers["anton"].String())
+	// test bad loglevel
+	r.Error(app.SetLogLevel(mylogger, "lulu"))
+	r.Equal("info", app.loggers[mylogger].String())
 }
 
 func TestSpacemeshApp_AddLogger(t *testing.T) {
 	r := require.New(t)
 
+	var buf bytes.Buffer
+
+	lg := newLogger(&buf)
 	app := NewSpacemeshApp()
-	app.Config.LOGGING.HareLoggerLevel = "warn"
-	tmpDir := os.TempDir()
-	tmpFile, err := ioutil.TempFile(tmpDir, "tmp_")
-	r.NoError(err)
-	myLog := log.New("logger", tmpDir, tmpFile.Name())
-	l := app.addLogger(HareLogger, myLog)
-	r.Equal("warn", app.loggers["hare"].String())
-	l.Info("not supposed to be printed")
+	mylogger := "anton"
+	subLogger := app.addLogger(mylogger, lg)
+	subLogger.Debug("should not get printed")
+	teststr := "should get printed"
+	subLogger.Info(teststr)
+	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\n", mylogger, teststr), buf.String())
 }
 
 func testArgs(app *SpacemeshApp, args ...string) (string, error) {
@@ -171,7 +201,23 @@ func resetFlags() {
 	cmdp.AddCommands(Cmd)
 }
 
+func setup() {
+	// Reset the shutdown context
+	// oof, globals make testing really difficult
+	ctx, cancel := context.WithCancel(context.Background())
+	cmdp.Ctx = ctx
+	cmdp.Cancel = cancel
+
+	events.CloseEventReporter()
+	resetFlags()
+}
+
 func TestSpacemeshApp_GrpcFlags(t *testing.T) {
+	setup()
+
+	// Use a unique port
+	port := 1244
+
 	r := require.New(t)
 	app := NewSpacemeshApp()
 	r.Equal(9092, app.Config.API.NewGrpcServerPort)
@@ -183,11 +229,11 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 		r.Error(err)
 		r.Equal("unrecognized GRPC service requested: illegal", err.Error())
 	}
-	str, err := testArgs(app, "--grpc-port-new", "1234", "--grpc", "illegal")
+	str, err := testArgs(app, "--grpc-port-new", strconv.Itoa(port), "--grpc", "illegal")
 	r.NoError(err)
 	r.Empty(str)
 	// This should still be set
-	r.Equal(1234, app.Config.API.NewGrpcServerPort)
+	r.Equal(port, app.Config.API.NewGrpcServerPort)
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	resetFlags()
@@ -195,7 +241,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	// Try enabling two services, one with a legal name and one with an illegal name
 	// In this case, the node service will be enabled because it comes first
 	// Uses Cmd.Run as defined above
-	str, err = testArgs(app, "--grpc-port-new", "1234", "--grpc", "node", "--grpc", "illegal")
+	str, err = testArgs(app, "--grpc-port-new", strconv.Itoa(port), "--grpc", "node", "--grpc", "illegal")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -205,7 +251,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	// Try the same thing but change the order of the flags
 	// In this case, the node service will not be enabled because it comes second
 	// Uses Cmd.Run as defined above
-	str, err = testArgs(app, "--grpc", "illegal", "--grpc-port-new", "1234", "--grpc", "node")
+	str, err = testArgs(app, "--grpc", "illegal", "--grpc-port-new", strconv.Itoa(port), "--grpc", "node")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(false, app.Config.API.StartNodeService)
@@ -215,7 +261,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	// Use commas instead
 	// In this case, the node service will be enabled because it comes first
 	// Uses Cmd.Run as defined above
-	str, err = testArgs(app, "--grpc", "node,illegal", "--grpc-port-new", "1234")
+	str, err = testArgs(app, "--grpc", "node,illegal", "--grpc-port-new", strconv.Itoa(port))
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -267,7 +313,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 }
 
 func TestSpacemeshApp_JsonFlags(t *testing.T) {
-	resetFlags()
+	setup()
 
 	r := require.New(t)
 	app := NewSpacemeshApp()
@@ -278,7 +324,6 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	// Try enabling just the JSON service (without the GRPC service)
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		err := app.Initialize(cmd, args)
-		//r.NoError(err)
 		r.Error(err)
 		r.Equal("must enable at least one GRPC service along with JSON gateway service", err.Error())
 	}
@@ -349,13 +394,17 @@ func callEndpoint(t *testing.T, endpoint, payload string, port int) (string, int
 }
 
 func TestSpacemeshApp_GrpcService(t *testing.T) {
-	resetFlags()
+	setup()
+
+	// Use a unique port
+	port := 1242
 
 	r := require.New(t)
 	app := NewSpacemeshApp()
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
+		app.Config.API.NewGrpcServerPort = port
 		app.startAPIServices(PostMock{}, NetMock{})
 	}
 	defer app.stopServices()
@@ -373,7 +422,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	const message = "Hello World"
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial("localhost:1234", grpc.WithInsecure())
+	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithInsecure())
 	r.NoError(err)
 	c := pb.NewNodeServiceClient(conn)
 
@@ -388,17 +437,17 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 	// Test starting the server from the commandline
 	// uses Cmd.Run from above
-	str, err = testArgs(app, "--grpc-port-new", "1234", "--grpc", "node")
+	str, err = testArgs(app, "--grpc-port-new", strconv.Itoa(port), "--grpc", "node")
 	r.Empty(str)
 	r.NoError(err)
-	r.Equal(1234, app.Config.API.NewGrpcServerPort)
+	r.Equal(port, app.Config.API.NewGrpcServerPort)
 	r.Equal(true, app.Config.API.StartNodeService)
 
 	// Give the services a few seconds to start running - this is important on travis.
 	time.Sleep(2 * time.Second)
 
 	// Set up a new connection to the server
-	conn, err = grpc.Dial("localhost:1234", grpc.WithInsecure())
+	conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithInsecure())
 	defer func() {
 		r.NoError(conn.Close())
 	}()
@@ -414,7 +463,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 }
 
 func TestSpacemeshApp_JsonService(t *testing.T) {
-	resetFlags()
+	setup()
 
 	r := require.New(t)
 	app := NewSpacemeshApp()
@@ -430,6 +479,10 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	r.NoError(err)
 	r.Equal(false, app.Config.API.StartNewJSONServer)
 	r.Equal(false, app.Config.API.StartNodeService)
+	r.Equal(false, app.Config.API.StartMeshService)
+	r.Equal(false, app.Config.API.StartGlobalStateService)
+	r.Equal(false, app.Config.API.StartSmesherService)
+	r.Equal(false, app.Config.API.StartTransactionService)
 
 	// Try talking to the server
 	const message = "nihao shijie"
@@ -446,10 +499,16 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 		app.Config.API.NewJSONServerPort))
 
 	resetFlags()
+	events.CloseEventReporter()
 
 	// Test starting the JSON server from the commandline
 	// uses Cmd.Run from above
-	str, err = testArgs(app, "--json-server-new", "--grpc", "node", "--json-port-new", "1234")
+	str, err = testArgs(app,
+		"--json-server-new",
+		"--grpc", "node",
+		"--json-port-new", "1234",
+		//"--grpc-interface-new", "127.0.0.1",
+	)
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(1234, app.Config.API.NewJSONServerPort)
@@ -460,7 +519,8 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// We expect this one to succeed
-	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload, 1234)
+	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload, app.Config.API.NewJSONServerPort)
+	log.Info("Got echo response: %v", respBody)
 	var msg pb.EchoResponse
 	r.NoError(jsonpb.UnmarshalString(respBody, &msg))
 	r.Equal(message, msg.Msg.Value)
@@ -469,12 +529,334 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	require.Equal(t, message, msg.Msg.Value)
 }
 
-func TestSpacemeshApp_P2PInterface(t *testing.T) {
+// E2E app test of the stream endpoints in the NodeService
+func TestSpacemeshApp_NodeService(t *testing.T) {
+	setup()
+
+	// Use a unique port
+	port := 1240
+
+	app := NewSpacemeshApp()
+
+	Cmd.Run = func(cmd *cobra.Command, args []string) {
+		defer app.Cleanup(cmd, args)
+		require.NoError(t, app.Initialize(cmd, args))
+
+		// Give the error channel a buffer
+		events.CloseEventReporter()
+		require.NoError(t, events.InitializeEventReporterWithOptions("", 10, true))
+
+		// Speed things up a little
+		app.Config.SyncInterval = 1
+		app.Config.LayerDurationSec = 2
+
+		// This will block. We need to run the full app here to make sure that
+		// the various services are reporting events correctly. This could probably
+		// be done more surgically, and we don't need _all_ of the services.
+		app.Start(cmd, args)
+	}
+
+	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
+	// If there's an error in the args, it will return immediately.
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		// This makes sure the test doesn't end until this goroutine closes
+		defer wg.Done()
+		str, err := testArgs(app,
+			"--grpc-port-new", strconv.Itoa(port),
+			"--grpc", "node",
+			// the following prevents obnoxious warning in macOS
+			"--acquire-port=false",
+			"--tcp-interface", "127.0.0.1",
+			"--grpc-interface-new", "localhost",
+		)
+		require.Empty(t, str)
+		require.NoError(t, err)
+	}()
+
+	// Wait for the app and services to start
+	// Strictly speaking, this does not indicate that all of the services
+	// have started, we could add separate channels for that.
+	<-app.started
+
+	// Unfortunately sometimes we need to wait even longer
+	time.Sleep(3 * time.Second)
+
+	// Set up a new connection to the server
+	addr := fmt.Sprintf("localhost:%d", port)
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
+	require.NoError(t, err)
+	c := pb.NewNodeServiceClient(conn)
+
+	// Use a channel to coordinate ending the test
+	end := make(chan struct{})
+
+	go func() {
+		// Don't close the channel twice
+		var once sync.Once
+		oncebody := func() { close(end) }
+		defer once.Do(oncebody)
+
+		// Open an error stream and a status stream
+		streamErr, err := c.ErrorStream(context.Background(), &pb.ErrorStreamRequest{})
+		require.NoError(t, err)
+
+		nextError := func() *pb.NodeError {
+			in, err := streamErr.Recv()
+			require.NoError(t, err)
+			log.Info("Got streamed error: %v", in.Error)
+			return in.Error
+		}
+
+		// We expect a specific series of errors in a specific order!
+		// Check each one
+		var myError *pb.NodeError
+
+		myError = nextError()
+
+		// Ignore this error which happens if you have a local database file
+		if strings.Contains(myError.Message, "error adding genesis block block already exist in database") {
+			myError = nextError()
+		}
+
+		require.Equal(t, "test123", myError.Message)
+		require.Equal(t, int(zapcore.ErrorLevel), int(myError.ErrorType))
+
+		myError = nextError()
+		require.Equal(t, "test456", myError.Message)
+		require.Equal(t, int(zapcore.ErrorLevel), int(myError.ErrorType))
+
+		// The panic gets wrapped in an ERROR, and we get both, in this order
+		myError = nextError()
+		require.Contains(t, myError.Message, "Fatal: goroutine panicked.")
+		require.Equal(t, int(zapcore.ErrorLevel), int(myError.ErrorType))
+
+		myError = nextError()
+		require.Equal(t, "testPANIC", myError.Message)
+		require.Equal(t, int(zapcore.FatalLevel), int(myError.ErrorType))
+
+		// Let the test end
+		once.Do(oncebody)
+	}()
+
+	wg.Add(1)
+	go func() {
+		// This makes sure the test doesn't end until this goroutine closes
+		defer wg.Done()
+
+		streamStatus, err := c.StatusStream(context.Background(), &pb.StatusStreamRequest{})
+		require.NoError(t, err)
+
+		// We don't really control the order in which these are received,
+		// unlike the errorStream. So just loop and listen here while the
+		// app is running, and make sure there are no errors.
+		for {
+			in, err := streamStatus.Recv()
+			if err == io.EOF {
+				return
+			}
+			code := status.Code(err)
+			// We expect this to happen when the server disconnects
+			if code == codes.Unavailable {
+				return
+			}
+			require.NoError(t, err)
+
+			// Note that, for some reason, protobuf does not display fields
+			// that still have their default value, so the output here will
+			// only be partial.
+			log.Info("Got status message: %s", in.Status)
+
+			// Check if the test should end
+			select {
+			case <-end:
+				return
+			default:
+				continue
+			}
+		}
+	}()
+	time.Sleep(4 * time.Second)
+
+	// Report two errors and make sure they're both received
+	log.Error("test123")
+	log.Error("test456")
+	time.Sleep(4 * time.Second)
+
+	// Trap a panic
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Println("Recovered", r)
+			}
+		}()
+		log.Panic("testPANIC")
+	}()
+
+	// Wait for messages to be received
+	<-end
+
+	// This stops the app
+	cmdp.Cancel()
+
+	// Wait for everything to stop cleanly before ending test
+	wg.Wait()
+}
+
+// E2E app test of the transaction service
+func TestSpacemeshApp_TransactionService(t *testing.T) {
+	setup()
+
+	// Use a unique port
+	port := 1236
+
 	r := require.New(t)
 	app := NewSpacemeshApp()
 
+	Cmd.Run = func(cmd *cobra.Command, args []string) {
+		defer app.Cleanup(cmd, args)
+		r.NoError(app.Initialize(cmd, args))
+
+		// GRPC configuration
+		app.Config.API.NewGrpcServerPort = port
+		app.Config.API.NewGrpcServerInterface = "localhost"
+		app.Config.API.StartTransactionService = true
+
+		// Prevent obnoxious warning in macOS
+		app.Config.P2P.AcquirePort = false
+		app.Config.P2P.TCPInterface = "127.0.0.1"
+
+		// Speed things up a little
+		app.Config.SyncInterval = 1
+		app.Config.LayerDurationSec = 2
+
+		// Force gossip to always listen, even when not synced
+		app.Config.AlwaysListen = true
+
+		// This will block. We need to run the full app here to make sure that
+		// the various services are reporting events correctly. This could probably
+		// be done more surgically, and we don't need _all_ of the services.
+		app.Start(cmd, args)
+	}
+
+	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
+	// If there's an error in the args, it will return immediately.
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		str, err := testArgs(app)
+		r.Empty(str)
+		r.NoError(err)
+		wg.Done()
+	}()
+
+	// Wait for the app and services to start
+	// Strictly speaking, this does not indicate that all of the services
+	// have started, we could add separate channels for that, but it seems
+	// to work well enough for testing.
+	<-app.started
+	time.Sleep(2 * time.Second)
+
+	// Set up a new connection to the server
+	addr := fmt.Sprintf("localhost:%d", port)
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	defer func() {
+		r.NoError(conn.Close())
+	}()
+	r.NoError(err)
+	c := pb.NewTransactionServiceClient(conn)
+
+	// Construct some mock tx data
+	// The tx origin must be the hardcoded test account or else it will have no balance.
+	signer, err := signing.NewEdSignerFromBuffer(util.FromHex(config.Account1Private))
+	require.NoError(t, err)
+	txorigin := types.Address{}
+	txorigin.SetBytes(signer.PublicKey().Bytes())
+	dst := types.BytesToAddress([]byte{0x02})
+	tx, err := types.NewSignedTx(0, dst, 10, 1, 1, signer)
+	require.NoError(t, err, "unable to create signed mock tx")
+	txbytes, _ := types.InterfaceToBytes(tx)
+
+	// Coordinate ending the test
+	wg2 := sync.WaitGroup{}
+	wg2.Add(1)
+	go func() {
+		// Make sure the channel is closed if we encounter an unexpected
+		// error, but don't close the channel twice if we don't!
+		var once sync.Once
+		oncebody := func() { wg2.Done() }
+		defer once.Do(oncebody)
+
+		// Open a transaction stream
+		stream, err := c.TransactionsStateStream(context.Background(), &pb.TransactionsStateStreamRequest{
+			TransactionId:       []*pb.TransactionId{{Id: tx.ID().Bytes()}},
+			IncludeTransactions: true,
+		})
+		require.NoError(t, err)
+
+		// Now listen on the stream
+		res, err := stream.Recv()
+		require.NoError(t, err)
+		require.Equal(t, tx.ID().Bytes(), res.TransactionState.Id.Id)
+
+		// We expect the tx to go to the mempool
+		inTx := res.Transaction
+		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.TransactionState.State)
+		require.Equal(t, tx.ID().Bytes(), inTx.Id.Id)
+		require.Equal(t, tx.Origin().Bytes(), inTx.Sender.Address)
+		require.Equal(t, tx.GasLimit, inTx.GasOffered.GasProvided)
+		require.Equal(t, tx.Amount, inTx.Amount.Value)
+		require.Equal(t, tx.AccountNonce, inTx.Counter)
+		require.Equal(t, tx.Origin().Bytes(), inTx.Signature.PublicKey)
+		switch x := inTx.Datum.(type) {
+		case *pb.Transaction_CoinTransfer:
+			require.Equal(t, tx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
+				"inner coin transfer tx has bad recipient")
+		default:
+			require.Fail(t, "inner tx has wrong tx data type")
+		}
+
+		// Let the test end
+		once.Do(oncebody)
+
+		// Wait for the app to exit
+		wg.Wait()
+	}()
+
+	time.Sleep(4 * time.Second)
+
+	// Submit the tx
+	res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
+		Transaction: txbytes,
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(code.Code_OK), res.Status.Code)
+	require.Equal(t, tx.ID().Bytes(), res.Txstate.Id.Id)
+	require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
+
+	// Wait for messages to be received
+	wg2.Wait()
+
+	// This stops the app
+	cmdp.Cancel()
+
+	// Wait for it to stop
+	wg.Wait()
+}
+
+func TestSpacemeshApp_P2PInterface(t *testing.T) {
+	setup()
+
+	// Use a unique port
+	port := 1238
 	addr := "127.0.0.1"
-	tcpAddr := inet.TCPAddr{IP: inet.ParseIP(addr), Port: app.Config.P2P.TCPPort}
+
+	r := require.New(t)
+	app := NewSpacemeshApp()
 
 	// Initialize the network: we don't want to listen but this lets us dial out
 	l, err := node.NewNodeIdentity()
@@ -488,10 +870,12 @@ func TestSpacemeshApp_P2PInterface(t *testing.T) {
 	defer p2pnet.Shutdown()
 
 	// Try to connect before we start the P2P service: this should fail
+	tcpAddr := inet.TCPAddr{IP: inet.ParseIP(addr), Port: port}
 	_, err = p2pnet.Dial(cmdp.Ctx, &tcpAddr, l.PublicKey())
 	r.Error(err)
 
 	// Start P2P services
+	app.Config.P2P.TCPPort = port
 	app.Config.P2P.TCPInterface = addr
 	app.Config.P2P.AcquirePort = false
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.AppLog, app.Config.DataDir())

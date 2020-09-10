@@ -28,7 +28,7 @@ func init() {
 }
 
 func getPersistentMash() *mesh.DB {
-	db, _ := mesh.NewPersistentMeshDB(fmt.Sprintf(Path+"ninje_tortoise/"), 10, log.New("ninje_tortoise", "", "").WithOptions(log.Nop))
+	db, _ := mesh.NewPersistentMeshDB(fmt.Sprintf(Path+"ninje_tortoise/"), 10, log.NewDefault("ninje_tortoise").WithOptions(log.Nop))
 	return db
 }
 
@@ -37,7 +37,7 @@ func persistenceTeardown() {
 }
 
 func getInMemMesh() *mesh.DB {
-	return mesh.NewMemMeshDB(log.New("", "", ""))
+	return mesh.NewMemMeshDB(log.NewDefault(""))
 }
 
 func getMeshForBench() *mesh.DB {
@@ -52,7 +52,7 @@ func getMeshForBench() *mesh.DB {
 
 func TestAlgorithm_HandleLateBlock(t *testing.T) {
 	mdb := getMeshForBench()
-	a := tortoise{ninjaTortoise: newNinjaTortoise(8, mdb, 5, log.New("", "", ""))}
+	a := tortoise{ninjaTortoise: newNinjaTortoise(8, mdb, 5, log.NewDefault(""))}
 	blk := types.NewExistingBlock(5, []byte("asdfasdfdgadsgdgr"))
 	a.HandleLateBlock(blk)
 	assert.True(t, blk.Layer() == types.LayerID(5))
@@ -165,7 +165,7 @@ var badblocks = 0.1
 
 func TestNinjaTortoise_VariableLayerSize(t *testing.T) {
 
-	lg := log.New(t.Name(), "", "")
+	lg := log.NewDefault(t.Name())
 
 	mdb := getMeshForBench()
 	ni := newNinjaTortoise(8, mdb, 5, lg)
@@ -215,7 +215,7 @@ func TestNinjaTortoise_VariableLayerSize(t *testing.T) {
 
 func TestNinjaTortoise_Abstain(t *testing.T) {
 
-	lg := log.New(t.Name(), "", "")
+	lg := log.NewDefault(t.Name())
 
 	mdb := getMeshForBench()
 	alg := newNinjaTortoise(3, mdb, 5, lg)
@@ -244,7 +244,7 @@ func TestNinjaTortoise_Abstain(t *testing.T) {
 
 func TestNinjaTortoise_BlockByBlock(t *testing.T) {
 
-	lg := log.New(t.Name(), "", "")
+	lg := log.NewDefault(t.Name())
 
 	mdb := getMeshForBench()
 	alg := newNinjaTortoise(8, mdb, 5, lg)
@@ -294,7 +294,7 @@ func TestNinjaTortoise_BlockByBlock(t *testing.T) {
 
 func TestNinjaTortoise_GoodLayerChanges(t *testing.T) {
 
-	lg := log.New(t.Name(), "", "")
+	lg := log.NewDefault(t.Name())
 
 	mdb := getMeshForBench()
 	alg := newNinjaTortoise(4, mdb, 5, lg)
@@ -369,7 +369,7 @@ func createLayer2(index types.LayerID, view *types.Layer, votes []*types.Layer, 
 }
 
 func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
-	lg := log.New(t.Name(), "", "")
+	lg := log.NewDefault(t.Name())
 
 	mdb := getInMemMesh()
 	alg := newNinjaTortoise(200, mdb, 5, lg)
@@ -459,7 +459,7 @@ func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 }
 
 func TestNinjaTortoise_LayerWithNoVotes2(t *testing.T) {
-	lg := log.New(t.Name(), "", "")
+	lg := log.NewDefault(t.Name())
 
 	mdb := getInMemMesh()
 	alg := newNinjaTortoise(200, mdb, 5, lg)
@@ -537,7 +537,7 @@ func TestNinjaTortoise_LayerWithNoVotes2(t *testing.T) {
 }
 
 func TestNinjaTortoise_OneMoreLayerWithNoVotes(t *testing.T) {
-	lg := log.New(t.Name(), "", "")
+	lg := log.NewDefault(t.Name())
 
 	mdb := getMeshForBench()
 	alg := newNinjaTortoise(200, mdb, 5, lg)
@@ -609,7 +609,7 @@ func TestNinjaTortoise_OneMoreLayerWithNoVotes(t *testing.T) {
 
 func TestNinjaTortoise_LateBlocks(t *testing.T) {
 
-	lg := log.New(t.Name(), "", "")
+	lg := log.NewDefault(t.Name())
 
 	mdb := getMeshForBench()
 	alg := newNinjaTortoise(10, mdb, 1, lg)
@@ -753,7 +753,7 @@ func TestNinjaTortoise_Increasing_Memory(t *testing.T) {
 	defer persistenceTeardown()
 	msh := getPersistentMash()
 	layerSize := 100
-	lg := log.New(t.Name(), "", "")
+	lg := log.NewDefault(t.Name())
 	alg := newNinjaTortoise(layerSize, msh, 5, lg.WithOptions(log.Nop))
 	l1 := mesh.GenesisLayer()
 
@@ -843,7 +843,7 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 }
 
 func sanity(t *testing.T, mdb *mesh.DB, layers int, layerSize int, patternSize int, badBlks float64) *ninjaTortoise {
-	lg := log.New(t.Name(), "", "")
+	lg := log.NewDefault(t.Name())
 	l1 := mesh.GenesisLayer()
 	var lyrs []*types.Layer
 	AddLayer(mdb, l1)
@@ -878,7 +878,7 @@ func sanity(t *testing.T, mdb *mesh.DB, layers int, layerSize int, patternSize i
 func TestNinjaTortoise_Sanity2(t *testing.T) {
 	defer persistenceTeardown()
 	mdb := getInMemMesh()
-	alg := newNinjaTortoise(3, mdb, 5, log.New(t.Name(), "", ""))
+	alg := newNinjaTortoise(3, mdb, 5, log.NewDefault(t.Name()))
 	l := mesh.GenesisLayer()
 
 	l1 := createLayer(1, []*types.Layer{l}, 3)
@@ -994,7 +994,7 @@ func AddLayer(m *mesh.DB, layer *types.Layer) error {
 
 func TestNinjaTortoise_Recovery(t *testing.T) {
 
-	lg := log.New(t.Name(), "", "")
+	lg := log.NewDefault(t.Name())
 
 	mdb := getPersistentMash()
 	alg := NewTortoise(3, mdb, 5, lg)
