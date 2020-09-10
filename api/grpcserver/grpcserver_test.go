@@ -1718,7 +1718,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Condition(t, func() bool {
 		for _, a := range l.Activations {
 			// Compare the two element by element
-			if a.Layer != globalAtx.PubLayerID.Uint64() {
+			if a.Layer != uint64(globalAtx.PubLayerID.Uint32()) {
 				continue
 			}
 			if bytes.Compare(a.Id.Id, globalAtx.ID().Bytes()) != 0 {
@@ -2156,7 +2156,7 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.AccountMeshData_Activation:
 		require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
-		require.Equal(t, globalAtx.PubLayerID.Uint64(), x.Activation.Layer)
+		require.Equal(t, uint64(globalAtx.PubLayerID.Uint32()), x.Activation.Layer)
 		require.Equal(t, globalAtx.NodeID.ToBytes(), x.Activation.SmesherId.Id)
 		require.Equal(t, globalAtx.Coinbase.Bytes(), x.Activation.Coinbase.Address)
 		require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
