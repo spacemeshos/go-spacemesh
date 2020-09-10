@@ -1447,6 +1447,9 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 
 	serializedTx, err := types.InterfaceToBytes(globalTx)
 	require.NoError(err, "error serializing tx")
+	
+	// This time, we expect an error, since isSynced is false (by default)
+	// The node should not allow tx submission when not synced
 	res, err := c.SubmitTransaction(
 		context.Background(),
 		&pb.SubmitTransactionRequest{Transaction: serializedTx},
@@ -1456,12 +1459,12 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 
 	syncer.isSynced = true
 
+	// This time, we expect no error, since isSynced is now true
 	_, err = c.SubmitTransaction(
 		context.Background(),
 		&pb.SubmitTransactionRequest{Transaction: serializedTx},
 	)
 	require.NoError(err)
-
 }
 
 func TestTransactionService(t *testing.T) {
