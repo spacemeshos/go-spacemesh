@@ -6,6 +6,7 @@ env:
   PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
   CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
   CLUSTER_ZONE: ${{ secrets.CLUSTER_ZONE }}
+  ES_PASSWD: ${{ secrets.ES_PASSWD }}
 
 # Controls when the action will run. Triggers the workflow on all pull requests.
 on: pull_request
@@ -21,24 +22,24 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v2
-    - name: set up go
-      uses: actions/setup-go@v2
-      with:
-        go-version: ${{ env.go-version }}
-    - name: setup env
-      run: make
-    - name: fmt, tidy, lint
-      # lint gets confused by windows line endings so skip it on windows
-      if: matrix.os != 'windows-latest'
-      run: |
-        make genproto
-        make test-tidy
-        make test-fmt
-        make lint
-    - name: unit tests (except app test)
-      run: make test-no-app-test
-    - name: app test
-      run: make test-only-app-test
+    # - name: set up go
+    #   uses: actions/setup-go@v2
+    #   with:
+    #     go-version: ${{ env.go-version }}
+    # - name: setup env
+    #   run: make
+    # - name: fmt, tidy, lint
+    #   # lint gets confused by windows line endings so skip it on windows
+    #   if: matrix.os != 'windows-latest'
+    #   run: |
+    #     make genproto
+    #     make test-tidy
+    #     make test-fmt
+    #     make lint
+    # - name: unit tests (except app test)
+    #   run: make test-no-app-test
+    # - name: app test
+    #   run: make test-only-app-test
 
   # run system tests as independent jobs so they can run in parallel
   systemtest-latenodes:
