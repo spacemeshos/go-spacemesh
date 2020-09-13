@@ -347,8 +347,9 @@ func (s *Syncer) synchronise() {
 
 func (s *Syncer) handleWeaklySynced() {
 	s.With().Info("Node is weakly synced",
-		s.LatestLayer(),
-		s.GetCurrentLayer())
+		log.Uint64("latest_layer", s.LatestLayer().Uint64()),
+		log.Uint64("current_layer", s.GetCurrentLayer().Uint64()),
+	)
 	events.ReportNodeStatusUpdate()
 
 	// handle all layers from processed+1 to current -1
@@ -451,8 +452,6 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 			}
 		}
 
-		// TODO: Here we should also get hare results from neighbors.
-		// TODO: change me I'm a mock
 		hareForLayer, err := s.DB.GetLayerInputVector(lyr.Index())
 		if err != nil {
 			hareForLayer = nil

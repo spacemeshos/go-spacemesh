@@ -19,12 +19,13 @@ type blockProvider interface {
 type SuperHare struct {
 	ticker    timesync.LayerTimer
 	blocks    blockProvider
+	delta     int
 	closeChan chan struct{}
 }
 
 // New creates a new instance of SuperHare
-func New(blocks blockProvider, ticker timesync.LayerTimer) *SuperHare {
-	return &SuperHare{ticker, blocks, make(chan struct{}, 1)}
+func New(blocks blockProvider, ticker timesync.LayerTimer, wakeupDelta int) *SuperHare {
+	return &SuperHare{ticker, blocks, wakeupDelta, make(chan struct{}, 1)}
 }
 
 // Start is a stub to support service API
@@ -46,7 +47,7 @@ func (h *SuperHare) dbSaveRoutine() {
 				continue
 			}
 
-			time.Sleep(time.Second * 3)
+			<-time.After(time.Second * time.Duration(h.delta-1))
 			// this cover ups the fact that hare doesn't run in tests
 			//  but tortoise relays on hare finishing
 			blks, err := h.blocks.LayerBlockIds(l)
