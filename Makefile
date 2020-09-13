@@ -185,7 +185,11 @@ dockerbuild-go:
 
 
 dockerbuild-test:
-	docker build -f DockerFileTests --build-arg GCLOUD_KEY="$(GCLOUD_KEY)" --build-arg PROJECT_NAME="$(PROJECT_NAME)" --build-arg CLUSTER_NAME="$(CLUSTER_NAME)" --build-arg CLUSTER_ZONE="$(CLUSTER_ZONE)" -t go-spacemesh-python:$(BRANCH) .
+	docker build -f DockerFileTests --build-arg GCLOUD_KEY="$(GCLOUD_KEY)" \
+	             --build-arg PROJECT_NAME="$(PROJECT_NAME)" \
+	             --build-arg CLUSTER_NAME="$(CLUSTER_NAME)" \
+	             --build-arg CLUSTER_ZONE="$(CLUSTER_ZONE)" \
+	             -t go-spacemesh-python:$(BRANCH) .
 .PHONY: dockerbuild-test
 
 
@@ -213,7 +217,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python:$(BRANCH) pytest -s -v p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml
+		-i go-spacemesh-python:$(BRANCH) pytest -s -v p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml
 .PHONY: dockerrun-p2p
 
 dockertest-p2p: dockerbuild-test dockerrun-p2p
@@ -227,7 +231,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python:$(BRANCH) pytest -s -v test_bs.py --tc-file=config.yaml --tc-format=yaml
+		-i go-spacemesh-python:$(BRANCH) pytest -s -v test_bs.py --tc-file=config.yaml --tc-format=yaml
 .PHONY: dockerrun-mining
 
 dockertest-mining: dockerbuild-test dockerrun-mining
@@ -241,7 +245,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python:$(BRANCH) pytest -s -v hare/test_hare.py::test_hare_sanity --tc-file=hare/config.yaml --tc-format=yaml
+		-i go-spacemesh-python:$(BRANCH) pytest -s -v hare/test_hare.py::test_hare_sanity --tc-file=hare/config.yaml --tc-format=yaml
 .PHONY: dockerrun-hare
 
 
@@ -257,7 +261,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python:$(BRANCH) pytest -s -v sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
+		-i go-spacemesh-python:$(BRANCH) pytest -s -v sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-sync
 
@@ -274,7 +278,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python:$(BRANCH) pytest -s -v late_nodes/test_delayed.py --tc-file=late_nodes/delayed_config.yaml --tc-format=yaml
+		-i go-spacemesh-python:$(BRANCH) pytest -s -v late_nodes/test_delayed.py --tc-file=late_nodes/delayed_config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-late-nodes
 
@@ -290,7 +294,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python:$(BRANCH) pytest -s -v sync/genesis/test_genesis_voting.py --tc-file=sync/genesis/config.yaml --tc-format=yaml
+		-i go-spacemesh-python:$(BRANCH) pytest -s -v sync/genesis/test_genesis_voting.py --tc-file=sync/genesis/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-genesis-voting
 
@@ -306,7 +310,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python:$(BRANCH) pytest -s -v block_atx/add_node/test_blocks_add_node.py --tc-file=block_atx/add_node/config.yaml --tc-format=yaml
+		-i go-spacemesh-python:$(BRANCH) pytest -s -v block_atx/add_node/test_blocks_add_node.py --tc-file=block_atx/add_node/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-blocks-add-node
 
@@ -322,7 +326,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python:$(BRANCH) pytest -s -v block_atx/remove_node/test_blocks_remove_node.py --tc-file=block_atx/remove_node/config.yaml --tc-format=yaml
+		-i go-spacemesh-python:$(BRANCH) pytest -s -v block_atx/remove_node/test_blocks_remove_node.py --tc-file=block_atx/remove_node/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-blocks-remove-node
 
@@ -338,7 +342,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python:$(BRANCH) pytest -s -v stress/blocks_stress/test_stress_blocks.py --tc-file=stress/blocks_stress/config.yaml --tc-format=yaml
+		-i go-spacemesh-python:$(BRANCH) pytest -s -v stress/blocks_stress/test_stress_blocks.py --tc-file=stress/blocks_stress/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-blocks-stress
 
@@ -354,7 +358,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python:$(BRANCH) pytest -s -v stress/grpc_stress/test_stress_grpc.py --tc-file=stress/grpc_stress/config.yaml --tc-format=yaml
+		-i go-spacemesh-python:$(BRANCH) pytest -s -v stress/grpc_stress/test_stress_grpc.py --tc-file=stress/grpc_stress/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-grpc-stress
 
@@ -370,7 +374,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python:$(BRANCH) pytest -s -v stress/sync_stress/test_sync.py --tc-file=stress/sync_stress/config.yaml --tc-format=yaml
+		-i go-spacemesh-python:$(BRANCH) pytest -s -v stress/sync_stress/test_sync.py --tc-file=stress/sync_stress/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-sync-stress
 
@@ -386,7 +390,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python:$(BRANCH) pytest -s -v stress/tx_stress/test_stress_txs.py --tc-file=stress/tx_stress/config.yaml --tc-format=yaml
+		-i go-spacemesh-python:$(BRANCH) pytest -s -v stress/tx_stress/test_stress_txs.py --tc-file=stress/tx_stress/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-tx-stress
 
