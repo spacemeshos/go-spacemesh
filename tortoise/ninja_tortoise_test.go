@@ -29,7 +29,11 @@ func init() {
 }
 
 func getPersistentMash() *mesh.DB {
-	db, _ := mesh.NewPersistentMeshDB(fmt.Sprintf(Path+"ninje_tortoise/"), 10, log.NewDefault("ninje_tortoise").WithOptions(log.Nop))
+	diff := rand.Uint32()
+	db, err := mesh.NewPersistentMeshDB(fmt.Sprint(Path, "ninje_tortoise/", diff), 10, log.NewDefault("ninje_tortoise").WithOptions(log.Nop))
+	if err != nil {
+		panic(fmt.Errorf("Failed making db err:%v", err))
+	}
 	return db
 }
 

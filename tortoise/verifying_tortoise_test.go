@@ -330,10 +330,9 @@ func TestTurtle_Recovery(t *testing.T) {
 		return mdb.LayerBlockIds(l)
 	}
 
-	lg := log.New(t.Name(), "", "")
+	lg := log.NewDefault(t.Name())
 	alg := NewVerifyingTortoise(3, mdb, 5, lg)
 	l := mesh.GenesisLayer()
-	AddLayer(mdb, l)
 
 	l1 := createTurtleLayer(1, mdb, alg.BaseBlock, getHareResults, 3)
 	AddLayer(mdb, l1)
