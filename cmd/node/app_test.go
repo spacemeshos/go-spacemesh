@@ -96,6 +96,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	const numberOfEpochs = 5 // first 2 epochs are genesis
 	//addr := address.BytesToAddress([]byte{0x01})
 	cfg := getTestDefaultConfig()
+	cfg.LOGGING.TrtlLoggerLevel = "debug"
 	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
 	path := "../tmp/test/state_" + time.Now().String()
 
@@ -517,7 +518,6 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.HareEligibility.EpochOffset = 0
 	smApp.Config.StartMining = true
 	smApp.Config.SyncRequestTimeout = 20000
-	smApp.Config.LOGGING.TrtlLoggerLevel = "DEBUG"
 
 	rolacle := eligibility.New()
 	types.SetLayersPerEpoch(int32(smApp.Config.LayersPerEpoch))
