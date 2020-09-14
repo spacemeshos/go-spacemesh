@@ -100,7 +100,7 @@ func (t *turtle) evict() {
 	// Don't evict before we've Verified more than hdist
 	// TODO: fix potential leak when we can't verify but keep receiving layers
 
-	if t.Verified <= t.Hdist {
+	if t.Verified <= types.GetEffectiveGenesis()+t.Hdist {
 		return
 	}
 	// The window is the last [Verified - hdist] layers.
@@ -509,7 +509,7 @@ loop:
 		}
 
 		// Count good blocks votes..
-		//Declare the vote vector “verified” up to position k if the total weight exceeds the confidence threshold in all positions up to k .
+		// Declare the vote vector “verified” up to position k if the total weight exceeds the confidence threshold in all positions up to k .
 		for blk, vote := range input {
 			// Count the votes for the input vote vector by summing the weight of the good blocks
 			sum := abstain
@@ -520,7 +520,7 @@ loop:
 
 				// blocks older than the voted block are not counted
 				if vopinion.LayerID <= i {
-					t.logger.Debug("%v is older than %v", vopinion.BlockID, blk)
+					t.logger.Debug("%v is not newerf than %v", vopinion.BlockID, blk)
 					continue
 				}
 
