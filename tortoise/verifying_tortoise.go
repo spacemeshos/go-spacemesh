@@ -137,7 +137,7 @@ func removeOpinion(o []opinion, i int) []opinion {
 }
 
 func (t *turtle) singleInputVectorFromDB(lyrid types.LayerID, blockid types.BlockID) (vec, error) {
-	if lyrid == 0 {
+	if lyrid <= types.GetEffectiveGenesis() {
 		return support, nil
 	}
 

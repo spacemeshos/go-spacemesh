@@ -517,6 +517,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.HareEligibility.EpochOffset = 0
 	smApp.Config.StartMining = true
 	smApp.Config.SyncRequestTimeout = 20000
+	smApp.Config.LOGGING.TrtlLoggerLevel = "DEBUG"
 
 	rolacle := eligibility.New()
 	types.SetLayersPerEpoch(int32(smApp.Config.LayersPerEpoch))
