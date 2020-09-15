@@ -371,4 +371,7 @@ func TestUDPNet_Cache2(t *testing.T) {
 
 	require.Len(t, n.incomingConn, maxUDPConn)
 	createAndRunConn()
+
+	// Make sure one connection was evicted and replaced
+	require.Len(t, n.incomingConn, maxUDPConn)
 }

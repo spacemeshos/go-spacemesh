@@ -274,16 +274,17 @@ func (n *UDPNet) addConn(addr net.Addr, ucw udpConn) {
 	evicted := false
 	lastk := ""
 	if len(n.incomingConn) >= maxUDPConn {
-		n.logger.Debug("Removing some udp session")
+		n.logger.Debug("UDP connection cache is full, evicting one session")
 		for k, c := range n.incomingConn {
 			lastk = k
 			if time.Since(c.Created()) > maxUDPLife {
 				delete(n.incomingConn, k)
-				c.Close()
+				if err := c.Close(); err != nil {
+					n.logger.Warning("Error closing udp connection: %s", err)
+				}
 				evicted = true
 				break
 			}
-
 		}
 
 		if !evicted {
@@ -297,7 +298,9 @@ func (n *UDPNet) addConn(addr net.Addr, ucw udpConn) {
 func (n *UDPNet) getConn(addr net.Addr) (udpConn, error) {
 	if c, ok := n.incomingConn[addr.String()]; ok {
 		if time.Since(c.Created()) > maxUDPLife {
-			c.Close()
+			if err := c.Close(); err != nil {
+				n.logger.Warning("Error closing udp connection: %s", err)
+			}
 			delete(n.incomingConn, addr.String())
 			return nil, errors.New("expired")
 		}
