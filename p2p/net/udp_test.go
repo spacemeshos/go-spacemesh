@@ -329,9 +329,7 @@ func TestUDPNet_Cache2(t *testing.T) {
 				return tm
 			},
 			CloseFunc: func() error {
-				if closeval {
-					panic("CLOSE TWICE")
-				}
+				require.False(t, closeval, "attempt to close closed channel on connection eviction")
 				closeval = true
 				return nil
 			},
