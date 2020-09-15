@@ -40,6 +40,19 @@ var (
 		"time4.google.com",
 		"time.asia.apple.com",
 		"time.americas.apple.com",
+		"pool.ntp.org",
+
+		// china-specific servers
+		"0.cn.pool.ntp.org",
+		"1.cn.pool.ntp.org",
+		"2.cn.pool.ntp.org",
+		"3.cn.pool.ntp.org",
+		"time1.cloud.tencent.com",
+		"time2.cloud.tencent.com",
+		"time3.cloud.tencent.com",
+		"time4.cloud.tencent.com",
+		"ntp2.aliyun.com",
+		"ntp4.aliyun.com",
 	}
 	zeroDuration = time.Duration(0)
 	zeroTime     = time.Time{}
