@@ -274,6 +274,7 @@ func (n *UDPNet) addConn(addr net.Addr, ucw udpConn) {
 	evicted := false
 	lastk := ""
 	if len(n.incomingConn) >= maxUDPConn {
+		n.logger.Debug("Removing some udp session")
 		for k, c := range n.incomingConn {
 			lastk = k
 			if time.Since(c.Created()) > maxUDPLife {
@@ -377,5 +378,5 @@ func (ucw *udpConnWrapper) Write(b []byte) (int, error) {
 
 func (ucw *udpConnWrapper) Close() error {
 	close(ucw.closeChan)
-	return nil
+	return ucw.conn.Close()
 }

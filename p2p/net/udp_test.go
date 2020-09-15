@@ -140,6 +140,24 @@ type udpConnMock struct {
 	RemoteAddrFunc       func() net.Addr
 	ReadFunc             func(b []byte) (int, error)
 	WriteFunc            func(b []byte) (int, error)
+	WriteToUDPFunc       func(final []byte, addr *net.UDPAddr) (int, error)
+	ReadFromFunc         func(p []byte) (n int, addr net.Addr, err error)
+	WriteToFunc          func(p []byte, addr net.Addr) (n int, err error)
+}
+
+func (ucw *udpConnMock) WriteToUDP(final []byte, addr *net.UDPAddr) (int, error) {
+	panic("implement me")
+}
+
+func (ucw *udpConnMock) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
+	if ucw.ReadFromFunc != nil {
+		return ucw.ReadFromFunc(p)
+	}
+	return 0, nil, errors.New("not impl")
+}
+
+func (ucw *udpConnMock) WriteTo(p []byte, addr net.Addr) (n int, err error) {
+	panic("implement me")
 }
 
 func (ucw *udpConnMock) PushIncoming(b []byte) error {
@@ -293,4 +311,64 @@ func TestUDPNet_Cache(t *testing.T) {
 	require.Nil(t, c)
 	require.True(t, closed)
 
+}
+
+func TestUDPNet_Cache2(t *testing.T) {
+	// This test fails by panic before latest fix to udp.go. it crashed the testnet.
+	// instead
+	localnode, _ := node.NewNodeIdentity()
+	n, err := NewUDPNet(config.DefaultConfig(), localnode, log.NewDefault(t.Name()))
+	require.NoError(t, err)
+	require.NotNil(t, n)
+
+	newCon := func() *udpConnMock {
+		tm := time.Now()
+		closeval := false
+		ucm := &udpConnMock{
+			CreatedFunc: func() time.Time {
+				return tm
+			},
+			CloseFunc: func() error {
+				if closeval {
+					panic("CLOSE TWICE")
+				}
+				closeval = true
+				return nil
+			},
+			PushIncomingFunc:     nil,
+			SetDeadlineFunc:      nil,
+			SetReadDeadlineFunc:  nil,
+			SetWriteDeadlineFunc: nil,
+			LocalAddrFunc:        nil,
+			RemoteAddrFunc:       nil,
+			ReadFunc:             nil,
+			WriteFunc:            nil,
+		}
+		return ucm
+	}
+
+	createAndRunConn := func() {
+		pk := p2pcrypto.NewRandomPubkey()
+		ns := NewSessionMock(pk)
+		conn := newCon()
+		addr := testUDPAddr()
+		_, ok := n.incomingConn[addr.String()]
+		for ok {
+			addr = testUDPAddr()
+			_, ok = n.incomingConn[addr.String()]
+		}
+		conn.RemoteAddrFunc = func() net.Addr {
+			return addr
+		}
+		mconn := newMsgConnection(conn, n, pk, ns, n.config.MsgSizeLimit, n.config.DialTimeout, n.logger)
+		n.addConn(addr, conn)
+		go mconn.beginEventProcessing()
+	}
+
+	for i := 0; i < maxUDPConn; i++ {
+		createAndRunConn()
+	}
+
+	require.Len(t, n.incomingConn, maxUDPConn)
+	createAndRunConn()
 }
