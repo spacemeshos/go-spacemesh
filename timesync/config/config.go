@@ -34,7 +34,7 @@ func DefaultConfig() TimeConfig {
 	// TimeConfigValues defines default values for all time and ntp related params.
 	var TimeConfigValues = TimeConfig{
 		MaxAllowedDrift:       duration("10s"),
-		NtpQueries:            5,
+		NtpQueries:            15,
 		DefaultTimeoutLatency: duration("10s"),
 		RefreshNtpInterval:    duration("30m"),
 	}
