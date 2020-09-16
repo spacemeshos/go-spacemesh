@@ -8,78 +8,82 @@ env:
   CLUSTER_ZONE: ${{ secrets.CLUSTER_ZONE }}
   ES_PASSWD: ${{ secrets.ES_PASSWD }}
 
-# Controls when the action will run. Triggers the workflow on all pull requests.
-on: pull_request
+# Trigger the workflow on all pull requests, and on push to specific branches
+on:
+  pull_request:
+  push:
+    branches:
+      - staging
+      - trying
 
 jobs:
-  test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        # no freebsd support for now =\
-        #os: [macos-latest, windows-latest, ubuntu-latest]
-        os: [ubuntu-latest]
+  # always run the unit tests, and run them first, as they are relatively cheap
+  unittests:
+    runs-on: ubuntu-latest
     steps:
-    - name: checkout
-      uses: actions/checkout@v2
-    # - name: set up go
-    #   uses: actions/setup-go@v2
-    #   with:
-    #     go-version: ${{ env.go-version }}
-    # - name: setup env
-    #   run: make
-    # - name: fmt, tidy, lint
-    #   # lint gets confused by windows line endings so skip it on windows
-    #   if: matrix.os != 'windows-latest'
-    #   run: |
-    #     make genproto
-    #     make test-tidy
-    #     make test-fmt
-    #     make lint
-    # - name: unit tests (except app test)
-    #   run: make test-no-app-test
-    # - name: app test
-    #   run: make test-only-app-test
+     - name: checkout
+       uses: actions/checkout@v2
+     - name: set up go
+       uses: actions/setup-go@v2
+       with:
+         go-version: ${{ env.go-version }}
+     - name: setup env
+       run: make
+     - name: fmt, tidy, lint
+       run: |
+         make genproto
+         make test-tidy
+         make test-fmt
+         make lint
+     - name: unit tests (except app test)
+       run: make test-no-app-test
+     - name: app test
+       run: make test-only-app-test
 
-  # run system tests as independent jobs so they can run in parallel
+  # run system tests second iff unit tests pass. run as independent jobs so they can run in parallel
   systemtest-latenodes:
-    needs: test
-    # only run this once
+    # only run on push, not on pull_request
+    if: github.event == 'push'
+    needs: unittests
     runs-on: ubuntu-latest
     steps:
-    - name: checkout
-      uses: actions/checkout@v2
-    - name: run late nodes system test
-      run: make dockertest-late-nodes
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: run late nodes system test
+        run: make dockertest-late-nodes
   systemtest-blocks-add-node:
-    needs: test
+    # only run on push, not on pull_request
+    needs: unittests
     runs-on: ubuntu-latest
     steps:
-    - name: checkout
-      uses: actions/checkout@v2
-    - name: run blocks add node test
-      run: make dockertest-blocks-add-node
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: run blocks add node test
+        run: make dockertest-blocks-add-node
   systemtest-hare-mining:
-    needs: test
+    # only run on push, not on pull_request
+    needs: unittests
     runs-on: ubuntu-latest
     steps:
-    - name: checkout
-      uses: actions/checkout@v2
-    - name: run hare+mining system tests
-      run: make dockertest-hare-mining
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: run hare+mining system tests
+        run: make dockertest-hare-mining
   systemtest-sync-blocks:
-    needs: test
+    # only run on push, not on pull_request
+    needs: unittests
     runs-on: ubuntu-latest
     steps:
-    - name: checkout
-      uses: actions/checkout@v2
-    - name: run sync+blocks remove node test
-      run: make dockertest-sync-blocks-remove-node
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: run sync+blocks remove node test
+        run: make dockertest-sync-blocks-remove-node
   systemtest-genesis-p2p:
-    needs: test
+    # only run on push, not on pull_request
+    needs: unittests
     runs-on: ubuntu-latest
     steps:
-    - name: checkout
-      uses: actions/checkout@v2
-    - name: run genesis+p2p system tests
-      run: make dockertest-genesis-voting-p2p
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: run genesis+p2p system tests
+        run: make dockertest-genesis-voting-p2p
