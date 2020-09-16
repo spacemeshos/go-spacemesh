@@ -336,7 +336,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 		bl.LayerIndex.GetEpoch(),
 		bl.MinerID(),
 		log.Int("tx_count", len(bl.TxIDs)),
-		bl.BaseBlock.Field(),
+		log.String("base_block", bl.BaseBlock.String()),
 		log.Int("against_count", len(bl.AgainstDiff)),
 		log.Int("neutral_count", len(bl.NeutralDiff)),
 		log.Int("support_count", len(bl.ForDiff)),

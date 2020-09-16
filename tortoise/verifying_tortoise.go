@@ -79,6 +79,7 @@ func newTurtle(bdp blockDataProvider, hdist, avgLayerSize int) *turtle {
 
 func (t *turtle) init(genesisLayer *types.Layer) {
 	// Mark the genesis layer as “good”
+	t.logger.With().Debug("Initializing genesis layer for verifying tortoise.", genesisLayer.Index(), genesisLayer.Hash().Field("hash"))
 	for i, blk := range genesisLayer.Blocks() {
 		id := blk.ID()
 		t.BlocksToBlocks = append(t.BlocksToBlocks, opinion{
@@ -426,6 +427,7 @@ markingLoop:
 	for _, b := range newlyr.Blocks() {
 		// (1) the base block is marked as good.
 		if _, good := t.GoodBlocksIndex[b.BaseBlock]; !good {
+			t.logger.Debug("not adding %v to good blocks because baseblock %v is not good", b.ID(), b.BaseBlock)
 			continue markingLoop
 		}
 
@@ -442,9 +444,11 @@ markingLoop:
 				panic(fmt.Sprint("err , ", err))
 			}
 			if exblk.LayerIndex < baseBlock.LayerIndex {
+				t.logger.Debug("not adding %v to good blocks because it points to block %v in old layer %v baseblock_lyr:%v", b.ID(), b.ForDiff[exfor], exblk.LayerIndex, baseBlock.LayerIndex)
 				continue markingLoop
 			}
 			if v, err := t.singleInputVectorFromDB(exblk.LayerIndex, exblk.ID()); err != nil || v != support {
+				t.logger.Debug("not adding %v to good blocks because it votes different from out input on %v, err:%v, blockvote:%v, ourvote: %v ", b.ID(), b.ForDiff[exfor], err, "for", v)
 				continue markingLoop
 			}
 		}
@@ -455,9 +459,11 @@ markingLoop:
 				panic(fmt.Sprint("err , ", err))
 			}
 			if exblk.LayerIndex < baseBlock.LayerIndex {
+				t.logger.Debug("not adding %v to good blocks because it points to block %v in old layer %v baseblock_lyr:%v", b.ID(), b.ForDiff[exag], exblk.LayerIndex, baseBlock.LayerIndex)
 				continue markingLoop
 			}
 			if v, err := t.singleInputVectorFromDB(exblk.LayerIndex, exblk.ID()); err != nil || v != against {
+				t.logger.Debug("not adding %v to good blocks because it votes different from out input on %v, err:%v, blockvote:%v, ourvote: %v ", b.ID(), b.ForDiff[exag], err, "against", v)
 				continue markingLoop
 			}
 		}
@@ -468,9 +474,11 @@ markingLoop:
 				panic(fmt.Sprint("err , ", err))
 			}
 			if exblk.LayerIndex < baseBlock.LayerIndex {
+				t.logger.Debug("not adding %v to good blocks because it points to block %v in old layer %v baseblock_lyr:%v", b.ID(), b.ForDiff[exneu], exblk.LayerIndex, baseBlock.LayerIndex)
 				continue markingLoop
 			}
 			if v, err := t.singleInputVectorFromDB(exblk.LayerIndex, exblk.ID()); err != nil || v != abstain {
+				t.logger.Debug("not adding %v to good blocks because it votes different from out input on %v, err:%v, blockvote:%v, ourvote: %v ", b.ID(), b.ForDiff[exneu], err, "neutral", v)
 				continue markingLoop
 			}
 		}
@@ -559,8 +567,8 @@ loop:
 		}
 
 		//Declare the vote vector “verified” up to position k.
-		t.logger.Info("Verified layer %v", i)
 		t.Verified = i
+		t.logger.Info("Verified layer %v", i)
 
 	}
 
