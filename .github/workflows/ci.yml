@@ -7,6 +7,7 @@ env:
   CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
   CLUSTER_ZONE: ${{ secrets.CLUSTER_ZONE }}
   ES_PASSWD: ${{ secrets.ES_PASSWD }}
+  GITHUB_BRANCH: ${{ github.ref }}
 
 # Trigger the workflow on all pull requests, and on push to specific branches
 on:
@@ -43,7 +44,7 @@ jobs:
   # run system tests second iff unit tests pass. run as independent jobs so they can run in parallel
   systemtest-latenodes:
     # only run on push, not on pull_request
-    if: github.event == 'push'
+#    if: github.event == 'push'
     needs: unittests
     runs-on: ubuntu-latest
     steps:
