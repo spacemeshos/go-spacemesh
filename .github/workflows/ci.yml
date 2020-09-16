@@ -53,6 +53,7 @@ jobs:
         run: make dockertest-late-nodes
   systemtest-blocks-add-node:
     # only run on push, not on pull_request
+    if: github.event == 'push'
     needs: unittests
     runs-on: ubuntu-latest
     steps:
@@ -62,6 +63,7 @@ jobs:
         run: make dockertest-blocks-add-node
   systemtest-hare-mining:
     # only run on push, not on pull_request
+    if: github.event == 'push'
     needs: unittests
     runs-on: ubuntu-latest
     steps:
@@ -71,6 +73,7 @@ jobs:
         run: make dockertest-hare-mining
   systemtest-sync-blocks:
     # only run on push, not on pull_request
+    if: github.event == 'push'
     needs: unittests
     runs-on: ubuntu-latest
     steps:
@@ -80,6 +83,7 @@ jobs:
         run: make dockertest-sync-blocks-remove-node
   systemtest-genesis-p2p:
     # only run on push, not on pull_request
+    if: github.event == 'push'
     needs: unittests
     runs-on: ubuntu-latest
     steps:
