@@ -315,7 +315,8 @@ func TestUDPNet_Cache(t *testing.T) {
 
 func TestUDPNet_Cache2(t *testing.T) {
 	// This test fails by panic before latest fix to udp.go. it crashed the testnet.
-	// instead
+	// instead we now give up on "Closing" from within the "connection" when there's an error since
+	// we provide the errors from the level above anyway, so closing should be preformed there.
 	localnode, _ := node.NewNodeIdentity()
 	n, err := NewUDPNet(config.DefaultConfig(), localnode, log.NewDefault(t.Name()))
 	require.NoError(t, err)
@@ -345,10 +346,13 @@ func TestUDPNet_Cache2(t *testing.T) {
 		return ucm
 	}
 
-	createAndRunConn := func() {
+	createAndRunConn := func(fs ...func(mock *udpConnMock)) {
 		pk := p2pcrypto.NewRandomPubkey()
 		ns := NewSessionMock(pk)
 		conn := newCon()
+		for _, f := range fs {
+			f(conn)
+		}
 		addr := testUDPAddr()
 		_, ok := n.incomingConn[addr.String()]
 		for ok {
@@ -372,4 +376,24 @@ func TestUDPNet_Cache2(t *testing.T) {
 
 	// Make sure one connection was evicted and replaced
 	require.Len(t, n.incomingConn, maxUDPConn)
+
+	createAndRunConn() // This gets into the closing code path and panics if Close is called twice
+
+	closed := 0
+	createAndRunConn(func(mock *udpConnMock) {
+		mock.CreatedFunc = func() time.Time {
+			return time.Now().Add(-maxUDPLife * 2)
+		}
+
+		require.True(t, time.Since(mock.Created()) > maxUDPLife)
+
+		mock.CloseFunc = func() error {
+			closed++
+			return nil
+		}
+	})
+
+	createAndRunConn() // this gets into the closing code path of older than 24 hours.
+	require.Equal(t, closed, 1)
+
 }
