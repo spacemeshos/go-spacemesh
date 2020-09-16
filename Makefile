@@ -1,4 +1,5 @@
 BINARY := go-spacemesh
+INTERACTIVE := $(shell [ -t 0 ] && echo 1)
 VERSION = $(shell cat version.txt)
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
@@ -27,6 +28,17 @@ ifeq ($(BRANCH),develop)
         DOCKER_IMAGE_REPO := go-spacemesh
 else
         DOCKER_IMAGE_REPO := go-spacemesh-dev
+endif
+
+# This prevents "the input device is not a TTY" error from docker in CI
+DOCKERRUNARGS := --rm -e ES_PASSWD="$(ES_PASSWD)" \
+	-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+	-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+	go-spacemesh-python:$(BRANCH)
+ifdef INTERACTIVE
+	DOCKERRUN := docker run -it $(DOCKERRUNARGS)
+else
+	DOCKERRUN := docker run -i $(DOCKERRUNARGS)
 endif
 
 all: install build
@@ -214,10 +226,7 @@ dockerrun-p2p:
 ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
-	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
-		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
-		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-i go-spacemesh-python:$(BRANCH) pytest -s -v p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml
 .PHONY: dockerrun-p2p
 
 dockertest-p2p: dockerbuild-test dockerrun-p2p
@@ -228,10 +237,7 @@ dockerrun-mining:
 ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
-	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
-		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
-		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-i go-spacemesh-python:$(BRANCH) pytest -s -v test_bs.py --tc-file=config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v test_bs.py --tc-file=config.yaml --tc-format=yaml
 .PHONY: dockerrun-mining
 
 dockertest-mining: dockerbuild-test dockerrun-mining
@@ -242,10 +248,7 @@ dockerrun-hare:
 ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
-	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
-		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
-		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-i go-spacemesh-python:$(BRANCH) pytest -s -v hare/test_hare.py::test_hare_sanity --tc-file=hare/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v hare/test_hare.py::test_hare_sanity --tc-file=hare/config.yaml --tc-format=yaml
 .PHONY: dockerrun-hare
 
 
@@ -258,10 +261,7 @@ ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
 
-	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
-		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
-		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-i go-spacemesh-python:$(BRANCH) pytest -s -v sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-sync
 
@@ -275,10 +275,7 @@ ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
 
-	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
-		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
-		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-i go-spacemesh-python:$(BRANCH) pytest -s -v late_nodes/test_delayed.py --tc-file=late_nodes/delayed_config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v late_nodes/test_delayed.py --tc-file=late_nodes/delayed_config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-late-nodes
 
@@ -291,10 +288,7 @@ ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
 
-	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
-		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
-		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-i go-spacemesh-python:$(BRANCH) pytest -s -v sync/genesis/test_genesis_voting.py --tc-file=sync/genesis/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v sync/genesis/test_genesis_voting.py --tc-file=sync/genesis/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-genesis-voting
 
@@ -307,10 +301,7 @@ ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
 
-	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
-		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
-		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-i go-spacemesh-python:$(BRANCH) pytest -s -v block_atx/add_node/test_blocks_add_node.py --tc-file=block_atx/add_node/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v block_atx/add_node/test_blocks_add_node.py --tc-file=block_atx/add_node/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-blocks-add-node
 
@@ -323,10 +314,7 @@ ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
 
-	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
-		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
-		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-i go-spacemesh-python:$(BRANCH) pytest -s -v block_atx/remove_node/test_blocks_remove_node.py --tc-file=block_atx/remove_node/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v block_atx/remove_node/test_blocks_remove_node.py --tc-file=block_atx/remove_node/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-blocks-remove-node
 
@@ -339,10 +327,7 @@ ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
 
-	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
-		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
-		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-i go-spacemesh-python:$(BRANCH) pytest -s -v stress/blocks_stress/test_stress_blocks.py --tc-file=stress/blocks_stress/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v stress/blocks_stress/test_stress_blocks.py --tc-file=stress/blocks_stress/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-blocks-stress
 
@@ -355,10 +340,7 @@ ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
 
-	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
-		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
-		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-i go-spacemesh-python:$(BRANCH) pytest -s -v stress/grpc_stress/test_stress_grpc.py --tc-file=stress/grpc_stress/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v stress/grpc_stress/test_stress_grpc.py --tc-file=stress/grpc_stress/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-grpc-stress
 
@@ -371,10 +353,7 @@ ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
 
-	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
-		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
-		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-i go-spacemesh-python:$(BRANCH) pytest -s -v stress/sync_stress/test_sync.py --tc-file=stress/sync_stress/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v stress/sync_stress/test_sync.py --tc-file=stress/sync_stress/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-sync-stress
 
@@ -387,10 +366,7 @@ ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
 
-	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
-		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
-		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-i go-spacemesh-python:$(BRANCH) pytest -s -v stress/tx_stress/test_stress_txs.py --tc-file=stress/tx_stress/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v stress/tx_stress/test_stress_txs.py --tc-file=stress/tx_stress/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-tx-stress
 
