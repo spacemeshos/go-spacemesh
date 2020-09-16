@@ -164,7 +164,7 @@ func (p *MessageServer) handleRequestMessage(msg Message, data *service.DataMsgW
 
 	foo, okFoo := p.msgRequestHandlers[MessageType(data.MsgType)]
 	if !okFoo {
-		p.Error("handler missing for request %v payload %v", data.ReqID)
+		p.With().Error("handler missing for request", log.Uint64("request_id", data.ReqID), log.String("protocol", p.name), log.Uint32("msg_type", data.MsgType))
 		return
 	}
 

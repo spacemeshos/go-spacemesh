@@ -32,7 +32,6 @@ type MsgConnection struct {
 	deadliner   deadliner
 	messages    chan []byte
 	stopSending chan struct{}
-	close       io.Closer
 
 	msgSizeLimit int
 }
@@ -50,7 +49,6 @@ func newMsgConnection(conn readWriteCloseAddresser, netw networker,
 		remoteAddr:   conn.RemoteAddr(),
 		r:            conn,
 		w:            conn,
-		close:        conn,
 		deadline:     deadline,
 		deadliner:    conn,
 		networker:    netw,
@@ -193,11 +191,7 @@ func (c *MsgConnection) closeUnlocked() error {
 	if c.closed {
 		return ErrAlreadyClosed
 	}
-	err := c.close.Close()
 	c.closed = true
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
