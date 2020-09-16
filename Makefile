@@ -10,14 +10,15 @@ BIN_DIR_WIN = $(CURR_DIR_WIN)/build
 export GO111MODULE = on
 
 # Read branch from CI env, or else read it from git if running make manually
+# Also allows BRANCH to be manually set
 ifeq ($(TRAVIS_PULL_REQUEST),"false")
-	BRANCH := $(TRAVIS_BRANCH)
+	BRANCH ?= $(TRAVIS_BRANCH)
 else ifdef $(TRAVIS_PULL_REQUEST_BRANCH)
-	BRANCH := $(TRAVIS_PULL_REQUEST_BRANCH)
+	BRANCH ?= $(TRAVIS_PULL_REQUEST_BRANCH)
 else ifdef $(GITHUB_BRANCH)
-	BRANCH := $(GITHUB_BRANCH)
+	BRANCH ?= $(GITHUB_BRANCH)
 else
-	BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
+	BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 endif
 
 # Setup the -ldflags option to pass vars defined here to app vars
