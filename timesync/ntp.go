@@ -40,7 +40,6 @@ var (
 		"time4.google.com",
 		"time.asia.apple.com",
 		"time.americas.apple.com",
-		"pool.ntp.org",
 
 		// china-specific servers
 		"0.cn.pool.ntp.org",
