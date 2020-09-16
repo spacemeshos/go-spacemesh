@@ -20,7 +20,7 @@ const (
 	NtpOffset = 2208988800
 	// DefaultNtpPort is the ntp protocol port
 	DefaultNtpPort = "123"
-	// MaxRequestTries is the number of tries we try to query ntp before we give up when having errors.
+	// MaxRequestTries is the number of times we try to query ntp before we give up when encountering errors.
 	MaxRequestTries = 3
 	// RequestTriesInterval is the interval to wait between tries to ask ntp for the time
 	RequestTriesInterval = time.Second * 5
@@ -201,7 +201,7 @@ func ntpTimeDrift() (time.Duration, error) {
 // CheckSystemClockDrift is comparing our clock to the collected ntp data
 // return the drift and an error when drift reading failed or exceeds our preset MaxAllowedDrift
 func CheckSystemClockDrift() (time.Duration, error) {
-	// Read average drift form ntpTimeDrift
+	// Read average drift from ntpTimeDrift
 	tries := 1
 	drift, err := ntpTimeDrift()
 	for err != nil && tries < MaxRequestTries {
@@ -216,7 +216,7 @@ func CheckSystemClockDrift() (time.Duration, error) {
 
 	// Check if drift exceeds our max allowed drift
 	if drift < -config.TimeConfigValues.MaxAllowedDrift || drift > config.TimeConfigValues.MaxAllowedDrift {
-		return drift, fmt.Errorf("System clock is %s away from NTP servers. please synchronize your OS ", drift)
+		return drift, fmt.Errorf("system clock is %s away from NTP servers, please synchronize your OS time", drift)
 	}
 
 	return drift, nil
