@@ -24,20 +24,21 @@ type layerMutex struct {
 // DB represents a mesh database instance
 type DB struct {
 	log.Log
-	blockCache         blockCache
-	layers             database.Database
-	blocks             database.Database
-	transactions       database.Database
-	contextualValidity database.Database
-	general            database.Database
-	unappliedTxs       database.Database
-	inputVector        database.Database
-	unappliedTxsMutex  sync.Mutex
-	blockMutex         sync.RWMutex
-	orphanBlocks       map[types.LayerID]map[types.BlockID]struct{}
-	layerMutex         map[types.LayerID]*layerMutex
-	lhMutex            sync.Mutex
-	exit               chan struct{}
+	blockCache            blockCache
+	layers                database.Database
+	blocks                database.Database
+	transactions          database.Database
+	contextualValidity    database.Database
+	general               database.Database
+	unappliedTxs          database.Database
+	inputVector           database.Database
+	unappliedTxsMutex     sync.Mutex
+	blockMutex            sync.RWMutex
+	orphanBlocks          map[types.LayerID]map[types.BlockID]struct{}
+	layerMutex            map[types.LayerID]*layerMutex
+	lhMutex               sync.Mutex
+	InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
+	exit                  chan struct{}
 }
 
 // NewPersistentMeshDB creates an instance of a mesh database
@@ -298,9 +299,7 @@ func (m *DB) SaveLayerInputVector(lyrid types.LayerID, vector []types.BlockID) e
 	return m.inputVector.Put(lyrid.Bytes(), i)
 }
 
-// GetLayerInputVector gets the input vote vector for a layer (hare results)
-func (m *DB) GetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
-
+func (m *DB) defaulGetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
 	by, err := m.inputVector.Get(lyrid.Bytes())
 	if err != nil {
 		return nil, err
@@ -310,8 +309,15 @@ func (m *DB) GetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return v, nil
+}
+
+// GetLayerInputVector gets the input vote vector for a layer (hare results)
+func (m *DB) GetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
+	if m.InputVectorBackupFunc != nil {
+		return m.InputVectorBackupFunc(lyrid)
+	}
+	return m.defaulGetLayerInputVector(lyrid)
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {

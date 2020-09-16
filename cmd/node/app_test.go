@@ -96,7 +96,6 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	const numberOfEpochs = 5 // first 2 epochs are genesis
 	//addr := address.BytesToAddress([]byte{0x01})
 	cfg := getTestDefaultConfig()
-	cfg.LOGGING.TrtlLoggerLevel = "debug"
 	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
 	path := "../tmp/test/state_" + time.Now().String()
 

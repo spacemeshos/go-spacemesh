@@ -147,21 +147,15 @@ func (t *turtle) singleInputVectorFromDB(lyrid types.LayerID, blockid types.Bloc
 		return abstain, err
 	}
 
-	m := make(map[types.BlockID]vec, len(input))
-	wasIncluded := false
+	t.logger.Debug("layer input vector returned from db for lyr %v - %v. querying for %v", lyrid, input, blockid)
 
 	for _, bl := range input {
-		m[bl] = support
 		if bl == blockid {
-			wasIncluded = true
+			return support, nil
 		}
 	}
 
-	if !wasIncluded {
-		return against, nil
-	}
-
-	return support, nil
+	return against, nil
 }
 
 func (t *turtle) inputVectorForLayer(lyrBlocks []types.BlockID, inputvector *[]types.BlockID) map[types.BlockID]vec {
@@ -463,7 +457,7 @@ markingLoop:
 				continue markingLoop
 			}
 			if v, err := t.singleInputVectorFromDB(exblk.LayerIndex, exblk.ID()); err != nil || v != against {
-				t.logger.Debug("not adding %v to good blocks because it votes different from out input on %v, err:%v, blockvote:%v, ourvote: %v ", b.ID(), b.ForDiff[exag], err, "against", v)
+				t.logger.Debug("not adding %v to good blocks because it votes different from out input on %v, err:%v, blockvote:%v, ourvote: %v ", b.ID(), b.AgainstDiff[exag], err, "against", v)
 				continue markingLoop
 			}
 		}
@@ -478,7 +472,7 @@ markingLoop:
 				continue markingLoop
 			}
 			if v, err := t.singleInputVectorFromDB(exblk.LayerIndex, exblk.ID()); err != nil || v != abstain {
-				t.logger.Debug("not adding %v to good blocks because it votes different from out input on %v, err:%v, blockvote:%v, ourvote: %v ", b.ID(), b.ForDiff[exneu], err, "neutral", v)
+				t.logger.Debug("not adding %v to good blocks because it votes different from out input on %v, err:%v, blockvote:%v, ourvote: %v ", b.ID(), b.NeutralDiff[exneu], err, "neutral", v)
 				continue markingLoop
 			}
 		}
@@ -528,7 +522,7 @@ loop:
 
 				// blocks older than the voted block are not counted
 				if vopinion.LayerID <= i {
-					t.logger.Debug("%v is not newerf than %v", vopinion.BlockID, blk)
+					t.logger.Debug("%v is not newer than %v", vopinion.BlockID, blk)
 					continue
 				}
 

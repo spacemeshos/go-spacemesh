@@ -5,9 +5,7 @@ import (
 	"bytes"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 	"sort"
-	"time"
 )
 
 type blockProvider interface {
@@ -17,52 +15,23 @@ type blockProvider interface {
 
 // SuperHare is a method to provide fast hare results without consensus based on received blocks from gossip
 type SuperHare struct {
-	ticker    timesync.LayerTimer
 	blocks    blockProvider
-	delta     int
 	closeChan chan struct{}
 }
 
 // New creates a new instance of SuperHare
-func New(blocks blockProvider, ticker timesync.LayerTimer, wakeupDelta int) *SuperHare {
-	return &SuperHare{ticker, blocks, wakeupDelta, make(chan struct{}, 1)}
+func New(blocksDb blockProvider) *SuperHare {
+	return &SuperHare{blocksDb, make(chan struct{}, 1)}
 }
 
 // Start is a stub to support service API
 func (h *SuperHare) Start() error {
-	go h.dbSaveRoutine()
 	return nil
 }
 
 // Close is a stup to support service API
 func (h *SuperHare) Close() {
 	close(h.closeChan)
-}
-
-func (h *SuperHare) dbSaveRoutine() {
-	for {
-		select {
-		case l := <-h.ticker:
-			if l < types.GetEffectiveGenesis() {
-				continue
-			}
-
-			<-time.After(time.Second * time.Duration(h.delta-1))
-			// this cover ups the fact that hare doesn't run in tests
-			//  but tortoise relays on hare finishing
-			blks, err := h.blocks.LayerBlockIds(l)
-			if err != nil {
-				log.Error("WTF SUPERHARE?? %v err: %v", l, err)
-				continue
-			}
-			if err := h.blocks.SaveLayerInputVector(l, blks); err != nil {
-				log.Error("WTF SUPERHARE?? %v err: %v", l, err)
-				continue
-			}
-		case <-h.closeChan:
-			return
-		}
-	}
 }
 
 // GetResult is the implementation for receiving consensus process result
