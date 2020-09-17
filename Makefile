@@ -149,18 +149,18 @@ test-only-app-test: genproto
 
 test-tidy:
 	# Working directory must be clean, or this test would be destructive
-	git diff --quiet || (echo "\033[0;31mWorking directory not clean!\033[0m" && git diff && exit 1)
+	git diff --quiet || (echo "\033[0;31mWorking directory not clean!\033[0m" && git --no-pager diff && exit 1)
 	# We expect `go mod tidy` not to change anything, the test should fail otherwise
 	make tidy
-	git diff --exit-code || (git diff && git checkout . && exit 1)
+	git diff --exit-code || (git --no-pager diff && git checkout . && exit 1)
 .PHONY: test-tidy
 
 
 test-fmt:
-	git diff --quiet || (echo "\033[0;31mWorking directory not clean!\033[0m" && git diff && exit 1)
+	git diff --quiet || (echo "\033[0;31mWorking directory not clean!\033[0m" && git --no-pager diff && exit 1)
 	# We expect `go fmt` not to change anything, the test should fail otherwise
 	go fmt ./...
-	git diff --exit-code || (git diff && git checkout . && exit 1)
+	git diff --exit-code || (git --no-pager diff && git checkout . && exit 1)
 .PHONY: test-fmt
 
 lint:
@@ -179,7 +179,7 @@ cover:
 
 
 tag-and-build:
-	@git diff --quiet || (echo "working directory must be clean"; exit 2)
+	git diff --quiet || (echo "\033[0;31mWorking directory not clean!\033[0m" && git --no-pager diff && exit 1)
 	echo ${VERSION} > version.txt
 	git commit -m "bump version to ${VERSION}" version.txt
 	git tag ${VERSION}
