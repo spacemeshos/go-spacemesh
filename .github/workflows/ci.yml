@@ -7,7 +7,6 @@ env:
   CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
   CLUSTER_ZONE: ${{ secrets.CLUSTER_ZONE }}
   ES_PASSWD: ${{ secrets.ES_PASSWD }}
-  GITHUB_BRANCH: ${{ github.ref }}
 
 # Trigger the workflow on all pull requests, and on push to specific branches
 on:

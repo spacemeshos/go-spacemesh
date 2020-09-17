@@ -15,8 +15,6 @@ ifeq ($(TRAVIS_PULL_REQUEST),"false")
 	BRANCH ?= $(TRAVIS_BRANCH)
 else ifdef $(TRAVIS_PULL_REQUEST_BRANCH)
 	BRANCH ?= $(TRAVIS_PULL_REQUEST_BRANCH)
-else ifdef $(GITHUB_BRANCH)
-	BRANCH ?= $(GITHUB_BRANCH)
 else
 	BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 endif
