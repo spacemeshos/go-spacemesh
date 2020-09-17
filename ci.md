@@ -41,7 +41,7 @@ It's not necessary to run any additional tests when bors merges code to `develop
 Mimicking the Travis CI workflow locally is [extraordinarily difficult](https://stackoverflow.com/questions/21053657/how-to-run-travis-ci-locally/49019950#49019950). This is one reason we are migrating to GA instead. Fortunately, there is a robust tool called [`act`](https://github.com/nektos/act) that mimics the GA environment locally. It can be installed using Homebrew by running:
 
 ```
-brew install nektos/tap/act
+> brew install nektos/tap/act
 ```
 
 Note that the default `act` [test runners](https://github.com/nektos/act/blob/master/README.md#runners) (docker images) are _intentionally incomplete._ We recommend using the full test runner to mimic the cloud environment as closely as possible. Note that this image is > 18GB. You can do so by adding the `-P` flag to `act` like such:
