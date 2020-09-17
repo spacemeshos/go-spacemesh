@@ -44,9 +44,10 @@ Mimicking the Travis CI workflow locally is [extraordinarily difficult](https://
 > brew install nektos/tap/act
 ```
 
-Note that the default `act` [test runners](https://github.com/nektos/act/blob/master/README.md#runners) (docker images) are _intentionally incomplete._ We recommend using the full test runner to mimic the cloud environment as closely as possible. Note that this image is > 18GB. You can do so by adding the `-P` flag to `act` like such:
+Note that the default `act` [test runners](https://github.com/nektos/act/blob/master/README.md#runners) (docker images) are _intentionally incomplete._ We recommend using the full test runner to mimic the cloud environment as closely as possible. Note that this image is > 18GB. You can pull the image and pass it to `act` by adding the `-P` flag like such:
 
 ```
+> docker pull nektos/act-environments-ubuntu:18.04
 > act -P nektos/act-environments-ubuntu:18.04 pull_request
 ```
 
