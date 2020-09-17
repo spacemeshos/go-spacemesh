@@ -18,24 +18,37 @@ BLUE   := $(shell echo "\e[1;34m")
 YELLOW := $(shell echo "\e[33m")
 WHITE  := $(shell echo "\e[1;37m")
 RESET  := $(shell echo "\e[0m")
-HELP_FUN = \
-	   %help; \
-	   while(<>) { push @{$$help{$$2 // 'options'}}, [$$1, $$3] if /^([a-zA-Z0-9\-]+)\s*:.*\#\#(?:@([a-zA-Z\-]+))?\s(.*)$$/ }; \
-	   print " ___________________________________________________________________\n"; \
-	   print "|  _______________________________________________________________  |\n"; \
-	   print "| |                                                               | |\n"; \
-	   print "| | ${WHITE}ⴵ spacemesh${RESET} ${BLUE}// makefile ${RESET}                                      | |\n"; \
-	   print "| | Usage: make [target]                                          | |\n"; \
-	   print "| |_______________________________________________________________| |\n"; \
-	   print "|___________________________________________________________________|\n\n"; \
-	   for (sort keys %help) { \
-		   print "${BLUE}// $$_:${RESET}\n"; \
-		   for (@{$$help{$$_}}) { \
-			   $$sep = " " x (35 - length $$_->[0]); \
-			   print "   ${YELLOW}$$_->[0]${RESET}$$sep${GREEN}$$_->[1]${RESET}\n"; \
-		   }; \
-		   print "\n"; \
+define HELP_FUN
+	   %help;
+	   while(<>) { push @{$$help{$$2 // 'options'}}, [$$1, $$3] if /^([a-zA-Z0-9\-]+)\s*:.*\#\#(?:@([a-zA-Z\-]+))?\s(.*)$$/ };
+	   print <<"END";
+ ___________________________________________________________________
+|  _______________________________________________________________  |
+| |                                                               | |
+| |     \\\\                                                        | |
+| |      \\\\_                                                      | |
+| |      ( _\\                                                     | |
+| |      / \\__                                                    | |
+| |     / _/`"`                                                   | |
+| |    {\\  )_                                                     | |
+| |    `"""`                                                      | |
+| | ${WHITE}ⴵ spacemesh${RESET} ${BLUE}// makefile ${RESET}                                      | |
+| | Usage: make [target]                                          | |
+| |_______________________________________________________________| |
+|___________________________________________________________________|
+
+END
+	   for (sort keys %help) {
+		   print "${BLUE}// $$_:${RESET}\n";
+		   for (@{$$help{$$_}}) {
+			   $$sep = " " x (35 - length $$_->[0]);
+			   print "   ${YELLOW}$$_->[0]${RESET}$$sep${GREEN}$$_->[1]${RESET}\n";
+		   };
+		   print "\n";
 	   }
+endef
+export HELP_FUN
+
 endif
 
 BRANCH := $(shell bash -c 'if [ "$$TRAVIS_PULL_REQUEST" == "false" ]; then echo $$TRAVIS_BRANCH; else echo $$TRAVIS_PULL_REQUEST_BRANCH; fi')
@@ -64,7 +77,7 @@ all: install build ##@build Install and build everything
 
 ifneq ($(OS),Windows_NT) 
 help:
-	@perl -e '$(HELP_FUN)' $(MAKEFILE_LIST)
+	@perl -e "$$HELP_FUN" $(MAKEFILE_LIST)
 .PHONY: help
 endif
 
