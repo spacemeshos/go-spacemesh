@@ -12,8 +12,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spf13/cobra"
@@ -81,7 +81,7 @@ func (app *syncApp) Cleanup() {
 
 func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	// start p2p services
-	lg := log.New("sync_test", "", "")
+	lg := log.NewDefault("sync_test")
 	lg.Info("------------ Start sync test -----------")
 	lg.Info("data folder: ", app.Config.DataDir())
 	lg.Info("storage path: ", bucket)
@@ -94,7 +94,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 
 	path := app.Config.DataDir() + version
 
-	lg.Info("local db path: ", path)
+	lg.Info(" anton local db path: %v layers per epoch", path)
 
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, lg.WithName("p2p"), app.Config.DataDir())
 
@@ -112,6 +112,8 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		ValidationDelta: 30 * time.Second,
 		LayersPerEpoch:  uint16(app.Config.LayersPerEpoch),
 	}
+	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
+	lg.Info("local db path: %v layers per epoch %v", path, app.Config.LayersPerEpoch)
 
 	if remote {
 		if err := getData(app.Config.DataDir(), version, lg); err != nil {
@@ -138,8 +140,8 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	txpool := miner.NewTxMemPool()
-	atxpool := miner.NewAtxMemPool()
+	txpool := state.NewTxMemPool()
+	atxpool := activation.NewAtxMemPool()
 
 	sync := sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, types.LayerID(expectedLayers))
 	app.sync = sync
@@ -147,11 +149,15 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		log.Panic("error starting p2p err=%v", err)
 	}
 
-	i := 0
+	i := conf.LayersPerEpoch * 2
 	for ; ; i++ {
+		log.Info("getting layer %v", i)
 		if lyr, err2 := sync.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
-			lg.Info("loaded %v layers from disk %v", i-1, err2)
-			break
+			l := types.LayerID(i)
+			if !l.GetEpoch().IsGenesis() {
+				lg.Info("loaded %v layers from disk %v", i-1, err2)
+				break
+			}
 		} else {
 			lg.Info("loaded layer %v from disk ", i)
 			sync.ValidateLayer(lyr)

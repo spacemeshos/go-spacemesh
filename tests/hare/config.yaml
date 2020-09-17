@@ -28,6 +28,7 @@ bootstrap:
     hare-wakeup-delta: '5'
     layer-duration-sec: '80'
     executable-path: '/bin/go-hare'
+    layers-per-epoch: '3'
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-harness'
@@ -46,6 +47,7 @@ client:
     hare-round-duration-sec: '10'
     hare-wakeup-delta: '5'
     layer-duration-sec: '80'
+    layers-per-epoch: '3'
     executable-path: '/bin/go-hare'
 elastic:
   host: elastic.spacemesh.io
