@@ -74,7 +74,7 @@ func newBroker(networkService NetworkService, eValidator validator, stateQuerier
 		outbox:         make(map[instanceID]chan *Msg),
 		pending:        make(map[instanceID][]*Msg),
 		tasks:          make(chan func()),
-		latestLayer:    0,
+		latestLayer:    instanceID(types.GetEffectiveGenesis()),
 		minDeleted:     0,
 		limit:          limit,
 	}

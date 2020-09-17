@@ -18,7 +18,6 @@ type patternID uint32 // this hash does not include the layer id
 const ( // Threshold
 	window          = 10
 	globalThreshold = 0.6
-	genesis         = 0
 )
 
 var ( // correction vectors type
@@ -147,7 +146,7 @@ func (ni *ninjaTortoise) saveOpinion() error {
 		if !valid {
 			ni.logger.With().Warning("block is contextually invalid", b.id())
 		}
-		events.Publish(events.ValidBlock{ID: b.id().String(), Valid: valid})
+		events.ReportValidBlock(b.id(), valid)
 	}
 	return nil
 }
@@ -211,7 +210,7 @@ func (ni *ninjaTortoise) evictOutOfPbase() {
 func (ni *ninjaTortoise) processBlock(b *types.Block) {
 
 	ni.logger.Debug("process block: %s layer: %s  ", b.ID(), b.Layer())
-	if b.Layer() == genesis {
+	if b.Layer() == types.GetEffectiveGenesis() {
 		return
 	}
 
@@ -232,8 +231,8 @@ func (ni *ninjaTortoise) processBlock(b *types.Block) {
 	ni.TExplicit[b.ID()] = make(map[types.LayerID]votingPattern, ni.Hdist)
 
 	var layerID types.LayerID
-	if ni.Hdist > b.Layer() {
-		layerID = 0
+	if ni.Hdist+types.GetEffectiveGenesis() > b.Layer() {
+		layerID = types.GetEffectiveGenesis()
 	} else {
 		layerID = b.Layer() - ni.Hdist
 	}
@@ -444,7 +443,12 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 		for _, ex := range vp {
 			blocks, err := ni.db.LayerBlockIds(ex.Layer())
 			if err != nil {
-				ni.logger.Panic("could not retrieve layer block ids")
+				if ex.Layer() == 0 {
+					//todo: fix this so that zero votes are ok
+					log.Warning("block %v int layer %v voted on zero layer", blk.ID().String(), blk.Layer())
+					continue
+				}
+				ni.logger.Panic("could not retrieve layer block ids %v error %v", ex.Layer(), err)
 			}
 
 			// explicitly abstain
@@ -496,8 +500,7 @@ func (ni *ninjaTortoise) updatePatSupport(p votingPattern, bids []types.BlockID,
 	ni.TPatSupport[p][idx] = votingPattern{id: pid, LayerID: idx}
 }
 
-// todo not sure initTallyToBase is even needed
-// todo due to the fact that we treat layers under pbase as irreversible
+//todo not sure initTallyToBase is even needed due to the fact that we treat layers under pbase as irreversible
 func (ni *ninjaTortoise) initTallyToBase(base votingPattern, p votingPattern, windowStart types.LayerID) {
 	mp := make(map[blockIDLayerTuple]vec, len(ni.TTally[base]))
 	for b, v := range ni.TTally[base] {
@@ -524,7 +527,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 	defer ni.evictOutOfPbase()
 	ni.processBlocks(newlyr)
 
-	if newlyr.Index() == genesis {
+	if newlyr.Index() == types.GetEffectiveGenesis() {
 		ni.handleGenesis(newlyr)
 		return
 	}

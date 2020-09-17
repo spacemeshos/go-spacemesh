@@ -19,9 +19,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
-	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
@@ -29,12 +29,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/turbohare"
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"runtime/pprof"
 	"time"
 
@@ -80,6 +82,7 @@ const (
 	PoetListenerLogger   = "poetListener"
 	NipstBuilderLogger   = "nipstBuilder"
 	AtxBuilderLogger     = "atxBuilder"
+	GossipListener       = "gossipListener"
 )
 
 // Cmd is the cobra wrapper for the node, that allows adding parameters to it
@@ -95,6 +98,7 @@ var Cmd = &cobra.Command{
 			log.With().Error("Failed to initialize node.", log.Err(err))
 			return
 		}
+		// This blocks until the context is finished
 		app.Start(cmd, args)
 	},
 }
@@ -156,19 +160,22 @@ type SpacemeshApp struct {
 	blockListener     *sync.BlockListener
 	state             *state.TransactionProcessor
 	blockProducer     *miner.BlockBuilder
-	oracle            *oracle.MinerBlockOracle
+	oracle            *miner.Oracle
 	txProcessor       *state.TransactionProcessor
 	mesh              *mesh.Mesh
+	gossipListener    *service.Listener
 	clock             TickProvider
 	hare              HareService
 	atxBuilder        *activation.Builder
+	atxDb             *activation.DB
 	poetListener      *activation.PoetListener
 	edSgn             *signing.EdSigner
 	closers           []interface{ Close() }
 	log               log.Log
-	txPool            *miner.TxMempool
+	txPool            *state.TxMempool
 	loggers           map[string]*zap.AtomicLevel
 	term              chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
+	started           chan struct{} // this channel is closed once the app has finished starting
 }
 
 // LoadConfigFromFile tries to load configuration file if the config parameter was specified
@@ -210,10 +217,10 @@ func NewSpacemeshApp() *SpacemeshApp {
 		Config:  &defaultConfig,
 		loggers: make(map[string]*zap.AtomicLevel),
 		term:    make(chan struct{}),
+		started: make(chan struct{}),
 	}
 
 	return node
-
 }
 
 func (app *SpacemeshApp) introduction() {
@@ -272,19 +279,32 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 
 // setupLogging configured the app logging system.
 func (app *SpacemeshApp) setupLogging() {
-
 	if app.Config.TestMode {
 		log.JSONLog(true)
 	}
 
 	// app-level logging
-	log.InitSpacemeshLoggingSystem()
+	log.InitSpacemeshLoggingSystemWithHooks(func(entry zapcore.Entry) error {
+		// If we report anything less than this we'll end up in an infinite loop
+		if entry.Level >= zapcore.ErrorLevel {
+			events.ReportError(events.NodeError{
+				Msg:   entry.Message,
+				Trace: string(debug.Stack()),
+				Type:  int(entry.Level),
+			})
+		}
+		return nil
+	})
 
 	log.Info("%s", app.getAppInfo())
 
+	msg := "initializing event reporter"
 	if app.Config.PublishEventsURL != "" {
-		log.Info("pubsubing on %v", app.Config.PublishEventsURL)
-		events.InitializeEventPubsub(app.Config.PublishEventsURL)
+		msg += fmt.Sprintf(" with pubsub URL: %s", app.Config.PublishEventsURL)
+	}
+	log.Info(msg)
+	if err := events.InitializeEventReporter(app.Config.PublishEventsURL); err != nil {
+		log.Error("unable to initialize event reporter: %s", err)
 	}
 }
 
@@ -294,13 +314,11 @@ func (app *SpacemeshApp) getAppInfo() string {
 }
 
 // Cleanup stops all app services
-func (app *SpacemeshApp) Cleanup(cmd *cobra.Command, args []string) (err error) {
+func (app *SpacemeshApp) Cleanup(cmd *cobra.Command, args []string) {
 	log.Info("App Cleanup starting...")
 	app.stopServices()
 	// add any other Cleanup tasks here....
 	log.Info("App Cleanup completed\n\n")
-
-	return nil
 }
 
 func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) {
@@ -333,10 +351,6 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 	if err != nil {
 		log.Panic("cannot commit genesis state")
 	}
-	err = msh.AddBlock(mesh.GenesisBlock)
-	if err != nil {
-		log.Error("error adding genesis block %v", err)
-	}
 }
 
 func (app *SpacemeshApp) setupTestFeatures() {
@@ -352,8 +366,9 @@ func (weakCoinStub) GetResult() bool {
 	return true
 }
 
+// Wrap the top-level logger to add context info and set the level for a
+// specific module.
 func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
-	log.Level()
 	lvl := zap.NewAtomicLevel()
 	var err error
 
@@ -414,11 +429,12 @@ func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
 		log.Error("cannot parse logging for %v error %v", name, err)
 		lvl.SetLevel(log.Level())
 	}
+
 	app.loggers[name] = &lvl
 	return logger.SetLevel(&lvl).WithName(name)
 }
 
-// SetLogLevel sets the specific log level for the specified logger name, Log level can be WARN, INFO, DEBUG
+// SetLogLevel updates the log level of an existing logger
 func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
 	if lvl, ok := app.loggers[name]; ok {
 		err := lvl.UnmarshalText([]byte(loglevel))
@@ -447,7 +463,10 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 
 	name := nodeID.ShortString()
 
-	lg := log.NewDefault(name).WithFields(nodeID)
+	// This base logger must be debug level so that other, derived loggers are not a lower level.
+	lg := log.NewWithLevel(name, zap.NewAtomicLevelAt(zapcore.DebugLevel)).WithFields(nodeID)
+
+	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
 
 	app.log = app.addLogger(AppLogger, lg)
 
@@ -493,8 +512,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		return err
 	}
 
-	app.txPool = miner.NewTxMemPool()
-	atxpool := miner.NewAtxMemPool()
+	app.txPool = state.NewTxMemPool()
 	meshAndPoolProjector := pendingtxs.NewMeshAndPoolProjector(mdb, app.txPool)
 
 	appliedTxs, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "appliedTxs"), 0, 0, lg.WithName("appliedTxs"))
@@ -502,23 +520,23 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		return err
 	}
 	app.closers = append(app.closers, appliedTxs)
-	processor := state.NewTransactionProcessor(db, appliedTxs, meshAndPoolProjector, lg.WithName("state"))
+	processor := state.NewTransactionProcessor(db, appliedTxs, meshAndPoolProjector, app.txPool, lg.WithName("state"))
 
 	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
-	beaconProvider := &oracle.EpochBeaconProvider{}
-	eValidator := oracle.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, app.addLogger(BlkEligibilityLogger, lg))
+	beaconProvider := &miner.EpochBeaconProvider{}
 
 	var msh *mesh.Mesh
 	var trtl tortoise.Tortoise
 	if mdb.PersistentData() {
 		trtl = tortoise.NewRecoveredTortoise(mdb, app.addLogger(TrtlLogger, lg))
-		msh = mesh.NewRecoveredMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg))
+		msh = mesh.NewRecoveredMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
 		trtl = tortoise.NewTortoise(int(layerSize), mdb, app.Config.Hdist, app.addLogger(TrtlLogger, lg))
-		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg))
+		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		app.setupGenesis(processor, msh)
 	}
+	eValidator := miner.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, msh, app.addLogger(BlkEligibilityLogger, lg))
 
 	syncConf := sync.Configuration{Concurrency: 4,
 		LayerSize:       int(layerSize),
@@ -527,7 +545,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		SyncInterval:    time.Duration(app.Config.SyncInterval) * time.Second,
 		ValidationDelta: time.Duration(app.Config.SyncValidationDelta) * time.Second,
 		Hdist:           app.Config.Hdist,
-		AtxsLimit:       app.Config.AtxsPerBlock}
+		AtxsLimit:       app.Config.AtxsPerBlock,
+		AlwaysListen:    app.Config.AlwaysListen,
+	}
 
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
 		app.log.Panic("Number of atxs per block required is bigger than the limit atxsPerBlock=%v limit=%v", app.Config.AtxsPerBlock, miner.AtxsPerBlockLimit)
@@ -539,8 +559,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	syncer := sync.NewSync(swarm, msh, app.txPool, atxpool, eValidator, poetDb, syncConf, clock, app.addLogger(SyncLogger, lg))
-	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
+	syncer := sync.NewSync(swarm, msh, app.txPool, atxdb, eValidator, poetDb, syncConf, clock, app.addLogger(SyncLogger, lg))
+	blockOracle := miner.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
 	var hOracle hare.Rolacle
@@ -551,16 +571,20 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		hOracle = eligibility.New(beacon, atxdb.CalcActiveSetSize, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	}
 
+	gossipListener := service.NewListener(swarm, syncer, app.addLogger(GossipListener, lg))
 	ha := app.HareFactory(mdb, swarm, sgn, nodeID, syncer, msh, hOracle, idStore, clock, lg)
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
-	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(),
-		app.Config.Hdist, app.txPool, atxpool, coinToss, msh, ha, blockOracle, processor,
-		atxdb, syncer, app.Config.AtxsPerBlock, app.Config.TxsPerBlock, layersPerEpoch,
-		stateAndMeshProjector, app.addLogger(BlockBuilderLogger, lg))
-	blockListener := sync.NewBlockListener(swarm, syncer, 4, app.addLogger(BlockListenerLogger, lg))
+	cfg := miner.Config{
+		Hdist:          app.Config.Hdist,
+		MinerID:        nodeID,
+		AtxsPerBlock:   app.Config.AtxsPerBlock,
+		LayersPerEpoch: layersPerEpoch,
+		TxsPerBlock:    app.Config.TxsPerBlock,
+	}
 
-	msh.SetBlockBuilder(blockProducer)
+	blockProducer := miner.NewBlockBuilder(cfg, sgn, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
+	blockListener := sync.NewBlockListener(swarm, syncer, 4, app.addLogger(BlockListenerLogger, lg))
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))
 
@@ -573,8 +597,12 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	}
 	atxBuilder := activation.NewBuilder(nodeID, coinBase, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock, syncer, store, app.addLogger("atxBuilder", lg))
 
+	gossipListener.AddListener(state.IncomingTxProtocol, priorityq.Low, processor.HandleTxData)
+	gossipListener.AddListener(activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
+
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener
+	app.gossipListener = gossipListener
 	app.mesh = msh
 	app.syncer = syncer
 	app.clock = clock
@@ -585,6 +613,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	app.atxBuilder = atxBuilder
 	app.oracle = blockOracle
 	app.txProcessor = processor
+	app.atxDb = atxdb
+
 	return nil
 }
 
@@ -669,9 +699,9 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 	apiConf := &app.Config.API
 
 	// OLD API SERVICES (deprecated)
+	layerDuration := app.Config.LayerDurationSec
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
-		layerDuration := app.Config.LayerDurationSec
 		app.grpcAPIService = api.NewGrpcService(apiConf.GrpcServerPort, net, app.state, app.mesh, app.txPool,
 			app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app.syncer, app.Config, app)
 		app.grpcAPIService.StartService()
@@ -688,21 +718,34 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 	// enabled (since we don't know which ones to enable), so it's an error if the
 	// gateway server is enabled without enabling at least one GRPC service.
 
-	// Make sure we only start the server once
-	startService := func(svc grpcserver.ServiceAPI) {
+	// Make sure we only create the server once.
+	registerService := func(svc grpcserver.ServiceAPI) {
 		if app.newgrpcAPIService == nil {
-			app.newgrpcAPIService = grpcserver.NewServer(apiConf.NewGrpcServerPort)
-			app.newgrpcAPIService.Start()
+			app.newgrpcAPIService = grpcserver.NewServerWithInterface(apiConf.NewGrpcServerPort, apiConf.NewGrpcServerInterface)
 		}
 		svc.RegisterService(app.newgrpcAPIService)
 	}
 
-	// Start the requested services one by one
+	// Register the requested services one by one
 	if apiConf.StartNodeService {
-		startService(grpcserver.NewNodeService(net, app.mesh, app.clock, app.syncer))
+		registerService(grpcserver.NewNodeService(net, app.mesh, app.clock, app.syncer))
 	}
 	if apiConf.StartMeshService {
-		startService(grpcserver.NewMeshService(net, app.mesh, app.clock, app.syncer))
+		registerService(grpcserver.NewMeshService(app.mesh, app.txPool, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
+	}
+	if apiConf.StartGlobalStateService {
+		registerService(grpcserver.NewGlobalStateService(net, app.mesh, app.clock, app.syncer))
+	}
+	if apiConf.StartSmesherService {
+		registerService(grpcserver.NewSmesherService(app.atxBuilder))
+	}
+	if apiConf.StartTransactionService {
+		registerService(grpcserver.NewTransactionService(net, app.mesh, app.txPool))
+	}
+
+	// Now that the services are registered, start the server.
+	if app.newgrpcAPIService != nil {
+		app.newgrpcAPIService.Start()
 	}
 
 	if apiConf.StartNewJSONServer {
@@ -713,7 +756,13 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 			return
 		}
 		app.newjsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.NewJSONServerPort, apiConf.NewGrpcServerPort)
-		app.newjsonAPIService.StartService(apiConf.StartNodeService, apiConf.StartMeshService)
+		app.newjsonAPIService.StartService(
+			apiConf.StartNodeService,
+			apiConf.StartMeshService,
+			apiConf.StartGlobalStateService,
+			apiConf.StartSmesherService,
+			apiConf.StartTransactionService,
+		)
 	}
 }
 
@@ -783,6 +832,12 @@ func (app *SpacemeshApp) stopServices() {
 		app.log.Info("%v closing mesh", app.nodeID.Key)
 		app.mesh.Close()
 	}
+
+	if app.gossipListener != nil {
+		app.gossipListener.Stop()
+	}
+
+	events.CloseEventReporter()
 
 	// Close all databases.
 	for _, closer := range app.closers {
@@ -901,7 +956,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 				log.Error("cannot start http server", err)
 			}
 		}()
-
 	}
 
 	/* Create or load miner identity */
@@ -925,8 +979,10 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Error("failed to create post client: %v", err)
 	}
 
+	// This base logger must be debug level so that other, derived loggers are not a lower level.
+	lg := log.NewWithLevel(nodeID.ShortString(), zap.NewAtomicLevelAt(zapcore.DebugLevel)).WithFields(nodeID)
+
 	/* Initialize all protocol services */
-	lg := log.NewDefault(nodeID.ShortString())
 
 	dbStorepath := app.Config.DataDir()
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
@@ -957,6 +1013,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	app.startServices()
+
 	// P2P must start last to not block when sending messages to protocols
 	err = app.P2P.Start()
 	if err != nil {
@@ -964,9 +1021,18 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	app.startAPIServices(postClient, app.P2P)
+	events.SubscribeToLayers(clock.Subscribe())
 	log.Info("App started.")
+
+	// notify anyone who might be listening that the app has finished starting.
+	// this can be used by, e.g., app tests.
+	close(app.started)
 
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	<-cmdp.Ctx.Done()
+	events.ReportError(events.NodeError{
+		Msg:  "node is shutting down",
+		Type: events.NodeErrorTypeSignalShutdown,
+	})
 }

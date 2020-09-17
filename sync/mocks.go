@@ -7,9 +7,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"math/big"
 	"time"
@@ -67,6 +67,10 @@ func (m *meshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, typ
 
 type mockState struct{}
 
+func (s mockState) ValidateAndAddTxToPool(tx *types.Transaction) error {
+	panic("implement me")
+}
+
 func (s mockState) LoadState(types.LayerID) error {
 	panic("implement me")
 }
@@ -79,6 +83,10 @@ func (mockState) ValidateNonceAndBalance(*types.Transaction) error {
 	panic("implement me")
 }
 
+func (mockState) GetLayerStateRoot(id types.LayerID) (types.Hash32, error) {
+	panic("implement me")
+}
+
 func (mockState) GetLayerApplied(types.TransactionID) *types.LayerID {
 	panic("implement me")
 }
@@ -88,6 +96,14 @@ func (mockState) ApplyTransactions(types.LayerID, []*types.Transaction) (int, er
 }
 
 func (mockState) ApplyRewards(types.LayerID, []types.Address, *big.Int) {}
+
+func (mockState) GetBalance(types.Address) uint64 {
+	panic("implement me")
+}
+
+func (mockState) GetNonce(types.Address) uint64 {
+	panic("implement me")
+}
 
 func (mockState) AddressExists(types.Address) bool {
 	return true
@@ -201,21 +217,20 @@ func (m *mockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
 
 // NewSyncWithMocks returns a syncer instance that is backed by mocks of other modules
 // for use in testing
-func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *miner.TxMempool, atxpool *miner.AtxMemPool, swarm service.Service, poetDb *activation.PoetDb, conf Configuration, expectedLayers types.LayerID) *Syncer {
-	lg := log.New("sync_test", "", "")
+func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *state.TxMempool, atxpool *activation.AtxMemDB, swarm service.Service, poetDb *activation.PoetDb, conf Configuration, expectedLayers types.LayerID) *Syncer {
+	lg := log.NewDefault("sync_test")
 	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, conf.LayersPerEpoch, &validatorMock{}, lg.WithOptions(log.Nop))
 	var msh *mesh.Mesh
 	if mshdb.PersistentData() {
 		lg.Info("persistent data found ")
-		msh = mesh.NewRecoveredMesh(mshdb, atxdb, configTst(), &meshValidatorMock{}, txpool, atxpool, &mockState{}, lg)
+		msh = mesh.NewRecoveredMesh(mshdb, atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
 	} else {
 		lg.Info("no persistent data found ")
-		msh = mesh.NewMesh(mshdb, atxdb, configTst(), &meshValidatorMock{}, txpool, atxpool, &mockState{}, lg)
+		msh = mesh.NewMesh(mshdb, atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
 	}
 
-	msh.SetBlockBuilder(&mockBlockBuilder{})
-	_ = msh.AddBlock(mesh.GenesisBlock)
+	_ = msh.AddBlock(mesh.GenesisBlock())
 	clock := mockClock{Layer: expectedLayers + 1}
 	lg.Info("current layer %v", clock.GetCurrentLayer())
-	return NewSync(swarm, msh, txpool, atxpool, blockEligibilityValidatorMock{}, poetDb, conf, &clock, lg)
+	return NewSync(swarm, msh, txpool, atxdb, blockEligibilityValidatorMock{}, poetDb, conf, &clock, lg)
 }

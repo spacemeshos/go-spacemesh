@@ -23,9 +23,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -78,6 +78,7 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := storeFormat + string(name)
+		database.SwitchCreationContext(dbStorepath, string(name))
 		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetClient, clock, network)
 		assert.NoError(suite.T(), err)
 		suite.apps = append(suite.apps, smApp)
@@ -89,12 +90,13 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 var tests = []TestScenario{txWithRunningNonceGenerator([]int{}), sameRootTester([]int{0}), reachedEpochTester([]int{}), txWithUnorderedNonceGenerator([]int{1})}
 
 func (suite *AppTestSuite) TestMultipleNodes() {
+	//suite.T().Skip()
 	//EntryPointCreated <- true
 	net := service.NewSimulator()
 	const numberOfEpochs = 5 // first 2 epochs are genesis
 	//addr := address.BytesToAddress([]byte{0x01})
 	cfg := getTestDefaultConfig()
-
+	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
 	path := "../tmp/test/state_" + time.Now().String()
 
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
@@ -180,7 +182,7 @@ func txWithUnorderedNonceGenerator(dependancies []int) TestScenario {
 		}
 
 		for i := 0; i < txsSent; i++ {
-			tx, err := mesh.NewSignedTx(uint64(txsSent-i), dst, 10, 1, 1, acc1Signer)
+			tx, err := types.NewSignedTx(uint64(txsSent-i), dst, 10, 1, 1, acc1Signer)
 			if err != nil {
 				log.Panic("panicked creating signed tx err=%v", err)
 			}
@@ -233,7 +235,7 @@ func txWithRunningNonceGenerator(dependancies []int) TestScenario {
 				assert.NoError(suite.T(), err)
 				actNonce, err = strconv.Atoi(nonceStr.Value)
 			}
-			tx, err := mesh.NewSignedTx(uint64(i), dst, 10, 1, 1, acc1Signer)
+			tx, err := types.NewSignedTx(uint64(i), dst, 10, 1, 1, acc1Signer)
 			if err != nil {
 				log.Panic("panicked creating signed tx err=%v", err)
 			}
@@ -269,7 +271,7 @@ func reachedEpochTester(dependancies []int) TestScenario {
 		for _, app := range suite.apps {
 			ok = ok && uint32(app.mesh.LatestLayer()) >= numberOfEpochs*uint32(app.Config.LayersPerEpoch)
 			if ok {
-				suite.validateLastATXActiveSetSize(app)
+				suite.validateLastATXActiveSetSize(app, numberOfEpochs)
 			}
 		}
 		if ok {
@@ -374,7 +376,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 			datamap[ap.nodeID.Key].layertoblocks = make(map[types.LayerID][]types.BlockID)
 		}
 
-		for i := types.LayerID(0); i <= untilLayer; i++ {
+		for i := types.LayerID(5); i <= untilLayer; i++ {
 			lyr, err := ap.blockListener.GetLayer(i)
 			if err != nil {
 				log.Error("ERROR: couldn't get a validated layer from db layer %v, %v", i, err)
@@ -417,52 +419,40 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	layerAvgSize := suite.apps[0].Config.LayerAvgSize
 	patient := datamap[suite.apps[0].nodeID.Key]
 
-	lastLayer := len(patient.layertoblocks)
+	lastLayer := len(patient.layertoblocks) + 5
+	log.Info("patient %v", suite.apps[0].nodeID.ShortString())
 
 	totalBlocks := 0
-	for _, l := range patient.layertoblocks {
+	for id, l := range patient.layertoblocks {
 		totalBlocks += len(l)
+		log.Info("patient %v layer %v, blocks %v", suite.apps[0].nodeID.String(), id, len(l))
 	}
 
 	firstEpochBlocks := 0
-	for i := 0; i < layersPerEpoch; i++ {
+	for i := 0; i < layersPerEpoch*2; i++ {
 		if l, ok := patient.layertoblocks[types.LayerID(i)]; ok {
 			firstEpochBlocks += len(l)
 		}
 	}
 
 	// assert number of blocks
-	totalEpochs := int(untilLayer.GetEpoch(uint16(layersPerEpoch))) + 1
+	totalEpochs := int(untilLayer.GetEpoch()) + 1
 	allMiners := len(suite.apps)
-	exp := (layerAvgSize * layersPerEpoch) / allMiners * allMiners * (totalEpochs - 1)
+	exp := (layerAvgSize * layersPerEpoch) / allMiners * allMiners * (totalEpochs - 2)
 	act := totalBlocks - firstEpochBlocks
 	assert.Equal(suite.T(), exp, act,
-		fmt.Sprintf("not good num of blocks got: %v, want: %v. totalBlocks: %v, firstEpochBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v",
-			act, exp, totalBlocks, firstEpochBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs))
+		fmt.Sprintf("not good num of blocks got: %v, want: %v. totalBlocks: %v, firstEpochBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v datamap: %v",
+			act, exp, totalBlocks, firstEpochBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, datamap))
 
 	firstAp := suite.apps[0]
 	atxDb := firstAp.blockListener.AtxDB.(*activation.DB)
-	atxID, err := atxDb.GetNodeLastAtxID(firstAp.nodeID)
+	_, err := atxDb.GetNodeLastAtxID(firstAp.nodeID)
 	assert.NoError(suite.T(), err)
-	atx, err := atxDb.GetAtxHeader(atxID)
-	assert.NoError(suite.T(), err)
-
-	totalAtxs := uint32(0)
-	for atx != nil {
-		totalAtxs += atx.ActiveSetSize
-		atx, err = atxDb.GetAtxHeader(atx.PrevATXID)
-	}
-
-	// assert number of ATXs
-	exp = totalEpochs * allMiners
-	act = int(totalAtxs)
-	assert.Equal(suite.T(), exp, act, fmt.Sprintf("not good num of atxs got: %v, want: %v", act, exp))
 }
 
-func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
-	atx, err := app.atxBuilder.GetPrevAtx(app.nodeID)
-	suite.NoError(err)
-	suite.True(int(atx.ActiveSetSize) == len(suite.apps), "atx: %v node: %v", atx.ShortString(), app.nodeID.Key[:5])
+func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp, numberOfEpochs int) {
+	atxs := app.atxDb.GetEpochAtxs(types.EpochID(numberOfEpochs - 1))
+	suite.True(len(atxs) == len(suite.apps), "atxs: %v node: %v", len(atxs), app.nodeID.Key[:5])
 }
 
 // travis has a 10 minutes timeout
@@ -519,7 +509,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.CoinbaseAccount = "0x123"
 	smApp.Config.LayerAvgSize = 5
 	smApp.Config.LayersPerEpoch = 3
-	smApp.Config.TxsPerBlock = 200
+	smApp.Config.TxsPerBlock = 100
 	smApp.Config.Hdist = 5
 	smApp.Config.GenesisTime = genesisTime.Format(time.RFC3339)
 	smApp.Config.LayerDurationSec = 20
@@ -528,6 +518,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.StartMining = true
 
 	rolacle := eligibility.New()
+	types.SetLayersPerEpoch(int32(smApp.Config.LayersPerEpoch))
 
 	edSgn := signing.NewEdSigner()
 	pub := edSgn.PublicKey()

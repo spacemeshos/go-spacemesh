@@ -25,8 +25,7 @@ var publisher *EventPublisher
 // Publish publishes an event on the pubsub singleton.
 func Publish(event Event) {
 	if publisher != nil {
-		err := publisher.PublishEvent(event)
-		if err != nil {
+		if err := publisher.PublishEvent(event); err != nil {
 			log.Error("pubsub error: %v", err)
 		}
 	}

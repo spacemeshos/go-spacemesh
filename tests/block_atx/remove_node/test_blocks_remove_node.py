@@ -40,7 +40,7 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     layers_per_epoch = int(testconfig['client']['args']['layers-per-epoch'])
     layer_avg_size = int(testconfig['client']['args']['layer-average-size'])
 
-    # in conf yml file second client deployment (client_1) will show after the
+    # in conf yml file second client deployment (clientv2) will show after the
     # first (client) in setup_mul_network.clients hence 1
     new_deployment_info = setup_mul_network.clients[1]
     print(f"\nlayer duration={layer_duration}, layers per epoch={layers_per_epoch}, layer avg size={layer_avg_size}")
@@ -120,7 +120,7 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
 
     # assert that each node has created layer_avg/number_of_nodes
-    validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners,
+    validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners -1,
                               ignore_lst=deleted_pods_lst)
 
     # wait an epoch

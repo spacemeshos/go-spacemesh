@@ -14,13 +14,22 @@ import (
 type MockMapState struct {
 	Rewards     map[types.Address]*big.Int
 	Txs         []*types.Transaction
+	Pool        []*types.Transaction
 	TotalReward int64
 }
 
-func (s MockMapState) LoadState(types.LayerID) error                    { panic("implement me") }
-func (MockMapState) GetStateRoot() types.Hash32                         { return [32]byte{} }
-func (MockMapState) ValidateNonceAndBalance(*types.Transaction) error   { panic("implement me") }
-func (MockMapState) GetLayerApplied(types.TransactionID) *types.LayerID { panic("implement me") }
+func (s *MockMapState) ValidateAndAddTxToPool(tx *types.Transaction) error {
+	s.Pool = append(s.Pool, tx)
+	return nil
+}
+
+func (s MockMapState) LoadState(types.LayerID) error                       { panic("implement me") }
+func (MockMapState) GetStateRoot() types.Hash32                            { return [32]byte{} }
+func (MockMapState) ValidateNonceAndBalance(*types.Transaction) error      { panic("implement me") }
+func (MockMapState) GetLayerApplied(types.TransactionID) *types.LayerID    { panic("implement me") }
+func (MockMapState) GetLayerStateRoot(types.LayerID) (types.Hash32, error) { panic("implement me") }
+func (MockMapState) GetBalance(types.Address) uint64                       { panic("implement me") }
+func (MockMapState) GetNonce(types.Address) uint64                         { panic("implement me") }
 
 func (s *MockMapState) ApplyTransactions(_ types.LayerID, txs []*types.Transaction) (int, error) {
 	s.Txs = append(s.Txs, txs...)
@@ -46,10 +55,10 @@ func ConfigTst() Config {
 
 func getMeshWithMapState(id string, s txProcessor) (*Mesh, *AtxDbMock) {
 	atxDb := NewAtxDbMock()
-	lg := log.New(id, "", "")
+	lg := log.NewDefault(id)
 	mshDb := NewMemMeshDB(lg)
 	mshDb.contextualValidity = &ContextualValidityMock{}
-	return NewMesh(mshDb, atxDb, ConfigTst(), &MeshValidatorMock{}, &MockTxMemPool{}, &MockAtxMemPool{}, s, lg), atxDb
+	return NewMesh(mshDb, atxDb, ConfigTst(), &MeshValidatorMock{}, &MockTxMemPool{}, s, lg), atxDb
 }
 
 func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs int, fee int64) int64 {
@@ -57,7 +66,7 @@ func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs in
 	var txs []*types.Transaction
 	for i := 0; i < numOfTxs; i++ {
 		// log.Info("adding tx with fee %v nonce %v", fee, i)
-		tx, err := NewSignedTx(1, types.HexToAddress("1"), 10, 100, uint64(fee), signing.NewEdSigner())
+		tx, err := types.NewSignedTx(1, types.HexToAddress("1"), 10, 100, uint64(fee), signing.NewEdSigner())
 		assert.NoError(t, err)
 		bl.TxIDs = append(bl.TxIDs, tx.ID())
 		totalFee += fee
@@ -248,6 +257,9 @@ func copyLayer(t *testing.T, srcMesh, dstMesh *Mesh, dstAtxDb *AtxDbMock, id typ
 	assert.NoError(t, err)
 	var blockIds []types.BlockID
 	for _, b := range l.Blocks() {
+		if b.ID() == GenesisBlock().ID() {
+			continue
+		}
 		txs := srcMesh.getTxs(b.TxIDs, l.Index())
 		atx, err := srcMesh.GetFullAtx(b.ATXID)
 		assert.NoError(t, err)
@@ -347,5 +359,5 @@ func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, 
 		StartTick:      startTick,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipstChallenge, coinbase, activeSetSize, view, nipst, nil)
+	return types.NewActivationTx(nipstChallenge, coinbase, nipst, nil)
 }

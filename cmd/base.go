@@ -82,9 +82,6 @@ func setupLogging(config *bc.Config) {
 		fmt.Printf("Failed to setup spacemesh data dir")
 		log.Panic("Failed to setup spacemesh data dir", err)
 	}
-
-	// app-level logging
-	log.InitSpacemeshLoggingSystem()
 }
 
 func parseConfig() (*bc.Config, error) {

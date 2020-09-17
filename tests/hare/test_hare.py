@@ -100,7 +100,9 @@ def test_hare_sanity(init_session, setup_bootstrap_for_hare, setup_clients_for_h
     print("Going to sleep for {0}".format(delay))
     time.sleep(delay)
 
-    assert_all(current_index, testconfig['namespace'])
+    # actual layer where hare will start
+    effective_layer = int(testconfig['client']['args']['layers-per-epoch']) * 2
+    assert_all(current_index, testconfig['namespace'], effective_layer)
 
 
 EXPECTED_MAX_MEM = 300*1024*1024  # MB
@@ -123,7 +125,9 @@ def test_hare_scale(init_session, setup_bootstrap_for_hare, setup_clients_for_ha
 
     ns = testconfig['namespace']
     f = int(testconfig['client']['args']['hare-max-adversaries'])
-    expect_hare(current_index, ns, 1, layers_count, total, f)
+    # actual layer where hare will start
+    effective_layer = int(testconfig['client']['args']['layers-per-epoch']) * 2
+    expect_hare(current_index, ns, effective_layer, effective_layer + layers_count, total, f)
     max_mem = get_max_mem_usage(current_index, ns)
     print('Mem usage is {0} expected max is {1}'.format(max_mem, EXPECTED_MAX_MEM))
     assert max_mem < EXPECTED_MAX_MEM

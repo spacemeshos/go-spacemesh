@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -8,6 +9,7 @@ import (
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/sha256-simd"
+	"sort"
 	"strings"
 )
 
@@ -23,8 +25,8 @@ func (l EpochID) IsGenesis() bool {
 }
 
 // FirstLayer returns the layer ID of the first layer in the epoch.
-func (l EpochID) FirstLayer(layersPerEpoch uint16) LayerID {
-	return LayerID(uint64(l) * uint64(layersPerEpoch))
+func (l EpochID) FirstLayer() LayerID {
+	return LayerID(uint64(l) * uint64(getLayersPerEpoch()))
 }
 
 // Field returns a log field. Implements the LoggableField interface.
@@ -51,6 +53,24 @@ func (t ATXID) Bytes() []byte {
 // Field returns a log field. Implements the LoggableField interface.
 func (t ATXID) Field() log.Field { return t.Hash32().Field("atx_id") }
 
+// Compare returns true if other (the given ATXID) is less than this ATXID, by lexicographic comparison.
+func (t ATXID) Compare(other ATXID) bool {
+	return bytes.Compare(t.Bytes(), other.Bytes()) < 0
+}
+
+// CalcAtxHash32Presorted returns the 32-byte sha256 sum of the Atx IDs, in the order given. The pre-image is
+// prefixed with additionalBytes.
+func CalcAtxHash32Presorted(sortedView []ATXID, additionalBytes []byte) Hash32 {
+	hash := sha256.New()
+	hash.Write(additionalBytes)
+	for _, id := range sortedView {
+		hash.Write(id.Bytes()) // this never returns an error: https://golang.org/pkg/hash/#Hash
+	}
+	var res Hash32
+	hash.Sum(res[:0])
+	return res
+}
+
 // EmptyATXID is a canonical empty ATXID.
 var EmptyATXID = &ATXID{}
 
@@ -58,9 +78,8 @@ var EmptyATXID = &ATXID{}
 // well as the coinbase address and active set size.
 type ActivationTxHeader struct {
 	NIPSTChallenge
-	id            *ATXID // non-exported cache of the ATXID
-	Coinbase      Address
-	ActiveSetSize uint32
+	id       *ATXID // non-exported cache of the ATXID
+	Coinbase Address
 }
 
 // ShortString returns the first 5 characters of the ID, for logging purposes.
@@ -83,8 +102,8 @@ func (atxh *ActivationTxHeader) ID() ATXID {
 
 // TargetEpoch returns the target epoch of the activation transaction. This is the epoch in which the miner is eligible
 // to participate thanks to the ATX.
-func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochID {
-	return atxh.PubLayerID.GetEpoch(layersPerEpoch) + 1
+func (atxh *ActivationTxHeader) TargetEpoch() EpochID {
+	return atxh.PubLayerID.GetEpoch() + 1
 }
 
 // SetID sets the ATXID in this ATX's cache.
@@ -138,7 +157,6 @@ func (challenge *NIPSTChallenge) String() string {
 type InnerActivationTx struct {
 	*ActivationTxHeader
 	Nipst      *NIPST
-	View       []BlockID
 	Commitment *PostProof
 }
 
@@ -150,18 +168,15 @@ type ActivationTx struct {
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
-func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, activeSetSize uint32, view []BlockID,
-	nipst *NIPST, commitment *PostProof) *ActivationTx {
+func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, nipst *NIPST, commitment *PostProof) *ActivationTx {
 
 	atx := &ActivationTx{
 		InnerActivationTx: &InnerActivationTx{
 			ActivationTxHeader: &ActivationTxHeader{
 				NIPSTChallenge: nipstChallenge,
 				Coinbase:       coinbase,
-				ActiveSetSize:  activeSetSize,
 			},
 			Nipst:      nipst,
-			View:       view,
 			Commitment: commitment,
 		},
 	}
@@ -175,7 +190,7 @@ func (atx *ActivationTx) InnerBytes() ([]byte, error) {
 }
 
 // Fields returns an array of LoggableFields for logging
-func (atx *ActivationTx) Fields(layersPerEpoch uint16, size int) []log.LoggableField {
+func (atx *ActivationTx) Fields(size int) []log.LoggableField {
 	commitmentStr := ""
 	if atx.Commitment != nil {
 		commitmentStr = atx.Commitment.String()
@@ -193,9 +208,7 @@ func (atx *ActivationTx) Fields(layersPerEpoch uint16, size int) []log.LoggableF
 		log.FieldNamed("prev_atx_id", atx.PrevATXID),
 		log.FieldNamed("pos_atx_id", atx.PositioningATX),
 		atx.PubLayerID,
-		atx.PubLayerID.GetEpoch(layersPerEpoch),
-		log.Uint32("active_set", atx.ActiveSetSize),
-		log.Int("viewlen", len(atx.View)),
+		atx.PubLayerID.GetEpoch(),
 		log.Uint64("sequence_number", atx.Sequence),
 		log.String("NIPSTChallenge", challenge),
 		log.String("commitment", commitmentStr),
@@ -311,4 +324,19 @@ func (s ProcessingError) Error() string {
 func IsProcessingError(err error) bool {
 	_, ok := err.(ProcessingError)
 	return ok
+}
+
+// SortAtxIDs sorts a list of atx IDs in lexicographic order, in-place.
+func SortAtxIDs(ids []ATXID) []ATXID {
+	sort.Slice(ids, func(i, j int) bool { return ids[i].Compare(ids[j]) })
+	return ids
+}
+
+// CalcATXIdsHash32 returns the 32-byte sha256 sum of the atx IDs, sorted in lexicographic order. The pre-image is
+// prefixed with additionalBytes.
+func CalcATXIdsHash32(view []ATXID, additionalBytes []byte) Hash32 {
+	sortedView := make([]ATXID, len(view))
+	copy(sortedView, view)
+	SortAtxIDs(sortedView)
+	return CalcAtxHash32Presorted(sortedView, additionalBytes)
 }

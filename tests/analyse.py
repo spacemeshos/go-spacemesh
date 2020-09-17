@@ -61,7 +61,7 @@ def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, tot
     print("total and first", total_blocks, first_epoch_blocks)
     ass_err = f"all blocks but first epoch={int(total_blocks - first_epoch_blocks)}\n" \
               f"total num of layers={last_layer - layers_per_epoch} layers avg size={layer_avg_size}"
-    assert int((total_blocks - first_epoch_blocks) / (last_layer - layers_per_epoch)) / layer_avg_size == 1, ass_err
+    assert int((total_blocks - first_epoch_blocks) / (last_layer - layers_per_epoch * 2)) / layer_avg_size == 1, ass_err
     # not all nodes produces atx in all epochs
     assert total_atxs == int((last_layer / layers_per_epoch)) * total_pods
 
@@ -79,7 +79,7 @@ def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, tot
     for node in blockmap.values():
         blocks_in_relevant_layers = sum([len(node.layers[layer]) for layer in range(layers_per_epoch, last_layer)])
         # need to deduct blocks created in first genesis epoch since it does not follow general mining rules by design
-        blocks_created_per_layer = blocks_in_relevant_layers / (last_layer - layers_per_epoch)
+        blocks_created_per_layer = blocks_in_relevant_layers / (last_layer - layers_per_epoch * 2)
         wanted_avg_block_per_node = max(1, int(layer_avg_size / total_pods))
         assert blocks_created_per_layer / wanted_avg_block_per_node == 1
 

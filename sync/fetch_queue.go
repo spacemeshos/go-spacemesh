@@ -6,11 +6,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"runtime"
+	"runtime/debug"
 	"sync"
 )
 
 type fetchPoetProofFunc func(poetProofRef []byte) error
 type sValidateAtxFunc func(atx *types.ActivationTx) error
+type sFetchAtxFunc func(atx *types.ActivationTx) error
 type checkLocalFunc func(ids []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32)
 
 type item interface {
@@ -56,6 +58,7 @@ func (fq *fetchQueue) shutdownRecover() {
 	r := recover()
 	if r != nil {
 		fq.Info("%s shut down ", fq.name)
+		fq.Error("stacktrace from panic: \n" + string(debug.Stack()))
 	}
 }
 
@@ -233,13 +236,14 @@ func newAtxQueue(s *Syncer, fetchPoetProof fetchPoetProofFunc) *atxQueue {
 		},
 	}
 
-	q.handleFetch = updateAtxDependencies(q.invalidate, s.SyntacticallyValidateAtx, s.atxpool, fetchPoetProof)
+	q.handleFetch = updateAtxDependencies(q.invalidate, s.SyntacticallyValidateAtx, s.FetchAtxReferences, s.atxDb, fetchPoetProof, q.Log)
 	go q.work()
 	return q
 }
 
 //we could get rid of this if we had a unified id type
 func (atx atxQueue) HandleAtxs(atxids []types.ATXID) ([]*types.ActivationTx, error) {
+	atx.Log.Debug("going to fetch %v", atxids)
 	atxItems := make([]types.Hash32, 0, len(atxids))
 	for _, i := range atxids {
 		atxItems = append(atxItems, i.Hash32())
@@ -247,6 +251,7 @@ func (atx atxQueue) HandleAtxs(atxids []types.ATXID) ([]*types.ActivationTx, err
 
 	atxres, err := atx.handle(atxItems)
 	if err != nil {
+		atx.Log.Error("cannot fetch all atxs for block %v", err)
 		return nil, err
 	}
 
@@ -258,7 +263,7 @@ func (atx atxQueue) HandleAtxs(atxids []types.ATXID) ([]*types.ActivationTx, err
 	return atxs, nil
 }
 
-func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValidateAtx sValidateAtxFunc, atxpool atxMemPool, fetchProof fetchPoetProofFunc) func(fj fetchJob) {
+func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValidateAtx sValidateAtxFunc, fetchAtxRefs sFetchAtxFunc, atxDB atxDB, fetchProof fetchPoetProofFunc, logger log.Log) func(fj fetchJob) {
 	return func(fj fetchJob) {
 		fetchProofCalcID(fetchProof, fj)
 
@@ -270,16 +275,31 @@ func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValida
 
 		for _, id := range fj.ids {
 			if atx, ok := mp[id]; ok {
-				err := sValidateAtx(atx)
-				if err == nil {
-					atxpool.Put(atx)
-					invalidate(id, true)
+				logger.Info("atx queue work item %v atx %v", id.String(), atx.ShortString())
+				err := fetchAtxRefs(atx)
+				if err != nil {
+					logger.Warning("failed to fetch referenced atxs of %s %s", id.ShortString(), err)
+					invalidate(id, false)
 					continue
-				} else {
-					log.Info("failed to validate %s %s", id.ShortString(), err)
 				}
+				err = sValidateAtx(atx)
+				if err != nil {
+					logger.Warning("failed to validate atx %v job %s %s", atx.ShortString(), id.ShortString(), err)
+					invalidate(id, false)
+					continue
+				}
+				err = atxDB.ProcessAtx(atx)
+				if err != nil {
+					logger.Warning("failed to add atx to db %s %s", id.ShortString(), err)
+					invalidate(id, false)
+					continue
+				}
+				logger.Info("atx queue work item ok %v atx %v", id.String(), atx.ShortString())
+				invalidate(id, true)
+			} else {
+				logger.Error("job returned with no response %v", id.String())
+				invalidate(id, false)
 			}
-			invalidate(id, false)
 		}
 	}
 
