@@ -57,4 +57,4 @@ See the [full documentation](https://github.com/nektos/act/blob/master/README.md
 
 ## Secrets
 
-Some of the CI workflows, including the system tests and the push to dockerhub, require additional credentials that are not stored in this repository. For Travis, these credentials are stored in the online Travis configuration. For GA, they're stored as [repository secrets](https://docs.github.com/en/actions/reference/encrypted-secrets). These are passed into the CI workflows as environment variables.
+Some of the CI workflows, including the system tests and the push to dockerhub, require additional credentials that are not stored in this repository. These include credentials for Dockerhub and Google Cloud, and configuration information for Kubernetes (for running system tests). For Travis, these credentials are stored in the online Travis configuration. For GA, they're stored as [repository secrets](https://docs.github.com/en/actions/reference/encrypted-secrets). These are passed into the CI workflows as environment variables.
