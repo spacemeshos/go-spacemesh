@@ -11,10 +11,16 @@ env:
 # Trigger the workflow on all pull requests, and on push to specific branches
 on:
   pull_request:
+    # Don't trigger tests if only updating docs
+    paths-ignore:
+      - '**.md'
   push:
     branches:
       - staging
       - trying
+    # Don't trigger tests if only updating docs
+    paths-ignore:
+      - '**.md'
 
 jobs:
   # always run the unit tests, and run them first, as they are relatively cheap
