@@ -62,7 +62,7 @@ spec:
               value: --max-old-space-size=1800
           readinessProbe:
             failureThreshold: 3
-            initialDelaySeconds: 10
+            initialDelaySeconds: 15
             periodSeconds: 10
             successThreshold: 3
             timeoutSeconds: 5

@@ -58,6 +58,18 @@ spec:
       port: 9200
     - name: transport
       port: 9300
+#---
+#kind: PersistentVolumeClaim
+#apiVersion: v1
+#metadata:
+#  name: elasticsearch-master
+#spec:
+#  accessModes:
+#    - ReadWriteOnce
+#  storageClassName: local-storage
+#  resources:
+#    requests:
+#      storage: 30Gi
 ---
 # Source: elasticsearch/templates/statefulset.yaml
 apiVersion: apps/v1
@@ -85,7 +97,8 @@ spec:
         name: elasticsearch-master
       spec:
         accessModes:
-          - ReadWriteOnce
+        - ReadWriteOnce
+        storageClassName: local-storage
         resources:
           requests:
             storage: 30Gi
@@ -160,7 +173,7 @@ spec:
                       set -- "$@" -u "${ELASTIC_USERNAME}:${ELASTIC_PASSWORD}"
                     fi
 
-                    curl --output /dev/null -k "$@" "http://127.0.0.1:9200${path}"
+                    curl --connect-timeout 10 --output /dev/null -k "$@" "http://127.0.0.1:9200${path}"
                   }
 
                   if [ -f "${START_FILE}" ]; then
@@ -183,7 +196,7 @@ spec:
 
                   else
                     echo 'Waiting for elasticsearch cluster to become ready (request params: "wait_for_status=green&timeout=1s" )'
-                    if http "/_cluster/health?wait_for_status=green&timeout=1s" "--fail" ; then
+                    if http "/_cluster/health?wait_for_status=green&timeout=5s" "--fail" ; then
                       touch ${START_FILE}
                       exit 0
                     else
@@ -192,7 +205,7 @@ spec:
                     fi
                   fi
             failureThreshold: 3
-            initialDelaySeconds: 10
+            initialDelaySeconds: 15
             periodSeconds: 10
             successThreshold: 3
             timeoutSeconds: 5
@@ -204,25 +217,25 @@ spec:
           resources:
             limits:
               cpu: 1000m
-              memory: 2Gi
+              memory: 512M #2Gi
             requests:
-              cpu: 1000m
-              memory: 2Gi
+              cpu: 100m
+              memory: 512M #2Gi
           env:
             - name: node.name
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
             - name: cluster.initial_master_nodes
-              value: "elasticsearch-master-0,elasticsearch-master-1,elasticsearch-master-2,"
-            - name: discovery.seed_hosts
-              value: "elasticsearch-master-headless"
+              value: "elasticsearch-master-0"
+            #- name: discovery.seed_hosts
+            #  value: "elasticsearch-master-headless"
             - name: cluster.name
               value: "elasticsearch"
             - name: network.host
               value: "0.0.0.0"
             - name: ES_JAVA_OPTS
-              value: "-Xmx1g -Xms1g"
+              value: "-Xmx128m -Xms128m" #"-Xmx1g -Xms1g"
             - name: node.data
               value: "true"
             - name: node.ingest
@@ -232,27 +245,3 @@ spec:
           volumeMounts:
             - name: "elasticsearch-master"
               mountPath: /usr/share/elasticsearch/data
----
-# Source: elasticsearch/templates/test/test-elasticsearch-health.yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: "gjbkt-test"
-  namespace: m4oao
-  annotations:
-    "helm.sh/hook": test-success
-spec:
-  securityContext:
-    fsGroup: 1000
-    runAsUser: 1000
-  containers:
-    - name: "ivgtl-test"
-      image: "docker.elastic.co/elasticsearch/elasticsearch:8.0.0-SNAPSHOT"
-      imagePullPolicy: "IfNotPresent"
-      command:
-        - "sh"
-        - "-c"
-        - |
-          #!/usr/bin/env bash -e
-          curl -XGET --fail 'elasticsearch-master:9200/_cluster/health?wait_for_status=green&timeout=1s'
-  restartPolicy: Never
