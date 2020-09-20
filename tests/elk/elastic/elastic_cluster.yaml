@@ -58,18 +58,6 @@ spec:
       port: 9200
     - name: transport
       port: 9300
-#---
-#kind: PersistentVolumeClaim
-#apiVersion: v1
-#metadata:
-#  name: elasticsearch-master
-#spec:
-#  accessModes:
-#    - ReadWriteOnce
-#  storageClassName: local-storage
-#  resources:
-#    requests:
-#      storage: 30Gi
 ---
 # Source: elasticsearch/templates/statefulset.yaml
 apiVersion: apps/v1
@@ -94,11 +82,12 @@ spec:
     type: RollingUpdate
   volumeClaimTemplates:
     - metadata:
-        name: elasticsearch-master
+        name: volume
       spec:
         accessModes:
         - ReadWriteOnce
-        storageClassName: local-storage
+        # if not specified it uses DefaultClass
+        # storageClassName: hostpath
         resources:
           requests:
             storage: 30Gi
@@ -205,7 +194,7 @@ spec:
                     fi
                   fi
             failureThreshold: 3
-            initialDelaySeconds: 15
+            initialDelaySeconds: 30
             periodSeconds: 10
             successThreshold: 3
             timeoutSeconds: 5
@@ -217,10 +206,10 @@ spec:
           resources:
             limits:
               cpu: 1000m
-              memory: 512M #2Gi
+              memory: 1Gi #2Gi
             requests:
               cpu: 100m
-              memory: 512M #2Gi
+              memory: 1Gi #2Gi
           env:
             - name: node.name
               valueFrom:
@@ -235,7 +224,7 @@ spec:
             - name: network.host
               value: "0.0.0.0"
             - name: ES_JAVA_OPTS
-              value: "-Xmx128m -Xms128m" #"-Xmx1g -Xms1g"
+              value: "-Xmx512m -Xms512m" #"-Xmx1g -Xms1g"
             - name: node.data
               value: "true"
             - name: node.ingest
@@ -243,5 +232,5 @@ spec:
             - name: node.master
               value: "true"
           volumeMounts:
-            - name: "elasticsearch-master"
+            - name: "volume"
               mountPath: /usr/share/elasticsearch/data
