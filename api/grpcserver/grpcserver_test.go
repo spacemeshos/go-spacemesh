@@ -1447,7 +1447,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 
 	serializedTx, err := types.InterfaceToBytes(globalTx)
 	require.NoError(err, "error serializing tx")
-	
+
 	// This time, we expect an error, since isSynced is false (by default)
 	// The node should not allow tx submission when not synced
 	res, err := c.SubmitTransaction(

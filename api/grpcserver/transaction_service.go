@@ -21,14 +21,7 @@ type TransactionService struct {
 	Network api.NetworkAPI // P2P Swarm
 	Mesh    api.TxAPI      // Mesh
 	Mempool *state.TxMempool
-	syncer  Syncer
-}
-
-// Syncer defines ways of interacting with the node syncer
-// business logic
-type Syncer interface {
-	// IsSynced returns true if the node is synced false otherwise
-	IsSynced() bool
+	syncer  api.Syncer
 }
 
 // RegisterService registers this service with a grpc server instance
@@ -41,7 +34,7 @@ func NewTransactionService(
 	net api.NetworkAPI,
 	tx api.TxAPI,
 	mempool *state.TxMempool,
-	syncer Syncer,
+	syncer api.Syncer,
 ) *TransactionService {
 	return &TransactionService{
 		Network: net,
