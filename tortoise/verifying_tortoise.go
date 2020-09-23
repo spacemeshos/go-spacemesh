@@ -8,9 +8,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 )
 
-// MaxExceptionList is the maximum number of exceptions we agree to accept in a block
-const MaxExceptionList = 100
-
 type blockDataProvider interface {
 	GetBlock(id types.BlockID) (*types.Block, error)
 	LayerBlockIds(l types.LayerID) (ids []types.BlockID, err error)
@@ -43,7 +40,8 @@ type turtle struct {
 	Hdist types.LayerID
 	Evict types.LayerID
 
-	avgLayerSize int
+	avgLayerSize  int
+	maxExceptions int
 
 	GoodBlocksIndex map[types.BlockID]struct{}
 
@@ -73,6 +71,7 @@ func newTurtle(bdp blockDataProvider, hdist, avgLayerSize int) *turtle {
 		GoodBlocksIndex:     make(map[types.BlockID]struct{}),
 		BlocksToBlocks:      make([]opinion, 0, 1),
 		BlocksToBlocksIndex: make(map[types.BlockID]int),
+		maxExceptions:       hdist * avgLayerSize,
 	}
 	return t
 }
@@ -255,7 +254,7 @@ func (t *turtle) opinionMatches(layerid types.LayerID, opinion2 opinion, getres 
 	}
 
 	// return now if already exceed explist
-	if len(a)+len(f)+len(n) > MaxExceptionList {
+	if len(a)+len(f)+len(n) > t.maxExceptions {
 		return nil, errors.New(" matches too much exceptions")
 	}
 
@@ -279,7 +278,7 @@ func (t *turtle) opinionMatches(layerid types.LayerID, opinion2 opinion, getres 
 				}
 			}
 
-			if len(a)+len(f)+len(n) > MaxExceptionList {
+			if len(a)+len(f)+len(n) > t.maxExceptions {
 				return nil, errors.New(" matches too much exceptions")
 			}
 			continue
@@ -308,7 +307,7 @@ func (t *turtle) opinionMatches(layerid types.LayerID, opinion2 opinion, getres 
 		}
 	}
 
-	if len(a)+len(f)+len(n) > MaxExceptionList {
+	if len(a)+len(f)+len(n) > t.maxExceptions {
 		return nil, errors.New(" matches too much exceptions")
 	}
 
@@ -353,7 +352,6 @@ func (t *turtle) processBlock(block *types.Block) error {
 	//When a new block arrives, we look up the block it points to in our table,
 	// and add the corresponding vector (multiplied by the block weight) to our own vote-totals vector.
 	//We then add the vote difference vector and the explicit vote vector to our vote-totals vector.
-
 	baseidx, ok := t.BlocksToBlocksIndex[block.BaseBlock]
 	if !ok {
 		return fmt.Errorf("base block not found %v", block.BaseBlock)
@@ -362,6 +360,8 @@ func (t *turtle) processBlock(block *types.Block) error {
 	if len(t.BlocksToBlocks) < baseidx {
 		return fmt.Errorf("array is less than baseblock id %v idx:%v", block.BaseBlock, baseidx)
 	}
+
+	// TODO: save and vote negative on blocks that exceed the max exception list size.
 
 	baseBlockOpinion := t.BlocksToBlocks[baseidx]
 	blockid := block.ID()
