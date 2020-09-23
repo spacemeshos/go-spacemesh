@@ -379,16 +379,18 @@ func (t *BlockBuilder) createBlockLoop() {
 				continue
 			}
 
+			lyrLog := t.Log.WithFields(layerID)
+
 			t.Debug("builder got layer %v", layerID)
 			atxID, proofs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
 				events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to check for block eligibility")
-				t.With().Error("failed to check for block eligibility", layerID, log.Err(err))
+				lyrLog.With().Error("failed to check for block eligibility", layerID, log.Err(err))
 				continue
 			}
 			if len(proofs) == 0 {
 				events.ReportDoneCreatingBlock(false, uint64(layerID), "")
-				t.With().Info("Notice: not eligible for blocks in layer", layerID)
+				lyrLog.With().Info("Notice: not eligible for blocks in layer", layerID)
 				continue
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
@@ -398,19 +400,19 @@ func (t *BlockBuilder) createBlockLoop() {
 				txList, txs, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to get txs for block")
-					t.With().Error("failed to get txs for block", layerID, log.Err(err))
+					lyrLog.With().Error("failed to get txs for block", layerID, log.Err(err))
 					continue
 				}
 				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot create new block")
-					t.Error("cannot create new block, %v ", err)
+					lyrLog.With().Error("cannot create new block", log.Err(err))
 					continue
 				}
 				err = t.meshProvider.AddBlockWithTxs(blk, txs, nil)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to store block")
-					t.With().Error("failed to store block", blk.ID(), log.Err(err))
+					lyrLog.With().Error("failed to store block", blk.ID(), log.Err(err))
 					continue
 				}
 				go func() {
