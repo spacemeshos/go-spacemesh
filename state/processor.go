@@ -174,7 +174,8 @@ func (tp *TransactionProcessor) addState(stateRoot types.Hash32, layer types.Lay
 	return nil
 }
 
-func (tp *TransactionProcessor) getLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
+// GetLayerStateRoot returns the state root at a given layer
+func (tp *TransactionProcessor) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
 	bts, err := tp.processorDb.Get(getStateRootLayerKey(layer))
 	if err != nil {
 		return types.Hash32{}, err
@@ -193,7 +194,12 @@ func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types
 			layer,
 		)
 		tp.AddBalance(account, reward)
-		events.Publish(events.RewardReceived{Coinbase: account.String(), Amount: reward.Uint64()})
+		events.ReportRewardReceived(events.Reward{
+			Layer:       layer,
+			Total:       reward.Uint64(),
+			LayerReward: reward.Uint64() * uint64(len(miners)),
+			Coinbase:    account,
+		})
 	}
 	newHash, err := tp.Commit()
 
@@ -212,7 +218,7 @@ func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types
 func (tp *TransactionProcessor) LoadState(layer types.LayerID) error {
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
-	state, err := tp.getLayerStateRoot(layer)
+	state, err := tp.GetLayerStateRoot(layer)
 	if err != nil {
 		return err
 	}
@@ -232,7 +238,7 @@ func (tp *TransactionProcessor) LoadState(layer types.LayerID) error {
 	return nil
 }
 
-// Process applies transaction vector to  current state, it returns the remaining transactions that failed
+// Process applies transaction vector to current state, it returns the remaining transactions that failed
 func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerID types.LayerID) (remaining []*types.Transaction) {
 	for _, tx := range txs {
 		err := tp.ApplyTransaction(tx, layerID)
@@ -240,13 +246,8 @@ func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerID types.
 			tp.With().Warning("failed to apply transaction", tx.ID(), log.Err(err))
 			remaining = append(remaining, tx)
 		}
-		events.Publish(events.ValidTx{ID: tx.ID().String(), Valid: err == nil})
-		events.Publish(events.NewTx{
-			ID:          tx.ID().String(),
-			Origin:      tx.Origin().String(),
-			Destination: tx.Recipient.String(),
-			Amount:      tx.Amount,
-			Fee:         tx.Fee})
+		events.ReportValidTx(tx, err == nil)
+		events.ReportNewTx(tx)
 	}
 	return
 }

@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
 set -e
-# Ensure we use Go installed
+
 errcho() {
     RED='\033[0;31m'
     NC='\033[0m' # no color
     echo -e "${RED}$1${NC}"
 }
 
+# Minimal Go version supported
+min_major=1
+min_minor=14
+
+# Ensure Go is installed
 if ! (hash go 2>/dev/null) ; then
     errcho "Could not find a Go installation, please install Go and try again."
     exit 1;
 fi
 
-# Ensure we use Go version 1.14+
-read major minor patch <<< $(go version | sed 's/go version go\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\).*/\1 \2 \3/')
-if [[ ${major} -ne 1 || ${minor} -lt 14 ]]; then
-    errcho "Go 1.14+ is required (v$major.$minor.$patch is installed at `which go`)"
+read major minor <<< $(go version | sed 's/go version go\([0-9]*\)\.\([0-9]*\).*/\1 \2/')
+if [[ ${major} -ne $min_major || ${minor} -lt $min_minor ]]; then
+    errcho "Go ${min_major}.${min_minor}+ is required (v$major.$minor is installed at `which go`)"
     exit 1;
 fi

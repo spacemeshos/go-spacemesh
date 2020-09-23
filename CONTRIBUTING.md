@@ -52,7 +52,7 @@ Please follow these guidelines for your PR to be reviewed and be considered for 
 # Working on a funded issue 
 
 ## Step 1 - Discover :sunrise_over_mountains:
-- Browse the [open funded issues](https://github.com/spacemeshos/go-spacemesh/labels/funded) in our github repo, or on our [gitcoin.io funded issues page](https://gitcoin.co/profile/spacemeshos).
+- Browse the [open funded issues](https://github.com/spacemeshos/go-spacemesh/labels/funded%20%3Amoneybag%3A) in our github repo, or on our [gitcoin.io funded issues page](https://gitcoin.co/profile/spacemeshos).
 - Skip issues that another contributor is already actively working on.
 - Find a funded issue you'd like to be working on.
 - Ask any questions you may have about the work involved in the issue github page comments section.

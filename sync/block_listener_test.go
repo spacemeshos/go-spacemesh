@@ -601,7 +601,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	bl1.Syncer.Start()
 	bl2.Start()
 
-	tx, err := mesh.NewSignedTx(1, types.BytesToAddress([]byte{0x01}), 10, 100, 10, signing.NewEdSigner())
+	tx, err := types.NewSignedTx(1, types.BytesToAddress([]byte{0x01}), 10, 100, 10, signing.NewEdSigner())
 	assert.NoError(t, err)
 	signer := signing.NewEdSigner()
 	atx := atx(signer.PublicKey().String())

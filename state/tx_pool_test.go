@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
@@ -173,7 +172,7 @@ func createBatch(t testing.TB, signer *signing.EdSigner) ([]*types.Transaction, 
 	var txBatch []*types.Transaction
 	var txIDBatch []types.TransactionID
 	for i := uint64(0); i < 10000; i++ {
-		tx, err := mesh.NewSignedTx(5+1, types.Address{}, 50, 100, 1, signer)
+		tx, err := types.NewSignedTx(5+1, types.Address{}, 50, 100, 1, signer)
 		require.NoError(t, err)
 		//tx := newTx(t, 5+i, 50, signer)
 		txBatch = append(txBatch, tx)

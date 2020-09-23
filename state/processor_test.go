@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -58,7 +57,7 @@ func createAccount(state *TransactionProcessor, addr types.Address, balance int6
 }
 
 func createTransaction(t *testing.T, nonce uint64, destination types.Address, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
-	tx, err := mesh.NewSignedTx(nonce, destination, amount, 100, fee, signer)
+	tx, err := types.NewSignedTx(nonce, destination, amount, 100, fee, signer)
 	assert.NoError(t, err)
 	return tx
 }
@@ -492,7 +491,7 @@ func createXdrSignedTransaction(t *testing.T, key ed25519.PrivateKey) *types.Tra
 	r := require.New(t)
 	signer, err := signing.NewEdSignerFromBuffer(key)
 	r.NoError(err)
-	tx, err := mesh.NewSignedTx(1111, toAddr([]byte{0xde}), 123, 11, 456, signer)
+	tx, err := types.NewSignedTx(1111, toAddr([]byte{0xde}), 123, 11, 456, signer)
 	r.NoError(err)
 	return tx
 }
@@ -565,7 +564,7 @@ func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
 	_, err = processor.ApplyTransactions(3, []*types.Transaction{})
 	assert.NoError(t, err)
 
-	_, err = processor.getLayerStateRoot(3)
+	_, err = processor.GetLayerStateRoot(3)
 	assert.NoError(t, err)
 
 }
