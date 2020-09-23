@@ -1,14 +1,18 @@
-from datetime import datetime, timedelta
+import time
+
 from kubernetes import config as k8s_config
 from kubernetes import client
-from kubernetes.client.rest import ApiException
 import os
 import pytest
 from pytest_testconfig import config as testconfig
 import random
 import string
 import subprocess
+import yaml
 
+from tests.deployment import wait_to_deployment_to_be_ready, wait_for_service_to_be_ready
+from tests.statefulset import wait_to_statefulset_to_be_ready
+from tests.deployment import add_elastic_cluster, add_filebeat_cluster, add_kibana_cluster
 from tests import pod
 from tests import config as tests_conf
 from tests.context import Context
@@ -247,3 +251,10 @@ def add_curl(request, init_session, setup_bootstrap):
         return True
 
     return _run_curl_pod()
+
+
+@pytest.fixture(scope='module')
+def add_elk(init_session):
+    add_elastic_cluster(init_session)
+    add_filebeat_cluster(init_session)
+    add_kibana_cluster(init_session)

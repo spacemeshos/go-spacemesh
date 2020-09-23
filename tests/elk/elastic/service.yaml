@@ -1,0 +1,23 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: elasticsearch-master
+  namespace: NAMESPACE
+  labels:
+    heritage: "Helm"
+    chart: "elasticsearch"
+    app: "elasticsearch-master"
+  annotations:
+    {}
+spec:
+  type: ClusterIP
+  selector:
+    chart: "elasticsearch"
+    app: "elasticsearch-master"
+  ports:
+    - name: http
+      protocol: TCP
+      port: 9200
+    - name: transport
+      protocol: TCP
+      port: 9300
