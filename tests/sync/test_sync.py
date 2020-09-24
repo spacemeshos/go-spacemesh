@@ -48,7 +48,7 @@ def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
 
 def search_pod_logs(namespace, pod_name, term):
     current_index = get_curr_ind()
-    api = ES().get_search_api()
+    api = ES(namespace).get_search_api()
     fltr = Q("match_phrase", kubernetes__pod_name=pod_name) & Q("match_phrase", kubernetes__namespace_name=namespace)
     s = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time")
     res = s.execute()

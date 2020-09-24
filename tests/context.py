@@ -1,7 +1,8 @@
 import os
+import time
 
 from elasticsearch import Elasticsearch
-from kubernetes import config
+from kubernetes import config, client
 
 
 ELASTIC_URL_FMT = "http://elastic-{0}.spacemesh.io"
@@ -21,16 +22,18 @@ def singleton(cls):
 @singleton
 class ES:
 
-    def __init__(self):
-        ES_PASSWD = os.getenv("ES_PASSWD")
-        if not ES_PASSWD:
-            raise Exception("Unknown Elasticsearch password. Please check 'ES_PASSWD' environment variable")
+    def __init__(self, namespace):
+        self.namespace = namespace
+        self.es_ip = self.get_elastic_ip()
+        self.es = Elasticsearch(self.es_ip, port=9200, timeout=90)
 
-        ctxt = Context()
-        cluster_name = ctxt.get_cluster_name()
-        es_url = generate_elastic_url(cluster_name)
-        print("ES_PASSWD is {0}".format(ES_PASSWD))
-        self.es = Elasticsearch(es_url, http_auth=("spacemesh", ES_PASSWD), port=80, timeout=90)
+    def get_elastic_ip(self):
+        k8s_client = client.CoreV1Api()
+        services = k8s_client.list_namespaced_service(namespace=self.namespace)
+        for serv in services.items:
+            print(serv)
+            if serv.metadata.name == 'elasticsearch-master':
+                return serv.status.load_balancer.ingress[0].ip
 
     def get_search_api(self):
         return self.es

@@ -10,7 +10,7 @@ metadata:
   annotations:
     {}
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     chart: "elasticsearch"
     app: "elasticsearch-master"

@@ -117,7 +117,7 @@ def get_layers(namespace, find_fails=True):
 # ============================== END MESSAGE CONTENT ==================================
 
 def get_podlist(namespace, depname):
-    api = ES().get_search_api()
+    api = ES(namespace).get_search_api()
     fltr = get_pod_name_and_namespace_queries(depname, namespace)
     s = Search(index=current_index, using=api).query('bool').filter(fltr)
     hits = list(s.scan())
@@ -126,7 +126,7 @@ def get_podlist(namespace, depname):
 
 
 def get_pod_logs(namespace, pod_name):
-    api = ES().get_search_api()
+    api = ES(namespace).get_search_api()
     fltr = get_pod_name_and_namespace_queries(pod_name, namespace)
     s = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time")
     res = s.execute()
@@ -187,7 +187,7 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
 
     """
     # TODO : break this to smaller functions ?
-    es = ES().get_search_api()
+    es = ES(namespace).get_search_api()
     fltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
     for key in fields:
         fltr = fltr & Q("match_phrase", **{key: fields[key]})
@@ -197,6 +197,22 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
         for q in queries:
             fltr = fltr & q
 
+    print("#@!#@!#@!")
+    print(fltr)
+    print("#@!#@!#@!")
+    s = Search(using=es).query('bool', filter=[fltr])
+    print(s)
+    print("sleeping for 5000 secs")
+    time.sleep(5000)
+    try:
+        hits = list(s.scan())
+    except Exception as e:
+        print(e)
+
+    print("#@!#@!#@!")
+    print(hits)
+    print('$#@ in queries sleeping for 5000 secs')
+    time.sleep(5000)
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 
@@ -331,7 +347,7 @@ def find_dups(indx, namespace, client_po_name, fields, max=1):
     {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}, 10)
     """
 
-    es = ES().get_search_api()
+    es = ES(namespace).get_search_api()
     fltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
     for f in fields:
         fltr = fltr & Q("match_phrase", **{f: fields[f]})
@@ -356,7 +372,7 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
     # Usage : find_dups(current_index, "t7t9e", "client-t7t9e-28qj7",
     # {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}, 10)
 
-    es = ES().get_search_api()
+    es = ES(namespace).get_search_api()
     fltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
     for f in fields:
         fltr = fltr & Q("match_phrase", **{f: fields[f]})
