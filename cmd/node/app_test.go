@@ -41,6 +41,7 @@ type AppTestSuite struct {
 func (suite *AppTestSuite) SetupTest() {
 	suite.apps = make([]*SpacemeshApp, 0, 0)
 	suite.dbs = make([]string, 0, 0)
+	suite.poetCleanup = func(bool) error { return nil }
 }
 
 func (suite *AppTestSuite) TearDownTest() {
@@ -100,9 +101,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
-	if err != nil {
-		log.Panic("failed creating poet client harness: %v", err)
-	}
+	require.NoError(suite.T(), err, "failed creating poet client harness: %v", err)
 	suite.poetCleanup = poetHarness.Teardown
 
 	rolacle := eligibility.New()
@@ -522,9 +521,7 @@ func TestShutdown(t *testing.T) {
 	pub := edSgn.PublicKey()
 
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
-	if err != nil {
-		log.Panic("failed creating poet harness: %v", err)
-	}
+	r.NoError(err, "failed creating poet client harness: %v", err)
 
 	vrfPriv, vrfPub := BLS381.GenKeyPair(BLS381.DefaultSeed())
 	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
@@ -549,7 +546,7 @@ func TestShutdown(t *testing.T) {
 	smApp.startServices()
 	ActivateGrpcServer(smApp)
 
-	poetHarness.Teardown(true)
+	r.NoError(poetHarness.Teardown(true))
 	smApp.stopServices()
 
 	time.Sleep(5 * time.Second)
