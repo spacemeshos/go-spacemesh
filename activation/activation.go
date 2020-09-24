@@ -3,6 +3,7 @@
 package activation
 
 import (
+	"errors"
 	"fmt"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -11,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/shared"
 	"sync"
-	"sync/atomic"
 )
 
 // AtxProtocol is the protocol id for broadcasting atxs over gossip
@@ -35,8 +35,8 @@ func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
 	return 0
 }
 
-type nipstBuilder interface {
-	BuildNIPST(challenge *types.Hash32, timeout chan struct{}, stop chan struct{}) (*types.NIPST, error)
+type nipostBuilder interface {
+	BuildNIPoST(challenge *types.Hash32, timeout chan struct{}, stop chan struct{}) (*types.NIPoST, error)
 }
 
 type idStore interface {
@@ -44,9 +44,9 @@ type idStore interface {
 	GetIdentity(id string) (types.NodeID, error)
 }
 
-type nipstValidator interface {
-	Validate(id signing.PublicKey, nipst *types.NIPST, expectedChallenge types.Hash32) error
-	VerifyPost(id signing.PublicKey, proof *types.PostProof, space uint64) error
+type nipostValidator interface {
+	Validate(id signing.PublicKey, NIPoST *types.NIPoST, expectedChallenge types.Hash32) error
+	ValidatePoST(id []byte, PoST *types.PoST, PoSTMetadata *types.PoSTMetadata) error
 }
 
 type atxDBProvider interface {
@@ -67,14 +67,28 @@ type signer interface {
 	Sign(m []byte) []byte
 }
 
-const (
-	// InitIdle status means that an init file does not exist and is not prepared
-	InitIdle = 1 + iota
-	// InitInProgress status means that an init file preparation is now in progress
-	InitInProgress
-	// InitDone status indicates there is a prepared init file
-	InitDone
-)
+type layerClock interface {
+	AwaitLayer(layerID types.LayerID) chan struct{}
+	GetCurrentLayer() types.LayerID
+}
+
+type syncer interface {
+	Await() chan struct{}
+}
+
+type SmeshingProvider interface {
+	Smeshing() bool
+	StartSmeshing(coinbase types.Address) error
+	StopSmeshing() error
+	SmesherID() types.NodeID
+	Coinbase() types.Address
+	SetCoinbase(coinbase types.Address)
+	MinGas() uint64
+	SetMinGas(value uint64)
+}
+
+// A compile time check to ensure that Builder fully implements the SmeshingProvider interface.
+var _ SmeshingProvider = (*Builder)(nil)
 
 // Builder struct is the struct that orchestrates the creation of activation transactions
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
@@ -88,68 +102,82 @@ type Builder struct {
 	mesh            meshProvider
 	layersPerEpoch  uint16
 	tickProvider    poetNumberOfTickProvider
-	nipstBuilder    nipstBuilder
-	postProver      PostProverClient
-	challenge       *types.NIPSTChallenge
-	commitment      *types.PostProof
+	nipostBuilder   nipostBuilder
+	post            PostProvider
+	challenge       *types.NIPoSTChallenge
+	initialPoST     *types.PoST
 	layerClock      layerClock
 	stop            chan struct{}
-	started         uint32
+	started         bool
+	mtx             sync.Mutex
 	store           bytesStore
 	syncer          syncer
 	accountLock     sync.RWMutex
-	initStatus      int32
-	initDone        chan struct{}
 	log             log.Log
 }
 
-type layerClock interface {
-	AwaitLayer(layerID types.LayerID) chan struct{}
-	GetCurrentLayer() types.LayerID
-}
-
-type syncer interface {
-	Await() chan struct{}
-}
-
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeID types.NodeID, coinbaseAccount types.Address, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipstBuilder nipstBuilder, postProver PostProverClient, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
+func NewBuilder(nodeID types.NodeID, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipostBuilder nipostBuilder, post PostProvider, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
 	return &Builder{
-		signer:          signer,
-		nodeID:          nodeID,
-		coinbaseAccount: coinbaseAccount,
-		db:              db,
-		net:             net,
-		mesh:            mesh,
-		layersPerEpoch:  layersPerEpoch,
-		nipstBuilder:    nipstBuilder,
-		postProver:      postProver,
-		layerClock:      layerClock,
-		stop:            make(chan struct{}),
-		syncer:          syncer,
-		store:           store,
-		initStatus:      InitIdle,
-		initDone:        make(chan struct{}),
-		log:             log,
+		signer:         signer,
+		nodeID:         nodeID,
+		db:             db,
+		net:            net,
+		mesh:           mesh,
+		layersPerEpoch: layersPerEpoch,
+		nipostBuilder:  nipostBuilder,
+		post:           post,
+		layerClock:     layerClock,
+		stop:           make(chan struct{}),
+		syncer:         syncer,
+		store:          store,
+		log:            log,
 	}
+}
+
+func (b *Builder) Smeshing() bool {
+	b.mtx.Lock()
+	defer b.mtx.Unlock()
+
+	return b.started
 }
 
 // Start is the main entry point of the atx builder. it runs the main loop of the builder and shouldn't be called more than once
-func (b *Builder) Start() {
-	if atomic.LoadUint32(&b.started) == 1 {
-		return
+func (b *Builder) StartSmeshing(coinbase types.Address) error {
+	b.mtx.Lock()
+	defer b.mtx.Unlock()
+
+	if b.started {
+		return errors.New("already started")
 	}
-	atomic.StoreUint32(&b.started, 1)
+
+	if _, ok := b.post.InitCompleted(); !ok {
+		return errors.New("PoST data creation not completed")
+	}
+
+	b.started = true
 	go b.loop()
+	return nil
 }
 
 // Stop stops the atx builder.
-func (b *Builder) Stop() {
+func (b *Builder) StopSmeshing() error {
+	b.mtx.Lock()
+	defer b.mtx.Unlock()
+
+	if b.started == false {
+		return errors.New("not started")
+	}
+
 	close(b.stop)
+	b.started = false
+	// TODO(moshababo): block until stop has finalized
+
+	return nil
 }
 
 // GetSmesherID returns the ID of the smesher that created this activation
-func (b *Builder) GetSmesherID() types.NodeID {
+func (b *Builder) SmesherID() types.NodeID {
 	return b.nodeID
 }
 
@@ -179,9 +207,17 @@ func (b *Builder) loop() {
 	if err != nil {
 		log.Info("challenge not loaded: %s", err)
 	}
-	if err := b.waitOrStop(b.initDone); err != nil {
+
+	// Once initialized, run the execution phase with zero-challenge,
+	// to create the initial proof (the commitment).
+	// TODO(moshababo): don't generate the commitment every time smeshing is starting, but once only.
+	b.initialPoST, _, err = b.post.GenerateProof(shared.ZeroChallenge)
+	if err != nil {
+		b.log.Error("PoST execution failed: %v", err)
+		b.started = false
 		return
 	}
+
 	// ensure layer 1 has arrived
 	if err := b.waitOrStop(b.layerClock.AwaitLayer(1)); err != nil {
 		return
@@ -202,9 +238,9 @@ func (b *Builder) loop() {
 	}
 }
 
-func (b *Builder) buildNipstChallenge(currentLayer types.LayerID) error {
+func (b *Builder) buildNIPoSTChallenge(currentLayer types.LayerID) error {
 	<-b.syncer.Await()
-	challenge := &types.NIPSTChallenge{NodeID: b.nodeID}
+	challenge := &types.NIPoSTChallenge{NodeID: b.nodeID}
 	if posAtx, err := b.GetPositioningAtx(); err != nil {
 		if b.currentEpoch() != 0 {
 			return fmt.Errorf("failed to get positioning ATX: %v", err)
@@ -218,138 +254,76 @@ func (b *Builder) buildNipstChallenge(currentLayer types.LayerID) error {
 		challenge.EndTick = posAtx.EndTick + b.tickProvider.NumOfTicks()
 	}
 	if prevAtx, err := b.GetPrevAtx(b.nodeID); err != nil {
-		challenge.CommitmentMerkleRoot = b.commitment.MerkleRoot
+		challenge.InitialPoSTIndices = b.initialPoST.Indices
 	} else {
 		challenge.PrevATXID = prevAtx.ID()
 		challenge.Sequence = prevAtx.Sequence + 1
 	}
 	b.challenge = challenge
 	if err := b.storeChallenge(b.challenge); err != nil {
-		return fmt.Errorf("failed to store nipst challenge: %v", err)
+		return fmt.Errorf("failed to store NIPoST challenge: %v", err)
 	}
 	return nil
 }
 
-// StartPost initiates post commitment generation process. It returns an error if a process is already in progress or
-// if a post has been already initialized
-func (b *Builder) StartPost(rewardAddress types.Address, dataDir string, space uint64) error {
-	if !atomic.CompareAndSwapInt32(&b.initStatus, InitIdle, InitInProgress) {
-		switch atomic.LoadInt32(&b.initStatus) {
-		case InitDone:
-			return fmt.Errorf("already initialized")
-		case InitInProgress:
-			return fmt.Errorf("already started")
-		}
-	}
+//// MiningStats returns state of post init, coinbase reward account and data directory path for post commitment
+//func (b *Builder) MiningStats() (int, uint64, string, string) {
+//	acc := b.Coinbase()
+//	initStatus := atomic.LoadInt32(&b.initStatus)
+//	remainingBytes := uint64(0)
+//	if initStatus == statusInProgress {
+//		var err error
+//		_, remainingBytes, err = b.postProver.IsInitialized()
+//		if err != nil {
+//			b.log.With().Error("failed to check remaining init bytes", log.Err(err))
+//		}
+//	}
+//	datadir := b.postProver.Cfg().DataDir
+//	return int(initStatus), remainingBytes, acc.String(), datadir
+//}
 
-	if err := b.postProver.SetParams(dataDir, space); err != nil {
-		return err
-	}
-	b.SetCoinbaseAccount(rewardAddress)
-
-	initialized, _, err := b.postProver.IsInitialized()
-	if err != nil {
-		atomic.StoreInt32(&b.initStatus, InitIdle)
-		return err
-	}
-
-	if !initialized {
-		if err := b.postProver.VerifyInitAllowed(); err != nil {
-			atomic.StoreInt32(&b.initStatus, InitIdle)
-			return err
-		}
-	}
-
-	b.log.With().Info("Starting PoST initialization",
-		log.String("datadir", dataDir),
-		log.String("space", fmt.Sprintf("%d", space)),
-		log.String("rewardAddress", fmt.Sprintf("%x", rewardAddress)),
-	)
-
-	go func() {
-		if initialized {
-			// If initialized, run the execution phase with zero-challenge,
-			// to create the initial proof (the commitment).
-			b.commitment, err = b.postProver.Execute(shared.ZeroChallenge)
-			if err != nil {
-				b.log.Error("PoST execution failed: %v", err)
-				atomic.StoreInt32(&b.initStatus, InitIdle)
-				return
-			}
-		} else {
-			// If not initialized, run the initialization phase.
-			// This would create the initial proof (the commitment) as well.
-			b.commitment, err = b.postProver.Initialize()
-			if err != nil {
-				b.log.Error("PoST initialization failed: %v", err)
-				atomic.StoreInt32(&b.initStatus, InitIdle)
-				return
-			}
-		}
-
-		b.log.With().Info("PoST initialization completed",
-			log.String("datadir", dataDir),
-			log.String("space", fmt.Sprintf("%d", space)),
-			log.String("commitment merkle root", fmt.Sprintf("%x", b.commitment.MerkleRoot)),
-		)
-
-		atomic.StoreInt32(&b.initStatus, InitDone)
-		close(b.initDone)
-	}()
-
-	return nil
-}
-
-// MiningStats returns state of post init, coinbase reward account and data directory path for post commitment
-func (b *Builder) MiningStats() (int, uint64, string, string) {
-	acc := b.getCoinbaseAccount()
-	initStatus := atomic.LoadInt32(&b.initStatus)
-	remainingBytes := uint64(0)
-	if initStatus == InitInProgress {
-		var err error
-		_, remainingBytes, err = b.postProver.IsInitialized()
-		if err != nil {
-			b.log.With().Error("failed to check remaining init bytes", log.Err(err))
-		}
-	}
-	datadir := b.postProver.Cfg().DataDir
-	return int(initStatus), remainingBytes, acc.String(), datadir
-}
-
-// SetCoinbaseAccount sets the address rewardAddress to be the coinbase account written into the activation transaction
+// SetCoinbase sets the address rewardAddress to be the coinbase account written into the activation transaction
 // the rewards for blocks made by this miner will go to this address
-func (b *Builder) SetCoinbaseAccount(rewardAddress types.Address) {
+func (b *Builder) SetCoinbase(rewardAddress types.Address) {
 	b.accountLock.Lock()
 	b.coinbaseAccount = rewardAddress
 	b.accountLock.Unlock()
 }
 
-func (b *Builder) getCoinbaseAccount() types.Address {
+func (b *Builder) Coinbase() types.Address {
 	b.accountLock.RLock()
 	acc := b.coinbaseAccount
 	b.accountLock.RUnlock()
 	return acc
 }
 
-func (b *Builder) getNipstKey() []byte {
-	return []byte("Nipst")
+func (b *Builder) MinGas() uint64 {
+	panic("not implemented")
 }
 
-func (b *Builder) storeChallenge(ch *types.NIPSTChallenge) error {
+func (b *Builder) SetMinGas(value uint64) {
+	panic("not implemented")
+}
+
+func (b *Builder) getNIPoSTKey() []byte {
+	return []byte("NIPoST")
+}
+
+func (b *Builder) storeChallenge(ch *types.NIPoSTChallenge) error {
 	bts, err := types.InterfaceToBytes(ch)
 	if err != nil {
 		return err
 	}
-	return b.store.Put(b.getNipstKey(), bts)
+	return b.store.Put(b.getNIPoSTKey(), bts)
 }
 
 func (b *Builder) loadChallenge() error {
-	bts, err := b.store.Get(b.getNipstKey())
+	bts, err := b.store.Get(b.getNIPoSTKey())
 	if err != nil {
 		return err
 	}
 	if len(bts) > 0 {
-		tp := &types.NIPSTChallenge{}
+		tp := &types.NIPoSTChallenge{}
 		err = types.BytesToInterface(bts, tp)
 		if err != nil {
 			return err
@@ -366,7 +340,7 @@ func (b *Builder) PublishActivationTx() error {
 		b.log.With().Info("using existing atx challenge", b.currentEpoch())
 	} else {
 		b.log.With().Info("building new atx challenge", b.currentEpoch())
-		err := b.buildNipstChallenge(b.layerClock.GetCurrentLayer())
+		err := b.buildNIPoSTChallenge(b.layerClock.GetCurrentLayer())
 		if err != nil {
 			return err
 		}
@@ -379,12 +353,12 @@ func (b *Builder) PublishActivationTx() error {
 	}
 	// ⏳ the following method waits for a PoET proof, which should take ~1 epoch
 	atxExpired := b.layerClock.AwaitLayer((pubEpoch + 2).FirstLayer()) // this fires when the target epoch is over
-	nipst, err := b.nipstBuilder.BuildNIPST(hash, atxExpired, b.stop)
+	nipost, err := b.nipostBuilder.BuildNIPoST(hash, atxExpired, b.stop)
 	if err != nil {
 		if _, stopRequested := err.(StopRequestedError); stopRequested {
 			return err
 		}
-		return fmt.Errorf("failed to build nipst: %v", err)
+		return fmt.Errorf("failed to build nipost: %v", err)
 	}
 
 	b.log.With().Info("awaiting atx publication epoch",
@@ -397,7 +371,7 @@ func (b *Builder) PublishActivationTx() error {
 	}
 	b.log.Info("publication epoch has arrived!")
 	if discarded := b.discardChallengeIfStale(); discarded {
-		return fmt.Errorf("atx target epoch has passed during nipst construction")
+		return fmt.Errorf("atx target epoch has passed during nipost construction")
 	}
 
 	// when we reach here an epoch has passed
@@ -410,12 +384,12 @@ func (b *Builder) PublishActivationTx() error {
 	}
 
 	var activeSetSize uint32
-	var commitment *types.PostProof
+	var initialPoST *types.PoST
 	if b.challenge.PrevATXID == *types.EmptyATXID {
-		commitment = b.commitment
+		initialPoST = b.initialPoST
 	}
 
-	atx := types.NewActivationTx(*b.challenge, b.getCoinbaseAccount(), nipst, commitment)
+	atx := types.NewActivationTx(*b.challenge, b.Coinbase(), nipost, initialPoST)
 
 	b.log.With().Info("active ids seen for epoch", log.FieldNamed("atx_pub_epoch", pubEpoch),
 		log.Uint32("view_cnt", activeSetSize))
@@ -458,8 +432,8 @@ func (b *Builder) currentEpoch() types.EpochID {
 
 func (b *Builder) discardChallenge() {
 	b.challenge = nil
-	if err := b.store.Put(b.getNipstKey(), []byte{}); err != nil {
-		b.log.Error("failed to discard Nipst challenge: %v", err)
+	if err := b.store.Put(b.getNIPoSTKey(), []byte{}); err != nil {
+		b.log.Error("failed to discard NIPoST challenge: %v", err)
 	}
 }
 

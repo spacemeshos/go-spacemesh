@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/collector"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
@@ -16,6 +15,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/post/initialization"
+	"io/ioutil"
 	"strconv"
 	"sync"
 	"time"
@@ -129,10 +130,11 @@ func getTestDefaultConfig() *config.Config {
 	}
 
 	cfg.POST = activation.DefaultConfig()
-	cfg.POST.Difficulty = 5
-	cfg.POST.NumProvenLabels = 10
-	cfg.POST.SpacePerUnit = 1 << 10 // 1KB.
+	cfg.POST.NumLabels = 1 << 10
 	cfg.POST.NumFiles = 1
+
+	cfg.PostOptions = activation.DefaultPostOptions()
+	cfg.PostOptions.ComputeProviderID = int(initialization.CPUProviderID())
 
 	cfg.HARE.N = 5
 	cfg.HARE.F = 2
@@ -148,7 +150,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.LayerDurationSec = 20
 	cfg.HareEligibility.ConfidenceParam = 4
 	cfg.HareEligibility.EpochOffset = 0
-	cfg.StartMining = true
+	cfg.StartSmeshing = true
 	cfg.SyncRequestTimeout = 500
 	cfg.SyncInterval = 2
 	cfg.SyncValidationDelta = 5
@@ -160,7 +162,7 @@ func getTestDefaultConfig() *config.Config {
 func ActivateGrpcServer(smApp *SpacemeshApp) {
 	smApp.Config.API.StartGrpcServer = true
 	layerDuration := smApp.Config.LayerDurationSec
-	smApp.grpcAPIService = api.NewGrpcService(smApp.Config.API.GrpcServerPort, smApp.P2P, smApp.state, smApp.mesh, smApp.txPool, smApp.atxBuilder, smApp.oracle, smApp.clock, nil, layerDuration, nil, nil, nil)
+	smApp.grpcAPIService = api.NewGrpcService(smApp.Config.API.GrpcServerPort, smApp.P2P, smApp.state, smApp.mesh, smApp.txPool, smApp.oracle, smApp.clock, layerDuration, nil, nil, nil)
 	smApp.grpcAPIService.StartService()
 }
 
@@ -191,11 +193,12 @@ type network interface {
 // InitSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
 func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network) (*SpacemeshApp, error) {
-
 	smApp := NewSpacemeshApp()
 	smApp.Config = &cfg
 	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
 	smApp.Config.GenesisTime = genesisTime
+	smApp.Config.POST.DataDir, _ = ioutil.TempDir("", "sm-app-test-post-datadir")
+	smApp.Config.PostOptions.DataDir = smApp.Config.POST.DataDir
 	edSgn := signing.NewEdSigner()
 	pub := edSgn.PublicKey()
 
@@ -209,12 +212,7 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.
 	hareOracle := newLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
-	postClient, err := activation.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))
-	if err != nil {
-		return nil, err
-	}
-
-	err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
+	err := smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
 	if err != nil {
 		return nil, err
 	}

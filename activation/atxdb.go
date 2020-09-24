@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/post/shared"
 	"sync"
 	"time"
 )
@@ -59,7 +60,7 @@ type DB struct {
 	atxHeaderCache    AtxCache
 	meshDb            *mesh.DB
 	LayersPerEpoch    uint16
-	nipstValidator    nipstValidator
+	nipostValidator   nipostValidator
 	pendingActiveSet  map[types.Hash12]*sync.Mutex
 	log               log.Log
 	calcActiveSetFunc func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
@@ -70,14 +71,14 @@ type DB struct {
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
 // their validity
-func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint16, nipstValidator nipstValidator, log log.Log) *DB {
+func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint16, nipostValidator nipostValidator, log log.Log) *DB {
 	db := &DB{
 		idStore:          idStore,
 		atxs:             dbStore,
 		atxHeaderCache:   NewAtxCache(600),
 		meshDb:           meshDb,
 		LayersPerEpoch:   layersPerEpoch,
-		nipstValidator:   nipstValidator,
+		nipostValidator:  nipostValidator,
 		pendingActiveSet: make(map[types.Hash12]*sync.Mutex),
 		log:              log,
 		atxChannels:      make(map[types.ATXID]*atxChan),
@@ -332,10 +333,10 @@ func (db *DB) deleteLock(viewHash types.Hash12) {
 //   than the current ATX's sequence number.
 // - If the sequence number is zero: PrevATX is empty.
 // - Positioning ATX points to a syntactically valid ATX.
-// - NIPST challenge is a hash of the serialization of the following fields:
+// - NIPoST challenge is a hash of the serialization of the following fields:
 //   NodeID, SequenceNumber, PrevATXID, LayerID, StartTick, PositioningATX.
-// - The NIPST is valid.
-// - ATX LayerID is NipstLayerTime or less after the PositioningATX LayerID.
+// - The NIPoST is valid.
+// - ATX LayerID is NiPoSTLayerTime or less after the PositioningATX LayerID.
 // - The ATX view of the previous epoch contains ActiveSetSize activations.
 func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	events.ReportNewActivation(atx)
@@ -346,6 +347,7 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	if atx.NodeID.Key != pub.String() {
 		return fmt.Errorf("node ids don't match")
 	}
+
 	if atx.PrevATXID != *types.EmptyATXID {
 		err = db.ValidateSignedAtx(*pub, atx)
 		if err != nil { // means there is no such identity
@@ -373,28 +375,36 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 			return fmt.Errorf("sequence number is not one more than prev sequence number")
 		}
 
-		if atx.Commitment != nil {
-			return fmt.Errorf("prevATX declared, but commitment proof is included")
+		if atx.InitialPoST != nil {
+			return fmt.Errorf("prevATX declared, but initial PoST is included")
 		}
 
-		if atx.CommitmentMerkleRoot != nil {
-			return fmt.Errorf("prevATX declared, but commitment merkle root is included in challenge")
+		if atx.InitialPoSTIndices != nil {
+			return fmt.Errorf("prevATX declared, but initial PoST indices is included in challenge")
 		}
 	} else {
 		if atx.Sequence != 0 {
 			return fmt.Errorf("no prevATX declared, but sequence number not zero")
 		}
-		if atx.Commitment == nil {
-			return fmt.Errorf("no prevATX declared, but commitment proof is not included")
+
+		if atx.InitialPoST == nil {
+			return fmt.Errorf("no prevATX declared, but initial PoST is not included")
 		}
-		if atx.CommitmentMerkleRoot == nil {
-			return fmt.Errorf("no prevATX declared, but commitment merkle root is not included in challenge")
+
+		if atx.InitialPoSTIndices == nil {
+			return fmt.Errorf("no prevATX declared, but initial PoST indices is not included in challenge")
 		}
-		if !bytes.Equal(atx.Commitment.MerkleRoot, atx.CommitmentMerkleRoot) {
-			return errors.New("commitment merkle root included in challenge is not equal to the merkle root included in the proof")
+
+		if !bytes.Equal(atx.InitialPoST.Indices, atx.InitialPoSTIndices) {
+			return errors.New("initial PoST indices included in challenge does not equal to the initial PoST indices included in the atx")
 		}
-		if err := db.nipstValidator.VerifyPost(*pub, atx.Commitment, atx.Nipst.Space); err != nil {
-			return fmt.Errorf("invalid commitment proof: %v", err)
+
+		// Use the NIPoST's PoST metadata, while overriding the challenge to a zero challenge,
+		// as expected from the initial PoST.
+		initialPoSTMetadata := *atx.NIPoST.PoSTMetadata
+		initialPoSTMetadata.Challenge = shared.ZeroChallenge
+		if err := db.nipostValidator.ValidatePoST(pub.Bytes(), atx.InitialPoST, &initialPoSTMetadata); err != nil {
+			return fmt.Errorf("invalid initial PoST: %v", err)
 		}
 	}
 
@@ -418,15 +428,15 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		}
 	}
 
-	hash, err := atx.NIPSTChallenge.Hash()
+	hash, err := atx.NIPoSTChallenge.Hash()
 	if err != nil {
-		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
+		return fmt.Errorf("cannot get NIPoST Challenge hash: %v", err)
 	}
-	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.String()), atx.ID())
+	db.log.With().Info("Validated NIPoST", log.String("challenge_hash", hash.String()), atx.ID())
 
 	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeID.Key))
-	if err = db.nipstValidator.Validate(*pubKey, atx.Nipst, *hash); err != nil {
-		return fmt.Errorf("NIPST not valid: %v", err)
+	if err = db.nipostValidator.Validate(*pubKey, atx.NIPoST, *hash); err != nil {
+		return fmt.Errorf("NIPoST not valid: %v", err)
 	}
 
 	return nil
@@ -531,8 +541,8 @@ func getAtxBody(atx *types.ActivationTx) *types.ActivationTx {
 	return &types.ActivationTx{
 		InnerActivationTx: &types.InnerActivationTx{
 			ActivationTxHeader: nil,
-			Nipst:              atx.Nipst,
-			Commitment:         atx.Commitment,
+			NIPoST:             atx.NIPoST,
+			InitialPoST:        atx.InitialPoST,
 		},
 		Sig: atx.Sig,
 	}
@@ -742,8 +752,8 @@ func (db *DB) HandleGossipAtx(data service.GossipMessage, syncer service.Syncer)
 	db.log.With().Info("got new ATX", atx.Fields(len(data.Bytes()))...)
 
 	//todo fetch from neighbour (#1925)
-	if atx.Nipst == nil {
-		db.log.Panic("nil nipst in gossip")
+	if atx.NIPoST == nil {
+		db.log.Panic("nil nipost in gossip")
 		return
 	}
 

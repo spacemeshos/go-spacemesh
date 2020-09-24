@@ -106,16 +106,16 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 	}
 	poetRef := sha256.Sum256(poetProofBytes)
 
-	atx1.Nipst.PostProof.Challenge = poetRef[:]
+	atx1.NIPoST.PoSTMetadata.Challenge = poetRef[:]
 	err = activation.SignAtx(signer, atx1)
 	assert.NoError(t, err)
-	atx2.Nipst.PostProof.Challenge = poetRef[:]
+	atx2.NIPoST.PoSTMetadata.Challenge = poetRef[:]
 	err = activation.SignAtx(signer, atx2)
 	assert.NoError(t, err)
-	atx3.Nipst.PostProof.Challenge = poetRef[:]
+	atx3.NIPoST.PoSTMetadata.Challenge = poetRef[:]
 	err = activation.SignAtx(signer, atx3)
 	assert.NoError(t, err)
-	atx4.Nipst.PostProof.Challenge = poetRef[:]
+	atx4.NIPoST.PoSTMetadata.Challenge = poetRef[:]
 	err = activation.SignAtx(signer, atx4)
 	assert.NoError(t, err)
 
@@ -218,15 +218,15 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 
 	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	atx1 := atx(signer.PublicKey().String())
-	atx1.Nipst.PostProof.Challenge = poetRef[:]
+	atx1.NIPoST.PoSTMetadata.Challenge = poetRef[:]
 	err = activation.SignAtx(signer, atx1)
 	assert.NoError(t, err)
 	atx2 := atx(signer.PublicKey().String())
-	atx2.Nipst.PostProof.Challenge = poetRef[:]
+	atx2.NIPoST.PoSTMetadata.Challenge = poetRef[:]
 	err = activation.SignAtx(signer, atx2)
 	assert.NoError(t, err)
 	atx3 := atx(signer.PublicKey().String())
-	atx3.Nipst.PostProof.Challenge = poetRef[:]
+	atx3.NIPoST.PoSTMetadata.Challenge = poetRef[:]
 	err = activation.SignAtx(signer, atx3)
 	assert.NoError(t, err)
 

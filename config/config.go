@@ -35,14 +35,15 @@ var (
 // Config defines the top level configuration for a spacemesh node
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
-	P2P             p2pConfig.Config      `mapstructure:"p2p"`
-	API             apiConfig.Config      `mapstructure:"api"`
-	HARE            hareConfig.Config     `mapstructure:"hare"`
-	HareEligibility eligConfig.Config     `mapstructure:"hare-eligibility"`
-	TIME            timeConfig.TimeConfig `mapstructure:"time"`
-	REWARD          mesh.Config           `mapstructure:"reward"`
-	POST            postConfig.Config     `mapstructure:"post"`
-	LOGGING         LoggerConfig          `mapstructure:"logging"`
+	P2P             p2pConfig.Config       `mapstructure:"p2p"`
+	API             apiConfig.Config       `mapstructure:"api"`
+	HARE            hareConfig.Config      `mapstructure:"hare"`
+	HareEligibility eligConfig.Config      `mapstructure:"hare-eligibility"`
+	TIME            timeConfig.TimeConfig  `mapstructure:"time"`
+	REWARD          mesh.Config            `mapstructure:"reward"`
+	POST            postConfig.Config      `mapstructure:"post"`
+	PostOptions     activation.PostOptions `mapstructure:"post-options"`
+	LOGGING         LoggerConfig           `mapstructure:"logging"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -93,7 +94,7 @@ type BaseConfig struct {
 
 	PublishEventsURL string `mapstructure:"events-url"`
 
-	StartMining bool `mapstructure:"start-mining"`
+	StartSmeshing bool `mapstructure:"start-smeshing"`
 
 	AtxsPerBlock int `mapstructure:"atxs-per-block"`
 
@@ -127,7 +128,7 @@ type LoggerConfig struct {
 	BlockBuilderLoggerLevel   string `mapstructure:"block-builder"`
 	BlockListenerLoggerLevel  string `mapstructure:"block-listener"`
 	PoetListenerLoggerLevel   string `mapstructure:"poet"`
-	NipstBuilderLoggerLevel   string `mapstructure:"nipst"`
+	NipostBuilderLoggerLevel  string `mapstructure:"nipost"`
 	AtxBuilderLoggerLevel     string `mapstructure:"atx-builder"`
 	HareBeaconLoggerLevel     string `mapstructure:"hare-beacon"`
 }
@@ -143,6 +144,7 @@ func DefaultConfig() Config {
 		TIME:            timeConfig.DefaultConfig(),
 		REWARD:          mesh.DefaultMeshConfig(),
 		POST:            activation.DefaultConfig(),
+		PostOptions:     activation.DefaultPostOptions(),
 	}
 }
 

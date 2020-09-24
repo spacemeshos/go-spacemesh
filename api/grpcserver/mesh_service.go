@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/state"
+	"github.com/spacemeshos/post/shared"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -287,7 +288,7 @@ func convertActivation(a *types.ActivationTx) (*pb.Activation, error) {
 		SmesherId:      &pb.SmesherId{Id: a.NodeID.ToBytes()},
 		Coinbase:       &pb.AccountId{Address: a.Coinbase.Bytes()},
 		PrevAtx:        &pb.ActivationId{Id: a.PrevATXID.Bytes()},
-		CommitmentSize: a.Nipst.Space,
+		CommitmentSize: shared.DataSize(a.NIPoST.PoSTMetadata.NumLabels, a.NIPoST.PoSTMetadata.LabelSize),
 	}, nil
 }
 

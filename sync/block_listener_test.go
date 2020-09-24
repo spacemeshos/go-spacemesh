@@ -87,9 +87,9 @@ func TestBlockListener(t *testing.T) {
 	}
 	poetRef := sha256.Sum256(poetProofBytes)
 
-	atx1.Nipst.PostProof.Challenge = poetRef[:]
-	atx2.Nipst.PostProof.Challenge = poetRef[:]
-	atx3.Nipst.PostProof.Challenge = poetRef[:]
+	atx1.NIPoST.PoSTMetadata.Challenge = poetRef[:]
+	atx2.NIPoST.PoSTMetadata.Challenge = poetRef[:]
+	atx3.NIPoST.PoSTMetadata.Challenge = poetRef[:]
 
 	err = activation.SignAtx(signer, atx1)
 	assert.NoError(t, err)
@@ -169,7 +169,7 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 	require.NoError(t, err)
 	poetRef := sha256.Sum256(poetProofBytes)
 
-	atx1.Nipst.PostProof.Challenge = poetRef[:]
+	atx1.NIPoST.PoSTMetadata.Challenge = poetRef[:]
 	err = activation.SignAtx(signer, atx1)
 	assert.NoError(t, err)
 	// Push a block with tx1 and and atx1 into bl1.
@@ -229,7 +229,7 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 	require.NoError(t, err)
 	poetRef := sha256.Sum256(poetProofBytes)
 
-	atx1.Nipst.PostProof.Challenge = poetRef[:]
+	atx1.NIPoST.PoSTMetadata.Challenge = poetRef[:]
 
 	// Push a block with tx1 and and atx1 into bl1.
 	block := types.NewExistingBlock(1, []byte(rand.String(8)))
@@ -254,7 +254,7 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 	require.NoError(t, err)
 	poetRef = sha256.Sum256(poetProofBytes)
 	// attach proof to ATX
-	atx2.Nipst.PostProof.Challenge = poetRef[:]
+	atx2.NIPoST.PoSTMetadata.Challenge = poetRef[:]
 	// create a block containing tx2 and atx2
 	tBlock := types.NewExistingBlock(1, []byte(rand.String(8)))
 	tBlock.Signature = signer.Sign(tBlock.Bytes())
@@ -617,7 +617,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	}
 
 	poetRef := sha256.Sum256(poetProofBytes)
-	atx.Nipst.PostProof.Challenge = poetRef[:]
+	atx.NIPoST.PoSTMetadata.Challenge = poetRef[:]
 	err = activation.SignAtx(signer, atx)
 	assert.NoError(t, err)
 

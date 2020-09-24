@@ -207,32 +207,6 @@ func (t *TxAPIMock) GetNonce(addr types.Address) uint64 {
 	panic("implement me")
 }
 
-// MiningAPIMock is a mock for mining API
-type MiningAPIMock struct{}
-
-const (
-	miningStatus   = 123
-	remainingBytes = 321
-)
-
-func (*MiningAPIMock) MiningStats() (int, uint64, string, string) {
-	return miningStatus, remainingBytes, "123456", "/tmp"
-}
-
-func (*MiningAPIMock) StartPost(types.Address, string, uint64) error {
-	return nil
-}
-
-func (*MiningAPIMock) SetCoinbaseAccount(types.Address) {}
-
-func (*MiningAPIMock) GetSmesherID() types.NodeID {
-	panic("implement me")
-}
-
-func (*MiningAPIMock) Stop() {
-	panic("implement me")
-}
-
 type OracleMock struct{}
 
 func (*OracleMock) GetEligibleLayers() []types.LayerID {
@@ -251,13 +225,6 @@ func (t GenesisTimeMock) GetGenesisTime() time.Time {
 	return t.t
 }
 
-type PostMock struct {
-}
-
-func (PostMock) Reset() error {
-	return nil
-}
-
 const (
 	genTimeUnix      = 1000000
 	layerDuration    = 10
@@ -268,7 +235,6 @@ const (
 var (
 	ap          = NewNodeAPIMock()
 	networkMock = NetworkMock{}
-	mining      = MiningAPIMock{}
 	oracle      = OracleMock{}
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
 	txMempool   = state.NewTxMemPool()
@@ -283,7 +249,7 @@ func TestServersConfig(t *testing.T) {
 	port2, err := node.GetUnboundedPort()
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	grpcService := NewGrpcService(port1, &networkMock, ap, txAPI, nil, &mining, &oracle, nil, PostMock{}, 0, nil, nil, nil)
+	grpcService := NewGrpcService(port1, &networkMock, ap, txAPI, nil, &oracle, nil, 0, nil, nil, nil)
 	require.Equal(t, grpcService.Port, uint(port1), "Expected same port")
 
 	jsonService := NewJSONHTTPServer(port2, port1)
@@ -383,23 +349,17 @@ func TestJsonWalletApi(t *testing.T) {
 	r.Equal(http.StatusInternalServerError, respStatus, http.StatusText(respStatus))
 	r.Equal(expected, res1)
 
-	// test start mining
-	initPostRequest := pb.InitPost{Coinbase: "0x1234", LogicalDrive: "/tmp/aaa", CommitmentSize: 2048}
-	respBody, respStatus = callEndpoint(t, "v1/startmining", marshalProto(t, &initPostRequest))
-	r.Equal(http.StatusOK, respStatus)
-	assertSimpleMessage(t, respBody, "ok")
+	// DEPRECATED OLD API
+	//// test start mining
+	//initPostRequest := pb.InitPost{Coinbase: "0x1234", LogicalDrive: "/tmp/aaa", CommitmentSize: 2048}
+	//respBody, respStatus = callEndpoint(t, "v1/startmining", marshalProto(t, &initPostRequest))
+	//r.Equal(http.StatusOK, respStatus)
+	//assertSimpleMessage(t, respBody, "ok")
 
-	// test get statistics about init progress
-	respBody, respStatus = callEndpoint(t, "v1/stats", "")
-	r.Equal(http.StatusOK, respStatus)
-
-	var stats pb.MiningStats
-	r.NoError(jsonpb.UnmarshalString(respBody, &stats))
-
-	r.Equal(int32(miningStatus), stats.Status)
-	r.Equal("/tmp", stats.DataDir)
-	r.Equal("123456", stats.Coinbase)
-	r.Equal(uint64(remainingBytes), stats.RemainingBytes)
+	// DEPRECATED OLD API
+	//// test get statistics about init progress
+	//respBody, respStatus = callEndpoint(t, "v1/stats", "")
+	//r.Equal(http.StatusOK, respStatus)
 
 	// test get node status
 	respBody, respStatus = callEndpoint(t, "v1/nodestatus", "")
@@ -490,9 +450,10 @@ func TestJsonWalletApi(t *testing.T) {
 	json.Unmarshal([]byte(respBody), &res2)
 	r.Equal(expected2, res2)
 
-	// test call reset post
-	respBody, respStatus = callEndpoint(t, "v1/resetpost", "")
-	r.Equal(http.StatusOK, respStatus)
+	// DEPRECATED OLD API
+	//// test call reset post
+	//respBody, respStatus = callEndpoint(t, "v1/resetpost", "")
+	//r.Equal(http.StatusOK, respStatus)
 
 	// test get getStateRoot
 	respBody, respStatus = callEndpoint(t, "v1/stateroot", "")
@@ -600,7 +561,7 @@ func (SyncerMock) Start()         {}
 func launchServer(t *testing.T) func() {
 	networkMock.Broadcast("", []byte{0x00})
 	defaultConfig := config2.DefaultConfig()
-	grpcService := NewGrpcService(cfg.GrpcServerPort, &networkMock, ap, txAPI, txMempool, &mining, &oracle, &genTime, PostMock{}, layerDuration, &SyncerMock{}, &defaultConfig, nil)
+	grpcService := NewGrpcService(cfg.GrpcServerPort, &networkMock, ap, txAPI, txMempool, &oracle, &genTime, layerDuration, &SyncerMock{}, &defaultConfig, nil)
 	jsonService := NewJSONHTTPServer(cfg.JSONServerPort, cfg.GrpcServerPort)
 	// start gRPC and json server
 	grpcService.StartService()

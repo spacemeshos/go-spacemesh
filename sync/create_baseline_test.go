@@ -34,8 +34,8 @@ func TestCreateBaseline(t *testing.T) {
 	id := Path
 	lg := log.NewDefault(id)
 	mshdb, _ := mesh.NewPersistentMeshDB(id, 5, lg.WithOptions(log.Nop))
-	nipstStore, _ := database.NewLDBDatabase(id+"nipst", 0, 0, lg.WithName("nipstDbStore").WithOptions(log.Nop))
-	defer nipstStore.Close()
+	nipostStore, _ := database.NewLDBDatabase(id+"nipost", 0, 0, lg.WithName("nipostDbStore").WithOptions(log.Nop))
+	defer nipostStore.Close()
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
 	defer atxdbStore.Close()
 	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, uint16(1000), &validatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
@@ -153,11 +153,11 @@ func createLayerWithRandVoting(msh *mesh.Mesh, index types.LayerID, prev []*type
 func atxWithProof(pubkey string, poetref []byte) *types.ActivationTx {
 	coinbase := types.HexToAddress("aaaa")
 	chlng := types.HexToHash32("0x3333")
-	npst := activation.NewNIPSTWithChallenge(&chlng, poetref)
+	npst := activation.NewNIPoSTWithChallenge(&chlng, poetref)
 
 	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, 5, 1, *types.EmptyATXID, coinbase, 0, []types.BlockID{}, npst)
-	atx.Commitment = commitment
-	atx.CommitmentMerkleRoot = commitment.MerkleRoot
+	atx.InitialPoST = initialPoST
+	atx.InitialPoSTIndices = initialPoST.Indices
 	atx.CalcAndSetID()
 	return atx
 }
@@ -174,9 +174,9 @@ func chooseRandomPattern(blocksInLayer int, patternSize int) []int {
 
 func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
 	startTick uint64, positioningATX types.ATXID, coinbase types.Address, activeSetSize uint32, view []types.BlockID,
-	nipst *types.NIPST) *types.ActivationTx {
+	nipost *types.NIPoST) *types.ActivationTx {
 
-	nipstChallenge := types.NIPSTChallenge{
+	nipostChallenge := types.NIPoSTChallenge{
 		NodeID:         nodeID,
 		Sequence:       sequence,
 		PrevATXID:      prevATX,
@@ -184,5 +184,5 @@ func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, 
 		StartTick:      startTick,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipstChallenge, coinbase, nipst, nil)
+	return types.NewActivationTx(nipostChallenge, coinbase, nipost, nil)
 }

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	xdr "github.com/nullstyle/go-xdr/xdr3"
+	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -71,11 +71,9 @@ var (
 	tx8 = tx()
 )
 
-var commitment = &types.PostProof{
-	Challenge:    []byte(nil),
-	MerkleRoot:   []byte("1"),
-	ProofNodes:   [][]byte(nil),
-	ProvenLeaves: [][]byte(nil),
+var initialPoST = &types.PoST{
+	Nonce:   0,
+	Indices: make([]byte, 10),
 }
 
 func newMemPoetDb() poetDb {
@@ -292,7 +290,7 @@ func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 	poetRef := sha256.Sum256(poetProofBytes)
 
 	atx1 := atx(signer.PublicKey().String())
-	atx1.Nipst.PostProof.Challenge = poetRef[:]
+	atx1.NIPoST.PoSTMetadata.Challenge = poetRef[:]
 	err = activation.SignAtx(signer, atx1)
 	r.NoError(err)
 	err = s0.ProcessAtxs([]*types.ActivationTx{atx1})
@@ -911,11 +909,11 @@ func atx(pubkey string) *types.ActivationTx {
 	coinbase := types.HexToAddress("aaaa")
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xde, 0xad}
-	npst := activation.NewNIPSTWithChallenge(&chlng, poetRef)
+	npst := activation.NewNIPoSTWithChallenge(&chlng, poetRef)
 
 	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, 5, 1, *types.EmptyATXID, coinbase, 0, nil, npst)
-	atx.Commitment = commitment
-	atx.CommitmentMerkleRoot = commitment.MerkleRoot
+	atx.InitialPoST = initialPoST
+	atx.InitialPoSTIndices = initialPoST.Indices
 	atx.CalcAndSetID()
 	return atx
 }
@@ -1690,14 +1688,14 @@ func TestSyncer_AtxSetID(t *testing.T) {
 	t.Log("---------------------")
 	t.Log(fmt.Sprintf("%+v\n", b))
 	t.Log("---------------------")
-	assert.Equal(t, b.Nipst, a.Nipst)
-	assert.Equal(t, b.Commitment, a.Commitment)
+	assert.Equal(t, b.NIPoST, a.NIPoST)
+	assert.Equal(t, b.InitialPoST, a.InitialPoST)
 
 	assert.Equal(t, b.ActivationTxHeader.NodeID, a.ActivationTxHeader.NodeID)
 	assert.Equal(t, b.ActivationTxHeader.PrevATXID, a.ActivationTxHeader.PrevATXID)
 	assert.Equal(t, b.ActivationTxHeader.Coinbase, a.ActivationTxHeader.Coinbase)
-	assert.Equal(t, b.ActivationTxHeader.CommitmentMerkleRoot, a.ActivationTxHeader.CommitmentMerkleRoot)
-	assert.Equal(t, b.ActivationTxHeader.NIPSTChallenge, a.ActivationTxHeader.NIPSTChallenge)
+	assert.Equal(t, b.ActivationTxHeader.InitialPoSTIndices, a.ActivationTxHeader.InitialPoSTIndices)
+	assert.Equal(t, b.ActivationTxHeader.NIPoSTChallenge, a.ActivationTxHeader.NIPoSTChallenge)
 	b.CalcAndSetID()
 	assert.Equal(t, a.ShortString(), b.ShortString())
 }

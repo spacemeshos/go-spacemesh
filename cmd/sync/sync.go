@@ -184,7 +184,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 
 //GetData downloads data from remote storage
 func getData(path, prefix string, lg log.Log) error {
-	dirs := []string{"poet", "atx", "nipst", "blocks", "ids", "layers", "transactions", "validity", "unappliedTxs"}
+	dirs := []string{"poet", "atx", "nipost", "blocks", "ids", "layers", "transactions", "validity", "unappliedTxs"}
 	for _, dir := range dirs {
 		if err := filesystem.ExistOrCreate(path + prefix + "/" + dir); err != nil {
 			return err

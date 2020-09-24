@@ -495,12 +495,10 @@ func TestShutdown(t *testing.T) {
 
 	smApp := NewSpacemeshApp()
 	genesisTime := time.Now().Add(time.Second * 10)
-	smApp.Config.POST = activation.DefaultConfig()
-	smApp.Config.POST.Difficulty = 5
-	smApp.Config.POST.NumProvenLabels = 10
-	smApp.Config.POST.SpacePerUnit = 1 << 10 // 1KB.
-	smApp.Config.POST.NumFiles = 1
 
+	smApp.Config.POST = activation.DefaultConfig()
+	smApp.Config.POST.NumLabels = 1 << 10
+	smApp.Config.POST.LabelSize = 8
 	smApp.Config.HARE.N = 5
 	smApp.Config.HARE.F = 2
 	smApp.Config.HARE.RoundDuration = 3
@@ -515,7 +513,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.LayerDurationSec = 20
 	smApp.Config.HareEligibility.ConfidenceParam = 3
 	smApp.Config.HareEligibility.EpochOffset = 0
-	smApp.Config.StartMining = true
+	smApp.Config.StartSmeshing = true
 
 	rolacle := eligibility.New()
 	types.SetLayersPerEpoch(int32(smApp.Config.LayersPerEpoch))
@@ -538,13 +536,10 @@ func TestShutdown(t *testing.T) {
 	hareOracle := newLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
-	postClient, err := activation.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))
-	r.NoError(err)
-	r.NotNil(postClient)
 	gTime := genesisTime
 	ld := time.Duration(20) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
-	err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetHarness.HTTPPoetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
+	err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), poetHarness.HTTPPoetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
 
 	r.NoError(err)
 
