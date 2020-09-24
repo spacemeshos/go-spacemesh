@@ -434,10 +434,11 @@ var cfg = config.DefaultConfig()
 
 type SyncerMock struct {
 	startCalled bool
+	isSynced    bool
 }
 
-func (SyncerMock) IsSynced() bool { return false }
-func (s *SyncerMock) Start()      { s.startCalled = true }
+func (s *SyncerMock) IsSynced() bool { return s.isSynced }
+func (s *SyncerMock) Start()         { s.startCalled = true }
 
 func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	networkMock.Broadcast("", []byte{0x00})
@@ -1485,8 +1486,48 @@ func TestMeshService(t *testing.T) {
 	}
 }
 
+func TestTransactionServiceSubmitUnsync(t *testing.T) {
+	require := require.New(t)
+	syncer := &SyncerMock{}
+	grpcService := NewTransactionService(&networkMock, txAPI, txMempool, syncer)
+	shutDown := launchServer(t, grpcService)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(err)
+
+	defer func() { require.NoError(conn.Close()) }()
+	c := pb.NewTransactionServiceClient(conn)
+
+	serializedTx, err := types.InterfaceToBytes(globalTx)
+	require.NoError(err, "error serializing tx")
+
+	// This time, we expect an error, since isSynced is false (by default)
+	// The node should not allow tx submission when not synced
+	res, err := c.SubmitTransaction(
+		context.Background(),
+		&pb.SubmitTransactionRequest{Transaction: serializedTx},
+	)
+	require.Error(err)
+	require.Nil(res)
+
+	syncer.isSynced = true
+
+	// This time, we expect no error, since isSynced is now true
+	_, err = c.SubmitTransaction(
+		context.Background(),
+		&pb.SubmitTransactionRequest{Transaction: serializedTx},
+	)
+	require.NoError(err)
+}
+
 func TestTransactionService(t *testing.T) {
-	grpcService := NewTransactionService(&networkMock, txAPI, txMempool)
+
+	grpcService := NewTransactionService(&networkMock, txAPI, txMempool, &SyncerMock{isSynced: true})
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
