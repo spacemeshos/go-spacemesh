@@ -1436,7 +1436,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
