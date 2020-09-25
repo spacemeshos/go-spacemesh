@@ -229,7 +229,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 		r.Error(err)
 		r.Equal("unrecognized GRPC service requested: illegal", err.Error())
 	}
-	str, err := testArgs(app, "--grpc-port-new", strconv.Itoa(port), "--grpc", "illegal")
+	str, err := testArgs(app, "--grpc-port", strconv.Itoa(port), "--grpc", "illegal")
 	r.NoError(err)
 	r.Empty(str)
 	// This should still be set
@@ -241,7 +241,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	// Try enabling two services, one with a legal name and one with an illegal name
 	// In this case, the node service will be enabled because it comes first
 	// Uses Cmd.Run as defined above
-	str, err = testArgs(app, "--grpc-port-new", strconv.Itoa(port), "--grpc", "node", "--grpc", "illegal")
+	str, err = testArgs(app, "--grpc-port", strconv.Itoa(port), "--grpc", "node", "--grpc", "illegal")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -251,7 +251,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	// Try the same thing but change the order of the flags
 	// In this case, the node service will not be enabled because it comes second
 	// Uses Cmd.Run as defined above
-	str, err = testArgs(app, "--grpc", "illegal", "--grpc-port-new", strconv.Itoa(port), "--grpc", "node")
+	str, err = testArgs(app, "--grpc", "illegal", "--grpc-port", strconv.Itoa(port), "--grpc", "node")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(false, app.Config.API.StartNodeService)
@@ -261,7 +261,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	// Use commas instead
 	// In this case, the node service will be enabled because it comes first
 	// Uses Cmd.Run as defined above
-	str, err = testArgs(app, "--grpc", "node,illegal", "--grpc-port-new", strconv.Itoa(port))
+	str, err = testArgs(app, "--grpc", "node,illegal", "--grpc-port", strconv.Itoa(port))
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -327,7 +327,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 		r.Error(err)
 		r.Equal("must enable at least one GRPC service along with JSON gateway service", err.Error())
 	}
-	str, err := testArgs(app, "--json-server-new")
+	str, err := testArgs(app, "--json-server")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.API.StartJSONServer)
@@ -339,7 +339,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
 	}
-	str, err = testArgs(app, "--grpc", "node", "--json-server-new")
+	str, err = testArgs(app, "--grpc", "node", "--json-server")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -349,7 +349,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 
 	// Try changing the port
 	// Uses Cmd.Run as defined above
-	str, err = testArgs(app, "--json-port-new", "1234")
+	str, err = testArgs(app, "--json-port", "1234")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(false, app.Config.API.StartNodeService)
@@ -430,7 +430,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 	// Test starting the server from the commandline
 	// uses Cmd.Run from above
-	str, err = testArgs(app, "--grpc-port-new", strconv.Itoa(port), "--grpc", "node")
+	str, err = testArgs(app, "--grpc-port", strconv.Itoa(port), "--grpc", "node")
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(port, app.Config.API.GrpcServerPort)
@@ -497,10 +497,10 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	// Test starting the JSON server from the commandline
 	// uses Cmd.Run from above
 	str, err = testArgs(app,
-		"--json-server-new",
+		"--json-server",
 		"--grpc", "node",
-		"--json-port-new", "1234",
-		//"--grpc-interface-new", "127.0.0.1",
+		"--json-port", "1234",
+		//"--grpc-interface", "127.0.0.1",
 	)
 	r.Empty(str)
 	r.NoError(err)
@@ -557,12 +557,12 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		// This makes sure the test doesn't end until this goroutine closes
 		defer wg.Done()
 		str, err := testArgs(app,
-			"--grpc-port-new", strconv.Itoa(port),
+			"--grpc-port", strconv.Itoa(port),
 			"--grpc", "node",
 			// the following prevents obnoxious warning in macOS
 			"--acquire-port=false",
 			"--tcp-interface", "127.0.0.1",
-			"--grpc-interface-new", "localhost",
+			"--grpc-interface", "localhost",
 		)
 		require.Empty(t, str)
 		require.NoError(t, err)
@@ -652,9 +652,9 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 			if err == io.EOF {
 				return
 			}
-			code := status.Code(err)
+			errCode := status.Code(err)
 			// We expect this to happen when the server disconnects
-			if code == codes.Unavailable {
+			if errCode == codes.Unavailable {
 				return
 			}
 			require.NoError(t, err)
