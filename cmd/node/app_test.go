@@ -219,21 +219,25 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 		}
 
 		for i := 0; i < txsSent; i++ {
-
 			actNonce := getNonce()
-			for actNonce != i {
-				log.Info("actual nonce: %d", actNonce)
-				time.Sleep(500 * time.Millisecond)
-				actNonce = getNonce()
+			log.Info("waiting for nonce: %d, current actual nonce: %d", i, actNonce)
+			timeout := time.After(30 * time.Second)
+			for i != actNonce {
+				select {
+				case <-timeout:
+					suite.FailNow("timed out waiting for account nonce to progress")
+				default:
+					time.Sleep(1 * time.Second)
+					actNonce = getNonce()
+					log.Info("actual nonce: %d", actNonce)
+				}
 			}
 			tx, err := types.NewSignedTx(uint64(i), dst, 10, 1, 1, acc1Signer)
-			if err != nil {
-				log.Panic("panicked creating signed tx err=%v", err)
-			}
+			suite.NoError(err, "failed to create signed tx: %s", err)
 			txbytes, _ := types.InterfaceToBytes(tx)
 			pbMsg := &pb.SubmitTransactionRequest{Transaction: txbytes}
 			_, err = suite.apps[0].txService.SubmitTransaction(nil, pbMsg)
-			assert.NoError(suite.T(), err)
+			suite.NoError(err, "error submitting transaction")
 		}
 	}
 
