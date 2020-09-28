@@ -334,6 +334,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	resetFlags()
+	events.CloseEventReporter()
 
 	// Try enabling both the JSON and the GRPC services
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
@@ -346,6 +347,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	r.Equal(true, app.Config.API.StartJSONServer)
 
 	resetFlags()
+	events.CloseEventReporter()
 
 	// Try changing the port
 	// Uses Cmd.Run as defined above
