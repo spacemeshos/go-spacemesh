@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sync"
 	"testing"
 	"time"
 
@@ -89,8 +88,6 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 var tests = []TestScenario{txWithRunningNonceGenerator([]int{}), sameRootTester([]int{0}), reachedEpochTester([]int{}), txWithUnorderedNonceGenerator([]int{1})}
 
 func (suite *AppTestSuite) TestMultipleNodes() {
-	var once sync.Once
-	oncebody := func() { GracefulShutdown(suite.apps) }
 	net := service.NewSimulator()
 	const numberOfEpochs = 5 // first 2 epochs are genesis
 	cfg := getTestDefaultConfig()
@@ -114,7 +111,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	ld := time.Duration(20) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
 	suite.initMultipleInstances(cfg, rolacle, rng, 5, path, genesisTime, poetHarness.HTTPPoetClient, false, clock, net)
-	defer once.Do(oncebody)
+	defer GracefulShutdown(suite.apps)
 	for _, a := range suite.apps {
 		a.startServices()
 	}
@@ -125,7 +122,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		suite.T().Fatalf("failed to start poet server: %v", err)
 	}
 
-	timeout := time.After(6 * 60 * time.Second)
+	timeout := time.After(6 * time.Minute)
 	setupTests(suite)
 	finished := map[int]bool{}
 loop:
@@ -143,7 +140,6 @@ loop:
 	}
 	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch) - 1)
 	oldRoot := suite.apps[0].state.GetStateRoot()
-	once.Do(oncebody)
 
 	// this tests loading of previous state, maybe it's not the best place to put this here...
 	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, rng, path+"a", rolacle, poetHarness.HTTPPoetClient, clock, net)
