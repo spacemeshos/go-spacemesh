@@ -224,7 +224,7 @@ func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID
 		}
 
 		// push children to bfs queue
-		for _, id := range block.ViewEdges {
+		for _, id := range append(block.ForDiff, append(block.AgainstDiff, block.NeutralDiff...)...) {
 			if _, found := seenBlocks[id]; !found {
 				seenBlocks[id] = struct{}{}
 				blocksToVisit.PushBack(id)
