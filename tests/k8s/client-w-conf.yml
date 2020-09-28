@@ -30,6 +30,6 @@ spec:
             memory: "2048M"
             cpu: "1"
         ports:
-        - containerPort: 9090
+        - containerPort: 9093
       nodeSelector:
         role: tests

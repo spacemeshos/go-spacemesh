@@ -283,7 +283,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	collect.Start(false)
 	ActivateGrpcServer(apps[0])
 
-	if err := poetHarness.Start([]string{"127.0.0.1:9091"}); err != nil {
+	if err := poetHarness.Start([]string{"127.0.0.1:9092"}); err != nil {
 		log.Panic("failed to start poet server: %v", err)
 	}
 
