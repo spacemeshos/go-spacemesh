@@ -183,13 +183,13 @@ func (t *turtle) inputVectorForLayer(lyrBlocks []types.BlockID, inputvector *[]t
 	return lyrResult
 }
 
-func (t *turtle) BaseBlock(getres func(id types.LayerID) ([]types.BlockID, error)) (types.BlockID, [][]types.BlockID, error) {
+func (t *turtle) BaseBlock(getRes func(id types.LayerID) ([]types.BlockID, error)) (types.BlockID, [][]types.BlockID, error) {
 	// Try to find a block counting only good blocks
 	for i := len(t.BlocksToBlocks) - 1; i >= 0; i-- {
 		if _, ok := t.GoodBlocksIndex[t.BlocksToBlocks[i].BlockID]; !ok {
 			continue
 		}
-		afn, err := t.opinionMatches(t.BlocksToBlocks[i].LayerID, t.BlocksToBlocks[i], getres)
+		afn, err := t.opinionMatches(t.BlocksToBlocks[i], getRes)
 		if err != nil {
 			continue
 		}
@@ -200,12 +200,13 @@ func (t *turtle) BaseBlock(getres func(id types.LayerID) ([]types.BlockID, error
 	return types.BlockID{0}, nil, errors.New("no base block that fits the limit")
 }
 
-func (t *turtle) opinionMatches(layerid types.LayerID, opinion2 opinion, getres func(id types.LayerID) ([]types.BlockID, error)) ([]map[types.BlockID]struct{}, error) {
+func (t *turtle) opinionMatches(opinion2 opinion, getRes func(id types.LayerID) ([]types.BlockID, error)) ([]map[types.BlockID]struct{}, error) {
 	// using maps makes it easy to not add duplicates
 	a := make(map[types.BlockID]struct{})
 	f := make(map[types.BlockID]struct{})
 	n := make(map[types.BlockID]struct{})
 
+	layerid := opinion2.layer()
 	// handle genesis
 	if layerid == types.GetEffectiveGenesis() {
 		for _, i := range types.BlockIDs(mesh.GenesisLayer().Blocks()) {
@@ -269,7 +270,7 @@ func (t *turtle) opinionMatches(layerid types.LayerID, opinion2 opinion, getres 
 			panic(fmt.Sprintf(" database err or layer not exist. %v", i))
 		}
 
-		res, err := getres(i)
+		res, err := t.bdp.GetLayerInputVector(i)
 		if err != nil {
 			for _, b := range blks {
 				if v, ok := opinion2.blocksOpinion[b]; !ok || v != abstain {
@@ -510,6 +511,8 @@ loop:
 			break
 		}
 
+		contextualValidity := make(map[types.BlockID]bool, len(blks))
+
 		// Count good blocks votes..
 		// Declare the vote vector “verified” up to position k if the total weight exceeds the confidence threshold in all positions up to k .
 		for blk, vote := range input {
@@ -553,14 +556,16 @@ loop:
 				break loop
 			}
 
-			// Just verified that layer, save contextual validity for hare beacon. (TODO: revisit)
-			if err := t.bdp.SaveContextualValidity(blk, gop == support); err != nil {
+			contextualValidity[blk] = gop == support
+		}
+
+		//Declare the vote vector “verified” up to position k.
+		for blk, v := range contextualValidity {
+			if err := t.bdp.SaveContextualValidity(blk, v); err != nil {
 				// panic?
 				t.logger.With().Error("Error saving contextual validity on block", blk.Field(), log.Err(err))
 			}
 		}
-
-		//Declare the vote vector “verified” up to position k.
 		t.Verified = i
 		t.logger.Info("Verified layer %v", i)
 

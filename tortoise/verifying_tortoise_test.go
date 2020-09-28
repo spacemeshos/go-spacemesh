@@ -3,6 +3,7 @@ package tortoise
 import (
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/config"
 	"strconv"
 	"testing"
 
@@ -14,7 +15,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const defaultTestHdist = 5
+func init() {
+	types.SetLayersPerEpoch(int32(config.DefaultConfig().LayersPerEpoch))
+}
+
+var defaultTestHdist = config.DefaultConfig().Hdist
 
 func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) {
 	for _, i := range blocks {
@@ -40,9 +45,8 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 }
 
 func TestTurtle_HandleIncomingLayerHappyFlow(t *testing.T) {
-	log.DebugMode(true)
-	layers := types.LayerID(10)
-	avgPerLayer := 10
+	layers := types.LayerID(25)
+	avgPerLayer := 50
 	voteNegative := 0
 	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
 	require.Equal(t, int(layers-1), int(trtl.Verified))
@@ -107,7 +111,10 @@ func turtleSanity(t testing.TB, layers types.LayerID, blocksPerLayer, voteNegati
 	abstainCount := 0
 
 	hm := func(l types.LayerID) (ids []types.BlockID, err error) {
-		if l == 0 {
+		if l < mesh.GenesisLayer().Index() {
+			return nil, errors.New("no results on genesis epochs")
+		}
+		if l == mesh.GenesisLayer().Index() {
 			return types.BlockIDs(mesh.GenesisLayer().Blocks()), nil
 		}
 
@@ -137,8 +144,10 @@ func turtleSanity(t testing.TB, layers types.LayerID, blocksPerLayer, voteNegati
 	gen := mesh.GenesisLayer()
 	trtl.init(gen)
 
+	msh.InputVectorBackupFunc = hm
+
 	var l types.LayerID
-	for l = 1; l <= layers; l++ {
+	for l = mesh.GenesisLayer().Index() + 1; l <= layers; l++ {
 		turtleMakeAndProcessLayer(l, trtl, blocksPerLayer, msh, hm)
 		fmt.Println("Handled ", l, "========================================================================")
 	}
