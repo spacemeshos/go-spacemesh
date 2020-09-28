@@ -153,7 +153,7 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\n", mylogger, teststr), buf.String())
 }
 
-func testArgs(app *SpacemeshApp, args ...string) (string, error) {
+func testArgs(args ...string) (string, error) {
 	root := Cmd
 	buf := new(bytes.Buffer)
 	root.SetOut(buf)
@@ -180,7 +180,7 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 		// We don't expect this to be called at all
 		r.Fail("Command.Run not expected to run")
 	}
-	str, err := testArgs(app, "illegal")
+	str, err := testArgs("illegal")
 	r.Error(err)
 	r.Equal(expected, err.Error())
 	r.Equal(expected2, str)
@@ -189,7 +189,7 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
 	}
-	str, err = testArgs(app, "--test-mode")
+	str, err = testArgs("--test-mode")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.TestMode)
@@ -229,7 +229,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 		r.Error(err)
 		r.Equal("unrecognized GRPC service requested: illegal", err.Error())
 	}
-	str, err := testArgs(app, "--grpc-port", strconv.Itoa(port), "--grpc", "illegal")
+	str, err := testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "illegal")
 	r.NoError(err)
 	r.Empty(str)
 	// This should still be set
@@ -237,50 +237,55 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	resetFlags()
+	events.CloseEventReporter()
 
 	// Try enabling two services, one with a legal name and one with an illegal name
 	// In this case, the node service will be enabled because it comes first
 	// Uses Cmd.Run as defined above
-	str, err = testArgs(app, "--grpc-port", strconv.Itoa(port), "--grpc", "node", "--grpc", "illegal")
+	str, err = testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "node", "--grpc", "illegal")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.API.StartNodeService)
 
 	resetFlags()
+	events.CloseEventReporter()
 
 	// Try the same thing but change the order of the flags
 	// In this case, the node service will not be enabled because it comes second
 	// Uses Cmd.Run as defined above
-	str, err = testArgs(app, "--grpc", "illegal", "--grpc-port", strconv.Itoa(port), "--grpc", "node")
+	str, err = testArgs("--grpc", "illegal", "--grpc-port", strconv.Itoa(port), "--grpc", "node")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	resetFlags()
+	events.CloseEventReporter()
 
 	// Use commas instead
 	// In this case, the node service will be enabled because it comes first
 	// Uses Cmd.Run as defined above
-	str, err = testArgs(app, "--grpc", "node,illegal", "--grpc-port", strconv.Itoa(port))
+	str, err = testArgs("--grpc", "node,illegal", "--grpc-port", strconv.Itoa(port))
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.API.StartNodeService)
 
 	resetFlags()
+	events.CloseEventReporter()
 
 	// This should work
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
 	}
-	str, err = testArgs(app, "--grpc", "node")
+	str, err = testArgs("--grpc", "node")
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(true, app.Config.API.StartNodeService)
 
 	resetFlags()
+	events.CloseEventReporter()
 
 	// This should work too
-	str, err = testArgs(app, "--grpc", "node,node")
+	str, err = testArgs("--grpc", "node,node")
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -289,11 +294,12 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 
 	// Reset flags and config
 	resetFlags()
+	events.CloseEventReporter()
 	app.Config.API = config.DefaultConfig()
 
 	r.Equal(false, app.Config.API.StartNodeService)
 	r.Equal(false, app.Config.API.StartMeshService)
-	str, err = testArgs(app, "--grpc", "node,mesh")
+	str, err = testArgs("--grpc", "node,mesh")
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -301,11 +307,12 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 
 	// Reset flags and config
 	resetFlags()
+	events.CloseEventReporter()
 	app.Config.API = config.DefaultConfig()
 
 	r.Equal(false, app.Config.API.StartNodeService)
 	r.Equal(false, app.Config.API.StartMeshService)
-	str, err = testArgs(app, "--grpc", "node", "--grpc", "mesh")
+	str, err = testArgs("--grpc", "node", "--grpc", "mesh")
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -327,7 +334,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 		r.Error(err)
 		r.Equal("must enable at least one GRPC service along with JSON gateway service", err.Error())
 	}
-	str, err := testArgs(app, "--json-server")
+	str, err := testArgs("--json-server")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.API.StartJSONServer)
@@ -340,7 +347,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
 	}
-	str, err = testArgs(app, "--grpc", "node", "--json-server")
+	str, err = testArgs("--grpc", "node", "--json-server")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -351,7 +358,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 
 	// Try changing the port
 	// Uses Cmd.Run as defined above
-	str, err = testArgs(app, "--json-port", "1234")
+	str, err = testArgs("--json-port", "1234")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(false, app.Config.API.StartNodeService)
@@ -405,7 +412,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	defer app.stopServices()
 
 	// Make sure the service is not running by default
-	str, err := testArgs(app) // no args
+	str, err := testArgs() // no args
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(false, app.Config.API.StartNodeService)
@@ -429,10 +436,11 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.NoError(conn.Close())
 
 	resetFlags()
+	events.CloseEventReporter()
 
 	// Test starting the server from the commandline
 	// uses Cmd.Run from above
-	str, err = testArgs(app, "--grpc-port", strconv.Itoa(port), "--grpc", "node")
+	str, err = testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "node")
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(port, app.Config.API.GrpcServerPort)
@@ -469,7 +477,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 		app.startAPIServices(NetMock{})
 	}
 	defer app.stopServices()
-	str, err := testArgs(app)
+	str, err := testArgs()
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(false, app.Config.API.StartJSONServer)
@@ -498,12 +506,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 	// Test starting the JSON server from the commandline
 	// uses Cmd.Run from above
-	str, err = testArgs(app,
-		"--json-server",
-		"--grpc", "node",
-		"--json-port", "1234",
-		//"--grpc-interface", "127.0.0.1",
-	)
+	str, err = testArgs("--json-server", "--grpc", "node", "--json-port", "1234")
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(1234, app.Config.API.JSONServerPort)
@@ -558,14 +561,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	go func() {
 		// This makes sure the test doesn't end until this goroutine closes
 		defer wg.Done()
-		str, err := testArgs(app,
-			"--grpc-port", strconv.Itoa(port),
-			"--grpc", "node",
-			// the following prevents obnoxious warning in macOS
-			"--acquire-port=false",
-			"--tcp-interface", "127.0.0.1",
-			"--grpc-interface", "localhost",
-		)
+		str, err := testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "node", "--acquire-port=false", "--tcp-interface", "127.0.0.1", "--grpc-interface", "localhost")
 		require.Empty(t, str)
 		require.NoError(t, err)
 	}()
@@ -743,7 +739,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		str, err := testArgs(app)
+		str, err := testArgs()
 		r.Empty(str)
 		r.NoError(err)
 		wg.Done()
