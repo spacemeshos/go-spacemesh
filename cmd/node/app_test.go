@@ -72,7 +72,7 @@ func Test_PoETHarnessSanity(t *testing.T) {
 	require.NotNil(t, h)
 }
 
-func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.HTTPPoetClient, fastHare bool, clock TickProvider, network network) {
+func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.HTTPPoetClient, clock TickProvider, network network) {
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := storeFormat + string(name)
@@ -110,7 +110,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}
 	ld := time.Duration(20) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
-	suite.initMultipleInstances(cfg, rolacle, rng, 5, path, genesisTime, poetHarness.HTTPPoetClient, false, clock, net)
+	suite.initMultipleInstances(cfg, rolacle, rng, 5, path, genesisTime, poetHarness.HTTPPoetClient, clock, net)
 	defer GracefulShutdown(suite.apps)
 	for _, a := range suite.apps {
 		a.startServices()
@@ -199,18 +199,18 @@ func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 	return TestScenario{setup, teardown, dependencies}
 }
 
-func txWithRunningNonceGenerator(dependancies []int) TestScenario {
+func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 
 	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apicfg.Account1Private))
+	if err != nil {
+		log.Panic("Could not build ed signer err=%v", err)
+	}
+
 	addr := types.Address{}
 	addr.SetBytes(acc1Signer.PublicKey().Bytes())
 	dst := types.BytesToAddress([]byte{0x02})
 	txsSent := 25
 	setup := func(suite *AppTestSuite, t *testing.T) {
-		if err != nil {
-			log.Panic("Could not build ed signer err=%v", err)
-		}
-
 		accountRequest := &pb.AccountRequest{AccountId: &pb.AccountId{Address: addr.Bytes()}}
 		getNonce := func() int {
 			accountResponse, err := suite.apps[0].globalstateSvc.Account(nil, accountRequest)
@@ -249,7 +249,7 @@ func txWithRunningNonceGenerator(dependancies []int) TestScenario {
 		return ok
 	}
 
-	return TestScenario{setup, teardown, dependancies}
+	return TestScenario{setup, teardown, dependencies}
 }
 
 func reachedEpochTester(dependancies []int) TestScenario {
@@ -350,7 +350,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 		atxPerEpoch   map[types.EpochID]uint32
 	}
 
-	layersPerEpoch := int(suite.apps[0].Config.LayersPerEpoch)
+	layersPerEpoch := suite.apps[0].Config.LayersPerEpoch
 	datamap := make(map[string]*nodeData)
 
 	// assert all nodes validated untilLayer-1
