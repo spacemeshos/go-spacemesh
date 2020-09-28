@@ -2,13 +2,14 @@ package grpcserver
 
 import (
 	"fmt"
+	"net/http"
+
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	gw "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"net/http"
 )
 
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.
@@ -17,16 +18,32 @@ type JSONHTTPServer struct {
 	Port     int
 	GrpcPort int
 	server   *http.Server
+	log      log.Logger
+}
+
+// JSONHTTPServerOption type defines a callback that can set internal JSONHTTPServer fields
+type JSONHTTPServerOption func(j *JSONHTTPServer)
+
+// WithJSONHTTPServerLogger set's the underlying logger to a custom logger.
+// By default the logger is NoOp
+func WithJSONHTTPServerLogger(log log.Logger) JSONHTTPServerOption {
+	return func(j *JSONHTTPServer) {
+		j.log = log
+	}
 }
 
 // NewJSONHTTPServer creates a new json http server.
-func NewJSONHTTPServer(port int, grpcPort int) *JSONHTTPServer {
-	return &JSONHTTPServer{Port: port, GrpcPort: grpcPort}
+func NewJSONHTTPServer(port int, grpcPort int, options ...JSONHTTPServerOption) *JSONHTTPServer {
+	j := &JSONHTTPServer{Port: port, GrpcPort: grpcPort, log: log.NewNop()}
+	for _, option := range options {
+		option(j)
+	}
+	return j
 }
 
 // Close stops the server.
 func (s *JSONHTTPServer) Close() error {
-	log.Debug("Stopping new json-http service...")
+	s.log.Debug("Stopping new json-http service...")
 	if s.server != nil {
 		if err := s.server.Shutdown(cmdp.Ctx); err != nil {
 			return err
@@ -62,57 +79,57 @@ func (s *JSONHTTPServer) startInternal(startNodeService bool, startMeshService b
 	serviceCount := 0
 	if startNodeService {
 		if err := gw.RegisterNodeServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
-			log.Error("error registering NodeService with grpc gateway", err)
+			s.log.Error("error registering NodeService with grpc gateway", err)
 		} else {
 			serviceCount++
-			log.Info("registered NodeService with grpc gateway server")
+			s.log.Info("registered NodeService with grpc gateway server")
 		}
 	}
 	if startMeshService {
 		if err := gw.RegisterMeshServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
-			log.Error("error registering MeshService with grpc gateway", err)
+			s.log.Error("error registering MeshService with grpc gateway", err)
 		} else {
 			serviceCount++
-			log.Info("registered MeshService with grpc gateway server")
+			s.log.Info("registered MeshService with grpc gateway server")
 		}
 	}
 	if startGlobalStateService {
 		if err := gw.RegisterGlobalStateServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
-			log.Error("error registering GlobalStateService with grpc gateway", err)
+			s.log.Error("error registering GlobalStateService with grpc gateway", err)
 		} else {
 			serviceCount++
-			log.Info("registered GlobalStateService with grpc gateway server")
+			s.log.Info("registered GlobalStateService with grpc gateway server")
 		}
 	}
 	if startSmesherService {
 		if err := gw.RegisterSmesherServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
-			log.Error("error registering SmesherService with grpc gateway", err)
+			s.log.Error("error registering SmesherService with grpc gateway", err)
 		} else {
 			serviceCount++
-			log.Info("registered SmesherService with grpc gateway server")
+			s.log.Info("registered SmesherService with grpc gateway server")
 		}
 	}
 	if startTransactionService {
 		if err := gw.RegisterTransactionServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
-			log.Error("error registering TransactionService with grpc gateway", err)
+			s.log.Error("error registering TransactionService with grpc gateway", err)
 		} else {
 			serviceCount++
-			log.Info("registered TransactionService with grpc gateway server")
+			s.log.Info("registered TransactionService with grpc gateway server")
 		}
 	}
 
 	// At least one service must be enabled
 	if serviceCount == 0 {
-		log.Error("not starting grpc gateway service; at least one service must be enabled")
+		s.log.Error("not starting grpc gateway service; at least one service must be enabled")
 		return
 	}
 
-	log.Info("starting grpc gateway server on port %d connected to grpc service at %s", s.Port, jsonEndpoint)
+	s.log.Info("starting grpc gateway server on port %d connected to grpc service at %s", s.Port, jsonEndpoint)
 	s.server = &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.Port),
 		Handler: mux,
 	}
 
 	// This will block
-	log.Error("error from grpc http listener: %v", s.server.ListenAndServe())
+	s.log.Error("error from grpc http listener: %v", s.server.ListenAndServe())
 }

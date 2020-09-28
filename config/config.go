@@ -106,30 +106,38 @@ type BaseConfig struct {
 
 // LoggerConfig holds the logging level for each module.
 type LoggerConfig struct {
-	AppLoggerLevel            string `mapstructure:"app"`
-	P2PLoggerLevel            string `mapstructure:"p2p"`
-	PostLoggerLevel           string `mapstructure:"post"`
-	StateDbLoggerLevel        string `mapstructure:"stateDb"`
-	StateLoggerLevel          string `mapstructure:"state"`
-	AtxDbStoreLoggerLevel     string `mapstructure:"atxDb"`
-	PoetDbStoreLoggerLevel    string `mapstructure:"poetDb"`
-	StoreLoggerLevel          string `mapstructure:"store"`
-	PoetDbLoggerLevel         string `mapstructure:"poetDb"`
-	MeshDBLoggerLevel         string `mapstructure:"meshDb"`
-	TrtlLoggerLevel           string `mapstructure:"trtl"`
-	AtxDbLoggerLevel          string `mapstructure:"atxDb"`
-	BlkEligibilityLoggerLevel string `mapstructure:"block-eligibility"`
-	MeshLoggerLevel           string `mapstructure:"mesh"`
-	SyncLoggerLevel           string `mapstructure:"sync"`
-	BlockOracleLevel          string `mapstructure:"block-oracle"`
-	HareOracleLoggerLevel     string `mapstructure:"hare-oracle"`
-	HareLoggerLevel           string `mapstructure:"hare"`
-	BlockBuilderLoggerLevel   string `mapstructure:"block-builder"`
-	BlockListenerLoggerLevel  string `mapstructure:"block-listener"`
-	PoetListenerLoggerLevel   string `mapstructure:"poet"`
-	NipstBuilderLoggerLevel   string `mapstructure:"nipst"`
-	AtxBuilderLoggerLevel     string `mapstructure:"atx-builder"`
-	HareBeaconLoggerLevel     string `mapstructure:"hare-beacon"`
+	AppLoggerLevel                string `mapstructure:"app"`
+	P2PLoggerLevel                string `mapstructure:"p2p"`
+	PostLoggerLevel               string `mapstructure:"post"`
+	StateDbLoggerLevel            string `mapstructure:"stateDb"`
+	StateLoggerLevel              string `mapstructure:"state"`
+	AtxDbStoreLoggerLevel         string `mapstructure:"atxDb"`
+	PoetDbStoreLoggerLevel        string `mapstructure:"poetDb"`
+	StoreLoggerLevel              string `mapstructure:"store"`
+	PoetDbLoggerLevel             string `mapstructure:"poetDb"`
+	MeshDBLoggerLevel             string `mapstructure:"meshDb"`
+	TrtlLoggerLevel               string `mapstructure:"trtl"`
+	AtxDbLoggerLevel              string `mapstructure:"atxDb"`
+	BlkEligibilityLoggerLevel     string `mapstructure:"block-eligibility"`
+	MeshLoggerLevel               string `mapstructure:"mesh"`
+	SyncLoggerLevel               string `mapstructure:"sync"`
+	BlockOracleLevel              string `mapstructure:"block-oracle"`
+	HareOracleLoggerLevel         string `mapstructure:"hare-oracle"`
+	HareLoggerLevel               string `mapstructure:"hare"`
+	BlockBuilderLoggerLevel       string `mapstructure:"block-builder"`
+	BlockListenerLoggerLevel      string `mapstructure:"block-listener"`
+	PoetListenerLoggerLevel       string `mapstructure:"poet"`
+	NipstBuilderLoggerLevel       string `mapstructure:"nipst"`
+	AtxBuilderLoggerLevel         string `mapstructure:"atx-builder"`
+	HareBeaconLoggerLevel         string `mapstructure:"hare-beacon"`
+	GrpcServiceLoggerLevel        string `mapstructure:"grpc-service"`
+	NodeServiceLoggerLevel        string `mapstructure:"node-service"`
+	GatewayServiceLoggerLevel     string `mapstructure:"gateway-service"`
+	MeshServiceLoggerLevel        string `mapstructure:"mesh-service"`
+	GlobalServiceLoggerLevel      string `mapstructure:"global-service"`
+	SmesherServiceLoggerLevel     string `mapstructure:"smesher-service"`
+	TransactionServiceLoggerLevel string `mapstructure:"transaction-service"`
+	JSONHTTPServerLoggerLevel     string `mapstructure:"jsonhttp-server"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node

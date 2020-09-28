@@ -51,39 +51,49 @@ import (
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
+
+	_ "net/http/pprof"
 )
 
-import _ "net/http/pprof" // import for memory and network profiling
+// import for memory and network profiling
 
 const edKeyFileName = "key.bin"
 
 // Logger names
 const (
-	AppLogger            = "app"
-	P2PLogger            = "p2p"
-	PostLogger           = "post"
-	StateDbLogger        = "stateDbStore"
-	StateLogger          = "state"
-	AtxDbStoreLogger     = "atxDbStore"
-	PoetDbStoreLogger    = "poetDbStore"
-	StoreLogger          = "store"
-	PoetDbLogger         = "poetDb"
-	MeshDBLogger         = "meshDb"
-	TrtlLogger           = "trtl"
-	AtxDbLogger          = "atxDb"
-	BlkEligibilityLogger = "blkElgValidator"
-	MeshLogger           = "mesh"
-	SyncLogger           = "sync"
-	BlockOracle          = "blockOracle"
-	HareBeaconLogger     = "hareBeacon"
-	HareOracleLogger     = "hareOracle"
-	HareLogger           = "hare"
-	BlockBuilderLogger   = "blockBuilder"
-	BlockListenerLogger  = "blockListener"
-	PoetListenerLogger   = "poetListener"
-	NipstBuilderLogger   = "nipstBuilder"
-	AtxBuilderLogger     = "atxBuilder"
-	GossipListener       = "gossipListener"
+	AppLogger                = "app"
+	P2PLogger                = "p2p"
+	PostLogger               = "post"
+	StateDbLogger            = "stateDbStore"
+	StateLogger              = "state"
+	AtxDbStoreLogger         = "atxDbStore"
+	PoetDbStoreLogger        = "poetDbStore"
+	StoreLogger              = "store"
+	PoetDbLogger             = "poetDb"
+	MeshDBLogger             = "meshDb"
+	TrtlLogger               = "trtl"
+	AtxDbLogger              = "atxDb"
+	BlkEligibilityLogger     = "blkElgValidator"
+	MeshLogger               = "mesh"
+	SyncLogger               = "sync"
+	BlockOracle              = "blockOracle"
+	HareBeaconLogger         = "hareBeacon"
+	HareOracleLogger         = "hareOracle"
+	HareLogger               = "hare"
+	BlockBuilderLogger       = "blockBuilder"
+	BlockListenerLogger      = "blockListener"
+	PoetListenerLogger       = "poetListener"
+	NipstBuilderLogger       = "nipstBuilder"
+	AtxBuilderLogger         = "atxBuilder"
+	GossipListener           = "gossipListener"
+	GrpcServiceLogger        = "grpcService"
+	NodeServiceLogger        = "nodeService"
+	GatewayServiceLogger     = "gatewayService"
+	MeshServiceLogger        = "meshService"
+	GlobalServiceLogger      = "globalService"
+	SmesherServiceLogger     = "smesherService"
+	TransactionServiceLogger = "transactionService"
+	JSONHTTPServerLogger     = "jsonServer"
 )
 
 // Cmd is the cobra wrapper for the node, that allows adding parameters to it
@@ -422,6 +432,22 @@ func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.NipstBuilderLoggerLevel))
 	case AtxBuilderLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxBuilderLoggerLevel))
+	case GrpcServiceLogger:
+		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.GrpcServiceLoggerLevel))
+	case NodeServiceLogger:
+		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.NodeServiceLoggerLevel))
+	case GatewayServiceLogger:
+		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.GatewayServiceLoggerLevel))
+	case MeshServiceLogger:
+		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.MeshServiceLoggerLevel))
+	case GlobalServiceLogger:
+		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.GlobalServiceLoggerLevel))
+	case SmesherServiceLogger:
+		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.SmesherServiceLoggerLevel))
+	case TransactionServiceLogger:
+		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TransactionServiceLoggerLevel))
+	case JSONHTTPServerLogger:
+		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.JSONHTTPServerLoggerLevel))
 	default:
 		lvl.SetLevel(log.Level())
 	}
@@ -696,7 +722,7 @@ func (app *SpacemeshApp) startServices() {
 	go app.checkTimeDrifts()
 }
 
-func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.NetworkAPI) {
+func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.NetworkAPI, lg log.Log) {
 	apiConf := &app.Config.API
 
 	// OLD API SERVICES (deprecated)
@@ -722,26 +748,70 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 	// Make sure we only create the server once.
 	registerService := func(svc grpcserver.ServiceAPI) {
 		if app.newgrpcAPIService == nil {
-			app.newgrpcAPIService = grpcserver.NewServerWithInterface(apiConf.NewGrpcServerPort, apiConf.NewGrpcServerInterface)
+			app.newgrpcAPIService = grpcserver.NewServer(
+				apiConf.NewGrpcServerPort,
+				apiConf.NewGrpcServerInterface,
+				grpcserver.WithServerLogger(
+					app.addLogger(GrpcServiceLogger, lg),
+				),
+			)
 		}
 		svc.RegisterService(app.newgrpcAPIService)
 	}
 
 	// Register the requested services one by one
 	if apiConf.StartNodeService {
-		registerService(grpcserver.NewNodeService(net, app.mesh, app.clock, app.syncer))
+		registerService(
+			grpcserver.NewNodeService(
+				net, app.mesh, app.clock, app.syncer,
+				grpcserver.WithNodeServiceLogger(
+					app.addLogger(NodeServiceLogger, lg),
+				),
+			),
+		)
 	}
 	if apiConf.StartMeshService {
-		registerService(grpcserver.NewMeshService(app.mesh, app.txPool, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
+		registerService(
+			grpcserver.NewMeshService(
+				app.mesh, app.txPool, app.clock, app.Config.LayersPerEpoch,
+				app.Config.P2P.NetworkID, layerDuration,
+				app.Config.LayerAvgSize,
+				app.Config.TxsPerBlock,
+				grpcserver.WithMeshServiceLogger(
+					app.addLogger(MeshServiceLogger, lg),
+				),
+			),
+		)
 	}
 	if apiConf.StartGlobalStateService {
-		registerService(grpcserver.NewGlobalStateService(net, app.mesh, app.clock, app.syncer))
+		registerService(
+			grpcserver.NewGlobalStateService(
+				net, app.mesh, app.clock, app.syncer,
+				grpcserver.WithGloalStateServiceLogger(
+					app.addLogger(GlobalServiceLogger, lg),
+				),
+			),
+		)
 	}
 	if apiConf.StartSmesherService {
-		registerService(grpcserver.NewSmesherService(app.atxBuilder))
+		registerService(
+			grpcserver.NewSmesherService(
+				app.atxBuilder,
+				grpcserver.WithSmesherServiceLogger(
+					app.addLogger(SmesherServiceLogger, lg),
+				),
+			),
+		)
 	}
 	if apiConf.StartTransactionService {
-		registerService(grpcserver.NewTransactionService(net, app.mesh, app.txPool, app.syncer))
+		registerService(
+			grpcserver.NewTransactionService(
+				net, app.mesh, app.txPool, app.syncer,
+				grpcserver.WithTransactionServiceLogger(
+					app.addLogger(TransactionServiceLogger, lg),
+				),
+			),
+		)
 	}
 
 	// Now that the services are registered, start the server.
@@ -756,7 +826,12 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 			log.Panic("one or more new GRPC services must be enabled with new JSON gateway server.")
 			return
 		}
-		app.newjsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.NewJSONServerPort, apiConf.NewGrpcServerPort)
+		app.newjsonAPIService = grpcserver.NewJSONHTTPServer(
+			apiConf.NewJSONServerPort, apiConf.NewGrpcServerPort,
+			grpcserver.WithJSONHTTPServerLogger(
+				app.addLogger(JSONHTTPServerLogger, lg),
+			),
+		)
 		app.newjsonAPIService.StartService(
 			apiConf.StartNodeService,
 			apiConf.StartMeshService,
@@ -1021,7 +1096,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("Error starting p2p services: %v", err)
 	}
 
-	app.startAPIServices(postClient, app.P2P)
+	app.startAPIServices(postClient, app.P2P, lg)
 	events.SubscribeToLayers(clock.Subscribe())
 	log.Info("App started.")
 

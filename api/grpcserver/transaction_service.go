@@ -22,11 +22,23 @@ type TransactionService struct {
 	Mesh    api.TxAPI      // Mesh
 	Mempool *state.TxMempool
 	syncer  api.Syncer
+	log     log.Logger
 }
 
 // RegisterService registers this service with a grpc server instance
 func (s TransactionService) RegisterService(server *Server) {
 	pb.RegisterTransactionServiceServer(server.GrpcServer, s)
+}
+
+// TransactionServiceOption type defines a callback that can set internal TransactionService fields
+type TransactionServiceOption func(t *TransactionService)
+
+// WithTransactionServiceLogger set's the underlying logger to a custom logger.
+// By default the logger is NoOp
+func WithTransactionServiceLogger(log log.Logger) TransactionServiceOption {
+	return func(t *TransactionService) {
+		t.log = log
+	}
 }
 
 // NewTransactionService creates a new grpc service using config data.
@@ -35,18 +47,24 @@ func NewTransactionService(
 	tx api.TxAPI,
 	mempool *state.TxMempool,
 	syncer api.Syncer,
+	options ...TransactionServiceOption,
 ) *TransactionService {
-	return &TransactionService{
+	t := &TransactionService{
 		Network: net,
 		Mesh:    tx,
 		Mempool: mempool,
 		syncer:  syncer,
+		log:     log.NewNop(),
 	}
+	for _, option := range options {
+		option(t)
+	}
+	return t
 }
 
 // SubmitTransaction allows a new tx to be submitted
 func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.SubmitTransactionRequest) (*pb.SubmitTransactionResponse, error) {
-	log.Info("GRPC TransactionService.SubmitTransaction")
+	s.log.Info("GRPC TransactionService.SubmitTransaction")
 
 	if len(in.Transaction) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "`Transaction` payload empty")
@@ -59,32 +77,32 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 
 	tx, err := types.BytesToTransaction(in.Transaction)
 	if err != nil {
-		log.Error("failed to deserialize tx, error: %v", err)
+		s.log.Error("failed to deserialize tx, error: %v", err)
 		return nil, status.Error(codes.InvalidArgument,
 			"`Transaction` must contain a valid, serialized transaction")
 	}
-	log.Info("GRPC TransactionService.SubmitTransaction to address: %s (len: %v), "+
+	s.log.Info("GRPC TransactionService.SubmitTransaction to address: %s (len: %v), "+
 		"amount: %v, gaslimit: %v, fee: %v",
 		tx.Recipient.String(), len(tx.Recipient), tx.Amount, tx.GasLimit, tx.Fee)
 	if err := tx.CalcAndSetOrigin(); err != nil {
-		log.Error("failed to calculate tx origin: %v", err)
+		s.log.Error("failed to calculate tx origin: %v", err)
 		return nil, status.Error(codes.InvalidArgument,
 			"`Transaction` must contain a valid, serialized transaction")
 	}
 	if !s.Mesh.AddressExists(tx.Origin()) {
-		log.With().Error("tx origin address not found in global state",
+		s.log.With().Error("tx origin address not found in global state",
 			tx.ID(), log.String("origin", tx.Origin().Short()))
 		return nil, status.Error(codes.InvalidArgument, "`Transaction` origin account not found")
 	}
 	if err := s.Mesh.ValidateNonceAndBalance(tx); err != nil {
-		log.Error("tx failed nonce and balance check: %v", err)
+		s.log.Error("tx failed nonce and balance check: %v", err)
 		return nil, status.Error(codes.InvalidArgument, "`Transaction` incorrect counter or insufficient balance")
 	}
-	log.Info("GRPC TransactionService.SubmitTransaction BROADCAST tx address %x (len %v), gas limit %v, fee %v id %v nonce %v",
+	s.log.Info("GRPC TransactionService.SubmitTransaction BROADCAST tx address %x (len %v), gas limit %v, fee %v id %v nonce %v",
 		tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.Fee, tx.ID().ShortString(), tx.AccountNonce)
 	go func() {
 		if err := s.Network.Broadcast(state.IncomingTxProtocol, in.Transaction); err != nil {
-			log.Error("error broadcasting incoming tx: %v", err)
+			s.log.Error("error broadcasting incoming tx: %v", err)
 		}
 	}()
 
@@ -127,7 +145,7 @@ func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (r
 
 // TransactionsState returns current tx data for one or more txs
 func (s TransactionService) TransactionsState(ctx context.Context, in *pb.TransactionsStateRequest) (*pb.TransactionsStateResponse, error) {
-	log.Info("GRPC TransactionService.TransactionsState")
+	s.log.Info("GRPC TransactionService.TransactionsState")
 
 	if in.TransactionId == nil || len(in.TransactionId) == 0 {
 		return nil, status.Error(codes.InvalidArgument,
@@ -164,7 +182,7 @@ func (s TransactionService) TransactionsState(ctx context.Context, in *pb.Transa
 
 // TransactionsStateStream exposes a stream of tx data
 func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStreamRequest, stream pb.TransactionService_TransactionsStateStreamServer) error {
-	log.Info("GRPC TransactionService.TransactionsStateStream")
+	s.log.Info("GRPC TransactionService.TransactionsStateStream")
 
 	if in.TransactionId == nil || len(in.TransactionId) == 0 {
 		return status.Error(codes.InvalidArgument, "`TransactionId` must include one or more transaction IDs")
@@ -183,7 +201,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 				// to this stream but continuing to listen to the other stream,
 				// but in practice one should never be closed while the other is
 				// still running, so it doesn't matter
-				log.Info("tx channel closed, shutting down")
+				s.log.Info("tx channel closed, shutting down")
 				return nil
 			}
 
@@ -222,7 +240,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 				// to this stream but continuing to listen to the other stream,
 				// but in practice one should never be closed while the other is
 				// still running, so it doesn't matter
-				log.Info("layer channel closed, shutting down")
+				s.log.Info("layer channel closed, shutting down")
 				return nil
 			}
 			// Filter for any matching transactions in the reported layer
@@ -250,7 +268,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 							if in.IncludeTransactions {
 								tx, err := s.Mesh.GetTransaction(layerTxid)
 								if err != nil {
-									log.Error("could not find transaction %v from layer %v: %v", layerTxid, layer, err)
+									s.log.Error("could not find transaction %v from layer %v: %v", layerTxid, layer, err)
 									return status.Error(codes.Internal, "error retrieving tx data")
 								}
 
@@ -267,7 +285,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 				}
 			}
 		case <-stream.Context().Done():
-			log.Info("TransactionsStateStream closing stream, client disconnected")
+			s.log.Info("TransactionsStateStream closing stream, client disconnected")
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate

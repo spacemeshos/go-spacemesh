@@ -39,6 +39,12 @@ type Logger interface {
 	Error(format string, args ...interface{})
 	Warning(format string, args ...interface{})
 	WithName(prefix string) Log
+	With() FieldLogger
+}
+
+// NewNop returns a no-op logger.
+func NewNop() *Log {
+	return &Log{logger: zap.NewNop()}
 }
 
 func encoder() zapcore.Encoder {
