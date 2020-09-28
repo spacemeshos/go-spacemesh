@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -90,11 +91,10 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 var tests = []TestScenario{txWithRunningNonceGenerator([]int{}), sameRootTester([]int{0}), reachedEpochTester([]int{}), txWithUnorderedNonceGenerator([]int{1})}
 
 func (suite *AppTestSuite) TestMultipleNodes() {
-	//suite.T().Skip()
-	//EntryPointCreated <- true
+	var once sync.Once
+	oncebody := func() { GracefulShutdown(suite.apps) }
 	net := service.NewSimulator()
 	const numberOfEpochs = 5 // first 2 epochs are genesis
-	//addr := address.BytesToAddress([]byte{0x01})
 	cfg := getTestDefaultConfig()
 	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
 	path := "../tmp/test/state_" + time.Now().String()
@@ -114,6 +114,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	ld := time.Duration(20) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
 	suite.initMultipleInstances(cfg, rolacle, rng, 5, path, genesisTime, poetHarness.HTTPPoetClient, false, clock, net)
+	defer once.Do(oncebody)
 	for _, a := range suite.apps {
 		a.startServices()
 	}
@@ -121,10 +122,8 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	ActivateGrpcServer(suite.apps[0])
 
 	if err := poetHarness.Start([]string{"127.0.0.1:9091"}); err != nil {
-		log.Panic("failed to start poet server: %v", err)
+		suite.T().Fatalf("failed to start poet server: %v", err)
 	}
-
-	//defer GracefulShutdown(suite.apps)
 
 	timeout := time.After(6 * 60 * time.Second)
 	setupTests(suite)
@@ -134,7 +133,6 @@ loop:
 		select {
 		// Got a timeout! fail with a timeout error
 		case <-timeout:
-			GracefulShutdown(suite.apps)
 			suite.T().Fatal("timed out")
 		default:
 			if runTests(suite, finished) {
@@ -145,12 +143,12 @@ loop:
 	}
 	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch) - 1)
 	oldRoot := suite.apps[0].state.GetStateRoot()
-	GracefulShutdown(suite.apps)
+	once.Do(oncebody)
 
-	// this tests loading of pervious state, mabe it's not the best place to put this here...
+	// this tests loading of previous state, maybe it's not the best place to put this here...
 	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, rng, path+"a", rolacle, poetHarness.HTTPPoetClient, clock, net)
 	assert.NoError(suite.T(), err)
-	//test that loaded root equals
+	// test that loaded root is equal
 	assert.Equal(suite.T(), oldRoot, smApp.state.GetStateRoot())
 	// start and stop and test for no panics
 	smApp.startServices()
@@ -167,18 +165,17 @@ type TestScenario struct {
 	Dependencies []int
 }
 
-func txWithUnorderedNonceGenerator(dependancies []int) TestScenario {
+func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 
 	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apicfg.Account2Private))
+	if err != nil {
+		log.Panic("Could not build ed signer err=%v", err)
+	}
 	addr := types.Address{}
 	addr.SetBytes(acc1Signer.PublicKey().Bytes())
 	dst := types.BytesToAddress([]byte{0x09})
 	txsSent := 25
 	setup := func(suite *AppTestSuite, t *testing.T) {
-		if err != nil {
-			log.Panic("Could not build ed signer err=%v", err)
-		}
-
 		for i := 0; i < txsSent; i++ {
 			tx, err := types.NewSignedTx(uint64(txsSent-i), dst, 10, 1, 1, acc1Signer)
 			if err != nil {
@@ -203,7 +200,7 @@ func txWithUnorderedNonceGenerator(dependancies []int) TestScenario {
 		return ok
 	}
 
-	return TestScenario{setup, teardown, dependancies}
+	return TestScenario{setup, teardown, dependencies}
 }
 
 func txWithRunningNonceGenerator(dependancies []int) TestScenario {
