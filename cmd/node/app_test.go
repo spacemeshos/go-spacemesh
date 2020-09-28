@@ -4,6 +4,7 @@ package node
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -54,10 +55,7 @@ func (suite *AppTestSuite) TearDownTest() {
 			panic(fmt.Sprintf("what happened : %v", err))
 		}
 	}
-	if err := os.RemoveAll("../tmp"); err != nil {
-		log.Error("error while cleaning up tmp dir: %v", err)
-	}
-	//poet should clean up after himself
+	// poet should clean up after itself
 	if matches, err := filepath.Glob("*.bin"); err != nil {
 		log.Error("error while finding PoET bin files: %v", err)
 	} else {
@@ -97,7 +95,9 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	const numberOfEpochs = 5 // first 2 epochs are genesis
 	cfg := getTestDefaultConfig()
 	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
-	path := "../tmp/test/state_" + time.Now().String()
+	path, err := ioutil.TempDir("", "state_")
+	require.NoError(suite.T(), err, "failed to create tempdir")
+	defer os.RemoveAll(path)
 
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
@@ -525,7 +525,9 @@ func TestShutdown(t *testing.T) {
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
 
 	swarm := net.NewNode()
-	dbStorepath := "/tmp/" + pub.String()
+	dbStorepath, err := ioutil.TempDir("", pub.String())
+	r.NoError(err, "failed to create tempdir")
+	defer os.RemoveAll(dbStorepath)
 
 	hareOracle := newLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
