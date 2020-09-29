@@ -42,7 +42,6 @@ func (s SmesherService) IsSmeshing(ctx context.Context, in *empty.Empty) (*pb.Is
 func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingRequest) (*pb.StartSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.StartSmeshing")
 
-	// TODO(moshababo): remove DataDir and CommitmentSize from the request proto definition.
 	// TODO(moshababo): check why JSON request via HTTP gateway doesn't decode `coinbase` properly
 
 	if in.Coinbase == nil {
@@ -51,8 +50,8 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 
 	addr := types.BytesToAddress(in.Coinbase.Address)
 	if err := s.smeshing.StartSmeshing(addr); err != nil {
-		log.Error("StartSmeshing failure: %v", err) // TODO: should not crash nor print stacktrace.
-		return nil, status.Error(codes.Internal, err.Error())
+		log.Error("failed to start smeshing: %v", err)
+		return nil, status.Error(codes.Internal, "failed to start smeshing")
 	}
 
 	return &pb.StartSmeshingResponse{
@@ -65,7 +64,8 @@ func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingReq
 	log.Info("GRPC SmesherService.StopSmeshing")
 
 	if err := s.smeshing.StopSmeshing(); err != nil {
-		return nil, err
+		log.Error("failed to stop smeshing: %v", err)
+		return nil, status.Error(codes.Internal, "failed to stop smeshing")
 	}
 	return &pb.StopSmeshingResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
@@ -85,7 +85,7 @@ func (s SmesherService) Coinbase(ctx context.Context, in *empty.Empty) (*pb.Coin
 	log.Info("GRPC SmesherService.Coinbase")
 
 	addr := s.smeshing.Coinbase()
-	return &pb.CoinbaseResponse{AccountId: &pb.AccountId{Address: addr[:]}}, nil
+	return &pb.CoinbaseResponse{AccountId: &pb.AccountId{Address: addr.Bytes()}}, nil
 }
 
 // SetCoinbase sets the current coinbase setting of this node
@@ -120,11 +120,12 @@ func (s SmesherService) SetMinGas(ctx context.Context, in *pb.SetMinGasRequest) 
 func (s SmesherService) PostStatus(ctx context.Context, in *empty.Empty) (*pb.PostStatusResponse, error) {
 	log.Info("GRPC SmesherService.PostStatus")
 
-	status, err := s.post.PostStatus()
+	postStatus, err := s.post.PostStatus()
 	if err != nil {
-		return nil, err
+		log.Error("failed retrieve post status: %v", err)
+		return nil, status.Error(codes.Internal, "failed retrieve post status")
 	}
-	return &pb.PostStatusResponse{Status: statusToPbStatus(status)}, nil
+	return &pb.PostStatusResponse{Status: statusToPbStatus(postStatus)}, nil
 }
 
 // PostComputeProviders returns a list of available post compute providers
@@ -138,7 +139,8 @@ func (s SmesherService) PostComputeProviders(ctx context.Context, in *empty.Empt
 	for i, p := range providers {
 		hs, err := p.Benchmark()
 		if err != nil {
-			return nil, err
+			log.Error("failed to benchmark provider: %v", err)
+			return nil, status.Error(codes.Internal, "failed to benchmark provider")
 		}
 
 		res.PostComputeProvider[i] = &pb.PostComputeProvider{
@@ -157,7 +159,7 @@ func (s SmesherService) CreatePostData(ctx context.Context, in *pb.CreatePostDat
 	log.Info("GRPC SmesherService.CreatePostData")
 
 	if in.Data == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "`Data` must be provided")
+		return nil, status.Error(codes.InvalidArgument, "`Data` must be provided")
 	}
 
 	if _, err := s.post.CreatePostData(&activation.PostOptions{
@@ -167,7 +169,8 @@ func (s SmesherService) CreatePostData(ctx context.Context, in *pb.CreatePostDat
 		Throttle:          in.Data.Throttle,
 		ComputeProviderID: int(in.Data.ProviderId),
 	}); err != nil {
-		return nil, err
+		log.Error("failed to start creating post data: %v", err)
+		return nil, status.Error(codes.Internal, "failed to start creating post data")
 	}
 
 	return &pb.CreatePostDataResponse{
@@ -180,7 +183,8 @@ func (s SmesherService) StopPostDataCreationSession(ctx context.Context, in *pb.
 	log.Info("GRPC SmesherService.StopPostDataCreationSession")
 
 	if err := s.post.StopPostDataCreationSession(in.DeleteFiles); err != nil {
-		return nil, err
+		log.Error("failed to stop post data creation session: %v", err)
+		return nil, status.Error(codes.Internal, "failed to stop")
 	}
 
 	return &pb.StopPostDataCreationSessionResponse{

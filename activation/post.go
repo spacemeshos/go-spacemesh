@@ -20,7 +20,7 @@ func DefaultConfig() config.Config {
 // based on a short benchmarking session.
 const BestProviderID = -1
 
-// DefaultPostOptions defines the default configuration for PoST options.
+// DefaultPostOptions defines the default configuration for post options.
 func DefaultPostOptions() PostOptions {
 	cfg := DefaultConfig()
 	return PostOptions{
