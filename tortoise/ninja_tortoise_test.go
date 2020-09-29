@@ -2,6 +2,7 @@ package tortoise
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"math"
 	"os"
 	"runtime"
@@ -178,43 +179,43 @@ func TestNinjaTortoise_VariableLayerSize(t *testing.T) {
 	AddLayer(mdb, l)
 	ni.handleIncomingLayer(l)
 
-	l1 := createLayer(1, []*types.Layer{l}, 8)
+	l1 := createLayer(types.GetEffectiveGenesis()+1, []*types.Layer{l}, 8)
 	AddLayer(mdb, l1)
 	ni.handleIncomingLayer(l1)
 
-	l2 := createLayer(2, []*types.Layer{l1, l}, 8)
+	l2 := createLayer(types.GetEffectiveGenesis()+2, []*types.Layer{l1, l}, 8)
 	AddLayer(mdb, l2)
 	ni.handleIncomingLayer(l2)
 
-	l3 := createLayer(3, []*types.Layer{l2, l1, l}, 8)
+	l3 := createLayer(types.GetEffectiveGenesis()+3, []*types.Layer{l2, l1, l}, 8)
 	AddLayer(mdb, l3)
 	ni.handleIncomingLayer(l3)
 
-	l4 := createLayer(4, []*types.Layer{l3, l2, l1, l}, 8)
+	l4 := createLayer(types.GetEffectiveGenesis()+4, []*types.Layer{l3, l2, l1, l}, 8)
 	AddLayer(mdb, l4)
 	ni.handleIncomingLayer(l4)
 
-	l5 := createLayer(5, []*types.Layer{l4, l3, l2, l1, l}, 4)
+	l5 := createLayer(types.GetEffectiveGenesis()+5, []*types.Layer{l4, l3, l2, l1, l}, 4)
 	AddLayer(mdb, l5)
 	ni.handleIncomingLayer(l5)
 
-	l6 := createLayer(6, []*types.Layer{l5, l4, l3, l2, l1}, 9)
+	l6 := createLayer(types.GetEffectiveGenesis()+6, []*types.Layer{l5, l4, l3, l2, l1}, 9)
 	AddLayer(mdb, l6)
 	ni.handleIncomingLayer(l6)
 	//
-	l7 := createLayer(7, []*types.Layer{l6, l5, l4, l3, l2}, 9)
+	l7 := createLayer(types.GetEffectiveGenesis()+7, []*types.Layer{l6, l5, l4, l3, l2}, 9)
 	AddLayer(mdb, l7)
 	ni.handleIncomingLayer(l7)
 
-	l8 := createLayer(8, []*types.Layer{l7, l6, l5, l4, l3}, 9)
+	l8 := createLayer(types.GetEffectiveGenesis()+8, []*types.Layer{l7, l6, l5, l4, l3}, 9)
 	AddLayer(mdb, l8)
 	ni.handleIncomingLayer(l8)
 
-	l9 := createLayer(9, []*types.Layer{l8, l7, l6, l5, l4}, 9)
+	l9 := createLayer(+types.GetEffectiveGenesis()+9, []*types.Layer{l8, l7, l6, l5, l4}, 9)
 	AddLayer(mdb, l9)
 	ni.handleIncomingLayer(l9)
 
-	assert.True(t, ni.PBase.Layer() == 8)
+	assert.Equal(t, int(ni.PBase.Layer()), int(types.GetEffectiveGenesis()+8))
 
 }
 
@@ -228,23 +229,23 @@ func TestNinjaTortoise_Abstain(t *testing.T) {
 	AddLayer(mdb, l)
 	alg.handleIncomingLayer(l)
 
-	l1 := createLayer(1, []*types.Layer{l}, 3)
+	l1 := createLayer(mesh.GenesisLayer().Index()+1, []*types.Layer{l}, 3)
 	AddLayer(mdb, l1)
 	alg.handleIncomingLayer(l1)
 
-	l2 := createLayer(2, []*types.Layer{l1, l}, 3)
+	l2 := createLayer(mesh.GenesisLayer().Index()+2, []*types.Layer{l1, l}, 3)
 	AddLayer(mdb, l2)
 	alg.handleIncomingLayer(l2)
 
-	l3 := createLayer(3, []*types.Layer{l2, l}, 3)
+	l3 := createLayer(mesh.GenesisLayer().Index()+3, []*types.Layer{l2, l}, 3)
 	AddLayer(mdb, l3)
 	alg.handleIncomingLayer(l3)
 
-	l4 := createLayer(4, []*types.Layer{l3, l}, 3)
+	l4 := createLayer(mesh.GenesisLayer().Index()+4, []*types.Layer{l3, l}, 3)
 	AddLayer(mdb, l4)
 	alg.handleIncomingLayer(l4)
 	assert.Equal(t, alg.PBase.Layer(), mesh.GenesisLayer().Index()+3)
-	assert.True(t, alg.TTally[alg.TGood[3]][blockIDLayerTuple{BlockID: mesh.GenesisBlock().ID(), LayerID: mesh.GenesisBlock().Layer()}][0] == 9)
+	assert.Equal(t, alg.TTally[alg.TGood[mesh.GenesisLayer().Index()+3]][blockIDLayerTuple{BlockID: mesh.GenesisBlock().ID(), LayerID: mesh.GenesisBlock().Layer()}][0], 9)
 }
 
 func TestNinjaTortoise_BlockByBlock(t *testing.T) {
@@ -379,88 +380,89 @@ func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 	mdb := getInMemMesh()
 	alg := newNinjaTortoise(200, mdb, 5, lg)
 
-	l := createLayer2(0, nil, []*types.Layer{}, 154)
+	//l := createLayer2(0, nil, []*types.Layer{}, 154)
+	l := mesh.GenesisLayer()
 	AddLayer(mdb, l)
 	alg.handleIncomingLayer(l)
 
-	l1 := createLayer2(1, l, []*types.Layer{l}, 141)
+	l1 := createLayer2(types.GetEffectiveGenesis()+1, mesh.GenesisLayer(), []*types.Layer{l}, 141)
 	AddLayer(mdb, l1)
 	alg.handleIncomingLayer(l1)
 
-	l2 := createLayer2(2, l1, []*types.Layer{l1, l}, 129)
+	l2 := createLayer2(types.GetEffectiveGenesis()+2, l1, []*types.Layer{l1, l}, 129)
 	AddLayer(mdb, l2)
 	alg.handleIncomingLayer(l2)
 
-	l3 := createLayer2(3, l2, []*types.Layer{l2, l1, l}, 132)
+	l3 := createLayer2(types.GetEffectiveGenesis()+3, l2, []*types.Layer{l2, l1, l}, 132)
 	AddLayer(mdb, l3)
 	alg.handleIncomingLayer(l3)
 
-	l4 := createLayer2(4, l3, []*types.Layer{l3, l2, l1, l}, 138)
+	l4 := createLayer2(types.GetEffectiveGenesis()+4, l3, []*types.Layer{l3, l2, l1, l}, 138)
 	AddLayer(mdb, l4)
 	alg.handleIncomingLayer(l4)
 
-	l5 := createLayer2(5, l4, []*types.Layer{l4, l3, l2, l1, l}, 158)
+	l5 := createLayer2(types.GetEffectiveGenesis()+5, l4, []*types.Layer{l4, l3, l2, l1, l}, 158)
 	AddLayer(mdb, l5)
 	alg.handleIncomingLayer(l5)
 
-	l6 := createLayer2(6, l5, []*types.Layer{l5, l4, l3, l2, l1}, 155)
+	l6 := createLayer2(types.GetEffectiveGenesis()+6, l5, []*types.Layer{l5, l4, l3, l2, l1}, 155)
 	AddLayer(mdb, l6)
 	alg.handleIncomingLayer(l6)
 	//
-	l7 := createLayer2(7, l6, []*types.Layer{l6, l5, l4, l3, l2}, 130)
+	l7 := createLayer2(types.GetEffectiveGenesis()+7, l6, []*types.Layer{l6, l5, l4, l3, l2}, 130)
 	AddLayer(mdb, l7)
 	alg.handleIncomingLayer(l7)
 
-	l8 := createLayer2(8, l7, []*types.Layer{l6, l5, l4, l3}, 150)
+	l8 := createLayer2(types.GetEffectiveGenesis()+8, l7, []*types.Layer{l6, l5, l4, l3}, 150)
 	AddLayer(mdb, l8)
 	alg.handleIncomingLayer(l8)
 
-	l9 := createLayer2(9, l8, []*types.Layer{l8, l7, l6, l5, l4}, 134)
+	l9 := createLayer2(types.GetEffectiveGenesis()+9, l8, []*types.Layer{l8, l7, l6, l5, l4}, 134)
 	AddLayer(mdb, l9)
 	alg.handleIncomingLayer(l9)
 
-	l10 := createLayer2(10, l9, []*types.Layer{l9, l8, l7, l6, l5}, 148)
+	l10 := createLayer2(types.GetEffectiveGenesis()+10, l9, []*types.Layer{l9, l8, l7, l6, l5}, 148)
 	AddLayer(mdb, l10)
 	alg.handleIncomingLayer(l10)
 
-	l11 := createLayer2(11, l10, []*types.Layer{l10, l9, l8, l7, l6}, 147)
+	l11 := createLayer2(types.GetEffectiveGenesis()+11, l10, []*types.Layer{l10, l9, l8, l7, l6}, 147)
 	AddLayer(mdb, l11)
 	alg.handleIncomingLayer(l11)
 
-	assert.True(t, alg.PBase.Layer() == 7)
+	require.Equal(t, types.GetEffectiveGenesis()+types.LayerID(7), alg.PBase.Layer())
 
 	//now l7 one votes to be contextually valid in the eyes of layer 12 good pattern
-	l12 := createLayer2(12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 171)
+	l12 := createLayer2(types.GetEffectiveGenesis()+12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 171)
 	AddLayer(mdb, l12)
 	alg.handleIncomingLayer(l12)
 
-	assert.True(t, alg.PBase.Layer() == 7)
+	assert.True(t, alg.PBase.Layer() == types.GetEffectiveGenesis()+7)
 
-	l13 := createLayer2(13, l12, []*types.Layer{l12, l11, l10, l9, l8}, 126)
+	l13 := createLayer2(types.GetEffectiveGenesis()+13, l12, []*types.Layer{l12, l11, l10, l9, l8}, 126)
 	AddLayer(mdb, l13)
 	alg.handleIncomingLayer(l13)
 
 	//now l7 has the exact amount of votes to be contextually valid which will make 12 good pattern complete
-	l121 := createLayer2(12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 1)
+	l121 := createLayer2(types.GetEffectiveGenesis()+12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 1)
 	AddLayer(mdb, l121)
 	alg.handleIncomingLayer(l121)
 
-	assert.True(t, alg.PBase.Layer() == 7)
+	assert.True(t, alg.PBase.Layer() == types.GetEffectiveGenesis()+7)
 
-	l14 := createLayer2(14, l13, []*types.Layer{l13, l12, l121, l11, l10, l9}, 148)
+	l14 := createLayer2(types.GetEffectiveGenesis()+14, l13, []*types.Layer{l13, l12, l121, l11, l10, l9}, 148)
 	AddLayer(mdb, l14)
 	alg.handleIncomingLayer(l14)
 
-	l15 := createLayer2(15, l14, []*types.Layer{l14, l13, l121, l12, l11, l10}, 150)
+	l15 := createLayer2(types.GetEffectiveGenesis()+15, l14, []*types.Layer{l14, l13, l121, l12, l11, l10}, 150)
 	AddLayer(mdb, l15)
 	alg.handleIncomingLayer(l15)
 
-	assert.True(t, alg.PBase.Layer() == 7)
+	assert.True(t, alg.PBase.Layer() == types.GetEffectiveGenesis()+7)
 
-	l16 := createLayer2(16, l15, []*types.Layer{l15, l14, l121, l13, l12, l11}, 121)
+	l16 := createLayer2(types.GetEffectiveGenesis()+16, l15, []*types.Layer{l15, l14, l121, l13, l12, l11}, 121)
 	AddLayer(mdb, l16)
 	alg.handleIncomingLayer(l16)
-	assert.True(t, alg.PBase.Layer() == 15)
+	assert.True(t, alg.PBase.Layer() == types.GetEffectiveGenesis()+15)
 }
 
 func TestNinjaTortoise_LayerWithNoVotes2(t *testing.T) {
@@ -469,76 +471,76 @@ func TestNinjaTortoise_LayerWithNoVotes2(t *testing.T) {
 	mdb := getInMemMesh()
 	alg := newNinjaTortoise(200, mdb, 5, lg)
 
-	l := createLayer2(0, nil, []*types.Layer{}, 154)
+	l := mesh.GenesisLayer()
 	AddLayer(mdb, l)
 	alg.handleIncomingLayer(l)
 
-	l1 := createLayer2(1, l, []*types.Layer{l}, 141)
+	l1 := createLayer2(types.GetEffectiveGenesis()+1, l, []*types.Layer{l}, 141)
 	AddLayer(mdb, l1)
 	alg.handleIncomingLayer(l1)
 
-	l2 := createLayer2(2, l1, []*types.Layer{l1, l}, 129)
+	l2 := createLayer2(types.GetEffectiveGenesis()+2, l1, []*types.Layer{l1, l}, 129)
 	AddLayer(mdb, l2)
 	alg.handleIncomingLayer(l2)
 
-	l3 := createLayer2(3, l2, []*types.Layer{l2, l1, l}, 132)
+	l3 := createLayer2(types.GetEffectiveGenesis()+3, l2, []*types.Layer{l2, l1, l}, 132)
 	AddLayer(mdb, l3)
 	alg.handleIncomingLayer(l3)
 
-	l4 := createLayer2(4, l3, []*types.Layer{l3, l2, l1, l}, 138)
+	l4 := createLayer2(types.GetEffectiveGenesis()+4, l3, []*types.Layer{l3, l2, l1, l}, 138)
 	AddLayer(mdb, l4)
 	alg.handleIncomingLayer(l4)
 
-	l5 := createLayer2(5, l4, []*types.Layer{l4, l3, l2, l1, l}, 158)
+	l5 := createLayer2(types.GetEffectiveGenesis()+5, l4, []*types.Layer{l4, l3, l2, l1, l}, 158)
 	AddLayer(mdb, l5)
 	alg.handleIncomingLayer(l5)
 
-	l6 := createLayer2(6, l5, []*types.Layer{l5, l4, l3, l2, l1}, 155)
+	l6 := createLayer2(types.GetEffectiveGenesis()+6, l5, []*types.Layer{l5, l4, l3, l2, l1}, 155)
 	AddLayer(mdb, l6)
 	alg.handleIncomingLayer(l6)
 	//
-	l7 := createLayer2(7, l6, []*types.Layer{l6, l5, l4, l3, l2}, 130)
+	l7 := createLayer2(types.GetEffectiveGenesis()+7, l6, []*types.Layer{l6, l5, l4, l3, l2}, 130)
 	AddLayer(mdb, l7)
 	alg.handleIncomingLayer(l7)
 
-	l8 := createLayer2(8, l7, []*types.Layer{l6, l5, l4, l3}, 150)
+	l8 := createLayer2(types.GetEffectiveGenesis()+8, l7, []*types.Layer{l6, l5, l4, l3}, 150)
 	AddLayer(mdb, l8)
 	alg.handleIncomingLayer(l8)
 
-	l9 := createLayer2(9, l8, []*types.Layer{l8, l7, l6, l5, l4}, 134)
+	l9 := createLayer2(types.GetEffectiveGenesis()+9, l8, []*types.Layer{l8, l7, l6, l5, l4}, 134)
 	AddLayer(mdb, l9)
 	alg.handleIncomingLayer(l9)
 
-	l10 := createLayer2(10, l9, []*types.Layer{l9, l8, l7, l6, l5}, 148)
+	l10 := createLayer2(types.GetEffectiveGenesis()+10, l9, []*types.Layer{l9, l8, l7, l6, l5}, 148)
 	AddLayer(mdb, l10)
 	alg.handleIncomingLayer(l10)
 
-	l11 := createLayer2(11, l10, []*types.Layer{l10, l9, l8, l7, l6}, 147)
+	l11 := createLayer2(types.GetEffectiveGenesis()+11, l10, []*types.Layer{l10, l9, l8, l7, l6}, 147)
 	AddLayer(mdb, l11)
 	alg.handleIncomingLayer(l11)
-	assert.True(t, alg.PBase.Layer() == 7)
+	assert.True(t, alg.PBase.Layer() == types.GetEffectiveGenesis()+7)
 
 	// l7 is missing exactly 1 vote to be contextually valid which will make 12 complete
-	l12 := createLayer2(12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 171)
+	l12 := createLayer2(types.GetEffectiveGenesis()+12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 171)
 	AddLayer(mdb, l12)
 	alg.handleIncomingLayer(l12)
 
-	l13 := createLayer2(13, l12, []*types.Layer{l12, l11, l10, l9, l8}, 126)
+	l13 := createLayer2(types.GetEffectiveGenesis()+13, l12, []*types.Layer{l12, l11, l10, l9, l8}, 126)
 	AddLayer(mdb, l13)
 	alg.handleIncomingLayer(l13)
 
-	l14 := createLayer2(14, l13, []*types.Layer{l13, l12, l11, l10, l9}, 148)
+	l14 := createLayer2(types.GetEffectiveGenesis()+14, l13, []*types.Layer{l13, l12, l11, l10, l9}, 148)
 	AddLayer(mdb, l14)
 	alg.handleIncomingLayer(l14)
 
-	l15 := createLayer2(15, l14, []*types.Layer{l14, l13, l12, l11, l10}, 150)
+	l15 := createLayer2(types.GetEffectiveGenesis()+15, l14, []*types.Layer{l14, l13, l12, l11, l10}, 150)
 	AddLayer(mdb, l15)
 	alg.handleIncomingLayer(l15)
 
-	l16 := createLayer2(16, l15, []*types.Layer{l15, l14, l13, l12, l11}, 121)
+	l16 := createLayer2(types.GetEffectiveGenesis()+16, l15, []*types.Layer{l15, l14, l13, l12, l11}, 121)
 	AddLayer(mdb, l16)
 	alg.handleIncomingLayer(l16)
-	assert.True(t, alg.PBase.Layer() == 7)
+	assert.True(t, alg.PBase.Layer() == types.GetEffectiveGenesis()+7)
 }
 
 func TestNinjaTortoise_OneMoreLayerWithNoVotes(t *testing.T) {
@@ -547,67 +549,67 @@ func TestNinjaTortoise_OneMoreLayerWithNoVotes(t *testing.T) {
 	mdb := getMeshForBench()
 	alg := newNinjaTortoise(200, mdb, 5, lg)
 
-	l := createLayer2(0, nil, []*types.Layer{}, 147)
+	l := mesh.GenesisLayer()
 	AddLayer(mdb, l)
 	alg.handleIncomingLayer(l)
 
-	l1 := createLayer2(1, l, []*types.Layer{l}, 150)
+	l1 := createLayer2(types.GetEffectiveGenesis()+1, l, []*types.Layer{l}, 150)
 	AddLayer(mdb, l1)
 	alg.handleIncomingLayer(l1)
 
-	l2 := createLayer2(2, l1, []*types.Layer{l1, l}, 140)
+	l2 := createLayer2(types.GetEffectiveGenesis()+2, l1, []*types.Layer{l1, l}, 140)
 	AddLayer(mdb, l2)
 	alg.handleIncomingLayer(l2)
 
-	l3 := createLayer2(3, l2, []*types.Layer{l2, l1, l}, 117)
+	l3 := createLayer2(types.GetEffectiveGenesis()+3, l2, []*types.Layer{l2, l1, l}, 117)
 	AddLayer(mdb, l3)
 	alg.handleIncomingLayer(l3)
 
-	l4 := createLayer2(4, l3, []*types.Layer{l3, l2, l1, l}, 142)
+	l4 := createLayer2(types.GetEffectiveGenesis()+4, l3, []*types.Layer{l3, l2, l1, l}, 142)
 	AddLayer(mdb, l4)
 	alg.handleIncomingLayer(l4)
 
-	l5 := createLayer2(5, l4, []*types.Layer{l4, l3, l2, l1, l}, 147)
+	l5 := createLayer2(types.GetEffectiveGenesis()+5, l4, []*types.Layer{l4, l3, l2, l1, l}, 147)
 	AddLayer(mdb, l5)
 	alg.handleIncomingLayer(l5)
 
-	l6 := createLayer2(6, l5, []*types.Layer{l4, l3, l2, l1}, 128)
+	l6 := createLayer2(types.GetEffectiveGenesis()+6, l5, []*types.Layer{l4, l3, l2, l1}, 128)
 	AddLayer(mdb, l6)
 	alg.handleIncomingLayer(l6)
 	//
-	l7 := createLayer2(7, l6, []*types.Layer{l6, l5, l4, l3, l2}, 144)
+	l7 := createLayer2(types.GetEffectiveGenesis()+7, l6, []*types.Layer{l6, l5, l4, l3, l2}, 144)
 	AddLayer(mdb, l7)
 	alg.handleIncomingLayer(l7)
 
-	l8 := createLayer2(8, l7, []*types.Layer{l7, l6, l5, l4, l3}, 167)
+	l8 := createLayer2(types.GetEffectiveGenesis()+8, l7, []*types.Layer{l7, l6, l5, l4, l3}, 167)
 	AddLayer(mdb, l8)
 	alg.handleIncomingLayer(l8)
 
-	l9 := createLayer2(9, l8, []*types.Layer{l8, l7, l6, l5, l4}, 128)
+	l9 := createLayer2(types.GetEffectiveGenesis()+9, l8, []*types.Layer{l8, l7, l6, l5, l4}, 128)
 	AddLayer(mdb, l9)
 	alg.handleIncomingLayer(l9)
 
-	l10 := createLayer2(10, l9, []*types.Layer{l9, l8, l7, l6, l5}, 142)
+	l10 := createLayer2(types.GetEffectiveGenesis()+10, l9, []*types.Layer{l9, l8, l7, l6, l5}, 142)
 	AddLayer(mdb, l10)
 	alg.handleIncomingLayer(l10)
 
-	l11 := createLayer2(11, l10, []*types.Layer{l10, l9, l8, l7, l6}, 157)
+	l11 := createLayer2(types.GetEffectiveGenesis()+11, l10, []*types.Layer{l10, l9, l8, l7, l6}, 157)
 	AddLayer(mdb, l11)
 	alg.handleIncomingLayer(l11)
 
-	l12 := createLayer2(12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 138)
+	l12 := createLayer2(types.GetEffectiveGenesis()+12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 138)
 	AddLayer(mdb, l12)
 	alg.handleIncomingLayer(l12)
 
-	l13 := createLayer2(13, l12, []*types.Layer{l12, l11, l10, l9, l8}, 139)
+	l13 := createLayer2(types.GetEffectiveGenesis()+13, l12, []*types.Layer{l12, l11, l10, l9, l8}, 139)
 	AddLayer(mdb, l13)
 	alg.handleIncomingLayer(l13)
 
-	l14 := createLayer2(14, l13, []*types.Layer{l13, l12, l11, l10, l9}, 128)
+	l14 := createLayer2(types.GetEffectiveGenesis()+14, l13, []*types.Layer{l13, l12, l11, l10, l9}, 128)
 	AddLayer(mdb, l14)
 	alg.handleIncomingLayer(l14)
 
-	l15 := createLayer2(15, l14, []*types.Layer{l14, l13, l12, l11, l10}, 134)
+	l15 := createLayer2(types.GetEffectiveGenesis()+15, l14, []*types.Layer{l14, l13, l12, l11, l10}, 134)
 	AddLayer(mdb, l15)
 	alg.handleIncomingLayer(l15)
 }
@@ -844,7 +846,7 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 	layers := 5
 	mdb := getInMemMesh()
 	alg := sanity(t, mdb, layers, layerSize, patternSize, 0.2)
-	assert.Equal(t, alg.PBase.Layer(), types.LayerID(layers-1))
+	assert.Equal(t, alg.PBase.Layer(), types.GetEffectiveGenesis()+types.LayerID(layers-1))
 }
 
 func sanity(t *testing.T, mdb *mesh.DB, layers int, layerSize int, patternSize int, badBlks float64) *ninjaTortoise {
@@ -886,11 +888,11 @@ func TestNinjaTortoise_Sanity2(t *testing.T) {
 	alg := newNinjaTortoise(3, mdb, 5, log.NewDefault(t.Name()))
 	l := mesh.GenesisLayer()
 
-	l1 := createLayer(1, []*types.Layer{l}, 3)
-	l2 := createLayer(2, []*types.Layer{l1, l}, 3)
-	l3 := createLayer(3, []*types.Layer{l2, l1, l}, 3)
-	l4 := createLayer(4, []*types.Layer{l3, l1, l}, 3)
-	l5 := createLayer(5, []*types.Layer{l4, l3, l2, l1, l}, 3)
+	l1 := createLayer(types.GetEffectiveGenesis()+1, []*types.Layer{l}, 3)
+	l2 := createLayer(types.GetEffectiveGenesis()+2, []*types.Layer{l1, l}, 3)
+	l3 := createLayer(types.GetEffectiveGenesis()+3, []*types.Layer{l2, l1, l}, 3)
+	l4 := createLayer(types.GetEffectiveGenesis()+4, []*types.Layer{l3, l1, l}, 3)
+	l5 := createLayer(types.GetEffectiveGenesis()+5, []*types.Layer{l4, l3, l2, l1, l}, 3)
 
 	AddLayer(mdb, l)
 	AddLayer(mdb, l1)
@@ -1009,19 +1011,19 @@ func TestNinjaTortoise_Recovery(t *testing.T) {
 	alg.HandleIncomingLayer(l)
 	alg.Persist()
 
-	l1 := createLayer(1, []*types.Layer{l}, 3)
+	l1 := createLayer(types.GetEffectiveGenesis()+1, []*types.Layer{l}, 3)
 	AddLayer(mdb, l1)
 
 	alg.HandleIncomingLayer(l1)
 	alg.Persist()
 
-	l2 := createLayer(2, []*types.Layer{l1, l}, 3)
+	l2 := createLayer(types.GetEffectiveGenesis()+2, []*types.Layer{l1, l}, 3)
 	AddLayer(mdb, l2)
 	alg.HandleIncomingLayer(l2)
 	alg.Persist()
 
-	l31 := createLayer(3, []*types.Layer{l1, l}, 4)
-	l32 := createLayer(3, []*types.Layer{l31}, 5)
+	l31 := createLayer(types.GetEffectiveGenesis()+3, []*types.Layer{l1, l}, 4)
+	l32 := createLayer(types.GetEffectiveGenesis()+3, []*types.Layer{l31}, 5)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -1031,17 +1033,17 @@ func TestNinjaTortoise_Recovery(t *testing.T) {
 
 		alg.HandleIncomingLayer(l2)
 
-		l3 := createLayer(3, []*types.Layer{l2, l}, 3)
+		l3 := createLayer(types.GetEffectiveGenesis()+3, []*types.Layer{l2, l}, 3)
 		AddLayer(mdb, l3)
 		alg.HandleIncomingLayer(l3)
 		alg.Persist()
 
-		l4 := createLayer(4, []*types.Layer{l3, l2}, 3)
+		l4 := createLayer(types.GetEffectiveGenesis()+4, []*types.Layer{l3, l2}, 3)
 		AddLayer(mdb, l4)
 		alg.HandleIncomingLayer(l4)
 		alg.Persist()
 
-		assert.True(t, alg.LatestComplete() == 3)
+		assert.True(t, alg.LatestComplete() == types.GetEffectiveGenesis()+3)
 		return
 	}()
 

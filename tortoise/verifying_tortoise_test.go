@@ -90,7 +90,7 @@ func TestTurtle_HandleIncomingLayer_VoteAbstain(t *testing.T) {
 	layers := types.LayerID(10)
 	avgPerLayer := 10
 	trtl, negs, abs := turtleSanity(t, layers, avgPerLayer, 0, 10)
-	require.Equal(t, 0, int(trtl.Verified), "when all votes abstain verification should stay at first layer and advance")
+	require.Equal(t, int(types.GetEffectiveGenesis()), int(trtl.Verified), "when all votes abstain verification should stay at first layer and advance")
 	requireVote(t, trtl, against, negs...)
 	requireVote(t, trtl, abstain, abs...)
 	poblkids := make([]types.BlockID, 0, avgPerLayer*int(layers))
@@ -108,7 +108,8 @@ func TestTurtle_HandleIncomingLayer_VoteAbstain(t *testing.T) {
 func turtleSanity(t testing.TB, layers types.LayerID, blocksPerLayer, voteNegative int, voteAbstain int) (trtl *turtle, negative []types.BlockID, abstains []types.BlockID) {
 	msh := getInMemMesh()
 
-	abstainCount := 0
+	abs := make(map[types.LayerID]int)
+	neg := make(map[types.LayerID]int)
 
 	hm := func(l types.LayerID) (ids []types.BlockID, err error) {
 		if l < mesh.GenesisLayer().Index() {
@@ -118,11 +119,11 @@ func turtleSanity(t testing.TB, layers types.LayerID, blocksPerLayer, voteNegati
 			return types.BlockIDs(mesh.GenesisLayer().Blocks()), nil
 		}
 
-		if voteAbstain > 0 && abstainCount <= voteAbstain {
-			abstainCount++
+		if voteAbstain > 0 && abs[l] <= voteAbstain {
+			abs[l]++
 		}
 
-		if voteAbstain > 0 && abstainCount >= int(layers)-voteAbstain {
+		if voteAbstain > 0 && abs[l] >= int(layers)-voteAbstain {
 			all, _ := msh.LayerBlockIds(l)
 			abstains = append(abstains, all...)
 			return nil, errors.New("hare didn't finish")
@@ -137,6 +138,7 @@ func turtleSanity(t testing.TB, layers types.LayerID, blocksPerLayer, voteNegati
 			panic("db err")
 		}
 		negative = append(negative, blks[:voteNegative]...)
+		neg[l] = len(negative)
 		return blks[voteNegative:], nil
 	}
 
