@@ -30,8 +30,10 @@ type NetworkAPI interface {
 	SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey)
 }
 
+// PostAPI is an alias to PostProvider.
 type PostAPI = activation.PostProvider
 
+// SmeshingAPI is an alias to SmeshingProvider.
 type SmeshingAPI = activation.SmeshingProvider
 
 // OracleAPI gets eligible layers from oracle

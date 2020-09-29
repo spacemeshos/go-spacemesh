@@ -48,10 +48,10 @@ func TestPostManager(t *testing.T) {
 			req.Empty(status.ErrorType)
 
 			if status.BytesWritten == options.DataSize {
-				req.Equal(FilesStatusCompleted, status.FilesStatus)
+				req.Equal(filesStatusCompleted, status.FilesStatus)
 				req.False(status.InitInProgress)
 			} else {
-				req.Equal(FilesStatusPartial, status.FilesStatus)
+				req.Equal(filesStatusPartial, status.FilesStatus)
 				req.True(status.InitInProgress)
 
 				// Compare the intermediate status update to the status queried directly.
@@ -290,7 +290,7 @@ func TestPostManager_StopInProgress(t *testing.T) {
 	req.NoError(err)
 	req.Equal(options, status.LastOptions)
 	req.True(status.InitInProgress)
-	req.Equal(FilesStatusPartial, status.FilesStatus)
+	req.Equal(filesStatusPartial, status.FilesStatus)
 
 	// Stop without files deletion.
 	err = mgr.StopPostDataCreationSession(false)
@@ -307,7 +307,7 @@ func TestPostManager_StopInProgress(t *testing.T) {
 	req.NoError(err)
 	req.Equal(options, status.LastOptions)
 	req.False(status.InitInProgress)
-	req.Equal(FilesStatusPartial, status.FilesStatus)
+	req.Equal(filesStatusPartial, status.FilesStatus)
 	req.True(status.BytesWritten > 0 && status.BytesWritten < options.DataSize)
 
 	// Continue creating PoST data.

@@ -11,7 +11,7 @@ import (
 	"sync"
 )
 
-// DefaultConfig defines the default configuration options for PoST
+// DefaultConfig defines the default configuration for PoST.
 func DefaultConfig() config.Config {
 	return *config.DefaultConfig()
 }
@@ -20,6 +20,7 @@ func DefaultConfig() config.Config {
 // based on a short benchmarking session.
 const BestProviderID = -1
 
+// DefaultPostOptions defines the default configuration for PoST options.
 func DefaultPostOptions() PostOptions {
 	cfg := DefaultConfig()
 	return PostOptions{
@@ -41,6 +42,7 @@ type PostOptions struct {
 	ComputeProviderID int    `mapstructure:"post-options-provider-id"`
 }
 
+// PostProvider defines the functionality required for the node's Smesher API.
 type PostProvider interface {
 	PostStatus() (*PostStatus, error)
 	PostComputeProviders() []initialization.ComputeProvider
@@ -54,6 +56,7 @@ type PostProvider interface {
 // A compile time check to ensure that PostManager fully implements the PostProvider interface.
 var _ PostProvider = (*PostManager)(nil)
 
+// PostManager implements PostProvider.
 type PostManager struct {
 	id []byte
 
@@ -91,35 +94,37 @@ const (
 var postOptionsStoreKey = []byte("postOptions")
 
 var emptyStatus = &PostStatus{
-	FilesStatus: FilesStatusNotFound,
+	FilesStatus: filesStatusNotFound,
 }
 
-type FilesStatus int
+type filesStatus int
 
 const (
-	FilesStatusNotFound  FilesStatus = 1
-	FilesStatusPartial   FilesStatus = 2
-	FilesStatusCompleted FilesStatus = 3
+	filesStatusNotFound  filesStatus = 1
+	filesStatusPartial   filesStatus = 2
+	filesStatusCompleted filesStatus = 3
 )
 
 // TODO(moshababo): apply custom error type inspection
-type ErrorType int
+type errorType int
 
 const (
-	ErrorTypeFilesNotFound   ErrorType = 1
-	ErrorTypeFilesReadError  ErrorType = 2
-	ErrorTypeFilesWriteError ErrorType = 3
+	errorTypeFilesNotFound   errorType = 1
+	errorTypeFilesReadError  errorType = 2
+	errorTypeFilesWriteError errorType = 3
 )
 
+// PostStatus indicates the a status regarding the post initialization.
 type PostStatus struct {
 	LastOptions    *PostOptions
-	FilesStatus    FilesStatus
+	FilesStatus    filesStatus
 	InitInProgress bool
 	BytesWritten   uint64
-	ErrorType      ErrorType
+	ErrorType      errorType
 	ErrorMessage   string
 }
 
+// NewPostManager creates a new instance of PostManager.
 func NewPostManager(id []byte, cfg config.Config, store bytesStore, logger log.Log) (*PostManager, error) {
 	mgr := &PostManager{
 		id:                id,
@@ -158,6 +163,7 @@ func NewPostManager(id []byte, cfg config.Config, store bytesStore, logger log.L
 	return mgr, nil
 }
 
+// PostStatus returns the node's post data status.
 func (mgr *PostManager) PostStatus() (*PostStatus, error) {
 	options, err := mgr.loadPostOptions()
 	if err != nil {
@@ -177,29 +183,31 @@ func (mgr *PostManager) PostStatus() (*PostStatus, error) {
 	status.BytesWritten = diskState.BytesWritten
 
 	if mgr.initStatus == statusInProgress {
-		status.FilesStatus = FilesStatusPartial
+		status.FilesStatus = filesStatusPartial
 		status.InitInProgress = true
 		return status, nil
 	}
 
 	switch diskState.InitState {
 	case initialization.InitStateNotStarted:
-		status.FilesStatus = FilesStatusNotFound
+		status.FilesStatus = filesStatusNotFound
 	case initialization.InitStateCompleted:
-		status.FilesStatus = FilesStatusCompleted
+		status.FilesStatus = filesStatusCompleted
 	case initialization.InitStateStopped:
-		status.FilesStatus = FilesStatusPartial
+		status.FilesStatus = filesStatusPartial
 	case initialization.InitStateCrashed:
-		status.FilesStatus = FilesStatusPartial
+		status.FilesStatus = filesStatusPartial
 		status.ErrorMessage = "crashed"
 	}
 	return status, nil
 }
 
+// PostComputeProviders returns a list of available compute providers for creating the post data.
 func (mgr *PostManager) PostComputeProviders() []initialization.ComputeProvider {
 	return initialization.Providers()
 }
 
+// BestProvider returns the most performant provider based on a short benchmarking session.
 func (mgr *PostManager) BestProvider() (*initialization.ComputeProvider, error) {
 	var bestProvider initialization.ComputeProvider
 	var maxHS int
@@ -216,6 +224,8 @@ func (mgr *PostManager) BestProvider() (*initialization.ComputeProvider, error) 
 	return &bestProvider, nil
 }
 
+// CreatePostData starts (or continues) a data creation session.
+// It supports resuming a previously started session, as well as changing post options (e.g., data size) after initial setup.
 func (mgr *PostManager) CreatePostData(options *PostOptions) (chan struct{}, error) {
 	mgr.initStatusMtx.Lock()
 	if mgr.initStatus == statusInProgress {
@@ -300,8 +310,10 @@ func (mgr *PostManager) CreatePostData(options *PostOptions) (chan struct{}, err
 	return mgr.doneChan, nil
 }
 
+// PostDataCreationProgressStream returns a stream of updates to post data file(s) during
+// the current or the upcoming data creation session.
 func (mgr *PostManager) PostDataCreationProgressStream() <-chan *PostStatus {
-	// Wait for init to start because only then the initializer instance
+	// Wait for session to start because only then the initializer instance
 	// used for retrieving the progress updates is already set.
 	<-mgr.startedChan
 
@@ -323,7 +335,7 @@ func (mgr *PostManager) PostDataCreationProgressStream() <-chan *PostStatus {
 			status := *firstStatus
 			status.BytesWritten = uint64(p * float64(status.LastOptions.DataSize))
 			if int(p) == 1 {
-				status.FilesStatus = FilesStatusCompleted
+				status.FilesStatus = filesStatusCompleted
 				status.InitInProgress = false
 			}
 			statusChan <- &status
@@ -333,6 +345,8 @@ func (mgr *PostManager) PostDataCreationProgressStream() <-chan *PostStatus {
 	return statusChan
 }
 
+// StopPostDataCreationSession stops the current post data creation session
+// and optionally attempts to delete the post data file(s).
 func (mgr *PostManager) StopPostDataCreationSession(deleteFiles bool) error {
 	mgr.stopMtx.Lock()
 	defer mgr.stopMtx.Unlock()
@@ -358,10 +372,12 @@ func (mgr *PostManager) StopPostDataCreationSession(deleteFiles bool) error {
 	return nil
 }
 
+// InitCompleted indicates whether the post init phase has been completed.
 func (mgr *PostManager) InitCompleted() (chan struct{}, bool) {
 	return mgr.initCompletedChan, mgr.initStatus == statusCompleted
 }
 
+// GenerateProof generates a new PoST.
 func (mgr *PostManager) GenerateProof(challenge []byte) (*types.PoST, *types.PoSTMetadata, error) {
 	p, err := proving.NewProver(&mgr.cfg, mgr.id)
 	if err != nil {

@@ -131,9 +131,11 @@ func getTestDefaultConfig() *config.Config {
 
 	cfg.POST = activation.DefaultConfig()
 	cfg.POST.NumLabels = 1 << 10
+	cfg.POST.LabelSize = 8
 	cfg.POST.NumFiles = 1
 
 	cfg.PostOptions = activation.DefaultPostOptions()
+	cfg.PostOptions.DataSize = 1 << 10
 	cfg.PostOptions.ComputeProviderID = int(initialization.CPUProviderID())
 
 	cfg.HARE.N = 5
@@ -192,16 +194,17 @@ type network interface {
 
 // InitSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
-func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network) (*SpacemeshApp, error) {
+func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network, edSgn *signing.EdSigner) (*SpacemeshApp, error) {
 	smApp := NewSpacemeshApp()
 	smApp.Config = &cfg
 	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
 	smApp.Config.GenesisTime = genesisTime
 	smApp.Config.POST.DataDir, _ = ioutil.TempDir("", "sm-app-test-post-datadir")
 	smApp.Config.PostOptions.DataDir = smApp.Config.POST.DataDir
-	edSgn := signing.NewEdSigner()
-	pub := edSgn.PublicKey()
 
+	smApp.edSgn = edSgn
+
+	pub := edSgn.PublicKey()
 	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
 	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
@@ -257,7 +260,8 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := path + string(name)
 		database.SwitchCreationContext(dbStorepath, string(name))
-		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net)
+		edSgn := signing.NewEdSigner()
+		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net, edSgn)
 		if err != nil {
 			log.Error("cannot run multi node %v", err)
 			return

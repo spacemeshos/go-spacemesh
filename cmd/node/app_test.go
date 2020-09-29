@@ -4,6 +4,8 @@ package node
 
 import (
 	"fmt"
+	"github.com/spacemeshos/post/initialization"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -79,7 +81,8 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := storeFormat + string(name)
 		database.SwitchCreationContext(dbStorepath, string(name))
-		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetClient, clock, network)
+		edSgn := signing.NewEdSigner()
+		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetClient, clock, network, edSgn)
 		assert.NoError(suite.T(), err)
 		suite.apps = append(suite.apps, smApp)
 		suite.dbs = append(suite.dbs, dbStorepath)
@@ -119,7 +122,6 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	for _, a := range suite.apps {
 		a.startServices()
 	}
-
 	ActivateGrpcServer(suite.apps[0])
 
 	if err := poetHarness.Start([]string{"127.0.0.1:9091"}); err != nil {
@@ -147,10 +149,12 @@ loop:
 	}
 	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch) - 1)
 	oldRoot := suite.apps[0].state.GetStateRoot()
+	edSgn := *suite.apps[0].edSgn
+
 	GracefulShutdown(suite.apps)
 
 	// this tests loading of pervious state, mabe it's not the best place to put this here...
-	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, rng, path+"a", rolacle, poetHarness.HTTPPoetClient, clock, net)
+	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, rng, path+"a", rolacle, poetHarness.HTTPPoetClient, clock, net, &edSgn)
 	assert.NoError(suite.T(), err)
 	//test that loaded root equals
 	assert.Equal(suite.T(), oldRoot, smApp.state.GetStateRoot())
@@ -496,9 +500,15 @@ func TestShutdown(t *testing.T) {
 	smApp := NewSpacemeshApp()
 	genesisTime := time.Now().Add(time.Second * 10)
 
+	tempdir, _ := ioutil.TempDir("", "sm-test-post")
 	smApp.Config.POST = activation.DefaultConfig()
+	smApp.Config.POST.DataDir = tempdir
 	smApp.Config.POST.NumLabels = 1 << 10
 	smApp.Config.POST.LabelSize = 8
+	smApp.Config.PostOptions = activation.DefaultPostOptions()
+	smApp.Config.PostOptions.DataDir = tempdir
+	smApp.Config.PostOptions.ComputeProviderID = int(initialization.CPUProviderID())
+
 	smApp.Config.HARE.N = 5
 	smApp.Config.HARE.F = 2
 	smApp.Config.HARE.RoundDuration = 3

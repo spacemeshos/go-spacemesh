@@ -166,7 +166,7 @@ type SpacemeshApp struct {
 	gossipListener    *service.Listener
 	clock             TickProvider
 	hare              HareService
-	post              *activation.PostManager
+	postMgr           *activation.PostManager
 	atxBuilder        *activation.Builder
 	atxDb             *activation.DB
 	poetListener      *activation.PoetListener
@@ -609,7 +609,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	app.P2P = swarm
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
-	app.post = postMgr
+	app.postMgr = postMgr
 	app.oracle = blockOracle
 	app.txProcessor = processor
 	app.atxDb = atxdb
@@ -686,13 +686,20 @@ func (app *SpacemeshApp) startServices() {
 		}
 
 		go func() {
-			if completedChan, ok := app.post.InitCompleted(); !ok {
-				// TODO(moshababo): add retry mechanism?
-				// completedChan would block forever if a failure happens during the init session.
-				if _, err := app.post.CreatePostData(&app.Config.PostOptions); err != nil {
+			if completedChan, ok := app.postMgr.InitCompleted(); !ok {
+				doneChan, err := app.postMgr.CreatePostData(&app.Config.PostOptions)
+				if err != nil {
 					log.Panic("Failed to create post data: %v", err)
 				}
-				<-completedChan
+				<-doneChan
+
+				// if completedChan isn't closed then the session failed
+				// and we can't start smeshing.
+				select {
+				case <-completedChan:
+				default:
+					return
+				}
 			}
 
 			if err := app.atxBuilder.StartSmeshing(coinbase); err != nil {
@@ -749,7 +756,7 @@ func (app *SpacemeshApp) startAPIServices(net api.NetworkAPI) {
 		registerService(grpcserver.NewGlobalStateService(net, app.mesh, app.clock, app.syncer))
 	}
 	if apiConf.StartSmesherService {
-		registerService(grpcserver.NewSmesherService(app.post, app.atxBuilder))
+		registerService(grpcserver.NewSmesherService(app.postMgr, app.atxBuilder))
 	}
 	if apiConf.StartTransactionService {
 		registerService(grpcserver.NewTransactionService(net, app.mesh, app.txPool, app.syncer))
@@ -803,6 +810,10 @@ func (app *SpacemeshApp) stopServices() {
 		app.newgrpcAPIService.Close()
 	}
 
+	if app.postMgr != nil {
+		_ = app.postMgr.StopPostDataCreationSession(false)
+	}
+
 	if app.blockProducer != nil {
 		app.log.Info("%v closing block producer", app.nodeID.Key)
 		if err := app.blockProducer.Close(); err != nil {
@@ -822,7 +833,7 @@ func (app *SpacemeshApp) stopServices() {
 
 	if app.atxBuilder != nil {
 		app.log.Info("closing atx builder")
-		app.atxBuilder.StopSmeshing()
+		_ = app.atxBuilder.StopSmeshing()
 	}
 
 	if app.blockListener != nil {

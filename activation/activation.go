@@ -76,6 +76,7 @@ type syncer interface {
 	Await() chan struct{}
 }
 
+// SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
 	Smeshing() bool
 	StartSmeshing(coinbase types.Address) error
@@ -135,6 +136,7 @@ func NewBuilder(nodeID types.NodeID, signer signer, db atxDBProvider, net broadc
 	}
 }
 
+// Smeshing returns true iff atx builder started.
 func (b *Builder) Smeshing() bool {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
@@ -142,7 +144,9 @@ func (b *Builder) Smeshing() bool {
 	return b.started
 }
 
-// Start is the main entry point of the atx builder. it runs the main loop of the builder and shouldn't be called more than once
+// StartSmeshing is the main entry point of the atx builder.
+// It runs the main loop of the builder and shouldn't be called more than once.
+// It returns error if post data is incomplete or missing.
 func (b *Builder) StartSmeshing(coinbase types.Address) error {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
@@ -160,7 +164,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address) error {
 	return nil
 }
 
-// Stop stops the atx builder.
+// StopSmeshing stops the atx builder.
 func (b *Builder) StopSmeshing() error {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
@@ -171,12 +175,11 @@ func (b *Builder) StopSmeshing() error {
 
 	close(b.stop)
 	b.started = false
-	// TODO(moshababo): block until stop has finalized
 
 	return nil
 }
 
-// GetSmesherID returns the ID of the smesher that created this activation
+// SmesherID returns the ID of the smesher that created this activation
 func (b *Builder) SmesherID() types.NodeID {
 	return b.nodeID
 }
@@ -266,22 +269,6 @@ func (b *Builder) buildNIPoSTChallenge(currentLayer types.LayerID) error {
 	return nil
 }
 
-//// MiningStats returns state of post init, coinbase reward account and data directory path for post commitment
-//func (b *Builder) MiningStats() (int, uint64, string, string) {
-//	acc := b.Coinbase()
-//	initStatus := atomic.LoadInt32(&b.initStatus)
-//	remainingBytes := uint64(0)
-//	if initStatus == statusInProgress {
-//		var err error
-//		_, remainingBytes, err = b.postProver.IsInitialized()
-//		if err != nil {
-//			b.log.With().Error("failed to check remaining init bytes", log.Err(err))
-//		}
-//	}
-//	datadir := b.postProver.Cfg().DataDir
-//	return int(initStatus), remainingBytes, acc.String(), datadir
-//}
-
 // SetCoinbase sets the address rewardAddress to be the coinbase account written into the activation transaction
 // the rewards for blocks made by this miner will go to this address
 func (b *Builder) SetCoinbase(rewardAddress types.Address) {
@@ -290,6 +277,7 @@ func (b *Builder) SetCoinbase(rewardAddress types.Address) {
 	b.accountLock.Unlock()
 }
 
+// Coinbase returns the current coinbase address.
 func (b *Builder) Coinbase() types.Address {
 	b.accountLock.RLock()
 	acc := b.coinbaseAccount
@@ -297,10 +285,12 @@ func (b *Builder) Coinbase() types.Address {
 	return acc
 }
 
+// MinGas [...]
 func (b *Builder) MinGas() uint64 {
 	panic("not implemented")
 }
 
+// SetMinGas [...]
 func (b *Builder) SetMinGas(value uint64) {
 	panic("not implemented")
 }

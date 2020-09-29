@@ -45,11 +45,8 @@ import (
 )
 
 const (
-	miningStatus          = activation.FilesStatusCompleted
-	remainingBytes        = 321
 	numLabels             = 8826949
 	labelSize             = 8
-	dataDir               = "/tmp"
 	defaultGasLimit       = 10
 	defaultFee            = 1
 	genTimeUnix           = 1000000

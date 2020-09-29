@@ -294,8 +294,10 @@ type NIPoST struct {
 	PoSTMetadata *PoSTMetadata
 }
 
+// PoST is an alias to proving.Proof.
 type PoST proving.Proof
 
+// PoSTMetadata is an alias to proving.ProofMetadata.
 type PoSTMetadata proving.ProofMetadata
 
 // String returns a string representation of the PostProof, for logging purposes.
