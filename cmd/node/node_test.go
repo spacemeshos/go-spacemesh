@@ -4,6 +4,18 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"io/ioutil"
+	inet "net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -26,17 +38,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"io"
-	"io/ioutil"
-	inet "net"
-	"net/http"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"sync"
-	"testing"
-	"time"
 )
 
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
@@ -405,7 +406,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
 		app.Config.API.NewGrpcServerPort = port
-		app.startAPIServices(PostMock{}, NetMock{})
+		app.startAPIServices(PostMock{}, NetMock{}, app.log)
 	}
 	defer app.stopServices()
 
@@ -471,7 +472,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	// Make sure the service is not running by default
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
-		app.startAPIServices(PostMock{}, NetMock{})
+		app.startAPIServices(PostMock{}, NetMock{}, app.log)
 	}
 	defer app.stopServices()
 	str, err := testArgs(app)
