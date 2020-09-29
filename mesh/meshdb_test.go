@@ -100,20 +100,39 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 	for i := 0; i < blocksInLayer; i++ {
 		bl := types.NewExistingBlock(0, []byte(rand.String(8)))
 		layerBlocks = append(layerBlocks, bl.ID())
+		mp := make(map[types.BlockID]struct{})
 		for idx, pat := range patterns {
 			for _, id := range pat {
 				b := prev[idx].Blocks()[id]
-				bl.AddVote(b.ID())
+				log.Info("Added %v to forDiff of block %v in layer %v", b.ShortString(), bl.ShortString(), index)
+				bl.ForDiff = append(bl.ForDiff, b.ID())
+				mp[b.ID()] = struct{}{}
 			}
 		}
 		for _, prevBloc := range prev[0].Blocks() {
-			bl.AddView(prevBloc.ID())
+			if _, ok := mp[prevBloc.ID()]; !ok {
+				log.Info("Added %v to againstDiff of block %v in layer %v", prevBloc.ShortString(), bl.ShortString(), index)
+				bl.AgainstDiff = append(bl.AgainstDiff, prevBloc.ID())
+			}
 		}
 		bl.LayerIndex = index
 		l.AddBlock(bl)
 	}
-	lg.Info("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
+
+	lg.Info("Created mesh.LayerID %d with blocks %v", l.Index(), blockList(layerBlocks))
+	//lg.Info(spew.Sdump(l))
 	return l
+}
+
+func blockList(bs []types.BlockID) string {
+	str := ""
+	for i, b := range bs {
+		str += b.String()
+		if i != len(bs)-1 {
+			str += ","
+		}
+	}
+	return str
 }
 
 func TestForEachInView_Persistent(t *testing.T) {
@@ -139,6 +158,8 @@ func testForeachInView(mdb *DB, t *testing.T) {
 		t.Fail()
 	}*/
 
+	blocks[GenesisLayer().Blocks()[0].ID()] = GenesisBlock()
+
 	for i := 0; i < 4; i++ {
 		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
 		for _, b := range lyr.Blocks() {
@@ -158,11 +179,16 @@ func testForeachInView(mdb *DB, t *testing.T) {
 	for _, b := range l.Blocks() {
 		ids[b.ID()] = struct{}{}
 	}
+	log.Info("IDS : %v", ids)
 	err := mdb.ForBlockInView(ids, 0, foo)
 	assert.NoError(t, err)
+	require.Len(t, mp, len(blocks))
 	for _, bl := range blocks {
+		if _, ok := ids[bl.ID()]; ok {
+			continue
+		}
 		_, found := mp[bl.ID()]
-		assert.True(t, found, "did not process block  ", bl)
+		assert.True(t, found, "did not process block  ", bl.ShortString())
 	}
 }
 
