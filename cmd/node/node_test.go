@@ -406,7 +406,8 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
 		app.Config.API.NewGrpcServerPort = port
-		app.startAPIServices(PostMock{}, NetMock{}, app.log)
+		log := log.NewNop()
+		app.startAPIServices(PostMock{}, NetMock{}, *log)
 	}
 	defer app.stopServices()
 
@@ -472,7 +473,8 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	// Make sure the service is not running by default
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
-		app.startAPIServices(PostMock{}, NetMock{}, app.log)
+		log := log.NewNop()
+		app.startAPIServices(PostMock{}, NetMock{}, *log)
 	}
 	defer app.stopServices()
 	str, err := testArgs(app)
