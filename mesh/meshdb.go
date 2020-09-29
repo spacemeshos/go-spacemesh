@@ -291,12 +291,12 @@ func (m *DB) SaveContextualValidity(id types.BlockID, valid bool) error {
 
 // SaveLayerInputVector saves the input vote vector for a layer (hare results)
 func (m *DB) SaveLayerInputVector(lyrid types.LayerID, vector []types.BlockID) error {
-	i, err := types.InterfaceToBytes(vector)
+	bytes, err := types.InterfaceToBytes(vector)
 	if err != nil {
 		return err
 	}
 
-	return m.inputVector.Put(lyrid.Bytes(), i)
+	return m.inputVector.Put(lyrid.Bytes(), bytes)
 }
 
 func (m *DB) defaulGetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
