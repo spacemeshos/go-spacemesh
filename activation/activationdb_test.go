@@ -159,14 +159,22 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 	}
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := types.NewExistingBlock(id, []byte(rand.String(8)))
-		block1.BlockVotes = append(block1.BlockVotes, votes...)
+		block1.ForDiff = append(block1.ForDiff, votes...)
 		activeSet := []types.ATXID{}
 		if i < len(atxs) {
 			activeSet = append(activeSet, atxs[i].ID())
 			fmt.Printf("adding i=%v bid=%v atxid=%v", i, block1.ID(), atxs[i].ShortString())
 		}
 		block1.ActiveSet = &activeSet
-		block1.ViewEdges = append(block1.ViewEdges, views...)
+	viewLoop:
+		for _, v := range views {
+			for _, j := range votes {
+				if j == v {
+					continue viewLoop
+				}
+			}
+			block1.AgainstDiff = append(block1.AgainstDiff, v)
+		}
 		var actualAtxs []*types.ActivationTx
 		if i < len(atxs) {
 			actualAtxs = atxs[i : i+1]
