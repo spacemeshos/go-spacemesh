@@ -549,7 +549,7 @@ loop:
 
 			// check that the total weight exceeds the confidence threshold in all positions up
 			gop := globalOpinion(sum, t.avgLayerSize, float64(i-wasVerified))
-			t.logger.Info("Global opinion on blk %v (lyr:%v) is %v (from:%v)", blk, i, gop, sum)
+			t.logger.Debug("Global opinion on blk %v (lyr:%v) is %v (from:%v)", blk, i, gop, sum)
 			if gop != vote || gop == abstain {
 				// TODO: trigger self healing after a while ?
 				t.logger.Warning("The global opinion is different from vote, global: %v, vote: %v", gop, vote)
