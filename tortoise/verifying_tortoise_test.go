@@ -4,14 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/stretchr/testify/assert"
 	"strconv"
 	"testing"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/stretchr/testify/assert"
-
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,19 +27,19 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 
 			blk, _ := trtl.bdp.GetBlock(i)
 
-			if vopinion.LayerID <= blk.LayerIndex {
+			if vopinion.BILT.LayerID <= blk.LayerIndex {
 				continue
 			}
 
-			opinionVote, ok := vopinion.blocksOpinion[i]
+			opinionVote, ok := vopinion.BlocksOpinion[i]
 			if !ok {
 				continue
 			}
 
 			//t.logger.Info("block %v is good and voting vote %v", vopinion.id, opinionVote)
-			sum = sum.Add(opinionVote.Multiply(trtl.BlockWeight(vopinion.BlockID, i)))
+			sum = sum.Add(opinionVote.Multiply(trtl.BlockWeight(vopinion.BILT.BlockID, i)))
 		}
-		require.Equal(t, globalOpinion(sum, trtl.avgLayerSize, 1), vote)
+		require.Equal(t, globalOpinion(sum, trtl.AvgLayerSize, 1), vote)
 	}
 }
 

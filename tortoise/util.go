@@ -82,9 +82,9 @@ func globalOpinion(v vec, layerSize int, delta float64) vec {
 	}
 }
 
-type opinion struct {
-	blockIDLayerTuple
-	blocksOpinion map[types.BlockID]vec
+type Opinion struct {
+	BILT          blockIDLayerTuple
+	BlocksOpinion map[types.BlockID]vec
 }
 
 type voteInput struct {
