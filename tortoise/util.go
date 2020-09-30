@@ -82,6 +82,7 @@ func globalOpinion(v vec, layerSize int, delta float64) vec {
 	}
 }
 
+// Opinion is a tuple of block and layer id and its opinions on other blocks.
 type Opinion struct {
 	BILT          blockIDLayerTuple
 	BlocksOpinion map[types.BlockID]vec
