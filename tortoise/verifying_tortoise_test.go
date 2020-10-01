@@ -158,7 +158,7 @@ func turtleSanity(t testing.TB, layers types.LayerID, blocksPerLayer, voteNegati
 
 func turtleMakeAndProcessLayer(l types.LayerID, trtl *turtle, blocksPerLayer int, msh *mesh.DB, hm func(id types.LayerID) ([]types.BlockID, error)) {
 	fmt.Println("choosing base block layer ", l)
-	b, lists, err := trtl.BaseBlock(hm)
+	b, lists, err := trtl.BaseBlock()
 	fmt.Println("the base block for ", l, "is ", b)
 	if err != nil {
 		panic(fmt.Sprint("no base - ", err))
@@ -259,12 +259,13 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 	//todo: also check votes with requireVote
 }
 
-type baseBlockProvider func(getres func(id types.LayerID) ([]types.BlockID, error)) (types.BlockID, [][]types.BlockID, error)
+type baseBlockProvider func() (types.BlockID, [][]types.BlockID, error)
 type inputVectorProvider func(l types.LayerID) ([]types.BlockID, error)
 
 func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp inputVectorProvider, blocksPerLayer int) *types.Layer {
 	fmt.Println("choosing base block layer ", l)
-	b, lists, err := bbp(ivp)
+	msh.InputVectorBackupFunc = ivp
+	b, lists, err := bbp()
 	fmt.Println("the base block for ", l, "is ", b)
 	if err != nil {
 		panic(fmt.Sprint("no base - ", err))
@@ -363,7 +364,7 @@ func TestTurtle_Recovery(t *testing.T) {
 
 	l31 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, 4)
 
-	l32 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, func(func(l types.LayerID) ([]types.BlockID, error)) (types.BlockID, [][]types.BlockID, error) {
+	l32 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, func() (types.BlockID, [][]types.BlockID, error) {
 		diffs := make([][]types.BlockID, 3)
 		diffs[0] = make([]types.BlockID, 0)
 		diffs[1] = types.BlockIDs(l.Blocks())

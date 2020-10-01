@@ -96,6 +96,7 @@ func (t *turtle) init(genesisLayer *types.Layer) {
 	t.Verified = genesisLayer.Index()
 }
 
+// evict makes sure we only keep a window of the last hdist layers.
 func (t *turtle) evict() {
 	// Don't evict before we've Verified more than hdist
 	// TODO: fix potential leak when we can't verify but keep receiving layers
@@ -121,7 +122,7 @@ func (t *turtle) evict() {
 			}
 			delete(t.BlocksToBlocksIndex, id)
 			t.BlocksToBlocks = removeOpinion(t.BlocksToBlocks, idx)
-			// FIX indexes
+			// FIX indexes todo: use only maps?
 			for i, op := range t.BlocksToBlocks {
 				t.BlocksToBlocksIndex[op.BILT.BlockID] = i
 			}
@@ -136,7 +137,7 @@ func removeOpinion(o []Opinion, i int) []Opinion {
 	return append(o[:i], o[i+1:]...)
 }
 
-func (t *turtle) singleInputVectorFromDB(lyrid types.LayerID, blockid types.BlockID) (vec, error) {
+func (t *turtle) getSingleInputVectorFromDB(lyrid types.LayerID, blockid types.BlockID) (vec, error) {
 	if lyrid <= types.GetEffectiveGenesis() {
 		return support, nil
 	}
@@ -157,11 +158,11 @@ func (t *turtle) singleInputVectorFromDB(lyrid types.LayerID, blockid types.Bloc
 	return against, nil
 }
 
-func (t *turtle) inputVectorForLayer(lyrBlocks []types.BlockID, inputvector *[]types.BlockID) map[types.BlockID]vec {
+func (t *turtle) inputVectorForLayer(lyrBlocks []types.BlockID, input []types.BlockID) map[types.BlockID]vec {
 	lyrResult := make(map[types.BlockID]vec, len(lyrBlocks))
 	//XXX : input vector must be pointer so we can differentiate
 	// no support votes to no results at all.
-	if inputvector == nil {
+	if input == nil {
 		// hare didn't finish hence we don't have Opinion
 		// TODO: get hare Opinion when hare finishes
 		for _, b := range lyrBlocks {
@@ -170,7 +171,6 @@ func (t *turtle) inputVectorForLayer(lyrBlocks []types.BlockID, inputvector *[]t
 		return lyrResult
 	}
 
-	input := *inputvector
 	for _, b := range input {
 		lyrResult[b] = support
 	}
@@ -183,13 +183,13 @@ func (t *turtle) inputVectorForLayer(lyrBlocks []types.BlockID, inputvector *[]t
 	return lyrResult
 }
 
-func (t *turtle) BaseBlock(getRes func(id types.LayerID) ([]types.BlockID, error)) (types.BlockID, [][]types.BlockID, error) {
+func (t *turtle) BaseBlock() (types.BlockID, [][]types.BlockID, error) {
 	// Try to find a block counting only good blocks
 	for i := len(t.BlocksToBlocks) - 1; i >= 0; i-- {
 		if _, ok := t.GoodBlocksIndex[t.BlocksToBlocks[i].BILT.BlockID]; !ok {
 			continue
 		}
-		afn, err := t.opinionMatches(t.BlocksToBlocks[i], getRes)
+		afn, err := t.opinionMatches(t.BlocksToBlocks[i])
 		if err != nil {
 			continue
 		}
@@ -200,19 +200,19 @@ func (t *turtle) BaseBlock(getRes func(id types.LayerID) ([]types.BlockID, error
 	return types.BlockID{0}, nil, errors.New("no base block that fits the limit")
 }
 
-func (t *turtle) opinionMatches(opinion2 Opinion, getRes func(id types.LayerID) ([]types.BlockID, error)) ([]map[types.BlockID]struct{}, error) {
+func (t *turtle) opinionMatches(opinion2 Opinion) ([]map[types.BlockID]struct{}, error) {
 	// using maps makes it easy to not add duplicates
-	a := make(map[types.BlockID]struct{})
-	f := make(map[types.BlockID]struct{})
-	n := make(map[types.BlockID]struct{})
+	againstDiff := make(map[types.BlockID]struct{})
+	forDiff := make(map[types.BlockID]struct{})
+	neutralDiff := make(map[types.BlockID]struct{})
 
 	layerid := opinion2.BILT.LayerID
 	// handle genesis
 	if layerid == types.GetEffectiveGenesis() {
 		for _, i := range types.BlockIDs(mesh.GenesisLayer().Blocks()) {
-			f[i] = struct{}{}
+			forDiff[i] = struct{}{}
 		}
-		return []map[types.BlockID]struct{}{a, f, n}, nil
+		return []map[types.BlockID]struct{}{againstDiff, forDiff, neutralDiff}, nil
 	}
 
 	// Check how much of this block's opinions corresponds with the input
@@ -224,7 +224,7 @@ func (t *turtle) opinionMatches(opinion2 Opinion, getRes func(id types.LayerID) 
 			return nil, err
 		}
 
-		inputVote, err := t.singleInputVectorFromDB(bl.LayerIndex, b)
+		inputVote, err := t.getSingleInputVectorFromDB(bl.LayerIndex, b)
 		if err != nil {
 			return nil, err
 		}
@@ -237,25 +237,25 @@ func (t *turtle) opinionMatches(opinion2 Opinion, getRes func(id types.LayerID) 
 
 		if inputVote == against && simplifyVote(o) != against {
 			t.logger.Debug("added diff %v to against", b)
-			a[b] = struct{}{}
+			againstDiff[b] = struct{}{}
 			continue
 		}
 
 		if inputVote == support && simplifyVote(o) != support {
 			t.logger.Debug("added diff %v to support", b)
-			f[b] = struct{}{}
+			forDiff[b] = struct{}{}
 			continue
 		}
 
 		if inputVote == abstain && simplifyVote(o) != abstain {
 			t.logger.Debug("added diff %v to neutral", b)
-			n[b] = struct{}{}
+			neutralDiff[b] = struct{}{}
 			continue
 		}
 	}
 
 	// return now if already exceed explist
-	if len(a)+len(f)+len(n) > t.MaxExceptions {
+	if len(againstDiff)+len(forDiff)+len(neutralDiff) > t.MaxExceptions {
 		return nil, errors.New(" matches too much exceptions")
 	}
 
@@ -267,7 +267,8 @@ func (t *turtle) opinionMatches(opinion2 Opinion, getRes func(id types.LayerID) 
 
 		blks, err := t.bdp.LayerBlockIds(i)
 		if err != nil {
-			panic(fmt.Sprintf(" database err or layer not exist. %v", i))
+			// todo: empty layer? maybe skip verify differently
+			t.logger.Panic("can't find old layer %v", i)
 		}
 
 		res, err := t.bdp.GetLayerInputVector(i)
@@ -275,11 +276,11 @@ func (t *turtle) opinionMatches(opinion2 Opinion, getRes func(id types.LayerID) 
 			for _, b := range blks {
 				if v, ok := opinion2.BlocksOpinion[b]; !ok || v != abstain {
 					t.logger.Debug("added diff %v to neutral", b)
-					n[b] = struct{}{}
+					neutralDiff[b] = struct{}{}
 				}
 			}
 
-			if len(a)+len(f)+len(n) > t.MaxExceptions {
+			if len(againstDiff)+len(forDiff)+len(neutralDiff) > t.MaxExceptions {
 				return nil, errors.New(" matches too much exceptions")
 			}
 			continue
@@ -291,7 +292,7 @@ func (t *turtle) opinionMatches(opinion2 Opinion, getRes func(id types.LayerID) 
 			inRes[b] = struct{}{}
 			if v, ok := opinion2.BlocksOpinion[b]; !ok || v != support {
 				t.logger.Debug("added diff %v to support", b)
-				f[b] = struct{}{}
+				forDiff[b] = struct{}{}
 			}
 		}
 
@@ -303,37 +304,21 @@ func (t *turtle) opinionMatches(opinion2 Opinion, getRes func(id types.LayerID) 
 			if v, ok := opinion2.BlocksOpinion[b]; !ok || v != against {
 				t.logger.Debug("added diff %v to against", b)
 
-				a[b] = struct{}{}
+				againstDiff[b] = struct{}{}
 			}
 		}
 	}
 
-	if len(a)+len(f)+len(n) > t.MaxExceptions {
+	if len(againstDiff)+len(forDiff)+len(neutralDiff) > t.MaxExceptions {
 		return nil, errors.New(" matches too much exceptions")
 	}
 
-	return []map[types.BlockID]struct{}{a, f, n}, nil
+	return []map[types.BlockID]struct{}{againstDiff, forDiff, neutralDiff}, nil
 }
 
 func (t *turtle) BlockWeight(voting, voted types.BlockID) int {
 	return 1
 }
-
-//func (t *turtle) saveOpinion() error {
-//	for i := t.Verified - t.Hdist; i < t.Verified; i++ {
-//
-//			if err := t.bdp.SaveContextualValidity(blk, voteFromVec(v).Bytes()); err != nil {
-//				return err
-//			}
-//			if simplifyVote(v) == support {
-//				events.Publish(events.ValidBlock{ID: blk.String(), Valid: true})
-//			} else {
-//				t.logger.With().Warning("block is contextually invalid", blk.Field(), log.String("vote", v.String()))
-//			}
-//		}
-//	}
-//	return nil
-//}
 
 //Persist saves the current tortoise state to the database
 func (t *turtle) persist() error {
@@ -436,13 +421,13 @@ markingLoop:
 		for exfor := range b.ForDiff {
 			exblk, err := t.bdp.GetBlock(b.ForDiff[exfor])
 			if err != nil {
-				panic(fmt.Sprint("err , ", err))
+				t.logger.Panic("can't find %v from block's %v diff ", exfor, b.ID())
 			}
 			if exblk.LayerIndex < baseBlock.LayerIndex {
 				t.logger.Debug("not adding %v to good blocks because it points to block %v in old layer %v baseblock_lyr:%v", b.ID(), b.ForDiff[exfor], exblk.LayerIndex, baseBlock.LayerIndex)
 				continue markingLoop
 			}
-			if v, err := t.singleInputVectorFromDB(exblk.LayerIndex, exblk.ID()); err != nil || v != support {
+			if v, err := t.getSingleInputVectorFromDB(exblk.LayerIndex, exblk.ID()); err != nil || v != support {
 				t.logger.Debug("not adding %v to good blocks because it votes different from out input on %v, err:%v, blockvote:%v, ourvote: %v ", b.ID(), b.ForDiff[exfor], err, "for", v)
 				continue markingLoop
 			}
@@ -451,13 +436,14 @@ markingLoop:
 		for exag := range b.AgainstDiff {
 			exblk, err := t.bdp.GetBlock(b.AgainstDiff[exag])
 			if err != nil {
-				panic(fmt.Sprint("err , ", err))
+				//todo: dangling pointers?
+				t.logger.Panic("can't find %v from block's %v diff ", exag, b.ID())
 			}
 			if exblk.LayerIndex < baseBlock.LayerIndex {
 				t.logger.Debug("not adding %v to good blocks because it points to block %v in old layer %v baseblock_lyr:%v", b.ID(), b.ForDiff[exag], exblk.LayerIndex, baseBlock.LayerIndex)
 				continue markingLoop
 			}
-			if v, err := t.singleInputVectorFromDB(exblk.LayerIndex, exblk.ID()); err != nil || v != against {
+			if v, err := t.getSingleInputVectorFromDB(exblk.LayerIndex, exblk.ID()); err != nil || v != against {
 				t.logger.Debug("not adding %v to good blocks because it votes different from out input on %v, err:%v, blockvote:%v, ourvote: %v ", b.ID(), b.AgainstDiff[exag], err, "against", v)
 				continue markingLoop
 			}
@@ -466,13 +452,13 @@ markingLoop:
 		for exneu := range b.NeutralDiff {
 			exblk, err := t.bdp.GetBlock(b.NeutralDiff[exneu])
 			if err != nil {
-				panic(fmt.Sprint("err , ", err))
+				t.logger.Panic("can't find %v from block's %v diff ", exneu, b.ID())
 			}
 			if exblk.LayerIndex < baseBlock.LayerIndex {
 				t.logger.Debug("not adding %v to good blocks because it points to block %v in old layer %v baseblock_lyr:%v", b.ID(), b.ForDiff[exneu], exblk.LayerIndex, baseBlock.LayerIndex)
 				continue markingLoop
 			}
-			if v, err := t.singleInputVectorFromDB(exblk.LayerIndex, exblk.ID()); err != nil || v != abstain {
+			if v, err := t.getSingleInputVectorFromDB(exblk.LayerIndex, exblk.ID()); err != nil || v != abstain {
 				t.logger.Debug("not adding %v to good blocks because it votes different from out input on %v, err:%v, blockvote:%v, ourvote: %v ", b.ID(), b.NeutralDiff[exneu], err, "neutral", v)
 				continue markingLoop
 			}
@@ -491,23 +477,25 @@ loop:
 
 		blks, err := t.bdp.LayerBlockIds(i)
 		if err != nil {
+			t.logger.With().Warning("can't find layer in db, skipping verification", i)
 			continue // Panic? can't get layer
 		}
 
 		var input map[types.BlockID]vec
 
-		if i == newlyr.Index() {
-			input = t.inputVectorForLayer(blks, &inputVector)
+		if i == idx {
+			input = t.inputVectorForLayer(blks, inputVector)
 		} else {
 			raw, err := t.bdp.GetLayerInputVector(i)
 			if err != nil {
 				// this sets the input to abstain
-				raw = nil
+				t.logger.With().Warning("input vector abstains on all blocks", idx)
 			}
-			input = t.inputVectorForLayer(blks, &raw)
+			input = t.inputVectorForLayer(blks, raw)
 		}
 
 		if len(input) == 0 {
+			t.logger.With().Warning("no blocks in input vector can't verify", i)
 			break
 		}
 

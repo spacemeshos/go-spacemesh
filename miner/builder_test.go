@@ -227,7 +227,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 
 	st := []*types.Block{block1, block2, block3}
 	builder := createBlockBuilder("a", n, st)
-	builder.baseBlockP = &mockBBP{f: func(getres func(id types.LayerID) ([]types.BlockID, error)) (types.BlockID, [][]types.BlockID, error) {
+	builder.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{0}, [][]types.BlockID{[]types.BlockID{}, blockset, []types.BlockID{}}, nil
 	}}
 	builder.TransactionPool = txPool
@@ -289,7 +289,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 
 	st := []*types.Block{block1, block2, block3}
 	builder := createBlockBuilder("a", n, st)
-	builder.baseBlockP = &mockBBP{f: func(getres func(id types.LayerID) ([]types.BlockID, error)) (types.BlockID, [][]types.BlockID, error) {
+	builder.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{0}, [][]types.BlockID{[]types.BlockID{block4.ID()}, hareRes, []types.BlockID{}}, nil
 	}}
 
@@ -711,7 +711,7 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	bs := []*types.Block{block1, block2, block3}
 	st := []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
 	builder1 := createBlockBuilder("a", n1, bs)
-	builder1.baseBlockP = &mockBBP{f: func(getres func(id types.LayerID) ([]types.BlockID, error)) (types.BlockID, [][]types.BlockID, error) {
+	builder1.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{0}, [][]types.BlockID{[]types.BlockID{}, []types.BlockID{}, st}, nil
 	}}
 
@@ -721,7 +721,7 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	r.Nil(err)
 	r.Equal(st, b.NeutralDiff)
 
-	builder1.baseBlockP = &mockBBP{f: func(getres func(id types.LayerID) ([]types.BlockID, error)) (types.BlockID, [][]types.BlockID, error) {
+	builder1.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{0}, [][]types.BlockID{[]types.BlockID{}, nil, st}, nil
 	}}
 
@@ -789,14 +789,14 @@ func Test_filter(t *testing.T) {
 // TODO: Test on bad baseblocks
 
 type mockBBP struct {
-	f func(getres func(id types.LayerID) ([]types.BlockID, error)) (types.BlockID, [][]types.BlockID, error)
+	f func() (types.BlockID, [][]types.BlockID, error)
 }
 
-func (b *mockBBP) BaseBlock(getres func(id types.LayerID) ([]types.BlockID, error)) (types.BlockID, [][]types.BlockID, error) {
-	if b.f != nil {
-		return b.f(getres)
-	}
+func (b *mockBBP) BaseBlock() (types.BlockID, [][]types.BlockID, error) {
 	// XXX: for now try to not brake all tests
+	if b.f != nil {
+		return b.f()
+	}
 	return types.BlockID{0}, [][]types.BlockID{[]types.BlockID{}, []types.BlockID{}, []types.BlockID{}}, nil
 }
 
@@ -809,7 +809,7 @@ func createBlockBuilder(ID string, n *service.Node, meshBlocks []*types.Block) *
 		LayersPerEpoch: 3,
 		TxsPerBlock:    selectCount,
 	}
-	bb := NewBlockBuilder(cfg, signing.NewEdSigner(), n, beginRound, MockCoin{}, &mockMesh{b: meshBlocks}, &mockBBP{f: func(getres func(id types.LayerID) ([]types.BlockID, error)) (types.BlockID, [][]types.BlockID, error) {
+	bb := NewBlockBuilder(cfg, signing.NewEdSigner(), n, beginRound, MockCoin{}, &mockMesh{b: meshBlocks}, &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{}, [][]types.BlockID{[]types.BlockID{}, []types.BlockID{}, []types.BlockID{}}, nil
 	}}, &mockResult{}, &mockBlockOracle{}, &mockSyncer{}, mockProjector, nil, atxDbMock{}, log.NewDefault("mock_builder_"+"a"))
 	return bb

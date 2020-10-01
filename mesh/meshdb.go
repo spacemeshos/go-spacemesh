@@ -353,10 +353,7 @@ func (m *DB) defaulGetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, er
 	}
 	var v []types.BlockID
 	err = types.BytesToInterface(by, &v)
-	if err != nil {
-		return nil, err
-	}
-	return v, nil
+	return v, err
 }
 
 // GetLayerInputVector gets the input vote vector for a layer (hare results)

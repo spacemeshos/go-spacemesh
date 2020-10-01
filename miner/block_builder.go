@@ -47,7 +47,7 @@ type blockOracle interface {
 }
 
 type baseBlockProvider interface {
-	BaseBlock(getres func(id types.LayerID) ([]types.BlockID, error)) (types.BlockID, [][]types.BlockID, error)
+	BaseBlock() (types.BlockID, [][]types.BlockID, error)
 }
 
 type atxDb interface {
@@ -276,7 +276,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 		return nil, errors.New("cannot create blockBytes in genesis layer")
 	}
 
-	base, diffs, err := t.baseBlockP.BaseBlock(t.hareResult.GetResult)
+	base, diffs, err := t.baseBlockP.BaseBlock()
 	t.Log.Info("the baseblock I choose %v", base)
 	if err != nil {
 		return nil, err

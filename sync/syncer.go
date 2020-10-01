@@ -452,10 +452,10 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 			}
 		}
 
+		// TODO: implement handling hare terminating with no valid blocks.
+		// 	currently hareForLayer is nil if hare hasn't terminated yet.
+		//	 ACT: hare should save something in the db when terminating empty set, sync should check it.
 		hareForLayer, err := s.DB.GetLayerInputVector(lyr.Index())
-		if err != nil {
-			hareForLayer = nil
-		}
 		s.ValidateLayer(lyr, hareForLayer) // wait for layer validation
 	}
 
