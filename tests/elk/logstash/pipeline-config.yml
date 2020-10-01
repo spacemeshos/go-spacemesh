@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-pipeline
+  labels:
+    app: logstash
+    chart: logstash-2.4.1
+    heritage: Helm
+data:
+  input_main.conf: |-
+    input {
+      # udp {
+      #   port => 1514
+      #   type => syslog
+      # }
+      # tcp {
+      #   port => 1514
+      #   type => syslog
+      # }
+      beats {
+        port => 5044
+      }
+      # http {
+      #   port => 8080
+      # }
+      # kafka {
+      #   ## ref: https://www.elastic.co/guide/en/logstash/current/plugins-inputs-kafka.html
+      #   bootstrap_servers => "kafka-input:9092"
+      #   codec => json { charset => "UTF-8" }
+      #   consumer_threads => 1
+      #   topics => ["source"]
+      #   type => "example"
+      # }
+    }
+  output_main.conf: |-
+    output {
+      # stdout { codec => rubydebug }
+      elasticsearch {
+        hosts => ["elasticsearch-master:9200"]
+        manage_template => false
+        index => "%{[@metadata][beat]}-%{+YYYY.MM.dd}"
+      }
+      # kafka {
+      #   ## ref: https://www.elastic.co/guide/en/logstash/current/plugins-outputs-kafka.html
+      #   bootstrap_servers => "kafka-output:9092"
+      #   codec => json { charset => "UTF-8" }
+      #   compression_type => "lz4"
+      #   topic_id => "destination"
+      # }
+      # hosts => ["${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}"]
+      #
+    }

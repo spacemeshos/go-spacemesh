@@ -105,6 +105,10 @@ def add_kibana_cluster(namespace):
     add_deployment_dir(namespace, conf.KIBANA_CONF_DIR)
 
 
+def add_logstash_cluster(namespace):
+    add_deployment_dir(namespace, conf.LOGSTASH_CONF_DIR)
+
+
 def add_deployment_dir(namespace, dir_path, timeout=None):
     with open(os.path.join(dir_path, 'dep_order.txt')) as f:
         dep_order = f.readline()

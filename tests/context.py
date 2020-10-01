@@ -31,7 +31,6 @@ class ES:
         k8s_client = client.CoreV1Api()
         services = k8s_client.list_namespaced_service(namespace=self.namespace)
         for serv in services.items:
-            print(serv)
             if serv.metadata.name == 'elasticsearch-master':
                 return serv.status.load_balancer.ingress[0].ip
 

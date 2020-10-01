@@ -188,6 +188,8 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
     """
     # TODO : break this to smaller functions ?
     es = ES(namespace).get_search_api()
+    print("sleeping for 5000 secs")
+    time.sleep(5000)
     fltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
     for key in fields:
         fltr = fltr & Q("match_phrase", **{key: fields[key]})
@@ -197,22 +199,6 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
         for q in queries:
             fltr = fltr & q
 
-    print("#@!#@!#@!")
-    print(fltr)
-    print("#@!#@!#@!")
-    s = Search(using=es).query('bool', filter=[fltr])
-    print(s)
-    print("sleeping for 5000 secs")
-    time.sleep(5000)
-    try:
-        hits = list(s.scan())
-    except Exception as e:
-        print(e)
-
-    print("#@!#@!#@!")
-    print(hits)
-    print('$#@ in queries sleeping for 5000 secs')
-    time.sleep(5000)
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 

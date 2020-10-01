@@ -1,3 +1,5 @@
+import time
+
 from pytest_testconfig import config as testconfig
 
 from tests import analyse, queries
@@ -86,7 +88,7 @@ def test_transactions(init_session, setup_network):
         assert actions.validate_nonce(wallet_api, acc, acc_pub), ass_err
 
 
-def test_mining(init_session, setup_network):
+def test_mining(init_session, add_elk, setup_network):
     current_index = get_curr_ind()
     ns = init_session
     layer_avg_size = testconfig['client']['args']['layer-average-size']

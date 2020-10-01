@@ -19,6 +19,10 @@ data:
           matchers:
           - logs_path:
               logs_path: "/var/log/containers/"
-    output.elasticsearch:
-      host: '${NODE_NAME}'
-      hosts: '${ELASTICSEARCH_HOSTS:elasticsearch-master:9200}'
+    output.logstash:
+      hosts: ["logstash:5044"]
+      loadbalance: true
+      index: filebeat
+#    output.elasticsearch:
+#      host: '${NODE_NAME}'
+#      hosts: '${ELASTICSEARCH_HOSTS:elasticsearch-master:9200}'
