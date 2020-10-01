@@ -169,6 +169,8 @@ spec:
               value: "true"
             - name: node.master
               value: "true"
+            - name: rest.action.multi.allow_explicit_index
+              value: "true"
           volumeMounts:
             - name: "volume"
               mountPath: /usr/share/elasticsearch/data
