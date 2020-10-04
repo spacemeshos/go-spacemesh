@@ -142,13 +142,17 @@ func AddCommands(cmd *cobra.Command) {
 		config.API.StartGrpcServer, "StartService the grpc server. "+
 			"Note: This service will soon be deprecated. Use --grpc instead.")
 	cmd.PersistentFlags().StringSliceVar(&config.API.StartGrpcServices, "grpc",
-		config.API.StartGrpcServices, "Comma-separated list of individual grpc services to enable")
+		config.API.StartGrpcServices, "Comma-separated list of individual grpc services to enable "+
+			"(node,mesh,globalstate,transaction,smesher)")
 	// GrpcServerPortFlag determines the grpc server local listening port
 	cmd.PersistentFlags().IntVar(&config.API.GrpcServerPort, "grpc-port",
 		config.API.GrpcServerPort, "GRPC api server port")
 	// NewGrpcServerFlag determines the grpc server local listening port (for new server)
 	cmd.PersistentFlags().IntVar(&config.API.NewGrpcServerPort, "grpc-port-new",
 		config.API.NewGrpcServerPort, "New GRPC api server port")
+	// NewGrpcServerInterface determines the interface the GRPC server listens on
+	cmd.PersistentFlags().StringVar(&config.API.NewGrpcServerInterface, "grpc-interface-new",
+		config.API.NewGrpcServerInterface, "New GRPC api server interface")
 
 	/**======================== Hare Flags ========================== **/
 

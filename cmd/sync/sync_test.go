@@ -12,7 +12,7 @@ func TestSpacemeshApp_TestSyncCmd(t *testing.T) {
 	defer syncApp.Cleanup()
 	syncApp.Initialize(cmd)
 	syncApp.Config.DataDirParent = "bin/data/"
-	lg := log.New("", "", "")
+	lg := log.NewDefault("")
 
 	if err := getData(syncApp.Config.DataDir(), version, lg); err != nil {
 		t.Error("could not download data for test", err)

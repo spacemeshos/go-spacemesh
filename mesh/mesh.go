@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"math/rand"
 
 	"math/big"
@@ -57,9 +56,12 @@ type txProcessor interface {
 	AddressExists(addr types.Address) bool
 	ValidateNonceAndBalance(transaction *types.Transaction) error
 	GetLayerApplied(txID types.TransactionID) *types.LayerID
+	GetLayerStateRoot(layer types.LayerID) (types.Hash32, error)
 	GetStateRoot() types.Hash32
 	LoadState(layer types.LayerID) error
 	ValidateAndAddTxToPool(tx *types.Transaction) error
+	GetBalance(addr types.Address) uint64
+	GetNonce(addr types.Address) uint64
 }
 
 type txMemPoolInValidator interface {
@@ -201,9 +203,20 @@ func (msh *Mesh) LatestLayer() types.LayerID {
 
 // SetLatestLayer sets the latest layer we saw from the network
 func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
+	// Report the status update, as well as the layer itself.
+	layer, err := msh.GetLayer(idx)
+	if err != nil {
+		msh.Error("error reading layer data for layer %v: %s", layer, err)
+	} else {
+		events.ReportNewLayer(events.NewLayer{
+			Layer:  layer,
+			Status: events.LayerStatusTypeUnknown,
+		})
+	}
 	defer msh.lkMutex.Unlock()
 	msh.lkMutex.Lock()
 	if idx > msh.latestLayer {
+		events.ReportNodeStatusUpdate()
 		msh.Info("set latest known layer to %v", idx)
 		msh.latestLayer = idx
 		if err := msh.general.Put(constLATEST, idx.Bytes()); err != nil {
@@ -238,6 +251,7 @@ func (vl *validator) ProcessedLayer() types.LayerID {
 
 func (vl *validator) SetProcessedLayer(lyr types.LayerID) {
 	vl.Info("set processed layer to %d", lyr)
+	events.ReportNodeStatusUpdate()
 	defer vl.lvMutex.Unlock()
 	vl.lvMutex.Lock()
 	vl.processedLayer = lyr
@@ -257,6 +271,10 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 	if len(lyr.Blocks()) == 0 {
 		vl.Info("skip validation of layer %d with no blocks", lyr.Index())
 		vl.SetProcessedLayer(lyr.Index())
+		events.ReportNewLayer(events.NewLayer{
+			Layer:  lyr,
+			Status: events.LayerStatusTypeConfirmed,
+		})
 		return
 	}
 
@@ -270,6 +288,10 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 		vl.Error("could not persist validated layer index %d", lyr.Index())
 	}
 	vl.pushLayersToState(oldPbase, newPbase)
+	events.ReportNewLayer(events.NewLayer{
+		Layer:  lyr,
+		Status: events.LayerStatusTypeConfirmed,
+	})
 	vl.Info("done validating layer %v", lyr.Index())
 }
 
@@ -311,6 +333,10 @@ func (msh *Mesh) applyState(l *types.Layer) {
 	msh.accumulateRewards(l, msh.config)
 	msh.pushTransactions(l)
 	msh.setLatestLayerInState(l.Index())
+	events.ReportNewLayer(events.NewLayer{
+		Layer:  l,
+		Status: events.LayerStatusTypeApproved,
+	})
 }
 
 // HandleValidatedLayer handles layer valid blocks as decided by hare
@@ -328,6 +354,8 @@ func (msh *Mesh) HandleValidatedLayer(validatedLayer types.LayerID, layer []type
 	}
 	lyr := types.NewExistingLayer(validatedLayer, blocks)
 	invalidBlocks := msh.getInvalidBlocksByHare(lyr)
+	// Reporting of the validated layer happens deep inside this call stack, below
+	// updateStateWithLayer, inside applyState. No need to report here.
 	msh.updateStateWithLayer(validatedLayer, lyr)
 	msh.reInsertTxsToPool(blocks, invalidBlocks, lyr.Index())
 }
@@ -579,7 +607,7 @@ func (msh *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atx
 	// invalidate txs and atxs from pool
 	msh.invalidateFromPools(&blk.MiniBlock)
 
-	events.Publish(events.NewBlock{ID: blk.ID().String(), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
+	events.ReportNewBlock(blk)
 	msh.With().Info("added block to database", blk.Fields()...)
 	return nil
 }
@@ -602,7 +630,7 @@ func (msh *Mesh) handleOrphanBlocks(blk *types.Block) {
 	for _, b := range blk.ViewEdges {
 		for layerID, layermap := range msh.orphanBlocks {
 			if _, has := layermap[b]; has {
-				msh.Log.Debug("delete block ", b, "from orphans")
+				msh.Log.With().Debug("delete block from orphans", b)
 				delete(layermap, b)
 				if len(layermap) == 0 {
 					delete(msh.orphanBlocks, layerID)
@@ -729,32 +757,4 @@ func (msh *Mesh) GetATXs(atxIds []types.ATXID) (map[types.ATXID]*types.Activatio
 		}
 	}
 	return atxs, mIds
-}
-
-// NewSignedTx is used in TESTS ONLY to generate signed txs
-func NewSignedTx(nonce uint64, rec types.Address, amount, gas, fee uint64, signer *signing.EdSigner) (*types.Transaction, error) {
-	inner := types.InnerTransaction{
-		AccountNonce: nonce,
-		Recipient:    rec,
-		Amount:       amount,
-		GasLimit:     gas,
-		Fee:          fee,
-	}
-
-	buf, err := types.InterfaceToBytes(&inner)
-	if err != nil {
-		return nil, err
-	}
-
-	sst := &types.Transaction{
-		InnerTransaction: inner,
-		Signature:        [64]byte{},
-	}
-
-	copy(sst.Signature[:], signer.Sign(buf))
-	addr := types.Address{}
-	addr.SetBytes(signer.PublicKey().Bytes())
-	sst.SetOrigin(addr)
-
-	return sst, nil
 }

@@ -33,7 +33,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-var conf = Configuration{1000, 1, 300, 500 * time.Millisecond, 200 * time.Millisecond, 10 * time.Hour, 100, 5}
+var conf = Configuration{1000, 1, 300, 500 * time.Millisecond, 200 * time.Millisecond, 10 * time.Hour, 100, 5, false}
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -102,7 +102,7 @@ func SyncMockFactoryManClock(number int, conf Configuration, name string, dbType
 	for i := 0; i < number; i++ {
 		net := sim.NewNode()
 		name := fmt.Sprintf(name+"_%d", i)
-		l := log.New(name, "", "")
+		l := log.NewDefault(name)
 		blockValidator := blockEligibilityValidatorMock{}
 		txpool := state.NewTxMemPool()
 		atxpool := activation.NewAtxMemPool()
@@ -126,7 +126,7 @@ var rewardConf = mesh.Config{
 }
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {
-	lg := log.New(id, "", "")
+	lg := log.NewDefault(id)
 	mshdb, _ := mesh.NewPersistentMeshDB(id, 5, lg)
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
 	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, 10, &validatorMock{}, lg.WithOptions(log.Nop))
@@ -138,7 +138,7 @@ func persistenceTeardown() {
 }
 
 func getMeshWithMemoryDB(id string) *mesh.Mesh {
-	lg := log.New(id, "", "")
+	lg := log.NewDefault(id)
 	mshdb := mesh.NewMemMeshDB(lg)
 	atxdb := activation.NewDB(database.NewMemDatabase(), &mockIStore{}, mshdb, 10, &validatorMock{}, lg.WithName("atxDB"))
 	return mesh.NewMesh(mshdb, atxdb, rewardConf, &meshValidatorMock{}, &mockTxMemPool{}, &mockState{}, lg)
@@ -670,7 +670,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	start, _ := time.Parse(layout, str)
 	ts := timesync.NewClock(timesync.RealClock{}, tick, start, log.NewDefault(t.Name()))
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
-		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
+		l := log.NewDefault(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
 		blockValidator := blockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
@@ -795,7 +795,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 	start, _ := time.Parse(layout, str)
 	ts := timesync.NewClock(timesync.RealClock{}, tick, start, log.NewDefault(t.Name()))
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
-		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
+		l := log.NewDefault(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))
 		blockValidator := blockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
@@ -900,7 +900,7 @@ end:
 func tx() *types.Transaction {
 	fee := rand.Uint64()
 	addr := rand.Int63n(1000000)
-	tx, err := mesh.NewSignedTx(1, types.HexToAddress(strconv.FormatUint(uint64(addr), 10)), 10, 100, fee, signing.NewEdSigner())
+	tx, err := types.NewSignedTx(1, types.HexToAddress(strconv.FormatUint(uint64(addr), 10)), 10, 100, fee, signing.NewEdSigner())
 	if err != nil {
 		log.Panic("failed to create transaction: %v", err)
 	}
@@ -1263,7 +1263,7 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	timer := &mockClock{Layer: 5}
 	sim := service.NewSimulator()
 	net := sim.NewNode()
-	l := log.New(t.Name(), "", "")
+	l := log.NewDefault(t.Name())
 	blockValidator := blockEligibilityValidatorMock{}
 	txpool := state.NewTxMemPool()
 	atxpool := activation.NewAtxMemPool()
@@ -1729,7 +1729,7 @@ func TestSyncer_Await_LowLevel(t *testing.T) {
 	syncer := &Syncer{
 		gossipSynced: pending,
 		awaitCh:      make(chan struct{}),
-		Log:          log.New("", "", ""),
+		Log:          log.NewDefault(""),
 	}
 
 	ch := syncer.Await()

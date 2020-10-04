@@ -28,7 +28,7 @@ func NewJSONHTTPServer(port int, grpcPort int) *JSONHTTPServer {
 func (s *JSONHTTPServer) Close() error {
 	log.Debug("Stopping new json-http service...")
 	if s.server != nil {
-		if err := s.server.Shutdown(context.TODO()); err != nil {
+		if err := s.server.Shutdown(cmdp.Ctx); err != nil {
 			return err
 		}
 	}
@@ -36,13 +36,22 @@ func (s *JSONHTTPServer) Close() error {
 }
 
 // StartService starts the json api server and listens for status (started, stopped).
-func (s *JSONHTTPServer) StartService(startNodeService bool, startMeshService bool) {
-	go s.startInternal(startNodeService, startMeshService)
+func (s *JSONHTTPServer) StartService(startNodeService bool, startMeshService bool,
+	startGlobalStateService bool, startSmesherService bool, startTransactionService bool) {
+
+	// This will block, so run it in a goroutine
+	go s.startInternal(
+		startNodeService, startMeshService, startGlobalStateService, startSmesherService,
+		startTransactionService)
 }
 
-func (s *JSONHTTPServer) startInternal(startNodeService bool, startMeshService bool) {
+func (s *JSONHTTPServer) startInternal(startNodeService bool, startMeshService bool,
+	startGlobalStateService bool, startSmesherService bool, startTransactionService bool) {
 	ctx, cancel := context.WithCancel(cmdp.Ctx)
+
+	// This will close all downstream connections when the server closes
 	defer cancel()
+
 	mux := runtime.NewServeMux()
 	opts := []grpc.DialOption{grpc.WithInsecure()}
 
@@ -67,6 +76,30 @@ func (s *JSONHTTPServer) startInternal(startNodeService bool, startMeshService b
 			log.Info("registered MeshService with grpc gateway server")
 		}
 	}
+	if startGlobalStateService {
+		if err := gw.RegisterGlobalStateServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
+			log.Error("error registering GlobalStateService with grpc gateway", err)
+		} else {
+			serviceCount++
+			log.Info("registered GlobalStateService with grpc gateway server")
+		}
+	}
+	if startSmesherService {
+		if err := gw.RegisterSmesherServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
+			log.Error("error registering SmesherService with grpc gateway", err)
+		} else {
+			serviceCount++
+			log.Info("registered SmesherService with grpc gateway server")
+		}
+	}
+	if startTransactionService {
+		if err := gw.RegisterTransactionServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
+			log.Error("error registering TransactionService with grpc gateway", err)
+		} else {
+			serviceCount++
+			log.Info("registered TransactionService with grpc gateway server")
+		}
+	}
 
 	// At least one service must be enabled
 	if serviceCount == 0 {
@@ -80,6 +113,6 @@ func (s *JSONHTTPServer) startInternal(startNodeService bool, startMeshService b
 		Handler: mux,
 	}
 
-	// This call is blocking, and only returns an error
+	// This will block
 	log.Error("error from grpc http listener: %v", s.server.ListenAndServe())
 }

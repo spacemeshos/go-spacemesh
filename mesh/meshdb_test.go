@@ -30,7 +30,7 @@ func teardown() {
 }
 
 func getMeshDB() *DB {
-	return NewMemMeshDB(log.New("mdb", "", ""))
+	return NewMemMeshDB(log.NewDefault("mdb"))
 }
 
 func TestNewMeshDB(t *testing.T) {
@@ -45,7 +45,7 @@ func TestNewMeshDB(t *testing.T) {
 
 func TestMeshDB_AddBlock(t *testing.T) {
 
-	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
 	defer mdb.Close()
 	coinbase := types.HexToAddress("aaaa")
 
@@ -116,7 +116,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 }
 
 func TestForEachInView_Persistent(t *testing.T) {
-	mdb, err := NewPersistentMeshDB(Path+"/mesh_db/", 5, log.New("TestForEachInView", "", ""))
+	mdb, err := NewPersistentMeshDB(Path+"/mesh_db/", 5, log.NewDefault("TestForEachInView"))
 	require.NoError(t, err)
 	defer mdb.Close()
 	defer teardown()
@@ -124,7 +124,7 @@ func TestForEachInView_Persistent(t *testing.T) {
 }
 
 func TestForEachInView_InMem(t *testing.T) {
-	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
 	testForeachInView(mdb, t)
 }
 
@@ -166,7 +166,7 @@ func testForeachInView(mdb *DB, t *testing.T) {
 }
 
 func TestForEachInView_InMem_WithStop(t *testing.T) {
-	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
 	blocks := make(map[types.BlockID]*types.Block)
 	l := GenesisLayer()
 	gen := l.Blocks()[0]
@@ -199,7 +199,7 @@ func TestForEachInView_InMem_WithStop(t *testing.T) {
 }
 
 func TestForEachInView_InMem_WithLimitedLayer(t *testing.T) {
-	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
 	blocks := make(map[types.BlockID]*types.Block)
 	l := GenesisLayer()
 
@@ -285,14 +285,14 @@ func address() types.Address {
 
 func newTx(r *require.Assertions, signer *signing.EdSigner, nonce, totalAmount uint64) *types.Transaction {
 	feeAmount := uint64(1)
-	tx, err := NewSignedTx(nonce, types.Address{}, totalAmount-feeAmount, 3, feeAmount, signer)
+	tx, err := types.NewSignedTx(nonce, types.Address{}, totalAmount-feeAmount, 3, feeAmount, signer)
 	r.NoError(err)
 	return tx
 }
 
 func newTxWithDest(r *require.Assertions, signer *signing.EdSigner, dest types.Address, nonce, totalAmount uint64) *types.Transaction {
 	feeAmount := uint64(1)
-	tx, err := NewSignedTx(nonce, dest, totalAmount-feeAmount, 3, feeAmount, signer)
+	tx, err := types.NewSignedTx(nonce, dest, totalAmount-feeAmount, 3, feeAmount, signer)
 	r.NoError(err)
 	return tx
 }
@@ -329,7 +329,7 @@ func TestMeshDB_GetStateProjection(t *testing.T) {
 func TestMeshDB_GetStateProjection_WrongNonce(t *testing.T) {
 	r := require.New(t)
 
-	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
 	signer, origin := newSignerAndAddress(r, "123")
 	err := mdb.addToUnappliedTxs([]*types.Transaction{
 		newTx(r, signer, 1, 10),
@@ -346,7 +346,7 @@ func TestMeshDB_GetStateProjection_WrongNonce(t *testing.T) {
 func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
 	r := require.New(t)
 
-	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
 	signer, origin := newSignerAndAddress(r, "123")
 	err := mdb.addToUnappliedTxs([]*types.Transaction{
 		newTx(r, signer, 0, 10),
@@ -363,7 +363,7 @@ func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
 func TestMeshDB_GetStateProjection_NothingToApply(t *testing.T) {
 	r := require.New(t)
 
-	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
 
 	nonce, balance, err := mdb.GetProjection(address(), initialNonce, initialBalance)
 	r.NoError(err)
@@ -374,7 +374,7 @@ func TestMeshDB_GetStateProjection_NothingToApply(t *testing.T) {
 func TestMeshDB_UnappliedTxs(t *testing.T) {
 	r := require.New(t)
 
-	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
 
 	signer1, origin1 := newSignerAndAddress(r, "thc")
 	signer2, origin2 := newSignerAndAddress(r, "cbd")
@@ -420,7 +420,7 @@ func TestMeshDB_UnappliedTxs(t *testing.T) {
 func TestMeshDB_testGetTransactions(t *testing.T) {
 	r := require.New(t)
 
-	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
 
 	signer1, addr1 := newSignerAndAddress(r, "thc")
 	signer2, _ := newSignerAndAddress(r, "cbd")
@@ -476,7 +476,7 @@ func getTxns(r *require.Assertions, mdb *DB, origin types.Address) []TinyTx {
 
 func TestMeshDB_testGetRewards(t *testing.T) {
 	r := require.New(t)
-	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
 	_, addr1 := newSignerAndAddress(r, "123")
 	_, addr2 := newSignerAndAddress(r, "456")
 	_, addr3 := newSignerAndAddress(r, "789")

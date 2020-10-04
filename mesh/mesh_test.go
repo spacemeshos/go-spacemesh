@@ -98,6 +98,17 @@ func (MockState) AddressExists(types.Address) bool {
 	return true
 }
 
+func (MockState) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
+	panic("implement me")
+}
+
+func (MockState) GetBalance(addr types.Address) uint64 {
+	panic("implement me")
+}
+func (MockState) GetNonce(addr types.Address) uint64 {
+	panic("implement me")
+}
+
 type MockTxMemPool struct{}
 
 func (MockTxMemPool) Get(types.TransactionID) (*types.Transaction, error) {
@@ -127,7 +138,7 @@ func (MockAtxMemPool) Invalidate(types.ATXID) {
 }
 
 func getMesh(id string) *Mesh {
-	lg := log.New(id, "", "")
+	lg := log.NewDefault(id)
 	mmdb := NewMemMeshDB(lg)
 	layers := NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: mmdb}, MockTxMemPool{}, &MockState{}, lg)
 	return layers
@@ -265,7 +276,7 @@ func TestLayers_WakeUp(t *testing.T) {
 	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
 	//assert.True(t, len(*rBlock1.ActiveSet) == len(*block1.ActiveSet))
 
-	recoveredMesh := NewMesh(layers.DB, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: layers.DB}, MockTxMemPool{}, &MockState{}, log.New("", "", ""))
+	recoveredMesh := NewMesh(layers.DB, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: layers.DB}, MockTxMemPool{}, &MockState{}, log.NewDefault(""))
 
 	rBlock2, err = recoveredMesh.GetBlock(block2.ID())
 	assert.NoError(t, err)
@@ -477,7 +488,7 @@ func (FailingAtxDbMock) SyntacticallyValidateAtx(*types.ActivationTx) error { pa
 
 func TestMesh_AddBlockWithTxs(t *testing.T) {
 	r := require.New(t)
-	lg := log.New("id", "", "")
+	lg := log.NewDefault("id")
 	meshDB := NewMemMeshDB(lg)
 	mesh := NewMesh(meshDB, &FailingAtxDbMock{}, ConfigTst(), &MeshValidatorMock{mdb: meshDB}, MockTxMemPool{}, &MockState{}, lg)
 

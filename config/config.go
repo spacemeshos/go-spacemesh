@@ -97,6 +97,8 @@ type BaseConfig struct {
 	TxsPerBlock int `mapstructure:"txs-per-block"`
 
 	BlockCacheSize int `mapstructure:"block-cache-size"`
+
+	AlwaysListen bool `mapstructure:"always-listen"` // force gossip to always be on (for testing)
 }
 
 // LoggerConfig holds the logging level for each module.
@@ -162,7 +164,7 @@ func defaultBaseConfig() BaseConfig {
 		SyncInterval:        10,
 		SyncValidationDelta: 30,
 		AtxsPerBlock:        100,
-		TxsPerBlock:         200,
+		TxsPerBlock:         100,
 	}
 }
 

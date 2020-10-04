@@ -150,6 +150,11 @@ func (b *Builder) Stop() {
 	close(b.stop)
 }
 
+// GetSmesherID returns the ID of the smesher that created this activation
+func (b *Builder) GetSmesherID() types.NodeID {
+	return b.nodeID
+}
+
 // SignAtx signs the atx and assigns the signature into atx.Sig
 // this function returns an error if atx could not be converted to bytes
 func (b *Builder) SignAtx(atx *types.ActivationTx) error {
@@ -193,7 +198,7 @@ func (b *Builder) loop() {
 			if _, stopRequested := err.(StopRequestedError); stopRequested {
 				return
 			}
-			events.Publish(events.AtxCreated{Created: false, Layer: uint64(b.currentEpoch())})
+			events.ReportAtxCreated(false, uint64(b.currentEpoch()), "")
 			<-b.layerClock.AwaitLayer(b.layerClock.GetCurrentLayer() + 1)
 		}
 	}
@@ -422,7 +427,7 @@ func (b *Builder) PublishActivationTx() error {
 	}
 
 	b.log.Event().Info("atx published!", atx.Fields(size)...)
-	events.Publish(events.AtxCreated{Created: true, ID: atx.ShortString(), Layer: uint64(b.currentEpoch())})
+	events.ReportAtxCreated(true, uint64(b.currentEpoch()), atx.ShortString())
 
 	select {
 	case <-atxReceived:

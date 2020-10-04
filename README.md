@@ -176,9 +176,9 @@ Assuming tn1.json is a testnet config file saved in the same directory as go-spa
 
 4. Use the CLI wallet to check your coinbase account balance and to transact
 
-#### Joining Spacemesh ([TweedleDee](https://testnet.spacemesh.io/#/?id=what-is-spacemesh-01-tweedledee)) Testnet (net id 116)
-1. Build go-spacemesh source code from this github release: [go-spacemesh 0.1.12](https://github.com/spacemeshos/go-spacemesh/releases/tag/v0.1.12).
-2. Follow the instructions on how to join a testnet with mining (above) and use [TweedleDee net id 116 config file](https://storage.googleapis.com/smapp/0.0.13/config.json) as your node's config file.  
+#### Joining Spacemesh ([TweedleDee](https://testnet.spacemesh.io/#/?id=what-is-spacemesh-01-tweedledee)) Testnet (net id 118)
+1. Build go-spacemesh source code from this github release: [go-spacemesh 0.1.14](https://github.com/spacemeshos/go-spacemesh/releases/tag/v0.1.14).
+2. Follow the instructions on how to join a testnet with mining (above) and use [TweedleDee net id 118 config file](https://raw.githubusercontent.com/spacemeshos/smapp/v0.1.1/desktop/config.json) as your node's config file.  
 
 ---
 

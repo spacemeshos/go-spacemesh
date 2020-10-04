@@ -83,6 +83,10 @@ func (mockState) ValidateNonceAndBalance(*types.Transaction) error {
 	panic("implement me")
 }
 
+func (mockState) GetLayerStateRoot(id types.LayerID) (types.Hash32, error) {
+	panic("implement me")
+}
+
 func (mockState) GetLayerApplied(types.TransactionID) *types.LayerID {
 	panic("implement me")
 }
@@ -92,6 +96,14 @@ func (mockState) ApplyTransactions(types.LayerID, []*types.Transaction) (int, er
 }
 
 func (mockState) ApplyRewards(types.LayerID, []types.Address, *big.Int) {}
+
+func (mockState) GetBalance(types.Address) uint64 {
+	panic("implement me")
+}
+
+func (mockState) GetNonce(types.Address) uint64 {
+	panic("implement me")
+}
 
 func (mockState) AddressExists(types.Address) bool {
 	return true
@@ -206,7 +218,7 @@ func (m *mockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
 // NewSyncWithMocks returns a syncer instance that is backed by mocks of other modules
 // for use in testing
 func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *state.TxMempool, atxpool *activation.AtxMemDB, swarm service.Service, poetDb *activation.PoetDb, conf Configuration, expectedLayers types.LayerID) *Syncer {
-	lg := log.New("sync_test", "", "")
+	lg := log.NewDefault("sync_test")
 	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, conf.LayersPerEpoch, &validatorMock{}, lg.WithOptions(log.Nop))
 	var msh *mesh.Mesh
 	if mshdb.PersistentData() {
