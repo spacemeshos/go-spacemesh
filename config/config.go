@@ -22,8 +22,6 @@ import (
 const (
 	defaultConfigFileName = "./config.toml"
 	defaultDataDirName    = "spacemesh"
-	// Genesis indicates the genesis LayerID.
-	Genesis = mesh.Genesis
 	// NewBlockProtocol indicates the protocol name for new blocks arriving.
 	NewBlockProtocol = "newBlock"
 )

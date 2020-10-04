@@ -23,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -78,6 +79,7 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := storeFormat + string(name)
+		database.SwitchCreationContext(dbStorepath, string(name))
 		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetClient, clock, network)
 		assert.NoError(suite.T(), err)
 		suite.apps = append(suite.apps, smApp)
@@ -89,6 +91,7 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 var tests = []TestScenario{txWithRunningNonceGenerator([]int{}), sameRootTester([]int{0}), reachedEpochTester([]int{}), txWithUnorderedNonceGenerator([]int{1})}
 
 func (suite *AppTestSuite) TestMultipleNodes() {
+	//suite.T().Skip()
 	//EntryPointCreated <- true
 	net := service.NewSimulator()
 	const (
@@ -97,7 +100,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	)
 	//addr := address.BytesToAddress([]byte{0x01})
 	cfg := getTestDefaultConfig(numOfInstances)
-
+	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
 	path := "../tmp/test/state_" + time.Now().String()
 
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
@@ -272,7 +275,7 @@ func reachedEpochTester(dependancies []int) TestScenario {
 		for _, app := range suite.apps {
 			ok = ok && uint32(app.mesh.LatestLayer()) >= numberOfEpochs*uint32(app.Config.LayersPerEpoch)
 			if ok {
-				suite.validateLastATXTotalWeight(app)
+				suite.validateLastATXTotalWeight(app, numberOfEpochs)
 			}
 		}
 		if ok {
@@ -377,7 +380,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 			datamap[ap.nodeID.Key].layertoblocks = make(map[types.LayerID][]types.BlockID)
 		}
 
-		for i := types.LayerID(0); i <= untilLayer; i++ {
+		for i := types.LayerID(5); i <= untilLayer; i++ {
 			lyr, err := ap.blockListener.GetLayer(i)
 			if err != nil {
 				log.Error("ERROR: couldn't get a validated layer from db layer %v, %v", i, err)
@@ -420,31 +423,44 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	layerAvgSize := suite.apps[0].Config.LayerAvgSize
 	patient := datamap[suite.apps[0].nodeID.Key]
 
-	blocksAfterFirstEpoch := 0
-	for layerID := types.LayerID(layersPerEpoch); layerID <= untilLayer; layerID++ {
-		blocksAfterFirstEpoch += len(patient.layertoblocks[layerID])
+	lastLayer := len(patient.layertoblocks) + 5
+	log.Info("patient %v", suite.apps[0].nodeID.ShortString())
+
+	totalBlocks := 0
+	for id, l := range patient.layertoblocks {
+		totalBlocks += len(l)
+		log.Info("patient %v layer %v, blocks %v", suite.apps[0].nodeID.String(), id, len(l))
+	}
+
+	firstEpochBlocks := 0
+	for i := 0; i < layersPerEpoch*2; i++ {
+		if l, ok := patient.layertoblocks[types.LayerID(i)]; ok {
+			firstEpochBlocks += len(l)
+		}
 	}
 
 	// assert number of blocks
-	totalEpochs := int(untilLayer.GetEpoch(uint16(layersPerEpoch))) + 1
-	exp := (layerAvgSize * layersPerEpoch) * (totalEpochs - 1)
-	assert.Equal(suite.T(), exp, blocksAfterFirstEpoch,
-		fmt.Sprintf("not good num of blocks got: %v, want: %v. untilLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v",
-			blocksAfterFirstEpoch, exp, untilLayer, layersPerEpoch, layerAvgSize, totalEpochs))
+	totalEpochs := int(untilLayer.GetEpoch()) + 1
+	exp := (layerAvgSize * layersPerEpoch) / (totalEpochs - 2)
+	act := totalBlocks - firstEpochBlocks
+	assert.Equal(suite.T(), exp, act,
+		fmt.Sprintf("not good num of blocks got: %v, want: %v. totalBlocks: %v, firstEpochBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v datamap: %v",
+			act, exp, totalBlocks, firstEpochBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, datamap))
 
 	firstAp := suite.apps[0]
 	atxDb := firstAp.blockListener.AtxDB.(*activation.DB)
 	atxID, err := atxDb.GetNodeLastAtxID(firstAp.nodeID)
 	assert.NoError(suite.T(), err)
+
 	atx, err := atxDb.GetAtxHeader(atxID)
 	assert.NoError(suite.T(), err)
 	atxWeight := atx.GetWeight()
 
 	totalWeightAllEpochs := uint64(0)
 	for atx != nil {
-		log.Info("adding atx. pub layer: %v, target epoch: %v, weight: %v, totalWeight: %v",
-			atx.PubLayerID, atx.TargetEpoch(uint16(layersPerEpoch)), atx.GetWeight(), atx.TotalWeight)
-		totalWeightAllEpochs += atx.TotalWeight
+		log.Info("adding atx. pub layer: %v, target epoch: %v, weight: %v",
+			atx.PubLayerID, atx.TargetEpoch(), atx.GetWeight())
+		totalWeightAllEpochs += atx.GetWeight()
 		atx, _ = atxDb.GetAtxHeader(atx.PrevATXID)
 	}
 
@@ -454,10 +470,18 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	assert.Equal(suite.T(), expectedWeight, totalWeightAllEpochs, fmt.Sprintf("not good num of atx weight got: %v, want: %v. totalEpochs: %v, allMiners: %v, atxWeight: %v", totalWeightAllEpochs, expectedWeight, totalEpochs, allMiners, atxWeight))
 }
 
-func (suite *AppTestSuite) validateLastATXTotalWeight(app *SpacemeshApp) {
+func (suite *AppTestSuite) validateLastATXTotalWeight(app *SpacemeshApp, numberOfEpochs int) {
+	atxs := app.atxDb.GetEpochAtxs(types.EpochID(numberOfEpochs - 1))
+	suite.True(len(atxs) == len(suite.apps), "atxs: %v node: %v", len(atxs), app.nodeID.Key[:5])
+
 	atx, err := app.atxBuilder.GetPrevAtx(app.nodeID)
 	suite.NoError(err)
-	suite.Equal(uint64(len(suite.apps))*atx.GetWeight(), atx.TotalWeight,
+	totalWeight := uint64(0)
+	for _, atxID := range atxs {
+		atx, _ := app.atxDb.GetAtxHeader(atxID)
+		totalWeight += atx.GetWeight()
+	}
+	suite.Equal(uint64(len(suite.apps))*atx.GetWeight(), totalWeight,
 		"atx: %v node: %v", atx.ShortString(), app.nodeID.Key[:5])
 }
 
@@ -524,6 +548,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.StartMining = true
 
 	rolacle := eligibility.New()
+	types.SetLayersPerEpoch(int32(smApp.Config.LayersPerEpoch))
 
 	edSgn := signing.NewEdSigner()
 	pub := edSgn.PublicKey()

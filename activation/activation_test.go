@@ -31,6 +31,10 @@ const (
 	defaultMeshLayer      = 12
 )
 
+func init() {
+	types.SetLayersPerEpoch(layersPerEpoch)
+}
+
 var (
 	pub, _, _   = ed25519.GenerateKey(nil)
 	nodeID      = types.NodeID{Key: util.Bytes2Hex(pub), VRFPublicKey: []byte("22222")}
@@ -96,7 +100,7 @@ func (n *NetMock) hookToAtxPool(transmission []byte) {
 
 		if n.atxDb != nil {
 			if atxDb, ok := n.atxDb.(*DB); ok {
-				err := atxDb.StoreAtx(atx.PubLayerID.GetEpoch(layersPerEpoch), atx)
+				err := atxDb.StoreAtx(atx.PubLayerID.GetEpoch(), atx)
 				if err != nil {
 					panic(err)
 				}
@@ -219,10 +223,8 @@ func newAtx(challenge types.NIPSTChallenge, View []types.BlockID, nipst *types.N
 				NIPSTChallenge: challenge,
 				Space:          100,
 				Coinbase:       coinbase,
-				TotalWeight:    1000000,
 			},
 			Nipst: nipst,
-			View:  View,
 		},
 	}
 	activationTx.CalcAndSetID()
@@ -293,13 +295,11 @@ func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTxHea
 	}
 	r.Equal(posAtx.ID(), atx.PositioningATX)
 	r.Equal(posAtx.PubLayerID.Add(layersPerEpoch), atx.PubLayerID)
-	r.Equal(defaultTotalWeight, atx.TotalWeight)
-	r.Equal(defaultView, atx.View)
 	r.Equal(poetRef, atx.GetPoetProofRef())
 }
 
 func storeAtx(r *require.Assertions, activationDb *DB, atx *types.ActivationTx, lg log.Log) {
-	epoch := atx.PubLayerID.GetEpoch(layersPerEpoch)
+	epoch := atx.PubLayerID.GetEpoch()
 	lg.Info("stored ATX in epoch %v", epoch)
 	err := activationDb.StoreAtx(epoch, atx)
 	r.NoError(err)
@@ -314,7 +314,7 @@ func publishAtx(b *Builder, meshLayer types.LayerID, clockEpoch types.EpochID, b
 		layerClockMock.currentLayer = layerClockMock.currentLayer.Add(buildNipstLayerDuration)
 		return NewNIPSTWithChallenge(challenge, poetRef), nil
 	}
-	layerClockMock.currentLayer = clockEpoch.FirstLayer(layersPerEpoch) + 3
+	layerClockMock.currentLayer = clockEpoch.FirstLayer() + 3
 	err = b.PublishActivationTx()
 	nipstBuilderMock.buildNipstFunc = nil
 	return net.lastTransmission != nil, builtNipst, err
@@ -323,6 +323,7 @@ func publishAtx(b *Builder, meshLayer types.LayerID, clockEpoch types.EpochID, b
 // ========== Tests ==========
 
 func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
+	types.SetLayersPerEpoch(int32(layersPerEpoch))
 	r := require.New(t)
 
 	// setup
@@ -423,6 +424,7 @@ func TestBuilder_PublishActivationTx_RebuildNipstWhenTargetEpochPassed(t *testin
 }
 
 func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
+	types.SetLayersPerEpoch(int32(layersPerEpoch))
 	r := require.New(t)
 
 	// setup
@@ -443,6 +445,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
+	types.SetLayersPerEpoch(int32(layersPerEpoch))
 	r := require.New(t)
 
 	// setup
@@ -469,6 +472,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
+	types.SetLayersPerEpoch(int32(layersPerEpoch))
 	r := require.New(t)
 
 	// setup
@@ -489,6 +493,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T) {
+	types.SetLayersPerEpoch(int32(defaultActiveSetSize))
 	r := require.New(t)
 
 	// setup
@@ -564,6 +569,7 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 	r := require.New(t)
 
+	types.SetLayersPerEpoch(int32(defaultActiveSetSize))
 	activationDb := newActivationDb()
 	b := newBuilder(activationDb)
 	setTotalWeightInCache(t, defaultTotalWeight)
@@ -640,7 +646,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 
 	atx := newActivationTx(types.NodeID{Key: "aaaaaa", VRFPublicKey: []byte("bbbbb")}, 1, prevAtx, prevAtx, 15, 1, 100, 100, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, npst)
 
-	err := activationDb.StoreAtx(atx.PubLayerID.GetEpoch(layersPerEpoch), atx)
+	err := activationDb.StoreAtx(atx.PubLayerID.GetEpoch(), atx)
 	assert.NoError(t, err)
 
 	challenge := types.NIPSTChallenge{
@@ -659,7 +665,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 
 	setTotalWeightInCache(t, defaultTotalWeight)
 
-	layerClockMock.currentLayer = types.EpochID(1).FirstLayer(layersPerEpoch) + 3
+	layerClockMock.currentLayer = types.EpochID(1).FirstLayer() + 3
 	err = b.PublishActivationTx()
 	assert.EqualError(t, err, "target epoch has passed")
 
@@ -670,7 +676,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	layers.latestLayer = 22
 	err = b.PublishActivationTx()
 	assert.NoError(t, err)
-	act := newActivationTx(b.nodeID, 2, atx.ID(), atx.ID(), atx.PubLayerID+10, 101, 1, 0, coinbase, defaultTotalWeight, defaultView, npst2)
+	act := newActivationTx(b.nodeID, 2, atx.ID(), atx.PubLayerID+10, 0, atx.ID(), coinbase, 0, defaultView, npst2)
 	err = b.SignAtx(act)
 	assert.NoError(t, err)
 	bts, err := types.InterfaceToBytes(act)
@@ -678,14 +684,14 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	assert.Equal(t, bts, net.lastTransmission)
 
 	b = NewBuilder(id, coinbase, 0, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
-	err = b.buildNipstChallenge()
+	err = b.buildNipstChallenge(0)
 	assert.NoError(t, err)
 	db.hadNone = false
 	// test load challenge in later epoch - Nipst should be truncated
 	b = NewBuilder(id, coinbase, 0, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
 	err = b.loadChallenge()
 	assert.NoError(t, err)
-	layerClockMock.currentLayer = types.EpochID(4).FirstLayer(layersPerEpoch) + 3
+	layerClockMock.currentLayer = types.EpochID(4).FirstLayer() + 3
 	err = b.PublishActivationTx()
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
 	assert.EqualError(t, err, "target epoch has passed")
@@ -814,7 +820,7 @@ func TestActivationDb_CalcActiveSetFromViewHighConcurrency(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < ff; i++ {
 		go func() {
-			num, err := atxdb.CalcTotalWeightFromView(genView(), atx.PubLayerID.GetEpoch(layersPerEpochBig))
+			num, err := atxdb.CalcTotalWeightFromView(genView(), atx.PubLayerID.GetEpoch())
 			assert.NoError(t, err)
 			assert.Equal(t, 6, int(num))
 			assert.NoError(t, err)
@@ -838,5 +844,5 @@ func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX, positioningA
 		EndTick:        startTick + numTicks,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipstChallenge, coinbase, totalWeight, view, nipst, space, nil)
+	return types.NewActivationTx(nipstChallenge, coinbase, nipst, nil)
 }

@@ -27,6 +27,7 @@ bootstrap:
     hare-round-duration-sec: '12'
     hare-wakeup-delta: '5'
     layer-duration-sec: '60'
+    layers-per-epoch: '3'
 
 client:
   image: 'spacemeshos/go-spacemesh:develop'
@@ -46,6 +47,7 @@ client:
     hare-round-duration-sec: '12'
     hare-wakeup-delta: '5'
     layer-duration-sec: '60'
+    layers-per-epoch: '3'
 
 elastic:
   host: elastic.spacemesh.io

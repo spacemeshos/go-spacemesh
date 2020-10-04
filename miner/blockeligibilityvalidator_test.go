@@ -1,4 +1,4 @@
-package oracle
+package miner
 
 import (
 	"errors"
@@ -15,6 +15,10 @@ type mockAtxDB struct {
 	err  error
 }
 
+func (m mockAtxDB) GetEpochAtxs(epochID types.EpochID) []types.ATXID {
+	return []types.ATXID{}
+}
+
 func (m mockAtxDB) GetIdentity(edID string) (types.NodeID, error) {
 	return types.NodeID{Key: edID, VRFPublicKey: vrfPubkey}, nil
 }
@@ -28,10 +32,10 @@ func (m mockAtxDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, erro
 }
 
 func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
+	types.SetLayersPerEpoch(5)
 	r := require.New(t)
 	atxdb := &mockAtxDB{err: errFoo}
-	v := NewBlockEligibilityValidator(10, 5, 5, atxdb, &EpochBeaconProvider{},
-		validateVRF, log.NewDefault(t.Name()))
+	v := NewBlockEligibilityValidator(10, 5, 5, atxdb, &EpochBeaconProvider{}, validateVRF, nil, log.NewDefault(t.Name()))
 
 	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: 20}}} // non-genesis
 	block.Signature = edSigner.Sign(block.Bytes())

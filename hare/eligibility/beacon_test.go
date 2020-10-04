@@ -2,9 +2,7 @@ package eligibility
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -17,13 +15,15 @@ type mockPatternProvider struct {
 }
 
 func (mpp *mockPatternProvider) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error) {
-	if layer == config.Genesis {
+	if layer == types.GetEffectiveGenesis() {
 		return mpp.valGenesis, mpp.err
 	}
 	return mpp.val, mpp.err
 }
 
 func TestBeacon_Value(t *testing.T) {
+	genesisBlock := types.NewExistingBlock(types.GetEffectiveGenesis(), []byte("genesis"))
+
 	block1 := types.NewExistingBlock(0, []byte("asghsfgdhn"))
 	block2 := types.NewExistingBlock(0, []byte("asghdhn"))
 	block3 := types.NewExistingBlock(0, []byte("asghsfg"))
@@ -35,7 +35,7 @@ func TestBeacon_Value(t *testing.T) {
 	b.cache = c
 
 	genesisGoodPtrn := map[types.BlockID]struct{}{}
-	genesisGoodPtrn[mesh.GenesisBlock.ID()] = struct{}{}
+	genesisGoodPtrn[genesisBlock.ID()] = struct{}{}
 
 	valGoodPtrn := map[types.BlockID]struct{}{}
 	valGoodPtrn[block1.ID()] = struct{}{}

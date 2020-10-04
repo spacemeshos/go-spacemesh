@@ -22,9 +22,6 @@ import (
 
 const (
 	layerSize = 200
-
-	// Genesis layer index
-	Genesis = types.LayerID(0)
 )
 
 var constTrue = []byte{1}
@@ -62,6 +59,7 @@ type txProcessor interface {
 	GetLayerApplied(txID types.TransactionID) *types.LayerID
 	GetStateRoot() types.Hash32
 	LoadState(layer types.LayerID) error
+	ValidateAndAddTxToPool(tx *types.Transaction) error
 }
 
 type txMemPoolInValidator interface {
@@ -80,10 +78,6 @@ type AtxDB interface {
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 
-type blockBuilder interface {
-	ValidateAndAddTxToPool(tx *types.Transaction) error
-}
-
 // Mesh is the logic layer above our mesh.DB database
 type Mesh struct {
 	log.Log
@@ -92,9 +86,7 @@ type Mesh struct {
 	txProcessor
 	Validator
 	trtl               tortoise
-	blockBuilder       blockBuilder
 	txInvalidator      txMemPoolInValidator
-	atxInvalidator     atxMemPoolInValidator
 	config             Config
 	latestLayer        types.LayerID
 	latestLayerInState types.LayerID
@@ -112,18 +104,19 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh
-func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPoolInValidator, atxInvalidator atxMemPoolInValidator, pr txProcessor, logger log.Log) *Mesh {
+func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPoolInValidator, pr txProcessor, logger log.Log) *Mesh {
 	ll := &Mesh{
-		Log:             logger,
-		trtl:            mesh,
-		txInvalidator:   txInvalidator,
-		atxInvalidator:  atxInvalidator,
-		txProcessor:     pr,
-		done:            make(chan struct{}),
-		DB:              db,
-		config:          rewardConfig,
-		AtxDB:           atxDb,
-		nextValidLayers: make(map[types.LayerID]*types.Layer),
+		Log:                logger,
+		trtl:               mesh,
+		txInvalidator:      txInvalidator,
+		txProcessor:        pr,
+		done:               make(chan struct{}),
+		DB:                 db,
+		config:             rewardConfig,
+		AtxDB:              atxDb,
+		nextValidLayers:    make(map[types.LayerID]*types.Layer),
+		latestLayer:        types.GetEffectiveGenesis(),
+		latestLayerInState: types.GetEffectiveGenesis(),
 	}
 
 	ll.Validator = &validator{ll, 0}
@@ -132,8 +125,8 @@ func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalida
 }
 
 // NewRecoveredMesh creates new instance of mesh with recovered mesh data fom database
-func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPoolInValidator, atxInvalidator atxMemPoolInValidator, pr txProcessor, logger log.Log) *Mesh {
-	msh := NewMesh(db, atxDb, rewardConfig, mesh, txInvalidator, atxInvalidator, pr, logger)
+func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPoolInValidator, pr txProcessor, logger log.Log) *Mesh {
+	msh := NewMesh(db, atxDb, rewardConfig, mesh, txInvalidator, pr, logger)
 
 	latest, err := db.general.Get(constLATEST)
 	if err != nil {
@@ -190,11 +183,6 @@ func (msh *Mesh) CacheWarmUp(layerSize int) {
 	}
 
 	msh.Info("cache warm up done")
-}
-
-// SetBlockBuilder sets the block builder in use by mesh
-func (msh *Mesh) SetBlockBuilder(blockBuilder blockBuilder) {
-	msh.blockBuilder = blockBuilder
 }
 
 // LatestLayerInState returns the latest layer we applied to state
@@ -311,7 +299,7 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 		msh.removeRejectedFromAccountTxs(account, grouped, l)
 	}
 	for _, tx := range returnedTxs {
-		err := msh.blockBuilder.ValidateAndAddTxToPool(tx)
+		err := msh.ValidateAndAddTxToPool(tx)
 		// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
 		if err == nil {
 			msh.With().Info("transaction from contextually invalid block re-added to mempool", tx.ID())
@@ -375,7 +363,7 @@ func (msh *Mesh) updateStateWithLayer(validatedLayer types.LayerID, layer *types
 		msh.maxValidatedLayer = validatedLayer
 	}
 	if validatedLayer > latest+1 {
-		log.Info("early layer result was received for layer %v, max validated so far %v", validatedLayer, msh.maxValidatedLayer)
+		log.Info("early layer result was received for layer %v, max validated so far %v latest %v", validatedLayer, msh.maxValidatedLayer, latest)
 		msh.nextValidLayers[validatedLayer] = layer
 		return
 	}
@@ -522,7 +510,7 @@ func (msh *Mesh) AddBlock(blk *types.Block) error {
 
 // SetZeroBlockLayer tags lyr as a layer without blocks
 func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
-
+	msh.Info("setting zero block layer %v", lyr)
 	// check database for layer
 	_, err := msh.GetLayer(lyr)
 
@@ -543,13 +531,7 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 	lm.m.Lock()
 	defer lm.m.Unlock()
 	// layer doesnt exist, need to insert new layer
-	blockIds := make([]types.BlockID, 0, 1)
-	w, err := types.BlockIdsToBytes(blockIds)
-	if err != nil {
-		return errors.New("could not encode layer blk ids")
-	}
-	err = msh.layers.Put(lyr.Bytes(), w)
-	return err
+	return msh.AddZeroBlockLayer(lyr)
 }
 
 // AddBlockWithTxs adds a block to the database
@@ -571,7 +553,12 @@ func (msh *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atx
 	}
 
 	// Store block (delete if storing ATXs fails)
-	if err := msh.DB.AddBlock(blk); err != nil && err != ErrAlreadyExist {
+	err := msh.DB.AddBlock(blk)
+	if err != nil && err == ErrAlreadyExist {
+		return nil
+	}
+
+	if err != nil {
 		msh.With().Error("failed to add block", blk.ID(), log.Err(err))
 		return err
 	}
@@ -600,10 +587,6 @@ func (msh *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atx
 func (msh *Mesh) invalidateFromPools(blk *types.MiniBlock) {
 	for _, id := range blk.TxIDs {
 		msh.txInvalidator.Invalidate(id)
-	}
-	msh.atxInvalidator.Invalidate(blk.ATXID)
-	for _, id := range blk.ATXIDs {
-		msh.atxInvalidator.Invalidate(id)
 	}
 }
 
@@ -645,7 +628,7 @@ func (msh *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 
 	blocks, err := msh.LayerBlockIds(l - 1)
 	if err != nil {
-		return nil, errors.New(fmt.Sprint("failed getting latest layer ", err))
+		return nil, fmt.Errorf("failed getting latest layer %v err %v", l-1, err)
 	}
 
 	// add last layer blocks
@@ -720,13 +703,15 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 
 }
 
-// GenesisBlock is a mock genesis block used until genesis flow is implemented
-var GenesisBlock = types.NewExistingBlock(0, []byte("genesis"))
+// GenesisBlock is a is the first static block that xists at the beginning of each network. it exist one layer before actual blocks could be created
+func GenesisBlock() *types.Block {
+	return types.NewExistingBlock(types.GetEffectiveGenesis(), []byte("genesis"))
+}
 
 // GenesisLayer generates layer 0 should be removed after the genesis flow is implemented
 func GenesisLayer() *types.Layer {
-	l := types.NewLayer(Genesis)
-	l.AddBlock(GenesisBlock)
+	l := types.NewLayer(types.GetEffectiveGenesis())
+	l.AddBlock(GenesisBlock())
 	return l
 }
 

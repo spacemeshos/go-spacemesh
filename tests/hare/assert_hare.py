@@ -50,28 +50,28 @@ def validate(outputs):
     return True
 
 
-def assert_all(curr_idx, ns):
+def assert_all(curr_idx, ns, layer):
     total = testconfig['bootstrap']['replicas'] + testconfig['client']['replicas']
 
     # assert no node ended up with an empty set at the end of the pre-round
-    lst = query_pre_round(curr_idx, ns, 1)
+    lst = query_pre_round(curr_idx, ns, layer)
     assert 0 == len(lst)
 
     # assert all nodes had SVP ready at the end of round 1
-    lst = query_round_1(curr_idx, ns, 1)
+    lst = query_round_1(curr_idx, ns, layer)
     assert total == len(lst)
 
     # assert all nodes had a (non-nil) proposal at the end of round 2
-    lst = query_round_2(curr_idx, ns, 1)
+    lst = query_round_2(curr_idx, ns, layer)
     assert total == len(lst)
 
     # assert at least f+1 has committed at the end of round 3
-    lst = query_round_3(curr_idx, ns, 1)
+    lst = query_round_3(curr_idx, ns, layer)
     f = int(testconfig['client']['args']['hare-max-adversaries'])
     assert len(lst) >= f + 1
 
     # assert termination output set
-    lst = query_hare_output_set(curr_idx, ns, 1)
+    lst = query_hare_output_set(curr_idx, ns, layer)
     assert total == len(lst)
     assert validate(lst)
 

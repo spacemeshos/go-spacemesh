@@ -40,9 +40,8 @@ func TestCreateBaseline(t *testing.T) {
 	defer atxdbStore.Close()
 	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, uint16(1000), &validatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
 	trtl := tortoise.NewTortoise(blocksPerLayer, mshdb, 1, lg.WithName("trtl"))
-	msh := mesh.NewMesh(mshdb, atxdb, rewardConf, trtl, &mockTxMemPool{}, &mockAtxMemPool{}, &mockState{}, lg.WithOptions(log.Nop))
+	msh := mesh.NewMesh(mshdb, atxdb, rewardConf, trtl, &mockTxMemPool{}, &mockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
-	msh.SetBlockBuilder(&blockBuilderMock{})
 	poetDbStore, err := database.NewLDBDatabase(id+"poet", 0, 0, lg.WithName("poetDbStore").WithOptions(log.Nop))
 	if err != nil {
 		lg.Error("error: ", err)
@@ -136,10 +135,10 @@ func createLayerWithRandVoting(msh *mesh.Mesh, index types.LayerID, prev []*type
 		//add txs
 		txs, txids := txs(txPerBlock)
 		//add atxs
-		atxs, atxids := atxs(atxPerBlock)
+		atxs, _ := atxs(atxPerBlock)
 
 		bl.TxIDs = txids
-		bl.ATXIDs = atxids
+		//bl.ATXIDs = atxids
 		bl.Initialize()
 		start := time.Now()
 		msh.AddBlockWithTxs(bl, txs, atxs)
@@ -185,5 +184,5 @@ func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, 
 		StartTick:      startTick,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipstChallenge, coinbase, uint64(activeSetSize), view, nipst, 0, nil)
+	return types.NewActivationTx(nipstChallenge, coinbase, nipst, 0, nil)
 }

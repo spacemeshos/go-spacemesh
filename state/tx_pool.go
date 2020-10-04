@@ -1,4 +1,4 @@
-package miner
+package state
 
 import (
 	"errors"
@@ -48,14 +48,14 @@ func (t *TxMempool) GetTxIdsByAddress(addr types.Address) []types.TransactionID 
 
 // GetTxsForBlock gets a specific number of random txs for a block. This function also receives a state calculation function
 // to allow returning only transactions that will probably be valid
-func (t *TxMempool) GetTxsForBlock(numOfTxs int, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionID, error) {
+func (t *TxMempool) GetTxsForBlock(numOfTxs int, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionID, []*types.Transaction, error) {
 	var txIds []types.TransactionID
 	t.mu.RLock()
 	for addr, account := range t.accounts {
 		nonce, balance, err := getState(addr)
 		if err != nil {
 			t.mu.RUnlock()
-			return nil, fmt.Errorf("failed to get state for addr %s: %v", addr.Short(), err)
+			return nil, nil, fmt.Errorf("failed to get state for addr %s: %v", addr.Short(), err)
 		}
 		accountTxIds, _, _ := account.ValidTxs(nonce, balance)
 		txIds = append(txIds, accountTxIds...)
@@ -63,7 +63,7 @@ func (t *TxMempool) GetTxsForBlock(numOfTxs int, getState func(addr types.Addres
 	t.mu.RUnlock()
 
 	if len(txIds) <= numOfTxs {
-		return txIds, nil
+		return txIds, t.getTxByIds(txIds), nil
 	}
 
 	var ret []types.TransactionID
@@ -71,7 +71,15 @@ func (t *TxMempool) GetTxsForBlock(numOfTxs int, getState func(addr types.Addres
 		//noinspection GoNilness
 		ret = append(ret, txIds[idx])
 	}
-	return ret, nil
+
+	return ret, t.getTxByIds(ret), nil
+}
+
+func (t *TxMempool) getTxByIds(txsIDs []types.TransactionID) (txs []*types.Transaction) {
+	for _, tx := range txsIDs {
+		txs = append(txs, t.txs[tx])
+	}
+	return
 }
 
 func getRandIdxs(numOfTxs, spaceSize int) map[uint64]struct{} {

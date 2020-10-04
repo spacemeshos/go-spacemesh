@@ -268,6 +268,8 @@ func (proc *consensusProcess) eventLoop() {
 			}
 			m := builder.SetType(pre).Sign(proc.signing).Build()
 			proc.sendMessage(m)
+		} else {
+			log.Info("shouldn't participate ")
 		}
 	}()
 

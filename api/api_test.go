@@ -21,11 +21,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	config2 "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/stretchr/testify/require"
 
 	crand "crypto/rand"
@@ -238,7 +238,7 @@ var (
 	mining      = MiningAPIMock{}
 	oracle      = OracleMock{}
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
-	txMempool   = miner.NewTxMemPool()
+	txMempool   = state.NewTxMemPool()
 	txAPI       = &TxAPIMock{
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),

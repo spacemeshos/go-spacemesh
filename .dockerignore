@@ -34,3 +34,4 @@ spacemesh.json
 database/data
 app/state
 *.pyc
+/devtools

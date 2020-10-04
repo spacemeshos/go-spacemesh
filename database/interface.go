@@ -16,7 +16,11 @@
 
 package database
 
-import "github.com/syndtr/goleveldb/leveldb/iterator"
+import (
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/syndtr/goleveldb/leveldb/iterator"
+	"time"
+)
 
 // IdealBatchSize is the best batch size
 // Code using batches should try to add this much data to the batch.
@@ -60,4 +64,47 @@ type Iterator interface {
 	iterator.IteratorSeeker
 	Key() []byte
 	Value() []byte
+}
+
+// ContextDBCreator is a global structure that toggles creation of real dbs and memory dbs for tests
+type ContextDBCreator struct {
+	Create  func(file string, cache int, handles int, logger log.Log) (Database, error)
+	Path    string
+	Context string
+}
+
+// CreateRealDB is a wrapper function that creates a leveldb database
+func (c ContextDBCreator) CreateRealDB(file string, cache int, handles int, logger log.Log) (Database, error) {
+	return NewLDBDatabase(c.Path+c.Context+file, cache, handles, logger)
+}
+
+// CreateMemDB is a wrapper function that creates a memory database to be used only in tests
+func (c ContextDBCreator) CreateMemDB(file string, cache int, handles int, logger log.Log) (Database, error) {
+	return NewMemDatabase(), nil
+}
+
+// DBC is the global context that determines what db will be created and at what path.
+var DBC = ContextDBCreator{
+	Path:    "../tmp/test/" + time.Now().String(),
+	Context: "",
+}
+
+// Create is the actual function that is used to create a DB without the need to know which DB specifically,
+// this can be determined by the context
+var Create = DBC.CreateRealDB
+
+// SwitchCreationContext switches real DB creation context to allow creating the same DB for multiple nodes in one process
+func SwitchCreationContext(path, context string) {
+	var c = ContextDBCreator{
+		Path:    path,
+		Context: context,
+	}
+	Create = c.CreateRealDB
+}
+
+// SwitchToMemCreationContext switches global DB creation function to create memory DBs (this funciton should be called in
+// tests 'init' function
+func SwitchToMemCreationContext() {
+	var c = ContextDBCreator{}
+	Create = c.CreateMemDB
 }
