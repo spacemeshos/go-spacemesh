@@ -406,16 +406,12 @@ func (b *Builder) PublishActivationTx() error {
 		return err
 	}
 
-	var epochWeight uint32
 	var commitment *types.PostProof
 	if b.challenge.PrevATXID == *types.EmptyATXID {
 		commitment = b.commitment
 	}
 
-	atx := types.NewActivationTx(*b.challenge, b.getCoinbaseAccount(), nipst, commitment)
-
-	b.log.With().Info("total weight seen for epoch", log.FieldNamed("atx_pub_epoch", pubEpoch),
-		log.Uint64("epoch_weight", epochWeight))
+	atx := types.NewActivationTx(*b.challenge, b.getCoinbaseAccount(), nipst, 0, commitment)
 
 	atxReceived := b.db.AwaitAtx(atx.ID())
 	defer b.db.UnsubscribeAtx(atx.ID())

@@ -20,7 +20,7 @@ type BlockEligibilityValidator struct {
 	genesisTotalWeight uint64
 	layersPerEpoch     uint16
 	activationDb       activationDB
-	blocks               blockDB
+	blocks             blockDB
 	beaconProvider     *EpochBeaconProvider
 	validateVRF        VRFValidationFunction
 	log                log.Log
@@ -28,7 +28,8 @@ type BlockEligibilityValidator struct {
 
 // NewBlockEligibilityValidator returns a new BlockEligibilityValidator.
 func NewBlockEligibilityValidator(
-	committeeSize uint32, genesisTotalWeight uint64, layersPerEpoch uint16, activationDb activationDB, beaconProvider *EpochBeaconProvider, validateVRF VRFValidationFunction, blockDB blockDB, log log.Log) *BlockEligibilityValidator {
+	committeeSize uint32, genesisTotalWeight uint64, layersPerEpoch uint16, activationDb activationDB,
+	beaconProvider *EpochBeaconProvider, validateVRF VRFValidationFunction, blockDB blockDB, log log.Log) *BlockEligibilityValidator {
 
 	return &BlockEligibilityValidator{
 		committeeSize:      committeeSize,
@@ -37,7 +38,7 @@ func NewBlockEligibilityValidator(
 		activationDb:       activationDb,
 		beaconProvider:     beaconProvider,
 		validateVRF:        validateVRF,
-		blocks:               blockDB,
+		blocks:             blockDB,
 		log:                log,
 	}
 }
@@ -69,7 +70,13 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 		return false, fmt.Errorf("cannot get active set from block %v", activeSetBlock.ID())
 	}
 	// todo: optimise by using reference to active set size and cache active set size to not load all atxsIDs from db
-	totalWeight = uint64(len(*activeSetBlock.ActiveSet))
+	for _, atxID := range *activeSetBlock.ActiveSet {
+		atxHeader, err := v.activationDb.GetAtxHeader(atxID)
+		if err != nil {
+			return false, err
+		}
+		totalWeight += atxHeader.GetWeight()
+	}
 	if block.ATXID == *types.EmptyATXID {
 		if !epochNumber.IsGenesis() {
 			return false, fmt.Errorf("no associated ATX in epoch %v", epochNumber)

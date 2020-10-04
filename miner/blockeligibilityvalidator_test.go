@@ -31,6 +31,10 @@ func (m mockAtxDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, erro
 	return m.atxH, m.err
 }
 
+func (m mockAtxDB) GetEpochWeight(epochID types.EpochID) (uint64, error) {
+	return 0, nil
+}
+
 func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 	types.SetLayersPerEpoch(5)
 	r := require.New(t)

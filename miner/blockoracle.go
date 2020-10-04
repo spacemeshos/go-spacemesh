@@ -15,8 +15,7 @@ import (
 type activationDB interface {
 	GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error)
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
-	GetIdentity(edID string) (types.NodeID, error)
-	GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID)
+	GetEpochWeight(epochID types.EpochID) (uint64, error)
 }
 
 type vrfSigner interface {
@@ -92,9 +91,11 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 	epochBeacon := bo.beaconProvider.GetBeacon(epochNumber)
 
 	var weight, totalWeight uint64
-	// get the previous epochs total ATXs
-	// TODO(NOW): this is the number of miners, not total total weight
-	totalWeight = uint64(len(bo.atxDB.GetEpochAtxs(epochNumber - 1)))
+	// get the previous epochs total weight
+	totalWeight, err := bo.atxDB.GetEpochWeight(epochNumber)
+	if err != nil {
+		return fmt.Errorf("failed to get epoch %v weight: %v", epochNumber, err)
+	}
 	atx, err := bo.getValidAtxForEpoch(epochNumber)
 	if err != nil {
 		if !epochNumber.IsGenesis() {
@@ -104,7 +105,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 		weight = atx.GetWeight()
 		bo.atxID = atx.ID()
 	}
-	bo.log.Info("calculating eligibility for epoch %v, total weight %v", epochBeacon, totalWeight)
+	bo.log.Info("calculating eligibility for epoch %v, total weight %v", epochNumber, totalWeight)
 
 	if epochNumber.IsGenesis() {
 		weight, totalWeight = 1024, bo.genesisTotalWeight // TODO: replace 1024 with configured weight

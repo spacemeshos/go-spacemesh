@@ -479,7 +479,7 @@ func (db *DB) StoreAtx(ech types.EpochID, atx *types.ActivationTx) error {
 		return err
 	}
 
-	err = db.addToEpochWeight(atx.TargetEpoch(db.LayersPerEpoch), atx.GetWeight())
+	err = db.addToEpochWeight(atx.TargetEpoch(), atx.GetWeight())
 	if err != nil {
 		return err
 	}
@@ -670,7 +670,7 @@ func (db *DB) addToEpochWeight(epochID types.EpochID, additionalWeight uint64) e
 	return nil
 }
 
-// GetEpochWeight returns the total epoch weight, given an epochID.
+// GetEpochWeight returns the total weight of ATXs targeting the given epochID.
 func (db *DB) GetEpochWeight(epochID types.EpochID) (uint64, error) {
 	w, err := db.atxs.Get(getEpochWeightKey(epochID))
 	if err != nil {

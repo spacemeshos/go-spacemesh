@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-const defSafety = types.LayerID(25)
+const defSafety = types.LayerID(35)
 const defLayersPerEpoch = 10
 
 var errFoo = errors.New("some error")
@@ -152,9 +152,14 @@ func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 }
 
 func defaultOracle(t *testing.T) *Oracle {
-	types.SetLayersPerEpoch(defLayersPerEpoch)
+	layersPerEpoch := uint16(defLayersPerEpoch)
+	return mockOracle(t, layersPerEpoch)
+}
+
+func mockOracle(t *testing.T, layersPerEpoch uint16) *Oracle {
+	types.SetLayersPerEpoch(int32(layersPerEpoch))
 	o := New(&mockValueProvider{1, nil}, nil, buildVerifier(true, nil), nil,
-		defLayersPerEpoch, genWeight, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+		layersPerEpoch, genWeight, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	return o
 }
 
@@ -187,7 +192,7 @@ func TestOracle_CalcEligibility_ErrorFromActiveSet(t *testing.T) {
 		return nil, errFoo
 	}
 
-	res, err := o.CalcEligibility(types.LayerID(30), 0, 1, types.NodeID{}, []byte{})
+	res, err := o.CalcEligibility(types.LayerID(50), 0, 1, types.NodeID{}, []byte{})
 
 	r.EqualError(err, errFoo.Error())
 	r.Equal(uint16(0), res)
@@ -235,7 +240,7 @@ func TestOracle_CalcEligibility_AllEligible(t *testing.T) {
 		r.NoError(err)
 		r.Equal(64, n)
 
-		res, err := o.CalcEligibility(types.LayerID(cfg.ConfidenceParam+11), 0, 1, nodeID, sig)
+		res, err := o.CalcEligibility(types.LayerID(cfg.ConfidenceParam+21), 0, 1, nodeID, sig)
 
 		r.NoError(err)
 		r.Equal(uint16(1), res)
@@ -512,13 +517,12 @@ func (p *bProvider) ContextuallyValidBlock(layer types.LayerID) (map[types.Block
 
 func TestOracle_activesSafeLayer(t *testing.T) {
 	r := require.New(t)
-	types.SetLayersPerEpoch(2)
-	o := defaultOracle(t)
+	o := mockOracle(t, 2)
 	o.layersPerEpoch = 2
 	o.cfg = eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}
 	mp := createMapWithSize(9)
 	o.activesCache = newMockCacher()
-	lyr := types.LayerID(10)
+	lyr := 19 + defSafety
 	rsl := roundedSafeLayer(lyr, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error) {
 		ep := rsl.GetEpoch()
@@ -533,8 +537,8 @@ func TestOracle_activesSafeLayer(t *testing.T) {
 	bmp[rsl] = mp2
 	o.blocksProvider = &bProvider{bmp}
 	mpRes, err := o.actives(lyr)
-	r.NotNil(mpRes)
 	r.NoError(err)
+	r.NotNil(mpRes)
 }
 
 func TestOracle_IsIdentityActive(t *testing.T) {
