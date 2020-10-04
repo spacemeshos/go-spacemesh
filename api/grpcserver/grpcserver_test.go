@@ -111,7 +111,6 @@ func init() {
 
 func NewNIPSTWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPST {
 	return &types.NIPST{
-		Space:          commitmentSize,
 		NipstChallenge: challenge,
 		PostProof: &types.PostProof{
 			Challenge:    poetRef,
@@ -321,6 +320,7 @@ func newAtx(challenge types.NIPSTChallenge, nipst *types.NIPST, coinbase types.A
 			ActivationTxHeader: &types.ActivationTxHeader{
 				NIPSTChallenge: challenge,
 				Coinbase:       coinbase,
+				Space:          commitmentSize,
 			},
 			Nipst: nipst,
 		},
@@ -1454,7 +1454,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 		context.Background(),
 		&pb.SubmitTransactionRequest{Transaction: serializedTx},
 	)
-	require.Error(err)
+	require.EqualError(err, "rpc error: code = FailedPrecondition desc = Cannot submit transaction, node is not in sync yet, try again later")
 	require.Nil(res)
 
 	syncer.isSynced = true
@@ -1465,6 +1465,9 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 		&pb.SubmitTransactionRequest{Transaction: serializedTx},
 	)
 	require.NoError(err)
+	// TODO: randomly got an error here, should investigate. Added specific error check above, as this error should have
+	//  happened there first.
+	//  Received unexpected error: "rpc error: code = Unimplemented desc = unknown service spacemesh.v1.TransactionService"
 }
 
 func TestTransactionService(t *testing.T) {
@@ -1775,7 +1778,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if bytes.Compare(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) != 0 {
 				continue
 			}
-			if a.CommitmentSize != globalAtx.Nipst.Space {
+			if a.CommitmentSize != globalAtx.Space {
 				continue
 			}
 			// found a match
