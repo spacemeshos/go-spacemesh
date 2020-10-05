@@ -422,6 +422,26 @@ func (m *DB) writeTransactions(l types.LayerID, txs []*types.Transaction) error 
 	return nil
 }
 
+func (m *DB) WriteTransaction(l types.LayerID, t *types.Transaction) error{
+	bytes, err := types.InterfaceToBytes(newDbTransaction(t))
+	if err != nil {
+		return fmt.Errorf("could not marshall tx %v to bytes: %v", t.ID().ShortString(), err)
+	}
+	if err := m.transactions.Put(t.ID().Bytes(), bytes); err != nil {
+		return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
+	}
+	// write extra index for querying txs by account
+	if err := m.transactions.Put(getTransactionOriginKey(l, t), t.ID().Bytes()); err != nil {
+		return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
+	}
+	if err := m.transactions.Put(getTransactionDestKey(l, t), t.ID().Bytes()); err != nil {
+		return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
+	}
+	m.Debug("wrote tx %v to db", t.ID().ShortString())
+
+	return nil
+}
+
 type dbReward struct {
 	TotalReward         uint64
 	LayerRewardEstimate uint64

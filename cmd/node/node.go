@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -153,7 +154,7 @@ type SpacemeshApp struct {
 	newgrpcAPIService *grpcserver.Server
 	newjsonAPIService *grpcserver.JSONHTTPServer
 	syncer            *sync.Syncer
-	blockListener     *sync.BlockListener
+	blockListener     *layerfetcher.BlockListener
 	state             *state.TransactionProcessor
 	blockProducer     *miner.BlockBuilder
 	oracle            *miner.Oracle
@@ -563,7 +564,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	}
 
 	blockProducer := miner.NewBlockBuilder(cfg, sgn, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
-	blockListener := sync.NewBlockListener(swarm, syncer, 4, app.addLogger(BlockListenerLogger, lg))
+	blockListener := layerfetcher.NewBlockListener(swarm, syncer, 4, app.addLogger(BlockListenerLogger, lg))
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))
 

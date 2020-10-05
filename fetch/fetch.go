@@ -6,9 +6,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	p2pconf "github.com/spacemeshos/go-spacemesh/p2p/config"
 	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"sync"
 	"time"
@@ -52,11 +53,6 @@ type Fetcher interface {
 	GetAllHashes(hash []types.Hash32, hint Hint, hashValidationFunction HandleDataCallback, validateAndSubmit bool) error
 }
 
-type network interface {
-	GetPeers() []p2ppeers.Peer
-	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), errHandler func(err error)) error
-}
-
 /// request contains all relevant data for a single request for a specified hash
 type request struct {
 	success          HandleDataCallback
@@ -64,7 +60,7 @@ type request struct {
 	priority         priority
 	validateResponse bool
 	hint             Hint
-	returnChan chan HashDataPromiseResult
+	returnChan       chan HashDataPromiseResult
 }
 
 // requestMessage is the on the wire message that will be send to the peer for hash query
@@ -73,45 +69,118 @@ type requestMessage struct {
 	Hash types.Hash32
 }
 
-// responseMessage is the on the wire message that will be send to the this node as response
+// responseMessage is the on the wire message that will be send to the this node as response,
 type responseMessage struct {
 	Hash types.Hash32
 	data []byte
 }
+
+// requestBatch is a batch of requests and a hash of all requests as ID
+type requestBatch struct {
+	ID       types.Hash32
+	requests []requestMessage
+}
+
+// SetID calculates the hash of all requests and sets it as this batches ID
+func (b *requestBatch) SetID() {
+	bts, err := types.InterfaceToBytes(b.requests)
+	if err != nil {
+		return
+	}
+	b.ID = types.CalcHash32(bts)
+}
+
+//ToMap converts the array of requests to map so it can be easily invalidated
+func (b requestBatch) ToMap() map[types.Hash32]requestMessage{
+	m := make(map[types.Hash32]requestMessage)
+	for _, r := range b.requests {
+		m[r.Hash] = r
+	}
+	return m
+}
+
+// responseBatch is the response struct send for a requestBatch. the responseBatch ID must be the same
+// as stated in requestBatch even if not all data is present
+type responseBatch struct {
+	ID        types.Hash32
+	responses []responseMessage
+}
+
 
 // Config is the configuration file of the Fetch component
 type Config struct {
 	BatchTimeout      int
 	MaxRetiresForPeer int
 	BatchSize         int
+	RequestTimeout    int
+}
+
+type peers interface {
+	GetPeers() []p2ppeers.Peer
+}
+
+type MessageNetwork struct {
+	*server.MessageServer
+	peers
+	log.Log
+}
+
+func NewMessageNetwork(requestTimeOut int, net service.Service, protocol string, log log.Log) *MessageNetwork {
+	return &MessageNetwork{
+		server.NewMsgServer(net.(server.Service), protocol, time.Duration(requestTimeOut)*time.Second, make(chan service.DirectMessage, p2pconf.Values.BufferSize), log),
+			p2ppeers.NewPeers(net, log.WithName("peers")),
+			log,
+	}
+}
+
+// GetRandomPeer returns a random peer from current peer list
+func (f MessageNetwork) GetRandomPeer() p2ppeers.Peer {
+	peers := f.peers.GetPeers()
+	if len(peers) == 0 {
+		f.Log.Panic("cannot send fetch - no peers found")
+	}
+	rand.Seed(time.Now().Unix()) // initialize global pseudo random generator
+	return peers[rand.Intn(len(peers))]
 }
 
 // Fetch is the main struct that contains network peers and logic to batch and dispatch hash fetch requests
 type Fetch struct {
-	cfg             Config
-	log             log.Log
-	dbs             map[Hint]database.Database
-	activeRequests  map[types.Hash32][]request
-	net             network
-	requestReceiver chan request
+	cfg                  Config
+	log                  log.Log
+	dbs                  map[Hint]database.Database
+	activeRequests       map[types.Hash32][]request
+	activeBatches        map[types.Hash32]requestBatch
+	net                  *MessageNetwork
+	requestReceiver      chan request
 	batchRequestReceiver chan []request
-	batchTimeout    *time.Ticker
-	stop            chan struct{}
-	activeReqM      sync.RWMutex
+	batchTimeout         *time.Ticker
+	stop                 chan struct{}
+	activeReqM           sync.RWMutex
+	activeBatchM         sync.RWMutex
 }
 
+
+
 // NewFetch creates a new FEtch struct
-func NewFetch(cfg Config, net network, logger log.Log) *Fetch {
-	return &Fetch{
+func NewFetch(cfg Config, network service.Service, logger log.Log) *Fetch {
+
+	srv := NewMessageNetwork(cfg.RequestTimeout, network, fetchProtocol, logger)
+
+	f := &Fetch{
 		cfg:             cfg,
 		log:             logger,
 		dbs:             make(map[Hint]database.Database),
 		activeRequests:  make(map[types.Hash32][]request),
-		net:             net,
+		net:             srv,
 		requestReceiver: make(chan request),
 		batchTimeout:    time.NewTicker(time.Second * time.Duration(cfg.BatchTimeout)),
 		stop:            make(chan struct{}),
+		activeBatches:   make(map[types.Hash32]requestBatch),
 	}
+
+	srv.RegisterBytesMsgHandler(fetch, f.FetchRequestHandler)
+
+	return f
 }
 
 // Start handling fetch requests
@@ -134,12 +203,13 @@ func (f *Fetch) loop() {
 			// group requests by hash
 			f.activeReqM.Lock()
 			f.activeRequests[req.hash] = append(f.activeRequests[req.hash], req)
+			rLen := len(f.activeRequests)
 			f.activeReqM.Unlock()
 			if req.priority > Low {
 				f.sendBatch([]types.Hash32{req.hash})
 				break
 			}
-			if len(f.activeRequests) > batchMaxSize {
+			if rLen > batchMaxSize {
 				f.requestHashBatchFromPeers() // Process the batch.
 			}
 		case <-f.batchTimeout.C:
@@ -161,22 +231,75 @@ func (f *Fetch) loop() {
 	}
 }
 
-func (f *Fetch) receiveResponse(data []byte) {
-	var responses []responseMessage
-	err := types.BytesToInterface(data, &responses)
+// FetchRequestHandler handles requests for sync from peers, and basically reads data from database and puts it
+// in a response batch
+func (f *Fetch) FetchRequestHandler(data []byte) []byte {
+	var requestBatch requestBatch
+	err := types.BytesToInterface(data, requestBatch)
 	if err != nil {
-		log.Error("we shold panic here, response was unclear, probably leaking")
+		return []byte{}
+	}
+	resBatch := responseBatch{
+		ID:        requestBatch.ID,
+		responses: make([]responseMessage,0, len(requestBatch.requests)),
+	}
+	// this will iterate all requests and populate appropriate responses, if there are any missing items they will not
+	// be included in the response at all
+	for _, r := range requestBatch.requests {
+		db, ok := f.dbs[r.Hint]
+		if !ok {
+			//db not found, don't return response here
+			continue
+		}
+		res, err := db.Get(r.Hash.Bytes())
+		if err != nil {
+			// no value found
+			continue
+		}
+		// add response to batch
+		m := responseMessage{
+			Hash: r.Hash,
+			data: res,
+		}
+		resBatch.responses = append(resBatch.responses, m)
 	}
 
+	bts, err := types.InterfaceToBytes(resBatch)
+	if err != nil {
+		f.log.Error("cannot parse message")
+		return nil
+	}
+	return bts
+}
+
+// receive data from message server and call response handlers accordingly
+func (f *Fetch) receiveResponse(data []byte) {
+	var response responseBatch
+	err := types.BytesToInterface(data, &response)
+	if err != nil {
+		f.log.Error("we shold panic here, response was unclear, probably leaking")
+		return
+	}
+
+	f.activeBatchM.RLock()
+	batch, has := f.activeBatches[response.ID]
+	f.activeBatchM.RUnlock()
+	if !has {
+		f.log.Error("unknown batch response received, or already invalidated %v", response.ID)
+		return
+	}
+
+	// convert requests to map so it can be invalidated when reading responses
+	batchMap := batch.ToMap()
 	// iterate all hash responses
-	for _, resID := range responses {
+	for _, resID := range response.responses {
 		//take lock here to make handling of a single hash atomic
 		f.activeReqM.Lock()
 		// for each hash, call its callbacks
 		resCallbacks := f.activeRequests[resID.Hash]
 		for _, req := range resCallbacks {
 			if req.validateResponse == false {
-				err := req.success(resID.Hash, data)
+				err := req.success(resID.Hash, resID.data)
 				req.returnChan <- HashDataPromiseResult{
 					Err:  err,
 					Hash: resID.Hash,
@@ -205,10 +328,33 @@ func (f *Fetch) receiveResponse(data []byte) {
 				Hash: resID.Hash,
 			}
 		}
+		//remove from map
+		delete(batchMap, resID.Hash)
+
 		// remove from active list
 		delete(f.activeRequests, resID.Hash)
 		f.activeReqM.Unlock()
 	}
+
+	//iterate all requests that didn't return value from peer and invalidate them with error
+	err = fmt.Errorf("hash did not return")
+	for h := range batchMap {
+		f.activeReqM.Lock()
+		// for each hash, call its callbacks
+		resCallbacks := f.activeRequests[h]
+		f.activeReqM.Unlock()
+		for _, req := range resCallbacks {
+			req.returnChan <- HashDataPromiseResult{
+				Err:  err,
+				Hash: h,
+			}
+		}
+	}
+
+	//delete the hash of waiting batch
+	f.activeBatchM.Lock()
+	delete(f.activeBatches, response.ID)
+	f.activeBatchM.Unlock()
 }
 
 // this is the main function that sends the hash request to the peer
@@ -230,35 +376,39 @@ func (f *Fetch) requestHashBatchFromPeers() {
 	}
 }
 
-func (f *Fetch) sendBatch(hashes []types.Hash32) { // create a network request and serialise to bytes
-	// build list of request messages
-	var requests []requestMessage
+func (f *Fetch) sendBatch(hashes []types.Hash32) { // create a network batch and serialise to bytes
+	// build list of batch messages
+	var batch requestBatch
 	f.activeReqM.RLock()
 	for _, hash := range hashes {
 		req, ok := f.activeRequests[hash]
 		if !ok {
-			f.log.Error("message invalidated before sent in batch %v", hash)
+			f.log.Warning("message invalidated before sent in batch %v", hash)
 			continue
 		}
 		r := requestMessage{Hint: req[0].hint, Hash: hash}
-		requests = append(requests, r)
+		batch.requests = append(batch.requests, r)
 	}
 	f.activeReqM.RUnlock()
+	batch.SetID()
 
+	f.activeBatchM.Lock()
+	f.activeBatches[batch.ID] = batch
+	f.activeBatchM.Unlock()
 	// timeout function will be called if no response was received for the hashes sent
 	timeoutFunc := func(err error) {
-		f.handleHashError(hashes, err)
+		f.handleHashError(batch.ID, err)
 	}
 
-	bytes, err := types.InterfaceToBytes(requests)
+	bytes, err := types.InterfaceToBytes(batch)
 	if err != nil {
-		f.handleHashError(hashes, err)
+		f.handleHashError(batch.ID, err)
 	}
-	// try sending request to some random peer
+	// try sending batch to some random peer
 	retries := 0
 	for {
 		// get random peer
-		p := f.getPeer()
+		p := f.net.GetRandomPeer()
 		err := f.net.SendRequest(fetch, bytes, p, f.receiveResponse, timeoutFunc)
 		// if call succeeded, continue to other requests
 		if err == nil {
@@ -267,7 +417,7 @@ func (f *Fetch) sendBatch(hashes []types.Hash32) { // create a network request a
 		//todo: mark number of fails per peer to make it low priority
 		retries++
 		if retries > f.cfg.MaxRetiresForPeer {
-			f.handleHashError(hashes, ErrCouldNotSend(fmt.Errorf("could not send message")))
+			f.handleHashError(batch.ID, ErrCouldNotSend(fmt.Errorf("could not send message")))
 			break
 		}
 		f.log.Error("could not send message to peer %v , retrying, retries : %v", p, retries)
@@ -275,30 +425,32 @@ func (f *Fetch) sendBatch(hashes []types.Hash32) { // create a network request a
 }
 
 // handleHashError is called when an error occurred processing batches of the following hashes
-func (f *Fetch) handleHashError(hashes []types.Hash32, err error) {
-	f.log.Error("cannot send fetch message %v", err)
+func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
+	f.log.Error("cannot fetch message %v", err)
+	f.activeBatchM.RLock()
+	batch, ok := f.activeBatches[batchHash]
+	if !ok {
+		f.activeBatchM.RUnlock()
+		f.log.Error("batch invalidated twice %v", batchHash)
+	}
+	f.activeBatchM.RUnlock()
 	f.activeReqM.Lock()
-	for _, h := range hashes {
-		for _, callback := range f.activeRequests[h] {
+	for _, h := range batch.requests {
+		for _, callback := range f.activeRequests[h.Hash] {
 			callback.returnChan <- HashDataPromiseResult{
 				Err:  err,
-				Hash: h,
+				Hash: h.Hash,
 			}
 		}
-		delete(f.activeRequests, h)
+		delete(f.activeRequests, h.Hash)
 	}
 	f.activeReqM.Unlock()
+
+	f.activeBatchM.Lock()
+	delete(f.activeBatches, batchHash)
+	f.activeBatchM.Unlock()
 }
 
-// getPeer returns a random peer from current peer list
-func (f *Fetch) getPeer() p2ppeers.Peer {
-	peers := f.net.GetPeers()
-	if len(peers) == 0 {
-		f.log.Panic("cannot send fetch - no peers found")
-	}
-	rand.Seed(time.Now().Unix()) // initialize global pseudo random generator
-	return peers[rand.Intn(len(peers))]
-}
 
 
 type HashDataPromiseResult struct {
@@ -328,7 +480,6 @@ func (f *Fetch) GetAllHashes(hashes []types.Hash32, hint Hint, hashValidationFun
 
 	return retErr
 }
-
 
 // GetHash is the regular buffered call to get a specific hash, using provided hash, h as hint the receiving end will
 // know where to look for the hash, if function fails to get a response - failCallback will be called, if a response was
@@ -360,5 +511,3 @@ func (f *Fetch) GetHash(hash types.Hash32, h Hint, dataCallback HandleDataCallba
 
 	return callbackChan
 }
-
-

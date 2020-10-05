@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"testing"
 	"time"
 
@@ -21,10 +22,10 @@ func TestBlockListener_TestTxQueue(t *testing.T) {
 	n2 := sim.NewNode()
 	//n2.RegisterGossipProtocol(NewBlockProtocol)
 
-	bl1 := SyncFactory("TextTxQueue_1", n1)
-	bl1.peers = PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n2.PublicKey()} }}
-	bl2 := SyncFactory("TextTxQueue_2", n2)
-	bl2.peers = PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}
+	bl1 := layerfetcher.SyncFactory("TextTxQueue_1", n1)
+	bl1.peers = layerfetcher.PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n2.PublicKey()} }}
+	bl2 := layerfetcher.SyncFactory("TextTxQueue_2", n2)
+	bl2.peers = layerfetcher.PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}
 
 	bl1.Start()
 	bl2.Start()
@@ -81,10 +82,10 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 	n2 := sim.NewNode()
 	signer := signing.NewEdSigner()
 
-	bl1 := SyncFactory("TextAtxQueue_1", n1)
-	bl1.peers = PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n2.PublicKey()} }}
-	bl2 := SyncFactory("TextAtxQueue_2", n2)
-	bl2.peers = PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}
+	bl1 := layerfetcher.SyncFactory("TextAtxQueue_1", n1)
+	bl1.peers = layerfetcher.PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n2.PublicKey()} }}
+	bl2 := layerfetcher.SyncFactory("TextAtxQueue_2", n2)
+	bl2.peers = layerfetcher.PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}
 
 	bl1.Start()
 	bl2.Start()
@@ -163,10 +164,10 @@ func TestBlockListener_TestTxQueueHandle(t *testing.T) {
 	n2 := sim.NewNode()
 	//n2.RegisterGossipProtocol(NewBlockProtocol)
 
-	bl1 := SyncFactory("TextTxQueueHandle_1", n1)
-	bl1.peers = PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n2.PublicKey()} }}
-	bl2 := SyncFactory("TextTxQueueHandle_2", n2)
-	bl2.peers = PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}
+	bl1 := layerfetcher.SyncFactory("TextTxQueueHandle_1", n1)
+	bl1.peers = layerfetcher.PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n2.PublicKey()} }}
+	bl2 := layerfetcher.SyncFactory("TextTxQueueHandle_2", n2)
+	bl2.peers = layerfetcher.PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}
 
 	bl1.Start()
 	bl2.Start()
@@ -202,10 +203,10 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 	n2 := sim.NewNode()
 	//n2.RegisterGossipProtocol(NewBlockProtocol)
 
-	bl1 := SyncFactory("TextAtxQueueHandle_1", n1)
-	bl1.peers = PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n2.PublicKey()} }}
-	bl2 := SyncFactory("TextAtxQueueHandle_2", n2)
-	bl2.peers = PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}
+	bl1 := layerfetcher.SyncFactory("TextAtxQueueHandle_1", n1)
+	bl1.peers = layerfetcher.PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n2.PublicKey()} }}
+	bl2 := layerfetcher.SyncFactory("TextAtxQueueHandle_2", n2)
+	bl2.peers = layerfetcher.PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}
 
 	bl1.Start()
 	bl2.Start()

@@ -35,7 +35,20 @@ type Syncer interface {
 	FetchAtxReferences(atx *types.ActivationTx) error
 	FetchPoetProof(poetProofRef []byte) error
 	ListenToGossip() bool
+	GetBlock(ID types.BlockID) error
+	GetTxs(IDs []types.TransactionID) error
+	GetBlocks(IDs []types.BlockID) error
+	GetAtxs(IDs []types.ATXID) error
 	IsSynced() bool
+}
+
+type Fetcher interface {
+	GetBlock(ID types.BlockID) error
+	GetAtx(ID types.ATXID) error
+	GetPoetProof(ID types.Hash32) error
+	GetTxs(IDs []types.TransactionID) error
+	GetBlocks(IDs []types.BlockID) error
+	GetAtxs(IDs []types.ATXID) error
 }
 
 // AddListener adds a listener to a specific gossip channel

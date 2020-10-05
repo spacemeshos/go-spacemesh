@@ -458,7 +458,7 @@ func addBlockWithTxs(r *require.Assertions, msh *Mesh, id types.LayerID, valid b
 	blk.Initialize()
 	err := msh.SaveContextualValidity(blk.ID(), valid)
 	r.NoError(err)
-	err = msh.AddBlockWithTxs(blk, txs, nil)
+	err = msh.AddBlockWithTxs(blk, txs)
 	r.NoError(err)
 	return blk
 }
@@ -483,7 +483,7 @@ func TestMesh_AddBlockWithTxs(t *testing.T) {
 
 	blk := types.NewExistingBlock(1, []byte("data"))
 
-	err := mesh.AddBlockWithTxs(blk, nil, nil)
+	err := mesh.AddBlockWithTxs(blk, nil)
 	r.EqualError(err, "failed to process ATXs: 💥")
 	_, err = meshDB.blocks.Get(blk.ID().Bytes())
 	r.EqualError(err, "leveldb: not found")

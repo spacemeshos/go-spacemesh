@@ -27,7 +27,7 @@ func createLayerWithAtx2(t require.TestingT, msh *mesh.Mesh, id types.LayerID, n
 			*block1.ActiveSet = append(*block1.ActiveSet, atx.ID())
 		}
 		block1.ViewEdges = append(block1.ViewEdges, views...)
-		err := msh.AddBlockWithTxs(block1, []*types.Transaction{}, atxs)
+		err := msh.AddBlockWithTxs(block1, []*types.Transaction{})
 		require.NoError(t, err)
 		created = append(created, block1.ID())
 	}
@@ -161,7 +161,7 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 			actualAtxs = atxs[i : i+1]
 		}
 		block1.Initialize()
-		err := msh.AddBlockWithTxs(block1, []*types.Transaction{}, actualAtxs)
+		err := msh.AddBlockWithTxs(block1, []*types.Transaction{})
 		require.NoError(t, err)
 		created = append(created, block1.ID())
 	}

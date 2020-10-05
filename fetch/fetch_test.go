@@ -7,6 +7,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -34,9 +36,10 @@ type mockRequest struct {
 	ErrCalledNum map[types.Hash32]int
 }
 
-func (m *mockRequest) OkCallback(hash types.Hash32, buf []byte) {
+func (m *mockRequest) OkCallback(hash types.Hash32, buf []byte) error{
 	m.OkCalled[hash] = buf
 	m.OkCalledNum[hash]++
+	return nil
 }
 
 func (m *mockRequest) ErrCallback(hash types.Hash32, err error) {
@@ -50,6 +53,30 @@ type mockNet struct {
 	Responses   map[types.Hash32]responseMessage
 	SendAck     bool
 	AckChannel  chan struct{}
+}
+
+func (m mockNet) Start() error {
+	panic("implement me")
+}
+
+func (m mockNet) RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage {
+	panic("implement me")
+}
+
+func (m mockNet) RegisterDirectProtocol(protocol string) chan service.DirectMessage {
+	panic("implement me")
+}
+
+func (m mockNet) SubscribePeerEvents() (new chan p2pcrypto.PublicKey, del chan p2pcrypto.PublicKey) {
+	panic("implement me")
+}
+
+func (m mockNet) Broadcast(protocol string, payload []byte) error {
+	panic("implement me")
+}
+
+func (m mockNet) Shutdown() {
+	panic("implement me")
 }
 
 func (m mockNet) GetPeers() []p2ppeers.Peer {
@@ -90,6 +117,7 @@ func defaultFetch() (*Fetch, *mockNet) {
 		3,
 		3,
 		3,
+		3,
 	}
 
 	mckNet := &mockNet{make(map[types.Hash32]int),
@@ -124,11 +152,11 @@ func TestFetch_GetHash(t *testing.T) {
 	hint2 := Hint("db2")
 
 	//test hash aggregation
-	f.GetHash(h1, hint, req.OkCallback, req.ErrCallback, true)
-	f.GetHash(h1, hint, req.OkCallback, req.ErrCallback, true)
+	f.GetHash(h1, hint, req.OkCallback, true)
+	f.GetHash(h1, hint, req.OkCallback, true)
 
 	h2 := randomHash()
-	f.GetHash(h2, hint2, req.OkCallback, req.ErrCallback, true)
+	f.GetHash(h2, hint2, req.OkCallback, true)
 
 	//test aggregation by hint
 
@@ -150,7 +178,6 @@ func TestFetch_requestHashFromPeers_AggregateAndValidate(t *testing.T) {
 	hint := Hint("db")
 	request1 := request{
 		success:          req.OkCallback,
-		fail:             req.ErrCallback,
 		hash:             h1,
 		priority:         0,
 		validateResponse: false,
@@ -196,7 +223,6 @@ func TestFetch_GetHash_failNetwork(t *testing.T) {
 	hint := Hint("db")
 	request1 := request{
 		success:          req.OkCallback,
-		fail:             req.ErrCallback,
 		hash:             h1,
 		priority:         0,
 		validateResponse: false,
@@ -244,9 +270,9 @@ func TestFetch_requestHashFromPeers_BatchRequestMax(t *testing.T) {
 	defer f.Stop()
 	f.Start()
 	//test hash aggregation
-	f.GetHash(h1, hint, req.OkCallback, req.ErrCallback, false)
-	f.GetHash(h2, hint, req.OkCallback, req.ErrCallback, false)
-	f.GetHash(h3, hint, req.OkCallback, req.ErrCallback, false)
+	f.GetHash(h1, hint, req.OkCallback, false)
+	f.GetHash(h2, hint, req.OkCallback, false)
+	f.GetHash(h3, hint, req.OkCallback, false)
 
 	//since we have a batch of 2 we should call send twice - of not we should fail
 	select {

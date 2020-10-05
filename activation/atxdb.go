@@ -728,52 +728,78 @@ func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.Activ
 }
 
 // HandleGossipAtx handles the atx gossip data channel
-func (db *DB) HandleGossipAtx(data service.GossipMessage, syncer service.Syncer) {
+func (db *DB) HandleGossipAtx(data service.GossipMessage, syncer service.Fetcher) {
 	if data == nil {
 		return
 	}
-	atx, err := types.BytesToAtx(data.Bytes())
+	err :=  db.HandleAtxData(data.Bytes(), syncer)
 	if err != nil {
-		db.log.Error("cannot parse incoming ATX")
+		db.log.Error("%v" , err)
 		return
+	}
+	data.ReportValidation(AtxProtocol)
+}
+
+func (db *DB) HandleAtxData(data []byte, syncer service.Fetcher) error{
+	atx, err := types.BytesToAtx(data)
+	if err != nil {
+		return fmt.Errorf("cannot parse incoming ATX")
 	}
 	atx.CalcAndSetID()
 
-	db.log.With().Info("got new ATX", atx.Fields(len(data.Bytes()))...)
+	db.log.With().Info("got new ATX", atx.Fields(len(data))...)
 
 	//todo fetch from neighbour (#1925)
 	if atx.Nipst == nil {
 		db.log.Panic("nil nipst in gossip")
-		return
+		return fmt.Errorf("nil nipst in gossip")
 	}
 
-	if err := syncer.FetchPoetProof(atx.GetPoetProofRef()); err != nil {
-		db.log.Warning("received ATX (%v) with syntactically invalid or missing PoET proof (%x): %v",
+	if err := syncer.GetPoetProof(atx.GetPoetProofRef()); err != nil {
+		return fmt.Errorf("received ATX (%v) with syntactically invalid or missing PoET proof (%x): %v",
 			atx.ShortString(), atx.GetShortPoetProofRef(), err)
-		return
+
 	}
 
-	if err := syncer.FetchAtxReferences(atx); err != nil {
-		db.log.With().Warning("received ATX with missing references of prev or pos id",
+	if err := db.FetchAtxReferences(atx, syncer); err != nil {
+		return fmt.Errorf("received ATX with missing references of prev or pos id %v, %v, %v, %v",
 			atx.ID(), atx.PrevATXID, atx.PositioningATX, log.Err(err))
-		return
 	}
 
 	err = db.SyntacticallyValidateAtx(atx)
 	events.Publish(events.ValidAtx{ID: atx.ShortString(), Valid: err == nil})
 	if err != nil {
-		db.log.Warning("received syntactically invalid ATX %v: %v", atx.ShortString(), err)
-		// TODO: blacklist peer
-		return
+		return fmt.Errorf("received syntactically invalid ATX %v: %v", atx.ShortString(), err)
 	}
 
-	//db.pool.Put(atx)
 	err = db.ProcessAtx(atx)
 	if err != nil {
-		db.log.Warning("cannot process ATX %v: %v", atx.ShortString(), err)
+		return fmt.Errorf("cannot process ATX %v: %v", atx.ShortString(), err)
 		// TODO: blacklist peer
-		return
 	}
-	data.ReportValidation(AtxProtocol)
+
 	db.log.With().Info("stored and propagated new syntactically valid ATX", atx.ID())
+	return nil
+}
+
+// FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db
+func (db *DB) FetchAtxReferences(atx *types.ActivationTx, f service.Fetcher) error {
+	if atx.PositioningATX != *types.EmptyATXID {
+		db.log.Info("going to fetch pos atx %v of atx %v", atx.PositioningATX.ShortString(), atx.ID().ShortString())
+		err := f.GetAtx(atx.PositioningATX)
+		if err != nil {
+			return err
+		}
+	}
+
+	if atx.PrevATXID != *types.EmptyATXID {
+		db.log.Info("going to fetch prev atx %v of atx %v", atx.PrevATXID.ShortString(), atx.ID().ShortString())
+		err := f.GetAtx(atx.PrevATXID)
+		if err != nil {
+			return err
+		}
+	}
+	db.log.Info("done fetching references for atx %v", atx.ID().ShortString())
+
+	return nil
 }
