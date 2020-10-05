@@ -1,1 +1,1 @@
-statefulset.yaml, pipeline-config.yml, patterns-config.yaml, files-config.yaml, service.yaml, serviceaccount.yaml, poddisruptionbudget.yaml
+pipeline-config.yml, patterns-config.yaml, files-config.yaml, statefulset.yaml, service.yaml, serviceaccount.yaml, poddisruptionbudget.yaml

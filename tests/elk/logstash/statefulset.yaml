@@ -25,11 +25,33 @@ spec:
       securityContext:
         runAsUser: 1000
         fsGroup: 1000
+
       initContainers:
+        - name: configure-logstash
+          #securityContext:
+          #  runAsUser: 0
+          #  privileged: true
+          image: "docker.elastic.co/logstash/logstash-oss:7.9.2"
+          imagePullPolicy: "IfNotPresent"
+          command:
+            - "cp"
+            - "-f"
+            - "/usr/share/logstash/config/log4j2.properties"
+            - "/usr/share/logstash/files/jvm.options"
+            - "/usr/share/logstash/files/logstash.yml"
+            - "/usr/share/logstash/config1/"
+          resources:
+            {}
+          volumeMounts:
+            - mountPath: /usr/share/logstash/files
+              name: files
+            - mountPath: /usr/share/logstash/config1
+              name: config
+
       containers:
         ## logstash
         - name: logstash
-          image: "docker.elastic.co/logstash/logstash-oss:7.1.1"
+          image: "docker.elastic.co/logstash/logstash-oss:7.9.2"
           imagePullPolicy: IfNotPresent
           ports:
             - name: monitor
@@ -54,11 +76,6 @@ spec:
               value: "0.0.0.0"
             - name: HTTP_PORT
               value: "9600"
-            ## Elasticsearch output
-            - name: ELASTICSEARCH_HOST
-              value: "elasticsearch-client.default.svc.cluster.local"
-            - name: ELASTICSEARCH_PORT
-              value: "9200"
             # Logstash Java Options
             - name: LS_JAVA_OPTS
               value: -Xmx1g -Xms1g
@@ -88,6 +105,8 @@ spec:
               name: files
             - mountPath: /usr/share/logstash/pipeline
               name: pipeline
+            - mountPath: /usr/share/logstash/config
+              name: config
       serviceAccountName: logstash
       terminationGracePeriodSeconds: 30
       volumes:
@@ -100,6 +119,10 @@ spec:
         - name: pipeline
           configMap:
             name: logstash-pipeline
+        - name: config
+          emptyDir: {}
+
+
   volumeClaimTemplates:
     - metadata:
         name: data

@@ -5,7 +5,7 @@ metadata:
   namespace: NAMESPACE
   labels:
     app: "filebeat"
-    chart: "filebeat-8.0.0-SNAPSHOT"
+    chart: "filebeat"
     heritage: "Helm"
 spec:
   selector:
@@ -21,7 +21,7 @@ spec:
       name: "filebeat"
       labels:
         app: "filebeat"
-        chart: "filebeat-8.0.0-SNAPSHOT"
+        chart: "filebeat"
         heritage: "Helm"
     spec:
       serviceAccountName: filebeat
@@ -46,7 +46,7 @@ spec:
             path: /var/run/docker.sock
       containers:
         - name: "filebeat"
-          image: "docker.elastic.co/beats/filebeat:8.0.0-SNAPSHOT"
+          image: "docker.elastic.co/beats/filebeat:7.9.2"
           imagePullPolicy: "IfNotPresent"
           args:
             - "-e"

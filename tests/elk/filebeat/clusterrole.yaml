@@ -5,7 +5,7 @@ metadata:
   namespace: NAMESPACE
   labels:
     app: "filebeat"
-    chart: "filebeat-8.0.0-SNAPSHOT"
+    chart: "filebeat"
     heritage: "Helm"
 rules:
   - apiGroups:

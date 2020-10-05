@@ -39,6 +39,8 @@ data:
         hosts => ["elasticsearch-master:9200"]
         manage_template => false
         index => "%{[@metadata][beat]}-%{+YYYY.MM.dd}"
+        user => "elastic"
+        password => "gavradon"
       }
       # kafka {
       #   ## ref: https://www.elastic.co/guide/en/logstash/current/plugins-outputs-kafka.html

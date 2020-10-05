@@ -4,7 +4,7 @@ metadata:
   name: fluent-bit-config
   labels:
     app: fluent-bit
-    chart: fluent-bit-2.4.2
+    chart: fluent-bit
     heritage: Helm
 data:
   fluent-bit-service.conf: |-

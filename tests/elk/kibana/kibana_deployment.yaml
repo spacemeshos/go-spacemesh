@@ -31,7 +31,7 @@ spec:
                 - ALL
             runAsNonRoot: true
             runAsUser: 1000
-          image: "docker.elastic.co/kibana/kibana:8.0.0-SNAPSHOT"
+          image: "docker.elastic.co/kibana/kibana:7.9.2"
           imagePullPolicy: "IfNotPresent"
           env:
             - name: ELASTICSEARCH_HOSTS
@@ -40,6 +40,10 @@ spec:
               value: "0.0.0.0"
             - name: NODE_OPTIONS
               value: --max-old-space-size=1800
+            - name: ELASTICSEARCH_USERNAME
+              value: elastic
+            - name: ELASTICSEARCH_PASSWORD
+              value: gavradon
           readinessProbe:
             failureThreshold: 3
             initialDelaySeconds: 15
@@ -77,6 +81,6 @@ spec:
               cpu: 1000m
               memory: 2Gi
             requests:
-              cpu: 1000m
-              memory: 2Gi
+              cpu: 100m
+              memory: 512Mi
           volumeMounts:

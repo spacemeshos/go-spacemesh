@@ -3,7 +3,7 @@ kind: ClusterRole
 metadata:
   labels:
     app: fluent-bit
-    chart: fluent-bit-2.4.2
+    chart: fluent-bit
     heritage: Helm
   name: fluent-bit
 rules:

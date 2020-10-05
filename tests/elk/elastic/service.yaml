@@ -8,7 +8,8 @@ metadata:
     chart: "elasticsearch"
     app: "elasticsearch-master"
   annotations:
-    cloud.google.com/load-balancer-type: "Internal"
+    {}
+    #cloud.google.com/load-balancer-type: "Internal"
 spec:
   type: LoadBalancer
   selector:
