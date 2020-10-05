@@ -385,6 +385,6 @@ func TestNIPSTBuilder_Close(t *testing.T) {
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 	hash := types.BytesToHash([]byte("anton"))
 	npst, err := nb.BuildNIPST(&hash, nil, closedChan) // closedChan will timeout immediately
-	r.IsType(&StopRequestedError{}, err)
+	r.IsType(StopRequestedError{}, err)
 	r.Nil(npst)
 }

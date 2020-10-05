@@ -89,7 +89,7 @@ type NodeID struct {
 // String returns a string representation of the NodeID, for logging purposes.
 // It implements the Stringer interface.
 func (id NodeID) String() string {
-	return id.Key + string(id.VRFPublicKey)
+	return id.Key + "|" + util.Bytes2Hex(id.VRFPublicKey)
 }
 
 // ToBytes returns the byte representation of the Edwards public key.
@@ -152,7 +152,7 @@ func (b *BlockHeader) AddView(id BlockID) {
 type MiniBlock struct {
 	BlockHeader
 	TxIDs []TransactionID
-	//ATXIDs    []ATXID
+	// ATXIDs    []ATXID
 	ActiveSet *[]ATXID
 	RefBlock  *BlockID
 }

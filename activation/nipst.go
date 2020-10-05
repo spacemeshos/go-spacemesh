@@ -193,7 +193,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired, stop cha
 			nb.poetDB.UnsubscribeFromProofRef(nb.state.PoetServiceID, nb.state.PoetRound.ID)
 			return nil, fmt.Errorf("atx expired while waiting for poet proof, target epoch ended")
 		case <-stop:
-			return nil, &StopRequestedError{}
+			return nil, StopRequestedError{}
 		}
 
 		membership, err := nb.poetDB.GetMembershipMap(poetProofRef)

@@ -56,7 +56,7 @@ func (suite *AppTestSuite) TearDownTest() {
 	if err := os.RemoveAll("../tmp"); err != nil {
 		log.Error("error while cleaning up tmp dir: %v", err)
 	}
-	//poet should clean up after himself
+	// poet should clean up after himself
 	if matches, err := filepath.Glob("*.bin"); err != nil {
 		log.Error("error while finding PoET bin files: %v", err)
 	} else {
@@ -90,14 +90,14 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 var tests = []TestScenario{txWithRunningNonceGenerator([]int{}), sameRootTester([]int{0}), reachedEpochTester([]int{}), txWithUnorderedNonceGenerator([]int{1})}
 
 func (suite *AppTestSuite) TestMultipleNodes() {
-	//suite.T().Skip()
-	//EntryPointCreated <- true
+	// suite.T().Skip()
+	// EntryPointCreated <- true
 	net := service.NewSimulator()
 	const (
 		numberOfEpochs = 5 // first 2 epochs are genesis
 		numOfInstances = 5
 	)
-	//addr := address.BytesToAddress([]byte{0x01})
+	// addr := address.BytesToAddress([]byte{0x01})
 	cfg := getTestDefaultConfig(numOfInstances)
 	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
 	path := "../tmp/test/state_" + time.Now().String()
@@ -125,11 +125,11 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 
 	ActivateGrpcServer(suite.apps[0])
 
-	if err := poetHarness.Start([]string{"127.0.0.1:9091"}); err != nil {
+	if err := poetHarness.Start([]string{"127.0.0.1:9094"}); err != nil {
 		log.Panic("failed to start poet server: %v", err)
 	}
 
-	//defer GracefulShutdown(suite.apps)
+	// defer GracefulShutdown(suite.apps)
 
 	timeout := time.After(6 * 60 * time.Second)
 	setupTests(suite)
@@ -155,7 +155,7 @@ loop:
 	// this tests loading of pervious state, mabe it's not the best place to put this here...
 	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, rng, path+"a", rolacle, poetHarness.HTTPPoetClient, clock, net)
 	assert.NoError(suite.T(), err)
-	//test that loaded root equals
+	// test that loaded root equals
 	assert.Equal(suite.T(), oldRoot, smApp.state.GetStateRoot())
 	// start and stop and test for no panics
 	smApp.startServices()
@@ -244,7 +244,7 @@ func txWithRunningNonceGenerator(dependancies []int) TestScenario {
 			}
 			txbytes, _ := types.InterfaceToBytes(tx)
 			pbMsg := pb.SignedTransaction{Tx: txbytes}
-			//_ = suite.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
+			// _ = suite.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
 			_, err = suite.apps[0].grpcAPIService.SubmitTransaction(nil, &pbMsg)
 			assert.NoError(suite.T(), err)
 		}
@@ -348,7 +348,7 @@ func runTests(suite *AppTestSuite, finished map[int]bool) bool {
 				return false
 			}
 		} else {
-			//test didnt run yet
+			// test didnt run yet
 			return false
 		}
 	}
@@ -431,47 +431,58 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 		log.Info("patient %v layer %v, blocks %v", suite.apps[0].nodeID.String(), id, len(l))
 	}
 
-	firstEpochBlocks := 0
+	genesisBlocks := 0
 	for i := 0; i < layersPerEpoch*2; i++ {
 		if l, ok := patient.layertoblocks[types.LayerID(i)]; ok {
-			firstEpochBlocks += len(l)
+			genesisBlocks += len(l)
 		}
 	}
 
 	// assert number of blocks
 	totalEpochs := int(untilLayer.GetEpoch()) + 1
-	exp := (layerAvgSize * layersPerEpoch) / (totalEpochs - 2)
-	act := totalBlocks - firstEpochBlocks
+	exp := layerAvgSize * layersPerEpoch * (totalEpochs - 2)
+	act := totalBlocks - genesisBlocks
 	assert.Equal(suite.T(), exp, act,
-		fmt.Sprintf("not good num of blocks got: %v, want: %v. totalBlocks: %v, firstEpochBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v datamap: %v",
-			act, exp, totalBlocks, firstEpochBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, datamap))
+		fmt.Sprintf("not good num of blocks got: %v, want: %v. totalBlocks: %v, genesisBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v datamap: %v",
+			act, exp, totalBlocks, genesisBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, datamap))
 
-	firstAp := suite.apps[0]
-	atxDb := firstAp.blockListener.AtxDB.(*activation.DB)
-	atxID, err := atxDb.GetNodeLastAtxID(firstAp.nodeID)
-	assert.NoError(suite.T(), err)
-
-	atx, err := atxDb.GetAtxHeader(atxID)
-	assert.NoError(suite.T(), err)
-	atxWeight := atx.GetWeight()
-
-	totalWeightAllEpochs := uint64(0)
-	for atx != nil {
-		log.Info("adding atx. pub layer: %v, target epoch: %v, weight: %v",
-			atx.PubLayerID, atx.TargetEpoch(), atx.GetWeight())
-		totalWeightAllEpochs += atx.GetWeight()
-		atx, _ = atxDb.GetAtxHeader(atx.PrevATXID)
-	}
+	totalWeightAllEpochs, atxWeight := calcTotalWeight(assert.New(suite.T()), suite.apps)
 
 	// assert number of ATXs
 	allMiners := len(suite.apps)
 	expectedWeight := uint64(totalEpochs*allMiners) * atxWeight
-	assert.Equal(suite.T(), expectedWeight, totalWeightAllEpochs, fmt.Sprintf("not good num of atx weight got: %v, want: %v. totalEpochs: %v, allMiners: %v, atxWeight: %v", totalWeightAllEpochs, expectedWeight, totalEpochs, allMiners, atxWeight))
+	assert.Equal(suite.T(), expectedWeight, totalWeightAllEpochs, fmt.Sprintf("not good total atx weight. got: %v, want: %v.\ntotalEpochs: %v, allMiners: %v, atxWeight: %v", totalWeightAllEpochs, expectedWeight, totalEpochs, allMiners, atxWeight))
+}
+
+func calcTotalWeight(assert *assert.Assertions, apps []*SpacemeshApp) (totalWeightAllEpochs, atxWeight uint64) {
+	app := apps[0]
+	atxDb := app.blockListener.AtxDB.(*activation.DB)
+
+	atxID, err := atxDb.GetNodeLastAtxID(app.nodeID)
+	assert.NoError(err)
+	atx, err := atxDb.GetAtxHeader(atxID)
+	assert.NoError(err)
+	atxWeight = atx.GetWeight()
+
+	for _, app := range apps {
+		atxID, err := atxDb.GetNodeLastAtxID(app.nodeID)
+		assert.NoError(err)
+
+		for atxID != *types.EmptyATXID {
+			atx, err := atxDb.GetAtxHeader(atxID)
+			assert.NoError(err)
+			totalWeightAllEpochs += atx.GetWeight()
+			log.Info("added atx. pub layer: %v, target epoch: %v, weight: %v",
+				atx.PubLayerID, atx.TargetEpoch(), atx.GetWeight())
+			atxID = atx.PrevATXID
+		}
+	}
+	return totalWeightAllEpochs, atxWeight
 }
 
 func (suite *AppTestSuite) validateLastATXTotalWeight(app *SpacemeshApp, numberOfEpochs int) {
 	atxs := app.atxDb.GetEpochAtxs(types.EpochID(numberOfEpochs - 1))
-	suite.True(len(atxs) == len(suite.apps), "atxs: %v node: %v", len(atxs), app.nodeID.Key[:5])
+	suite.Len(atxs, len(suite.apps), "node: %v", app.nodeID.ShortString())
 
 	atx, err := app.atxBuilder.GetPrevAtx(app.nodeID)
 	suite.NoError(err)
@@ -480,8 +491,12 @@ func (suite *AppTestSuite) validateLastATXTotalWeight(app *SpacemeshApp, numberO
 		atx, _ := app.atxDb.GetAtxHeader(atxID)
 		totalWeight += atx.GetWeight()
 	}
-	suite.Equal(uint64(len(suite.apps))*atx.GetWeight(), totalWeight,
-		"atx: %v node: %v", atx.ShortString(), app.nodeID.Key[:5])
+	if atx != nil {
+		suite.Equal(uint64(len(suite.apps))*atx.GetWeight(), totalWeight,
+			"atx: %v node: %v", atx.ShortString(), app.nodeID.Key[:5])
+	} else {
+		suite.Fail("no latest ATX")
+	}
 }
 
 // travis has a 10 minutes timeout
@@ -503,7 +518,7 @@ func TestAppTestSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	//defer leaktest.Check(t)()
+	// defer leaktest.Check(t)()
 	term := make(chan struct{})
 	go patchTravisTimeout(term)
 	suite.Run(t, new(AppTestSuite))
@@ -519,7 +534,7 @@ func TestShutdown(t *testing.T) {
 	time.Sleep(3 * time.Second)
 	gCount := runtime.NumGoroutine()
 	net := service.NewSimulator()
-	//defer leaktest.Check(t)()
+	// defer leaktest.Check(t)()
 	r := require.New(t)
 
 	smApp := NewSpacemeshApp()

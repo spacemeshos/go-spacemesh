@@ -624,7 +624,7 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 		}
 		atxs = append(atxs, a)
 	}
-	db.log.Info("returned epoch %v atxs %v %v", epochID, len(atxs), atxs)
+	db.log.Info("returned %v atxs for epoch %v: %x", len(atxs), epochID, atxs)
 	return atxs
 }
 

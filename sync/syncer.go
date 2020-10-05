@@ -587,7 +587,7 @@ func (s *Syncer) syncEpochActivations(epoch types.EpochID) error {
 		return err
 	}
 
-	s.Info("fetched %v atxs for epoch %v actual map %v", len(atxIds), epoch, atxIds)
+	s.Info("fetched %v atxs for epoch %v: %x", len(atxIds), epoch, atxIds)
 
 	_, err = s.atxQueue.HandleAtxs(atxIds)
 

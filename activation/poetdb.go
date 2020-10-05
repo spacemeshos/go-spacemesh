@@ -88,7 +88,11 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 		return fmt.Errorf("failed to store poet proof and index for poetId %x round %s: %v",
 			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
 	}
-	db.log.Debug("stored proof (id: %x) for round %d PoET id %x", ref[:5], proofMessage.RoundID, proofMessage.PoetServiceID[:5])
+	db.log.With().Info("stored PoET proof",
+		log.String("poet_proof_id", fmt.Sprintf("%x", ref)[:5]),
+		log.String("round_id", proofMessage.RoundID),
+		log.String("poet_service_id", fmt.Sprintf("%x", proofMessage.PoetServiceID)[:5]),
+	)
 	db.publishProofRef(key, ref)
 	return nil
 }

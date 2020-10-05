@@ -274,7 +274,7 @@ func (s SpacemeshGrpcService) startServiceInternal() {
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Error("failed to listen", err)
+		log.With().Error("failed to listen", log.Err(err))
 		return
 	}
 

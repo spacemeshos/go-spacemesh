@@ -171,7 +171,7 @@ func (b *Builder) waitOrStop(ch chan struct{}) error {
 	case <-ch:
 		return nil
 	case <-b.stop:
-		return &StopRequestedError{}
+		return StopRequestedError{}
 	}
 }
 
@@ -198,8 +198,10 @@ func (b *Builder) loop() {
 			if _, stopRequested := err.(StopRequestedError); stopRequested {
 				return
 			}
+			currentLayer := b.layerClock.GetCurrentLayer()
+			b.log.With().Error("atx construction errored", log.Err(err), currentLayer, currentLayer.GetEpoch())
 			events.ReportAtxCreated(false, uint64(b.currentEpoch()), "")
-			<-b.layerClock.AwaitLayer(b.layerClock.GetCurrentLayer() + 1)
+			<-b.layerClock.AwaitLayer(currentLayer + 1)
 		}
 	}
 }
@@ -416,7 +418,7 @@ func (b *Builder) PublishActivationTx() error {
 		commitment = b.commitment
 	}
 
-	atx := types.NewActivationTx(*b.challenge, b.getCoinbaseAccount(), nipst, 0, commitment)
+	atx := types.NewActivationTx(*b.challenge, b.getCoinbaseAccount(), nipst, b.committedSpace, commitment)
 
 	atxReceived := b.db.AwaitAtx(atx.ID())
 	defer b.db.UnsubscribeAtx(atx.ID())
@@ -441,10 +443,10 @@ func (b *Builder) PublishActivationTx() error {
 			b.discardChallenge()
 			return fmt.Errorf("target epoch has passed")
 		case <-b.stop:
-			return &StopRequestedError{}
+			return StopRequestedError{}
 		}
 	case <-b.stop:
-		return &StopRequestedError{}
+		return StopRequestedError{}
 	}
 	b.discardChallenge()
 	return nil
