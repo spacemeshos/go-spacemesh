@@ -732,15 +732,15 @@ func (db *DB) HandleGossipAtx(data service.GossipMessage, syncer service.Fetcher
 	if data == nil {
 		return
 	}
-	err :=  db.HandleAtxData(data.Bytes(), syncer)
+	err := db.HandleAtxData(data.Bytes(), syncer)
 	if err != nil {
-		db.log.Error("%v" , err)
+		db.log.Error("%v", err)
 		return
 	}
 	data.ReportValidation(AtxProtocol)
 }
 
-func (db *DB) HandleAtxData(data []byte, syncer service.Fetcher) error{
+func (db *DB) HandleAtxData(data []byte, syncer service.Fetcher) error {
 	atx, err := types.BytesToAtx(data)
 	if err != nil {
 		return fmt.Errorf("cannot parse incoming ATX")

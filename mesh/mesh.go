@@ -568,13 +568,13 @@ func (msh *Mesh) invalidateFromPools(blk *types.MiniBlock) {
 	}
 }
 
-func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error{
+func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
 	// Store transactions (doesn't have to be rolled back if other writes fail)
 	if len(blk.TxIDs) == 0 {
 		return nil
 	}
-	txs := make([]*types.Transaction, 0 , len(blk.TxIDs))
-	for _,txID := range blk.TxIDs {
+	txs := make([]*types.Transaction, 0, len(blk.TxIDs))
+	for _, txID := range blk.TxIDs {
 		tx, err := msh.txPool.Get(txID)
 		if err != nil {
 			// if the transaction is not in the pool it could have been

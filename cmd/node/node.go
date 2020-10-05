@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -157,7 +158,7 @@ type SpacemeshApp struct {
 	blockListener     *layerfetcher.BlockListener
 	state             *state.TransactionProcessor
 	blockProducer     *miner.BlockBuilder
-	oracle            *miner.Oracle
+	oracle            *blocks.Oracle
 	txProcessor       *state.TransactionProcessor
 	mesh              *mesh.Mesh
 	gossipListener    *service.Listener
@@ -505,7 +506,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	processor := state.NewTransactionProcessor(db, appliedTxs, meshAndPoolProjector, app.txPool, lg.WithName("state"))
 
 	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
-	beaconProvider := &miner.EpochBeaconProvider{}
+	beaconProvider := &blocks.EpochBeaconProvider{}
 
 	var msh *mesh.Mesh
 	var trtl tortoise.Tortoise
@@ -518,7 +519,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		app.setupGenesis(processor, msh)
 	}
-	eValidator := miner.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, msh, app.addLogger(BlkEligibilityLogger, lg))
+	eValidator := blocks.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, msh, app.addLogger(BlkEligibilityLogger, lg))
 
 	syncConf := sync.Configuration{Concurrency: 4,
 		LayerSize:       int(layerSize),
@@ -540,7 +541,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	}
 
 	syncer := sync.NewSync(swarm, msh, app.txPool, atxdb, eValidator, poetDb, syncConf, clock, app.addLogger(SyncLogger, lg))
-	blockOracle := miner.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
+	blockOracle := blocks.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
 	var hOracle hare.Rolacle

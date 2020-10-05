@@ -36,7 +36,7 @@ type mockRequest struct {
 	ErrCalledNum map[types.Hash32]int
 }
 
-func (m *mockRequest) OkCallback(hash types.Hash32, buf []byte) error{
+func (m *mockRequest) OkCallback(hash types.Hash32, buf []byte) error {
 	m.OkCalled[hash] = buf
 	m.OkCalledNum[hash]++
 	return nil

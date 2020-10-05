@@ -422,7 +422,7 @@ func (m *DB) writeTransactions(l types.LayerID, txs []*types.Transaction) error 
 	return nil
 }
 
-func (m *DB) WriteTransaction(l types.LayerID, t *types.Transaction) error{
+func (m *DB) WriteTransaction(l types.LayerID, t *types.Transaction) error {
 	bytes, err := types.InterfaceToBytes(newDbTransaction(t))
 	if err != nil {
 		return fmt.Errorf("could not marshall tx %v to bytes: %v", t.ID().ShortString(), err)

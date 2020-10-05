@@ -3,11 +3,11 @@ package layerfetcher
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"sync"
@@ -40,7 +40,7 @@ type Logic struct {
 	blockHashErrors  map[types.LayerID]int
 	layerResults     map[types.LayerID][]chan LayerPromiseResult
 	atxs             AtxHandler
-	blockHandler     *mesh.BlockHandler
+	blockHandler     *blocks.BlockHandler
 	layerDB          LayerDB
 	gossipBlocks     GossipBlocks
 	layerResM        sync.RWMutex
@@ -50,7 +50,7 @@ type Config struct {
 	RequestTimeout int
 }
 
-func NewLogic(cfg Config, blocks *mesh.BlockHandler, atxs AtxHandler, network service.Service, fetcher fetch.Fetcher, log log.Log) *Logic {
+func NewLogic(cfg Config, blocks *blocks.BlockHandler, atxs AtxHandler, network service.Service, fetcher fetch.Fetcher, log log.Log) *Logic {
 
 	srv := fetch.NewMessageNetwork(cfg.RequestTimeout, network, layersProtocol, log)
 	l := &Logic{
@@ -78,7 +78,7 @@ const (
 	TXDB          = 4
 	POETDB        = 5
 	LayerHashDB   = 6
-	ATXIDsDB   =7
+	ATXIDsDB      = 7
 
 	layersProtocol = "/layers/2.0/"
 )
@@ -258,7 +258,7 @@ func (l *Logic) receiveBlockHashes(layer types.LayerID, data []byte, extErr erro
 	l.notifyLayerPromiseResult(layer, nil)
 }
 
-func (l *Logic) HandleEpochATXs(hash types.Hash32, data []byte) error{
+func (l *Logic) HandleEpochATXs(hash types.Hash32, data []byte) error {
 	var atxIDs []types.ATXID
 	err := types.BytesToInterface(data, atxIDs)
 	if err != nil {
@@ -268,7 +268,7 @@ func (l *Logic) HandleEpochATXs(hash types.Hash32, data []byte) error{
 	return l.GetAtxs(atxIDs)
 }
 
-func (l *Logic) GetEpochATXs(id types.EpochID) error{
+func (l *Logic) GetEpochATXs(id types.EpochID) error {
 	res := <-l.fetcher.GetHash(types.CalcHash32(id.ToBytes()), fetch.Hint(BlockDB), l.HandleEpochATXs, true)
 	return res.Err
 }

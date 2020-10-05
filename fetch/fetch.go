@@ -91,7 +91,7 @@ func (b *requestBatch) SetID() {
 }
 
 //ToMap converts the array of requests to map so it can be easily invalidated
-func (b requestBatch) ToMap() map[types.Hash32]requestMessage{
+func (b requestBatch) ToMap() map[types.Hash32]requestMessage {
 	m := make(map[types.Hash32]requestMessage)
 	for _, r := range b.requests {
 		m[r.Hash] = r
@@ -105,7 +105,6 @@ type responseBatch struct {
 	ID        types.Hash32
 	responses []responseMessage
 }
-
 
 // Config is the configuration file of the Fetch component
 type Config struct {
@@ -128,8 +127,8 @@ type MessageNetwork struct {
 func NewMessageNetwork(requestTimeOut int, net service.Service, protocol string, log log.Log) *MessageNetwork {
 	return &MessageNetwork{
 		server.NewMsgServer(net.(server.Service), protocol, time.Duration(requestTimeOut)*time.Second, make(chan service.DirectMessage, p2pconf.Values.BufferSize), log),
-			p2ppeers.NewPeers(net, log.WithName("peers")),
-			log,
+		p2ppeers.NewPeers(net, log.WithName("peers")),
+		log,
 	}
 }
 
@@ -158,8 +157,6 @@ type Fetch struct {
 	activeReqM           sync.RWMutex
 	activeBatchM         sync.RWMutex
 }
-
-
 
 // NewFetch creates a new FEtch struct
 func NewFetch(cfg Config, network service.Service, logger log.Log) *Fetch {
@@ -241,7 +238,7 @@ func (f *Fetch) FetchRequestHandler(data []byte) []byte {
 	}
 	resBatch := responseBatch{
 		ID:        requestBatch.ID,
-		responses: make([]responseMessage,0, len(requestBatch.requests)),
+		responses: make([]responseMessage, 0, len(requestBatch.requests)),
 	}
 	// this will iterate all requests and populate appropriate responses, if there are any missing items they will not
 	// be included in the response at all
@@ -450,8 +447,6 @@ func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
 	delete(f.activeBatches, batchHash)
 	f.activeBatchM.Unlock()
 }
-
-
 
 type HashDataPromiseResult struct {
 	Err  error

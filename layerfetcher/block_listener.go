@@ -81,5 +81,3 @@ func (bl *BlockListener) listenToGossipBlocks() {
 		}
 	}
 }
-
-

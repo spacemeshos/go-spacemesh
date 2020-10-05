@@ -1,14 +1,15 @@
-package mesh
+package blocks
 
 import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/miner"
+	mesh2 "github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
+
+const NewBlockProtocol = "newBlock"
 
 var (
 	errDupTx = errors.New("duplicate TransactionID in block")
@@ -26,8 +27,8 @@ type BlockHandler struct {
 	log.Log
 	traverse  forBlockInView
 	depth     int
-	mesh      Mesh
-	validator miner.BlockEligibilityValidator
+	mesh      mesh2.Mesh
+	validator BlockEligibilityValidator
 }
 
 func (bh BlockHandler) validateVotes(blk *types.Block) error {
@@ -67,10 +68,10 @@ func (bh *BlockHandler) HandleBlock(data service.GossipMessage, sync service.Fet
 		bh.Error("%v", err)
 		return
 	}
-	data.ReportValidation(config.NewBlockProtocol)
+	data.ReportValidation(NewBlockProtocol)
 }
 
-func (bh *BlockHandler) HandleBlockData(data []byte, sync service.Fetcher) error{
+func (bh *BlockHandler) HandleBlockData(data []byte, sync service.Fetcher) error {
 	var blk types.Block
 	err := types.BytesToInterface(data, &blk)
 	if err != nil {

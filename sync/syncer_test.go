@@ -240,6 +240,7 @@ func TestSyncer_Close(t *testing.T) {
 	assert.True(t, !ok, "channel 'exit' still open")
 
 }
+
 /*
 func TestSyncProtocol_BlockRequest(t *testing.T) {
 	signer := signing.NewEdSigner()
@@ -1169,6 +1170,7 @@ func (m *mockLayerValidator) ValidateLayer(lyr *types.Layer) {
 	m.validatedLayers[lyr.Index()] = struct{}{}
 	log.Info("Validated count %d", m.countValidate)
 }
+
 /*
 func TestSyncer_Synchronise(t *testing.T) {
 	r := require.New(t)
@@ -1796,4 +1798,3 @@ func closed(ch chan struct{}) bool {
 		return false
 	}
 }
-

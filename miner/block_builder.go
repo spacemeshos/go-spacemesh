@@ -6,8 +6,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -404,7 +404,7 @@ func (t *BlockBuilder) createBlockLoop() {
 						events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "cannot serialize block"})
 						return
 					}
-					err = t.network.Broadcast(config.NewBlockProtocol, bytes)
+					err = t.network.Broadcast(blocks.NewBlockProtocol, bytes)
 					if err != nil {
 						t.Log.Error("cannot send block %v", err)
 					}
