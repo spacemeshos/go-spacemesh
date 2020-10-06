@@ -146,14 +146,35 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}
 
 	timeout := time.After(6 * time.Minute)
-	setupTests(suite)
+
+	// Run setup first. We need to allow this to timeout, and monitor the failure channel too,
+	// as this can also loop forever.
+	doneChan := make(chan struct{})
+	go func() {
+		setupTests(suite)
+		close(doneChan)
+	}()
+
+loopSetup:
+	for {
+		select {
+		case <-doneChan:
+			break loopSetup
+		case <-timeout:
+			suite.T().Fatal("timed out")
+		case <-failChan:
+			suite.T().Fatal("error from poet harness")
+		}
+	}
+
 	finished := map[int]bool{}
 loop:
 	for {
 		select {
-		// Got a timeout! fail with a timeout error
 		case <-timeout:
 			suite.T().Fatal("timed out")
+		case <-failChan:
+			suite.T().Fatal("error from poet harness")
 		default:
 			if runTests(suite, finished) {
 				break loop
@@ -244,16 +265,12 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 		for i := 0; i < txsSent; i++ {
 			actNonce := getNonce()
 			log.Info("waiting for nonce: %d, current actual nonce: %d", i, actNonce)
-			timeout := time.After(30 * time.Second)
+
+			// Note: this may loop forever if the nonce is not advancing for some reason, but the entire
+			// setup process will timeout above if this happens
 			for i != actNonce {
-				select {
-				case <-timeout:
-					suite.FailNow("timed out waiting for account nonce to progress")
-				default:
-					time.Sleep(1 * time.Second)
-					actNonce = getNonce()
-					log.Info("actual nonce: %d", actNonce)
-				}
+				time.Sleep(1 * time.Second)
+				actNonce = getNonce()
 			}
 			tx, err := types.NewSignedTx(uint64(i), dst, 10, 1, 1, acc1Signer)
 			suite.NoError(err, "failed to create signed tx: %s", err)
