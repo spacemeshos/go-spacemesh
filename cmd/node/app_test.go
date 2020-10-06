@@ -3,11 +3,14 @@
 package node
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"io/ioutil"
+	lg "log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"testing"
 	"time"
@@ -102,14 +105,23 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	require.NoError(suite.T(), err, "failed creating poet client harness: %v", err)
 	suite.poetCleanup = poetHarness.Teardown
 
-	// Merge the poet output with the test output: this helps a lot with debugging
+	// Scan and print the poet output, and catch errors early
+	l := lg.New(os.Stderr, "[poet]\t", 0)
+	failChan := make(chan struct{})
 	go func() {
-		_, err = io.Copy(os.Stdout, poetHarness.Stdout)
-		require.NoError(suite.T(), err, "error reading from poet harness stdout")
-	}()
-	go func() {
-		_, err = io.Copy(os.Stderr, poetHarness.Stderr)
-		require.NoError(suite.T(), err, "error reading from poet harness stderr")
+		scanner := bufio.NewScanner(io.MultiReader(poetHarness.Stdout, poetHarness.Stderr))
+		for scanner.Scan() {
+			line := scanner.Text()
+			matched, err := regexp.MatchString(`\bERROR\b`, line)
+			require.NoError(suite.T(), err)
+			// Fail fast if we encounter a poet error
+			// Must use a channel since we're running inside a goroutine
+			if matched {
+				close(failChan)
+				suite.T().Fatalf("got error from poet: %s", line)
+			}
+			l.Println(line)
+		}
 	}()
 
 	rolacle := eligibility.New()
