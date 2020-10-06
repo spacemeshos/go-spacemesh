@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -18,6 +19,9 @@ import (
 // targeted by an HTTP client, in order to exercise functionality.
 type HTTPPoetHarness struct {
 	*HTTPPoetClient
+	Stdout   io.Reader
+	Stderr   io.Reader
+	ErrChan  <-chan error
 	Teardown func(cleanup bool) error
 	h        *integration.Harness
 }
@@ -44,6 +48,9 @@ func NewHTTPPoetHarness(disableBroadcast bool) (*HTTPPoetHarness, error) {
 		HTTPPoetClient: NewHTTPPoetClient(context.Background(), h.RESTListen()),
 		Teardown:       h.TearDown,
 		h:              h,
+		Stdout:         h.StdoutPipe(),
+		Stderr:         h.StderrPipe(),
+		ErrChan:        h.ProcessErrors(),
 	}, nil
 }
 

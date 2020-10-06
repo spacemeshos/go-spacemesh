@@ -4,6 +4,7 @@ package node
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -100,6 +101,16 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	require.NoError(suite.T(), err, "failed creating poet client harness: %v", err)
 	suite.poetCleanup = poetHarness.Teardown
+
+	// Merge the poet output with the test output: this helps a lot with debugging
+	go func() {
+		_, err = io.Copy(os.Stdout, poetHarness.Stdout)
+		require.NoError(suite.T(), err, "error reading from poet harness stdout")
+	}()
+	go func() {
+		_, err = io.Copy(os.Stderr, poetHarness.Stderr)
+		require.NoError(suite.T(), err, "error reading from poet harness stderr")
+	}()
 
 	rolacle := eligibility.New()
 	rng := BLS381.DefaultSeed()
