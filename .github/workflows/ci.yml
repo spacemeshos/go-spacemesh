@@ -7,6 +7,8 @@ env:
   CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
   CLUSTER_ZONE: ${{ secrets.CLUSTER_ZONE }}
   ES_PASSWD: ${{ secrets.ES_PASSWD }}
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 
 # Trigger the workflow on all pull requests, and on push to specific branches
 on:
@@ -23,9 +25,27 @@ on:
       - '**.md'
 
 jobs:
-  # always run the unit tests, and run them first, as they are relatively cheap
+  # stage 1: run these as a prerequisite as they're quick and cheap
+  quicktests:
+    runs-on: ubuntu-latest
+    steps:
+     - name: checkout
+       uses: actions/checkout@v2
+     - name: set up go
+       uses: actions/setup-go@v2
+       with:
+         go-version: ${{ env.go-version }}
+     - name: fmt, tidy, lint
+       run: |
+         make genproto
+         make test-tidy
+         make test-fmt
+         make lint
+
+  # stage 2: next run unit tests and app tests in parallel
   unittests:
     runs-on: ubuntu-latest
+    needs: quicktests
     steps:
      - name: checkout
        uses: actions/checkout@v2
@@ -35,22 +55,43 @@ jobs:
          go-version: ${{ env.go-version }}
      - name: setup env
        run: make
-     - name: fmt, tidy, lint
-       run: |
-         make genproto
-         make test-tidy
-         make test-fmt
-         make lint
      - name: unit tests (except app test)
        run: make test-no-app-test
+  apptests:
+    runs-on: ubuntu-latest
+    needs: quicktests
+    steps:
+     - name: checkout
+       uses: actions/checkout@v2
+     - name: set up go
+       uses: actions/setup-go@v2
+       with:
+         go-version: ${{ env.go-version }}
+     - name: setup env
+       run: make
      - name: app test
        run: make test-only-app-test
 
-  # run system tests second iff unit tests pass. run as independent jobs so they can run in parallel
+  # stage 3: next run docker push, as system tests rely on this
+  dockerpush:
+    # only run on push, not on pull_request
+    # note that this does NOT run on pushes to branch develop, see separate workflow file for that
+    if: github.event_name == 'push'
+    needs:
+      - unittests
+      - apptests
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: push to dockerhub
+        run: make dockerpush
+
+  # stage 4: finally run system tests in parallel if everything else passes
   systemtest-latenodes:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
-    needs: unittests
+    needs: dockerpush
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -60,7 +101,7 @@ jobs:
   systemtest-blocks-add-node:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
-    needs: unittests
+    needs: dockerpush
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -70,7 +111,7 @@ jobs:
   systemtest-hare-mining:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
-    needs: unittests
+    needs: dockerpush
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -80,7 +121,7 @@ jobs:
   systemtest-sync-blocks:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
-    needs: unittests
+    needs: dockerpush
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -90,7 +131,7 @@ jobs:
   systemtest-genesis-p2p:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
-    needs: unittests
+    needs: dockerpush
     runs-on: ubuntu-latest
     steps:
       - name: checkout
