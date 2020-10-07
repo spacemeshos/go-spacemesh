@@ -122,6 +122,12 @@ func (s SmesherService) SetMinGas(ctx context.Context, in *pb.SetMinGasRequest) 
 	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
 }
 
+// EstimatedRewards returns estimated smeshing rewards over the next epoch
+func (s SmesherService) EstimatedRewards(context.Context, *pb.EstimatedRewardsRequest) (*pb.EstimatedRewardsResponse, error) {
+	log.Info("GRPC SmesherService.EstimatedRewards")
+	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
+}
+
 // PostStatus returns post data status
 func (s SmesherService) PostStatus(ctx context.Context, in *empty.Empty) (*pb.PostStatusResponse, error) {
 	log.Info("GRPC SmesherService.PostStatus")
