@@ -65,6 +65,7 @@ const (
 	layerLatest           = 10
 	layerCurrent          = 12
 	rewardAmount          = 5551234
+	receiptIndex          = 42
 )
 
 var (
@@ -955,7 +956,7 @@ func TestMeshService(t *testing.T) {
 		{"CurrentLayer", func(t *testing.T) {
 			response, err := c.CurrentLayer(context.Background(), &pb.CurrentLayerRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(12), response.Layernum.Value)
+			require.Equal(t, uint32(12), response.Layernum.Number)
 		}},
 		{"CurrentEpoch", func(t *testing.T) {
 			response, err := c.CurrentEpoch(context.Background(), &pb.CurrentEpochRequest{})
@@ -998,7 +999,7 @@ func TestMeshService(t *testing.T) {
 					name: "MinLayer too high",
 					run: func(t *testing.T) {
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
-							MinLayer: layerCurrent + 1,
+							MinLayer: &pb.LayerNumber{Number: layerCurrent + 1},
 						})
 						require.Error(t, err, "expected an error")
 						require.Contains(t, err.Error(), "`LatestLayer` must be less than")
@@ -1310,8 +1311,8 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "end layer after current layer",
 					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
-						StartLayer: uint32(layerCurrent),
-						EndLayer:   uint32(layerCurrent + 2),
+						StartLayer: &pb.LayerNumber{Number: uint32(layerCurrent)},
+						EndLayer:   &pb.LayerNumber{Number: uint32(layerCurrent + 2)},
 					}),
 				},
 
@@ -1319,8 +1320,8 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "start layer after current layer",
 					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
-						StartLayer: uint32(layerCurrent + 2),
-						EndLayer:   uint32(layerCurrent + 3),
+						StartLayer: &pb.LayerNumber{Number: uint32(layerCurrent + 2)},
+						EndLayer:   &pb.LayerNumber{Number: uint32(layerCurrent + 3)},
 					}),
 				},
 
@@ -1328,8 +1329,8 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "layer after last received",
 					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
-						StartLayer: uint32(layerLatest + 1),
-						EndLayer:   uint32(layerLatest + 2),
+						StartLayer: &pb.LayerNumber{Number: uint32(layerLatest + 1)},
+						EndLayer:   &pb.LayerNumber{Number: uint32(layerLatest + 2)},
 					}),
 				},
 
@@ -1337,8 +1338,8 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "very very large range",
 					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
-						StartLayer: uint32(0),
-						EndLayer:   uint32(math.MaxUint32),
+						StartLayer: &pb.LayerNumber{Number: 0},
+						EndLayer:   &pb.LayerNumber{Number: uint32(math.MaxUint32)},
 					}),
 				},
 
@@ -1356,8 +1357,8 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "start layer after end layer",
 					run: generateRunFn(0, &pb.LayersQueryRequest{
-						StartLayer: uint32(layerCurrent + 1),
-						EndLayer:   uint32(layerCurrent),
+						StartLayer: &pb.LayerNumber{Number: uint32(layerCurrent + 1)},
+						EndLayer:   &pb.LayerNumber{Number: uint32(layerCurrent)},
 					}),
 				},
 
@@ -1365,8 +1366,8 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "same start end layer",
 					run: generateRunFn(1, &pb.LayersQueryRequest{
-						StartLayer: uint32(layerVerified),
-						EndLayer:   uint32(layerVerified),
+						StartLayer: &pb.LayerNumber{Number: uint32(layerVerified)},
+						EndLayer:   &pb.LayerNumber{Number: uint32(layerVerified)},
 					}),
 				},
 
@@ -1374,8 +1375,8 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "start layer after last approved confirmed layer",
 					run: generateRunFn(2, &pb.LayersQueryRequest{
-						StartLayer: uint32(layerVerified + 1),
-						EndLayer:   uint32(layerVerified + 2),
+						StartLayer: &pb.LayerNumber{Number: uint32(layerVerified + 1)},
+						EndLayer:   &pb.LayerNumber{Number: uint32(layerVerified + 1)},
 					}),
 				},
 
@@ -1384,8 +1385,8 @@ func TestMeshService(t *testing.T) {
 					name: "end layer after last approved confirmed layer",
 					// expect difference + 1 return layers
 					run: generateRunFn(layerVerified+2-layerFirst+1, &pb.LayersQueryRequest{
-						StartLayer: uint32(layerFirst),
-						EndLayer:   uint32(layerVerified + 2),
+						StartLayer: &pb.LayerNumber{Number: uint32(layerFirst)},
+						EndLayer:   &pb.LayerNumber{Number: uint32(layerVerified + 2)},
 					}),
 				},
 
@@ -1394,8 +1395,8 @@ func TestMeshService(t *testing.T) {
 					name: "comprehensive",
 					run: func(t *testing.T) {
 						req := &pb.LayersQueryRequest{
-							StartLayer: uint32(layerFirst),
-							EndLayer:   uint32(layerLatest),
+							StartLayer: &pb.LayerNumber{Number: uint32(layerFirst)},
+							EndLayer:   &pb.LayerNumber{Number: uint32(layerLatest)},
 						}
 
 						res, err := c.LayersQuery(context.Background(), req)
@@ -1760,7 +1761,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Condition(t, func() bool {
 		for _, a := range l.Activations {
 			// Compare the two element by element
-			if a.Layer != globalAtx.PubLayerID.Uint64() {
+			if a.Layer.Number != uint32(globalAtx.PubLayerID) {
 				continue
 			}
 			if bytes.Compare(a.Id.Id, globalAtx.ID().Bytes()) != 0 {
@@ -1956,7 +1957,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 
 	// publish a receipt
 	events.ReportReceipt(events.TxReceipt{
-		Address: addr1,
+		Index: receiptIndex,
 	})
 
 	// publish a reward
@@ -2051,7 +2052,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 
 	// publish a receipt
 	events.ReportReceipt(events.TxReceipt{
-		Address: addr1,
+		Index: receiptIndex,
 	})
 
 	// publish a reward
@@ -2223,8 +2224,10 @@ func checkAccountDataItemReward(t *testing.T, dataItem interface{}) {
 
 func checkAccountDataItemReceipt(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
+	// We should check more data elements here but this isn't really implemented yet so for now
+	// just check one as a sanity check
 	case *pb.AccountData_Receipt:
-		require.Equal(t, addr1.Bytes(), x.Receipt.AppAddress.Address)
+		require.Equal(t, uint32(receiptIndex), x.Receipt.Index)
 
 	default:
 		require.Fail(t, "inner account data item has wrong data type")
@@ -2259,7 +2262,7 @@ func checkGlobalStateDataReward(t *testing.T, dataItem interface{}) {
 func checkGlobalStateDataReceipt(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.GlobalStateData_Receipt:
-		require.Equal(t, addr1.Bytes(), x.Receipt.AppAddress.Address)
+		require.Equal(t, uint32(receiptIndex), x.Receipt.Index)
 
 	default:
 		require.Fail(t, "inner account data item has wrong data type")
