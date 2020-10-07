@@ -43,7 +43,7 @@ func NewNodeService(
 }
 
 // Echo returns the response for an echo api request. It's used for E2E tests.
-func (s NodeService) Echo(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
+func (s NodeService) Echo(_ context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
 	log.Info("GRPC NodeService.Echo")
 	if in.Msg != nil {
 		return &pb.EchoResponse{Msg: &pb.SimpleString{Value: in.Msg.Value}}, nil
@@ -52,7 +52,7 @@ func (s NodeService) Echo(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResp
 }
 
 // Version returns the version of the node software as a semver string
-func (s NodeService) Version(ctx context.Context, in *empty.Empty) (*pb.VersionResponse, error) {
+func (s NodeService) Version(context.Context, *empty.Empty) (*pb.VersionResponse, error) {
 	log.Info("GRPC NodeService.Version")
 	return &pb.VersionResponse{
 		VersionString: &pb.SimpleString{Value: cmd.Version},
@@ -60,7 +60,7 @@ func (s NodeService) Version(ctx context.Context, in *empty.Empty) (*pb.VersionR
 }
 
 // Build returns the build of the node software
-func (s NodeService) Build(ctx context.Context, in *empty.Empty) (*pb.BuildResponse, error) {
+func (s NodeService) Build(context.Context, *empty.Empty) (*pb.BuildResponse, error) {
 	log.Info("GRPC NodeService.Build")
 	return &pb.BuildResponse{
 		BuildString: &pb.SimpleString{Value: cmd.Commit},
@@ -69,7 +69,7 @@ func (s NodeService) Build(ctx context.Context, in *empty.Empty) (*pb.BuildRespo
 
 // Status returns a status object providing information about the connected peers, sync status,
 // current and verified layer
-func (s NodeService) Status(ctx context.Context, request *pb.StatusRequest) (*pb.StatusResponse, error) {
+func (s NodeService) Status(context.Context, *pb.StatusRequest) (*pb.StatusResponse, error) {
 	log.Info("GRPC NodeService.Status")
 	return &pb.StatusResponse{
 		Status: &pb.NodeStatus{
@@ -83,7 +83,7 @@ func (s NodeService) Status(ctx context.Context, request *pb.StatusRequest) (*pb
 }
 
 // SyncStart requests that the node start syncing the mesh (if it isn't already syncing)
-func (s NodeService) SyncStart(ctx context.Context, request *pb.SyncStartRequest) (*pb.SyncStartResponse, error) {
+func (s NodeService) SyncStart(context.Context, *pb.SyncStartRequest) (*pb.SyncStartResponse, error) {
 	log.Info("GRPC NodeService.SyncStart")
 	s.Syncer.Start()
 	return &pb.SyncStartResponse{
@@ -92,7 +92,7 @@ func (s NodeService) SyncStart(ctx context.Context, request *pb.SyncStartRequest
 }
 
 // Shutdown requests a graceful shutdown
-func (s NodeService) Shutdown(ctx context.Context, request *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
+func (s NodeService) Shutdown(context.Context, *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
 	log.Info("GRPC NodeService.Shutdown")
 	cmd.Cancel()
 	return &pb.ShutdownResponse{
@@ -103,7 +103,7 @@ func (s NodeService) Shutdown(ctx context.Context, request *pb.ShutdownRequest) 
 // STREAMS
 
 // StatusStream exposes a stream of node status updates
-func (s NodeService) StatusStream(request *pb.StatusStreamRequest, stream pb.NodeService_StatusStreamServer) error {
+func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeService_StatusStreamServer) error {
 	log.Info("GRPC NodeService.StatusStream")
 	statusStream := events.GetStatusChannel()
 
@@ -137,7 +137,7 @@ func (s NodeService) StatusStream(request *pb.StatusStreamRequest, stream pb.Nod
 }
 
 // ErrorStream exposes a stream of node errors
-func (s NodeService) ErrorStream(request *pb.ErrorStreamRequest, stream pb.NodeService_ErrorStreamServer) error {
+func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService_ErrorStreamServer) error {
 	log.Info("GRPC NodeService.ErrorStream")
 	errorStream := events.GetErrorChannel()
 
