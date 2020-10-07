@@ -315,7 +315,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 						Fee:         &pb.Amount{Value: receipt.Fee},
 						LayerNumber: receipt.Layer.Uint64(),
 						Index:       receipt.Index,
-						AppAddress:  &pb.AccountId{Address: receipt.Address.Bytes()},
+						//SvmData: nil,
 					},
 				}}}); err != nil {
 					return err
@@ -451,7 +451,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 					Fee:         &pb.Amount{Value: receipt.Fee},
 					LayerNumber: receipt.Layer.Uint64(),
 					Index:       receipt.Index,
-					AppAddress:  &pb.AccountId{Address: receipt.Address.Bytes()},
+					//SvmData: nil,
 				},
 			}}}); err != nil {
 				return err
