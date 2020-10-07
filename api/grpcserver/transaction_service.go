@@ -45,7 +45,7 @@ func NewTransactionService(
 }
 
 // SubmitTransaction allows a new tx to be submitted
-func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.SubmitTransactionRequest) (*pb.SubmitTransactionResponse, error) {
+func (s TransactionService) SubmitTransaction(_ context.Context, in *pb.SubmitTransactionRequest) (*pb.SubmitTransactionResponse, error) {
 	log.Info("GRPC TransactionService.SubmitTransaction")
 
 	if len(in.Transaction) == 0 {
@@ -126,7 +126,7 @@ func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (r
 }
 
 // TransactionsState returns current tx data for one or more txs
-func (s TransactionService) TransactionsState(ctx context.Context, in *pb.TransactionsStateRequest) (*pb.TransactionsStateResponse, error) {
+func (s TransactionService) TransactionsState(_ context.Context, in *pb.TransactionsStateRequest) (*pb.TransactionsStateResponse, error) {
 	log.Info("GRPC TransactionService.TransactionsState")
 
 	if in.TransactionId == nil || len(in.TransactionId) == 0 {
@@ -141,10 +141,10 @@ func (s TransactionService) TransactionsState(ctx context.Context, in *pb.Transa
 		copy(txid[:], pbtxid.Id)
 
 		// Look up data for this tx. If it's unknown to us, status will be zero (unspecified).
-		tx, state := s.getTransactionAndStatus(txid)
+		tx, txstate := s.getTransactionAndStatus(txid)
 		res.TransactionsState = append(res.TransactionsState, &pb.TransactionState{
 			Id:    pbtxid,
-			State: state,
+			State: txstate,
 		})
 
 		if in.IncludeTransactions {
@@ -192,17 +192,17 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 				if bytes.Equal(tx.Transaction.ID().Bytes(), txid.Id) {
 					// If the tx was just invalidated, we already know its state.
 					// If not, read it from the database.
-					var state pb.TransactionState_TransactionState
+					var txstate pb.TransactionState_TransactionState
 					if tx.Valid {
-						_, state = s.getTransactionAndStatus(tx.Transaction.ID())
+						_, txstate = s.getTransactionAndStatus(tx.Transaction.ID())
 					} else {
-						state = pb.TransactionState_TRANSACTION_STATE_CONFLICTING
+						txstate = pb.TransactionState_TRANSACTION_STATE_CONFLICTING
 					}
 
 					res := &pb.TransactionsStateStreamResponse{
 						TransactionState: &pb.TransactionState{
 							Id:    txid,
-							State: state,
+							State: txstate,
 						},
 					}
 					if in.IncludeTransactions {
@@ -232,19 +232,19 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 				for _, layerTxid := range b.TxIDs {
 					for _, txid := range in.TransactionId {
 						if bytes.Equal(layerTxid.Bytes(), txid.Id) {
-							var state pb.TransactionState_TransactionState
+							var txstate pb.TransactionState_TransactionState
 							switch layer.Status {
 							case events.LayerStatusTypeApproved:
-								state = pb.TransactionState_TRANSACTION_STATE_MESH
+								txstate = pb.TransactionState_TRANSACTION_STATE_MESH
 							case events.LayerStatusTypeConfirmed:
-								state = pb.TransactionState_TRANSACTION_STATE_PROCESSED
+								txstate = pb.TransactionState_TRANSACTION_STATE_PROCESSED
 							default:
-								state = pb.TransactionState_TRANSACTION_STATE_UNSPECIFIED
+								txstate = pb.TransactionState_TRANSACTION_STATE_UNSPECIFIED
 							}
 							res := &pb.TransactionsStateStreamResponse{
 								TransactionState: &pb.TransactionState{
 									Id:    txid,
-									State: state,
+									State: txstate,
 								},
 							}
 							if in.IncludeTransactions {
