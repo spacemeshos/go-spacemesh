@@ -58,8 +58,8 @@ func (s MeshService) GenesisTime(ctx context.Context, in *pb.GenesisTimeRequest)
 // CurrentLayer returns the current layer number
 func (s MeshService) CurrentLayer(ctx context.Context, in *pb.CurrentLayerRequest) (*pb.CurrentLayerResponse, error) {
 	log.Info("GRPC MeshService.CurrentLayer")
-	return &pb.CurrentLayerResponse{Layernum: &pb.SimpleInt{
-		Value: s.GenTime.GetCurrentLayer().Uint64(),
+	return &pb.CurrentLayerResponse{Layernum: &pb.LayerNumber{
+		Number: uint32(s.GenTime.GetCurrentLayer()),
 	}}, nil
 }
 
@@ -160,7 +160,7 @@ func (s MeshService) getFilteredActivations(startLayer types.LayerID, addr types
 func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMeshDataQueryRequest) (*pb.AccountMeshDataQueryResponse, error) {
 	log.Info("GRPC MeshService.AccountMeshDataQuery")
 
-	startLayer := types.LayerID(in.MinLayer)
+	startLayer := types.LayerID(in.MinLayer.Number)
 
 	if startLayer > s.Mesh.LatestLayer() {
 		return nil, status.Errorf(codes.InvalidArgument, "`LatestLayer` must be less than or equal to latest layer")
@@ -283,7 +283,7 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 func convertActivation(a *types.ActivationTx) (*pb.Activation, error) {
 	return &pb.Activation{
 		Id:             &pb.ActivationId{Id: a.ID().Bytes()},
-		Layer:          a.PubLayerID.Uint64(),
+		Layer:          &pb.LayerNumber{Number: uint32(a.PubLayerID)},
 		SmesherId:      &pb.SmesherId{Id: a.NodeID.ToBytes()},
 		Coinbase:       &pb.AccountId{Address: a.Coinbase.Bytes()},
 		PrevAtx:        &pb.ActivationId{Id: a.PrevATXID.Bytes()},
@@ -347,7 +347,7 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 			layer, log.String("status", layerStatus.String()), log.Err(err))
 	}
 	return &pb.Layer{
-		Number:        layer.Index().Uint64(),
+		Number:        &pb.LayerNumber{Number: uint32(layer.Index())},
 		Status:        layerStatus,
 		Hash:          layer.Hash().Bytes(),
 		Blocks:        blocks,
@@ -365,7 +365,7 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 	lastLayerPassedTortoise := s.Mesh.ProcessedLayer()
 
 	layers := []*pb.Layer{}
-	for l := uint64(in.StartLayer); l <= uint64(in.EndLayer); l++ {
+	for l := uint64(in.StartLayer.Number); l <= uint64(in.EndLayer.Number); l++ {
 		layerStatus := pb.Layer_LAYER_STATUS_UNSPECIFIED
 
 		// First check if the layer passed the Hare, then check if it passed the Tortoise.
