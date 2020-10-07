@@ -43,7 +43,7 @@ func NewGlobalStateService(
 }
 
 // GlobalStateHash returns the latest layer and its computed global state hash
-func (s GlobalStateService) GlobalStateHash(ctx context.Context, in *pb.GlobalStateHashRequest) (*pb.GlobalStateHashResponse, error) {
+func (s GlobalStateService) GlobalStateHash(context.Context, *pb.GlobalStateHashRequest) (*pb.GlobalStateHashResponse, error) {
 	log.Info("GRPC GlobalStateService.GlobalStateHash")
 	return &pb.GlobalStateHashResponse{Response: &pb.GlobalStateHash{
 		RootHash:    s.Mesh.GetStateRoot().Bytes(),
@@ -81,7 +81,7 @@ func (s GlobalStateService) getAccount(addr types.Address) (acct *pb.Account, er
 }
 
 // Account returns current and projected counter and balance for one account
-func (s GlobalStateService) Account(ctx context.Context, in *pb.AccountRequest) (*pb.AccountResponse, error) {
+func (s GlobalStateService) Account(_ context.Context, in *pb.AccountRequest) (*pb.AccountResponse, error) {
 	log.Info("GRPC GlobalStateService.Account")
 
 	if in.AccountId == nil {
@@ -107,7 +107,7 @@ func (s GlobalStateService) Account(ctx context.Context, in *pb.AccountRequest) 
 }
 
 // AccountDataQuery returns historical account data such as rewards and receipts
-func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.AccountDataQueryRequest) (*pb.AccountDataQueryResponse, error) {
+func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDataQueryRequest) (*pb.AccountDataQueryResponse, error) {
 	log.Info("GRPC GlobalStateService.AccountDataQuery")
 
 	if in.Filter == nil {
@@ -196,7 +196,7 @@ func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.Account
 }
 
 // SmesherDataQuery returns historical info on smesher rewards
-func (s GlobalStateService) SmesherDataQuery(ctx context.Context, in *pb.SmesherDataQueryRequest) (*pb.SmesherDataQueryResponse, error) {
+func (s GlobalStateService) SmesherDataQuery(context.Context, *pb.SmesherDataQueryRequest) (*pb.SmesherDataQueryResponse, error) {
 	log.Info("GRPC GlobalStateService.SmesherDataQuery")
 
 	// TODO: implement me! We don't currently have a way to read rewards per-smesher.
@@ -332,7 +332,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 }
 
 // SmesherRewardStream exposes a stream of smesher rewards
-func (s GlobalStateService) SmesherRewardStream(request *pb.SmesherRewardStreamRequest, stream pb.GlobalStateService_SmesherRewardStreamServer) error {
+func (s GlobalStateService) SmesherRewardStream(*pb.SmesherRewardStreamRequest, pb.GlobalStateService_SmesherRewardStreamServer) error {
 	log.Info("GRPC GlobalStateService.SmesherRewardStream")
 
 	// TODO: implement me! We don't currently have a way to read rewards per-smesher.
@@ -342,7 +342,7 @@ func (s GlobalStateService) SmesherRewardStream(request *pb.SmesherRewardStreamR
 }
 
 // AppEventStream exposes a stream of emitted app events
-func (s GlobalStateService) AppEventStream(request *pb.AppEventStreamRequest, stream pb.GlobalStateService_AppEventStreamServer) error {
+func (s GlobalStateService) AppEventStream(*pb.AppEventStreamRequest, pb.GlobalStateService_AppEventStreamServer) error {
 	log.Info("GRPC GlobalStateService.AppEventStream")
 
 	// TODO: implement me! We don't currently have any app events
