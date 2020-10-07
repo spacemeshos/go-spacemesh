@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/net/context"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
@@ -148,8 +149,8 @@ func (s NodeService) ErrorStream(request *pb.ErrorStreamRequest, stream pb.NodeS
 				return nil
 			}
 			if err := stream.Send(&pb.ErrorStreamResponse{Error: &pb.NodeError{
-				ErrorType:  convertErrorType(nodeError.Type),
-				Message:    nodeError.Msg,
+				Level:      convertErrorLevel(nodeError.Level),
+				Msg:        nodeError.Msg,
 				StackTrace: nodeError.Trace,
 			}}); err != nil {
 				return err
@@ -163,19 +164,24 @@ func (s NodeService) ErrorStream(request *pb.ErrorStreamRequest, stream pb.NodeS
 	}
 }
 
-func convertErrorType(errType int) pb.NodeError_NodeErrorType {
-	switch errType {
-	case events.NodeErrorTypePanic:
-		return pb.NodeError_NODE_ERROR_TYPE_PANIC
-	case events.NodeErrorTypePanicHare:
-		return pb.NodeError_NODE_ERROR_TYPE_PANIC_HARE
-	case events.NodeErrorTypePanicSync:
-		return pb.NodeError_NODE_ERROR_TYPE_PANIC_SYNC
-	case events.NodeErrorTypePanicP2P:
-		return pb.NodeError_NODE_ERROR_TYPE_PANIC_P2P
-	case events.NodeErrorTypeSignalShutdown:
-		return pb.NodeError_NODE_ERROR_TYPE_SIGNAL_SHUT_DOWN
+// Convert internal error level into level understood by the API
+func convertErrorLevel(level zapcore.Level) pb.LogLevel {
+	switch level {
+	case zapcore.DebugLevel:
+		return pb.LogLevel_LOG_LEVEL_DEBUG
+	case zapcore.InfoLevel:
+		return pb.LogLevel_LOG_LEVEL_INFO
+	case zapcore.WarnLevel:
+		return pb.LogLevel_LOG_LEVEL_WARN
+	case zapcore.ErrorLevel:
+		return pb.LogLevel_LOG_LEVEL_ERROR
+	case zapcore.DPanicLevel:
+		return pb.LogLevel_LOG_LEVEL_DPANIC
+	case zapcore.PanicLevel:
+		return pb.LogLevel_LOG_LEVEL_PANIC
+	case zapcore.FatalLevel:
+		return pb.LogLevel_LOG_LEVEL_FATAL
 	default:
-		return pb.NodeError_NODE_ERROR_TYPE_UNSPECIFIED
+		return pb.LogLevel_LOG_LEVEL_UNSPECIFIED
 	}
 }
