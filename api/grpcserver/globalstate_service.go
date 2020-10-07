@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
+	"github.com/spacemeshos/go-spacemesh/state"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -15,7 +16,8 @@ import (
 // GlobalStateService exposes global state data, output from the STF
 type GlobalStateService struct {
 	Network     api.NetworkAPI // P2P Swarm
-	Mesh        api.TxAPI      // Mesh
+	Mesh        api.TxAPI
+	Mempool     *state.TxMempool
 	GenTime     api.GenesisTimeAPI
 	PeerCounter api.PeerCounter
 	Syncer      api.Syncer
@@ -29,10 +31,11 @@ func (s GlobalStateService) RegisterService(server *Server) {
 // NewGlobalStateService creates a new grpc service using config data.
 func NewGlobalStateService(
 	net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI,
-	syncer api.Syncer) *GlobalStateService {
+	syncer api.Syncer, mempool *state.TxMempool) *GlobalStateService {
 	return &GlobalStateService{
 		Network:     net,
 		Mesh:        tx,
+		Mempool:     mempool,
 		GenTime:     genTime,
 		PeerCounter: peers.NewPeers(net, log.NewDefault("grpcserver.GlobalStateService")),
 		Syncer:      syncer,
@@ -48,7 +51,16 @@ func (s GlobalStateService) GlobalStateHash(ctx context.Context, in *pb.GlobalSt
 	}}, nil
 }
 
-// Account returns counter and balance for one account
+func (s GlobalStateService) getProjection(curCounter, curBalance uint64, addr types.Address) (counter, balance uint64, err error) {
+	counter, balance, err = s.Mesh.GetProjection(addr, curCounter, curBalance)
+	if err != nil {
+		return 0, 0, err
+	}
+	counter, balance = s.Mempool.GetProjection(addr, counter, balance)
+	return counter, balance, nil
+}
+
+// Account returns current and projected counter and balance for one account
 func (s GlobalStateService) Account(ctx context.Context, in *pb.AccountRequest) (*pb.AccountResponse, error) {
 	log.Info("GRPC GlobalStateService.Account")
 
@@ -58,16 +70,29 @@ func (s GlobalStateService) Account(ctx context.Context, in *pb.AccountRequest) 
 
 	// Load data
 	addr := types.BytesToAddress(in.AccountId.Address)
-	balance := s.Mesh.GetBalance(addr)
-	counter := s.Mesh.GetNonce(addr)
+	balanceActual := s.Mesh.GetBalance(addr)
+	counterActual := s.Mesh.GetNonce(addr)
+	counterProjected, balanceProjected, err := s.getProjection(counterActual, balanceActual, addr)
+	if err != nil {
+		log.Error("unable to fetch projected account state: %s", err)
+		return nil, status.Errorf(codes.Internal, "error fetching projected account data")
+	}
 
 	log.With().Debug("GRPC GlobalStateService.Account",
-		addr, log.Uint64("balance", balance), log.Uint64("counter", counter))
+		addr,
+		log.Uint64("balance", balanceActual), log.Uint64("counter", counterActual),
+		log.Uint64("balance projected", balanceProjected), log.Uint64("counter projected", counterProjected))
 
 	return &pb.AccountResponse{AccountWrapper: &pb.Account{
 		AccountId: &pb.AccountId{Address: addr.Bytes()},
-		Counter:   counter,
-		Balance:   &pb.Amount{Value: balance},
+		StateCurrent: &pb.AccountState{
+			Counter: counterActual,
+			Balance: &pb.Amount{Value: balanceActual},
+		},
+		StateProjected: &pb.AccountState{
+			Counter: counterProjected,
+			Balance: &pb.Amount{Value: balanceProjected},
+		},
 	}}, nil
 }
 

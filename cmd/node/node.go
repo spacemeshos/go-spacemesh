@@ -735,7 +735,7 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 		registerService(grpcserver.NewMeshService(app.mesh, app.txPool, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
 	}
 	if apiConf.StartGlobalStateService {
-		registerService(grpcserver.NewGlobalStateService(net, app.mesh, app.clock, app.syncer))
+		registerService(grpcserver.NewGlobalStateService(net, app.mesh, app.clock, app.syncer, app.txPool))
 	}
 	if apiConf.StartSmesherService {
 		registerService(grpcserver.NewSmesherService(app.atxBuilder))
