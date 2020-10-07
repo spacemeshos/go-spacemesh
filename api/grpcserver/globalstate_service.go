@@ -131,7 +131,7 @@ func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.Account
 		for _, r := range dbRewards {
 			res.AccountItem = append(res.AccountItem, &pb.AccountData{Datum: &pb.AccountData_Reward{
 				Reward: &pb.Reward{
-					Layer:       r.Layer.Uint64(),
+					Layer:       &pb.LayerNumber{Number: uint32(r.Layer)},
 					Total:       &pb.Amount{Value: r.TotalReward},
 					LayerReward: &pb.Amount{Value: r.LayerRewardEstimate},
 					// Leave this out for now as this is changing
@@ -274,7 +274,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 			if reward.Coinbase == addr {
 				if err := stream.Send(&pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_Reward{
 					Reward: &pb.Reward{
-						Layer:       reward.Layer.Uint64(),
+						Layer:       &pb.LayerNumber{Number: uint32(reward.Layer)},
 						Total:       &pb.Amount{Value: reward.Total},
 						LayerReward: &pb.Amount{Value: reward.LayerReward},
 						// Leave this out for now as this is changing
@@ -414,7 +414,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			}
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Reward{
 				Reward: &pb.Reward{
-					Layer:       reward.Layer.Uint64(),
+					Layer:       &pb.LayerNumber{Number: uint32(reward.Layer)},
 					Total:       &pb.Amount{Value: reward.Total},
 					LayerReward: &pb.Amount{Value: reward.LayerReward},
 					// Leave this out for now as this is changing
