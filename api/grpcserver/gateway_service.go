@@ -20,7 +20,7 @@ import (
 type GatewayService struct {
 	Network api.NetworkAPI // P2P Swarm
 	Mesh    api.TxAPI      // Mesh
-	Mempool *state.TxMempool
+	Mempool api.MempoolAPI
 	syncer  api.Syncer
 }
 
@@ -33,7 +33,7 @@ func (s GatewayService) RegisterService(server *Server) {
 func NewGatewayService(
 	net api.NetworkAPI,
 	tx api.TxAPI,
-	mempool *state.TxMempool,
+	mempool api.MempoolAPI,
 	syncer api.Syncer,
 ) *GatewayService {
 	return &GatewayService{
@@ -44,8 +44,8 @@ func NewGatewayService(
 	}
 }
 
-// SubmitTransaction allows a new tx to be submitted
-func (s GatewayService) SubmitTransaction(ctx context.Context, in *pb.SubmitTransactionRequest) (*pb.SubmitTransactionResponse, error) {
+// BroadcastPoet accepts a binary poet packet to broadcast to the network
+func (s GatewayService) BroadcastPoet(ctx context.Context, in *pb.SubmitTransactionRequest) (*pb.SubmitTransactionResponse, error) {
 	log.Info("GRPC GatewayService.SubmitTransaction")
 
 	if len(in.Transaction) == 0 {
@@ -97,180 +97,3 @@ func (s GatewayService) SubmitTransaction(ctx context.Context, in *pb.SubmitTran
 	}, nil
 }
 
-// Get transaction and status for a given txid. It's not an error if we cannot find the tx,
-// we just return all nils.
-func (s GatewayService) getTransactionAndStatus(txID types.TransactionID) (retTx *types.Transaction, state pb.TransactionState_TransactionState) {
-	tx, err := s.Mesh.GetTransaction(txID) // have we seen this transaction in a block?
-	retTx = tx
-	if err != nil {
-		tx, err = s.Mempool.Get(txID) // do we have it in the mempool?
-		if err != nil {               // we don't know this transaction
-			return
-		}
-		state = pb.TransactionState_TRANSACTION_STATE_MEMPOOL
-		return
-	}
-
-	layer := s.Mesh.GetLayerApplied(txID)
-	if layer != nil {
-		state = pb.TransactionState_TRANSACTION_STATE_PROCESSED
-	} else {
-		nonce := s.Mesh.GetNonce(tx.Origin())
-		if nonce > tx.AccountNonce {
-			state = pb.TransactionState_TRANSACTION_STATE_REJECTED
-		} else {
-			state = pb.TransactionState_TRANSACTION_STATE_MESH
-		}
-	}
-	return
-}
-
-// TransactionsState returns current tx data for one or more txs
-func (s GatewayService) TransactionsState(ctx context.Context, in *pb.TransactionsStateRequest) (*pb.TransactionsStateResponse, error) {
-	log.Info("GRPC GatewayService.TransactionsState")
-
-	if in.TransactionId == nil || len(in.TransactionId) == 0 {
-		return nil, status.Error(codes.InvalidArgument,
-			"`TransactionId` must include one or more transaction IDs")
-	}
-
-	res := &pb.TransactionsStateResponse{}
-	for _, pbtxid := range in.TransactionId {
-		// Convert the incoming txid into a known type
-		txid := types.TransactionID{}
-		copy(txid[:], pbtxid.Id)
-
-		// Look up data for this tx. If it's unknown to us, status will be zero (unspecified).
-		tx, state := s.getTransactionAndStatus(txid)
-		res.TransactionsState = append(res.TransactionsState, &pb.TransactionState{
-			Id:    pbtxid,
-			State: state,
-		})
-
-		if in.IncludeTransactions {
-			if tx != nil {
-				res.Transactions = append(res.Transactions, convertTransaction(tx))
-			} else {
-				// If the tx is unknown to us, add an empty placeholder
-				res.Transactions = append(res.Transactions, &pb.Transaction{})
-			}
-		}
-	}
-
-	return res, nil
-}
-
-// STREAMS
-
-// TransactionsStateStream exposes a stream of tx data
-func (s GatewayService) TransactionsStateStream(in *pb.TransactionsStateStreamRequest, stream pb.GatewayService_TransactionsStateStreamServer) error {
-	log.Info("GRPC GatewayService.TransactionsStateStream")
-
-	if in.TransactionId == nil || len(in.TransactionId) == 0 {
-		return status.Error(codes.InvalidArgument, "`TransactionId` must include one or more transaction IDs")
-	}
-
-	// The tx channel tells us about newly received and newly created transactions
-	channelTx := events.GetNewTxChannel()
-	// The layer channel tells us about status updates
-	channelLayer := events.GetLayerChannel()
-
-	for {
-		select {
-		case tx, ok := <-channelTx:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("tx channel closed, shutting down")
-				return nil
-			}
-
-			// Filter
-			for _, txid := range in.TransactionId {
-				if bytes.Equal(tx.Transaction.ID().Bytes(), txid.Id) {
-					// If the tx was just invalidated, we already know its state.
-					// If not, read it from the database.
-					var state pb.TransactionState_TransactionState
-					if tx.Valid {
-						_, state = s.getTransactionAndStatus(tx.Transaction.ID())
-					} else {
-						state = pb.TransactionState_TRANSACTION_STATE_CONFLICTING
-					}
-
-					res := &pb.TransactionsStateStreamResponse{
-						TransactionState: &pb.TransactionState{
-							Id:    txid,
-							State: state,
-						},
-					}
-					if in.IncludeTransactions {
-						res.Transaction = convertTransaction(tx.Transaction)
-					}
-					if err := stream.Send(res); err != nil {
-						return err
-					}
-
-					// Don't match on any other transactions
-					break
-				}
-			}
-		case layer, ok := <-channelLayer:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("layer channel closed, shutting down")
-				return nil
-			}
-			// Filter for any matching transactions in the reported layer
-			// TODO: this is inefficient and could be optimized!
-			// See https://github.com/spacemeshos/go-spacemesh/issues/2076
-			for _, b := range layer.Layer.Blocks() {
-				for _, layerTxid := range b.TxIDs {
-					for _, txid := range in.TransactionId {
-						if bytes.Equal(layerTxid.Bytes(), txid.Id) {
-							var state pb.TransactionState_TransactionState
-							switch layer.Status {
-							case events.LayerStatusTypeApproved:
-								state = pb.TransactionState_TRANSACTION_STATE_MESH
-							case events.LayerStatusTypeConfirmed:
-								state = pb.TransactionState_TRANSACTION_STATE_PROCESSED
-							default:
-								state = pb.TransactionState_TRANSACTION_STATE_UNSPECIFIED
-							}
-							res := &pb.TransactionsStateStreamResponse{
-								TransactionState: &pb.TransactionState{
-									Id:    txid,
-									State: state,
-								},
-							}
-							if in.IncludeTransactions {
-								tx, err := s.Mesh.GetTransaction(layerTxid)
-								if err != nil {
-									log.Error("could not find transaction %v from layer %v: %v", layerTxid, layer, err)
-									return status.Error(codes.Internal, "error retrieving tx data")
-								}
-
-								res.Transaction = convertTransaction(tx)
-							}
-							if err := stream.Send(res); err != nil {
-								return err
-							}
-
-							// Don't match on any other transactions
-							break
-						}
-					}
-				}
-			}
-		case <-stream.Context().Done():
-			log.Info("TransactionsStateStream closing stream, client disconnected")
-			return nil
-		}
-		// TODO: do we need an additional case here for a context to indicate
-		// that the service needs to shut down?
-	}
-}
