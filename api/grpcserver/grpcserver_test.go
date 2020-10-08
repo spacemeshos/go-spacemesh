@@ -25,7 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/state"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -70,8 +69,11 @@ const (
 
 var (
 	networkMock = NetworkMock{}
+	mempoolMock = MempoolMock{
+		poolByAddress: make(map[types.Address]types.TransactionID),
+		poolByTxid: make(map[types.TransactionID]*types.Transaction),
+	}
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
-	txMempool   = state.NewTxMemPool()
 	addr1       = types.HexToAddress("33333")
 	addr2       = types.HexToAddress("44444")
 	pub, _, _   = ed25519.GenerateKey(nil)
@@ -378,6 +380,36 @@ type SyncerMock struct {
 func (s *SyncerMock) IsSynced() bool { return s.isSynced }
 func (s *SyncerMock) Start()         { s.startCalled = true }
 
+type MempoolMock struct {
+	// In the real state.TxMempool struct, there are multiple data structures and they're more complex,
+	// but we just mock a very simple use case here and only store some of these data
+	poolByAddress map[types.Address]types.TransactionID
+	poolByTxid map[types.TransactionID]*types.Transaction
+}
+
+func (m MempoolMock) Get(id types.TransactionID) (*types.Transaction, error) {
+	return m.poolByTxid[id], nil
+}
+
+func (m *MempoolMock) Put(id types.TransactionID, tx *types.Transaction) {
+	m.poolByTxid[id] = tx
+	m.poolByAddress[tx.Recipient] = id
+	m.poolByAddress[tx.Origin()] = id
+}
+
+// Return a mock estimated nonce and balance that's different than the default, mimicking transactions that are
+// unconfirmed or in the mempool that will update state
+func (m MempoolMock) GetProjection(types.Address, uint64, uint64) (nonce, balance uint64) {
+	nonce = accountCounter + 1
+	balance = accountBalance + 1
+	return
+}
+
+func (m MempoolMock) GetTxIdsByAddress(addr types.Address) (ids []types.TransactionID) {
+	ids = append(ids, m.poolByAddress[addr])
+	return
+}
+
 func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	networkMock.Broadcast("", []byte{0x00})
 	grpcService := NewServerWithInterface(cfg.NewGrpcServerPort, "localhost")
@@ -520,7 +552,7 @@ func TestNodeService(t *testing.T) {
 }
 
 func TestGlobalStateService(t *testing.T) {
-	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{}, txMempool)
+	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{}, mempoolMock)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -552,8 +584,10 @@ func TestGlobalStateService(t *testing.T) {
 			})
 			require.NoError(t, err)
 			require.Equal(t, addr1.Bytes(), res.AccountWrapper.AccountId.Address)
-			require.Equal(t, uint64(accountBalance), res.AccountWrapper.Balance.Value)
-			require.Equal(t, uint64(accountCounter), res.AccountWrapper.Counter)
+			require.Equal(t, uint64(accountBalance), res.AccountWrapper.StateCurrent.Balance.Value)
+			require.Equal(t, uint64(accountCounter), res.AccountWrapper.StateCurrent.Counter)
+			require.Equal(t, uint64(accountBalance+1), res.AccountWrapper.StateProjected.Balance.Value)
+			require.Equal(t, uint64(accountCounter+1), res.AccountWrapper.StateProjected.Counter)
 		}},
 		{"AccountDataQuery_MissingFilter", func(t *testing.T) {
 			_, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{})
@@ -928,7 +962,7 @@ func TestSmesherService(t *testing.T) {
 }
 
 func TestMeshService(t *testing.T) {
-	grpcService := NewMeshService(txAPI, txMempool, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	grpcService := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1432,7 +1466,7 @@ func TestMeshService(t *testing.T) {
 func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	require := require.New(t)
 	syncer := &SyncerMock{}
-	grpcService := NewTransactionService(&networkMock, txAPI, txMempool, syncer)
+	grpcService := NewTransactionService(&networkMock, txAPI, mempoolMock, syncer)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1470,7 +1504,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 
 func TestTransactionService(t *testing.T) {
 
-	grpcService := NewTransactionService(&networkMock, txAPI, txMempool, &SyncerMock{isSynced: true})
+	grpcService := NewTransactionService(&networkMock, txAPI, mempoolMock, &SyncerMock{isSynced: true})
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1690,7 +1724,7 @@ func TestTransactionService(t *testing.T) {
 				require.NoError(t, err, "error deserializing broadcast tx")
 
 				// We assume the data is valid here, and put it directly into the txpool
-				txMempool.Put(tx.ID(), tx)
+				mempoolMock.Put(tx.ID(), tx)
 			}()
 
 			wg := sync.WaitGroup{}
@@ -1813,7 +1847,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 }
 
 func TestAccountMeshDataStream_comprehensive(t *testing.T) {
-	grpcService := NewMeshService(txAPI, txMempool, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	grpcService := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1892,7 +1926,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 }
 
 func TestAccountDataStream_comprehensive(t *testing.T) {
-	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{}, txMempool)
+	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{}, mempoolMock)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -1985,7 +2019,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 }
 
 func TestGlobalStateStream_comprehensive(t *testing.T) {
-	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{}, txMempool)
+	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{}, mempoolMock)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -2083,7 +2117,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 }
 
 func TestLayerStream_comprehensive(t *testing.T) {
-	grpcService := NewMeshService(txAPI, txMempool, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	grpcService := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -2150,10 +2184,14 @@ func checkAccountDataQueryItemAccount(t *testing.T, dataItem interface{}) {
 		// Check the account, nonce, and balance
 		require.Equal(t, addr1.Bytes(), x.AccountWrapper.AccountId.Address,
 			"inner account has bad address")
-		require.Equal(t, uint64(accountCounter), x.AccountWrapper.Counter,
-			"inner account has bad counter")
-		require.Equal(t, uint64(accountBalance), x.AccountWrapper.Balance.Value,
-			"inner account has bad balance")
+		require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter,
+			"inner account has bad current counter")
+		require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value,
+			"inner account has bad current balance")
+		require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter,
+			"inner account has bad projected counter")
+		require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value,
+			"inner account has bad projected balance")
 	default:
 		require.Fail(t, "inner account data item has wrong data type")
 	}
@@ -2238,8 +2276,10 @@ func checkAccountDataItemAccount(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.AccountData_AccountWrapper:
 		require.Equal(t, addr1.Bytes(), x.AccountWrapper.AccountId.Address)
-		require.Equal(t, uint64(accountBalance), x.AccountWrapper.Balance.Value)
-		require.Equal(t, uint64(accountCounter), x.AccountWrapper.Counter)
+		require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value)
+		require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter)
+		require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value)
+		require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter)
 
 	default:
 		require.Fail(t, "inner account data item has wrong data type")
@@ -2273,8 +2313,10 @@ func checkGlobalStateDataAccountWrapper(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.GlobalStateData_AccountWrapper:
 		require.Equal(t, addr1.Bytes(), x.AccountWrapper.AccountId.Address)
-		require.Equal(t, uint64(accountBalance), x.AccountWrapper.Balance.Value)
-		require.Equal(t, uint64(accountCounter), x.AccountWrapper.Counter)
+		require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value)
+		require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter)
+		require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value)
+		require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter)
 
 	default:
 		require.Fail(t, "inner account data item has wrong data type")
@@ -2294,7 +2336,7 @@ func checkGlobalStateDataGlobalState(t *testing.T, dataItem interface{}) {
 
 func TestMultiService(t *testing.T) {
 	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
-	svc2 := NewMeshService(txAPI, txMempool, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	svc2 := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, svc1, svc2)
 	defer shutDown()
 
@@ -2354,7 +2396,7 @@ func TestJsonApi(t *testing.T) {
 
 	// enable services and try again
 	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
-	svc2 := NewMeshService(txAPI, txMempool, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	svc2 := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	cfg.StartNodeService = true
 	cfg.StartMeshService = true
 	shutDown = launchServer(t, svc1, svc2)
