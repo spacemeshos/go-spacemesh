@@ -20,7 +20,7 @@ import (
 type TransactionService struct {
 	Network api.NetworkAPI // P2P Swarm
 	Mesh    api.TxAPI      // Mesh
-	Mempool *state.TxMempool
+	Mempool api.MempoolAPI
 	syncer  api.Syncer
 }
 
@@ -33,7 +33,7 @@ func (s TransactionService) RegisterService(server *Server) {
 func NewTransactionService(
 	net api.NetworkAPI,
 	tx api.TxAPI,
-	mempool *state.TxMempool,
+	mempool api.MempoolAPI,
 	syncer api.Syncer,
 ) *TransactionService {
 	return &TransactionService{

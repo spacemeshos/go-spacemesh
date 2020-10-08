@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
-	"github.com/spacemeshos/go-spacemesh/state"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -17,7 +16,7 @@ import (
 type GlobalStateService struct {
 	Network     api.NetworkAPI // P2P Swarm
 	Mesh        api.TxAPI
-	Mempool     *state.TxMempool
+	Mempool     api.MempoolAPI
 	GenTime     api.GenesisTimeAPI
 	PeerCounter api.PeerCounter
 	Syncer      api.Syncer
@@ -31,7 +30,7 @@ func (s GlobalStateService) RegisterService(server *Server) {
 // NewGlobalStateService creates a new grpc service using config data.
 func NewGlobalStateService(
 	net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI,
-	syncer api.Syncer, mempool *state.TxMempool) *GlobalStateService {
+	syncer api.Syncer, mempool api.MempoolAPI) *GlobalStateService {
 	return &GlobalStateService{
 		Network:     net,
 		Mesh:        tx,
