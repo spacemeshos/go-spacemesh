@@ -1410,7 +1410,7 @@ func TestMeshService(t *testing.T) {
 					name: "start layer after last approved confirmed layer",
 					run: generateRunFn(2, &pb.LayersQueryRequest{
 						StartLayer: &pb.LayerNumber{Number: uint32(layerVerified + 1)},
-						EndLayer:   &pb.LayerNumber{Number: uint32(layerVerified + 1)},
+						EndLayer:   &pb.LayerNumber{Number: uint32(layerVerified + 2)},
 					}),
 				},
 
@@ -1442,7 +1442,7 @@ func TestMeshService(t *testing.T) {
 						checkLayer(t, res.Layer[0])
 
 						resLayerNine := res.Layer[9]
-						require.Equal(t, uint64(9), resLayerNine.Number, "layer nine is ninth")
+						require.Equal(t, uint32(9), resLayerNine.Number.Number, "layer nine is ninth")
 						require.Equal(t, pb.Layer_LAYER_STATUS_UNSPECIFIED, resLayerNine.Status, "later layer is unconfirmed")
 					},
 				},
@@ -1783,7 +1783,7 @@ func checkTransaction(t *testing.T, tx *pb.Transaction) {
 }
 
 func checkLayer(t *testing.T, l *pb.Layer) {
-	require.Equal(t, uint64(0), l.Number, "first layer is zero")
+	require.Equal(t, uint32(0), l.Number.Number, "first layer is zero")
 	require.Equal(t, pb.Layer_LAYER_STATUS_CONFIRMED, l.Status, "first layer is confirmed")
 
 	require.Equal(t, atxPerLayer, len(l.Activations), "unexpected number of activations in layer")

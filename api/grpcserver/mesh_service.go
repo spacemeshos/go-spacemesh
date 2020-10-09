@@ -159,10 +159,13 @@ func (s MeshService) getFilteredActivations(startLayer types.LayerID, addr types
 func (s MeshService) AccountMeshDataQuery(_ context.Context, in *pb.AccountMeshDataQueryRequest) (*pb.AccountMeshDataQueryResponse, error) {
 	log.Info("GRPC MeshService.AccountMeshDataQuery")
 
+	var startLayer types.LayerID
 	if in.MinLayer == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "`MinLayer` must be provided")
+		//return nil, status.Errorf(codes.InvalidArgument, "`MinLayer` must be provided")
+		startLayer = 0
+	} else {
+		startLayer = types.LayerID(in.MinLayer.Number)
 	}
-	startLayer := types.LayerID(in.MinLayer.Number)
 
 	if startLayer > s.Mesh.LatestLayer() {
 		return nil, status.Errorf(codes.InvalidArgument, "`LatestLayer` must be less than or equal to latest layer")
@@ -362,11 +365,16 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 func (s MeshService) LayersQuery(_ context.Context, in *pb.LayersQueryRequest) (*pb.LayersQueryResponse, error) {
 	log.Info("GRPC MeshService.LayersQuery")
 
+	var startLayer, endLayer types.LayerID
 	if in.StartLayer == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "`StartLayer` must be provided")
+		startLayer = 0
+	} else {
+		startLayer = types.LayerID(in.StartLayer.Number)
 	}
 	if in.EndLayer == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "`EndLayer` must be provided")
+		endLayer = 0
+	} else {
+		endLayer = types.LayerID(in.EndLayer.Number)
 	}
 
 	// Get the latest layers that passed both consensus engines.
@@ -374,7 +382,7 @@ func (s MeshService) LayersQuery(_ context.Context, in *pb.LayersQueryRequest) (
 	lastLayerPassedTortoise := s.Mesh.ProcessedLayer()
 
 	layers := []*pb.Layer{}
-	for l := uint64(in.StartLayer.Number); l <= uint64(in.EndLayer.Number); l++ {
+	for l := uint64(startLayer); l <= uint64(endLayer); l++ {
 		layerStatus := pb.Layer_LAYER_STATUS_UNSPECIFIED
 
 		// First check if the layer passed the Hare, then check if it passed the Tortoise.
