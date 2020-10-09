@@ -159,6 +159,9 @@ func (s MeshService) getFilteredActivations(startLayer types.LayerID, addr types
 func (s MeshService) AccountMeshDataQuery(_ context.Context, in *pb.AccountMeshDataQueryRequest) (*pb.AccountMeshDataQueryResponse, error) {
 	log.Info("GRPC MeshService.AccountMeshDataQuery")
 
+	if in.MinLayer == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "`MinLayer` must be provided")
+	}
 	startLayer := types.LayerID(in.MinLayer.Number)
 
 	if startLayer > s.Mesh.LatestLayer() {
@@ -358,6 +361,13 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 // LayersQuery returns all mesh data, layer by layer
 func (s MeshService) LayersQuery(_ context.Context, in *pb.LayersQueryRequest) (*pb.LayersQueryResponse, error) {
 	log.Info("GRPC MeshService.LayersQuery")
+
+	if in.StartLayer == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "`StartLayer` must be provided")
+	}
+	if in.EndLayer == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "`EndLayer` must be provided")
+	}
 
 	// Get the latest layers that passed both consensus engines.
 	lastLayerPassedHare := s.Mesh.LatestLayerInState()

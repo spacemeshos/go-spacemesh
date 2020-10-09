@@ -73,11 +73,11 @@ func (s NodeService) Status(context.Context, *pb.StatusRequest) (*pb.StatusRespo
 	log.Info("GRPC NodeService.Status")
 	return &pb.StatusResponse{
 		Status: &pb.NodeStatus{
-			ConnectedPeers: s.PeerCounter.PeerCount(),            // number of connected peers
-			IsSynced:       s.Syncer.IsSynced(),                  // whether the node is synced
-			SyncedLayer:    s.Mesh.LatestLayer().Uint64(),        // latest layer we saw from the network
-			TopLayer:       s.GenTime.GetCurrentLayer().Uint64(), // current layer, based on time
-			VerifiedLayer:  s.Mesh.LatestLayerInState().Uint64(), // latest verified layer
+			ConnectedPeers: s.PeerCounter.PeerCount(),                                    // number of connected peers
+			IsSynced:       s.Syncer.IsSynced(),                                          // whether the node is synced
+			SyncedLayer:    &pb.LayerNumber{Number: uint32(s.Mesh.LatestLayer())},        // latest layer we saw from the network
+			TopLayer:       &pb.LayerNumber{Number: uint32(s.GenTime.GetCurrentLayer())}, // current layer, based on time
+			VerifiedLayer:  &pb.LayerNumber{Number: uint32(s.Mesh.LatestLayerInState())}, // latest verified layer
 		},
 	}, nil
 }
@@ -118,11 +118,11 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 			}
 			if err := stream.Send(&pb.StatusStreamResponse{
 				Status: &pb.NodeStatus{
-					ConnectedPeers: s.PeerCounter.PeerCount(),            // number of connected peers
-					IsSynced:       s.Syncer.IsSynced(),                  // whether the node is synced
-					SyncedLayer:    s.Mesh.LatestLayer().Uint64(),        // latest layer we saw from the network
-					TopLayer:       s.GenTime.GetCurrentLayer().Uint64(), // current layer, based on time
-					VerifiedLayer:  s.Mesh.LatestLayerInState().Uint64(), // latest verified layer
+					ConnectedPeers: s.PeerCounter.PeerCount(),                                    // number of connected peers
+					IsSynced:       s.Syncer.IsSynced(),                                          // whether the node is synced
+					SyncedLayer:    &pb.LayerNumber{Number: uint32(s.Mesh.LatestLayer())},        // latest layer we saw from the network
+					TopLayer:       &pb.LayerNumber{Number: uint32(s.GenTime.GetCurrentLayer())}, // current layer, based on time
+					VerifiedLayer:  &pb.LayerNumber{Number: uint32(s.Mesh.LatestLayerInState())}, // latest verified layer
 				},
 			}); err != nil {
 				return err

@@ -521,9 +521,9 @@ func TestNodeService(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, uint64(0), res.Status.ConnectedPeers)
 			require.Equal(t, false, res.Status.IsSynced)
-			require.Equal(t, uint64(layerLatest), res.Status.SyncedLayer)
-			require.Equal(t, uint64(layerCurrent), res.Status.TopLayer)
-			require.Equal(t, uint64(layerVerified), res.Status.VerifiedLayer)
+			require.Equal(t, uint32(layerLatest), res.Status.SyncedLayer.Number)
+			require.Equal(t, uint32(layerCurrent), res.Status.TopLayer.Number)
+			require.Equal(t, uint32(layerVerified), res.Status.VerifiedLayer.Number)
 		}},
 		{"SyncStart", func(t *testing.T) {
 			require.Equal(t, false, syncer.startCalled, "Start() not yet called on syncer")
@@ -575,7 +575,7 @@ func TestGlobalStateService(t *testing.T) {
 		{"GlobalStateHash", func(t *testing.T) {
 			res, err := c.GlobalStateHash(context.Background(), &pb.GlobalStateHashRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(layerVerified), res.Response.LayerNumber)
+			require.Equal(t, uint32(layerVerified), res.Response.Layer.Number)
 			require.Equal(t, stateRoot.Bytes(), res.Response.RootHash)
 		}},
 		{"Account", func(t *testing.T) {
@@ -2200,7 +2200,7 @@ func checkAccountDataQueryItemAccount(t *testing.T, dataItem interface{}) {
 func checkAccountDataQueryItemReward(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.AccountData_Reward:
-		require.Equal(t, uint64(layerFirst), x.Reward.Layer)
+		require.Equal(t, uint32(layerFirst), x.Reward.Layer.Number)
 		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
 		require.Equal(t, uint64(rewardAmount), x.Reward.LayerReward.Value)
 		require.Equal(t, addr1.Bytes(), x.Reward.Coinbase.Address)
@@ -2237,7 +2237,7 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.AccountMeshData_Activation:
 		require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
-		require.Equal(t, globalAtx.PubLayerID.Uint64(), x.Activation.Layer)
+		require.Equal(t, uint32(globalAtx.PubLayerID), x.Activation.Layer.Number)
 		require.Equal(t, globalAtx.NodeID.ToBytes(), x.Activation.SmesherId.Id)
 		require.Equal(t, globalAtx.Coinbase.Bytes(), x.Activation.Coinbase.Address)
 		require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
@@ -2251,7 +2251,7 @@ func checkAccountDataItemReward(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.AccountData_Reward:
 		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
-		require.Equal(t, uint64(layerFirst), x.Reward.Layer)
+		require.Equal(t, uint32(layerFirst), x.Reward.Layer.Number)
 		require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
 		require.Equal(t, addr1.Bytes(), x.Reward.Coinbase.Address)
 
@@ -2290,7 +2290,7 @@ func checkGlobalStateDataReward(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.GlobalStateData_Reward:
 		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
-		require.Equal(t, uint64(layerFirst), x.Reward.Layer)
+		require.Equal(t, uint32(layerFirst), x.Reward.Layer.Number)
 		require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
 		require.Equal(t, addr1.Bytes(), x.Reward.Coinbase.Address)
 
@@ -2326,7 +2326,7 @@ func checkGlobalStateDataAccountWrapper(t *testing.T, dataItem interface{}) {
 func checkGlobalStateDataGlobalState(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.GlobalStateData_GlobalState:
-		require.Equal(t, uint64(layerFirst), x.GlobalState.LayerNumber)
+		require.Equal(t, uint32(layerFirst), x.GlobalState.Layer.Number)
 		require.Equal(t, stateRoot.Bytes(), x.GlobalState.RootHash)
 
 	default:
