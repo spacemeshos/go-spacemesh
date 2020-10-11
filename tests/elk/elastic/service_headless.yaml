@@ -2,7 +2,6 @@ kind: Service
 apiVersion: v1
 metadata:
   name: elasticsearch-master-headless
-  namespace: NAMESPACE
   labels:
     heritage: "Helm"
     chart: "elasticsearch"

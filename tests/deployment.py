@@ -93,12 +93,24 @@ def delete_deployment(deployment_name, name_space):
     return resp
 
 
+def filebeat_teardown(namespace):
+    # remove clusterrolebind
+    k8s_client = client.RbacAuthorizationV1beta1Api()
+    # TODO: find a solution for sharing the name both here and in the kube object
+    crb_name = f"filebeat-cluster-role-binding-{namespace}"
+    k8s_client.delete_cluster_role_binding(crb_name)
+
+
 def add_elastic_cluster(namespace):
     add_deployment_dir(namespace, conf.ELASTIC_CONF_DIR)
 
 
 def add_filebeat_cluster(namespace):
     add_deployment_dir(namespace, conf.FILEBEAT_CONF_DIR)
+
+
+def add_fluentbit_cluster(namespace):
+    add_deployment_dir(namespace, conf.FLUENTBIT_CONF_DIR)
 
 
 def add_kibana_cluster(namespace):
@@ -138,12 +150,29 @@ def add_deployment_dir(namespace, dir_path, timeout=None):
             elif dep['kind'] == 'PodDisruptionBudget':
                 k8s_client = client.PolicyV1beta1Api()
                 k8s_client.create_namespaced_pod_disruption_budget(body=dep, namespace=namespace)
-            elif dep["kind"] == 'ClusterRole':
+            elif dep["kind"] == 'Role':
                 k8s_client = client.RbacAuthorizationV1beta1Api()
                 k8s_client.create_namespaced_role(body=dep, namespace=namespace)
+            elif dep["kind"] == 'ClusterRole':
+                try:
+                    k8s_client = client.RbacAuthorizationV1beta1Api()
+                    k8s_client.create_cluster_role(body=dep)
+                except ApiException as e:
+                    if e.status == 409:
+                        print(f"cluster role already exists")
+                        continue
+                    raise e
+            elif dep["kind"] == 'RoleBinding':
+                k8s_client = client.RbacAuthorizationV1beta1Api()
+                dep["subjects"][0]["namespace"] = namespace
+                k8s_client.create_namespaced_role_binding(body=dep, namespace=namespace)
             elif dep["kind"] == 'ClusterRoleBinding':
                 k8s_client = client.RbacAuthorizationV1beta1Api()
-                k8s_client.create_namespaced_role_binding(body=dep, namespace=namespace)
+                # TODO: move this to a function
+                dep["metadata"]["name"] = dep["metadata"]["name"].replace("NAMESPACE", namespace)
+                dep["roleRef"]["name"] = dep["roleRef"]["name"].replace("NAMESPACE", namespace)
+                dep["subjects"][0]["namespace"] = namespace
+                k8s_client.create_cluster_role_binding(body=dep)
             elif dep["kind"] == 'ConfigMap':
                 k8s_client = client.CoreV1Api()
                 k8s_client.create_namespaced_config_map(body=dep, namespace=namespace)

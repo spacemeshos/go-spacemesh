@@ -1,1 +1,0 @@
-daemonset.yaml, config.yaml, service.yaml, serviceaccount.yaml, clusterrole.yaml, clusterrolebinding.yaml, secret.yaml

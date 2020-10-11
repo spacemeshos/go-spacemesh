@@ -2,7 +2,6 @@ apiVersion: policy/v1beta1
 kind: PodDisruptionBudget
 metadata:
   name: "elasticsearch-master-pdb"
-  namespace: NAMESPACE
 spec:
   maxUnavailable: 1
   selector:

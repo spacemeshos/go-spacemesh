@@ -2,7 +2,6 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: filebeat-config
-  namespace: NAMESPACE
   labels:
     app: "filebeat"
     chart: "filebeat"
@@ -24,5 +23,24 @@ data:
       loadbalance: true
       index: filebeat
 #    output.elasticsearch:
-#      host: '${NODE_NAME}'
-#      hosts: '${ELASTICSEARCH_HOSTS:elasticsearch-master:9200}'
+#        host: '${NODE_NAME}'
+#        hosts: '${ELASTICSEARCH_HOSTS:elasticsearch-master:9200}'
+#        username: elastic
+#        password: gavradon
+#  kubernetes.yml: |-
+#    - type: docker
+#      containers.ids:
+#      - "*"
+#      processors:
+#        - add_kubernetes_metadata:
+#            host: ${NODE_NAME}
+#            matchers:
+#            - logs_path:
+#                logs_path: "/var/log/containers/"
+#      processors:
+#        - add_kubernetes_metadata:
+#            in_cluster: true
+#            host: ${NODE_NAME}
+#            matchers:
+#              - logs_path:
+#                  logs_path: "/var/log/containers/"

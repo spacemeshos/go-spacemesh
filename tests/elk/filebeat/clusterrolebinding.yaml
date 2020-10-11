@@ -1,8 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRoleBinding
 metadata:
-  name: filebeat-cluster-role-binding
-  namespace: NAMESPACE
+  name: filebeat-cluster-role-binding-NAMESPACE
   labels:
     app: "filebeat"
     chart: "filebeat"
@@ -14,4 +13,4 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: filebeat
-    namespace: default
+    namespace: NAMESPACE
