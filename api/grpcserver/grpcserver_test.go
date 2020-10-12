@@ -1992,6 +1992,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 
 	// publish a receipt
 	events.ReportReceipt(events.TxReceipt{
+		Address: addr1,
 		Index: receiptIndex,
 	})
 
@@ -2087,6 +2088,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 
 	// publish a receipt
 	events.ReportReceipt(events.TxReceipt{
+		Address: addr1,
 		Index: receiptIndex,
 	})
 
@@ -2151,7 +2153,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
-		require.Equal(t, uint64(0), res.Layer.Number)
+		require.Equal(t, uint32(0), res.Layer.Number.Number)
 		require.Equal(t, events.LayerStatusTypeConfirmed, int(res.Layer.Status))
 		checkLayer(t, res.Layer)
 
