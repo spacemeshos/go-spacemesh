@@ -188,7 +188,7 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 	return nil
 }
 
-func (db *DB) createTraversalFuncForMinerWeights(minerWeight map[string]uint64, layersPerEpoch uint16, targetEpoch types.EpochID) func(b *types.Block) (bool, error) {
+func (db *DB) createTraversalFuncForMinerWeights(minerWeight map[string]uint64, targetEpoch types.EpochID) func(b *types.Block) (bool, error) {
 	return func(b *types.Block) (stop bool, err error) {
 
 		// count unique ATXs
@@ -232,7 +232,7 @@ func (db *DB) GetMinerWeightsInEpochFromView(targetEpoch types.EpochID, view map
 
 	minerWeight := make(map[string]uint64)
 
-	traversalFunc := db.createTraversalFuncForMinerWeights(minerWeight, db.LayersPerEpoch, targetEpoch)
+	traversalFunc := db.createTraversalFuncForMinerWeights(minerWeight, targetEpoch)
 
 	startTime := time.Now()
 	err := db.meshDb.ForBlockInView(view, firstLayerOfPrevEpoch, traversalFunc)

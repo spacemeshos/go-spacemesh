@@ -233,7 +233,7 @@ func TestOracle_CalcEligibility_AllEligible(t *testing.T) {
 	o := defaultOracle(t)
 	o.getActiveSet = (&mockActiveSetProvider{1}).ActiveSet
 
-	nodeID := types.NodeID{VRFPublicKey: []byte(strconv.Itoa(0))}
+	nodeID := types.NodeID{Key: strconv.Itoa(0)}
 	sig := make([]byte, 64)
 	for i := 0; i < 1000; i++ {
 		n, err := rand.Read(sig)
@@ -260,7 +260,7 @@ func TestOracle_CalcEligibility(t *testing.T) {
 		n, err := rand.Read(sig)
 		r.NoError(err)
 		r.Equal(64, n)
-		nodeID := types.NodeID{VRFPublicKey: []byte(pubkey)}
+		nodeID := types.NodeID{Key: pubkey}
 
 		res, err := o.CalcEligibility(types.LayerID(50), 1, committeeSize, nodeID, sig)
 		r.NoError(err)
@@ -360,14 +360,14 @@ func Test_BlsSignVerify(t *testing.T) {
 	o := defaultOracle(t)
 	getActiveSet := func(types.EpochID, map[types.BlockID]struct{}) (map[string]uint64, error) {
 		return map[string]uint64{
-			string(pu): 1,
-			"abc":      9,
+			"my_key": 1,
+			"abc":    9,
 		}, nil
 	}
 	o.getActiveSet = getActiveSet
 	o.vrfVerifier = BLS381.Verify2
 	o.vrfSigner = BLS381.NewBlsSigner(pr)
-	id := types.NodeID{VRFPublicKey: pu}
+	id := types.NodeID{Key: "my_key", VRFPublicKey: pu}
 	proof, err := o.Proof(50, 1)
 	assert.NoError(t, err)
 

@@ -1894,6 +1894,9 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 }
 
 func TestAccountDataStream_comprehensive(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{})
 	shutDown := launchServer(t, svc)
 	defer shutDown()
@@ -2085,6 +2088,9 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 }
 
 func TestLayerStream_comprehensive(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	grpcService := NewMeshService(txAPI, txMempool, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
@@ -2293,6 +2299,7 @@ func checkGlobalStateDataGlobalState(t *testing.T, dataItem interface{}) {
 }
 
 func TestMultiService(t *testing.T) {
+	cfg.NewGrpcServerPort = 9192
 	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
 	svc2 := NewMeshService(txAPI, txMempool, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, svc1, svc2)

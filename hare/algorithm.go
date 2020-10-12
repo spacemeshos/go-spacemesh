@@ -448,6 +448,7 @@ func (proc *consensusProcess) sendMessage(msg *Msg) bool {
 	proc.With().Info("message sent",
 		log.String("current_set", proc.s.String()),
 		log.String("msg_type", msg.InnerMsg.Type.String()),
+		log.Int("eligibility_count", int(msg.InnerMsg.EligibilityCount)),
 		types.LayerID(proc.instanceID))
 	return true
 }
@@ -797,7 +798,7 @@ func (proc *consensusProcess) currentRole() role {
 
 	eligibilityCount, err := proc.oracle.CalcEligibility(types.LayerID(proc.instanceID), proc.k, expectedCommitteeSize(proc.k, proc.cfg.N, proc.cfg.ExpectedLeaders), proc.nid, proof)
 	if err != nil {
-		proc.With().Error("Could not check our eligibility", log.Err(err))
+		proc.With().Error("Could not check our eligibility", log.Err(err), types.LayerID(proc.instanceID))
 		return passive
 	}
 

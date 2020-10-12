@@ -184,19 +184,24 @@ func (o *Oracle) totalWeight(layer types.LayerID) (uint64, error) {
 	return totalWeight, nil
 }
 
-func (o *Oracle) minerWeight(layer types.LayerID, id string) (uint64, error) {
+func (o *Oracle) minerWeight(layer types.LayerID, id types.NodeID) (uint64, error) {
 	actives, err := o.actives(layer)
 	if err != nil {
 		if err == errGenesis { // we are in genesis
 			return o.genesisTotalWeight / 50, nil
 		}
 
-		o.With().Error("totalWeight erred while calling actives func", log.Err(err), layer)
+		o.With().Error("minerWeight erred while calling actives func", log.Err(err), layer)
 		return 0, err
 	}
 
-	w, ok := actives[id]
+	w, ok := actives[id.Key]
 	if !ok {
+		o.With().Error("miner is not active in specified layer",
+			log.Int("active_set_size", len(actives)),
+			log.String("actives", fmt.Sprintf("%v", actives)),
+			layer, log.String("id.Key", id.Key),
+		)
 		return 0, errors.New("miner is not active in specified layer")
 	}
 	return w, nil
@@ -240,7 +245,7 @@ func (o *Oracle) prepareEligibilityCheck(layer types.LayerID, round int32, commi
 	}
 
 	// calc hash & check threshold
-	minerWeight, err := o.minerWeight(layer, string(id.VRFPublicKey))
+	minerWeight, err := o.minerWeight(layer, id)
 	if err != nil {
 		return fixed.Fixed{}, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
