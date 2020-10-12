@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	p2pconf "github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -75,25 +76,25 @@ type responseMessage struct {
 	data []byte
 }
 
-// requestBatch is a batch of requests and a hash of all requests as ID
+// requestBatch is a batch of Requests and a hash of all Requests as ID
 type requestBatch struct {
 	ID       types.Hash32
-	requests []requestMessage
+	Requests []requestMessage
 }
 
-// SetID calculates the hash of all requests and sets it as this batches ID
+// SetID calculates the hash of all Requests and sets it as this batches ID
 func (b *requestBatch) SetID() {
-	bts, err := types.InterfaceToBytes(b.requests)
+	bts, err := types.InterfaceToBytes(b.Requests)
 	if err != nil {
 		return
 	}
 	b.ID = types.CalcHash32(bts)
 }
 
-//ToMap converts the array of requests to map so it can be easily invalidated
+//ToMap converts the array of Requests to map so it can be easily invalidated
 func (b requestBatch) ToMap() map[types.Hash32]requestMessage {
 	m := make(map[types.Hash32]requestMessage)
-	for _, r := range b.requests {
+	for _, r := range b.Requests {
 		m[r.Hash] = r
 	}
 	return m
@@ -103,7 +104,7 @@ func (b requestBatch) ToMap() map[types.Hash32]requestMessage {
 // as stated in requestBatch even if not all data is present
 type responseBatch struct {
 	ID        types.Hash32
-	responses []responseMessage
+	Responses []responseMessage
 }
 
 // Config is the configuration file of the Fetch component
@@ -118,12 +119,14 @@ type peers interface {
 	GetPeers() []p2ppeers.Peer
 }
 
+// MessageNetwork is a network interface that allows fetch to communicate with other nodes with 'fetch servers'
 type MessageNetwork struct {
 	*server.MessageServer
 	peers
 	log.Log
 }
 
+// NewMessageNetwork creates a new instance of the fetch network server
 func NewMessageNetwork(requestTimeOut int, net service.Service, protocol string, log log.Log) *MessageNetwork {
 	return &MessageNetwork{
 		server.NewMsgServer(net.(server.Service), protocol, time.Duration(requestTimeOut)*time.Second, make(chan service.DirectMessage, p2pconf.Values.BufferSize), log),
@@ -142,14 +145,19 @@ func (f MessageNetwork) GetRandomPeer() p2ppeers.Peer {
 	return peers[rand.Intn(len(peers))]
 }
 
-// Fetch is the main struct that contains network peers and logic to batch and dispatch hash fetch requests
+type network interface {
+	GetRandomPeer() p2ppeers.Peer
+	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error
+}
+
+// Fetch is the main struct that contains network peers and logic to batch and dispatch hash fetch Requests
 type Fetch struct {
 	cfg                  Config
 	log                  log.Log
 	dbs                  map[Hint]database.Database
 	activeRequests       map[types.Hash32][]request
 	activeBatches        map[types.Hash32]requestBatch
-	net                  *MessageNetwork
+	net                  network
 	requestReceiver      chan request
 	batchRequestReceiver chan []request
 	batchTimeout         *time.Ticker
@@ -180,24 +188,28 @@ func NewFetch(cfg Config, network service.Service, logger log.Log) *Fetch {
 	return f
 }
 
-// Start handling fetch requests
+// Start handling fetch Requests
 func (f *Fetch) Start() {
 	go f.loop()
 }
 
-// Stop handling fetch requests
+// Stop handling fetch Requests
 func (f *Fetch) Stop() {
 	f.batchTimeout.Stop()
 	f.stop <- struct{}{}
 }
 
-// here we receive all requests for hashes for all DBs and batch them together before we send the request to peer
+func (f *Fetch) AddDB(hint Hint, db database.Database){
+	f.dbs[hint] = db
+}
+
+// here we receive all Requests for hashes for all DBs and batch them together before we send the request to peer
 // there can be a priority request that will not be batched
 func (f *Fetch) loop() {
 	for {
 		select {
 		case req := <-f.requestReceiver:
-			// group requests by hash
+			// group Requests by hash
 			f.activeReqM.Lock()
 			f.activeRequests[req.hash] = append(f.activeRequests[req.hash], req)
 			rLen := len(f.activeRequests)
@@ -228,7 +240,7 @@ func (f *Fetch) loop() {
 	}
 }
 
-// FetchRequestHandler handles requests for sync from peers, and basically reads data from database and puts it
+// FetchRequestHandler handles Requests for sync from peers, and basically reads data from database and puts it
 // in a response batch
 func (f *Fetch) FetchRequestHandler(data []byte) []byte {
 	var requestBatch requestBatch
@@ -238,11 +250,11 @@ func (f *Fetch) FetchRequestHandler(data []byte) []byte {
 	}
 	resBatch := responseBatch{
 		ID:        requestBatch.ID,
-		responses: make([]responseMessage, 0, len(requestBatch.requests)),
+		Responses: make([]responseMessage, 0, len(requestBatch.Requests)),
 	}
-	// this will iterate all requests and populate appropriate responses, if there are any missing items they will not
+	// this will iterate all Requests and populate appropriate Responses, if there are any missing items they will not
 	// be included in the response at all
-	for _, r := range requestBatch.requests {
+	for _, r := range requestBatch.Requests {
 		db, ok := f.dbs[r.Hint]
 		if !ok {
 			//db not found, don't return response here
@@ -258,7 +270,7 @@ func (f *Fetch) FetchRequestHandler(data []byte) []byte {
 			Hash: r.Hash,
 			data: res,
 		}
-		resBatch.responses = append(resBatch.responses, m)
+		resBatch.Responses = append(resBatch.Responses, m)
 	}
 
 	bts, err := types.InterfaceToBytes(resBatch)
@@ -286,10 +298,10 @@ func (f *Fetch) receiveResponse(data []byte) {
 		return
 	}
 
-	// convert requests to map so it can be invalidated when reading responses
+	// convert Requests to map so it can be invalidated when reading Responses
 	batchMap := batch.ToMap()
-	// iterate all hash responses
-	for _, resID := range response.responses {
+	// iterate all hash Responses
+	for _, resID := range response.Responses {
 		//take lock here to make handling of a single hash atomic
 		f.activeReqM.Lock()
 		// for each hash, call its callbacks
@@ -333,7 +345,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 		f.activeReqM.Unlock()
 	}
 
-	//iterate all requests that didn't return value from peer and invalidate them with error
+	//iterate all Requests that didn't return value from peer and invalidate them with error
 	err = fmt.Errorf("hash did not return")
 	for h := range batchMap {
 		f.activeReqM.Lock()
@@ -384,7 +396,7 @@ func (f *Fetch) sendBatch(hashes []types.Hash32) { // create a network batch and
 			continue
 		}
 		r := requestMessage{Hint: req[0].hint, Hash: hash}
-		batch.requests = append(batch.requests, r)
+		batch.Requests = append(batch.Requests, r)
 	}
 	f.activeReqM.RUnlock()
 	batch.SetID()
@@ -407,7 +419,7 @@ func (f *Fetch) sendBatch(hashes []types.Hash32) { // create a network batch and
 		// get random peer
 		p := f.net.GetRandomPeer()
 		err := f.net.SendRequest(fetch, bytes, p, f.receiveResponse, timeoutFunc)
-		// if call succeeded, continue to other requests
+		// if call succeeded, continue to other Requests
 		if err == nil {
 			break
 		}
@@ -432,7 +444,7 @@ func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
 	}
 	f.activeBatchM.RUnlock()
 	f.activeReqM.Lock()
-	for _, h := range batch.requests {
+	for _, h := range batch.Requests {
 		for _, callback := range f.activeRequests[h.Hash] {
 			callback.returnChan <- HashDataPromiseResult{
 				Err:  err,
@@ -448,6 +460,7 @@ func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
 	f.activeBatchM.Unlock()
 }
 
+// HashDataPromiseResult is the result strict when requesting data corresponding to the Hash
 type HashDataPromiseResult struct {
 	Err  error
 	Hash types.Hash32
@@ -463,7 +476,7 @@ func (f *Fetch) GetAllHashes(hashes []types.Hash32, hint Hint, hashValidationFun
 		hashWaiting = append(hashWaiting, callBackChan)
 	}
 
-	// wait for all block fetch requests to end
+	// wait for all block fetch Requests to end
 	var retErr error = nil
 	for _, hashRes := range hashWaiting {
 		res := <-hashRes
@@ -484,6 +497,10 @@ func (f *Fetch) GetHash(hash types.Hash32, h Hint, dataCallback HandleDataCallba
 	callbackChan := make(chan HashDataPromiseResult, 1)
 
 	//check if we already have this hash locally
+	if _, ok := f.dbs[h]; !ok {
+		f.log.Panic("tried to fetch data from DB that doesn't exist locally: %v", h)
+	}
+
 	if _, err := f.dbs[h].Get(hash.Bytes()); err == nil {
 		callbackChan <- HashDataPromiseResult{
 			Err:  nil,
