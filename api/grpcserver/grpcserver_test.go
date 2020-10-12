@@ -1993,7 +1993,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	// publish a receipt
 	events.ReportReceipt(events.TxReceipt{
 		Address: addr1,
-		Index: receiptIndex,
+		Index:   receiptIndex,
 	})
 
 	// publish a reward
@@ -2089,7 +2089,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	// publish a receipt
 	events.ReportReceipt(events.TxReceipt{
 		Address: addr1,
-		Index: receiptIndex,
+		Index:   receiptIndex,
 	})
 
 	// publish a reward
