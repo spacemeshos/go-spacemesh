@@ -395,6 +395,7 @@ func (m *MempoolMock) Put(id types.TransactionID, tx *types.Transaction) {
 	m.poolByTxid[id] = tx
 	m.poolByAddress[tx.Recipient] = id
 	m.poolByAddress[tx.Origin()] = id
+	events.ReportNewTx(tx)
 }
 
 // Return a mock estimated nonce and balance that's different than the default, mimicking transactions that are
