@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -14,9 +13,8 @@ import (
 
 // GlobalStateService exposes global state data, output from the STF
 type GlobalStateService struct {
-	Mesh        api.TxAPI
-	Mempool     api.MempoolAPI
-	PeerCounter api.PeerCounter
+	Mesh    api.TxAPI
+	Mempool api.MempoolAPI
 }
 
 // RegisterService registers this service with a grpc server instance
@@ -25,11 +23,10 @@ func (s GlobalStateService) RegisterService(server *Server) {
 }
 
 // NewGlobalStateService creates a new grpc service using config data.
-func NewGlobalStateService(net api.NetworkAPI, tx api.TxAPI, mempool api.MempoolAPI) *GlobalStateService {
+func NewGlobalStateService(tx api.TxAPI, mempool api.MempoolAPI) *GlobalStateService {
 	return &GlobalStateService{
-		Mesh:        tx,
-		Mempool:     mempool,
-		PeerCounter: peers.NewPeers(net, log.NewDefault("grpcserver.GlobalStateService")),
+		Mesh:    tx,
+		Mempool: mempool,
 	}
 }
 
