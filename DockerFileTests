@@ -1,4 +1,4 @@
-FROM python:latest AS tests_base
+FROM python:3.8 AS tests_base
 
 WORKDIR /go-spacemesh/tests
 
