@@ -10,11 +10,12 @@ const (
 	defaultGRPCServerInterface     = ""
 	defaultStartJSONServer         = false
 	defaultJSONServerPort          = 9093
-	defaultStartNodeService        = false
-	defaultStartMeshService        = false
+	defaultStartGatewayService     = false
 	defaultStartGlobalStateService = false
-	defaultStartTransactionService = false
+	defaultStartMeshService        = false
+	defaultStartNodeService        = false
 	defaultStartSmesherService     = false
+	defaultStartTransactionService = false
 )
 
 // Config defines the api config params
@@ -25,11 +26,12 @@ type Config struct {
 	StartJSONServer     bool     `mapstructure:"json-server"`
 	JSONServerPort      int      `mapstructure:"json-port"`
 	// no direct command line flags for these
-	StartNodeService        bool
-	StartMeshService        bool
+	StartGatewayService     bool
 	StartGlobalStateService bool
-	StartTransactionService bool
+	StartMeshService        bool
+	StartNodeService        bool
 	StartSmesherService     bool
+	StartTransactionService bool
 }
 
 func init() {
@@ -45,11 +47,12 @@ func DefaultConfig() Config {
 		GrpcServerInterface:     defaultGRPCServerInterface,
 		StartJSONServer:         defaultStartJSONServer,
 		JSONServerPort:          defaultJSONServerPort,
-		StartNodeService:        defaultStartNodeService,
-		StartMeshService:        defaultStartMeshService,
+		StartGatewayService:     defaultStartGatewayService,
 		StartGlobalStateService: defaultStartGlobalStateService,
-		StartTransactionService: defaultStartTransactionService,
+		StartMeshService:        defaultStartMeshService,
+		StartNodeService:        defaultStartNodeService,
 		StartSmesherService:     defaultStartSmesherService,
+		StartTransactionService: defaultStartTransactionService,
 	}
 }
 
@@ -58,16 +61,18 @@ func (s *Config) ParseServicesList() error {
 	// Make sure all enabled GRPC services are known
 	for _, svc := range s.StartGrpcServices {
 		switch svc {
+		case "gateway":
+			s.StartGatewayService = true
+		case "globalstate":
+			s.StartGlobalStateService = true
 		case "mesh":
 			s.StartMeshService = true
 		case "node":
 			s.StartNodeService = true
-		case "globalstate":
-			s.StartGlobalStateService = true
-		case "transaction":
-			s.StartTransactionService = true
 		case "smesher":
 			s.StartSmesherService = true
+		case "transaction":
+			s.StartTransactionService = true
 		default:
 			return errors.New("unrecognized GRPC service requested: " + svc)
 		}
@@ -75,8 +80,13 @@ func (s *Config) ParseServicesList() error {
 
 	// If JSON gateway server is enabled, make sure at least one
 	// GRPC service is also enabled
-	if s.StartJSONServer && !s.StartNodeService && !s.StartMeshService &&
-		!s.StartGlobalStateService && !s.StartTransactionService && !s.StartSmesherService {
+	if s.StartJSONServer &&
+		!s.StartGatewayService &&
+		!s.StartGlobalStateService &&
+		!s.StartMeshService &&
+		!s.StartNodeService &&
+		!s.StartSmesherService &&
+		!s.StartTransactionService {
 		return errors.New("must enable at least one GRPC service along with JSON gateway service")
 	}
 

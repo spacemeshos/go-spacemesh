@@ -132,7 +132,7 @@ func AddCommands(cmd *cobra.Command) {
 	// StartGrpcServices determines which (if any) GRPC API services should be started
 	cmd.PersistentFlags().StringSliceVar(&config.API.StartGrpcServices, "grpc",
 		config.API.StartGrpcServices, "Comma-separated list of individual grpc services to enable "+
-			"(node,mesh,globalstate,transaction,smesher)")
+			"(gateway,globalstate,mesh,node,smesher,transaction)")
 	// GrpcServerPort determines the grpc server local listening port
 	cmd.PersistentFlags().IntVar(&config.API.GrpcServerPort, "grpc-port",
 		config.API.GrpcServerPort, "GRPC api server port")
