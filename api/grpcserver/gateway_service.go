@@ -24,9 +24,7 @@ func (s GatewayService) RegisterService(server *Server) {
 }
 
 // NewGatewayService creates a new grpc service using config data.
-func NewGatewayService(
-	net api.NetworkAPI,
-) *GatewayService {
+func NewGatewayService(net api.NetworkAPI) *GatewayService {
 	return &GatewayService{
 		Network: net,
 	}
