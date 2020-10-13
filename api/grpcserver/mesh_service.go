@@ -161,7 +161,6 @@ func (s MeshService) AccountMeshDataQuery(_ context.Context, in *pb.AccountMeshD
 
 	var startLayer types.LayerID
 	if in.MinLayer == nil {
-		//return nil, status.Errorf(codes.InvalidArgument, "`MinLayer` must be provided")
 		startLayer = 0
 	} else {
 		startLayer = types.LayerID(in.MinLayer.Number)
