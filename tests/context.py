@@ -25,7 +25,7 @@ class ES:
     def __init__(self, namespace):
         self.namespace = namespace
         self.es_ip = self.get_elastic_ip()
-        self.es = Elasticsearch(self.es_ip, port=9200, timeout=90)
+        self.es = Elasticsearch(self.es_ip, port=9200, timeout=90, http_auth=('elastic', 'gavradon'))
 
     def get_elastic_ip(self):
         k8s_client = client.CoreV1Api()

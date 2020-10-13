@@ -102,22 +102,27 @@ def filebeat_teardown(namespace):
 
 
 def add_elastic_cluster(namespace):
+    print("Deploying ElasticSearch")
     add_deployment_dir(namespace, conf.ELASTIC_CONF_DIR)
 
 
 def add_filebeat_cluster(namespace):
+    print("Deploying FileBeat")
     add_deployment_dir(namespace, conf.FILEBEAT_CONF_DIR)
 
 
 def add_fluentbit_cluster(namespace):
+    print("Deploying FluentBit")
     add_deployment_dir(namespace, conf.FLUENTBIT_CONF_DIR)
 
 
 def add_kibana_cluster(namespace):
+    print("Deploying Kibana")
     add_deployment_dir(namespace, conf.KIBANA_CONF_DIR)
 
 
 def add_logstash_cluster(namespace):
+    print("Deploying LogStash")
     add_deployment_dir(namespace, conf.LOGSTASH_CONF_DIR)
 
 
@@ -170,7 +175,6 @@ def add_deployment_dir(namespace, dir_path, timeout=None):
                 k8s_client = client.RbacAuthorizationV1beta1Api()
                 # TODO: move this to a function
                 dep["metadata"]["name"] = dep["metadata"]["name"].replace("NAMESPACE", namespace)
-                dep["roleRef"]["name"] = dep["roleRef"]["name"].replace("NAMESPACE", namespace)
                 dep["subjects"][0]["namespace"] = namespace
                 k8s_client.create_cluster_role_binding(body=dep)
             elif dep["kind"] == 'ConfigMap':

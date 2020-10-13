@@ -13,7 +13,7 @@ from tests.tx_generator.models.wallet_api import WalletAPI
 from tests.utils import get_curr_ind
 
 
-def test_transactions(init_session, setup_network):
+def test_transactions(init_session, add_elk, setup_network):
     # create #new_acc_num new accounts by sending them coins from tap
     # check tap balance/nonce
     # sleep until new state is processed

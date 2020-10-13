@@ -21,8 +21,8 @@ current_index = 'kubernetes_cluster-' + todaydate
 
 # for convenience
 def get_pod_name_and_namespace_queries(pod_name, namespace):
-    return Q("match_phrase", kubernetes__pod_name=pod_name) & \
-           Q("match_phrase", kubernetes__namespace_name=namespace)
+    return Q("match_phrase", kubernetes__pod__name=pod_name) & \
+           Q("match_phrase", kubernetes__namespace=namespace)
 
 
 def set_time_frame_query(from_ts=None, to_ts=None):
@@ -121,7 +121,7 @@ def get_podlist(namespace, depname):
     fltr = get_pod_name_and_namespace_queries(depname, namespace)
     s = Search(index=current_index, using=api).query('bool').filter(fltr)
     hits = list(s.scan())
-    podnames = set([hit.kubernetes.pod_name for hit in hits])
+    podnames = set([hit.kubernetes.pod.name for hit in hits])
     return podnames
 
 
@@ -188,8 +188,6 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
     """
     # TODO : break this to smaller functions ?
     es = ES(namespace).get_search_api()
-    print("sleeping for 5000 secs")
-    time.sleep(5000)
     fltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
     for key in fields:
         fltr = fltr & Q("match_phrase", **{key: fields[key]})
@@ -199,7 +197,7 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
         for q in queries:
             fltr = fltr & q
 
-    s = Search(index=indx, using=es).query('bool', filter=[fltr])
+    s = Search(using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 
     if is_print:
@@ -211,14 +209,14 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
 
     if find_fails:
         print("Looking for pods that didn't hit:")
-        podnames = set([hit.kubernetes.pod_name for hit in hits])
+        podnames = set([hit.kubernetes.pod.name for hit in hits])
         newfltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
 
         for p in podnames:
-            newfltr = newfltr & ~Q("match_phrase", kubernetes__pod_name=p)
-        s2 = Search(index=current_index, using=es).query('bool', filter=[newfltr])
-        hits2 = list(s2.scan())
-        unsecpods = set([hit.kubernetes.pod_name for hit in hits2])
+            newfltr = newfltr & ~Q("match_phrase", kubernetes__pod__name=p)
+        s2 = Search(using=es).query('bool', filter=[newfltr])
+        hits2 = list(s2.scan(request_timeout=60, raise_on_error=False))
+        unsecpods = set([hit.kubernetes.pod.name for hit in hits2])
         if len(unsecpods) == 0:
             print("None. yay!")
         else:
@@ -344,10 +342,10 @@ def find_dups(indx, namespace, client_po_name, fields, max=1):
     counting = {}
 
     for hit in hits:
-        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[
-                                                                                                  hit.kubernetes.pod_name] + 1
-        if counting[hit.kubernetes.pod_name] > max and hit.kubernetes.pod_name not in counting:
-            dups.append(hit.kubernetes.pod_name)
+        counting[hit.kubernetes.pod.name] = 1 if hit.kubernetes.pod.name not in counting else counting[
+                                                                                                  hit.kubernetes.pod.name] + 1
+        if counting[hit.kubernetes.pod.name] > max and hit.kubernetes.pod.name not in counting:
+            dups.append(hit.kubernetes.pod.name)
 
     print("Total hits: {0}".format(len(hits)))
     print("Duplicate count {0}".format(len(dups)))
@@ -369,8 +367,8 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
     counting = {}
 
     for hit in hits:
-        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[
-                                                                                                  hit.kubernetes.pod_name] + 1
+        counting[hit.kubernetes.pod.name] = 1 if hit.kubernetes.pod.name not in counting else counting[
+                                                                                                  hit.kubernetes.pod.name] + 1
 
     for pod in counting:
         if counting[pod] < min:

@@ -61,7 +61,7 @@ def sleep_and_print(total_seconds):
 
 # add nodes continuously during the test (4 epochs) and validate hare consensus process,
 # layer hashes (match between all nodes)
-def test_add_delayed_nodes(init_session, add_curl, setup_bootstrap, start_poet, save_log_on_exit):
+def test_add_delayed_nodes(init_session, add_elk, add_curl, setup_bootstrap, start_poet, save_log_on_exit):
     current_index = get_curr_ind()
     bs_info = setup_bootstrap.pods[0]
     cspec = get_conf(bs_info, test_config['client'], test_config['genesis_delta'], setup_oracle=None,

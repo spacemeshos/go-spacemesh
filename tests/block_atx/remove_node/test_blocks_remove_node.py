@@ -33,7 +33,7 @@ from tests.utils import validate_blocks_per_nodes, get_pod_id
 #
 # hence:
 # validate total miner generated Tavg/x (floored) in i+5
-def test_remove_node_validate_atx(init_session, setup_mul_network):
+def test_remove_node_validate_atx(init_session, add_elk, setup_mul_network):
     curr_epoch = 0
     epochs_to_sleep = 2
     layer_duration = int(testconfig['client']['args']['layer-duration-sec'])

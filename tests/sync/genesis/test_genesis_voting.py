@@ -19,7 +19,7 @@ from tests.utils import get_conf
 # sleep until layer 4
 # validate no errors occurred
 # validate new node didn't receive any new blocks before being synced
-def test_unsync_while_genesis(init_session, setup_bootstrap, start_poet, add_curl):
+def test_unsync_while_genesis(init_session, add_elk, setup_bootstrap, start_poet, add_curl):
     layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
 
     time_to_create_block_since_startup = int(testconfig['client']['args']['layers-per-epoch']) * 2 * layer_duration

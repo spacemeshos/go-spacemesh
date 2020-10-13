@@ -49,7 +49,7 @@ def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
 def search_pod_logs(namespace, pod_name, term):
     current_index = get_curr_ind()
     api = ES(namespace).get_search_api()
-    fltr = Q("match_phrase", kubernetes__pod_name=pod_name) & Q("match_phrase", kubernetes__namespace_name=namespace)
+    fltr = Q("match_phrase", kubernetes__pod__name=pod_name) & Q("match_phrase", kubernetes__namespace=namespace)
     s = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time")
     res = s.execute()
     full = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time").extra(size=res.hits.total)
@@ -71,7 +71,7 @@ def check_pod_logs(pod_name, data):
     return False
 
 
-def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exit):
+def test_sync_gradually_add_nodes(init_session, add_elk, setup_bootstrap, save_log_on_exit):
     current_index = get_curr_ind()
     bs_info = setup_bootstrap.pods[0]
 
