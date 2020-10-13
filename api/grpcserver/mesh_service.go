@@ -159,7 +159,12 @@ func (s MeshService) getFilteredActivations(startLayer types.LayerID, addr types
 func (s MeshService) AccountMeshDataQuery(_ context.Context, in *pb.AccountMeshDataQueryRequest) (*pb.AccountMeshDataQueryResponse, error) {
 	log.Info("GRPC MeshService.AccountMeshDataQuery")
 
-	startLayer := types.LayerID(in.MinLayer.Number)
+	var startLayer types.LayerID
+	if in.MinLayer == nil {
+		startLayer = 0
+	} else {
+		startLayer = types.LayerID(in.MinLayer.Number)
+	}
 
 	if startLayer > s.Mesh.LatestLayer() {
 		return nil, status.Errorf(codes.InvalidArgument, "`LatestLayer` must be less than or equal to latest layer")
@@ -359,12 +364,24 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 func (s MeshService) LayersQuery(_ context.Context, in *pb.LayersQueryRequest) (*pb.LayersQueryResponse, error) {
 	log.Info("GRPC MeshService.LayersQuery")
 
+	var startLayer, endLayer types.LayerID
+	if in.StartLayer == nil {
+		startLayer = 0
+	} else {
+		startLayer = types.LayerID(in.StartLayer.Number)
+	}
+	if in.EndLayer == nil {
+		endLayer = 0
+	} else {
+		endLayer = types.LayerID(in.EndLayer.Number)
+	}
+
 	// Get the latest layers that passed both consensus engines.
 	lastLayerPassedHare := s.Mesh.LatestLayerInState()
 	lastLayerPassedTortoise := s.Mesh.ProcessedLayer()
 
 	layers := []*pb.Layer{}
-	for l := uint64(in.StartLayer.Number); l <= uint64(in.EndLayer.Number); l++ {
+	for l := uint64(startLayer); l <= uint64(endLayer); l++ {
 		layerStatus := pb.Layer_LAYER_STATUS_UNSPECIFIED
 
 		// First check if the layer passed the Hare, then check if it passed the Tortoise.

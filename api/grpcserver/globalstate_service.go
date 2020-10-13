@@ -45,8 +45,8 @@ func NewGlobalStateService(
 func (s GlobalStateService) GlobalStateHash(context.Context, *pb.GlobalStateHashRequest) (*pb.GlobalStateHashResponse, error) {
 	log.Info("GRPC GlobalStateService.GlobalStateHash")
 	return &pb.GlobalStateHashResponse{Response: &pb.GlobalStateHash{
-		RootHash:    s.Mesh.GetStateRoot().Bytes(),
-		LayerNumber: s.Mesh.LatestLayerInState().Uint64(),
+		RootHash: s.Mesh.GetStateRoot().Bytes(),
+		Layer:    &pb.LayerNumber{Number: uint32(s.Mesh.LatestLayerInState())},
 	}}, nil
 }
 
@@ -310,10 +310,10 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 					Receipt: &pb.TransactionReceipt{
 						Id: &pb.TransactionId{Id: receipt.ID.Bytes()},
 						//Result:      receipt.Result,
-						GasUsed:     receipt.GasUsed,
-						Fee:         &pb.Amount{Value: receipt.Fee},
-						LayerNumber: receipt.Layer.Uint64(),
-						Index:       receipt.Index,
+						GasUsed: receipt.GasUsed,
+						Fee:     &pb.Amount{Value: receipt.Fee},
+						Layer:   &pb.LayerNumber{Number: uint32(receipt.Layer)},
+						Index:   receipt.Index,
 						//SvmData: nil,
 					},
 				}}}); err != nil {
@@ -446,10 +446,10 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				Receipt: &pb.TransactionReceipt{
 					Id: &pb.TransactionId{Id: receipt.ID.Bytes()},
 					//Result:      receipt.Result,
-					GasUsed:     receipt.GasUsed,
-					Fee:         &pb.Amount{Value: receipt.Fee},
-					LayerNumber: receipt.Layer.Uint64(),
-					Index:       receipt.Index,
+					GasUsed: receipt.GasUsed,
+					Fee:     &pb.Amount{Value: receipt.Fee},
+					Layer:   &pb.LayerNumber{Number: uint32(receipt.Layer)},
+					Index:   receipt.Index,
 					//SvmData: nil,
 				},
 			}}}); err != nil {
@@ -471,8 +471,8 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			}
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_GlobalState{
 				GlobalState: &pb.GlobalStateHash{
-					RootHash:    root.Bytes(),
-					LayerNumber: layer.Layer.Index().Uint64(),
+					RootHash: root.Bytes(),
+					Layer:    &pb.LayerNumber{Number: uint32(layer.Layer.Index())},
 				},
 			}}}); err != nil {
 				return err

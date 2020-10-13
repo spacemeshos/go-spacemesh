@@ -151,7 +151,7 @@ func TestReportError(t *testing.T) {
 
 		// now check errors sent through logging
 		msg := <-stream
-		require.Equal(t, int(zapcore.ErrorLevel), msg.Level)
+		require.Equal(t, zapcore.ErrorLevel, msg.Level)
 		require.Equal(t, "abracadabra", msg.Msg)
 	}()
 
