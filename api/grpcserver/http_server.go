@@ -75,7 +75,12 @@ func (s *JSONHTTPServer) startInternal(
 	// register each individual, enabled service
 	serviceCount := 0
 	if startGatewayService {
-		// GatewayService JSON gateway not currently implemented
+		if err := gw.RegisterGatewayServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
+			log.Error("error registering GatewayService with grpc gateway", err)
+		} else {
+			serviceCount++
+			log.Info("registered GatewayService with grpc gateway server")
+		}
 	}
 	if startGlobalStateService {
 		if err := gw.RegisterGlobalStateServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
