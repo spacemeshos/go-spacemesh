@@ -21,7 +21,7 @@ require (
 	github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361
 	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect
 	github.com/spacemeshos/amcl v0.0.2
-	github.com/spacemeshos/api/release/go v0.0.0-20201008195826-158580f4a50c
+	github.com/spacemeshos/api/release/go v0.0.0-20201013155109-3facffccde82
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82
 	github.com/spacemeshos/poet v0.1.0
