@@ -423,8 +423,12 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 
 	// start gRPC and json servers
 	grpcService.Start()
-	jsonService.StartService(cfg.StartNodeService, cfg.StartMeshService, cfg.StartGlobalStateService,
-		cfg.StartSmesherService, cfg.StartTransactionService)
+	jsonService.StartService(cfg.StartGatewayService,
+		cfg.StartGlobalStateService,
+		cfg.StartMeshService,
+		cfg.StartNodeService,
+		cfg.StartSmesherService,
+		cfg.StartTransactionService)
 	time.Sleep(3 * time.Second) // wait for server to be ready (critical on Travis)
 
 	return func() {
