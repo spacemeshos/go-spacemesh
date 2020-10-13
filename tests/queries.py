@@ -106,7 +106,7 @@ def get_blocks_and_layers(namespace, pod_name, find_fails=False):
     return nodes, layers
 
 
-def get_layers(namespace, find_fails=True):
+def get_layers(namespace, find_fails=False):
     tick_msgs = get_all_msg_containing(namespace, namespace, "release tick", find_fails)
     layers = defaultdict(int)
     for msg in tick_msgs:
@@ -119,7 +119,7 @@ def get_layers(namespace, find_fails=True):
 def get_podlist(namespace, depname):
     api = ES(namespace).get_search_api()
     fltr = get_pod_name_and_namespace_queries(depname, namespace)
-    s = Search(index=current_index, using=api).query('bool').filter(fltr)
+    s = Search(using=api).query('bool').filter(fltr)
     hits = list(s.scan())
     podnames = set([hit.kubernetes.pod.name for hit in hits])
     return podnames
@@ -128,7 +128,7 @@ def get_podlist(namespace, depname):
 def get_pod_logs(namespace, pod_name):
     api = ES(namespace).get_search_api()
     fltr = get_pod_name_and_namespace_queries(pod_name, namespace)
-    s = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time")
+    s = Search(using=api).query('bool').filter(fltr).sort("time")
     res = s.execute()
     full = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time").extra(size=res.hits.total)
     res = full.execute()
@@ -215,7 +215,7 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
         for p in podnames:
             newfltr = newfltr & ~Q("match_phrase", kubernetes__pod__name=p)
         s2 = Search(using=es).query('bool', filter=[newfltr])
-        hits2 = list(s2.scan(request_timeout=60, raise_on_error=False))
+        hits2 = list(s2.scan())
         unsecpods = set([hit.kubernetes.pod.name for hit in hits2])
         if len(unsecpods) == 0:
             print("None. yay!")
@@ -335,7 +335,7 @@ def find_dups(indx, namespace, client_po_name, fields, max=1):
     fltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
     for f in fields:
         fltr = fltr & Q("match_phrase", **{f: fields[f]})
-    s = Search(index=indx, using=es).query('bool', filter=[fltr])
+    s = Search(using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 
     dups = []
@@ -360,7 +360,7 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
     fltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
     for f in fields:
         fltr = fltr & Q("match_phrase", **{f: fields[f]})
-    s = Search(index=indx, using=es).query('bool', filter=[fltr])
+    s = Search(using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 
     miss = []

@@ -50,7 +50,7 @@ def search_pod_logs(namespace, pod_name, term):
     current_index = get_curr_ind()
     api = ES(namespace).get_search_api()
     fltr = Q("match_phrase", kubernetes__pod__name=pod_name) & Q("match_phrase", kubernetes__namespace=namespace)
-    s = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time")
+    s = Search(using=api).query('bool').filter(fltr).sort("time")
     res = s.execute()
     full = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time").extra(size=res.hits.total)
     res = full.execute()
