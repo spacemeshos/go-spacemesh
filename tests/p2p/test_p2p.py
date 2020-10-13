@@ -158,11 +158,11 @@ def test_gossip(init_session, setup_clients, add_curl):
     print("Sending gossip from client ip: {0}/{1}".format(podname, client_ip))
 
     # todo: take out broadcast and rpcs to helper methods.
-    api = 'v1/broadcast'
+    api = 'v1/gateway/broadcastpoet'
     data = '{"data":"foo"}'
     out = api_call(client_ip, data, api, testconfig['namespace'])
 
-    assert "{'value': 'ok'}" in out
+    assert "{'status': {'Code': 0}}" in out
 
     # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
     # TODO: check frequently before timeout so we might be able to finish earlier.
@@ -196,10 +196,10 @@ def test_many_gossip_messages(setup_clients, add_curl):
         print("Sending gossip from client ip: {0}/{1}".format(podname, client_ip))
 
         # todo: take out broadcast and rpcs to helper methods.
-        api = 'v1/broadcast'
+        api = 'v1/gateway/broadcastpoet'
         data = '{"data":"foo' + str(i) + '"}'
         out = api_call(client_ip, data, api, testconfig['namespace'])
-        assert "{'value': 'ok'}" in out
+        assert "{'status': {'Code': 0}}" in out
 
         # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
         # TODO: check frequently before timeout so we might be able to finish earlier.
@@ -220,7 +220,7 @@ def test_many_gossip_messages(setup_clients, add_curl):
 
 
 def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000, prop_sleep_time=20, num_of_msg=100,
-              expected_ret="{'value': 'ok'}", msg_field="data"):
+              expected_ret="{'status': {'Code': 0}}", msg_field="data"):
     """
     sends a protocol message to a random node and asserts it's propagation
 
@@ -276,7 +276,7 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
 # Validate that all nodes got exactly Y messages (X*Y messages)
 # Sample few nodes and validate that they got all 5 messages
 def test_many_gossip_sim(setup_clients, add_curl):
-    api = 'v1/broadcast'
+    api = 'v1/gateway/broadcastpoet'
     headers = {'M': 'new_gossip_message', 'protocol': 'api_test_gossip'}
     msg_size = 10000  # 1kb TODO: increase up to 2mb
     test_messages = 100
@@ -290,7 +290,7 @@ def test_many_gossip_sim(setup_clients, add_curl):
 
 
 def test_broadcast_unknown_protocol(setup_bootstrap, setup_clients, add_curl):
-    api = 'v1/broadcast'
+    api = 'v1/gateway/broadcastpoet'
     # protocol is modified
     headers = {'M': 'new_gossip_message', 'protocol': 'unknown_protocol'}
     msg_size = 10000  # 1kb TODO: increase up to 2mb

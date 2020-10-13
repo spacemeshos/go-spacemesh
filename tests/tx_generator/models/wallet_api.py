@@ -15,10 +15,9 @@ class WalletAPI:
     """
 
     ADDRESS_SIZE_HEX = 40
-    balance_api = 'v1/balance'
-    get_tx_api = 'v1/gettransaction'
-    nonce_api = 'v1/nonce'
-    submit_api = 'v1/submittransaction'
+    account_api = 'v1/globalstate/account'
+    get_tx_api = 'v1/transaction/transactionsstate'
+    submit_api = 'v1/transaction/submittransaction'
 
     def __init__(self, namespace, clients_lst, fixed_node=None):
         """
@@ -68,13 +67,13 @@ class WalletAPI:
         return WalletAPI.extract_balance_from_resp(res)
 
     def _get_nonce(self, acc):
-        return self._make_address_api_call(acc, "nonce", self.nonce_api)
+        return self._make_address_api_call(acc, "counter")
 
     def _get_balance(self, acc):
-        return self._make_address_api_call(acc, "balance", self.balance_api)
+        return self._make_address_api_call(acc, "balance")
 
-    def _make_address_api_call(self, acc, resource, api_res):
-        # check balance/nonce
+    def _make_address_api_call(self, acc, resource):
+        # get account state to check balance/nonce
         print(f"\ngetting {resource} for", acc)
         pod_ip, pod_name = self.random_node()
         data = '{"address":"' + acc[-self.ADDRESS_SIZE_HEX:] + '"}'
@@ -82,10 +81,14 @@ class WalletAPI:
             data = '{"address":"' + acc + '"}'
 
         print(f"querying for the {resource} of {acc}")
-        out = self.send_api_call(pod_ip, data, api_res)
+        out = self.send_api_call(pod_ip, data, self.account_api)
 
         print(f"{resource} output={out}")
-        return out
+        state = out.account_wrapper.state_projected
+        if resource == 'counter':
+            return state.counter
+        elif resource == 'balance':
+            return state.balance.amount
 
     def random_node(self):
         """
