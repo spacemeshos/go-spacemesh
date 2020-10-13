@@ -291,7 +291,7 @@ func (app *SpacemeshApp) setupLogging() {
 			events.ReportError(events.NodeError{
 				Msg:   entry.Message,
 				Trace: string(debug.Stack()),
-				Type:  int(entry.Level),
+				Level: entry.Level,
 			})
 		}
 		return nil
@@ -717,7 +717,7 @@ func (app *SpacemeshApp) startAPIServices(net api.NetworkAPI) {
 		registerService(grpcserver.NewMeshService(app.mesh, app.txPool, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
 	}
 	if apiConf.StartGlobalStateService {
-		registerService(grpcserver.NewGlobalStateService(net, app.mesh))
+		registerService(grpcserver.NewGlobalStateService(net, app.mesh, app.txPool))
 	}
 	if apiConf.StartSmesherService {
 		registerService(grpcserver.NewSmesherService(app.atxBuilder))
@@ -1003,7 +1003,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	<-cmdp.Ctx.Done()
 	events.ReportError(events.NodeError{
-		Msg:  "node is shutting down",
-		Type: events.NodeErrorTypeSignalShutdown,
+		Msg:   "node is shutting down",
+		Level: zapcore.InfoLevel,
 	})
 }

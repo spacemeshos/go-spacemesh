@@ -60,3 +60,10 @@ type TxAPI interface {
 type PeerCounter interface {
 	PeerCount() uint64
 }
+
+// MempoolAPI is an API for reading mempool data that's useful for API services
+type MempoolAPI interface {
+	Get(types.TransactionID) (*types.Transaction, error)
+	GetTxIdsByAddress(types.Address) []types.TransactionID
+	GetProjection(types.Address, uint64, uint64) (uint64, uint64)
+}
