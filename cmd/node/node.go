@@ -155,6 +155,7 @@ type SpacemeshApp struct {
 	Config         *cfg.Config
 	grpcAPIService *grpcserver.Server
 	jsonAPIService *grpcserver.JSONHTTPServer
+	gatewaySvc     *grpcserver.GatewayService
 	globalstateSvc *grpcserver.GlobalStateService
 	txService      *grpcserver.TransactionService
 	syncer         *sync.Syncer

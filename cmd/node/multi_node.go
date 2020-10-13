@@ -158,16 +158,17 @@ func getTestDefaultConfig() *config.Config {
 
 // ActivateGrpcServer starts a grpc server on the provided node
 func ActivateGrpcServer(smApp *SpacemeshApp) {
-	// Activate the two API services used by app_test
-	smApp.Config.API.StartTransactionService = true
+	// Activate the API services used by app_test
+	smApp.Config.API.StartGatewayService = true
 	smApp.Config.API.StartGlobalStateService = true
+	smApp.Config.API.StartTransactionService = true
 	smApp.grpcAPIService = grpcserver.NewServerWithInterface(smApp.Config.API.GrpcServerPort, smApp.Config.API.GrpcServerInterface)
-	svcGlobalState := grpcserver.NewGlobalStateService(smApp.mesh, smApp.txPool)
-	svcTx := grpcserver.NewTransactionService(smApp.P2P, smApp.mesh, smApp.txPool, smApp.syncer)
-	svcGlobalState.RegisterService(smApp.grpcAPIService)
-	smApp.globalstateSvc = svcGlobalState
-	svcTx.RegisterService(smApp.grpcAPIService)
-	smApp.txService = svcTx
+	smApp.gatewaySvc = grpcserver.NewGatewayService(smApp.P2P)
+	smApp.globalstateSvc = grpcserver.NewGlobalStateService(smApp.mesh, smApp.txPool)
+	smApp.txService = grpcserver.NewTransactionService(smApp.P2P, smApp.mesh, smApp.txPool, smApp.syncer)
+	smApp.gatewaySvc.RegisterService(smApp.grpcAPIService)
+	smApp.globalstateSvc.RegisterService(smApp.grpcAPIService)
+	smApp.txService.RegisterService(smApp.grpcAPIService)
 	smApp.grpcAPIService.Start()
 }
 
