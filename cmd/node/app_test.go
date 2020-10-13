@@ -206,7 +206,6 @@ type TestScenario struct {
 }
 
 func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
-
 	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apicfg.Account2Private))
 	if err != nil {
 		log.Panic("Could not build ed signer err=%v", err)
@@ -244,7 +243,6 @@ func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 }
 
 func txWithRunningNonceGenerator(dependencies []int) TestScenario {
-
 	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apicfg.Account1Private))
 	if err != nil {
 		log.Panic("Could not build ed signer err=%v", err)
@@ -259,7 +257,7 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 		getNonce := func() int {
 			accountResponse, err := suite.apps[0].globalstateSvc.Account(nil, accountRequest)
 			assert.NoError(suite.T(), err)
-			return int(accountResponse.AccountWrapper.Counter)
+			return int(accountResponse.AccountWrapper.StateCurrent.Counter)
 		}
 
 		for i := 0; i < txsSent; i++ {

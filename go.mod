@@ -24,7 +24,7 @@ require (
 	github.com/spacemeshos/api/release/go v0.0.0-20201013155109-3facffccde82
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82
-	github.com/spacemeshos/poet v0.1.0
+	github.com/spacemeshos/poet v0.1.1-0.20201013202053-99eed195dc2d
 	github.com/spacemeshos/post v0.0.0-20200707150818-013318bab6f4
 	github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9
 	github.com/spf13/afero v1.2.0 // indirect
