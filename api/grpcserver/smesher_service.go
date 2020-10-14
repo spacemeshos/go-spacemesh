@@ -42,7 +42,8 @@ func (s SmesherService) IsSmeshing(ctx context.Context, in *empty.Empty) (*pb.Is
 func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingRequest) (*pb.StartSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.StartSmeshing")
 
-	// TODO(moshababo): check why JSON request via HTTP gateway doesn't decode `coinbase` properly
+	// TODO(moshababo): check why JSON request via HTTP gateway doesn't decode `coinbase` properly,
+	// see https://github.com/spacemeshos/api/issues/114
 
 	if in.Coinbase == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "`Coinbase` must be provided")
