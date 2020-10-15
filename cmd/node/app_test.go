@@ -257,17 +257,19 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 		getNonce := func() int {
 			accountResponse, err := suite.apps[0].globalstateSvc.Account(nil, accountRequest)
 			assert.NoError(suite.T(), err)
-			return int(accountResponse.AccountWrapper.StateCurrent.Counter)
+			// Check the projected state. We just want to know that the tx has entered
+			// the mempool successfully.
+			return int(accountResponse.AccountWrapper.StateProjected.Counter)
 		}
 
 		for i := 0; i < txsSent; i++ {
 			actNonce := getNonce()
-			log.Info("waiting for nonce: %d, current actual nonce: %d", i, actNonce)
+			log.Info("waiting for nonce: %d, current projected nonce: %d", i, actNonce)
 
 			// Note: this may loop forever if the nonce is not advancing for some reason, but the entire
 			// setup process will timeout above if this happens
 			for i != actNonce {
-				time.Sleep(1 * time.Second)
+				time.Sleep(250 * time.Millisecond)
 				actNonce = getNonce()
 			}
 			tx, err := types.NewSignedTx(uint64(i), dst, 10, 1, 1, acc1Signer)
@@ -294,7 +296,7 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 	return TestScenario{setup, teardown, dependencies}
 }
 
-func reachedEpochTester(dependancies []int) TestScenario {
+func reachedEpochTester(dependencies []int) TestScenario {
 	const numberOfEpochs = 5 // first 2 epochs are genesis
 	setup := func(suite *AppTestSuite, t *testing.T) {}
 
@@ -311,10 +313,10 @@ func reachedEpochTester(dependancies []int) TestScenario {
 		}
 		return ok
 	}
-	return TestScenario{setup, test, dependancies}
+	return TestScenario{setup, test, dependencies}
 }
 
-func sameRootTester(dependancies []int) TestScenario {
+func sameRootTester(dependencies []int) TestScenario {
 	setup := func(suite *AppTestSuite, t *testing.T) {}
 
 	test := func(suite *AppTestSuite, t *testing.T) bool {
@@ -347,7 +349,7 @@ func sameRootTester(dependancies []int) TestScenario {
 		return false
 	}
 
-	return TestScenario{setup, test, dependancies}
+	return TestScenario{setup, test, dependencies}
 }
 
 // run setup on all tests
@@ -367,17 +369,10 @@ func runTests(suite *AppTestSuite, finished map[int]bool) bool {
 		}
 		if depsOk && !finished[i] {
 			finished[i] = test.Criteria(suite, suite.T())
-			log.Info("test %d has finished with result %v", i, finished[i])
+			log.Info("test %d completion state: %v", i, finished[i])
 		}
-	}
-	for i := 0; i < len(tests); i++ {
-		testOk, hasTest := finished[i]
-		if hasTest {
-			if !testOk {
-				return false
-			}
-		} else {
-			//test didnt run yet
+		if !finished[i] {
+			// at least one test isn't completed, pre-empt and return to keep looping
 			return false
 		}
 	}
@@ -457,7 +452,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	totalBlocks := 0
 	for id, l := range patient.layertoblocks {
 		totalBlocks += len(l)
-		log.Info("patient %v layer %v, blocks %v", suite.apps[0].nodeID.String(), id, len(l))
+		log.Info("patient %v layer %v, blocks %v", suite.apps[0].nodeID.ShortString(), id, len(l))
 	}
 
 	firstEpochBlocks := 0
