@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -92,6 +93,9 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 var tests = []TestScenario{txWithRunningNonceGenerator([]int{}), sameRootTester([]int{0}), reachedEpochTester([]int{}), txWithUnorderedNonceGenerator([]int{1})}
 
 func (suite *AppTestSuite) TestMultipleNodes() {
+	var once sync.Once
+	wrapShutdown := func() { GracefulShutdown(suite.apps) }
+	shutdownOnce := func() { once.Do(wrapShutdown) }
 	net := service.NewSimulator()
 	const numberOfEpochs = 5 // first 2 epochs are genesis
 	cfg := getTestDefaultConfig()
@@ -134,7 +138,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	ld := time.Duration(20) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
 	suite.initMultipleInstances(cfg, rolacle, rng, 5, path, genesisTime, poetHarness.HTTPPoetClient, clock, net)
-	defer GracefulShutdown(suite.apps)
+	defer shutdownOnce()
 	for _, a := range suite.apps {
 		a.startServices()
 	}
@@ -184,6 +188,10 @@ loop:
 	}
 	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch) - 1)
 	oldRoot := suite.apps[0].state.GetStateRoot()
+
+	// Shut down before running the rest of the tests or we'll get an error about resource unavailable
+	// when we try to allocate more database files
+	shutdownOnce()
 
 	// this tests loading of previous state, maybe it's not the best place to put this here...
 	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, rng, path+"a", rolacle, poetHarness.HTTPPoetClient, clock, net)
@@ -405,9 +413,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 
 		for i := types.LayerID(5); i <= untilLayer; i++ {
 			lyr, err := ap.blockListener.GetLayer(i)
-			if err != nil {
-				log.Error("ERROR: couldn't get a validated layer from db layer %v, %v", i, err)
-			}
+			assert.NoError(suite.T(), err, "couldn't get a validated layer from db layer %v", i)
 			for _, b := range lyr.Blocks() {
 				datamap[ap.nodeID.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeID.Key].layertoblocks[lyr.Index()], b.ID())
 			}
