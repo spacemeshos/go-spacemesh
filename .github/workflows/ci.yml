@@ -26,7 +26,7 @@ on:
       - '**.md'
 
 jobs:
-  # stage 1: run these as a prerequisite as they're quick and cheap
+  # stage 1: run unit tests and app tests as a preqrequisite
   quicktests:
     runs-on: ubuntu-latest
     steps:
@@ -36,6 +36,7 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: ${{ env.go-version }}
+      # this sends a quick notification so we know tests have kicked off
       - uses: act10ns/slack@v1
         with:
           status: in progress
@@ -50,11 +51,8 @@ jobs:
         with:
           status: ${{ job.status }}
           if: always()
-
-  # stage 2: next run unit tests and app tests in parallel
   unittests:
     runs-on: ubuntu-latest
-    needs: quicktests
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -72,7 +70,6 @@ jobs:
           if: always()
   apptests:
     runs-on: ubuntu-latest
-    needs: quicktests
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -89,12 +86,13 @@ jobs:
           status: ${{ job.status }}
           if: always()
 
-  # stage 3: next run docker push, as system tests rely on this
+  # stage 2: next run docker push, as system tests rely on this
   dockerpush:
     # only run on push, not on pull_request
     # note that this does NOT run on pushes to branch develop, see separate workflow file for that
     if: github.event_name == 'push'
     needs:
+      - quicktests
       - unittests
       - apptests
     runs-on: ubuntu-latest
@@ -108,7 +106,7 @@ jobs:
           status: ${{ job.status }}
           if: always()
 
-  # stage 4: finally run system tests in parallel if everything else passes
+  # stage 3: finally run system tests in parallel if everything else passes
   systemtest-latenodes:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
