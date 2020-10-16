@@ -194,6 +194,10 @@ or
 make cover
 ```
 
+### Continuous Integration
+
+We've enabled continuous integration on this repository in GitHub. You can read more about [our CI workflows](ci.md).
+
 ### Docker
 A `Dockerfile` is included in the project allowing anyone to build and run a docker image:
 ```bash
