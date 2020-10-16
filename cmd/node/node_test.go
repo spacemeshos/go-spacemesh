@@ -39,6 +39,17 @@ import (
 	"time"
 )
 
+func tempDir() (dir string, cleanup func() error, err error) {
+	path, err := ioutil.TempDir("", "datadir_")
+	if err != nil {
+		return "", nil, err
+	}
+	cleanup = func() error {
+		return os.RemoveAll(path)
+	}
+	return
+}
+
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r := require.New(t)
 
@@ -408,9 +419,14 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r := require.New(t)
 	app := NewSpacemeshApp()
 
+	path, cleanup, err := tempDir()
+	r.NoError(err)
+	defer cleanup()
+
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
 		app.Config.API.GrpcServerPort = port
+		app.Config.DataDirParent = path
 		app.startAPIServices(NetMock{})
 	}
 	defer app.stopServices()
@@ -475,9 +491,14 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	r := require.New(t)
 	app := NewSpacemeshApp()
 
+	path, cleanup, err := tempDir()
+	r.NoError(err)
+	defer cleanup()
+
 	// Make sure the service is not running by default
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
+		app.Config.DataDirParent = path
 		app.startAPIServices(NetMock{})
 	}
 	defer app.stopServices()
@@ -540,6 +561,10 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	app := NewSpacemeshApp()
 
+	path, cleanup, err := tempDir()
+	require.NoError(t, err)
+	defer cleanup()
+
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		defer app.Cleanup(cmd, args)
 		require.NoError(t, app.Initialize(cmd, args))
@@ -551,6 +576,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		// Speed things up a little
 		app.Config.SyncInterval = 1
 		app.Config.LayerDurationSec = 2
+		app.Config.DataDirParent = path
 
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
@@ -705,16 +731,23 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 // E2E app test of the transaction service
 func TestSpacemeshApp_TransactionService(t *testing.T) {
 	setup()
+	r := require.New(t)
 
 	// Use a unique port
 	port := 1236
 
-	r := require.New(t)
+	// Use a unique dir for data so we don't read existing state
+	path, cleanup, err := tempDir()
+	r.NoError(err, "error creating tempdir")
+	defer cleanup()
+
 	app := NewSpacemeshApp()
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		defer app.Cleanup(cmd, args)
 		r.NoError(app.Initialize(cmd, args))
+
+		app.Config.DataDirParent = path
 
 		// GRPC configuration
 		app.Config.API.GrpcServerPort = port

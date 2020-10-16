@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"sync"
 	"testing"
 	"time"
 
@@ -93,9 +92,6 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 var tests = []TestScenario{txWithRunningNonceGenerator([]int{}), sameRootTester([]int{0}), reachedEpochTester([]int{}), txWithUnorderedNonceGenerator([]int{1})}
 
 func (suite *AppTestSuite) TestMultipleNodes() {
-	var once sync.Once
-	wrapShutdown := func() { GracefulShutdown(suite.apps) }
-	shutdownOnce := func() { once.Do(wrapShutdown) }
 	net := service.NewSimulator()
 	const numberOfEpochs = 5 // first 2 epochs are genesis
 	cfg := getTestDefaultConfig()
@@ -138,60 +134,63 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	ld := time.Duration(20) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
 	suite.initMultipleInstances(cfg, rolacle, rng, 5, path, genesisTime, poetHarness.HTTPPoetClient, clock, net)
-	defer shutdownOnce()
-	for _, a := range suite.apps {
-		a.startServices()
-	}
 
-	ActivateGrpcServer(suite.apps[0])
+	// We must shut down before running the rest of the tests or we'll get an error about resource unavailable
+	// when we try to allocate more database files. Wrap this context neatly in an inline func.
+	var oldRoot types.Hash32
+	func() {
+		defer GracefulShutdown(suite.apps)
 
-	if err := poetHarness.Start([]string{"127.0.0.1:9092"}); err != nil {
-		suite.T().Fatalf("failed to start poet server: %v", err)
-	}
-
-	timeout := time.After(6 * time.Minute)
-
-	// Run setup first. We need to allow this to timeout, and monitor the failure channel too,
-	// as this can also loop forever.
-	doneChan := make(chan struct{})
-	go func() {
-		setupTests(suite)
-		close(doneChan)
-	}()
-
-loopSetup:
-	for {
-		select {
-		case <-doneChan:
-			break loopSetup
-		case <-timeout:
-			suite.T().Fatal("timed out")
-		case <-failChan:
-			suite.T().Fatal("error from poet harness")
+		for _, a := range suite.apps {
+			a.startServices()
 		}
-	}
 
-	finished := map[int]bool{}
-loop:
-	for {
-		select {
-		case <-timeout:
-			suite.T().Fatal("timed out")
-		case <-failChan:
-			suite.T().Fatal("error from poet harness")
-		default:
-			if runTests(suite, finished) {
-				break loop
+		ActivateGrpcServer(suite.apps[0])
+
+		if err := poetHarness.Start([]string{"127.0.0.1:9092"}); err != nil {
+			suite.T().Fatalf("failed to start poet server: %v", err)
+		}
+
+		timeout := time.After(6 * time.Minute)
+
+		// Run setup first. We need to allow this to timeout, and monitor the failure channel too,
+		// as this can also loop forever.
+		doneChan := make(chan struct{})
+		go func() {
+			setupTests(suite)
+			close(doneChan)
+		}()
+
+	loopSetup:
+		for {
+			select {
+			case <-doneChan:
+				break loopSetup
+			case <-timeout:
+				suite.T().Fatal("timed out")
+			case <-failChan:
+				suite.T().Fatal("error from poet harness")
 			}
-			time.Sleep(10 * time.Second)
 		}
-	}
-	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch) - 1)
-	oldRoot := suite.apps[0].state.GetStateRoot()
 
-	// Shut down before running the rest of the tests or we'll get an error about resource unavailable
-	// when we try to allocate more database files
-	shutdownOnce()
+		finished := map[int]bool{}
+	loop:
+		for {
+			select {
+			case <-timeout:
+				suite.T().Fatal("timed out")
+			case <-failChan:
+				suite.T().Fatal("error from poet harness")
+			default:
+				if runTests(suite, finished) {
+					break loop
+				}
+				time.Sleep(10 * time.Second)
+			}
+		}
+		suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch) - 1)
+		oldRoot = suite.apps[0].state.GetStateRoot()
+	}()
 
 	// this tests loading of previous state, maybe it's not the best place to put this here...
 	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, rng, path+"a", rolacle, poetHarness.HTTPPoetClient, clock, net)
