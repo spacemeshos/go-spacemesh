@@ -199,7 +199,6 @@ def test_many_gossip_messages(setup_clients, add_curl):
         api = 'v1/gateway/broadcastpoet'
         data = '{"data":"foo' + str(i) + '"}'
         out = api_call(client_ip, data, api, testconfig['namespace'])
-        print(out)
         assert "{'status': {}}" in out
 
         # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node

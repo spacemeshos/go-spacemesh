@@ -38,7 +38,7 @@ spec:
         - name: bootstrap-vol
           mountPath: /usr/share/spacemesh
       - name: poet
-        image: spacemeshos/poet:develop
+        image: spacemeshos/poet:lane
         imagePullPolicy: Always
         args: ['--rpclisten', '0.0.0.0:50002', '--restlisten', '0.0.0.0:80', "--n", "19"]
         resources:
