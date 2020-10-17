@@ -162,7 +162,7 @@ def test_gossip(init_session, setup_clients, add_curl):
     data = '{"data":"foo"}'
     out = api_call(client_ip, data, api, testconfig['namespace'])
 
-    assert "{'status': {'Code': 0}}" in out
+    assert "{'status': {}}" in out
 
     # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
     # TODO: check frequently before timeout so we might be able to finish earlier.
@@ -199,7 +199,8 @@ def test_many_gossip_messages(setup_clients, add_curl):
         api = 'v1/gateway/broadcastpoet'
         data = '{"data":"foo' + str(i) + '"}'
         out = api_call(client_ip, data, api, testconfig['namespace'])
-        assert "{'status': {'Code': 0}}" in out
+        print(out)
+        assert "{'status': {}}" in out
 
         # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
         # TODO: check frequently before timeout so we might be able to finish earlier.
@@ -220,9 +221,9 @@ def test_many_gossip_messages(setup_clients, add_curl):
 
 
 def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000, prop_sleep_time=20, num_of_msg=100,
-              expected_ret="{'status': {'Code': 0}}", msg_field="data"):
+              expected_ret="{'status': {}}", msg_field="data"):
     """
-    sends a protocol message to a random node and asserts it's propagation
+    sends a protocol message to a random node and asserts its propagation
 
     :param setup_clients: DeploymentInfo, clients info
     :param api: string, api path

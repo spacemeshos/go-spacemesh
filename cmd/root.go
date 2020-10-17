@@ -81,7 +81,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().Int8Var(&config.P2P.NetworkID, "network-id",
 		config.P2P.NetworkID, "NetworkID to run on (0 - mainnet, 1 - testnet)")
 	cmd.PersistentFlags().DurationVar(&config.P2P.ResponseTimeout, "response-timeout",
-		config.P2P.ResponseTimeout, "Timeout for waiting on resposne message")
+		config.P2P.ResponseTimeout, "Timeout for waiting on response message")
 	cmd.PersistentFlags().DurationVar(&config.P2P.SessionTimeout, "session-timeout",
 		config.P2P.SessionTimeout, "Timeout for waiting on session message")
 	cmd.PersistentFlags().StringVar(&config.P2P.NodeID, "node-id",

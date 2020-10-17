@@ -696,11 +696,11 @@ func (app *SpacemeshApp) startAPIServices(net api.NetworkAPI) {
 	apiConf := &app.Config.API
 	layerDuration := app.Config.LayerDurationSec
 
-	// NEW API SERVICES
-	// These work a little differently than the old services. Since we have multiple
-	// GRPC services, we cannot automatically enable them if the gateway server is
-	// enabled (since we don't know which ones to enable), so it's an error if the
-	// gateway server is enabled without enabling at least one GRPC service.
+	// API SERVICES
+	// Since we have multiple GRPC services, we cannot automatically enable them if
+	// the gateway server is enabled (since we don't know which ones to enable), so
+	// it's an error if the gateway server is enabled without enabling at least one
+	// GRPC service.
 
 	// Make sure we only create the server once.
 	registerService := func(svc grpcserver.ServiceAPI) {
@@ -740,7 +740,6 @@ func (app *SpacemeshApp) startAPIServices(net api.NetworkAPI) {
 			// This panics because it should not happen.
 			// It should be caught inside apiConf.
 			log.Panic("one or more new GRPC services must be enabled with new JSON gateway server.")
-			return
 		}
 		app.jsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
 		app.jsonAPIService.StartService(
