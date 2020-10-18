@@ -465,6 +465,10 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 }
 
 func (s *Syncer) syncAtxs(currentSyncLayer types.LayerID) {
+	if currentSyncLayer.GetEpoch() == 0 {
+		s.With().Info("skipping ATX sync in epoch 0")
+		return
+	}
 	lastLayerOfEpoch := (currentSyncLayer.GetEpoch() + 1).FirstLayer() - 1
 	if currentSyncLayer == lastLayerOfEpoch {
 		err := s.syncEpochActivations(currentSyncLayer.GetEpoch())
