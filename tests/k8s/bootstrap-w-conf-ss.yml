@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
       - name: bootstrap
-        image: spacemeshos/go-spacemesh:develop
+        image: spacemeshos/go-spacemesh-dev:api-cleanup
         imagePullPolicy: Always
         args: ['--config', '/etc/config/config.toml', '--grpc', 'gateway,globalstate,transaction', '--test-mode', '--coinbase', '0x1234', '--metrics', '--metrics-port', '2020', '--pprof-server']
         resources:

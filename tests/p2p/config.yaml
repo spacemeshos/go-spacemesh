@@ -32,7 +32,7 @@ bootstrap:
   deployment_type: deployment # default:deployment
 # IMPORTANT: all clients on the same suite should contain the same args (hare-committee-size, hare-max-adversaries etc)!
 client:
-  image: 'spacemeshos/go-spacemesh:develop'
+  image: 'spacemeshos/go-spacemesh-dev:api-cleanup'
   command: '/bin/go-harness'
   replicas: 40 #default 40
   resources:

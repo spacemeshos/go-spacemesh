@@ -1,3 +1,4 @@
+import base64
 from datetime import datetime
 import pytest
 from pytest_testconfig import config as testconfig
@@ -16,6 +17,9 @@ from tests.utils import get_conf, api_call, get_curr_ind
 
 current_index = get_curr_ind()
 timeout_factor = 1
+
+# For purposes of these tests, we override the PoetProof protocol
+gossip_message_query_fields = {'M': 'new_gossip_message', 'protocol': 'PoetProof'}
 
 
 def query_bootstrap_es(namespace, bootstrap_po_name):
@@ -149,8 +153,8 @@ def test_add_many_clients(init_session, setup_bootstrap, setup_clients):
 
 
 def test_gossip(init_session, setup_clients, add_curl):
-    fields = {'M': 'new_gossip_message', 'protocol': 'api_test_gossip'}
-    initial = len(query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields))
+    initial = len(query_message(
+        current_index, testconfig['namespace'], setup_clients.deployment_name, gossip_message_query_fields))
     # *note*: this already waits for bootstrap so we can send the msg right away.
     # send message to client via rpc
     client_ip = setup_clients.pods[0]['pod_ip']
@@ -159,7 +163,10 @@ def test_gossip(init_session, setup_clients, add_curl):
 
     # todo: take out broadcast and rpcs to helper methods.
     api = 'v1/gateway/broadcastpoet'
-    data = '{"data":"foo"}'
+
+    # this is messy: this gets passed to curl as a command, so it needs to be a string
+    # grpc expects binary data as base64
+    data = '{"data":"%s"}' % base64.b64encode(b"foo").decode('utf-8')
     out = api_call(client_ip, data, api, testconfig['namespace'])
 
     assert "{'status': {}}" in out
@@ -175,7 +182,7 @@ def test_gossip(init_session, setup_clients, add_curl):
     after = poll_query_message(indx=current_index,
                                namespace=testconfig['namespace'],
                                client_po_name=setup_clients.deployment_name,
-                               fields=fields,
+                               fields=gossip_message_query_fields,
                                findFails=False,
                                expected=total_expected_gossip)
 
@@ -183,8 +190,8 @@ def test_gossip(init_session, setup_clients, add_curl):
 
 
 def test_many_gossip_messages(setup_clients, add_curl):
-    fields = {'M': 'new_gossip_message', 'protocol': 'api_test_gossip'}
-    initial = len(query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields))
+    initial = len(query_message(
+        current_index, testconfig['namespace'], setup_clients.deployment_name, gossip_message_query_fields))
 
     # *note*: this already waits for bootstrap so we can send the msg right away.
     # send message to client via rpc
@@ -197,7 +204,11 @@ def test_many_gossip_messages(setup_clients, add_curl):
 
         # todo: take out broadcast and rpcs to helper methods.
         api = 'v1/gateway/broadcastpoet'
-        data = '{"data":"foo' + str(i) + '"}'
+
+        # this is messy: this gets passed to curl as a command, so it needs to be a string
+        # grpc expects binary data as base64
+        # it doesn't matter what the data contains as long as each is unique
+        data = '{"data":"%s"}' % base64.b64encode(i.to_bytes(1, byteorder='big')).decode('utf-8')
         out = api_call(client_ip, data, api, testconfig['namespace'])
         assert "{'status': {}}" in out
 
@@ -211,7 +222,7 @@ def test_many_gossip_messages(setup_clients, add_curl):
         after = poll_query_message(indx=current_index,
                                    namespace=testconfig['namespace'],
                                    client_po_name=setup_clients.deployment_name,
-                                   fields=fields,
+                                   fields=gossip_message_query_fields,
                                    findFails=False,
                                    expected=total_expected_gossip)
 
@@ -277,22 +288,23 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
 # Sample few nodes and validate that they got all 5 messages
 def test_many_gossip_sim(setup_clients, add_curl):
     api = 'v1/gateway/broadcastpoet'
-    headers = {'M': 'new_gossip_message', 'protocol': 'api_test_gossip'}
     msg_size = 10000  # 1kb TODO: increase up to 2mb
     test_messages = 100
     pods_num = len(setup_clients.pods)
 
-    prev_num_of_msg = len(query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, headers))
+    prev_num_of_msg = len(query_message(
+        current_index, testconfig['namespace'], setup_clients.deployment_name, gossip_message_query_fields))
     # if msg is valid we should see the message at each node msg * pods(nodes)
     total_expected_gossip = prev_num_of_msg + test_messages * pods_num
 
-    send_msgs(setup_clients, api, headers, total_expected_gossip, num_of_msg=test_messages)
+    send_msgs(setup_clients, api, gossip_message_query_fields, total_expected_gossip, num_of_msg=test_messages)
 
 
 def test_broadcast_unknown_protocol(setup_bootstrap, setup_clients, add_curl):
     api = 'v1/gateway/broadcastpoet'
     # protocol is modified
-    headers = {'M': 'new_gossip_message', 'protocol': 'unknown_protocol'}
+    headers = gossip_message_query_fields.copy()
+    headers['protocol'] = 'unknown_protocol'
     msg_size = 10000  # 1kb TODO: increase up to 2mb
     test_messages = 10
 

@@ -3,6 +3,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -72,7 +73,7 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	app.p2p = swarm
 
 	// Testing stuff
-	//api.ApproveAPIGossipMessages(cmdp.Ctx, app.p2p)
+	api.ApproveAPIGossipMessages(cmdp.Ctx, app.p2p)
 	metrics.StartCollectingMetrics(app.Config.MetricsPort)
 
 	// start the node
