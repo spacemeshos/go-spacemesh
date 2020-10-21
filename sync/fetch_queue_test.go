@@ -38,7 +38,7 @@ func init() {
 func SyncFactory(name string, serv service.Service) *Syncer {
 	tick := 20 * time.Second
 	ts := timesync.NewClock(timesync.RealClock{}, tick, time.Now(), log.NewDefault("clock"))
-	l := log.New(name, "", "")
+	l := log.NewDefault(name)
 	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 	blockValidator := blockEligibilityValidatorMock{}
 	sync := NewSync(serv, getMesh(memoryDB, name), state.NewTxMemPool(), activation.NewAtxMemPool(), blockValidator, poetDb, conf, ts, l)
