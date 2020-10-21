@@ -274,19 +274,23 @@ func (n *UDPNet) addConn(addr net.Addr, ucw udpConn) {
 	evicted := false
 	lastk := ""
 	if len(n.incomingConn) >= maxUDPConn {
+		n.logger.Debug("UDP connection cache is full, evicting one session")
 		for k, c := range n.incomingConn {
 			lastk = k
 			if time.Since(c.Created()) > maxUDPLife {
 				delete(n.incomingConn, k)
+				if err := c.Close(); err != nil {
+					n.logger.With().Warning("Error closing udp socket", log.Err(err))
+				}
 				evicted = true
-				n.incomingConn[k].Close()
 				break
 			}
-
 		}
 
 		if !evicted {
-			n.incomingConn[lastk].Close()
+			if err := n.incomingConn[lastk].Close(); err != nil {
+				n.logger.With().Warning("Error closing udp socket", log.Err(err))
+			}
 			delete(n.incomingConn, lastk)
 		}
 	}
@@ -296,7 +300,9 @@ func (n *UDPNet) addConn(addr net.Addr, ucw udpConn) {
 func (n *UDPNet) getConn(addr net.Addr) (udpConn, error) {
 	if c, ok := n.incomingConn[addr.String()]; ok {
 		if time.Since(c.Created()) > maxUDPLife {
-			c.Close()
+			if err := c.Close(); err != nil {
+				n.logger.With().Warning("Error closing udp socket", log.Err(err))
+			}
 			delete(n.incomingConn, addr.String())
 			return nil, errors.New("expired")
 		}
@@ -377,5 +383,5 @@ func (ucw *udpConnWrapper) Write(b []byte) (int, error) {
 
 func (ucw *udpConnWrapper) Close() error {
 	close(ucw.closeChan)
-	return nil
+	return ucw.conn.Close()
 }

@@ -146,7 +146,7 @@ func (ni *ninjaTortoise) saveOpinion() error {
 		if !valid {
 			ni.logger.With().Warning("block is contextually invalid", b.id())
 		}
-		events.Publish(events.ValidBlock{ID: b.id().String(), Valid: valid})
+		events.ReportValidBlock(b.id(), valid)
 	}
 	return nil
 }

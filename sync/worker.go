@@ -66,7 +66,7 @@ func newPeersWorker(s networker, peers []p2ppeers.Peer, mu *sync.Once, reqFactor
 			lg.Debug("send request Peer: %v", peer)
 			ch, err := reqFactory(s, peer)
 			if err != nil {
-				s.Error("request failed, ", err)
+				s.Error("request failed: %s", err)
 				return
 			}
 

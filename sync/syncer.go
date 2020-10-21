@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"sync"
 	"time"
 
@@ -80,6 +81,7 @@ type Configuration struct {
 	ValidationDelta time.Duration
 	AtxsLimit       int
 	Hdist           int
+	AlwaysListen    bool
 }
 
 var (
@@ -266,7 +268,7 @@ func (s *Syncer) notifySubscribers(prevStatus, status status) {
 
 // ListenToGossip enables other modules to check if they should listen to gossip
 func (s *Syncer) ListenToGossip() bool {
-	return s.getGossipBufferingStatus() != pending
+	return s.AlwaysListen || s.getGossipBufferingStatus() != pending
 }
 
 func (s *Syncer) setGossipBufferingStatus(status status) {
@@ -341,13 +343,13 @@ func (s *Syncer) synchronise() {
 	}
 
 	s.syncAtxs(curr)
-
 }
 
 func (s *Syncer) handleWeaklySynced() {
 	s.With().Info("Node is weakly synced",
 		s.LatestLayer(),
 		s.GetCurrentLayer())
+	events.ReportNodeStatusUpdate()
 
 	// handle all layers from processed+1 to current -1
 	s.handleLayersTillCurrent()
@@ -422,6 +424,7 @@ func (s *Syncer) handleCurrentLayer() error {
 
 func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 	s.Info("Node is out of sync setting gossip-synced to false and starting sync")
+	events.ReportNodeStatusUpdate()
 	s.setGossipBufferingStatus(pending) // don't listen to gossip while not synced
 
 	// first, bring all the data of the prev layers
@@ -618,7 +621,7 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 	s.Info("layer %v wait for %d blocks", layerID, len(blockIds))
 	select {
 	case <-s.exit:
-		return nil, fmt.Errorf("recived interupt")
+		return nil, fmt.Errorf("received interupt")
 	case result := <-ch:
 		if !result {
 			return nil, fmt.Errorf("could not get all blocks for layer %v", layerID)
@@ -669,7 +672,7 @@ func (s *Syncer) GetBlocks(blockIds []types.BlockID) error {
 func (s *Syncer) fastValidation(block *types.Block) error {
 	// block eligibility
 	if eligible, err := s.BlockSignedAndEligible(block); err != nil || !eligible {
-		return fmt.Errorf("block eligibiliy check failed - err %v", err)
+		return fmt.Errorf("block eligibility check failed - err %v", err)
 	}
 
 	// validate unique tx atx

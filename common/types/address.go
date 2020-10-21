@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"math/big"
 )
 
@@ -86,6 +87,9 @@ func (a Address) Hex() string {
 func (a Address) String() string {
 	return a.Hex()
 }
+
+// Field returns a log field. Implements the LoggableField interface.
+func (a Address) Field() log.Field { return log.String("address", a.String()) }
 
 // Short returns the first 7 characters of the address hex representation (incl. "0x"), for logging purposes.
 func (a Address) Short() string {

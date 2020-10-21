@@ -22,14 +22,14 @@ func init() {
 func ListenerFactory(serv service.Service, peers peers, name string, layer types.LayerID) *blocks.BlockHandler {
 	sync := SyncFactory(name, serv)
 	sync.peers = peers
-	nbl := NewBlockListener(serv, sync, 2, log.New(name, "", ""))
+	nbl := NewBlockListener(serv, sync, 2, log.NewDefault(name))
 	return nbl
 }
 
 func SyncFactory(name string, serv service.Service) *Syncer {
 	tick := 20 * time.Second
 	ts := timesync.NewClock(timesync.RealClock{}, tick, time.Now(), log.NewDefault("clock"))
-	l := log.New(name, "", "")
+	l := log.NewDefault(name)
 	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 	blockValidator := blockEligibilityValidatorMock{}
 	sync := NewSync(serv, getMesh(memoryDB, name), state.NewTxMemPool(), activation.NewAtxMemPool(), blockValidator, poetDb, conf, ts, l)
@@ -315,7 +315,7 @@ func TestBlockListener_ValidateVotesGoodFlow(t *testing.T) {
 	bl1.AddBlock(block5)
 	bl1.AddBlock(block6)
 	bl1.AddBlock(block7)
-	valid, err := validateVotes(block1, bl1.ForBlockInView, bl1.Hdist, log.New("", "", ""))
+	valid, err := validateVotes(block1, bl1.ForBlockInView, bl1.Hdist, log.NewDefault(""))
 	assert.NoError(t, err)
 	assert.True(t, valid)
 }
@@ -364,7 +364,7 @@ func TestBlockListener_ValidateVotesBadFlow(t *testing.T) {
 	bl1.AddBlock(block5)
 	bl1.AddBlock(block6)
 	bl1.AddBlock(block7)
-	valid, err := validateVotes(block1, bl1.ForBlockInView, bl1.Hdist, log.New("", "", ""))
+	valid, err := validateVotes(block1, bl1.ForBlockInView, bl1.Hdist, log.NewDefault(""))
 	assert.Error(t, err)
 	assert.False(t, valid)
 }
@@ -600,7 +600,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	bl1.Syncer.Start()
 	bl2.Start()
 
-	tx, err := mesh.NewSignedTx(1, types.BytesToAddress([]byte{0x01}), 10, 100, 10, signing.NewEdSigner())
+	tx, err := types.NewSignedTx(1, types.BytesToAddress([]byte{0x01}), 10, 100, 10, signing.NewEdSigner())
 	assert.NoError(t, err)
 	signer := signing.NewEdSigner()
 	atx := atx(signer.PublicKey().String())

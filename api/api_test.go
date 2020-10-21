@@ -19,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	config2 "github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -181,6 +180,33 @@ func (t *TxAPIMock) AddressExists(types.Address) bool {
 	return true
 }
 
+func (t *TxAPIMock) GetATXs([]types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
+	return nil, nil
+}
+
+func (t *TxAPIMock) GetTransactions([]types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
+	return nil, nil
+}
+
+func (t *TxAPIMock) GetLayer(types.LayerID) (*types.Layer, error) {
+	return nil, nil
+}
+
+func (t *TxAPIMock) ProcessedLayer() types.LayerID {
+	panic("implement me")
+}
+
+func (t *TxAPIMock) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
+	panic("implement me")
+}
+
+func (t *TxAPIMock) GetBalance(addr types.Address) uint64 {
+	panic("implement me")
+}
+func (t *TxAPIMock) GetNonce(addr types.Address) uint64 {
+	panic("implement me")
+}
+
 // MiningAPIMock is a mock for mining API
 type MiningAPIMock struct{}
 
@@ -198,6 +224,14 @@ func (*MiningAPIMock) StartPost(types.Address, string, uint64) error {
 }
 
 func (*MiningAPIMock) SetCoinbaseAccount(types.Address) {}
+
+func (*MiningAPIMock) GetSmesherID() types.NodeID {
+	panic("implement me")
+}
+
+func (*MiningAPIMock) Stop() {
+	panic("implement me")
+}
 
 type OracleMock struct{}
 
@@ -399,22 +433,22 @@ func TestJsonWalletApi(t *testing.T) {
 	// test get txs per account:
 
 	// add incoming tx to mempool
-	mempoolTxIn, err := mesh.NewSignedTx(1337, addr, 420, 3, 42, signing.NewEdSigner())
+	mempoolTxIn, err := types.NewSignedTx(1337, addr, 420, 3, 42, signing.NewEdSigner())
 	r.NoError(err)
 	txMempool.Put(mempoolTxIn.ID(), mempoolTxIn)
 
 	// add outgoing tx to mempool
-	mempoolTxOut, err := mesh.NewSignedTx(1337, types.BytesToAddress([]byte{1}), 420, 3, 42, signer)
+	mempoolTxOut, err := types.NewSignedTx(1337, types.BytesToAddress([]byte{1}), 420, 3, 42, signer)
 	r.NoError(err)
 	txMempool.Put(mempoolTxOut.ID(), mempoolTxOut)
 
 	// add incoming tx to mesh
-	meshTxIn, err := mesh.NewSignedTx(1337, addr, 420, 3, 42, signing.NewEdSigner())
+	meshTxIn, err := types.NewSignedTx(1337, addr, 420, 3, 42, signing.NewEdSigner())
 	r.NoError(err)
 	txAPI.returnTx[meshTxIn.ID()] = meshTxIn
 
 	// add outgoing tx to mesh
-	meshTxOut, err := mesh.NewSignedTx(1337, types.BytesToAddress([]byte{1}), 420, 3, 42, signer)
+	meshTxOut, err := types.NewSignedTx(1337, types.BytesToAddress([]byte{1}), 420, 3, 42, signer)
 	r.NoError(err)
 	txAPI.returnTx[meshTxOut.ID()] = meshTxOut
 
@@ -597,7 +631,7 @@ func genTx(t *testing.T) *types.Transaction {
 	require.NoError(t, err)
 	signer, err := signing.NewEdSignerFromBuffer(key)
 	require.NoError(t, err)
-	tx, err := mesh.NewSignedTx(1111, [20]byte{}, 1234, 11, 321, signer)
+	tx, err := types.NewSignedTx(1111, [20]byte{}, 1234, 11, 321, signer)
 	require.NoError(t, err)
 
 	return tx

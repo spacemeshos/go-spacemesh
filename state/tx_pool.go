@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"sync"
@@ -100,6 +101,7 @@ func (t *TxMempool) Put(id types.TransactionID, tx *types.Transaction) {
 	t.addToAddr(tx.Origin(), id)
 	t.addToAddr(tx.Recipient, id)
 	t.mu.Unlock()
+	events.ReportNewTx(tx)
 }
 
 // Invalidate removes transaction from pool
@@ -115,6 +117,10 @@ func (t *TxMempool) Invalidate(id types.TransactionID) {
 			if pendingTxs.IsEmpty() {
 				delete(t.accounts, tx.Origin())
 			}
+			// We only report those transactions that are being dropped from the txpool here as
+			// conflicting since they won't be reported anywhere else. There is no need to report
+			// the initial tx here since it'll be reported as part of a new block/layer anyway.
+			events.ReportTxWithValidity(tx, false)
 		}
 		t.removeFromAddr(tx.Origin(), id)
 		t.removeFromAddr(tx.Recipient, id)
