@@ -1,4 +1,6 @@
+import base64
 from datetime import datetime
+import json
 import random
 import re
 
@@ -14,7 +16,7 @@ class WalletAPI:
 
     """
 
-    ADDRESS_SIZE_HEX = 40
+    ADDRESS_SIZE_BYTES = 20
     account_api = 'v1/globalstate/account'
     get_tx_api = 'v1/transaction/transactionsstate'
     submit_api = 'v1/transaction/submittransaction'
@@ -32,6 +34,7 @@ class WalletAPI:
         self.tx_ids = []
 
     def submit_tx(self, to, src, gas_price, amount, nonce, tx_bytes):
+        # TODO: update this to match TransactionService, check status.Code is okay and/or check tx state is MEMPOOL
         a_ok_pat = "[\'\"]value[\'\"]:\s?[\'\"]ok[\'\"]"
         print(f"\n{datetime.now()}: submit transaction\nfrom {src}\nto {to}")
         pod_ip, pod_name = self.random_node()
@@ -59,12 +62,10 @@ class WalletAPI:
         return self.extract_tx_id(out)
 
     def get_nonce_value(self, acc):
-        res = self._get_nonce(acc)
-        return WalletAPI.extract_nonce_from_resp(res)
+        return self._get_nonce(acc)
 
     def get_balance_value(self, acc):
-        res = self._get_balance(acc)
-        return WalletAPI.extract_balance_from_resp(res)
+        return self._get_balance(acc)
 
     def _get_nonce(self, acc):
         return self._make_address_api_call(acc, "counter")
@@ -74,21 +75,25 @@ class WalletAPI:
 
     def _make_address_api_call(self, acc, resource):
         # get account state to check balance/nonce
-        print(f"\ngetting {resource} for", acc)
+        print(f"\ngetting {resource} of {acc}")
         pod_ip, pod_name = self.random_node()
-        data = '{"address":"' + acc[-self.ADDRESS_SIZE_HEX:] + '"}'
-        if acc == conf.acc_pub:
-            data = '{"address":"' + acc + '"}'
 
-        print(f"querying for the {resource} of {acc}")
+        # API expects binary address in base64 format, must be converted to string to pass into curl
+        address = base64.b64encode(bytes.fromhex(acc)[-self.ADDRESS_SIZE_BYTES:]).decode('utf-8')
+        data = '{"account_id": {"address":"' + address + '"}}'
+        print(f"api input: {data}")
         out = self.send_api_call(pod_ip, data, self.account_api)
+        print(f"api output: {out}")
 
-        print(f"{resource} output={out}")
-        state = out.account_wrapper.state_projected
-        if resource == 'counter':
-            return state.counter
-        elif resource == 'balance':
-            return state.balance.amount
+        # If any of these are missing or the return data is malformed, this will cause an ugly exception
+        # That's fine - we don't do any fancy error handling here
+        out = json.loads(out)['account_wrapper']['state_projected']
+
+        # GRPC doesn't include zero values so use intelligent defaults here
+        if resource == 'balance':
+            return int(out.get('balance', {'value': 0})['value'])
+        elif resource == 'counter':
+            return int(out.get('counter', 0))
 
     def random_node(self):
         """
@@ -121,37 +126,6 @@ class WalletAPI:
         return out
 
     # ======================= utils =======================
-
-    @staticmethod
-    def extract_value_from_resp(val):
-        if not val:
-            print("cannot extract value, input is None")
-            return None
-
-        res_pat = "value[\'\"]:\s?[\'\"]([0-9]+)"
-        group_num = 1
-
-        match = re.search(res_pat, val)
-        if match:
-            return match.group(group_num)
-
-        return None
-
-    @staticmethod
-    def extract_nonce_from_resp(nonce_res):
-        res = WalletAPI.extract_value_from_resp(nonce_res)
-        if res:
-            return int(res)
-
-        return None
-
-    @staticmethod
-    def extract_balance_from_resp(balance_res):
-        res = WalletAPI.extract_value_from_resp(balance_res)
-        if res:
-            return int(res)
-
-        return None
 
     @staticmethod
     def extract_tx_id(tx_output):

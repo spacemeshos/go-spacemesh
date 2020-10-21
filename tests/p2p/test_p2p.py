@@ -122,7 +122,7 @@ def test_client(init_session, setup_clients, add_curl, save_log_on_exit):
 
 
 def test_add_client(add_client):
-    # Sleep a while before checking the node is bootstarped
+    # Sleep a while before checking the node is bootstrapped
     time.sleep(20 * timeout_factor)
     fields = {'M': 'discovery_bootstrap'}
 
@@ -324,13 +324,13 @@ def test_broadcast_unknown_protocol(setup_bootstrap, setup_clients, add_curl):
 # NOTE : this test is ran in the end because it affects the network structure,
 # it creates an additional pod with a "v2" client
 def test_diff_client_ver(setup_bootstrap, setup_clients, add_curl, add_clients):
-    sync_sleep_time = 10
     num_of_v2_clients = 2
     v2_version = "v2"
 
     clients = add_clients(num_of_v2_clients, v2_version)
 
-    time.sleep(sync_sleep_time)
+    # Sleep a while before checking the node is bootstrapped
+    time.sleep(20 * timeout_factor)
     headers = {'M': 'discovery_bootstrap'}
     for cl in clients:
         hits = poll_query_message(indx=current_index,
