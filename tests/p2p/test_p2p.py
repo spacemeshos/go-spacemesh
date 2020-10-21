@@ -64,7 +64,7 @@ def add_clients(setup_bootstrap, setup_clients):
     :return: function, _add_client
     """
 
-    def _add_clients(num_of_clients, version=None, version_separator='_'):
+    def _add_clients(num_of_clients, version=None, version_separator=''):
         # TODO make a generic function that _add_clients can use
         """
         adds a clients to namespace

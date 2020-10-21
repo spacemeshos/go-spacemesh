@@ -32,7 +32,7 @@ bootstrap:
   deployment_type: deployment # default:deployment
 # IMPORTANT: all clients on the same suite should contain the same args (hare-committee-size, hare-max-adversaries etc)!
 client:
-  image: 'spacemeshos/go-spacemesh-dev:api-cleanup'
+  image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-harness'
   replicas: 40 #default 40
   resources:
@@ -53,8 +53,8 @@ client:
     executable-path: '/bin/go-p2p'
   deployment_type: deployment # default:deployment
 # IMPORTANT: all clients on the same suite should contain the same args (hare-committee-size, hare-max-adversaries etc)!
-client_v2:
-  image: 'spacemeshos/go-spacemesh-dev:api-cleanup'
+clientv2:
+  image: 'spacemeshos/go-spacemesh:go_auto_client_v2'
   command: '/bin/go-p2p'
   replicas: 3 #default 40
   resources:
