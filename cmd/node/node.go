@@ -834,6 +834,11 @@ func (app *SpacemeshApp) stopServices() {
 		app.P2P.Shutdown()
 	}
 
+	if app.syncer != nil {
+		app.log.Info("%v closing sync", app.nodeID.Key)
+		app.syncer.Close()
+	}
+
 	if app.mesh != nil {
 		app.log.Info("%v closing mesh", app.nodeID.Key)
 		app.mesh.Close()
