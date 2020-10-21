@@ -1,12 +1,19 @@
 package blocks
 
 import (
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
+
+func init() {
+	types.SetLayersPerEpoch(3)
+}
 
 var commitment = &types.PostProof{
 	Challenge:    []byte(nil),
@@ -61,6 +68,97 @@ var atx1 = types.ATXID(one)
 var atx2 = types.ATXID(two)
 var atx3 = types.ATXID(three)
 
+type fetchMock struct {
+	retError       bool
+	getBlockCalled map[types.BlockID]int
+	getAtxCalled   map[types.ATXID]int
+	getTxsCalled   map[types.TransactionID]int
+}
+
+func (f fetchMock) FetchBlock(ID types.BlockID) error {
+	f.getBlockCalled[ID]++
+	return f.returnError()
+}
+
+func (f fetchMock) ListenToGossip() bool {
+	return true
+}
+
+func (f fetchMock) IsSynced() bool {
+	return true
+}
+
+func newFetchMock() *fetchMock {
+	return &fetchMock{
+		retError:       false,
+		getBlockCalled: make(map[types.BlockID]int),
+		getAtxCalled:   make(map[types.ATXID]int),
+		getTxsCalled:   make(map[types.TransactionID]int),
+	}
+}
+
+func (f fetchMock) returnError() error {
+	if f.retError {
+		return fmt.Errorf("error")
+	}
+	return nil
+}
+
+func (f *fetchMock) GetBlock(ID types.BlockID) error {
+	f.getBlockCalled[ID]++
+	return f.returnError()
+}
+
+func (f fetchMock) GetAtx(ID types.ATXID) error {
+	return f.returnError()
+}
+
+func (f fetchMock) GetPoetProof(ID types.Hash32) error {
+	return f.returnError()
+}
+
+func (f fetchMock) GetTxs(IDs []types.TransactionID) error {
+	return f.returnError()
+}
+
+func (f fetchMock) GetBlocks(IDs []types.BlockID) error {
+	return f.returnError()
+}
+
+func (f fetchMock) GetAtxs(IDs []types.ATXID) error {
+	return f.returnError()
+}
+
+type meshMock struct {
+}
+
+func (m meshMock) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error {
+	panic("implement me")
+}
+
+func (m meshMock) GetBlock(ID types.BlockID) (*types.Block, error) {
+	panic("implement me")
+}
+
+func (m meshMock) AddBlockWithTxs(blk *types.Block) error {
+	panic("implement me")
+}
+
+func (m meshMock) ProcessedLayer() types.LayerID {
+	panic("implement me")
+}
+
+func (m meshMock) HandleLateBlock(blk *types.Block) {
+	panic("implement me")
+}
+
+type verifierMock struct {
+}
+
+func (v verifierMock) BlockSignedAndEligible(block *types.Block) (bool, error) {
+	return true, nil
+}
+
 func Test_validateUniqueTxAtx(t *testing.T) {
 	r := require.New(t)
 	b := &types.Block{}
@@ -81,74 +179,62 @@ func Test_validateUniqueTxAtx(t *testing.T) {
 	r.EqualError(validateUniqueTxAtx(b), errDupAtx.Error())
 }
 
-func TestSyncer_BlockSyntacticValidation(t *testing.T) {
+func TestBlockHandler_BlockSyntacticValidation(t *testing.T) {
 	r := require.New(t)
+	cfg := Config{3}
 	//yncs, _, _ := SyncMockFactory(2, conf, "TestSyncProtocol_NilResponse", memoryDB, newMemPoetDb)
-	s := syncs[0]
-	s.atxDb = alwaysOkAtxDb{}
+	s := NewBlockHandler(cfg, &meshMock{}, &verifierMock{}, log.NewDefault("BlockSyntacticValidation"))
 	b := &types.Block{}
-	b.TxIDs = []types.TransactionID{txid1, txid2, txid1}
-	_, _, err := s.blockSyntacticValidation(b)
+
+	fetch := newFetchMock()
+	err := s.blockSyntacticValidation(b, fetch)
 	r.EqualError(err, errNoActiveSet.Error())
 
 	b.ActiveSet = &[]types.ATXID{}
-	_, _, err = s.blockSyntacticValidation(b)
+	err = s.blockSyntacticValidation(b, fetch)
 	r.EqualError(err, errZeroActiveSet.Error())
 
 	b.ActiveSet = &[]types.ATXID{atx1, atx2, atx3}
-	_, _, err = s.blockSyntacticValidation(b)
+	b.TxIDs = []types.TransactionID{txid1, txid2, txid1}
+	err = s.blockSyntacticValidation(b, fetch)
 	r.EqualError(err, errDupTx.Error())
 }
 
-func TestSyncer_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
+func mockForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error {
+	return nil
+}
+
+func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	r := require.New(t)
-	syncs, _, _ := SyncMockFactory(2, conf, "BlockSyntacticValidation_syncRefBlock", memoryDB, newMemPoetDb)
+	fetch := newFetchMock()
 	atxpool := activation.NewAtxMemPool()
-	s := syncs[0]
-	s.atxDb = atxpool
+	cfg := Config{
+		3,
+	}
+	s := NewBlockHandler(cfg, &meshMock{}, &verifierMock{}, log.NewDefault("syncRefBlock"))
+	s.traverse = mockForBlockInView
 	a := atx("")
 	atxpool.Put(a)
 	b := &types.Block{}
 	b.TxIDs = []types.TransactionID{}
-	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block1 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	block1.ActiveSet = &[]types.ATXID{a.ID()}
 	block1.ATXID = a.ID()
 	block1.Initialize()
 	block1ID := block1.ID()
 	b.RefBlock = &block1ID
 	b.ATXID = a.ID()
-	_, _, err := s.blockSyntacticValidation(b)
-	r.Equal(err, fmt.Errorf("failed to fetch ref block %v", *b.RefBlock))
+	fetch.retError = true
+	err := s.blockSyntacticValidation(b, fetch)
+	r.Equal(err, fmt.Errorf("failed to fetch ref block %v e: error", *b.RefBlock))
 
-	err = syncs[1].AddBlock(block1)
+	fetch.retError = false
+	err = s.blockSyntacticValidation(b, fetch)
 	r.NoError(err)
-	_, _, err = s.blockSyntacticValidation(b)
-	r.NoError(err)
+	assert.Equal(t, 2, fetch.getBlockCalled[block1ID])
 }
 
-func TestSyncer_fetchBlock(t *testing.T) {
-	r := require.New(t)
-	atxPool := activation.NewAtxMemPool()
-	syncs, _, _ := SyncMockFactory(2, conf, "fetchBlock", memoryDB, newMemPoetDb)
-	s := syncs[0]
-	s.atxDb = atxPool
-	atx := atx("")
-	atxPool.Put(atx)
-	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
-	block1.ActiveSet = &[]types.ATXID{atx.ID()}
-	block1.ATXID = atx.ID()
-	block1.Initialize()
-	block1ID := block1.ID()
-	res := s.fetchBlock(block1ID)
-	r.False(res)
-	err := syncs[1].AddBlock(block1)
-	r.NoError(err)
-	res = s.fetchBlock(block1ID)
-	r.True(res)
-
-}
-
-func TestSyncer_AtxSetID(t *testing.T) {
+func TestBlockHandler_AtxSetID(t *testing.T) {
 	a := atx("")
 	bbytes, _ := types.InterfaceToBytes(*a)
 	var b types.ActivationTx

@@ -8,7 +8,7 @@ import (
 )
 
 // GossipDataHandler is the function type that will be called when data is
-type GossipDataHandler func(data GossipMessage, syncer Syncer)
+type GossipDataHandler func(data GossipMessage, syncer Fetcher)
 
 // Listener represents the main struct that reqisters delegates to gossip function
 type Listener struct {
@@ -16,12 +16,12 @@ type Listener struct {
 	net      Service
 	channels []chan GossipMessage
 	stoppers []chan struct{}
-	syncer   Syncer
+	syncer   Fetcher
 	wg       sync.WaitGroup
 }
 
 // NewListener creates a new listener struct
-func NewListener(net Service, syncer Syncer, log log.Log) *Listener {
+func NewListener(net Service, syncer Fetcher, log log.Log) *Listener {
 	return &Listener{
 		Log:    &log,
 		net:    net,
@@ -35,20 +35,23 @@ type Syncer interface {
 	FetchAtxReferences(atx *types.ActivationTx) error
 	FetchPoetProof(poetProofRef []byte) error
 	ListenToGossip() bool
-	GetBlock(ID types.BlockID) error
-	GetTxs(IDs []types.TransactionID) error
-	GetBlocks(IDs []types.BlockID) error
-	GetAtxs(IDs []types.ATXID) error
+	GetBlock(ID types.BlockID) (*types.Block, error)
+	//GetTxs(IDs []types.TransactionID) error
+	//GetBlocks(IDs []types.BlockID) error
+	//GetAtxs(IDs []types.ATXID) error
 	IsSynced() bool
 }
 
+// Fetcher is a general interface that defines a component capable of fetching data from remote peers
 type Fetcher interface {
-	GetBlock(ID types.BlockID) error
+	FetchBlock(ID types.BlockID) error
 	GetAtx(ID types.ATXID) error
 	GetPoetProof(ID types.Hash32) error
 	GetTxs(IDs []types.TransactionID) error
 	GetBlocks(IDs []types.BlockID) error
 	GetAtxs(IDs []types.ATXID) error
+	ListenToGossip() bool
+	IsSynced() bool
 }
 
 // AddListener adds a listener to a specific gossip channel

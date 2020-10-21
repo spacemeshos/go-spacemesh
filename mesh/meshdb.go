@@ -422,6 +422,7 @@ func (m *DB) writeTransactions(l types.LayerID, txs []*types.Transaction) error 
 	return nil
 }
 
+// WriteTransaction writes a single transaction to the db
 func (m *DB) WriteTransaction(l types.LayerID, t *types.Transaction) error {
 	bytes, err := types.InterfaceToBytes(newDbTransaction(t))
 	if err != nil {

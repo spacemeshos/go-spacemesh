@@ -244,7 +244,7 @@ func validatePoetRef(proofMessage types.PoetProofMessage, poetProofRef []byte) (
 		return false, fmt.Errorf("could marshal PoET response for validation %v", err)
 	}
 	b := sha256.Sum256(poetProofBytes)
-	if bytes.Compare(b[:], poetProofRef) != 0 {
+	if bytes.Compare(types.CalcHash32(b[:]).Bytes(), poetProofRef) != 0 {
 		return false, fmt.Errorf("poet recived was diffrent then requested")
 	}
 

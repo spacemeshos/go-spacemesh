@@ -7,9 +7,11 @@ import (
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"sort"
 	"sync/atomic"
+	"time"
 )
 
 // BlockID is a 20-byte sha256 sum of the serialized block, used to identify it.
@@ -280,7 +282,7 @@ func NewExistingLayer(idx LayerID, blocks []*Block) *Layer {
 // NewExistingBlock returns a block in the given layer with the given arbitrary data. The block is signed with a random
 // keypair that isn't stored anywhere. This method should be phased out of use in production code (it's currently used
 // in tests and the temporary genesis flow).
-func NewExistingBlock(layerIndex LayerID, data []byte) *Block {
+func NewExistingBlock(layerIndex LayerID, data []byte, txs []TransactionID) *Block {
 	b := Block{
 		MiniBlock: MiniBlock{
 			BlockHeader: BlockHeader{
@@ -288,6 +290,7 @@ func NewExistingBlock(layerIndex LayerID, data []byte) *Block {
 				ViewEdges:  make([]BlockID, 0, 10),
 				LayerIndex: layerIndex,
 				Data:       data},
+			TxIDs: txs,
 		}}
 	b.Signature = signing.NewEdSigner().Sign(b.Bytes())
 	b.Initialize()
@@ -312,4 +315,16 @@ func SortBlockIDs(ids []BlockID) []BlockID {
 func SortBlocks(ids []*Block) []*Block {
 	sort.Slice(ids, func(i, j int) bool { return ids[i].ID().Compare(ids[j].ID()) })
 	return ids
+}
+
+// RandomBlockID generates random block id
+func RandomBlockID() BlockID {
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, 8)
+	_, err := rand.Read(b)
+	// Note that err == nil only if we read len(b) bytes.
+	if err != nil {
+		return BlockID{}
+	}
+	return BlockID(CalcHash32(b).ToHash20())
 }

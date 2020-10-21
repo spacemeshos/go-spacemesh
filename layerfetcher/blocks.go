@@ -12,7 +12,7 @@ var (
 	errNoActiveSet     = errors.New("block does not declare active set")
 )
 
-func (l *Logic) BlockReceiveFunc(blockId types.Hash32, data []byte) error{
+func (l *Logic) blockReceiveFunc(blockId types.Hash32, data []byte) error{
 	var blk types.Block
 	err := types.BytesToInterface(data, &blk)
 	if err != nil {
@@ -32,10 +32,10 @@ func (l *Logic) fetchRefBlock(block *types.Block) error {
 	if block.RefBlock == nil {
 		return fmt.Errorf("called fetch ref block with nil ref block %v", block.ID())
 	}
-	_, err := l.mesh.GetBlock(*block.RefBlock)
+	_, err := l.mesh.FetchBlock(*block.RefBlock)
 	if err != nil {
 		l.log.Info("fetching block %v", *block.RefBlock)
-		err := l.GetBlock(*block.RefBlock)
+		err := l.FetchBlock(*block.RefBlock)
 
 		if err != nil {
 			return err

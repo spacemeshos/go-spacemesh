@@ -14,6 +14,34 @@ type syncMock struct {
 	Synced bool
 }
 
+func (m *syncMock) FetchBlock(ID types.BlockID) error {
+	return nil
+}
+
+func (m *syncMock) GetAtx(ID types.ATXID) error {
+	return nil
+}
+
+func (m *syncMock) GetPoetProof(ID types.Hash32) error {
+	return nil
+}
+
+func (m *syncMock) GetBlock(ID types.BlockID) error {
+	return nil
+}
+
+func (m *syncMock) GetTxs(IDs []types.TransactionID) error {
+	return nil
+}
+
+func (m *syncMock) GetBlocks(IDs []types.BlockID) error {
+	return nil
+}
+
+func (m *syncMock) GetAtxs(IDs []types.ATXID) error {
+	return nil
+}
+
 func (*syncMock) FetchAtxReferences(atx *types.ActivationTx) error {
 	return nil
 }
@@ -39,12 +67,12 @@ func Test_AddListener(t *testing.T) {
 	wg := sync.WaitGroup{}
 
 	wg.Add(2)
-	fun := func(data GossipMessage, syncer Syncer) {
+	fun := func(data GossipMessage, syncer Fetcher) {
 		atomic.AddInt32(&channelCount, 1)
 		wg.Done()
 	}
 
-	fun2 := func(data GossipMessage, syncer Syncer) {
+	fun2 := func(data GossipMessage, syncer Fetcher) {
 		atomic.AddInt32(&secondChannel, 1)
 		wg.Done()
 	}
@@ -69,11 +97,11 @@ func Test_AddListener_notSynced(t *testing.T) {
 
 	var channelCount, secondChannel int32
 
-	fun := func(data GossipMessage, syncer Syncer) {
+	fun := func(data GossipMessage, syncer Fetcher) {
 		atomic.AddInt32(&channelCount, 1)
 	}
 
-	fun2 := func(data GossipMessage, syncer Syncer) {
+	fun2 := func(data GossipMessage, syncer Fetcher) {
 		atomic.AddInt32(&secondChannel, 1)
 	}
 

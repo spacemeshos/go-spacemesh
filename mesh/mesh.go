@@ -65,6 +65,7 @@ type txProcessor interface {
 type txMemPool interface {
 	Invalidate(id types.TransactionID)
 	Get(id types.TransactionID) (*types.Transaction, error)
+	Put(id types.TransactionID, tx *types.Transaction)
 }
 
 // AtxDB holds logic for working with atxs
@@ -568,6 +569,8 @@ func (msh *Mesh) invalidateFromPools(blk *types.MiniBlock) {
 	}
 }
 
+// StoreTransactionsFromPool takes declared txs from provided block blk and writes them to DB. it then invalidates
+// the transactions from txpool
 func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
 	// Store transactions (doesn't have to be rolled back if other writes fail)
 	if len(blk.TxIDs) == 0 {
@@ -582,6 +585,10 @@ func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
 			if has, err := msh.transactions.Has(txID.Bytes()); !has {
 				return err
 			}
+			continue
+		}
+		if err = tx.CalcAndSetOrigin(); err != nil {
+			return err
 		}
 		txs = append(txs, tx)
 	}
@@ -714,7 +721,7 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 
 // GenesisBlock is a is the first static block that xists at the beginning of each network. it exist one layer before actual blocks could be created
 func GenesisBlock() *types.Block {
-	return types.NewExistingBlock(types.GetEffectiveGenesis(), []byte("genesis"))
+	return types.NewExistingBlock(types.GetEffectiveGenesis(), []byte("genesis"), nil)
 }
 
 // GenesisLayer generates layer 0 should be removed after the genesis flow is implemented

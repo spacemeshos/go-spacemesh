@@ -309,7 +309,7 @@ func transfer(db *TransactionProcessor, sender, recipient types.Address, amount 
 }
 
 // HandleTxData handles data received on TX gossip channel
-func (tp *TransactionProcessor) HandleTxData(data service.GossipMessage, syncer service.Syncer) {
+func (tp *TransactionProcessor) HandleTxData(data service.GossipMessage, syncer service.Fetcher) {
 	tx, err := types.BytesToTransaction(data.Bytes())
 	if err != nil {
 		tp.With().Error("cannot parse incoming TX", log.Err(err))

@@ -1,21 +1,20 @@
-package layerfetcher
+package sync
 
+/*
 import (
-	"fmt"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
-	sync2 "github.com/spacemeshos/go-spacemesh/sync"
 	"sync"
 	"time"
 )
 
 // BlockListener Listens to blocks propagated in gossip
 type BlockListener struct {
-	*sync2.Syncer
-	sync2.blockEligibilityValidator
+	blocks.BlockEligibilityValidator
 	log.Log
 	wg                   sync.WaitGroup
 	bufferSize           int
@@ -80,4 +79,4 @@ func (bl *BlockListener) listenToGossipBlocks() {
 
 		}
 	}
-}
+}*/

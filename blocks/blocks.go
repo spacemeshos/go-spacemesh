@@ -5,30 +5,59 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	mesh2 "github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
+// NewBlockProtocol is the protocol indicator for gossip blocks
 const NewBlockProtocol = "newBlock"
 
 var (
 	errDupTx = errors.New("duplicate TransactionID in block")
 
-	errDupAtx          = errors.New("duplicate ATXID in block")
-	errTooManyAtxs     = errors.New("too many atxs in blocks")
-	errNoBlocksInLayer = errors.New("layer has no blocks")
-	errNoActiveSet     = errors.New("block does not declare active set")
-	errZeroActiveSet   = errors.New("block declares empty active set")
+	errDupAtx = errors.New("duplicate ATXID in block")
+	//errTooManyAtxs     = errors.New("too many atxs in blocks")
+	//errNoBlocksInLayer = errors.New("layer has no blocks")
+	errNoActiveSet   = errors.New("block does not declare active set")
+	errZeroActiveSet = errors.New("block declares empty active set")
 )
 
 type forBlockInView func(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 
+type mesh interface {
+	GetBlock(ID types.BlockID) (*types.Block, error)
+	AddBlockWithTxs(blk *types.Block) error
+	ProcessedLayer() types.LayerID
+	HandleLateBlock(blk *types.Block)
+	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
+}
+
+type blockValidator interface {
+	BlockSignedAndEligible(block *types.Block) (bool, error)
+}
+
+// BlockHandler is the struct responsible for storing meta data needed to process blocks from gossip
 type BlockHandler struct {
 	log.Log
 	traverse  forBlockInView
 	depth     int
-	mesh      mesh2.Mesh
-	validator BlockEligibilityValidator
+	mesh      mesh
+	validator blockValidator
+}
+
+// Config defines configuration for block handler
+type Config struct {
+	Depth int
+}
+
+// NewBlockHandler creates new BlockHandler
+func NewBlockHandler(cfg Config, m mesh, v blockValidator, lg log.Log) *BlockHandler {
+	return &BlockHandler{
+		Log:       lg,
+		traverse:  m.ForBlockInView,
+		depth:     cfg.Depth,
+		mesh:      m,
+		validator: v,
+	}
 }
 
 func (bh BlockHandler) validateVotes(blk *types.Block) error {
@@ -62,6 +91,7 @@ func (bh BlockHandler) validateVotes(blk *types.Block) error {
 	return err
 }
 
+// HandleBlock defines method to handle blocks from gossip
 func (bh *BlockHandler) HandleBlock(data service.GossipMessage, sync service.Fetcher) {
 	err := bh.HandleBlockData(data.Bytes(), sync)
 	if err != nil {
@@ -71,6 +101,7 @@ func (bh *BlockHandler) HandleBlock(data service.GossipMessage, sync service.Fet
 	data.ReportValidation(NewBlockProtocol)
 }
 
+// HandleBlockData defines a method to handle blocks either from gossip of sync
 func (bh *BlockHandler) HandleBlockData(data []byte, sync service.Fetcher) error {
 	var blk types.Block
 	err := types.BytesToInterface(data, &blk)
@@ -133,14 +164,15 @@ func (bh *BlockHandler) HandleBlockData(data []byte, sync service.Fetcher) error
 func (bh BlockHandler) blockSyntacticValidation(block *types.Block, syncer service.Fetcher) error {
 	// if there is a reference block - first validate it
 	if block.RefBlock != nil {
-		err := syncer.GetBlock(*block.RefBlock)
+		err := syncer.FetchBlock(*block.RefBlock)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to fetch ref block %v e: %v", *block.RefBlock, err)
 		}
 	}
 
 	// fast validation checks if there are no duplicate ATX in active set and no duplicate TXs as well
 	if err := bh.fastValidation(block); err != nil {
+		bh.Log.Error("failed fast validation block %v e: %v", block.ID(), err)
 		return err
 	}
 
@@ -154,13 +186,14 @@ func (bh BlockHandler) blockSyntacticValidation(block *types.Block, syncer servi
 	if len(block.TxIDs) > 0 {
 		err := syncer.GetTxs(block.TxIDs)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to fetch txs %v e: %v", block.ID(), err)
 		}
 	}
 
+	// get and validate blocks views using the fetch
 	err = syncer.GetBlocks(block.ViewEdges)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to fetch view %v e: %v", block.ID(), err)
 	}
 
 	// validate block's votes

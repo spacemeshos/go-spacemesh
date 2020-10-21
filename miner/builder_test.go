@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"testing"
 	"time"
 
 	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -129,10 +129,10 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	net := service.NewSimulator()
 	n := net.NewNode()
 
-	block1 := types.NewExistingBlock(0, []byte(rand.String(8)))
-	block2 := types.NewExistingBlock(0, []byte(rand.String(8)))
-	block3 := types.NewExistingBlock(0, []byte(rand.String(8)))
-	block4 := types.NewExistingBlock(0, []byte(rand.String(8)))
+	block1 := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
+	block2 := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
+	block3 := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
+	block4 := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
 	hareRes := []types.BlockID{block1.ID(), block2.ID(), block3.ID(), block4.ID()}
 
 	txMempool := state.NewTxMemPool()
@@ -168,10 +168,10 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	n1 := net.NewNode()
 	n2 := net.NewNode()
 
-	block1 := types.NewExistingBlock(0, []byte(rand.String(8)))
-	block2 := types.NewExistingBlock(0, []byte(rand.String(8)))
-	block3 := types.NewExistingBlock(0, []byte(rand.String(8)))
-	block4 := types.NewExistingBlock(0, []byte(rand.String(8)))
+	block1 := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
+	block2 := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
+	block3 := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
+	block4 := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
 	hareRes := []types.BlockID{block1.ID(), block2.ID(), block3.ID(), block4.ID()}
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
 	hare.res[0] = hareRes
@@ -193,10 +193,10 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 }
 
 var (
-	block1  = types.NewExistingBlock(0, []byte(rand.String(8)))
-	block2  = types.NewExistingBlock(0, []byte(rand.String(8)))
-	block3  = types.NewExistingBlock(0, []byte(rand.String(8)))
-	block4  = types.NewExistingBlock(0, []byte(rand.String(8)))
+	block1  = types.NewExistingBlock(0, []byte(rand.String(8)), nil)
+	block2  = types.NewExistingBlock(0, []byte(rand.String(8)), nil)
+	block3  = types.NewExistingBlock(0, []byte(rand.String(8)), nil)
+	block4  = types.NewExistingBlock(0, []byte(rand.String(8)), nil)
 	hareRes = []types.BlockID{block1.ID(), block2.ID(), block3.ID(), block4.ID()}
 
 	coinbase = types.HexToAddress("aaaa")
@@ -254,7 +254,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 
 	go func() { beginRound <- types.GetEffectiveGenesis() + 1 }()
 	select {
-	case output := <-receiver.RegisterGossipProtocol(config.NewBlockProtocol, priorityq.High):
+	case output := <-receiver.RegisterGossipProtocol(blocks.NewBlockProtocol, priorityq.High):
 		b := types.MiniBlock{}
 		_, _ = xdr.Unmarshal(bytes.NewBuffer(output.Bytes()), &b)
 
@@ -550,13 +550,13 @@ func Test_selectAtxs(t *testing.T) {
 }
 
 var (
-	b1 = types.NewExistingBlock(1, []byte{1})
-	b2 = types.NewExistingBlock(1, []byte{2})
-	b3 = types.NewExistingBlock(1, []byte{3})
-	b4 = types.NewExistingBlock(1, []byte{4})
-	b5 = types.NewExistingBlock(1, []byte{5})
-	b6 = types.NewExistingBlock(1, []byte{6})
-	b7 = types.NewExistingBlock(1, []byte{7})
+	b1 = types.NewExistingBlock(1, []byte{1}, nil)
+	b2 = types.NewExistingBlock(1, []byte{2}, nil)
+	b3 = types.NewExistingBlock(1, []byte{3}, nil)
+	b4 = types.NewExistingBlock(1, []byte{4}, nil)
+	b5 = types.NewExistingBlock(1, []byte{5}, nil)
+	b6 = types.NewExistingBlock(1, []byte{6}, nil)
+	b7 = types.NewExistingBlock(1, []byte{7}, nil)
 )
 
 func genBlockIds() []types.BlockID {
@@ -699,9 +699,9 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	r := require.New(t)
 	n1 := service.NewSimulator().NewNode()
 	types.SetLayersPerEpoch(int32(3))
-	block1 := types.NewExistingBlock(6, []byte(rand.String(8)))
-	block2 := types.NewExistingBlock(6, []byte(rand.String(8)))
-	block3 := types.NewExistingBlock(6, []byte(rand.String(8)))
+	block1 := types.NewExistingBlock(6, []byte(rand.String(8)), nil)
+	block2 := types.NewExistingBlock(6, []byte(rand.String(8)), nil)
+	block3 := types.NewExistingBlock(6, []byte(rand.String(8)), nil)
 	bs := []*types.Block{block1, block2, block3}
 	st := []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
 	builder1 := createBlockBuilder("a", n1, bs)
@@ -745,10 +745,10 @@ func TestBlockBuilder_notSynced(t *testing.T) {
 }
 
 var (
-	block1ID = types.NewExistingBlock(1, []byte{1}).ID()
-	block2ID = types.NewExistingBlock(1, []byte{2}).ID()
-	block3ID = types.NewExistingBlock(1, []byte{3}).ID()
-	block4ID = types.NewExistingBlock(1, []byte{4}).ID()
+	block1ID = types.NewExistingBlock(1, []byte{1}, nil).ID()
+	block2ID = types.NewExistingBlock(1, []byte{2}, nil).ID()
+	block3ID = types.NewExistingBlock(1, []byte{3}, nil).ID()
+	block4ID = types.NewExistingBlock(1, []byte{4}, nil).ID()
 )
 
 func Test_filter(t *testing.T) {

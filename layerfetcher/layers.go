@@ -3,54 +3,77 @@ package layerfetcher
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"sync"
 )
 
-type AtxHandler interface {
+// atxHandler defines handling function for incoming ATXs
+type atxHandler interface {
 	HandleAtxData(data []byte, syncer service.Fetcher) error
 }
 
-type BlockValidator interface {
-	fastValidation(block *types.Block) error
-	validateVotes(block *types.Block) error
+// blockHandler defines handling function for blocks
+type blockHandler interface {
+	HandleBlockData(date []byte, fetcher service.Fetcher) error
 }
 
-type LayerDB interface {
-	GetLayerHash(Id types.LayerID) types.Hash32
+// layerDB is an interface that returns layer data and blocks
+type layerDB interface {
+	GetLayerHash(ID types.LayerID) types.Hash32
 	GetLayerHashBlocks(hash types.Hash32) []types.BlockID
 	GetLayerVerifyingVector(hash types.Hash32) []types.BlockID
 }
 
-type GossipBlocks interface {
+// gossipBlocks returns gossip block received byu this node in the last x time frame
+type gossipBlocks interface {
 	Get() []types.BlockID
 }
 
+// poetDb is an interface to reading and storing poet proofs
+type poetDb interface {
+	HasProof(proofRef []byte) bool
+	ValidateAndStore(proofMessage *types.PoetProofMessage) error
+	ValidateAndStoreMsg(data []byte) error
+}
+
+// network defines network capabilities used
+type network interface {
+	GetPeers() []p2ppeers.Peer
+	GetRandomPeer() p2ppeers.Peer
+	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), timeoutHandler func(err error)) error
+}
+
+// Logic is the struct containing components needed to follow layer fetching logic
 type Logic struct {
 	log              log.Log
 	fetcher          fetch.Fetcher
-	net              *fetch.MessageNetwork
+	net              network
 	layerHashResults map[types.LayerID]map[p2ppeers.Peer]types.Hash32
 	blockHashErrors  map[types.LayerID]int
 	layerResults     map[types.LayerID][]chan LayerPromiseResult
-	atxs             AtxHandler
-	blockHandler     *blocks.BlockHandler
-	layerDB          LayerDB
-	gossipBlocks     GossipBlocks
+	poetProofs       poetDb
+	atxs             atxHandler
+	blockHandler     blockHandler
+	layerDB          layerDB
+	gossipBlocks     gossipBlocks
 	layerResM        sync.RWMutex
+	layerHashResM    sync.RWMutex
 }
 
+// Config defines configuration for layer fetching logic
 type Config struct {
 	RequestTimeout int
 }
 
-func NewLogic(cfg Config, blocks *blocks.BlockHandler, atxs AtxHandler, network service.Service, fetcher fetch.Fetcher, log log.Log) *Logic {
+// NewLogic creates a new instance of layer fetching logic
+func NewLogic(cfg Config, blocks blockHandler, atxs atxHandler, poet poetDb, network service.Service, fetcher fetch.Fetcher, log log.Log) *Logic {
 
 	srv := fetch.NewMessageNetwork(cfg.RequestTimeout, network, layersProtocol, log)
 	l := &Logic{
@@ -60,17 +83,19 @@ func NewLogic(cfg Config, blocks *blocks.BlockHandler, atxs AtxHandler, network 
 		layerHashResults: make(map[types.LayerID]map[p2ppeers.Peer]types.Hash32),
 		blockHashErrors:  make(map[types.LayerID]int),
 		layerResults:     make(map[types.LayerID][]chan LayerPromiseResult),
+		poetProofs:       poet,
 		atxs:             atxs,
 		blockHandler:     blocks,
 		layerResM:        sync.RWMutex{},
 	}
 
-	srv.RegisterBytesMsgHandler(LayerHashDB, l.LayerHashReceiver)
+	srv.RegisterBytesMsgHandler(LayerHashDB, l.LayerHashReqReceiver)
 	srv.RegisterBytesMsgHandler(LayerBlocksDB, l.LayerHashBlocksReceiver)
 
 	return l
 }
 
+// DB hints per DB
 const (
 	BlockDB       = 1
 	LayerBlocksDB = 2
@@ -83,6 +108,7 @@ const (
 	layersProtocol = "/layers/2.0/"
 )
 
+// FetchFlow is the main syncing flow TBD
 func (l *Logic) FetchFlow() {
 
 }
@@ -93,8 +119,8 @@ type LayerPromiseResult struct {
 	Layer types.LayerID
 }
 
-// LayerHashReceiver returns the layer hash for the given layer ID
-func (l *Logic) LayerHashReceiver(msg []byte) []byte {
+// LayerHashReqReceiver returns the layer hash for the given layer ID
+func (l *Logic) LayerHashReqReceiver(msg []byte) []byte {
 	lyr := types.LayerID(util.BytesToUint64(msg))
 	return l.layerDB.GetLayerHash(lyr).Bytes()
 }
@@ -121,6 +147,7 @@ func (l *Logic) LayerHashBlocksReceiver(msg []byte) []byte {
 	return out
 }
 
+// PollLayer performs the following
 // send layer number to all parties
 // receive layer hash from all peers
 // get layer hash from corresponding peer
@@ -164,18 +191,23 @@ func (l *Logic) receiveLayerHash(id types.LayerID, p p2ppeers.Peer, peers int, d
 	}
 
 	// log result for peer
+	l.layerHashResM.Lock()
 	if _, ok := l.layerHashResults[id]; !ok {
 		l.layerHashResults[id] = make(map[p2ppeers.Peer]types.Hash32)
 	}
 	l.layerHashResults[id][p] = hash
+
 	// not enough results
 	if len(l.layerHashResults[id]) < peers {
+		l.layerHashResM.Unlock()
 		return
 	}
+	l.layerHashResM.Unlock()
 	h := types.Hash32{}
 	errors := 0
 	//aggregate hashes so that same hash will not be requested several times
 	hashes := make(map[types.Hash32][]p2ppeers.Peer)
+	l.layerHashResM.RLock()
 	for peer, hash := range l.layerHashResults[id] {
 		//count zero hashes - mark errors.
 		if hash == h {
@@ -185,9 +217,12 @@ func (l *Logic) receiveLayerHash(id types.LayerID, p p2ppeers.Peer, peers int, d
 			hashes[hash] = append(hashes[hash], peer)
 		}
 	}
+	l.layerHashResM.RUnlock()
 
 	//delete the receiver since we got all the needed messages
+	l.layerHashResM.Lock()
 	delete(l.layerHashResults, id)
+	l.layerHashResM.Unlock()
 
 	// if more than half the peers returned an error, fail the sync of the entire layer
 	// todo: think whether we should panic here
@@ -227,7 +262,7 @@ func (l *Logic) notifyLayerPromiseResult(id types.LayerID, err error) {
 	for _, ch := range l.layerResults[id] {
 		ch <- res
 	}
-	l.layerResM.Unlock()
+	l.layerResM.RUnlock()
 }
 
 // receiveBlockHashes is called when receiving block hashes for specified layer layer from remote peer
@@ -252,13 +287,13 @@ func (l *Logic) receiveBlockHashes(layer types.LayerID, data []byte, extErr erro
 		l.notifyLayerPromiseResult(layer, retErr)
 	}
 
-	// here we neeed to update layer hash
+	// here we need to update layer hash
 
 	// we are done with no block iteration errors
 	l.notifyLayerPromiseResult(layer, nil)
 }
 
-func (l *Logic) HandleEpochATXs(hash types.Hash32, data []byte) error {
+func (l *Logic) handleEpochATXs(hash types.Hash32, data []byte) error {
 	var atxIDs []types.ATXID
 	err := types.BytesToInterface(data, atxIDs)
 	if err != nil {
@@ -268,31 +303,45 @@ func (l *Logic) HandleEpochATXs(hash types.Hash32, data []byte) error {
 	return l.GetAtxs(atxIDs)
 }
 
+// GetEpochATXs fetches all atxs received by peer for given layer
 func (l *Logic) GetEpochATXs(id types.EpochID) error {
-	res := <-l.fetcher.GetHash(types.CalcHash32(id.ToBytes()), fetch.Hint(BlockDB), l.HandleEpochATXs, true)
+	res := <-l.fetcher.GetHash(types.CalcHash32(id.ToBytes()), fetch.Hint(ATXIDsDB), l.handleEpochATXs, true)
 	return res.Err
 }
 
-// GetAtxResults is called when an ATX result is received
-func (l *Logic) GetAtxResults(hash types.Hash32, data []byte) error {
+// getAtxResults is called when an ATX result is received
+func (l *Logic) getAtxResults(hash types.Hash32, data []byte) error {
 	return l.atxs.HandleAtxData(data, l)
 }
 
-func (l *Logic) GetTxResult(hash types.Hash32, data []byte) error {
+func (l *Logic) getTxResult(hash types.Hash32, data []byte) error {
 	//TODO: this
 	return nil
 }
 
-func (l *Logic) GetPoetResult(hash types.Hash32, data []byte) error {
-	//TODO: this
-	return nil
+// getPoetResult is handler function to poet proof fetch result
+func (l *Logic) getPoetResult(hash types.Hash32, data []byte) error {
+	return l.poetProofs.ValidateAndStoreMsg(data)
 }
 
-func (l *Logic) BlockReceiveFunc(hash types.Hash32, data []byte) error {
+// blockReceiveFunc defines block handling function when fetching block
+func (l *Logic) blockReceiveFunc(hash types.Hash32, data []byte) error {
 	return l.blockHandler.HandleBlockData(data, l)
 }
 
-// this is a preparation for using actual futures in the code, this will allow to truly execute
+// IsSynced indocates if this node is synced
+func (l *Logic) IsSynced() bool {
+	//todo: add this logic
+	return true
+}
+
+// ListenToGossip indicates if node is currently accepting packets from gossip
+func (l *Logic) ListenToGossip() bool {
+	//todo: add this logic
+	return true
+}
+
+// Future is a preparation for using actual futures in the code, this will allow to truly execute
 // asynchronous reads and receive result only when needed
 type Future struct {
 	res chan fetch.HashDataPromiseResult
@@ -304,15 +353,15 @@ func (f *Future) Result() error {
 	return ret.Err
 }
 
-// GetATx returns error if ATX was not found
+// GetAtx returns error if ATX was not found
 func (l *Logic) GetAtx(id types.ATXID) error {
-	f := Future{l.fetcher.GetHash(id.Hash32(), fetch.Hint(BlockDB), l.GetAtxResults, true)}
+	f := Future{l.fetcher.GetHash(id.Hash32(), fetch.Hint(BlockDB), l.getAtxResults, true)}
 	return f.Result()
 }
 
-// GetBlock gets data for a single block id and validates it
-func (l *Logic) GetBlock(id types.BlockID) error {
-	res := <-l.fetcher.GetHash(id.AsHash32(), fetch.Hint(BlockDB), l.BlockReceiveFunc, true)
+// FetchBlock gets data for a single block id and validates it
+func (l *Logic) FetchBlock(id types.BlockID) error {
+	res := <-l.fetcher.GetHash(id.AsHash32(), fetch.Hint(BlockDB), l.blockReceiveFunc, true)
 	return res.Err
 }
 
@@ -322,7 +371,7 @@ func (l *Logic) GetAtxs(IDs []types.ATXID) error {
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.Hash32())
 	}
-	return l.fetcher.GetAllHashes(hashes, fetch.Hint(ATXDB), l.GetAtxResults, true)
+	return l.fetcher.GetAllHashes(hashes, fetch.Hint(ATXDB), l.getAtxResults, true)
 }
 
 // GetBlocks gets the data for given block ids and validates the blocks. returns an error if a single atx failed to be fetched
@@ -332,7 +381,7 @@ func (l *Logic) GetBlocks(IDs []types.BlockID) error {
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.AsHash32())
 	}
-	return l.fetcher.GetAllHashes(hashes, fetch.Hint(BlockDB), l.BlockReceiveFunc, true)
+	return l.fetcher.GetAllHashes(hashes, fetch.Hint(BlockDB), l.blockReceiveFunc, true)
 }
 
 // GetTxs fetches the txs provided as IDs and validates them, returns an error if one TX failed to be fetched
@@ -341,11 +390,11 @@ func (l *Logic) GetTxs(IDs []types.TransactionID) error {
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.Hash32())
 	}
-	return l.fetcher.GetAllHashes(hashes, fetch.Hint(TXDB), l.GetTxResult, true)
+	return l.fetcher.GetAllHashes(hashes, fetch.Hint(TXDB), l.getTxResult, true)
 }
 
-// GetBlock gets data for a single block id and validates it
+// GetPoetProof gets poet proof from remote peer
 func (l *Logic) GetPoetProof(id types.Hash32) error {
-	res := <-l.fetcher.GetHash(id, fetch.Hint(POETDB), l.GetPoetResult, true)
+	res := <-l.fetcher.GetHash(id, fetch.Hint(POETDB), l.getPoetResult, true)
 	return res.Err
 }

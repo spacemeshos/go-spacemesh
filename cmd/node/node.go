@@ -16,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
-	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -155,7 +154,7 @@ type SpacemeshApp struct {
 	newgrpcAPIService *grpcserver.Server
 	newjsonAPIService *grpcserver.JSONHTTPServer
 	syncer            *sync.Syncer
-	blockListener     *layerfetcher.BlockListener
+	blockListener     *blocks.BlockHandler
 	state             *state.TransactionProcessor
 	blockProducer     *miner.BlockBuilder
 	oracle            *blocks.Oracle
@@ -565,7 +564,11 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	}
 
 	blockProducer := miner.NewBlockBuilder(cfg, sgn, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
-	blockListener := layerfetcher.NewBlockListener(swarm, syncer, 4, app.addLogger(BlockListenerLogger, lg))
+
+	bCfg := blocks.Config{
+		app.Config.Hdist,
+	}
+	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, lg)
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))
 
@@ -580,6 +583,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 
 	gossipListener.AddListener(state.IncomingTxProtocol, priorityq.Low, processor.HandleTxData)
 	gossipListener.AddListener(activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
+	gossipListener.AddListener(blocks.NewBlockProtocol, priorityq.High, blockListener.HandleBlock)
 
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener
@@ -635,7 +639,7 @@ func (app *SpacemeshApp) HareFactory(mdb *mesh.DB, swarm service.Service, sgn ha
 				return false
 			}
 			if res == nil {
-				app.log.With().Error("output set block not in database (BUG BUG BUG - GetBlock return err nil and res nil)", b)
+				app.log.With().Error("output set block not in database (BUG BUG BUG - FetchBlock return err nil and res nil)", b)
 				return false
 			}
 
@@ -648,7 +652,7 @@ func (app *SpacemeshApp) HareFactory(mdb *mesh.DB, swarm service.Service, sgn ha
 }
 
 func (app *SpacemeshApp) startServices() {
-	app.blockListener.Start()
+	//app.blockListener.Start()
 	app.syncer.Start()
 	err := app.hare.Start()
 	if err != nil {
@@ -775,10 +779,10 @@ func (app *SpacemeshApp) stopServices() {
 		app.atxBuilder.Stop()
 	}
 
-	if app.blockListener != nil {
+	/*if app.blockListener != nil {
 		app.log.Info("%v closing blockListener", app.nodeID.Key)
 		app.blockListener.Close()
-	}
+	}*/
 
 	if app.hare != nil {
 		app.log.Info("%v closing Hare", app.nodeID.Key)

@@ -740,6 +740,7 @@ func (db *DB) HandleGossipAtx(data service.GossipMessage, syncer service.Fetcher
 	data.ReportValidation(AtxProtocol)
 }
 
+// HandleAtxData handles atxs received either by gossip or sync
 func (db *DB) HandleAtxData(data []byte, syncer service.Fetcher) error {
 	atx, err := types.BytesToAtx(data)
 	if err != nil {

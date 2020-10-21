@@ -91,7 +91,7 @@ func atxs(num int) ([]*types.ActivationTx, []types.ATXID) {
 func createBaseline(msh *mesh.Mesh, layers int, layerSize int, patternSize int, txPerBlock int, atxPerBlock int) {
 	lg := log.New("create_baseline", "", "")
 	l1 := mesh.GenesisLayer()
-	msh.AddBlockWithTxs(l1.Blocks()[0], nil)
+	msh.AddBlockWithTxs(l1.Blocks()[0])
 	var lyrs []*types.Layer
 	lyrs = append(lyrs, l1)
 	l := createLayerWithRandVoting(msh, 1, []*types.Layer{l1}, layerSize, 1, txPerBlock, atxPerBlock)
@@ -118,7 +118,7 @@ func createLayerWithRandVoting(msh *mesh.Mesh, index types.LayerID, prev []*type
 	}
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := types.NewExistingBlock(index, []byte(rand.String(8)))
+		bl := types.NewExistingBlock(index, []byte(rand.String(8)), nil)
 		signer := signing.NewEdSigner()
 		bl.Signature = signer.Sign(bl.Bytes())
 		layerBlocks = append(layerBlocks, bl.ID())
@@ -133,15 +133,17 @@ func createLayerWithRandVoting(msh *mesh.Mesh, index types.LayerID, prev []*type
 		}
 
 		//add txs
-		txs, txids := txs(txPerBlock)
+		_, txids := txs(txPerBlock)
+
 		//add atxs
 		atxs, _ := atxs(atxPerBlock)
+		msh.AtxDB.ProcessAtxs(atxs)
 
 		bl.TxIDs = txids
 		//bl.ATXIDs = atxids
 		bl.Initialize()
 		start := time.Now()
-		msh.AddBlockWithTxs(bl, txs)
+		msh.AddBlockWithTxs(bl)
 		log.Debug("added block %v", time.Since(start))
 		l.AddBlock(bl)
 

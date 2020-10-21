@@ -202,7 +202,7 @@ func filterUnknownBlocks(blocks []types.BlockID, validate func(id types.BlockID)
 }
 
 func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
-	var votes []types.BlockID = nil
+	var votes []types.BlockID
 
 	// if genesis
 	if id <= types.GetEffectiveGenesis() {

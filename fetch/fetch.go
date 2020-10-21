@@ -199,7 +199,8 @@ func (f *Fetch) Stop() {
 	f.stop <- struct{}{}
 }
 
-func (f *Fetch) AddDB(hint Hint, db database.Database){
+// AddDB adds a DB with corresponding hint
+func (f *Fetch) AddDB(hint Hint, db database.Database) {
 	f.dbs[hint] = db
 }
 
@@ -477,7 +478,7 @@ func (f *Fetch) GetAllHashes(hashes []types.Hash32, hint Hint, hashValidationFun
 	}
 
 	// wait for all block fetch Requests to end
-	var retErr error = nil
+	var retErr error
 	for _, hashRes := range hashWaiting {
 		res := <-hashRes
 		if res.Err != nil {
