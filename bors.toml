@@ -1,5 +1,4 @@
 status = [
-  "continuous-integration/travis-ci/push",
   "systemtest-latenodes",
   "systemtest-blocks-add-node",
   "systemtest-hare-mining",
