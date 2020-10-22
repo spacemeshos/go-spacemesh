@@ -54,5 +54,5 @@ func CheckNodeVersion(reqVersion string, minVersion string) (bool, error) {
 		}
 	}
 
-	return false, nil
+	return true, nil
 }
