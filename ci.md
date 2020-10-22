@@ -1,10 +1,10 @@
 # Continuous Integration (CI)
 
-This repository currently contains CI configuration for two different CI engines, [Travis CI](https://travis-ci.org/) and [GitHub Actions](https://docs.github.com/en/actions) (GA). Historically, we exclusively used Travis, but we're in the process of migrating to GA. Travis configuration can be found in [.travis.yml](.travis.yml) and GA configuration can be found in [.github/workflows](.github/workflows). At present the configuration for these two engines is nearly identical.
+This repository runs CI using [GitHub Actions](https://docs.github.com/en/actions) (GA). Historically we used Travis, but we migrated to GA. The configuration can be found in [.github/workflows](.github/workflows).
 
 ## Workflows
 
-Our CI configuration includes three distinct "workflows" (related sets of tasks). For Travis, these are all found in the `.travis.yml` file. For GA, the first two live in the `ci.yml` file and the last lives in `dockerpush.yml`, both in `.github/workflows`.
+Our CI configuration includes three distinct "workflows" (related sets of tasks). The first two live in the `ci.yml` file and the last lives in `dockerpush.yml`, both in `.github/workflows`.
 
 ### Unit tests
 
@@ -38,7 +38,7 @@ It's not necessary to run any additional tests when bors merges code to `develop
 
 ## Testing locally
 
-Mimicking the Travis CI workflow locally is [extraordinarily difficult](https://stackoverflow.com/questions/21053657/how-to-run-travis-ci-locally/49019950#49019950). This is one reason we are migrating to GA instead. Fortunately, there is a robust tool called [`act`](https://github.com/nektos/act) that mimics the GA environment locally. It can be installed using Homebrew by running:
+There is a robust tool called [`act`](https://github.com/nektos/act) that mimics the GA environment locally. It can be installed using Homebrew by running:
 
 ```
 > brew install nektos/tap/act
@@ -57,4 +57,4 @@ See the [full documentation](https://github.com/nektos/act/blob/master/README.md
 
 ## Secrets
 
-Some of the CI workflows, including the system tests and the push to dockerhub, require additional credentials that are not stored in this repository. These include credentials for Dockerhub and Google Cloud, and configuration information for Kubernetes (for running system tests). For Travis, these credentials are stored in the online Travis configuration. For GA, they're stored as [repository secrets](https://docs.github.com/en/actions/reference/encrypted-secrets). These are passed into the CI workflows as environment variables.
+Some of the CI workflows, including the system tests and the push to dockerhub, require additional credentials that are not stored in this repository. These include credentials for Dockerhub and Google Cloud, and configuration information for Kubernetes (for running system tests). They're stored as [repository secrets](https://docs.github.com/en/actions/reference/encrypted-secrets). These are passed into the CI workflows as environment variables.
