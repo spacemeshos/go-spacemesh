@@ -24,7 +24,7 @@ spec:
         accessModes:
         - ReadWriteOnce
         # if not specified it uses DefaultClass
-        # storageClassName: hostpath
+        storageClassName: ssd
         resources:
           requests:
             storage: 30Gi
