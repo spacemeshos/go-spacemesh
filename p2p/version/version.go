@@ -4,6 +4,7 @@ package version
 import (
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"strconv"
 	"strings"
 )
@@ -44,7 +45,7 @@ func CheckNodeVersion(reqVersion string, minVersion string) (bool, error) {
 		}
 	}
 
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 3; i++ {
 		if numa[i] > numb[i] {
 			return true, nil
 		}
@@ -54,5 +55,8 @@ func CheckNodeVersion(reqVersion string, minVersion string) (bool, error) {
 		}
 	}
 
-	return true, nil
+	// this should not happen, it means the versions perfectly match but we already tested that above
+	log.With().Error("error comparing node version strings",
+		log.String("reqVersion", reqVersion), log.String("minVersion", minVersion))
+	return false, errors.New("error comparing node version strings")
 }

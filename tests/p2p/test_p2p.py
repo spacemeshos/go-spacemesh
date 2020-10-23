@@ -319,9 +319,9 @@ def test_broadcast_unknown_protocol(setup_bootstrap, setup_clients, add_curl):
 # Different client version on bootstrap:
 # Deploy X peers with client version A
 # Wait for bootstrap
-# Deploy new peer with client version B
-# Validate that the new node failed to bootstrap
-# NOTE : this test is ran in the end because it affects the network structure,
+# Deploy new peers with client version B
+# Validate that the new nodes failed to bootstrap
+# NOTE: this test is run in the end because it affects the network structure,
 # it creates an additional pod with a "v2" client
 def test_diff_client_ver(setup_bootstrap, setup_clients, add_curl, add_clients):
     num_of_v2_clients = 2
@@ -342,7 +342,7 @@ def test_diff_client_ver(setup_bootstrap, setup_clients, add_curl, add_clients):
         assert len(hits) == 0, ass_err
 
 
-# NOTE : this test is ran in the end because it affects the network structure,
+# NOTE: this test is run in the end because it affects the network structure,
 # it creates more pods and bootstrap them which will affect final query results
 # an alternative to that would be to kill the pods when the test ends.
 def test_late_bootstraps(init_session, setup_bootstrap, setup_clients):

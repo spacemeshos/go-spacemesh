@@ -54,7 +54,7 @@ client:
   deployment_type: deployment # default:deployment
 # IMPORTANT: all clients on the same suite should contain the same args (hare-committee-size, hare-max-adversaries etc)!
 clientv2:
-  image: 'spacemeshos/go-spacemesh:go_auto_client_v2'
+  image: 'spacemeshos/go-spacemesh-dev:api-cleanup-p2pv0.0.1'
   command: '/bin/go-p2p'
   replicas: 3 #default 40
   resources:
