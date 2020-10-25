@@ -293,6 +293,10 @@ def get_latest_layer(deployment, num_miners):
         if node_cnt >= num_miners:
             return layer
 
+    for layer, node_cnt in sorted(layers.items(), key=lambda t: -t[0]):
+        if node_cnt >= num_miners-1:
+            return layer
+
 
 def wait_for_latest_layer(deployment, min_layer_id, layers_per_epoch, num_miners):
     while True:
