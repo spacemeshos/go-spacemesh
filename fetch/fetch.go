@@ -293,7 +293,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 	var response responseBatch
 	err := types.BytesToInterface(data, &response)
 	if err != nil {
-		f.log.Error("we shold panic here, response was unclear, probably leaking")
+		f.log.Error("we should panic here, response was unclear, probably leaking")
 		return
 	}
 
@@ -301,7 +301,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 	batch, has := f.activeBatches[response.ID]
 	f.activeBatchM.RUnlock()
 	if !has {
-		f.log.Error("unknown batch response received, or already invalidated %v", response.ID)
+		f.log.Warning("unknown batch response received, or already invalidated %v", response.ID)
 		return
 	}
 
@@ -480,12 +480,12 @@ func (f *Fetch) GetAllHashes(hashes []types.Hash32, hint Hint, hashValidationFun
 		hashWaiting = append(hashWaiting, callBackChan)
 	}
 
-	// wait for all block fetch Requests to end
+	// wait for all fetch Requests to end
 	var retErr error
 	for _, hashRes := range hashWaiting {
 		res := <-hashRes
 		if res.Err != nil {
-			f.log.Error("%v hash $v", res.Err, res.Hash)
+			f.log.Error("error fetching hash $v err %v", res.Hash, res.Err)
 			retErr = res.Err
 		}
 	}
