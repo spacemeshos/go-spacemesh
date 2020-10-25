@@ -819,8 +819,8 @@ func (s *Syncer) fetchAtx(ID types.ATXID) (*types.ActivationTx, error) {
 	return atxs[0], nil
 }
 
-// GetAtx fetches an ATX from remote peer
-func (s *Syncer) GetAtx(ID types.ATXID) error {
+// FetchAtx fetches an ATX from remote peer
+func (s *Syncer) FetchAtx(ID types.ATXID) error {
 	_, e := s.fetchAtx(ID)
 	return e
 }

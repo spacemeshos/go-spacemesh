@@ -204,12 +204,12 @@ func TestFetch_requestHashFromPeers_AggregateAndValidate(t *testing.T) {
 
 	hint := Hint("db")
 	request1 := request{
-		success:          req.OkCallback,
-		hash:             h1,
-		priority:         0,
-		validateResponse: false,
-		hint:             hint,
-		returnChan:       make(chan HashDataPromiseResult, 6),
+		successCallback:      req.OkCallback,
+		hash:                 h1,
+		priority:             0,
+		validateResponseHash: false,
+		hint:                 hint,
+		returnChan:           make(chan HashDataPromiseResult, 6),
 	}
 
 	f.activeRequests[h1] = []request{request1, request1, request1}
@@ -220,7 +220,7 @@ func TestFetch_requestHashFromPeers_AggregateAndValidate(t *testing.T) {
 	assert.Equal(t, 1, net.SendCalled[h1])
 
 	// test incorrect hash fail
-	request1.validateResponse = true
+	request1.validateResponseHash = true
 	f.activeRequests[h1] = []request{request1, request1, request1}
 	f.requestHashBatchFromPeers()
 
@@ -260,12 +260,12 @@ func TestFetch_GetHash_failNetwork(t *testing.T) {
 
 	hint := Hint("db")
 	request1 := request{
-		success:          req.OkCallback,
-		hash:             h1,
-		priority:         0,
-		validateResponse: false,
-		hint:             hint,
-		returnChan:       make(chan HashDataPromiseResult, f.cfg.MaxRetiresForPeer),
+		successCallback:      req.OkCallback,
+		hash:                 h1,
+		priority:             0,
+		validateResponseHash: false,
+		hint:                 hint,
+		returnChan:           make(chan HashDataPromiseResult, f.cfg.MaxRetiresForPeer),
 	}
 	f.activeRequests[h1] = []request{request1, request1, request1}
 	f.requestHashBatchFromPeers()

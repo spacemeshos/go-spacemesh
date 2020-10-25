@@ -353,8 +353,8 @@ func (f *Future) Result() error {
 	return ret.Err
 }
 
-// GetAtx returns error if ATX was not found
-func (l *Logic) GetAtx(id types.ATXID) error {
+// FetchAtx returns error if ATX was not found
+func (l *Logic) FetchAtx(id types.ATXID) error {
 	f := Future{l.fetcher.GetHash(id.Hash32(), fetch.Hint(BlockDB), l.getAtxResults, true)}
 	return f.Result()
 }

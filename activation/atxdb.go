@@ -787,7 +787,7 @@ func (db *DB) HandleAtxData(data []byte, syncer service.Fetcher) error {
 func (db *DB) FetchAtxReferences(atx *types.ActivationTx, f service.Fetcher) error {
 	if atx.PositioningATX != *types.EmptyATXID {
 		db.log.Info("going to fetch pos atx %v of atx %v", atx.PositioningATX.ShortString(), atx.ID().ShortString())
-		err := f.GetAtx(atx.PositioningATX)
+		err := f.FetchAtx(atx.PositioningATX)
 		if err != nil {
 			return err
 		}
@@ -795,7 +795,7 @@ func (db *DB) FetchAtxReferences(atx *types.ActivationTx, f service.Fetcher) err
 
 	if atx.PrevATXID != *types.EmptyATXID {
 		db.log.Info("going to fetch prev atx %v of atx %v", atx.PrevATXID.ShortString(), atx.ID().ShortString())
-		err := f.GetAtx(atx.PrevATXID)
+		err := f.FetchAtx(atx.PrevATXID)
 		if err != nil {
 			return err
 		}

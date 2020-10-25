@@ -45,7 +45,7 @@ type Syncer interface {
 // Fetcher is a general interface that defines a component capable of fetching data from remote peers
 type Fetcher interface {
 	FetchBlock(ID types.BlockID) error
-	GetAtx(ID types.ATXID) error
+	FetchAtx(ID types.ATXID) error
 	GetPoetProof(ID types.Hash32) error
 	GetTxs(IDs []types.TransactionID) error
 	GetBlocks(IDs []types.BlockID) error

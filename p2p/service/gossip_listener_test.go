@@ -18,7 +18,7 @@ func (m *syncMock) FetchBlock(ID types.BlockID) error {
 	return nil
 }
 
-func (m *syncMock) GetAtx(ID types.ATXID) error {
+func (m *syncMock) FetchAtx(ID types.ATXID) error {
 	return nil
 }
 

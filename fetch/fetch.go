@@ -16,12 +16,14 @@ import (
 	"time"
 )
 
-// HandleDataCallback is the callback that will be called when `hash` data is received, hash of the bytes must match
-// hash
-type HandleDataCallback func(hash types.Hash32, buf []byte) error
+type (
+	// DataCallbackHandler is the callback that will be called when `hash` data is received, hash of the bytes must match
+	// hash
+	DataCallbackHandler func(hash types.Hash32, buf []byte) error
 
-// HandleFailCallback is the callback that will be called when a fetch fails
-type HandleFailCallback func(hash types.Hash32, err error)
+	// HandleFailCallback is the callback that will be called when a fetch fails
+	HandleFailCallback func(hash types.Hash32, err error)
+)
 
 // Hint marks which DB should be queried for a certain provided hash
 type Hint string
@@ -37,6 +39,7 @@ const (
 	// High will call fetch immediately
 	High = 1
 )
+
 const (
 	fetch         server.MessageType = 8
 	fetchProtocol                    = "/sync/2.0/"
@@ -47,21 +50,24 @@ const (
 // ErrCouldNotSend is a special type of error indicating fetch could not be done because message could not be sent to peers
 type ErrCouldNotSend error
 
+var onlyOnce sync.Once
+
 // Fetcher is the general interface of the fetching unit, capable of requesting bytes that corresponds to a hash
 // from other remote peers.
 type Fetcher interface {
-	GetHash(hash types.Hash32, h Hint, dataCallback HandleDataCallback, validateAndSubmit bool) chan HashDataPromiseResult
-	GetAllHashes(hash []types.Hash32, hint Hint, hashValidationFunction HandleDataCallback, validateAndSubmit bool) error
+	GetHash(hash types.Hash32, h Hint, dataCallback DataCallbackHandler, validateAndSubmit bool) chan HashDataPromiseResult
+	GetAllHashes(hash []types.Hash32, hint Hint, hashValidationFunction DataCallbackHandler, validateAndSubmit bool) error
 }
 
 /// request contains all relevant data for a single request for a specified hash
 type request struct {
-	success          HandleDataCallback
-	hash             types.Hash32
-	priority         priority
-	validateResponse bool
-	hint             Hint
-	returnChan       chan HashDataPromiseResult
+	successCallback      DataCallbackHandler        // successCallback is the callback called if data was retrieved successfully
+	hash                 types.Hash32               // hash is the hash of the data requested
+	priority             priority                   // priority is for QoS
+	validateResponseHash bool                       // if true perform hash validation on received data
+	hint                 Hint                       // the hint from which database to fetch this hash
+	returnChan           chan HashDataPromiseResult //channel that will signal if the call succeeded or not
+	writeToDB            bool                       // writeToDB puts the returned data in DB
 }
 
 // requestMessage is the on the wire message that will be send to the peer for hash query
@@ -190,13 +196,13 @@ func NewFetch(cfg Config, network service.Service, logger log.Log) *Fetch {
 
 // Start handling fetch Requests
 func (f *Fetch) Start() {
-	go f.loop()
+	onlyOnce.Do(func() { go f.loop() })
 }
 
 // Stop handling fetch Requests
 func (f *Fetch) Stop() {
 	f.batchTimeout.Stop()
-	f.stop <- struct{}{}
+	close(f.stop)
 }
 
 // AddDB adds a DB with corresponding hint
@@ -308,35 +314,30 @@ func (f *Fetch) receiveResponse(data []byte) {
 		// for each hash, call its callbacks
 		resCallbacks := f.activeRequests[resID.Hash]
 		for _, req := range resCallbacks {
-			if req.validateResponse == false {
-				err := req.success(resID.Hash, resID.data)
-				req.returnChan <- HashDataPromiseResult{
-					Err:  err,
-					Hash: resID.Hash,
+			var err error
+			if req.validateResponseHash {
+				actual := types.CalcHash32(data)
+				if actual != resID.Hash {
+					err = fmt.Errorf("hash didnt match")
 				}
-				continue
-			}
 
-			// check hash flow, if hash didn't match still call fail function
-			actual := types.CalcHash32(data)
-			if actual == resID.Hash {
-				err := req.success(resID.Hash, data)
-				// if data is validates - put the returned value into the db.
-				if err == nil {
-					err = f.dbs[req.hint].Put(resID.Hash.Bytes(), data)
-				}
+			}
+			if err != nil {
 				req.returnChan <- HashDataPromiseResult{
 					Err:  err,
 					Hash: resID.Hash,
 				}
 				continue
 			}
-			//todo: mark peer as malicious
-			err := fmt.Errorf("hash didnt match")
+			err = req.successCallback(resID.Hash, resID.data)
+			if err == nil && req.writeToDB {
+				err = f.dbs[req.hint].Put(resID.Hash.Bytes(), data)
+			}
 			req.returnChan <- HashDataPromiseResult{
 				Err:  err,
 				Hash: resID.Hash,
 			}
+			//todo: mark peer as malicious
 		}
 		//remove from map
 		delete(batchMap, resID.Hash)
@@ -421,16 +422,18 @@ func (f *Fetch) sendBatch(hashes []types.Hash32) { // create a network batch and
 		p := f.net.GetRandomPeer()
 		err := f.net.SendRequest(fetch, bytes, p, f.receiveResponse, timeoutFunc)
 		// if call succeeded, continue to other Requests
-		if err == nil {
+		if err != nil {
+			retries++
+			if retries > f.cfg.MaxRetiresForPeer {
+				f.handleHashError(batch.ID, ErrCouldNotSend(fmt.Errorf("could not send message")))
+				break
+			}
+			//todo: mark number of fails per peer to make it low priority
+			f.log.Warning("could not send message to peer %v, retrying, retries %v", p, retries)
+		} else {
 			break
 		}
-		//todo: mark number of fails per peer to make it low priority
-		retries++
-		if retries > f.cfg.MaxRetiresForPeer {
-			f.handleHashError(batch.ID, ErrCouldNotSend(fmt.Errorf("could not send message")))
-			break
-		}
-		f.log.Error("could not send message to peer %v , retrying, retries : %v", p, retries)
+
 	}
 }
 
@@ -469,7 +472,7 @@ type HashDataPromiseResult struct {
 
 // GetAllHashes gets a list of hashes and validates them with the dataCallback function
 // it will return error if any of the hashes were not received.
-func (f *Fetch) GetAllHashes(hashes []types.Hash32, hint Hint, hashValidationFunction HandleDataCallback, validateAndSubmit bool) error {
+func (f *Fetch) GetAllHashes(hashes []types.Hash32, hint Hint, hashValidationFunction DataCallbackHandler, validateAndSubmit bool) error {
 	hashWaiting := make([]chan HashDataPromiseResult, len(hashes))
 
 	for _, id := range hashes {
@@ -494,7 +497,7 @@ func (f *Fetch) GetAllHashes(hashes []types.Hash32, hint Hint, hashValidationFun
 // know where to look for the hash, if function fails to get a response - failCallback will be called, if a response was
 // received dataCallback will be called. caller can choose whether to validate that the received bytes match the has by setting
 // validateHash to true
-func (f *Fetch) GetHash(hash types.Hash32, h Hint, dataCallback HandleDataCallback, validateAndSubmit bool) chan HashDataPromiseResult {
+func (f *Fetch) GetHash(hash types.Hash32, h Hint, dataCallback DataCallbackHandler, validateHash bool) chan HashDataPromiseResult {
 	callbackChan := make(chan HashDataPromiseResult, 1)
 
 	//check if we already have this hash locally
@@ -515,9 +518,10 @@ func (f *Fetch) GetHash(hash types.Hash32, h Hint, dataCallback HandleDataCallba
 		dataCallback,
 		hash,
 		Low,
-		validateAndSubmit,
+		validateHash,
 		h,
 		callbackChan,
+		false,
 	}
 
 	f.requestReceiver <- req

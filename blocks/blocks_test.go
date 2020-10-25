@@ -109,7 +109,7 @@ func (f *fetchMock) GetBlock(ID types.BlockID) error {
 	return f.returnError()
 }
 
-func (f fetchMock) GetAtx(ID types.ATXID) error {
+func (f fetchMock) FetchAtx(ID types.ATXID) error {
 	return f.returnError()
 }
 
