@@ -1,5 +1,9 @@
 status = [
-  "continuous-integration/travis-ci/push",
+  "systemtest-latenodes",
+  "systemtest-blocks-add-node",
+  "systemtest-hare-mining",
+  "systemtest-sync-blocks",
+  "systemtest-genesis-p2p",
 ]
 
 required_approvals = 1

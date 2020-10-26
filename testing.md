@@ -7,11 +7,8 @@ mp## Testing Notes
 ### Generating a Code Coverage Report
 `make cover`
 
-### Travis CI for cloud building & testing
-- Travis builds run all tests
-- A travis build is triggered for each PR
-- CI will fail if code is not proparly go formatted or one or more go vet check is failing.
-- https://travis-ci.org/spacemeshos/go-spacemesh
+### CI for cloud building & testing
+See [Continuous Integration](ci.md)
 
 
 ### Checking Out and Testing Pull Requests
