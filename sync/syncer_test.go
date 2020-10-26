@@ -665,7 +665,7 @@ func syncTest(dpType string, t *testing.T) {
 }
 
 func TestSyncProtocol_PersistenceIntegration(t *testing.T) {
-	t.Skip("fails on Travis") // TODO
+	t.Skip("fails on CI") // TODO
 	syncTest(levelDB, t)
 }
 
@@ -687,7 +687,7 @@ type syncIntegrationTwoNodes struct {
 }
 
 func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
-	t.Skip("fails on Travis") // TODO
+	t.Skip("fails on CI") // TODO
 
 	sis := &syncIntegrationTwoNodes{}
 	sis.BootstrappedNodeCount = 2
@@ -813,7 +813,7 @@ type syncIntegrationMultipleNodes struct {
 }
 
 func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
-	t.Skip("fails on Travis") // TODO
+	t.Skip("fails on CI") // TODO
 
 	sis := &syncIntegrationMultipleNodes{}
 	sis.BootstrappedNodeCount = 4
@@ -1554,7 +1554,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 		return
 	}
 
-	// ugly hack, just to see if this fixed travis fail
+	// ugly hack, just to see if this fixed CI failure
 	time.Sleep(3 * time.Second)
 	// layer hash
 	_, err1 := syncs[0].getLayerFromNeighbors(types.LayerID(1))
