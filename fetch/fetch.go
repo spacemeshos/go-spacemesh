@@ -47,7 +47,6 @@ const (
 // ErrCouldNotSend is a special type of error indicating fetch could not be done because message could not be sent to peersProvider
 type ErrCouldNotSend error
 
-
 // Fetcher is the general interface of the fetching unit, capable of requesting bytes that corresponds to a hash
 // from other remote peersProvider.
 type Fetcher interface {
