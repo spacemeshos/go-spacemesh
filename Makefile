@@ -136,7 +136,7 @@ test: genproto
 
 
 test-no-app-test: genproto
-	ulimit -n 9999; go test -timeout 0 -p 1 -tags exclude_app_test ./...
+	ulimit -n 9999; go test -v -timeout 0 -p 1 -tags exclude_app_test ./...
 .PHONY: test
 
 
