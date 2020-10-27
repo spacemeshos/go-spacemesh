@@ -47,7 +47,6 @@ const (
 // ErrCouldNotSend is a special type of error indicating fetch could not be done because message could not be sent to peersProvider
 type ErrCouldNotSend error
 
-var onlyOnce sync.Once
 
 // Fetcher is the general interface of the fetching unit, capable of requesting bytes that corresponds to a hash
 // from other remote peersProvider.
@@ -169,6 +168,7 @@ type Fetch struct {
 	activeBatchM         sync.RWMutex
 	stopM                sync.RWMutex
 	stopped              bool
+	onlyOnce             sync.Once
 }
 
 // NewFetch creates a new Fetch struct
@@ -195,7 +195,7 @@ func NewFetch(cfg Config, network service.Service, logger log.Log) *Fetch {
 
 // Start handling fetch Requests
 func (f *Fetch) Start() {
-	onlyOnce.Do(func() { go f.loop() })
+	f.onlyOnce.Do(func() { go f.loop() })
 }
 
 // Stop handling fetch Requests
@@ -228,6 +228,7 @@ func (f *Fetch) AddDB(hint Hint, db database.Database) {
 // here we receive all Requests for hashes for all DBs and batch them together before we send the request to peer
 // there can be a priority request that will not be batched
 func (f *Fetch) loop() {
+	f.log.Info("starting main loop")
 	for {
 		select {
 		case req := <-f.requestReceiver:
