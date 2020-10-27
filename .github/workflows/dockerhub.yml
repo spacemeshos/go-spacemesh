@@ -1,0 +1,21 @@
+# Generate latest build and push it to dockerhub on push to develop branch.
+# NOTE: This workflow does not include any tests, nor any dependencies, since bors guarantees
+# that only code that passes all tests is ever pushed to develop.
+name: push to dockerhub
+env:
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  dockerpush:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+    - name: push to dockerhub
+      run: make dockerpush

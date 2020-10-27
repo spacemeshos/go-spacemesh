@@ -499,14 +499,14 @@ func (suite *AppTestSuite) validateLastATXTotalWeight(app *SpacemeshApp, numberO
 	}
 }
 
-// travis has a 10 minutes timeout
+// CI has a 10 minute timeout
 // this ensures we print something before the timeout
-func patchTravisTimeout(termchan chan struct{}) {
+func patchCITimeout(termchan chan struct{}) {
 	ticker := time.NewTimer(5 * time.Minute)
 	for {
 		select {
 		case <-ticker.C:
-			fmt.Printf("Travis Patch\n")
+			fmt.Printf("CI timeout patch\n")
 			ticker = time.NewTimer(5 * time.Minute)
 		case <-termchan:
 			return
@@ -520,7 +520,7 @@ func TestAppTestSuite(t *testing.T) {
 	}
 	// defer leaktest.Check(t)()
 	term := make(chan struct{})
-	go patchTravisTimeout(term)
+	go patchCITimeout(term)
 	suite.Run(t, new(AppTestSuite))
 	close(term)
 }

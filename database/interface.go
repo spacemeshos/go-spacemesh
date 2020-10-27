@@ -19,6 +19,7 @@ package database
 import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
+	"path/filepath"
 	"time"
 )
 
@@ -75,7 +76,7 @@ type ContextDBCreator struct {
 
 // CreateRealDB is a wrapper function that creates a leveldb database
 func (c ContextDBCreator) CreateRealDB(file string, cache int, handles int, logger log.Log) (Database, error) {
-	return NewLDBDatabase(c.Path+c.Context+file, cache, handles, logger)
+	return NewLDBDatabase(filepath.Join(c.Path+c.Context, file), cache, handles, logger)
 }
 
 // CreateMemDB is a wrapper function that creates a memory database to be used only in tests
