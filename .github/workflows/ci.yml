@@ -29,6 +29,8 @@ jobs:
   # stage 1: run unit tests and app tests as a preqrequisite
   quicktests:
     runs-on: ubuntu-latest
+    # should not take more than 2-3 mins
+    timeout-minutes: 5
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -36,10 +38,6 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: ${{ env.go-version }}
-      # this sends a quick notification so we know tests have kicked off
-      - uses: act10ns/slack@v1
-        with:
-          status: in progress
       - name: fmt, tidy, lint
         run: |
           make
@@ -53,6 +51,8 @@ jobs:
         if: always()
   unittests:
     runs-on: ubuntu-latest
+    # should take around 8-10 mins
+    timeout-minutes: 15
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -70,6 +70,8 @@ jobs:
         if: always()
   apptests:
     runs-on: ubuntu-latest
+    # should take around 7-9 mins
+    timeout-minutes: 15
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -91,6 +93,8 @@ jobs:
     # only run on push, not on pull_request
     # note that this does NOT run on pushes to branch develop, see separate workflow file for that
     if: github.event_name == 'push'
+    # should take 2-3 mins
+    timeout-minutes: 7
     needs:
       - quicktests
       - unittests
@@ -112,6 +116,7 @@ jobs:
     if: github.event_name == 'push'
     needs: dockerpush
     runs-on: ubuntu-latest
+    timeout-minutes: 80
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -126,6 +131,7 @@ jobs:
     if: github.event_name == 'push'
     needs: dockerpush
     runs-on: ubuntu-latest
+    timeout-minutes: 80
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -140,6 +146,7 @@ jobs:
     if: github.event_name == 'push'
     needs: dockerpush
     runs-on: ubuntu-latest
+    timeout-minutes: 80
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -154,6 +161,7 @@ jobs:
     if: github.event_name == 'push'
     needs: dockerpush
     runs-on: ubuntu-latest
+    timeout-minutes: 80
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -168,6 +176,7 @@ jobs:
     if: github.event_name == 'push'
     needs: dockerpush
     runs-on: ubuntu-latest
+    timeout-minutes: 80
     steps:
       - name: checkout
         uses: actions/checkout@v2
