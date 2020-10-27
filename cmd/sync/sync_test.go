@@ -11,7 +11,7 @@ func TestSpacemeshApp_TestSyncCmd(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	version = "newestSamples"
+	version = "samples"
 	syncApp := newSyncApp()
 	defer syncApp.Cleanup()
 	syncApp.Initialize(cmd)
@@ -31,8 +31,8 @@ func TestSpacemeshApp_TestSyncCmd(t *testing.T) {
 
 	go syncApp.start(cmd, nil)
 
-	time.Sleep(20 * time.Second)
-	timeout := time.After(60 * time.Second)
+	time.Sleep(5 * time.Second)
+	timeout := time.After(20 * time.Second)
 	for {
 		select {
 		// Got a timeout! fail with a timeout error

@@ -8,7 +8,7 @@
 data-folder = "~/.spacemesh-data"
 test-mode = false
 metrics = false
-metrics-port = 2020
+metrics-port = 12020
 oracle_server = "http://localhost:3030"
 oracle_server_worldid = 0
 genesis-time = "2019-02-13T17:02:00+00:00"
@@ -20,7 +20,7 @@ coinbase = "0x1234"
 [p2p]
 security-param = 20
 fast-sync = true
-tcp-port = 7513
+tcp-port = 17513
 node-id = ""
 new-node= false
 dial-timeout = "1m"
@@ -46,8 +46,8 @@ bootnodes = [] # example : spacemesh://j7qWfWaJRVp25ZsnCu9rJ4PmhigZBtesB4YmQHqqP
 [api]
 grpc-server = true
 json-server = true
-grpc-port = 9091
-json-port = 9090
+grpc-port = 19091
+json-port = 19090
 
 # Time sync NTP Config
 [time]
@@ -70,10 +70,8 @@ state = "info"
 atxDb = "info"
 poetDb = "info"
 store = "info"
-poetDb = "info"
 meshDb = "info"
 trtl = "info"
-atxDb = "info"
 block-eligibility = "info"
 mesh = "info"
 sync = "info"

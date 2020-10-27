@@ -41,7 +41,7 @@ type meshValidatorMock struct {
 }
 
 func (m *meshValidatorMock) LatestComplete() types.LayerID {
-	panic("implement me")
+	return m.vl
 }
 
 func (m *meshValidatorMock) Persist() error {
@@ -72,7 +72,7 @@ func (s mockState) ValidateAndAddTxToPool(tx *types.Transaction) error {
 }
 
 func (s mockState) LoadState(types.LayerID) error {
-	panic("implement me")
+	return nil
 }
 
 func (s mockState) GetStateRoot() types.Hash32 {
@@ -222,14 +222,13 @@ func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *
 	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, conf.LayersPerEpoch, &validatorMock{}, lg.WithOptions(log.Nop))
 	var msh *mesh.Mesh
 	if mshdb.PersistentData() {
-		lg.Info("persistent data found ")
+		lg.Info("persistent data found")
 		msh = mesh.NewRecoveredMesh(mshdb, atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
 	} else {
-		lg.Info("no persistent data found ")
+		lg.Info("no persistent data found")
 		msh = mesh.NewMesh(mshdb, atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
 	}
 
-	_ = msh.AddBlock(mesh.GenesisBlock())
 	clock := mockClock{Layer: expectedLayers + 1}
 	lg.Info("current layer %v", clock.GetCurrentLayer())
 	return NewSync(swarm, msh, txpool, atxdb, blockEligibilityValidatorMock{}, poetDb, conf, &clock, lg)

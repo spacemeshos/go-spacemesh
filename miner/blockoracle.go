@@ -68,18 +68,21 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 		bo.log.With().Warning("block eligibility requested during genesis, cannot create blocks here", layerID, epochNumber)
 		return *types.EmptyATXID, nil, nil
 	}
+	var proofs []types.BlockEligibilityProof
 	bo.eligibilityMutex.RLock()
 	bo.log.With().Info("block eligibility requested", layerID, epochNumber, bo.proofsEpoch)
 	if bo.proofsEpoch != epochNumber {
-		err := bo.calcEligibilityProofs(epochNumber)
+		bo.eligibilityMutex.RUnlock()
+		newProofs, err := bo.calcEligibilityProofs(epochNumber)
+		proofs = newProofs[layerID]
 		if err != nil {
 			bo.log.With().Error("failed to calculate eligibility proofs", layerID, epochNumber, log.Err(err))
-			bo.eligibilityMutex.RUnlock()
 			return *types.EmptyATXID, nil, err
 		}
+	} else {
+		proofs = bo.eligibilityProofs[layerID]
+		bo.eligibilityMutex.RUnlock()
 	}
-	proofs := bo.eligibilityProofs[layerID]
-	bo.eligibilityMutex.RUnlock()
 	bo.log.With().Info("eligible for blocks in layer",
 		bo.nodeID, layerID, layerID.GetEpoch(),
 		log.Int("num_blocks", len(proofs)))
@@ -87,19 +90,19 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 	return bo.atxID, proofs, nil
 }
 
-func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
+func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.LayerID][]types.BlockEligibilityProof, error) {
 	epochBeacon := bo.beaconProvider.GetBeacon(epochNumber)
 
 	var weight, totalWeight uint64
 	// get the previous epochs total weight
 	totalWeight, err := bo.atxDB.GetEpochWeight(epochNumber)
 	if err != nil {
-		return fmt.Errorf("failed to get epoch %v weight: %v", epochNumber, err)
+		return nil, fmt.Errorf("failed to get epoch %v weight: %v", epochNumber, err)
 	}
 	atx, err := bo.getValidAtxForEpoch(epochNumber)
 	if err != nil {
 		if !epochNumber.IsGenesis() {
-			return fmt.Errorf("failed to get latest ATX: %v", err)
+			return nil, fmt.Errorf("failed to get latest ATX: %v", err)
 		}
 	} else {
 		weight = atx.GetWeight()
@@ -114,8 +117,8 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 
 	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(weight, totalWeight, bo.committeeSize, bo.layersPerEpoch)
 	if err != nil {
-		bo.log.Error("failed to get number of eligible blocks: %v", err)
-		return err
+		bo.log.With().Error("failed to get number of eligible blocks", log.Err(err))
+		return nil, err
 	}
 
 	eligibilityProofs := map[types.LayerID][]types.BlockEligibilityProof{}
@@ -123,8 +126,8 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 		message := serializeVRFMessage(epochBeacon, epochNumber, counter)
 		vrfSig, err := bo.vrfSigner.Sign(message)
 		if err != nil {
-			bo.log.Error("Could not sign message err=%v", err)
-			return err
+			bo.log.With().Error("Could not sign message", log.Err(err))
+			return nil, err
 		}
 		vrfHash := sha256.Sum256(vrfSig)
 		eligibleLayer := calcEligibleLayer(epochNumber, bo.layersPerEpoch, vrfHash)
@@ -139,12 +142,10 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 	bo.eligibilityProofs = eligibilityProofs
 	bo.eligibilityMutex.Unlock()
 
-	bo.eligibilityMutex.RLock()
-
 	// Sort the layer map so we can print the layer data in order
-	keys := make([]types.LayerID, len(bo.eligibilityProofs))
+	keys := make([]types.LayerID, len(eligibilityProofs))
 	i := 0
-	for k := range bo.eligibilityProofs {
+	for k := range eligibilityProofs {
 		keys[i] = k
 		i++
 	}
@@ -155,16 +156,15 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 	// Pretty-print the number of blocks per eligible layer
 	var strs []string
 	for k := range keys {
-		strs = append(strs, fmt.Sprintf("Layer %d: %d", keys[k], len(bo.eligibilityProofs[keys[k]])))
+		strs = append(strs, fmt.Sprintf("Layer %d: %d", keys[k], len(eligibilityProofs[keys[k]])))
 	}
 
 	bo.log.With().Info("block eligibility calculated",
 		epochNumber,
 		log.Uint32("total_num_blocks", numberOfEligibleBlocks),
-		log.Int("num_layers_eligible", len(bo.eligibilityProofs)),
+		log.Int("num_layers_eligible", len(eligibilityProofs)),
 		log.String("layers_and_num_blocks", strings.Join(strs, ", ")))
-	bo.eligibilityMutex.RUnlock()
-	return nil
+	return eligibilityProofs, nil
 }
 
 func (bo *Oracle) getValidAtxForEpoch(validForEpoch types.EpochID) (*types.ActivationTxHeader, error) {
