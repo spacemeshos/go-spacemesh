@@ -1,7 +1,6 @@
 // Package node contains the main executable for go-spacemesh node
 package node
 
-import "C"
 import (
 	"context"
 	"fmt"

@@ -71,36 +71,36 @@ endif
 
 hare:
 ifeq ($(OS),Windows_NT)
-	cd cmd/hare ; go build -o $(BIN_DIR_WIN)/go-hare.exe; cd ..
+	cd cmd/hare ; go build -o $(BIN_DIR_WIN)/go-hare.exe
 else
-	cd cmd/hare ; go build -o $(BIN_DIR)/go-hare; cd ..
+	cd cmd/hare ; go build -o $(BIN_DIR)/go-hare
 endif
 .PHONY: hare
 
 
 p2p:
 ifeq ($(OS),WINDOWS_NT)
-	cd cmd/p2p ; go build -o $(BIN_DIR_WIN)/go-p2p.exe; cd ..
+	cd cmd/p2p ; go build -o $(BIN_DIR_WIN)/go-p2p.exe
 else
-	cd cmd/p2p ; go build -o $(BIN_DIR)/go-p2p; cd ..
+	cd cmd/p2p ; go build -o $(BIN_DIR)/go-p2p
 endif
 .PHONY: p2p
 
 
 sync:
 ifeq ($(OS),WINDOWS_NT)
-	cd cmd/sync ; go build -o $(BIN_DIR_WIN)/go-sync.exe; cd ..
+	cd cmd/sync ; go build -o $(BIN_DIR_WIN)/go-sync.exe
 else
-	cd cmd/sync ; go build -o $(BIN_DIR)/go-sync; cd ..
+	cd cmd/sync ; go build -o $(BIN_DIR)/go-sync
 endif
 .PHONY: sync
 
 
 harness:
 ifeq ($(OS),WINDOWS_NT)
-	cd cmd/integration ; go build -o $(BIN_DIR_WIN)/go-harness.exe; cd ..
+	cd cmd/integration ; go build -o $(BIN_DIR_WIN)/go-harness.exe
 else
-	cd cmd/integration ; go build -o $(BIN_DIR)/go-harness; cd ..
+	cd cmd/integration ; go build -o $(BIN_DIR)/go-harness
 endif
 .PHONY: harness
 
@@ -112,11 +112,21 @@ tidy:
 
 $(PLATFORMS): genproto
 ifeq ($(OS),Windows_NT)
-	set GOOS=$(os)&&set GOARCH=amd64&&go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
+	set GOOS=$(os)&&set GOARCH=amd64&&go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY).exe
 else
 	GOOS=$(os) GOARCH=amd64 go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
 endif
 .PHONY: $(PLATFORMS)
+
+
+docker-local-build: genproto
+	GOOS=linux GOARCH=amd64 go build ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)
+	cd cmd/hare ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-hare
+	cd cmd/p2p ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-p2p
+	cd cmd/sync ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-sync
+	cd cmd/integration ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-harness
+	cd build ; docker build -f ../DockerfilePrebuiltBinary -t $(DOCKER_IMAGE_REPO):$(BRANCH) .
+.PHONY: docker-local-build
 
 
 arm6: genproto
@@ -202,7 +212,10 @@ dockerbuild-test:
 .PHONY: dockerbuild-test
 
 
-dockerpush: dockerbuild-go
+dockerpush: dockerbuild-go dockerpush-only
+.PHONY: dockerpush
+
+dockerpush-only:
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
 	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
@@ -211,7 +224,11 @@ ifeq ($(BRANCH),develop)
 	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
 	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
 endif
-.PHONY: dockerpush
+.PHONY: dockerpush-only
+
+
+docker-local-push: docker-local-build dockerpush-only
+.PHONY: docker-local-push
 
 
 ifdef TEST
