@@ -606,7 +606,7 @@ func launchServer(t *testing.T) func() {
 	grpcService.StartService()
 	jsonService.StartService()
 
-	time.Sleep(3 * time.Second) // wait for server to be ready (critical on Travis)
+	time.Sleep(3 * time.Second) // wait for server to be ready (critical on CI)
 
 	return func() {
 		require.NoError(t, jsonService.Close())
