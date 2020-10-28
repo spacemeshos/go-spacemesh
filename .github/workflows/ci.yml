@@ -1,0 +1,188 @@
+name: CI
+
+env:
+  go-version: '1.14.6'
+  GCLOUD_KEY: ${{ secrets.GCLOUD_KEY }}
+  PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
+  CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
+  CLUSTER_ZONE: ${{ secrets.CLUSTER_ZONE }}
+  ES_PASSWD: ${{ secrets.ES_PASSWD }}
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+# Trigger the workflow on all pull requests, and on push to specific branches
+on:
+  pull_request:
+    # Don't trigger tests if only updating docs
+    paths-ignore:
+      - '**.md'
+  push:
+    branches:
+      - staging
+      - trying
+    # Don't trigger tests if only updating docs
+    paths-ignore:
+      - '**.md'
+
+jobs:
+  # stage 1: run unit tests and app tests as a preqrequisite
+  quicktests:
+    runs-on: ubuntu-latest
+    # should not take more than 2-3 mins
+    timeout-minutes: 5
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: set up go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ env.go-version }}
+      - name: fmt, tidy, lint
+        run: |
+          make
+          make genproto
+          make test-tidy
+          make test-fmt
+          make lint
+      - uses: act10ns/slack@v1
+        with:
+          status: ${{ job.status }}
+        if: always()
+  unittests:
+    runs-on: ubuntu-latest
+    # should take around 8-10 mins
+    timeout-minutes: 15
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: set up go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ env.go-version }}
+      - name: setup env
+        run: make
+      - name: unit tests (except app test)
+        run: make test-no-app-test
+      - uses: act10ns/slack@v1
+        with:
+          status: ${{ job.status }}
+        if: always()
+  apptests:
+    runs-on: ubuntu-latest
+    # should take around 7-9 mins
+    timeout-minutes: 15
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: set up go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ env.go-version }}
+      - name: setup env
+        run: make
+      - name: app test
+        run: make test-only-app-test
+      - uses: act10ns/slack@v1
+        with:
+          status: ${{ job.status }}
+        if: always()
+
+  # stage 2: next run docker push, as system tests rely on this
+  dockerpush:
+    # only run on push, not on pull_request
+    # note that this does NOT run on pushes to branch develop, see separate workflow file for that
+    if: github.event_name == 'push'
+    # should take 2-3 mins
+    timeout-minutes: 7
+    needs:
+      - quicktests
+      - unittests
+      - apptests
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: push to dockerhub
+        run: make dockerpush
+      - uses: act10ns/slack@v1
+        with:
+          status: ${{ job.status }}
+        if: always()
+
+  # stage 3: finally run system tests in parallel if everything else passes
+  systemtest-latenodes:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: dockerpush
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: late nodes system test
+        run: make dockertest-late-nodes
+      - uses: act10ns/slack@v1
+        with:
+          status: ${{ job.status }}
+        if: always()
+  systemtest-blocks-add-node:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: dockerpush
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: blocks add node test
+        run: make dockertest-blocks-add-node
+      - uses: act10ns/slack@v1
+        with:
+          status: ${{ job.status }}
+        if: always()
+  systemtest-hare-mining:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: dockerpush
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: hare+mining system tests
+        run: make dockertest-hare-mining
+      - uses: act10ns/slack@v1
+        with:
+          status: ${{ job.status }}
+        if: always()
+  systemtest-sync-blocks:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: dockerpush
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: sync+blocks remove node test
+        run: make dockertest-sync-blocks-remove-node
+      - uses: act10ns/slack@v1
+        with:
+          status: ${{ job.status }}
+        if: always()
+  systemtest-genesis-p2p:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: dockerpush
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: genesis+p2p system tests
+        run: make dockertest-genesis-voting-p2p
+      - uses: act10ns/slack@v1
+        with:
+          status: ${{ job.status }}
+        if: always()
