@@ -7,13 +7,13 @@ import (
 
 const (
 	defaultStartGRPCServer         = false
-	defaultGRPCServerPort          = 9091
-	defaultNewGRPCServerPort       = 9092
+	defaultGRPCServerPort          = 19091
+	defaultNewGRPCServerPort       = 19092
 	defaultNewGRPCServerInterface  = ""
 	defaultStartJSONServer         = false
 	defaultStartNewJSONServer      = false
-	defaultJSONServerPort          = 9090
-	defaultNewJSONServerPort       = 9093
+	defaultJSONServerPort          = 19090
+	defaultNewJSONServerPort       = 19093
 	defaultStartNodeService        = false
 	defaultStartMeshService        = false
 	defaultStartGlobalStateService = false
