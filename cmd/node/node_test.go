@@ -220,7 +220,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 
 	r := require.New(t)
 	app := NewSpacemeshApp()
-	r.Equal(9092, app.Config.API.NewGrpcServerPort)
+	r.Equal(19092, app.Config.API.NewGrpcServerPort)
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	// Try enabling an illegal service
@@ -317,7 +317,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 
 	r := require.New(t)
 	app := NewSpacemeshApp()
-	r.Equal(9093, app.Config.API.NewJSONServerPort)
+	r.Equal(19093, app.Config.API.NewJSONServerPort)
 	r.Equal(false, app.Config.API.StartNewJSONServer)
 	r.Equal(false, app.Config.API.StartNodeService)
 
