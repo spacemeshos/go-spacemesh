@@ -77,6 +77,7 @@ type AtxDB interface {
 	ProcessAtxs(atxs []*types.ActivationTx) error
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
 	GetFullAtx(id types.ATXID) (*types.ActivationTx, error)
+	GetAtxIterByCoinbase(coinbase types.Address) database.Iterator
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 

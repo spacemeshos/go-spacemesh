@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"io"
 	"io/ioutil"
 	"math"
@@ -293,6 +294,10 @@ func (t *TxAPIMock) AddressExists(addr types.Address) bool {
 
 func (t *TxAPIMock) ProcessedLayer() types.LayerID {
 	return types.LayerID(layerVerified)
+}
+
+func (t *TxAPIMock) GetAtxIterByCoinbase(coinbase types.Address) database.Iterator {
+	panic("implement me")
 }
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {

@@ -42,6 +42,14 @@ func getAtxBodyKey(atxID types.ATXID) []byte {
 	return []byte(fmt.Sprintf("b_%v", atxID.Bytes()))
 }
 
+func getAtxCoinbaseKey(atx *types.ActivationTx) []byte {
+	return append(getAtxCoinbasePrefix(atx.Coinbase), []byte(fmt.Sprintf("_%v", atx.PubLayerID.Bytes()))...)
+}
+
+func getAtxCoinbasePrefix(coinbase types.Address) []byte {
+	return []byte(fmt.Sprintf("cb_%v", coinbase.Bytes()))
+}
+
 var errInvalidSig = fmt.Errorf("identity not found when validating signature, invalid atx")
 
 type atxChan struct {
@@ -518,6 +526,11 @@ func (db *DB) storeAtxUnlocked(atx *types.ActivationTx) error {
 		return err
 	}
 
+	err = db.atxs.Put(getAtxCoinbaseKey(atx), atx.ID().Bytes())
+	if err != nil {
+		return err
+	}
+
 	// notify subscribers
 	if ch, found := db.atxChannels[atx.ID()]; found {
 		close(ch.ch)
@@ -708,6 +721,11 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	}
 	atx.ActivationTxHeader = header
 	return atx, nil
+}
+
+// GetAtxIterByCoinbase returns an iterator over all ATXs associated with that coinbase address
+func (db *DB) GetAtxIterByCoinbase(coinbase types.Address) database.Iterator {
+	return db.atxs.Find(getAtxCoinbasePrefix(coinbase))
 }
 
 // ValidateSignedAtx extracts public key from message and verifies public key exists in idStore, this is how we validate

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -203,7 +204,12 @@ func (t *TxAPIMock) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error)
 func (t *TxAPIMock) GetBalance(addr types.Address) uint64 {
 	panic("implement me")
 }
+
 func (t *TxAPIMock) GetNonce(addr types.Address) uint64 {
+	panic("implement me")
+}
+
+func (t *TxAPIMock) GetAtxIterByCoinbase(coinbase types.Address) database.Iterator {
 	panic("implement me")
 }
 

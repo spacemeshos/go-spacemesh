@@ -3,6 +3,7 @@ package mesh
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 )
 
 // AtxDbMock is a mock of an activation DB
@@ -52,4 +53,9 @@ func (t *AtxDbMock) ProcessAtxs(atxs []*types.ActivationTx) error {
 // SyntacticallyValidateAtx always returns no error
 func (AtxDbMock) SyntacticallyValidateAtx(*types.ActivationTx) error {
 	return nil
+}
+
+// GetAtxIterByCoinbase returns a database iterator over all ATXs associated with that coinbase address
+func (t *AtxDbMock) GetAtxIterByCoinbase(coinbase types.Address) database.Iterator {
+	panic("implement me")
 }

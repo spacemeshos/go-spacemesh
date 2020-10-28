@@ -123,22 +123,16 @@ func (s MeshService) getFilteredTransactions(startLayer types.LayerID, addr type
 }
 
 func (s MeshService) getFilteredActivations(startLayer types.LayerID, addr types.Address) (activations []*types.ActivationTx, err error) {
-	// We have no way to look up activations by coinbase so we have no choice
-	// but to read all of them.
-	// TODO: index activations by layer (and maybe by coinbase)
-	// See https://github.com/spacemeshos/go-spacemesh/issues/2064.
-	var atxids []types.ATXID
-	for l := startLayer; l <= s.Mesh.LatestLayer(); l++ {
-		layer, err := s.Mesh.GetLayer(l)
-		if layer == nil || err != nil {
-			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
-		}
 
-		for _, b := range layer.Blocks() {
-			if b.ActiveSet != nil {
-				atxids = append(atxids, *b.ActiveSet...)
-			}
+	var atxids []types.ATXID
+	atxIter := s.Mesh.GetAtxIterByCoinbase(addr)
+	for atxIter.Next() {
+		var a types.ATXID
+		err = types.BytesToInterface(atxIter.Value(), &a)
+		if err != nil {
+			return nil, err
 		}
+		atxids = append(atxids, a)
 	}
 
 	// Look up full data
@@ -148,11 +142,9 @@ func (s MeshService) getFilteredActivations(startLayer types.LayerID, addr types
 		return nil, status.Errorf(codes.Internal, "error retrieving activations data")
 	}
 	for _, atx := range atxs {
-		// Filter here, now that we have full data
-		if atx.Coinbase == addr {
-			activations = append(activations, atx)
-		}
+		activations = append(activations, atx)
 	}
+
 	return
 }
 

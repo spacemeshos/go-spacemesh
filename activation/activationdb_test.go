@@ -326,6 +326,40 @@ func Test_DBSanity(t *testing.T) {
 	assert.Equal(t, *types.EmptyATXID, id)
 }
 
+func Test_DBGetByCoinbase(t *testing.T) {
+	atxdb, _, _ := getAtxDb("t6")
+
+	id1 := types.NodeID{Key: uuid.New().String()}
+	coinbase1 := types.HexToAddress("aaaa")
+	coinbase2 := types.HexToAddress("bbbb")
+
+	atx1 := newActivationTx(id1, 0, *types.EmptyATXID, 3, 0, *types.EmptyATXID, coinbase1, 3, []types.BlockID{}, &types.NIPST{})
+	atx2 := newActivationTx(id1, 0, *types.EmptyATXID, 1001, 0, *types.EmptyATXID, coinbase2, 3, []types.BlockID{}, &types.NIPST{})
+	atx3 := newActivationTx(id1, 0, *types.EmptyATXID, 2001, 0, *types.EmptyATXID, coinbase1, 3, []types.BlockID{}, &types.NIPST{})
+
+	atxid1 := atx1.ID()
+	atxid2 := atx2.ID()
+	atxid3 := atx3.ID()
+
+	err := atxdb.storeAtxUnlocked(atx1)
+	assert.NoError(t, err)
+	err = atxdb.storeAtxUnlocked(atx2)
+	assert.NoError(t, err)
+	err = atxdb.storeAtxUnlocked(atx3)
+	assert.NoError(t, err)
+
+	iter := atxdb.GetAtxIterByCoinbase(coinbase1)
+	assert.True(t, iter.Next())
+	assert.Equal(t, iter.Value(), atxid3.Bytes())
+	assert.True(t, iter.Next())
+	assert.Equal(t, iter.Value(), atxid1.Bytes())
+	assert.False(t, iter.Next())
+	iter = atxdb.GetAtxIterByCoinbase(coinbase2)
+	assert.True(t, iter.Next())
+	assert.Equal(t, iter.Value(), atxid2.Bytes())
+	assert.False(t, iter.Next())
+}
+
 func TestMesh_processBlockATXs(t *testing.T) {
 	activesetCache.Purge()
 	atxdb, _, _ := getAtxDb("t6")
