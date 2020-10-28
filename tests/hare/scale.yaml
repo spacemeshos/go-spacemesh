@@ -22,8 +22,8 @@ bootstrap:
       cpu: '1'
   args:
     randcon: '8'
-    hare-committee-size: '100'
-    hare-max-adversaries: '49'
+    hare-committee-size: '800'
+    hare-max-adversaries: '399'
     hare-round-duration-sec: '12'
     hare-wakeup-delta: '5'
     layer-duration-sec: '60'
@@ -42,8 +42,8 @@ client:
       cpu: '1'
   args:
     randcon: '8'
-    hare-committee-size: '100'
-    hare-max-adversaries: '49'
+    hare-committee-size: '800'
+    hare-max-adversaries: '399'
     hare-round-duration-sec: '12'
     hare-wakeup-delta: '5'
     layer-duration-sec: '60'
