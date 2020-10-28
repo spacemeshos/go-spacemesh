@@ -186,3 +186,33 @@ jobs:
         with:
           status: ${{ job.status }}
         if: always()
+
+  # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
+  # all tests that are required to pass before a bors merge must be listed here!
+  ci-success:
+    name: ci
+    if: github.event_name == 'push' && success()
+    needs:
+      - systemtest-latenodes
+      - systemtest-blocks-add-node
+      - systemtest-hare-mining
+      - systemtest-sync-blocks
+      - systemtest-genesis-p2p
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark the job as a success
+        run: exit 0
+  ci-failure:
+    name: ci
+    if: github.event_name == 'push' && !success()
+    needs:
+      - systemtest-latenodes
+      - systemtest-blocks-add-node
+      - systemtest-hare-mining
+      - systemtest-sync-blocks
+      - systemtest-genesis-p2p
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark the job as a failure
+        run: exit 1
+

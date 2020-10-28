@@ -1,9 +1,5 @@
 status = [
-  "systemtest-latenodes",
-  "systemtest-blocks-add-node",
-  "systemtest-hare-mining",
-  "systemtest-sync-blocks",
-  "systemtest-genesis-p2p",
+  "ci-success",
 ]
 
 required_approvals = 1
