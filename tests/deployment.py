@@ -111,11 +111,6 @@ def add_filebeat_cluster(namespace):
     add_deployment_dir(namespace, conf.FILEBEAT_CONF_DIR)
 
 
-def add_fluentbit_cluster(namespace):
-    print("Deploying FluentBit")
-    add_deployment_dir(namespace, conf.FLUENTBIT_CONF_DIR)
-
-
 def add_kibana_cluster(namespace):
     print("Deploying Kibana")
     add_deployment_dir(namespace, conf.KIBANA_CONF_DIR)

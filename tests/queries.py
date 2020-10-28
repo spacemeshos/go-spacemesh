@@ -186,9 +186,17 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
     :return: list, a list of all hits
 
     """
-    # TODO : break this to smaller functions ?
     es = ES(namespace).get_search_api()
     fltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
+    partial_k8s_metadata = ["starting spacemesh"]
+    if 'M' in fields.keys() and fields['M'].lower() in partial_k8s_metadata:
+        # some of the early messages arrive with no K8S metadata,
+        # in that case some of the logs won't be returned when querying with the filters attached by
+        # get_pod_name_and_namespace_queries func.
+        # This behaviour is neglectable.
+        fltr = Q()
+        namespace, client_po_name = "\"\""
+
     for key in fields:
         fltr = fltr & Q("match_phrase", **{key: fields[key]})
 
@@ -206,22 +214,6 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
               f"all clients containing {client_po_name} in pod_name")
         print("Number of hits: ", len(hits))
         print(f"{PRINT_SEP}\n")
-
-    if find_fails:
-        print("Looking for pods that didn't hit:")
-        podnames = set([hit.kubernetes.pod.name for hit in hits])
-        newfltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
-
-        for p in podnames:
-            newfltr = newfltr & ~Q("match_phrase", kubernetes__pod__name=p)
-        s2 = Search(using=es).query('bool', filter=[newfltr])
-        hits2 = list(s2.scan())
-        unsecpods = set([hit.kubernetes.pod.name for hit in hits2])
-        if len(unsecpods) == 0:
-            print("None. yay!")
-        else:
-            print(unsecpods)
-        print(PRINT_SEP)
 
     s = list(hits)
     return s
