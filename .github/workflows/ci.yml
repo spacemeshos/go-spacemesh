@@ -26,7 +26,9 @@ on:
       - '**.md'
 
 jobs:
-  # stage 1: run unit tests and app tests as a preqrequisite
+  ## stage 1: run unit tests and app tests as a preqrequisite
+  ## these run on all pushes to all pull requests, all branches
+  ## note that secrets may not be accessible in this phase
   quicktests:
     runs-on: ubuntu-latest
     # should not take more than 2-3 mins
@@ -46,9 +48,10 @@ jobs:
           make test-fmt
           make lint
       - uses: act10ns/slack@v1
+        # skip if the secret is not accessible
+        if: ${{ always() && env.SLACK_WEBHOOK_URL }}
         with:
           status: ${{ job.status }}
-        if: always()
   unittests:
     runs-on: ubuntu-latest
     # should take around 8-10 mins
@@ -65,9 +68,10 @@ jobs:
       - name: unit tests (except app test)
         run: make test-no-app-test
       - uses: act10ns/slack@v1
+        # skip if the secret is not accessible
+        if: ${{ always() && env.SLACK_WEBHOOK_URL }}
         with:
           status: ${{ job.status }}
-        if: always()
   apptests:
     runs-on: ubuntu-latest
     # should take around 7-9 mins
@@ -84,11 +88,16 @@ jobs:
       - name: app test
         run: make test-only-app-test
       - uses: act10ns/slack@v1
+        # skip if the secret is not accessible
+        if: ${{ always() && env.SLACK_WEBHOOK_URL }}
         with:
           status: ${{ job.status }}
-        if: always()
 
-  # stage 2: next run docker push, as system tests rely on this
+  ## workflow for regular pull requests ends here
+  ## everything below here only runs in a push when bors is invoked
+  ## so we can safely assume that all secrets are accessible here below
+
+  ## stage 2: next run docker push, as system tests rely on this
   dockerpush:
     # only run on push, not on pull_request
     # note that this does NOT run on pushes to branch develop, see separate workflow file for that
@@ -110,7 +119,7 @@ jobs:
           status: ${{ job.status }}
         if: always()
 
-  # stage 3: finally run system tests in parallel if everything else passes
+  ## stage 3: finally run system tests in parallel if everything else passes
   systemtest-latenodes:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
@@ -200,10 +209,11 @@ jobs:
       - systemtest-genesis-p2p
     runs-on: ubuntu-latest
     steps:
-      - name: Mark the job as a success
+      - name: Mark the job as succeeded
         run: exit 0
   ci-failure:
     name: ci
+    # unclear whether !success() === failure(), this seems safer
     if: github.event_name == 'push' && !success()
     needs:
       - systemtest-latenodes
@@ -213,6 +223,5 @@ jobs:
       - systemtest-genesis-p2p
     runs-on: ubuntu-latest
     steps:
-      - name: Mark the job as a failure
+      - name: Mark the job as failed
         run: exit 1
-
