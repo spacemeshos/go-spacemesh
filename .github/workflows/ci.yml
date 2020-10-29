@@ -213,5 +213,5 @@ jobs:
         if: success()
         run: exit 0
       - name: Mark the job as failed
-        if: !success()
+        if: always() && !success()
         run: exit 1
