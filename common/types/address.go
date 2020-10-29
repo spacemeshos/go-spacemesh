@@ -14,7 +14,8 @@ const (
 	AddressLength = 20
 )
 
-// Address represents the 20 byte address of an spacemesh account.
+// Address is an identifier of a Spacemesh account.
+// An Address for a user account is created by taking the last AddressLength bytes of the user's public key.
 type Address [AddressLength]byte
 
 // BytesToAddress returns Address with value b.
