@@ -305,7 +305,7 @@ func (l *Logic) handleEpochATXs(hash types.Hash32, data []byte) error {
 
 // GetEpochATXs fetches all atxs received by peer for given layer
 func (l *Logic) GetEpochATXs(id types.EpochID) error {
-	res := <-l.fetcher.GetHash(types.CalcHash32(id.ToBytes()), fetch.Hint(ATXIDsDB), l.handleEpochATXs, true)
+	res := <-l.fetcher.GetHash(types.CalcHash32(id.ToBytes()), fetch.Hint(ATXIDsDB), true)
 	return res.Err
 }
 
@@ -355,13 +355,13 @@ func (f *Future) Result() error {
 
 // FetchAtx returns error if ATX was not found
 func (l *Logic) FetchAtx(id types.ATXID) error {
-	f := Future{l.fetcher.GetHash(id.Hash32(), fetch.Hint(BlockDB), l.getAtxResults, true)}
+	f := Future{l.fetcher.GetHash(id.Hash32(), fetch.Hint(BlockDB), true)}
 	return f.Result()
 }
 
 // FetchBlock gets data for a single block id and validates it
 func (l *Logic) FetchBlock(id types.BlockID) error {
-	res := <-l.fetcher.GetHash(id.AsHash32(), fetch.Hint(BlockDB), l.blockReceiveFunc, true)
+	res := <-l.fetcher.GetHash(id.AsHash32(), fetch.Hint(BlockDB), true)
 	return res.Err
 }
 
@@ -371,7 +371,15 @@ func (l *Logic) GetAtxs(IDs []types.ATXID) error {
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.Hash32())
 	}
-	return l.fetcher.GetAllHashes(hashes, fetch.Hint(ATXDB), l.getAtxResults, true)
+	results := l.fetcher.GetAllHashes(hashes, fetch.Hint(BlockDB), true)
+	for hash, resC := range results {
+		res := <-resC
+		err := l.getAtxResults(hash, res.Data)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GetBlocks gets the data for given block ids and validates the blocks. returns an error if a single atx failed to be fetched
@@ -381,7 +389,15 @@ func (l *Logic) GetBlocks(IDs []types.BlockID) error {
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.AsHash32())
 	}
-	return l.fetcher.GetAllHashes(hashes, fetch.Hint(BlockDB), l.blockReceiveFunc, true)
+	results := l.fetcher.GetAllHashes(hashes, fetch.Hint(BlockDB), true)
+	for hash, resC := range results {
+		res := <-resC
+		err := l.blockReceiveFunc(hash, res.Data)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GetTxs fetches the txs provided as IDs and validates them, returns an error if one TX failed to be fetched
@@ -390,11 +406,22 @@ func (l *Logic) GetTxs(IDs []types.TransactionID) error {
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.Hash32())
 	}
-	return l.fetcher.GetAllHashes(hashes, fetch.Hint(TXDB), l.getTxResult, true)
+	results := l.fetcher.GetAllHashes(hashes, fetch.Hint(TXDB), true)
+	for hash, resC := range results {
+		res := <-resC
+		err := l.getTxResult(hash, res.Data)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GetPoetProof gets poet proof from remote peer
 func (l *Logic) GetPoetProof(id types.Hash32) error {
-	res := <-l.fetcher.GetHash(id, fetch.Hint(POETDB), l.getPoetResult, true)
-	return res.Err
+	res := <-l.fetcher.GetHash(id, fetch.Hint(POETDB), true)
+	if res.Err != nil {
+		return res.Err
+	}
+	return l.getPoetResult(res.Hash, res.Data)
 }

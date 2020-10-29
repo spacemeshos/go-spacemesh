@@ -56,6 +56,9 @@ type mockNet struct {
 	AckChannel  chan struct{}
 }
 
+func (m mockNet) RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func([]byte) []byte) {
+}
+
 func (m mockNet) GetRandomPeer() p2ppeers.Peer {
 	_, pub1, _ := p2pcrypto.GenerateKeyPair()
 	return pub1
@@ -174,16 +177,15 @@ func TestFetch_GetHash(t *testing.T) {
 	f.Start()
 	f.cfg.BatchTimeout = 2000 // make sure we never hit the batch timeout
 	h1 := randomHash()
-	req := newRequestMock()
 	hint := Hint("db")
 	hint2 := Hint("db2")
 
 	//test hash aggregation
-	f.GetHash(h1, hint, req.OkCallback, true)
-	f.GetHash(h1, hint, req.OkCallback, true)
+	f.GetHash(h1, hint, false)
+	f.GetHash(h1, hint, false)
 
 	h2 := randomHash()
-	f.GetHash(h2, hint2, req.OkCallback, true)
+	f.GetHash(h2, hint2, false)
 
 	//test aggregation by hint
 
@@ -193,7 +195,6 @@ func TestFetch_GetHash(t *testing.T) {
 func TestFetch_requestHashFromPeers_AggregateAndValidate(t *testing.T) {
 	h1 := randomHash()
 	f, net := defaultFetch()
-	req := newRequestMock()
 
 	// set response mock
 	res := responseMessage{
@@ -204,7 +205,7 @@ func TestFetch_requestHashFromPeers_AggregateAndValidate(t *testing.T) {
 
 	hint := Hint("db")
 	request1 := request{
-		successCallback:      req.OkCallback,
+		//successCallback:      req.OkCallback,
 		hash:                 h1,
 		priority:             0,
 		validateResponseHash: false,
@@ -216,7 +217,7 @@ func TestFetch_requestHashFromPeers_AggregateAndValidate(t *testing.T) {
 	f.requestHashBatchFromPeers()
 
 	// test aggregation of messages before calling fetch from peer
-	assert.Equal(t, 3, req.OkCalledNum[h1])
+	//assert.Equal(t, 3, req.OkCalledNum[h1])
 	assert.Equal(t, 1, net.SendCalled[h1])
 
 	// test incorrect hash fail
@@ -247,7 +248,6 @@ func TestFetch_GetHash_StartStopSanity(t *testing.T) {
 func TestFetch_GetHash_failNetwork(t *testing.T) {
 	h1 := randomHash()
 	f, net := defaultFetch()
-	req := newRequestMock()
 
 	// set response mock
 	bts := responseMessage{
@@ -260,7 +260,7 @@ func TestFetch_GetHash_failNetwork(t *testing.T) {
 
 	hint := Hint("db")
 	request1 := request{
-		successCallback:      req.OkCallback,
+		//successCallback:      req.OkCallback,
 		hash:                 h1,
 		priority:             0,
 		validateResponseHash: false,
@@ -284,7 +284,6 @@ func TestFetch_requestHashFromPeers_BatchRequestMax(t *testing.T) {
 		MaxRetiresForPeer: 2,
 		BatchSize:         2,
 	})
-	req := newRequestMock()
 
 	// set response mock
 	bts := responseMessage{
@@ -309,9 +308,9 @@ func TestFetch_requestHashFromPeers_BatchRequestMax(t *testing.T) {
 	defer f.Stop()
 	f.Start()
 	//test hash aggregation
-	f.GetHash(h1, hint, req.OkCallback, false)
-	f.GetHash(h2, hint, req.OkCallback, false)
-	f.GetHash(h3, hint, req.OkCallback, false)
+	r1 := f.GetHash(h1, hint, false)
+	r2 := f.GetHash(h2, hint, false)
+	r3 := f.GetHash(h3, hint, false)
 
 	//since we have a batch of 2 we should call send twice - of not we should fail
 	select {
@@ -328,10 +327,17 @@ func TestFetch_requestHashFromPeers_BatchRequestMax(t *testing.T) {
 		assert.Fail(t, "timeout getting")
 	}
 
+	responses := []chan HashDataPromiseResult{r1, r2, r3}
+	for _, res := range responses {
+		select {
+		case data := <-res:
+			assert.NoError(t, data.Err)
+		case <-time.After(1 * time.Second):
+			assert.Fail(t, "timeout getting")
+		}
+	}
+
 	// test aggregation of messages before calling fetch from peer
-	assert.Equal(t, 1, req.OkCalledNum[h1])
-	assert.Equal(t, 1, req.OkCalledNum[h2])
-	assert.Equal(t, 1, req.OkCalledNum[h3])
 	assert.Equal(t, 1, net.SendCalled[h1])
 	assert.Equal(t, 1, net.SendCalled[h2])
 	assert.Equal(t, 1, net.SendCalled[h1])

@@ -95,11 +95,11 @@ func (l layerDBMock) Get() []types.BlockID {
 type mockFetcher struct {
 }
 
-func (m mockFetcher) GetHash(hash types.Hash32, h fetch.Hint, dataCallback fetch.DataCallbackHandler, validateAndSubmit bool) chan fetch.HashDataPromiseResult {
+func (m mockFetcher) GetHash(hash types.Hash32, h fetch.Hint, validateAndSubmit bool) chan fetch.HashDataPromiseResult {
 	panic("implement me")
 }
 
-func (m mockFetcher) GetAllHashes(hash []types.Hash32, hint fetch.Hint, hashValidationFunction fetch.DataCallbackHandler, validateAndSubmit bool) error {
+func (m mockFetcher) GetAllHashes(hash []types.Hash32, hint fetch.Hint, validateAndSubmit bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
 	panic("implement me")
 }
 
