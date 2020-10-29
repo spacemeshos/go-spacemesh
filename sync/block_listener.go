@@ -29,7 +29,6 @@ func (bl *BlockListener) Close() {
 	close(bl.exit)
 	bl.Info("block listener closing, waiting for gorutines")
 	bl.wg.Wait()
-	bl.Syncer.Close()
 	bl.Info("block listener closed")
 }
 
