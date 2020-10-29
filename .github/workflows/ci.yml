@@ -200,7 +200,7 @@ jobs:
   # all tests that are required to pass before a bors merge must be listed here!
   ci-success:
     name: ci
-    if: github.event_name == 'push' && success()
+    if: github.event_name == 'push'
     needs:
       - systemtest-latenodes
       - systemtest-blocks-add-node
@@ -210,18 +210,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Mark the job as succeeded
+        if: success()
         run: exit 0
-  ci-failure:
-    name: ci
-    # unclear whether !success() === failure(), this seems safer
-    if: github.event_name == 'push' && !success()
-    needs:
-      - systemtest-latenodes
-      - systemtest-blocks-add-node
-      - systemtest-hare-mining
-      - systemtest-sync-blocks
-      - systemtest-genesis-p2p
-    runs-on: ubuntu-latest
-    steps:
       - name: Mark the job as failed
+        if: !success()
         run: exit 1
