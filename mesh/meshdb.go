@@ -438,9 +438,9 @@ func (m *DB) writeTransactionRewards(l types.LayerID, accounts []types.Address, 
 	for account, cnt := range actBlockCnt {
 		reward := dbReward{TotalReward: cnt * totalReward.Uint64(), LayerRewardEstimate: cnt * layerReward.Uint64()}
 		if b, err := types.InterfaceToBytes(&reward); err != nil {
-			return fmt.Errorf("could not marshal reward for %v: %v", account.Short(), err)
+			return fmt.Errorf("could not marshal reward for %v: %v", account.String(), err)
 		} else if err := batch.Put(getRewardKey(l, account), b); err != nil {
-			return fmt.Errorf("could not write reward to %v to database: %v", account.Short(), err)
+			return fmt.Errorf("could not write reward to %v to database: %v", account.String(), err)
 		}
 	}
 	return batch.Write()
@@ -520,13 +520,13 @@ func (m *DB) removeFromAccountTxs(account types.Address, gAccepted map[types.Add
 	pending, err := m.getAccountPendingTxs(account)
 	if err != nil {
 		m.With().Error("failed to get account pending txs",
-			log.String("address", account.Short()), log.Err(err))
+			log.String("address", account.String()), log.Err(err))
 		return
 	}
 	pending.RemoveAccepted(gAccepted[account])
 	if err := m.storeAccountPendingTxs(account, pending); err != nil {
 		m.With().Error("failed to store account pending txs",
-			log.String("address", account.Short()), log.Err(err))
+			log.String("address", account.String()), log.Err(err))
 	}
 }
 
@@ -538,27 +538,27 @@ func (m *DB) removeRejectedFromAccountTxs(account types.Address, rejected map[ty
 	pending, err := m.getAccountPendingTxs(account)
 	if err != nil {
 		m.With().Error("failed to get account pending txs",
-			layer, log.String("address", account.Short()), log.Err(err))
+			layer, log.String("address", account.String()), log.Err(err))
 		return
 	}
 	pending.RemoveRejected(rejected[account], layer)
 	if err := m.storeAccountPendingTxs(account, pending); err != nil {
 		m.With().Error("failed to store account pending txs",
-			layer, log.String("address", account.Short()), log.Err(err))
+			layer, log.String("address", account.String()), log.Err(err))
 	}
 }
 
 func (m *DB) storeAccountPendingTxs(account types.Address, pending *pendingtxs.AccountPendingTxs) error {
 	if pending.IsEmpty() {
 		if err := m.unappliedTxs.Delete(account.Bytes()); err != nil {
-			return fmt.Errorf("failed to delete empty pending txs for account %v: %v", account.Short(), err)
+			return fmt.Errorf("failed to delete empty pending txs for account %v: %v", account.String(), err)
 		}
 		return nil
 	}
 	if accountTxsBytes, err := types.InterfaceToBytes(&pending); err != nil {
 		return fmt.Errorf("failed to marshal account pending txs: %v", err)
 	} else if err := m.unappliedTxs.Put(account.Bytes(), accountTxsBytes); err != nil {
-		return fmt.Errorf("failed to store mesh txs for address %s", account.Short())
+		return fmt.Errorf("failed to store mesh txs for address %s", account.String())
 	}
 	return nil
 }
@@ -566,7 +566,7 @@ func (m *DB) storeAccountPendingTxs(account types.Address, pending *pendingtxs.A
 func (m *DB) getAccountPendingTxs(addr types.Address) (*pendingtxs.AccountPendingTxs, error) {
 	accountTxsBytes, err := m.unappliedTxs.Get(addr.Bytes())
 	if err != nil && err != database.ErrNotFound {
-		return nil, fmt.Errorf("failed to get mesh txs for account %s", addr.Short())
+		return nil, fmt.Errorf("failed to get mesh txs for account %s", addr.String())
 	}
 	if err == database.ErrNotFound {
 		return pendingtxs.NewAccountPendingTxs(), nil

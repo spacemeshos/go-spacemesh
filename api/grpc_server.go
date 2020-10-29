@@ -174,15 +174,15 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 		return nil, err
 	}
 	log.Info("GRPC SubmitTransaction to address: %s (len: %v), amount: %v gaslimit: %v, fee: %v",
-		tx.Recipient.Short(), len(tx.Recipient), tx.Amount, tx.GasLimit, tx.Fee)
+		tx.Recipient.String(), len(tx.Recipient), tx.Amount, tx.GasLimit, tx.Fee)
 	if err := tx.CalcAndSetOrigin(); err != nil {
 		log.With().Error("failed to calc origin", log.Err(err))
 		return nil, err
 	}
 	if !s.Tx.AddressExists(tx.Origin()) {
 		log.With().Error("tx failed to validate signature",
-			tx.ID(), log.String("origin", tx.Origin().Short()))
-		return nil, fmt.Errorf("transaction origin (%v) not found in global state", tx.Origin().Short())
+			tx.ID(), log.String("origin", tx.Origin().String()))
+		return nil, fmt.Errorf("transaction origin (%v) not found in global state", tx.Origin().String())
 	}
 	if err := s.Tx.ValidateNonceAndBalance(tx); err != nil {
 		log.With().Error("tx failed nonce and balance check", log.Err(err))

@@ -104,7 +104,7 @@ func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) e
 	origin := tx.Origin()
 	nonce, balance, err := tp.projector.GetProjection(origin, tp.GetNonce(origin), tp.GetBalance(origin))
 	if err != nil {
-		return fmt.Errorf("failed to project state for account %v: %v", origin.Short(), err)
+		return fmt.Errorf("failed to project state for account %v: %v", origin.String(), err)
 	}
 	if tx.AccountNonce != nonce {
 		return fmt.Errorf("incorrect account nonce! Expected: %d, Actual: %d", nonce, tx.AccountNonce)
@@ -189,7 +189,7 @@ func (tp *TransactionProcessor) GetLayerStateRoot(layer types.LayerID) (types.Ha
 func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int) {
 	for _, account := range miners {
 		tp.Log.With().Info("Reward applied",
-			log.String("account", account.Short()),
+			log.String("account", account.String()),
 			log.Uint64("reward", reward.Uint64()),
 			layer,
 		)
@@ -322,7 +322,7 @@ func (tp *TransactionProcessor) HandleTxData(data service.GossipMessage, syncer 
 	}
 	if !tp.AddressExists(tx.Origin()) {
 		tp.With().Error("transaction origin does not exist", log.String("transaction", tx.String()),
-			tx.ID(), log.String("origin", tx.Origin().Short()), log.Err(err))
+			tx.ID(), log.String("origin", tx.Origin().String()), log.Err(err))
 		return
 	}
 	if err := tp.ValidateNonceAndBalance(tx); err != nil {

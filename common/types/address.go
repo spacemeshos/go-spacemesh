@@ -103,7 +103,7 @@ func (a Address) Format(s fmt.State, c rune) {
 	_, _ = fmt.Fprintf(s, "%"+string(c), a[:])
 }
 
-// SetBytes sets the address to the value of b.
+// SetBytes sets the address to the last AddressLength bytes of b.
 // If b is larger than len(a) it will panic.
 func (a *Address) SetBytes(b []byte) {
 	if len(b) > len(a) {

@@ -114,7 +114,7 @@ func (t *Transaction) ShortString() string {
 // It implements the fmt.Stringer interface.
 func (t *Transaction) String() string {
 	return fmt.Sprintf("<id: %s, origin: %s, recipient: %s, amount: %v, nonce: %v, gas_limit: %v, fee: %v>",
-		t.ID().ShortString(), t.Origin().Short(), t.Recipient.Short(), t.Amount, t.AccountNonce, t.GasLimit, t.Fee)
+		t.ID().ShortString(), t.Origin().String(), t.Recipient.String(), t.Amount, t.AccountNonce, t.GasLimit, t.Fee)
 }
 
 // InnerTransaction includes all of a transaction's fields, except the signature (origin and id aren't stored).

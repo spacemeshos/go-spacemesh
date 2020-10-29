@@ -73,7 +73,7 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 	}
 	if !s.Mesh.AddressExists(tx.Origin()) {
 		log.With().Error("tx origin address not found in global state",
-			tx.ID(), log.String("origin", tx.Origin().Short()))
+			tx.ID(), log.String("origin", tx.Origin().String()))
 		return nil, status.Error(codes.InvalidArgument, "`Transaction` origin account not found")
 	}
 	if err := s.Mesh.ValidateNonceAndBalance(tx); err != nil {

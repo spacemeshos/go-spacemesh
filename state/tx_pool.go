@@ -56,7 +56,7 @@ func (t *TxMempool) GetTxsForBlock(numOfTxs int, getState func(addr types.Addres
 		nonce, balance, err := getState(addr)
 		if err != nil {
 			t.mu.RUnlock()
-			return nil, nil, fmt.Errorf("failed to get state for addr %s: %v", addr.Short(), err)
+			return nil, nil, fmt.Errorf("failed to get state for addr %s: %v", addr.String(), err)
 		}
 		accountTxIds, _, _ := account.ValidTxs(nonce, balance)
 		txIds = append(txIds, accountTxIds...)
