@@ -79,6 +79,7 @@ jobs:
         run: make test-only-app-test
   # checkpoint and print a single, clean status message to slack
   ci-success-stage1:
+    if: always()
     needs:
       - quicktests
       - unittests
@@ -86,8 +87,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: act10ns/slack@v1
-        # run regardless of success, but skip if the secret is not accessible
-        if: always() && env.SLACK_WEBHOOK_URL
+        # skip if the secret is not accessible
+        if: env.SLACK_WEBHOOK_URL
         with:
           status: ${{ job.status }}
 
