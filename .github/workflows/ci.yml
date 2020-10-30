@@ -79,7 +79,6 @@ jobs:
         run: make test-only-app-test
   # checkpoint and print a single, clean status message to slack
   ci-success-stage1:
-    if: github.event_name == 'push'
     needs:
       - quicktests
       - unittests
@@ -88,7 +87,7 @@ jobs:
     steps:
       - uses: act10ns/slack@v1
         # run regardless of success, but skip if the secret is not accessible
-        if: ${{ always() && env.SLACK_WEBHOOK_URL }}
+        if: always() && env.SLACK_WEBHOOK_URL
         with:
           status: ${{ job.status }}
 
