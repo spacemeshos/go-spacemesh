@@ -81,13 +81,16 @@ def set_docker_images():
         print("++Set docker images to: {0}".format(docker_image))
         testconfig['bootstrap']['image'] = docker_image
         testconfig['client']['image'] = docker_image
-        # If we make these the same image, the test_diff_client_ver test will always fail.
-        # if 'clientv2' in testconfig.keys():
-        #     print("Set docker clientv2 images to: {0}".format(docker_image))
-        #     testconfig['clientv2']['image'] = docker_image
-        # else:
-        #     print("no other config")
-        #     print(testconfig.keys())
+        if 'clientv2' in testconfig.keys():
+            # some should not be replaced!
+            if getattr(testconfig['clientv2'], 'noreplace', False):
+                print("not replacing clientv2 docker image since replace is set to False")
+            else:
+                print("Set docker clientv2 images to: {0}".format(docker_image))
+                testconfig['clientv2']['image'] = docker_image
+        else:
+            print("no other config")
+            print(testconfig.keys())
 
 
 @pytest.fixture(scope='session')
