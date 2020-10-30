@@ -174,7 +174,7 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 		return nil, err
 	}
 	log.Info("GRPC SubmitTransaction to address: %s (len: %v), amount: %v gaslimit: %v, fee: %v",
-		tx.Recipient.String(), len(tx.Recipient), tx.Amount, tx.GasLimit, tx.Fee)
+		tx.Recipient.Short(), len(tx.Recipient), tx.Amount, tx.GasLimit, tx.Fee)
 	if err := tx.CalcAndSetOrigin(); err != nil {
 		log.With().Error("failed to calc origin", log.Err(err))
 		return nil, err
