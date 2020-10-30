@@ -77,16 +77,15 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
 
     gen_delt = testconfig['genesis_delta']
     cspec = get_conf(bs_info, testconfig['client'], gen_delt)
-    cspec2 = get_conf(bs_info, testconfig['clientv2'], gen_delt)
 
-    inf = add_multi_clients(testconfig, init_session, cspec, 10)
+    add_multi_clients(testconfig, init_session, cspec, 10)
 
     del cspec.args['remote-data']
     del cspec.args['data-folder']
 
     num_clients = 4
     clients = [None] * num_clients
-    clients[0] = add_multi_clients(testconfig, init_session, cspec2, 1, 'clientv2')[0]
+    clients[0] = add_multi_clients(testconfig, init_session, cspec, 1, 'client')[0]
     time.sleep(10)
     clients[1] = add_multi_clients(testconfig, init_session, cspec, 1, 'client')[0]
     time.sleep(20)
@@ -105,9 +104,9 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
 
     start = time.time()
     sleep = 30  # seconds
-    num_iter = 25  # total of 5 minutes
+    num_iter = 25  # wait up to 12.5 minutes
+    done = 0
     for i in range(num_iter):
-        done = 0
         for j in range(0, num_clients):
             pod_name = clients[j]
             if not check_pod_logs(pod_name, SYNC_DONE):  # not all done
@@ -121,7 +120,7 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
             print("all pods done")
             break
 
-        print("not done yet sleep for " + str(sleep) + " seconds")
+        print("not done yet, sleeping for " + str(sleep) + " seconds")
         time.sleep(sleep)
 
     assert done == num_clients
@@ -131,5 +130,5 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
     check_pod_logs(clients[0], PERSISTENT_DATA)
     queries.assert_equal_layer_hashes(current_index, testconfig['namespace'])
 
-    print("it took " + str(end - start) + " to sync all nodes with " + cspec.args['expected-layers'] + "layers")
+    print("it took " + str(end - start) + " to sync all nodes with " + cspec.args['expected-layers'] + " layers")
     print("done!!")
