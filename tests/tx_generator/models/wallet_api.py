@@ -34,22 +34,29 @@ class WalletAPI:
         self.tx_ids = []
 
     def submit_tx(self, to, src, gas_price, amount, nonce, tx_bytes):
-        # TODO: update this to match TransactionService, check status.Code is okay and/or check tx state is MEMPOOL
-        a_ok_pat = "[\'\"]value[\'\"]:\s?[\'\"]ok[\'\"]"
         print(f"\n{datetime.now()}: submit transaction\nfrom {src}\nto {to}")
         pod_ip, pod_name = self.random_node()
         print(f"nonce: {nonce}, amount: {amount}, gas-price: {gas_price}, total: {amount+gas_price}")
-        tx_field = '{"tx":' + str(list(tx_bytes)) + '}'
+        tx_str = base64.b64encode(tx_bytes).decode('utf-8')
+        tx_field = '{"transaction":' + tx_str + '}'
         out = self.send_api_call(pod_ip, tx_field, self.submit_api)
         print(f"{datetime.now()}: submit result: {out}")
         if not out:
             print("cannot parse submission result, result is none")
             return False
 
-        if re.search(a_ok_pat, out):
+        res = self.decode_response(out)
+        if (
+                # "google.golang.org/genproto/googleapis/rpc/code.Code_OK
+                res['status']['code'] == 0 and
+                # TRANSACTION_STATE_MEMPOOL
+                res['txstate']['state'] == 4
+        ):
+            print("tx submission successful")
             self.tx_ids.append(self.extract_tx_id(out))
             return True
 
+        print("tx submission failed, bad status or txstate")
         return False
 
     def get_tx_by_id(self, tx_id):
@@ -87,7 +94,7 @@ class WalletAPI:
 
         # If any of these are missing or the return data is malformed, this will cause an ugly exception
         # That's fine - we don't do any fancy error handling here
-        out = json.loads(out)['account_wrapper']['state_projected']
+        out = self.decode_response(out)['account_wrapper']['state_projected']
 
         # GRPC doesn't include zero values so use intelligent defaults here
         if resource == 'balance':
@@ -149,3 +156,9 @@ class WalletAPI:
         :return: list, a list of 32 integers (32 bytes rep)
         """
         return list(bytearray.fromhex(hex_str))
+
+    @staticmethod
+    def decode_response(res):
+        p = re.compile('(?<!\\\\)\'')
+        res = p.sub('\"', res)
+        return json.loads(res)
