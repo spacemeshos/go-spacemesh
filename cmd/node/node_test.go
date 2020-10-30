@@ -437,7 +437,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.NoError(err)
 	r.Equal(false, app.Config.API.StartNodeService)
 
-	// Give the services a few seconds to start running - this is important on travis.
+	// Give the services a few seconds to start running - this is important on CI.
 	time.Sleep(2 * time.Second)
 
 	// Try talking to the server
@@ -466,7 +466,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.Equal(port, app.Config.API.GrpcServerPort)
 	r.Equal(true, app.Config.API.StartNodeService)
 
-	// Give the services a few seconds to start running - this is important on travis.
+	// Give the services a few seconds to start running - this is important on CI.
 	time.Sleep(2 * time.Second)
 
 	// Set up a new connection to the server
