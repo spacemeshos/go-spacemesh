@@ -1,7 +1,6 @@
 // Package node contains the main executable for go-spacemesh node
 package node
 
-import "C"
 import (
 	"context"
 	"fmt"
@@ -584,6 +583,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		TxsPerBlock:    app.Config.TxsPerBlock,
 	}
 
+	database.SwitchCreationContext(dbStorepath, "") // currently only blockbuilder uses this mechanism
 	blockProducer := miner.NewBlockBuilder(cfg, sgn, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
 	blockListener := sync.NewBlockListener(swarm, syncer, 4, app.addLogger(BlockListenerLogger, lg))
 
