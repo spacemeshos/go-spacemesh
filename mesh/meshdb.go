@@ -126,7 +126,7 @@ func (m *DB) Close() {
 }
 
 // ErrAlreadyExist error returned when adding an existing value to the database
-var ErrAlreadyExist = errors.New("block already exist in database")
+var ErrAlreadyExist = errors.New("block already exists in database")
 
 // AddBlock adds a block to the database
 func (m *DB) AddBlock(bl *types.Block) error {

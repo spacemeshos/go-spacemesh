@@ -640,7 +640,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		myError = nextError()
 
 		// Ignore this error which happens if you have a local database file
-		if strings.Contains(myError.Msg, "error adding genesis block block already exist in database") {
+		if strings.Contains(myError.Msg, "error adding genesis block, block already exists in database") {
 			myError = nextError()
 		}
 
