@@ -82,8 +82,9 @@ def set_docker_images():
         testconfig['bootstrap']['image'] = docker_image
         testconfig['client']['image'] = docker_image
         if 'clientv2' in testconfig.keys():
+            print(testconfig['clientv2'])
             # some should not be replaced!
-            if getattr(testconfig['clientv2'], 'noreplace', False):
+            if testconfig['clientv2'].get('noreplace', False):
                 print("not replacing clientv2 docker image since replace is set to False")
             else:
                 print("Set docker clientv2 images to: {0}".format(docker_image))
