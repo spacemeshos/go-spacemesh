@@ -16,6 +16,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/spacemeshos/go-spacemesh)](https://goreportcard.com/report/github.com/spacemeshos/go-spacemesh)
 [![Bors enabled](https://bors.tech/images/badge_small.svg)](https://app.bors.tech/repositories/22421)
 <a href="https://godoc.org/github.com/spacemeshos/go-spacemesh"><img src="https://img.shields.io/badge/godoc-LGTM-blue.svg"/></a>
+[![CI](https://github.com/spacemeshos/go-spacemesh/workflows/CI/badge.svg)](https://github.com/spacemeshos/go-spacemesh/actions)
 </p>
 <p align="center">
 <a href="https://gitcoin.co/profile/spacemeshos" title="Push Open Source Forward">
@@ -193,6 +194,10 @@ or
 ```
 make cover
 ```
+
+### Continuous Integration
+
+We've enabled continuous integration on this repository in GitHub. You can read more about [our CI workflows](ci.md).
 
 ### Docker
 A `Dockerfile` is included in the project allowing anyone to build and run a docker image:
