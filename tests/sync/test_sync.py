@@ -97,20 +97,21 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
 
     delete_pod(testconfig['namespace'], clients[0])
 
-    print("sleep for 20 sec")
-    time.sleep(20)
-
     print("waiting for pods to be done with sync")
 
     start = time.time()
     sleep = 30  # seconds
     num_iter = 25  # wait up to 12.5 minutes
-    done = 0
     for i in range(num_iter):
+        done = 0
+
+        print("not done yet, sleeping for " + str(sleep) + " seconds")
+        time.sleep(sleep)
+
         for j in range(0, num_clients):
             pod_name = clients[j]
             if not check_pod_logs(pod_name, SYNC_DONE):  # not all done
-                print("pod " + pod_name + " still not done. Going to sleep")
+                print("pod " + pod_name + " still not done")
                 break  # stop check and sleep
             else:
                 print("pod " + pod_name + " done")
@@ -119,9 +120,6 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
         if done == num_clients:
             print("all pods done")
             break
-
-        print("not done yet, sleeping for " + str(sleep) + " seconds")
-        time.sleep(sleep)
 
     assert done == num_clients
 
