@@ -38,7 +38,8 @@ class WalletAPI:
         pod_ip, pod_name = self.random_node()
         print(f"nonce: {nonce}, amount: {amount}, gas-price: {gas_price}, total: {amount+gas_price}")
         tx_str = base64.b64encode(tx_bytes).decode('utf-8')
-        tx_field = '{"transaction":' + tx_str + '}'
+        print(f"txbytes in base64: {tx_str}")
+        tx_field = '{"transaction": "' + tx_str + '"}'
         out = self.send_api_call(pod_ip, tx_field, self.submit_api)
         print(f"{datetime.now()}: submit result: {out}")
         if not out:
@@ -46,12 +47,7 @@ class WalletAPI:
             return False
 
         res = self.decode_response(out)
-        if (
-                # "google.golang.org/genproto/googleapis/rpc/code.Code_OK
-                res['status']['code'] == 0 and
-                # TRANSACTION_STATE_MEMPOOL
-                res['txstate']['state'] == 4
-        ):
+        if res['txstate']['state'] == 'TRANSACTION_STATE_MEMPOOL':
             print("tx submission successful")
             self.tx_ids.append(self.extract_tx_id(out))
             return True
