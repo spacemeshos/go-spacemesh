@@ -3,6 +3,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 )
 
 const (
@@ -74,7 +75,7 @@ func (s *Config) ParseServicesList() error {
 		case "transaction":
 			s.StartTransactionService = true
 		default:
-			return errors.New("unrecognized GRPC service requested: " + svc)
+			return fmt.Errorf("unrecognized GRPC service requested: %s", svc)
 		}
 	}
 
