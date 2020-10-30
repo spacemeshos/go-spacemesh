@@ -77,15 +77,16 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
 
     gen_delt = testconfig['genesis_delta']
     cspec = get_conf(bs_info, testconfig['client'], gen_delt)
+    cspec2 = get_conf(bs_info, testconfig['clientv2'], gen_delt)
 
-    add_multi_clients(testconfig, init_session, cspec, 10)
+    inf = add_multi_clients(testconfig, init_session, cspec, 10)
 
     del cspec.args['remote-data']
     del cspec.args['data-folder']
 
     num_clients = 4
     clients = [None] * num_clients
-    clients[0] = add_multi_clients(testconfig, init_session, cspec, 1, 'client')[0]
+    clients[0] = add_multi_clients(testconfig, init_session, cspec2, 1, 'clientv2')[0]
     time.sleep(10)
     clients[1] = add_multi_clients(testconfig, init_session, cspec, 1, 'client')[0]
     time.sleep(20)
@@ -128,5 +129,5 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
     check_pod_logs(clients[0], PERSISTENT_DATA)
     queries.assert_equal_layer_hashes(current_index, testconfig['namespace'])
 
-    print("it took " + str(end - start) + " to sync all nodes with " + cspec.args['expected-layers'] + " layers")
+    print("it took " + str(end - start) + " to sync all nodes with " + cspec.args['expected-layers'] + "layers")
     print("done!!")
