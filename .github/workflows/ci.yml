@@ -47,11 +47,6 @@ jobs:
           make test-tidy
           make test-fmt
           make lint
-      - uses: act10ns/slack@v1
-        # skip if the secret is not accessible
-        if: ${{ always() && env.SLACK_WEBHOOK_URL }}
-        with:
-          status: ${{ job.status }}
   unittests:
     runs-on: ubuntu-latest
     # should take around 8-10 mins
@@ -67,11 +62,6 @@ jobs:
         run: make
       - name: unit tests (except app test)
         run: make test-no-app-test
-      - uses: act10ns/slack@v1
-        # skip if the secret is not accessible
-        if: ${{ always() && env.SLACK_WEBHOOK_URL }}
-        with:
-          status: ${{ job.status }}
   apptests:
     runs-on: ubuntu-latest
     # should take around 7-9 mins
@@ -87,11 +77,21 @@ jobs:
         run: make
       - name: app test
         run: make test-only-app-test
+  # checkpoint and print a single, clean status message to slack
+  ci-success-stage1:
+    if: github.event_name == 'push'
+    needs:
+      - quicktests
+      - unittests
+      - apptests
+    runs-on: ubuntu-latest
+    steps:
       - uses: act10ns/slack@v1
-        # skip if the secret is not accessible
+        # run regardless of success, but skip if the secret is not accessible
         if: ${{ always() && env.SLACK_WEBHOOK_URL }}
         with:
           status: ${{ job.status }}
+
 
   ## workflow for regular pull requests ends here
   ## everything below here only runs in a push when bors is invoked
@@ -114,10 +114,6 @@ jobs:
         uses: actions/checkout@v2
       - name: push to dockerhub
         run: make dockerpush
-      - uses: act10ns/slack@v1
-        with:
-          status: ${{ job.status }}
-        if: always()
 
   ## stage 3: finally run system tests in parallel if everything else passes
   systemtest-latenodes:
@@ -131,10 +127,6 @@ jobs:
         uses: actions/checkout@v2
       - name: late nodes system test
         run: make dockertest-late-nodes
-      - uses: act10ns/slack@v1
-        with:
-          status: ${{ job.status }}
-        if: always()
   systemtest-blocks-add-node:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
@@ -146,10 +138,6 @@ jobs:
         uses: actions/checkout@v2
       - name: blocks add node test
         run: make dockertest-blocks-add-node
-      - uses: act10ns/slack@v1
-        with:
-          status: ${{ job.status }}
-        if: always()
   systemtest-hare-mining:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
@@ -161,10 +149,6 @@ jobs:
         uses: actions/checkout@v2
       - name: hare+mining system tests
         run: make dockertest-hare-mining
-      - uses: act10ns/slack@v1
-        with:
-          status: ${{ job.status }}
-        if: always()
   systemtest-sync-blocks:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
@@ -176,10 +160,6 @@ jobs:
         uses: actions/checkout@v2
       - name: sync+blocks remove node test
         run: make dockertest-sync-blocks-remove-node
-      - uses: act10ns/slack@v1
-        with:
-          status: ${{ job.status }}
-        if: always()
   systemtest-genesis-p2p:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
@@ -191,14 +171,11 @@ jobs:
         uses: actions/checkout@v2
       - name: genesis+p2p system tests
         run: make dockertest-genesis-voting-p2p
-      - uses: act10ns/slack@v1
-        with:
-          status: ${{ job.status }}
-        if: always()
+
 
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
   # all tests that are required to pass before a bors merge must be listed here!
-  ci-success:
+  ci-success-stage2:
     name: ci
     if: github.event_name == 'push'
     needs:
@@ -209,6 +186,11 @@ jobs:
       - systemtest-genesis-p2p
     runs-on: ubuntu-latest
     steps:
+      # print a single, clean status update to slack
+      - uses: act10ns/slack@v1
+        if: always()
+        with:
+          status: ${{ job.status }}
       - name: Mark the job as succeeded
         if: success()
         run: exit 0
