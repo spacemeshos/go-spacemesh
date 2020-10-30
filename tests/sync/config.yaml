@@ -45,7 +45,7 @@ client:
     hdist: '5'
     version: 'newestSamples/'
 clientv2:
-  image: 'spacemeshos/go-spacemesh:develop'
+  image: 'spacemeshos/go-spacemesh-dev:api-cleanup-p2pv0.0.1'
   command: '/bin/go-sync'
   replicas: 9
   args:
