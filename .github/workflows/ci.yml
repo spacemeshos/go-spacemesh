@@ -95,7 +95,7 @@ jobs:
         # skip if the secret is not accessible
         if: env.SLACK_WEBHOOK_URL
         with:
-          status: $status
+          status: ${{ env.status }}
 
 
   ## workflow for regular pull requests ends here
@@ -190,22 +190,17 @@ jobs:
       - systemtest-sync-blocks
       - systemtest-genesis-p2p
     runs-on: ubuntu-latest
+    env:
+      status: ${{ needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-hare-mining.result == 'success' && needs.systemtest-sync-blocks.result == 'success' && needs.systemtest-genesis-p2p.result == 'success' && 'success' || 'failure' }}
     steps:
       # print a single, clean status update to slack
-      # this is the easiest way to access success/failure state of previous jobs in this workflow
       - uses: act10ns/slack@v1
-        name: slack notify success
-        if: success()
+        name: slack notify
         with:
-          status: success
-      - uses: act10ns/slack@v1
-        name: slack notify failure
-        if: (!success())
-        with:
-          status: failure
+          status: ${{ env.status }}
       - name: Mark the job as succeeded
-        if: success()
+        if: env.status == 'success'
         run: exit 0
       - name: Mark the job as failed
-        if: (!success())
+        if: env.status != 'success'
         run: exit 1
