@@ -54,22 +54,14 @@ func NewBlockListener(net service.Service, sync *Syncer, concurrency int, logger
 }
 
 func (bl *BlockListener) listenToGossipBlocks() {
+	bl.wg.Add(1)
+	defer bl.wg.Done()
 	for {
 		select {
 		case <-bl.exit:
 			bl.Log.Info("stopped listening to gossip blocks")
 			return
 		case data := <-bl.receivedGossipBlocks:
-			// this is a bit messy, but it's necessary to avoid a concurrency issue: if Close was called, but there
-			// was already pending input on this channel, and the select chose this branch, we still need to check if
-			// Close was called
-			select {
-			case <-bl.exit:
-				bl.Log.Info("stopped listening to gossip blocks")
-				return
-			default:
-			}
-
 			if !bl.ListenToGossip() {
 				bl.With().Info("ignoring gossip blocks - not synced yet")
 				break
