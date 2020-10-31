@@ -79,18 +79,24 @@ jobs:
         run: make test-only-app-test
   # checkpoint and print a single, clean status message to slack
   ci-success-stage1:
-    if: always()
+    # skip if the secret is not accessible
+    if: always() && env.SLACK_WEBHOOK_URL
     needs:
       - quicktests
       - unittests
       - apptests
     runs-on: ubuntu-latest
+    # this is the easiest way to access success/failure state of previous jobs in this workflow
     steps:
       - uses: act10ns/slack@v1
-        # skip if the secret is not accessible
-        if: env.SLACK_WEBHOOK_URL
+        if: success()
         with:
-          status: ${{ job.status }}
+          status: success
+      - uses: act10ns/slack@v1
+        # skip if the secret is not accessible
+        if: (!success())
+        with:
+          status: failure
 
 
   ## workflow for regular pull requests ends here
@@ -187,9 +193,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # print a single, clean status update to slack
+      # this is the easiest way to access success/failure state of previous jobs in this workflow
       - uses: act10ns/slack@v1
+        if: success()
         with:
-          status: ${{ job.status }}
+          status: success
+      - uses: act10ns/slack@v1
+        if: (!success())
+        with:
+          status: failure
       - name: Mark the job as succeeded
         if: success()
         run: exit 0
