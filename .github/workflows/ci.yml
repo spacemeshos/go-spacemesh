@@ -80,7 +80,7 @@ jobs:
   # checkpoint and print a single, clean status message to slack
   ci-success-stage1:
     # run regardless of status of previous jobs but skip if the required secret is not accessible
-    if: always() && secrets.SLACK_WEBHOOK_URL
+    if: always()
     needs:
       - quicktests
       - unittests
@@ -89,12 +89,12 @@ jobs:
     # this is the easiest way to access success/failure state of previous jobs in this workflow
     steps:
       - uses: act10ns/slack@v1
-        if: success()
+        if: env.SLACK_WEBHOOK_URL && success()
         with:
           status: success
       - uses: act10ns/slack@v1
         # skip if the secret is not accessible
-        if: (!success())
+        if: env.SLACK_WEBHOOK_URL && !success()
         with:
           status: failure
 
