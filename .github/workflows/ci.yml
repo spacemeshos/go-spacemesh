@@ -80,7 +80,7 @@ jobs:
   # checkpoint and print a single, clean status message to slack
   ci-success-stage1:
     # run regardless of status of previous jobs but skip if the required secret is not accessible
-    if: ${{ always() && env.SLACK_WEBHOOK_URL }}
+    if: always() && secrets.SLACK_WEBHOOK_URL
     needs:
       - quicktests
       - unittests
@@ -183,7 +183,7 @@ jobs:
   # all tests that are required to pass before a bors merge must be listed here!
   ci-success-stage2:
     name: ci
-    if: ${{ always() && github.event_name == 'push' }}
+    if: always() && github.event_name == 'push'
     needs:
       - systemtest-latenodes
       - systemtest-blocks-add-node
