@@ -86,17 +86,16 @@ jobs:
       - unittests
       - apptests
     runs-on: ubuntu-latest
+    env:
+      status: ${{ needs.quicktests.result == 'success' && needs.unittests.result == 'success' && needs.apptests.result == 'success' && 'success' || 'failure' }}
     # this is the easiest way to access success/failure state of previous jobs in this workflow
     steps:
       - uses: act10ns/slack@v1
-        if: env.SLACK_WEBHOOK_URL && success()
-        with:
-          status: success
-      - uses: act10ns/slack@v1
+        name: slack notify
         # skip if the secret is not accessible
-        if: env.SLACK_WEBHOOK_URL && !success()
+        if: env.SLACK_WEBHOOK_URL
         with:
-          status: failure
+          status: $status
 
 
   ## workflow for regular pull requests ends here
@@ -195,10 +194,12 @@ jobs:
       # print a single, clean status update to slack
       # this is the easiest way to access success/failure state of previous jobs in this workflow
       - uses: act10ns/slack@v1
+        name: slack notify success
         if: success()
         with:
           status: success
       - uses: act10ns/slack@v1
+        name: slack notify failure
         if: (!success())
         with:
           status: failure
