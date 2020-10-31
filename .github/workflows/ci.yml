@@ -177,7 +177,7 @@ jobs:
   # all tests that are required to pass before a bors merge must be listed here!
   ci-success-stage2:
     name: ci
-    if: github.event_name == 'push'
+    if: always() && github.event_name == 'push'
     needs:
       - systemtest-latenodes
       - systemtest-blocks-add-node
@@ -188,12 +188,11 @@ jobs:
     steps:
       # print a single, clean status update to slack
       - uses: act10ns/slack@v1
-        if: always()
         with:
           status: ${{ job.status }}
       - name: Mark the job as succeeded
         if: success()
         run: exit 0
       - name: Mark the job as failed
-        if: always() && !success()
+        if: (!success())
         run: exit 1
