@@ -78,7 +78,7 @@ jobs:
       - name: app test
         run: make test-only-app-test
   # checkpoint and print a single, clean status message to slack
-  ci-success-stage1:
+  ci-stage1:
     # run regardless of status of previous jobs but skip if the required secret is not accessible
     if: always()
     needs:
@@ -91,11 +91,17 @@ jobs:
     # this is the easiest way to access success/failure state of previous jobs in this workflow
     steps:
       - uses: act10ns/slack@v1
-        name: slack notify
+        name: Slack notification
         # skip if the secret is not accessible
         if: env.SLACK_WEBHOOK_URL
         with:
           status: ${{ env.status }}
+      - name: Mark the job as succeeded
+        if: env.status == 'success'
+        run: exit 0
+      - name: Mark the job as failed
+        if: env.status != 'success'
+        run: exit 1
 
 
   ## workflow for regular pull requests ends here
@@ -180,10 +186,10 @@ jobs:
 
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
   # all tests that are required to pass before a bors merge must be listed here!
-  ci-success-stage2:
-    name: ci
-    if: always() && github.event_name == 'push'
+  ci-stage2:
+    if: always() && github.event_name == 'push' && needs.ci-stage1.result == 'success'
     needs:
+      - ci-stage1
       - systemtest-latenodes
       - systemtest-blocks-add-node
       - systemtest-hare-mining
@@ -195,7 +201,7 @@ jobs:
     steps:
       # print a single, clean status update to slack
       - uses: act10ns/slack@v1
-        name: slack notify
+        name: Slack notification
         with:
           status: ${{ env.status }}
       - name: Mark the job as succeeded
