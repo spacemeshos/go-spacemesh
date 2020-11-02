@@ -196,6 +196,7 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.
 
 	smApp := NewSpacemeshApp()
 	smApp.Config = &cfg
+	smApp.Config.SpaceToCommit = smApp.Config.POST.SpacePerUnit << (i % 5)
 	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
 	smApp.Config.GenesisTime = genesisTime
 	edSgn := signing.NewEdSigner()
