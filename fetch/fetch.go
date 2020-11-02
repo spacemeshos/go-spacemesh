@@ -1,4 +1,4 @@
-// Package fetch contains mechanism to fetch data from remote peersProvider
+// Package fetch contains mechanism to fetch data from remote peers
 package fetch
 
 import (
@@ -37,14 +37,14 @@ const (
 	batchMaxSize                     = 20
 )
 
-// ErrCouldNotSend is a special type of error indicating fetch could not be done because message could not be sent to peersProvider
+// ErrCouldNotSend is a special type of error indicating fetch could not be done because message could not be sent to peers
 type ErrCouldNotSend error
 
 // Fetcher is the general interface of the fetching unit, capable of requesting bytes that corresponds to a hash
-// from other remote peersProvider.
+// from other remote peers.
 type Fetcher interface {
 	GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashDataPromiseResult
-	GetAllHashes(hash []types.Hash32, hint Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult
+	GetHashes(hash []types.Hash32, hint Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult
 }
 
 /// request contains all relevant data for a single request for a specified hash
@@ -199,7 +199,7 @@ func (f *Fetch) Stop() {
 	<-f.doneChan
 }
 
-// getStopped returns if we should stop
+// stopped returns if we should stop
 func (f *Fetch) stopped() bool {
 	select {
 	case <-f.stop:
@@ -460,13 +460,12 @@ type HashDataPromiseResult struct {
 	Data []byte
 }
 
-// GetAllHashes gets a list of hashes and validates them with the dataCallback function
-// it will return a map of hashes and their respective promise channels
-func (f *Fetch) GetAllHashes(hashes []types.Hash32, hint Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult {
+// GetHashes gets a list of hashes to be fetched and will return a map of hashes and their respective promise channels
+func (f *Fetch) GetHashes(hashes []types.Hash32, hint Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult {
 	hashWaiting := make(map[types.Hash32]chan HashDataPromiseResult)
 	for _, id := range hashes {
-		callBackChan := f.GetHash(id, hint, validateHash)
-		hashWaiting[id] = callBackChan
+		resChan := f.GetHash(id, hint, validateHash)
+		hashWaiting[id] = resChan
 	}
 
 	return hashWaiting
@@ -475,7 +474,7 @@ func (f *Fetch) GetAllHashes(hashes []types.Hash32, hint Hint, validateHash bool
 // GetHash is the regular buffered call to get a specific hash, using provided hash, h as hint the receiving end will
 // know where to look for the hash, this function returns HashDataPromiseResult channel that will hold data received or error
 func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashDataPromiseResult {
-	callbackChan := make(chan HashDataPromiseResult, 1)
+	resChan := make(chan HashDataPromiseResult, 1)
 
 	//check if we already have this hash locally
 	if _, ok := f.dbs[h]; !ok {
@@ -483,12 +482,12 @@ func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashD
 	}
 
 	if b, err := f.dbs[h].Get(hash.Bytes()); err == nil {
-		callbackChan <- HashDataPromiseResult{
+		resChan <- HashDataPromiseResult{
 			Err:  nil,
 			Hash: hash,
 			Data: b,
 		}
-		return callbackChan
+		return resChan
 	}
 
 	// if not present in db, call fetching of the item
@@ -497,10 +496,10 @@ func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashD
 		Low,
 		validateHash,
 		h,
-		callbackChan,
+		resChan,
 	}
 
 	f.requestReceiver <- req
 
-	return callbackChan
+	return resChan
 }

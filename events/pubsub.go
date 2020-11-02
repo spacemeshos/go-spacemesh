@@ -141,3 +141,7 @@ func (p *Publisher) publish(topic ChannelID, payload []byte) error {
 	err := p.sock.Send(msg)
 	return err
 }
+
+func (p *Publisher) Close() {
+	p.sock.Close()
+}

@@ -99,7 +99,7 @@ func (m mockFetcher) GetHash(hash types.Hash32, h fetch.Hint, validateAndSubmit 
 	panic("implement me")
 }
 
-func (m mockFetcher) GetAllHashes(hash []types.Hash32, hint fetch.Hint, validateAndSubmit bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
+func (m mockFetcher) GetHashes(hash []types.Hash32, hint fetch.Hint, validateAndSubmit bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
 	panic("implement me")
 }
 

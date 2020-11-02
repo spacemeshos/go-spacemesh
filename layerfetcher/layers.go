@@ -371,7 +371,7 @@ func (l *Logic) GetAtxs(IDs []types.ATXID) error {
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.Hash32())
 	}
-	results := l.fetcher.GetAllHashes(hashes, fetch.Hint(BlockDB), true)
+	results := l.fetcher.GetHashes(hashes, fetch.Hint(BlockDB), true)
 	for hash, resC := range results {
 		res := <-resC
 		err := l.getAtxResults(hash, res.Data)
@@ -389,7 +389,7 @@ func (l *Logic) GetBlocks(IDs []types.BlockID) error {
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.AsHash32())
 	}
-	results := l.fetcher.GetAllHashes(hashes, fetch.Hint(BlockDB), true)
+	results := l.fetcher.GetHashes(hashes, fetch.Hint(BlockDB), true)
 	for hash, resC := range results {
 		res := <-resC
 		err := l.blockReceiveFunc(hash, res.Data)
@@ -406,7 +406,7 @@ func (l *Logic) GetTxs(IDs []types.TransactionID) error {
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.Hash32())
 	}
-	results := l.fetcher.GetAllHashes(hashes, fetch.Hint(TXDB), true)
+	results := l.fetcher.GetHashes(hashes, fetch.Hint(TXDB), true)
 	for hash, resC := range results {
 		res := <-resC
 		err := l.getTxResult(hash, res.Data)
