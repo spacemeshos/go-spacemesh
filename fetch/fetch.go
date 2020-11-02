@@ -297,7 +297,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 	var response responseBatch
 	err := types.BytesToInterface(data, &response)
 	if err != nil {
-		f.log.Error("we should panic here, response was unclear, probably leaking")
+		f.log.Error("response was unclear, maybe leaking")
 		return
 	}
 
@@ -315,7 +315,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 	for _, resID := range response.Responses {
 		//take lock here to make handling of a single hash atomic
 		f.activeReqM.Lock()
-		// for each hash, call its callbacks
+		// for each hash, send data on waiting channel
 		reqs := f.activeRequests[resID.Hash]
 		for _, req := range reqs {
 			var err error
