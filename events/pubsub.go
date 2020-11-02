@@ -142,6 +142,7 @@ func (p *Publisher) publish(topic ChannelID, payload []byte) error {
 	return err
 }
 
+// Close closes the publishers output socket
 func (p *Publisher) Close() {
 	p.sock.Close()
 }

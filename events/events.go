@@ -42,6 +42,7 @@ func InitializeEventPubsub(ur string) {
 	}
 }
 
+// CloseEventPubSub closes events pubsub and destroys it
 func CloseEventPubSub() {
 	if publisher != nil {
 		publisher.Close()
