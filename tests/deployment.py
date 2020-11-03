@@ -4,8 +4,9 @@ import time
 import yaml
 from kubernetes import client
 from kubernetes.client.rest import ApiException
-from tests import config as conf
 
+from tests import config as conf
+from tests.utils import replace_phrase_in_file
 
 """ k8s deployment api file for stateless deployments (opposite to statefulset.py) """
 
@@ -98,36 +99,42 @@ def filebeat_teardown(namespace):
     k8s_client = client.RbacAuthorizationV1beta1Api()
     # TODO: find a solution for sharing the name both here and in the kube object
     crb_name = f"filebeat-cluster-role-binding-{namespace}"
-    k8s_client.delete_cluster_role_binding(crb_name)
+    try:
+        k8s_client.delete_cluster_role_binding(crb_name)
+        print(f"successfully deleted: {crb_name}")
+    except Exception as e:
+        print(f"filebeat teardown failed, manually delete {crb_name}")
 
 
 def add_elastic_cluster(namespace):
-    print("Deploying ElasticSearch")
+    print("\nDeploying ElasticSearch\n")
     add_deployment_dir(namespace, conf.ELASTIC_CONF_DIR)
 
 
 def add_filebeat_cluster(namespace):
-    print("Deploying FileBeat")
+    print("\nDeploying FileBeat\n")
     add_deployment_dir(namespace, conf.FILEBEAT_CONF_DIR)
 
 
 def add_kibana_cluster(namespace):
-    print("Deploying Kibana")
+    print("\nDeploying Kibana\n")
     add_deployment_dir(namespace, conf.KIBANA_CONF_DIR)
 
 
 def add_logstash_cluster(namespace):
-    print("Deploying LogStash")
+    print("\nDeploying LogStash\n")
     add_deployment_dir(namespace, conf.LOGSTASH_CONF_DIR)
 
 
-def add_deployment_dir(namespace, dir_path, timeout=None):
+def add_deployment_dir(namespace, dir_path):
     with open(os.path.join(dir_path, 'dep_order.txt')) as f:
         dep_order = f.readline()
         dep_lst = [x.strip() for x in dep_order.split(',')]
         print(dep_lst)
 
     for filename in dep_lst:
+        # replace 'NAMESPACE' with the actual namespace if exists
+        replace_phrase_in_file(os.path.join(dir_path, filename), "(?<!_)NAMESPACE", namespace)
         print(f"applying file: {filename}")
         with open(os.path.join(dir_path, filename)) as f:
             dep = yaml.safe_load(f)
@@ -168,9 +175,6 @@ def add_deployment_dir(namespace, dir_path, timeout=None):
                 k8s_client.create_namespaced_role_binding(body=dep, namespace=namespace)
             elif dep["kind"] == 'ClusterRoleBinding':
                 k8s_client = client.RbacAuthorizationV1beta1Api()
-                # TODO: move this to a function
-                dep["metadata"]["name"] = dep["metadata"]["name"].replace("NAMESPACE", namespace)
-                dep["subjects"][0]["namespace"] = namespace
                 k8s_client.create_cluster_role_binding(body=dep)
             elif dep["kind"] == 'ConfigMap':
                 k8s_client = client.CoreV1Api()
@@ -178,3 +182,8 @@ def add_deployment_dir(namespace, dir_path, timeout=None):
             elif dep["kind"] == 'ServiceAccount':
                 k8s_client = client.CoreV1Api()
                 k8s_client.create_namespaced_service_account(body=dep, namespace=namespace)
+
+        # replace namespace with 'NAMESPACE'
+        replace_phrase_in_file(os.path.join(dir_path, filename), namespace, "NAMESPACE")
+
+    print("\nDone\n")

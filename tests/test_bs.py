@@ -1,5 +1,3 @@
-import time
-
 from pytest_testconfig import config as testconfig
 
 from tests import analyse, queries

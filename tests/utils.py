@@ -4,6 +4,7 @@ import functools
 import os
 import pytz
 import re
+import subprocess
 import time
 
 import tests.config as conf
@@ -203,3 +204,32 @@ def wait_genesis(genesis_time, genesis_delta):
     else:
         print('sleep for {0} sec until genesis time'.format(delta_from_genesis))
         time.sleep(delta_from_genesis)
+
+
+def exec_wait(cmd, retry=3, interval=1):
+    print(f"\nrunning: {cmd}")
+    ret_code = 0
+    try:
+        process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+        process.wait()
+        ret_code = process.returncode
+    except Exception as e:
+        raise Exception(f"failed running: \"{cmd}\",\nreturn code: {ret_code},\nexception: {e}")
+
+    # if return code != 0 and retry !=0 run the same command again
+    if ret_code and ret_code != "0" and retry:
+        print(f"return code: {ret_code}")
+        print(f"retrying (retries left: {retry})")
+        time.sleep(interval)
+        exec_wait(cmd, retry-1)
+    elif ret_code is not None:
+        print(f"return code: {ret_code}")
+
+
+def replace_phrase_in_file(filepath, look, replace):
+    with open(filepath, 'r+') as f:
+        text = f.read()
+        text = re.sub(look, replace, text)
+        f.seek(0)
+        f.write(text)
+        f.truncate()

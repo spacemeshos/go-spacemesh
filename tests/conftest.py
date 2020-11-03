@@ -1,3 +1,4 @@
+from datetime import datetime
 from kubernetes import config as k8s_config
 from kubernetes import client
 import os
@@ -8,6 +9,7 @@ import string
 import subprocess
 
 from tests.deployment import add_elastic_cluster, add_filebeat_cluster, add_kibana_cluster, add_logstash_cluster, filebeat_teardown
+from tests.es_dump import dump_es, restore_es
 from tests import pod
 from tests import config as tests_conf
 from tests.context import Context
@@ -250,9 +252,13 @@ def add_curl(request, init_session, setup_bootstrap):
 
 @pytest.fixture(scope='module')
 def add_elk(init_session):
+    # get today's date for filebeat data index
+    filebeat_index_date = datetime.utcnow().date().strftime("%Y.%m.%d")
     add_elastic_cluster(init_session)
     add_filebeat_cluster(init_session)
     add_logstash_cluster(init_session)
     add_kibana_cluster(init_session)
     yield
     filebeat_teardown(init_session)
+    dump_es(init_session, filebeat_index_date)
+    restore_es(init_session, filebeat_index_date)
