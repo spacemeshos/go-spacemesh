@@ -114,6 +114,10 @@ type TxAPIMock struct {
 	err          error
 }
 
+func (t *TxAPIMock) GetAllAccounts() (*types.AccountsState, error) {
+	panic("implement me")
+}
+
 func (t *TxAPIMock) GetStateRoot() types.Hash32 {
 	var hash types.Hash32
 	hash.SetBytes([]byte("00000"))

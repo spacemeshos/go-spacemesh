@@ -37,16 +37,16 @@ func (s *JSONHTTPServer) Close() error {
 
 // StartService starts the json api server and listens for status (started, stopped).
 func (s *JSONHTTPServer) StartService(startNodeService bool, startMeshService bool,
-	startGlobalStateService bool, startSmesherService bool, startTransactionService bool) {
+	startGlobalStateService bool, startSmesherService bool, startTransactionService bool, startDebugService bool) {
 
 	// This will block, so run it in a goroutine
 	go s.startInternal(
 		startNodeService, startMeshService, startGlobalStateService, startSmesherService,
-		startTransactionService)
+		startTransactionService, startDebugService)
 }
 
 func (s *JSONHTTPServer) startInternal(startNodeService bool, startMeshService bool,
-	startGlobalStateService bool, startSmesherService bool, startTransactionService bool) {
+	startGlobalStateService bool, startSmesherService bool, startTransactionService bool, startDebugService bool) {
 	ctx, cancel := context.WithCancel(cmdp.Ctx)
 
 	// This will close all downstream connections when the server closes
@@ -98,6 +98,14 @@ func (s *JSONHTTPServer) startInternal(startNodeService bool, startMeshService b
 		} else {
 			serviceCount++
 			log.Info("registered TransactionService with grpc gateway server")
+		}
+	}
+	if startDebugService {
+		if err := gw.RegisterDebugServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
+			log.Error("error registering DebugService with grpc gateway", err)
+		} else {
+			serviceCount++
+			log.Info("registered DebugService with grpc gateway server")
 		}
 	}
 

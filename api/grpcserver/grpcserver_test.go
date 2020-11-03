@@ -171,6 +171,24 @@ type TxAPIMock struct {
 	err          error
 }
 
+func (t *TxAPIMock) GetAllAccounts() (*types.AccountsState, error) {
+
+	accounts := make(map[string]types.Account)
+
+	for address, balance := range t.balances {
+		accounts[address.String()] = types.Account{
+			Balance: balance,
+			Nonce: t.nonces[address],
+		}
+	}
+	res := &types.AccountsState{
+		Root: "",
+		Accounts: accounts,
+	}
+
+	return res, nil
+}
+
 func (t *TxAPIMock) GetStateRoot() types.Hash32 {
 	return stateRoot
 }
@@ -424,7 +442,7 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	// start gRPC and json servers
 	grpcService.Start()
 	jsonService.StartService(cfg.StartNodeService, cfg.StartMeshService, cfg.StartGlobalStateService,
-		cfg.StartSmesherService, cfg.StartTransactionService)
+		cfg.StartSmesherService, cfg.StartTransactionService, cfg.StartDebugService)
 	time.Sleep(3 * time.Second) // wait for server to be ready (critical on CI)
 
 	return func() {

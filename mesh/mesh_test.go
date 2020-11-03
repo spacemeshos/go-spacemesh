@@ -98,6 +98,10 @@ func (MockState) AddressExists(types.Address) bool {
 	return true
 }
 
+func (MockState) GetAllAccounts() (*types.AccountsState, error) {
+	panic("implement me")
+}
+
 func (MockState) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
 	panic("implement me")
 }

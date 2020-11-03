@@ -19,6 +19,7 @@ const (
 	defaultStartGlobalStateService = false
 	defaultStartTransactionService = false
 	defaultStartSmesherService     = false
+	defaultStartDebugService       = false
 )
 
 // Config defines the api config params
@@ -38,6 +39,7 @@ type Config struct {
 	StartGlobalStateService bool
 	StartTransactionService bool
 	StartSmesherService     bool
+	StartDebugService		bool
 }
 
 func init() {
@@ -61,6 +63,7 @@ func DefaultConfig() Config {
 		StartGlobalStateService: defaultStartGlobalStateService,
 		StartTransactionService: defaultStartTransactionService,
 		StartSmesherService:     defaultStartSmesherService,
+		StartDebugService: 		 defaultStartDebugService,
 	}
 }
 
@@ -79,6 +82,8 @@ func (s *Config) ParseServicesList() error {
 			s.StartTransactionService = true
 		case "smesher":
 			s.StartSmesherService = true
+		case "debug":
+			s.StartDebugService = true
 		default:
 			return errors.New("unrecognized GRPC service requested: " + svc)
 		}

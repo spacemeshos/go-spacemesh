@@ -19,41 +19,30 @@ package state
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/trie"
 )
 
-// DumpAccount is a helper struct that helps dumping account balance and nonce in json form
-type DumpAccount struct {
-	Balance string `json:"balance"`
-	Nonce   uint64 `json:"nonce"`
-}
-
-// Dump is a struct used to dump an entire state root into json form
-type Dump struct {
-	Root     string                 `json:"root"`
-	Accounts map[string]DumpAccount `json:"accounts"`
-}
-
 // RawDump returns a Dump struct for the receivers state
-func (state *DB) RawDump() Dump {
-	dump := Dump{
+func (state *DB) RawDump() types.AccountsState {
+	dump := types.AccountsState {
 		Root:     fmt.Sprintf("%x", state.globalTrie.Hash()),
-		Accounts: make(map[string]DumpAccount),
+		Accounts: make(map[string]types.Account),
 	}
 
 	it := trie.NewIterator(state.globalTrie.NodeIterator(nil))
 	for it.Next() {
 		addr := state.globalTrie.GetKey(it.Key)
-		var data Account
+		var data types.Account
 		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
 			panic(err)
 		}
 
 		//obj := newObject(nil, address.BytesToAddress(addr), data)
-		account := DumpAccount{
-			Balance: data.Balance.String(),
+		account := types.Account{
+			Balance: data.Balance,
 			Nonce:   data.Nonce,
 		}
 

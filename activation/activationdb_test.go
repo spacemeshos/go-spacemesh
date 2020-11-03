@@ -53,6 +53,10 @@ func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, typ
 
 type MockState struct{}
 
+func (s MockState) GetAllAccounts() (*types.AccountsState, error) {
+	panic("implement me")
+}
+
 func (MockState) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	panic("implement me")
 }

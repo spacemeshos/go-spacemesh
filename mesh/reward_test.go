@@ -18,6 +18,10 @@ type MockMapState struct {
 	TotalReward int64
 }
 
+func (s *MockMapState) GetAllAccounts() (*types.AccountsState, error) {
+	panic("implement me")
+}
+
 func (s *MockMapState) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	s.Pool = append(s.Pool, tx)
 	return nil

@@ -763,6 +763,7 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 			apiConf.StartGlobalStateService,
 			apiConf.StartSmesherService,
 			apiConf.StartTransactionService,
+			apiConf.StartDebugService,
 		)
 	}
 }
