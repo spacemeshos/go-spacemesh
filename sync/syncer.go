@@ -87,7 +87,6 @@ type Configuration struct {
 var (
 	errDupTx           = errors.New("duplicate TransactionID in block")
 	errDupAtx          = errors.New("duplicate ATXID in block")
-	errTooManyAtxs     = errors.New("too many atxs in blocks")
 	errNoBlocksInLayer = errors.New("layer has no blocks")
 	errNoActiveSet     = errors.New("block does not declare active set")
 	errZeroActiveSet   = errors.New("block declares empty active set")
@@ -221,7 +220,7 @@ func (s *Syncer) Close() {
 	s.MessageServer.Close()
 	s.syncLock.Lock()
 	s.syncLock.Unlock()
-	s.Info("sync Closed")
+	s.Info("sync closed")
 }
 
 // check if syncer was closed
