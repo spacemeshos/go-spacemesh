@@ -27,10 +27,11 @@ type BlockListener struct {
 
 // Close closes all running goroutines
 func (bl *BlockListener) Close() {
+	// this stops us from receiving any new blocks, but we may still already be processing received blocks
 	close(bl.exit)
-	bl.Info("block listener closing, waiting for gorutines")
+	bl.Info("block listener closing, waiting for goroutines to finish")
+	// this waits for processing of received blocks to finish
 	bl.wg.Wait()
-	bl.Syncer.Close()
 	bl.Info("block listener closed")
 }
 
@@ -54,10 +55,12 @@ func NewBlockListener(net service.Service, sync *sync2.Syncer, concurrency int, 
 }
 
 func (bl *BlockListener) listenToGossipBlocks() {
+	bl.wg.Add(1)
+	defer bl.wg.Done()
 	for {
 		select {
 		case <-bl.exit:
-			bl.Log.Info("listening  stopped")
+			bl.Log.Info("stopped listening to gossip blocks")
 			return
 		case data := <-bl.receivedGossipBlocks:
 			if !bl.ListenToGossip() {
@@ -76,7 +79,6 @@ func (bl *BlockListener) listenToGossipBlocks() {
 				bl.handleBlock(data)
 				tmr.ObserveDuration()
 			}()
-
 		}
 	}
 }*/
