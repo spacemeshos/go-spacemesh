@@ -4,6 +4,7 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -22,8 +23,8 @@ func (d DebugService) RegisterService(server *Server) {
 }
 
 // DebugService creates a new grpc service using config data.
-func NewDebugService(tx api.TxAPI, mempool api.MempoolAPI) *GlobalStateService {
-	return &GlobalStateService{
+func NewDebugService(tx api.TxAPI, mempool api.MempoolAPI) *DebugService {
+	return &DebugService{
 		Mesh:        tx,
 		Mempool:     mempool,
 	}
@@ -47,8 +48,12 @@ func (d DebugService) Accounts(_ context.Context, in *empty.Empty) (*pb.Accounts
 			Balance: &pb.Amount{Value: accountData.Balance.Uint64()},
 		}
 
+		foo := util.FromHex(address)
+		log.Info("{%s}", foo)
+
+		// need to convert hex string to bytes here....
 		account := &pb.Account{
-			AccountId:    &pb.AccountId{Address: []byte(address)},
+			AccountId:    &pb.AccountId{Address: util.FromHex(address)}, // AccountId is raw account bytes, not hex string
 			StateCurrent: state,
 		}
 

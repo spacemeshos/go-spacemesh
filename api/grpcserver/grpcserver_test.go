@@ -94,8 +94,8 @@ var (
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),
 		balances: map[types.Address]*big.Int{
-			globalTx.Origin(): big.NewInt(int64(accountBalance)),
-			addr1:             big.NewInt(int64(accountBalance)),
+			addr1: big.NewInt(int64(accountBalance)),
+			addr2: big.NewInt(int64(accountBalance)),
 		},
 		nonces: map[types.Address]uint64{globalTx.Origin(): uint64(accountCounter)},
 	}
@@ -2465,7 +2465,10 @@ func TestDebugService(t *testing.T) {
 		{"GetAccounts", func(t *testing.T) {
 			res, err := c.Accounts(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
+			t.Log("res:", res)
 			require.Equal(t, 2, len(res.AccountWrapper))
+			require.Equal(t, addr1.Bytes(), res.AccountWrapper[0].AccountId.Address)
+			require.Equal(t, addr2.Bytes(), res.AccountWrapper[1].AccountId.Address)
 		}},
 	}
 
