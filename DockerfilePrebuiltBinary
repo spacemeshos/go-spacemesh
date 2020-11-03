@@ -1,0 +1,16 @@
+FROM alpine AS spacemesh
+
+COPY go-spacemesh /bin/go-spacemesh
+COPY go-hare /bin/go-hare
+COPY go-p2p /bin/go-p2p
+COPY go-sync /bin/go-sync
+COPY go-harness /bin/go-harness
+
+ENTRYPOINT ["/bin/go-harness"]
+EXPOSE 7513
+
+# profiling port
+EXPOSE 6060
+
+# pubsub port
+EXPOSE 56565
