@@ -48,9 +48,6 @@ func (d DebugService) Accounts(_ context.Context, in *empty.Empty) (*pb.Accounts
 			Balance: &pb.Amount{Value: accountData.Balance.Uint64()},
 		}
 
-		foo := util.FromHex(address)
-		log.Info("{%s}", foo)
-
 		// need to convert hex string to bytes here....
 		account := &pb.Account{
 			AccountId:    &pb.AccountId{Address: util.FromHex(address)}, // AccountId is raw account bytes, not hex string
