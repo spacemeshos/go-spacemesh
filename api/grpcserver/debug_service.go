@@ -4,7 +4,6 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -29,35 +28,6 @@ func NewDebugService(tx api.TxAPI, mempool api.MempoolAPI) *GlobalStateService {
 		Mesh:        tx,
 		Mempool:     mempool,
 	}
-}
-
-func (d DebugService) getProjection(curCounter, curBalance uint64, addr types.Address) (counter, balance uint64, err error) {
-	counter, balance, err = d.Mesh.GetProjection(addr, curCounter, curBalance)
-	if err != nil {
-		return 0, 0, err
-	}
-	counter, balance = d.Mempool.GetProjection(addr, counter, balance)
-	return counter, balance, nil
-}
-
-func (d DebugService) getAccount(addr types.Address) (acct *pb.Account, err error) {
-	balanceActual := d.Mesh.GetBalance(addr)
-	counterActual := d.Mesh.GetNonce(addr)
-	counterProjected, balanceProjected, err := d.getProjection(counterActual, balanceActual, addr)
-	if err != nil {
-		return nil, err
-	}
-	return &pb.Account{
-		AccountId: &pb.AccountId{Address: addr.Bytes()},
-		StateCurrent: &pb.AccountState{
-			Counter: counterActual,
-			Balance: &pb.Amount{Value: balanceActual},
-		},
-		StateProjected: &pb.AccountState{
-			Counter: counterProjected,
-			Balance: &pb.Amount{Value: balanceProjected},
-		},
-	}, nil
 }
 
 // Accounts returns current counter and balance for all accounts
