@@ -56,7 +56,7 @@ func (state *DB) Error() error {
 	return state.dbErr
 }
 
-// Accounts returns a dump of all accounts in global state
+// GetAllAccounts returns a dump of all accounts in global state
 func (state *DB) GetAllAccounts() (*types.AccountsState, error) {
 
 	// Commit state to store so memory accounts are included

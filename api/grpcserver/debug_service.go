@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// GlobalStateService exposes global state data, output from the STF
+// DebugService exposes global state data, output from the STF
 type DebugService struct {
 	Mesh        api.TxAPI
 	Mempool     api.MempoolAPI
@@ -22,7 +22,7 @@ func (d DebugService) RegisterService(server *Server) {
 	pb.RegisterDebugServiceServer(server.GrpcServer, d)
 }
 
-// DebugService creates a new grpc service using config data.
+// NewDebugService creates a new grpc service using config data.
 func NewDebugService(tx api.TxAPI, mempool api.MempoolAPI) *DebugService {
 	return &DebugService{
 		Mesh:        tx,
@@ -48,7 +48,6 @@ func (d DebugService) Accounts(_ context.Context, in *empty.Empty) (*pb.Accounts
 			Balance: &pb.Amount{Value: accountData.Balance.Uint64()},
 		}
 
-		// need to convert hex string to bytes here....
 		account := &pb.Account{
 			AccountId:    &pb.AccountId{Address: util.FromHex(address)}, // AccountId is raw account bytes, not hex string
 			StateCurrent: state,
