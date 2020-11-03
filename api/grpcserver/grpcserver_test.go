@@ -173,10 +173,10 @@ type TxAPIMock struct {
 
 func (t *TxAPIMock) GetAllAccounts() (*types.AccountsState, error) {
 
-	accounts := make(map[string]types.Account)
+	accounts := make(map[string]types.AccountState)
 
 	for address, balance := range t.balances {
-		accounts[address.String()] = types.Account{
+		accounts[address.String()] = types.AccountState{
 			Balance: balance,
 			Nonce: t.nonces[address],
 		}

@@ -171,7 +171,7 @@ func (state *DB) getStateObj(addr types.Address) (StateObj *Object) {
 		state.setError(err)
 		return nil
 	}
-	var data types.Account
+	var data types.AccountState
 	if err := rlp.DecodeBytes(enc, &data); err != nil {
 		log.Error("Failed to decode state object", "addr", addr, "err", err)
 		return nil
@@ -203,7 +203,7 @@ func (state *DB) GetOrNewStateObj(addr types.Address) *Object {
 // the given address, it is overwritten and returned as the second return value.
 func (state *DB) createObject(addr types.Address) (newObj, prev *Object) {
 	prev = state.getStateObj(addr)
-	newObj = newObject(state, addr, types.Account{})
+	newObj = newObject(state, addr, types.AccountState{})
 	newObj.setNonce(0)
 	/*if prev == nil {
 		state.journal.append(createObjectChange{account: &addr})

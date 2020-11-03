@@ -29,24 +29,17 @@ import (
 func (state *DB) RawDump() types.AccountsState {
 	dump := types.AccountsState {
 		Root:     fmt.Sprintf("%x", state.globalTrie.Hash()),
-		Accounts: make(map[string]types.Account),
+		Accounts: make(map[string]types.AccountState),
 	}
 
 	it := trie.NewIterator(state.globalTrie.NodeIterator(nil))
 	for it.Next() {
 		addr := state.globalTrie.GetKey(it.Key)
-		var data types.Account
-		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
+		var state types.AccountState
+		if err := rlp.DecodeBytes(it.Value, &state); err != nil {
 			panic(err)
 		}
-
-		//obj := newObject(nil, address.BytesToAddress(addr), data)
-		account := types.Account{
-			Balance: data.Balance,
-			Nonce:   data.Nonce,
-		}
-
-		dump.Accounts[util.Bytes2Hex(addr)] = account
+		dump.Accounts[util.Bytes2Hex(addr)] = state
 	}
 	return dump
 }

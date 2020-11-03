@@ -24,12 +24,12 @@ type AccountState interface {
 type Object struct {
 	address  types.Address
 	addrHash types.Hash32
-	account  types.Account
+	account  types.AccountState
 	db       *DB
 }
 
 // newObject creates a state object.
-func newObject(db *DB, address types.Address, data types.Account) *Object {
+func newObject(db *DB, address types.Address, data types.AccountState) *Object {
 	if data.Balance == nil {
 		data.Balance = new(big.Int)
 	}
