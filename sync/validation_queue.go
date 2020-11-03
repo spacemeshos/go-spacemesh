@@ -10,7 +10,7 @@ import (
 )
 
 type syncer interface {
-	AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs []*types.ActivationTx) error
+	AddBlockWithTxs(blk *types.Block) error
 	GetBlock(id types.BlockID) (*types.Block, error)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 	HandleLateBlock(bl *types.Block)
@@ -128,7 +128,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 		}
 
 		// data availability
-		txs, atxs, err := vq.dataAvailability(block)
+		_, _, err := vq.dataAvailability(block)
 		if err != nil {
 			return fmt.Errorf("DataAvailabilty failed for block: %v errmsg: %v", block.ID().String(), err)
 		}
@@ -138,7 +138,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 			return fmt.Errorf("validate votes failed for block: %s errmsg: %s", block.ID().String(), err)
 		}
 
-		err = vq.AddBlockWithTxs(block, txs, atxs)
+		err = vq.AddBlockWithTxs(block)
 
 		if err != nil && err != mesh.ErrAlreadyExist {
 			return err
