@@ -1,10 +1,4 @@
-status = [
-  "systemtest-latenodes",
-  "systemtest-blocks-add-node",
-  "systemtest-hare-mining",
-  "systemtest-sync-blocks",
-  "systemtest-genesis-p2p",
-]
+status = ["ci-stage2"]
 
 required_approvals = 1
 delete_merged_branches = true
