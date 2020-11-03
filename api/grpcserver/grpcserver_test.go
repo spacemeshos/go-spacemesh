@@ -2438,3 +2438,42 @@ func TestJsonApi(t *testing.T) {
 	require.NoError(t, jsonpb.UnmarshalString(respBody2, &msg2))
 	require.Equal(t, uint64(genTime.GetGenesisTime().Unix()), msg2.Unixtime.Value)
 }
+
+//////
+
+func TestDebugService(t *testing.T) {
+	svc := NewDebugService(txAPI, mempoolMock)
+	shutDown := launchServer(t, svc)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
+	c := pb.NewDebugServiceClient(conn)
+
+	// Construct an array of test cases to test each endpoint in turn
+	testCases := []struct {
+		name string
+		run  func(*testing.T)
+	}{
+		{"GetAccounts", func(t *testing.T) {
+			res, err := c.Accounts(context.Background(), &empty.Empty{})
+			require.NoError(t, err)
+			require.Equal(t, 2, len(res.AccountWrapper))
+		}},
+	}
+
+	// Run subtests
+	for _, tc := range testCases {
+		t.Run(tc.name, tc.run)
+	}
+}
+
+
+

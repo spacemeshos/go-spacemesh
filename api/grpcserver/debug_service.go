@@ -14,7 +14,6 @@ import (
 type DebugService struct {
 	Mesh        api.TxAPI
 	Mempool     api.MempoolAPI
-
 }
 
 // RegisterService registers this service with a grpc server instance
