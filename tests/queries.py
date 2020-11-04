@@ -207,7 +207,7 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
         print("Number of hits: ", len(hits))
         print(f"{PRINT_SEP}\n")
 
-    if find_fails:
+    '''if find_fails:
         print("Looking for pods that didn't hit:")
         podnames = set([hit.kubernetes.pod_name for hit in hits])
         newfltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
@@ -221,7 +221,7 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
             print("None. yay!")
         else:
             print(unsecpods)
-        print(PRINT_SEP)
+        print(PRINT_SEP)'''
 
     s = list(hits)
     return s

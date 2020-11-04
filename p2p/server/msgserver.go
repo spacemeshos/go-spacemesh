@@ -3,6 +3,7 @@ package server
 
 import (
 	"container/list"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -32,6 +33,12 @@ type Item struct {
 	timestamp time.Time
 }
 
+// ResponseHandlers contains handlers for received response handlers
+type ResponseHandlers struct {
+	okCallback   func(msg []byte)
+	failCallBack func(err error)
+}
+
 // MessageServer is a request-response multiplexer on top of the p2p layer. it provides a way to register
 // message types on top of a protocol and declare request and response handlers. it matches incoming responses to requests.
 type MessageServer struct {
@@ -41,7 +48,7 @@ type MessageServer struct {
 	network            Service
 	pendMutex          sync.RWMutex
 	pendingQueue       *list.List                                   //queue of pending messages
-	resHandlers        map[uint64]func(msg []byte)                  //response handlers by request ReqID
+	resHandlers        map[uint64]ResponseHandlers                  //response handlers by request ReqID
 	msgRequestHandlers map[MessageType]func(message Message) []byte //request handlers by request type
 	ingressChannel     chan service.DirectMessage                   //chan to relay messages into the server
 	requestLifetime    time.Duration                                //time a request can stay in the pending queue until evicted
@@ -61,7 +68,7 @@ func NewMsgServer(network Service, name string, requestLifetime time.Duration, c
 	p := &MessageServer{
 		Log:                logger,
 		name:               name,
-		resHandlers:        make(map[uint64]func(msg []byte)),
+		resHandlers:        make(map[uint64]ResponseHandlers),
 		pendingQueue:       list.New(),
 		network:            network,
 		ingressChannel:     network.RegisterDirectProtocolWithChannel(name, c),
@@ -122,6 +129,12 @@ func (p *MessageServer) cleanStaleMessages() {
 			item := elem.Value.(Item)
 			if time.Since(item.timestamp) > p.requestLifetime {
 				p.Debug("cleanStaleMessages remove request ", item.id)
+				p.pendMutex.RLock()
+				foo, okFoo := p.resHandlers[item.id]
+				p.pendMutex.RUnlock()
+				if okFoo {
+					foo.failCallBack(fmt.Errorf("response timeout"))
+				}
 				p.removeFromPending(item.id)
 			} else {
 				p.Debug("cleanStaleMessages no more stale messages")
@@ -184,7 +197,7 @@ func (p *MessageServer) handleResponseMessage(headers *service.DataMsgWrapper) {
 	p.pendMutex.RUnlock()
 	p.removeFromPending(headers.ReqID)
 	if okFoo {
-		foo(headers.Payload)
+		foo.okCallback(headers.Payload)
 	} else {
 		p.Error("Cant find handler %v", headers.ReqID)
 	}
@@ -209,10 +222,10 @@ func (p *MessageServer) RegisterBytesMsgHandler(msgType MessageType, reqHandler 
 }
 
 // SendRequest sends a request of a specific message.
-func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte)) error {
+func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), timeoutHandler func(err error)) error {
 	reqID := p.newReqID()
 	p.pendMutex.Lock()
-	p.resHandlers[reqID] = resHandler
+	p.resHandlers[reqID] = ResponseHandlers{resHandler, timeoutHandler}
 	p.pendingQueue.PushBack(Item{id: reqID, timestamp: time.Now()})
 	p.pendMutex.Unlock()
 	msg := &service.DataMsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}

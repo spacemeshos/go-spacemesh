@@ -87,9 +87,9 @@ var (
 	globalAtx2 = newAtx(challenge, npst, addr2)
 	globalTx   = NewTx(0, addr1, signing.NewEdSigner())
 	globalTx2  = NewTx(1, addr2, signing.NewEdSigner())
-	block1     = types.NewExistingBlock(0, []byte("11111"))
-	block2     = types.NewExistingBlock(0, []byte("22222"))
-	block3     = types.NewExistingBlock(0, []byte("33333"))
+	block1     = types.NewExistingBlock(0, []byte("11111"), nil)
+	block2     = types.NewExistingBlock(0, []byte("22222"), nil)
+	block3     = types.NewExistingBlock(0, []byte("33333"), nil)
 	txAPI      = &TxAPIMock{
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),
