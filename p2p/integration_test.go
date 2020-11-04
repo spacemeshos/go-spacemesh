@@ -72,7 +72,7 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 	require.NoError(its.T(), err, "Failed to connect all nodes to gossip")
 	errg, ctx := errgroup.WithContext(ctx)
 
-	MSGS := 100
+	MSGS := 10
 	MSGSIZE := 108692
 	tm := time.Now()
 	testLog("%v Sending %v messages with size %v to %v miners", its.T().Name(), MSGS, MSGSIZE, its.BootstrappedNodeCount+its.BootstrapNodesCount)
