@@ -49,7 +49,7 @@ func (d DebugService) Accounts(_ context.Context, in *empty.Empty) (*pb.Accounts
 		}
 
 		account := &pb.Account{
-			AccountId:    &pb.AccountId{Address: util.FromHex(address)}, // AccountId is raw account bytes, not hex string
+			AccountId:    &pb.AccountId{Address: util.FromHex(address)}, // Address is raw account bytes, not a 0x hex string
 			StateCurrent: state,
 		}
 
