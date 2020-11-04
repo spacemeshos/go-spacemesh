@@ -39,7 +39,7 @@ type Config struct {
 	StartGlobalStateService bool
 	StartTransactionService bool
 	StartSmesherService     bool
-	StartDebugService		bool
+	StartDebugService       bool
 }
 
 func init() {
@@ -63,7 +63,7 @@ func DefaultConfig() Config {
 		StartGlobalStateService: defaultStartGlobalStateService,
 		StartTransactionService: defaultStartTransactionService,
 		StartSmesherService:     defaultStartSmesherService,
-		StartDebugService: 		 defaultStartDebugService,
+		StartDebugService:       defaultStartDebugService,
 	}
 }
 

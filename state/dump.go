@@ -27,7 +27,7 @@ import (
 
 // RawDump returns a Dump struct for the receivers state
 func (state *DB) RawDump() types.AccountsState {
-	dump := types.AccountsState {
+	dump := types.AccountsState{
 		Root:     fmt.Sprintf("%x", state.globalTrie.Hash()),
 		Accounts: make(map[string]types.AccountState),
 	}

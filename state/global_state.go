@@ -60,7 +60,7 @@ func (state *DB) Error() error {
 func (state *DB) GetAllAccounts() (*types.AccountsState, error) {
 
 	// Commit state to store so memory accounts are included
-	_, err :=  state.Commit()
+	_, err := state.Commit()
 	if err != nil {
 		return nil, err
 	}

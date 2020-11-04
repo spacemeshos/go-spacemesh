@@ -759,7 +759,6 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 		app.newgrpcAPIService.Start()
 	}
 
-
 	if apiConf.StartNewJSONServer {
 		if app.newgrpcAPIService == nil {
 			// This panics because it should not happen.
