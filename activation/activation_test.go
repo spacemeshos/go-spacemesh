@@ -42,10 +42,11 @@ var (
 	coinbase    = types.HexToAddress("33333")
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
 	chlng       = types.HexToHash32("55555")
-	poetRef     = []byte("66666")
-	block1      = types.NewExistingBlock(0, []byte("11111"))
-	block2      = types.NewExistingBlock(0, []byte("22222"))
-	block3      = types.NewExistingBlock(0, []byte("33333"))
+	poetRef     = types.CalcHash32([]byte("66666"))
+	poetBytes   = []byte("66666")
+	block1      = types.NewExistingBlock(0, []byte("11111"), nil)
+	block2      = types.NewExistingBlock(0, []byte("22222"), nil)
+	block3      = types.NewExistingBlock(0, []byte("33333"), nil)
 
 	defaultView      = []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
 	net              = &NetMock{}
@@ -53,7 +54,7 @@ var (
 	meshProviderMock = &MeshProviderMock{latestLayer: 12}
 	nipstBuilderMock = &NipstBuilderMock{}
 	postProver       = &postProverClientMock{}
-	npst             = NewNIPSTWithChallenge(&chlng, poetRef)
+	npst             = NewNIPSTWithChallenge(&chlng, poetBytes)
 	commitment       = &types.PostProof{
 		Challenge:    []byte(nil),
 		MerkleRoot:   []byte("1"),
@@ -309,7 +310,7 @@ func publishAtx(b *Builder, meshLayer types.LayerID, clockEpoch types.EpochID, b
 		builtNipst = true
 		meshProviderMock.latestLayer = meshLayer.Add(buildNipstLayerDuration)
 		layerClockMock.currentLayer = layerClockMock.currentLayer.Add(buildNipstLayerDuration)
-		return NewNIPSTWithChallenge(challenge, poetRef), nil
+		return NewNIPSTWithChallenge(challenge, poetBytes), nil
 	}
 	layerClockMock.currentLayer = clockEpoch.FirstLayer() + 3
 	err = b.PublishActivationTx()

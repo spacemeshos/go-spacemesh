@@ -1,4 +1,4 @@
-package miner
+package blocks
 
 import (
 	"fmt"
