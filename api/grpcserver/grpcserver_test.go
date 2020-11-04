@@ -94,12 +94,11 @@ var (
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),
 		balances: map[types.Address]*big.Int{
-			addr1: big.NewInt(int64(accountBalance)),
-			addr2 : big.NewInt(int64(accountBalance)),
+			globalTx.Origin(): big.NewInt(int64(accountBalance)),
+			addr1:             big.NewInt(int64(accountBalance)),
 		},
 		nonces: map[types.Address]uint64{
-			addr1: uint64(accountCounter),
-			addr2: uint64(accountCounter),
+			globalTx.Origin(): uint64(accountCounter),
 		},
 	}
 	stateRoot = types.HexToHash32("11111")
@@ -180,11 +179,11 @@ func (t *TxAPIMock) GetAllAccounts() (*types.AccountsState, error) {
 	for address, balance := range t.balances {
 		accounts[address.String()] = types.AccountState{
 			Balance: balance,
-			Nonce: t.nonces[address],
+			Nonce:   t.nonces[address],
 		}
 	}
 	res := &types.AccountsState{
-		Root: "",
+		Root:     "",
 		Accounts: accounts,
 	}
 
@@ -2468,8 +2467,14 @@ func TestDebugService(t *testing.T) {
 			res, err := c.Accounts(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
 			require.Equal(t, 2, len(res.AccountWrapper))
-			require.Equal(t, addr1.Bytes(), res.AccountWrapper[0].AccountId.Address)
-			require.Equal(t, addr2.Bytes(), res.AccountWrapper[1].AccountId.Address)
+
+			// Get the list of addresses and compare them regardless of order
+			var addresses [][]byte
+			for _, a := range res.AccountWrapper {
+				addresses = append(addresses, a.AccountId.Address)
+			}
+			require.Contains(t, addresses, globalTx.Origin().Bytes())
+			require.Contains(t, addresses, addr1.Bytes())
 		}},
 	}
 
@@ -2478,6 +2483,3 @@ func TestDebugService(t *testing.T) {
 		t.Run(tc.name, tc.run)
 	}
 }
-
-
-
