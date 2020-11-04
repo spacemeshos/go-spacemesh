@@ -305,10 +305,6 @@ github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337/go.mod h1:s
 github.com/soheilhy/cmux v0.1.4/go.mod h1:IM3LyeVVIOuxMH7sFAkER9+bJ4dT7Ms6E4xg4kGIyLM=
 github.com/spacemeshos/amcl v0.0.2 h1:YyYF1irv4GkArTe8hzb5/e2B6ReicL2SHeUUsvO3N0c=
 github.com/spacemeshos/amcl v0.0.2/go.mod h1:6/boG2CTNCJ3HBfuyU29Eg1fJxMrXUctpvBiJj1Q69o=
-github.com/spacemeshos/api v1.1.0 h1:U3PKfWGdRGjjqM+FcYFEfB7qGXse7M4KiQRr9NhTdVk=
-github.com/spacemeshos/api v1.1.0/go.mod h1:QheZo+QfghYvSB2E31sBYiJazIIsGT7BcaU2QEFdBvA=
-github.com/spacemeshos/api/release/go v0.0.0-20201008195826-158580f4a50c h1:03Q0lzDCjJJp+HjQjj9vp1Y32NeDU4L0+mFTpJsqczA=
-github.com/spacemeshos/api/release/go v0.0.0-20201008195826-158580f4a50c/go.mod h1:kNY4cuAimIxpUbMLPZSgU8jl7Zbv5ohQrLn87ybl0QI=
 github.com/spacemeshos/api/release/go v0.0.0-20201103002846-7d0dfed55cc1 h1:7GoyccHS/hWGM2wryRzNi5LEymBy5FbGvfRSx3wXjd8=
 github.com/spacemeshos/api/release/go v0.0.0-20201103002846-7d0dfed55cc1/go.mod h1:kNY4cuAimIxpUbMLPZSgU8jl7Zbv5ohQrLn87ybl0QI=
 github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1 h1:INBIhbR/39yXEN8WVNfiGZehiKvkML+yrJfFuIwrmbU=
