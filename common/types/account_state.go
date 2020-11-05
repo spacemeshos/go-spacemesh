@@ -10,8 +10,8 @@ type AccountState struct {
 	Balance *big.Int `json:"balance"`
 }
 
-// AccountsState is a struct used to dump an entire state root
-type AccountsState struct {
+// MultipleAccountsState is a struct used to dump an entire state root
+type MultipleAccountsState struct {
 	Root     string                  `json:"root"`
 	Accounts map[string]AccountState `json:"accounts"` // key is in hex string format e.g. 0x12...
 }

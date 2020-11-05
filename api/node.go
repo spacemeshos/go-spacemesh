@@ -86,7 +86,7 @@ type TxAPI interface {
 	GetLayerStateRoot(types.LayerID) (types.Hash32, error)
 	GetBalance(types.Address) uint64
 	GetNonce(types.Address) uint64
-	GetAllAccounts() (*types.AccountsState, error)
+	GetAllAccounts() (*types.MultipleAccountsState, error)
 }
 
 // PeerCounter is an api to get amount of connected peers

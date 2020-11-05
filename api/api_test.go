@@ -114,7 +114,7 @@ type TxAPIMock struct {
 	err          error
 }
 
-func (t *TxAPIMock) GetAllAccounts() (*types.AccountsState, error) {
+func (t *TxAPIMock) GetAllAccounts() (*types.MultipleAccountsState, error) {
 	panic("implement me")
 }
 

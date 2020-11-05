@@ -57,7 +57,7 @@ func (state *DB) Error() error {
 }
 
 // GetAllAccounts returns a dump of all accounts in global state
-func (state *DB) GetAllAccounts() (*types.AccountsState, error) {
+func (state *DB) GetAllAccounts() (*types.MultipleAccountsState, error) {
 	// Commit state to store so accounts in memory are included
 	if _, err := state.Commit(); err != nil {
 		return nil, err

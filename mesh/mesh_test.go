@@ -98,7 +98,7 @@ func (MockState) AddressExists(types.Address) bool {
 	return true
 }
 
-func (MockState) GetAllAccounts() (*types.AccountsState, error) {
+func (MockState) GetAllAccounts() (*types.MultipleAccountsState, error) {
 	panic("implement me")
 }
 

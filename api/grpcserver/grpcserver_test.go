@@ -173,7 +173,7 @@ type TxAPIMock struct {
 	err          error
 }
 
-func (t *TxAPIMock) GetAllAccounts() (res *types.AccountsState, err error) {
+func (t *TxAPIMock) GetAllAccounts() (res *types.MultipleAccountsState, err error) {
 	accounts := make(map[string]types.AccountState)
 	for address, balance := range t.balances {
 		accounts[address.String()] = types.AccountState{
@@ -181,7 +181,7 @@ func (t *TxAPIMock) GetAllAccounts() (res *types.AccountsState, err error) {
 			Nonce:   t.nonces[address],
 		}
 	}
-	res = &types.AccountsState{
+	res = &types.MultipleAccountsState{
 		Root:     "", // DebugService.Accounts does not return a state root
 		Accounts: accounts,
 	}

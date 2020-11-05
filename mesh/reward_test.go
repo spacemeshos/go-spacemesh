@@ -18,7 +18,7 @@ type MockMapState struct {
 	TotalReward int64
 }
 
-func (s *MockMapState) GetAllAccounts() (*types.AccountsState, error) {
+func (s *MockMapState) GetAllAccounts() (*types.MultipleAccountsState, error) {
 	panic("implement me")
 }
 
