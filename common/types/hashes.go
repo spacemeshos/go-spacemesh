@@ -138,6 +138,16 @@ func CalcHash32(data []byte) Hash32 {
 	return sha256.Sum256(data)
 }
 
+// CalcHash32 returns the 32-byte sha256 sum of the given data aggregated with previous hash h
+func CalcAggregateHash32(h Hash32, data []byte) Hash32 {
+	hash := sha256.New()
+	hash.Write(h.Bytes())
+	hash.Write(data) // this never returns an error: https://golang.org/pkg/hash/#Hash
+	var res Hash32
+	hash.Sum(res[:0])
+	return res
+}
+
 // CalcATXHash32 returns the 32-byte sha256 sum of serialization of the given ATX.
 func CalcATXHash32(atx *ActivationTx) Hash32 {
 	bytes, err := InterfaceToBytes(&atx.ActivationTxHeader)
