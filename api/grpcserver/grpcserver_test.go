@@ -173,8 +173,7 @@ type TxAPIMock struct {
 	err          error
 }
 
-func (t *TxAPIMock) GetAllAccounts() (*types.AccountsState, error) {
-
+func (t *TxAPIMock) GetAllAccounts() (res *types.AccountsState, err error) {
 	accounts := make(map[string]types.AccountState)
 	for address, balance := range t.balances {
 		accounts[address.String()] = types.AccountState{
@@ -182,12 +181,11 @@ func (t *TxAPIMock) GetAllAccounts() (*types.AccountsState, error) {
 			Nonce:   t.nonces[address],
 		}
 	}
-	res := &types.AccountsState{
-		Root:     "",
+	res = &types.AccountsState{
+		Root:     "", // DebugService.Accounts does not return a state root
 		Accounts: accounts,
 	}
-
-	return res, nil
+	return
 }
 
 func (t *TxAPIMock) GetStateRoot() types.Hash32 {
@@ -2463,7 +2461,7 @@ func TestDebugService(t *testing.T) {
 		name string
 		run  func(*testing.T)
 	}{
-		{"GetAccounts", func(t *testing.T) {
+		{"Accounts", func(t *testing.T) {
 			res, err := c.Accounts(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
 			require.Equal(t, 2, len(res.AccountWrapper))

@@ -27,6 +27,8 @@ import (
 
 // RawDump returns a Dump struct for the receivers state
 func (state *DB) RawDump() types.AccountsState {
+	// Reading the state root and accounts data here is concurrency safe since this
+	// method should only be called after a lock has been acquired on state
 	dump := types.AccountsState{
 		Root:     fmt.Sprintf("%x", state.globalTrie.Hash()),
 		Accounts: make(map[string]types.AccountState),

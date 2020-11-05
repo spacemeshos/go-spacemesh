@@ -749,7 +749,6 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 	if apiConf.StartTransactionService {
 		registerService(grpcserver.NewTransactionService(net, app.mesh, app.txPool, app.syncer))
 	}
-
 	if apiConf.StartDebugService {
 		registerService(grpcserver.NewDebugService(app.mesh, app.txPool))
 	}
