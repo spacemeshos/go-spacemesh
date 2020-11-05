@@ -138,7 +138,7 @@ func CalcHash32(data []byte) Hash32 {
 	return sha256.Sum256(data)
 }
 
-// CalcHash32 returns the 32-byte sha256 sum of the given data aggregated with previous hash h
+// CalcAggregateHash32 returns the 32-byte sha256 sum of the given data aggregated with previous hash h
 func CalcAggregateHash32(h Hash32, data []byte) Hash32 {
 	hash := sha256.New()
 	hash.Write(h.Bytes())
