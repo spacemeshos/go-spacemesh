@@ -58,13 +58,16 @@ func (state *DB) Error() error {
 
 // GetAllAccounts returns a dump of all accounts in global state
 func (state *DB) GetAllAccounts() (*types.AccountsState, error) {
-
-	// Commit state to store so memory accounts are included
-	_, err := state.Commit()
-	if err != nil {
+	// Commit state to store so accounts in memory are included
+	if _, err := state.Commit(); err != nil {
 		return nil, err
 	}
 
+	// We cannot lock before the call to Commit since that also acquires a lock
+	// But we need to lock here to ensure consistency between the state root and
+	// the account data
+	state.lock.Lock()
+	defer state.lock.Unlock()
 	accounts := state.RawDump()
 	return &accounts, nil
 }
