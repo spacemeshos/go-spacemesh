@@ -10,6 +10,9 @@ LOGSTASH_CONF_DIR = './tests/elk/logstash/'
 
 ES_USER_LOCAL = "elastic"
 ES_PASS_LOCAL = "gavradon"
+MAIN_ES_URL = "kibana.spacemesh.io"
+# MAIN_ES_URL = "34.105.49.21:9200"
+
 
 BOOTSTRAP_PORT = 7513
 ORACLE_SERVER_PORT = 3030

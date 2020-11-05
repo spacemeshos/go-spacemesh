@@ -83,7 +83,7 @@ spec:
               cpu: 100m
               memory: 100Mi
           env:
-            - name: POD_NAMESPACE
+            - name: POD_akh36
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
@@ -100,7 +100,7 @@ spec:
               readOnly: true
               subPath: filebeat.yml
             - name: data
-              mountPath: /usr/share/filebeat/data
+              mountPath: /usr/share/filebeat/data-akh36
             - name: varlibdockercontainers
               mountPath: /var/lib/docker/containers
               readOnly: true

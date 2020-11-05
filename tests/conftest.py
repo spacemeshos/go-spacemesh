@@ -9,7 +9,7 @@ import string
 import subprocess
 
 from tests.deployment import add_elastic_cluster, add_filebeat_cluster, add_kibana_cluster, add_logstash_cluster, filebeat_teardown
-from tests.es_dump import dump_es, restore_es
+from tests.es_dump import es_reindex
 from tests import pod
 from tests import config as tests_conf
 from tests.context import Context
@@ -260,5 +260,4 @@ def add_elk(init_session):
     add_kibana_cluster(init_session)
     yield
     filebeat_teardown(init_session)
-    dump_es(init_session, filebeat_index_date)
-    restore_es(init_session, filebeat_index_date)
+    es_reindex(init_session, filebeat_index_date)

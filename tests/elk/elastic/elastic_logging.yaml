@@ -183,6 +183,8 @@ spec:
               value: "true"
             - name: xpack.monitoring.collection.enabled
               value: "true"
+            - name: reindex.remote.whitelist
+              value: "*:*"
           volumeMounts:
             - name: "volume"
               mountPath: /usr/share/elasticsearch/data

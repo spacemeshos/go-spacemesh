@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 import os
 import time
@@ -101,9 +102,9 @@ def filebeat_teardown(namespace):
     crb_name = f"filebeat-cluster-role-binding-{namespace}"
     try:
         k8s_client.delete_cluster_role_binding(crb_name)
-        print(f"successfully deleted: {crb_name}")
+        print(f"\nsuccessfully deleted: {crb_name}")
     except Exception as e:
-        print(f"filebeat teardown failed, manually delete {crb_name}")
+        print(f"\nfilebeat teardown failed, manually delete {crb_name}")
 
 
 def add_elastic_cluster(namespace):
@@ -134,14 +135,10 @@ def add_deployment_dir(namespace, dir_path):
 
     for filename in dep_lst:
         # replace 'NAMESPACE' with the actual namespace if exists
-        replace_phrase_in_file(os.path.join(dir_path, filename), "(?<!_)NAMESPACE", namespace)
+        replace_phrase_in_file(os.path.join(dir_path, filename), "NAMESPACE", namespace)
         print(f"applying file: {filename}")
         with open(os.path.join(dir_path, filename)) as f:
             dep = yaml.safe_load(f)
-
-            if 'metadata' in dep:
-                dep['metadata']['namespace'] = namespace
-
             if dep['kind'] == 'StatefulSet':
                 k8s_client = client.AppsV1Api()
                 k8s_client.create_namespaced_stateful_set(body=dep, namespace=namespace)

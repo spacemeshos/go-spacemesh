@@ -8,7 +8,7 @@ import subprocess
 import time
 
 import tests.config as conf
-from tests.deployment import create_deployment
+import tests.deployment as deployment
 from tests.misc import ContainerSpec, CoreV1ApiClient
 from tests.statefulset import create_statefulset
 import tests.queries as q
@@ -185,7 +185,7 @@ def get_conf(bs_info, client_config, genesis_time, setup_oracle=None, setup_poet
 def choose_k8s_object_create(config, deployment_file, statefulset_file):
     dep_type = 'deployment' if 'deployment_type' not in config else config['deployment_type']
     if dep_type == 'deployment':
-        return deployment_file, create_deployment
+        return deployment_file, deployment.create_deployment
     elif dep_type == 'statefulset':
         # StatefulSets are intended to be used with stateful applications and distributed systems.
         # Pods in a StatefulSet have a unique ordinal index and a stable network identity.
@@ -206,20 +206,24 @@ def wait_genesis(genesis_time, genesis_delta):
         time.sleep(delta_from_genesis)
 
 
-def exec_wait(cmd, retry=3, interval=1):
+def exec_wait(cmd, retry=1, interval=1):
     print(f"\nrunning: {cmd}")
     ret_code = 0
     try:
         process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
-        process.wait()
-        ret_code = process.returncode
+        while True:
+            line = process.stdout.readline()
+            if not line and process.poll() is not None:
+                break
+            print(line.strip())
+            time.sleep(0.5)
+        ret_code = process.poll()
     except Exception as e:
         raise Exception(f"failed running: \"{cmd}\",\nreturn code: {ret_code},\nexception: {e}")
 
     # if return code != 0 and retry !=0 run the same command again
     if ret_code and ret_code != "0" and retry:
-        print(f"return code: {ret_code}")
-        print(f"retrying (retries left: {retry})")
+        print(f"failed with return code: {ret_code}, retrying (retries left: {retry})")
         time.sleep(interval)
         exec_wait(cmd, retry-1)
     elif ret_code is not None:
