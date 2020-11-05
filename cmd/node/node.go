@@ -750,7 +750,7 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 		registerService(grpcserver.NewTransactionService(net, app.mesh, app.txPool, app.syncer))
 	}
 	if apiConf.StartDebugService {
-		registerService(grpcserver.NewDebugService(app.mesh, app.txPool))
+		registerService(grpcserver.NewDebugService(app.mesh))
 	}
 
 	// Now that the services are registered, start the server.

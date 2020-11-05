@@ -13,8 +13,7 @@ import (
 
 // DebugService exposes global state data, output from the STF
 type DebugService struct {
-	Mesh    api.TxAPI
-	Mempool api.MempoolAPI
+	Mesh api.TxAPI
 }
 
 // RegisterService registers this service with a grpc server instance
@@ -23,10 +22,9 @@ func (d DebugService) RegisterService(server *Server) {
 }
 
 // NewDebugService creates a new grpc service using config data.
-func NewDebugService(tx api.TxAPI, mempool api.MempoolAPI) *DebugService {
+func NewDebugService(tx api.TxAPI) *DebugService {
 	return &DebugService{
-		Mesh:    tx,
-		Mempool: mempool,
+		Mesh: tx,
 	}
 }
 

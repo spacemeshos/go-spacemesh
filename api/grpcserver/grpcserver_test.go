@@ -2441,7 +2441,7 @@ func TestJsonApi(t *testing.T) {
 //////
 
 func TestDebugService(t *testing.T) {
-	svc := NewDebugService(txAPI, mempoolMock)
+	svc := NewDebugService(txAPI)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
