@@ -734,23 +734,26 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 	}
 
 	// Register the requested services one by one
-	if apiConf.StartNodeService {
-		registerService(grpcserver.NewNodeService(net, app.mesh, app.clock, app.syncer))
+	if apiConf.StartDebugService {
+		registerService(grpcserver.NewDebugService(app.mesh))
+	}
+	if apiConf.StartGatewayService {
+		registerService(grpcserver.NewGatewayService(net))
+	}
+	if apiConf.StartGlobalStateService {
+		registerService(grpcserver.NewGlobalStateService(net, app.mesh, app.clock, app.syncer, app.txPool))
 	}
 	if apiConf.StartMeshService {
 		registerService(grpcserver.NewMeshService(app.mesh, app.txPool, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
 	}
-	if apiConf.StartGlobalStateService {
-		registerService(grpcserver.NewGlobalStateService(net, app.mesh, app.clock, app.syncer, app.txPool))
+	if apiConf.StartNodeService {
+		registerService(grpcserver.NewNodeService(net, app.mesh, app.clock, app.syncer))
 	}
 	if apiConf.StartSmesherService {
 		registerService(grpcserver.NewSmesherService(app.atxBuilder))
 	}
 	if apiConf.StartTransactionService {
 		registerService(grpcserver.NewTransactionService(net, app.mesh, app.txPool, app.syncer))
-	}
-	if apiConf.StartDebugService {
-		registerService(grpcserver.NewDebugService(app.mesh))
 	}
 
 	// Now that the services are registered, start the server.
@@ -767,12 +770,13 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 		}
 		app.newjsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.NewJSONServerPort, apiConf.NewGrpcServerPort)
 		app.newjsonAPIService.StartService(
-			apiConf.StartNodeService,
-			apiConf.StartMeshService,
+			apiConf.StartDebugService,
+			apiConf.StartGatewayService,
 			apiConf.StartGlobalStateService,
+			apiConf.StartMeshService,
+			apiConf.StartNodeService,
 			apiConf.StartSmesherService,
 			apiConf.StartTransactionService,
-			apiConf.StartDebugService,
 		)
 	}
 }
