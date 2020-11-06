@@ -423,8 +423,12 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 
 	// start gRPC and json servers
 	grpcService.Start()
-	jsonService.StartService(cfg.StartNodeService, cfg.StartMeshService, cfg.StartGlobalStateService,
-		cfg.StartSmesherService, cfg.StartTransactionService)
+	jsonService.StartService(cfg.StartGatewayService,
+		cfg.StartGlobalStateService,
+		cfg.StartMeshService,
+		cfg.StartNodeService,
+		cfg.StartSmesherService,
+		cfg.StartTransactionService)
 	time.Sleep(3 * time.Second) // wait for server to be ready (critical on CI)
 
 	return func() {
@@ -2419,4 +2423,37 @@ func TestJsonApi(t *testing.T) {
 	var msg2 pb.GenesisTimeResponse
 	require.NoError(t, jsonpb.UnmarshalString(respBody2, &msg2))
 	require.Equal(t, uint64(genTime.GetGenesisTime().Unix()), msg2.Unixtime.Value)
+}
+
+func TestGatewayService(t *testing.T) {
+	svc := NewGatewayService(&networkMock)
+	shutDown := launchServer(t, svc)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+
+	defer func() { require.NoError(t, conn.Close()) }()
+	c := pb.NewGatewayServiceClient(conn)
+
+	// This should fail
+	poetMessage := []byte("")
+	req := &pb.BroadcastPoetRequest{Data: poetMessage}
+	res, err := c.BroadcastPoet(context.Background(), req)
+	require.Nil(t, res, "expected request to fail")
+	require.Error(t, err, "expected request to fail")
+
+	// This should work. Any nonzero byte string should work as we don't perform any additional validation.
+	poetMessage = []byte("123")
+	req.Data = poetMessage
+	res, err = c.BroadcastPoet(context.Background(), req)
+	require.NotNil(t, res, "expected request to succeed")
+	require.Equal(t, int32(code.Code_OK), res.Status.Code)
+	require.NoError(t, err, "expected request to succeed")
+	require.Equal(t, networkMock.GetBroadcast(), poetMessage,
+		"expected network mock to broadcast input poet message")
 }
