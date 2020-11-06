@@ -319,10 +319,11 @@ def test_broadcast_unknown_protocol(setup_bootstrap, setup_clients, add_curl):
 # Different client version on bootstrap:
 # Deploy X peers with client version A
 # Wait for bootstrap
-# Deploy new peers with client version B
+# Deploy new "v2" peers with client version B<A
 # Validate that the new nodes failed to bootstrap
 # NOTE: this test is run in the end because it affects the network structure,
 # it creates an additional pod with a "v2" client
+# ALSO NOTE: The "v2" client is actually running an _earlier_ client version, this is confusing
 def test_diff_client_ver(setup_bootstrap, setup_clients, add_curl, add_clients):
     num_of_v2_clients = 2
     v2_version = "v2"
