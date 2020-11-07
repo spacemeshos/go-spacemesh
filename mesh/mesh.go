@@ -62,6 +62,7 @@ type txProcessor interface {
 	ValidateAndAddTxToPool(tx *types.Transaction) error
 	GetBalance(addr types.Address) uint64
 	GetNonce(addr types.Address) uint64
+	GetAllAccounts() (*types.MultipleAccountsState, error)
 }
 
 type txMemPool interface {

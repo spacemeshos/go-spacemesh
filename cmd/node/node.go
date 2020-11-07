@@ -734,6 +734,9 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 	}
 
 	// Register the requested services one by one
+	if apiConf.StartDebugService {
+		registerService(grpcserver.NewDebugService(app.mesh))
+	}
 	if apiConf.StartGatewayService {
 		registerService(grpcserver.NewGatewayService(net))
 	}
@@ -767,6 +770,7 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 		}
 		app.newjsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.NewJSONServerPort, apiConf.NewGrpcServerPort)
 		app.newjsonAPIService.StartService(
+			apiConf.StartDebugService,
 			apiConf.StartGatewayService,
 			apiConf.StartGlobalStateService,
 			apiConf.StartMeshService,
