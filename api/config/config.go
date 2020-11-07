@@ -14,6 +14,7 @@ const (
 	defaultStartNewJSONServer      = false
 	defaultJSONServerPort          = 9090
 	defaultNewJSONServerPort       = 9093
+	defaultStartDebugService       = false
 	defaultStartGatewayService     = false
 	defaultStartGlobalStateService = false
 	defaultStartMeshService        = false
@@ -34,6 +35,7 @@ type Config struct {
 	JSONServerPort         int      `mapstructure:"json-port"`
 	NewJSONServerPort      int      `mapstructure:"json-port-new"`
 	// no direct command line flags for these
+	StartDebugService       bool
 	StartGatewayService     bool
 	StartGlobalStateService bool
 	StartMeshService        bool
@@ -58,6 +60,7 @@ func DefaultConfig() Config {
 		StartNewJSONServer:      defaultStartNewJSONServer,
 		JSONServerPort:          defaultJSONServerPort,
 		NewJSONServerPort:       defaultNewJSONServerPort,
+		StartDebugService:       defaultStartDebugService,
 		StartGatewayService:     defaultStartGatewayService,
 		StartGlobalStateService: defaultStartGlobalStateService,
 		StartMeshService:        defaultStartMeshService,
@@ -72,6 +75,8 @@ func (s *Config) ParseServicesList() error {
 	// Make sure all enabled GRPC services are known
 	for _, svc := range s.StartGrpcServices {
 		switch svc {
+		case "debug":
+			s.StartDebugService = true
 		case "gateway":
 			s.StartGatewayService = true
 		case "globalstate":
@@ -92,12 +97,15 @@ func (s *Config) ParseServicesList() error {
 	// If JSON gateway server is enabled, make sure at least one
 	// GRPC service is also enabled
 	if s.StartNewJSONServer &&
+		!s.StartDebugService &&
 		!s.StartGatewayService &&
 		!s.StartGlobalStateService &&
 		!s.StartMeshService &&
 		!s.StartNodeService &&
 		!s.StartSmesherService &&
-		!s.StartTransactionService {
+		!s.StartTransactionService &&
+		// 'true' keeps the above clean
+		true {
 		return errors.New("must enable at least one GRPC service along with JSON gateway service")
 	}
 
