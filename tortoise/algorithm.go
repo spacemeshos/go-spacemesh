@@ -9,7 +9,7 @@ import (
 // Tortoise represents an instance of a vote counting algorithm
 type Tortoise interface {
 	HandleLateBlock(b *types.Block) (types.LayerID, types.LayerID)
-	HandleIncomingLayer(ll *types.Layer) (types.LayerID, types.LayerID)
+	HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID)
 	LatestComplete() types.LayerID
 	Persist() error
 }
