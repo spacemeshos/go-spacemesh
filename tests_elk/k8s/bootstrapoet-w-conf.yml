@@ -1,0 +1,46 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  generateName: sm-bootstrapoet-
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        name: bootstrapoet
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '2020'
+        prometheus.io/path: '/metrics'
+    spec:
+      containers:
+      - name: bootstrap
+        image: spacemeshos/go-spacemesh:develop
+        imagePullPolicy: Always
+        args: ['--config', '/etc/config/config.toml', '--oracle_server', 'http://10.40.5.12:3030', '--grpc-server', '--test-mode', '--metrics', '--start-mining', '--metrics-port', '2020', '--pprof-server', '--poet-server', '127.0.0.1:80']
+        resources:
+          requests:
+            memory: "512M"
+            cpu: "0.5"
+          limits:
+            memory: "2048M"
+            cpu: "1"
+        ports:
+        - containerPort: 9091
+        - containerPort: 9999
+      - name: poet
+        image: spacemeshos/poet:develop
+        imagePullPolicy: Always
+        args: ['--rpclisten', '0.0.0.0:50002', '--restlisten', '0.0.0.0:80', "--n", "19"]
+        resources:
+          requests:
+            memory: "512M"
+            cpu: "1"
+          limits:
+            memory: "2048M"
+            cpu: "2"
+        ports:
+          - containerPort: 80
+      nodeSelector:
+        role: tests

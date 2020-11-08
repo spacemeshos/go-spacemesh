@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-files
+  labels:
+    app: logstash
+    chart: logstash
+    heritage: Helm
+data:
+  logstash.yml: |
+    http.host: "0.0.0.0"
+    path.config: /usr/share/logstash/pipeline
+    #xpack.monitoring.enabled: true
+    #xpack.monitoring.elasticsearch.hosts: [ "http://elasticsearch-client.default.svc.cluster.local:9200" ]
+    #xpack.monitoring.elasticsearch.username: "elastic"
+    #xpack.monitoring.elasticsearch.password: "gavradon"
+    #xpack.management.elasticsearch.username: "elastic"
+    #xpack.management.elasticsearch.password: "gavradon"
+    config.reload.automatic: false
+
+  jvm.options: |
+    --add-opens=java.base/java.lang=ALL-UNNAMED
+    --add-opens=java.base/java.security=ALL-UNNAMED
+    --add-opens=java.base/java.util=ALL-UNNAMED
+    --add-opens=java.base/java.security.cert=ALL-UNNAMED
+    --add-opens=java.base/java.util.zip=ALL-UNNAMED
+    --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+    --add-opens=java.base/java.util.regex=ALL-UNNAMED
+    --add-opens=java.base/java.net=ALL-UNNAMED
+    --add-opens=java.base/java.io=ALL-UNNAMED
+    --add-opens=java.base/java.lang=ALL-UNNAMED
+    --add-opens=java.base/javax.crypto=ALL-UNNAMED
+    --add-opens=java.management/sun.management=ALL-UNNAMED
+    --add-opens=java.base/java.io=ALL-UNNAMED
+    --add-opens=java.base/java.nio.channels=ALL-UNNAMED
+    --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
+    -XX:+UseConcMarkSweepGC
+    -XX:CMSInitiatingOccupancyFraction=75
+    -XX:+UseCMSInitiatingOccupancyOnly
+    -Djava.awt.headless=true
+    -Djruby.compile.invokedynamic=true
+    -Djruby.jit.threshold=0
+    -Djruby.regexp.interruptible=true
+    -Dlog4j2.isThreadContextMapInheritable=true
+
+binaryData:

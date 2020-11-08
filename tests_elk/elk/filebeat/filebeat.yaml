@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: filebeat
+  labels:
+    app: "filebeat"
+    chart: "filebeat"
+    heritage: "Helm"
+spec:
+  selector:
+    matchLabels:
+      app: "filebeat"
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+
+        configChecksum: 1594c85ba80039483c8614a11ce63089e3d102596a94f6189fe9a9704237685
+      name: "filebeat"
+      labels:
+        app: "filebeat"
+        chart: "filebeat"
+        heritage: "Helm"
+    spec:
+      serviceAccountName: filebeat
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: filebeat-config
+          configMap:
+            defaultMode: 0600
+            name: filebeat-config
+        - name: data
+          hostPath:
+            path: /var/lib/filebeat-default-data
+            type: DirectoryOrCreate
+        - name: varlibdockercontainers
+          hostPath:
+            path: /var/lib/docker/containers
+        - name: varlog
+          hostPath:
+            path: /var/log
+        - name: varrundockersock
+          hostPath:
+            path: /var/run/docker.sock
+      containers:
+        - name: "filebeat"
+          image: "docker.elastic.co/beats/filebeat:7.9.2"
+          imagePullPolicy: "IfNotPresent"
+          args:
+            - "-e"
+            - "-E"
+            - "http.enabled=true"
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - |
+                  #!/usr/bin/env bash -e
+                  curl --fail 127.0.0.1:5066
+            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - |
+                  #!/usr/bin/env bash -e
+                  filebeat test output
+            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 200Mi
+            requests:
+              cpu: 100m
+              memory: 100Mi
+          env:
+            - name: POD_akh36
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          securityContext:
+            privileged: false
+            runAsUser: 0
+          volumeMounts:
+            - name: filebeat-config
+              mountPath: /usr/share/filebeat/filebeat.yml
+              readOnly: true
+              subPath: filebeat.yml
+            - name: data
+              mountPath: /usr/share/filebeat/data-akh36
+            - name: varlibdockercontainers
+              mountPath: /var/lib/docker/containers
+              readOnly: true
+            - name: varlog
+              mountPath: /var/log
+              readOnly: true
+            # Necessary when using autodiscovery; avoid mounting it otherwise
+            # See: https://www.elastic.co/guide/en/beats/filebeat/master/configuration-autodiscover.html
+            - name: varrundockersock
+              mountPath: /var/run/docker.sock
+              readOnly: true

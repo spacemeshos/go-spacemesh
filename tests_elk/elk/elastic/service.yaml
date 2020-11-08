@@ -1,0 +1,23 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: elasticsearch-master
+  labels:
+    heritage: "Helm"
+    chart: "elasticsearch"
+    app: "elasticsearch-master"
+  annotations:
+    {}
+    #cloud.google.com/load-balancer-type: "Internal"
+spec:
+  type: LoadBalancer
+  selector:
+    chart: "elasticsearch"
+    app: "elasticsearch-master"
+  ports:
+    - name: http
+      protocol: TCP
+      port: 9200
+    - name: transport
+      protocol: TCP
+      port: 9300
