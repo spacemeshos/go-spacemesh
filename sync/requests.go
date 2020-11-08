@@ -238,6 +238,35 @@ func poetReqFactory(poetProofRef []byte) requestFactory {
 	}
 }
 
+func inputVectorReqFactory(lyreq []byte) requestFactory {
+	return func(s networker, peer p2ppeers.Peer) (chan interface{}, error) {
+		ch := make(chan interface{}, 1)
+		resHandler := func(msg []byte) {
+			s.Info("handle inputvec response")
+			defer close(ch)
+			if len(msg) == 0 || msg == nil {
+				s.Warning("peer responded with nil to inputvec request %v", peer, lyreq)
+				return
+			}
+
+			var valid []types.BlockID
+			err := types.BytesToInterface(msg, &valid)
+			if err != nil {
+				s.Error("could not unmarshal PoET proof message: %v", err)
+				return
+			}
+
+			ch <- valid
+		}
+
+		if err := s.SendRequest(inputVecMessage, lyreq, peer, resHandler, func(err error) {}); err != nil {
+			return nil, err
+		}
+
+		return ch, nil
+	}
+}
+
 func validatePoetRef(proofMessage types.PoetProofMessage, poetProofRef []byte) (bool, error) {
 	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
 	if err != nil {

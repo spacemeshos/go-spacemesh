@@ -128,8 +128,15 @@ type BlockHeader struct {
 	Data             []byte
 	Coin             bool
 	Timestamp        int64
-	BlockVotes       []BlockID
-	ViewEdges        []BlockID
+
+	BaseBlock BlockID
+
+	AgainstDiff []BlockID
+	ForDiff     []BlockID
+	NeutralDiff []BlockID
+
+	BlockVotes []BlockID
+	ViewEdges  []BlockID
 }
 
 // Layer returns the block's LayerID.
@@ -187,10 +194,11 @@ func (b *Block) Fields() []log.LoggableField {
 	return []log.LoggableField{
 		b.ID(),
 		b.LayerIndex,
-		b.LayerIndex.GetEpoch(),
-		log.FieldNamed("miner_id", b.MinerID()),
-		log.Int("view_edges", len(b.ViewEdges)),
-		log.Int("vote_count", len(b.BlockVotes)),
+		b.MinerID(),
+		log.String("base_block", b.BaseBlock.String()),
+		log.Int("supports", len(b.ForDiff)),
+		log.Int("againsts", len(b.AgainstDiff)),
+		log.Int("abstains", len(b.NeutralDiff)),
 		b.ATXID,
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
 		log.FieldNamed("ref_block", b.RefBlock),

@@ -58,7 +58,7 @@ func (m *MeshValidatorMock) LatestComplete() types.LayerID {
 	panic("implement me")
 }
 
-func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
+func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer, inputVector []types.BlockID) (types.LayerID, types.LayerID) {
 	return layer.Index() - 1, layer.Index()
 }
 func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
@@ -237,11 +237,11 @@ func TestLayers_AddWrongLayer(t *testing.T) {
 	assert.NoError(t, err)
 	err = layers.SaveContextualValidity(block1.ID(), true)
 	assert.NoError(t, err)
-	layers.ValidateLayer(l1)
+	layers.ValidateLayer(l1, nil)
 	l2 := types.NewExistingLayer(2, []*types.Block{block2})
 	err = layers.AddBlock(block2)
 	assert.NoError(t, err)
-	layers.ValidateLayer(l2)
+	layers.ValidateLayer(l2, nil)
 	err = layers.AddBlock(block3)
 	assert.NoError(t, err)
 	_, err = layers.GetProcessedLayer(1)
@@ -261,7 +261,7 @@ func TestLayers_GetLayer(t *testing.T) {
 	l1 := types.NewExistingLayer(1, []*types.Block{block1})
 	err := layers.AddBlock(block1)
 	assert.NoError(t, err)
-	layers.ValidateLayer(l1)
+	layers.ValidateLayer(l1, nil)
 	l, err := layers.GetProcessedLayer(0)
 	err = layers.AddBlock(block2)
 	assert.NoError(t, err)

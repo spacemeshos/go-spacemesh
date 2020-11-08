@@ -612,10 +612,10 @@ func syncTest(dpType string, t *testing.T) {
 	block12 := types.NewExistingBlock(6, []byte(rand.String(8)), []types.TransactionID{tx7.ID(), tx8.ID()})
 	block10.Signature = signer.Sign(block10.Bytes())
 
-	syncObj1.ValidateLayer(mesh.GenesisLayer())
-	syncObj2.ValidateLayer(mesh.GenesisLayer())
-	syncObj3.ValidateLayer(mesh.GenesisLayer())
-	syncObj4.ValidateLayer(mesh.GenesisLayer())
+	syncObj1.ValidateLayer(mesh.GenesisLayer(), types.BlockIDs(mesh.GenesisLayer().Blocks()))
+	syncObj2.ValidateLayer(mesh.GenesisLayer(), types.BlockIDs(mesh.GenesisLayer().Blocks()))
+	syncObj3.ValidateLayer(mesh.GenesisLayer(), types.BlockIDs(mesh.GenesisLayer().Blocks()))
+	syncObj4.ValidateLayer(mesh.GenesisLayer(), types.BlockIDs(mesh.GenesisLayer().Blocks()))
 
 	addTxsToPool(syncObj1.txpool, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
 	syncObj1.AddBlock(block2)
@@ -1163,7 +1163,7 @@ func (m *mockLayerValidator) HandleLateBlock(bl *types.Block) {
 	panic("implement me")
 }
 
-func (m *mockLayerValidator) ValidateLayer(lyr *types.Layer) {
+func (m *mockLayerValidator) ValidateLayer(lyr *types.Layer, iv []types.BlockID) {
 	log.Info("mock Validate layer %d", lyr.Index())
 	m.countValidate++
 	m.processedLayer = lyr.Index()
@@ -1372,7 +1372,7 @@ func (m *mockTimedValidator) SetProcessedLayer(lyr types.LayerID) {
 	panic("implement me")
 }
 
-func (m *mockTimedValidator) ValidateLayer(lyr *types.Layer) {
+func (m *mockTimedValidator) ValidateLayer(lyr *types.Layer, iv []types.BlockID) {
 	log.Info("Validate layer %d", lyr.Index())
 	m.calls++
 	time.Sleep(m.delay)

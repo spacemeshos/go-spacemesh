@@ -105,7 +105,7 @@ func (vq *blockQueue) handleBlock(id types.Hash32, block *types.Block) {
 // if there are unknown blocks in the view they are added to the fetch queue
 func (vq *blockQueue) handleBlockDependencies(blk *types.Block) {
 	vq.With().Debug("handle dependencies", blk.ID())
-	res, err := vq.addDependencies(blk.ID(), blk.ViewEdges, vq.finishBlockCallback(blk))
+	res, err := vq.addDependencies(blk.ID(), append(append(blk.ForDiff, blk.NeutralDiff...), blk.AgainstDiff...), vq.finishBlockCallback(blk))
 
 	if err != nil {
 		vq.updateDependencies(blk.Hash32(), false)

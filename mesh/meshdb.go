@@ -25,19 +25,21 @@ type layerMutex struct {
 // DB represents a mesh database instance
 type DB struct {
 	log.Log
-	blockCache         blockCache
-	layers             database.Database
-	blocks             database.Database
-	transactions       database.Database
-	contextualValidity database.Database
-	general            database.Database
-	unappliedTxs       database.Database
-	unappliedTxsMutex  sync.Mutex
-	blockMutex         sync.RWMutex
-	orphanBlocks       map[types.LayerID]map[types.BlockID]struct{}
-	layerMutex         map[types.LayerID]*layerMutex
-	lhMutex            sync.Mutex
-	exit               chan struct{}
+	blockCache            blockCache
+	layers                database.Database
+	blocks                database.Database
+	transactions          database.Database
+	contextualValidity    database.Database
+	general               database.Database
+	unappliedTxs          database.Database
+	inputVector           database.Database
+	unappliedTxsMutex     sync.Mutex
+	blockMutex            sync.RWMutex
+	orphanBlocks          map[types.LayerID]map[types.BlockID]struct{}
+	layerMutex            map[types.LayerID]*layerMutex
+	lhMutex               sync.Mutex
+	InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
+	exit                  chan struct{}
 }
 
 // NewPersistentMeshDB creates an instance of a mesh database
@@ -66,6 +68,10 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize mesh unappliedTxs db: %v", err)
 	}
+	iv, err := database.NewLDBDatabase(filepath.Join(path, "inputvector"), 0, 0, log)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize mesh unappliedTxs db: %v", err)
+	}
 
 	ll := &DB{
 		Log:                log,
@@ -76,6 +82,7 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, err
 		general:            gdb,
 		contextualValidity: vdb,
 		unappliedTxs:       utx,
+		inputVector:        iv,
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
@@ -106,6 +113,7 @@ func NewMemMeshDB(log log.Log) *DB {
 		contextualValidity: database.NewMemDatabase(),
 		transactions:       database.NewMemDatabase(),
 		unappliedTxs:       database.NewMemDatabase(),
+		inputVector:        database.NewMemDatabase(),
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
@@ -122,6 +130,7 @@ func (m *DB) Close() {
 	m.layers.Close()
 	m.transactions.Close()
 	m.unappliedTxs.Close()
+	m.inputVector.Close()
 	m.general.Close()
 	m.contextualValidity.Close()
 }
@@ -183,6 +192,53 @@ func (m *DB) LayerBlocks(index types.LayerID) ([]*types.Block, error) {
 // The block handler func should return two values - a bool indicating whether or not we should stop traversing after the current block (happy flow)
 // and an error indicating that an error occurred while handling the block, the traversing will stop in that case as well (error flow)
 func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error {
+	blocksToVisit := list.New()
+	for id := range view {
+		blocksToVisit.PushBack(id)
+	}
+	seenBlocks := make(map[types.BlockID]struct{})
+	for blocksToVisit.Len() > 0 {
+		block, err := m.GetBlock(blocksToVisit.Remove(blocksToVisit.Front()).(types.BlockID))
+		if err != nil {
+			return err
+		}
+
+		// catch blocks that were referenced after more than one layer, and slipped through the stop condition
+		if block.LayerIndex < layer {
+			continue
+		}
+
+		// execute handler
+		stop, err := blockHandler(block)
+		if err != nil {
+			return err
+		}
+
+		if stop {
+			m.Log.With().Debug("ForBlockInView stopped", block.ID())
+			break
+		}
+
+		// stop condition: referenced blocks must be in lower layers, so we don't traverse them
+		if block.LayerIndex == layer {
+			continue
+		}
+
+		// push children to bfs queue
+		for _, id := range append(block.ForDiff, append(block.AgainstDiff, block.NeutralDiff...)...) {
+			if _, found := seenBlocks[id]; !found {
+				seenBlocks[id] = struct{}{}
+				blocksToVisit.PushBack(id)
+			}
+		}
+	}
+	return nil
+}
+
+// OldForBlockInView traverses all blocks in a view and uses blockHandler func on each block
+// The block handler func should return two values - a bool indicating whether or not we should stop traversing after the current block (happy flow)
+// and an error indicating that an error occurred while handling the block, the traversing will stop in that case as well (error flow)
+func (m *DB) OldForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error {
 	blocksToVisit := list.New()
 	for id := range view {
 		blocksToVisit.PushBack(id)
@@ -279,6 +335,34 @@ func (m *DB) SaveContextualValidity(id types.BlockID, valid bool) error {
 	}
 	m.Debug("save contextual validity %v %v", id, valid)
 	return m.contextualValidity.Put(id.Bytes(), v)
+}
+
+// SaveLayerInputVector saves the input vote vector for a layer (hare results)
+func (m *DB) SaveLayerInputVector(lyrid types.LayerID, vector []types.BlockID) error {
+	bytes, err := types.InterfaceToBytes(vector)
+	if err != nil {
+		return err
+	}
+
+	return m.inputVector.Put(lyrid.Bytes(), bytes)
+}
+
+func (m *DB) defaulGetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
+	by, err := m.inputVector.Get(lyrid.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	var v []types.BlockID
+	err = types.BytesToInterface(by, &v)
+	return v, err
+}
+
+// GetLayerInputVector gets the input vote vector for a layer (hare results)
+func (m *DB) GetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
+	if m.InputVectorBackupFunc != nil {
+		return m.InputVectorBackupFunc(lyrid)
+	}
+	return m.defaulGetLayerInputVector(lyrid)
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {

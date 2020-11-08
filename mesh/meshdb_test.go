@@ -99,15 +99,19 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
 		bl := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
+		voted := make(map[types.BlockID]struct{})
 		layerBlocks = append(layerBlocks, bl.ID())
 		for idx, pat := range patterns {
 			for _, id := range pat {
 				b := prev[idx].Blocks()[id]
-				bl.AddVote(b.ID())
+				bl.ForDiff = append(bl.ForDiff, b.ID())
+				voted[b.ID()] = struct{}{}
 			}
 		}
 		for _, prevBloc := range prev[0].Blocks() {
-			bl.AddView(prevBloc.ID())
+			if _, ok := voted[prevBloc.ID()]; !ok {
+				bl.AgainstDiff = append(bl.AgainstDiff, prevBloc.ID())
+			}
 		}
 		bl.LayerIndex = index
 		l.AddBlock(bl)
