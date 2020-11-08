@@ -2,7 +2,12 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: sm-oracle
+  labels:
+    name: oracle
 spec:
+  selector:
+    matchLabels:
+      name: oracle
   replicas: 1
   template:
     metadata:
