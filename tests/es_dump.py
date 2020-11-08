@@ -80,7 +80,7 @@ def es_reindex(namespace, filebeat_index_date, port=9200, retry=3):
     headers = {"Content-Type": "application/json"}
     res = requests.post(url=post_url, data=json.dumps(dump_req_body), headers=headers)
     res_json = res.json()
-    print(f"#@! res json:\n{res_json}\n")
+    print(f"response:\n{res_json}\n")
     if res_json and res_json["timed_out"]:
         print("timed out while dumping data to main ES server")
         print(f"retrying ({retry} retries left)")

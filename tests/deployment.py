@@ -74,7 +74,7 @@ def create_deployment(file_name, name_space, deployment_id=None, replica_size=1,
         if container_specs:
             dep = container_specs.update_deployment(dep)
 
-        k8s_beta = client.ExtensionsV1beta1Api()
+        k8s_beta = client.AppsV1Api()
         resp1 = k8s_beta.create_namespaced_deployment(body=dep, namespace=name_space)
         wait_to_deployment_to_be_ready(resp1.metadata._name, name_space, time_out=time_out)
         return resp1
