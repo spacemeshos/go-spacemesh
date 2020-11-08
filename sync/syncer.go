@@ -335,11 +335,13 @@ func (s *Syncer) synchronise() {
 	// we have all the data of the prev layers so we can simply validate
 	if s.weaklySynced(curr) {
 		s.handleWeaklySynced()
+		err := s.syncEpochActivations(curr.GetEpoch())
+		if err != nil {
+			s.With().Error("cannot fetch epoch atxs ", curr, log.Err(err))
+		}
 	} else {
 		s.handleNotSynced(s.ProcessedLayer() + 1)
 	}
-
-	s.syncAtxs(curr)
 }
 
 func (s *Syncer) handleWeaklySynced() {
@@ -446,7 +448,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 				return
 			}
 		}
-
+		s.syncAtxs(currentSyncLayer)
 		s.ValidateLayer(lyr) // wait for layer validation
 	}
 
