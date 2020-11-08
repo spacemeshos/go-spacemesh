@@ -1,8 +1,13 @@
-apiVersion: extensions/v1beta1
+apiVersion: app/v1
 kind: Deployment
 metadata:
   name: sm-poet
+  labels:
+    name: poet
 spec:
+  selector:
+    matchLabels:
+      name: poet
   replicas: 1
   template:
     metadata:

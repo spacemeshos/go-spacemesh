@@ -5,6 +5,7 @@ env:
   GCLOUD_KEY: ${{ secrets.GCLOUD_KEY }}
   PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
   CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
+  CLUSTER_NAME_ELK: ${{ secrets.CLUSTER_NAME_ELK }}
   CLUSTER_ZONE: ${{ secrets.CLUSTER_ZONE }}
   ES_PASSWD: ${{ secrets.ES_PASSWD }}
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
@@ -183,6 +184,95 @@ jobs:
       - name: genesis+p2p system tests
         run: make dockertest-genesis-voting-p2p
 
+  ## second part of stage3: this is for testing the new CI env
+  systemtest-latenodes-elk:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: dockerpush
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: late nodes system test
+        run: make dockertest-late-nodes-elk
+  systemtest-blocks-add-node-elk:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: dockerpush
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: blocks add node test
+        run: make dockertest-blocks-add-node-elk
+  systemtest-hare-elk:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: dockerpush
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: hare system tests
+        run: make dockertest-hare-elk
+  systemtest-mining-elk:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: dockerpush
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: mining system tests
+        run: make dockertest-mining-elk
+  systemtest-sync:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: dockerpush
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: sync test
+        run: make dockertest-sync-elk
+  systemtest-blocks-remove-node-elk:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: dockerpush
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: blocks remove node test
+        run: make dockertest-blocks-remove-node-elk
+  systemtest-genesis-elk:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: dockerpush
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: genesis system tests
+        run: make dockertest-genesis-voting-elk
+  systemtest-p2p-elk:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: dockerpush
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: p2p tests
+        run: make dockertest-p2p-elk
 
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
   # all tests that are required to pass before a bors merge must be listed here!

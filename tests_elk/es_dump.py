@@ -75,12 +75,10 @@ def es_reindex(namespace, filebeat_index_date, port=9200, retry=3):
         }
     }
     print(f"\ndumping index: {indx}, from: {es_ip}:{port}, to: {cnf.MAIN_ES_URL}")
-    post_url = f"http://spacemesh:Arielis1005@kibana.spacemesh.io/_reindex"
-    # post_url = f"http://{cnf.ES_USER_LOCAL}:{cnf.ES_PASS_LOCAL}@{cnf.MAIN_ES_URL}/_reindex"
+    post_url = f"http://{cnf.ES_USER_LOCAL}:{cnf.ES_PASS_LOCAL}@{cnf.MAIN_ES_URL}/_reindex"
     headers = {"Content-Type": "application/json"}
     res = requests.post(url=post_url, data=json.dumps(dump_req_body), headers=headers)
     res_json = res.json()
-    print(f"response:\n{res_json}\n")
     if res_json and res_json["timed_out"]:
         print("timed out while dumping data to main ES server")
         print(f"retrying ({retry} retries left)")
@@ -92,7 +90,7 @@ def es_reindex(namespace, filebeat_index_date, port=9200, retry=3):
         time.sleep(1)
         es_reindex(namespace, filebeat_index_date, retry=retry-1)
     elif res_json:
-        print("response:\n", json.dumps(res_json))
+        print(f"response:\n{json.dumps(res_json)}")
         print("done dumping")
     else:
         raise Exception("received an empty result!")
