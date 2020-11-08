@@ -35,7 +35,7 @@ func (h Hash20) Bytes() []byte { return h[:] }
 // Big converts a hash to a big integer.
 func (h Hash20) Big() *big.Int { return new(big.Int).SetBytes(h[:]) }
 
-// Hex converts a hash to a hex string.
+// Hex converts a hash to a hex string with 0x prefix.
 func (h Hash20) Hex() string { return util.Encode(h[:]) }
 
 // String implements the stringer interface and is used also by the logger when

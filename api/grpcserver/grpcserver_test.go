@@ -182,7 +182,7 @@ func (t *TxAPIMock) GetAllAccounts() (res *types.MultipleAccountsState, err erro
 		}
 	}
 	res = &types.MultipleAccountsState{
-		Root:     "", // DebugService.Accounts does not return a state root
+		Root:     types.CalcHash32([]byte {0x00}), // We have no backing trie here so we just use a random hash
 		Accounts: accounts,
 	}
 	return

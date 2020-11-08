@@ -30,7 +30,7 @@ func (state *DB) RawDump() types.MultipleAccountsState {
 	// Reading the state root and accounts data here is concurrency safe since this
 	// method should only be called after a lock has been acquired on state
 	dump := types.MultipleAccountsState{
-		Root:     fmt.Sprintf("%x", state.globalTrie.Hash()),
+		Root:     state.globalTrie.Hash(),
 		Accounts: make(map[string]types.AccountState),
 	}
 
