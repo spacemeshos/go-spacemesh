@@ -216,12 +216,13 @@ func (s *Syncer) Close() {
 	close(s.exit)
 	close(s.forceSync)
 	s.peers.Close()
+	s.syncLock.Lock()
+	s.syncLock.Unlock()
+	s.MessageServer.Close()
 	s.blockQueue.Close()
 	s.atxQueue.Close()
 	s.txQueue.Close()
-	s.MessageServer.Close()
-	s.syncLock.Lock()
-	s.syncLock.Unlock()
+
 	s.Info("sync closed")
 }
 
