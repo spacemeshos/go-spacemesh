@@ -213,9 +213,9 @@ dockerbuild-test:
 
 
 dockerbuild-test-elk:
-	docker build -f DockerFileTests --build-arg GCLOUD_KEY="$(GCLOUD_KEY)" \
+	docker build -f DockerFileTestsElk --build-arg GCLOUD_KEY="$(GCLOUD_KEY)" \
 	             --build-arg PROJECT_NAME="$(PROJECT_NAME)" \
-	             --build-arg CLUSTER_NAME_ELK="$(CLUSTER_NAME_ELK)" \
+	             --build-arg CLUSTER_NAME="$(CLUSTER_NAME_ELK)" \
 	             --build-arg CLUSTER_ZONE="$(CLUSTER_ZONE_ELK)" \
 	             -t go-spacemesh-python:$(BRANCH) .
 .PHONY: dockerbuild-test-elk
@@ -260,7 +260,7 @@ dockerrun-p2p-elk:
 ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
-	$(DOCKERRUN) pytest -s -v ../test_elk/p2p/test_p2p.py --tc-file=../test_elk/p2p/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml
 .PHONY: dockerrun-p2p-elk
 
 dockertest-p2p-elk: dockerbuild-test-elk dockerrun-p2p-elk
@@ -282,7 +282,7 @@ dockerrun-mining-elk:
 ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
-	$(DOCKERRUN) pytest -s -v ../test_elk/test_bs.py --tc-file=../test_elk/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v test_bs.py --tc-file=config.yaml --tc-format=yaml
 .PHONY: dockerrun-mining-elk
 
 dockertest-mining-elk: dockerbuild-test-elk dockerrun-mining-elk
@@ -305,7 +305,7 @@ dockerrun-hare-elk:
 ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
-	$(DOCKERRUN) pytest -s -v ../test_elk/hare/test_hare.py::test_hare_sanity --tc-file=../test_elk/hare/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v hare/test_hare.py::test_hare_sanity --tc-file=hare/config.yaml --tc-format=yaml
 .PHONY: dockerrun-hare-elk
 
 
@@ -331,7 +331,7 @@ ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
 
-	$(DOCKERRUN) pytest -s -v ../test_elk/sync/test_sync.py --tc-file=../test_elk/sync/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-sync-elk
 
@@ -358,7 +358,7 @@ ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
 
-	$(DOCKERRUN) pytest -s -v ../test_elk/late_nodes/test_delayed.py --tc-file=../test_elk/late_nodes/delayed_config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v late_nodes/test_delayed.py --tc-file=late_nodes/delayed_config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-late-nodes-elk
 
@@ -384,7 +384,7 @@ ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
 
-	$(DOCKERRUN) pytest -s -v ../test_elk/sync/genesis/test_genesis_voting.py --tc-file=../test_elk/sync/genesis/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v sync/genesis/test_genesis_voting.py --tc-file=sync/genesis/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-genesis-voting-elk
 
@@ -410,7 +410,7 @@ ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
 
-	$(DOCKERRUN) pytest -s -v ../test_elk/block_atx/add_node/test_blocks_add_node.py --tc-file=../test_elk/block_atx/add_node/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v block_atx/add_node/test_blocks_add_node.py --tc-file=block_atx/add_node/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-blocks-add-node-elk
 
@@ -436,7 +436,7 @@ ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
 
-	$(DOCKERRUN) pytest -s -v ../test_elk/block_atx/remove_node/test_blocks_remove_node.py --tc-file=../test_elk/block_atx/remove_node/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v block_atx/remove_node/test_blocks_remove_node.py --tc-file=block_atx/remove_node/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-blocks-remove-node-elk
 
