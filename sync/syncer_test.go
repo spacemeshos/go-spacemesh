@@ -262,6 +262,31 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	}
 }
 
+func TestSyncProtocol_FetchInputVector(t *testing.T) {
+	r := require.New(t)
+
+	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
+	s0 := syncs[0]
+	s1 := syncs[1]
+	s1.peers = getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey()})
+
+	input := []types.BlockID{types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID()}
+
+	_, err := types.InterfaceToBytes(input)
+	r.NoError(err)
+	s0.InputVectorBackupFunc = func(id types.LayerID) ([]types.BlockID, error) {
+		return input, nil
+	}
+
+	got, err := s0.GetLayerInputVector(1)
+	r.NoError(err)
+	r.Equal(input, got)
+
+	bids, err := s1.syncInputVector(types.LayerID(1))
+	r.NoError(err)
+	require.Equal(t, bids, input)
+}
+
 func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
 	r := require.New(t)
 

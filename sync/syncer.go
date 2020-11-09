@@ -114,15 +114,15 @@ const (
 	inProgress status = 1
 	done       status = 2
 
-	blockMsg        server.MessageType = 1
-	layerHashMsg    server.MessageType = 2
-	layerIdsMsg     server.MessageType = 3
-	txMsg           server.MessageType = 4
-	atxMsg          server.MessageType = 5
-	poetMsg         server.MessageType = 6
-	atxIdsMsg       server.MessageType = 7
-	atxIdrHashMsg   server.MessageType = 8
-	inputVecMessage server.MessageType = 9
+	blockMsg      server.MessageType = 1
+	layerHashMsg  server.MessageType = 2
+	layerIdsMsg   server.MessageType = 3
+	txMsg         server.MessageType = 4
+	atxMsg        server.MessageType = 5
+	poetMsg       server.MessageType = 6
+	atxIdsMsg     server.MessageType = 7
+	atxIdrHashMsg server.MessageType = 8
+	inputVecMsg   server.MessageType = 9
 
 	syncProtocol                      = "/sync/1.0/"
 	validatingLayerNone types.LayerID = 0
@@ -204,6 +204,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxDB atx
 	srvr.RegisterBytesMsgHandler(poetMsg, newPoetRequestHandler(s, logger))
 	srvr.RegisterBytesMsgHandler(atxIdsMsg, newEpochAtxsRequestHandler(s, logger))
 	srvr.RegisterBytesMsgHandler(atxIdrHashMsg, newAtxHashRequestHandler(s, logger))
+	srvr.RegisterBytesMsgHandler(inputVecMsg, newInputVecRequestHandler(s, logger))
 
 	return s
 }
@@ -678,7 +679,7 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 }
 
 func (s *Syncer) syncInputVector(layerID types.LayerID) ([]types.BlockID, error) {
-	tmr := newMilliTimer(syncLayerTime)
+	//tmr := newMilliTimer(syncLaye	Time)
 	if r, err := s.DB.GetLayerInputVector(layerID); err == nil {
 		return r, nil
 	}
@@ -686,12 +687,11 @@ func (s *Syncer) syncInputVector(layerID types.LayerID) ([]types.BlockID, error)
 	out := <-fetchWithFactory(newNeighborhoodWorker(s, 1, inputVectorReqFactory(layerID.Bytes())))
 	if out == nil {
 		return nil, fmt.Errorf("could not find input vector with any neighbor")
-
 	}
 
 	inputvec := out.([]types.BlockID)
 
-	tmr.ObserveDuration()
+	//tmr.ObserveDuration()
 
 	return inputvec, nil
 }

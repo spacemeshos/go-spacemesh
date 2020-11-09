@@ -259,7 +259,7 @@ func inputVectorReqFactory(lyreq []byte) requestFactory {
 			ch <- valid
 		}
 
-		if err := s.SendRequest(inputVecMessage, lyreq, peer, resHandler, func(err error) {}); err != nil {
+		if err := s.SendRequest(inputVecMsg, lyreq, peer, resHandler, func(err error) {}); err != nil {
 			return nil, err
 		}
 
