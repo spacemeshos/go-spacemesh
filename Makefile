@@ -216,7 +216,7 @@ dockerbuild-test-elk:
 	docker build -f DockerFileTests --build-arg GCLOUD_KEY="$(GCLOUD_KEY)" \
 	             --build-arg PROJECT_NAME="$(PROJECT_NAME)" \
 	             --build-arg CLUSTER_NAME_ELK="$(CLUSTER_NAME_ELK)" \
-	             --build-arg CLUSTER_ZONE="$(CLUSTER_ZONE)" \
+	             --build-arg CLUSTER_ZONE="$(CLUSTER_ZONE_ELK)" \
 	             -t go-spacemesh-python:$(BRANCH) .
 .PHONY: dockerbuild-test-elk
 
