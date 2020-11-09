@@ -110,9 +110,10 @@ func (s *status) String() string {
 }
 
 const (
-	pending    status = 0
-	inProgress status = 1
-	done       status = 2
+	pending     status = 0
+	inProgress  status = 1
+	done        status = 2
+	inProgress2 status = 3
 
 	blockMsg      server.MessageType = 1
 	layerHashMsg  server.MessageType = 2
@@ -293,6 +294,11 @@ func (s *Syncer) setGossipBufferingStatus(status status) {
 func (s *Syncer) IsSynced() bool {
 	s.Info("sync state w: %v, g:%v layer : %v latest: %v", s.weaklySynced(s.GetCurrentLayer()), s.getGossipBufferingStatus(), s.GetCurrentLayer(), s.LatestLayer())
 	return s.weaklySynced(s.GetCurrentLayer()) && s.getGossipBufferingStatus() == done
+}
+
+// IsSynced returns true if the node is synced false otherwise
+func (s *Syncer) IsHareSynced() bool {
+	return s.getGossipBufferingStatus() == inProgress2 || s.IsSynced()
 }
 
 // Start starts the main pooling routine that checks the sync status every set interval
@@ -526,11 +532,17 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 		return fmt.Errorf("cloed while buffering second layer ")
 	}
 
-	s.ticker.Unsubscribe(ch) // unsub, we won't be listening on this ch anymore
 	s.Info("done waiting for two ticks while listening to p2p")
+	s.Info("syncing on input vector for layer %v", currentSyncLayer)
 
-	// assumed to be weakly synced here
-	// just get the layers and validate
+	iv, err := s.syncInputVector(currentSyncLayer)
+	if err != nil {
+		s.Error("syncing on input vector for layer %v failed err:%v", currentSyncLayer, err)
+	} else {
+		if err := s.SaveLayerInputVector(currentSyncLayer, iv); err != nil {
+			s.Error("saving to db failed err:%v", err)
+		}
+	}
 
 	// get & validate first tick
 	if err := s.getAndValidateLayer(currentSyncLayer); err != nil {
@@ -541,6 +553,27 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 			return err
 		}
 	}
+
+	s.setGossipBufferingStatus(inProgress2)
+	// now hare is open. but block builder is still closed.
+	if done := s.waitLayer(ch); done {
+		return fmt.Errorf("cloed while buffering second layer ")
+	}
+
+	s.ticker.Unsubscribe(ch)
+
+	// sync on input vector for second layer
+	iv, err = s.syncInputVector(currentSyncLayer + 1)
+	if err != nil {
+		s.Error("syncing on input vector for layer %v failed err:%v", currentSyncLayer+1, err)
+	} else {
+		if err := s.SaveLayerInputVector(currentSyncLayer+1, iv); err != nil {
+			s.Error("saving to db failed err:%v", err)
+		}
+	}
+
+	// assumed to be weakly synced here
+	// just get the layers and validate
 
 	// get & validate second tick
 	if err := s.getAndValidateLayer(currentSyncLayer + 1); err != nil {
