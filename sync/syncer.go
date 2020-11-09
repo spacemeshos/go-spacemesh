@@ -105,6 +105,9 @@ func (s *status) String() string {
 	if *s == 1 {
 		return "inProgress"
 	}
+	if *s == 3 {
+		return "inProgress2"
+	}
 
 	return "done"
 }
@@ -553,6 +556,8 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 			return err
 		}
 	}
+
+	s.Info("Opening hare for third layer")
 
 	s.setGossipBufferingStatus(inProgress2)
 	// now hare is open. but block builder is still closed.

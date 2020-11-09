@@ -1324,13 +1324,12 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	//ch := ts.Subscribe()
 	msh := getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String())
 
-	msh.AddBlock(types.NewExistingBlock(1, []byte(rand.String(8)), nil))
-	msh.AddBlock(types.NewExistingBlock(2, []byte(rand.String(8)), nil))
-	msh.AddBlock(types.NewExistingBlock(3, []byte(rand.String(8)), nil))
-	msh.AddBlock(types.NewExistingBlock(4, []byte(rand.String(8)), nil))
-	msh.AddBlock(types.NewExistingBlock(5, []byte(rand.String(8)), nil))
-	msh.AddBlock(types.NewExistingBlock(6, []byte(rand.String(8)), nil))
-	msh.AddBlock(types.NewExistingBlock(7, []byte(rand.String(8)), nil))
+	layers := types.LayerID(7)
+	for i := types.LayerID(1); i < layers; i++ {
+		blk := types.NewExistingBlock(i, []byte(rand.String(8)), nil)
+		msh.AddBlock(blk)
+		msh.SaveLayerInputVector(i, []types.BlockID{blk.ID()})
+	}
 
 	sync := NewSync(net, msh, txpool, atxpool, blockValidator, newMockPoetDb(), conf, timer, l)
 	lv := &mockLayerValidator{0, 0, 0, nil}
@@ -1362,6 +1361,11 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	timer.Layer = timer.Layer + 1
 	log.Info("layer %v", timer.GetCurrentLayer())
 	timer.Tick()
+	timer.Layer = timer.Layer + 1
+	log.Info("layer %v", timer.GetCurrentLayer())
+	timer.Tick()
+
+	time.Sleep(1 * time.Second)
 	timer.Layer = timer.Layer + 1
 	log.Info("layer %v", timer.GetCurrentLayer())
 	timer.Tick()
