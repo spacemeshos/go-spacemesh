@@ -86,9 +86,17 @@ type TxAPI interface {
 	GetLayerStateRoot(types.LayerID) (types.Hash32, error)
 	GetBalance(types.Address) uint64
 	GetNonce(types.Address) uint64
+	GetAllAccounts() (*types.MultipleAccountsState, error)
 }
 
 // PeerCounter is an api to get amount of connected peers
 type PeerCounter interface {
 	PeerCount() uint64
+}
+
+// MempoolAPI is an API for reading mempool data that's useful for API services
+type MempoolAPI interface {
+	Get(types.TransactionID) (*types.Transaction, error)
+	GetTxIdsByAddress(types.Address) []types.TransactionID
+	GetProjection(types.Address, uint64, uint64) (uint64, uint64)
 }

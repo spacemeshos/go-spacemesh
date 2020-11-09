@@ -55,16 +55,16 @@ func TestDump(t *testing.T) {
 	"root": "ba94994b7d4b6590b615f0a8ab543445312fd303fdab013f0b0fba920f8f228b",
 	"accounts": {
 		"0000000000000000000000000000000000000001": {
-			"balance": "22",
-			"nonce": 0
+			"nonce": 0,
+			"balance": 22
 		},
 		"0000000000000000000000000000000000000002": {
-			"balance": "44",
-			"nonce": 0
+			"nonce": 0,
+			"balance": 44
 		},
 		"0000000000000000000000000000000000000102": {
-			"balance": "0",
-			"nonce": 10
+			"nonce": 10,
+			"balance": 0
 		}
 	}
 }`

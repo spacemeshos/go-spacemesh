@@ -97,16 +97,16 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 	"root": "6de6ffd7eda4c1aa4de66051e4ad05afc1233e089f9e9afaf8174a4dc483fa57",
 	"accounts": {
 		"0000000000000000000000000000000000000002": {
-			"balance": "44",
-			"nonce": 0
+			"nonce": 0,
+			"balance": 44
 		},
 		"0000000000000000000000000000000000000102": {
-			"balance": "2",
-			"nonce": 10
+			"nonce": 10,
+			"balance": 2
 		},
 		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
-			"balance": "15",
-			"nonce": 1
+			"nonce": 1,
+			"balance": 15
 		}
 	}
 }`
@@ -244,16 +244,16 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	"root": "0fb9e074115e49b9a1d33949de2578459c158d8885ca10ad9edcd5d3a84fd67c",
 	"accounts": {
 		"0000000000000000000000000000000000000002": {
-			"balance": "47",
-			"nonce": 0
+			"nonce": 0,
+			"balance": 47
 		},
 		"0000000000000000000000000000000000000102": {
-			"balance": "2",
-			"nonce": 10
+			"nonce": 10,
+			"balance": 2
 		},
 		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
-			"balance": "1",
-			"nonce": 4
+			"nonce": 4,
+			"balance": 1
 		}
 	}
 }`
@@ -312,16 +312,16 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	"root": "4b7174d31e60ef1ed970137079e2b8044d9c381422dbcbe16e561d8a51a9f651",
 	"accounts": {
 		"0000000000000000000000000000000000000002": {
-			"balance": "44",
-			"nonce": 0
+			"nonce": 0,
+			"balance": 44
 		},
 		"198d6e08b28e813feb01e4a400839b85e18080ce": {
-			"balance": "28",
-			"nonce": 11
+			"nonce": 11,
+			"balance": 28
 		},
 		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
-			"balance": "19",
-			"nonce": 2
+			"nonce": 2,
+			"balance": 19
 		}
 	}
 }`
@@ -340,16 +340,16 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	"root": "9273645f6b9a62f32500021f5e0a89d3eb6ffd36b1b9f9f82fcaad4555951e97",
 	"accounts": {
 		"0000000000000000000000000000000000000002": {
-			"balance": "44",
-			"nonce": 0
+			"nonce": 0,
+			"balance": 44
 		},
 		"198d6e08b28e813feb01e4a400839b85e18080ce": {
-			"balance": "42",
-			"nonce": 10
+			"nonce": 10,
+			"balance": 42
 		},
 		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
-			"balance": "15",
-			"nonce": 1
+			"nonce": 1,
+			"balance": 15
 		}
 	}
 }`

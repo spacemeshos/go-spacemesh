@@ -21,13 +21,13 @@ import (
 
 func createLayerWithAtx2(t require.TestingT, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
 	for i := 0; i < numOfBlocks; i++ {
-		block1 := types.NewExistingBlock(id, []byte(rand.String(8)))
+		block1 := types.NewExistingBlock(id, []byte(rand.String(8)), nil)
 		block1.BlockVotes = append(block1.BlockVotes, votes...)
 		for _, atx := range atxs {
 			*block1.ActiveSet = append(*block1.ActiveSet, atx.ID())
 		}
 		block1.ViewEdges = append(block1.ViewEdges, views...)
-		err := msh.AddBlockWithTxs(block1, []*types.Transaction{}, atxs)
+		err := msh.AddBlockWithTxs(block1)
 		require.NoError(t, err)
 		created = append(created, block1.ID())
 	}
@@ -52,6 +52,10 @@ func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, typ
 }
 
 type MockState struct{}
+
+func (MockState) GetAllAccounts() (*types.MultipleAccountsState, error) {
+	panic("implement me")
+}
 
 func (MockState) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	panic("implement me")
@@ -158,7 +162,7 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 		panic("not supported")
 	}
 	for i := 0; i < numOfBlocks; i++ {
-		block1 := types.NewExistingBlock(id, []byte(rand.String(8)))
+		block1 := types.NewExistingBlock(id, []byte(rand.String(8)), nil)
 		block1.BlockVotes = append(block1.BlockVotes, votes...)
 		activeSet := []types.ATXID{}
 		if i < len(atxs) {
@@ -171,8 +175,9 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 		if i < len(atxs) {
 			actualAtxs = atxs[i : i+1]
 		}
+		msh.ProcessAtxs(actualAtxs)
 		block1.Initialize()
-		err := msh.AddBlockWithTxs(block1, []*types.Transaction{}, actualAtxs)
+		err := msh.AddBlockWithTxs(block1)
 		require.NoError(t, err)
 		created = append(created, block1.ID())
 	}
@@ -789,7 +794,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 			challenge := newChallenge(nodeID, 1, prevAtxs[miner], posAtx, layer)
 			h, err := challenge.Hash()
 			r.NoError(err)
-			atx = newAtx(challenge, defaultView, NewNIPSTWithChallenge(h, poetRef))
+			atx = newAtx(challenge, defaultView, NewNIPSTWithChallenge(h, poetBytes))
 			prevAtxs[miner] = atx.ID()
 			storeAtx(r, atxdb, atx, log.NewDefault("storeAtx").WithOptions(log.Nop))
 		}

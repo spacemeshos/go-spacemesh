@@ -28,3 +28,4 @@ spacemesh.json
 database/data
 *.pyc
 /devtools
+.python-version
