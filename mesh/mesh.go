@@ -319,6 +319,7 @@ func (msh *Mesh) persistLayerHashes(l *types.Layer) {
 		prevHash, err = msh.getRunningLayerHash(l.Index() - 1)
 		if err != nil {
 			msh.Log.Error("cannot get running layer hash for layer %v", l.Index()-1)
+			return
 		}
 	}
 	msh.persistRunningLayerHash(l.Index(), types.CalcAggregateHash32(prevHash, l.Hash().Bytes()))
