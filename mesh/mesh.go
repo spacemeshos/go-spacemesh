@@ -456,14 +456,14 @@ func (msh *Mesh) persistLastLayerHash() {
 func (msh *Mesh) persistLayerHash(layerID types.LayerID, hash types.Hash32) {
 	if err := msh.general.Put(msh.getLayerHashKey(layerID), hash.Bytes()); err != nil {
 		msh.With().Error("failed to persist layer hash", log.Err(err), msh.ProcessedLayer(),
-			log.String("layer_hash", util.Bytes2Hex(msh.layerHash)))
+			log.String("layer_hash", hash.Hex()))
 	}
 }
 
 func (msh *Mesh) persistRunningLayerHash(layerID types.LayerID, hash types.Hash32) {
 	if err := msh.general.Put(msh.getRunningLayerHashKey(layerID), hash.Bytes()); err != nil {
 		msh.With().Error("failed to persist running layer hash", log.Err(err), msh.ProcessedLayer(),
-			log.String("layer_hash", util.Bytes2Hex(msh.layerHash)))
+			log.String("layer_hash", hash.Hex()))
 	}
 }
 
