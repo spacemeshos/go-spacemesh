@@ -135,7 +135,7 @@ def add_deployment_dir(namespace, dir_path):
 
     for filename in dep_lst:
         # replace 'NAMESPACE' with the actual namespace if exists
-        replace_phrase_in_file(os.path.join(dir_path, filename), "NAMESPACE", namespace)
+        replace_phrase_in_file(os.path.join(dir_path, filename), "(?<!_)NAMESPACE", namespace)
         print(f"applying file: {filename}")
         with open(os.path.join(dir_path, filename)) as f:
             dep = yaml.safe_load(f)
