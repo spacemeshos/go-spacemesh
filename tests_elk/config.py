@@ -3,10 +3,10 @@ BOOT_STATEFULSET_FILE = './k8s/bootstrapoet-w-conf-ss.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
 CLIENT_STATEFULSET_FILE = './k8s/client-w-conf-ss.yml'
 CURL_POD_FILE = './k8s/curl.yml'
-ELASTIC_CONF_DIR = './tests_elk/elk/elastic/'
-FILEBEAT_CONF_DIR = './tests_elk/elk/filebeat/'
-KIBANA_CONF_DIR = './tests_elk/elk/kibana/'
-LOGSTASH_CONF_DIR = './tests_elk/elk/logstash/'
+ELASTIC_CONF_DIR = './elk/elastic/'
+FILEBEAT_CONF_DIR = './elk/filebeat/'
+KIBANA_CONF_DIR = './elk/kibana/'
+LOGSTASH_CONF_DIR = './elk/logstash/'
 
 ES_USER_LOCAL = "elastic"
 ES_PASS_LOCAL = "gavradon"
