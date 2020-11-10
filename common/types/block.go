@@ -37,7 +37,7 @@ func (id BlockID) AsHash32() Hash32 {
 	return Hash20(id).ToHash32()
 }
 
-var layersPerEpoch int32
+var layersPerEpoch int32 = 1
 
 // EffectiveGenesis marks when actual blocks would start being crated in the network, this will take account the first
 // genesis epoch and the following epoch in which ATXs are published
@@ -179,13 +179,22 @@ func (b *Block) Bytes() []byte {
 
 // Fields returns an array of LoggableFields for logging
 func (b *Block) Fields() []log.LoggableField {
+	activeSet := 0
+	if b.ActiveSet != nil {
+		activeSet = len(*b.ActiveSet)
+	}
+
 	return []log.LoggableField{
 		b.ID(),
 		b.LayerIndex,
-		b.MinerID(),
+		b.LayerIndex.GetEpoch(),
+		log.FieldNamed("miner_id", b.MinerID()),
 		log.Int("view_edges", len(b.ViewEdges)),
 		log.Int("vote_count", len(b.BlockVotes)),
+		b.ATXID,
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
+		log.FieldNamed("ref_block", b.RefBlock),
+		log.Int("active_set", activeSet),
 		log.Int("tx_count", len(b.TxIDs)),
 	}
 }

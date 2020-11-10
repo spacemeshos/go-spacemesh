@@ -113,29 +113,7 @@ func (bh *BlockHandler) HandleBlockData(data []byte, sync service.Fetcher) error
 	// set the block id when received
 	blk.Initialize()
 
-	activeSet := 0
-	if blk.ActiveSet != nil {
-		activeSet = len(*blk.ActiveSet)
-	}
-
-	refBlock := ""
-	if blk.RefBlock != nil {
-		refBlock = blk.RefBlock.String()
-	}
-	bh.Log.With().Info("got new block",
-		blk.ID(),
-		blk.LayerIndex,
-		blk.LayerIndex.GetEpoch(),
-		log.String("sender_id", blk.MinerID().ShortString()),
-		log.Int("tx_count", len(blk.TxIDs)),
-		//log.Int("atx_count", len(blk.ATXIDs)),
-		log.Int("view_edges", len(blk.ViewEdges)),
-		log.Int("vote_count", len(blk.BlockVotes)),
-		blk.ATXID,
-		log.Uint32("eligibility_counter", blk.EligibilityProof.J),
-		log.String("ref_block", refBlock),
-		log.Int("active_set", activeSet),
-	)
+	bh.Log.With().Info("got new block", blk.Fields()...)
 	// check if known
 	if _, err := bh.mesh.GetBlock(blk.ID()); err == nil {
 		//data.ReportValidation(config.NewBlockProtocol)

@@ -363,24 +363,16 @@ func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
 	assert.Equal(t, 1, len(layers.orphanBlocks))
 }
 
-type MockBlockBuilder struct {
-	txs []*types.Transaction
-}
-
-func (m *MockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
-	m.txs = append(m.txs, tx)
-	return nil
-}
-
 func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) {
 	r := require.New(t)
 
+	// types.SetLayersPerEpoch(2)
 	msh := getMesh("mesh")
 
 	state := &MockMapState{}
 	msh.txProcessor = state
 
-	layerID := types.LayerID(types.GetEffectiveGenesis() + 1)
+	layerID := types.GetEffectiveGenesis() + 1
 	signer, origin := newSignerAndAddress(r, "origin")
 	tx1 := addTxToMesh(r, msh, signer, 2468)
 	tx2 := addTxToMesh(r, msh, signer, 2469)
