@@ -15,7 +15,8 @@ import (
 // GlobalStateService exposes global state data, output from the STF
 type GlobalStateService struct {
 	Network     api.NetworkAPI // P2P Swarm
-	Mesh        api.TxAPI      // Mesh
+	Mesh        api.TxAPI
+	Mempool     api.MempoolAPI
 	GenTime     api.GenesisTimeAPI
 	PeerCounter api.PeerCounter
 	Syncer      api.Syncer
@@ -29,10 +30,11 @@ func (s GlobalStateService) RegisterService(server *Server) {
 // NewGlobalStateService creates a new grpc service using config data.
 func NewGlobalStateService(
 	net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI,
-	syncer api.Syncer) *GlobalStateService {
+	syncer api.Syncer, mempool api.MempoolAPI) *GlobalStateService {
 	return &GlobalStateService{
 		Network:     net,
 		Mesh:        tx,
+		Mempool:     mempool,
 		GenTime:     genTime,
 		PeerCounter: peers.NewPeers(net, log.NewDefault("grpcserver.GlobalStateService")),
 		Syncer:      syncer,
@@ -40,16 +42,45 @@ func NewGlobalStateService(
 }
 
 // GlobalStateHash returns the latest layer and its computed global state hash
-func (s GlobalStateService) GlobalStateHash(ctx context.Context, in *pb.GlobalStateHashRequest) (*pb.GlobalStateHashResponse, error) {
+func (s GlobalStateService) GlobalStateHash(context.Context, *pb.GlobalStateHashRequest) (*pb.GlobalStateHashResponse, error) {
 	log.Info("GRPC GlobalStateService.GlobalStateHash")
 	return &pb.GlobalStateHashResponse{Response: &pb.GlobalStateHash{
-		RootHash:    s.Mesh.GetStateRoot().Bytes(),
-		LayerNumber: s.Mesh.LatestLayerInState().Uint64(),
+		RootHash: s.Mesh.GetStateRoot().Bytes(),
+		Layer:    &pb.LayerNumber{Number: uint32(s.Mesh.LatestLayerInState())},
 	}}, nil
 }
 
-// Account returns counter and balance for one account
-func (s GlobalStateService) Account(ctx context.Context, in *pb.AccountRequest) (*pb.AccountResponse, error) {
+func (s GlobalStateService) getProjection(curCounter, curBalance uint64, addr types.Address) (counter, balance uint64, err error) {
+	counter, balance, err = s.Mesh.GetProjection(addr, curCounter, curBalance)
+	if err != nil {
+		return 0, 0, err
+	}
+	counter, balance = s.Mempool.GetProjection(addr, counter, balance)
+	return counter, balance, nil
+}
+
+func (s GlobalStateService) getAccount(addr types.Address) (acct *pb.Account, err error) {
+	balanceActual := s.Mesh.GetBalance(addr)
+	counterActual := s.Mesh.GetNonce(addr)
+	counterProjected, balanceProjected, err := s.getProjection(counterActual, balanceActual, addr)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.Account{
+		AccountId: &pb.AccountId{Address: addr.Bytes()},
+		StateCurrent: &pb.AccountState{
+			Counter: counterActual,
+			Balance: &pb.Amount{Value: balanceActual},
+		},
+		StateProjected: &pb.AccountState{
+			Counter: counterProjected,
+			Balance: &pb.Amount{Value: balanceProjected},
+		},
+	}, nil
+}
+
+// Account returns current and projected counter and balance for one account
+func (s GlobalStateService) Account(_ context.Context, in *pb.AccountRequest) (*pb.AccountResponse, error) {
 	log.Info("GRPC GlobalStateService.Account")
 
 	if in.AccountId == nil {
@@ -58,21 +89,24 @@ func (s GlobalStateService) Account(ctx context.Context, in *pb.AccountRequest) 
 
 	// Load data
 	addr := types.BytesToAddress(in.AccountId.Address)
-	balance := s.Mesh.GetBalance(addr)
-	counter := s.Mesh.GetNonce(addr)
+	acct, err := s.getAccount(addr)
+	if err != nil {
+		log.Error("unable to fetch projected account state: %s", err)
+		return nil, status.Errorf(codes.Internal, "error fetching projected account data")
+	}
 
 	log.With().Debug("GRPC GlobalStateService.Account",
-		addr, log.Uint64("balance", balance), log.Uint64("counter", counter))
+		addr,
+		log.Uint64("balance", acct.StateCurrent.Balance.Value),
+		log.Uint64("counter", acct.StateCurrent.Counter),
+		log.Uint64("balance projected", acct.StateProjected.Balance.Value),
+		log.Uint64("counter projected", acct.StateProjected.Counter))
 
-	return &pb.AccountResponse{AccountWrapper: &pb.Account{
-		AccountId: &pb.AccountId{Address: addr.Bytes()},
-		Counter:   counter,
-		Balance:   &pb.Amount{Value: balance},
-	}}, nil
+	return &pb.AccountResponse{AccountWrapper: acct}, nil
 }
 
 // AccountDataQuery returns historical account data such as rewards and receipts
-func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.AccountDataQueryRequest) (*pb.AccountDataQueryResponse, error) {
+func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDataQueryRequest) (*pb.AccountDataQueryResponse, error) {
 	log.Info("GRPC GlobalStateService.AccountDataQuery")
 
 	if in.Filter == nil {
@@ -106,7 +140,7 @@ func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.Account
 		for _, r := range dbRewards {
 			res.AccountItem = append(res.AccountItem, &pb.AccountData{Datum: &pb.AccountData_Reward{
 				Reward: &pb.Reward{
-					Layer:       r.Layer.Uint64(),
+					Layer:       &pb.LayerNumber{Number: uint32(r.Layer)},
 					Total:       &pb.Amount{Value: r.TotalReward},
 					LayerReward: &pb.Amount{Value: r.LayerRewardEstimate},
 					// Leave this out for now as this is changing
@@ -121,14 +155,13 @@ func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.Account
 	}
 
 	if filterAccount {
-		balance := s.Mesh.GetBalance(addr)
-		counter := s.Mesh.GetNonce(addr)
+		acct, err := s.getAccount(addr)
+		if err != nil {
+			log.Error("unable to fetch projected account state: %s", err)
+			return nil, status.Errorf(codes.Internal, "error fetching projected account data")
+		}
 		res.AccountItem = append(res.AccountItem, &pb.AccountData{Datum: &pb.AccountData_AccountWrapper{
-			AccountWrapper: &pb.Account{
-				AccountId: &pb.AccountId{Address: addr.Bytes()},
-				Counter:   counter,
-				Balance:   &pb.Amount{Value: balance},
-			},
+			AccountWrapper: acct,
 		}})
 	}
 
@@ -162,7 +195,7 @@ func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.Account
 }
 
 // SmesherDataQuery returns historical info on smesher rewards
-func (s GlobalStateService) SmesherDataQuery(ctx context.Context, in *pb.SmesherDataQueryRequest) (*pb.SmesherDataQueryResponse, error) {
+func (s GlobalStateService) SmesherDataQuery(context.Context, *pb.SmesherDataQueryRequest) (*pb.SmesherDataQueryResponse, error) {
 	log.Info("GRPC GlobalStateService.SmesherDataQuery")
 
 	// TODO: implement me! We don't currently have a way to read rewards per-smesher.
@@ -224,14 +257,13 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 				// The Reporter service just sends us the account address. We are responsible
 				// for looking up the other required data here. Get the account balance and
 				// nonce.
-				balance := s.Mesh.GetBalance(addr)
-				counter := s.Mesh.GetNonce(addr)
+				acct, err := s.getAccount(addr)
+				if err != nil {
+					log.Error("unable to fetch projected account state: %s", err)
+					return status.Errorf(codes.Internal, "error fetching projected account data")
+				}
 				if err := stream.Send(&pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_AccountWrapper{
-					AccountWrapper: &pb.Account{
-						AccountId: &pb.AccountId{Address: addr.Bytes()},
-						Counter:   counter,
-						Balance:   &pb.Amount{Value: balance},
-					},
+					AccountWrapper: acct,
 				}}}); err != nil {
 					return err
 				}
@@ -249,7 +281,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 			if reward.Coinbase == addr {
 				if err := stream.Send(&pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_Reward{
 					Reward: &pb.Reward{
-						Layer:       reward.Layer.Uint64(),
+						Layer:       &pb.LayerNumber{Number: uint32(reward.Layer)},
 						Total:       &pb.Amount{Value: reward.Total},
 						LayerReward: &pb.Amount{Value: reward.LayerReward},
 						// Leave this out for now as this is changing
@@ -278,11 +310,11 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 					Receipt: &pb.TransactionReceipt{
 						Id: &pb.TransactionId{Id: receipt.ID.Bytes()},
 						//Result:      receipt.Result,
-						GasUsed:     receipt.GasUsed,
-						Fee:         &pb.Amount{Value: receipt.Fee},
-						LayerNumber: receipt.Layer.Uint64(),
-						Index:       receipt.Index,
-						AppAddress:  &pb.AccountId{Address: receipt.Address.Bytes()},
+						GasUsed: receipt.GasUsed,
+						Fee:     &pb.Amount{Value: receipt.Fee},
+						Layer:   &pb.LayerNumber{Number: uint32(receipt.Layer)},
+						Index:   receipt.Index,
+						//SvmData: nil,
 					},
 				}}}); err != nil {
 					return err
@@ -299,7 +331,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 }
 
 // SmesherRewardStream exposes a stream of smesher rewards
-func (s GlobalStateService) SmesherRewardStream(request *pb.SmesherRewardStreamRequest, stream pb.GlobalStateService_SmesherRewardStreamServer) error {
+func (s GlobalStateService) SmesherRewardStream(*pb.SmesherRewardStreamRequest, pb.GlobalStateService_SmesherRewardStreamServer) error {
 	log.Info("GRPC GlobalStateService.SmesherRewardStream")
 
 	// TODO: implement me! We don't currently have a way to read rewards per-smesher.
@@ -309,7 +341,7 @@ func (s GlobalStateService) SmesherRewardStream(request *pb.SmesherRewardStreamR
 }
 
 // AppEventStream exposes a stream of emitted app events
-func (s GlobalStateService) AppEventStream(request *pb.AppEventStreamRequest, stream pb.GlobalStateService_AppEventStreamServer) error {
+func (s GlobalStateService) AppEventStream(*pb.AppEventStreamRequest, pb.GlobalStateService_AppEventStreamServer) error {
 	log.Info("GRPC GlobalStateService.AppEventStream")
 
 	// TODO: implement me! We don't currently have any app events
@@ -367,14 +399,13 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			// The Reporter service just sends us the account address. We are responsible
 			// for looking up the other required data here. Get the account balance and
 			// nonce.
-			balance := s.Mesh.GetBalance(updatedAccount)
-			counter := s.Mesh.GetNonce(updatedAccount)
+			acct, err := s.getAccount(updatedAccount)
+			if err != nil {
+				log.Error("unable to fetch projected account state: %s", err)
+				return status.Errorf(codes.Internal, "error fetching projected account data")
+			}
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_AccountWrapper{
-				AccountWrapper: &pb.Account{
-					AccountId: &pb.AccountId{Address: updatedAccount.Bytes()},
-					Counter:   counter,
-					Balance:   &pb.Amount{Value: balance},
-				},
+				AccountWrapper: acct,
 			}}}); err != nil {
 				return err
 			}
@@ -389,7 +420,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			}
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Reward{
 				Reward: &pb.Reward{
-					Layer:       reward.Layer.Uint64(),
+					Layer:       &pb.LayerNumber{Number: uint32(reward.Layer)},
 					Total:       &pb.Amount{Value: reward.Total},
 					LayerReward: &pb.Amount{Value: reward.LayerReward},
 					// Leave this out for now as this is changing
@@ -415,11 +446,11 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				Receipt: &pb.TransactionReceipt{
 					Id: &pb.TransactionId{Id: receipt.ID.Bytes()},
 					//Result:      receipt.Result,
-					GasUsed:     receipt.GasUsed,
-					Fee:         &pb.Amount{Value: receipt.Fee},
-					LayerNumber: receipt.Layer.Uint64(),
-					Index:       receipt.Index,
-					AppAddress:  &pb.AccountId{Address: receipt.Address.Bytes()},
+					GasUsed: receipt.GasUsed,
+					Fee:     &pb.Amount{Value: receipt.Fee},
+					Layer:   &pb.LayerNumber{Number: uint32(receipt.Layer)},
+					Index:   receipt.Index,
+					//SvmData: nil,
 				},
 			}}}); err != nil {
 				return err
@@ -440,8 +471,8 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			}
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_GlobalState{
 				GlobalState: &pb.GlobalStateHash{
-					RootHash:    root.Bytes(),
-					LayerNumber: layer.Layer.Index().Uint64(),
+					RootHash: root.Bytes(),
+					Layer:    &pb.LayerNumber{Number: uint32(layer.Layer.Index())},
 				},
 			}}}); err != nil {
 				return err

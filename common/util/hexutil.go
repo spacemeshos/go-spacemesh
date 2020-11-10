@@ -238,6 +238,7 @@ func mapError(err error) error {
 }
 
 // Hex2Bytes returns the bytes represented by the hexadecimal string str.
+// Note that str should not be "0x" prefixed. To decode a "0x" prefixed string use FromHex
 func Hex2Bytes(str string) []byte {
 	h, _ := hex.DecodeString(str)
 	return h

@@ -349,5 +349,6 @@ loop:
 			time.Sleep(200 * time.Millisecond)
 		}
 	}
+	events.CloseEventPubSub()
 	collect.Stop()
 }
