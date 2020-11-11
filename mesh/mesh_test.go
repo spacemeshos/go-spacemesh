@@ -177,6 +177,26 @@ func TestLayers_AddBlock(t *testing.T) {
 	//assert.True(t, len(*rBlock1.ActiveSet) == len(*block1.ActiveSet))
 }
 
+func addLayer(id types.LayerID, layerSize int, msh *Mesh) *types.Layer {
+	for i := 0; i < layerSize; i++ {
+
+		block1 := types.NewExistingBlock(id, []byte(rand.String(8)), nil)
+		block1.Initialize()
+
+		err := msh.AddBlock(block1)
+		msh.contextualValidity.Put(block1.ID().Bytes(), []byte{1})
+		if err != nil {
+			panic("cannot add data to test")
+		}
+	}
+	l, err := msh.GetLayer(id)
+	if err != nil {
+		panic("cant get a layer we've just created")
+	}
+
+	return l
+}
+
 func TestLayers_AddLayer(t *testing.T) {
 	r := require.New(t)
 
@@ -448,6 +468,27 @@ func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
 	validBlocks := msh.extractUniqueOrderedTransactions(l)
 
 	r.ElementsMatch(GetTransactionIds(tx1, tx2, tx3, tx4), GetTransactionIds(validBlocks...))
+}
+
+func TestMesh_persistLayerHashes(t *testing.T) {
+	msh := getMesh("persistLayerHashes")
+	defer msh.Close()
+
+	// test first layer hash
+	l := addLayer(types.GetEffectiveGenesis(), 5, msh)
+	msh.persistLayerHashes(l)
+	wantedHash := types.CalcAggregateHash32(types.Hash32{}, l.Hash().Bytes())
+	actualHash, err := msh.getRunningLayerHash(0)
+	assert.NoError(t, err)
+
+	assert.Equal(t, wantedHash, actualHash)
+
+	l2 := addLayer(types.GetEffectiveGenesis()+1, 5, msh)
+	msh.persistLayerHashes(l2)
+	secondWantedHash := types.CalcAggregateHash32(wantedHash, l2.Hash().Bytes())
+	actualHash2, err := msh.getRunningLayerHash(1)
+	assert.NoError(t, err)
+	assert.Equal(t, secondWantedHash, actualHash2)
 }
 
 func GetTransactionIds(txs ...*types.Transaction) []types.TransactionID {

@@ -307,10 +307,26 @@ func (msh *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerI
 		validBlocks, invalidBlocks := msh.BlocksByValidity(l.Blocks())
 		msh.updateStateWithLayer(layerID, types.NewExistingLayer(layerID, validBlocks))
 		msh.logStateRoot(l.Index())
-		msh.setLayerHash(l)
+		msh.persistLayerHashes(l)
 		msh.reInsertTxsToPool(validBlocks, invalidBlocks, l.Index())
 	}
-	msh.persistLayerHash()
+	msh.persistLastLayerHash()
+}
+
+func (msh *Mesh) persistLayerHashes(l *types.Layer) {
+	hash := msh.calcLayerHash(l)
+	msh.persistLayerHash(l.Index(), hash)
+	prevHash := types.Hash32{}
+	var err error
+	if l.Index() > types.GetEffectiveGenesis() {
+		prevHash, err = msh.getRunningLayerHash(l.Index() - 1)
+		if err != nil {
+			msh.Log.Error("cannot get running layer hash for layer %v", l.Index()-1)
+			return
+		}
+	}
+	msh.persistRunningLayerHash(l.Index(), types.CalcAggregateHash32(prevHash, l.Hash().Bytes()))
+	msh.layerHash = hash.Bytes()
 }
 
 func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l types.LayerID) {
@@ -423,19 +439,53 @@ func (msh *Mesh) logStateRoot(layerID types.LayerID) {
 	)
 }
 
-func (msh *Mesh) setLayerHash(layer *types.Layer) {
+func (msh *Mesh) calcLayerHash(layer *types.Layer) types.Hash32 {
 	validBlocks, _ := msh.BlocksByValidity(layer.Blocks())
 	msh.layerHash = types.CalcBlocksHash32(types.BlockIDs(validBlocks), msh.layerHash).Bytes()
 
 	msh.Event().Info("new layer hash", layer.Index(),
 		log.String("layer_hash", util.Bytes2Hex(msh.layerHash)))
+
+	return types.CalcBlocksHash32(types.BlockIDs(validBlocks), msh.layerHash)
 }
 
-func (msh *Mesh) persistLayerHash() {
+func (msh *Mesh) persistLastLayerHash() {
 	if err := msh.general.Put(constLAYERHASH, msh.layerHash); err != nil {
-		msh.With().Error("failed to persist layer hash", log.Err(err), msh.ProcessedLayer(),
+		msh.With().Error("failed to persist last layer hash", log.Err(err), msh.ProcessedLayer(),
 			log.String("layer_hash", util.Bytes2Hex(msh.layerHash)))
 	}
+}
+
+func (msh *Mesh) persistLayerHash(layerID types.LayerID, hash types.Hash32) {
+	if err := msh.general.Put(msh.getLayerHashKey(layerID), hash.Bytes()); err != nil {
+		msh.With().Error("failed to persist layer hash", log.Err(err), msh.ProcessedLayer(),
+			log.String("layer_hash", hash.Hex()))
+	}
+}
+
+func (msh *Mesh) persistRunningLayerHash(layerID types.LayerID, hash types.Hash32) {
+	if err := msh.general.Put(msh.getRunningLayerHashKey(layerID), hash.Bytes()); err != nil {
+		msh.With().Error("failed to persist running layer hash", log.Err(err), msh.ProcessedLayer(),
+			log.String("layer_hash", hash.Hex()))
+	}
+}
+
+func (msh *Mesh) getRunningLayerHash(layerID types.LayerID) (types.Hash32, error) {
+	bts, err := msh.general.Get(msh.getRunningLayerHashKey(layerID))
+	if err != nil {
+		return [32]byte{}, err
+	}
+	var hash types.Hash32
+	hash.SetBytes(bts)
+	return hash, nil
+}
+
+func (msh *Mesh) getLayerHashKey(layerID types.LayerID) []byte {
+	return []byte(fmt.Sprintf("layerHash_%v", layerID.Bytes()))
+}
+
+func (msh *Mesh) getRunningLayerHashKey(layerID types.LayerID) []byte {
+	return []byte(fmt.Sprintf("rLayerHash_%v", layerID.Bytes()))
 }
 
 func (msh *Mesh) extractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs []*types.Transaction) {
