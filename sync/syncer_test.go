@@ -1365,10 +1365,10 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	log.Info("layer %v", timer.GetCurrentLayer())
 	timer.Tick()
 
-	time.Sleep(1 * time.Second)
-	timer.Layer = timer.Layer + 1
-	log.Info("layer %v", timer.GetCurrentLayer())
-	timer.Tick()
+	//time.Sleep(1 * time.Second)
+	//timer.Layer = timer.Layer + 1
+	//log.Info("layer %v", timer.GetCurrentLayer())
+	//timer.Tick()
 
 	time.Sleep(1 * time.Second)
 

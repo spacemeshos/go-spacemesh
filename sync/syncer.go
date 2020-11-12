@@ -486,6 +486,9 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 		// 	currently hareForLayer is nil if hare hasn't terminated yet.
 		//	 ACT: hare should save something in the db when terminating empty set, sync should check it.
 		hareForLayer, err := s.DB.GetLayerInputVector(lyr.Index())
+		if err != nil {
+			s.Log.With().Warning("validating layer without input vector", lyr.Index(), log.Err(err))
+		}
 		s.ValidateLayer(lyr, hareForLayer) // wait for layer validation
 	}
 
@@ -519,6 +522,58 @@ func (s *Syncer) syncAtxs(currentSyncLayer types.LayerID) {
 
 // Waits two ticks (while weakly-synced) in order to ensure that we listened to gossip for one full layer
 // after that we are assumed to have all the data required for validation so we can validate and open gossip
+//// opening gossip in weakly-synced transition us to fully-synced
+//func (s *Syncer) oldGossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error {
+//	// listen to gossip
+//	s.setGossipBufferingStatus(inProgress)
+//	// subscribe and wait for two ticks
+//	s.Info("waiting for two ticks while p2p is open, epoch %v", currentSyncLayer.GetEpoch())
+//	ch := s.ticker.Subscribe()
+//
+//	if _, done := s.waitLayer(ch); done {
+//		return fmt.Errorf("cloed while buffering first layer")
+//	}
+//
+//	if _, done := s.waitLayer(ch); done {
+//		return fmt.Errorf("cloed while buffering second layer ")
+//	}
+//
+//	s.ticker.Unsubscribe(ch) // unsub, we won't be listening on this ch anymore
+//	s.Info("done waiting for two ticks while listening to p2p")
+//
+//	// assumed to be weakly synced here
+//	// just get the layers and validate
+//
+//	// get & validate first tick
+//	if err := s.getAndValidateLayer(currentSyncLayer); err != nil {
+//		if err != database.ErrNotFound {
+//			return err
+//		}
+//		if err := s.SetZeroBlockLayer(currentSyncLayer); err != nil {
+//			return err
+//		}
+//	}
+//
+//	// get & validate second tick
+//	if err := s.getAndValidateLayer(currentSyncLayer + 1); err != nil {
+//		if err != database.ErrNotFound {
+//			return err
+//		}
+//		if err := s.SetZeroBlockLayer(currentSyncLayer + 1); err != nil {
+//			return err
+//		}
+//	}
+//
+//	s.Info("done waiting for ticks and validation. setting gossip true")
+//
+//	// fully-synced - set gossip -synced to true
+//	s.setGossipBufferingStatus(done)
+//
+//	return nil
+//}
+
+// Waits two ticks (while weakly-synced) in order to ensure that we listened to gossip for one full layer
+// after that we are assumed to have all the data required for validation so we can validate and open gossip
 // opening gossip in weakly-synced transition us to fully-synced
 func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error {
 	// listen to gossip
@@ -527,17 +582,14 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 	s.With().Info("waiting for two ticks while p2p is open", currentSyncLayer.GetEpoch())
 	ch := s.ticker.Subscribe()
 
-	if done := s.waitLayer(ch); done {
+	var flayer types.LayerID // this will be currentSyncLayer+1
+	var exit bool
+
+	if flayer, exit = s.waitLayer(ch); exit {
 		return fmt.Errorf("cloed while buffering first layer")
 	}
 
-	if done := s.waitLayer(ch); done {
-		return fmt.Errorf("cloed while buffering second layer ")
-	}
-
-	s.Info("done waiting for two ticks while listening to p2p")
-	s.Info("syncing on input vector for layer %v", currentSyncLayer)
-
+	s.Log.Info("syncing input vector for layer %v", currentSyncLayer)
 	iv, err := s.syncInputVector(currentSyncLayer)
 	if err != nil {
 		s.Error("syncing on input vector for layer %v failed err:%v", currentSyncLayer, err)
@@ -557,22 +609,24 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 		}
 	}
 
-	s.Info("Opening hare for third layer")
+	// wait so we have iv for flayer
 
 	s.setGossipBufferingStatus(inProgress2)
-	// now hare is open. but block builder is still closed.
-	if done := s.waitLayer(ch); done {
+
+	if _, exit = s.waitLayer(ch); exit {
 		return fmt.Errorf("cloed while buffering second layer ")
 	}
 
 	s.ticker.Unsubscribe(ch)
 
-	// sync on input vector for second layer
-	iv, err = s.syncInputVector(currentSyncLayer + 1)
+	s.Info("done waiting for two ticks while listening to p2p")
+	s.Info("syncing on input vector for layer %v", flayer)
+
+	iv, err = s.syncInputVector(flayer)
 	if err != nil {
-		s.Error("syncing on input vector for layer %v failed err:%v", currentSyncLayer+1, err)
+		s.Error("syncing on input vector for layer %v failed err:%v", flayer, err)
 	} else {
-		if err := s.SaveLayerInputVector(currentSyncLayer+1, iv); err != nil {
+		if err := s.SaveLayerInputVector(flayer, iv); err != nil {
 			s.Error("saving to db failed err:%v", err)
 		}
 	}
@@ -598,15 +652,16 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 	return nil
 }
 
-func (s *Syncer) waitLayer(ch timesync.LayerTimer) bool {
+func (s *Syncer) waitLayer(ch timesync.LayerTimer) (types.LayerID, bool) {
+	var l types.LayerID
 	select {
-	case <-ch:
+	case l = <-ch:
 		s.Debug("waited one layer")
 	case <-s.exit:
 		s.Debug("exit while buffering")
-		return true
+		return l, true
 	}
-	return false
+	return l, false
 }
 
 func (s *Syncer) getLayerFromNeighbors(currentSyncLayer types.LayerID) (*types.Layer, error) {
