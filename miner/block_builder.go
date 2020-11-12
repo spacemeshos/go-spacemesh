@@ -119,7 +119,7 @@ func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent
 		network:         net,
 		weakCoinToss:    weakCoin,
 		meshProvider:    orph,
-		baseBlockP: bbp,
+		baseBlockP:      bbp,
 		blockOracle:     blockOracle,
 		syncer:          syncer,
 		started:         false,
