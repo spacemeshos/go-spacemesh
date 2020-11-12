@@ -358,6 +358,9 @@ func Test_DBGetByCoinbase(t *testing.T) {
 	assert.True(t, iter.Next())
 	assert.Equal(t, iter.Value(), atxid2.Bytes())
 	assert.False(t, iter.Next())
+	iter.Release()
+	err = iter.Error()
+	assert.NoError(t, err)
 }
 
 func TestMesh_processBlockATXs(t *testing.T) {

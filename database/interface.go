@@ -65,6 +65,8 @@ type Iterator interface {
 	iterator.IteratorSeeker
 	Key() []byte
 	Value() []byte
+	Release()
+	Error() error
 }
 
 // ContextDBCreator is a global structure that toggles creation of real dbs and memory dbs for tests

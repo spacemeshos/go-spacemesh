@@ -134,6 +134,11 @@ func (s MeshService) getFilteredActivations(startLayer types.LayerID, addr types
 		}
 		atxids = append(atxids, a)
 	}
+	atxIter.Release()
+	err = atxIter.Error()
+	if err != nil {
+		return nil, err
+	}
 
 	// Look up full data
 	atxs, matxs := s.Mesh.GetATXs(atxids)

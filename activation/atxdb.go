@@ -648,6 +648,11 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 		}
 		atxs = append(atxs, a)
 	}
+	atxIterator.Release()
+	err := atxIterator.Error()
+	if err != nil {
+		db.log.Panic("")
+	}
 	db.log.Info("returned epoch %v atxs %v %v", epochID, len(atxs), atxs)
 	return atxs
 }
