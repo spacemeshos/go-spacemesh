@@ -140,6 +140,7 @@ func (app *P2PApp) startAPI() {
 		}
 		jsonSvc = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
 		jsonSvc.StartService(
+			apiConf.StartDebugService,
 			apiConf.StartGatewayService,
 			apiConf.StartGlobalStateService,
 			apiConf.StartMeshService,
