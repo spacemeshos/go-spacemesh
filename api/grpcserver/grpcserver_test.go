@@ -97,7 +97,9 @@ var (
 			globalTx.Origin(): big.NewInt(int64(accountBalance)),
 			addr1:             big.NewInt(int64(accountBalance)),
 		},
-		nonces: map[types.Address]uint64{globalTx.Origin(): uint64(accountCounter)},
+		nonces: map[types.Address]uint64{
+			globalTx.Origin(): uint64(accountCounter),
+		},
 	}
 	stateRoot = types.HexToHash32("11111")
 )
@@ -169,6 +171,21 @@ type TxAPIMock struct {
 	balances     map[types.Address]*big.Int
 	nonces       map[types.Address]uint64
 	err          error
+}
+
+func (t *TxAPIMock) GetAllAccounts() (res *types.MultipleAccountsState, err error) {
+	accounts := make(map[string]types.AccountState)
+	for address, balance := range t.balances {
+		accounts[address.String()] = types.AccountState{
+			Balance: balance,
+			Nonce:   t.nonces[address],
+		}
+	}
+	res = &types.MultipleAccountsState{
+		Root:     "", // DebugService.Accounts does not return a state root
+		Accounts: accounts,
+	}
+	return
 }
 
 func (t *TxAPIMock) GetStateRoot() types.Hash32 {
@@ -423,7 +440,9 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 
 	// start gRPC and json servers
 	grpcService.Start()
-	jsonService.StartService(cfg.StartGatewayService,
+	jsonService.StartService(
+		cfg.StartDebugService,
+		cfg.StartGatewayService,
 		cfg.StartGlobalStateService,
 		cfg.StartMeshService,
 		cfg.StartNodeService,
@@ -2423,6 +2442,46 @@ func TestJsonApi(t *testing.T) {
 	var msg2 pb.GenesisTimeResponse
 	require.NoError(t, jsonpb.UnmarshalString(respBody2, &msg2))
 	require.Equal(t, uint64(genTime.GetGenesisTime().Unix()), msg2.Unixtime.Value)
+}
+
+func TestDebugService(t *testing.T) {
+	svc := NewDebugService(txAPI)
+	shutDown := launchServer(t, svc)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() { require.NoError(t, conn.Close()) }()
+	c := pb.NewDebugServiceClient(conn)
+
+	// Construct an array of test cases to test each endpoint in turn
+	testCases := []struct {
+		name string
+		run  func(*testing.T)
+	}{
+		{"Accounts", func(t *testing.T) {
+			res, err := c.Accounts(context.Background(), &empty.Empty{})
+			require.NoError(t, err)
+			require.Equal(t, 2, len(res.AccountWrapper))
+
+			// Get the list of addresses and compare them regardless of order
+			var addresses [][]byte
+			for _, a := range res.AccountWrapper {
+				addresses = append(addresses, a.AccountId.Address)
+			}
+			require.Contains(t, addresses, globalTx.Origin().Bytes())
+			require.Contains(t, addresses, addr1.Bytes())
+		}},
+	}
+
+	// Run subtests
+	for _, tc := range testCases {
+		t.Run(tc.name, tc.run)
+	}
 }
 
 func TestGatewayService(t *testing.T) {
