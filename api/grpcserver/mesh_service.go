@@ -160,9 +160,7 @@ func (s MeshService) AccountMeshDataQuery(_ context.Context, in *pb.AccountMeshD
 	log.Info("GRPC MeshService.AccountMeshDataQuery")
 
 	var startLayer types.LayerID
-	if in.MinLayer == nil {
-		startLayer = 0
-	} else {
+	if in.MinLayer != nil {
 		startLayer = types.LayerID(in.MinLayer.Number)
 	}
 
@@ -365,14 +363,10 @@ func (s MeshService) LayersQuery(_ context.Context, in *pb.LayersQueryRequest) (
 	log.Info("GRPC MeshService.LayersQuery")
 
 	var startLayer, endLayer types.LayerID
-	if in.StartLayer == nil {
-		startLayer = 0
-	} else {
+	if in.StartLayer != nil {
 		startLayer = types.LayerID(in.StartLayer.Number)
 	}
-	if in.EndLayer == nil {
-		endLayer = 0
-	} else {
+	if in.EndLayer != nil {
 		endLayer = types.LayerID(in.EndLayer.Number)
 	}
 
