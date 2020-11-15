@@ -396,6 +396,8 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer, inputVector []types.Bl
 
 	defer t.evict()
 
+	t.logger.Info("Start handling layer", newlyr.Index())
+
 	// update tables with blocks
 	for _, b := range newlyr.Blocks() {
 		_, ok := t.BlocksToBlocks[b.LayerIndex]
@@ -495,7 +497,7 @@ loop:
 			raw, err := t.bdp.GetLayerInputVector(i)
 			if err != nil {
 				// this sets the input to abstain
-				t.logger.With().Warning("input vector abstains on all blocks", idx)
+				t.logger.With().Warning("input vector abstains on all blocks", i)
 			}
 			input = t.inputVectorForLayer(blks, raw)
 		}
