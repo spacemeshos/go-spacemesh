@@ -208,39 +208,6 @@ jobs:
         uses: actions/checkout@v2
       - name: blocks add node test
         run: make dockertest-blocks-add-node-elk
-  systemtest-hare-elk:
-    # only run on push, not on pull_request
-    if: github.event_name == 'push'
-    needs: dockerpush
-    runs-on: ubuntu-latest
-    timeout-minutes: 80
-    steps:
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: hare system tests
-        run: make dockertest-hare-elk
-  systemtest-mining-elk:
-    # only run on push, not on pull_request
-    if: github.event_name == 'push'
-    needs: dockerpush
-    runs-on: ubuntu-latest
-    timeout-minutes: 80
-    steps:
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: mining system tests
-        run: make dockertest-mining-elk
-  systemtest-sync-elk:
-    # only run on push, not on pull_request
-    if: github.event_name == 'push'
-    needs: dockerpush
-    runs-on: ubuntu-latest
-    timeout-minutes: 80
-    steps:
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: sync test
-        run: make dockertest-sync-elk
   systemtest-blocks-remove-node-elk:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
@@ -252,10 +219,43 @@ jobs:
         uses: actions/checkout@v2
       - name: blocks remove node test
         run: make dockertest-blocks-remove-node-elk
+  systemtest-hare-elk:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: systemtest-blocks-add-node-elk
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: hare system tests
+        run: make dockertest-hare-elk
+  systemtest-mining-elk:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: systemtest-blocks-remove-node-elk
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: mining system tests
+        run: make dockertest-mining-elk
+  systemtest-sync-elk:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: systemtest-blocks-add-node-elk
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: sync test
+        run: make dockertest-sync-elk
   systemtest-genesis-elk:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
-    needs: dockerpush
+    needs: systemtest-blocks-remove-node-elk
     runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
@@ -266,7 +266,7 @@ jobs:
   systemtest-p2p-elk:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
-    needs: dockerpush
+    needs: systemtest-blocks-remove-node-elk
     runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:

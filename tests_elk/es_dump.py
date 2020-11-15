@@ -83,7 +83,7 @@ def es_reindex(namespace, filebeat_index_date, port=9200, retry=3):
     post_url = f"http://{cnf.ES_USER_LOCAL}:{cnf.ES_PASS_LOCAL}@{cnf.MAIN_ES_URL}/_reindex"
     headers = {"Content-Type": "application/json"}
     try:
-        res = requests.post(url=post_url, data=json.dumps(dump_req_body), headers=headers)
+        res = requests.post(url=post_url, data=json.dumps(dump_req_body), headers=headers, timeout=480)
     except Exception as e:
         print(f"elk dumping POST has failed: {e}")
         return
