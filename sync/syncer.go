@@ -520,135 +520,85 @@ func (s *Syncer) syncAtxs(currentSyncLayer types.LayerID) {
 	}
 }
 
-// Waits two ticks (while weakly-synced) in order to ensure that we listened to gossip for one full layer
-// after that we are assumed to have all the data required for validation so we can validate and open gossip
-//// opening gossip in weakly-synced transition us to fully-synced
-//func (s *Syncer) oldGossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error {
-//	// listen to gossip
-//	s.setGossipBufferingStatus(inProgress)
-//	// subscribe and wait for two ticks
-//	s.Info("waiting for two ticks while p2p is open, epoch %v", currentSyncLayer.GetEpoch())
-//	ch := s.ticker.Subscribe()
-//
-//	if _, done := s.waitLayer(ch); done {
-//		return fmt.Errorf("cloed while buffering first layer")
-//	}
-//
-//	if _, done := s.waitLayer(ch); done {
-//		return fmt.Errorf("cloed while buffering second layer ")
-//	}
-//
-//	s.ticker.Unsubscribe(ch) // unsub, we won't be listening on this ch anymore
-//	s.Info("done waiting for two ticks while listening to p2p")
-//
-//	// assumed to be weakly synced here
-//	// just get the layers and validate
-//
-//	// get & validate first tick
-//	if err := s.getAndValidateLayer(currentSyncLayer); err != nil {
-//		if err != database.ErrNotFound {
-//			return err
-//		}
-//		if err := s.SetZeroBlockLayer(currentSyncLayer); err != nil {
-//			return err
-//		}
-//	}
-//
-//	// get & validate second tick
-//	if err := s.getAndValidateLayer(currentSyncLayer + 1); err != nil {
-//		if err != database.ErrNotFound {
-//			return err
-//		}
-//		if err := s.SetZeroBlockLayer(currentSyncLayer + 1); err != nil {
-//			return err
-//		}
-//	}
-//
-//	s.Info("done waiting for ticks and validation. setting gossip true")
-//
-//	// fully-synced - set gossip -synced to true
-//	s.setGossipBufferingStatus(done)
-//
-//	return nil
-//}
-
-// Waits two ticks (while weakly-synced) in order to ensure that we listened to gossip for one full layer
-// after that we are assumed to have all the data required for validation so we can validate and open gossip
+//Waits two ticks (while weakly-synced) in order to ensure that we listened to gossip for one full layer
+//after that we are assumed to have all the data required for validation so we can validate and open gossip
 // opening gossip in weakly-synced transition us to fully-synced
 func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error {
 	// listen to gossip
-	s.setGossipBufferingStatus(inProgress)
 	// subscribe and wait for two ticks
-	s.With().Info("waiting for two ticks while p2p is open", currentSyncLayer.GetEpoch())
+	s.Info("waiting for two ticks while p2p is open, epoch %v", currentSyncLayer.GetEpoch())
 	ch := s.ticker.Subscribe()
 
-	var flayer types.LayerID // this will be currentSyncLayer+1
 	var exit bool
+	var flayer types.LayerID
 
 	if flayer, exit = s.waitLayer(ch); exit {
 		return fmt.Errorf("cloed while buffering first layer")
 	}
 
-	s.Log.Info("syncing input vector for layer %v", currentSyncLayer)
-	iv, err := s.syncInputVector(currentSyncLayer)
-	if err != nil {
-		s.Error("syncing on input vector for layer %v failed err:%v", currentSyncLayer, err)
-	} else {
-		if err := s.SaveLayerInputVector(currentSyncLayer, iv); err != nil {
-			s.Error("saving to db failed err:%v", err)
-		}
+	if err := s.syncSingleLayer(currentSyncLayer); err != nil {
+		return err
 	}
 
-	// get & validate first tick
-	if err := s.getAndValidateLayer(currentSyncLayer); err != nil {
-		if err != database.ErrNotFound {
-			return err
-		}
-		if err := s.SetZeroBlockLayer(currentSyncLayer); err != nil {
-			return err
-		}
-	}
-
-	// wait so we have iv for flayer
-
+	//todo: just set hare to listen when inProgress and remove inProgress2
 	s.setGossipBufferingStatus(inProgress2)
 
-	if _, exit = s.waitLayer(ch); exit {
+	if _, done := s.waitLayer(ch); done {
 		return fmt.Errorf("cloed while buffering second layer ")
 	}
 
-	s.ticker.Unsubscribe(ch)
-
-	s.Info("done waiting for two ticks while listening to p2p")
-	s.Info("syncing on input vector for layer %v", flayer)
-
-	iv, err = s.syncInputVector(flayer)
-	if err != nil {
-		s.Error("syncing on input vector for layer %v failed err:%v", flayer, err)
-	} else {
-		if err := s.SaveLayerInputVector(flayer, iv); err != nil {
-			s.Error("saving to db failed err:%v", err)
-		}
+	if err := s.syncSingleLayer(flayer); err != nil {
+		return err
 	}
 
-	// assumed to be weakly synced here
-	// just get the layers and validate
-
 	// get & validate second tick
-	if err := s.getAndValidateLayer(currentSyncLayer + 1); err != nil {
+	if err := s.getAndValidateLayer(flayer); err != nil {
 		if err != database.ErrNotFound {
 			return err
 		}
-		if err := s.SetZeroBlockLayer(currentSyncLayer + 1); err != nil {
+		if err := s.SetZeroBlockLayer(flayer); err != nil {
 			return err
 		}
 	}
 
-	s.Info("done waiting for ticks and validation, setting gossip true")
+	s.ticker.Unsubscribe(ch) // unsub, we won't be listening on this ch anymore
+	s.Info("done waiting for ticks and validation. setting gossip true")
 
 	// fully-synced - set gossip -synced to true
 	s.setGossipBufferingStatus(done)
 
+	return nil
+}
+
+func (s *Syncer) syncSingleLayer(currentSyncLayer types.LayerID) error {
+	s.With().Info("syncing layer", log.FieldNamed("current_sync_layer", currentSyncLayer),
+		log.FieldNamed("last_ticked_layer", s.GetCurrentLayer()))
+
+	if s.shutdown() {
+		return errors.New("shutdown")
+	}
+
+	lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
+	if err != nil {
+		s.With().Info("could not get layer from neighbors", currentSyncLayer, log.Err(err))
+		return err
+	}
+
+	if len(lyr.Blocks()) == 0 {
+		if err := s.SetZeroBlockLayer(currentSyncLayer); err != nil {
+			s.With().Error("handleNotSynced failed ", currentSyncLayer, log.Err(err))
+			return err
+		}
+	}
+	s.syncAtxs(currentSyncLayer)
+	// TODO: implement handling hare terminating with no valid blocks.
+	// 	currently hareForLayer is nil if hare hasn't terminated yet.
+	//	 ACT: hare should save something in the db when terminating empty set, sync should check it.
+	hareForLayer, err := s.DB.GetLayerInputVector(lyr.Index())
+	if err != nil {
+		s.Log.With().Warning("validating layer without input vector", lyr.Index(), log.Err(err))
+	}
+	s.ValidateLayer(lyr, hareForLayer) // wait for layer validation
 	return nil
 }
 
