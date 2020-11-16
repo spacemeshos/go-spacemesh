@@ -1313,25 +1313,47 @@ func TestSyncer_handleNotSyncedFlow(t *testing.T) {
 }
 
 func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
+	types.SetLayersPerEpoch(100)
 	r := require.New(t)
 	timer := &mockClock{Layer: 5}
 	sim := service.NewSimulator()
-	net := sim.NewNode()
 	l := log.NewDefault(t.Name())
+
+	syncedMiner := sim.NewNode()
+	syncedMsh := getMesh(memoryDB, Path+t.Name()+"synced_"+time.Now().String())
+	synecdAtxPool := activation.NewAtxMemPool()
+	_ = NewSync(syncedMiner, syncedMsh, state.NewTxMemPool(), synecdAtxPool, blockEligibilityValidatorMock{}, newMockPoetDb(), conf, timer, l.WithName("synced"))
+	atx := types.NewActivationTx(types.NIPSTChallenge{}, types.Address{}, &types.NIPST{}, &types.PostProof{})
+	atx.CalcAndSetID()
+	fmt.Println("ATX ID ", atx.ID())
+
+	layers := types.LayerID(7)
+	for i := types.LayerID(1); i < layers; i++ {
+		blk := types.NewExistingBlock(i, []byte(rand.String(8)), nil)
+		blk.ATXID = atx.ID()
+		blk.ActiveSet = &[]types.ATXID{atx.ID()} // mock
+		blk.Signature = signing.NewEdSigner().Sign(blk.Bytes())
+		blk.Initialize()
+		syncedMsh.AddBlock(blk)
+		syncedMsh.SaveLayerInputVector(i, []types.BlockID{blk.ID()})
+		fmt.Printf("Added block %v to layer %v \r\n", blk.ID(), blk.LayerIndex)
+	}
+
+	net := sim.NewNode()
 	blockValidator := blockEligibilityValidatorMock{}
 	txpool := state.NewTxMemPool()
 	atxpool := activation.NewAtxMemPool()
 	//ch := ts.Subscribe()
 	msh := getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String())
 
-	layers := types.LayerID(7)
-	for i := types.LayerID(1); i < layers; i++ {
-		blk := types.NewExistingBlock(i, []byte(rand.String(8)), nil)
-		msh.AddBlock(blk)
-		msh.SaveLayerInputVector(i, []types.BlockID{blk.ID()})
+	sync := NewSync(net, msh, txpool, atxpool, blockValidator, newMockPoetDb(), conf, timer, l)
+
+	atxpool.Put(atx)
+	err := msh.ProcessAtxs([]*types.ActivationTx{atx})
+	if err != nil {
+		panic("WOWOWO")
 	}
 
-	sync := NewSync(net, msh, txpool, atxpool, blockValidator, newMockPoetDb(), conf, timer, l)
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.peers = PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{net.PublicKey()} }}
 	sync.syncLock.Lock()

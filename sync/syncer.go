@@ -535,6 +535,16 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 		return err
 	}
 
+	// get & validate first tick
+	if err := s.getAndValidateLayer(currentSyncLayer); err != nil {
+		if err != database.ErrNotFound {
+			return err
+		}
+		if err := s.SetZeroBlockLayer(currentSyncLayer); err != nil {
+			return err
+		}
+	}
+
 	//todo: just set hare to listen when inProgress and remove inProgress2
 	s.setGossipBufferingStatus(inProgress2)
 
@@ -586,14 +596,6 @@ func (s *Syncer) syncSingleLayer(currentSyncLayer types.LayerID) error {
 		}
 	}
 	s.syncAtxs(currentSyncLayer)
-	// TODO: implement handling hare terminating with no valid blocks.
-	// 	currently hareForLayer is nil if hare hasn't terminated yet.
-	//	 ACT: hare should save something in the db when terminating empty set, sync should check it.
-	hareForLayer, err := s.DB.GetLayerInputVector(lyr.Index())
-	if err != nil {
-		s.Log.With().Warning("validating layer without input vector", lyr.Index(), log.Err(err))
-	}
-	s.ValidateLayer(lyr, hareForLayer) // wait for layer validation
 	return nil
 }
 
