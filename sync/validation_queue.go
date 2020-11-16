@@ -88,7 +88,7 @@ func (vq *blockQueue) handleBlocks(bjb fetchJob) {
 func (vq *blockQueue) handleBlock(id types.Hash32, block *types.Block) {
 	vq.With().Info("start handling block", block.Fields()...)
 	if err := vq.fetchBlockDataForValidation(block); err != nil {
-		vq.With().Error("block data fetching failed", append(block.Fields(), log.Err(err))...)
+		vq.With().Error("fetching block data failed", append(block.Fields(), log.Err(err))...)
 		vq.updateDependencies(id, false)
 		return
 	}
