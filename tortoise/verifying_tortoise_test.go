@@ -109,7 +109,6 @@ func turtleSanity(t testing.TB, layers types.LayerID, blocksPerLayer, voteNegati
 	hm := func(l types.LayerID) (ids []types.BlockID, err error) {
 		if l < mesh.GenesisLayer().Index() {
 			panic("should'nt happen")
-			return nil, errors.New("no results on genesis epochs")
 		}
 		if l == mesh.GenesisLayer().Index() {
 			return types.BlockIDs(mesh.GenesisLayer().Blocks()), nil
