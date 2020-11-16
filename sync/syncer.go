@@ -299,7 +299,7 @@ func (s *Syncer) IsSynced() bool {
 	return s.weaklySynced(s.GetCurrentLayer()) && s.getGossipBufferingStatus() == done
 }
 
-// IsSynced returns true if the node is synced false otherwise
+// IsHareSynced returns true if the hare is synced false otherwise
 func (s *Syncer) IsHareSynced() bool {
 	return s.getGossipBufferingStatus() == inProgress2 || s.IsSynced()
 }
