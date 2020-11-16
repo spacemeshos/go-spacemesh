@@ -366,7 +366,6 @@ func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
 func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) {
 	r := require.New(t)
 
-	// types.SetLayersPerEpoch(2)
 	msh := getMesh("mesh")
 
 	state := &MockMapState{}
@@ -425,7 +424,6 @@ func TestMesh_AddBlockWithTxs_PushTransactions_getInvalidBlocksByHare(t *testing
 
 	msh.reInsertTxsToPool(hareBlocks, invalid, layerID)
 	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(state.Pool...))
-
 }
 
 func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {

@@ -37,7 +37,7 @@ func (id BlockID) AsHash32() Hash32 {
 	return Hash20(id).ToHash32()
 }
 
-var layersPerEpoch int32 = 1
+var layersPerEpoch int32
 
 // EffectiveGenesis marks when actual blocks would start being crated in the network, this will take account the first
 // genesis epoch and the following epoch in which ATXs are published
@@ -50,7 +50,7 @@ func getLayersPerEpoch() int32 {
 // SetLayersPerEpoch sets global parameter of layers per epoch, all conversion from layer to epoch use this param
 func SetLayersPerEpoch(l int32) {
 	atomic.StoreInt32(&layersPerEpoch, l)
-	atomic.StoreInt32(&EffectiveGenesis, getLayersPerEpoch()*2-1)
+	atomic.StoreInt32(&EffectiveGenesis, l*2-1)
 }
 
 // LayerID is a uint64 representing a layer number. It is zero-based.
