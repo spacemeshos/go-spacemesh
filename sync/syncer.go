@@ -482,6 +482,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 			}
 		}
 		s.syncAtxs(currentSyncLayer)
+
 		// TODO: implement handling hare terminating with no valid blocks.
 		// 	currently hareForLayer is nil if hare hasn't terminated yet.
 		//	 ACT: hare should save something in the db when terminating empty set, sync should check it.
