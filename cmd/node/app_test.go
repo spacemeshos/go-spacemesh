@@ -476,7 +476,7 @@ func max(i, j int) int {
 
 func calcTotalWeight(assert *assert.Assertions, apps []*SpacemeshApp) (totalWeightAllEpochs uint64) {
 	app := apps[0]
-	atxDb := app.blockListener.AtxDB.(*activation.DB)
+	atxDb := app.atxDb
 
 	for _, app := range apps {
 		atxID, err := atxDb.GetNodeLastAtxID(app.nodeID)

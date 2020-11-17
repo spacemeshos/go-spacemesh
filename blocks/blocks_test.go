@@ -23,8 +23,7 @@ var commitment = &types.PostProof{
 }
 
 func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
-	startTick uint64, positioningATX types.ATXID, coinbase types.Address, activeSetSize uint32, view []types.BlockID,
-	nipst *types.NIPST) *types.ActivationTx {
+	startTick uint64, positioningATX types.ATXID, coinbase types.Address, nipst *types.NIPST) *types.ActivationTx {
 
 	nipstChallenge := types.NIPSTChallenge{
 		NodeID:         nodeID,
@@ -34,7 +33,7 @@ func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, 
 		StartTick:      startTick,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipstChallenge, coinbase, nipst, nil)
+	return types.NewActivationTx(nipstChallenge, coinbase, nipst, 1024, nil)
 }
 
 func atx(pubkey string) *types.ActivationTx {
@@ -43,7 +42,7 @@ func atx(pubkey string) *types.ActivationTx {
 	poetRef := []byte{0xde, 0xad}
 	npst := activation.NewNIPSTWithChallenge(&chlng, poetRef)
 
-	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, 5, 1, *types.EmptyATXID, coinbase, 0, nil, npst)
+	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, 5, 1, *types.EmptyATXID, coinbase, npst)
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
 	atx.CalcAndSetID()
