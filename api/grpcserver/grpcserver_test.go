@@ -264,6 +264,11 @@ func (t *TxAPIMock) GetATXs([]types.ATXID) (map[types.ATXID]*types.ActivationTx,
 	return atxs, nil
 }
 
+func (t *TxAPIMock) GetATXsByCoinbase(coinbase types.Address) ([]types.ATXID, error) {
+	atxids := []types.ATXID{globalAtx.ID(), globalAtx2.ID()}
+	return atxids, nil
+}
+
 func (t *TxAPIMock) GetTransactions(txids []types.TransactionID) (txs []*types.Transaction, missing map[types.TransactionID]struct{}) {
 	for _, txid := range txids {
 		for _, tx := range t.returnTx {
