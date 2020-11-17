@@ -30,7 +30,7 @@ spec:
         - containerPort: 19091
         - containerPort: 9999
       - name: poet
-        image: spacemeshos/poet:develop
+        image: spacemeshos/poet:73488d6
         imagePullPolicy: Always
         args: ['--rpclisten', '0.0.0.0:50002', '--restlisten', '0.0.0.0:80', "--n", "19"]
         resources:

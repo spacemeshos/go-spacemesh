@@ -109,6 +109,10 @@ func (mockState) AddressExists(types.Address) bool {
 	return true
 }
 
+func (mockState) GetAllAccounts() (*types.MultipleAccountsState, error) {
+	panic("implement me")
+}
+
 type mockIStore struct{}
 
 func (*mockIStore) StoreNodeIdentity(types.NodeID) error {

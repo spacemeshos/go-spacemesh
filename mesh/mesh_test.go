@@ -98,6 +98,10 @@ func (MockState) AddressExists(types.Address) bool {
 	return true
 }
 
+func (MockState) GetAllAccounts() (*types.MultipleAccountsState, error) {
+	panic("implement me")
+}
+
 func (MockState) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
 	panic("implement me")
 }
@@ -109,14 +113,22 @@ func (MockState) GetNonce(addr types.Address) uint64 {
 	panic("implement me")
 }
 
-type MockTxMemPool struct{}
-
-func (MockTxMemPool) Get(types.TransactionID) (*types.Transaction, error) {
-	return &types.Transaction{}, nil
+type MockTxMemPool struct {
+	db map[types.TransactionID]*types.Transaction
 }
 
-func (MockTxMemPool) Put(types.TransactionID, *types.Transaction) {
+func newMockTxMemPool() *MockTxMemPool {
+	return &MockTxMemPool{
+		db: make(map[types.TransactionID]*types.Transaction),
+	}
+}
 
+func (m *MockTxMemPool) Get(ID types.TransactionID) (*types.Transaction, error) {
+	return m.db[ID], nil
+}
+
+func (m *MockTxMemPool) Put(ID types.TransactionID, t *types.Transaction) {
+	m.db[ID] = t
 }
 
 func (MockTxMemPool) Invalidate(types.TransactionID) {
@@ -140,7 +152,7 @@ func (MockAtxMemPool) Invalidate(types.ATXID) {
 func getMesh(id string) *Mesh {
 	lg := log.NewDefault(id)
 	mmdb := NewMemMeshDB(lg)
-	layers := NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: mmdb}, MockTxMemPool{}, &MockState{}, lg)
+	layers := NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: mmdb}, newMockTxMemPool(), &MockState{}, lg)
 	return layers
 }
 
@@ -149,9 +161,9 @@ func TestLayers_AddBlock(t *testing.T) {
 	layers := getMesh("t1")
 	defer layers.Close()
 
-	block1 := types.NewExistingBlock(1, []byte("data1"))
-	block2 := types.NewExistingBlock(2, []byte("data2"))
-	block3 := types.NewExistingBlock(3, []byte("data3"))
+	block1 := types.NewExistingBlock(1, []byte("data1"), nil)
+	block2 := types.NewExistingBlock(2, []byte("data2"), nil)
+	block3 := types.NewExistingBlock(3, []byte("data3"), nil)
 
 	addTransactionsWithFee(t, layers.DB, block1, 4, rand.Int63n(100))
 
@@ -173,6 +185,26 @@ func TestLayers_AddBlock(t *testing.T) {
 	//assert.True(t, len(*rBlock1.ActiveSet) == len(*block1.ActiveSet))
 }
 
+func addLayer(id types.LayerID, layerSize int, msh *Mesh) *types.Layer {
+	for i := 0; i < layerSize; i++ {
+
+		block1 := types.NewExistingBlock(id, []byte(rand.String(8)), nil)
+		block1.Initialize()
+
+		err := msh.AddBlock(block1)
+		msh.contextualValidity.Put(block1.ID().Bytes(), []byte{1})
+		if err != nil {
+			panic("cannot add data to test")
+		}
+	}
+	l, err := msh.GetLayer(id)
+	if err != nil {
+		panic("cant get a layer we've just created")
+	}
+
+	return l
+}
+
 func TestLayers_AddLayer(t *testing.T) {
 	r := require.New(t)
 
@@ -184,11 +216,11 @@ func TestLayers_AddLayer(t *testing.T) {
 	_, err := msh.GetLayer(id)
 	r.EqualError(err, database.ErrNotFound.Error())
 
-	err = msh.AddBlock(types.NewExistingBlock(id, []byte("data1")))
+	err = msh.AddBlock(types.NewExistingBlock(id, []byte("data1"), nil))
 	r.NoError(err)
-	err = msh.AddBlock(types.NewExistingBlock(id, []byte("data2")))
+	err = msh.AddBlock(types.NewExistingBlock(id, []byte("data2"), nil))
 	r.NoError(err)
-	err = msh.AddBlock(types.NewExistingBlock(id, []byte("data3")))
+	err = msh.AddBlock(types.NewExistingBlock(id, []byte("data3"), nil))
 	r.NoError(err)
 	_, err = msh.GetLayer(id)
 	r.NoError(err)
@@ -197,9 +229,9 @@ func TestLayers_AddLayer(t *testing.T) {
 func TestLayers_AddWrongLayer(t *testing.T) {
 	layers := getMesh("t3")
 	defer layers.Close()
-	block1 := types.NewExistingBlock(1, []byte("data data data1"))
-	block2 := types.NewExistingBlock(2, []byte("data data data2"))
-	block3 := types.NewExistingBlock(4, []byte("data data data3"))
+	block1 := types.NewExistingBlock(1, []byte("data data data1"), nil)
+	block2 := types.NewExistingBlock(2, []byte("data data data2"), nil)
+	block3 := types.NewExistingBlock(4, []byte("data data data3"), nil)
 	l1 := types.NewExistingLayer(1, []*types.Block{block1})
 	err := layers.AddBlock(block1)
 	assert.NoError(t, err)
@@ -223,9 +255,9 @@ func TestLayers_AddWrongLayer(t *testing.T) {
 func TestLayers_GetLayer(t *testing.T) {
 	layers := getMesh("t4")
 	defer layers.Close()
-	block1 := types.NewExistingBlock(1, []byte("data data data1"))
-	block2 := types.NewExistingBlock(1, []byte("data data data2"))
-	block3 := types.NewExistingBlock(1, []byte("data data data3"))
+	block1 := types.NewExistingBlock(1, []byte("data data data1"), nil)
+	block2 := types.NewExistingBlock(1, []byte("data data data2"), nil)
+	block3 := types.NewExistingBlock(1, []byte("data data data3"), nil)
 	l1 := types.NewExistingLayer(1, []*types.Block{block1})
 	err := layers.AddBlock(block1)
 	assert.NoError(t, err)
@@ -255,9 +287,9 @@ func TestLayers_WakeUp(t *testing.T) {
 	layers := getMesh("t1")
 	defer layers.Close()
 
-	block1 := types.NewExistingBlock(1, []byte("data1"))
-	block2 := types.NewExistingBlock(2, []byte("data2"))
-	block3 := types.NewExistingBlock(3, []byte("data3"))
+	block1 := types.NewExistingBlock(1, []byte("data1"), nil)
+	block2 := types.NewExistingBlock(2, []byte("data2"), nil)
+	block3 := types.NewExistingBlock(3, []byte("data3"), nil)
 
 	err := layers.AddBlock(block1)
 	assert.NoError(t, err)
@@ -276,7 +308,7 @@ func TestLayers_WakeUp(t *testing.T) {
 	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
 	//assert.True(t, len(*rBlock1.ActiveSet) == len(*block1.ActiveSet))
 
-	recoveredMesh := NewMesh(layers.DB, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: layers.DB}, MockTxMemPool{}, &MockState{}, log.NewDefault(""))
+	recoveredMesh := NewMesh(layers.DB, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: layers.DB}, newMockTxMemPool(), &MockState{}, log.NewDefault(""))
 
 	rBlock2, err = recoveredMesh.GetBlock(block2.ID())
 	assert.NoError(t, err)
@@ -293,11 +325,11 @@ func TestLayers_WakeUp(t *testing.T) {
 func TestLayers_OrphanBlocks(t *testing.T) {
 	layers := getMesh("t6")
 	defer layers.Close()
-	block1 := types.NewExistingBlock(1, []byte("data data data1"))
-	block2 := types.NewExistingBlock(1, []byte("data data data2"))
-	block3 := types.NewExistingBlock(2, []byte("data data data3"))
-	block4 := types.NewExistingBlock(2, []byte("data data data4"))
-	block5 := types.NewExistingBlock(3, []byte("data data data5"))
+	block1 := types.NewExistingBlock(1, []byte("data data data1"), nil)
+	block2 := types.NewExistingBlock(1, []byte("data data data2"), nil)
+	block3 := types.NewExistingBlock(2, []byte("data data data3"), nil)
+	block4 := types.NewExistingBlock(2, []byte("data data data4"), nil)
+	block5 := types.NewExistingBlock(3, []byte("data data data5"), nil)
 	block5.AddView(block1.ID())
 	block5.AddView(block2.ID())
 	block5.AddView(block3.ID())
@@ -325,11 +357,11 @@ func TestLayers_OrphanBlocks(t *testing.T) {
 func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
 	layers := getMesh("t6")
 	defer layers.Close()
-	block1 := types.NewExistingBlock(1, []byte("data data data1"))
-	block2 := types.NewExistingBlock(1, []byte("data data data2"))
-	block3 := types.NewExistingBlock(2, []byte("data data data3"))
-	block4 := types.NewExistingBlock(2, []byte("data data data4"))
-	block5 := types.NewExistingBlock(3, []byte("data data data5"))
+	block1 := types.NewExistingBlock(1, []byte("data data data1"), nil)
+	block2 := types.NewExistingBlock(1, []byte("data data data2"), nil)
+	block3 := types.NewExistingBlock(2, []byte("data data data3"), nil)
+	block4 := types.NewExistingBlock(2, []byte("data data data4"), nil)
+	block5 := types.NewExistingBlock(3, []byte("data data data5"), nil)
 	block5.AddView(block1.ID())
 	block5.AddView(block2.ID())
 	block5.AddView(block3.ID())
@@ -351,15 +383,6 @@ func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
 	assert.Equal(t, 1, len(layers.orphanBlocks))
 }
 
-type MockBlockBuilder struct {
-	txs []*types.Transaction
-}
-
-func (m *MockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
-	m.txs = append(m.txs, tx)
-	return nil
-}
-
 func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) {
 	r := require.New(t)
 
@@ -368,7 +391,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 	state := &MockMapState{}
 	msh.txProcessor = state
 
-	layerID := types.LayerID(types.GetEffectiveGenesis() + 1)
+	layerID := types.GetEffectiveGenesis() + 1
 	signer, origin := newSignerAndAddress(r, "origin")
 	tx1 := addTxToMesh(r, msh, signer, 2468)
 	tx2 := addTxToMesh(r, msh, signer, 2469)
@@ -421,7 +444,6 @@ func TestMesh_AddBlockWithTxs_PushTransactions_getInvalidBlocksByHare(t *testing
 
 	msh.reInsertTxsToPool(hareBlocks, invalid, layerID)
 	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(state.Pool...))
-
 }
 
 func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
@@ -446,6 +468,27 @@ func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
 	r.ElementsMatch(GetTransactionIds(tx1, tx2, tx3, tx4), GetTransactionIds(validBlocks...))
 }
 
+func TestMesh_persistLayerHashes(t *testing.T) {
+	msh := getMesh("persistLayerHashes")
+	defer msh.Close()
+
+	// test first layer hash
+	l := addLayer(types.GetEffectiveGenesis(), 5, msh)
+	msh.persistLayerHashes(l)
+	wantedHash := types.CalcAggregateHash32(types.Hash32{}, l.Hash().Bytes())
+	actualHash, err := msh.getRunningLayerHash(types.GetEffectiveGenesis())
+	assert.NoError(t, err)
+
+	assert.Equal(t, wantedHash, actualHash)
+
+	l2 := addLayer(types.GetEffectiveGenesis()+1, 5, msh)
+	msh.persistLayerHashes(l2)
+	secondWantedHash := types.CalcAggregateHash32(wantedHash, l2.Hash().Bytes())
+	actualHash2, err := msh.getRunningLayerHash(types.GetEffectiveGenesis() + 1)
+	assert.NoError(t, err)
+	assert.Equal(t, secondWantedHash, actualHash2)
+}
+
 func GetTransactionIds(txs ...*types.Transaction) []types.TransactionID {
 	var res []types.TransactionID
 	for _, tx := range txs {
@@ -462,14 +505,16 @@ func addTxToMesh(r *require.Assertions, msh *Mesh, signer *signing.EdSigner, non
 }
 
 func addBlockWithTxs(r *require.Assertions, msh *Mesh, id types.LayerID, valid bool, txs ...*types.Transaction) *types.Block {
-	blk := types.NewExistingBlock(id, []byte("data"))
+	blk := types.NewExistingBlock(id, []byte("data"), nil)
 	for _, tx := range txs {
 		blk.TxIDs = append(blk.TxIDs, tx.ID())
+		msh.txPool.Put(tx.ID(), tx)
 	}
 	blk.Initialize()
 	err := msh.SaveContextualValidity(blk.ID(), valid)
 	r.NoError(err)
-	err = msh.AddBlockWithTxs(blk, txs, nil)
+
+	err = msh.AddBlockWithTxs(blk)
 	r.NoError(err)
 	return blk
 }
@@ -490,12 +535,12 @@ func TestMesh_AddBlockWithTxs(t *testing.T) {
 	r := require.New(t)
 	lg := log.NewDefault("id")
 	meshDB := NewMemMeshDB(lg)
-	mesh := NewMesh(meshDB, &FailingAtxDbMock{}, ConfigTst(), &MeshValidatorMock{mdb: meshDB}, MockTxMemPool{}, &MockState{}, lg)
+	mesh := NewMesh(meshDB, &FailingAtxDbMock{}, ConfigTst(), &MeshValidatorMock{mdb: meshDB}, newMockTxMemPool(), &MockState{}, lg)
 
-	blk := types.NewExistingBlock(1, []byte("data"))
+	blk := types.NewExistingBlock(1, []byte("data"), nil)
 
-	err := mesh.AddBlockWithTxs(blk, nil, nil)
-	r.EqualError(err, "failed to process ATXs: 💥")
+	err := mesh.AddBlockWithTxs(blk)
+	//r.EqualError(err, "failed to process ATXs: 💥")
 	_, err = meshDB.blocks.Get(blk.ID().Bytes())
-	r.EqualError(err, "leveldb: not found")
+	r.NoError(err)
 }

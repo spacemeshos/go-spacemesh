@@ -374,7 +374,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 
 	// assert all nodes validated untilLayer-1
 	for _, ap := range suite.apps {
-		curNodeLastLayer := ap.blockListener.ProcessedLayer()
+		curNodeLastLayer := ap.mesh.ProcessedLayer()
 		assert.True(suite.T(), int(untilLayer)-1 <= int(curNodeLastLayer))
 	}
 
@@ -386,7 +386,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 		}
 
 		for i := types.LayerID(5); i <= untilLayer; i++ {
-			lyr, err := ap.blockListener.GetLayer(i)
+			lyr, err := ap.mesh.GetLayer(i)
 			if err != nil {
 				log.Error("ERROR: couldn't get a validated layer from db layer %v, %v", i, err)
 			}

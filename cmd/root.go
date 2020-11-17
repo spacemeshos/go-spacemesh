@@ -143,7 +143,7 @@ func AddCommands(cmd *cobra.Command) {
 			"Note: This service will soon be deprecated. Use --grpc instead.")
 	cmd.PersistentFlags().StringSliceVar(&config.API.StartGrpcServices, "grpc",
 		config.API.StartGrpcServices, "Comma-separated list of individual grpc services to enable "+
-			"(node,mesh,globalstate,transaction,smesher)")
+			"(gateway,globalstate,mesh,node,smesher,transaction)")
 	// GrpcServerPortFlag determines the grpc server local listening port
 	cmd.PersistentFlags().IntVar(&config.API.GrpcServerPort, "grpc-port",
 		config.API.GrpcServerPort, "GRPC api server port")

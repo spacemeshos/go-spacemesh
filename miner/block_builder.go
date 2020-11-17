@@ -6,8 +6,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -169,7 +169,7 @@ type meshProvider interface {
 	LayerBlockIds(index types.LayerID) ([]types.BlockID, error)
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 	GetBlock(id types.BlockID) (*types.Block, error)
-	AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs []*types.ActivationTx) error
+	AddBlockWithTxs(blk *types.Block) error
 }
 
 func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID, top types.LayerID) {
@@ -202,7 +202,7 @@ func filterUnknownBlocks(blocks []types.BlockID, validate func(id types.BlockID)
 }
 
 func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
-	var votes []types.BlockID = nil
+	var votes []types.BlockID
 
 	// if genesis
 	if id <= types.GetEffectiveGenesis() {
@@ -379,7 +379,7 @@ func (t *BlockBuilder) createBlockLoop() {
 
 			//reducedAtxList := selectAtxs(atxList, t.atxsPerBlock)
 			for _, eligibilityProof := range proofs {
-				txList, txs, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
+				txList, _, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to get txs for block")
 					t.With().Error("failed to get txs for block", layerID, log.Err(err))
@@ -391,7 +391,7 @@ func (t *BlockBuilder) createBlockLoop() {
 					t.Error("cannot create new block, %v ", err)
 					continue
 				}
-				err = t.meshProvider.AddBlockWithTxs(blk, txs, nil)
+				err = t.meshProvider.AddBlockWithTxs(blk)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to store block")
 					t.With().Error("failed to store block", blk.ID(), log.Err(err))
@@ -404,7 +404,7 @@ func (t *BlockBuilder) createBlockLoop() {
 						events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot serialize block")
 						return
 					}
-					err = t.network.Broadcast(config.NewBlockProtocol, bytes)
+					err = t.network.Broadcast(blocks.NewBlockProtocol, bytes)
 					if err != nil {
 						t.Log.Error("cannot send block %v", err)
 					}

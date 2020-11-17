@@ -23,7 +23,6 @@ const (
 	defaultConfigFileName = "./config.toml"
 	defaultDataDirName    = "spacemesh"
 	// NewBlockProtocol indicates the protocol name for new blocks arriving.
-	NewBlockProtocol = "newBlock"
 )
 
 var (

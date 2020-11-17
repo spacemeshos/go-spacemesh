@@ -87,7 +87,6 @@ type Configuration struct {
 var (
 	errDupTx           = errors.New("duplicate TransactionID in block")
 	errDupAtx          = errors.New("duplicate ATXID in block")
-	errTooManyAtxs     = errors.New("too many atxs in blocks")
 	errNoBlocksInLayer = errors.New("layer has no blocks")
 	errNoActiveSet     = errors.New("block does not declare active set")
 	errZeroActiveSet   = errors.New("block declares empty active set")
@@ -157,6 +156,8 @@ type Syncer struct {
 	atxQueue   *atxQueue
 }
 
+var _ service.Fetcher = (*Syncer)(nil)
+
 // NewSync fires a sync every sm.SyncInterval or on force space from outside
 func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxDB atxDB, bv blockEligibilityValidator, poetdb poetDb, conf Configuration, clock ticker, logger log.Log) *Syncer {
 
@@ -215,13 +216,14 @@ func (s *Syncer) Close() {
 	close(s.exit)
 	close(s.forceSync)
 	s.peers.Close()
+	s.syncLock.Lock()
+	s.syncLock.Unlock()
+	s.MessageServer.Close()
 	s.blockQueue.Close()
 	s.atxQueue.Close()
 	s.txQueue.Close()
-	s.MessageServer.Close()
-	s.syncLock.Lock()
-	s.syncLock.Unlock()
-	s.Info("sync Closed")
+
+	s.Info("sync closed")
 }
 
 // check if syncer was closed
@@ -336,11 +338,13 @@ func (s *Syncer) synchronise() {
 	// we have all the data of the prev layers so we can simply validate
 	if s.weaklySynced(curr) {
 		s.handleWeaklySynced()
+		err := s.syncEpochActivations(curr.GetEpoch())
+		if err != nil {
+			s.With().Error("cannot fetch epoch atxs ", curr, log.Err(err))
+		}
 	} else {
 		s.handleNotSynced(s.ProcessedLayer() + 1)
 	}
-
-	s.syncAtxs(curr)
 }
 
 func (s *Syncer) handleWeaklySynced() {
@@ -447,7 +451,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 				return
 			}
 		}
-
+		s.syncAtxs(currentSyncLayer)
 		s.ValidateLayer(lyr) // wait for layer validation
 	}
 
@@ -598,6 +602,12 @@ func (s *Syncer) syncEpochActivations(epoch types.EpochID) error {
 	return err
 }
 
+// GetAtxs fetches list of atxs from remote peers if possible
+func (s *Syncer) GetAtxs(IDs []types.ATXID) error {
+	_, err := s.atxQueue.HandleAtxs(IDs)
+	return err
+}
+
 func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*types.Block, error) {
 	ch := make(chan bool, 1)
 	foo := func(res bool) error {
@@ -629,10 +639,46 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 	return s.LayerBlocks(layerID)
 }
 
+func (s *Syncer) getBlocks(jobID types.LayerID, blockIds []types.BlockID) error {
+	ch := make(chan bool, 1)
+	foo := func(res bool) error {
+		s.Info("layer %v done", jobID)
+		ch <- res
+		return nil
+	}
+
+	tmr := newMilliTimer(syncLayerTime)
+	if res, err := s.blockQueue.addDependencies(jobID, blockIds, foo); err != nil {
+		return fmt.Errorf("failed adding layer %v blocks to queue %v", jobID, err)
+	} else if res == false {
+		s.With().Info("no missing blocks for layer", jobID)
+		return nil
+	}
+
+	s.Info("layer %v wait for %d blocks", jobID, len(blockIds))
+	select {
+	case <-s.exit:
+		return fmt.Errorf("recived interupt")
+	case result := <-ch:
+		if !result {
+			return nil
+		}
+	}
+
+	tmr.ObserveDuration()
+
+	return nil
+}
+
+// GetBlocks fetches list of blocks from peers
+func (s *Syncer) GetBlocks(blockIds []types.BlockID) error {
+	return s.getBlocks(types.LayerID(rand.Int31()), blockIds)
+}
+
 func (s *Syncer) fastValidation(block *types.Block) error {
 	// block eligibility
 	if eligible, err := s.BlockSignedAndEligible(block); err != nil || !eligible {
-		return fmt.Errorf("block eligibility check failed - err %v", err)
+		return fmt.Errorf("block eligibility check failed - err: %v", err)
 	}
 
 	// validate unique tx atx
@@ -779,6 +825,12 @@ func (s *Syncer) fetchAtx(ID types.ATXID) (*types.ActivationTx, error) {
 	return atxs[0], nil
 }
 
+// FetchAtx fetches an ATX from remote peer
+func (s *Syncer) FetchAtx(ID types.ATXID) error {
+	_, e := s.fetchAtx(ID)
+	return e
+}
+
 // FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db
 func (s *Syncer) FetchAtxReferences(atx *types.ActivationTx) error {
 	if atx.PositioningATX != *types.EmptyATXID {
@@ -822,6 +874,14 @@ func (s *Syncer) fetchBlock(ID types.BlockID) bool {
 	}
 
 	return <-ch
+}
+
+// FetchBlock fetches a single block from peers
+func (s *Syncer) FetchBlock(ID types.BlockID) error {
+	if !s.fetchBlock(ID) {
+		return fmt.Errorf("stuff")
+	}
+	return nil
 }
 
 func validateVotes(blk *types.Block, forBlockfunc forBlockInView, depth int, lg log.Log) (bool, error) {
@@ -878,6 +938,12 @@ func (s *Syncer) dataAvailability(blk *types.Block) ([]*types.Transaction, []*ty
 
 	s.With().Info("fetched all block data", blk.Fields()...)
 	return txres, atxres, nil
+}
+
+// GetTxs fetches txs from peers if necessary
+func (s *Syncer) GetTxs(IDs []types.TransactionID) error {
+	_, err := s.txQueue.HandleTxs(IDs)
+	return err
 }
 
 func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2ppeers.Peer, lyr types.LayerID) ([]types.BlockID, error) {
@@ -1056,6 +1122,23 @@ func fetchWithFactory(wrk worker) chan interface{} {
 
 // FetchPoetProof fetches a poet proof from network peers
 func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
+	if !s.poetDb.HasProof(poetProofRef) {
+		out := <-fetchWithFactory(newNeighborhoodWorker(s, 1, poetReqFactory(poetProofRef)))
+		if out == nil {
+			return fmt.Errorf("could not find PoET proof with any neighbor")
+		}
+		proofMessage := out.(types.PoetProofMessage)
+		err := s.poetDb.ValidateAndStore(&proofMessage)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetPoetProof fetches a poet proof from network peers
+func (s *Syncer) GetPoetProof(hash types.Hash32) error {
+	poetProofRef := hash.Bytes()
 	if !s.poetDb.HasProof(poetProofRef) {
 		out := <-fetchWithFactory(newNeighborhoodWorker(s, 1, poetReqFactory(poetProofRef)))
 		if out == nil {
