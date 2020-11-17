@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type blockDataProvider interface {
@@ -180,16 +181,16 @@ func (t *turtle) BaseBlock() (types.BlockID, [][]types.BlockID, error) {
 	for i := t.Last; i > t.Last-t.Hdist; i-- {
 		for blk, op := range t.BlocksToBlocks[i] {
 			if _, ok := t.GoodBlocksIndex[blk]; !ok {
-				t.logger.Error(" block no good")
+				t.logger.With().Debug("can't use a not good block", log.FieldNamed("last_layer", t.Last), i, blk)
 				continue
 			}
 			afn, err := t.opinionMatches(i, blk, op)
 			if err != nil {
-				t.logger.Error(" blockmatch error %v", err)
+				t.logger.With().Debug("can't use block error %v", log.FieldNamed("last_layer", t.Last), i, blk, log.Err(err))
 				continue
 			}
 
-			t.logger.With().Info("Choose baseblock", log.FieldNamed("last_layer", t.Last), blk, log.Int("against_count", len(afn[0])), log.Int("support_count", len(afn[1])), log.Int("neutral_count", len(afn[2])))
+			t.logger.With().Info("Choose baseblock", log.FieldNamed("last_layer", t.Last), log.FieldNamed("base_block_layer", i), blk, log.Int("against_count", len(afn[0])), log.Int("support_count", len(afn[1])), log.Int("neutral_count", len(afn[2])))
 
 			return blk, [][]types.BlockID{blockMapToArray(afn[0]), blockMapToArray(afn[1]), blockMapToArray(afn[2])}, nil
 		}
@@ -268,8 +269,11 @@ func (t *turtle) opinionMatches(layerid types.LayerID, blockid types.BlockID, op
 
 		blks, err := t.bdp.LayerBlockIds(i)
 		if err != nil {
-			// todo: empty layer? maybe skip verify differently
-			t.logger.Panic("can't find old layer %v", i)
+			if err != leveldb.ErrClosed {
+				// todo: empty layer? maybe skip verify differently
+				t.logger.Panic("can't find old layer %v", i)
+			}
+			return nil, err
 		}
 
 		res, err := t.bdp.GetLayerInputVector(i)
@@ -396,7 +400,7 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer, inputVector []types.Bl
 
 	defer t.evict()
 
-	t.logger.Info("Start handling layer", newlyr.Index())
+	t.logger.With().Info("Start handling layer", newlyr.Index(), log.Int("blocks", len(newlyr.Blocks())))
 
 	// update tables with blocks
 	for _, b := range newlyr.Blocks() {
