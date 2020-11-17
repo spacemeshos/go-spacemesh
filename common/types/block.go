@@ -48,9 +48,9 @@ func getLayersPerEpoch() int32 {
 }
 
 // SetLayersPerEpoch sets global parameter of layers per epoch, all conversion from layer to epoch use this param
-func SetLayersPerEpoch(l int32) {
-	atomic.StoreInt32(&layersPerEpoch, l)
-	atomic.StoreInt32(&EffectiveGenesis, getLayersPerEpoch()*2-1)
+func SetLayersPerEpoch(layers int32) {
+	atomic.StoreInt32(&layersPerEpoch, layers)
+	atomic.StoreInt32(&EffectiveGenesis, layers*2-1)
 }
 
 // LayerID is a uint64 representing a layer number. It is zero-based.
@@ -179,13 +179,22 @@ func (b *Block) Bytes() []byte {
 
 // Fields returns an array of LoggableFields for logging
 func (b *Block) Fields() []log.LoggableField {
+	activeSet := 0
+	if b.ActiveSet != nil {
+		activeSet = len(*b.ActiveSet)
+	}
+
 	return []log.LoggableField{
 		b.ID(),
 		b.LayerIndex,
-		b.MinerID(),
+		b.LayerIndex.GetEpoch(),
+		log.FieldNamed("miner_id", b.MinerID()),
 		log.Int("view_edges", len(b.ViewEdges)),
 		log.Int("vote_count", len(b.BlockVotes)),
+		b.ATXID,
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
+		log.FieldNamed("ref_block", b.RefBlock),
+		log.Int("active_set", activeSet),
 		log.Int("tx_count", len(b.TxIDs)),
 	}
 }

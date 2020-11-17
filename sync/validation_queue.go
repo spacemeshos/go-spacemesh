@@ -86,18 +86,18 @@ func (vq *blockQueue) handleBlocks(bjb fetchJob) {
 }
 
 func (vq *blockQueue) handleBlock(id types.Hash32, block *types.Block) {
-	vq.With().Info("start handling", block.ID(), block.MinerID())
+	vq.With().Info("start handling block", block.Fields()...)
 	if err := vq.fetchBlockDataForValidation(block); err != nil {
-		vq.Error("block fetching data failed", block.ID(), log.Err(err))
+		vq.With().Error("fetching block data failed", append(block.Fields(), log.Err(err))...)
 		vq.updateDependencies(id, false)
 		return
 	}
 	if err := vq.fastValidation(block); err != nil {
-		vq.Error("block validation failed", block.ID(), log.Err(err))
+		vq.With().Error("block fast validation failed", append(block.Fields(), log.Err(err))...)
 		vq.updateDependencies(id, false)
 		return
 	}
-	vq.With().Info("finish fast validation", block.ID())
+	vq.With().Info("finished block fast validation", block.Fields()...)
 	vq.handleBlockDependencies(block)
 }
 
@@ -109,7 +109,7 @@ func (vq *blockQueue) handleBlockDependencies(blk *types.Block) {
 
 	if err != nil {
 		vq.updateDependencies(blk.Hash32(), false)
-		vq.With().Error("failed to add dependencies", blk.ID(), log.Err(err))
+		vq.With().Error("failed to add dependencies", append(blk.Fields(), log.Err(err))...)
 		return
 	}
 
