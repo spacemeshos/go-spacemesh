@@ -759,3 +759,25 @@ func (msh *Mesh) GetATXs(atxIds []types.ATXID) (map[types.ATXID]*types.Activatio
 	}
 	return atxs, mIds
 }
+
+// GetATXsByCoinbase returns a list of all atx ids corresponding to a coinbase address
+func (msh *Mesh) GetATXsByCoinbase(coinbase types.Address) ([]types.ATXID, error) {
+
+	var atxIds []types.ATXID
+	atxIter := msh.GetAtxIterByCoinbase(coinbase)
+	for atxIter.Next() {
+		var a types.ATXID
+		err := types.BytesToInterface(atxIter.Value(), &a)
+		if err != nil {
+			return nil, err
+		}
+		atxIds = append(atxIds, a)
+	}
+
+	atxIter.Release()
+	if err := atxIter.Error(); err != nil {
+		return nil, err
+	}
+
+	return atxIds, nil
+}

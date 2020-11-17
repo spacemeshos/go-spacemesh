@@ -2,7 +2,6 @@ package api
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -71,7 +70,7 @@ type Syncer interface {
 type TxAPI interface {
 	AddressExists(types.Address) bool
 	ValidateNonceAndBalance(*types.Transaction) error
-	GetAtxIterByCoinbase(coinbase types.Address) database.Iterator
+	GetATXsByCoinbase(coinbase types.Address) ([]types.ATXID, error)
 	GetATXs([]types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID)
 	GetLayer(types.LayerID) (*types.Layer, error)
 	GetRewards(types.Address) ([]types.Reward, error)

@@ -630,6 +630,10 @@ func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
 	if exists := nodeAtxsIterator.Last(); !exists {
 		return *types.EmptyATXID, ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeID.ShortString()))
 	}
+	nodeAtxsIterator.Release()
+	if err := nodeAtxsIterator.Error(); err != nil {
+		return *types.EmptyATXID, err
+	}
 	return types.ATXID(types.BytesToHash(nodeAtxsIterator.Value())), nil
 }
 
@@ -649,9 +653,8 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 		atxs = append(atxs, a)
 	}
 	atxIterator.Release()
-	err := atxIterator.Error()
-	if err != nil {
-		db.log.Panic("")
+	if err := atxIterator.Error(); err != nil {
+		db.log.Panic("atxdb iterator error")
 	}
 	db.log.Info("returned epoch %v atxs %v %v", epochID, len(atxs), atxs)
 	return atxs

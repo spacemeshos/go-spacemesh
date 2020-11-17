@@ -122,20 +122,9 @@ func (s MeshService) getFilteredTransactions(startLayer types.LayerID, addr type
 	return
 }
 
-func (s MeshService) getFilteredActivations(startLayer types.LayerID, addr types.Address) (activations []*types.ActivationTx, err error) {
+func (s MeshService) getFilteredActivations(addr types.Address) (activations []*types.ActivationTx, err error) {
 
-	var atxids []types.ATXID
-	atxIter := s.Mesh.GetAtxIterByCoinbase(addr)
-	for atxIter.Next() {
-		var a types.ATXID
-		err = types.BytesToInterface(atxIter.Value(), &a)
-		if err != nil {
-			return nil, err
-		}
-		atxids = append(atxids, a)
-	}
-	atxIter.Release()
-	err = atxIter.Error()
+	atxids, err := s.Mesh.GetATXsByCoinbase(addr)
 	if err != nil {
 		return nil, err
 	}

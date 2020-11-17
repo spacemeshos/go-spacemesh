@@ -1,6 +1,7 @@
 package database
 
 import (
+	"github.com/syndtr/goleveldb/leveldb/util"
 	"reflect"
 )
 
@@ -88,3 +89,9 @@ func (iter *MemDatabaseIterator) Release() { return }
 
 // Error is a stub to comply with DB interface
 func (iter *MemDatabaseIterator) Error() error { return nil }
+
+// SetReleaser is a stub to comply with DB iterator interface
+func (iter *MemDatabaseIterator) SetReleaser(releaser util.Releaser) { return }
+
+// Valid is a stub to comply with DB iterator interface
+func (iter *MemDatabaseIterator) Valid() bool { return false }
