@@ -184,7 +184,7 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 
 	// Gather activation data
 	if filterActivations {
-		atxs, err := s.getFilteredActivations(startLayer, addr)
+		atxs, err := s.getFilteredActivations(addr)
 		if err != nil {
 			return nil, err
 		}
