@@ -33,9 +33,9 @@ func TestClock_StartClock_BeforeEpoch(t *testing.T) {
 	tmr := RealClock{}
 
 	waitTime := 2 * d50milli
+	then := time.Now()
 	ts := NewClock(tmr, tick, tmr.Now().Add(2*d50milli), log.NewDefault(t.Name()))
 	tk := ts.Subscribe()
-	then := time.Now()
 	ts.StartNotifying()
 
 	fmt.Println(waitTime)
