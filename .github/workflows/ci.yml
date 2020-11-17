@@ -215,7 +215,7 @@ jobs:
   ## stage4: this is for testing the new CI env
   systemtest-latenodes-elk:
     # only run on push, not on pull_request
-    if: github.event_name == 'push'
+    if: always() && github.event_name == 'push'
     needs: ci-stage2
     runs-on: ubuntu-latest
     timeout-minutes: 80
@@ -226,7 +226,7 @@ jobs:
         run: make dockertest-late-nodes-elk
   systemtest-blocks-add-node-elk:
     # only run on push, not on pull_request
-    if: github.event_name == 'push'
+    if: always() && github.event_name == 'push'
     needs: ci-stage2
     runs-on: ubuntu-latest
     timeout-minutes: 80
@@ -237,7 +237,7 @@ jobs:
         run: make dockertest-blocks-add-node-elk
   systemtest-blocks-remove-node-elk:
     # only run on push, not on pull_request
-    if: github.event_name == 'push'
+    if: always() && github.event_name == 'push'
     needs: ci-stage2
     runs-on: ubuntu-latest
     timeout-minutes: 80
@@ -248,8 +248,10 @@ jobs:
         run: make dockertest-blocks-remove-node-elk
   systemtest-hare-elk:
     # only run on push, not on pull_request
-    if: github.event_name == 'push'
-    needs: ci-stage2
+    if: always() && github.event_name == 'push'
+    needs:
+      - ci-stage2
+      - systemtest-blocks-remove-node-elk
     runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
@@ -259,8 +261,10 @@ jobs:
         run: make dockertest-hare-elk
   systemtest-mining-elk:
     # only run on push, not on pull_request
-    if: github.event_name == 'push'
-    needs: ci-stage2
+    if: always() && github.event_name == 'push'
+    needs:
+      - ci-stage2
+      - systemtest-blocks-remove-node-elk
     runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
@@ -270,8 +274,10 @@ jobs:
         run: make dockertest-mining-elk
   systemtest-sync-elk:
     # only run on push, not on pull_request
-    if: github.event_name == 'push'
-    needs: ci-stage2
+    if: always() && github.event_name == 'push'
+    needs:
+      - ci-stage2
+      - systemtest-blocks-add-node-elk
     runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
@@ -281,8 +287,10 @@ jobs:
         run: make dockertest-sync-elk
   systemtest-genesis-elk:
     # only run on push, not on pull_request
-    if: github.event_name == 'push'
-    needs: ci-stage2
+    if: always() && github.event_name == 'push'
+    needs:
+      - ci-stage2
+      - systemtest-blocks-add-node-elk
     runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
@@ -292,8 +300,10 @@ jobs:
         run: make dockertest-genesis-voting-elk
   systemtest-p2p-elk:
     # only run on push, not on pull_request
-    if: github.event_name == 'push'
-    needs: ci-stage2
+    if: always() && github.event_name == 'push'
+    needs:
+      - ci-stage2
+      - systemtest-latenodes-elk
     runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
