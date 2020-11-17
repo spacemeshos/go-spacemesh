@@ -82,7 +82,7 @@ def create_deployment(file_name, name_space, deployment_id=None, replica_size=1,
 
 def delete_deployment(deployment_name, name_space):
     try:
-        k8s_beta = client.ExtensionsV1beta1Api()
+        k8s_beta = client.AppsV1Api()
         resp = k8s_beta.delete_namespaced_deployment(name=deployment_name,
                                                      namespace=name_space,
                                                      body=client.V1DeleteOptions(propagation_policy='Foreground',
