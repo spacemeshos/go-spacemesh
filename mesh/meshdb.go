@@ -422,6 +422,27 @@ func (m *DB) writeTransactions(l types.LayerID, txs []*types.Transaction) error 
 	return nil
 }
 
+// WriteTransaction writes a single transaction to the db
+func (m *DB) WriteTransaction(l types.LayerID, t *types.Transaction) error {
+	bytes, err := types.InterfaceToBytes(newDbTransaction(t))
+	if err != nil {
+		return fmt.Errorf("could not marshall tx %v to bytes: %v", t.ID().ShortString(), err)
+	}
+	if err := m.transactions.Put(t.ID().Bytes(), bytes); err != nil {
+		return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
+	}
+	// write extra index for querying txs by account
+	if err := m.transactions.Put(getTransactionOriginKey(l, t), t.ID().Bytes()); err != nil {
+		return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
+	}
+	if err := m.transactions.Put(getTransactionDestKey(l, t), t.ID().Bytes()); err != nil {
+		return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
+	}
+	m.Debug("wrote tx %v to db", t.ID().ShortString())
+
+	return nil
+}
+
 type dbReward struct {
 	TotalReward         uint64
 	LayerRewardEstimate uint64
@@ -709,25 +730,24 @@ func (m *DB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]stru
 		return mp, nil
 	}
 
-	blks, err := m.LayerBlocks(layer)
+	blockIds, err := m.LayerBlockIds(layer)
 	if err != nil {
 		return nil, err
 	}
 
 	validBlks := make(map[types.BlockID]struct{})
 
-	for _, b := range blks {
-		valid, err := m.ContextualValidity(b.ID())
-
+	for _, b := range blockIds {
+		valid, err := m.ContextualValidity(b)
 		if err != nil {
-			m.Error("could not get contextual validity for block %v in layer %v err=%v", b.ID(), layer, err)
+			m.With().Error("could not get contextual validity", b, layer, log.Err(err))
 		}
 
 		if !valid {
 			continue
 		}
 
-		validBlks[b.ID()] = struct{}{}
+		validBlks[b] = struct{}{}
 	}
 
 	return validBlks, nil

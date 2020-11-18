@@ -327,7 +327,7 @@ func fetchProofCalcID(fetchPoetProof fetchPoetProofFunc, fj fetchJob) {
 	for _, item := range fj.items {
 		atx := item.(*types.ActivationTx)
 		atx.CalcAndSetID() //todo put it somewhere that will cause less confusion
-		if err := fetchPoetProof(atx.GetPoetProofRef()); err != nil {
+		if err := fetchPoetProof(atx.GetPoetProofRef().Bytes()); err != nil {
 			log.Error("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
 				atx.ShortString(), atx.GetShortPoetProofRef(), err)
 			continue

@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"go.uber.org/zap/zapcore"
 	"sync"
 )
 
@@ -388,16 +389,6 @@ func SubscribeToLayers(newLayerCh timesync.LayerTimer) {
 	}
 }
 
-// The type and severity of a reported error
-const (
-	NodeErrorTypeError = iota
-	NodeErrorTypePanic
-	NodeErrorTypePanicSync
-	NodeErrorTypePanicP2P
-	NodeErrorTypePanicHare
-	NodeErrorTypeSignalShutdown
-)
-
 // The status of a layer
 const (
 	LayerStatusTypeUnknown   = iota
@@ -423,7 +414,7 @@ func (nl NewLayer) Field() log.Field {
 type NodeError struct {
 	Msg   string
 	Trace string
-	Type  int
+	Level zapcore.Level
 }
 
 // TxReceipt represents a transaction receipt

@@ -19,45 +19,29 @@ package state
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/trie"
 )
 
-// DumpAccount is a helper struct that helps dumping account balance and nonce in json form
-type DumpAccount struct {
-	Balance string `json:"balance"`
-	Nonce   uint64 `json:"nonce"`
-}
-
-// Dump is a struct used to dump an entire state root into json form
-type Dump struct {
-	Root     string                 `json:"root"`
-	Accounts map[string]DumpAccount `json:"accounts"`
-}
-
 // RawDump returns a Dump struct for the receivers state
-func (state *DB) RawDump() Dump {
-	dump := Dump{
+func (state *DB) RawDump() types.MultipleAccountsState {
+	// Reading the state root and accounts data here is concurrency safe since this
+	// method should only be called after a lock has been acquired on state
+	dump := types.MultipleAccountsState{
 		Root:     fmt.Sprintf("%x", state.globalTrie.Hash()),
-		Accounts: make(map[string]DumpAccount),
+		Accounts: make(map[string]types.AccountState),
 	}
 
 	it := trie.NewIterator(state.globalTrie.NodeIterator(nil))
 	for it.Next() {
 		addr := state.globalTrie.GetKey(it.Key)
-		var data Account
-		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
+		var state types.AccountState
+		if err := rlp.DecodeBytes(it.Value, &state); err != nil {
 			panic(err)
 		}
-
-		//obj := newObject(nil, address.BytesToAddress(addr), data)
-		account := DumpAccount{
-			Balance: data.Balance.String(),
-			Nonce:   data.Nonce,
-		}
-
-		dump.Accounts[util.Bytes2Hex(addr)] = account
+		dump.Accounts[util.Bytes2Hex(addr)] = state
 	}
 	return dump
 }
