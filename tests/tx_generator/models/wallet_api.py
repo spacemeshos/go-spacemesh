@@ -88,9 +88,11 @@ class WalletAPI:
         out = self.send_api_call(pod_ip, data, self.account_api)
         print(f"api output: {out}")
 
-        # If any of these are missing or the return data is malformed, this will cause an ugly exception
-        # That's fine - we don't do any fancy error handling here
-        out = self.decode_response(out)['account_wrapper']['state_projected']
+        # Try to decode the response. If we fail that probably just means the data isn't there.
+        try:
+            out = self.decode_response(out)['account_wrapper']['state_projected']
+        except json.decoder.JSONDecodeError:
+            raise Exception(f"missing or malformed account data for address {acc}")
 
         # GRPC doesn't include zero values so use intelligent defaults here
         if resource == 'balance':
