@@ -31,6 +31,7 @@ var atx3 = ATXID(three)
 
 // Make sure we can print out all the relevant log fields for a block
 func TestFields(t *testing.T) {
+	SetLayersPerEpoch(3)
 	b := &Block{}
 	b.TxIDs = []TransactionID{txid1, txid2, txid1}
 	b.ActiveSet = &[]ATXID{atx1, atx2, atx3}

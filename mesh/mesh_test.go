@@ -383,15 +383,6 @@ func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
 	assert.Equal(t, 1, len(layers.orphanBlocks))
 }
 
-type MockBlockBuilder struct {
-	txs []*types.Transaction
-}
-
-func (m *MockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
-	m.txs = append(m.txs, tx)
-	return nil
-}
-
 func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) {
 	r := require.New(t)
 
@@ -400,7 +391,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 	state := &MockMapState{}
 	msh.txProcessor = state
 
-	layerID := types.LayerID(types.GetEffectiveGenesis() + 1)
+	layerID := types.GetEffectiveGenesis() + 1
 	signer, origin := newSignerAndAddress(r, "origin")
 	tx1 := addTxToMesh(r, msh, signer, 2468)
 	tx2 := addTxToMesh(r, msh, signer, 2469)
@@ -453,7 +444,6 @@ func TestMesh_AddBlockWithTxs_PushTransactions_getInvalidBlocksByHare(t *testing
 
 	msh.reInsertTxsToPool(hareBlocks, invalid, layerID)
 	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(state.Pool...))
-
 }
 
 func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
@@ -486,7 +476,7 @@ func TestMesh_persistLayerHashes(t *testing.T) {
 	l := addLayer(types.GetEffectiveGenesis(), 5, msh)
 	msh.persistLayerHashes(l)
 	wantedHash := types.CalcAggregateHash32(types.Hash32{}, l.Hash().Bytes())
-	actualHash, err := msh.getRunningLayerHash(0)
+	actualHash, err := msh.getRunningLayerHash(types.GetEffectiveGenesis())
 	assert.NoError(t, err)
 
 	assert.Equal(t, wantedHash, actualHash)
@@ -494,7 +484,7 @@ func TestMesh_persistLayerHashes(t *testing.T) {
 	l2 := addLayer(types.GetEffectiveGenesis()+1, 5, msh)
 	msh.persistLayerHashes(l2)
 	secondWantedHash := types.CalcAggregateHash32(wantedHash, l2.Hash().Bytes())
-	actualHash2, err := msh.getRunningLayerHash(1)
+	actualHash2, err := msh.getRunningLayerHash(types.GetEffectiveGenesis() + 1)
 	assert.NoError(t, err)
 	assert.Equal(t, secondWantedHash, actualHash2)
 }
