@@ -90,7 +90,9 @@ func (iter *MemDatabaseIterator) Release() { return }
 // Error is a stub to comply with DB interface
 func (iter *MemDatabaseIterator) Error() error { return nil }
 
-// SetReleaser is a stub to comply with DB iterator interface
+// SetReleaser is a stub to comply with DB iterator interface.
+// This method is used to update association of releaser objects with resources. Since memory resources/releasing
+// is automatically handled by Golang, we don't need to implement it for an in-memory DB
 func (iter *MemDatabaseIterator) SetReleaser(releaser util.Releaser) { return }
 
 // Valid is a stub to comply with DB iterator interface

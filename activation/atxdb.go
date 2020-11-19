@@ -521,13 +521,10 @@ func (db *DB) storeAtxUnlocked(atx *types.ActivationTx) error {
 	if err != nil {
 		return err
 	}
-	err = db.atxs.Put(getAtxBodyKey(atx.ID()), atxBodyBytes)
-	if err != nil {
+	if err = db.atxs.Put(getAtxBodyKey(atx.ID()), atxBodyBytes); err != nil {
 		return err
 	}
-
-	err = db.atxs.Put(getAtxCoinbaseKey(atx), atx.ID().Bytes())
-	if err != nil {
+	if err = db.atxs.Put(getAtxCoinbaseKey(atx), atx.ID().Bytes()); err != nil {
 		return err
 	}
 
@@ -619,7 +616,13 @@ type ErrAtxNotFound error
 
 // GetNodeLastAtxID returns the last atx id that was received for node nodeID
 func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
+
+	var err error
 	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeID))
+	defer func() {
+		nodeAtxsIterator.Release()
+		err = nodeAtxsIterator.Error()
+	}()
 	// ATX syntactic validation ensures that each ATX is at least one epoch after a referenced previous ATX.
 	// Contextual validation ensures that the previous ATX referenced matches what this method returns, so the next ATX
 	// added will always be the next ATX returned by this method.
@@ -630,16 +633,20 @@ func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
 	if exists := nodeAtxsIterator.Last(); !exists {
 		return *types.EmptyATXID, ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeID.ShortString()))
 	}
-	nodeAtxsIterator.Release()
-	if err := nodeAtxsIterator.Error(); err != nil {
-		return *types.EmptyATXID, err
-	}
-	return types.ATXID(types.BytesToHash(nodeAtxsIterator.Value())), nil
+
+	return types.ATXID(types.BytesToHash(nodeAtxsIterator.Value())), err
 }
 
 // GetEpochAtxs returns all valid ATXs received in the epoch epochID
 func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 	atxIterator := db.atxs.Find(getEpochPrefix(epochID))
+	defer func() {
+		atxIterator.Release()
+		if err := atxIterator.Error(); err != nil {
+			db.log.Panic("atxdb iterator error")
+		}
+	}()
+
 	for atxIterator.Next() {
 		if atxIterator.Key() == nil {
 			break
@@ -652,10 +659,7 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 		}
 		atxs = append(atxs, a)
 	}
-	atxIterator.Release()
-	if err := atxIterator.Error(); err != nil {
-		db.log.Panic("atxdb iterator error")
-	}
+
 	db.log.Info("returned epoch %v atxs %v %v", epochID, len(atxs), atxs)
 	return atxs
 }

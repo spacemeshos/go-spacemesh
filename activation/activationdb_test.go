@@ -332,6 +332,7 @@ func Test_DBGetByCoinbase(t *testing.T) {
 	id1 := types.NodeID{Key: uuid.New().String()}
 	coinbase1 := types.HexToAddress("aaaa")
 	coinbase2 := types.HexToAddress("bbbb")
+	coinbase3 := types.HexToAddress("0")
 
 	atx1 := newActivationTx(id1, 0, *types.EmptyATXID, 3, 0, *types.EmptyATXID, coinbase1, 3, []types.BlockID{}, &types.NIPST{})
 	atx2 := newActivationTx(id1, 0, *types.EmptyATXID, 1001, 0, *types.EmptyATXID, coinbase2, 3, []types.BlockID{}, &types.NIPST{})
@@ -354,9 +355,20 @@ func Test_DBGetByCoinbase(t *testing.T) {
 	assert.True(t, iter.Next())
 	assert.Equal(t, iter.Value(), atxid1.Bytes())
 	assert.False(t, iter.Next())
+	iter.Release()
+	err = iter.Error()
+	assert.NoError(t, err)
+
 	iter = atxdb.GetAtxIterByCoinbase(coinbase2)
 	assert.True(t, iter.Next())
 	assert.Equal(t, iter.Value(), atxid2.Bytes())
+	assert.False(t, iter.Next())
+	iter.Release()
+	err = iter.Error()
+	assert.NoError(t, err)
+
+	// test for coinbase address that doesn't exist
+	iter = atxdb.GetAtxIterByCoinbase(coinbase3)
 	assert.False(t, iter.Next())
 	iter.Release()
 	err = iter.Error()

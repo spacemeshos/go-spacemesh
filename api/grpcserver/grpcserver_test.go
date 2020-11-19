@@ -264,7 +264,7 @@ func (t *TxAPIMock) GetATXs([]types.ATXID) (map[types.ATXID]*types.ActivationTx,
 	return atxs, nil
 }
 
-func (t *TxAPIMock) GetATXsByCoinbase(coinbase types.Address) ([]types.ATXID, error) {
+func (t *TxAPIMock) GetAtxIDsByCoinbase(coinbase types.Address) ([]types.ATXID, error) {
 	atxids := []types.ATXID{globalAtx.ID(), globalAtx2.ID()}
 	return atxids, nil
 }

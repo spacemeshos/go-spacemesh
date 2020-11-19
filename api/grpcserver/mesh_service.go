@@ -124,7 +124,7 @@ func (s MeshService) getFilteredTransactions(startLayer types.LayerID, addr type
 
 func (s MeshService) getFilteredActivations(addr types.Address) (activations []*types.ActivationTx, err error) {
 
-	atxids, err := s.Mesh.GetATXsByCoinbase(addr)
+	atxids, err := s.Mesh.GetAtxIDsByCoinbase(addr)
 	if err != nil {
 		return nil, err
 	}
