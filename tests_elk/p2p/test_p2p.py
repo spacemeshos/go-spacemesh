@@ -9,6 +9,7 @@ import time
 
 # noinspection PyUnresolvedReferences
 from tests_elk.context import ES
+from tests_elk.convenience import sleep_print_backwards
 from tests_elk.queries import query_message, poll_query_message
 from tests_elk.setup_utils import add_multi_clients
 from tests_elk.utils import get_conf, api_call, get_curr_ind
@@ -95,10 +96,15 @@ def add_clients(setup_bootstrap, setup_clients):
 # ==============================================================================
 
 def test_bootstrap(init_session, add_elk, setup_bootstrap):
+    print("running test_bootstrap")
+    tts = 75
+    msg = f"sleep {tts} secs to enable ES server to start"
+    sleep_print_backwards(tts, msg)
     # wait for the bootstrap logs to be available in ElasticSearch
     time.sleep(10 * timeout_factor)
-    assert setup_bootstrap.pods[0]['key'] == query_bootstrap_es(testconfig['namespace'],
-                                                                setup_bootstrap.pods[0]['name'])
+    bs_id = query_bootstrap_es(testconfig['namespace'], setup_bootstrap.pods[0]['name'])
+    ass_err = f"setup_bootstrap.pods[0]['key'] = {setup_bootstrap.pods[0]['key']}, bootstrap returned ID: {bs_id}"
+    assert setup_bootstrap.pods[0]['key'] == bs_id, ass_err
 
 
 def test_client(init_session, add_elk, setup_clients, add_curl, save_log_on_exit):
@@ -249,7 +255,6 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
         # TODO in the future this may be changed for a more generic function
         data = '{{"{msg_field}": "{msg}"}}'.format(msg_field=msg_field, msg=msg)
         out = api_call(client_ip, data, api, testconfig['namespace'])
-        expected_ret = expected_ret
         ass_err = f"test_invalid_msg: expected \"{expected_ret}\" and got \"{out}\""
         assert expected_ret in out, ass_err
 

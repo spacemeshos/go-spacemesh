@@ -94,16 +94,27 @@ def delete_deployment(deployment_name, name_space):
     return resp
 
 
-def filebeat_teardown(namespace):
-    # remove clusterrolebind
-    k8s_client = client.RbacAuthorizationV1beta1Api()
-    # TODO: find a solution for sharing the name both here and in the kube object
-    crb_name = f"filebeat-cluster-role-binding-{namespace}"
+def remove_clusterrole_binding(crb_name):
+    k8s_client = client.RbacAuthorizationV1Api()
     try:
         k8s_client.delete_cluster_role_binding(crb_name)
         print(f"\nsuccessfully deleted: {crb_name}")
     except Exception as e:
         print(f"\nfilebeat teardown failed, manually delete {crb_name}")
+
+
+def filebeat_teardown(namespace):
+    # remove clusterrolebind
+    # TODO: find a solution for sharing the name both here and in the kube object
+    crb_name = f"filebeat-cluster-role-binding-{namespace}"
+    remove_clusterrole_binding(crb_name)
+
+
+def fluent_bit_teardown(namespace):
+    # remove clusterrolebind
+    # TODO: find a solution for sharing the name both here and in the kube object
+    crb_name = f"fluent-bit-cluster-role-binding-{namespace}"
+    remove_clusterrole_binding(crb_name)
 
 
 def add_elastic_cluster(namespace):
@@ -114,6 +125,11 @@ def add_elastic_cluster(namespace):
 def add_filebeat_cluster(namespace):
     print("\nDeploying FileBeat\n")
     add_deployment_dir(namespace, conf.FILEBEAT_CONF_DIR)
+
+
+def add_fluent_bit_cluster(namespace):
+    print("\nDeploying Fluent-bit\n")
+    add_deployment_dir(namespace, conf.FLUENT_BIT_CONF_DIR)
 
 
 def add_kibana_cluster(namespace):
@@ -154,11 +170,11 @@ def add_deployment_dir(namespace, dir_path):
                 k8s_client = client.PolicyV1beta1Api()
                 k8s_client.create_namespaced_pod_disruption_budget(body=dep, namespace=namespace)
             elif dep["kind"] == 'Role':
-                k8s_client = client.RbacAuthorizationV1beta1Api()
+                k8s_client = client.RbacAuthorizationV1Api()
                 k8s_client.create_namespaced_role(body=dep, namespace=namespace)
             elif dep["kind"] == 'ClusterRole':
                 try:
-                    k8s_client = client.RbacAuthorizationV1beta1Api()
+                    k8s_client = client.RbacAuthorizationV1Api()
                     k8s_client.create_cluster_role(body=dep)
                 except ApiException as e:
                     if e.status == 409:
@@ -166,11 +182,11 @@ def add_deployment_dir(namespace, dir_path):
                         continue
                     raise e
             elif dep["kind"] == 'RoleBinding':
-                k8s_client = client.RbacAuthorizationV1beta1Api()
+                k8s_client = client.RbacAuthorizationV1Api()
                 dep["subjects"][0]["namespace"] = namespace
                 k8s_client.create_namespaced_role_binding(body=dep, namespace=namespace)
             elif dep["kind"] == 'ClusterRoleBinding':
-                k8s_client = client.RbacAuthorizationV1beta1Api()
+                k8s_client = client.RbacAuthorizationV1Api()
                 k8s_client.create_cluster_role_binding(body=dep)
             elif dep["kind"] == 'ConfigMap':
                 k8s_client = client.CoreV1Api()

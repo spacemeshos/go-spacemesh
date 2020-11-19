@@ -8,7 +8,7 @@ import random
 import string
 import subprocess
 
-from tests_elk.deployment import add_elastic_cluster, add_filebeat_cluster, add_kibana_cluster, add_logstash_cluster, filebeat_teardown
+from tests_elk.deployment import add_elastic_cluster, add_kibana_cluster, add_logstash_cluster, add_fluent_bit_cluster, fluent_bit_teardown
 from tests_elk.es_dump import es_reindex
 from tests_elk import pod
 from tests_elk import config as tests_conf
@@ -253,11 +253,11 @@ def add_curl(request, init_session, setup_bootstrap):
 @pytest.fixture(scope='module')
 def add_elk(init_session):
     # get today's date for filebeat data index
-    filebeat_index_date = datetime.utcnow().date().strftime("%Y.%m.%d")
+    index_date = datetime.utcnow().date().strftime("%Y.%m.%d")
     add_elastic_cluster(init_session)
-    add_filebeat_cluster(init_session)
+    add_fluent_bit_cluster(init_session)
     add_logstash_cluster(init_session)
     add_kibana_cluster(init_session)
     yield
-    filebeat_teardown(init_session)
-    es_reindex(init_session, filebeat_index_date)
+    fluent_bit_teardown(init_session)
+    es_reindex(init_session, index_date)
