@@ -45,7 +45,6 @@ jobs:
       - name: fmt, tidy, lint
         run: |
           make
-          make genproto
           make test-tidy
           make test-fmt
           make lint

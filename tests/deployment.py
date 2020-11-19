@@ -40,7 +40,7 @@ def wait_to_deployment_to_be_ready(deployment_name, name_space, time_out=None):
         time.sleep(1)
 
         if time_out and total_sleep_time > time_out:
-            raise Exception("Timeout waiting to deployment to be ready")
+            raise Exception("Timeout waiting for deployment to be ready")
 
 
 def create_deployment(file_name, name_space, deployment_id=None, replica_size=1, container_specs=None, time_out=None):

@@ -67,7 +67,7 @@ def load_config():
             raise Exception("KUBECONFIG file not found: {0}\nException: {1}".format(kube_config_path, e))
 
 
-def api_call(client_ip, data, api, namespace, port="9090"):
+def api_call(client_ip, data, api, namespace, port="9093"):
     # todo: this won't work with long payloads - ( `Argument list too long` ). try port-forward ?
     res = stream(CoreV1ApiClient().connect_post_namespaced_pod_exec, name="curl", namespace=namespace,
                  command=["curl", "-s", "--request", "POST", "--data", data, f"http://{client_ip}:{port}/{api}"],
@@ -75,7 +75,7 @@ def api_call(client_ip, data, api, namespace, port="9090"):
     return res
 
 
-def aws_api_call(client_ip, data, api, port="9090"):
+def aws_api_call(client_ip, data, api, port="9093"):
     url = f"http://{client_ip}:{port}/{api}"
     return requests.post(url, data=data)
 

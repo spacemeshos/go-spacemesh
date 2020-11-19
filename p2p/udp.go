@@ -267,7 +267,7 @@ func (mux *UDPMux) processUDPMessage(msg inet.IncomingMessageEvent) error {
 	}
 
 	if t, err := version.CheckNodeVersion(pm.Metadata.ClientVersion, config.MinClientVersion); err != nil || !t {
-		return fmt.Errorf("wrong client version want atleast: %v, got: %v, err=%v", config.MinClientVersion, pm.Metadata.ClientVersion, err)
+		return fmt.Errorf("wrong client version want at least: %v, got: %v, err: %v", config.MinClientVersion, pm.Metadata.ClientVersion, err)
 	}
 
 	var data service.Data

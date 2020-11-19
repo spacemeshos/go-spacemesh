@@ -1,3 +1,4 @@
+import base64
 from datetime import datetime
 import pytest
 from pytest_testconfig import config as testconfig
@@ -16,6 +17,9 @@ from tests.utils import get_conf, api_call, get_curr_ind
 
 current_index = get_curr_ind()
 timeout_factor = 1
+
+# For purposes of these tests, we override the PoetProof protocol
+gossip_message_query_fields = {'M': 'new_gossip_message', 'protocol': 'PoetProof'}
 
 
 def query_bootstrap_es(namespace, bootstrap_po_name):
@@ -60,7 +64,7 @@ def add_clients(setup_bootstrap, setup_clients):
     :return: function, _add_client
     """
 
-    def _add_clients(num_of_clients, version=None, version_separator='_'):
+    def _add_clients(num_of_clients, version=None, version_separator=''):
         # TODO make a generic function that _add_clients can use
         """
         adds a clients to namespace
@@ -118,7 +122,7 @@ def test_client(init_session, setup_clients, add_curl, save_log_on_exit):
 
 
 def test_add_client(add_client):
-    # Sleep a while before checking the node is bootstarped
+    # Sleep a while before checking the node is bootstrapped
     time.sleep(20 * timeout_factor)
     fields = {'M': 'discovery_bootstrap'}
 
@@ -149,8 +153,8 @@ def test_add_many_clients(init_session, setup_bootstrap, setup_clients):
 
 
 def test_gossip(init_session, setup_clients, add_curl):
-    fields = {'M': 'new_gossip_message', 'protocol': 'api_test_gossip'}
-    initial = len(query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields))
+    initial = len(query_message(
+        current_index, testconfig['namespace'], setup_clients.deployment_name, gossip_message_query_fields))
     # *note*: this already waits for bootstrap so we can send the msg right away.
     # send message to client via rpc
     client_ip = setup_clients.pods[0]['pod_ip']
@@ -158,11 +162,14 @@ def test_gossip(init_session, setup_clients, add_curl):
     print("Sending gossip from client ip: {0}/{1}".format(podname, client_ip))
 
     # todo: take out broadcast and rpcs to helper methods.
-    api = 'v1/broadcast'
-    data = '{"data":"foo"}'
+    api = 'v1/gateway/broadcastpoet'
+
+    # this is messy: this gets passed to curl as a command, so it needs to be a string
+    # grpc expects binary data as base64
+    data = '{"data":"%s"}' % base64.b64encode(b"foo").decode('utf-8')
     out = api_call(client_ip, data, api, testconfig['namespace'])
 
-    assert "{'value': 'ok'}" in out
+    assert "{'status': {}}" in out
 
     # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
     # TODO: check frequently before timeout so we might be able to finish earlier.
@@ -175,7 +182,7 @@ def test_gossip(init_session, setup_clients, add_curl):
     after = poll_query_message(indx=current_index,
                                namespace=testconfig['namespace'],
                                client_po_name=setup_clients.deployment_name,
-                               fields=fields,
+                               fields=gossip_message_query_fields,
                                findFails=False,
                                expected=total_expected_gossip)
 
@@ -183,8 +190,8 @@ def test_gossip(init_session, setup_clients, add_curl):
 
 
 def test_many_gossip_messages(setup_clients, add_curl):
-    fields = {'M': 'new_gossip_message', 'protocol': 'api_test_gossip'}
-    initial = len(query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields))
+    initial = len(query_message(
+        current_index, testconfig['namespace'], setup_clients.deployment_name, gossip_message_query_fields))
 
     # *note*: this already waits for bootstrap so we can send the msg right away.
     # send message to client via rpc
@@ -196,10 +203,14 @@ def test_many_gossip_messages(setup_clients, add_curl):
         print("Sending gossip from client ip: {0}/{1}".format(podname, client_ip))
 
         # todo: take out broadcast and rpcs to helper methods.
-        api = 'v1/broadcast'
-        data = '{"data":"foo' + str(i) + '"}'
+        api = 'v1/gateway/broadcastpoet'
+
+        # this is messy: this gets passed to curl as a command, so it needs to be a string
+        # grpc expects binary data as base64
+        # it doesn't matter what the data contains as long as each is unique
+        data = '{"data":"%s"}' % base64.b64encode(i.to_bytes(1, byteorder='big')).decode('utf-8')
         out = api_call(client_ip, data, api, testconfig['namespace'])
-        assert "{'value': 'ok'}" in out
+        assert "{'status': {}}" in out
 
         # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
         # TODO: check frequently before timeout so we might be able to finish earlier.
@@ -211,7 +222,7 @@ def test_many_gossip_messages(setup_clients, add_curl):
         after = poll_query_message(indx=current_index,
                                    namespace=testconfig['namespace'],
                                    client_po_name=setup_clients.deployment_name,
-                                   fields=fields,
+                                   fields=gossip_message_query_fields,
                                    findFails=False,
                                    expected=total_expected_gossip)
 
@@ -220,9 +231,9 @@ def test_many_gossip_messages(setup_clients, add_curl):
 
 
 def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000, prop_sleep_time=20, num_of_msg=100,
-              expected_ret="{'value': 'ok'}", msg_field="data"):
+              expected_ret="{'status': {}}", msg_field="data"):
     """
-    sends a protocol message to a random node and asserts it's propagation
+    sends a protocol message to a random node and asserts its propagation
 
     :param setup_clients: DeploymentInfo, clients info
     :param api: string, api path
@@ -276,23 +287,24 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
 # Validate that all nodes got exactly Y messages (X*Y messages)
 # Sample few nodes and validate that they got all 5 messages
 def test_many_gossip_sim(setup_clients, add_curl):
-    api = 'v1/broadcast'
-    headers = {'M': 'new_gossip_message', 'protocol': 'api_test_gossip'}
+    api = 'v1/gateway/broadcastpoet'
     msg_size = 10000  # 1kb TODO: increase up to 2mb
     test_messages = 100
     pods_num = len(setup_clients.pods)
 
-    prev_num_of_msg = len(query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, headers))
+    prev_num_of_msg = len(query_message(
+        current_index, testconfig['namespace'], setup_clients.deployment_name, gossip_message_query_fields))
     # if msg is valid we should see the message at each node msg * pods(nodes)
     total_expected_gossip = prev_num_of_msg + test_messages * pods_num
 
-    send_msgs(setup_clients, api, headers, total_expected_gossip, num_of_msg=test_messages)
+    send_msgs(setup_clients, api, gossip_message_query_fields, total_expected_gossip, num_of_msg=test_messages)
 
 
 def test_broadcast_unknown_protocol(setup_bootstrap, setup_clients, add_curl):
-    api = 'v1/broadcast'
+    api = 'v1/gateway/broadcastpoet'
     # protocol is modified
-    headers = {'M': 'new_gossip_message', 'protocol': 'unknown_protocol'}
+    headers = gossip_message_query_fields.copy()
+    headers['protocol'] = 'unknown_protocol'
     msg_size = 10000  # 1kb TODO: increase up to 2mb
     test_messages = 10
 
@@ -307,18 +319,19 @@ def test_broadcast_unknown_protocol(setup_bootstrap, setup_clients, add_curl):
 # Different client version on bootstrap:
 # Deploy X peers with client version A
 # Wait for bootstrap
-# Deploy new peer with client version B
-# Validate that the new node failed to bootstrap
-# NOTE : this test is ran in the end because it affects the network structure,
+# Deploy new "v2" peers with client version B<A
+# Validate that the new nodes failed to bootstrap
+# NOTE: this test is run in the end because it affects the network structure,
 # it creates an additional pod with a "v2" client
+# ALSO NOTE: The "v2" client is actually running an _earlier_ client version, this is confusing
 def test_diff_client_ver(setup_bootstrap, setup_clients, add_curl, add_clients):
-    sync_sleep_time = 10
     num_of_v2_clients = 2
     v2_version = "v2"
 
     clients = add_clients(num_of_v2_clients, v2_version)
 
-    time.sleep(sync_sleep_time)
+    # Sleep a while before checking the node is bootstrapped
+    time.sleep(20 * timeout_factor)
     headers = {'M': 'discovery_bootstrap'}
     for cl in clients:
         hits = poll_query_message(indx=current_index,
@@ -330,7 +343,7 @@ def test_diff_client_ver(setup_bootstrap, setup_clients, add_curl, add_clients):
         assert len(hits) == 0, ass_err
 
 
-# NOTE : this test is ran in the end because it affects the network structure,
+# NOTE: this test is run in the end because it affects the network structure,
 # it creates more pods and bootstrap them which will affect final query results
 # an alternative to that would be to kill the pods when the test ends.
 def test_late_bootstraps(init_session, setup_bootstrap, setup_clients):

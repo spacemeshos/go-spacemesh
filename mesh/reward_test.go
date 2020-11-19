@@ -81,6 +81,10 @@ func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs in
 	return totalFee
 }
 
+func init() {
+	types.SetLayersPerEpoch(3)
+}
+
 func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
 	layers, atxDB := getMeshWithMapState("t1", s)
@@ -303,6 +307,8 @@ func (m *meshValidatorBatchMock) SetProcessedLayer(lyr types.LayerID) { m.proces
 func (m *meshValidatorBatchMock) HandleLateBlock(*types.Block)        { panic("implement me") }
 
 func TestMesh_AccumulateRewards(t *testing.T) {
+	types.SetLayersPerEpoch(1)
+	defer types.SetLayersPerEpoch(3)
 	numOfLayers := 10
 	numOfBlocks := 10
 	maxTxs := 20

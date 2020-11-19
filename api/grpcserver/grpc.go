@@ -57,9 +57,12 @@ func (s *Server) startInternal() {
 }
 
 // Close stops the server
-func (s *Server) Close() {
+func (s *Server) Close() error {
 	log.Info("Stopping new grpc server...")
 	s.GrpcServer.Stop()
+
+	// We don't return any errors but we want to conform to io.Closer so return a nil error
+	return nil
 }
 
 // ServerOptions are shared by all grpc servers
