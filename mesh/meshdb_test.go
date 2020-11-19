@@ -35,7 +35,7 @@ func getMeshDB() *DB {
 
 func TestNewMeshDB(t *testing.T) {
 	mdb := getMeshDB()
-	bl := types.NewExistingBlock(1, []byte(rand.String(8)))
+	bl := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	err := mdb.AddBlock(bl)
 	assert.NoError(t, err)
 	block, err := mdb.GetBlock(bl.ID())
@@ -49,7 +49,7 @@ func TestMeshDB_AddBlock(t *testing.T) {
 	defer mdb.Close()
 	coinbase := types.HexToAddress("aaaa")
 
-	block1 := types.NewExistingBlock(1, []byte("data1"))
+	block1 := types.NewExistingBlock(1, []byte("data1"), nil)
 
 	addTransactionsWithFee(t, mdb, block1, 4, rand.Int63n(100))
 
@@ -98,7 +98,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 	}
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := types.NewExistingBlock(0, []byte(rand.String(8)))
+		bl := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
 		layerBlocks = append(layerBlocks, bl.ID())
 		for idx, pat := range patterns {
 			for _, id := range pat {
@@ -228,7 +228,7 @@ func TestForEachInView_InMem_WithLimitedLayer(t *testing.T) {
 	// traverse until (and including) layer 2
 	err := mdb.ForBlockInView(ids, 2, foo)
 	assert.NoError(t, err)
-	assert.Equal(t, 6, i)
+	assert.Equal(t, 9, i)
 }
 
 func BenchmarkNewPersistentMeshDB(b *testing.B) {

@@ -56,6 +56,22 @@ func (state *DB) Error() error {
 	return state.dbErr
 }
 
+// GetAllAccounts returns a dump of all accounts in global state
+func (state *DB) GetAllAccounts() (*types.MultipleAccountsState, error) {
+	// Commit state to store so accounts in memory are included
+	if _, err := state.Commit(); err != nil {
+		return nil, err
+	}
+
+	// We cannot lock before the call to Commit since that also acquires a lock
+	// But we need to lock here to ensure consistency between the state root and
+	// the account data
+	state.lock.Lock()
+	defer state.lock.Unlock()
+	accounts := state.RawDump()
+	return &accounts, nil
+}
+
 // Exist reports whether the given account address exists in the state.
 // Notably this also returns true for suicided accounts.
 func (state *DB) Exist(addr types.Address) bool {
@@ -158,7 +174,7 @@ func (state *DB) getStateObj(addr types.Address) (StateObj *Object) {
 		state.setError(err)
 		return nil
 	}
-	var data Account
+	var data types.AccountState
 	if err := rlp.DecodeBytes(enc, &data); err != nil {
 		log.Error("Failed to decode state object", "addr", addr, "err", err)
 		return nil
@@ -190,7 +206,7 @@ func (state *DB) GetOrNewStateObj(addr types.Address) *Object {
 // the given address, it is overwritten and returned as the second return value.
 func (state *DB) createObject(addr types.Address) (newObj, prev *Object) {
 	prev = state.getStateObj(addr)
-	newObj = newObject(state, addr, Account{})
+	newObj = newObject(state, addr, types.AccountState{})
 	newObj.setNonce(0)
 	/*if prev == nil {
 		state.journal.append(createObjectChange{account: &addr})

@@ -22,11 +22,11 @@ func (mpp *mockPatternProvider) ContextuallyValidBlock(layer types.LayerID) (map
 }
 
 func TestBeacon_Value(t *testing.T) {
-	genesisBlock := types.NewExistingBlock(types.GetEffectiveGenesis(), []byte("genesis"))
+	genesisBlock := types.NewExistingBlock(types.GetEffectiveGenesis(), []byte("genesis"), nil)
 
-	block1 := types.NewExistingBlock(0, []byte("asghsfgdhn"))
-	block2 := types.NewExistingBlock(0, []byte("asghdhn"))
-	block3 := types.NewExistingBlock(0, []byte("asghsfg"))
+	block1 := types.NewExistingBlock(0, []byte("asghsfgdhn"), nil)
+	block2 := types.NewExistingBlock(0, []byte("asghdhn"), nil)
+	block3 := types.NewExistingBlock(0, []byte("asghsfg"), nil)
 
 	r := require.New(t)
 

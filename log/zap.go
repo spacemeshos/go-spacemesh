@@ -2,6 +2,7 @@ package log
 
 import (
 	"fmt"
+	"reflect"
 	"runtime/debug"
 	"time"
 
@@ -52,6 +53,9 @@ func (f Field) Field() Field { return f }
 
 // FieldNamed returns a field with the provided name instead of the default.
 func FieldNamed(name string, field LoggableField) Field {
+	if field == nil || (reflect.ValueOf(field).Kind() == reflect.Ptr && reflect.ValueOf(field).IsNil()) {
+		return String(name, "nil")
+	}
 	f := field.Field()
 	f.Key = name
 	return f

@@ -16,6 +16,7 @@ func TestCheckNodeVersion(t *testing.T) {
 
 	testNewClient := versionTest{
 		{"someclient/0.0.1", "0.0.1"},
+		{"someclient/0.0.2", "0.0.1"},
 		{"anotherclient/1.0.0", "0.0.1"},
 		{"someclient/0.2.1", "0.0.1"},
 		{"someclient/1.3.1", "1.0.1"},
