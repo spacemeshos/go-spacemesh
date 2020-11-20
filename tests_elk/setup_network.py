@@ -32,6 +32,3 @@ def setup_mul_network(init_session, add_elk, add_curl, setup_bootstrap, start_po
 
     wait_genesis(GENESIS_TIME, testconfig['genesis_delta'])
     return network_deployment
-
-
-

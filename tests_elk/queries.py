@@ -282,12 +282,15 @@ def get_latest_layer(deployment, num_miners):
 
 
 def wait_for_latest_layer(deployment, min_layer_id, layers_per_epoch, num_miners):
-    while True:
+    # wait up to 10 secs * 60 = 10 mins
+    for i in range(0, 60):
+        time.sleep(10)
         lyr = get_latest_layer(deployment, num_miners)
-        print("current layer " + str(lyr))
+        print("current layer: " + str(lyr))
         if lyr is not None and lyr >= min_layer_id and lyr % layers_per_epoch == 0:
             return lyr
-        time.sleep(10)
+        else:
+            print("sleeping 10 seconds")
 
 
 def get_atx_per_node(deployment):

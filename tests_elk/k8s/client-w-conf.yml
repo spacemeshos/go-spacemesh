@@ -21,7 +21,7 @@ spec:
       - name: client
         image: spacemeshos/go-spacemesh:develop
         imagePullPolicy: Always
-        args: ['--randcon', '3', '--bootstrap','--start-mining', '--test-mode', '--oracle_server', 'http://10.12.3.14:3030', '--grpc-server', '--json-server', '--bootnodes', '10.36.1.12:7513/26hRBJqMJPUnKgJ9VR6g3kH6aCQhZ9shBvhn3bEHDvRyv', '--metrics', '--metrics-port', '2020', '--pprof-server']
+        args: ['--randcon', '3', '--bootstrap','--start-mining', '--test-mode', '--oracle_server', 'http://10.12.3.14:3030', '--grpc', 'gateway,globalstate,transaction', '--json-server', '--bootnodes', '10.36.1.12:7513/26hRBJqMJPUnKgJ9VR6g3kH6aCQhZ9shBvhn3bEHDvRyv', '--metrics', '--metrics-port', '2020', '--pprof-server']
         resources:
           requests:
             memory: "512M"
@@ -30,6 +30,6 @@ spec:
             memory: "2048M"
             cpu: "1"
         ports:
-        - containerPort: 9090
+        - containerPort: 9093
       nodeSelector:
         role: tests
