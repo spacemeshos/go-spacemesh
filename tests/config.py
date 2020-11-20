@@ -5,6 +5,7 @@ CLIENT_STATEFULSET_FILE = './k8s/client-w-conf-ss.yml'
 CURL_POD_FILE = './k8s/curl.yml'
 ELASTIC_CONF_DIR = './elk/elastic/'
 FILEBEAT_CONF_DIR = './elk/filebeat/'
+FLUENT_BIT_CONF_DIR = './elk/fluent-bit/'
 KIBANA_CONF_DIR = './elk/kibana/'
 LOGSTASH_CONF_DIR = './elk/logstash/'
 

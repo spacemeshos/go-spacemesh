@@ -21,8 +21,8 @@ current_index = 'kubernetes_cluster-' + todaydate
 
 # for convenience
 def get_pod_name_and_namespace_queries(pod_name, namespace):
-    return Q("match_phrase", kubernetes__pod__name=pod_name) & \
-           Q("match_phrase", kubernetes__namespace=namespace)
+    return Q("match_phrase", kubernetes__pod_name=pod_name) & \
+           Q("match_phrase", kubernetes__namespace_name=namespace)
 
 
 def set_time_frame_query(from_ts=None, to_ts=None):
@@ -188,15 +188,6 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
     """
     es = ES(namespace).get_search_api()
     fltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
-    partial_k8s_metadata = ["starting spacemesh"]
-    if 'M' in fields.keys() and fields['M'].lower() in partial_k8s_metadata:
-        # some of the early messages arrive with no K8S metadata,
-        # in that case some of the logs won't be returned when querying with the filters attached by
-        # get_pod_name_and_namespace_queries func.
-        # This behaviour is neglectable.
-        fltr = Q()
-        namespace, client_po_name = "\"\""
-
     for key in fields:
         fltr = fltr & Q("match_phrase", **{key: fields[key]})
 

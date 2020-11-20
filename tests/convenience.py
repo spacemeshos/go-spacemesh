@@ -21,12 +21,16 @@ def convert_ts_to_datetime(ts):
     return datetime.strptime(ts, TIMESTAMP_FMT)
 
 
-def sleep_print_backwards(tts):
-    print(f"\nsleeping for {tts} seconds\n")
+def sleep_print_backwards(tts, msg=None):
+    if msg:
+        print(f"\n{msg}")
+    else:
+        print(f"\nsleeping for {tts} seconds\n")
     while tts != 0:
         tts -= 1
-        print(f" {tts} seconds left     ", end="\r")
+        print(f" {tts} seconds left             ", end="\r")
         time.sleep(1)
+    print("\033[A \033[A")
 
 
 def str2bool(v):

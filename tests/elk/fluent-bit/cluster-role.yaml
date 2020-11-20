@@ -1,11 +1,11 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: filebeat-cluster-role
+  name: fluent-bit-clusterrole
   labels:
-    app: "filebeat"
-    chart: "filebeat"
-    heritage: "Helm"
+    app: fluent-bit
+    chart: fluent-bit-2.4.2
+    heritage: Helm
 rules:
   - apiGroups:
       - ""

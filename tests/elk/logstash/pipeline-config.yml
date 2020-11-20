@@ -11,10 +11,21 @@ data:
     input {
       beats {
         port => 5044
+        add_field => { "[@metadata][input-http]" => "" }
       }
     }
 
     filter {
+      if [@metadata][input-http] {
+        date {
+          match => [ "date", "UNIX" ]
+          remove_field => [ "date" ]
+        }
+        mutate {
+          remove_field => ["headers","host"]
+        }
+      }
+
       json{
         source => "message"
         skip_on_invalid_json => true
@@ -30,7 +41,7 @@ data:
       elasticsearch {
         hosts => ["elasticsearch-master:9200"]
         manage_template => false
-        index => "%{[@metadata][beat]}-%{+YYYY.MM.dd}"
+        index => "fluent-bit-NAMESPACE-%{+YYYY.MM.dd}"
         user => "elastic"
         password => "gavradon"
       }
