@@ -126,7 +126,7 @@ func (m *DB) Close() {
 }
 
 // ErrAlreadyExist error returned when adding an existing value to the database
-var ErrAlreadyExist = errors.New("block already exist in database")
+var ErrAlreadyExist = errors.New("block already exists in database")
 
 // AddBlock adds a block to the database
 func (m *DB) AddBlock(bl *types.Block) error {
@@ -730,25 +730,24 @@ func (m *DB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]stru
 		return mp, nil
 	}
 
-	blks, err := m.LayerBlocks(layer)
+	blockIds, err := m.LayerBlockIds(layer)
 	if err != nil {
 		return nil, err
 	}
 
 	validBlks := make(map[types.BlockID]struct{})
 
-	for _, b := range blks {
-		valid, err := m.ContextualValidity(b.ID())
-
+	for _, b := range blockIds {
+		valid, err := m.ContextualValidity(b)
 		if err != nil {
-			m.Error("could not get contextual validity for block %v in layer %v err=%v", b.ID(), layer, err)
+			m.With().Error("could not get contextual validity", b, layer, log.Err(err))
 		}
 
 		if !valid {
 			continue
 		}
 
-		validBlks[b.ID()] = struct{}{}
+		validBlks[b] = struct{}{}
 	}
 
 	return validBlks, nil

@@ -14,7 +14,7 @@ from tests.statefulset import create_statefulset
 import tests.queries as q
 
 
-def api_call(client_ip, data, api, namespace, port="9090"):
+def api_call(client_ip, data, api, namespace, port="9093"):
     # todo: this won't work with long payloads - ( `Argument list too long` ). try port-forward ?
     res = stream(CoreV1ApiClient().connect_post_namespaced_pod_exec, name="curl", namespace=namespace,
                  command=["curl", "-s", "--request", "POST", "--data", data, f"http://{client_ip}:{port}/{api}"],

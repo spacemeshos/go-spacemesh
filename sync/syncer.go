@@ -674,7 +674,7 @@ func (s *Syncer) GetBlocks(blockIds []types.BlockID) error {
 func (s *Syncer) fastValidation(block *types.Block) error {
 	// block eligibility
 	if eligible, err := s.BlockSignedAndEligible(block); err != nil || !eligible {
-		return fmt.Errorf("block eligibility check failed - err %v", err)
+		return fmt.Errorf("block eligibility check failed - err: %v", err)
 	}
 
 	// validate unique tx atx
