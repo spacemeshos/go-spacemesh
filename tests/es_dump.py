@@ -19,7 +19,7 @@ DIRECT_CMD = "elasticdump --input=http://{es_input_user}:{es_input_pass}@{es_ip}
 
 
 def elasticdump_to_file(namespace, index_date, limit=500):
-    indx = INDX.format(namespace=namespace, filebeat_index_date=index_date)
+    indx = INDX.format(namespace=namespace, index_date=index_date)
     mapping_file_name = indx + "-mapping"
     data_file_name = indx + "-data"
     es_ip = ES(namespace).es_ip
@@ -32,7 +32,7 @@ def elasticdump_to_file(namespace, index_date, limit=500):
 
 
 def elasticdump_from_file(namespace, index_date, limit=500):
-    indx = INDX.format(namespace=namespace, filebeat_index_date=index_date)
+    indx = INDX.format(namespace=namespace, index_date=index_date)
     mapping_file_name = indx + "-mapping"
     data_file_name = indx + "-data"
     rest_map = REST_CMD.format(file_name=mapping_file_name, es_output_user=cnf.ES_USER_LOCAL, es_output_pass=cnf.ES_PASS_LOCAL,
@@ -44,7 +44,7 @@ def elasticdump_from_file(namespace, index_date, limit=500):
 
 
 def elasticdump_direct(namespace, index_date, limit=500):
-    indx = INDX.format(namespace=namespace, filebeat_index_date=index_date)
+    indx = INDX.format(namespace=namespace, index_date=index_date)
     es_ip = ES(namespace).es_ip
     dump_map = DMP_CMD.format(es_input_user=cnf.ES_USER_LOCAL, es_input_pass=cnf.ES_PASS_LOCAL, es_ip=es_ip,
                               namespace=namespace, index=indx, es_output_user=cnf.ES_USER_LOCAL,
@@ -57,7 +57,7 @@ def elasticdump_direct(namespace, index_date, limit=500):
 
 
 def es_reindex(namespace, index_date, port=9200, retry=3):
-    indx = INDX.format(namespace=namespace, filebeat_index_date=index_date)
+    indx = INDX.format(namespace=namespace, index_date=index_date)
     try:
         es_ip = ES(namespace).es_ip
     except Exception as e:

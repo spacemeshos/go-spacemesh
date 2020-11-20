@@ -115,7 +115,7 @@ def filebeat_teardown(namespace):
 def fluent_bit_teardown(namespace):
     # remove clusterrolebind
     # TODO: find a solution for sharing the name both here and in the kube object
-    crb_name = f"fluent-bit-cluster-role-binding-{namespace}"
+    crb_name = f"fluent-bit-clusterrole-binding-{namespace}"
     remove_clusterrole_binding("fluent-bit", crb_name)
 
 

@@ -9,7 +9,7 @@ metadata:
 data:
   logstash.conf: |-
     input {
-      beats {
+      http {
         port => 5044
         add_field => { "[@metadata][input-http]" => "" }
       }
