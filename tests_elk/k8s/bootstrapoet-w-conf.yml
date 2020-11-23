@@ -13,6 +13,7 @@ spec:
     metadata:
       labels:
         name: bootstrapoet
+        namespace: NAMESPACE
       annotations:
         cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
         prometheus.io/scrape: 'true'
@@ -47,5 +48,3 @@ spec:
             cpu: "2"
         ports:
           - containerPort: 80
-      nodeSelector:
-        role: tests

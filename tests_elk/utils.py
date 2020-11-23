@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta
 from kubernetes.stream import stream
 import functools
+import ntpath
 import os
 import pytz
 import re
+from shutil import copyfile
 import subprocess
 import time
 
@@ -230,6 +232,37 @@ def exec_wait(cmd, retry=1, interval=1):
         print(f"return code: {ret_code}")
 
 
+def duplicate_file_and_replace_phrase(path, filename, new_name, look, replace):
+    if is_pattern_in_file(os.path.join(path, filename), look):
+        backup_path = create_backup_file(path, filename, new_name)
+        replace_phrase_in_file(backup_path, look, replace)
+        return backup_path, True
+    else:
+        return os.path.join(path, filename), False
+
+
+def is_pattern_in_file(path, look):
+    # search phrase in file return True if found else return False
+    with open(path) as f:
+        text = f.read()
+        match = re.search(look, text)
+        if match:
+            return True
+    return False
+
+
+def create_backup_file(path, filename, new_name):
+    src_path = os.path.join(path, filename)
+    backup_path = os.path.join(path, new_name)
+    try:
+        copyfile(src_path, backup_path)
+    except Exception as e:
+        print(f"failed backing up file: {src_path}, err: {e}")
+        return None
+
+    return backup_path
+
+
 def replace_phrase_in_file(filepath, look, replace):
     with open(filepath, 'r+') as f:
         text = f.read()
@@ -237,3 +270,20 @@ def replace_phrase_in_file(filepath, look, replace):
         f.seek(0)
         f.write(text)
         f.truncate()
+
+
+def delete_file(filepath):
+    try:
+        while os.path.isfile(filepath):
+            os.remove(filepath)
+            time.sleep(0.2)
+    except OSError as e:
+        print(f"failed removing file: {filepath}, err: {e}")
+
+
+def get_filename_and_path(path):
+    head, tail = ntpath.split(path)
+    if not tail:
+        head, tail = ntpath.split(head)
+
+    return head, tail

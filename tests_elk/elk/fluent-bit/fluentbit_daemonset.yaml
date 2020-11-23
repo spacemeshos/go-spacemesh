@@ -19,6 +19,16 @@ spec:
       annotations:
         checksum/config: 45db4dbdc41de54e92afc2c801476960963abf9844fb759243951bc2c2b41bd5
     spec:
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: namespace
+                  operator: In
+                  values:
+                    - NAMESPACE
+            topologyKey: kubernetes.io/hostname
       hostNetwork: false
       dnsPolicy: ClusterFirst
       serviceAccountName: fluent-bit
@@ -56,8 +66,6 @@ spec:
               subPath: parsers.conf
 
       terminationGracePeriodSeconds: 10
-      nodeSelector:
-        role: tests
 
       volumes:
         - name: varlog

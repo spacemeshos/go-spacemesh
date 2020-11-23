@@ -6,7 +6,7 @@ import time
 import yaml
 
 from tests_elk import config as conf
-from tests_elk.utils import replace_phrase_in_file
+from tests_elk.utils import get_filename_and_path, duplicate_file_and_replace_phrase, delete_file
 
 """ k8s deployment api file for stateless deployments (opposite to statefulset.py) """
 
@@ -61,7 +61,10 @@ def wait_for_service_to_be_ready(deployment_name, name_space, time_out=None):
 
 
 def create_deployment(file_name, name_space, deployment_id=None, replica_size=1, container_specs=None, time_out=None):
-    with open(os.path.join(os.path.dirname(__file__), file_name)) as f:
+    file_path, filename = get_filename_and_path(file_name)
+    mod_file_path, is_changed = duplicate_file_and_replace_phrase(file_path, filename, f"{name_space}_{filename}",
+                                                                  "(?<!_)NAMESPACE", name_space)
+    with open(mod_file_path) as f:
         dep = yaml.safe_load(f)
 
         # Set unique deployment id
@@ -76,7 +79,11 @@ def create_deployment(file_name, name_space, deployment_id=None, replica_size=1,
         k8s_beta = client.AppsV1Api()
         resp1 = k8s_beta.create_namespaced_deployment(body=dep, namespace=name_space)
         wait_to_deployment_to_be_ready(resp1.metadata._name, name_space, time_out=time_out)
-        return resp1
+
+    if mod_file_path != os.path.join(file_path, file_name) and is_changed:
+        delete_file(mod_file_path)
+
+    return resp1
 
 
 def delete_deployment(deployment_name, name_space):
@@ -113,7 +120,7 @@ def filebeat_teardown(namespace):
 def fluent_bit_teardown(namespace):
     # remove clusterrolebind
     # TODO: find a solution for sharing the name both here and in the kube object
-    crb_name = f"fluent-bit-cluster-role-binding-{namespace}"
+    crb_name = f"fluent-bit-clusterrole-binding-{namespace}"
     remove_clusterrole_binding(crb_name)
 
 
@@ -150,9 +157,10 @@ def add_deployment_dir(namespace, dir_path):
 
     for filename in dep_lst:
         # replace 'NAMESPACE' with the actual namespace if exists
-        replace_phrase_in_file(os.path.join(dir_path, filename), "(?<!_)NAMESPACE", namespace)
+        modified_file_path, is_change = duplicate_file_and_replace_phrase(dir_path, filename, f"{namespace}_{filename}",
+                                                                          "(?<!_)NAMESPACE", namespace)
         print(f"applying file: {filename}")
-        with open(os.path.join(dir_path, filename)) as f:
+        with open(modified_file_path) as f:
             dep = yaml.safe_load(f)
             if dep['kind'] == 'StatefulSet':
                 k8s_client = client.AppsV1Api()
@@ -181,6 +189,7 @@ def add_deployment_dir(namespace, dir_path):
                         print(f"cluster role already exists")
                         continue
                     raise e
+
             elif dep["kind"] == 'RoleBinding':
                 k8s_client = client.RbacAuthorizationV1Api()
                 dep["subjects"][0]["namespace"] = namespace
@@ -195,7 +204,8 @@ def add_deployment_dir(namespace, dir_path):
                 k8s_client = client.CoreV1Api()
                 k8s_client.create_namespaced_service_account(body=dep, namespace=namespace)
 
-        # replace namespace with 'NAMESPACE'
-        replace_phrase_in_file(os.path.join(dir_path, filename), namespace, "NAMESPACE")
+        if modified_file_path != os.path.join(dir_path, filename) and is_change:
+            # remove modified file
+            delete_file(modified_file_path)
 
     print("\nDone\n")

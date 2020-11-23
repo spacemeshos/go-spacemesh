@@ -13,6 +13,7 @@ spec:
     metadata:
       labels:
         name: poet
+        namespace: NAMESPACE
       annotations:
         cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
     spec:
