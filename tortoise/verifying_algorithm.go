@@ -11,11 +11,28 @@ import (
 // ThreadSafeVerifyingTortoise is a thread safe verifying tortoise wrapper, it just locks all actions.
 type ThreadSafeVerifyingTortoise struct {
 	trtl  *turtle
-	mutex sync.Mutex
+	mutex sync.RWMutex
+}
+
+// Config holds the arguments and dependencies to create a verifying tortoise instance.
+type Config struct {
+	LayerSyze int
+	Database  blockDataProvider
+	Hdist     int
+	Log       log.Log
+	Recovered bool
 }
 
 // NewVerifyingTortoise creates a new verifying tortoise wrapper
-func NewVerifyingTortoise(layerSize int, mdb blockDataProvider, hdist int, lg log.Log) *ThreadSafeVerifyingTortoise {
+func NewVerifyingTortoise(cfg Config) *ThreadSafeVerifyingTortoise {
+	if cfg.Recovered {
+		return recoveredVerifyingTortoise(cfg.Database, cfg.Log)
+	}
+	return verifyingTortoise(cfg.LayerSyze, cfg.Database, cfg.Hdist, cfg.Log)
+}
+
+// verifyingTortoise creates a new verifying tortoise wrapper
+func verifyingTortoise(layerSize int, mdb blockDataProvider, hdist int, lg log.Log) *ThreadSafeVerifyingTortoise {
 	alg := &ThreadSafeVerifyingTortoise{trtl: newTurtle(mdb, hdist, layerSize)}
 	alg.trtl.SetLogger(lg)
 	alg.trtl.init(mesh.GenesisLayer())
@@ -23,7 +40,7 @@ func NewVerifyingTortoise(layerSize int, mdb blockDataProvider, hdist int, lg lo
 }
 
 // NewRecoveredVerifyingTortoise recovers a previously persisted tortoise copy from mesh.DB
-func NewRecoveredVerifyingTortoise(mdb blockDataProvider, lg log.Log) *ThreadSafeVerifyingTortoise {
+func recoveredVerifyingTortoise(mdb blockDataProvider, lg log.Log) *ThreadSafeVerifyingTortoise {
 	tmp, err := RecoverVerifyingTortoise(mdb)
 	if err != nil {
 		lg.Panic("could not recover tortoise state from disc ", err)
@@ -40,9 +57,9 @@ func NewRecoveredVerifyingTortoise(mdb blockDataProvider, lg log.Log) *ThreadSaf
 
 // LatestComplete returns the latest verified layer. TODO: rename?
 func (trtl *ThreadSafeVerifyingTortoise) LatestComplete() types.LayerID {
-	trtl.mutex.Lock()
+	trtl.mutex.RLock()
 	verified := trtl.trtl.Verified
-	trtl.mutex.Unlock()
+	trtl.mutex.RUnlock()
 	return verified
 }
 

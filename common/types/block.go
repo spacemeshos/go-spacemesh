@@ -134,26 +134,11 @@ type BlockHeader struct {
 	AgainstDiff []BlockID
 	ForDiff     []BlockID
 	NeutralDiff []BlockID
-
-	BlockVotes []BlockID
-	ViewEdges  []BlockID
 }
 
 // Layer returns the block's LayerID.
 func (b BlockHeader) Layer() LayerID {
 	return b.LayerIndex
-}
-
-// AddVote adds a vote to the list of block votes.
-func (b *BlockHeader) AddVote(id BlockID) {
-	// todo: do this in a sorted manner
-	b.BlockVotes = append(b.BlockVotes, id)
-}
-
-// AddView adds a block to this block's view.
-func (b *BlockHeader) AddView(id BlockID) {
-	// todo: do this in a sorted manner
-	b.ViewEdges = append(b.ViewEdges, id)
 }
 
 // MiniBlock includes all of a block's fields, except for the signature. This structure is serialized and signed to
@@ -309,8 +294,6 @@ func NewExistingBlock(layerIndex LayerID, data []byte, txs []TransactionID) *Blo
 	b := Block{
 		MiniBlock: MiniBlock{
 			BlockHeader: BlockHeader{
-				BlockVotes: make([]BlockID, 0, 10),
-				ViewEdges:  make([]BlockID, 0, 10),
 				LayerIndex: layerIndex,
 				Data:       data},
 			TxIDs: txs,

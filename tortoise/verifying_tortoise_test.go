@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/stretchr/testify/assert"
+	"os"
 	"strconv"
 	"testing"
 
@@ -16,6 +17,46 @@ import (
 
 func init() {
 	types.SetLayersPerEpoch(4)
+}
+
+const Path = "../tmp/tortoise/"
+
+const inmem = 1
+const disc = 2
+
+const memType = inmem
+
+func getPersistentMash() *mesh.DB {
+	db, _ := mesh.NewPersistentMeshDB(fmt.Sprintf(Path+"ninje_tortoise/"), 10, log.NewDefault("ninje_tortoise").WithOptions(log.Nop))
+	return db
+}
+
+func persistenceTeardown() {
+	os.RemoveAll(Path)
+}
+
+func getInMemMesh() *mesh.DB {
+	return mesh.NewMemMeshDB(log.NewDefault(""))
+}
+
+func getMeshForBench() *mesh.DB {
+	switch memType {
+	case inmem:
+		return getInMemMesh()
+	case disc:
+		return getPersistentMash()
+	}
+	return nil
+}
+
+func AddLayer(m *mesh.DB, layer *types.Layer) error {
+	//add blocks to mDB
+	for _, bl := range layer.Blocks() {
+		if err := m.AddBlock(bl); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 var defaultTestHdist = config.DefaultConfig().Hdist
@@ -362,7 +403,7 @@ func TestTurtle_Recovery(t *testing.T) {
 	mdb.InputVectorBackupFunc = getHareResults
 
 	lg := log.NewDefault(t.Name())
-	alg := NewVerifyingTortoise(3, mdb, 5, lg)
+	alg := verifyingTortoise(3, mdb, 5, lg)
 	l := mesh.GenesisLayer()
 
 	l1 := createTurtleLayer(types.GetEffectiveGenesis()+1, mdb, alg.BaseBlock, getHareResults, 3)
@@ -395,7 +436,7 @@ func TestTurtle_Recovery(t *testing.T) {
 		if r := recover(); r != nil {
 			t.Log("Recovered from", r)
 		}
-		alg := NewRecoveredVerifyingTortoise(mdb, lg)
+		alg := recoveredVerifyingTortoise(mdb, lg)
 
 		l2res, _ := getHareResults(types.GetEffectiveGenesis() + 2)
 		alg.HandleIncomingLayer(l2, l2res)

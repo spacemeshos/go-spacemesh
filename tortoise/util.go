@@ -8,7 +8,6 @@ import (
 )
 
 type vec [2]int
-type patternID uint32 //this hash does not include the layer id
 
 const ( //Threshold
 	window          = 10
@@ -18,10 +17,9 @@ const ( //Threshold
 
 var ( //correction vectors type
 	//Opinion
-	support     = vec{1, 0}
-	against     = vec{0, 1}
-	abstain     = vec{0, 0}
-	zeroPattern = votingPattern{}
+	support = vec{1, 0}
+	against = vec{0, 1}
+	abstain = vec{0, 0}
 )
 
 func max(i types.LayerID, j types.LayerID) types.LayerID {
@@ -87,6 +85,19 @@ func globalOpinion(v vec, layerSize int, delta float64) vec {
 	} else {
 		return abstain
 	}
+}
+
+type blockIDLayerTuple struct {
+	types.BlockID
+	types.LayerID
+}
+
+func (blt blockIDLayerTuple) layer() types.LayerID {
+	return blt.LayerID
+}
+
+func (blt blockIDLayerTuple) id() types.BlockID {
+	return blt.BlockID
 }
 
 // Opinion is a tuple of block and layer id and its opinions on other blocks.
@@ -166,4 +177,13 @@ func (vi voteInput) Bytes() []byte {
 
 type retriever interface {
 	Retrieve(key []byte, v interface{}) (interface{}, error)
+}
+
+func getBottomOfWindow(newlyr types.LayerID, pbase types.LayerID, hdist types.LayerID) types.LayerID {
+	if window > newlyr {
+		return types.GetEffectiveGenesis()
+	} else if pbase < hdist {
+		return newlyr - window + 1
+	}
+	return max(pbase-hdist, newlyr-window+1)
 }

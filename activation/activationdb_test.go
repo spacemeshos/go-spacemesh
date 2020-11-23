@@ -24,11 +24,19 @@ import (
 func createLayerWithAtx2(t require.TestingT, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := types.NewExistingBlock(id, []byte(rand.String(8)), nil)
-		block1.BlockVotes = append(block1.BlockVotes, votes...)
+		block1.ForDiff = append(block1.ForDiff, votes...)
 		for _, atx := range atxs {
 			*block1.ActiveSet = append(*block1.ActiveSet, atx.ID())
 		}
-		block1.ViewEdges = append(block1.ViewEdges, views...)
+	loop:
+		for _, v := range views {
+			for _, vv := range votes {
+				if vv == v {
+					continue loop
+				}
+			}
+			block1.AgainstDiff = append(block1.AgainstDiff, v)
+		}
 		err := msh.AddBlockWithTxs(block1)
 		require.NoError(t, err)
 		created = append(created, block1.ID())

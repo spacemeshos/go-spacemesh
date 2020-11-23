@@ -715,7 +715,7 @@ func (msh *Mesh) handleOrphanBlocks(blk *types.Block) {
 	}
 	msh.orphanBlocks[blk.Layer()][blk.ID()] = struct{}{}
 	msh.Debug("Added block %s to orphans", blk.ID())
-	for _, b := range blk.ViewEdges {
+	for _, b := range append(blk.ForDiff, append(blk.AgainstDiff, blk.NeutralDiff...)...) {
 		for layerID, layermap := range msh.orphanBlocks {
 			if _, has := layermap[b]; has {
 				msh.Log.With().Debug("delete block from orphans", b)

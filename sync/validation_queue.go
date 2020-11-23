@@ -133,11 +133,6 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 			return fmt.Errorf("DataAvailabilty failed for block: %v errmsg: %v", block.ID().String(), err)
 		}
 
-		// validate block's votes
-		if valid, err := validateVotes(block, vq.ForBlockInView, vq.Hdist, vq.Log); valid == false || err != nil {
-			return fmt.Errorf("validate votes failed for block: %s errmsg: %s", block.ID().String(), err)
-		}
-
 		err = vq.AddBlockWithTxs(block)
 
 		if err != nil && err != mesh.ErrAlreadyExist {

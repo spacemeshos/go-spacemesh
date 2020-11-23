@@ -541,13 +541,20 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
+	trtlCfg := tortoise.Config{
+		LayerSyze: int(layerSize),
+		Database:  mdb,
+		Hdist:     app.Config.Hdist,
+		Log:       app.addLogger(TrtlLogger, lg),
+		Recovered: mdb.PersistentData(),
+	}
 
-	if mdb.PersistentData() {
-		trtl = tortoise.NewRecoveredVerifyingTortoise(mdb, app.addLogger(TrtlLogger, lg))
+	trtl = tortoise.NewVerifyingTortoise(trtlCfg)
+
+	if trtlCfg.Recovered {
 		msh = mesh.NewRecoveredMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
-		trtl = tortoise.NewVerifyingTortoise(int(layerSize), mdb, app.Config.Hdist, app.addLogger(TrtlLogger, lg))
 		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		app.setupGenesis(processor, msh)
 	}

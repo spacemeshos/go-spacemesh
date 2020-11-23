@@ -121,6 +121,18 @@ func removeOpinion(o []Opinion, i int) []Opinion {
 	return append(o[:i], o[i+1:]...)
 }
 
+func blockIDsToString(input []types.BlockID) string {
+	str := "["
+	for i, b := range input {
+		str += b.String()
+		if i != len(input)-1 {
+			str += ","
+		}
+	}
+	str += "]"
+	return str
+}
+
 // TODO: cache but somehow check for changes (hare that didn't finish finishes..) maybe check hash?
 func (t *turtle) getSingleInputVectorFromDB(lyrid types.LayerID, blockid types.BlockID) (vec, error) {
 	if lyrid <= types.GetEffectiveGenesis() {
@@ -132,15 +144,7 @@ func (t *turtle) getSingleInputVectorFromDB(lyrid types.LayerID, blockid types.B
 		return abstain, err
 	}
 
-	str := "["
-	for i, b := range input {
-		str += b.String()
-		if i != len(input)-1 {
-			str += ","
-		}
-	}
-	str += "]"
-	t.logger.With().Debug("got input vector from db", lyrid, log.FieldNamed("query_block", blockid), log.String("input", str))
+	t.logger.With().Debug("got input vector from db", lyrid, log.FieldNamed("query_block", blockid), log.String("input", blockIDsToString(input)))
 
 	for _, bl := range input {
 		if bl == blockid {
@@ -190,7 +194,7 @@ func (t *turtle) BaseBlock() (types.BlockID, [][]types.BlockID, error) {
 				continue
 			}
 
-			t.logger.With().Info("Choose baseblock", log.FieldNamed("last_layer", t.Last), log.FieldNamed("base_block_layer", i), blk, log.Int("against_count", len(afn[0])), log.Int("support_count", len(afn[1])), log.Int("neutral_count", len(afn[2])))
+			t.logger.With().Info("choose baseblock", log.FieldNamed("last_layer", t.Last), log.FieldNamed("base_block_layer", i), blk, log.Int("against_count", len(afn[0])), log.Int("support_count", len(afn[1])), log.Int("neutral_count", len(afn[2])))
 
 			return blk, [][]types.BlockID{blockMapToArray(afn[0]), blockMapToArray(afn[1]), blockMapToArray(afn[2])}, nil
 		}
@@ -212,54 +216,6 @@ func (t *turtle) opinionMatches(layerid types.LayerID, blockid types.BlockID, op
 		}
 		return []map[types.BlockID]struct{}{againstDiff, forDiff, neutralDiff}, nil
 	}
-
-	//if t.Last-layerid > t.Hdist {
-	//	return nil, errors.New("layer is out of hdist")
-	//}
-
-	// Check how much of this block's opinions corresponds with the input
-	//   vote vector and add the differences if there are and they not exceed the diff list limit.
-
-	//for b, o := range opinion2.BlocksOpinion {
-	//	bl, err := t.bdp.GetBlock(b)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//
-	//	inputVote, err := t.getSingleInputVectorFromDB(bl.LayerIndex, b)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	t.logger.With().Debug("checking block differences", log.FieldNamed("base_block_candidate", blockid), log.FieldNamed("diff_block", b), layerid)
-	//
-	//	if inputVote == simplifyVote(o) {
-	//		t.logger.With().Debug("no diff added", log.FieldNamed("base_block_candidate", blockid), log.FieldNamed("diff_block", b))
-	//		continue
-	//	}
-	//
-	//	if inputVote == against && simplifyVote(o) != against {
-	//		t.logger.With().Debug("added diff", log.FieldNamed("base_block_candidate", blockid), log.FieldNamed("diff_block", b), log.String("diff", "against"))
-	//		againstDiff[b] = struct{}{}
-	//		continue
-	//	}
-	//
-	//	if inputVote == support && simplifyVote(o) != support {
-	//		t.logger.With().Debug("added diff", log.FieldNamed("base_block_candidate", blockid), log.FieldNamed("diff_block", b), log.String("diff", "support"))
-	//		forDiff[b] = struct{}{}
-	//		continue
-	//	}
-	//
-	//	if inputVote == abstain && simplifyVote(o) != abstain {
-	//		t.logger.With().Debug("added diff", log.FieldNamed("base_block_candidate", blockid), log.FieldNamed("diff_block", b), log.String("diff", "neutral"))
-	//		neutralDiff[b] = struct{}{}
-	//		continue
-	//	}
-	//}
-	// return now if already exceed explist
-	//explen := len(againstDiff)+len(forDiff)+len(neutralDiff)
-	//if explen > t.MaxExceptions {
-	//	return nil, fmt.Errorf(" matches too much exceptions (%v)", explen)
-	//}
 
 	// TODO: maybe we should vote back hdist but drill down check the base blocks ?
 
@@ -329,9 +285,6 @@ func (t *turtle) BlockWeight(voting, voted types.BlockID) int {
 
 //Persist saves the current tortoise state to the database
 func (t *turtle) persist() error {
-	//if err := t.saveOpinion(); err != nil {
-	//	return err
-	//}
 	return t.bdp.Persist(mesh.TORTOISE, t)
 }
 

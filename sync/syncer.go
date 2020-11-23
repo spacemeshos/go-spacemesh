@@ -881,12 +881,11 @@ func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Transact
 		return nil, nil, fmt.Errorf("block %v not syntacticly valid", block.ID())
 	}
 
-	// validate block's votes
-	if valid, err := validateVotes(block, s.ForBlockInView, s.Hdist, s.Log); valid == false || err != nil {
-		return nil, nil, fmt.Errorf("validate votes failed for block %v, %v", block.ID(), err)
-	}
-
 	return txs, atxs, nil
+}
+
+func combineBlockDiffs(blk *types.Block) []types.BlockID {
+	return append(append(blk.ForDiff, blk.AgainstDiff...), blk.NeutralDiff...)
 }
 
 func (s *Syncer) validateBlockView(blk *types.Block) bool {
@@ -900,7 +899,7 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 		ch <- res
 		return nil
 	}
-	if res, err := s.blockQueue.addDependencies(blk.ID(), append(append(blk.ForDiff, blk.NeutralDiff...), blk.AgainstDiff...), foo); err != nil {
+	if res, err := s.blockQueue.addDependencies(blk.ID(), combineBlockDiffs(blk), foo); err != nil {
 		s.Error(fmt.Sprintf("block %v not syntactically valid", blk.ID()), err)
 		return false
 	} else if res == false {
@@ -980,41 +979,6 @@ func (s *Syncer) FetchBlock(ID types.BlockID) error {
 		return fmt.Errorf("stuff")
 	}
 	return nil
-}
-
-func validateVotes(blk *types.Block, forBlockfunc forBlockInView, depth int, lg log.Log) (bool, error) {
-	view := map[types.BlockID]struct{}{}
-	for _, b := range blk.ViewEdges {
-		view[b] = struct{}{}
-	}
-
-	vote := map[types.BlockID]struct{}{}
-	for _, b := range blk.BlockVotes {
-		vote[b] = struct{}{}
-	}
-
-	traverse := func(b *types.Block) (stop bool, err error) {
-		if _, ok := vote[b.ID()]; ok {
-			delete(vote, b.ID())
-		}
-		return len(vote) == 0, nil
-	}
-
-	// traverse only through the last Hdist layers
-	lowestLayer := blk.LayerIndex - types.LayerID(depth)
-	if blk.LayerIndex < types.LayerID(depth) {
-		lowestLayer = 0
-	}
-	err := forBlockfunc(view, lowestLayer, traverse)
-	if err == nil && len(vote) > 0 {
-		return false, fmt.Errorf("voting on blocks out of view (or out of Hdist), %v %s", vote, err)
-	}
-
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
 }
 
 func (s *Syncer) dataAvailability(blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {

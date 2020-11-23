@@ -235,53 +235,6 @@ func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID
 	return nil
 }
 
-// OldForBlockInView traverses all blocks in a view and uses blockHandler func on each block
-// The block handler func should return two values - a bool indicating whether or not we should stop traversing after the current block (happy flow)
-// and an error indicating that an error occurred while handling the block, the traversing will stop in that case as well (error flow)
-func (m *DB) OldForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error {
-	blocksToVisit := list.New()
-	for id := range view {
-		blocksToVisit.PushBack(id)
-	}
-	seenBlocks := make(map[types.BlockID]struct{})
-	for blocksToVisit.Len() > 0 {
-		block, err := m.GetBlock(blocksToVisit.Remove(blocksToVisit.Front()).(types.BlockID))
-		if err != nil {
-			return err
-		}
-
-		// catch blocks that were referenced after more than one layer, and slipped through the stop condition
-		if block.LayerIndex < layer {
-			continue
-		}
-
-		// execute handler
-		stop, err := blockHandler(block)
-		if err != nil {
-			return err
-		}
-
-		if stop {
-			m.Log.With().Debug("ForBlockInView stopped", block.ID())
-			break
-		}
-
-		// stop condition: referenced blocks must be in lower layers, so we don't traverse them
-		if block.LayerIndex == layer {
-			continue
-		}
-
-		// push children to bfs queue
-		for _, id := range block.ViewEdges {
-			if _, found := seenBlocks[id]; !found {
-				seenBlocks[id] = struct{}{}
-				blocksToVisit.PushBack(id)
-			}
-		}
-	}
-	return nil
-}
-
 // LayerBlockIds retrieves all block ids from a layer by layer index
 func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	idsBytes, err := m.layers.Get(index.Bytes())

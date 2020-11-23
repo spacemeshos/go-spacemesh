@@ -42,7 +42,7 @@ func TestCreateBaseline(t *testing.T) {
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
 	defer atxdbStore.Close()
 	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, uint16(1000), goldenATXID, &validatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
-	trtl := tortoise.NewVerifyingTortoise(blocksPerLayer, mshdb, 1, lg.WithName("trtl"))
+	trtl := tortoise.NewVerifyingTortoise(tortoise.Config{LayerSyze: blocksPerLayer, Database: mshdb, Hdist: 1, Log: lg.WithName("trtl")})
 	msh := mesh.NewMesh(mshdb, atxdb, rewardConf, trtl, &mockTxMemPool{}, &mockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
 	poetDbStore, err := database.NewLDBDatabase(id+"poet", 0, 0, lg.WithName("poetDbStore").WithOptions(log.Nop))
@@ -125,14 +125,18 @@ func createLayerWithRandVoting(msh *mesh.Mesh, index types.LayerID, prev []*type
 		signer := signing.NewEdSigner()
 		bl.Signature = signer.Sign(bl.Bytes())
 		layerBlocks = append(layerBlocks, bl.ID())
+		votes := make(map[types.BlockID]struct{})
 		for idx, pat := range patterns {
 			for _, id := range pat {
 				b := prev[idx].Blocks()[id]
-				bl.AddVote(b.ID())
+				bl.ForDiff = append(bl.ForDiff, (b.ID()))
+				votes[b.ID()] = struct{}{}
 			}
 		}
 		for _, prevBloc := range prev[0].Blocks() {
-			bl.AddView(prevBloc.ID())
+			if _, ok := votes[prevBloc.ID()]; !ok {
+				bl.AgainstDiff = append(bl.AgainstDiff, prevBloc.ID())
+			}
 		}
 
 		//add txs
