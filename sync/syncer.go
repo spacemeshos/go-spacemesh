@@ -4,12 +4,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/events"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	p2pconf "github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -18,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"strconv"
 )
 
 type forBlockInView func(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
@@ -82,6 +82,7 @@ type Configuration struct {
 	AtxsLimit       int
 	Hdist           int
 	AlwaysListen    bool
+	GoldenATXID     types.ATXID
 }
 
 var (
@@ -727,10 +728,9 @@ func (s *Syncer) fetchRefBlock(block *types.Block) error {
 func (s *Syncer) fetchAllReferencedAtxs(blk *types.Block) error {
 	var atxs []types.ATXID
 
-	//todo: patch, remove when golden atx
-	//if blk.ATXID != *types.EmptyATXID{
-	atxs = append(atxs, blk.ATXID)
-	//}
+	if blk.ATXID != s.GoldenATXID {
+		atxs = append(atxs, blk.ATXID)
+	}
 	if blk.ActiveSet != nil {
 		if len(*blk.ActiveSet) > 0 {
 			atxs = append(atxs, *blk.ActiveSet...)

@@ -33,7 +33,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-var conf = Configuration{1000, 1, 300, 500 * time.Millisecond, 200 * time.Millisecond, 10 * time.Hour, 100, 5, false}
+var (
+	goldenATXID = types.ATXID(types.HexToHash32("77777"))
+	conf        = Configuration{1000, 1, 300, 500 * time.Millisecond, 200 * time.Millisecond, 10 * time.Hour, 100, 5, false, goldenATXID}
+)
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -55,14 +58,11 @@ func (alwaysOkAtxDb) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 }
 
 const (
-	levelDB  = "LevelDB"
-	memoryDB = "MemoryDB"
-	Path     = "../tmp/sync/"
+	levelDB        = "LevelDB"
+	memoryDB       = "MemoryDB"
+	Path           = "../tmp/sync/"
+	layersPerEpoch = 10
 )
-
-const layersPerEpoch = 10
-
-var goldenATXID = types.ATXID(types.HexToHash32("77777"))
 
 var (
 	tx1 = tx()

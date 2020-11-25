@@ -102,6 +102,8 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		panic("something got fudged while creating p2p service ")
 	}
 
+	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
+
 	conf := sync.Configuration{
 		Concurrency:     4,
 		AtxsLimit:       200,
@@ -111,6 +113,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		Hdist:           app.Config.Hdist,
 		ValidationDelta: 30 * time.Second,
 		LayersPerEpoch:  uint16(app.Config.LayersPerEpoch),
+		GoldenATXID:     goldenATXID,
 	}
 	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
 	lg.Info("local db path: %v layers per epoch: %v", path, app.Config.LayersPerEpoch)
@@ -142,8 +145,6 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 
 	txpool := state.NewTxMemPool()
 	atxpool := activation.NewAtxMemPool()
-
-	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
 
 	sync := sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, goldenATXID, types.LayerID(expectedLayers))
 	app.sync = sync

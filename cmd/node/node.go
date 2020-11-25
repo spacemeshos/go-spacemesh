@@ -546,6 +546,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		Hdist:           app.Config.Hdist,
 		AtxsLimit:       app.Config.AtxsPerBlock,
 		AlwaysListen:    app.Config.AlwaysListen,
+		GoldenATXID:     goldenATXID,
 	}
 
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
