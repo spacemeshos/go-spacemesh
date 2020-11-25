@@ -178,7 +178,7 @@ type SpacemeshApp struct {
 	closers        []interface{ Close() }
 	log            log.Log
 	txPool         *state.TxMempool
-	fetch             *fetch.Fetch
+	fetch          *fetch.Fetch
 	loggers        map[string]*zap.AtomicLevel
 	term           chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
 	started        chan struct{} // this channel is closed once the app has finished starting
