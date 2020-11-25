@@ -121,7 +121,7 @@ func (s MeshService) getFilteredTransactions(startLayer types.LayerID, addr type
 	return
 }
 
-func (s MeshService) getFilteredActivations(addr types.Address) (activations []*types.ActivationTx, err error) {
+func (s MeshService) getFilteredActivations(startLayer types.LayerID, addr types.Address) (activations []*types.ActivationTx, err error) {
 
 	atxids, err := s.Mesh.GetAtxIDsByCoinbase(addr)
 	if err != nil {
@@ -135,7 +135,9 @@ func (s MeshService) getFilteredActivations(addr types.Address) (activations []*
 		return nil, status.Errorf(codes.Internal, "error retrieving activations data")
 	}
 	for _, atx := range atxs {
-		activations = append(activations, atx)
+		if atx.PubLayerID.Uint64() >= startLayer.Uint64() {
+			activations = append(activations, atx)
+		}
 	}
 
 	return
@@ -186,7 +188,7 @@ func (s MeshService) AccountMeshDataQuery(_ context.Context, in *pb.AccountMeshD
 
 	// Gather activation data
 	if filterActivations {
-		atxs, err := s.getFilteredActivations(addr)
+		atxs, err := s.getFilteredActivations(startLayer, addr)
 		if err != nil {
 			return nil, err
 		}

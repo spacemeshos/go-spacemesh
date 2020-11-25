@@ -354,6 +354,7 @@ func Test_DBGetByCoinbase(t *testing.T) {
 	err = atxdb.storeAtxUnlocked(atx3)
 	assert.NoError(t, err)
 
+	// DB stores atxs sorted using byte by byte comparison of atxids. Thus 3 > 2001 since 3 > 2
 	iter := atxdb.GetAtxIterByCoinbase(coinbase1)
 	assert.True(t, iter.Next())
 	assert.Equal(t, iter.Value(), atxid3.Bytes())

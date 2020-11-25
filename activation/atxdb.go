@@ -512,20 +512,27 @@ func (db *DB) storeAtxUnlocked(atx *types.ActivationTx) error {
 	if err != nil {
 		return err
 	}
-	err = db.atxs.Put(getAtxHeaderKey(atx.ID()), atxHeaderBytes)
-	if err != nil {
-		return err
-	}
-
 	atxBodyBytes, err := types.InterfaceToBytes(getAtxBody(atx))
 	if err != nil {
 		return err
 	}
-	if err = db.atxs.Put(getAtxBodyKey(atx.ID()), atxBodyBytes); err != nil {
-		return err
+
+	batch := db.atxs.NewBatch()
+	if err = batch.Put(getAtxHeaderKey(atx.ID()), atxHeaderBytes); err != nil {
+		return fmt.Errorf("failed to store atx header for atxid %x with error %v",
+			atx.ID(), err)
 	}
-	if err = db.atxs.Put(getAtxCoinbaseKey(atx), atx.ID().Bytes()); err != nil {
-		return err
+	if err = batch.Put(getAtxBodyKey(atx.ID()), atxBodyBytes); err != nil {
+		return fmt.Errorf("failed to store atx body for atxid %x with error %v",
+			atx.ID(), err)
+	}
+	if err = batch.Put(getAtxCoinbaseKey(atx), atx.ID().Bytes()); err != nil {
+		return fmt.Errorf("failed to store atx coinbase for atxid %x with error %v",
+			atx.ID(), err)
+	}
+	if err = batch.Write(); err != nil {
+		return fmt.Errorf("failed to write batch to atxdb for atxid %x with error %v",
+			atx.ID(), err)
 	}
 
 	// notify subscribers
@@ -615,9 +622,8 @@ func (db *DB) addNodeAtxToEpoch(epoch types.EpochID, nodeID types.NodeID, atx *t
 type ErrAtxNotFound error
 
 // GetNodeLastAtxID returns the last atx id that was received for node nodeID
-func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
+func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (atxid types.ATXID, err error) {
 
-	var err error
 	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeID))
 	defer func() {
 		nodeAtxsIterator.Release()
@@ -631,10 +637,12 @@ func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
 	// For the lexicographical order to match the epoch order we must encode the epoch id using big endian encoding when
 	// composing the key.
 	if exists := nodeAtxsIterator.Last(); !exists {
-		return *types.EmptyATXID, ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeID.ShortString()))
+		err = ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeID.ShortString()))
+		return
 	}
+	atxid = types.ATXID(types.BytesToHash(nodeAtxsIterator.Value()))
 
-	return types.ATXID(types.BytesToHash(nodeAtxsIterator.Value())), err
+	return
 }
 
 // GetEpochAtxs returns all valid ATXs received in the epoch epochID

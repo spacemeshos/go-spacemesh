@@ -321,10 +321,6 @@ func (t *TxAPIMock) ProcessedLayer() types.LayerID {
 	return types.LayerID(layerVerified)
 }
 
-func (t *TxAPIMock) GetAtxIterByCoinbase(coinbase types.Address) database.Iterator {
-	panic("implement me")
-}
-
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tx, err := types.NewSignedTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
 	if err != nil {
