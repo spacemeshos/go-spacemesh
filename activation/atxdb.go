@@ -457,12 +457,6 @@ func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 		return fmt.Errorf("could not fetch node last ATX: %v", err)
 	}
 
-	if atx.PrevATXID == db.goldenATXID {
-		// we found an ATX for this node ID, although it reported the golden ATX as prevATX -- this is invalid
-		return fmt.Errorf("golden ATX reported as prevATX, but other ATXs with same nodeID (%v) found: %v",
-			atx.NodeID.ShortString(), lastAtx.ShortString())
-	}
-
 	// last atx is not the one referenced
 	if lastAtx != atx.PrevATXID {
 		return fmt.Errorf("last atx is not the one referenced")
