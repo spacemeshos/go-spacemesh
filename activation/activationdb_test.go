@@ -199,12 +199,12 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	coinbase3 := types.HexToAddress("cccc")
 	coinbase4 := types.HexToAddress("cccc")
 	atxs := []*types.ActivationTx{
-		newActivationTx(id1, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
-		newActivationTx(id1, 0, *types.EmptyATXID, 2, 0, *types.EmptyATXID, coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
-		newActivationTx(id1, 0, *types.EmptyATXID, 3, 0, *types.EmptyATXID, coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
-		newActivationTx(id2, 0, *types.EmptyATXID, 2, 0, *types.EmptyATXID, coinbase2, 0, []types.BlockID{}, &types.NIPST{}),
-		newActivationTx(id4, 0, *types.EmptyATXID, 2, 0, *types.EmptyATXID, coinbase4, 0, []types.BlockID{}, &types.NIPST{}),
-		newActivationTx(id3, 0, *types.EmptyATXID, 11, 0, *types.EmptyATXID, coinbase3, 0, []types.BlockID{}, &types.NIPST{}),
+		newActivationTx(id1, 0, goldenATXID, 1, 0, *types.EmptyATXID, coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
+		newActivationTx(id1, 0, goldenATXID, 2, 0, *types.EmptyATXID, coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
+		newActivationTx(id1, 0, goldenATXID, 3, 0, *types.EmptyATXID, coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
+		newActivationTx(id2, 0, goldenATXID, 2, 0, *types.EmptyATXID, coinbase2, 0, []types.BlockID{}, &types.NIPST{}),
+		newActivationTx(id4, 0, goldenATXID, 2, 0, *types.EmptyATXID, coinbase4, 0, []types.BlockID{}, &types.NIPST{}),
+		newActivationTx(id3, 0, goldenATXID, 11, 0, *types.EmptyATXID, coinbase3, 0, []types.BlockID{}, &types.NIPST{}),
 	}
 
 	poetRef := []byte{0xba, 0xb0}
@@ -442,9 +442,9 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	id2 := types.NodeID{Key: uuid.New().String()}
 	id3 := types.NodeID{Key: uuid.New().String()}
 	atxs := []*types.ActivationTx{
-		newActivationTx(id1, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase, 3, []types.BlockID{}, &types.NIPST{}),
-		newActivationTx(id2, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase, 3, []types.BlockID{}, &types.NIPST{}),
-		newActivationTx(id3, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase, 3, []types.BlockID{}, &types.NIPST{}),
+		newActivationTx(id1, 0, goldenATXID, 1, 0, *types.EmptyATXID, coinbase, 3, []types.BlockID{}, &types.NIPST{}),
+		newActivationTx(id2, 0, goldenATXID, 1, 0, *types.EmptyATXID, coinbase, 3, []types.BlockID{}, &types.NIPST{}),
+		newActivationTx(id3, 0, goldenATXID, 1, 0, *types.EmptyATXID, coinbase, 3, []types.BlockID{}, &types.NIPST{}),
 	}
 
 	blocks := createLayerWithAtx(t, layers, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
@@ -454,7 +454,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xba, 0xbe}
 	npst := NewNIPSTWithChallenge(&chlng, poetRef)
-	prevAtx := newActivationTx(idx1, 0, *types.EmptyATXID, 100, 0, *types.EmptyATXID, coinbase, 3, blocks, npst)
+	prevAtx := newActivationTx(idx1, 0, goldenATXID, 100, 0, *types.EmptyATXID, coinbase, 3, blocks, npst)
 	posAtx := newActivationTx(idx2, 0, *types.EmptyATXID, 100, 0, *types.EmptyATXID, coinbase, 3, blocks, npst)
 	err := atxdb.StoreNodeIdentity(idx1)
 	assert.NoError(t, err)

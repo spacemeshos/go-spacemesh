@@ -416,7 +416,7 @@ func (b *Builder) PublishActivationTx() error {
 
 	var activeSetSize uint32
 	var commitment *types.PostProof
-	if b.challenge.PrevATXID == *types.EmptyATXID {
+	if b.challenge.PrevATXID == b.goldenATXID {
 		commitment = b.commitment
 	}
 

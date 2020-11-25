@@ -290,7 +290,7 @@ func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTxHea
 		r.Nil(atx.CommitmentMerkleRoot)
 	} else {
 		r.Zero(atx.Sequence)
-		r.Equal(*types.EmptyATXID, atx.PrevATXID)
+		r.Equal(goldenATXID, atx.PrevATXID)
 		r.NotNil(atx.Commitment)
 		r.NotNil(atx.CommitmentMerkleRoot)
 	}
