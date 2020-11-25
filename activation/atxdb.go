@@ -442,24 +442,27 @@ func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 		return fmt.Errorf("no prevATX reported")
 	}
 
-	lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
-	if _, ok := err.(ErrAtxNotFound); ok {
-		if atx.PrevATXID != db.goldenATXID {
-			// we found no ATXs for this node ID, although it reported no golden ATX as prevATX -- this is invalid
-			return fmt.Errorf("other ATXs not found, but golden ATX not reported as prevATX")
+	if atx.PrevATXID != db.goldenATXID {
+		lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
+		if err != nil {
+			db.log.With().Error("could not fetch node last ATX", atx.ID(),
+				log.FieldNamed("atx_node_id", atx.NodeID), log.Err(err))
+			return fmt.Errorf("could not fetch node last ATX: %v", err)
 		}
-
-		// we found no ATXs for this node ID, and it reported golden ATX as prevATX -- this is valid
-		return nil
-	} else if err != nil {
-		db.log.With().Error("could not fetch node last ATX", atx.ID(),
-			log.FieldNamed("atx_node_id", atx.NodeID), log.Err(err))
-		return fmt.Errorf("could not fetch node last ATX: %v", err)
-	}
-
-	// last atx is not the one referenced
-	if lastAtx != atx.PrevATXID {
-		return fmt.Errorf("last atx is not the one referenced")
+		// last atx is not the one referenced
+		if lastAtx != atx.PrevATXID {
+			return fmt.Errorf("last atx is not the one referenced")
+		}
+	} else {
+		lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
+		if _, ok := err.(ErrAtxNotFound); err != nil && !ok {
+			db.log.Error("fetching ATX ids failed: %v", err)
+			return err
+		}
+		if err == nil { // we found an ATX for this node ID, although it reported golden ATX -- this is invalid
+			return fmt.Errorf("golden ATX reported, but other ATX with same nodeID (%v) found: %v",
+				atx.NodeID.ShortString(), lastAtx.ShortString())
+		}
 	}
 
 	return nil

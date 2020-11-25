@@ -968,5 +968,6 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 	arbitraryAtxID := types.ATXID(types.HexToHash32("11111"))
 	malformedAtx := types.NewActivationTx(newChallenge(nodeID, 0, arbitraryAtxID, *types.EmptyATXID, 0), [20]byte{}, nil, nil)
 	err = atxdb.ContextuallyValidateAtx(malformedAtx.ActivationTxHeader)
-	r.EqualError(err, "other ATXs not found, but golden ATX not reported as prevATX")
+	r.EqualError(err,
+		fmt.Sprintf("could not fetch node last ATX: atx for node %v does not exist", nodeID.ShortString()))
 }
