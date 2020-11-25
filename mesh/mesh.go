@@ -104,6 +104,10 @@ type Mesh struct {
 	txMutex            sync.Mutex
 }
 
+func (msh *Mesh) GetLayerVerifyingVector(hash types.Hash32) []types.BlockID {
+	return []types.BlockID{}
+}
+
 // NewMesh creates a new instant of a mesh
 func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPool, pr txProcessor, logger log.Log) *Mesh {
 	ll := &Mesh{
@@ -459,6 +463,13 @@ func (msh *Mesh) persistLayerHash(layerID types.LayerID, hash types.Hash32) {
 		msh.With().Error("failed to persist layer hash", log.Err(err), msh.ProcessedLayer(),
 			log.String("layer_hash", hash.Hex()))
 	}
+
+	// we store a double index here because most of the code uses layer ID as key, currently only sync reads layer by hash
+	// when this changes we can simply point to the layes
+	if err := msh.general.Put(hash.Bytes(), layerID.Bytes()); err != nil {
+		msh.With().Error("failed to persist layer hash", log.Err(err), msh.ProcessedLayer(),
+			log.String("layer_hash", hash.Hex()))
+	}
 }
 
 func (msh *Mesh) persistRunningLayerHash(layerID types.LayerID, hash types.Hash32) {
@@ -476,6 +487,30 @@ func (msh *Mesh) getRunningLayerHash(layerID types.LayerID) (types.Hash32, error
 	var hash types.Hash32
 	hash.SetBytes(bts)
 	return hash, nil
+}
+
+func (msh *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
+	h := types.Hash32{}
+	bts, err := msh.general.Get(msh.getLayerHashKey(layerID))
+	if err != nil {
+		return types.Hash32{}
+	}
+	h.SetBytes(bts)
+	return h
+}
+
+func (msh *Mesh) GetLayerHashBlocks(h types.Hash32) []types.BlockID {
+	layerIDBytes, err := msh.general.Get(h.Bytes())
+	if err != nil {
+		msh.Warning("requested unknown layer hash %v", h.Hex())
+		return []types.BlockID{}
+	}
+	l := types.BytesToLayerID(layerIDBytes)
+	mBlocks, err := msh.LayerBlockIds(l)
+	if err != nil {
+		return []types.BlockID{}
+	}
+	return mBlocks
 }
 
 func (msh *Mesh) getLayerHashKey(layerID types.LayerID) []byte {

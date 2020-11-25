@@ -3,6 +3,8 @@ package config
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"path/filepath"
 	"time"
 
@@ -42,6 +44,8 @@ type Config struct {
 	REWARD          mesh.Config           `mapstructure:"reward"`
 	POST            postConfig.Config     `mapstructure:"post"`
 	LOGGING         LoggerConfig          `mapstructure:"logging"`
+	LAYERS          layerfetcher.Config   `mapstructure:"layer-fetch"`
+	FETCH           fetch.Config          `mapstructure:"fetch"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config

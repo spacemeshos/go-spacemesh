@@ -4,6 +4,8 @@ package node
 import (
 	"context"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -84,6 +86,7 @@ const (
 	NipstBuilderLogger   = "nipstBuilder"
 	AtxBuilderLogger     = "atxBuilder"
 	GossipListener       = "gossipListener"
+	Fetcher              = "fetcher"
 )
 
 // Cmd is the cobra wrapper for the node, that allows adding parameters to it
@@ -174,6 +177,7 @@ type SpacemeshApp struct {
 	closers           []interface{ Close() }
 	log               log.Log
 	txPool            *state.TxMempool
+	fetch             *fetch.Fetch
 	loggers           map[string]*zap.AtomicLevel
 	term              chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
 	started           chan struct{} // this channel is closed once the app has finished starting
@@ -560,7 +564,17 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	syncer := sync.NewSync(swarm, msh, app.txPool, atxdb, eValidator, poetDb, syncConf, clock, app.addLogger(SyncLogger, lg))
+	bCfg := blocks.Config{
+		Depth: app.Config.Hdist,
+	}
+	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, lg)
+
+	fetcher := fetch.NewFetch(app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
+
+	layerFetch := layerfetcher.NewLogic(app.Config.LAYERS, blockListener, atxdb, poetDb, atxdb, processor, swarm, fetcher, msh, app.addLogger(Fetcher, lg))
+	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore)
+
+	syncer := sync.NewSync(swarm, msh, app.txPool, atxdb, eValidator, poetDb, syncConf, clock, layerFetch, app.addLogger(SyncLogger, lg))
 	blockOracle := blocks.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
@@ -572,7 +586,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		hOracle = eligibility.New(beacon, atxdb.CalcActiveSetSize, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	}
 
-	gossipListener := service.NewListener(swarm, syncer, app.addLogger(GossipListener, lg))
+	gossipListener := service.NewListener(swarm, layerFetch, app.addLogger(GossipListener, lg))
 	ha := app.HareFactory(mdb, swarm, sgn, nodeID, syncer, msh, hOracle, idStore, clock, lg)
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
@@ -586,12 +600,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 
 	database.SwitchCreationContext(dbStorepath, "") // currently only blockbuilder uses this mechanism
 	blockProducer := miner.NewBlockBuilder(cfg, sgn, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
-
-	bCfg := blocks.Config{
-		Depth: app.Config.Hdist,
-	}
-	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, lg)
-
 	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))
 
 	nipstBuilder := activation.NewNIPSTBuilder(util.Hex2Bytes(nodeID.Key), postClient, poetClient, poetDb, store, app.addLogger(NipstBuilderLogger, lg))
@@ -603,7 +611,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	}
 	atxBuilder := activation.NewBuilder(nodeID, coinBase, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock, syncer, store, app.addLogger("atxBuilder", lg))
 
-	gossipListener.AddListener(state.IncomingTxProtocol, priorityq.Low, processor.HandleTxData)
+	gossipListener.AddListener(state.IncomingTxProtocol, priorityq.Low, processor.HandleTxGossipData)
 	gossipListener.AddListener(activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
 	gossipListener.AddListener(blocks.NewBlockProtocol, priorityq.High, blockListener.HandleBlock)
 
@@ -621,6 +629,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	app.oracle = blockOracle
 	app.txProcessor = processor
 	app.atxDb = atxdb
+	app.fetch = fetcher
 
 	return nil
 }
@@ -675,6 +684,7 @@ func (app *SpacemeshApp) HareFactory(mdb *mesh.DB, swarm service.Service, sgn ha
 
 func (app *SpacemeshApp) startServices() {
 	//app.blockListener.Start()
+	app.fetch.Start()
 	app.syncer.Start()
 	err := app.hare.Start()
 	if err != nil {
@@ -841,6 +851,11 @@ func (app *SpacemeshApp) stopServices() {
 	if app.P2P != nil {
 		app.log.Info("%v closing p2p", app.nodeID.Key)
 		app.P2P.Shutdown()
+	}
+
+	if app.fetch != nil {
+		app.log.Info("%v closing fetch", app.nodeID.Key)
+		app.fetch.Stop()
 	}
 
 	if app.syncer != nil {

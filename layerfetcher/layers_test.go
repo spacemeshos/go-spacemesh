@@ -20,7 +20,7 @@ func RandomHash() types.Hash32 {
 	rand.Seed(time.Now().UnixNano())
 	b := make([]byte, 8)
 	_, err := rand.Read(b)
-	// Note that err == nil only if we read len(b) bytes.
+	// Note that Err == nil only if we read len(b) bytes.
 	if err != nil {
 		return types.Hash32{}
 	}
@@ -119,17 +119,17 @@ func (m mockAtx) HandleAtxData(data []byte, syncer service.Fetcher) error {
 
 func NewMockLogic(net *mockNet, layers layerDB, blocksDB gossipBlocks, blocks blockHandler, atxs atxHandler, fetcher fetch.Fetcher, log log.Log) *Logic {
 	var l = &Logic{
-		log:              log,
-		fetcher:          fetcher,
-		net:              net,
-		layerHashResults: make(map[types.LayerID]map[p2ppeers.Peer]types.Hash32),
-		blockHashErrors:  make(map[types.LayerID]int),
-		layerResults:     make(map[types.LayerID][]chan LayerPromiseResult),
-		atxs:             atxs,
-		blockHandler:     blocks,
-		layerDB:          layers,
-		gossipBlocks:     blocksDB,
-		layerResM:        sync.RWMutex{},
+		log:                  log,
+		fetcher:              fetcher,
+		net:                  net,
+		layerHashResults:     make(map[types.LayerID]map[p2ppeers.Peer]types.Hash32),
+		blockHashErrors:      make(map[types.LayerID]int),
+		layerResultsChannels: make(map[types.LayerID][]chan LayerPromiseResult),
+		atxs:                 atxs,
+		blockHandler:         blocks,
+		layerDB:              layers,
+		gossipBlocks:         blocksDB,
+		layerResM:            sync.RWMutex{},
 	}
 	return l
 }

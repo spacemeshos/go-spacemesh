@@ -3,6 +3,7 @@ package activation
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/merkle-tree"
@@ -48,12 +49,12 @@ func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
 
 // ValidateAndStoreMsg validates and stores a new PoET proof.
 func (db *PoetDb) ValidateAndStoreMsg(data []byte) error {
-	var proofMessage *types.PoetProofMessage
+	var proofMessage types.PoetProofMessage
 	err := types.BytesToInterface(data, &proofMessage)
 	if err != nil {
 		return err
 	}
-	return db.ValidateAndStore(proofMessage)
+	return db.ValidateAndStore(&proofMessage)
 }
 
 // Validate validates a new PoET proof.
@@ -85,7 +86,7 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 	}
 
 	batch := db.store.NewBatch()
-	if err := batch.Put(types.CalcHash32(ref).Bytes(), messageBytes); err != nil {
+	if err := batch.Put(ref, messageBytes); err != nil {
 		return fmt.Errorf("failed to store poet proof for poetId %x round %s: %v",
 			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
 	}
@@ -98,7 +99,7 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 		return fmt.Errorf("failed to store poet proof and index for poetId %x round %s: %v",
 			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
 	}
-	db.log.Debug("stored proof (id: %x) for round %d PoET id %x", ref[:5], proofMessage.RoundID, proofMessage.PoetServiceID[:5])
+	db.log.Debug("stored proof (id: %x) for round %d PoET id %x", util.Bytes2Hex(ref), proofMessage.RoundID, proofMessage.PoetServiceID[:5])
 	db.publishProofRef(key, ref)
 	return nil
 }

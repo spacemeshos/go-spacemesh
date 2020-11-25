@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"sync"
 	"time"
 
@@ -49,6 +50,15 @@ type ticker interface {
 	Unsubscribe(timer timesync.LayerTimer)
 	GetCurrentLayer() types.LayerID
 	LayerToTime(types.LayerID) time.Time
+}
+
+type LayerFetch interface {
+	PollLayer(layer types.LayerID) chan layerfetcher.LayerPromiseResult
+	GetAtxs(IDs []types.ATXID) error
+	GetEpochATXs(id types.EpochID) error
+	GetBlocks(IDs []types.BlockID) error
+	FetchBlock(ID types.BlockID) error
+	GetPoetProof(id types.Hash32) error
 }
 
 type net struct {
@@ -154,12 +164,14 @@ type Syncer struct {
 	blockQueue *blockQueue
 	txQueue    *txQueue
 	atxQueue   *atxQueue
+
+	fetcher LayerFetch
 }
 
 var _ service.Fetcher = (*Syncer)(nil)
 
 // NewSync fires a sync every sm.SyncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxDB atxDB, bv blockEligibilityValidator, poetdb poetDb, conf Configuration, clock ticker, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxDB atxDB, bv blockEligibilityValidator, poetdb poetDb, conf Configuration, clock ticker, layerFetch LayerFetch, logger log.Log) *Syncer {
 
 	exit := make(chan struct{})
 
@@ -188,11 +200,12 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxDB atx
 		exit:                      exit,
 		gossipSynced:              pending,
 		awaitCh:                   make(chan struct{}),
+		fetcher:                   layerFetch,
 	}
 
-	s.blockQueue = newValidationQueue(srvr, conf, s)
-	s.txQueue = newTxQueue(s)
-	s.atxQueue = newAtxQueue(s, s.FetchPoetProof)
+	s.blockQueue = nil //newValidationQueue(srvr, conf, s)
+	s.txQueue = nil    //newTxQueue(s)
+	s.atxQueue = nil   //newAtxQueue(s, s.FetchPoetProof)
 	srvr.RegisterBytesMsgHandler(layerHashMsg, newLayerHashRequestHandler(layers, logger))
 	srvr.RegisterBytesMsgHandler(blockMsg, newBlockRequestHandler(layers, logger))
 	srvr.RegisterBytesMsgHandler(layerIdsMsg, newLayerBlockIdsRequestHandler(layers, logger))
@@ -219,9 +232,9 @@ func (s *Syncer) Close() {
 	s.syncLock.Lock()
 	s.syncLock.Unlock()
 	s.MessageServer.Close()
-	s.blockQueue.Close()
-	s.atxQueue.Close()
-	s.txQueue.Close()
+	//s.blockQueue.Close()
+	//s.atxQueue.Close()
+	//s.txQueue.Close()
 
 	s.Info("sync closed")
 }
@@ -320,6 +333,7 @@ func (s *Syncer) run() {
 func (s *Syncer) synchronise() {
 	// only one concurrent synchronise
 	if s.syncLock.TryLock() == false {
+		s.Log.Info("cannot sync because another sync is in progress")
 		return
 	}
 
@@ -329,7 +343,7 @@ func (s *Syncer) synchronise() {
 
 	// node is synced and blocks from current layer have already been validated
 	if curr == s.ProcessedLayer() {
-		s.Debug("node is synced")
+		s.Info("node is fully synced")
 		// fully-synced, make sure we listen to p2p
 		s.setGossipBufferingStatus(done)
 		return
@@ -337,13 +351,17 @@ func (s *Syncer) synchronise() {
 
 	// we have all the data of the prev layers so we can simply validate
 	if s.weaklySynced(curr) {
-		s.handleWeaklySynced()
-		err := s.syncEpochActivations(curr.GetEpoch())
+		s.Log.Info("start syncing epoch atxs")
+		err := s.fetcher.GetEpochATXs(curr.GetEpoch()) //syncEpochActivations(curr.GetEpoch())
 		if err != nil {
 			s.With().Error("cannot fetch epoch atxs ", curr, log.Err(err))
 		}
+		s.Log.Info("done syncing epoch atxs")
+		s.handleWeaklySynced()
 	} else {
+		s.Log.Info("start not synced")
 		s.handleNotSynced(s.ProcessedLayer() + 1)
+		s.Log.Info("end not synced")
 	}
 }
 
@@ -391,7 +409,7 @@ func (s *Syncer) handleLayersTillCurrent() {
 		}
 		if err := s.getAndValidateLayer(currentSyncLayer); err != nil {
 			if currentSyncLayer.GetEpoch().IsGenesis() {
-				log.Warning("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
+				s.Warning("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
 			} else {
 				s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
 			}
@@ -439,7 +457,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 			return
 		}
 
-		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
+		lyr, err := s.getLayerFromNeighbors2(currentSyncLayer)
 		if err != nil {
 			s.With().Info("could not get layer from neighbors", currentSyncLayer, log.Err(err))
 			return
@@ -471,7 +489,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 func (s *Syncer) syncAtxs(currentSyncLayer types.LayerID) {
 	lastLayerOfEpoch := (currentSyncLayer.GetEpoch() + 1).FirstLayer() - 1
 	if currentSyncLayer == lastLayerOfEpoch {
-		err := s.syncEpochActivations(currentSyncLayer.GetEpoch())
+		err := s.fetcher.GetEpochATXs(currentSyncLayer.GetEpoch()) //s.syncEpochActivations(currentSyncLayer.GetEpoch())
 		if err != nil {
 			s.With().Error("cannot fetch epoch atxs ", currentSyncLayer, log.Err(err))
 		}
@@ -539,6 +557,15 @@ func (s *Syncer) waitLayer(ch timesync.LayerTimer) bool {
 		return true
 	}
 	return false
+}
+
+func (s *Syncer) getLayerFromNeighbors2(currentSyncLayer types.LayerID) (*types.Layer, error) {
+	ch := s.fetcher.PollLayer(currentSyncLayer)
+	res := <-ch
+	if res.Err != nil {
+		return nil, res.Err
+	}
+	return s.GetLayer(currentSyncLayer)
 }
 
 func (s *Syncer) getLayerFromNeighbors(currentSyncLayer types.LayerID) (*types.Layer, error) {
@@ -668,7 +695,7 @@ func (s *Syncer) getBlocks(jobID types.LayerID, blockIds []types.BlockID) error 
 
 // GetBlocks fetches list of blocks from peers
 func (s *Syncer) GetBlocks(blockIds []types.BlockID) error {
-	return s.getBlocks(types.LayerID(rand.Int31()), blockIds)
+	return s.fetcher.GetBlocks(blockIds)
 }
 
 func (s *Syncer) fastValidation(block *types.Block) error {
@@ -716,10 +743,7 @@ func (s *Syncer) fetchRefBlock(block *types.Block) error {
 	_, err := s.GetBlock(*block.RefBlock)
 	if err != nil {
 		s.Log.Info("fetching block %v", *block.RefBlock)
-		fetched := s.fetchBlock(*block.RefBlock)
-		if !fetched {
-			return fmt.Errorf("failed to fetch ref block %v", *block.RefBlock)
-		}
+		return s.fetcher.FetchBlock(*block.RefBlock)
 	}
 	return nil
 }
@@ -742,8 +766,9 @@ func (s *Syncer) fetchAllReferencedAtxs(blk *types.Block) error {
 			return errNoActiveSet
 		}
 	}
-	_, err := s.atxQueue.HandleAtxs(atxs)
-	return err
+	return s.fetcher.GetAtxs(atxs)
+	//_, err := s.atxQueue.HandleAtxs(atxs)
+	//return err
 }
 
 func (s *Syncer) fetchBlockDataForValidation(blk *types.Block) error {
@@ -874,8 +899,8 @@ func (s *Syncer) fetchBlock(ID types.BlockID) bool {
 
 // FetchBlock fetches a single block from peers
 func (s *Syncer) FetchBlock(ID types.BlockID) error {
-	if !s.fetchBlock(ID) {
-		return fmt.Errorf("stuff")
+	if err := s.fetcher.FetchBlock(ID); err != nil {
+		return err
 	}
 	return nil
 }
@@ -1134,7 +1159,8 @@ func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
 
 // GetPoetProof fetches a poet proof from network peers
 func (s *Syncer) GetPoetProof(hash types.Hash32) error {
-	poetProofRef := hash.Bytes()
+	return s.fetcher.GetPoetProof(hash)
+	/*poetProofRef := hash.Bytes()
 	if !s.poetDb.HasProof(poetProofRef) {
 		out := <-fetchWithFactory(newNeighborhoodWorker(s, 1, poetReqFactory(poetProofRef)))
 		if out == nil {
@@ -1146,7 +1172,7 @@ func (s *Syncer) GetPoetProof(hash types.Hash32) error {
 			return err
 		}
 	}
-	return nil
+	return nil*/
 }
 
 func (s *Syncer) atxCheckLocal(atxIds []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32) {

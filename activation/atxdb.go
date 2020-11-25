@@ -39,7 +39,7 @@ func getAtxHeaderKey(atxID types.ATXID) []byte {
 }
 
 func getAtxBodyKey(atxID types.ATXID) []byte {
-	return []byte(fmt.Sprintf("b_%v", atxID.Bytes()))
+	return atxID.Bytes()
 }
 
 var errInvalidSig = fmt.Errorf("identity not found when validating signature, invalid atx")
@@ -509,7 +509,8 @@ func (db *DB) storeAtxUnlocked(atx *types.ActivationTx) error {
 		return err
 	}
 
-	atxBodyBytes, err := types.InterfaceToBytes(getAtxBody(atx))
+	// todo: this changed so that a full atx will be written - inherently there will be double data with atx header
+	atxBodyBytes, err := types.InterfaceToBytes(atx)
 	if err != nil {
 		return err
 	}
@@ -635,7 +636,7 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 		}
 		atxs = append(atxs, a)
 	}
-	db.log.Info("returned epoch %v atxs %v %v", epochID, len(atxs), atxs)
+	db.log.Info("returned epoch %v atxs %v", epochID, len(atxs))
 	return atxs
 }
 
@@ -702,11 +703,13 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	if err != nil {
 		return nil, err
 	}
-	header, err := db.GetAtxHeader(id)
+	/*header, err := db.GetAtxHeader(id)
 	if err != nil {
 		return nil, err
 	}
 	atx.ActivationTxHeader = header
+
+	*/
 	return atx, nil
 }
 
@@ -758,13 +761,13 @@ func (db *DB) HandleAtxData(data []byte, syncer service.Fetcher) error {
 
 	if err := syncer.GetPoetProof(atx.GetPoetProofRef()); err != nil {
 		return fmt.Errorf("received ATX (%v) with syntactically invalid or missing PoET proof (%x): %v",
-			atx.ShortString(), atx.GetShortPoetProofRef(), err)
+			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err)
 
 	}
 
 	if err := db.FetchAtxReferences(atx, syncer); err != nil {
 		return fmt.Errorf("received ATX with missing references of prev or pos id %v, %v, %v, %v",
-			atx.ID(), atx.PrevATXID, atx.PositioningATX, log.Err(err))
+			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), log.Err(err))
 	}
 
 	err = db.SyntacticallyValidateAtx(atx)
@@ -804,3 +807,16 @@ func (db *DB) FetchAtxReferences(atx *types.ActivationTx, f service.Fetcher) err
 
 	return nil
 }
+
+/*
+type DbAdapter struct {
+	db *DB
+}
+
+func (d *DbAdapter) Get(id types.Hash32) ([]byte, error) {
+	return d.db.GetFullAtx(id)
+}
+
+func (db *DB) GetAdapter() {
+
+}*/

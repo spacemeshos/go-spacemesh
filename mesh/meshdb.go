@@ -125,6 +125,18 @@ func (m *DB) Close() {
 	m.contextualValidity.Close()
 }
 
+//todo: for now, these methods are used to export dbs to sync, think about merging the two packages
+
+func (m *DB) Blocks() database.Database {
+	m.blockMutex.RLock()
+	defer m.blockMutex.RUnlock()
+	return m.blocks
+}
+
+func (m *DB) Transactions() database.Database {
+	return m.transactions
+}
+
 // ErrAlreadyExist error returned when adding an existing value to the database
 var ErrAlreadyExist = errors.New("block already exist in database")
 
@@ -382,16 +394,16 @@ func getTransactionDestKeyPrefix(l types.LayerID, account types.Address) []byte 
 	return []byte(str)
 }
 
-type dbTransaction struct {
+type DbTransaction struct {
 	*types.Transaction
 	Origin types.Address
 }
 
-func newDbTransaction(tx *types.Transaction) *dbTransaction {
-	return &dbTransaction{Transaction: tx, Origin: tx.Origin()}
+func newDbTransaction(tx *types.Transaction) *DbTransaction {
+	return &DbTransaction{Transaction: tx, Origin: tx.Origin()}
 }
 
-func (t dbTransaction) getTransaction() *types.Transaction {
+func (t DbTransaction) getTransaction() *types.Transaction {
 	t.Transaction.SetOrigin(t.Origin)
 	return t.Transaction
 }
@@ -403,6 +415,7 @@ func (m *DB) writeTransactions(l types.LayerID, txs []*types.Transaction) error 
 		if err != nil {
 			return fmt.Errorf("could not marshall tx %v to bytes: %v", t.ID().ShortString(), err)
 		}
+		m.Log.Info("storing tx id %v size %v", t.ID().ShortString(), len(bytes))
 		if err := batch.Put(t.ID().Bytes(), bytes); err != nil {
 			return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
 		}
@@ -652,7 +665,7 @@ func (m *DB) GetTransaction(id types.TransactionID) (*types.Transaction, error) 
 	if err != nil {
 		return nil, fmt.Errorf("could not find transaction in database %v err=%v", hex.EncodeToString(id[:]), err)
 	}
-	var dbTx dbTransaction
+	var dbTx DbTransaction
 	err = types.BytesToInterface(tBytes, &dbTx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal transaction: %v", err)

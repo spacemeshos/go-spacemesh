@@ -199,8 +199,11 @@ func (bh *BlockHandler) fetchAllReferencedAtxs(blk *types.Block, syncer service.
 			return errNoActiveSet
 		}
 	}
-	err := syncer.GetAtxs(atxs)
-	return err
+	if len(atxs) > 0 {
+		err := syncer.GetAtxs(atxs)
+		return err
+	}
+	return nil
 }
 
 func (bh *BlockHandler) fastValidation(block *types.Block) error {

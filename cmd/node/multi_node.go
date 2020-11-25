@@ -152,6 +152,13 @@ func getTestDefaultConfig() *config.Config {
 	cfg.SyncRequestTimeout = 500
 	cfg.SyncInterval = 2
 	cfg.SyncValidationDelta = 5
+
+	cfg.FETCH.RequestTimeout = 10
+	cfg.FETCH.MaxRetiresForPeer = 5
+	cfg.FETCH.BatchSize = 5
+	cfg.FETCH.BatchTimeout = 5
+
+	cfg.LAYERS.RequestTimeout = 10
 	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
 	return cfg
 }
