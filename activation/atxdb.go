@@ -393,10 +393,10 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 			return fmt.Errorf("no prevATX declared, but sequence number not zero")
 		}
 		if atx.Commitment == nil {
-			return fmt.Errorf("golden ATX declared, but commitment proof is not included")
+			return fmt.Errorf("golden prevATX declared, but commitment proof is not included")
 		}
 		if atx.CommitmentMerkleRoot == nil {
-			return fmt.Errorf("golden ATX declared, but commitment merkle root is not included in challenge")
+			return fmt.Errorf("golden prevATX declared, but commitment merkle root is not included in challenge")
 		}
 		if !bytes.Equal(atx.Commitment.MerkleRoot, atx.CommitmentMerkleRoot) {
 			return errors.New("commitment merkle root included in challenge is not equal to the merkle root included in the proof")
