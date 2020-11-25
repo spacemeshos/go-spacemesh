@@ -128,7 +128,7 @@ func NewMockLogic(net *mockNet, layers layerDB, blocksDB gossipBlocks, blocks bl
 		fetcher:              fetcher,
 		net:                  net,
 		layerHashResults:     make(map[types.LayerID]map[p2ppeers.Peer]*types.Hash32),
-		blockHashResults:      make(map[types.LayerID]int),
+		blockHashResults:     make(map[types.LayerID]int),
 		layerResultsChannels: make(map[types.LayerID][]chan LayerPromiseResult),
 		atxs:                 atxs,
 		blockHandler:         blocks,
