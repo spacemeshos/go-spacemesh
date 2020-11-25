@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-const harnessPort = "9092"
+const harnessPort = "9094"
 
 // ServerConfig contains all the args and data required to launch a node
 // server instance.

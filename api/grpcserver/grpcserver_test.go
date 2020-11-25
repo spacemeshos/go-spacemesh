@@ -436,8 +436,8 @@ func (m MempoolMock) GetTxIdsByAddress(addr types.Address) (ids []types.Transact
 
 func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	networkMock.Broadcast("", []byte{0x00})
-	grpcService := NewServerWithInterface(cfg.NewGrpcServerPort, "localhost")
-	jsonService := NewJSONHTTPServer(cfg.NewJSONServerPort, cfg.NewGrpcServerPort)
+	grpcService := NewServerWithInterface(cfg.GrpcServerPort, "localhost")
+	jsonService := NewJSONHTTPServer(cfg.JSONServerPort, cfg.GrpcServerPort)
 
 	// attach services
 	for _, svc := range services {
@@ -463,7 +463,7 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 }
 
 func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
-	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.NewJSONServerPort, endpoint)
+	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.JSONServerPort, endpoint)
 	t.Log("sending POST request to", url)
 	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
 	t.Log("got response", resp)
@@ -496,7 +496,7 @@ func TestNodeService(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -582,12 +582,12 @@ func TestNodeService(t *testing.T) {
 }
 
 func TestGlobalStateService(t *testing.T) {
-	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{}, mempoolMock)
+	svc := NewGlobalStateService(txAPI, mempoolMock)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -876,7 +876,7 @@ func TestSmesherService(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -997,7 +997,7 @@ func TestMeshService(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -1501,7 +1501,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -1539,7 +1539,7 @@ func TestTransactionService(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -1882,7 +1882,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -1956,12 +1956,12 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 }
 
 func TestAccountDataStream_comprehensive(t *testing.T) {
-	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{}, mempoolMock)
+	svc := NewGlobalStateService(txAPI, mempoolMock)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -2050,12 +2050,12 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 }
 
 func TestGlobalStateStream_comprehensive(t *testing.T) {
-	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{}, mempoolMock)
+	svc := NewGlobalStateService(txAPI, mempoolMock)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -2154,7 +2154,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	log.Info("dialing %s", addr)
@@ -2373,7 +2373,7 @@ func TestMultiService(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -2417,13 +2417,13 @@ func TestJsonApi(t *testing.T) {
 	require.Equal(t, cfg.StartMeshService, false)
 	shutDown := launchServer(t)
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
-	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.NewJSONServerPort, "v1/node/echo")
+	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.JSONServerPort, "v1/node/echo")
 	t.Log("sending POST request to", url)
 	_, err := http.Post(url, "application/json", strings.NewReader(payload))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), fmt.Sprintf(
 		"dial tcp 127.0.0.1:%d: connect: connection refused",
-		cfg.NewJSONServerPort))
+		cfg.JSONServerPort))
 	shutDown()
 
 	// enable services and try again
@@ -2456,7 +2456,7 @@ func TestDebugService(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -2496,7 +2496,7 @@ func TestGatewayService(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
