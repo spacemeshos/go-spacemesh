@@ -961,7 +961,7 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxdb := NewDB(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
 
-	atx := types.NewActivationTx(newChallenge(nodeID, 0, *types.EmptyATXID, *types.EmptyATXID, 0), [20]byte{}, nil, nil)
+	atx := types.NewActivationTx(newChallenge(nodeID, 0, goldenATXID, *types.EmptyATXID, 0), [20]byte{}, nil, nil)
 	err := atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	r.NoError(err)
 }
