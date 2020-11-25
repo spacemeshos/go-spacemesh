@@ -961,7 +961,12 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxdb := NewDB(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
 
-	atx := types.NewActivationTx(newChallenge(nodeID, 0, goldenATXID, *types.EmptyATXID, 0), [20]byte{}, nil, nil)
-	err := atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
+	validAtx := types.NewActivationTx(newChallenge(nodeID, 0, goldenATXID, *types.EmptyATXID, 0), [20]byte{}, nil, nil)
+	err := atxdb.ContextuallyValidateAtx(validAtx.ActivationTxHeader)
 	r.NoError(err)
+
+	arbitraryAtxID := types.ATXID(types.HexToHash32("11111"))
+	malformedAtx := types.NewActivationTx(newChallenge(nodeID, 0, arbitraryAtxID, *types.EmptyATXID, 0), [20]byte{}, nil, nil)
+	err = atxdb.ContextuallyValidateAtx(malformedAtx.ActivationTxHeader)
+	r.EqualError(err, "other ATXs not found, but golden ATX not reported as prevATX")
 }
