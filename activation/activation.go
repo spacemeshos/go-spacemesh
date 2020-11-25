@@ -4,14 +4,16 @@ package activation
 
 import (
 	"fmt"
+	"sync"
+	"sync/atomic"
+
 	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/post/shared"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/post/shared"
-	"sync"
-	"sync/atomic"
 )
 
 // AtxProtocol is the protocol id for broadcasting atxs over gossip
@@ -83,6 +85,7 @@ type Builder struct {
 	signer
 	nodeID          types.NodeID
 	coinbaseAccount types.Address
+	goldenATXID     types.ATXID
 	db              atxDBProvider
 	net             broadcaster
 	mesh            meshProvider
@@ -113,11 +116,12 @@ type syncer interface {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeID types.NodeID, coinbaseAccount types.Address, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipstBuilder nipstBuilder, postProver PostProverClient, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
+func NewBuilder(nodeID types.NodeID, coinbaseAccount types.Address, goldenATXID types.ATXID, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipstBuilder nipstBuilder, postProver PostProverClient, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
 	return &Builder{
 		signer:          signer,
 		nodeID:          nodeID,
 		coinbaseAccount: coinbaseAccount,
+		goldenATXID:     goldenATXID,
 		db:              db,
 		net:             net,
 		mesh:            mesh,
@@ -219,6 +223,7 @@ func (b *Builder) buildNipstChallenge(currentLayer types.LayerID) error {
 	}
 	if prevAtx, err := b.GetPrevAtx(b.nodeID); err != nil {
 		challenge.CommitmentMerkleRoot = b.commitment.MerkleRoot
+		challenge.PrevATXID = b.goldenATXID
 	} else {
 		challenge.PrevATXID = prevAtx.ID()
 		challenge.Sequence = prevAtx.Sequence + 1

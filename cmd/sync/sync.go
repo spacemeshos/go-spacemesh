@@ -1,10 +1,19 @@
 package main
 
 import (
-	"cloud.google.com/go/storage"
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"time"
+
+	"cloud.google.com/go/storage"
+	"github.com/spf13/cobra"
+	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -16,13 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spf13/cobra"
-	"google.golang.org/api/iterator"
-	"google.golang.org/api/option"
-	"io/ioutil"
-	"net/http"
-	"os"
-	"time"
 )
 
 // Sync cmd
@@ -141,7 +143,9 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	txpool := state.NewTxMemPool()
 	atxpool := activation.NewAtxMemPool()
 
-	sync := sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, types.LayerID(expectedLayers))
+	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
+
+	sync := sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, goldenATXID, types.LayerID(expectedLayers))
 	app.sync = sync
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)

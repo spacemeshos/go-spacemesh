@@ -60,6 +60,10 @@ const (
 	Path     = "../tmp/sync/"
 )
 
+const layersPerEpoch = 10
+
+var goldenATXID = types.ATXID(types.HexToHash32("77777"))
+
 var (
 	tx1 = tx()
 	tx2 = tx()
@@ -129,7 +133,7 @@ func getMeshWithLevelDB(id string) *mesh.Mesh {
 	lg := log.NewDefault(id)
 	mshdb, _ := mesh.NewPersistentMeshDB(id, 5, lg)
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
-	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, 10, &validatorMock{}, lg.WithOptions(log.Nop))
+	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, layersPerEpoch, goldenATXID, &validatorMock{}, lg.WithOptions(log.Nop))
 	return mesh.NewMesh(mshdb, atxdb, rewardConf, &meshValidatorMock{}, &mockTxMemPool{}, &mockState{}, lg.WithOptions(log.Nop))
 }
 
@@ -140,7 +144,7 @@ func persistenceTeardown() {
 func getMeshWithMemoryDB(id string) *mesh.Mesh {
 	lg := log.NewDefault(id)
 	mshdb := mesh.NewMemMeshDB(lg)
-	atxdb := activation.NewDB(database.NewMemDatabase(), &mockIStore{}, mshdb, 10, &validatorMock{}, lg.WithName("atxDB"))
+	atxdb := activation.NewDB(database.NewMemDatabase(), &mockIStore{}, mshdb, layersPerEpoch, goldenATXID, &validatorMock{}, lg.WithName("atxDB"))
 	return mesh.NewMesh(mshdb, atxdb, rewardConf, &meshValidatorMock{}, &mockTxMemPool{}, &mockState{}, lg)
 }
 

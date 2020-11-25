@@ -519,7 +519,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	app.closers = append(app.closers, appliedTxs)
 	processor := state.NewTransactionProcessor(db, appliedTxs, meshAndPoolProjector, app.txPool, lg.WithName("state"))
 
-	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
+	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
+
+	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 	beaconProvider := &blocks.EpochBeaconProvider{}
 
 	var msh *mesh.Mesh
@@ -597,7 +599,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
 		app.log.Panic("invalid Coinbase account")
 	}
-	atxBuilder := activation.NewBuilder(nodeID, coinBase, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock, syncer, store, app.addLogger("atxBuilder", lg))
+
+	atxBuilder := activation.NewBuilder(nodeID, coinBase, goldenATXID, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock, syncer, store, app.addLogger("atxBuilder", lg))
 
 	gossipListener.AddListener(state.IncomingTxProtocol, priorityq.Low, processor.HandleTxData)
 	gossipListener.AddListener(activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)

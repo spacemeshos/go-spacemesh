@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -12,8 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"sync"
-	"time"
 )
 
 const topAtxKey = "topAtxKey"
@@ -59,6 +60,7 @@ type DB struct {
 	atxHeaderCache    AtxCache
 	meshDb            *mesh.DB
 	LayersPerEpoch    uint16
+	goldenATXID       types.ATXID
 	nipstValidator    nipstValidator
 	pendingActiveSet  map[types.Hash12]*sync.Mutex
 	log               log.Log
@@ -70,13 +72,14 @@ type DB struct {
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
 // their validity
-func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint16, nipstValidator nipstValidator, log log.Log) *DB {
+func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint16, goldenATXID types.ATXID, nipstValidator nipstValidator, log log.Log) *DB {
 	db := &DB{
 		idStore:          idStore,
 		atxs:             dbStore,
 		atxHeaderCache:   NewAtxCache(600),
 		meshDb:           meshDb,
 		LayersPerEpoch:   layersPerEpoch,
+		goldenATXID:      goldenATXID,
 		nipstValidator:   nipstValidator,
 		pendingActiveSet: make(map[types.Hash12]*sync.Mutex),
 		log:              log,
@@ -435,27 +438,34 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 // ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
 // If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
 func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
-	if atx.PrevATXID != *types.EmptyATXID {
-		lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
-		if err != nil {
-			db.log.With().Error("could not fetch node last ATX", atx.ID(),
-				log.FieldNamed("atx_node_id", atx.NodeID), log.Err(err))
-			return fmt.Errorf("could not fetch node last ATX: %v", err)
+	if atx.PrevATXID == *types.EmptyATXID {
+		return fmt.Errorf("no prevATX reported")
+	}
+
+	lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
+	if _, ok := err.(ErrAtxNotFound); ok {
+		if atx.PrevATXID != db.goldenATXID {
+			// we found no ATXs for this node ID, although it reported no golden ATX as prevATX -- this is invalid
+			return fmt.Errorf("other ATXs not found, but golden ATX not reported as prevATX")
 		}
-		// last atx is not the one referenced
-		if lastAtx != atx.PrevATXID {
-			return fmt.Errorf("last atx is not the one referenced")
-		}
-	} else {
-		lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
-		if _, ok := err.(ErrAtxNotFound); err != nil && !ok {
-			db.log.Error("fetching ATX ids failed: %v", err)
-			return err
-		}
-		if err == nil { // we found an ATX for this node ID, although it reported no prevATX -- this is invalid
-			return fmt.Errorf("no prevATX reported, but other ATX with same nodeID (%v) found: %v",
-				atx.NodeID.ShortString(), lastAtx.ShortString())
-		}
+
+		// we found no ATXs for this node ID, and it reported golden ATX as prevATX -- this is valid
+		return nil
+	} else if err != nil {
+		db.log.With().Error("could not fetch node last ATX", atx.ID(),
+			log.FieldNamed("atx_node_id", atx.NodeID), log.Err(err))
+		return fmt.Errorf("could not fetch node last ATX: %v", err)
+	}
+
+	if atx.PrevATXID == db.goldenATXID {
+		// we found an ATX for this node ID, although it reported the golden ATX as prevATX -- this is invalid
+		return fmt.Errorf("golden ATX reported as prevATX, but other ATXs with same nodeID (%v) found: %v",
+			atx.NodeID.ShortString(), lastAtx.ShortString())
+	}
+
+	// last atx is not the one referenced
+	if lastAtx != atx.PrevATXID {
+		return fmt.Errorf("last atx is not the one referenced")
 	}
 
 	return nil

@@ -82,6 +82,8 @@ type BaseConfig struct {
 
 	CoinbaseAccount string `mapstructure:"coinbase"`
 
+	GoldenATXID string `mapstructure:"golden-atx"`
+
 	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
 
 	SyncRequestTimeout int `mapstructure:"sync-request-timeout"` // ms the timeout for direct request in the sync
