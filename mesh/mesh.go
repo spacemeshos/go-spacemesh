@@ -104,6 +104,7 @@ type Mesh struct {
 	txMutex            sync.Mutex
 }
 
+// GetLayerVerifyingVector is a stub for returning verifying vector
 func (msh *Mesh) GetLayerVerifyingVector(hash types.Hash32) []types.BlockID {
 	return []types.BlockID{}
 }
@@ -489,6 +490,7 @@ func (msh *Mesh) getRunningLayerHash(layerID types.LayerID) (types.Hash32, error
 	return hash, nil
 }
 
+// GetLayerHash returns layer hash for received blocks
 func (msh *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
 	h := types.Hash32{}
 	bts, err := msh.general.Get(msh.getLayerHashKey(layerID))
@@ -499,6 +501,7 @@ func (msh *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
 	return h
 }
 
+// GetLayerHashBlocks returns blocks for given hash
 func (msh *Mesh) GetLayerHashBlocks(h types.Hash32) []types.BlockID {
 	layerIDBytes, err := msh.general.Get(h.Bytes())
 	if err != nil {

@@ -310,6 +310,7 @@ func transfer(db *TransactionProcessor, sender, recipient types.Address, amount 
 	db.AddBalance(recipient, amount)
 }
 
+// HandleTxGossipData handles data sent from gossip
 func (tp *TransactionProcessor) HandleTxGossipData(data service.GossipMessage, syncer service.Fetcher) {
 	err := tp.HandleTxData(data.Bytes())
 	if err != nil {
@@ -319,7 +320,7 @@ func (tp *TransactionProcessor) HandleTxGossipData(data service.GossipMessage, s
 	data.ReportValidation(IncomingTxProtocol)
 }
 
-// HandleTxGossipData handles data received on TX gossip channel
+// HandleTxData handles data received on TX gossip channel
 func (tp *TransactionProcessor) HandleTxData(data []byte) error {
 	tx, err := types.BytesToTransaction(data)
 	if err != nil {
@@ -329,7 +330,7 @@ func (tp *TransactionProcessor) HandleTxData(data []byte) error {
 	return tp.handleTransaction(tx)
 }
 
-// HandleTxGossipData handles data received on TX gossip channel
+// HandleTxSyncData handles data received on TX sync
 func (tp *TransactionProcessor) HandleTxSyncData(data []byte) error {
 	var tx mesh.DbTransaction
 	err := types.BytesToInterface(data, &tx)

@@ -52,6 +52,7 @@ type ticker interface {
 	LayerToTime(types.LayerID) time.Time
 }
 
+// LayerFetch definer interface for fetching data for layers
 type LayerFetch interface {
 	PollLayer(layer types.LayerID) chan layerfetcher.LayerPromiseResult
 	GetAtxs(IDs []types.ATXID) error

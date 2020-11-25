@@ -332,7 +332,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 			if req.validateResponseHash {
 				actual := types.CalcHash32(data)
 				if actual != resID.Hash {
-					err = fmt.Errorf("hash didnt match expected: %v, actual %v")
+					err = fmt.Errorf("hash didnt match expected: %v, actual %v", resID.Hash, actual)
 				}
 
 			}

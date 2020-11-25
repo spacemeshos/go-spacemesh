@@ -25,6 +25,7 @@ type blockHandler interface {
 	HandleBlockData(date []byte, fetcher service.Fetcher) error
 }
 
+// TxProcessor is an interface for handling TX data received in sync
 type TxProcessor interface {
 	HandleTxSyncData(data []byte) error
 }
@@ -132,6 +133,7 @@ func (l *Logic) FetchFlow() {
 
 }
 
+// AddDBs adds dbs that will be queried when sync requests are received. these databases will be exposed to external callers
 func (l *Logic) AddDBs(blockDB, AtxDB, TxDB, poetDB database.Store) {
 	l.fetcher.AddDB(BlockDB, blockDB)
 	l.fetcher.AddDB(ATXDB, AtxDB)

@@ -42,7 +42,7 @@ var (
 	coinbase    = types.HexToAddress("33333")
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
 	chlng       = types.HexToHash32("55555")
-	poetRef     = types.CalcHash32([]byte("66666"))
+	poetRef     = types.BytesToHash([]byte("66666"))
 	poetBytes   = []byte("66666")
 	block1      = types.NewExistingBlock(0, []byte("11111"), nil)
 	block2      = types.NewExistingBlock(0, []byte("22222"), nil)

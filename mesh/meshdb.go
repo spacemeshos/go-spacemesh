@@ -127,12 +127,14 @@ func (m *DB) Close() {
 
 //todo: for now, these methods are used to export dbs to sync, think about merging the two packages
 
+// Blocks exports the block database
 func (m *DB) Blocks() database.Database {
 	m.blockMutex.RLock()
 	defer m.blockMutex.RUnlock()
 	return m.blocks
 }
 
+// Transactions exports the transactions DB
 func (m *DB) Transactions() database.Database {
 	return m.transactions
 }
@@ -394,6 +396,7 @@ func getTransactionDestKeyPrefix(l types.LayerID, account types.Address) []byte 
 	return []byte(str)
 }
 
+// DbTransaction is the transaction type stored in DB
 type DbTransaction struct {
 	*types.Transaction
 	Origin types.Address

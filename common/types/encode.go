@@ -94,6 +94,7 @@ func ATXIdsToBytes(ids []ATXID) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
+// BytesToLayerID return uint64 layer IO
 func BytesToLayerID(b []byte) LayerID {
 	return LayerID(util.BytesToUint64(b))
 }

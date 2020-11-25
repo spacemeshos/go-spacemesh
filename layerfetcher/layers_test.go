@@ -3,6 +3,7 @@ package layerfetcher
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -95,12 +96,16 @@ func (l layerDBMock) Get() []types.BlockID {
 type mockFetcher struct {
 }
 
+func (m mockFetcher) AddDB(hint fetch.Hint, db database.Store) {
+
+}
+
 func (m mockFetcher) GetHash(hash types.Hash32, h fetch.Hint, validateAndSubmit bool) chan fetch.HashDataPromiseResult {
-	panic("implement me")
+	return nil
 }
 
 func (m mockFetcher) GetHashes(hash []types.Hash32, hint fetch.Hint, validateAndSubmit bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
-	panic("implement me")
+	return nil
 }
 
 type mockBlocks struct {
@@ -122,8 +127,8 @@ func NewMockLogic(net *mockNet, layers layerDB, blocksDB gossipBlocks, blocks bl
 		log:                  log,
 		fetcher:              fetcher,
 		net:                  net,
-		layerHashResults:     make(map[types.LayerID]map[p2ppeers.Peer]types.Hash32),
-		blockHashErrors:      make(map[types.LayerID]int),
+		layerHashResults:     make(map[types.LayerID]map[p2ppeers.Peer]*types.Hash32),
+		blockHashResults:      make(map[types.LayerID]int),
 		layerResultsChannels: make(map[types.LayerID][]chan LayerPromiseResult),
 		atxs:                 atxs,
 		blockHandler:         blocks,
