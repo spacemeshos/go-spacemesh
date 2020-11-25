@@ -656,12 +656,6 @@ func TestBuilder_SignAtx(t *testing.T) {
 }
 
 func TestBuilder_NipstPublishRecovery(t *testing.T) {
-	bc := Config{
-		CoinbaseAccount: coinbase,
-		GoldenATXID:     goldenATXID,
-		LayersPerEpoch:  layersPerEpoch,
-	}
-
 	id := types.NodeID{Key: "aaaaaa", VRFPublicKey: []byte("bbbbb")}
 	coinbase := types.HexToAddress("0xaaa")
 	net := &NetMock{}
@@ -673,7 +667,15 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	sig := &MockSigning{}
 	activationDb := NewDB(database.NewMemDatabase(), &MockIDStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB1"))
 	net.atxDb = activationDb
+
+	bc := Config{
+		CoinbaseAccount: coinbase,
+		GoldenATXID:     goldenATXID,
+		LayersPerEpoch:  layersPerEpoch,
+	}
+
 	b := NewBuilder(bc, id, sig, activationDb, &FaultyNetMock{}, layers, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
+
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xbe, 0xef}
