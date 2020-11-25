@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"io"
 	"io/ioutil"
 	"math"
