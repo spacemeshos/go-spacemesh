@@ -1,5 +1,4 @@
 BINARY := go-spacemesh
-INTERACTIVE := $(shell [ -t 0 ] && echo 1)
 VERSION = $(shell cat version.txt)
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
@@ -8,6 +7,15 @@ CURR_DIR_WIN = $(shell cd)
 BIN_DIR = $(CURR_DIR)/build
 BIN_DIR_WIN = $(CURR_DIR_WIN)/build
 export GO111MODULE = on
+
+# These commands cause problems on Windows
+ifeq ($(OS),Windows_NT)
+       # Just assume we're in interactive mode on Windows
+       INTERACTIVE = 1
+       VERSION = $(shell type version.txt)
+else
+       INTERACTIVE := $(shell [ -t 0 ] && echo 1)
+endif
 
 # Read branch from git if running make manually
 # Also allows BRANCH to be manually set
@@ -51,16 +59,7 @@ endif
 .PHONY: install
 
 
-genproto:
-ifeq ($(OS),Windows_NT) 
-	scripts\win\genproto.bat
-else
-	./scripts/genproto.sh
-endif
-.PHONY: genproto
-
-
-build: genproto
+build:
 ifeq ($(OS),Windows_NT)
 	go build ${LDFLAGS} -o $(BIN_DIR_WIN)/$(BINARY).exe
 else
@@ -110,7 +109,7 @@ tidy:
 .PHONY: tidy
 
 
-$(PLATFORMS): genproto
+$(PLATFORMS):
 ifeq ($(OS),Windows_NT)
 	set GOOS=$(os)&&set GOARCH=amd64&&go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY).exe
 else
@@ -119,7 +118,7 @@ endif
 .PHONY: $(PLATFORMS)
 
 
-docker-local-build: genproto
+docker-local-build:
 	GOOS=linux GOARCH=amd64 go build ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)
 	cd cmd/hare ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-hare
 	cd cmd/p2p ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-p2p
@@ -129,22 +128,22 @@ docker-local-build: genproto
 .PHONY: docker-local-build
 
 
-arm6: genproto
+arm6:
 	GOOS=linux GOARCH=arm GOARM=6 go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
 .PHONY: pi
 
 
-test: genproto
+test:
 	ulimit -n 9999; go test -timeout 0 -p 1 ./...
 .PHONY: test
 
 
-test-no-app-test: genproto
+test-no-app-test:
 	ulimit -n 9999; go test -v -timeout 0 -p 1 -tags exclude_app_test ./...
 .PHONY: test
 
 
-test-only-app-test: genproto
+test-only-app-test:
 	ulimit -n 9999; go test -timeout 0 -p 1 -v -tags !exclude_app_test ./cmd/node
 .PHONY: test
 
