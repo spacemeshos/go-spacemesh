@@ -3,6 +3,7 @@ package blocks
 import (
 	"errors"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -38,25 +39,28 @@ type blockValidator interface {
 // BlockHandler is the struct responsible for storing meta data needed to process blocks from gossip
 type BlockHandler struct {
 	log.Log
-	traverse  forBlockInView
-	depth     int
-	mesh      mesh
-	validator blockValidator
+	traverse    forBlockInView
+	depth       int
+	mesh        mesh
+	validator   blockValidator
+	goldenATXID types.ATXID
 }
 
 // Config defines configuration for block handler
 type Config struct {
-	Depth int
+	Depth       int
+	GoldenATXID types.ATXID
 }
 
 // NewBlockHandler creates new BlockHandler
 func NewBlockHandler(cfg Config, m mesh, v blockValidator, lg log.Log) *BlockHandler {
 	return &BlockHandler{
-		Log:       lg,
-		traverse:  m.ForBlockInView,
-		depth:     cfg.Depth,
-		mesh:      m,
-		validator: v,
+		Log:         lg,
+		traverse:    m.ForBlockInView,
+		depth:       cfg.Depth,
+		mesh:        m,
+		validator:   v,
+		goldenATXID: cfg.GoldenATXID,
 	}
 }
 
@@ -186,7 +190,9 @@ func (bh BlockHandler) blockSyntacticValidation(block *types.Block, syncer servi
 func (bh *BlockHandler) fetchAllReferencedAtxs(blk *types.Block, syncer service.Fetcher) error {
 	var atxs []types.ATXID
 
-	atxs = append(atxs, blk.ATXID)
+	if blk.ATXID != bh.goldenATXID {
+		atxs = append(atxs, blk.ATXID)
+	}
 
 	if blk.ActiveSet != nil {
 		if len(*blk.ActiveSet) > 0 {

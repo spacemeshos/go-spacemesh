@@ -349,7 +349,12 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	if atx.NodeID.Key != pub.String() {
 		return fmt.Errorf("node ids don't match")
 	}
-	if atx.PrevATXID != *types.EmptyATXID {
+
+	if atx.PrevATXID == *types.EmptyATXID {
+		return fmt.Errorf("no prevATX reported")
+	}
+
+	if atx.PrevATXID != db.goldenATXID {
 		err = db.ValidateSignedAtx(*pub, atx)
 		if err != nil { // means there is no such identity
 			return fmt.Errorf("no id found %v err %v", atx.ShortString(), err)
@@ -377,21 +382,21 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		}
 
 		if atx.Commitment != nil {
-			return fmt.Errorf("prevATX declared, but commitment proof is included")
+			return fmt.Errorf("non-golden prevATX declared, but commitment proof is included")
 		}
 
 		if atx.CommitmentMerkleRoot != nil {
-			return fmt.Errorf("prevATX declared, but commitment merkle root is included in challenge")
+			return fmt.Errorf("non-golden prevATX declared, but commitment merkle root is included in challenge")
 		}
 	} else {
 		if atx.Sequence != 0 {
 			return fmt.Errorf("no prevATX declared, but sequence number not zero")
 		}
 		if atx.Commitment == nil {
-			return fmt.Errorf("no prevATX declared, but commitment proof is not included")
+			return fmt.Errorf("golden ATX declared, but commitment proof is not included")
 		}
 		if atx.CommitmentMerkleRoot == nil {
-			return fmt.Errorf("no prevATX declared, but commitment merkle root is not included in challenge")
+			return fmt.Errorf("golden ATX declared, but commitment merkle root is not included in challenge")
 		}
 		if !bytes.Equal(atx.Commitment.MerkleRoot, atx.CommitmentMerkleRoot) {
 			return errors.New("commitment merkle root included in challenge is not equal to the merkle root included in the proof")
@@ -438,10 +443,6 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 // ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
 // If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
 func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
-	if atx.PrevATXID == *types.EmptyATXID {
-		return fmt.Errorf("no prevATX reported")
-	}
-
 	if atx.PrevATXID != db.goldenATXID {
 		lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
 		if err != nil {
@@ -800,7 +801,7 @@ func (db *DB) FetchAtxReferences(atx *types.ActivationTx, f service.Fetcher) err
 		}
 	}
 
-	if atx.PrevATXID != *types.EmptyATXID {
+	if atx.PrevATXID != *types.EmptyATXID && atx.PrevATXID != db.goldenATXID {
 		db.log.Info("going to fetch prev atx %v of atx %v", atx.PrevATXID.ShortString(), atx.ID().ShortString())
 		err := f.FetchAtx(atx.PrevATXID)
 		if err != nil {

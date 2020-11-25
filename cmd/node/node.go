@@ -587,7 +587,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	blockProducer := miner.NewBlockBuilder(cfg, sgn, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
 
 	bCfg := blocks.Config{
-		Depth: app.Config.Hdist,
+		Depth:       app.Config.Hdist,
+		GoldenATXID: goldenATXID,
 	}
 	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, lg)
 

@@ -2,13 +2,15 @@ package blocks
 
 import (
 	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func init() {
@@ -21,6 +23,8 @@ var commitment = &types.PostProof{
 	ProofNodes:   [][]byte(nil),
 	ProvenLeaves: [][]byte(nil),
 }
+
+var goldenATXID = types.ATXID(types.HexToHash32("77777"))
 
 func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
 	startTick uint64, positioningATX types.ATXID, coinbase types.Address, activeSetSize uint32, view []types.BlockID,
@@ -181,7 +185,7 @@ func Test_validateUniqueTxAtx(t *testing.T) {
 
 func TestBlockHandler_BlockSyntacticValidation(t *testing.T) {
 	r := require.New(t)
-	cfg := Config{3}
+	cfg := Config{3, goldenATXID}
 	//yncs, _, _ := SyncMockFactory(2, conf, "TestSyncProtocol_NilResponse", memoryDB, newMemPoetDb)
 	s := NewBlockHandler(cfg, &meshMock{}, &verifierMock{}, log.NewDefault("BlockSyntacticValidation"))
 	b := &types.Block{}
@@ -209,7 +213,7 @@ func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	fetch := newFetchMock()
 	atxpool := activation.NewAtxMemPool()
 	cfg := Config{
-		3,
+		3, goldenATXID,
 	}
 	s := NewBlockHandler(cfg, &meshMock{}, &verifierMock{}, log.NewDefault("syncRefBlock"))
 	s.traverse = mockForBlockInView
