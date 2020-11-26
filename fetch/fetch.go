@@ -279,7 +279,7 @@ func (f *Fetch) FetchRequestHandler(data []byte) []byte {
 			f.log.Warning("requested non existing hash %v %v", r.Hash.Hex(), err)
 			continue
 		} else {
-			f.log.Info("responded to hash req %v bytes %", r.Hash.ShortString(), len(res))
+			f.log.Info("responded to hash req %v bytes %v", r.Hash.ShortString(), len(res))
 		}
 		// add response to batch
 		m := responseMessage{
