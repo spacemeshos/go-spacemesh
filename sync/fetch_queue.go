@@ -330,7 +330,6 @@ func fetchProofCalcID(fetchPoetProof fetchPoetProofFunc, fj fetchJob) {
 		if err := fetchPoetProof(atx.GetPoetProofRef().Bytes()); err != nil {
 			log.Error("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
 				atx.ShortString(), atx.GetShortPoetProofRef(), err)
-			panic("here")
 			continue
 		}
 		itemsWithProofs = append(itemsWithProofs, atx)
