@@ -463,7 +463,7 @@ func (l *Logic) FetchAtx(id types.ATXID) error {
 
 // FetchBlock gets data for a single block id and validates it
 func (l *Logic) FetchBlock(id types.BlockID) error {
-	res := <-l.fetcher.GetHash(id.AsHash32(), BlockDB, true)
+	res := <-l.fetcher.GetHash(id.AsHash32(), BlockDB, false)
 	if res.Err != nil {
 		return res.Err
 	}
