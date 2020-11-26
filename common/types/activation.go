@@ -299,8 +299,7 @@ type PostProof proving.Proof
 // String returns a string representation of the PostProof, for logging purposes.
 // It implements the Stringer interface.
 func (p PostProof) String() string {
-	return fmt.Sprintf("challenge: %v, root: %v",
-		bytesToShortString(p.Challenge), bytesToShortString(p.MerkleRoot))
+	return fmt.Sprintf("challenge: %v", bytesToShortString(p.Challenge))
 }
 
 func bytesToShortString(b []byte) string {

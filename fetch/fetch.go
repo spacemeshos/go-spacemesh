@@ -447,6 +447,7 @@ func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
 	if !ok {
 		f.activeBatchM.RUnlock()
 		f.log.Error("batch invalidated twice %v", batchHash.Hex())
+		return
 	}
 	f.activeBatchM.RUnlock()
 	f.activeReqM.Lock()
