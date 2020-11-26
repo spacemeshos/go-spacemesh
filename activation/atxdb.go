@@ -350,11 +350,8 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		return fmt.Errorf("node ids don't match")
 	}
 
-	if atx.PrevATXID == *types.EmptyATXID {
-		return fmt.Errorf("no prevATX reported")
-	}
-
-	if atx.PrevATXID != db.goldenATXID {
+	// TODO(nkryuchkov): consider empty PrevATXID and empty PositioningATX as invalid
+	if atx.PrevATXID != *types.EmptyATXID {
 		err = db.ValidateSignedAtx(*pub, atx)
 		if err != nil { // means there is no such identity
 			return fmt.Errorf("no id found %v err %v", atx.ShortString(), err)
@@ -382,21 +379,21 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		}
 
 		if atx.Commitment != nil {
-			return fmt.Errorf("non-golden prevATX declared, but commitment proof is included")
+			return fmt.Errorf("prevATX declared, but commitment proof is included")
 		}
 
 		if atx.CommitmentMerkleRoot != nil {
-			return fmt.Errorf("non-golden prevATX declared, but commitment merkle root is included in challenge")
+			return fmt.Errorf("prevATX declared, but commitment merkle root is included in challenge")
 		}
 	} else {
 		if atx.Sequence != 0 {
 			return fmt.Errorf("no prevATX declared, but sequence number not zero")
 		}
 		if atx.Commitment == nil {
-			return fmt.Errorf("golden prevATX declared, but commitment proof is not included")
+			return fmt.Errorf("no prevATX declared, but commitment proof is not included")
 		}
 		if atx.CommitmentMerkleRoot == nil {
-			return fmt.Errorf("golden prevATX declared, but commitment merkle root is not included in challenge")
+			return fmt.Errorf("no prevATX declared, but commitment merkle root is not included in challenge")
 		}
 		if !bytes.Equal(atx.Commitment.MerkleRoot, atx.CommitmentMerkleRoot) {
 			return errors.New("commitment merkle root included in challenge is not equal to the merkle root included in the proof")
