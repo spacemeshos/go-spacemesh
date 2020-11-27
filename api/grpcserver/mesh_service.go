@@ -123,6 +123,7 @@ func (s MeshService) getFilteredTransactions(startLayer types.LayerID, addr type
 
 func (s MeshService) getFilteredActivations(startLayer types.LayerID, addr types.Address) (activations []*types.ActivationTx, err error) {
 
+	// TODO: Also add db indices for activations by layer number into atx db. This getter becomes less efficient as numbers of layer grows
 	atxids, err := s.Mesh.GetAtxIDsByCoinbase(addr)
 	if err != nil {
 		return nil, err
@@ -135,7 +136,7 @@ func (s MeshService) getFilteredActivations(startLayer types.LayerID, addr types
 		return nil, status.Errorf(codes.Internal, "error retrieving activations data")
 	}
 	for _, atx := range atxs {
-		if atx.PubLayerID.Uint64() >= startLayer.Uint64() {
+		if atx.PubLayerID >= startLayer {
 			activations = append(activations, atx)
 		}
 	}
