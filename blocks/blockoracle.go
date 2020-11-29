@@ -66,13 +66,10 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 	if !bo.isSynced() {
 		return types.ATXID{}, nil, fmt.Errorf("cannot calc eligibility, not synced yet")
 	}
+
 	epochNumber := layerID.GetEpoch()
 	bo.log.Info("asked for eligibility for epoch %d (cached: %d)", epochNumber, bo.proofsEpoch)
-	if epochNumber.IsGenesis() {
-		bo.log.Warning("asked for eligibility for epoch 0, cannot create blocks here")
-		// TODO(nkryuchkov): consider using the Golden ATX
-		return *types.EmptyATXID, nil, nil
-	}
+
 	if bo.proofsEpoch != epochNumber {
 		err := bo.calcEligibilityProofs(epochNumber)
 		if err != nil {
@@ -80,9 +77,11 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 			return *types.EmptyATXID, nil, err
 		}
 	}
+
 	bo.eligibilityMutex.RLock()
 	proofs := bo.eligibilityProofs[layerID]
 	bo.eligibilityMutex.RUnlock()
+
 	bo.log.With().Info("eligible for blocks in layer",
 		bo.nodeID,
 		layerID,
