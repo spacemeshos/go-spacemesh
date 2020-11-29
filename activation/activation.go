@@ -218,6 +218,7 @@ func (b *Builder) buildNipstChallenge(currentLayer types.LayerID) error {
 		}
 		challenge.EndTick = b.tickProvider.NumOfTicks()
 		challenge.PubLayerID = currentLayer.Add(b.conf.LayersPerEpoch)
+		challenge.PositioningATX = b.conf.GoldenATXID
 	} else {
 		challenge.PositioningATX = posAtx.ID()
 		challenge.PubLayerID = posAtx.PubLayerID.Add(b.conf.LayersPerEpoch)

@@ -829,7 +829,7 @@ func (s *Syncer) FetchAtx(ID types.ATXID) error {
 
 // FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db
 func (s *Syncer) FetchAtxReferences(atx *types.ActivationTx) error {
-	if atx.PositioningATX != *types.EmptyATXID {
+	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != s.GoldenATXID {
 		s.Log.Info("going to fetch pos atx %v of atx %v", atx.PositioningATX.ShortString(), atx.ID().ShortString())
 		_, err := s.fetchAtx(atx.PositioningATX)
 		if err != nil {

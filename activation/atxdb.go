@@ -350,8 +350,12 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		return fmt.Errorf("node ids don't match")
 	}
 
-	// TODO(nkryuchkov): consider empty PrevATXID and empty PositioningATX as invalid
-	if atx.PrevATXID != *types.EmptyATXID {
+	// if atx.PositioningATX == *types.EmptyATXID {
+	// 	return errors.New("empty pos ATX")
+	// }
+
+	// TODO(nkryuchkov): consider empty PrevATXID as invalid
+	if atx.PrevATXID != *types.EmptyATXID && atx.PrevATXID != db.goldenATXID {
 		err = db.ValidateSignedAtx(*pub, atx)
 		if err != nil { // means there is no such identity
 			return fmt.Errorf("no id found %v err %v", atx.ShortString(), err)
@@ -379,21 +383,21 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		}
 
 		if atx.Commitment != nil {
-			return fmt.Errorf("prevATX declared, but commitment proof is included")
+			return fmt.Errorf("non-golden prevATX declared, but commitment proof is included")
 		}
 
 		if atx.CommitmentMerkleRoot != nil {
-			return fmt.Errorf("prevATX declared, but commitment merkle root is included in challenge")
+			return fmt.Errorf("non-golden prevATX declared, but commitment merkle root is included in challenge")
 		}
 	} else {
 		if atx.Sequence != 0 {
-			return fmt.Errorf("no prevATX declared, but sequence number not zero")
+			return fmt.Errorf("golden prevATX declared, but sequence number not zero")
 		}
 		if atx.Commitment == nil {
-			return fmt.Errorf("no prevATX declared, but commitment proof is not included")
+			return fmt.Errorf("golden prevATX declared, but commitment proof is not included")
 		}
 		if atx.CommitmentMerkleRoot == nil {
-			return fmt.Errorf("no prevATX declared, but commitment merkle root is not included in challenge")
+			return fmt.Errorf("golden prevATX declared, but commitment merkle root is not included in challenge")
 		}
 		if !bytes.Equal(atx.Commitment.MerkleRoot, atx.CommitmentMerkleRoot) {
 			return errors.New("commitment merkle root included in challenge is not equal to the merkle root included in the proof")
@@ -403,7 +407,8 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		}
 	}
 
-	if atx.PositioningATX != *types.EmptyATXID {
+	// TODO(nkryuchkov): consider empty PositioningATX as invalid
+	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != db.goldenATXID {
 		posAtx, err := db.GetAtxHeader(atx.PositioningATX)
 		if err != nil {
 			return fmt.Errorf("positioning atx not found")
@@ -720,7 +725,7 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.ActivationTx) error {
 	// this is the first occurrence of this identity, we cannot validate simply by extracting public key
 	// pass it down to Atx handling so that atx can be syntactically verified and identity could be registered.
-	if signedAtx.PrevATXID == *types.EmptyATXID {
+	if signedAtx.PrevATXID == db.goldenATXID {
 		return nil
 	}
 
@@ -790,7 +795,7 @@ func (db *DB) HandleAtxData(data []byte, syncer service.Fetcher) error {
 
 // FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db
 func (db *DB) FetchAtxReferences(atx *types.ActivationTx, f service.Fetcher) error {
-	if atx.PositioningATX != *types.EmptyATXID {
+	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != db.goldenATXID {
 		db.log.Info("going to fetch pos atx %v of atx %v", atx.PositioningATX.ShortString(), atx.ID().ShortString())
 		err := f.FetchAtx(atx.PositioningATX)
 		if err != nil {
