@@ -476,7 +476,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	posAtx := newAtx(challenge, defaultView, npst)
 	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
 
-	challenge = newChallenge(nodeID /*👀*/, 0, *types.EmptyATXID, posAtx.ID(), postGenesisEpochLayer)
+	challenge = newChallenge(nodeID /*👀*/, 0, goldenATXID, posAtx.ID(), postGenesisEpochLayer)
 	challenge.CommitmentMerkleRoot = commitment.MerkleRoot
 	prevAtx := newAtx(challenge, defaultView, npst)
 	prevAtx.Commitment = commitment
@@ -838,9 +838,9 @@ func TestActivationDb_CalcActiveSetFromViewHighConcurrency(t *testing.T) {
 	coinbase2 := types.HexToAddress("bbbb")
 	coinbase3 := types.HexToAddress("cccc")
 	atxs := []*types.ActivationTx{
-		newActivationTx(id1, 0, *types.EmptyATXID, 12, 0, *types.EmptyATXID, coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
-		newActivationTx(id2, 0, *types.EmptyATXID, 300, 0, *types.EmptyATXID, coinbase2, 0, []types.BlockID{}, &types.NIPST{}),
-		newActivationTx(id3, 0, *types.EmptyATXID, 435, 0, *types.EmptyATXID, coinbase3, 0, []types.BlockID{}, &types.NIPST{}),
+		newActivationTx(id1, 0, goldenATXID, 12, 0, goldenATXID, coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
+		newActivationTx(id2, 0, goldenATXID, 300, 0, goldenATXID, coinbase2, 0, []types.BlockID{}, &types.NIPST{}),
+		newActivationTx(id3, 0, goldenATXID, 435, 0, goldenATXID, coinbase3, 0, []types.BlockID{}, &types.NIPST{}),
 	}
 
 	poetRef := []byte{0xba, 0xb0}
