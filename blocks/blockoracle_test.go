@@ -3,12 +3,14 @@ package blocks
 import (
 	"errors"
 	"fmt"
+	"testing"
+
 	"github.com/spacemeshos/amcl/BLS381"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 var atxID = types.ATXID([32]byte{1, 3, 3, 7})

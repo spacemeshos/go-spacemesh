@@ -350,17 +350,15 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		return fmt.Errorf("node ids don't match")
 	}
 
-	// TODO(nkryuchkov): uncomment
-	// if atx.PrevATXID == *types.EmptyATXID {
-	// 	return fmt.Errorf("empty previous ATX")
-	// }
-	//
-	// if atx.PositioningATX == *types.EmptyATXID {
-	// 	return fmt.Errorf("empty positioning ATX")
-	// }
+	if atx.PrevATXID == *types.EmptyATXID {
+		return fmt.Errorf("empty previous ATX")
+	}
 
-	// TODO(nkryuchkov): consider empty PrevATXID as invalid
-	if atx.PrevATXID != *types.EmptyATXID && atx.PrevATXID != db.goldenATXID {
+	if atx.PositioningATX == *types.EmptyATXID {
+		return fmt.Errorf("empty positioning ATX")
+	}
+
+	if atx.PrevATXID != db.goldenATXID {
 		err = db.ValidateSignedAtx(*pub, atx)
 		if err != nil { // means there is no such identity
 			return fmt.Errorf("no id found %v err %v", atx.ShortString(), err)
@@ -412,8 +410,7 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		}
 	}
 
-	// TODO(nkryuchkov): consider empty PositioningATX as invalid
-	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != db.goldenATXID {
+	if atx.PositioningATX != db.goldenATXID {
 		posAtx, err := db.GetAtxHeader(atx.PositioningATX)
 		if err != nil {
 			return fmt.Errorf("positioning atx not found")
