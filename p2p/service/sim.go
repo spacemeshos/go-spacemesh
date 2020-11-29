@@ -304,7 +304,6 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 			c <- simGossipMessage{sn.Info.PublicKey(), DataBytes{Payload: payload}, nil}
 		}
 		log.Info("sent message %v", types.CalcHash32(payload))
->>>>>>> a8cf5013afe118994fa10867c9bf2744a0694d99
 
 		log.Debug("%v >> All ( Gossip ) (%v)", sn.Info.PublicKey(), payload)
 	}()
