@@ -350,8 +350,13 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		return fmt.Errorf("node ids don't match")
 	}
 
+	// TODO(nkryuchkov): uncomment
+	// if atx.PrevATXID == *types.EmptyATXID {
+	// 	return fmt.Errorf("empty previous ATX")
+	// }
+	//
 	// if atx.PositioningATX == *types.EmptyATXID {
-	// 	return errors.New("empty pos ATX")
+	// 	return fmt.Errorf("empty positioning ATX")
 	// }
 
 	// TODO(nkryuchkov): consider empty PrevATXID as invalid

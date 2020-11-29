@@ -2,9 +2,11 @@ package blocks
 
 import (
 	"fmt"
+
+	"github.com/spacemeshos/sha256-simd"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/sha256-simd"
 )
 
 // VRFValidationFunction is the VRF validation function.
@@ -69,6 +71,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	}
 	//todo: optimise by using reference to active set size and cache active set size to not load all atxsIDs from db
 	activeSetSize = uint32(len(*activeSetBlock.ActiveSet))
+	// TODO(nkryuchkov): consider using the Golden ATX
 	if block.ATXID == *types.EmptyATXID {
 		if !epochNumber.IsGenesis() {
 			return false, fmt.Errorf("no associated ATX in epoch %v", epochNumber)
