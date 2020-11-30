@@ -146,6 +146,7 @@ func DefaultConfig() Config {
 		TIME:            timeConfig.DefaultConfig(),
 		REWARD:          mesh.DefaultMeshConfig(),
 		POST:            activation.DefaultConfig(),
+		FETCH:           fetch.DefaultConfig(),
 	}
 }
 

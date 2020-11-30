@@ -108,6 +108,15 @@ type Config struct {
 	RequestTimeout    int // in seconds
 }
 
+func DefaultConfig() Config {
+	return Config{
+		BatchTimeout:      2,
+		MaxRetiresForPeer: 2,
+		BatchSize:         5,
+		RequestTimeout:    10,
+	}
+}
+
 type peersProvider interface {
 	GetPeers() []p2ppeers.Peer
 }
