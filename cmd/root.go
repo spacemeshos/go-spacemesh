@@ -55,7 +55,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&config.CoinbaseAccount, "coinbase",
 		config.CoinbaseAccount, "coinbase account to accumulate rewards")
 	cmd.PersistentFlags().StringVar(&config.GoldenATXID, "golden-atx",
-		config.CoinbaseAccount, "golden ATX hash")
+		config.GoldenATXID, "golden ATX hash")
 	cmd.PersistentFlags().IntVar(&config.GenesisActiveSet, "genesis-active-size",
 		config.GenesisActiveSet, "The active set size for the genesis flow")
 	cmd.PersistentFlags().IntVar(&config.BlockCacheSize, "block-cache-size",
