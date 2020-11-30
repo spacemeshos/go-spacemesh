@@ -56,6 +56,9 @@ type mockNet struct {
 	AckChannel  chan struct{}
 }
 
+func (m mockNet) Close() {
+}
+
 func (m mockNet) RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func([]byte) []byte) {
 }
 

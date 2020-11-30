@@ -58,6 +58,7 @@ type network interface {
 	GetPeers() []p2ppeers.Peer
 	GetRandomPeer() p2ppeers.Peer
 	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), timeoutHandler func(err error)) error
+	Close()
 }
 
 var emptyHash = types.Hash32{}
@@ -131,6 +132,13 @@ const (
 // FetchFlow is the main syncing flow TBD
 func (l *Logic) FetchFlow() {
 
+}
+
+func (l *Logic) Start() {
+}
+
+func (l *Logic) Close() {
+	l.net.Close()
 }
 
 // AddDBs adds dbs that will be queried when sync requests are received. these databases will be exposed to external callers
@@ -479,11 +487,12 @@ func (l *Logic) GetAtxs(IDs []types.ATXID) error {
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.Hash32())
 	}
-	results := l.fetcher.GetHashes(hashes, ATXDB, true)
+	//todo: atx Id is currently only the header bytes - should we change it?
+	results := l.fetcher.GetHashes(hashes, ATXDB, false)
 	for hash, resC := range results {
 		res := <-resC
 		if res.Err != nil {
-			l.log.Error("cannot fetch atx %v err %v", hash.Hex(), res.Err)
+			l.log.Error("cannot fetch atx %v err %v", hash.ShortString(), res.Err)
 			return res.Err
 		}
 		if !res.IsLocal {

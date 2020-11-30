@@ -44,6 +44,10 @@ func (m *mockNet) GetRandomPeer() p2ppeers.Peer {
 	return m.peers[0]
 }
 
+func (mockNet) Close() {
+
+}
+
 func (m *mockNet) SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), timeoutHandler func(err error)) error {
 	m.sendCalled++
 	if m.errToSend != nil {

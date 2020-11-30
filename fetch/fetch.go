@@ -142,6 +142,7 @@ type network interface {
 	GetRandomPeer() p2ppeers.Peer
 	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error
 	RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func([]byte) []byte)
+	Close()
 }
 
 // Fetch is the main struct that contains network peers and logic to batch and dispatch hash fetch requests
@@ -196,6 +197,7 @@ func (f *Fetch) Start() {
 // Stop stops handling fetch requests
 func (f *Fetch) Stop() {
 	f.batchTimeout.Stop()
+	f.net.Close()
 	close(f.stop)
 	// wait for close to end
 	<-f.doneChan
@@ -332,7 +334,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 			if req.validateResponseHash {
 				actual := types.CalcHash32(data)
 				if actual != resID.Hash {
-					err = fmt.Errorf("hash didnt match expected: %v, actual %v", resID.Hash, actual)
+					err = fmt.Errorf("hash didnt match expected: %v, actual %v", resID.Hash.ShortString(), actual.ShortString())
 				}
 
 			}

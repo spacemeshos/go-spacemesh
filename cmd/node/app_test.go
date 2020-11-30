@@ -548,6 +548,11 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.HareEligibility.EpochOffset = 0
 	smApp.Config.StartMining = true
 
+	smApp.Config.FETCH.RequestTimeout = 1
+	smApp.Config.FETCH.BatchTimeout = 1
+	smApp.Config.FETCH.BatchSize = 5
+	smApp.Config.FETCH.MaxRetiresForPeer = 5
+
 	rolacle := eligibility.New()
 	types.SetLayersPerEpoch(int32(smApp.Config.LayersPerEpoch))
 

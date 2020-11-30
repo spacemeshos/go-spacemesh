@@ -179,6 +179,7 @@ type SpacemeshApp struct {
 	log            log.Log
 	txPool         *state.TxMempool
 	fetch          *fetch.Fetch
+	layerFetch     *layerfetcher.Logic
 	loggers        map[string]*zap.AtomicLevel
 	term           chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
 	started        chan struct{} // this channel is closed once the app has finished starting
@@ -626,6 +627,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	app.txProcessor = processor
 	app.atxDb = atxdb
 	app.fetch = fetcher
+	app.layerFetch = layerFetch
 
 	return nil
 }
@@ -825,6 +827,11 @@ func (app *SpacemeshApp) stopServices() {
 	if app.P2P != nil {
 		app.log.Info("%v closing p2p", app.nodeID.Key)
 		app.P2P.Shutdown()
+	}
+
+	if app.layerFetch != nil {
+		app.log.Info("%v closing layerFetch", app.nodeID.Key)
+		app.layerFetch.Close()
 	}
 
 	if app.fetch != nil {
