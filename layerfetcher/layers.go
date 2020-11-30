@@ -134,9 +134,7 @@ func (l *Logic) FetchFlow() {
 
 }
 
-func (l *Logic) Start() {
-}
-
+// Close closes all running workers
 func (l *Logic) Close() {
 	l.net.Close()
 }
