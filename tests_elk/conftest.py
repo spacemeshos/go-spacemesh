@@ -260,8 +260,8 @@ def add_elk(init_session):
     # get today's date for filebeat data index
     index_date = datetime.utcnow().date().strftime("%Y.%m.%d")
     add_elastic_cluster(init_session)
-    add_fluent_bit_cluster(init_session)
     add_logstash_cluster(init_session)
+    add_fluent_bit_cluster(init_session)
     add_kibana_cluster(init_session)
     yield
     fluent_bit_teardown(init_session)

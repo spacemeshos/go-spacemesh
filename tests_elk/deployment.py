@@ -66,6 +66,8 @@ def create_deployment(file_name, name_space, deployment_id=None, replica_size=1,
                                                                   "(?<!_)NAMESPACE", name_space)
     with open(mod_file_path) as f:
         dep = yaml.safe_load(f)
+        if mod_file_path != os.path.join(file_path, file_name) and is_changed:
+            delete_file(mod_file_path)
 
         # Set unique deployment id
         if deployment_id:
@@ -79,9 +81,6 @@ def create_deployment(file_name, name_space, deployment_id=None, replica_size=1,
         k8s_beta = client.AppsV1Api()
         resp1 = k8s_beta.create_namespaced_deployment(body=dep, namespace=name_space)
         wait_to_deployment_to_be_ready(resp1.metadata._name, name_space, time_out=time_out)
-
-    if mod_file_path != os.path.join(file_path, file_name) and is_changed:
-        delete_file(mod_file_path)
 
     return resp1
 
@@ -162,6 +161,10 @@ def add_deployment_dir(namespace, dir_path):
         print(f"applying file: {filename}")
         with open(modified_file_path) as f:
             dep = yaml.safe_load(f)
+            if modified_file_path != os.path.join(dir_path, filename) and is_change:
+                # remove modified file
+                delete_file(modified_file_path)
+
             if dep['kind'] == 'StatefulSet':
                 k8s_client = client.AppsV1Api()
                 k8s_client.create_namespaced_stateful_set(body=dep, namespace=namespace)
@@ -203,9 +206,5 @@ def add_deployment_dir(namespace, dir_path):
             elif dep["kind"] == 'ServiceAccount':
                 k8s_client = client.CoreV1Api()
                 k8s_client.create_namespaced_service_account(body=dep, namespace=namespace)
-
-        if modified_file_path != os.path.join(dir_path, filename) and is_change:
-            # remove modified file
-            delete_file(modified_file_path)
 
     print("\nDone\n")

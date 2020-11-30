@@ -4,6 +4,7 @@ metadata:
   generateName: sm-bootstrapoet-
   labels:
     name: bootstrapoet
+    namespace: NAMESPACE
 spec:
   selector:
     matchLabels:
@@ -48,3 +49,5 @@ spec:
             cpu: "2"
         ports:
           - containerPort: 80
+      nodeSelector:
+        role: tests

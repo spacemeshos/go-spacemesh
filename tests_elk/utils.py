@@ -255,6 +255,7 @@ def create_backup_file(path, filename, new_name):
     src_path = os.path.join(path, filename)
     backup_path = os.path.join(path, new_name)
     try:
+        print(f"copying {src_path} to {backup_path}")
         copyfile(src_path, backup_path)
     except Exception as e:
         print(f"failed backing up file: {src_path}, err: {e}")
@@ -275,6 +276,7 @@ def replace_phrase_in_file(filepath, look, replace):
 def delete_file(filepath):
     try:
         while os.path.isfile(filepath):
+            print(f"deleting file: {filepath}")
             os.remove(filepath)
             time.sleep(0.2)
     except OSError as e:
