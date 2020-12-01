@@ -234,7 +234,7 @@ jobs:
         uses: actions/checkout@v2
       - name: blocks add node test
         run: |
-          sleep 30
+          sleep 90
           make dockertest-blocks-add-node-elk
   systemtest-blocks-remove-node-elk:
     # only run on push, not on pull_request
@@ -247,7 +247,7 @@ jobs:
         uses: actions/checkout@v2
       - name: blocks remove node test
         run: |
-          sleep 90
+          sleep 180
           make dockertest-blocks-remove-node-elk
   systemtest-genesis-elk:
     # only run on push, not on pull_request
@@ -260,7 +260,7 @@ jobs:
         uses: actions/checkout@v2
       - name: genesis system tests
         run: |
-          sleep 150
+          sleep 270
           make dockertest-genesis-voting-elk
   systemtest-p2p-elk:
     # only run on push, not on pull_request

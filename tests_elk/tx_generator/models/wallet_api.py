@@ -4,8 +4,7 @@ import json
 import random
 import re
 
-from tests.tx_generator import config as conf
-from tests.tx_generator.k8s_handler import api_call, aws_api_call
+from tests_elk.tx_generator.k8s_handler import api_call, aws_api_call
 
 
 class WalletAPI:
