@@ -65,7 +65,11 @@ spec:
           command: ["sysctl", "-w", "vm.max_map_count=262144"]
           resources:
             {}
-
+      tolerations:
+        - key: "app"
+          operation: "Equal"
+          value: "elasticseach"
+          effect: "NoSchedule"
       containers:
         - name: "elasticsearch"
           securityContext:

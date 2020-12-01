@@ -18,7 +18,7 @@ data:
   fluent-bit-input.conf: |-
     [INPUT]
         Name             tail
-        Path             /var/log/containers/sm-*.log
+        Path             /var/log/containers/*NAMESPACE*.log
         Parser           docker
         Tag              kube.*
         Refresh_Interval 5
