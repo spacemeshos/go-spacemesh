@@ -233,7 +233,9 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: blocks add node test
-        run: make dockertest-blocks-add-node-elk
+        run: |
+          sleep 30
+          make dockertest-blocks-add-node-elk
   systemtest-blocks-remove-node-elk:
     # only run on push, not on pull_request
     if: always() && github.event_name == 'push'
@@ -244,7 +246,9 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: blocks remove node test
-        run: make dockertest-blocks-remove-node-elk
+        run: |
+          sleep 90
+          make dockertest-blocks-remove-node-elk
   systemtest-genesis-elk:
     # only run on push, not on pull_request
     if: always() && github.event_name == 'push'
@@ -255,7 +259,9 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: genesis system tests
-        run: make dockertest-genesis-voting-elk
+        run: |
+          sleep 150
+          make dockertest-genesis-voting-elk
   systemtest-p2p-elk:
     # only run on push, not on pull_request
     if: always() && github.event_name == 'push'
@@ -299,5 +305,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: sync test
-        run: make dockertest-sync-elk
+        run: |
+          sleep 60
+          make dockertest-sync-elk
 
