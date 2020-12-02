@@ -222,7 +222,9 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: late nodes system test
-        run: make dockertest-late-nodes-elk
+        run: |
+          sleep 30
+          make dockertest-late-nodes-elk
   systemtest-blocks-add-node-elk:
     # only run on push, not on pull_request
     if: always() && github.event_name == 'push'
@@ -294,7 +296,9 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: mining system tests
-        run: make dockertest-mining-elk
+        run: |
+          sleep 30
+          make dockertest-mining-elk
   systemtest-sync-elk:
     # only run on push, not on pull_request
     if: always() && github.event_name == 'push'
@@ -306,6 +310,6 @@ jobs:
         uses: actions/checkout@v2
       - name: sync test
         run: |
-          sleep 60
+          sleep 120
           make dockertest-sync-elk
 
