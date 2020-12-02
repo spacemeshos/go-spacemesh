@@ -88,31 +88,14 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), failed == 0)
 
-	got := string(s.processor.Dump())
-
-	assert.Equal(s.T(), uint64(15), s.processor.GetBalance(obj1.address))
-	assert.Equal(s.T(), uint64(1), s.processor.GetNonce(obj1.address))
-
-	want := `{
-	"root": "6de6ffd7eda4c1aa4de66051e4ad05afc1233e089f9e9afaf8174a4dc483fa57",
-	"accounts": {
-		"0000000000000000000000000000000000000002": {
-			"nonce": 0,
-			"balance": 44
-		},
-		"0000000000000000000000000000000000000102": {
-			"nonce": 10,
-			"balance": 2
-		},
-		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
-			"nonce": 1,
-			"balance": 15
-		}
-	}
-}`
-	if got != want {
-		s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
-	}
+	// No need to check existence; non-existence of address returns 0 balance
+	assert.Equal(s.T(), types.HexToHash32("6de6ffd7eda4c1aa4de66051e4ad05afc1233e089f9e9afaf8174a4dc483fa57"), s.processor.GetStateRoot())
+	assert.Equal(s.T(), uint64(15), s.processor.GetBalance(SignerToAddr(signer)))
+	assert.Equal(s.T(), uint64(1), s.processor.GetNonce(SignerToAddr(signer)))
+	assert.Equal(s.T(), uint64(2), s.processor.GetBalance(toAddr([]byte{0x01, 02})))
+	assert.Equal(s.T(), uint64(10), s.processor.GetNonce(toAddr([]byte{0x01, 02})))
+	assert.Equal(s.T(), uint64(44), s.processor.GetBalance(toAddr([]byte{0x02})))
+	assert.Equal(s.T(), uint64(0), s.processor.GetNonce(toAddr([]byte{0x02})))
 }
 
 func SignerToAddr(signer *signing.EdSigner) types.Address {
@@ -232,34 +215,18 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer),
 	}
 
-	s.processor.ApplyTransactions(1, transactions)
-	//assert.Error(s.T(), err)
+	failed, err := s.processor.ApplyTransactions(1, transactions)
+	assert.True(s.T(), failed == 0)
+	assert.NoError(s.T(), err)
 
-	got := string(s.processor.Dump())
-
-	assert.Equal(s.T(), uint64(1), s.processor.GetBalance(obj1.address))
-	assert.Equal(s.T(), uint64(2), s.processor.GetBalance(obj2.address))
-
-	want := `{
-	"root": "0fb9e074115e49b9a1d33949de2578459c158d8885ca10ad9edcd5d3a84fd67c",
-	"accounts": {
-		"0000000000000000000000000000000000000002": {
-			"nonce": 0,
-			"balance": 47
-		},
-		"0000000000000000000000000000000000000102": {
-			"nonce": 10,
-			"balance": 2
-		},
-		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
-			"nonce": 4,
-			"balance": 1
-		}
-	}
-}`
-	if got != want {
-		s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
-	}
+	// No need to check existence; non-existence of address returns 0 balance
+	assert.Equal(s.T(), types.HexToHash32("0fb9e074115e49b9a1d33949de2578459c158d8885ca10ad9edcd5d3a84fd67c"), s.processor.GetStateRoot())
+	assert.Equal(s.T(), uint64(1), s.processor.GetBalance(SignerToAddr(signer)))
+	assert.Equal(s.T(), uint64(4), s.processor.GetNonce(SignerToAddr(signer)))
+	assert.Equal(s.T(), uint64(2), s.processor.GetBalance(toAddr([]byte{0x01, 02})))
+	assert.Equal(s.T(), uint64(10), s.processor.GetNonce(toAddr([]byte{0x01, 02})))
+	assert.Equal(s.T(), uint64(47), s.processor.GetBalance(toAddr([]byte{0x02})))
+	assert.Equal(s.T(), uint64(0), s.processor.GetNonce(toAddr([]byte{0x02})))
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
@@ -306,56 +273,26 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	assert.True(s.T(), failed == 0)
 	assert.NoError(s.T(), err)
 
-	got := string(processor.Dump())
-
-	want := `{
-	"root": "4b7174d31e60ef1ed970137079e2b8044d9c381422dbcbe16e561d8a51a9f651",
-	"accounts": {
-		"0000000000000000000000000000000000000002": {
-			"nonce": 0,
-			"balance": 44
-		},
-		"198d6e08b28e813feb01e4a400839b85e18080ce": {
-			"nonce": 11,
-			"balance": 28
-		},
-		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
-			"nonce": 2,
-			"balance": 19
-		}
-	}
-}`
-	if got != want {
-		s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
-	}
+	// No need to check existence; non-existence of address returns 0 balance
+	assert.Equal(s.T(), types.HexToHash32("4b7174d31e60ef1ed970137079e2b8044d9c381422dbcbe16e561d8a51a9f651"), processor.GetStateRoot())
+	assert.Equal(s.T(), uint64(19), processor.GetBalance(SignerToAddr(signer1)))
+	assert.Equal(s.T(), uint64(2), processor.GetNonce(SignerToAddr(signer1)))
+	assert.Equal(s.T(), uint64(28), processor.GetBalance(SignerToAddr(signer2)))
+	assert.Equal(s.T(), uint64(11), processor.GetNonce(SignerToAddr(signer2)))
+	assert.Equal(s.T(), uint64(44), processor.GetBalance(toAddr([]byte{0x02})))
+	assert.Equal(s.T(), uint64(0), processor.GetNonce(toAddr([]byte{0x02})))
 
 	err = processor.LoadState(1)
 	assert.NoError(s.T(), err)
 
-	got = string(processor.Dump())
-
-	assert.Equal(s.T(), uint64(15), processor.GetBalance(obj1.address))
-
-	want = `{
-	"root": "9273645f6b9a62f32500021f5e0a89d3eb6ffd36b1b9f9f82fcaad4555951e97",
-	"accounts": {
-		"0000000000000000000000000000000000000002": {
-			"nonce": 0,
-			"balance": 44
-		},
-		"198d6e08b28e813feb01e4a400839b85e18080ce": {
-			"nonce": 10,
-			"balance": 42
-		},
-		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
-			"nonce": 1,
-			"balance": 15
-		}
-	}
-}`
-	if got != want {
-		s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
-	}
+	// No need to check existence; non-existence of address returns 0 balance
+	assert.Equal(s.T(), types.HexToHash32("9273645f6b9a62f32500021f5e0a89d3eb6ffd36b1b9f9f82fcaad4555951e97"), processor.GetStateRoot())
+	assert.Equal(s.T(), uint64(15), processor.GetBalance(SignerToAddr(signer1)))
+	assert.Equal(s.T(), uint64(1), processor.GetNonce(SignerToAddr(signer1)))
+	assert.Equal(s.T(), uint64(42), processor.GetBalance(SignerToAddr(signer2)))
+	assert.Equal(s.T(), uint64(10), processor.GetNonce(SignerToAddr(signer2)))
+	assert.Equal(s.T(), uint64(44), processor.GetBalance(toAddr([]byte{0x02})))
+	assert.Equal(s.T(), uint64(0), processor.GetNonce(toAddr([]byte{0x02})))
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
