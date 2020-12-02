@@ -104,8 +104,7 @@ def test_bootstrap(init_session, add_elk, setup_bootstrap):
     tts = 75
     msg = f"sleep {tts} secs to enable ES server to start"
     sleep_print_backwards(tts, msg)
-    # wait for the bootstrap logs to be available in ElasticSearch
-    time.sleep(10 * timeout_factor)
+    sleep_print_backwards(10 * timeout_factor, "wait for the bootstrap logs to be available in ElasticSearch")
     bs_id = query_bootstrap_es(testconfig['namespace'], setup_bootstrap.pods[0]['name'])
     ass_err = f"setup_bootstrap.pods[0]['key'] = {setup_bootstrap.pods[0]['key']}, bootstrap returned ID: {bs_id}"
     assert setup_bootstrap.pods[0]['key'] == bs_id, ass_err
@@ -128,7 +127,7 @@ def test_client(init_session, add_elk, setup_clients, add_curl, save_log_on_exit
 
 
 def test_add_client(add_client):
-    # Sleep a while before checking the node is bootstarapped
+    # Sleep a while before checking the node is bootstrapped
     time.sleep(20 * timeout_factor)
     fields = {'M': 'discovery_bootstrap'}
 
@@ -237,9 +236,9 @@ def test_many_gossip_messages(setup_clients, add_elk, add_curl):
 
 
 def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000, prop_sleep_time=20, num_of_msg=100,
-              expected_ret="{'value': 'ok'}", msg_field="data"):
+              expected_ret="{'status': {}}", msg_field="data"):
     """
-    sends a protocol message to a random node and asserts it's propagation
+    sends a protocol message to a random node and asserts its propagation
 
     :param setup_clients: DeploymentInfo, clients info
     :param api: string, api path
@@ -266,6 +265,7 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
         # TODO in the future this may be changed for a more generic function
         data = '{{"{msg_field}": "{msg}"}}'.format(msg_field=msg_field, msg=msg)
         out = api_call(client_ip, data, api, testconfig['namespace'])
+        expected_ret = expected_ret
         ass_err = f"test_invalid_msg: expected \"{expected_ret}\" and got \"{out}\""
         assert expected_ret in out, ass_err
 
