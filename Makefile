@@ -180,16 +180,20 @@ cover:
 .PHONY: cover
 
 
-tag-and-build:
+tag-and-build: tag
+	docker build -t go-spacemesh:${VERSION} .
+	docker tag go-spacemesh:${VERSION} spacemeshos/go-spacemesh:${VERSION}
+	docker push spacemeshos/go-spacemesh:${VERSION}
+.PHONY: tag-and-build
+
+
+tag:
 	git diff --quiet || (echo "\033[0;31mWorking directory not clean!\033[0m" && git --no-pager diff && exit 1)
 	echo ${VERSION} > version.txt
 	git commit -m "bump version to ${VERSION}" version.txt
 	git tag ${VERSION}
 	git push origin ${VERSION}
-	docker build -t go-spacemesh:${VERSION} .
-	docker tag go-spacemesh:${VERSION} spacemeshos/go-spacemesh:${VERSION}
-	docker push spacemeshos/go-spacemesh:${VERSION}
-.PHONY: tag-and-build
+.PHONY: tag
 
 
 list-versions:
