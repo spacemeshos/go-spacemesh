@@ -21,6 +21,7 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"cloud.google.com/go/profiler"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
@@ -255,6 +256,16 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 	// ensure cli flags are higher priority than config file
 	if err := cmdp.EnsureCLIFlags(cmd, app.Config); err != nil {
 		return err
+	}
+
+	if app.Config.Profiler {
+		if err := profiler.Start(profiler.Config{
+			Service:        "go-spacemesh",
+			ServiceVersion: fmt.Sprintf("%s+%s+%s", cmdp.Version, cmdp.Branch, cmdp.Commit),
+			MutexProfiling: true,
+		}); err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "failed to start profiler:", err)
+		}
 	}
 
 	// override default config in timesync since timesync is using TimeCongigValues
