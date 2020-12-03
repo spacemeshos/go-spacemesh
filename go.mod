@@ -1,7 +1,7 @@
 module github.com/spacemeshos/go-spacemesh
 
 require (
-	cloud.google.com/go v0.68.0 // indirect
+	cloud.google.com/go v0.68.0
 	cloud.google.com/go/storage v1.10.0
 	github.com/Microsoft/go-winio v0.4.14 // indirect
 	github.com/VividCortex/gohistogram v1.0.0 // indirect

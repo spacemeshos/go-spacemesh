@@ -169,7 +169,7 @@ func defaultBaseConfig() BaseConfig {
 		SyncValidationDelta: 30,
 		AtxsPerBlock:        100,
 		TxsPerBlock:         100,
-		Profiler:            false
+		Profiler:            false,
 	}
 }
 
