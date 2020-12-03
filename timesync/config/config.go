@@ -17,6 +17,7 @@ type TimeConfig struct {
 	NtpQueries            int           `mapstructure:"ntp-queries"`
 	DefaultTimeoutLatency time.Duration `mapstructure:"default-timeout-latency"`
 	RefreshNtpInterval    time.Duration `mapstructure:"refresh-ntp-interval"`
+	NTPServersFile        string        `mapstructure:"ntp-servers"`
 }
 
 //todo: this is a duplicate function found also in p2p config
@@ -34,7 +35,7 @@ func DefaultConfig() TimeConfig {
 	// TimeConfigValues defines default values for all time and ntp related params.
 	var TimeConfigValues = TimeConfig{
 		MaxAllowedDrift:       duration("10s"),
-		NtpQueries:            5,
+		NtpQueries:            15,
 		DefaultTimeoutLatency: duration("10s"),
 		RefreshNtpInterval:    duration("30m"),
 	}
