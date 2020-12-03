@@ -120,7 +120,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 
 	if remote {
 		if err := getData(app.Config.DataDir(), version, lg); err != nil {
-			lg.Error("could not download data for test", err)
+			lg.Error("could not download data for test: %v", err)
 			return
 		}
 	}
