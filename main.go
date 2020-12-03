@@ -23,7 +23,7 @@ var (
 )
 
 func main() { // run the app
-	if config.Profiler { 
+	if config.Profiler {
 		if err := profiler.Start(profiler.Config{
 			Service:        "go-spacemesh",
 			ServiceVersion: fmt.Sprintf("%s+%s+%s", version, commit, branch),
@@ -33,7 +33,6 @@ func main() { // run the app
 		}
 	}
 
-	
 	cmd.Version = version
 	cmd.Commit = commit
 	cmd.Branch = branch
