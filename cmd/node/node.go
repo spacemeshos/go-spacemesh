@@ -14,6 +14,7 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"cloud.google.com/go/profiler"
 	"github.com/spacemeshos/amcl"
 	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/post/shared"
@@ -21,7 +22,6 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"cloud.google.com/go/profiler"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
