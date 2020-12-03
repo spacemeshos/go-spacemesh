@@ -161,6 +161,7 @@ func defaultBaseConfig() BaseConfig {
 		LayerDurationSec:    30,
 		LayersPerEpoch:      3,
 		PoETServer:          "127.0.0.1",
+		GoldenATXID:         "0x5678", // TODO: Change the value
 		Hdist:               5,
 		GenesisActiveSet:    5,
 		BlockCacheSize:      20,
