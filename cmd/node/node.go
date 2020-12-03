@@ -519,6 +519,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	processor := state.NewTransactionProcessor(db, appliedTxs, meshAndPoolProjector, app.txPool, lg.WithName("state"))
 
 	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
+	if goldenATXID == *types.EmptyATXID {
+		app.log.Panic("invalid Golden ATX ID")
+	}
 
 	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 	beaconProvider := &blocks.EpochBeaconProvider{}
