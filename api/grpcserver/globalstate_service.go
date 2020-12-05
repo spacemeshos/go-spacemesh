@@ -230,16 +230,14 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 		channelReceipt = events.GetReceiptChannel()
 	}
 
-	for {
+	accountOk, rewardOk, receiptOk := true, true, true
+
+	for accountOk || rewardOk || receiptOk {
 		select {
-		case updatedAccount, ok := <-channelAccount:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("account channel closed, shutting down")
-				return nil
+		case updatedAccount, accountOk := <-channelAccount:
+			if !accountOk {
+				log.Info("account channel closed")
+				channelAccount = nil
 			}
 			// Apply address filter
 			if updatedAccount == addr {
@@ -257,14 +255,10 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 					return err
 				}
 			}
-		case reward, ok := <-channelReward:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("reward channel closed, shutting down")
-				return nil
+		case reward, rewardOk := <-channelReward:
+			if !rewardOk {
+				log.Info("reward channel closed")
+				channelReward = nil
 			}
 			// Apply address filter
 			if reward.Coinbase == addr {
@@ -284,14 +278,10 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 					return err
 				}
 			}
-		case receipt, ok := <-channelReceipt:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("receipt channel closed, shutting down")
-				return nil
+		case receipt, receiptOk := <-channelReceipt:
+			if !receiptOk {
+				log.Info("receipt channel closed")
+				channelReceipt = nil
 			}
 			// Apply address filter
 			if receipt.Address == addr {
@@ -317,6 +307,8 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 		// that the service needs to shut down?
 		// See https://github.com/spacemeshos/go-spacemesh/issues/2075
 	}
+
+	return nil
 }
 
 // SmesherRewardStream exposes a stream of smesher rewards
@@ -374,16 +366,14 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		channelLayer = events.GetLayerChannel()
 	}
 
-	for {
+	accountOk, rewardOk, receiptOk, layerOk := true, true, true, true
+
+	for accountOk || rewardOk || receiptOk || layerOk {
 		select {
-		case updatedAccount, ok := <-channelAccount:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("account channel closed, shutting down")
-				return nil
+		case updatedAccount, accountOk := <-channelAccount:
+			if !accountOk {
+				log.Info("account channel closed")
+				channelAccount = nil
 			}
 			// The Reporter service just sends us the account address. We are responsible
 			// for looking up the other required data here. Get the account balance and
@@ -398,14 +388,10 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			}}}); err != nil {
 				return err
 			}
-		case reward, ok := <-channelReward:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("reward channel closed, shutting down")
-				return nil
+		case reward, rewardOk := <-channelReward:
+			if !rewardOk {
+				log.Info("reward channel closed")
+				channelReward = nil
 			}
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Reward{
 				Reward: &pb.Reward{
@@ -422,14 +408,10 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			}}}); err != nil {
 				return err
 			}
-		case receipt, ok := <-channelReceipt:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("receipt channel closed, shutting down")
-				return nil
+		case receipt, receiptOk := <-channelReceipt:
+			if !receiptOk {
+				log.Info("receipt channel closed")
+				channelReceipt = nil
 			}
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Receipt{
 				Receipt: &pb.TransactionReceipt{
@@ -444,14 +426,10 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			}}}); err != nil {
 				return err
 			}
-		case layer, ok := <-channelLayer:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("layer channel closed, shutting down")
-				return nil
+		case layer, layerOk := <-channelLayer:
+			if !layerOk {
+				log.Info("layer channel closed")
+				channelLayer = nil
 			}
 			root, err := s.Mesh.GetLayerStateRoot(layer.Layer.Index())
 			if err != nil {
@@ -474,4 +452,6 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		// that the service needs to shut down?
 		// See https://github.com/spacemeshos/go-spacemesh/issues/2075
 	}
+
+	return nil
 }
