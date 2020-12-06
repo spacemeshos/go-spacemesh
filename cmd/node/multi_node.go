@@ -154,7 +154,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.SyncRequestTimeout = 500
 	cfg.SyncInterval = 2
 	cfg.SyncValidationDelta = 5
-	cfg.GoldenATXID = "11111"
+	cfg.GoldenATXID = "0x5678"
 
 	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
 
