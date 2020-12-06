@@ -171,7 +171,7 @@ func ntpTimeDrift() (time.Duration, error) {
 	if config.TimeConfigValues.NTPServersFile != "" {
 		file, err := os.Open(config.TimeConfigValues.NTPServersFile)
 		if err != nil {
-			return 0, fmt.Errorf("Unable to open NTP servers file")
+			return 0, fmt.Errorf("Unable to open NTP servers file: %s", err)
 		}
 
 		defer file.Close()
@@ -183,7 +183,7 @@ func ntpTimeDrift() (time.Duration, error) {
 		}
 
 		if scanner.Err() != nil {
-			return 0, fmt.Errorf("Unable to read NTP servers file")
+			return 0, fmt.Errorf("Unable to read NTP servers file: %v", scanner.Err())
 		}
 
 		NTPServers = lines
