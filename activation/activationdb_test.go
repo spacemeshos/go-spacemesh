@@ -330,7 +330,7 @@ func Test_DBSanity(t *testing.T) {
 
 	id, err = atxdb.GetNodeLastAtxID(id3)
 	assert.EqualError(t, err, fmt.Sprintf("atx for node %v does not exist", id3.ShortString()))
-	assert.Equal(t, *types.EmptyATXID, id)
+	assert.Equal(t, goldenATXID, id)
 }
 
 func TestMesh_processBlockATXs(t *testing.T) {

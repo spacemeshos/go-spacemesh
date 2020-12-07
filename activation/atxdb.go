@@ -448,27 +448,21 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 // ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
 // If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
 func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
-	if atx.PrevATXID != db.goldenATXID {
-		lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
-		if err != nil {
-			db.log.With().Error("could not fetch node last ATX", atx.ID(),
-				log.FieldNamed("atx_node_id", atx.NodeID), log.Err(err))
-			return fmt.Errorf("could not fetch node last ATX: %v", err)
+	lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
+	if err != nil {
+		// The golden PrevATXID should *not* exist in the DB. A non-golden PrevATXID should exist in DB.
+		if _, ok := err.(ErrAtxNotFound); ok && atx.PrevATXID == db.goldenATXID {
+			return nil
 		}
-		// last atx is not the one referenced
-		if lastAtx != atx.PrevATXID {
-			return fmt.Errorf("last atx is not the one referenced")
-		}
-	} else {
-		lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
-		if _, ok := err.(ErrAtxNotFound); err != nil && !ok {
-			db.log.Error("fetching ATX ids failed: %v", err)
-			return err
-		}
-		if err == nil { // we found an ATX for this node ID, although it reported golden ATX -- this is invalid
-			return fmt.Errorf("golden ATX reported, but other ATX with same nodeID (%v) found: %v",
-				atx.NodeID.ShortString(), lastAtx.ShortString())
-		}
+
+		db.log.With().Error("could not fetch node last ATX", atx.ID(),
+			log.FieldNamed("atx_node_id", atx.NodeID), log.Err(err))
+		return fmt.Errorf("could not fetch node last ATX: %v", err)
+	}
+
+	// last atx is not the one referenced
+	if lastAtx != atx.PrevATXID {
+		return fmt.Errorf("last atx is not the one referenced")
 	}
 
 	return nil
@@ -628,7 +622,7 @@ func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
 	// For the lexicographical order to match the epoch order we must encode the epoch id using big endian encoding when
 	// composing the key.
 	if exists := nodeAtxsIterator.Last(); !exists {
-		return *types.EmptyATXID, ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeID.ShortString()))
+		return db.goldenATXID, ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeID.ShortString()))
 	}
 	return types.ATXID(types.BytesToHash(nodeAtxsIterator.Value())), nil
 }
