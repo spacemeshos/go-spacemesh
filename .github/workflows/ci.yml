@@ -183,6 +183,17 @@ jobs:
         uses: actions/checkout@v2
       - name: genesis+p2p system tests
         run: make dockertest-genesis-voting-p2p
+  systemtest-dummy:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: systemtest-latenodes
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: dummy test
+        run: make dockertest-test-dummy
 
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
   # all tests that are required to pass before a bors merge must be listed here!
@@ -195,6 +206,7 @@ jobs:
       - systemtest-hare-mining
       - systemtest-sync-blocks
       - systemtest-genesis-p2p
+      - systemtest-dummy
     runs-on: ubuntu-latest
     env:
       status: ${{ needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-hare-mining.result == 'success' && needs.systemtest-sync-blocks.result == 'success' && needs.systemtest-genesis-p2p.result == 'success' && 'success' || 'failure' }}

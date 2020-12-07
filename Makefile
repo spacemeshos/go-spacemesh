@@ -443,6 +443,19 @@ dockertest-blocks-remove-node-elk: dockerbuild-test-elk dockerrun-blocks-remove-
 .PHONY: dockertest-blocks-remove-node-elk
 
 
+dockerrun-test-dummy:
+ifndef ES_PASSWD
+	$(error ES_PASSWD is not set)
+endif
+
+	$(DOCKERRUN) pytest -s -v dummy_test/test_dummy.py --tc-file=dummy_test/config.yaml --tc-format=yaml
+
+.PHONY: dockerrun-test-dummy
+
+dockertest-test-dummy: dockerbuild-test-elk dockerrun-test-dummy
+.PHONY: dockertest-test-dummy
+
+
 dockerrun-blocks-stress:
 ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
