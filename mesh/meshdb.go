@@ -270,7 +270,7 @@ func (m *DB) AddZeroBlockLayer(index types.LayerID) error {
 }
 
 func (m *DB) getBlockBytes(id types.BlockID) ([]byte, error) {
-	return m.blocks.Get(id.Bytes())
+	return m.blocks.Get(id.AsHash32().Bytes())
 }
 
 // ContextualValidity retrieves opinion on block from the database
@@ -300,7 +300,7 @@ func (m *DB) writeBlock(bl *types.Block) error {
 		return fmt.Errorf("could not encode bl")
 	}
 
-	if err := m.blocks.Put(bl.ID().Bytes(), bytes); err != nil {
+	if err := m.blocks.Put(bl.ID().AsHash32().Bytes(), bytes); err != nil {
 		return fmt.Errorf("could not add bl %v to database %v", bl.ID(), err)
 	}
 

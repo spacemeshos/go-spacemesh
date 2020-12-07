@@ -614,6 +614,12 @@ func (msh *Mesh) AddBlock(blk *types.Block) error {
 		msh.Warning("failed to add block %v  %v", blk.ID(), err)
 		return err
 	}
+
+	l, err := msh.GetLayer(blk.LayerIndex)
+	if err != nil {
+		return err
+	}
+	msh.persistLayerHashes(l)
 	msh.SetLatestLayer(blk.Layer())
 	// new block add to orphans
 	msh.handleOrphanBlocks(blk)

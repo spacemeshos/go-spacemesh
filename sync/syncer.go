@@ -60,6 +60,8 @@ type LayerFetch interface {
 	GetBlocks(IDs []types.BlockID) error
 	FetchBlock(ID types.BlockID) error
 	GetPoetProof(id types.Hash32) error
+	Start()
+	Close()
 }
 
 type net struct {
@@ -454,6 +456,11 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 		s.With().Info("syncing layer", log.FieldNamed("current_sync_layer", currentSyncLayer),
 			log.FieldNamed("last_ticked_layer", s.GetCurrentLayer()))
 
+		if len(s.net.GetPeers()) == 0 {
+			s.With().Error("cannot sync - no peers")
+			return
+		}
+
 		if s.shutdown() {
 			return
 		}
@@ -564,6 +571,9 @@ func (s *Syncer) getLayerFromNeighbors2(currentSyncLayer types.LayerID) (*types.
 	ch := s.fetcher.PollLayer(currentSyncLayer)
 	res := <-ch
 	if res.Err != nil {
+		if res.Err == layerfetcher.ZeroLayerError {
+			return types.NewLayer(currentSyncLayer), nil
+		}
 		return nil, res.Err
 	}
 	return s.GetLayer(currentSyncLayer)

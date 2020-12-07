@@ -2,6 +2,7 @@
 package layerfetcher
 
 import (
+	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -56,12 +57,12 @@ type poetDb interface {
 // network defines network capabilities used
 type network interface {
 	GetPeers() []p2ppeers.Peer
-	GetRandomPeer() p2ppeers.Peer
 	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), timeoutHandler func(err error)) error
 	Close()
 }
 
 var emptyHash = types.Hash32{}
+var ZeroLayerError = errors.New("zero layer")
 
 // Logic is the struct containing components needed to follow layer fetching logic
 type Logic struct {
@@ -69,7 +70,7 @@ type Logic struct {
 	fetcher              fetch.Fetcher
 	net                  network
 	layerHashResults     map[types.LayerID]map[p2ppeers.Peer]*types.Hash32
-	blockHashResults     map[types.LayerID]int
+	blockHashResults     map[types.LayerID][]bool //list of results from peers - true if blocks were received
 	layerResultsChannels map[types.LayerID][]chan LayerPromiseResult
 	poetProofs           poetDb
 	atxs                 atxHandler
@@ -97,7 +98,7 @@ func NewLogic(cfg Config, blocks blockHandler, atxs atxHandler, poet poetDb, atx
 		fetcher:              fetcher,
 		net:                  srv,
 		layerHashResults:     make(map[types.LayerID]map[p2ppeers.Peer]*types.Hash32),
-		blockHashResults:     make(map[types.LayerID]int),
+		blockHashResults:     make(map[types.LayerID][]bool),
 		layerResultsChannels: make(map[types.LayerID][]chan LayerPromiseResult),
 		poetProofs:           poet,
 		atxs:                 atxs,
@@ -134,9 +135,15 @@ func (l *Logic) FetchFlow() {
 
 }
 
+// Start starts layerFetcher logic and fetch component
+func (l *Logic) Start() {
+	l.fetcher.Start()
+}
+
 // Close closes all running workers
 func (l *Logic) Close() {
 	l.net.Close()
+	l.fetcher.Stop()
 }
 
 // AddDBs adds dbs that will be queried when sync requests are received. these databases will be exposed to external callers
@@ -294,7 +301,7 @@ func (l *Logic) receiveLayerHash(id types.LayerID, p p2ppeers.Peer, peers int, d
 	//todo: think if we should aggregate or ask from multiple peers to have some redundancy in requests
 	for hash, peer := range hashes {
 		if hash == emptyHash {
-			l.receiveBlockHashes(id, nil, len(hashes), fmt.Errorf("empty result received"))
+			l.receiveBlockHashes(id, nil, len(hashes), ZeroLayerError)
 			continue
 		}
 		//build receiver function
@@ -319,27 +326,40 @@ func (l *Logic) notifyLayerPromiseResult(id types.LayerID, expectedResults int, 
 
 	// count number of results - only after all results were received we can notify the caller
 	l.blockHashResM.Lock()
-	l.blockHashResults[id]++
+	// put false if no blocks
+	l.blockHashResults[id] = append(l.blockHashResults[id], err == ZeroLayerError)
+
 	// we are done with no block iteration errors
-	if l.blockHashResults[id] < expectedResults {
+	if len(l.blockHashResults[id]) < expectedResults {
 		l.blockHashResM.Unlock()
 		return
+	}
+	isZero := false
+	for _, hadBlocks := range l.blockHashResults[id] {
+		if hadBlocks {
+			isZero = false
+			break
+		}
 	}
 	delete(l.blockHashResults, id)
 	l.blockHashResM.Unlock()
 
+	var er = err
+	if isZero {
+		er = ZeroLayerError
+	}
 	res := LayerPromiseResult{
-		err,
+		er,
 		id,
 	}
 	l.layerResM.Lock()
 	for _, ch := range l.layerResultsChannels[id] {
-		l.log.Error("writing error for layer %v err %v", id, err)
+		l.log.Info("writing res for layer %v err %v", id, err)
 		ch <- res
 	}
 	delete(l.layerResultsChannels, id)
 	l.layerResM.Unlock()
-	l.log.Error("writing error for layer %v done %v", id, err)
+	l.log.Info("writing error for layer %v done %v", id, err)
 }
 
 // receiveBlockHashes is called when receiving block hashes for specified layer layer from remote peer
@@ -351,19 +371,21 @@ func (l *Logic) receiveBlockHashes(layer types.LayerID, data []byte, expectedRes
 		return
 	}
 
-	var blocks layerBlocks
-	err := types.BytesToInterface(data, &blocks)
-	if err != nil {
-		l.log.Error("received error for layer id %v", err)
-		l.notifyLayerPromiseResult(layer, expectedResults, err)
-		return
-	}
+	if data != nil {
+		var blocks layerBlocks
+		err := types.BytesToInterface(data, &blocks)
+		if err != nil {
+			l.log.Error("received error for layer id %v", err)
+			l.notifyLayerPromiseResult(layer, expectedResults, err)
+			return
+		}
 
-	// fetch all blocks
-	retErr := l.GetBlocks(blocks.Blocks)
-	// if there is an error this means that the entire layer cannot be validated and therefore sync should fail
-	if retErr != nil {
-		l.log.Error("received error for layer id %v", retErr)
+		// fetch all blocks
+		retErr := l.GetBlocks(blocks.Blocks)
+		// if there is an error this means that the entire layer cannot be validated and therefore sync should fail
+		if retErr != nil {
+			l.log.Error("received error for layer id %v", retErr)
+		}
 	}
 
 	// here we need to update layer hash
@@ -394,7 +416,7 @@ func (l *Logic) GetEpochATXs(id types.EpochID) error {
 			Atxs:  nil,
 		}
 	}
-	err := l.net.SendRequest(atxIDsMsg, id.ToBytes(), l.net.GetRandomPeer(), receiveForPeerFunc, errFunc)
+	err := l.net.SendRequest(atxIDsMsg, id.ToBytes(), fetch.GetRandomPeer(l.net.GetPeers()), receiveForPeerFunc, errFunc)
 	if err != nil {
 		return err
 	}

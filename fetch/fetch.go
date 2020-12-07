@@ -46,6 +46,8 @@ type Fetcher interface {
 	GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashDataPromiseResult
 	GetHashes(hash []types.Hash32, hint Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult
 	AddDB(hint Hint, db database.Store)
+	Stop()
+	Start()
 }
 
 /// request contains all relevant Data for a single request for a specified hash
@@ -55,6 +57,8 @@ type request struct {
 	validateResponseHash bool                       // if true perform hash validation on received Data
 	hint                 Hint                       // the hint from which database to fetch this hash
 	returnChan           chan HashDataPromiseResult //channel that will signal if the call succeeded or not
+	failedPeers []p2ppeers.Peer // failedPeers are the peers that failed to return this message
+	retries int // number of times this request has been retried and failed
 }
 
 // requestMessage is the on the wire message that will be send to the peer for hash query
@@ -138,17 +142,20 @@ func NewMessageNetwork(requestTimeOut int, net service.Service, protocol string,
 }
 
 // GetRandomPeer returns a random peer from current peer list
-func (f MessageNetwork) GetRandomPeer() p2ppeers.Peer {
-	peers := f.peersProvider.GetPeers()
+func GetRandomPeer(peers []p2ppeers.Peer) p2ppeers.Peer {
 	if len(peers) == 0 {
-		f.Log.Panic("cannot send fetch - no peers found")
+		log.Panic("cannot send fetch - no peers found")
 	}
 	rand.Seed(time.Now().Unix()) // initialize global pseudo random generator
 	return peers[rand.Intn(len(peers))]
 }
 
+func (f MessageNetwork) GetPeers() []p2ppeers.Peer {
+	return f.peersProvider.GetPeers()
+}
+
 type network interface {
-	GetRandomPeer() p2ppeers.Peer
+	GetPeers() []p2ppeers.Peer
 	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error
 	RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func([]byte) []byte)
 	Close()
@@ -430,8 +437,9 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 		if f.stopped() {
 			return
 		}
+
 		// get random peer
-		p := f.net.GetRandomPeer()
+		p := GetRandomPeer(f.net.GetPeers())
 		f.log.Info("sending request batch %v items %v", batch.ID.Hex(), len(batch.Requests))
 		err := f.net.SendRequest(fetch, bytes, p, f.receiveResponse, timeoutFunc)
 		// if call succeeded, continue to other requests
@@ -529,6 +537,8 @@ func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashD
 		validateHash,
 		h,
 		resChan,
+		nil,
+		0,
 	}
 
 	f.requestReceiver <- req

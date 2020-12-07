@@ -682,7 +682,7 @@ func (app *SpacemeshApp) HareFactory(mdb *mesh.DB, swarm service.Service, sgn ha
 
 func (app *SpacemeshApp) startServices() {
 	//app.blockListener.Start()
-	app.fetch.Start()
+	app.layerFetch.Start()
 	app.syncer.Start()
 	err := app.hare.Start()
 	if err != nil {
@@ -832,11 +832,6 @@ func (app *SpacemeshApp) stopServices() {
 	if app.layerFetch != nil {
 		app.log.Info("%v closing layerFetch", app.nodeID.Key)
 		app.layerFetch.Close()
-	}
-
-	if app.fetch != nil {
-		app.log.Info("%v closing fetch", app.nodeID.Key)
-		app.fetch.Stop()
 	}
 
 	if app.syncer != nil {

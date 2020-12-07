@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"fmt"
 	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -15,13 +16,37 @@ import (
 	"time"
 )
 
-type poetDbMock struct{}
+type poetDbMock struct{
+	Data map[types.Hash32][]byte
+}
 
 func (poetDbMock) GetProofMessage(proofRef []byte) ([]byte, error) { return proofRef, nil }
 
 func (poetDbMock) HasProof([]byte) bool { return true }
 
-func (poetDbMock) ValidateAndStore(*types.PoetProofMessage) error { return nil }
+func (p *poetDbMock) ValidateAndStore(m *types.PoetProofMessage) error {
+	b, e := m.Ref()
+	if e != nil {
+		return e
+	}
+	val, e := types.InterfaceToBytes(m.PoetProof)
+
+	p.Data[types.BytesToHash(b)] = val
+	return nil
+}
+
+func (p *poetDbMock) Get(b []byte) ([]byte, error) {
+	b, has := p.Data[types.BytesToHash(b)]
+	if !has {
+		return nil, fmt.Errorf("not found in mock db")
+	}
+	return b, nil
+}
+
+func (p *poetDbMock) Put(key, val []byte) error {
+	p.Data[types.BytesToHash(key)] = val
+	return nil
+}
 
 type blockEligibilityValidatorMock struct {
 }
