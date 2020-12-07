@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-type poetDbMock struct{
+type poetDbMock struct {
 	Data map[types.Hash32][]byte
 }
 

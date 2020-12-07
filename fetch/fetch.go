@@ -57,8 +57,8 @@ type request struct {
 	validateResponseHash bool                       // if true perform hash validation on received Data
 	hint                 Hint                       // the hint from which database to fetch this hash
 	returnChan           chan HashDataPromiseResult //channel that will signal if the call succeeded or not
-	failedPeers []p2ppeers.Peer // failedPeers are the peers that failed to return this message
-	retries int // number of times this request has been retried and failed
+	failedPeers          []p2ppeers.Peer            // failedPeers are the peers that failed to return this message
+	retries              int                        // number of times this request has been retried and failed
 }
 
 // requestMessage is the on the wire message that will be send to the peer for hash query
@@ -112,6 +112,7 @@ type Config struct {
 	RequestTimeout    int // in seconds
 }
 
+// DefaultConfig is the default config for the fetch component
 func DefaultConfig() Config {
 	return Config{
 		BatchTimeout:      2,
@@ -150,6 +151,7 @@ func GetRandomPeer(peers []p2ppeers.Peer) p2ppeers.Peer {
 	return peers[rand.Intn(len(peers))]
 }
 
+// GetPeers return active peers
 func (f MessageNetwork) GetPeers() []p2ppeers.Peer {
 	return f.peersProvider.GetPeers()
 }

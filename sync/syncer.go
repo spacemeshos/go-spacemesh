@@ -571,7 +571,7 @@ func (s *Syncer) getLayerFromNeighbors2(currentSyncLayer types.LayerID) (*types.
 	ch := s.fetcher.PollLayer(currentSyncLayer)
 	res := <-ch
 	if res.Err != nil {
-		if res.Err == layerfetcher.ZeroLayerError {
+		if res.Err == layerfetcher.ErrZeroLayer {
 			return types.NewLayer(currentSyncLayer), nil
 		}
 		return nil, res.Err

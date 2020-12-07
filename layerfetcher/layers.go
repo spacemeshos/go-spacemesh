@@ -62,7 +62,9 @@ type network interface {
 }
 
 var emptyHash = types.Hash32{}
-var ZeroLayerError = errors.New("zero layer")
+
+// ErrZeroLayer is the error returned when an empty hash is received when polling for layer
+var ErrZeroLayer = errors.New("zero layer")
 
 // Logic is the struct containing components needed to follow layer fetching logic
 type Logic struct {
@@ -301,7 +303,7 @@ func (l *Logic) receiveLayerHash(id types.LayerID, p p2ppeers.Peer, peers int, d
 	//todo: think if we should aggregate or ask from multiple peers to have some redundancy in requests
 	for hash, peer := range hashes {
 		if hash == emptyHash {
-			l.receiveBlockHashes(id, nil, len(hashes), ZeroLayerError)
+			l.receiveBlockHashes(id, nil, len(hashes), ErrZeroLayer)
 			continue
 		}
 		//build receiver function
@@ -327,7 +329,7 @@ func (l *Logic) notifyLayerPromiseResult(id types.LayerID, expectedResults int, 
 	// count number of results - only after all results were received we can notify the caller
 	l.blockHashResM.Lock()
 	// put false if no blocks
-	l.blockHashResults[id] = append(l.blockHashResults[id], err == ZeroLayerError)
+	l.blockHashResults[id] = append(l.blockHashResults[id], err == ErrZeroLayer)
 
 	// we are done with no block iteration errors
 	if len(l.blockHashResults[id]) < expectedResults {
@@ -346,7 +348,7 @@ func (l *Logic) notifyLayerPromiseResult(id types.LayerID, expectedResults int, 
 
 	var er = err
 	if isZero {
-		er = ZeroLayerError
+		er = ErrZeroLayer
 	}
 	res := LayerPromiseResult{
 		er,

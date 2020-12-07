@@ -86,7 +86,7 @@ func (alwaysOkAtxDb) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 type storeMock struct {
 	store  map[types.Hash32][]byte
 	blocks map[types.Hash32]*types.Block
-	msh *mesh.Mesh
+	msh    *mesh.Mesh
 }
 
 func (s storeMock) GetLayerHash(ID types.LayerID) types.Hash32 {
@@ -195,7 +195,7 @@ func SyncMockFactoryManClock(number int, conf Configuration, name string, dbType
 		f := fetch2.NewFetch(fetch2.DefaultConfig(), net, l)
 		msh := getMesh(dbType, Path+name+"_"+time.Now().String(), atxDB)
 		store := &storeMock{
-			msh: msh,
+			msh:    msh,
 			blocks: make(map[types.Hash32]*types.Block),
 		}
 		layerFetcher := layerfetcher.NewLogic(layerfetcher.Config{3}, store, store, store, store, store, net, f, msh, l)

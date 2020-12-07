@@ -578,7 +578,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		app.Config.LayerDurationSec = 2
 		app.Config.DataDirParent = path
 
-
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
