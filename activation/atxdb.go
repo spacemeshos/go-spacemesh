@@ -331,10 +331,11 @@ func (db *DB) deleteLock(viewHash types.Hash12) {
 
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
 //
+// - If the PrevATX and PositioningATX are not empty ATX.
 // - If the sequence number is non-zero: PrevATX points to a syntactically valid ATX whose sequence number is one less
 //   than the current ATX's sequence number.
-// - If the sequence number is zero: PrevATX is empty.
-// - Positioning ATX points to a syntactically valid ATX.
+// - If the sequence number is zero: PrevATX equals to the Golden ATX.
+// - Positioning ATX points to a syntactically valid ATX or the Golden ATX.
 // - NIPST challenge is a hash of the serialization of the following fields:
 //   NodeID, SequenceNumber, PrevATXID, LayerID, StartTick, PositioningATX.
 // - The NIPST is valid.
