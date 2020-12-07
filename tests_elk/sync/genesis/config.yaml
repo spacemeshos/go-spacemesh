@@ -13,6 +13,13 @@ bootstrap:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-harness'
   replicas: 1
+  resources:
+    requests:
+      memory: '2048M'
+      cpu: '2'
+    limits:
+      memory: '2048M'
+      cpu: '2'
   args:
     randcon: '8'
     hare-committee-size: '10'
@@ -34,6 +41,13 @@ client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-harness'
   replicas: 9
+  resources:
+    requests:
+      memory: '2048M'
+      cpu: '2'
+    limits:
+      memory: '2048M'
+      cpu: '2'
   args:
     randcon: '8'
     hare-committee-size: '10'

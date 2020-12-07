@@ -5,6 +5,8 @@ from datetime import datetime
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 
+import tests_elk.utils as ut
+
 
 """ k8s deployment api file for stateful deployments (opposite to deployment.py) """
 
@@ -45,10 +47,14 @@ def wait_to_statefulset_to_be_ready(statefulset_name, name_space, time_out=None)
 
 
 def create_statefulset(file_name, name_space, deployment_id=None, replica_size=1, container_specs=None, time_out=None):
+    file_path, filename = ut.get_filename_and_path(file_name)
+    mod_file_path, is_changed = ut.duplicate_file_and_replace_phrase(file_path, filename, f"{name_space}_{filename}",
+                                                                  "(?<!_)NAMESPACE", name_space)
     resp1 = None
-    with open(os.path.join(os.path.dirname(__file__), file_name)) as f:
+    with open(mod_file_path) as f:
         dep = yaml.safe_load(f)
-
+        if mod_file_path != os.path.join(file_path, file_name) and is_changed:
+            ut.delete_file(mod_file_path)
         # Set unique deployment id
         if deployment_id:
             dep['metadata']['name'] += '-{0}'.format(deployment_id)

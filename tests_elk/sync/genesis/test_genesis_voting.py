@@ -55,8 +55,8 @@ def test_unsync_while_genesis(init_session, add_elk, setup_bootstrap, start_poet
     print("validation succeeded")
 
     # Get the msg when app started on the late node
-    app_started_hits = q.get_app_started_msgs(init_session, unsynced_cl.pods[0]["name"])
-    assert app_started_hits, f"app did not start for new node after {layers_to_wait} layers"
+    # app_started_hits = q.get_app_started_msgs(init_session, unsynced_cl.pods[0]["name"])
+    # assert app_started_hits, f"app did not start for new node after {layers_to_wait} layers"
 
     # Check if the new node has finished syncing
     hits_synced = q.get_done_syncing_msgs(init_session, unsynced_cl.pods[0]["name"])
@@ -66,9 +66,9 @@ def test_unsync_while_genesis(init_session, add_elk, setup_bootstrap, start_poet
 
     # validate no new blocks were received before being synced
     sync_ts = hits_synced[0].T
-    app_started_ts = app_started_hits[0].T
+    # app_started_ts = app_started_hits[0].T
 
-    hits_msg_block = q.get_block_creation_msgs(init_session, unsynced_cl.pods[0]["name"], from_ts=app_started_ts,
+    hits_msg_block = q.get_block_creation_msgs(init_session, unsynced_cl.pods[0]["name"], from_ts=None,
                                                to_ts=sync_ts)
 
     if hits_msg_block:
