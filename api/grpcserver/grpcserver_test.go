@@ -107,6 +107,7 @@ var (
 func init() {
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
+	block1.ATXID = globalAtx.ID()
 	block1.TxIDs = []types.TransactionID{globalTx.ID(), globalTx2.ID()}
 	block1.ActiveSet = &[]types.ATXID{globalAtx.ID(), globalAtx2.ID()}
 	txAPI.returnTx[globalTx.ID()] = globalTx
@@ -1036,7 +1037,7 @@ func TestMeshService(t *testing.T) {
 		{"MaxTransactionsPerSecond", func(t *testing.T) {
 			response, err := c.MaxTransactionsPerSecond(context.Background(), &pb.MaxTransactionsPerSecondRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(layerAvgSize*txsPerBlock/layerDurationSec), response.Maxtxpersecond.Value)
+			require.Equal(t, uint64(layerAvgSize*txsPerBlock/layerDurationSec), response.MaxTxsPerSecond.Value)
 		}},
 		{"AccountMeshDataQuery", func(t *testing.T) {
 			subtests := []struct {
@@ -1848,6 +1849,9 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	}, "return layer does not contain expected activation data")
 
 	resBlock := l.Blocks[0]
+
+	require.NotNil(t, resBlock.ActivationId)
+	require.NotNil(t, resBlock.SmesherId)
 
 	require.Equal(t, len(block1.TxIDs), len(resBlock.Transactions))
 	require.Equal(t, block1.ID().Bytes(), resBlock.Id)

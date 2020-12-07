@@ -1,5 +1,7 @@
 module github.com/spacemeshos/go-spacemesh
 
+replace github.com/spacemeshos/api/release/go => /Users/avive/dev/api/release/go
+
 require (
 	cloud.google.com/go v0.68.0 // indirect
 	cloud.google.com/go/storage v1.10.0
