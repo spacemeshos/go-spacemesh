@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+
 	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -116,8 +117,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.TIME.DefaultTimeoutLatency, "Default timeout to ntp query")
 	cmd.PersistentFlags().DurationVar(&config.TIME.RefreshNtpInterval, "refresh-ntp-interval",
 		config.TIME.RefreshNtpInterval, "Refresh intervals to ntp")
-	cmd.PersistentFlags().StringVar(&config.TIME.NTPServersFile,
-		"ntp-servers", config.TIME.NTPServersFile, "Load NTP servers URLs from file")
+	cmd.PersistentFlags().StringSliceVar(&config.TIME.NTPServers,
+		"ntp-servers", config.TIME.NTPServers, "Load NTP servers URLs")
 	cmd.PersistentFlags().IntVar(&config.P2P.MsgSizeLimit, "msg-size-limit",
 		config.P2P.MsgSizeLimit, "The message size limit in bytes for incoming messages")
 

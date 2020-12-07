@@ -2,15 +2,14 @@
 package timesync
 
 import (
-	"bufio"
 	"encoding/binary"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"net"
-	"os"
 	"sort"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/rand"
 
 	"github.com/spacemeshos/go-spacemesh/timesync/config"
 )
@@ -32,17 +31,6 @@ const (
 
 // DefaultServer is a list of relay on more than one server.
 var (
-	DefaultServers = []string{
-		"time-a-wwv.nist.gov",
-		"time-b-wwv.nist.gov",
-		"time-c-wwv.nist.gov",
-		"time.google.com",
-		"time1.google.com",
-		"time3.google.com",
-		"time4.google.com",
-		"time.asia.apple.com",
-		"time.americas.apple.com",
-	}
 	zeroDuration = time.Duration(0)
 	zeroTime     = time.Time{}
 	zeroNtp      = NtpPacket{}
@@ -166,39 +154,14 @@ func ntpTimeDrift() (time.Duration, error) {
 	res := make(sortableDurations, 0, config.TimeConfigValues.NtpQueries)
 	errors := make([]error, 0, config.TimeConfigValues.NtpQueries)
 
-	NTPServers := []string{}
-
-	if config.TimeConfigValues.NTPServersFile != "" {
-		file, err := os.Open(config.TimeConfigValues.NTPServersFile)
-		if err != nil {
-			return 0, fmt.Errorf("Unable to open NTP servers file: %s", err)
-		}
-
-		defer file.Close()
-
-		var lines []string
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			lines = append(lines, scanner.Text())
-		}
-
-		if scanner.Err() != nil {
-			return 0, fmt.Errorf("Unable to read NTP servers file: %v", scanner.Err())
-		}
-
-		NTPServers = lines
-	} else {
-		NTPServers = DefaultServers
-	}
-
-	sl := len(NTPServers) - 1
+	sl := len(config.TimeConfigValues.NTPServers) - 1
 	for i := 0; i < config.TimeConfigValues.NtpQueries; i++ {
 		rndsrv := rand.Intn(sl)
 		for queriedServers[rndsrv] {
 			rndsrv = rand.Intn(sl)
 		}
 		queriedServers[rndsrv] = true
-		dur, err := queryNtpServer(NTPServers[rndsrv])
+		dur, err := queryNtpServer(config.TimeConfigValues.NTPServers[rndsrv])
 		if err != nil {
 			errors = append(errors, err)
 			continue
