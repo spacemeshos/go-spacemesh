@@ -294,7 +294,7 @@ func (t *TxAPIMock) GetTransactions(txids []types.TransactionID) (txs []*types.T
 	return
 }
 
-func (t *TxAPIMock) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
+func (t *TxAPIMock) GetLayerStateRoot(types.LayerID) (types.Hash32, error) {
 	return stateRoot, nil
 }
 
@@ -429,7 +429,9 @@ func (m MempoolMock) GetTxIdsByAddress(addr types.Address) (ids []types.Transact
 }
 
 func launchServer(t *testing.T, services ...ServiceAPI) func() {
-	networkMock.Broadcast("", []byte{0x00})
+	err := networkMock.Broadcast("", []byte{0x00})
+	require.NoError(t, err)
+
 	grpcService := NewServerWithInterface(cfg.GrpcServerPort, "localhost")
 	jsonService := NewJSONHTTPServer(cfg.JSONServerPort, cfg.GrpcServerPort)
 
@@ -452,7 +454,7 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 
 	return func() {
 		require.NoError(t, jsonService.Close())
-		grpcService.Close()
+		_ = grpcService.Close()
 	}
 }
 
@@ -515,13 +517,13 @@ func TestNodeService(t *testing.T) {
 			// now try sending bad payloads
 			_, err = c.Echo(context.Background(), &pb.EchoRequest{Msg: nil})
 			require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
-			code := status.Code(err)
-			require.Equal(t, codes.InvalidArgument, code)
+			statusCode := status.Code(err)
+			require.Equal(t, codes.InvalidArgument, statusCode)
 
 			_, err = c.Echo(context.Background(), &pb.EchoRequest{})
 			require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
-			code = status.Code(err)
-			require.Equal(t, codes.InvalidArgument, code)
+			statusCode = status.Code(err)
+			require.Equal(t, codes.InvalidArgument, statusCode)
 		}},
 		{"Version", func(t *testing.T) {
 			// must set this manually as it's set up in main() when running
@@ -1488,7 +1490,7 @@ func TestMeshService(t *testing.T) {
 }
 
 func TestTransactionServiceSubmitUnsync(t *testing.T) {
-	require := require.New(t)
+	req := require.New(t)
 	syncer := &SyncerMock{}
 	grpcService := NewTransactionService(&networkMock, txAPI, mempoolMock, syncer)
 	shutDown := launchServer(t, grpcService)
@@ -1499,13 +1501,13 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
-	require.NoError(err)
+	req.NoError(err)
 
-	defer func() { require.NoError(conn.Close()) }()
+	defer func() { req.NoError(conn.Close()) }()
 	c := pb.NewTransactionServiceClient(conn)
 
 	serializedTx, err := types.InterfaceToBytes(globalTx)
-	require.NoError(err, "error serializing tx")
+	req.NoError(err, "error serializing tx")
 
 	// This time, we expect an error, since isSynced is false (by default)
 	// The node should not allow tx submission when not synced
@@ -1513,8 +1515,8 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 		context.Background(),
 		&pb.SubmitTransactionRequest{Transaction: serializedTx},
 	)
-	require.Error(err)
-	require.Nil(res)
+	req.Error(err)
+	req.Nil(res)
 
 	syncer.isSynced = true
 
@@ -1523,7 +1525,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 		context.Background(),
 		&pb.SubmitTransactionRequest{Transaction: serializedTx},
 	)
-	require.NoError(err)
+	req.NoError(err)
 }
 
 func TestTransactionService(t *testing.T) {
@@ -1744,6 +1746,7 @@ func TestTransactionService(t *testing.T) {
 
 				// Deserialize
 				tx, err := types.BytesToTransaction(data)
+				require.NotNil(t, tx, "expected transaction")
 				require.NoError(t, tx.CalcAndSetOrigin())
 				require.NoError(t, err, "error deserializing broadcast tx")
 
