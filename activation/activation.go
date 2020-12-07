@@ -90,25 +90,27 @@ type Config struct {
 // calculate active set size and providing relevant view as proof
 type Builder struct {
 	signer
-	conf         Config
-	accountLock  sync.RWMutex
-	nodeID       types.NodeID
-	db           atxDBProvider
-	net          broadcaster
-	mesh         meshProvider
-	tickProvider poetNumberOfTickProvider
-	nipstBuilder nipstBuilder
-	postProver   PostProverClient
-	challenge    *types.NIPSTChallenge
-	commitment   *types.PostProof
-	layerClock   layerClock
-	stop         chan struct{}
-	started      uint32
-	store        bytesStore
-	syncer       syncer
-	initStatus   int32
-	initDone     chan struct{}
-	log          log.Log
+	accountLock     sync.RWMutex
+	nodeID          types.NodeID
+	coinbaseAccount types.Address
+	goldenATXID     types.ATXID
+	layersPerEpoch  uint16
+	db              atxDBProvider
+	net             broadcaster
+	mesh            meshProvider
+	tickProvider    poetNumberOfTickProvider
+	nipstBuilder    nipstBuilder
+	postProver      PostProverClient
+	challenge       *types.NIPSTChallenge
+	commitment      *types.PostProof
+	layerClock      layerClock
+	stop            chan struct{}
+	started         uint32
+	store           bytesStore
+	syncer          syncer
+	initStatus      int32
+	initDone        chan struct{}
+	log             log.Log
 }
 
 type layerClock interface {
@@ -123,21 +125,23 @@ type syncer interface {
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, nipstBuilder nipstBuilder, postProver PostProverClient, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
 	return &Builder{
-		conf:         conf,
-		signer:       signer,
-		nodeID:       nodeID,
-		db:           db,
-		net:          net,
-		mesh:         mesh,
-		nipstBuilder: nipstBuilder,
-		postProver:   postProver,
-		layerClock:   layerClock,
-		stop:         make(chan struct{}),
-		syncer:       syncer,
-		store:        store,
-		initStatus:   InitIdle,
-		initDone:     make(chan struct{}),
-		log:          log,
+		signer:          signer,
+		nodeID:          nodeID,
+		coinbaseAccount: conf.CoinbaseAccount,
+		goldenATXID:     conf.GoldenATXID,
+		layersPerEpoch:  conf.LayersPerEpoch,
+		db:              db,
+		net:             net,
+		mesh:            mesh,
+		nipstBuilder:    nipstBuilder,
+		postProver:      postProver,
+		layerClock:      layerClock,
+		stop:            make(chan struct{}),
+		syncer:          syncer,
+		store:           store,
+		initStatus:      InitIdle,
+		initDone:        make(chan struct{}),
+		log:             log,
 	}
 }
 
@@ -217,17 +221,17 @@ func (b *Builder) buildNipstChallenge(currentLayer types.LayerID) error {
 			return fmt.Errorf("failed to get positioning ATX: %v", err)
 		}
 		challenge.EndTick = b.tickProvider.NumOfTicks()
-		challenge.PubLayerID = currentLayer.Add(b.conf.LayersPerEpoch)
-		challenge.PositioningATX = b.conf.GoldenATXID
+		challenge.PubLayerID = currentLayer.Add(b.layersPerEpoch)
+		challenge.PositioningATX = b.goldenATXID
 	} else {
 		challenge.PositioningATX = posAtx.ID()
-		challenge.PubLayerID = posAtx.PubLayerID.Add(b.conf.LayersPerEpoch)
+		challenge.PubLayerID = posAtx.PubLayerID.Add(b.layersPerEpoch)
 		challenge.StartTick = posAtx.EndTick
 		challenge.EndTick = posAtx.EndTick + b.tickProvider.NumOfTicks()
 	}
 	if prevAtx, err := b.GetPrevAtx(b.nodeID); err != nil {
 		challenge.CommitmentMerkleRoot = b.commitment.MerkleRoot
-		challenge.PrevATXID = b.conf.GoldenATXID
+		challenge.PrevATXID = b.goldenATXID
 	} else {
 		challenge.PrevATXID = prevAtx.ID()
 		challenge.Sequence = prevAtx.Sequence + 1
@@ -329,13 +333,13 @@ func (b *Builder) MiningStats() (int, uint64, string, string) {
 // the rewards for blocks made by this miner will go to this address
 func (b *Builder) SetCoinbaseAccount(rewardAddress types.Address) {
 	b.accountLock.Lock()
-	b.conf.CoinbaseAccount = rewardAddress
+	b.coinbaseAccount = rewardAddress
 	b.accountLock.Unlock()
 }
 
 func (b *Builder) getCoinbaseAccount() types.Address {
 	b.accountLock.RLock()
-	acc := b.conf.CoinbaseAccount
+	acc := b.coinbaseAccount
 	b.accountLock.RUnlock()
 	return acc
 }
@@ -420,7 +424,7 @@ func (b *Builder) PublishActivationTx() error {
 
 	var activeSetSize uint32
 	var commitment *types.PostProof
-	if b.challenge.PrevATXID == b.conf.GoldenATXID {
+	if b.challenge.PrevATXID == b.goldenATXID {
 		commitment = b.commitment
 	}
 

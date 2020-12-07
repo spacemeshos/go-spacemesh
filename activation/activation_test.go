@@ -691,7 +691,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 		NodeID:         b.nodeID,
 		Sequence:       2,
 		PrevATXID:      atx.ID(),
-		PubLayerID:     atx.PubLayerID.Add(b.conf.LayersPerEpoch),
+		PubLayerID:     atx.PubLayerID.Add(b.layersPerEpoch),
 		StartTick:      atx.EndTick,
 		EndTick:        b.tickProvider.NumOfTicks(), // todo: add tick provider (#827)
 		PositioningATX: atx.ID(),
