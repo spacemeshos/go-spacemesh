@@ -387,7 +387,7 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 	return buf.String()
 }
 
-var cfg = config.DefaultConfig()
+var cfg = config.DefaultTestConfig()
 
 type SyncerMock struct {
 	startCalled bool

@@ -7,13 +7,13 @@ import (
 
 const (
 	defaultStartGRPCServer         = false
-	defaultGRPCServerPort          = 19091
-	defaultNewGRPCServerPort       = 19092
+	defaultGRPCServerPort          = 9091
+	defaultNewGRPCServerPort       = 9092
 	defaultNewGRPCServerInterface  = ""
 	defaultStartJSONServer         = false
 	defaultStartNewJSONServer      = false
-	defaultJSONServerPort          = 19090
-	defaultNewJSONServerPort       = 19093
+	defaultJSONServerPort          = 9090
+	defaultNewJSONServerPort       = 9093
 	defaultStartDebugService       = false
 	defaultStartGatewayService     = false
 	defaultStartGlobalStateService = false
@@ -68,6 +68,16 @@ func DefaultConfig() Config {
 		StartSmesherService:     defaultStartSmesherService,
 		StartTransactionService: defaultStartTransactionService,
 	}
+}
+
+func DefaultTestConfig() Config {
+	testPortOffset := 10000
+	conf := DefaultConfig()
+	conf.GrpcServerPort += testPortOffset
+	conf.JSONServerPort += testPortOffset
+	conf.NewGrpcServerPort += testPortOffset
+	conf.NewJSONServerPort += testPortOffset
+	return conf
 }
 
 // ParseServicesList enables the requested services

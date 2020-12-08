@@ -11,7 +11,7 @@ func TestNewTable(t *testing.T) {
 
 	t.Skip() // should be more established before really running.
 
-	config := config.DefaultConfig()
+	config := config.DefaultTestConfig()
 
 	table, err := NewTable(1, "test_post", config.DataDir())
 	assert.NoError(t, err, "expected no error")

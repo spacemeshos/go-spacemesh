@@ -142,6 +142,14 @@ func DefaultConfig() Config {
 	}
 }
 
+func DefaultTestConfig() Config {
+	conf := DefaultConfig()
+	conf.BaseConfig = defaultTestConfig()
+	conf.P2P = p2pConfig.DefaultTestConfig()
+	conf.API = apiConfig.DefaultTestConfig()
+	return conf
+}
+
 // DefaultBaseConfig returns a default configuration for spacemesh
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
@@ -165,6 +173,12 @@ func defaultBaseConfig() BaseConfig {
 		AtxsPerBlock:        100,
 		TxsPerBlock:         100,
 	}
+}
+
+func defaultTestConfig() BaseConfig {
+	conf := defaultBaseConfig()
+	conf.MetricsPort += 10000
+	return conf
 }
 
 // LoadConfig load the config file

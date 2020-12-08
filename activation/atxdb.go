@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"math"
 	"sync"
 	"time"
 )
@@ -659,7 +660,7 @@ func (db *DB) addToEpochWeight(epochID types.EpochID, additionalWeight uint64) e
 	}
 	newWeight := weight + additionalWeight
 	if newWeight < weight {
-		newWeight -= newWeight + 1 // this under-flows newWeight so it holds the max possible value
+		newWeight = math.MaxUint64
 		db.log.Warning("newWeight for epoch %d overflows! previous weight=%d, additional weight=%d, setting newWeight=%d",
 			epochID, weight, additionalWeight, newWeight)
 	}

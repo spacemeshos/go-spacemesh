@@ -34,6 +34,7 @@ func (v *Validator) Validate(minerID signing.PublicKey, nipst *types.NIPST, spac
 		return fmt.Errorf("PoET proof chain invalid: %v", err)
 	}
 
+	// TODO: This validation should be in SyntacticallyValidateAtx and SpacePerUnit should not be in the postCfg.
 	if space < v.postCfg.SpacePerUnit {
 		return fmt.Errorf("PoST space (%d) is less than a single space unit (%d)", space, v.postCfg.SpacePerUnit)
 	}

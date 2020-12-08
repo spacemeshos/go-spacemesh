@@ -596,7 +596,7 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 }
 
 func getConfig() config.Config {
-	defaultConfig := config.DefaultConfig()
+	defaultConfig := config.DefaultTestConfig()
 	defaultConfig.GrpcServerPort = randPort()
 	defaultConfig.JSONServerPort = randPort()
 	return defaultConfig
@@ -615,7 +615,7 @@ func randPort() int {
 
 func launchServer(t *testing.T) func() {
 	networkMock.Broadcast("", []byte{0x00})
-	defaultConfig := config2.DefaultConfig()
+	defaultConfig := config2.DefaultTestConfig()
 	defaultConfig.API = cfg
 	grpcService := NewGrpcService(cfg.GrpcServerPort, &networkMock, ap, txAPI, txMempool, &mining, &oracle, &genTime, PostMock{}, layerDuration, &SyncerMock{}, &defaultConfig, nil)
 	jsonService := NewJSONHTTPServer(cfg.JSONServerPort, cfg.GrpcServerPort)
