@@ -29,6 +29,7 @@ def setup_mul_network(init_session, add_elk, add_curl, setup_bootstrap, start_po
     network_deployment = NetworkInfo(namespace=init_session,
                                      bs_deployment_info=setup_bootstrap,
                                      cl_deployment_info=setup_mul_clients)
-
-    wait_genesis(GENESIS_TIME, testconfig['genesis_delta'])
+    print("genesis", GENESIS_TIME)
+    print("GENESIS_TIME - timedelta(seconds=int(add_elk))", GENESIS_TIME - timedelta(seconds=int(add_elk)))
+    wait_genesis(GENESIS_TIME + timedelta(seconds=int(add_elk)), testconfig['genesis_delta'] + int(add_elk))
     return network_deployment

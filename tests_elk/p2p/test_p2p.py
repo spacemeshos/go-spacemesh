@@ -101,9 +101,6 @@ def add_clients(setup_bootstrap, setup_clients):
 
 def test_bootstrap(init_session, add_elk, setup_bootstrap):
     print("running test_bootstrap")
-    tts = 75
-    msg = f"sleep {tts} secs to enable ES server to start"
-    sleep_print_backwards(tts, msg)
     sleep_print_backwards(10 * timeout_factor, "wait for the bootstrap logs to be available in ElasticSearch")
     bs_id = query_bootstrap_es(testconfig['namespace'], setup_bootstrap.pods[0]['name'])
     ass_err = f"setup_bootstrap.pods[0]['key'] = {setup_bootstrap.pods[0]['key']}, bootstrap returned ID: {bs_id}"

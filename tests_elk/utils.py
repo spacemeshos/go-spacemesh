@@ -12,7 +12,7 @@ import time
 import tests_elk.config as conf
 import tests_elk.deployment as deployment
 from tests_elk.misc import ContainerSpec, CoreV1ApiClient
-from tests_elk.statefulset import create_statefulset
+import tests_elk.statefulset as statefulset
 import tests_elk.queries as q
 
 
@@ -191,7 +191,7 @@ def choose_k8s_object_create(config, deployment_file, statefulset_file):
     elif dep_type == 'statefulset':
         # StatefulSets are intended to be used with stateful applications and distributed systems.
         # Pods in a StatefulSet have a unique ordinal index and a stable network identity.
-        return statefulset_file, create_statefulset
+        return statefulset_file, statefulset.create_statefulset
     else:
         raise Exception("Unknown deployment type in configuration. Please check your config.yaml")
 
@@ -206,6 +206,14 @@ def wait_genesis(genesis_time, genesis_delta):
     else:
         print('sleep for {0} sec until genesis time'.format(delta_from_genesis))
         time.sleep(delta_from_genesis)
+
+
+def wait_ready_minimal_elk_cluster(namespace, es_dep_name="elasticsearch-master", logstash_ss_name="logstash"):
+    print("waiting for ES to be ready")
+    es_sleep_time = statefulset.wait_to_statefulset_to_be_ready(es_dep_name, namespace)
+    print("waiting for logstash to be ready")
+    logstash_sleep_time = statefulset.wait_to_statefulset_to_be_ready(logstash_ss_name, namespace)
+    return logstash_sleep_time + es_sleep_time
 
 
 def exec_wait(cmd, retry=1, interval=1):
