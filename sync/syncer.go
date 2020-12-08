@@ -339,16 +339,10 @@ func (s *Syncer) synchronise() {
 		s.Log.Info("cannot sync because another sync is in progress")
 		return
 	}
-
-	if len(s.net.GetPeers()) == 0 {
-		s.Log.Warning("no peers to sync from")
-		return
-	}
-
 	// release synchronise lock
 	defer s.syncLock.Unlock()
-	curr := s.GetCurrentLayer()
 
+	curr := s.GetCurrentLayer()
 	// node is synced and blocks from current layer have already been validated
 	if curr == s.ProcessedLayer() {
 		s.Info("node is fully synced")
@@ -359,10 +353,12 @@ func (s *Syncer) synchronise() {
 
 	// we have all the data of the prev layers so we can simply validate
 	if s.weaklySynced(curr) {
-		s.Log.Info("start syncing epoch atxs")
-		err := s.fetcher.GetEpochATXs(curr.GetEpoch()) //syncEpochActivations(curr.GetEpoch())
-		if err != nil {
-			s.With().Error("cannot fetch epoch atxs ", curr, log.Err(err))
+		if len(s.net.GetPeers()) != 0 {
+			s.Log.Info("start syncing epoch atxs")
+			err := s.fetcher.GetEpochATXs(curr.GetEpoch()) //syncEpochActivations(curr.GetEpoch())
+			if err != nil {
+				s.With().Error("cannot fetch epoch atxs ", curr, log.Err(err))
+			}
 		}
 		s.Log.Info("done syncing epoch atxs")
 		s.handleWeaklySynced()
