@@ -100,6 +100,12 @@ func (l layerDBMock) Get() []types.BlockID {
 type mockFetcher struct {
 }
 
+func (m mockFetcher) Stop() {
+}
+
+func (m mockFetcher) Start() {
+}
+
 func (m mockFetcher) AddDB(hint fetch.Hint, db database.Store) {
 
 }
@@ -132,7 +138,7 @@ func NewMockLogic(net *mockNet, layers layerDB, blocksDB gossipBlocks, blocks bl
 		fetcher:              fetcher,
 		net:                  net,
 		layerHashResults:     make(map[types.LayerID]map[p2ppeers.Peer]*types.Hash32),
-		blockHashResults:     make(map[types.LayerID]int),
+		blockHashResults:     make(map[types.LayerID][]bool),
 		layerResultsChannels: make(map[types.LayerID][]chan LayerPromiseResult),
 		atxs:                 atxs,
 		blockHandler:         blocks,

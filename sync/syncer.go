@@ -340,6 +340,11 @@ func (s *Syncer) synchronise() {
 		return
 	}
 
+	if len(s.net.GetPeers()) == 0 {
+		s.Log.Warning("no peers to sync from")
+		return
+	}
+
 	// release synchronise lock
 	defer s.syncLock.Unlock()
 	curr := s.GetCurrentLayer()

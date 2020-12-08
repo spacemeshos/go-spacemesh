@@ -198,7 +198,7 @@ func SyncMockFactoryManClock(number int, conf Configuration, name string, dbType
 			msh:    msh,
 			blocks: make(map[types.Hash32]*types.Block),
 		}
-		layerFetcher := layerfetcher.NewLogic(layerfetcher.Config{3}, store, store, store, store, store, net, f, msh, l)
+		layerFetcher := layerfetcher.NewLogic(layerfetcher.Config{RequestTimeout: 3}, store, store, store, store, store, net, f, msh, l)
 		poet := poetDb()
 		layerFetcher.AddDBs(msh.Blocks(), atxDB, msh.Transactions(), nil)
 
