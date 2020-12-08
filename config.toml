@@ -55,6 +55,7 @@ json-port = 9093
 max-allowed-time-drift = "10s"
 ntp-queries = 5
 default-timeout-latency = "10s"
+ntp-servers = ["time1.cloud.tencent.com", "0.cn.pool.ntp.org"]
 
 # Hare Config
 [hare]
