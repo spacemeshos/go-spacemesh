@@ -6,7 +6,7 @@ script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
 
 genesis_delta: 180
 single_pod_ready_time_out: 60
-deployment_ready_time_out: 180
+deployment_ready_time_out: 300
 config_path: '../config.toml'
 
 bootstrap:
@@ -40,7 +40,7 @@ bootstrap:
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-harness'
-  replicas: 150
+  replicas: 149
   resources:
     requests:
       memory: '2048M'
