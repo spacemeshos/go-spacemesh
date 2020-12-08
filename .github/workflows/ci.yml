@@ -216,15 +216,14 @@ jobs:
   systemtest-dummy:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
-    needs: systemtest-latenodes
-    runs-on: ci-stage2
+    needs: ci-stage2
+    runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
       - name: checkout
         uses: actions/checkout@v2
       - name: dummy test
         run: make dockertest-test-dummy
-
   systemtest-latenodes-elk:
     # only run on push, not on pull_request
     if: always() && github.event_name == 'push'
@@ -247,6 +246,17 @@ jobs:
         uses: actions/checkout@v2
       - name: blocks add node test
         run: make dockertest-blocks-add-node-elk
+  systemtest-mining-elk:
+    # only run on push, not on pull_request
+    if: always() && github.event_name == 'push'
+    needs: systemtest-dummy
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: mining system tests
+        run: make dockertest-mining-elk
   systemtest-blocks-remove-node-elk:
     # only run on push, not on pull_request
     if: always() && github.event_name == 'push'
@@ -261,7 +271,7 @@ jobs:
   systemtest-p2p-elk:
     # only run on push, not on pull_request
     if: always() && github.event_name == 'push'
-    needs: systemtest-dummy
+    needs: systemtest-blocks-add-node-elk
     runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
@@ -280,17 +290,6 @@ jobs:
         uses: actions/checkout@v2
       - name: hare system tests
         run: make dockertest-hare-elk
-  systemtest-mining-elk:
-    # only run on push, not on pull_request
-    if: always() && github.event_name == 'push'
-    needs: systemtest-blocks-add-node-elk
-    runs-on: ubuntu-latest
-    timeout-minutes: 80
-    steps:
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: mining system tests
-        run: make dockertest-mining-elk
   systemtest-sync-elk:
     # only run on push, not on pull_request
     if: always() && github.event_name == 'push'
