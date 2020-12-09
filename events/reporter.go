@@ -118,7 +118,7 @@ func ReportRewardReceived(r Reward) {
 // ReportNewBlock reports a new block
 func ReportNewBlock(blk *types.Block) {
 	Publish(NewBlock{
-		ID:    blk.ID().String(),
+		ID:    blk.ID().ShortString(),
 		Atx:   blk.ATXID.ShortString(),
 		Layer: uint64(blk.LayerIndex),
 	})
@@ -127,7 +127,7 @@ func ReportNewBlock(blk *types.Block) {
 // ReportValidBlock reports a valid block
 func ReportValidBlock(blockID types.BlockID, valid bool) {
 	Publish(ValidBlock{
-		ID:    blockID.String(),
+		ID:    blockID.ShortString(),
 		Valid: valid,
 	})
 }

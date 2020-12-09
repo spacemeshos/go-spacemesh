@@ -212,7 +212,7 @@ func (s *Set) String() string {
 	// TODO: should improve
 	b := new(bytes.Buffer)
 	for v := range s.values {
-		fmt.Fprintf(b, "%v,", v.String())
+		fmt.Fprintf(b, "%v,", v.ShortString())
 	}
 	if b.Len() >= 1 {
 		return b.String()[:b.Len()-1]

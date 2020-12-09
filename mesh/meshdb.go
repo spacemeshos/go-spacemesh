@@ -169,7 +169,7 @@ func (m *DB) LayerBlocks(index types.LayerID) ([]*types.Block, error) {
 	for _, k := range ids {
 		block, err := m.GetBlock(k)
 		if err != nil {
-			return nil, fmt.Errorf("could not retrieve block %s %s", k.String(), err)
+			return nil, fmt.Errorf("could not retrieve block %s %s", k.ShortString(), err)
 		}
 		blocks = append(blocks, block)
 	}

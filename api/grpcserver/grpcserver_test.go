@@ -1513,7 +1513,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 		context.Background(),
 		&pb.SubmitTransactionRequest{Transaction: serializedTx},
 	)
-	require.Error(err)
+	require.EqualError(err, "rpc error: code = FailedPrecondition desc = Cannot submit transaction, node is not in sync yet, try again later")
 	require.Nil(res)
 
 	syncer.isSynced = true

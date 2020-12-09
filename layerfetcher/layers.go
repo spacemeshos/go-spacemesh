@@ -386,8 +386,8 @@ func (l *Logic) GetAtxs(IDs []types.ATXID) error {
 // or validated
 func (l *Logic) GetBlocks(IDs []types.BlockID) error {
 	hashes := make([]types.Hash32, 0, len(IDs))
-	for _, atxID := range IDs {
-		hashes = append(hashes, atxID.AsHash32())
+	for _, blockID := range IDs {
+		hashes = append(hashes, blockID.AsHash32())
 	}
 	results := l.fetcher.GetHashes(hashes, fetch.Hint(BlockDB), true)
 	for hash, resC := range results {

@@ -445,7 +445,7 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 			if err != nil {
 				if ex.Layer() == 0 {
 					//todo: fix this so that zero votes are ok
-					log.Warning("block %v int layer %v voted on zero layer", blk.ID().String(), blk.Layer())
+					log.Warning("block %v int layer %v voted on zero layer", blk.ID().ShortString(), blk.Layer())
 					continue
 				}
 				ni.logger.Panic("could not retrieve layer block ids %v error %v", ex.Layer(), err)

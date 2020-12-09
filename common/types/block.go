@@ -17,14 +17,19 @@ import (
 // BlockID is a 20-byte sha256 sum of the serialized block, used to identify it.
 type BlockID Hash20
 
-// String returns a short prefix of the hex representation of the ID.
+// String returns the hex representation of the ID.
 func (id BlockID) String() string {
-	return id.AsHash32().ShortString()
+	return id.AsHash20().String()
+}
+
+// ShortString returns a short prefix of the hex representation of the ID.
+func (id BlockID) ShortString() string {
+	return id.AsHash20().ShortString()
 }
 
 // Field returns a log field. Implements the LoggableField interface.
 func (id BlockID) Field() log.Field {
-	return log.String("block_id", id.AsHash32().ShortString())
+	return log.String("block_id", id.ShortString())
 }
 
 // Compare returns true if other (the given BlockID) is less than this BlockID, by lexicographic comparison.
@@ -35,6 +40,11 @@ func (id BlockID) Compare(other BlockID) bool {
 // AsHash32 returns a Hash32 whose first 20 bytes are the bytes of this BlockID, it is right-padded with zeros.
 func (id BlockID) AsHash32() Hash32 {
 	return Hash20(id).ToHash32()
+}
+
+// AsHash20 returns this BlockID as a Hash20.
+func (id BlockID) AsHash20() Hash20 {
+	return Hash20(id)
 }
 
 var layersPerEpoch int32
@@ -228,7 +238,7 @@ func (b Block) Hash32() Hash32 {
 
 // ShortString returns a the first 5 characters of the ID, for logging purposes.
 func (b Block) ShortString() string {
-	return b.id.AsHash32().ShortString()
+	return b.id.ShortString()
 }
 
 // MinerID returns this block's miner's Edwards public key.
