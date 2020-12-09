@@ -1,6 +1,7 @@
+cat := $(if $(filter $(OS),Windows_NT),type,cat)
+
 BINARY := go-spacemesh
-VERSION = $(shell cat version.txt)
-VERSION_WIN = $(<version.txt)
+VERSION = $(shell $(cat) verson.txt)
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
 BIN_DIR = ./build
