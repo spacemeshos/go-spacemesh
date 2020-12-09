@@ -33,7 +33,7 @@ jobs:
         run: go build -ldflags “-X main.version=1.0 -X main.commit=5f1237a7ee06884d55712faf04655b064fe49225 -X main.branch=HEAD” -o ./build/go-spacemesh.exe
       - if: matrix.os == 'windows-latest'
         name: See build directory content
-        run: dir .
+        run: dir ./build
       - if: matrix.os == 'windows-latest'
         name: See go path
         run: echo %PATH%
