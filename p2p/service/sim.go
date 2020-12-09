@@ -2,7 +2,6 @@ package service
 
 import (
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"io"
 	"net"
 	"sync"
@@ -294,11 +293,9 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 		if mychan != nil {
 			mychan <- simGossipMessage{sn.Info.PublicKey(), DataBytes{Payload: payload}, nil}
 		}
-		log.Info("sending message %v", types.CalcHash32(payload).ShortString())
 		for _, c := range sendees {
 			c <- simGossipMessage{sn.Info.PublicKey(), DataBytes{Payload: payload}, nil}
 		}
-		log.Info("sent message %v", types.CalcHash32(payload).ShortString())
 
 		log.Debug("%v >> All ( Gossip ) (%v)", sn.Info.PublicKey(), payload)
 	}()

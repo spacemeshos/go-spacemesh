@@ -98,10 +98,7 @@ func (bh *BlockHandler) HandleBlock(data service.GossipMessage, sync service.Fet
 		bh.Error("%v", err)
 		return
 	}
-	h := types.CalcHash32(data.Bytes()).ShortString()
-	bh.Log.Info("releasing block to gossip %v", h)
 	data.ReportValidation(NewBlockProtocol)
-	bh.Log.Info("released block to gossip %v", h)
 }
 
 // HandleBlockData defines a method to handle blocks either from gossip of sync
