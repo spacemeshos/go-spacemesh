@@ -15,8 +15,7 @@ else
        INTERACTIVE := $(shell [ -t 0 ] && echo 1)
 endif
 
-$(info	VERSION is $(shell type version.txt))
-$(info	VERSION is $(shell type ./version.txt))
+$(info	VERSION is $(file < version.txt))
 $(info	MAKE is $(shell make -v))
 
 # Read branch from git if running make manually
