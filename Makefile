@@ -24,7 +24,7 @@ endif
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
 # Setup the -ldflags option to pass vars defined here to app vars
-LDFLAGS = -ldflags "-X main.version=${GO_SPACEMESH_VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
+LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 
 PKGS = $(shell go list ./...)
 
