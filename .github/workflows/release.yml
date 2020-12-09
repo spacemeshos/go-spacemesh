@@ -35,5 +35,5 @@ jobs:
         name: See build directory content
         run: dir ./build
       - if: matrix.os == 'windows-latest'
-        name: See go path
-        run: echo %PATH%
+        name: output
+        run: shell pwd
