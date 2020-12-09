@@ -1,11 +1,5 @@
 name: Publish Release
 
-# on:
-#   push:
-#     branches:
-#       - master
-#   workflow_dispatch:
-
 on:
   push:
     branches-ignore:
@@ -38,3 +32,6 @@ jobs:
         run: make install
       - name: Build go-spacemesh
         run: make build
+      - if: matrix.os == 'windows-latest'
+        name: See build directory content
+        run: dir ./build
