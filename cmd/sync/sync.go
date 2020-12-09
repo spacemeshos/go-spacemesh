@@ -34,7 +34,7 @@ var cmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Starting sync")
 		syncApp := newSyncApp()
-		log.Info("Right after NewSyncApp %v", syncApp.Config.DataDir())
+		log.With().Info("Initializing NewSyncApp", log.String("DataDir", syncApp.Config.DataDir()))
 		defer syncApp.Cleanup()
 		syncApp.Initialize(cmd)
 		syncApp.start(cmd, args)
@@ -113,7 +113,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		LayersPerEpoch:  uint16(app.Config.LayersPerEpoch),
 	}
 	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
-	lg.Info("local db path: %v layers per epoch %v", path, app.Config.LayersPerEpoch)
+	lg.Info("local db path: %v layers per epoch: %v", path, app.Config.LayersPerEpoch)
 
 	if remote {
 		if err := getData(app.Config.DataDir(), version, lg); err != nil {

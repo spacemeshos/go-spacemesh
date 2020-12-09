@@ -4,7 +4,7 @@ import (
 	"github.com/spacemeshos/amcl"
 	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/api"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/collector"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -159,11 +159,19 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 
 // ActivateGrpcServer starts a grpc server on the provided node
 func ActivateGrpcServer(smApp *SpacemeshApp) {
-	smApp.Config.API.StartGrpcServer = true
+	// Activate the API services used by app_test
+	smApp.Config.API.StartGatewayService = true
+	smApp.Config.API.StartGlobalStateService = true
+	smApp.Config.API.StartTransactionService = true
 	smApp.Config.API.GrpcServerPort = 9094
-	layerDuration := smApp.Config.LayerDurationSec
-	smApp.grpcAPIService = api.NewGrpcService(smApp.Config.API.GrpcServerPort, smApp.P2P, smApp.state, smApp.mesh, smApp.txPool, smApp.atxBuilder, smApp.oracle, smApp.clock, nil, layerDuration, nil, nil, nil)
-	smApp.grpcAPIService.StartService()
+	smApp.grpcAPIService = grpcserver.NewServerWithInterface(smApp.Config.API.GrpcServerPort, smApp.Config.API.GrpcServerInterface)
+	smApp.gatewaySvc = grpcserver.NewGatewayService(smApp.P2P)
+	smApp.globalstateSvc = grpcserver.NewGlobalStateService(smApp.mesh, smApp.txPool)
+	smApp.txService = grpcserver.NewTransactionService(smApp.P2P, smApp.mesh, smApp.txPool, smApp.syncer)
+	smApp.gatewaySvc.RegisterService(smApp.grpcAPIService)
+	smApp.globalstateSvc.RegisterService(smApp.grpcAPIService)
+	smApp.txService.RegisterService(smApp.grpcAPIService)
+	smApp.grpcAPIService.Start()
 }
 
 // GracefulShutdown stops the current services running in apps
@@ -253,7 +261,9 @@ func StartMultiNode(numOfInstances, layerAvgSize int, runTillLayer uint32, dbPat
 		log.Error("cannot parse genesis time %v", err)
 	}
 	pubsubAddr := "tcp://localhost:55666"
-	events.InitializeEventReporter(pubsubAddr)
+	if err := events.InitializeEventReporter(pubsubAddr); err != nil {
+		log.With().Error("error initializing event reporter", log.Err(err))
+	}
 	clock := NewManualClock(gTime)
 
 	apps := make([]*SpacemeshApp, 0, numOfInstances)
@@ -351,6 +361,7 @@ loop:
 			time.Sleep(200 * time.Millisecond)
 		}
 	}
+	events.CloseEventReporter()
 	events.CloseEventPubSub()
 	collect.Stop()
 }

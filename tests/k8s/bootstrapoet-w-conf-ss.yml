@@ -23,7 +23,7 @@ spec:
       - name: bootstrap
         image: spacemeshos/go-spacemesh:develop
         imagePullPolicy: Always
-        args: ['--config', '/etc/config/config.toml', '--grpc-server', '--test-mode', '--coinbase', '0x1234', '--metrics', '--metrics-port', '2020', '--pprof-server', '--poet-server', '127.0.0.1:80']
+        args: ['--config', '/etc/config/config.toml', '--grpc', 'gateway,globalstate,transaction', '--test-mode', '--coinbase', '0x1234', '--metrics', '--metrics-port', '2020', '--pprof-server', '--poet-server', '127.0.0.1:80']
         resources:
           requests:
             memory: "512M"
@@ -32,13 +32,13 @@ spec:
             memory: "2048M"
             cpu: "1"
         ports:
-        - containerPort: 19091
+        - containerPort: 19092
         - containerPort: 9999
         volumeMounts:
         - name: bootstrap-vol
           mountPath: /usr/share/spacemesh
       - name: poet
-        image: spacemeshos/poet:73488d6
+        image: spacemeshos/poet:ef8f28a
         imagePullPolicy: Always
         args: ['--rpclisten', '0.0.0.0:50002', '--restlisten', '0.0.0.0:80', "--n", "19"]
         resources:

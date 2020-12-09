@@ -46,8 +46,8 @@ bootnodes = [] # example : spacemesh://j7qWfWaJRVp25ZsnCu9rJ4PmhigZBtesB4YmQHqqP
 [api]
 grpc-server = true
 json-server = true
-grpc-port = 19091
-json-port = 19090
+grpc-port = 19092
+json-port = 19093
 
 # Time sync NTP Config
 [time]

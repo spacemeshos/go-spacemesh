@@ -82,8 +82,13 @@ def set_docker_images():
         testconfig['bootstrap']['image'] = docker_image
         testconfig['client']['image'] = docker_image
         if 'clientv2' in testconfig.keys():
-            print("Set docker clientv2 images to: {0}".format(docker_image))
-            testconfig['clientv2']['image'] = docker_image
+            print(testconfig['clientv2'])
+            # some should not be replaced!
+            if testconfig['clientv2'].get('noreplace', False):
+                print("not replacing clientv2 docker image since replace is set to False")
+            else:
+                print("Set docker clientv2 images to: {0}".format(docker_image))
+                testconfig['clientv2']['image'] = docker_image
         else:
             print("no other config")
             print(testconfig.keys())
@@ -223,7 +228,7 @@ def start_poet(init_session, add_curl, setup_bootstrap):
         raise Exception("Failed to read container logs in {0}".format("poet"))
 
     print("Starting PoET")
-    out = api_call(bs_pod['pod_ip'], '{ "gatewayAddresses": ["127.0.0.1:19091"] }', 'v1/start', namespace, "80")
+    out = api_call(bs_pod['pod_ip'], '{ "gatewayAddresses": ["127.0.0.1:19092"] }', 'v1/start', namespace, "80")
     assert out == "{}", "PoET start returned error {0}".format(out)
     print("PoET started")
 

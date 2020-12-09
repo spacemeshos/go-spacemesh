@@ -32,6 +32,3 @@ def setup_mul_network(init_session, add_curl, setup_bootstrap, start_poet, setup
 
     wait_genesis(GENESIS_TIME, testconfig['genesis_delta'])
     return network_deployment
-
-
-

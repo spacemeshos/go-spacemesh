@@ -25,7 +25,7 @@ require (
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/fixed v0.0.0-20200815212823-62bc0ef99f93
 	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82
-	github.com/spacemeshos/poet v0.1.0
+	github.com/spacemeshos/poet v0.1.1-0.20201013202053-99eed195dc2d
 	github.com/spacemeshos/post v0.0.0-20200707150818-013318bab6f4
 	github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9
 	github.com/spf13/afero v1.2.0 // indirect
@@ -42,7 +42,6 @@ require (
 	google.golang.org/api v0.32.0
 	google.golang.org/genproto v0.0.0-20201007142714-5c0e72c5e71e
 	google.golang.org/grpc v1.32.0
-	google.golang.org/protobuf v1.25.0
 	gopkg.in/yaml.v2 v2.3.0 // indirect
 	nanomsg.org/go-mangos v1.4.0
 )
