@@ -299,9 +299,8 @@ def test_many_gossip_sim(setup_clients, add_elk, add_curl):
     # if msg is valid we should see the message at each node msg * pods(nodes)
     total_expected_gossip = prev_num_of_msg + test_messages * pods_num
 
-    send_msgs(setup_clients, api, gossip_message_query_fields, total_expected_gossip, num_of_msg=test_messages)
-    print("#@! sleeping for 400 secs")
-    time.sleep(400)
+    send_msgs(setup_clients, api, gossip_message_query_fields, total_expected_gossip, num_of_msg=test_messages,
+              prop_sleep_time=40)
 
 
 def test_broadcast_unknown_protocol(setup_bootstrap, add_elk, setup_clients, add_curl):
