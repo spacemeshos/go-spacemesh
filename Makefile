@@ -1,11 +1,10 @@
 BINARY := go-spacemesh
 VERSION = $(shell cat version.txt)
+VERSION_WIN = $(<version.txt)
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
-CURR_DIR = $(shell pwd)
-CURR_DIR_WIN = $(shell cd)
-BIN_DIR = $(CURR_DIR)/build
-BIN_DIR_WIN = $(CURR_DIR_WIN)/build
+BIN_DIR = ./build
+BIN_DIR_WIN = ./build
 export GO111MODULE = on
 
 # These commands cause problems on Windows
