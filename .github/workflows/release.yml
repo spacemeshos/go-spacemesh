@@ -23,7 +23,7 @@ jobs:
           go-version: '1.14.13' 
       - if: matrix.os == 'windows-latest'
         name: test
-        run: type ./version.txt
+        run: type version.txt
       - if: matrix.os == 'windows-latest'
         name: Install make in windows
         uses: crazy-max/ghaction-chocolatey@v1
