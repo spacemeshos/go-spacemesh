@@ -23,9 +23,7 @@ jobs:
         with:
           go-version: '1.14.13' 
       - name: Set GOPATH
-        run: |
-          echo "##[set-env name=GOPATH;]$(dirname $GITHUB_WORKSPACE)"
-          echo "##[add-path]$(dirname $GITHUB_WORKSPACE)/bin"
+        run: export PATH=$PATH:$(go env GOPATH)/bin
         shell: bash
       - if: matrix.os == 'windows-latest'
         name: Install make in windows
@@ -35,7 +33,9 @@ jobs:
       - name: Setup Go environment
         run: make install
       - name: Build go-spacemesh
-        run: make build
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          make build
       - if: matrix.os == 'windows-latest'
         name: See build directory content
         run: dir .
