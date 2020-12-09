@@ -28,6 +28,13 @@ jobs:
           args: install make
       - name: Setup Go environment
         run: make install
+      - name: Read version.txt
+        id: version
+        uses: juliangruber/read-file-action@v1
+        with:
+          path: ./version.txt
+      - name: Echo package.json
+        run: echo ${{ steps.package.outputs.content }}
       - if: matrix.os == 'windows-latest'
         name: Build go-spacemesh
         run: make build
