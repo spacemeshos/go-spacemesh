@@ -15,7 +15,7 @@ else
        INTERACTIVE := $(shell [ -t 0 ] && echo 1)
 endif
 
-ifndef VERSION
+ifdef GO_SPACEMESH_VERSION
 	VERSION=GO_SPACEMESH_VERSION
 endif
 
