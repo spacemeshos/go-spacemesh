@@ -209,10 +209,20 @@ def wait_genesis(genesis_time, genesis_delta, offset=0):
 
 
 def wait_ready_minimal_elk_cluster(namespace, es_dep_name="elasticsearch-master", logstash_ss_name="logstash"):
-    print("waiting for ES to be ready")
-    es_sleep_time = statefulset.wait_to_statefulset_to_be_ready(es_dep_name, namespace, time_out=120)
-    print("waiting for logstash to be ready")
-    logstash_sleep_time = statefulset.wait_to_statefulset_to_be_ready(logstash_ss_name, namespace, time_out=120)
+    try:
+        print("waiting for ES to be ready")
+        es_sleep_time = statefulset.wait_to_statefulset_to_be_ready(es_dep_name, namespace, time_out=120)
+    except Exception as e:
+        print(f"got an exception while waiting for ES to be ready: {e}")
+        return
+
+    try:
+        print("waiting for logstash to be ready")
+        logstash_sleep_time = statefulset.wait_to_statefulset_to_be_ready(logstash_ss_name, namespace, time_out=120)
+    except Exception as e:
+        print(f"got an exception while waiting for Logstash to be ready: {e}")
+        return
+
     return logstash_sleep_time + es_sleep_time
 
 
