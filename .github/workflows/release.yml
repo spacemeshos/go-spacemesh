@@ -27,8 +27,7 @@ jobs:
         uses: crazy-max/ghaction-chocolatey@v1
         with:
           args: install make
-      - if: matrix.os == 'macos-latest' || matrix.os == 'ubuntu-latest'
-        name: Setup Go environment
+      - name: Setup Go environment
         run: make install
       - name: Build go-spacemesh
         run: make build
