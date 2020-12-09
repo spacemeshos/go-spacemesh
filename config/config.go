@@ -142,6 +142,7 @@ func DefaultConfig() Config {
 	}
 }
 
+// DefaultTestConfig returns the default config for tests.
 func DefaultTestConfig() Config {
 	conf := DefaultConfig()
 	conf.BaseConfig = defaultTestConfig()
