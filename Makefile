@@ -15,14 +15,18 @@ else
        INTERACTIVE := $(shell [ -t 0 ] && echo 1)
 endif
 
-$(info	${GO_SPACEMESH_VERSION})
+ifndef VERSION
+	VERSION=GO_SPACEMESH_VERSION
+endif
+
+$(info	${VERSION})
 
 # Read branch from git if running make manually
 # Also allows BRANCH to be manually set
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
 # Setup the -ldflags option to pass vars defined here to app vars
-LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
+LDFLAGS = -ldflags "-X main.version=${GO_SPACEMESH_VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 
 PKGS = $(shell go list ./...)
 
