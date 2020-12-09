@@ -1,5 +1,6 @@
 BINARY := go-spacemesh
-VERSION := $(shell type version.txt) #$(shell cat version.txt)
+#VERSION = $(shell cat version.txt)
+VERSION := $(file < version.txt)
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
 BIN_DIR = ./build
