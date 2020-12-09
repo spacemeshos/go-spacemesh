@@ -765,6 +765,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// Force gossip to always listen, even when not synced
 		app.Config.AlwaysListen = true
 
+		app.Config.GenesisTime = time.Now().Add(20 * time.Second).Format(time.RFC3339)
+
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
