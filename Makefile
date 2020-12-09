@@ -1,5 +1,5 @@
 BINARY := go-spacemesh
-VERSION = v0.0.0
+VERSION_GO_SPACEMESH := 10ed53bba0b631f1237e9f82f19c6b68d06a2fab
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
 BIN_DIR = ./build
@@ -19,7 +19,7 @@ endif
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
 # Setup the -ldflags option to pass vars defined here to app vars
-LDFLAGS = -ldflags "-X main.version=${COMMIT} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
+LDFLAGS = -ldflags "-X main.version=${VERSION_GO_SPACEMESH} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 
 PKGS = $(shell go list ./...)
 
