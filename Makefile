@@ -61,9 +61,9 @@ endif
 
 build:
 ifeq ($(OS),Windows_NT)
-	go build -race ${LDFLAGS} -o $(BIN_DIR_WIN)/$(BINARY).exe
+	go build ${LDFLAGS} -o $(BIN_DIR_WIN)/$(BINARY).exe
 else
-	go build -race ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)
+	go build ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)
 endif
 .PHONY: build
 
@@ -134,17 +134,17 @@ arm6:
 
 
 test:
-	ulimit -n 9999; go test -race -timeout 0 -p 1 ./...
+	ulimit -n 9999; go test -timeout 0 -p 1 ./...
 .PHONY: test
 
 
 test-no-app-test:
-	ulimit -n 9999; go test -race -v -timeout 0 -p 1 -tags exclude_app_test ./...
+	ulimit -n 9999; go test -v -timeout 0 -p 1 -tags exclude_app_test ./...
 .PHONY: test
 
 
 test-only-app-test:
-	ulimit -n 9999; go test -race -timeout 0 -p 1 -v -tags !exclude_app_test ./cmd/node
+	ulimit -n 9999; go test -timeout 0 -p 1 -v -tags !exclude_app_test ./cmd/node
 .PHONY: test
 
 
