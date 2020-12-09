@@ -1,5 +1,5 @@
 BINARY := go-spacemesh
-VERSION_GO_SPACEMESH := 10ed53bba0b631f1237e9f82f19c6b68d06a2fab
+VERSION_GO_SPACEMESH = $(shell cat version.txt)
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
 BIN_DIR = ./build
@@ -10,6 +10,7 @@ export GO111MODULE = on
 ifeq ($(OS),Windows_NT)
        # Just assume we're in interactive mode on Windows
        INTERACTIVE = 1
+			 VERSION_GO_SPACEMESH = $(shell type version.txt)
 else
        INTERACTIVE := $(shell [ -t 0 ] && echo 1)
 endif
