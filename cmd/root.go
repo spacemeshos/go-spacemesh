@@ -52,6 +52,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.GenesisConfPath, "add genesis configuration")
 	cmd.PersistentFlags().StringVar(&config.CoinbaseAccount, "coinbase",
 		config.CoinbaseAccount, "coinbase account to accumulate rewards")
+	cmd.PersistentFlags().Uint64Var(&config.SpaceToCommit, "space-to-commit",
+		config.SpaceToCommit, "number of bytes to commit to mining")
 	cmd.PersistentFlags().Uint64Var(&config.GenesisTotalWeight, "genesis-total-weight",
 		config.GenesisTotalWeight, "The active set size for the genesis flow")
 	cmd.PersistentFlags().IntVar(&config.BlockCacheSize, "block-cache-size",
@@ -185,7 +187,7 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().StringVar(&config.POST.DataDir, "post-datadir",
 		config.POST.DataDir, "The directory that contains post data files")
-	cmd.PersistentFlags().Uint64Var(&config.POST.SpacePerUnit, "post-space",
+	cmd.PersistentFlags().Uint64Var(&config.POST.SpacePerUnit, "post-space-unit",
 		config.POST.SpacePerUnit, "Space per unit, in bytes")
 	cmd.PersistentFlags().IntVar(&config.POST.NumFiles, "post-numfiles",
 		config.POST.NumFiles, "Number of files")

@@ -81,9 +81,9 @@ type BaseConfig struct {
 	GenesisConfPath    string `mapstructure:"genesis-conf"`
 	GenesisTotalWeight uint64 `mapstructure:"genesis-total-weight"` // the total weight for genesis
 
-	StartMining     bool   `mapstructure:"start-mining"` // Should the node start mining
-	CoinbaseAccount string `mapstructure:"coinbase"`     // The account credited for mining rewards
-	SpaceToCommit   uint64 `mapstructure:"space"`        // Number of bytes to commit to mining
+	StartMining     bool   `mapstructure:"start-mining"`    // Should the node start mining
+	CoinbaseAccount string `mapstructure:"coinbase"`        // The account credited for mining rewards
+	SpaceToCommit   uint64 `mapstructure:"space-to-commit"` // Number of bytes to commit to mining
 
 	SyncRequestTimeout  int `mapstructure:"sync-request-timeout"`  // ms the timeout for direct request in the sync
 	SyncInterval        int `mapstructure:"sync-interval"`         // sync interval in seconds
