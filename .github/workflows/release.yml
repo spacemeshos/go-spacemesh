@@ -40,3 +40,25 @@ jobs:
       
       - name: Build go-spacemesh
         run: make build GO_SPACEMESH_VERSION=${{ steps.version.outputs.content }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@master
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
+
+      - if: matrix.os == 'macos-latest' || matrix.os == 'ubuntu-latest'
+        name: upload macos build
+        uses: google-github-actions/upload-cloud-storage@main
+        with:
+          path: ./build/go-spacemesh
+          destination: ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/${{ matrix.os }}/go-spacemesh
+      
+      - if: matrix.os == 'windows-latest'
+        name: upload macos build
+        uses: google-github-actions/upload-cloud-storage@main
+        with:
+          path: ./build/go-spacemesh.exe
+          destination: ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/${{ matrix.os }}/go-spacemesh.exe
+      
