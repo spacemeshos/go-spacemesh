@@ -19,8 +19,6 @@ ifndef VERSION
 	VERSION=GO_SPACEMESH_VERSION
 endif
 
-$(info	${VERSION})
-
 # Read branch from git if running make manually
 # Also allows BRANCH to be manually set
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
