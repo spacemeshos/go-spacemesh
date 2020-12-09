@@ -66,8 +66,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-upload
     steps:
-      - if: matrix.os == 'windows-latest'
-        name: Create Release
+      - name: Create Release
         id: create_release
         uses: actions/create-release@v1
         env:
