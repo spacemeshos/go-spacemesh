@@ -265,4 +265,4 @@ def add_elk(init_session):
     add_kibana_cluster(init_session)
     yield wait_ready_minimal_elk_cluster(init_session)
     fluent_bit_teardown(init_session)
-    es_reindex(init_session, index_date)
+    # es_reindex(init_session, index_date)
