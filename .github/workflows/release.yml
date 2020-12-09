@@ -8,7 +8,7 @@ on:
       - v0.*
 
 jobs:
-  release:
+  build-and-upload:
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -62,7 +62,9 @@ jobs:
           path: ./build/go-spacemesh.exe
           destination: ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/${{ matrix.os }}
       
-
+  release:
+    runs-on: ubuntu-latest
+    steps:
       - if: matrix.os == 'windows-latest'
         name: Create Release
         id: create_release
