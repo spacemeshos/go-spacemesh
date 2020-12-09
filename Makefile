@@ -15,6 +15,8 @@ else
        INTERACTIVE := $(shell [ -t 0 ] && echo 1)
 endif
 
+$(info	${GO_SPACEMESH_VERSION})
+
 # Read branch from git if running make manually
 # Also allows BRANCH to be manually set
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)

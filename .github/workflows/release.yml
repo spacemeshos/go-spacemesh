@@ -33,12 +33,9 @@ jobs:
         uses: juliangruber/read-file-action@v1
         with:
           path: ./version.txt
-      - name: Echo package.json
-        run: echo ${{ steps.package.outputs.content }}
       - if: matrix.os == 'windows-latest'
         name: Build go-spacemesh
-        run: make build
+        run: make build GO_SPACEMESH_VERSION=${{ steps.version.outputs.content }}
       - if: matrix.os == 'windows-latest'
         name: See build directory content
         run: dir ./build
-      
