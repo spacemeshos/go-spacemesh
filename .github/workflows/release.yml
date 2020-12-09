@@ -29,9 +29,7 @@ jobs:
       - name: Setup Go environment
         run: make install
       - name: Build go-spacemesh
-        run: |
-          GOBIN=$PWD/bin
-          make build
+        run: make build
       - if: matrix.os == 'windows-latest'
         name: See build directory content
         run: dir .
