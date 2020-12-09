@@ -14,7 +14,6 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
-
     steps:
       - name: Check out Git repository
         uses: actions/checkout@v2
@@ -31,7 +30,7 @@ jobs:
         run: make install
       - name: Build go-spacemesh
         run: |
-          export PATH=$PATH:$(go env GOPATH)/bin
+          GOBIN=$PWD/bin
           make build
       - if: matrix.os == 'windows-latest'
         name: See build directory content
