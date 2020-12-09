@@ -36,3 +36,5 @@ jobs:
       - if: matrix.os == 'macos-latest' || matrix.os == 'ubuntu-latest'
         name: Setup Go environment
         run: make install
+      - name: Build go-spacemesh
+        run: make build
