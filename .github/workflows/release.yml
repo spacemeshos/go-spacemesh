@@ -62,3 +62,19 @@ jobs:
           path: ./build/go-spacemesh.exe
           destination: ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/${{ matrix.os }}
       
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          body: |
+            ## Compiled Binaries
+            - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/windows-latest/go-spacemesh.exe
+            - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/ubuntu-latest/go-spacemesh
+            - Mac: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/macos-latest/go-spacemesh
+          draft: true
+          prerelease: true
