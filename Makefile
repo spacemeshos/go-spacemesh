@@ -1,7 +1,7 @@
 cat := $(if $(filter $(OS),Windows_NT),type,cat)
 
 BINARY := go-spacemesh
-VERSION = $(shell $(cat) verson.txt)
+VERSION = $(shell $(cat) version.txt)
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
 BIN_DIR = ./build
@@ -12,7 +12,7 @@ export GO111MODULE = on
 ifeq ($(OS),Windows_NT)
        # Just assume we're in interactive mode on Windows
        INTERACTIVE = 1
-       VERSION = $(shell type version.txt)
+       #VERSION = $(shell type version.txt)
 else
        INTERACTIVE := $(shell [ -t 0 ] && echo 1)
 endif
