@@ -1,5 +1,5 @@
 BINARY := go-spacemesh
-VERSION_GO_SPACEMESH = $(shell cat version.txt)
+VERSION = $(shell cat version.txt)
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
 BIN_DIR = ./build
@@ -10,7 +10,7 @@ export GO111MODULE = on
 ifeq ($(OS),Windows_NT)
        # Just assume we're in interactive mode on Windows
        INTERACTIVE = 1
-			 VERSION_GO_SPACEMESH = v0.0.0-unreleased
+			 VERSION = v0.0.0-unreleased
 else
        INTERACTIVE := $(shell [ -t 0 ] && echo 1)
 endif
@@ -20,7 +20,7 @@ endif
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
 # Setup the -ldflags option to pass vars defined here to app vars
-LDFLAGS = -ldflags "-X main.version=${VERSION_GO_SPACEMESH} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
+LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 
 PKGS = $(shell go list ./...)
 
