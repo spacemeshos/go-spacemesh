@@ -10,7 +10,7 @@ export GO111MODULE = on
 ifeq ($(OS),Windows_NT)
        # Just assume we're in interactive mode on Windows
        INTERACTIVE = 1
-			 VERSION_GO_SPACEMESH = $(shell type version.txt)
+			 VERSION_GO_SPACEMESH = ksjfjklsdhf
 else
        INTERACTIVE := $(shell [ -t 0 ] && echo 1)
 endif
