@@ -271,7 +271,7 @@ jobs:
   systemtest-p2p-elk:
     # only run on push, not on pull_request
     if: always() && github.event_name == 'push'
-    needs: systemtest-blocks-add-node-elk
+    needs: systemtest-dummy
     runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
@@ -282,7 +282,7 @@ jobs:
   systemtest-hare-elk:
     # only run on push, not on pull_request
     if: always() && github.event_name == 'push'
-    needs: systemtest-blocks-remove-node-elk
+    needs: systemtest-blocks-add-node-elk
     runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
@@ -293,7 +293,7 @@ jobs:
   systemtest-sync-elk:
     # only run on push, not on pull_request
     if: always() && github.event_name == 'push'
-    needs: systemtest-p2p-elk
+    needs: systemtest-blocks-add-node-elk
     runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:

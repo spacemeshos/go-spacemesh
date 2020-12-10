@@ -260,7 +260,6 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
         # TODO in the future this may be changed for a more generic function
         data = '{{"{msg_field}": "{msg}"}}'.format(msg_field=msg_field, msg=msg)
         out = api_call(client_ip, data, api, testconfig['namespace'])
-        expected_ret = expected_ret
         ass_err = f"test_invalid_msg: expected \"{expected_ret}\" and got \"{out}\""
         assert expected_ret in out, ass_err
 
