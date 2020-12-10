@@ -300,7 +300,7 @@ def test_many_gossip_sim(setup_clients, add_elk, add_curl):
     total_expected_gossip = prev_num_of_msg + test_messages * pods_num
 
     send_msgs(setup_clients, api, gossip_message_query_fields, total_expected_gossip, num_of_msg=test_messages,
-              prop_sleep_time=240)
+              prop_sleep_time=250)
 
 
 def test_broadcast_unknown_protocol(setup_bootstrap, add_elk, setup_clients, add_curl):
