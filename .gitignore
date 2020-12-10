@@ -26,3 +26,4 @@ database/data
 *.pyc
 /devtools
 .python-version
+.vscode
