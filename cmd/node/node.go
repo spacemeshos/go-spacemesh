@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	_ "net/http/pprof" // import for memory and network profiling
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -52,8 +53,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
 )
-
-import _ "net/http/pprof" // import for memory and network profiling
 
 const edKeyFileName = "key.bin"
 
@@ -135,7 +134,7 @@ type HareService interface {
 	GetResult(id types.LayerID) ([]types.BlockID, error)
 }
 
-// TickProvider is an interface to a glopbal system clock that releases ticks on each layer
+// TickProvider is an interface to a global system clock that releases ticks on each layer
 type TickProvider interface {
 	Subscribe() timesync.LayerTimer
 	Unsubscribe(timer timesync.LayerTimer)

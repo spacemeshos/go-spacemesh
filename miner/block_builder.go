@@ -361,7 +361,7 @@ func (t *BlockBuilder) createBlockLoop() {
 
 		case layerID := <-t.beginRoundEvent:
 			t.attempts++
-			t.Debug("block creation event started at layer %v, attempts: %v", layerID, t.attempts)
+			t.Warning("block creation event started at layer %v, attempts: %v", layerID, t.attempts)
 
 			if !t.syncer.IsSynced() {
 				t.Debug("builder got layer %v not synced yet", layerID)
@@ -415,9 +415,9 @@ func (t *BlockBuilder) createBlockLoop() {
 					}
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "")
 				}()
-
-				t.Debug("block creation event finished for layer ID %v, attempts: %v", layerID, t.attempts)
 			}
+
+			t.Warning("block creation event finished for layer ID %v, attempts: %v", layerID, t.attempts)
 		}
 	}
 }
