@@ -4,12 +4,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/sha256-simd"
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/spacemeshos/sha256-simd"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type activationDB interface {
@@ -108,6 +110,9 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 	}
 
 	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, bo.committeeSize, bo.layersPerEpoch)
+
+	bo.log.Warning("block creation event getNumberOfEligibleBlocks activeSetSize %v, bo.committeeSize %v, bo.layersPerEpoch %v, numberOfEligibleBlocks %v, err %v", activeSetSize, bo.committeeSize, bo.layersPerEpoch, numberOfEligibleBlocks, err)
+
 	if err != nil {
 		bo.log.Error("failed to get number of eligible blocks: %v", err)
 		return err
