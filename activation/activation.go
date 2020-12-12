@@ -4,14 +4,16 @@ package activation
 
 import (
 	"fmt"
+	"sync"
+	"sync/atomic"
+
 	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/post/shared"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/post/shared"
-	"sync"
-	"sync/atomic"
 )
 
 // AtxProtocol is the protocol id for broadcasting atxs over gossip
@@ -193,6 +195,8 @@ func (b *Builder) loop() {
 		default:
 		}
 		if err := b.PublishActivationTx(); err != nil {
+			b.log.Warning("block creation event PublishActivationTx err %v", err)
+
 			if _, stopRequested := err.(StopRequestedError); stopRequested {
 				return
 			}
