@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -83,7 +84,7 @@ type BlockBuilder struct {
 	projector       projector
 	db              database.Database
 	layerPerEpoch   uint16
-	attempts        int
+	attempts        uint64
 }
 
 // Config is the block builders configuration struct
@@ -360,10 +361,12 @@ func (t *BlockBuilder) createBlockLoop() {
 			return
 
 		case layerID := <-t.beginRoundEvent:
-			t.attempts++
-			t.Warning("block creation event started at layer %v, attempts: %v", layerID, t.attempts)
+			atomic.AddUint64(&t.attempts, 1)
+
+			t.Warning("block creation event started at layer %v, attempts: %v", layerID, atomic.LoadUint64(&t.attempts))
 
 			if !t.syncer.IsSynced() {
+				t.Warning("block creation event not synced at layer %v, attempts: %v", layerID, atomic.LoadUint64(&t.attempts))
 				t.Debug("builder got layer %v not synced yet", layerID)
 				continue
 			}
@@ -371,11 +374,13 @@ func (t *BlockBuilder) createBlockLoop() {
 			t.Debug("builder got layer %v", layerID)
 			atxID, proofs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
+				t.Warning("block creation event not BlockEligible err %v at layer %v, attempts: %v", err, layerID, atomic.LoadUint64(&t.attempts))
 				events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to check for block eligibility")
 				t.With().Error("failed to check for block eligibility", layerID, log.Err(err))
 				continue
 			}
 			if len(proofs) == 0 {
+				t.Warning("block creation event no proofs at layer %v, attempts: %v", layerID, atomic.LoadUint64(&t.attempts))
 				events.ReportDoneCreatingBlock(false, uint64(layerID), "")
 				t.With().Info("Notice: not eligible for blocks in layer", layerID)
 				continue
@@ -386,38 +391,45 @@ func (t *BlockBuilder) createBlockLoop() {
 			for _, eligibilityProof := range proofs {
 				txList, _, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {
+					t.Warning("block creation event proof %v GetTxsForBlock err %v at layer %v, attempts: %v", eligibilityProof, err, layerID, atomic.LoadUint64(&t.attempts))
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to get txs for block")
 					t.With().Error("failed to get txs for block", layerID, log.Err(err))
 					continue
 				}
 				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList)
 				if err != nil {
+					t.Warning("block creation event proof %v createBlock err %v at layer %v, attempts: %v", eligibilityProof, err, layerID, atomic.LoadUint64(&t.attempts))
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot create new block")
 					t.Error("cannot create new block, %v ", err)
 					continue
 				}
 				err = t.meshProvider.AddBlockWithTxs(blk)
 				if err != nil {
+					t.Warning("block creation event proof %v AddBlockWithTxs err %v at layer %v, attempts: %v", eligibilityProof, err, layerID, atomic.LoadUint64(&t.attempts))
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to store block")
 					t.With().Error("failed to store block", blk.ID(), log.Err(err))
 					continue
 				}
-				go func() {
+				go func(eligibilityProof types.BlockEligibilityProof) {
 					bytes, err := types.InterfaceToBytes(blk)
 					if err != nil {
+						t.Warning("block creation event proof %v InterfaceToBytes err %v at layer %v, attempts: %v", eligibilityProof, err, layerID, atomic.LoadUint64(&t.attempts))
 						t.Log.Error("cannot serialize block %v", err)
 						events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot serialize block")
 						return
 					}
 					err = t.network.Broadcast(blocks.NewBlockProtocol, bytes)
 					if err != nil {
+						t.Warning("block creation event proof %v Broadcast err %v at layer %v, attempts: %v", eligibilityProof, err, layerID, atomic.LoadUint64(&t.attempts))
 						t.Log.Error("cannot send block %v", err)
 					}
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "")
-				}()
+
+					t.Warning("block creation event proof %v sent block at layer %v, attempts: %v", eligibilityProof, layerID, atomic.LoadUint64(&t.attempts))
+				}(eligibilityProof)
 			}
 
-			t.Warning("block creation event finished for layer ID %v, attempts: %v", layerID, t.attempts)
+			t.Warning("block creation event finished for layer ID %v, attempts: %v", layerID, atomic.LoadUint64(&t.attempts))
 		}
 	}
 }
