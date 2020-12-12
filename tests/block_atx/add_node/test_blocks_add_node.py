@@ -52,6 +52,9 @@ def test_add_node_validate_atx(init_session, setup_network):
     print(f"wait until next epoch to layer {last_layer}")
     _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch, num_miners+1)
 
+    # wait for published ATX in epoch 2 from new client
+    _ = q.wait_for_published_atx(init_session, curr_epoch, num_miners+1)
+
     # ========================== epoch i+3 ==========================
     curr_epoch += 1
     print("\n\n-------- current epoch", curr_epoch, "--------")
