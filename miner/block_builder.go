@@ -6,6 +6,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/rand"
+	"sync"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -13,9 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"math/rand"
-	"sync"
-	"time"
 )
 
 const defaultGasLimit = 10
@@ -82,6 +83,7 @@ type BlockBuilder struct {
 	projector       projector
 	db              database.Database
 	layerPerEpoch   uint16
+	attempts        int
 }
 
 // Config is the block builders configuration struct
@@ -358,6 +360,9 @@ func (t *BlockBuilder) createBlockLoop() {
 			return
 
 		case layerID := <-t.beginRoundEvent:
+			t.attempts++
+			t.Debug("block creation event started at layer %v, attempts: %v", layerID, t.attempts)
+
 			if !t.syncer.IsSynced() {
 				t.Debug("builder got layer %v not synced yet", layerID)
 				continue
@@ -410,6 +415,8 @@ func (t *BlockBuilder) createBlockLoop() {
 					}
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "")
 				}()
+
+				t.Debug("block creation event finished for layer ID %v, attempts: %v", layerID, t.attempts)
 			}
 		}
 	}
