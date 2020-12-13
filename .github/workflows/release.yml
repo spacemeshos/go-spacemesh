@@ -75,7 +75,7 @@ jobs:
           repository: spacemeshos/go-spacemesh
           tag_with_ref: true
 
-          release:
+  release:
     runs-on: ubuntu-latest
     needs: docker-push
     steps:
