@@ -4,12 +4,10 @@ env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
   
-on:
+on:  
   push:
-    branches-ignore:
-      - 'master'
-    tags-ignore:
-      - v0.*
+    tags:
+      - '*'
 
 jobs:
   build-and-upload:
@@ -72,11 +70,7 @@ jobs:
     steps:
       - name: Check out Git repository
         uses: actions/checkout@v2
-      - name: Read version.txt
-        id: version
-        uses: juliangruber/read-file-action@v1
-        with:
-          path: ./version.txt
+      
       - name: push to dockerhub
         run: make dockerpush
 
