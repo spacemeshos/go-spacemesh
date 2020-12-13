@@ -66,6 +66,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-upload
     steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v2
+        
       - name: Push to Docker Hub
         uses: docker/build-push-action@v2
         with:
