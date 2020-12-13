@@ -61,13 +61,34 @@ jobs:
         with:
           path: ./build/go-spacemesh.exe
           destination: ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/${{ matrix.os }}
-      
-  release:
+
+  docker-push:
     runs-on: ubuntu-latest
     needs: build-and-upload
     steps:
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v1 
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: spacemeshos/go-spacemesh:${{ steps.version.outputs.content }}
+
+  release:
+    runs-on: ubuntu-latest
+    needs: docker-push
+    steps:
       - name: Create Release
-        id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
