@@ -78,7 +78,7 @@ jobs:
         with:
           path: ./version.txt
       - name: push to dockerhub
-        run: make dockerpush GO_SPACEMESH_VERSION=${{ steps.version.outputs.content }}
+        run: make dockerpush
 
   # release:
   #   runs-on: ubuntu-latest
