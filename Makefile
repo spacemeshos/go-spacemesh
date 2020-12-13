@@ -16,7 +16,7 @@ else
 endif
 
 ifdef GO_SPACEMESH_VERSION
-	VERSION=GO_SPACEMESH_VERSION
+	VERSION=$(GO_SPACEMESH_VERSION)
 endif
 
 # Read branch from git if running make manually
