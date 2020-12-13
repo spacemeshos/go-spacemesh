@@ -1,1 +1,1 @@
-test-cd
+test.cd
