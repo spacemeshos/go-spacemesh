@@ -2,8 +2,8 @@ BINARY := go-spacemesh
 VERSION = $(shell cat version.txt)
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
-BIN_DIR = ./build
-BIN_DIR_WIN = ./build
+BIN_DIR = $(CURR_DIR)/build
+BIN_DIR_WIN = $(CURR_DIR_WIN)/build
 export GO111MODULE = on
 
 # These commands cause problems on Windows
@@ -17,6 +17,10 @@ endif
 
 ifdef GO_SPACEMESH_VERSION
 	VERSION=$(GO_SPACEMESH_VERSION)
+endif
+
+ifdef WINDOWS_BUILD_DIR
+	BIN_DIR_WIN=$(WINDOWS_BUILD_DIR)
 endif
 
 # Read branch from git if running make manually
