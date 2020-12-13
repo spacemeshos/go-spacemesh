@@ -279,8 +279,6 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
 
     err_msg = "msg_testing: Total gossip messages in ES is not as expected"
     err_msg += f"\nexpected {total_expected_gossip}, got {len(after)}"
-    print("#@! sleeping for 5000 secs")
-    time.sleep(5000)
     assert total_expected_gossip == len(after), err_msg
 
 
