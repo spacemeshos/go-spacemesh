@@ -68,13 +68,26 @@ jobs:
     steps:
       - name: Check out Git repository
         uses: actions/checkout@v2
-      - name: Read version.txt
-        id: version
-        uses: juliangruber/read-file-action@v1
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      -
+        name: Login to DockerHub
+        uses: docker/login-action@v1 
         with:
-          path: ./version.txt
-      - name: push to dockerhub
-        run: make dockerpush GO_SPACEMESH_VERSION=${{ steps.version.outputs.content }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      -
+        name: Build and push
+        id: docker_build
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: spacemeshos/go-spacemesh:test
 
   # release:
   #   runs-on: ubuntu-latest
