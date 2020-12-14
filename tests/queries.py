@@ -114,14 +114,6 @@ def get_layers(namespace, find_fails=True):
     return layers
 
 
-def get_last_published_atxs(namespace, find_fails=True):
-    atx_msgs = get_all_msg_containing(namespace, namespace, "atx published!", find_fails)
-    atxs = defaultdict(int)
-    for msg in atx_msgs:
-        atxs[msg.epoch_id] += 1
-    return atxs
-
-
 # ============================== END MESSAGE CONTENT ==================================
 
 def get_podlist(namespace, depname):
@@ -314,16 +306,10 @@ def wait_for_latest_layer(deployment, min_layer_id, layers_per_epoch, num_miners
             print("sleeping 10 seconds")
 
 
-def wait_for_published_atx(deployment, epoch_id, num_miners):
-    # wait up to 10 secs * 6 = 1 min
-    for i in range(0, 6):
-        time.sleep(10)
-        atxs = get_last_published_atxs(deployment, num_miners)
-        print("published ATXs: " + str(atxs))
-        if atxs is not None and atxs[epoch_id == num_miners]:
-            return atxs
-        else:
-            print("sleeping 10 seconds")
+def node_published_atx(deployment, node_id, epoch_id):
+    atx_per_epoch = query_atx_per_epoch(deployment, epoch_id)
+    print(f"atx_per_epoch: {atx_per_epoch}, node_id in atx_per_epoch: {node_id in atx_per_epoch}")
+    return node_id in atx_per_epoch
 
 
 def get_atx_per_node(deployment):

@@ -52,8 +52,9 @@ def test_add_node_validate_atx(init_session, setup_network):
     print(f"wait until next epoch to layer {last_layer}")
     _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch, num_miners+1)
 
-    # wait for published ATX in epoch 2 from new client
-    _ = q.wait_for_published_atx(init_session, curr_epoch, num_miners+1)
+    # wait for published ATX from new client in epoch i+2 # TODO: update comment
+    new_pod_id = get_pod_id(init_session, new_pod_name)
+    new_pod_published_atx = q.node_published_atx(init_session, new_pod_id, curr_epoch)
 
     # ========================== epoch i+3 ==========================
     curr_epoch += 1
@@ -63,7 +64,7 @@ def test_add_node_validate_atx(init_session, setup_network):
     # we're querying for block creation without epoch constrain, this will result
     # with epochs where new or deleted nodes will return 0 blocks in certain epochs
     # we should ignore those
-    new_pod_id = get_pod_id(init_session, new_pod_name)
+
     ignore_lst = [new_pod_id]
     first_layer = epochs_to_sleep * layers_per_epoch
     validate_blocks_per_nodes(block_map, first_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners,
@@ -81,7 +82,10 @@ def test_add_node_validate_atx(init_session, setup_network):
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
     # assert that each node has created layer_avg/number_of_nodes
     print(f"-------- validating blocks per nodes up to layer {last_layer} --------")
-    validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners +1,
+
+    # TODO: add comment
+    num_miners_epoch_4 = num_miners + 1 if new_pod_published_atx else num_miners
+    validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners_epoch_4,
                               ignore_lst=ignore_lst)
 
     print("-------- validating all nodes ATX creation in last epoch --------")
@@ -102,4 +106,4 @@ def test_add_node_validate_atx(init_session, setup_network):
     print(f"-------- validating blocks per nodes up to layer {last_layer} --------")
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
     prev_layer = last_layer - layers_per_epoch
-    validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners + 1)
+    validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners)
