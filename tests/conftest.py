@@ -15,7 +15,7 @@ from tests import config as tests_conf
 from tests.context import Context
 from tests.misc import CoreV1ApiClient
 from tests.setup_utils import setup_bootstrap_in_namespace, setup_clients_in_namespace
-from tests.utils import api_call
+from tests.utils import api_call, wait_ready_minimal_elk_cluster
 
 
 def random_id(length):
@@ -263,6 +263,6 @@ def add_elk(init_session):
     add_logstash_cluster(init_session)
     add_fluent_bit_cluster(init_session)
     add_kibana_cluster(init_session)
-    yield
+    yield wait_ready_minimal_elk_cluster(init_session)
     fluent_bit_teardown(init_session)
-    es_reindex(init_session, index_date)
+    # es_reindex(init_session, index_date)

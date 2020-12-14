@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: sm-client
+  namespace: NAMESPACE
 spec:
   selector:
     matchLabels:
@@ -13,6 +14,7 @@ spec:
       labels:
         name: client
         app: spacemesh-client
+        namespace: NAMESPACE
       annotations:
         cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
         prometheus.io/scrape: 'true'

@@ -15,8 +15,8 @@ bootstrap:
   replicas: 1
   resources:
     requests:
-      memory: '256M'
-      cpu: '0.5'
+      memory: '512M'
+      cpu: '1'
     limits:
       memory: '512M'
       cpu: '1'
@@ -35,8 +35,8 @@ client:
   replicas: 19
   resources:
     requests:
-      memory: '256M'
-      cpu: '0.5'
+      memory: '512M'
+      cpu: '1'
     limits:
       memory: '512M'
       cpu: '1'

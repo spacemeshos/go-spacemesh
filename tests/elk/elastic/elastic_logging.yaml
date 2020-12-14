@@ -67,9 +67,11 @@ spec:
             {}
       tolerations:
         - key: "app"
-          operation: "Equal"
-          value: "elasticseach"
+          operator: "Equal"
+          value: "elasticseach-main"
           effect: "NoSchedule"
+      nodeSelector:
+          app: elasticsearch-main
       containers:
         - name: "elasticsearch"
           securityContext:

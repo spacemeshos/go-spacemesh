@@ -18,7 +18,7 @@ def setup_network(init_session, add_elk, add_curl, setup_bootstrap, start_poet, 
                                                bs_deployment_info=setup_bootstrap,
                                                cl_deployment_info=setup_clients)
 
-    wait_genesis(GENESIS_TIME, testconfig['genesis_delta'])
+    wait_genesis(GENESIS_TIME, testconfig['genesis_delta'], offset=add_elk)
     return network_deployment
 
 
@@ -30,5 +30,5 @@ def setup_mul_network(init_session, add_elk, add_curl, setup_bootstrap, start_po
                                      bs_deployment_info=setup_bootstrap,
                                      cl_deployment_info=setup_mul_clients)
 
-    wait_genesis(GENESIS_TIME, testconfig['genesis_delta'])
+    wait_genesis(GENESIS_TIME, testconfig['genesis_delta'], offset=add_elk)
     return network_deployment
