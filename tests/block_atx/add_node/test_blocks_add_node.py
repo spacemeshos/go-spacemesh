@@ -59,6 +59,7 @@ def test_add_node_validate_atx(init_session, setup_network):
     # ========================== epoch i+3 ==========================
     curr_epoch += 1
     print("\n\n-------- current epoch", curr_epoch, "--------")
+
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
     print(f"-------- validating blocks per nodes up to layer {last_layer} --------")
     # we're querying for block creation without epoch constrain, this will result
@@ -69,6 +70,9 @@ def test_add_node_validate_atx(init_session, setup_network):
     first_layer = epochs_to_sleep * layers_per_epoch
     validate_blocks_per_nodes(block_map, first_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners,
                               ignore_lst=ignore_lst)
+
+    atx_epoch_2 = q.query_atx_per_epoch(init_session, curr_epoch - 1)
+    print(f"found {len(atx_epoch_2)} ATXs in epoch {curr_epoch-1}")
 
     # wait an epoch
     prev_layer = last_layer
@@ -90,6 +94,9 @@ def test_add_node_validate_atx(init_session, setup_network):
 
     print("-------- validating all nodes ATX creation in last epoch --------")
     atx_hits = q.query_atx_per_epoch(init_session, curr_epoch - 1)
+
+    print(f"found {len(atx_hits)} ATXs in epoch {curr_epoch-1}")
+
     assert len(atx_hits) == num_miners + 1  # add 1 for new miner
     print("-------- validation succeed --------")
 
@@ -107,3 +114,6 @@ def test_add_node_validate_atx(init_session, setup_network):
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
     prev_layer = last_layer - layers_per_epoch
     validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners)
+
+    atx_epoch_4 = q.query_atx_per_epoch(init_session, curr_epoch - 1)
+    print(f"found {len(atx_epoch_4)} ATXs in epoch {curr_epoch-1}")
