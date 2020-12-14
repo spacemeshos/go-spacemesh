@@ -307,9 +307,11 @@ def wait_for_latest_layer(deployment, min_layer_id, layers_per_epoch, num_miners
 
 
 def node_published_atx(deployment, node_id, epoch_id):
-    atx_per_epoch = query_atx_per_epoch(deployment, epoch_id)
-    print(f"atx_per_epoch: {atx_per_epoch}, node_id in atx_per_epoch: {node_id in atx_per_epoch}")
-    return node_id in atx_per_epoch
+    res = query_atx_per_node_and_epoch(deployment, node_id, epoch_id)
+
+    print(f"check if node {node_id} published ATX in epoch {epoch_id}: {res}")
+
+    return res
 
 
 def get_atx_per_node(deployment):
@@ -442,6 +444,10 @@ def query_atx_published(indx, ns, layer):
 
 def query_atx_per_epoch(ns, epoch_id, index=current_index):
     return query_message(index, ns, ns, {'M': 'atx published', 'epoch_id': str(epoch_id)}, False)
+
+
+def query_atx_per_node_and_epoch(ns, node_id, epoch_id, index=current_index):
+    return query_message(index, ns, ns, {'M': 'atx published', 'epoch_id': str(epoch_id), 'node_id': str(node_id)}, False)
 
 
 def message_propagation(deployment, query_fields):
