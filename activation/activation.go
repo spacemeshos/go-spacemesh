@@ -198,10 +198,17 @@ func (b *Builder) loop() {
 			b.log.Warning("block creation event PublishActivationTx err %v", err)
 
 			if _, stopRequested := err.(StopRequestedError); stopRequested {
+				b.log.Warning("block creation event PublishActivationTx stop requested")
 				return
 			}
+			b.log.Warning("block creation event PublishActivationTx stop not requested")
+
 			events.ReportAtxCreated(false, uint64(b.currentEpoch()), "")
-			<-b.layerClock.AwaitLayer(b.layerClock.GetCurrentLayer() + 1)
+
+			layer := b.layerClock.GetCurrentLayer() + 1
+			b.log.Warning("block creation event PublishActivationTx awaiting layer %v", layer)
+			<-b.layerClock.AwaitLayer(layer)
+			b.log.Warning("block creation event PublishActivationTx awaited layer %v", layer)
 		}
 	}
 }
@@ -372,6 +379,7 @@ func (b *Builder) PublishActivationTx() error {
 		b.log.With().Info("building new atx challenge", b.currentEpoch())
 		err := b.buildNipstChallenge(b.layerClock.GetCurrentLayer())
 		if err != nil {
+			b.log.Warning("block creation event buildNipstChallenge err: %v", err)
 			return err
 		}
 	}
@@ -379,12 +387,14 @@ func (b *Builder) PublishActivationTx() error {
 
 	hash, err := b.challenge.Hash()
 	if err != nil {
+		b.log.Warning("block creation event Hash err: %v", err)
 		return fmt.Errorf("getting challenge hash failed: %v", err)
 	}
 	// ⏳ the following method waits for a PoET proof, which should take ~1 epoch
 	atxExpired := b.layerClock.AwaitLayer((pubEpoch + 2).FirstLayer()) // this fires when the target epoch is over
 	nipst, err := b.nipstBuilder.BuildNIPST(hash, atxExpired, b.stop)
 	if err != nil {
+		b.log.Warning("block creation event BuildNIPST err: %v", err)
 		if _, stopRequested := err.(StopRequestedError); stopRequested {
 			return err
 		}
@@ -397,10 +407,12 @@ func (b *Builder) PublishActivationTx() error {
 		log.FieldNamed("current_layer", b.layerClock.GetCurrentLayer()),
 	)
 	if err := b.waitOrStop(b.layerClock.AwaitLayer(pubEpoch.FirstLayer())); err != nil {
+		b.log.Warning("block creation event waitOrStop[1] err: %v", err)
 		return err
 	}
 	b.log.Info("publication epoch has arrived!")
 	if discarded := b.discardChallengeIfStale(); discarded {
+		b.log.Warning("block creation event discardChallengeIfStale result: %v", discarded)
 		return fmt.Errorf("atx target epoch has passed during nipst construction")
 	}
 
@@ -410,6 +422,7 @@ func (b *Builder) PublishActivationTx() error {
 
 	// ensure we are synced before generating the ATX's view
 	if err := b.waitOrStop(b.syncer.Await()); err != nil {
+		b.log.Warning("block creation event waitOrStop[2] err: %v", err)
 		return err
 	}
 
@@ -428,6 +441,7 @@ func (b *Builder) PublishActivationTx() error {
 	defer b.db.UnsubscribeAtx(atx.ID())
 	size, err := b.signAndBroadcast(atx)
 	if err != nil {
+		b.log.Warning("block creation event signAndBroadcast err: %v", err)
 		b.log.With().Error("failed to publish atx", append(atx.Fields(size), log.Err(err))...)
 		return err
 	}
