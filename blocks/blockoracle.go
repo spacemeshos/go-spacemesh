@@ -110,9 +110,6 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 	}
 
 	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, bo.committeeSize, bo.layersPerEpoch)
-
-	bo.log.Warning("block creation event getNumberOfEligibleBlocks activeSetSize %v, bo.committeeSize %v, bo.layersPerEpoch %v, numberOfEligibleBlocks %v, err %v", activeSetSize, bo.committeeSize, bo.layersPerEpoch, numberOfEligibleBlocks, err)
-
 	if err != nil {
 		bo.log.Error("failed to get number of eligible blocks: %v", err)
 		return err
