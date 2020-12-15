@@ -401,7 +401,7 @@ func (t *BlockBuilder) createBlockLoop() {
 					continue
 				}
 
-				go func(eligibilityProof types.BlockEligibilityProof) {
+				go func() {
 					bytes, err := types.InterfaceToBytes(blk)
 					if err != nil {
 						t.Log.Error("cannot serialize block %v", err)
@@ -413,9 +413,9 @@ func (t *BlockBuilder) createBlockLoop() {
 					if err != nil {
 						t.Log.Error("cannot send block %v", err)
 					}
-					events.ReportDoneCreatingBlock(true, uint64(layerID), "")
 
-				}(eligibilityProof)
+					events.ReportDoneCreatingBlock(true, uint64(layerID), "")
+				}()
 			}
 		}
 	}

@@ -201,9 +201,7 @@ func (b *Builder) loop() {
 			}
 
 			events.ReportAtxCreated(false, uint64(b.currentEpoch()), "")
-
-			layer := b.layerClock.GetCurrentLayer() + 1
-			<-b.layerClock.AwaitLayer(layer)
+			<-b.layerClock.AwaitLayer(b.layerClock.GetCurrentLayer() + 1)
 		}
 	}
 }
