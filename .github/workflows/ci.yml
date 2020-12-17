@@ -215,9 +215,11 @@ jobs:
       - ci-stage1
       - systemtest-latenodes
       - systemtest-blocks-add-node
-      - systemtest-hare-mining
-      - systemtest-sync-blocks
-      - systemtest-genesis-p2p
+      - systemtest-blocks-remove-node
+      - systemtest-mining
+      - systemtest-p2p
+      - systemtest-hare
+      - systemtest-sync
     runs-on: ubuntu-latest
     env:
       status: ${{ needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-hare-mining.result == 'success' && needs.systemtest-sync-blocks.result == 'success' && needs.systemtest-genesis-p2p.result == 'success' && 'success' || 'failure' }}
