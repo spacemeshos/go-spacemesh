@@ -71,7 +71,7 @@ def check_pod_logs(pod_name, data):
     return False
 
 
-def test_sync_gradually_add_nodes(init_session, add_elk, setup_bootstrap, save_log_on_exit):
+def test_sync_gradually_add_nodes(init_session, add_node_pool, add_elk, setup_bootstrap, save_log_on_exit):
     current_index = get_curr_ind()
     bs_info = setup_bootstrap.pods[0]
 

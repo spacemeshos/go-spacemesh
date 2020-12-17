@@ -57,7 +57,12 @@ spec:
 
       terminationGracePeriodSeconds: 10
       nodeSelector:
-          role: tests
+        namespace: NAMESPACE
+      tolerations:
+        - key: "namespace"
+          operator: "Equal"
+          value: NAMESPACE
+          effect: "NoSchedule"
       volumes:
         - name: varlog
           hostPath:

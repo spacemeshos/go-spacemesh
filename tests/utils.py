@@ -6,7 +6,7 @@ import os
 import pytz
 import re
 from shutil import copyfile
-import subprocess
+from subprocess import Popen, PIPE, STDOUT
 import time
 
 import tests.config as conf
@@ -211,7 +211,7 @@ def wait_genesis(genesis_time, genesis_delta, offset=0):
 def wait_ready_minimal_elk_cluster(namespace, es_dep_name="elasticsearch-master", logstash_ss_name="logstash"):
     try:
         print("waiting for ES to be ready")
-        es_sleep_time = statefulset.wait_to_statefulset_to_be_ready(es_dep_name, namespace, time_out=120)
+        es_sleep_time = statefulset.wait_to_statefulset_to_be_ready(es_dep_name, namespace, time_out=180)
     except Exception as e:
         print(f"got an exception while waiting for ES to be ready: {e}")
         return
@@ -226,27 +226,28 @@ def wait_ready_minimal_elk_cluster(namespace, es_dep_name="elasticsearch-master"
 
 
 def exec_wait(cmd, retry=1, interval=1):
-    print(f"\nrunning: {cmd}")
+    print(f"\nrunning:\n{cmd}")
     ret_code = 0
     try:
-        process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+        process = Popen(cmd, shell=True, stdout=PIPE)
         while True:
-            line = process.stdout.readline()
+            line = process.stdout.readline().decode("utf-8")
             if not line and process.poll() is not None:
                 break
             print(line.strip())
-            time.sleep(0.5)
         ret_code = process.poll()
     except Exception as e:
-        raise Exception(f"failed running: \"{cmd}\",\nreturn code: {ret_code},\nexception: {e}")
+        raise Exception(f"failed running:\n\"{cmd}\",\nreturn code: {ret_code},\nexception: {e}")
 
     # if return code != 0 and retry !=0 run the same command again
     if ret_code and ret_code != "0" and retry:
         print(f"failed with return code: {ret_code}, retrying (retries left: {retry})")
         time.sleep(interval)
-        exec_wait(cmd, retry-1)
+        ret_code = exec_wait(cmd, retry-1, interval)
     elif ret_code is not None:
         print(f"return code: {ret_code}")
+
+    return ret_code
 
 
 def duplicate_file_and_replace_phrase(path, filename, new_name, look, replace):

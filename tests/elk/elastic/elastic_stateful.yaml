@@ -38,6 +38,13 @@ spec:
       annotations:
 
     spec:
+      nodeSelector:
+        app: elasticsearch
+      tolerations:
+        - key: "app"
+          operator: "Equal"
+          value: elasticsearch
+          effect: "NoSchedule"
       securityContext:
         fsGroup: 1000
         runAsUser: 1000

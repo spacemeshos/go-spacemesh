@@ -11,7 +11,7 @@ from tests.tx_generator.models.wallet_api import WalletAPI
 from tests.utils import get_curr_ind
 
 
-def test_transactions(init_session, add_elk, setup_network):
+def test_transactions(init_session, setup_network):
     # create #new_acc_num new accounts by sending them coins from tap
     # check tap balance/nonce
     # sleep until new state is processed
@@ -86,7 +86,7 @@ def test_transactions(init_session, add_elk, setup_network):
         assert actions.validate_nonce(wallet_api, acc, acc_pub), ass_err
 
 
-def test_mining(init_session, add_elk, setup_network):
+def test_mining(init_session, setup_network):
     current_index = get_curr_ind()
     ns = init_session
     layer_avg_size = testconfig['client']['args']['layer-average-size']

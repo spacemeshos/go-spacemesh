@@ -14,6 +14,7 @@ from tests import pod
 from tests import config as tests_conf
 from tests.context import Context
 from tests.misc import CoreV1ApiClient
+from tests.node_pool_deployer import NodePoolDep
 from tests.setup_utils import setup_bootstrap_in_namespace, setup_clients_in_namespace
 from tests.utils import api_call, wait_ready_minimal_elk_cluster
 
@@ -253,6 +254,19 @@ def add_curl(request, init_session, setup_bootstrap):
         return True
 
     return _run_curl_pod()
+
+
+@pytest.fixture(scope='module')
+def add_node_pool():
+    """
+    memory should be represented by number of megabytes, \d*M
+
+    :return:
+    """
+    deployer = NodePoolDep(testconfig)
+    _, time_elapsed = deployer.add_node_pool()
+    yield time_elapsed
+    deployer.remove_node_pool()
 
 
 @pytest.fixture(scope='module')

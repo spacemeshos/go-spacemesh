@@ -24,6 +24,8 @@ spec:
         heritage: "Helm"
       annotations:
     spec:
+      nodeSelector:
+        role: tests
       securityContext:
         fsGroup: 1000
         runAsUser: 1000

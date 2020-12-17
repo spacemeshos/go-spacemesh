@@ -39,7 +39,12 @@ spec:
         - name: client-vol
           mountPath: /usr/share/spacemesh          
       nodeSelector:
-        role: tests
+        namespace: NAMESPACE
+      tolerations:
+        - key: "namespace"
+          operator: "Equal"
+          value: NAMESPACE
+          effect: "NoSchedule"
   volumeClaimTemplates:
     - metadata:
         name: client-vol
