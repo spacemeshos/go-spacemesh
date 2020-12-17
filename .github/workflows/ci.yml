@@ -5,7 +5,9 @@ env:
   GCLOUD_KEY: ${{ secrets.GCLOUD_KEY }}
   PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
   CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
+  CLUSTER_NAME_ELK: ${{ secrets.CLUSTER_NAME_ELK }}
   CLUSTER_ZONE: ${{ secrets.CLUSTER_ZONE }}
+  CLUSTER_ZONE_ELK: ${{ secrets.CLUSTER_ZONE_ELK }}
   ES_PASSWD: ${{ secrets.ES_PASSWD }}
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
@@ -136,7 +138,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: late nodes system test
-        run: make dockertest-late-nodes
+        run: make dockertest-late-nodes-elk
   systemtest-blocks-add-node:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
@@ -147,8 +149,8 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: blocks add node test
-        run: make dockertest-blocks-add-node
-  systemtest-hare-mining:
+        run: make dockertest-blocks-add-node-elk
+  systemtest-blocks-remove-node:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
@@ -157,9 +159,9 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v2
-      - name: hare+mining system tests
-        run: make dockertest-hare-mining
-  systemtest-sync-blocks:
+      - name: remove node test
+        run: make dockertest-blocks-remove-node-elk
+  systemtest-mining:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
@@ -168,9 +170,9 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v2
-      - name: sync+blocks remove node test
-        run: make dockertest-sync-blocks-remove-node
-  systemtest-genesis-p2p:
+      - name: mining system test
+        run: make dockertest-mining-elk
+  systemtest-p2p:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
@@ -179,8 +181,30 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v2
-      - name: genesis+p2p system tests
-        run: make dockertest-genesis-voting-p2p
+      - name: p2p system test
+        run: make dockertest-p2p-elk
+  systemtest-hare:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: dockerpush
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: hare system test
+        run: make dockertest-hare-elk
+  systemtest-sync:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: dockerpush
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: hare system test
+        run: make dockertest-sync-elk
 
 
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
