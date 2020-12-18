@@ -196,13 +196,13 @@ def choose_k8s_object_create(config, deployment_file, statefulset_file):
         raise Exception("Unknown deployment type in configuration. Please check your config.yaml")
 
 
-def wait_genesis(genesis_time, genesis_delta, offset=0):
+def wait_genesis(genesis_time, genesis_delta):
     # Make sure genesis time has not passed yet and sleep for the rest
     time_now = pytz.utc.localize(datetime.utcnow())
-    delta_from_genesis = (genesis_time + timedelta(seconds=int(offset)) - time_now).total_seconds()
+    delta_from_genesis = (genesis_time - time_now).total_seconds()
     if delta_from_genesis < 0:
         raise Exception("genesis_delta time={0}sec, is too short for this deployment. "
-                        "delta_from_genesis={1}".format(genesis_delta + int(offset), delta_from_genesis))
+                        "delta_from_genesis={1}".format(genesis_delta, delta_from_genesis))
     else:
         print('sleep for {0} sec until genesis time'.format(delta_from_genesis))
         time.sleep(delta_from_genesis)

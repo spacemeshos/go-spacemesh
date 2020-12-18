@@ -9,7 +9,7 @@ from tests.deployment import create_deployment
 from tests.hare.assert_hare import expect_hare
 from tests.misc import CoreV1ApiClient
 from tests.queries import query_atx_published
-from tests.utils import get_conf, get_curr_ind
+from tests.utils import get_conf, get_curr_ind, wait_genesis, get_genesis_time_delta
 
 
 def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
@@ -75,6 +75,7 @@ def test_add_delayed_nodes(init_session, add_node_pool, add_elk, add_curl, setup
     # start with 20 miners
     start_count = 20
     new_client_in_namespace(ns, setup_bootstrap, cspec, start_count)
+    wait_genesis(get_genesis_time_delta(test_config["genesis_delta"]), test_config["genesis_delta"])
     sleep_and_print(epoch_duration)  # wait epoch duration
 
     # add 10 each epoch

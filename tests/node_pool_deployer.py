@@ -58,20 +58,25 @@ class NodePoolDep:
     def add_node_pool(self):
         print("adding node pool:", self.pool_name)
         # in advance we also add 4 CPUs and another 16GB of memory for precaution
-        cpu_per_node, mem_per_node = self.calculate_cpu_and_mem_per_node()
-
+        num_nodes, cpu_per_node, mem_per_node = self.calculate_cpu_and_mem_per_node()
         config = {
-            "num_nodes": 2,
-            "max_nodes": 2,
+            "num_nodes": num_nodes,
+            "max_nodes": num_nodes,
             "cpu": cpu_per_node,
             "mem": mem_per_node,
         }
         # get formatted cmd
         config = self.merge_conf(config)
         cmd = self.gcloud_cmd.format(**config)
-        ret_code = ut.exec_wait(cmd, retry=60, interval=10)
+        ut.exec_wait(cmd, retry=60, interval=10)
 
     def calculate_cpu_and_mem_per_node(self):
+        """
+
+        :return: dividor: the number of nodes to be started,
+                 cpu_per_node: how many CPUs per node, must divide by 2 according to GCP specifications limits
+                 mem per node: how much memory per node, must be withing GCP specifications limits
+        """
         from math import ceil
         max_cpus_per_node = 96
         total_cpu, _ = self.get_total_cpu_and_mem()
@@ -88,7 +93,7 @@ class NodePoolDep:
             cpu_per_node += 1
 
         mem_per_node = (cpu_per_node + 5) * 1024
-        return cpu_per_node, mem_per_node
+        return dividor, cpu_per_node, mem_per_node
 
     def remove_node_pool(self):
         print("removing node pool")
@@ -100,21 +105,11 @@ class NodePoolDep:
         total_pods = int(self.testconfig["total_pods"])
         total_cpu = total_pods * cpu
         total_mem = total_pods * mem
-        # if "clientv2" in self.testconfig.keys() and "clientv2" not in self.resources:
-        #     self.resources.append("clientv2")
-        #
-        # total_cpu = 0
-        # total_mem = 0
-        # for res in self.resources:
-        #     replicas, cpu, mem = self.get_spec_resources(res)
-        #     total_cpu += replicas * cpu
-        #     total_mem += replicas * mem
-        # # TODO: maybe move validation somewhere else?
         if total_cpu % 2:
             print("adding additional CPU, total CPU was not divide by 2, total CPUs:", total_cpu)
             total_cpu += 1
         if total_mem % 512:
-            raise Exception("total memory is not a 1024 multiplication")
+            raise Exception("total memory is not a 512 multiplication")
 
         return total_cpu, total_mem
 
