@@ -8,15 +8,16 @@ import random
 import string
 import subprocess
 
-from tests.deployment import add_elastic_cluster, add_kibana_cluster, add_logstash_cluster, add_fluent_bit_cluster, fluent_bit_teardown
-from tests.es_dump import es_reindex
+from tests import config as conf
 from tests import pod
-from tests import config as tests_conf
 from tests.context import Context
+from tests.es_dump import es_reindex
+from tests.k8s_handler import add_elastic_cluster, add_kibana_cluster, add_logstash_cluster, add_fluent_bit_cluster, \
+    fluent_bit_teardown, remove_deployment_dir
 from tests.misc import CoreV1ApiClient
 from tests.node_pool_deployer import NodePoolDep
 from tests.setup_utils import setup_bootstrap_in_namespace, setup_clients_in_namespace
-from tests.utils import api_call, wait_ready_minimal_elk_cluster
+from tests.utils import api_call, wait_for_minimal_elk_cluster_ready
 
 
 def random_id(length):
@@ -250,7 +251,7 @@ def add_curl(request, init_session, setup_bootstrap):
         if not setup_bootstrap.pods:
             raise Exception("Could not find bootstrap node")
 
-        pod.create_pod(tests_conf.CURL_POD_FILE, testconfig['namespace'])
+        pod.create_pod(conf.CURL_POD_FILE, testconfig['namespace'])
         return True
 
     return _run_curl_pod()
@@ -277,6 +278,11 @@ def add_elk(init_session):
     add_logstash_cluster(init_session)
     add_fluent_bit_cluster(init_session)
     add_kibana_cluster(init_session)
-    yield wait_ready_minimal_elk_cluster(init_session)
+    wait_for_minimal_elk_cluster_ready(init_session)
+    yield
     fluent_bit_teardown(init_session)
     # es_reindex(init_session, index_date)
+
+
+def raise_exception():
+    raise Exception("this is a dummy exception")

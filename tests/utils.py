@@ -6,14 +6,18 @@ import os
 import pytz
 import re
 from shutil import copyfile
-from subprocess import Popen, PIPE, STDOUT
+from subprocess import Popen, PIPE
 import time
 
 import tests.config as conf
 import tests.deployment as deployment
+import tests.k8s_handler as k8h
 from tests.misc import ContainerSpec, CoreV1ApiClient
 import tests.statefulset as statefulset
 import tests.queries as q
+
+ES_SS_NAME = "elasticsearch-master"
+LOGSTASH_SS_NAME = "logstash"
 
 
 def api_call(client_ip, data, api, namespace, port="9093"):
@@ -208,19 +212,25 @@ def wait_genesis(genesis_time, genesis_delta):
         time.sleep(delta_from_genesis)
 
 
-def wait_ready_minimal_elk_cluster(namespace, es_dep_name="elasticsearch-master", logstash_ss_name="logstash"):
+def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME, logstash_ss_name=LOGSTASH_SS_NAME):
+    es_timeout = 180
     try:
         print("waiting for ES to be ready")
-        es_sleep_time = statefulset.wait_to_statefulset_to_be_ready(es_dep_name, namespace, time_out=180)
+        es_sleep_time = statefulset.wait_to_statefulset_to_be_ready(es_ss_name, namespace, time_out=es_timeout)
     except Exception as e:
-        print(f"got an exception while waiting for ES to be ready: {e}")
-        return
+        print("elasticsearch statefulset readiness check has failed with err:", e)
+        k8h.remove_deployment_dir(namespace, conf.ELASTIC_CONF_DIR)
+        k8h.add_elastic_cluster(namespace)
+        es_sleep_time = statefulset.wait_to_statefulset_to_be_ready(es_ss_name, namespace, time_out=es_timeout)
+
+    ls_timeout = 120
     try:
         print("waiting for logstash to be ready")
-        logstash_sleep_time = statefulset.wait_to_statefulset_to_be_ready(logstash_ss_name, namespace,  time_out=120)
+        logstash_sleep_time = statefulset.wait_to_statefulset_to_be_ready(logstash_ss_name, namespace,
+                                                                          time_out=ls_timeout)
     except Exception as e:
         print(f"got an exception while waiting for Logstash to be ready: {e}")
-        return
+        raise Exception(f"logstash took over than {ls_timeout} to start")
 
     return logstash_sleep_time + es_sleep_time
 

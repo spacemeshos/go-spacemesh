@@ -5,8 +5,7 @@ import os
 import time
 import yaml
 
-from tests import config as conf
-from tests.utils import get_filename_and_path, duplicate_file_and_replace_phrase, delete_file
+import tests.utils as ut
 
 """ k8s deployment api file for stateless deployments (opposite to statefulset.py) """
 
@@ -61,13 +60,13 @@ def wait_for_service_to_be_ready(deployment_name, name_space, time_out=None):
 
 
 def create_deployment(file_name, name_space, deployment_id=None, replica_size=1, container_specs=None, time_out=None):
-    file_path, filename = get_filename_and_path(file_name)
-    mod_file_path, is_changed = duplicate_file_and_replace_phrase(file_path, filename, f"{name_space}_{filename}",
-                                                                  "(?<!_)NAMESPACE", name_space)
+    file_path, filename = ut.get_filename_and_path(file_name)
+    mod_file_path, is_changed = ut.duplicate_file_and_replace_phrase(file_path, filename, f"{name_space}_{filename}",
+                                                                     "(?<!_)NAMESPACE", name_space)
     with open(mod_file_path) as f:
         dep = yaml.safe_load(f)
         if mod_file_path != os.path.join(file_path, file_name) and is_changed:
-            delete_file(mod_file_path)
+            ut.delete_file(mod_file_path)
 
         # Set unique deployment id
         if deployment_id:
@@ -98,114 +97,3 @@ def delete_deployment(deployment_name, name_space):
 
     wait_to_deployment_to_be_deleted(deployment_name, name_space)
     return resp
-
-
-def remove_clusterrole_binding(shipper_name, crb_name):
-    # remove clusterrolebind
-    k8s_client = client.RbacAuthorizationV1Api()
-    try:
-        k8s_client.delete_cluster_role_binding(crb_name)
-        print(f"\nsuccessfully deleted: {crb_name}")
-    except Exception as e:
-        print(f"\n{shipper_name} cluster role binding deletion has failed, manually delete {crb_name}")
-
-
-def filebeat_teardown(namespace):
-    # remove clusterrolebind
-    # TODO: find a solution for sharing the name both here and in the kube object
-    crb_name = f"filebeat-cluster-role-binding-{namespace}"
-    remove_clusterrole_binding("filebeat", crb_name)
-
-
-def fluent_bit_teardown(namespace):
-    # remove clusterrolebind
-    # TODO: find a solution for sharing the name both here and in the kube object
-    crb_name = f"fluent-bit-clusterrole-binding-{namespace}"
-    remove_clusterrole_binding("fluent-bit", crb_name)
-
-
-def add_elastic_cluster(namespace):
-    print("\nDeploying ElasticSearch\n")
-    add_deployment_dir(namespace, conf.ELASTIC_CONF_DIR)
-
-
-def add_filebeat_cluster(namespace):
-    print("\nDeploying FileBeat\n")
-    add_deployment_dir(namespace, conf.FILEBEAT_CONF_DIR)
-
-
-def add_fluent_bit_cluster(namespace):
-    print("\nDeploying Fluent-bit\n")
-    add_deployment_dir(namespace, conf.FLUENT_BIT_CONF_DIR)
-
-
-def add_kibana_cluster(namespace):
-    print("\nDeploying Kibana\n")
-    add_deployment_dir(namespace, conf.KIBANA_CONF_DIR)
-
-
-def add_logstash_cluster(namespace):
-    print("\nDeploying LogStash\n")
-    add_deployment_dir(namespace, conf.LOGSTASH_CONF_DIR)
-
-
-def add_deployment_dir(namespace, dir_path):
-    with open(os.path.join(dir_path, 'dep_order.txt')) as f:
-        dep_order = f.readline()
-        dep_lst = [x.strip() for x in dep_order.split(',')]
-        print(dep_lst)
-
-    for filename in dep_lst:
-        # replace 'NAMESPACE' with the actual namespace if exists
-        modified_file_path, is_change = duplicate_file_and_replace_phrase(dir_path, filename, f"{namespace}_{filename}",
-                                                                          "(?<!_)NAMESPACE", namespace)
-        print(f"applying file: {filename}")
-        with open(modified_file_path) as f:
-            dep = yaml.safe_load(f)
-            if modified_file_path != os.path.join(dir_path, filename) and is_change:
-                # remove modified file
-                delete_file(modified_file_path)
-
-            if dep['kind'] == 'StatefulSet':
-                k8s_client = client.AppsV1Api()
-                k8s_client.create_namespaced_stateful_set(body=dep, namespace=namespace)
-            if dep['kind'] == 'DaemonSet':
-                k8s_client = client.AppsV1Api()
-                k8s_client.create_namespaced_daemon_set(body=dep, namespace=namespace)
-            if dep['kind'] == 'Deployment':
-                k8s_client = client.AppsV1Api()
-                k8s_client.create_namespaced_deployment(body=dep, namespace=namespace)
-            elif dep['kind'] == 'Service':
-                k8s_client = client.CoreV1Api()
-                k8s_client.create_namespaced_service(body=dep, namespace=namespace)
-            elif dep['kind'] == 'PodDisruptionBudget':
-                k8s_client = client.PolicyV1beta1Api()
-                k8s_client.create_namespaced_pod_disruption_budget(body=dep, namespace=namespace)
-            elif dep["kind"] == 'Role':
-                k8s_client = client.RbacAuthorizationV1Api()
-                k8s_client.create_namespaced_role(body=dep, namespace=namespace)
-            elif dep["kind"] == 'ClusterRole':
-                try:
-                    k8s_client = client.RbacAuthorizationV1Api()
-                    k8s_client.create_cluster_role(body=dep)
-                except ApiException as e:
-                    if e.status == 409:
-                        print(f"cluster role already exists")
-                        continue
-                    raise e
-
-            elif dep["kind"] == 'RoleBinding':
-                k8s_client = client.RbacAuthorizationV1Api()
-                dep["subjects"][0]["namespace"] = namespace
-                k8s_client.create_namespaced_role_binding(body=dep, namespace=namespace)
-            elif dep["kind"] == 'ClusterRoleBinding':
-                k8s_client = client.RbacAuthorizationV1Api()
-                k8s_client.create_cluster_role_binding(body=dep)
-            elif dep["kind"] == 'ConfigMap':
-                k8s_client = client.CoreV1Api()
-                k8s_client.create_namespaced_config_map(body=dep, namespace=namespace)
-            elif dep["kind"] == 'ServiceAccount':
-                k8s_client = client.CoreV1Api()
-                k8s_client.create_namespaced_service_account(body=dep, namespace=namespace)
-
-    print("\nDone\n")
