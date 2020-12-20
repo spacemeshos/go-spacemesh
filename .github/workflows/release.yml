@@ -41,7 +41,7 @@ jobs:
           path: ./version.txt
       
       - name: Build go-spacemesh
-        run: make build GO_SPACEMESH_VERSION=${{ steps.version.outputs.content }} WINDOWS_BUILD_DIR=./build
+        run: make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@master
