@@ -1315,6 +1315,7 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 
 	sync := NewSync(net, msh, txpool, atxpool, blockValidator, newMockPoetDb(), conf, timer, l)
 	lv := &mockLayerValidator{0, 0, 0, nil}
+	sync.peers = PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{net.PublicKey()} }}
 	sync.syncLock.Lock()
 	sync.Mesh.Validator = lv
 	sync.SetLatestLayer(5)

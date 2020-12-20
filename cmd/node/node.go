@@ -51,9 +51,11 @@ import (
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
+
+	_ "net/http/pprof"
 )
 
-import _ "net/http/pprof" // import for memory and network profiling
+// import for memory and network profiling
 
 const edKeyFileName = "key.bin"
 
@@ -671,6 +673,8 @@ func (app *SpacemeshApp) HareFactory(mdb *mesh.DB, swarm service.Service, sgn ha
 
 func (app *SpacemeshApp) startServices() {
 	//app.blockListener.Start()
+	go app.startSyncer()
+
 	err := app.hare.Start()
 	if err != nil {
 		log.Panic("cannot start hare")
@@ -902,6 +906,15 @@ func (app *SpacemeshApp) getIdentityFile() (string, error) {
 	return "", fmt.Errorf("not found")
 }
 
+func (app *SpacemeshApp) startSyncer() {
+	if app.P2P == nil {
+		app.log.Error("Syncer is started before P2P is initialized")
+	} else {
+		<-app.P2P.GossipReady()
+	}
+	app.syncer.Start()
+}
+
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
 func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	log.With().Info("Starting Spacemesh", log.String("data-dir", app.Config.DataDir()), log.String("post-dir", app.Config.POST.DataDir))
@@ -1008,13 +1021,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Panic("Error starting p2p services: %v", err)
 	}
-	go func() {
-		select {
-		case <-app.P2P.GossipReady():
-			break
-		}
-		app.syncer.Start()
-	}()
 
 	app.startAPIServices(app.P2P)
 	events.SubscribeToLayers(clock.Subscribe())

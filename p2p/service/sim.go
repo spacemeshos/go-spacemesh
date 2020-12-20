@@ -246,8 +246,8 @@ func (sn *Node) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, pay
 
 // GossipReady is a chan which is closed when we established initial min connections with peers.
 func (sn *Node) GossipReady() <-chan struct{} {
-	c := make(chan struct{}, 1)
-	c <- struct{}{}
+	c := make(chan struct{})
+	close(c)
 	return c
 }
 
