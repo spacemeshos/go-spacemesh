@@ -118,7 +118,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().DurationVar(&config.TIME.RefreshNtpInterval, "refresh-ntp-interval",
 		config.TIME.RefreshNtpInterval, "Refresh intervals to ntp")
 	cmd.PersistentFlags().StringSliceVar(&config.TIME.NTPServers,
-		"ntp-servers", config.TIME.NTPServers, "Load NTP servers URLs")
+		"ntp-servers", config.TIME.NTPServers, "Load NTP servers URLs. The total NTP server URLs should be greater than number of NTP queries")
 	cmd.PersistentFlags().IntVar(&config.P2P.MsgSizeLimit, "msg-size-limit",
 		config.P2P.MsgSizeLimit, "The message size limit in bytes for incoming messages")
 
