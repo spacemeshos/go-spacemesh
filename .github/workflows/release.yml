@@ -4,10 +4,12 @@ env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
   
-on:  
+on:
   push:
-    tags:
-      - '*'
+    branches-ignore:
+      - 'master'
+    tags-ignore:
+      - v0.*
 
 jobs:
   build-and-upload:
@@ -64,31 +66,31 @@ jobs:
           path: ${{ steps.buildpath.outputs.value }}
           destination: ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/${{ matrix.os }}
       
-  docker-push:
-    runs-on: ubuntu-latest
-    needs: build-and-upload
-    steps:
-      - name: Check out Git repository
-        uses: actions/checkout@v2
+  # docker-push:
+  #   runs-on: ubuntu-latest
+  #   needs: build-and-upload
+  #   steps:
+  #     - name: Check out Git repository
+  #       uses: actions/checkout@v2
       
-      - name: push to dockerhub
-        run: make dockerpush
+  #     - name: push to dockerhub
+  #       run: make dockerpush
 
-  release:
-    runs-on: ubuntu-latest
-    needs: docker-push
-    steps:
-      - name: Create Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ steps.version.outputs.content }}
-          body: |
-            ## Compiled Binaries
-            - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/windows-latest/go-spacemesh.exe
-            - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/ubuntu-latest/go-spacemesh
-            - Mac: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/macos-latest/go-spacemesh
-          draft: true
-          prerelease: true
+  # release:
+  #   runs-on: ubuntu-latest
+  #   needs: docker-push
+  #   steps:
+  #     - name: Create Release
+  #       uses: actions/create-release@v1
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #       with:
+  #         tag_name: ${{ github.ref }}
+  #         release_name: Release ${{ steps.version.outputs.content }}
+  #         body: |
+  #           ## Compiled Binaries
+  #           - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/windows-latest/go-spacemesh.exe
+  #           - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/ubuntu-latest/go-spacemesh
+  #           - Mac: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/macos-latest/go-spacemesh
+  #         draft: true
+  #         prerelease: true
