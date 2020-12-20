@@ -40,6 +40,7 @@ jobs:
         with:
           path: ./version.txt
       
+      # `make build` reads version from version.txt but in Windows it doesn't work therefore passing version explicitly
       - name: Build go-spacemesh
         run: make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
 
@@ -49,21 +50,20 @@ jobs:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
+      
+      - uses: haya14busa/action-cond@v1
+        id: buildpath
+        with:
+          cond: ${{ matrix.os == 'windows-latest' }}
+          if_true: ./build/go-spacemesh.exe
+          if_false: ./build/go-spacemesh
 
-      - if: matrix.os == 'macos-latest' || matrix.os == 'ubuntu-latest'
-        name: Upload macos and ubuntu build
+      - name: Upload build
         uses: google-github-actions/upload-cloud-storage@main
         with:
-          path: ./build/go-spacemesh
+          path: ${{ steps.buildpath.outputs.value }}
           destination: ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/${{ matrix.os }}
       
-      - if: matrix.os == 'windows-latest'
-        name: Upload windows build
-        uses: google-github-actions/upload-cloud-storage@main
-        with:
-          path: ./build/go-spacemesh.exe
-          destination: ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/${{ matrix.os }}
-
   docker-push:
     runs-on: ubuntu-latest
     needs: build-and-upload
