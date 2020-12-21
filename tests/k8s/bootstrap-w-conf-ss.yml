@@ -32,7 +32,7 @@ spec:
             memory: "2048M"
             cpu: "1"
         ports:
-        - containerPort: 19092
+        - containerPort: 9092
         - containerPort: 9999
         volumeMounts:
         - name: bootstrap-vol

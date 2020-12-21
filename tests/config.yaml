@@ -33,10 +33,12 @@ bootstrap:
     coinbase: '0x4321'
     eligibility-confidence-param: '5'
     eligibility-epoch-offset: '0'
-    post-space-unit: '1024'
+    post-space: '1024'
     space-to-commit: '2048'
     genesis-total-weight: '51200'
     executable-path: '/bin/go-spacemesh'
+#    grpc-port: '19092'
+#    json-port: '19093'
   deployment_type: deployment
 client:
   image: 'spacemeshos/go-spacemesh:develop'
@@ -62,9 +64,11 @@ client:
     coinbase: '0x1234'
     eligibility-confidence-param: '5'
     eligibility-epoch-offset: '0'
-    post-space-unit: '1024'
+    post-space: '1024'
     genesis-total-weight: '51200'
     executable-path: '/bin/go-spacemesh'
+#    grpc-port: '19092'
+#    json-port: '19093'
   deployment_type: deployment
 elastic:
   host: elastic.spacemesh.io

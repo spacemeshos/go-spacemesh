@@ -339,8 +339,8 @@ func (s *Syncer) synchronise() {
 	if s.weaklySynced(curr) {
 		s.handleWeaklySynced()
 		err := s.syncEpochActivations(curr.GetEpoch())
-		if err != nil {
-			s.With().Error("cannot fetch epoch atxs ", curr, log.Err(err))
+		if err != nil && !curr.GetEpoch().IsGenesis() {
+			s.With().Error("cannot fetch epoch atxs ", curr, curr.GetEpoch(), log.Err(err))
 		}
 	} else {
 		s.handleNotSynced(s.ProcessedLayer() + 1)
@@ -476,8 +476,8 @@ func (s *Syncer) syncAtxs(currentSyncLayer types.LayerID) {
 	lastLayerOfEpoch := (currentSyncLayer.GetEpoch() + 1).FirstLayer() - 1
 	if currentSyncLayer == lastLayerOfEpoch {
 		err := s.syncEpochActivations(currentSyncLayer.GetEpoch())
-		if err != nil {
-			s.With().Error("cannot fetch epoch atxs ", currentSyncLayer, log.Err(err))
+		if err != nil && !currentSyncLayer.GetEpoch().IsGenesis() {
+			s.With().Error("cannot fetch epoch atxs ", currentSyncLayer, currentSyncLayer.GetEpoch(), log.Err(err))
 		}
 	}
 }

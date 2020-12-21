@@ -33,7 +33,7 @@ bootstrap:
     coinbase: '0x4321'
     eligibility-confidence-param: '5'
     eligibility-epoch-offset: '0'
-    post-space-unit: '1024'
+    post-space: '1024'
     genesis-total-weight: '52224'
     executable-path: '/bin/go-spacemesh'
   deployment_type: deployment
@@ -61,7 +61,7 @@ client:
     coinbase: '0x1234'
     eligibility-confidence-param: '5'
     eligibility-epoch-offset: '0'
-    post-space-unit: '1024'
+    post-space: '1024'
     genesis-total-weight: '52224'
     executable-path: '/bin/go-spacemesh'
   deployment_type: deployment
@@ -89,7 +89,7 @@ clientv2:
     coinbase: '0x1234'
     eligibility-confidence-param: '5'
     eligibility-epoch-offset: '0'
-    post-space-unit: '1024'
+    post-space: '1024'
     genesis-total-weight: '52224'
     executable-path: '/bin/go-spacemesh'
   deployment_type: deployment

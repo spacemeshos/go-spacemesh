@@ -173,7 +173,7 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().StringVar(&config.POST.DataDir, "post-datadir",
 		config.POST.DataDir, "The directory that contains post data files")
-	cmd.PersistentFlags().Uint64Var(&config.POST.SpacePerUnit, "post-space-unit",
+	cmd.PersistentFlags().Uint64Var(&config.POST.SpacePerUnit, "post-space",
 		config.POST.SpacePerUnit, "Space per unit, in bytes")
 	cmd.PersistentFlags().IntVar(&config.POST.NumFiles, "post-numfiles",
 		config.POST.NumFiles, "Number of files")
