@@ -246,11 +246,8 @@ def save_log_on_exit(request):
 
 
 @pytest.fixture(scope='module')
-def add_curl(request, init_session, setup_bootstrap):
+def add_curl(request, init_session):
     def _run_curl_pod():
-        if not setup_bootstrap.pods:
-            raise Exception("Could not find bootstrap node")
-
         pod.create_pod(conf.CURL_POD_FILE, testconfig['namespace'])
         return True
 

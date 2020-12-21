@@ -99,7 +99,7 @@ def add_clients(setup_bootstrap, setup_clients):
 #    TESTS
 # ==============================================================================
 
-def test_bootstrap(init_session, add_node_pool, add_elk, setup_bootstrap):
+def test_bootstrap(init_session, add_node_pool, add_elk, add_curl, setup_bootstrap):
     print("running test_bootstrap")
     sleep_print_backwards(10 * timeout_factor, "wait for the bootstrap logs to be available in ElasticSearch")
     bs_id = query_bootstrap_es(testconfig['namespace'], setup_bootstrap.pods[0]['name'])
@@ -107,7 +107,7 @@ def test_bootstrap(init_session, add_node_pool, add_elk, setup_bootstrap):
     assert setup_bootstrap.pods[0]['key'] == bs_id, ass_err
 
 
-def test_client(init_session, add_node_pool, add_elk, setup_clients, add_curl, save_log_on_exit):
+def test_client(init_session, add_node_pool, add_elk, add_curl, setup_clients, save_log_on_exit):
     fields = {'M': 'discovery_bootstrap'}
     timetowait = len(setup_clients.pods) * timeout_factor
     print(f"Sleeping {str(timetowait)} before checking out bootstrap results")
