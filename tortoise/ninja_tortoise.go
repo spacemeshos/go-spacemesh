@@ -199,7 +199,7 @@ func (ni *ninjaTortoise) evictOutOfPbase() {
 				delete(ni.TEffective, id)
 				delete(ni.TCorrect, id)
 				delete(ni.TExplicit, id)
-				ni.logger.Debug("evict block %v from maps ", id)
+				ni.logger.Info("evict block from maps ", id)
 			}
 		}()
 		wg.Wait()
@@ -209,7 +209,7 @@ func (ni *ninjaTortoise) evictOutOfPbase() {
 
 func (ni *ninjaTortoise) processBlock(b *types.Block) {
 
-	ni.logger.Debug("process block: %s layer: %s  ", b.ID(), b.Layer())
+	ni.logger.With().Info("process block", b.ID(), b.Layer())
 	if b.Layer() == types.GetEffectiveGenesis() {
 		return
 	}
