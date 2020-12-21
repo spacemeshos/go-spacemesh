@@ -319,8 +319,7 @@ func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 	if err != nil {
 		return errors.New("could not encode layer blk ids")
 	}
-	m.layers.Put(blk.LayerIndex.Bytes(), w)
-	return nil
+	return m.layers.Put(blk.LayerIndex.Bytes(), w)
 }
 
 // try delete layer Handler (deletes if pending pendingCount is 0)
