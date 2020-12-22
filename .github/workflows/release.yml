@@ -63,7 +63,8 @@ jobs:
         with:
           path: ${{ steps.buildpath.outputs.value }}
           destination: ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/${{ matrix.os }}
-      
+  
+  # The other dockerpush workflow is for building latest develop branch. Whereas for release we have several steps pre and post docker build/push.
   docker-push:
     runs-on: ubuntu-latest
     needs: build-and-upload
