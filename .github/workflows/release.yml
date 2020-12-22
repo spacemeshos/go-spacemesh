@@ -64,17 +64,6 @@ jobs:
           path: ${{ steps.buildpath.outputs.value }}
           destination: ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/${{ matrix.os }}
   
-  # The other dockerpush workflow is for building latest develop branch. Whereas for release we have several steps pre and post docker build/push.
-  docker-push:
-    runs-on: ubuntu-latest
-    needs: build-and-upload
-    steps:
-      - name: Check out Git repository
-        uses: actions/checkout@v2
-      
-      - name: push to dockerhub
-        run: make dockerpush
-
   release:
     runs-on: ubuntu-latest
     needs: docker-push
