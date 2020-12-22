@@ -219,11 +219,9 @@ def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME, logstas
         es_sleep_time = statefulset.wait_to_statefulset_to_be_ready(es_ss_name, namespace, time_out=es_timeout)
     except Exception as e:
         print("elasticsearch statefulset readiness check has failed with err:", e)
-        k8h.remove_deployment_dir(namespace, conf.ELASTIC_CONF_DIR)
-        k8h.add_elastic_cluster(namespace)
-        es_sleep_time = statefulset.wait_to_statefulset_to_be_ready(es_ss_name, namespace, time_out=es_timeout)
+        raise Exception(f"elasticsearch took over than {es_timeout} to start")
 
-    ls_timeout = 180
+    ls_timeout = 240
     try:
         print("waiting for logstash to be ready")
         logstash_sleep_time = statefulset.wait_to_statefulset_to_be_ready(logstash_ss_name, namespace,
