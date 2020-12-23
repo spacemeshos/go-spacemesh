@@ -134,6 +134,8 @@ jobs:
     needs: dockerpush
     runs-on: ubuntu-latest
     timeout-minutes: 80
+    strategy:
+      max-parallel: 3
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -145,6 +147,8 @@ jobs:
     needs: dockerpush
     runs-on: ubuntu-latest
     timeout-minutes: 80
+    strategy:
+      max-parallel: 3
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -156,6 +160,8 @@ jobs:
     needs: dockerpush
     runs-on: ubuntu-latest
     timeout-minutes: 80
+    strategy:
+      max-parallel: 3
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -167,6 +173,8 @@ jobs:
     needs: dockerpush
     runs-on: ubuntu-latest
     timeout-minutes: 80
+    strategy:
+      max-parallel: 3
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -178,6 +186,8 @@ jobs:
     needs: dockerpush
     runs-on: ubuntu-latest
     timeout-minutes: 80
+    strategy:
+      max-parallel: 3
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -189,6 +199,8 @@ jobs:
     needs: dockerpush
     runs-on: ubuntu-latest
     timeout-minutes: 80
+    strategy:
+      max-parallel: 3
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -200,6 +212,8 @@ jobs:
     needs: dockerpush
     runs-on: ubuntu-latest
     timeout-minutes: 80
+    strategy:
+      max-parallel: 3
     steps:
       - name: checkout
         uses: actions/checkout@v2
