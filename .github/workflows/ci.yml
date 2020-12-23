@@ -32,7 +32,7 @@ jobs:
   ## these run on all pushes to all pull requests, all branches
   ## note that secrets may not be accessible in this phase
   quicktests:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     # should not take more than 2-3 mins
     timeout-minutes: 5
     steps:
@@ -49,7 +49,7 @@ jobs:
           make test-fmt
           make lint
   unittests:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     # should take around 8-10 mins
     timeout-minutes: 15
     steps:
@@ -64,7 +64,7 @@ jobs:
       - name: unit tests (except app test)
         run: make test-no-app-test
   apptests:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     # should take around 7-9 mins
     timeout-minutes: 15
     steps:
@@ -86,7 +86,7 @@ jobs:
       - quicktests
       - unittests
       - apptests
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     env:
       status: ${{ needs.quicktests.result == 'success' && needs.unittests.result == 'success' && needs.apptests.result == 'success' && 'success' || 'failure' }}
     # this is the easiest way to access success/failure state of previous jobs in this workflow
@@ -120,7 +120,7 @@ jobs:
       - quicktests
       - unittests
       - apptests
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -132,7 +132,7 @@ jobs:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -143,7 +143,7 @@ jobs:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -154,7 +154,7 @@ jobs:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -165,7 +165,7 @@ jobs:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -176,7 +176,7 @@ jobs:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -187,7 +187,7 @@ jobs:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -198,7 +198,7 @@ jobs:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -220,7 +220,7 @@ jobs:
       - systemtest-p2p
       - systemtest-hare
       - systemtest-sync
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     env:
       status: ${{ needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-blocks-remove-node.result == 'success' && needs.systemtest-mining.result == 'success' && needs.systemtest-p2p.result == 'success' && needs.systemtest-hare.result == 'success' && needs.systemtest-sync.result == 'success' && 'success' || 'failure' }}
     steps:
