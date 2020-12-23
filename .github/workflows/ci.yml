@@ -134,7 +134,8 @@ jobs:
     needs: dockerpush
     runs-on: ubuntu-latest
     timeout-minutes: 80
-    
+    strategy:
+      max-parallel: 3
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -146,6 +147,8 @@ jobs:
     needs: dockerpush
     runs-on: ubuntu-latest
     timeout-minutes: 80
+    strategy:
+      max-parallel: 3
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -157,6 +160,8 @@ jobs:
     needs: dockerpush
     runs-on: ubuntu-latest
     timeout-minutes: 80
+    strategy:
+      max-parallel: 3
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -165,9 +170,11 @@ jobs:
   systemtest-mining:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
-    needs: systemtest-latenodes
+    needs: dockerpush
     runs-on: ubuntu-latest
     timeout-minutes: 80
+    strategy:
+      max-parallel: 3
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -176,9 +183,11 @@ jobs:
   systemtest-p2p:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
-    needs: systemtest-blocks-add-node
+    needs: dockerpush
     runs-on: ubuntu-latest
     timeout-minutes: 80
+    strategy:
+      max-parallel: 3
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -187,9 +196,11 @@ jobs:
   systemtest-hare:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
-    needs: systemtest-blocks-remove-node
+    needs: dockerpush
     runs-on: ubuntu-latest
     timeout-minutes: 80
+    strategy:
+      max-parallel: 3
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -198,9 +209,11 @@ jobs:
   systemtest-sync:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
-    needs: systemtest-mining
+    needs: dockerpush
     runs-on: ubuntu-latest
     timeout-minutes: 80
+    strategy:
+      max-parallel: 3
     steps:
       - name: checkout
         uses: actions/checkout@v2
