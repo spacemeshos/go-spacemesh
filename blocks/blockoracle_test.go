@@ -313,7 +313,7 @@ func TestBlockEligibility_calc(t *testing.T) {
 	atxDb := &mockAtxDB{atxH: atxH.ActivationTxHeader}
 	genSetSize := uint32(0)
 	o := NewMinerBlockOracle(10, genSetSize, 1, atxDb, &EpochBeaconProvider{}, vrfsgn, nodeID, func() bool { return true }, log.NewDefault(t.Name()))
-	_, err := o.calcEligibilityProofs(1)
+	err := o.calcEligibilityProofs(1)
 	r.EqualError(err, "empty active set not allowed") // a hack to make sure we got genesis active set size on genesis
 }
 
