@@ -96,7 +96,7 @@ class NodePoolDep:
         return dividor, cpu_per_node, mem_per_node
 
     def remove_node_pool(self):
-        print("removing node pool")
+        print("\nremoving node pool")
         ut.exec_wait(self.gcloud_delete.format(pool_name=self.pool_name, cluster_name=self.cluster_name, zone=self.zone)
                      , retry=60, interval=10)
 

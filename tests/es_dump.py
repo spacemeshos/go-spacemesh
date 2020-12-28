@@ -61,7 +61,7 @@ def es_reindex(namespace, index_date, port=9200, retry=3):
     try:
         es_ip = ES(namespace).es_ip
     except Exception as e:
-        print(f"failed getting local ES IP: {e}")
+        print(f"failed getting local ES IP: {e}\ncannot reindex ES!!!")
         return
 
     dump_req_body = {
@@ -84,7 +84,7 @@ def es_reindex(namespace, index_date, port=9200, retry=3):
     post_url = f"http://{cnf.ES_USER_LOCAL}:{cnf.ES_PASS_LOCAL}@{cnf.MAIN_ES_URL}/_reindex"
     headers = {"Content-Type": "application/json"}
     try:
-        res = requests.post(url=post_url, data=json.dumps(dump_req_body), headers=headers, timeout=480)
+        res = requests.post(url=post_url, data=json.dumps(dump_req_body), headers=headers, timeout=900)
     except Exception as e:
         print(f"elk dumping POST has failed: {e}")
         return

@@ -20,6 +20,8 @@ spec:
       annotations:
 
     spec:
+      nodeSelector:
+        role: tests
       securityContext:
         fsGroup: 1000
       volumes:
@@ -85,12 +87,11 @@ spec:
               cpu: 1000m
               memory: 2Gi
             requests:
-              cpu: 100m
-              memory: 512Mi
+              cpu: 1000m
+              memory: 2Gi
           volumeMounts:
             - name: config
               mountPath: /usr/share/kibana/config
-
 ---
 
 apiVersion: v1

@@ -278,7 +278,7 @@ def add_elk(init_session):
     wait_for_minimal_elk_cluster_ready(init_session)
     yield
     fluent_bit_teardown(init_session)
-    # es_reindex(init_session, index_date)
+    es_reindex(init_session, index_date)
 
 
 def raise_exception():

@@ -68,7 +68,7 @@ spec:
       tolerations:
         - key: "app"
           operator: "Equal"
-          value: "elasticseach-main"
+          value: "elasticsearch-main"
           effect: "NoSchedule"
       nodeSelector:
           app: elasticsearch-main
@@ -184,7 +184,7 @@ spec:
             - name: ELASTIC_PASSWORD
               value: gavradon
             - name: xpack.security.enabled
-              value: "true"
+              value: "false"
             - name: xpack.monitoring.enabled
               value: "true"
             - name: xpack.monitoring.collection.enabled
