@@ -1,6 +1,7 @@
 from kubernetes import config as k8s_config
 import os
 import requests
+import time
 
 from kubernetes import client
 from kubernetes.client.rest import ApiException
@@ -69,7 +70,6 @@ def load_config():
 
 
 def api_call(client_ip, data, api, namespace, port="9093", retry=3, interval=1):
-    # todo: this won't work with long payloads - ( `Argument list too long` ). try port-forward ?
     res = None
     while True:
         try:
@@ -78,7 +78,6 @@ def api_call(client_ip, data, api, namespace, port="9093", retry=3, interval=1):
                          stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
         except ApiException as e:
             print(f"got an ApiException while streaming: {e}")
-            import time
             print(f"sleeping for {interval} seconds before trying again")
             time.sleep(interval)
             retry -= 1

@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta
+
+from kubernetes.client.rest import ApiException
 from kubernetes.stream import stream
 import functools
 import ntpath
@@ -20,11 +22,24 @@ ES_SS_NAME = "elasticsearch-master"
 LOGSTASH_SS_NAME = "logstash"
 
 
-def api_call(client_ip, data, api, namespace, port="9093"):
-    # todo: this won't work with long payloads - ( `Argument list too long` ). try port-forward ?
-    res = stream(CoreV1ApiClient().connect_post_namespaced_pod_exec, name="curl", namespace=namespace,
-                 command=["curl", "-s", "--request", "POST", "--data", data, f"http://{client_ip}:{port}/{api}"],
-                 stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
+def api_call(client_ip, data, api, namespace, port="9093", retry=3, interval=1):
+    res = None
+    while True:
+        try:
+            res = stream(CoreV1ApiClient().connect_post_namespaced_pod_exec, name="curl", namespace=namespace,
+                         command=["curl", "-s", "--request", "POST", "--data", data, f"http://{client_ip}:{port}/{api}"],
+                         stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
+        except ApiException as e:
+            print(f"got an ApiException while streaming: {e}")
+            print(f"sleeping for {interval} seconds before trying again")
+            time.sleep(interval)
+            retry -= 1
+            if retry < 0:
+                raise ApiException(e)
+            continue
+        else:
+            break
+
     return res
 
 
