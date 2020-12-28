@@ -295,6 +295,14 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 }
 
 func (msh *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerID) {
+	if oldPbase < 2 {
+		msh.With().Warning("tried to push layer < 2",
+			log.FieldNamed("old_pbase", oldPbase), log.FieldNamed("new_pbase", newPbase))
+		if newPbase < 3 {
+			return
+		}
+		oldPbase = 2
+	}
 	for layerID := oldPbase; layerID < newPbase; layerID++ {
 		l, err := msh.GetLayer(layerID)
 		// TODO: propagate/handle error

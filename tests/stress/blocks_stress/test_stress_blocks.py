@@ -14,5 +14,5 @@ def test_blocks_stress(init_session, setup_network):
     number_of_cl += 1  # add bootstrap node
 
     last_layer = layers_per_epoch * epochs_to_wait
-    layer_reached = wait_for_latest_layer(init_session, last_layer, layers_per_epoch, number_of_cl)
-    analyse.analyze_mining(init_session, layer_reached, layers_per_epoch, layer_avg_size, number_of_cl)
+    wait_for_latest_layer(init_session, last_layer, layers_per_epoch, number_of_cl)
+    analyse.analyze_mining(init_session, epochs_to_wait, layers_per_epoch, layer_avg_size, number_of_cl)

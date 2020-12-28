@@ -89,7 +89,7 @@ def test_transactions(init_session, setup_network):
 def test_mining(init_session, setup_network):
     current_index = get_curr_ind()
     ns = init_session
-    layer_avg_size = testconfig['client']['args']['layer-average-size']
+    layer_avg_size = int(testconfig['client']['args']['layer-average-size'])
     layers_per_epoch = int(testconfig['client']['args']['layers-per-epoch'])
     # check only third epoch
     epochs = 5
@@ -97,12 +97,12 @@ def test_mining(init_session, setup_network):
 
     total_pods = len(setup_network.clients.pods) + len(setup_network.bootstrap.pods)
 
-    layer_reached = queries.wait_for_latest_layer(testconfig["namespace"], last_layer, layers_per_epoch, total_pods)
+    queries.wait_for_latest_layer(testconfig["namespace"], last_layer, layers_per_epoch, total_pods)
 
     tts = 50
     sleep_print_backwards(tts)
 
-    analyse.analyze_mining(testconfig['namespace'], layer_reached, layers_per_epoch, layer_avg_size, total_pods)
+    analyse.analyze_mining(testconfig['namespace'], epochs, layers_per_epoch, layer_avg_size, total_pods)
 
     queries.assert_equal_layer_hashes(current_index, ns)
     queries.assert_equal_state_roots(current_index, ns)
