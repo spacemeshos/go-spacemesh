@@ -120,6 +120,7 @@ func (s *Switch) waitForGossip() error {
 	return nil
 }
 
+// GossipReady is a chan which is closed when we established initial min connections with peers.
 func (s *Switch) GossipReady() <-chan struct{} {
 	return s.gossipC
 }
