@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	_ "net/http/pprof" // import for memory and network profiling
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -51,11 +52,7 @@ import (
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
-
-	_ "net/http/pprof"
 )
-
-// import for memory and network profiling
 
 const edKeyFileName = "key.bin"
 
