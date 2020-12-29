@@ -59,29 +59,48 @@ spec:
                       - "elasticsearch-master"
               topologyKey: kubernetes.io/hostname
       terminationGracePeriodSeconds: 120
-      volumes:
       enableServiceLinks: true
       initContainers:
         - name: configure-sysctl
+          image: "docker.elastic.co/elasticsearch/elasticsearch:7.9.2"
+          imagePullPolicy: "IfNotPresent"
           securityContext:
             runAsUser: 0
             privileged: true
-          image: "docker.elastic.co/elasticsearch/elasticsearch:7.9.2"
-          imagePullPolicy: "IfNotPresent"
           command: ["sysctl", "-w", "vm.max_map_count=262144"]
           resources:
             {}
+        - name: install-plugin
+          image: "docker.elastic.co/elasticsearch/elasticsearch:7.9.2"
+          imagePullPolicy: "IfNotPresent"
+          command:
+          - sh
+          - -c
+          - |
+            bin/elasticsearch-plugin install --batch repository-gcs
+        - name: add-gcs-key
+          image: "docker.elastic.co/elasticsearch/elasticsearch:7.9.2"
+          imagePullPolicy: "IfNotPresent"
+          command:
+          - sh
+          - -c
+          - |
+            echo y | bin/elasticsearch-keystore add-file gcs.client.default.credentials_file ./key/gcs_backup_key.json
+          volumeMounts:
+          - name: gcs-backup-key
+            mountPath: "/usr/share/elasticsearch/key"
+            readOnly: true
 
       containers:
         - name: "elasticsearch"
+          image: "docker.elastic.co/elasticsearch/elasticsearch:7.9.2"
+          imagePullPolicy: "IfNotPresent"
           securityContext:
             capabilities:
               drop:
                 - ALL
             runAsNonRoot: true
             runAsUser: 1000
-          image: "docker.elastic.co/elasticsearch/elasticsearch:7.9.2"
-          imagePullPolicy: "IfNotPresent"
           readinessProbe:
             exec:
               command:
@@ -192,3 +211,7 @@ spec:
           volumeMounts:
             - name: "volume"
               mountPath: /usr/share/elasticsearch/data
+      volumes:
+        - name: gcs-backup-key
+          secret:
+            secretName: gcs-backup-key

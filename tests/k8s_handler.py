@@ -3,6 +3,8 @@ from kubernetes.client.rest import ApiException
 import os
 import time
 import yaml
+import base64
+import json 
 
 from tests import config as conf
 import tests.utils as ut
@@ -17,6 +19,16 @@ def remove_clusterrole_binding(shipper_name, crb_name):
     except Exception as e:
         print(f"\n{shipper_name} cluster role binding deletion has failed, manually delete {crb_name}")
 
+def add_elastic_secret(namespace):
+  encoded_gcloud_key = os.environ['GCLOUD_KEY']
+  k8s_client = client.CoreV1Api()
+  body = client.V1Secret()
+  body.api_version = 'v1'
+  body.data = { "gcs_backup_key.json":  encoded_gcloud_key }
+  body.kind = 'Secret'
+  body.metadata = {'name': 'gcs-backup-key'}
+  body.type = 'Opaque'
+  k8s_client.create_namespaced_secret(namespace, body, pretty='true')
 
 def filebeat_teardown(namespace):
     # remove clusterrolebind

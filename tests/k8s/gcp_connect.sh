@@ -24,4 +24,3 @@ echo $GCLOUD_KEY | base64 --decode > spacemesh.json
 gcloud auth activate-service-account --key-file spacemesh.json
 gcloud config set project $PROJECT_NAME
 gcloud container clusters get-credentials $CLUSTER_NAME --zone $CLUSTER_ZONE
-

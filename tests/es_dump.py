@@ -1,11 +1,12 @@
 import json
 import requests
 import time
-
+import pytest
 import tests.config as cnf
-from tests.context import ES
 from tests.utils import exec_wait
-
+from tests.context import ES, generate_elastic_url, Context
+from pprint import pprint
+from elasticsearch import client
 
 SHIPPER = "fluent-bit"
 INDX = SHIPPER+"-{namespace}-{index_date}"
@@ -107,3 +108,9 @@ def es_reindex(namespace, index_date, port=9200, retry=3):
     elif res_json:
         print(f"response:\n{json.dumps(res_json)}")
         print("done dumping")
+
+
+def es_backup(namespace):
+    es = ES(namespace).get_search_api()
+    snapshot_client = client.SnapshotClient(es)
+    snapshot_client.create_repository(namespace, "{\"type\":\"gcs\",\"settings\":{\"bucket\":\"sm-elk\",\"base_path\":\"backups\"}}")   

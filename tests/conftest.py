@@ -11,8 +11,8 @@ import subprocess
 from tests import config as conf
 from tests import pod
 from tests.context import Context
-from tests.es_dump import es_reindex
-from tests.k8s_handler import add_elastic_cluster, add_kibana_cluster, add_logstash_cluster, add_fluent_bit_cluster, \
+from tests.es_dump import es_backup
+from tests.k8s_handler import add_elastic_secret, add_elastic_cluster, add_kibana_cluster, add_logstash_cluster, add_fluent_bit_cluster, \
     fluent_bit_teardown, remove_deployment_dir
 from tests.misc import CoreV1ApiClient
 from tests.node_pool_deployer import NodePoolDep
@@ -271,6 +271,7 @@ def add_node_pool():
 def add_elk(init_session):
     # get today's date for filebeat data index
     index_date = datetime.utcnow().date().strftime("%Y.%m.%d")
+    add_elastic_secret(init_session)
     add_elastic_cluster(init_session)
     add_logstash_cluster(init_session)
     add_fluent_bit_cluster(init_session)
@@ -278,6 +279,7 @@ def add_elk(init_session):
     wait_for_minimal_elk_cluster_ready(init_session)
     yield
     fluent_bit_teardown(init_session)
+    es_backup(init_session)
     # es_reindex(init_session, index_date)
 
 
