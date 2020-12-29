@@ -671,7 +671,6 @@ func (app *SpacemeshApp) HareFactory(mdb *mesh.DB, swarm service.Service, sgn ha
 
 func (app *SpacemeshApp) startServices() {
 	//app.blockListener.Start()
-	app.syncer.Start()
 	err := app.hare.Start()
 	if err != nil {
 		log.Panic("cannot start hare")
@@ -1009,6 +1008,13 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Panic("Error starting p2p services: %v", err)
 	}
+	go func() {
+		select {
+		case <-app.P2P.GossipReady():
+			break
+		}
+		app.syncer.Start()
+	}()
 
 	app.startAPIServices(app.P2P)
 	events.SubscribeToLayers(clock.Subscribe())

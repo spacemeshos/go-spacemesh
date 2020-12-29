@@ -244,6 +244,13 @@ func (sn *Node) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, pay
 	return sn.sendMessageImpl(peerPubkey, protocol, DataBytes{Payload: payload})
 }
 
+// SendMessage send a message to another simulated node.
+func (sn *Node) GossipReady() <-chan struct{} {
+	c := make(chan struct{}, 1)
+	c <- struct{}{}
+	return c
+}
+
 func (sn *Node) sendMessageImpl(nodeID p2pcrypto.PublicKey, protocol string, payload Data) error {
 	sn.sim.mutex.RLock()
 	thec, ok := sn.sim.protocolDirectHandler[nodeID][protocol]

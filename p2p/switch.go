@@ -120,6 +120,10 @@ func (s *Switch) waitForGossip() error {
 	return nil
 }
 
+func (s *Switch) GossipReady() <-chan struct{} {
+	return s.gossipC
+}
+
 // newSwarm creates a new P2P instance, configured by config, if a NodeID is given it tries to load if from `datadir`,
 // otherwise it loads the first found node from `datadir` or creates a new one and store it there. It creates
 // all the needed services.
