@@ -32,7 +32,9 @@ func (ServiceMock) SubscribePeerEvents() (new chan p2pcrypto.PublicKey, del chan
 }
 
 func (ServiceMock) GossipReady() <-chan struct{} {
-	panic("implement me")
+	c := make(chan struct{})
+	close(c)
+	return c
 }
 
 func (ServiceMock) Broadcast(protocol string, payload []byte) error { panic("implement me") }

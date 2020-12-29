@@ -22,9 +22,13 @@ from tests.utils import get_conf
 def test_unsync_while_genesis(init_session, setup_bootstrap, start_poet, add_curl):
     layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
 
+    # As client waits for gossip before sync, additional delay is needed.
+    gossip_delay = int(testconfig["gossip_delay"])
+
     time_to_create_block_since_startup = int(testconfig['client']['args']['layers-per-epoch']) * 2 * layer_duration
-    time_before_first_block = int(testconfig["genesis_delta"]) + time_to_create_block_since_startup
-    layers_to_wait = 4
+    time_before_first_block = int(testconfig["genesis_delta"]) + time_to_create_block_since_startup + gossip_delay
+
+    layers_to_wait = 8
 
     bs_info = setup_bootstrap.pods[0]
     cspec = get_conf(bs_info, testconfig['client'], testconfig['genesis_delta'], setup_oracle=None,
@@ -57,6 +61,9 @@ def test_unsync_while_genesis(init_session, setup_bootstrap, start_poet, add_cur
     # Get the msg when app started on the late node
     app_started_hits = q.get_app_started_msgs(init_session, unsynced_cl.pods[0]["name"])
     assert app_started_hits, f"app did not start for new node after {layers_to_wait} layers"
+
+    print(f"sleeping for {gossip_delay} seconds\n")
+    time.sleep(gossip_delay)
 
     # Check if the new node has finished syncing
     hits_synced = q.get_done_syncing_msgs(init_session, unsynced_cl.pods[0]["name"])

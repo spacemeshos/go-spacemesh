@@ -2,6 +2,9 @@ package fetch
 
 import (
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -12,8 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"time"
 )
 
 func randomHash() (hash types.Hash32) {
@@ -76,6 +77,12 @@ func (m mockNet) RegisterDirectProtocol(protocol string) chan service.DirectMess
 	return nil
 }
 
+func (m mockNet) GossipReady() <-chan struct{} {
+	c := make(chan struct{})
+	close(c)
+	return c
+}
+
 func (m mockNet) SubscribePeerEvents() (new chan p2pcrypto.PublicKey, del chan p2pcrypto.PublicKey) {
 	return nil, nil
 }
@@ -92,10 +99,6 @@ func (m mockNet) RegisterDirectProtocolWithChannel(protocol string, ingressChann
 }
 
 func (m mockNet) SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
-	return nil
-}
-
-func (m mockNet) GossipReady() <-chan struct{} {
 	return nil
 }
 
