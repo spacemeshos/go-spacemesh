@@ -117,8 +117,15 @@ def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch,
         blocks_per_layer = blocks_sum / (to_layer - from_layer)
         wanted_res = int((layer_avg_size * layers_per_epoch) / num_miners) / layers_per_epoch
         ass_err = f"node {node} failed creating the avg block size"
-        ass_err += f"\nblocks created per layer {blocks_per_layer}, wanted average block per node {wanted_res}"
+        ass_err += f"\nblocks created per layer {blocks_per_layer}, wanted average block per node {wanted_res}, " \
+                   f"layer_avg_size {layer_avg_size}, layers_per_epoch {layers_per_epoch}, num_miners {num_miners}, " \
+                   f"blocks_sum {blocks_sum}, to_layer {to_layer}, from_layer {from_layer}, blocks {node_lays}"
         assert blocks_per_layer == wanted_res, ass_err
+
+        print(f"successfully validated {node}",
+              f"\nblocks created per layer {blocks_per_layer}, wanted average block per node {wanted_res}, ",
+              f"layer_avg_size {layer_avg_size}, layers_per_epoch {layers_per_epoch}, num_miners {num_miners}, ",
+              f"blocks_sum {blocks_sum}, to_layer {to_layer}, from_layer {from_layer}")
 
     print("\nvalidation succeeded!\n")
 
