@@ -95,6 +95,10 @@ func (m mockNet) SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string,
 	return nil
 }
 
+func (m mockNet) GossipReady() <-chan struct{} {
+	return nil
+}
+
 func (m mockNet) GetPeers() []p2ppeers.Peer {
 	_, pub1, _ := p2pcrypto.GenerateKeyPair()
 	return []p2ppeers.Peer{pub1}
