@@ -69,7 +69,7 @@ func (fq *fetchQueue) work() error {
 	output := fetchWithFactory(newFetchWorker(fq.workerInfra, runtime.NumCPU(), fq.batchRequestFactory, fq.queue, fq.name))
 	wg := sync.WaitGroup{}
 	wg.Add(runtime.NumCPU())
-	for i:=0; i < runtime.NumCPU(); i ++{
+	for i := 0; i < runtime.NumCPU(); i++ {
 		go func() {
 			fq.Info("running work")
 			for out := range output {
