@@ -9,6 +9,7 @@ import string
 import subprocess
 
 from tests import config as conf
+from tests import convenience as conv
 from tests import pod
 from tests.context import Context
 from tests.es_dump import es_reindex
@@ -268,7 +269,7 @@ def add_node_pool():
 
 
 @pytest.fixture(scope='module')
-def add_elk(init_session):
+def add_elk(init_session, request):
     # get today's date for filebeat data index
     index_date = datetime.utcnow().date().strftime("%Y.%m.%d")
     add_elastic_cluster(init_session)
@@ -278,8 +279,11 @@ def add_elk(init_session):
     wait_for_minimal_elk_cluster_ready(init_session)
     yield
     fluent_bit_teardown(init_session)
-    es_reindex(init_session, index_date)
+    if conv.str2bool(request.config.getoption("--is-dump")):
+        es_reindex(init_session, index_date)
 
 
-def raise_exception():
-    raise Exception("this is a dummy exception")
+def pytest_addoption(parser):
+    print('conftest method')
+    is_dump_help = "whether to dump logs into main ES when test is done"
+    parser.addoption("--is-dump", action="store", default="false", help=is_dump_help)

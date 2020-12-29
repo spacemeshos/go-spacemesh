@@ -11,7 +11,7 @@ LOGSTASH_CONF_DIR = './elk/logstash/'
 
 ES_USER_LOCAL = "elastic"
 ES_PASS_LOCAL = "gavradon"
-MAIN_ES_URL = "34.83.53.216:9200"
+MAIN_ES_URL = "35.197.82.152:9200"
 
 
 BOOTSTRAP_PORT = 7513
