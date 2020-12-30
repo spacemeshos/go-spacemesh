@@ -163,19 +163,7 @@ func TestSyncer_Start(t *testing.T) {
 	syn := syncs[0]
 	defer syn.Close()
 	syn.Start()
-	timeout := time.After(10 * time.Second)
-	for {
-		select {
-		// Got a timeout! fail with a timeout error
-		case <-timeout:
-			t.Error("timed out ")
-			return
-		default:
-			if !syn.startLock.TryLock() {
-				return
-			}
-		}
-	}
+	syn.Start()
 }
 
 func createBlock(activationTx types.ActivationTx, signer *signing.EdSigner) *types.Block {
