@@ -86,6 +86,9 @@ EFK_LOG_PROPAGATION_DELAY = 20
 
 # simple sanity test run for one layer
 def test_hare_sanity(init_session, add_elk, add_node_pool, setup_bootstrap_for_hare, setup_clients_for_hare):
+    print("#@!#@! amitmamitmaijgdlgjslkgfsdjgkl;fdsjfl;kdsjfk;ldsjfkdsjfgk;ldshg;lkshg;kldshg")
+    testconfig["passed"] = False
+    assert 0
     # NOTICE the following line should be present in the first test of the suite
     wait_genesis(get_genesis_time_delta(testconfig['genesis_delta']), testconfig['genesis_delta'])
     current_index = get_curr_ind()

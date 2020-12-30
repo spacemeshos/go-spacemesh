@@ -271,6 +271,7 @@ def add_node_pool():
 @pytest.fixture(scope='module')
 def add_elk(init_session, request):
     # get today's date for filebeat data index
+    print("#@! testconfig", testconfig["passed"])
     index_date = datetime.utcnow().date().strftime("%Y.%m.%d")
     add_elastic_cluster(init_session)
     add_logstash_cluster(init_session)
@@ -278,6 +279,8 @@ def add_elk(init_session, request):
     add_kibana_cluster(init_session)
     wait_for_minimal_elk_cluster_ready(init_session)
     yield
+    print("#@! testconfig", testconfig["passed"])
+    print("#@! str2bool testconfig", conv.str2bool(testconfig["passed"]))
     fluent_bit_teardown(init_session)
     if request.config.getoption("--is-dump"):
         es_reindex(init_session, index_date)

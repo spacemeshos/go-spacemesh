@@ -4,6 +4,7 @@ config_map_name: conf
 
 script_on_exit: '' #'./k8s/log-client-pods.sh'
 
+passed: True
 total_pods: 20
 genesis_delta: 55
 deployment_ready_time_out: 180
