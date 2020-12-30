@@ -82,8 +82,12 @@ def es_reindex(namespace, index_date, port=9200, retry=3):
     }
     print(f"\ndumping index: {indx}, from: {es_ip}:{port}, to: {cnf.MAIN_ES_URL}")
     post_url = f"http://{cnf.ES_USER_LOCAL}:{cnf.ES_PASS_LOCAL}@{cnf.MAIN_ES_URL}/_reindex"
-    headers = {"Content-Type": "application/json", "Connection": "Keep-Alive", "Keep-Alive": "timeout=900, max=500"}
+    # headers = {"Content-Type": "application/json", "Connection": "Keep-Alive", "Keep-Alive": "timeout=900, max=500"}
+    headers = {"Content-Type": "application/json"}
     try:
+        # with requests.Session() as session:
+        #     session.headers.update(headers)
+        #     res = session.post(post_url, data=json.dumps(dump_req_body))
         res = requests.post(url=post_url, data=json.dumps(dump_req_body), headers=headers, timeout=900)
     except Exception as e:
         print(f"elk dumping POST has failed: {e}")
