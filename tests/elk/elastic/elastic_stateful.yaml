@@ -78,6 +78,9 @@ spec:
           - -c
           - |
             bin/elasticsearch-plugin install --batch repository-gcs
+          volumeMounts:
+          - name: shared-data
+            mountPath: /usr/share/elasticsearch/plugins
         - name: add-gcs-key
           image: "docker.elastic.co/elasticsearch/elasticsearch:7.9.2"
           imagePullPolicy: "IfNotPresent"
@@ -211,7 +214,11 @@ spec:
           volumeMounts:
             - name: "volume"
               mountPath: /usr/share/elasticsearch/data
+            - name: shared-data
+              mountPath: /usr/share/elasticsearch/plugins
       volumes:
         - name: gcs-backup-key
           secret:
             secretName: gcs-backup-key
+        - name: shared-data
+          emptyDir: {}
