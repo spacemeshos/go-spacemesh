@@ -295,11 +295,7 @@ def wait_for_latest_layer(deployment, min_layer_id, layers_per_epoch, num_miners
 
 def node_published_atx(deployment, node_id, epoch_id):
     output = query_atx_per_node_and_epoch(deployment, node_id, epoch_id)
-    res = len(output) != 0
-
-    print(f"check if node {node_id} published ATX in epoch {epoch_id}: [{res}] {output}")
-
-    return res
+    return len(output) != 0
 
 
 def get_atx_per_node(deployment):

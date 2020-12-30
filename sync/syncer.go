@@ -214,8 +214,11 @@ func (s *Syncer) ForceSync() {
 // Close closes all running goroutines
 func (s *Syncer) Close() {
 	s.Info("Closing syncer")
+
 	close(s.exit)
+	s.startLock.Lock()
 	close(s.forceSync)
+	s.startLock.Unlock()
 	s.peers.Close()
 	s.syncLock.Lock()
 	s.syncLock.Unlock()
