@@ -4,30 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
-	"io/ioutil"
-	inet "net"
-	"net/http"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"sync"
-	"testing"
-	"time"
-
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spf13/cobra"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"google.golang.org/genproto/googleapis/rpc/code"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -39,6 +18,25 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"google.golang.org/genproto/googleapis/rpc/code"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"io"
+	"io/ioutil"
+	inet "net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
 )
 
 func tempDir() (dir string, cleanup func() error, err error) {
@@ -759,6 +757,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// Prevent obnoxious warning in macOS
 		app.Config.P2P.AcquirePort = false
 		app.Config.P2P.TCPInterface = "127.0.0.1"
+
+		// Avoid waiting for new connections.
+		app.Config.P2P.SwarmConfig.RandomConnections = 0
 
 		// Speed things up a little
 		app.Config.SyncInterval = 1
