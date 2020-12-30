@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -1110,7 +1111,7 @@ func (s *Syncer) fetchEpochAtxHashes(ep types.EpochID) (map[types.Hash32][]p2ppe
 func fetchWithFactory(wrk worker) chan interface{} {
 	// each worker goroutine tries to fetch a block iteratively from each peer
 	go wrk.Work()
-	for i := 0; int32(i) < *wrk.workCount-1; i++ {
+	for i := 0; int32(i) < atomic.LoadInt32(wrk.workCount)-1; i++ {
 		go wrk.Clone().Work()
 	}
 	return wrk.output
