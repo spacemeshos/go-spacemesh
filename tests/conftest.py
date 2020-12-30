@@ -279,11 +279,4 @@ def add_elk(init_session, request):
     wait_for_minimal_elk_cluster_ready(init_session)
     yield
     fluent_bit_teardown(init_session)
-    if request.config.getoption("--is-dump"):
-        es_reindex(init_session, index_date)
-
-
-def pytest_addoption(parser):
-    print('conftest method')
-    is_dump_help = "whether to dump logs into main ES when test is done"
-    parser.addoption("--is-dump", action="store_true", default="false", help=is_dump_help)
+    es_reindex(init_session, index_date) if request.session.testsfailed else None
