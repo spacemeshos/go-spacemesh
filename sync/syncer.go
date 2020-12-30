@@ -297,6 +297,7 @@ func (s *Syncer) IsSynced() bool {
 // and calls synchronise if the node is out of sync
 func (s *Syncer) Start() {
 	if s.startLock.TryLock() {
+		defer s.startLock.Unlock()
 		s.Info("start syncer")
 		go s.run()
 		s.forceSync <- true
