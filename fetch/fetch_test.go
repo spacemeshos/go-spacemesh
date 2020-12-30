@@ -57,10 +57,6 @@ type mockNet struct {
 	AckChannel  chan struct{}
 }
 
-func (m mockNet) GossipReady() <-chan struct{} {
-	panic("implement me")
-}
-
 func (m mockNet) RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func([]byte) []byte) {
 }
 

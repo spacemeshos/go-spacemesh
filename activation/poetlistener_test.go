@@ -18,10 +18,6 @@ type ServiceMock struct {
 	ch chan service.GossipMessage
 }
 
-func (s ServiceMock) GossipReady() <-chan struct{} {
-	panic("not implemented")
-}
-
 func (ServiceMock) Start() error { panic("implement me") }
 
 func (s *ServiceMock) RegisterGossipProtocol(protocol string, priority priorityq.Priority) chan service.GossipMessage {
