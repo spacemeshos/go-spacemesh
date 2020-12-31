@@ -120,6 +120,16 @@ func (s *Switch) waitForGossip() error {
 	return nil
 }
 
+// GossipReady is a chan which is closed when we established initial min connections with peers.
+func (s *Switch) GossipReady() <-chan struct{} {
+	if s.config.SwarmConfig.Gossip {
+		return s.gossipC
+	}
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}
+
 // newSwarm creates a new P2P instance, configured by config, if a NodeID is given it tries to load if from `datadir`,
 // otherwise it loads the first found node from `datadir` or creates a new one and store it there. It creates
 // all the needed services.
@@ -707,6 +717,18 @@ func (s *Switch) askForMorePeers() {
 	s.outpeersMutex.RUnlock()
 	req := s.config.SwarmConfig.RandomConnections - numpeers
 	if req <= 0 {
+		// If 0 connections are required, the condition above is always true,
+		// so gossip needs to be considered ready in this case.
+		if s.config.SwarmConfig.RandomConnections == 0 {
+			select {
+			case <-s.initial:
+				// Nothing to do if channel is closed.
+				break
+			default:
+				// Close channel if it is not closed.
+				close(s.initial)
+			}
+		}
 		return
 	}
 
