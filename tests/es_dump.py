@@ -4,7 +4,7 @@ import time
 
 import tests.config as cnf
 from tests.context import ES
-from tests.utils import exec_wait
+import tests.utils as ut
 
 
 SHIPPER = "fluent-bit"
@@ -27,8 +27,8 @@ def elasticdump_to_file(namespace, index_date, limit=500):
                               index=indx, file_name=mapping_file_name, type="mapping", limit=limit)
     dump_data = DMP_CMD.format(es_input_user=cnf.ES_USER_LOCAL, es_input_pass=cnf.ES_PASS_LOCAL, es_ip=es_ip,
                                index=indx, file_name=data_file_name, type="data", limit=limit)
-    exec_wait(dump_map)
-    exec_wait(dump_data)
+    ut.exec_wait(dump_map)
+    ut.exec_wait(dump_data)
 
 
 def elasticdump_from_file(namespace, index_date, limit=500):
@@ -39,8 +39,8 @@ def elasticdump_from_file(namespace, index_date, limit=500):
                                index=indx, type="mapping", limit=limit)
     rest_data = REST_CMD.format(file_name=data_file_name, es_output_user=cnf.ES_USER_LOCAL, es_output_pass=cnf.ES_PASS_LOCAL,
                                 index=indx, type="data", limit=limit)
-    exec_wait(rest_map)
-    exec_wait(rest_data)
+    ut.exec_wait(rest_map)
+    ut.exec_wait(rest_data)
 
 
 def elasticdump_direct(namespace, index_date, limit=500):
@@ -52,18 +52,17 @@ def elasticdump_direct(namespace, index_date, limit=500):
     dump_data = DMP_CMD.format(es_input_user=cnf.ES_USER_LOCAL, es_input_pass=cnf.ES_PASS_LOCAL, es_ip=es_ip,
                                namespace=namespace, index=indx, es_output_user=cnf.ES_USER_LOCAL,
                                es_output_pass=cnf.ES_PASS_LOCAL, type="data", limit=limit)
-    exec_wait(dump_map)
-    exec_wait(dump_data)
+    ut.exec_wait(dump_map)
+    ut.exec_wait(dump_data)
 
 
-def es_reindex(namespace, index_date, port=9200, retry=3):
+def es_reindex(namespace, index_date, port=9200):
     indx = INDX.format(namespace=namespace, index_date=index_date)
     try:
         es_ip = ES(namespace).es_ip
     except Exception as e:
         print(f"failed getting local ES IP: {e}\ncannot reindex ES!!!")
         return
-
     dump_req_body = {
         "source": {
             "remote": {
@@ -81,33 +80,45 @@ def es_reindex(namespace, index_date, port=9200, retry=3):
         }
     }
     print(f"\ndumping index: {indx}, from: {es_ip}:{port}, to: {cnf.MAIN_ES_URL}")
-    post_url = f"http://{cnf.ES_USER_LOCAL}:{cnf.ES_PASS_LOCAL}@{cnf.MAIN_ES_URL}/_reindex"
-    # headers = {"Content-Type": "application/json", "Connection": "Keep-Alive", "Keep-Alive": "timeout=900, max=500"}
+    # wait_for_completion false means don't wait for reindex to return an answer
+    post_url = f"http://{cnf.ES_USER_LOCAL}:{cnf.ES_PASS_LOCAL}@{cnf.MAIN_ES_URL}/_reindex?wait_for_completion=false"
     headers = {"Content-Type": "application/json"}
     try:
-        # with requests.Session() as session:
-        #     session.headers.update(headers)
-        #     res = session.post(post_url, data=json.dumps(dump_req_body))
-        res = requests.post(url=post_url, data=json.dumps(dump_req_body), headers=headers, timeout=900)
+        requests.post(url=post_url, data=json.dumps(dump_req_body), headers=headers, timeout=900)
     except Exception as e:
         print(f"elk dumping POST has failed: {e}")
         return
-    # got empty response
-    if not res:
-        print("response is empty!")
-        return
-    # valid response
-    res_json = res.json()
-    if res_json and res_json["timed_out"]:
-        print("timed out while dumping data to main ES server")
-        print(f"retrying ({retry} retries left)")
-        time.sleep(1)
-        es_reindex(namespace, index_date, retry=retry-1)
-    elif res_json and res_json["failures"]:
-        print(f"found failures while dumping data to main ES server:", res_json["failures"])
-        print(f"retrying ({retry} retries left)")
-        time.sleep(1)
-        es_reindex(namespace, index_date, retry=retry-1)
-    elif res_json:
-        print(f"response:\n{json.dumps(res_json)}")
-        print("done dumping")
+    try:
+        _, time_waiting = wait_for_dump_to_end(es_ip, cnf.MAIN_ES_IP, indx)
+        print(f"total time waiting:", time_waiting)
+    except Exception as e:
+        print(e)
+
+
+@ut.timing
+def wait_for_dump_to_end(src_ip, dst_ip, indx, port=9200, timeout=900, usr=cnf.ES_USER_LOCAL, pwd=cnf.ES_PASS_LOCAL):
+    orig_timeout = timeout
+    url = "http://{usr}:{pwd}@{ip}:{port}/{indx}/_stats"
+    src_url = url.format(ip=src_ip, port=port, indx=indx, usr=usr, pwd=pwd)
+    dst_url = url.format(ip=dst_ip, port=port, indx=indx, usr=usr, pwd=pwd)
+    src_res = requests.get(src_url)
+    src_docs_count = src_res.json()["indices"][indx]["primaries"]["docs"]["count"]
+    print(f"source documents count: {src_docs_count}")
+    dst_docs_count = 0
+    interval = 10
+    while src_docs_count > dst_docs_count and timeout >= 0:
+        dst_res = requests.get(dst_url)
+        if dst_res.status_code == 200:
+            dst_docs_count = dst_res.json()["indices"][indx]["primaries"]["docs"]["count"]
+            print(f"destinations' documents count: {dst_docs_count}")
+        else:
+            # TODO: handle exceptions more delicately
+            raise Exception(f"got a bad status code when GET {dst_url}\nstatus code: {dst_res.status_code}")
+        if src_docs_count > dst_docs_count:
+            timeout -= interval
+            time.sleep(interval)
+        else:
+            print(f"finished dumping logs, destinations' document count: {dst_docs_count}")
+    # validate destination got all logs
+    if src_docs_count > dst_docs_count and timeout <= 0:
+        raise Exception(f"timed out while waiting for dump to finish!! timeout={orig_timeout}")

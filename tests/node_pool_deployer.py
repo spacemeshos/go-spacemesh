@@ -1,18 +1,6 @@
-from functools import wraps
 import re
-from time import time
 
 import tests.utils as ut
-
-
-def timing(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        start = time()
-        result = func(*args, **kwargs)
-        end = time()
-        return result, end-start
-    return wrapper
 
 
 class NodePoolDep:
@@ -54,7 +42,7 @@ class NodePoolDep:
             "max_nodes": 10,
         }
 
-    @timing
+    @ut.timing
     def add_node_pool(self):
         print("adding node pool:", self.pool_name)
         # in advance we also add 4 CPUs and another 16GB of memory for precaution
@@ -68,7 +56,7 @@ class NodePoolDep:
         # get formatted cmd
         config = self.merge_conf(config)
         cmd = self.gcloud_cmd.format(**config)
-        ut.exec_wait(cmd, retry=60, interval=10)
+        ut.exec_wait(cmd, retry=80, interval=10)
 
     def calculate_cpu_and_mem_per_node(self):
         """
@@ -98,7 +86,7 @@ class NodePoolDep:
     def remove_node_pool(self):
         print("\nremoving node pool")
         ut.exec_wait(self.gcloud_delete.format(pool_name=self.pool_name, cluster_name=self.cluster_name, zone=self.zone)
-                     , retry=60, interval=10)
+                     , retry=80, interval=10)
 
     def get_total_cpu_and_mem(self):
         _, cpu, mem = self.get_spec_resources("bootstrap")

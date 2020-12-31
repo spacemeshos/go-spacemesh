@@ -1,8 +1,6 @@
-import os
-import time
-
 from elasticsearch import Elasticsearch
 from kubernetes import config, client
+import os
 
 
 ELASTIC_URL_FMT = "http://elastic-{0}.spacemesh.io"

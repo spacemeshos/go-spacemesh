@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-
+from functools import wraps
 from kubernetes.client.rest import ApiException
 from kubernetes.stream import stream
 import functools
@@ -248,26 +248,39 @@ def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME, logstas
     return logstash_sleep_time + es_sleep_time
 
 
-def exec_wait(cmd, retry=1, interval=1):
-    print(f"\nrunning:\n{cmd}")
+def exec_wait(cmd, retry=1, interval=1, is_print=True):
+    """
+    execute a command and wait for it to finish execution
+
+    :param cmd: string or list, the command to be run, commands are ran using subprocess.popen
+    :param retry: int, how many times to rerun in case of failures
+    :param interval: int, time to sleep between retries
+    :param is_print: bool, whether or not to print to screen in case of a retry
+    :return: int, return code
+    """
+    # TODO: split this into 2 functions exec and exec_retry, the second will run the other
+    # TODO: shorten intervals once getting to a certain threshold
+    if is_print:
+        print(f"\nrunning:\n{cmd}")
+
     ret_code = 0
     try:
-        process = Popen(cmd, shell=True, stdout=PIPE)
-        while True:
-            line = process.stdout.readline().decode("utf-8")
-            if not line and process.poll() is not None:
-                break
-            print(line.strip())
+        if is_print:
+            process = Popen(cmd, shell=True, stdout=PIPE)
+        else:
+            # prevent from printing to screen
+            with open(os.devnull, 'w') as fp:
+                process = Popen(cmd, shell=True, stdout=fp, stderr=fp)
+        process.communicate()
         ret_code = process.poll()
     except Exception as e:
         raise Exception(f"failed running:\n\"{cmd}\",\nreturn code: {ret_code},\nexception: {e}")
-
-    # if return code != 0 and retry !=0 run the same command again
+    # if process ended with an error and got retries left run the same command again
     if ret_code and ret_code != "0" and retry:
-        print(f"failed with return code: {ret_code}, retrying (retries left: {retry})")
+        print(f"failed with return code: {ret_code}, retrying in {interval} seconds (retries left: {retry})")
         time.sleep(interval)
-        ret_code = exec_wait(cmd, retry-1, interval)
-    elif ret_code is not None:
+        ret_code = exec_wait(cmd, retry-1, interval, is_print=False)
+    else:
         print(f"return code: {ret_code}")
 
     return ret_code
@@ -330,3 +343,13 @@ def get_filename_and_path(path):
         head, tail = ntpath.split(head)
 
     return head, tail
+
+
+def timing(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        end = time.time()
+        return result, end-start
+    return wrapper
