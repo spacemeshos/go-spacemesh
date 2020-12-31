@@ -79,21 +79,69 @@ spec:
           - |
             bin/elasticsearch-plugin install --batch repository-gcs
           volumeMounts:
-          - name: shared-data
+          - name: plugins
             mountPath: /usr/share/elasticsearch/plugins
-        - name: add-gcs-key
+        - name: keystore
           image: "docker.elastic.co/elasticsearch/elasticsearch:7.9.2"
           imagePullPolicy: "IfNotPresent"
           command:
-          - sh
-          - -c
-          - |
-            echo y | bin/elasticsearch-keystore add-file gcs.client.default.credentials_file ./key/gcs_backup_key.json
+            - sh
+            - -c
+            - |
+              #!/usr/bin/env bash
+              set -euo pipefail
+              elasticsearch-keystore create
+              for i in /tmp/keystoreSecrets/*/*; do
+                key=$(basename $i)
+                echo "Adding file $i to keystore key $key"
+                elasticsearch-keystore add-file "$key" "$i"
+              done
+              # Add the bootstrap password since otherwise the Elasticsearch entrypoint tries to do this on startup
+              if [ ! -z ${ELASTIC_PASSWORD+x} ]; then
+                echo 'Adding env $ELASTIC_PASSWORD to keystore as key bootstrap.password'
+                echo "$ELASTIC_PASSWORD" | elasticsearch-keystore add -x bootstrap.password
+              fi
+              cp -a /usr/share/elasticsearch/config/elasticsearch.keystore /tmp/keystore/
           volumeMounts:
-          - name: gcs-backup-key
-            mountPath: "/usr/share/elasticsearch/key"
-            readOnly: true
-
+          - name: keystore
+            mountPath: /tmp/keystore
+          - name: keystore-gcs-backup-key
+            mountPath: /tmp/keystoreSecrets/gcs-backup-key
+          env:
+            - name: node.name
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: cluster.initial_master_nodes
+              value: "elasticsearch-master-0"
+            #- name: discovery.type
+            #  value: single-node
+            - name: discovery.seed_hosts
+              value: "elasticsearch-master-headless"
+            - name: cluster.name
+              value: "elasticsearch"
+            - name: network.host
+              value: "0.0.0.0"
+            - name: ES_JAVA_OPTS
+              value: "-Xmx1g -Xms1g"
+            - name: node.data
+              value: "true"
+            - name: node.ingest
+              value: "true"
+            - name: node.master
+              value: "true"
+            - name: rest.action.multi.allow_explicit_index
+              value: "true"
+            - name: ELASTIC_USERNAME
+              value: elastic
+            - name: ELASTIC_PASSWORD
+              value: gavradon
+            - name: xpack.security.enabled
+              value: "true"
+            - name: xpack.monitoring.enabled
+              value: "true"
+            - name: xpack.monitoring.collection.enabled
+              value: "true"
       containers:
         - name: "elasticsearch"
           image: "docker.elastic.co/elasticsearch/elasticsearch:7.9.2"
@@ -214,11 +262,16 @@ spec:
           volumeMounts:
             - name: "volume"
               mountPath: /usr/share/elasticsearch/data
-            - name: shared-data
+            - name: keystore
+              mountPath: /usr/share/elasticsearch/config/elasticsearch.keystore
+              subPath: elasticsearch.keystore
+            - name: plugins
               mountPath: /usr/share/elasticsearch/plugins
       volumes:
-        - name: gcs-backup-key
+        - name: keystore
+          emptyDir: {}
+        - name: keystore-gcs-backup-key
           secret:
             secretName: gcs-backup-key
-        - name: shared-data
+        - name: plugins
           emptyDir: {}
