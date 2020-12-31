@@ -24,7 +24,7 @@ def add_elastic_secret(namespace):
   k8s_client = client.CoreV1Api()
   body = client.V1Secret()
   body.api_version = 'v1'
-  body.data = { "gcs_backup_key.json":  encoded_gcloud_key }
+  body.data = { "gcs.client.default.credentials_file":  encoded_gcloud_key }
   body.kind = 'Secret'
   body.metadata = {'name': 'gcs-backup-key'}
   body.type = 'Opaque'
