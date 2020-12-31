@@ -279,4 +279,10 @@ def add_elk(init_session, request):
     wait_for_minimal_elk_cluster_ready(init_session)
     yield
     fluent_bit_teardown(init_session)
-    es_reindex(init_session, index_date) if request.session.testsfailed else None
+    dump_es_to_main_server(init_session, index_date, request.session.testsfailed)
+
+
+def dump_es_to_main_server(init_session, index_date, testsfailed):
+    not_dumped = es_reindex(init_session, index_date) if testsfailed else True
+    if not_dumped and "is_dump" in testconfig.keys() and conv.str2bool(testconfig["is_dump"]):
+        es_reindex(init_session, index_date)

@@ -107,18 +107,21 @@ def wait_for_dump_to_end(src_ip, dst_ip, indx, port=9200, timeout=900, usr=cnf.E
     dst_docs_count = 0
     interval = 10
     while src_docs_count > dst_docs_count and timeout >= 0:
-        dst_res = requests.get(dst_url)
-        if dst_res.status_code == 200:
-            dst_docs_count = dst_res.json()["indices"][indx]["primaries"]["docs"]["count"]
-            print(f"destinations' documents count: {dst_docs_count}")
-        else:
-            # TODO: handle exceptions more delicately
-            raise Exception(f"got a bad status code when GET {dst_url}\nstatus code: {dst_res.status_code}")
+        # sleep first in order to allow index to be created at destination
         if src_docs_count > dst_docs_count:
             timeout -= interval
             time.sleep(interval)
         else:
             print(f"finished dumping logs, destinations' document count: {dst_docs_count}")
+            break
+        dst_res = requests.get(dst_url)
+        if dst_res.status_code == 200:
+            dst_docs_count = dst_res.json()["indices"][indx]["primaries"]["docs"]["count"]
+            print(f"destinations' documents count: {dst_docs_count}")
+        else:
+            # TODO: handle exceptions more delicately with attendance to different err types (400, 401, 404..)
+            #  maybe create a different function for GET/POST requests
+            raise Exception(f"got a bad status code when sending GET {dst_url}\nstatus code: {dst_res.status_code}")
     # validate destination got all logs
     if src_docs_count > dst_docs_count and timeout <= 0:
         raise Exception(f"timed out while waiting for dump to finish!! timeout={orig_timeout}")

@@ -13,7 +13,6 @@ import time
 
 import tests.config as conf
 import tests.deployment as deployment
-import tests.k8s_handler as k8h
 from tests.misc import ContainerSpec, CoreV1ApiClient
 import tests.statefulset as statefulset
 import tests.queries as q
