@@ -50,9 +50,6 @@ func (suite *AppTestSuite) SetupTest() {
 }
 
 func (suite *AppTestSuite) TearDownTest() {
-	if err := suite.poetCleanup(true); err != nil {
-		log.Error("error while cleaning up PoET: %v", err)
-	}
 	for _, dbinst := range suite.dbs {
 		if err := os.RemoveAll(dbinst); err != nil {
 			panic(fmt.Sprintf("what happened : %v", err))
@@ -86,6 +83,12 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 		suite.apps = append(suite.apps, smApp)
 		suite.dbs = append(suite.dbs, dbStorepath)
 		name++
+	}
+}
+
+func (suite *AppTestSuite) ClosePoet() {
+	if err := suite.poetCleanup(true); err != nil {
+		log.Error("error while cleaning up PoET: %v", err)
 	}
 }
 
@@ -140,6 +143,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	var oldRoot types.Hash32
 	func() {
 		defer GracefulShutdown(suite.apps)
+		defer suite.ClosePoet()
 
 		for _, a := range suite.apps {
 			a.startServices()

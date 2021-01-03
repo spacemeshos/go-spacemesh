@@ -57,8 +57,6 @@ type request struct {
 	validateResponseHash bool                       // if true perform hash validation on received Data
 	hint                 Hint                       // the hint from which database to fetch this hash
 	returnChan           chan HashDataPromiseResult //channel that will signal if the call succeeded or not
-	failedPeers          []p2ppeers.Peer            // failedPeers are the peers that failed to return this message
-	retries              int                        // number of times this request has been retried and failed
 }
 
 // requestMessage is the on the wire message that will be send to the peer for hash query
@@ -375,17 +373,26 @@ func (f *Fetch) receiveResponse(data []byte) {
 	//iterate all requests that didn't return value from peer and invalidate them with error
 	err = fmt.Errorf("hash did not return")
 	for h := range batchMap {
-		f.activeReqM.Lock()
+		/*f.activeReqM.Lock()
 		// for each hash, call its callbacks
 		resCallbacks := f.activeRequests[h]
 		f.activeReqM.Unlock()
-		for _, req := range resCallbacks {
-			req.returnChan <- HashDataPromiseResult{
-				Err:     err,
-				Hash:    h,
-				IsLocal: false,
+		*/
+		//todo: this will cause infinite retries for a hash - we should consider limiting it
+		/*for _, req := range resCallbacks {
+			req.retries++
+			if req.retries > len(f.net.GetPeers()) {
+				req.returnChan <- HashDataPromiseResult{
+					Err:     err,
+					Hash:    h,
+					IsLocal: false,
+				}
 			}
-		}
+			f.activeReqM.Lock()
+			delete(f.activeRequests, h)
+			f.activeReqM.Unlock()
+		}*/
+		f.log.Warning("hash was not found in response %v", h.ShortString())
 	}
 
 	//delete the hash of waiting batch
@@ -399,6 +406,7 @@ func (f *Fetch) requestHashBatchFromPeers() {
 	var requestList []requestMessage
 	f.activeReqM.RLock()
 	for hash, req := range f.activeRequests {
+		f.log.Info("batching %v", hash.ShortString())
 		requestList = append(requestList, requestMessage{Hash: hash, Hint: req[0].hint})
 	}
 	f.activeReqM.RUnlock()
@@ -539,8 +547,6 @@ func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashD
 		validateHash,
 		h,
 		resChan,
-		nil,
-		0,
 	}
 
 	f.requestReceiver <- req
