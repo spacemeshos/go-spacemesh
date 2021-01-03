@@ -4,6 +4,7 @@ config_map_name: conf
 
 script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
 
+total_pods: 60
 genesis_delta: 180
 single_pod_ready_time_out: 60
 deployment_ready_time_out: 300 #default 120
@@ -15,8 +16,8 @@ bootstrap:
   replicas: 1
   resources:
     requests:
-      memory: '256M'
-      cpu: '0.5'
+      memory: '512M'
+      cpu: '1'
     limits:
       memory: '512M'
       cpu: '1'
@@ -37,8 +38,8 @@ client:
   replicas: 40 #default 40
   resources:
     requests:
-      memory: '256M'
-      cpu: '0.5'
+      memory: '512M'
+      cpu: '1'
     limits:
       memory: '512M'
       cpu: '1'
@@ -59,8 +60,8 @@ client_v2:
   replicas: 3 #default 40
   resources:
     requests:
-      memory: '256M'
-      cpu: '0.5'
+      memory: '512M'
+      cpu: '1'
     limits:
       memory: '512M'
       cpu: '1'

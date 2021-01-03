@@ -106,7 +106,7 @@ def get_blocks_and_layers(namespace, pod_name, find_fails=False):
     return nodes, layers
 
 
-def get_layers(namespace, find_fails=True):
+def get_layers(namespace, find_fails=False):
     tick_msgs = get_all_msg_containing(namespace, namespace, "release tick", find_fails)
     layers = defaultdict(int)
     for msg in tick_msgs:
@@ -117,18 +117,18 @@ def get_layers(namespace, find_fails=True):
 # ============================== END MESSAGE CONTENT ==================================
 
 def get_podlist(namespace, depname):
-    api = ES().get_search_api()
+    api = ES(namespace).get_search_api()
     fltr = get_pod_name_and_namespace_queries(depname, namespace)
-    s = Search(index=current_index, using=api).query('bool').filter(fltr)
+    s = Search(using=api).query('bool').filter(fltr)
     hits = list(s.scan())
-    podnames = set([hit.kubernetes.pod_name for hit in hits])
+    podnames = set([hit.kubernetes.pod.name for hit in hits])
     return podnames
 
 
 def get_pod_logs(namespace, pod_name):
-    api = ES().get_search_api()
+    api = ES(namespace).get_search_api()
     fltr = get_pod_name_and_namespace_queries(pod_name, namespace)
-    s = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time")
+    s = Search(using=api).query('bool').filter(fltr).sort("time")
     res = s.execute()
     full = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time").extra(size=res.hits.total)
     res = full.execute()
@@ -186,8 +186,7 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
     :return: list, a list of all hits
 
     """
-    # TODO : break this to smaller functions ?
-    es = ES().get_search_api()
+    es = ES(namespace).get_search_api()
     fltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
     for key in fields:
         fltr = fltr & Q("match_phrase", **{key: fields[key]})
@@ -197,7 +196,7 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
         for q in queries:
             fltr = fltr & q
 
-    s = Search(index=indx, using=es).query('bool', filter=[fltr])
+    s = Search(using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 
     if is_print:
@@ -206,22 +205,6 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
               f"all clients containing {client_po_name} in pod_name")
         print("Number of hits: ", len(hits))
         print(f"{PRINT_SEP}\n")
-
-    '''if find_fails:
-        print("Looking for pods that didn't hit:")
-        podnames = set([hit.kubernetes.pod_name for hit in hits])
-        newfltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
-
-        for p in podnames:
-            newfltr = newfltr & ~Q("match_phrase", kubernetes__pod_name=p)
-        s2 = Search(index=current_index, using=es).query('bool', filter=[newfltr])
-        hits2 = list(s2.scan())
-        unsecpods = set([hit.kubernetes.pod_name for hit in hits2])
-        if len(unsecpods) == 0:
-            print("None. yay!")
-        else:
-            print(unsecpods)
-        print(PRINT_SEP)'''
 
     s = list(hits)
     return s
@@ -293,6 +276,10 @@ def get_latest_layer(deployment, num_miners):
         if node_cnt >= num_miners:
             return layer
 
+    for layer, node_cnt in sorted(layers.items(), key=lambda t: -t[0]):
+        if node_cnt >= num_miners-1:
+            return layer
+
 
 def wait_for_latest_layer(deployment, min_layer_id, layers_per_epoch, num_miners):
     while True:
@@ -301,6 +288,11 @@ def wait_for_latest_layer(deployment, min_layer_id, layers_per_epoch, num_miners
         if lyr is not None and lyr >= min_layer_id and lyr % layers_per_epoch == 0:
             return lyr
         time.sleep(10)
+
+
+def node_published_atx(deployment, node_id, epoch_id):
+    output = query_atx_per_node_and_epoch(deployment, node_id, epoch_id)
+    return len(output) != 0
 
 
 def get_atx_per_node(deployment):
@@ -331,21 +323,21 @@ def find_dups(indx, namespace, client_po_name, fields, max=1):
     {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}, 10)
     """
 
-    es = ES().get_search_api()
+    es = ES(namespace).get_search_api()
     fltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
     for f in fields:
         fltr = fltr & Q("match_phrase", **{f: fields[f]})
-    s = Search(index=indx, using=es).query('bool', filter=[fltr])
+    s = Search(using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 
     dups = []
     counting = {}
 
     for hit in hits:
-        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[
-                                                                                                  hit.kubernetes.pod_name] + 1
-        if counting[hit.kubernetes.pod_name] > max and hit.kubernetes.pod_name not in counting:
-            dups.append(hit.kubernetes.pod_name)
+        counting[hit.kubernetes.pod.name] = 1 if hit.kubernetes.pod.name not in counting else counting[
+                                                                                                  hit.kubernetes.pod.name] + 1
+        if counting[hit.kubernetes.pod.name] > max and hit.kubernetes.pod.name not in counting:
+            dups.append(hit.kubernetes.pod.name)
 
     print("Total hits: {0}".format(len(hits)))
     print("Duplicate count {0}".format(len(dups)))
@@ -356,19 +348,19 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
     # Usage : find_dups(current_index, "t7t9e", "client-t7t9e-28qj7",
     # {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}, 10)
 
-    es = ES().get_search_api()
+    es = ES(namespace).get_search_api()
     fltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
     for f in fields:
         fltr = fltr & Q("match_phrase", **{f: fields[f]})
-    s = Search(index=indx, using=es).query('bool', filter=[fltr])
+    s = Search(using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 
     miss = []
     counting = {}
 
     for hit in hits:
-        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[
-                                                                                                  hit.kubernetes.pod_name] + 1
+        counting[hit.kubernetes.pod.name] = 1 if hit.kubernetes.pod.name not in counting else counting[
+                                                                                                  hit.kubernetes.pod.name] + 1
 
     for pod in counting:
         if counting[pod] < min:
@@ -433,6 +425,11 @@ def query_atx_published(indx, ns, layer):
 
 def query_atx_per_epoch(ns, epoch_id, index=current_index):
     return query_message(index, ns, ns, {'M': 'atx published', 'epoch_id': str(epoch_id)}, False)
+
+
+def query_atx_per_node_and_epoch(ns, node_id, epoch_id, index=current_index):
+    fields = {'M': 'atx published', 'epoch_id': str(epoch_id), 'node_id': str(node_id)}
+    return query_message(index, ns, ns, fields, False)
 
 
 def message_propagation(deployment, query_fields):

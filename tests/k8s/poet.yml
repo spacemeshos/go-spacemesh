@@ -1,27 +1,33 @@
-apiVersion: extensions/v1beta1
+apiVersion: app/v1
 kind: Deployment
 metadata:
   name: sm-poet
+  labels:
+    name: poet
 spec:
+  selector:
+    matchLabels:
+      name: poet
   replicas: 1
   template:
     metadata:
       labels:
         name: poet
+        namespace: NAMESPACE
       annotations:
         cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
     spec:
       containers:
-      - name: poet
-        image: spacemeshos/poet:73488d6
-        env:
-          - name: GRPC_GO_LOG_VERBOSITY_LEVEL
-            value: "99"
-          - name: GRPC_GO_LOG_SEVERITY_LEVEL
-            value: "debug"
-        imagePullPolicy: Always
-        args: ['--rpclisten', '0.0.0.0:50002', '--restlisten', '0.0.0.0:80']
-        ports:
-        - containerPort: 80
+        - name: poet
+          image: spacemeshos/poet:73488d6
+          env:
+            - name: GRPC_GO_LOG_VERBOSITY_LEVEL
+              value: "99"
+            - name: GRPC_GO_LOG_SEVERITY_LEVEL
+              value: "debug"
+          imagePullPolicy: Always
+          args: ['--rpclisten', '0.0.0.0:50002', '--restlisten', '0.0.0.0:80']
+          ports:
+            - containerPort: 80
       nodeSelector:
         role: poet

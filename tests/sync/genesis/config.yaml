@@ -5,6 +5,7 @@ config_map_name: conf
 script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
 
 genesis_delta: 100
+gossip_delay: 300
 single_pod_ready_time_out: 60
 deployment_ready_time_out: 180
 config_path: '../config.toml'
@@ -14,7 +15,7 @@ bootstrap:
   command: '/bin/go-harness'
   replicas: 1
   args:
-    randcon: '8'
+    randcon: '4' # Set to 4 instead of 8 because inbound peers are not allowed to be outbound.
     hare-committee-size: '10'
     hare-max-adversaries: '5'
     hare-round-duration-sec: '10'
@@ -35,7 +36,7 @@ client:
   command: '/bin/go-harness'
   replicas: 9
   args:
-    randcon: '8'
+    randcon: '4' # Set to 4 instead of 8 because inbound peers are not allowed to be outbound.
     hare-committee-size: '10'
     hare-max-adversaries: '5'
     hare-round-duration-sec: '10'

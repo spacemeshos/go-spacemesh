@@ -4,6 +4,18 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"io/ioutil"
+	inet "net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -26,17 +38,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"io"
-	"io/ioutil"
-	inet "net"
-	"net/http"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"sync"
-	"testing"
-	"time"
 )
 
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
@@ -729,6 +730,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// Prevent obnoxious warning in macOS
 		app.Config.P2P.AcquirePort = false
 		app.Config.P2P.TCPInterface = "127.0.0.1"
+
+		// Avoid waiting for new connections.
+		app.Config.P2P.SwarmConfig.RandomConnections = 0
 
 		// Speed things up a little
 		app.Config.SyncInterval = 1

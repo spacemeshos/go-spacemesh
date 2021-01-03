@@ -1,7 +1,6 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from kubernetes import config as k8s_config
 from kubernetes import client
-from kubernetes.client.rest import ApiException
 import os
 import pytest
 from pytest_testconfig import config as testconfig
@@ -9,12 +8,17 @@ import random
 import string
 import subprocess
 
+from tests import config as conf
+from tests import convenience as conv
 from tests import pod
-from tests import config as tests_conf
 from tests.context import Context
+from tests.es_dump import es_reindex
+from tests.k8s_handler import add_elastic_cluster, add_kibana_cluster, add_logstash_cluster, add_fluent_bit_cluster, \
+    fluent_bit_teardown
 from tests.misc import CoreV1ApiClient
+from tests.node_pool_deployer import NodePoolDep
 from tests.setup_utils import setup_bootstrap_in_namespace, setup_clients_in_namespace
-from tests.utils import api_call
+from tests.utils import api_call, wait_for_minimal_elk_cluster_ready
 
 
 def random_id(length):
@@ -238,12 +242,44 @@ def save_log_on_exit(request):
 
 
 @pytest.fixture(scope='module')
-def add_curl(request, init_session, setup_bootstrap):
+def add_curl(request, init_session):
     def _run_curl_pod():
-        if not setup_bootstrap.pods:
-            raise Exception("Could not find bootstrap node")
-
-        pod.create_pod(tests_conf.CURL_POD_FILE, testconfig['namespace'])
+        pod.create_pod(conf.CURL_POD_FILE, testconfig['namespace'])
         return True
 
     return _run_curl_pod()
+
+
+@pytest.fixture(scope='module')
+def add_node_pool():
+    """
+    memory should be represented by number of megabytes, \d*M
+
+    :return:
+    """
+    deployer = NodePoolDep(testconfig)
+    _, time_elapsed = deployer.add_node_pool()
+    print(f"total time waiting for clients node pool creation: {time_elapsed}")
+    yield time_elapsed
+    _, time_elapsed = deployer.remove_node_pool()
+    print(f"total time waiting for clients node pool deletion: {time_elapsed}")
+
+
+@pytest.fixture(scope='module')
+def add_elk(init_session, request):
+    # get today's date for filebeat data index
+    index_date = datetime.utcnow().date().strftime("%Y.%m.%d")
+    add_elastic_cluster(init_session)
+    add_logstash_cluster(init_session)
+    add_fluent_bit_cluster(init_session)
+    add_kibana_cluster(init_session)
+    wait_for_minimal_elk_cluster_ready(init_session)
+    yield
+    fluent_bit_teardown(init_session)
+    dump_es_to_main_server(init_session, index_date, request.session.testsfailed)
+
+
+def dump_es_to_main_server(init_session, index_date, testsfailed):
+    not_dumped = es_reindex(init_session, index_date) if testsfailed else True
+    if not_dumped and "is_dump" in testconfig.keys() and conv.str2bool(testconfig["is_dump"]):
+        es_reindex(init_session, index_date)
