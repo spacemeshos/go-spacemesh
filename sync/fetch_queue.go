@@ -66,28 +66,38 @@ func (fq *fetchQueue) shutdownRecover() {
 func (fq *fetchQueue) work() error {
 
 	defer fq.shutdownRecover()
+	parallelWorkers := runtime.NumCPU()
 	output := fetchWithFactory(newFetchWorker(fq.workerInfra, runtime.NumCPU(), fq.batchRequestFactory, fq.queue, fq.name))
-	for out := range output {
-		fq.Debug("new batch out of queue")
-		if out == nil {
-			fq.Info("close queue")
-			return nil
-		}
+	wg := sync.WaitGroup{}
+	wg.Add(parallelWorkers)
+	for i := 0; i < parallelWorkers; i++ {
+		go func() {
+			fq.Info("running work")
+			for out := range output {
+				fq.Info("new batch out of queue")
+				if out == nil {
+					fq.Info("close queue")
+					break
+				}
 
-		bjb, ok := out.(fetchJob)
-		if !ok {
-			fq.Error(fmt.Sprintf("Type assertion err %v", out))
-			continue
-		}
+				bjb, ok := out.(fetchJob)
+				if !ok {
+					fq.Error(fmt.Sprintf("Type assertion err %v", out))
+					continue
+				}
 
-		if len(bjb.ids) == 0 {
-			return fmt.Errorf("channel closed")
-		}
+				if len(bjb.ids) == 0 {
+					break //fmt.Errorf("channel closed")
+				}
 
-		fq.Info("fetched %ss %s", fq.name, concatShortIds(bjb.ids))
-		fq.handleFetch(bjb)
-		fq.Debug("next batch")
+				fq.Info("fetched %ss %s", fq.name, concatShortIds(bjb.ids))
+				fq.handleFetch(bjb)
+				fq.Info("next batch")
+			}
+			wg.Done()
+		}()
 	}
+	wg.Wait()
 	return nil
 }
 
@@ -99,18 +109,14 @@ func (fq *fetchQueue) addToPending(ids []types.Hash32) []chan bool {
 	//defer fq.shutdownRecover()
 	fq.Lock()
 	deps := make([]chan bool, 0, len(ids))
-	var idsToAdd []types.Hash32
 	for _, id := range ids {
 		ch := make(chan bool, 1)
 		deps = append(deps, ch)
-		if _, ok := fq.pending[id]; !ok {
-			idsToAdd = append(idsToAdd, id)
-		}
 		fq.pending[id] = append(fq.pending[id], ch)
 	}
 	fq.Unlock()
-	if len(idsToAdd) > 0 {
-		fq.queue <- idsToAdd
+	if len(ids) > 0 {
+		fq.queue <- ids
 	}
 	return deps
 }

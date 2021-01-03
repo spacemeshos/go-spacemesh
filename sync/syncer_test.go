@@ -157,19 +157,7 @@ func TestSyncer_Start(t *testing.T) {
 	syn := syncs[0]
 	defer syn.Close()
 	syn.Start()
-	timeout := time.After(10 * time.Second)
-	for {
-		select {
-		// Got a timeout! fail with a timeout error
-		case <-timeout:
-			t.Error("timed out ")
-			return
-		default:
-			if !syn.startLock.TryLock() {
-				return
-			}
-		}
-	}
+	syn.Start()
 }
 
 func TestSyncer_Close(t *testing.T) {
@@ -1280,6 +1268,7 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 
 	sync := NewSync(net, msh, txpool, atxpool, blockValidator, newMockPoetDb(), conf, timer, l)
 	lv := &mockLayerValidator{0, 0, 0, nil}
+	sync.peers = PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{net.PublicKey()} }}
 	sync.syncLock.Lock()
 	sync.Mesh.Validator = lv
 	sync.SetLatestLayer(5)
