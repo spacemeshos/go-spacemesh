@@ -91,33 +91,6 @@ def es_reindex(namespace, index_date, port=9200):
     except Exception as e:
         print(f"elk dumping POST has failed: {e}")
         return
-<<<<<<< HEAD
-    # got empty response
-    if not res:
-        print("response is empty!")
-        return
-    # valid response
-    res_json = res.json()
-    if res_json and res_json["timed_out"]:
-        print("timed out while dumping data to main ES server")
-        print(f"retrying ({retry} retries left)")
-        time.sleep(1)
-        es_reindex(namespace, index_date, retry=retry-1)
-    elif res_json and res_json["failures"]:
-        print(f"found failures while dumping data to main ES server:", res_json["failures"])
-        print(f"retrying ({retry} retries left)")
-        time.sleep(1)
-        es_reindex(namespace, index_date, retry=retry-1)
-    elif res_json:
-        print(f"response:\n{json.dumps(res_json)}")
-        print("done dumping")
-
-
-def es_backup(namespace):
-    es = ES(namespace).get_search_api()
-    snapshot_client = client.SnapshotClient(es)
-    snapshot_client.create_repository(namespace, "{\"type\":\"gcs\",\"settings\":{\"bucket\":\"sm-elk\",\"base_path\":\"backups\"}}")   
-=======
     try:
         _, time_waiting = wait_for_dump_to_end(es_ip, cnf.MAIN_ES_IP, indx)
         print(f"total time waiting:", time_waiting)
@@ -155,4 +128,9 @@ def wait_for_dump_to_end(src_ip, dst_ip, indx, port=9200, timeout=900, usr=cnf.E
     # validate destination got all logs
     if src_docs_count > dst_docs_count and timeout <= 0:
         raise Exception(f"timed out while waiting for dump to finish!! timeout={orig_timeout}")
->>>>>>> elk_hare
+
+
+def es_backup(namespace):
+    es = ES(namespace).get_search_api()
+    snapshot_client = client.SnapshotClient(es)
+    snapshot_client.create_repository(namespace, "{\"type\":\"gcs\",\"settings\":{\"bucket\":\"sm-elk\",\"base_path\":\"backups\"}}")  
