@@ -9,7 +9,7 @@ from tests.deployment import create_deployment
 from tests.hare.assert_hare import expect_hare
 from tests.misc import CoreV1ApiClient
 from tests.queries import query_atx_published
-from tests.utils import get_conf, get_curr_ind
+from tests.utils import get_conf, get_curr_ind, wait_genesis, get_genesis_time_delta
 
 
 def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
@@ -61,7 +61,7 @@ def sleep_and_print(total_seconds):
 
 # add nodes continuously during the test (4 epochs) and validate hare consensus process,
 # layer hashes (match between all nodes)
-def test_add_delayed_nodes(init_session, add_curl, setup_bootstrap, start_poet, save_log_on_exit):
+def test_add_delayed_nodes(init_session, add_elk, add_node_pool, add_curl, setup_bootstrap, start_poet, save_log_on_exit):
     current_index = get_curr_ind()
     bs_info = setup_bootstrap.pods[0]
     cspec = get_conf(bs_info, test_config['client'], test_config['genesis_delta'], setup_oracle=None,
@@ -75,6 +75,7 @@ def test_add_delayed_nodes(init_session, add_curl, setup_bootstrap, start_poet, 
     # start with 20 miners
     start_count = 20
     new_client_in_namespace(ns, setup_bootstrap, cspec, start_count)
+    wait_genesis(get_genesis_time_delta(test_config["genesis_delta"]), test_config["genesis_delta"])
     sleep_and_print(epoch_duration)  # wait epoch duration
 
     # add 10 each epoch
