@@ -10,6 +10,7 @@ import time
 
 # noinspection PyUnresolvedReferences
 from tests.context import ES
+from tests.convenience import sleep_print_backwards
 from tests.queries import query_message, poll_query_message
 from tests.setup_utils import add_multi_clients
 from tests.utils import get_conf, api_call, get_curr_ind
@@ -98,14 +99,15 @@ def add_clients(setup_bootstrap, setup_clients):
 #    TESTS
 # ==============================================================================
 
-def test_bootstrap(init_session, setup_bootstrap):
-    # wait for the bootstrap logs to be available in ElasticSearch
-    time.sleep(10 * timeout_factor)
-    assert setup_bootstrap.pods[0]['key'] == query_bootstrap_es(testconfig['namespace'],
-                                                                setup_bootstrap.pods[0]['name'])
+def test_bootstrap(init_session, add_elk, add_node_pool, add_curl, setup_bootstrap):
+    print("running test_bootstrap")
+    sleep_print_backwards(10 * timeout_factor, "wait for the bootstrap logs to be available in ElasticSearch")
+    bs_id = query_bootstrap_es(testconfig['namespace'], setup_bootstrap.pods[0]['name'])
+    ass_err = f"setup_bootstrap.pods[0]['key'] = {setup_bootstrap.pods[0]['key']}, bootstrap returned ID: {bs_id}"
+    assert setup_bootstrap.pods[0]['key'] == bs_id, ass_err
 
 
-def test_client(init_session, setup_clients, add_curl, save_log_on_exit):
+def test_client(init_session, add_elk, add_node_pool, add_curl, setup_clients, save_log_on_exit):
     fields = {'M': 'discovery_bootstrap'}
     timetowait = len(setup_clients.pods) * timeout_factor
     print(f"Sleeping {str(timetowait)} before checking out bootstrap results")
@@ -135,7 +137,7 @@ def test_add_client(add_client):
     assert len(hits) == 1, "Could not find new Client bootstrap message pod:{0}".format(add_client)
 
 
-def test_add_many_clients(init_session, setup_bootstrap, setup_clients):
+def test_add_many_clients(init_session, add_elk, add_node_pool, setup_bootstrap, setup_clients):
     bs_info = setup_bootstrap.pods[0]
     cspec = get_conf(bs_info, testconfig['client'], testconfig['genesis_delta'])
 
@@ -152,7 +154,7 @@ def test_add_many_clients(init_session, setup_bootstrap, setup_clients):
         assert len(hits) == 1, "Could not find new Client bootstrap message pod:{0}".format(p)
 
 
-def test_gossip(init_session, setup_clients, add_curl):
+def test_gossip(init_session, add_elk, add_node_pool, setup_clients, add_curl):
     initial = len(query_message(
         current_index, testconfig['namespace'], setup_clients.deployment_name, gossip_message_query_fields))
     # *note*: this already waits for bootstrap so we can send the msg right away.
@@ -189,7 +191,7 @@ def test_gossip(init_session, setup_clients, add_curl):
     assert total_expected_gossip == len(after), "test_gossip: Total gossip messages in ES is not as expected"
 
 
-def test_many_gossip_messages(setup_clients, add_curl):
+def test_many_gossip_messages(setup_clients, add_elk, add_node_pool, add_curl):
     initial = len(query_message(
         current_index, testconfig['namespace'], setup_clients.deployment_name, gossip_message_query_fields))
 
@@ -260,7 +262,6 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
         # TODO in the future this may be changed for a more generic function
         data = '{{"{msg_field}": "{msg}"}}'.format(msg_field=msg_field, msg=msg)
         out = api_call(client_ip, data, api, testconfig['namespace'])
-        expected_ret = expected_ret
         ass_err = f"test_invalid_msg: expected \"{expected_ret}\" and got \"{out}\""
         assert expected_ret in out, ass_err
 
@@ -286,7 +287,7 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
 # Broadcast Y messages (make sure that all of them are live simultaneously)
 # Validate that all nodes got exactly Y messages (X*Y messages)
 # Sample few nodes and validate that they got all 5 messages
-def test_many_gossip_sim(setup_clients, add_curl):
+def test_many_gossip_sim(setup_clients, add_elk, add_node_pool, add_curl):
     api = 'v1/gateway/broadcastpoet'
     msg_size = 10000  # 1kb TODO: increase up to 2mb
     test_messages = 100
@@ -300,7 +301,7 @@ def test_many_gossip_sim(setup_clients, add_curl):
     send_msgs(setup_clients, api, gossip_message_query_fields, total_expected_gossip, num_of_msg=test_messages)
 
 
-def test_broadcast_unknown_protocol(setup_bootstrap, setup_clients, add_curl):
+def test_broadcast_unknown_protocol(setup_bootstrap, add_elk, add_node_pool, setup_clients, add_curl):
     api = 'v1/gateway/broadcastpoet'
     # protocol is modified
     headers = gossip_message_query_fields.copy()
@@ -324,7 +325,7 @@ def test_broadcast_unknown_protocol(setup_bootstrap, setup_clients, add_curl):
 # NOTE: this test is run in the end because it affects the network structure,
 # it creates an additional pod with a "v2" client
 # ALSO NOTE: The "v2" client is actually running an _earlier_ client version, this is confusing
-def test_diff_client_ver(setup_bootstrap, setup_clients, add_curl, add_clients):
+def test_diff_client_ver(setup_bootstrap, add_elk, add_node_pool, setup_clients, add_curl, add_clients):
     num_of_v2_clients = 2
     v2_version = "v2"
 
@@ -346,7 +347,7 @@ def test_diff_client_ver(setup_bootstrap, setup_clients, add_curl, add_clients):
 # NOTE: this test is run in the end because it affects the network structure,
 # it creates more pods and bootstrap them which will affect final query results
 # an alternative to that would be to kill the pods when the test ends.
-def test_late_bootstraps(init_session, setup_bootstrap, setup_clients):
+def test_late_bootstraps(init_session, add_elk, add_node_pool, setup_bootstrap, setup_clients):
     TEST_NUM = 10
     testnames = []
 
