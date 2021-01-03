@@ -148,12 +148,12 @@ def remove_deployment_dir(namespace, dir_path):
             elif dep['kind'] == 'Deployment':
                 k8s_client = client.AppsV1Api()
                 k8s_client.delete_namespaced_deployment(name=name, namespace=namespace)
-            # elif dep['kind'] == 'Service':
-            #     k8s_client = client.CoreV1Api()
-            #     k8s_client.delete_namespaced_service(name=name, namespace=namespace, grace_period_seconds=0)
-            #     delete_func = k8s_client.delete_namespaced_service
-            #     list_func = k8s_client.list_namespaced_service
-            #     wait_for_namespaced_deletion(name, namespace, delete_func, list_func)
+            elif dep['kind'] == 'Service':
+                k8s_client = client.CoreV1Api()
+                k8s_client.delete_namespaced_service(name=name, namespace=namespace, grace_period_seconds=0)
+                delete_func = k8s_client.delete_namespaced_service
+                list_func = k8s_client.list_namespaced_service
+                wait_for_namespaced_deletion(name, namespace, delete_func, list_func)
             elif dep['kind'] == 'PodDisruptionBudget':
                 k8s_client = client.PolicyV1beta1Api()
                 k8s_client.delete_namespaced_pod_disruption_budget(name=name, namespace=namespace)

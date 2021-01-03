@@ -276,7 +276,7 @@ def exec_wait(cmd, retry=1, interval=1, is_print=True):
         raise Exception(f"failed running:\n\"{cmd}\",\nreturn code: {ret_code},\nexception: {e}")
     # if process ended with an error and got retries left run the same command again
     if ret_code and ret_code != "0" and retry:
-        print(f"failed with return code: {ret_code}, retrying in {interval} seconds (retries left: {retry})")
+        print(f"return code: {ret_code}, failed, retrying in {interval} seconds (retries left: {retry})")
         time.sleep(interval)
         ret_code = exec_wait(cmd, retry-1, interval, is_print=False)
     else:

@@ -2,6 +2,8 @@ from elasticsearch import Elasticsearch
 from kubernetes import config, client
 import os
 
+import tests.config as cnf
+
 
 ELASTIC_URL_FMT = "http://elastic-{0}.spacemesh.io"
 

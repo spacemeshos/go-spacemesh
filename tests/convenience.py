@@ -30,6 +30,7 @@ def sleep_print_backwards(tts, msg=None):
         tts -= 1
         print(f" {tts} seconds left             ", end="\r")
         time.sleep(1)
+    # next line will remove the previous line (the countdown)
     print("\033[A \033[A")
 
 

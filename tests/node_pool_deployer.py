@@ -83,6 +83,7 @@ class NodePoolDep:
         mem_per_node = (cpu_per_node + 5) * 1024
         return dividor, cpu_per_node, mem_per_node
 
+    @ut.timing
     def remove_node_pool(self):
         print("\nremoving node pool")
         ut.exec_wait(self.gcloud_delete.format(pool_name=self.pool_name, cluster_name=self.cluster_name, zone=self.zone)
@@ -94,10 +95,10 @@ class NodePoolDep:
         total_cpu = total_pods * cpu
         total_mem = total_pods * mem
         if total_cpu % 2:
-            print("adding additional CPU, total CPU was not divide by 2, total CPUs:", total_cpu)
+            print("adding additional CPU, total CPU count not divisible by 2, total CPUs:", total_cpu)
             total_cpu += 1
         if total_mem % 512:
-            raise Exception("total memory is not a 512 multiplication")
+            raise Exception("total memory is not divisible by 512")
 
         return total_cpu, total_mem
 

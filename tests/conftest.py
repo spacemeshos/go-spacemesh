@@ -14,7 +14,7 @@ from tests import pod
 from tests.context import Context
 from tests.es_dump import es_reindex
 from tests.k8s_handler import add_elastic_cluster, add_kibana_cluster, add_logstash_cluster, add_fluent_bit_cluster, \
-    fluent_bit_teardown, remove_deployment_dir
+    fluent_bit_teardown
 from tests.misc import CoreV1ApiClient
 from tests.node_pool_deployer import NodePoolDep
 from tests.setup_utils import setup_bootstrap_in_namespace, setup_clients_in_namespace
@@ -264,8 +264,10 @@ def add_node_pool():
     """
     deployer = NodePoolDep(testconfig)
     _, time_elapsed = deployer.add_node_pool()
+    print(f"total time waiting for clients node pool creation: {time_elapsed}")
     yield time_elapsed
-    deployer.remove_node_pool()
+    _, time_elapsed = deployer.remove_node_pool()
+    print(f"total time waiting for clients node pool deletion: {time_elapsed}")
 
 
 @pytest.fixture(scope='module')
