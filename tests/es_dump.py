@@ -131,6 +131,9 @@ def wait_for_dump_to_end(src_ip, dst_ip, indx, port=9200, timeout=900, usr=cnf.E
 
 
 def es_backup(namespace):
+    print('Started logs backup to GCS')
     es = ES(namespace).get_search_api()
     snapshot_client = client.SnapshotClient(es)
     snapshot_client.create_repository(namespace, "{\"type\":\"gcs\",\"settings\":{\"bucket\":\"sm-elk\",\"base_path\":\"backups\"}}")  
+    snapshot_client.create(repository=namespace, snapshot='snapshot_1')
+    print('Ended logs backup to GCS')
