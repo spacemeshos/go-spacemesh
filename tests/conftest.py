@@ -9,6 +9,7 @@ import string
 import subprocess
 
 from tests import config as conf
+from tests import convenience as conv
 from tests import pod
 from tests.context import Context
 from tests.es_dump import es_backup
@@ -268,7 +269,7 @@ def add_node_pool():
 
 
 @pytest.fixture(scope='module')
-def add_elk(init_session):
+def add_elk(init_session, request):
     # get today's date for filebeat data index
     index_date = datetime.utcnow().date().strftime("%Y.%m.%d")
     add_elastic_secret(init_session)
@@ -281,7 +282,10 @@ def add_elk(init_session):
     fluent_bit_teardown(init_session)
     es_backup(init_session)
     # es_reindex(init_session, index_date)
+    dump_es_to_main_server(init_session, index_date, request.session.testsfailed)
 
 
-def raise_exception():
-    raise Exception("this is a dummy exception")
+def dump_es_to_main_server(init_session, index_date, testsfailed):
+    not_dumped = es_reindex(init_session, index_date) if testsfailed else True
+    if not_dumped and "is_dump" in testconfig.keys() and conv.str2bool(testconfig["is_dump"]):
+        es_reindex(init_session, index_date)

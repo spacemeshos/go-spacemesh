@@ -8,7 +8,7 @@ from tests.utils import wait_genesis, get_genesis_time_delta
 
 
 @pytest.fixture(scope='module')
-def setup_network(init_session, add_node_pool, add_elk, add_curl, setup_bootstrap, start_poet, setup_clients):
+def setup_network(init_session, add_elk, add_node_pool, add_curl, setup_bootstrap, start_poet, setup_clients):
     # This fixture deploy a complete Spacemesh network and returns only after genesis time is over
     _session_id = init_session
     network_deployment = NetworkDeploymentInfo(dep_id=_session_id,
@@ -20,7 +20,7 @@ def setup_network(init_session, add_node_pool, add_elk, add_curl, setup_bootstra
 
 
 @pytest.fixture(scope='module')
-def setup_mul_network(init_session, add_node_pool, add_elk, add_curl, setup_bootstrap, start_poet, setup_mul_clients):
+def setup_mul_network(init_session, add_elk, add_node_pool, add_curl, setup_bootstrap, start_poet, setup_mul_clients):
     # This fixture deploy a complete Spacemesh network and returns only after genesis time is over
     _session_id = init_session
     network_deployment = NetworkInfo(namespace=init_session,
