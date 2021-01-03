@@ -30,6 +30,8 @@ endif
 # This prevents "the input device is not a TTY" error from docker in CI
 DOCKERRUNARGS := --rm -e ES_PASSWD="$(ES_PASSWD)" \
 	-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+	-e ES_USER=$(ES_USER) \
+	-e ES_PASS=$(ES_PASS) \
 	-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
 	go-spacemesh-python:$(BRANCH)
 ifdef INTERACTIVE
@@ -237,8 +239,8 @@ endif
 
 
 dockerrun-p2p-elk:
-ifndef ES_PASSWD
-	$(error ES_PASSWD is not set)
+ifndef ES_PASS
+	$(error ES_PASS is not set)
 endif
 	$(DOCKERRUN) pytest -s -v p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml
 .PHONY: dockerrun-p2p-elk
@@ -248,8 +250,8 @@ dockertest-p2p-elk: dockerbuild-test-elk dockerrun-p2p-elk
 
 
 dockerrun-mining-elk:
-ifndef ES_PASSWD
-	$(error ES_PASSWD is not set)
+ifndef ES_PASS
+	$(error ES_PASS is not set)
 endif
 	$(DOCKERRUN) pytest -s -v test_bs.py --tc-file=config.yaml --tc-format=yaml
 .PHONY: dockerrun-mining-elk
@@ -259,8 +261,8 @@ dockertest-mining-elk: dockerbuild-test-elk dockerrun-mining-elk
 
 
 dockerrun-hare-elk:
-ifndef ES_PASSWD
-	$(error ES_PASSWD is not set)
+ifndef ES_PASS
+	$(error ES_PASS is not set)
 endif
 	$(DOCKERRUN) pytest -s -v hare/test_hare.py::test_hare_sanity --tc-file=hare/config.yaml --tc-format=yaml
 .PHONY: dockerrun-hare-elk
@@ -271,8 +273,8 @@ dockertest-hare-elk: dockerbuild-test-elk dockerrun-hare-elk
 
 
 dockerrun-sync-elk:
-ifndef ES_PASSWD
-	$(error ES_PASSWD is not set)
+ifndef ES_PASS
+	$(error ES_PASS is not set)
 endif
 
 	$(DOCKERRUN) pytest -s -v sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
@@ -284,8 +286,8 @@ dockertest-sync-elk: dockerbuild-test-elk dockerrun-sync-elk
 
 
 dockerrun-late-nodes-elk:
-ifndef ES_PASSWD
-	$(error ES_PASSWD is not set)
+ifndef ES_PASS
+	$(error ES_PASS is not set)
 endif
 
 	$(DOCKERRUN) pytest -s -v late_nodes/test_delayed.py --tc-file=late_nodes/delayed_config.yaml --tc-format=yaml
@@ -297,8 +299,8 @@ dockertest-late-nodes-elk: dockerbuild-test-elk dockerrun-late-nodes-elk
 
 
 dockerrun-genesis-voting-elk:
-ifndef ES_PASSWD
-	$(error ES_PASSWD is not set)
+ifndef ES_PASS
+	$(error ES_PASS is not set)
 endif
 
 	$(DOCKERRUN) pytest -s -v sync/genesis/test_genesis_voting.py --tc-file=sync/genesis/config.yaml --tc-format=yaml
@@ -310,8 +312,8 @@ dockertest-genesis-voting-elk: dockerbuild-test-elk dockerrun-genesis-voting-elk
 
 
 dockerrun-blocks-add-node-elk:
-ifndef ES_PASSWD
-	$(error ES_PASSWD is not set)
+ifndef ES_PASS
+	$(error ES_PASS is not set)
 endif
 
 	$(DOCKERRUN) pytest -s -v block_atx/add_node/test_blocks_add_node.py --tc-file=block_atx/add_node/config.yaml --tc-format=yaml
@@ -323,8 +325,8 @@ dockertest-blocks-add-node-elk: dockerbuild-test-elk dockerrun-blocks-add-node-e
 
 
 dockerrun-blocks-remove-node-elk:
-ifndef ES_PASSWD
-	$(error ES_PASSWD is not set)
+ifndef ES_PASS
+	$(error ES_PASS is not set)
 endif
 
 	$(DOCKERRUN) pytest -s -v block_atx/remove_node/test_blocks_remove_node.py --tc-file=block_atx/remove_node/config.yaml --tc-format=yaml

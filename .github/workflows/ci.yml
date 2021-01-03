@@ -12,6 +12,8 @@ env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
   SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  ES_USER: ${{ secrets.ES_USER }}
+  ES_PASS: ${{ secrets.ES_PASS }}
 
 # Trigger the workflow on all pull requests, and on push to specific branches
 on:
