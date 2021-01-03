@@ -42,7 +42,7 @@ data:
         hosts => ["elasticsearch-master:9200"]
         manage_template => false
         index => "fluent-bit-NAMESPACE-%{+YYYY.MM.dd}"
-        user => "elastic"
-        password => "gavradon"
+        user => "REP_ES_USER"
+        password => "REP_ES_PASS"
       }
     }

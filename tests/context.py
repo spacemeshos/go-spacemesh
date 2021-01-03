@@ -26,7 +26,8 @@ class ES:
         self.namespace = namespace
         self.es_ip = self.get_elastic_ip()
         self.es = Elasticsearch(
-            self.es_ip, port=9200, timeout=30, max_retries=3, retry_on_timeout=True, http_auth=('elastic', 'gavradon')
+            self.es_ip, port=9200, timeout=30, max_retries=3, retry_on_timeout=True,
+            http_auth=(cnf.ES_USER_LOCAL, cnf.ES_PASS_LOCAL)
         )
 
     def get_elastic_ip(self):

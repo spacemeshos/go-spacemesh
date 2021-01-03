@@ -285,13 +285,40 @@ def exec_wait(cmd, retry=1, interval=1, is_print=True):
     return ret_code
 
 
-def duplicate_file_and_replace_phrase(path, filename, new_name, look, replace):
-    if is_pattern_in_file(os.path.join(path, filename), look):
-        backup_path = create_backup_file(path, filename, new_name)
-        replace_phrase_in_file(backup_path, look, replace)
-        return backup_path, True
-    else:
-        return os.path.join(path, filename), False
+def duplicate_file_and_replace_phrases(path, filename, new_name, look_lst, replace_lst):
+    """
+    creates a new file with replaced values from the original one.
+
+    note that look_lst and replace_lst values should match,
+    the value on look_lst[x] will be replaced with the value on replace_lst[x]
+
+    :param path: string, file to be inspected and new file path
+    :param filename: string, file to be inspected name
+    :param new_name: string, new file name
+    :param look_lst: list (of regex expressions), phrases to look
+    :param replace_lst: list of strings, phrases to replace with
+    :return: tuple with 2 values, first the new file path (return the original file path if no changes were made,
+                                  second boolean indicates whether a change was made
+    """
+    # validate number of look_lst values match number of replace_lst values
+    if len(look_lst) != len(replace_lst):
+        raise ValueError(f"the number of values to look does not match the number of values to replace,"
+                         f"\nlook: {look_lst}\nreplace: {replace_lst}")
+    original_file_path = os.path.join(path, filename)
+    backup_path = None
+    is_changed = False
+    for index, look in enumerate(look_lst):
+        if backup_path and is_pattern_in_file(original_file_path, look):
+            replace_phrase_in_file(backup_path, look, replace_lst[index])
+        elif is_pattern_in_file(os.path.join(path, filename), look):
+            backup_path = create_backup_file(path, filename, new_name)
+            replace_phrase_in_file(backup_path, look, replace_lst[index])
+            is_changed = True
+    # if file was changed return the new file path with True (indicates a change was made)
+    if is_changed:
+        return backup_path, is_changed
+    # if no changes were made return the original file path and False
+    return original_file_path, is_changed
 
 
 def is_pattern_in_file(path, look):

@@ -180,9 +180,9 @@ spec:
             - name: rest.action.multi.allow_explicit_index
               value: "true"
             - name: ELASTIC_USERNAME
-              value: elastic
+              value: REP_ES_USER
             - name: ELASTIC_PASSWORD
-              value: gavradon
+              value: REP_ES_PASS
             - name: xpack.security.enabled
               value: "true"
             - name: xpack.monitoring.enabled

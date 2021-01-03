@@ -63,10 +63,13 @@ def add_deployment_dir(namespace, dir_path, delete=False):
         dep_lst = [x.strip() for x in dep_order.split(',')]
         print(dep_lst)
 
+    phrases_to_replace = ["(?<!_)NAMESPACE", "REP_ES_USER", "REP_ES_PASS"]
+    values_for_replacement = [namespace, conf.ES_USER_LOCAL, conf.ES_PASS_LOCAL]
     for filename in dep_lst:
-        # replace 'NAMESPACE' with the actual namespace if exists
-        modified_file_path, is_change = ut.duplicate_file_and_replace_phrase(dir_path, filename, f"{namespace}_{filename}",
-                                                                          "(?<!_)NAMESPACE", namespace)
+        # replace all phrases with the actual values if exists
+        modified_file_path, is_change = ut.duplicate_file_and_replace_phrases(
+            dir_path, filename, f"{namespace}_{filename}", phrases_to_replace, values_for_replacement
+        )
         print(f"applying file: {filename}")
         with open(modified_file_path) as f:
             dep = yaml.safe_load(f)

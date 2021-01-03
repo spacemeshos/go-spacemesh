@@ -50,8 +50,8 @@ def wait_to_statefulset_to_be_ready(statefulset_name, name_space, time_out=None)
 
 def create_statefulset(file_name, name_space, deployment_id=None, replica_size=1, container_specs=None, time_out=None):
     file_path, filename = ut.get_filename_and_path(file_name)
-    mod_file_path, is_changed = ut.duplicate_file_and_replace_phrase(file_path, filename, f"{name_space}_{filename}",
-                                                                     "(?<!_)NAMESPACE", name_space)
+    mod_file_path, is_changed = ut.duplicate_file_and_replace_phrases(file_path, filename, f"{name_space}_{filename}",
+                                                                      ["(?<!_)NAMESPACE"], [name_space])
     resp1 = None
     with open(mod_file_path) as f:
         dep = yaml.safe_load(f)

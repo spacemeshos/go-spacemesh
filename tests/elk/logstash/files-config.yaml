@@ -12,10 +12,10 @@ data:
     path.config: /usr/share/logstash/pipeline
     #xpack.monitoring.enabled: true
     #xpack.monitoring.elasticsearch.hosts: [ "http://elasticsearch-client.default.svc.cluster.local:9200" ]
-    #xpack.monitoring.elasticsearch.username: "elastic"
-    #xpack.monitoring.elasticsearch.password: "gavradon"
-    #xpack.management.elasticsearch.username: "elastic"
-    #xpack.management.elasticsearch.password: "gavradon"
+    #xpack.monitoring.elasticsearch.username: "REP_ES_USER"
+    #xpack.monitoring.elasticsearch.password: "REP_ES_PASS"
+    #xpack.management.elasticsearch.username: "REP_ES_USER"
+    #xpack.management.elasticsearch.password: "REP_ES_PASS"
     config.reload.automatic: false
 
   jvm.options: |

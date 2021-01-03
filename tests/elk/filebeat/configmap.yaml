@@ -22,9 +22,3 @@ data:
       hosts: ["logstash:5044"]
       loadbalance: true
       index: filebeat-NAMESPACE
-#    output.elasticsearch:
-#        host: '${NODE_NAME}'
-#        hosts: '${ELASTICSEARCH_HOSTS:elasticsearch-master:9200}'
-#        username: elastic
-#        password: gavradon
-

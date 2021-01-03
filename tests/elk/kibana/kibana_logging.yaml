@@ -46,9 +46,9 @@ spec:
             - name: NODE_OPTIONS
               value: --max-old-space-size=1800
             - name: ELASTICSEARCH_USERNAME
-              value: elastic
+              value: REP_ES_USER
             - name: ELASTICSEARCH_PASSWORD
-              value: gavradon
+              value: REP_ES_PASS
           readinessProbe:
             failureThreshold: 3
             initialDelaySeconds: 15
