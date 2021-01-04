@@ -11,12 +11,12 @@ import (
 
 // AccountState is the interface defined to query a single account state
 type AccountState interface {
-	GetBalance() *big.Int
+	GetBalance() uint64
 	GetNonce() uint64
 	SetNonce(newNonce uint64)
-	AddBalance(amount *big.Int)
-	SubBalance(amount *big.Int)
-	SetBalance(amount *big.Int)
+	AddBalance(amount uint64)
+	SubBalance(amount uint64)
+	SetBalance(amount uint64)
 	GetAddress() types.Address
 }
 
