@@ -3,6 +3,7 @@ package state
 import (
 	"container/list"
 	"fmt"
+	"math/big"
 	"sync"
 
 	"github.com/spacemeshos/ed25519"
@@ -186,18 +187,19 @@ func (tp *TransactionProcessor) GetLayerStateRoot(layer types.LayerID) (types.Ha
 }
 
 // ApplyRewards applies reward reward to miners vector miners in for layer
-func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types.Address, reward uint64) {
+func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int) {
+	reward_converted := reward.Uint64()
 	for _, account := range miners {
 		tp.Log.With().Info("Reward applied",
 			log.String("account", account.Short()),
-			log.Uint64("reward", reward),
+			log.Uint64("reward", reward_converted),
 			layer,
 		)
-		tp.AddBalance(account, reward)
+		tp.AddBalance(account, reward_converted)
 		events.ReportRewardReceived(events.Reward{
 			Layer:       layer,
-			Total:       reward,
-			LayerReward: reward * uint64(len(miners)),
+			Total:       reward_converted,
+			LayerReward: reward_converted * uint64(len(miners)),
 			Coinbase:    account,
 		})
 	}
