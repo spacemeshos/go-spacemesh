@@ -49,9 +49,9 @@ type mockBlockOracle struct {
 	J     uint32
 }
 
-func (mbo *mockBlockOracle) BlockEligible(types.LayerID) (types.ATXID, []types.BlockEligibilityProof, error) {
+func (mbo *mockBlockOracle) BlockEligible(types.LayerID) (types.ATXID, []types.BlockEligibilityProof, []types.ATXID, error) {
 	mbo.calls++
-	return types.ATXID(types.Hash32{1, 2, 3}), []types.BlockEligibilityProof{{J: mbo.J, Sig: []byte{1}}}, mbo.err
+	return types.ATXID(types.Hash32{1, 2, 3}), []types.BlockEligibilityProof{{J: mbo.J, Sig: []byte{1}}}, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, mbo.err
 }
 
 type mockAtxValidator struct{}
@@ -183,9 +183,9 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	builder2.AtxDb = atxDbMock{}
 	builder1.AtxDb = atxDbMock{}
 
-	b1, err := builder1.createBlock(types.GetEffectiveGenesis()+2, types.ATXID{}, types.BlockEligibilityProof{}, nil)
+	b1, err := builder1.createBlock(types.GetEffectiveGenesis()+2, types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
 	assert.NoError(t, err)
-	b2, err := builder2.createBlock(types.GetEffectiveGenesis()+2, types.ATXID{}, types.BlockEligibilityProof{}, nil)
+	b2, err := builder2.createBlock(types.GetEffectiveGenesis()+2, types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
 	assert.NoError(t, err)
 
 	assert.True(t, b1.ID() != b2.ID(), "ids are identical")
@@ -297,7 +297,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 
 	transids := []types.TransactionID{trans[0].ID(), trans[1].ID(), trans[2].ID()}
 
-	b, err := builder.createBlock(types.GetEffectiveGenesis()+1, types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 0, Sig: []byte{1}}, transids)
+	b, err := builder.createBlock(types.GetEffectiveGenesis()+1, types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 0, Sig: []byte{1}}, transids, []types.ATXID{atx1, atx2, atx3, atx4, atx5})
 	assert.NoError(t, err)
 
 	assert.NotEqual(t, hareRes, b.BlockVotes)
@@ -314,7 +314,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 	assert.Equal(t, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, *b.ActiveSet)
 
 	//test create second block
-	bl, err := builder.createBlock(types.GetEffectiveGenesis()+2, types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 1, Sig: []byte{1}}, transids)
+	bl, err := builder.createBlock(types.GetEffectiveGenesis()+2, types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 1, Sig: []byte{1}}, transids, nil)
 	assert.NoError(t, err)
 
 	assert.NotEqual(t, hareRes, bl.BlockVotes)
@@ -707,18 +707,18 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 
 	builder1.hareResult = &mockResult{err: errExample, ids: nil}
 	builder1.AtxDb = atxDbMock{}
-	b, err := builder1.createBlock(7, types.ATXID{}, types.BlockEligibilityProof{}, nil)
+	b, err := builder1.createBlock(7, types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
 	r.Nil(err)
 	r.Equal(st, b.BlockVotes)
 
 	builder1.hareResult = &mockResult{err: nil, ids: nil}
-	b, err = builder1.createBlock(7, types.ATXID{}, types.BlockEligibilityProof{}, nil)
+	b, err = builder1.createBlock(7, types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
 	r.Nil(err)
 	r.Equal([]types.BlockID(nil), b.BlockVotes)
 	emptyID := types.BlockID{}
 	r.NotEqual(b.ID(), emptyID)
 
-	b, err = builder1.createBlock(5, types.ATXID{}, types.BlockEligibilityProof{}, nil)
+	b, err = builder1.createBlock(5, types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
 	r.EqualError(err, "cannot create blockBytes in genesis layer")
 }
 
