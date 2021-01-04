@@ -1854,7 +1854,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.NotNil(t, resBlock.SmesherId)
 
 	require.Equal(t, len(block1.TxIDs), len(resBlock.Transactions))
-	require.Equal(t, block1.ID().Bytes(), resBlock.Id)
+	require.Equal(t, types.Hash20(block1.ID()).Bytes(), resBlock.Id)
 
 	// Check the tx as well
 	resTx := resBlock.Transactions[0]
