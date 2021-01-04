@@ -52,8 +52,6 @@ import (
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
-
-	_ "net/http/pprof"
 )
 
 const edKeyFileName = "key.bin"
