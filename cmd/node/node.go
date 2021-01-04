@@ -51,9 +51,11 @@ import (
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
+
+	_ "net/http/pprof"
 )
 
-import _ "net/http/pprof" // import for memory and network profiling
+// import for memory and network profiling
 
 const edKeyFileName = "key.bin"
 
@@ -344,7 +346,7 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 
 		addr := types.BytesToAddress(bytes)
 		state.CreateAccount(addr)
-		state.AddBalance(addr, acc.Balance)
+		state.AddBalance(addr, acc.Balance.Uint64())
 		state.SetNonce(addr, acc.Nonce)
 		app.log.Info("Genesis account created: %s, Balance: %s", id, acc.Balance.Uint64())
 	}
