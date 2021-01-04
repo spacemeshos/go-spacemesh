@@ -12,8 +12,8 @@ import (
 
 // GenesisAccount is the json representation of an account
 type GenesisAccount struct {
-	Balance *uint64 `json:"balance" gencodec:"required"`
-	Nonce   uint64  `json:"nonce"`
+	Balance *big.Int `json:"balance" gencodec:"required"`
+	Nonce   uint64   `json:"nonce"`
 }
 
 // GenesisConfig defines accounts that will exist in state at genesis
