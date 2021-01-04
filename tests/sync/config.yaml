@@ -4,6 +4,7 @@ config_map_name: conf
 
 script_on_exit: '' #'./k8s/log-client-pods.sh'
 
+total_pods: 15
 genesis_delta: -1000
 deployment_ready_time_out: 500
 single_pod_ready_time_out: 60
@@ -14,6 +15,13 @@ bootstrap:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-sync'
   replicas: 1
+  resources:
+    requests:
+      memory: '512M'
+      cpu: '1'
+    limits:
+      memory: '512M'
+      cpu: '1'
   args:
     randcon: '8'
     hare-committee-size: '800'
@@ -31,6 +39,13 @@ client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-sync'
   replicas: 9
+  resources:
+    requests:
+      memory: '512M'
+      cpu: '1'
+    limits:
+      memory: '512M'
+      cpu: '1'
   args:
     randcon: '8'
     hare-committee-size: '800'
@@ -48,6 +63,13 @@ clientv2:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-sync'
   replicas: 9
+  resources:
+    requests:
+      memory: '512M'
+      cpu: '1'
+    limits:
+      memory: '512M'
+      cpu: '1'
   args:
     randcon: '8'
     hare-committee-size: '800'

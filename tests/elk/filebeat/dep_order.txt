@@ -1,0 +1,1 @@
+clusterrole.yaml, clusterrolebinding.yaml, filebeat.yaml, configmap.yaml, serviceaccount.yaml

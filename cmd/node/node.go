@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	_ "net/http/pprof" // import for memory and network profiling
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -52,8 +53,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
 )
-
-import _ "net/http/pprof" // import for memory and network profiling
 
 const edKeyFileName = "key.bin"
 
@@ -674,7 +673,8 @@ func (app *SpacemeshApp) HareFactory(mdb *mesh.DB, swarm service.Service, sgn ha
 
 func (app *SpacemeshApp) startServices() {
 	//app.blockListener.Start()
-	app.syncer.Start()
+	go app.startSyncer()
+
 	err := app.hare.Start()
 	if err != nil {
 		log.Panic("cannot start hare")
@@ -904,6 +904,15 @@ func (app *SpacemeshApp) getIdentityFile() (string, error) {
 		return "", fmt.Errorf("failed to traverse PoST data dir: %v", err)
 	}
 	return "", fmt.Errorf("not found")
+}
+
+func (app *SpacemeshApp) startSyncer() {
+	if app.P2P == nil {
+		app.log.Error("Syncer is started before P2P is initialized")
+	} else {
+		<-app.P2P.GossipReady()
+	}
+	app.syncer.Start()
 }
 
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
