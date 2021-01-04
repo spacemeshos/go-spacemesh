@@ -94,7 +94,7 @@ func testBlockOracleAndValidator(r *require.Assertions, activeSetSize uint32, co
 	for layer := layersPerEpoch * 2; layer < layersPerEpoch*uint16(numberOfEpochsToTest+2); layer++ {
 		activationDB.atxPublicationLayer = types.LayerID((layer/layersPerEpoch)*layersPerEpoch - 1)
 		layerID := types.LayerID(layer)
-		_, proofs, err := blockOracle.BlockEligible(layerID)
+		_, proofs, _, err := blockOracle.BlockEligible(layerID)
 		r.NoError(err)
 
 		for _, proof := range proofs {
@@ -131,7 +131,7 @@ func TestBlockOracleEmptyActiveSet(t *testing.T) {
 	lg := log.NewDefault(nodeID.Key[:5])
 	blockOracle := NewMinerBlockOracle(committeeSize, activeSetSize, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nodeID, func() bool { return true }, lg.WithName("blockOracle"))
 
-	_, proofs, err := blockOracle.BlockEligible(types.LayerID(layersPerEpoch * 3))
+	_, proofs, _, err := blockOracle.BlockEligible(types.LayerID(layersPerEpoch * 3))
 	r.EqualError(err, "empty active set not allowed")
 	r.Nil(proofs)
 }
@@ -173,7 +173,7 @@ func TestBlockOracleNoActivationsForNode(t *testing.T) {
 	lg := log.NewDefault(nID.Key[:5])
 	blockOracle := NewMinerBlockOracle(committeeSize, activeSetSize, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nID, func() bool { return true }, lg.WithName("blockOracle"))
 
-	_, proofs, err := blockOracle.BlockEligible(types.LayerID(layersPerEpoch * 2))
+	_, proofs, _, err := blockOracle.BlockEligible(types.LayerID(layersPerEpoch * 2))
 	r.EqualError(err, "failed to get latest ATX: failed to get ATX ID for target epoch 2: not found")
 	r.Nil(proofs)
 }
@@ -193,7 +193,7 @@ func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 
 	layerID := types.LayerID(layersPerEpoch * 2)
 
-	_, proofs, err := blockOracle.BlockEligible(layerID)
+	_, proofs, _, err := blockOracle.BlockEligible(layerID)
 	r.NoError(err)
 	r.NotNil(proofs)
 
@@ -223,7 +223,7 @@ func TestBlockOracleValidatorInvalidProof2(t *testing.T) {
 
 	layerID := types.LayerID(layersPerEpoch * 2)
 
-	_, proofs, err := blockOracle.BlockEligible(layerID)
+	_, proofs, _, err := blockOracle.BlockEligible(layerID)
 	r.NoError(err)
 	r.NotNil(proofs)
 
@@ -254,7 +254,7 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 
 	layerID := types.LayerID(layersPerEpoch * 2)
 
-	_, proofs, err := blockOracle.BlockEligible(layerID)
+	_, proofs, _, err := blockOracle.BlockEligible(layerID)
 	r.NoError(err)
 	r.NotNil(proofs)
 
@@ -315,7 +315,7 @@ func TestMinerBlockOracle_GetEligibleLayers(t *testing.T) {
 	for layer := layersPerEpoch * 2; layer < layersPerEpoch*uint16(numberOfEpochsToTest+2); layer++ {
 		activationDB.atxPublicationLayer = types.LayerID((layer/layersPerEpoch)*layersPerEpoch - 1)
 		layerID := types.LayerID(layer)
-		_, proofs, err := blockOracle.BlockEligible(layerID)
+		_, proofs, _, err := blockOracle.BlockEligible(layerID)
 		r.NoError(err)
 		if len(proofs) > 0 {
 			eligibleLayers++
