@@ -151,6 +151,7 @@ type Syncer struct {
 	gossipLock           sync.RWMutex
 	gossipSynced         status
 	awaitCh              chan struct{}
+	closed               bool
 
 	blockQueue *blockQueue
 	txQueue    *txQueue
@@ -189,6 +190,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxDB atx
 		exit:                      exit,
 		gossipSynced:              pending,
 		awaitCh:                   make(chan struct{}),
+		closed:                    false,
 	}
 
 	s.blockQueue = newValidationQueue(srvr, conf, s)
@@ -218,6 +220,7 @@ func (s *Syncer) Close() {
 	close(s.exit)
 	s.startLock.Lock()
 	close(s.forceSync)
+	s.closed = true
 	s.startLock.Unlock()
 	s.peers.Close()
 	s.syncLock.Lock()
@@ -298,6 +301,10 @@ func (s *Syncer) IsSynced() bool {
 func (s *Syncer) Start() {
 	if s.startLock.TryLock() {
 		defer s.startLock.Unlock()
+		if s.closed {
+			s.Warning("sync started after closed")
+			return
+		}
 		s.Info("start syncer")
 		go s.run()
 		s.forceSync <- true
