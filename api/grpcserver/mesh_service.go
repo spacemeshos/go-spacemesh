@@ -318,7 +318,7 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 			pbTxs = append(pbTxs, convertTransaction(t))
 		}
 		blocks = append(blocks, &pb.Block{
-			Id:           b.ID().Bytes(),
+			Id:           types.Hash20(b.ID()).Bytes(),
 			Transactions: pbTxs,
 			SmesherId:    &pb.SmesherId{Id: b.MinerID().Bytes()},
 			ActivationId: &pb.ActivationId{Id: b.ATXID.Bytes()},
