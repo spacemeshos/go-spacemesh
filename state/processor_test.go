@@ -51,7 +51,6 @@ func (s *ProcessorStateSuite) SetupTest() {
 
 func createAccount(state *TransactionProcessor, addr types.Address, balance int64, nonce uint64) *Object {
 	obj1 := state.GetOrNewStateObj(addr)
-	/* check if this is okay to do */
 	obj1.AddBalance(uint64(balance))
 	obj1.SetNonce(nonce)
 	state.updateStateObj(obj1)
