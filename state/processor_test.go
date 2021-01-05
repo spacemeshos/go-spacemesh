@@ -2,6 +2,10 @@ package state
 
 import (
 	crand "crypto/rand"
+	"math/big"
+	"math/rand"
+	"testing"
+
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -10,9 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"math/big"
-	"math/rand"
-	"testing"
 )
 
 type ProcessorStateSuite struct {
@@ -48,9 +49,9 @@ func (s *ProcessorStateSuite) SetupTest() {
 	s.processor = NewTransactionProcessor(s.db, appliedTxsMock{}, s.projector, NewTxMemPool(), lg)
 }
 
-func createAccount(state *TransactionProcessor, addr types.Address, balance int64, nonce uint64) *Object {
+func createAccount(state *TransactionProcessor, addr types.Address, balance uint64, nonce uint64) *Object {
 	obj1 := state.GetOrNewStateObj(addr)
-	obj1.AddBalance(big.NewInt(balance))
+	obj1.AddBalance(balance)
 	obj1.SetNonce(nonce)
 	state.updateStateObj(obj1)
 	return obj1
@@ -407,7 +408,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 			for dstAccount == srcAccount {
 				dstAccount = accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
 			}
-			t := createTransaction(s.T(), processor.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]), dstAccount.address, (rand.Uint64()%srcAccount.Balance().Uint64())/100, 5, signers[src])
+			t := createTransaction(s.T(), processor.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]), dstAccount.address, (rand.Uint64()%srcAccount.Balance())/100, 5, signers[src])
 			trns = append(trns, t)
 
 			log.Info("transaction %v nonce %v amount %v", t.Origin().Hex(), t.AccountNonce, t.Amount)
@@ -448,7 +449,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance()
 	r := require.New(s.T())
 	signer := signing.NewEdSigner()
 	origin := types.BytesToAddress(signer.PublicKey().Bytes())
-	s.processor.SetBalance(origin, big.NewInt(100))
+	s.processor.SetBalance(origin, 100)
 	s.processor.SetNonce(origin, 5)
 	s.projector.balanceDiff = 10
 	s.projector.nonceDiff = 2
@@ -461,7 +462,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance_W
 	r := require.New(s.T())
 	signer := signing.NewEdSigner()
 	origin := types.BytesToAddress(signer.PublicKey().Bytes())
-	s.processor.SetBalance(origin, big.NewInt(100))
+	s.processor.SetBalance(origin, 100)
 	s.processor.SetNonce(origin, 5)
 	s.projector.balanceDiff = 10
 	s.projector.nonceDiff = 2
@@ -474,7 +475,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance_I
 	r := require.New(s.T())
 	signer := signing.NewEdSigner()
 	origin := types.BytesToAddress(signer.PublicKey().Bytes())
-	s.processor.SetBalance(origin, big.NewInt(100))
+	s.processor.SetBalance(origin, 100)
 	s.processor.SetNonce(origin, 5)
 	s.projector.balanceDiff = 10
 	s.projector.nonceDiff = 2

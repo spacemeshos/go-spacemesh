@@ -343,7 +343,7 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 
 		addr := types.BytesToAddress(bytes)
 		state.CreateAccount(addr)
-		state.AddBalance(addr, acc.Balance)
+		state.AddBalance(addr, acc.Balance.Uint64())
 		state.SetNonce(addr, acc.Nonce)
 		app.log.Info("Genesis account created: %s, Balance: %s", id, acc.Balance.Uint64())
 	}

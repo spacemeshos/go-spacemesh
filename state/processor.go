@@ -3,6 +3,9 @@ package state
 import (
 	"container/list"
 	"fmt"
+	"math/big"
+	"sync"
+
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -12,8 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/trie"
-	"math/big"
-	"sync"
 )
 
 // IncomingTxProtocol is the protocol identifier for tx received by gossip that is used by the p2p
@@ -193,7 +194,7 @@ func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types
 			log.Uint64("reward", reward.Uint64()),
 			layer,
 		)
-		tp.AddBalance(account, reward)
+		tp.AddBalance(account, reward.Uint64())
 		events.ReportRewardReceived(events.Reward{
 			Layer:       layer,
 			Total:       reward.Uint64(),
@@ -275,7 +276,7 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction, layer
 	amountWithFee := trans.Fee + trans.Amount
 
 	// todo: should we allow to spend all accounts balance?
-	if origin.Balance().Uint64() <= amountWithFee {
+	if origin.Balance() <= amountWithFee {
 		tp.Log.Error(errFunds+" have: %v need: %v", origin.Balance(), amountWithFee)
 		return fmt.Errorf(errFunds)
 	}
@@ -286,10 +287,10 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction, layer
 	}
 
 	tp.SetNonce(trans.Origin(), tp.GetNonce(trans.Origin())+1) // TODO: Not thread-safe
-	transfer(tp, trans.Origin(), trans.Recipient, new(big.Int).SetUint64(trans.Amount))
+	transfer(tp, trans.Origin(), trans.Recipient, trans.Amount)
 
 	// subtract fee from account, fee will be sent to miners in layers after
-	tp.SubBalance(trans.Origin(), new(big.Int).SetUint64(trans.Fee))
+	tp.SubBalance(trans.Origin(), trans.Fee)
 	if err := tp.processorDb.Put(trans.ID().Bytes(), layerID.Bytes()); err != nil {
 		return fmt.Errorf("failed to add to applied txs: %v", err)
 	}
@@ -304,7 +305,7 @@ func (tp *TransactionProcessor) GetStateRoot() types.Hash32 {
 	return tp.rootHash
 }
 
-func transfer(db *TransactionProcessor, sender, recipient types.Address, amount *big.Int) {
+func transfer(db *TransactionProcessor, sender, recipient types.Address, amount uint64) {
 	db.SubBalance(sender, amount)
 	db.AddBalance(recipient, amount)
 }
