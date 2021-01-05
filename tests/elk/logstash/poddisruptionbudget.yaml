@@ -1,0 +1,13 @@
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: logstash
+  labels:
+    app: logstash
+    chart: logstash-2.4.1
+    heritage: Helm
+spec:
+  selector:
+    matchLabels:
+      app: logstash
+  maxUnavailable: 1

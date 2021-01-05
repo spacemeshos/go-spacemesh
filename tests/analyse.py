@@ -53,10 +53,11 @@ def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, tot
     print("atx created " + str(total_atxs))
     print("blocks created " + str(total_blocks) + " first epoch blocks " + str(first_epoch_blocks))
 
+    up_pods = queries.get_nodes_up(deployment)
     # not enough pods deployed or pods restarted
-    assert queries.get_nodes_up(deployment) == total_pods
+    assert up_pods == total_pods, f"up pods: {up_pods}, total: {total_pods}"
     # not all nodes created blocks
-    assert total_pods == len(blockmap)
+    assert total_pods == len(blockmap), f"total pods={total_pods}, number of nodes that created blocks{len(blockmap)}"
     # remove blocks created in first epoch since first epoch starts with layer 1
     print("total and first", total_blocks, first_epoch_blocks)
     ass_err = f"all blocks but first epoch={int(total_blocks - first_epoch_blocks)}\n" \
