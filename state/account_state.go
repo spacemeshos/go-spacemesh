@@ -31,10 +31,6 @@ type Object struct {
 
 // newObject creates a state object.
 func newObject(db *DB, address types.Address, data types.AccountState) *Object {
-	/* don't need the following because uints can never be non-initialized */
-	// if data.Balance == nil {
-	// 	data.Balance = new(big.Int)
-	// }
 	return &Object{
 		db:       db,
 		address:  address,
