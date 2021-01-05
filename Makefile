@@ -1,18 +1,18 @@
 BINARY := go-spacemesh
-VERSION = $(shell cat version.txt)
+VERSION ?= $(shell cat version.txt)
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
 CURR_DIR = $(shell pwd)
 CURR_DIR_WIN = $(shell cd)
 BIN_DIR = $(CURR_DIR)/build
-BIN_DIR_WIN = $(CURR_DIR_WIN)/build
+BIN_DIR_WIN ?= $(CURR_DIR_WIN)/build
 export GO111MODULE = on
 
 # These commands cause problems on Windows
 ifeq ($(OS),Windows_NT)
        # Just assume we're in interactive mode on Windows
        INTERACTIVE = 1
-       VERSION = $(shell type version.txt)
+       VERSION ?= $(shell type version.txt)
 else
        INTERACTIVE := $(shell [ -t 0 ] && echo 1)
 endif
