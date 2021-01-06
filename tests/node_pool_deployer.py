@@ -1,3 +1,4 @@
+from math import ceil
 import re
 
 import tests.utils as ut
@@ -45,6 +46,8 @@ class NodePoolDep:
     @ut.timing
     def add_node_pool(self):
         print("adding node pool:", self.pool_name)
+        retry = 800
+        interval = 10
         # in advance we also add 4 CPUs and another 16GB of memory for precaution
         num_nodes, cpu_per_node, mem_per_node = self.calculate_cpu_and_mem_per_node()
         config = {
@@ -56,19 +59,19 @@ class NodePoolDep:
         # get formatted cmd
         config = self.merge_conf(config)
         cmd = self.gcloud_cmd.format(**config)
-        ut.exec_wait(cmd, retry=80, interval=10)
+        ut.exec_wait(cmd, retry=retry, interval=interval)
 
     def calculate_cpu_and_mem_per_node(self):
         """
-
+        adding extra_cpus and extra 5GB of memory on each node for precaution.
         :return: dividor: the number of nodes to be started,
                  cpu_per_node: how many CPUs per node, must divide by 2 according to GCP specifications limits
                  mem per node: how much memory per node, must be withing GCP specifications limits
         """
-        from math import ceil
         max_cpus_per_node = 96
+        extra_cpus = 4
         total_cpu, _ = self.get_total_cpu_and_mem()
-        total_cpu += 4
+        total_cpu += extra_cpus
         dividor = 6
         for i in range(1, 6):
             if total_cpu / i > max_cpus_per_node:
@@ -79,15 +82,19 @@ class NodePoolDep:
         cpu_per_node = ceil(total_cpu / dividor)
         if cpu_per_node % 2:
             cpu_per_node += 1
-
+        # memory is equal to the number of CPUs in GB with adding additional 5GB of memory
         mem_per_node = (cpu_per_node + 5) * 1024
         return dividor, cpu_per_node, mem_per_node
 
     @ut.timing
     def remove_node_pool(self):
         print("\nremoving node pool")
-        ut.exec_wait(self.gcloud_delete.format(pool_name=self.pool_name, cluster_name=self.cluster_name, zone=self.zone)
-                     , retry=80, interval=10)
+        retry = 800
+        interval = 10
+        ut.exec_wait(
+            self.gcloud_delete.format(pool_name=self.pool_name, cluster_name=self.cluster_name, zone=self.zone),
+            retry=retry, interval=interval
+        )
 
     def get_total_cpu_and_mem(self):
         _, cpu, mem = self.get_spec_resources("bootstrap")
