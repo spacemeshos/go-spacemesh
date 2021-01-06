@@ -59,6 +59,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.BlockCacheSize, "size in layers of meshdb block cache")
 	cmd.PersistentFlags().StringVar(&config.PublishEventsURL, "events-url",
 		config.PublishEventsURL, "publish events to this url; if no url specified no events will be published")
+	cmd.PersistentFlags().BoolVar(&config.Profiler, "profiler",
+		config.Profiler, "enable profiler")
 
 	cmd.PersistentFlags().IntVar(&config.SyncRequestTimeout, "sync-request-timeout",
 		config.SyncRequestTimeout, "the timeout in ms for direct requests in the sync")
