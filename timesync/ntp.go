@@ -4,11 +4,12 @@ package timesync
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"net"
 	"sort"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/rand"
 
 	"github.com/spacemeshos/go-spacemesh/timesync/config"
 )
@@ -20,7 +21,7 @@ const (
 	NtpOffset = 2208988800
 	// DefaultNtpPort is the ntp protocol port
 	DefaultNtpPort = "123"
-	// MaxRequestTries is the number of tries we try to query ntp before we give up when having errors.
+	// MaxRequestTries is the number of times we try to query ntp before we give up when encountering errors.
 	MaxRequestTries = 3
 	// RequestTriesInterval is the interval to wait between tries to ask ntp for the time
 	RequestTriesInterval = time.Second * 5
@@ -30,17 +31,6 @@ const (
 
 // DefaultServer is a list of relay on more than one server.
 var (
-	DefaultServers = []string{
-		"time-a-wwv.nist.gov",
-		"time-b-wwv.nist.gov",
-		"time-c-wwv.nist.gov",
-		"time.google.com",
-		"time1.google.com",
-		"time3.google.com",
-		"time4.google.com",
-		"time.asia.apple.com",
-		"time.americas.apple.com",
-	}
 	zeroDuration = time.Duration(0)
 	zeroTime     = time.Time{}
 	zeroNtp      = NtpPacket{}
@@ -102,6 +92,7 @@ func (n *NtpPacket) Time() time.Time {
 
 // ntpRequest requests a Ntp packet from a server and  request time, latency and a NtpPacket struct.
 func ntpRequest(server string, rq *NtpPacket) (time.Time, time.Duration, *NtpPacket, error) {
+
 	addr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(server, DefaultNtpPort))
 	if err != nil {
 		return zeroTime, zeroDuration, nil, err
@@ -143,6 +134,7 @@ func queryNtpServer(server string) (time.Duration, error) {
 	// Calculate drift with latency
 	drift := rt.UTC().Sub(rsp.Time().UTC().Add(lat / 2))
 	log.Info("ntp check from server %v, drift: %v, start_check: %v, latency: %v, rsp: %v", server, drift, rt.UTC(), lat, rsp.Time().UTC())
+
 	return drift, nil
 }
 
@@ -162,14 +154,14 @@ func ntpTimeDrift() (time.Duration, error) {
 	res := make(sortableDurations, 0, config.TimeConfigValues.NtpQueries)
 	errors := make([]error, 0, config.TimeConfigValues.NtpQueries)
 
-	sl := len(DefaultServers) - 1
+	sl := len(config.TimeConfigValues.NTPServers) - 1
 	for i := 0; i < config.TimeConfigValues.NtpQueries; i++ {
 		rndsrv := rand.Intn(sl)
 		for queriedServers[rndsrv] {
 			rndsrv = rand.Intn(sl)
 		}
 		queriedServers[rndsrv] = true
-		dur, err := queryNtpServer(DefaultServers[rndsrv])
+		dur, err := queryNtpServer(config.TimeConfigValues.NTPServers[rndsrv])
 		if err != nil {
 			errors = append(errors, err)
 			continue
@@ -189,7 +181,7 @@ func ntpTimeDrift() (time.Duration, error) {
 // CheckSystemClockDrift is comparing our clock to the collected ntp data
 // return the drift and an error when drift reading failed or exceeds our preset MaxAllowedDrift
 func CheckSystemClockDrift() (time.Duration, error) {
-	// Read average drift form ntpTimeDrift
+	// Read average drift from ntpTimeDrift
 	tries := 1
 	drift, err := ntpTimeDrift()
 	for err != nil && tries < MaxRequestTries {
@@ -204,7 +196,7 @@ func CheckSystemClockDrift() (time.Duration, error) {
 
 	// Check if drift exceeds our max allowed drift
 	if drift < -config.TimeConfigValues.MaxAllowedDrift || drift > config.TimeConfigValues.MaxAllowedDrift {
-		return drift, fmt.Errorf("System clock is %s away from NTP servers. please synchronize your OS ", drift)
+		return drift, fmt.Errorf("System clock is %s away from NTP servers, please synchronize your OS time", drift)
 	}
 
 	return drift, nil
