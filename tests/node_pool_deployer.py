@@ -46,6 +46,8 @@ class NodePoolDep:
     @ut.timing
     def add_node_pool(self):
         print("adding node pool:", self.pool_name)
+        retry = 800
+        interval = 10
         # in advance we also add 4 CPUs and another 16GB of memory for precaution
         num_nodes, cpu_per_node, mem_per_node = self.calculate_cpu_and_mem_per_node()
         config = {
@@ -57,7 +59,7 @@ class NodePoolDep:
         # get formatted cmd
         config = self.merge_conf(config)
         cmd = self.gcloud_cmd.format(**config)
-        ut.exec_wait(cmd, retry=80, interval=10)
+        ut.exec_wait(cmd, retry=retry, interval=interval)
 
     def calculate_cpu_and_mem_per_node(self):
         """
@@ -87,8 +89,12 @@ class NodePoolDep:
     @ut.timing
     def remove_node_pool(self):
         print("\nremoving node pool")
-        ut.exec_wait(self.gcloud_delete.format(pool_name=self.pool_name, cluster_name=self.cluster_name, zone=self.zone)
-                     , retry=80, interval=10)
+        retry = 800
+        interval = 10
+        ut.exec_wait(
+            self.gcloud_delete.format(pool_name=self.pool_name, cluster_name=self.cluster_name, zone=self.zone),
+            retry=retry, interval=interval
+        )
 
     def get_total_cpu_and_mem(self):
         _, cpu, mem = self.get_spec_resources("bootstrap")
