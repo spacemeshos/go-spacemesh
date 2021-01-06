@@ -73,6 +73,7 @@ func DefaultGenesisConfig() *GenesisConfig {
 	g := GenesisConfig{}
 
 	// we default to 10^5 SMH per account which is 10^17 smidge
+	// each genesis account starts off with 10^17 smidge
 	g.InitialAccounts = map[string]GenesisAccount{
 		"0x1":       {Balance: 100000000000000000, Nonce: 0},
 		Account1Pub: {Balance: 100000000000000000, Nonce: 0},
