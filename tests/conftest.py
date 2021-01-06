@@ -253,7 +253,7 @@ def add_curl(request, init_session):
 @pytest.fixture(scope='module')
 def add_node_pool():
     """
-    memory should be represented by number of megabytes, \d*M
+    memory should be represented by number of megabytes, \d+M
 
     :return:
     """

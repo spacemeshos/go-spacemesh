@@ -264,7 +264,7 @@ def exec_wait(cmd, retry=1, interval=1, is_print=True):
     :return: int, return code
     """
     # TODO: split this into 2 functions exec and exec_retry, the second will run the other
-    # TODO: shorten intervals once getting to a certain threshold
+    # TODO: optional, shorten intervals once getting to a certain threshold to increase chances of polling positively
     if is_print:
         print(f"\nrunning:\n{cmd}")
 
@@ -337,9 +337,12 @@ def is_pattern_in_file(path, look):
     return False
 
 
-def create_backup_file(path, filename, new_name):
+def create_backup_file(path, filename, new_name, new_path=None):
+    if not new_path:
+        new_path = path
+
     src_path = os.path.join(path, filename)
-    backup_path = os.path.join(path, new_name)
+    backup_path = os.path.join(new_path, new_name)
     try:
         print(f"copying {src_path} to {backup_path}")
         copyfile(src_path, backup_path)
