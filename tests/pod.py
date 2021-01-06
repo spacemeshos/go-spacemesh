@@ -41,6 +41,7 @@ def wait_to_pod_to_be_deleted(pod_name, name_space, time_out=None):
 
 
 def create_pod(file_name, name_space, deployment_id=None, container_specs=None):
+    timeout = 70
     with open(path.join(path.dirname(__file__), file_name)) as f:
         dep = yaml.safe_load(f)
 
@@ -53,7 +54,7 @@ def create_pod(file_name, name_space, deployment_id=None, container_specs=None):
 
         k8s_api = CoreV1ApiClient()
         resp = k8s_api.create_namespaced_pod(namespace=name_space, body=dep)
-        wait_for_pod_to_be_ready(resp.metadata._name, name_space, time_out=testconfig['single_pod_ready_time_out'])
+        wait_for_pod_to_be_ready(resp.metadata._name, name_space, time_out=timeout)
         return resp
 
 

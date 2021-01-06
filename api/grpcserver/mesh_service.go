@@ -98,7 +98,7 @@ func (s MeshService) LayerDuration(context.Context, *pb.LayerDurationRequest) (*
 // MaxTransactionsPerSecond returns the max number of tx per sec (a network parameter)
 func (s MeshService) MaxTransactionsPerSecond(context.Context, *pb.MaxTransactionsPerSecondRequest) (*pb.MaxTransactionsPerSecondResponse, error) {
 	log.Info("GRPC MeshService.MaxTransactionsPerSecond")
-	return &pb.MaxTransactionsPerSecondResponse{Maxtxpersecond: &pb.SimpleInt{
+	return &pb.MaxTransactionsPerSecondResponse{MaxTxsPerSecond: &pb.SimpleInt{
 		Value: uint64(s.TxsPerBlock * s.LayerAvgSize / s.LayerDurationSec),
 	}}, nil
 }
@@ -318,8 +318,10 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 			pbTxs = append(pbTxs, convertTransaction(t))
 		}
 		blocks = append(blocks, &pb.Block{
-			Id:           b.ID().Bytes(),
+			Id:           types.Hash20(b.ID()).Bytes(),
 			Transactions: pbTxs,
+			SmesherId:    &pb.SmesherId{Id: b.MinerID().Bytes()},
+			ActivationId: &pb.ActivationId{Id: b.ATXID.Bytes()},
 		})
 	}
 
