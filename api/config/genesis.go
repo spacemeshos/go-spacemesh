@@ -10,7 +10,7 @@ import (
 
 // GenesisAccount is the json representation of an account
 type GenesisAccount struct {
-	Balance uint64 `json:"balance" gencodec:"required"`
+	Balance uint64 `json:"balance"`
 	Nonce   uint64 `json:"nonce"`
 }
 
