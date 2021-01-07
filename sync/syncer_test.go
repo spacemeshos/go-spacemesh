@@ -161,8 +161,10 @@ func addTxsToPool(pool txMemPool, txs []*types.Transaction) {
 func TestSyncer_Start(t *testing.T) {
 	syncs, _, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	syn := syncs[0]
-	defer syn.Close()
+
 	syn.Start()
+	syn.Start()
+	syn.Close()
 	syn.Start()
 }
 
