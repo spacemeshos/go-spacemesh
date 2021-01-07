@@ -6,7 +6,8 @@ import tests.utils as ut
 
 class NodePoolDep:
     resources = ["bootstrap", "client"]
-    gcloud_delete = "yes | gcloud container node-pools delete {pool_name} --cluster={cluster_name} --zone={zone}"
+    gcloud_delete = 'yes | gcloud container --project="{project_name}" node-pools delete {pool_name} ' \
+                    '--cluster={cluster_name} --zone={zone}'
     gcloud_cmd = 'yes | gcloud beta container --project "{project_name}" node-pools create "{pool_name}" ' \
                  '--cluster "{cluster_name}" --zone "{zone}" --node-version "{node_version}" ' \
                  '--machine-type "custom-{cpu}-{mem}" --image-type "COS" --disk-type "{disk_type}" ' \
@@ -26,8 +27,9 @@ class NodePoolDep:
         self.pool_name = f"pool-{self.namespace}"
         self.cluster_name = "spacemesh-cluster-elk"
         self.zone = "us-west1-a"
+        self.project_name = "spacemesh-198810"
         self.default_config = {
-            "project_name": "spacemesh-198810",
+            "project_name": self.project_name,
             "pool_name": self.pool_name,
             "cluster_name": self.cluster_name,
             "zone": self.zone,
@@ -92,7 +94,8 @@ class NodePoolDep:
         retry = 800
         interval = 10
         ut.exec_wait(
-            self.gcloud_delete.format(pool_name=self.pool_name, cluster_name=self.cluster_name, zone=self.zone),
+            self.gcloud_delete.format(project_name=self.project_name , pool_name=self.pool_name,
+                                      cluster_name=self.cluster_name, zone=self.zone),
             retry=retry, interval=interval
         )
 
