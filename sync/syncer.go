@@ -215,9 +215,8 @@ func (s *Syncer) ForceSync() {
 // Close closes all running goroutines
 func (s *Syncer) Close() {
 	s.Info("Closing syncer")
-
-	close(s.exit)
 	s.startLock.Lock()
+	close(s.exit)
 	close(s.forceSync)
 	s.startLock.Unlock()
 	s.peers.Close()
@@ -232,7 +231,7 @@ func (s *Syncer) Close() {
 }
 
 // check if syncer was closed
-func (s *Syncer) shutdown() bool {
+func (s *Syncer) isClosed() bool {
 	select {
 	case <-s.exit:
 		s.Info("receive interrupt")
@@ -299,6 +298,10 @@ func (s *Syncer) IsSynced() bool {
 func (s *Syncer) Start() {
 	if s.startLock.TryLock() {
 		defer s.startLock.Unlock()
+		if s.isClosed() {
+			s.Warning("sync started after closed")
+			return
+		}
 		s.Info("start syncer")
 		go s.run()
 		s.forceSync <- true
@@ -362,7 +365,7 @@ func (s *Syncer) handleWeaklySynced() {
 	// handle all layers from processed+1 to current -1
 	s.handleLayersTillCurrent()
 
-	if s.shutdown() {
+	if s.isClosed() {
 		return
 	}
 
@@ -373,7 +376,7 @@ func (s *Syncer) handleWeaklySynced() {
 		return
 	}
 
-	if s.shutdown() {
+	if s.isClosed() {
 		return
 	}
 
@@ -392,7 +395,7 @@ func (s *Syncer) handleLayersTillCurrent() {
 
 	s.Info("handle layers %d to %d", s.ProcessedLayer()+1, s.GetCurrentLayer()-1)
 	for currentSyncLayer := s.ProcessedLayer() + 1; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
-		if s.shutdown() {
+		if s.isClosed() {
 			return
 		}
 		if err := s.getAndValidateLayer(currentSyncLayer); err != nil {
@@ -441,7 +444,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 		s.With().Info("syncing layer", log.FieldNamed("current_sync_layer", currentSyncLayer),
 			log.FieldNamed("last_ticked_layer", s.GetCurrentLayer()))
 
-		if s.shutdown() {
+		if s.isClosed() {
 			return
 		}
 
@@ -562,7 +565,7 @@ func (s *Syncer) getLayerFromNeighbors(currentSyncLayer types.LayerID) (*types.L
 		return nil, err
 	}
 
-	if s.shutdown() {
+	if s.isClosed() {
 		return nil, fmt.Errorf("interupt")
 	}
 
@@ -573,7 +576,7 @@ func (s *Syncer) getLayerFromNeighbors(currentSyncLayer types.LayerID) (*types.L
 		return nil, err
 	}
 
-	if s.shutdown() {
+	if s.isClosed() {
 		return nil, fmt.Errorf("interupt")
 	}
 
