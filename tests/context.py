@@ -1,6 +1,7 @@
 from elasticsearch import Elasticsearch
 from kubernetes import config, client
 import os
+import time
 
 import tests.config as cnf
 
@@ -30,9 +31,20 @@ class ES:
             http_auth=(cnf.ES_USER_LOCAL, cnf.ES_PASS_LOCAL)
         )
 
-    def get_elastic_ip(self):
+    def get_elastic_ip(self, retry=3, interval=1):
+        # timeout is in seconds
         k8s_client = client.CoreV1Api()
-        services = k8s_client.list_namespaced_service(namespace=self.namespace)
+        # list_namespaced_service sometimes gets stuck and return an empty result
+        # if not received namespaced services -> try again in {interval} time until reaching timeout
+        services = None
+        while not services and retry:
+            services = k8s_client.list_namespaced_service(namespace=self.namespace)
+            if services:
+                break
+            print(f"ES: k8s client failed to get active services in {self.namespace}, retrying in {interval}")
+            time.sleep(interval)
+            retry -= 1
+
         for serv in services.items:
             if serv.metadata.name == 'elasticsearch-master':
                 return serv.status.load_balancer.ingress[0].ip

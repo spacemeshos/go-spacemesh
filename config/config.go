@@ -103,6 +103,8 @@ type BaseConfig struct {
 	BlockCacheSize int `mapstructure:"block-cache-size"`
 
 	AlwaysListen bool `mapstructure:"always-listen"` // force gossip to always be on (for testing)
+
+	Profiler bool `mapstructure:"profiler"`
 }
 
 // LoggerConfig holds the logging level for each module.
@@ -170,6 +172,7 @@ func defaultBaseConfig() BaseConfig {
 		SyncValidationDelta: 30,
 		AtxsPerBlock:        100,
 		TxsPerBlock:         100,
+		Profiler:            false,
 	}
 }
 
