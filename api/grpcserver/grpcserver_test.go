@@ -178,7 +178,7 @@ func (t *TxAPIMock) GetAllAccounts() (res *types.MultipleAccountsState, err erro
 	accounts := make(map[string]types.AccountState)
 	for address, balance := range t.balances {
 		accounts[address.String()] = types.AccountState{
-			Balance: balance,
+			Balance: balance.Uint64(),
 			Nonce:   t.nonces[address],
 		}
 	}
