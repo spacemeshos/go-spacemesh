@@ -1,13 +1,11 @@
 package types
 
-import "math/big"
-
 // AccountState struct represents basic account data: nonce and balance
 // Todo: get rid of big.Int everywhere and replace with uint64
 // See https://github.com/spacemeshos/go-spacemesh/issues/2192
 type AccountState struct {
-	Nonce   uint64   `json:"nonce"`
-	Balance *big.Int `json:"balance"`
+	Nonce   uint64 `json:"nonce"`
+	Balance uint64 `json:"balance"`
 }
 
 // MultipleAccountsState is a struct used to dump an entire state root
