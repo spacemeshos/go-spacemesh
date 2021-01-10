@@ -110,8 +110,8 @@ func (tp *TransactionProcessor) ValidateNonceAndBalance(tx types.Transaction) er
 	if tx.GetNonce() != nonce {
 		return fmt.Errorf("incorrect account nonce! Expected: %d, Actual: %d", nonce, tx.GetNonce())
 	}
-	gasAmount := tx.GetGasLimit() /*TODO: available gas per transfer? */
-	fee := tx.GetFee(gasAmount) // TODO: Fee represents the absolute fee here, as a temporarily hack
+	gasAmount := tx.GetGasLimit()         /*TODO: available gas per transfer? */
+	fee := tx.GetFee(gasAmount)           // TODO: Fee represents the absolute fee here, as a temporarily hack
 	if (tx.GetAmount() + fee) > balance { // we have anough to spend gas up to limit
 		return fmt.Errorf("insufficient balance! Available: %d, Attempting to spend: %d[amount]+%d[fee]=%d",
 			balance, tx.GetAmount(), fee, tx.GetAmount()+fee)
@@ -278,7 +278,7 @@ func (tp *TransactionProcessor) ApplyTransaction(trans types.Transaction, layerI
 	origin := tp.GetOrNewStateObj(trans.Origin())
 
 	// TODO: there is more then one type of tranactions
-	fee := trans.GetFee(/* TODO: gas consumed by transaction */1)
+	fee := trans.GetFee( /* TODO: gas consumed by transaction */ 1)
 	amountWithFee := fee + trans.GetAmount()
 
 	// todo: should we allow to spend all accounts balance?
@@ -293,7 +293,7 @@ func (tp *TransactionProcessor) ApplyTransaction(trans types.Transaction, layerI
 	}
 
 	tp.SetNonce(trans.Origin(), tp.GetNonce(trans.Origin())+1) // TODO: Not thread-safe
-  transfer(tp, trans.Origin(), trans.GetRecipient(), trans.GetAmount())
+	transfer(tp, trans.Origin(), trans.GetRecipient(), trans.GetAmount())
 
 	// subtract fee from account, fee will be sent to miners in layers after
 	tp.SubBalance(trans.Origin(), fee)
@@ -319,7 +319,7 @@ func transfer(db *TransactionProcessor, sender, recipient types.Address, amount 
 // HandleTxData handles data received on TX gossip channel
 func (tp *TransactionProcessor) HandleTxData(data service.GossipMessage, syncer service.Fetcher) {
 
-	tx,err := types.SignedTransaction(data.Bytes()).Decode()
+	tx, err := types.SignedTransaction(data.Bytes()).Decode()
 	if err != nil {
 		tp.With().Error("cannot parse incoming TX", log.Err(err))
 		return
