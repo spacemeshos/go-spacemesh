@@ -117,14 +117,15 @@ func (mock *ATXDBMock) CalcActiveSetSize(types.EpochID, map[types.BlockID]struct
 }
 
 type MockTxMemPool struct{}
+
 var alice = signing.NewEdSignerSeed("alice")
 
 func (MockTxMemPool) Get(types.TransactionID) (types.Transaction, error) {
-	return types.SignTransaction(types.OldCoinTx{}.NewEd(),alice)
+	return types.SignTransaction(types.OldCoinTx{}.NewEd(), alice)
 }
 
 func (MockTxMemPool) Put(types.TransactionID, types.Transaction) {}
-func (MockTxMemPool) Invalidate(types.TransactionID)                  {}
+func (MockTxMemPool) Invalidate(types.TransactionID)             {}
 
 type MockAtxMemPool struct{}
 

@@ -134,10 +134,11 @@ func (*validatorMock) VerifyPost(signing.PublicKey, *types.PostProof, uint64) er
 }
 
 type mockTxMemPool struct{}
+
 var alice = signing.NewEdSignerSeed("alice")
 
 func (mockTxMemPool) Get(types.TransactionID) (types.Transaction, error) {
-	return types.SignTransaction(types.OldCoinTx{}.NewEd(),alice)
+	return types.SignTransaction(types.OldCoinTx{}.NewEd(), alice)
 }
 
 func (mockTxMemPool) GetAllItems() []types.Transaction {
@@ -145,7 +146,7 @@ func (mockTxMemPool) GetAllItems() []types.Transaction {
 }
 
 func (mockTxMemPool) Put(types.TransactionID, types.Transaction) {}
-func (mockTxMemPool) Invalidate(types.TransactionID)                  {}
+func (mockTxMemPool) Invalidate(types.TransactionID)             {}
 
 type mockAtxMemPool struct{}
 

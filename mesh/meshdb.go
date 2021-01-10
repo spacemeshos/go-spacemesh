@@ -625,7 +625,7 @@ func (m *DB) GetTransaction(id types.TransactionID) (types.Transaction, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not find transaction in database %v err=%v", hex.EncodeToString(id[:]), err)
 	}
-	tx,err := types.SignedTransaction(tBytes).Decode()
+	tx, err := types.SignedTransaction(tBytes).Decode()
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal transaction: %v", err)
 	}

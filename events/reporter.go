@@ -27,7 +27,7 @@ func ReportNewTx(tx types.Transaction) {
 		Origin:      tx.Origin().String(),
 		Destination: tx.GetRecipient().String(),
 		Amount:      tx.GetAmount(),
-		Fee:         0 /*tx.Fee*/, /* TODO: ??? */
+		Fee:         0, /*tx.Fee*/ /* TODO: ??? */
 	})
 	ReportTxWithValidity(tx, true)
 }

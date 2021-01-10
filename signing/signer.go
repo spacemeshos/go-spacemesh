@@ -124,4 +124,3 @@ func (es *EdSigner) ToBuffer() []byte {
 
 	return buff
 }
-

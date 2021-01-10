@@ -173,7 +173,9 @@ func txsAsItems(msg []byte) ([]item, error) {
 	items := make([]item, len(txs))
 	for i := range txs {
 		items[i], err = txs[i].Decode()
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 	}
 	return items, nil
 }

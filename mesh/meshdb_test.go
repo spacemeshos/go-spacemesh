@@ -118,7 +118,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 
 func TestForEachInView_Persistent(t *testing.T) {
 	// TODO: is it right to create new db every time?
-	_ = os.RemoveAll(Path+"/mesh_db/")
+	_ = os.RemoveAll(Path + "/mesh_db/")
 	mdb, err := NewPersistentMeshDB(Path+"/mesh_db/", 5, log.NewDefault("TestForEachInView"))
 	require.NoError(t, err)
 	defer mdb.Close()
