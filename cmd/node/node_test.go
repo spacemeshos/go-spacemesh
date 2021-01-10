@@ -805,7 +805,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	txorigin := types.Address{}
 	txorigin.SetBytes(signer.PublicKey().Bytes())
 	dst := types.BytesToAddress([]byte{0x02})
-	tx, err := types.NewSignedTx(0, dst, 10, 1, 1, signer)
+	tx, err := types.NewSignedOldCoinTx(0, dst, 10, 1, 1, signer)
 	require.NoError(t, err, "unable to create signed mock tx")
 	txbytes, _ := types.InterfaceToBytes(tx)
 

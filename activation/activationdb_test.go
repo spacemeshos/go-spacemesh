@@ -57,7 +57,7 @@ func (MockState) GetAllAccounts() (*types.MultipleAccountsState, error) {
 	panic("implement me")
 }
 
-func (MockState) ValidateAndAddTxToPool(tx *types.Transaction) error {
+func (MockState) ValidateAndAddTxToPool(tx types.Transaction) error {
 	panic("implement me")
 }
 
@@ -69,7 +69,7 @@ func (MockState) GetStateRoot() types.Hash32 {
 	panic("implement me")
 }
 
-func (MockState) ValidateNonceAndBalance(*types.Transaction) error {
+func (MockState) ValidateNonceAndBalance(types.Transaction) error {
 	panic("implement me")
 }
 
@@ -77,7 +77,7 @@ func (MockState) GetLayerApplied(types.TransactionID) *types.LayerID {
 	panic("implement me")
 }
 
-func (MockState) ApplyTransactions(types.LayerID, []*types.Transaction) (int, error) {
+func (MockState) ApplyTransactions(types.LayerID, []types.Transaction) (int, error) {
 	return 0, nil
 }
 
@@ -117,13 +117,14 @@ func (mock *ATXDBMock) CalcActiveSetSize(types.EpochID, map[types.BlockID]struct
 }
 
 type MockTxMemPool struct{}
+var alice = signing.NewEdSignerSeed("alice")
 
-func (MockTxMemPool) Get(types.TransactionID) (*types.Transaction, error) {
-	return &types.Transaction{}, nil
+func (MockTxMemPool) Get(types.TransactionID) (types.Transaction, error) {
+	return types.SignTransaction(types.OldCoinTx{}.NewEd(),alice)
 }
 
-func (MockTxMemPool) Put(types.TransactionID, *types.Transaction) {}
-func (MockTxMemPool) Invalidate(types.TransactionID)              {}
+func (MockTxMemPool) Put(types.TransactionID, types.Transaction) {}
+func (MockTxMemPool) Invalidate(types.TransactionID)                  {}
 
 type MockAtxMemPool struct{}
 

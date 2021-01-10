@@ -88,6 +88,20 @@ func NewEdSigner() *EdSigner {
 	return &EdSigner{privKey: priv, pubKey: pub}
 }
 
+// NewEdSigner returns an auto-generated ed signer from seed
+func NewEdSignerSeed(seedStr string) *EdSigner {
+	seed := make([]byte, 32)
+	copy(seed, seedStr)
+
+	pub, priv, err := ed25519.GenerateKey(bytes.NewReader(seed))
+
+	if err != nil {
+		log.Panic("Could not generate key pair err=%v", err)
+	}
+
+	return &EdSigner{privKey: priv, pubKey: pub}
+}
+
 // Sign signs the provided message
 func (es *EdSigner) Sign(m []byte) []byte {
 	return ed25519.Sign2(es.privKey, m)
@@ -110,3 +124,4 @@ func (es *EdSigner) ToBuffer() []byte {
 
 	return buff
 }
+

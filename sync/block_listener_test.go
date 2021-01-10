@@ -178,7 +178,7 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 	block.TxIDs = append(block.TxIDs, tx1.ID())
 	block.ActiveSet = &[]types.ATXID{atx1.ID()}
 	block.ATXID = atx1.ID()
-	err = bl1.AddBlockWithTxs(block, []*types.Transaction{tx1})
+	err = bl1.AddBlockWithTxs(block, []*types.CoinTransaction{tx1})
 	require.NoError(t, err)
 
 	_, err = bl1.FetchBlock(block.ID())
@@ -237,7 +237,7 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 	block.ActiveSet = &[]types.ATXID{atx1.ID()}
 
 	// adding block to peer1
-	err = bl1.AddBlockWithTxs(block, []*types.Transaction{})
+	err = bl1.AddBlockWithTxs(block, []*types.CoinTransaction{})
 	require.NoError(t, err)
 
 	_, err = bl1.FetchBlock(block.ID())
@@ -261,7 +261,7 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 	tBlock.ActiveSet = &[]types.ATXID{atx2.ID()}
 
 	// Push tx2 poet proof into bl1.
-	err = bl1.AddBlockWithTxs(tBlock, []*types.Transaction{tx2})
+	err = bl1.AddBlockWithTxs(tBlock, []*types.CoinTransaction{tx2})
 	require.NoError(t, err)
 
 	_, err = bl1.FetchBlock(tBlock.ID())
@@ -627,7 +627,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	blk.ATXID = atx.ID()
 	blk.Initialize()
 
-	bl2.AddBlockWithTxs(blk, []*types.Transaction{tx})
+	bl2.AddBlockWithTxs(blk, []*types.CoinTransaction{tx})
 
 	data, err := types.InterfaceToBytes(&blk)
 	require.NoError(t, err)
@@ -682,7 +682,7 @@ func TestBlockListener_AtxCache(t *testing.T) {
 	//blk1.ATXIDs = append(blk1.ATXIDs, atx1.ID())
 	//blk1.ATXIDs = append(blk1.ATXIDs, atx2.ID())
 
-	err := bl1.AddBlockWithTxs(blk1, []*types.Transaction{tx1})
+	err := bl1.AddBlockWithTxs(blk1, []*types.CoinTransaction{tx1})
 	require.NoError(t, err)
 	require.Equal(t, 2, atxDb.ProcCnt)
 	_, err = bl1.FetchBlock(blk1.ID())
@@ -695,7 +695,7 @@ func TestBlockListener_AtxCache(t *testing.T) {
 	//blk2.ATXIDs = append(blk2.ATXIDs, atx1.ID())
 	//blk2.ATXIDs = append(blk2.ATXIDs, atx2.ID())
 
-	err = bl1.AddBlockWithTxs(blk2, []*types.Transaction{tx1})
+	err = bl1.AddBlockWithTxs(blk2, []*types.CoinTransaction{tx1})
 	require.NoError(t, err)
 	require.Equal(t, 4, atxDb.ProcCnt)
 	_, err = bl1.FetchBlock(blk2.ID())
@@ -707,7 +707,7 @@ func TestBlockListener_AtxCache(t *testing.T) {
 	blk3.TxIDs = append(blk3.TxIDs, tx1.ID())
 	//blk3.ATXIDs = append(blk3.ATXIDs, atx1.ID())
 
-	err = bl1.AddBlockWithTxs(blk3, []*types.Transaction{tx1})
+	err = bl1.AddBlockWithTxs(blk3, []*types.CoinTransaction{tx1})
 	require.NoError(t, err)
 	require.Equal(t, 5, atxDb.ProcCnt)
 	_, err = bl1.FetchBlock(blk3.ID())

@@ -31,20 +31,20 @@ func NewAccountPendingTxs() *AccountPendingTxs {
 
 // Add adds transactions to a specific layer. It also updates the highest layer each transaction is included in, if this
 // transaction is already indexed.
-func (apt *AccountPendingTxs) Add(layer types.LayerID, txs ...*types.Transaction) {
+func (apt *AccountPendingTxs) Add(layer types.LayerID, txs ...types.Transaction) {
 	apt.mu.Lock()
 	for _, tx := range txs {
-		existing, found := apt.PendingTxs[tx.AccountNonce]
+		existing, found := apt.PendingTxs[tx.GetNonce()]
 		if !found {
 			existing = make(map[types.TransactionID]nanoTx)
-			apt.PendingTxs[tx.AccountNonce] = existing
+			apt.PendingTxs[tx.GetNonce()] = existing
 		}
 		if existing[tx.ID()].HighestLayerIncludedIn > layer {
 			layer = existing[tx.ID()].HighestLayerIncludedIn
 		}
 		existing[tx.ID()] = nanoTx{
-			Amount:                 tx.Amount,
-			Fee:                    tx.Fee,
+			Amount:                 tx.GetAmount(),
+			Fee:                    tx.GetFee(1), // TODO: gas spent for transaction is unknown here
 			HighestLayerIncludedIn: layer,
 		}
 	}
@@ -53,10 +53,10 @@ func (apt *AccountPendingTxs) Add(layer types.LayerID, txs ...*types.Transaction
 
 // RemoveAccepted removes a list of accepted transactions from the AccountPendingTxs. Since the given transactions were
 // accepted, any other version of the transaction with the same nonce is also discarded.
-func (apt *AccountPendingTxs) RemoveAccepted(accepted []*types.Transaction) {
+func (apt *AccountPendingTxs) RemoveAccepted(accepted []types.Transaction) {
 	apt.mu.Lock()
 	for _, tx := range accepted {
-		delete(apt.PendingTxs, tx.AccountNonce)
+		delete(apt.PendingTxs, tx.GetNonce())
 	}
 	apt.mu.Unlock()
 }
@@ -64,17 +64,17 @@ func (apt *AccountPendingTxs) RemoveAccepted(accepted []*types.Transaction) {
 // RemoveRejected removes a list of rejected transactions from the AccountPendingTxs, assuming they were rejected in the
 // given layer. If any of the listed transactions also appears in a higher layer than the one given, it will not be
 // removed.
-func (apt *AccountPendingTxs) RemoveRejected(rejected []*types.Transaction, layer types.LayerID) {
+func (apt *AccountPendingTxs) RemoveRejected(rejected []types.Transaction, layer types.LayerID) {
 	apt.mu.Lock()
 	for _, tx := range rejected {
-		existing, found := apt.PendingTxs[tx.AccountNonce]
+		existing, found := apt.PendingTxs[tx.GetNonce()]
 		if found {
 			if existing[tx.ID()].HighestLayerIncludedIn > layer {
 				continue
 			}
 			delete(existing, tx.ID())
 			if len(existing) == 0 {
-				delete(apt.PendingTxs, tx.AccountNonce)
+				delete(apt.PendingTxs, tx.GetNonce())
 			}
 		}
 	}

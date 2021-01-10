@@ -13,8 +13,8 @@ import (
 
 type MockMapState struct {
 	Rewards     map[types.Address]*big.Int
-	Txs         []*types.Transaction
-	Pool        []*types.Transaction
+	Txs         []types.Transaction
+	Pool        []types.Transaction
 	TotalReward int64
 }
 
@@ -22,20 +22,20 @@ func (s *MockMapState) GetAllAccounts() (*types.MultipleAccountsState, error) {
 	panic("implement me")
 }
 
-func (s *MockMapState) ValidateAndAddTxToPool(tx *types.Transaction) error {
+func (s *MockMapState) ValidateAndAddTxToPool(tx types.Transaction) error {
 	s.Pool = append(s.Pool, tx)
 	return nil
 }
 
 func (s MockMapState) LoadState(types.LayerID) error                       { panic("implement me") }
-func (MockMapState) GetStateRoot() types.Hash32                            { return [32]byte{} }
-func (MockMapState) ValidateNonceAndBalance(*types.Transaction) error      { panic("implement me") }
-func (MockMapState) GetLayerApplied(types.TransactionID) *types.LayerID    { panic("implement me") }
+func (MockMapState) GetStateRoot() types.Hash32                           { return [32]byte{} }
+func (MockMapState) ValidateNonceAndBalance(types.Transaction) error { panic("implement me") }
+func (MockMapState) GetLayerApplied(types.TransactionID) *types.LayerID   { panic("implement me") }
 func (MockMapState) GetLayerStateRoot(types.LayerID) (types.Hash32, error) { panic("implement me") }
 func (MockMapState) GetBalance(types.Address) uint64                       { panic("implement me") }
 func (MockMapState) GetNonce(types.Address) uint64                         { panic("implement me") }
 
-func (s *MockMapState) ApplyTransactions(_ types.LayerID, txs []*types.Transaction) (int, error) {
+func (s *MockMapState) ApplyTransactions(_ types.LayerID, txs []types.Transaction) (int, error) {
 	s.Txs = append(s.Txs, txs...)
 	return 0, nil
 }
@@ -67,10 +67,10 @@ func getMeshWithMapState(id string, s txProcessor) (*Mesh, *AtxDbMock) {
 
 func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs int, fee int64) int64 {
 	var totalFee int64
-	var txs []*types.Transaction
+	var txs []types.Transaction
 	for i := 0; i < numOfTxs; i++ {
 		// log.Info("adding tx with fee %v nonce %v", fee, i)
-		tx, err := types.NewSignedTx(1, types.HexToAddress("1"), 10, 100, uint64(fee), signing.NewEdSigner())
+		tx, err := types.NewSignedOldCoinTx(1, types.HexToAddress("1"), 10, 100, uint64(fee), signing.NewEdSigner())
 		assert.NoError(t, err)
 		bl.TxIDs = append(bl.TxIDs, tx.ID())
 		totalFee += fee

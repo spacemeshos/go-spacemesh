@@ -178,7 +178,7 @@ func newTxQueue(s *Syncer) *txQueue {
 }
 
 //we could get rid of this if we had a unified id type
-func (tx txQueue) HandleTxs(txids []types.TransactionID) ([]*types.Transaction, error) {
+func (tx txQueue) HandleTxs(txids []types.TransactionID) ([]types.Transaction, error) {
 	txItems := make([]types.Hash32, 0, len(txids))
 	for _, i := range txids {
 		txItems = append(txItems, i.Hash32())
@@ -189,9 +189,9 @@ func (tx txQueue) HandleTxs(txids []types.TransactionID) ([]*types.Transaction, 
 		return nil, err
 	}
 
-	txs := make([]*types.Transaction, 0, len(txres))
+	txs := make([]types.Transaction, 0, len(txres))
 	for _, i := range txres {
-		txs = append(txs, i.(*types.Transaction))
+		txs = append(txs, i.(types.Transaction))
 	}
 
 	return txs, nil
@@ -200,10 +200,10 @@ func (tx txQueue) HandleTxs(txids []types.TransactionID) ([]*types.Transaction, 
 func updateTxDependencies(invalidate func(id types.Hash32, valid bool), txpool txMemPool) func(fj fetchJob) {
 	return func(fj fetchJob) {
 
-		mp := map[types.Hash32]*types.Transaction{}
+		mp := map[types.Hash32]types.Transaction{}
 
 		for _, item := range fj.items {
-			mp[item.Hash32()] = item.(*types.Transaction)
+			mp[item.Hash32()] = item.(types.Transaction)
 		}
 
 		for _, id := range fj.ids {

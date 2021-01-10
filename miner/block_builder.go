@@ -35,7 +35,7 @@ type syncer interface {
 }
 
 type txPool interface {
-	GetTxsForBlock(numOfTxs int, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionID, []*types.Transaction, error)
+	GetTxsForBlock(numOfTxs int, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionID, []types.Transaction, error)
 }
 
 type projector interface {

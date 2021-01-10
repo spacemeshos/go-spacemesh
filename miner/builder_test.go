@@ -66,7 +66,7 @@ type mockTxProcessor struct {
 	notValid bool
 }
 
-func (m mockTxProcessor) ValidateNonceAndBalance(*types.Transaction) error {
+func (m mockTxProcessor) ValidateNonceAndBalance(*types.CoinTransaction) error {
 	return nil
 }
 
@@ -235,7 +235,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	recipient := types.BytesToAddress([]byte{0x01})
 	signer := signing.NewEdSigner()
 
-	trans := []*types.Transaction{
+	trans := []*types.CoinTransaction{
 		NewTx(t, 1, recipient, signer),
 		NewTx(t, 2, recipient, signer),
 		NewTx(t, 3, recipient, signer),
@@ -289,7 +289,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 	recipient := types.BytesToAddress([]byte{0x01})
 	signer := signing.NewEdSigner()
 
-	trans := []*types.Transaction{
+	trans := []*types.CoinTransaction{
 		NewTx(t, 1, recipient, signer),
 		NewTx(t, 2, recipient, signer),
 		NewTx(t, 3, recipient, signer),
@@ -331,8 +331,8 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 	assert.Equal(t, *bl.RefBlock, b.ID())
 }
 
-func NewTx(t *testing.T, nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
-	tx, err := types.NewSignedTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
+func NewTx(t *testing.T, nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.CoinTransaction {
+	tx, err := types.NewSignedOldCoinTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
 	assert.NoError(t, err)
 	return tx
 }

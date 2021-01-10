@@ -362,13 +362,13 @@ func getRewardKeyPrefix(account types.Address) []byte {
 	return []byte(str)
 }
 
-func getTransactionOriginKey(l types.LayerID, t *types.Transaction) []byte {
+func getTransactionOriginKey(l types.LayerID, t types.Transaction) []byte {
 	str := string(getTransactionOriginKeyPrefix(l, t.Origin())) + "_" + t.ID().String()
 	return []byte(str)
 }
 
-func getTransactionDestKey(l types.LayerID, t *types.Transaction) []byte {
-	str := string(getTransactionDestKeyPrefix(l, t.Recipient)) + "_" + t.ID().String()
+func getTransactionDestKey(l types.LayerID, t types.Transaction) []byte {
+	str := string(getTransactionDestKeyPrefix(l, t.GetRecipient())) + "_" + t.ID().String()
 	return []byte(str)
 }
 
@@ -382,38 +382,12 @@ func getTransactionDestKeyPrefix(l types.LayerID, account types.Address) []byte 
 	return []byte(str)
 }
 
-type dbTransaction struct {
-	*types.Transaction
-	Origin types.Address
-}
-
-func newDbTransaction(tx *types.Transaction) *dbTransaction {
-	return &dbTransaction{Transaction: tx, Origin: tx.Origin()}
-}
-
-func (t dbTransaction) getTransaction() *types.Transaction {
-	t.Transaction.SetOrigin(t.Origin)
-	return t.Transaction
-}
-
-func (m *DB) writeTransactions(l types.LayerID, txs []*types.Transaction) error {
+func (m *DB) writeTransactions(l types.LayerID, txs []types.Transaction) error {
 	batch := m.transactions.NewBatch()
 	for _, t := range txs {
-		bytes, err := types.InterfaceToBytes(newDbTransaction(t))
-		if err != nil {
-			return fmt.Errorf("could not marshall tx %v to bytes: %v", t.ID().ShortString(), err)
+		if err := m.WriteTransaction(l, t); err != nil {
+			return err
 		}
-		if err := batch.Put(t.ID().Bytes(), bytes); err != nil {
-			return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
-		}
-		// write extra index for querying txs by account
-		if err := batch.Put(getTransactionOriginKey(l, t), t.ID().Bytes()); err != nil {
-			return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
-		}
-		if err := batch.Put(getTransactionDestKey(l, t), t.ID().Bytes()); err != nil {
-			return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
-		}
-		m.Debug("wrote tx %v to db", t.ID().ShortString())
 	}
 	err := batch.Write()
 	if err != nil {
@@ -423,8 +397,8 @@ func (m *DB) writeTransactions(l types.LayerID, txs []*types.Transaction) error 
 }
 
 // WriteTransaction writes a single transaction to the db
-func (m *DB) WriteTransaction(l types.LayerID, t *types.Transaction) error {
-	bytes, err := types.InterfaceToBytes(newDbTransaction(t))
+func (m *DB) WriteTransaction(l types.LayerID, t types.Transaction) error {
+	bytes, err := t.Encode()
 	if err != nil {
 		return fmt.Errorf("could not marshall tx %v to bytes: %v", t.ID().ShortString(), err)
 	}
@@ -439,7 +413,6 @@ func (m *DB) WriteTransaction(l types.LayerID, t *types.Transaction) error {
 		return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
 	}
 	m.Debug("wrote tx %v to db", t.ID().ShortString())
-
 	return nil
 }
 
@@ -494,7 +467,7 @@ func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err erro
 	return
 }
 
-func (m *DB) addToUnappliedTxs(txs []*types.Transaction, layer types.LayerID) error {
+func (m *DB) addToUnappliedTxs(txs []types.Transaction, layer types.LayerID) error {
 	groupedTxs := groupByOrigin(txs)
 
 	for addr, accountTxs := range groupedTxs {
@@ -505,7 +478,7 @@ func (m *DB) addToUnappliedTxs(txs []*types.Transaction, layer types.LayerID) er
 	return nil
 }
 
-func (m *DB) addToAccountTxs(addr types.Address, accountTxs []*types.Transaction, layer types.LayerID) error {
+func (m *DB) addToAccountTxs(addr types.Address, accountTxs []types.Transaction, layer types.LayerID) error {
 	m.unappliedTxsMutex.Lock()
 	defer m.unappliedTxsMutex.Unlock()
 
@@ -521,7 +494,7 @@ func (m *DB) addToAccountTxs(addr types.Address, accountTxs []*types.Transaction
 	return nil
 }
 
-func (m *DB) removeFromUnappliedTxs(accepted []*types.Transaction) (grouped map[types.Address][]*types.Transaction, accounts map[types.Address]struct{}) {
+func (m *DB) removeFromUnappliedTxs(accepted []types.Transaction) (grouped map[types.Address][]types.Transaction, accounts map[types.Address]struct{}) {
 	grouped = groupByOrigin(accepted)
 	accounts = make(map[types.Address]struct{})
 	for account := range grouped {
@@ -533,7 +506,7 @@ func (m *DB) removeFromUnappliedTxs(accepted []*types.Transaction) (grouped map[
 	return
 }
 
-func (m *DB) removeFromAccountTxs(account types.Address, gAccepted map[types.Address][]*types.Transaction) {
+func (m *DB) removeFromAccountTxs(account types.Address, gAccepted map[types.Address][]types.Transaction) {
 	m.unappliedTxsMutex.Lock()
 	defer m.unappliedTxsMutex.Unlock()
 
@@ -551,7 +524,7 @@ func (m *DB) removeFromAccountTxs(account types.Address, gAccepted map[types.Add
 	}
 }
 
-func (m *DB) removeRejectedFromAccountTxs(account types.Address, rejected map[types.Address][]*types.Transaction, layer types.LayerID) {
+func (m *DB) removeRejectedFromAccountTxs(account types.Address, rejected map[types.Address][]types.Transaction, layer types.LayerID) {
 	m.unappliedTxsMutex.Lock()
 	defer m.unappliedTxsMutex.Unlock()
 
@@ -599,8 +572,8 @@ func (m *DB) getAccountPendingTxs(addr types.Address) (*pendingtxs.AccountPendin
 	return &pending, nil
 }
 
-func groupByOrigin(txs []*types.Transaction) map[types.Address][]*types.Transaction {
-	grouped := make(map[types.Address][]*types.Transaction)
+func groupByOrigin(txs []types.Transaction) map[types.Address][]types.Transaction {
+	grouped := make(map[types.Address][]types.Transaction)
 	for _, tx := range txs {
 		grouped[tx.Origin()] = append(grouped[tx.Origin()], tx)
 	}
@@ -619,7 +592,7 @@ func (m *DB) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (n
 
 type txGetter struct {
 	missingIds map[types.TransactionID]struct{}
-	txs        []*types.Transaction
+	txs        []types.Transaction
 	mesh       *DB
 }
 
@@ -638,7 +611,7 @@ func newGetter(m *DB) *txGetter {
 }
 
 // GetTransactions retrieves a list of txs by their id's
-func (m *DB) GetTransactions(transactions []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
+func (m *DB) GetTransactions(transactions []types.TransactionID) ([]types.Transaction, map[types.TransactionID]struct{}) {
 	getter := newGetter(m)
 	for _, id := range transactions {
 		getter.get(id)
@@ -647,17 +620,16 @@ func (m *DB) GetTransactions(transactions []types.TransactionID) ([]*types.Trans
 }
 
 // GetTransaction retrieves a tx by its id
-func (m *DB) GetTransaction(id types.TransactionID) (*types.Transaction, error) {
+func (m *DB) GetTransaction(id types.TransactionID) (types.Transaction, error) {
 	tBytes, err := m.transactions.Get(id[:])
 	if err != nil {
 		return nil, fmt.Errorf("could not find transaction in database %v err=%v", hex.EncodeToString(id[:]), err)
 	}
-	var dbTx dbTransaction
-	err = types.BytesToInterface(tBytes, &dbTx)
+	tx,err := types.SignedTransaction(tBytes).Decode()
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal transaction: %v", err)
 	}
-	return dbTx.getTransaction(), nil
+	return tx, nil
 }
 
 // GetTransactionsByDestination retrieves txs by destination and layer

@@ -152,7 +152,7 @@ func getMesh(dbType, id string) *mesh.Mesh {
 	return getMeshWithMemoryDB(id)
 }
 
-func addTxsToPool(pool txMemPool, txs []*types.Transaction) {
+func addTxsToPool(pool txMemPool, txs []types.Transaction) {
 	for _, t := range txs {
 		pool.Put(t.ID(), t)
 	}
@@ -219,7 +219,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	syncObj2 := syncs[1]
 	defer syncObj.Close()
 	block := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
-	addTxsToPool(syncObj.txpool, []*types.Transaction{tx1})
+	addTxsToPool(syncObj.txpool, []types.Transaction{tx1})
 
 	syncObj.AddBlockWithTxs(block)
 	syncObj2.peers = getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey()})
@@ -253,7 +253,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	defer syncObj2.Close()
 	lid := types.LayerID(1)
 	block := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
-	addTxsToPool(syncObj1.txpool, []*types.Transaction{tx1})
+	addTxsToPool(syncObj1.txpool, []types.Transaction{tx1})
 	syncObj1.AddBlockWithTxs(block)
 	timeout := time.NewTimer(2 * time.Second)
 
@@ -363,7 +363,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	lid := types.LayerID(1)
 	layer := types.NewExistingLayer(lid, make([]*types.Block, 0, 10))
 	block1 := types.NewExistingBlock(1, []byte(rand.String(8)), []types.TransactionID{tx1.ID()})
-	addTxsToPool(syncObj1.txpool, []*types.Transaction{tx1, tx2, tx3, tx4})
+	addTxsToPool(syncObj1.txpool, []types.Transaction{tx1, tx2, tx3, tx4})
 
 	syncObj1.atxDb.ProcessAtx(atx1)
 	syncObj1.atxDb.ProcessAtx(atx2)
@@ -434,7 +434,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	block1.Initialize()
 	block2.Initialize()
 	block3.Initialize()
-	addTxsToPool(syncObj1.txpool, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
+	addTxsToPool(syncObj1.txpool, []types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
 	syncObj1.atxDb.ProcessAtx(atx1)
 	syncObj1.atxDb.ProcessAtx(atx2)
 	syncObj1.atxDb.ProcessAtx(atx3)
@@ -499,7 +499,7 @@ func TestSyncProtocol_SyncNodes(t *testing.T) {
 	block10 := types.NewExistingBlock(5, []byte(rand.String(8)), []types.TransactionID{tx7.ID(), tx8.ID()})
 	block10.Signature = signer.Sign(block10.Bytes())
 
-	addTxsToPool(syncObj1.txpool, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
+	addTxsToPool(syncObj1.txpool, []types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
 	syncObj1.AddBlockWithTxs(block3)
 	syncObj1.AddBlockWithTxs(block4)
 	syncObj1.AddBlockWithTxs(block5)
@@ -509,7 +509,7 @@ func TestSyncProtocol_SyncNodes(t *testing.T) {
 	syncObj1.AddBlockWithTxs(block9)
 	syncObj1.AddBlockWithTxs(block10)
 
-	addTxsToPool(syncObj2.txpool, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
+	addTxsToPool(syncObj2.txpool, []types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
 	syncObj2.AddBlockWithTxs(block3)
 	syncObj2.AddBlockWithTxs(block4)
 	syncObj2.AddBlockWithTxs(block5)
@@ -623,7 +623,7 @@ func syncTest(dpType string, t *testing.T) {
 	syncObj3.ValidateLayer(mesh.GenesisLayer())
 	syncObj4.ValidateLayer(mesh.GenesisLayer())
 
-	addTxsToPool(syncObj1.txpool, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
+	addTxsToPool(syncObj1.txpool, []types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
 	syncObj1.AddBlock(block2)
 	syncObj1.AddBlockWithTxs(block3)
 	syncObj1.AddBlockWithTxs(block4)
@@ -772,7 +772,7 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	block9.Initialize()
 	block10.Initialize()
 
-	addTxsToPool(syncObj2.txpool, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
+	addTxsToPool(syncObj2.txpool, []types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
 	syncObj2.AddBlock(block1)
 	syncObj2.AddBlock(block2)
 	syncObj2.AddBlockWithTxs(block3)
@@ -886,7 +886,7 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	err = syncObj5.AddBlock(block2)
 	require.NoError(t, err)
 
-	addTxsToPool(syncObj2.txpool, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
+	addTxsToPool(syncObj2.txpool, []types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
 	err = syncObj1.AddBlockWithTxs(block3)
 	err = syncObj1.AddBlockWithTxs(block4)
 	err = syncObj1.AddBlockWithTxs(block5)
@@ -931,10 +931,10 @@ end:
 	return
 }
 
-func tx() *types.Transaction {
+func tx() types.Transaction {
 	fee := rand.Uint64()
 	addr := rand.Int63n(1000000)
-	tx, err := types.NewSignedTx(1, types.HexToAddress(strconv.FormatUint(uint64(addr), 10)), 10, 100, fee, signing.NewEdSigner())
+	tx, err := types.NewSignedOldCoinTx(1, types.HexToAddress(strconv.FormatUint(uint64(addr), 10)), 10, 100, fee, signing.NewEdSigner())
 	if err != nil {
 		log.Panic("failed to create transaction: %v", err)
 	}
@@ -975,7 +975,7 @@ func TestSyncer_Txs(t *testing.T) {
 	id2 := tx2.ID()
 	id3 := tx3.ID()
 	block3.TxIDs = []types.TransactionID{id1, id2, id3}
-	addTxsToPool(syncObj1.txpool, []*types.Transaction{tx1, tx2, tx3})
+	addTxsToPool(syncObj1.txpool, []types.Transaction{tx1, tx2, tx3})
 	syncObj1.AddBlockWithTxs(block3)
 
 	_, err := syncObj2.txQueue.handle([]types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32()})
@@ -1525,7 +1525,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 
 	txHandlerMock := func([]byte) []byte {
 		t.Log("return fake tx")
-		byts, _ := types.InterfaceToBytes(tx())
+		byts, _ := tx().Encode()
 		return byts
 	}
 

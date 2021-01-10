@@ -37,16 +37,16 @@ type Syncer interface {
 // TxAPI is an api for getting transaction status
 type TxAPI interface {
 	AddressExists(types.Address) bool
-	ValidateNonceAndBalance(*types.Transaction) error
+	ValidateNonceAndBalance(types.Transaction) error
 	GetATXs([]types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID)
 	GetLayer(types.LayerID) (*types.Layer, error)
 	GetRewards(types.Address) ([]types.Reward, error)
-	GetTransactions([]types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{})
+	GetTransactions([]types.TransactionID) ([]types.Transaction, map[types.TransactionID]struct{})
 	GetTransactionsByDestination(types.LayerID, types.Address) []types.TransactionID
 	GetTransactionsByOrigin(types.LayerID, types.Address) []types.TransactionID
 	LatestLayer() types.LayerID
 	GetLayerApplied(types.TransactionID) *types.LayerID
-	GetTransaction(types.TransactionID) (*types.Transaction, error)
+	GetTransaction(types.TransactionID) (types.Transaction, error)
 	GetProjection(types.Address, uint64, uint64) (uint64, uint64, error)
 	LatestLayerInState() types.LayerID
 	ProcessedLayer() types.LayerID
@@ -64,7 +64,7 @@ type PeerCounter interface {
 
 // MempoolAPI is an API for reading mempool data that's useful for API services
 type MempoolAPI interface {
-	Get(types.TransactionID) (*types.Transaction, error)
+	Get(types.TransactionID) (types.Transaction, error)
 	GetTxIdsByAddress(types.Address) []types.TransactionID
 	GetProjection(types.Address, uint64, uint64) (uint64, uint64)
 }

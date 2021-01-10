@@ -18,7 +18,7 @@ var proof []byte
 
 type blockBuilderMock struct{}
 
-func (blockBuilderMock) ValidateAndAddTxToPool(tx *types.Transaction) error {
+func (blockBuilderMock) ValidateAndAddTxToPool(tx types.Transaction) error {
 	return nil
 }
 
@@ -61,8 +61,8 @@ func TestCreateBaseline(t *testing.T) {
 	createBaseline(msh, numOfLayers, blocksPerLayer, blocksPerLayer, txPerBlock, atxPerBlock)
 }
 
-func txs(num int) ([]*types.Transaction, []types.TransactionID) {
-	txs := make([]*types.Transaction, 0, num)
+func txs(num int) ([]types.Transaction, []types.TransactionID) {
+	txs := make([]types.Transaction, 0, num)
 	ids := make([]types.TransactionID, 0, num)
 	for i := 0; i < num; i++ {
 		tx := tx()

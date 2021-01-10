@@ -15,7 +15,7 @@ type syncer interface {
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 	HandleLateBlock(bl *types.Block)
 	ProcessedLayer() types.LayerID
-	dataAvailability(blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error)
+	dataAvailability(blk *types.Block) ([]types.Transaction, []*types.ActivationTx, error)
 	getValidatingLayer() types.LayerID
 	fastValidation(block *types.Block) error
 	blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32)

@@ -117,6 +117,8 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 }
 
 func TestForEachInView_Persistent(t *testing.T) {
+	// TODO: is it right to create new db every time?
+	_ = os.RemoveAll(Path+"/mesh_db/")
 	mdb, err := NewPersistentMeshDB(Path+"/mesh_db/", 5, log.NewDefault("TestForEachInView"))
 	require.NoError(t, err)
 	defer mdb.Close()
@@ -284,16 +286,16 @@ func address() types.Address {
 	return addr
 }
 
-func newTx(r *require.Assertions, signer *signing.EdSigner, nonce, totalAmount uint64) *types.Transaction {
+func newTx(r *require.Assertions, signer *signing.EdSigner, nonce, totalAmount uint64) types.Transaction {
 	feeAmount := uint64(1)
-	tx, err := types.NewSignedTx(nonce, types.Address{}, totalAmount-feeAmount, 3, feeAmount, signer)
+	tx, err := types.NewSignedOldCoinTx(nonce, types.Address{}, totalAmount-feeAmount, 3, feeAmount, signer)
 	r.NoError(err)
 	return tx
 }
 
-func newTxWithDest(r *require.Assertions, signer *signing.EdSigner, dest types.Address, nonce, totalAmount uint64) *types.Transaction {
+func newTxWithDest(r *require.Assertions, signer *signing.EdSigner, dest types.Address, nonce, totalAmount uint64) types.Transaction {
 	feeAmount := uint64(1)
-	tx, err := types.NewSignedTx(nonce, dest, totalAmount-feeAmount, 3, feeAmount, signer)
+	tx, err := types.NewSignedOldCoinTx(nonce, dest, totalAmount-feeAmount, 3, feeAmount, signer)
 	r.NoError(err)
 	return tx
 }
@@ -315,7 +317,7 @@ func TestMeshDB_GetStateProjection(t *testing.T) {
 
 	mdb := NewMemMeshDB(log.NewDefault("DB.GetStateProjection"))
 	signer, origin := newSignerAndAddress(r, "123")
-	err := mdb.addToUnappliedTxs([]*types.Transaction{
+	err := mdb.addToUnappliedTxs([]types.Transaction{
 		newTx(r, signer, 0, 10),
 		newTx(r, signer, 1, 20),
 	}, 1)
@@ -332,7 +334,7 @@ func TestMeshDB_GetStateProjection_WrongNonce(t *testing.T) {
 
 	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
 	signer, origin := newSignerAndAddress(r, "123")
-	err := mdb.addToUnappliedTxs([]*types.Transaction{
+	err := mdb.addToUnappliedTxs([]types.Transaction{
 		newTx(r, signer, 1, 10),
 		newTx(r, signer, 2, 20),
 	}, 1)
@@ -349,7 +351,7 @@ func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
 
 	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
 	signer, origin := newSignerAndAddress(r, "123")
-	err := mdb.addToUnappliedTxs([]*types.Transaction{
+	err := mdb.addToUnappliedTxs([]types.Transaction{
 		newTx(r, signer, 0, 10),
 		newTx(r, signer, 1, 95),
 	}, 1)
@@ -379,7 +381,7 @@ func TestMeshDB_UnappliedTxs(t *testing.T) {
 
 	signer1, origin1 := newSignerAndAddress(r, "thc")
 	signer2, origin2 := newSignerAndAddress(r, "cbd")
-	err := mdb.addToUnappliedTxs([]*types.Transaction{
+	err := mdb.addToUnappliedTxs([]types.Transaction{
 		newTx(r, signer1, 420, 240),
 		newTx(r, signer1, 421, 241),
 		newTx(r, signer2, 0, 100),
@@ -401,7 +403,7 @@ func TestMeshDB_UnappliedTxs(t *testing.T) {
 	r.Equal(100, int(txns2[0].TotalAmount))
 	r.Equal(101, int(txns2[1].TotalAmount))
 
-	mdb.removeFromUnappliedTxs([]*types.Transaction{
+	mdb.removeFromUnappliedTxs([]types.Transaction{
 		newTx(r, signer2, 0, 100),
 	})
 
@@ -426,7 +428,7 @@ func TestMeshDB_testGetTransactions(t *testing.T) {
 	signer1, addr1 := newSignerAndAddress(r, "thc")
 	signer2, _ := newSignerAndAddress(r, "cbd")
 	_, addr3 := newSignerAndAddress(r, "cbe")
-	err := mdb.writeTransactions(1, []*types.Transaction{
+	err := mdb.writeTransactions(1, []types.Transaction{
 		newTx(r, signer1, 420, 240),
 		newTx(r, signer1, 421, 241),
 		newTxWithDest(r, signer2, addr1, 0, 100),

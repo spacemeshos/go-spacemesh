@@ -141,7 +141,15 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			}
 		}
 
-		bbytes, err := types.InterfaceToBytes(txs)
+		stx := make([]types.SignedTransaction,len(txs))
+		for i,v := range txs {
+			stx[i], err = v.Encode()
+			if err != nil {
+				logger.Error("Error marshaling transactions response message, err:", err)
+				return nil
+			}
+		}
+		bbytes, err := types.InterfaceToBytes(stx)
 		if err != nil {
 			logger.Error("Error marshaling transactions response message, with ids %v and err:", txs, err)
 			return nil

@@ -24,8 +24,8 @@ import (
 type forBlockInView func(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 
 type txMemPool interface {
-	Get(id types.TransactionID) (*types.Transaction, error)
-	Put(id types.TransactionID, item *types.Transaction)
+	Get(id types.TransactionID) (types.Transaction, error)
+	Put(id types.TransactionID, item types.Transaction)
 }
 
 type atxDB interface {
@@ -756,7 +756,7 @@ func (s *Syncer) fetchBlockDataForValidation(blk *types.Block) error {
 	return s.fetchAllReferencedAtxs(blk)
 }
 
-func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
+func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]types.Transaction, []*types.ActivationTx, error) {
 	// validate unique tx atx
 	if err := s.fetchBlockDataForValidation(block); err != nil {
 		return nil, nil, err
@@ -915,11 +915,11 @@ func validateVotes(blk *types.Block, forBlockfunc forBlockInView, depth int, lg 
 	return true, nil
 }
 
-func (s *Syncer) dataAvailability(blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
+func (s *Syncer) dataAvailability(blk *types.Block) ([]types.Transaction, []*types.ActivationTx, error) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	var txres []*types.Transaction
+	var txres []types.Transaction
 	var txerr error
 
 	if len(blk.TxIDs) > 0 {

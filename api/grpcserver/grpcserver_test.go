@@ -71,7 +71,7 @@ var (
 	networkMock = NetworkMock{}
 	mempoolMock = MempoolMock{
 		poolByAddress: make(map[types.Address]types.TransactionID),
-		poolByTxid:    make(map[types.TransactionID]*types.Transaction),
+		poolByTxid:    make(map[types.TransactionID]types.Transaction),
 	}
 	genTime    = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
 	addr1      = types.HexToAddress("33333")
@@ -91,7 +91,7 @@ var (
 	block2     = types.NewExistingBlock(0, []byte("22222"), nil)
 	block3     = types.NewExistingBlock(0, []byte("33333"), nil)
 	txAPI      = &TxAPIMock{
-		returnTx:     make(map[types.TransactionID]*types.Transaction),
+		returnTx:     make(map[types.TransactionID]types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),
 		balances: map[types.Address]*big.Int{
 			globalTx.Origin(): big.NewInt(int64(accountBalance)),
@@ -167,7 +167,7 @@ func (s *NetworkMock) GetErr() bool {
 }
 
 type TxAPIMock struct {
-	returnTx     map[types.TransactionID]*types.Transaction
+	returnTx     map[types.TransactionID]types.Transaction
 	layerApplied map[types.TransactionID]*types.LayerID
 	balances     map[types.Address]*big.Int
 	nonces       map[types.Address]uint64
@@ -193,9 +193,12 @@ func (t *TxAPIMock) GetStateRoot() types.Hash32 {
 	return stateRoot
 }
 
-func (t *TxAPIMock) ValidateNonceAndBalance(tx *types.Transaction) error {
-	if !t.AddressExists(tx.Origin()) || t.GetBalance(tx.Origin()) < tx.GasLimit || t.GetNonce(tx.Origin()) != tx.AccountNonce {
-		return errors.New("not gonna happen")
+func (t *TxAPIMock) ValidateNonceAndBalance(tx types.Transaction) error {
+	ctx := types.SimpleCoinTx{}
+	if tx.Extract(&ctx) {
+		if !t.AddressExists(tx.Origin()) || t.GetBalance(tx.Origin()) < ctx.GasLimit {
+			return errors.New("not gonna happen")
+		}
 	}
 	return nil
 }
@@ -223,7 +226,7 @@ func (t *TxAPIMock) GetLayerApplied(txID types.TransactionID) *types.LayerID {
 	return t.layerApplied[txID]
 }
 
-func (t *TxAPIMock) GetTransaction(id types.TransactionID) (*types.Transaction, error) {
+func (t *TxAPIMock) GetTransaction(id types.TransactionID) (types.Transaction, error) {
 	tx, ok := t.returnTx[id]
 	if !ok {
 		return nil, errors.New("it ain't there")
@@ -246,7 +249,7 @@ func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.
 		return nil
 	}
 	for _, tx := range t.returnTx {
-		if tx.Recipient.String() == account.String() {
+		if tx.GetRecipient().String() == account.String() {
 			txs = append(txs, tx.ID())
 		}
 	}
@@ -284,7 +287,7 @@ func (t *TxAPIMock) GetATXs([]types.ATXID) (map[types.ATXID]*types.ActivationTx,
 	return atxs, nil
 }
 
-func (t *TxAPIMock) GetTransactions(txids []types.TransactionID) (txs []*types.Transaction, missing map[types.TransactionID]struct{}) {
+func (t *TxAPIMock) GetTransactions(txids []types.TransactionID) (txs []types.Transaction, missing map[types.TransactionID]struct{}) {
 	for _, txid := range txids {
 		for _, tx := range t.returnTx {
 			if tx.ID() == txid {
@@ -316,8 +319,10 @@ func (t *TxAPIMock) ProcessedLayer() types.LayerID {
 	return types.LayerID(layerVerified)
 }
 
-func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
-	tx, err := types.NewSignedTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
+func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) types.Transaction {
+	/*TODO: nonce is byte for all new tranactions*/
+	ctx := types.OldCoinTx{AccountNonce: nonce, Recipient: recipient, Amount: 1, GasLimit: defaultGasLimit, Fee: defaultFee}.NewEd()
+	tx, err := types.SignTransaction(ctx, signer)
 	if err != nil {
 		log.Error("error creating new signed tx: ", err)
 		return nil
@@ -402,16 +407,16 @@ type MempoolMock struct {
 	// In the real state.TxMempool struct, there are multiple data structures and they're more complex,
 	// but we just mock a very simple use case here and only store some of these data
 	poolByAddress map[types.Address]types.TransactionID
-	poolByTxid    map[types.TransactionID]*types.Transaction
+	poolByTxid    map[types.TransactionID]types.Transaction
 }
 
-func (m MempoolMock) Get(id types.TransactionID) (*types.Transaction, error) {
+func (m MempoolMock) Get(id types.TransactionID) (types.Transaction, error) {
 	return m.poolByTxid[id], nil
 }
 
-func (m *MempoolMock) Put(id types.TransactionID, tx *types.Transaction) {
+func (m *MempoolMock) Put(id types.TransactionID, tx types.Transaction) {
 	m.poolByTxid[id] = tx
-	m.poolByAddress[tx.Recipient] = id
+	m.poolByAddress[tx.GetRecipient()] = id
 	m.poolByAddress[tx.Origin()] = id
 	events.ReportNewTx(tx)
 }
@@ -1797,13 +1802,15 @@ func TestTransactionService(t *testing.T) {
 func checkTransaction(t *testing.T, tx *pb.Transaction) {
 	require.Equal(t, globalTx.ID().Bytes(), tx.Id.Id)
 	require.Equal(t, globalTx.Origin().Bytes(), tx.Sender.Address)
-	require.Equal(t, globalTx.GasLimit, tx.GasOffered.GasProvided)
-	require.Equal(t, globalTx.Amount, tx.Amount.Value)
-	require.Equal(t, globalTx.AccountNonce, tx.Counter)
+	var h types.OldCoinTx
+	require.True(t, globalTx.Extract(&h))
+	require.Equal(t, h.GasLimit, tx.GasOffered.GasProvided)
+	require.Equal(t, h.Amount, tx.Amount.Value)
+	require.Equal(t, h.AccountNonce, tx.Counter)
 	require.Equal(t, globalTx.Origin().Bytes(), tx.Signature.PublicKey)
 	switch x := tx.Datum.(type) {
 	case *pb.Transaction_CoinTransfer:
-		require.Equal(t, globalTx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
+		require.Equal(t, globalTx.GetRecipient().Bytes(), x.CoinTransfer.Receiver.Address,
 			"inner coin transfer tx has bad recipient")
 	default:
 		require.Fail(t, "inner tx has wrong tx data type")
@@ -1860,17 +1867,19 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	resTx := resBlock.Transactions[0]
 	require.Equal(t, globalTx.ID().Bytes(), resTx.Id.Id)
 	require.Equal(t, globalTx.Origin().Bytes(), resTx.Sender.Address)
-	require.Equal(t, globalTx.GasLimit, resTx.GasOffered.GasProvided)
-	require.Equal(t, globalTx.Amount, resTx.Amount.Value)
-	require.Equal(t, globalTx.AccountNonce, resTx.Counter)
-	require.Equal(t, globalTx.Signature[:], resTx.Signature.Signature)
+	var h types.OldCoinTx
+	require.True(t, globalTx.Extract(&h))
+	require.Equal(t, h.GasLimit, resTx.GasOffered.GasProvided)
+	require.Equal(t, h.Amount, resTx.Amount.Value)
+	require.Equal(t, h.AccountNonce, resTx.Counter)
+	require.Equal(t, globalTx.Signature().Bytes(), resTx.Signature.Signature)
 	require.Equal(t, pb.Signature_SCHEME_ED25519_PLUS_PLUS, resTx.Signature.Scheme)
 	require.Equal(t, globalTx.Origin().Bytes(), resTx.Signature.PublicKey)
 
 	// The Data field is a bit trickier to read
 	switch x := resTx.Datum.(type) {
 	case *pb.Transaction_CoinTransfer:
-		require.Equal(t, globalTx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
+		require.Equal(t, globalTx.GetRecipient().Bytes(), x.CoinTransfer.Receiver.Address,
 			"inner coin transfer tx has bad recipient")
 	default:
 		require.Fail(t, "inner tx has wrong tx data type")
@@ -2248,15 +2257,17 @@ func checkAccountMeshDataItemTx(t *testing.T, dataItem interface{}) {
 		// Check the sender
 		require.Equal(t, globalTx.Origin().Bytes(), x.Transaction.Signature.PublicKey,
 			"inner coin transfer tx has bad sender")
-		require.Equal(t, globalTx.Amount, x.Transaction.Amount.Value,
+		var h types.OldCoinTx
+		require.True(t, globalTx.Extract(&h))
+		require.Equal(t, h.Amount, x.Transaction.Amount.Value,
 			"inner coin transfer tx has bad amount")
-		require.Equal(t, globalTx.AccountNonce, x.Transaction.Counter,
+		require.Equal(t, h.AccountNonce, x.Transaction.Counter,
 			"inner coin transfer tx has bad counter")
 
 		// Need to further check tx type
 		switch y := x.Transaction.Datum.(type) {
 		case *pb.Transaction_CoinTransfer:
-			require.Equal(t, globalTx.Recipient.Bytes(), y.CoinTransfer.Receiver.Address,
+			require.Equal(t, globalTx.GetRecipient().Bytes(), y.CoinTransfer.Receiver.Address,
 				"inner coin transfer tx has bad recipient")
 		default:
 			require.Fail(t, "inner tx has wrong tx data type")

@@ -21,19 +21,19 @@ func init() {
 }
 
 // ReportNewTx dispatches incoming events to the reporter singleton
-func ReportNewTx(tx *types.Transaction) {
+func ReportNewTx(tx types.Transaction) {
 	Publish(NewTx{
 		ID:          tx.ID().String(),
 		Origin:      tx.Origin().String(),
-		Destination: tx.Recipient.String(),
-		Amount:      tx.Amount,
-		Fee:         tx.Fee,
+		Destination: tx.GetRecipient().String(),
+		Amount:      tx.GetAmount(),
+		Fee:         0 /*tx.Fee*/, /* TODO: ??? */
 	})
 	ReportTxWithValidity(tx, true)
 }
 
 // ReportTxWithValidity reports a tx along with whether it was just invalidated
-func ReportTxWithValidity(tx *types.Transaction, valid bool) {
+func ReportTxWithValidity(tx types.Transaction, valid bool) {
 	mu.RLock()
 	defer mu.RUnlock()
 	txWithValidity := TransactionWithValidity{
@@ -56,7 +56,7 @@ func ReportTxWithValidity(tx *types.Transaction, valid bool) {
 }
 
 // ReportValidTx reports a valid transaction
-func ReportValidTx(tx *types.Transaction, valid bool) {
+func ReportValidTx(tx types.Transaction, valid bool) {
 	Publish(ValidTx{ID: tx.ID().String(), Valid: valid})
 }
 
@@ -447,7 +447,7 @@ type Reward struct {
 
 // TransactionWithValidity wraps a tx with its validity info
 type TransactionWithValidity struct {
-	Transaction *types.Transaction
+	Transaction types.Transaction
 	Valid       bool
 }
 

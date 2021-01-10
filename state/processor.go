@@ -22,7 +22,7 @@ const IncomingTxProtocol = "TxGossip"
 // PreImages is a struct that contains a root hash and the transactions that are in store of this root hash
 type PreImages struct {
 	rootHash  types.Hash32
-	preImages []*types.Transaction
+	preImages []types.Transaction
 }
 
 // Projector interface defines the interface for a struct that can project the state of an account by applying txs from
@@ -100,24 +100,26 @@ func (tp *TransactionProcessor) GetLayerApplied(txID types.TransactionID) *types
 
 // ValidateNonceAndBalance validates that the tx origin account has enough balance to apply the tx,
 // also, it checks that nonce in tx is correct, returns error otherwise
-func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) error {
+func (tp *TransactionProcessor) ValidateNonceAndBalance(tx types.Transaction) error {
 	origin := tx.Origin()
 	nonce, balance, err := tp.projector.GetProjection(origin, tp.GetNonce(origin), tp.GetBalance(origin))
 	if err != nil {
 		return fmt.Errorf("failed to project state for account %v: %v", origin.Short(), err)
 	}
-	if tx.AccountNonce != nonce {
-		return fmt.Errorf("incorrect account nonce! Expected: %d, Actual: %d", nonce, tx.AccountNonce)
+	if tx.GetNonce() != nonce {
+		return fmt.Errorf("incorrect account nonce! Expected: %d, Actual: %d", nonce, tx.GetNonce())
 	}
-	if (tx.Amount + tx.Fee) > balance { // TODO: Fee represents the absolute fee here, as a temporarily hack
+	gasAmount := tx.GetGasLimit() /*TODO: available gas per transfer? */
+	fee := tx.GetFee(gasAmount) // TODO: Fee represents the absolute fee here, as a temporarily hack
+	if (tx.GetAmount() + fee) > balance { // we have anough to spend gas up to limit
 		return fmt.Errorf("insufficient balance! Available: %d, Attempting to spend: %d[amount]+%d[fee]=%d",
-			balance, tx.Amount, tx.Fee, tx.Amount+tx.Fee)
+			balance, tx.GetAmount(), fee, tx.GetAmount()+fee)
 	}
 	return nil
 }
 
 // ApplyTransactions receives a batch of transaction to apply on state. Returns the number of transaction that failed to apply.
-func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
+func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []types.Transaction) (int, error) {
 	if len(txs) == 0 {
 		err := tp.addStateToHistory(layer, tp.GetStateRoot())
 		return 0, err
@@ -239,7 +241,7 @@ func (tp *TransactionProcessor) LoadState(layer types.LayerID) error {
 }
 
 // Process applies transaction vector to current state, it returns the remaining transactions that failed
-func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerID types.LayerID) (remaining []*types.Transaction) {
+func (tp *TransactionProcessor) Process(txs []types.Transaction, layerID types.LayerID) (remaining []types.Transaction) {
 	for _, tx := range txs {
 		err := tp.ApplyTransaction(tx, layerID)
 		if err != nil {
@@ -252,8 +254,8 @@ func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerID types.
 	return
 }
 
-func (tp *TransactionProcessor) checkNonce(trns *types.Transaction) bool {
-	return tp.GetNonce(trns.Origin()) == trns.AccountNonce
+func (tp *TransactionProcessor) checkNonce(trns types.Transaction) bool {
+	return tp.GetNonce(trns.Origin()) == trns.GetNonce()
 }
 
 var (
@@ -265,14 +267,16 @@ var (
 // ApplyTransaction applies provided transaction trans to the current state, but does not commit it to persistent
 // storage. it returns error if there is not enough balance in src account to perform the transaction and pay
 // fee or if the nonce is invalid
-func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction, layerID types.LayerID) error {
+func (tp *TransactionProcessor) ApplyTransaction(trans types.Transaction, layerID types.LayerID) error {
 	if !tp.Exist(trans.Origin()) {
 		return fmt.Errorf(errOrigin)
 	}
 
 	origin := tp.GetOrNewStateObj(trans.Origin())
 
-	amountWithFee := trans.Fee + trans.Amount
+	// TODO: there is more then one type of tranactions
+	fee := trans.GetFee(/* TODO: gas consumed by transaction */1)
+	amountWithFee := fee + trans.GetAmount()
 
 	// todo: should we allow to spend all accounts balance?
 	if origin.Balance().Uint64() <= amountWithFee {
@@ -281,15 +285,15 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction, layer
 	}
 
 	if !tp.checkNonce(trans) {
-		tp.Log.Error(errNonce+" should be %v actual %v", tp.GetNonce(trans.Origin()), trans.AccountNonce)
+		tp.Log.Error(errNonce+" should be %v actual %v", tp.GetNonce(trans.Origin()), trans.GetNonce())
 		return fmt.Errorf(errNonce)
 	}
 
 	tp.SetNonce(trans.Origin(), tp.GetNonce(trans.Origin())+1) // TODO: Not thread-safe
-	transfer(tp, trans.Origin(), trans.Recipient, new(big.Int).SetUint64(trans.Amount))
+	transfer(tp, trans.Origin(), trans.GetRecipient(), new(big.Int).SetUint64(trans.GetAmount()))
 
 	// subtract fee from account, fee will be sent to miners in layers after
-	tp.SubBalance(trans.Origin(), new(big.Int).SetUint64(trans.Fee))
+	tp.SubBalance(trans.Origin(), new(big.Int).SetUint64(fee))
 	if err := tp.processorDb.Put(trans.ID().Bytes(), layerID.Bytes()); err != nil {
 		return fmt.Errorf("failed to add to applied txs: %v", err)
 	}
@@ -311,15 +315,13 @@ func transfer(db *TransactionProcessor, sender, recipient types.Address, amount 
 
 // HandleTxData handles data received on TX gossip channel
 func (tp *TransactionProcessor) HandleTxData(data service.GossipMessage, syncer service.Fetcher) {
-	tx, err := types.BytesToTransaction(data.Bytes())
+
+	tx,err := types.SignedTransaction(data.Bytes()).Decode()
 	if err != nil {
 		tp.With().Error("cannot parse incoming TX", log.Err(err))
 		return
 	}
-	if err := tx.CalcAndSetOrigin(); err != nil {
-		tp.With().Error("failed to calc transaction origin", tx.ID(), log.Err(err))
-		return
-	}
+
 	if !tp.AddressExists(tx.Origin()) {
 		tp.With().Error("transaction origin does not exist", log.String("transaction", tx.String()),
 			tx.ID(), log.String("origin", tx.Origin().Short()), log.Err(err))
@@ -331,11 +333,11 @@ func (tp *TransactionProcessor) HandleTxData(data service.GossipMessage, syncer 
 	}
 	tp.Log.With().Info("got new tx",
 		tx.ID(),
-		log.Uint64("nonce", tx.AccountNonce),
-		log.Uint64("amount", tx.Amount),
-		log.Uint64("fee", tx.Fee),
-		log.Uint64("gas", tx.GasLimit),
-		log.String("recipient", tx.Recipient.String()),
+		log.Uint64("nonce", tx.GetNonce()),
+		log.Uint64("amount", tx.GetAmount()),
+		log.Uint64("max fee", tx.GetFee(tx.GetGasLimit())),
+		log.Uint64("gas", tx.GetGasLimit()),
+		log.String("recipient", tx.GetRecipient().String()),
 		log.String("origin", tx.Origin().String()))
 	data.ReportValidation(IncomingTxProtocol)
 	tp.pool.Put(tx.ID(), tx)
@@ -343,7 +345,7 @@ func (tp *TransactionProcessor) HandleTxData(data service.GossipMessage, syncer 
 
 // ValidateAndAddTxToPool validates the provided tx nonce and balance with projector and puts it in the transaction pool
 // it returns an error if the provided tx is not valid
-func (tp *TransactionProcessor) ValidateAndAddTxToPool(tx *types.Transaction) error {
+func (tp *TransactionProcessor) ValidateAndAddTxToPool(tx types.Transaction) error {
 	err := tp.ValidateNonceAndBalance(tx)
 	if err != nil {
 		return err

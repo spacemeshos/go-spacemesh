@@ -131,7 +131,7 @@ func BenchmarkTxPoolWithAccounts(b *testing.B) {
 	pool := NewTxMemPool()
 
 	const numBatches = 10
-	txBatches := make([][]*types.Transaction, numBatches)
+	txBatches := make([][]*types.CoinTransaction, numBatches)
 	txIDBatches := make([][]types.TransactionID, numBatches)
 	for i := 0; i < numBatches; i++ {
 		signer := signing.NewEdSigner()
@@ -154,7 +154,7 @@ func BenchmarkTxPoolWithAccounts(b *testing.B) {
 	b.Log(time.Since(start))
 }
 
-func addBatch(pool *TxMempool, txBatch []*types.Transaction, txIDBatch []types.TransactionID, wg *sync.WaitGroup) {
+func addBatch(pool *TxMempool, txBatch []*types.CoinTransaction, txIDBatch []types.TransactionID, wg *sync.WaitGroup) {
 	for i, tx := range txBatch {
 		pool.Put(txIDBatch[i], tx)
 	}
@@ -168,11 +168,11 @@ func invalidateBatch(pool *TxMempool, txIDBatch []types.TransactionID, wg *sync.
 	wg.Done()
 }
 
-func createBatch(t testing.TB, signer *signing.EdSigner) ([]*types.Transaction, []types.TransactionID) {
-	var txBatch []*types.Transaction
+func createBatch(t testing.TB, signer *signing.EdSigner) ([]*types.CoinTransaction, []types.TransactionID) {
+	var txBatch []*types.CoinTransaction
 	var txIDBatch []types.TransactionID
 	for i := uint64(0); i < 10000; i++ {
-		tx, err := types.NewSignedTx(5+1, types.Address{}, 50, 100, 1, signer)
+		tx, err := types.NewSignedOldCoinTx(5+1, types.Address{}, 50, 100, 1, signer)
 		require.NoError(t, err)
 		//tx := newTx(t, 5+i, 50, signer)
 		txBatch = append(txBatch, tx)

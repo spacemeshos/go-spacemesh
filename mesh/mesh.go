@@ -51,15 +51,15 @@ type Validator interface {
 }
 
 type txProcessor interface {
-	ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error)
+	ApplyTransactions(layer types.LayerID, txs []types.Transaction) (int, error)
 	ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int)
 	AddressExists(addr types.Address) bool
-	ValidateNonceAndBalance(transaction *types.Transaction) error
+	ValidateNonceAndBalance(transaction types.Transaction) error
 	GetLayerApplied(txID types.TransactionID) *types.LayerID
 	GetLayerStateRoot(layer types.LayerID) (types.Hash32, error)
 	GetStateRoot() types.Hash32
 	LoadState(layer types.LayerID) error
-	ValidateAndAddTxToPool(tx *types.Transaction) error
+	ValidateAndAddTxToPool(tx types.Transaction) error
 	GetBalance(addr types.Address) uint64
 	GetNonce(addr types.Address) uint64
 	GetAllAccounts() (*types.MultipleAccountsState, error)
@@ -67,8 +67,8 @@ type txProcessor interface {
 
 type txMemPool interface {
 	Invalidate(id types.TransactionID)
-	Get(id types.TransactionID) (*types.Transaction, error)
-	Put(id types.TransactionID, tx *types.Transaction)
+	Get(id types.TransactionID) (types.Transaction, error)
+	Put(id types.TransactionID, tx types.Transaction)
 }
 
 // AtxDB holds logic for working with atxs
@@ -486,7 +486,7 @@ func (msh *Mesh) getRunningLayerHashKey(layerID types.LayerID) []byte {
 	return []byte(fmt.Sprintf("rLayerHash_%v", layerID.Bytes()))
 }
 
-func (msh *Mesh) extractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs []*types.Transaction) {
+func (msh *Mesh) extractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs []types.Transaction) {
 	validBlocks := l.Blocks()
 
 	// Deterministically sort valid blocks
@@ -531,7 +531,7 @@ func uniqueTxIds(blocks []*types.Block, seenTxIds map[types.TransactionID]struct
 	return txIds
 }
 
-func (msh *Mesh) getTxs(txIds []types.TransactionID, l types.LayerID) []*types.Transaction {
+func (msh *Mesh) getTxs(txIds []types.TransactionID, l types.LayerID) []types.Transaction {
 	txs, missing := msh.GetTransactions(txIds)
 	if len(missing) != 0 {
 		msh.Panic("could not find transactions %v from layer %v", missing, l)
@@ -655,7 +655,7 @@ func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
 	if len(blk.TxIDs) == 0 {
 		return nil
 	}
-	txs := make([]*types.Transaction, 0, len(blk.TxIDs))
+	txs := make([]types.Transaction, 0, len(blk.TxIDs))
 	for _, txID := range blk.TxIDs {
 		tx, err := msh.txPool.Get(txID)
 		if err != nil {
@@ -665,9 +665,6 @@ func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
 				return err
 			}
 			continue
-		}
-		if err = tx.CalcAndSetOrigin(); err != nil {
-			return err
 		}
 		txs = append(txs, tx)
 	}
@@ -768,7 +765,8 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 
 	totalReward := &big.Int{}
 	for _, tx := range txs {
-		totalReward.Add(totalReward, new(big.Int).SetUint64(tx.Fee))
+		// TODO: correct fee calculation depending on spent gas
+		totalReward.Add(totalReward, new(big.Int).SetUint64(tx.GetFee(1)))
 	}
 
 	layerReward := calculateLayerReward(l.Index(), params)

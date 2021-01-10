@@ -67,7 +67,7 @@ func (m *meshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, typ
 
 type mockState struct{}
 
-func (s mockState) ValidateAndAddTxToPool(tx *types.Transaction) error {
+func (s mockState) ValidateAndAddTxToPool(tx types.Transaction) error {
 	panic("implement me")
 }
 
@@ -79,7 +79,7 @@ func (s mockState) GetStateRoot() types.Hash32 {
 	return [32]byte{}
 }
 
-func (mockState) ValidateNonceAndBalance(*types.Transaction) error {
+func (mockState) ValidateNonceAndBalance(types.Transaction) error {
 	panic("implement me")
 }
 
@@ -91,7 +91,7 @@ func (mockState) GetLayerApplied(types.TransactionID) *types.LayerID {
 	panic("implement me")
 }
 
-func (mockState) ApplyTransactions(types.LayerID, []*types.Transaction) (int, error) {
+func (mockState) ApplyTransactions(types.LayerID, []types.Transaction) (int, error) {
 	return 0, nil
 }
 
@@ -134,17 +134,18 @@ func (*validatorMock) VerifyPost(signing.PublicKey, *types.PostProof, uint64) er
 }
 
 type mockTxMemPool struct{}
+var alice = signing.NewEdSignerSeed("alice")
 
-func (mockTxMemPool) Get(types.TransactionID) (*types.Transaction, error) {
-	return &types.Transaction{}, nil
+func (mockTxMemPool) Get(types.TransactionID) (types.Transaction, error) {
+	return types.SignTransaction(types.OldCoinTx{}.NewEd(),alice)
 }
 
-func (mockTxMemPool) GetAllItems() []*types.Transaction {
+func (mockTxMemPool) GetAllItems() []types.Transaction {
 	return nil
 }
 
-func (mockTxMemPool) Put(types.TransactionID, *types.Transaction) {}
-func (mockTxMemPool) Invalidate(types.TransactionID)              {}
+func (mockTxMemPool) Put(types.TransactionID, types.Transaction) {}
+func (mockTxMemPool) Invalidate(types.TransactionID)                  {}
 
 type mockAtxMemPool struct{}
 
@@ -211,10 +212,10 @@ func configTst() mesh.Config {
 }
 
 type mockBlockBuilder struct {
-	txs []*types.Transaction
+	txs []types.Transaction
 }
 
-func (m *mockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
+func (m *mockBlockBuilder) ValidateAndAddTxToPool(tx types.Transaction) error {
 	m.txs = append(m.txs, tx)
 	return nil
 }

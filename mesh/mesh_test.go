@@ -67,7 +67,7 @@ func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, typ
 
 type MockState struct{}
 
-func (MockState) ValidateAndAddTxToPool(tx *types.Transaction) error {
+func (MockState) ValidateAndAddTxToPool(tx types.Transaction) error {
 	panic("implement me")
 }
 
@@ -79,7 +79,7 @@ func (MockState) GetStateRoot() types.Hash32 {
 	return [32]byte{}
 }
 
-func (MockState) ValidateNonceAndBalance(*types.Transaction) error {
+func (MockState) ValidateNonceAndBalance(types.Transaction) error {
 	panic("implement me")
 }
 
@@ -87,7 +87,7 @@ func (MockState) GetLayerApplied(types.TransactionID) *types.LayerID {
 	panic("implement me")
 }
 
-func (MockState) ApplyTransactions(types.LayerID, []*types.Transaction) (int, error) {
+func (MockState) ApplyTransactions(types.LayerID, []types.Transaction) (int, error) {
 	return 0, nil
 }
 
@@ -114,20 +114,20 @@ func (MockState) GetNonce(addr types.Address) uint64 {
 }
 
 type MockTxMemPool struct {
-	db map[types.TransactionID]*types.Transaction
+	db map[types.TransactionID]types.Transaction
 }
 
 func newMockTxMemPool() *MockTxMemPool {
 	return &MockTxMemPool{
-		db: make(map[types.TransactionID]*types.Transaction),
+		db: make(map[types.TransactionID]types.Transaction),
 	}
 }
 
-func (m *MockTxMemPool) Get(ID types.TransactionID) (*types.Transaction, error) {
+func (m *MockTxMemPool) Get(ID types.TransactionID) (types.Transaction, error) {
 	return m.db[ID], nil
 }
 
-func (m *MockTxMemPool) Put(ID types.TransactionID, t *types.Transaction) {
+func (m *MockTxMemPool) Put(ID types.TransactionID, t types.Transaction) {
 	m.db[ID] = t
 }
 
@@ -489,7 +489,7 @@ func TestMesh_persistLayerHashes(t *testing.T) {
 	assert.Equal(t, secondWantedHash, actualHash2)
 }
 
-func GetTransactionIds(txs ...*types.Transaction) []types.TransactionID {
+func GetTransactionIds(txs ...types.Transaction) []types.TransactionID {
 	var res []types.TransactionID
 	for _, tx := range txs {
 		res = append(res, tx.ID())
@@ -497,14 +497,14 @@ func GetTransactionIds(txs ...*types.Transaction) []types.TransactionID {
 	return res
 }
 
-func addTxToMesh(r *require.Assertions, msh *Mesh, signer *signing.EdSigner, nonce uint64) *types.Transaction {
+func addTxToMesh(r *require.Assertions, msh *Mesh, signer *signing.EdSigner, nonce uint64) types.Transaction {
 	tx1 := newTx(r, signer, nonce, 111)
-	err := msh.writeTransactions(0, []*types.Transaction{tx1})
+	err := msh.writeTransactions(0, []types.Transaction{tx1})
 	r.NoError(err)
 	return tx1
 }
 
-func addBlockWithTxs(r *require.Assertions, msh *Mesh, id types.LayerID, valid bool, txs ...*types.Transaction) *types.Block {
+func addBlockWithTxs(r *require.Assertions, msh *Mesh, id types.LayerID, valid bool, txs ...types.Transaction) *types.Block {
 	blk := types.NewExistingBlock(id, []byte("data"), nil)
 	for _, tx := range txs {
 		blk.TxIDs = append(blk.TxIDs, tx.ID())

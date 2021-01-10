@@ -60,14 +60,9 @@ func (s TransactionService) SubmitTransaction(_ context.Context, in *pb.SubmitTr
 	// Note: The TransactionProcessor performs these same checks, so there is some duplicated logic here.
 	// See https://github.com/spacemeshos/go-spacemesh/issues/2162
 
-	tx, err := types.BytesToTransaction(in.Transaction)
+	tx, err := types.SignedTransaction(in.Transaction).Decode()
 	if err != nil {
 		log.Error("failed to deserialize tx, error: %v", err)
-		return nil, status.Error(codes.InvalidArgument,
-			"`Transaction` must contain a valid, serialized transaction")
-	}
-	if err := tx.CalcAndSetOrigin(); err != nil {
-		log.Error("failed to calculate tx origin: %v", err)
 		return nil, status.Error(codes.InvalidArgument,
 			"`Transaction` must contain a valid, serialized transaction")
 	}
@@ -80,8 +75,8 @@ func (s TransactionService) SubmitTransaction(_ context.Context, in *pb.SubmitTr
 		log.Error("tx failed nonce and balance check: %v", err)
 		return nil, status.Error(codes.InvalidArgument, "`Transaction` incorrect counter or insufficient balance")
 	}
-	log.Info("GRPC TransactionService.SubmitTransaction BROADCAST tx address: %x (len: %v), amount: %v, gas limit: %v, fee: %v, id: %v, nonce: %v",
-		tx.Recipient, len(tx.Recipient), tx.Amount, tx.GasLimit, tx.Fee, tx.ID().ShortString(), tx.AccountNonce)
+
+	log.Info("GRPC TransactionService.SubmitTransaction BROADCAST tx: %v", tx.String())
 	go func() {
 		if err := s.Network.Broadcast(state.IncomingTxProtocol, in.Transaction); err != nil {
 			log.Error("error broadcasting incoming tx: %v", err)
@@ -99,7 +94,7 @@ func (s TransactionService) SubmitTransaction(_ context.Context, in *pb.SubmitTr
 
 // Get transaction and status for a given txid. It's not an error if we cannot find the tx,
 // we just return all nils.
-func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (retTx *types.Transaction, state pb.TransactionState_TransactionState) {
+func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (retTx types.Transaction, state pb.TransactionState_TransactionState) {
 	tx, err := s.Mesh.GetTransaction(txID) // have we seen this transaction in a block?
 	retTx = tx
 	if err != nil {
@@ -115,8 +110,9 @@ func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (r
 	if layer != nil {
 		state = pb.TransactionState_TRANSACTION_STATE_PROCESSED
 	} else {
+		// TODO: nonce processing
 		nonce := s.Mesh.GetNonce(tx.Origin())
-		if nonce > tx.AccountNonce {
+		if nonce > tx.GetNonce() {
 			state = pb.TransactionState_TRANSACTION_STATE_REJECTED
 		} else {
 			state = pb.TransactionState_TRANSACTION_STATE_MESH

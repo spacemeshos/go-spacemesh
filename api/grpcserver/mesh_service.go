@@ -105,7 +105,7 @@ func (s MeshService) MaxTransactionsPerSecond(context.Context, *pb.MaxTransactio
 
 // QUERIES
 
-func (s MeshService) getFilteredTransactions(startLayer types.LayerID, addr types.Address) (txs []*types.Transaction, err error) {
+func (s MeshService) getFilteredTransactions(startLayer types.LayerID, addr types.Address) (txs []types.Transaction, err error) {
 	meshTxIds := s.getTxIdsFromMesh(startLayer, addr)
 	mempoolTxIds := s.Mempool.GetTxIdsByAddress(addr)
 
@@ -255,12 +255,18 @@ func (s MeshService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address
 	return txIDs
 }
 
-func convertTransaction(t *types.Transaction) *pb.Transaction {
+func convertTransaction(t types.Transaction) *pb.Transaction {
+	scheme := func() pb.Signature_Scheme {
+		if t.Type().IsEdPlus() {
+			return pb.Signature_SCHEME_ED25519_PLUS_PLUS
+		}
+		return pb.Signature_SCHEME_ED25519
+	}
 	return &pb.Transaction{
 		Id: &pb.TransactionId{Id: t.ID().Bytes()},
 		Datum: &pb.Transaction_CoinTransfer{
 			CoinTransfer: &pb.CoinTransferTransaction{
-				Receiver: &pb.AccountId{Address: t.Recipient.Bytes()},
+				Receiver: &pb.AccountId{Address: t.GetRecipient().Bytes()},
 			},
 		},
 		Sender: &pb.AccountId{Address: t.Origin().Bytes()},
@@ -269,15 +275,15 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 			// by the tx; GasLimit is the max gas. MeshService is concerned with the
 			// pre-STF tx, which includes a gas offer but not an amount of gas actually
 			// consumed.
-			//GasPrice:    nil,
-			GasProvided: t.GasLimit,
+			GasPrice:    t.GetGasPrice(),
+			GasProvided: t.GetGasLimit(),
 		},
-		Amount:  &pb.Amount{Value: t.Amount},
-		Counter: t.AccountNonce,
+		Amount:  &pb.Amount{Value: t.GetAmount()},
+		Counter: t.GetNonce(), // TODO: nonce processing
 		Signature: &pb.Signature{
-			Scheme:    pb.Signature_SCHEME_ED25519_PLUS_PLUS,
-			Signature: t.Signature[:],
-			PublicKey: t.Origin().Bytes(),
+			Scheme:    scheme(),
+			Signature: t.Signature().Bytes(),
+			PublicKey: t.PubKey().Bytes(),
 		},
 	}
 }
@@ -483,7 +489,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 				return nil
 			}
 			// Apply address filter
-			if tx.Valid && (tx.Transaction.Origin() == addr || tx.Transaction.Recipient == addr) {
+			if tx.Valid && (tx.Transaction.Origin() == addr || tx.Transaction.GetRecipient() == addr) {
 				if err := stream.Send(&pb.AccountMeshDataStreamResponse{
 					Datum: &pb.AccountMeshData{
 						Datum: &pb.AccountMeshData_Transaction{
