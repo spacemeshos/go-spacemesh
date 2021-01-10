@@ -43,7 +43,7 @@ type projector interface {
 }
 
 type blockOracle interface {
-	BlockEligible(layerID types.LayerID) (types.ATXID, []types.BlockEligibilityProof, error)
+	BlockEligible(layerID types.LayerID) (types.ATXID, []types.BlockEligibilityProof, []types.ATXID, error)
 }
 
 type atxDb interface {
@@ -264,7 +264,7 @@ func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, 
 	return
 }
 
-func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID) (*types.Block, error) {
+func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID, activeSet []types.ATXID) (*types.Block, error) {
 
 	votes, err := t.getVotes(id)
 	if err != nil {
@@ -292,7 +292,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 	epoch := id.GetEpoch()
 	refBlock, err := t.getRefBlock(epoch)
 	if err != nil {
-		atxs := t.AtxDb.GetEpochAtxs(id.GetEpoch() - 1)
+		atxs := activeSet
 		b.ActiveSet = &atxs
 	} else {
 		b.RefBlock = &refBlock
@@ -364,7 +364,7 @@ func (t *BlockBuilder) createBlockLoop() {
 			}
 
 			t.Debug("builder got layer %v", layerID)
-			atxID, proofs, err := t.blockOracle.BlockEligible(layerID)
+			atxID, proofs, atxs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
 				events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to check for block eligibility")
 				t.With().Error("failed to check for block eligibility", layerID, log.Err(err))
@@ -385,7 +385,7 @@ func (t *BlockBuilder) createBlockLoop() {
 					t.With().Error("failed to get txs for block", layerID, log.Err(err))
 					continue
 				}
-				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList)
+				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList, atxs)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot create new block")
 					t.Error("cannot create new block, %v ", err)

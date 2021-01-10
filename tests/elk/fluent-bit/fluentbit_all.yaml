@@ -1,0 +1,275 @@
+---
+# Source: fluent-bit/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: fluent-bit
+    chart: fluent-bit-2.4.2
+    heritage: Helm
+    release: RELEASE-NAME
+  name: RELEASE-NAME-fluent-bit
+---
+# Source: fluent-bit/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "RELEASE-NAME-fluent-bit-es-tls-secret"
+  labels:
+    app: fluent-bit
+    chart: fluent-bit-2.4.2
+    heritage: Helm
+    release: RELEASE-NAME
+type: Opaque
+data:
+  es-tls-ca.crt: ""
+---
+# Source: fluent-bit/templates/config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: RELEASE-NAME-fluent-bit-config
+  labels:
+    app: fluent-bit
+    chart: fluent-bit-2.4.2
+    heritage: Helm
+    release: RELEASE-NAME
+data:
+  fluent-bit-service.conf: |-
+    [SERVICE]
+        Flush        1
+        Daemon       Off
+        Log_Level    debug
+        Parsers_File parsers.conf
+        Parsers_File parsers_custom.conf
+
+  fluent-bit-input.conf: |-
+    [INPUT]
+        Name             tail
+        Path             /var/log/containers/sm-*.log
+        Parser           docker
+        Tag              kube.*
+        Refresh_Interval 5
+        Mem_Buf_Limit    5MB
+        Skip_Long_Lines  On
+
+
+  fluent-bit-filter.conf: |-
+    [FILTER]
+        Name                kubernetes
+        Match               kube.*
+        Kube_Tag_Prefix     kube.var.log.containers.
+        Kube_URL            https://kubernetes.default.svc:443
+        Kube_CA_File        /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        Kube_Token_File     /var/run/secrets/kubernetes.io/serviceaccount/token
+        Keep_Log            On
+        Merge_Log           On
+        K8S-Logging.Parser  On
+        K8S-Logging.Exclude On
+
+
+  fluent-bit-output.conf: |-
+
+    [OUTPUT]
+        Name          forward
+        Match         *
+        Host          fluentd
+        Port          24224
+        Retry_Limit False
+
+
+
+
+  fluent-bit.conf: |-
+    @INCLUDE fluent-bit-service.conf
+    @INCLUDE fluent-bit-input.conf
+    @INCLUDE fluent-bit-filter.conf
+    @INCLUDE fluent-bit-output.conf
+
+  parsers.conf: |-
+    [PARSER]
+        Name        panic
+        Format      regex
+        Regex       panic*
+        Time_Key    time
+---
+# Source: fluent-bit/templates/tests/test-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: RELEASE-NAME-fluent-bit-test
+  labels:
+    app: RELEASE-NAME-fluent-bit
+    chart: "fluent-bit-2.4.2"
+    heritage: "Helm"
+    release: "RELEASE-NAME"
+data:
+  run.sh: |-
+    @test "Test fluentd" {
+      fluentd -c /tests/fluentd.conf --dry-run
+    }
+
+  fluentd.conf: |-
+    <source>
+      @type forward
+      bind 0.0.0.0
+      port 24224
+      shared_key
+    </source>
+
+    <match **>
+      @type stdout
+    </match>
+---
+# Source: fluent-bit/templates/cluster-role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: fluent-bit
+    chart: fluent-bit-2.4.2
+    heritage: Helm
+    release: RELEASE-NAME
+  name: RELEASE-NAME-fluent-bit
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+---
+# Source: fluent-bit/templates/cluster-rolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: fluent-bit
+    chart: fluent-bit-2.4.2
+    heritage: Helm
+    release: RELEASE-NAME
+  name: RELEASE-NAME-fluent-bit
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: RELEASE-NAME-fluent-bit
+subjects:
+  - kind: ServiceAccount
+    name: RELEASE-NAME-fluent-bit
+    namespace: default
+---
+# Source: fluent-bit/templates/daemonset.yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: RELEASE-NAME-fluent-bit
+  labels:
+    app: fluent-bit
+    chart: fluent-bit-2.4.2
+    heritage: Helm
+    release: RELEASE-NAME
+spec:
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: fluent-bit
+        release: RELEASE-NAME
+      annotations:
+        checksum/config: 45db4dbdc41de54e92afc2c801476960963abf9844fb759243951bc2c2b41bd5
+    spec:
+      hostNetwork: false
+      dnsPolicy: ClusterFirst
+      serviceAccountName: RELEASE-NAME-fluent-bit
+      containers:
+        - name: fluent-bit
+          image: "fluent/fluent-bit:1.2.0"
+          imagePullPolicy: "Always"
+          env:
+            []
+          resources:
+            {}
+          volumeMounts:
+            - name: varlog
+              mountPath: /var/log
+            - name: varlibdockercontainers
+              mountPath: /var/lib/docker/containers
+              readOnly: true
+            - name: config
+              mountPath: /fluent-bit/etc/fluent-bit.conf
+              subPath: fluent-bit.conf
+            - name: config
+              mountPath: /fluent-bit/etc/fluent-bit-service.conf
+              subPath: fluent-bit-service.conf
+            - name: config
+              mountPath: /fluent-bit/etc/fluent-bit-input.conf
+              subPath: fluent-bit-input.conf
+            - name: config
+              mountPath: /fluent-bit/etc/fluent-bit-filter.conf
+              subPath: fluent-bit-filter.conf
+            - name: config
+              mountPath: /fluent-bit/etc/fluent-bit-output.conf
+              subPath: fluent-bit-output.conf
+            - name: config
+              mountPath: /fluent-bit/etc/parsers_custom.conf
+              subPath: parsers.conf
+
+      terminationGracePeriodSeconds: 10
+      nodeSelector:
+        role: tests
+
+      volumes:
+        - name: varlog
+          hostPath:
+            path: /var/log
+        - name: varlibdockercontainers
+          hostPath:
+            path: /var/lib/docker/containers
+        - name: config
+          configMap:
+            name: RELEASE-NAME-fluent-bit-config
+---
+# Source: fluent-bit/templates/tests/test.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: RELEASE-NAME-fluent-bit-test
+  labels:
+    app: RELEASE-NAME-fluent-bit
+    chart: "fluent-bit-2.4.2"
+    heritage: "Helm"
+    release: "RELEASE-NAME"
+  annotations:
+    "helm.sh/hook": test-success
+spec:
+  initContainers:
+    - name: test-framework
+      image: "dduportal/bats:0.4.0"
+      command:
+        - "bash"
+        - "-c"
+        - |
+          set -ex
+          # copy bats to tools dir
+          cp -R /usr/local/libexec/ /tools/bats/
+      volumeMounts:
+        - mountPath: /tools
+          name: tools
+  containers:
+    - name: RELEASE-NAME-test
+      image: "fluent/fluentd:v1.4-debian-1"
+      command: ["/tools/bats/bats", "-t", "/tests/run.sh"]
+      volumeMounts:
+        - mountPath: /tests
+          name: tests
+          readOnly: true
+        - mountPath: /tools
+          name: tools
+  volumes:
+    - name: tests
+      configMap:
+        name: RELEASE-NAME-fluent-bit-test
+    - name: tools
+      emptyDir: {}
+  restartPolicy: Never
