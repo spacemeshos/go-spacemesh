@@ -1,12 +1,130 @@
 package types
 
 import (
+	"bytes"
 	"fmt"
+	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"strings"
 )
+
+type TransactionType byte
+
+const (
+	TxSimpleCoinEd     TransactionType = 0 // coin transaction with ed
+	TxSimpleCoinEdPlus TransactionType = 1 // // coin transaction with ed++
+	TxCallAppEd        TransactionType = 2 // exec app transaction with ed
+	TxCallAppEdPlus    TransactionType = 3 // exec app transaction with ed++
+	TxSpawnAppEd       TransactionType = 4 // spawn app + ed
+	TxSpawnAppEdPlus   TransactionType = 5 // spawn app + ed++
+
+	// for support of code transition to new transactions abstraction
+	TxOldCoinEd     TransactionType = 6 // old coin transaction with ed
+	TxOldCoinEdPlus TransactionType = 7 // old coin transaction with ed++
+)
+
+func (tt TransactionType) String() string {
+	switch tt {
+	case TxSimpleCoinEd:
+		return "TxSimpleCoinEd"
+	case TxSimpleCoinEdPlus:
+		return "TxSimpleCoinEdPlus"
+	case TxCallAppEd:
+		return "TxCallAppEd"
+	case TxCallAppEdPlus:
+		return "TxCallAppEdPlus"
+	case TxSpawnAppEd:
+		return "TxSpawnAppEd"
+	case TxSpawnAppEdPlus:
+		return "TxSpawnAppEdPlus"
+	case TxOldCoinEd:
+		return "TxOldCoinEd"
+	case TxOldCoinEdPlus:
+		return "TxOldCoinEdPlus"
+	default:
+		return "UnknownTransactionType"
+	}
+}
+
+func (tt TransactionType) IsEdPlus() bool {
+	switch tt {
+	case TxSimpleCoinEdPlus, TxCallAppEdPlus, TxSpawnAppEdPlus, TxOldCoinEdPlus:
+		return true
+	case TxSimpleCoinEd, TxCallAppEd, TxSpawnAppEd, TxOldCoinEd:
+		return false
+	}
+	// it must be impossible (in theory)
+	panic(fmt.Errorf("unknown transaction type"))
+}
+
+func (tt TransactionType) Decode(pubKey TxPublicKey, signature TxSignature, txid TransactionID, data []byte) (Transaction, error) {
+	switch tt {
+	case TxSimpleCoinEd, TxSimpleCoinEdPlus:
+		return DecodeSimpleCoinTx(data, signature, pubKey, txid, tt)
+	case TxCallAppEd, TxCallAppEdPlus:
+		return DecodeCallAppTx(data, signature, pubKey, txid, tt)
+	case TxSpawnAppEd, TxSpawnAppEdPlus:
+		return DecodeSpawnAppTx(data, signature, pubKey, txid, tt)
+	case TxOldCoinEd, TxOldCoinEdPlus:
+		return DecodeOldCoinTx(data, signature, pubKey, txid, tt)
+	}
+	// it must be impossible (in theory)
+	return nil, fmt.Errorf("unknown transaction type")
+}
+
+type EdPlusTransactionFactory interface {
+	NewEdPlus() IncompleteTransaction
+}
+
+type EdTransactionFactory interface {
+	NewEd() IncompleteTransaction
+}
+
+type IncompleteTransaction interface {
+	AuthenticationMessage() (TransactionAuthenticationMessage, error)
+	Type() TransactionType
+	String() string
+
+	// extract internal transaction structure
+	Extract(interface{}) bool
+
+	// common attributes
+	// they use Get prefix to not mess with struct attributes
+	//    and do not pass function address to log/printf instead value
+
+	GetRecipient() Address
+	GetAmount() uint64
+	GetNonce() uint64
+	GetGasLimit() uint64
+	GetGasPrice() uint64
+	GetFee(gas uint64) uint64
+}
+
+func SignTransaction(itx IncompleteTransaction, signer *signing.EdSigner) (tx Transaction, err error) {
+	txm, err := itx.AuthenticationMessage()
+	if err != nil {
+		return
+	}
+	stx, err := txm.Sign(signer)
+	if err != nil {
+		return
+	}
+	return stx.Decode()
+}
+
+type Transaction interface {
+	IncompleteTransaction
+
+	Origin() Address
+	ID() TransactionID
+	Hash32() Hash32
+	ShortString() string
+	PubKey() TxPublicKey
+	Signature() TxSignature
+	Encode() (SignedTransaction, error)
+}
 
 // TransactionID is a 32-byte sha256 sum of the transaction, used as an identifier.
 type TransactionID Hash32
@@ -47,116 +165,85 @@ func TxIdsField(ids []TransactionID) log.Field {
 // EmptyTransactionID is a canonical empty TransactionID.
 var EmptyTransactionID = TransactionID{}
 
-// Transaction contains all transaction fields, including the signature and cached origin address and transaction ID.
-type Transaction struct {
-	InnerTransaction
-	Signature [64]byte
-	origin    *Address
-	id        *TransactionID
+type TransactionAuthenticationMessage struct {
+	NetID           NetworkID
+	TxType          TransactionType
+	TransactionData []byte
 }
 
-// Origin returns the transaction's origin address: the public key extracted from the transaction signature.
-func (t *Transaction) Origin() Address {
-	if t.origin == nil {
-		panic("origin not set")
+func (txm TransactionAuthenticationMessage) Type() TransactionType {
+	return txm.TxType
+}
+
+func (txm TransactionAuthenticationMessage) Sign(signer *signing.EdSigner) (_ SignedTransaction, err error) {
+	bf := bytes.Buffer{}
+	if _, err = xdr.Marshal(&bf, &txm); err != nil {
+		return
 	}
-	return *t.origin
+	signature := TxSignatureFromBytes(signer.Sign(bf.Bytes()))
+	return txm.Encode(TxPublicKeyFromBytes(signer.PublicKey().Bytes()), signature)
 }
 
-// SetOrigin sets the cache of the transaction's origin address.
-func (t *Transaction) SetOrigin(origin Address) {
-	t.origin = &origin
-}
-
-// CalcAndSetOrigin extracts the public key from the transaction's signature and caches it as the transaction's origin
-// address.
-func (t *Transaction) CalcAndSetOrigin() error {
-	txBytes, err := InterfaceToBytes(&t.InnerTransaction)
-	if err != nil {
-		return fmt.Errorf("failed to marshal transaction: %v", err)
+func (txm TransactionAuthenticationMessage) Encode(pubKey TxPublicKey, signature TxSignature) (_ SignedTransaction, err error) {
+	stl := SignedTransactionLayout{TxType: byte(txm.TxType), Data: txm.TransactionData, Signature: signature}
+	if !txm.TxType.IsEdPlus() {
+		stl.PubKey = pubKey.Bytes()
 	}
-	pubKey, err := ed25519.ExtractPublicKey(txBytes, t.Signature[:])
-	if err != nil {
-		return fmt.Errorf("failed to extract transaction pubkey: %v", err)
+	bf := bytes.Buffer{}
+	if _, err = xdr.Marshal(&bf, &stl); err != nil {
+		return
 	}
-
-	t.origin = &Address{}
-	t.origin.SetBytes(pubKey)
-	return nil
+	return bf.Bytes(), nil
 }
 
-// ID returns the transaction's ID. If it's not cached, it's calculated, cached and returned.
-func (t *Transaction) ID() TransactionID {
-	if t.id != nil {
-		return *t.id
+func (txm TransactionAuthenticationMessage) Verify(pubKey TxPublicKey, sig TxSignature) bool {
+	bf := bytes.Buffer{}
+	if _, err := xdr.Marshal(&bf, &txm); err != nil {
+		return false
 	}
-
-	txBytes, err := InterfaceToBytes(t)
-	if err != nil {
-		panic("failed to marshal transaction: " + err.Error())
-	}
-	id := TransactionID(CalcHash32(txBytes))
-	t.id = &id
-	return id
+	return sig.Verify(pubKey.Bytes(), bf.Bytes())
 }
 
-// Hash32 returns the TransactionID as a Hash32.
-func (t *Transaction) Hash32() Hash32 {
-	return t.ID().Hash32()
+type SignedTransactionLayout struct {
+	TxType    byte
+	Signature [TxSignatureLength]byte
+	Data      []byte
+	PubKey    [] /*TODO:???*/ byte
 }
 
-// ShortString returns a the first 5 characters of the ID, for logging purposes.
-func (t *Transaction) ShortString() string {
-	return t.ID().ShortString()
+func (stl SignedTransactionLayout) Type() TransactionType {
+	return TransactionType(stl.TxType)
 }
 
-// String returns a string representation of the Transaction, for logging purposes.
-// It implements the fmt.Stringer interface.
-func (t *Transaction) String() string {
-	return fmt.Sprintf("<id: %s, origin: %s, recipient: %s, amount: %v, nonce: %v, gas_limit: %v, fee: %v>",
-		t.ID().ShortString(), t.Origin().Short(), t.Recipient.Short(), t.Amount, t.AccountNonce, t.GasLimit, t.Fee)
+type SignedTransaction []byte
+
+func (stx SignedTransaction) ID() TransactionID {
+	return TransactionID(CalcHash32(stx[:]))
 }
 
-// InnerTransaction includes all of a transaction's fields, except the signature (origin and id aren't stored).
-type InnerTransaction struct {
-	AccountNonce uint64
-	Recipient    Address
-	GasLimit     uint64
-	Fee          uint64
-	Amount       uint64
-}
-
-// Reward is a virtual reward transaction, which the node keeps track of for the gRPC api.
-type Reward struct {
-	Layer               LayerID
-	TotalReward         uint64
-	LayerRewardEstimate uint64
-}
-
-// NewSignedTx is used in TESTS ONLY to generate signed txs
-func NewSignedTx(nonce uint64, rec Address, amount, gas, fee uint64, signer *signing.EdSigner) (*Transaction, error) {
-	inner := InnerTransaction{
-		AccountNonce: nonce,
-		Recipient:    rec,
-		Amount:       amount,
-		GasLimit:     gas,
-		Fee:          fee,
+func (stx SignedTransaction) Decode() (tx Transaction, err error) {
+	stl := SignedTransactionLayout{}
+	if _, err = xdr.Unmarshal(bytes.NewReader(stx[:]), &stl); err != nil {
+		return
 	}
 
-	buf, err := InterfaceToBytes(&inner)
-	if err != nil {
-		return nil, err
+	txm := TransactionAuthenticationMessage{GetNetworkID(), stl.Type(), stl.Data}
+	bf := bytes.Buffer{}
+	if _, err = xdr.Marshal(&bf, &txm); err != nil {
+		return
 	}
 
-	sst := &Transaction{
-		InnerTransaction: inner,
-		Signature:        [64]byte{},
+	pubKey := stl.PubKey
+	if stl.Type().IsEdPlus() {
+		if pubKey, err = ed25519.ExtractPublicKey(bf.Bytes(), stl.Signature[:]); err != nil {
+			return tx, fmt.Errorf("failed to extract transaction public key: %v", err.Error())
+		}
+	} else {
+		// TODO: signing does not have PublicKey length constant
+		if len(pubKey) != ed25519.PublicKeySize || !signing.Verify(signing.NewPublicKey(pubKey), bf.Bytes(), stl.Signature[:]) {
+			return tx, fmt.Errorf("failed to verify transaction signature")
+		}
 	}
 
-	copy(sst.Signature[:], signer.Sign(buf))
-	addr := Address{}
-	addr.SetBytes(signer.PublicKey().Bytes())
-	sst.SetOrigin(addr)
-
-	return sst, nil
+	return stl.Type().Decode(TxPublicKeyFromBytes(pubKey), stl.Signature, stx.ID(), stl.Data)
 }

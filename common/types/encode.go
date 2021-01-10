@@ -54,19 +54,17 @@ func NIPSTChallengeToBytes(challenge *NIPSTChallenge) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-// BytesToTransaction deserializes a Transaction.
-func BytesToTransaction(buf []byte) (*Transaction, error) {
-	b := Transaction{}
-	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
-	if err != nil {
-		return nil, err
-	}
-	return &b, nil
+// BytesToTransaction deserializes a CoinTransaction.
+func BytesToTransaction(buf []byte) (Transaction, error) {
+	return SignedTransaction(buf).Decode()
 }
 
 // BytesToInterface deserializes any type.
 // ⚠️ Pass the interface by reference
 func BytesToInterface(buf []byte, i interface{}) error {
+	if _, ok := i.(*Transaction); ok {
+		panic("use SignedTransaction.Decode()")
+	}
 	_, err := xdr.Unmarshal(bytes.NewReader(buf), i)
 	if err != nil {
 		return err
@@ -77,6 +75,12 @@ func BytesToInterface(buf []byte, i interface{}) error {
 // InterfaceToBytes serializes any type.
 // ⚠️ Pass the interface by reference
 func InterfaceToBytes(i interface{}) ([]byte, error) {
+	if _, ok := i.(Transaction); ok {
+		panic("use Transaction.Encode()")
+	}
+	if _, ok := i.([]Transaction); ok {
+		panic("use Transaction.Encode()")
+	}
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &i); err != nil {
 		return nil, err
