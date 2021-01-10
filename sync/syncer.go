@@ -579,7 +579,7 @@ func (s *Syncer) syncSingleLayer(currentSyncLayer types.LayerID) error {
 	s.With().Info("syncing layer", log.FieldNamed("current_sync_layer", currentSyncLayer),
 		log.FieldNamed("last_ticked_layer", s.GetCurrentLayer()))
 
-	if s.shutdown() {
+	if s.isClosed() {
 		return errors.New("shutdown")
 	}
 
