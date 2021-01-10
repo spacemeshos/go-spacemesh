@@ -26,17 +26,14 @@ func (t IncompleteCommonTx) Type() TransactionType {
 
 type CommonTx struct {
 	IncompleteCommonTx
-	origin    *Address
-	id        *TransactionID
+	origin    Address
+	id        TransactionID
 	signature TxSignature
 	pubKey    TxPublicKey
 }
 
 func (t CommonTx) Origin() Address {
-	if t.origin == nil {
-		panic("origin not set")
-	}
-	return *t.origin
+	return t.origin
 }
 
 func (t CommonTx) Signature() TxSignature {
@@ -49,20 +46,17 @@ func (t CommonTx) PubKey() TxPublicKey {
 
 // ID returns the transaction's ID. If it's not cached, it's calculated, cached and returned.
 func (t *CommonTx) ID() TransactionID {
-	if t.id == nil {
-		panic("transaction id is not set")
-	}
-	return *t.id
+	return t.id
 }
 
 // Hash32 returns the TransactionID as a Hash32.
 func (t *CommonTx) Hash32() Hash32 {
-	return t.ID().Hash32()
+	return t.id.Hash32()
 }
 
 // ShortString returns a the first 5 characters of the ID, for logging purposes.
 func (t *CommonTx) ShortString() string {
-	return t.ID().ShortString()
+	return t.id.ShortString()
 }
 
 func (t *CommonTx) Encode() (_ SignedTransaction, err error) {
@@ -77,10 +71,9 @@ func (tx *CommonTx) decode(marshal xdrMarshal, data []byte, signature TxSignatur
 	if err = marshal.XdrFill(data); err != nil {
 		return
 	}
-	a := BytesToAddress(pubKey.Bytes())
 	tx.txType = txtp
-	tx.origin = &a
-	tx.id = &txid
+	tx.origin = BytesToAddress(pubKey.Bytes())
+	tx.id = txid
 	tx.pubKey = pubKey
 	tx.signature = signature
 	tx.marshal = marshal

@@ -843,7 +843,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		require.Equal(t, tx.GetGasLimit(), inTx.GasOffered.GasProvided)
 		require.Equal(t, tx.GetAmount(), inTx.Amount.Value)
 		require.Equal(t, tx.GetNonce(), inTx.Counter)
-		require.Equal(t, tx.Origin().Bytes(), inTx.Signature.PublicKey)
+		require.Equal(t, tx.PubKey().Bytes(), inTx.Signature.PublicKey)
 		switch x := inTx.Datum.(type) {
 		case *pb.Transaction_CoinTransfer:
 			require.Equal(t, tx.GetRecipient().Bytes(), x.CoinTransfer.Receiver.Address,

@@ -14,13 +14,13 @@ type TransactionType byte
 
 const (
 	TxSimpleCoinEd     TransactionType = 0 // coin transaction with ed
-	TxSimpleCoinEdPlus TransactionType = 1 // // coin transaction with ed++
+	TxSimpleCoinEdPlus TransactionType = 1 // coin transaction with ed++
 	TxCallAppEd        TransactionType = 2 // exec app transaction with ed
 	TxCallAppEdPlus    TransactionType = 3 // exec app transaction with ed++
 	TxSpawnAppEd       TransactionType = 4 // spawn app + ed
 	TxSpawnAppEdPlus   TransactionType = 5 // spawn app + ed++
 
-	// for support of code transition to new transactions abstraction
+	// for support code transition to new transactions abstraction
 	TxOldCoinEd     TransactionType = 6 // old coin transaction with ed
 	TxOldCoinEdPlus TransactionType = 7 // old coin transaction with ed++
 )
