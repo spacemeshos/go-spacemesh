@@ -227,7 +227,7 @@ func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 			if err != nil {
 				log.Panic("panicked creating signed tx err=%v", err)
 			}
-			txbytes, _ := types.InterfaceToBytes(tx)
+			txbytes, _ := tx.Encode()
 			pbMsg := &pb.SubmitTransactionRequest{Transaction: txbytes}
 			_, err = suite.apps[0].txService.SubmitTransaction(nil, pbMsg)
 			assert.Error(suite.T(), err)
@@ -281,7 +281,7 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 			}
 			tx, err := types.NewSignedOldCoinTx(uint64(i), dst, 10, 1, 1, acc1Signer)
 			suite.NoError(err, "failed to create signed tx: %s", err)
-			txbytes, _ := types.InterfaceToBytes(tx)
+			txbytes, _ := tx.Encode()
 			pbMsg := &pb.SubmitTransactionRequest{Transaction: txbytes}
 			_, err = suite.apps[0].txService.SubmitTransaction(nil, pbMsg)
 			suite.NoError(err, "error submitting transaction")
