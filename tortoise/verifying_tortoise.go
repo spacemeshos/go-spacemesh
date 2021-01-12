@@ -353,7 +353,7 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer, inputVector []types.Bl
 
 	defer t.evict()
 
-	t.logger.With().Info("Start handling layer", newlyr.Index(), log.Int("blocks", len(newlyr.Blocks())))
+	t.logger.With().Info("start handling layer", newlyr.Index(), log.Int("blocks", len(newlyr.Blocks())))
 
 	// update tables with blocks
 	for _, b := range newlyr.Blocks() {
@@ -434,11 +434,11 @@ markingLoop:
 
 	idx := newlyr.Index()
 	wasVerified := t.Verified
-	t.logger.With().Info("Starting layer verification", log.FieldNamed("was_verified", wasVerified), log.FieldNamed("target_verification", newlyr.Index()))
+	t.logger.With().Info("starting layer verification", log.FieldNamed("was_verified", wasVerified), log.FieldNamed("target_verification", newlyr.Index()))
 	i := wasVerified + 1
 loop:
 	for ; i < idx; i++ {
-		t.logger.With().Info("Verifying layer", i)
+		t.logger.With().Info("verifying layer", i)
 
 		blks, err := t.bdp.LayerBlockIds(i)
 		if err != nil {
@@ -501,12 +501,12 @@ loop:
 			t.logger.With().Debug("calculated global opinion on block", log.FieldNamed("voted_block", blk), i, log.String("global_opinion", gop.String()), log.String("sum", fmt.Sprintf("[%v, %v]", sum[0], sum[1])))
 			if gop != vote {
 				// TODO: trigger self healing after a while ?
-				t.logger.With().Warning("The global opinion is different from vote", log.String("global_opinion", gop.String()), log.String("vote", vote.String()))
+				t.logger.With().Warning("global opinion is different from vote", log.String("global_opinion", gop.String()), log.String("vote", vote.String()))
 				break loop
 			}
 
 			if gop == abstain {
-				t.logger.With().Warning("The global opinion on a block is abstain hence can't verify layer", log.String("global_opinion", gop.String()), log.String("vote", vote.String()))
+				t.logger.With().Warning("global opinion on a block is abstain hence can't verify layer", log.String("global_opinion", gop.String()), log.String("vote", vote.String()))
 				break loop
 			}
 
@@ -517,11 +517,11 @@ loop:
 		for blk, v := range contextualValidity {
 			if err := t.bdp.SaveContextualValidity(blk, v); err != nil {
 				// panic?
-				t.logger.With().Error("Error saving contextual validity on block", blk.Field(), log.Err(err))
+				t.logger.With().Error("error saving contextual validity on block", blk.Field(), log.Err(err))
 			}
 		}
 		t.Verified = i
-		t.logger.With().Info("Verified layer", i)
+		t.logger.With().Info("verified layer", i)
 
 	}
 
