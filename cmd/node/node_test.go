@@ -51,7 +51,7 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 
 	// setup spacemesh app
 	app := NewSpacemeshApp()
-	app.Config.DataDir = "tmp"
+	app.Config.DataDirParent = "tmp"
 	app.log = log.NewDefault("logger")
 
 	// get new identity
