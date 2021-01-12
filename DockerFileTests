@@ -25,6 +25,7 @@ RUN pip install pipenv
 COPY tests/Pipfile .
 COPY tests/Pipfile.lock .
 RUN pipenv install --ignore-pipfile
+RUN pipenv shell
 
 FROM with_requirements AS tests_runner
 
