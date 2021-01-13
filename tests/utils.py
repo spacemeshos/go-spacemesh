@@ -389,3 +389,10 @@ def timing(func):
         end = time.time()
         return result, end-start
     return wrapper
+
+
+def get_env(name, is_must=True):
+    if name not in os.environ and is_must:
+        raise Exception(f"a value must be set for {name} environment variable")
+    ret = os.getenv(name)
+    return ret
