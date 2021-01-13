@@ -26,7 +26,7 @@ LOGSTASH_CONF_DIR = './elk/logstash/'
 
 ES_USER_LOCAL = get_es_usr()
 ES_PASS_LOCAL = get_es_password()
-MAIN_ES_IP = "35.197.82.152"
+MAIN_ES_IP = "35.227.190.1"
 MAIN_ES_URL = f"{MAIN_ES_IP}:9200"
 
 

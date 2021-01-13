@@ -47,6 +47,9 @@ class ES:
 
         for serv in services.items:
             if serv.metadata.name == 'elasticsearch-master':
+                print("#@!#@! serv\n")
+                print(serv)
+                print("\n\n#@!#@!")
                 return serv.status.load_balancer.ingress[0].ip
 
     def get_search_api(self):
