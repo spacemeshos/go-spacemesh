@@ -58,6 +58,7 @@ jobs:
         uses: allenevans/set-env@v2.0.0
         with:
           GOPATH: 'C:\Go'
+          PATH: 'C:\Go\bin'
 
       # - if: matrix.os == 'windows-latest'
       #   name: Set env for windows
