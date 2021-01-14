@@ -58,6 +58,8 @@ jobs:
         run: |
           setx GOPATH C:\go
           setx /M PATH "%PATH%;C:\go"
+          echo %PATH%
+          echo %GOPATH%
           make install
           make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
 
