@@ -59,6 +59,21 @@ def wait_for_service_to_be_ready(deployment_name, name_space, time_out=None):
             raise Exception("Timeout waiting to deployment to be ready")
 
 
+def wait_for_service_to_be_ready(deployment_name, name_space, time_out=None):
+    start = datetime.now()
+    while True:
+        resp = client.CoreV1Api().read_namespaced_service_status_with_http_info(name=deployment_name, namespace=name_space)
+        total_sleep_time = (datetime.now()-start).total_seconds()
+        if resp[1] == 200:
+            print(f"Total time waiting for service {deployment_name}: {total_sleep_time} sec")
+            break
+        print(f"{total_sleep_time} sec  ", end="\r")
+        time.sleep(1)
+
+        if time_out and total_sleep_time > time_out:
+            raise Exception("Timeout waiting to deployment to be ready")
+
+
 def create_deployment(file_name, name_space, deployment_id=None, replica_size=1, container_specs=None, time_out=None):
     file_path, filename = ut.get_filename_and_path(file_name)
     mod_file_path, is_changed = ut.duplicate_file_and_replace_phrases(file_path, filename, f"{name_space}_{filename}",

@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: poet
-          image: spacemeshos/poet:ef8f28a
+          image: spacemeshos/poet:73488d6
           env:
             - name: GRPC_GO_LOG_VERBOSITY_LEVEL
               value: "99"

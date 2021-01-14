@@ -3,6 +3,8 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"math"
+	"math/big"
 	"os"
 
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -68,6 +70,11 @@ const Account2Pub = "0x22a31a84ab876f82fcafba86e77910b4419a4ee0f1d5483d7dd3b5b6b
 // Account2Private is the private key for secode test account
 const Account2Private = "0x9d411020d46d3f4e1214f7b51052219737669f461ac9c9ac6ac49753926d0af222a31a84ab876f82fcafba86e77910b4419a4ee0f1d5483d7dd3b5b6b6922ee9"
 
+const (
+	tap1 = "c007a95dc5b50c3ebbb8ff6bc4eabd379d646beb6e065934cf7e9de59f8d43e7"
+	tap2 = "9707fd32f9e96a72c4fa1b0f18cd748bd82496c4341aad3e66930c855349aa48"
+)
+
 // DefaultGenesisConfig is the default configuration for the node
 func DefaultGenesisConfig() *GenesisConfig {
 	g := GenesisConfig{}
@@ -75,9 +82,9 @@ func DefaultGenesisConfig() *GenesisConfig {
 	// we default to 10^5 SMH per account which is 10^17 smidge
 	// each genesis account starts off with 10^17 smidge
 	g.InitialAccounts = map[string]GenesisAccount{
-		"0x1":       {Balance: 100000000000000000, Nonce: 0},
-		Account1Pub: {Balance: 100000000000000000, Nonce: 0},
-		Account2Pub: {Balance: 100000000000000000, Nonce: 0},
+		"0x1": {Balance: big.NewInt(int64(math.Pow10(17))), Nonce: 0},
+		tap1:  {Balance: big.NewInt(int64(math.Pow10(17))), Nonce: 0},
+		tap2:  {Balance: big.NewInt(int64(math.Pow10(17))), Nonce: 0},
 	}
 	return &g
 	//todo: implement reading from file

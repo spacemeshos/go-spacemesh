@@ -148,15 +148,15 @@ func (bh BlockHandler) blockSyntacticValidation(block *types.Block, syncer servi
 		}
 	}
 
-	// fast validation checks if there are no duplicate ATX in active set and no duplicate TXs as well
-	if err := bh.fastValidation(block); err != nil {
-		bh.Log.Error("failed fast validation block %v e: %v", block.ID(), err)
-		return err
-	}
-
 	// try fetch referenced ATXs
 	err := bh.fetchAllReferencedAtxs(block, syncer)
 	if err != nil {
+		return err
+	}
+
+	// fast validation checks if there are no duplicate ATX in active set and no duplicate TXs as well
+	if err := bh.fastValidation(block); err != nil {
+		bh.Log.Error("failed fast validation block %v e: %v", block.ID(), err)
 		return err
 	}
 

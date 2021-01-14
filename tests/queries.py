@@ -298,6 +298,11 @@ def node_published_atx(deployment, node_id, epoch_id):
     return len(output) != 0
 
 
+def node_published_atx(deployment, node_id, epoch_id):
+    output = query_atx_per_node_and_epoch(deployment, node_id, epoch_id)
+    return len(output) != 0
+
+
 def get_atx_per_node(deployment):
     # based on log: atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v,
     # published in epoch: %v, active set: %v miner: %v view %v

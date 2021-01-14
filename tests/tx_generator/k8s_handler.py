@@ -69,7 +69,7 @@ def load_config():
             raise Exception("KUBECONFIG file not found: {0}\nException: {1}".format(kube_config_path, e))
 
 
-def api_call(client_ip, data, api, namespace, port="9093", retry=3, interval=1):
+def api_call(client_ip, data, api, namespace, port="9090", retry=3, interval=1):
     res = None
     while True:
         try:
@@ -86,7 +86,6 @@ def api_call(client_ip, data, api, namespace, port="9093", retry=3, interval=1):
             continue
         else:
             break
-
     return res
 
 

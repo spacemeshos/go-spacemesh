@@ -155,8 +155,8 @@ def test_add_many_clients(init_session, add_elk, add_node_pool, setup_bootstrap,
 
 
 def test_gossip(init_session, add_elk, add_node_pool, setup_clients, add_curl):
-    initial = len(query_message(
-        current_index, testconfig['namespace'], setup_clients.deployment_name, gossip_message_query_fields))
+    fields = {'M': 'new_gossip_message', 'protocol': 'api_test_gossip'}
+    initial = len(query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields))
     # *note*: this already waits for bootstrap so we can send the msg right away.
     # send message to client via rpc
     client_ip = setup_clients.pods[0]['pod_ip']
@@ -192,8 +192,8 @@ def test_gossip(init_session, add_elk, add_node_pool, setup_clients, add_curl):
 
 
 def test_many_gossip_messages(setup_clients, add_elk, add_node_pool, add_curl):
-    initial = len(query_message(
-        current_index, testconfig['namespace'], setup_clients.deployment_name, gossip_message_query_fields))
+    fields = {'M': 'new_gossip_message', 'protocol': 'api_test_gossip'}
+    initial = len(query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields))
 
     # *note*: this already waits for bootstrap so we can send the msg right away.
     # send message to client via rpc
@@ -288,7 +288,8 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
 # Validate that all nodes got exactly Y messages (X*Y messages)
 # Sample few nodes and validate that they got all 5 messages
 def test_many_gossip_sim(setup_clients, add_elk, add_node_pool, add_curl):
-    api = 'v1/gateway/broadcastpoet'
+    api = 'v1/broadcast'
+    headers = {'M': 'new_gossip_message', 'protocol': 'api_test_gossip'}
     msg_size = 10000  # 1kb TODO: increase up to 2mb
     test_messages = 100
     pods_num = len(setup_clients.pods)
@@ -302,7 +303,7 @@ def test_many_gossip_sim(setup_clients, add_elk, add_node_pool, add_curl):
 
 
 def test_broadcast_unknown_protocol(setup_bootstrap, add_elk, add_node_pool, setup_clients, add_curl):
-    api = 'v1/gateway/broadcastpoet'
+    api = 'v1/broadcast'
     # protocol is modified
     headers = gossip_message_query_fields.copy()
     headers['protocol'] = 'unknown_protocol'
@@ -324,8 +325,8 @@ def test_broadcast_unknown_protocol(setup_bootstrap, add_elk, add_node_pool, set
 # Validate that the new nodes failed to bootstrap
 # NOTE: this test is run in the end because it affects the network structure,
 # it creates an additional pod with a "v2" client
-# ALSO NOTE: The "v2" client is actually running an _earlier_ client version, this is confusing
 def test_diff_client_ver(setup_bootstrap, add_elk, add_node_pool, setup_clients, add_curl, add_clients):
+    sync_sleep_time = 10
     num_of_v2_clients = 2
     v2_version = "v2"
 

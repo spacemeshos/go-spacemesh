@@ -21,7 +21,7 @@ ES_SS_NAME = "elasticsearch-master"
 LOGSTASH_SS_NAME = "logstash"
 
 
-def api_call(client_ip, data, api, namespace, port="9093", retry=3, interval=1):
+def api_call(client_ip, data, api, namespace, port="9090", retry=3, interval=1):
     res = None
     while True:
         try:
@@ -38,11 +38,6 @@ def api_call(client_ip, data, api, namespace, port="9093", retry=3, interval=1):
             continue
         else:
             break
-
-    return res
-
-
-def get_curr_ind():
     dt = datetime.now()
     today_date = dt.strftime("%Y.%m.%d")
     return 'kubernetes_cluster-' + today_date
