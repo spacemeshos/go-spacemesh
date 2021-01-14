@@ -54,9 +54,10 @@ jobs:
           make build VERSION=${{ steps.version.outputs.content }}
 
       - if: matrix.os == 'windows-latest'
-        name: Build go-spacemesh for mac windows
+        name: Build go-spacemesh for windows
         run: |
           setx GOPATH %USERPROFILE%\go
+          setx PATH "%PATH%;%GOPATH%"
           make install
           make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
 
