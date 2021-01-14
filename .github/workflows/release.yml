@@ -19,9 +19,6 @@ on:
 
 jobs:
   build-and-upload:
-    env:
-      GOPATH: ~/go
-      GO111MODULE: off
 
     runs-on: ${{ matrix.os }}
 
