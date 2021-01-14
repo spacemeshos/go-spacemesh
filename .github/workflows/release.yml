@@ -49,6 +49,7 @@ jobs:
       - if: matrix.os != 'windows-latest'
         name: Build go-spacemesh for mac and ubuntu
         run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
           make install
           make build VERSION=${{ steps.version.outputs.content }}
 
