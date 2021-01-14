@@ -12,8 +12,8 @@ import (
 
 // GenesisAccount is the json representation of an account
 type GenesisAccount struct {
-	Balance uint64 `json:"balance"`
-	Nonce   uint64 `json:"nonce"`
+	Balance *big.Int `json:"balance" gencodec:"required"`
+	Nonce   uint64   `json:"nonce"`
 }
 
 // GenesisConfig defines accounts that will exist in state at genesis
@@ -80,7 +80,6 @@ func DefaultGenesisConfig() *GenesisConfig {
 	g := GenesisConfig{}
 
 	// we default to 10^5 SMH per account which is 10^17 smidge
-	// each genesis account starts off with 10^17 smidge
 	g.InitialAccounts = map[string]GenesisAccount{
 		"0x1": {Balance: big.NewInt(int64(math.Pow10(17))), Nonce: 0},
 		tap1:  {Balance: big.NewInt(int64(math.Pow10(17))), Nonce: 0},
