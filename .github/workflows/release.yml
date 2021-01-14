@@ -41,9 +41,10 @@ jobs:
 
       - name: Read version.txt
         id: version
-        uses: juliangruber/read-file-action@v1
+        uses: pCYSl5EDgo/cat@master
         with:
           path: ./version.txt
+          trim: true
       
       # `make build` reads version from version.txt but in Windows it doesn't work therefore passing version explicitly
       - if: matrix.os != 'windows-latest'
