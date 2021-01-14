@@ -4,10 +4,18 @@ env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
   
-on:  
+# on:  
+#   push:
+#     tags:
+#       - '*'
+
+on:
   push:
-    tags:
-      - '*'
+    branches-ignore:
+      - 'master'
+    tags-ignore:
+      - v0.*
+  workflow_dispatch:
 
 jobs:
   build-and-upload:
