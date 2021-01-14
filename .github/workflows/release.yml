@@ -20,23 +20,18 @@ on:
 jobs:
   build-and-upload:
     env:
-      GOPATH: ${{ github.workspace }}
+      GOPATH: ~/go
       GO111MODULE: off
 
-    defaults:
-      run:
-        working-directory: ${{ env.GOPATH }}/src/github.com/${{ github.repository }}
-    
     runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
-    steps:
+
+      steps:
       - name: Check out Git repository
         uses: actions/checkout@v2
-        with:
-          path: ${{ env.GOPATH }}/src/github.com/${{ github.repository }}
 
       - name: Setup Go
         uses: actions/setup-go@v1
