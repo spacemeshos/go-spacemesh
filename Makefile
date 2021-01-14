@@ -38,6 +38,9 @@ endif
 # This prevents "the input device is not a TTY" error from docker in CI
 DOCKERRUNARGS := --rm -e ES_PASSWD="$(ES_PASSWD)" \
 	-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+	-e CLUSTER_NAME_ELK=$(CLUSTER_NAME_ELK) \
+	-e CLUSTER_ZONE_ELK=$(CLUSTER_ZONE_ELK) \
+	-e PROJECT_NAME=$(PROJECT_NAME) \
 	-e ES_USER=$(ES_USER) \
 	-e ES_PASS=$(ES_PASS) \
 	-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
