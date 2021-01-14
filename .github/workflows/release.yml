@@ -74,11 +74,6 @@ jobs:
           if_true: ./build/go-spacemesh.exe
           if_false: ./build/go-spacemesh
 
-      - if: matrix.os != 'windows-latest'
-        name: Echo
-        run: |
-          echo ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/${{ matrix.os }}
-
       - name: Upload build
         uses: google-github-actions/upload-cloud-storage@main
         with:
