@@ -57,7 +57,7 @@ jobs:
         name: Set env for windows
         run: |
           echo "GOPATH=C:\go" >> $GITHUB_ENV
-          echo "C:\go" >> $GITHUB_PATH
+          echo "C:\go\bin" >> $GITHUB_PATH
 
       - if: matrix.os == 'windows-latest'
         name: Build go-spacemesh for windows
