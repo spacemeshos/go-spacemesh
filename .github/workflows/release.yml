@@ -39,17 +39,6 @@ jobs:
         with:
           args: install make
 
-      - if: matrix.os == 'windows-latest'
-        name: Add GOPATH to PATH in windows
-        run: setx GOPATH %USERPROFILE%\go
-      
-      - if: matrix.os != 'windows-latest'
-        name: Add GOPATH to PATH in mac and ubuntu
-        run: export PATH=$PATH:$(go env GOPATH)/bin
-      
-      - name: Setup Go environment
-        run: make install
-      
       - name: Read version.txt
         id: version
         uses: juliangruber/read-file-action@v1
@@ -57,9 +46,18 @@ jobs:
           path: ./version.txt
       
       # `make build` reads version from version.txt but in Windows it doesn't work therefore passing version explicitly
-      - name: Build go-spacemesh
+      - if: matrix.os != 'windows-latest'
+        name: Build go-spacemesh for mac and ubuntu
         run: |
           export PATH=$PATH:$(go env GOPATH)/bin
+          make install
+          make build VERSION=${{ steps.version.outputs.content }}
+
+      - if: matrix.os == 'windows-latest'
+        name: Build go-spacemesh for mac and ubuntu
+        run: |
+          setx GOPATH %USERPROFILE%\go
+          make install
           make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
 
       - name: Set up Cloud SDK
