@@ -30,6 +30,14 @@ jobs:
         uses: crazy-max/ghaction-chocolatey@v1
         with:
           args: install make
+
+      - if: matrix.os == 'windows-latest'
+        name: Add GOPATH to PATH in windows
+        run: setx GOPATH %USERPROFILE%\go
+      
+      - if: matrix.os != 'windows-latest'
+        name: Add GOPATH to PATH in mac and ubuntu
+        run: export PATH=$PATH:$(go env GOPATH)/bin
       
       - name: Setup Go environment
         run: make install
