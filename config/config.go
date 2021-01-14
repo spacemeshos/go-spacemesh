@@ -112,8 +112,8 @@ type LoggerConfig struct {
 	PostLoggerLevel           string `mapstructure:"post"`
 	StateDbLoggerLevel        string `mapstructure:"stateDb"`
 	StateLoggerLevel          string `mapstructure:"state"`
-	AtxDbStoreLoggerLevel     string `mapstructure:"atxDb"`
-	PoetDbStoreLoggerLevel    string `mapstructure:"poetDb"`
+	AtxDbStoreLoggerLevel     string `mapstructure:"atxDbStore"`
+	PoetDbStoreLoggerLevel    string `mapstructure:"poetDbStore"`
 	StoreLoggerLevel          string `mapstructure:"store"`
 	PoetDbLoggerLevel         string `mapstructure:"poetDb"`
 	MeshDBLoggerLevel         string `mapstructure:"meshDb"`
