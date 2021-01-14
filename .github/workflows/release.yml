@@ -30,52 +30,52 @@ jobs:
         os: [macos-latest, ubuntu-latest, windows-latest]
 
       steps:
-      - name: Check out Git repository
-        uses: actions/checkout@v2
+        - name: Check out Git repository
+          uses: actions/checkout@v2
 
-      - name: Setup Go
-        uses: actions/setup-go@v1
-        with:
-          go-version: '1.14.13' 
-      
-      - if: matrix.os == 'windows-latest'
-        name: Install make in windows
-        uses: crazy-max/ghaction-chocolatey@v1
-        with:
-          args: install make
-      
-      - name: Setup Go environment
-        run: make install
-      
-      - name: Read version.txt
-        id: version
-        uses: juliangruber/read-file-action@v1
-        with:
-          path: ./version.txt
-      
-      # `make build` reads version from version.txt but in Windows it doesn't work therefore passing version explicitly
-      - name: Build go-spacemesh
-        run: make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
+        - name: Setup Go
+          uses: actions/setup-go@v1
+          with:
+            go-version: '1.14.13' 
+        
+        - if: matrix.os == 'windows-latest'
+          name: Install make in windows
+          uses: crazy-max/ghaction-chocolatey@v1
+          with:
+            args: install make
+        
+        - name: Setup Go environment
+          run: make install
+        
+        - name: Read version.txt
+          id: version
+          uses: juliangruber/read-file-action@v1
+          with:
+            path: ./version.txt
+        
+        # `make build` reads version from version.txt but in Windows it doesn't work therefore passing version explicitly
+        - name: Build go-spacemesh
+          run: make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
 
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@master
-        with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
-          export_default_credentials: true
-      
-      - uses: haya14busa/action-cond@v1
-        id: buildpath
-        with:
-          cond: ${{ matrix.os == 'windows-latest' }}
-          if_true: ./build/go-spacemesh.exe
-          if_false: ./build/go-spacemesh
+        - name: Set up Cloud SDK
+          uses: google-github-actions/setup-gcloud@master
+          with:
+            project_id: ${{ secrets.GCP_PROJECT_ID }}
+            service_account_key: ${{ secrets.GCP_SA_KEY }}
+            export_default_credentials: true
+        
+        - uses: haya14busa/action-cond@v1
+          id: buildpath
+          with:
+            cond: ${{ matrix.os == 'windows-latest' }}
+            if_true: ./build/go-spacemesh.exe
+            if_false: ./build/go-spacemesh
 
-      - name: Upload build
-        uses: google-github-actions/upload-cloud-storage@main
-        with:
-          path: ${{ steps.buildpath.outputs.value }}
-          destination: ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/${{ matrix.os }}
+        - name: Upload build
+          uses: google-github-actions/upload-cloud-storage@main
+          with:
+            path: ${{ steps.buildpath.outputs.value }}
+            destination: ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/${{ matrix.os }}
   
   release:
     runs-on: ubuntu-latest
