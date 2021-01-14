@@ -25,13 +25,24 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
     steps:
-      - name: Check out Git repository
-        uses: actions/checkout@v2
+      
 
       - name: Setup Go
         uses: actions/setup-go@v1
         with:
           go-version: '1.14.13' 
+      
+      - name: setup env
+        run: |
+          echo "::set-env name=GOPATH::$(go env GOPATH)"
+          echo "::add-path::$(go env GOPATH)/bin"
+        shell: bash
+
+      - name: Check out Git repository
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+          path: src/github.com/${{ github.repository }}
       
       - if: matrix.os == 'windows-latest'
         name: Install make in windows
