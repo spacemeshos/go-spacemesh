@@ -57,7 +57,19 @@ jobs:
         name: Build go-spacemesh for windows
         run: |
           setx GOPATH %USERPROFILE%\go
-          setx PATH %PATH%;%GOPATH%
+          setx PATH "%PATH%;%GOPATH%"
+
+      - uses: FranzDiebold/github-env-vars-action@v2
+        name: Print environment variables
+        run: |
+          echo "GOPATH"
+          echo "PATH"
+
+      - if: matrix.os == 'windows-latest'
+        name: Build go-spacemesh for windows
+        run: |
+          setx GOPATH %USERPROFILE%\go
+          setx PATH "%PATH%;%GOPATH%"
           make install
           make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
 
