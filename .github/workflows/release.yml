@@ -57,7 +57,7 @@ jobs:
         name: Build go-spacemesh for windows
         run: |
           SET GOPATH=C:\go
-          SET PATH=%PATH%;C:\go
+          SET PATH="%PATH%;C:\go"
           make install
           make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
 
