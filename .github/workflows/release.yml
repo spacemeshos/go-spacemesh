@@ -56,10 +56,8 @@ jobs:
       - if: matrix.os == 'windows-latest'
         name: Build go-spacemesh for windows
         run: |
-          setx GOPATH C:\go
-          setx /M PATH "%PATH%;C:\go"
-          echo %PATH%
-          echo %GOPATH%
+          SET GOPATH=C:\go
+          SET PATH=C:\go
           make install
           make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
 
