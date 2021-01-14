@@ -89,7 +89,7 @@ def api_call(client_ip, data, api, namespace, port="9090", retry=3, interval=1):
     return res
 
 
-def aws_api_call(client_ip, data, api, port="9093"):
+def aws_api_call(client_ip, data, api, port="9090"):
     url = f"http://{client_ip}:{port}/{api}"
     return requests.post(url, data=data)
 

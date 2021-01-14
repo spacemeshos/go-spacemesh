@@ -66,7 +66,7 @@ func (app *BaseApp) Initialize(cmd *cobra.Command) {
 
 	app.Config = conf
 	if err := EnsureCLIFlags(cmd, app.Config); err != nil {
-		log.Panic(err.Error())
+		log.Panic("Panic: ", err.Error())
 	}
 	setupLogging(app.Config)
 }

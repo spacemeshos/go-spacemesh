@@ -32,7 +32,7 @@ var cmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Starting sync")
 		syncApp := newSyncApp()
-		log.With().Info("Initializing NewSyncApp", log.String("DataDir", syncApp.Config.DataDir()))
+		log.Info("Right after NewSyncApp %v", syncApp.Config.DataDir())
 		defer syncApp.Cleanup()
 		syncApp.Initialize(cmd)
 		syncApp.start(cmd, args)
@@ -83,16 +83,18 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.NewDefault("sync_test")
 	lg.Info("------------ Start sync test -----------")
-	lg.Info("data folder: %s", app.Config.DataDir())
-	lg.Info("storage path: %s", bucket)
-	lg.Info("download from remote storage: %v", remote)
-	lg.Info("expected layers: %d", expectedLayers)
-	lg.Info("request timeout: %d", app.Config.SyncRequestTimeout)
-	lg.Info("data version: %s", version)
-	lg.Info("layers per epoch: %d", app.Config.LayersPerEpoch)
-	lg.Info("hdist: %d", app.Config.Hdist)
+	lg.Info("data folder: ", app.Config.DataDir())
+	lg.Info("storage path: ", bucket)
+	lg.Info("download from remote storage: ", remote)
+	lg.Info("expected layers: ", expectedLayers)
+	lg.Info("request timeout: ", app.Config.SyncRequestTimeout)
+	lg.Info("data version: ", version)
+	lg.Info("layers per epoch: ", app.Config.LayersPerEpoch)
+	lg.Info("hdist: ", app.Config.Hdist)
 
 	path := app.Config.DataDir() + version
+
+	lg.Info(" anton local db path: %v layers per epoch", path)
 
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, lg.WithName("p2p"), app.Config.DataDir())
 
@@ -111,7 +113,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		LayersPerEpoch:  uint16(app.Config.LayersPerEpoch),
 	}
 	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
-	lg.Info("local db path: %v layers per epoch: %v", path, app.Config.LayersPerEpoch)
+	lg.Info("local db path: %v layers per epoch %v", path, app.Config.LayersPerEpoch)
 
 	if remote {
 		if err := getData(app.Config.DataDir(), version, lg); err != nil {

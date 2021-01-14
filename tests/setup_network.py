@@ -28,3 +28,6 @@ def setup_mul_network(init_session, add_elk, add_node_pool, add_curl, setup_boot
                                      cl_deployment_info=setup_mul_clients)
     wait_genesis(get_genesis_time_delta(testconfig['genesis_delta']), testconfig['genesis_delta'])
     return network_deployment
+
+
+

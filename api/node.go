@@ -3,8 +3,25 @@ package api
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"time"
 )
+
+// Service is an interface for receiving messages via gossip
+type Service interface {
+	RegisterGossipProtocol(string, priorityq.Priority) chan service.GossipMessage
+}
+
+// StateAPI is an API to global state
+// TODO: Remove me once the old API is removed. These are not used by the new
+// API implementation as this interface has been completely folded into the TxAPI.
+// see https://github.com/spacemeshos/go-spacemesh/issues/2077
+type StateAPI interface {
+	GetBalance(address types.Address) uint64
+	GetNonce(address types.Address) uint64
+	Exist(address types.Address) bool
+}
 
 // NetworkAPI is an API to nodes gossip network
 type NetworkAPI interface {
@@ -22,10 +39,25 @@ type MiningAPI interface {
 	Stop()
 }
 
+// OracleAPI gets eligible layers from oracle
+type OracleAPI interface {
+	GetEligibleLayers() []types.LayerID
+}
+
 // GenesisTimeAPI is an API to get genesis time and current layer of the system
 type GenesisTimeAPI interface {
 	GetGenesisTime() time.Time
 	GetCurrentLayer() types.LayerID
+}
+
+// LoggingAPI is an API to system loggers
+type LoggingAPI interface {
+	SetLogLevel(loggerName, severity string) error
+}
+
+// PostAPI is an API for post init module
+type PostAPI interface {
+	Reset() error
 }
 
 // Syncer is the API to get sync status and to start sync

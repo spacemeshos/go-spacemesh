@@ -3,11 +3,10 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"math"
 	"math/big"
 	"os"
-
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // GenesisAccount is the json representation of an account

@@ -2,12 +2,12 @@ package state
 
 import (
 	"fmt"
-	"sync"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/trie"
+	"math/big"
+	"sync"
 )
 
 // DB is the struct that performs logging of all account states. It consists of a state trie that contains all
@@ -91,7 +91,7 @@ func (state *DB) Empty(addr types.Address) bool {
 func (state *DB) GetBalance(addr types.Address) uint64 {
 	StateObj := state.getStateObj(addr)
 	if StateObj != nil {
-		return StateObj.Balance()
+		return StateObj.Balance().Uint64()
 	}
 	return 0
 }
@@ -111,7 +111,7 @@ func (state *DB) GetNonce(addr types.Address) uint64 {
  */
 
 // AddBalance adds amount to the account associated with addr.
-func (state *DB) AddBalance(addr types.Address, amount uint64) {
+func (state *DB) AddBalance(addr types.Address, amount *big.Int) {
 	stateObj := state.GetOrNewStateObj(addr)
 	if stateObj != nil {
 		stateObj.AddBalance(amount)
@@ -119,7 +119,7 @@ func (state *DB) AddBalance(addr types.Address, amount uint64) {
 }
 
 // SubBalance subtracts amount from the account associated with addr.
-func (state *DB) SubBalance(addr types.Address, amount uint64) {
+func (state *DB) SubBalance(addr types.Address, amount *big.Int) {
 	StateObj := state.GetOrNewStateObj(addr)
 	if StateObj != nil {
 		StateObj.SubBalance(amount)
@@ -127,7 +127,7 @@ func (state *DB) SubBalance(addr types.Address, amount uint64) {
 }
 
 // SetBalance sets balance to the specific address, it does not return error if address was not found
-func (state *DB) SetBalance(addr types.Address, amount uint64) {
+func (state *DB) SetBalance(addr types.Address, amount *big.Int) {
 	stateObj := state.GetOrNewStateObj(addr)
 	if stateObj != nil {
 		stateObj.SetBalance(amount)

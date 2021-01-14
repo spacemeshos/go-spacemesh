@@ -49,7 +49,7 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     num_miners = int(testconfig['client']['replicas']) + 2
 
     last_layer = epochs_to_sleep * layers_per_epoch
-    print(f"-------- wait until epoch number {epochs_to_sleep} layer {last_layer} --------")
+    print(f"-------- wait until epoch number {epochs_to_sleep} to layer {last_layer} --------")
     _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch, num_miners)
 
     # ========================== epoch i+2 ==========================

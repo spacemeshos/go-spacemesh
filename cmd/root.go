@@ -84,7 +84,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().Int8Var(&config.P2P.NetworkID, "network-id",
 		config.P2P.NetworkID, "NetworkID to run on (0 - mainnet, 1 - testnet)")
 	cmd.PersistentFlags().DurationVar(&config.P2P.ResponseTimeout, "response-timeout",
-		config.P2P.ResponseTimeout, "Timeout for waiting on response message")
+		config.P2P.ResponseTimeout, "Timeout for waiting on resposne message")
 	cmd.PersistentFlags().DurationVar(&config.P2P.SessionTimeout, "session-timeout",
 		config.P2P.SessionTimeout, "Timeout for waiting on session message")
 	cmd.PersistentFlags().StringVar(&config.P2P.NodeID, "node-id",
@@ -126,24 +126,38 @@ func AddCommands(cmd *cobra.Command) {
 
 	/** ======================== API Flags ========================== **/
 
-	// StartJSONServer determines if json api server should be started
+	// StartJSONApiServerFlag determines if json api server should be started
 	cmd.PersistentFlags().BoolVar(&config.API.StartJSONServer, "json-server",
-		config.API.StartJSONServer, "Start the grpc-gateway (json http) server. "+
+		config.API.StartJSONServer, "StartService the json http server. "+
+			"Note that starting the Json server also starts the grpc server. ",
+	)
+	// StartJSONApiServerFlag determines if json api server should be started
+	cmd.PersistentFlags().BoolVar(&config.API.StartNewJSONServer, "json-server-new",
+		config.API.StartNewJSONServer, "Start the new grpc-gateway (json http) server. "+
 			"The gateway server will be enabled for all corresponding, enabled GRPC services.",
 	)
-	// JSONServerPort determines the json api server local listening port
+	// JSONServerPortFlag determines the json api server local listening port
 	cmd.PersistentFlags().IntVar(&config.API.JSONServerPort, "json-port",
 		config.API.JSONServerPort, "JSON api server port")
-	// StartGrpcServices determines which (if any) GRPC API services should be started
+	// NewJSONServerPortFlag determines the json api server local listening port (for new server)
+	cmd.PersistentFlags().IntVar(&config.API.NewJSONServerPort, "json-port-new",
+		config.API.NewJSONServerPort, "New JSON api server port")
+	// StartGrpcAPIServerFlag determines if the grpc server should be started
+	cmd.PersistentFlags().BoolVar(&config.API.StartGrpcServer, "grpc-server",
+		config.API.StartGrpcServer, "StartService the grpc server. "+
+			"Note: This service will soon be deprecated. Use --grpc instead.")
 	cmd.PersistentFlags().StringSliceVar(&config.API.StartGrpcServices, "grpc",
 		config.API.StartGrpcServices, "Comma-separated list of individual grpc services to enable "+
 			"(gateway,globalstate,mesh,node,smesher,transaction)")
-	// GrpcServerPort determines the grpc server local listening port
+	// GrpcServerPortFlag determines the grpc server local listening port
 	cmd.PersistentFlags().IntVar(&config.API.GrpcServerPort, "grpc-port",
 		config.API.GrpcServerPort, "GRPC api server port")
-	// GrpcServerInterface determines the interface the GRPC server listens on
-	cmd.PersistentFlags().StringVar(&config.API.GrpcServerInterface, "grpc-interface",
-		config.API.GrpcServerInterface, "GRPC api server interface")
+	// NewGrpcServerFlag determines the grpc server local listening port (for new server)
+	cmd.PersistentFlags().IntVar(&config.API.NewGrpcServerPort, "grpc-port-new",
+		config.API.NewGrpcServerPort, "New GRPC api server port")
+	// NewGrpcServerInterface determines the interface the GRPC server listens on
+	cmd.PersistentFlags().StringVar(&config.API.NewGrpcServerInterface, "grpc-interface-new",
+		config.API.NewGrpcServerInterface, "New GRPC api server interface")
 
 	/**======================== Hare Flags ========================== **/
 

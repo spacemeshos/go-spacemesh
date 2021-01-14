@@ -57,15 +57,15 @@ func (s TransactionService) SubmitTransaction(_ context.Context, in *pb.SubmitTr
 			"Cannot submit transaction, node is not in sync yet, try again later")
 	}
 
-	// Note: The TransactionProcessor performs these same checks, so there is some duplicated logic here.
-	// See https://github.com/spacemeshos/go-spacemesh/issues/2162
-
 	tx, err := types.BytesToTransaction(in.Transaction)
 	if err != nil {
 		log.Error("failed to deserialize tx, error: %v", err)
 		return nil, status.Error(codes.InvalidArgument,
 			"`Transaction` must contain a valid, serialized transaction")
 	}
+	log.Info("GRPC TransactionService.SubmitTransaction to address: %s (len: %v), "+
+		"amount: %v, gaslimit: %v, fee: %v",
+		tx.Recipient.String(), len(tx.Recipient), tx.Amount, tx.GasLimit, tx.Fee)
 	if err := tx.CalcAndSetOrigin(); err != nil {
 		log.Error("failed to calculate tx origin: %v", err)
 		return nil, status.Error(codes.InvalidArgument,
@@ -80,8 +80,8 @@ func (s TransactionService) SubmitTransaction(_ context.Context, in *pb.SubmitTr
 		log.Error("tx failed nonce and balance check: %v", err)
 		return nil, status.Error(codes.InvalidArgument, "`Transaction` incorrect counter or insufficient balance")
 	}
-	log.Info("GRPC TransactionService.SubmitTransaction BROADCAST tx address: %x (len: %v), amount: %v, gas limit: %v, fee: %v, id: %v, nonce: %v",
-		tx.Recipient, len(tx.Recipient), tx.Amount, tx.GasLimit, tx.Fee, tx.ID().ShortString(), tx.AccountNonce)
+	log.Info("GRPC TransactionService.SubmitTransaction BROADCAST tx address %x (len %v), gas limit %v, fee %v id %v nonce %v",
+		tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.Fee, tx.ID().ShortString(), tx.AccountNonce)
 	go func() {
 		if err := s.Network.Broadcast(state.IncomingTxProtocol, in.Transaction); err != nil {
 			log.Error("error broadcasting incoming tx: %v", err)

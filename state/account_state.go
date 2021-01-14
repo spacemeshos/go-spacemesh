@@ -1,22 +1,21 @@
 package state
 
 import (
-	"io"
-	"math/big"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/rlp"
+	"io"
+	"math/big"
 )
 
 // AccountState is the interface defined to query a single account state
 type AccountState interface {
-	GetBalance() uint64
+	GetBalance() *big.Int
 	GetNonce() uint64
 	SetNonce(newNonce uint64)
-	AddBalance(amount uint64)
-	SubBalance(amount uint64)
-	SetBalance(amount uint64)
+	AddBalance(amount *big.Int)
+	SubBalance(amount *big.Int)
+	SetBalance(amount *big.Int)
 	GetAddress() types.Address
 }
 
@@ -31,6 +30,9 @@ type Object struct {
 
 // newObject creates a state object.
 func newObject(db *DB, address types.Address, data types.AccountState) *Object {
+	if data.Balance == nil {
+		data.Balance = new(big.Int)
+	}
 	return &Object{
 		db:       db,
 		address:  address,
@@ -46,16 +48,17 @@ func (state *Object) EncodeRLP(w io.Writer) error {
 
 // AddBalance removes amount from c's balance.
 // It is used to add funds to the destination account of a transfer.
-func (state *Object) AddBalance(amount uint64) {
+func (state *Object) AddBalance(amount *big.Int) {
 	// EIP158: We must check emptiness for the objects such that the account
 	// clearing (0,0,0 objects) can take effect.
-	if amount == 0 {
+	if amount.Sign() == 0 {
 		if state.empty() {
 			state.touch()
 		}
+
 		return
 	}
-	state.SetBalance(state.Balance() + amount)
+	state.SetBalance(new(big.Int).Add(state.Balance(), amount))
 }
 
 func (state *Object) touch() {
@@ -64,25 +67,25 @@ func (state *Object) touch() {
 
 // empty returns whether the account is considered empty.
 func (state *Object) empty() bool {
-	return state.account.Nonce == 0 && state.account.Balance == 0
+	return state.account.Nonce == 0 && state.account.Balance.Sign() == 0
 }
 
 // SubBalance removes amount from c's balance.
 // It is used to remove funds from the origin account of a transfer.
-func (state *Object) SubBalance(amount uint64) {
-	if amount == 0 {
+func (state *Object) SubBalance(amount *big.Int) {
+	if amount.Sign() == 0 {
 		return
 	}
-	state.SetBalance(state.Balance() - amount)
+	state.SetBalance(new(big.Int).Sub(state.Balance(), amount))
 }
 
 // SetBalance sets the balance for current account
-func (state *Object) SetBalance(amount uint64) {
+func (state *Object) SetBalance(amount *big.Int) {
 	state.setBalance(amount)
 	state.db.makeDirtyObj(state)
 }
 
-func (state *Object) setBalance(amount uint64) {
+func (state *Object) setBalance(amount *big.Int) {
 	state.account.Balance = amount
 }
 
@@ -115,7 +118,7 @@ func (state *Object) setNonce(nonce uint64) {
 }
 
 // Balance returns the account current balance
-func (state *Object) Balance() uint64 {
+func (state *Object) Balance() *big.Int {
 	return state.account.Balance
 }
 

@@ -27,10 +27,14 @@ services:
           "--genesis-time", "${SMESH_GENESIS_TIME:?SMESH_GENESIS_TIME Must be specified}",
           "--bootstrap", 
           "--bootnodes", "${SMESH_BOOTNODES:?SMESH_BOOTNODES Must be specified}",
+          "--grpc-server",
+          "--json-server",
+          "--json-port", "${SMESH_JSON_PORT:-9090}",
           "--executable-path", "/bin/go-spacemesh",
           "-d", "/root/spacemeshdata/" ]
      ports:
         - "${SMESH_PORT:-7513}:${SMESH_PORT:-7513}"
+        - "${SMESH_JSON_PORT:-9090}:${SMESH_JSON_PORT:-9090}"
      networks:
        spacemesh: {}
        
