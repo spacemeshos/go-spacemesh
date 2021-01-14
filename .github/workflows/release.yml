@@ -58,7 +58,9 @@ jobs:
       
       # `make build` reads version from version.txt but in Windows it doesn't work therefore passing version explicitly
       - name: Build go-spacemesh
-        run: make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@master
