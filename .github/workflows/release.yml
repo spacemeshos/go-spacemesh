@@ -41,10 +41,9 @@ jobs:
 
       - name: Read version.txt
         id: version
-        uses: pCYSl5EDgo/cat@master
+        uses: juliangruber/read-file-action@v1
         with:
           path: ./version.txt
-          trim: true
       
       # `make build` reads version from version.txt but in Windows it doesn't work therefore passing version explicitly
       - if: matrix.os != 'windows-latest'
@@ -56,8 +55,9 @@ jobs:
 
       - if: matrix.os == 'windows-latest'
         name: Set the value
-        run: |
-            echo "$GOPATH/bin" >> $GITHUB_PATH
+        uses: allenevans/set-env@v2.0.0
+        with:
+          GOPATH: 'C:\Go'
 
       # - if: matrix.os == 'windows-latest'
       #   name: Set env for windows
