@@ -53,17 +53,19 @@ jobs:
           make install
           make build VERSION=${{ steps.version.outputs.content }}
 
-      - if: matrix.os == 'windows-latest'
-        name: Set env for windows
-        run: |
-          echo "%GOPATH%/bin" >> $GITHUB_PATH
-          echo "$GITHUB_PATH"
-          echo "$PATH"
+      - uses: s-weigand/setup-conda@v1
+      - run: conda install protobuf
+
+      # - if: matrix.os == 'windows-latest'
+      #   name: Set env for windows
+      #   run: |
+      #     echo "%GOPATH%/bin" >> $GITHUB_PATH
+      #     echo "$GITHUB_PATH"
+      #     echo "$PATH"
 
       - if: matrix.os == 'windows-latest'
         name: Build go-spacemesh for windows
         run: |
-          go get -u github.com/golang/protobuf/protoc-gen-go
           make install
           make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
 
