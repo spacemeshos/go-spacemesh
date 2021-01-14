@@ -54,10 +54,14 @@ jobs:
           make build VERSION=${{ steps.version.outputs.content }}
 
       - if: matrix.os == 'windows-latest'
+        name: Set env for windows
+        run: |
+          echo "GOPATH=C:\go" >> $GITHUB_ENV
+          echo "C:\go" >> $GITHUB_PATH
+
+      - if: matrix.os == 'windows-latest'
         name: Build go-spacemesh for windows
         run: |
-          SET GOPATH=C:\go
-          SET PATH="%PATH%;C:\go"
           make install
           make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
 
