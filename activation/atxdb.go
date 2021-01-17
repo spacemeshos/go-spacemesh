@@ -626,7 +626,13 @@ func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (atxid types.ATXID, err erro
 	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeID))
 	defer func() {
 		nodeAtxsIterator.Release()
-		err = nodeAtxsIterator.Error()
+		if err2 := nodeAtxsIterator.Error(); err2 != nil {
+			db.log.With().Error("error releasing atxDB iterator", log.Err(err2))
+			// Don't overwrite previous error
+			if err == nil {
+				err = err2
+			}
+		}
 	}()
 	// ATX syntactic validation ensures that each ATX is at least one epoch after a referenced previous ATX.
 	// Contextual validation ensures that the previous ATX referenced matches what this method returns, so the next ATX
