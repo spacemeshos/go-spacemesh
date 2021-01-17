@@ -17,9 +17,6 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
     steps:
-      - name: Check out Git repository
-        uses: actions/checkout@v2
-
       - name: Setup Go
         uses: actions/setup-go@v1
         with:
@@ -31,19 +28,29 @@ jobs:
         with:
           args: install make
       
-      - name: Setup Go environment
-        run: make install
-      
+      - name: setup env
+        run: |
+          echo "::set-env name=GOPATH::$(go env GOPATH)"
+          echo "::add-path::$(go env GOPATH)/bin"
+        shell: bash
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
+
+      - name: Check out Git repository
+        uses: actions/checkout@v2
+
       - name: Read version.txt
         id: version
         uses: juliangruber/read-file-action@v1
         with:
           path: ./version.txt
-      
+
       # `make build` reads version from version.txt but in Windows it doesn't work therefore passing version explicitly
       - name: Build go-spacemesh
-        run: make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
-
+        shell: bash
+        run: |
+          make install
+          make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@master
         with:
@@ -68,6 +75,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-upload
     steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v2
+
+      - name: Read version.txt
+        id: version
+        uses: juliangruber/read-file-action@v1
+        with:
+          path: ./version.txt
+          
       - name: Create Release
         uses: actions/create-release@v1
         env:
