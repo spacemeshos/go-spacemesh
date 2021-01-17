@@ -47,26 +47,18 @@ jobs:
           include: "version.txt" 
 
       - name: Read version.txt
-        id: versionraw
+        id: version
         uses: juliangruber/read-file-action@v1
         with:
           path: ./version.txt
 
-      - uses: mad9000/actions-find-and-replace-string@2
-        id: version
-        with:
-          source: ${{ steps.versionraw.outputs.content }}
-          find: '\n'
-          replace: ''
-
-      
       # `make build` reads version from version.txt but in Windows it doesn't work therefore passing version explicitly
       - if: matrix.os != 'windows-latest'
         name: Build go-spacemesh for mac and ubuntu
         run: |
           export PATH=$PATH:$(go env GOPATH)/bin
           make install
-          make build VERSION=${{ steps.version.outputs.value }}
+          make build VERSION=${{ steps.versionraw.outputs.content }}
 
       - if: matrix.os == 'windows-latest'
         name: Set the value
@@ -88,7 +80,7 @@ jobs:
           echo %PATH%
           echo %GOPATH%
           make install
-          make build VERSION=${{ steps.version.outputs.value }} BIN_DIR_WIN=./build
+          make build VERSION=${{ steps.versionraw.outputs.content }} BIN_DIR_WIN=./build
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@master
@@ -108,7 +100,7 @@ jobs:
         uses: google-github-actions/upload-cloud-storage@main
         with:
           path: ${{ steps.buildpath.outputs.value }}
-          destination: ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.value }}/${{ matrix.os }}
+          destination: ${{ secrets.GCP_BUCKET }}/${{ steps.versionraw.outputs.content }}/${{ matrix.os }}
   
   release:
     runs-on: ubuntu-latest
@@ -120,11 +112,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref }}
-          release_name: Release ${{ steps.version.outputs.value }}
+          release_name: Release ${{ steps.versionraw.outputs.content }}
           body: |
             ## Compiled Binaries
-            - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.value }}/windows-latest/go-spacemesh.exe
-            - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.value }}/ubuntu-latest/go-spacemesh
-            - Mac: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.value }}/macos-latest/go-spacemesh
+            - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.versionraw.outputs.content }}/windows-latest/go-spacemesh.exe
+            - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.versionraw.outputs.content }}/ubuntu-latest/go-spacemesh
+            - Mac: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.versionraw.outputs.content }}/macos-latest/go-spacemesh
           draft: true
           prerelease: true
