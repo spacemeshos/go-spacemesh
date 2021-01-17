@@ -43,6 +43,7 @@ DOCKERRUNARGS := --rm -e ES_PASSWD="$(ES_PASSWD)" \
 	-e PROJECT_NAME=$(PROJECT_NAME) \
 	-e ES_USER=$(ES_USER) \
 	-e ES_PASS=$(ES_PASS) \
+	-e MAIN_ES_IP=$(MAIN_ES_IP) \
 	-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
 	go-spacemesh-python:$(BRANCH)
 ifdef INTERACTIVE
