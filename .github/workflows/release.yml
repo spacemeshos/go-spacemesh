@@ -45,30 +45,24 @@ jobs:
         with:
           path: ./version.txt
 
+      - name: Set the value
+        uses: allenevans/set-env@v2.0.0
+        shell: bash
+        run: |
+          export GOPATH=$(go env GOPATH)
+          export PATH=$PATH:$(go env GOPATH)/bin
+
       # `make build` reads version from version.txt but in Windows it doesn't work therefore passing version explicitly
       - if: matrix.os != 'windows-latest'
         name: Build go-spacemesh for mac and ubuntu
+        shell: bash
         run: |
-          export PATH=$PATH:$(go env GOPATH)/bin
           make install
           make build VERSION=${{ steps.version.outputs.content }}
 
       - if: matrix.os == 'windows-latest'
-        name: Set the value
-        uses: allenevans/set-env@v2.0.0
-        with:
-          GOPATH: 'C:\Go'
-          PATH: 'C:\Go\bin'
-
-      # - if: matrix.os == 'windows-latest'
-      #   name: Set env for windows
-      #   run: |
-      #     echo "%GOPATH%/bin" >> $GITHUB_PATH
-      #     echo "$GITHUB_PATH"
-      #     echo "$PATH"
-
-      - if: matrix.os == 'windows-latest'
         name: Build go-spacemesh for windows
+        shell: bash
         run: |
           make install
           make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
