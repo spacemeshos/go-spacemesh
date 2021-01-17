@@ -43,11 +43,11 @@ func getAtxBodyKey(atxID types.ATXID) []byte {
 }
 
 func getAtxCoinbaseKey(atx *types.ActivationTx) []byte {
-	return append(getAtxCoinbasePrefix(atx.Coinbase), []byte(fmt.Sprintf("_%v", atx.PubLayerID.Bytes()))...)
+	return append(getAtxCoinbasePrefix(atx.Coinbase), atx.PubLayerID.Bytes()...)
 }
 
 func getAtxCoinbasePrefix(coinbase types.Address) []byte {
-	return []byte(fmt.Sprintf("cb_%v", coinbase.Bytes()))
+	return []byte(fmt.Sprintf("c_%v_", coinbase.Bytes()))
 }
 
 var errInvalidSig = fmt.Errorf("identity not found when validating signature, invalid atx")
