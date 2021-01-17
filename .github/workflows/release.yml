@@ -39,9 +39,6 @@ jobs:
         with:
           args: install make
       
-      - name: Setup Go environment
-        run: make install
-      
       - name: Read version.txt
         id: version
         uses: juliangruber/read-file-action@v1
