@@ -54,15 +54,7 @@ jobs:
           path: ./version.txt
 
       # `make build` reads version from version.txt but in Windows it doesn't work therefore passing version explicitly
-      - if: matrix.os != 'windows-latest'
-        name: Build go-spacemesh for mac and ubuntu
-        shell: bash
-        run: |
-          make install
-          make build VERSION=${{ steps.version.outputs.content }}
-
-      - if: matrix.os == 'windows-latest'
-        name: Build go-spacemesh for windows
+      - name: Build go-spacemesh
         shell: bash
         run: |
           make install
@@ -92,6 +84,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-upload
     steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v2
+
+      - name: Read version.txt
+        id: version
+        uses: juliangruber/read-file-action@v1
+        with:
+          path: ./version.txt
+          
       - name: Create Release
         uses: actions/create-release@v1
         env:
