@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-pipeline
+  labels:
+    app: logstash
+    chart: logstash-2.4.1
+    heritage: Helm
+data:
+  logstash.conf: |-
+    input {
+      http {
+        port => 5044
+        add_field => { "[@metadata][input-http]" => "" }
+      }
+    }
+
+    filter {
+      if [@metadata][input-http] {
+        date {
+          match => [ "date", "UNIX" ]
+          remove_field => [ "date" ]
+        }
+        mutate {
+          remove_field => ["headers","host"]
+        }
+      }
+
+      json{
+        source => "message"
+        skip_on_invalid_json => true
+      }
+
+      mutate {
+        remove_field => ["log", "cloud", "ecs", "agent", "input", "tags", "docker", "container", "host", "message", "@version"]
+        remove_field => ["headers","host"]
+      }
+    }
+
+    output {
+      elasticsearch {
+        hosts => ["elasticsearch-master:9200"]
+        manage_template => false
+        index => "fluent-bit-NAMESPACE-%{+YYYY.MM.dd}"
+        user => "REP_ES_USER"
+        password => "REP_ES_PASS"
+      }
+    }

@@ -61,6 +61,7 @@ type Service interface {
 	RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan GossipMessage
 	RegisterDirectProtocol(protocol string) chan DirectMessage
 	SubscribePeerEvents() (new chan p2pcrypto.PublicKey, del chan p2pcrypto.PublicKey)
+	GossipReady() <-chan struct{}
 	Broadcast(protocol string, payload []byte) error
 	Shutdown()
 }

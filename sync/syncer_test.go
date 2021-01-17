@@ -161,21 +161,11 @@ func addTxsToPool(pool txMemPool, txs []*types.Transaction) {
 func TestSyncer_Start(t *testing.T) {
 	syncs, _, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	syn := syncs[0]
-	defer syn.Close()
+
 	syn.Start()
-	timeout := time.After(10 * time.Second)
-	for {
-		select {
-		// Got a timeout! fail with a timeout error
-		case <-timeout:
-			t.Error("timed out ")
-			return
-		default:
-			if !syn.startLock.TryLock() {
-				return
-			}
-		}
-	}
+	syn.Start()
+	syn.Close()
+	syn.Start()
 }
 
 func createBlock(activationTx types.ActivationTx, signer *signing.EdSigner) *types.Block {
@@ -1315,6 +1305,7 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 
 	sync := NewSync(net, msh, txpool, atxpool, blockValidator, newMockPoetDb(), conf, timer, l)
 	lv := &mockLayerValidator{0, 0, 0, nil}
+	sync.peers = PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{net.PublicKey()} }}
 	sync.syncLock.Lock()
 	sync.Mesh.Validator = lv
 	sync.SetLatestLayer(5)
