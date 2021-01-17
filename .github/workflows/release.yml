@@ -39,13 +39,6 @@ jobs:
         with:
           args: install make
 
-      - name: Find and Replace
-        uses: jacobtomlinson/gha-find-replace@master
-        with:
-          find: "\n"
-          replace: ""
-          include: "version.txt" 
-
       - name: Read version.txt
         id: version
         uses: juliangruber/read-file-action@v1
