@@ -393,6 +393,6 @@ def timing(func):
 
 def get_env(name, is_must=True):
     if name not in os.environ and is_must:
-        raise Exception(f"a value must be set for {name} environment variable")
+        raise Exception(f"{name} environment variable must be set")
     ret = os.getenv(name)
     return ret

@@ -14,7 +14,7 @@ LOGSTASH_CONF_DIR = './elk/logstash/'
 
 ES_USER_LOCAL = ut.get_env("ES_USER")
 ES_PASS_LOCAL = ut.get_env("ES_PASS")
-MAIN_ES_IP = "35.227.190.1"
+MAIN_ES_IP = ut.get_env("MAIN_ES_IP")
 MAIN_ES_URL = f"{MAIN_ES_IP}:9200"
 
 
