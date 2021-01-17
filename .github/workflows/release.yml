@@ -38,7 +38,10 @@ jobs:
         uses: crazy-max/ghaction-chocolatey@v1
         with:
           args: install make
-
+      
+      - name: Setup Go environment
+        run: make install
+      
       - name: Read version.txt
         id: version
         uses: juliangruber/read-file-action@v1
@@ -70,8 +73,6 @@ jobs:
       - if: matrix.os == 'windows-latest'
         name: Build go-spacemesh for windows
         run: |
-          echo %PATH%
-          echo %GOPATH%
           make install
           make build VERSION=${{ steps.versionraw.outputs.content }} BIN_DIR_WIN=./build
 
