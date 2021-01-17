@@ -57,6 +57,7 @@ type turtle struct {
 	//	that's not needed here, probably for self healing?
 }
 
+// SetLogger sets the Log instance for this turtle
 func (t *turtle) SetLogger(log2 log.Log) {
 	t.logger = log2
 }
@@ -115,10 +116,6 @@ func (t *turtle) evict() {
 
 	}
 	t.Evict = window
-}
-
-func removeOpinion(o []Opinion, i int) []Opinion {
-	return append(o[:i], o[i+1:]...)
 }
 
 func blockIDsToString(input []types.BlockID) string {
@@ -283,7 +280,7 @@ func (t *turtle) BlockWeight(voting, voted types.BlockID) int {
 	return 1
 }
 
-//Persist saves the current tortoise state to the database
+// Persist saves the current tortoise state to the database
 func (t *turtle) persist() error {
 	return t.bdp.Persist(mesh.TORTOISE, t)
 }
@@ -334,8 +331,8 @@ func (t *turtle) processBlock(block *types.Block) error {
 	return nil
 }
 
-//HandleIncomingLayer processes all layer block votes
-//returns the old pbase and new pbase after taking into account the blocks votes
+// HandleIncomingLayer processes all layer block votes
+// returns the old pbase and new pbase after taking into account the blocks votes
 func (t *turtle) HandleIncomingLayer(newlyr *types.Layer, inputVector []types.BlockID) (types.LayerID, types.LayerID) {
 
 	if t.Last < newlyr.Index() {
