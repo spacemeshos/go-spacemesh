@@ -829,7 +829,6 @@ func (msh *Mesh) GetATXs(atxIds []types.ATXID) (map[types.ATXID]*types.Activatio
 
 // GetAtxIDsByCoinbase returns a list of all atx ids corresponding to a coinbase address
 func (msh *Mesh) GetAtxIDsByCoinbase(coinbase types.Address) (atxIds []types.ATXID, err error) {
-
 	atxIter := msh.GetAtxIterByCoinbase(coinbase)
 	defer func() {
 		atxIter.Release()
