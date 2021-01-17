@@ -2,10 +2,11 @@ package types
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"strings"
 )
 
 // TransactionID is a 32-byte sha256 sum of the transaction, used as an identifier.
@@ -131,6 +132,7 @@ type Reward struct {
 	Layer               LayerID
 	TotalReward         uint64
 	LayerRewardEstimate uint64
+	SmesherID           types.NodeID
 }
 
 // NewSignedTx is used in TESTS ONLY to generate signed txs
