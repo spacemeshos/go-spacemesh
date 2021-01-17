@@ -46,7 +46,6 @@ jobs:
           path: ./version.txt
 
       - name: Set the value
-        uses: allenevans/set-env@v2.0.0
         shell: bash
         run: |
           export GOPATH=$(go env GOPATH)
