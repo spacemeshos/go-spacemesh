@@ -623,7 +623,6 @@ type ErrAtxNotFound error
 
 // GetNodeLastAtxID returns the last atx id that was received for node nodeID
 func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (atxid types.ATXID, err error) {
-
 	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeID))
 	defer func() {
 		nodeAtxsIterator.Release()
