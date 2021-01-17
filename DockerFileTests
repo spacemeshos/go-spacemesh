@@ -21,7 +21,7 @@ FROM tests_base AS with_requirements
 RUN pip install pipenv
 COPY tests/Pipfile .
 COPY tests/Pipfile.lock .
-RUN pipenv install --system --ignore-pipfile
+RUN pipenv install --system
 
 FROM with_requirements AS tests_runner
 
