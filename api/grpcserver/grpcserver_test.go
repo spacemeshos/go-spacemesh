@@ -276,17 +276,26 @@ func (t *TxAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
 	return types.NewExistingLayer(tid, blocks), nil
 }
 
-func (t *TxAPIMock) GetATXs([]types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
-	atxs := map[types.ATXID]*types.ActivationTx{
-		globalAtx.ID():  globalAtx,
-		globalAtx2.ID(): globalAtx2,
+func (t *TxAPIMock) GetATXs(atxids []types.ATXID) (atxs map[types.ATXID]*types.ActivationTx, missing []types.ATXID) {
+	atxs = make(map[types.ATXID]*types.ActivationTx)
+	for _, atxid := range atxids {
+		if globalAtx.ID() == atxid {
+			atxs[atxid] = globalAtx
+		} else if globalAtx2.ID() == atxid {
+			atxs[atxid] = globalAtx2
+		}
 	}
-	return atxs, nil
+	return
 }
 
-func (t *TxAPIMock) GetAtxIDsByCoinbase(coinbase types.Address) ([]types.ATXID, error) {
-	atxids := []types.ATXID{globalAtx.ID(), globalAtx2.ID()}
-	return atxids, nil
+func (t *TxAPIMock) GetAtxIDsByCoinbase(coinbase types.Address) (atxids []types.ATXID, err error) {
+	switch coinbase {
+	case globalAtx.Coinbase:
+		atxids = append(atxids, globalAtx.ID())
+	case globalAtx2.Coinbase:
+		atxids = append(atxids, globalAtx2.ID())
+	}
+	return
 }
 
 func (t *TxAPIMock) GetTransactions(txids []types.TransactionID) (txs []*types.Transaction, missing map[types.TransactionID]struct{}) {

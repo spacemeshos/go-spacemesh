@@ -122,7 +122,6 @@ func (s MeshService) getFilteredTransactions(startLayer types.LayerID, addr type
 }
 
 func (s MeshService) getFilteredActivations(startLayer types.LayerID, addr types.Address) (activations []*types.ActivationTx, err error) {
-
 	// TODO: Also add db indices for activations by layer number.
 	// This getter becomes less efficient as number of layers grows large.
 	// See https://github.com/spacemeshos/go-spacemesh/issues/2064.
