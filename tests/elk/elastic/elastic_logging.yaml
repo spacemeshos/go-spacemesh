@@ -184,7 +184,7 @@ spec:
             - name: ELASTIC_PASSWORD
               value: REP_ES_PASS
             - name: xpack.security.enabled
-              value: "false"
+              value: "true"
             - name: xpack.monitoring.enabled
               value: "true"
             - name: xpack.monitoring.collection.enabled

@@ -14,6 +14,7 @@ env:
   SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   ES_USER: ${{ secrets.ES_USER }}
   ES_PASS: ${{ secrets.ES_PASS }}
+  MAIN_ES_IP: ${{ secrets.MAIN_ES_IP }}
 
 # Trigger the workflow on all pull requests, and on push to specific branches
 on:
