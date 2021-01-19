@@ -10,21 +10,32 @@ import (
 	"strings"
 )
 
+// TransactionType is a transaction's kind and signing scheme
 type TransactionType byte
 
 const (
-	TxSimpleCoinEd     TransactionType = 0 // coin transaction with ed
-	TxSimpleCoinEdPlus TransactionType = 1 // coin transaction with ed++
-	TxCallAppEd        TransactionType = 2 // exec app transaction with ed
-	TxCallAppEdPlus    TransactionType = 3 // exec app transaction with ed++
-	TxSpawnAppEd       TransactionType = 4 // spawn app + ed
-	TxSpawnAppEdPlus   TransactionType = 5 // spawn app + ed++
+	// TxSimpleCoinEd is a simple coin transaction with ed signing scheme
+	TxSimpleCoinEd TransactionType = 0
+	// TxSimpleCoinEdPlus is a simple coin transaction with ed++ signing scheme
+	TxSimpleCoinEdPlus TransactionType = 1
+	// TxCallAppEd is a exec app transaction with ed signing scheme
+	TxCallAppEd TransactionType = 2
+	// TxCallAppEdPlus is a exec app transaction with ed++ signing scheme
+	TxCallAppEdPlus TransactionType = 3
+	// TxSpawnAppEd is a spawn app transaction with ed signing scheme
+	TxSpawnAppEd TransactionType = 4
+	// TxSpawnAppEdPlus is a spawn app transaction with ed++ signing scheme
+	TxSpawnAppEdPlus TransactionType = 5
 
 	// for support code transition to new transactions abstraction
-	TxOldCoinEd     TransactionType = 6 // old coin transaction with ed
-	TxOldCoinEdPlus TransactionType = 7 // old coin transaction with ed++
+
+	// TxOldCoinEd is a old coin transaction with ed signing scheme
+	TxOldCoinEd TransactionType = 6
+	// TxOldCoinEdPlus is a old coin transaction with ed++ signing scheme
+	TxOldCoinEdPlus TransactionType = 7
 )
 
+// String returns string representation for TransactionType
 func (tt TransactionType) String() string {
 	switch tt {
 	case TxSimpleCoinEd:
@@ -48,6 +59,7 @@ func (tt TransactionType) String() string {
 	}
 }
 
+// IsEdPlus returns true if transaction type has Ed++ signing scheme
 func (tt TransactionType) IsEdPlus() bool {
 	switch tt {
 	case TxSimpleCoinEdPlus, TxCallAppEdPlus, TxSpawnAppEdPlus, TxOldCoinEdPlus:
@@ -59,6 +71,7 @@ func (tt TransactionType) IsEdPlus() bool {
 	panic(fmt.Errorf("unknown transaction type"))
 }
 
+// Decode decodes transaction bytes into the transaction object
 func (tt TransactionType) Decode(pubKey TxPublicKey, signature TxSignature, txid TransactionID, data []byte) (Transaction, error) {
 	switch tt {
 	case TxSimpleCoinEd, TxSimpleCoinEdPlus:
@@ -74,18 +87,22 @@ func (tt TransactionType) Decode(pubKey TxPublicKey, signature TxSignature, txid
 	return nil, fmt.Errorf("unknown transaction type")
 }
 
+// EdPlusTransactionFactory allowing to create transactions with Ed++ signing scheme
 type EdPlusTransactionFactory interface {
 	NewEdPlus() IncompleteTransaction
 }
 
+// EdTransactionFactory allowing to create transactions with Ed signing scheme
 type EdTransactionFactory interface {
 	NewEd() IncompleteTransaction
 }
 
+// IncompleteTransaction is the incomplete transaction having just a header
 type IncompleteTransaction interface {
+	fmt.Stringer // String()string
+
 	AuthenticationMessage() (TransactionAuthenticationMessage, error)
 	Type() TransactionType
-	String() string
 
 	// extract internal transaction structure
 	Extract(interface{}) bool
@@ -102,6 +119,7 @@ type IncompleteTransaction interface {
 	GetFee(gas uint64) uint64
 }
 
+// SignTransaction signs incomplete transaction and returns completed transaction object
 func SignTransaction(itx IncompleteTransaction, signer *signing.EdSigner) (tx Transaction, err error) {
 	txm, err := itx.AuthenticationMessage()
 	if err != nil {
@@ -114,6 +132,7 @@ func SignTransaction(itx IncompleteTransaction, signer *signing.EdSigner) (tx Tr
 	return stx.Decode()
 }
 
+// Transaction is a completed transaction interface
 type Transaction interface {
 	IncompleteTransaction
 
@@ -165,16 +184,19 @@ func TxIdsField(ids []TransactionID) log.Field {
 // EmptyTransactionID is a canonical empty TransactionID.
 var EmptyTransactionID = TransactionID{}
 
+// TransactionAuthenticationMessage is an incomplete transaction binary representation
 type TransactionAuthenticationMessage struct {
 	NetID           NetworkID
 	TxType          TransactionType
 	TransactionData []byte
 }
 
+// Type returns transaction type
 func (txm TransactionAuthenticationMessage) Type() TransactionType {
 	return txm.TxType
 }
 
+// Sign signs transaction binary data
 func (txm TransactionAuthenticationMessage) Sign(signer *signing.EdSigner) (_ SignedTransaction, err error) {
 	bf := bytes.Buffer{}
 	if _, err = xdr.Marshal(&bf, &txm); err != nil {
@@ -184,6 +206,7 @@ func (txm TransactionAuthenticationMessage) Sign(signer *signing.EdSigner) (_ Si
 	return txm.Encode(TxPublicKeyFromBytes(signer.PublicKey().Bytes()), signature)
 }
 
+// Encode encodes transaction into the independent form
 func (txm TransactionAuthenticationMessage) Encode(pubKey TxPublicKey, signature TxSignature) (_ SignedTransaction, err error) {
 	stl := SignedTransactionLayout{TxType: byte(txm.TxType), Data: txm.TransactionData, Signature: signature}
 	if !txm.TxType.IsEdPlus() {
@@ -196,6 +219,7 @@ func (txm TransactionAuthenticationMessage) Encode(pubKey TxPublicKey, signature
 	return bf.Bytes(), nil
 }
 
+// Verify verifies transaction bytes
 func (txm TransactionAuthenticationMessage) Verify(pubKey TxPublicKey, sig TxSignature) bool {
 	bf := bytes.Buffer{}
 	if _, err := xdr.Marshal(&bf, &txm); err != nil {
@@ -204,6 +228,7 @@ func (txm TransactionAuthenticationMessage) Verify(pubKey TxPublicKey, sig TxSig
 	return sig.Verify(pubKey.Bytes(), bf.Bytes())
 }
 
+// SignedTransactionLayout represents fields layout of a signed transaction
 type SignedTransactionLayout struct {
 	TxType    byte
 	Signature [TxSignatureLength]byte
@@ -211,16 +236,20 @@ type SignedTransactionLayout struct {
 	PubKey    [] /*TODO:???*/ byte
 }
 
+// Type returns transaction type
 func (stl SignedTransactionLayout) Type() TransactionType {
 	return TransactionType(stl.TxType)
 }
 
+// SignedTransaction is the binary transaction independent form
 type SignedTransaction []byte
 
+// ID returns transaction identifier
 func (stx SignedTransaction) ID() TransactionID {
 	return TransactionID(CalcHash32(stx[:]))
 }
 
+// Decode decodes binary transaction into transaction object
 func (stx SignedTransaction) Decode() (tx Transaction, err error) {
 	stl := SignedTransactionLayout{}
 	if _, err = xdr.Unmarshal(bytes.NewReader(stx[:]), &stl); err != nil {

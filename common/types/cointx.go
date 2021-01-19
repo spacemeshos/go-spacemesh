@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
+// OldCoinTx implements "Old Coin Transaction"
 type OldCoinTx struct {
 	AccountNonce uint64
 	Recipient    Address
@@ -15,23 +16,27 @@ type OldCoinTx struct {
 	Amount       uint64
 }
 
+// NewEdPlus creates a new incomplete transaction with Ed++ signing scheme
 func (h OldCoinTx) NewEdPlus() IncompleteTransaction {
 	tx := &incompOldCoinTx{OldCoinTxHeader{h}, IncompleteCommonTx{txType: TxOldCoinEdPlus}}
 	tx.marshal = tx
 	return tx
 }
 
+// NewEd creates a new incomplete transaction with Ed signing scheme
 func (h OldCoinTx) NewEd() IncompleteTransaction {
 	tx := &incompOldCoinTx{OldCoinTxHeader{h}, IncompleteCommonTx{txType: TxOldCoinEd}}
 	tx.marshal = tx
 	return tx
 }
 
+// incompOldCoinTx implements IncompleteTransaction for a "Old Coin Transaction"
 type incompOldCoinTx struct {
 	OldCoinTxHeader
 	IncompleteCommonTx
 }
 
+// String implements fmt.Stringer interface
 func (tx incompOldCoinTx) String() string {
 	return fmt.Sprintf(
 		"<incomplete transaction, type: %v, recipient: %s, amount: %v, nonce: %v, gas_limit: %v, fee: %v>",
@@ -40,10 +45,12 @@ func (tx incompOldCoinTx) String() string {
 		tx.GasLimit, tx.Fee)
 }
 
+// OldCoinTxHeader implements xdrMarshal and Get* methods from IncompleteTransaction
 type OldCoinTxHeader struct {
 	OldCoinTx
 }
 
+// Extract implements IncompleteTransaction.Extract to extract internal transaction structure
 func (tx OldCoinTxHeader) Extract(out interface{}) bool {
 	if p, ok := out.(*OldCoinTx); ok {
 		*p = tx.OldCoinTx
@@ -52,48 +59,58 @@ func (tx OldCoinTxHeader) Extract(out interface{}) bool {
 	return false
 }
 
-func (h OldCoinTxHeader) GetRecipient() Address {
-	return h.Recipient
+// GetRecipient returns recipient address
+func (tx OldCoinTxHeader) GetRecipient() Address {
+	return tx.Recipient
 }
 
-func (h OldCoinTxHeader) GetAmount() uint64 {
-	return h.Amount
+// GetAmount returns transaction amount
+func (tx OldCoinTxHeader) GetAmount() uint64 {
+	return tx.Amount
 }
 
-func (h OldCoinTxHeader) GetNonce() uint64 {
-	return h.AccountNonce
+// GetNonce returns transaction nonce
+func (tx OldCoinTxHeader) GetNonce() uint64 {
+	return tx.AccountNonce
 }
 
-func (h OldCoinTxHeader) GetGasLimit() uint64 {
-	return h.GasLimit
+// GetGasLimit returns transaction gas limit
+func (tx OldCoinTxHeader) GetGasLimit() uint64 {
+	return tx.GasLimit
 }
 
-func (h OldCoinTxHeader) GetGasPrice() uint64 {
+// GetGasPrice returns gas price
+func (tx OldCoinTxHeader) GetGasPrice() uint64 {
 	return 1 // TODO: there is just fee no gas price
 }
 
-func (h OldCoinTxHeader) GetFee( /*gas*/ _ uint64) uint64 {
-	return h.Fee
+// GetFee calculate transaction fee regarding gas spent
+func (tx OldCoinTxHeader) GetFee( /*gas*/ _ uint64) uint64 {
+	return tx.Fee
 }
 
-func (h OldCoinTxHeader) XdrBytes() ([]byte, error) {
+// XdrBytes implements xdrMarshal.XdrBytes
+func (tx OldCoinTxHeader) XdrBytes() ([]byte, error) {
 	bf := bytes.Buffer{}
-	if _, err := xdr.Marshal(&bf, h.OldCoinTx); err != nil {
+	if _, err := xdr.Marshal(&bf, tx.OldCoinTx); err != nil {
 		return nil, err
 	}
 	return bf.Bytes(), nil
 }
 
-func (h *OldCoinTxHeader) XdrFill(bs []byte) (err error) {
-	_, err = xdr.Unmarshal(bytes.NewReader(bs), &h.OldCoinTx)
+// XdrFill implements xdrMarshal.XdrFill
+func (tx *OldCoinTxHeader) XdrFill(bs []byte) (err error) {
+	_, err = xdr.Unmarshal(bytes.NewReader(bs), &tx.OldCoinTx)
 	return
 }
 
+// oldCoinTx implements TransactionInterface for "Old Coin Transaction"
 type oldCoinTx struct {
 	OldCoinTxHeader
 	CommonTx
 }
 
+// String implements fmt.Stringer interface
 func (tx oldCoinTx) String() string {
 	h := tx.OldCoinTx
 	return fmt.Sprintf(
@@ -102,6 +119,7 @@ func (tx oldCoinTx) String() string {
 		h.Recipient, h.Amount, h.AccountNonce, h.GasLimit, h.Fee)
 }
 
+// DecodeOldCoinTx decodes transaction bytes into "Old Coin Transaction" object
 func DecodeOldCoinTx(data []byte, signature TxSignature, pubKey TxPublicKey, txid TransactionID, txtp TransactionType) (r Transaction, err error) {
 	tx := &oldCoinTx{}
 	return tx, tx.decode(tx, data, signature, pubKey, txid, txtp)

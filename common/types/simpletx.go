@@ -6,6 +6,7 @@ import (
 	xdr "github.com/nullstyle/go-xdr/xdr3"
 )
 
+// SimpleCoinTx implements "Simple Coin Transaction"
 type SimpleCoinTx struct {
 	TTL       uint32
 	Nonce     byte
@@ -15,23 +16,27 @@ type SimpleCoinTx struct {
 	GasPrice  uint64
 }
 
+// NewEdPlus creates a new incomplete transaction with Ed++ signing scheme
 func (h SimpleCoinTx) NewEdPlus() IncompleteTransaction {
 	tx := &incompSimpleCoinTx{SimpleCoinTxHeader{h}, IncompleteCommonTx{txType: TxSimpleCoinEdPlus}}
 	tx.marshal = tx
 	return tx
 }
 
+// NewEd creates a new incomplete transaction with Ed signing scheme
 func (h SimpleCoinTx) NewEd() IncompleteTransaction {
 	tx := &incompSimpleCoinTx{SimpleCoinTxHeader{h}, IncompleteCommonTx{txType: TxSimpleCoinEd}}
 	tx.marshal = tx
 	return tx
 }
 
+// incompSimpleCoinTx implements IncompleteTransaction for a "Simple Coin Transaction"
 type incompSimpleCoinTx struct {
 	SimpleCoinTxHeader
 	IncompleteCommonTx
 }
 
+// String implements fmt.Stringer interface
 func (tx incompSimpleCoinTx) String() string {
 	return fmt.Sprintf(
 		"<incomplete transaction, type: %v, recipient: %s, ttl: %d, amount: %v, nonce: %v, gas_limit: %v, gas_price: %v>",
@@ -40,10 +45,12 @@ func (tx incompSimpleCoinTx) String() string {
 		tx.GasLimit, tx.GasPrice)
 }
 
+// SimpleCoinTxHeader implements xdrMarshal and Get* methods from IncompleteTransaction
 type SimpleCoinTxHeader struct {
 	SimpleCoinTx
 }
 
+// Extract implements IncompleteTransaction.Extract to extract internal transaction structure
 func (tx SimpleCoinTxHeader) Extract(out interface{}) bool {
 	if p, ok := out.(*SimpleCoinTx); ok {
 		*p = tx.SimpleCoinTx
@@ -52,49 +59,59 @@ func (tx SimpleCoinTxHeader) Extract(out interface{}) bool {
 	return false
 }
 
-func (h SimpleCoinTxHeader) GetRecipient() Address {
-	return h.Recipient
+// GetRecipient returns recipient address
+func (tx SimpleCoinTxHeader) GetRecipient() Address {
+	return tx.Recipient
 }
 
-func (h SimpleCoinTxHeader) GetAmount() uint64 {
-	return h.Amount
+// GetAmount returns transaction amount
+func (tx SimpleCoinTxHeader) GetAmount() uint64 {
+	return tx.Amount
 }
 
-func (h SimpleCoinTxHeader) GetNonce() uint64 {
+// GetNonce returns transaction nonce
+func (tx SimpleCoinTxHeader) GetNonce() uint64 {
 	// TODO: nonce processing
-	return uint64(h.Nonce)
+	return uint64(tx.Nonce)
 }
 
-func (h SimpleCoinTxHeader) GetGasLimit() uint64 {
-	return h.GasLimit
+// GetGasLimit returns transaction gas limit
+func (tx SimpleCoinTxHeader) GetGasLimit() uint64 {
+	return tx.GasLimit
 }
 
-func (h SimpleCoinTxHeader) GetGasPrice() uint64 {
-	return h.GasPrice
+// GetGasPrice returns gas price
+func (tx SimpleCoinTxHeader) GetGasPrice() uint64 {
+	return tx.GasPrice
 }
 
-func (h SimpleCoinTxHeader) GetFee(gas uint64) uint64 {
-	return h.GasPrice * gas
+// GetFee calculate transaction fee regarding gas spent
+func (tx SimpleCoinTxHeader) GetFee(gas uint64) uint64 {
+	return tx.GasPrice * gas
 }
 
-func (h SimpleCoinTxHeader) XdrBytes() ([]byte, error) {
+// XdrBytes implements xdrMarshal.XdrBytes
+func (tx SimpleCoinTxHeader) XdrBytes() ([]byte, error) {
 	bf := bytes.Buffer{}
-	if _, err := xdr.Marshal(&bf, &h); err != nil {
+	if _, err := xdr.Marshal(&bf, &tx); err != nil {
 		return nil, err
 	}
 	return bf.Bytes(), nil
 }
 
-func (h *SimpleCoinTxHeader) XdrFill(bs []byte) (err error) {
-	_, err = xdr.Unmarshal(bytes.NewReader(bs), &h.SimpleCoinTx)
+// XdrFill implements xdrMarshal.XdrFill
+func (tx *SimpleCoinTxHeader) XdrFill(bs []byte) (err error) {
+	_, err = xdr.Unmarshal(bytes.NewReader(bs), &tx.SimpleCoinTx)
 	return
 }
 
+// simpleCoinTx implements TransactionInterface for "Simple Coin Transaction"
 type simpleCoinTx struct {
 	SimpleCoinTxHeader
 	CommonTx
 }
 
+// String implements fmt.Stringer interface
 func (tx simpleCoinTx) String() string {
 	return fmt.Sprintf(
 		"<id: %s, type: %v, origin: %s, recipient: %s, ttl: %d, amount: %v, nonce: %v, gas_limit: %v, gas_price: %v>",
@@ -103,6 +120,7 @@ func (tx simpleCoinTx) String() string {
 		tx.GasLimit, tx.GasPrice)
 }
 
+// DecodeSimpleCoinTx decodes transaction bytes into "Simple Coin Transaction" object
 func DecodeSimpleCoinTx(data []byte, signature TxSignature, pubKey TxPublicKey, txid TransactionID, txtp TransactionType) (r Transaction, err error) {
 	tx := &simpleCoinTx{}
 	return tx, tx.decode(tx, data, signature, pubKey, txid, txtp)
