@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -37,6 +38,8 @@ type TortoiseBeacon struct {
 	messageReceiver messageReceiver
 	messageSender   messageSender
 
+	atxDB *activation.DB
+
 	layerMu   sync.RWMutex
 	lastLayer types.LayerID
 
@@ -48,18 +51,40 @@ type TortoiseBeacon struct {
 
 	votingMessagesMu sync.RWMutex
 	votingMessages   map[types.EpochID]chan Message
+
+	currentRoundsMu sync.RWMutex
+	currentRounds   map[types.EpochID]int
+
+	timelyProposalsMu sync.RWMutex
+	timelyProposals   map[EpochRoundPair][]types.ATXID
+
+	delayedProposalsMu sync.RWMutex
+	delayedProposals   map[EpochRoundPair][]types.ATXID
+
+	lateProposalsMu sync.RWMutex
+	lateProposals   map[EpochRoundPair][]types.ATXID
 }
 
-func New(conf Config, messageReceiver messageReceiver, messageSender messageSender, layerTicker chan types.LayerID, logger log.Log) *TortoiseBeacon {
+type EpochRoundPair struct {
+	EpochID types.EpochID
+	Round   int
+}
+
+func New(conf Config, messageReceiver messageReceiver, messageSender messageSender, atxDB *activation.DB, layerTicker chan types.LayerID, logger log.Log) *TortoiseBeacon {
 	return &TortoiseBeacon{
-		config:          conf,
-		Log:             logger,
-		messageReceiver: messageReceiver,
-		messageSender:   messageSender,
-		layerTicker:     layerTicker,
-		networkDelta:    time.Duration(conf.WakeupDelta) * time.Second,
-		initialMessages: make(map[types.EpochID]chan Message),
-		votingMessages:  make(map[types.EpochID]chan Message),
+		config:           conf,
+		Log:              logger,
+		messageReceiver:  messageReceiver,
+		messageSender:    messageSender,
+		atxDB:            atxDB,
+		layerTicker:      layerTicker,
+		networkDelta:     time.Duration(conf.WakeupDelta) * time.Second,
+		initialMessages:  make(map[types.EpochID]chan Message),
+		votingMessages:   make(map[types.EpochID]chan Message),
+		currentRounds:    make(map[types.EpochID]int),
+		timelyProposals:  make(map[EpochRoundPair][]types.ATXID),
+		delayedProposals: make(map[EpochRoundPair][]types.ATXID),
+		lateProposals:    make(map[EpochRoundPair][]types.ATXID),
 	}
 }
 
@@ -139,17 +164,17 @@ func (tb *TortoiseBeacon) onTick(layer types.LayerID) {
 
 	tb.initialMessages[epoch] = make(chan Message, messageBufSize)
 
-	message := NewInitialMessage(epoch)
-	tb.messageSender.Send(message)
+	go func() {
+		tb.roundTicker(epoch)
+	}()
 
-	ti := time.NewTimer(tb.networkDelta)
-	select {
-	case <-ti.C:
-		break // keep going
-	case <-tb.CloseChannel():
-		// closed while waiting the delta
-		return
-	}
+	go func() {
+		tb.listenInitialMessages(epoch)
+	}()
+
+	atxList := tb.atxDB.GetEpochAtxs(epoch - 1)
+	m := NewVotingMessage(epoch, 0, atxList)
+	tb.messageSender.Send(m)
 }
 
 func (tb *TortoiseBeacon) handleInitialMessage(m Message) error {
@@ -180,4 +205,74 @@ func (tb *TortoiseBeacon) handleVotingMessage(m Message) error {
 	tb.votingMessages[epoch] <- m
 
 	return nil
+}
+
+func (tb *TortoiseBeacon) listenInitialMessages(epoch types.EpochID) {
+	tb.votingMessagesMu.Lock()
+	ch := tb.votingMessages[epoch]
+	tb.votingMessagesMu.Unlock()
+	for m := range ch {
+		tb.currentRoundsMu.Lock()
+		currentRound := tb.currentRounds[epoch]
+		tb.currentRoundsMu.Unlock()
+
+		pair := EpochRoundPair{
+			EpochID: epoch,
+			Round:   currentRound,
+		}
+
+		if m.Round() <= currentRound {
+			tb.timelyProposalsMu.Lock()
+			tb.timelyProposals[pair] = m.Payload()
+			tb.timelyProposalsMu.Unlock()
+		} else if m.Round() == currentRound-1 {
+			tb.delayedProposalsMu.Lock()
+			tb.delayedProposals[pair] = m.Payload()
+			tb.delayedProposalsMu.Unlock()
+		} else {
+			tb.lateProposalsMu.Lock()
+			tb.lateProposals[pair] = m.Payload()
+			tb.lateProposalsMu.Unlock()
+		}
+	}
+}
+
+func (tb *TortoiseBeacon) roundTicker(epoch types.EpochID) {
+	ticker := time.NewTicker(tb.networkDelta)
+
+	tb.currentRoundsMu.Lock()
+	tb.currentRounds[epoch] = 0
+	tb.currentRoundsMu.Unlock()
+
+	for i := 1; i < tb.lastPossibleRound(); i++ {
+		<-ticker.C
+		tb.currentRoundsMu.Lock()
+		tb.currentRounds[epoch]++
+		round := tb.currentRounds[epoch]
+		tb.currentRoundsMu.Unlock()
+
+		pair := EpochRoundPair{
+			EpochID: epoch,
+			Round:   round,
+		}
+
+		tb.timelyProposalsMu.Lock()
+		proposals := tb.timelyProposals[pair]
+		tb.timelyProposalsMu.Unlock()
+
+		m := NewVotingMessage(epoch, round, proposals)
+		tb.messageSender.Send(m)
+	}
+
+	ticker.Stop()
+}
+
+func (tb *TortoiseBeacon) lastPossibleRound() int {
+	// K - 1 is the last round (counting starts from 0).
+	// That means, messages from round K - 1 received in round K - 1 are timely.
+	// Messages from round K - 1 received in round K are delayed.
+	// Messages from round K - 1 received in round K + 1 are late.
+	// Therefore, counting more than K + 1 rounds is not needed.
+
+	return tb.config.K + 1
 }

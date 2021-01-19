@@ -13,24 +13,25 @@ type Message interface {
 	Kind() Kind
 	Epoch() types.EpochID
 	Round() int
-	Payload() []byte
+	Payload() []types.ATXID
 }
 
-func NewInitialMessage(epoch types.EpochID) Message {
+// TODO: have one message type
+func NewInitialMessage(epoch types.EpochID, atxList []types.ATXID) Message {
 	return message{
 		kind:    InitialMessage,
 		epoch:   epoch,
 		round:   0,
-		payload: nil,
+		atxList: atxList,
 	}
 }
 
-func NewVotingMessage(epoch types.EpochID, round int) Message {
+func NewVotingMessage(epoch types.EpochID, round int, atxList []types.ATXID) Message {
 	return message{
 		kind:    VotingMessage,
 		epoch:   epoch,
 		round:   round,
-		payload: nil,
+		atxList: atxList,
 	}
 }
 
@@ -38,7 +39,7 @@ type message struct {
 	kind    Kind
 	epoch   types.EpochID
 	round   int
-	payload []byte
+	atxList []types.ATXID
 }
 
 func (m message) Kind() Kind {
@@ -52,6 +53,6 @@ func (m message) Epoch() types.EpochID {
 func (m message) Round() int {
 	return m.round
 }
-func (m message) Payload() []byte {
-	return m.payload
+func (m message) Payload() []types.ATXID {
+	return m.atxList
 }
