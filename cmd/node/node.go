@@ -361,7 +361,7 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 		state.CreateAccount(addr)
 		state.AddBalance(addr, acc.Balance)
 		state.SetNonce(addr, acc.Nonce)
-		app.log.Info("Genesis account created: %s, Balance: %s", id, acc.Balance.Uint64())
+		app.log.Info("Genesis account created: %s, Balance: %s", id, acc.Balance)
 	}
 
 	_, err := state.Commit()
