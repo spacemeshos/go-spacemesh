@@ -17,8 +17,7 @@ const (
 )
 
 var (
-	ErrBadMessage  = errors.New("bad message")
-	ErrUnknownType = errors.New("unknown type")
+	ErrBadMessage = errors.New("bad message")
 )
 
 type messageReceiver interface {
@@ -26,7 +25,16 @@ type messageReceiver interface {
 }
 
 type messageSender interface {
-	Send(Message)
+	Send(Message) // TODO: sign message
+}
+
+type beaconCalculator interface {
+	CalculateBeacon(map[EpochRoundPair][]types.ATXID) types.Hash32
+}
+
+type EpochRoundPair struct {
+	EpochID types.EpochID
+	Round   int
 }
 
 type TortoiseBeacon struct {
@@ -35,8 +43,9 @@ type TortoiseBeacon struct {
 
 	config Config
 
-	messageReceiver messageReceiver
-	messageSender   messageSender
+	messageReceiver  messageReceiver
+	messageSender    messageSender
+	beaconCalculator beaconCalculator
 
 	atxDB *activation.DB
 
@@ -45,9 +54,6 @@ type TortoiseBeacon struct {
 
 	layerTicker  chan types.LayerID
 	networkDelta time.Duration
-
-	messagesMu sync.RWMutex
-	messages   map[types.EpochID]chan Message
 
 	currentRoundsMu sync.RWMutex
 	currentRounds   map[types.EpochID]int
@@ -60,23 +66,21 @@ type TortoiseBeacon struct {
 
 	lateProposalsMu sync.RWMutex
 	lateProposals   map[EpochRoundPair][]types.ATXID
+
+	beaconsMu sync.RWMutex
+	beacons   map[types.EpochID]chan types.Hash32
 }
 
-type EpochRoundPair struct {
-	EpochID types.EpochID
-	Round   int
-}
-
-func New(conf Config, messageReceiver messageReceiver, messageSender messageSender, atxDB *activation.DB, layerTicker chan types.LayerID, logger log.Log) *TortoiseBeacon {
+func New(conf Config, messageReceiver messageReceiver, messageSender messageSender, beaconCalculator beaconCalculator, atxDB *activation.DB, layerTicker chan types.LayerID, logger log.Log) *TortoiseBeacon {
 	return &TortoiseBeacon{
 		config:           conf,
 		Log:              logger,
 		messageReceiver:  messageReceiver,
 		messageSender:    messageSender,
+		beaconCalculator: beaconCalculator,
 		atxDB:            atxDB,
 		layerTicker:      layerTicker,
 		networkDelta:     time.Duration(conf.WakeupDelta) * time.Second,
-		messages:         make(map[types.EpochID]chan Message),
 		currentRounds:    make(map[types.EpochID]int),
 		timelyProposals:  make(map[EpochRoundPair][]types.ATXID),
 		delayedProposals: make(map[EpochRoundPair][]types.ATXID),
@@ -97,6 +101,15 @@ func (tb *TortoiseBeacon) Start() error {
 	}()
 
 	return nil
+}
+
+func (tb *TortoiseBeacon) Get(epochID types.EpochID) types.Hash32 {
+	tb.beaconsMu.RLock()
+	ch := tb.beacons[epochID]
+	tb.beaconsMu.RUnlock()
+
+	beacon := <-ch
+	return beacon
 }
 
 func (tb *TortoiseBeacon) listen() error {
@@ -139,22 +152,21 @@ func (tb *TortoiseBeacon) onTick(layer types.LayerID) {
 		return
 	}
 
-	tb.messagesMu.RLock()
-	defer tb.messagesMu.RUnlock() // TODO: check if unlocked at correct time
-
-	if _, ok := tb.messages[epoch]; ok {
-		// Tortoise beacon already started for this epoch.
-		return
-	}
-
-	tb.messages[epoch] = make(chan Message, messageBufSize)
+	tb.beaconsMu.Lock()
+	tb.beacons[epoch] = make(chan types.Hash32, 1)
+	tb.beaconsMu.Unlock()
 
 	go func() {
 		tb.roundTicker(epoch)
-	}()
 
-	go func() {
-		tb.listenInitialMessages(epoch)
+		tb.timelyProposalsMu.Lock()
+		beacon := tb.beaconCalculator.CalculateBeacon(tb.timelyProposals)
+		tb.timelyProposalsMu.Unlock()
+
+		tb.beaconsMu.Lock()
+		tb.beacons[epoch] <- beacon
+		close(tb.beacons[epoch])
+		tb.beaconsMu.Unlock()
 	}()
 
 	atxList := tb.atxDB.GetEpochAtxs(epoch - 1)
@@ -164,85 +176,76 @@ func (tb *TortoiseBeacon) onTick(layer types.LayerID) {
 
 func (tb *TortoiseBeacon) handleMessage(m Message) error {
 	epoch := m.Epoch()
-
-	tb.messagesMu.RLock()
-	defer tb.messagesMu.RUnlock()
-
-	if _, ok := tb.messages[epoch]; !ok {
-		return ErrBadMessage
-	}
-
-	tb.messages[epoch] <- m
+	tb.classifyMessage(m, epoch)
 
 	return nil
 }
 
-func (tb *TortoiseBeacon) listenInitialMessages(epoch types.EpochID) {
-	tb.messagesMu.Lock()
-	ch := tb.messages[epoch]
-	tb.messagesMu.Unlock()
-	for m := range ch {
-		tb.currentRoundsMu.Lock()
-		currentRound := tb.currentRounds[epoch]
-		tb.currentRoundsMu.Unlock()
+func (tb *TortoiseBeacon) classifyMessage(m Message, epoch types.EpochID) {
+	tb.currentRoundsMu.Lock()
+	currentRound := tb.currentRounds[epoch]
+	tb.currentRoundsMu.Unlock()
 
-		pair := EpochRoundPair{
-			EpochID: epoch,
-			Round:   currentRound,
-		}
+	pair := EpochRoundPair{
+		EpochID: epoch,
+		Round:   currentRound,
+	}
 
-		if m.Round() <= currentRound {
-			tb.timelyProposalsMu.Lock()
-			tb.timelyProposals[pair] = m.Payload()
-			tb.timelyProposalsMu.Unlock()
-		} else if m.Round() == currentRound-1 {
-			tb.delayedProposalsMu.Lock()
-			tb.delayedProposals[pair] = m.Payload()
-			tb.delayedProposalsMu.Unlock()
-		} else {
-			tb.lateProposalsMu.Lock()
-			tb.lateProposals[pair] = m.Payload()
-			tb.lateProposalsMu.Unlock()
-		}
+	if m.Round() <= currentRound-1 {
+		tb.timelyProposalsMu.Lock()
+		tb.timelyProposals[pair] = m.Payload()
+		tb.timelyProposalsMu.Unlock()
+	} else if m.Round() == currentRound-2 {
+		tb.delayedProposalsMu.Lock()
+		tb.delayedProposals[pair] = m.Payload()
+		tb.delayedProposalsMu.Unlock()
+	} else {
+		tb.lateProposalsMu.Lock()
+		tb.lateProposals[pair] = m.Payload()
+		tb.lateProposalsMu.Unlock()
 	}
 }
 
 func (tb *TortoiseBeacon) roundTicker(epoch types.EpochID) {
 	ticker := time.NewTicker(tb.networkDelta)
+	defer ticker.Stop()
 
 	tb.currentRoundsMu.Lock()
 	tb.currentRounds[epoch] = 0
 	tb.currentRoundsMu.Unlock()
 
 	for i := 1; i < tb.lastPossibleRound(); i++ {
-		<-ticker.C
-		tb.currentRoundsMu.Lock()
-		tb.currentRounds[epoch]++
-		round := tb.currentRounds[epoch]
-		tb.currentRoundsMu.Unlock()
+		select {
+		case <-ticker.C:
+			tb.currentRoundsMu.Lock()
+			tb.currentRounds[epoch]++
+			round := tb.currentRounds[epoch]
+			tb.currentRoundsMu.Unlock()
 
-		pair := EpochRoundPair{
-			EpochID: epoch,
-			Round:   round,
+			pair := EpochRoundPair{
+				EpochID: epoch,
+				Round:   round - 1, // proposals from the previous round are needed
+			}
+
+			tb.timelyProposalsMu.Lock()
+			proposals := tb.timelyProposals[pair]
+			tb.timelyProposalsMu.Unlock()
+
+			m := NewMessage(epoch, round, proposals)
+			tb.messageSender.Send(m)
+		case <-tb.CloseChannel():
+			return
 		}
-
-		tb.timelyProposalsMu.Lock()
-		proposals := tb.timelyProposals[pair]
-		tb.timelyProposalsMu.Unlock()
-
-		m := NewMessage(epoch, round, proposals)
-		tb.messageSender.Send(m)
 	}
-
-	ticker.Stop()
 }
 
 func (tb *TortoiseBeacon) lastPossibleRound() int {
 	// K - 1 is the last round (counting starts from 0).
-	// That means, messages from round K - 1 received in round K - 1 are timely.
-	// Messages from round K - 1 received in round K are delayed.
-	// Messages from round K - 1 received in round K + 1 are late.
-	// Therefore, counting more than K + 1 rounds is not needed.
+	// That means:
+	// Messages from round K - 1 received in round K are timely.
+	// Messages from round K - 1 received in round K + 1 are delayed.
+	// Messages from round K - 1 received in round K + 2 are late.
+	// Therefore, counting more than K + 2 rounds is not needed.
 
-	return tb.config.K + 1
+	return tb.config.K + 2
 }
