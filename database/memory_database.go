@@ -23,7 +23,7 @@ import (
 	"sync"
 )
 
-// MemDatabase is a test memory database. Do not use for any production it does not get persisted
+// MemDatabase is an in-memory database used in tests. Do not use for production as it is not persistent.
 type MemDatabase struct {
 	db   map[string][]byte
 	lock sync.RWMutex
@@ -123,6 +123,24 @@ func (db *MemDatabase) Find(key []byte) Iterator {
 	keys := make([][]byte, 0, len(db.db))
 	for k := range db.db {
 		if bytes.HasPrefix([]byte(k), key) {
+			keys = append(keys, []byte(k))
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return string(keys[i]) < string(keys[j])
+	})
+	return &MemDatabaseIterator{
+		keys:  keys,
+		db:    db.db,
+		index: -1,
+	}
+}
+
+// FindRange returns an iterator to iterate over an explicit range of values (inclusive of start, exclusive of end)
+func (db *MemDatabase) FindRange(keyStart []byte, keyEnd []byte) Iterator {
+	keys := make([][]byte, 0, len(db.db))
+	for k := range db.db {
+		if bytes.Compare([]byte(k), keyStart) >= 0 && bytes.Compare([]byte(k), keyEnd) < 0 {
 			keys = append(keys, []byte(k))
 		}
 	}

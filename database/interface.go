@@ -47,6 +47,7 @@ type Database interface {
 	Close()
 	NewBatch() Batch
 	Find(key []byte) Iterator
+	FindRange(keyStart []byte, keyEnd []byte) Iterator
 }
 
 // Batch is a write-only database that commits changes to its host database

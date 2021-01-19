@@ -624,16 +624,6 @@ type ErrAtxNotFound error
 // GetNodeLastAtxID returns the last atx id that was received for node nodeID
 func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (atxid types.ATXID, err error) {
 	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeID))
-	defer func() {
-		nodeAtxsIterator.Release()
-		if err2 := nodeAtxsIterator.Error(); err2 != nil {
-			db.log.With().Error("error releasing atxDB iterator", log.Err(err2))
-			// Don't overwrite previous error
-			if err == nil {
-				err = err2
-			}
-		}
-	}()
 	// ATX syntactic validation ensures that each ATX is at least one epoch after a referenced previous ATX.
 	// Contextual validation ensures that the previous ATX referenced matches what this method returns, so the next ATX
 	// added will always be the next ATX returned by this method.
@@ -653,12 +643,6 @@ func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (atxid types.ATXID, err erro
 // GetEpochAtxs returns all valid ATXs received in the epoch epochID
 func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 	atxIterator := db.atxs.Find(getEpochPrefix(epochID))
-	defer func() {
-		atxIterator.Release()
-		if err := atxIterator.Error(); err != nil {
-			db.log.Panic("atxdb iterator error")
-		}
-	}()
 
 	for atxIterator.Next() {
 		if atxIterator.Key() == nil {
