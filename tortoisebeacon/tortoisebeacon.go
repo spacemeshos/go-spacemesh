@@ -1,7 +1,6 @@
 package tortoisebeacon
 
 import (
-	"errors"
 	"sync"
 	"time"
 
@@ -12,12 +11,7 @@ import (
 )
 
 const (
-	protoName      = "TORTOISE_BEACON_PROTOCOL"
-	messageBufSize = 1024
-)
-
-var (
-	ErrBadMessage = errors.New("bad message")
+	protoName = "TORTOISE_BEACON_PROTOCOL"
 )
 
 type messageReceiver interface {
@@ -153,6 +147,14 @@ func (tb *TortoiseBeacon) onTick(layer types.LayerID) {
 	}
 
 	tb.beaconsMu.Lock()
+
+	if _, ok := tb.beacons[epoch]; ok {
+		tb.beaconsMu.Unlock()
+
+		// Already handling this epoch
+		return
+	}
+
 	tb.beacons[epoch] = make(chan types.Hash32, 1)
 	tb.beaconsMu.Unlock()
 
