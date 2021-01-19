@@ -46,11 +46,8 @@ type TortoiseBeacon struct {
 	layerTicker  chan types.LayerID
 	networkDelta time.Duration
 
-	initialMessagesMu sync.RWMutex
-	initialMessages   map[types.EpochID]chan Message
-
-	votingMessagesMu sync.RWMutex
-	votingMessages   map[types.EpochID]chan Message
+	messagesMu sync.RWMutex
+	messages   map[types.EpochID]chan Message
 
 	currentRoundsMu sync.RWMutex
 	currentRounds   map[types.EpochID]int
@@ -79,8 +76,7 @@ func New(conf Config, messageReceiver messageReceiver, messageSender messageSend
 		atxDB:            atxDB,
 		layerTicker:      layerTicker,
 		networkDelta:     time.Duration(conf.WakeupDelta) * time.Second,
-		initialMessages:  make(map[types.EpochID]chan Message),
-		votingMessages:   make(map[types.EpochID]chan Message),
+		messages:         make(map[types.EpochID]chan Message),
 		currentRounds:    make(map[types.EpochID]int),
 		timelyProposals:  make(map[EpochRoundPair][]types.ATXID),
 		delayedProposals: make(map[EpochRoundPair][]types.ATXID),
@@ -110,17 +106,6 @@ func (tb *TortoiseBeacon) listen() error {
 		if err := tb.handleMessage(m); err != nil {
 			return err
 		}
-	}
-}
-
-func (tb *TortoiseBeacon) handleMessage(m Message) error {
-	switch m.Kind() {
-	case InitialMessage:
-		return tb.handleInitialMessage(m)
-	case VotingMessage:
-		return tb.handleVotingMessage(m)
-	default:
-		return ErrUnknownType
 	}
 }
 
@@ -154,15 +139,15 @@ func (tb *TortoiseBeacon) onTick(layer types.LayerID) {
 		return
 	}
 
-	tb.initialMessagesMu.RLock()
-	defer tb.initialMessagesMu.RUnlock() // TODO: check if unlocked at correct time
+	tb.messagesMu.RLock()
+	defer tb.messagesMu.RUnlock() // TODO: check if unlocked at correct time
 
-	if _, ok := tb.initialMessages[epoch]; ok {
+	if _, ok := tb.messages[epoch]; ok {
 		// Tortoise beacon already started for this epoch.
 		return
 	}
 
-	tb.initialMessages[epoch] = make(chan Message, messageBufSize)
+	tb.messages[epoch] = make(chan Message, messageBufSize)
 
 	go func() {
 		tb.roundTicker(epoch)
@@ -173,44 +158,29 @@ func (tb *TortoiseBeacon) onTick(layer types.LayerID) {
 	}()
 
 	atxList := tb.atxDB.GetEpochAtxs(epoch - 1)
-	m := NewVotingMessage(epoch, 0, atxList)
+	m := NewMessage(epoch, 0, atxList)
 	tb.messageSender.Send(m)
 }
 
-func (tb *TortoiseBeacon) handleInitialMessage(m Message) error {
+func (tb *TortoiseBeacon) handleMessage(m Message) error {
 	epoch := m.Epoch()
 
-	tb.initialMessagesMu.Lock()
-	defer tb.initialMessagesMu.Unlock()
+	tb.messagesMu.RLock()
+	defer tb.messagesMu.RUnlock()
 
-	if _, ok := tb.initialMessages[epoch]; !ok {
+	if _, ok := tb.messages[epoch]; !ok {
 		return ErrBadMessage
 	}
 
-	tb.initialMessages[epoch] <- m
-
-	return nil
-}
-
-func (tb *TortoiseBeacon) handleVotingMessage(m Message) error {
-	epoch := m.Epoch()
-
-	tb.votingMessagesMu.RLock()
-	defer tb.votingMessagesMu.RUnlock()
-
-	if _, ok := tb.votingMessages[epoch]; !ok {
-		return ErrBadMessage
-	}
-
-	tb.votingMessages[epoch] <- m
+	tb.messages[epoch] <- m
 
 	return nil
 }
 
 func (tb *TortoiseBeacon) listenInitialMessages(epoch types.EpochID) {
-	tb.votingMessagesMu.Lock()
-	ch := tb.votingMessages[epoch]
-	tb.votingMessagesMu.Unlock()
+	tb.messagesMu.Lock()
+	ch := tb.messages[epoch]
+	tb.messagesMu.Unlock()
 	for m := range ch {
 		tb.currentRoundsMu.Lock()
 		currentRound := tb.currentRounds[epoch]
@@ -260,7 +230,7 @@ func (tb *TortoiseBeacon) roundTicker(epoch types.EpochID) {
 		proposals := tb.timelyProposals[pair]
 		tb.timelyProposalsMu.Unlock()
 
-		m := NewVotingMessage(epoch, round, proposals)
+		m := NewMessage(epoch, round, proposals)
 		tb.messageSender.Send(m)
 	}
 
