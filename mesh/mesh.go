@@ -76,7 +76,7 @@ type AtxDB interface {
 	ProcessAtxs(atxs []*types.ActivationTx) error
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
 	GetFullAtx(id types.ATXID) (*types.ActivationTx, error)
-	GetAtxIterByCoinbase(coinbase types.Address) database.Iterator
+	GetAtxIterByCoinbaseAndLayer(coinbase types.Address, startLayer types.LayerID, endLayer types.LayerID) database.Iterator
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 
@@ -827,13 +827,9 @@ func (msh *Mesh) GetATXs(atxIds []types.ATXID) (map[types.ATXID]*types.Activatio
 	return atxs, mIds
 }
 
-// GetAtxIDsByCoinbase returns a list of all atx ids corresponding to a coinbase address
-func (msh *Mesh) GetAtxIDsByCoinbase(coinbase types.Address) (atxIds []types.ATXID, err error) {
-	atxIter := msh.GetAtxIterByCoinbase(coinbase)
-	defer func() {
-		atxIter.Release()
-		err = atxIter.Error()
-	}()
+// GetAtxIDsByCoinbase returns a list of all atx ids corresponding to a coinbase address after start layer
+func (msh *Mesh) GetAtxIDsByCoinbaseAndLayer(coinbase types.Address, startLayer types.LayerID) (atxIds []types.ATXID, err error) {
+	atxIter := msh.GetAtxIterByCoinbaseAndLayer(coinbase, startLayer, msh.latestLayer)
 
 	for atxIter.Next() {
 		var a types.ATXID

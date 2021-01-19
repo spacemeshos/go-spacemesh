@@ -42,8 +42,8 @@ func getAtxBodyKey(atxID types.ATXID) []byte {
 	return []byte(fmt.Sprintf("b_%v", atxID.Bytes()))
 }
 
-func getAtxCoinbaseKey(atx *types.ActivationTx) []byte {
-	return append(getAtxCoinbasePrefix(atx.Coinbase), atx.PubLayerID.Bytes()...)
+func getAtxCoinbaseLayerKey(coinbase types.Address, layer types.LayerID) []byte {
+	return append(getAtxCoinbasePrefix(coinbase), layer.Bytes()...)
 }
 
 func getAtxCoinbasePrefix(coinbase types.Address) []byte {
@@ -526,7 +526,7 @@ func (db *DB) storeAtxUnlocked(atx *types.ActivationTx) error {
 		return fmt.Errorf("failed to store atx body for atxid %x with error %v",
 			atx.ID(), err)
 	}
-	if err = batch.Put(getAtxCoinbaseKey(atx), atx.ID().Bytes()); err != nil {
+	if err = batch.Put(getAtxCoinbaseLayerKey(atx.Coinbase, atx.PubLayerID), atx.ID().Bytes()); err != nil {
 		return fmt.Errorf("failed to store atx coinbase for atxid %x with error %v",
 			atx.ID(), err)
 	}
@@ -732,9 +732,12 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	return atx, nil
 }
 
-// GetAtxIterByCoinbase returns an iterator over all ATXs associated with that coinbase address
-func (db *DB) GetAtxIterByCoinbase(coinbase types.Address) database.Iterator {
-	return db.atxs.Find(getAtxCoinbasePrefix(coinbase))
+// GetAtxIterByCoinbaseAndLayer returns an iterator over all ATXs associated with a coinbase address from a start layer
+func (db *DB) GetAtxIterByCoinbaseAndLayer(coinbase types.Address, startLayer types.LayerID, endLayer types.LayerID) database.Iterator {
+	keyStart := getAtxCoinbaseLayerKey(coinbase, startLayer)
+	// add one since FindRange is not inclusive of end
+	keyEnd := getAtxCoinbaseLayerKey(coinbase, endLayer+1)
+	return db.atxs.FindRange(keyStart, keyEnd)
 }
 
 // ValidateSignedAtx extracts public key from message and verifies public key exists in idStore, this is how we validate

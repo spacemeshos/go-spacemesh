@@ -38,7 +38,7 @@ type Syncer interface {
 type TxAPI interface {
 	AddressExists(types.Address) bool
 	ValidateNonceAndBalance(*types.Transaction) error
-	GetAtxIDsByCoinbase(coinbase types.Address) ([]types.ATXID, error)
+	GetAtxIDsByCoinbaseAndLayer(coinbase types.Address, startLayer types.LayerID) ([]types.ATXID, error)
 	GetATXs([]types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID)
 	GetLayer(types.LayerID) (*types.Layer, error)
 	GetRewards(types.Address) ([]types.Reward, error)

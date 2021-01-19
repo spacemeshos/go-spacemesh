@@ -355,7 +355,7 @@ func Test_DBGetByCoinbase(t *testing.T) {
 	assert.NoError(t, err)
 
 	// DB stores atxs sorted using byte by byte comparison of atxids. Thus 3 > 2001 since 3 > 2
-	iter := atxdb.GetAtxIterByCoinbase(coinbase1)
+	iter := atxdb.GetAtxIterByCoinbaseAndLayer(coinbase1, 0, 3000)
 	assert.True(t, iter.Next())
 	assert.Equal(t, iter.Value(), atxid3.Bytes())
 	assert.True(t, iter.Next())
@@ -365,7 +365,7 @@ func Test_DBGetByCoinbase(t *testing.T) {
 	err = iter.Error()
 	assert.NoError(t, err)
 
-	iter = atxdb.GetAtxIterByCoinbase(coinbase2)
+	iter = atxdb.GetAtxIterByCoinbaseAndLayer(coinbase2, 0, 3000)
 	assert.True(t, iter.Next())
 	assert.Equal(t, iter.Value(), atxid2.Bytes())
 	assert.False(t, iter.Next())
@@ -374,11 +374,15 @@ func Test_DBGetByCoinbase(t *testing.T) {
 	assert.NoError(t, err)
 
 	// test for coinbase address that doesn't exist
-	iter = atxdb.GetAtxIterByCoinbase(coinbase3)
+	iter = atxdb.GetAtxIterByCoinbaseAndLayer(coinbase3, 0, 3000)
 	assert.False(t, iter.Next())
 	iter.Release()
 	err = iter.Error()
 	assert.NoError(t, err)
+
+	// TODO: test lookup by layerID
+	// - make sure we don't return ATX from layer before startLayer
+	// - make sure we don't return ATX from layer after endLayer
 }
 
 func TestMesh_processBlockATXs(t *testing.T) {

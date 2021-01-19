@@ -288,7 +288,7 @@ func (t *TxAPIMock) GetATXs(atxids []types.ATXID) (atxs map[types.ATXID]*types.A
 	return
 }
 
-func (t *TxAPIMock) GetAtxIDsByCoinbase(coinbase types.Address) (atxids []types.ATXID, err error) {
+func (t *TxAPIMock) GetAtxIDsByCoinbaseAndLayer(coinbase types.Address, _ types.LayerID) (atxids []types.ATXID, err error) {
 	switch coinbase {
 	case globalAtx.Coinbase:
 		atxids = append(atxids, globalAtx.ID())

@@ -63,7 +63,7 @@ type Batch interface {
 
 // Iterator defined basic iterator interface
 type Iterator interface {
-	iterator.CommonIterator
+	iterator.IteratorSeeker
 	Key() []byte
 	Value() []byte
 }
