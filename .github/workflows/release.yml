@@ -28,14 +28,6 @@ jobs:
         with:
           args: install make
       
-      - name: setup env
-        run: |
-          echo "::set-env name=GOPATH::$(go env GOPATH)"
-          echo "::add-path::$(go env GOPATH)/bin"
-        shell: bash
-        env:
-          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
-
       - name: Check out Git repository
         uses: actions/checkout@v2
 
