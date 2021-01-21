@@ -301,6 +301,7 @@ github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337/go.mod h1:s
 github.com/soheilhy/cmux v0.1.4/go.mod h1:IM3LyeVVIOuxMH7sFAkER9+bJ4dT7Ms6E4xg4kGIyLM=
 github.com/spacemeshos/amcl v0.0.2 h1:YyYF1irv4GkArTe8hzb5/e2B6ReicL2SHeUUsvO3N0c=
 github.com/spacemeshos/amcl v0.0.2/go.mod h1:6/boG2CTNCJ3HBfuyU29Eg1fJxMrXUctpvBiJj1Q69o=
+github.com/spacemeshos/api v1.1.1 h1:LC3XU+vgrZa5jCSS/KKPQ/pZJ1V+y3TzLwj45xE1ioM=
 github.com/spacemeshos/api/release/go v0.0.0-20201013155109-3facffccde82/go.mod h1:kNY4cuAimIxpUbMLPZSgU8jl7Zbv5ohQrLn87ybl0QI=
 github.com/spacemeshos/api/release/go v0.0.0-20201210094223-105249951c66 h1:6LUk0P+WbWPuJkpXYRuP08LRq1WNaunl+6sCkEqsJio=
 github.com/spacemeshos/api/release/go v0.0.0-20201210094223-105249951c66/go.mod h1:kNY4cuAimIxpUbMLPZSgU8jl7Zbv5ohQrLn87ybl0QI=
@@ -469,6 +470,7 @@ golang.org/x/net v0.0.0-20200822124328-c89045814202/go.mod h1:/O7V0waA8r7cgGh81R
 golang.org/x/net v0.0.0-20200927032502-5d4f70055728/go.mod h1:/O7V0waA8r7cgGh81Ro3o1hOxt32SMVPicZroKQ2sZA=
 golang.org/x/net v0.0.0-20201006153459-a7d1128ccaa0 h1:wBouT66WTYFXdxfVdz9sVWARVd/2vfGcmI45D2gj45M=
 golang.org/x/net v0.0.0-20201006153459-a7d1128ccaa0/go.mod h1:sp8m0HH+o8qH0wwXwYZr8TS3Oi6o0r6Gce1SSxlDquU=
+golang.org/x/net v0.0.0-20210119194325-5f4716e94777 h1:003p0dJM77cxMSyCPFphvZf/Y5/NXf5fzg6ufd1/Oew=
 golang.org/x/oauth2 v0.0.0-20180821212333-d2e6202438be h1:vEDujvNQGv4jgYKudGeI/+DAX4Jffq6hpD55MmoEvKs=
 golang.org/x/oauth2 v0.0.0-20180821212333-d2e6202438be/go.mod h1:N/0e6XlmueqKjAGxoOufVs8QHGRruUQn6yWY3a++T0U=
 golang.org/x/oauth2 v0.0.0-20190226205417-e64efc72b421/go.mod h1:gOpvHmFTYa4IltrdGE7lF6nIHvwfUNPOp7c8zoXwtLw=

@@ -4,14 +4,15 @@ package types
 import (
 	"bytes"
 	"fmt"
+	"sort"
+	"sync/atomic"
+	"time"
+
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"sort"
-	"sync/atomic"
-	"time"
 )
 
 // BlockID is a 20-byte sha256 sum of the serialized block, used to identify it.
@@ -87,6 +88,8 @@ type NodeID struct {
 	// VRFPublicKey is the miner's public key used for VRF. The VRF scheme used is BLS.
 	VRFPublicKey []byte
 }
+
+//TODO: possibly add a deserialization
 
 // String returns a string representation of the NodeID, for logging purposes.
 // It implements the Stringer interface.

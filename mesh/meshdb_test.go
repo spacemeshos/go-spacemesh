@@ -3,6 +3,14 @@ package mesh
 import (
 	"bytes"
 	"fmt"
+	"math"
+	"math/big"
+	"os"
+	"path"
+	"sort"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -12,13 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"math"
-	"math/big"
-	"os"
-	"path"
-	"sort"
-	"testing"
-	"time"
 )
 
 const (
@@ -478,33 +479,57 @@ func getTxns(r *require.Assertions, mdb *DB, origin types.Address) []TinyTx {
 func TestMeshDB_testGetRewards(t *testing.T) {
 	r := require.New(t)
 	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
-	_, addr1 := newSignerAndAddress(r, "123")
-	_, addr2 := newSignerAndAddress(r, "456")
-	_, addr3 := newSignerAndAddress(r, "789")
-	_, addr4 := newSignerAndAddress(r, "999")
+	signer1, addr1 := newSignerAndAddress(r, "123")
+	signer2, addr2 := newSignerAndAddress(r, "456")
+	signer3, addr3 := newSignerAndAddress(r, "789")
+	signer4, addr4 := newSignerAndAddress(r, "999")
 
-	err := mdb.writeTransactionRewards(1, []types.Address{addr1, addr2, addr3}, big.NewInt(10000), big.NewInt(9000))
+	smesher1 := types.NodeID{
+		Key:          signer1.PublicKey().String(),
+		VRFPublicKey: signer1.PublicKey().Bytes(),
+	}
+	smesher2 := types.NodeID{
+		Key:          signer1.PublicKey().String(),
+		VRFPublicKey: signer2.PublicKey().Bytes(),
+	}
+	smesher3 := types.NodeID{
+		Key:          signer1.PublicKey().String(),
+		VRFPublicKey: signer3.PublicKey().Bytes(),
+	}
+	smesher4 := types.NodeID{
+		Key:          signer1.PublicKey().String(),
+		VRFPublicKey: signer4.PublicKey().Bytes(),
+	}
+
+	smesherMap := map[types.Address]types.NodeID{
+		addr1: smesher1,
+		addr2: smesher2,
+		addr3: smesher3,
+		addr4: smesher4,
+	}
+
+	err := mdb.writeTransactionRewards(1, []types.Address{addr1, addr2, addr3}, big.NewInt(10000), big.NewInt(9000), smesherMap)
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(2, []types.Address{addr1, addr2}, big.NewInt(20000), big.NewInt(19000))
+	err = mdb.writeTransactionRewards(2, []types.Address{addr1, addr2}, big.NewInt(20000), big.NewInt(19000), smesherMap)
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(3, []types.Address{addr2, addr2}, big.NewInt(15000), big.NewInt(14500))
+	err = mdb.writeTransactionRewards(3, []types.Address{addr2, addr2}, big.NewInt(15000), big.NewInt(14500), smesherMap)
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewards(addr2)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000},
-		{Layer: 3, TotalReward: 30000, LayerRewardEstimate: 29000},
+		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2},
+		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2},
+		{Layer: 3, TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2},
 	}, rewards)
 
 	rewards, err = mdb.GetRewards(addr1)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000},
+		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1},
+		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewards(addr4)

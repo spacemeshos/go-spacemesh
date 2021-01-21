@@ -138,6 +138,7 @@ func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDa
 					// TODO: There is currently no way to get this for a reward.
 					// See https://github.com/spacemeshos/go-spacemesh/issues/2068
 					//Smesher:  nil,
+					Smesher: &pb.SmesherId{Id: r.SmesherID.ToBytes()},
 				},
 			}})
 		}

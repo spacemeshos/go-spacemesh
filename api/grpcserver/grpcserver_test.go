@@ -40,6 +40,7 @@ import (
 	"google.golang.org/grpc"
 )
 
+//set a const thats a smesherID and init it
 const (
 	miningStatus          = activation.InitDone
 	remainingBytes        = 321
@@ -67,30 +68,33 @@ const (
 	receiptIndex          = 42
 )
 
+//copy node ID and change public key, smesherID
 var (
 	networkMock = NetworkMock{}
 	mempoolMock = MempoolMock{
 		poolByAddress: make(map[types.Address]types.TransactionID),
 		poolByTxid:    make(map[types.TransactionID]*types.Transaction),
 	}
-	genTime    = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
-	addr1      = types.HexToAddress("33333")
-	addr2      = types.HexToAddress("44444")
-	pub, _, _  = ed25519.GenerateKey(nil)
-	nodeID     = types.NodeID{Key: util.Bytes2Hex(pub), VRFPublicKey: []byte("22222")}
-	prevAtxID  = types.ATXID(types.HexToHash32("44444"))
-	chlng      = types.HexToHash32("55555")
-	poetRef    = []byte("66666")
-	npst       = NewNIPSTWithChallenge(&chlng, poetRef)
-	challenge  = newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-	globalAtx  = newAtx(challenge, npst, addr1)
-	globalAtx2 = newAtx(challenge, npst, addr2)
-	globalTx   = NewTx(0, addr1, signing.NewEdSigner())
-	globalTx2  = NewTx(1, addr2, signing.NewEdSigner())
-	block1     = types.NewExistingBlock(0, []byte("11111"), nil)
-	block2     = types.NewExistingBlock(0, []byte("22222"), nil)
-	block3     = types.NewExistingBlock(0, []byte("33333"), nil)
-	txAPI      = &TxAPIMock{
+	genTime          = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
+	addr1            = types.HexToAddress("33333")
+	addr2            = types.HexToAddress("44444")
+	pub, _, _        = ed25519.GenerateKey(nil)
+	nodeID           = types.NodeID{Key: util.Bytes2Hex(pub), VRFPublicKey: []byte("22222")}
+	pubSmesher, _, _ = ed25519.GenerateKey(nil)
+	smesherID        = types.NodeID{Key: util.Bytes2Hex(pubSmesher), VRFPublicKey: []byte("77777")}
+	prevAtxID        = types.ATXID(types.HexToHash32("44444"))
+	chlng            = types.HexToHash32("55555")
+	poetRef          = []byte("66666")
+	npst             = NewNIPSTWithChallenge(&chlng, poetRef)
+	challenge        = newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	globalAtx        = newAtx(challenge, npst, addr1)
+	globalAtx2       = newAtx(challenge, npst, addr2)
+	globalTx         = NewTx(0, addr1, signing.NewEdSigner())
+	globalTx2        = NewTx(1, addr2, signing.NewEdSigner())
+	block1           = types.NewExistingBlock(0, []byte("11111"), nil)
+	block2           = types.NewExistingBlock(0, []byte("22222"), nil)
+	block3           = types.NewExistingBlock(0, []byte("33333"), nil)
+	txAPI            = &TxAPIMock{
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),
 		balances: map[types.Address]*big.Int{
@@ -237,6 +241,7 @@ func (t *TxAPIMock) GetRewards(types.Address) (rewards []types.Reward, err error
 			Layer:               layerFirst,
 			TotalReward:         rewardAmount,
 			LayerRewardEstimate: rewardAmount,
+			SmesherID:           nodeID,
 		},
 	}, nil
 }
@@ -2230,6 +2235,7 @@ func checkAccountDataQueryItemAccount(t *testing.T, dataItem interface{}) {
 	}
 }
 
+//Add a line here
 func checkAccountDataQueryItemReward(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.AccountData_Reward:
@@ -2237,6 +2243,7 @@ func checkAccountDataQueryItemReward(t *testing.T, dataItem interface{}) {
 		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
 		require.Equal(t, uint64(rewardAmount), x.Reward.LayerReward.Value)
 		require.Equal(t, addr1.Bytes(), x.Reward.Coinbase.Address)
+		require.Equal(t, nodeID.ToBytes(), x.Reward.Smesher.Id)
 	default:
 		require.Fail(t, "inner account data item has wrong data type")
 	}

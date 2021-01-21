@@ -6,13 +6,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/rand"
+
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"math/rand"
 
 	"math/big"
 
@@ -210,6 +211,7 @@ func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
 		events.ReportNewLayer(events.NewLayer{
 			Layer:  layer,
 			Status: events.LayerStatusTypeUnknown,
+			//Rewards: list of reward type
 		})
 	}
 	defer msh.lkMutex.Unlock()
@@ -742,8 +744,10 @@ func (msh *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 	return idArr, nil
 }
 
+//Add a struct containing count and NodeID
 func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
-	ids := make([]types.Address, 0, len(l.Blocks()))
+	coinbases := make([]types.Address, 0, len(l.Blocks()))
+	smeshers := make(map[types.Address]types.NodeID)
 	for _, bl := range l.Blocks() {
 		if bl.ATXID == *types.EmptyATXID {
 			msh.With().Info("skipping reward distribution for block with no ATX", bl.LayerIndex, bl.ID())
@@ -754,11 +758,14 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 			msh.With().Warning("Atx from block not found in db", log.Err(err), bl.ID(), bl.ATXID)
 			continue
 		}
-		ids = append(ids, atx.Coinbase)
-
+		coinbases = append(coinbases, atx.Coinbase)
+		//Sid: add a mapping between accounts and nodeID, pass this into the function
+		if _, exists := smeshers[atx.Coinbase]; !exists {
+			smeshers[atx.Coinbase] = atx.NodeID
+		}
 	}
 
-	if len(ids) == 0 {
+	if len(coinbases) == 0 {
 		msh.With().Info("no valid blocks for layer ", l.Index())
 		return
 	}
@@ -774,10 +781,10 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 	layerReward := calculateLayerReward(l.Index(), params)
 	totalReward.Add(totalReward, layerReward)
 
-	numBlocks := big.NewInt(int64(len(ids)))
+	numBlocks := big.NewInt(int64(len(coinbases)))
 
 	blockTotalReward, blockTotalRewardMod := calculateActualRewards(l.Index(), totalReward, numBlocks)
-	msh.ApplyRewards(l.Index(), ids, blockTotalReward)
+	msh.ApplyRewards(l.Index(), coinbases, blockTotalReward)
 
 	blockLayerReward, blockLayerRewardMod := calculateActualRewards(l.Index(), layerReward, numBlocks)
 	log.With().Info("Reward calculated",
@@ -790,11 +797,13 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 		log.Uint64("total_reward_remainder", blockTotalRewardMod.Uint64()),
 		log.Uint64("layer_reward_remainder", blockLayerRewardMod.Uint64()),
 	)
-	err := msh.writeTransactionRewards(l.Index(), ids, blockTotalReward, blockLayerReward)
+	//err := msh.writeTransactionRewards(l.Index(), ids, blockTotalReward, blockLayerReward)
+	err := msh.writeTransactionRewards(l.Index(), coinbases, blockTotalReward, blockLayerReward, smeshers)
 	if err != nil {
 		msh.Error("cannot write reward to db")
 	}
 	// todo: should miner id be sorted in a deterministic order prior to applying rewards?
+	//
 
 }
 

@@ -3,11 +3,12 @@ package events
 import (
 	"errors"
 	"fmt"
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"go.uber.org/zap/zapcore"
-	"sync"
 )
 
 // reporter is the event reporter singleton.
@@ -403,6 +404,7 @@ const (
 
 // NewLayer packages up a layer with its status (which a layer does not
 // ordinarily contain)
+// add it here as well
 type NewLayer struct {
 	Layer  *types.Layer
 	Status int

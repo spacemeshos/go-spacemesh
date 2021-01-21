@@ -5,15 +5,16 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"math/big"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 )
 
 type layerMutex struct {
@@ -443,13 +444,15 @@ func (m *DB) WriteTransaction(l types.LayerID, t *types.Transaction) error {
 	return nil
 }
 
+//Reason we're not using the existing reward type because the layer is implicit in the key
 type dbReward struct {
 	TotalReward         uint64
 	LayerRewardEstimate uint64
+	SmesherID           types.NodeID
 	// TotalReward - LayerRewardEstimate = FeesEstimate
 }
 
-func (m *DB) writeTransactionRewards(l types.LayerID, accounts []types.Address, totalReward, layerReward *big.Int) error {
+func (m *DB) writeTransactionRewards(l types.LayerID, accounts []types.Address, totalReward, layerReward *big.Int, smeshers map[types.Address]types.NodeID) error {
 	actBlockCnt := make(map[types.Address]uint64)
 	for _, account := range accounts {
 		actBlockCnt[account]++
@@ -457,7 +460,8 @@ func (m *DB) writeTransactionRewards(l types.LayerID, accounts []types.Address, 
 
 	batch := m.transactions.NewBatch()
 	for account, cnt := range actBlockCnt {
-		reward := dbReward{TotalReward: cnt * totalReward.Uint64(), LayerRewardEstimate: cnt * layerReward.Uint64()}
+		smesherID := smeshers[account] //check if we need to check whether the account is present
+		reward := dbReward{TotalReward: cnt * totalReward.Uint64(), LayerRewardEstimate: cnt * layerReward.Uint64(), SmesherID: smesherID}
 		if b, err := types.InterfaceToBytes(&reward); err != nil {
 			return fmt.Errorf("could not marshal reward for %v: %v", account.Short(), err)
 		} else if err := batch.Put(getRewardKey(l, account), b); err != nil {
@@ -489,6 +493,7 @@ func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err erro
 			Layer:               types.LayerID(layer),
 			TotalReward:         reward.TotalReward,
 			LayerRewardEstimate: reward.LayerRewardEstimate,
+			SmesherID:           reward.SmesherID,
 		})
 	}
 	return
