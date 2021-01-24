@@ -1,34 +1,111 @@
 package tortoisebeacon
 
-import "github.com/spacemeshos/go-spacemesh/common/types"
+import (
+	"github.com/spacemeshos/go-spacemesh/common/types"
+)
+
+type MessageType int
+
+const (
+	TimelyMessage MessageType = iota
+	DelayedMessage
+	LateMessage
+)
 
 type Message interface {
 	Epoch() types.EpochID
-	Round() int
-	Payload() []types.ATXID
 }
 
-func NewMessage(epoch types.EpochID, round int, atxList []types.ATXID) Message {
-	return message{
-		epoch:   epoch,
-		round:   round,
-		atxList: atxList,
+type ProposalMessage interface {
+	Message
+	Proposals() []types.ATXID
+	Hash() types.Hash32
+}
+
+type proposal struct {
+	epoch     types.EpochID
+	proposals []types.ATXID
+}
+
+func NewProposalMessage(epoch types.EpochID, atxList []types.ATXID) ProposalMessage {
+	return &proposal{
+		epoch:     epoch,
+		proposals: atxList,
 	}
 }
 
-type message struct {
-	epoch   types.EpochID
-	round   int
-	atxList []types.ATXID
+func (p proposal) Epoch() types.EpochID {
+	return p.epoch
 }
 
-func (m message) Epoch() types.EpochID {
-	return m.epoch
+func (p proposal) Proposals() []types.ATXID {
+	return p.proposals
 }
 
-func (m message) Round() int {
-	return m.round
+func (p proposal) Hash() types.Hash32 {
+	return hashATXList(p.proposals)
 }
-func (m message) Payload() []types.ATXID {
-	return m.atxList
+
+type VotingMessage interface {
+	Message
+	Round() int
+	Hash() types.Hash32
+}
+
+type vote struct {
+	epoch       types.EpochID
+	round       int
+	atxListHash types.Hash32
+}
+
+func NewVotingMessage(epoch types.EpochID, round int, atxListHash types.Hash32) VotingMessage {
+	return &vote{
+		epoch:       epoch,
+		round:       round,
+		atxListHash: atxListHash,
+	}
+}
+
+func (v vote) Epoch() types.EpochID {
+	return v.epoch
+}
+
+func (v vote) Round() int {
+	return v.round
+}
+
+func (v vote) Hash() types.Hash32 {
+	return v.atxListHash
+}
+
+type BatchVotingMessage interface {
+	Message
+	Round() int
+	HashList() []types.Hash32
+}
+
+type batchVote struct {
+	epoch         types.EpochID
+	round         int
+	atxListHashes []types.Hash32
+}
+
+func NewBatchVotingMessage(epoch types.EpochID, round int, atxListHashes []types.Hash32) BatchVotingMessage {
+	return &batchVote{
+		epoch:         epoch,
+		round:         round,
+		atxListHashes: atxListHashes,
+	}
+}
+
+func (v batchVote) Epoch() types.EpochID {
+	return v.epoch
+}
+
+func (v batchVote) Round() int {
+	return v.round
+}
+
+func (v batchVote) HashList() []types.Hash32 {
+	return v.atxListHashes
 }

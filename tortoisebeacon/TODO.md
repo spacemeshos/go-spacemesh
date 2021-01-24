@@ -1,0 +1,17 @@
+- [ ] Create a proposal for a beacon:
+    - [X] take all ATXs received in last epoch (i -1)
+    - [ ] concat them into a single proposal message and sign it
+    - [X] Each smesher partitions the valid proposals received in the previous epoch into three sets:
+        - [X] Timely proposals: received up to δ after the end of the previous epoch.
+        - [X] Delayed proposals: received between δ and 2δ after the end of the previous epoch.
+        - [X] Late proposals: more than 2δ after the end of the previous epoch. Note that honest users cannot disagree on timing by more than δ, so if a proposal is timely for any honest user, it cannot be late for any honest user (and vice versa).
+    - [X] A party’s initial input to the consensus algorithm is the set of timely proposals.
+- [ ] Reach consensus over set of ATXs to construct a beacon from
+    - [X] for K rounds : in each round that lasts δ, wait for proposals to come in
+    - [X] create a voting message that references all seen proposals within δ time frame and send it
+    - [X] for next rounds wait for δ time, and construct a message that points to all messages from previous round received by δ
+    - [ ] After K rounds had passed, tally up votes for proposals using simple tortoise vote counting
+- [ ] Create random beacon coin
+    - [ ] for all messages that passed the global voting threshold, take the ATXs they have pointer on
+    - [ ] hash all ATX into a single value
+    - [ ] Beacon value received
