@@ -146,7 +146,10 @@ func TestVerifyTransactionLength(t *testing.T) {
 		stx = append(stx, 0)
 		_, err = stx.Decode()
 		require.EqualError(t, err, errBadTransactionEncodingError.Error())
-		stx = append(stx, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+		stx = append(stx, 0, 0, 0)
+		_, err = stx.Decode()
+		require.EqualError(t, err, errBadTransactionEncodingError.Error())
+		stx = append(stx, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 		_, err = stx.Decode()
 		require.EqualError(t, err, errBadTransactionEncodingError.Error())
 	}

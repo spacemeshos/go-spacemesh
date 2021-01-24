@@ -242,7 +242,11 @@ func (txm TransactionAuthenticationMessage) Encode(pubKey TxPublicKey, signature
 	if _, err = xdr.Marshal(&bf, &stl); err != nil {
 		return
 	}
-	return bf.Bytes(), nil
+	bs := bf.Bytes()
+	if txm.TxType.EdPlus() {
+		bs = bs[:len(bs)-4] // remove 4 bytes of zero length pubkey
+	}
+	return bs, nil
 }
 
 // Verify verifies transaction bytes
@@ -283,16 +287,17 @@ var errBadTransactionTypeError = errors.New("failed to decode: bad transaction t
 // Decode decodes binary transaction into transaction object
 func (stx SignedTransaction) Decode() (tx Transaction, err error) {
 	stl := SignedTransactionLayout{}
-	n, err := xdr.Unmarshal(bytes.NewReader(stx[:]), &stl)
+	bs := append(stx[:], 0, 0, 0, 0)
+	n, err := xdr.Unmarshal(bytes.NewReader(bs), &stl)
 	if err != nil {
 		return
 	}
-	if n != len(stx) {
-		// to protect against digest compilation attack with ED++
-		return tx, errBadTransactionEncodingError
-	}
 	if !stl.Type().Good() {
 		return tx, errBadTransactionTypeError
+	}
+	if stl.Type().EdPlus() && n != 4+len(stx) || !stl.Type().EdPlus() && n != len(stx) {
+		// to protect against digest compilation attack with ED++
+		return tx, errBadTransactionEncodingError
 	}
 	txm := TransactionAuthenticationMessage{GetNetworkID(), stl.Type(), stl.Data}
 	bf := bytes.Buffer{}
