@@ -385,9 +385,11 @@ func getTransactionDestKeyPrefix(l types.LayerID, account types.Address) []byte 
 func (m *DB) writeTransactions(l types.LayerID, txs []types.Transaction) error {
 	batch := m.transactions.NewBatch()
 	for _, t := range txs {
-		if err := m.WriteTransaction(l, t); err != nil {
+		if err := txWrite(batch, l, t); err != nil {
 			return err
 		}
+		// TODO: batch not yet synced in this point
+		m.Debug("(batch) wrote tx %v to db", t.ID().ShortString())
 	}
 	err := batch.Write()
 	if err != nil {
@@ -398,21 +400,28 @@ func (m *DB) writeTransactions(l types.LayerID, txs []types.Transaction) error {
 
 // WriteTransaction writes a single transaction to the db
 func (m *DB) WriteTransaction(l types.LayerID, t types.Transaction) error {
+	if err := txWrite(m.transactions, l, t); err != nil {
+		return err
+	}
+	m.Debug("wrote tx %v to db", t.ID().ShortString())
+	return nil
+}
+
+func txWrite(p database.Putter, l types.LayerID, t types.Transaction) error {
 	bytes, err := t.Encode()
 	if err != nil {
 		return fmt.Errorf("could not marshall tx %v to bytes: %v", t.ID().ShortString(), err)
 	}
-	if err := m.transactions.Put(t.ID().Bytes(), bytes); err != nil {
+	if err := p.Put(t.ID().Bytes(), bytes); err != nil {
 		return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
 	}
 	// write extra index for querying txs by account
-	if err := m.transactions.Put(getTransactionOriginKey(l, t), t.ID().Bytes()); err != nil {
+	if err := p.Put(getTransactionOriginKey(l, t), t.ID().Bytes()); err != nil {
 		return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
 	}
-	if err := m.transactions.Put(getTransactionDestKey(l, t), t.ID().Bytes()); err != nil {
+	if err := p.Put(getTransactionDestKey(l, t), t.ID().Bytes()); err != nil {
 		return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
 	}
-	m.Debug("wrote tx %v to db", t.ID().ShortString())
 	return nil
 }
 

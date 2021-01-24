@@ -194,11 +194,8 @@ func (t *TxAPIMock) GetStateRoot() types.Hash32 {
 }
 
 func (t *TxAPIMock) ValidateNonceAndBalance(tx types.Transaction) error {
-	ctx := types.SimpleCoinTx{}
-	if tx.Extract(&ctx) {
-		if !t.AddressExists(tx.Origin()) || t.GetBalance(tx.Origin()) < ctx.GasLimit {
-			return errors.New("not gonna happen")
-		}
+	if !t.AddressExists(tx.Origin()) || t.GetBalance(tx.Origin()) < tx.GetGasLimit() || t.GetNonce(tx.Origin()) != tx.GetNonce() {
+		return errors.New("not gonna happen")
 	}
 	return nil
 }
@@ -1512,7 +1509,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	defer func() { req.NoError(conn.Close()) }()
 	c := pb.NewTransactionServiceClient(conn)
 
-	serializedTx, err := types.InterfaceToBytes(globalTx)
+	serializedTx, err := globalTx.Encode()
 	req.NoError(err, "error serializing tx")
 
 	// This time, we expect an error, since isSynced is false (by default)
@@ -1557,7 +1554,7 @@ func TestTransactionService(t *testing.T) {
 		run  func(*testing.T)
 	}{
 		{"SubmitTransaction", func(t *testing.T) {
-			serializedTx, err := types.InterfaceToBytes(globalTx)
+			serializedTx, err := globalTx.Encode()
 			require.NoError(t, err, "error serializing tx")
 			res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
 				Transaction: serializedTx,
@@ -1569,7 +1566,7 @@ func TestTransactionService(t *testing.T) {
 		}},
 		{"SubmitTransaction_ZeroBalance", func(t *testing.T) {
 			txAPI.balances[globalTx.Origin()] = big.NewInt(0)
-			serializedTx, err := types.InterfaceToBytes(globalTx)
+			serializedTx, err := globalTx.Encode()
 			require.NoError(t, err, "error serializing tx")
 			_, err = c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
 				Transaction: serializedTx,
@@ -1581,7 +1578,7 @@ func TestTransactionService(t *testing.T) {
 		}},
 		{"SubmitTransaction_BadCounter", func(t *testing.T) {
 			txAPI.nonces[globalTx.Origin()] = uint64(accountCounter + 1)
-			serializedTx, err := types.InterfaceToBytes(globalTx)
+			serializedTx, err := globalTx.Encode()
 			require.NoError(t, err, "error serializing tx")
 			_, err = c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
 				Transaction: serializedTx,
@@ -1604,7 +1601,7 @@ func TestTransactionService(t *testing.T) {
 		}},
 		{"SubmitTransaction_InvalidAddr", func(t *testing.T) {
 			// this tx origin does not exist in state
-			serializedTx, err := types.InterfaceToBytes(globalTx2)
+			serializedTx, err := globalTx2.Encode()
 			require.NoError(t, err, "error serializing tx")
 			_, err = c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
 				Transaction: serializedTx,
@@ -1778,7 +1775,7 @@ func TestTransactionService(t *testing.T) {
 			events.CloseEventReporter()
 			err := events.InitializeEventReporterWithOptions("", 1, true)
 			require.NoError(t, err)
-			serializedTx, err := types.InterfaceToBytes(globalTx)
+			serializedTx, err := globalTx.Encode()
 			require.NoError(t, err, "error serializing tx")
 			res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
 				Transaction: serializedTx,
@@ -1807,7 +1804,7 @@ func checkTransaction(t *testing.T, tx *pb.Transaction) {
 	require.Equal(t, h.GasLimit, tx.GasOffered.GasProvided)
 	require.Equal(t, h.Amount, tx.Amount.Value)
 	require.Equal(t, h.AccountNonce, tx.Counter)
-	require.Equal(t, globalTx.Origin().Bytes(), tx.Signature.PublicKey)
+	require.Equal(t, globalTx.PubKey().Bytes(), tx.Signature.PublicKey)
 	switch x := tx.Datum.(type) {
 	case *pb.Transaction_CoinTransfer:
 		require.Equal(t, globalTx.GetRecipient().Bytes(), x.CoinTransfer.Receiver.Address,
@@ -1873,8 +1870,12 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Equal(t, h.Amount, resTx.Amount.Value)
 	require.Equal(t, h.AccountNonce, resTx.Counter)
 	require.Equal(t, globalTx.Signature().Bytes(), resTx.Signature.Signature)
-	require.Equal(t, pb.Signature_SCHEME_ED25519_PLUS_PLUS, resTx.Signature.Scheme)
-	require.Equal(t, globalTx.Origin().Bytes(), resTx.Signature.PublicKey)
+	scheme := pb.Signature_SCHEME_ED25519
+	if globalTx.Type().EdPlus() {
+		scheme = pb.Signature_SCHEME_ED25519_PLUS_PLUS
+	}
+	require.Equal(t, scheme, resTx.Signature.Scheme)
+	require.Equal(t, globalTx.PubKey().Bytes(), resTx.Signature.PublicKey)
 
 	// The Data field is a bit trickier to read
 	switch x := resTx.Datum.(type) {
@@ -2255,13 +2256,11 @@ func checkAccountMeshDataItemTx(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.AccountMeshData_Transaction:
 		// Check the sender
-		require.Equal(t, globalTx.Origin().Bytes(), x.Transaction.Signature.PublicKey,
+		require.Equal(t, globalTx.PubKey().Bytes(), x.Transaction.Signature.PublicKey,
 			"inner coin transfer tx has bad sender")
-		var h types.OldCoinTx
-		require.True(t, globalTx.Extract(&h))
-		require.Equal(t, h.Amount, x.Transaction.Amount.Value,
+		require.Equal(t, globalTx.GetAmount(), x.Transaction.Amount.Value,
 			"inner coin transfer tx has bad amount")
-		require.Equal(t, h.AccountNonce, x.Transaction.Counter,
+		require.Equal(t, globalTx.GetNonce(), x.Transaction.Counter,
 			"inner coin transfer tx has bad counter")
 
 		// Need to further check tx type
