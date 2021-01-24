@@ -7,53 +7,18 @@ import (
 	"testing"
 )
 
-//var signer = signing.NewEdSigner()
+var alice = signing.NewEdSignerSeed("alice")
 
 func newTx(t *testing.T, nonce, totalAmount, fee uint64) types.Transaction {
-	/*
-		inner := types.TransactionHeader{
+	tx, err := types.SignTransaction(
+		types.OldCoinTx{
 			AccountNonce: nonce,
 			Recipient:    types.Address{},
 			Amount:       totalAmount - fee,
 			GasLimit:     3,
 			Fee:          fee,
-		}
-
-		buf, err := types.InterfaceToBytes(&inner)
-		require.NoError(t, err)
-
-		tx := &types.CoinTransaction{
-			TransactionHeader: inner,
-			Signature:         [64]byte{},
-		}
-
-		signerBuf := []byte("22222222222222222222222222222222")
-		signerBuf = append(signerBuf, []byte{
-			94, 33, 44, 9, 128, 228, 179, 159, 192, 151, 33, 19, 74, 160, 33, 9,
-			55, 78, 223, 210, 96, 192, 211, 208, 60, 181, 1, 200, 214, 84, 87, 169,
-		}...)
-		signer, err := signing.NewEdSignerFromBuffer(signerBuf)
-		require.NoError(t, err)
-		copy(tx.Signature[:], signer.Sign(buf))
-		addr := types.Address{}
-		addr.SetBytes(signer.PublicKey().Bytes())
-		tx.SetOrigin(addr)
-	*/
-
-	signerBuf := []byte("22222222222222222222222222222222")
-	signerBuf = append(signerBuf, []byte{
-		94, 33, 44, 9, 128, 228, 179, 159, 192, 151, 33, 19, 74, 160, 33, 9,
-		55, 78, 223, 210, 96, 192, 211, 208, 60, 181, 1, 200, 214, 84, 87, 169,
-	}...)
-	signer, err := signing.NewEdSignerFromBuffer(signerBuf)
-	require.NoError(t, err)
-	tx, err := types.SignTransaction(types.OldCoinTx{
-		AccountNonce: nonce,
-		Recipient:    types.Address{},
-		Amount:       totalAmount - fee,
-		GasLimit:     3,
-		Fee:          fee}.NewEd(),
-		signer)
+		}.NewEd(),
+		alice)
 	require.NoError(t, err)
 	return tx
 }
@@ -151,9 +116,9 @@ func TestNewAccountPendingTxs(t *testing.T) {
 	r.Equal(prevBalance-100, balance)
 
 	// Trying to fill the gap with a transaction that would over-draft the account has no effect
-	pendingTxs.Add(1, newTx(t, 6, 950, 1))
+	pendingTxs.Add(1, newTx(t, 6, 950, 2)) // to prefer this transaction against another
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
-	r.Equal(int(prevNonce)+1, int(nonce))
+	r.Equal(prevNonce+1, nonce)
 	r.Equal(prevBalance-100, balance)
 
 	// But filling the gap with a valid transaction causes the higher nonce transactions to start being considered
@@ -168,6 +133,6 @@ func TestNewAccountPendingTxs(t *testing.T) {
 		newTx(t, 5, 100, 2),
 	}, 2)
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
-	r.Equal(int(prevNonce)+2, int(nonce))
+	r.Equal(prevNonce+2, nonce)
 	r.Equal(prevBalance-50-950, balance)
 }
