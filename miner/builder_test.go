@@ -66,7 +66,7 @@ type mockTxProcessor struct {
 	notValid bool
 }
 
-func (m mockTxProcessor) ValidateNonceAndBalance(*types.CoinTransaction) error {
+func (m mockTxProcessor) ValidateNonceAndBalance(types.Transaction) error {
 	return nil
 }
 
@@ -235,7 +235,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	recipient := types.BytesToAddress([]byte{0x01})
 	signer := signing.NewEdSigner()
 
-	trans := []*types.CoinTransaction{
+	trans := []types.Transaction{
 		NewTx(t, 1, recipient, signer),
 		NewTx(t, 2, recipient, signer),
 		NewTx(t, 3, recipient, signer),
@@ -289,7 +289,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 	recipient := types.BytesToAddress([]byte{0x01})
 	signer := signing.NewEdSigner()
 
-	trans := []*types.CoinTransaction{
+	trans := []types.Transaction{
 		NewTx(t, 1, recipient, signer),
 		NewTx(t, 2, recipient, signer),
 		NewTx(t, 3, recipient, signer),
@@ -331,7 +331,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 	assert.Equal(t, *bl.RefBlock, b.ID())
 }
 
-func NewTx(t *testing.T, nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.CoinTransaction {
+func NewTx(t *testing.T, nonce uint64, recipient types.Address, signer *signing.EdSigner) types.Transaction {
 	tx, err := types.NewSignedOldCoinTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
 	assert.NoError(t, err)
 	return tx
@@ -339,15 +339,13 @@ func NewTx(t *testing.T, nonce uint64, recipient types.Address, signer *signing.
 
 func TestBlockBuilder_SerializeTrans(t *testing.T) {
 	tx := NewTx(t, 1, types.BytesToAddress([]byte{0x02}), signing.NewEdSigner())
-	buf, err := types.InterfaceToBytes(tx)
+	buf, err := tx.Encode()
 	assert.NoError(t, err)
-
-	ntx, err := types.BytesToTransaction(buf)
+	ntx, err := buf.Decode()
 	assert.NoError(t, err)
-	err = ntx.CalcAndSetOrigin()
-	assert.NoError(t, err)
-
-	assert.Equal(t, *tx, *ntx)
+	var a, b types.OldCoinTx
+	assert.True(t, ntx.Extract(&a) && tx.Extract(&b))
+	assert.Equal(t, a, b)
 }
 
 func ContainsTx(a []types.TransactionID, x types.TransactionID) bool {

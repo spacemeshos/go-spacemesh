@@ -57,7 +57,7 @@ func createAccount(state *TransactionProcessor, addr types.Address, balance int6
 	return obj1
 }
 
-func createTransaction(t *testing.T, nonce uint64, destination types.Address, amount, fee uint64, signer *signing.EdSigner) *types.CoinTransaction {
+func createTransaction(t *testing.T, nonce uint64, destination types.Address, amount, fee uint64, signer *signing.EdSigner) types.Transaction {
 	tx, err := types.NewSignedOldCoinTx(nonce, destination, amount, 100, fee, signer)
 	assert.NoError(t, err)
 	return tx
@@ -81,7 +81,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 	createAccount(s.processor, toAddr([]byte{0x02}), 44, 0)
 	s.processor.Commit()
 
-	transactions := []*types.CoinTransaction{
+	transactions := []types.Transaction{
 		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer),
 	}
 
@@ -175,7 +175,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 	createAccount(s.processor, toAddr([]byte{0x02}), 44, 0)
 	s.processor.Commit()
 
-	transactions := []*types.CoinTransaction{
+	transactions := []types.Transaction{
 		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer1),
 	}
 
@@ -226,7 +226,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	obj3 := createAccount(s.processor, toAddr([]byte{0x02}), 44, 0)
 	s.processor.Commit()
 
-	transactions := []*types.CoinTransaction{
+	transactions := []types.Transaction{
 		createTransaction(s.T(), obj1.Nonce()+3, obj3.address, 1, 5, signer),
 		createTransaction(s.T(), obj1.Nonce()+2, obj3.address, 1, 5, signer),
 		createTransaction(s.T(), obj1.Nonce()+1, obj3.address, 1, 5, signer),
@@ -289,7 +289,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	createAccount(processor, toAddr([]byte{0x02}), 44, 0)
 	processor.Commit()
 
-	transactions := []*types.CoinTransaction{
+	transactions := []types.Transaction{
 		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer1),
 		//createTransaction(obj2.Nonce(),obj2.address, obj1.address, 1),
 	}
@@ -298,7 +298,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), failed == 0)
 
-	transactions = []*types.CoinTransaction{
+	transactions = []types.Transaction{
 		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer1),
 		createTransaction(s.T(), obj2.Nonce(), obj1.address, 10, 5, signer2),
 	}
@@ -391,7 +391,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	var want string
 	for i := 0; i < testCycles; i++ {
 		numOfTransactions := rand.Intn(maxTransactions-minTransactions) + minTransactions
-		trns := []*types.CoinTransaction{}
+		trns := []types.Transaction{}
 		nonceTrack := make(map[*Object]int)
 		for j := 0; j < numOfTransactions; j++ {
 
@@ -411,7 +411,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 			t := createTransaction(s.T(), processor.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]), dstAccount.address, (rand.Uint64()%srcAccount.Balance())/100, 5, signers[src])
 			trns = append(trns, t)
 
-			log.Info("transaction %v nonce %v amount %v", t.Origin().Hex(), t.AccountNonce, t.Amount)
+			log.Info("transaction %v nonce %v amount %v", t.Origin().Hex(), t.GetNonce(), t.GetAmount())
 		}
 		failed, err := processor.ApplyTransactions(types.LayerID(i), trns)
 		assert.NoError(s.T(), err)
@@ -439,7 +439,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	assert.True(s.T(), writtenMore > written)
 }
 
-func newTx(t *testing.T, nonce, totalAmount uint64, signer *signing.EdSigner) *types.CoinTransaction {
+func newTx(t *testing.T, nonce, totalAmount uint64, signer *signing.EdSigner) types.Transaction {
 	feeAmount := uint64(1)
 	rec := types.Address{byte(rand.Int()), byte(rand.Int()), byte(rand.Int()), byte(rand.Int())}
 	return createTransaction(t, nonce, rec, totalAmount-feeAmount, feeAmount, signer)
@@ -488,7 +488,7 @@ func TestTransactionProcessor_ApplyTransactionTestSuite(t *testing.T) {
 	suite.Run(t, new(ProcessorStateSuite))
 }
 
-func createXdrSignedTransaction(t *testing.T, key ed25519.PrivateKey) *types.CoinTransaction {
+func createXdrSignedTransaction(t *testing.T, key ed25519.PrivateKey) types.Transaction {
 	r := require.New(t)
 	signer, err := signing.NewEdSignerFromBuffer(key)
 	r.NoError(err)
@@ -552,17 +552,17 @@ func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
 	createAccount(processor, toAddr([]byte{0x02}), 44, 0)
 	processor.Commit()
 
-	transactions := []*types.CoinTransaction{
+	transactions := []types.Transaction{
 		createTransaction(t, obj1.Nonce(), obj2.address, 1, 5, signer),
 	}
 
 	_, err = processor.ApplyTransactions(1, transactions)
 	assert.NoError(t, err)
 
-	_, err = processor.ApplyTransactions(2, []*types.CoinTransaction{})
+	_, err = processor.ApplyTransactions(2, []types.Transaction{})
 	assert.NoError(t, err)
 
-	_, err = processor.ApplyTransactions(3, []*types.CoinTransaction{})
+	_, err = processor.ApplyTransactions(3, []types.Transaction{})
 	assert.NoError(t, err)
 
 	_, err = processor.GetLayerStateRoot(3)

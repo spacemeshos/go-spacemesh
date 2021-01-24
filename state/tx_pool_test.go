@@ -35,7 +35,7 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 	r.Equal(prevNonce+1, nonce)
 	r.Equal(prevBalance-50, balance)
 	r.ElementsMatch([]types.TransactionID{tx1.ID()}, pool.GetTxIdsByAddress(origin))
-	r.ElementsMatch([]types.TransactionID{tx1.ID()}, pool.GetTxIdsByAddress(tx1.Recipient))
+	r.ElementsMatch([]types.TransactionID{tx1.ID()}, pool.GetTxIdsByAddress(tx1.GetRecipient()))
 
 	tx2 := newTx(t, 5, 150, signer)
 	pool.Put(tx2.ID(), tx2)
@@ -43,16 +43,16 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 	r.Equal(prevNonce+2, nonce)
 	r.Equal(prevBalance-50-150, balance)
 	r.ElementsMatch([]types.TransactionID{tx1.ID(), tx2.ID()}, pool.GetTxIdsByAddress(origin))
-	r.ElementsMatch([]types.TransactionID{tx1.ID()}, pool.GetTxIdsByAddress(tx1.Recipient))
-	r.ElementsMatch([]types.TransactionID{tx2.ID()}, pool.GetTxIdsByAddress(tx2.Recipient))
+	r.ElementsMatch([]types.TransactionID{tx1.ID()}, pool.GetTxIdsByAddress(tx1.GetRecipient()))
+	r.ElementsMatch([]types.TransactionID{tx2.ID()}, pool.GetTxIdsByAddress(tx2.GetRecipient()))
 
 	pool.Invalidate(tx1.ID())
 	nonce, balance = pool.GetProjection(origin, prevNonce+1, prevBalance-50)
 	r.Equal(prevNonce+2, nonce)
 	r.Equal(prevBalance-50-150, balance)
 	r.ElementsMatch([]types.TransactionID{tx2.ID()}, pool.GetTxIdsByAddress(origin))
-	r.Empty(pool.GetTxIdsByAddress(tx1.Recipient))
-	r.ElementsMatch([]types.TransactionID{tx2.ID()}, pool.GetTxIdsByAddress(tx2.Recipient))
+	r.Empty(pool.GetTxIdsByAddress(tx1.GetRecipient()))
+	r.ElementsMatch([]types.TransactionID{tx2.ID()}, pool.GetTxIdsByAddress(tx2.GetRecipient()))
 
 	seed := []byte("seedseed")
 	rand.Seed(int64(binary.LittleEndian.Uint64(seed)))
@@ -131,7 +131,7 @@ func BenchmarkTxPoolWithAccounts(b *testing.B) {
 	pool := NewTxMemPool()
 
 	const numBatches = 10
-	txBatches := make([][]*types.CoinTransaction, numBatches)
+	txBatches := make([][]types.Transaction, numBatches)
 	txIDBatches := make([][]types.TransactionID, numBatches)
 	for i := 0; i < numBatches; i++ {
 		signer := signing.NewEdSigner()
@@ -154,7 +154,7 @@ func BenchmarkTxPoolWithAccounts(b *testing.B) {
 	b.Log(time.Since(start))
 }
 
-func addBatch(pool *TxMempool, txBatch []*types.CoinTransaction, txIDBatch []types.TransactionID, wg *sync.WaitGroup) {
+func addBatch(pool *TxMempool, txBatch []types.Transaction, txIDBatch []types.TransactionID, wg *sync.WaitGroup) {
 	for i, tx := range txBatch {
 		pool.Put(txIDBatch[i], tx)
 	}
@@ -168,8 +168,8 @@ func invalidateBatch(pool *TxMempool, txIDBatch []types.TransactionID, wg *sync.
 	wg.Done()
 }
 
-func createBatch(t testing.TB, signer *signing.EdSigner) ([]*types.CoinTransaction, []types.TransactionID) {
-	var txBatch []*types.CoinTransaction
+func createBatch(t testing.TB, signer *signing.EdSigner) ([]types.Transaction, []types.TransactionID) {
+	var txBatch []types.Transaction
 	var txIDBatch []types.TransactionID
 	for i := uint64(0); i < 10000; i++ {
 		tx, err := types.NewSignedOldCoinTx(5+1, types.Address{}, 50, 100, 1, signer)

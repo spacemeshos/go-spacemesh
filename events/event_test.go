@@ -61,7 +61,7 @@ var (
 	globalTx = MakeTx(1, addr1, signing.NewEdSigner())
 )
 
-func MakeTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.CoinTransaction {
+func MakeTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) types.Transaction {
 	tx, err := types.NewSignedOldCoinTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
 	if err != nil {
 		log.Error("error creating new signed tx: %v", err)
