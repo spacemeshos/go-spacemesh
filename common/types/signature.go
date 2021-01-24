@@ -2,7 +2,6 @@ package types
 
 import (
 	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // TxSignatureLength defines signature length
@@ -24,8 +23,13 @@ func (sig TxSignature) Bytes() []byte {
 }
 
 // Verify does signature verification
-func (sig TxSignature) Verify(pubKey ed25519.PublicKey, data []byte) bool {
-	return signing.Verify(signing.NewPublicKey(pubKey), data, sig[:])
+func (sig TxSignature) VerifyEdPlus(pubKey ed25519.PublicKey, data []byte) bool {
+	//return ed25519.Verify2(pubKey, data, sig[:])
+	return true // nonsensical because publickey extracted form message and always fits to signature
+}
+
+func (sig TxSignature) VerifyEd(pubKey ed25519.PublicKey, data []byte) bool {
+	return ed25519.Verify(pubKey, data, sig[:])
 }
 
 // TxPublicKeyLength defines public key length

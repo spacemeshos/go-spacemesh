@@ -3,7 +3,7 @@ package types
 // xdrMarshal is a marshaller interface to encode/decode transaction header
 type xdrMarshal interface {
 	XdrBytes() ([]byte, error)
-	XdrFill([]byte) error
+	XdrFill([]byte) (int, error)
 }
 
 // IncompleteCommonTx is a common partial implementation of the IncompleteTransaction
@@ -78,8 +78,14 @@ func (tx *CommonTx) Encode() (_ SignedTransaction, err error) {
 
 // decode decodes fills the transaction object from the transaction bytes
 func (tx *CommonTx) decode(marshal xdrMarshal, data []byte, signature TxSignature, pubKey TxPublicKey, txid TransactionID, txtp TransactionType) (err error) {
-	if err = marshal.XdrFill(data); err != nil {
+	var n int
+	if n, err = marshal.XdrFill(data); err != nil {
 		return
+	}
+	if n != len(data) {
+		// to protect against digest compilation attack with ED++
+		//   app call/spawn txs can be vulnerable because variable call-data size
+		return errBadTransactionEncodingError
 	}
 	tx.txType = txtp
 	tx.origin = BytesToAddress(pubKey.Bytes())

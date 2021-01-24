@@ -104,6 +104,16 @@ func NewEdSignerSeed(seedStr string) *EdSigner {
 
 // Sign signs the provided message
 func (es *EdSigner) Sign(m []byte) []byte {
+	return es.Sign2(m)
+}
+
+// Sign1 signs the provided message with classic Ed scheme
+func (es *EdSigner) Sign1(m []byte) []byte {
+	return ed25519.Sign(es.privKey, m)
+}
+
+// Sign2 signs the provided message with modern Ed++ scheme
+func (es *EdSigner) Sign2(m []byte) []byte {
 	return ed25519.Sign2(es.privKey, m)
 }
 

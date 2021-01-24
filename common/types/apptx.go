@@ -66,9 +66,8 @@ func (tx CallAppTxHeader) XdrBytes() ([]byte, error) {
 }
 
 // XdrFill implements xdrMarshal.XdrFill
-func (tx *CallAppTxHeader) XdrFill(bs []byte) (err error) {
-	_, err = xdr.Unmarshal(bytes.NewReader(bs), &tx.CallAppTx)
-	return
+func (tx *CallAppTxHeader) XdrFill(bs []byte) (int, error) {
+	return xdr.Unmarshal(bytes.NewReader(bs), &tx.CallAppTx)
 }
 
 func (tx CallAppTxHeader) extract(out interface{}, tt TransactionType) bool {

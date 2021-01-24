@@ -100,9 +100,8 @@ func (tx SimpleCoinTxHeader) XdrBytes() ([]byte, error) {
 }
 
 // XdrFill implements xdrMarshal.XdrFill
-func (tx *SimpleCoinTxHeader) XdrFill(bs []byte) (err error) {
-	_, err = xdr.Unmarshal(bytes.NewReader(bs), &tx.SimpleCoinTx)
-	return
+func (tx *SimpleCoinTxHeader) XdrFill(bs []byte) (int, error) {
+	return xdr.Unmarshal(bytes.NewReader(bs), &tx.SimpleCoinTx)
 }
 
 // simpleCoinTx implements TransactionInterface for "Simple Coin Transaction"

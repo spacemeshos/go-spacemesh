@@ -99,9 +99,8 @@ func (tx OldCoinTxHeader) XdrBytes() ([]byte, error) {
 }
 
 // XdrFill implements xdrMarshal.XdrFill
-func (tx *OldCoinTxHeader) XdrFill(bs []byte) (err error) {
-	_, err = xdr.Unmarshal(bytes.NewReader(bs), &tx.OldCoinTx)
-	return
+func (tx *OldCoinTxHeader) XdrFill(bs []byte) (int, error) {
+	return xdr.Unmarshal(bytes.NewReader(bs), &tx.OldCoinTx)
 }
 
 // oldCoinTx implements TransactionInterface for "Old Coin Transaction"
@@ -114,9 +113,10 @@ type oldCoinTx struct {
 func (tx oldCoinTx) String() string {
 	h := tx.OldCoinTx
 	return fmt.Sprintf(
-		"<id: %s, type: %v, origin: %s, recipient: %s, amount: %v, nonce: %v, gas_limit: %v, gas_price: %v>",
+		"<id: %s, type: %v, origin: %s, recipient: %s, amount: %v, nonce: %v, gas_limit: %v, fee: %v>",
 		tx.ID().ShortString(), tx.Type(), tx.Origin().Short(),
-		h.Recipient, h.Amount, h.AccountNonce, h.GasLimit, h.Fee)
+		h.Recipient.Short(),
+		h.Amount, h.AccountNonce, h.GasLimit, h.Fee)
 }
 
 // DecodeOldCoinTx decodes transaction bytes into "Old Coin Transaction" object

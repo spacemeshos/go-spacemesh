@@ -2,6 +2,8 @@ package types
 
 import (
 	"bytes"
+	"crypto/sha512"
+	"errors"
 	"fmt"
 	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/ed25519"
@@ -35,6 +37,15 @@ const (
 	TxOldCoinEdPlus TransactionType = 7
 )
 
+func (tt TransactionType) Good() bool {
+	switch tt {
+	case TxSimpleCoinEdPlus, TxCallAppEdPlus, TxSpawnAppEdPlus, TxOldCoinEdPlus,
+		TxSimpleCoinEd, TxCallAppEd, TxSpawnAppEd, TxOldCoinEd:
+		return true
+	}
+	return false
+}
+
 // String returns string representation for TransactionType
 func (tt TransactionType) String() string {
 	switch tt {
@@ -59,8 +70,8 @@ func (tt TransactionType) String() string {
 	}
 }
 
-// IsEdPlus returns true if transaction type has Ed++ signing scheme
-func (tt TransactionType) IsEdPlus() bool {
+// EdPlus returns true if transaction type has Ed++ signing scheme
+func (tt TransactionType) EdPlus() bool {
 	switch tt {
 	case TxSimpleCoinEdPlus, TxCallAppEdPlus, TxSpawnAppEdPlus, TxOldCoinEdPlus:
 		return true
@@ -85,6 +96,20 @@ func (tt TransactionType) Decode(pubKey TxPublicKey, signature TxSignature, txid
 	}
 	// it must be impossible (in theory)
 	return nil, fmt.Errorf("unknown transaction type")
+}
+
+func (tt TransactionType) verify(pubKey TxPublicKey, sig TxSignature, data []byte) bool {
+	if tt.EdPlus() {
+		return sig.VerifyEdPlus(pubKey.Bytes(), data)
+	}
+	return sig.VerifyEd(pubKey.Bytes(), data)
+}
+
+func (tt TransactionType) sign(signer *signing.EdSigner, data []byte) TxSignature {
+	if tt.EdPlus() {
+		return TxSignatureFromBytes(signer.Sign2(data))
+	}
+	return TxSignatureFromBytes(signer.Sign1(data))
 }
 
 // EdPlusTransactionFactory allowing to create transactions with Ed++ signing scheme
@@ -202,14 +227,15 @@ func (txm TransactionAuthenticationMessage) Sign(signer *signing.EdSigner) (_ Si
 	if _, err = xdr.Marshal(&bf, &txm); err != nil {
 		return
 	}
-	signature := TxSignatureFromBytes(signer.Sign(bf.Bytes()))
+	digest := sha512.Sum512(bf.Bytes())
+	signature := txm.Type().sign(signer, digest[:])
 	return txm.Encode(TxPublicKeyFromBytes(signer.PublicKey().Bytes()), signature)
 }
 
 // Encode encodes transaction into the independent form
 func (txm TransactionAuthenticationMessage) Encode(pubKey TxPublicKey, signature TxSignature) (_ SignedTransaction, err error) {
 	stl := SignedTransactionLayout{TxType: byte(txm.TxType), Data: txm.TransactionData, Signature: signature}
-	if !txm.TxType.IsEdPlus() {
+	if !txm.TxType.EdPlus() {
 		stl.PubKey = pubKey.Bytes()
 	}
 	bf := bytes.Buffer{}
@@ -225,7 +251,8 @@ func (txm TransactionAuthenticationMessage) Verify(pubKey TxPublicKey, sig TxSig
 	if _, err := xdr.Marshal(&bf, &txm); err != nil {
 		return false
 	}
-	return sig.Verify(pubKey.Bytes(), bf.Bytes())
+	digest := sha512.Sum512(bf.Bytes())
+	return txm.Type().verify(pubKey, sig, digest[:])
 }
 
 // SignedTransactionLayout represents fields layout of a signed transaction
@@ -249,29 +276,42 @@ func (stx SignedTransaction) ID() TransactionID {
 	return TransactionID(CalcHash32(stx[:]))
 }
 
+var errBadSignatureError = errors.New("failed to verify: bad signature")
+var errBadTransactionEncodingError = errors.New("failed to decode: bad transaction")
+var errBadTransactionTypeError = errors.New("failed to decode: bad transaction type")
+
 // Decode decodes binary transaction into transaction object
 func (stx SignedTransaction) Decode() (tx Transaction, err error) {
 	stl := SignedTransactionLayout{}
-	if _, err = xdr.Unmarshal(bytes.NewReader(stx[:]), &stl); err != nil {
+	n, err := xdr.Unmarshal(bytes.NewReader(stx[:]), &stl)
+	if err != nil {
 		return
 	}
-
+	if n != len(stx) {
+		// to protect against digest compilation attack with ED++
+		return tx, errBadTransactionEncodingError
+	}
+	if !stl.Type().Good() {
+		return tx, errBadTransactionTypeError
+	}
 	txm := TransactionAuthenticationMessage{GetNetworkID(), stl.Type(), stl.Data}
 	bf := bytes.Buffer{}
 	if _, err = xdr.Marshal(&bf, &txm); err != nil {
 		return
 	}
+	digest := sha512.Sum512(bf.Bytes())
 
 	pubKey := stl.PubKey
-	if stl.Type().IsEdPlus() {
-		if pubKey, err = ed25519.ExtractPublicKey(bf.Bytes(), stl.Signature[:]); err != nil {
-			return tx, fmt.Errorf("failed to extract transaction public key: %v", err.Error())
+	if stl.Type().EdPlus() {
+		pubKey, err = ed25519.ExtractPublicKey(digest[:], stl.Signature[:])
+		if err != nil {
+			return tx, fmt.Errorf("failed to verify transaction: %v", err.Error())
 		}
-	} else {
-		// TODO: signing does not have PublicKey length constant
-		if len(pubKey) != ed25519.PublicKeySize || !signing.Verify(signing.NewPublicKey(pubKey), bf.Bytes(), stl.Signature[:]) {
-			return tx, fmt.Errorf("failed to verify transaction signature")
-		}
+	}
+
+	// ED++ will be correct with any trash if signature format fits requirements
+	if len(pubKey) != ed25519.PublicKeySize || !stl.Type().verify(TxPublicKeyFromBytes(pubKey), stl.Signature, digest[:]) {
+		return tx, errBadSignatureError
 	}
 
 	return stl.Type().Decode(TxPublicKeyFromBytes(pubKey), stl.Signature, stx.ID(), stl.Data)
