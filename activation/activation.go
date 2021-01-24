@@ -231,7 +231,6 @@ func (b *Builder) buildNipstChallenge(currentLayer types.LayerID) error {
 	}
 	if prevAtx, err := b.GetPrevAtx(b.nodeID); err != nil {
 		challenge.CommitmentMerkleRoot = b.commitment.MerkleRoot
-		challenge.PrevATXID = b.goldenATXID
 	} else {
 		challenge.PrevATXID = prevAtx.ID()
 		challenge.Sequence = prevAtx.Sequence + 1
@@ -424,7 +423,7 @@ func (b *Builder) PublishActivationTx() error {
 
 	var activeSetSize uint32
 	var commitment *types.PostProof
-	if b.challenge.PrevATXID == b.goldenATXID {
+	if b.challenge.PrevATXID == *types.EmptyATXID {
 		commitment = b.commitment
 	}
 

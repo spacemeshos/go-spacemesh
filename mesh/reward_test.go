@@ -98,7 +98,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	block1 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 
 	coinbase1 := types.HexToAddress("0xaaa")
-	atx := newActivationTx(types.NodeID{Key: "1", VRFPublicKey: []byte("bbbbb")}, 0, goldenATXID, 1, 0, goldenATXID, coinbase1, 10, []types.BlockID{}, &types.NIPST{})
+	atx := newActivationTx(types.NodeID{Key: "1", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, goldenATXID, coinbase1, 10, []types.BlockID{}, &types.NIPST{})
 	atxDB.AddAtx(atx.ID(), atx)
 	block1.ATXID = atx.ID()
 	totalFee += addTransactionsWithFee(t, layers.DB, block1, 15, 7)
@@ -106,7 +106,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	block2 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 
 	coinbase2 := types.HexToAddress("0xbbb")
-	atx = newActivationTx(types.NodeID{Key: "2", VRFPublicKey: []byte("bbbbb")}, 0, goldenATXID, 1, 0, goldenATXID, coinbase2, 10, []types.BlockID{}, &types.NIPST{})
+	atx = newActivationTx(types.NodeID{Key: "2", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, goldenATXID, coinbase2, 10, []types.BlockID{}, &types.NIPST{})
 	atxDB.AddAtx(atx.ID(), atx)
 	block2.ATXID = atx.ID()
 	totalFee += addTransactionsWithFee(t, layers.DB, block2, 13, rand.Int63n(100))

@@ -845,7 +845,7 @@ func (s *Syncer) FetchAtxReferences(atx *types.ActivationTx) error {
 		}
 	}
 
-	if atx.PrevATXID != s.GoldenATXID {
+	if atx.PrevATXID != *types.EmptyATXID {
 		s.Log.Info("going to fetch prev atx %v of atx %v", atx.PrevATXID.ShortString(), atx.ID().ShortString())
 		_, err := s.fetchAtx(atx.PrevATXID)
 		if err != nil {

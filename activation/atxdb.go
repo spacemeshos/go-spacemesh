@@ -331,11 +331,10 @@ func (db *DB) deleteLock(viewHash types.Hash12) {
 
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
 //
-// - If the PrevATX and PositioningATX are not empty ATX.
 // - If the sequence number is non-zero: PrevATX points to a syntactically valid ATX whose sequence number is one less
 //   than the current ATX's sequence number.
-// - If the sequence number is zero: PrevATX equals to the Golden ATX.
-// - Positioning ATX points to a syntactically valid ATX or the Golden ATX.
+// - If the sequence number is zero: PrevATX is empty.
+// - Positioning ATX points to a syntactically valid ATX.
 // - NIPST challenge is a hash of the serialization of the following fields:
 //   NodeID, SequenceNumber, PrevATXID, LayerID, StartTick, PositioningATX.
 // - The NIPST is valid.
@@ -347,19 +346,16 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	if err != nil {
 		return fmt.Errorf("cannot validate atx sig atx id %v err %v", atx.ShortString(), err)
 	}
+
 	if atx.NodeID.Key != pub.String() {
 		return fmt.Errorf("node ids don't match")
-	}
-
-	if atx.PrevATXID == *types.EmptyATXID {
-		return fmt.Errorf("empty previous ATX")
 	}
 
 	if atx.PositioningATX == *types.EmptyATXID {
 		return fmt.Errorf("empty positioning ATX")
 	}
 
-	if atx.PrevATXID != db.goldenATXID {
+	if atx.PrevATXID != *types.EmptyATXID {
 		err = db.ValidateSignedAtx(*pub, atx)
 		if err != nil { // means there is no such identity
 			return fmt.Errorf("no id found %v err %v", atx.ShortString(), err)
@@ -387,21 +383,21 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		}
 
 		if atx.Commitment != nil {
-			return fmt.Errorf("non-golden prevATX declared, but commitment proof is included")
+			return fmt.Errorf("prevATX declared, but commitment proof is included")
 		}
 
 		if atx.CommitmentMerkleRoot != nil {
-			return fmt.Errorf("non-golden prevATX declared, but commitment merkle root is included in challenge")
+			return fmt.Errorf("prevATX declared, but commitment merkle root is included in challenge")
 		}
 	} else {
 		if atx.Sequence != 0 {
-			return fmt.Errorf("golden prevATX declared, but sequence number not zero")
+			return fmt.Errorf("no prevATX declared, but sequence number not zero")
 		}
 		if atx.Commitment == nil {
-			return fmt.Errorf("golden prevATX declared, but commitment proof is not included")
+			return fmt.Errorf("no prevATX declared, but commitment proof is not included")
 		}
 		if atx.CommitmentMerkleRoot == nil {
-			return fmt.Errorf("golden prevATX declared, but commitment merkle root is not included in challenge")
+			return fmt.Errorf("no prevATX declared, but commitment merkle root is not included in challenge")
 		}
 		if !bytes.Equal(atx.Commitment.MerkleRoot, atx.CommitmentMerkleRoot) {
 			return errors.New("commitment merkle root included in challenge is not equal to the merkle root included in the proof")
@@ -448,21 +444,27 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 // ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
 // If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
 func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
-	lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
-	if err != nil {
-		// The golden PrevATXID should *not* exist in the DB. A non-golden PrevATXID should exist in DB.
-		if _, ok := err.(ErrAtxNotFound); ok && atx.PrevATXID == db.goldenATXID {
-			return nil
+	if atx.PrevATXID != *types.EmptyATXID {
+		lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
+		if err != nil {
+			db.log.With().Error("could not fetch node last ATX", atx.ID(),
+				log.FieldNamed("atx_node_id", atx.NodeID), log.Err(err))
+			return fmt.Errorf("could not fetch node last ATX: %v", err)
 		}
-
-		db.log.With().Error("could not fetch node last ATX", atx.ID(),
-			log.FieldNamed("atx_node_id", atx.NodeID), log.Err(err))
-		return fmt.Errorf("could not fetch node last ATX: %v", err)
-	}
-
-	// last atx is not the one referenced
-	if lastAtx != atx.PrevATXID {
-		return fmt.Errorf("last atx is not the one referenced")
+		// last atx is not the one referenced
+		if lastAtx != atx.PrevATXID {
+			return fmt.Errorf("last atx is not the one referenced")
+		}
+	} else {
+		lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
+		if _, ok := err.(ErrAtxNotFound); err != nil && !ok {
+			db.log.Error("fetching ATX ids failed: %v", err)
+			return err
+		}
+		if err == nil { // we found an ATX for this node ID, although it reported no prevATX -- this is invalid
+			return fmt.Errorf("no prevATX reported, but other ATX with same nodeID (%v) found: %v",
+				atx.NodeID.ShortString(), lastAtx.ShortString())
+		}
 	}
 
 	return nil
@@ -622,7 +624,7 @@ func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
 	// For the lexicographical order to match the epoch order we must encode the epoch id using big endian encoding when
 	// composing the key.
 	if exists := nodeAtxsIterator.Last(); !exists {
-		return db.goldenATXID, ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeID.ShortString()))
+		return *types.EmptyATXID, ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeID.ShortString()))
 	}
 	return types.ATXID(types.BytesToHash(nodeAtxsIterator.Value())), nil
 }
@@ -722,7 +724,7 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.ActivationTx) error {
 	// this is the first occurrence of this identity, we cannot validate simply by extracting public key
 	// pass it down to Atx handling so that atx can be syntactically verified and identity could be registered.
-	if signedAtx.PrevATXID == db.goldenATXID {
+	if signedAtx.PrevATXID == *types.EmptyATXID {
 		return nil
 	}
 
@@ -800,7 +802,7 @@ func (db *DB) FetchAtxReferences(atx *types.ActivationTx, f service.Fetcher) err
 		}
 	}
 
-	if atx.PrevATXID != *types.EmptyATXID && atx.PrevATXID != db.goldenATXID {
+	if atx.PrevATXID != *types.EmptyATXID {
 		db.log.Info("going to fetch prev atx %v of atx %v", atx.PrevATXID.ShortString(), atx.ID().ShortString())
 		err := f.FetchAtx(atx.PrevATXID)
 		if err != nil {
