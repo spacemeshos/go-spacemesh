@@ -37,6 +37,7 @@ const (
 	TxOldCoinEdPlus TransactionType = 7
 )
 
+// Good checks that transaction type is Good
 func (tt TransactionType) Good() bool {
 	switch tt {
 	case TxSimpleCoinEdPlus, TxCallAppEdPlus, TxSpawnAppEdPlus, TxOldCoinEdPlus,

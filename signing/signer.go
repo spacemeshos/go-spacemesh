@@ -88,7 +88,7 @@ func NewEdSigner() *EdSigner {
 	return &EdSigner{privKey: priv, pubKey: pub}
 }
 
-// NewEdSigner returns an auto-generated ed signer from seed
+// NewEdSignerSeed returns an auto-generated ed signer from seed
 func NewEdSignerSeed(seedStr string) *EdSigner {
 	seed := make([]byte, 32)
 	copy(seed, seedStr)

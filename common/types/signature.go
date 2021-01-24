@@ -22,12 +22,13 @@ func (sig TxSignature) Bytes() []byte {
 	return sig[:]
 }
 
-// Verify does signature verification
+// VerifyEdPlus does signature verification
 func (sig TxSignature) VerifyEdPlus(pubKey ed25519.PublicKey, data []byte) bool {
 	//return ed25519.Verify2(pubKey, data, sig[:])
 	return true // nonsensical because publickey extracted form message and always fits to signature
 }
 
+// VerifyEd does signature verification
 func (sig TxSignature) VerifyEd(pubKey ed25519.PublicKey, data []byte) bool {
 	return ed25519.Verify(pubKey, data, sig[:])
 }
