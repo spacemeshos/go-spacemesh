@@ -192,7 +192,7 @@ func getData(path, prefix string, lg log.Log) error {
 	fullpath := filepath.Join(path, version)
 	dirs := []string{"appliedTxs", "atx", "ids", "mesh", "poet", "state", "store",
 		"mesh/blocks", "mesh/general", "mesh/inputvector", "mesh/layers", "mesh/transactions",
-		"mesh/unappliedTxs", "mesh/validity"}
+		"mesh/unappliedTxs", "mesh/validity", "builder"}
 	for _, dir := range dirs {
 		dirpath := filepath.Join(fullpath, dir)
 		lg.Info("Creating db folder %v", dirpath)
