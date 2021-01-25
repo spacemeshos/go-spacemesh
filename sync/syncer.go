@@ -736,7 +736,7 @@ func (s *Syncer) fetchRefBlock(block *types.Block) error {
 func (s *Syncer) fetchAllReferencedAtxs(blk *types.Block) error {
 	var atxs []types.ATXID
 
-	if blk.ATXID != s.GoldenATXID {
+	if blk.ATXID != *types.EmptyATXID {
 		atxs = append(atxs, blk.ATXID)
 	}
 	if blk.ActiveSet != nil {
