@@ -422,8 +422,8 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		}
 	} else {
 		publicationEpoch := atx.PubLayerID.GetEpoch()
-		if !publicationEpoch.IsGenesis() {
-			return fmt.Errorf("no positioning atx found")
+		if !publicationEpoch.NeedsGoldenPositioningATX() {
+			return fmt.Errorf("golden ATX used for ATX in epoch %d, but is only valid in epoch 1", publicationEpoch)
 		}
 	}
 

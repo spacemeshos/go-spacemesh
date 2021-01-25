@@ -4,13 +4,15 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"sort"
+	"strings"
+
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/sha256-simd"
-	"sort"
-	"strings"
+
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // EpochID is the running epoch number. It's zero-based, so the genesis epoch has EpochID == 0.
@@ -22,6 +24,12 @@ func (l EpochID) ToBytes() []byte { return util.Uint64ToBytes(uint64(l)) }
 // IsGenesis returns true if this epoch is in genesis. The first two epochs are considered genesis epochs.
 func (l EpochID) IsGenesis() bool {
 	return l < 2
+}
+
+// NeedsGoldenPositioningATX returns true if ATXs in this epoch require positioning ATX to be equal to the Golden ATX.
+// All ATXs in epoch 1 must have the Golden ATX as positioning ATX.
+func (l EpochID) NeedsGoldenPositioningATX() bool {
+	return l == 1
 }
 
 // FirstLayer returns the layer ID of the first layer in the epoch.
