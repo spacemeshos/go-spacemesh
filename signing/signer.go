@@ -119,7 +119,7 @@ func (es *EdSigner) Sign2(m []byte) []byte {
 
 // Verify verifies the provided message
 func Verify(pubkey *PublicKey, message []byte, sign []byte) bool {
-	return ed25519.Verify2(ed25519.PublicKey(pubkey.Bytes()), message, sign)
+	return ed25519.Verify2(pubkey.Bytes(), message, sign)
 }
 
 // PublicKey returns the public key of the signer

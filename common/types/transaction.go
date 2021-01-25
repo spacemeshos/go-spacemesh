@@ -235,7 +235,7 @@ func (txm TransactionAuthenticationMessage) Sign(signer *signing.EdSigner) (_ Si
 
 // Encode encodes transaction into the independent form
 func (txm TransactionAuthenticationMessage) Encode(pubKey TxPublicKey, signature TxSignature) (_ SignedTransaction, err error) {
-	stl := SignedTransactionLayout{TxType: byte(txm.TxType), Data: txm.TransactionData, Signature: signature}
+	stl := SignedTransactionLayout{TxType: [1]byte{byte(txm.TxType)}, Data: txm.TransactionData, Signature: signature}
 	if !txm.TxType.EdPlus() {
 		stl.PubKey = pubKey.Bytes()
 	}
@@ -262,7 +262,7 @@ func (txm TransactionAuthenticationMessage) Verify(pubKey TxPublicKey, sig TxSig
 
 // SignedTransactionLayout represents fields layout of a signed transaction
 type SignedTransactionLayout struct {
-	TxType    byte
+	TxType    [1]byte
 	Signature [TxSignatureLength]byte
 	Data      []byte
 	PubKey    [] /*TODO:???*/ byte
@@ -270,7 +270,7 @@ type SignedTransactionLayout struct {
 
 // Type returns transaction type
 func (stl SignedTransactionLayout) Type() TransactionType {
-	return TransactionType(stl.TxType)
+	return TransactionType(stl.TxType[0])
 }
 
 // SignedTransaction is the binary transaction independent form

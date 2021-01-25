@@ -125,9 +125,13 @@ func TestVerifyTransactionType(t *testing.T) {
 	require.NoError(t, err)
 	stx, err := txm.Encode(tx.PubKey(), tx.Signature())
 	require.NoError(t, err)
-	stx[3] = 0xff
+	stx[0] = 0xff
 	_, err = stx.Decode()
 	require.EqualError(t, err, errBadTransactionTypeError.Error())
+	stx[0] = 0
+	stx[2] = 0xff
+	_, err = stx.Decode()
+	require.Error(t, err)
 }
 
 func TestVerifyTransactionLength(t *testing.T) {
@@ -248,14 +252,18 @@ func _TestG1(t *testing.T) {
 		edfx(itx.(EdPlusTransactionFactory).NewEdPlus(), n+"EdPlus")
 	}
 
-	wrs(`
+	wrf(`
 package types
 import (
 	"github.com/stretchr/testify/require"
 	"reflect"
 	"testing"
 )
-`)
+
+// PrivKey = %v
+// PubKey = %v
+
+`, util.Bytes2Hex(alice.ToBuffer()), util.Bytes2Hex(alice.PublicKey().Bytes()))
 
 	edf(OldCoinTx{Amount: 100, GasLimit: 10, AccountNonce: 5, Fee: 1, Recipient: bob.Address()}, "OldCoinTx1")
 	edf(OldCoinTx{Amount: 101, GasLimit: 10, AccountNonce: 6, Fee: 2, Recipient: charlie.Address()}, "OldCoinTx2")
