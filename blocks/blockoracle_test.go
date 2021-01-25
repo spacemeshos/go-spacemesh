@@ -118,6 +118,26 @@ func testBlockOracleAndValidator(r *require.Assertions, activeSetSize uint32, co
 	r.Len(counterValuesSeen, int(numberOfEligibleBlocks))
 }
 
+func TestBlockOracleInGenesisReturnsNoAtx(t *testing.T) {
+	r := require.New(t)
+	activeSetSize := uint32(5)
+	committeeSize := uint32(10)
+	layersPerEpoch := uint16(20)
+	types.SetLayersPerEpoch(int32(layersPerEpoch))
+
+	activationDB := &mockActivationDB{activeSetSize: activeSetSize, atxPublicationLayer: types.LayerID(0), atxs: map[string]map[types.LayerID]types.ATXID{}}
+	beaconProvider := &EpochBeaconProvider{}
+	lg := log.NewDefault(nodeID.Key[:5])
+	blockOracle := NewMinerBlockOracle(committeeSize, activeSetSize, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nodeID, func() bool { return true }, lg.WithName("blockOracle"))
+	for layer := uint16(0); layer < layersPerEpoch; layer++ {
+		activationDB.atxPublicationLayer = types.LayerID((layer/layersPerEpoch)*layersPerEpoch - 1)
+		layerID := types.LayerID(layer)
+		atxID, _, _, err := blockOracle.BlockEligible(layerID)
+		r.NoError(err)
+		r.Equal(*types.EmptyATXID, atxID)
+	}
+}
+
 func TestBlockOracleEmptyActiveSet(t *testing.T) {
 	types.SetLayersPerEpoch(3)
 	r := require.New(t)
