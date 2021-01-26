@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"sort"
+	"strings"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/sha256-simd"
-	"sort"
-	"strings"
 )
 
 // EpochID is the running epoch number. It's zero-based, so the genesis epoch has EpochID == 0.
@@ -141,7 +142,7 @@ func (challenge *NIPSTChallenge) Hash() (*Hash32, error) {
 func (challenge *NIPSTChallenge) String() string {
 	return fmt.Sprintf("<id: [vrf: %v ed: %v], seq: %v, prevATX: %v, PubLayer: %v, s tick: %v, e tick: %v, "+
 		"posATX: %v>",
-		util.Bytes2Hex(challenge.NodeID.VRFPublicKey)[:5],
+		util.Bytes2Hex(challenge.NodeID.VRFPublicKey[:])[:5],
 		challenge.NodeID.Key[:5],
 		challenge.Sequence,
 		challenge.PrevATXID.ShortString(),

@@ -97,8 +97,9 @@ func ReportRewardReceived(r Reward) {
 	defer mu.RUnlock()
 
 	Publish(RewardReceived{
-		Coinbase: r.Coinbase.String(),
-		Amount:   r.Total,
+		Coinbase:  r.Coinbase.String(),
+		Amount:    r.Total,
+		SmesherID: r.Smesher.ToBytes(),
 	})
 
 	if reporter != nil {
@@ -444,7 +445,7 @@ type Reward struct {
 	// TODO: We don't currently have a way to get these two.
 	// See https://github.com/spacemeshos/go-spacemesh/issues/2068
 	//LayerComputed
-	//Smesher
+	Smesher types.NodeID
 }
 
 // TransactionWithValidity wraps a tx with its validity info

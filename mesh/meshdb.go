@@ -363,6 +363,18 @@ func getRewardKeyPrefix(account types.Address) []byte {
 	return []byte(str)
 }
 
+// adding functions for getting the reward key for a smesherID
+// format for the index "reward_<smesherid>_<layerid> -> reward_<accountid>_<layerid> -> the actual reward"
+func getSmesherRewardKey(l types.LayerID, smesherID types.NodeID) []byte {
+	str := string(getSmesherRewardKeyPrefix(smesherID)) + "_" + strconv.FormatUint(l.Uint64(), 10)
+	return []byte(str)
+}
+
+func getSmesherRewardKeyPrefix(smesherID types.NodeID) []byte {
+	str := "reward_" + smesherID.String()
+	return []byte(str)
+}
+
 func getTransactionOriginKey(l types.LayerID, t *types.Transaction) []byte {
 	str := string(getTransactionOriginKeyPrefix(l, t.Origin())) + "_" + t.ID().String()
 	return []byte(str)
@@ -452,20 +464,22 @@ type dbReward struct {
 	// TotalReward - LayerRewardEstimate = FeesEstimate
 }
 
-func (m *DB) writeTransactionRewards(l types.LayerID, accounts []types.Address, totalReward, layerReward *big.Int, smeshers map[types.Address]types.NodeID) error {
-	actBlockCnt := make(map[types.Address]uint64)
-	for _, account := range accounts {
-		actBlockCnt[account]++
-	}
+func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[types.Address]uint64, totalReward, layerReward *big.Int, smeshers map[types.Address]types.NodeID) error {
+	// actBlockCnt := make(map[types.Address]uint64)
+	// for _, account := range accounts {
+	// 	actBlockCnt[account]++
+	// }
 
 	batch := m.transactions.NewBatch()
-	for account, cnt := range actBlockCnt {
-		smesherID := smeshers[account] //check if we need to check whether the account is present
+	for account, cnt := range accountBlockCount {
+		smesherID := smeshers[account]
 		reward := dbReward{TotalReward: cnt * totalReward.Uint64(), LayerRewardEstimate: cnt * layerReward.Uint64(), SmesherID: smesherID}
 		if b, err := types.InterfaceToBytes(&reward); err != nil {
 			return fmt.Errorf("could not marshal reward for %v: %v", account.Short(), err)
 		} else if err := batch.Put(getRewardKey(l, account), b); err != nil {
 			return fmt.Errorf("could not write reward to %v to database: %v", account.Short(), err)
+		} else if err := batch.Put(getSmesherRewardKey(l, smesherID), getRewardKey(l, account)); err != nil {
+			return fmt.Errorf("could not write smesherID to %v to datavase: %v", smesherID.ShortString(), err)
 		}
 	}
 	return batch.Write()
@@ -486,6 +500,39 @@ func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err erro
 		}
 		var reward dbReward
 		err = types.BytesToInterface(it.Value(), &reward)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
+		}
+		rewards = append(rewards, types.Reward{
+			Layer:               types.LayerID(layer),
+			TotalReward:         reward.TotalReward,
+			LayerRewardEstimate: reward.LayerRewardEstimate,
+			SmesherID:           reward.SmesherID,
+		})
+	}
+	return
+}
+
+// GetRewardsBySmesherID retrieves rewards by smesherID
+func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Reward, err error) {
+	it := m.transactions.Find(getSmesherRewardKeyPrefix(smesherID))
+	for it.Next() {
+		if it.Key() == nil {
+			break
+		}
+		str := string(it.Key())
+		strs := strings.Split(str, "_")
+		layer, err := strconv.ParseUint(strs[2], 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("wrong key in db %s: %v", it.Key(), err)
+		}
+		//find the key to the actual reward, which is in it.Value()
+		var reward dbReward
+		rewardBytes, err := m.transactions.Get(it.Value())
+		if err != nil {
+			return nil, fmt.Errorf("wrong key in db %s: %v", it.Value(), err)
+		}
+		err = types.BytesToInterface(rewardBytes, &reward)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
 		}

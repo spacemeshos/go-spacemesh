@@ -784,6 +784,7 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 	numBlocks := big.NewInt(int64(len(coinbases)))
 
 	blockTotalReward, blockTotalRewardMod := calculateActualRewards(l.Index(), totalReward, numBlocks)
+
 	msh.ApplyRewards(l.Index(), coinbases, blockTotalReward)
 
 	blockLayerReward, blockLayerRewardMod := calculateActualRewards(l.Index(), layerReward, numBlocks)
@@ -798,7 +799,22 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 		log.Uint64("layer_reward_remainder", blockLayerRewardMod.Uint64()),
 	)
 	//err := msh.writeTransactionRewards(l.Index(), ids, blockTotalReward, blockLayerReward)
-	err := msh.writeTransactionRewards(l.Index(), coinbases, blockTotalReward, blockLayerReward, smeshers)
+	accountBlockCount := make(map[types.Address]uint64)
+	//remove duplicates from the coinbases
+	for _, account := range coinbases {
+		accountBlockCount[account]++
+	}
+	//report the rewards for each coinbase
+	for account, cnt := range accountBlockCount {
+		events.ReportRewardReceived(events.Reward{
+			Layer:       l.Index(),
+			Total:       cnt * blockTotalReward.Uint64(),
+			LayerReward: cnt * blockLayerReward.Uint64(),
+			Coinbase:    account,
+			Smesher:     smeshers[account],
+		})
+	}
+	err := msh.writeTransactionRewards(l.Index(), accountBlockCount, blockTotalReward, blockLayerReward, smeshers)
 	if err != nil {
 		msh.Error("cannot write reward to db")
 	}

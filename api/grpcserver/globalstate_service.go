@@ -1,6 +1,8 @@
 package grpcserver
 
 import (
+	"bytes"
+
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -190,6 +192,7 @@ func (s GlobalStateService) SmesherDataQuery(context.Context, *pb.SmesherDataQue
 
 	// TODO: implement me! We don't currently have a way to read rewards per-smesher.
 	// See https://github.com/spacemeshos/go-spacemesh/issues/2068
+	// Need to add a database index for this
 
 	return nil, status.Errorf(codes.Unimplemented, "this endpoint has not yet been implemented")
 }
@@ -279,7 +282,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 						Coinbase: &pb.AccountId{Address: addr.Bytes()},
 						// TODO: There is currently no way to get this for a reward.
 						// See https://github.com/spacemeshos/go-spacemesh/issues/2068
-						//Smesher:  nil,
+						Smesher: &pb.SmesherId{Id: reward.Smesher.ToBytes()},
 					},
 				}}}); err != nil {
 					return err
@@ -321,13 +324,52 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 }
 
 // SmesherRewardStream exposes a stream of smesher rewards
-func (s GlobalStateService) SmesherRewardStream(*pb.SmesherRewardStreamRequest, pb.GlobalStateService_SmesherRewardStreamServer) error {
+func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamRequest, stream pb.GlobalStateService_SmesherRewardStreamServer) error {
 	log.Info("GRPC GlobalStateService.SmesherRewardStream")
 
 	// TODO: implement me! We don't currently have a way to read rewards per-smesher.
 	// See https://github.com/spacemeshos/go-spacemesh/issues/2068
+	// Is this just filtering on the SmesherID?
 
-	return status.Errorf(codes.Unimplemented, "this endpoint has not yet been implemented")
+	if in.Id == nil {
+		return status.Errorf(codes.InvalidArgument, "`ID` must be provided")
+	}
+	smesherIDBytes := in.Id.Id
+
+	// subscribe to the rewards channel
+	channelReward := events.GetRewardChannel()
+
+	for {
+		select {
+		case reward, ok := <-channelReward:
+			if !ok {
+				//shut down the reward channel
+				log.Info("Reward channel closed, shutting down")
+				return nil
+			}
+			//filter on the smesherID
+			if comp := bytes.Compare(reward.Smesher.ToBytes(), smesherIDBytes); comp == 0 {
+				if err := stream.Send(&pb.SmesherRewardStreamResponse{
+					Reward: &pb.Reward{
+						Layer:       &pb.LayerNumber{Number: uint32(reward.Layer)},
+						Total:       &pb.Amount{Value: reward.Total},
+						LayerReward: &pb.Amount{Value: reward.LayerReward},
+						// Leave this out for now as this is changing
+						//LayerComputed: 0,
+						Coinbase: &pb.AccountId{Address: reward.Coinbase.Bytes()},
+						Smesher:  &pb.SmesherId{Id: reward.Smesher.ToBytes()},
+					},
+				}); err != nil {
+					return err
+				}
+			}
+		case <-stream.Context().Done():
+			log.Info("SmesherRewardStream closing stream, client disconnected")
+			return nil
+		}
+	}
+
+	//return status.Errorf(codes.Unimplemented, "this endpoint has not yet been implemented")
 }
 
 // AppEventStream exposes a stream of emitted app events
@@ -418,7 +460,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 					Coinbase: &pb.AccountId{Address: reward.Coinbase.Bytes()},
 					// TODO: There is currently no way to get this for a reward.
 					// See https://github.com/spacemeshos/go-spacemesh/issues/2068
-					//Smesher:  nil,
+					Smesher: &pb.SmesherId{Id: reward.Smesher.ToBytes()},
 				},
 			}}}); err != nil {
 				return err

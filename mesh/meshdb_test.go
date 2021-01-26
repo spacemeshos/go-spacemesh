@@ -55,7 +55,7 @@ func TestMeshDB_AddBlock(t *testing.T) {
 	addTransactionsWithFee(t, mdb, block1, 4, rand.Int63n(100))
 
 	poetRef := []byte{0xba, 0x05}
-	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID{}, 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{}, &types.NIPST{
+	atx := newActivationTx(types.NodeID{Key: []byte("aaaa"), VRFPublicKey: []byte("bbb")}, 1, types.ATXID{}, 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{}, &types.NIPST{
 		Space:          0,
 		NipstChallenge: &types.Hash32{},
 		PostProof: &types.PostProof{
@@ -485,19 +485,19 @@ func TestMeshDB_testGetRewards(t *testing.T) {
 	signer4, addr4 := newSignerAndAddress(r, "999")
 
 	smesher1 := types.NodeID{
-		Key:          signer1.PublicKey().String(),
+		Key:          signer1.PublicKey().Bytes(),
 		VRFPublicKey: signer1.PublicKey().Bytes(),
 	}
 	smesher2 := types.NodeID{
-		Key:          signer1.PublicKey().String(),
+		Key:          signer1.PublicKey().Bytes(),
 		VRFPublicKey: signer2.PublicKey().Bytes(),
 	}
 	smesher3 := types.NodeID{
-		Key:          signer1.PublicKey().String(),
+		Key:          signer1.PublicKey().Bytes(),
 		VRFPublicKey: signer3.PublicKey().Bytes(),
 	}
 	smesher4 := types.NodeID{
-		Key:          signer1.PublicKey().String(),
+		Key:          signer1.PublicKey().Bytes(),
 		VRFPublicKey: signer4.PublicKey().Bytes(),
 	}
 
@@ -508,13 +508,28 @@ func TestMeshDB_testGetRewards(t *testing.T) {
 		addr4: smesher4,
 	}
 
-	err := mdb.writeTransactionRewards(1, []types.Address{addr1, addr2, addr3}, big.NewInt(10000), big.NewInt(9000), smesherMap)
+	test1Map := map[types.Address]uint64{
+		addr1: 1,
+		addr2: 1,
+		addr3: 1,
+	}
+
+	test2Map := map[types.Address]uint64{
+		addr1: 1,
+		addr2: 1,
+	}
+
+	test3Map := map[types.Address]uint64{
+		addr2: 2,
+	}
+
+	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000), smesherMap)
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(2, []types.Address{addr1, addr2}, big.NewInt(20000), big.NewInt(19000), smesherMap)
+	err = mdb.writeTransactionRewards(2, test2Map, big.NewInt(20000), big.NewInt(19000), smesherMap)
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(3, []types.Address{addr2, addr2}, big.NewInt(15000), big.NewInt(14500), smesherMap)
+	err = mdb.writeTransactionRewards(3, test3Map, big.NewInt(15000), big.NewInt(14500), smesherMap)
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewards(addr2)
@@ -530,6 +545,171 @@ func TestMeshDB_testGetRewards(t *testing.T) {
 	r.Equal([]types.Reward{
 		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1},
 		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1},
+	}, rewards)
+
+	rewards, err = mdb.GetRewards(addr4)
+	r.NoError(err)
+	r.Nil(rewards)
+}
+
+func TestMeshDB_testGetRewardsBySmesher(t *testing.T) {
+	r := require.New(t)
+	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	signer1, addr1 := newSignerAndAddress(r, "123")
+	signer2, addr2 := newSignerAndAddress(r, "456")
+	signer3, addr3 := newSignerAndAddress(r, "789")
+	signer4, addr4 := newSignerAndAddress(r, "999")
+
+	smesher1 := types.NodeID{
+		Key:          signer1.PublicKey().Bytes(),
+		VRFPublicKey: signer1.PublicKey().Bytes(),
+	}
+	smesher2 := types.NodeID{
+		Key:          signer1.PublicKey().Bytes(),
+		VRFPublicKey: signer2.PublicKey().Bytes(),
+	}
+	smesher3 := types.NodeID{
+		Key:          signer1.PublicKey().Bytes(),
+		VRFPublicKey: signer3.PublicKey().Bytes(),
+	}
+	smesher4 := types.NodeID{
+		Key:          signer1.PublicKey().Bytes(),
+		VRFPublicKey: signer4.PublicKey().Bytes(),
+	}
+
+	smesherMap := map[types.Address]types.NodeID{
+		addr1: smesher1,
+		addr2: smesher2,
+		addr3: smesher3,
+		addr4: smesher4,
+	}
+
+	test1Map := map[types.Address]uint64{
+		addr1: 1,
+		addr2: 1,
+		addr3: 1,
+	}
+
+	test2Map := map[types.Address]uint64{
+		addr1: 1,
+		addr2: 1,
+	}
+
+	test3Map := map[types.Address]uint64{
+		addr2: 2,
+	}
+
+	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000), smesherMap)
+	r.NoError(err)
+
+	err = mdb.writeTransactionRewards(2, test2Map, big.NewInt(20000), big.NewInt(19000), smesherMap)
+	r.NoError(err)
+
+	err = mdb.writeTransactionRewards(3, test3Map, big.NewInt(15000), big.NewInt(14500), smesherMap)
+	r.NoError(err)
+
+	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
+	r.NoError(err)
+	r.Equal([]types.Reward{
+		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2},
+		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2},
+		{Layer: 3, TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2},
+	}, rewards)
+
+	rewards, err = mdb.GetRewardsBySmesherID(smesher1)
+	r.NoError(err)
+	r.Equal([]types.Reward{
+		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1},
+		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1},
+	}, rewards)
+
+	rewards, err = mdb.GetRewards(addr4)
+	r.NoError(err)
+	r.Nil(rewards)
+}
+
+func TestMeshDB_testGetRewardsBySmesherChangingLayer(t *testing.T) {
+	r := require.New(t)
+	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	signer1, addr1 := newSignerAndAddress(r, "123")
+	signer2, addr2 := newSignerAndAddress(r, "456")
+	signer3, addr3 := newSignerAndAddress(r, "789")
+	signer4, addr4 := newSignerAndAddress(r, "999")
+
+	smesher1 := types.NodeID{
+		Key:          signer1.PublicKey().Bytes(),
+		VRFPublicKey: signer1.PublicKey().Bytes(),
+	}
+	smesher2 := types.NodeID{
+		Key:          signer1.PublicKey().Bytes(),
+		VRFPublicKey: signer2.PublicKey().Bytes(),
+	}
+	smesher3 := types.NodeID{
+		Key:          signer1.PublicKey().Bytes(),
+		VRFPublicKey: signer3.PublicKey().Bytes(),
+	}
+	smesher4 := types.NodeID{
+		Key:          signer1.PublicKey().Bytes(),
+		VRFPublicKey: signer4.PublicKey().Bytes(),
+	}
+
+	smesherMapL1 := map[types.Address]types.NodeID{
+		addr1: smesher1,
+		addr2: smesher2,
+		addr3: smesher3,
+		addr4: smesher4,
+	}
+
+	smesherMapL2 := map[types.Address]types.NodeID{
+		addr1: smesher2,
+		addr2: smesher3,
+		addr3: smesher1,
+		addr4: smesher4,
+	}
+
+	test1Map := map[types.Address]uint64{
+		addr1: 1,
+		addr2: 1,
+		addr3: 1,
+	}
+
+	test2Map := map[types.Address]uint64{
+		addr1: 1,
+		addr2: 1,
+	}
+
+	test3Map := map[types.Address]uint64{
+		addr2: 2,
+	}
+
+	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000), smesherMapL1)
+	r.NoError(err)
+
+	err = mdb.writeTransactionRewards(2, test2Map, big.NewInt(20000), big.NewInt(19000), smesherMapL2)
+	r.NoError(err)
+
+	err = mdb.writeTransactionRewards(3, test3Map, big.NewInt(15000), big.NewInt(14500), smesherMapL1)
+	r.NoError(err)
+
+	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
+	r.NoError(err)
+	r.Equal([]types.Reward{
+		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2},
+		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2},
+		{Layer: 3, TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2},
+	}, rewards)
+
+	rewards, err = mdb.GetRewardsBySmesherID(smesher1)
+	r.NoError(err)
+	r.Equal([]types.Reward{
+		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1},
+	}, rewards)
+
+	rewards, err = mdb.GetRewardsBySmesherID(smesher3)
+	r.NoError(err)
+	r.Equal([]types.Reward{
+		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher3},
+		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher3},
 	}, rewards)
 
 	rewards, err = mdb.GetRewards(addr4)
