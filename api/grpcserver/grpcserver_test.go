@@ -698,14 +698,62 @@ func TestGlobalStateService(t *testing.T) {
 			statusCode := status.Code(err)
 			require.Equal(t, codes.Unimplemented, statusCode)
 		}},
-		// {"SmesherRewardStream", func(t *testing.T) {
-		// 	stream, err := c.SmesherRewardStream(context.Background(), &pb.SmesherRewardStreamRequest{})
-		// 	// We expect to be able to open the stream but for it to fail upon the first request
-		// 	require.NoError(t, err)
-		// 	_, err = stream.Recv()
-		// 	statusCode := status.Code(err)
-		// 	require.Equal(t, codes.Unimplemented, statusCode)
-		// }},
+		{name: "SmesherRewardStream_Basic", run: func(t *testing.T) {
+			generateRunFn := func(req *pb.SmesherRewardStreamRequest) func(*testing.T) {
+				return func(*testing.T) {
+					// Just try opening and immediately closing the stream
+					stream, err := c.SmesherRewardStream(context.Background(), req)
+					require.NoError(t, err, "unexpected error opening stream")
+
+					// Do we need this? It doesn't seem to cause any harm
+					stream.Context().Done()
+				}
+			}
+			generateRunFnError := func(msg string, req *pb.SmesherRewardStreamRequest) func(*testing.T) {
+				return func(t *testing.T) {
+					// there should be no error opening the stream
+					stream, err := c.SmesherRewardStream(context.Background(), req)
+					require.NoError(t, err, "unexpected error opening stream")
+
+					// sending a request should generate an error
+					_, err = stream.Recv()
+					require.Error(t, err, "expected an error")
+					require.Contains(t, err.Error(), msg, "received unexpected error")
+					statusCode := status.Code(err)
+					require.Equal(t, codes.InvalidArgument, statusCode, "expected InvalidArgument error")
+
+					// Do we need this? It doesn't seem to cause any harm
+					stream.Context().Done()
+				}
+			}
+			subtests := []struct {
+				name string
+				run  func(*testing.T)
+			}{
+				{
+					name: "missing ID",
+					run:  generateRunFnError("`Id` must be provided", &pb.SmesherRewardStreamRequest{}),
+				},
+				{
+					name: "empty ID",
+					run: generateRunFnError("`Id.Id` must be provided", &pb.SmesherRewardStreamRequest{
+						Id: &pb.SmesherId{},
+					}),
+				},
+
+				//These tests should be successful
+				{
+					name: "valid address",
+					run: generateRunFn(&pb.SmesherRewardStreamRequest{
+						Id: &pb.SmesherId{Id: []byte("smesher1")},
+					}),
+				},
+			}
+			//Run sub-subtests
+			for _, r := range subtests {
+				t.Run(r.name, r.run)
+			}
+		}},
 		{"AppEventStream", func(t *testing.T) {
 			stream, err := c.AppEventStream(context.Background(), &pb.AppEventStreamRequest{})
 			// We expect to be able to open the stream but for it to fail upon the first request

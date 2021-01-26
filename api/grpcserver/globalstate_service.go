@@ -332,7 +332,10 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 	// Is this just filtering on the SmesherID?
 
 	if in.Id == nil {
-		return status.Errorf(codes.InvalidArgument, "`ID` must be provided")
+		return status.Errorf(codes.InvalidArgument, "`Id` must be provided")
+	}
+	if in.Id.Id == nil {
+		return status.Errorf(codes.InvalidArgument, "`Id.Id` must be provided")
 	}
 	smesherIDBytes := in.Id.Id
 
