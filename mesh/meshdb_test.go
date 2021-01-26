@@ -55,7 +55,7 @@ func TestMeshDB_AddBlock(t *testing.T) {
 	addTransactionsWithFee(t, mdb, block1, 4, rand.Int63n(100))
 
 	poetRef := []byte{0xba, 0x05}
-	atx := newActivationTx(types.NodeID{Key: []byte("aaaa"), VRFPublicKey: []byte("bbb")}, 1, types.ATXID{}, 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{}, &types.NIPST{
+	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID{}, 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{}, &types.NIPST{
 		Space:          0,
 		NipstChallenge: &types.Hash32{},
 		PostProof: &types.PostProof{
@@ -485,19 +485,19 @@ func TestMeshDB_testGetRewards(t *testing.T) {
 	signer4, addr4 := newSignerAndAddress(r, "999")
 
 	smesher1 := types.NodeID{
-		Key:          signer1.PublicKey().Bytes(),
+		Key:          signer1.PublicKey().String(),
 		VRFPublicKey: signer1.PublicKey().Bytes(),
 	}
 	smesher2 := types.NodeID{
-		Key:          signer1.PublicKey().Bytes(),
+		Key:          signer1.PublicKey().String(),
 		VRFPublicKey: signer2.PublicKey().Bytes(),
 	}
 	smesher3 := types.NodeID{
-		Key:          signer1.PublicKey().Bytes(),
+		Key:          signer1.PublicKey().String(),
 		VRFPublicKey: signer3.PublicKey().Bytes(),
 	}
 	smesher4 := types.NodeID{
-		Key:          signer1.PublicKey().Bytes(),
+		Key:          signer1.PublicKey().String(),
 		VRFPublicKey: signer4.PublicKey().Bytes(),
 	}
 
@@ -561,19 +561,19 @@ func TestMeshDB_testGetRewardsBySmesher(t *testing.T) {
 	signer4, addr4 := newSignerAndAddress(r, "999")
 
 	smesher1 := types.NodeID{
-		Key:          signer1.PublicKey().Bytes(),
+		Key:          signer1.PublicKey().String(),
 		VRFPublicKey: signer1.PublicKey().Bytes(),
 	}
 	smesher2 := types.NodeID{
-		Key:          signer1.PublicKey().Bytes(),
+		Key:          signer1.PublicKey().String(),
 		VRFPublicKey: signer2.PublicKey().Bytes(),
 	}
 	smesher3 := types.NodeID{
-		Key:          signer1.PublicKey().Bytes(),
+		Key:          signer1.PublicKey().String(),
 		VRFPublicKey: signer3.PublicKey().Bytes(),
 	}
 	smesher4 := types.NodeID{
-		Key:          signer1.PublicKey().Bytes(),
+		Key:          signer1.PublicKey().String(),
 		VRFPublicKey: signer4.PublicKey().Bytes(),
 	}
 
@@ -637,19 +637,19 @@ func TestMeshDB_testGetRewardsBySmesherChangingLayer(t *testing.T) {
 	signer4, addr4 := newSignerAndAddress(r, "999")
 
 	smesher1 := types.NodeID{
-		Key:          signer1.PublicKey().Bytes(),
+		Key:          signer1.PublicKey().String(),
 		VRFPublicKey: signer1.PublicKey().Bytes(),
 	}
 	smesher2 := types.NodeID{
-		Key:          signer1.PublicKey().Bytes(),
+		Key:          signer1.PublicKey().String(),
 		VRFPublicKey: signer2.PublicKey().Bytes(),
 	}
 	smesher3 := types.NodeID{
-		Key:          signer1.PublicKey().Bytes(),
+		Key:          signer1.PublicKey().String(),
 		VRFPublicKey: signer3.PublicKey().Bytes(),
 	}
 	smesher4 := types.NodeID{
-		Key:          signer1.PublicKey().Bytes(),
+		Key:          signer1.PublicKey().String(),
 		VRFPublicKey: signer4.PublicKey().Bytes(),
 	}
 
