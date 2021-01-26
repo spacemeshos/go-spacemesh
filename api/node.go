@@ -1,9 +1,10 @@
 package api
 
 import (
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"time"
 )
 
 // NetworkAPI is an API to nodes gossip network
@@ -55,6 +56,7 @@ type TxAPI interface {
 	GetBalance(types.Address) uint64
 	GetNonce(types.Address) uint64
 	GetAllAccounts() (*types.MultipleAccountsState, error)
+	GetRewardsBySmesherID(types.NodeID) ([]types.Reward, error)
 }
 
 // PeerCounter is an api to get amount of connected peers

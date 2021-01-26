@@ -246,6 +246,17 @@ func (t *TxAPIMock) GetRewards(types.Address) (rewards []types.Reward, err error
 	}, nil
 }
 
+func (t *TxAPIMock) GetRewardsBySmesherID(types.NodeID) (rewards []types.Reward, err error) {
+	return []types.Reward{
+		{
+			Layer:               layerFirst,
+			TotalReward:         rewardAmount,
+			LayerRewardEstimate: rewardAmount,
+			SmesherID:           nodeID,
+		},
+	}, nil
+}
+
 func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID) {
 	if l != TxReturnLayer {
 		return nil
@@ -693,10 +704,25 @@ func TestGlobalStateService(t *testing.T) {
 			checkAccountDataQueryItemAccount(t, res.AccountItem[1].Datum)
 		}},
 		{"SmesherDataQuery", func(t *testing.T) {
-			_, err := c.SmesherDataQuery(context.Background(), &pb.SmesherDataQueryRequest{})
-			require.Error(t, err)
-			statusCode := status.Code(err)
-			require.Equal(t, codes.Unimplemented, statusCode)
+			// _, err := c.SmesherDataQuery(context.Background(), &pb.SmesherDataQueryRequest{})
+			// require.Error(t, err)
+			// statusCode := status.Code(err)
+			// require.Equal(t, codes.Unimplemented, statusCode)
+			res, err := c.SmesherDataQuery(context.Background(), &pb.SmesherDataQueryRequest{
+				SmesherId: &pb.SmesherId{
+					Id: nodeID.ToBytes(),
+				},
+				MaxResults: uint32(10),
+				Offset:     uint32(0),
+			})
+			require.NoError(t, err)
+			require.Equal(t, uint32(1), res.TotalResults)
+			require.Equal(t, 1, len(res.Rewards))
+			require.Equal(t, uint32(layerFirst), res.Rewards[0].Layer.Number)
+			require.Equal(t, uint64(rewardAmount), res.Rewards[0].Total.Value)
+			require.Equal(t, uint64(rewardAmount), res.Rewards[0].LayerReward.Value)
+			//require.Equal(t, addr1.Bytes(), res.Rewards[0].Coinbase.Address)
+			require.Equal(t, nodeID.ToBytes(), res.Rewards[0].Smesher.Id)
 		}},
 		{name: "SmesherRewardStream_Basic", run: func(t *testing.T) {
 			generateRunFn := func(req *pb.SmesherRewardStreamRequest) func(*testing.T) {

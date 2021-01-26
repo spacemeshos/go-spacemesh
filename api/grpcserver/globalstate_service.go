@@ -187,14 +187,52 @@ func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDa
 }
 
 // SmesherDataQuery returns historical info on smesher rewards
-func (s GlobalStateService) SmesherDataQuery(context.Context, *pb.SmesherDataQueryRequest) (*pb.SmesherDataQueryResponse, error) {
+func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDataQueryRequest) (*pb.SmesherDataQueryResponse, error) {
 	log.Info("GRPC GlobalStateService.SmesherDataQuery")
 
 	// TODO: implement me! We don't currently have a way to read rewards per-smesher.
 	// See https://github.com/spacemeshos/go-spacemesh/issues/2068
-	// Need to add a database index for this
+	if in.SmesherId == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "`Id` must be provided")
+	}
+	if in.SmesherId.Id == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "`Id.Id` must be provided")
+	}
 
-	return nil, status.Errorf(codes.Unimplemented, "this endpoint has not yet been implemented")
+	smesherIDBytes := in.SmesherId.Id
+	smesherID := types.BytesToNodeID(smesherIDBytes)
+	res := &pb.SmesherDataQueryResponse{}
+	dbRewards, err := s.Mesh.GetRewardsBySmesherID(smesherID)
+
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "error getting rewards data")
+	}
+	for _, r := range dbRewards {
+		res.Rewards = append(res.Rewards, &pb.Reward{
+			Layer:       &pb.LayerNumber{Number: uint32(r.Layer)},
+			Total:       &pb.Amount{Value: r.TotalReward},
+			LayerReward: &pb.Amount{Value: r.LayerRewardEstimate},
+			// Leave this out for now as this is changing
+			//LayerComputed: 0,
+			Coinbase: &pb.AccountId{Address: r.Coinbase.Bytes()},
+			Smesher:  &pb.SmesherId{Id: r.SmesherID.ToBytes()},
+		})
+	}
+
+	res.TotalResults = uint32(len(res.Rewards))
+	offset := in.Offset
+
+	if offset > uint32(len(res.Rewards)) {
+		return &pb.SmesherDataQueryResponse{}, nil
+	}
+
+	maxResults := in.MaxResults
+	if maxResults == 0 || offset+maxResults > uint32(len(res.Rewards)) {
+		maxResults = uint32(len(res.Rewards)) - offset
+	}
+	res.Rewards = res.Rewards[offset : offset+maxResults]
+
+	return res, nil
 }
 
 // STREAMS

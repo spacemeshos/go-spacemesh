@@ -133,6 +133,7 @@ type Reward struct {
 	TotalReward         uint64
 	LayerRewardEstimate uint64
 	SmesherID           NodeID
+	Coinbase            Address
 }
 
 // NewSignedTx is used in TESTS ONLY to generate signed txs

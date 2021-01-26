@@ -461,6 +461,7 @@ type dbReward struct {
 	TotalReward         uint64
 	LayerRewardEstimate uint64
 	SmesherID           types.NodeID
+	Coinbase            types.Address
 	// TotalReward - LayerRewardEstimate = FeesEstimate
 }
 
@@ -473,7 +474,7 @@ func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[type
 	batch := m.transactions.NewBatch()
 	for account, cnt := range accountBlockCount {
 		smesherID := smeshers[account]
-		reward := dbReward{TotalReward: cnt * totalReward.Uint64(), LayerRewardEstimate: cnt * layerReward.Uint64(), SmesherID: smesherID}
+		reward := dbReward{TotalReward: cnt * totalReward.Uint64(), LayerRewardEstimate: cnt * layerReward.Uint64(), SmesherID: smesherID, Coinbase: account}
 		if b, err := types.InterfaceToBytes(&reward); err != nil {
 			return fmt.Errorf("could not marshal reward for %v: %v", account.Short(), err)
 		} else if err := batch.Put(getRewardKey(l, account), b); err != nil {
@@ -508,6 +509,7 @@ func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err erro
 			TotalReward:         reward.TotalReward,
 			LayerRewardEstimate: reward.LayerRewardEstimate,
 			SmesherID:           reward.SmesherID,
+			Coinbase:            reward.Coinbase,
 		})
 	}
 	return
@@ -529,6 +531,7 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 		//find the key to the actual reward, which is in it.Value()
 		var reward dbReward
 		rewardBytes, err := m.transactions.Get(it.Value())
+
 		if err != nil {
 			return nil, fmt.Errorf("wrong key in db %s: %v", it.Value(), err)
 		}
@@ -541,6 +544,7 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 			TotalReward:         reward.TotalReward,
 			LayerRewardEstimate: reward.LayerRewardEstimate,
 			SmesherID:           reward.SmesherID,
+			Coinbase:            reward.Coinbase,
 		})
 	}
 	return

@@ -111,7 +111,15 @@ func (id NodeID) ShortString() string {
 	return Shorten(name, 5)
 }
 
-// Deserialization of a NodeID
+// BytesToNodeID deserializes a byte slice into a NodeID
+func BytesToNodeID(b []byte) NodeID {
+	pubKey := b[0:32]
+	vrfKey := b[32:]
+	return NodeID{
+		Key:          util.Bytes2Hex(pubKey),
+		VRFPublicKey: vrfKey,
+	}
+}
 
 // Field returns a log field. Implements the LoggableField interface.
 func (id NodeID) Field() log.Field { return log.String("node_id", string(id.Key[:])) }
