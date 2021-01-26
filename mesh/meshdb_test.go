@@ -611,16 +611,16 @@ func TestMeshDB_testGetRewardsBySmesher(t *testing.T) {
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2},
-		{Layer: 3, TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2},
+		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: 3, TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2, Coinbase: addr2},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher1)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1},
+		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewards(addr4)
@@ -694,22 +694,22 @@ func TestMeshDB_testGetRewardsBySmesherChangingLayer(t *testing.T) {
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2},
-		{Layer: 3, TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2},
+		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr1},
+		{Layer: 3, TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2, Coinbase: addr2},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher1)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1},
+		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher3)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher3},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher3},
+		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher3, Coinbase: addr3},
+		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher3, Coinbase: addr2},
 	}, rewards)
 
 	rewards, err = mdb.GetRewards(addr4)
