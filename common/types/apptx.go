@@ -2,15 +2,15 @@ package types
 
 import (
 	"bytes"
-	"crypto/sha512"
 	"fmt"
 	xdr "github.com/nullstyle/go-xdr/xdr3"
+	"github.com/spacemeshos/sha256-simd"
 )
 
 const (
 	originalTransaction byte = 0
 	prunedTransaction   byte = 0xff
-	prunedDataHashSize  int  = 32
+	prunedDataHashSize  int  = sha256.Size
 )
 
 // CallAppTx implements "Call App Transaction"
@@ -107,8 +107,8 @@ func (h *CallAppTxHeader) xdrFill(bs []byte) (int, error) {
 		GasPrice: d.GasPrice,
 	}
 	if h.pruned == originalTransaction {
-		h.AppAddress = BytesToAddress(d.AddrAndCallData[:20])
-		h.CallData = d.AddrAndCallData[20:]
+		h.AppAddress = BytesToAddress(d.AddrAndCallData[:AddressLength])
+		h.CallData = d.AddrAndCallData[AddressLength:]
 	} else {
 		h.AppAddress = Address{}
 		h.CallData = d.AddrAndCallData
@@ -134,10 +134,10 @@ func (h CallAppTxHeader) immutableBytes() ([]byte, error) {
 
 func (h CallAppTxHeader) immutableCallData() []byte {
 	if h.pruned == originalTransaction {
-		w := sha512.New()
-		_, _ = w.Write(h.AppAddress[:])
+		w := sha256.New()
+		_, _ = w.Write(h.AppAddress[:AddressLength])
 		_, _ = w.Write(h.CallData)
-		return w.Sum(nil)[:prunedDataHashSize]
+		return w.Sum(nil)
 	}
 	return h.CallData
 }
