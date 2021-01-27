@@ -84,16 +84,16 @@ func (tt TransactionType) EdPlus() bool {
 }
 
 // Decode decodes transaction bytes into the transaction object
-func (tt TransactionType) Decode(pubKey TxPublicKey, signature TxSignature, txid TransactionID, data []byte) (Transaction, error) {
+func (tt TransactionType) Decode(data []byte) (IncompleteTransaction, error) {
 	switch tt {
 	case TxSimpleCoinEd, TxSimpleCoinEdPlus:
-		return DecodeSimpleCoinTx(data, signature, pubKey, txid, tt)
+		return DecodeSimpleCoinTx(data, tt)
 	case TxCallAppEd, TxCallAppEdPlus:
-		return DecodeCallAppTx(data, signature, pubKey, txid, tt)
+		return DecodeCallAppTx(data, tt)
 	case TxSpawnAppEd, TxSpawnAppEdPlus:
-		return DecodeSpawnAppTx(data, signature, pubKey, txid, tt)
+		return DecodeSpawnAppTx(data, tt)
 	case TxOldCoinEd, TxOldCoinEdPlus:
-		return DecodeOldCoinTx(data, signature, pubKey, txid, tt)
+		return DecodeOldCoinTx(data, tt)
 	}
 	// it must be impossible (in theory)
 	return nil, fmt.Errorf("unknown transaction type")
@@ -123,12 +123,13 @@ type EdTransactionFactory interface {
 	NewEd() IncompleteTransaction
 }
 
-// IncompleteTransaction is the incomplete transaction having just a header
+// IncompleteTransaction is the interface of an immutable incomplete transaction
 type IncompleteTransaction interface {
 	fmt.Stringer // String()string
 
 	AuthenticationMessage() (TransactionAuthenticationMessage, error)
 	Type() TransactionType
+	Complete(key TxPublicKey, signature TxSignature, id TransactionID) Transaction
 
 	// extract internal transaction structure
 	Extract(interface{}) bool
@@ -158,7 +159,7 @@ func SignTransaction(itx IncompleteTransaction, signer *signing.EdSigner) (tx Tr
 	return stx.Decode()
 }
 
-// Transaction is a completed transaction interface
+// Transaction is the interface of an immutable completed transaction
 type Transaction interface {
 	IncompleteTransaction
 
@@ -169,6 +170,8 @@ type Transaction interface {
 	PubKey() TxPublicKey
 	Signature() TxSignature
 	Encode() (SignedTransaction, error)
+	Prune() Transaction
+	Pruned() bool
 }
 
 // TransactionID is a 32-byte sha256 sum of the transaction, used as an identifier.
@@ -212,8 +215,8 @@ var EmptyTransactionID = TransactionID{}
 
 // TransactionAuthenticationMessage is an incomplete transaction binary representation
 type TransactionAuthenticationMessage struct {
-	NetID           NetworkID
 	TxType          TransactionType
+	Digest          [sha512.Size]byte // contains type, network id and transaction immutable data
 	TransactionData []byte
 }
 
@@ -224,12 +227,7 @@ func (txm TransactionAuthenticationMessage) Type() TransactionType {
 
 // Sign signs transaction binary data
 func (txm TransactionAuthenticationMessage) Sign(signer *signing.EdSigner) (_ SignedTransaction, err error) {
-	bf := bytes.Buffer{}
-	if _, err = xdr.Marshal(&bf, &txm); err != nil {
-		return
-	}
-	digest := sha512.Sum512(bf.Bytes())
-	signature := txm.Type().sign(signer, digest[:])
+	signature := txm.Type().sign(signer, txm.Digest[:])
 	return txm.Encode(TxPublicKeyFromBytes(signer.PublicKey().Bytes()), signature)
 }
 
@@ -252,12 +250,7 @@ func (txm TransactionAuthenticationMessage) Encode(pubKey TxPublicKey, signature
 
 // Verify verifies transaction bytes
 func (txm TransactionAuthenticationMessage) Verify(pubKey TxPublicKey, sig TxSignature) bool {
-	bf := bytes.Buffer{}
-	if _, err := xdr.Marshal(&bf, &txm); err != nil {
-		return false
-	}
-	digest := sha512.Sum512(bf.Bytes())
-	return txm.Type().verify(pubKey, sig, digest[:])
+	return txm.Type().verify(pubKey, sig, txm.Digest[:])
 }
 
 // SignedTransactionLayout represents fields layout of a signed transaction
@@ -289,36 +282,43 @@ var errBadTransactionTypeError = errors.New("failed to decode: bad transaction t
 func (stx SignedTransaction) Decode() (tx Transaction, err error) {
 	stl := SignedTransactionLayout{}
 	bs := append(stx[:], 0, 0, 0, 0)
+
 	n, err := xdr.Unmarshal(bytes.NewReader(bs), &stl)
 	if err != nil {
 		return
 	}
+
 	if !stl.Type().Good() {
 		return tx, errBadTransactionTypeError
 	}
+
 	if stl.Type().EdPlus() && n != 4+len(stx) || !stl.Type().EdPlus() && n != len(stx) {
 		// to protect against digest compilation attack with ED++
 		return tx, errBadTransactionEncodingError
 	}
-	txm := TransactionAuthenticationMessage{GetNetworkID(), stl.Type(), stl.Data}
-	bf := bytes.Buffer{}
-	if _, err = xdr.Marshal(&bf, &txm); err != nil {
+
+	itx, err := stl.Type().Decode(stl.Data)
+	if err != nil {
 		return
 	}
-	digest := sha512.Sum512(bf.Bytes())
+
+	txm, err := itx.AuthenticationMessage()
+	if err != nil {
+		return
+	}
 
 	pubKey := stl.PubKey
+
 	if stl.Type().EdPlus() {
-		pubKey, err = ed25519.ExtractPublicKey(digest[:], stl.Signature[:])
+		pubKey, err = ed25519.ExtractPublicKey(txm.Digest[:], stl.Signature[:])
 		if err != nil {
 			return tx, fmt.Errorf("failed to verify transaction: %v", err.Error())
 		}
+	} else {
+		if len(pubKey) != ed25519.PublicKeySize || !stl.Type().verify(TxPublicKeyFromBytes(pubKey), stl.Signature, txm.Digest[:]) {
+			return tx, errBadSignatureError
+		}
 	}
 
-	// ED++ will be correct with any trash if signature format fits requirements
-	if len(pubKey) != ed25519.PublicKeySize || !stl.Type().verify(TxPublicKeyFromBytes(pubKey), stl.Signature, digest[:]) {
-		return tx, errBadSignatureError
-	}
-
-	return stl.Type().Decode(TxPublicKeyFromBytes(pubKey), stl.Signature, stx.ID(), stl.Data)
+	return itx.Complete(TxPublicKeyFromBytes(pubKey), stl.Signature, stx.ID()), nil
 }

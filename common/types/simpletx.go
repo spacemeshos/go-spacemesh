@@ -16,17 +16,26 @@ type SimpleCoinTx struct {
 	GasPrice  uint64
 }
 
+type xdrSimpleCoinTx struct {
+	TTL       uint32
+	Nonce     [1]byte
+	Recipient Address
+	Amount    uint64
+	GasLimit  uint64
+	GasPrice  uint64
+}
+
 // NewEdPlus creates a new incomplete transaction with Ed++ signing scheme
 func (h SimpleCoinTx) NewEdPlus() IncompleteTransaction {
 	tx := &incompSimpleCoinTx{SimpleCoinTxHeader{h}, IncompleteCommonTx{txType: TxSimpleCoinEdPlus}}
-	tx.marshal = tx
+	tx.self = tx
 	return tx
 }
 
 // NewEd creates a new incomplete transaction with Ed signing scheme
 func (h SimpleCoinTx) NewEd() IncompleteTransaction {
 	tx := &incompSimpleCoinTx{SimpleCoinTxHeader{h}, IncompleteCommonTx{txType: TxSimpleCoinEd}}
-	tx.marshal = tx
+	tx.self = tx
 	return tx
 }
 
@@ -45,63 +54,85 @@ func (tx incompSimpleCoinTx) String() string {
 		tx.GasLimit, tx.GasPrice)
 }
 
-// SimpleCoinTxHeader implements xdrMarshal and Get* methods from IncompleteTransaction
+// SimpleCoinTxHeader implements txSelf and Get* methods from IncompleteTransaction
 type SimpleCoinTxHeader struct {
 	SimpleCoinTx
 }
 
 // Extract implements IncompleteTransaction.Extract to extract internal transaction structure
-func (tx SimpleCoinTxHeader) Extract(out interface{}) bool {
+func (h SimpleCoinTxHeader) Extract(out interface{}) bool {
 	if p, ok := out.(*SimpleCoinTx); ok {
-		*p = tx.SimpleCoinTx
+		*p = h.SimpleCoinTx
 		return true
 	}
 	return false
 }
 
 // GetRecipient returns recipient address
-func (tx SimpleCoinTxHeader) GetRecipient() Address {
-	return tx.Recipient
+func (h SimpleCoinTxHeader) GetRecipient() Address {
+	return h.Recipient
 }
 
 // GetAmount returns transaction amount
-func (tx SimpleCoinTxHeader) GetAmount() uint64 {
-	return tx.Amount
+func (h SimpleCoinTxHeader) GetAmount() uint64 {
+	return h.Amount
 }
 
 // GetNonce returns transaction nonce
-func (tx SimpleCoinTxHeader) GetNonce() uint64 {
+func (h SimpleCoinTxHeader) GetNonce() uint64 {
 	// TODO: nonce processing
-	return uint64(tx.Nonce)
+	return uint64(h.Nonce)
 }
 
 // GetGasLimit returns transaction gas limit
-func (tx SimpleCoinTxHeader) GetGasLimit() uint64 {
-	return tx.GasLimit
+func (h SimpleCoinTxHeader) GetGasLimit() uint64 {
+	return h.GasLimit
 }
 
 // GetGasPrice returns gas price
-func (tx SimpleCoinTxHeader) GetGasPrice() uint64 {
-	return tx.GasPrice
+func (h SimpleCoinTxHeader) GetGasPrice() uint64 {
+	return h.GasPrice
 }
 
 // GetFee calculate transaction fee regarding gas spent
-func (tx SimpleCoinTxHeader) GetFee(gas uint64) uint64 {
-	return tx.GasPrice * gas
+func (h SimpleCoinTxHeader) GetFee(gas uint64) uint64 {
+	return h.GasPrice * gas
 }
 
-// XdrBytes implements xdrMarshal.XdrBytes
-func (tx SimpleCoinTxHeader) XdrBytes() ([]byte, error) {
+func (h SimpleCoinTxHeader) xdrBytes() ([]byte, error) {
 	bf := bytes.Buffer{}
-	if _, err := xdr.Marshal(&bf, &tx); err != nil {
+	d := xdrSimpleCoinTx{
+		h.TTL,
+		[1]byte{h.Nonce},
+		h.Recipient,
+		h.Amount,
+		h.GasLimit,
+		h.GasPrice,
+	}
+	if _, err := xdr.Marshal(&bf, &d); err != nil {
 		return nil, err
 	}
 	return bf.Bytes(), nil
 }
 
-// XdrFill implements xdrMarshal.XdrFill
-func (tx *SimpleCoinTxHeader) XdrFill(bs []byte) (int, error) {
-	return xdr.Unmarshal(bytes.NewReader(bs), &tx.SimpleCoinTx)
+func (h *SimpleCoinTxHeader) xdrFill(bs []byte) (n int, err error) {
+	d := xdrSimpleCoinTx{}
+	n, err = xdr.Unmarshal(bytes.NewReader(bs), &d)
+	h.SimpleCoinTx = SimpleCoinTx{
+		d.TTL,
+		d.Nonce[0],
+		d.Recipient,
+		d.Amount,
+		d.GasLimit,
+		d.GasPrice,
+	}
+	return
+}
+
+func (h SimpleCoinTxHeader) complete() *CommonTx {
+	tx2 := &simpleCoinTx{SimpleCoinTxHeader: h}
+	tx2.self = tx2
+	return &tx2.CommonTx
 }
 
 // simpleCoinTx implements TransactionInterface for "Simple Coin Transaction"
@@ -120,7 +151,8 @@ func (tx simpleCoinTx) String() string {
 }
 
 // DecodeSimpleCoinTx decodes transaction bytes into "Simple Coin Transaction" object
-func DecodeSimpleCoinTx(data []byte, signature TxSignature, pubKey TxPublicKey, txid TransactionID, txtp TransactionType) (r Transaction, err error) {
+func DecodeSimpleCoinTx(data []byte, txtp TransactionType) (r IncompleteTransaction, err error) {
 	tx := &simpleCoinTx{}
-	return tx, tx.decode(tx, data, signature, pubKey, txid, txtp)
+	tx.self = tx
+	return tx, tx.decode(data, txtp)
 }

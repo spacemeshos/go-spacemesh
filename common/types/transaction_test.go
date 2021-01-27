@@ -20,8 +20,8 @@ var alice = newTxUser("alice")
 var signingTxs = []interface{}{
 	OldCoinTx{Amount: 100, Fee: 1, Recipient: alice.Address()},
 	SimpleCoinTx{Amount: 101, GasPrice: 1, GasLimit: 10, Recipient: alice.Address()},
-	CallAppTx{Amount: 102, GasPrice: 1, GasLimit: 10, AppAddress: alice.Address()},
-	SpawnAppTx{Amount: 103, GasPrice: 1, GasLimit: 10, AppAddress: alice.Address()},
+	CallAppTx{Amount: 102, GasPrice: 1, GasLimit: 10, AppAddress: alice.Address(), CallData: []byte{}},
+	SpawnAppTx{Amount: 103, GasPrice: 1, GasLimit: 10, AppAddress: alice.Address(), CallData: []byte{}},
 }
 
 type txUser struct{ *signing.EdSigner }
@@ -51,29 +51,6 @@ func txExtract(a interface{}, tx IncompleteTransaction, t *testing.T) (bool, int
 	b := reflect.New(val.Type())
 	ok := tx.Extract(b.Interface())
 	return ok, b.Elem().Interface()
-}
-
-func (tt TransactionType) invert() TransactionType {
-	switch tt {
-	case TxSimpleCoinEdPlus:
-		return TxSimpleCoinEd
-	case TxCallAppEdPlus:
-		return TxCallAppEd
-	case TxSpawnAppEdPlus:
-		return TxSpawnAppEd
-	case TxOldCoinEdPlus:
-		return TxOldCoinEd
-	case TxSimpleCoinEd:
-		return TxSimpleCoinEdPlus
-	case TxCallAppEd:
-		return TxCallAppEdPlus
-	case TxSpawnAppEd:
-		return TxSpawnAppEdPlus
-	case TxOldCoinEd:
-		return TxOldCoinEdPlus
-	}
-	// it must be impossible (in theory)
-	panic(fmt.Errorf("unknown transaction type"))
 }
 
 func TestSignTransaction(t *testing.T) {
@@ -234,7 +211,7 @@ func _TestG1(t *testing.T) {
 				wrf("\t%s: Address{%v},\n", f.Name, b2x(a[:]))
 			} else if f.Type == reflect.TypeOf([]byte{}) {
 				if v.Field(i).IsNil() || v.Field(i).Len() == 0 {
-					wrf("\t%s: nil,\n", f.Name)
+					wrf("\t%s: []byte{},\n", f.Name)
 				} else {
 					a := v.Field(i).Interface().([]byte)
 					wrf("\t%s: []byte{%v},\n", f.Name, b2x(a[:]))

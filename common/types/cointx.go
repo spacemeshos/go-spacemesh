@@ -19,14 +19,14 @@ type OldCoinTx struct {
 // NewEdPlus creates a new incomplete transaction with Ed++ signing scheme
 func (h OldCoinTx) NewEdPlus() IncompleteTransaction {
 	tx := &incompOldCoinTx{OldCoinTxHeader{h}, IncompleteCommonTx{txType: TxOldCoinEdPlus}}
-	tx.marshal = tx
+	tx.self = tx
 	return tx
 }
 
 // NewEd creates a new incomplete transaction with Ed signing scheme
 func (h OldCoinTx) NewEd() IncompleteTransaction {
 	tx := &incompOldCoinTx{OldCoinTxHeader{h}, IncompleteCommonTx{txType: TxOldCoinEd}}
-	tx.marshal = tx
+	tx.self = tx
 	return tx
 }
 
@@ -45,62 +45,66 @@ func (tx incompOldCoinTx) String() string {
 		tx.GasLimit, tx.Fee)
 }
 
-// OldCoinTxHeader implements xdrMarshal and Get* methods from IncompleteTransaction
+// OldCoinTxHeader implements txSelf and Get* methods from IncompleteTransaction
 type OldCoinTxHeader struct {
 	OldCoinTx
 }
 
 // Extract implements IncompleteTransaction.Extract to extract internal transaction structure
-func (tx OldCoinTxHeader) Extract(out interface{}) bool {
+func (h OldCoinTxHeader) Extract(out interface{}) bool {
 	if p, ok := out.(*OldCoinTx); ok {
-		*p = tx.OldCoinTx
+		*p = h.OldCoinTx
 		return true
 	}
 	return false
 }
 
 // GetRecipient returns recipient address
-func (tx OldCoinTxHeader) GetRecipient() Address {
-	return tx.Recipient
+func (h OldCoinTxHeader) GetRecipient() Address {
+	return h.Recipient
 }
 
 // GetAmount returns transaction amount
-func (tx OldCoinTxHeader) GetAmount() uint64 {
-	return tx.Amount
+func (h OldCoinTxHeader) GetAmount() uint64 {
+	return h.Amount
 }
 
 // GetNonce returns transaction nonce
-func (tx OldCoinTxHeader) GetNonce() uint64 {
-	return tx.AccountNonce
+func (h OldCoinTxHeader) GetNonce() uint64 {
+	return h.AccountNonce
 }
 
 // GetGasLimit returns transaction gas limit
-func (tx OldCoinTxHeader) GetGasLimit() uint64 {
-	return tx.GasLimit
+func (h OldCoinTxHeader) GetGasLimit() uint64 {
+	return h.GasLimit
 }
 
 // GetGasPrice returns gas price
-func (tx OldCoinTxHeader) GetGasPrice() uint64 {
+func (h OldCoinTxHeader) GetGasPrice() uint64 {
 	return 1 // TODO: there is just fee no gas price
 }
 
 // GetFee calculate transaction fee regarding gas spent
-func (tx OldCoinTxHeader) GetFee( /*gas*/ _ uint64) uint64 {
-	return tx.Fee
+func (h OldCoinTxHeader) GetFee( /*gas*/ _ uint64) uint64 {
+	return h.Fee
 }
 
-// XdrBytes implements xdrMarshal.XdrBytes
-func (tx OldCoinTxHeader) XdrBytes() ([]byte, error) {
+func (h OldCoinTxHeader) xdrBytes() ([]byte, error) {
 	bf := bytes.Buffer{}
-	if _, err := xdr.Marshal(&bf, tx.OldCoinTx); err != nil {
+	if _, err := xdr.Marshal(&bf, h.OldCoinTx); err != nil {
 		return nil, err
 	}
 	return bf.Bytes(), nil
 }
 
-// XdrFill implements xdrMarshal.XdrFill
-func (tx *OldCoinTxHeader) XdrFill(bs []byte) (int, error) {
-	return xdr.Unmarshal(bytes.NewReader(bs), &tx.OldCoinTx)
+func (h *OldCoinTxHeader) xdrFill(bs []byte) (int, error) {
+	return xdr.Unmarshal(bytes.NewReader(bs), &h.OldCoinTx)
+}
+
+func (h OldCoinTxHeader) complete() *CommonTx {
+	tx2 := &oldCoinTx{OldCoinTxHeader: h}
+	tx2.self = tx2
+	return &tx2.CommonTx
 }
 
 // oldCoinTx implements TransactionInterface for "Old Coin Transaction"
@@ -119,10 +123,11 @@ func (tx oldCoinTx) String() string {
 		h.Amount, h.AccountNonce, h.GasLimit, h.Fee)
 }
 
-// DecodeOldCoinTx decodes transaction bytes into "Old Coin Transaction" object
-func DecodeOldCoinTx(data []byte, signature TxSignature, pubKey TxPublicKey, txid TransactionID, txtp TransactionType) (r Transaction, err error) {
-	tx := &oldCoinTx{}
-	return tx, tx.decode(tx, data, signature, pubKey, txid, txtp)
+// DecodeOldCoinTx decodes transaction bytes into "Old Coin Incomplete Transaction" object
+func DecodeOldCoinTx(data []byte, txtp TransactionType) (r IncompleteTransaction, err error) {
+	tx := &incompOldCoinTx{}
+	tx.self = tx
+	return tx, tx.decode(data, txtp)
 }
 
 // NewSignedOldCoinTx is used in TESTS ONLY to generate signed txs
