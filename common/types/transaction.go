@@ -130,6 +130,7 @@ type IncompleteTransaction interface {
 	AuthenticationMessage() (TransactionAuthenticationMessage, error)
 	Type() TransactionType
 	Complete(key TxPublicKey, signature TxSignature, id TransactionID) Transaction
+	Digest() ([]byte, error)
 
 	// extract internal transaction structure
 	Extract(interface{}) bool
@@ -302,7 +303,7 @@ func (stx SignedTransaction) Decode() (tx Transaction, err error) {
 		return
 	}
 
-	txm, err := itx.AuthenticationMessage()
+	digest, err := itx.Digest()
 	if err != nil {
 		return
 	}
@@ -310,12 +311,12 @@ func (stx SignedTransaction) Decode() (tx Transaction, err error) {
 	pubKey := stl.PubKey
 
 	if stl.Type().EdPlus() {
-		pubKey, err = ed25519.ExtractPublicKey(txm.Digest[:], stl.Signature[:])
+		pubKey, err = ed25519.ExtractPublicKey(digest, stl.Signature[:])
 		if err != nil {
 			return tx, fmt.Errorf("failed to verify transaction: %v", err.Error())
 		}
 	} else {
-		if len(pubKey) != ed25519.PublicKeySize || !stl.Type().verify(TxPublicKeyFromBytes(pubKey), stl.Signature, txm.Digest[:]) {
+		if len(pubKey) != ed25519.PublicKeySize || !stl.Type().verify(TxPublicKeyFromBytes(pubKey), stl.Signature, digest) {
 			return tx, errBadSignatureError
 		}
 	}

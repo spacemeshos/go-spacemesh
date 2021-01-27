@@ -21,28 +21,47 @@ type IncompleteCommonTx struct {
 	txType TransactionType
 }
 
+// Digest calculates message digest
+func (t IncompleteCommonTx) Digest() ([]byte, error) {
+	return t.digest(nil)
+}
+
 // AuthenticationMessage returns the authentication message for the transaction
 func (t IncompleteCommonTx) AuthenticationMessage() (txm TransactionAuthenticationMessage, err error) {
+	txm.TxType = t.txType
 	txm.TransactionData, err = t.self.xdrBytes()
 	if err != nil {
 		return
 	}
+	d, err := t.digest(txm.TransactionData)
+	if err != nil {
+		return
+	}
+	copy(txm.Digest[:], d)
+	return
+}
+
+func (t IncompleteCommonTx) digest(d []byte) (_ []byte, err error) {
 	sha := sha512.New()
 	networkID := GetNetworkID()
 	_, _ = sha.Write(networkID[:])
 	_, _ = sha.Write([]byte{byte(t.txType)})
 	if p, ok := t.self.(txMutable); ok {
-		d, err := p.immutableBytes() // err shadowed
+		d, err = p.immutableBytes() // err shadowed
 		if err != nil {
-			return txm, err
+			return
 		}
 		_, _ = sha.Write(d)
 	} else {
-		_, _ = sha.Write(txm.TransactionData)
+		if d == nil {
+			d, err = t.self.xdrBytes()
+			if err != nil {
+				return
+			}
+		}
+		_, _ = sha.Write(d)
 	}
-	copy(txm.Digest[:], sha.Sum(nil))
-	txm.TxType = t.txType
-	return
+	return sha.Sum(nil), nil
 }
 
 // Type returns transaction's type
