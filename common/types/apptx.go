@@ -30,7 +30,7 @@ type xrdCallAppTx struct {
 	Amount          uint64 // Amount of the transaction
 	GasLimit        uint64 // GasLimit for the transaction
 	GasPrice        uint64 // GasPrice for the transaction
-	AddrAndCallData []byte
+	AddrAndCallData []byte // AddrAndCallData is concatenated Address and CallData bytes
 }
 
 // NewEdPlus creates a new incomplete transaction with Ed++ signing scheme

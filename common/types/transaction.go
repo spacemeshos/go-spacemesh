@@ -123,13 +123,11 @@ type EdTransactionFactory interface {
 	NewEd() IncompleteTransaction
 }
 
-// IncompleteTransaction is the interface of an immutable incomplete transaction
-type IncompleteTransaction interface {
+type CommonTransaction interface {
 	fmt.Stringer // String()string
 
 	AuthenticationMessage() (TransactionAuthenticationMessage, error)
 	Type() TransactionType
-	Complete(key TxPublicKey, signature TxSignature, id TransactionID) Transaction
 	Digest() ([]byte, error)
 
 	// extract internal transaction structure
@@ -147,6 +145,12 @@ type IncompleteTransaction interface {
 	GetFee(gas uint64) uint64
 }
 
+// IncompleteTransaction is the interface of an immutable incomplete transaction
+type IncompleteTransaction interface {
+	CommonTransaction
+	Complete(key TxPublicKey, signature TxSignature, id TransactionID) Transaction
+}
+
 // SignTransaction signs incomplete transaction and returns completed transaction object
 func SignTransaction(itx IncompleteTransaction, signer *signing.EdSigner) (tx Transaction, err error) {
 	txm, err := itx.AuthenticationMessage()
@@ -162,8 +166,7 @@ func SignTransaction(itx IncompleteTransaction, signer *signing.EdSigner) (tx Tr
 
 // Transaction is the interface of an immutable completed transaction
 type Transaction interface {
-	IncompleteTransaction
-
+	CommonTransaction
 	Origin() Address
 	ID() TransactionID
 	Hash32() Hash32
