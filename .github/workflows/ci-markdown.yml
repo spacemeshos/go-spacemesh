@@ -18,11 +18,13 @@ on:
 jobs:
   # short-circuit and pass both stages
   ci-stage1:
+    runs-on: ubuntu-latest
     steps:
       - name: Mark the job as succeeded
         run: exit 0
 
   ci-stage2:
+    runs-on: ubuntu-latest
     steps:
       - uses: act10ns/slack@v1
         name: Slack notification
