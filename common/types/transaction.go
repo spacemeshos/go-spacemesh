@@ -123,6 +123,7 @@ type EdTransactionFactory interface {
 	NewEd() IncompleteTransaction
 }
 
+// GeneralTransaction is the general immutable transactions interface
 type GeneralTransaction interface {
 	fmt.Stringer // String()string
 
@@ -164,7 +165,7 @@ func SignTransaction(itx IncompleteTransaction, signer *signing.EdSigner) (tx Tr
 	return stx.Decode()
 }
 
-// Transaction is the interface of an immutable completed transaction
+// Transaction is the interface of an immutable complete transaction
 type Transaction interface {
 	GeneralTransaction
 	Origin() Address
