@@ -123,7 +123,7 @@ type EdTransactionFactory interface {
 	NewEd() IncompleteTransaction
 }
 
-type CommonTransaction interface {
+type GeneralTransaction interface {
 	fmt.Stringer // String()string
 
 	AuthenticationMessage() (TransactionAuthenticationMessage, error)
@@ -147,7 +147,7 @@ type CommonTransaction interface {
 
 // IncompleteTransaction is the interface of an immutable incomplete transaction
 type IncompleteTransaction interface {
-	CommonTransaction
+	GeneralTransaction
 	Complete(key TxPublicKey, signature TxSignature, id TransactionID) Transaction
 }
 
@@ -166,7 +166,7 @@ func SignTransaction(itx IncompleteTransaction, signer *signing.EdSigner) (tx Tr
 
 // Transaction is the interface of an immutable completed transaction
 type Transaction interface {
-	CommonTransaction
+	GeneralTransaction
 	Origin() Address
 	ID() TransactionID
 	Hash32() Hash32

@@ -47,7 +47,7 @@ func (t IncompleteCommonTx) digest(d []byte) (_ []byte, err error) {
 	_, _ = sha.Write(networkID[:])
 	_, _ = sha.Write([]byte{byte(t.txType)})
 	if p, ok := t.self.(txMutable); ok {
-		d, err = p.immutableBytes() // err shadowed
+		d, err = p.immutableBytes()
 		if err != nil {
 			return
 		}

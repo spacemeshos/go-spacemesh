@@ -43,7 +43,7 @@ var signSchemes = []func(ft interface{}) IncompleteTransaction{
 	},
 }
 
-func txExtract(a interface{}, tx CommonTransaction, t *testing.T) (bool, interface{}) {
+func txExtract(a interface{}, tx GeneralTransaction, t *testing.T) (bool, interface{}) {
 	val := reflect.ValueOf(a)
 	for val.Kind() == reflect.Ptr {
 		val = val.Elem()
