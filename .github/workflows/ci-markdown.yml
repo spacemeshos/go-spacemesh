@@ -1,0 +1,32 @@
+# Much simpler CI for changes only to markdown documentation
+name: CI-markdown
+
+env:
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+# Trigger the workflow on the pushes that bors cares about
+on:
+  push:
+    branches:
+      - staging
+      - trying
+    # Only trigger if updating only docs
+    paths:
+      - '**.md'
+      - '!**.md'
+
+jobs:
+  # short-circuit and pass both stages
+  ci-stage1:
+    steps:
+      - name: Mark the job as succeeded
+        run: exit 0
+
+  ci-stage2:
+    steps:
+      - uses: act10ns/slack@v1
+        name: Slack notification
+        with:
+          status: success
+      - name: Mark the job as succeeded
+        run: exit 0
