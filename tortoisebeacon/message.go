@@ -58,6 +58,7 @@ type vote struct {
 	atxListHash types.Hash32
 }
 
+// TODO(nkryuchkov): remove this type
 func NewVotingMessage(epoch types.EpochID, round int, atxListHash types.Hash32) VotingMessage {
 	return &vote{
 		epoch:       epoch,
@@ -90,6 +91,7 @@ type batchVote struct {
 	atxListHashes []types.Hash32
 }
 
+// TODO(nkryuchkov): rename to NewVotingMessage
 func NewBatchVotingMessage(epoch types.EpochID, round int, atxListHashes []types.Hash32) BatchVotingMessage {
 	return &batchVote{
 		epoch:         epoch,

@@ -52,6 +52,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
 )
 
@@ -65,6 +66,8 @@ const (
 	StateDbLogger        = "stateDbStore"
 	StateLogger          = "state"
 	AtxDbStoreLogger     = "atxDbStore"
+	TBeaconDbStoreLogger = "tbDbStore"
+	TBeaconDbLogger      = "tbDb"
 	PoetDbStoreLogger    = "poetDbStore"
 	StoreLogger          = "store"
 	PoetDbLogger         = "poetDb"
@@ -493,6 +496,12 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	}
 	app.closers = append(app.closers, atxdbstore)
 
+	tBeaconDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "tbeacon"), 0, 0, app.addLogger(TBeaconDbStoreLogger, lg))
+	if err != nil {
+		return err
+	}
+	app.closers = append(app.closers, tBeaconDBStore)
+
 	poetDbStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "poet"), 0, 0, app.addLogger(PoetDbStoreLogger, lg))
 	if err != nil {
 		return err
@@ -530,6 +539,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	processor := state.NewTransactionProcessor(db, appliedTxs, meshAndPoolProjector, app.txPool, lg.WithName("state"))
 
 	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
+	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg)) // TOOO(nkryuchkov): use
+	_ = tBeaconDB
+
 	beaconProvider := &blocks.EpochBeaconProvider{}
 
 	var msh *mesh.Mesh

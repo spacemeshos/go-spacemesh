@@ -8,5 +8,8 @@ type Config struct {
 
 // DefaultConfig returns the default configuration for the hare.
 func DefaultConfig() Config {
-	return Config{6, 10}
+	return Config{
+		K:           6,
+		WakeupDelta: 10,
+	}
 }
