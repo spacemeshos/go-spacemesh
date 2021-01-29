@@ -4,8 +4,15 @@ import (
 	"bytes"
 	"fmt"
 	xdr "github.com/nullstyle/go-xdr/xdr3"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
+
+var OldCoinEdPlusType = TransactionTypeObject{
+	TxOldCoinEdPlus, "TxOldCoinEdPlus", EdPlusSigningScheme, DecodeOldCoinTx,
+}.New()
+
+var OldCoinEdType = TransactionTypeObject{
+	TxOldCoinEd, "TxOldCoinEd", EdSigningScheme, DecodeOldCoinTx,
+}.New()
 
 // OldCoinTx implements "Old Coin Transaction"
 type OldCoinTx struct {
@@ -18,14 +25,14 @@ type OldCoinTx struct {
 
 // NewEdPlus creates a new incomplete transaction with Ed++ signing scheme
 func (h OldCoinTx) NewEdPlus() IncompleteTransaction {
-	tx := &incompOldCoinTx{OldCoinTxHeader{h}, IncompleteCommonTx{txType: TxOldCoinEdPlus}}
+	tx := &incompOldCoinTx{OldCoinTxHeader{h}, IncompleteCommonTx{txType: OldCoinEdPlusType}}
 	tx.self = tx
 	return tx
 }
 
 // NewEd creates a new incomplete transaction with Ed signing scheme
 func (h OldCoinTx) NewEd() IncompleteTransaction {
-	tx := &incompOldCoinTx{OldCoinTxHeader{h}, IncompleteCommonTx{txType: TxOldCoinEd}}
+	tx := &incompOldCoinTx{OldCoinTxHeader{h}, IncompleteCommonTx{txType: OldCoinEdType}}
 	tx.self = tx
 	return tx
 }
@@ -131,7 +138,7 @@ func DecodeOldCoinTx(data []byte, txtp TransactionType) (r IncompleteTransaction
 }
 
 // NewSignedOldCoinTx is used in TESTS ONLY to generate signed txs
-func NewSignedOldCoinTx(nonce uint64, rec Address, amount, gas, fee uint64, signer *signing.EdSigner) (Transaction, error) {
+func NewSignedOldCoinTx(nonce uint64, rec Address, amount, gas, fee uint64, signer Signer) (Transaction, error) {
 	return SignTransaction(OldCoinTx{
 		AccountNonce: nonce,
 		Recipient:    rec,

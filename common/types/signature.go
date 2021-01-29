@@ -5,85 +5,61 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-// EdSigningScheme is the classic Ed25519 signing scheme value
-const EdSigningScheme = 0
+type Signer = *signing.EdSigner
+type SigningScheme struct{ *SigningSchemeObject }
 
-// EdSigning is the classic Ed25519 signing scheme
-const EdSigning = edSigningObject(EdSigningScheme)
+var EdSigningScheme = SigningSchemeObject{
+	Value: func() int { return 0 },
 
-// EdPlusSigningScheme is the extended Ed25519++ signing scheme value
-const EdPlusSigningScheme = 1
+	Extractable: func() bool { return false },
 
-// EdPlusSigning is the extended Ed25519++ signing scheme
-const EdPlusSigning = edPlusSigningObject(EdPlusSigningScheme)
+	Sign: func(signer Signer, data []byte) TxSignature {
+		return TxSignatureFromBytes(signer.Sign1(data))
+	},
 
-// SigningScheme defines the signing scheme
-type SigningScheme interface {
-	Sign(signer *signing.EdSigner, data []byte) TxSignature
-	Verify(data []byte, pubKey TxPublicKey, signature TxSignature) bool
-	Extract(data []byte, signature TxSignature) (TxPublicKey, bool, error)
-	ExtractablePubKey() bool
-	Identify() int
-}
+	Verify: func(data []byte, pubKey TxPublicKey, signature TxSignature) bool {
+		return ed25519.Verify(pubKey[:], data, signature[:])
+	},
 
-type edSigningObject int
+	ExtractPubKey: func(data []byte, signature TxSignature) (TxPublicKey, bool, error) {
+		return TxPublicKey{}, false, nil
+	},
+}.New()
 
-// Sign signs data
-func (edSigningObject) Sign(signer *signing.EdSigner, data []byte) TxSignature {
-	return TxSignatureFromBytes(signer.Sign1(data))
-}
+var EdPlusSigningScheme = SigningSchemeObject{
+	Value: func() int { return 1 },
 
-// Verify verifies signature
-func (edSigningObject) Verify(data []byte, pubKey TxPublicKey, signature TxSignature) bool {
-	return ed25519.Verify(pubKey[:], data, signature[:])
-}
+	Extractable: func() bool { return true },
 
-// Extract returns public key if it's extractable
-func (edSigningObject) Extract(data []byte, signature TxSignature) (TxPublicKey, bool, error) {
-	return TxPublicKey{}, false, nil
-}
+	Sign: func(signer Signer, data []byte) TxSignature {
+		return TxSignatureFromBytes(signer.Sign2(data))
+	},
 
-// ExtractablePubKey returns true if public key is extractable
-func (edSigningObject) ExtractablePubKey() bool {
-	return false
-}
+	Verify: func(data []byte, pubKey TxPublicKey, signature TxSignature) bool {
+		return ed25519.Verify2(pubKey[:], data, signature[:])
+	},
 
-// Identify returns scheme's constant value
-func (e edSigningObject) Identify() int {
-	return int(e)
-}
-
-type edPlusSigningObject int
-
-// Sign signs data
-func (edPlusSigningObject) Sign(signer *signing.EdSigner, data []byte) TxSignature {
-	return TxSignatureFromBytes(signer.Sign2(data))
-}
-
-// Verify verifies signature
-func (edPlusSigningObject) Verify(data []byte, pubKey TxPublicKey, signature TxSignature) bool {
-	return ed25519.Verify2(pubKey[:], data, signature[:])
-}
-
-// Extract returns public key if it's extractable
-func (edPlusSigningObject) Extract(data []byte, signature TxSignature) (pubKey TxPublicKey, ok bool, err error) {
-	ok = true
-	pk, err := ed25519.ExtractPublicKey(data, signature[:])
-	if err != nil {
+	ExtractPubKey: func(data []byte, signature TxSignature) (pubKey TxPublicKey, ok bool, err error) {
+		ok = true
+		pk, err := ed25519.ExtractPublicKey(data, signature[:])
+		if err != nil {
+			return
+		}
+		pubKey = TxPublicKeyFromBytes(pk)
 		return
-	}
-	pubKey = TxPublicKeyFromBytes(pk)
-	return
+	},
+}.New()
+
+type SigningSchemeObject struct {
+	Value         func() int
+	Extractable   func() bool
+	Sign          func(signer Signer, data []byte) TxSignature
+	Verify        func(data []byte, pubKey TxPublicKey, signature TxSignature) bool
+	ExtractPubKey func(data []byte, signature TxSignature) (TxPublicKey, bool, error)
 }
 
-// ExtractablePubKey returns true if public key is extractable
-func (edPlusSigningObject) ExtractablePubKey() bool {
-	return true
-}
-
-// Identify returns scheme's constant value
-func (e edPlusSigningObject) Identify() int {
-	return int(e)
+func (sso SigningSchemeObject) New() SigningScheme {
+	return SigningScheme{&sso}
 }
 
 // TxSignatureLength defines signature length

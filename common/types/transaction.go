@@ -7,86 +7,57 @@ import (
 	"fmt"
 	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"strings"
 )
 
-// TransactionTypesMap defines transaction types interpretation
-var TransactionTypesMap = map[TransactionType]TransactionTypeRoute{
-	TxSimpleCoinEdPlus: {"TxSimpleCoinEdPlus", EdPlusSigning, DecodeSimpleCoinTx},
-	TxSimpleCoinEd:     {"TxSimpleCoinEd", EdSigning, DecodeSimpleCoinTx},
-	TxCallAppEdPlus:    {"TxCallAppEdPlus", EdPlusSigning, DecodeCallAppTx},
-	TxCallAppEd:        {"TxCallAppEd", EdSigning, DecodeCallAppTx},
-	TxSpawnAppEdPlus:   {"TxSpawnAppEdPlus", EdPlusSigning, DecodeSpawnAppTx},
-	TxSpawnAppEd:       {"TxSpawnAppEd", EdSigning, DecodeSpawnAppTx},
-	TxOldCoinEdPlus:    {"TxOldCoinEdPlus", EdPlusSigning, DecodeOldCoinTx},
-	TxOldCoinEd:        {"TxOldCoinEd", EdSigning, DecodeOldCoinTx},
-	// add new routes here
-}
-
-// TransactionType is a transaction's kind and signing scheme
-type TransactionType byte
-
 const (
 	// TxSimpleCoinEd is a simple coin transaction with ed signing scheme
-	TxSimpleCoinEd TransactionType = 0
+	TxSimpleCoinEd byte = 0
 	// TxSimpleCoinEdPlus is a simple coin transaction with ed++ signing scheme
-	TxSimpleCoinEdPlus TransactionType = 1
+	TxSimpleCoinEdPlus byte = 1
 	// TxCallAppEd is a exec app transaction with ed signing scheme
-	TxCallAppEd TransactionType = 2
+	TxCallAppEd byte = 2
 	// TxCallAppEdPlus is a exec app transaction with ed++ signing scheme
-	TxCallAppEdPlus TransactionType = 3
+	TxCallAppEdPlus byte = 3
 	// TxSpawnAppEd is a spawn app transaction with ed signing scheme
-	TxSpawnAppEd TransactionType = 4
+	TxSpawnAppEd byte = 4
 	// TxSpawnAppEdPlus is a spawn app transaction with ed++ signing scheme
-	TxSpawnAppEdPlus TransactionType = 5
+	TxSpawnAppEdPlus byte = 5
 
 	// for support code transition to new transactions abstraction
 
 	// TxOldCoinEd is a old coin transaction with ed signing scheme
-	TxOldCoinEd TransactionType = 6
+	TxOldCoinEd byte = 6
 	// TxOldCoinEdPlus is a old coin transaction with ed++ signing scheme
-	TxOldCoinEdPlus TransactionType = 7
+	TxOldCoinEdPlus byte = 7
 )
 
-// TransactionTypeRoute defines how to interpret transaction type
-type TransactionTypeRoute struct {
+// TransactionTypesMap defines transaction types interpretation
+var TransactionTypesMap = map[byte]TransactionType{
+	SimpleCoinEdPlusType.Value: SimpleCoinEdPlusType,
+	SimpleCoinEdType.Value:     SimpleCoinEdType,
+	CallAppEdPlusType.Value:    CallAppEdPlusType,
+	CallAppEdType.Value:        CallAppEdType,
+	SpawnAppEdPlusType.Value:   SpawnAppEdPlusType,
+	SpawnAppEdType.Value:       SpawnAppEdType,
+	OldCoinEdPlusType.Value:    OldCoinEdPlusType,
+	OldCoinEdType.Value:        OldCoinEdType,
+	// add new transaction types here
+}
+
+type TransactionType struct{ *TransactionTypeObject }
+
+// TransactionTypeObject defines how to interpret transaction type
+type TransactionTypeObject struct {
+	Value   byte
 	Name    string
 	Signing SigningScheme
 	Decode  func([]byte, TransactionType) (IncompleteTransaction, error)
 }
 
-// Good checks that transaction type is Good
-func (tt TransactionType) Good() bool {
-	_, ok := TransactionTypesMap[tt]
-	return ok
+func (tto TransactionTypeObject) New() TransactionType {
+	return TransactionType{&tto}
 }
-
-// String returns string representation for TransactionType
-func (tt TransactionType) String() string {
-	if v, ok := TransactionTypesMap[tt]; ok {
-		return v.Name
-	}
-	return "UnknownTransactionType"
-}
-
-// Scheme returns signing scheme defined for the transaction type
-func (tt TransactionType) Scheme() SigningScheme {
-	if v, ok := TransactionTypesMap[tt]; ok {
-		return v.Signing
-	}
-	panic(errUnknownTransactionType)
-}
-
-// Decode decodes transaction bytes into the transaction object
-func (tt TransactionType) Decode(data []byte) (IncompleteTransaction, error) {
-	if v, ok := TransactionTypesMap[tt]; ok {
-		return v.Decode(data, tt)
-	}
-	return nil, errUnknownTransactionType
-}
-
-var errUnknownTransactionType = errors.New("unknown transaction type")
 
 // EdPlusTransactionFactory allowing to create transactions with Ed++ signing scheme
 type EdPlusTransactionFactory interface {
@@ -128,7 +99,7 @@ type IncompleteTransaction interface {
 }
 
 // SignTransaction signs incomplete transaction and returns completed transaction object
-func SignTransaction(itx IncompleteTransaction, signer *signing.EdSigner) (tx Transaction, err error) {
+func SignTransaction(itx IncompleteTransaction, signer Signer) (tx Transaction, err error) {
 	txm, err := itx.AuthenticationMessage()
 	if err != nil {
 		return
@@ -207,20 +178,20 @@ func (txm TransactionAuthenticationMessage) Type() TransactionType {
 
 // Scheme returns signing scheme
 func (txm TransactionAuthenticationMessage) Scheme() SigningScheme {
-	return txm.TxType.Scheme()
+	return txm.TxType.Signing
 }
 
 // Sign signs transaction binary data
-func (txm TransactionAuthenticationMessage) Sign(signer *signing.EdSigner) (_ SignedTransaction, err error) {
+func (txm TransactionAuthenticationMessage) Sign(signer Signer) (_ SignedTransaction, err error) {
 	signature := txm.Scheme().Sign(signer, txm.Digest[:])
 	return txm.Encode(TxPublicKeyFromBytes(signer.PublicKey().Bytes()), signature)
 }
 
 // Encode encodes transaction into the independent form
 func (txm TransactionAuthenticationMessage) Encode(pubKey TxPublicKey, signature TxSignature) (_ SignedTransaction, err error) {
-	stl := SignedTransactionLayout{TxType: [1]byte{byte(txm.TxType)}, Data: txm.TransactionData, Signature: signature}
-	extractablePubKey := txm.Scheme().ExtractablePubKey()
-	if !extractablePubKey {
+	stl := SignedTransactionLayout{TxType: [1]byte{txm.TxType.Value}, Data: txm.TransactionData, Signature: signature}
+	extractable := txm.Scheme().Extractable()
+	if !extractable {
 		stl.PubKey = pubKey.Bytes()
 	}
 	bf := bytes.Buffer{}
@@ -228,7 +199,7 @@ func (txm TransactionAuthenticationMessage) Encode(pubKey TxPublicKey, signature
 		return
 	}
 	bs := bf.Bytes()
-	if extractablePubKey {
+	if extractable {
 		bs = bs[:len(bs)-4] // remove 4 bytes of zero length pubkey
 	}
 	return bs, nil
@@ -248,8 +219,8 @@ type SignedTransactionLayout struct {
 }
 
 // Type returns transaction type
-func (stl SignedTransactionLayout) Type() TransactionType {
-	return TransactionType(stl.TxType[0])
+func (stl SignedTransactionLayout) Type() byte {
+	return stl.TxType[0]
 }
 
 // SignedTransaction is the binary transaction independent form
@@ -274,19 +245,18 @@ func (stx SignedTransaction) Decode() (tx Transaction, err error) {
 		return
 	}
 
-	if !stl.Type().Good() {
+	txType, good := TransactionTypesMap[stl.Type()]
+	if !good {
 		return tx, errBadTransactionTypeError
 	}
 
-	signScheme := stl.Type().Scheme()
-
-	extractablePubKey := signScheme.ExtractablePubKey()
+	extractablePubKey := txType.Signing.Extractable()
 	if extractablePubKey && n != 4+len(stx) || !extractablePubKey && n != len(stx) {
 		// to protect against digest compilation attack with ED++
 		return tx, errBadTransactionEncodingError
 	}
 
-	itx, err := stl.Type().Decode(stl.Data)
+	itx, err := txType.Decode(stl.Data, txType)
 	if err != nil {
 		return
 	}
@@ -298,7 +268,7 @@ func (stx SignedTransaction) Decode() (tx Transaction, err error) {
 
 	var pubKey TxPublicKey
 	if extractablePubKey {
-		pubKey, _, err = signScheme.Extract(digest, stl.Signature)
+		pubKey, _, err = txType.Signing.ExtractPubKey(digest, stl.Signature)
 		if err != nil {
 			return tx, fmt.Errorf("failed to verify transaction: %v", err.Error())
 		}
@@ -307,7 +277,7 @@ func (stx SignedTransaction) Decode() (tx Transaction, err error) {
 			return tx, errBadSignatureError
 		}
 		pubKey = TxPublicKeyFromBytes(stl.PubKey)
-		if !signScheme.Verify(digest, pubKey, stl.Signature) {
+		if !txType.Signing.Verify(digest, pubKey, stl.Signature) {
 			return tx, errBadSignatureError
 		}
 	}

@@ -257,7 +257,7 @@ func (s MeshService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address
 
 func signingScheme(t types.Transaction) (scheme pb.Signature_Scheme) {
 	scheme = pb.Signature_SCHEME_UNSPECIFIED
-	switch t.Type().Scheme().Identify() {
+	switch t.Type().Signing {
 	case types.EdSigningScheme:
 		scheme = pb.Signature_SCHEME_ED25519
 	case types.EdPlusSigningScheme:

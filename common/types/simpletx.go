@@ -6,6 +6,14 @@ import (
 	xdr "github.com/nullstyle/go-xdr/xdr3"
 )
 
+var SimpleCoinEdPlusType = TransactionTypeObject{
+	TxSimpleCoinEdPlus, "TxSimpleCoinEdPlus", EdPlusSigningScheme, DecodeSimpleCoinTx,
+}.New()
+
+var SimpleCoinEdType = TransactionTypeObject{
+	TxSimpleCoinEd, "TxSimpleCoinEd", EdSigningScheme, DecodeSimpleCoinTx,
+}.New()
+
 // SimpleCoinTx implements "Simple Coin Transaction"
 type SimpleCoinTx struct {
 	TTL       uint32
@@ -27,14 +35,14 @@ type xdrSimpleCoinTx struct {
 
 // NewEdPlus creates a new incomplete transaction with Ed++ signing scheme
 func (h SimpleCoinTx) NewEdPlus() IncompleteTransaction {
-	tx := &incompSimpleCoinTx{SimpleCoinTxHeader{h}, IncompleteCommonTx{txType: TxSimpleCoinEdPlus}}
+	tx := &incompSimpleCoinTx{SimpleCoinTxHeader{h}, IncompleteCommonTx{txType: SimpleCoinEdPlusType}}
 	tx.self = tx
 	return tx
 }
 
 // NewEd creates a new incomplete transaction with Ed signing scheme
 func (h SimpleCoinTx) NewEd() IncompleteTransaction {
-	tx := &incompSimpleCoinTx{SimpleCoinTxHeader{h}, IncompleteCommonTx{txType: TxSimpleCoinEd}}
+	tx := &incompSimpleCoinTx{SimpleCoinTxHeader{h}, IncompleteCommonTx{txType: SimpleCoinEdType}}
 	tx.self = tx
 	return tx
 }

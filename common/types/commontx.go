@@ -46,7 +46,7 @@ func (t IncompleteCommonTx) digest(d []byte) (_ []byte, err error) {
 	// we don't need to use XDR here because it's just a concatenation of bytes string
 	networkID := GetNetworkID()
 	_, _ = sha.Write(networkID[:])
-	_, _ = sha.Write([]byte{byte(t.txType)})
+	_, _ = sha.Write([]byte{t.txType.Value})
 	// here we add original Xdr encoded transaction
 	//   or Xdr encoded immutable transaction part if transaction can be pruned
 	if p, ok := t.self.(txMutable); ok {
