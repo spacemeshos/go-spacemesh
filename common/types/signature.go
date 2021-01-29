@@ -6,20 +6,20 @@ import (
 )
 
 // EdSigning is the classic Ed25519 signing scheme
-var EdSigning = EdSigningScheme{}
+const EdSigning = EdSigningScheme(0)
 
 // EdPlusSigning is the extended Ed25519++ signing scheme
-var EdPlusSigning = EdPlusSigningScheme{}
+const EdPlusSigning = EdPlusSigningScheme(1)
 
 // SigningScheme defines the signing scheme
 type SigningScheme interface {
 	Sign(signer *signing.EdSigner, data []byte) TxSignature
-	Verify(data []byte, pk TxPublicKey, signature TxSignature) bool
+	Verify(data []byte, pubKey TxPublicKey, signature TxSignature) bool
 	Extract(data []byte, signature TxSignature) (TxPublicKey, bool, error)
 	ExtractablePubKey() bool
 }
 
-type EdSigningScheme struct{}
+type EdSigningScheme int
 
 func (EdSigningScheme) Sign(signer *signing.EdSigner, data []byte) TxSignature {
 	return TxSignatureFromBytes(signer.Sign1(data))
@@ -37,7 +37,7 @@ func (EdSigningScheme) ExtractablePubKey() bool {
 	return false
 }
 
-type EdPlusSigningScheme struct{}
+type EdPlusSigningScheme int
 
 func (EdPlusSigningScheme) Sign(signer *signing.EdSigner, data []byte) TxSignature {
 	return TxSignatureFromBytes(signer.Sign2(data))

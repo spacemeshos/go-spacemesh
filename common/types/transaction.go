@@ -232,8 +232,8 @@ func (txm TransactionAuthenticationMessage) Encode(pubKey TxPublicKey, signature
 }
 
 // Verify verifies transaction bytes
-func (txm TransactionAuthenticationMessage) Verify(pubKey TxPublicKey, sig TxSignature) bool {
-	return txm.Scheme().Verify(txm.Digest[:], pubKey, sig)
+func (txm TransactionAuthenticationMessage) Verify(pubKey TxPublicKey, signature TxSignature) bool {
+	return txm.Scheme().Verify(txm.Digest[:], pubKey, signature)
 }
 
 // SignedTransactionLayout represents fields layout of a signed transaction
@@ -294,11 +294,11 @@ func (stx SignedTransaction) Decode() (tx Transaction, err error) {
 	}
 
 	var pubKey TxPublicKey
-	if pk, ok, err := signScheme.Extract(digest, stl.Signature); ok {
+	if extractablePubKey {
+		pubKey, _, err = signScheme.Extract(digest, stl.Signature)
 		if err != nil {
 			return tx, fmt.Errorf("failed to verify transaction: %v", err.Error())
 		}
-		pubKey = pk
 	} else {
 		if len(stl.PubKey) != TxPublicKeyLength {
 			return tx, errBadSignatureError

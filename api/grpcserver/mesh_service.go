@@ -257,7 +257,7 @@ func (s MeshService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address
 
 func convertTransaction(t types.Transaction) *pb.Transaction {
 	scheme := pb.Signature_SCHEME_ED25519
-	if t.Type().EdPlus() {
+	if t.Type().Scheme().ExtractablePubKey() {
 		scheme = pb.Signature_SCHEME_ED25519_PLUS_PLUS
 	}
 	return &pb.Transaction{
