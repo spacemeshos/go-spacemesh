@@ -2,7 +2,64 @@ package types
 
 import (
 	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
+
+// EdSigning is the classic Ed25519 signing scheme
+var EdSigning = EdSigningScheme{}
+
+// EdPlusSigning is the extended Ed25519++ signing scheme
+var EdPlusSigning = EdPlusSigningScheme{}
+
+// SigningScheme defines the signing scheme
+type SigningScheme interface {
+	Sign(signer *signing.EdSigner, data []byte) TxSignature
+	Verify(data []byte, pk TxPublicKey, signature TxSignature) bool
+	Extract(data []byte, signature TxSignature) (TxPublicKey, bool, error)
+	ExtractablePubKey() bool
+}
+
+type EdSigningScheme struct{}
+
+func (EdSigningScheme) Sign(signer *signing.EdSigner, data []byte) TxSignature {
+	return TxSignatureFromBytes(signer.Sign1(data))
+}
+
+func (EdSigningScheme) Verify(data []byte, pubKey TxPublicKey, signature TxSignature) bool {
+	return ed25519.Verify(pubKey[:], data, signature[:])
+}
+
+func (EdSigningScheme) Extract(data []byte, signature TxSignature) (TxPublicKey, bool, error) {
+	return TxPublicKey{}, false, nil
+}
+
+func (EdSigningScheme) ExtractablePubKey() bool {
+	return false
+}
+
+type EdPlusSigningScheme struct{}
+
+func (EdPlusSigningScheme) Sign(signer *signing.EdSigner, data []byte) TxSignature {
+	return TxSignatureFromBytes(signer.Sign2(data))
+}
+
+func (EdPlusSigningScheme) Verify(data []byte, pubKey TxPublicKey, signature TxSignature) bool {
+	return ed25519.Verify2(pubKey[:], data, signature[:])
+}
+
+func (EdPlusSigningScheme) Extract(data []byte, signature TxSignature) (pubKey TxPublicKey, ok bool, err error) {
+	ok = true
+	pk, err := ed25519.ExtractPublicKey(data, signature[:])
+	if err != nil {
+		return
+	}
+	pubKey = TxPublicKeyFromBytes(pk)
+	return
+}
+
+func (EdPlusSigningScheme) ExtractablePubKey() bool {
+	return true
+}
 
 // TxSignatureLength defines signature length
 // TODO: signing does not have signature length constant
@@ -20,17 +77,6 @@ func TxSignatureFromBytes(bs []byte) (sig TxSignature) {
 // Bytes returns signature's bytes
 func (sig TxSignature) Bytes() []byte {
 	return sig[:]
-}
-
-// VerifyEdPlus does signature verification
-func (sig TxSignature) VerifyEdPlus(pubKey ed25519.PublicKey, data []byte) bool {
-	//return ed25519.Verify2(pubKey, data, sig[:])
-	return true // nonsensical because publickey extracted form message and always fits to signature
-}
-
-// VerifyEd does signature verification
-func (sig TxSignature) VerifyEd(pubKey ed25519.PublicKey, data []byte) bool {
-	return ed25519.Verify(pubKey, data, sig[:])
 }
 
 // TxPublicKeyLength defines public key length
