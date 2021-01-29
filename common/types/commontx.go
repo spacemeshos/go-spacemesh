@@ -29,11 +29,11 @@ func (t IncompleteCommonTx) Digest() ([]byte, error) {
 // AuthenticationMessage returns the authentication message for the transaction
 func (t IncompleteCommonTx) AuthenticationMessage() (txm TransactionAuthenticationMessage, err error) {
 	txm.TxType = t.txType
-	txm.TransactionData, err = t.self.xdrBytes()
+	txm.TransactionData, err = t.self.xdrBytes() // for use in encoding signed transaction
 	if err != nil {
 		return
 	}
-	d, err := t.digest(txm.TransactionData)
+	d, err := t.digest(txm.TransactionData) // for sign transaction
 	if err != nil {
 		return
 	}
@@ -43,9 +43,12 @@ func (t IncompleteCommonTx) AuthenticationMessage() (txm TransactionAuthenticati
 
 func (t IncompleteCommonTx) digest(d []byte) (_ []byte, err error) {
 	sha := sha512.New()
+	// we don't need to use XDR here because it's just a concatenation of bytes string
 	networkID := GetNetworkID()
 	_, _ = sha.Write(networkID[:])
 	_, _ = sha.Write([]byte{byte(t.txType)})
+	// here we add original Xdr encoded transaction
+	//   or Xdr encoded immutable transaction part if transaction can be pruned
 	if p, ok := t.self.(txMutable); ok {
 		d, err = p.immutableBytes()
 		if err != nil {

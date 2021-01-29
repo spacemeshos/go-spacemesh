@@ -232,7 +232,7 @@ func (txm TransactionAuthenticationMessage) Type() TransactionType {
 
 // Sign signs transaction binary data
 func (txm TransactionAuthenticationMessage) Sign(signer *signing.EdSigner) (_ SignedTransaction, err error) {
-	signature := txm.Type().sign(signer, txm.Digest[:])
+	signature := txm.TxType.sign(signer, txm.Digest[:])
 	return txm.Encode(TxPublicKeyFromBytes(signer.PublicKey().Bytes()), signature)
 }
 
@@ -255,7 +255,7 @@ func (txm TransactionAuthenticationMessage) Encode(pubKey TxPublicKey, signature
 
 // Verify verifies transaction bytes
 func (txm TransactionAuthenticationMessage) Verify(pubKey TxPublicKey, sig TxSignature) bool {
-	return txm.Type().verify(pubKey, sig, txm.Digest[:])
+	return txm.TxType.verify(pubKey, sig, txm.Digest[:])
 }
 
 // SignedTransactionLayout represents fields layout of a signed transaction
