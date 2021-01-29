@@ -1870,11 +1870,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Equal(t, h.Amount, resTx.Amount.Value)
 	require.Equal(t, h.AccountNonce, resTx.Counter)
 	require.Equal(t, globalTx.Signature().Bytes(), resTx.Signature.Signature)
-	scheme := pb.Signature_SCHEME_ED25519
-	if globalTx.Type().EdPlus() {
-		scheme = pb.Signature_SCHEME_ED25519_PLUS_PLUS
-	}
-	require.Equal(t, scheme, resTx.Signature.Scheme)
+	require.Equal(t, signingScheme(globalTx), resTx.Signature.Scheme)
 	require.Equal(t, globalTx.PubKey().Bytes(), resTx.Signature.PublicKey)
 
 	// The Data field is a bit trickier to read

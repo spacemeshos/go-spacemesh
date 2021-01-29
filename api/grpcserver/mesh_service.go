@@ -255,11 +255,18 @@ func (s MeshService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address
 	return txIDs
 }
 
-func convertTransaction(t types.Transaction) *pb.Transaction {
-	scheme := pb.Signature_SCHEME_ED25519
-	if t.Type().Scheme().ExtractablePubKey() {
+func signingScheme(t types.Transaction) (scheme pb.Signature_Scheme) {
+	scheme = pb.Signature_SCHEME_UNSPECIFIED
+	switch t.Type().Scheme().Identify() {
+	case types.EdSigningScheme:
+		scheme = pb.Signature_SCHEME_ED25519
+	case types.EdPlusSigningScheme:
 		scheme = pb.Signature_SCHEME_ED25519_PLUS_PLUS
 	}
+	return
+}
+
+func convertTransaction(t types.Transaction) *pb.Transaction {
 	return &pb.Transaction{
 		Id: &pb.TransactionId{Id: t.ID().Bytes()},
 		Datum: &pb.Transaction_CoinTransfer{
@@ -279,7 +286,7 @@ func convertTransaction(t types.Transaction) *pb.Transaction {
 		Amount:  &pb.Amount{Value: t.GetAmount()},
 		Counter: t.GetNonce(), // TODO: nonce processing
 		Signature: &pb.Signature{
-			Scheme:    scheme,
+			Scheme:    signingScheme(t),
 			Signature: t.Signature().Bytes(),
 			PublicKey: t.PubKey().Bytes(),
 		},
