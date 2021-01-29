@@ -70,11 +70,12 @@ func (tt TransactionType) String() string {
 	return "UnknownTransactionType"
 }
 
+// Scheme returns signing scheme defined for the transaction type
 func (tt TransactionType) Scheme() SigningScheme {
 	if v, ok := TransactionTypesMap[tt]; ok {
 		return v.Signing
 	}
-	panic(fmt.Errorf("unknown transaction type"))
+	panic(errUnknownTransactionType)
 }
 
 // Decode decodes transaction bytes into the transaction object
@@ -82,8 +83,10 @@ func (tt TransactionType) Decode(data []byte) (IncompleteTransaction, error) {
 	if v, ok := TransactionTypesMap[tt]; ok {
 		return v.Decode(data, tt)
 	}
-	return nil, fmt.Errorf("unknown transaction type")
+	return nil, errUnknownTransactionType
 }
+
+var errUnknownTransactionType = errors.New("unknown transaction type")
 
 // EdPlusTransactionFactory allowing to create transactions with Ed++ signing scheme
 type EdPlusTransactionFactory interface {
@@ -202,7 +205,7 @@ func (txm TransactionAuthenticationMessage) Type() TransactionType {
 	return txm.TxType
 }
 
-// Type returns signing scheme
+// Scheme returns signing scheme
 func (txm TransactionAuthenticationMessage) Scheme() SigningScheme {
 	return txm.TxType.Scheme()
 }
