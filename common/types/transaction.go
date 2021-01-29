@@ -12,6 +12,19 @@ import (
 	"strings"
 )
 
+// TransactionTypesMap defines transaction types interpretation
+var TransactionTypesMap = map[TransactionType]TransactionTypeRoute{
+	TxSimpleCoinEdPlus: {"TxSimpleCoinEdPlus", EdPlusSigning, DecodeSimpleCoinTx},
+	TxSimpleCoinEd:     {"TxSimpleCoinEd", EdSigning, DecodeSimpleCoinTx},
+	TxCallAppEdPlus:    {"TxCallAppEdPlus", EdPlusSigning, DecodeCallAppTx},
+	TxCallAppEd:        {"TxCallAppEd", EdSigning, DecodeCallAppTx},
+	TxSpawnAppEdPlus:   {"TxSpawnAppEdPlus", EdPlusSigning, DecodeSpawnAppTx},
+	TxSpawnAppEd:       {"TxSpawnAppEd", EdSigning, DecodeSpawnAppTx},
+	TxOldCoinEdPlus:    {"TxOldCoinEdPlus", EdPlusSigning, DecodeOldCoinTx},
+	TxOldCoinEd:        {"TxOldCoinEd", EdSigning, DecodeOldCoinTx},
+	// add new routes here
+}
+
 // TransactionType is a transaction's kind and signing scheme
 type TransactionType byte
 
@@ -37,66 +50,58 @@ const (
 	TxOldCoinEdPlus TransactionType = 7
 )
 
+// SigningScheme is the enum of possible signing chemes
+type SigningScheme byte
+
+// EdSigning is the classic Ed25519 signing scheme
+const EdSigning SigningScheme = 0
+
+// EdPlusSigning is the extended Ed25519++ signing scheme
+const EdPlusSigning SigningScheme = 1
+
+// TransactionTypeRoute defines how to interpret transaction type
+type TransactionTypeRoute struct {
+	Name    string
+	Signing SigningScheme
+	Decode  func([]byte, TransactionType) (IncompleteTransaction, error)
+}
+
 // Good checks that transaction type is Good
 func (tt TransactionType) Good() bool {
-	switch tt {
-	case TxSimpleCoinEdPlus, TxCallAppEdPlus, TxSpawnAppEdPlus, TxOldCoinEdPlus,
-		TxSimpleCoinEd, TxCallAppEd, TxSpawnAppEd, TxOldCoinEd:
-		return true
-	}
-	return false
+	_, ok := TransactionTypesMap[tt]
+	return ok
 }
 
 // String returns string representation for TransactionType
 func (tt TransactionType) String() string {
-	switch tt {
-	case TxSimpleCoinEd:
-		return "TxSimpleCoinEd"
-	case TxSimpleCoinEdPlus:
-		return "TxSimpleCoinEdPlus"
-	case TxCallAppEd:
-		return "TxCallAppEd"
-	case TxCallAppEdPlus:
-		return "TxCallAppEdPlus"
-	case TxSpawnAppEd:
-		return "TxSpawnAppEd"
-	case TxSpawnAppEdPlus:
-		return "TxSpawnAppEdPlus"
-	case TxOldCoinEd:
-		return "TxOldCoinEd"
-	case TxOldCoinEdPlus:
-		return "TxOldCoinEdPlus"
-	default:
-		return "UnknownTransactionType"
+	if v, ok := TransactionTypesMap[tt]; ok {
+		return v.Name
 	}
+	return "UnknownTransactionType"
 }
 
 // EdPlus returns true if transaction type has Ed++ signing scheme
 func (tt TransactionType) EdPlus() bool {
-	switch tt {
-	case TxSimpleCoinEdPlus, TxCallAppEdPlus, TxSpawnAppEdPlus, TxOldCoinEdPlus:
-		return true
-	case TxSimpleCoinEd, TxCallAppEd, TxSpawnAppEd, TxOldCoinEd:
-		return false
+	if v, ok := TransactionTypesMap[tt]; ok {
+		return v.Signing == EdPlusSigning
 	}
-	// it must be impossible (in theory)
 	panic(fmt.Errorf("unknown transaction type"))
 }
 
 // Decode decodes transaction bytes into the transaction object
 func (tt TransactionType) Decode(data []byte) (IncompleteTransaction, error) {
-	switch tt {
-	case TxSimpleCoinEd, TxSimpleCoinEdPlus:
-		return DecodeSimpleCoinTx(data, tt)
-	case TxCallAppEd, TxCallAppEdPlus:
-		return DecodeCallAppTx(data, tt)
-	case TxSpawnAppEd, TxSpawnAppEdPlus:
-		return DecodeSpawnAppTx(data, tt)
-	case TxOldCoinEd, TxOldCoinEdPlus:
-		return DecodeOldCoinTx(data, tt)
+	if v, ok := TransactionTypesMap[tt]; ok {
+		return v.Decode(data, tt)
 	}
-	// it must be impossible (in theory)
 	return nil, fmt.Errorf("unknown transaction type")
+}
+
+// Sign signs data with TransactionType dependent signing method
+func (tt TransactionType) Sign(signer *signing.EdSigner, data []byte) TxSignature {
+	if tt.EdPlus() {
+		return TxSignatureFromBytes(signer.Sign2(data))
+	}
+	return TxSignatureFromBytes(signer.Sign1(data))
 }
 
 func (tt TransactionType) verify(pubKey TxPublicKey, sig TxSignature, data []byte) bool {
@@ -104,13 +109,6 @@ func (tt TransactionType) verify(pubKey TxPublicKey, sig TxSignature, data []byt
 		return sig.VerifyEdPlus(pubKey.Bytes(), data)
 	}
 	return sig.VerifyEd(pubKey.Bytes(), data)
-}
-
-func (tt TransactionType) sign(signer *signing.EdSigner, data []byte) TxSignature {
-	if tt.EdPlus() {
-		return TxSignatureFromBytes(signer.Sign2(data))
-	}
-	return TxSignatureFromBytes(signer.Sign1(data))
 }
 
 // EdPlusTransactionFactory allowing to create transactions with Ed++ signing scheme
@@ -232,7 +230,7 @@ func (txm TransactionAuthenticationMessage) Type() TransactionType {
 
 // Sign signs transaction binary data
 func (txm TransactionAuthenticationMessage) Sign(signer *signing.EdSigner) (_ SignedTransaction, err error) {
-	signature := txm.TxType.sign(signer, txm.Digest[:])
+	signature := txm.TxType.Sign(signer, txm.Digest[:])
 	return txm.Encode(TxPublicKeyFromBytes(signer.PublicKey().Bytes()), signature)
 }
 
