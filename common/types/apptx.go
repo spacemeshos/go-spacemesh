@@ -10,8 +10,11 @@ import (
 const (
 	originalTransaction byte = 0
 	prunedTransaction   byte = 0xff
-	prunedDataHashSize  int  = sha256.Size
 )
+
+var prunedDataHasher = sha256.New
+
+const prunedDataHashSize int = sha256.Size
 
 // CallAppTx implements "Call App Transaction"
 type CallAppTx struct {
@@ -25,12 +28,12 @@ type CallAppTx struct {
 }
 
 type xrdCallAppTx struct {
-	TTL             uint32 // TTL TODO: update
-	NonceAndPrune   [2]byte
-	Amount          uint64 // Amount of the transaction
-	GasLimit        uint64 // GasLimit for the transaction
-	GasPrice        uint64 // GasPrice for the transaction
-	AddrAndCallData []byte // AddrAndCallData is concatenated Address and CallData bytes
+	TTL             uint32  // TTL TODO: update
+	NonceAndPrune   [2]byte // can be used as Nonce [1]byte for client encoders, because of 4 byte pudding
+	Amount          uint64  // Amount of the transaction
+	GasLimit        uint64  // GasLimit for the transaction
+	GasPrice        uint64  // GasPrice for the transaction
+	AddrAndCallData []byte  // AddrAndCallData is concatenated Address and CallData bytes
 }
 
 // NewEdPlus creates a new incomplete transaction with Ed++ signing scheme
@@ -134,7 +137,7 @@ func (h CallAppTxHeader) immutableBytes() ([]byte, error) {
 
 func (h CallAppTxHeader) immutableCallData() []byte {
 	if h.pruned == originalTransaction {
-		w := sha256.New()
+		w := prunedDataHasher()
 		_, _ = w.Write(h.AppAddress[:AddressLength])
 		_, _ = w.Write(h.CallData)
 		return w.Sum(nil)
@@ -242,9 +245,12 @@ func (tx callAppTx) Extract(out interface{}) bool {
 	return tx.extract(out, tx.txType)
 }
 
-// Prune by default does nothing and returns original transaction
+// Prune tries to reduce transaction size if it's possible
 func (tx *callAppTx) Prune() Transaction {
 	if tx.pruned != originalTransaction {
+		return tx
+	}
+	if len(tx.CallData)+AddressLength < prunedDataHashSize {
 		return tx
 	}
 	tx2 := &callAppTx{}
