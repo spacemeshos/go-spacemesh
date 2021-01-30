@@ -146,7 +146,7 @@ func TestVerifyTransactionBody(t *testing.T) {
 	require.Equal(t, ft, x)
 	txm, err := tx.Message()
 	require.NoError(t, err)
-	txm.TransactionData = append(txm.TransactionData, 0, 1, 2, 3, 4)
+	txm.Data = append(txm.Data, 0, 1, 2, 3, 4)
 	stx, err := txm.Encode(tx.PubKey(), tx.Signature())
 	require.NoError(t, err)
 	_, err = stx.Decode()

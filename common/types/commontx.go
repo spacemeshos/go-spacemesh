@@ -28,12 +28,12 @@ func (t IncompleteCommonTx) Digest() (TransactionDigest, error) {
 
 // Message returns the authentication message for the transaction
 func (t IncompleteCommonTx) Message() (txm TransactionMessage, err error) {
-	txm.TxType = t.txType
-	txm.TransactionData, err = t.self.xdrBytes() // for use in encoding signed transaction
+	txm.Type = t.txType
+	txm.Data, err = t.self.xdrBytes() // for use in encoding signed transaction
 	if err != nil {
 		return
 	}
-	txm.Digest, err = t.digest(txm.TransactionData) // for sign transaction
+	txm.Digest, err = t.digest(txm.Data) // for sign transaction
 	return
 }
 

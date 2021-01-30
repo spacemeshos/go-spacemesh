@@ -80,7 +80,7 @@ type EdTransactionFactory interface {
 
 // GeneralTransaction is the general immutable transactions interface
 type GeneralTransaction interface {
-	fmt.Stringer // String()string
+	String() string
 
 	Message() (TransactionMessage, error)
 	Type() TransactionType
@@ -177,19 +177,14 @@ var EmptyTransactionID = TransactionID{}
 
 // TransactionMessage is an incomplete transaction binary representation
 type TransactionMessage struct {
-	TxType          TransactionType
-	Digest          TransactionDigest // hashed type, network id and transaction immutable data
-	TransactionData []byte
-}
-
-// Type returns transaction type
-func (txm TransactionMessage) Type() TransactionType {
-	return txm.TxType
+	Type   TransactionType
+	Digest TransactionDigest // hashed type, network id and transaction immutable data
+	Data   []byte
 }
 
 // Scheme returns signing scheme
 func (txm TransactionMessage) Scheme() SigningScheme {
-	return txm.TxType.Signing
+	return txm.Type.Signing
 }
 
 // Sign signs transaction binary data
@@ -200,7 +195,7 @@ func (txm TransactionMessage) Sign(signer Signer) (_ SignedTransaction, err erro
 
 // Encode encodes transaction into the independent form
 func (txm TransactionMessage) Encode(pubKey PublicKey, signature Signature) (_ SignedTransaction, err error) {
-	stl := SignedTransactionLayout{TxType: [1]byte{txm.TxType.Value}, Data: txm.TransactionData, Signature: signature}
+	stl := SignedTransactionLayout{TxType: [1]byte{txm.Type.Value}, Data: txm.Data, Signature: signature}
 	extractable := txm.Scheme().Extractable
 	if !extractable {
 		stl.PubKey = pubKey.Bytes()
