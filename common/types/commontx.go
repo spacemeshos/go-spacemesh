@@ -60,7 +60,7 @@ func (t IncompleteCommonTx) digest(d []byte) (_ []byte, err error) {
 		}
 	}
 
-	// we don't need to use XDR here because it's just a concatenation of bytes string
+	// but we really don't need to use XDR here because it's just a concatenation of bytes string
 	xdrMessage := struct {
 		NetworkID [32]byte
 		Type      [1]byte
@@ -81,21 +81,7 @@ func (t IncompleteCommonTx) digest(d []byte) (_ []byte, err error) {
 		_, _ = sha.Write([]byte{t.txType.Value})
 		// here we add original Xdr encoded transaction
 		//   or Xdr encoded immutable transaction part if transaction can be pruned
-		if p, ok := t.self.(txMutable); ok {
-			d, err = p.immutableBytes()
-			if err != nil {
-				return
-			}
-			_, _ = sha.Write(d)
-		} else {
-			if d == nil {
-				d, err = t.self.xdrBytes()
-				if err != nil {
-					return
-				}
-			}
-			_, _ = sha.Write(d)
-		}
+		_, _ = sha.Write(d)
 	*/
 	return sha.Sum(nil), nil
 }

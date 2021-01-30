@@ -10,6 +10,7 @@ import (
 	"strings"
 )
 
+// EnableTransactionPruning enables suuport for transaction pruning and changes prunable transactions are signed
 var EnableTransactionPruning = false
 
 const (
@@ -36,17 +37,18 @@ const (
 
 // TransactionTypesMap defines transaction types interpretation
 var TransactionTypesMap = map[byte]TransactionType{
-	SimpleCoinEdPlusType.Value: SimpleCoinEdPlusType,
-	SimpleCoinEdType.Value:     SimpleCoinEdType,
-	CallAppEdPlusType.Value:    CallAppEdPlusType,
-	CallAppEdType.Value:        CallAppEdType,
-	SpawnAppEdPlusType.Value:   SpawnAppEdPlusType,
-	SpawnAppEdType.Value:       SpawnAppEdType,
-	OldCoinEdPlusType.Value:    OldCoinEdPlusType,
-	OldCoinEdType.Value:        OldCoinEdType,
+	simpleCoinEdPlusType.Value: simpleCoinEdPlusType,
+	simpleCoinEdType.Value:     simpleCoinEdType,
+	callAppEdPlusType.Value:    callAppEdPlusType,
+	callAppEdType.Value:        callAppEdType,
+	spawnAppEdPlusType.Value:   spawnAppEdPlusType,
+	spawnAppEdType.Value:       spawnAppEdType,
+	oldCoinEdPlusType.Value:    oldCoinEdPlusType,
+	oldCoinEdType.Value:        oldCoinEdType,
 	// add new transaction types here
 }
 
+// TransactionType is a type interface for transactions manipulation
 type TransactionType struct{ *TransactionTypeObject }
 
 // TransactionTypeObject defines how to interpret transaction type
@@ -57,10 +59,12 @@ type TransactionTypeObject struct {
 	Decode  func([]byte, TransactionType) (IncompleteTransaction, error)
 }
 
+// New creates new transaction type
 func (tto TransactionTypeObject) New() TransactionType {
 	return TransactionType{&tto}
 }
 
+// String returns name of transaction type
 func (tt TransactionType) String() string {
 	return tt.Name
 }
@@ -196,7 +200,7 @@ func (txm TransactionAuthenticationMessage) Sign(signer Signer) (_ SignedTransac
 // Encode encodes transaction into the independent form
 func (txm TransactionAuthenticationMessage) Encode(pubKey TxPublicKey, signature TxSignature) (_ SignedTransaction, err error) {
 	stl := SignedTransactionLayout{TxType: [1]byte{txm.TxType.Value}, Data: txm.TransactionData, Signature: signature}
-	extractable := txm.Scheme().Extractable()
+	extractable := txm.Scheme().Extractable
 	if !extractable {
 		stl.PubKey = pubKey.Bytes()
 	}
@@ -262,8 +266,8 @@ func (stx SignedTransaction) Decode() (tx Transaction, err error) {
 		return tx, errBadTransactionTypeError
 	}
 
-	extractablePubKey := txType.Signing.Extractable()
-	if extractablePubKey && n != 4+len(stx) || !extractablePubKey && n != len(stx) {
+	extractable := txType.Signing.Extractable
+	if extractable && n != 4+len(stx) || !extractable && n != len(stx) {
 		// to protect against digest compilation attack with ED++
 		return tx, errBadTransactionEncodingError
 	}
@@ -279,13 +283,13 @@ func (stx SignedTransaction) Decode() (tx Transaction, err error) {
 	}
 
 	var pubKey TxPublicKey
-	if extractablePubKey {
+	if extractable {
 		pubKey, _, err = txType.Signing.ExtractPubKey(digest, stl.Signature)
 		if err != nil {
 			return tx, fmt.Errorf("failed to verify transaction: %v", err.Error())
 		}
 	} else {
-		if len(stl.PubKey) != TxPublicKeyLength {
+		if len(stl.PubKey) != txType.Signing.PubKeyLength {
 			return tx, errBadSignatureError
 		}
 		pubKey = TxPublicKeyFromBytes(stl.PubKey)

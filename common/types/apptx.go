@@ -8,19 +8,19 @@ import (
 	"github.com/spacemeshos/sha256-simd"
 )
 
-var CallAppEdPlusType = TransactionTypeObject{
+var callAppEdPlusType = TransactionTypeObject{
 	TxCallAppEdPlus, "TxCallAppEdPlus", EdPlusSigningScheme, DecodeCallAppTx,
 }.New()
 
-var CallAppEdType = TransactionTypeObject{
+var callAppEdType = TransactionTypeObject{
 	TxCallAppEd, "TxCallAppEd", EdSigningScheme, DecodeCallAppTx,
 }.New()
 
-var SpawnAppEdPlusType = TransactionTypeObject{
+var spawnAppEdPlusType = TransactionTypeObject{
 	TxSpawnAppEdPlus, "TxSpawnAppEdPlus", EdPlusSigningScheme, DecodeSpawnAppTx,
 }.New()
 
-var SpawnAppEdType = TransactionTypeObject{
+var spawnAppEdType = TransactionTypeObject{
 	TxSpawnAppEd, "TxSpawnAppEd", EdSigningScheme, DecodeSpawnAppTx,
 }.New()
 
@@ -65,14 +65,14 @@ type xrdCallAppTxPruned struct {
 
 // NewEdPlus creates a new incomplete transaction with Ed++ signing scheme
 func (h CallAppTx) NewEdPlus() IncompleteTransaction {
-	tx := &incompCallAppTx{CallAppTxHeader{h, 0}, IncompleteCommonTx{txType: CallAppEdPlusType}}
+	tx := &incompCallAppTx{CallAppTxHeader{h, 0}, IncompleteCommonTx{txType: callAppEdPlusType}}
 	tx.self = tx
 	return tx
 }
 
 // NewEd creates a new incomplete transaction with Ed signing scheme
 func (h CallAppTx) NewEd() IncompleteTransaction {
-	tx := &incompCallAppTx{CallAppTxHeader{h, 0}, IncompleteCommonTx{txType: CallAppEdType}}
+	tx := &incompCallAppTx{CallAppTxHeader{h, 0}, IncompleteCommonTx{txType: callAppEdType}}
 	tx.self = tx
 	return tx
 }
@@ -181,6 +181,9 @@ func (h *CallAppTxHeader) xdrFill(bs []byte) (n int, err error) {
 }
 
 func (h CallAppTxHeader) immutableBytes() ([]byte, error) {
+	if !EnableTransactionPruning {
+		return nil, errPrunedTransactionsAreUnsupported
+	}
 	bf := bytes.Buffer{}
 	d := xrdCallAppTxPruned{
 		h.TTL,
@@ -263,14 +266,14 @@ type SpawnAppTx CallAppTx
 
 // NewEdPlus creates a new incomplete transaction with Ed++ signing scheme
 func (h SpawnAppTx) NewEdPlus() IncompleteTransaction {
-	tx := &incompCallAppTx{CallAppTxHeader{CallAppTx(h), 0}, IncompleteCommonTx{txType: SpawnAppEdPlusType}}
+	tx := &incompCallAppTx{CallAppTxHeader{CallAppTx(h), 0}, IncompleteCommonTx{txType: spawnAppEdPlusType}}
 	tx.self = tx
 	return tx
 }
 
 // NewEd creates a new incomplete transaction with Ed signing scheme
 func (h SpawnAppTx) NewEd() IncompleteTransaction {
-	tx := &incompCallAppTx{CallAppTxHeader{CallAppTx(h), 0}, IncompleteCommonTx{txType: SpawnAppEdType}}
+	tx := &incompCallAppTx{CallAppTxHeader{CallAppTx(h), 0}, IncompleteCommonTx{txType: spawnAppEdType}}
 	tx.self = tx
 	return tx
 }
