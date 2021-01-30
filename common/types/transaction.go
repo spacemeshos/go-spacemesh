@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+var EnableTransactionPruning = false
+
 const (
 	// TxSimpleCoinEd is a simple coin transaction with ed signing scheme
 	TxSimpleCoinEd byte = 0
@@ -57,6 +59,10 @@ type TransactionTypeObject struct {
 
 func (tto TransactionTypeObject) New() TransactionType {
 	return TransactionType{&tto}
+}
+
+func (tt TransactionType) String() string {
+	return tt.Name
 }
 
 // EdPlusTransactionFactory allowing to create transactions with Ed++ signing scheme
@@ -229,6 +235,12 @@ type SignedTransaction []byte
 // ID returns transaction identifier
 func (stx SignedTransaction) ID() TransactionID {
 	return TransactionID(CalcHash32(stx[:]))
+}
+
+// Type returns transaction type
+func (stx SignedTransaction) Type() (tt TransactionType, ok bool) {
+	tt, ok = TransactionTypesMap[stx[0]]
+	return
 }
 
 var errBadSignatureError = errors.New("failed to verify: bad signature")

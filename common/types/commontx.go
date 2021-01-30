@@ -2,6 +2,7 @@ package types
 
 import (
 	"crypto/sha512"
+	xdr "github.com/nullstyle/go-xdr/xdr3"
 )
 
 // txSelf is an interface to encode/decode transaction header or access to self Transaction interface
@@ -43,27 +44,59 @@ func (t IncompleteCommonTx) AuthenticationMessage() (txm TransactionAuthenticati
 
 func (t IncompleteCommonTx) digest(d []byte) (_ []byte, err error) {
 	sha := sha512.New()
-	// we don't need to use XDR here because it's just a concatenation of bytes string
 	networkID := GetNetworkID()
-	_, _ = sha.Write(networkID[:])
-	_, _ = sha.Write([]byte{t.txType.Value})
-	// here we add original Xdr encoded transaction
-	//   or Xdr encoded immutable transaction part if transaction can be pruned
-	if p, ok := t.self.(txMutable); ok {
-		d, err = p.immutableBytes()
-		if err != nil {
-			return
-		}
-		_, _ = sha.Write(d)
-	} else {
-		if d == nil {
-			d, err = t.self.xdrBytes()
+	if EnableTransactionPruning {
+		if p, ok := t.self.(txMutable); ok {
+			d, err = p.immutableBytes()
 			if err != nil {
 				return
 			}
 		}
-		_, _ = sha.Write(d)
 	}
+	if d == nil {
+		d, err = t.self.xdrBytes()
+		if err != nil {
+			return
+		}
+	}
+
+	// we don't need to use XDR here because it's just a concatenation of bytes string
+	xdrMessage := struct {
+		NetworkID [32]byte
+		Type      [1]byte
+		// ImmutableTransactionData for simple coin is exactly the transaction body
+		//   for prunable transactions it's specifically encoded
+		//   immutable body part and hash of prunable data,
+		//   so it the same for pruned and original transaction
+		ImmutableTransactionData []byte
+	}{networkID, [1]byte{t.txType.Value}, d}
+
+	if _, err = xdr.Marshal(sha, &xdrMessage); err != nil {
+		return
+	}
+	/*
+		this code uses alternative more compact encoding without XDR serializer
+
+		_, _ = sha.Write(networkID[:])
+		_, _ = sha.Write([]byte{t.txType.Value})
+		// here we add original Xdr encoded transaction
+		//   or Xdr encoded immutable transaction part if transaction can be pruned
+		if p, ok := t.self.(txMutable); ok {
+			d, err = p.immutableBytes()
+			if err != nil {
+				return
+			}
+			_, _ = sha.Write(d)
+		} else {
+			if d == nil {
+				d, err = t.self.xdrBytes()
+				if err != nil {
+					return
+				}
+			}
+			_, _ = sha.Write(d)
+		}
+	*/
 	return sha.Sum(nil), nil
 }
 

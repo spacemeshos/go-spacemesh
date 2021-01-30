@@ -20,8 +20,8 @@ var alice = newTxUser("alice")
 var signingTxs = []interface{}{
 	OldCoinTx{Amount: 100, Fee: 1, Recipient: alice.Address()},
 	SimpleCoinTx{Amount: 101, GasPrice: 1, GasLimit: 10, Recipient: alice.Address()},
-	CallAppTx{Amount: 102, GasPrice: 1, GasLimit: 10, AppAddress: alice.Address(), CallData: []byte{}},
-	SpawnAppTx{Amount: 103, GasPrice: 1, GasLimit: 10, AppAddress: alice.Address(), CallData: []byte{}},
+	CallAppTx{Amount: 102, GasPrice: 1, GasLimit: 10, AppAddress: alice.Address()},
+	SpawnAppTx{Amount: 103, GasPrice: 1, GasLimit: 10, AppAddress: alice.Address()},
 }
 
 type txUser struct{ *signing.EdSigner }
@@ -168,7 +168,20 @@ func TestSignEdPlus(t *testing.T) {
 	require.True(t, ok)
 }
 
-func _TestG1(t *testing.T) {
+func _TestGen(t *testing.T) {
+	testGen(false, t)
+	testGen(true, t)
+}
+
+func testGen(enablePruning bool, t *testing.T) {
+	sfx := "1"
+	if enablePruning {
+		sfx = "2"
+	}
+	var old bool
+	old, EnableTransactionPruning = EnableTransactionPruning, enablePruning
+	defer func() { EnableTransactionPruning = old }()
+
 	bf := bytes.Buffer{}
 	wr := bufio.NewWriter(&bf)
 	bob := newTxUser("bob")
@@ -200,18 +213,22 @@ func _TestG1(t *testing.T) {
 		p2w("pkey:", sxm[l1:])
 		wrs("}\n")
 	}
-	txf := func(itx interface{}, n string) {
+	txf := func(itx interface{}, n string, pruned bool) {
 		v := reflect.ValueOf(itx)
 		vt := v.Type()
 		wrf("var txValue%s = %s{\n", n, vt.Name())
 		for i := 0; i < vt.NumField(); i++ {
 			f := vt.Field(i)
-			if f.Type == reflect.TypeOf(Address{}) {
+			if f.Name == "AppAddress" && pruned {
+				wrf("\t%s: Address{},\n", f.Name)
+			} else if f.Name == "CallData" && pruned {
+				wrf("\t%s: nil,\n", f.Name)
+			} else if f.Type == reflect.TypeOf(Address{}) {
 				a := v.Field(i).Interface().(Address)
 				wrf("\t%s: Address{%v},\n", f.Name, b2x(a[:]))
 			} else if f.Type == reflect.TypeOf([]byte{}) {
 				if v.Field(i).IsNil() || v.Field(i).Len() == 0 {
-					wrf("\t%s: []byte{},\n", f.Name)
+					wrf("\t%s: nil,\n", f.Name)
 				} else {
 					a := v.Field(i).Interface().([]byte)
 					wrf("\t%s: []byte{%v},\n", f.Name, b2x(a[:]))
@@ -223,14 +240,14 @@ func _TestG1(t *testing.T) {
 		wrs("}\n")
 	}
 	edf := func(itx interface{}, n string) {
-		txf(itx, n)
+		n += sfx
+		txf(itx, n, false)
 		lx = append(lx, n)
 		edfx(itx.(EdTransactionFactory).NewEd(), n+"Ed")
 		edfx(itx.(EdPlusTransactionFactory).NewEdPlus(), n+"EdPlus")
 	}
 
-	wrf(`
-package types
+	wrf(`package types
 import (
 	"github.com/stretchr/testify/require"
 	"reflect"
@@ -253,16 +270,21 @@ import (
 	edf(SpawnAppTx{Amount: 108, GasLimit: 1, GasPrice: 5, Nonce: 8, AppAddress: charlie.Address(), CallData: []byte{}}, "SpawnAppTx2")
 	edf(SpawnAppTx{Amount: 109, GasLimit: 1, GasPrice: 33, Nonce: 12, AppAddress: alice.Address(), CallData: nil}, "SpawnAppTx3")
 
-	wrf("var txCases = []struct{Tx interface{}; Signed SignedTransaction}{\n")
+	wrf("var txCases%v = []struct{Tx interface{}; Signed SignedTransaction}{\n", sfx)
 	for _, v := range lx {
 		wrf("\t{txValue%s,txCase%sEd},\n", v, v)
 		wrf("\t{txValue%s,txCase%sEdPlus},\n", v, v)
 	}
 	wrs("}\n")
 
-	wrs(`	
-func TestBinaryTransactions(t *testing.T) {
-	for _,v := range txCases {
+	wrf(`	
+func TestBinaryTransactions%v(t *testing.T) {
+	var old bool
+	old,EnableTransactionPruning = EnableTransactionPruning, %v
+	defer func(){
+		EnableTransactionPruning = old
+	}()
+	for _,v := range txCases%v {
 		tx, err := v.Signed.Decode()
 		require.NoError(t, err)
 		val := reflect.ValueOf(v.Tx)
@@ -272,7 +294,7 @@ func TestBinaryTransactions(t *testing.T) {
 		require.Equal(t, v.Tx, b.Elem().Interface())
 	}
 }	
-`)
+`, sfx, enablePruning, sfx)
 	_ = wr.Flush()
-	_ = ioutil.WriteFile("transactionbin_test.go", bf.Bytes(), 0666)
+	_ = ioutil.WriteFile(fmt.Sprintf("transactionbin%v_test.go", sfx), bf.Bytes(), 0666)
 }

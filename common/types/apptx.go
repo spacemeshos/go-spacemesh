@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/sha256-simd"
@@ -40,16 +41,26 @@ type CallAppTx struct {
 	Amount     uint64  // Amount of the transaction
 	GasLimit   uint64  // GasLimit for the transaction
 	GasPrice   uint64  // GasPrice for the transaction
-	CallData   []byte  // CallData an additional data
+	CallData   []byte  // CallData an additional data or pruned data hash
 }
 
-type xrdCallAppTx struct {
-	TTL             uint32  // TTL TODO: update
-	NonceAndPrune   [2]byte // can be used as Nonce [1]byte for client encoders, because of 4 byte pudding
-	Amount          uint64  // Amount of the transaction
-	GasLimit        uint64  // GasLimit for the transaction
-	GasPrice        uint64  // GasPrice for the transaction
-	AddrAndCallData []byte  // AddrAndCallData is concatenated Address and CallData bytes
+type xrdCallAppTxOriginal struct {
+	TTL           uint32  // TTL TODO: update
+	NonceAndPrune [2]byte // can be used as Nonce [1]byte for client encoders, because of 4 byte padding
+	AppAddress    Address // AppAddress Recipient App Address to Call
+	Amount        uint64  // Amount of the transaction
+	GasLimit      uint64  // GasLimit for the transaction
+	GasPrice      uint64  // GasPrice for the transaction
+	CallData      []byte  // CallData bytes
+}
+
+type xrdCallAppTxPruned struct {
+	TTL           uint32                   // TTL TODO: update
+	NonceAndPrune [2]byte                  // can be used as Nonce [1]byte for client encoders, because of 4 byte padding
+	Amount        uint64                   // Amount of the transaction
+	GasLimit      uint64                   // GasLimit for the transaction
+	GasPrice      uint64                   // GasPrice for the transaction
+	Hash          [prunedDataHashSize]byte // Hash of pruned Address and CallData
 }
 
 // NewEdPlus creates a new incomplete transaction with Ed++ signing scheme
@@ -95,17 +106,27 @@ type CallAppTxHeader struct {
 // XdrBytes implements txSelf.xdrBytes
 func (h CallAppTxHeader) xdrBytes() ([]byte, error) {
 	bf := bytes.Buffer{}
-	adr := h.AppAddress[:]
-	if h.pruned != originalTransaction {
-		adr = []byte{}
-	}
-	d := xrdCallAppTx{
-		h.TTL,
-		[2]byte{h.Nonce, h.pruned},
-		h.Amount,
-		h.GasLimit,
-		h.GasPrice,
-		append(adr, h.CallData...),
+	var d interface{}
+	if EnableTransactionPruning && h.pruned == prunedTransaction {
+		x := &xrdCallAppTxPruned{
+			TTL:           h.TTL,
+			NonceAndPrune: [2]byte{h.Nonce, prunedTransaction},
+			Amount:        h.Amount,
+			GasLimit:      h.GasLimit,
+			GasPrice:      h.GasPrice,
+		}
+		copy(x.Hash[:], h.CallData)
+		d = x
+	} else {
+		d = &xrdCallAppTxOriginal{
+			h.TTL,
+			[2]byte{h.Nonce, originalTransaction},
+			h.AppAddress,
+			h.Amount,
+			h.GasLimit,
+			h.GasPrice,
+			h.CallData,
+		}
 	}
 	if _, err := xdr.Marshal(&bf, &d); err != nil {
 		return nil, err
@@ -113,37 +134,61 @@ func (h CallAppTxHeader) xdrBytes() ([]byte, error) {
 	return bf.Bytes(), nil
 }
 
+var errPrunedTransactionsAreUnsupported = errors.New("pruned transactions are unsupported yet")
+
 // XdrFill implements txSelf.xdrFill
-func (h *CallAppTxHeader) xdrFill(bs []byte) (int, error) {
-	d := xrdCallAppTx{}
-	n, err := xdr.Unmarshal(bytes.NewReader(bs), &d)
-	h.pruned = d.NonceAndPrune[1]
-	h.CallAppTx = CallAppTx{
-		TTL:      d.TTL,
-		Nonce:    d.NonceAndPrune[0],
-		Amount:   d.Amount,
-		GasLimit: d.GasLimit,
-		GasPrice: d.GasPrice,
-	}
-	if h.pruned == originalTransaction {
-		h.AppAddress = BytesToAddress(d.AddrAndCallData[:AddressLength])
-		h.CallData = d.AddrAndCallData[AddressLength:]
+func (h *CallAppTxHeader) xdrFill(bs []byte) (n int, err error) {
+	if bs[6] != 0 {
+		if !EnableTransactionPruning {
+			return 0, errPrunedTransactionsAreUnsupported
+		}
+		d := xrdCallAppTxPruned{}
+		n, err = xdr.Unmarshal(bytes.NewReader(bs), &d)
+		if err != nil {
+			return
+		}
+		h.pruned = prunedTransaction
+		h.CallAppTx = CallAppTx{
+			TTL:        d.TTL,
+			Nonce:      d.NonceAndPrune[0],
+			AppAddress: Address{},
+			Amount:     d.Amount,
+			GasLimit:   d.GasLimit,
+			GasPrice:   d.GasPrice,
+			CallData:   d.Hash[:],
+		}
 	} else {
-		h.AppAddress = Address{}
-		h.CallData = d.AddrAndCallData
+		d := xrdCallAppTxOriginal{}
+		n, err = xdr.Unmarshal(bytes.NewReader(bs), &d)
+		if err != nil {
+			return
+		}
+		h.pruned = originalTransaction
+		h.CallAppTx = CallAppTx{
+			TTL:        d.TTL,
+			Nonce:      d.NonceAndPrune[0],
+			AppAddress: d.AppAddress,
+			Amount:     d.Amount,
+			GasLimit:   d.GasLimit,
+			GasPrice:   d.GasPrice,
+			CallData:   d.CallData,
+		}
 	}
-	return n, err
+	if len(h.CallData) == 0 {
+		h.CallData = nil
+	}
+	return
 }
 
 func (h CallAppTxHeader) immutableBytes() ([]byte, error) {
 	bf := bytes.Buffer{}
-	d := xrdCallAppTx{
+	d := xrdCallAppTxPruned{
 		h.TTL,
 		[2]byte{h.Nonce, 0},
 		h.Amount,
 		h.GasLimit,
 		h.GasPrice,
-		h.immutableCallData(),
+		h.hash(),
 	}
 	if _, err := xdr.Marshal(&bf, &d); err != nil {
 		return nil, err
@@ -151,14 +196,17 @@ func (h CallAppTxHeader) immutableBytes() ([]byte, error) {
 	return bf.Bytes(), nil
 }
 
-func (h CallAppTxHeader) immutableCallData() []byte {
+func (h CallAppTxHeader) hash() [prunedDataHashSize]byte {
+	x := [prunedDataHashSize]byte{}
 	if h.pruned == originalTransaction {
 		w := prunedDataHasher()
 		_, _ = w.Write(h.AppAddress[:AddressLength])
 		_, _ = w.Write(h.CallData)
-		return w.Sum(nil)
+		copy(x[:], w.Sum(nil))
+	} else {
+		copy(x[:], h.CallData)
 	}
-	return h.CallData
+	return x
 }
 
 func (h CallAppTxHeader) complete() *CommonTx {
@@ -263,6 +311,9 @@ func (tx callAppTx) Extract(out interface{}) bool {
 
 // Prune tries to reduce transaction size if it's possible
 func (tx *callAppTx) Prune() Transaction {
+	if !EnableTransactionPruning {
+		return tx.CommonTx.Prune()
+	}
 	if tx.pruned != originalTransaction {
 		return tx
 	}
@@ -273,7 +324,8 @@ func (tx *callAppTx) Prune() Transaction {
 	*tx2 = *tx
 	tx2.self = tx2
 	tx2.pruned = prunedTransaction
-	tx2.CallData = tx.immutableCallData()
+	hash := tx.hash()
+	tx2.CallData = hash[:]
 	return tx2
 }
 
