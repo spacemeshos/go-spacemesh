@@ -1,7 +1,6 @@
 package types
 
 import (
-	"crypto/sha512"
 	xdr "github.com/nullstyle/go-xdr/xdr3"
 )
 
@@ -23,27 +22,24 @@ type IncompleteCommonTx struct {
 }
 
 // Digest calculates message digest
-func (t IncompleteCommonTx) Digest() ([]byte, error) {
+func (t IncompleteCommonTx) Digest() (TransactionDigest, error) {
 	return t.digest(nil)
 }
 
 // AuthenticationMessage returns the authentication message for the transaction
-func (t IncompleteCommonTx) AuthenticationMessage() (txm TransactionAuthenticationMessage, err error) {
+func (t IncompleteCommonTx) Message() (txm TransactionMessage, err error) {
 	txm.TxType = t.txType
 	txm.TransactionData, err = t.self.xdrBytes() // for use in encoding signed transaction
 	if err != nil {
 		return
 	}
-	d, err := t.digest(txm.TransactionData) // for sign transaction
-	if err != nil {
-		return
-	}
-	copy(txm.Digest[:], d)
+	txm.Digest, err = t.digest(txm.TransactionData) // for sign transaction
 	return
 }
 
-func (t IncompleteCommonTx) digest(d []byte) (_ []byte, err error) {
-	sha := sha512.New()
+func (t IncompleteCommonTx) digest(d []byte) (_ TransactionDigest, err error) {
+	hasher := NewTransactionHasher()
+
 	networkID := GetNetworkID()
 	if EnableTransactionPruning {
 		if p, ok := t.self.(txMutable); ok {
@@ -60,18 +56,20 @@ func (t IncompleteCommonTx) digest(d []byte) (_ []byte, err error) {
 		}
 	}
 
+	// TransactionMessage as it's described in the
+	//     https://product.spacemesh.io/#/transactions?id=signing-a-transaction
 	// but we really don't need to use XDR here because it's just a concatenation of bytes string
 	xdrMessage := struct {
 		NetworkID [32]byte
 		Type      [1]byte
 		// ImmutableTransactionData for simple coin is exactly the transaction body
 		//   for prunable transactions it's specifically encoded
-		//   immutable body part and hash of prunable data,
+		//   immutable body part and hasher of prunable data,
 		//   so it the same for pruned and original transaction
 		ImmutableTransactionData []byte
 	}{networkID, [1]byte{t.txType.Value}, d}
 
-	if _, err = xdr.Marshal(sha, &xdrMessage); err != nil {
+	if _, err = xdr.Marshal(hasher, &xdrMessage); err != nil {
 		return
 	}
 	/*
@@ -83,7 +81,7 @@ func (t IncompleteCommonTx) digest(d []byte) (_ []byte, err error) {
 		//   or Xdr encoded immutable transaction part if transaction can be pruned
 		_, _ = sha.Write(d)
 	*/
-	return sha.Sum(nil), nil
+	return hasher.Sum(), nil
 }
 
 // Type returns transaction's type
@@ -92,7 +90,7 @@ func (t IncompleteCommonTx) Type() TransactionType {
 }
 
 // Complete converts the IncompleteTransaction to the Transaction object
-func (t *IncompleteCommonTx) Complete(pubKey TxPublicKey, signature TxSignature, txid TransactionID) Transaction {
+func (t *IncompleteCommonTx) Complete(pubKey PublicKey, signature Signature, txid TransactionID) Transaction {
 	tx := t.self.complete()
 	tx.txType = t.txType
 	tx.origin = BytesToAddress(pubKey.Bytes())
@@ -122,8 +120,8 @@ type CommonTx struct {
 	IncompleteCommonTx
 	origin    Address
 	id        TransactionID
-	signature TxSignature
-	pubKey    TxPublicKey
+	signature Signature
+	pubKey    PublicKey
 }
 
 // Origin returns transaction's origin, it implements Transaction.Origin
@@ -132,12 +130,12 @@ func (tx CommonTx) Origin() Address {
 }
 
 // Signature returns transaction's signature, it implements Transaction.Signature
-func (tx CommonTx) Signature() TxSignature {
+func (tx CommonTx) Signature() Signature {
 	return tx.signature
 }
 
 // PubKey returns transaction's public key, it implements Transaction.PubKey
-func (tx CommonTx) PubKey() TxPublicKey {
+func (tx CommonTx) PubKey() PublicKey {
 	return tx.pubKey
 }
 
@@ -158,7 +156,7 @@ func (tx *CommonTx) ShortString() string {
 
 // Encode encodes the transaction to a signed transaction. It implements Transaction.Encode
 func (tx *CommonTx) Encode() (_ SignedTransaction, err error) {
-	txm, err := tx.AuthenticationMessage()
+	txm, err := tx.Message()
 	if err != nil {
 		return
 	}

@@ -2,7 +2,6 @@ package types
 
 import (
 	"bytes"
-	"crypto/sha512"
 	"errors"
 	"fmt"
 	xdr "github.com/nullstyle/go-xdr/xdr3"
@@ -83,9 +82,9 @@ type EdTransactionFactory interface {
 type GeneralTransaction interface {
 	fmt.Stringer // String()string
 
-	AuthenticationMessage() (TransactionAuthenticationMessage, error)
+	Message() (TransactionMessage, error)
 	Type() TransactionType
-	Digest() ([]byte, error)
+	Digest() (TransactionDigest, error)
 
 	// extract internal transaction structure
 	Extract(interface{}) bool
@@ -105,12 +104,12 @@ type GeneralTransaction interface {
 // IncompleteTransaction is the interface of an immutable incomplete transaction
 type IncompleteTransaction interface {
 	GeneralTransaction
-	Complete(key TxPublicKey, signature TxSignature, id TransactionID) Transaction
+	Complete(key PublicKey, signature Signature, id TransactionID) Transaction
 }
 
 // SignTransaction signs incomplete transaction and returns completed transaction object
 func SignTransaction(itx IncompleteTransaction, signer Signer) (tx Transaction, err error) {
-	txm, err := itx.AuthenticationMessage()
+	txm, err := itx.Message()
 	if err != nil {
 		return
 	}
@@ -128,9 +127,11 @@ type Transaction interface {
 	ID() TransactionID
 	Hash32() Hash32
 	ShortString() string
-	PubKey() TxPublicKey
-	Signature() TxSignature
+	PubKey() PublicKey
+	Signature() Signature
 	Encode() (SignedTransaction, error)
+
+	// implementation must be enabled bye setting EnableTransactionPruning to true
 	Prune() Transaction
 	Pruned() bool
 }
@@ -174,31 +175,31 @@ func TxIdsField(ids []TransactionID) log.Field {
 // EmptyTransactionID is a canonical empty TransactionID.
 var EmptyTransactionID = TransactionID{}
 
-// TransactionAuthenticationMessage is an incomplete transaction binary representation
-type TransactionAuthenticationMessage struct {
+// TransactionMessage is an incomplete transaction binary representation
+type TransactionMessage struct {
 	TxType          TransactionType
-	Digest          [sha512.Size]byte // contains type, network id and transaction immutable data
+	Digest          TransactionDigest // hashed type, network id and transaction immutable data
 	TransactionData []byte
 }
 
 // Type returns transaction type
-func (txm TransactionAuthenticationMessage) Type() TransactionType {
+func (txm TransactionMessage) Type() TransactionType {
 	return txm.TxType
 }
 
 // Scheme returns signing scheme
-func (txm TransactionAuthenticationMessage) Scheme() SigningScheme {
+func (txm TransactionMessage) Scheme() SigningScheme {
 	return txm.TxType.Signing
 }
 
 // Sign signs transaction binary data
-func (txm TransactionAuthenticationMessage) Sign(signer Signer) (_ SignedTransaction, err error) {
+func (txm TransactionMessage) Sign(signer Signer) (_ SignedTransaction, err error) {
 	signature := txm.Scheme().Sign(signer, txm.Digest[:])
-	return txm.Encode(TxPublicKeyFromBytes(signer.PublicKey().Bytes()), signature)
+	return txm.Encode(PublicKeyFromBytes(signer.PublicKey().Bytes()), signature)
 }
 
 // Encode encodes transaction into the independent form
-func (txm TransactionAuthenticationMessage) Encode(pubKey TxPublicKey, signature TxSignature) (_ SignedTransaction, err error) {
+func (txm TransactionMessage) Encode(pubKey PublicKey, signature Signature) (_ SignedTransaction, err error) {
 	stl := SignedTransactionLayout{TxType: [1]byte{txm.TxType.Value}, Data: txm.TransactionData, Signature: signature}
 	extractable := txm.Scheme().Extractable
 	if !extractable {
@@ -216,14 +217,14 @@ func (txm TransactionAuthenticationMessage) Encode(pubKey TxPublicKey, signature
 }
 
 // Verify verifies transaction bytes
-func (txm TransactionAuthenticationMessage) Verify(pubKey TxPublicKey, signature TxSignature) bool {
-	return txm.Scheme().Verify(txm.Digest[:], pubKey, signature)
+func (txm TransactionMessage) Verify(pubKey PublicKey, signature Signature) bool {
+	return txm.Scheme().Verify(txm.Digest, pubKey, signature)
 }
 
-// SignedTransactionLayout represents fields layout of a signed transaction
+// SignedTransactionLayout represents fields layout of a signed transaction for XDR encoder
 type SignedTransactionLayout struct {
 	TxType    [1]byte
-	Signature [TxSignatureLength]byte
+	Signature [SignatureLength]byte
 	Data      []byte
 	PubKey    [] /*TODO:???*/ byte
 }
@@ -239,12 +240,6 @@ type SignedTransaction []byte
 // ID returns transaction identifier
 func (stx SignedTransaction) ID() TransactionID {
 	return TransactionID(CalcHash32(stx[:]))
-}
-
-// Type returns transaction type
-func (stx SignedTransaction) Type() (tt TransactionType, ok bool) {
-	tt, ok = TransactionTypesMap[stx[0]]
-	return
 }
 
 var errBadSignatureError = errors.New("failed to verify: bad signature")
@@ -282,7 +277,7 @@ func (stx SignedTransaction) Decode() (tx Transaction, err error) {
 		return
 	}
 
-	var pubKey TxPublicKey
+	var pubKey PublicKey
 	if extractable {
 		pubKey, _, err = txType.Signing.ExtractPubKey(digest, stl.Signature)
 		if err != nil {
@@ -292,7 +287,7 @@ func (stx SignedTransaction) Decode() (tx Transaction, err error) {
 		if len(stl.PubKey) != txType.Signing.PubKeyLength {
 			return tx, errBadSignatureError
 		}
-		pubKey = TxPublicKeyFromBytes(stl.PubKey)
+		pubKey = PublicKeyFromBytes(stl.PubKey)
 		if !txType.Signing.Verify(digest, pubKey, stl.Signature) {
 			return tx, errBadSignatureError
 		}
