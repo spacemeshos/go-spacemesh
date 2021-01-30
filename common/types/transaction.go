@@ -9,29 +9,27 @@ import (
 	"strings"
 )
 
-// EnableTransactionPruning enables suuport for transaction pruning and changes prunable transactions are signed
+// EnableTransactionPruning enables support for transaction pruning and changes how prunable transactions are signed
 var EnableTransactionPruning = false
 
 const (
-	// TxSimpleCoinEd is a simple coin transaction with ed signing scheme
-	TxSimpleCoinEd byte = 0
-	// TxSimpleCoinEdPlus is a simple coin transaction with ed++ signing scheme
-	TxSimpleCoinEdPlus byte = 1
-	// TxCallAppEd is a exec app transaction with ed signing scheme
-	TxCallAppEd byte = 2
-	// TxCallAppEdPlus is a exec app transaction with ed++ signing scheme
-	TxCallAppEdPlus byte = 3
-	// TxSpawnAppEd is a spawn app transaction with ed signing scheme
-	TxSpawnAppEd byte = 4
-	// TxSpawnAppEdPlus is a spawn app transaction with ed++ signing scheme
-	TxSpawnAppEdPlus byte = 5
+	// TxEdScheme is the classic Ed25519 scheme
+	TxEdScheme byte = 0
+	// TxEdPlusScheme is the extended Ed25519++ scheme
+	TxEdPlusScheme byte = 1
+)
 
-	// for support code transition to new transactions abstraction
+const (
+	// TxSimpleCoin is a simple coin transaction
+	TxSimpleCoin byte = 0
+	// TxCallApp is a exec app transaction
+	TxCallApp byte = 2
+	// TxSpawnApp is a spawn app transaction
+	TxSpawnApp byte = 4
 
-	// TxOldCoinEd is a old coin transaction with ed signing scheme
-	TxOldCoinEd byte = 6
-	// TxOldCoinEdPlus is a old coin transaction with ed++ signing scheme
-	TxOldCoinEdPlus byte = 7
+	// TxOldCoin is a old coin transaction
+	//   for support code transition to new transactions abstraction
+	TxOldCoin byte = 6
 )
 
 // TransactionTypesMap defines transaction types interpretation
@@ -66,6 +64,11 @@ func (tto TransactionTypeObject) New() TransactionType {
 // String returns name of transaction type
 func (tt TransactionType) String() string {
 	return tt.Name
+}
+
+// Kind returns kind of transaction like TxSimpleCoin, TxCallApp, ...
+func (tt TransactionType) Kind() byte {
+	return tt.Value & ^byte(1)
 }
 
 // EdPlusTransactionFactory allowing to create transactions with Ed++ signing scheme

@@ -7,11 +7,11 @@ import (
 )
 
 var simpleCoinEdPlusType = TransactionTypeObject{
-	TxSimpleCoinEdPlus, "TxSimpleCoinEdPlus", EdPlusSigningScheme, DecodeSimpleCoinTx,
+	TxSimpleCoin + TxEdPlusScheme, "TxSimpleCoinEdPlus", EdPlusSigningScheme, DecodeSimpleCoinTx,
 }.New()
 
 var simpleCoinEdType = TransactionTypeObject{
-	TxSimpleCoinEd, "TxSimpleCoinEd", EdSigningScheme, DecodeSimpleCoinTx,
+	TxSimpleCoin + TxEdScheme, "TxSimpleCoinEd", EdSigningScheme, DecodeSimpleCoinTx,
 }.New()
 
 // SimpleCoinTx implements "Simple Coin Transaction"
@@ -27,7 +27,7 @@ type SimpleCoinTx struct {
 type xdrSimpleCoinTx struct {
 	TTL       uint32
 	Nonce     [1]byte
-	Recipient Address
+	Recipient [20]byte
 	Amount    uint64
 	GasLimit  uint64
 	GasPrice  uint64

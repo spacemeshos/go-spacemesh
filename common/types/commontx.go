@@ -72,15 +72,7 @@ func (t IncompleteCommonTx) digest(d []byte) (_ TransactionDigest, err error) {
 	if _, err = xdr.Marshal(hasher, &xdrMessage); err != nil {
 		return
 	}
-	/*
-		this code uses alternative more compact encoding without XDR serializer
 
-		_, _ = sha.Write(networkID[:])
-		_, _ = sha.Write([]byte{t.txType.Value})
-		// here we add original Xdr encoded transaction
-		//   or Xdr encoded immutable transaction part if transaction can be pruned
-		_, _ = sha.Write(d)
-	*/
 	return hasher.Sum(), nil
 }
 

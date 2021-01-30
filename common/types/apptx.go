@@ -9,19 +9,19 @@ import (
 )
 
 var callAppEdPlusType = TransactionTypeObject{
-	TxCallAppEdPlus, "TxCallAppEdPlus", EdPlusSigningScheme, DecodeCallAppTx,
+	TxCallApp + TxEdPlusScheme, "TxCallAppEdPlus", EdPlusSigningScheme, DecodeCallAppTx,
 }.New()
 
 var callAppEdType = TransactionTypeObject{
-	TxCallAppEd, "TxCallAppEd", EdSigningScheme, DecodeCallAppTx,
+	TxCallApp + TxEdScheme, "TxCallAppEd", EdSigningScheme, DecodeCallAppTx,
 }.New()
 
 var spawnAppEdPlusType = TransactionTypeObject{
-	TxSpawnAppEdPlus, "TxSpawnAppEdPlus", EdPlusSigningScheme, DecodeSpawnAppTx,
+	TxSpawnApp + TxEdPlusScheme, "TxSpawnAppEdPlus", EdPlusSigningScheme, DecodeSpawnAppTx,
 }.New()
 
 var spawnAppEdType = TransactionTypeObject{
-	TxSpawnAppEd, "TxSpawnAppEd", EdSigningScheme, DecodeSpawnAppTx,
+	TxSpawnApp + TxEdScheme, "TxSpawnAppEd", EdSigningScheme, DecodeSpawnAppTx,
 }.New()
 
 const (
@@ -45,18 +45,18 @@ type CallAppTx struct {
 }
 
 type xrdCallAppTxOriginal struct {
-	TTL           uint32  // TTL TODO: update
-	NonceAndPrune [2]byte // can be used as Nonce [1]byte for client encoders, because of 4 byte padding
-	AppAddress    Address // AppAddress Recipient App Address to Call
-	Amount        uint64  // Amount of the transaction
-	GasLimit      uint64  // GasLimit for the transaction
-	GasPrice      uint64  // GasPrice for the transaction
-	CallData      []byte  // CallData bytes
+	TTL           uint32   // TTL TODO: update
+	NonceAndPrune [2]byte  // can be used as Nonce [1]byte for client encoders, because of 4 byte padding
+	AppAddress    [20]byte // AppAddress app to Call
+	Amount        uint64   // Amount of the transaction
+	GasLimit      uint64   // GasLimit for the transaction
+	GasPrice      uint64   // GasPrice for the transaction
+	CallData      []byte   // CallData bytes
 }
 
 type xrdCallAppTxPruned struct {
 	TTL           uint32                   // TTL TODO: update
-	NonceAndPrune [2]byte                  // can be used as Nonce [1]byte for client encoders, because of 4 byte padding
+	NonceAndPrune [2]byte                  // {Nonce,prunedTransaction}
 	Amount        uint64                   // Amount of the transaction
 	GasLimit      uint64                   // GasLimit for the transaction
 	GasPrice      uint64                   // GasPrice for the transaction
@@ -219,11 +219,11 @@ func (h CallAppTxHeader) complete() *CommonTx {
 }
 
 func (h CallAppTxHeader) extract(out interface{}, tt TransactionType) bool {
-	if p, ok := out.(*CallAppTx); ok && (tt.Value == TxCallAppEd || tt.Value == TxCallAppEdPlus) {
+	if p, ok := out.(*CallAppTx); ok && tt.Kind() == TxCallApp {
 		*p = h.CallAppTx
 		return true
 	}
-	if p, ok := out.(*SpawnAppTx); ok && (tt.Value == TxSpawnAppEd || tt.Value == TxSpawnAppEdPlus) {
+	if p, ok := out.(*SpawnAppTx); ok && tt.Kind() == TxSpawnApp {
 		*p = SpawnAppTx(h.CallAppTx)
 		return true
 	}

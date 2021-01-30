@@ -7,11 +7,11 @@ import (
 )
 
 var oldCoinEdPlusType = TransactionTypeObject{
-	TxOldCoinEdPlus, "TxOldCoinEdPlus", EdPlusSigningScheme, DecodeOldCoinTx,
+	TxOldCoin + TxEdPlusScheme, "TxOldCoinEdPlus", EdPlusSigningScheme, DecodeOldCoinTx,
 }.New()
 
 var oldCoinEdType = TransactionTypeObject{
-	TxOldCoinEd, "TxOldCoinEd", EdSigningScheme, DecodeOldCoinTx,
+	TxOldCoin + TxEdScheme, "TxOldCoinEd", EdSigningScheme, DecodeOldCoinTx,
 }.New()
 
 // OldCoinTx implements "Old Coin Transaction"
@@ -88,7 +88,7 @@ func (h OldCoinTxHeader) GetGasLimit() uint64 {
 
 // GetGasPrice returns gas price
 func (h OldCoinTxHeader) GetGasPrice() uint64 {
-	return 1 // TODO: there is just fee no gas price
+	return 1 // TODO: there is just a fee, no gas price
 }
 
 // GetFee calculate transaction fee regarding gas spent
