@@ -25,7 +25,7 @@ func (h TransactionHasher) Sum() (digest TransactionDigest) {
 	return
 }
 
-// creates new Hasher
+// NewTransactionHasher creates new Hasher
 func NewTransactionHasher() TransactionHasher {
 	return TransactionHasher{sha512.New()}
 }

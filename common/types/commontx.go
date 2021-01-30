@@ -26,7 +26,7 @@ func (t IncompleteCommonTx) Digest() (TransactionDigest, error) {
 	return t.digest(nil)
 }
 
-// AuthenticationMessage returns the authentication message for the transaction
+// Message returns the authentication message for the transaction
 func (t IncompleteCommonTx) Message() (txm TransactionMessage, err error) {
 	txm.TxType = t.txType
 	txm.TransactionData, err = t.self.xdrBytes() // for use in encoding signed transaction
@@ -56,11 +56,11 @@ func (t IncompleteCommonTx) digest(d []byte) (_ TransactionDigest, err error) {
 		}
 	}
 
-	// TransactionMessage as it's described in the
+	// TransactionAuthenticationMessage as it's described in the
 	//     https://product.spacemesh.io/#/transactions?id=signing-a-transaction
 	// but we really don't need to use XDR here because it's just a concatenation of bytes string
 	xdrMessage := struct {
-		NetworkID [32]byte
+		NetworkID NetworkID
 		Type      [1]byte
 		// ImmutableTransactionData for simple coin is exactly the transaction body
 		//   for prunable transactions it's specifically encoded
