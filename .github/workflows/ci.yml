@@ -211,29 +211,29 @@ jobs:
 
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
   # all tests that are required to pass before a bors merge must be listed here!
-  ci-stage2:
-    if: always() && github.event_name == 'push' && needs.ci-stage1.result == 'success'
-    needs:
-      - ci-stage1
-      - systemtest-latenodes
-      - systemtest-blocks-add-node
-      - systemtest-blocks-remove-node
-      - systemtest-mining
-      - systemtest-p2p
-      - systemtest-hare
-      - systemtest-sync
-    runs-on: ubuntu-latest
-    env:
-      status: ${{ needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-blocks-remove-node.result == 'success' && needs.systemtest-mining.result == 'success' && needs.systemtest-p2p.result == 'success' && needs.systemtest-hare.result == 'success' && needs.systemtest-sync.result == 'success' && 'success' || 'failure' }}
-    steps:
-      # print a single, clean status update to slack
-      - uses: act10ns/slack@v1
-        name: Slack notification
-        with:
-          status: ${{ env.status }}
-      - name: Mark the job as succeeded
-        if: env.status == 'success'
-        run: exit 0
-      - name: Mark the job as failed
-        if: env.status != 'success'
-        run: exit 1
+#  ci-stage2:
+#    if: always() && github.event_name == 'push' && needs.ci-stage1.result == 'success'
+#    needs:
+#      - ci-stage1
+#      - systemtest-latenodes
+#      - systemtest-blocks-add-node
+#      - systemtest-blocks-remove-node
+#      - systemtest-mining
+#      - systemtest-p2p
+#      - systemtest-hare
+#      - systemtest-sync
+#    runs-on: ubuntu-latest
+#    env:
+#      status: ${{ needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-blocks-remove-node.result == 'success' && needs.systemtest-mining.result == 'success' && needs.systemtest-p2p.result == 'success' && needs.systemtest-hare.result == 'success' && needs.systemtest-sync.result == 'success' && 'success' || 'failure' }}
+#    steps:
+#      # print a single, clean status update to slack
+#      - uses: act10ns/slack@v1
+#        name: Slack notification
+#        with:
+#          status: ${{ env.status }}
+#      - name: Mark the job as succeeded
+#        if: env.status == 'success'
+#        run: exit 0
+#      - name: Mark the job as failed
+#        if: env.status != 'success'
+#        run: exit 1
