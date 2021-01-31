@@ -65,13 +65,28 @@ func GenerateRandomNodesData(n int) []*Info {
 // GetUnboundedPort returns a port that is for sure unbounded or an error
 // 	optionalPort can be 0 to return a random port.
 func GetUnboundedPort(protocol string, optionalPort int) (int, error) {
-	l, e := net.Listen(protocol, fmt.Sprintf(":%v", optionalPort))
-	if e != nil {
-		l, e = net.Listen(protocol, ":0")
+	if protocol == "tcp" {
+		l, e := net.Listen("tcp", fmt.Sprintf(":%v", optionalPort))
 		if e != nil {
-			return 0, e
+			l, e = net.Listen("tcp", ":0")
+			if e != nil {
+				return 0, e
+			}
 		}
+		defer l.Close()
+		return l.Addr().(*net.TCPAddr).Port, nil
 	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port, nil
+	if protocol == "udp" {
+		l, e := net.ListenUDP("udp", &net.UDPAddr{Port: optionalPort})
+		if e != nil {
+			l, e = net.ListenUDP("udp", &net.UDPAddr{Port: 0})
+			if e != nil {
+				return 0, e
+			}
+		}
+		defer l.Close()
+		return l.LocalAddr().(*net.UDPAddr).Port, nil
+	}
+
+	return 0, errors.New("unknown protocol")
 }
