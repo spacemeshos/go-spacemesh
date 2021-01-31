@@ -484,6 +484,29 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "expected distance of one epoch (1000 layers) from pos ATX but found 1011")
 
+	// Empty positioning atx.
+	atx = newActivationTx(idx1, 1, prevAtx.ID(), 2000, 0, *types.EmptyATXID, coinbase, 3, blocks, &types.NIPST{})
+	err = SignAtx(signer, atx)
+	assert.NoError(t, err)
+	err = atxdb.SyntacticallyValidateAtx(atx)
+	assert.EqualError(t, err, "empty positioning ATX")
+
+	// Using Golden ATX in epochs other than 1 is not allowed. Testing epoch 0.
+	atx = newActivationTx(idx1, 0, *types.EmptyATXID, 0, 0, goldenATXID, coinbase, 3, blocks, &types.NIPST{})
+	atx.Commitment = &types.PostProof{}
+	atx.CommitmentMerkleRoot = []byte{}
+	err = SignAtx(signer, atx)
+	assert.NoError(t, err)
+	err = atxdb.SyntacticallyValidateAtx(atx)
+	assert.EqualError(t, err, "golden ATX used for ATX in epoch 0, but is only valid in epoch 1")
+
+	// Using Golden ATX in epochs other than 1 is not allowed. Testing epoch 2.
+	atx = newActivationTx(idx1, 1, prevAtx.ID(), 2000, 0, goldenATXID, coinbase, 3, blocks, &types.NIPST{})
+	err = SignAtx(signer, atx)
+	assert.NoError(t, err)
+	err = atxdb.SyntacticallyValidateAtx(atx)
+	assert.EqualError(t, err, "golden ATX used for ATX in epoch 2, but is only valid in epoch 1")
+
 	// Wrong prevATx.
 	atx = newActivationTx(idx1, 1, atxs[0].ID(), 1012, 0, posAtx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	err = SignAtx(signer, atx)
