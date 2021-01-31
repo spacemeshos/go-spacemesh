@@ -139,7 +139,7 @@ def set_namespace(request, session_id, load_config):
             print("\nDeleting test namespace: {0}".format(testconfig['namespace']))
             v1.delete_namespace(name=testconfig['namespace'], body=client.V1DeleteOptions())
 
-    request.addfinalizer(fin)
+    # request.addfinalizer(fin)
     return _setup_namespace()
 
 
@@ -266,8 +266,8 @@ def add_node_pool():
     _, time_elapsed = deployer.add_node_pool()
     print(f"total time waiting for clients node pool creation: {time_elapsed}")
     yield time_elapsed
-    _, time_elapsed = deployer.remove_node_pool()
-    print(f"total time waiting for clients node pool deletion: {time_elapsed}")
+    # _, time_elapsed = deployer.remove_node_pool()
+    # print(f"total time waiting for clients node pool deletion: {time_elapsed}")
 
 
 @pytest.fixture(scope='module')
