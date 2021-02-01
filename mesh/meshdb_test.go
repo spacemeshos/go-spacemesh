@@ -623,7 +623,7 @@ func TestMeshDB_testGetRewardsBySmesher(t *testing.T) {
 		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1, Coinbase: addr1},
 	}, rewards)
 
-	rewards, err = mdb.GetRewards(addr4)
+	rewards, err = mdb.GetRewardsBySmesherID(smesher4)
 	r.NoError(err)
 	r.Nil(rewards)
 }
@@ -712,7 +712,7 @@ func TestMeshDB_testGetRewardsBySmesherChangingLayer(t *testing.T) {
 		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher3, Coinbase: addr2},
 	}, rewards)
 
-	rewards, err = mdb.GetRewards(addr4)
+	rewards, err = mdb.GetRewardsBySmesherID(smesher4)
 	r.NoError(err)
 	r.Nil(rewards)
 }

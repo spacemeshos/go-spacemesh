@@ -152,7 +152,7 @@ func createLayer(t testing.TB, mesh *Mesh, id types.LayerID, numOfBlocks, maxTra
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := types.NewExistingBlock(id, []byte(rand.String(8)), nil)
 		nodeID := types.NodeID{Key: strconv.Itoa(i), VRFPublicKey: []byte("bbbbb")}
-		coinbase := types.HexToAddress(string(nodeID.Key))
+		coinbase := types.HexToAddress(nodeID.Key)
 		atx := newActivationTx(nodeID, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase, 10, []types.BlockID{}, &types.NIPST{})
 		atxDB.AddAtx(atx.ID(), atx)
 		block1.ATXID = atx.ID()

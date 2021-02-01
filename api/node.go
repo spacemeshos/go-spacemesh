@@ -56,6 +56,7 @@ type TxAPI interface {
 	GetBalance(types.Address) uint64
 	GetNonce(types.Address) uint64
 	GetAllAccounts() (*types.MultipleAccountsState, error)
+	//TODO: fix the discrepancy between SmesherID and NodeID (see https://github.com/spacemeshos/go-spacemesh/issues/2269)
 	GetRewardsBySmesherID(types.NodeID) ([]types.Reward, error)
 }
 

@@ -81,7 +81,6 @@ func (l LayerID) Uint64() uint64 {
 func (l LayerID) Field() log.Field { return log.Uint64("layer_id", uint64(l)) }
 
 // NodeID contains a miner's two public keys.
-// Sid : change the structs to fixed size byte arrays
 type NodeID struct {
 	// Key is the miner's Edwards public key
 	Key string
@@ -101,7 +100,6 @@ func (id NodeID) String() string {
 // ToBytes returns the byte representation of the Edwards public key.
 /* Based on Noam's suggestion, return the bytes of the VRF public key */
 func (id NodeID) ToBytes() []byte {
-	//return id.VRFPublicKey[:]
 	return util.Hex2Bytes(id.String())
 }
 
@@ -122,7 +120,7 @@ func BytesToNodeID(b []byte) NodeID {
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (id NodeID) Field() log.Field { return log.String("node_id", string(id.Key[:])) }
+func (id NodeID) Field() log.Field { return log.String("node_id", id.Key) }
 
 // BlockEligibilityProof includes the required values that, along with the miner's VRF public key, allow non-interactive
 // block eligibility validation.

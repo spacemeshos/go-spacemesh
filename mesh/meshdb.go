@@ -480,7 +480,7 @@ func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[type
 		} else if err := batch.Put(getRewardKey(l, account), b); err != nil {
 			return fmt.Errorf("could not write reward to %v to database: %v", account.Short(), err)
 		} else if err := batch.Put(getSmesherRewardKey(l, smesherID), getRewardKey(l, account)); err != nil {
-			return fmt.Errorf("could not write smesherID to %v to datavase: %v", smesherID.ShortString(), err)
+			return fmt.Errorf("could not write reweard key for smesherID %v to datavase: %v", smesherID.ShortString(), err)
 		}
 	}
 	return batch.Write()
@@ -526,7 +526,7 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 		strs := strings.Split(str, "_")
 		layer, err := strconv.ParseUint(strs[2], 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("wrong key in db %s: %v", it.Key(), err)
+			return nil, fmt.Errorf("error parsing db key %s: %v", it.Key(), err)
 		}
 		//find the key to the actual reward, which is in it.Value()
 		var reward dbReward
@@ -535,8 +535,7 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 		if err != nil {
 			return nil, fmt.Errorf("wrong key in db %s: %v", it.Value(), err)
 		}
-		err = types.BytesToInterface(rewardBytes, &reward)
-		if err != nil {
+		if err = types.BytesToInterface(rewardBytes, &reward); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
 		}
 		rewards = append(rewards, types.Reward{
