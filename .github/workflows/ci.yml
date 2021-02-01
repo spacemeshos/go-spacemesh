@@ -209,6 +209,33 @@ jobs:
       - name: late nodes system test
         run: make dockertest-late-nodes-elk
 
+  ci-stage2:
+    if: always() && github.event_name == 'push' && needs.ci-stage1.result == 'success'
+    needs:
+      - ci-stage1
+      - systemtest-latenodes-1
+      - systemtest-latenodes-2
+      - systemtest-latenodes-3
+      - systemtest-latenodes-4
+      - systemtest-latenodes-5
+      - systemtest-latenodes-6
+      - systemtest-latenodes-7
+    runs-on: ubuntu-latest
+    env:
+      status: ${{ needs.systemtest-latenodes-1.result == 'success' && 'success' || 'failure' }}
+    steps:
+      # print a single, clean status update to slack
+      - uses: act10ns/slack@v1
+        name: Slack notification
+        with:
+          status: ${{ env.status }}
+      - name: Mark the job as succeeded
+        if: env.status == 'success'
+        run: exit 0
+      - name: Mark the job as failed
+        if: env.status != 'success'
+        run: exit 1
+
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
   # all tests that are required to pass before a bors merge must be listed here!
 #  ci-stage2:
