@@ -55,7 +55,7 @@ func (AtxDbMock) SyntacticallyValidateAtx(*types.ActivationTx) error {
 	return nil
 }
 
-// GetAtxIterByCoinbase returns a database iterator over all ATXs associated with that coinbase address
+// GetAtxIterByCoinbaseAndLayer returns a database iterator over all ATXs associated with that coinbase address
 func (t *AtxDbMock) GetAtxIterByCoinbaseAndLayer(coinbase types.Address, startLayer types.LayerID, endLayer types.LayerID) database.Iterator {
 	panic("implement me")
 }

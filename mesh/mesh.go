@@ -827,7 +827,7 @@ func (msh *Mesh) GetATXs(atxIds []types.ATXID) (map[types.ATXID]*types.Activatio
 	return atxs, mIds
 }
 
-// GetAtxIDsByCoinbase returns a list of all atx ids corresponding to a coinbase address after start layer
+// GetAtxIterByCoinbaseAndLayer returns a list of all atx ids corresponding to a coinbase address after start layer
 func (msh *Mesh) GetAtxIDsByCoinbaseAndLayer(coinbase types.Address, startLayer types.LayerID) (atxIds []types.ATXID, err error) {
 	atxIter := msh.GetAtxIterByCoinbaseAndLayer(coinbase, startLayer, msh.latestLayer)
 
