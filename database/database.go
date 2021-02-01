@@ -376,4 +376,3 @@ func (b *ldbBatch) Reset() {
 	b.b.Reset()
 	b.size = 0
 }
-

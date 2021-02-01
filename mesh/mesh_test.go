@@ -30,6 +30,10 @@ func (m *ContextualValidityMock) Find([]byte) database.Iterator {
 	panic("implement me")
 }
 
+func (m *ContextualValidityMock) FindRange([]byte, []byte) database.Iterator {
+	panic("implement me")
+}
+
 func (m *ContextualValidityMock) Put([]byte, []byte) error {
 	return nil
 }
@@ -531,7 +535,9 @@ func (FailingAtxDbMock) GetFullAtx(types.ATXID) (*types.ActivationTx, error) { p
 
 func (FailingAtxDbMock) SyntacticallyValidateAtx(*types.ActivationTx) error { panic("implement me") }
 
-func (FailingAtxDbMock) GetAtxIterByCoinbaseAndLayer(types.Address, types.LayerID) database.Iterator { panic("implement me") }
+func (FailingAtxDbMock) GetAtxIterByCoinbaseAndLayer(types.Address, types.LayerID, types.LayerID) database.Iterator {
+	panic("implement me")
+}
 
 func TestMesh_AddBlockWithTxs(t *testing.T) {
 	r := require.New(t)

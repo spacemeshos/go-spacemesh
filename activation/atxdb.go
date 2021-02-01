@@ -45,10 +45,13 @@ func getAtxBodyKey(atxID types.ATXID) []byte {
 }
 
 func getAtxCoinbaseLayerKey(coinbase types.Address, layer types.LayerID) []byte {
+
 	byteArray := make([]byte, unsafe.Sizeof(layer))
 	binary.BigEndian.PutUint64(byteArray, layer.Uint64())
 
-	return append(coinbase.Bytes(), byteArray...)
+	addDelimiter := append(coinbase.Bytes(), 'z')
+
+	return append(addDelimiter, byteArray...)
 }
 
 var errInvalidSig = fmt.Errorf("identity not found when validating signature, invalid atx")
