@@ -41,7 +41,9 @@ func (appliedTxsMock) Has(key []byte) (bool, error)       { panic("implement me"
 func (appliedTxsMock) Close()                             { panic("implement me") }
 func (appliedTxsMock) NewBatch() database.Batch           { panic("implement me") }
 func (appliedTxsMock) Find(key []byte) database.Iterator  { panic("implement me") }
-func (appliedTxsMock) FindRange(keyStart []byte, keyEnd []byte) database.Iterator  { panic("implement me") }
+func (appliedTxsMock) FindRange(keyStart []byte, keyEnd []byte) database.Iterator {
+	panic("implement me")
+}
 
 func (s *ProcessorStateSuite) SetupTest() {
 	lg := log.NewDefault("proc_logger")
