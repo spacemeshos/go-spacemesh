@@ -49,7 +49,9 @@ func getAtxCoinbaseLayerKey(coinbase types.Address, layer types.LayerID) []byte 
 	byteArray := make([]byte, unsafe.Sizeof(layer))
 	binary.BigEndian.PutUint64(byteArray, layer.Uint64())
 
-	returnArray := append([]byte("cb_"), coinbase.Bytes()...)
+	preallocationSize := unsafe.Sizeof(coinbase) + unsafe.Sizeof(layer.Uint64()) + 4
+	returnArray := make([]byte, preallocationSize)
+	returnArray = append([]byte("cb_"), coinbase.Bytes()...)
 	returnArray = append(returnArray, []byte("_")...)
 
 	return append(returnArray, byteArray...)
