@@ -354,10 +354,19 @@ func Test_DBGetByCoinbase(t *testing.T) {
 	err = atxdb.storeAtxUnlocked(atx3)
 	assert.NoError(t, err)
 
-	// DB stores atxs sorted using byte by byte comparison of atxids. Thus 3 > 2001 since 3 > 2
+	// Testing getting all ATXs by coinbase
 	iter := atxdb.GetAtxIterByCoinbaseAndLayer(coinbase1, 0, 3000)
 	assert.True(t, iter.Next())
+	assert.Equal(t, iter.Value(), atxid1.Bytes())
+	assert.True(t, iter.Next())
 	assert.Equal(t, iter.Value(), atxid3.Bytes())
+	assert.False(t, iter.Next())
+	iter.Release()
+	err = iter.Error()
+	assert.NoError(t, err)
+
+	// Testing getting ATXs with a limited range (should only return atx1)
+	iter = atxdb.GetAtxIterByCoinbaseAndLayer(coinbase1, 0, 3)
 	assert.True(t, iter.Next())
 	assert.Equal(t, iter.Value(), atxid1.Bytes())
 	assert.False(t, iter.Next())
@@ -365,6 +374,16 @@ func Test_DBGetByCoinbase(t *testing.T) {
 	err = iter.Error()
 	assert.NoError(t, err)
 
+	// Testing getting ATXs with a limited range again (should only return atx3)
+	iter = atxdb.GetAtxIterByCoinbaseAndLayer(coinbase1, 1000, 2001)
+	assert.True(t, iter.Next())
+	assert.Equal(t, iter.Value(), atxid3.Bytes())
+	assert.False(t, iter.Next())
+	iter.Release()
+	err = iter.Error()
+	assert.NoError(t, err)
+
+	// Testing getting another coinbase, should not retrieve atxs from other coinbase addresses
 	iter = atxdb.GetAtxIterByCoinbaseAndLayer(coinbase2, 0, 3000)
 	assert.True(t, iter.Next())
 	assert.Equal(t, iter.Value(), atxid2.Bytes())
@@ -379,10 +398,6 @@ func Test_DBGetByCoinbase(t *testing.T) {
 	iter.Release()
 	err = iter.Error()
 	assert.NoError(t, err)
-
-	// TODO: test lookup by layerID
-	// - make sure we don't return ATX from layer before startLayer
-	// - make sure we don't return ATX from layer after endLayer
 }
 
 func TestMesh_processBlockATXs(t *testing.T) {

@@ -2,6 +2,7 @@ package activation
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -14,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"sync"
 	"time"
+	"unsafe"
 )
 
 const topAtxKey = "topAtxKey"
@@ -43,11 +45,10 @@ func getAtxBodyKey(atxID types.ATXID) []byte {
 }
 
 func getAtxCoinbaseLayerKey(coinbase types.Address, layer types.LayerID) []byte {
-	return append(getAtxCoinbasePrefix(coinbase), layer.Bytes()...)
-}
+	byteArray := make([]byte, unsafe.Sizeof(layer))
+	binary.BigEndian.PutUint64(byteArray, layer.Uint64())
 
-func getAtxCoinbasePrefix(coinbase types.Address) []byte {
-	return []byte(fmt.Sprintf("c_%v_", coinbase.Bytes()))
+	return append(coinbase.Bytes(), byteArray...)
 }
 
 var errInvalidSig = fmt.Errorf("identity not found when validating signature, invalid atx")
