@@ -12,7 +12,7 @@ class TxGenerator:
 
     """
     def __init__(self, pub=conf.acc_pub, pri=conf.acc_priv):
-        self.signer = Signer(bytes.fromhex(pub),bytes.fromhex(pri))
+        self.signer = Signer(priv=bytes.fromhex(pri),pubk=bytes.fromhex(pub))
 
     def generate(self, dst, nonce, gas_limit, fee, amount):
         tx = OldCoinTx(nonce=nonce,recipient=Address(bytes.fromhex(dst)),gas_limit=gas_limit,fee=fee,amount=amount)
