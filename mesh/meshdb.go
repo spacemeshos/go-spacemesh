@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"container/list"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -353,35 +354,31 @@ func (m *DB) getLayerMutex(index types.LayerID) *layerMutex {
 	return ll
 }
 
-// the commented functions below don't take into account the fact that a Coinbase could be associated with multiple SmesherIDs
-
-// func getRewardKey(l types.LayerID, account types.Address) []byte {
-// 	str := string(getRewardKeyPrefix(account)) + "_" + strconv.FormatUint(l.Uint64(), 10)
-// 	return []byte(str)
-// }
-
 // Schema: "reward_<coinbase>_<smesherId>_<layerId> -> reward struct"
-// Add a todo to the PR, feel free to change it
 func getRewardKey(l types.LayerID, account types.Address, smesherID types.NodeID) []byte {
+	byteArray := make([]byte, 8)
+	binary.BigEndian.PutUint64(byteArray, l.Uint64())
 	str := string(getRewardKeyPrefix(account)) + "_" + smesherID.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
 	return []byte(str)
 }
 
 func getRewardKeyPrefix(account types.Address) []byte {
-	str := "reward_" + account.String()
+	str := "r_" + account.String()
 	return []byte(str)
 }
 
 // adding functions for getting the reward key for a smesherID
-// format for the index "reward_<smesherid>_<accountid>_<layerid> -> reward_<accountid>_<smesherid>_<layerid> -> the actual reward"
+// format for the index "r_<smesherid>_<accountid>_<layerid> -> s_<accountid>_<smesherid>_<layerid> -> the actual reward"
 func getSmesherRewardKey(l types.LayerID, smesherID types.NodeID, account types.Address) []byte {
+	// byteArray := make([]byte, 8)
+	// binary.BigEndian.PutUint64(byteArray, l.Uint64())
 	str := string(getSmesherRewardKeyPrefix(smesherID)) + "_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
 	return []byte(str)
 }
 
 //use r_ for one and s_ for the other so the namespaces can't collide
 func getSmesherRewardKeyPrefix(smesherID types.NodeID) []byte {
-	str := "reward_" + smesherID.String()
+	str := "s_" + smesherID.String()
 	return []byte(str)
 }
 
