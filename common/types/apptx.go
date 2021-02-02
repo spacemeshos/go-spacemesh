@@ -187,7 +187,7 @@ func (h CallAppTxHeader) immutableBytes() ([]byte, error) {
 	bf := bytes.Buffer{}
 	d := xrdCallAppTxPruned{
 		h.TTL,
-		[2]byte{h.Nonce, 0},
+		[2]byte{h.Nonce},
 		h.Amount,
 		h.GasLimit,
 		h.GasPrice,
@@ -203,8 +203,8 @@ func (h CallAppTxHeader) hash() [prunedDataHashSize]byte {
 	x := [prunedDataHashSize]byte{}
 	if h.pruned == originalTransaction {
 		w := prunedDataHasher()
-		_, _ = w.Write(h.AppAddress[:AddressLength])
-		_, _ = w.Write(h.CallData)
+		xh := struct{A [20]byte;B []byte}{h.AppAddress, h.CallData} //nolint:gofmt
+		_,_ = xdr.Marshal(w, &xh)
 		copy(x[:], w.Sum(nil))
 	} else {
 		copy(x[:], h.CallData)

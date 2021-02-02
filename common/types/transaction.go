@@ -193,7 +193,7 @@ func (txm TransactionMessage) Scheme() SigningScheme {
 // Sign signs transaction binary data
 func (txm TransactionMessage) Sign(signer Signer) (_ SignedTransaction, err error) {
 	signature := txm.Scheme().Sign(signer, txm.Digest[:])
-	return txm.Encode(PublicKeyFromBytes(signer.PublicKey().Bytes()), signature)
+	return txm.Encode(signer.PublicKey(), signature)
 }
 
 // Encode encodes transaction into the independent form
@@ -285,7 +285,7 @@ func (stx SignedTransaction) Decode() (tx Transaction, err error) {
 		if len(stl.PubKey) != txType.Signing.PubKeyLength {
 			return tx, errBadSignatureError
 		}
-		pubKey = PublicKeyFromBytes(stl.PubKey)
+		pubKey = txType.Signing.NewPubKey(stl.PubKey)
 		if !txType.Signing.Verify(digest, pubKey, stl.Signature) {
 			return tx, errBadSignatureError
 		}

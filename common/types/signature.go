@@ -10,6 +10,9 @@ import (
 // Signer is an alias to Ed signer
 type Signer = *signing.EdSigner
 
+// PublicKey is an alias to Ed signer public key
+type PublicKey = *signing.PublicKey
+
 // SigningScheme is an signing interface using to sign/verify transactions
 type SigningScheme struct{ *SigningSchemeObject }
 
@@ -32,7 +35,6 @@ func NewTransactionHasher() TransactionHasher {
 
 // EdSigningScheme is an classic Ed25519 scheme
 var EdSigningScheme = SigningSchemeObject{
-	Value:        0,
 	Extractable:  false,
 	PubKeyLength: ed25519.PublicKeySize,
 
@@ -41,17 +43,18 @@ var EdSigningScheme = SigningSchemeObject{
 	},
 
 	Verify: func(digest TransactionDigest, pubKey PublicKey, signature Signature) bool {
-		return ed25519.Verify(pubKey.k[:], digest[:], signature[:])
+		return ed25519.Verify(pubKey.Bytes(), digest[:], signature[:])
 	},
 
 	ExtractPubKey: func(digest TransactionDigest, signature Signature) (PublicKey, bool, error) {
-		return PublicKey{}, false, nil
+		return nil, false, nil
 	},
+
+	NewPubKey: newPubKeyEd25519,
 }.New()
 
 // EdPlusSigningScheme is an classic Ed25519++ scheme
 var EdPlusSigningScheme = SigningSchemeObject{
-	Value:        1,
 	Extractable:  true,
 	PubKeyLength: ed25519.PublicKeySize,
 
@@ -60,7 +63,7 @@ var EdPlusSigningScheme = SigningSchemeObject{
 	},
 
 	Verify: func(digest TransactionDigest, pubKey PublicKey, signature Signature) bool {
-		return ed25519.Verify2(pubKey.k[:], digest[:], signature[:])
+		return ed25519.Verify2(pubKey.Bytes(), digest[:], signature[:])
 	},
 
 	ExtractPubKey: func(digest TransactionDigest, signature Signature) (pubKey PublicKey, ok bool, err error) {
@@ -69,19 +72,25 @@ var EdPlusSigningScheme = SigningSchemeObject{
 		if err != nil {
 			return
 		}
-		pubKey = PublicKeyFromBytes(pk)
+		pubKey = newPubKeyEd25519(pk)
 		return
 	},
+
+	NewPubKey: newPubKeyEd25519,
 }.New()
+
+func newPubKeyEd25519(pk []byte) (pubKey PublicKey) {
+	return signing.NewPublicKey(pk[0:ed25519.PublicKeySize])
+}
 
 // SigningSchemeObject is an backand signing scheme object
 type SigningSchemeObject struct {
-	Value         int
 	Extractable   bool
 	PubKeyLength  int
 	Sign          func(signer Signer, data []byte) Signature
 	Verify        func(digest TransactionDigest, pubKey PublicKey, signature Signature) bool
 	ExtractPubKey func(digest TransactionDigest, signature Signature) (PublicKey, bool, error)
+	NewPubKey     func(pk []byte) PublicKey
 }
 
 // New creates new signing scheme
@@ -105,24 +114,4 @@ func SignatureFromBytes(bs []byte) (sig Signature) {
 // Bytes returns signature's bytes
 func (sig Signature) Bytes() []byte {
 	return sig[:]
-}
-
-// PublicKeyLength defines public key length
-// TODO: signing does not have public key length constant
-const PublicKeyLength = ed25519.PublicKeySize
-
-// PublicKey is a public key of a transaction
-type PublicKey struct {
-	k [PublicKeyLength]byte
-}
-
-// PublicKeyFromBytes converts bytes to the public key
-func PublicKeyFromBytes(bs []byte) (pk PublicKey) {
-	copy(pk.k[:], bs)
-	return
-}
-
-// Bytes returns public key's bytes
-func (pk PublicKey) Bytes() []byte {
-	return pk.k[:]
 }

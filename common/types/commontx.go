@@ -58,21 +58,18 @@ func (t IncompleteCommonTx) digest(d []byte) (_ TransactionDigest, err error) {
 
 	// TransactionAuthenticationMessage as it's described in the
 	//     https://product.spacemesh.io/#/transactions?id=signing-a-transaction
-	// but we really don't need to use XDR here because it's just a concatenation of bytes string
 	xdrMessage := struct {
 		NetworkID NetworkID
 		Type      [1]byte
 		// ImmutableTransactionData for simple coin is exactly the transaction body
 		//   for prunable transactions it's specifically encoded
-		//   immutable body part and hasher of prunable data,
+		//   immutable body part and hash of prunable data,
 		//   so it the same for pruned and original transaction
 		ImmutableTransactionData []byte
 	}{networkID, [1]byte{t.txType.Value}, d}
-
 	if _, err = xdr.Marshal(hasher, &xdrMessage); err != nil {
 		return
 	}
-
 	return hasher.Sum(), nil
 }
 
