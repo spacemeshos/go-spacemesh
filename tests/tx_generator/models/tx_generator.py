@@ -1,7 +1,4 @@
-import xdrlib
-
 import tests.tx_generator.config as conf
-from tests.ed25519.eddsa import signature2
 from tests.transactions import OldCoinTx, Signer, Address, sign
 
 
@@ -16,5 +13,5 @@ class TxGenerator:
 
     def generate(self, dst, nonce, gas_limit, fee, amount):
         tx = OldCoinTx(nonce=nonce,recipient=Address(bytes.fromhex(dst)),gas_limit=gas_limit,fee=fee,amount=amount)
-        return sign(tx.new_ed(), self.signer)
+        return tx.new_ed().message.sign(self.signer)
 
