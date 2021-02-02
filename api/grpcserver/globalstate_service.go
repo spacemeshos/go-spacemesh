@@ -185,7 +185,7 @@ func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDa
 }
 
 // SmesherDataQuery returns historical info on smesher rewards
-func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDataQueryRequest) (res *pb.SmesherDataQueryResponse, _ error) {
+func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDataQueryRequest) (*pb.SmesherDataQueryResponse, error) {
 	log.Info("GRPC GlobalStateService.SmesherDataQuery")
 
 	if in.SmesherId == nil {
@@ -198,6 +198,7 @@ func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDa
 	smesherIDBytes := in.SmesherId.Id
 	smesherID := types.BytesToNodeID(smesherIDBytes)
 	dbRewards, err := s.Mesh.GetRewardsBySmesherID(smesherID)
+	res := &pb.SmesherDataQueryResponse{}
 
 	if err != nil {
 		log.Error("unable to fetch projected reward state for smesher %v: %s", smesherID, err)
