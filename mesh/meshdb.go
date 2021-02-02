@@ -353,8 +353,17 @@ func (m *DB) getLayerMutex(index types.LayerID) *layerMutex {
 	return ll
 }
 
-func getRewardKey(l types.LayerID, account types.Address) []byte {
-	str := string(getRewardKeyPrefix(account)) + "_" + strconv.FormatUint(l.Uint64(), 10)
+// the commented functions below don't take into account the fact that a Coinbase could be associated with multiple SmesherIDs
+
+// func getRewardKey(l types.LayerID, account types.Address) []byte {
+// 	str := string(getRewardKeyPrefix(account)) + "_" + strconv.FormatUint(l.Uint64(), 10)
+// 	return []byte(str)
+// }
+
+// Schema: "reward_<coinbase>_<smesherId>_<layerId> -> reward struct"
+// Add a todo to the PR, feel free to change it
+func getRewardKey(l types.LayerID, account types.Address, smesherID types.NodeID) []byte {
+	str := string(getRewardKeyPrefix(account)) + "_" + smesherID.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
 	return []byte(str)
 }
 
@@ -364,12 +373,13 @@ func getRewardKeyPrefix(account types.Address) []byte {
 }
 
 // adding functions for getting the reward key for a smesherID
-// format for the index "reward_<smesherid>_<layerid> -> reward_<accountid>_<layerid> -> the actual reward"
-func getSmesherRewardKey(l types.LayerID, smesherID types.NodeID) []byte {
-	str := string(getSmesherRewardKeyPrefix(smesherID)) + "_" + strconv.FormatUint(l.Uint64(), 10)
+// format for the index "reward_<smesherid>_<accountid>_<layerid> -> reward_<accountid>_<smesherid>_<layerid> -> the actual reward"
+func getSmesherRewardKey(l types.LayerID, smesherID types.NodeID, account types.Address) []byte {
+	str := string(getSmesherRewardKeyPrefix(smesherID)) + "_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
 	return []byte(str)
 }
 
+//use r_ for one and s_ for the other so the namespaces can't collide
 func getSmesherRewardKeyPrefix(smesherID types.NodeID) []byte {
 	str := "reward_" + smesherID.String()
 	return []byte(str)
@@ -465,22 +475,20 @@ type dbReward struct {
 	// TotalReward - LayerRewardEstimate = FeesEstimate
 }
 
-func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[types.Address]uint64, totalReward, layerReward *big.Int, smeshers map[types.Address]types.NodeID) error {
-	// actBlockCnt := make(map[types.Address]uint64)
-	// for _, account := range accounts {
-	// 	actBlockCnt[account]++
-	// }
+func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[types.Address]map[string]uint64, totalReward, layerReward *big.Int, smeshers map[types.Address][]types.NodeID) error {
 
 	batch := m.transactions.NewBatch()
-	for account, cnt := range accountBlockCount {
-		smesherID := smeshers[account]
-		reward := dbReward{TotalReward: cnt * totalReward.Uint64(), LayerRewardEstimate: cnt * layerReward.Uint64(), SmesherID: smesherID, Coinbase: account}
-		if b, err := types.InterfaceToBytes(&reward); err != nil {
-			return fmt.Errorf("could not marshal reward for %v: %v", account.Short(), err)
-		} else if err := batch.Put(getRewardKey(l, account), b); err != nil {
-			return fmt.Errorf("could not write reward to %v to database: %v", account.Short(), err)
-		} else if err := batch.Put(getSmesherRewardKey(l, smesherID), getRewardKey(l, account)); err != nil {
-			return fmt.Errorf("could not write reweard key for smesherID %v to datavase: %v", smesherID.ShortString(), err)
+	for account, smesherAccountEntry := range accountBlockCount {
+		for _, smesherEntry := range smeshers[account] {
+			cnt := smesherAccountEntry[smesherEntry.String()]
+			reward := dbReward{TotalReward: cnt * totalReward.Uint64(), LayerRewardEstimate: cnt * layerReward.Uint64(), SmesherID: smesherEntry, Coinbase: account}
+			if b, err := types.InterfaceToBytes(&reward); err != nil {
+				return fmt.Errorf("could not marshal reward for %v: %v", account.Short(), err)
+			} else if err := batch.Put(getRewardKey(l, account, smesherEntry), b); err != nil {
+				return fmt.Errorf("could not write reward to %v to database: %v", account.Short(), err)
+			} else if err := batch.Put(getSmesherRewardKey(l, smesherEntry, account), getRewardKey(l, account, smesherEntry)); err != nil {
+				return fmt.Errorf("could not write reweard key for smesherID %v to datavase: %v", smesherEntry.ShortString(), err)
+			}
 		}
 	}
 	return batch.Write()
@@ -495,7 +503,7 @@ func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err erro
 		}
 		str := string(it.Key())
 		strs := strings.Split(str, "_")
-		layer, err := strconv.ParseUint(strs[2], 10, 64)
+		layer, err := strconv.ParseUint(strs[3], 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("wrong key in db %s: %v", it.Key(), err)
 		}
@@ -524,7 +532,7 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 		}
 		str := string(it.Key())
 		strs := strings.Split(str, "_")
-		layer, err := strconv.ParseUint(strs[2], 10, 64)
+		layer, err := strconv.ParseUint(strs[3], 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing db key %s: %v", it.Key(), err)
 		}
