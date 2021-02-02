@@ -1489,7 +1489,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	defer syncs[0].Close()
 	defer syncs[1].Close()
 
-	timeout := 1 * time.Second + 2 * conf.RequestTimeout
+	timeout := 1*time.Second + 2*conf.RequestTimeout
 	timeoutErrMsg := "no message received on channel"
 
 	bl1 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
