@@ -15,6 +15,6 @@ class TxGenerator:
         self.signer = Signer(bytes.fromhex(pub),bytes.fromhex(pri))
 
     def generate(self, dst, nonce, gas_limit, fee, amount):
-        tx = OldCoinTx(nonce=nonce,recipient=Address(bytes.fromhex(dst)),gas_limit=gas_limit,fee=fee)
+        tx = OldCoinTx(nonce=nonce,recipient=Address(bytes.fromhex(dst)),gas_limit=gas_limit,fee=fee,amount=amount)
         return sign(tx.new_ed(), self.signer)
 
