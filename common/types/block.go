@@ -89,8 +89,6 @@ type NodeID struct {
 	VRFPublicKey []byte
 }
 
-//TODO: possibly add a deserialization
-
 // String returns a string representation of the NodeID, for logging purposes.
 // It implements the Stringer interface.
 func (id NodeID) String() string {
@@ -98,7 +96,6 @@ func (id NodeID) String() string {
 }
 
 // ToBytes returns the byte representation of the Edwards public key.
-/* Based on Noam's suggestion, return the bytes of the VRF public key */
 func (id NodeID) ToBytes() []byte {
 	return util.Hex2Bytes(id.String())
 }

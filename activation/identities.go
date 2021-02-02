@@ -24,7 +24,7 @@ func getKey(key string) [32]byte {
 
 // StoreNodeIdentity stores a NodeID type, which consists of 2 identities: BLS and ed25519
 func (s *IdentityStore) StoreNodeIdentity(id types.NodeID) error {
-	key := getKey(string(id.Key))
+	key := getKey(id.Key)
 	err := s.ids.Put(key[:], id.VRFPublicKey)
 	return err
 }
