@@ -226,8 +226,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 				return nil
 			}
 			// Filter for any matching transactions in the reported layer
-			// TODO: this is inefficient and could be optimized!
-			// See https://github.com/spacemeshos/go-spacemesh/issues/2076
+			// Essentially, we need to find the intersection between b.TxIDs and in.TransactionIds
 			for _, b := range layer.Layer.Blocks() {
 				for _, layerTxid := range b.TxIDs {
 					for _, txid := range in.TransactionId {
@@ -260,7 +259,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 								return err
 							}
 
-							// Don't match on any other transactions
+							// Don't match on any other transactions. Why not?
 							break
 						}
 					}
