@@ -1489,7 +1489,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	defer syncs[0].Close()
 	defer syncs[1].Close()
 
-	timeout := 1 * time.Second
+	timeout := 1 * time.Second + 2 * conf.RequestTimeout
 	timeoutErrMsg := "no message received on channel"
 
 	bl1 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
@@ -1546,7 +1546,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	}
 
 	// ugly hack, just to see if this fixed CI failure
-	time.Sleep(3 * time.Second)
+	time.Sleep(timeout)
 	// layer hash
 	_, err1 := syncs[0].getLayerFromNeighbors(types.LayerID(1))
 

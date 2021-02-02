@@ -1,5 +1,5 @@
 import tests.tx_generator.config as conf
-from tests.transactions import OldCoinTx, Signer, Address, sign
+from tests.transactions import OldCoinTx, Signer, Address
 
 
 class TxGenerator:
