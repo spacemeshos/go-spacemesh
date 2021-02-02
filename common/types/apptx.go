@@ -203,8 +203,11 @@ func (h CallAppTxHeader) hash() [prunedDataHashSize]byte {
 	x := [prunedDataHashSize]byte{}
 	if h.pruned == originalTransaction {
 		w := prunedDataHasher()
-		xh := struct{A [20]byte;B []byte}{h.AppAddress, h.CallData} //nolint:gofmt
-		_,_ = xdr.Marshal(w, &xh)
+		xh := struct {
+			A [20]byte
+			B []byte
+		}{h.AppAddress, h.CallData} //nolint:gofmt
+		_, _ = xdr.Marshal(w, &xh)
 		copy(x[:], w.Sum(nil))
 	} else {
 		copy(x[:], h.CallData)
