@@ -49,21 +49,20 @@ func (p proposal) Hash() types.Hash32 {
 type VotingMessage interface {
 	Message
 	Round() int
-	Hash() types.Hash32
+	HashList() []types.Hash32
 }
 
 type vote struct {
-	epoch       types.EpochID
-	round       int
-	atxListHash types.Hash32
+	epoch         types.EpochID
+	round         int
+	atxListHashes []types.Hash32
 }
 
-// TODO(nkryuchkov): remove this type
-func NewVotingMessage(epoch types.EpochID, round int, atxListHash types.Hash32) VotingMessage {
+func NewVotingMessage(epoch types.EpochID, round int, atxListHashes []types.Hash32) VotingMessage {
 	return &vote{
-		epoch:       epoch,
-		round:       round,
-		atxListHash: atxListHash,
+		epoch:         epoch,
+		round:         round,
+		atxListHashes: atxListHashes,
 	}
 }
 
@@ -75,39 +74,6 @@ func (v vote) Round() int {
 	return v.round
 }
 
-func (v vote) Hash() types.Hash32 {
-	return v.atxListHash
-}
-
-type BatchVotingMessage interface {
-	Message
-	Round() int
-	HashList() []types.Hash32
-}
-
-type batchVote struct {
-	epoch         types.EpochID
-	round         int
-	atxListHashes []types.Hash32
-}
-
-// TODO(nkryuchkov): rename to NewVotingMessage
-func NewBatchVotingMessage(epoch types.EpochID, round int, atxListHashes []types.Hash32) BatchVotingMessage {
-	return &batchVote{
-		epoch:         epoch,
-		round:         round,
-		atxListHashes: atxListHashes,
-	}
-}
-
-func (v batchVote) Epoch() types.EpochID {
-	return v.epoch
-}
-
-func (v batchVote) Round() int {
-	return v.round
-}
-
-func (v batchVote) HashList() []types.Hash32 {
+func (v vote) HashList() []types.Hash32 {
 	return v.atxListHashes
 }

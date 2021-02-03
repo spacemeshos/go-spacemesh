@@ -8,7 +8,6 @@ import (
 	"github.com/spacemeshos/sha256-simd"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -19,8 +18,8 @@ const (
 )
 
 var (
-	ErrUnknownMessageType          = errors.New("unknown message type")
-	ErrBeaconCalculationNotStarted = errors.New("beacon calculation for this epoch was not started")
+	ErrUnknownMessageType  = errors.New("unknown message type")
+	ErrBeaconNotCalculated = errors.New("beacon is not calculated for this epoch")
 )
 
 type messageReceiver interface {
@@ -43,7 +42,6 @@ type tortoiseBeaconDB interface {
 type beaconCalculator interface {
 	CalculateBeacon(map[EpochRoundPair][]types.Hash32) types.Hash32
 	CountVotes(m VotingMessage) error
-	CountBatchVotes(m BatchVotingMessage) error
 }
 
 type EpochRoundPair struct {
@@ -52,7 +50,7 @@ type EpochRoundPair struct {
 }
 
 type TortoiseBeacon struct {
-	hare.Closer
+	Closer
 	log.Log
 
 	config Config
@@ -73,7 +71,7 @@ type TortoiseBeacon struct {
 	currentRounds   map[types.EpochID]int
 
 	timelyProposalsMu   sync.RWMutex
-	timelyProposalsMap  map[types.Hash32][]types.ATXID // lookup by hash TODO((nkryuchkov): consider removing
+	timelyProposalsMap  map[types.Hash32][]types.ATXID // lookup by hash TODO(nkryuchkov): consider removing
 	timelyProposalsList map[types.EpochID][][]types.ATXID
 
 	// TODO(nkryuchkov): consider removing
@@ -90,7 +88,7 @@ type TortoiseBeacon struct {
 	beaconsMu sync.RWMutex
 	beacons   map[types.EpochID]types.Hash32
 	// beaconsReady indicates if beacons are ready.
-	//If a beacon for an epoch becomes ready, channel for this epoch becomes closed.
+	// If a beacon for an epoch becomes ready, channel for this epoch becomes closed.
 	beaconsReady map[types.EpochID]chan struct{}
 
 	backgroundWG sync.WaitGroup
@@ -108,6 +106,7 @@ func New(
 ) *TortoiseBeacon {
 	return &TortoiseBeacon{
 		Log:                  logger,
+		Closer:               NewCloser(),
 		config:               conf,
 		messageReceiver:      messageReceiver,
 		messageSender:        messageSender,
@@ -121,6 +120,9 @@ func New(
 		timelyProposalsList:  make(map[types.EpochID][][]types.ATXID),
 		delayedProposalsList: make(map[types.EpochID][][]types.ATXID),
 		lateProposalsList:    make(map[types.EpochID][][]types.ATXID),
+		votes:                make(map[EpochRoundPair][]types.Hash32),
+		beacons:              make(map[types.EpochID]types.Hash32),
+		beaconsReady:         make(map[types.EpochID]chan struct{}),
 	}
 }
 
@@ -164,8 +166,10 @@ func (tb *TortoiseBeacon) Close() error {
 }
 
 func (tb *TortoiseBeacon) Get(epochID types.EpochID) (types.Hash32, error) {
-	if val, ok := tb.tortoiseBeaconDB.GetTortoiseBeacon(epochID); ok {
-		return val, nil
+	if tb.tortoiseBeaconDB != nil {
+		if val, ok := tb.tortoiseBeaconDB.GetTortoiseBeacon(epochID); ok {
+			return val, nil
+		}
 	}
 
 	tb.beaconsMu.RLock()
@@ -173,11 +177,13 @@ func (tb *TortoiseBeacon) Get(epochID types.EpochID) (types.Hash32, error) {
 	tb.beaconsMu.RUnlock()
 
 	if !ok {
-		return types.Hash32{}, ErrBeaconCalculationNotStarted
+		return types.Hash32{}, ErrBeaconNotCalculated
 	}
 
-	if err := tb.tortoiseBeaconDB.SetTortoiseBeacon(epochID, beacon); err != nil {
-		return types.Hash32{}, err
+	if tb.tortoiseBeaconDB != nil {
+		if err := tb.tortoiseBeaconDB.SetTortoiseBeacon(epochID, beacon); err != nil {
+			return types.Hash32{}, err
+		}
 	}
 
 	return beacon, nil
@@ -185,8 +191,10 @@ func (tb *TortoiseBeacon) Get(epochID types.EpochID) (types.Hash32, error) {
 
 // Wait waits until beacon for this epoch becomes ready.
 func (tb *TortoiseBeacon) Wait(epochID types.EpochID) error {
-	if _, ok := tb.tortoiseBeaconDB.GetTortoiseBeacon(epochID); ok {
-		return nil
+	if tb.tortoiseBeaconDB != nil {
+		if _, ok := tb.tortoiseBeaconDB.GetTortoiseBeacon(epochID); ok {
+			return nil
+		}
 	}
 
 	tb.beaconsMu.RLock()
@@ -194,7 +202,7 @@ func (tb *TortoiseBeacon) Wait(epochID types.EpochID) error {
 	tb.beaconsMu.RUnlock()
 
 	if !ok {
-		return ErrBeaconCalculationNotStarted
+		return ErrBeaconNotCalculated
 	}
 
 	<-ch
@@ -255,6 +263,7 @@ func (tb *TortoiseBeacon) listenLayers() {
 		case <-tb.CloseChannel():
 			return
 		case layer := <-tb.layerTicker:
+			tb.Log.Info("Received tick for layer %v", layer)
 			go tb.handleLayer(layer)
 		}
 	}
@@ -282,6 +291,8 @@ func (tb *TortoiseBeacon) handleEpoch(epoch types.EpochID) {
 
 		return
 	}
+
+	tb.Log.Info("Calculating beacon for epoch %v", epoch)
 
 	tb.beaconsMu.Lock()
 
@@ -312,6 +323,8 @@ func (tb *TortoiseBeacon) handleEpoch(epoch types.EpochID) {
 	beacon := tb.beaconCalculator.CalculateBeacon(tb.votes)
 	tb.timelyProposalsMu.Unlock()
 
+	tb.Log.Info("Beacon for epoch %v calculated: %v", epoch, beacon.String())
+
 	tb.beaconsMu.Lock()
 	tb.beacons[epoch] = beacon
 	close(tb.beaconsReady[epoch]) // indicate that value is ready
@@ -324,8 +337,6 @@ func (tb *TortoiseBeacon) handleMessage(m Message) error {
 		return tb.handleProposalMessage(m)
 	case VotingMessage:
 		return tb.handleVotingMessage(m)
-	case BatchVotingMessage:
-		return tb.handleBatchVotingMessage(m)
 	default:
 		return ErrUnknownMessageType
 	}
@@ -375,57 +386,21 @@ func (tb *TortoiseBeacon) handleVotingMessage(m VotingMessage) error {
 	mt := tb.classifyMessage(m, epoch)
 	switch mt {
 	case TimelyMessage:
-		tb.votesMu.Lock()
-		tb.votes[pair] = append(tb.votes[pair], m.Hash())
-		tb.votesMu.Unlock()
-
-		return tb.beaconCalculator.CountVotes(m) // TODO(nkryuchkov): count votes properly
-
-	case DelayedMessage:
-		tb.Log.Debug("Received delayed VotingMessage, epoch: %v, proposals: %v, hash: %v",
-			m.Epoch(), m.Round(), m.Hash())
-		return nil
-
-	case LateMessage:
-		tb.Log.Debug("Received late VotingMessage, epoch: %v, round: %v, hash: %v",
-			m.Epoch(), m.Round(), m.Hash())
-		return nil
-
-	default:
-		return ErrUnknownMessageType
-	}
-}
-
-func (tb *TortoiseBeacon) handleBatchVotingMessage(m BatchVotingMessage) error {
-	epoch := m.Epoch()
-
-	tb.currentRoundsMu.Lock()
-	currentRound := tb.currentRounds[epoch]
-	tb.currentRoundsMu.Unlock()
-
-	pair := EpochRoundPair{
-		EpochID: epoch,
-		Round:   currentRound,
-	}
-
-	mt := tb.classifyMessage(m, epoch)
-	switch mt {
-	case TimelyMessage:
 		for _, hash := range m.HashList() {
 			tb.votesMu.Lock()
 			tb.votes[pair] = append(tb.votes[pair], hash)
 			tb.votesMu.Unlock()
 		}
 
-		return tb.beaconCalculator.CountBatchVotes(m) // TODO(nkryuchkov): count votes properly
+		return tb.beaconCalculator.CountVotes(m) // TODO(nkryuchkov): count votes properly
 
 	case DelayedMessage:
-		tb.Log.Debug("Received delayed BatchVotingMessage, epoch: %v, proposals: %v, hash list: %v",
+		tb.Log.Debug("Received delayed VotingMessage, epoch: %v, proposals: %v, hash list: %v",
 			m.Epoch(), m.Round(), m.HashList())
 		return nil
 
 	case LateMessage:
-		tb.Log.Debug("Received late BatchVotingMessage, epoch: %v, round: %v, hash list: %v",
+		tb.Log.Debug("Received late VotingMessage, epoch: %v, round: %v, hash list: %v",
 			m.Epoch(), m.Round(), m.HashList())
 		return nil
 
@@ -486,7 +461,7 @@ func (tb *TortoiseBeacon) roundTicker(epoch types.EpochID) {
 					hashes = append(hashes, hashATXList(p))
 				}
 
-				m := NewBatchVotingMessage(epoch, round, hashes)
+				m := NewVotingMessage(epoch, round, hashes)
 				tb.messageSender.Send(m)
 			} else {
 				// next rounds, send vote
@@ -500,7 +475,7 @@ func (tb *TortoiseBeacon) roundTicker(epoch types.EpochID) {
 				votes := tb.votes[key]
 				tb.timelyProposalsMu.Unlock()
 
-				m := NewBatchVotingMessage(epoch, round, votes)
+				m := NewVotingMessage(epoch, round, votes)
 				tb.messageSender.Send(m)
 			}
 
@@ -529,16 +504,37 @@ func (tb *TortoiseBeacon) lastPossibleRound() int {
 }
 
 func hashATXList(atxList []types.ATXID) types.Hash32 {
-	hash := sha256.New()
+	hasher := sha256.New()
 
 	for _, id := range atxList {
-		if _, err := hash.Write(id.Bytes()); err != nil {
+		if _, err := hasher.Write(id.Bytes()); err != nil {
 			panic("should not happen") // an error is never returned: https://golang.org/pkg/hash/#Hash
 		}
 	}
 
 	var res types.Hash32
-	hash.Sum(res[:0])
+	hasher.Sum(res[:0])
 
 	return res
+}
+
+// Closer adds the ability to close objects.
+type Closer struct {
+	channel chan struct{} // closeable go routines listen to this channel
+}
+
+// NewCloser creates a new (not closed) closer.
+func NewCloser() Closer {
+	return Closer{make(chan struct{})}
+}
+
+// Close signals all listening instances to close.
+// Note: should be called only once.
+func (closer *Closer) Close() {
+	close(closer.channel)
+}
+
+// CloseChannel returns the channel to wait on for close signal.
+func (closer *Closer) CloseChannel() chan struct{} {
+	return closer.channel
 }
