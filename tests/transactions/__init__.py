@@ -7,7 +7,6 @@ from .transaction import \
 from .signature import \
     Address, \
     Signature, Signer, PublicKey, \
-    new_signer, signer_from_seed, signer_from_bytes, \
     SIGNATURE_LENGTH, PUBLIC_KEY_LENGTH
 from .simplecointx import \
     SIMPLE_COIN_ED_TX, SIMPLE_COIN_ED_PLUS_TX, SimpleCoinTx
@@ -76,6 +75,6 @@ __ALL__ = [
     OLD_COIN_ED_TX, OLD_COIN_ED_PLUS_TX, OldCoinTx,
     CALL_APP_ED_TX, CALL_APP_ED_PLUS_TX, CallAppTx,
     SPAWN_APP_ED_TX, SPAWN_APP_ED_PLUS_TX, SpawnAppTx,
-    decode, sign, new_signer, signer_from_seed, signer_from_bytes,
+    decode, sign
 ]
 

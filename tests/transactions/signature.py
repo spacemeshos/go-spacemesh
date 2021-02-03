@@ -17,6 +17,10 @@ class PublicKey:
     def __str__(self) -> str:
         return self.bytes.hex()
 
+    @staticmethod
+    def from_hex(hex_str: str):
+        return PublicKey(bytes.fromhex(hex_str))
+
 
 @dataclass(frozen=True)
 class Address:
@@ -33,6 +37,10 @@ class Address:
     def form_pk(pk: PublicKey):
         return Address(pk.bytes[:ADDRESS_LENGTH])
 
+    @staticmethod
+    def from_hex(hex_str: str):
+        return Address(bytes.fromhex(hex_str))
+
 
 @dataclass(frozen=True)
 class Signature:
@@ -44,6 +52,10 @@ class Signature:
     @staticmethod
     def from_list(lst: List[int]):
         return Signature(bytes(lst))
+
+    @staticmethod
+    def from_hex(hex_str: str):
+        return Signature(bytes.fromhex(hex_str))
 
 
 @dataclass(frozen=True)
@@ -63,24 +75,28 @@ class Signer:
     def public_key(self) -> PublicKey:
         return PublicKey(self.pubk)
 
+    @staticmethod
+    def new():
+        priv = create_signing_key()
+        pubk = create_verifying_key(priv)
+        return Signer(priv, pubk)
 
-def new_signer() -> Signer:
-    priv = create_signing_key()
-    pubk = create_verifying_key(priv)
-    return Signer(priv, pubk)
+    @staticmethod
+    def from_seed(seed: str):
+        priv = seed.encode('utf-8')
+        priv = priv + bytes([0] * (PUBLIC_KEY_LENGTH - len(priv)))
+        pubk = create_verifying_key(priv)
+        return Signer(priv, pubk)
 
+    @staticmethod
+    def from_bytes(bs: bytes):
+        priv = bs
+        pubk = create_verifying_key(priv)
+        return Signer(priv, pubk)
 
-def signer_from_seed(seed: str) -> Signer:
-    priv = seed.encode('utf-8')
-    priv = priv + bytes([0] * (PUBLIC_KEY_LENGTH - len(priv)))
-    pubk = create_verifying_key(priv)
-    return Signer(priv, pubk)
-
-
-def signer_from_bytes(bs: bytes) -> Signer:
-    priv = bs
-    pubk = create_verifying_key(priv)
-    return Signer(priv, pubk)
+    @property
+    def bytes(self) -> bytes:
+        return self.priv
 
 
 class Signing(ABC):

@@ -4,6 +4,7 @@ from .transaction import Address, TxType, IncompleteTransaction, TransactionBody
 from .signature import EdSigningScheme, EdPlusSignigScheme
 import xdrlib
 
+
 @dataclass(frozen=True)
 class OldCoinTx(TransactionBody):
     nonce: int
@@ -21,13 +22,13 @@ class OldCoinTx(TransactionBody):
     def get_xdr_bytes(self) -> bytes:
         p = xdrlib.Packer()
         p.pack_hyper(self.nonce)
-        p.pack_fopaque(20,self.recipient.bytes)
+        p.pack_fopaque(20, self.recipient.bytes)
         p.pack_hyper(self.gas_limit)
         p.pack_hyper(self.fee)
         p.pack_hyper(self.amount)
         return p.get_buffer()
 
-    def get_digest_bytes(self,xdr_bytes:bytes) -> bytes:
+    def get_digest_bytes(self, xdr_bytes: bytes) -> bytes:
         if len(xdr_bytes) == 0:
             xdr_bytes = self.get_xdr_bytes()
         return xdr_bytes
@@ -54,8 +55,9 @@ class OldCoinTx(TransactionBody):
         return self.fee
 
     def __str__(self) -> str:
-        return "OldCoinTx(nonce=%d, recipient=%s, amount=%d, gas_limit=%d, fee=%d)"%\
+        return "OldCoinTx(nonce=%d, recipient=%s, amount=%d, gas_limit=%d, fee=%d)" % \
                (self.nonce, str(self.recipient), self.amount, self.gas_limit, self.fee)
+
 
 def decode_old_coin_tx(bs: bytes, tt: TxType) -> IncompleteTransaction:
     p = xdrlib.Unpacker(bs)
@@ -65,7 +67,9 @@ def decode_old_coin_tx(bs: bytes, tt: TxType) -> IncompleteTransaction:
     fee = p.unpack_hyper()
     amount = p.unpack_hyper()
     p.done()
-    return IncompleteTransaction(tt,OldCoinTx(account_nonce,Address(addr),amount,gas_limit,fee))
+    return IncompleteTransaction(tt, OldCoinTx(account_nonce, Address(addr), amount, gas_limit, fee))
+
 
 OLD_COIN_ED_TX = TxType(TX_OLD_COIN + TX_SIGNING_ED, "OLD_COIN_ED_TX", EdSigningScheme, decode_old_coin_tx)
-OLD_COIN_ED_PLUS_TX = TxType(TX_OLD_COIN + TX_SIGNING_ED_PLUS, "OLD_COIN_ED_PLUS_TX", EdPlusSignigScheme, decode_old_coin_tx)
+OLD_COIN_ED_PLUS_TX = TxType(TX_OLD_COIN + TX_SIGNING_ED_PLUS, "OLD_COIN_ED_PLUS_TX", EdPlusSignigScheme,
+                             decode_old_coin_tx)
