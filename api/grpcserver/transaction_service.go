@@ -2,6 +2,7 @@ package grpcserver
 
 import (
 	"bytes"
+	"fmt"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
@@ -69,7 +70,8 @@ func (s TransactionService) SubmitTransaction(_ context.Context, in *pb.SubmitTr
 	if !s.Mesh.AddressExists(tx.Origin()) {
 		log.With().Error("tx origin address not found in global state",
 			tx.ID(), log.String("origin", tx.Origin().Short()))
-		return nil, status.Error(codes.InvalidArgument, "`Transaction` origin account not found")
+		//return nil, status.Error(codes.InvalidArgument, "`Transaction` origin account not found")
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("`Transaction` origin account (%v) not found", tx.Origin()))
 	}
 	if err := s.Mesh.ValidateNonceAndBalance(tx); err != nil {
 		log.Error("tx failed nonce and balance check: %v", err)

@@ -12,6 +12,9 @@ from tests.utils import get_curr_ind
 
 
 def test_transactions(init_session, setup_network):
+
+    print("\n== test_transactions ==\n")
+
     # create #new_acc_num new accounts by sending them coins from tap
     # check tap balance/nonce
     # sleep until new state is processed
@@ -52,6 +55,11 @@ def test_transactions(init_session, setup_network):
     tts = layer_duration * layers_per_epoch * 2 + 1
     sleep_print_backwards(tts)
 
+    print("\n\n------ validate balance ------")
+    for acc_pub in acc.accounts:
+        ass_err = f"account {acc_pub} did not have the matching balance"
+        assert actions.validate_acc_amount(wallet_api, acc, acc_pub), ass_err
+
     print("\n\n------ create new accounts using the accounts created by tap ------")
     # add 1 because we have #new_acc_num new accounts and one tap
     tx_num = new_acc_num + 1
@@ -87,6 +95,9 @@ def test_transactions(init_session, setup_network):
 
 
 def test_mining(init_session, setup_network):
+
+    print("\n== test_mining ==\n")
+
     current_index = get_curr_ind()
     ns = init_session
     layer_avg_size = testconfig['client']['args']['layer-average-size']
