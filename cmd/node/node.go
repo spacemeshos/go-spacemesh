@@ -828,7 +828,7 @@ func (app *SpacemeshApp) stopServices() {
 	}
 
 	events.CloseEventReporter()
-
+	events.CloseEventPubSub()
 	// Close all databases.
 	for _, closer := range app.closers {
 		if closer != nil {

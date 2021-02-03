@@ -360,5 +360,6 @@ loop:
 		}
 	}
 	events.CloseEventReporter()
+	events.CloseEventPubSub()
 	collect.Stop()
 }
