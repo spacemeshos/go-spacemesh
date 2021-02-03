@@ -156,6 +156,9 @@ type SpacemeshApp struct {
 	jsonAPIService    *api.JSONHTTPServer
 	newgrpcAPIService *grpcserver.Server
 	newjsonAPIService *grpcserver.JSONHTTPServer
+	gatewaySvc        *grpcserver.GatewayService
+	globalstateSvc    *grpcserver.GlobalStateService
+	txService         *grpcserver.TransactionService
 	syncer            *sync.Syncer
 	blockListener     *sync.BlockListener
 	state             *state.TransactionProcessor
@@ -351,11 +354,6 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 	if err != nil {
 		log.Panic("cannot commit genesis state")
 	}
-}
-
-func (app *SpacemeshApp) setupTestFeatures() {
-	// NOTE: any test-related feature enabling should happen here.
-	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
 type weakCoinStub struct {
@@ -696,35 +694,22 @@ func (app *SpacemeshApp) startServices() {
 	go app.checkTimeDrifts()
 }
 
-func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.NetworkAPI) {
+func (app *SpacemeshApp) startAPIServices(net api.NetworkAPI) {
 	apiConf := &app.Config.API
-
-	// OLD API SERVICES (deprecated)
 	layerDuration := app.Config.LayerDurationSec
-	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
-		// start grpc if specified or if json rpc specified
-		app.grpcAPIService = api.NewGrpcService(apiConf.GrpcServerPort, net, app.state, app.mesh, app.txPool,
-			app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app.syncer, app.Config, app)
-		app.grpcAPIService.StartService()
-	}
 
-	if apiConf.StartJSONServer {
-		app.jsonAPIService = api.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
-		app.jsonAPIService.StartService()
-	}
-
-	// NEW API SERVICES
-	// These work a little differently than the old services. Since we have multiple
-	// GRPC services, we cannot automatically enable them if the gateway server is
-	// enabled (since we don't know which ones to enable), so it's an error if the
-	// gateway server is enabled without enabling at least one GRPC service.
+	// API SERVICES
+	// Since we have multiple GRPC services, we cannot automatically enable them if
+	// the gateway server is enabled (since we don't know which ones to enable), so
+	// it's an error if the gateway server is enabled without enabling at least one
+	// GRPC service.
 
 	// Make sure we only create the server once.
 	registerService := func(svc grpcserver.ServiceAPI) {
-		if app.newgrpcAPIService == nil {
-			app.newgrpcAPIService = grpcserver.NewServerWithInterface(apiConf.NewGrpcServerPort, apiConf.NewGrpcServerInterface)
+		if app.grpcAPIService == nil {
+			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface)
 		}
-		svc.RegisterService(app.newgrpcAPIService)
+		svc.RegisterService(app.grpcAPIService)
 	}
 
 	// Register the requested services one by one
@@ -735,7 +720,7 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 		registerService(grpcserver.NewGatewayService(net))
 	}
 	if apiConf.StartGlobalStateService {
-		registerService(grpcserver.NewGlobalStateService(net, app.mesh, app.clock, app.syncer, app.txPool))
+		registerService(grpcserver.NewGlobalStateService(app.mesh, app.txPool))
 	}
 	if apiConf.StartMeshService {
 		registerService(grpcserver.NewMeshService(app.mesh, app.txPool, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
@@ -751,19 +736,18 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 	}
 
 	// Now that the services are registered, start the server.
-	if app.newgrpcAPIService != nil {
-		app.newgrpcAPIService.Start()
+	if app.grpcAPIService != nil {
+		app.grpcAPIService.Start()
 	}
 
-	if apiConf.StartNewJSONServer {
-		if app.newgrpcAPIService == nil {
+	if apiConf.StartJSONServer {
+		if app.grpcAPIService == nil {
 			// This panics because it should not happen.
 			// It should be caught inside apiConf.
 			log.Panic("one or more new GRPC services must be enabled with new JSON gateway server.")
-			return
 		}
-		app.newjsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.NewJSONServerPort, apiConf.NewGrpcServerPort)
-		app.newjsonAPIService.StartService(
+		app.jsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
+		app.jsonAPIService.StartService(
 			apiConf.StartDebugService,
 			apiConf.StartGatewayService,
 			apiConf.StartGlobalStateService,
@@ -781,23 +765,15 @@ func (app *SpacemeshApp) stopServices() {
 	close(app.term)
 
 	if app.jsonAPIService != nil {
-		log.Info("Stopping JSON service api...")
-		app.jsonAPIService.Close()
+		log.Info("Stopping JSON gateway service...")
+		if err := app.jsonAPIService.Close(); err != nil {
+			log.Error("error stopping JSON gateway server: %s", err)
+		}
 	}
 
 	if app.grpcAPIService != nil {
-		log.Info("Stopping grpc service...")
+		log.Info("Stopping GRPC service...")
 		app.grpcAPIService.Close()
-	}
-
-	if app.newjsonAPIService != nil {
-		log.Info("Stopping new JSON gateway service...")
-		app.newjsonAPIService.Close()
-	}
-
-	if app.newgrpcAPIService != nil {
-		log.Info("Stopping new grpc service...")
-		app.newgrpcAPIService.Close()
 	}
 
 	if app.blockProducer != nil {
@@ -1018,10 +994,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	if app.Config.TestMode {
-		app.setupTestFeatures()
-	}
-
 	if app.Config.CollectMetrics {
 		metrics.StartCollectingMetrics(app.Config.MetricsPort)
 	}
@@ -1034,7 +1006,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("Error starting p2p services: %v", err)
 	}
 
-	app.startAPIServices(postClient, app.P2P)
+	app.startAPIServices(app.P2P)
 	events.SubscribeToLayers(clock.Subscribe())
 	log.Info("App started.")
 
