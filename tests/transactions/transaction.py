@@ -38,10 +38,11 @@ class TransactionMessage:
     digest: bytes
     data: bytes
 
+    def signature(self, signer: Signer) -> Signature:
+        return self.tx_type.signing.sign(self.digest, signer)
+
     def sign(self, signer: Signer) -> bytes:
-        signature = self.tx_type.signing.sign(self.digest, signer)
-        return self.encode(signer.public_key, signature)
-        pass
+        return self.encode(signer.public_key, self.signature(signer))
 
     def encode(self, public_key: PublicKey, signature: Signature) -> bytes:
         p = xdrlib.Packer()
@@ -178,7 +179,17 @@ class IncompleteTransaction(GeneralTransaction):
     def __init__(self, tx_type: TxType, body: TransactionBody):
         super().__init__(tx_type, body)
 
-    def complete(self, signature: Signature, public_key: PublicKey, tx_id: TxID) -> Any:
+    def complete(self, signature: Signature, public_key: PublicKey, tx_id: TxID):
+        return Transaction(self, signature, public_key, tx_id)
+
+    def encode(self, signer: Signer) -> bytes:
+        return self.message.sign(signer)
+
+    def sign(self, signer: Signer):
+        signature = self.message.signature(signer)
+        public_key = signer.public_key
+        stx = self.message.encode(public_key,signature)
+        tx_id = tx_id_form_signed_transaction(stx)
         return Transaction(self, signature, public_key, tx_id)
 
     def __str__(self) -> str:

@@ -62,11 +62,6 @@ def decode(signed_transaction: bytes) -> Transaction:
     return itx.complete(signature, public_key, tx_id)
 
 
-def sign(tx: IncompleteTransaction, signer: Signer) -> Transaction:
-    signed_transaction = tx.message.sign(signer)
-    return decode(signed_transaction)
-
-
 __ALL__ = [
     Address, Signer, PublicKey,
     TX_SIGNING_ED, TX_SIGNING_ED_PLUS,
@@ -75,6 +70,6 @@ __ALL__ = [
     OLD_COIN_ED_TX, OLD_COIN_ED_PLUS_TX, OldCoinTx,
     CALL_APP_ED_TX, CALL_APP_ED_PLUS_TX, CallAppTx,
     SPAWN_APP_ED_TX, SPAWN_APP_ED_PLUS_TX, SpawnAppTx,
-    decode, sign
+    decode
 ]
 

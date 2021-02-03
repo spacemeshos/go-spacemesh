@@ -10,15 +10,13 @@ import (
 var alice = signing.NewEdSignerSeed("alice")
 
 func newTx(t *testing.T, nonce, totalAmount, fee uint64) types.Transaction {
-	tx, err := types.SignTransaction(
-		types.OldCoinTx{
-			AccountNonce: nonce,
-			Recipient:    types.Address{},
-			Amount:       totalAmount - fee,
-			GasLimit:     3,
-			Fee:          fee,
-		}.NewEd(),
-		alice)
+	tx, err := types.OldCoinTx{
+		AccountNonce: nonce,
+		Recipient:    types.Address{},
+		Amount:       totalAmount - fee,
+		GasLimit:     3,
+		Fee:          fee,
+	}.NewEd().Sign(alice)
 	require.NoError(t, err)
 	return tx
 }

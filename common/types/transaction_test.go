@@ -77,7 +77,7 @@ func TestVerifyTransaction(t *testing.T) {
 	for _, scheme := range signSchemes {
 		for _, ft := range signingTxs {
 			itx := scheme(ft)
-			tx, err := SignTransaction(itx, alice.EdSigner)
+			tx, err := itx.Sign(alice.EdSigner)
 			require.NoError(t, err)
 			ok, x := txExtract(ft, tx, t)
 			require.True(t, ok)
@@ -93,7 +93,7 @@ func TestVerifyTransaction(t *testing.T) {
 func TestVerifyTransactionType(t *testing.T) {
 	ft := signingTxs[0]
 	itx := signSchemes[0](ft)
-	tx, err := SignTransaction(itx, alice.EdSigner)
+	tx, err := itx.Sign(alice.EdSigner)
 	require.NoError(t, err)
 	ok, x := txExtract(ft, tx, t)
 	require.True(t, ok)
@@ -115,7 +115,7 @@ func TestVerifyTransactionLength(t *testing.T) {
 	ft := signingTxs[0]
 	for _, scheme := range signSchemes {
 		itx := scheme(ft)
-		tx, err := SignTransaction(itx, alice.EdSigner)
+		tx, err := itx.Sign(alice.EdSigner)
 		require.NoError(t, err)
 		ok, x := txExtract(ft, tx, t)
 		require.True(t, ok)
@@ -139,7 +139,7 @@ func TestVerifyTransactionLength(t *testing.T) {
 func TestVerifyTransactionBody(t *testing.T) {
 	ft := signingTxs[0]
 	itx := ft.(EdPlusTransactionFactory).NewEdPlus()
-	tx, err := SignTransaction(itx, alice.EdSigner)
+	tx, err := itx.Sign(alice.EdSigner)
 	require.NoError(t, err)
 	ok, x := txExtract(ft, tx, t)
 	require.True(t, ok)

@@ -318,8 +318,13 @@ func (t *TxAPIMock) ProcessedLayer() types.LayerID {
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) types.Transaction {
 	/*TODO: nonce is byte for all new tranactions*/
-	ctx := types.OldCoinTx{AccountNonce: nonce, Recipient: recipient, Amount: 1, GasLimit: defaultGasLimit, Fee: defaultFee}.NewEd()
-	tx, err := types.SignTransaction(ctx, signer)
+	tx,err := types.OldCoinTx{
+		AccountNonce: nonce,
+		Recipient:    recipient,
+		Amount:       1,
+		GasLimit:     defaultGasLimit,
+		Fee:          defaultFee,
+	}.NewEd().Sign(signer)
 	if err != nil {
 		log.Error("error creating new signed tx: ", err)
 		return nil

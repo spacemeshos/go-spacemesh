@@ -121,7 +121,7 @@ type MockTxMemPool struct{}
 var alice = signing.NewEdSignerSeed("alice")
 
 func (MockTxMemPool) Get(types.TransactionID) (types.Transaction, error) {
-	return types.SignTransaction(types.OldCoinTx{}.NewEd(), alice)
+	return types.OldCoinTx{}.NewEd().Sign(alice)
 }
 
 func (MockTxMemPool) Put(types.TransactionID, types.Transaction) {}

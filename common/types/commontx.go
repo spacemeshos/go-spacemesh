@@ -104,6 +104,29 @@ func (t *IncompleteCommonTx) decode(data []byte, txtp TransactionType) (err erro
 	return
 }
 
+// Encode signs and encode transaction into SignedTransaction object
+func (t IncompleteCommonTx) Encode(signer Signer) (_ SignedTransaction, err error) { //nolint:gofmt
+	txm, err := t.Message()
+	if err != nil {
+		return
+	}
+	return txm.Sign(signer)
+}
+
+// Sign signs transaction and returns complete Transaction object
+func (t IncompleteCommonTx) Sign(signer Signer) (_ Transaction, err error) {
+	txm, err := t.Message()
+	if err != nil {
+		return
+	}
+	signature := txm.Signature(signer)
+	stx, err := txm.Sign(signer)
+	if err != nil {
+		return
+	}
+	return t.Complete(signer.PublicKey(), signature, stx.ID()), nil
+}
+
 // CommonTx is an common partial implementation of the Transaction
 type CommonTx struct {
 	IncompleteCommonTx

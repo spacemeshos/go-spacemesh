@@ -160,7 +160,7 @@ func (tx simpleCoinTx) String() string {
 
 // DecodeSimpleCoinTx decodes transaction bytes into "Simple Coin Transaction" object
 func DecodeSimpleCoinTx(data []byte, txtp TransactionType) (r IncompleteTransaction, err error) {
-	tx := &simpleCoinTx{}
+	tx := &incompSimpleCoinTx{}
 	tx.self = tx
 	return tx, tx.decode(data, txtp)
 }

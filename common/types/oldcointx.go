@@ -139,11 +139,11 @@ func DecodeOldCoinTx(data []byte, txtp TransactionType) (r IncompleteTransaction
 
 // NewSignedOldCoinTx is used in TESTS ONLY to generate signed txs
 func NewSignedOldCoinTx(nonce uint64, rec Address, amount, gas, fee uint64, signer Signer) (Transaction, error) {
-	return SignTransaction(OldCoinTx{
+	return OldCoinTx{
 		AccountNonce: nonce,
 		Recipient:    rec,
 		Amount:       amount,
 		GasLimit:     gas,
 		Fee:          fee,
-	}.NewEdPlus(), signer)
+	}.NewEdPlus().Sign(signer)
 }

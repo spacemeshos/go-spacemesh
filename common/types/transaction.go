@@ -108,19 +108,8 @@ type GeneralTransaction interface {
 type IncompleteTransaction interface {
 	GeneralTransaction
 	Complete(key PublicKey, signature Signature, id TransactionID) Transaction
-}
-
-// SignTransaction signs incomplete transaction and returns completed transaction object
-func SignTransaction(itx IncompleteTransaction, signer Signer) (tx Transaction, err error) {
-	txm, err := itx.Message()
-	if err != nil {
-		return
-	}
-	stx, err := txm.Sign(signer)
-	if err != nil {
-		return
-	}
-	return stx.Decode()
+	Encode(signer Signer) (SignedTransaction, error)
+	Sign(signer Signer) (Transaction, error)
 }
 
 // Transaction is the interface of an immutable complete transaction
@@ -192,8 +181,12 @@ func (txm TransactionMessage) Scheme() SigningScheme {
 
 // Sign signs transaction binary data
 func (txm TransactionMessage) Sign(signer Signer) (_ SignedTransaction, err error) {
-	signature := txm.Scheme().Sign(signer, txm.Digest[:])
-	return txm.Encode(signer.PublicKey(), signature)
+	return txm.Encode(signer.PublicKey(), txm.Signature(signer))
+}
+
+// Signature calculates signature of transaction message
+func (txm TransactionMessage) Signature(signer Signer) Signature {
+	return txm.Scheme().Sign(signer, txm.Digest[:])
 }
 
 // Encode encodes transaction into the independent form
