@@ -228,7 +228,7 @@ func TestForEachInView_InMem_WithLimitedLayer(t *testing.T) {
 	// traverse until (and including) layer 2
 	err := mdb.ForBlockInView(ids, 2, foo)
 	assert.NoError(t, err)
-	assert.Equal(t, 6, i)
+	assert.Equal(t, 9, i)
 }
 
 func BenchmarkNewPersistentMeshDB(b *testing.B) {
