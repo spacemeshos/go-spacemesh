@@ -2,6 +2,7 @@ package grpcserver
 
 import (
 	"bytes"
+	"sort"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
@@ -228,9 +229,35 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 			// Filter for any matching transactions in the reported layer
 			// Essentially, we need to find the intersection between b.TxIDs and in.TransactionIds
 			for _, b := range layer.Layer.Blocks() {
-				for _, layerTxid := range b.TxIDs {
-					for _, txid := range in.TransactionId {
-						if bytes.Equal(layerTxid.Bytes(), txid.Id) {
+
+				//Possible algorithm: create an array A of b.TxIDs and B of in.TransactionId
+				//Lexicographically sort A and B, and then binary search for each A[i] in B.
+				//Will this give the same properties?
+				blockTxIDs := make([]types.TransactionID, len(b.TxIDs))
+				inputIDs := make([][]byte, len(in.TransactionId))
+				for index, layerTxID := range b.TxIDs {
+					blockTxIDs[index] = layerTxID
+				}
+				for index, inputTxID := range in.TransactionId {
+					inputIDs[index] = inputTxID.Id
+				}
+				//now we sort the two arrays
+				sort.SliceStable(blockTxIDs, func(i, j int) bool {
+					return bytes.Compare(blockTxIDs[i].Bytes(), blockTxIDs[j].Bytes()) == -1
+				})
+				sort.SliceStable(inputIDs, func(i, j int) bool {
+					return bytes.Compare(inputIDs[i], inputIDs[j]) == -1
+				})
+				//now that they are sorted, we can binary search
+				for _, layerTxID := range blockTxIDs {
+					//binary search on the input
+					left := 0
+					right := len(inputIDs)
+					for left < right {
+						mid := (left + right) / 2
+						compareVal := bytes.Compare(inputIDs[mid], layerTxID.Bytes())
+						if compareVal == 0 {
+							//we have found what we were looking for
 							var txstate pb.TransactionState_TransactionState
 							switch layer.Status {
 							case events.LayerStatusTypeApproved:
@@ -242,14 +269,14 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 							}
 							res := &pb.TransactionsStateStreamResponse{
 								TransactionState: &pb.TransactionState{
-									Id:    txid,
+									Id:    &pb.TransactionId{Id: inputIDs[mid]},
 									State: txstate,
 								},
 							}
 							if in.IncludeTransactions {
-								tx, err := s.Mesh.GetTransaction(layerTxid)
+								tx, err := s.Mesh.GetTransaction(layerTxID)
 								if err != nil {
-									log.Error("could not find transaction %v from layer %v: %v", layerTxid, layer, err)
+									log.Error("could not find transaction %v from layer %v: %v", layerTxID, layer, err)
 									return status.Error(codes.Internal, "error retrieving tx data")
 								}
 
@@ -258,12 +285,57 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 							if err := stream.Send(res); err != nil {
 								return err
 							}
-
-							// Don't match on any other transactions. Why not?
 							break
+						} else if compareVal == -1 {
+							//move to the left
+							right = mid - 1
+							continue
+						} else if compareVal == 1 {
+							//move to the right
+							left = mid + 1
+							continue
+						} else {
+							//error: should never get here
 						}
 					}
 				}
+
+				// for _, layerTxid := range b.TxIDs {
+				// 	for _, txid := range in.TransactionId {
+				// 		if bytes.Equal(layerTxid.Bytes(), txid.Id) {
+				// 			var txstate pb.TransactionState_TransactionState
+				// 			switch layer.Status {
+				// 			case events.LayerStatusTypeApproved:
+				// 				txstate = pb.TransactionState_TRANSACTION_STATE_MESH
+				// 			case events.LayerStatusTypeConfirmed:
+				// 				txstate = pb.TransactionState_TRANSACTION_STATE_PROCESSED
+				// 			default:
+				// 				txstate = pb.TransactionState_TRANSACTION_STATE_UNSPECIFIED
+				// 			}
+				// 			res := &pb.TransactionsStateStreamResponse{
+				// 				TransactionState: &pb.TransactionState{
+				// 					Id:    txid,
+				// 					State: txstate,
+				// 				},
+				// 			}
+				// 			if in.IncludeTransactions {
+				// 				tx, err := s.Mesh.GetTransaction(layerTxid)
+				// 				if err != nil {
+				// 					log.Error("could not find transaction %v from layer %v: %v", layerTxid, layer, err)
+				// 					return status.Error(codes.Internal, "error retrieving tx data")
+				// 				}
+
+				// 				res.Transaction = convertTransaction(tx)
+				// 			}
+				// 			if err := stream.Send(res); err != nil {
+				// 				return err
+				// 			}
+
+				// 			// Don't match on any other transactions. Why not, are they unique?
+				// 			break
+				// 		}
+				// 	}
+				// }
 			}
 		case <-stream.Context().Done():
 			log.Info("TransactionsStateStream closing stream, client disconnected")
