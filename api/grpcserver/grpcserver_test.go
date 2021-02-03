@@ -318,7 +318,7 @@ func (t *TxAPIMock) ProcessedLayer() types.LayerID {
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) types.Transaction {
 	/*TODO: nonce is byte for all new tranactions*/
-	tx,err := types.OldCoinTx{
+	tx, err := types.OldCoinTx{
 		AccountNonce: nonce,
 		Recipient:    recipient,
 		Amount:       1,
