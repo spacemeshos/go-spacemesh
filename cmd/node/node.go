@@ -694,9 +694,22 @@ func (app *SpacemeshApp) startServices() {
 	go app.checkTimeDrifts()
 }
 
-func (app *SpacemeshApp) startAPIServices(net api.NetworkAPI) {
+func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.NetworkAPI) {
 	apiConf := &app.Config.API
 	layerDuration := app.Config.LayerDurationSec
+
+	// OLD API SERVICES (deprecated)
+	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
+		// start grpc if specified or if json rpc specified
+		app.grpcAPIService = api.NewGrpcService(apiConf.GrpcServerPort, net, app.state, app.mesh, app.txPool,
+			app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app.syncer, app.Config, app)
+		app.grpcAPIService.StartService()
+	}
+
+	if apiConf.StartJSONServer {
+		app.jsonAPIService = api.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
+		app.jsonAPIService.StartService()
+	}
 
 	// API SERVICES
 	// Since we have multiple GRPC services, we cannot automatically enable them if
@@ -706,10 +719,10 @@ func (app *SpacemeshApp) startAPIServices(net api.NetworkAPI) {
 
 	// Make sure we only create the server once.
 	registerService := func(svc grpcserver.ServiceAPI) {
-		if app.grpcAPIService == nil {
-			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface)
+		if app.newgrpcAPIService == nil {
+			app.newgrpcAPIService = grpcserver.NewServerWithInterface(apiConf.NewGrpcServerPort, apiConf.NewGrpcServerInterface)
 		}
-		svc.RegisterService(app.grpcAPIService)
+		svc.RegisterService(app.newgrpcAPIService)
 	}
 
 	// Register the requested services one by one
@@ -736,18 +749,18 @@ func (app *SpacemeshApp) startAPIServices(net api.NetworkAPI) {
 	}
 
 	// Now that the services are registered, start the server.
-	if app.grpcAPIService != nil {
-		app.grpcAPIService.Start()
+	if app.newgrpcAPIService != nil {
+		app.newgrpcAPIService.Start()
 	}
 
-	if apiConf.StartJSONServer {
-		if app.grpcAPIService == nil {
+	if apiConf.StartNewJSONServer {
+		if app.newgrpcAPIService == nil {
 			// This panics because it should not happen.
 			// It should be caught inside apiConf.
 			log.Panic("one or more new GRPC services must be enabled with new JSON gateway server.")
 		}
-		app.jsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
-		app.jsonAPIService.StartService(
+		app.newjsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.NewJSONServerPort, apiConf.NewGrpcServerPort)
+		app.newjsonAPIService.StartService(
 			apiConf.StartDebugService,
 			apiConf.StartGatewayService,
 			apiConf.StartGlobalStateService,
@@ -763,6 +776,18 @@ func (app *SpacemeshApp) stopServices() {
 	// all go-routines that listen to app.term will close
 	// note: there is no guarantee that a listening go-routine will close before stopServices exits
 	close(app.term)
+
+	if app.newjsonAPIService != nil {
+		log.Info("Stopping new JSON gateway service...")
+		if err := app.newjsonAPIService.Close(); err != nil {
+			log.Error("error stopping new JSON gateway server: %s", err)
+		}
+	}
+
+	if app.newgrpcAPIService != nil {
+		log.Info("Stopping new GRPC service...")
+		app.newgrpcAPIService.Close()
+	}
 
 	if app.jsonAPIService != nil {
 		log.Info("Stopping JSON gateway service...")
@@ -1006,7 +1031,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("Error starting p2p services: %v", err)
 	}
 
-	app.startAPIServices(app.P2P)
+	app.startAPIServices(postClient, app.P2P)
 	events.SubscribeToLayers(clock.Subscribe())
 	log.Info("App started.")
 

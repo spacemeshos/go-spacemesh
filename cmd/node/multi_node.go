@@ -162,14 +162,14 @@ func ActivateGrpcServer(smApp *SpacemeshApp) {
 	smApp.Config.API.StartGatewayService = true
 	smApp.Config.API.StartGlobalStateService = true
 	smApp.Config.API.StartTransactionService = true
-	smApp.grpcAPIService = grpcserver.NewServerWithInterface(smApp.Config.API.GrpcServerPort, smApp.Config.API.GrpcServerInterface)
+	smApp.newgrpcAPIService = grpcserver.NewServerWithInterface(smApp.Config.API.NewGrpcServerPort, smApp.Config.API.NewGrpcServerInterface)
 	smApp.gatewaySvc = grpcserver.NewGatewayService(smApp.P2P)
 	smApp.globalstateSvc = grpcserver.NewGlobalStateService(smApp.mesh, smApp.txPool)
 	smApp.txService = grpcserver.NewTransactionService(smApp.P2P, smApp.mesh, smApp.txPool, smApp.syncer)
-	smApp.gatewaySvc.RegisterService(smApp.grpcAPIService)
-	smApp.globalstateSvc.RegisterService(smApp.grpcAPIService)
-	smApp.txService.RegisterService(smApp.grpcAPIService)
-	smApp.grpcAPIService.Start()
+	smApp.gatewaySvc.RegisterService(smApp.newgrpcAPIService)
+	smApp.globalstateSvc.RegisterService(smApp.newgrpcAPIService)
+	smApp.txService.RegisterService(smApp.newgrpcAPIService)
+	smApp.newgrpcAPIService.Start()
 }
 
 // GracefulShutdown stops the current services running in apps

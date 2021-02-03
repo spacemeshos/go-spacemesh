@@ -51,7 +51,16 @@ endif
 .PHONY: install
 
 
-build:
+genproto:
+ifeq ($(OS),Windows_NT) 
+	scripts\win\genproto.bat
+else
+	./scripts/genproto.sh
+endif
+.PHONY: genproto
+
+
+build: genproto
 ifeq ($(OS),Windows_NT)
 	go build ${LDFLAGS} -o $(BIN_DIR_WIN)/$(BINARY).exe
 else
@@ -101,7 +110,7 @@ tidy:
 .PHONY: tidy
 
 
-$(PLATFORMS):
+$(PLATFORMS): genproto
 ifeq ($(OS),Windows_NT)
 	set GOOS=$(os)&&set GOARCH=amd64&&go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY).exe
 else
@@ -110,7 +119,7 @@ endif
 .PHONY: $(PLATFORMS)
 
 
-docker-local-build:
+docker-local-build: genproto
 	GOOS=linux GOARCH=amd64 go build ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)
 	cd cmd/hare ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-hare
 	cd cmd/p2p ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-p2p
@@ -120,12 +129,12 @@ docker-local-build:
 .PHONY: docker-local-build
 
 
-arm6:
+arm6: genproto
 	GOOS=linux GOARCH=arm GOARM=6 go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
 .PHONY: pi
 
 
-test:
+test: genproto
 	ulimit -n 9999; go test -timeout 0 -p 1 ./...
 .PHONY: test
 
@@ -135,7 +144,7 @@ test-no-app-test: genproto
 .PHONY: test
 
 
-test-only-app-test:
+test-only-app-test: genproto
 	ulimit -n 9999; go test -timeout 0 -p 1 -v -tags !exclude_app_test ./cmd/node
 .PHONY: test
 

@@ -22,6 +22,9 @@ cmd/tmp
 */**/cover.out
 gcloud.json
 spacemesh.json
+**/pb/*.pb.go
+**/pb/*.pb.gw.go
+**/pb/*.swagger.json
 database/data
 *.pyc
 /devtools

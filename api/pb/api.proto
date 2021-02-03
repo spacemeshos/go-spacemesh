@@ -1,0 +1,235 @@
+syntax = "proto3";
+package pb;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+
+message SimpleMessage {
+    string value = 1;
+}
+
+message TxConfirmation {
+    string value = 1;
+    string id = 2;
+}
+
+enum TxStatus {
+    REJECTED = 0;
+    //INSUFFICIENT_FUNDS = 1;
+    //CONFLICTING = 2;
+    PENDING = 3;
+    //PROCESSING = 4;
+    //APPROVED = 5;
+    CONFIRMED = 6;
+}
+
+message TransactionId {
+    bytes id = 1;
+}
+
+message Transaction {
+    TransactionId txId = 1;
+    AccountId sender = 2;
+    AccountId receiver = 3;
+    uint64 amount = 4;
+    uint64 fee = 5;
+    TxStatus status = 6;
+    uint64 layerId = 7;
+    uint64 timestamp = 8;
+}
+
+message AccountId {
+    string address = 1;
+}
+
+message TransferFunds {
+    AccountId sender = 1;
+    AccountId receiver = 2;
+    uint64 nonce = 3;
+    uint64 amount = 4;
+}
+
+message InitPost {
+    string logicalDrive = 1;
+    uint64 commitmentSize = 2;
+    string coinbase = 3;
+}
+
+message SignedTransaction {
+    bytes tx = 1; // serialized with XDR
+}
+
+message EligibleLayers {
+    repeated uint64 layers = 1;
+}
+
+message BroadcastMessage {
+    string data = 1;
+}
+
+message BinaryMessage {
+    bytes data = 1;
+}
+
+message CommitmentSizeMessage {
+    uint64 mbCommitted = 1;
+}
+
+message LogicalDriveMessage {
+    string logicalDrive = 1;
+}
+
+message MiningStats {
+    string dataDir = 1;
+    int32 status = 2;
+    string coinbase = 3;
+    uint64 remainingBytes = 4;
+}
+
+message SetLogLevel {
+    string loggerName = 1;
+    string severity = 2;
+}
+
+message AccountTxs {
+    repeated string txs = 1;
+    uint64 validatedLayer = 2;
+}
+
+message GetTxsSinceLayer {
+    uint64 startLayer = 1;
+    AccountId account = 3;
+}
+
+message Reward {
+    uint64 layer = 1;
+    uint64 totalReward = 2;
+    uint64 layerRewardEstimate = 3;
+    // totalReward - layerRewardEstimate = feesEstimate
+}
+
+message AccountRewards {
+    repeated Reward rewards = 1;
+}
+
+message NodeStatus {
+    uint64 peers = 1;
+    uint64 minPeers = 2;
+    uint64 maxPeers = 3;
+    bool synced = 4;
+    uint64 syncedLayer = 5;
+    uint64 currentLayer = 6;
+    uint64 verifiedLayer = 7;
+}
+
+service SpacemeshService {
+    rpc Echo (SimpleMessage) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/example/echo"
+          body: "*"
+        };
+    }
+    rpc GetNonce (AccountId) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/nonce"
+          body: "*"
+        };
+    }
+    rpc GetBalance (AccountId) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/balance"
+          body: "*"
+        };
+    }
+    rpc StartMining (InitPost) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/startmining"
+          body: "*"
+        };
+    }
+    rpc GetTransaction (TransactionId) returns (Transaction) {
+        option (google.api.http) = {
+          post: "/v1/gettransaction"
+          body: "*"
+        };
+    }
+    rpc SubmitTransaction (SignedTransaction) returns (TxConfirmation) {
+        option (google.api.http) = {
+          post: "/v1/submittransaction"
+          body: "*"
+        };
+    }
+    rpc Broadcast (BroadcastMessage) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/broadcast"
+          body: "*"
+        };
+    }
+    rpc BroadcastPoet (BinaryMessage) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/broadcastpoet"
+          body: "*"
+        };
+    }
+    rpc SetAwardsAddress (AccountId) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/setawardsaddr"
+          body: "*"
+        };
+    }
+    rpc GetMiningStats (google.protobuf.Empty) returns (MiningStats) {
+        option (google.api.http) = {
+          post: "/v1/stats"
+          body: "*"
+        };
+    }
+    rpc GetNodeStatus (google.protobuf.Empty) returns (NodeStatus) {
+        option (google.api.http) = {
+          post: "/v1/nodestatus"
+          body: "*"
+        };
+    }
+    rpc GetGenesisTime (google.protobuf.Empty) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/genesis"
+          body: "*"
+        };
+    }
+    rpc GetUpcomingAwards (google.protobuf.Empty) returns (EligibleLayers) {
+        option (google.api.http) = {
+          post: "/v1/getupcomingawards"
+          body: "*"
+        };
+    }
+    rpc SetLoggerLevel (SetLogLevel) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/loggerlevel"
+          body: "*"
+        };
+    }
+    rpc GetAccountTxs (GetTxsSinceLayer) returns (AccountTxs) {
+        option (google.api.http) = {
+          post: "/v1/accounttxs"
+          body: "*"
+        };
+    }
+    rpc GetAccountRewards (AccountId) returns (AccountRewards) {
+        option (google.api.http) = {
+          post: "/v1/accountrewards"
+          body: "*"
+        };
+    }
+    rpc ResetPost (google.protobuf.Empty) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/resetpost"
+          body: "*"
+        };
+    }
+    rpc GetStateRoot (google.protobuf.Empty) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/stateroot"
+          body: "*"
+        };
+    }
+}
+

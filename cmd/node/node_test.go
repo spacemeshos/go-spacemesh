@@ -235,7 +235,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 
 	r := require.New(t)
 	app := NewSpacemeshApp()
-	r.Equal(9092, app.Config.API.GrpcServerPort)
+	r.Equal(9092, app.Config.API.NewGrpcServerPort)
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	// Try enabling an illegal service
@@ -244,11 +244,11 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 		r.Error(err)
 		r.Equal("unrecognized GRPC service requested: illegal", err.Error())
 	}
-	str, err := testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "illegal")
+	str, err := testArgs("--grpc-port-new", strconv.Itoa(port), "--grpc", "illegal")
 	r.NoError(err)
 	r.Empty(str)
 	// This should still be set
-	r.Equal(port, app.Config.API.GrpcServerPort)
+	r.Equal(port, app.Config.API.NewGrpcServerPort)
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	resetFlags()
@@ -257,7 +257,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	// Try enabling two services, one with a legal name and one with an illegal name
 	// In this case, the node service will be enabled because it comes first
 	// Uses Cmd.Run as defined above
-	str, err = testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "node", "--grpc", "illegal")
+	str, err = testArgs("--grpc-port-new", strconv.Itoa(port), "--grpc", "node", "--grpc", "illegal")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -268,7 +268,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	// Try the same thing but change the order of the flags
 	// In this case, the node service will not be enabled because it comes second
 	// Uses Cmd.Run as defined above
-	str, err = testArgs("--grpc", "illegal", "--grpc-port", strconv.Itoa(port), "--grpc", "node")
+	str, err = testArgs("--grpc", "illegal", "--grpc-port-new", strconv.Itoa(port), "--grpc", "node")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(false, app.Config.API.StartNodeService)
@@ -279,7 +279,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	// Use commas instead
 	// In this case, the node service will be enabled because it comes first
 	// Uses Cmd.Run as defined above
-	str, err = testArgs("--grpc", "node,illegal", "--grpc-port", strconv.Itoa(port))
+	str, err = testArgs("--grpc", "node,illegal", "--grpc-port-new", strconv.Itoa(port))
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.API.StartNodeService)
@@ -339,8 +339,8 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 
 	r := require.New(t)
 	app := NewSpacemeshApp()
-	r.Equal(9093, app.Config.API.JSONServerPort)
-	r.Equal(false, app.Config.API.StartJSONServer)
+	r.Equal(9093, app.Config.API.NewJSONServerPort)
+	r.Equal(false, app.Config.API.StartNewJSONServer)
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	// Try enabling just the JSON service (without the GRPC service)
@@ -349,10 +349,10 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 		r.Error(err)
 		r.Equal("must enable at least one GRPC service along with JSON gateway service", err.Error())
 	}
-	str, err := testArgs("--json-server")
+	str, err := testArgs("--json-server-new")
 	r.NoError(err)
 	r.Empty(str)
-	r.Equal(true, app.Config.API.StartJSONServer)
+	r.Equal(true, app.Config.API.StartNewJSONServer)
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	resetFlags()
@@ -362,23 +362,30 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
 	}
-	str, err = testArgs("--grpc", "node", "--json-server")
+	str, err = testArgs("--grpc", "node", "--json-server-new")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.API.StartNodeService)
-	r.Equal(true, app.Config.API.StartJSONServer)
+	r.Equal(true, app.Config.API.StartNewJSONServer)
 
 	resetFlags()
 	events.CloseEventReporter()
 
 	// Try changing the port
 	// Uses Cmd.Run as defined above
-	str, err = testArgs("--json-port", "1234")
+	str, err = testArgs("--json-port-new", "1234")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(false, app.Config.API.StartNodeService)
-	r.Equal(false, app.Config.API.StartJSONServer)
-	r.Equal(1234, app.Config.API.JSONServerPort)
+	r.Equal(false, app.Config.API.StartNewJSONServer)
+	r.Equal(1234, app.Config.API.NewJSONServerPort)
+}
+
+type PostMock struct {
+}
+
+func (PostMock) Reset() error {
+	return nil
 }
 
 type NetMock struct {
@@ -425,9 +432,9 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
-		app.Config.API.GrpcServerPort = port
+		app.Config.API.NewGrpcServerPort = port
 		app.Config.DataDirParent = path
-		app.startAPIServices(NetMock{})
+		app.startAPIServices(PostMock{}, NetMock{})
 	}
 	defer app.stopServices()
 
@@ -460,10 +467,10 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 	// Test starting the server from the commandline
 	// uses Cmd.Run from above
-	str, err = testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "node")
+	str, err = testArgs("--grpc-port-new", strconv.Itoa(port), "--grpc", "node")
 	r.Empty(str)
 	r.NoError(err)
-	r.Equal(port, app.Config.API.GrpcServerPort)
+	r.Equal(port, app.Config.API.NewGrpcServerPort)
 	r.Equal(true, app.Config.API.StartNodeService)
 
 	// Give the services a few seconds to start running - this is important on CI.
@@ -499,13 +506,13 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
 		app.Config.DataDirParent = path
-		app.startAPIServices(NetMock{})
+		app.startAPIServices(PostMock{}, NetMock{})
 	}
 	defer app.stopServices()
 	str, err := testArgs()
 	r.Empty(str)
 	r.NoError(err)
-	r.Equal(false, app.Config.API.StartJSONServer)
+	r.Equal(false, app.Config.API.StartNewJSONServer)
 	r.Equal(false, app.Config.API.StartNodeService)
 	r.Equal(false, app.Config.API.StartMeshService)
 	r.Equal(false, app.Config.API.StartGlobalStateService)
@@ -519,30 +526,30 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
 
 	// We expect this one to fail
-	url := fmt.Sprintf("http://127.0.0.1:%d/%s", app.Config.API.JSONServerPort, "v1/node/echo")
+	url := fmt.Sprintf("http://127.0.0.1:%d/%s", app.Config.API.NewJSONServerPort, "v1/node/echo")
 	_, err = http.Post(url, "application/json", strings.NewReader(payload))
 	r.Error(err)
 	r.Contains(err.Error(), fmt.Sprintf(
 		"dial tcp 127.0.0.1:%d: connect: connection refused",
-		app.Config.API.JSONServerPort))
+		app.Config.API.NewJSONServerPort))
 
 	resetFlags()
 	events.CloseEventReporter()
 
 	// Test starting the JSON server from the commandline
 	// uses Cmd.Run from above
-	str, err = testArgs("--json-server", "--grpc", "node", "--json-port", "1234")
+	str, err = testArgs("--json-server-new", "--grpc", "node", "--json-port-new", "1234")
 	r.Empty(str)
 	r.NoError(err)
-	r.Equal(1234, app.Config.API.JSONServerPort)
-	r.Equal(true, app.Config.API.StartJSONServer)
+	r.Equal(1234, app.Config.API.NewJSONServerPort)
+	r.Equal(true, app.Config.API.StartNewJSONServer)
 	r.Equal(true, app.Config.API.StartNodeService)
 
 	// Give the server a chance to start up
 	time.Sleep(2 * time.Second)
 
 	// We expect this one to succeed
-	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload, app.Config.API.JSONServerPort)
+	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload, app.Config.API.NewJSONServerPort)
 	log.Info("Got echo response: %v", respBody)
 	var msg pb.EchoResponse
 	r.NoError(jsonpb.UnmarshalString(respBody, &msg))
@@ -591,7 +598,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	go func() {
 		// This makes sure the test doesn't end until this goroutine closes
 		defer wg.Done()
-		str, err := testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "node", "--acquire-port=false", "--tcp-interface", "127.0.0.1", "--grpc-interface", "localhost")
+		str, err := testArgs("--grpc-port-new", strconv.Itoa(port), "--grpc", "node", "--acquire-port=false", "--tcp-interface", "127.0.0.1", "--grpc-interface-new", "localhost")
 		require.Empty(t, str)
 		require.NoError(t, err)
 	}()
@@ -750,8 +757,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.DataDirParent = path
 
 		// GRPC configuration
-		app.Config.API.GrpcServerPort = port
-		app.Config.API.GrpcServerInterface = "localhost"
+		app.Config.API.NewGrpcServerPort = port
+		app.Config.API.NewGrpcServerInterface = "localhost"
 		app.Config.API.StartTransactionService = true
 
 		// Prevent obnoxious warning in macOS
