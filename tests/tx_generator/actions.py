@@ -128,7 +128,7 @@ def send_coins_to_new_accounts(wallet_api, new_acc_num, amount, accountant, gas_
             print("transaction succeeded!\n")
 
             # sleep briefly to allow tx to be gossipped and projections to be updated
-            sleep_print_backwards(2)
+            sleep_print_backwards(10)
 
             continue
 

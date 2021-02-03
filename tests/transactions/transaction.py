@@ -131,11 +131,11 @@ class GeneralTransaction:
         return self.body.get_ttl()
 
     @property
-    def get_amount(self) -> int:
+    def amount(self) -> int:
         return self.body.get_amount()
 
     @property
-    def get_nonce(self) -> int:
+    def nonce(self) -> int:
         return self.body.get_nonce()
 
     @property
@@ -151,7 +151,7 @@ class GeneralTransaction:
 
 
 @dataclass(frozen=True)
-class CompletedTransaction:
+class TransactionSignature:
     _signature: Signature
     _public_key: PublicKey
     _origin: Address
@@ -196,10 +196,10 @@ class IncompleteTransaction(GeneralTransaction):
         return "IncompleteTransaction(tx_type=" + self.tx_type.name + ", body=" + str(self.body) + ")"
 
 
-class Transaction(GeneralTransaction, CompletedTransaction):
+class Transaction(GeneralTransaction, TransactionSignature):
     def __init__(self, tx: IncompleteTransaction, signature: Signature, public_key: PublicKey, tx_id: TxID):
         GeneralTransaction.__init__(self, tx.tx_type, tx.body)
-        CompletedTransaction.__init__(self, signature, public_key, Address.form_pk(public_key), tx_id)
+        TransactionSignature.__init__(self, signature, public_key, Address.form_pk(public_key), tx_id)
 
     def encode(self) -> bytes:
         return self.message.encode(self._public_key, self._signature)
