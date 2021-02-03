@@ -619,25 +619,25 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		myError = nextError()
 
 		// Ignore this error which happens if you have a local database file
-		if strings.Contains(myError.Message, "error adding genesis block block already exist in database") {
+		if strings.Contains(myError.Msg, "error adding genesis block block already exist in database") {
 			myError = nextError()
 		}
 
-		require.Equal(t, "test123", myError.Message)
-		require.Equal(t, int(zapcore.ErrorLevel), int(myError.ErrorType))
+		require.Equal(t, "test123", myError.Msg)
+		require.Equal(t, pb.LogLevel_LOG_LEVEL_ERROR, myError.Level)
 
 		myError = nextError()
-		require.Equal(t, "test456", myError.Message)
-		require.Equal(t, int(zapcore.ErrorLevel), int(myError.ErrorType))
+		require.Equal(t, "test456", myError.Msg)
+		require.Equal(t, pb.LogLevel_LOG_LEVEL_ERROR, myError.Level)
 
 		// The panic gets wrapped in an ERROR, and we get both, in this order
 		myError = nextError()
-		require.Contains(t, myError.Message, "Fatal: goroutine panicked.")
-		require.Equal(t, int(zapcore.ErrorLevel), int(myError.ErrorType))
+		require.Contains(t, myError.Msg, "Fatal: goroutine panicked.")
+		require.Equal(t, pb.LogLevel_LOG_LEVEL_ERROR, myError.Level)
 
 		myError = nextError()
-		require.Equal(t, "testPANIC", myError.Message)
-		require.Equal(t, int(zapcore.FatalLevel), int(myError.ErrorType))
+		require.Equal(t, "testPANIC", myError.Msg)
+		require.Equal(t, pb.LogLevel_LOG_LEVEL_PANIC, myError.Level)
 
 		// Let the test end
 		once.Do(oncebody)
