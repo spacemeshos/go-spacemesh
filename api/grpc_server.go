@@ -283,7 +283,7 @@ func (s SpacemeshGrpcService) startServiceInternal() {
 	// SubscribeOnNewConnections reflection service on gRPC server
 	reflection.Register(s.Server)
 
-	log.Info("grpc API listening on port %d", s.Port)
+	log.Info("old grpc API listening on port %d", s.Port)
 
 	// start serving - this blocks until err or server is stopped
 	if err := s.Server.Serve(lis); err != nil {

@@ -45,10 +45,10 @@ bootnodes = [] # example : spacemesh://j7qWfWaJRVp25ZsnCu9rJ4PmhigZBtesB4YmQHqqP
 
 # API Config
 [api]
-grpc-server = true
-json-server = true
-grpc-port = 9091
-json-port = 9090
+grpc = "node" # Only run the Node service by default
+json-server-new = true
+grpc-port-new = 9092
+json-port-new = 9093
 
 # Time sync NTP Config
 [time]
