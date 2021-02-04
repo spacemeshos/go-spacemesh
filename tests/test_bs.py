@@ -31,7 +31,7 @@ def test_transactions(init_session, setup_network):
     tts = layer_duration * tx_gen_conf.num_layers_until_process
     sleep_print_backwards(tts)
 
-    wallet_api = WalletAPI(namespace, setup_network.clients.pods)
+    wallet_api = WalletAPI(namespace, setup_network.clients.pods, 1)
 
     tap_bal = wallet_api.get_balance_value(tx_gen_conf.acc_pub)
     tap_nonce = wallet_api.get_nonce_value(tx_gen_conf.acc_pub)
@@ -52,7 +52,7 @@ def test_transactions(init_session, setup_network):
     assert actions.validate_acc_amount(wallet_api, acc, tx_gen_conf.acc_pub), ass_err
 
     # wait for 2 genesis epochs that will not contain any blocks + one layer for tx execution
-    tts = layer_duration * layers_per_epoch * 2 + 1
+    tts = layer_duration * (layers_per_epoch * 3 + 1)
     sleep_print_backwards(tts)
 
     print("\n\n------ validate balance ------")
