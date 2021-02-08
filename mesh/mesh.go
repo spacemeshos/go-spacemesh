@@ -822,6 +822,7 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 	//report the rewards for each coinbase and each smesherID within each coinbase
 	//this can be thought of as a partition of the reward amongst all the smesherIDs
 	//that added the Coinbase into the block
+	//deserialize
 	for account, smesherAccountEntry := range coinbasesAndSmeshers {
 		for _, smesherEntry := range smeshers[account] {
 			cnt := smesherAccountEntry[smesherEntry.String()]
