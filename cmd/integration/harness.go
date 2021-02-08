@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 
@@ -79,6 +80,9 @@ func NewHarness(cfg *ServerConfig, args []string) (*Harness, error) {
 func main() {
 	// setup logger
 	log.JSONLog(true)
+	// when creating a new pod a daemonset of fluent bit is being created along side for collecting the pods' logs.
+	// the following sleep time is for giving the daemonset container enough time to be created.
+	time.Sleep(15 * time.Second)
 
 	dummyChan := make(chan string)
 	// os.Args[0] contains the current process path

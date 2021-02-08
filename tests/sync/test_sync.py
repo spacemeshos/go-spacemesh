@@ -72,6 +72,11 @@ def check_pod_logs(pod_name, data):
 
 
 def test_sync_gradually_add_nodes(init_session, add_elk, add_node_pool, setup_bootstrap, save_log_on_exit):
+    # in order for early logs to arrive a sleep time was added in the harness code to enable fluent bit container
+    # to be created before collecting and shipping logs
+    tts = conf.SLEEP_TIME_BEFORE_POD_START
+    print(f"sleeping for {tts} in order to let fluent bit enough time to start")
+    time.sleep(tts)
     current_index = get_curr_ind()
     bs_info = setup_bootstrap.pods[0]
 

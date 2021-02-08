@@ -9,6 +9,7 @@ from string import ascii_lowercase
 import time
 
 # noinspection PyUnresolvedReferences
+import tests.config as cnf
 from tests.context import ES
 from tests.convenience import sleep_print_backwards
 from tests.queries import query_message, poll_query_message
@@ -24,6 +25,11 @@ gossip_message_query_fields = {'M': 'new_gossip_message', 'protocol': 'PoetProof
 
 
 def query_bootstrap_es(namespace, bootstrap_po_name):
+    # in order for early logs to arrive a sleep time was added in the harness code to enable fluent bit container
+    # to be created before collecting and shipping logs
+    tts = cnf.SLEEP_TIME_BEFORE_POD_START
+    print(f"sleeping for {tts} in order to let fluent bit enough time to start")
+    time.sleep(tts)
     hits = poll_query_message(current_index, namespace, bootstrap_po_name, {"M": "Local node identity"}, expected=1)
     for h in hits:
         match = re.search(r"Local node identity >> (?P<bootstrap_key>\w+)", h.M)
