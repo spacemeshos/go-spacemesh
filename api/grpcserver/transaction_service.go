@@ -241,10 +241,10 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 				for index, inputTxID := range in.TransactionId {
 					inputIDs[index] = inputTxID.Id
 				}
-				//now we sort the two arrays
-				sort.SliceStable(blockTxIDs, func(i, j int) bool {
-					return bytes.Compare(blockTxIDs[i].Bytes(), blockTxIDs[j].Bytes()) == -1
-				})
+				//now we sort the input arrays
+				// sort.SliceStable(blockTxIDs, func(i, j int) bool {
+				// 	return bytes.Compare(blockTxIDs[i].Bytes(), blockTxIDs[j].Bytes()) == -1
+				// })
 				sort.SliceStable(inputIDs, func(i, j int) bool {
 					return bytes.Compare(inputIDs[i], inputIDs[j]) == -1
 				})
