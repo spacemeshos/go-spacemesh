@@ -92,7 +92,7 @@ var (
 	errNoBlocksInLayer = errors.New("layer has no blocks")
 	errNoActiveSet     = errors.New("block does not declare active set")
 	errZeroActiveSet   = errors.New("block declares empty active set")
-	ErrInvalidATXID    = errors.New("invalid ATXID")
+	errInvalidATXID    = errors.New("invalid ATXID")
 
 	emptyLayer = types.Layer{}.Hash()
 )
@@ -766,7 +766,7 @@ func (s *Syncer) fetchBlockDataForValidation(blk *types.Block) error {
 func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
 	// A block whose associated ATX is the GoldenATXID or the EmptyATXID - either of these - is syntactically invalid.
 	if block.ATXID == *types.EmptyATXID || block.ATXID == s.GoldenATXID {
-		return nil, nil, ErrInvalidATXID
+		return nil, nil, errInvalidATXID
 	}
 
 	// validate unique tx atx
