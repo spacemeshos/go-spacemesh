@@ -188,11 +188,8 @@ func (bh BlockHandler) blockSyntacticValidation(block *types.Block, syncer servi
 }
 
 func (bh *BlockHandler) fetchAllReferencedAtxs(blk *types.Block, syncer service.Fetcher) error {
-	var atxs []types.ATXID
-
-	if blk.ATXID != bh.goldenATXID {
-		atxs = append(atxs, blk.ATXID)
-	}
+	// As block with empty or Golden ATXID is considered syntactically invalid, explicit check is not needed here.
+	atxs := []types.ATXID{blk.ATXID}
 
 	if blk.ActiveSet != nil {
 		if len(*blk.ActiveSet) > 0 {

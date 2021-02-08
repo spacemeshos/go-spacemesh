@@ -47,9 +47,7 @@ func (l *Logic) fetchRefBlock(block *types.Block) error {
 func (l *Logic) fetchAllReferencedAtxs(blk *types.Block) error {
 	var atxs []types.ATXID
 
-	if blk.ATXID != l.goldenATXID {
-		atxs = append(atxs, blk.ATXID)
-	}
+	atxs = append(atxs, blk.ATXID)
 
 	if blk.ActiveSet != nil {
 		if len(*blk.ActiveSet) > 0 {

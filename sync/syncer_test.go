@@ -790,7 +790,7 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 		select {
 		// Got a timeout! fail with a timeout error
 		case <-timeout:
-			t.Error("timed out ")
+			t.Error("timed out")
 			return
 		default:
 			if syncObj1.ProcessedLayer() == 5 {
@@ -905,7 +905,7 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 		select {
 		// Got a timeout! fail with a timeout error
 		case <-timeout:
-			t.Error("timed out ")
+			t.Error("timed out")
 			goto end
 		default:
 
@@ -1616,10 +1616,12 @@ var txid1 = types.TransactionID(genByte32())
 var txid2 = types.TransactionID(genByte32())
 var txid3 = types.TransactionID(genByte32())
 
+var zero = types.CalcHash32([]byte("0"))
 var one = types.CalcHash32([]byte("1"))
 var two = types.CalcHash32([]byte("2"))
 var three = types.CalcHash32([]byte("3"))
 
+var atx0 = types.ATXID(zero)
 var atx1 = types.ATXID(one)
 var atx2 = types.ATXID(two)
 var atx3 = types.ATXID(three)
@@ -1650,6 +1652,9 @@ func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 	s := syncs[0]
 	s.atxDb = alwaysOkAtxDb{}
 	b := &types.Block{}
+
+	b.ATXID = atx0
+
 	b.TxIDs = []types.TransactionID{txid1, txid2, txid1}
 	_, _, err := s.blockSyntacticValidation(b)
 	r.EqualError(err, errNoActiveSet.Error())
@@ -1661,6 +1666,16 @@ func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 	b.ActiveSet = &[]types.ATXID{atx1, atx2, atx3}
 	_, _, err = s.blockSyntacticValidation(b)
 	r.EqualError(err, errDupTx.Error())
+
+	b.ActiveSet = &[]types.ATXID{atx1}
+
+	b.ATXID = *types.EmptyATXID
+	_, _, err = s.blockSyntacticValidation(b)
+	r.EqualError(err, ErrInvalidATXID.Error())
+
+	b.ATXID = goldenATXID
+	_, _, err = s.blockSyntacticValidation(b)
+	r.EqualError(err, ErrInvalidATXID.Error())
 }
 
 func TestSyncer_BlockSyntacticValidation_syncRefBlock(t *testing.T) {

@@ -236,11 +236,6 @@ func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	err = s.blockSyntacticValidation(b, fetch)
 	r.NoError(err)
 	assert.Equal(t, 2, fetch.getBlockCalled[block1ID])
-
-	b.ATXID = goldenATXID
-	err = s.blockSyntacticValidation(b, fetch)
-	r.NoError(err)
-	assert.Equal(t, 3, fetch.getBlockCalled[block1ID]) // incremented by 1 as golden ATX is skipped
 }
 
 func TestBlockHandler_AtxSetID(t *testing.T) {

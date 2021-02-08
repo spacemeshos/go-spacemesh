@@ -71,7 +71,7 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 	epochNumber := layerID.GetEpoch()
 	bo.log.Info("asked for eligibility for epoch %d (cached: %d)", epochNumber, bo.proofsEpoch)
 	if epochNumber.IsGenesis() {
-		bo.log.Warning("asked for eligibility for epoch 0, cannot create blocks here")
+		bo.log.Info("asked for eligibility for epoch 0, cannot create blocks here")
 		return *types.EmptyATXID, nil, nil, nil
 	}
 
