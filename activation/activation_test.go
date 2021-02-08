@@ -875,6 +875,48 @@ func TestActivationDb_CalcActiveSetFromViewHighConcurrency(t *testing.T) {
 	wg.Wait()
 }
 
+// Check that we're not trying to sync an ATX that references the golden ATX or an empty ATX (i.e. not adding it to the sync queue).
+func TestActivationDB_FetchAtxReferences(t *testing.T) {
+	types.SetLayersPerEpoch(int32(layersPerEpoch))
+	r := require.New(t)
+
+	activationDb := newActivationDb()
+	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	fetcher := newFetchMock()
+
+	atx1 := newAtx(challenge, defaultView, npst)
+	atx1.PositioningATX = prevAtxID // should be fetched
+	atx1.PrevATXID = prevAtxID      // should be fetched
+
+	atx2 := newAtx(challenge, defaultView, npst)
+	atx2.PositioningATX = goldenATXID // should *NOT* be fetched
+	atx2.PrevATXID = prevAtxID        // should be fetched
+
+	atx3 := newAtx(challenge, defaultView, npst)
+	atx3.PositioningATX = *types.EmptyATXID // should *NOT* be fetched
+	atx3.PrevATXID = prevAtxID              // should be fetched
+
+	atx4 := newAtx(challenge, defaultView, npst)
+	atx4.PositioningATX = prevAtxID    // should be fetched
+	atx4.PrevATXID = *types.EmptyATXID // should *NOT* be fetched
+
+	atx5 := newAtx(challenge, defaultView, npst)
+	atx5.PositioningATX = *types.EmptyATXID // should *NOT* be fetched
+	atx5.PrevATXID = *types.EmptyATXID      // should *NOT* be fetched
+
+	atxList := []*types.ActivationTx{atx1, atx2, atx3, atx4, atx5}
+
+	for _, atx := range atxList {
+		r.NoError(activationDb.FetchAtxReferences(atx, fetcher))
+	}
+
+	expected := map[types.ATXID]int{
+		prevAtxID: 5,
+	}
+
+	r.EqualValues(expected, fetcher.atxCalled)
+}
+
 func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
 	startTick uint64, positioningATX types.ATXID, coinbase types.Address, activeSetSize uint32, view []types.BlockID,
 	nipst *types.NIPST) *types.ActivationTx {
