@@ -8,6 +8,7 @@ require (
 	github.com/btcsuite/btcd v0.0.0-20190629003639-c26ffa870fd8
 	github.com/btcsuite/btcutil v0.0.0-20190425235716-9e5f4b9a998d
 	github.com/go-kit/kit v0.9.0
+	github.com/golang-collections/collections v0.0.0-20130729185459-604e922904d3
 	github.com/golang/mock v1.4.4
 	github.com/golang/protobuf v1.4.2
 	github.com/google/uuid v1.1.0
