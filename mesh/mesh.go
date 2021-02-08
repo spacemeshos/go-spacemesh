@@ -786,7 +786,7 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 		}
 	}
 
-	if len(coinbasesAndSmeshers) == 0 {
+	if len(coinbases) == 0 {
 		msh.With().Info("no valid blocks for layer ", l.Index())
 		return
 	}
@@ -820,7 +820,7 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 		log.Uint64("layer_reward_remainder", blockLayerRewardMod.Uint64()),
 	)
 	//report the rewards for each coinbase and each smesherID within each coinbase
-	//this can be thought off as a partition of the reward amongst all the smesherIDs
+	//this can be thought of as a partition of the reward amongst all the smesherIDs
 	//that added the Coinbase into the block
 	for account, smesherAccountEntry := range coinbasesAndSmeshers {
 		for _, smesherEntry := range smeshers[account] {

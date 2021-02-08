@@ -108,6 +108,9 @@ func (id NodeID) ShortString() string {
 
 // BytesToNodeID deserializes a byte slice into a NodeID
 func BytesToNodeID(b []byte) NodeID {
+	// if len(b) < 32 {
+	// 	return nil
+	// }
 	pubKey := b[0:32]
 	vrfKey := b[32:]
 	return NodeID{

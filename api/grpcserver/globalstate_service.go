@@ -201,7 +201,7 @@ func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDa
 	res := &pb.SmesherDataQueryResponse{}
 
 	if err != nil {
-		log.Error("unable to fetch projected reward state for smesher %v: %s", smesherID, err)
+		log.With().Error("unable to fetch projected reward state for smesher", log.String("smesher", smesherID.String()), log.Err(err))
 		return nil, status.Errorf(codes.Internal, "error getting rewards data")
 	}
 	for _, r := range dbRewards {

@@ -2,7 +2,6 @@ package mesh
 
 import (
 	"container/list"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -354,10 +353,10 @@ func (m *DB) getLayerMutex(index types.LayerID) *layerMutex {
 	return ll
 }
 
-// Schema: "reward_<coinbase>_<smesherId>_<layerId> -> reward struct"
+// Schema: "r_<coinbase>_<smesherId>_<layerId> -> reward struct"
 func getRewardKey(l types.LayerID, account types.Address, smesherID types.NodeID) []byte {
-	byteArray := make([]byte, 8)
-	binary.BigEndian.PutUint64(byteArray, l.Uint64())
+	// byteArray := make([]byte, 8)
+	// binary.BigEndian.PutUint64(byteArray, l.Uint64())
 	str := string(getRewardKeyPrefix(account)) + "_" + smesherID.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
 	return []byte(str)
 }
@@ -368,7 +367,7 @@ func getRewardKeyPrefix(account types.Address) []byte {
 }
 
 // adding functions for getting the reward key for a smesherID
-// format for the index "r_<smesherid>_<accountid>_<layerid> -> s_<accountid>_<smesherid>_<layerid> -> the actual reward"
+// format for the index "s_<smesherid>_<accountid>_<layerid> -> r_<accountid>_<smesherid>_<layerid> -> the actual reward"
 func getSmesherRewardKey(l types.LayerID, smesherID types.NodeID, account types.Address) []byte {
 	// byteArray := make([]byte, 8)
 	// binary.BigEndian.PutUint64(byteArray, l.Uint64())
@@ -463,7 +462,7 @@ func (m *DB) WriteTransaction(l types.LayerID, t *types.Transaction) error {
 	return nil
 }
 
-//Reason we're not using the existing reward type because the layer is implicit in the key
+//We're not using the existing reward type because the layer is implicit in the key
 type dbReward struct {
 	TotalReward         uint64
 	LayerRewardEstimate uint64
