@@ -702,10 +702,6 @@ func TestGlobalStateService(t *testing.T) {
 			checkAccountDataQueryItemAccount(t, res.AccountItem[1].Datum)
 		}},
 		{"SmesherDataQuery", func(t *testing.T) {
-			// _, err := c.SmesherDataQuery(context.Background(), &pb.SmesherDataQueryRequest{})
-			// require.Error(t, err)
-			// statusCode := status.Code(err)
-			// require.Equal(t, codes.Unimplemented, statusCode)
 			res, err := c.SmesherDataQuery(context.Background(), &pb.SmesherDataQueryRequest{
 				SmesherId: &pb.SmesherId{
 					Id: nodeID.ToBytes(),
@@ -719,7 +715,7 @@ func TestGlobalStateService(t *testing.T) {
 			require.Equal(t, uint32(layerFirst), res.Rewards[0].Layer.Number)
 			require.Equal(t, uint64(rewardAmount), res.Rewards[0].Total.Value)
 			require.Equal(t, uint64(rewardAmount), res.Rewards[0].LayerReward.Value)
-			//require.Equal(t, addr1.Bytes(), res.Rewards[0].Coinbase.Address)
+			require.Equal(t, addr1.Bytes(), res.Rewards[0].Coinbase.Address)
 			require.Equal(t, nodeID.ToBytes(), res.Rewards[0].Smesher.Id)
 		}},
 		{name: "SmesherRewardStream_Basic", run: func(t *testing.T) {

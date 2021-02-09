@@ -831,7 +831,6 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 		msh.Error("cannot write reward to db")
 	}
 	// todo: should miner id be sorted in a deterministic order prior to applying rewards?
-	//
 
 }
 

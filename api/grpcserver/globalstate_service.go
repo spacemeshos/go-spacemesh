@@ -408,8 +408,6 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 			return nil
 		}
 	}
-
-	//return status.Errorf(codes.Unimplemented, "this endpoint has not yet been implemented")
 }
 
 // AppEventStream exposes a stream of emitted app events
