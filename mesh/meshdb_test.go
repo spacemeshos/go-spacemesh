@@ -496,22 +496,10 @@ func TestMeshDB_testGetRewards(t *testing.T) {
 		Key:          signer1.PublicKey().String(),
 		VRFPublicKey: signer3.PublicKey().Bytes(),
 	}
-	// smesher4 := types.NodeID{
-	// 	Key:          signer1.PublicKey().String(),
-	// 	VRFPublicKey: signer4.PublicKey().Bytes(),
-	// }
 
 	smesher1String := smesher1.String()
 	smesher2String := smesher2.String()
 	smesher3String := smesher3.String()
-	//smesher4String := smesher4.String()
-
-	// smesherMap := map[types.Address][]types.NodeID{
-	// 	addr1: {smesher1},
-	// 	addr2: {smesher2},
-	// 	addr3: {smesher3},
-	// 	addr4: {smesher4},
-	// }
 
 	test1Map := map[types.Address]map[string]uint64{
 		addr1: {
@@ -597,14 +585,6 @@ func TestMeshDB_testGetRewardsBySmesher(t *testing.T) {
 	smesher1String := smesher1.String()
 	smesher2String := smesher2.String()
 	smesher3String := smesher3.String()
-	//smesher4String := smesher4.String()
-
-	// smesherMap := map[types.Address][]types.NodeID{
-	// 	addr1: {smesher1},
-	// 	addr2: {smesher2},
-	// 	addr3: {smesher3},
-	// 	addr4: {smesher4},
-	// }
 
 	test1Map := map[types.Address]map[string]uint64{
 		addr1: {
@@ -686,20 +666,6 @@ func TestMeshDB_testGetRewardsBySmesherChangingLayer(t *testing.T) {
 		Key:          signer1.PublicKey().String(),
 		VRFPublicKey: signer4.PublicKey().Bytes(),
 	}
-
-	// smesherMapL1 := map[types.Address][]types.NodeID{
-	// 	addr1: {smesher1},
-	// 	addr2: {smesher2},
-	// 	addr3: {smesher3},
-	// 	addr4: {smesher4},
-	// }
-
-	// smesherMapL2 := map[types.Address][]types.NodeID{
-	// 	addr1: {smesher2},
-	// 	addr2: {smesher3},
-	// 	addr3: {smesher1},
-	// 	addr4: {smesher4},
-	// }
 
 	smesher1String := smesher1.String()
 	smesher2String := smesher2.String()
@@ -792,12 +758,6 @@ func TestMeshDB_testGetRewardsBySmesherMultipleSmeshers(t *testing.T) {
 		VRFPublicKey: signer4.PublicKey().Bytes(),
 	}
 
-	// smesherMapL1 := map[types.Address][]types.NodeID{
-	// 	addr1: {smesher1, smesher4},
-	// 	addr2: {smesher2},
-	// 	addr3: {smesher3},
-	// }
-
 	smesher1String := smesher1.String()
 	smesher2String := smesher2.String()
 	smesher3String := smesher3.String()
@@ -875,12 +835,6 @@ func TestMeshDB_testGetRewardsBySmesherMultipleSmeshersAndLayers(t *testing.T) {
 		Key:          signer1.PublicKey().String(),
 		VRFPublicKey: signer4.PublicKey().Bytes(),
 	}
-
-	// smesherMapL1 := map[types.Address][]types.NodeID{
-	// 	addr1: {smesher1, smesher4},
-	// 	addr2: {smesher2},
-	// 	addr3: {smesher3},
-	// }
 
 	smesher1String := smesher1.String()
 	smesher2String := smesher2.String()

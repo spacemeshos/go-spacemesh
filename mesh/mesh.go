@@ -757,7 +757,6 @@ func checkIfPresent(target types.NodeID, container []types.NodeID) bool {
 func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 	coinbases := make([]types.Address, 0, len(l.Blocks()))
 	coinbasesAndSmeshers := make(map[types.Address]map[string]uint64)
-	//smeshers := make(map[types.Address][]types.NodeID)
 	for _, bl := range l.Blocks() {
 		if bl.ATXID == *types.EmptyATXID {
 			msh.With().Info("skipping reward distribution for block with no ATX", bl.LayerIndex, bl.ID())
@@ -769,21 +768,14 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 			continue
 		}
 		coinbases = append(coinbases, atx.Coinbase)
-		//create a map where we count the number of coinbase-smesherID pairs appearing
+		//create a 2 dimensional map where the entries are
+		//coinbasesAndSmeshers[coinbase_id][smesher_id] = number of blocks this pair has created
 		if _, exists := coinbasesAndSmeshers[atx.Coinbase]; !exists {
 			coinbasesAndSmeshers[atx.Coinbase] = make(map[string]uint64)
 			coinbasesAndSmeshers[atx.Coinbase][atx.NodeID.String()]++
 		} else {
 			coinbasesAndSmeshers[atx.Coinbase][atx.NodeID.String()]++
 		}
-		// if _, exists := smeshers[atx.Coinbase]; !exists {
-		// 	smeshers[atx.Coinbase] = make([]types.NodeID, 0)
-		// 	smeshers[atx.Coinbase] = append(smeshers[atx.Coinbase], atx.NodeID)
-		// } else {
-		// 	if !checkIfPresent(atx.NodeID, smeshers[atx.Coinbase]) {
-		// 		smeshers[atx.Coinbase] = append(smeshers[atx.Coinbase], atx.NodeID)
-		// 	}
-		// }
 	}
 
 	if len(coinbases) == 0 {
