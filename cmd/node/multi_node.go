@@ -327,14 +327,14 @@ loop:
 			}
 
 			if eventDb.GetBlockCreationDone(layer) < numOfInstances {
-				log.Info("blocks done in layer %v: %v", layer, eventDb.GetBlockCreationDone(layer))
+				log.Warning("blocks done in layer %v: %v", layer, eventDb.GetBlockCreationDone(layer))
 				time.Sleep(500 * time.Millisecond)
 				errors++
 				continue
 			}
 			log.Info("all miners tried to create block in %v", layer)
 			if eventDb.GetNumOfCreatedBlocks(layer)*numOfInstances != eventDb.GetReceivedBlocks(layer) {
-				log.Info("finished: %v, block received %v layer %v", eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer), layer)
+				log.Warning("finished: %v, block received %v layer %v", eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer), layer)
 				time.Sleep(500 * time.Millisecond)
 				errors++
 				continue
@@ -342,15 +342,15 @@ loop:
 			log.Info("all miners got blocks for layer: %v created: %v received: %v", layer, eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer))
 			epoch := layer.GetEpoch()
 			if !(eventDb.GetAtxCreationDone(epoch) >= numOfInstances && eventDb.GetAtxCreationDone(epoch)%numOfInstances == 0) {
-				log.Info("atx not created %v in epoch %v, created only %v atxs", numOfInstances-eventDb.GetAtxCreationDone(epoch), epoch, eventDb.GetAtxCreationDone(epoch))
+				log.Warning("atx not created %v in epoch %v, created only %v atxs", numOfInstances-eventDb.GetAtxCreationDone(epoch), epoch, eventDb.GetAtxCreationDone(epoch))
 				time.Sleep(500 * time.Millisecond)
 				errors++
 				continue
 			}
 			log.Info("all miners finished reading %v atxs, layer %v done in %v", eventDb.GetAtxCreationDone(epoch), layer, time.Since(startLayer))
 			for _, atxID := range eventDb.GetCreatedAtx(epoch) {
-				if _, found := eventDb.Atxs[atxID]; !found {
-					log.Info("atx %v not propagated", atxID)
+				if !eventDb.AtxIDExists(atxID) {
+					log.Warning("atx %v not propagated", atxID)
 					errors++
 					continue
 				}

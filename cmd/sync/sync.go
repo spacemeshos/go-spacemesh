@@ -141,7 +141,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	txpool := state.NewTxMemPool()
 	atxpool := activation.NewAtxMemPool()
 
-	sync := sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, types.LayerID(expectedLayers))
+	sync := sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, types.LayerID(expectedLayers), poetDbStore)
 	app.sync = sync
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)
@@ -152,7 +152,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		log.Info("getting layer %v", i)
 		if lyr, err2 := sync.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
 			l := types.LayerID(i)
-			if !l.GetEpoch().IsGenesis() {
+			if l > types.GetEffectiveGenesis(){
 				lg.Info("loaded %v layers from disk %v", i-1, err2)
 				break
 			}
@@ -182,7 +182,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 
 //GetData downloads data from remote storage
 func getData(path, prefix string, lg log.Log) error {
-	dirs := []string{"poet", "atx", "nipst", "blocks", "ids", "layers", "transactions", "validity", "unappliedTxs"}
+	dirs := []string{"general", "poet", "atx", "nipst", "blocks", "ids", "layers", "transactions", "validity", "unappliedTxs"}
 	for _, dir := range dirs {
 		if err := filesystem.ExistOrCreate(path + prefix + "/" + dir); err != nil {
 			return err

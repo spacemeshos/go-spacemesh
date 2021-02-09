@@ -113,9 +113,9 @@ type Config struct {
 // DefaultConfig is the default config for the fetch component
 func DefaultConfig() Config {
 	return Config{
-		BatchTimeout:      2,
+		BatchTimeout:      1,
 		MaxRetiresForPeer: 2,
-		BatchSize:         5,
+		BatchSize:         20,
 		RequestTimeout:    10,
 	}
 }
@@ -193,7 +193,7 @@ func NewFetch(cfg Config, network service.Service, logger log.Log) *Fetch {
 		activeRequests:  make(map[types.Hash32][]request),
 		net:             srv,
 		requestReceiver: make(chan request),
-		batchTimeout:    time.NewTicker(time.Second * time.Duration(cfg.BatchTimeout)),
+		batchTimeout:    time.NewTicker(time.Millisecond * 50),
 		stop:            make(chan struct{}),
 		activeBatches:   make(map[types.Hash32]requestBatch),
 		doneChan:        make(chan struct{}),
@@ -212,9 +212,27 @@ func (f *Fetch) Start() {
 
 // Stop stops handling fetch requests
 func (f *Fetch) Stop() {
+	f.log.Info("stopping fetch")
 	f.batchTimeout.Stop()
 	f.net.Close()
 	close(f.stop)
+	f.activeReqM.Lock()
+	for _, batch := range f.activeRequests {
+
+		for _, req := range batch {
+			close(req.returnChan)
+			/*req.returnChan <- HashDataPromiseResult{
+				Err:     fmt.Errorf("closed"),
+				Hash:    req.hash,
+				Data:    nil,
+				IsLocal: false,
+			}*/
+
+		}
+	}
+	f.activeReqM.Unlock()
+	f.log.Info("stopped fetch")
+
 	// wait for close to end
 	<-f.doneChan
 }
@@ -249,15 +267,16 @@ func (f *Fetch) loop() {
 			f.activeRequests[req.hash] = append(f.activeRequests[req.hash], req)
 			rLen := len(f.activeRequests)
 			f.activeReqM.Unlock()
+			f.log.Info("request added to queue %v", req.hash.ShortString())
 			if req.priority > Low {
 				f.sendBatch([]requestMessage{{req.hint, req.hash}})
 				break
 			}
 			if rLen > batchMaxSize {
-				f.requestHashBatchFromPeers() // Process the batch.
+				go f.requestHashBatchFromPeers() // Process the batch.
 			}
 		case <-f.batchTimeout.C:
-			f.requestHashBatchFromPeers() // Process the batch.
+			go f.requestHashBatchFromPeers() // Process the batch.
 		case <-f.stop:
 			close(f.doneChan)
 			return
@@ -521,6 +540,11 @@ func (f *Fetch) GetHashes(hashes []types.Hash32, hint Hint, validateHash bool) m
 // know where to look for the hash, this function returns HashDataPromiseResult channel that will hold Data received or error
 func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashDataPromiseResult {
 	resChan := make(chan HashDataPromiseResult, 1)
+
+	if f.stopped() {
+		close(resChan)
+		return resChan
+	}
 
 	//check if we already have this hash locally
 	f.dbLock.RLock()

@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -66,7 +69,7 @@ type meshValidatorMock struct {
 }
 
 func (m *meshValidatorMock) LatestComplete() types.LayerID {
-	panic("implement me")
+	return types.LayerID(len(m.validatedLayers))
 }
 
 func (m *meshValidatorMock) Persist() error {
@@ -97,7 +100,7 @@ func (s mockState) ValidateAndAddTxToPool(tx *types.Transaction) error {
 }
 
 func (s mockState) LoadState(types.LayerID) error {
-	panic("implement me")
+	return nil
 }
 
 func (s mockState) GetStateRoot() types.Hash32 {
@@ -244,10 +247,19 @@ func (m *mockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	return nil
 }
 
+type mockTxProcessor struct {
+
+}
+
+func (m mockTxProcessor) HandleTxSyncData(data []byte) error {
+	return nil
+}
+
 // NewSyncWithMocks returns a syncer instance that is backed by mocks of other modules
 // for use in testing
-func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *state.TxMempool, atxpool *activation.AtxMemDB, swarm service.Service, poetDb *activation.PoetDb, conf Configuration, expectedLayers types.LayerID) *Syncer {
+func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *state.TxMempool, atxpool *activation.AtxMemDB, swarm service.Service, poetDb *activation.PoetDb, conf Configuration, expectedLayers types.LayerID, poetStorage database.Database) *Syncer {
 	lg := log.NewDefault("sync_test")
+	lg.Info("new sync tester")
 	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, conf.LayersPerEpoch, &validatorMock{}, lg.WithOptions(log.Nop))
 	var msh *mesh.Mesh
 	if mshdb.PersistentData() {
@@ -261,5 +273,16 @@ func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *
 	_ = msh.AddBlock(mesh.GenesisBlock())
 	clock := mockClock{Layer: expectedLayers + 1}
 	lg.Info("current layer %v", clock.GetCurrentLayer())
-	return NewSync(swarm, msh, txpool, atxdb, blockEligibilityValidatorMock{}, poetDb, conf, &clock, nil, lg)
+
+	blockHandler := blocks.NewBlockHandler(blocks.Config{Depth: 10}, msh,  blockEligibilityValidatorMock{}, lg)
+
+
+	fCfg := fetch.DefaultConfig()
+	fetcher := fetch.NewFetch(fCfg, swarm, lg)
+
+	lCfg := layerfetcher.Config{RequestTimeout: 20}
+	layerFetch := layerfetcher.NewLogic(lCfg, blockHandler, atxdb, poetDb, atxdb, mockTxProcessor{}, swarm, fetcher, msh, lg)
+	layerFetch.AddDBs(mshdb.Blocks(), atxdbStore, mshdb.Transactions(), poetStorage)
+	layerFetch.Start()
+	return NewSync(swarm, msh, txpool, atxdb, blockEligibilityValidatorMock{}, poetDb, conf, &clock, layerFetch, lg)
 }
