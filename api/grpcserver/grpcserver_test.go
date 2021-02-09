@@ -40,7 +40,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-//set a const thats a smesherID and init it
 const (
 	miningStatus          = activation.InitDone
 	remainingBytes        = 321
@@ -68,7 +67,6 @@ const (
 	receiptIndex          = 42
 )
 
-//copy node ID and change public key, smesherID
 var (
 	networkMock = NetworkMock{}
 	mempoolMock = MempoolMock{
