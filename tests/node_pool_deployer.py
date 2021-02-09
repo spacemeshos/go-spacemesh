@@ -73,16 +73,16 @@ class NodePoolDep:
         # GCP limit
         max_cpus_per_node = 96
         # extra cpus for k8s processes
-        extra_cpus_per_machine = 2
+        extra_cpus_per_node = 2
         total_cpu, _ = self.get_total_cpu_and_mem()
         dividor = 6
         for i in range(1, 6):
-            if total_cpu / i > max_cpus_per_node + extra_cpus_per_machine:
+            if ceil(total_cpu / i) + extra_cpus_per_node > max_cpus_per_node:
                 continue
             dividor = i
             break
 
-        cpu_per_node = ceil(total_cpu / dividor) + extra_cpus_per_machine
+        cpu_per_node = ceil(total_cpu / dividor) + extra_cpus_per_node
         if cpu_per_node % 2:
             cpu_per_node += 1
         # memory is equal to the number of CPUs in GB with adding additional 5GB of memory
