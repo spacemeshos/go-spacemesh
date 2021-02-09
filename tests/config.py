@@ -22,4 +22,6 @@ BOOTSTRAP_PORT = 7513
 ORACLE_SERVER_PORT = 3030
 POET_SERVER_PORT = 80
 
+# NOTICE: this value is coordinated with the harness sleep time before running the SM protocol.
+# if changing it here please change it in the harness code as well.
 SLEEP_TIME_BEFORE_POD_START = 15

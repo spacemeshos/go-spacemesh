@@ -82,7 +82,10 @@ func main() {
 	log.JSONLog(true)
 	// when creating a new pod a daemonset of fluent bit is being created along side for collecting the pods' logs.
 	// the following sleep time is for giving the daemonset container enough time to be created.
-	time.Sleep(15 * time.Second)
+	// this value is coordinated with SLEEP_TIME_BEFORE_POD_START in our python automation code, in case this value is
+	// changed here please change it in config.py as well.
+	const sleepTimeBeforePodStart = 15
+	time.Sleep(sleepTimeBeforePodStart * time.Second)
 
 	dummyChan := make(chan string)
 	// os.Args[0] contains the current process path
