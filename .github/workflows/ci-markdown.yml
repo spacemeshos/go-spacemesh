@@ -31,7 +31,7 @@ jobs:
     - uses: dorny/paths-filter@v2
       id: filter
       with:
-        # this pattern matches using picomatch syntax (used by this Action), which is slightly
+        # this pattern matches using picomatch syntax (used by this third party Action), which is slightly
         # different than the GitHub syntax above: it also matches any file in any path ending in '.md'
         filters: |
           nondoc:
