@@ -1,18 +1,18 @@
 BINARY := go-spacemesh
-VERSION = $(shell cat version.txt)
+VERSION ?= $(shell cat version.txt)
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
 CURR_DIR = $(shell pwd)
 CURR_DIR_WIN = $(shell cd)
 BIN_DIR = $(CURR_DIR)/build
-BIN_DIR_WIN = $(CURR_DIR_WIN)/build
+BIN_DIR_WIN ?= $(CURR_DIR_WIN)/build
 export GO111MODULE = on
 
 # These commands cause problems on Windows
 ifeq ($(OS),Windows_NT)
        # Just assume we're in interactive mode on Windows
        INTERACTIVE = 1
-       VERSION = $(shell type version.txt)
+       VERSION ?= $(shell type version.txt)
 else
        INTERACTIVE := $(shell [ -t 0 ] && echo 1)
 endif
@@ -38,8 +38,12 @@ endif
 # This prevents "the input device is not a TTY" error from docker in CI
 DOCKERRUNARGS := --rm -e ES_PASSWD="$(ES_PASSWD)" \
 	-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+	-e CLUSTER_NAME_ELK=$(CLUSTER_NAME_ELK) \
+	-e CLUSTER_ZONE_ELK=$(CLUSTER_ZONE_ELK) \
+	-e PROJECT_NAME=$(PROJECT_NAME) \
 	-e ES_USER=$(ES_USER) \
 	-e ES_PASS=$(ES_PASS) \
+	-e MAIN_ES_IP=$(MAIN_ES_IP) \
 	-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
 	go-spacemesh-python:$(BRANCH)
 ifdef INTERACTIVE
@@ -183,7 +187,7 @@ cover:
 
 tag-and-build:
 	git diff --quiet || (echo "\033[0;31mWorking directory not clean!\033[0m" && git --no-pager diff && exit 1)
-	echo ${VERSION} > version.txt
+	printf "${VERSION}" > version.txt
 	git commit -m "bump version to ${VERSION}" version.txt
 	git tag ${VERSION}
 	git push origin ${VERSION}

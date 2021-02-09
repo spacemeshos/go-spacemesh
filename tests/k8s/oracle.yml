@@ -23,4 +23,9 @@ spec:
         ports:
         - containerPort: 3030
       nodeSelector:
-        role: tests
+        namespace: NAMESPACE
+      tolerations:
+        - key: "namespace"
+          operator: "Equal"
+          value: NAMESPACE
+          effect: "NoSchedule"

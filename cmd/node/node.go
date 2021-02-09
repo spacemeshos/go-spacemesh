@@ -15,6 +15,7 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"cloud.google.com/go/profiler"
 	"github.com/spacemeshos/amcl"
 	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/post/shared"
@@ -256,6 +257,16 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 		return err
 	}
 
+	if app.Config.Profiler {
+		if err := profiler.Start(profiler.Config{
+			Service:        "go-spacemesh",
+			ServiceVersion: fmt.Sprintf("%s+%s+%s", cmdp.Version, cmdp.Branch, cmdp.Commit),
+			MutexProfiling: true,
+		}); err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "failed to start profiler:", err)
+		}
+	}
+
 	// override default config in timesync since timesync is using TimeCongigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
 
@@ -345,7 +356,7 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 		state.CreateAccount(addr)
 		state.AddBalance(addr, acc.Balance)
 		state.SetNonce(addr, acc.Nonce)
-		app.log.Info("Genesis account created: %s, Balance: %s", id, acc.Balance.Uint64())
+		app.log.Info("Genesis account created: %s, Balance: %s", id, acc.Balance)
 	}
 
 	_, err := state.Commit()
