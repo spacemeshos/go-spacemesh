@@ -1,10 +1,13 @@
 package types
 
 import (
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rand"
+	"bytes"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 func init() {
@@ -36,4 +39,20 @@ func TestFields(t *testing.T) {
 	b.TxIDs = []TransactionID{txid1, txid2, txid1}
 	b.ActiveSet = &[]ATXID{atx1, atx2, atx3}
 	log.With().Info("got new block", b.Fields()...)
+}
+
+func TestStringToNodeID(t *testing.T) {
+	pubkey := genByte32()
+	nodeID1 := NodeID{
+		Key:          util.Bytes2Hex(pubkey[:]),
+		VRFPublicKey: []byte("22222"),
+	}
+	nodeIDStr := nodeID1.String()
+	reversed, _ := StringToNodeID(nodeIDStr)
+	if nodeID1.Key != reversed.Key {
+		t.Errorf("Node ID deserialization Key does not match")
+	}
+	if !bytes.Equal(nodeID1.VRFPublicKey, nodeID1.VRFPublicKey) {
+		t.Errorf("Node ID deserialization VRF Key does not match")
+	}
 }

@@ -482,7 +482,7 @@ func TestMeshDB_testGetRewards(t *testing.T) {
 	signer1, addr1 := newSignerAndAddress(r, "123")
 	signer2, addr2 := newSignerAndAddress(r, "456")
 	signer3, addr3 := newSignerAndAddress(r, "789")
-	signer4, addr4 := newSignerAndAddress(r, "999")
+	_, addr4 := newSignerAndAddress(r, "999")
 
 	smesher1 := types.NodeID{
 		Key:          signer1.PublicKey().String(),
@@ -496,22 +496,22 @@ func TestMeshDB_testGetRewards(t *testing.T) {
 		Key:          signer1.PublicKey().String(),
 		VRFPublicKey: signer3.PublicKey().Bytes(),
 	}
-	smesher4 := types.NodeID{
-		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer4.PublicKey().Bytes(),
-	}
+	// smesher4 := types.NodeID{
+	// 	Key:          signer1.PublicKey().String(),
+	// 	VRFPublicKey: signer4.PublicKey().Bytes(),
+	// }
 
 	smesher1String := smesher1.String()
 	smesher2String := smesher2.String()
 	smesher3String := smesher3.String()
 	//smesher4String := smesher4.String()
 
-	smesherMap := map[types.Address][]types.NodeID{
-		addr1: {smesher1},
-		addr2: {smesher2},
-		addr3: {smesher3},
-		addr4: {smesher4},
-	}
+	// smesherMap := map[types.Address][]types.NodeID{
+	// 	addr1: {smesher1},
+	// 	addr2: {smesher2},
+	// 	addr3: {smesher3},
+	// 	addr4: {smesher4},
+	// }
 
 	test1Map := map[types.Address]map[string]uint64{
 		addr1: {
@@ -540,13 +540,13 @@ func TestMeshDB_testGetRewards(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000), smesherMap)
+	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(2, test2Map, big.NewInt(20000), big.NewInt(19000), smesherMap)
+	err = mdb.writeTransactionRewards(2, test2Map, big.NewInt(20000), big.NewInt(19000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(3, test3Map, big.NewInt(15000), big.NewInt(14500), smesherMap)
+	err = mdb.writeTransactionRewards(3, test3Map, big.NewInt(15000), big.NewInt(14500))
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewards(addr2)
@@ -575,7 +575,7 @@ func TestMeshDB_testGetRewardsBySmesher(t *testing.T) {
 	signer1, addr1 := newSignerAndAddress(r, "123")
 	signer2, addr2 := newSignerAndAddress(r, "456")
 	signer3, addr3 := newSignerAndAddress(r, "789")
-	signer4, addr4 := newSignerAndAddress(r, "999")
+	signer4, _ := newSignerAndAddress(r, "999")
 
 	smesher1 := types.NodeID{
 		Key:          signer1.PublicKey().String(),
@@ -599,12 +599,12 @@ func TestMeshDB_testGetRewardsBySmesher(t *testing.T) {
 	smesher3String := smesher3.String()
 	//smesher4String := smesher4.String()
 
-	smesherMap := map[types.Address][]types.NodeID{
-		addr1: {smesher1},
-		addr2: {smesher2},
-		addr3: {smesher3},
-		addr4: {smesher4},
-	}
+	// smesherMap := map[types.Address][]types.NodeID{
+	// 	addr1: {smesher1},
+	// 	addr2: {smesher2},
+	// 	addr3: {smesher3},
+	// 	addr4: {smesher4},
+	// }
 
 	test1Map := map[types.Address]map[string]uint64{
 		addr1: {
@@ -633,13 +633,13 @@ func TestMeshDB_testGetRewardsBySmesher(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000), smesherMap)
+	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(2, test2Map, big.NewInt(20000), big.NewInt(19000), smesherMap)
+	err = mdb.writeTransactionRewards(2, test2Map, big.NewInt(20000), big.NewInt(19000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(3, test3Map, big.NewInt(15000), big.NewInt(14500), smesherMap)
+	err = mdb.writeTransactionRewards(3, test3Map, big.NewInt(15000), big.NewInt(14500))
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
@@ -668,7 +668,7 @@ func TestMeshDB_testGetRewardsBySmesherChangingLayer(t *testing.T) {
 	signer1, addr1 := newSignerAndAddress(r, "123")
 	signer2, addr2 := newSignerAndAddress(r, "456")
 	signer3, addr3 := newSignerAndAddress(r, "789")
-	signer4, addr4 := newSignerAndAddress(r, "999")
+	signer4, _ := newSignerAndAddress(r, "999")
 
 	smesher1 := types.NodeID{
 		Key:          signer1.PublicKey().String(),
@@ -687,19 +687,19 @@ func TestMeshDB_testGetRewardsBySmesherChangingLayer(t *testing.T) {
 		VRFPublicKey: signer4.PublicKey().Bytes(),
 	}
 
-	smesherMapL1 := map[types.Address][]types.NodeID{
-		addr1: {smesher1},
-		addr2: {smesher2},
-		addr3: {smesher3},
-		addr4: {smesher4},
-	}
+	// smesherMapL1 := map[types.Address][]types.NodeID{
+	// 	addr1: {smesher1},
+	// 	addr2: {smesher2},
+	// 	addr3: {smesher3},
+	// 	addr4: {smesher4},
+	// }
 
-	smesherMapL2 := map[types.Address][]types.NodeID{
-		addr1: {smesher2},
-		addr2: {smesher3},
-		addr3: {smesher1},
-		addr4: {smesher4},
-	}
+	// smesherMapL2 := map[types.Address][]types.NodeID{
+	// 	addr1: {smesher2},
+	// 	addr2: {smesher3},
+	// 	addr3: {smesher1},
+	// 	addr4: {smesher4},
+	// }
 
 	smesher1String := smesher1.String()
 	smesher2String := smesher2.String()
@@ -732,13 +732,13 @@ func TestMeshDB_testGetRewardsBySmesherChangingLayer(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000), smesherMapL1)
+	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(2, test2Map, big.NewInt(20000), big.NewInt(19000), smesherMapL2)
+	err = mdb.writeTransactionRewards(2, test2Map, big.NewInt(20000), big.NewInt(19000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(3, test3Map, big.NewInt(15000), big.NewInt(14500), smesherMapL1)
+	err = mdb.writeTransactionRewards(3, test3Map, big.NewInt(15000), big.NewInt(14500))
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
@@ -792,11 +792,11 @@ func TestMeshDB_testGetRewardsBySmesherMultipleSmeshers(t *testing.T) {
 		VRFPublicKey: signer4.PublicKey().Bytes(),
 	}
 
-	smesherMapL1 := map[types.Address][]types.NodeID{
-		addr1: {smesher1, smesher4},
-		addr2: {smesher2},
-		addr3: {smesher3},
-	}
+	// smesherMapL1 := map[types.Address][]types.NodeID{
+	// 	addr1: {smesher1, smesher4},
+	// 	addr2: {smesher2},
+	// 	addr3: {smesher3},
+	// }
 
 	smesher1String := smesher1.String()
 	smesher2String := smesher2.String()
@@ -816,7 +816,7 @@ func TestMeshDB_testGetRewardsBySmesherMultipleSmeshers(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000), smesherMapL1)
+	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000))
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
@@ -876,11 +876,11 @@ func TestMeshDB_testGetRewardsBySmesherMultipleSmeshersAndLayers(t *testing.T) {
 		VRFPublicKey: signer4.PublicKey().Bytes(),
 	}
 
-	smesherMapL1 := map[types.Address][]types.NodeID{
-		addr1: {smesher1, smesher4},
-		addr2: {smesher2},
-		addr3: {smesher3},
-	}
+	// smesherMapL1 := map[types.Address][]types.NodeID{
+	// 	addr1: {smesher1, smesher4},
+	// 	addr2: {smesher2},
+	// 	addr3: {smesher3},
+	// }
 
 	smesher1String := smesher1.String()
 	smesher2String := smesher2.String()
@@ -913,10 +913,10 @@ func TestMeshDB_testGetRewardsBySmesherMultipleSmeshersAndLayers(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000), smesherMapL1)
+	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(2, test2Map, big.NewInt(20000), big.NewInt(19000), smesherMapL1)
+	err = mdb.writeTransactionRewards(2, test2Map, big.NewInt(20000), big.NewInt(19000))
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)

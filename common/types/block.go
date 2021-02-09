@@ -108,15 +108,38 @@ func (id NodeID) ShortString() string {
 
 // BytesToNodeID deserializes a byte slice into a NodeID
 func BytesToNodeID(b []byte) NodeID {
-	// if len(b) < 32 {
-	// 	return nil
-	// }
+	if len(b) < 32 {
+		var emptySlice []byte
+		return NodeID{
+			Key:          "",
+			VRFPublicKey: emptySlice,
+		}
+	}
 	pubKey := b[0:32]
 	vrfKey := b[32:]
 	return NodeID{
 		Key:          util.Bytes2Hex(pubKey),
 		VRFPublicKey: vrfKey,
 	}
+}
+
+//StringToNodeID deserializes a string into a NodeID
+func StringToNodeID(s string) (NodeID, error) {
+	strLen := len(s)
+	if strLen < 64 {
+		var emptySlice []byte
+		return NodeID{
+			Key:          "",
+			VRFPublicKey: emptySlice,
+		}, fmt.Errorf("Invalid input length")
+	}
+	//portion of the string corresponding to the Edwards public key
+	pubKey := s[:64]
+	vrfKey := s[64:]
+	return NodeID{
+		Key:          pubKey,
+		VRFPublicKey: []byte(vrfKey),
+	}, nil
 }
 
 // Field returns a log field. Implements the LoggableField interface.

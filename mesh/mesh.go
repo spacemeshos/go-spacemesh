@@ -757,7 +757,7 @@ func checkIfPresent(target types.NodeID, container []types.NodeID) bool {
 func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 	coinbases := make([]types.Address, 0, len(l.Blocks()))
 	coinbasesAndSmeshers := make(map[types.Address]map[string]uint64)
-	smeshers := make(map[types.Address][]types.NodeID)
+	//smeshers := make(map[types.Address][]types.NodeID)
 	for _, bl := range l.Blocks() {
 		if bl.ATXID == *types.EmptyATXID {
 			msh.With().Info("skipping reward distribution for block with no ATX", bl.LayerIndex, bl.ID())
@@ -776,14 +776,14 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 		} else {
 			coinbasesAndSmeshers[atx.Coinbase][atx.NodeID.String()]++
 		}
-		if _, exists := smeshers[atx.Coinbase]; !exists {
-			smeshers[atx.Coinbase] = make([]types.NodeID, 0)
-			smeshers[atx.Coinbase] = append(smeshers[atx.Coinbase], atx.NodeID)
-		} else {
-			if !checkIfPresent(atx.NodeID, smeshers[atx.Coinbase]) {
-				smeshers[atx.Coinbase] = append(smeshers[atx.Coinbase], atx.NodeID)
-			}
-		}
+		// if _, exists := smeshers[atx.Coinbase]; !exists {
+		// 	smeshers[atx.Coinbase] = make([]types.NodeID, 0)
+		// 	smeshers[atx.Coinbase] = append(smeshers[atx.Coinbase], atx.NodeID)
+		// } else {
+		// 	if !checkIfPresent(atx.NodeID, smeshers[atx.Coinbase]) {
+		// 		smeshers[atx.Coinbase] = append(smeshers[atx.Coinbase], atx.NodeID)
+		// 	}
+		// }
 	}
 
 	if len(coinbases) == 0 {
@@ -822,10 +822,9 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 	//report the rewards for each coinbase and each smesherID within each coinbase
 	//this can be thought of as a partition of the reward amongst all the smesherIDs
 	//that added the Coinbase into the block
-	//deserialize
 	for account, smesherAccountEntry := range coinbasesAndSmeshers {
-		for _, smesherEntry := range smeshers[account] {
-			cnt := smesherAccountEntry[smesherEntry.String()]
+		for smesherString, cnt := range smesherAccountEntry {
+			smesherEntry, _ := types.StringToNodeID(smesherString)
 			events.ReportRewardReceived(events.Reward{
 				Layer:       l.Index(),
 				Total:       cnt * blockTotalReward.Uint64(),
@@ -835,7 +834,7 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 			})
 		}
 	}
-	err := msh.writeTransactionRewards(l.Index(), coinbasesAndSmeshers, blockTotalReward, blockLayerReward, smeshers)
+	err := msh.writeTransactionRewards(l.Index(), coinbasesAndSmeshers, blockTotalReward, blockLayerReward)
 	if err != nil {
 		msh.Error("cannot write reward to db")
 	}
