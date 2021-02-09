@@ -240,6 +240,7 @@ func (t *TxAPIMock) GetRewards(types.Address) (rewards []types.Reward, err error
 			TotalReward:         rewardAmount,
 			LayerRewardEstimate: rewardAmount,
 			SmesherID:           nodeID,
+			Coinbase:            addr1,
 		},
 	}, nil
 }
@@ -251,6 +252,7 @@ func (t *TxAPIMock) GetRewardsBySmesherID(types.NodeID) (rewards []types.Reward,
 			TotalReward:         rewardAmount,
 			LayerRewardEstimate: rewardAmount,
 			SmesherID:           nodeID,
+			Coinbase:            addr1,
 		},
 	}, nil
 }
