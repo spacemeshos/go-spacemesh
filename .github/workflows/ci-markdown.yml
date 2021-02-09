@@ -34,7 +34,7 @@ jobs:
         #base: develop
         filters: |
           nondoc:
-            - '!**.md'
+            - '!**/**.md'
 
   # short-circuit and pass both stages
   ci-stage1:
