@@ -66,7 +66,6 @@ type Switch struct {
 	// NOTE: maybe let more than one handler register on a protocol ?
 	directProtocolHandlers map[string]chan service.DirectMessage
 	gossipProtocolHandlers map[string]chan service.GossipMessage
-	//protocolHandlerMutex   sync.RWMutex
 
 	// Networking
 	network    *net.Net    // (tcp) networking service
@@ -578,7 +577,6 @@ func (s *Switch) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	// Add metadata collected from p2p message (todo: maybe pass sender and protocol inside metadata)
 	p2pmeta := service.P2PMetadata{FromAddress: msg.Conn.RemoteAddr()}
 
-	// TODO: get rid of mutexes. (Blocker: registering protocols after `Start`. currently only known place is Test_Gossiping
 	_, ok := s.gossipProtocolHandlers[pm.Metadata.NextProtocol]
 
 	s.logger.Debug("Handle %v message from << %v", pm.Metadata.NextProtocol, msg.Conn.RemotePublicKey().String())
