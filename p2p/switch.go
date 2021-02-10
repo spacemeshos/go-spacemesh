@@ -409,6 +409,9 @@ func (s *Switch) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string
 
 // RegisterDirectProtocol registers an handler for a direct messaging based protocol.
 func (s *Switch) RegisterDirectProtocol(protocol string) chan service.DirectMessage { // TODO: not used - remove
+	if s.started == 1 {
+		panic("Calling register after the p2p has started")
+	}
 	mchan := make(chan service.DirectMessage, s.config.BufferSize)
 	s.protocolHandlerMutex.Lock()
 	s.directProtocolHandlers[protocol] = mchan
@@ -418,6 +421,9 @@ func (s *Switch) RegisterDirectProtocol(protocol string) chan service.DirectMess
 
 // RegisterGossipProtocol registers an handler for a gossip based protocol. priority must be provided.
 func (s *Switch) RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage {
+	if s.started == 1 {
+		panic("Calling register after the p2p has started")
+	}
 	mchan := make(chan service.GossipMessage, s.config.BufferSize)
 	s.protocolHandlerMutex.Lock()
 	s.gossip.SetPriority(protocol, prio)
