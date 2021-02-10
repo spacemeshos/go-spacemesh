@@ -4,7 +4,7 @@ metadata:
   name: fluent-bit
   labels:
     app: fluent-bit
-    chart: fluent-bit-2.4.2
+    chart: fluent-bit-1.6.10
     heritage: Helm
 spec:
   selector:
@@ -24,7 +24,7 @@ spec:
       serviceAccountName: fluent-bit
       containers:
         - name: fluent-bit
-          image: "fluent/fluent-bit:1.6.4"
+          image: "fluent/fluent-bit:1.6.10"
           imagePullPolicy: "Always"
           env:
             []
