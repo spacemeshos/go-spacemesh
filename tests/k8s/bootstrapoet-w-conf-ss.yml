@@ -23,7 +23,7 @@ spec:
       - name: bootstrap
         image: spacemeshos/go-spacemesh:develop
         imagePullPolicy: Always
-        args: ['--config', '/etc/config/config.toml', '--grpc', 'gateway,globalstate,transaction', '--test-mode', '--coinbase', '0x1234', '--metrics', '--metrics-port', '2020', '--pprof-server', '--poet-server', '127.0.0.1:80']
+        args: ['--config', '/etc/config/config.toml', '--grpc', 'gateway,globalstate,transaction', '--test-mode', '--coinbase', '0x1234', '--golden-atx', '0x5678', '--metrics', '--metrics-port', '2020', '--pprof-server', '--poet-server', '127.0.0.1:80']
         resources:
           requests:
             memory: "512M"

@@ -3,9 +3,10 @@ package cmd
 import (
 	"fmt"
 
-	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	cfg "github.com/spacemeshos/go-spacemesh/config"
 )
 
 var (
@@ -32,7 +33,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.OracleServerWorldID, "oracle_server_worldid",
 		config.OracleServerWorldID, "The worldid to use with the oracle server (temporary) ")
 	cmd.PersistentFlags().StringVar(&config.PoETServer, "poet-server",
-		config.OracleServer, "The poet server url. (temporary) ")
+		config.PoETServer, "The poet server url. (temporary) ")
 	cmd.PersistentFlags().StringVar(&config.GenesisTime, "genesis-time",
 		config.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
 	cmd.PersistentFlags().IntVar(&config.LayerDurationSec, "layer-duration-sec",
@@ -53,6 +54,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.GenesisConfPath, "add genesis configuration")
 	cmd.PersistentFlags().StringVar(&config.CoinbaseAccount, "coinbase",
 		config.CoinbaseAccount, "coinbase account to accumulate rewards")
+	cmd.PersistentFlags().StringVar(&config.GoldenATXID, "golden-atx",
+		config.GoldenATXID, "golden ATX hash")
 	cmd.PersistentFlags().IntVar(&config.GenesisActiveSet, "genesis-active-size",
 		config.GenesisActiveSet, "The active set size for the genesis flow")
 	cmd.PersistentFlags().IntVar(&config.BlockCacheSize, "block-cache-size",

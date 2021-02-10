@@ -16,6 +16,7 @@ layer-duration-sec = "5"
 block-cache-size = "20"
 hdist = "5"
 coinbase = "0x1234"
+golden-atx = "0x5678"
 
 # Node Config
 [p2p]

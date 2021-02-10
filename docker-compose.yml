@@ -6,6 +6,7 @@ services:
      command: [
           "--tcp-port", "${SMESH_PORT:-7513}",
           "--coinbase", "${SMESH_COINBASE:-0x1234}",
+          "--golden-atx", "${SMESH_GOLDEN_ATX:-0x5678}",
           "--poet-server", "${SMESH_POET_SERVER:?SMESH_POET_SERVER Must be specified}",
           "--post-space", "${SMESH_POST_SPACE:-1048576}",
           "--test-mode",
