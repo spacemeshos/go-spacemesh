@@ -16,6 +16,7 @@ on:
       - staging
       - trying
     # Trigger if updating docs
+    # This pattern matches using GitHub syntax: any file in any path ending in '.md'
     paths:
       - '**.md'
 
@@ -30,11 +31,11 @@ jobs:
     - uses: dorny/paths-filter@v2
       id: filter
       with:
-        # this should be auto-detected
-        #base: develop
+        # this pattern matches using picomatch syntax (used by this third party Action), which is slightly
+        # different than the GitHub syntax above: it also matches any file in any path ending in '.md'
         filters: |
           nondoc:
-            - '!**.md'
+            - '!**/*.md'
 
   # short-circuit and pass both stages
   ci-stage1:
