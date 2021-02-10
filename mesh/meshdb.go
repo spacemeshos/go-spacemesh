@@ -353,9 +353,6 @@ func (m *DB) getLayerMutex(index types.LayerID) *layerMutex {
 	return ll
 }
 
-// add an index key that you can seek to
-// add a max index key-value pair that you read and update
-
 func getRewardKey(l types.LayerID, account types.Address) []byte {
 	str := string(getRewardKeyPrefix(account)) + "_" + strconv.FormatUint(l.Uint64(), 10)
 	return []byte(str)
@@ -473,7 +470,6 @@ func (m *DB) writeTransactionRewards(l types.LayerID, accounts []types.Address, 
 
 // GetRewards retrieves account's rewards by address
 func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err error) {
-	//get the max value and determine whether the offset makes sense
 	it := m.transactions.Find(getRewardKeyPrefix(account))
 	for it.Next() {
 		if it.Key() == nil {
