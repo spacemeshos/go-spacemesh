@@ -102,11 +102,6 @@ def add_clients(setup_bootstrap, setup_clients):
 
 def test_bootstrap(init_session, add_elk, add_node_pool, add_curl, setup_bootstrap):
     print("running test_bootstrap")
-    # in order for early logs to arrive a sleep time was added in the harness code to enable fluent bit container
-    # to be created before collecting and shipping logs
-    tts = cnf.SLEEP_TIME_BEFORE_POD_START
-    print(f"sleeping for {tts} in order to let fluent bit enough time to start")
-    time.sleep(tts)
     sleep_print_backwards(10 * timeout_factor, "wait for the bootstrap logs to be available in ElasticSearch")
     bs_id = query_bootstrap_es(testconfig['namespace'], setup_bootstrap.pods[0]['name'])
     ass_err = f"setup_bootstrap.pods[0]['key'] = {setup_bootstrap.pods[0]['key']}, bootstrap returned ID: {bs_id}"
