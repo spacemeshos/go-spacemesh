@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/spacemeshos/go-spacemesh/log"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 func TestSpacemeshApp_TestSyncCmd(t *testing.T) {
