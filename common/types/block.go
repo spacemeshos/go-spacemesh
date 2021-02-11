@@ -107,20 +107,20 @@ func (id NodeID) ShortString() string {
 }
 
 // BytesToNodeID deserializes a byte slice into a NodeID
-func BytesToNodeID(b []byte) NodeID {
+func BytesToNodeID(b []byte) (NodeID, error) {
 	if len(b) < 32 {
 		var emptySlice []byte
 		return NodeID{
 			Key:          "",
 			VRFPublicKey: emptySlice,
-		}
+		}, fmt.Errorf("Invalid input length")
 	}
 	pubKey := b[0:32]
 	vrfKey := b[32:]
 	return NodeID{
 		Key:          util.Bytes2Hex(pubKey),
 		VRFPublicKey: vrfKey,
-	}
+	}, nil
 }
 
 //StringToNodeID deserializes a string into a NodeID

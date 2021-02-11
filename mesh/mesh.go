@@ -211,7 +211,6 @@ func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
 		events.ReportNewLayer(events.NewLayer{
 			Layer:  layer,
 			Status: events.LayerStatusTypeUnknown,
-			//Rewards: list of reward type
 		})
 	}
 	defer msh.lkMutex.Unlock()
@@ -744,16 +743,6 @@ func (msh *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 	return idArr, nil
 }
 
-func checkIfPresent(target types.NodeID, container []types.NodeID) bool {
-	targetStr := target.String()
-	for _, item := range container {
-		if targetStr == item.String() {
-			return true
-		}
-	}
-	return false
-}
-
 func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 	coinbases := make([]types.Address, 0, len(l.Blocks()))
 	coinbasesAndSmeshers := make(map[types.Address]map[string]uint64)
@@ -772,10 +761,8 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 		//coinbasesAndSmeshers[coinbase_id][smesher_id] = number of blocks this pair has created
 		if _, exists := coinbasesAndSmeshers[atx.Coinbase]; !exists {
 			coinbasesAndSmeshers[atx.Coinbase] = make(map[string]uint64)
-			coinbasesAndSmeshers[atx.Coinbase][atx.NodeID.String()]++
-		} else {
-			coinbasesAndSmeshers[atx.Coinbase][atx.NodeID.String()]++
 		}
+		coinbasesAndSmeshers[atx.Coinbase][atx.NodeID.String()]++
 	}
 
 	if len(coinbases) == 0 {

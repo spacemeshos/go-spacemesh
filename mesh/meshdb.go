@@ -479,7 +479,7 @@ func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[type
 			} else if err := batch.Put(getRewardKey(l, account, smesherEntry), b); err != nil {
 				return fmt.Errorf("could not write reward to %v to database: %v", account.Short(), err)
 			} else if err := batch.Put(getSmesherRewardKey(l, smesherEntry, account), getRewardKey(l, account, smesherEntry)); err != nil {
-				return fmt.Errorf("could not write reweard key for smesherID %v to datavase: %v", smesherEntry.ShortString(), err)
+				return fmt.Errorf("could not write reward key for smesherID %v to database: %v", smesherEntry.ShortString(), err)
 			}
 		}
 	}
