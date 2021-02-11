@@ -93,7 +93,7 @@ def test_hare_sanity(init_session, add_elk, add_node_pool, setup_bootstrap_for_h
     round_duration = int(testconfig['client']['args']['hare-round-duration-sec'])
     wakeup_delta = int(testconfig['client']['args']['hare-wakeup-delta'])
     layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
-    layers_count = int(1)
+    layers_count = int(1) 
     print("Number of layers is ", layers_count)
     delay = layer_duration * layers_count + EFK_LOG_PROPAGATION_DELAY + wakeup_delta * (layers_count - 1) + round_duration
     print("Going to sleep for {0}".format(delay))
