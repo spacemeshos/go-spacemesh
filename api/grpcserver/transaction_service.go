@@ -251,9 +251,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 						}
 						res := &pb.TransactionsStateStreamResponse{
 							TransactionState: &pb.TransactionState{
-								Id: &pb.TransactionId{
-									Id: txid.Bytes(),
-								},
+								Id:    inputTxID,
 								State: txstate,
 							},
 						}
