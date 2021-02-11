@@ -135,7 +135,7 @@ jobs:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -146,7 +146,7 @@ jobs:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -157,7 +157,7 @@ jobs:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -168,7 +168,7 @@ jobs:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -179,7 +179,7 @@ jobs:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -190,7 +190,7 @@ jobs:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -201,7 +201,7 @@ jobs:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 80
     steps:
       - name: checkout
