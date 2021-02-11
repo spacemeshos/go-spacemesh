@@ -474,8 +474,8 @@ func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
 }
 
 func TestNewServersConfig(t *testing.T) {
-	port1, err := node.GetUnboundedPort()
-	port2, err := node.GetUnboundedPort()
+	port1, err := node.GetUnboundedPort("tcp", 0)
+	port2, err := node.GetUnboundedPort("tcp", 0)
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
 	grpcService := NewServerWithInterface(port1, "localhost")

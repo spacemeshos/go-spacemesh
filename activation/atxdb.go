@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -12,8 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"sync"
-	"time"
 )
 
 const topAtxKey = "topAtxKey"
@@ -59,6 +60,7 @@ type DB struct {
 	atxHeaderCache    AtxCache
 	meshDb            *mesh.DB
 	LayersPerEpoch    uint16
+	goldenATXID       types.ATXID
 	nipstValidator    nipstValidator
 	pendingActiveSet  map[types.Hash12]*sync.Mutex
 	log               log.Log
@@ -70,13 +72,14 @@ type DB struct {
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
 // their validity
-func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint16, nipstValidator nipstValidator, log log.Log) *DB {
+func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint16, goldenATXID types.ATXID, nipstValidator nipstValidator, log log.Log) *DB {
 	db := &DB{
 		idStore:          idStore,
 		atxs:             dbStore,
 		atxHeaderCache:   NewAtxCache(600),
 		meshDb:           meshDb,
 		LayersPerEpoch:   layersPerEpoch,
+		goldenATXID:      goldenATXID,
 		nipstValidator:   nipstValidator,
 		pendingActiveSet: make(map[types.Hash12]*sync.Mutex),
 		log:              log,
@@ -343,9 +346,15 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	if err != nil {
 		return fmt.Errorf("cannot validate atx sig atx id %v err %v", atx.ShortString(), err)
 	}
+
 	if atx.NodeID.Key != pub.String() {
 		return fmt.Errorf("node ids don't match")
 	}
+
+	if atx.PositioningATX == *types.EmptyATXID {
+		return fmt.Errorf("empty positioning ATX")
+	}
+
 	if atx.PrevATXID != *types.EmptyATXID {
 		err = db.ValidateSignedAtx(*pub, atx)
 		if err != nil { // means there is no such identity
@@ -398,7 +407,7 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		}
 	}
 
-	if atx.PositioningATX != *types.EmptyATXID {
+	if atx.PositioningATX != db.goldenATXID {
 		posAtx, err := db.GetAtxHeader(atx.PositioningATX)
 		if err != nil {
 			return fmt.Errorf("positioning atx not found")
@@ -413,8 +422,8 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		}
 	} else {
 		publicationEpoch := atx.PubLayerID.GetEpoch()
-		if !publicationEpoch.IsGenesis() {
-			return fmt.Errorf("no positioning atx found")
+		if !publicationEpoch.NeedsGoldenPositioningATX() {
+			return fmt.Errorf("golden ATX used for ATX in epoch %d, but is only valid in epoch 1", publicationEpoch)
 		}
 	}
 
@@ -785,7 +794,7 @@ func (db *DB) HandleAtxData(data []byte, syncer service.Fetcher) error {
 
 // FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db
 func (db *DB) FetchAtxReferences(atx *types.ActivationTx, f service.Fetcher) error {
-	if atx.PositioningATX != *types.EmptyATXID {
+	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != db.goldenATXID {
 		db.log.Info("going to fetch pos atx %v of atx %v", atx.PositioningATX.ShortString(), atx.ID().ShortString())
 		err := f.FetchAtx(atx.PositioningATX)
 		if err != nil {
