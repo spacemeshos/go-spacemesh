@@ -9,6 +9,7 @@ from string import ascii_lowercase
 import time
 
 # noinspection PyUnresolvedReferences
+import tests.config as cnf
 from tests.context import ES
 from tests.convenience import sleep_print_backwards
 from tests.queries import query_message, poll_query_message

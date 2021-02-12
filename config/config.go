@@ -82,6 +82,8 @@ type BaseConfig struct {
 
 	CoinbaseAccount string `mapstructure:"coinbase"`
 
+	GoldenATXID string `mapstructure:"golden-atx"`
+
 	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
 
 	SyncRequestTimeout int `mapstructure:"sync-request-timeout"` // ms the timeout for direct request in the sync
@@ -161,6 +163,7 @@ func defaultBaseConfig() BaseConfig {
 		LayerDurationSec:    30,
 		LayersPerEpoch:      3,
 		PoETServer:          "127.0.0.1",
+		GoldenATXID:         "0x5678", // TODO: Change the value
 		Hdist:               5,
 		GenesisActiveSet:    5,
 		BlockCacheSize:      20,
