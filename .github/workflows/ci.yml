@@ -27,7 +27,7 @@ on:
     branches:
       - staging
       - trying
-      - test-github-actions
+      - test-selfhosted
     # Don't trigger tests if only updating docs
     paths-ignore:
       - '**.md'
