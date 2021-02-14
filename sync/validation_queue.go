@@ -215,7 +215,7 @@ func (vq *blockQueue) addDependencies(jobID interface{}, blks []types.BlockID, f
 		bid := id.AsHash32()
 		if vq.inQueue(bid) {
 			vq.reverseDepMap[bid] = append(vq.reverseDepMap[bid], jobID)
-			vq.With().Debug("adding already queued block to pending map",
+			vq.With().Info("adding already queued block to pending map",
 				id,
 				log.String("job_id", fmt.Sprintf("%v", jobID)))
 			dependencies[bid] = struct{}{}
@@ -224,7 +224,7 @@ func (vq *blockQueue) addDependencies(jobID interface{}, blks []types.BlockID, f
 			if _, err := vq.GetBlock(id); err != nil {
 				// add unknown block to queue
 				vq.reverseDepMap[bid] = append(vq.reverseDepMap[bid], jobID)
-				vq.With().Debug("adding unknown block to pending map",
+				vq.With().Info("adding unknown block to pending map",
 					id,
 					log.String("job_id", fmt.Sprintf("%v", jobID)))
 				dependencies[bid] = struct{}{}
@@ -248,13 +248,13 @@ func (vq *blockQueue) addDependencies(jobID interface{}, blks []types.BlockID, f
 	// addToPending needs the mutex so we must release before
 	vq.Unlock()
 	if len(idsToPush) > 0 {
-		vq.With().Debug("adding dependencies to pending queue",
+		vq.With().Info("adding dependencies to pending queue",
 			log.Int("count", len(idsToPush)),
 			log.String("job_id", fmt.Sprintf("%v", jobID)))
 		vq.addToPending(idsToPush)
 	}
 
-	vq.With().Debug("finished adding dependencies",
+	vq.With().Info("finished adding dependencies",
 		log.Int("count", len(dependencies)),
 		log.String("job_id", fmt.Sprintf("%v", jobID)))
 	return true, nil

@@ -117,7 +117,7 @@ func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []b
 			return nil
 		}
 
-		logger.Info("send block response")
+		logger.With().Info("send block response", log.Int("block_size", len(bbytes)))
 		return bbytes
 	}
 }

@@ -576,7 +576,7 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 }
 
 func (s *Syncer) syncSingleLayer(currentSyncLayer types.LayerID) error {
-	s.With().Info("syncing layer", log.FieldNamed("current_sync_layer", currentSyncLayer),
+	s.With().Info("syncing single layer", log.FieldNamed("current_sync_layer", currentSyncLayer),
 		log.FieldNamed("last_ticked_layer", s.GetCurrentLayer()))
 
 	if s.isClosed() {
@@ -703,7 +703,7 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 		return s.LayerBlocks(layerID)
 	}
 
-	s.With().Info("wait for blocks", layerID, log.Int("num_blocks", len(blockIds)))
+	s.With().Info("wait for blocks", layerID, log.Int("num_blocks", len(blockIds)), types.BlockIdsField(blockIds))
 	select {
 	case <-s.exit:
 		return nil, fmt.Errorf("received interupt")

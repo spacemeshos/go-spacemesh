@@ -128,12 +128,12 @@ func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]
 
 			items, err := asItems(msg)
 			if err != nil {
-				infra.Error("fetch failed bad response: %v", err)
+				infra.With().Error("fetch failed items bad response", log.Err(err))
 				return
 			}
 
 			if valid, err := validateItemIds(ids, items); !valid {
-				infra.Error("fetch failed bad response: %v", err)
+				infra.With().Error("fetch failed validating bad response", log.Err(err))
 				return
 			}
 

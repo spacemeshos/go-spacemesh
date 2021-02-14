@@ -4,14 +4,16 @@ package types
 import (
 	"bytes"
 	"fmt"
+	"sort"
+	"strings"
+	"sync/atomic"
+	"time"
+
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"sort"
-	"sync/atomic"
-	"time"
 )
 
 // BlockID is a 20-byte sha256 sum of the serialized block, used to identify it.
@@ -236,6 +238,15 @@ func BlockIDs(blocks []*Block) []BlockID {
 		ids = append(ids, block.ID())
 	}
 	return ids
+}
+
+// BlockIdsField returns a list of loggable fields for a given list of BlockIDs
+func BlockIdsField(ids []BlockID) log.Field {
+	strs := []string{}
+	for _, a := range ids {
+		strs = append(strs, a.String())
+	}
+	return log.String("block_ids", strings.Join(strs, ", "))
 }
 
 // Layer contains a list of blocks and their corresponding LayerID.

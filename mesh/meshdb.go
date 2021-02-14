@@ -87,8 +87,15 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, err
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
 	}
-	ll.AddBlock(GenesisBlock())
-	ll.SaveContextualValidity(GenesisBlock().ID(), true)
+
+	for _, blk := range GenesisLayer().Blocks() {
+		if err := ll.AddBlock(blk); err != nil {
+			log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
+		}
+		if err := ll.SaveContextualValidity(blk.ID(), true); err != nil {
+			log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
+		}
+	}
 	return ll, nil
 }
 
@@ -118,8 +125,10 @@ func NewMemMeshDB(log log.Log) *DB {
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
 	}
-	ll.AddBlock(GenesisBlock())
-	ll.SaveContextualValidity(GenesisBlock().ID(), true)
+	for _, blk := range GenesisLayer().Blocks() {
+		ll.AddBlock(blk)
+		ll.SaveContextualValidity(blk.ID(), true)
+	}
 	return ll
 }
 
