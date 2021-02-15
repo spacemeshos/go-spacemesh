@@ -7,8 +7,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"time"
 	"path/filepath"
+	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/spf13/cobra"
