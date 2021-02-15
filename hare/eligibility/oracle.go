@@ -197,7 +197,7 @@ func (o *Oracle) minerWeight(layer types.LayerID, id types.NodeID) (uint64, erro
 
 	w, ok := actives[id.Key]
 	if !ok {
-		o.With().Error("miner is not active in specified layer",
+		o.With().Debug("miner is not active in specified layer",
 			log.Int("active_set_size", len(actives)),
 			log.String("actives", fmt.Sprintf("%v", actives)),
 			layer, log.String("id.Key", id.Key),
@@ -289,7 +289,7 @@ func (o *Oracle) Validate(layer types.LayerID, round int32, committeeSize int, i
 	if !fixed.BinCDF(n, p, x.Sub(fixed.One)).GreaterThan(vrfFrac) && vrfFrac.LessThan(fixed.BinCDF(n, p, x)) {
 		return true, nil
 	}
-	o.With().Info("eligibility: node did not pass VRF eligibility threshold",
+	o.With().Warning("eligibility: node did not pass VRF eligibility threshold",
 		layer,
 		log.Int32("round", round),
 		log.Int("committee_size", committeeSize),
@@ -350,7 +350,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]uint64, error) {
 	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	safeEp := sl.GetEpoch()
 
-	o.Info("safe layer %v, epoch %v", sl, safeEp)
+	o.Debug("safe layer %v, epoch %v", sl, safeEp)
 	// check genesis
 	// genesis is for 3 epochs with hare since it can only count active identities found in blocks
 	if safeEp < 3 {

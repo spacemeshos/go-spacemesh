@@ -151,12 +151,12 @@ func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	r.Equal(10, mCache.numAdd)
 }
 
-func defaultOracle(t *testing.T) *Oracle {
+func defaultOracle(t testing.TB) *Oracle {
 	layersPerEpoch := uint16(defLayersPerEpoch)
 	return mockOracle(t, layersPerEpoch)
 }
 
-func mockOracle(t *testing.T, layersPerEpoch uint16) *Oracle {
+func mockOracle(t testing.TB, layersPerEpoch uint16) *Oracle {
 	types.SetLayersPerEpoch(int32(layersPerEpoch))
 	o := New(&mockValueProvider{1, nil}, nil, buildVerifier(true, nil), nil,
 		layersPerEpoch, genWeight, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
@@ -280,6 +280,35 @@ func TestOracle_CalcEligibility(t *testing.T) {
 	r.Less(diff, committeeSize/10) // up to 10% difference
 	// While it's theoretically possible to get a result higher than 10%, I've run this many times and haven't seen
 	// anything higher than 6% and it's usually under 3%.
+}
+
+func BenchmarkOracle_CalcEligibility(b *testing.B) {
+	r := require.New(b)
+
+	o := defaultOracle(b)
+	numOfMiners := 2000
+	committeeSize := 800
+	o.getActiveSet = (&mockActiveSetProvider{numOfMiners}).ActiveSet
+
+	var eligibilityCount uint16
+	sig := make([]byte, 64)
+
+	var nodeIDs []types.NodeID
+	for pubkey := range createMapWithSize(b.N) {
+		nodeIDs = append(nodeIDs, types.NodeID{Key: pubkey})
+	}
+	b.ResetTimer()
+	for _, nodeID := range nodeIDs {
+		res, err := o.CalcEligibility(types.LayerID(50), 1, committeeSize, nodeID, sig)
+
+		if err == nil {
+			valid, err := o.Validate(types.LayerID(50), 1, committeeSize, nodeID, sig, res)
+			r.NoError(err)
+			r.True(valid)
+		}
+
+		eligibilityCount += res
+	}
 }
 
 func Test_safeLayer(t *testing.T) {

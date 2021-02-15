@@ -446,16 +446,25 @@ func (proc *consensusProcess) sendMessage(msg *Msg) bool {
 	}
 
 	proc.With().Info("message sent",
-		log.String("current_set", proc.s.String()),
+		types.LayerID(proc.instanceID),
+		log.Int32("msg_k", msg.InnerMsg.K),
 		log.String("msg_type", msg.InnerMsg.Type.String()),
 		log.Int("eligibility_count", int(msg.InnerMsg.EligibilityCount)),
-		types.LayerID(proc.instanceID))
+		log.String("current_set", proc.s.String()),
+	)
 	return true
 }
 
 // logic of the end of a round by the round type
 func (proc *consensusProcess) onRoundEnd() {
-	proc.With().Debug("End of round", log.Int32("K", proc.k), types.LayerID(proc.instanceID))
+	fields := []log.LoggableField{log.Int32("K", proc.k), types.LayerID(proc.instanceID)}
+	if proc.k%4 == 0 {
+		fields = append(fields, log.Bool("notify_round", true),
+			log.Int("expected_notifications", proc.cfg.F+1),
+			log.Int("received_notifications", proc.notifyTracker.NotificationsCount(proc.s)),
+		)
+	}
+	proc.With().Info("End of round", fields...)
 
 	// reset trackers
 	switch proc.currentRound() {
@@ -707,7 +716,7 @@ func (proc *consensusProcess) processNotifyMsg(msg *Msg) {
 	// enough notifications, should terminate
 	proc.s = s // update to the agreed set
 	proc.Event().Info("Consensus process terminated", log.String("current_set", proc.s.String()),
-		types.LayerID(proc.instanceID), log.Int("set_size", proc.s.Size()))
+		types.LayerID(proc.instanceID), log.Int("set_size", proc.s.Size()), log.Int32("K", proc.k))
 	proc.report(completed)
 	close(proc.CloseChannel())
 	proc.terminating = true
