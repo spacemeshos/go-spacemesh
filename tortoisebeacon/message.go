@@ -49,20 +49,23 @@ func (p proposal) Hash() types.Hash32 {
 type VotingMessage interface {
 	Message
 	Round() int
-	HashList() []types.Hash32
+	VotesFor() []types.Hash32
+	VotesAgainst() []types.Hash32
 }
 
 type vote struct {
-	epoch         types.EpochID
-	round         int
-	atxListHashes []types.Hash32
+	epoch                types.EpochID
+	round                int
+	atxListHashesFor     []types.Hash32
+	atxListHashesAgainst []types.Hash32
 }
 
-func NewVotingMessage(epoch types.EpochID, round int, atxListHashes []types.Hash32) VotingMessage {
+func NewVotingMessage(epoch types.EpochID, round int, atxListHashesFor, atxListHashesAgainst []types.Hash32) VotingMessage {
 	return &vote{
-		epoch:         epoch,
-		round:         round,
-		atxListHashes: atxListHashes,
+		epoch:                epoch,
+		round:                round,
+		atxListHashesFor:     atxListHashesFor,
+		atxListHashesAgainst: atxListHashesAgainst,
 	}
 }
 
@@ -74,6 +77,9 @@ func (v vote) Round() int {
 	return v.round
 }
 
-func (v vote) HashList() []types.Hash32 {
-	return v.atxListHashes
+func (v vote) VotesFor() []types.Hash32 {
+	return v.atxListHashesFor
+}
+func (v vote) VotesAgainst() []types.Hash32 {
+	return v.atxListHashesAgainst
 }

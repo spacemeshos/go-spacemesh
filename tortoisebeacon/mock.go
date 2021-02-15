@@ -1,6 +1,8 @@
 package tortoisebeacon
 
 import (
+	"math/rand"
+
 	"github.com/spacemeshos/sha256-simd"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -43,6 +45,12 @@ func (mockBeaconCalculator) CalculateBeacon(m map[EpochRoundPair][]types.Hash32)
 	return res
 }
 
-func (mockBeaconCalculator) CountVotes(VotingMessage) error {
-	return nil
+type mockWeakCoin struct{}
+
+func (mockWeakCoin) WeakCoin(types.EpochID, int) bool {
+	if rand.Intn(2) == 0 {
+		return false
+	}
+
+	return true
 }

@@ -542,6 +542,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg)) // TOOO(nkryuchkov): use
 	_ = tBeaconDB
 
+	// TODO(nkryuchkov): use tortoise beacon
 	beaconProvider := &blocks.EpochBeaconProvider{}
 
 	var msh *mesh.Mesh

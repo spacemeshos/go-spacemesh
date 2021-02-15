@@ -20,6 +20,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	}
 	ms := mockMessageSender{}
 	mbc := mockBeaconCalculator{}
+	mwc := mockWeakCoin{}
 	atxPool := activation.NewAtxMemPool()
 	logger := log.NewDefault("TortoiseBeacon")
 	genesisTime := time.Now().Add(time.Second * 10)
@@ -29,7 +30,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	clock.StartNotifying()
 	ticker := clock.Subscribe()
 
-	tb := New(conf, mr, ms, mbc, atxPool, nil, ticker, logger)
+	tb := New(conf, mr, ms, mbc, atxPool, nil, mwc, ticker, logger)
 	requirer.NotNil(tb)
 
 	err := tb.Start()
