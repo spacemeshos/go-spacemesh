@@ -538,6 +538,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.HARE.WakeupDelta = 5
 	smApp.Config.HARE.ExpectedLeaders = 5
 	smApp.Config.CoinbaseAccount = "0x123"
+	smApp.Config.GoldenATXID = "0x5678"
 	smApp.Config.LayerAvgSize = 5
 	smApp.Config.LayersPerEpoch = 3
 	smApp.Config.TxsPerBlock = 100

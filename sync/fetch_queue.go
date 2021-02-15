@@ -3,11 +3,12 @@ package sync
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"runtime"
 	"runtime/debug"
 	"sync"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type fetchPoetProofFunc func(poetProofRef []byte) error
@@ -257,7 +258,7 @@ func (atx atxQueue) HandleAtxs(atxids []types.ATXID) ([]*types.ActivationTx, err
 
 	atxres, err := atx.handle(atxItems)
 	if err != nil {
-		atx.Log.Error("cannot fetch all atxs for block %v", err)
+		atx.Log.Error("cannot fetch all atxs for block: %v", err)
 		return nil, err
 	}
 

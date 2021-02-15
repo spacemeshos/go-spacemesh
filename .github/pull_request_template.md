@@ -15,3 +15,10 @@ Closes #
 - [ ] Explain motivation or link existing issue(s)
 - [ ] Test changes and document test plan
 - [ ] Update documentation as needed
+
+## DevOps Notes
+<!-- This section is for DevOps to be aware of changes that might impact releases -->
+- [ ] Does this code require configuration changes?
+- [ ] Does this code affect public APIs?
+- [ ] Does this code assume a new version of external services (PoET, elasticsearch, etc.)
+- [ ] Does this code make changes to log messages that our monitoring infrastructure may rely on?

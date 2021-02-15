@@ -4,12 +4,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/sha256-simd"
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/spacemeshos/sha256-simd"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type activationDB interface {
@@ -65,14 +67,15 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 	if !bo.isSynced() {
 		return types.ATXID{}, nil, nil, fmt.Errorf("cannot calc eligibility, not synced yet")
 	}
+
 	epochNumber := layerID.GetEpoch()
 	bo.log.Info("asked for eligibility for epoch %d (cached: %d)", epochNumber, bo.proofsEpoch)
 	if epochNumber.IsGenesis() {
-		bo.log.Warning("asked for eligibility for epoch 0, cannot create blocks here")
+		bo.log.Info("asked for eligibility for epoch 0, cannot create blocks here")
 		return *types.EmptyATXID, nil, nil, nil
 	}
 
-	if epochNumber != bo.proofsEpoch {
+	if bo.proofsEpoch != epochNumber {
 		err := bo.calcEligibilityProofs(epochNumber)
 		if err != nil {
 			bo.log.Error("failed to calculate eligibility proofs for epoch %v : %v", epochNumber, err)
@@ -84,6 +87,7 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 	proofs := bo.eligibilityProofs[layerID]
 	activeSet := bo.epochAtxs
 	bo.eligibilityMutex.RUnlock()
+
 	bo.log.With().Info("eligible for blocks in layer",
 		bo.nodeID,
 		layerID,
