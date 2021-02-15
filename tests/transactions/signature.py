@@ -31,7 +31,7 @@ class Address:
 
     @staticmethod
     def from_list(lst: List[int]):
-        return Address(bytes(lst))
+        return Address(bytes(lst)[-ADDRESS_LENGTH:])
 
     @staticmethod
     def form_pk(pk: PublicKey):
@@ -39,7 +39,7 @@ class Address:
 
     @staticmethod
     def from_hex(hex_str: str):
-        return Address(bytes.fromhex(hex_str))
+        return Address(bytes.fromhex(hex_str)[-ADDRESS_LENGTH:])
 
 
 @dataclass(frozen=True)
