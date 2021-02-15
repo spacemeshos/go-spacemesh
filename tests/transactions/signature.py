@@ -35,7 +35,7 @@ class Address:
 
     @staticmethod
     def form_pk(pk: PublicKey):
-        return Address(pk.bytes[:ADDRESS_LENGTH])
+        return Address(pk.bytes[-ADDRESS_LENGTH:])
 
     @staticmethod
     def from_hex(hex_str: str):
@@ -69,7 +69,7 @@ class Signer:
 
     @property
     def address(self) -> Address:
-        return Address(self.pubk[:ADDRESS_LENGTH])
+        return Address.form_pk(self.public_key)
 
     @property
     def public_key(self) -> PublicKey:

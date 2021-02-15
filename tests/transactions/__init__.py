@@ -1,6 +1,6 @@
 import xdrlib
 from .transaction import \
-    IncompleteTransaction, GeneralTransaction, Transaction, TransactionBody, TransactionMessage,\
+    IncompleteTransaction, GeneralTransaction, Transaction, TransactionBody, TransactionMessage, TxID, \
     tx_id_form_signed_transaction, \
     TX_SIGNING_ED, TX_SIGNING_ED_PLUS, \
     TX_SIMPLE_COIN, TX_CALL_APP, TX_SPAWN_APP, TX_OLD_COIN
@@ -63,7 +63,7 @@ def decode(signed_transaction: bytes) -> Transaction:
 
 
 __ALL__ = [
-    Address, Signer, PublicKey,
+    Address, Signer, PublicKey, TxID,
     TX_SIGNING_ED, TX_SIGNING_ED_PLUS,
     TX_SIMPLE_COIN,
     SIMPLE_COIN_ED_TX, SIMPLE_COIN_ED_PLUS_TX, SimpleCoinTx,
