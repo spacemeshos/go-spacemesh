@@ -234,21 +234,26 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 					blockTXIDSet[txid] = struct{}{}
 				}
 
+				var txstate pb.TransactionState_TransactionState
+				switch layer.Status {
+				case events.LayerStatusTypeApproved:
+					txstate = pb.TransactionState_TRANSACTION_STATE_MESH
+				case events.LayerStatusTypeConfirmed:
+					txstate = pb.TransactionState_TRANSACTION_STATE_PROCESSED
+				default:
+					txstate = pb.TransactionState_TRANSACTION_STATE_UNSPECIFIED
+				}
+
 				for _, inputTxID := range in.TransactionId {
+					// since the txid coming in from the API does not have a fixed length, we need to convert it from a slice
+					// to a fixed size array before we can convert it into a types.TransactionID object. We don't need to worry
+					// about error handling, since copy intelligently copies only how much it can. If the resultant transactionID
+					// is invalid, an error will be thrown below
 					var arrayID [32]byte
 					copy(arrayID[:], inputTxID.Id[:])
 					txid := types.TransactionID(arrayID)
 					// if there is an ID corresponding to inputTxID in the block
 					if _, exists := blockTXIDSet[txid]; exists {
-						var txstate pb.TransactionState_TransactionState
-						switch layer.Status {
-						case events.LayerStatusTypeApproved:
-							txstate = pb.TransactionState_TRANSACTION_STATE_MESH
-						case events.LayerStatusTypeConfirmed:
-							txstate = pb.TransactionState_TRANSACTION_STATE_PROCESSED
-						default:
-							txstate = pb.TransactionState_TRANSACTION_STATE_UNSPECIFIED
-						}
 						res := &pb.TransactionsStateStreamResponse{
 							TransactionState: &pb.TransactionState{
 								Id:    inputTxID,
