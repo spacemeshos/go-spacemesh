@@ -97,7 +97,7 @@ def check_for_restarted_pods(namespace, specific_deployment_name=''):
     return restarted_pods
 
 
-def search_phrase_in_pod_log(pod_name, name_space, container_name, phrase, time_out=60, group=None, retry=3):
+def search_phrase_in_pod_log(pod_name, name_space, container_name, phrase, timeout=60, group=None, retry=3):
     sleep_interval = 0.3
     total_sleep = 0
     _retry = retry
@@ -119,7 +119,7 @@ def search_phrase_in_pod_log(pod_name, name_space, container_name, phrase, time_
             return match.group(group)
         elif match:
             return match
-        elif not match and total_sleep < time_out:
+        elif not match and total_sleep < timeout:
             time.sleep(1)
             _retry = retry
         else:
