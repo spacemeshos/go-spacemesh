@@ -56,3 +56,38 @@ func TestStringToNodeID(t *testing.T) {
 		t.Errorf("Node ID deserialization VRF Key does not match")
 	}
 }
+
+func TestStringToNodeIDTooShort(t *testing.T) {
+	pubkey := genByte32()
+	_, err := StringToNodeID(string(pubkey[:10]))
+	if err == nil {
+		t.Errorf("Error should be thrown but is not")
+	}
+}
+
+func TestStringToNodeIDTooLong(t *testing.T) {
+	var x [129]byte
+	rand.Read(x[:])
+	_, err := StringToNodeID(string(x[:]))
+	if err == nil {
+		t.Errorf("Error should be thrown but is not")
+	}
+}
+
+func TestBytesToNodeIDTooShort(t *testing.T) {
+	var x [31]byte
+	rand.Read(x[:])
+	_, err := BytesToNodeID(x[:])
+	if err == nil {
+		t.Errorf("Error should be thrown but is not")
+	}
+}
+
+func TestBytesToNodeIDTooLong(t *testing.T) {
+	var x [65]byte
+	rand.Read(x[:])
+	_, err := BytesToNodeID(x[:])
+	if err == nil {
+		t.Errorf("Error should be thrown but is not")
+	}
+}

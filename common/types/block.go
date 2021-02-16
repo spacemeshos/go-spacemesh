@@ -107,36 +107,34 @@ func (id NodeID) ShortString() string {
 }
 
 // BytesToNodeID deserializes a byte slice into a NodeID
-func BytesToNodeID(b []byte) (NodeID, error) {
+func BytesToNodeID(b []byte) (*NodeID, error) {
 	if len(b) < 32 {
-		var emptySlice []byte
-		return NodeID{
-			Key:          "",
-			VRFPublicKey: emptySlice,
-		}, fmt.Errorf("Invalid input length")
+		return nil, fmt.Errorf("Invalid input length, input too short")
+	}
+	if len(b) > 64 {
+		return nil, fmt.Errorf("Invalid input length, input too long")
 	}
 	pubKey := b[0:32]
 	vrfKey := b[32:]
-	return NodeID{
+	return &NodeID{
 		Key:          util.Bytes2Hex(pubKey),
 		VRFPublicKey: vrfKey,
 	}, nil
 }
 
 //StringToNodeID deserializes a string into a NodeID
-func StringToNodeID(s string) (NodeID, error) {
+func StringToNodeID(s string) (*NodeID, error) {
 	strLen := len(s)
 	if strLen < 64 {
-		var emptySlice []byte
-		return NodeID{
-			Key:          "",
-			VRFPublicKey: emptySlice,
-		}, fmt.Errorf("Invalid input length")
+		return nil, fmt.Errorf("Invalid input length, input too short")
+	}
+	if strLen > 128 {
+		return nil, fmt.Errorf("Invalid input length, input too long")
 	}
 	//portion of the string corresponding to the Edwards public key
 	pubKey := s[:64]
 	vrfKey := s[64:]
-	return NodeID{
+	return &NodeID{
 		Key:          pubKey,
 		VRFPublicKey: []byte(vrfKey),
 	}, nil

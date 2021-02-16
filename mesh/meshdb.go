@@ -472,13 +472,16 @@ func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[type
 	batch := m.transactions.NewBatch()
 	for account, smesherAccountEntry := range accountBlockCount {
 		for smesherString, cnt := range smesherAccountEntry {
-			smesherEntry, _ := types.StringToNodeID(smesherString)
-			reward := dbReward{TotalReward: cnt * totalReward.Uint64(), LayerRewardEstimate: cnt * layerReward.Uint64(), SmesherID: smesherEntry, Coinbase: account}
+			smesherEntry, err := types.StringToNodeID(smesherString)
+			if err != nil {
+				return fmt.Errorf("could not convert String to NodeID for %v: %v", smesherString, err)
+			}
+			reward := dbReward{TotalReward: cnt * totalReward.Uint64(), LayerRewardEstimate: cnt * layerReward.Uint64(), SmesherID: *smesherEntry, Coinbase: account}
 			if b, err := types.InterfaceToBytes(&reward); err != nil {
 				return fmt.Errorf("could not marshal reward for %v: %v", account.Short(), err)
-			} else if err := batch.Put(getRewardKey(l, account, smesherEntry), b); err != nil {
+			} else if err := batch.Put(getRewardKey(l, account, *smesherEntry), b); err != nil {
 				return fmt.Errorf("could not write reward to %v to database: %v", account.Short(), err)
-			} else if err := batch.Put(getSmesherRewardKey(l, smesherEntry, account), getRewardKey(l, account, smesherEntry)); err != nil {
+			} else if err := batch.Put(getSmesherRewardKey(l, *smesherEntry, account), getRewardKey(l, account, *smesherEntry)); err != nil {
 				return fmt.Errorf("could not write reward key for smesherID %v to database: %v", smesherEntry.ShortString(), err)
 			}
 		}
