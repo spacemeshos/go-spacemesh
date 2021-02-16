@@ -121,6 +121,7 @@ def search_phrase_in_pod_log(pod_name, name_space, container_name, phrase, timeo
             return match
         elif not match and total_sleep < timeout:
             time.sleep(1)
+            total_sleep += 1
             _retry = retry
         else:
             return None
