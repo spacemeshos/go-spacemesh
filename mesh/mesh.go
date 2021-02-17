@@ -592,6 +592,9 @@ func (msh *Mesh) GetProcessedLayer(i types.LayerID) (*types.Layer, error) {
 // AddBlock adds a block to the database ignoring the block txs/atxs
 // ***USED ONLY FOR TESTS***
 func (msh *Mesh) AddBlock(blk *types.Block) error {
+	if blk.ID().String() == "132894add1" {
+		msh.Info("the wrong genesis block was added now!")
+	}
 	msh.Debug("add block %d", blk.ID())
 	if err := msh.DB.AddBlock(blk); err != nil {
 		msh.Warning("failed to add block %v  %v", blk.ID(), err)
