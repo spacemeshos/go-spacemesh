@@ -89,6 +89,7 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, err
 	}
 
 	for _, blk := range GenesisLayer().Blocks() {
+		ll.Log.With().Info("Adding genesis block ", blk.ID(), blk.LayerIndex)
 		if err := ll.AddBlock(blk); err != nil {
 			log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
 		}
