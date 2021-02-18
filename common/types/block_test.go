@@ -1,13 +1,13 @@
 package types
 
 import (
-	"bytes"
 	"testing"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/stretchr/testify/require"
 )
 
 func init() {
@@ -22,7 +22,6 @@ func genByte32() [32]byte {
 
 var txid1 = TransactionID(genByte32())
 var txid2 = TransactionID(genByte32())
-var txid3 = TransactionID(genByte32())
 
 var one = CalcHash32([]byte("1"))
 var two = CalcHash32([]byte("2"))
@@ -48,46 +47,49 @@ func TestStringToNodeID(t *testing.T) {
 		VRFPublicKey: []byte("22222"),
 	}
 	nodeIDStr := nodeID1.String()
-	reversed, _ := StringToNodeID(nodeIDStr)
-	if nodeID1.Key != reversed.Key {
-		t.Errorf("Node ID deserialization Key does not match")
-	}
-	if !bytes.Equal(nodeID1.VRFPublicKey, nodeID1.VRFPublicKey) {
-		t.Errorf("Node ID deserialization VRF Key does not match")
-	}
-}
+	reversed, err := StringToNodeID(nodeIDStr)
 
-func TestStringToNodeIDTooShort(t *testing.T) {
-	pubkey := genByte32()
-	_, err := StringToNodeID(string(pubkey[:10]))
-	if err == nil {
-		t.Errorf("Error should be thrown but is not")
-	}
-}
+	r := require.New(t)
+	r.NoError(err, "Error converting string to NodeID")
+	r.Equal(nodeID1.Key, reversed.Key, "Node ID deserialization Key does not match")
+	r.Equal(nodeID1.VRFPublicKey, reversed.VRFPublicKey, "Node ID deserialization VRF Key does not match")
 
-func TestStringToNodeIDTooLong(t *testing.T) {
+	// Test too short
+	_, err = StringToNodeID(string(pubkey[:10]))
+	r.Error(err, "Expected error converting too-short string to NodeID")
+
+	// Test too long
 	var x [129]byte
 	rand.Read(x[:])
-	_, err := StringToNodeID(string(x[:]))
-	if err == nil {
-		t.Errorf("Error should be thrown but is not")
-	}
+	_, err = StringToNodeID(string(x[:]))
+	r.Error(err, "Expected error converting too-long string to NodeID")
 }
 
-func TestBytesToNodeIDTooShort(t *testing.T) {
+func TestBytesToNodeID(t *testing.T) {
+	pubkey := genByte32()
+	nodeID1 := NodeID{
+		Key:          util.Bytes2Hex(pubkey[:]),
+		VRFPublicKey: []byte("22222"),
+	}
+
+	// Test correct length
+	bytes := nodeID1.ToBytes()
+	reversed, err := BytesToNodeID(bytes)
+
+	r := require.New(t)
+	r.NoError(err, "Error converting bytes to NodeID")
+	r.Equal(nodeID1.Key, reversed.Key, "NodeID Key does not match")
+	r.Equal(nodeID1.VRFPublicKey, reversed.VRFPublicKey, "NodeID VRF Key does not match")
+
+	// Test too short
 	var x [31]byte
 	rand.Read(x[:])
-	_, err := BytesToNodeID(x[:])
-	if err == nil {
-		t.Errorf("Error should be thrown but is not")
-	}
-}
+	_, err = BytesToNodeID(x[:])
+	r.Error(err, "Expected error converting too-short byte array to NodeID")
 
-func TestBytesToNodeIDTooLong(t *testing.T) {
-	var x [65]byte
-	rand.Read(x[:])
-	_, err := BytesToNodeID(x[:])
-	if err == nil {
-		t.Errorf("Error should be thrown but is not")
-	}
+	// Test too long
+	var y [65]byte
+	rand.Read(y[:])
+	_, err = BytesToNodeID(y[:])
+	r.Error(err, "Expected error converting too-long byte array to NodeID")
 }
