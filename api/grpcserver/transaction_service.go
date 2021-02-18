@@ -245,10 +245,11 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 				}
 
 				for _, inputTxID := range in.TransactionId {
-					// since the txid coming in from the API does not have a fixed length, we need to convert it from a slice
-					// to a fixed size array before we can convert it into a types.TransactionID object. We don't need to worry
-					// about error handling, since copy intelligently copies only how much it can. If the resultant transactionID
-					// is invalid, an error will be thrown below
+					// Since the txid coming in from the API does not have a fixed length (see
+					// https://github.com/spacemeshos/api/issues/130), we need to convert it from a slice to a fixed
+					// size array before we can convert it into a TransactionID object. We don't need to worry about
+					// error handling, since copy intelligently copies only what it can. If the resulting TransactionID
+					// is invalid, an error will be thrown below.
 					var arrayID [32]byte
 					copy(arrayID[:], inputTxID.Id[:])
 					txid := types.TransactionID(arrayID)
