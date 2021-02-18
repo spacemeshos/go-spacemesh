@@ -1,6 +1,7 @@
 package node
 
 import (
+	"io/ioutil"
 	"strconv"
 	"sync"
 	"time"
@@ -290,6 +291,13 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	}
 	collect.Start(false)
 	ActivateGrpcServer(apps[0])
+
+	go func() {
+		_, _ = ioutil.ReadAll(poetHarness.Stdout)
+	}()
+	go func() {
+		_, _ = ioutil.ReadAll(poetHarness.Stderr)
+	}()
 
 	if err := poetHarness.Start([]string{"127.0.0.1:9092"}); err != nil {
 		log.Panic("failed to start poet server: %v", err)
