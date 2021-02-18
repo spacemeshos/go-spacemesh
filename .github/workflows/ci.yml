@@ -216,10 +216,16 @@ jobs:
     if: always() && github.event_name == 'push' && needs.ci-stage1.result == 'success'
     needs:
       - ci-stage1
+      - systemtest-latenodes
+      - systemtest-latenodes-1
+      - systemtest-latenodes-2
+      - systemtest-latenodes-3
+      - systemtest-latenodes-4
+      - systemtest-latenodes-5
       - systemtest-latenodes-6
     runs-on: ubuntu-latest
     env:
-      status: ${{ needs.systemtest-latenodes-2.result == 'success' && needs.systemtest-latenodes-4.result == 'success' && needs.systemtest-latenodes-6.result == 'success' && needs.systemtest-latenodes.result == 'success' && 'success' || 'failure' }}
+      status: ${{ needs.systemtest-latenodes-5.result == 'success' && needs.systemtest-latenodes-3.result == 'success' && needs.systemtest-latenodes-1.result == 'success' && needs.systemtest-latenodes-2.result == 'success' && needs.systemtest-latenodes-4.result == 'success' && needs.systemtest-latenodes-6.result == 'success' && needs.systemtest-latenodes.result == 'success' && 'success' || 'failure' }}
     steps:
       # print a single, clean status update to slack
       - uses: act10ns/slack@v1
