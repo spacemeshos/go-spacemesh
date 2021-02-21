@@ -142,7 +142,7 @@ jobs:
         uses: actions/checkout@v2
       - name: late nodes system test
         run: make dockertest-late-nodes-elk
-  systemtest-latenodes-1:
+  systemtest-blocks-add-node:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
@@ -151,9 +151,9 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v2
-      - name: late nodes system test
-        run: make dockertest-late-nodes-elk
-  systemtest-latenodes-2:
+      - name: blocks add node test
+        run: make dockertest-blocks-add-node-elk
+  systemtest-blocks-remove-node:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
@@ -162,9 +162,9 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v2
-      - name: late nodes system test
-        run: make dockertest-late-nodes-elk
-  systemtest-latenodes-3:
+      - name: remove node test
+        run: make dockertest-blocks-remove-node-elk
+  systemtest-mining:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
@@ -173,9 +173,9 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v2
-      - name: late nodes system test
-        run: make dockertest-late-nodes-elk
-  systemtest-latenodes-4:
+      - name: mining system test
+        run: make dockertest-mining-elk
+  systemtest-p2p:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
@@ -184,9 +184,9 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v2
-      - name: late nodes system test
-        run: make dockertest-late-nodes-elk
-  systemtest-latenodes-5:
+      - name: p2p system test
+        run: make dockertest-p2p-elk
+  systemtest-hare:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
@@ -206,8 +206,8 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v2
-      - name: late nodes system test
-        run: make dockertest-late-nodes-elk
+      - name: hare system test
+        run: make dockertest-sync-elk
 
 
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
@@ -217,15 +217,15 @@ jobs:
     needs:
       - ci-stage1
       - systemtest-latenodes
-      - systemtest-latenodes-1
-      - systemtest-latenodes-2
-      - systemtest-latenodes-3
-      - systemtest-latenodes-4
-      - systemtest-latenodes-5
-      - systemtest-latenodes-6
+      - systemtest-blocks-add-node
+      - systemtest-blocks-remove-node
+      - systemtest-mining
+      - systemtest-p2p
+      - systemtest-hare
+      - systemtest-sync
     runs-on: ubuntu-latest
     env:
-      status: ${{ needs.systemtest-latenodes-5.result == 'success' && needs.systemtest-latenodes-3.result == 'success' && needs.systemtest-latenodes-1.result == 'success' && needs.systemtest-latenodes-2.result == 'success' && needs.systemtest-latenodes-4.result == 'success' && needs.systemtest-latenodes-6.result == 'success' && needs.systemtest-latenodes.result == 'success' && 'success' || 'failure' }}
+      status: ${{ needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-blocks-remove-node.result == 'success' && needs.systemtest-mining.result == 'success' && needs.systemtest-p2p.result == 'success' && needs.systemtest-hare.result == 'success' && needs.systemtest-sync.result == 'success' && 'success' || 'failure' }}
     steps:
       # print a single, clean status update to slack
       - uses: act10ns/slack@v1
