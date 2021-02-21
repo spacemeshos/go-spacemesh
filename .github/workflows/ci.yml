@@ -195,9 +195,9 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v2
-      - name: late nodes system test
-        run: make dockertest-late-nodes-elk
-  systemtest-latenodes-6:
+      - name: hare system test
+        run: make dockertest-hare-elk
+  systemtest-sync:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
