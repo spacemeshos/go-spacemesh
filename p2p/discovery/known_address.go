@@ -1,9 +1,10 @@
 package discovery
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"math"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
 // KnownAddress tracks information about a known network address that is used
@@ -15,6 +16,7 @@ type KnownAddress struct {
 	lastSeen    time.Time
 	lastattempt time.Time
 	lastsuccess time.Time
+	lastping    time.Time //last successful ping response
 	tried       bool
 	refs        int // reference count of new buckets
 }
@@ -27,6 +29,17 @@ func (ka *KnownAddress) NodeInfo() *node.Info {
 // LastAttempt returns the last time the known address was attempted.
 func (ka *KnownAddress) LastAttempt() time.Time {
 	return ka.lastattempt
+}
+
+// NeedsPing returns whether we need to ping this node again, or whether it has
+// been successfully pinged in the last pinginterval hours
+func (ka *KnownAddress) NeedsPing() bool {
+	return ka.lastping.Before(time.Now().Add(-1 * pingInterval * time.Hour))
+}
+
+// UpdatePing updates the last pingtime of a known address
+func (ka *KnownAddress) UpdatePing() {
+	ka.lastping = time.Now()
 }
 
 // chance returns the selection probability for a known address.  The priority

@@ -50,6 +50,7 @@ type addressBook interface {
 
 	NeedNewAddresses() bool
 	Lookup(key p2pcrypto.PublicKey) (*node.Info, error)
+	LookupKnownAddress(key p2pcrypto.PublicKey) (*KnownAddress, error)
 	AddressCache() []*node.Info
 	NumAddresses() int
 	GetAddress() *KnownAddress

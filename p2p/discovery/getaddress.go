@@ -2,12 +2,13 @@ package discovery
 
 import (
 	"errors"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"time"
 )
 
 // todo : calculate real udp max message size
@@ -18,8 +19,28 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 		plogger := p.logger.WithFields(log.String("type", "getaddresses"), log.String("from", msg.Sender().String()))
 		plogger.Debug("got request")
 
-		// TODO: if we don't know who is that peer (a.k.a first time we hear from this address)
-		// 		 we must ensure that he's indeed listening on that address = check last pong
+		// verifyPinger in the ping handler adds this peer to the address book if they have already sent a ping to
+		// this node. Therefore, they should be in the address book.
+
+		// lookup the address in our local table
+		ka, err := p.table.LookupKnownAddress(msg.Sender())
+		if err != nil {
+			//error in table lookup
+			return nil
+		}
+
+		if ka.NeedsPing() {
+			peer := ka.na.PublicKey()
+			plogger.Debug("Message sender (GetAddress) known byt needs fresh ping, performing ping procedure: %v", msg.Sender())
+			if err := p.Ping(msg.Sender()); err != nil {
+				plogger.Warning("Peer failed to respond to ping, dropping getaddresses request and removing from addrbook: %v", peer.String())
+				//remove the peer from the table, since it is unverified
+				p.table.RemoveAddress(peer)
+				return nil
+			}
+		}
+
+		p.logger.Debug("Passed ping check, recently pinged (GetAddress) Peer: %v", msg.Sender())
 
 		results := p.table.AddressCache()
 		// remove the sender from the list

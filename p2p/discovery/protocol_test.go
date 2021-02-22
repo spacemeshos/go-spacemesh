@@ -1,12 +1,13 @@
 package discovery
 
 import (
+	"testing"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 /* methods below are kept to keep tests working without big changes */
@@ -36,6 +37,7 @@ func newTestNode(simulator *service.Simulator) *testNode {
 	return &testNode{nd, d, disc}
 }
 
+//document this code and test
 func TestPing_Ping(t *testing.T) {
 
 	sim := service.NewSimulator()

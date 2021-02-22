@@ -236,6 +236,11 @@ func (m *mockAddrBook) Lookup(pubkey p2pcrypto.PublicKey) (*node.Info, error) {
 	return m.lookupRes, m.lookupErr
 }
 
+// LookupKnownAddress mock
+func (m *mockAddrBook) LookupKnownAddress(pubkey p2pcrypto.PublicKey) (*KnownAddress, error) {
+	return m.GetAddress(), nil
+}
+
 // GetAddress mock
 func (m *mockAddrBook) GetAddress() *KnownAddress {
 	if m.GetAddressFunc != nil {
