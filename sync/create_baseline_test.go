@@ -1,6 +1,10 @@
 package sync
 
 import (
+	"math"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -9,9 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
-	"math"
-	"testing"
-	"time"
 )
 
 var proof []byte
@@ -31,6 +32,8 @@ func TestCreateBaseline(t *testing.T) {
 		atxPerBlock    = 5   // 5
 	)
 
+	goldenATXID := types.ATXID(types.HexToHash32("77777"))
+
 	id := Path
 	lg := log.NewDefault(id)
 	mshdb, _ := mesh.NewPersistentMeshDB(id, 5, lg.WithOptions(log.Nop))
@@ -38,7 +41,7 @@ func TestCreateBaseline(t *testing.T) {
 	defer nipstStore.Close()
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
 	defer atxdbStore.Close()
-	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, uint16(1000), &validatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
+	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, uint16(1000), goldenATXID, &validatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
 	trtl := tortoise.NewTortoise(blocksPerLayer, mshdb, 1, lg.WithName("trtl"))
 	msh := mesh.NewMesh(mshdb, atxdb, rewardConf, trtl, &mockTxMemPool{}, &mockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
@@ -157,7 +160,7 @@ func atxWithProof(pubkey string, poetref []byte) *types.ActivationTx {
 	chlng := types.HexToHash32("0x3333")
 	npst := activation.NewNIPSTWithChallenge(&chlng, poetref)
 
-	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, 5, 1, *types.EmptyATXID, coinbase, 0, []types.BlockID{}, npst)
+	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, 5, 1, goldenATXID, coinbase, 0, []types.BlockID{}, npst)
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
 	atx.CalcAndSetID()

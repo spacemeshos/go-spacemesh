@@ -211,7 +211,7 @@ func poetReqFactory(poetProofRef []byte) requestFactory {
 			s.Info("handle PoET proof response")
 			defer close(ch)
 			if len(msg) == 0 || msg == nil {
-				s.Warning("peer responded with nil to poet request %v", peer, poetProofRef)
+				s.Warning("peer %v responded with nil to poet request %v", peer, poetProofRef)
 				return
 			}
 

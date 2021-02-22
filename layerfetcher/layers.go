@@ -3,6 +3,8 @@ package layerfetcher
 
 import (
 	"fmt"
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -11,7 +13,6 @@ import (
 	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"sync"
 )
 
 // atxHandler defines handling function for incoming ATXs
@@ -65,11 +66,13 @@ type Logic struct {
 	gossipBlocks     gossipBlocks
 	layerResM        sync.RWMutex
 	layerHashResM    sync.RWMutex
+	goldenATXID      types.ATXID
 }
 
 // Config defines configuration for layer fetching logic
 type Config struct {
 	RequestTimeout int
+	GoldenATXID    types.ATXID
 }
 
 // NewLogic creates a new instance of layer fetching logic
@@ -87,6 +90,7 @@ func NewLogic(cfg Config, blocks blockHandler, atxs atxHandler, poet poetDb, net
 		atxs:             atxs,
 		blockHandler:     blocks,
 		layerResM:        sync.RWMutex{},
+		goldenATXID:      cfg.GoldenATXID,
 	}
 
 	srv.RegisterBytesMsgHandler(LayerHashDB, l.LayerHashReqReceiver)

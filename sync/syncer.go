@@ -4,13 +4,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/events"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	p2pconf "github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -19,7 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"strconv"
 )
 
 type forBlockInView func(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
@@ -83,6 +83,7 @@ type Configuration struct {
 	AtxsLimit       int
 	Hdist           int
 	AlwaysListen    bool
+	GoldenATXID     types.ATXID
 }
 
 var (
@@ -91,6 +92,7 @@ var (
 	errNoBlocksInLayer = errors.New("layer has no blocks")
 	errNoActiveSet     = errors.New("block does not declare active set")
 	errZeroActiveSet   = errors.New("block declares empty active set")
+	errInvalidATXID    = errors.New("invalid ATXID")
 
 	emptyLayer = types.Layer{}.Hash()
 )
@@ -214,9 +216,8 @@ func (s *Syncer) ForceSync() {
 // Close closes all running goroutines
 func (s *Syncer) Close() {
 	s.Info("Closing syncer")
-
-	close(s.exit)
 	s.startLock.Lock()
+	close(s.exit)
 	close(s.forceSync)
 	s.startLock.Unlock()
 	s.peers.Close()
@@ -231,7 +232,7 @@ func (s *Syncer) Close() {
 }
 
 // check if syncer was closed
-func (s *Syncer) shutdown() bool {
+func (s *Syncer) isClosed() bool {
 	select {
 	case <-s.exit:
 		s.Info("receive interrupt")
@@ -298,6 +299,10 @@ func (s *Syncer) IsSynced() bool {
 func (s *Syncer) Start() {
 	if s.startLock.TryLock() {
 		defer s.startLock.Unlock()
+		if s.isClosed() {
+			s.Warning("sync started after closed")
+			return
+		}
 		s.Info("start syncer")
 		go s.run()
 		s.forceSync <- true
@@ -361,7 +366,7 @@ func (s *Syncer) handleWeaklySynced() {
 	// handle all layers from processed+1 to current -1
 	s.handleLayersTillCurrent()
 
-	if s.shutdown() {
+	if s.isClosed() {
 		return
 	}
 
@@ -372,7 +377,7 @@ func (s *Syncer) handleWeaklySynced() {
 		return
 	}
 
-	if s.shutdown() {
+	if s.isClosed() {
 		return
 	}
 
@@ -391,7 +396,7 @@ func (s *Syncer) handleLayersTillCurrent() {
 
 	s.Info("handle layers %d to %d", s.ProcessedLayer()+1, s.GetCurrentLayer()-1)
 	for currentSyncLayer := s.ProcessedLayer() + 1; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
-		if s.shutdown() {
+		if s.isClosed() {
 			return
 		}
 		if err := s.getAndValidateLayer(currentSyncLayer); err != nil {
@@ -440,7 +445,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 		s.With().Info("syncing layer", log.FieldNamed("current_sync_layer", currentSyncLayer),
 			log.FieldNamed("last_ticked_layer", s.GetCurrentLayer()))
 
-		if s.shutdown() {
+		if s.isClosed() {
 			return
 		}
 
@@ -561,7 +566,7 @@ func (s *Syncer) getLayerFromNeighbors(currentSyncLayer types.LayerID) (*types.L
 		return nil, err
 	}
 
-	if s.shutdown() {
+	if s.isClosed() {
 		return nil, fmt.Errorf("interupt")
 	}
 
@@ -572,7 +577,7 @@ func (s *Syncer) getLayerFromNeighbors(currentSyncLayer types.LayerID) (*types.L
 		return nil, err
 	}
 
-	if s.shutdown() {
+	if s.isClosed() {
 		return nil, fmt.Errorf("interupt")
 	}
 
@@ -591,7 +596,7 @@ func (s *Syncer) syncEpochActivations(epoch types.EpochID) error {
 		return err
 	}
 
-	atxIds, err := s.fetcEpochAtxs(hashes, epoch)
+	atxIds, err := s.fetchEpochAtxs(hashes, epoch)
 	if err != nil {
 		return err
 	}
@@ -730,12 +735,9 @@ func (s *Syncer) fetchRefBlock(block *types.Block) error {
 }
 
 func (s *Syncer) fetchAllReferencedAtxs(blk *types.Block) error {
-	var atxs []types.ATXID
+	// As block with empty or Golden ATXID is considered syntactically invalid, explicit check is not needed here.
+	atxs := []types.ATXID{blk.ATXID}
 
-	//todo: patch, remove when golden atx
-	//if blk.ATXID != *types.EmptyATXID{
-	atxs = append(atxs, blk.ATXID)
-	//}
 	if blk.ActiveSet != nil {
 		if len(*blk.ActiveSet) > 0 {
 			atxs = append(atxs, *blk.ActiveSet...)
@@ -762,6 +764,11 @@ func (s *Syncer) fetchBlockDataForValidation(blk *types.Block) error {
 }
 
 func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
+	// A block whose associated ATX is the GoldenATXID or the EmptyATXID - either of these - is syntactically invalid.
+	if block.ATXID == *types.EmptyATXID || block.ATXID == s.GoldenATXID {
+		return nil, nil, errInvalidATXID
+	}
+
 	// validate unique tx atx
 	if err := s.fetchBlockDataForValidation(block); err != nil {
 		return nil, nil, err
@@ -834,7 +841,7 @@ func (s *Syncer) FetchAtx(ID types.ATXID) error {
 
 // FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db
 func (s *Syncer) FetchAtxReferences(atx *types.ActivationTx) error {
-	if atx.PositioningATX != *types.EmptyATXID {
+	if atx.PositioningATX != s.GoldenATXID {
 		s.Log.Info("going to fetch pos atx %v of atx %v", atx.PositioningATX.ShortString(), atx.ID().ShortString())
 		_, err := s.fetchAtx(atx.PositioningATX)
 		if err != nil {
@@ -998,7 +1005,7 @@ func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2ppeers.Peer, lyr type
 	return ids, nil
 }
 
-func (s *Syncer) fetcEpochAtxs(m map[types.Hash32][]p2ppeers.Peer, epoch types.EpochID) ([]types.ATXID, error) {
+func (s *Syncer) fetchEpochAtxs(m map[types.Hash32][]p2ppeers.Peer, epoch types.EpochID) ([]types.ATXID, error) {
 	// send request to different users according to returned hashes
 	idSet := make(map[types.ATXID]struct{}, s.LayerSize)
 	ids := make([]types.ATXID, 0, s.LayerSize)

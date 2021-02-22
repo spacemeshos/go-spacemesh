@@ -178,7 +178,7 @@ func (t *TxAPIMock) GetAllAccounts() (res *types.MultipleAccountsState, err erro
 	accounts := make(map[string]types.AccountState)
 	for address, balance := range t.balances {
 		accounts[address.String()] = types.AccountState{
-			Balance: balance,
+			Balance: balance.Uint64(),
 			Nonce:   t.nonces[address],
 		}
 	}
@@ -474,8 +474,8 @@ func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
 }
 
 func TestNewServersConfig(t *testing.T) {
-	port1, err := node.GetUnboundedPort()
-	port2, err := node.GetUnboundedPort()
+	port1, err := node.GetUnboundedPort("tcp", 0)
+	port2, err := node.GetUnboundedPort("tcp", 0)
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
 	grpcService := NewServerWithInterface(port1, "localhost")

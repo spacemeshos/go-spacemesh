@@ -6,7 +6,8 @@ import tests.utils as ut
 
 class NodePoolDep:
     resources = ["bootstrap", "client"]
-    gcloud_delete = "yes | gcloud container node-pools delete {pool_name} --cluster={cluster_name} --zone={zone}"
+    gcloud_delete = 'yes | gcloud container --project="{project_name}" node-pools delete {pool_name} ' \
+                    '--cluster={cluster_name} --zone={zone}'
     gcloud_cmd = 'yes | gcloud beta container --project "{project_name}" node-pools create "{pool_name}" ' \
                  '--cluster "{cluster_name}" --zone "{zone}" --node-version "{node_version}" ' \
                  '--machine-type "custom-{cpu}-{mem}" --image-type "COS" --disk-type "{disk_type}" ' \
@@ -24,10 +25,11 @@ class NodePoolDep:
         self.testconfig = testconfig
         self.namespace = testconfig["namespace"]
         self.pool_name = f"pool-{self.namespace}"
-        self.cluster_name = "spacemesh-cluster-elk"
-        self.zone = "us-west1-a"
+        self.cluster_name = ut.get_env("CLUSTER_NAME_ELK")
+        self.zone = ut.get_env("CLUSTER_ZONE_ELK")
+        self.project_name = ut.get_env("PROJECT_NAME")
         self.default_config = {
-            "project_name": "spacemesh-198810",
+            "project_name": self.project_name,
             "pool_name": self.pool_name,
             "cluster_name": self.cluster_name,
             "zone": self.zone,
@@ -68,18 +70,19 @@ class NodePoolDep:
                  cpu_per_node: how many CPUs per node, must divide by 2 according to GCP specifications limits
                  mem per node: how much memory per node, must be withing GCP specifications limits
         """
+        # GCP limit
         max_cpus_per_node = 96
-        extra_cpus = 4
+        # extra cpus for k8s processes
+        extra_cpus_per_node = 2
         total_cpu, _ = self.get_total_cpu_and_mem()
-        total_cpu += extra_cpus
         dividor = 6
         for i in range(1, 6):
-            if total_cpu / i > max_cpus_per_node:
+            if ceil(total_cpu / i) + extra_cpus_per_node > max_cpus_per_node:
                 continue
             dividor = i
             break
 
-        cpu_per_node = ceil(total_cpu / dividor)
+        cpu_per_node = ceil(total_cpu / dividor) + extra_cpus_per_node
         if cpu_per_node % 2:
             cpu_per_node += 1
         # memory is equal to the number of CPUs in GB with adding additional 5GB of memory
@@ -92,7 +95,8 @@ class NodePoolDep:
         retry = 800
         interval = 10
         ut.exec_wait(
-            self.gcloud_delete.format(pool_name=self.pool_name, cluster_name=self.cluster_name, zone=self.zone),
+            self.gcloud_delete.format(project_name=self.project_name , pool_name=self.pool_name,
+                                      cluster_name=self.cluster_name, zone=self.zone),
             retry=retry, interval=interval
         )
 

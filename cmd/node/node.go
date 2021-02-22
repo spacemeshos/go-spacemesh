@@ -15,6 +15,7 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"cloud.google.com/go/profiler"
 	"github.com/spacemeshos/amcl"
 	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/post/shared"
@@ -256,6 +257,16 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 		return err
 	}
 
+	if app.Config.Profiler {
+		if err := profiler.Start(profiler.Config{
+			Service:        "go-spacemesh",
+			ServiceVersion: fmt.Sprintf("%s+%s+%s", cmdp.Version, cmdp.Branch, cmdp.Commit),
+			MutexProfiling: true,
+		}); err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "failed to start profiler:", err)
+		}
+	}
+
 	// override default config in timesync since timesync is using TimeCongigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
 
@@ -345,7 +356,7 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 		state.CreateAccount(addr)
 		state.AddBalance(addr, acc.Balance)
 		state.SetNonce(addr, acc.Nonce)
-		app.log.Info("Genesis account created: %s, Balance: %s", id, acc.Balance.Uint64())
+		app.log.Info("Genesis account created: %s, Balance: %v", id, acc.Balance)
 	}
 
 	_, err := state.Commit()
@@ -518,7 +529,12 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	app.closers = append(app.closers, appliedTxs)
 	processor := state.NewTransactionProcessor(db, appliedTxs, meshAndPoolProjector, app.txPool, lg.WithName("state"))
 
-	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
+	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
+	if goldenATXID == *types.EmptyATXID {
+		app.log.Panic("invalid Golden ATX ID")
+	}
+
+	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 	beaconProvider := &blocks.EpochBeaconProvider{}
 
 	var msh *mesh.Mesh
@@ -532,6 +548,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		app.setupGenesis(processor, msh)
 	}
+
 	eValidator := blocks.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, msh, app.addLogger(BlkEligibilityLogger, lg))
 
 	syncConf := sync.Configuration{Concurrency: 4,
@@ -543,6 +560,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		Hdist:           app.Config.Hdist,
 		AtxsLimit:       app.Config.AtxsPerBlock,
 		AlwaysListen:    app.Config.AlwaysListen,
+		GoldenATXID:     goldenATXID,
 	}
 
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
@@ -583,7 +601,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	blockProducer := miner.NewBlockBuilder(cfg, sgn, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
 
 	bCfg := blocks.Config{
-		Depth: app.Config.Hdist,
+		Depth:       app.Config.Hdist,
+		GoldenATXID: goldenATXID,
 	}
 	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, lg)
 
@@ -596,7 +615,14 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
 		app.log.Panic("invalid Coinbase account")
 	}
-	atxBuilder := activation.NewBuilder(nodeID, coinBase, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock, syncer, store, app.addLogger("atxBuilder", lg))
+
+	builderConfig := activation.Config{
+		CoinbaseAccount: coinBase,
+		GoldenATXID:     goldenATXID,
+		LayersPerEpoch:  layersPerEpoch,
+	}
+
+	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, atxdb, swarm, msh, nipstBuilder, postClient, clock, syncer, store, app.addLogger("atxBuilder", lg))
 
 	gossipListener.AddListener(state.IncomingTxProtocol, priorityq.Low, processor.HandleTxData)
 	gossipListener.AddListener(activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
