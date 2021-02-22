@@ -114,11 +114,12 @@ func BytesToNodeID(b []byte) (*NodeID, error) {
 	if len(b) > 64 {
 		return nil, fmt.Errorf("Invalid input length, input too long")
 	}
+
 	pubKey := b[0:32]
 	vrfKey := b[32:]
 	return &NodeID{
 		Key:          util.Bytes2Hex(pubKey),
-		VRFPublicKey: vrfKey,
+		VRFPublicKey: []byte(util.Bytes2Hex(vrfKey)),
 	}, nil
 }
 

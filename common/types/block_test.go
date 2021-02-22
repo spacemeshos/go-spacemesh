@@ -69,7 +69,7 @@ func TestBytesToNodeID(t *testing.T) {
 	pubkey := genByte32()
 	nodeID1 := NodeID{
 		Key:          util.Bytes2Hex(pubkey[:]),
-		VRFPublicKey: []byte("22222"),
+		VRFPublicKey: []byte("222222"),
 	}
 
 	// Test correct length
