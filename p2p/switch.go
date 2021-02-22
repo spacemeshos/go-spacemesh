@@ -66,7 +66,6 @@ type Switch struct {
 	// NOTE: maybe let more than one handler register on a protocol ?
 	directProtocolHandlers map[string]chan service.DirectMessage
 	gossipProtocolHandlers map[string]chan service.GossipMessage
-	protocolHandlerMutex   sync.RWMutex
 
 	// Networking
 	network    *net.Net    // (tcp) networking service
@@ -409,20 +408,22 @@ func (s *Switch) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string
 
 // RegisterDirectProtocol registers an handler for a direct messaging based protocol.
 func (s *Switch) RegisterDirectProtocol(protocol string) chan service.DirectMessage { // TODO: not used - remove
+	if s.started == 1 {
+		log.Panic("Attemping to register direct protocol after the p2p has started")
+	}
 	mchan := make(chan service.DirectMessage, s.config.BufferSize)
-	s.protocolHandlerMutex.Lock()
 	s.directProtocolHandlers[protocol] = mchan
-	s.protocolHandlerMutex.Unlock()
 	return mchan
 }
 
 // RegisterGossipProtocol registers an handler for a gossip based protocol. priority must be provided.
 func (s *Switch) RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage {
+	if s.started == 1 {
+		log.Panic("Attemping to register gossip protocol after the p2p has started")
+	}
 	mchan := make(chan service.GossipMessage, s.config.BufferSize)
-	s.protocolHandlerMutex.Lock()
 	s.gossip.SetPriority(protocol, prio)
 	s.gossipProtocolHandlers[protocol] = mchan
-	s.protocolHandlerMutex.Unlock()
 	return mchan
 }
 
@@ -437,7 +438,6 @@ func (s *Switch) Shutdown() {
 		s.network.Shutdown()
 		s.udpServer.Shutdown()
 
-		s.protocolHandlerMutex.Lock()
 		for i := range s.directProtocolHandlers {
 			delete(s.directProtocolHandlers, i)
 			//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
@@ -446,7 +446,6 @@ func (s *Switch) Shutdown() {
 			delete(s.gossipProtocolHandlers, i)
 			//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
 		}
-		s.protocolHandlerMutex.Unlock()
 
 		s.peerLock.Lock()
 		for _, ch := range s.newPeerSub {
@@ -485,9 +484,10 @@ func (s *Switch) processMessage(ime net.IncomingMessageEvent) {
 
 // RegisterDirectProtocolWithChannel registers a direct protocol with a given channel. NOTE: eventually should replace RegisterDirectProtocol
 func (s *Switch) RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan service.DirectMessage) chan service.DirectMessage {
-	s.protocolHandlerMutex.Lock()
+	if s.started == 1 {
+		log.Panic("Attempting to register direct protocol with channel after p2p has started")
+	}
 	s.directProtocolHandlers[protocol] = ingressChannel
-	s.protocolHandlerMutex.Unlock()
 	return ingressChannel
 }
 
@@ -577,10 +577,7 @@ func (s *Switch) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	// Add metadata collected from p2p message (todo: maybe pass sender and protocol inside metadata)
 	p2pmeta := service.P2PMetadata{FromAddress: msg.Conn.RemoteAddr()}
 
-	// TODO: get rid of mutexes. (Blocker: registering protocols after `Start`. currently only known place is Test_Gossiping
-	s.protocolHandlerMutex.RLock()
 	_, ok := s.gossipProtocolHandlers[pm.Metadata.NextProtocol]
-	s.protocolHandlerMutex.RUnlock()
 
 	s.logger.Debug("Handle %v message from << %v", pm.Metadata.NextProtocol, msg.Conn.RemotePublicKey().String())
 
@@ -596,9 +593,7 @@ func (s *Switch) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 
 // ProcessDirectProtocolMessage passes an already decrypted message to a protocol. if protocol does not exist, return and error.
 func (s *Switch) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, metadata service.P2PMetadata) error {
-	s.protocolHandlerMutex.RLock()
 	msgchan := s.directProtocolHandlers[protocol]
-	s.protocolHandlerMutex.RUnlock()
 	if msgchan == nil {
 		return ErrNoProtocol
 	}
@@ -616,9 +611,7 @@ func (s *Switch) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protoc
 // the message syntactic validation result on the validationCompletedChan ASAP
 func (s *Switch) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
 	// route authenticated message to the registered protocol
-	s.protocolHandlerMutex.RLock()
 	msgchan := s.gossipProtocolHandlers[protocol]
-	s.protocolHandlerMutex.RUnlock()
 	if msgchan == nil {
 		return ErrNoProtocol
 	}
