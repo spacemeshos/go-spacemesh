@@ -1,7 +1,7 @@
 # Automation Overview:
 
 SM-automation is written in Python 3.7 and uses the [pytest](https://pypi.org/project/pytest/) Python package for running tests on cloud machines that are managed by GKE (Google Kubernetes Engine).
-Each test folder holds a test file (test_testname.py) and a config yaml file that contains test configurations, k8s configurations and SM-client arguments.
+Each test folder holds a test file (`test_testname.py`) and a `config.yaml` file that contains test configurations, k8s configurations and SM-client arguments.
 
 Please note: We currently use logs parsing in order to assert our tests but that will be changed to using the node's API.
 
