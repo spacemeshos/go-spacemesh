@@ -409,7 +409,7 @@ func (s *Switch) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string
 // RegisterDirectProtocol registers an handler for a direct messaging based protocol.
 func (s *Switch) RegisterDirectProtocol(protocol string) chan service.DirectMessage { // TODO: not used - remove
 	if s.started == 1 {
-		panic("Calling register after the p2p has started")
+		log.Panic("Attemping to register direct protocol after the p2p has started")
 	}
 	mchan := make(chan service.DirectMessage, s.config.BufferSize)
 	s.directProtocolHandlers[protocol] = mchan
@@ -419,7 +419,7 @@ func (s *Switch) RegisterDirectProtocol(protocol string) chan service.DirectMess
 // RegisterGossipProtocol registers an handler for a gossip based protocol. priority must be provided.
 func (s *Switch) RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage {
 	if s.started == 1 {
-		panic("Calling register after the p2p has started")
+		log.Panic("Attemping to register gossip protocol after the p2p has started")
 	}
 	mchan := make(chan service.GossipMessage, s.config.BufferSize)
 	s.gossip.SetPriority(protocol, prio)
@@ -485,7 +485,7 @@ func (s *Switch) processMessage(ime net.IncomingMessageEvent) {
 // RegisterDirectProtocolWithChannel registers a direct protocol with a given channel. NOTE: eventually should replace RegisterDirectProtocol
 func (s *Switch) RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan service.DirectMessage) chan service.DirectMessage {
 	if s.started == 1 {
-		panic("Attempting to register after p2p has started")
+		log.Panic("Attempting to register direct protocol with channel after p2p has started")
 	}
 	s.directProtocolHandlers[protocol] = ingressChannel
 	return ingressChannel
