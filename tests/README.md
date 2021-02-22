@@ -1,11 +1,11 @@
-#Automation Overview:
+# Automation Overview:
 
 SM-automation is written in Python 3.7 and uses pytest Python package for running tests on cloud machines that are managed by GKE (google kubernetes engine).
 Each test folder holds a test file (test_testname.py) and a config yaml file that contains test configurations, k8s configurations and SM-client arguments.
 
-Currently we use logs parsing in order to assert our tests but that will be changed to using the node's API.
+Please note: We currently use logs parsing in order to assert our tests but that will be changed to using the node's API.
 
-####Packaging
+#### Packaging
 
 Spacemesh code is being run on containers, miner container is defined in `DockerFile` file.
 It includes a basic OS, environment variables and the compiled SM code.
@@ -13,7 +13,7 @@ When running a make command (locally or using the CI) another container is being
 automation code and is defined under `DockerFileTests` file. It includes automation requirements (python, pytest, 
 py packages, etc) and the automation code itself to be run on this pod.
 
-###Kubernetes Files
+### Kubernetes Files
    
 K8s files are being used to deploy the networks' nodes (bootstrap node, client nodes, poet and curl).
 Those files are located under `k8s` folder.
@@ -23,10 +23,9 @@ You can see the changes being made in conftest.py under the functionality that d
 clients for example).
 
 #### SM-clients & Bootstrap
-When deploying SM-client the bootstrap node will be deployed first, next all other clients (miners) will be deployed with the bootstrap as their `entry point` to the network.
-Bootstrap node provides other nodes information about active nodes in the network.
-After deployment, bootstrap node will function as a normal miner. 
-After being deployed and part of the network, every client can perform as a bootstrap node for a new client that wants to join the network.
+When deploying SM-client the bootstrap node will be deployed first. After that, all other clients (miners) will be deployed with the bootstrap as their entry point to the network.
+The bootstrap node provides other nodes information about active nodes in the network.
+After deployment, the bootstrap node will function as a normal miner, and in turn, any existing client can perform as a bootstrap node for a new client.
 The number of replicas for each deployment (bootsrap or miners) can be found in the tests config file.
 
 ### Test Configurations
@@ -83,11 +82,11 @@ After setting the ELK cluster we wait for it to be ready, this process might tak
 
 #### Node pool
 Node pools provide a physical test objects separation in oppose to namespacing.
-When ELK is ready we add the node pool that will serve the Spacemesh pods, this node pool is necessary in order to get all of the resources needed (only for the SM-clients) in advance so our deployment will happen in a shorter and more predictable time.
-The process of creating/deleting/altering a node pool is blocking since only one action can be made simultaneously, this means that if someone just started a test and wants to create a node pool he will have to wait for previous started action to end.
-Node pool creation/deletion is polling every 10 seconds to see if it can start, in case it can't (for the reason mentioned above) it creates a single `Error` message for the first time it tries, this message can be ignored for it will start once GCP is ready to take another action.
+When ELK is ready we add the node pool that will serve the Spacemesh pods. This node pool is necessary in order to get all of the resources needed (only for the SM-clients) in advance so our deployment will happen in a shorter and a more predictable time.
+The process of creating/deleting/altering a node pool is blocking since only one action can be made simultaneously. This means that if someone just started a test and wants to create a node pool he will have to wait for the completion of the previously started action.
+Node pool creation/deletion is polling every 10 seconds to see if it can start. In the event that it can't (for the reason mentioned above) it creates a single `Error` message for the first attempt. This message can be ignored, the process will start once GCP is ready to take another action.
 
 #### Communicating With Miners
 In order to communicate with SM-clients we use a CURL pod.
 Actions like sending a transaction or requesting a node balance/nonce etc, will be performed by sending an http request to one or many of the SM-clients.
-Another CURL use in automation is to start the poet using its API what makes it necessary for each test that use a POET service.
+CURL is also used in automation is to start the POET using its API. This means that CURL is necessary for each test that makes use of a POET service.
