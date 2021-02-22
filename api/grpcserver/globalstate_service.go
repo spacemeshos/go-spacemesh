@@ -201,13 +201,14 @@ func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDa
 		log.With().Error("unable to convert bytes to nodeID", log.Err(err))
 		return nil, status.Errorf(codes.Internal, "error deserializing NodeID")
 	}
-	dbRewards, err := s.Mesh.GetRewardsBySmesherID(*smesherID)
-	res := &pb.SmesherDataQueryResponse{}
 
+	dbRewards, err := s.Mesh.GetRewardsBySmesherID(*smesherID)
 	if err != nil {
 		log.With().Error("unable to fetch projected reward state for smesher", log.String("smesher", smesherID.String()), log.Err(err))
 		return nil, status.Errorf(codes.Internal, "error getting rewards data")
 	}
+
+	res := &pb.SmesherDataQueryResponse{}
 	for _, r := range dbRewards {
 		res.Rewards = append(res.Rewards, &pb.Reward{
 			Layer:       &pb.LayerNumber{Number: uint32(r.Layer)},
