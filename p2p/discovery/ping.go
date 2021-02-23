@@ -105,7 +105,7 @@ func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
 			return errors.New("got pong with different public key")
 		}
 	case <-timeout.C:
-		return errors.New("ping timeouted")
+		return errors.New("ping timed out")
 	}
 
 	return nil
