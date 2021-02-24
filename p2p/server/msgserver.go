@@ -4,13 +4,14 @@ package server
 import (
 	"container/list"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
 // MessageType is a uint32 used to distinguish between server messages inside a single protocol.
@@ -199,7 +200,7 @@ func (p *MessageServer) handleResponseMessage(headers *service.DataMsgWrapper) {
 	if okFoo {
 		foo.okCallback(headers.Payload)
 	} else {
-		p.Error("Cant find handler %v", headers.ReqID)
+		p.Error("Can't find handler %v", headers.ReqID)
 	}
 	p.Debug("handleResponseMessage close")
 }

@@ -19,9 +19,6 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 		plogger := p.logger.WithFields(log.String("type", "getaddresses"), log.String("from", msg.Sender().String()))
 		plogger.Debug("got request")
 
-		// verifyPinger in the ping handler adds this peer to the address book if they have already sent a ping to
-		// this node. Therefore, they should be in the address book.
-
 		// lookup the address in our local table
 		ka, err := p.table.LookupKnownAddress(msg.Sender())
 		if err != nil {

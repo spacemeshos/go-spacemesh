@@ -72,6 +72,7 @@ func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
 		return err
 	}
 	ch := make(chan []byte)
+	// callback function to handle the response to the ping
 	foo := func(msg []byte) {
 		defer close(ch)
 		plogger.Debug("handle response")

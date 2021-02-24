@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"testing"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
@@ -64,6 +65,17 @@ func TestPing_Ping(t *testing.T) {
 
 	err = p1.dscv.Ping(p3.PublicKey())
 	require.Error(t, err)
+}
+
+func TestDiscoveryPing(t *testing.T) {
+	sim := service.NewSimulator()
+	p1 := newTestNode(sim)
+	p2 := newTestNode(sim)
+
+	err := p1.dscv.Ping(p2.svc.PublicKey())
+	require.NoError(t, err)
+
+	p1.dscv.GetAddresses(p2.svc.PublicKey())
 }
 
 func TestPing_Ping_Concurrency(t *testing.T) {
@@ -130,6 +142,12 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 	}
 
 	n2.dscv.table = n2.d
+	n2.d.GetAddressFunc = func() *KnownAddress {
+		return &KnownAddress{
+			na:       n1.svc.Info,
+			lastping: time.Unix(0, 0),
+		}
+	}
 
 	idarr, err := n1.dscv.GetAddresses(n2.svc.Info.PublicKey())
 

@@ -35,6 +35,7 @@ func (ka *KnownAddress) LastAttempt() time.Time {
 // been successfully pinged in the last pinginterval hours
 func (ka *KnownAddress) NeedsPing() bool {
 	return ka.lastping.Before(time.Now().Add(-1 * pingInterval * time.Hour))
+	//return true
 }
 
 // UpdatePing updates the last pingtime of a known address
