@@ -4,12 +4,13 @@ package node
 import (
 	"errors"
 	"fmt"
-	"github.com/btcsuite/btcutil/base58"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"net"
 	"net/url"
 	"regexp"
 	"strconv"
+
+	"github.com/btcsuite/btcutil/base58"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 // Scheme sets the URI scheme for the node string format.

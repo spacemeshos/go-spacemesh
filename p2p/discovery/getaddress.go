@@ -31,6 +31,7 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 			plogger.Debug("Message sender (GetAddress) known byt needs fresh ping, performing ping procedure: %v", msg.Sender())
 			if err := p.Ping(msg.Sender()); err != nil {
 				plogger.Warning("Peer failed to respond to ping, dropping getaddresses request and removing from addrbook: %v", peer.String())
+				plogger.Warning("Error was : %v", err)
 				//remove the peer from the table, since it is unverified
 				p.table.RemoveAddress(peer)
 				return nil

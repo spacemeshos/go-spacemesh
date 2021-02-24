@@ -21,10 +21,11 @@ type protocolRoutingTable interface {
 }
 
 type protocol struct {
-	local     *node.Info
-	table     protocolRoutingTable
-	logger    log.Log
-	msgServer *server.MessageServer
+	local             *node.Info
+	table             protocolRoutingTable
+	logger            log.Log
+	msgServer         *server.MessageServer
+	lastDiscoveryPing time.Time
 }
 
 func (p *protocol) SetLocalAddresses(tcp, udp int) {
@@ -51,10 +52,11 @@ const GetAddresses = 1
 func newProtocol(local p2pcrypto.PublicKey, rt protocolRoutingTable, svc server.Service, log log.Log) *protocol {
 	s := server.NewMsgServer(svc, Name, MessageTimeout, make(chan service.DirectMessage, MessageBufSize), log)
 	d := &protocol{
-		local:     &node.Info{ID: local.Array(), IP: net.IPv4zero, ProtocolPort: 7513, DiscoveryPort: 7513},
-		table:     rt,
-		msgServer: s,
-		logger:    log,
+		local:             &node.Info{ID: local.Array(), IP: net.IPv4zero, ProtocolPort: 7513, DiscoveryPort: 7513},
+		table:             rt,
+		msgServer:         s,
+		logger:            log,
+		lastDiscoveryPing: time.Unix(0, 0),
 	}
 
 	// XXX Reminder: for discovery protocol to work you must call SetLocalAddresses with updated ports from the socket.

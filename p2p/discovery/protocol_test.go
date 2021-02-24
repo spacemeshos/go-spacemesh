@@ -67,15 +67,44 @@ func TestPing_Ping(t *testing.T) {
 	require.Error(t, err)
 }
 
+//check that the error is empty as well
 func TestDiscoveryPing(t *testing.T) {
 	sim := service.NewSimulator()
-	p1 := newTestNode(sim)
-	p2 := newTestNode(sim)
+	n1 := newTestNode(sim)
+	n2 := newTestNode(sim)
 
-	err := p1.dscv.Ping(p2.svc.PublicKey())
-	require.NoError(t, err)
+	//assume that n1 has pinged n2, therefore n1 is in the addrBook of n2
+	n2.d.LookupKnownFunc = func(pubkey p2pcrypto.PublicKey) (*KnownAddress, error) {
+		return &KnownAddress{
+			na:       n1.svc.Info,
+			lastping: time.Unix(0, 0),
+		}, nil
+	}
+	justnow := time.Now()
+	//explain what happens inside GetAddresses => synchronous, ping should have happened
+	n1.dscv.GetAddresses(n2.svc.PublicKey())
 
-	p1.dscv.GetAddresses(p2.svc.PublicKey())
+	// since n2 has never pinged n1, the GetAddresses method should result in a ping from n2 to n1
+	// this means that n1.dscv.lastDiscoveryPing should be after justnow
+	if !n1.dscv.lastDiscoveryPing.After(justnow) {
+		t.Errorf("test case 1 : unpinged address should receive a ping during the GetAddresses request")
+	}
+
+	//assume that n1 has pinged n2, and we have verified the ping after the threshold (1 hour ago)
+	n2.d.LookupKnownFunc = func(pubkey p2pcrypto.PublicKey) (*KnownAddress, error) {
+		return &KnownAddress{
+			na:       n1.svc.Info,
+			lastping: time.Now().Add(-1 * time.Hour),
+		}, nil
+	}
+
+	justnow = time.Now()
+
+	n1.dscv.GetAddresses(n2.svc.PublicKey())
+	if n1.dscv.lastDiscoveryPing.After(justnow) {
+		t.Errorf("test case 2 : recently pinged address should not receive a ping during the GetAddresses request")
+	}
+
 }
 
 func TestPing_Ping_Concurrency(t *testing.T) {
@@ -119,6 +148,14 @@ func TestFindNodeProtocol_FindNode(t *testing.T) {
 	n1 := newTestNode(sim)
 	n2 := newTestNode(sim)
 
+	//we have to assume that n1 has pinged n2, and so it is added into its addrBook
+	n2.d.LookupKnownFunc = func(pubkey p2pcrypto.PublicKey) (*KnownAddress, error) {
+		return &KnownAddress{
+			na:       n1.svc.Info,
+			lastping: time.Unix(0, 0),
+		}, nil
+	}
+
 	idarr, err := n1.dscv.GetAddresses(n2.svc.Info.PublicKey())
 
 	require.NoError(t, err, "Should not return error")
@@ -142,11 +179,12 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 	}
 
 	n2.dscv.table = n2.d
-	n2.d.GetAddressFunc = func() *KnownAddress {
+	//we have to assume that n1 has pinged n2, and so it is added into its addrBook
+	n2.d.LookupKnownFunc = func(pubkey p2pcrypto.PublicKey) (*KnownAddress, error) {
 		return &KnownAddress{
 			na:       n1.svc.Info,
 			lastping: time.Unix(0, 0),
-		}
+		}, nil
 	}
 
 	idarr, err := n1.dscv.GetAddresses(n2.svc.Info.PublicKey())
@@ -170,32 +208,55 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 
 func TestFindNodeProtocol_FindNode_Concurrency(t *testing.T) {
 
-	concurrency := 100
+	concurrency := 4
 
 	sim := service.NewSimulator()
 	n1 := newTestNode(sim)
-	gen := generateDiscNodes(100)
+	gen := generateDiscNodes(2)
+	testNodes := make([]*testNode, concurrency)
+	for i := 0; i < concurrency; i++ {
+		//create all the nodes
+		testNodes[i] = newTestNode(sim)
+		testNodes[i].d.LookupFunc = func(key p2pcrypto.PublicKey) (d *node.Info, e error) {
+			return n1.svc.Info, nil
+		}
+		testNodes[i].dscv.table = testNodes[i].d
+	}
 	n1.d.AddressCacheFunc = func() []*node.Info {
 		return gen
+	}
+	n1.d.LookupKnownFunc = func(pubkey p2pcrypto.PublicKey) (*KnownAddress, error) {
+		for i := 0; i < concurrency; i++ {
+			if testNodes[i].svc.PublicKey() == pubkey {
+				return &KnownAddress{
+					na: testNodes[i].svc.Info,
+				}, nil
+			}
+		}
+		return nil, nil
 	}
 	n1.dscv.table = n1.d
 
 	retchans := make(chan []*node.Info)
 
 	for i := 0; i < concurrency; i++ {
-		go func() {
-			nx := newTestNode(sim)
-			nx.d.LookupFunc = func(key p2pcrypto.PublicKey) (d *node.Info, e error) {
-				return n1.svc.Info, nil
-			}
-			nx.dscv.table = nx.d
-			res, err := nx.dscv.GetAddresses(n1.svc.PublicKey())
+		go func(index int) {
+			// nx := newTestNode(sim)
+			// nx.d.LookupFunc = func(key p2pcrypto.PublicKey) (d *node.Info, e error) {
+			// 	return n1.svc.Info, nil
+			// }
+			// n1.d.LookupKnownFunc = func(pubkey p2pcrypto.PublicKey) (*KnownAddress, error) {
+			// 	return &KnownAddress{
+			// 		na: nx.svc.Info,
+			// 	}, nil
+			// }
+			res, err := testNodes[index].dscv.GetAddresses(n1.svc.PublicKey())
 			if err != nil {
 				t.Log(err)
 				retchans <- nil
 			}
 			retchans <- res
-		}()
+		}(i)
 	}
 
 	for i := 0; i < concurrency; i++ {

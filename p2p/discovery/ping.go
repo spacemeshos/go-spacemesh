@@ -18,18 +18,19 @@ func (p *protocol) newPingRequestHandler() func(msg server.Message) []byte {
 	return func(msg server.Message) []byte {
 		plogger := p.logger.WithFields(log.String("type", "ping"), log.String("from", msg.Sender().String()))
 		plogger.Debug("handle request")
+		plogger.Warning("In ping request handler")
 		pinged := &node.Info{}
 		err := types.BytesToInterface(msg.Bytes(), pinged)
 		if err != nil {
 			plogger.Error("failed to deserialize ping message err=", err)
 			return nil
 		}
-
 		if err := p.verifyPinger(msg.Metadata().FromAddress, pinged); err != nil {
 			plogger.Error("msg contents were not valid err=", err)
 			return nil
 		}
-
+		//only update the last pinged time once we know everything is valid
+		p.lastDiscoveryPing = time.Now()
 		//pong
 		payload, err := types.InterfaceToBytes(p.local)
 		// TODO: include the resolved To address
@@ -39,6 +40,7 @@ func (p *protocol) newPingRequestHandler() func(msg server.Message) []byte {
 		}
 
 		plogger.Debug("Sending pong message")
+		plogger.Warning("Sending pong message")
 		return payload
 	}
 }

@@ -130,9 +130,10 @@ func (m *MockPeerStore) Attempt(key p2pcrypto.PublicKey) {
 type mockAddrBook struct {
 	addAddressFunc func(n, src *node.Info)
 
-	LookupFunc func(p2pcrypto.PublicKey) (*node.Info, error)
-	lookupRes  *node.Info
-	lookupErr  error
+	LookupFunc      func(p2pcrypto.PublicKey) (*node.Info, error)
+	lookupRes       *node.Info
+	lookupErr       error
+	LookupKnownFunc func(p2pcrypto.PublicKey) (*KnownAddress, error)
 
 	GetAddressFunc func() *KnownAddress
 	GetAddressRes  *KnownAddress
@@ -238,7 +239,10 @@ func (m *mockAddrBook) Lookup(pubkey p2pcrypto.PublicKey) (*node.Info, error) {
 
 // LookupKnownAddress mock
 func (m *mockAddrBook) LookupKnownAddress(pubkey p2pcrypto.PublicKey) (*KnownAddress, error) {
-	return m.GetAddress(), nil
+	if m.LookupKnownFunc != nil {
+		return m.LookupKnownFunc(pubkey)
+	}
+	return nil, ErrLookupFailed
 }
 
 // GetAddress mock
