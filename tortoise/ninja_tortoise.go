@@ -230,7 +230,7 @@ func (ni *ninjaTortoise) evictOutOfPbase() {
 }
 
 func (ni *ninjaTortoise) processBlock(b *types.Block) {
-	ni.logger.With().Debug("process block", b.Fields()...)
+	ni.logger.With().Info("process block", b.Fields()...)
 	if b.Layer() == types.GetEffectiveGenesis() {
 		return
 	}
