@@ -750,6 +750,10 @@ func (m *DB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]stru
 		validBlks[b] = struct{}{}
 	}
 
+	m.With().Info("count of contextually valid blocks in layer",
+		layer,
+		log.Int("count_valid", len(validBlks)),
+		log.Int("count_total", len(blockIds)))
 	return validBlks, nil
 }
 

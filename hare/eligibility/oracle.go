@@ -134,10 +134,10 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 	key := buildKey(layer, round)
 
 	o.lock.Lock()
+	defer o.lock.Unlock()
 
 	// check cache
 	if val, exist := o.vrfMsgCache.Get(key); exist {
-		o.lock.Unlock()
 		return val.([]byte), nil
 	}
 
@@ -145,7 +145,6 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 	v, err := o.beacon.Value(layer)
 	if err != nil {
 		o.With().Error("Could not get hare Beacon value", log.Err(err), layer, log.Int32("round", round))
-		o.lock.Unlock()
 		return nil, err
 	}
 
@@ -155,14 +154,12 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 	_, err = xdr.Marshal(&w, &msg)
 	if err != nil {
 		o.With().Error("Fatal: could not marshal xdr", log.Err(err))
-		o.lock.Unlock()
 		return nil, err
 	}
 
 	val := w.Bytes()
 	o.vrfMsgCache.Add(key, val) // update cache
 
-	o.lock.Unlock()
 	return val, nil
 }
 
@@ -263,26 +260,26 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	// lock until any return
 	// note: no need to lock per safeEp - we do not expect many concurrent requests per safeEp (max two)
 	o.lock.Lock()
+	defer o.lock.Unlock()
 
 	// check cache
 	if val, exist := o.activesCache.Get(safeEp); exist {
-		o.lock.Unlock()
 		return val.(map[string]struct{}), nil
 	}
 
 	// build a map of all blocks on the current layer
 	mp, err := o.blocksProvider.ContextuallyValidBlock(sl)
 	if err != nil {
-		o.lock.Unlock()
 		return nil, err
 	}
 
 	// no contextually valid blocks
 	if len(mp) == 0 {
 		o.With().Error("could not calculate hare active set size: no contextually valid blocks",
-			layer, layer.GetEpoch(),
-			log.FieldNamed("safe_layer_id", sl), log.FieldNamed("safe_epoch_id", safeEp))
-		o.lock.Unlock()
+			layer,
+			layer.GetEpoch(),
+			log.FieldNamed("safe_layer_id", sl),
+			log.FieldNamed("safe_epoch_id", safeEp))
 		return nil, errNoContextualBlocks
 	}
 
@@ -290,14 +287,12 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	if err != nil {
 		o.With().Error("could not retrieve active set size", log.Err(err), layer, layer.GetEpoch(),
 			log.FieldNamed("safe_layer_id", sl), log.FieldNamed("safe_epoch_id", safeEp))
-		o.lock.Unlock()
 		return nil, err
 	}
 
 	// update
 	o.activesCache.Add(safeEp, activeMap)
 
-	o.lock.Unlock()
 	return activeMap, nil
 }
 
