@@ -15,9 +15,15 @@ import (
 type vec [2]int
 type patternID uint32 // this hash does not include the layer id
 
-const ( // Threshold
-	window          = 10
-	globalThreshold = 0.6
+const (
+	// These two thresholds control how tortoise votes on blocks and layers (patterns).
+	// The first is used when voting for or against blocks (in a layer/pattern).
+	// The second is used when voting for or against a layer (to promote it to newly-good as a pbase candidate).
+	// They should be independent, but the existing tortoise tests expect the second to be a fixed ratio of the first.
+	// NOTE: These have been lowered (from 0.6 and 0.5, respectively) for the testnet.
+	globalThreshold   = 0.5
+	newLayerThreshold = 0.5 * (globalThreshold / 0.6) // adjust to match global threshold
+	window            = 10
 )
 
 var ( // correction vectors type
@@ -429,16 +435,17 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.Layer
 			log.Int("num_blocks", len(lyr.Blocks())),
 			log.Int("num_updated_patterns", len(sUpdated)))
 		for p := range sUpdated {
-			// if a majority supports p (p is good)
+			// if a minimum threshold supports p (p is good)
 			// according to tal we dont have to know the exact amount, we can multiply layer size by number of layers
 			jGood, found := ni.TGood[j]
-			threshold := 0.5 * float64(types.LayerID(ni.AvgLayerSize)*(ni.Last-p.Layer()))
+			threshold := newLayerThreshold * float64(types.LayerID(ni.AvgLayerSize)*(ni.Last-p.Layer()))
 			ni.logger.With().Debug("checking pattern",
 				p,
 				log.FieldNamed("jGood", jGood),
 				log.Bool("found", found),
 				log.Int("support", ni.TSupport[p]),
 				log.String("threshold", fmt.Sprint(threshold)))
+
 			if (jGood != p || !found) && float64(ni.TSupport[p]) > threshold {
 				ni.logger.With().Debug("new pattern has enough support",
 					p,
