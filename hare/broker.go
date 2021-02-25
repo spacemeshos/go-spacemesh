@@ -83,7 +83,7 @@ func newBroker(networkService NetworkService, eValidator validator, stateQuerier
 // Start listening to Hare messages (non-blocking).
 func (b *Broker) Start() error {
 	if b.isStarted { // Start has been called at least twice
-		b.Error("Could not start instance")
+		b.Error("could not start instance")
 		return startInstanceError(errors.New("instance already started"))
 	}
 
@@ -100,7 +100,7 @@ var (
 	errNotSynced         = errors.New("layer is not synced")
 	errFutureMsg         = errors.New("future message")
 	errRegistration      = errors.New("failed during registration")
-	errTooMany           = errors.New("too many consensus process")
+	errTooMany           = errors.New("too many concurrent consensus processes running")
 	errInstanceNotSynced = errors.New("instance not synchronized")
 )
 
@@ -146,19 +146,19 @@ func (b *Broker) eventLoop() {
 		select {
 		case msg := <-b.inbox:
 			if msg == nil {
-				b.With().Error("Broker message validation failed: called with nil",
+				b.With().Error("broker message validation failed: called with nil",
 					log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 				continue
 			}
 
 			hareMsg, err := MessageFromBuffer(msg.Bytes())
 			if err != nil {
-				b.Error("Could not build message err=%v", err)
+				b.With().Error("could not build message", log.Err(err))
 				continue
 			}
 
 			if hareMsg.InnerMsg == nil {
-				b.With().Error("Broker message validation failed",
+				b.With().Error("broker message validation failed",
 					log.Err(errNilInner), log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 				continue
 			}
@@ -170,7 +170,7 @@ func (b *Broker) eventLoop() {
 			if err := b.validate(hareMsg); err != nil {
 				if err != errEarlyMsg {
 					// not early, validation failed
-					b.With().Debug("Broker received a message to a CP that is not registered",
+					b.With().Debug("broker received a message to a consensus process that is not registered",
 						log.Err(err),
 						log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)),
 						log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
@@ -190,13 +190,13 @@ func (b *Broker) eventLoop() {
 			// create msg
 			iMsg, err := newMsg(hareMsg, b.stateQuerier)
 			if err != nil {
-				b.Warning("Message validation failed: could not construct msg err=%v", err)
+				b.With().Warning("message validation failed: could not construct msg", log.Err(err))
 				continue
 			}
 
 			// validate msg
 			if !b.eValidator.Validate(iMsg) {
-				b.Warning("Message validation failed: eValidator returned false %v", hareMsg)
+				b.With().Warning("message validation failed: eligibility validator returned false")
 				continue
 			}
 
@@ -210,8 +210,10 @@ func (b *Broker) eventLoop() {
 				// we want to write all buffered messages to a chan with InboxCapacity len
 				// hence, we limit the buffer for pending messages
 				if len(b.pending[msgInstID]) == inboxCapacity {
-					b.Error("Reached %v pending messages. Ignoring message for layer %v sent from %v",
-						inboxCapacity, msgInstID, iMsg.PubKey.ShortString())
+					b.With().Error("too many pending messages, ignoring message",
+						log.Int("inbox_capacity", inboxCapacity),
+						types.LayerID(msgInstID),
+						log.String("sender_id", iMsg.PubKey.ShortString()))
 					continue
 				}
 				b.pending[msgInstID] = append(b.pending[msgInstID], iMsg)
@@ -228,7 +230,7 @@ func (b *Broker) eventLoop() {
 		case task := <-b.tasks:
 			task()
 		case <-b.CloseChannel():
-			b.Warning("Broker exiting")
+			b.Warning("broker exiting")
 			return
 		}
 	}
@@ -236,7 +238,7 @@ func (b *Broker) eventLoop() {
 
 func (b *Broker) updateLatestLayer(id instanceID) {
 	if id <= b.latestLayer { // should expect to update only newer layers
-		b.Panic("Tried to update a previous layer expected %v > %v", id, b.latestLayer)
+		b.Panic("tried to update a previous layer, expected %v > %v", id, b.latestLayer)
 		return
 	}
 
@@ -262,7 +264,7 @@ func (b *Broker) updateSynchronicity(id instanceID) {
 	// not exist means unknown, check & set
 
 	if !b.isNodeSynced() {
-		b.With().Info("Note: node is not synced. Marking layer as not synced", types.LayerID(id))
+		b.With().Info("node is not synced, marking layer as not synced", types.LayerID(id))
 		b.syncState[id] = false // mark not synced
 		return
 	}
@@ -275,7 +277,7 @@ func (b *Broker) isSynced(id instanceID) bool {
 
 	synced, ok := b.syncState[id]
 	if !ok { // not exist means unknown
-		log.Panic("syncState doesn't contain a value after call to updateSynchronicity")
+		b.Panic("syncState doesn't contain a value after call to updateSynchronicity")
 	}
 
 	return synced
@@ -335,7 +337,7 @@ func (b *Broker) Unregister(id instanceID) {
 	b.tasks <- func() {
 		delete(b.outbox, id) // delete matching outbox
 		b.cleanOldLayers()
-		b.Info("Unregistered layer %v ", id)
+		b.With().Info("hare broker unregistered layer", types.LayerID(id))
 		wg.Done()
 	}
 

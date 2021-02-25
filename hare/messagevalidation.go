@@ -207,29 +207,34 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, currentK in
 // SyntacticallyValidateMessage the syntax of the provided message.
 func (v *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bool {
 	if m == nil {
-		v.Warning("Syntax validation failed: m is nil")
+		v.Warning("syntax validation failed: m is nil")
 		return false
 	}
 
 	if m.PubKey == nil {
-		v.Warning("Syntax validation failed: missing public key")
+		v.Warning("syntax validation failed: missing public key")
 		return false
 	}
 
 	if m.InnerMsg == nil {
-		v.Warning("Syntax validation failed: inner message is nil")
+		v.With().Warning("syntax validation failed: inner message is nil",
+			log.String("sender_id", m.PubKey.ShortString()))
 		return false
 	}
 
 	if m.InnerMsg.Values == nil {
-		v.With().Warning("Syntax validation failed: set is nil",
-			log.String("sender_id", m.PubKey.ShortString()), types.LayerID(m.InnerMsg.InstanceID), log.String("msg_type", m.InnerMsg.Type.String()))
+		v.With().Warning("syntax validation failed: set is nil",
+			log.String("sender_id", m.PubKey.ShortString()),
+			types.LayerID(m.InnerMsg.InstanceID),
+			log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
 
 	if len(m.InnerMsg.Values) == 0 {
-		v.With().Warning("Syntax validation failed: set is empty",
-			log.String("sender_id", m.PubKey.ShortString()), types.LayerID(m.InnerMsg.InstanceID), log.String("msg_type", m.InnerMsg.Type.String()))
+		v.With().Warning("syntax validation failed: set is empty",
+			log.String("sender_id", m.PubKey.ShortString()),
+			types.LayerID(m.InnerMsg.InstanceID),
+			log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
 

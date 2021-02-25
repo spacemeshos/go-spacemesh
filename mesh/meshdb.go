@@ -715,11 +715,10 @@ func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks
 
 // ContextuallyValidBlock - returns the contextually valid blocks for the provided layer
 func (m *DB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error) {
-
 	if layer == 0 || layer == 1 {
 		v, err := m.LayerBlockIds(layer)
 		if err != nil {
-			m.Error("Could not get layer block ids for layer %v err=%v", layer, err)
+			m.With().Error("could not get layer block ids", layer, log.Err(err))
 			return nil, err
 		}
 

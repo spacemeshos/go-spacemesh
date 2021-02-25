@@ -88,7 +88,7 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 	activeSet := bo.epochAtxs
 	bo.eligibilityMutex.RUnlock()
 
-	bo.log.With().Info("eligible for blocks in layer",
+	bo.log.With().Info("got eligibility for blocks in layer",
 		bo.nodeID,
 		layerID,
 		log.Int("num_blocks", len(proofs)))

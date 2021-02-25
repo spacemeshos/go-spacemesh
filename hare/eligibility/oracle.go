@@ -235,13 +235,13 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 func (o *Oracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
 	msg, err := o.buildVRFMessage(layer, round)
 	if err != nil {
-		o.Error("Proof: could not build VRF message err=%v", err)
+		o.With().Error("proof: could not build VRF message", log.Err(err))
 		return nil, err
 	}
 
 	sig, err := o.vrfSigner.Sign(msg)
 	if err != nil {
-		o.Error("Proof: could not sign VRF message err=%v", err)
+		o.With().Error("proof: could not sign VRF message", log.Err(err))
 		return nil, err
 	}
 
@@ -253,7 +253,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	safeEp := sl.GetEpoch()
 
-	o.Info("safe layer %v, epoch %v", sl, safeEp)
+	o.With().Info("safe layer and epoch", sl, safeEp)
 	// check genesis
 	// genesis is for 3 epochs with hare since it can only count active identities found in blocks
 	if safeEp < 3 {
@@ -279,7 +279,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 
 	// no contextually valid blocks
 	if len(mp) == 0 {
-		o.With().Error("Could not calculate hare active set size: no contextually valid blocks",
+		o.With().Error("could not calculate hare active set size: no contextually valid blocks",
 			layer, layer.GetEpoch(),
 			log.FieldNamed("safe_layer_id", sl), log.FieldNamed("safe_epoch_id", safeEp))
 		o.lock.Unlock()
@@ -288,7 +288,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 
 	activeMap, err := o.getActiveSet(safeEp-1, mp)
 	if err != nil {
-		o.With().Error("Could not retrieve active set size", log.Err(err), layer, layer.GetEpoch(),
+		o.With().Error("could not retrieve active set size", log.Err(err), layer, layer.GetEpoch(),
 			log.FieldNamed("safe_layer_id", sl), log.FieldNamed("safe_epoch_id", safeEp))
 		o.lock.Unlock()
 		return nil, err
@@ -310,7 +310,8 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerI
 			return true, nil // all ids are active in genesis
 		}
 
-		o.With().Error("IsIdentityActiveOnConsensusView erred while calling actives func", layer, log.Err(err))
+		o.With().Error("method IsIdentityActiveOnConsensusView erred while calling actives func",
+			layer, log.Err(err))
 		return false, err
 	}
 	_, exist := actives[edID]

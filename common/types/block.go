@@ -191,7 +191,7 @@ func (b *Block) Fields() []log.LoggableField {
 		log.FieldNamed("miner_id", b.MinerID()),
 		log.Int("view_edges", len(b.ViewEdges)),
 		log.Int("vote_count", len(b.BlockVotes)),
-		b.ATXID,
+		log.String("atxid", b.ATXID.ShortString()),
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
 		log.FieldNamed("ref_block", b.RefBlock),
 		log.Int("active_set", activeSet),

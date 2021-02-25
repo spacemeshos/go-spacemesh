@@ -162,7 +162,6 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 	}
 
 	// Create networking
-
 	n, err := net.NewNet(config, l, logger.WithName("tcpnet"))
 	if err != nil {
 		return nil, fmt.Errorf("can't create Switch without a network, err: %v", err)
@@ -493,7 +492,6 @@ func (s *Switch) RegisterDirectProtocolWithChannel(protocol string, ingressChann
 
 // listenToNetworkMessages is listening on new messages from the opened connections and processes them.
 func (s *Switch) listenToNetworkMessages() {
-
 	// We listen to each of the messages queues we get from `net`
 	// It's net's responsibility to distribute the messages to the queues
 	// in a way that they're processing order will work
@@ -512,7 +510,6 @@ func (s *Switch) listenToNetworkMessages() {
 			}
 		}(netqueues[nq])
 	}
-
 }
 
 // onRemoteClientMessage possible errors

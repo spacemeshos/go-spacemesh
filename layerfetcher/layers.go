@@ -328,8 +328,8 @@ func (l *Logic) getPoetResult(hash types.Hash32, data []byte) error {
 	return l.poetProofs.ValidateAndStoreMsg(data)
 }
 
-// blockReceiveFunc defines block handling function when fetching block
-func (l *Logic) blockReceiveFunc(hash types.Hash32, data []byte) error {
+// blockReceiveFunc handles blocks received via fetch
+func (l *Logic) blockReceiveFunc(data []byte) error {
 	return l.blockHandler.HandleBlockData(data, l)
 }
 
@@ -394,9 +394,9 @@ func (l *Logic) GetBlocks(IDs []types.BlockID) error {
 		hashes = append(hashes, atxID.AsHash32())
 	}
 	results := l.fetcher.GetHashes(hashes, fetch.Hint(BlockDB), true)
-	for hash, resC := range results {
+	for _, resC := range results {
 		res := <-resC
-		err := l.blockReceiveFunc(hash, res.Data)
+		err := l.blockReceiveFunc(res.Data)
 		if err != nil {
 			return err
 		}

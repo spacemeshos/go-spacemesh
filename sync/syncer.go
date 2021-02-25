@@ -617,7 +617,7 @@ func (s *Syncer) GetAtxs(IDs []types.ATXID) error {
 func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*types.Block, error) {
 	ch := make(chan bool, 1)
 	foo := func(res bool) error {
-		s.Info("layer %v done", layerID)
+		s.With().Info("sync layer done", layerID)
 		ch <- res
 		return nil
 	}
@@ -648,7 +648,7 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 func (s *Syncer) getBlocks(jobID types.LayerID, blockIds []types.BlockID) error {
 	ch := make(chan bool, 1)
 	foo := func(res bool) error {
-		s.Info("layer %v done", jobID)
+		s.With().Info("get blocks for layer done", jobID)
 		ch <- res
 		return nil
 	}

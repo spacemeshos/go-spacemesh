@@ -73,6 +73,11 @@ func (vp votingPattern) Layer() types.LayerID {
 	return vp.LayerID
 }
 
+// Field returns a log field. Implements the LoggableField interface.
+func (vp votingPattern) Field() log.Field {
+	return log.String("votingpattern", fmt.Sprintf("patternID %d for layer %d", vp.id, vp.LayerID))
+}
+
 type database interface {
 	GetBlock(id types.BlockID) (*types.Block, error)
 	LayerBlockIds(id types.LayerID) ([]types.BlockID, error)
@@ -112,7 +117,6 @@ type ninjaTortoise struct {
 
 // NewNinjaTortoise create a new ninja tortoise instance
 func newNinjaTortoise(layerSize int, blocks database, hdist int, log log.Log) *ninjaTortoise {
-
 	trtl := &ninjaTortoise{logger: log, db: blocks,
 		Hdist:        types.LayerID(hdist),
 		AvgLayerSize: layerSize,
@@ -144,7 +148,7 @@ func (ni *ninjaTortoise) saveOpinion() error {
 		}
 
 		if !valid {
-			ni.logger.With().Warning("block is contextually invalid", b.id())
+			ni.logger.With().Warning("block is contextually invalid", b.id(), b.layer())
 		}
 		events.ReportValidBlock(b.id(), valid)
 	}
@@ -183,7 +187,7 @@ func (ni *ninjaTortoise) evictOutOfPbase() {
 				delete(ni.TTally, p)
 				delete(ni.TPattern, p)
 				delete(ni.TPatSupport, p)
-				ni.logger.Debug("evict pattern %v from maps ", p)
+				ni.logger.With().Debug("evict pattern from maps", p)
 			}
 			delete(ni.TGood, lyr)
 			delete(ni.Patterns, lyr)
@@ -193,13 +197,13 @@ func (ni *ninjaTortoise) evictOutOfPbase() {
 			defer wg.Done()
 			ids, err := ni.db.LayerBlockIds(lyr)
 			if err != nil {
-				ni.logger.With().Error("could not get layer ids for layer ", lyr, log.Err(err))
+				ni.logger.With().Error("could not get layer ids", lyr, log.Err(err))
 			}
 			for _, id := range ids {
 				delete(ni.TEffective, id)
 				delete(ni.TCorrect, id)
 				delete(ni.TExplicit, id)
-				ni.logger.Debug("evict block %v from maps ", id)
+				ni.logger.With().Debug("evict block from maps", id)
 			}
 		}()
 		wg.Wait()
@@ -208,18 +212,17 @@ func (ni *ninjaTortoise) evictOutOfPbase() {
 }
 
 func (ni *ninjaTortoise) processBlock(b *types.Block) {
-
-	ni.logger.Debug("process block: %s layer: %s  ", b.ID(), b.Layer())
+	ni.logger.With().Debug("process block", b.Fields()...)
 	if b.Layer() == types.GetEffectiveGenesis() {
 		return
 	}
 
 	patternMap := make(map[types.LayerID]map[types.BlockID]struct{})
 	for _, bid := range b.BlockVotes {
-		ni.logger.Debug("block votes %s", bid)
+		ni.logger.With().Debug("block votes", bid)
 		bl, err := ni.db.GetBlock(bid)
 		if err != nil || bl == nil {
-			ni.logger.Panic(fmt.Sprintf("error block not found ID %s , %v!!!!!", bid, err))
+			ni.logger.Panic(fmt.Sprintf("block in vote not found: ID %s, err: %v", bid, err))
 		}
 		if _, found := patternMap[bl.Layer()]; !found {
 			patternMap[bl.Layer()] = map[types.BlockID]struct{}{}
@@ -364,7 +367,7 @@ func (ni *ninjaTortoise) getCorrEffCounter() (map[types.BlockID]vec, map[types.L
 	return correctionMap, effCountMap, foo
 }
 
-// for all layers from pBase to i add b's votes, mark good layers
+// for all layers from pBase to lyr add b's votes, mark good layers
 // return new minimal good layer
 func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.LayerID {
 	minGood := types.LayerID(math.MaxUint64)
@@ -377,7 +380,7 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.Layer
 	}
 
 	for ; j < lyr.Index(); j++ {
-		// update block votes on all Patterns in blocks view
+		// update block votes on all patterns in blocks view
 		sUpdated := ni.updateBlocksSupport(lyr.Blocks(), j)
 		// todo do this as part of previous for if possible
 		// for each p that was updated and not the good layer of j check if it is the good layer
@@ -396,7 +399,17 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.Layer
 		}
 	}
 
-	ni.logger.Info("found minimal good layer %d, %d", minGood, ni.TGood[minGood].id)
+	if minGood < types.LayerID(math.MaxUint64) {
+		ni.logger.With().Info("found minimal good layer as of this layer",
+			lyr,
+			log.Int("numBlocks", len(lyr.Blocks())),
+			log.FieldNamed("minGood", minGood),
+			ni.TGood[minGood])
+	} else {
+		ni.logger.With().Info("found no minimal good layer as of this layer",
+			lyr,
+			log.Int("numBlocks", len(lyr.Blocks())))
+	}
 	return minGood
 }
 
@@ -410,9 +423,8 @@ func (ni *ninjaTortoise) updateBlocksSupport(b []*types.Block, j types.LayerID) 
 			// explicit
 			ni.TSupport[p]++         // add to supporting Patterns
 			sUpdated[p] = struct{}{} // add to updated Patterns
-
-			// implicit
 		} else if eff, effFound := ni.TEffective[block.ID()]; effFound {
+			// implicit
 			p, found = ni.TPatSupport[eff][j]
 			if found {
 				ni.TSupport[p]++         // add to supporting Patterns
@@ -429,7 +441,7 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 		var found bool
 		blk, err := ni.db.GetBlock(b)
 		if err != nil {
-			ni.logger.Panic(fmt.Sprintf("error block not found ID %s %v", b, err))
+			ni.logger.Panic(fmt.Sprintf("block not found ID %s %v", b, err))
 		}
 
 		if ni.PBase != zeroPattern && blk.Layer() <= ni.PBase.Layer() { // ignore under pbase
@@ -437,7 +449,7 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 		}
 
 		if vp, found = ni.TExplicit[b]; !found {
-			ni.logger.Panic(fmt.Sprintf("block %s from layer %v has no explicit voting, something went wrong ", b, blk.Layer()))
+			ni.logger.Panic(fmt.Sprintf("block %s from layer %v has no explicit voting, something went wrong", b, blk.Layer()))
 		}
 
 		for _, ex := range vp {
@@ -445,7 +457,7 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 			if err != nil {
 				if ex.Layer() == 0 {
 					//todo: fix this so that zero votes are ok
-					log.Warning("block %v int layer %v voted on zero layer", blk.ID().String(), blk.Layer())
+					ni.logger.With().Warning("block voted on zero layer", blk.ID(), blk.Layer())
 					continue
 				}
 				ni.logger.Panic("could not retrieve layer block ids %v error %v", ex.Layer(), err)
@@ -518,7 +530,9 @@ func (ni *ninjaTortoise) latestComplete() types.LayerID {
 }
 
 func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
-	ni.logger.With().Info("tortoise update tables", newlyr.Index(), log.Int("n_blocks", len(newlyr.Blocks())))
+	ni.logger.With().Info("tortoise update tables",
+		newlyr.Index(),
+		log.Int("n_blocks", len(newlyr.Blocks())))
 	start := time.Now()
 	if newlyr.Index() > ni.Last {
 		ni.Last = newlyr.Index()
@@ -538,7 +552,6 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 	for j := l; j > 0 && j < newlyr.Index(); j++ {
 		p, gfound := ni.TGood[j]
 		if gfound {
-
 			// find bottom of window
 			windowStart := getBottomOfWindow(newlyr.Index(), ni.PBase.Layer(), ni.Hdist)
 
@@ -556,7 +569,9 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 			}
 
 			tp := ni.TPattern[p]
-			ni.db.ForBlockInView(tp, windowStart, foo)
+			if err := ni.db.ForBlockInView(tp, windowStart, foo); err != nil {
+				ni.logger.With().Error("error while traversing blocks", log.Err(err))
+			}
 
 			// add corrected implicit votes
 			ni.updatePatternTally(p, correctionMap, effCountMap)
@@ -591,8 +606,8 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 						}
 					} else {
 						ni.TVote[p][blt] = vote
-						ni.logger.Debug(" %s no opinion on %s %s %s", p, bid, idx, vote, ni.TTally[p][blt])
-						complete = false // not complete
+						ni.logger.Debug("%s no opinion on %v %v %v %v", p, bid, idx, vote, ni.TTally[p][blt])
+						complete = false
 					}
 				}
 
@@ -608,11 +623,16 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 			if _, found := ni.TComplete[p]; complete && !found {
 				ni.TComplete[p] = struct{}{}
 				ni.PBase = p
-				ni.logger.Info("found new complete and good pattern for layer %d pattern %d with %d support ", p.Layer().Uint64(), p.id, ni.TSupport[p])
+				ni.logger.With().Info("found new complete and good pattern",
+					p.Layer(),
+					p,
+					log.Int("support", ni.TSupport[p]))
 			}
 		}
 	}
-	ni.logger.With().Info(fmt.Sprintf("tortoise finished layer in %v", time.Since(start)), newlyr.Index(), log.FieldNamed("pbase", ni.PBase.Layer()))
+	ni.logger.With().Info(fmt.Sprintf("tortoise finished layer in %v", time.Since(start)),
+		newlyr.Index(),
+		log.FieldNamed("pbase", ni.PBase.Layer()))
 	return
 }
 
