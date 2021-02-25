@@ -273,7 +273,7 @@ func (proc *consensusProcess) eventLoop() {
 			m := builder.SetType(pre).Sign(proc.signing).Build()
 			proc.sendMessage(m)
 		} else {
-			log.With().Info("shouldn't participate",
+			proc.With().Info("shouldn't participate",
 				log.Int32("current_k", proc.k),
 				types.LayerID(proc.instanceID))
 		}

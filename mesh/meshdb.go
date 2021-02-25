@@ -240,7 +240,7 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 
 	blockIds, err := types.BytesToBlockIds(idsBytes)
 	if err != nil {
-		return nil, errors.New("could not get all blocks from database ")
+		return nil, errors.New("could not get all blocks from database")
 	}
 
 	return blockIds, nil
