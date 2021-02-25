@@ -15,9 +15,15 @@ import (
 type vec [2]int
 type patternID uint32 // this hash does not include the layer id
 
-const ( // Threshold
-	window          = 10
-	globalThreshold = 0.6
+const (
+	// These two thresholds control how tortoise votes on blocks and layers (patterns).
+	// The first is used when voting for or against blocks (in a layer/pattern).
+	// The second is used when voting for or against a layer (to promote it to newly-good as a pbase candidate).
+	// They should be independent, but the existing tortoise tests expect the second to be a fixed ratio of the first.
+	// NOTE: These have been lowered (from 0.6 and 0.5, respectively) for the testnet.
+	globalThreshold   = 0.5
+	newLayerThreshold = 0.5 * (globalThreshold / 0.6) // adjust to match global threshold
+	window            = 10
 )
 
 var ( // correction vectors type
@@ -294,7 +300,7 @@ func getIdsFromSet(bids map[types.BlockID]struct{}) patternID {
 }
 
 func globalOpinion(v vec, layerSize int, delta float64) vec {
-	threshold := float64(globalThreshold*delta) * float64(layerSize)
+	threshold := globalThreshold * delta * float64(layerSize)
 	if float64(v[0]) > threshold {
 		return support
 	} else if float64(v[1]) > threshold {
@@ -383,10 +389,10 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.Layer
 		// todo do this as part of previous for if possible
 		// for each p that was updated and not the good layer of j check if it is the good layer
 		for p := range sUpdated {
-			// if a majority supports p (p is good)
+			// if a minimum threshold supports p (p is good)
 			// according to tal we dont have to know the exact amount, we can multiply layer size by number of layers
 			jGood, found := ni.TGood[j]
-			threshold := 0.5 * float64(types.LayerID(ni.AvgLayerSize)*(ni.Last-p.Layer()))
+			threshold := newLayerThreshold * float64(types.LayerID(ni.AvgLayerSize)*(ni.Last-p.Layer()))
 			if (jGood != p || !found) && float64(ni.TSupport[p]) > threshold {
 				ni.TGood[p.Layer()] = p
 				// if p is the new minimal good layer
