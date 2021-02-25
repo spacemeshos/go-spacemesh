@@ -196,10 +196,13 @@ func (h *Hare) onTick(id types.LayerID) {
 	h.layerLock.Lock()
 	if id > h.lastLayer {
 		h.lastLayer = id
+	} else {
+		h.With().Error("received out of order layer tick",
+			log.FieldNamed("last_layer", h.lastLayer),
+			log.FieldNamed("this_layer", id))
 	}
 
 	h.layerLock.Unlock()
-	h.Debug("hare got tick, sleeping for %v", h.networkDelta)
 
 	if !h.broker.Synced(instanceID(id)) { // if not synced don't start consensus
 		h.With().Info("not starting hare since node is not synced", id)
@@ -220,6 +223,7 @@ func (h *Hare) onTick(id types.LayerID) {
 		}
 	}()
 
+	h.Debug("hare got tick, sleeping for %v", h.networkDelta)
 	ti := time.NewTimer(h.networkDelta)
 	select {
 	case <-ti.C:
