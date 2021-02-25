@@ -327,8 +327,8 @@ func (app *SpacemeshApp) getAppInfo() string {
 }
 
 // Cleanup stops all app services
-func (app *SpacemeshApp) Cleanup(cmd *cobra.Command, args []string) {
-	log.Info("App Cleanup starting...")
+func (app *SpacemeshApp) Cleanup(*cobra.Command, []string) {
+	log.Info("app cleanup starting...")
 	app.stopServices()
 	// add any other Cleanup tasks here....
 	log.Info("App Cleanup completed\n\n")

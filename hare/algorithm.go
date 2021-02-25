@@ -267,7 +267,9 @@ func (proc *consensusProcess) eventLoop() {
 			m := builder.SetType(pre).Sign(proc.signing).Build()
 			proc.sendMessage(m)
 		} else {
-			log.Info("shouldn't participate ")
+			proc.With().Info("shouldn't participate",
+				log.Int32("current_k", proc.k),
+				types.LayerID(proc.instanceID))
 		}
 	}()
 
@@ -356,10 +358,9 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 	proc.With().Debug("Received message", log.String("msg_type", m.InnerMsg.Type.String()))
 
 	// validate context
+	mType := m.InnerMsg.Type.String()
 	err := proc.validator.ContextuallyValidateMessage(m, proc.k)
 	if err != nil {
-		mType := m.InnerMsg.Type.String()
-
 		// early message, keep for later
 		if err == errEarlyMsg {
 			proc.With().Debug("Early message detected, keeping",
@@ -400,7 +401,12 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 
 	// warn on late pre-round msgs
 	if m.InnerMsg.Type == pre && proc.k != -1 {
-		proc.With().Warning("encountered late PreRound message", log.String("sender_id", m.PubKey.ShortString()), types.LayerID(proc.instanceID))
+		proc.With().Warning("encountered late preround message",
+			log.String("msg_type", mType),
+			log.String("sender_id", m.PubKey.ShortString()),
+			log.Int32("current_k", proc.k),
+			log.Int32("msg_k", m.InnerMsg.K),
+			types.LayerID(proc.instanceID))
 	}
 
 	// valid, continue process msg by type
@@ -571,7 +577,7 @@ func (proc *consensusProcess) beginNotifyRound() {
 
 	cert := proc.commitTracker.BuildCertificate()
 	if cert == nil {
-		proc.Error("Begin notify round: Build certificate returned nil")
+		proc.Error("begin notify round: BuildCertificate returned nil")
 		return
 	}
 

@@ -89,7 +89,7 @@ func (p *MessageServer) readLoop() {
 	for {
 		select {
 		case <-p.exit:
-			p.Debug("shutting down protocol ", p.name)
+			p.With().Debug("shutting down protocol", log.String("protocol", p.name))
 			close(p.exit)
 			return
 		case <-timer.C:
@@ -121,7 +121,7 @@ func (p *MessageServer) cleanStaleMessages() {
 		if elem != nil {
 			item := elem.Value.(Item)
 			if time.Since(item.timestamp) > p.requestLifetime {
-				p.Debug("cleanStaleMessages remove request ", item.id)
+				p.With().Debug("cleanStaleMessages remove request", log.Uint64("id", item.id))
 				p.removeFromPending(item.id)
 			} else {
 				p.Debug("cleanStaleMessages no more stale messages")
@@ -141,11 +141,11 @@ func (p *MessageServer) removeFromPending(reqID uint64) {
 		next = e.Next()
 		if reqID == e.Value.(Item).id {
 			p.pendingQueue.Remove(e)
-			p.Debug("removed request ", e.Value.(Item).id)
+			p.With().Debug("removed request", log.Uint64("request_id", reqID))
 			break
 		}
 	}
-	p.Debug("delete request result %v handler", reqID)
+	p.With().Debug("delete request result handler", log.Uint64("request_id", reqID))
 	delete(p.resHandlers, reqID)
 	p.pendMutex.Unlock()
 }
@@ -164,21 +164,24 @@ func (p *MessageServer) handleRequestMessage(msg Message, data *service.DataMsgW
 
 	foo, okFoo := p.msgRequestHandlers[MessageType(data.MsgType)]
 	if !okFoo {
-		p.With().Error("handler missing for request", log.Uint64("request_id", data.ReqID), log.String("protocol", p.name), log.Uint32("msg_type", data.MsgType))
+		p.With().Error("handler missing for request",
+			log.Uint64("request_id", data.ReqID),
+			log.String("protocol", p.name),
+			log.Uint32("msg_type", data.MsgType))
 		return
 	}
 
 	p.Debug("handle request type %v", data.MsgType)
 	rmsg := &service.DataMsgWrapper{MsgType: data.MsgType, ReqID: data.ReqID, Payload: foo(msg)}
 	if sendErr := p.network.SendWrappedMessage(msg.Sender(), p.name, rmsg); sendErr != nil {
-		p.Error("Error sending response message: %s", sendErr)
+		p.With().Error("Error sending response message", log.Err(sendErr))
 	}
 	p.Debug("handleRequestMessage close")
 }
 
 func (p *MessageServer) handleResponseMessage(headers *service.DataMsgWrapper) {
 	//get and remove from pendingMap
-	p.Log.With().Debug("handleResponseMessage", log.Uint64("req_id", headers.ReqID))
+	p.Log.With().Debug("handleResponseMessage", log.Uint64("request_id", headers.ReqID))
 	p.pendMutex.RLock()
 	foo, okFoo := p.resHandlers[headers.ReqID]
 	p.pendMutex.RUnlock()
@@ -186,7 +189,7 @@ func (p *MessageServer) handleResponseMessage(headers *service.DataMsgWrapper) {
 	if okFoo {
 		foo(headers.Payload)
 	} else {
-		p.Error("Cant find handler %v", headers.ReqID)
+		p.With().Error("can't find handler", log.Uint64("request_id", headers.ReqID))
 	}
 	p.Debug("handleResponseMessage close")
 }
@@ -225,7 +228,7 @@ func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address
 		p.removeFromPending(reqID)
 		return sendErr
 	}
-	p.Log.With().Debug("sent request", log.Uint64("req_id", reqID))
+	p.Log.With().Debug("sent request", log.Uint64("request_id", reqID))
 	return nil
 }
 

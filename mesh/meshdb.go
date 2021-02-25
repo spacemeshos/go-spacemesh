@@ -240,7 +240,7 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 
 	blockIds, err := types.BytesToBlockIds(idsBytes)
 	if err != nil {
-		return nil, errors.New("could not get all blocks from database ")
+		return nil, errors.New("could not get all blocks from database")
 	}
 
 	return blockIds, nil
@@ -729,6 +729,10 @@ func (m *DB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]stru
 		validBlks[b] = struct{}{}
 	}
 
+	m.With().Info("count of contextually valid blocks in layer",
+		layer,
+		log.Int("count_valid", len(validBlks)),
+		log.Int("count_total", len(blockIds)))
 	return validBlks, nil
 }
 

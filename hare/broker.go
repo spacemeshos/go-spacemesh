@@ -158,8 +158,9 @@ func (b *Broker) eventLoop() {
 			}
 
 			if hareMsg.InnerMsg == nil {
-				b.With().Error("Broker message validation failed",
-					log.Err(errNilInner), log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
+				b.With().Error("broker message validation failed",
+					log.Err(errNilInner),
+					log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 				continue
 			}
 
