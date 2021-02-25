@@ -208,7 +208,6 @@ func (ni *ninjaTortoise) evictOutOfPbase() {
 }
 
 func (ni *ninjaTortoise) processBlock(b *types.Block) {
-
 	ni.logger.With().Info("process block", b.ID(), b.Layer())
 	if b.Layer() == types.GetEffectiveGenesis() {
 		return
@@ -216,7 +215,7 @@ func (ni *ninjaTortoise) processBlock(b *types.Block) {
 
 	patternMap := make(map[types.LayerID]map[types.BlockID]struct{})
 	for _, bid := range b.BlockVotes {
-		ni.logger.Debug("block votes %s", bid)
+		ni.logger.With().Debug("block votes", bid)
 		bl, err := ni.db.GetBlock(bid)
 		if err != nil || bl == nil {
 			ni.logger.Panic(fmt.Sprintf("error block not found ID %s , %v!!!!!", bid, err))
