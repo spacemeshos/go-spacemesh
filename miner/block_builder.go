@@ -217,30 +217,33 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	// not genesis, get from hare
 	bottom, top := calcHdistRange(id, t.hdist)
 
-	if res, err := t.hareResult.GetResult(bottom); err != nil { // no result for bottom, take the whole layer
-		t.With().Warning("Could not get result for bottom layer. Adding the whole layer instead.", log.Err(err),
-			log.FieldNamed("bottom", bottom), log.FieldNamed("top", top), log.FieldNamed("hdist", t.hdist))
-		ids, e := t.meshProvider.LayerBlockIds(bottom)
-		if e != nil {
-			t.With().Error("could not set votes to whole layer", log.Err(e))
-			return nil, e
-		}
-
-		// set votes to whole layer
-		votes = ids
-	} else { // got result, just set
-		votes = res
-	}
-
-	// add rest of hdist range
-	for i := bottom + 1; i <= top; i++ {
-		res, err := t.hareResult.GetResult(i)
-		if err != nil {
+	// add votes
+	// for layers that are missing hare votes, we just vote for the entire layer instead, i.e., all blocks
+	// received. note that "top" here is set to one layer before the current layer, so hare should have
+	// finished for this layer by now.
+	for i := bottom; i <= top; i++ {
+		if res, err := t.hareResult.GetResult(i); err != nil {
 			t.With().Warning("could not get result for layer in range", i, log.Err(err),
 				log.FieldNamed("bottom", bottom), log.FieldNamed("top", top), log.FieldNamed("hdist", t.hdist))
-			continue
+			ids, e := t.meshProvider.LayerBlockIds(i)
+			if e != nil {
+				t.With().Error("could not set votes to whole layer", log.Err(e))
+				return nil, e
+			}
+			// no hare result, vote for entire layer instead
+			t.With().Debug("adding votes for layer (no hare result)",
+				i,
+				log.FieldNamed("currentLayer", id),
+				log.Int("numVotes", len(ids)))
+			votes = append(votes, ids...)
+		} else {
+			// use hare result to set votes
+			t.With().Debug("adding votes for layer (using hare result)",
+				i,
+				log.FieldNamed("currentLayer", id),
+				log.Int("numVotes", len(res)))
+			votes = append(votes, res...)
 		}
-		votes = append(votes, res...)
 	}
 
 	votes = filterUnknownBlocks(votes, t.meshProvider.GetBlock)
