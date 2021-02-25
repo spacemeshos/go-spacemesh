@@ -231,14 +231,14 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 				return nil, e
 			}
 			// no hare result, vote for entire layer instead
-			t.With().Debug("adding votes for layer (no hare result)",
+			t.With().Info("adding votes for layer (no hare result)",
 				i,
 				log.FieldNamed("currentLayer", id),
 				log.Int("numVotes", len(ids)))
 			votes = append(votes, ids...)
 		} else {
 			// use hare result to set votes
-			t.With().Debug("adding votes for layer (using hare result)",
+			t.With().Info("adding votes for layer (using hare result)",
 				i,
 				log.FieldNamed("currentLayer", id),
 				log.Int("numVotes", len(res)))
