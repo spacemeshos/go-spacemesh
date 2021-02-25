@@ -246,6 +246,8 @@ func (ni *ninjaTortoise) processBlock(b *types.Block) {
 		}
 
 		vp := votingPattern{id: getIdsFromSet(v), LayerID: layerID}
+		// if we set a block here that we don't also explicitly process, there will be an error later in
+		// handleIncomingLayer
 		ni.TPattern[vp] = v
 		if _, ok := ni.Patterns[vp.Layer()]; !ok {
 			ni.Patterns[vp.Layer()] = map[votingPattern]struct{}{}
@@ -437,7 +439,8 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 		}
 
 		if vp, found = ni.TExplicit[b]; !found {
-			ni.logger.Panic(fmt.Sprintf("block %s from layer %v has no explicit voting, something went wrong ", b, blk.Layer()))
+			ni.logger.With().Error("block in view has no explicit voting", b, blk.Layer())
+			return
 		}
 
 		for _, ex := range vp {
@@ -563,6 +566,10 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 
 			// add explicit votes
 			addPtrnVt := ni.addPatternVote(p, view)
+
+			// if a block exists in this view but is not in TExplicit, there will be an error here
+			// view comes from TPattern
+			// all blocks processed in processBlock exist in TExplicit
 			for bl := range view {
 				addPtrnVt(bl)
 			}
