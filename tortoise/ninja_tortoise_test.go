@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"math"
 	"os"
 	"runtime"
@@ -352,12 +353,12 @@ func createLayer2(index types.LayerID, view *types.Layer, votes []*types.Layer, 
 		for idx, pat := range patterns {
 			for _, id := range pat {
 				b := votes[idx].Blocks()[id]
-				bl.AddVote(types.BlockID(b.ID()))
+				bl.AddVote(b.ID())
 			}
 		}
 		if view != nil && len(view.Blocks()) > 0 {
 			for _, prevBloc := range view.Blocks() {
-				bl.AddView(types.BlockID(prevBloc.ID()))
+				bl.AddView(prevBloc.ID())
 			}
 		}
 
@@ -422,40 +423,40 @@ func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 	AddLayer(mdb, l11)
 	alg.handleIncomingLayer(l11)
 
-	assert.True(t, alg.PBase.Layer() == 7)
+	require.Equal(t, types.LayerID(7), alg.PBase.Layer(), "unexpected pbase")
 
 	//now l7 one votes to be contextually valid in the eyes of layer 12 good pattern
 	l12 := createLayer2(12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 171)
 	AddLayer(mdb, l12)
 	alg.handleIncomingLayer(l12)
 
-	assert.True(t, alg.PBase.Layer() == 7)
+	require.Equal(t, types.LayerID(7), alg.PBase.Layer(), "unexpected pbase")
 
 	l13 := createLayer2(13, l12, []*types.Layer{l12, l11, l10, l9, l8}, 126)
 	AddLayer(mdb, l13)
 	alg.handleIncomingLayer(l13)
 
-	//now l7 has the exact amount of votes to be contextually valid which will make 12 good pattern complete
-	l121 := createLayer2(12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 1)
-	AddLayer(mdb, l121)
-	alg.handleIncomingLayer(l121)
+	// now l7 has the exact amount of votes to be contextually valid which will make 12 good pattern complete
+	l12b := createLayer2(12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 1)
+	AddLayer(mdb, l12b)
+	alg.handleIncomingLayer(l12b)
 
-	assert.True(t, alg.PBase.Layer() == 7)
+	require.Equal(t, types.LayerID(7), alg.PBase.Layer(), "unexpected pbase")
 
-	l14 := createLayer2(14, l13, []*types.Layer{l13, l12, l121, l11, l10, l9}, 148)
+	l14 := createLayer2(14, l13, []*types.Layer{l13, l12, l12b, l11, l10, l9}, 148)
 	AddLayer(mdb, l14)
 	alg.handleIncomingLayer(l14)
 
-	l15 := createLayer2(15, l14, []*types.Layer{l14, l13, l121, l12, l11, l10}, 150)
+	l15 := createLayer2(15, l14, []*types.Layer{l14, l13, l12b, l12, l11, l10}, 150)
 	AddLayer(mdb, l15)
 	alg.handleIncomingLayer(l15)
 
-	assert.True(t, alg.PBase.Layer() == 7)
+	require.Equal(t, types.LayerID(7), alg.PBase.Layer(), "unexpected pbase")
 
-	l16 := createLayer2(16, l15, []*types.Layer{l15, l14, l121, l13, l12, l11}, 121)
+	l16 := createLayer2(16, l15, []*types.Layer{l15, l14, l12b, l13, l12, l11}, 121)
 	AddLayer(mdb, l16)
 	alg.handleIncomingLayer(l16)
-	assert.True(t, alg.PBase.Layer() == 15)
+	require.Equal(t, types.LayerID(15), alg.PBase.Layer(), "unexpected pbase")
 }
 
 func TestNinjaTortoise_LayerWithNoVotes2(t *testing.T) {
@@ -511,7 +512,7 @@ func TestNinjaTortoise_LayerWithNoVotes2(t *testing.T) {
 	l11 := createLayer2(11, l10, []*types.Layer{l10, l9, l8, l7, l6}, 147)
 	AddLayer(mdb, l11)
 	alg.handleIncomingLayer(l11)
-	assert.True(t, alg.PBase.Layer() == 7)
+	require.Equal(t, types.LayerID(7), alg.PBase.Layer(), "unexpected pbase")
 
 	// l7 is missing exactly 1 vote to be contextually valid which will make 12 complete
 	l12 := createLayer2(12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 171)
@@ -533,7 +534,7 @@ func TestNinjaTortoise_LayerWithNoVotes2(t *testing.T) {
 	l16 := createLayer2(16, l15, []*types.Layer{l15, l14, l13, l12, l11}, 121)
 	AddLayer(mdb, l16)
 	alg.handleIncomingLayer(l16)
-	assert.True(t, alg.PBase.Layer() == 7)
+	require.Equal(t, types.LayerID(7), alg.PBase.Layer(), "unexpected pbase")
 }
 
 func TestNinjaTortoise_OneMoreLayerWithNoVotes(t *testing.T) {
