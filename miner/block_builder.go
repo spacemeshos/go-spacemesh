@@ -218,24 +218,18 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	bottom, top := calcHdistRange(id, t.hdist)
 
 	// add votes
-	// for layers that are missing hare votes, we just vote for the entire layer instead, i.e., all blocks
-	// received. note that "top" here is set to one layer before the current layer, so hare should have
+	// for layers that are missing hare votes, we vote for the "zero pattern", i.e., nothing at all.
+	// this is the only way to guarantee consensus if the hare isn't working (without self-healing).
+	// note that "top" here is set to one layer before the current layer, so hare should have
 	// finished for this layer by now.
 	for i := bottom; i <= top; i++ {
 		if res, err := t.hareResult.GetResult(i); err != nil {
 			t.With().Warning("could not get result for layer in range", i, log.Err(err),
 				log.FieldNamed("bottom", bottom), log.FieldNamed("top", top), log.FieldNamed("hdist", t.hdist))
-			ids, e := t.meshProvider.LayerBlockIds(i)
-			if e != nil {
-				t.With().Error("could not set votes to whole layer", log.Err(e))
-				return nil, e
-			}
-			// no hare result, vote for entire layer instead
-			t.With().Info("adding votes for layer (no hare result)",
+			// no hare result, don't vote for anything
+			t.With().Info("voting for zero pattern this layer (no hare result)",
 				i,
-				log.FieldNamed("currentLayer", id),
-				log.Int("numVotes", len(ids)))
-			votes = append(votes, ids...)
+				log.FieldNamed("currentLayer", id))
 		} else {
 			// use hare result to set votes
 			t.With().Info("adding votes for layer (using hare result)",
