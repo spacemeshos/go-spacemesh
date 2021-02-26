@@ -71,15 +71,32 @@ func (s NodeService) Build(context.Context, *empty.Empty) (*pb.BuildResponse, er
 // current and verified layer
 func (s NodeService) Status(context.Context, *pb.StatusRequest) (*pb.StatusResponse, error) {
 	log.Info("GRPC NodeService.Status")
+
+	curLayer, latestLayer, verifiedLayer := s.getLayers()
 	return &pb.StatusResponse{
 		Status: &pb.NodeStatus{
-			ConnectedPeers: s.PeerCounter.PeerCount(),                                    // number of connected peers
-			IsSynced:       s.Syncer.IsSynced(),                                          // whether the node is synced
-			SyncedLayer:    &pb.LayerNumber{Number: uint32(s.Mesh.LatestLayer())},        // latest layer we saw from the network
-			TopLayer:       &pb.LayerNumber{Number: uint32(s.GenTime.GetCurrentLayer())}, // current layer, based on time
-			VerifiedLayer:  &pb.LayerNumber{Number: uint32(s.Mesh.LatestLayerInState())}, // latest verified layer
+			ConnectedPeers: s.PeerCounter.PeerCount(),              // number of connected peers
+			IsSynced:       s.Syncer.IsSynced(),                    // whether the node is synced
+			SyncedLayer:    &pb.LayerNumber{Number: latestLayer},   // latest layer we saw from the network
+			TopLayer:       &pb.LayerNumber{Number: curLayer},      // current layer, based on time
+			VerifiedLayer:  &pb.LayerNumber{Number: verifiedLayer}, // latest verified layer
 		},
 	}, nil
+}
+
+func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
+	// We cannot get meaningful data from the mesh during the genesis epochs since there are no blocks in these
+	// epochs, so just return the current layer instead
+	curLayerObj := s.GenTime.GetCurrentLayer()
+	curLayer = uint32(curLayerObj)
+	if curLayerObj.GetEpoch().IsGenesis() {
+		latestLayer = curLayer
+		verifiedLayer = curLayer
+	} else {
+		latestLayer = uint32(s.Mesh.LatestLayer())
+		verifiedLayer = uint32(s.Mesh.LatestLayerInState())
+	}
+	return
 }
 
 // SyncStart requests that the node start syncing the mesh (if it isn't already syncing)
@@ -116,13 +133,14 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 				log.Info("StatusStream closed, shutting down")
 				return nil
 			}
+			curLayer, latestLayer, verifiedLayer := s.getLayers()
 			if err := stream.Send(&pb.StatusStreamResponse{
 				Status: &pb.NodeStatus{
-					ConnectedPeers: s.PeerCounter.PeerCount(),                                    // number of connected peers
-					IsSynced:       s.Syncer.IsSynced(),                                          // whether the node is synced
-					SyncedLayer:    &pb.LayerNumber{Number: uint32(s.Mesh.LatestLayer())},        // latest layer we saw from the network
-					TopLayer:       &pb.LayerNumber{Number: uint32(s.GenTime.GetCurrentLayer())}, // current layer, based on time
-					VerifiedLayer:  &pb.LayerNumber{Number: uint32(s.Mesh.LatestLayerInState())}, // latest verified layer
+					ConnectedPeers: s.PeerCounter.PeerCount(),              // number of connected peers
+					IsSynced:       s.Syncer.IsSynced(),                    // whether the node is synced
+					SyncedLayer:    &pb.LayerNumber{Number: latestLayer},   // latest layer we saw from the network
+					TopLayer:       &pb.LayerNumber{Number: curLayer},      // current layer, based on time
+					VerifiedLayer:  &pb.LayerNumber{Number: verifiedLayer}, // latest verified layer
 				},
 			}); err != nil {
 				return err
