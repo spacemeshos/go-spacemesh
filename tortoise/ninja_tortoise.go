@@ -18,7 +18,6 @@ type patternID uint32 // this hash does not include the layer id
 const ( // Threshold
 	window             = 10
 	globalThreshold    = 0.5
-	newlyGoodThreshold = 0.4
 )
 
 var ( // correction vectors type
@@ -294,7 +293,7 @@ func getIdsFromSet(bids map[types.BlockID]struct{}) patternID {
 }
 
 func globalOpinion(v vec, layerSize int, delta float64) vec {
-	threshold := float64(globalThreshold*delta) * float64(layerSize)
+	threshold := globalThreshold * delta * float64(layerSize)
 	if float64(v[0]) > threshold {
 		return support
 	} else if float64(v[1]) > threshold {
@@ -386,7 +385,7 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.Layer
 			// if a minimum threshold supports p (p is good)
 			// according to tal we dont have to know the exact amount, we can multiply layer size by number of layers
 			jGood, found := ni.TGood[j]
-			threshold := newlyGoodThreshold * float64(types.LayerID(ni.AvgLayerSize)*(ni.Last-p.Layer()))
+			threshold := 0.5 * float64(types.LayerID(ni.AvgLayerSize)*(ni.Last-p.Layer()))
 			if (jGood != p || !found) && float64(ni.TSupport[p]) > threshold {
 				ni.TGood[p.Layer()] = p
 				// if p is the new minimal good layer
