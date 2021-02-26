@@ -674,7 +674,6 @@ func TestBlockBuilder_getVotes(t *testing.T) {
 
 	// no bottom
 	bb.meshProvider = &mockMesh{b: allblocks} // assume all blocks exist in DB --> no filtering applied
-	allids := []types.BlockID{b1.ID(), b2.ID(), b3.ID(), b4.ID(), b5.ID(), b6.ID(), b7.ID()}
 	mh = newMockResult()
 	mh.err = errors.New("no result")
 	b1arr := mh.set(bottom + 1)
@@ -683,15 +682,9 @@ func TestBlockBuilder_getVotes(t *testing.T) {
 	b, err = bb.getVotes(id)
 	r.Nil(err)
 	var exp []types.BlockID
-	exp = append(exp, allids...)
 	exp = append(exp, b1arr...)
 	exp = append(exp, tarr...)
 	r.Equal(exp, b)
-
-	// errExample on layer request
-	bb.meshProvider = &mockMesh{b: nil, err: errExample}
-	b, err = bb.getVotes(id)
-	r.Equal(errExample, err)
 }
 
 func TestBlockBuilder_createBlock(t *testing.T) {
@@ -702,14 +695,14 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	block2 := types.NewExistingBlock(6, []byte(rand.String(8)), nil)
 	block3 := types.NewExistingBlock(6, []byte(rand.String(8)), nil)
 	bs := []*types.Block{block1, block2, block3}
-	st := []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
 	builder1 := createBlockBuilder("a", n1, bs)
 
+	// error from hare means no votes
 	builder1.hareResult = &mockResult{err: errExample, ids: nil}
 	builder1.AtxDb = atxDbMock{}
 	b, err := builder1.createBlock(7, types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
 	r.Nil(err)
-	r.Equal(st, b.BlockVotes)
+	r.Nil(b.BlockVotes) // expect empty slice
 
 	builder1.hareResult = &mockResult{err: nil, ids: nil}
 	b, err = builder1.createBlock(7, types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)

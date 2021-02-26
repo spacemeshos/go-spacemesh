@@ -224,12 +224,14 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	// finished for this layer by now.
 	for i := bottom; i <= top; i++ {
 		if res, err := t.hareResult.GetResult(i); err != nil {
-			t.With().Warning("could not get result for layer in range", i, log.Err(err),
-				log.FieldNamed("bottom", bottom), log.FieldNamed("top", top), log.FieldNamed("hdist", t.hdist))
-			// no hare result, don't vote for anything
-			t.With().Info("voting for zero pattern this layer (no hare result)",
+			t.With().Warning("could not get hare result for layer in hdist range, voting for zero pattern",
 				i,
-				log.FieldNamed("currentLayer", id))
+				log.Err(err),
+				log.FieldNamed("bottom", bottom),
+				log.FieldNamed("top", top),
+				log.FieldNamed("currentLayer", id),
+				log.FieldNamed("hdist", t.hdist))
+			// no hare result, don't vote for anything
 		} else {
 			// use hare result to set votes
 			t.With().Info("adding votes for layer (using hare result)",
