@@ -344,9 +344,12 @@ func (s *Syncer) synchronise() {
 	// we have all the data of the prev layers so we can simply validate
 	if s.weaklySynced(curr) {
 		s.handleWeaklySynced()
-		err := s.syncEpochActivations(curr.GetEpoch())
-		if err != nil {
-			s.With().Error("cannot fetch epoch atxs ", curr, log.Err(err))
+		if err := s.syncEpochActivations(curr.GetEpoch()); err != nil {
+			if curr.GetEpoch().IsGenesis() {
+				s.With().Info("cannot fetch epoch atxs (expected during genesis)", curr, log.Err(err))
+			} else {
+				s.With().Error("cannot fetch epoch atxs", curr, log.Err(err))
+			}
 		}
 	} else {
 		s.handleNotSynced(s.ProcessedLayer() + 1)
@@ -390,16 +393,20 @@ func (s *Syncer) handleLayersTillCurrent() {
 		return
 	}
 
-	s.Info("handle layers %d to %d", s.ProcessedLayer()+1, s.GetCurrentLayer()-1)
+	s.With().Info("handle layers",
+		log.FieldNamed("from", s.ProcessedLayer()+1), log.FieldNamed("to", s.GetCurrentLayer()-1))
 	for currentSyncLayer := s.ProcessedLayer() + 1; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
 		if s.isClosed() {
 			return
 		}
 		if err := s.getAndValidateLayer(currentSyncLayer); err != nil {
 			if currentSyncLayer.GetEpoch().IsGenesis() {
-				log.Warning("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
+				s.With().Info("failed getting layer even though we are weakly synced (expected during genesis)",
+					log.FieldNamed("currentSyncLayer", currentSyncLayer),
+					log.FieldNamed("currentLayer", s.GetCurrentLayer()),
+					log.Err(err))
 			} else {
-				s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
+				s.Panic("failed getting layer even though we are weakly synced currentLayer=%v lastTicked=%v err=%v", currentSyncLayer, s.GetCurrentLayer(), err)
 			}
 		}
 	}
@@ -477,9 +484,12 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 func (s *Syncer) syncAtxs(currentSyncLayer types.LayerID) {
 	lastLayerOfEpoch := (currentSyncLayer.GetEpoch() + 1).FirstLayer() - 1
 	if currentSyncLayer == lastLayerOfEpoch {
-		err := s.syncEpochActivations(currentSyncLayer.GetEpoch())
-		if err != nil {
-			s.With().Error("cannot fetch epoch atxs ", currentSyncLayer, log.Err(err))
+		if err := s.syncEpochActivations(currentSyncLayer.GetEpoch()); err != nil {
+			if currentSyncLayer.GetEpoch().IsGenesis() {
+				s.With().Info("cannot fetch epoch atxs (expected during genesis)", currentSyncLayer, log.Err(err))
+			} else {
+				s.With().Error("cannot fetch epoch atxs", currentSyncLayer, log.Err(err))
+			}
 		}
 	}
 }
