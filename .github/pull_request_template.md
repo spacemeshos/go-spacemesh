@@ -18,7 +18,7 @@ Closes #
 
 ## DevOps Notes
 <!-- This section is for DevOps to be aware of changes that might impact releases -->
-- [ ] Does this code require configuration changes?
-- [ ] Does this code affect public APIs?
-- [ ] Does this code assume a new version of external services (PoET, elasticsearch, etc.)
-- [ ] Does this code make changes to log messages that our monitoring infrastructure may rely on?
+- [ ] This PR requires configuration changes?
+- [ ] This PR effect public APIs?
+- [ ] This PR assumes a new version of external services (PoET, elasticsearch, etc.)
+- [ ] This PR makes changes to log messages that our monitoring infrastructure may rely on
