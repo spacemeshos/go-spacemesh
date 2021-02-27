@@ -16,9 +16,9 @@ type vec [2]int
 type patternID uint32 // this hash does not include the layer id
 
 const ( // Threshold
-	window             = 10
-	globalThreshold    = 0.5
-	newLayerThreshold  = 0.5 * (globalThreshold/0.6) // adjust to match global threshold
+	window            = 10
+	globalThreshold   = 0.5
+	newLayerThreshold = 0.5 * (globalThreshold / 0.6) // adjust to match global threshold
 )
 
 var ( // correction vectors type
