@@ -310,7 +310,7 @@ func getIdsFromSet(bids map[types.BlockID]struct{}) patternID {
 
 func (ni *ninjaTortoise) globalOpinion(v vec, layerSize int, delta float64) vec {
 	threshold := globalThreshold * delta * float64(layerSize)
-	ni.logger.With().Info("global opinion", v, log.String("threshold", fmt.Sprint(threshold)))
+	ni.logger.With().Debug("global opinion", v, log.String("threshold", fmt.Sprint(threshold)))
 	if float64(v[0]) > threshold {
 		return support
 	} else if float64(v[1]) > threshold {
@@ -405,7 +405,7 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.Layer
 		j = max(ni.PBase.Layer()+1, lyr.Index()-window+1)
 	}
 
-	ni.logger.With().Info("looking for new minimal good layer",
+	ni.logger.With().Debug("looking for new minimal good layer",
 		log.FieldNamed("bottom", j),
 		log.FieldNamed("top", lyr.Index()-1))
 	for ; j < lyr.Index(); j++ {
@@ -413,7 +413,7 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.Layer
 		sUpdated := ni.updateBlocksSupport(lyr.Blocks(), j)
 		// todo do this as part of previous for if possible
 		// for each p that was updated and not the good layer of j check if it is the good layer
-		ni.logger.With().Info("checking updated patterns for layer",
+		ni.logger.With().Debug("checking updated patterns for layer",
 			j,
 			log.Int("num_blocks", len(lyr.Blocks())),
 			log.Int("num_updated_patterns", len(sUpdated)))
@@ -422,21 +422,21 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.Layer
 			// according to tal we dont have to know the exact amount, we can multiply layer size by number of layers
 			jGood, found := ni.TGood[j]
 			threshold := 0.5 * float64(types.LayerID(ni.AvgLayerSize)*(ni.Last-p.Layer()))
-			ni.logger.With().Info("checking pattern",
+			ni.logger.With().Debug("checking pattern",
 				p,
 				log.FieldNamed("jGood", jGood),
 				log.Bool("found", found),
 				log.Int("support", ni.TSupport[p]),
 				log.String("threshold", fmt.Sprint(threshold)))
 			if (jGood != p || !found) && float64(ni.TSupport[p]) > threshold {
-				ni.logger.With().Info("new pattern has enough support",
+				ni.logger.With().Debug("new pattern has enough support",
 					p,
 					log.Int("support", ni.TSupport[p]),
 					log.String("threshold", fmt.Sprint(threshold)))
 				ni.TGood[p.Layer()] = p
 				// if p is the new minimal good layer
 				if p.Layer() < minGood {
-					ni.logger.With().Info("new minimal good layer", p, p.Layer())
+					ni.logger.With().Debug("new minimal good layer", p, p.Layer())
 					minGood = p.Layer()
 				}
 			}
@@ -465,7 +465,7 @@ func (ni *ninjaTortoise) updateBlocksSupport(b []*types.Block, j types.LayerID) 
 		// check if block votes for layer j explicitly or implicitly
 		p, found := ni.TExplicit[block.ID()][j]
 		if found {
-			ni.logger.With().Info("block explicitly votes for pattern", append(block.Fields(), j, p)...)
+			ni.logger.With().Debug("block explicitly votes for pattern", append(block.Fields(), j, p)...)
 			// explicit
 			ni.TSupport[p]++         // add to supporting Patterns
 			sUpdated[p] = struct{}{} // add to updated Patterns
@@ -473,7 +473,7 @@ func (ni *ninjaTortoise) updateBlocksSupport(b []*types.Block, j types.LayerID) 
 			// implicit
 			p, found = ni.TPatSupport[eff][j]
 			if found {
-				ni.logger.With().Info("block implicitly votes for pattern", append(block.Fields(), j, p, eff)...)
+				ni.logger.With().Debug("block implicitly votes for pattern", append(block.Fields(), j, p, eff)...)
 				ni.TSupport[p]++         // add to supporting Patterns
 				sUpdated[p] = struct{}{} // add to updated Patterns
 			}
@@ -654,7 +654,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 						ni.TVote[p] = make(map[blockIDLayerTuple]vec)
 					}
 
-					ni.logger.With().Info("checking global opinion", p, blt)
+					ni.logger.With().Debug("checking global opinion", p, blt)
 					if vote := ni.globalOpinion(ni.TTally[p][blt], ni.AvgLayerSize, float64(p.LayerID-idx)); vote != abstain {
 						ni.TVote[p][blt] = vote
 						if vote == support {
@@ -662,7 +662,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 						}
 					} else {
 						ni.TVote[p][blt] = vote
-						ni.logger.With().Info(
+						ni.logger.With().Debug(
 							"block support below threshold, pattern abstains from vote and will not be promoted",
 							p,
 							bid,
