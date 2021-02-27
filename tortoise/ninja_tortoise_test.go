@@ -407,25 +407,17 @@ func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 	AddLayer(mdb, l7)
 	alg.handleIncomingLayer(l7)
 
-	//require.Equal(t, types.LayerID(6), alg.PBase.Layer(), "unexpected pbase")
-
 	l8 := createLayer2(8, l7, []*types.Layer{l6, l5, l4, l3}, 125)
 	AddLayer(mdb, l8)
 	alg.handleIncomingLayer(l8)
-
-	//require.Equal(t, types.LayerID(6), alg.PBase.Layer(), "unexpected pbase")
 
 	l9 := createLayer2(9, l8, []*types.Layer{l8, l7, l6, l5, l4}, 112)
 	AddLayer(mdb, l9)
 	alg.handleIncomingLayer(l9)
 
-	//require.Equal(t, types.LayerID(6), alg.PBase.Layer(), "unexpected pbase")
-
 	l10 := createLayer2(10, l9, []*types.Layer{l9, l8, l7, l6, l5}, 124)
 	AddLayer(mdb, l10)
 	alg.handleIncomingLayer(l10)
-
-	//require.Equal(t, types.LayerID(6), alg.PBase.Layer(), "unexpected pbase")
 
 	l11 := createLayer2(11, l10, []*types.Layer{l10, l9, l8, l7, l6}, 122)
 	AddLayer(mdb, l11)
@@ -433,7 +425,7 @@ func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 
 	require.Equal(t, types.LayerID(7), alg.PBase.Layer(), "unexpected pbase")
 
-	//now l7 one votes to be contextually valid in the eyes of layer 12 good pattern
+	// now l7 one votes to be contextually valid in the eyes of layer 12 good pattern
 	l12 := createLayer2(12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 142)
 	AddLayer(mdb, l12)
 	alg.handleIncomingLayer(l12)
@@ -443,8 +435,6 @@ func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 	l13 := createLayer2(13, l12, []*types.Layer{l12, l11, l10, l9, l8}, 105)
 	AddLayer(mdb, l13)
 	alg.handleIncomingLayer(l13)
-
-	//require.Equal(t, types.LayerID(7), alg.PBase.Layer(), "unexpected pbase")
 
 	// now l7 has the exact amount of votes to be contextually valid which will make 12 good pattern complete
 	l12b := createLayer2(12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 1)
@@ -456,8 +446,6 @@ func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 	l14 := createLayer2(14, l13, []*types.Layer{l13, l12, l12b, l11, l10, l9}, 123)
 	AddLayer(mdb, l14)
 	alg.handleIncomingLayer(l14)
-
-	//require.Equal(t, types.LayerID(7), alg.PBase.Layer(), "unexpected pbase")
 
 	l15 := createLayer2(15, l14, []*types.Layer{l14, l13, l12b, l12, l11, l10}, 125)
 	AddLayer(mdb, l15)
