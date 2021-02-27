@@ -415,13 +415,13 @@ func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 
 	//require.Equal(t, types.LayerID(6), alg.PBase.Layer(), "unexpected pbase")
 
-	l9 := createLayer2(9, l8, []*types.Layer{l8, l7, l6, l5, l4}, 111)
+	l9 := createLayer2(9, l8, []*types.Layer{l8, l7, l6, l5, l4}, 112)
 	AddLayer(mdb, l9)
 	alg.handleIncomingLayer(l9)
 
 	//require.Equal(t, types.LayerID(6), alg.PBase.Layer(), "unexpected pbase")
 
-	l10 := createLayer2(10, l9, []*types.Layer{l9, l8, l7, l6, l5}, 123)
+	l10 := createLayer2(10, l9, []*types.Layer{l9, l8, l7, l6, l5}, 124)
 	AddLayer(mdb, l10)
 	alg.handleIncomingLayer(l10)
 
