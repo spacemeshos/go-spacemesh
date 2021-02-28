@@ -9,8 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// DB hold the atxs received from all nodes and their validity status
-// it also stores identifications for all nodes e.g the coupling between ed id and bls id
+// DB holds beacons for epochs.
 type DB struct {
 	sync.RWMutex
 	store database.Database

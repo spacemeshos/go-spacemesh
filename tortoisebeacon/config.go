@@ -6,10 +6,18 @@ type Config struct {
 	WakeupDelta int `mapstructure:"tortoise-beacon-wakeup-delta"`  // the wakeup delta after tick
 }
 
-// DefaultConfig returns the default configuration for the hare.
+// DefaultConfig returns the default configuration for the tortoise beacon.
 func DefaultConfig() Config {
 	return Config{
 		K:           6,
 		WakeupDelta: 10,
+	}
+}
+
+// TestConfig returns the test configuration for the tortoise beacon.
+func TestConfig() Config {
+	return Config{
+		K:           2,
+		WakeupDelta: 1,
 	}
 }
