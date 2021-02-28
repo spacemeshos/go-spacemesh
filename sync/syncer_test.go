@@ -1698,6 +1698,15 @@ func TestSyncer_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	_, _, err := s.blockSyntacticValidation(b)
 	r.Equal(err, fmt.Errorf("failed to fetch ref block %v", *b.RefBlock))
 
+	tries := 5
+	for len(syncs[1].net.GetPeers()) == 0 {
+		time.Sleep( 1 * time.Second)
+		tries --
+		if tries == 0 {
+			r.Fail("peers did not connect to network")
+			break
+		}
+	}
 	err = syncs[1].AddBlock(block1)
 	r.NoError(err)
 	_, _, err = s.blockSyntacticValidation(b)
@@ -1719,6 +1728,16 @@ func TestSyncer_fetchBlock(t *testing.T) {
 	block1ID := block1.ID()
 	res := s.fetchBlock(block1ID)
 	r.False(res)
+
+	tries := 5
+	for len(syncs[1].net.GetPeers()) == 0 {
+		time.Sleep( 1 * time.Second)
+		tries --
+		if tries == 0 {
+			r.Fail("peers did not connect to network")
+			break
+		}
+	}
 	err := syncs[1].AddBlock(block1)
 	r.NoError(err)
 	res = s.fetchBlock(block1ID)
