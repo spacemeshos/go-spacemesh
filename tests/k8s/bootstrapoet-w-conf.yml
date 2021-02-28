@@ -34,7 +34,7 @@ spec:
               memory: "2048M"
               cpu: "1"
           ports:
-            - containerPort: 9092
+            - containerPort: 9093
             - containerPort: 9999
         - name: poet
           image: spacemeshos/poet:ef8f28a
