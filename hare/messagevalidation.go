@@ -276,8 +276,13 @@ func (v *syntaxContextValidator) validateAggregatedMessage(aggMsg *aggregatedMes
 		return errNilMsgsSlice
 	}
 
-	if len(aggMsg.Messages) != v.threshold { // must include exactly f+1 Messages
-		v.Warning("Aggregated validation failed: number of messages does not match. Expected: %v Actual: %v",
+	var count int
+	for _, m := range aggMsg.Messages {
+		count += int(m.InnerMsg.EligibilityCount)
+	}
+
+	if count < v.threshold { // must fit eligibility threshold
+		v.Warning("Aggregated validation failed: total eligibility of messages does not match. Expected: %v Actual: %v",
 			v.threshold, len(aggMsg.Messages))
 		return errMsgsCountMismatch
 	}
