@@ -62,12 +62,12 @@ const (
 	layerFirst            = 0
 	layerVerified         = 8
 	layerLatest           = 10
-	layerCurrent          = 12
 	rewardAmount          = 5551234
 	receiptIndex          = 42
 )
 
 var (
+	layerCurrent = 12
 	networkMock = NetworkMock{}
 	mempoolMock = MempoolMock{
 		poolByAddress: make(map[types.Address]types.TransactionID),
@@ -374,7 +374,7 @@ type GenesisTimeMock struct {
 }
 
 func (t GenesisTimeMock) GetCurrentLayer() types.LayerID {
-	return layerCurrent
+	return types.LayerID(layerCurrent)
 }
 
 func (t GenesisTimeMock) GetGenesisTime() time.Time {
@@ -543,8 +543,22 @@ func TestNodeService(t *testing.T) {
 			require.Equal(t, build, res.BuildString.Value)
 		}},
 		{"Status", func(t *testing.T) {
+			// First do a mock checking during a genesis layer
+			// During genesis all layers should be set to current layer
+			oldCurLayer := layerCurrent
+			layerCurrent = layersPerEpoch // end of first epoch
 			req := &pb.StatusRequest{}
 			res, err := c.Status(context.Background(), req)
+			require.NoError(t, err)
+			require.Equal(t, uint64(0), res.Status.ConnectedPeers)
+			require.Equal(t, false, res.Status.IsSynced)
+			require.Equal(t, uint32(layerCurrent), res.Status.SyncedLayer.Number)
+			require.Equal(t, uint32(layerCurrent), res.Status.TopLayer.Number)
+			require.Equal(t, uint32(layerCurrent), res.Status.VerifiedLayer.Number)
+
+			// Now do a mock check post-genesis
+			layerCurrent = oldCurLayer
+			res, err = c.Status(context.Background(), req)
 			require.NoError(t, err)
 			require.Equal(t, uint64(0), res.Status.ConnectedPeers)
 			require.Equal(t, false, res.Status.IsSynced)
@@ -1060,7 +1074,7 @@ func TestMeshService(t *testing.T) {
 					name: "MinLayer too high",
 					run: func(t *testing.T) {
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
-							MinLayer: &pb.LayerNumber{Number: layerCurrent + 1},
+							MinLayer: &pb.LayerNumber{Number: uint32(layerCurrent + 1)},
 						})
 						require.Error(t, err, "expected an error")
 						require.Contains(t, err.Error(), "`LatestLayer` must be less than")
