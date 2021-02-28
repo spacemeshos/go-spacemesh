@@ -68,8 +68,8 @@ const (
 
 var (
 	layerCurrent = 12
-	networkMock = NetworkMock{}
-	mempoolMock = MempoolMock{
+	networkMock  = NetworkMock{}
+	mempoolMock  = MempoolMock{
 		poolByAddress: make(map[types.Address]types.TransactionID),
 		poolByTxid:    make(map[types.TransactionID]*types.Transaction),
 	}
