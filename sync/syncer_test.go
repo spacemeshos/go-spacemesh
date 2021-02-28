@@ -1700,8 +1700,8 @@ func TestSyncer_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 
 	tries := 5
 	for len(syncs[1].net.GetPeers()) == 0 {
-		time.Sleep( 1 * time.Second)
-		tries --
+		time.Sleep(1 * time.Second)
+		tries--
 		if tries == 0 {
 			r.Fail("peers did not connect to network")
 			break
@@ -1731,8 +1731,8 @@ func TestSyncer_fetchBlock(t *testing.T) {
 
 	tries := 5
 	for len(syncs[1].net.GetPeers()) == 0 {
-		time.Sleep( 1 * time.Second)
-		tries --
+		time.Sleep(1 * time.Second)
+		tries--
 		if tries == 0 {
 			r.Fail("peers did not connect to network")
 			break
