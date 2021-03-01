@@ -35,8 +35,22 @@ class DeploymentInfo:
 
     def __str__(self):
         ret_str = f"DeploymentInfo:\n\tdeployment name: {self.deployment_name}\n\t"
-        ret_str += f"deployment id: {self.deployment_id}\n\tpods number: {len(self.pods)}"
-        return ret_str
+        ret_str += f"deployment id: {self.deployment_id}\n\tpods number: {len(self.pods)}\n"
+        for x in self.pods:
+            ret_str += f"{x}, "
+        # [:-2] to remove the last two ", " unnecessary characters
+        return ret_str[:-2]
+
+    def get_ips(self):
+        ips = []
+        for pod_details in self.pods:
+            ips.append(pod_details["pod_ip"])
+        return ips
+
+    @staticmethod
+    def get_all_ips(deployments):
+        all_dep_ips = [ip for dep in deployments for ip in dep.get_ips()]
+        return all_dep_ips
 
 
 class NetworkInfo:

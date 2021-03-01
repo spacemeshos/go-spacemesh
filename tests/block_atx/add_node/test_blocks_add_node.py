@@ -26,6 +26,7 @@ from tests.utils import validate_blocks_per_nodes, get_pod_id, get_conf
 # epoch i+6
 # validate total miner generated Tavg/x+1 (floored) in i+5
 def test_add_node_validate_atx(init_session, setup_network):
+    dep_info, api_handler = setup_network
     curr_epoch = 0
     epochs_to_sleep = 2
     layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
@@ -37,20 +38,19 @@ def test_add_node_validate_atx(init_session, setup_network):
     # wait for 2 epochs
     last_layer = epochs_to_sleep * layers_per_epoch
     print(f"wait until second epoch to layer {last_layer}")
-    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch, num_miners)
-
+    api_handler.wait_for_layer(last_layer, timeout=last_layer * layer_duration + 10)
     # ========================== epoch i+2 ==========================
     curr_epoch += epochs_to_sleep
     print("\n\n-------- current epoch", curr_epoch, "--------")
     print("adding a new miner")
-    bs_info = setup_network.bootstrap.pods[0]
+    bs_info = dep_info.bootstrap.pods[0]
     cspec = get_conf(bs_info, testconfig['client'], testconfig['genesis_delta'])
     new_pod_name = add_multi_clients(testconfig, init_session, cspec, 1)[0]
 
     # wait for next epoch
     last_layer = layers_per_epoch * (curr_epoch + 1)
     print(f"wait until next epoch to layer {last_layer}")
-    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch, num_miners+1)
+    api_handler.wait_for_layer(last_layer, timeout=layers_per_epoch * layer_duration + 10)
 
     # check if new client published ATX in epoch i+2
     new_pod_id = get_pod_id(init_session, new_pod_name)

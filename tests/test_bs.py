@@ -28,7 +28,8 @@ def test_transactions(init_session, setup_network):
     tts = layer_duration * tx_gen_conf.num_layers_until_process
     sleep_print_backwards(tts)
 
-    wallet_api = WalletAPI(namespace, setup_network.clients.pods)
+    dep_info, _ = setup_network
+    wallet_api = WalletAPI(namespace, dep_info.clients.pods)
 
     tap_bal = wallet_api.get_balance_value(tx_gen_conf.acc_pub)
     tap_nonce = wallet_api.get_nonce_value(tx_gen_conf.acc_pub)
@@ -87,6 +88,7 @@ def test_transactions(init_session, setup_network):
 
 
 def test_mining(init_session, setup_network):
+    dep_info, api_handler = setup_network
     current_index = get_curr_ind()
     ns = init_session
     layer_avg_size = testconfig['client']['args']['layer-average-size']
@@ -95,7 +97,7 @@ def test_mining(init_session, setup_network):
     epochs = 5
     last_layer = epochs * layers_per_epoch
 
-    total_pods = len(setup_network.clients.pods) + len(setup_network.bootstrap.pods)
+    total_pods = len(dep_info.clients.pods) + len(dep_info.bootstrap.pods)
 
     layer_reached = queries.wait_for_latest_layer(testconfig["namespace"], last_layer, layers_per_epoch, total_pods)
 
