@@ -207,7 +207,13 @@ func (ni *ninjaTortoise) evictOutOfPbase() {
 			defer wg.Done()
 			ids, err := ni.db.LayerBlockIds(lyr)
 			if err != nil {
-				ni.logger.With().Error("could not get layer ids", lyr, log.Err(err))
+				if lyr.GetEpoch().IsGenesis() {
+					ni.logger.With().Info("could not get block ids for layer (expected in genesis)",
+						lyr,
+						log.Err(err))
+				} else {
+					ni.logger.With().Error("could not get block ids for layer", lyr, log.Err(err))
+				}
 			}
 			for _, id := range ids {
 				delete(ni.TEffective, id)
@@ -555,7 +561,8 @@ func (ni *ninjaTortoise) updatePatSupport(p votingPattern, bids []types.BlockID,
 		ni.TPatSupport[p] = make(map[types.LayerID]votingPattern)
 	}
 	pid := getID(bids)
-	ni.logger.Debug("update support for %s layer %s supported pattern %s", p, idx, pid)
+	ni.logger.With().Debug("update support for layer supported pattern",
+		p, idx, log.Uint32("pattern_id", uint32(pid)))
 	ni.TPatSupport[p][idx] = votingPattern{id: pid, LayerID: idx}
 }
 
