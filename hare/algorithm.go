@@ -426,7 +426,7 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 
 	// warn on late pre-round msgs
 	if m.InnerMsg.Type == pre && proc.k != -1 {
-		proc.With().Warning("encountered late PreRound message",
+		proc.With().Warning("encountered late preround message",
 			log.String("msg_type", mType),
 			log.String("sender_id", m.PubKey.ShortString()),
 			log.Int32("current_k", proc.k),
@@ -606,7 +606,7 @@ func (proc *consensusProcess) beginNotifyRound() {
 
 	cert := proc.commitTracker.BuildCertificate()
 	if cert == nil {
-		proc.Error("begin notify round: Build certificate returned nil")
+		proc.Error("begin notify round: BuildCertificate returned nil")
 		return
 	}
 
