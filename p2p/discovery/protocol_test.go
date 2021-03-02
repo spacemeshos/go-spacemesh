@@ -208,7 +208,7 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 
 func TestFindNodeProtocol_FindNode_Concurrency(t *testing.T) {
 
-	concurrency := 4
+	concurrency := 5
 
 	sim := service.NewSimulator()
 	n1 := newTestNode(sim)
@@ -254,6 +254,7 @@ func TestFindNodeProtocol_FindNode_Concurrency(t *testing.T) {
 			if err != nil {
 				t.Log(err)
 				retchans <- nil
+				return
 			}
 			retchans <- res
 		}(i)
