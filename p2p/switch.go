@@ -45,13 +45,15 @@ type cPool interface {
 // for protocols to access peers or receive incoming messages.
 type Switch struct {
 	// configuration and maintenance fields
-	started   uint32
-	bootErr   error
-	bootChan  chan struct{}
-	gossipErr error
-	gossipC   chan struct{}
-	config    config.Config
-	logger    log.Log
+	started uint32
+	//field to indicate whether we are shutting down
+	shuttingdown uint32
+	bootErr      error
+	bootChan     chan struct{}
+	gossipErr    error
+	gossipC      chan struct{}
+	config       config.Config
+	logger       log.Log
 	// Context for cancel
 	ctx        context.Context
 	cancelFunc context.CancelFunc
@@ -187,6 +189,8 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 		bootChan: make(chan struct{}),
 		gossipC:  make(chan struct{}),
 		shutdown: make(chan struct{}), // non-buffered so requests to shutdown block until Switch is shut down
+
+		//add a shutdown flag when we are shutting down
 
 		initial:           make(chan struct{}),
 		morePeersReq:      make(chan struct{}, config.MaxInboundPeers+config.OutboundPeersTarget),
@@ -430,6 +434,7 @@ func (s *Switch) RegisterGossipProtocol(protocol string, prio priorityq.Priority
 // Shutdown sends a shutdown signal to all running services of Switch and then runs an internal shutdown to cleanup.
 func (s *Switch) Shutdown() {
 	s.shutdownOnce.Do(func() {
+		atomic.StoreUint32(&s.shuttingdown, 1)
 		s.cancelFunc()
 		close(s.shutdown)
 		s.gossip.Close()
@@ -705,6 +710,12 @@ loop:
 // if it failed it issues a one second timeout and then sends a request to try again.
 func (s *Switch) askForMorePeers() {
 	// check how much peers needed
+	//return from this function if we are already shutting down?
+	//add a check here to the shutdown flag -> if 1 we shouldn't proceed
+	if atomic.LoadUint32(&s.shuttingdown) == 1 {
+		//we are shutting down, and morePeersReq won the race
+		return
+	}
 	s.outpeersMutex.RLock()
 	numpeers := len(s.outpeers)
 	s.outpeersMutex.RUnlock()
