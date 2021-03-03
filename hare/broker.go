@@ -191,13 +191,17 @@ func (b *Broker) eventLoop() {
 			// create msg
 			iMsg, err := newMsg(hareMsg, b.stateQuerier)
 			if err != nil {
-				b.Warning("Message validation failed: could not construct msg err=%v", err)
+				b.With().Warning("message validation failed: could not construct msg",
+					log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)),
+					log.Err(err))
 				continue
 			}
 
 			// validate msg
 			if !b.eValidator.Validate(iMsg) {
-				b.Warning("Message validation failed: eValidator returned false %v", hareMsg)
+				b.With().Warning("message validation failed: eligibility validator returned false",
+					log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)),
+					log.String("hare_msg", hareMsg.String()))
 				continue
 			}
 

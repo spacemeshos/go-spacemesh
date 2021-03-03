@@ -121,22 +121,29 @@ func newMsg(hareMsg *Message, querier StateQuerier) (*Msg, error) {
 	// extract pub key
 	pubKey, err := ed25519.ExtractPublicKey(hareMsg.InnerMsg.Bytes(), hareMsg.Sig)
 	if err != nil {
-		log.With().Error("newMsg construction failed: could not extract public key", log.Err(err), log.Int("sig len", len(hareMsg.Sig)))
+		log.With().Error("newMsg construction failed: could not extract public key",
+			log.Err(err),
+			log.Int("sig len", len(hareMsg.Sig)))
 		return nil, err
 	}
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
 	res, err := querier.IsIdentityActiveOnConsensusView(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceID))
 	if err != nil {
-		log.With().Error("error while checking if identity is active", log.String("sender_id", pub.ShortString()),
-			log.Err(err), types.LayerID(hareMsg.InnerMsg.InstanceID), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
+		log.With().Error("error while checking if identity is active",
+			log.String("sender_id", pub.ShortString()),
+			log.Err(err),
+			types.LayerID(hareMsg.InnerMsg.InstanceID),
+			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("is identity active query failed")
 	}
 
 	// check query result
 	if !res {
-		log.With().Error("identity is not active", log.String("sender_id", pub.ShortString()),
-			types.LayerID(hareMsg.InnerMsg.InstanceID), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
+		log.With().Error("identity is not active",
+			log.String("sender_id", pub.ShortString()),
+			types.LayerID(hareMsg.InnerMsg.InstanceID),
+			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("inactive identity")
 	}
 
@@ -185,7 +192,7 @@ func newConsensusProcess(cfg config.Config, instanceID instanceID, s *Set, oracl
 		signing:           signing,
 		nid:               nid,
 		network:           p2p,
-		preRoundTracker:   newPreRoundTracker(cfg.F+1, cfg.N),
+		preRoundTracker:   newPreRoundTracker(cfg.F+1, cfg.N, logger),
 		notifyTracker:     newNotifyTracker(cfg.N),
 		cfg:               cfg,
 		terminationReport: terminationReport,
@@ -285,9 +292,15 @@ PreRound:
 			return
 		}
 	}
+	proc.With().Debug("preround ended, filtering preliminary set",
+		types.LayerID(proc.instanceID),
+		log.Int("set_size", proc.s.Size()))
 	proc.preRoundTracker.FilterSet(proc.s)
+	proc.With().Debug("preround set size after filtering",
+		types.LayerID(proc.instanceID),
+		log.Int("set_size", proc.s.Size()))
 	if proc.s.Size() == 0 {
-		proc.Event().Error("Fatal: PreRound ended with empty set", types.LayerID(proc.instanceID))
+		proc.Event().Error("preround ended with empty set", types.LayerID(proc.instanceID))
 	} else {
 		proc.Info("PreRound ended")
 	}
@@ -355,7 +368,12 @@ func (proc *consensusProcess) onEarlyMessage(m *Msg) {
 func (proc *consensusProcess) handleMessage(m *Msg) {
 	// Note: instanceID is already verified by the broker
 
-	proc.With().Debug("Received message", log.String("msg_type", m.InnerMsg.Type.String()))
+	proc.With().Debug("received message",
+		log.Int32("current_k", proc.k),
+		types.LayerID(proc.instanceID),
+		log.String("sender_id", m.PubKey.ShortString()),
+		log.FieldNamed("msg_layer_id", types.LayerID(m.InnerMsg.InstanceID)),
+		log.String("msg_type", m.InnerMsg.Type.String()))
 
 	// validate context
 	mType := m.InnerMsg.Type.String()
@@ -363,7 +381,7 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 	if err != nil {
 		// early message, keep for later
 		if err == errEarlyMsg {
-			proc.With().Debug("Early message detected, keeping",
+			proc.With().Debug("early message detected, keeping",
 				log.String("msg_type", mType),
 				log.String("sender_id", m.PubKey.ShortString()),
 				log.Int32("current_k", proc.k),
@@ -415,7 +433,9 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 
 // process the message by its type
 func (proc *consensusProcess) processMsg(m *Msg) {
-	proc.Debug("Processing message of type %v", m.InnerMsg.Type.String())
+	proc.With().Debug("processing message",
+		log.String("msg_type", m.InnerMsg.Type.String()),
+		log.Int("num_values", len(m.InnerMsg.Values)))
 	// TODO: fix metrics
 	// metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(m.InnerMsg.InstanceID), 10), "reporter", "processMsg").Add(1)
 
@@ -431,7 +451,9 @@ func (proc *consensusProcess) processMsg(m *Msg) {
 	case notify: // end of round 4
 		proc.processNotifyMsg(m)
 	default:
-		proc.Warning("Unknown message type: %v , pubkey %v", m.InnerMsg.Type, m.PubKey.ShortString())
+		proc.With().Warning("unknown message type",
+			log.Int("msg_type", int(m.InnerMsg.Type)),
+			log.String("sender_id", m.PubKey.ShortString()))
 	}
 }
 
@@ -571,7 +593,9 @@ func (proc *consensusProcess) beginNotifyRound() {
 	}
 
 	if !proc.commitTracker.HasEnoughCommits() {
-		proc.With().Warning("Begin notify round: not enough commits", log.Int("expected", proc.cfg.F+1), log.Int("actual", proc.commitTracker.CommitCount()))
+		proc.With().Warning("begin notify round: not enough commits",
+			log.Int("expected", proc.cfg.F+1),
+			log.Int("actual", proc.commitTracker.CommitCount()))
 		return
 	}
 
@@ -701,8 +725,9 @@ func (proc *consensusProcess) processNotifyMsg(msg *Msg) {
 	}
 
 	if proc.notifyTracker.NotificationsCount(s) < proc.cfg.F+1 { // not enough
-		proc.Debug("Not enough notifications for termination. Expected: %v Actual: %v",
-			proc.cfg.F+1, proc.notifyTracker.NotificationsCount(s))
+		proc.With().Debug("not enough notifications for termination",
+			log.Int("expected", proc.cfg.F+1),
+			log.Int("actual", proc.notifyTracker.NotificationsCount(s)))
 		return
 	}
 
@@ -753,8 +778,10 @@ func (proc *consensusProcess) endOfStatusRound() {
 	// assumption: AnalyzeStatuses calls vtFunc for every recorded status message
 	before := time.Now()
 	proc.statusesTracker.AnalyzeStatuses(vtFunc)
-	proc.Event().Info("status round ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
-		types.LayerID(proc.instanceID), log.String("analyze_duration", time.Since(before).String()))
+	proc.Event().Info("status round ended",
+		log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
+		types.LayerID(proc.instanceID),
+		log.String("analyze_duration", time.Since(before).String()))
 }
 
 // checks if we should participate in the current round

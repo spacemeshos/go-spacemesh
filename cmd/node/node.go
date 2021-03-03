@@ -349,7 +349,7 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 		bytes := util.FromHex(id)
 		if len(bytes) == 0 {
 			// todo: should we panic here?
-			log.Error("cannot read config entry for :%s", id)
+			app.log.With().Error("cannot read config entry for genesis account", log.String("acct_id", id))
 			continue
 		}
 
@@ -357,7 +357,9 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 		state.CreateAccount(addr)
 		state.AddBalance(addr, acc.Balance)
 		state.SetNonce(addr, acc.Nonce)
-		app.log.Info("Genesis account created: %s, Balance: %s", id, acc.Balance)
+		app.log.With().Info("genesis account created",
+			log.String("acct_id", id),
+			log.Uint64("balance", acc.Balance))
 	}
 
 	_, err := state.Commit()
