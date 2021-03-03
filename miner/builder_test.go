@@ -212,69 +212,98 @@ var (
 )
 
 func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
-	net := service.NewSimulator()
-	beginRound := make(chan types.LayerID)
-	n := net.NewNode()
-	receiver := net.NewNode()
+	const iterations = 1000000
 
-	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
-	hare.res[1] = hareRes
+	for i := 1; i <= iterations; i++ {
+		t.Logf("iteration %v", i)
 
-	txPool := state.NewTxMemPool()
+		net := service.NewSimulator()
+		beginRound := make(chan types.LayerID)
+		n := net.NewNode()
+		receiver := net.NewNode()
 
-	atxPool := activation.NewAtxMemPool()
+		hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
+		hare.res[1] = hareRes
 
-	st := []*types.Block{block1, block2, block3}
-	builder := createBlockBuilder("a", n, st)
-	builder.TransactionPool = txPool
-	builder.beginRoundEvent = beginRound
-	//builder := NewBlockBuilder(types.NodeID{Key: "anton", VRFPublicKey: []byte("anton")}, signing.NewEdSigner(), n, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: st}, hare, &mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, selectCount, layersPerEpoch, mockProjector, log.New(n.String(), "", ""))
+		txPool := state.NewTxMemPool()
 
-	gossipMessages := receiver.RegisterGossipProtocol(blocks.NewBlockProtocol, priorityq.High)
-	err := builder.Start()
-	assert.NoError(t, err)
+		atxPool := activation.NewAtxMemPool()
 
-	recipient := types.BytesToAddress([]byte{0x01})
-	signer := signing.NewEdSigner()
+		st := []*types.Block{block1, block2, block3}
+		builder := createBlockBuilder("a", n, st)
+		builder.TransactionPool = txPool
+		builder.beginRoundEvent = beginRound
+		//builder := NewBlockBuilder(types.NodeID{Key: "anton", VRFPublicKey: []byte("anton")}, signing.NewEdSigner(), n, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: st}, hare, &mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, selectCount, layersPerEpoch, mockProjector, log.New(n.String(), "", ""))
 
-	trans := []*types.Transaction{
-		NewTx(t, 1, recipient, signer),
-		NewTx(t, 2, recipient, signer),
-		NewTx(t, 3, recipient, signer),
+		log.Info("[CreateBlockFlow] 1")
+
+		gossipMessages := receiver.RegisterGossipProtocol(blocks.NewBlockProtocol, priorityq.High)
+		err := builder.Start()
+		assert.NoError(t, err)
+
+		log.Info("[CreateBlockFlow] 2")
+
+		recipient := types.BytesToAddress([]byte{0x01})
+		signer := signing.NewEdSigner()
+
+		log.Info("[CreateBlockFlow] 3")
+
+		trans := []*types.Transaction{
+			NewTx(t, 1, recipient, signer),
+			NewTx(t, 2, recipient, signer),
+			NewTx(t, 3, recipient, signer),
+		}
+
+		transids := []types.TransactionID{trans[0].ID(), trans[1].ID(), trans[2].ID()}
+
+		log.Info("[CreateBlockFlow] 4")
+
+		txPool.Put(trans[0].ID(), trans[0])
+		txPool.Put(trans[1].ID(), trans[1])
+		txPool.Put(trans[2].ID(), trans[2])
+
+		log.Info("[CreateBlockFlow] 5")
+
+		atxPool.Put(atxs[0])
+		atxPool.Put(atxs[1])
+		atxPool.Put(atxs[2])
+
+		log.Info("[CreateBlockFlow] 6")
+
+		go func() {
+			log.Info("[GetEffectiveGenesis] 1")
+			id := types.GetEffectiveGenesis() + 1
+			log.Info("[GetEffectiveGenesis] 2")
+			beginRound <- id
+			log.Info("[GetEffectiveGenesis] 3")
+		}()
+
+		log.Info("[CreateBlockFlow] 7")
+
+		now := time.Now()
+		select {
+		case output := <-gossipMessages:
+			b := types.MiniBlock{}
+			_, _ = xdr.Unmarshal(bytes.NewBuffer(output.Bytes()), &b)
+
+			require.NotEqual(t, hareRes, b.BlockVotes)
+			require.Equal(t, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, b.ViewEdges)
+
+			require.True(t, ContainsTx(b.TxIDs, transids[0]))
+			require.True(t, ContainsTx(b.TxIDs, transids[1]))
+			require.True(t, ContainsTx(b.TxIDs, transids[2]))
+
+			/*require.True(t, ContainsAtx(b.ATXIDs, atxs[0].ID()))
+			require.True(t, ContainsAtx(b.ATXIDs, atxs[1].ID()))
+			require.True(t, ContainsAtx(b.ATXIDs, atxs[2].ID()))*/
+
+			require.Equal(t, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, *b.ActiveSet)
+		case <-time.After(5 * time.Second):
+			log.Info("elapsed too much time: %v", time.Since(now))
+			require.Fail(t, "timeout on receiving block")
+		}
+		t.Logf("elapsed: %v", time.Since(now))
 	}
-
-	transids := []types.TransactionID{trans[0].ID(), trans[1].ID(), trans[2].ID()}
-
-	txPool.Put(trans[0].ID(), trans[0])
-	txPool.Put(trans[1].ID(), trans[1])
-	txPool.Put(trans[2].ID(), trans[2])
-
-	atxPool.Put(atxs[0])
-	atxPool.Put(atxs[1])
-	atxPool.Put(atxs[2])
-
-	go func() { beginRound <- types.GetEffectiveGenesis() + 1 }()
-	select {
-	case output := <-gossipMessages:
-		b := types.MiniBlock{}
-		_, _ = xdr.Unmarshal(bytes.NewBuffer(output.Bytes()), &b)
-
-		assert.NotEqual(t, hareRes, b.BlockVotes)
-		assert.Equal(t, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, b.ViewEdges)
-
-		assert.True(t, ContainsTx(b.TxIDs, transids[0]))
-		assert.True(t, ContainsTx(b.TxIDs, transids[1]))
-		assert.True(t, ContainsTx(b.TxIDs, transids[2]))
-
-		/*assert.True(t, ContainsAtx(b.ATXIDs, atxs[0].ID()))
-		assert.True(t, ContainsAtx(b.ATXIDs, atxs[1].ID()))
-		assert.True(t, ContainsAtx(b.ATXIDs, atxs[2].ID()))*/
-
-		assert.Equal(t, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, *b.ActiveSet)
-	case <-time.After(1 * time.Second):
-		assert.Fail(t, "timeout on receiving block")
-	}
-
 }
 
 func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {

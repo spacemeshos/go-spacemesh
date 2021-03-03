@@ -223,11 +223,17 @@ func (sn *Node) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protoco
 func (sn *Node) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data Data, validationCompletedChan chan MessageValidation) error {
 	sn.sim.mutex.RLock()
 	c, ok := sn.sim.protocolGossipHandler[sn.PublicKey()][protocol]
+
+	log.Info("Processing gossip message for %v@%v", sn.Info.PublicKey(), protocol)
+
 	sn.sim.mutex.RUnlock()
 	if !ok {
 		return errors.New("unknown protocol")
 	}
 	c <- simGossipMessage{sender, data, validationCompletedChan}
+
+	log.Info("Processed gossip message for %v@%v", sn.Info.PublicKey(), protocol)
+
 	return nil
 }
 
@@ -276,14 +282,30 @@ func (sn *Node) sleep(delay uint32) {
 
 // Broadcast disseminates a message to all simulated nodes. sends to yourself first.
 func (sn *Node) Broadcast(protocol string, payload []byte) error {
+	//panic("test")
+
+	log.Info("[Broadcast] 1")
+
 	go func() {
+		log.Info("[Broadcast] 2, going to sleep for %v", sn.sndDelay)
+
 		sn.sleep(sn.sndDelay)
+
+		log.Info("[Broadcast] 3")
+
 		sn.sim.mutex.Lock()
 		var mychan chan GossipMessage
 
+		log.Info("[Broadcast] 4")
+
 		if me, ok := sn.sim.protocolGossipHandler[sn.PublicKey()][protocol]; ok {
+			log.Info("protocolGossipHandler exists for %v@%v", sn.Info.PublicKey(), protocol)
 			mychan = me
+		} else {
+			log.Info("protocolGossipHandler does not exist for %v@%v", sn.Info.PublicKey(), protocol)
 		}
+
+		log.Info("[Broadcast] 5")
 
 		sendees := make([]chan GossipMessage, 0, len(sn.sim.protocolGossipHandler))
 
@@ -293,16 +315,19 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 			}
 			if c, ok := sn.sim.protocolGossipHandler[n][protocol]; ok {
 				sendees = append(sendees, c) // <- simGossipMessage{sn.Info.PublicKey(), DataBytes{Payload: payload}, nil}
+				log.Info("going to send gossip to: %v ([%v])", n, len(sendees)-1)
 			}
 		}
 		sn.sim.mutex.Unlock()
 
 		if mychan != nil {
 			mychan <- simGossipMessage{sn.Info.PublicKey(), DataBytes{Payload: payload}, nil}
+			log.Info("sent gossip message mychan")
 		}
 
-		for _, c := range sendees {
+		for i, c := range sendees {
 			c <- simGossipMessage{sn.Info.PublicKey(), DataBytes{Payload: payload}, nil}
+			log.Info("sent gossip message to sendee %v", i)
 		}
 
 		log.Debug("%v >> All ( Gossip ) (%v)", sn.Info.PublicKey(), payload)
@@ -329,6 +354,7 @@ func (sn *Node) RegisterGossipProtocol(protocol string, prio priorityq.Priority)
 	c := make(chan GossipMessage, 1000)
 	sn.sim.mutex.Lock()
 	sn.sim.protocolGossipHandler[sn.Info.PublicKey()][protocol] = c
+	log.Info("Registered gossip handler for %v@%v", sn.Info.PublicKey(), protocol)
 	sn.sim.mutex.Unlock()
 	return c
 }

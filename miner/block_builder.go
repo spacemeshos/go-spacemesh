@@ -6,6 +6,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/rand"
+	"sync"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -13,9 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"math/rand"
-	"sync"
-	"time"
 )
 
 const defaultGasLimit = 10
@@ -133,6 +134,8 @@ func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent
 // Start starts the process of creating a block, it listens for txs and atxs received by gossip, and starts querying
 // block oracle when it should create a block. This function returns an error if Start was already called once
 func (t *BlockBuilder) Start() error {
+	log.Info("[Builder] 1")
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.started {
@@ -351,6 +354,10 @@ func selectAtxs(atxs []types.ATXID, atxsPerBlock int) []types.ATXID {
 }
 
 func (t *BlockBuilder) createBlockLoop() {
+	//panic("test2")
+
+	log.Info("[Builder] 2")
+
 	for {
 		select {
 
@@ -358,10 +365,14 @@ func (t *BlockBuilder) createBlockLoop() {
 			return
 
 		case layerID := <-t.beginRoundEvent:
+			log.Info("[Builder] 3-1")
+
 			if !t.syncer.IsSynced() {
 				t.Debug("builder got layer %v not synced yet", layerID)
 				continue
 			}
+
+			log.Info("[Builder] 3-2")
 
 			t.Debug("builder got layer %v", layerID)
 			atxID, proofs, atxs, err := t.blockOracle.BlockEligible(layerID)
@@ -370,6 +381,9 @@ func (t *BlockBuilder) createBlockLoop() {
 				t.With().Error("failed to check for block eligibility", layerID, log.Err(err))
 				continue
 			}
+
+			log.Info("[Builder] 3-3")
+
 			if len(proofs) == 0 {
 				events.ReportDoneCreatingBlock(false, uint64(layerID), "")
 				t.With().Info("Notice: not eligible for blocks in layer", layerID)
@@ -377,33 +391,49 @@ func (t *BlockBuilder) createBlockLoop() {
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
+			log.Info("[Builder] 3-4")
+
 			//reducedAtxList := selectAtxs(atxList, t.atxsPerBlock)
 			for _, eligibilityProof := range proofs {
+				log.Info("[Builder] 4-1")
+
 				txList, _, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to get txs for block")
 					t.With().Error("failed to get txs for block", layerID, log.Err(err))
 					continue
 				}
+
+				log.Info("[Builder] 4-2")
 				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList, atxs)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot create new block")
 					t.Error("cannot create new block, %v ", err)
 					continue
 				}
+
+				log.Info("[Builder] 4-3")
 				err = t.meshProvider.AddBlockWithTxs(blk)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to store block")
 					t.With().Error("failed to store block", blk.ID(), log.Err(err))
 					continue
 				}
+
+				log.Info("[Builder] 4-4")
+
 				go func() {
+					log.Info("[Builder] 5")
+
 					bytes, err := types.InterfaceToBytes(blk)
 					if err != nil {
 						t.Log.Error("cannot serialize block %v", err)
 						events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot serialize block")
 						return
 					}
+
+					log.Info("[Builder] 6")
+
 					err = t.network.Broadcast(blocks.NewBlockProtocol, bytes)
 					if err != nil {
 						t.Log.Error("cannot send block %v", err)
