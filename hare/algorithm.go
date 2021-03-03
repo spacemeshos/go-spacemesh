@@ -121,22 +121,29 @@ func newMsg(hareMsg *Message, querier StateQuerier) (*Msg, error) {
 	// extract pub key
 	pubKey, err := ed25519.ExtractPublicKey(hareMsg.InnerMsg.Bytes(), hareMsg.Sig)
 	if err != nil {
-		log.With().Error("newMsg construction failed: could not extract public key", log.Err(err), log.Int("sig len", len(hareMsg.Sig)))
+		log.With().Error("newMsg construction failed: could not extract public key",
+			log.Err(err),
+			log.Int("sig len", len(hareMsg.Sig)))
 		return nil, err
 	}
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
 	res, err := querier.IsIdentityActiveOnConsensusView(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceID))
 	if err != nil {
-		log.With().Error("error while checking if identity is active", log.String("sender_id", pub.ShortString()),
-			log.Err(err), types.LayerID(hareMsg.InnerMsg.InstanceID), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
+		log.With().Error("error while checking if identity is active",
+			log.String("sender_id", pub.ShortString()),
+			log.Err(err),
+			types.LayerID(hareMsg.InnerMsg.InstanceID),
+			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("is identity active query failed")
 	}
 
 	// check query result
 	if !res {
-		log.With().Error("identity is not active", log.String("sender_id", pub.ShortString()),
-			types.LayerID(hareMsg.InnerMsg.InstanceID), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
+		log.With().Error("identity is not active",
+			log.String("sender_id", pub.ShortString()),
+			types.LayerID(hareMsg.InnerMsg.InstanceID),
+			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("inactive identity")
 	}
 
@@ -296,7 +303,7 @@ PreRound:
 	}
 	proc.preRoundTracker.FilterSet(proc.s)
 	if proc.s.Size() == 0 {
-		proc.Event().Error("fatal: preround ended with empty set", types.LayerID(proc.instanceID))
+		proc.Event().Error("preround ended with empty set", types.LayerID(proc.instanceID))
 	} else {
 		proc.With().Info("preround ended",
 			log.Int("set_size", proc.s.Size()),
@@ -375,6 +382,8 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 	proc.With().Debug("received message",
 		log.Int32("current_k", proc.k),
 		types.LayerID(proc.instanceID),
+		log.String("sender_id", m.PubKey.ShortString()),
+		log.FieldNamed("msg_layer_id", types.LayerID(m.InnerMsg.InstanceID)),
 		log.String("msg_type", m.InnerMsg.Type.String()))
 
 	// validate context
@@ -383,7 +392,7 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 	if err != nil {
 		// early message, keep for later
 		if err == errEarlyMsg {
-			proc.With().Debug("early message detected",
+			proc.With().Debug("early message detected, keeping",
 				log.String("msg_type", mType),
 				log.String("sender_id", m.PubKey.ShortString()),
 				log.Int32("current_k", proc.k),
@@ -440,7 +449,7 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 
 // process the message by its type
 func (proc *consensusProcess) processMsg(m *Msg) {
-	proc.With().Debug("processing message", log.String("type", m.InnerMsg.Type.String()))
+	proc.With().Debug("processing message", log.String("msg_type", m.InnerMsg.Type.String()))
 	// TODO: fix metrics
 	// metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(m.InnerMsg.InstanceID), 10), "reporter", "processMsg").Add(1)
 
@@ -456,8 +465,9 @@ func (proc *consensusProcess) processMsg(m *Msg) {
 	case notify: // end of round 4
 		proc.processNotifyMsg(m)
 	default:
-		proc.With().Error("unknown message type",
-			log.String("type", m.InnerMsg.Type.String()), log.String("sender_id", m.PubKey.ShortString()))
+		proc.With().Warning("unknown message type",
+			log.Int("msg_type", int(m.InnerMsg.Type)),
+			log.String("sender_id", m.PubKey.ShortString()))
 	}
 }
 
@@ -600,7 +610,8 @@ func (proc *consensusProcess) beginNotifyRound() {
 
 	if !proc.commitTracker.HasEnoughCommits() {
 		proc.With().Warning("begin notify round: not enough commits",
-			log.Int("expected", proc.cfg.F+1), log.Int("actual", proc.commitTracker.CommitCount()))
+			log.Int("expected", proc.cfg.F+1),
+			log.Int("actual", proc.commitTracker.CommitCount()))
 		return
 	}
 
@@ -732,8 +743,9 @@ func (proc *consensusProcess) processNotifyMsg(msg *Msg) {
 	}
 
 	if proc.notifyTracker.NotificationsCount(s) < proc.cfg.F+1 { // not enough
-		proc.Debug("not enough notifications for termination. Expected: %v Actual: %v",
-			proc.cfg.F+1, proc.notifyTracker.NotificationsCount(s))
+		proc.With().Debug("not enough notifications for termination",
+			log.Int("expected", proc.cfg.F+1),
+			log.Int("actual", proc.notifyTracker.NotificationsCount(s)))
 		return
 	}
 
@@ -787,8 +799,10 @@ func (proc *consensusProcess) endOfStatusRound() {
 	// assumption: AnalyzeStatuses calls vtFunc for every recorded status message
 	before := time.Now()
 	proc.statusesTracker.AnalyzeStatuses(vtFunc)
-	proc.Event().Info("status round ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
-		types.LayerID(proc.instanceID), log.String("analyze_duration", time.Since(before).String()))
+	proc.Event().Info("status round ended",
+		log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
+		types.LayerID(proc.instanceID),
+		log.String("analyze_duration", time.Since(before).String()))
 }
 
 // checks if we should participate in the current round

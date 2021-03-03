@@ -30,7 +30,7 @@ func (pre *preRoundTracker) OnPreRound(msg *Msg) {
 	alreadyTracked := NewDefaultEmptySet()  // assume nothing tracked so far
 
 	if set, exist := pre.preRound[pub.String()]; exist { // not first pre-round msg from this sender
-		log.Debug("Duplicate sender %v", pub.String())
+		log.Debug("duplicate sender %v", pub.String())
 		alreadyTracked = set              // update already tracked Values
 		sToTrack.Subtract(alreadyTracked) // subtract the already tracked Values
 	}
