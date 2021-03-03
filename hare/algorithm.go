@@ -192,7 +192,7 @@ func newConsensusProcess(cfg config.Config, instanceID instanceID, s *Set, oracl
 		signing:           signing,
 		nid:               nid,
 		network:           p2p,
-		preRoundTracker:   newPreRoundTracker(cfg.F+1, cfg.N),
+		preRoundTracker:   newPreRoundTracker(cfg.F+1, cfg.N, logger),
 		notifyTracker:     newNotifyTracker(cfg.N),
 		cfg:               cfg,
 		terminationReport: terminationReport,
@@ -301,7 +301,13 @@ PreRound:
 			return
 		}
 	}
+	proc.With().Debug("preround ended, filtering preliminary set",
+		types.LayerID(proc.instanceID),
+		log.Int("set_size", proc.s.Size()))
 	proc.preRoundTracker.FilterSet(proc.s)
+	proc.With().Debug("preround set size after filtering",
+		types.LayerID(proc.instanceID),
+		log.Int("set_size", proc.s.Size()))
 	if proc.s.Size() == 0 {
 		proc.Event().Error("preround ended with empty set", types.LayerID(proc.instanceID))
 	} else {
@@ -449,7 +455,9 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 
 // process the message by its type
 func (proc *consensusProcess) processMsg(m *Msg) {
-	proc.With().Debug("processing message", log.String("msg_type", m.InnerMsg.Type.String()))
+	proc.With().Debug("processing message",
+		log.String("msg_type", m.InnerMsg.Type.String()),
+		log.Int("num_values", len(m.InnerMsg.Values)))
 	// TODO: fix metrics
 	// metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(m.InnerMsg.InstanceID), 10), "reporter", "processMsg").Add(1)
 
