@@ -442,7 +442,6 @@ def message_propagation(deployment, query_fields):
         t1 = datetime.strptime(srt[0].T, convenience.TIMESTAMP_FMT)
         t2 = datetime.strptime(srt[-1].T, convenience.TIMESTAMP_FMT)
         diff = t2 - t1
-        # print(diff)
         return diff, t2
     return None, None
 

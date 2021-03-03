@@ -69,3 +69,15 @@ def print_hits_entry_count(hits, log_entry):
 
     for key in result:
         print(f"found {result[key]} appearances of '{key}' in hits")
+
+
+def all_list_items_equal(lst):
+    """
+    all objects in lst must have 'equal' '=' operator
+    :param lst: list, items list
+    :return: bool, True if all items are equal else false
+    """
+    if len(lst) < 2:
+        print("list is too short to validate, length:", len(lst))
+        return False
+    return all(elem == lst[0] for elem in lst)

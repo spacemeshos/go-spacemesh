@@ -45,8 +45,11 @@ def test_add_node_validate_atx(init_session, setup_network):
     print("adding a new miner")
     bs_info = dep_info.bootstrap.pods[0]
     cspec = get_conf(bs_info, testconfig['client'], testconfig['genesis_delta'])
-    new_pod_name = add_multi_clients(testconfig, init_session, cspec, 1)[0]
-
+    new_pod_name_list, new_pod_ip_list = add_multi_clients(testconfig, init_session, cspec, 1, ret_ip=True)
+    # newly added pod name ([0] - there is only one pod)
+    new_pod_name = new_pod_name_list[0]
+    # adding nodes IP to api handler ip list for future communication
+    api_handler.extend_ips(new_pod_ip_list)
     # wait for next epoch
     last_layer = layers_per_epoch * (curr_epoch + 1)
     print(f"wait until next epoch to layer {last_layer}")
@@ -79,7 +82,7 @@ def test_add_node_validate_atx(init_session, setup_network):
     prev_layer = last_layer
     last_layer = layers_per_epoch * (curr_epoch + 1)
     print(f"wait until next epoch to layer {last_layer}")
-    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch, num_miners+1)
+    api_handler.wait_for_layer(last_layer, timeout=(last_layer - prev_layer) * layer_duration + 10)
 
     new_pod_published_atx_epoch_3 = q.node_published_atx(init_session, new_pod_id, curr_epoch)
 
@@ -113,7 +116,7 @@ def test_add_node_validate_atx(init_session, setup_network):
 
     last_layer = layers_per_epoch * (curr_epoch + 2)
     print(f"wait 2 epochs for layer {last_layer}")
-    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch, num_miners+1)
+    api_handler.wait_for_layer(last_layer, timeout=layers_per_epoch * layer_duration * 2 + 10)
 
     new_pod_published_atx_epoch_4 = q.node_published_atx(init_session, new_pod_id, curr_epoch)
 

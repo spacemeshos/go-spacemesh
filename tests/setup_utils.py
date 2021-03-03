@@ -6,7 +6,7 @@ from tests.misc import CoreV1ApiClient, ContainerSpec
 from tests.utils import get_conf, get_genesis_time_delta, choose_k8s_object_create
 
 
-def add_multi_clients(testconfig, deployment_id, container_specs, size=2, client_title='client', ret_dep=False):
+def add_multi_clients(testconfig, deployment_id, container_specs, size=2, client_title='client', ret_ip=False):
     """
     adds pods to a given namespace according to specification params
 
@@ -15,7 +15,7 @@ def add_multi_clients(testconfig, deployment_id, container_specs, size=2, client
     :param container_specs:
     :param size: int, number of replicas
     :param client_title: string, client title in yml file (client, clientv2 etc)
-    :param ret_dep: boolean, if 'True' RETURN deployment name in addition
+    :param ret_ip: boolean, if 'True' RETURN list of all newly created miners IPs in addition
     :return: list (strings), list of pods names
     """
     k8s_file, k8s_create_func = choose_k8s_object_create(testconfig[client_title],
@@ -40,8 +40,9 @@ def add_multi_clients(testconfig, deployment_id, container_specs, size=2, client
     ret_val = pods
     print(f"added new clients: {pods}\n")
 
-    if ret_dep:
-        ret_val = pods, resp.metadata._name
+    if ret_ip:
+        ips = [client_pod.status.pod_ip for client_pod in client_pods if client_pod.metadata.name in pods]
+        ret_val = [pods, ips]
 
     return ret_val
 

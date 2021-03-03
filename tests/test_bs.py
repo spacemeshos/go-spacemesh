@@ -1,6 +1,7 @@
 from pytest_testconfig import config as testconfig
 
 from tests import analyse, queries
+from tests.assertions.mesh_assertion import assert_layer_hash
 from tests.convenience import sleep_print_backwards
 from tests.hare.assert_hare import validate_hare
 from tests.setup_network import setup_network
@@ -20,17 +21,13 @@ def test_transactions(init_session, setup_network):
     # validate all accounts balance/nonce
     # send txs from all accounts between themselves
     # validate all accounts balance/nonce
-
     namespace = init_session
     layers_per_epoch = int(testconfig['client']['args']['layers-per-epoch'])
     layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
 
-    tts = layer_duration * tx_gen_conf.num_layers_until_process
-    sleep_print_backwards(tts)
-
-    dep_info, _ = setup_network
+    dep_info, api_handler = setup_network
+    api_handler.wait_for_layer(tx_gen_conf.num_layers_until_process)
     wallet_api = WalletAPI(namespace, dep_info.clients.pods)
-
     tap_bal = wallet_api.get_balance_value(tx_gen_conf.acc_pub)
     tap_nonce = wallet_api.get_nonce_value(tx_gen_conf.acc_pub)
     tap_pub = tx_gen_conf.acc_pub
@@ -92,21 +89,21 @@ def test_mining(init_session, setup_network):
     current_index = get_curr_ind()
     ns = init_session
     layer_avg_size = testconfig['client']['args']['layer-average-size']
+    layers_duration = int(testconfig['client']['args']['layer-duration-sec'])
     layers_per_epoch = int(testconfig['client']['args']['layers-per-epoch'])
     # check only third epoch
     epochs = 5
     last_layer = epochs * layers_per_epoch
 
     total_pods = len(dep_info.clients.pods) + len(dep_info.bootstrap.pods)
-
-    layer_reached = queries.wait_for_latest_layer(testconfig["namespace"], last_layer, layers_per_epoch, total_pods)
+    # TODO: timeout margin variable in conf
+    api_handler.wait_for_layer(last_layer, timeout=layers_duration * last_layer + 10)
 
     tts = 50
     sleep_print_backwards(tts)
 
-    analyse.analyze_mining(testconfig['namespace'], layer_reached, layers_per_epoch, layer_avg_size, total_pods)
-
-    queries.assert_equal_layer_hashes(current_index, ns)
+    analyse.analyze_mining(testconfig['namespace'], last_layer, layers_per_epoch, layer_avg_size, total_pods)
+    assert_layer_hash(api_handler, last_layer)
     queries.assert_equal_state_roots(current_index, ns)
     queries.assert_no_contextually_invalid_atxs(current_index, ns)
     validate_hare(current_index, ns)  # validate hare
