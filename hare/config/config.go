@@ -14,5 +14,5 @@ type Config struct {
 
 // DefaultConfig returns the default configuration for the hare.
 func DefaultConfig() Config {
-	return Config{10, 5, 2, 10, 5, false, 1000, 5}
+	return Config{10, 5, 10, 10, 5, false, 50, 5}
 }
