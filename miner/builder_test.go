@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/blocks"
 	"testing"
 	"time"
 
 	xdr "github.com/nullstyle/go-xdr/xdr3"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -18,8 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/state"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const selectCount = 100
@@ -229,6 +230,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	builder.beginRoundEvent = beginRound
 	//builder := NewBlockBuilder(types.NodeID{Key: "anton", VRFPublicKey: []byte("anton")}, signing.NewEdSigner(), n, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: st}, hare, &mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, selectCount, layersPerEpoch, mockProjector, log.New(n.String(), "", ""))
 
+	gossipMessages := receiver.RegisterGossipProtocol(blocks.NewBlockProtocol, priorityq.High)
 	err := builder.Start()
 	assert.NoError(t, err)
 
@@ -253,7 +255,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 
 	go func() { beginRound <- types.GetEffectiveGenesis() + 1 }()
 	select {
-	case output := <-receiver.RegisterGossipProtocol(blocks.NewBlockProtocol, priorityq.High):
+	case output := <-gossipMessages:
 		b := types.MiniBlock{}
 		_, _ = xdr.Unmarshal(bytes.NewBuffer(output.Bytes()), &b)
 
