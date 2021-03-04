@@ -298,7 +298,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 			require.True(t, ContainsAtx(b.ATXIDs, atxs[2].ID()))*/
 
 			require.Equal(t, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, *b.ActiveSet)
-		case <-time.After(5 * time.Second):
+		case <-time.After(1 * time.Minute):
 			log.Info("elapsed too much time: %v", time.Since(now))
 			require.Fail(t, "timeout on receiving block")
 		}
