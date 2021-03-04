@@ -218,7 +218,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 		t.Logf("iteration %v", i)
 
 		net := service.NewSimulator()
-		beginRound := make(chan types.LayerID)
+		beginRound := make(chan types.LayerID, 1)
 		n := net.NewNode()
 		receiver := net.NewNode()
 
@@ -270,13 +270,13 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 
 		log.Info("[CreateBlockFlow] 6")
 
-		go func() {
-			log.Info("[GetEffectiveGenesis] 1")
-			id := types.GetEffectiveGenesis() + 1
-			log.Info("[GetEffectiveGenesis] 2")
-			beginRound <- id
-			log.Info("[GetEffectiveGenesis] 3")
-		}()
+		//go func() {
+		log.Info("[GetEffectiveGenesis] 1")
+		id := types.GetEffectiveGenesis() + 1
+		log.Info("[GetEffectiveGenesis] 2")
+		beginRound <- id
+		log.Info("[GetEffectiveGenesis] 3")
+		//}()
 
 		log.Info("[CreateBlockFlow] 7")
 
