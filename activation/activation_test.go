@@ -240,11 +240,13 @@ func (l *LayerClockMock) GetCurrentLayer() types.LayerID {
 	return l.currentLayer
 }
 
-func (l *LayerClockMock) AwaitLayer(types.LayerID) chan struct{} {
+func (l *LayerClockMock) AwaitLayer(id types.LayerID) chan struct{} {
+	log.Info("Layer %v started", id)
 	ch := make(chan struct{})
 	go func() {
 		time.Sleep(1 * time.Second)
 		close(ch)
+		log.Info("Layer %v finished", id)
 	}()
 	return ch
 }
@@ -329,6 +331,15 @@ func publishAtx(b *Builder, meshLayer types.LayerID, clockEpoch types.EpochID, b
 // ========== Tests ==========
 
 func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
+	iterations := 10
+	for i := 1; i <= iterations; i++ {
+		t.Logf("iteration %v", i)
+
+		happyFlow(t)
+	}
+}
+
+func happyFlow(t *testing.T) {
 	types.SetLayersPerEpoch(int32(layersPerEpoch))
 	r := require.New(t)
 

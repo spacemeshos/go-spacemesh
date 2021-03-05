@@ -443,14 +443,20 @@ func (b *Builder) PublishActivationTx() error {
 	b.log.Event().Info("atx published!", atx.Fields(size)...)
 	events.ReportAtxCreated(true, uint64(b.currentEpoch()), atx.ShortString())
 
+	log.Info("[PublishActivationTx] Before select")
+
 	select {
 	case <-atxReceived:
+		log.Info("[PublishActivationTx] ATX received")
+
 		b.log.Info("atx received in db")
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer()):
 		select {
 		case <-atxReceived:
 			b.log.Info("atx received in db (in the last moment)")
 		case <-b.syncer.Await(): // ensure we've seen all blocks before concluding that the ATX was lost
+			log.Info("[PublishActivationTx] target epoch has passed")
+
 			b.log.With().Error("target epoch has passed before atx was added to database", atx.ID())
 			b.discardChallenge()
 			return fmt.Errorf("target epoch has passed")
