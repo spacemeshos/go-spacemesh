@@ -368,7 +368,7 @@ func (t *BlockBuilder) createBlockLoop() {
 			}
 			if len(proofs) == 0 {
 				events.ReportDoneCreatingBlock(false, uint64(layerID), "")
-				t.With().Info("notice: not eligible for blocks in layer", layerID)
+				t.With().Info("not eligible for blocks in layer", layerID)
 				continue
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
