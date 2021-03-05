@@ -1,7 +1,10 @@
 package node
 
 import (
-	"io/ioutil"
+	"bufio"
+	"fmt"
+	"io"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -293,10 +296,34 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	ActivateGrpcServer(apps[0])
 
 	go func() {
-		_, _ = ioutil.ReadAll(poetHarness.Stdout)
+		r := bufio.NewReader(poetHarness.Stdout)
+		for {
+			line, _, err := r.ReadLine()
+			if err == io.EOF || err == os.ErrClosed {
+				return
+			}
+			if err != nil {
+				log.Error("Failed to read PoET stdout: %v", err)
+				return
+			}
+
+			fmt.Printf("[PoET stdout] %v\n", string(line))
+		}
 	}()
 	go func() {
-		_, _ = ioutil.ReadAll(poetHarness.Stderr)
+		r := bufio.NewReader(poetHarness.Stderr)
+		for {
+			line, _, err := r.ReadLine()
+			if err == io.EOF || err == os.ErrClosed {
+				return
+			}
+			if err != nil {
+				log.Error("Failed to read PoET stderr: %v", err)
+				return
+			}
+
+			fmt.Printf("[PoET stderr] %v", string(line))
+		}
 	}()
 
 	if err := poetHarness.Start([]string{"127.0.0.1:9092"}); err != nil {
