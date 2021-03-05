@@ -548,7 +548,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.NoError(t, err)
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err,
-		fmt.Sprintf("could not fetch node last ATX: atx for node %v does not exist", atx.NodeID.ShortString()))
+		fmt.Sprintf("could not fetch node last atx: atx for node %v does not exist", atx.NodeID.ShortString()))
 
 	// Prev atx not declared but commitment not included.
 	atx = newActivationTx(idx1, 0, *types.EmptyATXID, 1012, 0, posAtx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
@@ -991,5 +991,5 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 	malformedAtx := types.NewActivationTx(newChallenge(nodeID, 0, arbitraryAtxID, goldenATXID, 0), [20]byte{}, nil, nil)
 	err = atxdb.ContextuallyValidateAtx(malformedAtx.ActivationTxHeader)
 	r.EqualError(err,
-		fmt.Sprintf("could not fetch node last ATX: atx for node %v does not exist", nodeID.ShortString()))
+		fmt.Sprintf("could not fetch node last atx: atx for node %v does not exist", nodeID.ShortString()))
 }
