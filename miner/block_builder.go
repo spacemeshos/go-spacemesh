@@ -227,7 +227,7 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 			t.With().Error("could not get block ids for layer", bottom, log.Err(e))
 			return nil, e
 		}
-		t.With().Warning("adding votes for all blocks in layer", log.Int("numBlocks", len(ids)))
+		t.With().Warning("adding votes for all blocks in layer", log.Int("num_blocks", len(ids)))
 
 		// set votes to whole layer
 		votes = ids
@@ -314,25 +314,15 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 	bl.Initialize()
 
 	if b.ActiveSet != nil {
-		t.Log.Info("storing ref block for epoch %v id %v", epoch, bl.ID())
+		t.With().Info("storing ref block", epoch, bl.ID())
 		err := t.storeRefBlock(epoch, bl.ID())
 		if err != nil {
-			t.Log.Error("cannot store ref block for epoch %v err %v", epoch, err)
+			t.With().Error("cannot store ref block", epoch, log.Err(err))
 			//todo: panic?
 		}
 	}
 
-	t.Log.Event().Info("block created",
-		bl.ID(),
-		bl.LayerIndex,
-		bl.LayerIndex.GetEpoch(),
-		bl.MinerID(),
-		log.Int("tx_count", len(bl.TxIDs)),
-		log.Int("view_edges", len(bl.ViewEdges)),
-		log.Int("vote_count", len(bl.BlockVotes)),
-		bl.ATXID,
-		log.Uint32("eligibility_counter", bl.EligibilityProof.J),
-	)
+	t.Event().Info("block created", bl.Fields()...)
 	return bl, nil
 }
 
