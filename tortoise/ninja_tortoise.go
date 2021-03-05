@@ -362,7 +362,9 @@ func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow
 }
 
 func (ni *ninjaTortoise) updatePatternTally(newMinGood votingPattern, correctionMap map[types.BlockID]vec, effCountMap map[types.LayerID]int) {
-	ni.logger.Debug("update tally pbase id:%s layer:%s p id:%s layer:%s", ni.PBase.id, ni.PBase.Layer(), newMinGood.id, newMinGood.Layer())
+	ni.logger.With().Debug("update tally",
+		log.FieldNamed("pbase", ni.PBase),
+		log.FieldNamed("new_min_good", newMinGood))
 	for idx, effc := range effCountMap {
 		g := ni.TGood[idx]
 		for b, v := range ni.TVote[g] {

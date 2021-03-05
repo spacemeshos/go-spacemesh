@@ -299,7 +299,11 @@ func (msh *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerI
 		l, err := msh.GetLayer(layerID)
 		// TODO: propagate/handle error
 		if err != nil || l == nil {
-			msh.With().Error("failed to get layer", layerID, log.Err(err))
+			if layerID.GetEpoch().IsGenesis() {
+				msh.With().Info("failed to get layer (expected for genesis layers)", layerID, log.Err(err))
+			} else {
+				msh.With().Error("failed to get layer", layerID, log.Err(err))
+			}
 			return
 		}
 		validBlocks, invalidBlocks := msh.BlocksByValidity(l.Blocks())
@@ -319,7 +323,7 @@ func (msh *Mesh) persistLayerHashes(l *types.Layer) {
 	if l.Index() > types.GetEffectiveGenesis() {
 		prevHash, err = msh.getRunningLayerHash(l.Index() - 1)
 		if err != nil {
-			msh.Log.Error("cannot get running layer hash for layer %v", l.Index()-1)
+			msh.With().Error("cannot get running layer hash", l.Index()-1)
 			return
 		}
 	}
