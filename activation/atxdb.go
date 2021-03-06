@@ -371,7 +371,7 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		}
 
 		if prevATX.NodeID.Key != atx.NodeID.Key {
-			return fmt.Errorf("previous ATX belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v",
+			return fmt.Errorf("previous atx belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v",
 				atx.ShortString(), atx.NodeID.Key, prevATX.NodeID.Key)
 		}
 
