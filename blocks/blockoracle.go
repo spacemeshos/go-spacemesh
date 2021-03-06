@@ -25,6 +25,7 @@ type vrfSigner interface {
 	Sign(msg []byte) ([]byte, error)
 }
 
+// DefaultProofsEpoch is set such that it will never equal the current epoch
 const DefaultProofsEpoch = ^types.EpochID(0)
 
 // Oracle is the oracle that provides block eligibility proofs for the miner.
