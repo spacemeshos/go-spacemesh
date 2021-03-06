@@ -25,6 +25,8 @@ type vrfSigner interface {
 	Sign(msg []byte) ([]byte, error)
 }
 
+const DefaultProofsEpoch = ^types.EpochID(0)
+
 // Oracle is the oracle that provides block eligibility proofs for the miner.
 type Oracle struct {
 	committeeSize        uint32
@@ -46,7 +48,6 @@ type Oracle struct {
 
 // NewMinerBlockOracle returns a new Oracle.
 func NewMinerBlockOracle(committeeSize uint32, genesisActiveSetSize uint32, layersPerEpoch uint16, atxDB activationDB, beaconProvider *EpochBeaconProvider, vrfSigner vrfSigner, nodeID types.NodeID, isSynced func() bool, log log.Log) *Oracle {
-
 	return &Oracle{
 		committeeSize:        committeeSize,
 		genesisActiveSetSize: genesisActiveSetSize,
@@ -55,7 +56,7 @@ func NewMinerBlockOracle(committeeSize uint32, genesisActiveSetSize uint32, laye
 		beaconProvider:       beaconProvider,
 		vrfSigner:            vrfSigner,
 		nodeID:               nodeID,
-		proofsEpoch:          ^types.EpochID(0),
+		proofsEpoch:          DefaultProofsEpoch,
 		isSynced:             isSynced,
 		log:                  log,
 	}
@@ -69,7 +70,15 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 	}
 
 	epochNumber := layerID.GetEpoch()
-	bo.log.With().Info("asked for eligibility", epochNumber, log.FieldNamed("cached", bo.proofsEpoch))
+	var cachedEpochDescription log.Field
+	if bo.proofsEpoch == DefaultProofsEpoch {
+		cachedEpochDescription = log.String("cached_epoch_id", "(none)")
+	} else {
+		cachedEpochDescription = log.FieldNamed("cached_epoch_id", bo.proofsEpoch.Field())
+	}
+	bo.log.With().Info("asked for eligibility",
+		log.FieldNamed("epoch_id", epochNumber),
+		cachedEpochDescription)
 	if epochNumber.IsGenesis() {
 		bo.log.Info("asked for eligibility for genesis epoch, cannot create blocks here")
 		return *types.EmptyATXID, nil, nil, nil
@@ -106,7 +115,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 	atx, err := bo.getValidAtxForEpoch(epochNumber)
 	if err != nil {
 		if !epochNumber.IsGenesis() {
-			return fmt.Errorf("failed to get latest ATX: %v", err)
+			return fmt.Errorf("failed to get latest atx for node in epoch %d: %v", epochNumber, err)
 		}
 	} else {
 		bo.atxID = atx.ID()

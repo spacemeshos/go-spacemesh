@@ -654,7 +654,7 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 	db.log.With().Debug("returned epoch atxs", epochID,
 		log.Int("count", len(atxs)),
 		log.String("atxs", fmt.Sprint(atxs)))
-	return atxs
+	return
 }
 
 // GetNodeAtxIDForEpoch returns an atx published by the provided nodeID for the specified targetEpoch. meaning the atx
