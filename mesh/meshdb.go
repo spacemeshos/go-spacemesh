@@ -468,7 +468,6 @@ type dbReward struct {
 }
 
 func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[types.Address]map[string]uint64, totalReward, layerReward *big.Int) error {
-
 	batch := m.transactions.NewBatch()
 	for account, smesherAccountEntry := range accountBlockCount {
 		for smesherString, cnt := range smesherAccountEntry {

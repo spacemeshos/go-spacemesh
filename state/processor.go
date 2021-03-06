@@ -191,7 +191,7 @@ func (tp *TransactionProcessor) GetLayerStateRoot(layer types.LayerID) (types.Ha
 func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int) {
 	rewardConverted := reward.Uint64()
 	for _, account := range miners {
-		tp.Log.With().Info("Reward applied",
+		tp.Log.With().Info("reward applied",
 			log.String("account", account.Short()),
 			log.Uint64("reward", rewardConverted),
 			layer,
@@ -201,13 +201,13 @@ func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types
 	newHash, err := tp.Commit()
 
 	if err != nil {
-		tp.Log.Error("trie write error %v", err)
+		tp.With().Error("trie write error", log.Err(err))
 		return
 	}
 
 	err = tp.addStateToHistory(layer, newHash)
 	if err != nil {
-		tp.Log.Error("failed to add state to history: %v", err)
+		tp.With().Error("failed to add state to history", log.Err(err))
 	}
 }
 
