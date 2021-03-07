@@ -214,6 +214,7 @@ func (atx *ActivationTx) Fields(size int) []log.LoggableField {
 		log.FieldNamed("sender_id", atx.NodeID),
 		log.FieldNamed("prev_atx_id", atx.PrevATXID),
 		log.FieldNamed("pos_atx_id", atx.PositioningATX),
+		log.FieldNamed("coinbase", atx.Coinbase),
 		atx.PubLayerID,
 		atx.PubLayerID.GetEpoch(),
 		log.Uint64("sequence_number", atx.Sequence),
