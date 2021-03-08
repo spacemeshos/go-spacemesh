@@ -97,13 +97,6 @@ func init() {
 
 // AwaitAtx returns a channel that will receive notification when the specified atx with id id is received via gossip
 func (db *DB) AwaitAtx(id types.ATXID) chan struct{} {
-	start := time.Now()
-
-	log.Info("[AwaitAtx] Start")
-	defer func() {
-		log.Info("[AwaitAtx] Finish")
-	}()
-
 	db.Lock()
 	defer db.Unlock()
 
@@ -120,11 +113,6 @@ func (db *DB) AwaitAtx(id types.ATXID) chan struct{} {
 		db.atxChannels[id] = ch
 	}
 	ch.listeners++
-	go func(start time.Time, ch chan struct{}) {
-		<-ch
-		log.Info("[AwaitAtx] chan id %v closed in %v", id.ShortString(), time.Since(start))
-	}(start, ch.ch)
-
 	return ch.ch
 }
 
@@ -521,52 +509,28 @@ func (db *DB) StoreAtx(ech types.EpochID, atx *types.ActivationTx) error {
 }
 
 func (db *DB) storeAtxUnlocked(atx *types.ActivationTx) error {
-	start := time.Now()
-	log.Info("[storeAtxUnlocked] Start")
-	defer func() {
-		log.Info("[storeAtxUnlocked] Finish")
-	}()
-
 	atxHeaderBytes, err := types.InterfaceToBytes(atx.ActivationTxHeader)
 	if err != nil {
 		return err
 	}
-
-	log.Info("[storeAtxUnlocked] 1 - %v after function start", time.Since(start))
-	atxID := atx.ID()
-
-	log.Info("[storeAtxUnlocked] 2 - %v after function start", time.Since(start))
-	atxHeaderKey := getAtxHeaderKey(atxID)
-
-	log.Info("[storeAtxUnlocked] 3 - %v after function start", time.Since(start))
-	err = db.atxs.Put(atxHeaderKey, atxHeaderBytes)
+	err = db.atxs.Put(getAtxHeaderKey(atx.ID()), atxHeaderBytes)
 	if err != nil {
 		return err
 	}
 
-	log.Info("[storeAtxUnlocked] 4 - %v after function start", time.Since(start))
-	atxBody := getAtxBody(atx)
-
-	log.Info("[storeAtxUnlocked] 5 - %v after function start", time.Since(start))
-	atxBodyBytes, err := types.InterfaceToBytes(atxBody)
+	atxBodyBytes, err := types.InterfaceToBytes(getAtxBody(atx))
 	if err != nil {
 		return err
 	}
-
-	log.Info("[storeAtxUnlocked] 6 - %v after function start", time.Since(start))
-	key := getAtxBodyKey(atxID)
-
-	log.Info("[storeAtxUnlocked] 7 - %v after function start", time.Since(start))
-	err = db.atxs.Put(key, atxBodyBytes)
+	err = db.atxs.Put(getAtxBodyKey(atx.ID()), atxBodyBytes)
 	if err != nil {
 		return err
 	}
 
 	// notify subscribers
-	if ch, found := db.atxChannels[atxID]; found {
-		log.Info("[storeAtxUnlocked] Closing channel %v in %v after function start", atxID.ShortString(), time.Since(start))
+	if ch, found := db.atxChannels[atx.ID()]; found {
 		close(ch.ch)
-		delete(db.atxChannels, atxID)
+		delete(db.atxChannels, atx.ID())
 	}
 
 	return nil

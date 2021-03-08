@@ -52,8 +52,6 @@ func encoder() zapcore.Encoder {
 var AppLog Log
 
 func init() {
-	defaultEncoder.EncodeTime = zapcore.RFC3339NanoTimeEncoder
-
 	logwriter = os.Stdout
 
 	// create a basic temp os.Stdout logger
