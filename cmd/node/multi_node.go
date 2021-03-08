@@ -322,7 +322,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 				return
 			}
 
-			fmt.Printf("[PoET stderr] %v", string(line))
+			fmt.Printf("[PoET stderr] %v\n", string(line))
 		}
 	}()
 
