@@ -2,7 +2,7 @@ import time
 
 import tests.convenience as conv
 import tests.api.parser as parser
-from tests.api.sender import ApiSender as sender
+from tests.api.sender import ApiSender as Sender
 
 
 layers_query_request = '{{"start_layer": {{"number": {start_layer}}}, "end_layer": {{"number": {end_layer}}}}}'
@@ -10,7 +10,10 @@ layers_query_request = '{{"start_layer": {{"number": {start_layer}}}, "end_layer
 
 class ApiHandler:
     def __init__(self, ips, namespace):
-        self.sender = sender(ips, namespace)
+        self.sender = Sender(ips, namespace)
+
+    def extend_ips(self, ips):
+        self.sender.extend_ips(ips)
 
     # TODO: add timeout decorator
     def wait_for_layer(self, layer_num, timeout=None, interval=10):
@@ -44,23 +47,24 @@ class ApiHandler:
             timeout = timeout - elapsed_time if is_timeout else timeout
         return current_layer
 
+    # TODO: add timeout
     def wait_for_epoch(self, epoch_num):
         curr_epoch = self.sender.send_current_epoch()
         if curr_epoch > epoch_num:
             raise ValueError(f"epoch requested is {epoch_num} has already passed, current epoch {curr_epoch}")
         # TODO: add layers per epoch in ApiHandler?
-        first_layer, _ = self.get_epochs_layer_range(epoch_num, self.sender.layers_per_epoch)
+        first_layer, last_layer = self.get_epochs_layer_range(epoch_num, self.sender.layers_per_epoch)
         print(f"wait for epoch {epoch_num}, epoch first layer {first_layer}")
-        self.wait_for_layer(first_layer)
+        return self.wait_for_layer(first_layer)
 
     # TODO: add timeout
     def wait_for_next_epoch(self):
         curr_epoch = self.sender.send_current_epoch()
         next_epoch_ind = curr_epoch + 1
         # TODO: add layers per epoch in ApiHandler?
-        first_layer, _ = self.get_epochs_layer_range(next_epoch_ind, self.sender.layers_per_epoch)
+        first_layer, last_layer = self.get_epochs_layer_range(next_epoch_ind, self.sender.layers_per_epoch)
         print(f"wait for next epoch - {next_epoch_ind}, epoch first layer {first_layer}")
-        self.wait_for_layer(first_layer)
+        return self.wait_for_layer(first_layer)
 
     def request_layer_hash(self, layer_num):
         layer_hashes = []
@@ -75,6 +79,24 @@ class ApiHandler:
             print(f"not all layer hashes equal for layer {layer_num}\nlayer_hashes: {layer_hashes}")
             return False
         return True
+
+    def get_current_layer(self):
+        return self.sender.send_current_layer()
+
+    # TODO: this function shouldn't be here
+    @staticmethod
+    def get_epochs_layer_range(epoch_num, layers_per_epoch):
+        # epochs index start from 0
+        first_layer = layers_per_epoch * epoch_num
+        last_layer = first_layer + layers_per_epoch - 1
+        return first_layer, last_layer
+
+    @staticmethod
+    def resolve_api_entry(api):
+        api_entry = getattr(ApiHandler, api)
+        if not api_entry:
+            raise ValueError(f"{api} is not a valid api")
+        return api_entry
 
     # def get_node_atx_on_epoch(self, node_ip, epoch_number, node_id=None):
     #     """
@@ -110,24 +132,6 @@ class ApiHandler:
     #             if atx['smesher_id']['id'] == node_id_b64:
     #                 print("#@!#@! atx\n", atx, "\n\n")
     #                 return atx
-
-    def get_current_layer(self):
-        return self.sender.send_current_layer()
-
-    @staticmethod
-    def get_epochs_layer_range(epoch_num, layers_per_epoch):
-        # epochs index start from 0
-        first_layer = layers_per_epoch * epoch_num
-        last_layer = first_layer + layers_per_epoch - 1
-        return first_layer, last_layer
-
-    @staticmethod
-    def resolve_api_entry(api):
-        api_entry = getattr(ApiHandler, api)
-        if not api_entry:
-            raise ValueError(f"{api} is not a valid api")
-        return api_entry
-
     # @staticmethod
     # def parse_atx_from_layer_query_res(layer_query):
     #     if 'layer' not in layer_query:
