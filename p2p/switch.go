@@ -760,6 +760,13 @@ func (s *Switch) askForMorePeers() {
 	}
 }
 
+// peerKeepAliveLoop sends a periodic TCP ping over to the peer in order to make sure that it is still alive
+func (s *Switch) peerKeepAliveLoop(addr inet.TCPAddr) {
+	// sends a ping to the peerID over TCP
+	// need to create the TCP connection : peer needs to accept the TCP connection
+
+}
+
 // getMorePeers tries to fill the `outpeers` slice with dialed outbound peers that we selected from the discovery.
 func (s *Switch) getMorePeers(numpeers int) int {
 
