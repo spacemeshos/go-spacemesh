@@ -243,7 +243,7 @@ func (l *LayerClockMock) GetCurrentLayer() types.LayerID {
 func (l *LayerClockMock) AwaitLayer(types.LayerID) chan struct{} {
 	ch := make(chan struct{})
 	go func() {
-		time.Sleep(1 * time.Second)
+		time.Sleep(500 * time.Millisecond)
 		close(ch)
 	}()
 	return ch
