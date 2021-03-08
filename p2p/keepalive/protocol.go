@@ -57,6 +57,8 @@ func newProtocol(peerChan chan p2pcrypto.PublicKey, svc baseNetwork, log log.Log
 
 	//spin up a thread that loops on the input from the two channels
 	go p.listenForPeers()
+	//spin up a thread that keeps sending pings
+	go p.pingLoop()
 	return p
 }
 
