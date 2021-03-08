@@ -1,6 +1,14 @@
 package node
 
 import (
+	"bufio"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+	"sync"
+	"time"
+
 	"github.com/spacemeshos/amcl"
 	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -16,9 +24,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"strconv"
-	"sync"
-	"time"
 )
 
 // ManualClock is a clock that releases ticks on demand and not according to a real world clock
@@ -285,6 +290,37 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	}
 	collect.Start(false)
 	ActivateGrpcServer(apps[0])
+
+	go func() {
+		r := bufio.NewReader(poetHarness.Stdout)
+		for {
+			line, _, err := r.ReadLine()
+			if err == io.EOF || err == os.ErrClosed {
+				return
+			}
+			if err != nil {
+				log.Error("Failed to read PoET stdout: %v", err)
+				return
+			}
+
+			fmt.Printf("[PoET stdout] %v\n", string(line))
+		}
+	}()
+	go func() {
+		r := bufio.NewReader(poetHarness.Stderr)
+		for {
+			line, _, err := r.ReadLine()
+			if err == io.EOF || err == os.ErrClosed {
+				return
+			}
+			if err != nil {
+				log.Error("Failed to read PoET stderr: %v", err)
+				return
+			}
+
+			fmt.Printf("[PoET stderr] %v\n", string(line))
+		}
+	}()
 
 	if err := poetHarness.Start([]string{"127.0.0.1:9092"}); err != nil {
 		log.Panic("failed to start poet server: %v", err)
