@@ -1,6 +1,7 @@
 from pytest_testconfig import config as testconfig
 
 from tests import queries as q
+from tests.assertions.mesh_assertion import assert_blocks_num_in_epochs
 from tests.setup_utils import add_multi_clients
 from tests.setup_network import setup_network
 from tests.utils import validate_blocks_per_nodes, get_pod_id, get_conf
@@ -63,8 +64,8 @@ def test_add_node_validate_atx(init_session, setup_network):
     print(f"found {len(atx_epoch_2)} ATXs in epoch {epoch_2}")
     e2_first_layer, e2_last_layer = api_handler.get_epochs_layer_range(epoch_2, layers_per_epoch)
     print(f"-------- validating blocks per nodes in epoch {epoch_2} --------")
-    validate_blocks_per_nodes(block_map, e2_first_layer, e2_last_layer, layers_per_epoch, layer_avg_size, num_miners,
-                              ignore_lst=ignore_lst)
+    assert_blocks_num_in_epochs(block_map, e2_first_layer, e2_last_layer + 1, layers_per_epoch, layer_avg_size,
+                                num_miners, ignore_lst=ignore_lst)
     # wait an epoch
     api_handler.wait_for_next_epoch()
 
@@ -72,7 +73,8 @@ def test_add_node_validate_atx(init_session, setup_network):
     curr_epoch += 1
     print(f"\n\n-------- current epoch {curr_epoch} --------")
     epoch_3 = 3
-    # TODO: why are we checking if new node created an ATX, we should assume it did, should this be an assertion?
+    # TODO: why are we checking if new node created an ATX in epoch 3, we should assume it did,
+    #  should this be an assertion?
     new_pod_published_atx_epoch_3 = q.node_published_atx(init_session, new_pod_id, epoch_3)
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
     atx_epoch_3 = q.query_atx_per_epoch(init_session, epoch_3)
@@ -83,8 +85,8 @@ def test_add_node_validate_atx(init_session, setup_network):
     e3_first_layer, e3_last_layer = api_handler.get_epochs_layer_range(epoch_3, layers_per_epoch)
     print(f"-------- validating blocks per nodes in epoch {epoch_3} --------")
     # assert that each node has created layer_avg/number_of_nodes
-    validate_blocks_per_nodes(block_map, e3_first_layer, e3_last_layer, layers_per_epoch, layer_avg_size,
-                              num_miners_epoch_4, ignore_lst=ignore_lst)
+    assert_blocks_num_in_epochs(block_map, e3_first_layer, e3_last_layer + 1, layers_per_epoch, layer_avg_size,
+                                num_miners_epoch_4, ignore_lst=ignore_lst)
     # ATX validation in epoch 3
     atx_hits = q.query_atx_per_epoch(init_session, epoch_3)
     print(f"found {len(atx_hits)} ATXs in epoch {epoch_3}")
@@ -108,5 +110,5 @@ def test_add_node_validate_atx(init_session, setup_network):
     num_miners_epoch_6 = num_miners + 1 if new_pod_published_atx_epoch_4 else num_miners
     print(f"-------- validating blocks per nodes in epoch {epoch_4} --------")
     e4_first_layer, e4_last_layer = api_handler.get_epochs_layer_range(epoch_4, layers_per_epoch)
-    validate_blocks_per_nodes(block_map, e4_first_layer, e4_last_layer, layers_per_epoch, layer_avg_size,
-                              num_miners_epoch_6)
+    assert_blocks_num_in_epochs(block_map, e4_first_layer, e4_last_layer + 1, layers_per_epoch, layer_avg_size,
+                                num_miners_epoch_6)
