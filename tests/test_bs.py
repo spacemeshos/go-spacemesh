@@ -94,15 +94,21 @@ def test_mining(init_session, setup_network):
     # check only third epoch
     epochs = 5
     last_layer = epochs * layers_per_epoch
-
+    # TODO: remove timing from get current layer after adding timeout decorator
+    current_layer, _ = api_handler.get_current_layer()[0]
     total_pods = len(dep_info.clients.pods) + len(dep_info.bootstrap.pods)
-    # TODO: timeout margin variable in conf
-    api_handler.wait_for_layer(last_layer, timeout=layers_duration * last_layer + 10)
+    if current_layer < last_layer:
+        # TODO: timeout margin variable in conf
+        api_handler.wait_for_layer(last_layer, timeout=layers_duration * last_layer + 10)
+    while current_layer % layers_per_epoch != 0:
+        print("#@! current layer is not the first layer of the epoch waiting another layer, curr:", current_layer)
+        current_layer += 1
+        api_handler.wait_for_layer(current_layer, timeout=layers_duration + 10)
 
     tts = 50
     sleep_print_backwards(tts)
 
-    analyse.analyze_mining(testconfig['namespace'], last_layer, layers_per_epoch, layer_avg_size, total_pods)
+    analyse.analyze_mining(testconfig['namespace'], current_layer, layers_per_epoch, layer_avg_size, total_pods)
     assert_layer_hash(api_handler, last_layer)
     queries.assert_equal_state_roots(current_index, ns)
     queries.assert_no_contextually_invalid_atxs(current_index, ns)

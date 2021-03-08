@@ -1,4 +1,4 @@
-from tests.api_handler import ApiHandler
+from tests.api.api_handler import ApiHandler
 
 
 def assert_layer_hash(api_handler: ApiHandler, last_layer, start_layer=None):

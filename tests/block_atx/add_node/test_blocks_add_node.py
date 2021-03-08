@@ -27,6 +27,7 @@ from tests.utils import validate_blocks_per_nodes, get_pod_id, get_conf
 # validate total miner generated Tavg/x+1 (floored) in i+5
 def test_add_node_validate_atx(init_session, setup_network):
     dep_info, api_handler = setup_network
+    # TODO: this should be 1 not 0
     curr_epoch = 0
     epochs_to_sleep = 2
     layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
@@ -36,58 +37,52 @@ def test_add_node_validate_atx(init_session, setup_network):
 
     print(f"\nlayer duration={layer_duration}, layers per epoch={layers_per_epoch}, layer avg size={layer_avg_size}")
     # wait for 2 epochs
-    last_layer = epochs_to_sleep * layers_per_epoch
-    print(f"wait until second epoch to layer {last_layer}")
-    api_handler.wait_for_layer(last_layer, timeout=last_layer * layer_duration + 10)
-    # ========================== epoch i+2 ==========================
+    api_handler.wait_for_epoch(epochs_to_sleep)
+
+    # ========================== epoch 2 ==========================
     curr_epoch += epochs_to_sleep
     print("\n\n-------- current epoch", curr_epoch, "--------")
     print("adding a new miner")
     bs_info = dep_info.bootstrap.pods[0]
     cspec = get_conf(bs_info, testconfig['client'], testconfig['genesis_delta'])
     new_pod_name_list, new_pod_ip_list = add_multi_clients(testconfig, init_session, cspec, 1, ret_ip=True)
-    # newly added pod name ([0] - there is only one pod)
-    new_pod_name = new_pod_name_list[0]
     # adding nodes IP to api handler ip list for future communication
     api_handler.extend_ips(new_pod_ip_list)
     # wait for next epoch
     last_layer = layers_per_epoch * (curr_epoch + 1)
-    print(f"wait until next epoch to layer {last_layer}")
-    api_handler.wait_for_layer(last_layer, timeout=layers_per_epoch * layer_duration + 10)
+    api_handler.wait_for_next_epoch()
 
-    # check if new client published ATX in epoch i+2
-    new_pod_id = get_pod_id(init_session, new_pod_name)
-    new_pod_published_atx_epoch_2 = q.node_published_atx(init_session, new_pod_id, curr_epoch)
-
-    # ========================== epoch i+3 ==========================
+    # ========================== epoch 3 ==========================
+    epoch_2 = curr_epoch
     curr_epoch += 1
+    new_pod_id = get_pod_id(init_session, new_pod_name_list[0])
+    # check if new client published ATX in epoch i+2
+    new_pod_published_atx_epoch_2 = q.node_published_atx(init_session, new_pod_id, epoch_2)
     print("\n\n-------- current epoch", curr_epoch, "--------")
-
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
     print(f"-------- validating blocks per nodes up to layer {last_layer} --------")
     # we're querying for block creation without epoch constrain, this will result
     # with epochs where new or deleted nodes will return 0 blocks in certain epochs
     # we should ignore those
-
     ignore_lst = [new_pod_id]
     first_layer = epochs_to_sleep * layers_per_epoch
-
     atx_epoch_2 = q.query_atx_per_epoch(init_session, curr_epoch - 1)
     print(f"found {len(atx_epoch_2)} ATXs in epoch {curr_epoch-1}")
-
     validate_blocks_per_nodes(block_map, first_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners,
                               ignore_lst=ignore_lst)
-
     # wait an epoch
     prev_layer = last_layer
     last_layer = layers_per_epoch * (curr_epoch + 1)
     print(f"wait until next epoch to layer {last_layer}")
-    api_handler.wait_for_layer(last_layer, timeout=(last_layer - prev_layer) * layer_duration + 10)
+    api_handler.wait_for_next_epoch()
 
-    new_pod_published_atx_epoch_3 = q.node_published_atx(init_session, new_pod_id, curr_epoch)
-
-    # ========================== epoch i+4 ==========================
+    # ========================== epoch 4 ==========================
+    # TODO: move curr epoch here and add last epoch variable
+    epoch_3 = curr_epoch
     curr_epoch += 1
+    new_pod_published_atx_epoch_3 = q.node_published_atx(init_session, new_pod_id, epoch_3)
+    last_layer = layers_per_epoch * (curr_epoch + 1)
+    api_handler.wait_for_layer(last_layer, timeout=layers_per_epoch * layer_duration + 10)
     print("\n\n-------- current epoch", curr_epoch, "--------")
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
     # assert that each node has created layer_avg/number_of_nodes
@@ -120,7 +115,7 @@ def test_add_node_validate_atx(init_session, setup_network):
 
     new_pod_published_atx_epoch_4 = q.node_published_atx(init_session, new_pod_id, curr_epoch)
 
-    # ========================== epoch i+6 ==========================
+    # ========================== epoch 6 ==========================
     curr_epoch += 2
     print("\n\n-------- current epoch", curr_epoch, "--------")
 

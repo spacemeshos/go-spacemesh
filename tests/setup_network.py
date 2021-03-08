@@ -1,7 +1,7 @@
 import pytest
 from pytest_testconfig import config as testconfig
 
-from tests.api_handler import ApiHandler
+from tests.api.api_handler import ApiHandler
 from tests.conftest import NetworkDeploymentInfo, NetworkInfo
 from tests.conftest import DeploymentInfo as DepInfo
 from tests.utils import wait_genesis, get_genesis_time_delta
