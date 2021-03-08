@@ -3,6 +3,7 @@ package keepalive
 import (
 	"bytes"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -38,6 +39,7 @@ type protocol struct {
 	disconnectPeerChannel chan p2pcrypto.PublicKey
 	msgServer             *server.MessageServer
 	logger                log.Log
+	peersLock             sync.RWMutex
 	peers                 map[p2pcrypto.PublicKey]struct{}
 	net                   baseNetwork
 }
@@ -54,7 +56,23 @@ func newProtocol(peerChan chan p2pcrypto.PublicKey, svc baseNetwork, log log.Log
 	p.msgServer.RegisterMsgHandler(KeepAlivePing, p.handleKeepAlivePingRequest())
 
 	//spin up a thread that loops on the input from the two channels
+	go p.listenForPeers()
 	return p
+}
+
+func (p *protocol) listenForPeers() {
+	for {
+		select {
+		case newpeer := <-p.connectPeerChannel:
+			p.peersLock.Lock()
+			p.peers[newpeer] = struct{}{}
+			p.peersLock.Unlock()
+		case delpeer := <-p.disconnectPeerChannel:
+			p.peersLock.Lock()
+			delete(p.peers, delpeer)
+			p.peersLock.Unlock()
+		}
+	}
 }
 
 func (p *protocol) handleKeepAlivePingRequest() func(msg server.Message) []byte {
@@ -128,8 +146,12 @@ func (p *protocol) handleKeepAlivePing(peer p2pcrypto.PublicKey) error {
 
 func (p *protocol) pingLoop() {
 	for {
-		//send ping
-		p.handleKeepAlivePing()
+		p.peersLock.RLock()
+		for peerAddr := range p.peers {
+			//send ping
+			p.handleKeepAlivePing(peerAddr)
+		}
+		p.peersLock.RUnlock()
 		time.Sleep(DurationBetweenPings)
 	}
 }
