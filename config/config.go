@@ -149,6 +149,7 @@ func DefaultConfig() Config {
 		REWARD:          mesh.DefaultMeshConfig(),
 		POST:            activation.DefaultConfig(),
 		FETCH:           fetch.DefaultConfig(),
+		LAYERS:          layerfetcher.DefaultConfig(),
 	}
 }
 
