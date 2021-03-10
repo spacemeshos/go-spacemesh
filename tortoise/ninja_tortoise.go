@@ -680,8 +680,8 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 					} else {
 						ni.TVote[p][blt] = vote
 						ni.logger.With().Debug(
-							"block support below threshold, block abstains from vote on pattern, " +
-							"pattern is incomplete and will not be promoted",
+							"block support below threshold, block abstains from vote on pattern, "+
+								"pattern is incomplete and will not be promoted",
 							p,
 							bid,
 							idx,
