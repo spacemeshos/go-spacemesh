@@ -59,7 +59,7 @@ func (t ATXID) Bytes() []byte {
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (t ATXID) Field() log.Field { return t.Hash32().Field("atx_id") }
+func (t ATXID) Field() log.Field { return log.FieldNamed("atx_id", t.Hash32()) }
 
 // Compare returns true if other (the given ATXID) is less than this ATXID, by lexicographic comparison.
 func (t ATXID) Compare(other ATXID) bool {
