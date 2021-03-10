@@ -151,35 +151,42 @@ func (b *Broker) eventLoop() {
 				continue
 			}
 
+			h := types.CalcMessageHash12(msg.Bytes(), protoName)
 			hareMsg, err := MessageFromBuffer(msg.Bytes())
 			if err != nil {
-				b.With().Error("could not build message", log.Err(err))
+				b.With().Error("could not build message", h, log.Err(err))
 				continue
 			}
 
 			if hareMsg.InnerMsg == nil {
 				b.With().Error("broker message validation failed",
+					h,
 					log.Err(errNilInner),
 					log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 				continue
 			}
+			b.With().Debug("broker received hare message", hareMsg)
 
-			msgInstID := hareMsg.InnerMsg.InstanceID
 			// TODO: fix metrics
 			// metrics.MessageTypeCounter.With("type_id", hareMsg.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(msgInstID), 10), "reporter", "brokerHandler").Add(1)
+			msgInstID := hareMsg.InnerMsg.InstanceID
 			isEarly := false
 			if err := b.validate(hareMsg); err != nil {
 				if err != errEarlyMsg {
 					// not early, validation failed
 					b.With().Debug("broker received a message to a consensus process that is not registered",
+						h,
 						log.Err(err),
+						hareMsg,
 						log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)),
 						log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 					continue
 				}
 
 				b.With().Debug("early message detected",
+					h,
 					log.Err(err),
+					hareMsg,
 					log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)),
 					log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 
@@ -192,6 +199,8 @@ func (b *Broker) eventLoop() {
 			iMsg, err := newMsg(hareMsg, b.stateQuerier)
 			if err != nil {
 				b.With().Warning("message validation failed: could not construct msg",
+					h,
+					hareMsg,
 					log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)),
 					log.Err(err))
 				continue
@@ -200,6 +209,8 @@ func (b *Broker) eventLoop() {
 			// validate msg
 			if !b.eValidator.Validate(iMsg) {
 				b.With().Warning("message validation failed: eligibility validator returned false",
+					h,
+					hareMsg,
 					log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)),
 					log.String("hare_msg", hareMsg.String()))
 				continue
@@ -243,7 +254,7 @@ func (b *Broker) eventLoop() {
 
 func (b *Broker) updateLatestLayer(id instanceID) {
 	if id <= b.latestLayer { // should expect to update only newer layers
-		b.Panic("tried to update a previous layer, expected %v > %v", id, b.latestLayer)
+		b.Panic("tried to update a previous layer: expected %v > %v", id, b.latestLayer)
 		return
 	}
 
