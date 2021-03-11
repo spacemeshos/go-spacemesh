@@ -2,6 +2,7 @@ package state
 
 import (
 	"container/list"
+	"context"
 	"fmt"
 	"math/big"
 	"sync"
@@ -313,26 +314,30 @@ func transfer(db *TransactionProcessor, sender, recipient types.Address, amount 
 }
 
 // HandleTxData handles data received on TX gossip channel
-func (tp *TransactionProcessor) HandleTxData(data service.GossipMessage, syncer service.Fetcher) {
+func (tp *TransactionProcessor) HandleTxData(ctx context.Context, data service.GossipMessage, syncer service.Fetcher) {
+	logger := tp.WithContext(ctx)
 	tx, err := types.BytesToTransaction(data.Bytes())
 	if err != nil {
-		tp.With().Error("cannot parse incoming TX", log.Err(err))
+		logger.With().Error("cannot parse incoming TX", log.Err(err))
 		return
 	}
 	if err := tx.CalcAndSetOrigin(); err != nil {
-		tp.With().Error("failed to calc transaction origin", tx.ID(), log.Err(err))
+		logger.With().Error("failed to calc transaction origin", tx.ID(), log.Err(err))
 		return
 	}
 	if !tp.AddressExists(tx.Origin()) {
-		tp.With().Error("transaction origin does not exist", log.String("transaction", tx.String()),
-			tx.ID(), log.String("origin", tx.Origin().Short()), log.Err(err))
+		logger.With().Error("transaction origin does not exist",
+			log.String("transaction", tx.String()),
+			tx.ID(),
+			log.String("origin", tx.Origin().Short()),
+			log.Err(err))
 		return
 	}
 	if err := tp.ValidateNonceAndBalance(tx); err != nil {
-		tp.With().Error("nonce and balance validation failed", tx.ID(), log.Err(err))
+		logger.With().Error("nonce and balance validation failed", tx.ID(), log.Err(err))
 		return
 	}
-	tp.Log.With().Info("got new tx",
+	logger.With().Info("got new tx",
 		tx.ID(),
 		log.Uint64("nonce", tx.AccountNonce),
 		log.Uint64("amount", tx.Amount),
@@ -340,7 +345,7 @@ func (tp *TransactionProcessor) HandleTxData(data service.GossipMessage, syncer 
 		log.Uint64("gas", tx.GasLimit),
 		log.String("recipient", tx.Recipient.String()),
 		log.String("origin", tx.Origin().String()))
-	data.ReportValidation(IncomingTxProtocol)
+	data.ReportValidation(ctx, IncomingTxProtocol)
 	tp.pool.Put(tx.ID(), tx)
 }
 

@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -101,8 +102,18 @@ func (c *MsgConnection) Created() time.Time {
 	return c.created
 }
 
-func (c *MsgConnection) publish(message []byte) {
-	c.networker.EnqueueMessage(IncomingMessageEvent{c, message})
+func (c *MsgConnection) publish(ctx context.Context, message []byte) {
+	// Print a log line to establish a link between the originating sessionID and this requestID,
+	// before the sessionID disappears.
+	c.logger.WithContext(ctx).Debug("enqueuing incoming message")
+
+	// Rather than store the context on the heap, which is an antipattern, we instead extract the relevant IDs and
+	// store those.
+	ime := IncomingMessageEvent{Conn: c, Message: message}
+	if requestID, ok := log.ExtractRequestID(ctx); ok {
+		ime.RequestID = requestID
+	}
+	c.networker.EnqueueMessage(ctx, ime)
 }
 
 // NOTE: this is left here intended to help debugging in the future.
@@ -216,7 +227,7 @@ func (c *MsgConnection) Closed() bool {
 
 // Push outgoing message to the connections
 // Read from the incoming new messages and send down the connection
-func (c *MsgConnection) beginEventProcessing() {
+func (c *MsgConnection) beginEventProcessing(ctx context.Context) {
 	//TODO: use a buffer pool
 	var err error
 	for {
@@ -234,7 +245,9 @@ func (c *MsgConnection) beginEventProcessing() {
 		if len(buf) > 0 {
 			newbuf := make([]byte, size)
 			copy(newbuf, buf[:size])
-			c.publish(newbuf)
+
+			// Create a new requestId for context
+			c.publish(log.WithNewRequestID(ctx), newbuf)
 		}
 
 		if err != nil {

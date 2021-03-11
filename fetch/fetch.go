@@ -2,6 +2,7 @@
 package fetch
 
 import (
+	"context"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -139,7 +140,7 @@ func (f MessageNetwork) GetRandomPeer() p2ppeers.Peer {
 
 type network interface {
 	GetRandomPeer() p2ppeers.Peer
-	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error
+	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error
 	RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func([]byte) []byte)
 }
 
@@ -164,7 +165,6 @@ type Fetch struct {
 
 // NewFetch creates a new Fetch struct
 func NewFetch(cfg Config, network service.Service, logger log.Log) *Fetch {
-
 	srv := NewMessageNetwork(cfg.RequestTimeout, network, fetchProtocol, logger)
 
 	f := &Fetch{
@@ -408,7 +408,7 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 		}
 		// get random peer
 		p := f.net.GetRandomPeer()
-		err := f.net.SendRequest(fetch, bytes, p, f.receiveResponse, timeoutFunc)
+		err := f.net.SendRequest(context.TODO(), fetch, bytes, p, f.receiveResponse, timeoutFunc)
 		// if call succeeded, continue to other requests
 		if err != nil {
 			retries++

@@ -3,6 +3,7 @@ package turbohare
 
 import (
 	"bytes"
+	"context"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"sort"
@@ -18,12 +19,12 @@ type SuperHare struct {
 }
 
 // New creates a new instance of SuperHare
-func New(blocks blockProvider) *SuperHare {
+func New(ctx context.Context, blocks blockProvider) *SuperHare {
 	return &SuperHare{blocks}
 }
 
 // Start is a stub to support service API
-func (h *SuperHare) Start() error {
+func (h *SuperHare) Start(ctx context.Context) error {
 	return nil
 }
 

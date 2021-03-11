@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -52,7 +53,7 @@ func init() {
 type mockBlockProvider struct {
 }
 
-func (mbp *mockBlockProvider) HandleValidatedLayer(validatedLayer types.LayerID, layer []types.BlockID) {
+func (mbp *mockBlockProvider) HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID) {
 }
 
 func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
@@ -117,36 +118,36 @@ func validateBlocks(blocks []types.BlockID) bool {
 
 // Start the app
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {
-	log.Info("Starting hare main")
+	log.Info("starting hare main")
 
 	if app.Config.MemProfile != "" {
-		log.Info("Starting mem profiling")
+		log.Info("starting mem profiling")
 		f, err := os.Create(app.Config.MemProfile)
 		if err != nil {
-			log.Error("could not create memory profile: ", err)
+			log.With().Error("could not create memory profile", log.Err(err))
 		}
 		defer f.Close()
 		runtime.GC() // get up-to-date statistics
 		if err := pprof.WriteHeapProfile(f); err != nil {
-			log.Error("could not write memory profile: ", err)
+			log.With().Error("could not write memory profile", log.Err(err))
 		}
 	}
 
 	if app.Config.PprofHTTPServer {
-		log.Info("Starting pprof server")
+		log.Info("starting pprof server")
 		go func() {
 			err := http.ListenAndServe(":6060", nil)
 			if err != nil {
-				log.Error("cannot start http server", err)
+				log.With().Error("cannot start http server", log.Err(err))
 			}
 		}()
 	}
 	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
-	log.Info("Initializing P2P services")
+	log.Info("initializing P2P services")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.NewDefault("p2p_haretest"), app.Config.DataDir())
 	app.p2p = swarm
 	if err != nil {
-		log.Panic("Error starting p2p services err=%v", err)
+		log.With().Panic("error starting p2p services", log.Err(err))
 	}
 
 	pub := app.sgn.PublicKey()
@@ -170,22 +171,20 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	lt := make(timesync.LayerTimer)
 
 	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, validateBlocks, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, lt, lg)
-	log.Info("Starting hare service")
+	log.Info("starting hare service")
 	app.ha = hareI
-	err = app.ha.Start()
-	if err != nil {
-		log.Panic("error starting maatuf err=%v", err)
+	if err = app.ha.Start(cmdp.Ctx); err != nil {
+		log.With().Panic("error starting hare", log.Err(err))
 	}
-	err = app.p2p.Start()
-	if err != nil {
-		log.Panic("error starting p2p err=%v", err)
+	if err = app.p2p.Start(cmdp.Ctx); err != nil {
+		log.With().Panic("error starting p2p", log.Err(err))
 	}
 	if gTime.After(time.Now()) {
 		log.Info("sleeping until %v", gTime)
-		time.Sleep(time.Duration(gTime.Sub(time.Now())))
+		time.Sleep(gTime.Sub(time.Now()))
 	}
 	startLayer := types.GetEffectiveGenesis() + 1
-	lt <- types.LayerID(startLayer)
+	lt <- startLayer
 }
 
 func main() {

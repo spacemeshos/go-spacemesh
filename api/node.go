@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"time"
@@ -24,7 +25,7 @@ type NetworkAPI interface {
 
 // MiningAPI is an API for controlling Post, setting coinbase account and getting mining stats
 type MiningAPI interface {
-	StartPost(address types.Address, datadir string, space uint64) error
+	StartPost(ctx context.Context, address types.Address, datadir string, space uint64) error
 	SetCoinbaseAccount(rewardAddress types.Address)
 	// MiningStats returns state of post init, coinbase reward account and data directory path for post commitment
 	MiningStats() (postStatus int, remainingBytes uint64, coinbaseAccount string, postDatadir string)
@@ -56,7 +57,7 @@ type PostAPI interface {
 // Syncer is the API to get sync status and to start sync
 type Syncer interface {
 	IsSynced() bool
-	Start()
+	Start(ctx context.Context)
 }
 
 // TxAPI is an api for getting transaction status

@@ -357,7 +357,7 @@ func (*MiningAPIMock) MiningStats() (int, uint64, string, string) {
 	return miningStatus, remainingBytes, addr1.String(), dataDir
 }
 
-func (*MiningAPIMock) StartPost(types.Address, string, uint64) error {
+func (*MiningAPIMock) StartPost(context.Context, types.Address, string, uint64) error {
 	return nil
 }
 
@@ -395,8 +395,8 @@ type SyncerMock struct {
 	isSynced    bool
 }
 
-func (s *SyncerMock) IsSynced() bool { return s.isSynced }
-func (s *SyncerMock) Start()         { s.startCalled = true }
+func (s *SyncerMock) IsSynced() bool        { return s.isSynced }
+func (s *SyncerMock) Start(context.Context) { s.startCalled = true }
 
 type MempoolMock struct {
 	// In the real state.TxMempool struct, there are multiple data structures and they're more complex,
@@ -444,6 +444,7 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	// start gRPC and json servers
 	grpcService.Start()
 	jsonService.StartService(
+		context.TODO(),
 		cfg.StartDebugService,
 		cfg.StartGatewayService,
 		cfg.StartGlobalStateService,

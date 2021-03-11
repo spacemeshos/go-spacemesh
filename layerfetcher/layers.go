@@ -2,6 +2,7 @@
 package layerfetcher
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"sync"
@@ -23,7 +24,7 @@ type atxHandler interface {
 
 // blockHandler defines handling function for blocks
 type blockHandler interface {
-	HandleBlockData(date []byte, fetcher service.Fetcher) error
+	HandleBlockData(ctx context.Context, date []byte, fetcher service.Fetcher) error
 }
 
 // layerDB is an interface that returns layer data and blocks
@@ -49,7 +50,7 @@ type poetDb interface {
 type network interface {
 	GetPeers() []p2ppeers.Peer
 	GetRandomPeer() p2ppeers.Peer
-	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), timeoutHandler func(err error)) error
+	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), timeoutHandler func(err error)) error
 }
 
 // Logic is the struct containing components needed to follow layer fetching logic
@@ -158,7 +159,7 @@ func (l *Logic) LayerHashBlocksReceiver(msg []byte) []byte {
 // get layer hash from corresponding peer
 // fetch block ids from all peers
 // fetch ATXs and Txs per block
-func (l *Logic) PollLayer(layer types.LayerID) chan LayerPromiseResult {
+func (l *Logic) PollLayer(ctx context.Context, layer types.LayerID) chan LayerPromiseResult {
 	result := make(chan LayerPromiseResult)
 
 	l.layerResM.Lock()
@@ -172,15 +173,15 @@ func (l *Logic) PollLayer(layer types.LayerID) chan LayerPromiseResult {
 		// build custom receiver for each peer so that receiver will know which peer the hash came from
 		// so that it could request relevant block ids from the same peer
 		receiveForPeerFunc := func(b []byte) {
-			l.receiveLayerHash(layer, p, len(peers), b, nil)
+			l.receiveLayerHash(ctx, layer, p, len(peers), b, nil)
 		}
 
 		timeoutFunc := func(err error) {
-			l.receiveLayerHash(layer, p, len(peers), nil, err)
+			l.receiveLayerHash(ctx, layer, p, len(peers), nil, err)
 		}
-		err := l.net.SendRequest(LayerBlocksDB, layer.Bytes(), p, receiveForPeerFunc, timeoutFunc)
+		err := l.net.SendRequest(context.TODO(), LayerBlocksDB, layer.Bytes(), p, receiveForPeerFunc, timeoutFunc)
 		if err != nil {
-			l.receiveLayerHash(layer, p, len(peers), nil, err)
+			l.receiveLayerHash(ctx, layer, p, len(peers), nil, err)
 		}
 	}
 	return result
@@ -188,7 +189,7 @@ func (l *Logic) PollLayer(layer types.LayerID) chan LayerPromiseResult {
 
 // receiver function for block hash result per layer, this function aggregates all responses from all peers
 // and then unifies them. it also fails if a threshold of failed calls to peers have been reached
-func (l *Logic) receiveLayerHash(id types.LayerID, p p2ppeers.Peer, peers int, data []byte, err error) {
+func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppeers.Peer, peers int, data []byte, err error) {
 	hash := types.Hash32{}
 	// if no error from peer, try to parse data
 	if err == nil {
@@ -243,15 +244,15 @@ func (l *Logic) receiveLayerHash(id types.LayerID, p p2ppeers.Peer, peers int, d
 	for hash, peer := range hashes {
 		//build receiver function
 		receiveForPeerFunc := func(data []byte) {
-			l.receiveBlockHashes(id, data, nil)
+			l.receiveBlockHashes(ctx, id, data, nil)
 		}
 		remainingPeers := 0
 		errFunc := func(err error) {
-			l.receiveBlockHashes(id, nil, err)
+			l.receiveBlockHashes(ctx, id, nil, err)
 		}
-		err := l.net.SendRequest(LayerHashDB, hash.Bytes(), peer[remainingPeers], receiveForPeerFunc, errFunc)
+		err := l.net.SendRequest(context.TODO(), LayerHashDB, hash.Bytes(), peer[remainingPeers], receiveForPeerFunc, errFunc)
 		if err != nil {
-			l.receiveBlockHashes(id, nil, err)
+			l.receiveBlockHashes(ctx, id, nil, err)
 		}
 	}
 
@@ -271,7 +272,7 @@ func (l *Logic) notifyLayerPromiseResult(id types.LayerID, err error) {
 }
 
 // receiveBlockHashes is called when receiving block hashes for specified layer layer from remote peer
-func (l *Logic) receiveBlockHashes(layer types.LayerID, data []byte, extErr error) {
+func (l *Logic) receiveBlockHashes(ctx context.Context, layer types.LayerID, data []byte, extErr error) {
 	//if we failed getting layer data - notify
 	if extErr != nil {
 		l.notifyLayerPromiseResult(layer, extErr)
@@ -286,7 +287,7 @@ func (l *Logic) receiveBlockHashes(layer types.LayerID, data []byte, extErr erro
 	}
 
 	// fetch all blocks
-	retErr := l.GetBlocks(blocks.Blocks)
+	retErr := l.GetBlocks(ctx, blocks.Blocks)
 	// if there is an error this means that the entire layer cannot be validated and therefore sync should fail
 	if retErr != nil {
 		l.notifyLayerPromiseResult(layer, retErr)
@@ -331,7 +332,7 @@ func (l *Logic) getPoetResult(hash types.Hash32, data []byte) error {
 
 // blockReceiveFunc handles blocks received via fetch
 func (l *Logic) blockReceiveFunc(data []byte) error {
-	return l.blockHandler.HandleBlockData(data, l)
+	return l.blockHandler.HandleBlockData(context.TODO(), data, l)
 }
 
 // IsSynced indocates if this node is synced
@@ -389,7 +390,7 @@ func (l *Logic) GetAtxs(IDs []types.ATXID) error {
 
 // GetBlocks gets the data for given block ids and validates the blocks. returns an error if a single atx failed to be fetched
 // or validated
-func (l *Logic) GetBlocks(IDs []types.BlockID) error {
+func (l *Logic) GetBlocks(ctx context.Context, IDs []types.BlockID) error {
 	hashes := make([]types.Hash32, 0, len(IDs))
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.AsHash32())
@@ -423,7 +424,7 @@ func (l *Logic) GetTxs(IDs []types.TransactionID) error {
 }
 
 // GetPoetProof gets poet proof from remote peer
-func (l *Logic) GetPoetProof(id types.Hash32) error {
+func (l *Logic) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	res := <-l.fetcher.GetHash(id, fetch.Hint(strconv.Itoa(POETDB)), true)
 	if res.Err != nil {
 		return res.Err

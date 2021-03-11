@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -16,7 +17,7 @@ type startInstanceError error
 type syncStateFunc func() bool
 
 type validator interface {
-	Validate(m *Msg) bool
+	Validate(context.Context, *Msg) bool
 }
 
 // Closer adds the ability to close objects.
@@ -81,16 +82,16 @@ func newBroker(networkService NetworkService, eValidator validator, stateQuerier
 }
 
 // Start listening to Hare messages (non-blocking).
-func (b *Broker) Start() error {
+func (b *Broker) Start(ctx context.Context) error {
 	if b.isStarted { // Start has been called at least twice
-		b.Error("could not start instance")
+		b.WithContext(ctx).Error("could not start instance")
 		return startInstanceError(errors.New("instance already started"))
 	}
 
 	b.isStarted = true
 
 	b.inbox = b.network.RegisterGossipProtocol(protoName, priorityq.Mid)
-	go b.eventLoop()
+	go b.eventLoop(ctx)
 
 	return nil
 }
@@ -106,7 +107,7 @@ var (
 
 // validate the message is contextually valid and that the target layer is synced.
 // note: it is important to check synchronicity after contextual to avoid memory leak in syncState.
-func (b *Broker) validate(m *Message) error {
+func (b *Broker) validate(ctx context.Context, m *Message) error {
 	msgInstID := m.InnerMsg.InstanceID
 
 	_, exist := b.outbox[msgInstID]
@@ -132,7 +133,7 @@ func (b *Broker) validate(m *Message) error {
 	}
 
 	// exist, check synchronicity
-	if !b.isSynced(msgInstID) {
+	if !b.isSynced(ctx, msgInstID) {
 		return errNotSynced
 	}
 
@@ -141,83 +142,76 @@ func (b *Broker) validate(m *Message) error {
 }
 
 // listens to incoming messages and incoming tasks
-func (b *Broker) eventLoop() {
+func (b *Broker) eventLoop(ctx context.Context) {
+	logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 	for {
 		select {
 		case msg := <-b.inbox:
 			if msg == nil {
-				b.With().Error("broker message validation failed: called with nil",
-					log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
+				logger.Error("broker message validation failed: called with nil")
 				continue
+			}
+
+			// create an inner context object to handle this message
+			messageCtx := ctx
+
+			// try to read stored context
+			if msg.RequestID() == "" {
+				logger.With().Warning("broker received hare message with no registered requestID")
+			} else {
+				messageCtx = log.WithRequestID(ctx, msg.RequestID())
 			}
 
 			h := types.CalcMessageHash12(msg.Bytes(), protoName)
+			msgLogger := logger.WithContext(messageCtx).WithFields(h)
 			hareMsg, err := MessageFromBuffer(msg.Bytes())
 			if err != nil {
-				b.With().Error("could not build message", h, log.Err(err))
+				msgLogger.With().Error("could not build message", h, log.Err(err))
 				continue
 			}
+			msgLogger = msgLogger.WithFields(hareMsg)
 
 			if hareMsg.InnerMsg == nil {
-				b.With().Error("broker message validation failed",
-					h,
-					log.Err(errNilInner),
-					log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
+				msgLogger.With().Error("broker message validation failed", log.Err(errNilInner))
 				continue
 			}
-			b.With().Debug("broker received hare message", hareMsg)
+			msgLogger.With().Debug("broker received hare message", hareMsg)
 
 			// TODO: fix metrics
 			// metrics.MessageTypeCounter.With("type_id", hareMsg.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(msgInstID), 10), "reporter", "brokerHandler").Add(1)
 			msgInstID := hareMsg.InnerMsg.InstanceID
+			msgLogger = msgLogger.WithFields(log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)))
 			isEarly := false
-			if err := b.validate(hareMsg); err != nil {
+			if err := b.validate(messageCtx, hareMsg); err != nil {
 				if err != errEarlyMsg {
 					// not early, validation failed
-					b.With().Debug("broker received a message to a consensus process that is not registered",
-						h,
-						log.Err(err),
-						hareMsg,
-						log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)),
-						log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
+					msgLogger.With().Debug("broker received a message to a consensus process that is not registered",
+						log.Err(err))
 					continue
 				}
 
-				b.With().Debug("early message detected",
-					h,
-					log.Err(err),
-					hareMsg,
-					log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)),
-					log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
-
+				msgLogger.With().Debug("early message detected", log.Err(err))
 				isEarly = true
 			}
 
 			// the msg is either early or has instance
 
 			// create msg
-			iMsg, err := newMsg(hareMsg, b.stateQuerier)
+			iMsg, err := newMsg(messageCtx, hareMsg, b.stateQuerier)
 			if err != nil {
-				b.With().Warning("message validation failed: could not construct msg",
-					h,
-					hareMsg,
-					log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)),
-					log.Err(err))
+				msgLogger.With().Warning("message validation failed: could not construct msg", log.Err(err))
 				continue
 			}
 
 			// validate msg
-			if !b.eValidator.Validate(iMsg) {
-				b.With().Warning("message validation failed: eligibility validator returned false",
-					h,
-					hareMsg,
-					log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)),
+			if !b.eValidator.Validate(messageCtx, iMsg) {
+				msgLogger.With().Warning("message validation failed: eligibility validator returned false",
 					log.String("hare_msg", hareMsg.String()))
 				continue
 			}
 
 			// validation passed, report
-			msg.ReportValidation(protoName)
+			msg.ReportValidation(messageCtx, protoName)
 
 			if isEarly {
 				if _, exist := b.pending[msgInstID]; !exist { // create buffer if first msg
@@ -226,9 +220,8 @@ func (b *Broker) eventLoop() {
 				// we want to write all buffered messages to a chan with InboxCapacity len
 				// hence, we limit the buffer for pending messages
 				if len(b.pending[msgInstID]) == inboxCapacity {
-					b.With().Error("too many pending messages, ignoring message",
+					msgLogger.With().Error("too many pending messages, ignoring message",
 						log.Int("inbox_capacity", inboxCapacity),
-						types.LayerID(msgInstID),
 						log.String("sender_id", iMsg.PubKey.ShortString()))
 					continue
 				}
@@ -239,22 +232,25 @@ func (b *Broker) eventLoop() {
 			// has instance, just send
 			out, exist := b.outbox[msgInstID]
 			if !exist {
-				b.Panic("broker should have had an instance for layer %v", msgInstID)
+				msgLogger.With().Panic("missing broker instance for layer")
 			}
+			msgLogger.Debug("broker forwarding message to outbox")
 			out <- iMsg
 
 		case task := <-b.tasks:
 			task()
 		case <-b.CloseChannel():
-			b.Warning("broker exiting")
+			logger.Warning("broker exiting")
 			return
 		}
 	}
 }
 
-func (b *Broker) updateLatestLayer(id instanceID) {
+func (b *Broker) updateLatestLayer(ctx context.Context, id instanceID) {
 	if id <= b.latestLayer { // should expect to update only newer layers
-		b.Panic("tried to update a previous layer: expected %v > %v", id, b.latestLayer)
+		b.WithContext(ctx).With().Panic("tried to update a previous layer",
+			log.FieldNamed("this_layer", types.LayerID(id)),
+			log.FieldNamed("prev_layer", types.LayerID(b.latestLayer)))
 		return
 	}
 
@@ -272,7 +268,7 @@ func (b *Broker) cleanOldLayers() {
 	}
 }
 
-func (b *Broker) updateSynchronicity(id instanceID) {
+func (b *Broker) updateSynchronicity(ctx context.Context, id instanceID) {
 	if _, ok := b.syncState[id]; ok { // already has result
 		return
 	}
@@ -280,7 +276,7 @@ func (b *Broker) updateSynchronicity(id instanceID) {
 	// not exist means unknown, check & set
 
 	if !b.isNodeSynced() {
-		b.With().Info("node is not synced, marking layer as not synced", types.LayerID(id))
+		b.WithContext(ctx).With().Info("node is not synced, marking layer as not synced", types.LayerID(id))
 		b.syncState[id] = false // mark not synced
 		return
 	}
@@ -288,12 +284,12 @@ func (b *Broker) updateSynchronicity(id instanceID) {
 	b.syncState[id] = true // mark valid
 }
 
-func (b *Broker) isSynced(id instanceID) bool {
-	b.updateSynchronicity(id)
+func (b *Broker) isSynced(ctx context.Context, id instanceID) bool {
+	b.updateSynchronicity(ctx, id)
 
 	synced, ok := b.syncState[id]
 	if !ok { // not exist means unknown
-		b.Panic("syncState doesn't contain a value after call to updateSynchronicity")
+		b.WithContext(ctx).Panic("syncState doesn't contain a value after call to updateSynchronicity")
 	}
 
 	return synced
@@ -301,11 +297,11 @@ func (b *Broker) isSynced(id instanceID) bool {
 
 // Register a layer to receive messages
 // Note: the registering instance is assumed to be started and accepting messages
-func (b *Broker) Register(id instanceID) (chan *Msg, error) {
+func (b *Broker) Register(ctx context.Context, id instanceID) (chan *Msg, error) {
 	resErr := make(chan error, 1)
 	resCh := make(chan chan *Msg, 1)
 	regRequest := func() {
-		b.updateLatestLayer(id)
+		b.updateLatestLayer(ctx, id)
 
 		if len(b.outbox) >= b.limit {
 			resErr <- errTooMany
@@ -313,7 +309,7 @@ func (b *Broker) Register(id instanceID) (chan *Msg, error) {
 			return
 		}
 
-		if b.isSynced(id) {
+		if b.isSynced(ctx, id) {
 			b.outbox[id] = make(chan *Msg, inboxCapacity)
 
 			pendingForInstance := b.pending[id]
@@ -346,14 +342,14 @@ func (b *Broker) Register(id instanceID) (chan *Msg, error) {
 }
 
 // Unregister a layer from receiving messages
-func (b *Broker) Unregister(id instanceID) {
+func (b *Broker) Unregister(ctx context.Context, id instanceID) {
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
 	b.tasks <- func() {
 		delete(b.outbox, id) // delete matching outbox
 		b.cleanOldLayers()
-		b.With().Info("hare broker unregistered layer", types.LayerID(id))
+		b.WithContext(ctx).With().Info("hare broker unregistered layer", types.LayerID(id))
 		wg.Done()
 	}
 
@@ -361,10 +357,10 @@ func (b *Broker) Unregister(id instanceID) {
 }
 
 // Synced returns true if the given layer is synced, false otherwise
-func (b *Broker) Synced(id instanceID) bool {
+func (b *Broker) Synced(ctx context.Context, id instanceID) bool {
 	res := make(chan bool)
 	b.tasks <- func() {
-		res <- b.isSynced(id)
+		res <- b.isSynced(ctx, id)
 	}
 
 	return <-res

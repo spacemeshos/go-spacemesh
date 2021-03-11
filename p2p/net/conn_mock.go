@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -117,8 +118,7 @@ func (cm *ConnectionMock) Close() error {
 	return nil
 }
 
-func (cm *ConnectionMock) beginEventProcessing() {
-
+func (cm *ConnectionMock) beginEventProcessing(context.Context) {
 }
 
 // String mocks the interface

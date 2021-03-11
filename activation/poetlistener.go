@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -26,7 +27,7 @@ type PoetListener struct {
 }
 
 // Start starts listening to PoET gossip messages.
-func (l *PoetListener) Start() {
+func (l *PoetListener) Start(ctx context.Context) {
 	if l.started {
 		return
 	}
@@ -74,7 +75,7 @@ func (l *PoetListener) handlePoetProofMessage(gossipMessage service.GossipMessag
 		return
 	}
 
-	gossipMessage.ReportValidation(PoetProofProtocol)
+	gossipMessage.ReportValidation(context.TODO(), PoetProofProtocol)
 
 	if err := l.poetDb.storeProof(&proofMessage); err != nil {
 		l.Log.Error("failed to store PoET proof: %v", err)

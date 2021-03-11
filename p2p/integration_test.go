@@ -48,9 +48,9 @@ func (its *P2PIntegrationSuite) Test_SendingMessage() {
 	recvChan := node2.directProtocolHandlers[exampleDirectProto]
 	require.NotNil(its.T(), recvChan)
 
-	conn, err := node1.cPool.GetConnection(node2.network.LocalAddr(), node2.lNode.PublicKey())
+	conn, err := node1.cPool.GetConnection(context.TODO(), node2.network.LocalAddr(), node2.lNode.PublicKey())
 	require.NoError(its.T(), err)
-	err = node1.SendMessage(node2.LocalNode().PublicKey(), exampleDirectProto, []byte(exMsg))
+	err = node1.SendMessage(context.TODO(), node2.LocalNode().PublicKey(), exampleDirectProto, []byte(exMsg))
 	require.NoError(its.T(), err)
 
 	tm := time.After(10 * time.Second)
@@ -89,7 +89,7 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 				select {
 				case got := <-mc:
 					atomic.AddInt32(numgot, 1)
-					got.ReportValidation(exampleGossipProto)
+					got.ReportValidation(ctx, exampleGossipProto)
 					return nil
 				case <-ctx.Done():
 					return errors.New("timed out")
