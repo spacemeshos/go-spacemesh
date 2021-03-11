@@ -25,9 +25,6 @@ type vrfSigner interface {
 	Sign(msg []byte) ([]byte, error)
 }
 
-// DefaultProofsEpoch is set such that it will never equal the current epoch
-const DefaultProofsEpoch = ^types.EpochID(0)
-
 // Oracle is the oracle that provides block eligibility proofs for the miner.
 type Oracle struct {
 	committeeSize        uint32
@@ -49,6 +46,7 @@ type Oracle struct {
 
 // NewMinerBlockOracle returns a new Oracle.
 func NewMinerBlockOracle(committeeSize uint32, genesisActiveSetSize uint32, layersPerEpoch uint16, atxDB activationDB, beaconProvider *EpochBeaconProvider, vrfSigner vrfSigner, nodeID types.NodeID, isSynced func() bool, log log.Log) *Oracle {
+
 	return &Oracle{
 		committeeSize:        committeeSize,
 		genesisActiveSetSize: genesisActiveSetSize,
@@ -57,7 +55,7 @@ func NewMinerBlockOracle(committeeSize uint32, genesisActiveSetSize uint32, laye
 		beaconProvider:       beaconProvider,
 		vrfSigner:            vrfSigner,
 		nodeID:               nodeID,
-		proofsEpoch:          DefaultProofsEpoch,
+		proofsEpoch:          ^types.EpochID(0),
 		isSynced:             isSynced,
 		log:                  log,
 	}
@@ -71,24 +69,16 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 	}
 
 	epochNumber := layerID.GetEpoch()
-	var cachedEpochDescription log.Field
-	if bo.proofsEpoch == DefaultProofsEpoch {
-		cachedEpochDescription = log.String("cached_epoch_id", "(none)")
-	} else {
-		cachedEpochDescription = log.FieldNamed("cached_epoch_id", bo.proofsEpoch.Field())
-	}
-	bo.log.With().Info("asked for eligibility",
-		log.FieldNamed("epoch_id", epochNumber),
-		cachedEpochDescription)
+	bo.log.Info("asked for eligibility for epoch %d (cached: %d)", epochNumber, bo.proofsEpoch)
 	if epochNumber.IsGenesis() {
-		bo.log.Info("asked for eligibility for genesis epoch, cannot create blocks here")
+		bo.log.Info("asked for eligibility for epoch 0, cannot create blocks here")
 		return *types.EmptyATXID, nil, nil, nil
 	}
 
 	if bo.proofsEpoch != epochNumber {
 		err := bo.calcEligibilityProofs(epochNumber)
 		if err != nil {
-			bo.log.With().Error("failed to calculate eligibility proofs", epochNumber, log.Err(err))
+			bo.log.Error("failed to calculate eligibility proofs for epoch %v : %v", epochNumber, err)
 			return *types.EmptyATXID, nil, nil, err
 		}
 	}
@@ -98,10 +88,9 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 	activeSet := bo.epochAtxs
 	bo.eligibilityMutex.RUnlock()
 
-	bo.log.With().Info("got eligibility for blocks in layer",
+	bo.log.With().Info("eligible for blocks in layer",
 		bo.nodeID,
 		layerID,
-		log.Int("active_set_size", len(activeSet)),
 		log.Int("num_blocks", len(proofs)))
 
 	return bo.atxID, proofs, activeSet, nil
@@ -116,26 +105,20 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 	atx, err := bo.getValidAtxForEpoch(epochNumber)
 	if err != nil {
 		if !epochNumber.IsGenesis() {
-			return fmt.Errorf("failed to get latest atx for node in epoch %d: %v", epochNumber, err)
+			return fmt.Errorf("failed to get latest ATX: %v", err)
 		}
 	} else {
 		bo.atxID = atx.ID()
 	}
-	bo.log.With().Info("calculating eligibility",
-		epochNumber,
-		log.Uint32("active_set_size", activeSetSize))
-	bo.log.With().Debug("calculating eligibility",
-		epochNumber,
-		log.String("epoch_beacon", fmt.Sprint(epochBeacon)))
+	bo.log.Info("calculating eligibility for epoch %v, active set size %v", epochBeacon, activeSetSize)
 
 	if epochNumber.IsGenesis() {
-		bo.log.With().Info("genesis epoch detected, using GenesisActiveSetSize",
-			log.Uint32("active_set_size", activeSetSize))
+		bo.log.Info("genesis epoch detected, using GenesisActiveSetSize (%v)", activeSetSize)
 	}
 
 	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, bo.committeeSize, bo.layersPerEpoch)
 	if err != nil {
-		bo.log.With().Error("failed to get number of eligible blocks", log.Err(err))
+		bo.log.Error("failed to get number of eligible blocks: %v", err)
 		return err
 	}
 
@@ -146,7 +129,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 		message := serializeVRFMessage(epochBeacon, epochNumber, counter)
 		vrfSig, err := bo.vrfSigner.Sign(message)
 		if err != nil {
-			bo.log.With().Error("could not sign message", log.Err(err))
+			bo.log.Error("Could not sign message err=%v", err)
 			return err
 		}
 		vrfHash := sha256.Sum256(vrfSig)
@@ -196,11 +179,11 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 func (bo *Oracle) getValidAtxForEpoch(validForEpoch types.EpochID) (*types.ActivationTxHeader, error) {
 	atxID, err := bo.getATXIDForEpoch(validForEpoch - 1)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get atx id for target epoch %v: %v", validForEpoch, err)
+		return nil, fmt.Errorf("failed to get ATX ID for target epoch %v: %v", validForEpoch, err)
 	}
 	atx, err := bo.atxDB.GetAtxHeader(atxID)
 	if err != nil {
-		bo.log.With().Error("getting atx failed", log.Err(err))
+		bo.log.Error("getting ATX failed: %v", err)
 		return nil, err
 	}
 	return atx, nil
@@ -226,9 +209,7 @@ func getNumberOfEligibleBlocks(activeSetSize, committeeSize uint32, layersPerEpo
 func (bo *Oracle) getATXIDForEpoch(targetEpoch types.EpochID) (types.ATXID, error) {
 	latestATXID, err := bo.atxDB.GetNodeAtxIDForEpoch(bo.nodeID, targetEpoch)
 	if err != nil {
-		bo.log.With().Info("did not find atx ids for node",
-			log.FieldNamed("atx_node_id", bo.nodeID),
-			log.Err(err))
+		bo.log.With().Info("did not find ATX IDs for node", log.FieldNamed("atx_node_id", bo.nodeID), log.Err(err))
 		return types.ATXID{}, err
 	}
 	bo.log.With().Info("latest atx id found", latestATXID)

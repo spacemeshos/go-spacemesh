@@ -124,7 +124,7 @@ func ReportNewBlock(blk *types.Block) {
 	})
 }
 
-// ReportValidBlock reports a block's validity
+// ReportValidBlock reports a valid block
 func ReportValidBlock(blockID types.BlockID, valid bool) {
 	Publish(ValidBlock{
 		ID:    blockID.String(),

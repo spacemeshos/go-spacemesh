@@ -86,14 +86,11 @@ func TestVec_Multiply(t *testing.T) {
 }
 
 func TestNinjaTortoise_GlobalOpinion(t *testing.T) {
-	lg := log.NewDefault(t.Name())
-	mdb := getMeshForBench()
-	nt := newNinjaTortoise(3, mdb, 5, lg)
-	glo := nt.globalOpinion(vec{2, 0}, 2, 1)
+	glo := globalOpinion(vec{2, 0}, 2, 1)
 	assert.True(t, glo == support, "vec was wrong %d", glo)
-	glo = nt.globalOpinion(vec{1, 0}, 2, 1)
+	glo = globalOpinion(vec{1, 0}, 2, 1)
 	assert.True(t, glo == abstain, "vec was wrong %d", glo)
-	glo = nt.globalOpinion(vec{0, 2}, 2, 1)
+	glo = globalOpinion(vec{0, 2}, 2, 1)
 	assert.True(t, glo == against, "vec was wrong %d", glo)
 }
 

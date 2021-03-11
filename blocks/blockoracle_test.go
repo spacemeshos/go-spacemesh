@@ -194,7 +194,7 @@ func TestBlockOracleNoActivationsForNode(t *testing.T) {
 	blockOracle := NewMinerBlockOracle(committeeSize, activeSetSize, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nID, func() bool { return true }, lg.WithName("blockOracle"))
 
 	_, proofs, _, err := blockOracle.BlockEligible(types.LayerID(layersPerEpoch * 2))
-	r.EqualError(err, "failed to get latest atx for node in epoch 2: failed to get atx id for target epoch 2: not found")
+	r.EqualError(err, "failed to get latest ATX: failed to get ATX ID for target epoch 2: not found")
 	r.Nil(proofs)
 }
 

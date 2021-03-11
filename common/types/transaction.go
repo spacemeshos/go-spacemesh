@@ -33,7 +33,7 @@ func (id TransactionID) Bytes() []byte {
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (id TransactionID) Field() log.Field { return log.FieldNamed("tx_id", id.Hash32()) }
+func (id TransactionID) Field() log.Field { return id.Hash32().Field("tx_id") }
 
 // TxIdsField returns a list of loggable fields for a given list of IDs
 func TxIdsField(ids []TransactionID) log.Field {
