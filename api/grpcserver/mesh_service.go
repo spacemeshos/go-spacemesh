@@ -98,7 +98,7 @@ func (s MeshService) LayerDuration(context.Context, *pb.LayerDurationRequest) (*
 // MaxTransactionsPerSecond returns the max number of tx per sec (a network parameter)
 func (s MeshService) MaxTransactionsPerSecond(context.Context, *pb.MaxTransactionsPerSecondRequest) (*pb.MaxTransactionsPerSecondResponse, error) {
 	log.Info("GRPC MeshService.MaxTransactionsPerSecond")
-	return &pb.MaxTransactionsPerSecondResponse{Maxtxpersecond: &pb.SimpleInt{
+	return &pb.MaxTransactionsPerSecondResponse{MaxTxsPerSecond: &pb.SimpleInt{
 		Value: uint64(s.TxsPerBlock * s.LayerAvgSize / s.LayerDurationSec),
 	}}, nil
 }
@@ -305,7 +305,8 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 		// TODO: Do we ever expect txs to be missing here?
 		// E.g., if this node has not synced/received them yet.
 		if len(missing) != 0 {
-			log.Error("could not find transactions %v from layer %v", missing, layer.Index())
+			log.With().Error("could not find transactions from layer",
+				log.String("missing", fmt.Sprint(missing)), layer.Index())
 			return nil, status.Errorf(codes.Internal, "error retrieving tx data")
 		}
 
@@ -318,8 +319,10 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 			pbTxs = append(pbTxs, convertTransaction(t))
 		}
 		blocks = append(blocks, &pb.Block{
-			Id:           b.ID().Bytes(),
+			Id:           types.Hash20(b.ID()).Bytes(),
 			Transactions: pbTxs,
+			SmesherId:    &pb.SmesherId{Id: b.MinerID().Bytes()},
+			ActivationId: &pb.ActivationId{Id: b.ATXID.Bytes()},
 		})
 	}
 
@@ -329,13 +332,14 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 	// Add unique ATXIDs
 	atxs, matxs := s.Mesh.GetATXs(activations)
 	if len(matxs) != 0 {
-		log.Error("could not find activations %v from layer %v", matxs, layer.Index())
+		log.With().Error("could not find activations from layer",
+			log.String("missing", fmt.Sprint(matxs)), layer.Index())
 		return nil, status.Errorf(codes.Internal, "error retrieving activations data")
 	}
 	for _, atx := range atxs {
 		pbatx, err := convertActivation(atx)
 		if err != nil {
-			log.Error("error serializing activation data: %s", err)
+			log.With().Error("error serializing activation data", log.Err(err))
 			return nil, status.Errorf(codes.Internal, "error serializing activation data")
 		}
 		pbActivations = append(pbActivations, pbatx)
@@ -396,7 +400,7 @@ func (s MeshService) LayersQuery(_ context.Context, in *pb.LayersQueryRequest) (
 		// internal or an input error? For now, all missing layers produce
 		// internal errors.
 		if layer == nil || err != nil {
-			log.Error("error retrieving layer data: %s", err)
+			log.With().Error("error retrieving layer data", log.Err(err))
 			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
 		}
 
@@ -458,7 +462,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 				pbActivation, err := convertActivation(activation)
 				if err != nil {
 					errmsg := "error serializing activation data"
-					log.Error(fmt.Sprintf("%s: %s", errmsg, err))
+					log.With().Error(errmsg, log.Err(err))
 					return status.Errorf(codes.Internal, errmsg)
 				}
 				if err := stream.Send(&pb.AccountMeshDataStreamResponse{

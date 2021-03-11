@@ -97,6 +97,7 @@ func TestPeers_RemovePeer(t *testing.T) {
 
 func TestPeers_RandomPeers(t *testing.T) {
 	pi, n, _ := getPeers(service.NewSimulator().NewNode())
+	pi.rand.Seed(0)
 	a := p2pcrypto.NewRandomPubkey()
 	b := p2pcrypto.NewRandomPubkey()
 	c := p2pcrypto.NewRandomPubkey()

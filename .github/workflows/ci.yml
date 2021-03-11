@@ -5,11 +5,16 @@ env:
   GCLOUD_KEY: ${{ secrets.GCLOUD_KEY }}
   PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
   CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
+  CLUSTER_NAME_ELK: ${{ secrets.CLUSTER_NAME_ELK }}
   CLUSTER_ZONE: ${{ secrets.CLUSTER_ZONE }}
+  CLUSTER_ZONE_ELK: ${{ secrets.CLUSTER_ZONE_ELK }}
   ES_PASSWD: ${{ secrets.ES_PASSWD }}
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
   SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  ES_USER: ${{ secrets.ES_USER }}
+  ES_PASS: ${{ secrets.ES_PASS }}
+  MAIN_ES_IP: ${{ secrets.MAIN_ES_IP }}
 
 # Trigger the workflow on all pull requests, and on push to specific branches
 on:
@@ -43,7 +48,6 @@ jobs:
       - name: fmt, tidy, lint
         run: |
           make
-          make genproto
           make test-tidy
           make test-fmt
           make lint
@@ -137,7 +141,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: late nodes system test
-        run: make dockertest-late-nodes
+        run: make dockertest-late-nodes-elk
   systemtest-blocks-add-node:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
@@ -148,8 +152,8 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: blocks add node test
-        run: make dockertest-blocks-add-node
-  systemtest-hare-mining:
+        run: make dockertest-blocks-add-node-elk
+  systemtest-blocks-remove-node:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
@@ -158,9 +162,9 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v2
-      - name: hare+mining system tests
-        run: make dockertest-hare-mining
-  systemtest-sync-blocks:
+      - name: remove node test
+        run: make dockertest-blocks-remove-node-elk
+  systemtest-mining:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
@@ -169,9 +173,9 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v2
-      - name: sync+blocks remove node test
-        run: make dockertest-sync-blocks-remove-node
-  systemtest-genesis-p2p:
+      - name: mining system test
+        run: make dockertest-mining-elk
+  systemtest-p2p:
     # only run on push, not on pull_request
     if: github.event_name == 'push'
     needs: dockerpush
@@ -180,8 +184,30 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v2
-      - name: genesis+p2p system tests
-        run: make dockertest-genesis-voting-p2p
+      - name: p2p system test
+        run: make dockertest-p2p-elk
+  systemtest-hare:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: dockerpush
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: hare system test
+        run: make dockertest-hare-elk
+  systemtest-sync:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: dockerpush
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: hare system test
+        run: make dockertest-sync-elk
 
 
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
@@ -192,12 +218,14 @@ jobs:
       - ci-stage1
       - systemtest-latenodes
       - systemtest-blocks-add-node
-      - systemtest-hare-mining
-      - systemtest-sync-blocks
-      - systemtest-genesis-p2p
+      - systemtest-blocks-remove-node
+      - systemtest-mining
+      - systemtest-p2p
+      - systemtest-hare
+      - systemtest-sync
     runs-on: ubuntu-latest
     env:
-      status: ${{ needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-hare-mining.result == 'success' && needs.systemtest-sync-blocks.result == 'success' && needs.systemtest-genesis-p2p.result == 'success' && 'success' || 'failure' }}
+      status: ${{ needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-blocks-remove-node.result == 'success' && needs.systemtest-mining.result == 'success' && needs.systemtest-p2p.result == 'success' && needs.systemtest-hare.result == 'success' && needs.systemtest-sync.result == 'success' && 'success' || 'failure' }}
     steps:
       # print a single, clean status update to slack
       - uses: act10ns/slack@v1

@@ -156,7 +156,7 @@ func (bh BlockHandler) blockSyntacticValidation(block *types.Block, syncer servi
 
 	// fast validation checks if there are no duplicate ATX in active set and no duplicate TXs as well
 	if err := bh.fastValidation(block); err != nil {
-		bh.Log.Error("failed fast validation block %v e: %v", block.ID(), err)
+		bh.With().Error("failed fast validation", block.ID(), log.Err(err))
 		return err
 	}
 

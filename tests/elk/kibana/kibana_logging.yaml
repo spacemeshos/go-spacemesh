@@ -1,0 +1,131 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana
+  namespace: logging
+  labels:
+    app: kibana
+    heritage: Helm
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: kibana
+  template:
+    metadata:
+      labels:
+        app: kibana
+      annotations:
+
+    spec:
+      nodeSelector:
+        role: tests
+      securityContext:
+        fsGroup: 1000
+      volumes:
+        - name: config
+          configMap:
+            name: kibana-config
+      containers:
+        - name: kibana
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 1000
+          image: "docker.elastic.co/kibana/kibana:7.9.2"
+          imagePullPolicy: "IfNotPresent"
+          env:
+            - name: ELASTICSEARCH_HOSTS
+              value: "http://elasticsearch-master:9200"
+            - name: SERVER_HOST
+              value: "0.0.0.0"
+            - name: NODE_OPTIONS
+              value: --max-old-space-size=1800
+            - name: ELASTICSEARCH_USERNAME
+              value: REP_ES_USER
+            - name: ELASTICSEARCH_PASSWORD
+              value: REP_ES_PASS
+          readinessProbe:
+            failureThreshold: 3
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            successThreshold: 3
+            timeoutSeconds: 5
+            exec:
+              command:
+                - sh
+                - -c
+                - |
+                  #!/usr/bin/env bash -e
+                  http () {
+                      local path="${1}"
+                      set -- -XGET -s --fail -L
+
+                      if [ -n "${ELASTICSEARCH_USERNAME}" ] && [ -n "${ELASTICSEARCH_PASSWORD}" ]; then
+                        set -- "$@" -u "${ELASTICSEARCH_USERNAME}:${ELASTICSEARCH_PASSWORD}"
+                      fi
+
+                      STATUS=$(curl --output /dev/null --write-out "%{http_code}" -k "$@" "http://localhost:5601${path}")
+                      if [[ "${STATUS}" -eq 200 ]]; then
+                        curl -X POST "http://${ELASTICSEARCH_USERNAME}:${ELASTICSEARCH_PASSWORD}@localhost:5601/api/saved_objects/_import" -H "kbn-xsrf: true" --form file=@/usr/share/kibana/config/kibana.ndjson
+                        exit 0
+                      fi
+
+                      echo "Error: Got HTTP code ${STATUS} but expected a 200"
+                      exit 1
+                  }
+
+                  http "/app/kibana"
+          ports:
+            - containerPort: 5601
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+            requests:
+              cpu: 1000m
+              memory: 2Gi
+          volumeMounts:
+            - name: config
+              mountPath: /usr/share/kibana/config
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kibana-config
+  namespace: logging
+  labels:
+    app: kibana
+    heritage: Helm
+data:
+  kibana.ndjson: |-
+    {"type":"index-pattern","id":"sm","attributes":{"title":"f*","timeFieldName":"@timestamp"}}
+    {"type":"config","attributes":{"defaultIndex":"f*"}}
+    {"type":"query","id":"release tick","attributes":{"title":"release tick","query":{"language":"kuery","query":"M:\"release tick\""}}}
+    {"type":"query","id":"starting spacemesh","attributes":{"title":"starting spacemesh","query":{"language":"kuery","query":"M:\"Starting spacemesh\""}}}
+  kibana.yml:
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana
+  namespace: logging
+  labels:
+    app: kibana
+    heritage: Helm
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 5601
+      protocol: TCP
+      name: http
+      targetPort: 5601
+  selector:
+    app: kibana

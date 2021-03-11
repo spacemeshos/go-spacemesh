@@ -6,6 +6,7 @@ services:
      command: [
           "--tcp-port", "${SMESH_PORT:-7513}",
           "--coinbase", "${SMESH_COINBASE:-0x1234}",
+          "--golden-atx", "${SMESH_GOLDEN_ATX:-0x5678}",
           "--poet-server", "${SMESH_POET_SERVER:?SMESH_POET_SERVER Must be specified}",
           "--post-space", "${SMESH_POST_SPACE:-1048576}",
           "--test-mode",
@@ -27,14 +28,10 @@ services:
           "--genesis-time", "${SMESH_GENESIS_TIME:?SMESH_GENESIS_TIME Must be specified}",
           "--bootstrap", 
           "--bootnodes", "${SMESH_BOOTNODES:?SMESH_BOOTNODES Must be specified}",
-          "--grpc-server",
-          "--json-server",
-          "--json-port", "${SMESH_JSON_PORT:-9090}",
           "--executable-path", "/bin/go-spacemesh",
           "-d", "/root/spacemeshdata/" ]
      ports:
         - "${SMESH_PORT:-7513}:${SMESH_PORT:-7513}"
-        - "${SMESH_JSON_PORT:-9090}:${SMESH_JSON_PORT:-9090}"
      networks:
        spacemesh: {}
        

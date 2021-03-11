@@ -1,7 +1,6 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from kubernetes import config as k8s_config
 from kubernetes import client
-from kubernetes.client.rest import ApiException
 import os
 import pytest
 from pytest_testconfig import config as testconfig
@@ -9,12 +8,17 @@ import random
 import string
 import subprocess
 
+from tests import config as conf
+from tests import convenience as conv
 from tests import pod
-from tests import config as tests_conf
 from tests.context import Context
+from tests.es_dump import es_reindex
+from tests.k8s_handler import add_elastic_cluster, add_kibana_cluster, add_logstash_cluster, add_fluent_bit_cluster, \
+    fluent_bit_teardown, wait_for_daemonset_to_be_ready
 from tests.misc import CoreV1ApiClient
+from tests.node_pool_deployer import NodePoolDep
 from tests.setup_utils import setup_bootstrap_in_namespace, setup_clients_in_namespace
-from tests.utils import api_call
+from tests.utils import api_call, wait_for_minimal_elk_cluster_ready
 
 
 def random_id(length):
@@ -82,8 +86,13 @@ def set_docker_images():
         testconfig['bootstrap']['image'] = docker_image
         testconfig['client']['image'] = docker_image
         if 'clientv2' in testconfig.keys():
-            print("Set docker clientv2 images to: {0}".format(docker_image))
-            testconfig['clientv2']['image'] = docker_image
+            print(testconfig['clientv2'])
+            # some should not be replaced!
+            if testconfig['clientv2'].get('noreplace', False):
+                print("not replacing clientv2 docker image since replace is set to False")
+            else:
+                print("Set docker clientv2 images to: {0}".format(docker_image))
+                testconfig['clientv2']['image'] = docker_image
         else:
             print("no other config")
             print(testconfig.keys())
@@ -223,7 +232,7 @@ def start_poet(init_session, add_curl, setup_bootstrap):
         raise Exception("Failed to read container logs in {0}".format("poet"))
 
     print("Starting PoET")
-    out = api_call(bs_pod['pod_ip'], '{ "gatewayAddresses": ["127.0.0.1:9091"] }', 'v1/start', namespace, "80")
+    out = api_call(bs_pod['pod_ip'], '{ "gatewayAddresses": ["127.0.0.1:9092"] }', 'v1/start', namespace, "80")
     assert out == "{}", "PoET start returned error {0}".format(out)
     print("PoET started")
 
@@ -238,12 +247,46 @@ def save_log_on_exit(request):
 
 
 @pytest.fixture(scope='module')
-def add_curl(request, init_session, setup_bootstrap):
+def add_curl(request, init_session):
     def _run_curl_pod():
-        if not setup_bootstrap.pods:
-            raise Exception("Could not find bootstrap node")
-
-        pod.create_pod(tests_conf.CURL_POD_FILE, testconfig['namespace'])
+        pod.create_pod(conf.CURL_POD_FILE, testconfig['namespace'])
         return True
 
     return _run_curl_pod()
+
+
+@pytest.fixture(scope='module')
+def add_node_pool(session_id):
+    """
+    memory should be represented by number of megabytes, \d+M
+
+    :return:
+    """
+    deployer = NodePoolDep(testconfig)
+    _, time_elapsed = deployer.add_node_pool()
+    print(f"total time waiting for clients node pool creation: {time_elapsed}")
+    # wait for fluent bit daemonset to be ready after node pool creation
+    wait_for_daemonset_to_be_ready("fluent-bit", session_id, timeout=60)
+    yield time_elapsed
+    _, time_elapsed = deployer.remove_node_pool()
+    print(f"total time waiting for clients node pool deletion: {time_elapsed}")
+
+
+@pytest.fixture(scope='module')
+def add_elk(init_session, request):
+    # get today's date for filebeat data index
+    index_date = datetime.utcnow().date().strftime("%Y.%m.%d")
+    add_elastic_cluster(init_session)
+    add_logstash_cluster(init_session)
+    add_fluent_bit_cluster(init_session)
+    add_kibana_cluster(init_session)
+    wait_for_minimal_elk_cluster_ready(init_session)
+    yield
+    fluent_bit_teardown(init_session)
+    dump_es_to_main_server(init_session, index_date, request.session.testsfailed)
+
+
+def dump_es_to_main_server(init_session, index_date, testsfailed):
+    not_dumped = es_reindex(init_session, index_date) if testsfailed else True
+    if not_dumped and "is_dump" in testconfig.keys() and conv.str2bool(testconfig["is_dump"]):
+        es_reindex(init_session, index_date)

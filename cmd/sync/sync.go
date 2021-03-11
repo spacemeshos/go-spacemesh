@@ -1,10 +1,19 @@
 package main
 
 import (
-	"cloud.google.com/go/storage"
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"time"
+
+	"cloud.google.com/go/storage"
+	"github.com/spf13/cobra"
+	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -16,13 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spf13/cobra"
-	"google.golang.org/api/iterator"
-	"google.golang.org/api/option"
-	"io/ioutil"
-	"net/http"
-	"os"
-	"time"
 )
 
 // Sync cmd
@@ -32,7 +34,7 @@ var cmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Starting sync")
 		syncApp := newSyncApp()
-		log.Info("Right after NewSyncApp %v", syncApp.Config.DataDir())
+		log.With().Info("Initializing NewSyncApp", log.String("DataDir", syncApp.Config.DataDir()))
 		defer syncApp.Cleanup()
 		syncApp.Initialize(cmd)
 		syncApp.start(cmd, args)
@@ -83,24 +85,24 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.NewDefault("sync_test")
 	lg.Info("------------ Start sync test -----------")
-	lg.Info("data folder: ", app.Config.DataDir())
-	lg.Info("storage path: ", bucket)
-	lg.Info("download from remote storage: ", remote)
-	lg.Info("expected layers: ", expectedLayers)
-	lg.Info("request timeout: ", app.Config.SyncRequestTimeout)
-	lg.Info("data version: ", version)
-	lg.Info("layers per epoch: ", app.Config.LayersPerEpoch)
-	lg.Info("hdist: ", app.Config.Hdist)
+	lg.Info("data folder: %s", app.Config.DataDir())
+	lg.Info("storage path: %s", bucket)
+	lg.Info("download from remote storage: %v", remote)
+	lg.Info("expected layers: %d", expectedLayers)
+	lg.Info("request timeout: %d", app.Config.SyncRequestTimeout)
+	lg.Info("data version: %s", version)
+	lg.Info("layers per epoch: %d", app.Config.LayersPerEpoch)
+	lg.Info("hdist: %d", app.Config.Hdist)
 
 	path := app.Config.DataDir() + version
-
-	lg.Info(" anton local db path: %v layers per epoch", path)
 
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, lg.WithName("p2p"), app.Config.DataDir())
 
 	if err != nil {
 		panic("something got fudged while creating p2p service ")
 	}
+
+	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
 
 	conf := sync.Configuration{
 		Concurrency:     4,
@@ -111,13 +113,14 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		Hdist:           app.Config.Hdist,
 		ValidationDelta: 30 * time.Second,
 		LayersPerEpoch:  uint16(app.Config.LayersPerEpoch),
+		GoldenATXID:     goldenATXID,
 	}
 	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
-	lg.Info("local db path: %v layers per epoch %v", path, app.Config.LayersPerEpoch)
+	lg.Info("local db path: %v layers per epoch: %v", path, app.Config.LayersPerEpoch)
 
 	if remote {
 		if err := getData(app.Config.DataDir(), version, lg); err != nil {
-			lg.Error("could not download data for test", err)
+			lg.With().Error("could not download data for test", log.Err(err))
 			return
 		}
 	}
@@ -143,7 +146,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	txpool := state.NewTxMemPool()
 	atxpool := activation.NewAtxMemPool()
 
-	sync := sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, types.LayerID(expectedLayers))
+	sync := sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, goldenATXID, types.LayerID(expectedLayers))
 	app.sync = sync
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)

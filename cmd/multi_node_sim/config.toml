@@ -15,6 +15,7 @@ genesis-time = "2019-02-13T17:02:00+00:00"
 layer-duration-sec = "5"
 hdist = "5"
 coinbase = "0x1234"
+golden-atx = "0x5678"
 
 # Node Config
 [p2p]
@@ -46,8 +47,8 @@ bootnodes = [] # example : spacemesh://j7qWfWaJRVp25ZsnCu9rJ4PmhigZBtesB4YmQHqqP
 [api]
 grpc-server = true
 json-server = true
-grpc-port = 9091
-json-port = 9090
+grpc-port = 9092
+json-port = 9093
 
 # Time sync NTP Config
 [time]
