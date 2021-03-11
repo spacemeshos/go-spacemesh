@@ -178,7 +178,7 @@ func (p *Protocol) handlePQ() {
 func (p *Protocol) getPriority(protoName string) priorityq.Priority {
 	v, exist := p.priorities[protoName]
 	if !exist {
-		p.With().Warning("note: no priority found for protocol",
+		p.With().Warning("no priority found for protocol",
 			log.String("protoName", protoName))
 		return priorityq.Low
 	}

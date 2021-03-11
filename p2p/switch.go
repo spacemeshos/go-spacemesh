@@ -496,7 +496,6 @@ func (s *Switch) listenToNetworkMessages() {
 	// It's net's responsibility to distribute the messages to the queues
 	// in a way that they're processing order will work
 	// Switch process all the queues concurrently but synchronously for each queue
-
 	netqueues := s.network.IncomingMessages()
 	for nq := range netqueues { // run a separate worker for each queue.
 		go func(c chan net.IncomingMessageEvent) {
