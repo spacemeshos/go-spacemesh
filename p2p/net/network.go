@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	appcontext "github.com/spacemeshos/go-spacemesh/app_context"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -39,12 +40,13 @@ const (
 type IncomingMessageEvent struct {
 	Conn    Connection
 	Message []byte
+	Ctx     context.Context
 }
 
 // ManagedConnection in an interface extending Connection with some internal methods that are required for Net to manage Connections
 type ManagedConnection interface {
 	Connection
-	beginEventProcessing()
+	beginEventProcessing(ctx context.Context)
 }
 
 // Net is a connection factory able to dial remote endpoints
@@ -204,7 +206,6 @@ func (n *Net) tcpSocketConfig(tcpconn *net.TCPConn) {
 }
 
 func (n *Net) createConnection(ctx context.Context, address net.Addr, remotePub p2pcrypto.PublicKey, session NetworkSession) (ManagedConnection, error) {
-
 	if n.isShuttingDown {
 		return nil, fmt.Errorf("can't dial because the connection is shutting down")
 	}
@@ -220,7 +221,6 @@ func (n *Net) createConnection(ctx context.Context, address net.Addr, remotePub 
 }
 
 func (n *Net) createSecuredConnection(ctx context.Context, address net.Addr, remotePubkey p2pcrypto.PublicKey) (ManagedConnection, error) {
-
 	session := createSession(n.localNode.PrivateKey(), remotePubkey)
 	conn, err := n.createConnection(ctx, address, remotePubkey, session)
 	if err != nil {
@@ -257,9 +257,12 @@ func (n *Net) Dial(ctx context.Context, address net.Addr, remotePubkey p2pcrypto
 
 	conn, err := n.createSecuredConnection(ctx, address, remotePubkey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to Dial. err: %v", err)
+		return nil, fmt.Errorf("failed to dial, err: %v", err)
 	}
-	go conn.beginEventProcessing()
+
+	// Add session ID to context
+	sessionId := fmt.Sprintf("dialed_peer_%s_%s_%s", remotePubkey.String(), address.Network(), address.String())
+	go conn.beginEventProcessing(appcontext.WithSessionId(ctx, sessionId))
 	return conn, nil
 }
 
@@ -269,13 +272,13 @@ func (n *Net) Shutdown() {
 	if n.listener != nil {
 		err := n.listener.Close()
 		if err != nil {
-			n.logger.Error("Error closing listener err=%v", err)
+			n.logger.With().Error("error closing listener", log.Err(err))
 		}
 	}
 }
 
 func (n *Net) accept(listen net.Listener) {
-	n.logger.Debug("Waiting for incoming connections...")
+	n.logger.Debug("waiting for incoming connections")
 	pending := make(chan struct{}, n.config.MaxPendingConnections)
 
 	for i := 0; i < n.config.MaxPendingConnections; i++ {
@@ -290,16 +293,18 @@ func (n *Net) accept(listen net.Listener) {
 				return
 			}
 			if !Temporary(err) {
-				n.logger.Error("Listener errored while accepting connections: err: %v", err)
+				n.logger.With().Error("listener errored while accepting connections", log.Err(err))
 				return
 			}
 
-			n.logger.Warning("Failed to accept connection request err:%v", err)
+			n.logger.With().Warning("failed to accept connection request", log.Err(err))
 			pending <- struct{}{}
 			continue
 		}
 
-		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
+		n.logger.With().Debug("got new connection",
+			log.String("remote_addr", netConn.RemoteAddr().String()),
+			log.String("network", netConn.RemoteAddr().Network()))
 		conn := netConn.(*net.TCPConn)
 		n.tcpSocketConfig(conn) // TODO maybe only set this after session handshake to prevent denial of service with big messages
 		c := newConnection(netConn, n, nil, nil, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger)
@@ -307,10 +312,12 @@ func (n *Net) accept(listen net.Listener) {
 			defer func() { pending <- struct{}{} }()
 			err := c.setupIncoming(n.config.SessionTimeout)
 			if err != nil {
-				n.logger.Event().Warning("conn_incoming_failed", log.String("remote", c.remoteAddr.String()), log.Err(err))
+				n.logger.Event().Warning("incoming connection failed",
+					log.String("remote_addr", c.remoteAddr.String()),
+					log.Err(err))
 				return
 			}
-			go c.beginEventProcessing()
+			go c.beginEventProcessing(context.TODO())
 		}(c)
 
 		// network won't publish the connection before it the remote node had established a session

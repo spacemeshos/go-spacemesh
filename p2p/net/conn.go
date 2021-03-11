@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -172,8 +173,8 @@ func (c *FormattedConnection) Created() time.Time {
 	return c.created
 }
 
-func (c *FormattedConnection) publish(message []byte) {
-	c.networker.EnqueueMessage(IncomingMessageEvent{c, message})
+func (c *FormattedConnection) publish(ctx context.Context, message []byte) {
+	c.networker.EnqueueMessage(IncomingMessageEvent{c, message, ctx})
 }
 
 // NOTE: this is left here intended to help debugging in the future.
@@ -211,7 +212,7 @@ func (c *FormattedConnection) sendListener() {
 			//todo: we are hiding the error here...
 			err := c.SendSock(buf)
 			if err != nil {
-				log.Error("cannot send message to peer %v", err)
+				c.logger.With().Error("cannot send message to peer", log.Err(err))
 			}
 		case <-c.stopSending:
 			return
@@ -356,7 +357,7 @@ func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
 }
 
 // Read from the incoming new messages and send down the connection
-func (c *FormattedConnection) beginEventProcessing() {
+func (c *FormattedConnection) beginEventProcessing(ctx context.Context) {
 	//TODO: use a buffer pool
 	var err error
 	var buf []byte
@@ -374,7 +375,7 @@ func (c *FormattedConnection) beginEventProcessing() {
 		if len(buf) > 0 {
 			newbuf := make([]byte, len(buf))
 			copy(newbuf, buf)
-			c.publish(newbuf)
+			c.publish(ctx, newbuf)
 		}
 
 		if err != nil {

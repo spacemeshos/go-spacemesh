@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	appcontext "github.com/spacemeshos/go-spacemesh/app_context"
 	"strings"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -165,7 +166,7 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 	// Create networking
 	n, err := net.NewNet(config, l, logger.WithName("tcpnet"))
 	if err != nil {
-		return nil, fmt.Errorf("can't create Switch without a network, err: %v", err)
+		return nil, fmt.Errorf("can't create switch without a network, err: %v", err)
 	}
 
 	udpnet, err := net.NewUDPNet(config, l, logger.WithName("udpnet"))
@@ -462,16 +463,20 @@ func (s *Switch) Shutdown() {
 
 // process an incoming message
 func (s *Switch) processMessage(ime net.IncomingMessageEvent) {
+	// Add context to log
+	ctx := appcontext.WithNewSessionId(ime.Ctx)
+	logger := s.logger.WithContext(ctx)
+
 	if s.config.MsgSizeLimit != config.UnlimitedMsgSize && len(ime.Message) > s.config.MsgSizeLimit {
-		s.logger.With().Error("message is too big to process",
+		logger.With().Error("message is too big to process",
 			log.Int("limit", s.config.MsgSizeLimit),
 			log.Int("actual", len(ime.Message)))
 		return
 	}
 
-	if err := s.onRemoteClientMessage(ime); err != nil {
+	if err := s.onRemoteClientMessage(ctx, ime); err != nil {
 		// TODO: differentiate action on errors
-		s.logger.With().Error("err reading incoming message, closing connection",
+		logger.With().Error("err reading incoming message, closing connection",
 			log.FieldNamed("sender_id", ime.Conn.RemotePublicKey()),
 			log.Err(err))
 		if err := ime.Conn.Close(); err == nil {
@@ -762,7 +767,6 @@ func (s *Switch) askForMorePeers() {
 
 // getMorePeers tries to fill the `outpeers` slice with dialed outbound peers that we selected from the discovery.
 func (s *Switch) getMorePeers(numpeers int) int {
-
 	if numpeers == 0 {
 		return 0
 	}

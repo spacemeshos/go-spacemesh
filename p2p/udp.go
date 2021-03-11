@@ -202,7 +202,10 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 		return err
 	}
 
-	mux.logger.With().Debug("Sent UDP message", log.String("protocol", protocol), log.String("to", peer.String()), log.Int("len", len(realfinal)))
+	mux.logger.With().Debug("sent udp message",
+		log.String("protocol", protocol),
+		log.String("to", peer.String()),
+		log.Int("len", len(realfinal)))
 	return nil
 }
 

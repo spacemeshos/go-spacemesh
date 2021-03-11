@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -364,7 +365,7 @@ func TestUDPNet_Cache2(t *testing.T) {
 		}
 		mconn := newMsgConnection(conn, n, pk, ns, n.config.MsgSizeLimit, n.config.DialTimeout, n.logger)
 		n.addConn(addr, conn)
-		go mconn.beginEventProcessing()
+		go mconn.beginEventProcessing(context.TODO())
 	}
 
 	for i := 0; i < maxUDPConn; i++ {

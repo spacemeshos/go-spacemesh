@@ -797,27 +797,27 @@ func (app *SpacemeshApp) stopServices() {
 	close(app.term)
 
 	if app.jsonAPIService != nil {
-		log.Info("stopping JSON gateway service...")
+		log.Info("stopping json gateway service")
 		if err := app.jsonAPIService.Close(); err != nil {
-			log.Error("error stopping JSON gateway server: %s", err)
+			log.With().Error("error stopping json gateway server", log.Err(err))
 		}
 	}
 
 	if app.grpcAPIService != nil {
-		log.Info("Stopping GRPC service...")
+		log.Info("stopping grpc service")
 		// does not return any errors
-		app.grpcAPIService.Close()
+		_ = app.grpcAPIService.Close()
 	}
 
 	if app.blockProducer != nil {
-		app.log.Info("%v closing block producer", app.nodeID.Key)
+		app.log.Info("closing block producer")
 		if err := app.blockProducer.Close(); err != nil {
-			log.Error("cannot stop block producer %v", err)
+			log.With().Error("cannot stop block producer", log.Err(err))
 		}
 	}
 
 	if app.clock != nil {
-		app.log.Info("%v closing clock", app.nodeID.Key)
+		app.log.Info("closing clock")
 		app.clock.Close()
 	}
 
@@ -831,28 +831,23 @@ func (app *SpacemeshApp) stopServices() {
 		app.atxBuilder.Stop()
 	}
 
-	/*if app.blockListener != nil {
-		app.log.Info("%v closing blockListener", app.nodeID.Key)
-		app.blockListener.Close()
-	}*/
-
 	if app.hare != nil {
-		app.log.Info("%v closing Hare", app.nodeID.Key)
+		app.log.Info("closing hare")
 		app.hare.Close()
 	}
 
 	if app.P2P != nil {
-		app.log.Info("%v closing p2p", app.nodeID.Key)
+		app.log.Info("closing p2p")
 		app.P2P.Shutdown()
 	}
 
 	if app.syncer != nil {
-		app.log.Info("%v closing sync", app.nodeID.Key)
+		app.log.Info("closing sync")
 		app.syncer.Close()
 	}
 
 	if app.mesh != nil {
-		app.log.Info("%v closing mesh", app.nodeID.Key)
+		app.log.Info("closing mesh")
 		app.mesh.Close()
 	}
 

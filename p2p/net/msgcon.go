@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -101,8 +102,8 @@ func (c *MsgConnection) Created() time.Time {
 	return c.created
 }
 
-func (c *MsgConnection) publish(message []byte) {
-	c.networker.EnqueueMessage(IncomingMessageEvent{c, message})
+func (c *MsgConnection) publish(ctx context.Context, message []byte) {
+	c.networker.EnqueueMessage(IncomingMessageEvent{c, message, ctx})
 }
 
 // NOTE: this is left here intended to help debugging in the future.
@@ -216,7 +217,7 @@ func (c *MsgConnection) Closed() bool {
 
 // Push outgoing message to the connections
 // Read from the incoming new messages and send down the connection
-func (c *MsgConnection) beginEventProcessing() {
+func (c *MsgConnection) beginEventProcessing(ctx context.Context) {
 	//TODO: use a buffer pool
 	var err error
 	for {
@@ -234,7 +235,7 @@ func (c *MsgConnection) beginEventProcessing() {
 		if len(buf) > 0 {
 			newbuf := make([]byte, size)
 			copy(newbuf, buf[:size])
-			c.publish(newbuf)
+			c.publish(ctx, newbuf)
 		}
 
 		if err != nil {

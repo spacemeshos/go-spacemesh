@@ -157,7 +157,7 @@ func (n *UDPNet) IncomingMessages() chan IncomingMessageEvent {
 	return n.msgChan
 }
 
-// Dial creates a Connection interface which is wrapped around a udp socket with a session and start listening on messages form it.
+// Dial creates a Connection interface which is wrapped around a udp socket with a session and start listening on messages from it.
 // it uses the `connect` syscall
 func (n *UDPNet) Dial(ctx context.Context, address net.Addr, remotePublicKey p2pcrypto.PublicKey) (Connection, error) {
 	udpcon, err := net.DialUDP("udp", nil, address.(*net.UDPAddr))
@@ -168,7 +168,7 @@ func (n *UDPNet) Dial(ctx context.Context, address net.Addr, remotePublicKey p2p
 	ns := n.cache.GetOrCreate(remotePublicKey)
 
 	conn := newMsgConnection(udpcon, n, remotePublicKey, ns, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger)
-	go conn.beginEventProcessing()
+	go conn.beginEventProcessing(ctx)
 	return conn, nil
 }
 
@@ -201,10 +201,10 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 			if temp, ok := err.(interface {
 				Temporary() bool
 			}); ok && temp.Temporary() {
-				n.logger.Warning("Temporary UDP error", err)
+				n.logger.With().Warning("temporary UDP error", log.Err(err))
 				continue
 			} else {
-				n.logger.With().Error("Listen UDP error, stopping server", log.Err(err))
+				n.logger.With().Error("listen UDP error, stopping server", log.Err(err))
 				return
 			}
 
@@ -212,7 +212,8 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 
 		if n.config.MsgSizeLimit != config.UnlimitedMsgSize && size > n.config.MsgSizeLimit {
 			n.logger.With().Error("listenToUDPNetworkMessages: message is too big",
-				log.Int("limit", n.config.MsgSizeLimit), log.Int("actual", size))
+				log.Int("limit", n.config.MsgSizeLimit),
+				log.Int("actual", size))
 			continue
 		}
 
@@ -221,30 +222,36 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 
 		conn, err := n.getConn(addr)
 		if err != nil {
-			n.logger.Debug("Creating new connection ")
+			n.logger.Debug("creating new connection")
 			_, pk, err := p2pcrypto.ExtractPubkey(copybuf)
 
 			if err != nil {
-				n.logger.Warning("error can't extract public key from udp message. (Addr=%v), err=%v", addr.String(), err)
+				n.logger.With().Warning("error can't extract public key from udp message",
+					log.String("addr", addr.String()),
+					log.Err(err))
 				continue
 			}
 
 			ns := n.cache.GetOrCreate(pk)
 
 			if ns == nil {
-				n.logger.Warning("could not create session with %v:%v skipping message..", addr.String(), pk.String())
+				n.logger.With().Warning("could not create session, skipping message",
+					log.String("addr", addr.String()),
+					log.String("pk", pk.String()))
 				continue
 			}
 
 			host, port, err := net.SplitHostPort(addr.String())
 			if err != nil {
-				n.logger.Warning("could not parse address skipping message from  %v %s", addr.String(), pk)
+				n.logger.With().Warning("could not parse address, skipping message",
+					log.String("addr", addr.String()),
+					log.String("pk", pk.String()))
 				continue
 			}
 
 			iport, err := strconv.Atoi(port)
 			if err != nil {
-				n.logger.Warning("failed converting port to int %v", port)
+				n.logger.With().Warning("failed converting port to int", log.String("port", port))
 				continue
 			}
 
@@ -259,12 +266,13 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 			mconn := newMsgConnection(conn, n, pk, ns, n.config.MsgSizeLimit, n.config.DialTimeout, n.logger)
 			n.publishNewRemoteConnectionEvent(mconn, node.NewNode(pk, net.ParseIP(host), 0, uint16(iport)))
 			n.addConn(addr, conn)
-			go mconn.beginEventProcessing()
+			go mconn.beginEventProcessing(context.TODO())
 		}
 
 		err = conn.PushIncoming(copybuf)
 		if err != nil {
-			n.logger.Warning("error pushing incoming message to conn with %v", conn.RemoteAddr())
+			n.logger.With().Warning("error pushing incoming message to conn",
+				log.String("remote_addr", conn.RemoteAddr().String()))
 		}
 
 	}
@@ -280,7 +288,7 @@ func (n *UDPNet) addConn(addr net.Addr, ucw udpConn) {
 			if time.Since(c.Created()) > maxUDPLife {
 				delete(n.incomingConn, k)
 				if err := c.Close(); err != nil {
-					n.logger.With().Warning("Error closing udp socket", log.Err(err))
+					n.logger.With().Warning("error closing udp socket", log.Err(err))
 				}
 				evicted = true
 				break
