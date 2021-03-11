@@ -161,14 +161,17 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 		return nil
 	}
 	epoch := atx.PubLayerID.GetEpoch()
-	db.log.With().Info("processing atx", atx.ID(), epoch, log.FieldNamed("atx_node_id", atx.NodeID),
+	db.log.With().Info("processing atx",
+		atx.ID(),
+		epoch,
+		log.FieldNamed("atx_node_id", atx.NodeID),
 		atx.PubLayerID)
 	err := db.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	if err != nil {
-		db.log.With().Error("ATX failed contextual validation", atx.ID(), log.Err(err))
+		db.log.With().Error("atx failed contextual validation", atx.ID(), log.Err(err))
 		// TODO: Blacklist this miner
 	} else {
-		db.log.With().Info("ATX is valid", atx.ID())
+		db.log.With().Info("atx is valid", atx.ID())
 	}
 	err = db.StoreAtx(epoch, atx)
 	if err != nil {
@@ -177,14 +180,15 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 
 	err = db.StoreNodeIdentity(atx.NodeID)
 	if err != nil {
-		db.log.With().Error("cannot store node identity", log.FieldNamed("atx_node_id", atx.NodeID),
-			atx.ID(), log.Err(err))
+		db.log.With().Error("cannot store node identity",
+			log.FieldNamed("atx_node_id", atx.NodeID),
+			atx.ID(),
+			log.Err(err))
 	}
 	return nil
 }
 
 func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.ATXID, penalties map[string]struct{}, layersPerEpoch uint16, epoch types.EpochID) func(b *types.Block) (bool, error) {
-
 	traversalFunc := func(b *types.Block) (stop bool, err error) {
 
 		// count unique ATXs
@@ -202,7 +206,8 @@ func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.A
 
 			// make sure the target epoch is our epoch
 			if atx.TargetEpoch() != epoch {
-				db.log.With().Debug("atx found, but targeting epoch doesn't match publication epoch", atx.ID(),
+				db.log.With().Debug("atx found, but targeting epoch doesn't match publication epoch",
+					atx.ID(),
 					log.FieldNamed("atx_target_epoch", atx.TargetEpoch()),
 					log.FieldNamed("actual_epoch", epoch))
 				continue
@@ -217,8 +222,9 @@ func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.A
 			if prevID, exist := countedAtxs[atx.NodeID.Key]; exist { // same miner
 
 				if prevID != id { // different atx for same epoch
-					db.log.With().Error("Encountered second atx for the same miner on the same epoch",
-						log.FieldNamed("first_atx", prevID), log.FieldNamed("second_atx", id))
+					db.log.With().Error("encountered second atx for the same miner on the same epoch",
+						log.FieldNamed("first_atx", prevID),
+						log.FieldNamed("second_atx", id))
 
 					penalties[atx.NodeID.Key] = struct{}{} // mark node in penalty
 					delete(countedAtxs, atx.NodeID.Key)    // remove the penalized node from counted
@@ -237,7 +243,6 @@ func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.A
 
 // CalcActiveSetSize - returns the active set size that matches the view of the contextually valid blocks in the provided layer
 func (db *DB) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
-
 	if epoch == 0 {
 		return nil, errors.New("tried to retrieve active set for epoch 0")
 	}
@@ -357,7 +362,7 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		}
 
 		if prevATX.NodeID.Key != atx.NodeID.Key {
-			return fmt.Errorf("previous ATX belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v",
+			return fmt.Errorf("previous atx belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v",
 				atx.ShortString(), atx.NodeID.Key, prevATX.NodeID.Key)
 		}
 
@@ -408,7 +413,7 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 				atx.PubLayerID, posAtx.PubLayerID)
 		}
 		if uint64(atx.PubLayerID-posAtx.PubLayerID) > uint64(db.LayersPerEpoch) {
-			return fmt.Errorf("expected distance of one epoch (%v layers) from pos ATX but found %v",
+			return fmt.Errorf("expected distance of one epoch (%v layers) from pos atx but found %v",
 				db.LayersPerEpoch, atx.PubLayerID-posAtx.PubLayerID)
 		}
 	} else {
@@ -420,13 +425,13 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 
 	hash, err := atx.NIPSTChallenge.Hash()
 	if err != nil {
-		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
+		return fmt.Errorf("cannot get nipst challenge hash: %v", err)
 	}
-	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.String()), atx.ID())
+	db.log.With().Info("validated nipst", log.String("challenge_hash", hash.String()), atx.ID())
 
 	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeID.Key))
 	if err = db.nipstValidator.Validate(*pubKey, atx.Nipst, *hash); err != nil {
-		return fmt.Errorf("NIPST not valid: %v", err)
+		return fmt.Errorf("nipst not valid: %v", err)
 	}
 
 	return nil
@@ -438,9 +443,10 @@ func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 	if atx.PrevATXID != *types.EmptyATXID {
 		lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
 		if err != nil {
-			db.log.With().Error("could not fetch node last ATX", atx.ID(),
-				log.FieldNamed("atx_node_id", atx.NodeID), log.Err(err))
-			return fmt.Errorf("could not fetch node last ATX: %v", err)
+			db.log.With().Error("could not fetch node last atx", atx.ID(),
+				log.FieldNamed("atx_node_id", atx.NodeID),
+				log.Err(err))
+			return fmt.Errorf("could not fetch node last atx: %v", err)
 		}
 		// last atx is not the one referenced
 		if lastAtx != atx.PrevATXID {
@@ -449,11 +455,11 @@ func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 	} else {
 		lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
 		if _, ok := err.(ErrAtxNotFound); err != nil && !ok {
-			db.log.Error("fetching ATX ids failed: %v", err)
+			db.log.With().Error("fetching atx ids failed", log.Err(err))
 			return err
 		}
 		if err == nil { // we found an ATX for this node ID, although it reported no prevATX -- this is invalid
-			return fmt.Errorf("no prevATX reported, but other ATX with same nodeID (%v) found: %v",
+			return fmt.Errorf("no prevATX reported, but other atx with same nodeID (%v) found: %v",
 				atx.NodeID.ShortString(), lastAtx.ShortString())
 		}
 	}
@@ -494,7 +500,7 @@ func (db *DB) StoreAtx(ech types.EpochID, atx *types.ActivationTx) error {
 		return err
 	}
 
-	db.log.Info("finished storing atx %v, in epoch %v", atx.ShortString(), ech)
+	db.log.With().Info("finished storing atx in epoch", atx.ID(), ech)
 
 	return nil
 }
@@ -548,7 +554,7 @@ type atxIDAndLayer struct {
 func (db *DB) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 	currentTopAtx, err := db.getTopAtx()
 	if err != nil && err != database.ErrNotFound {
-		return fmt.Errorf("failed to get current ATX: %v", err)
+		return fmt.Errorf("failed to get current atx: %v", err)
 	}
 	if err == nil && currentTopAtx.LayerID >= atx.PubLayerID {
 		return nil
@@ -560,12 +566,12 @@ func (db *DB) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 	}
 	topAtxBytes, err := types.InterfaceToBytes(&newTopAtx)
 	if err != nil {
-		return fmt.Errorf("failed to marshal top ATX: %v", err)
+		return fmt.Errorf("failed to marshal top atx: %v", err)
 	}
 
 	err = db.atxs.Put([]byte(topAtxKey), topAtxBytes)
 	if err != nil {
-		return fmt.Errorf("failed to store top ATX: %v", err)
+		return fmt.Errorf("failed to store top atx: %v", err)
 	}
 	return nil
 }
@@ -578,7 +584,7 @@ func (db *DB) getTopAtx() (atxIDAndLayer, error) {
 	var topAtx atxIDAndLayer
 	err = types.BytesToInterface(topAtxBytes, &topAtx)
 	if err != nil {
-		return atxIDAndLayer{}, fmt.Errorf("failed to unmarshal top ATX: %v", err)
+		return atxIDAndLayer{}, fmt.Errorf("failed to unmarshal top atx: %v", err)
 	}
 	return topAtx, nil
 }
@@ -587,7 +593,7 @@ func (db *DB) getTopAtx() (atxIDAndLayer, error) {
 func (db *DB) addAtxToNodeID(nodeID types.NodeID, atx *types.ActivationTx) error {
 	err := db.atxs.Put(getNodeAtxKey(nodeID, atx.PubLayerID.GetEpoch()), atx.ID().Bytes())
 	if err != nil {
-		return fmt.Errorf("failed to store ATX ID for node: %v", err)
+		return fmt.Errorf("failed to store atx ID for node: %v", err)
 	}
 	return nil
 }
@@ -596,7 +602,7 @@ func (db *DB) addNodeAtxToEpoch(epoch types.EpochID, nodeID types.NodeID, atx *t
 	db.log.Info("added atx %v to epoch %v", atx.ID().ShortString(), epoch)
 	err := db.atxs.Put(getNodeAtxEpochKey(atx.PubLayerID.GetEpoch(), nodeID), atx.ID().Bytes())
 	if err != nil {
-		return fmt.Errorf("failed to store ATX ID for node: %v", err)
+		return fmt.Errorf("failed to store atx ID for node: %v", err)
 	}
 	return nil
 }
@@ -635,8 +641,11 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 		}
 		atxs = append(atxs, a)
 	}
-	db.log.Info("returned epoch %v atxs %v %v", epochID, len(atxs), atxs)
-	return atxs
+	db.log.With().Info("returned epoch atxs", epochID, log.Int("count", len(atxs)))
+	db.log.With().Debug("returned epoch atxs", epochID,
+		log.Int("count", len(atxs)),
+		log.String("atxs", fmt.Sprint(atxs)))
+	return
 }
 
 // GetNodeAtxIDForEpoch returns an atx published by the provided nodeID for the specified targetEpoch. meaning the atx
@@ -734,7 +743,7 @@ func (db *DB) HandleGossipAtx(data service.GossipMessage, syncer service.Syncer)
 	}
 	atx, err := types.BytesToAtx(data.Bytes())
 	if err != nil {
-		db.log.Error("cannot parse incoming ATX")
+		db.log.With().Error("error handling atx data", log.Err(err))
 		return
 	}
 	atx.CalcAndSetID()

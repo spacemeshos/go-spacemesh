@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -445,7 +444,8 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 	// first, bring all the data of the prev layers
 	// Note: lastTicked() is not constant but updates as ticks are received
 	for ; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
-		s.With().Info("syncing layer", log.FieldNamed("current_sync_layer", currentSyncLayer),
+		s.With().Info("syncing layer",
+			log.FieldNamed("current_sync_layer", currentSyncLayer),
 			log.FieldNamed("last_ticked_layer", s.GetCurrentLayer()))
 
 		if s.isClosed() {
@@ -460,7 +460,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 
 		if len(lyr.Blocks()) == 0 {
 			if err := s.SetZeroBlockLayer(currentSyncLayer); err != nil {
-				s.With().Error("handleNotSynced failed ", currentSyncLayer, log.Err(err))
+				s.With().Error("handleNotSynced failed", currentSyncLayer, log.Err(err))
 				return
 			}
 		}
@@ -477,7 +477,9 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 	// wait for two ticks to ensure we are fully synced before we open gossip or validate the current layer
 	err := s.gossipSyncForOneFullLayer(currentSyncLayer)
 	if err != nil {
-		s.With().Error("Fatal: failed getting layer from db even though we listened to gossip", currentSyncLayer, log.Err(err))
+		s.With().Error("failed getting layer from db even though we listened to gossip",
+			currentSyncLayer,
+			log.Err(err))
 	}
 }
 
@@ -501,7 +503,7 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 	// listen to gossip
 	s.setGossipBufferingStatus(inProgress)
 	// subscribe and wait for two ticks
-	s.Info("waiting for two ticks while p2p is open, epoch %v", currentSyncLayer.GetEpoch())
+	s.With().Info("waiting for two ticks while p2p is open", currentSyncLayer.GetEpoch())
 	ch := s.ticker.Subscribe()
 
 	if done := s.waitLayer(ch); done {
@@ -538,7 +540,7 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 		}
 	}
 
-	s.Info("done waiting for ticks and validation. setting gossip true")
+	s.Info("done waiting for ticks and validation, setting gossip true")
 
 	// fully-synced - set gossip -synced to true
 	s.setGossipBufferingStatus(done)
@@ -596,7 +598,7 @@ func (s *Syncer) getLayerFromNeighbors(currentSyncLayer types.LayerID) (*types.L
 }
 
 func (s *Syncer) syncEpochActivations(epoch types.EpochID) error {
-	s.Log.Info("syncing atxs for epoch %v", epoch)
+	s.With().Info("syncing atxs", epoch)
 	hashes, err := s.fetchEpochAtxHashes(epoch)
 	if err != nil {
 		return err
@@ -607,7 +609,11 @@ func (s *Syncer) syncEpochActivations(epoch types.EpochID) error {
 		return err
 	}
 
-	s.Info("fetched %v atxs for epoch %v actual map %v", len(atxIds), epoch, atxIds)
+	s.With().Info("fetched atxs for epoch", epoch, log.Int("count", len(atxIds)))
+	s.With().Debug("fetched atxs for epoch",
+		epoch,
+		log.Int("count", len(atxIds)),
+		log.String("atxs", fmt.Sprint(atxIds)))
 
 	_, err = s.atxQueue.HandleAtxs(atxIds)
 
@@ -617,7 +623,7 @@ func (s *Syncer) syncEpochActivations(epoch types.EpochID) error {
 func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*types.Block, error) {
 	ch := make(chan bool, 1)
 	foo := func(res bool) error {
-		s.Info("layer %v done", layerID)
+		s.With().Info("sync layer done", layerID)
 		ch <- res
 		return nil
 	}
@@ -630,7 +636,7 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 		return s.LayerBlocks(layerID)
 	}
 
-	s.Info("layer %v wait for %d blocks", layerID, len(blockIds))
+	s.With().Info("wait for blocks", layerID, log.Int("num_blocks", len(blockIds)))
 	select {
 	case <-s.exit:
 		return nil, fmt.Errorf("received interupt")
@@ -689,7 +695,7 @@ func (s *Syncer) fetchRefBlock(block *types.Block) error {
 	}
 	_, err := s.GetBlock(*block.RefBlock)
 	if err != nil {
-		s.Log.Info("fetching block %v", *block.RefBlock)
+		s.With().Info("fetching block", *block.RefBlock)
 		fetched := s.fetchBlock(*block.RefBlock)
 		if !fetched {
 			return fmt.Errorf("failed to fetch ref block %v", *block.RefBlock)
@@ -798,7 +804,7 @@ func (s *Syncer) fetchAtx(ID types.ATXID) (*types.ActivationTx, error) {
 // FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db
 func (s *Syncer) FetchAtxReferences(atx *types.ActivationTx) error {
 	if atx.PositioningATX != *types.EmptyATXID {
-		s.Log.Info("going to fetch pos atx %v of atx %v", atx.PositioningATX.ShortString(), atx.ID().ShortString())
+		s.With().Info("going to fetch pos atx", atx.PositioningATX, atx.ID())
 		_, err := s.fetchAtx(atx.PositioningATX)
 		if err != nil {
 			return err
@@ -806,13 +812,13 @@ func (s *Syncer) FetchAtxReferences(atx *types.ActivationTx) error {
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
-		s.Log.Info("going to fetch prev atx %v of atx %v", atx.PrevATXID.ShortString(), atx.ID().ShortString())
+		s.With().Info("going to fetch prev atx", atx.PrevATXID, atx.ID())
 		_, err := s.fetchAtx(atx.PrevATXID)
 		if err != nil {
 			return err
 		}
 	}
-	s.Log.Info("done fetching references for atx %v", atx.ID().ShortString())
+	s.With().Info("done fetching references for atx", atx.ID())
 
 	return nil
 }
@@ -824,7 +830,6 @@ func (s *Syncer) fetchBlock(ID types.BlockID) bool {
 		s.With().Info("single block fetched",
 			ID,
 			log.Bool("result", res))
-		//log.LayerID(uint64(blk.LayerIndex)))
 		ch <- res
 		return nil
 	}
@@ -903,7 +908,7 @@ func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2ppeers.Peer, lyr type
 	for h, peers := range m {
 	NextHash:
 		for _, peer := range peers {
-			s.Debug("send request Peer: %v", peer)
+			s.With().Debug("send request", log.String("peer", peer.String()))
 			ch, err := layerIdsReqFactory(lyr)(s, peer)
 			if err != nil {
 				return nil, err
@@ -915,16 +920,17 @@ func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2ppeers.Peer, lyr type
 				s.Debug("worker received interrupt")
 				return nil, fmt.Errorf("interupt")
 			case <-timeout:
-				s.Error("layer ids request to %v timed out", peer)
+				s.With().Error("layer ids request timed out", log.String("peer", peer.String()))
 				continue
 			case v := <-ch:
 				if v != nil {
-					s.Debug("Peer: %v responded to layer ids request", peer)
+					s.With().Debug("peer responded to layer ids request", log.String("peer", peer.String()))
 					// peer returned set with bad hash ask next peer
 					res := types.CalcBlocksHash32(v.([]types.BlockID), nil)
 
 					if h != res {
-						s.Warning("Peer: %v layer ids hash does not match request", peer)
+						s.With().Warning("layer ids hash does not match request",
+							log.String("peer", peer.String()))
 					}
 
 					for _, bid := range v.([]types.BlockID) {
@@ -954,7 +960,7 @@ func (s *Syncer) fetcEpochAtxs(m map[types.Hash32][]p2ppeers.Peer, epoch types.E
 	for h, peers := range m {
 	NextHash:
 		for _, peer := range peers {
-			s.Debug("send request Peer: %v", peer)
+			s.With().Debug("send request", log.String("peer", peer.String()))
 			ch, err := getEpochAtxIds(epoch, s, peer)
 			if err != nil {
 				return nil, err
@@ -966,16 +972,18 @@ func (s *Syncer) fetcEpochAtxs(m map[types.Hash32][]p2ppeers.Peer, epoch types.E
 				s.Debug("worker received interrupt")
 				return nil, fmt.Errorf("interupt")
 			case <-timeout:
-				s.Error("layer ids request to %v timed out", peer)
+				s.With().Error("layer ids request timed out", log.String("peer", peer.String()))
 				continue
 			case v := <-ch:
 				if v != nil {
-					s.Debug("Peer: %v responded to epoch atx ids request", peer)
+					s.With().Debug("peer responded to epoch atx ids request",
+						log.String("peer", peer.String()))
 					// peer returned set with bad hash ask next peer
 					res := types.CalcATXIdsHash32(v.([]types.ATXID), nil)
 
 					if h != res {
-						s.Warning("Peer: %v epoch atx ids hash does not match request", peer)
+						s.With().Warning("epoch atx ids hash does not match request",
+							log.String("peer", peer.String()))
 					}
 
 					for _, bid := range v.([]types.ATXID) {
@@ -1021,14 +1029,14 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[types.Hash32][]p2ppeer
 	}
 
 	if !layerHasBlocks {
-		s.Info("layer %d has no blocks", lyr)
+		s.With().Info("layer has no blocks", lyr)
 		return nil, errNoBlocksInLayer
 	}
 
 	if len(m) == 0 {
 		return nil, errors.New("could not get layer hashes from any peer")
 	}
-	s.Info("layer %d has blocks", lyr)
+	s.With().Info("layer has blocks", lyr)
 	return m, nil
 }
 
@@ -1050,14 +1058,14 @@ func (s *Syncer) fetchEpochAtxHashes(ep types.EpochID) (map[types.Hash32][]p2ppe
 	}
 
 	if !layerHasBlocks {
-		s.Info("epoch %d has no atxs", ep)
+		s.With().Info("epoch has no atxs", ep)
 		return nil, errNoBlocksInLayer
 	}
 
 	if len(m) == 0 {
 		return nil, errors.New("could not get epoch hashes from any peer")
 	}
-	s.Info("epoch %d has atxs", ep)
+	s.With().Info("epoch has atxs", ep)
 	return m, nil
 }
 
@@ -1094,10 +1102,10 @@ func (s *Syncer) atxCheckLocal(atxIds []types.Hash32) (map[types.Hash32]item, ma
 		id := types.ATXID(t)
 		if x, err := s.atxDb.GetFullAtx(id); err == nil {
 			atx := x
-			s.Debug("found atx, %v in atx db", id.ShortString())
+			s.With().Debug("found atx in atx db", id)
 			unprocessedItems[id.Hash32()] = atx
 		} else {
-			s.Debug("atx %v not in atx pool", id.ShortString())
+			s.With().Debug("atx not in atx pool", id)
 			missingInPool = append(missingInPool, id)
 		}
 	}
@@ -1124,10 +1132,10 @@ func (s *Syncer) txCheckLocal(txIds []types.Hash32) (map[types.Hash32]item, map[
 	for _, t := range txIds {
 		id := types.TransactionID(t)
 		if tx, err := s.txpool.Get(id); err == nil {
-			s.Debug("found tx, %v in tx pool", hex.EncodeToString(t[:]))
+			s.With().Debug("found tx in tx pool", id)
 			unprocessedItems[id.Hash32()] = tx
 		} else {
-			s.Debug("tx %v not in atx pool", hex.EncodeToString(t[:]))
+			s.With().Debug("tx not in tx pool", id)
 			missingInPool = append(missingInPool, id)
 		}
 	}
@@ -1153,7 +1161,7 @@ func (s *Syncer) blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]item
 	for _, id := range blockIds {
 		res, err := s.GetBlock(types.BlockID(id.ToHash20()))
 		if err != nil {
-			s.Debug("get block failed %v", id)
+			s.With().Debug("get block failed", log.String("id", id.ShortString()))
 			continue
 		}
 		dbItems[id] = res

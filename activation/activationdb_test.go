@@ -479,14 +479,14 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
-	assert.EqualError(t, err, "expected distance of one epoch (1000 layers) from pos ATX but found 1011")
+	assert.EqualError(t, err, "expected distance of one epoch (1000 layers) from pos atx but found 1011")
 
 	// Wrong prevATx.
 	atx = newActivationTx(idx1, 1, atxs[0].ID(), 1012, 0, posAtx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
-	assert.EqualError(t, err, fmt.Sprintf("previous ATX belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v", atx.ShortString(), atx.NodeID.Key, atxs[0].NodeID.Key))
+	assert.EqualError(t, err, fmt.Sprintf("previous atx belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v", atx.ShortString(), atx.NodeID.Key, atxs[0].NodeID.Key))
 
 	// Wrong layerId.
 	posAtx2 := newActivationTx(idx2, 0, *types.EmptyATXID, 1020, 0, *types.EmptyATXID, coinbase, 3, blocks, npst)
@@ -522,7 +522,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.NoError(t, err)
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err,
-		fmt.Sprintf("could not fetch node last ATX: atx for node %v does not exist", atx.NodeID.ShortString()))
+		fmt.Sprintf("could not fetch node last atx: atx for node %v does not exist", atx.NodeID.ShortString()))
 
 	// Prev atx not declared but commitment not included.
 	atx = newActivationTx(idx1, 0, *types.EmptyATXID, 1012, 0, posAtx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
