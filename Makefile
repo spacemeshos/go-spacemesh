@@ -43,13 +43,19 @@ DOCKERRUNARGS := --rm -e ES_PASSWD="$(ES_PASSWD)" \
 	-e PROJECT_NAME=$(PROJECT_NAME) \
 	-e ES_USER=$(ES_USER) \
 	-e ES_PASS=$(ES_PASS) \
-	-e MAIN_ES_IP=$(MAIN_ES_IP) \
-	-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-	go-spacemesh-python:$(BRANCH)
-ifdef INTERACTIVE
-	DOCKERRUN := docker run -it $(DOCKERRUNARGS)
+	-e MAIN_ES_IP=$(MAIN_ES_IP)
+
+# We use a docker image corresponding to the commithash for staging, to be safe
+ifeq ($(BRANCH),staging)
+	DOCKERRUNARGS := $(DOCKERRUNARGS) -e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)"
 else
-	DOCKERRUN := docker run -i $(DOCKERRUNARGS)
+	DOCKERRUNARGS := $(DOCKERRUNARGS) -e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)"
+endif
+
+ifdef INTERACTIVE
+	DOCKERRUN := docker run -it $(DOCKERRUNARGS) go-spacemesh-python:$(BRANCH)
+else
+	DOCKERRUN := docker run -i $(DOCKERRUNARGS) go-spacemesh-python:$(BRANCH)
 endif
 
 all: install build
@@ -231,9 +237,19 @@ dockerpush: dockerbuild-go dockerpush-only
 
 dockerpush-only:
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
+
+# for staging, push an image using the commithash rather than the branch name to be 100%
+# sure that bors is running tests against the right image. for all other branches, just use
+# the branch name as the tag.
+ifeq ($(BRANCH),staging)
+	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
+	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
+else
 	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
 	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
+endif
 
+# for develop, we push an additional copy of the image using the commithash for archival
 ifeq ($(BRANCH),develop)
 	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
 	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
