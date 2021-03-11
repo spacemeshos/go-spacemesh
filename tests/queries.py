@@ -323,7 +323,7 @@ def find_dups(indx, namespace, client_po_name, fields, max=1):
     should show up if the indexing was functioning well.
 
     Usage : find_dups(current_index, "t7t9e", "client-t7t9e-28qj7",
-    {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}, 10)
+    {'M':'gossip message is new', 'protocol': 'api_test_gossip'}, 10)
     """
 
     es = ES(namespace).get_search_api()
@@ -349,7 +349,7 @@ def find_dups(indx, namespace, client_po_name, fields, max=1):
 
 def find_missing(indx, namespace, client_po_name, fields, min=1):
     # Usage : find_dups(current_index, "t7t9e", "client-t7t9e-28qj7",
-    # {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}, 10)
+    # {'M':'gossip message is new', 'protocol': 'api_test_gossip'}, 10)
 
     es = ES(namespace).get_search_api()
     fltr = get_pod_name_and_namespace_queries(client_po_name, namespace)

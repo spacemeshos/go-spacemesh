@@ -21,7 +21,7 @@ current_index = get_curr_ind()
 timeout_factor = 1
 
 # For purposes of these tests, we override the PoetProof protocol
-gossip_message_query_fields = {'M': 'new_gossip_message', 'protocol': 'PoetProof'}
+gossip_message_query_fields = {'M': 'gossip message is new', 'protocol': 'PoetProof'}
 
 
 def query_bootstrap_es(namespace, bootstrap_po_name):
