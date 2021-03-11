@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -187,8 +188,7 @@ func TestLayers_AddBlock(t *testing.T) {
 
 func addLayer(id types.LayerID, layerSize int, msh *Mesh) *types.Layer {
 	for i := 0; i < layerSize; i++ {
-
-		block1 := types.NewExistingBlock(id, []byte(rand.String(8)))
+		block1 := types.NewExistingBlock(id, []byte(rand.String(8)), nil)
 		block1.Initialize()
 
 		err := msh.AddBlock(block1)
@@ -439,7 +439,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_getInvalidBlocksByHare(t *testing
 	blocks = append(blocks, addBlockWithTxs(r, msh, layerID, true, tx2, tx3, tx4))
 	blocks = append(blocks, addBlockWithTxs(r, msh, layerID, true, tx4, tx5))
 	hareBlocks := blocks[:2]
-	invalid := msh.getInvalidBlocksByHare(types.NewExistingLayer(layerID, hareBlocks))
+	invalid := msh.getInvalidBlocksByHare(context.TODO(), types.NewExistingLayer(layerID, hareBlocks))
 	r.ElementsMatch(blocks[2:], invalid)
 
 	msh.reInsertTxsToPool(hareBlocks, invalid, layerID)

@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -13,19 +14,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
-func (p *protocol) newPingRequestHandler() func(msg server.Message) []byte {
-	return func(msg server.Message) []byte {
-		plogger := p.logger.WithFields(log.String("type", "ping"), log.String("from", msg.Sender().String()))
+func (p *protocol) newPingRequestHandler() func(context.Context, server.Message) []byte {
+	return func(ctx context.Context, msg server.Message) []byte {
+		plogger := p.logger.WithContext(ctx).WithFields(log.String("type", "ping"),
+			log.String("from", msg.Sender().String()))
 		plogger.Debug("handle request")
 		pinged := &node.Info{}
 		err := types.BytesToInterface(msg.Bytes(), pinged)
 		if err != nil {
-			plogger.Error("failed to deserialize ping message err=", err)
+			plogger.With().Error("failed to deserialize ping message", log.Err(err))
 			return nil
 		}
 
 		if err := p.verifyPinger(msg.Metadata().FromAddress, pinged); err != nil {
-			plogger.Error("msg contents were not valid err=", err)
+			plogger.With().Error("msg contents were not valid", log.Err(err))
 			return nil
 		}
 
@@ -33,11 +35,11 @@ func (p *protocol) newPingRequestHandler() func(msg server.Message) []byte {
 		payload, err := types.InterfaceToBytes(p.local)
 		// TODO: include the resolved To address
 		if err != nil {
-			plogger.Error("Error marshaling response message (Ping)")
+			plogger.With().Error("error marshaling response message (ping)", log.Err(err))
 			return nil
 		}
 
-		plogger.Debug("Sending pong message")
+		plogger.Debug("sending pong message")
 		return payload
 	}
 }
@@ -61,7 +63,7 @@ func (p *protocol) verifyPinger(from net.Addr, pi *node.Info) error {
 }
 
 // Ping notifies `peer` about our p2p identity.
-func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
+func (p *protocol) Ping(ctx context.Context, peer p2pcrypto.PublicKey) error {
 	plogger := p.logger.WithFields(log.String("type", "ping"), log.String("to", peer.String()))
 
 	plogger.Debug("send request")
@@ -88,7 +90,7 @@ func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
 		ch <- sender.ID.Bytes()
 	}
 
-	err = p.msgServer.SendRequest(PingPong, data, peer, foo, func(err error) {})
+	err = p.msgServer.SendRequest(ctx, PingPong, data, peer, foo, func(err error) {})
 
 	if err != nil {
 		return err

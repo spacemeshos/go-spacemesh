@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -8,7 +9,7 @@ import (
 )
 
 // GossipDataHandler is the function type that will be called when data is
-type GossipDataHandler func(data GossipMessage, syncer Fetcher)
+type GossipDataHandler func(ctx context.Context, data GossipMessage, syncer Fetcher)
 
 // Listener represents the main struct that reqisters delegates to gossip function
 type Listener struct {
@@ -32,36 +33,37 @@ func NewListener(net Service, syncer Fetcher, log log.Log) *Listener {
 
 // Syncer is interface for sync services
 type Syncer interface {
-	FetchAtxReferences(atx *types.ActivationTx) error
-	FetchPoetProof(poetProofRef []byte) error
+	FetchAtxReferences(context.Context, *types.ActivationTx) error
+	FetchPoetProof(ctx context.Context, poetProofRef []byte) error
 	ListenToGossip() bool
 	GetBlock(ID types.BlockID) (*types.Block, error)
 	//GetTxs(IDs []types.TransactionID) error
 	//GetBlocks(IDs []types.BlockID) error
 	//GetAtxs(IDs []types.ATXID) error
-	IsSynced() bool
+	IsSynced(context.Context) bool
 }
 
 // Fetcher is a general interface that defines a component capable of fetching data from remote peers
 type Fetcher interface {
-	FetchBlock(ID types.BlockID) error
-	FetchAtx(ID types.ATXID) error
-	GetPoetProof(ID types.Hash32) error
-	GetTxs(IDs []types.TransactionID) error
-	GetBlocks(IDs []types.BlockID) error
-	GetAtxs(IDs []types.ATXID) error
+	FetchBlock(types.BlockID) error
+	FetchAtx(context.Context, types.ATXID) error
+	GetPoetProof(context.Context, types.Hash32) error
+	GetTxs(context.Context, []types.TransactionID) error
+	GetBlocks(context.Context, []types.BlockID) error
+	GetAtxs(context.Context, []types.ATXID) error
 	ListenToGossip() bool
-	IsSynced() bool
+	IsSynced(context.Context) bool
 }
 
 // AddListener adds a listener to a specific gossip channel
-func (l *Listener) AddListener(channel string, priority priorityq.Priority, dataHandler GossipDataHandler) {
+func (l *Listener) AddListener(ctx context.Context, channel string, priority priorityq.Priority, dataHandler GossipDataHandler) {
+	ctx = log.WithNewSessionID(ctx, log.String("channel", channel))
 	ch := l.net.RegisterGossipProtocol(channel, priority)
 	stop := make(chan struct{})
 	l.channels = append(l.channels, ch)
 	l.stoppers = append(l.stoppers, stop)
 	l.wg.Add(1)
-	go l.listenToGossip(dataHandler, ch, stop)
+	go l.listenToGossip(log.WithNewRequestID(ctx), dataHandler, ch, stop)
 }
 
 // Stop stops listening to all gossip channels
@@ -72,8 +74,8 @@ func (l *Listener) Stop() {
 	l.wg.Wait()
 }
 
-func (l *Listener) listenToGossip(dataHandler GossipDataHandler, gossipChannel chan GossipMessage, stop chan struct{}) {
-	l.Info("start listening")
+func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHandler, gossipChannel chan GossipMessage, stop chan struct{}) {
+	l.WithContext(ctx).Info("start listening")
 	for {
 		select {
 		case <-stop:
@@ -84,7 +86,7 @@ func (l *Listener) listenToGossip(dataHandler GossipDataHandler, gossipChannel c
 				// not accepting data
 				continue
 			}
-			dataHandler(data, l.syncer)
+			dataHandler(log.WithNewRequestID(ctx), data, l.syncer)
 		}
 	}
 }

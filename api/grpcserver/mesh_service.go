@@ -121,7 +121,7 @@ func (s MeshService) getFilteredTransactions(startLayer types.LayerID, addr type
 	return
 }
 
-func (s MeshService) getFilteredActivations(startLayer types.LayerID, addr types.Address) (activations []*types.ActivationTx, err error) {
+func (s MeshService) getFilteredActivations(ctx context.Context, startLayer types.LayerID, addr types.Address) (activations []*types.ActivationTx, err error) {
 	// We have no way to look up activations by coinbase so we have no choice
 	// but to read all of them.
 	// TODO: index activations by layer (and maybe by coinbase)
@@ -141,7 +141,7 @@ func (s MeshService) getFilteredActivations(startLayer types.LayerID, addr types
 	}
 
 	// Look up full data
-	atxs, matxs := s.Mesh.GetATXs(atxids)
+	atxs, matxs := s.Mesh.GetATXs(ctx, atxids)
 	if len(matxs) != 0 {
 		log.Error("could not find activations %v", matxs)
 		return nil, status.Errorf(codes.Internal, "error retrieving activations data")
@@ -156,7 +156,7 @@ func (s MeshService) getFilteredActivations(startLayer types.LayerID, addr types
 }
 
 // AccountMeshDataQuery returns account data
-func (s MeshService) AccountMeshDataQuery(_ context.Context, in *pb.AccountMeshDataQueryRequest) (*pb.AccountMeshDataQueryResponse, error) {
+func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMeshDataQueryRequest) (*pb.AccountMeshDataQueryResponse, error) {
 	log.Info("GRPC MeshService.AccountMeshDataQuery")
 
 	var startLayer types.LayerID
@@ -200,7 +200,7 @@ func (s MeshService) AccountMeshDataQuery(_ context.Context, in *pb.AccountMeshD
 
 	// Gather activation data
 	if filterActivations {
-		atxs, err := s.getFilteredActivations(startLayer, addr)
+		atxs, err := s.getFilteredActivations(ctx, startLayer, addr)
 		if err != nil {
 			return nil, err
 		}
@@ -293,7 +293,7 @@ func convertActivation(a *types.ActivationTx) (*pb.Activation, error) {
 	}, nil
 }
 
-func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerStatus) (*pb.Layer, error) {
+func (s MeshService) readLayer(ctx context.Context, layer *types.Layer, layerStatus pb.Layer_LayerStatus) (*pb.Layer, error) {
 	// Load all block data
 	var blocks []*pb.Block
 
@@ -330,7 +330,7 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 	var pbActivations []*pb.Activation
 
 	// Add unique ATXIDs
-	atxs, matxs := s.Mesh.GetATXs(activations)
+	atxs, matxs := s.Mesh.GetATXs(ctx, activations)
 	if len(matxs) != 0 {
 		log.With().Error("could not find activations from layer",
 			log.String("missing", fmt.Sprint(matxs)), layer.Index())
@@ -363,7 +363,7 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 }
 
 // LayersQuery returns all mesh data, layer by layer
-func (s MeshService) LayersQuery(_ context.Context, in *pb.LayersQueryRequest) (*pb.LayersQueryResponse, error) {
+func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest) (*pb.LayersQueryResponse, error) {
 	log.Info("GRPC MeshService.LayersQuery")
 
 	var startLayer, endLayer types.LayerID
@@ -404,7 +404,7 @@ func (s MeshService) LayersQuery(_ context.Context, in *pb.LayersQueryRequest) (
 			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
 		}
 
-		pbLayer, err := s.readLayer(layer, layerStatus)
+		pbLayer, err := s.readLayer(ctx, layer, layerStatus)
 		if err != nil {
 			return nil, err
 		}
@@ -517,7 +517,7 @@ func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService
 				log.Info("LayerStream closed, shutting down")
 				return nil
 			}
-			pbLayer, err := s.readLayer(layer.Layer, convertLayerStatus(layer.Status))
+			pbLayer, err := s.readLayer(stream.Context(), layer.Layer, convertLayerStatus(layer.Status))
 			if err != nil {
 				return err
 			}

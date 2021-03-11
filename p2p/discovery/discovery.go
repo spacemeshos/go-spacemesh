@@ -34,8 +34,8 @@ type PeerStore interface {
 
 // Protocol is the API of node messages used to discover new nodes.
 type Protocol interface {
-	Ping(p p2pcrypto.PublicKey) error
-	GetAddresses(server p2pcrypto.PublicKey) ([]*node.Info, error)
+	Ping(context.Context, p2pcrypto.PublicKey) error
+	GetAddresses(context.Context, p2pcrypto.PublicKey) ([]*node.Info, error)
 	SetLocalAddresses(tcp, udp int)
 	Close()
 }
@@ -148,7 +148,7 @@ func (d *Discovery) Update(addr, src *node.Info) {
 }
 
 // New creates a new Discovery
-func New(ln node.LocalNode, config config.SwarmConfig, service server.Service, path string, logger log.Log) *Discovery {
+func New(ctx context.Context, ln node.LocalNode, config config.SwarmConfig, service server.Service, path string, logger log.Log) *Discovery {
 	d := &Discovery{
 		config: config,
 		logger: logger,
@@ -159,13 +159,15 @@ func New(ln node.LocalNode, config config.SwarmConfig, service server.Service, p
 	d.rt.Start()
 	d.rt.AddLocalAddress(&node.Info{ID: ln.PublicKey().Array()})
 
-	d.disc = newProtocol(ln.PublicKey(), d.rt, service, logger)
+	d.disc = newProtocol(ctx, ln.PublicKey(), d.rt, service, logger)
 
 	bn := make([]*node.Info, 0, len(config.BootstrapNodes))
 	for _, n := range config.BootstrapNodes {
 		nd, err := node.ParseNode(n)
 		if err != nil {
-			d.logger.Warning("Could'nt parse bootstrap node string skipping str=%v, err=%v", n, err)
+			d.logger.WithContext(ctx).With().Warning("couldn't parse bootstrap node string, skipping",
+				log.String("bootstrap_node_string", n),
+				log.Err(err))
 			// TODO : handle errors
 			continue
 		}
