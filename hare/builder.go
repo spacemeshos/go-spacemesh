@@ -38,7 +38,6 @@ func (m *Message) String() string {
 	return fmt.Sprintf("Sig: %v… InnerMsg: %v", sig[:l], m.InnerMsg.String())
 }
 
-
 // Field returns a log field. Implements the LoggableField interface.
 func (m *Message) Field() log.Field {
 	return log.String("message", m.String())
