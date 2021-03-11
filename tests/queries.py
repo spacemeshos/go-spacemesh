@@ -59,7 +59,7 @@ def get_block_creation_msgs(namespace, pod_name, find_fails=False, from_ts=None,
 
 
 def get_done_syncing_msgs(namespace, pod_name):
-    done_waiting_msg = "Node is synced"
+    done_waiting_msg = "node is synced"
     return get_all_msg_containing(namespace, pod_name, done_waiting_msg)
 
 
@@ -177,7 +177,7 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
     :param indx: string, current index
     :param namespace: string, namespace to query
     :param client_po_name: string, pod name
-    :param fields: dictionary, for example {'M': 'ATX published'}
+    :param fields: dictionary, for example {'M': 'atx published'}
     :param find_fails: bool, if true print unmatching results
     :param start_time: NOT IN USE, should be deleted
     :param queries: elasticsearch_dsl.Q, queries to append to the new query
@@ -299,8 +299,6 @@ def node_published_atx(deployment, node_id, epoch_id):
 
 
 def get_atx_per_node(deployment):
-    # based on log: atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v,
-    # published in epoch: %v, active set: %v miner: %v view %v
     block_fields = {"M": "atx published"}
     atx_logs = query_message(current_index, deployment, deployment, block_fields, True)
     print("found " + str(len(atx_logs)) + " atxs")
@@ -310,7 +308,7 @@ def get_atx_per_node(deployment):
 
 def get_nodes_up(deployment):
     # based on log:
-    block_fields = {"M": "Starting Spacemesh"}
+    block_fields = {"M": "starting Spacemesh"}
     logs = query_message(current_index, deployment, deployment, block_fields, True)
     print("found " + str(len(logs)) + " nodes up")
     return len(logs)
@@ -380,7 +378,7 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
 
 
 def query_hare_output_set(indx, ns, layer):
-    hits = query_message(indx, ns, ns, {'M': 'Consensus process terminated', 'layer_id': str(layer)}, True)
+    hits = query_message(indx, ns, ns, {'M': 'consensus process terminated', 'layer_id': str(layer)}, True)
     lst = [h.current_set for h in hits]
 
     return lst
@@ -403,7 +401,7 @@ def query_round_3(indx, ns, layer):
 
 
 def query_pre_round(indx, ns, layer):
-    return query_message(indx, ns, ns, {'M': 'Fatal: PreRound ended with empty set', 'layer_id': str(layer)}, False)
+    return query_message(indx, ns, ns, {'M': 'preround ended with empty set', 'layer_id': str(layer)}, False)
 
 
 def query_no_svp(indx, ns):
@@ -411,11 +409,11 @@ def query_no_svp(indx, ns):
 
 
 def query_empty_set(indx, ns):
-    return query_message(indx, ns, ns, {'M': 'Fatal: PreRound ended with empty set'}, False)
+    return query_message(indx, ns, ns, {'M': 'preround ended with empty set'}, False)
 
 
 def query_new_iteration(indx, ns):
-    return query_message(indx, ns, ns, {'M': 'Starting new iteration'}, False)
+    return query_message(indx, ns, ns, {'M': 'starting new iteration'}, False)
 
 
 def query_mem_usage(indx, ns):
@@ -433,6 +431,11 @@ def query_atx_per_epoch(ns, epoch_id, index=current_index):
 def query_atx_per_node_and_epoch(ns, node_id, epoch_id, index=current_index):
     fields = {'M': 'atx published', 'epoch_id': str(epoch_id), 'node_id': str(node_id)}
     return query_message(index, ns, ns, fields, False)
+
+
+def query_protocol_started(ns, pod_name, protocol_name, index=current_index):
+    fields = {'M': 'starting protocol', 'protocol': protocol_name}
+    return query_message(index, ns, pod_name, fields, False)
 
 
 def message_propagation(deployment, query_fields):
@@ -472,7 +475,7 @@ def all_atx_max_propagation(deployment, samples_per_node=1):
         for i in range(samples_per_node):
             atx = random.choice(nodes[n])
             # id = re.split(r'\.', x.N)[0]
-            block_recv_msg = {"M": "got new ATX", "atx_id": atx.atx_id}
+            block_recv_msg = {"M": "got new atx", "atx_id": atx.atx_id}
             # if we have a delta (we found 2 times to get the diff from, check if this delta is the greatest.)
             prop, max_message = message_propagation(deployment, block_recv_msg)
             if prop is not None and (max_propagation is None or prop > max_propagation):
@@ -528,5 +531,5 @@ def assert_equal_state_roots(indx, ns):
 
 
 def assert_no_contextually_invalid_atxs(indx, ns):
-    hits = query_message(indx, ns, ns, {'M': 'ATX failed contextual validation'})
+    hits = query_message(indx, ns, ns, {'M': 'atx failed contextual validation'})
     assert len(hits) == 0

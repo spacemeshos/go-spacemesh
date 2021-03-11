@@ -152,7 +152,7 @@ def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch,
 
 
 def get_pod_id(ns, pod_name):
-    hits = q.get_all_msg_containing(ns, pod_name, "HARE_PROTOCOL")
+    hits = q.query_protocol_started(ns, pod_name, "HARE_PROTOCOL")
     if not hits:
         return None
 
