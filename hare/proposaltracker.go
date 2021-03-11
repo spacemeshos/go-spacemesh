@@ -41,10 +41,8 @@ func (pt *proposalTracker) OnProposal(msg *Msg) {
 		s := NewSet(msg.InnerMsg.Values)
 		g := NewSet(pt.proposal.InnerMsg.Values)
 		if !s.Equals(g) { // equivocation detected
-			pt.With().Info("equivocation detected on proposal round",
-				log.String("id_malicious", msg.PubKey.String()),
-				log.String("current_set", g.String()),
-				log.String("conflicting_set", s.String()))
+			pt.With().Info("Equivocation detected on proposal round", log.String("id_malicious", msg.PubKey.String()),
+				log.String("current_set", g.String()), log.String("conflicting_set", s.String()))
 			pt.isConflicting = true
 		}
 

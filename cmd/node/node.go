@@ -316,7 +316,7 @@ func (app *SpacemeshApp) setupLogging() {
 	}
 	log.Info(msg)
 	if err := events.InitializeEventReporter(app.Config.PublishEventsURL); err != nil {
-		log.With().Error("unable to initialize event reporter", log.Err(err))
+		log.Error("unable to initialize event reporter: %s", err)
 	}
 }
 
@@ -326,11 +326,11 @@ func (app *SpacemeshApp) getAppInfo() string {
 }
 
 // Cleanup stops all app services
-func (app *SpacemeshApp) Cleanup(*cobra.Command, []string) {
-	log.Info("app cleanup starting...")
+func (app *SpacemeshApp) Cleanup(cmd *cobra.Command, args []string) {
+	log.Info("App Cleanup starting...")
 	app.stopServices()
 	// add any other Cleanup tasks here....
-	log.Info("app cleanup completed\n\n")
+	log.Info("App Cleanup completed\n\n")
 }
 
 func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) {
@@ -348,7 +348,7 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 		bytes := util.FromHex(id)
 		if len(bytes) == 0 {
 			// todo: should we panic here?
-			app.log.With().Error("cannot read config entry for genesis account", log.String("acct_id", id))
+			log.Error("cannot read config entry for :%s", id)
 			continue
 		}
 
@@ -356,9 +356,7 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 		state.CreateAccount(addr)
 		state.AddBalance(addr, acc.Balance)
 		state.SetNonce(addr, acc.Nonce)
-		app.log.With().Info("genesis account created",
-			log.String("acct_id", id),
-			log.Uint64("balance", acc.Balance))
+		app.log.Info("Genesis account created: %s, Balance: %v", id, acc.Balance)
 	}
 
 	_, err := state.Commit()
@@ -615,7 +613,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	coinBase := types.HexToAddress(app.Config.CoinbaseAccount)
 
 	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
-		app.log.Panic("invalid coinbase account")
+		app.log.Panic("invalid Coinbase account")
 	}
 
 	builderConfig := activation.Config{
@@ -797,7 +795,7 @@ func (app *SpacemeshApp) stopServices() {
 	close(app.term)
 
 	if app.jsonAPIService != nil {
-		log.Info("stopping JSON gateway service...")
+		log.Info("Stopping JSON gateway service...")
 		if err := app.jsonAPIService.Close(); err != nil {
 			log.Error("error stopping JSON gateway server: %s", err)
 		}
@@ -805,7 +803,6 @@ func (app *SpacemeshApp) stopServices() {
 
 	if app.grpcAPIService != nil {
 		log.Info("Stopping GRPC service...")
-		// does not return any errors
 		app.grpcAPIService.Close()
 	}
 
@@ -874,7 +871,7 @@ func (app *SpacemeshApp) stopServices() {
 func (app *SpacemeshApp) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	f, err := app.getIdentityFile()
 	if err != nil {
-		log.With().Warning("failed to find identity file", log.Err(err))
+		log.Warning("Failed to find identity file: %v", err)
 
 		edSgn := signing.NewEdSigner()
 		f = filepath.Join(shared.GetInitDir(app.Config.POST.DataDir, edSgn.PublicKey().Bytes()), edKeyFileName)
@@ -886,7 +883,7 @@ func (app *SpacemeshApp) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to write identity file: %v", err)
 		}
-		log.With().Warning("created new identity", edSgn.PublicKey())
+		log.Warning("Created new identity with public key %v", edSgn.PublicKey())
 		return edSgn, nil
 	}
 
@@ -901,7 +898,7 @@ func (app *SpacemeshApp) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	if edSgn.PublicKey().String() != filepath.Base(filepath.Dir(f)) {
 		return nil, fmt.Errorf("identity file path ('%s') does not match public key (%s)", filepath.Dir(f), edSgn.PublicKey().String())
 	}
-	log.With().Info("loaded identity from file", log.String("file", f))
+	log.Info("Loaded identity from file ('%s')", f)
 	return edSgn, nil
 }
 
@@ -934,7 +931,7 @@ func (app *SpacemeshApp) getIdentityFile() (string, error) {
 
 func (app *SpacemeshApp) startSyncer() {
 	if app.P2P == nil {
-		app.log.Error("syncer started before P2P is initialized")
+		app.log.Error("Syncer is started before P2P is initialized")
 	} else {
 		<-app.P2P.GossipReady()
 	}
@@ -943,7 +940,7 @@ func (app *SpacemeshApp) startSyncer() {
 
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
 func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
-	log.With().Info("starting Spacemesh", log.String("data-dir", app.Config.DataDir()), log.String("post-dir", app.Config.POST.DataDir))
+	log.With().Info("Starting Spacemesh", log.String("data-dir", app.Config.DataDir()), log.String("post-dir", app.Config.POST.DataDir))
 
 	err := filesystem.ExistOrCreate(app.Config.DataDir())
 	if err != nil {
@@ -994,7 +991,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	app.edSgn, err = app.LoadOrCreateEdSigner()
 	if err != nil {
-		log.Panic("could not retrieve identity err=%v", err)
+		log.Panic("Could not retrieve identity err=%v", err)
 	}
 
 	poetClient := activation.NewHTTPPoetClient(cmdp.Ctx, app.Config.PoETServer)
@@ -1008,7 +1005,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	postClient, err := activation.NewPostClient(&app.Config.POST, util.Hex2Bytes(nodeID.Key))
 	if err != nil {
-		log.With().Error("failed to create post client", log.Err(err))
+		log.Error("failed to create post client: %v", err)
 	}
 
 	// This base logger must be debug level so that other, derived loggers are not a lower level.
@@ -1019,20 +1016,20 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	dbStorepath := app.Config.DataDir()
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {
-		log.With().Error("cannot parse genesis time", log.Err(err))
+		log.Error("cannot parse genesis time %v", err)
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
 
-	log.Info("initializing P2P services")
+	log.Info("Initializing P2P services")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, app.addLogger(P2PLogger, lg), dbStorepath)
 	if err != nil {
-		log.Panic("error starting p2p services. err: %v", err)
+		log.Panic("Error starting p2p services. err: %v", err)
 	}
 
 	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, false, nil, uint32(app.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(app.Config.LayersPerEpoch), clock)
 	if err != nil {
-		log.With().Error("cannot start services", log.Err(err))
+		log.Error("cannot start services %v", err.Error())
 		return
 	}
 

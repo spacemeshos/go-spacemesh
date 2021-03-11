@@ -420,7 +420,7 @@ func (db *Database) reference(child types.Hash32, parent types.Hash32) {
 func (db *Database) Dereference(root types.Hash32) {
 	// Sanity check to ensure that the meta-root is not removed
 	if root == (types.Hash32{}) {
-		log.Error("attempted to dereference the trie cache meta root")
+		log.Error("Attempted to dereference the trie cache meta root")
 		return
 	}
 	db.lock.Lock()
@@ -433,15 +433,8 @@ func (db *Database) Dereference(root types.Hash32) {
 	db.gcsize += storage - db.nodesSize
 	db.gctime += time.Since(start)
 
-	log.With().Debug("dereferenced trie from memory database",
-		log.Int("nodes", nodes-len(db.nodes)),
-		log.String("size", (storage-db.nodesSize).String()),
-		log.String("time", time.Since(start).String()),
-		log.Uint64("gcnodes", db.gcnodes),
-		log.String("gcsize", db.gcsize.String()),
-		log.String("gctime", db.gctime.String()),
-		log.Int("livenodes", len(db.nodes)),
-		log.String("livesize", db.nodesSize.String()))
+	log.Debug("Dereferenced trie from memory database", "nodes", nodes-len(db.nodes), "size", storage-db.nodesSize, "time", time.Since(start),
+		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.nodes), "livesize", db.nodesSize)
 }
 
 // dereference is the private locked version of Dereference.
@@ -513,7 +506,7 @@ func (db *Database) Cap(limit types.StorageSize) error {
 	if flushPreimages {
 		for hash, preimage := range db.preimages {
 			if err := batch.Put(db.secureKey(hash[:]), preimage); err != nil {
-				log.With().Error("failed to commit preimage from trie database", log.Err(err))
+				log.Error("Failed to commit preimage from trie database", "err", err)
 				db.lock.RUnlock()
 				return err
 			}
@@ -538,7 +531,7 @@ func (db *Database) Cap(limit types.StorageSize) error {
 		// If we exceeded the ideal batch size, commit and reset
 		if batch.ValueSize() >= database.IdealBatchSize {
 			if err := batch.Write(); err != nil {
-				log.With().Error("failed to write flush list to disk", log.Err(err))
+				log.Error("Failed to write flush list to disk", "err", err)
 				db.lock.RUnlock()
 				return err
 			}
@@ -553,7 +546,7 @@ func (db *Database) Cap(limit types.StorageSize) error {
 	}
 	// Flush out any remainder data from the last batch
 	if err := batch.Write(); err != nil {
-		log.With().Error("failed to write flush list to disk", log.Err(err))
+		log.Error("Failed to write flush list to disk", "err", err)
 		db.lock.RUnlock()
 		return err
 	}
@@ -581,15 +574,8 @@ func (db *Database) Cap(limit types.StorageSize) error {
 	db.flushsize += storage - db.nodesSize
 	db.flushtime += time.Since(start)
 
-	log.With().Debug("persisted nodes from memory database",
-		log.Int("nodes", nodes-len(db.nodes)),
-		log.String("size", (storage-db.nodesSize).String()),
-		log.String("time", time.Since(start).String()),
-		log.Uint64("flushnodes", db.flushnodes),
-		log.String("flushsize", db.flushsize.String()),
-		log.String("flushtime", db.flushtime.String()),
-		log.Int("livenodes", len(db.nodes)),
-		log.String("livesize", db.nodesSize.String()))
+	log.Debug("Persisted nodes from memory database", "nodes", nodes-len(db.nodes), "size", storage-db.nodesSize, "time", time.Since(start),
+		"flushnodes", db.flushnodes, "flushsize", db.flushsize, "flushtime", db.flushtime, "livenodes", len(db.nodes), "livesize", db.nodesSize)
 
 	return nil
 }
@@ -611,7 +597,7 @@ func (db *Database) Commit(node types.Hash32, report bool) error {
 	// Move all of the accumulated preimages into a write batch
 	for hash, preimage := range db.preimages {
 		if err := batch.Put(db.secureKey(hash[:]), preimage); err != nil {
-			log.With().Error("failed to commit preimage from trie database", log.Err(err))
+			log.Error("Failed to commit preimage from trie database", "err", err)
 			db.lock.RUnlock()
 			return err
 		}
@@ -625,13 +611,13 @@ func (db *Database) Commit(node types.Hash32, report bool) error {
 	// Move the trie itself into the batch, flushing if enough data is accumulated
 	nodes, storage := len(db.nodes), db.nodesSize
 	if err := db.commit(node, batch); err != nil {
-		log.With().Error("failed to commit trie from trie database", log.Err(err))
+		log.Error("Failed to commit trie from trie database", "err", err)
 		db.lock.RUnlock()
 		return err
 	}
 	// Write batch ready, unlock for readers during persistence
 	if err := batch.Write(); err != nil {
-		log.With().Error("failed to write trie to disk", log.Err(err))
+		log.Error("Failed to write trie to disk", "err", err)
 		db.lock.RUnlock()
 		return err
 	}
@@ -646,19 +632,12 @@ func (db *Database) Commit(node types.Hash32, report bool) error {
 
 	db.uncache(node)
 
-	logger := log.With().Info
+	logger := log.Info
 	if !report {
-		logger = log.With().Debug
+		logger = log.Debug
 	}
-	logger("persisted trie from memory database",
-		log.Int("nodes", nodes-len(db.nodes)+int(db.flushnodes)),
-		log.String("size", (storage-db.nodesSize+db.flushsize).String()),
-		log.String("time", (time.Since(start)+db.flushtime).String()),
-		log.Uint64("gcnodes", db.gcnodes),
-		log.String("gcsize", db.gcsize.String()),
-		log.String("gctime", db.gctime.String()),
-		log.Int("livenodes", len(db.nodes)),
-		log.String("livesize", db.nodesSize.String()))
+	logger("Persisted trie from memory database", "nodes", nodes-len(db.nodes)+int(db.flushnodes), "size", storage-db.nodesSize+db.flushsize, "time", time.Since(start)+db.flushtime,
+		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.nodes), "livesize", db.nodesSize)
 
 	// Reset the garbage collection statistics
 	db.gcnodes, db.gcsize, db.gctime = 0, 0, 0

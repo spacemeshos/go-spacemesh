@@ -12,15 +12,13 @@ type preRoundTracker struct {
 	preRound  map[string]*Set  // maps PubKey->Set of already tracked Values
 	tracker   *RefCountTracker // keeps track of seen Values
 	threshold uint32           // the threshold to prove a value
-	logger    log.Log
 }
 
-func newPreRoundTracker(threshold int, expectedSize int, logger log.Log) *preRoundTracker {
+func newPreRoundTracker(threshold int, expectedSize int) *preRoundTracker {
 	pre := &preRoundTracker{}
 	pre.preRound = make(map[string]*Set, expectedSize)
 	pre.tracker = NewRefCountTracker()
 	pre.threshold = uint32(threshold)
-	pre.logger = logger
 
 	return pre
 }
@@ -28,14 +26,11 @@ func newPreRoundTracker(threshold int, expectedSize int, logger log.Log) *preRou
 // OnPreRound tracks pre-round messages
 func (pre *preRoundTracker) OnPreRound(msg *Msg) {
 	pub := msg.PubKey
-	pre.logger.With().Debug("received preround message",
-		log.String("sender_id", pub.ShortString()),
-		log.Int("num_values", len(msg.InnerMsg.Values)))
 	sToTrack := NewSet(msg.InnerMsg.Values) // assume track all Values
 	alreadyTracked := NewDefaultEmptySet()  // assume nothing tracked so far
 
 	if set, exist := pre.preRound[pub.String()]; exist { // not first pre-round msg from this sender
-		pre.logger.With().Debug("duplicate preround msg sender", log.String("sender_id", pub.ShortString()))
+		log.Debug("Duplicate sender %v", pub.String())
 		alreadyTracked = set              // update already tracked Values
 		sToTrack.Subtract(alreadyTracked) // subtract the already tracked Values
 	}
@@ -53,12 +48,7 @@ func (pre *preRoundTracker) OnPreRound(msg *Msg) {
 // a value is said to be provable if it has at least threshold pre-round messages to support it.
 func (pre *preRoundTracker) CanProveValue(value types.BlockID) bool {
 	// at least threshold occurrences of a given value
-	countStatus := pre.tracker.CountStatus(value)
-	pre.logger.With().Debug("preround tracker count for blockid",
-		value,
-		log.Uint32("count", countStatus),
-		log.Uint32("threshold", pre.threshold))
-	return countStatus >= pre.threshold
+	return pre.tracker.CountStatus(value) >= pre.threshold
 }
 
 // CanProveSet returns true if the give set is provable, false otherwise.
