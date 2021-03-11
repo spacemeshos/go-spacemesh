@@ -62,14 +62,14 @@ const (
 	layerFirst            = 0
 	layerVerified         = 8
 	layerLatest           = 10
-	layerCurrent          = 12
 	rewardAmount          = 5551234
 	receiptIndex          = 42
 )
 
 var (
-	networkMock = NetworkMock{}
-	mempoolMock = MempoolMock{
+	layerCurrent = 12
+	networkMock  = NetworkMock{}
+	mempoolMock  = MempoolMock{
 		poolByAddress: make(map[types.Address]types.TransactionID),
 		poolByTxid:    make(map[types.TransactionID]*types.Transaction),
 	}
@@ -107,6 +107,7 @@ var (
 func init() {
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
+	block1.ATXID = globalAtx.ID()
 	block1.TxIDs = []types.TransactionID{globalTx.ID(), globalTx2.ID()}
 	block1.ActiveSet = &[]types.ATXID{globalAtx.ID(), globalAtx2.ID()}
 	txAPI.returnTx[globalTx.ID()] = globalTx
@@ -177,7 +178,7 @@ func (t *TxAPIMock) GetAllAccounts() (res *types.MultipleAccountsState, err erro
 	accounts := make(map[string]types.AccountState)
 	for address, balance := range t.balances {
 		accounts[address.String()] = types.AccountState{
-			Balance: balance,
+			Balance: balance.Uint64(),
 			Nonce:   t.nonces[address],
 		}
 	}
@@ -294,7 +295,7 @@ func (t *TxAPIMock) GetTransactions(txids []types.TransactionID) (txs []*types.T
 	return
 }
 
-func (t *TxAPIMock) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
+func (t *TxAPIMock) GetLayerStateRoot(types.LayerID) (types.Hash32, error) {
 	return stateRoot, nil
 }
 
@@ -373,7 +374,7 @@ type GenesisTimeMock struct {
 }
 
 func (t GenesisTimeMock) GetCurrentLayer() types.LayerID {
-	return layerCurrent
+	return types.LayerID(layerCurrent)
 }
 
 func (t GenesisTimeMock) GetGenesisTime() time.Time {
@@ -429,9 +430,11 @@ func (m MempoolMock) GetTxIdsByAddress(addr types.Address) (ids []types.Transact
 }
 
 func launchServer(t *testing.T, services ...ServiceAPI) func() {
-	networkMock.Broadcast("", []byte{0x00})
-	grpcService := NewServerWithInterface(cfg.NewGrpcServerPort, "localhost")
-	jsonService := NewJSONHTTPServer(cfg.NewJSONServerPort, cfg.NewGrpcServerPort)
+	err := networkMock.Broadcast("", []byte{0x00})
+	require.NoError(t, err)
+
+	grpcService := NewServerWithInterface(cfg.GrpcServerPort, "localhost")
+	jsonService := NewJSONHTTPServer(cfg.JSONServerPort, cfg.GrpcServerPort)
 
 	// attach services
 	for _, svc := range services {
@@ -452,12 +455,12 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 
 	return func() {
 		require.NoError(t, jsonService.Close())
-		grpcService.Close()
+		_ = grpcService.Close()
 	}
 }
 
 func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
-	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.NewJSONServerPort, endpoint)
+	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.JSONServerPort, endpoint)
 	t.Log("sending POST request to", url)
 	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
 	t.Log("got response", resp)
@@ -471,8 +474,8 @@ func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
 }
 
 func TestNewServersConfig(t *testing.T) {
-	port1, err := node.GetUnboundedPort()
-	port2, err := node.GetUnboundedPort()
+	port1, err := node.GetUnboundedPort("tcp", 0)
+	port2, err := node.GetUnboundedPort("tcp", 0)
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
 	grpcService := NewServerWithInterface(port1, "localhost")
@@ -490,7 +493,7 @@ func TestNodeService(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -515,13 +518,13 @@ func TestNodeService(t *testing.T) {
 			// now try sending bad payloads
 			_, err = c.Echo(context.Background(), &pb.EchoRequest{Msg: nil})
 			require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
-			code := status.Code(err)
-			require.Equal(t, codes.InvalidArgument, code)
+			statusCode := status.Code(err)
+			require.Equal(t, codes.InvalidArgument, statusCode)
 
 			_, err = c.Echo(context.Background(), &pb.EchoRequest{})
 			require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
-			code = status.Code(err)
-			require.Equal(t, codes.InvalidArgument, code)
+			statusCode = status.Code(err)
+			require.Equal(t, codes.InvalidArgument, statusCode)
 		}},
 		{"Version", func(t *testing.T) {
 			// must set this manually as it's set up in main() when running
@@ -540,8 +543,22 @@ func TestNodeService(t *testing.T) {
 			require.Equal(t, build, res.BuildString.Value)
 		}},
 		{"Status", func(t *testing.T) {
+			// First do a mock checking during a genesis layer
+			// During genesis all layers should be set to current layer
+			oldCurLayer := layerCurrent
+			layerCurrent = layersPerEpoch // end of first epoch
 			req := &pb.StatusRequest{}
 			res, err := c.Status(context.Background(), req)
+			require.NoError(t, err)
+			require.Equal(t, uint64(0), res.Status.ConnectedPeers)
+			require.Equal(t, false, res.Status.IsSynced)
+			require.Equal(t, uint32(layerCurrent), res.Status.SyncedLayer.Number)
+			require.Equal(t, uint32(layerCurrent), res.Status.TopLayer.Number)
+			require.Equal(t, uint32(layerCurrent), res.Status.VerifiedLayer.Number)
+
+			// Now do a mock check post-genesis
+			layerCurrent = oldCurLayer
+			res, err = c.Status(context.Background(), req)
 			require.NoError(t, err)
 			require.Equal(t, uint64(0), res.Status.ConnectedPeers)
 			require.Equal(t, false, res.Status.IsSynced)
@@ -576,12 +593,12 @@ func TestNodeService(t *testing.T) {
 }
 
 func TestGlobalStateService(t *testing.T) {
-	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{}, mempoolMock)
+	svc := NewGlobalStateService(txAPI, mempoolMock)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -870,7 +887,7 @@ func TestSmesherService(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -991,7 +1008,7 @@ func TestMeshService(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -1034,7 +1051,7 @@ func TestMeshService(t *testing.T) {
 		{"MaxTransactionsPerSecond", func(t *testing.T) {
 			response, err := c.MaxTransactionsPerSecond(context.Background(), &pb.MaxTransactionsPerSecondRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(layerAvgSize*txsPerBlock/layerDurationSec), response.Maxtxpersecond.Value)
+			require.Equal(t, uint64(layerAvgSize*txsPerBlock/layerDurationSec), response.MaxTxsPerSecond.Value)
 		}},
 		{"AccountMeshDataQuery", func(t *testing.T) {
 			subtests := []struct {
@@ -1057,7 +1074,7 @@ func TestMeshService(t *testing.T) {
 					name: "MinLayer too high",
 					run: func(t *testing.T) {
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
-							MinLayer: &pb.LayerNumber{Number: layerCurrent + 1},
+							MinLayer: &pb.LayerNumber{Number: uint32(layerCurrent + 1)},
 						})
 						require.Error(t, err, "expected an error")
 						require.Contains(t, err.Error(), "`LatestLayer` must be less than")
@@ -1488,24 +1505,24 @@ func TestMeshService(t *testing.T) {
 }
 
 func TestTransactionServiceSubmitUnsync(t *testing.T) {
-	require := require.New(t)
+	req := require.New(t)
 	syncer := &SyncerMock{}
 	grpcService := NewTransactionService(&networkMock, txAPI, mempoolMock, syncer)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
-	require.NoError(err)
+	req.NoError(err)
 
-	defer func() { require.NoError(conn.Close()) }()
+	defer func() { req.NoError(conn.Close()) }()
 	c := pb.NewTransactionServiceClient(conn)
 
 	serializedTx, err := types.InterfaceToBytes(globalTx)
-	require.NoError(err, "error serializing tx")
+	req.NoError(err, "error serializing tx")
 
 	// This time, we expect an error, since isSynced is false (by default)
 	// The node should not allow tx submission when not synced
@@ -1513,8 +1530,8 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 		context.Background(),
 		&pb.SubmitTransactionRequest{Transaction: serializedTx},
 	)
-	require.Error(err)
-	require.Nil(res)
+	req.Error(err)
+	req.Nil(res)
 
 	syncer.isSynced = true
 
@@ -1523,7 +1540,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 		context.Background(),
 		&pb.SubmitTransactionRequest{Transaction: serializedTx},
 	)
-	require.NoError(err)
+	req.NoError(err)
 }
 
 func TestTransactionService(t *testing.T) {
@@ -1533,7 +1550,7 @@ func TestTransactionService(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -1744,6 +1761,7 @@ func TestTransactionService(t *testing.T) {
 
 				// Deserialize
 				tx, err := types.BytesToTransaction(data)
+				require.NotNil(t, tx, "expected transaction")
 				require.NoError(t, tx.CalcAndSetOrigin())
 				require.NoError(t, err, "error deserializing broadcast tx")
 
@@ -1846,8 +1864,11 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 
 	resBlock := l.Blocks[0]
 
+	require.NotNil(t, resBlock.ActivationId)
+	require.NotNil(t, resBlock.SmesherId)
+
 	require.Equal(t, len(block1.TxIDs), len(resBlock.Transactions))
-	require.Equal(t, block1.ID().Bytes(), resBlock.Id)
+	require.Equal(t, types.Hash20(block1.ID()).Bytes(), resBlock.Id)
 
 	// Check the tx as well
 	resTx := resBlock.Transactions[0]
@@ -1876,7 +1897,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -1950,12 +1971,12 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 }
 
 func TestAccountDataStream_comprehensive(t *testing.T) {
-	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{}, mempoolMock)
+	svc := NewGlobalStateService(txAPI, mempoolMock)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -2044,12 +2065,12 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 }
 
 func TestGlobalStateStream_comprehensive(t *testing.T) {
-	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{}, mempoolMock)
+	svc := NewGlobalStateService(txAPI, mempoolMock)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -2148,7 +2169,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	log.Info("dialing %s", addr)
@@ -2367,7 +2388,7 @@ func TestMultiService(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -2411,13 +2432,13 @@ func TestJsonApi(t *testing.T) {
 	require.Equal(t, cfg.StartMeshService, false)
 	shutDown := launchServer(t)
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
-	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.NewJSONServerPort, "v1/node/echo")
+	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.JSONServerPort, "v1/node/echo")
 	t.Log("sending POST request to", url)
 	_, err := http.Post(url, "application/json", strings.NewReader(payload))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), fmt.Sprintf(
 		"dial tcp 127.0.0.1:%d: connect: connection refused",
-		cfg.NewJSONServerPort))
+		cfg.JSONServerPort))
 	shutDown()
 
 	// enable services and try again
@@ -2450,7 +2471,7 @@ func TestDebugService(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -2490,7 +2511,7 @@ func TestGatewayService(t *testing.T) {
 	defer shutDown()
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())

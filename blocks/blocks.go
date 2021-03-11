@@ -3,6 +3,7 @@ package blocks
 import (
 	"errors"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -38,25 +39,28 @@ type blockValidator interface {
 // BlockHandler is the struct responsible for storing meta data needed to process blocks from gossip
 type BlockHandler struct {
 	log.Log
-	traverse  forBlockInView
-	depth     int
-	mesh      mesh
-	validator blockValidator
+	traverse    forBlockInView
+	depth       int
+	mesh        mesh
+	validator   blockValidator
+	goldenATXID types.ATXID
 }
 
 // Config defines configuration for block handler
 type Config struct {
-	Depth int
+	Depth       int
+	GoldenATXID types.ATXID
 }
 
 // NewBlockHandler creates new BlockHandler
 func NewBlockHandler(cfg Config, m mesh, v blockValidator, lg log.Log) *BlockHandler {
 	return &BlockHandler{
-		Log:       lg,
-		traverse:  m.ForBlockInView,
-		depth:     cfg.Depth,
-		mesh:      m,
-		validator: v,
+		Log:         lg,
+		traverse:    m.ForBlockInView,
+		depth:       cfg.Depth,
+		mesh:        m,
+		validator:   v,
+		goldenATXID: cfg.GoldenATXID,
 	}
 }
 
@@ -91,64 +95,37 @@ func (bh BlockHandler) validateVotes(blk *types.Block) error {
 	return err
 }
 
-// HandleBlock defines method to handle blocks from gossip
+// HandleBlock handles blocks from gossip
 func (bh *BlockHandler) HandleBlock(data service.GossipMessage, sync service.Fetcher) {
-	err := bh.HandleBlockData(data.Bytes(), sync)
-	if err != nil {
-		bh.Error("%v", err)
+	if err := bh.HandleBlockData(data.Bytes(), sync); err != nil {
+		bh.With().Error("error handling block data", log.Err(err))
 		return
 	}
 	data.ReportValidation(NewBlockProtocol)
 }
 
-// HandleBlockData defines a method to handle blocks either from gossip of sync
+// HandleBlockData handles blocks from gossip and sync
 func (bh *BlockHandler) HandleBlockData(data []byte, sync service.Fetcher) error {
 	var blk types.Block
-	err := types.BytesToInterface(data, &blk)
-	if err != nil {
-		bh.Log.Error("received invalid block %v", data, err)
-
+	if err := types.BytesToInterface(data, &blk); err != nil {
+		bh.With().Error("received invalid block", log.Err(err))
 	}
 
 	// set the block id when received
 	blk.Initialize()
+	bh.With().Info("got new block", blk.Fields()...)
 
-	activeSet := 0
-	if blk.ActiveSet != nil {
-		activeSet = len(*blk.ActiveSet)
-	}
-
-	refBlock := ""
-	if blk.RefBlock != nil {
-		refBlock = blk.RefBlock.String()
-	}
-	bh.Log.With().Info("got new block",
-		blk.ID(),
-		blk.LayerIndex,
-		blk.LayerIndex.GetEpoch(),
-		log.String("sender_id", blk.MinerID().ShortString()),
-		log.Int("tx_count", len(blk.TxIDs)),
-		//log.Int("atx_count", len(blk.ATXIDs)),
-		log.Int("view_edges", len(blk.ViewEdges)),
-		log.Int("vote_count", len(blk.BlockVotes)),
-		blk.ATXID,
-		log.Uint32("eligibility_counter", blk.EligibilityProof.J),
-		log.String("ref_block", refBlock),
-		log.Int("active_set", activeSet),
-	)
 	// check if known
 	if _, err := bh.mesh.GetBlock(blk.ID()); err == nil {
-		//data.ReportValidation(config.NewBlockProtocol)
 		bh.With().Info("we already know this block", blk.ID())
 		return nil
 	}
 
-	err = bh.blockSyntacticValidation(&blk, sync)
-	if err != nil {
+	if err := bh.blockSyntacticValidation(&blk, sync); err != nil {
 		bh.With().Error("failed to validate block", blk.ID(), log.Err(err))
 		return fmt.Errorf("failed to validate block %v", err)
 	}
-	//data.ReportValidation(config.NewBlockProtocol)
+
 	if err := bh.mesh.AddBlockWithTxs(&blk); err != nil {
 		bh.With().Error("failed to add block to database", blk.ID(), log.Err(err))
 		// we return nil here so that the block will still be propagated
@@ -156,6 +133,10 @@ func (bh *BlockHandler) HandleBlockData(data []byte, sync service.Fetcher) error
 	}
 
 	if blk.Layer() <= bh.mesh.ProcessedLayer() { //|| blk.Layer() == bh.mesh.getValidatingLayer() {
+		bh.With().Error("block is late",
+			blk.ID(),
+			log.FieldNamed("blockLayer", blk.Layer()),
+			log.FieldNamed("processedLayer", bh.mesh.ProcessedLayer()))
 		bh.mesh.HandleLateBlock(&blk)
 	}
 	return nil
@@ -172,7 +153,7 @@ func (bh BlockHandler) blockSyntacticValidation(block *types.Block, syncer servi
 
 	// fast validation checks if there are no duplicate ATX in active set and no duplicate TXs as well
 	if err := bh.fastValidation(block); err != nil {
-		bh.Log.Error("failed fast validation block %v e: %v", block.ID(), err)
+		bh.With().Error("failed fast validation", block.ID(), log.Err(err))
 		return err
 	}
 
@@ -206,9 +187,8 @@ func (bh BlockHandler) blockSyntacticValidation(block *types.Block, syncer servi
 }
 
 func (bh *BlockHandler) fetchAllReferencedAtxs(blk *types.Block, syncer service.Fetcher) error {
-	var atxs []types.ATXID
-
-	atxs = append(atxs, blk.ATXID)
+	// As block with empty or Golden ATXID is considered syntactically invalid, explicit check is not needed here.
+	atxs := []types.ATXID{blk.ATXID}
 
 	if blk.ActiveSet != nil {
 		if len(*blk.ActiveSet) > 0 {

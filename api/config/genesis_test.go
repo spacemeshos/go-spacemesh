@@ -1,18 +1,18 @@
 package config
 
 import (
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
-	"math/big"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSaveLoadConfig(t *testing.T) {
 	cfg := GenesisConfig{}
 	cfg.InitialAccounts = map[string]GenesisAccount{
-		"0x1": {Balance: big.NewInt(10000), Nonce: 0},
-		"0x7be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c": {Balance: big.NewInt(10000), Nonce: 0},
+		"0x1": {Balance: 10000, Nonce: 0},
+		"0x7be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c": {Balance: 10000, Nonce: 0},
 	}
 
 	tempDir, err := ioutil.TempDir("", "genesis")

@@ -56,7 +56,7 @@ func (trtl *tortoise) HandleLateBlock(b *types.Block) (types.LayerID, types.Laye
 func (trtl *tortoise) Persist() error {
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()
-	log.Info("persist tortoise ")
+	trtl.logger.With().Info("persist tortoise at pbase", trtl.PBase)
 	return trtl.ninjaTortoise.persist()
 }
 

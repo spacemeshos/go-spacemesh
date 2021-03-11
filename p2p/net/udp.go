@@ -219,8 +219,8 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 		copybuf := make([]byte, size)
 		copy(copybuf, buf)
 
-		conn, ok := n.incomingConn[addr.String()]
-		if !ok {
+		conn, err := n.getConn(addr)
+		if err != nil {
 			n.logger.Debug("Creating new connection ")
 			_, pk, err := p2pcrypto.ExtractPubkey(copybuf)
 
@@ -383,5 +383,5 @@ func (ucw *udpConnWrapper) Write(b []byte) (int, error) {
 
 func (ucw *udpConnWrapper) Close() error {
 	close(ucw.closeChan)
-	return ucw.conn.Close()
+	return nil
 }

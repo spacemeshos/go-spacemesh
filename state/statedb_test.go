@@ -20,7 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 
-	"math/big"
 	"testing"
 	//check "gopkg.in/check.v1"
 )
@@ -35,7 +34,7 @@ func TestUpdateLeaks(t *testing.T) {
 	// Update it with some accounts
 	for i := byte(0); i < 255; i++ {
 		addr := types.BytesToAddress([]byte{i})
-		state.AddBalance(addr, big.NewInt(int64(11*i)))
+		state.AddBalance(addr, uint64(11*i))
 		state.SetNonce(addr, uint64(42*i))
 		state.IntermediateRoot(false)
 	}
@@ -56,7 +55,7 @@ func TestIntermediateLeaks(t *testing.T) {
 	finalState, _ := New(types.Hash32{}, NewDatabase(finalDb))
 
 	modify := func(state *DB, addr types.Address, i, tweak byte) {
-		state.SetBalance(addr, big.NewInt(int64(11*i)+int64(tweak)))
+		state.SetBalance(addr, uint64(int64(11*i)+int64(tweak)))
 		state.SetNonce(addr, uint64(42*i+tweak))
 	}
 
@@ -103,7 +102,7 @@ func TestCopy(t *testing.T) {
 
 	for i := byte(0); i < 255; i++ {
 		obj := orig.GetOrNewStateObj(types.BytesToAddress([]byte{i}))
-		obj.AddBalance(big.NewInt(int64(i)))
+		obj.AddBalance(uint64(i))
 		orig.updateStateObj(obj)
 	}
 
@@ -114,8 +113,8 @@ func TestCopy(t *testing.T) {
 		origObj := orig.GetOrNewStateObj(types.BytesToAddress([]byte{i}))
 		copyObj := copy.GetOrNewStateObj(types.BytesToAddress([]byte{i}))
 
-		origObj.AddBalance(big.NewInt(2 * int64(i)))
-		copyObj.AddBalance(big.NewInt(3 * int64(i)))
+		origObj.AddBalance(2 * uint64(i))
+		copyObj.AddBalance(3 * uint64(i))
 
 		orig.updateStateObj(origObj)
 		copy.updateStateObj(copyObj)
@@ -132,10 +131,10 @@ func TestCopy(t *testing.T) {
 		origObj := orig.GetOrNewStateObj(types.BytesToAddress([]byte{i}))
 		copyObj := copy.GetOrNewStateObj(types.BytesToAddress([]byte{i}))
 
-		if want := big.NewInt(3 * int64(i)); origObj.Balance().Cmp(want) != 0 {
+		if want := (3 * uint64(i)); origObj.Balance() != want {
 			t.Errorf("orig obj %d: balance mismatch: have %v, want %v", i, origObj.Balance(), want)
 		}
-		if want := big.NewInt(4 * int64(i)); copyObj.Balance().Cmp(want) != 0 {
+		if want := (4 * uint64(i)); copyObj.Balance() != want {
 			t.Errorf("copy obj %d: balance mismatch: have %v, want %v", i, copyObj.Balance(), want)
 		}
 	}
@@ -146,7 +145,7 @@ func TestCopy(t *testing.T) {
 func TestCopyOfCopy(t *testing.T) {
 	sdb, _ := New(types.Hash32{}, NewDatabase(database.NewMemDatabase()))
 	addr := types.HexToAddress("aaaa")
-	sdb.SetBalance(addr, big.NewInt(42))
+	sdb.SetBalance(addr, 42)
 
 	if got := sdb.Copy().GetBalance(addr); got != 42 {
 		t.Fatalf("1st copy fail, expected 42, got %v", got)

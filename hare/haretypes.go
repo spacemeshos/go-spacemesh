@@ -243,7 +243,7 @@ func (s *Set) Intersection(g *Set) *Set {
 	return both
 }
 
-// Union returns a new set which represetns the union set of s and g.
+// Union returns a new set which represents the union set of s and g.
 func (s *Set) Union(g *Set) *Set {
 	union := NewEmptySet(len(s.values) + len(g.values))
 

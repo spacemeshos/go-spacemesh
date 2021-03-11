@@ -85,7 +85,6 @@ type NewConnectionEvent struct {
 // NewNet creates a new network.
 // It attempts to tcp listen on address. e.g. localhost:1234 .
 func NewNet(conf config.Config, localEntity node.LocalNode, logger log.Log) (*Net, error) {
-
 	qcount := DefaultQueueCount      // todo : get from cfg
 	qsize := DefaultMessageQueueSize // todo : get from cfg
 

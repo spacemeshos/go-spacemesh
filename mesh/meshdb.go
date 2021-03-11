@@ -5,15 +5,16 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"math/big"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 )
 
 type layerMutex struct {
@@ -126,7 +127,7 @@ func (m *DB) Close() {
 }
 
 // ErrAlreadyExist error returned when adding an existing value to the database
-var ErrAlreadyExist = errors.New("block already exist in database")
+var ErrAlreadyExist = errors.New("block already exists in database")
 
 // AddBlock adds a block to the database
 func (m *DB) AddBlock(bl *types.Block) error {
@@ -239,7 +240,7 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 
 	blockIds, err := types.BytesToBlockIds(idsBytes)
 	if err != nil {
-		return nil, errors.New("could not get all blocks from database ")
+		return nil, errors.New("could not get all blocks from database")
 	}
 
 	return blockIds, nil
@@ -714,11 +715,10 @@ func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks
 
 // ContextuallyValidBlock - returns the contextually valid blocks for the provided layer
 func (m *DB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error) {
-
 	if layer == 0 || layer == 1 {
 		v, err := m.LayerBlockIds(layer)
 		if err != nil {
-			m.Error("Could not get layer block ids for layer %v err=%v", layer, err)
+			m.With().Error("could not get layer block ids", layer, log.Err(err))
 			return nil, err
 		}
 
@@ -730,27 +730,30 @@ func (m *DB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]stru
 		return mp, nil
 	}
 
-	blks, err := m.LayerBlocks(layer)
+	blockIds, err := m.LayerBlockIds(layer)
 	if err != nil {
 		return nil, err
 	}
 
 	validBlks := make(map[types.BlockID]struct{})
 
-	for _, b := range blks {
-		valid, err := m.ContextualValidity(b.ID())
-
+	for _, b := range blockIds {
+		valid, err := m.ContextualValidity(b)
 		if err != nil {
-			m.Error("could not get contextual validity for block %v in layer %v err=%v", b.ID(), layer, err)
+			m.With().Error("could not get contextual validity", b, layer, log.Err(err))
 		}
 
 		if !valid {
 			continue
 		}
 
-		validBlks[b.ID()] = struct{}{}
+		validBlks[b] = struct{}{}
 	}
 
+	m.With().Info("count of contextually valid blocks in layer",
+		layer,
+		log.Int("count_valid", len(validBlks)),
+		log.Int("count_total", len(blockIds)))
 	return validBlks, nil
 }
 

@@ -41,6 +41,7 @@ def wait_to_pod_to_be_deleted(pod_name, name_space, time_out=None):
 
 
 def create_pod(file_name, name_space, deployment_id=None, container_specs=None):
+    timeout = 70
     with open(path.join(path.dirname(__file__), file_name)) as f:
         dep = yaml.safe_load(f)
 
@@ -53,7 +54,7 @@ def create_pod(file_name, name_space, deployment_id=None, container_specs=None):
 
         k8s_api = CoreV1ApiClient()
         resp = k8s_api.create_namespaced_pod(namespace=name_space, body=dep)
-        wait_for_pod_to_be_ready(resp.metadata._name, name_space, time_out=testconfig['single_pod_ready_time_out'])
+        wait_for_pod_to_be_ready(resp.metadata._name, name_space, time_out=timeout)
         return resp
 
 
@@ -96,19 +97,31 @@ def check_for_restarted_pods(namespace, specific_deployment_name=''):
     return restarted_pods
 
 
-def search_phrase_in_pod_log(pod_name, name_space, container_name, phrase, time_out=60, group=None):
-
-    match = None
+def search_phrase_in_pod_log(pod_name, name_space, container_name, phrase, timeout=60, group=None, retries=3):
+    sleep_interval = 0.3
     total_sleep = 0
+    retries_remaining = retries
     while True:
-        pod_logs = CoreV1ApiClient().read_namespaced_pod_log(name=pod_name,
-                                                             namespace=name_space,
-                                                             container=container_name)
+        try:
+            read_namespaced_pod_log = CoreV1ApiClient().read_namespaced_pod_log
+            pod_logs = read_namespaced_pod_log(name=pod_name, namespace=name_space, container=container_name)
+        except ApiException as e:
+            print(f"got an exception while reading pod log:\n{e}")
+            if retries_remaining <= 0:
+                raise ApiException(e)
+            retries_remaining -= 1
+            time.sleep(sleep_interval)
+            print(f"retrying, retries left:\n{retries_remaining}")
+            continue
+
         match = re.search(phrase, pod_logs)
-        if not match and total_sleep < time_out:
-            time.sleep(1)
-            total_sleep = total_sleep + 1
-        else:
-            if match and group:
-                return match.group(group)
+        if match and group:
+            return match.group(group)
+        elif match:
             return match
+        elif not match and total_sleep < timeout:
+            time.sleep(1)
+            total_sleep += 1
+            retries_remaining = retries
+        else:
+            return None
