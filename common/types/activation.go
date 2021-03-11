@@ -59,7 +59,7 @@ func (t ATXID) Bytes() []byte {
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (t ATXID) Field() log.Field { return t.Hash32().Field("atx_id") }
+func (t ATXID) Field() log.Field { return log.FieldNamed("atx_id", t.Hash32()) }
 
 // Compare returns true if other (the given ATXID) is less than this ATXID, by lexicographic comparison.
 func (t ATXID) Compare(other ATXID) bool {
@@ -177,7 +177,6 @@ type ActivationTx struct {
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
 func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, nipst *NIPST, commitment *PostProof) *ActivationTx {
-
 	atx := &ActivationTx{
 		InnerActivationTx: &InnerActivationTx{
 			ActivationTxHeader: &ActivationTxHeader{
@@ -215,6 +214,7 @@ func (atx *ActivationTx) Fields(size int) []log.LoggableField {
 		log.FieldNamed("sender_id", atx.NodeID),
 		log.FieldNamed("prev_atx_id", atx.PrevATXID),
 		log.FieldNamed("pos_atx_id", atx.PositioningATX),
+		log.FieldNamed("coinbase", atx.Coinbase),
 		atx.PubLayerID,
 		atx.PubLayerID.GetEpoch(),
 		log.Uint64("sequence_number", atx.Sequence),

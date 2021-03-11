@@ -27,7 +27,7 @@ type Hash32 [Hash32Length]byte
 type Hash20 [hash20Length]byte
 
 // Field returns a log field. Implements the LoggableField interface.
-func (h Hash12) Field(name string) log.Field { return log.String(name, util.Bytes2Hex(h[:])) }
+func (h Hash12) Field() log.Field { return log.String("hash", util.Bytes2Hex(h[:])) }
 
 // Bytes gets the byte representation of the underlying hash.
 func (h Hash20) Bytes() []byte { return h[:] }
@@ -88,7 +88,7 @@ func (h Hash20) ToHash32() (h32 Hash32) {
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (h Hash20) Field(name string) log.Field { return log.String(name, util.Bytes2Hex(h[:])) }
+func (h Hash20) Field() log.Field { return log.String("hash", util.Bytes2Hex(h[:])) }
 
 // CalcHash12 returns the 12-byte prefix of the sha256 sum of the given byte slice.
 func CalcHash12(data []byte) (h Hash12) {
@@ -253,4 +253,4 @@ func (h *Hash32) Scan(src interface{}) error {
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (h Hash32) Field(name string) log.Field { return log.String(name, util.Bytes2Hex(h[:])) }
+func (h Hash32) Field() log.Field { return log.String("hash", util.Bytes2Hex(h[:])) }
