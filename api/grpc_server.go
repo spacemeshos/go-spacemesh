@@ -190,7 +190,7 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 	}
 	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gas limit %v, fee %v id %v nonce %v",
 		tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.Fee, tx.ID().ShortString(), tx.AccountNonce)
-	go s.Network.Broadcast(state.IncomingTxProtocol, in.Tx)
+	go s.Network.Broadcast(ctx, state.IncomingTxProtocol, in.Tx)
 	log.Info("GRPC SubmitTransaction returned msg ok")
 	return &pb.TxConfirmation{Value: "ok", Id: hex.EncodeToString(tx.ID().Bytes())}, nil
 }
@@ -200,7 +200,7 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 // Broadcast broadcasts message to gossip network
 func (s SpacemeshGrpcService) Broadcast(ctx context.Context, in *pb.BroadcastMessage) (*pb.SimpleMessage, error) {
 	log.Info("GRPC Broadcast msg")
-	err := s.Network.Broadcast(apiGossipProtocol, []byte(in.Data))
+	err := s.Network.Broadcast(ctx, apiGossipProtocol, []byte(in.Data))
 	if err != nil {
 		log.Warning("RPC Broadcast failed please check that `test-mode` is on in order to use RPC Broadcast.")
 		return &pb.SimpleMessage{Value: err.Error()}, err
@@ -212,7 +212,7 @@ func (s SpacemeshGrpcService) Broadcast(ctx context.Context, in *pb.BroadcastMes
 // BroadcastPoet is a specialized API to broadcast poet messages
 func (s SpacemeshGrpcService) BroadcastPoet(ctx context.Context, in *pb.BinaryMessage) (*pb.SimpleMessage, error) {
 	log.Debug("GRPC Broadcast PoET msg")
-	err := s.Network.Broadcast(activation.PoetProofProtocol, in.Data)
+	err := s.Network.Broadcast(ctx, activation.PoetProofProtocol, in.Data)
 	if err != nil {
 		log.Error("failed to broadcast PoET message: %v", err.Error())
 		return &pb.SimpleMessage{Value: err.Error()}, err
@@ -299,7 +299,7 @@ func (s SpacemeshGrpcService) StartMining(ctx context.Context, message *pb.InitP
 	if err != nil {
 		return nil, err
 	}
-	err = s.Mining.StartPost(addr, message.LogicalDrive, message.CommitmentSize)
+	err = s.Mining.StartPost(ctx, addr, message.LogicalDrive, message.CommitmentSize)
 	if err != nil {
 		return nil, err
 	}

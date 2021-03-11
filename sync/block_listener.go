@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
+	"context"
 	"sync"
 	"time"
 )
@@ -36,9 +37,9 @@ func (bl *BlockListener) Close() {
 }
 
 // Start starts the main listening goroutine
-func (bl *BlockListener) Start() {
+func (bl *BlockListener) Start(ctx context.Context) {
 	if bl.startLock.TryLock() {
-		go bl.listenToGossipBlocks()
+		go bl.listenToGossipBlocks(log.WithNewSessionID(ctx))
 	}
 }
 
@@ -54,7 +55,7 @@ func NewBlockListener(net service.Service, sync *sync2.Syncer, concurrency int, 
 	return &bl
 }
 
-func (bl *BlockListener) listenToGossipBlocks() {
+func (bl *BlockListener) listenToGossipBlocks(ctx context.Context) {
 	bl.wg.Add(1)
 	defer bl.wg.Done()
 	for {
@@ -76,7 +77,7 @@ func (bl *BlockListener) listenToGossipBlocks() {
 					return
 				}
 				tmr := sync2.newMilliTimer(sync2.gossipBlockTime)
-				bl.handleBlock(data)
+				bl.handleBlock(ctx, data)
 				tmr.ObserveDuration()
 			}()
 		}

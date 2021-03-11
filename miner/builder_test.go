@@ -2,6 +2,7 @@ package miner
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -83,7 +84,7 @@ func (mockSyncer) ListenToGossip() bool {
 	return true
 }
 
-func (mockSyncer) FetchPoetProof([]byte) error { return nil }
+func (mockSyncer) FetchPoetProof(context.Context, []byte) error { return nil }
 
 func (m mockSyncer) IsSynced() bool { return !m.notSynced }
 
@@ -95,7 +96,7 @@ func (m mockSyncerP) ListenToGossip() bool {
 	return m.synced
 }
 
-func (mockSyncerP) FetchPoetProof([]byte) error { return nil }
+func (mockSyncerP) FetchPoetProof(context.Context, []byte) error { return nil }
 
 func (m mockSyncerP) IsSynced() bool { return m.synced }
 
@@ -146,10 +147,10 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	builder.TransactionPool = txMempool
 	//builder := NewBlockBuilder(types.NodeID{}, signing.NewEdSigner(), n, beginRound, 5, MockCoin{}, orphans, hare, &mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, selectCount, layersPerEpoch, mockProjector, log.New(n.String(), "", ""))
 
-	err := builder.Start()
+	err := builder.Start(context.TODO())
 	assert.NoError(t, err)
 
-	err = builder.Start()
+	err = builder.Start(context.TODO())
 	assert.Error(t, err)
 
 	err = builder.Close()
@@ -231,7 +232,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	//builder := NewBlockBuilder(types.NodeID{Key: "anton", VRFPublicKey: []byte("anton")}, signing.NewEdSigner(), n, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: st}, hare, &mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, selectCount, layersPerEpoch, mockProjector, log.New(n.String(), "", ""))
 
 	gossipMessages := receiver.RegisterGossipProtocol(blocks.NewBlockProtocol, priorityq.High)
-	err := builder.Start()
+	err := builder.Start(context.TODO())
 	assert.NoError(t, err)
 
 	recipient := types.BytesToAddress([]byte{0x01})
@@ -739,7 +740,7 @@ func TestBlockBuilder_notSynced(t *testing.T) {
 	builder.blockOracle = mbo
 	builder.beginRoundEvent = beginRound
 	//builder := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: bs}, hare, mbo, mockTxProcessor{true}, &mockAtxValidator{}, ms, selectCount, selectCount, layersPerEpoch, mockProjector, log.NewDefault(t.Name()))
-	go builder.createBlockLoop()
+	go builder.createBlockLoop(context.TODO())
 	beginRound <- 1
 	beginRound <- 2
 	r.Equal(0, mbo.calls)

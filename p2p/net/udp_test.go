@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -96,7 +97,7 @@ func TestUDPNet_Sanity(t *testing.T) {
 		err  error
 	}{buf: []byte(testMsg), n: len([]byte(testMsg)), addr: addr2, err: nil}
 
-	go udpnet.listenToUDPNetworkMessages(mockconn)
+	go udpnet.listenToUDPNetworkMessages(context.TODO(), mockconn)
 
 	mockconn.releaseCount <- struct{}{}
 
@@ -364,7 +365,7 @@ func TestUDPNet_Cache2(t *testing.T) {
 		}
 		mconn := newMsgConnection(conn, n, pk, ns, n.config.MsgSizeLimit, n.config.DialTimeout, n.logger)
 		n.addConn(addr, conn)
-		go mconn.beginEventProcessing()
+		go mconn.beginEventProcessing(context.TODO())
 	}
 
 	for i := 0; i < maxUDPConn; i++ {
@@ -431,7 +432,7 @@ func Test_UDPIncomingConnClose(t *testing.T) {
 	}
 	n.conn = lis
 
-	go n.listenToUDPNetworkMessages(lis)
+	go n.listenToUDPNetworkMessages(context.TODO(), lis)
 	<-donech
 	<-donech
 	conn := n.incomingConn[addr.String()]

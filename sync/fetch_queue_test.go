@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/state"
@@ -41,7 +42,7 @@ func SyncFactory(name string, serv service.Service) *Syncer {
 	l := log.NewDefault(name)
 	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 	blockValidator := blockEligibilityValidatorMock{}
-	sync := NewSync(serv, getMesh(memoryDB, name), state.NewTxMemPool(), activation.NewAtxMemPool(), blockValidator, poetDb, conf, ts, l)
+	sync := NewSync(context.TODO(), serv, getMesh(memoryDB, name), state.NewTxMemPool(), activation.NewAtxMemPool(), blockValidator, poetDb, conf, ts, l)
 	return sync
 }
 
@@ -56,8 +57,8 @@ func TestBlockListener_TestTxQueue(t *testing.T) {
 	bl2 := SyncFactory("TextTxQueue_2", n2)
 	bl2.peers = PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}
 
-	bl1.Start()
-	bl2.Start()
+	bl1.Start(context.TODO())
+	bl2.Start(context.TODO())
 	queue := bl1.txQueue
 	id1 := tx1.ID()
 	id2 := tx2.ID()
@@ -117,8 +118,8 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 	bl2 := SyncFactory("TextAtxQueue_2", n2)
 	bl2.peers = PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}
 
-	bl1.Start()
-	bl2.Start()
+	bl1.Start(context.TODO())
+	bl2.Start(context.TODO())
 	queue := bl1.atxQueue
 
 	block1 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
@@ -202,8 +203,8 @@ func TestBlockListener_TestTxQueueHandle(t *testing.T) {
 	bl2 := SyncFactory("TextTxQueueHandle_2", n2)
 	bl2.peers = PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}
 
-	bl1.Start()
-	bl2.Start()
+	bl1.Start(context.TODO())
+	bl2.Start(context.TODO())
 	queue := bl1.txQueue
 	id1 := tx1.ID()
 	id2 := tx2.ID()
@@ -242,8 +243,8 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 	bl2 := SyncFactory("TextAtxQueueHandle_2", n2)
 	bl2.peers = PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}
 
-	bl1.Start()
-	bl2.Start()
+	bl1.Start(context.TODO())
+	bl2.Start(context.TODO())
 
 	proofMessage := makePoetProofMessage(t)
 	err := bl2.poetDb.ValidateAndStore(&proofMessage)

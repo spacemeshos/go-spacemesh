@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -51,7 +52,7 @@ func TestNet_EnqueueMessage(t *testing.T) {
 			msg := make([]byte, 10)
 			randmsg(msg)
 			fmt.Printf("pushing %v to %v \r\n", hex.EncodeToString(msg), sum%n.queuesCount)
-			n.EnqueueMessage(IncomingMessageEvent{NewConnectionMock(rnode.PublicKey()), msg})
+			n.EnqueueMessage(context.TODO(), IncomingMessageEvent{Conn: NewConnectionMock(rnode.PublicKey()), Message: msg})
 			fmt.Printf("pushed %v to %v \r\n", hex.EncodeToString(msg), sum%n.queuesCount)
 			tx := time.NewTimer(time.Second * 2)
 			defer wg.Done()
@@ -127,7 +128,7 @@ func Test_Net_LimitedConnections(t *testing.T) {
 	//n.SubscribeOnNewRemoteConnections(counter)
 	require.NoError(t, err)
 	listener := newMockListener()
-	n.Start(listener)
+	n.Start(context.TODO(), listener)
 	listener.accpetResErr = tempErr("demo connection will close and allow more")
 	for i := 0; i < cfg.MaxPendingConnections; i++ {
 		listener.releaseConn()

@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"runtime"
@@ -11,9 +12,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type fetchPoetProofFunc func(poetProofRef []byte) error
-type sValidateAtxFunc func(atx *types.ActivationTx) error
-type sFetchAtxFunc func(atx *types.ActivationTx) error
+type fetchPoetProofFunc func(ctx context.Context, poetProofRef []byte) error
+type sValidateAtxFunc func(*types.ActivationTx) error
+type sFetchAtxFunc func(context.Context, *types.ActivationTx) error
 type checkLocalFunc func(ids []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32)
 
 type item interface {
@@ -33,7 +34,7 @@ type fetchQueue struct {
 	*sync.Mutex
 	workerInfra networker
 	pending     map[types.Hash32][]chan bool
-	handleFetch func(fj fetchJob)
+	handleFetch func(context.Context, fetchJob)
 	checkLocal  checkLocalFunc
 	queue       chan []types.Hash32 //types.TransactionID //todo make buffered
 	name        string
@@ -64,20 +65,20 @@ func (fq *fetchQueue) shutdownRecover() {
 }
 
 //todo batches
-func (fq *fetchQueue) work() error {
-
+func (fq *fetchQueue) work(ctx context.Context) {
+	logger := fq.WithContext(ctx)
 	defer fq.shutdownRecover()
 	parallelWorkers := runtime.NumCPU()
-	output := fetchWithFactory(newFetchWorker(fq.workerInfra, runtime.NumCPU(), fq.batchRequestFactory, fq.queue, fq.name))
+	output := fetchWithFactory(newFetchWorker(ctx, fq.workerInfra, runtime.NumCPU(), fq.batchRequestFactory, fq.queue, fq.name))
 	wg := sync.WaitGroup{}
 	wg.Add(parallelWorkers)
 	for i := 0; i < parallelWorkers; i++ {
 		go func() {
-			fq.Info("running work")
+			logger.Info("running work")
 			for out := range output {
-				fq.Info("new batch out of queue")
+				logger.Info("new batch out of queue")
 				if out == nil {
-					fq.Info("close queue")
+					logger.Info("close queue")
 					break
 				}
 
@@ -91,15 +92,16 @@ func (fq *fetchQueue) work() error {
 					break //fmt.Errorf("channel closed")
 				}
 
-				fq.Info("fetched %ss %s", fq.name, concatShortIds(bjb.ids))
-				fq.handleFetch(bjb)
-				fq.Info("next batch")
+				logger.With().Info("attempting to fetch objects",
+					log.String("type", fq.name),
+					log.String("ids", concatShortIds(bjb.ids)))
+				fq.handleFetch(ctx, bjb)
+				logger.Info("done fetching, going to next batch")
 			}
 			wg.Done()
 		}()
 	}
 	wg.Wait()
-	return nil
 }
 
 func (fq *fetchQueue) addToPendingGetCh(ids []types.Hash32) chan bool {
@@ -164,7 +166,7 @@ type txQueue struct {
 	fetchQueue
 }
 
-func newTxQueue(s *Syncer) *txQueue {
+func newTxQueue(ctx context.Context, s *Syncer) *txQueue {
 	//todo buffersize
 	q := &txQueue{
 		fetchQueue: fetchQueue{
@@ -180,7 +182,7 @@ func newTxQueue(s *Syncer) *txQueue {
 	}
 
 	q.handleFetch = updateTxDependencies(q.invalidate, s.txpool)
-	go q.work()
+	go q.work(log.WithNewSessionID(ctx))
 	return q
 }
 
@@ -204,9 +206,8 @@ func (tx txQueue) HandleTxs(txids []types.TransactionID) ([]*types.Transaction, 
 	return txs, nil
 }
 
-func updateTxDependencies(invalidate func(id types.Hash32, valid bool), txpool txMemPool) func(fj fetchJob) {
-	return func(fj fetchJob) {
-
+func updateTxDependencies(invalidate func(id types.Hash32, valid bool), txpool txMemPool) func(context.Context, fetchJob) {
+	return func(ctx context.Context, fj fetchJob) {
 		mp := map[types.Hash32]*types.Transaction{}
 
 		for _, item := range fj.items {
@@ -228,7 +229,7 @@ type atxQueue struct {
 	fetchQueue
 }
 
-func newAtxQueue(s *Syncer, fetchPoetProof fetchPoetProofFunc) *atxQueue {
+func newAtxQueue(ctx context.Context, s *Syncer, fetchPoetProof fetchPoetProofFunc) *atxQueue {
 	//todo buffersize
 	q := &atxQueue{
 		fetchQueue: fetchQueue{
@@ -243,22 +244,24 @@ func newAtxQueue(s *Syncer, fetchPoetProof fetchPoetProofFunc) *atxQueue {
 		},
 	}
 
-	q.handleFetch = updateAtxDependencies(q.invalidate, s.SyntacticallyValidateAtx, s.FetchAtxReferences, s.atxDb, fetchPoetProof, q.Log)
-	go q.work()
+	q.handleFetch = updateAtxDependencies(ctx, q.invalidate, s.SyntacticallyValidateAtx, s.FetchAtxReferences, s.atxDb, fetchPoetProof, q.Log)
+	go q.work(log.WithNewSessionID(ctx))
 	return q
 }
 
 //we could get rid of this if we had a unified id type
-func (atx atxQueue) HandleAtxs(atxids []types.ATXID) ([]*types.ActivationTx, error) {
-	atx.Log.Debug("going to fetch %v", atxids)
+func (atx atxQueue) HandleAtxs(ctx context.Context, atxids []types.ATXID) ([]*types.ActivationTx, error) {
+	atxFields := make([]log.LoggableField, len(atxids))
 	atxItems := make([]types.Hash32, 0, len(atxids))
-	for _, i := range atxids {
-		atxItems = append(atxItems, i.Hash32())
+	for _, atxid := range atxids {
+		atxFields = append(atxFields, atxid.Field())
+		atxItems = append(atxItems, atxid.Hash32())
 	}
+	atx.Log.WithContext(ctx).With().Debug("going to fetch atxs", atxFields...)
 
 	atxres, err := atx.handle(atxItems)
 	if err != nil {
-		atx.Log.Error("cannot fetch all atxs for block: %v", err)
+		atx.Log.WithContext(ctx).With().Error("cannot fetch all atxs for block", log.Err(err))
 		return nil, err
 	}
 
@@ -270,9 +273,10 @@ func (atx atxQueue) HandleAtxs(atxids []types.ATXID) ([]*types.ActivationTx, err
 	return atxs, nil
 }
 
-func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValidateAtx sValidateAtxFunc, fetchAtxRefs sFetchAtxFunc, atxDB atxDB, fetchProof fetchPoetProofFunc, logger log.Log) func(fj fetchJob) {
-	return func(fj fetchJob) {
-		fetchProofCalcID(fetchProof, fj)
+func updateAtxDependencies(ctx context.Context, invalidate func(id types.Hash32, valid bool), sValidateAtx sValidateAtxFunc, fetchAtxRefs sFetchAtxFunc, atxDB atxDB, fetchProof fetchPoetProofFunc, logger log.Log) func(context.Context, fetchJob) {
+	logger = logger.WithContext(ctx)
+	return func(ctx context.Context, fj fetchJob) {
+		fetchProofCalcID(ctx, logger, fetchProof, fj)
 
 		mp := map[types.Hash32]*types.ActivationTx{}
 		for _, item := range fj.items {
@@ -281,35 +285,32 @@ func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValida
 		}
 
 		for _, id := range fj.ids {
+			logger := logger.WithContext(ctx).WithFields(log.String("job_id", id.String()))
 			if atx, ok := mp[id]; ok {
-				logger.Info("atx queue work item %v atx %v", id.String(), atx.ShortString())
-				err := fetchAtxRefs(atx)
-				if err != nil {
-					logger.Warning("failed to fetch referenced atxs of %s %s", id.ShortString(), err)
+				logger.With().Info("atx queue work item", atx.ID())
+				if err := fetchAtxRefs(ctx, atx); err != nil {
+					logger.With().Warning("failed to fetch referenced atxs", log.Err(err))
 					invalidate(id, false)
 					continue
 				}
-				err = sValidateAtx(atx)
-				if err != nil {
-					logger.Warning("failed to validate atx %v job %s %s", atx.ShortString(), id.ShortString(), err)
+				if err := sValidateAtx(atx); err != nil {
+					logger.With().Warning("failed to validate atx", atx.ID(), log.Err(err))
 					invalidate(id, false)
 					continue
 				}
-				err = atxDB.ProcessAtx(atx)
-				if err != nil {
-					logger.Warning("failed to add atx to db %s %s", id.ShortString(), err)
+				if err := atxDB.ProcessAtx(atx); err != nil {
+					logger.Warning("failed to add atx to db", log.Err(err))
 					invalidate(id, false)
 					continue
 				}
-				logger.Info("atx queue work item ok %v atx %v", id.String(), atx.ShortString())
+				logger.With().Info("atx queue work item ok", atx.ID())
 				invalidate(id, true)
 			} else {
-				logger.Error("job returned with no response %v", id.String())
+				logger.Error("job returned with no response")
 				invalidate(id, false)
 			}
 		}
 	}
-
 }
 
 func getDoneChan(deps []chan bool) chan bool {
@@ -329,14 +330,17 @@ func getDoneChan(deps []chan bool) chan bool {
 	return doneChan
 }
 
-func fetchProofCalcID(fetchPoetProof fetchPoetProofFunc, fj fetchJob) {
+func fetchProofCalcID(ctx context.Context, logger log.Log, fetchPoetProof fetchPoetProofFunc, fj fetchJob) {
 	itemsWithProofs := make([]item, 0, len(fj.items))
 	for _, item := range fj.items {
 		atx := item.(*types.ActivationTx)
 		atx.CalcAndSetID() //todo put it somewhere that will cause less confusion
-		if err := fetchPoetProof(atx.GetPoetProofRef().Bytes()); err != nil {
-			log.Error("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
-				atx.ShortString(), atx.GetShortPoetProofRef(), err)
+		if err := fetchPoetProof(ctx, atx.GetPoetProofRef().Bytes()); err != nil {
+			logger.With().Error("received atx with syntactically invalid or missing PoET proof",
+				atx.ID(),
+				log.String("short_poet_proof_ref", fmt.Sprintf("%x", atx.GetShortPoetProofRef())),
+				log.String("poet_proof_ref", fmt.Sprint(atx.GetShortPoetProofRef())),
+				log.Err(err))
 			continue
 		}
 		itemsWithProofs = append(itemsWithProofs, atx)

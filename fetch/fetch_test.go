@@ -1,6 +1,7 @@
 package fetch
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -65,7 +66,7 @@ func (m mockNet) GetRandomPeer() p2ppeers.Peer {
 	return pub1
 }
 
-func (m mockNet) Start() error {
+func (m mockNet) Start(ctx context.Context) error {
 	return nil
 }
 
@@ -98,7 +99,7 @@ func (m mockNet) RegisterDirectProtocolWithChannel(protocol string, ingressChann
 	return nil
 }
 
-func (m mockNet) SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
+func (m mockNet) SendWrappedMessage(ctx context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
 	return nil
 }
 
@@ -107,7 +108,7 @@ func (m mockNet) GetPeers() []p2ppeers.Peer {
 	return []p2ppeers.Peer{pub1}
 }
 
-func (m *mockNet) SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error {
+func (m *mockNet) SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error {
 	if m.ReturnError {
 		if m.SendAck {
 			m.AckChannel <- struct{}{}

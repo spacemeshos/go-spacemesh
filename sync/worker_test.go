@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"crypto/sha256"
 	"sync"
 	"testing"
@@ -25,7 +26,7 @@ func TestNewPeerWorker(t *testing.T) {
 	err := syncObj1.AddBlock(bl1)
 	assert.NoError(t, err)
 
-	wrk := newPeersWorker(syncObj2, []p2ppeers.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, layerIdsReqFactory(types.GetEffectiveGenesis()+1))
+	wrk := newPeersWorker(context.TODO(), syncObj2, []p2ppeers.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, layerIdsReqFactory(types.GetEffectiveGenesis()+1))
 
 	go wrk.Work()
 
@@ -55,7 +56,7 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 	r.NoError(err)
 	ref := sha256.Sum256(poetProofBytes)
 
-	w := newNeighborhoodWorker(s1, 1, poetReqFactory(types.CalcHash32(ref[:]).Bytes()))
+	w := newNeighborhoodWorker(context.TODO(), s1, 1, poetReqFactory(types.CalcHash32(ref[:]).Bytes()))
 	go w.Work()
 	assert.NotNil(t, <-w.output)
 	r.NoError(err)
@@ -75,7 +76,7 @@ func TestNeighborhoodWorkerClose(t *testing.T) {
 	r.NoError(err)
 	ref := sha256.Sum256(poetProofBytes)
 
-	w := newNeighborhoodWorker(s1, 1, poetReqFactory(ref[:]))
+	w := newNeighborhoodWorker(context.TODO(), s1, 1, poetReqFactory(ref[:]))
 	go w.Work()
 	go func() {
 		time.Sleep(time.Second)
@@ -90,7 +91,7 @@ func TestPeerWorkerClose(t *testing.T) {
 	syncObj1 := syncs[0]
 	syncObj1.Close()
 	syncObj2 := syncs[1]
-	wrk := newPeersWorker(syncObj2, []p2ppeers.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, layerIdsReqFactory(1))
+	wrk := newPeersWorker(context.TODO(), syncObj2, []p2ppeers.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, layerIdsReqFactory(1))
 	go wrk.Work()
 	go func() {
 		time.Sleep(time.Second)

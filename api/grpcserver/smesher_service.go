@@ -41,7 +41,7 @@ func (s SmesherService) IsSmeshing(context.Context, *empty.Empty) (*pb.IsSmeshin
 }
 
 // StartSmeshing requests that the node begin smeshing
-func (s SmesherService) StartSmeshing(_ context.Context, in *pb.StartSmeshingRequest) (*pb.StartSmeshingResponse, error) {
+func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingRequest) (*pb.StartSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.StartSmeshing")
 
 	if in.Coinbase == nil {
@@ -55,7 +55,7 @@ func (s SmesherService) StartSmeshing(_ context.Context, in *pb.StartSmeshingReq
 	}
 
 	addr := types.BytesToAddress(in.Coinbase.Address)
-	if err := s.Mining.StartPost(addr, in.DataDir, in.CommitmentSize.Value); err != nil {
+	if err := s.Mining.StartPost(ctx, addr, in.DataDir, in.CommitmentSize.Value); err != nil {
 		log.Error("error starting post: %s", err)
 		return nil, status.Errorf(codes.Internal, "error initializing smeshing")
 	}

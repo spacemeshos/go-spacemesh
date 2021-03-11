@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"context"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -29,7 +30,7 @@ func (*fetchMock) IsSynced() bool {
 	return true
 }
 
-func (f *fetchMock) FetchAtx(ID types.ATXID) error {
+func (f *fetchMock) FetchAtx(ctx context.Context, ID types.ATXID) error {
 	f.atxCalledMu.Lock()
 	defer f.atxCalledMu.Unlock()
 
@@ -38,7 +39,7 @@ func (f *fetchMock) FetchAtx(ID types.ATXID) error {
 	return nil
 }
 
-func (*fetchMock) GetPoetProof(types.Hash32) error {
+func (*fetchMock) GetPoetProof(context.Context, types.Hash32) error {
 	return nil
 }
 
@@ -46,10 +47,10 @@ func (*fetchMock) GetTxs([]types.TransactionID) error {
 	return nil
 }
 
-func (*fetchMock) GetBlocks([]types.BlockID) error {
+func (*fetchMock) GetBlocks(context.Context, []types.BlockID) error {
 	return nil
 }
 
-func (*fetchMock) GetAtxs([]types.ATXID) error {
+func (*fetchMock) GetAtxs(context.Context, []types.ATXID) error {
 	return nil
 }
