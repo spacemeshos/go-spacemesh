@@ -149,7 +149,7 @@ func sumByteArray(b []byte) uint {
 
 // EnqueueMessage inserts a message into a queue, to decide on which queue to send the message to
 // it sum the remote public key bytes as integer to segment to queueCount queues.
-func (n *Net) EnqueueMessage(event IncomingMessageEvent) {
+func (n *Net) EnqueueMessage(ctx context.Context, event IncomingMessageEvent) {
 	sba := sumByteArray(event.Conn.RemotePublicKey().Bytes())
 	n.incomingMessagesQueue[sba%n.queuesCount] <- event
 }

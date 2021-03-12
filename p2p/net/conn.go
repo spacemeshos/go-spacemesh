@@ -82,7 +82,7 @@ type FormattedConnection struct {
 
 type networker interface {
 	HandlePreSessionIncomingMessage(c Connection, msg []byte) error
-	EnqueueMessage(ime IncomingMessageEvent)
+	EnqueueMessage(ctx context.Context, ime IncomingMessageEvent)
 	SubscribeClosingConnections(func(c ConnectionWithErr))
 	publishClosingConnection(c ConnectionWithErr)
 	NetworkID() int8
@@ -180,7 +180,10 @@ func (c *FormattedConnection) publish(ctx context.Context, message []byte) {
 	if sessionID, ok := log.ExtractSessionID(ctx); ok {
 		icm.SessionID = sessionID
 	}
-	c.networker.EnqueueMessage(icm)
+	if requestID, ok := log.ExtractRequestID(ctx); ok {
+		icm.RequestID = requestID
+	}
+	c.networker.EnqueueMessage(ctx, icm)
 }
 
 // NOTE: this is left here intended to help debugging in the future.
@@ -381,7 +384,7 @@ func (c *FormattedConnection) beginEventProcessing(ctx context.Context) {
 		if len(buf) > 0 {
 			newbuf := make([]byte, len(buf))
 			copy(newbuf, buf)
-			c.publish(ctx, newbuf)
+			c.publish(log.WithNewRequestID(ctx), newbuf)
 		}
 
 		if err != nil {

@@ -625,11 +625,11 @@ func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcry
 	metrics.QueueLength.With(metrics.ProtocolLabel, protocol).Set(float64(len(msgchan)))
 
 	// TODO: check queue length
-	gcp := gossipProtocolMessage{sender: sender, data: data, validationChan: validationCompletedChan}
+	gpm := gossipProtocolMessage{sender: sender, data: data, validationChan: validationCompletedChan}
 	if requestID, ok := log.ExtractRequestID(ctx); ok {
-		gcp.requestID = requestID
+		gpm.requestID = requestID
 	}
-	msgchan <- gcp
+	msgchan <- gpm
 
 	return nil
 }

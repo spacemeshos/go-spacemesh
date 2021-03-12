@@ -241,7 +241,7 @@ func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address
 		p.removeFromPending(reqID)
 		return sendErr
 	}
-	p.Log.With().Debug("sent request", log.Uint64("request_id", reqID))
+	p.Log.With().Debug("sent request", log.Uint64("msg_request_id", reqID))
 	return nil
 }
 

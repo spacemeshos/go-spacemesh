@@ -168,7 +168,7 @@ func (n *UDPNet) Dial(ctx context.Context, address net.Addr, remotePublicKey p2p
 	ns := n.cache.GetOrCreate(remotePublicKey)
 
 	conn := newMsgConnection(udpcon, n, remotePublicKey, ns, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger)
-	go conn.beginEventProcessing(ctx)
+	go conn.beginEventProcessing(log.WithNewSessionID(ctx, log.String("netproto", "udp")))
 	return conn, nil
 }
 
@@ -178,10 +178,13 @@ func (n *UDPNet) HandlePreSessionIncomingMessage(c Connection, msg []byte) error
 }
 
 // EnqueueMessage pushes an incoming message event into the queue
-func (n *UDPNet) EnqueueMessage(ime IncomingMessageEvent) {
+func (n *UDPNet) EnqueueMessage(ctx context.Context, ime IncomingMessageEvent) {
 	select {
 	case n.msgChan <- ime:
-		n.logger.With().Debug("recv udp message", log.String("from", ime.Conn.RemotePublicKey().String()), log.String("fromaddr", ime.Conn.RemoteAddr().String()), log.Int("len", len(ime.Message)))
+		n.logger.WithContext(ctx).With().Debug("recv udp message",
+			log.String("from", ime.Conn.RemotePublicKey().String()),
+			log.String("fromaddr", ime.Conn.RemoteAddr().String()),
+			log.Int("len", len(ime.Message)))
 	case <-n.shutdown:
 		return
 	}

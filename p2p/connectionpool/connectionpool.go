@@ -76,7 +76,10 @@ func (cp *ConnectionPool) OnClosedConnection(cwe net.ConnectionWithErr) {
 		return
 	}
 	conn := cwe.Conn
-	cp.logger.With().Info("connection_closed", log.String("id", conn.String()), log.String("remote", conn.RemotePublicKey().String()), log.Err(cwe.Err))
+	cp.logger.With().Info("connection_closed",
+		log.String("id", conn.String()),
+		log.String("remote", conn.RemotePublicKey().String()),
+		log.Err(cwe.Err))
 	cp.handleClosedConnection(conn)
 }
 

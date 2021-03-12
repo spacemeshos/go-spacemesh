@@ -150,7 +150,7 @@ func (n *NetworkMock) IncomingMessages() []chan IncomingMessageEvent {
 }
 
 // EnqueueMessage return channel of IncomingMessages
-func (n *NetworkMock) EnqueueMessage(event IncomingMessageEvent) {
+func (n *NetworkMock) EnqueueMessage(ctx context.Context, event IncomingMessageEvent) {
 	n.incomingMessages[0] <- event
 }
 

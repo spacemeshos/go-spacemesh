@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -51,7 +52,7 @@ func TestNet_EnqueueMessage(t *testing.T) {
 			msg := make([]byte, 10)
 			randmsg(msg)
 			fmt.Printf("pushing %v to %v \r\n", hex.EncodeToString(msg), sum%n.queuesCount)
-			n.EnqueueMessage(IncomingMessageEvent{Conn: NewConnectionMock(rnode.PublicKey()), Message: msg})
+			n.EnqueueMessage(context.TODO(), IncomingMessageEvent{Conn: NewConnectionMock(rnode.PublicKey()), Message: msg})
 			fmt.Printf("pushed %v to %v \r\n", hex.EncodeToString(msg), sum%n.queuesCount)
 			tx := time.NewTimer(time.Second * 2)
 			defer wg.Done()

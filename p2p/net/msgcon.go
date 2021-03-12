@@ -112,7 +112,7 @@ func (c *MsgConnection) publish(ctx context.Context, message []byte) {
 	if requestID, ok := log.ExtractRequestID(ctx); ok {
 		icm.RequestID = requestID
 	}
-	c.networker.EnqueueMessage(icm)
+	c.networker.EnqueueMessage(ctx, icm)
 }
 
 // NOTE: this is left here intended to help debugging in the future.
