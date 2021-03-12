@@ -3,7 +3,6 @@ package log
 import (
 	"context"
 	"fmt"
-	appcontext "github.com/spacemeshos/go-spacemesh/app_context"
 	"reflect"
 	"runtime/debug"
 	"time"
@@ -158,16 +157,16 @@ func (l Log) WithFields(fields ...LoggableField) Log {
 
 // WithContext creates a Log from an existing log and a context object
 func (l Log) WithContext(ctx context.Context) Log {
-	lgr := l
+	var fields []LoggableField
 	if ctx != nil {
-		if ctxRqId, ok := ctx.Value(appcontext.RequestIdKey).(string); ok {
-			lgr = lgr.WithFields(String("requestId", ctxRqId))
+		if ctxRequestId, ok := ExtractRequestId(ctx); ok {
+			fields = append(fields, append(ExtractRequestFields(ctx), String("requestId", ctxRequestId))...)
 		}
-		if ctxSessionId, ok := ctx.Value(appcontext.SessionIdKey).(string); ok {
-			lgr = lgr.WithFields(String("sessionId", ctxSessionId))
+		if ctxSessionId, ok := ExtractSessionId(ctx); ok {
+			fields = append(fields, append(ExtractSessionFields(ctx), String("sessionId", ctxSessionId))...)
 		}
 	}
-	return lgr
+	return l.WithFields(fields...)
 }
 
 const eventKey = "event"

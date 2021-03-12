@@ -3,6 +3,7 @@ package hare
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
@@ -117,11 +118,12 @@ func (m *Msg) Bytes() []byte {
 // Upon receiving a protocol's message, we try to build the full message.
 // The full message consists of the original message and the extracted public key.
 // An extracted public key is considered valid if it represents an active identity for a consensus view.
-func newMsg(hareMsg *Message, querier StateQuerier) (*Msg, error) {
+func newMsg(ctx context.Context, hareMsg *Message, querier StateQuerier) (*Msg, error) {
+	logger := log.AppLog.WithContext(ctx)
 	// extract pub key
 	pubKey, err := ed25519.ExtractPublicKey(hareMsg.InnerMsg.Bytes(), hareMsg.Sig)
 	if err != nil {
-		log.With().Error("newMsg construction failed: could not extract public key",
+		logger.With().Error("newMsg construction failed: could not extract public key",
 			log.Err(err),
 			log.Int("sig len", len(hareMsg.Sig)))
 		return nil, err
@@ -130,7 +132,7 @@ func newMsg(hareMsg *Message, querier StateQuerier) (*Msg, error) {
 	pub := signing.NewPublicKey(pubKey)
 	res, err := querier.IsIdentityActiveOnConsensusView(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceID))
 	if err != nil {
-		log.With().Error("error while checking if identity is active",
+		logger.With().Error("error while checking if identity is active",
 			log.String("sender_id", pub.ShortString()),
 			log.Err(err),
 			types.LayerID(hareMsg.InnerMsg.InstanceID),
@@ -140,7 +142,7 @@ func newMsg(hareMsg *Message, querier StateQuerier) (*Msg, error) {
 
 	// check query result
 	if !res {
-		log.With().Error("identity is not active",
+		logger.With().Error("identity is not active",
 			log.String("sender_id", pub.ShortString()),
 			types.LayerID(hareMsg.InnerMsg.InstanceID),
 			log.String("msg_type", hareMsg.InnerMsg.Type.String()))

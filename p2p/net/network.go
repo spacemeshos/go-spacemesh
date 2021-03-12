@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	appcontext "github.com/spacemeshos/go-spacemesh/app_context"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -15,7 +14,6 @@ import (
 	"net"
 	"strconv"
 	"sync"
-	//"syscall"
 	"time"
 )
 
@@ -38,9 +36,10 @@ const (
 
 // IncomingMessageEvent is the event reported on new incoming message, it contains the message and the Connection carrying the message
 type IncomingMessageEvent struct {
-	Conn    Connection
-	Message []byte
-	Ctx     context.Context
+	Conn      Connection
+	Message   []byte
+	SessionId string
+	RequestId string
 }
 
 // ManagedConnection in an interface extending Connection with some internal methods that are required for Net to manage Connections
@@ -261,8 +260,10 @@ func (n *Net) Dial(ctx context.Context, address net.Addr, remotePubkey p2pcrypto
 	}
 
 	// Add session ID to context
-	sessionId := fmt.Sprintf("dialed_peer_%s_%s_%s", remotePubkey.String(), address.Network(), address.String())
-	go conn.beginEventProcessing(appcontext.WithSessionId(ctx, sessionId))
+	go conn.beginEventProcessing(log.WithNewSessionId(ctx,
+		log.FieldNamed("session_remote_id", remotePubkey),
+		log.String("session_remote_addr", address.String()),
+		log.String("session_network", address.Network())))
 	return conn, nil
 }
 

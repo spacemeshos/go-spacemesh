@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -314,7 +315,7 @@ func (v *syntaxContextValidator) validateAggregatedMessage(aggMsg *aggregatedMes
 		}
 
 		// extract public key
-		iMsg, err := newMsg(innerMsg, v.stateQuerier)
+		var iMsg, err = newMsg(context.TODO(), innerMsg, v.stateQuerier)
 		if err != nil {
 			return err
 		}

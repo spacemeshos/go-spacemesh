@@ -103,7 +103,16 @@ func (c *MsgConnection) Created() time.Time {
 }
 
 func (c *MsgConnection) publish(ctx context.Context, message []byte) {
-	c.networker.EnqueueMessage(IncomingMessageEvent{c, message, ctx})
+	// Rather than store the context on the heap, which is an antipattern, we instead extract the relevant IDs and
+	// store those.
+	icm := IncomingMessageEvent{Conn: c, Message: message}
+	if sessionId, ok := log.ExtractSessionId(ctx); ok {
+		icm.SessionId = sessionId
+	}
+	if requestId, ok := log.ExtractRequestId(ctx); ok {
+		icm.RequestId = requestId
+	}
+	c.networker.EnqueueMessage(icm)
 }
 
 // NOTE: this is left here intended to help debugging in the future.
@@ -235,7 +244,9 @@ func (c *MsgConnection) beginEventProcessing(ctx context.Context) {
 		if len(buf) > 0 {
 			newbuf := make([]byte, size)
 			copy(newbuf, buf[:size])
-			c.publish(ctx, newbuf)
+
+			// Create a new requestId for context
+			c.publish(log.WithNewRequestId(ctx), newbuf)
 		}
 
 		if err != nil {

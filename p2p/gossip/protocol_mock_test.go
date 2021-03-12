@@ -5,6 +5,7 @@
 package gossip
 
 import (
+	context "context"
 	gomock "github.com/golang/mock/gomock"
 	p2pcrypto "github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	peers "github.com/spacemeshos/go-spacemesh/p2p/peers"
@@ -117,17 +118,17 @@ func (mr *MockbaseNetworkMockRecorder) SubscribePeerEvents() *gomock.Call {
 }
 
 // ProcessGossipProtocolMessage mocks base method
-func (m *MockbaseNetwork) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
+func (m *MockbaseNetwork) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ProcessGossipProtocolMessage", sender, protocol, data, validationCompletedChan)
+	ret := m.ctrl.Call(m, "ProcessGossipProtocolMessage", ctx, sender, protocol, data, validationCompletedChan)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ProcessGossipProtocolMessage indicates an expected call of ProcessGossipProtocolMessage
-func (mr *MockbaseNetworkMockRecorder) ProcessGossipProtocolMessage(sender, protocol, data, validationCompletedChan interface{}) *gomock.Call {
+func (mr *MockbaseNetworkMockRecorder) ProcessGossipProtocolMessage(ctx, sender, protocol, data, validationCompletedChan interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessGossipProtocolMessage", reflect.TypeOf((*MockbaseNetwork)(nil).ProcessGossipProtocolMessage), sender, protocol, data, validationCompletedChan)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessGossipProtocolMessage", reflect.TypeOf((*MockbaseNetwork)(nil).ProcessGossipProtocolMessage), ctx, sender, protocol, data, validationCompletedChan)
 }
 
 // MockprioQ is a mock of prioQ interface

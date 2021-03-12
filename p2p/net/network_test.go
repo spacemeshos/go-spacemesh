@@ -51,7 +51,7 @@ func TestNet_EnqueueMessage(t *testing.T) {
 			msg := make([]byte, 10)
 			randmsg(msg)
 			fmt.Printf("pushing %v to %v \r\n", hex.EncodeToString(msg), sum%n.queuesCount)
-			n.EnqueueMessage(IncomingMessageEvent{NewConnectionMock(rnode.PublicKey()), msg})
+			n.EnqueueMessage(IncomingMessageEvent{Conn: NewConnectionMock(rnode.PublicKey()), Message: msg})
 			fmt.Printf("pushed %v to %v \r\n", hex.EncodeToString(msg), sum%n.queuesCount)
 			tx := time.NewTimer(time.Second * 2)
 			defer wg.Done()

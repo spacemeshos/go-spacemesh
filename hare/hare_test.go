@@ -2,6 +2,7 @@ package hare
 
 import (
 	"bytes"
+	"context"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
@@ -102,7 +103,7 @@ func TestHare_Start(t *testing.T) {
 
 	h := createHare(n1, log.NewDefault(t.Name()))
 
-	h.broker.Start() // todo: fix that hack. this will cause h.Start to return err
+	h.broker.Start(context.TODO()) // todo: fix that hack. this will cause h.Start to return err
 
 	/*err := h.Start()
 	require.Error(t, err)*/
@@ -252,7 +253,7 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 	h := createHare(n1, log.NewDefault(t.Name()))
 	h.Start()
 	mo := mockReport{8, NewEmptySet(0), true}
-	h.broker.Register(mo.ID())
+	h.broker.Register(context.TODO(), mo.ID())
 	time.Sleep(1 * time.Second)
 	h.outputChan <- mo
 	time.Sleep(1 * time.Second)

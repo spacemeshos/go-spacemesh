@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
@@ -135,12 +136,12 @@ func (test *ConsensusTest) Start() {
 
 func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle, network NetworkService, initialSet *Set, layer instanceID, name string) *consensusProcess {
 	broker := buildBroker(network, name)
-	broker.Start()
+	broker.Start(context.TODO())
 	output := make(chan TerminationOutput, 1)
 	signing := signing2.NewEdSigner()
 	oracle.Register(isHonest, signing.PublicKey().String())
 	proc := newConsensusProcess(cfg, layer, initialSet, oracle, NewMockStateQuerier(), 10, signing, types.NodeID{Key: signing.PublicKey().String(), VRFPublicKey: []byte{}}, network, output, truer{}, log.NewDefault(signing.PublicKey().ShortString()))
-	c, _ := broker.Register(proc.ID())
+	c, _ := broker.Register(context.TODO(), proc.ID())
 	proc.SetInbox(c)
 
 	return proc

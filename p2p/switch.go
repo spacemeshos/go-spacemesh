@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	appcontext "github.com/spacemeshos/go-spacemesh/app_context"
 	"strings"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -254,7 +253,7 @@ func (s *Switch) onClosedConnection(cwe net.ConnectionWithErr) {
 // returns error if the Switch is already running or there was an error starting one of the needed services.
 func (s *Switch) Start() error {
 	if atomic.LoadUint32(&s.started) == 1 {
-		return errors.New("Switch already running")
+		return errors.New("switch already running")
 	}
 
 	var err error
@@ -280,8 +279,9 @@ func (s *Switch) Start() error {
 		return err
 	}
 
+	ctx := log.WithNewSessionId(context.TODO())
 	s.logger.Debug("starting to listen for network messages")
-	s.listenToNetworkMessages() // fires up a goroutine for each queue of messages
+	s.listenToNetworkMessages(ctx) // fires up a goroutine for each queue of messages
 	s.logger.Debug("starting the udp server")
 
 	// TODO : insert new addresses to discovery
@@ -462,13 +462,14 @@ func (s *Switch) Shutdown() {
 }
 
 // process an incoming message
-func (s *Switch) processMessage(ime net.IncomingMessageEvent) {
-	// Add context to log
-	ctx := appcontext.WithNewSessionId(ime.Ctx)
-	logger := s.logger.WithContext(ctx)
+func (s *Switch) processMessage(ctx context.Context, ime net.IncomingMessageEvent) {
+	// Extract request context and add to log
+	if ime.RequestId != "" {
+		ctx = log.WithRequestId(ctx, ime.RequestId, log.String("orig_session_id", ime.SessionId))
+	}
 
 	if s.config.MsgSizeLimit != config.UnlimitedMsgSize && len(ime.Message) > s.config.MsgSizeLimit {
-		logger.With().Error("message is too big to process",
+		s.logger.WithContext(ctx).With().Error("message is too big to process",
 			log.Int("limit", s.config.MsgSizeLimit),
 			log.Int("actual", len(ime.Message)))
 		return
@@ -476,7 +477,7 @@ func (s *Switch) processMessage(ime net.IncomingMessageEvent) {
 
 	if err := s.onRemoteClientMessage(ctx, ime); err != nil {
 		// TODO: differentiate action on errors
-		logger.With().Error("err reading incoming message, closing connection",
+		s.logger.WithContext(ctx).With().Error("err reading incoming message, closing connection",
 			log.FieldNamed("sender_id", ime.Conn.RemotePublicKey()),
 			log.Err(err))
 		if err := ime.Conn.Close(); err == nil {
@@ -496,7 +497,7 @@ func (s *Switch) RegisterDirectProtocolWithChannel(protocol string, ingressChann
 }
 
 // listenToNetworkMessages is listening on new messages from the opened connections and processes them.
-func (s *Switch) listenToNetworkMessages() {
+func (s *Switch) listenToNetworkMessages(ctx context.Context) {
 	// We listen to each of the messages queues we get from `net`
 	// It's net's responsibility to distribute the messages to the queues
 	// in a way that they're processing order will work
@@ -507,7 +508,7 @@ func (s *Switch) listenToNetworkMessages() {
 			for {
 				select {
 				case msg := <-c:
-					s.processMessage(msg)
+					s.processMessage(ctx, msg)
 				case <-s.shutdown:
 					return
 				}
@@ -536,7 +537,7 @@ var (
 // onRemoteClientMessage pre-process a protocol message from a remote client handling decryption and authentication
 // authenticated messages are forwarded to corresponding protocol handlers
 // msg : an incoming message event that includes the raw message and the sending connection.
-func (s *Switch) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
+func (s *Switch) onRemoteClientMessage(ctx context.Context, msg net.IncomingMessageEvent) error {
 	if msg.Message == nil || msg.Conn == nil {
 		return ErrBadFormat1
 	}
@@ -578,28 +579,28 @@ func (s *Switch) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 
 	_, ok := s.gossipProtocolHandlers[pm.Metadata.NextProtocol]
 
-	s.logger.With().Debug("handle incoming message",
+	s.logger.WithContext(ctx).With().Debug("handle incoming message",
 		log.String("protocol", pm.Metadata.NextProtocol),
 		log.FieldNamed("sender_id", msg.Conn.RemotePublicKey()),
 		log.Bool("is_gossip", ok))
 
 	if ok {
 		// if this message is tagged with a gossip protocol, relay it.
-		return s.gossip.Relay(msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data)
+		return s.gossip.Relay(ctx, msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data)
 	}
 
 	// route authenticated message to the registered protocol
 	// messages handled here are always processed by direct based protocols, only the gossip protocol calls ProcessGossipProtocolMessage
-	return s.ProcessDirectProtocolMessage(msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data, p2pmeta)
+	return s.ProcessDirectProtocolMessage(ctx, msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data, p2pmeta)
 }
 
 // ProcessDirectProtocolMessage passes an already decrypted message to a protocol. if protocol does not exist, return and error.
-func (s *Switch) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, metadata service.P2PMetadata) error {
+func (s *Switch) ProcessDirectProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, protocol string, data service.Data, metadata service.P2PMetadata) error {
 	msgchan := s.directProtocolHandlers[protocol]
 	if msgchan == nil {
 		return ErrNoProtocol
 	}
-	s.logger.With().Debug("forwarding message to protocol", log.String("protocol", protocol))
+	s.logger.WithContext(ctx).With().Debug("forwarding message to protocol", log.String("protocol", protocol))
 
 	metrics.QueueLength.With(metrics.ProtocolLabel, protocol).Set(float64(len(msgchan)))
 
@@ -611,7 +612,7 @@ func (s *Switch) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protoc
 
 // ProcessGossipProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will send
 // the message syntactic validation result on the validationCompletedChan ASAP
-func (s *Switch) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
+func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
 	h := types.CalcMessageHash12(data.Bytes(), protocol)
 
 	// route authenticated message to the registered protocol
@@ -619,12 +620,16 @@ func (s *Switch) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protoc
 	if msgchan == nil {
 		return ErrNoProtocol
 	}
-	s.logger.With().Debug("forwarding message to protocol", log.String("protocol", protocol), h)
+	s.logger.WithContext(ctx).With().Debug("forwarding message to protocol", log.String("protocol", protocol), h)
 
 	metrics.QueueLength.With(metrics.ProtocolLabel, protocol).Set(float64(len(msgchan)))
 
 	// TODO: check queue length
-	msgchan <- gossipProtocolMessage{sender, data, validationCompletedChan}
+	gcp := gossipProtocolMessage{sender: sender, data: data, validationChan: validationCompletedChan}
+	if requestId, ok := log.ExtractRequestId(ctx); ok {
+		gcp.requestId = requestId
+	}
+	msgchan <- gcp
 
 	return nil
 }

@@ -159,7 +159,7 @@ func TestSwarm_processMessage(t *testing.T) {
 	c := &net.ConnectionMock{}
 	c.SetRemotePublicKey(r.PublicKey())
 	ime := net.IncomingMessageEvent{Message: []byte("0"), Conn: c}
-	s.processMessage(ime) // should error
+	s.processMessage(context.TODO(), ime) // should error
 
 	select {
 	case k := <-cpmock.keyRemoved:
@@ -179,7 +179,7 @@ func TestSwarm_processMessage(t *testing.T) {
 	c2 := &net.ConnectionMock{}
 	c2.SetRemotePublicKey(r2.PublicKey())
 	ime2 := net.IncomingMessageEvent{Message: []byte("0"), Conn: c2}
-	s.processMessage(ime2) // should error
+	s.processMessage(context.TODO(), ime2) // should error
 
 	select {
 	case k := <-cpmock.keyRemoved:
@@ -520,13 +520,14 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 
 	// Test bad format
 	imc := net.IncomingMessageEvent{Conn: nmock}
-	err = p.onRemoteClientMessage(imc)
+	err = p.onRemoteClientMessage(context.TODO(), imc)
 	assert.Equal(t, err, ErrBadFormat1)
 
 	// Test No Session
 	imc.Message = []byte("test")
 
-	err = p.onRemoteClientMessage(imc)
+	err = p.onRemoteClientMessage(context.TODO(), imc)
+	assert.Equal(t, err, ErrBadFormat1)
 	assert.Equal(t, err, ErrNoSession)
 
 	//Test bad session
@@ -536,7 +537,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	}
 	imc.Conn.SetSession(session)
 
-	err = p.onRemoteClientMessage(imc)
+	err = p.onRemoteClientMessage(context.TODO(), imc)
 	assert.Equal(t, err, ErrFailDecrypt)
 
 	//// Test bad format again
@@ -544,7 +545,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 		return []byte("wont_format_fo_protocol_message"), nil
 	}
 
-	err = p.onRemoteClientMessage(imc)
+	err = p.onRemoteClientMessage(context.TODO(), imc)
 	assert.Equal(t, err, ErrBadFormat2)
 
 	goodmsg := &ProtocolMessage{
@@ -570,7 +571,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	// Test out of sync
 	imc.Message = nosynced
 
-	err = p.onRemoteClientMessage(imc)
+	err = p.onRemoteClientMessage(context.TODO(), imc)
 	assert.Equal(t, ErrOutOfSync, err)
 
 	// Test no protocol
@@ -582,7 +583,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 		return goodbin, nil
 	}
 
-	err = p.onRemoteClientMessage(imc)
+	err = p.onRemoteClientMessage(context.TODO(), imc)
 	assert.Equal(t, err, ErrNoProtocol)
 
 	// Test no err
@@ -601,7 +602,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 		}
 	}()
 	wg.Add(1)
-	err = p.onRemoteClientMessage(imc)
+	err = p.onRemoteClientMessage(context.TODO(), imc)
 	assert.NoError(t, err)
 	wg.Wait()
 
