@@ -174,6 +174,11 @@ func (sm simGossipMessage) Sender() p2pcrypto.PublicKey {
 	return sm.sender
 }
 
+// RequestID
+func (sm simGossipMessage) RequestID() string {
+	return "fake_request_id"
+}
+
 // Bytes is the message's binary data in byte array format.
 func (sm simGossipMessage) Bytes() []byte {
 	return sm.msg.Bytes()

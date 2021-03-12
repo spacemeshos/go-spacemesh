@@ -164,13 +164,13 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 		if res <= 0 { // newConn >= curConn
 			if res == 0 { // newConn == curConn
 				// TODO Is it a potential threat (session hijacking)? Should we keep the existing connection?
-				cp.logger.With().Warning("new connection was created with same session ID as an existing connection, " +
+				cp.logger.With().Warning("new connection was created with same session ID as an existing connection, "+
 					"keeping the new connection (assuming existing connection is stale)",
 					log.FieldNamed("old_session_id", curConn.Session().ID()),
 					log.FieldNamed("new_session_id", newConn.Session().ID()),
 					log.FieldNamed("remote_id", rPub))
 			} else {
-				cp.logger.With().Warning("connection created while connection already exists between peers, " +
+				cp.logger.With().Warning("connection created while connection already exists between peers, "+
 					"closing existing connection",
 					log.FieldNamed("old_session_id", curConn.Session().ID()),
 					log.FieldNamed("new_session_id", newConn.Session().ID()),

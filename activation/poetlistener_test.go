@@ -56,6 +56,10 @@ func (m *mockMsg) Bytes() []byte {
 	return b
 }
 
+func (m *mockMsg) RequestID() string {
+	return "fake_request_id"
+}
+
 func (m *mockMsg) ValidationCompletedChan() chan service.MessageValidation { panic("implement me") }
 
 func (m *mockMsg) ReportValidation(protocol string) {

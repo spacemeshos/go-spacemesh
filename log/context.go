@@ -2,7 +2,7 @@ package log
 
 import (
 	"context"
-	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/google/uuid"
 )
 
 type correlationIDType int
@@ -36,7 +36,7 @@ func WithRequestID(ctx context.Context, requestID string, fields ...LoggableFiel
 // It can be used when there isn't a single, clear, unique id associated with a request (e.g.,
 // a block or tx hash).
 func WithNewRequestID(ctx context.Context, fields ...LoggableField) context.Context {
-	return WithRequestID(ctx, crypto.UUIDString(), fields...)
+	return WithRequestID(ctx, uuid.New().String(), fields...)
 }
 
 // ExtractSessionID extracts the session id from a context object
@@ -90,5 +90,5 @@ func WithSessionID(ctx context.Context, sessionID string, fields ...LoggableFiel
 // WithNewSessionID does the same thing as WithSessionID but generates a new, random sessionId.
 // It can be used when there isn't a single, clear, unique id associated with a session.
 func WithNewSessionID(ctx context.Context, fields ...LoggableField) context.Context {
-	return WithSessionID(ctx, crypto.UUIDString(), fields...)
+	return WithSessionID(ctx, uuid.New().String(), fields...)
 }
