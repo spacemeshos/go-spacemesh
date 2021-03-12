@@ -23,7 +23,7 @@ type Key interface {
 	raw() *[keySize]byte
 	Array() [32]byte
 	String() string
-	Field(key string) log.Field
+	Field() log.Field
 }
 
 // PrivateKey is a private key of 32 byte.
@@ -71,14 +71,14 @@ func (k key) String() string {
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (k key) Field(key string) log.Field {
-	return log.String(key, k.String())
+func (k key) Field() log.Field {
+	return log.String("key", k.String())
 }
 
 func getRandomNonce() [nonceSize]byte {
 	nonce := [nonceSize]byte{}
 	if _, err := io.ReadFull(rand.Reader, nonce[:]); err != nil {
-		log.Panic("Panic: ", err)
+		log.Panic(fmt.Sprint(err))
 	}
 	return nonce
 }
@@ -132,7 +132,7 @@ func ExtractPubkey(message []byte) ([]byte, PublicKey, error) {
 	}
 	pubkey, err := NewPubkeyFromBytes(message[:keySize])
 	if err != nil {
-		log.Panic("Panic: ", err) // this should never happen as we control the key size
+		log.Panic(fmt.Sprint(err)) // this should never happen as we control the key size
 	}
 	return message[keySize:], pubkey, nil
 }
@@ -179,7 +179,7 @@ func NewPublicKeyFromBase58(s string) (PublicKey, error) {
 func NewRandomPubkey() PublicKey {
 	k := newKey()
 	if _, err := io.ReadFull(rand.Reader, k.bytes[:]); err != nil {
-		log.Panic("Panic: ", err)
+		log.Panic(fmt.Sprint(err))
 	}
 	return k
 }
