@@ -38,8 +38,8 @@ const (
 type IncomingMessageEvent struct {
 	Conn      Connection
 	Message   []byte
-	SessionId string
-	RequestId string
+	SessionID string
+	RequestID string
 }
 
 // ManagedConnection in an interface extending Connection with some internal methods that are required for Net to manage Connections
@@ -260,7 +260,7 @@ func (n *Net) Dial(ctx context.Context, address net.Addr, remotePubkey p2pcrypto
 	}
 
 	// Add session ID to context
-	go conn.beginEventProcessing(log.WithNewSessionId(ctx,
+	go conn.beginEventProcessing(log.WithNewSessionID(ctx,
 		log.FieldNamed("session_remote_id", remotePubkey),
 		log.String("session_remote_addr", address.String()),
 		log.String("session_network", address.Network())))

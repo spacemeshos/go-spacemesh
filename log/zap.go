@@ -159,11 +159,11 @@ func (l Log) WithFields(fields ...LoggableField) Log {
 func (l Log) WithContext(ctx context.Context) Log {
 	var fields []LoggableField
 	if ctx != nil {
-		if ctxRequestId, ok := ExtractRequestId(ctx); ok {
-			fields = append(fields, append(ExtractRequestFields(ctx), String("requestId", ctxRequestId))...)
+		if ctxRequestID, ok := ExtractRequestID(ctx); ok {
+			fields = append(fields, append(ExtractRequestFields(ctx), String("requestId", ctxRequestID))...)
 		}
-		if ctxSessionId, ok := ExtractSessionId(ctx); ok {
-			fields = append(fields, append(ExtractSessionFields(ctx), String("sessionId", ctxSessionId))...)
+		if ctxSessionID, ok := ExtractSessionID(ctx); ok {
+			fields = append(fields, append(ExtractSessionFields(ctx), String("sessionId", ctxSessionID))...)
 		}
 	}
 	return l.WithFields(fields...)

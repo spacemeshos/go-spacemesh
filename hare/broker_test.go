@@ -204,7 +204,7 @@ func (mgm *mockGossipMessage) Sender() p2pcrypto.PublicKey {
 	return mgm.sender
 }
 
-func (mgm *mockGossipMessage) RequestId() string {
+func (mgm *mockGossipMessage) RequestID() string {
 	return "fake_request_id"
 }
 

@@ -329,7 +329,7 @@ func (h *Hare) tickLoop(ctx context.Context) {
 
 // Start starts listening for layers and outputs.
 func (h *Hare) Start() error {
-	ctx := log.WithNewSessionId(context.TODO(), log.String("protocol", protoName))
+	ctx := log.WithNewSessionID(context.TODO(), log.String("protocol", protoName))
 	h.With().Info("starting protocol", log.String("protocol", protoName))
 	err := h.broker.Start(ctx)
 	if err != nil {

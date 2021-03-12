@@ -106,11 +106,11 @@ func (c *MsgConnection) publish(ctx context.Context, message []byte) {
 	// Rather than store the context on the heap, which is an antipattern, we instead extract the relevant IDs and
 	// store those.
 	icm := IncomingMessageEvent{Conn: c, Message: message}
-	if sessionId, ok := log.ExtractSessionId(ctx); ok {
-		icm.SessionId = sessionId
+	if sessionID, ok := log.ExtractSessionID(ctx); ok {
+		icm.SessionID = sessionID
 	}
-	if requestId, ok := log.ExtractRequestId(ctx); ok {
-		icm.RequestId = requestId
+	if requestID, ok := log.ExtractRequestID(ctx); ok {
+		icm.RequestID = requestID
 	}
 	c.networker.EnqueueMessage(icm)
 }
@@ -246,7 +246,7 @@ func (c *MsgConnection) beginEventProcessing(ctx context.Context) {
 			copy(newbuf, buf[:size])
 
 			// Create a new requestId for context
-			c.publish(log.WithNewRequestId(ctx), newbuf)
+			c.publish(log.WithNewRequestID(ctx), newbuf)
 		}
 
 		if err != nil {

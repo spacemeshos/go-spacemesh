@@ -153,8 +153,8 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			}
 
 			// try to read stored context
-			if msg.RequestId() != "" {
-				ctx = log.WithRequestId(ctx, msg.RequestId())
+			if msg.RequestID() != "" {
+				ctx = log.WithRequestID(ctx, msg.RequestID())
 			}
 
 			h := types.CalcMessageHash12(msg.Bytes(), protoName)

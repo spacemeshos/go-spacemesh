@@ -33,7 +33,7 @@ type gossipProtocolMessage struct {
 	sender         p2pcrypto.PublicKey
 	data           service.Data
 	validationChan chan service.MessageValidation
-	requestId      string
+	requestID      string
 }
 
 func (pm gossipProtocolMessage) Sender() p2pcrypto.PublicKey {
@@ -44,8 +44,8 @@ func (pm gossipProtocolMessage) Data() service.Data {
 	return pm.data
 }
 
-func (pm gossipProtocolMessage) RequestId() string {
-	return pm.requestId
+func (pm gossipProtocolMessage) RequestID() string {
+	return pm.requestID
 }
 
 func (pm gossipProtocolMessage) Bytes() []byte {

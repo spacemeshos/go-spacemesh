@@ -174,11 +174,11 @@ func (c *FormattedConnection) Created() time.Time {
 }
 
 func (c *FormattedConnection) publish(ctx context.Context, message []byte) {
-	// Rather than store the context on the heap, which is an antipattern, we instead extract the sessionId and store
+	// Rather than store the context on the heap, which is an antipattern, we instead extract the sessionID and store
 	// that.
 	icm := IncomingMessageEvent{Conn: c, Message: message}
-	if sessionId, ok := log.ExtractSessionId(ctx); ok {
-		icm.SessionId = sessionId
+	if sessionID, ok := log.ExtractSessionID(ctx); ok {
+		icm.SessionID = sessionID
 	}
 	c.networker.EnqueueMessage(icm)
 }

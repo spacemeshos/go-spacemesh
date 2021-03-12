@@ -279,7 +279,7 @@ func (s *Switch) Start() error {
 		return err
 	}
 
-	ctx := log.WithNewSessionId(context.TODO())
+	ctx := log.WithNewSessionID(context.TODO())
 	s.logger.Debug("starting to listen for network messages")
 	s.listenToNetworkMessages(ctx) // fires up a goroutine for each queue of messages
 	s.logger.Debug("starting the udp server")
@@ -464,8 +464,8 @@ func (s *Switch) Shutdown() {
 // process an incoming message
 func (s *Switch) processMessage(ctx context.Context, ime net.IncomingMessageEvent) {
 	// Extract request context and add to log
-	if ime.RequestId != "" {
-		ctx = log.WithRequestId(ctx, ime.RequestId, log.String("orig_session_id", ime.SessionId))
+	if ime.RequestID != "" {
+		ctx = log.WithRequestID(ctx, ime.RequestID, log.String("orig_session_id", ime.SessionID))
 	}
 
 	if s.config.MsgSizeLimit != config.UnlimitedMsgSize && len(ime.Message) > s.config.MsgSizeLimit {
@@ -626,8 +626,8 @@ func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcry
 
 	// TODO: check queue length
 	gcp := gossipProtocolMessage{sender: sender, data: data, validationChan: validationCompletedChan}
-	if requestId, ok := log.ExtractRequestId(ctx); ok {
-		gcp.requestId = requestId
+	if requestID, ok := log.ExtractRequestID(ctx); ok {
+		gcp.requestID = requestID
 	}
 	msgchan <- gcp
 
