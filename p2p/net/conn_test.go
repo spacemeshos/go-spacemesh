@@ -94,7 +94,7 @@ func TestPreSessionMessage(t *testing.T) {
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, nil, msgSizeLimit, time.Second, netw.logger)
 	rwcam.SetReadResult([]byte{3, 1, 1, 1}, nil)
-	err := conn.setupIncoming(time.Millisecond)
+	err := conn.setupIncoming(context.TODO(), time.Millisecond)
 	require.NoError(t, err)
 	assert.Equal(t, rwcam.CloseCount(), 0)
 	require.Equal(t, int32(1), netw.PreSessionCount())
@@ -117,7 +117,7 @@ func TestConn_Limit(t *testing.T) {
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, nil, 1, time.Second, netw.logger)
 	rwcam.SetReadResult([]byte{5, 1, 2, 3, 4, 5, 6}, nil)
-	err := conn.setupIncoming(time.Second)
+	err := conn.setupIncoming(context.TODO(), time.Second)
 	assert.EqualError(t, err, ErrMsgExceededLimit.Error())
 }
 
@@ -128,7 +128,7 @@ func TestPreSessionError(t *testing.T) {
 	conn := newConnection(rwcam, netw, rPub, nil, msgSizeLimit, time.Second, netw.logger)
 	netw.SetPreSessionResult(fmt.Errorf("fail"))
 	rwcam.SetReadResult(append([]byte{1}, []byte("0")...), nil)
-	err := conn.setupIncoming(time.Second)
+	err := conn.setupIncoming(context.TODO(), time.Second)
 	require.Error(t, err)
 }
 

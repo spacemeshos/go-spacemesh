@@ -309,7 +309,7 @@ var (
 	ErrMsgExceededLimit = errors.New("message size exceeded limit")
 )
 
-func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
+func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Duration) error {
 	be := make(chan struct {
 		b []byte
 		e error

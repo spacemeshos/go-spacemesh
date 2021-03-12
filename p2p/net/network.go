@@ -303,22 +303,24 @@ func (n *Net) accept(listen net.Listener) {
 			continue
 		}
 
-		n.logger.With().Debug("got new connection",
+		// Create a new session context to track this listener
+		ctx := log.WithNewSessionID(context.Background())
+		n.logger.WithContext(ctx).With().Debug("got new connection",
 			log.String("remote_addr", netConn.RemoteAddr().String()),
 			log.String("network", netConn.RemoteAddr().Network()))
 		conn := netConn.(*net.TCPConn)
 		n.tcpSocketConfig(conn) // TODO maybe only set this after session handshake to prevent denial of service with big messages
-		c := newConnection(netConn, n, nil, nil, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger)
+		c := newConnection(netConn, n, nil, nil, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger.WithContext(ctx))
 		go func(con Connection) {
 			defer func() { pending <- struct{}{} }()
-			err := c.setupIncoming(n.config.SessionTimeout)
+			err := c.setupIncoming(ctx, n.config.SessionTimeout)
 			if err != nil {
-				n.logger.Event().Warning("incoming connection failed",
+				n.logger.WithContext(ctx).Event().Warning("incoming connection failed",
 					log.String("remote_addr", c.remoteAddr.String()),
 					log.Err(err))
 				return
 			}
-			go c.beginEventProcessing(context.TODO())
+			go c.beginEventProcessing(ctx)
 		}(c)
 
 		// network won't publish the connection before it the remote node had established a session
