@@ -128,7 +128,7 @@ func Test_Net_LimitedConnections(t *testing.T) {
 	//n.SubscribeOnNewRemoteConnections(counter)
 	require.NoError(t, err)
 	listener := newMockListener()
-	n.Start(listener)
+	n.Start(context.TODO(), listener)
 	listener.accpetResErr = tempErr("demo connection will close and allow more")
 	for i := 0; i < cfg.MaxPendingConnections; i++ {
 		listener.releaseConn()

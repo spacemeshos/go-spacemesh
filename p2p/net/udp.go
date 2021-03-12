@@ -105,10 +105,11 @@ func (n *UDPNet) publishNewRemoteConnectionEvent(conn Connection, node *node.Inf
 }
 
 // Start will start reading messages from the udp socket and pass them up the channels
-func (n *UDPNet) Start(listener UDPListener) {
+func (n *UDPNet) Start(ctx context.Context, listener UDPListener) {
 	n.conn = listener
-	n.logger.Info("Started UDP server listening for messages on udp:%v", listener.LocalAddr().String())
-	go n.listenToUDPNetworkMessages(listener)
+	n.logger.WithContext(ctx).With().Info("started udp server listening for messages",
+		log.String("udpaddr", listener.LocalAddr().String()))
+	go n.listenToUDPNetworkMessages(ctx, listener)
 }
 
 // LocalAddr returns the local listening addr, will panic before running Start. or if start errored
@@ -196,7 +197,7 @@ func (n *UDPNet) NetworkID() int8 {
 }
 
 // main listening loop
-func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
+func (n *UDPNet) listenToUDPNetworkMessages(ctx context.Context, listener net.PacketConn) {
 	buf := make([]byte, maxMessageSize) // todo: buffer pool ?
 	for {
 		size, addr, err := listener.ReadFrom(buf)

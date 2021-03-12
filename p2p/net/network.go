@@ -108,11 +108,12 @@ func NewNet(conf config.Config, localEntity node.LocalNode, logger log.Log) (*Ne
 }
 
 // Start begins accepting connections from the listener socket
-func (n *Net) Start(listener net.Listener) { // todo: maybe add context
+func (n *Net) Start(ctx context.Context, listener net.Listener) { // todo: maybe add context
 	n.listener = listener
 	n.listenAddress = listener.Addr().(*net.TCPAddr)
-	n.logger.Info("Started TCP server listening for connections on tcp:%v", listener.Addr().String())
-	go n.accept(listener)
+	n.logger.WithContext(ctx).With().Info("started tcp server listening for connections",
+		log.String("tcpaddr", listener.Addr().String()))
+	go n.accept(ctx, listener)
 }
 
 // LocalAddr returns the local listening address. panics before calling Start or if Start errored
@@ -278,8 +279,8 @@ func (n *Net) Shutdown() {
 	}
 }
 
-func (n *Net) accept(listen net.Listener) {
-	n.logger.Debug("waiting for incoming connections")
+func (n *Net) accept(ctx context.Context, listen net.Listener) {
+	n.logger.WithContext(ctx).Debug("waiting for incoming connections")
 	pending := make(chan struct{}, n.config.MaxPendingConnections)
 
 	for i := 0; i < n.config.MaxPendingConnections; i++ {
@@ -294,17 +295,16 @@ func (n *Net) accept(listen net.Listener) {
 				return
 			}
 			if !Temporary(err) {
-				n.logger.With().Error("listener errored while accepting connections", log.Err(err))
+				n.logger.WithContext(ctx).With().Error("listener errored while accepting connections", log.Err(err))
 				return
 			}
 
-			n.logger.With().Warning("failed to accept connection request", log.Err(err))
+			n.logger.WithContext(ctx).With().Warning("failed to accept connection request", log.Err(err))
 			pending <- struct{}{}
 			continue
 		}
 
 		// Create a new session context to track this listener
-		ctx := log.WithNewSessionID(context.Background())
 		n.logger.WithContext(ctx).With().Debug("got new connection",
 			log.String("remote_addr", netConn.RemoteAddr().String()),
 			log.String("network", netConn.RemoteAddr().Network()))

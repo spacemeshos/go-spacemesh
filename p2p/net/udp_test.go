@@ -97,7 +97,7 @@ func TestUDPNet_Sanity(t *testing.T) {
 		err  error
 	}{buf: []byte(testMsg), n: len([]byte(testMsg)), addr: addr2, err: nil}
 
-	go udpnet.listenToUDPNetworkMessages(mockconn)
+	go udpnet.listenToUDPNetworkMessages(context.TODO(), mockconn)
 
 	mockconn.releaseCount <- struct{}{}
 
@@ -432,7 +432,7 @@ func Test_UDPIncomingConnClose(t *testing.T) {
 	}
 	n.conn = lis
 
-	go n.listenToUDPNetworkMessages(lis)
+	go n.listenToUDPNetworkMessages(context.TODO(), lis)
 	<-donech
 	<-donech
 	conn := n.incomingConn[addr.String()]

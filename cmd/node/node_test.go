@@ -898,7 +898,7 @@ func TestSpacemeshApp_P2PInterface(t *testing.T) {
 	// We need to listen on a different port
 	listener, err := inet.Listen("tcp", fmt.Sprintf("%s:%d", addr, 9270))
 	r.NoError(err)
-	p2pnet.Start(listener)
+	p2pnet.Start(context.TODO(), listener)
 	defer p2pnet.Shutdown()
 
 	// Try to connect before we start the P2P service: this should fail

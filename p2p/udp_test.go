@@ -267,14 +267,14 @@ func Test_RoundTrip(t *testing.T) {
 	udpAddr := &net2.UDPAddr{IP: ndinfo.IP, Port: int(ndinfo.DiscoveryPort)}
 	udpListener, err := net2.ListenUDP("udp", udpAddr)
 	require.NoError(t, err)
-	udpnet.Start(udpListener)
+	udpnet.Start(context.TODO(), udpListener)
 	err = m.Start()
 	require.NoError(t, err)
 	defer m.Shutdown()
 	udpAddr2 := &net2.UDPAddr{IP: ndinfo2.IP, Port: int(ndinfo2.DiscoveryPort)}
 	udpListener2, err := net2.ListenUDP("udp", udpAddr2)
 	require.NoError(t, err)
-	udpnet2.Start(udpListener2)
+	udpnet2.Start(context.TODO(), udpListener2)
 	err = m2.Start()
 	require.NoError(t, err)
 	defer m2.Shutdown()

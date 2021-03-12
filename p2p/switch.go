@@ -266,8 +266,8 @@ func (s *Switch) Start() error {
 		return fmt.Errorf("error getting port: %v", err)
 	}
 
-	s.network.Start(tcpListener)
-	s.udpnetwork.Start(udpListener)
+	s.network.Start(log.WithNewSessionID(context.Background()), tcpListener)
+	s.udpnetwork.Start(log.WithNewSessionID(context.Background()), udpListener)
 
 	tcpAddress := s.network.LocalAddr().(*inet.TCPAddr)
 	udpAddress := s.udpnetwork.LocalAddr().(*inet.UDPAddr)
