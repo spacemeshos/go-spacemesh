@@ -38,7 +38,6 @@ const (
 type IncomingMessageEvent struct {
 	Conn      Connection
 	Message   []byte
-	SessionID string
 	RequestID string
 }
 

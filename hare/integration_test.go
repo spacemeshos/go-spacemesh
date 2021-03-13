@@ -70,7 +70,7 @@ func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 
 func (his *hareIntegrationThreeNodes) Test_16Nodes_AllHonest() {
 	for _, proc := range his.procs {
-		proc.Start()
+		proc.Start(context.TODO())
 	}
 
 	his.WaitForTimedTermination(his.T(), 60*time.Second)
@@ -123,7 +123,7 @@ func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 
 func (his *hareIntegration20Nodes) Test_20Nodes_AllHonest() {
 	for _, proc := range his.procs {
-		proc.Start()
+		proc.Start(context.TODO())
 	}
 
 	his.WaitForTimedTermination(his.T(), 120*time.Second)

@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"context"
 	"errors"
 	"github.com/spacemeshos/amcl"
 	"github.com/spacemeshos/amcl/BLS381"
@@ -143,11 +144,11 @@ func (trueOracle) Register(bool, string) {
 func (trueOracle) Unregister(bool, string) {
 }
 
-func (trueOracle) Eligible(types.LayerID, int32, int, types.NodeID, []byte) (bool, error) {
+func (trueOracle) Eligible(context.Context, types.LayerID, int32, int, types.NodeID, []byte) (bool, error) {
 	return true, nil
 }
 
-func (trueOracle) Proof(types.LayerID, int32) ([]byte, error) {
+func (trueOracle) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
 	x := make([]byte, 100)
 	return x, nil
 }

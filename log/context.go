@@ -21,10 +21,16 @@ const (
 // A request ID tracks the lifecycle of a single request across all execution contexts, including
 // multiple goroutines, task queues, workers, etc. The canonical example is an incoming message
 // received over the network. Rule of thumb: requests "traverse the heap" and may be passed from one
-// session to another.
+// session to another via channels.
 // This requires a requestId string, and optionally, other LoggableFields that are added to
 // context and printed in contextual logs.
 func WithRequestID(ctx context.Context, requestID string, fields ...LoggableField) context.Context {
+	// Warn if overwriting
+	if curRequestID, ok := ExtractRequestID(ctx); ok && curRequestID != requestID {
+		AppLog.WithContext(ctx).With().Warning("overwriting requestID in context",
+			String("old_request_id", curRequestID),
+			String("new_request_id", requestID))
+	}
 	ctx = context.WithValue(ctx, requestIDKey, requestID)
 	if len(fields) > 0 {
 		ctx = context.WithValue(ctx, requestFieldsKey, fields)
@@ -75,11 +81,18 @@ func ExtractRequestFields(ctx context.Context) (fields []LoggableField) {
 // A session ID tracks a single thread of execution. This may include multiple goroutines running
 // concurrently, but it does not include asynchronous task execution such as task queues handled
 // in separate threads. The canonical example is a single protocol routine, down to the point where
-// an incoming request is either handled, or else handed off to another routine. Rule of thumb: sessions
-// live entirely on the stack, and never on the heap.
+// an incoming request is either handled, or else handed off to another routine via a channel. Rule
+// of thumb: sessions live entirely on the stack, and never on the heap (and should not be passed over
+// channels).
 // This requires a sessionId string, and optionally, other LoggableFields that are added to
 // context and printed in contextual logs.
 func WithSessionID(ctx context.Context, sessionID string, fields ...LoggableField) context.Context {
+	// Warn if overwriting
+	if curSessionID, ok := ExtractSessionID(ctx); ok && curSessionID != sessionID {
+		AppLog.WithContext(ctx).With().Warning("overwriting sessionID in context",
+			String("old_session_id", curSessionID),
+			String("new_session_id", sessionID))
+	}
 	ctx = context.WithValue(ctx, sessionIDKey, sessionID)
 	if len(fields) > 0 {
 		ctx = context.WithValue(ctx, sessionFieldsKey, fields)

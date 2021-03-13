@@ -23,7 +23,7 @@ type Consensus interface {
 	Close()
 	CloseChannel() chan struct{}
 
-	Start() error
+	Start(ctx context.Context) error
 	SetInbox(chan *Msg)
 }
 
@@ -259,7 +259,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) {
 	}
 	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.network, h.outputChan)
 	cp.SetInbox(c)
-	if err := cp.Start(); err != nil {
+	if err := cp.Start(ctx); err != nil {
 		h.WithContext(ctx).With().Error("could not start consensus process", log.Err(err))
 		h.broker.Unregister(cp.ID())
 		return

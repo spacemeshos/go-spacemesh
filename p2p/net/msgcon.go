@@ -103,16 +103,17 @@ func (c *MsgConnection) Created() time.Time {
 }
 
 func (c *MsgConnection) publish(ctx context.Context, message []byte) {
+	// Print a log line to establish a link between the originating sessionID and this requestID,
+	// before the sessionID disappears.
+	c.logger.WithContext(ctx).Debug("enqueuing incoming message")
+
 	// Rather than store the context on the heap, which is an antipattern, we instead extract the relevant IDs and
 	// store those.
-	icm := IncomingMessageEvent{Conn: c, Message: message}
-	if sessionID, ok := log.ExtractSessionID(ctx); ok {
-		icm.SessionID = sessionID
-	}
+	ime := IncomingMessageEvent{Conn: c, Message: message}
 	if requestID, ok := log.ExtractRequestID(ctx); ok {
-		icm.RequestID = requestID
+		ime.RequestID = requestID
 	}
-	c.networker.EnqueueMessage(ctx, icm)
+	c.networker.EnqueueMessage(ctx, ime)
 }
 
 // NOTE: this is left here intended to help debugging in the future.

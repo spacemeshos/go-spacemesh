@@ -125,7 +125,7 @@ func (test *ConsensusTest) Create(N int, create func()) {
 
 func startProcs(procs []*consensusProcess) {
 	for _, proc := range procs {
-		proc.Start()
+		proc.Start(context.TODO())
 	}
 }
 

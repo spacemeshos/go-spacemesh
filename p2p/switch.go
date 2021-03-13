@@ -465,7 +465,7 @@ func (s *Switch) Shutdown() {
 func (s *Switch) processMessage(ctx context.Context, ime net.IncomingMessageEvent) {
 	// Extract request context and add to log
 	if ime.RequestID != "" {
-		ctx = log.WithRequestID(ctx, ime.RequestID, log.String("orig_session_id", ime.SessionID))
+		ctx = log.WithRequestID(ctx, ime.RequestID)
 	}
 
 	if s.config.MsgSizeLimit != config.UnlimitedMsgSize && len(ime.Message) > s.config.MsgSizeLimit {

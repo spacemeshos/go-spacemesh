@@ -2,12 +2,13 @@ package hare
 
 import (
 	"bytes"
+	"context"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type proposalTrackerProvider interface {
-	OnProposal(msg *Msg)
-	OnLateProposal(msg *Msg)
+	OnProposal(context.Context, *Msg)
+	OnLateProposal(context.Context, *Msg)
 	IsConflicting() bool
 	ProposedSet() *Set
 }
@@ -30,7 +31,7 @@ func newProposalTracker(log log.Log) *proposalTracker {
 
 // OnProposal tracks the provided proposal message.
 // It assumes the proposal message is syntactically valid and that it was received on the proposal round.
-func (pt *proposalTracker) OnProposal(msg *Msg) {
+func (pt *proposalTracker) OnProposal(ctx context.Context, msg *Msg) {
 	if pt.proposal == nil { // first leader
 		pt.proposal = msg // just update
 		return
@@ -41,7 +42,7 @@ func (pt *proposalTracker) OnProposal(msg *Msg) {
 		s := NewSet(msg.InnerMsg.Values)
 		g := NewSet(pt.proposal.InnerMsg.Values)
 		if !s.Equals(g) { // equivocation detected
-			pt.With().Info("equivocation detected on proposal round",
+			pt.WithContext(ctx).With().Info("equivocation detected on proposal round",
 				log.String("id_malicious", msg.PubKey.String()),
 				log.String("current_set", g.String()),
 				log.String("conflicting_set", s.String()))
@@ -62,7 +63,7 @@ func (pt *proposalTracker) OnProposal(msg *Msg) {
 
 // OnLateProposal tracks the given proposal message.
 // It assumes the proposal message is syntactically valid and that it was not received on the proposal round (late).
-func (pt *proposalTracker) OnLateProposal(msg *Msg) {
+func (pt *proposalTracker) OnLateProposal(ctx context.Context, msg *Msg) {
 	if pt.proposal == nil {
 		return
 	}
@@ -72,8 +73,10 @@ func (pt *proposalTracker) OnLateProposal(msg *Msg) {
 		s := NewSet(msg.InnerMsg.Values)
 		g := NewSet(pt.proposal.InnerMsg.Values)
 		if !s.Equals(g) { // equivocation detected
-			pt.With().Info("Equivocation detected for late round", log.String("id_malicious", msg.PubKey.String()),
-				log.String("current_set", g.String()), log.String("conflicting_set", s.String()))
+			pt.WithContext(ctx).With().Info("equivocation detected for late round",
+				log.String("id_malicious", msg.PubKey.String()),
+				log.String("current_set", g.String()),
+				log.String("conflicting_set", s.String()))
 			pt.isConflicting = true
 		}
 	}
@@ -81,7 +84,8 @@ func (pt *proposalTracker) OnLateProposal(msg *Msg) {
 	// not equal check rank
 	// lower ranked proposal on late proposal is a conflict
 	if bytes.Compare(msg.InnerMsg.RoleProof, pt.proposal.InnerMsg.RoleProof) < 0 {
-		pt.With().Info("late lower rank detected", log.String("id_malicious", msg.PubKey.String()))
+		pt.With().Info("late lower rank detected",
+			log.String("id_malicious", msg.PubKey.String()))
 		pt.isConflicting = true
 	}
 }
