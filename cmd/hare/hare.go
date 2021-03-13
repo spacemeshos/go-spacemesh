@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -176,7 +177,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Panic("error starting maatuf err=%v", err)
 	}
-	err = app.p2p.Start()
+	err = app.p2p.Start(context.TODO())
 	if err != nil {
 		log.Panic("error starting p2p err=%v", err)
 	}

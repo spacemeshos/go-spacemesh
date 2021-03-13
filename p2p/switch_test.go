@@ -64,7 +64,7 @@ func (cp *cpoolMock) Shutdown() {
 
 func p2pTestInstance(t testing.TB, config config.Config) *Switch {
 	p := p2pTestNoStart(t, config)
-	err := p.Start()
+	err := p.Start(context.TODO())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ const examplePayload = "Example"
 func TestNew(t *testing.T) {
 	s, err := New(context.TODO(), configWithPort(0), log.NewDefault(t.Name()), "")
 	require.NoError(t, err)
-	err = s.Start()
+	err = s.Start(context.TODO())
 	require.NoError(t, err)
 	require.NotNil(t, s, "its nil")
 	s.Shutdown()
@@ -98,7 +98,7 @@ func TestNew(t *testing.T) {
 func Test_newSwarm(t *testing.T) {
 	s, err := newSwarm(context.TODO(), configWithPort(0), log.NewDefault(t.Name()), "")
 	assert.NoError(t, err)
-	err = s.Start()
+	err = s.Start(context.TODO())
 	assert.NoError(t, err)
 	assert.NotNil(t, s)
 	s.Shutdown()
@@ -107,7 +107,7 @@ func Test_newSwarm(t *testing.T) {
 func TestSwarm_Shutdown(t *testing.T) {
 	s, err := newSwarm(context.TODO(), configWithPort(0), log.NewDefault(t.Name()), "")
 	assert.NoError(t, err)
-	err = s.Start()
+	err = s.Start(context.TODO())
 	assert.NoError(t, err)
 	conn, disc := s.SubscribePeerEvents()
 	s.Shutdown()
@@ -216,7 +216,7 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 
 	p2 := p2pTestNoStart(t, configWithPort(0))
 	c2 := p2.RegisterDirectProtocol(exampleProtocol)
-	require.NoError(t, p2.Start())
+	require.NoError(t, p2.Start(context.TODO()))
 	defer p2.Shutdown()
 
 	go func() {
@@ -255,7 +255,7 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 		go func() {
 			p1 := p2pTestNoStart(t, configWithPort(0))
 			_ = p1.RegisterDirectProtocol(exampleProtocol)
-			require.NoError(t, p1.Start())
+			require.NoError(t, p1.Start(context.TODO()))
 			sa.add(p1)
 			_, err := p1.cPool.GetConnection(p2.network.LocalAddr(), p2.lNode.PublicKey())
 			require.NoError(t, err)
@@ -303,8 +303,8 @@ func TestSwarm_RoundTrip(t *testing.T) {
 	exchan2 := p2.RegisterDirectProtocol(exampleProtocol)
 	require.Equal(t, exchan2, p2.directProtocolHandlers[exampleProtocol])
 
-	require.NoError(t, p1.Start())
-	require.NoError(t, p2.Start())
+	require.NoError(t, p1.Start(context.TODO()))
+	require.NoError(t, p2.Start(context.TODO()))
 
 	_, err := p2.cPool.GetConnection(p1.network.LocalAddr(), p1.lNode.PublicKey())
 	require.NoError(t, err)
@@ -325,8 +325,8 @@ func TestSwarm_MultipleMessages(t *testing.T) {
 	exchan2 := p2.RegisterDirectProtocol(exampleProtocol)
 	require.Equal(t, exchan2, p2.directProtocolHandlers[exampleProtocol])
 
-	require.NoError(t, p1.Start())
-	require.NoError(t, p2.Start())
+	require.NoError(t, p1.Start(context.TODO()))
+	require.NoError(t, p2.Start(context.TODO()))
 
 	err := p2.SendMessage(p1.lNode.PublicKey(), exampleProtocol, []byte(examplePayload))
 	require.Error(t, err, "ERR") // should'nt be in routing table
@@ -376,7 +376,7 @@ func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 	exchan1 := p1.RegisterDirectProtocol(exampleProtocol)
 	assert.Equal(t, exchan1, p1.directProtocolHandlers[exampleProtocol])
 
-	p1.Start()
+	p1.Start(context.TODO())
 
 	pend := make(map[string]chan error)
 	var mu sync.Mutex
@@ -400,7 +400,7 @@ func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 	sa := &swarmArray{}
 	for i := 0; i < Senders; i++ {
 		p := p2pTestNoStart(t, cfg)
-		require.NoError(t, p.Start())
+		require.NoError(t, p.Start(context.TODO()))
 		sa.add(p)
 		_, err := p.cPool.GetConnection(p1.network.LocalAddr(), p1.lNode.PublicKey())
 		require.NoError(t, err)
@@ -460,12 +460,12 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 
 	}
 
-	require.NoError(t, p1.Start())
+	require.NoError(t, p1.Start(context.TODO()))
 
 	sa := &swarmArray{}
 	for i := 0; i < Senders; i++ {
 		p := p2pTestNoStart(t, cfg)
-		require.NoError(t, p.Start())
+		require.NoError(t, p.Start(context.TODO()))
 		sa.add(p)
 		mychan := make(chan error)
 		mu.Lock()
@@ -852,8 +852,8 @@ func Test_Swarm_callCpoolCloseCon(t *testing.T) {
 	exchan2 := p2.RegisterDirectProtocol(exampleProtocol)
 	require.Equal(t, exchan2, p2.directProtocolHandlers[exampleProtocol])
 
-	require.NoError(t, p1.Start())
-	require.NoError(t, p2.Start())
+	require.NoError(t, p1.Start(context.TODO()))
+	require.NoError(t, p2.Start(context.TODO()))
 
 	cpm := newCpoolMock()
 	p1.cPool = cpm
@@ -892,7 +892,7 @@ func TestNeighborhood_Initial(t *testing.T) {
 
 	p.discover = mdht
 
-	err := p.Start()
+	err := p.Start(context.TODO())
 	assert.NoError(t, err)
 	ti := time.After(time.Millisecond)
 	select {
@@ -912,7 +912,7 @@ func TestNeighborhood_Initial(t *testing.T) {
 	}
 	p.cPool = cpm
 
-	err = p.Start()
+	err = p.Start(context.TODO())
 	assert.NoError(t, err)
 	ti = time.After(time.Second * 1)
 	select {

@@ -912,7 +912,7 @@ func TestSpacemeshApp_P2PInterface(t *testing.T) {
 	app.Config.P2P.AcquirePort = false
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.AppLog, app.Config.DataDir())
 	r.NoError(err)
-	r.NoError(swarm.Start())
+	r.NoError(swarm.Start(context.TODO()))
 	defer swarm.Shutdown()
 
 	// Try to connect again: this should succeed

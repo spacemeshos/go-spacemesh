@@ -148,7 +148,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 
 	sync := sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, goldenATXID, types.LayerID(expectedLayers))
 	app.sync = sync
-	if err = swarm.Start(); err != nil {
+	if err = swarm.Start(context.TODO()); err != nil {
 		log.Panic("error starting p2p err=%v", err)
 	}
 
@@ -229,9 +229,8 @@ func getData(path, prefix string, lg log.Log) error {
 			return err
 		}
 
-		defer rc.Close()
-
 		data, err := ioutil.ReadAll(rc)
+		rc.Close()
 		if err != nil {
 			return err
 		}

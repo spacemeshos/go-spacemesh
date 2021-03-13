@@ -156,24 +156,24 @@ func TestOracle_IsEligible(t *testing.T) {
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 0, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	o.layersPerEpoch = 10
 	o.vrfVerifier = buildVerifier(false, errFoo)
-	res, err := o.Eligible(types.LayerID(1), 0, 1, types.NodeID{}, []byte{})
+	res, err := o.Eligible(context.TODO(), types.LayerID(1), 0, 1, types.NodeID{}, []byte{})
 	assert.NotNil(t, err)
 	assert.False(t, res)
 
 	o.vrfVerifier = buildVerifier(true, nil)
 	o.getActiveSet = (&mockActiveSetProvider{10}).ActiveSet
-	res, err = o.Eligible(types.LayerID(50), 1, 0, types.NodeID{}, []byte{})
+	res, err = o.Eligible(context.TODO(), types.LayerID(50), 1, 0, types.NodeID{}, []byte{})
 	assert.Nil(t, err)
 	assert.False(t, res)
 
 	o.getActiveSet = (&mockActiveSetProvider{0}).ActiveSet
-	res, err = o.Eligible(types.LayerID(cfg.ConfidenceParam*2+11), 1, 0, types.NodeID{}, []byte{})
+	res, err = o.Eligible(context.TODO(), types.LayerID(cfg.ConfidenceParam*2+11), 1, 0, types.NodeID{}, []byte{})
 	assert.NotNil(t, err)
 	assert.Equal(t, "active set size is zero", err.Error())
 	assert.False(t, res)
 
 	o.getActiveSet = (&mockActiveSetProvider{10}).ActiveSet
-	res, err = o.Eligible(types.LayerID(50), 1, 10, types.NodeID{}, []byte{})
+	res, err = o.Eligible(context.TODO(), types.LayerID(50), 1, 10, types.NodeID{}, []byte{})
 	assert.Nil(t, err)
 	assert.True(t, res)
 }
@@ -186,14 +186,14 @@ func Test_safeLayer(t *testing.T) {
 
 func Test_ZeroParticipants(t *testing.T) {
 	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{5}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, defLayersPerEpoch, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
-	res, err := o.Eligible(1, 0, 0, types.NodeID{Key: ""}, []byte{1})
+	res, err := o.Eligible(context.TODO(), 1, 0, 0, types.NodeID{Key: ""}, []byte{1})
 	assert.Nil(t, err)
 	assert.False(t, res)
 }
 
 func Test_AllParticipants(t *testing.T) {
 	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{5}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
-	res, err := o.Eligible(0, 0, 5, types.NodeID{Key: ""}, []byte{1})
+	res, err := o.Eligible(context.TODO(), 0, 0, 5, types.NodeID{Key: ""}, []byte{1})
 	assert.Nil(t, err)
 	assert.True(t, res)
 }
@@ -212,7 +212,7 @@ func Test_ExpectedCommitteeSize(t *testing.T) {
 	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{setSize}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	count := 0
 	for i := 0; i < setSize; i++ {
-		res, err := o.Eligible(0, 0, commSize, types.NodeID{Key: ""}, genBytes())
+		res, err := o.Eligible(context.TODO(), 0, 0, commSize, types.NodeID{Key: ""}, genBytes())
 		assert.Nil(t, err)
 		if res {
 			count++
@@ -283,7 +283,7 @@ func Test_BlsSignVerify(t *testing.T) {
 	id := types.NodeID{Key: "abc", VRFPublicKey: pu}
 	proof, err := o.Proof(context.TODO(), 1, 1)
 	assert.Nil(t, err)
-	res, err := o.Eligible(1, 1, 10, id, proof)
+	res, err := o.Eligible(context.TODO(), 1, 1, 10, id, proof)
 	assert.Nil(t, err)
 	assert.True(t, res)
 }
@@ -309,14 +309,14 @@ func TestOracle_Proof(t *testing.T) {
 
 func TestOracle_Eligible(t *testing.T) {
 	o := New(&mockValueProvider{0, errMy}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
-	res, err := o.Eligible(1, 2, 3, types.NodeID{}, []byte{})
+	res, err := o.Eligible(context.TODO(), 1, 2, 3, types.NodeID{}, []byte{})
 	assert.False(t, res)
 	assert.NotNil(t, err)
 	assert.Equal(t, errMy, err)
 
 	o.beacon = &mockValueProvider{0, nil}
 	o.vrfVerifier = buildVerifier(false, nil)
-	res, err = o.Eligible(1, 2, 3, types.NodeID{}, []byte{})
+	res, err = o.Eligible(context.TODO(), 1, 2, 3, types.NodeID{}, []byte{})
 	assert.False(t, res)
 	assert.Nil(t, err)
 }
@@ -500,6 +500,6 @@ func TestOracle_Eligible2(t *testing.T) {
 	o.vrfVerifier = func(msg, sig, pub []byte) (bool, error) {
 		return true, nil
 	}
-	_, err := o.Eligible(100, 1, 1, types.NodeID{}, []byte{})
+	_, err := o.Eligible(context.TODO(), 100, 1, 1, types.NodeID{}, []byte{})
 	assert.Equal(t, errFoo, err)
 }
