@@ -27,12 +27,12 @@ type mockMessageValidator struct {
 	countContext int
 }
 
-func (mmv *mockMessageValidator) SyntacticallyValidateMessage(m *Msg) bool {
+func (mmv *mockMessageValidator) SyntacticallyValidateMessage(context.Context, *Msg) bool {
 	mmv.countSyntax++
 	return mmv.syntaxValid
 }
 
-func (mmv *mockMessageValidator) ContextuallyValidateMessage(*Msg, int32) error {
+func (mmv *mockMessageValidator) ContextuallyValidateMessage(context.Context, *Msg, int32) error {
 	mmv.countContext++
 	return mmv.contextValid
 }
@@ -149,7 +149,7 @@ type mockEligibilityValidator struct {
 	valid bool
 }
 
-func (mev *mockEligibilityValidator) Validate(*Msg) bool {
+func (mev *mockEligibilityValidator) Validate(context.Context, *Msg) bool {
 	return mev.valid
 }
 
@@ -253,10 +253,10 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	broker.Start(context.TODO())
 	proc := generateConsensusProcess(t)
 	proc.inbox, _ = broker.Register(context.TODO(), proc.ID())
-	proc.advanceToNextRound()
-	proc.advanceToNextRound()
+	proc.advanceToNextRound(context.TODO())
+	proc.advanceToNextRound(context.TODO())
 	assert.Equal(t, int32(1), proc.k)
-	proc.advanceToNextRound()
+	proc.advanceToNextRound(context.TODO())
 	assert.Equal(t, int32(2), proc.k)
 }
 
@@ -284,7 +284,7 @@ func TestConsensusProcess_Id(t *testing.T) {
 func TestNewConsensusProcess_AdvanceToNextRound(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	k := proc.k
-	proc.advanceToNextRound()
+	proc.advanceToNextRound(context.TODO())
 	assert.Equal(t, k+1, proc.k)
 }
 
@@ -372,8 +372,8 @@ func TestConsensusProcess_procProposal(t *testing.T) {
 		return true
 	}
 	proc.SetInbox(make(chan *Msg))
-	proc.advanceToNextRound()
-	proc.advanceToNextRound()
+	proc.advanceToNextRound(context.TODO())
+	proc.advanceToNextRound(context.TODO())
 	s := NewSetFromValues(value1)
 	m := BuildProposalMsg(generateSigning(t), s)
 	mpt := &mockProposalTracker{}
@@ -381,14 +381,14 @@ func TestConsensusProcess_procProposal(t *testing.T) {
 	proc.handleMessage(context.TODO(), m)
 	//proc.processProposalMsg(m)
 	assert.Equal(t, 1, mpt.countOnProposal)
-	proc.advanceToNextRound()
+	proc.advanceToNextRound(context.TODO())
 	proc.handleMessage(context.TODO(), m)
 	assert.Equal(t, 1, mpt.countOnLateProposal)
 }
 
 func TestConsensusProcess_procCommit(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	proc.advanceToNextRound()
+	proc.advanceToNextRound(context.TODO())
 	s := NewDefaultEmptySet()
 	proc.commitTracker = newCommitTracker(1, 1, s)
 	m := BuildCommitMsg(generateSigning(t), s)
@@ -400,7 +400,7 @@ func TestConsensusProcess_procCommit(t *testing.T) {
 
 func TestConsensusProcess_procNotify(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	proc.advanceToNextRound()
+	proc.advanceToNextRound(context.TODO())
 	s := NewSetFromValues(value1)
 	m := BuildNotifyMsg(generateSigning(t), s)
 	proc.processNotifyMsg(context.TODO(), m)
@@ -417,7 +417,7 @@ func TestConsensusProcess_procNotify(t *testing.T) {
 func TestConsensusProcess_Termination(t *testing.T) {
 
 	proc := generateConsensusProcess(t)
-	proc.advanceToNextRound()
+	proc.advanceToNextRound(context.TODO())
 	s := NewSetFromValues(value1)
 
 	for i := 0; i < cfg.F+1; i++ {
@@ -437,13 +437,13 @@ func TestConsensusProcess_Termination(t *testing.T) {
 
 func TestConsensusProcess_currentRound(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	proc.advanceToNextRound()
+	proc.advanceToNextRound(context.TODO())
 	assert.Equal(t, statusRound, proc.currentRound())
-	proc.advanceToNextRound()
+	proc.advanceToNextRound(context.TODO())
 	assert.Equal(t, proposalRound, proc.currentRound())
-	proc.advanceToNextRound()
+	proc.advanceToNextRound(context.TODO())
 	assert.Equal(t, commitRound, proc.currentRound())
-	proc.advanceToNextRound()
+	proc.advanceToNextRound(context.TODO())
 	assert.Equal(t, notifyRound, proc.currentRound())
 }
 
@@ -451,7 +451,7 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	r := require.New(t)
 	proc := generateConsensusProcess(t)
 	m := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
-	proc.advanceToNextRound()
+	proc.advanceToNextRound(context.TODO())
 	proc.onEarlyMessage(context.TODO(), buildMessage(nil))
 	r.Equal(0, len(proc.pending))
 	proc.onEarlyMessage(context.TODO(), m)
@@ -497,7 +497,7 @@ func TestIterationFromCounter(t *testing.T) {
 
 func TestConsensusProcess_beginRound1(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	proc.advanceToNextRound()
+	proc.advanceToNextRound(context.TODO())
 	proc.onRoundBegin(context.TODO())
 	network := &mockP2p{}
 	proc.network = network
@@ -516,7 +516,7 @@ func TestConsensusProcess_beginRound1(t *testing.T) {
 
 func TestConsensusProcess_beginRound2(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	proc.advanceToNextRound()
+	proc.advanceToNextRound(context.TODO())
 	network := &mockP2p{}
 	proc.network = network
 	oracle := &mockRolacle{MockStateQuerier: MockStateQuerier{true, nil}}

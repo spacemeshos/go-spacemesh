@@ -1,6 +1,7 @@
 package fetch
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -65,7 +66,7 @@ func (m mockNet) GetRandomPeer() p2ppeers.Peer {
 	return pub1
 }
 
-func (m mockNet) Start() error {
+func (m mockNet) Start(ctx context.Context) error {
 	return nil
 }
 

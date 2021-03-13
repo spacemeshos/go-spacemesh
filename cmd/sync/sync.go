@@ -169,7 +169,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 
 	sleep := time.Duration(10) * time.Second
 	lg.Info("wait %v sec", sleep)
-	app.sync.Start()
+	app.sync.Start(cmdp.Ctx)
 	for app.sync.ProcessedLayer() < types.LayerID(expectedLayers) {
 		app.sync.ForceSync()
 		lg.Info("sleep for %v sec", 30)

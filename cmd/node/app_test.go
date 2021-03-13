@@ -4,6 +4,7 @@ package node
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -142,7 +143,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		defer GracefulShutdown(suite.apps)
 
 		for _, a := range suite.apps {
-			a.startServices()
+			a.startServices(context.TODO())
 		}
 
 		ActivateGrpcServer(suite.apps[0])
@@ -198,7 +199,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	// test that loaded root is equal
 	assert.Equal(suite.T(), oldRoot, smApp.state.GetStateRoot())
 	// start and stop and test for no panics
-	smApp.startServices()
+	smApp.startServices(context.TODO())
 	smApp.stopServices()
 }
 
@@ -580,7 +581,7 @@ func TestShutdown(t *testing.T) {
 
 	r.NoError(err)
 
-	smApp.startServices()
+	smApp.startServices(context.TODO())
 	ActivateGrpcServer(smApp)
 
 	r.NoError(poetHarness.Teardown(true))

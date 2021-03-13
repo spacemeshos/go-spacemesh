@@ -2,6 +2,7 @@ package node
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -290,7 +291,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	eventDb := collector.NewMemoryCollector()
 	collect := collector.NewCollector(eventDb, pubsubAddr)
 	for _, a := range apps {
-		a.startServices()
+		a.startServices(context.TODO())
 	}
 	collect.Start(false)
 	ActivateGrpcServer(apps[0])

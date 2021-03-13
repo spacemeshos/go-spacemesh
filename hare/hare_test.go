@@ -47,7 +47,7 @@ type mockConsensusProcess struct {
 	set  *Set
 }
 
-func (mcp *mockConsensusProcess) Start() error {
+func (mcp *mockConsensusProcess) Start(ctx context.Context) error {
 	if mcp.term != nil {
 		<-mcp.term
 	}
@@ -109,7 +109,7 @@ func TestHare_Start(t *testing.T) {
 	require.Error(t, err)*/
 
 	h2 := createHare(n1, log.NewDefault(t.Name()))
-	require.NoError(t, h2.Start())
+	require.NoError(t, h2.Start(context.TODO()))
 }
 
 func TestHare_GetResult(t *testing.T) {
@@ -151,7 +151,7 @@ func TestHare_GetResult2(t *testing.T) {
 		return newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan)
 	}
 
-	h.Start()
+	h.Start(context.TODO())
 
 	for i := 1; i <= h.bufferSize; i++ {
 		h.beginLayer <- types.LayerID(i)
@@ -251,7 +251,7 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 	n1 := sim.NewNode()
 
 	h := createHare(n1, log.NewDefault(t.Name()))
-	h.Start()
+	h.Start(context.TODO())
 	mo := mockReport{8, NewEmptySet(0), true}
 	h.broker.Register(context.TODO(), mo.ID())
 	time.Sleep(1 * time.Second)
@@ -294,7 +294,7 @@ func TestHare_onTick(t *testing.T) {
 		createdChan <- struct{}{}
 		return nmcp
 	}
-	h.Start()
+	h.Start(context.TODO())
 
 	var wg sync.WaitGroup
 

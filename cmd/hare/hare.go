@@ -172,7 +172,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, validateBlocks, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, lt, lg)
 	log.Info("Starting hare service")
 	app.ha = hareI
-	err = app.ha.Start()
+	err = app.ha.Start(cmd.Context())
 	if err != nil {
 		log.Panic("error starting maatuf err=%v", err)
 	}

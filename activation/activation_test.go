@@ -2,6 +2,7 @@ package activation
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"sort"
 	"sync"
@@ -773,28 +774,28 @@ func TestStartPost(t *testing.T) {
 	// Attempt to initialize with invalid space.
 	// This test verifies that the params are being set in the post client.
 	assert.Nil(t, builder.commitment)
-	err = builder.StartPost(coinbase2, drive, 1000)
+	err = builder.StartPost(context.TODO(), coinbase2, drive, 1000)
 	assert.EqualError(t, err, "space (1000) must be a power of 2")
 	assert.Nil(t, builder.commitment)
 	assert.Equal(t, postProver.Cfg().SpacePerUnit, uint64(1000))
 
 	// Attempt to initialize again
 	assert.Nil(t, builder.commitment)
-	err = builder.StartPost(coinbase2, drive, 1024)
+	err = builder.StartPost(context.TODO(), coinbase2, drive, 1024)
 	assert.EqualError(t, err, "already started")
 	assert.Nil(t, builder.commitment)
 
 	// Reinitialize.
 	builder = NewBuilder(bc, id, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder2"))
 	assert.Nil(t, builder.commitment)
-	err = builder.StartPost(coinbase2, drive, 1024)
+	err = builder.StartPost(context.TODO(), coinbase2, drive, 1024)
 	assert.NoError(t, err)
 	time.Sleep(100 * time.Millisecond) // Introducing a small delay since the procedure is async.
 	assert.NotNil(t, builder.commitment)
 	assert.Equal(t, postProver.Cfg().SpacePerUnit, uint64(1024))
 
 	// Attempt to initialize again.
-	err = builder.StartPost(coinbase2, drive, 1024)
+	err = builder.StartPost(context.TODO(), coinbase2, drive, 1024)
 	assert.EqualError(t, err, "already initialized")
 	assert.NotNil(t, builder.commitment)
 
@@ -802,12 +803,12 @@ func TestStartPost(t *testing.T) {
 	// and so will result in running the execution phase instead of the initialization phase.
 	// This test verifies that a call to StartPost with a different space param will return an error.
 	execBuilder := NewBuilder(bc, id, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
-	err = execBuilder.StartPost(coinbase2, drive, 2048)
+	err = execBuilder.StartPost(context.TODO(), coinbase2, drive, 2048)
 	assert.EqualError(t, err, "config mismatch")
 
 	// Call StartPost with the correct space param.
 	assert.Nil(t, execBuilder.commitment)
-	err = execBuilder.StartPost(coinbase2, drive, 1024)
+	err = execBuilder.StartPost(context.TODO(), coinbase2, drive, 1024)
 	time.Sleep(100 * time.Millisecond)
 	assert.NoError(t, err)
 	assert.NotNil(t, execBuilder.commitment)

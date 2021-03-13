@@ -17,7 +17,7 @@ type startInstanceError error
 type syncStateFunc func() bool
 
 type validator interface {
-	Validate(m *Msg) bool
+	Validate(context.Context, *Msg) bool
 }
 
 // Closer adds the ability to close objects.
@@ -213,7 +213,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			}
 
 			// validate msg
-			if !b.eValidator.Validate(iMsg) {
+			if !b.eValidator.Validate(ctx, iMsg) {
 				b.WithContext(ctx).With().Warning("message validation failed: eligibility validator returned false",
 					h,
 					hareMsg,

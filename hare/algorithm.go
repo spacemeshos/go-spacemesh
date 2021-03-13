@@ -319,7 +319,7 @@ PreRound:
 			log.Int("set_size", proc.s.Size()),
 			types.LayerID(proc.instanceID))
 	}
-	proc.advanceToNextRound() // K was initialized to -1, K should be 0
+	proc.advanceToNextRound(ctx) // K was initialized to -1, K should be 0
 
 	// start first iteration
 	proc.onRoundBegin(ctx)
@@ -334,8 +334,8 @@ PreRound:
 				return
 			}
 		case <-ticker.C: // next round event
-			proc.onRoundEnd()
-			proc.advanceToNextRound()
+			proc.onRoundEnd(ctx)
+			proc.advanceToNextRound(ctx)
 
 			// exit if we reached the limit on number of iterations
 			if proc.k/4 >= int32(proc.cfg.LimitIterations) {
@@ -401,7 +401,7 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 
 	// validate context
 	mType := m.InnerMsg.Type.String()
-	if err := proc.validator.ContextuallyValidateMessage(m, proc.k); err != nil {
+	if err := proc.validator.ContextuallyValidateMessage(ctx, m, proc.k); err != nil {
 		// early message, keep for later
 		if err == errEarlyMsg {
 			logger.With().Debug("early message detected, keeping",
@@ -413,7 +413,7 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 				log.Err(err))
 
 			// validate syntax for early messages
-			if !proc.validator.SyntacticallyValidateMessage(m) {
+			if !proc.validator.SyntacticallyValidateMessage(ctx, m) {
 				logger.With().Warning("early message failed syntactic validation, discarding",
 					log.String("msg_type", mType),
 					log.String("sender_id", m.PubKey.ShortString()))
@@ -435,7 +435,7 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 	}
 
 	// validate syntax for contextually valid messages
-	if !proc.validator.SyntacticallyValidateMessage(m) {
+	if !proc.validator.SyntacticallyValidateMessage(ctx, m) {
 		logger.With().Warning("message failed syntactic validation, discarding",
 			log.String("msg_type", mType),
 			log.String("sender_id", m.PubKey.ShortString()),
@@ -508,8 +508,12 @@ func (proc *consensusProcess) sendMessage(msg *Msg) bool {
 }
 
 // logic of the end of a round by the round type
-func (proc *consensusProcess) onRoundEnd() {
-	proc.With().Debug("end of round", log.Int32("current_k", proc.k), types.LayerID(proc.instanceID))
+func (proc *consensusProcess) onRoundEnd(ctx context.Context) {
+	logger := proc.WithContext(ctx).WithFields(
+		log.Int32("current_k", proc.k),
+		types.LayerID(proc.instanceID),
+	)
+	logger.Debug("end of round")
 
 	// reset trackers
 	switch proc.currentRound() {
@@ -521,20 +525,19 @@ func (proc *consensusProcess) onRoundEnd() {
 		if s != nil {
 			sStr = s.String()
 		}
-		proc.Event().Info("proposal round ended",
+		logger.Event().Info("proposal round ended",
 			log.String("proposed_set", sStr),
-			log.Bool("is_conflicting", proc.proposalTracker.IsConflicting()),
-			types.LayerID(proc.instanceID))
+			log.Bool("is_conflicting", proc.proposalTracker.IsConflicting()))
 	case commitRound:
-		proc.With().Info("commit round ended", types.LayerID(proc.instanceID))
+		logger.Info("commit round ended")
 	}
 }
 
 // advances the state to the next round
-func (proc *consensusProcess) advanceToNextRound() {
+func (proc *consensusProcess) advanceToNextRound(ctx context.Context) {
 	proc.k++
 	if proc.k >= 4 && proc.k%4 == 0 {
-		proc.Event().Warning("starting new iteration",
+		proc.WithContext(ctx).Event().Warning("starting new iteration",
 			log.Int32("current_k", proc.k),
 			types.LayerID(proc.instanceID))
 	}

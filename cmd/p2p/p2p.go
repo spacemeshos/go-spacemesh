@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
@@ -78,7 +79,7 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 
 	// start the node
 
-	err = app.p2p.Start()
+	err = app.p2p.Start(cmdp.Ctx)
 	defer app.p2p.Shutdown()
 
 	if err != nil {
@@ -140,6 +141,7 @@ func (app *P2PApp) startAPI() {
 		}
 		jsonSvc = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
 		jsonSvc.StartService(
+			context.TODO(),
 			apiConf.StartDebugService,
 			apiConf.StartGatewayService,
 			apiConf.StartGlobalStateService,

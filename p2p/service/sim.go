@@ -197,7 +197,7 @@ func (sm simGossipMessage) ReportValidation(protocol string) {
 }
 
 // Start is here to satisfy the Service interface.
-func (sn *Node) Start() error {
+func (sn *Node) Start(ctx context.Context) error {
 	// on simulation this doesn't really matter yet.
 	return nil
 }

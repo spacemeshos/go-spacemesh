@@ -251,7 +251,8 @@ func (s *Switch) onClosedConnection(cwe net.ConnectionWithErr) {
 
 // Start starts the p2p service. if configured, bootstrap is started in the background.
 // returns error if the Switch is already running or there was an error starting one of the needed services.
-func (s *Switch) Start() error {
+func (s *Switch) Start(ctx context.Context) error {
+	ctx = log.WithNewSessionID(ctx)
 	if atomic.LoadUint32(&s.started) == 1 {
 		return errors.New("switch already running")
 	}
@@ -279,7 +280,6 @@ func (s *Switch) Start() error {
 		return err
 	}
 
-	ctx := log.WithNewSessionID(context.TODO())
 	s.logger.Debug("starting to listen for network messages")
 	s.listenToNetworkMessages(ctx) // fires up a goroutine for each queue of messages
 	s.logger.Debug("starting the udp server")

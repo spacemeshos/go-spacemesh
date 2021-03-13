@@ -2,6 +2,7 @@
 package service
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"net"
@@ -58,7 +59,7 @@ type GossipMessage interface {
 
 // Service is an interface that represents a networking service (ideally p2p) that we can use to send messages or listen to incoming messages
 type Service interface {
-	Start() error
+	Start(ctx context.Context) error
 	RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan GossipMessage
 	RegisterDirectProtocol(protocol string) chan DirectMessage
 	SubscribePeerEvents() (new chan p2pcrypto.PublicKey, del chan p2pcrypto.PublicKey)

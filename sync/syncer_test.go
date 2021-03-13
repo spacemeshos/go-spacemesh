@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -166,10 +167,10 @@ func TestSyncer_Start(t *testing.T) {
 	syncs, _, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	syn := syncs[0]
 
-	syn.Start()
-	syn.Start()
+	syn.Start(context.TODO())
+	syn.Start(context.TODO())
 	syn.Close()
-	syn.Start()
+	syn.Start(context.TODO())
 }
 
 func createBlock(activationTx types.ActivationTx, signer *signing.EdSigner) *types.Block {
@@ -194,7 +195,7 @@ func TestSyncer_Close(t *testing.T) {
 
 	sync1.AddBlockWithTxs(block)
 	sync1.Close()
-	sync.Start()
+	sync.Start(context.TODO())
 	sync.Close()
 	_, ok := <-sync.forceSync
 	assert.True(t, !ok, "channel 'forceSync' still open")
@@ -526,7 +527,7 @@ func TestSyncProtocol_SyncNodes(t *testing.T) {
 	syncObj2.getAndValidateLayer(5)
 
 	syncObj3.SyncInterval = time.Millisecond * 20
-	syncObj3.Start()
+	syncObj3.Start(context.TODO())
 
 	timeout := time.After(5 * time.Second)
 
@@ -630,11 +631,11 @@ func syncTest(dpType string, t *testing.T) {
 	syncObj1.AddBlockWithTxs(block11)
 	syncObj1.AddBlockWithTxs(block12)
 
-	syncObj1.Start()
+	syncObj1.Start(context.TODO())
 
-	syncObj2.Start()
-	syncObj3.Start()
-	syncObj4.Start()
+	syncObj2.Start(context.TODO())
+	syncObj3.Start(context.TODO())
+	syncObj4.Start(context.TODO())
 
 	// Keep trying until we're timed out or got a result or got an error
 	timeout := time.After(30 * time.Second)
@@ -780,10 +781,10 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 
 	timeout := time.After(60 * time.Second)
 	syncObj1.SetLatestLayer(6)
-	syncObj1.Start()
+	syncObj1.Start(context.TODO())
 
-	syncObj0.Start()
-	syncObj2.Start()
+	syncObj0.Start(context.TODO())
+	syncObj2.Start(context.TODO())
 
 	// Keep trying until we're timed out or got a result or got an error
 	for {
@@ -889,15 +890,15 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	err = syncObj1.AddBlockWithTxs(block8)
 
 	timeout := time.After(30 * time.Second)
-	syncObj1.Start()
+	syncObj1.Start(context.TODO())
 	syncObj1.SetLatestLayer(5)
-	syncObj2.Start()
+	syncObj2.Start(context.TODO())
 	syncObj2.SetLatestLayer(5)
-	syncObj3.Start()
+	syncObj3.Start(context.TODO())
 	syncObj3.SetLatestLayer(5)
-	syncObj4.Start()
+	syncObj4.Start(context.TODO())
 	syncObj4.SetLatestLayer(5)
-	syncObj5.Start()
+	syncObj5.Start(context.TODO())
 	syncObj5.SetLatestLayer(5)
 
 	// Keep trying until we're timed out or got a result or got an error
@@ -1314,7 +1315,7 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	sync.Mesh.Validator = lv
 	sync.SetLatestLayer(5)
 
-	sync.Start()
+	sync.Start(context.TODO())
 	time.Sleep(250 * time.Millisecond)
 	current := sync.GetCurrentLayer()
 

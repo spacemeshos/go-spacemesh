@@ -255,7 +255,7 @@ func Test_multipleCPs(t *testing.T) {
 		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
 		h := createMaatuf(cfg, rng, test.lCh[i], s, oracle, t.Name())
 		test.hare = append(test.hare, h)
-		e := h.Start()
+		e := h.Start(context.TODO())
 		r.NoError(e)
 	}
 
@@ -290,7 +290,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
 		h := createMaatuf(cfg, rng, test.lCh[i], mp2p, oracle, t.Name())
 		test.hare = append(test.hare, h)
-		e := h.Start()
+		e := h.Start(context.TODO())
 		r.NoError(e)
 	}
 

@@ -428,7 +428,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 		r.NoError(app.Initialize(cmd, args))
 		app.Config.API.GrpcServerPort = port
 		app.Config.DataDirParent = path
-		app.startAPIServices(NetMock{})
+		app.startAPIServices(context.TODO(), NetMock{})
 	}
 	defer app.stopServices()
 
@@ -500,7 +500,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
 		app.Config.DataDirParent = path
-		app.startAPIServices(NetMock{})
+		app.startAPIServices(context.TODO(), NetMock{})
 	}
 	defer app.stopServices()
 	str, err := testArgs()
