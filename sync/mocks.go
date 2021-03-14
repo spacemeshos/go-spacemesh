@@ -250,7 +250,6 @@ func (m *mockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
 }
 
 type mockTxProcessor struct {
-
 }
 
 func (m mockTxProcessor) HandleTxSyncData(data []byte) error {
@@ -276,8 +275,7 @@ func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *
 	clock := mockClock{Layer: expectedLayers + 1}
 	lg.Info("current layer %v", clock.GetCurrentLayer())
 
-	blockHandler := blocks.NewBlockHandler(blocks.Config{Depth: 10}, msh,  blockEligibilityValidatorMock{}, lg)
-
+	blockHandler := blocks.NewBlockHandler(blocks.Config{Depth: 10}, msh, blockEligibilityValidatorMock{}, lg)
 
 	fCfg := fetch.DefaultConfig()
 	fetcher := fetch.NewFetch(fCfg, swarm, lg)

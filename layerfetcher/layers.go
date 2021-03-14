@@ -85,7 +85,7 @@ type Logic struct {
 	layerResM            sync.RWMutex
 	layerHashResM        sync.RWMutex
 	blockHashResM        sync.RWMutex
-	goldenATXID      types.ATXID
+	goldenATXID          types.ATXID
 }
 
 // Config defines configuration for layer fetching logic
@@ -117,7 +117,7 @@ func NewLogic(cfg Config, blocks blockHandler, atxs atxHandler, poet poetDb, atx
 		atxIds:               atxIDs,
 		txs:                  txs,
 		layerResM:            sync.RWMutex{},
-		goldenATXID:      cfg.GoldenATXID,
+		goldenATXID:          cfg.GoldenATXID,
 	}
 
 	srv.RegisterBytesMsgHandler(LayerHashMsg, l.LayerHashReqReceiver)

@@ -157,7 +157,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		log.Info("getting layer %v", i)
 		if lyr, err2 := sync.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
 			l := types.LayerID(i)
-			if l > types.GetEffectiveGenesis(){
+			if l > types.GetEffectiveGenesis() {
 				lg.Info("loaded %v layers from disk %v", i-1, err2)
 				break
 			}

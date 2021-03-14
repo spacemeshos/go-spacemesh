@@ -581,7 +581,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	}
 
 	bCfg := blocks.Config{
-		Depth: app.Config.Hdist,
+		Depth:       app.Config.Hdist,
 		GoldenATXID: goldenATXID,
 	}
 	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, lg)
