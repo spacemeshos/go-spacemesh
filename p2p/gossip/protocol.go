@@ -26,7 +26,7 @@ type peersManager interface {
 
 // Interface for the underlying p2p layer
 type baseNetwork interface {
-	SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
+	SendMessage(ctx context.Context, peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
 	SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey)
 	ProcessGossipProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error
 }
@@ -74,8 +74,8 @@ func NewProtocol(config config.SwarmConfig, base baseNetwork, peersManager peers
 }
 
 // Start a loop that process peers events
-func (p *Protocol) Start() {
-	go p.propagationEventLoop() // TODO consider running several consumers
+func (p *Protocol) Start(ctx context.Context) {
+	go p.propagationEventLoop(ctx) // TODO consider running several consumers
 }
 
 // Close stops all protocol routines.
@@ -129,7 +129,7 @@ func (p *Protocol) processMessage(ctx context.Context, sender p2pcrypto.PublicKe
 }
 
 // send a message to all the peers.
-func (p *Protocol) propagateMessage(payload []byte, h types.Hash12, nextProt string, exclude p2pcrypto.PublicKey) {
+func (p *Protocol) propagateMessage(ctx context.Context, payload []byte, h types.Hash12, nextProt string, exclude p2pcrypto.PublicKey) {
 	//TODO soon : don't wait for mesaage to send and if we finished sending last message one of the peers send the next message to him.
 	// limit the number of simultaneous sends. *consider other messages (mainly sync)
 	var wg sync.WaitGroup
@@ -141,9 +141,9 @@ peerLoop:
 		wg.Add(1)
 		go func(pubkey p2pcrypto.PublicKey) {
 			// TODO: replace peer ?
-			err := p.net.SendMessage(pubkey, nextProt, payload)
+			err := p.net.SendMessage(ctx, pubkey, nextProt, payload)
 			if err != nil {
-				p.With().Warning("failed sending",
+				p.WithContext(ctx).With().Warning("failed sending",
 					log.String("protocol", nextProt),
 					h,
 					log.FieldNamed("to", pubkey),
@@ -155,24 +155,26 @@ peerLoop:
 	wg.Wait()
 }
 
-func (p *Protocol) handlePQ() {
+func (p *Protocol) handlePQ(ctx context.Context) {
 	for {
+		// Generate new reqID for each message
+		ctx := log.WithNewRequestID(ctx)
 		mi, err := p.pq.Read()
 		if err != nil {
-			p.With().Info("priority queue was closed, exiting", log.Err(err))
+			p.WithContext(ctx).With().Info("priority queue was closed, exiting", log.Err(err))
 			return
 		}
 		m, ok := mi.(service.MessageValidation)
 		if !ok {
-			p.Error("could not convert to message validation, ignoring message")
+			p.WithContext(ctx).Error("could not convert to message validation, ignoring message")
 			continue
 		}
 		h := types.CalcMessageHash12(m.Message(), m.Protocol())
-		p.Log.With().Debug("new_gossip_message_relay",
+		p.WithContext(ctx).With().Debug("new_gossip_message_relay",
 			log.FieldNamed("from", m.Sender()),
 			log.String("protocol", m.Protocol()),
 			h)
-		p.propagateMessage(m.Message(), h, m.Protocol(), m.Sender())
+		p.propagateMessage(ctx, m.Message(), h, m.Protocol(), m.Sender())
 	}
 }
 
@@ -187,14 +189,14 @@ func (p *Protocol) getPriority(protoName string) priorityq.Priority {
 }
 
 // pushes messages that passed validation into the priority queue
-func (p *Protocol) propagationEventLoop() {
-	go p.handlePQ()
+func (p *Protocol) propagationEventLoop(ctx context.Context) {
+	go p.handlePQ(ctx)
 
 	for {
 		select {
 		case msgV := <-p.propagateQ:
 			if err := p.pq.Write(p.getPriority(msgV.Protocol()), msgV); err != nil {
-				p.With().Error("could not write to priority queue",
+				p.WithContext(ctx).With().Error("could not write to priority queue",
 					log.Err(err),
 					log.String("protocol", msgV.Protocol()))
 			}
@@ -202,7 +204,7 @@ func (p *Protocol) propagationEventLoop() {
 
 		case <-p.shutdown:
 			p.pq.Close()
-			p.Error("propagate event loop stopped: protocol shutdown")
+			p.WithContext(ctx).Error("propagate event loop stopped: protocol shutdown")
 			return
 		}
 	}

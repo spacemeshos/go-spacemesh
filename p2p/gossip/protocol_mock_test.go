@@ -89,17 +89,17 @@ func (m *MockbaseNetwork) EXPECT() *MockbaseNetworkMockRecorder {
 }
 
 // SendMessage mocks base method
-func (m *MockbaseNetwork) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error {
+func (m *MockbaseNetwork) SendMessage(ctx context.Context, peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendMessage", peerPubkey, protocol, payload)
+	ret := m.ctrl.Call(m, "SendMessage", ctx, peerPubkey, protocol, payload)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SendMessage indicates an expected call of SendMessage
-func (mr *MockbaseNetworkMockRecorder) SendMessage(peerPubkey, protocol, payload interface{}) *gomock.Call {
+func (mr *MockbaseNetworkMockRecorder) SendMessage(ctx, peerPubkey, protocol, payload interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendMessage", reflect.TypeOf((*MockbaseNetwork)(nil).SendMessage), peerPubkey, protocol, payload)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendMessage", reflect.TypeOf((*MockbaseNetwork)(nil).SendMessage), ctx, peerPubkey, protocol, payload)
 }
 
 // SubscribePeerEvents mocks base method

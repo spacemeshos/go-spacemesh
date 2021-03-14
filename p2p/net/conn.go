@@ -83,7 +83,7 @@ type FormattedConnection struct {
 type networker interface {
 	HandlePreSessionIncomingMessage(c Connection, msg []byte) error
 	EnqueueMessage(ctx context.Context, ime IncomingMessageEvent)
-	SubscribeClosingConnections(func(c ConnectionWithErr))
+	SubscribeClosingConnections(func(context.Context, ConnectionWithErr))
 	publishClosingConnection(c ConnectionWithErr)
 	NetworkID() int8
 }

@@ -51,7 +51,7 @@ type NetworkMock struct {
 	preSessionCount  int32
 	regNewRemoteConn []func(NewConnectionEvent)
 	networkID        int8
-	closingConn      []func(ConnectionWithErr)
+	closingConn      []func(context.Context, ConnectionWithErr)
 	incomingMessages []chan IncomingMessageEvent
 	dialSessionID    []byte
 	logger           log.Log
@@ -61,7 +61,7 @@ type NetworkMock struct {
 func NewNetworkMock() *NetworkMock {
 	return &NetworkMock{
 		regNewRemoteConn: make([]func(NewConnectionEvent), 0, 3),
-		closingConn:      make([]func(ConnectionWithErr), 0, 3),
+		closingConn:      make([]func(context.Context, ConnectionWithErr), 0, 3),
 		logger:           getTestLogger("network mock"),
 		incomingMessages: []chan IncomingMessageEvent{make(chan IncomingMessageEvent, 256)},
 	}
@@ -123,14 +123,14 @@ func (n NetworkMock) PublishNewRemoteConnection(nce NewConnectionEvent) {
 }
 
 // SubscribeClosingConnections subscribes on new connections
-func (n *NetworkMock) SubscribeClosingConnections(f func(connection ConnectionWithErr)) {
+func (n *NetworkMock) SubscribeClosingConnections(f func(context.Context, ConnectionWithErr)) {
 	n.closingConn = append(n.closingConn, f)
 }
 
 // publishClosingConnection and stuff
 func (n NetworkMock) publishClosingConnection(con ConnectionWithErr) {
 	for _, f := range n.closingConn {
-		f(con)
+		f(context.TODO(), con)
 	}
 }
 

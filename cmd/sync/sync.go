@@ -32,9 +32,9 @@ var cmd = &cobra.Command{
 	Use:   "sync",
 	Short: "start sync",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Starting sync")
+		fmt.Println("starting sync")
 		syncApp := newSyncApp()
-		log.With().Info("Initializing NewSyncApp", log.String("DataDir", syncApp.Config.DataDir()))
+		log.With().Info("initializing new sync app", log.String("DataDir", syncApp.Config.DataDir()))
 		defer syncApp.Cleanup()
 		syncApp.Initialize(cmd)
 		syncApp.start(cmd, args)
@@ -77,7 +77,7 @@ func newSyncApp() *syncApp {
 func (app *syncApp) Cleanup() {
 	err := os.RemoveAll(app.Config.DataDir())
 	if err != nil {
-		app.sync.Error("failed to cleanup sync: %v", err)
+		app.sync.With().Error("failed to cleanup sync", log.Err(err))
 	}
 }
 
@@ -126,7 +126,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	}
 	poetDbStore, err := database.NewLDBDatabase(path+"poet", 0, 0, lg.WithName("poetDbStore"))
 	if err != nil {
-		lg.Error("error: ", err)
+		lg.With().Error("error", log.Err(err))
 		return
 	}
 
@@ -134,12 +134,12 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 
 	mshdb, err := mesh.NewPersistentMeshDB(path, 5, lg.WithOptions(log.Nop))
 	if err != nil {
-		lg.Error("error: ", err)
+		lg.With().Error("error", log.Err(err))
 		return
 	}
 	atxdbStore, err := database.NewLDBDatabase(path+"atx", 0, 0, lg)
 	if err != nil {
-		lg.Error("error: ", err)
+		lg.With().Error("error", log.Err(err))
 		return
 	}
 
@@ -148,8 +148,8 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 
 	sync := sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, goldenATXID, types.LayerID(expectedLayers))
 	app.sync = sync
-	if err = swarm.Start(context.TODO()); err != nil {
-		log.Panic("error starting p2p err=%v", err)
+	if err = swarm.Start(cmdp.Ctx); err != nil {
+		log.With().Panic("error starting p2p", log.Err(err))
 	}
 
 	i := conf.LayersPerEpoch * 2
@@ -162,7 +162,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 				break
 			}
 		} else {
-			lg.Info("loaded layer %v from disk ", i)
+			lg.Info("loaded layer %v from disk", i)
 			sync.ValidateLayer(lyr)
 		}
 	}
@@ -256,7 +256,7 @@ func getData(path, prefix string, lg log.Log) error {
 
 func main() {
 	if err := cmd.Execute(); err != nil {
-		log.Info("error ", err)
+		log.With().Info("error", log.Err(err))
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

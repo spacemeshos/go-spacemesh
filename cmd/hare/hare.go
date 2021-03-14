@@ -137,7 +137,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 		go func() {
 			err := http.ListenAndServe(":6060", nil)
 			if err != nil {
-				log.With().Error("cannot start http server", err)
+				log.With().Error("cannot start http server", log.Err(err))
 			}
 		}()
 	}

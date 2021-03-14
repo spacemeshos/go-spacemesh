@@ -241,13 +241,13 @@ func (sn *Node) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcryp
 // returns error if the node cant be found. corresponds to `SendMessage`
 
 // SendWrappedMessage send a wrapped message to another simulated node.
-func (sn *Node) SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *DataMsgWrapper) error {
-	return sn.sendMessageImpl(nodeID, protocol, payload)
+func (sn *Node) SendWrappedMessage(ctx context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload *DataMsgWrapper) error {
+	return sn.sendMessageImpl(ctx, nodeID, protocol, payload)
 }
 
 // SendMessage send a message to another simulated node.
-func (sn *Node) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error {
-	return sn.sendMessageImpl(peerPubkey, protocol, DataBytes{Payload: payload})
+func (sn *Node) SendMessage(ctx context.Context, peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error {
+	return sn.sendMessageImpl(ctx, peerPubkey, protocol, DataBytes{Payload: payload})
 }
 
 // GossipReady is a chan which is closed when we established initial min connections with peers.
@@ -257,7 +257,7 @@ func (sn *Node) GossipReady() <-chan struct{} {
 	return c
 }
 
-func (sn *Node) sendMessageImpl(nodeID p2pcrypto.PublicKey, protocol string, payload Data) error {
+func (sn *Node) sendMessageImpl(ctx context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload Data) error {
 	sn.sim.mutex.RLock()
 	thec, ok := sn.sim.protocolDirectHandler[nodeID][protocol]
 	sn.sim.mutex.RUnlock()

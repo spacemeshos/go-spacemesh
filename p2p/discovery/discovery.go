@@ -35,7 +35,7 @@ type PeerStore interface {
 // Protocol is the API of node messages used to discover new nodes.
 type Protocol interface {
 	Ping(p p2pcrypto.PublicKey) error
-	GetAddresses(server p2pcrypto.PublicKey) ([]*node.Info, error)
+	GetAddresses(context.Context, p2pcrypto.PublicKey) ([]*node.Info, error)
 	SetLocalAddresses(tcp, udp int)
 	Close()
 }

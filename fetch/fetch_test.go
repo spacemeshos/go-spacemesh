@@ -99,7 +99,7 @@ func (m mockNet) RegisterDirectProtocolWithChannel(protocol string, ingressChann
 	return nil
 }
 
-func (m mockNet) SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
+func (m mockNet) SendWrappedMessage(ctx context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
 	return nil
 }
 

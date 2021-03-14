@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -36,7 +37,7 @@ func TestProtocol_SendRequest(t *testing.T) {
 		strCh <- string(msg)
 	}
 
-	err := fnd2.SendRequest(1, nil, n1.PublicKey(), callback, func(err error) {})
+	err := fnd2.SendRequest(context.TODO(), 1, nil, n1.PublicKey(), callback, func(err error) {})
 	msg := <-strCh
 
 	assert.EqualValues(t, "some value to return", msg, "value received did not match correct value")
@@ -44,7 +45,7 @@ func TestProtocol_SendRequest(t *testing.T) {
 
 	// Now try sending to a bad address
 	randkey := p2pcrypto.NewRandomPubkey()
-	err = fnd2.SendRequest(1, nil, randkey, callback, func(err error) {})
+	err = fnd2.SendRequest(context.TODO(), 1, nil, randkey, callback, func(err error) {})
 	assert.Error(t, err, "Sending to bad address should return error")
 }
 
@@ -72,7 +73,7 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 		strCh <- string(msg)
 	}
 
-	err := fnd2.SendRequest(1, nil, n1.PublicKey(), callback, func(err error) {})
+	err := fnd2.SendRequest(context.TODO(), 1, nil, n1.PublicKey(), callback, func(err error) {})
 	assert.NoError(t, err, "Should not return error")
 	assert.EqualValues(t, 1, fnd2.pendingQueue.Len(), "value received did not match correct value1")
 
@@ -116,7 +117,7 @@ func TestProtocol_Close(t *testing.T) {
 		strCh <- string(msg)
 	}
 
-	err := fnd2.SendRequest(1, nil, n1.PublicKey(), callback, func(err error) {})
+	err := fnd2.SendRequest(context.TODO(), 1, nil, n1.PublicKey(), callback, func(err error) {})
 	assert.NoError(t, err, "Should not return error")
 	assert.EqualValues(t, 1, fnd2.pendingQueue.Len(), "value received did not match correct value1")
 	fnd2.Close()

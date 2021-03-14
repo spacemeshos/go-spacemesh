@@ -35,7 +35,7 @@ const ConnectingTimeout = 20 * time.Second //todo: add to the config
 const UPNPRetries = 20
 
 type cPool interface {
-	GetConnection(address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error)
+	GetConnection(ctx context.Context, address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error)
 	GetConnectionIfExists(pk p2pcrypto.PublicKey) (net.Connection, error)
 	CloseConnection(key p2pcrypto.PublicKey)
 	Shutdown()
@@ -204,15 +204,16 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 	}
 
 	// Create the udp version of Switch
-	mux := NewUDPMux(s.lNode, s.lookupFunc, udpnet, s.config.NetworkID, s.logger)
+	mux := NewUDPMux(ctx, s.lNode, s.lookupFunc, udpnet, s.config.NetworkID, s.logger)
 	s.udpServer = mux
 
 	// todo : if discovery on
 	s.discover = discovery.New(l, config.SwarmConfig, s.udpServer, datadir, s.logger) // create table and discovery protocol
 	cpool := connectionpool.NewConnectionPool(s.network.Dial, l.PublicKey(), logger)
 	s.network.SubscribeOnNewRemoteConnections(func(nce net.NewConnectionEvent) {
-		if err := cpool.OnNewConnection(nce); err != nil {
-			s.logger.With().Warning("adding incoming connection", log.Err(err))
+		ctx := log.WithNewSessionID(ctx)
+		if err := cpool.OnNewConnection(ctx, nce); err != nil {
+			s.logger.WithContext(ctx).With().Warning("adding incoming connection", log.Err(err))
 			// no need to continue since this means connection already exists.
 			return
 		}
@@ -232,8 +233,7 @@ func (s *Switch) lookupFunc(target p2pcrypto.PublicKey) (*node.Info, error) {
 
 func (s *Switch) onNewConnection(nce net.NewConnectionEvent) {
 	// todo: consider doing cpool actions from here instead of registering cpool as well.
-	err := s.addIncomingPeer(nce.Node.PublicKey())
-	if err != nil {
+	if err := s.addIncomingPeer(nce.Node.PublicKey()); err != nil {
 		s.logger.With().Warning("error adding new connection",
 			log.FieldNamed("peer_id", nce.Node.PublicKey()),
 			log.Err(err))
@@ -242,7 +242,7 @@ func (s *Switch) onNewConnection(nce net.NewConnectionEvent) {
 	}
 }
 
-func (s *Switch) onClosedConnection(cwe net.ConnectionWithErr) {
+func (s *Switch) onClosedConnection(ctx context.Context, cwe net.ConnectionWithErr) {
 	// we don't want to block, we know this node's connection was closed.
 	// todo: pass on closing reason, if we closed the connection.
 	// 	mark address book or ban if malicious activity recognised
@@ -252,7 +252,6 @@ func (s *Switch) onClosedConnection(cwe net.ConnectionWithErr) {
 // Start starts the p2p service. if configured, bootstrap is started in the background.
 // returns error if the Switch is already running or there was an error starting one of the needed services.
 func (s *Switch) Start(ctx context.Context) error {
-	ctx = log.WithNewSessionID(ctx)
 	if atomic.LoadUint32(&s.started) == 1 {
 		return errors.New("switch already running")
 	}
@@ -267,8 +266,8 @@ func (s *Switch) Start(ctx context.Context) error {
 		return fmt.Errorf("error getting port: %v", err)
 	}
 
-	s.network.Start(log.WithNewSessionID(context.Background()), tcpListener)
-	s.udpnetwork.Start(log.WithNewSessionID(context.Background()), udpListener)
+	s.network.Start(log.WithNewSessionID(ctx), tcpListener)
+	s.udpnetwork.Start(log.WithNewSessionID(ctx), udpListener)
 
 	tcpAddress := s.network.LocalAddr().(*inet.TCPAddr)
 	udpAddress := s.udpnetwork.LocalAddr().(*inet.UDPAddr)
@@ -309,14 +308,14 @@ func (s *Switch) Start(ctx context.Context) error {
 	// wait for neighborhood
 	if s.config.SwarmConfig.Gossip {
 		// start gossip before starting to collect peers
-		s.gossip.Start()
+		s.gossip.Start(log.WithNewSessionID(ctx))
 		go func() {
 			if s.config.SwarmConfig.Bootstrap {
 				if err := s.waitForBoot(); err != nil {
 					return
 				}
 			}
-			err := s.startNeighborhood() // non blocking
+			err := s.startNeighborhood(ctx) // non blocking
 			//todo:maybe start listening only after we got enough outbound neighbors?
 			if err != nil {
 				s.gossipErr = err
@@ -339,19 +338,19 @@ func (s *Switch) LocalNode() node.LocalNode {
 
 // SendWrappedMessage sends a wrapped message in order to differentiate between request response and sub protocol messages.
 // It is used by `MessageServer`.
-func (s *Switch) SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
-	return s.sendMessageImpl(nodeID, protocol, payload)
+func (s *Switch) SendWrappedMessage(ctx context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
+	return s.sendMessageImpl(ctx, nodeID, protocol, payload)
 }
 
 // SendMessage sends a p2p message to a peer using it's public key. the provided public key must belong
 // to one of our connected neighbors. otherwise an error will return.
-func (s *Switch) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error {
-	return s.sendMessageImpl(peerPubkey, protocol, service.DataBytes{Payload: payload})
+func (s *Switch) SendMessage(ctx context.Context, peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error {
+	return s.sendMessageImpl(ctx, peerPubkey, protocol, service.DataBytes{Payload: payload})
 }
 
 // sendMessageImpl Sends a message to a remote node
 // receives `service.Data` which is either bytes or a DataMsgWrapper.
-func (s *Switch) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string, payload service.Data) error {
+func (s *Switch) sendMessageImpl(ctx context.Context, peerPubKey p2pcrypto.PublicKey, protocol string, payload service.Data) error {
 	var err error
 	var conn net.Connection
 
@@ -368,7 +367,7 @@ func (s *Switch) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string
 
 	session := conn.Session()
 	if session == nil {
-		s.logger.With().Warning("failed to send message to peer, no valid session",
+		s.logger.WithContext(ctx).With().Warning("failed to send message to peer, no valid session",
 			log.FieldNamed("peer_id", conn.RemotePublicKey()))
 		return ErrNoSession
 	}
@@ -399,7 +398,7 @@ func (s *Switch) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string
 
 	err = conn.Send(final)
 
-	s.logger.Debug("direct message sent successfully")
+	s.logger.WithContext(ctx).Debug("direct message sent successfully")
 
 	return err
 }
@@ -504,10 +503,12 @@ func (s *Switch) listenToNetworkMessages(ctx context.Context) {
 	// Switch process all the queues concurrently but synchronously for each queue
 	netqueues := s.network.IncomingMessages()
 	for nq := range netqueues { // run a separate worker for each queue.
+		ctx := log.WithNewSessionID(ctx)
 		go func(c chan net.IncomingMessageEvent) {
 			for {
 				select {
 				case msg := <-c:
+					// requestID will be restored from the saved message, no need to generate one here
 					s.processMessage(ctx, msg)
 				case <-s.shutdown:
 					return
@@ -684,25 +685,25 @@ func (s *Switch) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey) {
 const NoResultsInterval = 1 * time.Second
 
 // startNeighborhood starts the peersLoop and send a request to start connecting peers.
-func (s *Switch) startNeighborhood() error {
+func (s *Switch) startNeighborhood(ctx context.Context) error {
 	//TODO: Save and load persistent peers ?
-	s.logger.Info("neighborhood service started")
+	s.logger.WithContext(ctx).Info("neighborhood service started")
 
 	// initial request for peers
-	go s.peersLoop()
+	go s.peersLoop(ctx)
 	s.morePeersReq <- struct{}{}
 
 	return nil
 }
 
 // peersLoop executes one routine at a time to connect new peers.
-func (s *Switch) peersLoop() {
+func (s *Switch) peersLoop(ctx context.Context) {
 loop:
 	for {
 		select {
 		case <-s.morePeersReq:
-			s.logger.Debug("loop: got morePeersReq")
-			s.askForMorePeers()
+			s.logger.WithContext(ctx).Debug("loop: got morePeersReq")
+			s.askForMorePeers(ctx)
 		//todo: try getting the connections (heartbeat)
 		case <-s.shutdown:
 			break loop // maybe error ?
@@ -712,7 +713,7 @@ loop:
 
 // askForMorePeers checks the number of peers required and tries to match this number. if there are enough peers it returns.
 // if it failed it issues a one second timeout and then sends a request to try again.
-func (s *Switch) askForMorePeers() {
+func (s *Switch) askForMorePeers(ctx context.Context) {
 	// check how much peers needed
 	s.outpeersMutex.RLock()
 	numpeers := len(s.outpeers)
@@ -735,7 +736,7 @@ func (s *Switch) askForMorePeers() {
 	}
 
 	// try to connect eq peers
-	s.getMorePeers(req)
+	s.getMorePeers(ctx, req)
 
 	// check number of peers after
 	s.outpeersMutex.RLock()
@@ -745,7 +746,7 @@ func (s *Switch) askForMorePeers() {
 	// todo: better way then going in this every time ?
 	if numpeers >= s.config.SwarmConfig.RandomConnections {
 		s.initOnce.Do(func() {
-			s.logger.With().Info("gossip connected to initial required neighbors",
+			s.logger.WithContext(ctx).With().Info("gossip connected to initial required neighbors",
 				log.Int("n", len(s.outpeers)))
 			close(s.initial)
 			s.outpeersMutex.RLock()
@@ -753,7 +754,8 @@ func (s *Switch) askForMorePeers() {
 			for pk := range s.outpeers {
 				strs = append(strs, pk.String())
 			}
-			s.logger.With().Debug("neighbors list", log.String("neighbors", strings.Join(strs, ",")))
+			s.logger.WithContext(ctx).With().Debug("neighbors list",
+				log.String("neighbors", strings.Join(strs, ",")))
 			s.outpeersMutex.RUnlock()
 		})
 		return
@@ -771,16 +773,18 @@ func (s *Switch) askForMorePeers() {
 }
 
 // getMorePeers tries to fill the `outpeers` slice with dialed outbound peers that we selected from the discovery.
-func (s *Switch) getMorePeers(numpeers int) int {
+func (s *Switch) getMorePeers(ctx context.Context, numpeers int) int {
 	if numpeers == 0 {
 		return 0
 	}
+
+	logger := s.logger.WithContext(ctx)
 
 	// discovery should provide us with random peers to connect to
 	nds := s.discover.SelectPeers(s.ctx, numpeers)
 	ndsLen := len(nds)
 	if ndsLen == 0 {
-		s.logger.Debug("peer sampler returned nothing")
+		logger.Debug("peer sampler returned nothing")
 		// this gets busy at start so we spare a second
 		return 0 // zero samples here so no reason to proceed
 	}
@@ -802,7 +806,7 @@ func (s *Switch) getMorePeers(numpeers int) int {
 			}
 			s.discover.Attempt(nd.PublicKey())
 			addr := inet.TCPAddr{IP: inet.ParseIP(nd.IP.String()), Port: int(nd.ProtocolPort)}
-			_, err := s.cPool.GetConnection(&addr, nd.PublicKey())
+			_, err := s.cPool.GetConnection(ctx, &addr, nd.PublicKey())
 			reportChan <- cnErr{nd, err}
 		}(nds[i], res)
 	}
@@ -817,7 +821,7 @@ loop:
 			total++ // We count i every time to know when to close the channel
 
 			if cne.err != nil {
-				s.logger.With().Debug("can't establish connection with sampled peer",
+				logger.With().Debug("can't establish connection with sampled peer",
 					log.FieldNamed("peer_id", cne.n.PublicKey()),
 					log.Err(cne.err))
 				bad++
@@ -830,7 +834,7 @@ loop:
 			_, ok := s.inpeers[pk]
 			s.inpeersMutex.Unlock()
 			if ok {
-				s.logger.With().Debug("not allowing peers from inbound to upgrade to outbound to prevent poisoning",
+				logger.With().Debug("not allowing peers from inbound to upgrade to outbound to prevent poisoning",
 					log.FieldNamed("peer_id", cne.n.PublicKey()))
 				bad++
 				break
@@ -839,7 +843,7 @@ loop:
 			s.outpeersMutex.Lock()
 			if _, ok := s.outpeers[pk]; ok {
 				s.outpeersMutex.Unlock()
-				s.logger.With().Debug("selected an already outbound peer, not counting peer",
+				logger.With().Debug("selected an already outbound peer, not counting peer",
 					log.FieldNamed("peer_id", cne.n.PublicKey()))
 				bad++
 				break
@@ -850,7 +854,8 @@ loop:
 			s.discover.Good(cne.n.PublicKey())
 			s.publishNewPeer(cne.n.PublicKey())
 			metrics.OutboundPeers.Add(1)
-			s.logger.With().Debug("added peer to peer list", log.FieldNamed("peer_id", cne.n.PublicKey()))
+			logger.With().Debug("added peer to peer list",
+				log.FieldNamed("peer_id", cne.n.PublicKey()))
 		case <-tm.C:
 			break loop
 		case <-s.shutdown:

@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -105,7 +106,7 @@ func TestFindNodeProtocol_FindNode(t *testing.T) {
 	n1 := newTestNode(sim)
 	n2 := newTestNode(sim)
 
-	idarr, err := n1.dscv.GetAddresses(n2.svc.Info.PublicKey())
+	idarr, err := n1.dscv.GetAddresses(context.TODO(), n2.svc.Info.PublicKey())
 
 	require.NoError(t, err, "Should not return error")
 	// when routing table is empty we get an empty result
@@ -129,7 +130,7 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 
 	n2.dscv.table = n2.d
 
-	idarr, err := n1.dscv.GetAddresses(n2.svc.Info.PublicKey())
+	idarr, err := n1.dscv.GetAddresses(context.TODO(), n2.svc.Info.PublicKey())
 
 	require.NoError(t, err, "Should not return error")
 	require.Equal(t, gen, idarr, "Should be array that contains the node")
@@ -142,7 +143,7 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 
 	n2.dscv.table = n2.d
 
-	idarr, err = n1.dscv.GetAddresses(n2.svc.Info.PublicKey())
+	idarr, err = n1.dscv.GetAddresses(context.TODO(), n2.svc.Info.PublicKey())
 
 	require.NoError(t, err, "Should not return error")
 	require.Equal(t, gen, idarr, "Should be same array")
@@ -169,7 +170,7 @@ func TestFindNodeProtocol_FindNode_Concurrency(t *testing.T) {
 				return n1.svc.Info, nil
 			}
 			nx.dscv.table = nx.d
-			res, err := nx.dscv.GetAddresses(n1.svc.PublicKey())
+			res, err := nx.dscv.GetAddresses(context.TODO(), n1.svc.PublicKey())
 			if err != nil {
 				t.Log(err)
 				retchans <- nil

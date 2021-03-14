@@ -63,7 +63,7 @@ func TestPropagateMessage(t *testing.T) {
 	peersMu := sync.Mutex{}
 	handledPeers := make(map[p2ppeers.Peer]bool)
 	net.EXPECT().
-		SendMessage(gomock.Any(), "test", []byte("test")).
+		SendMessage(gomock.Any(), gomock.Any(), "test", []byte("test")).
 		Do(func(peer p2pcrypto.PublicKey, _ ...interface{}) {
 			peersMu.Lock()
 			handledPeers[peer] = true
@@ -71,7 +71,7 @@ func TestPropagateMessage(t *testing.T) {
 		}).
 		AnyTimes()
 
-	protocol.propagateMessage([]byte("test"), types.CalcHash12([]byte("test")), "test", exclude)
+	protocol.propagateMessage(context.TODO(), []byte("test"), types.CalcHash12([]byte("test")), "test", exclude)
 
 	assert.Equal(t, false, handledPeers[exclude], "peer should be excluded")
 	for i := 1; i < len(peers); i++ {
@@ -102,7 +102,7 @@ func TestPropagationEventLoop(t *testing.T) {
 		Do(func() { time.Sleep(time.Minute * 5) }).
 		AnyTimes()
 
-	go protocol.propagationEventLoop()
+	go protocol.propagationEventLoop(context.TODO())
 
 	protocol.propagateQ <- service.MessageValidation{}
 	time.Sleep(time.Second * 2)

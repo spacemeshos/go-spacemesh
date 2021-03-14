@@ -51,7 +51,7 @@ type UDPNet struct {
 	regNewRemoteConn []func(NewConnectionEvent)
 
 	clsMutex           sync.RWMutex
-	closingConnections []func(ConnectionWithErr)
+	closingConnections []func(context.Context, ConnectionWithErr)
 
 	incomingConn map[string]udpConn
 
@@ -75,7 +75,7 @@ func NewUDPNet(config config.Config, localEntity node.LocalNode, log log.Log) (*
 }
 
 // SubscribeClosingConnections registers a callback for a new connection event. all registered callbacks are called before moving.
-func (n *UDPNet) SubscribeClosingConnections(f func(connection ConnectionWithErr)) {
+func (n *UDPNet) SubscribeClosingConnections(f func(ctx context.Context, connection ConnectionWithErr)) {
 	n.clsMutex.Lock()
 	n.closingConnections = append(n.closingConnections, f)
 	n.clsMutex.Unlock()
@@ -84,7 +84,7 @@ func (n *UDPNet) SubscribeClosingConnections(f func(connection ConnectionWithErr
 func (n *UDPNet) publishClosingConnection(connection ConnectionWithErr) {
 	n.clsMutex.RLock()
 	for _, f := range n.closingConnections {
-		f(connection)
+		f(context.TODO(), connection)
 	}
 	n.clsMutex.RUnlock()
 }

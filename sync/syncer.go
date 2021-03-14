@@ -441,7 +441,7 @@ func (s *Syncer) handleCurrentLayer() error {
 }
 
 func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
-	s.Info("Node is out of sync setting gossip-synced to false and starting sync")
+	s.Info("node is out of sync, setting gossip-synced to false and starting sync")
 	events.ReportNodeStatusUpdate()
 	s.setGossipBufferingStatus(pending) // don't listen to gossip while not synced
 

@@ -113,7 +113,7 @@ func TestRemoteConnectionWithNoConnection(t *testing.T) {
 	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
 	rConn := net.NewConnectionMock(remotePub)
 	rConn.SetSession(net.NewSessionMock(remotePub))
-	err2 := cPool.OnNewConnection(net.NewConnectionEvent{Conn: rConn})
+	err2 := cPool.OnNewConnection(context.TODO(), net.NewConnectionEvent{Conn: rConn})
 	require.NoError(t, err2)
 	time.Sleep(50 * time.Millisecond)
 	conn, err := cPool.GetConnection(&addr, remotePub)
@@ -143,7 +143,7 @@ func TestRemoteConnectionWithExistingConnection(t *testing.T) {
 	lConn, _ := cPool.GetConnection(&addr, remotePub)
 	rConn := net.NewConnectionMock(remotePub)
 	rConn.SetSession(net.NewSessionMock(remotePub))
-	err = cPool.OnNewConnection(net.NewConnectionEvent{Conn: rConn})
+	err = cPool.OnNewConnection(context.TODO(), net.NewConnectionEvent{Conn: rConn})
 	require.NoError(t, err)
 	time.Sleep(20 * time.Millisecond)
 	assert.Equal(t, remotePub.String(), lConn.RemotePublicKey().String())
@@ -160,7 +160,7 @@ func TestRemoteConnectionWithExistingConnection(t *testing.T) {
 	lConn, _ = cPool.GetConnection(&addr, remotePub)
 	rConn = net.NewConnectionMock(remotePub)
 	rConn.SetSession(net.NewSessionMock(remotePub))
-	err = cPool.OnNewConnection(net.NewConnectionEvent{Conn: rConn})
+	err = cPool.OnNewConnection(context.TODO(), net.NewConnectionEvent{Conn: rConn})
 	require.Error(t, err)
 	time.Sleep(20 * time.Millisecond)
 	assert.Equal(t, remotePub.String(), lConn.RemotePublicKey().String())
@@ -277,7 +277,7 @@ func TestRandom(t *testing.T) {
 				rConn := net.NewConnectionMock(peer.key)
 				sID := p2pcrypto.NewRandomPubkey()
 				rConn.SetSession(net.NewSessionMock(sID))
-				_ = cPool.OnNewConnection(net.NewConnectionEvent{Conn: rConn})
+				_ = cPool.OnNewConnection(context.TODO(), net.NewConnectionEvent{Conn: rConn})
 			}()
 		} else if r == 1 {
 			go func() {
@@ -327,7 +327,7 @@ func TestConnectionPool_GetConnectionIfExists(t *testing.T) {
 
 	nd := node.NewNode(pk, net2.ParseIP(addr), 1010, 1010)
 
-	err = cPool.OnNewConnection(net.NewConnectionEvent{Conn: conn, Node: nd})
+	err = cPool.OnNewConnection(context.TODO(), net.NewConnectionEvent{Conn: conn, Node: nd})
 	require.NoError(t, err)
 
 	getcon, err := cPool.GetConnectionIfExists(pk)
@@ -350,7 +350,7 @@ func TestConnectionPool_GetConnectionIfExists_Concurrency(t *testing.T) {
 
 	nd := node.NewNode(pk, net2.ParseIP(addr), 1010, 1010)
 
-	err = cPool.OnNewConnection(net.NewConnectionEvent{Conn: conn, Node: nd})
+	err = cPool.OnNewConnection(context.TODO(), net.NewConnectionEvent{Conn: conn, Node: nd})
 	require.NoError(t, err)
 
 	i := 10
@@ -387,7 +387,7 @@ func TestConnectionPool_CloseConnection(t *testing.T) {
 
 	nd := node.NewNode(pk, net2.ParseIP(addr), 1010, 1010)
 
-	err = cPool.OnNewConnection(net.NewConnectionEvent{Conn: conn, Node: nd})
+	err = cPool.OnNewConnection(context.TODO(), net.NewConnectionEvent{Conn: conn, Node: nd})
 	assert.NoError(t, err)
 
 	cPool.CloseConnection(nd.PublicKey())

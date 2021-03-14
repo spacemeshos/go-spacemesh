@@ -62,7 +62,7 @@ func TestReceiveError(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	netw.SubscribeClosingConnections(func(closedConn ConnectionWithErr) {
+	netw.SubscribeClosingConnections(func(ctx context.Context, closedConn ConnectionWithErr) {
 		assert.Equal(t, conn.id, closedConn.Conn.ID())
 		wg.Done()
 	})
@@ -140,7 +140,7 @@ func TestErrClose(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	netw.SubscribeClosingConnections(func(closedConn ConnectionWithErr) {
+	netw.SubscribeClosingConnections(func(ctx context.Context, closedConn ConnectionWithErr) {
 		assert.Equal(t, conn.id, closedConn.Conn.ID())
 		wg.Done()
 	})
@@ -156,7 +156,7 @@ func TestClose(t *testing.T) {
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
 	c := make(chan struct{}, 1)
-	netw.SubscribeClosingConnections(func(connection ConnectionWithErr) {
+	netw.SubscribeClosingConnections(func(ctx context.Context, connection ConnectionWithErr) {
 		c <- struct{}{}
 	})
 
