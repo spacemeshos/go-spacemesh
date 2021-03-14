@@ -1160,7 +1160,7 @@ func TestSwarm_SendMessage(t *testing.T) {
 	}
 
 	err = p.SendMessage(context.TODO(), someky, proto, nil)
-	require.Equal(t, err, errors.New("cant send empty payload"))
+	require.Equal(t, err, errors.New("unable to send empty payload"))
 
 	session.SealMessageFunc = func(message []byte) []byte {
 		return nil
