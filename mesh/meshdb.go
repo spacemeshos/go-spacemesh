@@ -5,15 +5,16 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"math/big"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 )
 
 type layerMutex struct {
@@ -253,7 +254,7 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 
 	blockIds, err := types.BytesToBlockIds(idsBytes)
 	if err != nil {
-		return nil, errors.New("could not get all blocks from database ")
+		return nil, errors.New("could not get all blocks from database")
 	}
 
 	return blockIds, nil
@@ -730,11 +731,10 @@ func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks
 
 // ContextuallyValidBlock - returns the contextually valid blocks for the provided layer
 func (m *DB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error) {
-
 	if layer == 0 || layer == 1 {
 		v, err := m.LayerBlockIds(layer)
 		if err != nil {
-			m.Error("Could not get layer block ids for layer %v err=%v", layer, err)
+			m.With().Error("could not get layer block ids", layer, log.Err(err))
 			return nil, err
 		}
 
@@ -766,6 +766,10 @@ func (m *DB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]stru
 		validBlks[b] = struct{}{}
 	}
 
+	m.With().Info("count of contextually valid blocks in layer",
+		layer,
+		log.Int("count_valid", len(validBlks)),
+		log.Int("count_total", len(blockIds)))
 	return validBlks, nil
 }
 

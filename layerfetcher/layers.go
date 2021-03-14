@@ -4,6 +4,9 @@ package layerfetcher
 import (
 	"errors"
 	"fmt"
+	"strconv"
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -13,7 +16,6 @@ import (
 	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"sync"
 )
 
 // atxHandler defines handling function for incoming ATXs
@@ -84,11 +86,13 @@ type Logic struct {
 	layerResM            sync.RWMutex
 	layerHashResM        sync.RWMutex
 	blockHashResM        sync.RWMutex
+	goldenATXID      types.ATXID
 }
 
 // Config defines configuration for layer fetching logic
 type Config struct {
 	RequestTimeout int
+	GoldenATXID    types.ATXID
 }
 
 // NewLogic creates a new instance of layer fetching logic
@@ -109,6 +113,7 @@ func NewLogic(cfg Config, blocks blockHandler, atxs atxHandler, poet poetDb, atx
 		atxIds:               atxIDs,
 		txs:                  txs,
 		layerResM:            sync.RWMutex{},
+		goldenATXID:      cfg.GoldenATXID,
 	}
 
 	srv.RegisterBytesMsgHandler(LayerHashMsg, l.LayerHashReqReceiver)
@@ -446,8 +451,8 @@ func (l *Logic) getPoetResult(hash types.Hash32, data []byte) error {
 	return l.poetProofs.ValidateAndStoreMsg(data)
 }
 
-// blockReceiveFunc defines block handling function when fetching block
-func (l *Logic) blockReceiveFunc(hash types.Hash32, data []byte) error {
+// blockReceiveFunc handles blocks received via fetch
+func (l *Logic) blockReceiveFunc(data []byte) error {
 	return l.blockHandler.HandleBlockData(data, l)
 }
 

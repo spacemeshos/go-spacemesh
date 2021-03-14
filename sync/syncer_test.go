@@ -35,7 +35,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-var conf = Configuration{1000, 1, 300, 500 * time.Millisecond, 200 * time.Millisecond, 10 * time.Hour, 100, 5, false}
+var (
+	goldenATXID = types.ATXID(types.HexToHash32("77777"))
+	conf        = Configuration{1000, 1, 300, 500 * time.Millisecond, 200 * time.Millisecond, 10 * time.Hour, 100, 5, false, goldenATXID}
+)
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -140,9 +143,10 @@ func (s *storeMock) HandleBlockData(data []byte, fetcher service.Fetcher) error 
 }
 
 const (
-	levelDB  = "LevelDB"
-	memoryDB = "MemoryDB"
-	Path     = "../tmp/sync/"
+	levelDB        = "LevelDB"
+	memoryDB       = "MemoryDB"
+	Path           = "../tmp/sync/"
+	layersPerEpoch = 10
 )
 
 var (
@@ -225,7 +229,7 @@ func getMeshWithLevelDB(id string) *mesh.Mesh {
 	lg := log.NewDefault(id)
 	mshdb, _ := mesh.NewPersistentMeshDB(id, 5, lg)
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
-	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, 10, &validatorMock{}, lg.WithOptions(log.Nop))
+	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, layersPerEpoch, goldenATXID, &validatorMock{}, lg.WithOptions(log.Nop))
 	return mesh.NewMesh(mshdb, atxdb, rewardConf, &meshValidatorMock{}, &mockTxMemPool{}, &mockState{}, lg.WithOptions(log.Nop))
 }
 
@@ -239,7 +243,7 @@ func getMeshWithMemoryDB(id string, atxDb database.Database) *mesh.Mesh {
 	if atxDb == nil {
 		atxDb = database.NewMemDatabase()
 	}
-	atxdb := activation.NewDB(atxDb, &mockIStore{}, mshdb, 10, &validatorMock{}, lg.WithName("atxDB"))
+	atxdb := activation.NewDB(atxDb, &mockIStore{}, mshdb, layersPerEpoch, goldenATXID, &validatorMock{}, lg.WithName("atxDB"))
 	return mesh.NewMesh(mshdb, atxdb, rewardConf, &meshValidatorMock{}, &mockTxMemPool{}, &mockState{}, lg)
 }
 
@@ -885,7 +889,7 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 		select {
 		// Got a timeout! fail with a timeout error
 		case <-timeout:
-			t.Error("timed out ")
+			t.Error("timed out")
 			return
 		default:
 			if syncObj1.ProcessedLayer() == 5 {
@@ -1000,7 +1004,7 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 		select {
 		// Got a timeout! fail with a timeout error
 		case <-timeout:
-			t.Error("timed out ")
+			t.Error("timed out")
 			goto end
 		default:
 
@@ -1036,7 +1040,7 @@ func atx(pubkey string) *types.ActivationTx {
 	poetRef := []byte{0xde, 0xad}
 	npst := activation.NewNIPSTWithChallenge(&chlng, poetRef)
 
-	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, 5, 1, *types.EmptyATXID, coinbase, 0, nil, npst)
+	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, 5, 1, goldenATXID, coinbase, 0, nil, npst)
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
 	atx.CalcAndSetID()
@@ -1730,10 +1734,12 @@ var txid1 = types.TransactionID(genByte32())
 var txid2 = types.TransactionID(genByte32())
 var txid3 = types.TransactionID(genByte32())
 
+var zero = types.CalcHash32([]byte("0"))
 var one = types.CalcHash32([]byte("1"))
 var two = types.CalcHash32([]byte("2"))
 var three = types.CalcHash32([]byte("3"))
 
+var atx0 = types.ATXID(zero)
 var atx1 = types.ATXID(one)
 var atx2 = types.ATXID(two)
 var atx3 = types.ATXID(three)
@@ -1766,6 +1772,9 @@ func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 	s := syncs[0]
 	s.atxDb = alwaysOkAtxDb{}
 	b := &types.Block{}
+
+	b.ATXID = atx0
+
 	b.TxIDs = []types.TransactionID{txid1, txid2, txid1}
 	_, _, err := s.blockSyntacticValidation(b)
 	r.EqualError(err, errNoActiveSet.Error())
@@ -1777,6 +1786,16 @@ func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 	b.ActiveSet = &[]types.ATXID{atx1, atx2, atx3}
 	_, _, err = s.blockSyntacticValidation(b)
 	r.EqualError(err, errDupTx.Error())
+
+	b.ActiveSet = &[]types.ATXID{atx1}
+
+	b.ATXID = *types.EmptyATXID
+	_, _, err = s.blockSyntacticValidation(b)
+	r.EqualError(err, errInvalidATXID.Error())
+
+	b.ATXID = goldenATXID
+	_, _, err = s.blockSyntacticValidation(b)
+	r.EqualError(err, errInvalidATXID.Error())
 }
 
 func TestSyncer_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
@@ -1799,6 +1818,15 @@ func TestSyncer_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	_, _, err := s.blockSyntacticValidation(b)
 	r.Equal(err, fmt.Errorf("failed to fetch ref block %v", *b.RefBlock))
 
+	tries := 5
+	for len(syncs[1].net.GetPeers()) == 0 {
+		time.Sleep(1 * time.Second)
+		tries--
+		if tries == 0 {
+			r.Fail("peers did not connect to network")
+			break
+		}
+	}
 	err = syncs[1].AddBlock(block1)
 	r.NoError(err)
 	_, _, err = s.blockSyntacticValidation(b)
@@ -1820,6 +1848,16 @@ func TestSyncer_fetchBlock(t *testing.T) {
 	block1ID := block1.ID()
 	res := s.fetchBlock(block1ID)
 	r.False(res)
+
+	tries := 5
+	for len(syncs[1].net.GetPeers()) == 0 {
+		time.Sleep(1 * time.Second)
+		tries--
+		if tries == 0 {
+			r.Fail("peers did not connect to network")
+			break
+		}
+	}
 	err := syncs[1].AddBlock(block1)
 	r.NoError(err)
 	res = s.fetchBlock(block1ID)

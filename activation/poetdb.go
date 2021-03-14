@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/poet/verifier"
 	"github.com/spacemeshos/sha256-simd"
-	"sync"
 )
 
 type poetProofKey [sha256.Size]byte
@@ -77,7 +76,7 @@ func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string,
 func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 	ref, err := proofMessage.Ref()
 	if err != nil {
-		return fmt.Errorf("failed to get PoET proof message refference: %v", err)
+		return fmt.Errorf("failed to get PoET proof message reference: %v", err)
 	}
 
 	messageBytes, err := types.InterfaceToBytes(proofMessage)

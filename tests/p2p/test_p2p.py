@@ -9,6 +9,7 @@ from string import ascii_lowercase
 import time
 
 # noinspection PyUnresolvedReferences
+import tests.config as cnf
 from tests.context import ES
 from tests.convenience import sleep_print_backwards
 from tests.queries import query_message, poll_query_message
@@ -20,15 +21,14 @@ current_index = get_curr_ind()
 timeout_factor = 1
 
 # For purposes of these tests, we override the PoetProof protocol
-gossip_message_query_fields = {'M': 'new_gossip_message', 'protocol': 'PoetProof'}
+gossip_message_query_fields = {'M': 'gossip message is new', 'protocol': 'PoetProof'}
 
 
 def query_bootstrap_es(namespace, bootstrap_po_name):
-    hits = poll_query_message(current_index, namespace, bootstrap_po_name, {"M": "Local node identity"}, expected=1)
+    hits = poll_query_message(current_index, namespace, bootstrap_po_name, {"M": "local node identity"}, expected=1)
     for h in hits:
-        match = re.search(r"Local node identity >> (?P<bootstrap_key>\w+)", h.M)
-        if match:
-            return match.group('bootstrap_key')
+        if getattr(h, 'key', None):
+            return h.key
     return None
 
 # ==============================================================================

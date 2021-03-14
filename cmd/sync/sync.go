@@ -1,10 +1,19 @@
 package main
 
 import (
-	"cloud.google.com/go/storage"
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"time"
+
+	"cloud.google.com/go/storage"
+	"github.com/spf13/cobra"
+	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -16,13 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spf13/cobra"
-	"google.golang.org/api/iterator"
-	"google.golang.org/api/option"
-	"io/ioutil"
-	"net/http"
-	"os"
-	"time"
 )
 
 // Sync cmd
@@ -100,6 +102,8 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		panic("something got fudged while creating p2p service ")
 	}
 
+	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
+
 	conf := sync.Configuration{
 		Concurrency:     4,
 		AtxsLimit:       200,
@@ -109,13 +113,14 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		Hdist:           app.Config.Hdist,
 		ValidationDelta: 30 * time.Second,
 		LayersPerEpoch:  uint16(app.Config.LayersPerEpoch),
+		GoldenATXID:     goldenATXID,
 	}
 	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
 	lg.Info("local db path: %v layers per epoch: %v", path, app.Config.LayersPerEpoch)
 
 	if remote {
 		if err := getData(app.Config.DataDir(), version, lg); err != nil {
-			lg.Error("could not download data for test", err)
+			lg.With().Error("could not download data for test", log.Err(err))
 			return
 		}
 	}
@@ -141,7 +146,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	txpool := state.NewTxMemPool()
 	atxpool := activation.NewAtxMemPool()
 
-	sync := sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, types.LayerID(expectedLayers), poetDbStore)
+	sync := sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, goldenATXID, types.LayerID(expectedLayers))
 	app.sync = sync
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)
