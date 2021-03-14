@@ -2,19 +2,22 @@ package p2p
 
 import (
 	"fmt"
+	inet "net"
+	"sync/atomic"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/nattraversal"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/discovery"
 	"github.com/stretchr/testify/require"
-	inet "net"
-	"sync/atomic"
-	"testing"
-	"time"
 
 	"context"
 	"errors"
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
@@ -22,7 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
-	"sync"
 )
 
 type cpoolMock struct {
@@ -369,10 +371,12 @@ func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 	cfg.SwarmConfig.Gossip = false
 	cfg.SwarmConfig.Bootstrap = false
 
-	p1 := p2pTestInstance(t, cfg)
+	p1 := p2pTestNoStart(t, cfg)
 
 	exchan1 := p1.RegisterDirectProtocol(exampleProtocol)
 	assert.Equal(t, exchan1, p1.directProtocolHandlers[exampleProtocol])
+
+	p1.Start()
 
 	pend := make(map[string]chan error)
 	var mu sync.Mutex

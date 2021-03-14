@@ -46,7 +46,12 @@ class ES:
             retry -= 1
 
         for serv in services.items:
-            if serv.metadata.name == 'elasticsearch-master':
+            # Amit: following a bug - sometimes elasticsearch-master service will be returned before being assigned with
+            # an IP address, in that case run this function again recursively.
+            if serv.metadata.name == 'elasticsearch-master' and not serv.status.load_balancer.ingress:
+                time.sleep(interval)
+                return self.get_elastic_ip()
+            elif serv.metadata.name == 'elasticsearch-master':
                 return serv.status.load_balancer.ingress[0].ip
 
     def get_search_api(self):

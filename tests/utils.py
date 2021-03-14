@@ -152,7 +152,7 @@ def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch,
 
 
 def get_pod_id(ns, pod_name):
-    hits = q.get_all_msg_containing(ns, pod_name, "Starting HARE_PROTOCOL")
+    hits = q.query_protocol_started(ns, pod_name, "HARE_PROTOCOL")
     if not hits:
         return None
 
@@ -389,3 +389,10 @@ def timing(func):
         end = time.time()
         return result, end-start
     return wrapper
+
+
+def get_env(name, is_must=True):
+    if name not in os.environ and is_must:
+        raise Exception(f"{name} environment variable must be set")
+    ret = os.getenv(name)
+    return ret
