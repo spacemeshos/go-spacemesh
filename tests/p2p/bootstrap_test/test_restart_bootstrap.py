@@ -23,7 +23,7 @@ def test_reboot_bootstrap(init_session):
     session_id = init_session
     bootstrap_group_id = 'bootstrap_key'
     ss_file_path = get_spec_file_path("bootstrap-w-conf-ss.yml")
-    key_regex = r"Local node identity >> (?P<{bootstrap_group_id}>\w+)".format(bootstrap_group_id=bootstrap_group_id)
+    key_regex = r"local node identity.*\"key\"\s*:\s*\"(?P<{bootstrap_group_id}>\w+)".format(bootstrap_group_id=bootstrap_group_id)
     # using the same logic as setup_bootstrap fixture but with an additional
     # file_path argument to load a none default yaml spec file
     bootstrap_deployment_info = DeploymentInfo(dep_id=session_id)

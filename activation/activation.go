@@ -441,7 +441,7 @@ func (b *Builder) PublishActivationTx() error {
 		return err
 	}
 
-	b.log.Event().Info("atx published!", atx.Fields(size)...)
+	b.log.Event().Info("atx published", atx.Fields(size)...)
 	events.ReportAtxCreated(true, uint64(b.currentEpoch()), atx.ShortString())
 
 	select {
