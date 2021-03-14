@@ -370,7 +370,7 @@ func (s *Syncer) handleWeaklySynced() {
 
 	// validate current layer if more than s.ValidationDelta has passed
 	if err := s.handleCurrentLayer(); err != nil {
-		s.With().Error("Node is out of sync", log.Err(err))
+		s.With().Error("node is out of sync", log.Err(err))
 		s.setGossipBufferingStatus(pending)
 		return
 	}
@@ -381,7 +381,7 @@ func (s *Syncer) handleWeaklySynced() {
 
 	// fully-synced, make sure we listen to p2p
 	s.setGossipBufferingStatus(done)
-	s.With().Info("Node is synced")
+	s.With().Info("node is synced")
 	return
 }
 
