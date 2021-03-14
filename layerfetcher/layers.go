@@ -94,6 +94,11 @@ type Config struct {
 	GoldenATXID    types.ATXID
 }
 
+// DefaultConfig returns default configuration for layer fetching logic
+func DefaultConfig() Config {
+	return Config{RequestTimeout: 10}
+}
+
 // NewLogic creates a new instance of layer fetching logic
 func NewLogic(cfg Config, blocks blockHandler, atxs atxHandler, poet poetDb, atxIDs atxIDsDB, txs TxProcessor, network service.Service, fetcher fetch.Fetcher, layers layerDB, log log.Log) *Logic {
 
