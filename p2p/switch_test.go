@@ -519,34 +519,33 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	nmock.SetRemotePublicKey(id.PublicKey())
 
 	// Test bad format
-	imc := net.IncomingMessageEvent{Conn: nmock}
-	err = p.onRemoteClientMessage(context.TODO(), imc)
-	assert.Equal(t, err, ErrBadFormat1)
+	ime := net.IncomingMessageEvent{Conn: nmock}
+	err = p.onRemoteClientMessage(context.TODO(), ime)
+	assert.Equal(t, ErrBadFormat1, err)
 
 	// Test No Session
-	imc.Message = []byte("test")
+	ime.Message = []byte("test")
 
-	err = p.onRemoteClientMessage(context.TODO(), imc)
-	assert.Equal(t, err, ErrBadFormat1)
-	assert.Equal(t, err, ErrNoSession)
+	err = p.onRemoteClientMessage(context.TODO(), ime)
+	assert.Equal(t, ErrNoSession, err)
 
 	//Test bad session
 	session := &net.SessionMock{}
 	session.OpenMessageFunc = func(boxedMessage []byte) (bytes []byte, err error) {
 		return nil, errors.New("fail")
 	}
-	imc.Conn.SetSession(session)
+	ime.Conn.SetSession(session)
 
-	err = p.onRemoteClientMessage(context.TODO(), imc)
-	assert.Equal(t, err, ErrFailDecrypt)
+	err = p.onRemoteClientMessage(context.TODO(), ime)
+	assert.Equal(t, ErrFailDecrypt, err)
 
 	//// Test bad format again
 	session.OpenMessageFunc = func(boxedMessage []byte) (bytes []byte, err error) {
 		return []byte("wont_format_fo_protocol_message"), nil
 	}
 
-	err = p.onRemoteClientMessage(context.TODO(), imc)
-	assert.Equal(t, err, ErrBadFormat2)
+	err = p.onRemoteClientMessage(context.TODO(), ime)
+	assert.Equal(t, ErrBadFormat2, err)
 
 	goodmsg := &ProtocolMessage{
 		Metadata: &ProtocolMessageMetadata{AuthPubkey: id.PublicKey().Bytes(), NextProtocol: exampleProtocol,
@@ -556,7 +555,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 
 	goodbin, _ := types.InterfaceToBytes(goodmsg)
 
-	imc.Message = goodbin
+	ime.Message = goodbin
 	session.OpenMessageFunc = func(boxedMessage []byte) (bytes []byte, err error) {
 		return goodbin, nil
 	}
@@ -569,22 +568,22 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	}
 
 	// Test out of sync
-	imc.Message = nosynced
+	ime.Message = nosynced
 
-	err = p.onRemoteClientMessage(context.TODO(), imc)
+	err = p.onRemoteClientMessage(context.TODO(), ime)
 	assert.Equal(t, ErrOutOfSync, err)
 
 	// Test no protocol
 	goodmsg.Metadata.Timestamp = time.Now().Unix()
 
 	goodbin, _ = types.InterfaceToBytes(goodmsg)
-	imc.Message = goodbin
+	ime.Message = goodbin
 	session.OpenMessageFunc = func(boxedMessage []byte) (bytes []byte, err error) {
 		return goodbin, nil
 	}
 
-	err = p.onRemoteClientMessage(context.TODO(), imc)
-	assert.Equal(t, err, ErrNoProtocol)
+	err = p.onRemoteClientMessage(context.TODO(), ime)
+	assert.Equal(t, ErrNoProtocol, err)
 
 	// Test no err
 
@@ -602,7 +601,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 		}
 	}()
 	wg.Add(1)
-	err = p.onRemoteClientMessage(context.TODO(), imc)
+	err = p.onRemoteClientMessage(context.TODO(), ime)
 	assert.NoError(t, err)
 	wg.Wait()
 
