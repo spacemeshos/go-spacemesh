@@ -137,7 +137,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 		go func() {
 			err := http.ListenAndServe(":6060", nil)
 			if err != nil {
-				log.Error("cannot start http server", err)
+				log.With().Error("cannot start http server", err)
 			}
 		}()
 	}
@@ -146,7 +146,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.NewDefault("p2p_haretest"), app.Config.DataDir())
 	app.p2p = swarm
 	if err != nil {
-		log.Panic("error starting p2p services", log.Err(err))
+		log.With().Panic("error starting p2p services", log.Err(err))
 	}
 
 	pub := app.sgn.PublicKey()
@@ -180,10 +180,10 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	}
 	if gTime.After(time.Now()) {
 		log.Info("sleeping until %v", gTime)
-		time.Sleep(time.Duration(gTime.Sub(time.Now())))
+		time.Sleep(gTime.Sub(time.Now()))
 	}
 	startLayer := types.GetEffectiveGenesis() + 1
-	lt <- types.LayerID(startLayer)
+	lt <- startLayer
 }
 
 func main() {
