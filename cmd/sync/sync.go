@@ -146,7 +146,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	txpool := state.NewTxMemPool()
 	atxpool := activation.NewAtxMemPool()
 
-	sync := sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, goldenATXID, types.LayerID(expectedLayers))
+	sync := sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, goldenATXID, types.LayerID(expectedLayers), poetDbStore)
 	app.sync = sync
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)

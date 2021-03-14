@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/poet/verifier"
 	"github.com/spacemeshos/sha256-simd"
+	"sync"
 )
 
 type poetProofKey [sha256.Size]byte

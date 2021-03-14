@@ -4,7 +4,6 @@ package layerfetcher
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -548,7 +547,7 @@ func (l *Logic) GetBlocks(IDs []types.BlockID) error {
 			continue
 		}
 		if !res.IsLocal {
-			err := l.blockReceiveFunc(hash, res.Data)
+			err := l.blockReceiveFunc(res.Data)
 			if err != nil {
 				return err
 			}

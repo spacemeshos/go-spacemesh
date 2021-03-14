@@ -582,6 +582,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 
 	bCfg := blocks.Config{
 		Depth: app.Config.Hdist,
+		GoldenATXID: goldenATXID,
 	}
 	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, lg)
 
@@ -616,12 +617,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 
 	database.SwitchCreationContext(dbStorepath, "") // currently only blockbuilder uses this mechanism
 	blockProducer := miner.NewBlockBuilder(cfg, sgn, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
-
-	bCfg := blocks.Config{
-		Depth:       app.Config.Hdist,
-		GoldenATXID: goldenATXID,
-	}
-	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, lg)
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))
 
