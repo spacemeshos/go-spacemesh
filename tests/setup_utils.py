@@ -146,7 +146,7 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
     bs_pod['pod_ip'] = resp.status.pod_ip
 
     match = search_phrase_in_pod_log(bs_pod['name'], namespace, 'bootstrap',
-                                     r"Local node identity >> (?P<bootstrap_key>\w+)")
+                                     r"local node identity.*\"key\"\s*:\s*\"(?P<bootstrap_key>\w+)")
 
     if not match:
         raise Exception("Failed to read container logs in {0}".format('bootstrap'))
