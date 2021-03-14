@@ -2,6 +2,7 @@
 package layerfetcher
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"sync"
@@ -49,7 +50,7 @@ type poetDb interface {
 type network interface {
 	GetPeers() []p2ppeers.Peer
 	GetRandomPeer() p2ppeers.Peer
-	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), timeoutHandler func(err error)) error
+	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), timeoutHandler func(err error)) error
 }
 
 // Logic is the struct containing components needed to follow layer fetching logic
@@ -178,7 +179,7 @@ func (l *Logic) PollLayer(layer types.LayerID) chan LayerPromiseResult {
 		timeoutFunc := func(err error) {
 			l.receiveLayerHash(layer, p, len(peers), nil, err)
 		}
-		err := l.net.SendRequest(LayerBlocksDB, layer.Bytes(), p, receiveForPeerFunc, timeoutFunc)
+		err := l.net.SendRequest(context.TODO(), LayerBlocksDB, layer.Bytes(), p, receiveForPeerFunc, timeoutFunc)
 		if err != nil {
 			l.receiveLayerHash(layer, p, len(peers), nil, err)
 		}
@@ -249,7 +250,7 @@ func (l *Logic) receiveLayerHash(id types.LayerID, p p2ppeers.Peer, peers int, d
 		errFunc := func(err error) {
 			l.receiveBlockHashes(id, nil, err)
 		}
-		err := l.net.SendRequest(LayerHashDB, hash.Bytes(), peer[remainingPeers], receiveForPeerFunc, errFunc)
+		err := l.net.SendRequest(context.TODO(), LayerHashDB, hash.Bytes(), peer[remainingPeers], receiveForPeerFunc, errFunc)
 		if err != nil {
 			l.receiveBlockHashes(id, nil, err)
 		}

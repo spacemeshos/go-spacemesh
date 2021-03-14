@@ -31,7 +31,7 @@ var defaultBackoffFunc = func(tries int) time.Duration { return time.Second * ti
 var ErrBootAbort = errors.New("bootstrap canceled by signal")
 
 type pingerGetAddresser interface {
-	Ping(p2pcrypto.PublicKey) error
+	Ping(context.Context, p2pcrypto.PublicKey) error
 	GetAddresses(context.Context, p2pcrypto.PublicKey) ([]*node.Info, error)
 }
 
@@ -151,7 +151,7 @@ type queryResult struct {
 // pingThenGetAddresses is sending a ping, then getaddress, then return results on given chan.
 func pingThenGetAddresses(ctx context.Context, p pingerGetAddresser, addr *node.Info, qr chan queryResult) {
 	// TODO: check whether we pinged recently and maybe skip pinging
-	err := p.Ping(addr.PublicKey())
+	err := p.Ping(ctx, addr.PublicKey())
 
 	if err != nil {
 		qr <- queryResult{src: addr, err: err}

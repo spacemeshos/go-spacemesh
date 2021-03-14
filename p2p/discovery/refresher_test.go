@@ -17,7 +17,7 @@ type mockDisc struct {
 	findnoderr  error
 }
 
-func (md *mockDisc) Ping(key p2pcrypto.PublicKey) error {
+func (md *mockDisc) Ping(ctx context.Context, key p2pcrypto.PublicKey) error {
 	return md.pingres
 }
 
