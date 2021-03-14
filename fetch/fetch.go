@@ -221,13 +221,6 @@ func (f *Fetch) Stop() {
 
 		for _, req := range batch {
 			close(req.returnChan)
-			/*req.returnChan <- HashDataPromiseResult{
-				Err:     fmt.Errorf("closed"),
-				Hash:    req.hash,
-				Data:    nil,
-				IsLocal: false,
-			}*/
-
 		}
 	}
 	f.activeReqM.Unlock()
@@ -389,28 +382,9 @@ func (f *Fetch) receiveResponse(data []byte) {
 		f.activeReqM.Unlock()
 	}
 
-	//iterate all requests that didn't return value from peer and invalidate them with error
+	//iterate all requests that didn't return value from peer and notify - they wioll be retried
 	err = fmt.Errorf("hash did not return")
 	for h := range batchMap {
-		/*f.activeReqM.Lock()
-		// for each hash, call its callbacks
-		resCallbacks := f.activeRequests[h]
-		f.activeReqM.Unlock()
-		*/
-		//todo: this will cause infinite retries for a hash - we should consider limiting it
-		/*for _, req := range resCallbacks {
-			req.retries++
-			if req.retries > len(f.net.GetPeers()) {
-				req.returnChan <- HashDataPromiseResult{
-					Err:     err,
-					Hash:    h,
-					IsLocal: false,
-				}
-			}
-			f.activeReqM.Lock()
-			delete(f.activeRequests, h)
-			f.activeReqM.Unlock()
-		}*/
 		f.log.Warning("hash was not found in response %v", h.ShortString())
 	}
 
