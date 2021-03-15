@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -18,7 +19,7 @@ type ServiceMock struct {
 	ch chan service.GossipMessage
 }
 
-func (ServiceMock) Start() error { panic("implement me") }
+func (ServiceMock) Start(ctx context.Context) error { panic("implement me") }
 
 func (s *ServiceMock) RegisterGossipProtocol(protocol string, priority priorityq.Priority) chan service.GossipMessage {
 	return s.ch
@@ -54,6 +55,10 @@ func (m *mockMsg) Bytes() []byte {
 		panic(err)
 	}
 	return b
+}
+
+func (m *mockMsg) RequestID() string {
+	return "fake_request_id"
 }
 
 func (m *mockMsg) ValidationCompletedChan() chan service.MessageValidation { panic("implement me") }
@@ -97,7 +102,7 @@ func TestNewPoetListener(t *testing.T) {
 	svc.ch = make(chan service.GossipMessage)
 	poetDb := PoetDbIMock{}
 	listener := NewPoetListener(svc, &poetDb, lg)
-	listener.Start()
+	listener.Start(context.TODO())
 
 	// ⚠️ IMPORTANT: We must not ensure that the node is synced! PoET messages must be propagated regardless.
 

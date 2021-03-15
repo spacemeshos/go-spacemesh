@@ -26,7 +26,7 @@ type udpNetwork interface {
 	Dial(ctx context.Context, address net.Addr, remotePublicKey p2pcrypto.PublicKey) (inet.Connection, error)
 	IncomingMessages() chan inet.IncomingMessageEvent
 	SubscribeOnNewRemoteConnections(f func(event inet.NewConnectionEvent))
-	SubscribeClosingConnections(f func(connection inet.ConnectionWithErr))
+	SubscribeClosingConnections(f func(ctx context.Context, connection inet.ConnectionWithErr))
 }
 
 // UDPMux is a server for receiving and sending udp messages through protocols.
@@ -45,8 +45,7 @@ type UDPMux struct {
 }
 
 // NewUDPMux creates a new udp protocol server
-func NewUDPMux(localNode node.LocalNode, lookuper Lookuper, udpNet udpNetwork, networkid int8, logger log.Log) *UDPMux {
-
+func NewUDPMux(ctx context.Context, localNode node.LocalNode, lookuper Lookuper, udpNet udpNetwork, networkid int8, logger log.Log) *UDPMux {
 	cpool := connectionpool.NewConnectionPool(udpNet.Dial, localNode.PublicKey(), logger.WithName("udp_cpool"))
 
 	um := &UDPMux{
@@ -61,14 +60,14 @@ func NewUDPMux(localNode node.LocalNode, lookuper Lookuper, udpNet udpNetwork, n
 	}
 
 	udpNet.SubscribeOnNewRemoteConnections(func(event inet.NewConnectionEvent) {
-		err := cpool.OnNewConnection(event)
-		if err != nil {
-			um.logger.Warning("error adding udp connection to cpool err=%c", err)
+		ctx := log.WithNewSessionID(ctx)
+		if err := cpool.OnNewConnection(ctx, event); err != nil {
+			um.logger.WithContext(ctx).With().Warning("error adding udp connection to cpool", log.Err(err))
 		}
 	})
 
-	udpNet.SubscribeClosingConnections(func(connection inet.ConnectionWithErr) {
-		cpool.OnClosedConnection(connection)
+	udpNet.SubscribeClosingConnections(func(ctx context.Context, connection inet.ConnectionWithErr) {
+		cpool.OnClosedConnection(ctx, connection)
 	})
 
 	return um
@@ -134,7 +133,7 @@ func (mux *UDPMux) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, prot
 }
 
 // SendWrappedMessage is a proxy method to the sendMessageImpl. it sends a wrapped message and used within MessageServer
-func (mux *UDPMux) SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
+func (mux *UDPMux) SendWrappedMessage(ctx context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
 	return mux.sendMessageImpl(nodeID, protocol, payload)
 }
 
@@ -157,7 +156,7 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 
 	addr := &net.UDPAddr{IP: net.ParseIP(peer.IP.String()), Port: int(peer.DiscoveryPort)}
 
-	conn, err := mux.cpool.GetConnection(addr, peer.PublicKey())
+	conn, err := mux.cpool.GetConnection(context.TODO(), addr, peer.PublicKey())
 
 	if err != nil {
 		return err
@@ -202,7 +201,10 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 		return err
 	}
 
-	mux.logger.With().Debug("Sent UDP message", log.String("protocol", protocol), log.String("to", peer.String()), log.Int("len", len(realfinal)))
+	mux.logger.With().Debug("sent udp message",
+		log.String("protocol", protocol),
+		log.String("to", peer.String()),
+		log.Int("len", len(realfinal)))
 	return nil
 }
 

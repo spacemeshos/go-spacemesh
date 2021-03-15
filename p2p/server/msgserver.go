@@ -3,6 +3,7 @@ package server
 
 import (
 	"container/list"
+	"context"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -53,7 +54,7 @@ type MessageServer struct {
 // Service is the subset of method used by MessageServer for p2p communications.
 type Service interface {
 	RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan service.DirectMessage) chan service.DirectMessage
-	SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error
+	SendWrappedMessage(ctx context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error
 }
 
 // NewMsgServer registers a protocol and returns a new server to declare request and response handlers on.
@@ -71,7 +72,7 @@ func NewMsgServer(network Service, name string, requestLifetime time.Duration, c
 		workerLimiter:      make(chan struct{}, runtime.NumCPU()),
 	}
 
-	go p.readLoop()
+	go p.readLoop(context.TODO())
 	return p
 }
 
@@ -83,7 +84,7 @@ func (p *MessageServer) Close() {
 }
 
 // readLoop reads incoming messages and matches them to requests or responses.
-func (p *MessageServer) readLoop() {
+func (p *MessageServer) readLoop(ctx context.Context) {
 	timer := time.NewTicker(p.requestLifetime + time.Millisecond*100)
 	defer timer.Stop()
 	for {
@@ -95,15 +96,17 @@ func (p *MessageServer) readLoop() {
 		case <-timer.C:
 			go p.cleanStaleMessages()
 		case msg, ok := <-p.ingressChannel:
-			p.Debug("new msg received from channel")
+			// generate new reqID for message
+			ctx := log.WithNewRequestID(ctx)
+			p.WithContext(ctx).Debug("new msg received from channel")
 			if !ok {
-				p.Error("read loop channel was closed")
+				p.WithContext(ctx).Error("read loop channel was closed")
 				return
 			}
 			p.workerCount.Add(1)
 			p.workerLimiter <- struct{}{}
 			go func(msg Message) {
-				p.handleMessage(msg)
+				p.handleMessage(ctx, msg)
 				<-p.workerLimiter
 				p.workerCount.Done()
 			}(msg.(Message))
@@ -141,47 +144,50 @@ func (p *MessageServer) removeFromPending(reqID uint64) {
 		next = e.Next()
 		if reqID == e.Value.(Item).id {
 			p.pendingQueue.Remove(e)
-			p.With().Debug("removed request", log.Uint64("request_id", reqID))
+			p.With().Debug("removed request", log.Uint64("req_id", reqID))
 			break
 		}
 	}
-	p.With().Debug("delete request result handler", log.Uint64("request_id", reqID))
+	p.With().Debug("delete request result handler", log.Uint64("req_id", reqID))
 	delete(p.resHandlers, reqID)
 	p.pendMutex.Unlock()
 }
 
-func (p *MessageServer) handleMessage(msg Message) {
+func (p *MessageServer) handleMessage(ctx context.Context, msg Message) {
 	data := msg.Data().(*service.DataMsgWrapper)
 	if data.Req {
-		p.handleRequestMessage(msg, data)
+		p.handleRequestMessage(ctx, msg, data)
 	} else {
-		p.handleResponseMessage(data)
+		p.handleResponseMessage(ctx, data)
 	}
 }
 
-func (p *MessageServer) handleRequestMessage(msg Message, data *service.DataMsgWrapper) {
-	p.Debug("handleRequestMessage start")
+func (p *MessageServer) handleRequestMessage(ctx context.Context, msg Message, data *service.DataMsgWrapper) {
+	logger := p.WithContext(ctx)
+	logger.Debug("handleRequestMessage start")
 
 	foo, okFoo := p.msgRequestHandlers[MessageType(data.MsgType)]
 	if !okFoo {
-		p.With().Error("handler missing for request",
-			log.Uint64("request_id", data.ReqID),
+		logger.With().Error("handler missing for request",
+			log.Uint64("req_id", data.ReqID),
 			log.String("protocol", p.name),
 			log.Uint32("msg_type", data.MsgType))
 		return
 	}
 
-	p.Debug("handle request type %v", data.MsgType)
+	logger.Debug("handle request type %v", data.MsgType)
 	rmsg := &service.DataMsgWrapper{MsgType: data.MsgType, ReqID: data.ReqID, Payload: foo(msg)}
-	if sendErr := p.network.SendWrappedMessage(msg.Sender(), p.name, rmsg); sendErr != nil {
-		p.With().Error("Error sending response message", log.Err(sendErr))
+	if sendErr := p.network.SendWrappedMessage(ctx, msg.Sender(), p.name, rmsg); sendErr != nil {
+		logger.With().Error("error sending response message", log.Err(sendErr))
 	}
-	p.Debug("handleRequestMessage close")
+	logger.Debug("handleRequestMessage close")
 }
 
-func (p *MessageServer) handleResponseMessage(headers *service.DataMsgWrapper) {
+func (p *MessageServer) handleResponseMessage(ctx context.Context, headers *service.DataMsgWrapper) {
+	logger := p.WithContext(ctx)
+
 	//get and remove from pendingMap
-	p.Log.With().Debug("handleResponseMessage", log.Uint64("request_id", headers.ReqID))
+	logger.With().Debug("handleResponseMessage", log.Uint64("req_id", headers.ReqID))
 	p.pendMutex.RLock()
 	foo, okFoo := p.resHandlers[headers.ReqID]
 	p.pendMutex.RUnlock()
@@ -189,9 +195,9 @@ func (p *MessageServer) handleResponseMessage(headers *service.DataMsgWrapper) {
 	if okFoo {
 		foo(headers.Payload)
 	} else {
-		p.With().Error("can't find handler", log.Uint64("request_id", headers.ReqID))
+		logger.With().Error("can't find handler", log.Uint64("req_id", headers.ReqID))
 	}
-	p.Debug("handleResponseMessage close")
+	logger.Debug("handleResponseMessage close")
 }
 
 // RegisterMsgHandler sets the handler to act on a specific message request.
@@ -212,15 +218,15 @@ func (p *MessageServer) RegisterBytesMsgHandler(msgType MessageType, reqHandler 
 }
 
 // SendRequest sends a request of a specific message.
-func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte)) error {
+func (p *MessageServer) SendRequest(ctx context.Context, msgType MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte)) error {
 	reqID := p.newReqID()
 	p.pendMutex.Lock()
 	p.resHandlers[reqID] = resHandler
 	p.pendingQueue.PushBack(Item{id: reqID, timestamp: time.Now()})
 	p.pendMutex.Unlock()
 	msg := &service.DataMsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
-	if sendErr := p.network.SendWrappedMessage(address, p.name, msg); sendErr != nil {
-		p.With().Error("sending message failed",
+	if sendErr := p.network.SendWrappedMessage(ctx, address, p.name, msg); sendErr != nil {
+		p.WithContext(ctx).With().Error("sending message failed",
 			log.Uint32("msg_type", uint32(msgType)),
 			log.FieldNamed("recipient", address),
 			log.Int("msglen", len(payload)),
@@ -228,7 +234,7 @@ func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address
 		p.removeFromPending(reqID)
 		return sendErr
 	}
-	p.Log.With().Debug("sent request", log.Uint64("request_id", reqID))
+	p.WithContext(ctx).With().Debug("sent request", log.Uint64("req_id", reqID))
 	return nil
 }
 

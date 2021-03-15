@@ -14,7 +14,6 @@ import (
 	"net"
 	"strconv"
 	"sync"
-	//"syscall"
 	"time"
 )
 
@@ -37,14 +36,15 @@ const (
 
 // IncomingMessageEvent is the event reported on new incoming message, it contains the message and the Connection carrying the message
 type IncomingMessageEvent struct {
-	Conn    Connection
-	Message []byte
+	Conn      Connection
+	Message   []byte
+	RequestID string
 }
 
 // ManagedConnection in an interface extending Connection with some internal methods that are required for Net to manage Connections
 type ManagedConnection interface {
 	Connection
-	beginEventProcessing()
+	beginEventProcessing(ctx context.Context)
 }
 
 // Net is a connection factory able to dial remote endpoints
@@ -66,7 +66,7 @@ type Net struct {
 	regNewRemoteConn []func(NewConnectionEvent)
 
 	clsMutex           sync.RWMutex
-	closingConnections []func(ConnectionWithErr)
+	closingConnections []func(context.Context, ConnectionWithErr)
 
 	queuesCount           uint
 	incomingMessagesQueue []chan IncomingMessageEvent
@@ -93,7 +93,7 @@ func NewNet(conf config.Config, localEntity node.LocalNode, logger log.Log) (*Ne
 		localNode:             localEntity,
 		logger:                logger,
 		regNewRemoteConn:      make([]func(NewConnectionEvent), 0, 3),
-		closingConnections:    make([]func(cwe ConnectionWithErr), 0, 3),
+		closingConnections:    make([]func(context.Context, ConnectionWithErr), 0, 3),
 		queuesCount:           qcount,
 		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount),
 		config:                conf,
@@ -107,11 +107,12 @@ func NewNet(conf config.Config, localEntity node.LocalNode, logger log.Log) (*Ne
 }
 
 // Start begins accepting connections from the listener socket
-func (n *Net) Start(listener net.Listener) { // todo: maybe add context
+func (n *Net) Start(ctx context.Context, listener net.Listener) { // todo: maybe add context
 	n.listener = listener
 	n.listenAddress = listener.Addr().(*net.TCPAddr)
-	n.logger.Info("Started TCP server listening for connections on tcp:%v", listener.Addr().String())
-	go n.accept(listener)
+	n.logger.WithContext(ctx).With().Info("started tcp server listening for connections",
+		log.String("tcpaddr", listener.Addr().String()))
+	go n.accept(ctx, listener)
 }
 
 // LocalAddr returns the local listening address. panics before calling Start or if Start errored
@@ -148,7 +149,7 @@ func sumByteArray(b []byte) uint {
 
 // EnqueueMessage inserts a message into a queue, to decide on which queue to send the message to
 // it sum the remote public key bytes as integer to segment to queueCount queues.
-func (n *Net) EnqueueMessage(event IncomingMessageEvent) {
+func (n *Net) EnqueueMessage(ctx context.Context, event IncomingMessageEvent) {
 	sba := sumByteArray(event.Conn.RemotePublicKey().Bytes())
 	n.incomingMessagesQueue[sba%n.queuesCount] <- event
 }
@@ -160,7 +161,7 @@ func (n *Net) IncomingMessages() []chan IncomingMessageEvent {
 }
 
 // SubscribeClosingConnections registers a callback for a new connection event. all registered callbacks are called before moving.
-func (n *Net) SubscribeClosingConnections(f func(connection ConnectionWithErr)) {
+func (n *Net) SubscribeClosingConnections(f func(context.Context, ConnectionWithErr)) {
 	n.clsMutex.Lock()
 	n.closingConnections = append(n.closingConnections, f)
 	n.clsMutex.Unlock()
@@ -169,7 +170,7 @@ func (n *Net) SubscribeClosingConnections(f func(connection ConnectionWithErr)) 
 func (n *Net) publishClosingConnection(connection ConnectionWithErr) {
 	n.clsMutex.RLock()
 	for _, f := range n.closingConnections {
-		f(connection)
+		f(context.TODO(), connection)
 	}
 	n.clsMutex.RUnlock()
 }
@@ -204,7 +205,6 @@ func (n *Net) tcpSocketConfig(tcpconn *net.TCPConn) {
 }
 
 func (n *Net) createConnection(ctx context.Context, address net.Addr, remotePub p2pcrypto.PublicKey, session NetworkSession) (ManagedConnection, error) {
-
 	if n.isShuttingDown {
 		return nil, fmt.Errorf("can't dial because the connection is shutting down")
 	}
@@ -220,7 +220,6 @@ func (n *Net) createConnection(ctx context.Context, address net.Addr, remotePub 
 }
 
 func (n *Net) createSecuredConnection(ctx context.Context, address net.Addr, remotePubkey p2pcrypto.PublicKey) (ManagedConnection, error) {
-
 	session := createSession(n.localNode.PrivateKey(), remotePubkey)
 	conn, err := n.createConnection(ctx, address, remotePubkey, session)
 	if err != nil {
@@ -257,9 +256,14 @@ func (n *Net) Dial(ctx context.Context, address net.Addr, remotePubkey p2pcrypto
 
 	conn, err := n.createSecuredConnection(ctx, address, remotePubkey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to Dial. err: %v", err)
+		return nil, fmt.Errorf("failed to dial, err: %v", err)
 	}
-	go conn.beginEventProcessing()
+
+	// Add session ID to context
+	go conn.beginEventProcessing(log.WithNewSessionID(ctx,
+		log.FieldNamed("session_remote_id", remotePubkey),
+		log.String("session_remote_addr", address.String()),
+		log.String("session_network", address.Network())))
 	return conn, nil
 }
 
@@ -269,13 +273,13 @@ func (n *Net) Shutdown() {
 	if n.listener != nil {
 		err := n.listener.Close()
 		if err != nil {
-			n.logger.Error("Error closing listener err=%v", err)
+			n.logger.With().Error("error closing listener", log.Err(err))
 		}
 	}
 }
 
-func (n *Net) accept(listen net.Listener) {
-	n.logger.Debug("Waiting for incoming connections...")
+func (n *Net) accept(ctx context.Context, listen net.Listener) {
+	n.logger.WithContext(ctx).Debug("waiting for incoming connections")
 	pending := make(chan struct{}, n.config.MaxPendingConnections)
 
 	for i := 0; i < n.config.MaxPendingConnections; i++ {
@@ -290,27 +294,32 @@ func (n *Net) accept(listen net.Listener) {
 				return
 			}
 			if !Temporary(err) {
-				n.logger.Error("Listener errored while accepting connections: err: %v", err)
+				n.logger.WithContext(ctx).With().Error("listener errored while accepting connections", log.Err(err))
 				return
 			}
 
-			n.logger.Warning("Failed to accept connection request err:%v", err)
+			n.logger.WithContext(ctx).With().Warning("failed to accept connection request", log.Err(err))
 			pending <- struct{}{}
 			continue
 		}
 
-		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
+		// Create a new session context to track this listener
+		n.logger.WithContext(ctx).With().Debug("got new connection",
+			log.String("remote_addr", netConn.RemoteAddr().String()),
+			log.String("network", netConn.RemoteAddr().Network()))
 		conn := netConn.(*net.TCPConn)
 		n.tcpSocketConfig(conn) // TODO maybe only set this after session handshake to prevent denial of service with big messages
-		c := newConnection(netConn, n, nil, nil, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger)
+		c := newConnection(netConn, n, nil, nil, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger.WithContext(ctx))
 		go func(con Connection) {
 			defer func() { pending <- struct{}{} }()
-			err := c.setupIncoming(n.config.SessionTimeout)
+			err := c.setupIncoming(ctx, n.config.SessionTimeout)
 			if err != nil {
-				n.logger.Event().Warning("conn_incoming_failed", log.String("remote", c.remoteAddr.String()), log.Err(err))
+				n.logger.WithContext(ctx).Event().Warning("incoming connection failed",
+					log.String("remote_addr", c.remoteAddr.String()),
+					log.Err(err))
 				return
 			}
-			go c.beginEventProcessing()
+			go c.beginEventProcessing(ctx)
 		}(c)
 
 		// network won't publish the connection before it the remote node had established a session

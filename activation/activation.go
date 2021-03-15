@@ -3,6 +3,7 @@
 package activation
 
 import (
+	"context"
 	"fmt"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -135,7 +136,7 @@ func NewBuilder(nodeID types.NodeID, coinbaseAccount types.Address, signer signe
 }
 
 // Start is the main entry point of the atx builder. it runs the main loop of the builder and shouldn't be called more than once
-func (b *Builder) Start() {
+func (b *Builder) Start(ctx context.Context) {
 	if atomic.LoadUint32(&b.started) == 1 {
 		return
 	}
@@ -232,7 +233,7 @@ func (b *Builder) buildNipstChallenge(currentLayer types.LayerID) error {
 
 // StartPost initiates post commitment generation process. It returns an error if a process is already in progress or
 // if a post has been already initialized
-func (b *Builder) StartPost(rewardAddress types.Address, dataDir string, space uint64) error {
+func (b *Builder) StartPost(ctx context.Context, rewardAddress types.Address, dataDir string, space uint64) error {
 	if !atomic.CompareAndSwapInt32(&b.initStatus, InitIdle, InitInProgress) {
 		switch atomic.LoadInt32(&b.initStatus) {
 		case InitDone:

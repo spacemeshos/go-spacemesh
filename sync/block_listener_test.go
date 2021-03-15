@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -598,7 +599,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	bl2 := ListenerFactory(n2, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}, "TestBlockListener_ListenToGossipBlocks2", 1)
 
 	bl1.Start()
-	bl1.Syncer.Start()
+	bl1.Syncer.Start(context.TODO())
 	bl2.Start()
 
 	tx, err := types.NewSignedTx(1, types.BytesToAddress([]byte{0x01}), 10, 100, 10, signing.NewEdSigner())

@@ -1,7 +1,9 @@
 package hare
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -21,7 +23,7 @@ type Consensus interface {
 	Close()
 	CloseChannel() chan struct{}
 
-	Start() error
+	Start(ctx context.Context) error
 	SetInbox(chan *Msg)
 }
 
@@ -192,12 +194,13 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 
 // the logic that happens when a new layer arrives.
 // this function triggers the start of new consensus processes.
-func (h *Hare) onTick(id types.LayerID) {
+func (h *Hare) onTick(ctx context.Context, id types.LayerID) {
+	logger := h.WithContext(ctx).WithFields(id)
 	h.layerLock.Lock()
 	if id > h.lastLayer {
 		h.lastLayer = id
 	} else {
-		h.With().Error("received out of order layer tick",
+		logger.With().Error("received out of order layer tick",
 			log.FieldNamed("last_layer", h.lastLayer),
 			log.FieldNamed("this_layer", id))
 	}
@@ -205,12 +208,12 @@ func (h *Hare) onTick(id types.LayerID) {
 	h.layerLock.Unlock()
 
 	if !h.broker.Synced(instanceID(id)) { // if not synced don't start consensus
-		h.With().Info("not starting hare since node is not synced", id)
+		logger.Info("not starting hare since node is not synced")
 		return
 	}
 
 	if id.GetEpoch().IsGenesis() {
-		h.With().Info("not starting hare since we are in genesis epoch", id)
+		logger.Info("not starting hare since we are in genesis epoch")
 		return
 	}
 
@@ -218,12 +221,13 @@ func (h *Hare) onTick(id types.LayerID) {
 	go func() {
 		// this is called only for its side effects, but at least print the error if it returns one
 		if isActive, err := h.rolacle.IsIdentityActiveOnConsensusView(h.nid.Key, id); err != nil {
-			h.With().Error("error checking if identity is active",
+			logger.With().Error("error checking if identity is active",
 				log.Bool("isActive", isActive), log.Err(err))
 		}
 	}()
 
-	h.Debug("hare got tick, sleeping for %v", h.networkDelta)
+	logger.With().Debug("hare got tick, sleeping",
+		log.String("delta", fmt.Sprint(h.networkDelta)))
 	ti := time.NewTimer(h.networkDelta)
 	select {
 	case <-ti.C:
@@ -233,35 +237,35 @@ func (h *Hare) onTick(id types.LayerID) {
 		return
 	}
 
-	h.Debug("get hare results")
+	logger.Debug("get hare results")
 
 	// retrieve set from orphan blocks
 	blocks, err := h.msh.LayerBlockIds(h.lastLayer)
 	if err != nil {
-		h.With().Error("no blocks for consensus", id, log.Err(err))
+		logger.With().Error("no blocks for consensus", log.Err(err))
 		return
 	}
 
-	h.With().Debug("received new blocks", log.Int("count", len(blocks)))
+	logger.With().Debug("received new blocks", log.Int("count", len(blocks)))
 	set := NewEmptySet(len(blocks))
 	for _, b := range blocks {
 		set.Add(b)
 	}
 
 	instID := instanceID(id)
-	c, err := h.broker.Register(instID)
+	c, err := h.broker.Register(ctx, instID)
 	if err != nil {
-		h.With().Warning("could not register consensus process on broker", id, log.Err(err))
+		logger.With().Warning("could not register consensus process on broker", log.Err(err))
 		return
 	}
 	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.network, h.outputChan)
 	cp.SetInbox(c)
-	if err := cp.Start(); err != nil {
-		h.With().Error("could not start consensus process", log.Err(err))
+	if err := cp.Start(ctx); err != nil {
+		logger.With().Error("could not start consensus process", log.Err(err))
 		h.broker.Unregister(cp.ID())
 		return
 	}
-	h.With().Info("number of consensus processes (after +1)",
+	logger.With().Info("number of consensus processes (after +1)",
 		log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
 	// TODO: fix metrics
 	//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(id), 10)).Add(1)
@@ -290,7 +294,7 @@ func (h *Hare) GetResult(lid types.LayerID) ([]types.BlockID, error) {
 }
 
 // listens to outputs arriving from consensus processes.
-func (h *Hare) outputCollectionLoop() {
+func (h *Hare) outputCollectionLoop(ctx context.Context) {
 	for {
 		select {
 		case out := <-h.outputChan:
@@ -313,11 +317,11 @@ func (h *Hare) outputCollectionLoop() {
 }
 
 // listens to new layers.
-func (h *Hare) tickLoop() {
+func (h *Hare) tickLoop(ctx context.Context) {
 	for {
 		select {
 		case layer := <-h.beginLayer:
-			go h.onTick(layer)
+			go h.onTick(ctx, layer)
 		case <-h.CloseChannel():
 			return
 		}
@@ -325,15 +329,17 @@ func (h *Hare) tickLoop() {
 }
 
 // Start starts listening for layers and outputs.
-func (h *Hare) Start() error {
+func (h *Hare) Start(ctx context.Context) error {
+	// Create a new session ID for hare
+	ctx = log.WithNewSessionID(ctx, log.String("protocol", protoName))
 	h.With().Info("starting protocol", log.String("protocol", protoName))
-	err := h.broker.Start()
+	err := h.broker.Start(ctx)
 	if err != nil {
 		return err
 	}
 
-	go h.tickLoop()
-	go h.outputCollectionLoop()
+	go h.tickLoop(ctx)
+	go h.outputCollectionLoop(ctx)
 
 	return nil
 }

@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -158,7 +159,6 @@ type Syncer struct {
 
 // NewSync fires a sync every sm.SyncInterval or on force space from outside
 func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxDB atxDB, bv blockEligibilityValidator, poetdb poetDb, conf Configuration, clock ticker, logger log.Log) *Syncer {
-
 	exit := make(chan struct{})
 
 	srvr := &net{
@@ -291,7 +291,7 @@ func (s *Syncer) IsSynced() bool {
 
 // Start starts the main pooling routine that checks the sync status every set interval
 // and calls synchronise if the node is out of sync
-func (s *Syncer) Start() {
+func (s *Syncer) Start(ctx context.Context) {
 	if s.startLock.TryLock() {
 		defer s.startLock.Unlock()
 		if s.isClosed() {
@@ -308,11 +308,11 @@ func (s *Syncer) Start() {
 
 // fires a sync every sm.SyncInterval or on force sync from outside
 func (s *Syncer) run() {
-	s.Debug("Start running")
+	s.Debug("start running")
 	for {
 		select {
 		case <-s.exit:
-			s.Debug("Work stopped")
+			s.Debug("work stopped")
 			return
 		case <-s.forceSync:
 			go s.synchronise()
@@ -437,7 +437,7 @@ func (s *Syncer) handleCurrentLayer() error {
 }
 
 func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
-	s.Info("Node is out of sync setting gossip-synced to false and starting sync")
+	s.Info("node is out of sync, setting gossip-synced to false and starting sync")
 	events.ReportNodeStatusUpdate()
 	s.setGossipBufferingStatus(pending) // don't listen to gossip while not synced
 

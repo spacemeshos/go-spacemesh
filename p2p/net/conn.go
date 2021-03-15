@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -81,8 +82,8 @@ type FormattedConnection struct {
 
 type networker interface {
 	HandlePreSessionIncomingMessage(c Connection, msg []byte) error
-	EnqueueMessage(ime IncomingMessageEvent)
-	SubscribeClosingConnections(func(c ConnectionWithErr))
+	EnqueueMessage(ctx context.Context, ime IncomingMessageEvent)
+	SubscribeClosingConnections(func(context.Context, ConnectionWithErr))
 	publishClosingConnection(c ConnectionWithErr)
 	NetworkID() int8
 }
@@ -172,8 +173,18 @@ func (c *FormattedConnection) Created() time.Time {
 	return c.created
 }
 
-func (c *FormattedConnection) publish(message []byte) {
-	c.networker.EnqueueMessage(IncomingMessageEvent{c, message})
+func (c *FormattedConnection) publish(ctx context.Context, message []byte) {
+	// Print a log line to establish a link between the originating sessionID and this requestID,
+	// before the sessionID disappears.
+	c.logger.WithContext(ctx).Debug("enqueuing incoming message")
+
+	// Rather than store the context on the heap, which is an antipattern, we instead extract the sessionID and store
+	// that.
+	ime := IncomingMessageEvent{Conn: c, Message: message}
+	if requestID, ok := log.ExtractRequestID(ctx); ok {
+		ime.RequestID = requestID
+	}
+	c.networker.EnqueueMessage(ctx, ime)
 }
 
 // NOTE: this is left here intended to help debugging in the future.
@@ -211,7 +222,7 @@ func (c *FormattedConnection) sendListener() {
 			//todo: we are hiding the error here...
 			err := c.SendSock(buf)
 			if err != nil {
-				log.Error("cannot send message to peer %v", err)
+				c.logger.With().Error("cannot send message to peer", log.Err(err))
 			}
 		case <-c.stopSending:
 			return
@@ -299,7 +310,7 @@ var (
 	ErrMsgExceededLimit = errors.New("message size exceeded limit")
 )
 
-func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
+func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Duration) error {
 	be := make(chan struct {
 		b []byte
 		e error
@@ -356,7 +367,7 @@ func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
 }
 
 // Read from the incoming new messages and send down the connection
-func (c *FormattedConnection) beginEventProcessing() {
+func (c *FormattedConnection) beginEventProcessing(ctx context.Context) {
 	//TODO: use a buffer pool
 	var err error
 	var buf []byte
@@ -374,7 +385,7 @@ func (c *FormattedConnection) beginEventProcessing() {
 		if len(buf) > 0 {
 			newbuf := make([]byte, len(buf))
 			copy(newbuf, buf)
-			c.publish(newbuf)
+			c.publish(log.WithNewRequestID(ctx), newbuf)
 		}
 
 		if err != nil {

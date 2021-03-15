@@ -124,7 +124,7 @@ func init() {
 
 // Service is a general service interface that specifies the basic start/stop functionality
 type Service interface {
-	Start() error
+	Start(ctx context.Context) error
 	Close()
 }
 
@@ -457,7 +457,8 @@ func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
 	return nil
 }
 
-func (app *SpacemeshApp) initServices(nodeID types.NodeID,
+func (app *SpacemeshApp) initServices(ctx context.Context,
+	nodeID types.NodeID,
 	swarm service.Service,
 	dbStorepath string,
 	sgn hare.Signer,
@@ -560,13 +561,16 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	}
 
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
-		app.log.Panic("Number of atxs per block required is bigger than the limit atxsPerBlock=%v limit=%v", app.Config.AtxsPerBlock, miner.AtxsPerBlockLimit)
+		app.log.With().Panic("number of atxs per block required is bigger than the limit",
+			log.Int("atxs_per_block", app.Config.AtxsPerBlock),
+			log.Int("limit", miner.AtxsPerBlockLimit))
 	}
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 	if app.Config.HareEligibility.EpochOffset >= app.Config.BaseConfig.LayersPerEpoch {
-		app.log.Panic("Epoch offset cannot be greater than or equal to the number of layers per epoch EpochOffset=%v LayersPerEpoch=%v",
-			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
+		app.log.With().Panic("epoch offset cannot be greater than or equal to the number of layers per epoch",
+			log.Int("epoch_offset", app.Config.HareEligibility.EpochOffset),
+			log.Int("layers_per_epoch", app.Config.BaseConfig.LayersPerEpoch))
 	}
 
 	syncer := sync.NewSync(swarm, msh, app.txPool, atxdb, eValidator, poetDb, syncConf, clock, app.addLogger(SyncLogger, lg))
@@ -582,10 +586,10 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	}
 
 	gossipListener := service.NewListener(swarm, syncer, app.addLogger(GossipListener, lg))
-	ha := app.HareFactory(mdb, swarm, sgn, nodeID, syncer, msh, hOracle, idStore, clock, lg)
+	ha := app.HareFactory(ctx, mdb, swarm, sgn, nodeID, syncer, msh, hOracle, idStore, clock, lg)
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
-	cfg := miner.Config{
+	minerCfg := miner.Config{
 		Hdist:          app.Config.Hdist,
 		MinerID:        nodeID,
 		AtxsPerBlock:   app.Config.AtxsPerBlock,
@@ -594,7 +598,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	}
 
 	database.SwitchCreationContext(dbStorepath, "") // currently only blockbuilder uses this mechanism
-	blockProducer := miner.NewBlockBuilder(cfg, sgn, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
+	blockProducer := miner.NewBlockBuilder(minerCfg, sgn, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
 	blockListener := sync.NewBlockListener(swarm, syncer, 4, app.addLogger(BlockListenerLogger, lg))
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))
@@ -642,7 +646,7 @@ func (app *SpacemeshApp) checkTimeDrifts() {
 		case <-checkTimeSync.C:
 			_, err := timesync.CheckSystemClockDrift()
 			if err != nil {
-				app.log.Error("System time couldn't synchronize %s", err)
+				app.log.With().Error("system time couldn't synchronize", log.Err(err))
 				cmdp.Cancel()
 				return
 			}
@@ -651,9 +655,9 @@ func (app *SpacemeshApp) checkTimeDrifts() {
 }
 
 // HareFactory returns a hare consensus algorithm according to the parameters is app.Config.Hare.SuperHare
-func (app *SpacemeshApp) HareFactory(mdb *mesh.DB, swarm service.Service, sgn hare.Signer, nodeID types.NodeID, syncer *sync.Syncer, msh *mesh.Mesh, hOracle hare.Rolacle, idStore *activation.IdentityStore, clock TickProvider, lg log.Log) HareService {
+func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm service.Service, sgn hare.Signer, nodeID types.NodeID, syncer *sync.Syncer, msh *mesh.Mesh, hOracle hare.Rolacle, idStore *activation.IdentityStore, clock TickProvider, lg log.Log) HareService {
 	if app.Config.HARE.SuperHare {
-		return turbohare.New(msh)
+		return turbohare.New(ctx, msh)
 	}
 
 	// a function to validate we know the blocks
@@ -677,37 +681,34 @@ func (app *SpacemeshApp) HareFactory(mdb *mesh.DB, swarm service.Service, sgn ha
 	return ha
 }
 
-func (app *SpacemeshApp) startServices() {
+func (app *SpacemeshApp) startServices(ctx context.Context) {
 	app.blockListener.Start()
-	go app.startSyncer()
+	go app.startSyncer(ctx)
 
-	err := app.hare.Start()
-	if err != nil {
+	if err := app.hare.Start(ctx); err != nil {
 		log.Panic("cannot start hare")
 	}
-	err = app.blockProducer.Start()
-	if err != nil {
+	if err := app.blockProducer.Start(ctx); err != nil {
 		log.Panic("cannot start block producer")
 	}
 
-	app.poetListener.Start()
+	app.poetListener.Start(ctx)
 
 	if app.Config.StartMining {
 		coinBase := types.HexToAddress(app.Config.CoinbaseAccount)
-		err := app.atxBuilder.StartPost(coinBase, app.Config.POST.DataDir, app.Config.POST.SpacePerUnit)
+		err := app.atxBuilder.StartPost(ctx, coinBase, app.Config.POST.DataDir, app.Config.POST.SpacePerUnit)
 		if err != nil {
-			log.Error("Error initializing post, err: %v", err)
-			log.Panic("Error initializing post")
+			log.With().Panic("error initializing post", log.Err(err))
 		}
 	} else {
-		log.Info("Manual post init")
+		log.Info("manual post init")
 	}
-	app.atxBuilder.Start()
+	app.atxBuilder.Start(ctx)
 	app.clock.StartNotifying()
 	go app.checkTimeDrifts()
 }
 
-func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.NetworkAPI) {
+func (app *SpacemeshApp) startAPIServices(ctx context.Context, postClient api.PostAPI, net api.NetworkAPI) {
 	apiConf := &app.Config.API
 	layerDuration := app.Config.LayerDurationSec
 
@@ -770,10 +771,11 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 		if app.newgrpcAPIService == nil {
 			// This panics because it should not happen.
 			// It should be caught inside apiConf.
-			log.Panic("one or more new GRPC services must be enabled with new JSON gateway server.")
+			log.Panic("one or more new grpc services must be enabled with new json gateway server")
 		}
 		app.newjsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.NewJSONServerPort, apiConf.NewGrpcServerPort)
 		app.newjsonAPIService.StartService(
+			ctx,
 			apiConf.StartDebugService,
 			apiConf.StartGatewayService,
 			apiConf.StartGlobalStateService,
@@ -803,32 +805,32 @@ func (app *SpacemeshApp) stopServices() {
 	}
 
 	if app.jsonAPIService != nil {
-		log.Info("stopping JSON gateway service...")
+		log.Info("stopping json gateway service")
 		if err := app.jsonAPIService.Close(); err != nil {
-			log.Error("error stopping JSON gateway server: %s", err)
+			log.With().Error("error stopping json gateway server", log.Err(err))
 		}
 	}
 
 	if app.grpcAPIService != nil {
-		log.Info("Stopping GRPC service...")
+		log.Info("stopping grpc service")
 		// does not return any errors
-		app.grpcAPIService.Close()
+		_ = app.grpcAPIService.Close()
 	}
 
 	if app.blockProducer != nil {
-		app.log.Info("%v closing block producer", app.nodeID.Key)
+		app.log.Info("closing block producer")
 		if err := app.blockProducer.Close(); err != nil {
-			log.Error("cannot stop block producer %v", err)
+			log.With().Error("cannot stop block producer", log.Err(err))
 		}
 	}
 
 	if app.clock != nil {
-		app.log.Info("%v closing clock", app.nodeID.Key)
+		app.log.Info("closing clock")
 		app.clock.Close()
 	}
 
 	if app.poetListener != nil {
-		app.log.Info("closing PoET listener")
+		app.log.Info("closing poet listener")
 		app.poetListener.Close()
 	}
 
@@ -843,22 +845,22 @@ func (app *SpacemeshApp) stopServices() {
 	}
 
 	if app.hare != nil {
-		app.log.Info("%v closing Hare", app.nodeID.Key)
+		app.log.Info("closing hare")
 		app.hare.Close()
 	}
 
 	if app.P2P != nil {
-		app.log.Info("%v closing p2p", app.nodeID.Key)
+		app.log.Info("closing p2p")
 		app.P2P.Shutdown()
 	}
 
 	if app.syncer != nil {
-		app.log.Info("%v closing sync", app.nodeID.Key)
+		app.log.Info("closing sync")
 		app.syncer.Close()
 	}
 
 	if app.mesh != nil {
-		app.log.Info("%v closing mesh", app.nodeID.Key)
+		app.log.Info("closing mesh")
 		app.mesh.Close()
 	}
 
@@ -938,60 +940,65 @@ func (app *SpacemeshApp) getIdentityFile() (string, error) {
 	return "", fmt.Errorf("not found")
 }
 
-func (app *SpacemeshApp) startSyncer() {
+func (app *SpacemeshApp) startSyncer(ctx context.Context) {
 	if app.P2P == nil {
-		app.log.Error("syncer started before P2P is initialized")
+		app.log.Error("syncer started before p2p is initialized")
 	} else {
 		<-app.P2P.GossipReady()
 	}
-	app.syncer.Start()
+	app.syncer.Start(ctx)
 }
 
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
-func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
-	log.With().Info("starting Spacemesh", log.String("data-dir", app.Config.DataDir()), log.String("post-dir", app.Config.POST.DataDir))
+func (app *SpacemeshApp) Start(*cobra.Command, []string) {
+	// we use the main app context
+	ctx := cmdp.Ctx
+
+	log.With().Info("starting spacemesh",
+		log.String("data-dir", app.Config.DataDir()),
+		log.String("post-dir", app.Config.POST.DataDir))
 
 	err := filesystem.ExistOrCreate(app.Config.DataDir())
 	if err != nil {
-		log.Error("data-dir not found or could not be created err:%v", err)
+		log.With().Error("data-dir not found or could not be created", log.Err(err))
 	}
 
 	/* Setup monitoring */
 
 	if app.Config.MemProfile != "" {
-		log.Info("Starting mem profiling")
+		log.Info("starting mem profiling")
 		f, err := os.Create(app.Config.MemProfile)
 		if err != nil {
-			log.Error("could not create memory profile: ", err)
+			log.With().Error("could not create memory profile", log.Err(err))
 		}
 		defer f.Close()
 		runtime.GC() // get up-to-date statistics
 		if err := pprof.WriteHeapProfile(f); err != nil {
-			log.Error("could not write memory profile: ", err)
+			log.With().Error("could not write memory profile", log.Err(err))
 		}
 	}
 
 	if app.Config.CPUProfile != "" {
-		log.Info("Starting cpu profile")
+		log.Info("starting cpu profile")
 		f, err := os.Create(app.Config.CPUProfile)
 		if err != nil {
-			log.Error("could not create CPU profile: ", err)
+			log.With().Error("could not create cpu profile", log.Err(err))
 		}
 		defer f.Close()
 		if err := pprof.StartCPUProfile(f); err != nil {
-			log.Error("could not start CPU profile: ", err)
+			log.With().Error("could not start cpu profile", log.Err(err))
 		}
 		defer pprof.StopCPUProfile()
 	}
 
 	if app.Config.PprofHTTPServer {
-		log.Info("Starting pprof server")
+		log.Info("starting pprof server")
 		srv := &http.Server{Addr: ":6060"}
-		defer srv.Shutdown(context.TODO())
+		defer srv.Shutdown(ctx)
 		go func() {
 			err := srv.ListenAndServe()
 			if err != nil {
-				log.Error("cannot start http server", err)
+				log.With().Error("cannot start http server", log.Err(err))
 			}
 		}()
 	}
@@ -1000,10 +1007,10 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	app.edSgn, err = app.LoadOrCreateEdSigner()
 	if err != nil {
-		log.Panic("could not retrieve identity err=%v", err)
+		log.With().Panic("could not retrieve identity", log.Err(err))
 	}
 
-	poetClient := activation.NewHTTPPoetClient(cmdp.Ctx, app.Config.PoETServer)
+	poetClient := activation.NewHTTPPoetClient(ctx, app.Config.PoETServer)
 
 	rng := amcl.NewRAND()
 	pub := app.edSgn.PublicKey().Bytes()
@@ -1030,14 +1037,25 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
 
-	log.Info("initializing P2P services")
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, app.addLogger(P2PLogger, lg), dbStorepath)
+	log.Info("initializing p2p services")
+	swarm, err := p2p.New(ctx, app.Config.P2P, app.addLogger(P2PLogger, lg), dbStorepath)
 	if err != nil {
-		log.Panic("error starting p2p services. err: %v", err)
+		log.With().Panic("error starting p2p services", log.Err(err))
 	}
 
-	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, false, nil, uint32(app.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(app.Config.LayersPerEpoch), clock)
-	if err != nil {
+	if err = app.initServices(ctx,
+		nodeID,
+		swarm,
+		dbStorepath,
+		app.edSgn,
+		false,
+		nil,
+		uint32(app.Config.LayerAvgSize),
+		postClient,
+		poetClient,
+		vrfSigner,
+		uint16(app.Config.LayersPerEpoch),
+		clock); err != nil {
 		log.With().Error("cannot start services", log.Err(err))
 		return
 	}
@@ -1046,17 +1064,16 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		metrics.StartCollectingMetrics(app.Config.MetricsPort)
 	}
 
-	app.startServices()
+	app.startServices(ctx)
 
 	// P2P must start last to not block when sending messages to protocols
-	err = app.P2P.Start()
-	if err != nil {
-		log.Panic("Error starting p2p services: %v", err)
+	if err = app.P2P.Start(ctx); err != nil {
+		log.With().Panic("error starting p2p services", log.Err(err))
 	}
 
-	app.startAPIServices(postClient, app.P2P)
+	app.startAPIServices(ctx, postClient, app.P2P)
 	events.SubscribeToLayers(clock.Subscribe())
-	log.Info("App started.")
+	log.Info("app started")
 
 	// notify anyone who might be listening that the app has finished starting.
 	// this can be used by, e.g., app tests.
@@ -1064,7 +1081,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
-	<-cmdp.Ctx.Done()
+	<-ctx.Done()
 	events.ReportError(events.NodeError{
 		Msg:   "node is shutting down",
 		Level: zapcore.InfoLevel,

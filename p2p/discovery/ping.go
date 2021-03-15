@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -61,7 +62,7 @@ func (p *protocol) verifyPinger(from net.Addr, pi *node.Info) error {
 }
 
 // Ping notifies `peer` about our p2p identity.
-func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
+func (p *protocol) Ping(ctx context.Context, peer p2pcrypto.PublicKey) error {
 	plogger := p.logger.WithFields(log.String("type", "ping"), log.String("to", peer.String()))
 
 	plogger.Debug("send request")
@@ -88,7 +89,7 @@ func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
 		ch <- sender.ID.Bytes()
 	}
 
-	err = p.msgServer.SendRequest(PingPong, data, peer, foo)
+	err = p.msgServer.SendRequest(ctx, PingPong, data, peer, foo)
 
 	if err != nil {
 		return err

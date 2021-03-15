@@ -2,6 +2,7 @@
 package miner
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/binary"
 	"errors"
@@ -129,7 +130,7 @@ func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent
 
 // Start starts the process of creating a block, it listens for txs and atxs received by gossip, and starts querying
 // block oracle when it should create a block. This function returns an error if Start was already called once
-func (t *BlockBuilder) Start() error {
+func (t *BlockBuilder) Start(ctx context.Context) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.started {
@@ -137,7 +138,7 @@ func (t *BlockBuilder) Start() error {
 	}
 
 	t.started = true
-	go t.createBlockLoop()
+	go t.createBlockLoop(log.WithNewSessionID(ctx))
 	return nil
 }
 
@@ -342,7 +343,8 @@ func selectAtxs(atxs []types.ATXID, atxsPerBlock int) []types.ATXID {
 	return selected
 }
 
-func (t *BlockBuilder) createBlockLoop() {
+func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
+	logger := t.WithContext(ctx)
 	for {
 		select {
 
@@ -350,21 +352,21 @@ func (t *BlockBuilder) createBlockLoop() {
 			return
 
 		case layerID := <-t.beginRoundEvent:
-			t.With().Debug("builder got layer", layerID)
+			logger.With().Debug("builder got layer", layerID)
 			if !t.syncer.IsSynced() {
-				t.Debug("not synced yet, not building a block in this round")
+				logger.Debug("not synced yet, not building a block in this round")
 				continue
 			}
 
 			atxID, proofs, atxs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
 				events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to check for block eligibility")
-				t.With().Error("failed to check for block eligibility", layerID, log.Err(err))
+				logger.With().Error("failed to check for block eligibility", layerID, log.Err(err))
 				continue
 			}
 			if len(proofs) == 0 {
 				events.ReportDoneCreatingBlock(false, uint64(layerID), "")
-				t.With().Info("not eligible for blocks in layer", layerID)
+				logger.With().Info("not eligible for blocks in layer", layerID)
 				continue
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
@@ -374,31 +376,31 @@ func (t *BlockBuilder) createBlockLoop() {
 				txList, txs, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to get txs for block")
-					t.With().Error("failed to get txs for block", layerID, log.Err(err))
+					logger.With().Error("failed to get txs for block", layerID, log.Err(err))
 					continue
 				}
 				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList, atxs)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot create new block")
-					t.With().Error("failed to create new block", log.Err(err))
+					logger.With().Error("failed to create new block", log.Err(err))
 					continue
 				}
 				err = t.meshProvider.AddBlockWithTxs(blk, txs, nil)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to store block")
-					t.With().Error("failed to store block", blk.ID(), log.Err(err))
+					logger.With().Error("failed to store block", blk.ID(), log.Err(err))
 					continue
 				}
 				go func() {
 					bytes, err := types.InterfaceToBytes(blk)
 					if err != nil {
-						t.With().Error("failed to serialize block", log.Err(err))
+						logger.With().Error("failed to serialize block", log.Err(err))
 						events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot serialize block")
 						return
 					}
 					err = t.network.Broadcast(config.NewBlockProtocol, bytes)
 					if err != nil {
-						t.With().Error("failed to send block", log.Err(err))
+						logger.With().Error("failed to send block", log.Err(err))
 					}
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "")
 				}()

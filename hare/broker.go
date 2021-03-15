@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -16,7 +17,7 @@ type startInstanceError error
 type syncStateFunc func() bool
 
 type validator interface {
-	Validate(m *Msg) bool
+	Validate(context.Context, *Msg) bool
 }
 
 // Closer adds the ability to close objects.
@@ -81,16 +82,16 @@ func newBroker(networkService NetworkService, eValidator validator, stateQuerier
 }
 
 // Start listening to Hare messages (non-blocking).
-func (b *Broker) Start() error {
+func (b *Broker) Start(ctx context.Context) error {
 	if b.isStarted { // Start has been called at least twice
-		b.Error("could not start instance")
+		b.WithContext(ctx).Error("could not start instance")
 		return startInstanceError(errors.New("instance already started"))
 	}
 
 	b.isStarted = true
 
 	b.inbox = b.network.RegisterGossipProtocol(protoName, priorityq.Mid)
-	go b.eventLoop()
+	go b.eventLoop(ctx)
 
 	return nil
 }
@@ -141,31 +142,36 @@ func (b *Broker) validate(m *Message) error {
 }
 
 // listens to incoming messages and incoming tasks
-func (b *Broker) eventLoop() {
+func (b *Broker) eventLoop(ctx context.Context) {
 	for {
 		select {
 		case msg := <-b.inbox:
 			if msg == nil {
-				b.With().Error("broker message validation failed: called with nil",
+				b.WithContext(ctx).With().Error("broker message validation failed: called with nil",
 					log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 				continue
+			}
+
+			// try to read stored context
+			if msg.RequestID() != "" {
+				ctx = log.WithRequestID(ctx, msg.RequestID())
 			}
 
 			h := types.CalcMessageHash12(msg.Bytes(), protoName)
 			hareMsg, err := MessageFromBuffer(msg.Bytes())
 			if err != nil {
-				b.With().Error("could not build message", h, log.Err(err))
+				b.WithContext(ctx).With().Error("could not build message", h, log.Err(err))
 				continue
 			}
 
 			if hareMsg.InnerMsg == nil {
-				b.With().Error("broker message validation failed",
+				b.WithContext(ctx).With().Error("broker message validation failed",
 					h,
 					log.Err(errNilInner),
 					log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 				continue
 			}
-			b.With().Debug("broker received hare message", hareMsg)
+			b.WithContext(ctx).With().Debug("broker received hare message", hareMsg)
 
 			// TODO: fix metrics
 			// metrics.MessageTypeCounter.With("type_id", hareMsg.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(msgInstID), 10), "reporter", "brokerHandler").Add(1)
@@ -174,7 +180,7 @@ func (b *Broker) eventLoop() {
 			if err := b.validate(hareMsg); err != nil {
 				if err != errEarlyMsg {
 					// not early, validation failed
-					b.With().Debug("broker received a message to a consensus process that is not registered",
+					b.WithContext(ctx).With().Debug("broker received a message to a consensus process that is not registered",
 						h,
 						log.Err(err),
 						hareMsg,
@@ -183,7 +189,7 @@ func (b *Broker) eventLoop() {
 					continue
 				}
 
-				b.With().Debug("early message detected",
+				b.WithContext(ctx).With().Debug("early message detected",
 					h,
 					log.Err(err),
 					hareMsg,
@@ -196,9 +202,9 @@ func (b *Broker) eventLoop() {
 			// the msg is either early or has instance
 
 			// create msg
-			iMsg, err := newMsg(hareMsg, b.stateQuerier)
+			iMsg, err := newMsg(ctx, hareMsg, b.stateQuerier)
 			if err != nil {
-				b.With().Warning("message validation failed: could not construct msg",
+				b.WithContext(ctx).With().Warning("message validation failed: could not construct msg",
 					h,
 					hareMsg,
 					log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)),
@@ -207,8 +213,8 @@ func (b *Broker) eventLoop() {
 			}
 
 			// validate msg
-			if !b.eValidator.Validate(iMsg) {
-				b.With().Warning("message validation failed: eligibility validator returned false",
+			if !b.eValidator.Validate(ctx, iMsg) {
+				b.WithContext(ctx).With().Warning("message validation failed: eligibility validator returned false",
 					h,
 					hareMsg,
 					log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)),
@@ -226,7 +232,7 @@ func (b *Broker) eventLoop() {
 				// we want to write all buffered messages to a chan with InboxCapacity len
 				// hence, we limit the buffer for pending messages
 				if len(b.pending[msgInstID]) == inboxCapacity {
-					b.With().Error("too many pending messages, ignoring message",
+					b.WithContext(ctx).With().Error("too many pending messages, ignoring message",
 						log.Int("inbox_capacity", inboxCapacity),
 						types.LayerID(msgInstID),
 						log.String("sender_id", iMsg.PubKey.ShortString()))
@@ -239,22 +245,25 @@ func (b *Broker) eventLoop() {
 			// has instance, just send
 			out, exist := b.outbox[msgInstID]
 			if !exist {
-				b.Panic("broker should have had an instance for layer %v", msgInstID)
+				b.WithContext(ctx).With().Panic("broker should have had an instance for layer",
+					types.LayerID(msgInstID))
 			}
 			out <- iMsg
 
 		case task := <-b.tasks:
 			task()
 		case <-b.CloseChannel():
-			b.Warning("broker exiting")
+			b.WithContext(ctx).Warning("broker exiting")
 			return
 		}
 	}
 }
 
-func (b *Broker) updateLatestLayer(id instanceID) {
+func (b *Broker) updateLatestLayer(ctx context.Context, id instanceID) {
 	if id <= b.latestLayer { // should expect to update only newer layers
-		b.Panic("tried to update a previous layer: expected %v > %v", id, b.latestLayer)
+		b.WithContext(ctx).With().Panic("tried to update a previous layer",
+			log.FieldNamed("this_layer", types.LayerID(id)),
+			log.FieldNamed("prev_layer", types.LayerID(b.latestLayer)))
 		return
 	}
 
@@ -301,11 +310,11 @@ func (b *Broker) isSynced(id instanceID) bool {
 
 // Register a layer to receive messages
 // Note: the registering instance is assumed to be started and accepting messages
-func (b *Broker) Register(id instanceID) (chan *Msg, error) {
+func (b *Broker) Register(ctx context.Context, id instanceID) (chan *Msg, error) {
 	resErr := make(chan error, 1)
 	resCh := make(chan chan *Msg, 1)
 	regRequest := func() {
-		b.updateLatestLayer(id)
+		b.updateLatestLayer(ctx, id)
 
 		if len(b.outbox) >= b.limit {
 			resErr <- errTooMany

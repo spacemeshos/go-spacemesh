@@ -26,7 +26,7 @@ func NewJSONHTTPServer(port int, grpcPort int) *JSONHTTPServer {
 
 // Close stops the server.
 func (s *JSONHTTPServer) Close() error {
-	log.Debug("Stopping new json-http service...")
+	log.Debug("stopping new json-http service...")
 	if s.server != nil {
 		if err := s.server.Shutdown(cmdp.Ctx); err != nil {
 			return err
@@ -37,6 +37,7 @@ func (s *JSONHTTPServer) Close() error {
 
 // StartService starts the json api server and listens for status (started, stopped).
 func (s *JSONHTTPServer) StartService(
+	ctx context.Context,
 	startDebugService bool,
 	startGatewayService bool,
 	startGlobalStateService bool,
@@ -47,6 +48,7 @@ func (s *JSONHTTPServer) StartService(
 
 	// This will block, so run it in a goroutine
 	go s.startInternal(
+		ctx,
 		startDebugService,
 		startGatewayService,
 		startGlobalStateService,
@@ -57,6 +59,7 @@ func (s *JSONHTTPServer) StartService(
 }
 
 func (s *JSONHTTPServer) startInternal(
+	ctx context.Context,
 	startDebugService bool,
 	startGatewayService bool,
 	startGlobalStateService bool,
@@ -64,7 +67,7 @@ func (s *JSONHTTPServer) startInternal(
 	startNodeService bool,
 	startSmesherService bool,
 	startTransactionService bool) {
-	ctx, cancel := context.WithCancel(cmdp.Ctx)
+	ctx, cancel := context.WithCancel(ctx)
 
 	// This will close all downstream connections when the server closes
 	defer cancel()
