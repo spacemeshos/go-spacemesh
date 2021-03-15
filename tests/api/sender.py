@@ -89,6 +89,9 @@ class ApiSender:
 
     # TODO: remove timing decorator after adding timeout decorator
     @ut.timing
+    def send_current_layer_timed(self, timeout=None, ip=None, interval=10):
+        return self.send_current_layer(timeout, ip, interval)
+
     def send_current_layer(self, timeout=None, ip=None, interval=10):
         res_layer_idx = None
         is_timeout = timeout is not None

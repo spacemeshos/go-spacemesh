@@ -33,7 +33,7 @@ class ApiHandler:
         is_timeout = timeout is not None
         if is_timeout and timeout <= 0:
             raise TimeoutError(f"got a timeout while waiting for layer {layer_num}")
-        current_layer, elapsed_time = self.sender.send_current_layer(timeout)
+        current_layer, elapsed_time = self.sender.send_current_layer_timed(timeout)
         if current_layer > layer_num:
             # raise a value error in case wanted layer has passed
             # raise ValueError(f"layer {layer_num} has already passed")
@@ -47,7 +47,7 @@ class ApiHandler:
             print(f"sleeping for {interval} before querying for current layer again\n")
             time.sleep(interval)
             timeout = timeout - interval if is_timeout else timeout
-            current_layer, elapsed_time = self.sender.send_current_layer(timeout)
+            current_layer, elapsed_time = self.sender.send_current_layer_timed(timeout)
             timeout = timeout - elapsed_time if is_timeout else timeout
         return current_layer
 

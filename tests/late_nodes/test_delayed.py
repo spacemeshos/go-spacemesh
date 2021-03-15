@@ -2,14 +2,15 @@ import time
 
 from pytest_testconfig import config as test_config
 
-from tests import queries
 from tests import config as conf
+from tests.assertions import mesh_assertion
 from tests.conftest import DeploymentInfo
 from tests.deployment import create_deployment
 from tests.hare.assert_hare import expect_hare
 from tests.misc import CoreV1ApiClient
+from tests.setup_network import setup_network
 from tests.queries import query_atx_published
-from tests.utils import get_conf, get_curr_ind, wait_genesis, get_genesis_time_delta
+from tests.utils import get_conf, get_curr_ind
 
 
 def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
@@ -61,52 +62,42 @@ def sleep_and_print(total_seconds):
 
 # add nodes continuously during the test (4 epochs) and validate hare consensus process,
 # layer hashes (match between all nodes)
-def test_add_delayed_nodes(init_session, add_elk, add_node_pool, add_curl, setup_bootstrap, start_poet, save_log_on_exit):
+def test_add_delayed_nodes(init_session, setup_network):
     current_index = get_curr_ind()
-    bs_info = setup_bootstrap.pods[0]
-    cspec = get_conf(bs_info, test_config['client'], test_config['genesis_delta'], setup_oracle=None,
-                     setup_poet=setup_bootstrap.pods[0]['pod_ip'])
-    ns = test_config['namespace']
-
-    layer_duration = int(test_config['client']['args']['layer-duration-sec'])
+    deps_info, api_handler = setup_network
+    bs_info = deps_info.bootstrap
+    bs_details = bs_info.pods[0]
+    cspec = get_conf(bs_details, test_config['client'], test_config['genesis_delta'], setup_oracle=None,
+                     setup_poet=bs_details['pod_ip'])
+    ns = init_session
     layers_per_epoch = int(test_config['client']['args']['layers-per-epoch'])
-    epoch_duration = layer_duration * layers_per_epoch
+    # started with 20 miners
+    start_count = int(test_config['client']['replicas'])
 
-    # start with 20 miners
-    start_count = 20
-    new_client_in_namespace(ns, setup_bootstrap, cspec, start_count)
-    wait_genesis(get_genesis_time_delta(test_config["genesis_delta"]), test_config["genesis_delta"])
-    sleep_and_print(epoch_duration)  # wait epoch duration
-    start = time.time()
     # add 10 each epoch
     num_to_add = 10
     num_epochs_to_add_clients = 4
     clients = []
     for i in range(num_epochs_to_add_clients):
-        clients.append(new_client_in_namespace(ns, setup_bootstrap, cspec, num_to_add))
+        clients.append(new_client_in_namespace(ns, bs_info, cspec, num_to_add))
         print("Added client batch ", i, clients[i].pods[i]['name'])
-        sleep_and_print(epoch_duration)
+        api_handler.wait_for_next_epoch()
 
     print("Done adding clients. Going to wait for two epochs")
     # wait two more epochs
     wait_epochs = 3
-    sleep_and_print(wait_epochs * epoch_duration)
+    for _ in range(wait_epochs):
+        first_layer_of_last_epoch = api_handler.wait_for_next_epoch()
 
     # total = bootstrap + first clients + added clients
     total = 1 + start_count + num_epochs_to_add_clients * num_to_add
-    print("#@! total ", total)
     total_epochs = 1 + num_epochs_to_add_clients + wait_epochs  # add 1 for first epoch
-    print(f"#@!#@! total_epochs {total_epochs}")
     total_layers = layers_per_epoch * total_epochs
-    print(f"#@!#@! total_layers {total_layers}")
-    first_layer_of_last_epoch = total_layers - layers_per_epoch
-    print(f"#@!#@! first_layer_of_last_epoch {first_layer_of_last_epoch}")
     f = int(test_config['client']['args']['hare-max-adversaries'])
 
     # validate
-    print("Waiting 2 minutes for logs to propagate")
-    sleep_and_print(120)
-    print("#@!#@!#@!#!@#@!#!@ total time from miners creation up until validation\n", time.time() - start)
+    print("Waiting another epoch so we can validate previous one")
+    api_handler.wait_for_next_epoch()
     print("Running validation")
     expect_hare(current_index, ns, first_layer_of_last_epoch, total_layers - 1, total, f)  # validate hare
     atx_last_epoch = query_atx_published(current_index, ns, first_layer_of_last_epoch)
@@ -114,5 +105,6 @@ def test_add_delayed_nodes(init_session, add_elk, add_node_pool, add_curl, setup
     atx_last_epoch += query_atx_published(current_index, ns, first_layer_of_last_epoch + 2)
     atx_last_epoch += query_atx_published(current_index, ns, first_layer_of_last_epoch + 3)
 
-    queries.assert_equal_layer_hashes(current_index, ns)
+    mesh_assertion.assert_layer_hash(api_handler, api_handler.get_current_layer())
+    # queries.assert_equal_layer_hashes(current_index, ns)
     assert len(atx_last_epoch) == total  # validate num of atxs in last epoch
