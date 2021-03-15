@@ -718,6 +718,20 @@ func TestGlobalStateService(t *testing.T) {
 			require.Equal(t, addr1.Bytes(), res.Rewards[0].Coinbase.Address)
 			require.Equal(t, nodeID.ToBytes(), res.Rewards[0].Smesher.Id)
 		}},
+		{"SmesherDataQueryNullArgs", func(t *testing.T) {
+			_, err := c.SmesherDataQuery(context.Background(), &pb.SmesherDataQueryRequest{})
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "`Id` must be provided")
+		}},
+		{"SmesherDataQueryNoID", func(t *testing.T) {
+			_, err := c.SmesherDataQuery(context.Background(), &pb.SmesherDataQueryRequest{
+				SmesherId:  &pb.SmesherId{},
+				MaxResults: uint32(10),
+				Offset:     uint32(0),
+			})
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "`Id.Id` must be provided")
+		}},
 		{name: "SmesherRewardStream_Basic", run: func(t *testing.T) {
 			generateRunFn := func(req *pb.SmesherRewardStreamRequest) func(*testing.T) {
 				return func(*testing.T) {
@@ -2303,7 +2317,6 @@ func checkAccountDataQueryItemAccount(t *testing.T, dataItem interface{}) {
 	}
 }
 
-//Add a line here
 func checkAccountDataQueryItemReward(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.AccountData_Reward:
