@@ -405,7 +405,6 @@ const (
 
 // NewLayer packages up a layer with its status (which a layer does not
 // ordinarily contain)
-// add it here as well
 type NewLayer struct {
 	Layer  *types.Layer
 	Status int
