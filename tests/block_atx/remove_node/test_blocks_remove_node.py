@@ -70,7 +70,7 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     deleted_pods_lst = [get_pod_id(init_session, single_pod_name)]
     # assert that each node has created layer_avg/number_of_nodes
     print(f"-------- validating blocks per nodes in epoch {epoch_2} --------")
-    e2_first_layer, e2_last_layer = api_handler.get_epoch_layer_range(epoch_2, layers_per_epoch)
+    e2_first_layer, e2_last_layer = api_handler.get_epoch_layer_range(epoch_2)
     validate_blocks_per_nodes(block_map, e2_first_layer, e2_last_layer+1, layers_per_epoch, layer_avg_size, num_miners,
                               ignore_lst=deleted_pods_lst)
     # wait an epoch
@@ -83,7 +83,7 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
 
     print(f"-------- validating blocks per nodes in epoch {epoch_3} --------")
     # assert that each node has created layer_avg/number_of_nodes
-    e3_first_layer, e3_last_layer = api_handler.get_epoch_layer_range(epoch_3, layers_per_epoch)
+    e3_first_layer, e3_last_layer = api_handler.get_epoch_layer_range(epoch_3)
     validate_blocks_per_nodes(block_map, e3_first_layer, e3_last_layer+1, layers_per_epoch, layer_avg_size, num_miners,
                               ignore_lst=deleted_pods_lst)
     # wait an epoch
@@ -95,7 +95,7 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
     print(f"-------- validating blocks per nodes in epoch {epoch_4} --------")
     # assert that each node has created layer_avg/number_of_nodes
-    e4_first_layer, e4_last_layer = api_handler.get_epoch_layer_range(epoch_4, layers_per_epoch)
+    e4_first_layer, e4_last_layer = api_handler.get_epoch_layer_range(epoch_4)
     validate_blocks_per_nodes(block_map, e4_first_layer, e4_last_layer+1, layers_per_epoch, layer_avg_size, num_miners-1,
                               ignore_lst=deleted_pods_lst)
     # wait an epoch
@@ -107,7 +107,7 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
     # remove the removed node from nodes count
     num_miners -= 1
-    e5_first_layer, e5_last_layer = api_handler.get_epoch_layer_range(epoch_5, layers_per_epoch)
+    e5_first_layer, e5_last_layer = api_handler.get_epoch_layer_range(epoch_5)
     # assert that each node has created layer_avg/number_of_nodes
     print(f"-------- validating blocks per nodes in epoch {epoch_5} --------")
     validate_blocks_per_nodes(block_map, e5_first_layer, e5_last_layer+1, layers_per_epoch, layer_avg_size, num_miners,

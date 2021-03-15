@@ -94,7 +94,6 @@ def test_mining(init_session, setup_network):
     # check only third epoch
     epochs = 5
     last_layer = epochs * layers_per_epoch
-    # TODO: remove timing from get current layer after adding timeout decorator
     current_layer = api_handler.get_current_layer()
     total_pods = len(dep_info.clients.pods) + len(dep_info.bootstrap.pods)
     if current_layer < last_layer:

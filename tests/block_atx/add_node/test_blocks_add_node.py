@@ -61,7 +61,7 @@ def test_add_node_validate_atx(init_session, setup_network):
     ignore_lst = [new_pod_id]
     atx_epoch_2 = q.query_atx_per_epoch(init_session, epoch_2)
     print(f"found {len(atx_epoch_2)} ATXs in epoch {epoch_2}")
-    e2_first_layer, e2_last_layer = api_handler.get_epochs_layer_range(epoch_2, layers_per_epoch)
+    e2_first_layer, e2_last_layer = api_handler.get_epoch_layer_range(epoch_2)
     print(f"-------- validating blocks per nodes in epoch {epoch_2} --------")
     assert_blocks_num_in_epochs(block_map, e2_first_layer, e2_last_layer + 1, layers_per_epoch, layer_avg_size,
                                 num_miners, ignore_lst=ignore_lst)
@@ -81,7 +81,7 @@ def test_add_node_validate_atx(init_session, setup_network):
     # As new client was started in epoch 2, it may or may not published an ATX in that same epoch.
     # The amount of miners created blocks in epoch 3 depends on this condition.
     num_miners_epoch_4 = num_miners + 1 if new_pod_published_atx_epoch_2 else num_miners
-    e3_first_layer, e3_last_layer = api_handler.get_epochs_layer_range(epoch_3, layers_per_epoch)
+    e3_first_layer, e3_last_layer = api_handler.get_epoch_layer_range(epoch_3)
     print(f"-------- validating blocks per nodes in epoch {epoch_3} --------")
     # assert that each node has created layer_avg/number_of_nodes
     assert_blocks_num_in_epochs(block_map, e3_first_layer, e3_last_layer + 1, layers_per_epoch, layer_avg_size,
@@ -108,6 +108,6 @@ def test_add_node_validate_atx(init_session, setup_network):
     print(f"found {len(atx_epoch_4)} ATXs in epoch {epoch_4}")
     num_miners_epoch_6 = num_miners + 1 if new_pod_published_atx_epoch_4 else num_miners
     print(f"-------- validating blocks per nodes in epoch {epoch_4} --------")
-    e4_first_layer, e4_last_layer = api_handler.get_epochs_layer_range(epoch_4, layers_per_epoch)
+    e4_first_layer, e4_last_layer = api_handler.get_epoch_layer_range(epoch_4)
     assert_blocks_num_in_epochs(block_map, e4_first_layer, e4_last_layer + 1, layers_per_epoch, layer_avg_size,
                                 num_miners_epoch_6)
