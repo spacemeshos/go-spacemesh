@@ -77,7 +77,7 @@ def test_add_delayed_nodes(init_session, add_elk, add_node_pool, add_curl, setup
     new_client_in_namespace(ns, setup_bootstrap, cspec, start_count)
     wait_genesis(get_genesis_time_delta(test_config["genesis_delta"]), test_config["genesis_delta"])
     sleep_and_print(epoch_duration)  # wait epoch duration
-
+    start = time.time()
     # add 10 each epoch
     num_to_add = 10
     num_epochs_to_add_clients = 4
@@ -94,15 +94,19 @@ def test_add_delayed_nodes(init_session, add_elk, add_node_pool, add_curl, setup
 
     # total = bootstrap + first clients + added clients
     total = 1 + start_count + num_epochs_to_add_clients * num_to_add
+    print("#@! total ", total)
     total_epochs = 1 + num_epochs_to_add_clients + wait_epochs  # add 1 for first epoch
+    print(f"#@!#@! total_epochs {total_epochs}")
     total_layers = layers_per_epoch * total_epochs
+    print(f"#@!#@! total_layers {total_layers}")
     first_layer_of_last_epoch = total_layers - layers_per_epoch
+    print(f"#@!#@! first_layer_of_last_epoch {first_layer_of_last_epoch}")
     f = int(test_config['client']['args']['hare-max-adversaries'])
 
     # validate
     print("Waiting 2 minutes for logs to propagate")
     sleep_and_print(120)
-
+    print("#@!#@!#@!#!@#@!#!@ total time from miners creation up until validation\n", time.time() - start)
     print("Running validation")
     expect_hare(current_index, ns, first_layer_of_last_epoch, total_layers - 1, total, f)  # validate hare
     atx_last_epoch = query_atx_published(current_index, ns, first_layer_of_last_epoch)

@@ -3,6 +3,7 @@ import time
 import tests.convenience as conv
 import tests.api.parser as parser
 from tests.api.sender import ApiSender as Sender
+from tests import utils as ut
 
 
 layers_query_request = '{{"start_layer": {{"number": {start_layer}}}, "end_layer": {{"number": {end_layer}}}}}'
@@ -14,6 +15,9 @@ class ApiHandler:
 
     def extend_ips(self, ips):
         self.sender.extend_ips(ips)
+
+    def remove_ips(self, ips):
+        self.sender.remove_ips(ips)
 
     # TODO: add timeout decorator
     def wait_for_layer(self, layer_num, timeout=None, interval=10):
@@ -53,7 +57,7 @@ class ApiHandler:
         if curr_epoch > epoch_num:
             raise ValueError(f"epoch requested is {epoch_num} has already passed, current epoch {curr_epoch}")
         # TODO: add layers per epoch in ApiHandler?
-        first_layer, last_layer = self.get_epochs_layer_range(epoch_num, self.sender.layers_per_epoch)
+        first_layer, last_layer = self.get_epoch_layer_range(epoch_num)
         print(f"wait for epoch {epoch_num}, epoch first layer {first_layer}")
         return self.wait_for_layer(first_layer)
 
@@ -62,7 +66,7 @@ class ApiHandler:
         curr_epoch = self.sender.send_current_epoch()
         next_epoch_ind = curr_epoch + 1
         # TODO: add layers per epoch in ApiHandler?
-        first_layer, last_layer = self.get_epochs_layer_range(next_epoch_ind, self.sender.layers_per_epoch)
+        first_layer, last_layer = self.get_epoch_layer_range(next_epoch_ind)
         print(f"wait for next epoch - {next_epoch_ind}, epoch first layer {first_layer}")
         return self.wait_for_layer(first_layer)
 
@@ -83,13 +87,8 @@ class ApiHandler:
     def get_current_layer(self):
         return self.sender.send_current_layer()
 
-    # TODO: this function shouldn't be here
-    @staticmethod
-    def get_epochs_layer_range(epoch_num, layers_per_epoch):
-        # epochs index start from 0
-        first_layer = layers_per_epoch * epoch_num
-        last_layer = first_layer + layers_per_epoch - 1
-        return first_layer, last_layer
+    def get_epoch_layer_range(self, epoch_num):
+        return ut.get_epoch_layer_range(epoch_num, self.sender.layers_per_epoch)
 
     @staticmethod
     def resolve_api_entry(api):

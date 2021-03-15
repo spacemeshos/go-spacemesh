@@ -28,6 +28,6 @@ def setup_mul_network(init_session, add_elk, add_node_pool, add_curl, setup_boot
     network_deployment = NetworkInfo(namespace=init_session,
                                      bs_deployment_info=setup_bootstrap,
                                      cl_deployment_info=setup_mul_clients)
-    api_handler = ApiHandler(DepInfo.get_all_ips(setup_mul_clients.append(setup_bootstrap)), init_session)
+    api_handler = ApiHandler(DepInfo.get_all_ips(setup_mul_clients), init_session)
     wait_genesis(get_genesis_time_delta(testconfig['genesis_delta']), testconfig['genesis_delta'])
     return network_deployment, api_handler

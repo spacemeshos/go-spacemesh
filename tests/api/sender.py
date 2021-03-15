@@ -28,6 +28,9 @@ class ApiSender:
     def extend_ips(self, ips):
         self.ips.extend(ips)
 
+    def remove_ips(self, ips):
+        self.ips = [ip for ip in self.ips if ip not in ips]
+
     def send(self, data, api, ip=None, retry=3):
         ip = choice(self.ips) if not ip else ip
         api_entry = self.resolve_api_entry(api)

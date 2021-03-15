@@ -396,3 +396,10 @@ def get_env(name, is_must=True):
         raise Exception(f"{name} environment variable must be set")
     ret = os.getenv(name)
     return ret
+
+
+def get_epoch_layer_range(epoch_num, layers_per_epoch):
+    # epochs index start from 0
+    first_layer = layers_per_epoch * epoch_num
+    last_layer = first_layer + layers_per_epoch - 1
+    return first_layer, last_layer

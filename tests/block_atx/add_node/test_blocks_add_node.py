@@ -4,7 +4,7 @@ from tests import queries as q
 from tests.assertions.mesh_assertion import assert_blocks_num_in_epochs
 from tests.setup_utils import add_multi_clients
 from tests.setup_network import setup_network
-from tests.utils import validate_blocks_per_nodes, get_pod_id, get_conf
+from tests.utils import get_pod_id, get_conf
 
 
 # epoch i:
@@ -34,7 +34,6 @@ def test_add_node_validate_atx(init_session, setup_network):
     layers_per_epoch = int(testconfig['client']['args']['layers-per-epoch'])
     layer_avg_size = int(testconfig['client']['args']['layer-average-size'])
     num_miners = int(testconfig['client']['replicas']) + 1  # add 1 for bs node
-
     print(f"\nlayer duration={layer_duration}, layers per epoch={layers_per_epoch}, layer avg size={layer_avg_size}")
     dep_info, api_handler = setup_network
     # wait for 2 epochs
