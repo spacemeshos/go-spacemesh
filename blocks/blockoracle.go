@@ -34,7 +34,7 @@ type Oracle struct {
 	genesisActiveSetSize uint32
 	layersPerEpoch       uint16
 	atxDB                activationDB
-	beaconProvider       *EpochBeaconProvider
+	beaconProvider       BeaconGetter
 	vrfSigner            vrfSigner
 	nodeID               types.NodeID
 
@@ -48,7 +48,7 @@ type Oracle struct {
 }
 
 // NewMinerBlockOracle returns a new Oracle.
-func NewMinerBlockOracle(committeeSize uint32, genesisActiveSetSize uint32, layersPerEpoch uint16, atxDB activationDB, beaconProvider *EpochBeaconProvider, vrfSigner vrfSigner, nodeID types.NodeID, isSynced func() bool, log log.Log) *Oracle {
+func NewMinerBlockOracle(committeeSize uint32, genesisActiveSetSize uint32, layersPerEpoch uint16, atxDB activationDB, beaconProvider BeaconGetter, vrfSigner vrfSigner, nodeID types.NodeID, isSynced func() bool, log log.Log) *Oracle {
 	return &Oracle{
 		committeeSize:        committeeSize,
 		genesisActiveSetSize: genesisActiveSetSize,

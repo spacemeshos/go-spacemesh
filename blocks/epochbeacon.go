@@ -2,8 +2,13 @@ package blocks
 
 import (
 	"encoding/binary"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
+
+type BeaconGetter interface {
+	GetBeacon(epochNumber types.EpochID) []byte
+}
 
 // EpochBeaconProvider holds all the dependencies for generating an epoch beacon. There are currently none.
 type EpochBeaconProvider struct{}

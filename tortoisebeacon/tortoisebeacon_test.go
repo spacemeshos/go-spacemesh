@@ -1,7 +1,6 @@
 package tortoisebeacon
 
 import (
-	"math/rand"
 	"testing"
 	"time"
 
@@ -10,19 +9,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 func TestTortoiseBeacon(t *testing.T) {
 	requirer := require.New(t)
 	conf := TestConfig()
-	mr := &mockMessageReceiver{
-		messages: generateMessageList(),
-	}
-	ms := mockMessageSender{rnd: rand.New(rand.NewSource(time.Now().UnixNano()))}
-	mbc := mockBeaconCalculator{}
+
 	mwc := mockWeakCoin{}
-	mwmp := mockWeakCoinPublisher{}
 
 	atxPool := activation.NewAtxMemPool()
 	logger := log.NewDefault("TortoiseBeacon")
@@ -33,7 +28,10 @@ func TestTortoiseBeacon(t *testing.T) {
 	clock.StartNotifying()
 	ticker := clock.Subscribe()
 
-	tb := New(conf, mr, ms, mbc, atxPool, nil, mwc, mwmp, ticker, logger)
+	sim := service.NewSimulator()
+	n1 := sim.NewNode()
+
+	tb := New(conf, n1, atxPool, nil, mwc, ticker, logger)
 	requirer.NotNil(tb)
 
 	err := tb.Start()
@@ -54,7 +52,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	v, err := tb.Get(epoch)
 	requirer.NoError(err)
 
-	expected := "0x2b32db6c2c0a6235fb1397e8225ea85e0f0e6e8c7b126d0016ccbde0e667151e"
+	expected := "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	requirer.Equal(expected, v.String())
 
 	requirer.NoError(tb.Close())
@@ -71,38 +69,21 @@ func awaitEpoch(clock *timesync.TimeClock, epoch types.EpochID) {
 	}
 }
 
-func generateMessageList() []Message {
-	// TODO: generate messages properly
-	messages := []Message{
-		NewProposalMessage(0, []types.ATXID{*types.EmptyATXID}),
-		NewVotingMessage(0, 0, []types.Hash32{hashATXList([]types.ATXID{*types.EmptyATXID})}, []types.Hash32{}),
-		NewVotingMessage(0, 0, []types.Hash32{hashATXList([]types.ATXID{*types.EmptyATXID})}, []types.Hash32{}),
-		NewVotingMessage(0, 0, []types.Hash32{hashATXList([]types.ATXID{*types.EmptyATXID})}, []types.Hash32{}),
-		NewVotingMessage(0, 0, []types.Hash32{hashATXList([]types.ATXID{*types.EmptyATXID})}, []types.Hash32{}),
-		NewVotingMessage(0, 0, []types.Hash32{hashATXList([]types.ATXID{*types.EmptyATXID})}, []types.Hash32{}),
-		NewVotingMessage(0, 0, []types.Hash32{hashATXList([]types.ATXID{*types.EmptyATXID})}, []types.Hash32{}),
-		NewVotingMessage(0, 0, []types.Hash32{hashATXList([]types.ATXID{*types.EmptyATXID})}, []types.Hash32{}),
-		NewVotingMessage(0, 0, []types.Hash32{hashATXList([]types.ATXID{*types.EmptyATXID})}, []types.Hash32{}),
-	}
-
-	return messages
-}
-
 func TestTortoiseBeacon_classifyMessage(t *testing.T) {
 	r := require.New(t)
 
 	epoch := types.EpochID(3)
-	round := 4
+	round := uint64(4)
 
 	tb := TortoiseBeacon{
-		currentRounds: map[types.EpochID]int{
+		currentRounds: map[types.EpochID]uint64{
 			epoch: round,
 		},
 	}
 
 	tt := []struct {
 		name    string
-		round   int
+		round   uint64
 		msgType MessageType
 	}{
 		{"Timely", 3, TimelyMessage},
@@ -113,7 +94,7 @@ func TestTortoiseBeacon_classifyMessage(t *testing.T) {
 	for _, tc := range tt {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			m := vote{round: tc.round}
+			m := VotingMessage{RoundID: tc.round}
 			result := tb.classifyMessage(m, epoch)
 			r.Equal(tc.msgType, result)
 		})

@@ -68,6 +68,7 @@ const (
 	AtxDbStoreLogger     = "atxDbStore"
 	TBeaconDbStoreLogger = "tbDbStore"
 	TBeaconDbLogger      = "tbDb"
+	TBeaconLogger        = "tBeaconLogger"
 	PoetDbStoreLogger    = "poetDbStore"
 	StoreLogger          = "store"
 	PoetDbLogger         = "poetDb"
@@ -546,11 +547,11 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	}
 
 	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
-	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg)) // TOOO(nkryuchkov): use
-	_ = tBeaconDB
+	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
+	tBeaconConf := tortoisebeacon.DefaultConfig()
 
-	// TODO(nkryuchkov): use tortoise beacon
-	beaconProvider := &blocks.EpochBeaconProvider{}
+	// TODO(nkryuchkov): pass correct args
+	tBeacon := tortoisebeacon.New(tBeaconConf, swarm, atxdb, tBeaconDB, nil, clock.Subscribe(), app.addLogger(TBeaconLogger, lg))
 
 	var msh *mesh.Mesh
 	var trtl tortoise.Tortoise
@@ -564,7 +565,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		app.setupGenesis(processor, msh)
 	}
 
-	eValidator := blocks.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, msh, app.addLogger(BlkEligibilityLogger, lg))
+	eValidator := blocks.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, tBeacon, BLS381.Verify2, msh, app.addLogger(BlkEligibilityLogger, lg))
 
 	syncConf := sync.Configuration{Concurrency: 4,
 		LayerSize:       int(layerSize),
@@ -589,7 +590,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	}
 
 	syncer := sync.NewSync(swarm, msh, app.txPool, atxdb, eValidator, poetDb, syncConf, clock, app.addLogger(SyncLogger, lg))
-	blockOracle := blocks.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
+	blockOracle := blocks.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, tBeacon, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
 	var hOracle hare.Rolacle
@@ -642,6 +643,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	gossipListener.AddListener(state.IncomingTxProtocol, priorityq.Low, processor.HandleTxData)
 	gossipListener.AddListener(activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
 	gossipListener.AddListener(blocks.NewBlockProtocol, priorityq.High, blockListener.HandleBlock)
+	gossipListener.AddListener(tortoisebeacon.TBProposalProtocol, priorityq.Low, tBeacon.HandleProposalMessage)
+	gossipListener.AddListener(tortoisebeacon.TBVotingProtocol, priorityq.Low, tBeacon.HandleVotingMessage)
+	gossipListener.AddListener(tortoisebeacon.TBWeakCoinProtocol, priorityq.Low, tBeacon.HandleWeakCoinMessage)
 
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener

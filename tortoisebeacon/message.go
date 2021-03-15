@@ -1,6 +1,8 @@
 package tortoisebeacon
 
 import (
+	"encoding/json"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -16,70 +18,76 @@ type Message interface {
 	Epoch() types.EpochID
 }
 
-type ProposalMessage interface {
-	Message
-	Proposals() []types.ATXID
-	Hash() types.Hash32
+type ProposalMessage struct {
+	EpochID      types.EpochID `json:"epoch_id"`
+	ProposalList []types.ATXID `json:"proposal_list"`
 }
 
-type proposal struct {
-	epoch     types.EpochID
-	proposals []types.ATXID
-}
-
-func NewProposalMessage(epoch types.EpochID, atxList []types.ATXID) ProposalMessage {
-	return &proposal{
-		epoch:     epoch,
-		proposals: atxList,
+func NewProposalMessage(epoch types.EpochID, atxList []types.ATXID) *ProposalMessage {
+	return &ProposalMessage{
+		EpochID:      epoch,
+		ProposalList: atxList,
 	}
 }
 
-func (p proposal) Epoch() types.EpochID {
-	return p.epoch
+func (p ProposalMessage) Epoch() types.EpochID {
+	return p.EpochID
 }
 
-func (p proposal) Proposals() []types.ATXID {
-	return p.proposals
+func (p ProposalMessage) Proposals() []types.ATXID {
+	return p.ProposalList
 }
 
-func (p proposal) Hash() types.Hash32 {
-	return hashATXList(p.proposals)
+func (p ProposalMessage) Hash() types.Hash32 {
+	return hashATXList(p.ProposalList)
 }
 
-type VotingMessage interface {
-	Message
-	Round() int
-	VotesFor() []types.Hash32
-	VotesAgainst() []types.Hash32
+func (p ProposalMessage) String() string {
+	bytes, err := json.Marshal(p)
+	if err != nil {
+		panic(err)
+	}
+
+	return string(bytes)
 }
 
-type vote struct {
-	epoch                types.EpochID
-	round                int
-	atxListHashesFor     []types.Hash32
-	atxListHashesAgainst []types.Hash32
+type VotingMessage struct {
+	EpochID              types.EpochID  `json:"epoch_id"`
+	RoundID              uint64         `json:"round_id"`
+	ATXListHashesFor     []types.Hash32 `json:"atx_list_hashes_for"`
+	ATXListHashesAgainst []types.Hash32 `json:"atx_list_hashes_against"`
 }
 
-func NewVotingMessage(epoch types.EpochID, round int, atxListHashesFor, atxListHashesAgainst []types.Hash32) VotingMessage {
-	return &vote{
-		epoch:                epoch,
-		round:                round,
-		atxListHashesFor:     atxListHashesFor,
-		atxListHashesAgainst: atxListHashesAgainst,
+func NewVotingMessage(epoch types.EpochID, round uint64, atxListHashesFor, atxListHashesAgainst []types.Hash32) *VotingMessage {
+	return &VotingMessage{
+		EpochID:              epoch,
+		RoundID:              round,
+		ATXListHashesFor:     atxListHashesFor,
+		ATXListHashesAgainst: atxListHashesAgainst,
 	}
 }
 
-func (v vote) Epoch() types.EpochID {
-	return v.epoch
+func (v VotingMessage) Epoch() types.EpochID {
+	return v.EpochID
 }
 
-func (v vote) Round() int {
-	return v.round
+func (v VotingMessage) Round() uint64 {
+	return v.RoundID
 }
 
-func (v vote) VotesFor() []types.Hash32 {
-	return v.atxListHashesFor
+func (v VotingMessage) VotesFor() []types.Hash32 {
+	return v.ATXListHashesFor
 }
-func (v vote) VotesAgainst() []types.Hash32 {
-	return v.atxListHashesAgainst
+
+func (v VotingMessage) VotesAgainst() []types.Hash32 {
+	return v.ATXListHashesAgainst
+}
+
+func (v VotingMessage) String() string {
+	bytes, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+
+	return string(bytes)
 }

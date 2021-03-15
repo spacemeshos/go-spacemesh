@@ -11,13 +11,12 @@ import (
 func TestWeakCoinGenerator_GenerateProposal(t *testing.T) {
 	r := require.New(t)
 
-	wcmp := mockWeakCoinPublisher{}
-	wcg := NewWeakCoinGenerator(defaultPrefix, defaultThreshold, wcmp)
+	wcg := NewWeakCoinGenerator(defaultPrefix, defaultThreshold, nil)
 	epoch := types.EpochID(3)
-	round := 1
+	round := uint64(1)
 	expected := 0xb9
 
-	p, err := wcg.GenerateProposal(epoch, round)
+	p, err := wcg.generateProposal(epoch, round)
 	r.NoError(err)
 
 	r.EqualValues(expected, p)
