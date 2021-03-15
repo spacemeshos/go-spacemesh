@@ -128,12 +128,12 @@ func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]
 
 			items, err := asItems(msg)
 			if err != nil {
-				infra.Error("fetch failed bad response : %v", err)
+				infra.Error("fetch failed bad response: %v", err)
 				return
 			}
 
 			if valid, err := validateItemIds(ids, items); !valid {
-				infra.Error("fetch failed bad response : %v", err)
+				infra.Error("fetch failed bad response: %v", err)
 				return
 			}
 
@@ -245,7 +245,7 @@ func validatePoetRef(proofMessage types.PoetProofMessage, poetProofRef []byte) (
 	}
 	b := sha256.Sum256(poetProofBytes)
 	if bytes.Compare(types.CalcHash32(b[:]).Bytes(), poetProofRef) != 0 {
-		return false, fmt.Errorf("poet recived was diffrent then requested")
+		return false, fmt.Errorf("poet received value was different than requested")
 	}
 
 	return true, nil
@@ -266,7 +266,7 @@ func validateItemIds(ids []types.Hash32, items []item) (bool, error) {
 
 	if len(mp) > 0 {
 		for id := range mp {
-			log.Warning("item %s was not in response ", id.ShortString())
+			log.Warning("item %s was not in response", id.ShortString())
 		}
 	}
 

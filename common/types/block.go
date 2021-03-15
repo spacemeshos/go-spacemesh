@@ -230,7 +230,7 @@ func (b *Block) Fields() []log.LoggableField {
 		b.ATXID,
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
 		log.FieldNamed("ref_block", b.RefBlock),
-		log.Int("active_set", activeSet),
+		log.Int("active_set_size", activeSet),
 		log.Int("tx_count", len(b.TxIDs)),
 	}
 }
