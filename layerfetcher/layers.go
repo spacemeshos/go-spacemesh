@@ -3,6 +3,7 @@ package layerfetcher
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -309,7 +310,7 @@ func (l *Logic) handleEpochATXs(hash types.Hash32, data []byte) error {
 
 // GetEpochATXs fetches all atxs received by peer for given layer
 func (l *Logic) GetEpochATXs(id types.EpochID) error {
-	res := <-l.fetcher.GetHash(types.CalcHash32(id.ToBytes()), fetch.Hint(ATXIDsDB), true)
+	res := <-l.fetcher.GetHash(types.CalcHash32(id.ToBytes()), fetch.Hint(strconv.Itoa(ATXIDsDB)), true)
 	return res.Err
 }
 
@@ -328,8 +329,8 @@ func (l *Logic) getPoetResult(hash types.Hash32, data []byte) error {
 	return l.poetProofs.ValidateAndStoreMsg(data)
 }
 
-// blockReceiveFunc defines block handling function when fetching block
-func (l *Logic) blockReceiveFunc(hash types.Hash32, data []byte) error {
+// blockReceiveFunc handles blocks received via fetch
+func (l *Logic) blockReceiveFunc(data []byte) error {
 	return l.blockHandler.HandleBlockData(data, l)
 }
 
@@ -359,13 +360,13 @@ func (f *Future) Result() error {
 
 // FetchAtx returns error if ATX was not found
 func (l *Logic) FetchAtx(id types.ATXID) error {
-	f := Future{l.fetcher.GetHash(id.Hash32(), fetch.Hint(BlockDB), true)}
+	f := Future{l.fetcher.GetHash(id.Hash32(), fetch.Hint(strconv.Itoa(BlockDB)), true)}
 	return f.Result()
 }
 
 // FetchBlock gets data for a single block id and validates it
 func (l *Logic) FetchBlock(id types.BlockID) error {
-	res := <-l.fetcher.GetHash(id.AsHash32(), fetch.Hint(BlockDB), true)
+	res := <-l.fetcher.GetHash(id.AsHash32(), fetch.Hint(strconv.Itoa(BlockDB)), true)
 	return res.Err
 }
 
@@ -375,7 +376,7 @@ func (l *Logic) GetAtxs(IDs []types.ATXID) error {
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.Hash32())
 	}
-	results := l.fetcher.GetHashes(hashes, fetch.Hint(BlockDB), true)
+	results := l.fetcher.GetHashes(hashes, fetch.Hint(strconv.Itoa(BlockDB)), true)
 	for hash, resC := range results {
 		res := <-resC
 		err := l.getAtxResults(hash, res.Data)
@@ -393,10 +394,10 @@ func (l *Logic) GetBlocks(IDs []types.BlockID) error {
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.AsHash32())
 	}
-	results := l.fetcher.GetHashes(hashes, fetch.Hint(BlockDB), true)
-	for hash, resC := range results {
+	results := l.fetcher.GetHashes(hashes, fetch.Hint(strconv.Itoa(BlockDB)), true)
+	for _, resC := range results {
 		res := <-resC
-		err := l.blockReceiveFunc(hash, res.Data)
+		err := l.blockReceiveFunc(res.Data)
 		if err != nil {
 			return err
 		}
@@ -410,7 +411,7 @@ func (l *Logic) GetTxs(IDs []types.TransactionID) error {
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.Hash32())
 	}
-	results := l.fetcher.GetHashes(hashes, fetch.Hint(TXDB), true)
+	results := l.fetcher.GetHashes(hashes, fetch.Hint(strconv.Itoa(TXDB)), true)
 	for hash, resC := range results {
 		res := <-resC
 		err := l.getTxResult(hash, res.Data)
@@ -423,7 +424,7 @@ func (l *Logic) GetTxs(IDs []types.TransactionID) error {
 
 // GetPoetProof gets poet proof from remote peer
 func (l *Logic) GetPoetProof(id types.Hash32) error {
-	res := <-l.fetcher.GetHash(id, fetch.Hint(POETDB), true)
+	res := <-l.fetcher.GetHash(id, fetch.Hint(strconv.Itoa(POETDB)), true)
 	if res.Err != nil {
 		return res.Err
 	}

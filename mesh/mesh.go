@@ -249,7 +249,7 @@ func (vl *validator) ProcessedLayer() types.LayerID {
 }
 
 func (vl *validator) SetProcessedLayer(lyr types.LayerID) {
-	vl.Info("set processed layer to %d", lyr)
+	vl.With().Info("set processed layer", lyr)
 	events.ReportNodeStatusUpdate()
 	defer vl.lvMutex.Unlock()
 	vl.lvMutex.Lock()
@@ -257,18 +257,18 @@ func (vl *validator) SetProcessedLayer(lyr types.LayerID) {
 }
 
 func (vl *validator) HandleLateBlock(b *types.Block) {
-	vl.Info("Validate late block %s", b.ID())
+	vl.With().Info("validate late block", b.ID())
 	oldPbase, newPbase := vl.trtl.HandleLateBlock(b)
 	if err := vl.trtl.Persist(); err != nil {
-		vl.Error("could not persist Tortoise on late block %s from layer index %d", b.ID(), b.Layer())
+		vl.With().Error("could not persist tortoise on late block", b.ID(), b.Layer())
 	}
 	vl.pushLayersToState(oldPbase, newPbase)
 }
 
 func (vl *validator) ValidateLayer(lyr *types.Layer) {
-	vl.Info("Validate layer %d", lyr.Index())
+	vl.With().Info("validate layer", lyr)
 	if len(lyr.Blocks()) == 0 {
-		vl.Info("skip validation of layer %d with no blocks", lyr.Index())
+		vl.With().Info("skip validation of layer with no blocks", lyr)
 		vl.SetProcessedLayer(lyr.Index())
 		events.ReportNewLayer(events.NewLayer{
 			Layer:  lyr,
@@ -281,17 +281,17 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 	vl.SetProcessedLayer(lyr.Index())
 
 	if err := vl.trtl.Persist(); err != nil {
-		vl.Error("could not persist tortoise layer index %d", lyr.Index())
+		vl.With().Error("could not persist tortoise", lyr)
 	}
 	if err := vl.general.Put(constPROCESSED, lyr.Index().Bytes()); err != nil {
-		vl.Error("could not persist validated layer index %d", lyr.Index())
+		vl.With().Error("could not persist validated layer", lyr)
 	}
 	vl.pushLayersToState(oldPbase, newPbase)
 	events.ReportNewLayer(events.NewLayer{
 		Layer:  lyr,
 		Status: events.LayerStatusTypeConfirmed,
 	})
-	vl.Info("done validating layer %v", lyr.Index())
+	vl.With().Info("done validating layer", lyr)
 }
 
 func (msh *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerID) {
@@ -299,7 +299,11 @@ func (msh *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerI
 		l, err := msh.GetLayer(layerID)
 		// TODO: propagate/handle error
 		if err != nil || l == nil {
-			msh.With().Error("failed to get layer", layerID, log.Err(err))
+			if layerID.GetEpoch().IsGenesis() {
+				msh.With().Info("failed to get layer (expected for genesis layers)", layerID, log.Err(err))
+			} else {
+				msh.With().Error("failed to get layer", layerID, log.Err(err))
+			}
 			return
 		}
 		validBlocks, invalidBlocks := msh.BlocksByValidity(l.Blocks())
@@ -319,7 +323,7 @@ func (msh *Mesh) persistLayerHashes(l *types.Layer) {
 	if l.Index() > types.GetEffectiveGenesis() {
 		prevHash, err = msh.getRunningLayerHash(l.Index() - 1)
 		if err != nil {
-			msh.Log.Error("cannot get running layer hash for layer %v", l.Index()-1)
+			msh.With().Error("cannot get running layer hash", l.Index()-1)
 			return
 		}
 	}
@@ -362,7 +366,7 @@ func (msh *Mesh) HandleValidatedLayer(validatedLayer types.LayerID, layer []type
 		block, err := msh.GetBlock(blockID)
 		if err != nil {
 			// stop processing this hare result, wait until tortoise pushes this layer into state
-			log.Error("hare terminated with block that is not present in mesh")
+			msh.Error("hare terminated with block that is not present in mesh")
 			return
 		}
 		blocks = append(blocks, block)
@@ -378,7 +382,7 @@ func (msh *Mesh) HandleValidatedLayer(validatedLayer types.LayerID, layer []type
 func (msh *Mesh) getInvalidBlocksByHare(hareLayer *types.Layer) (invalid []*types.Block) {
 	dbLayer, err := msh.GetLayer(hareLayer.Index())
 	if err != nil {
-		log.Panic("wtf")
+		msh.Panic("failed to get layer, err: %v", err)
 		return
 	}
 	exists := make(map[types.BlockID]struct{})
@@ -399,14 +403,19 @@ func (msh *Mesh) updateStateWithLayer(validatedLayer types.LayerID, layer *types
 	defer msh.txMutex.Unlock()
 	latest := msh.LatestLayerInState()
 	if validatedLayer <= latest {
-		log.Info("result received after state has been advanced for layer %v, latest: %v", validatedLayer, latest)
+		msh.With().Warning("result received after state has advanced",
+			log.FieldNamed("validatedLayer", validatedLayer),
+			log.FieldNamed("latestLayer", latest))
 		return
 	}
 	if msh.maxValidatedLayer < validatedLayer {
 		msh.maxValidatedLayer = validatedLayer
 	}
 	if validatedLayer > latest+1 {
-		log.Info("early layer result was received for layer %v, max validated so far %v latest %v", validatedLayer, msh.maxValidatedLayer, latest)
+		msh.With().Warning("early layer result received",
+			log.FieldNamed("validatedLayer", validatedLayer),
+			log.FieldNamed("maxValidatedLayer", msh.maxValidatedLayer),
+			log.FieldNamed("latestLayer", latest))
 		msh.nextValidLayers[validatedLayer] = layer
 		return
 	}
@@ -780,7 +789,7 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 	msh.ApplyRewards(l.Index(), ids, blockTotalReward)
 
 	blockLayerReward, blockLayerRewardMod := calculateActualRewards(l.Index(), layerReward, numBlocks)
-	log.With().Info("Reward calculated",
+	msh.With().Info("reward calculated",
 		l.Index(),
 		log.Uint64("num_blocks", numBlocks.Uint64()),
 		log.Uint64("total_reward", totalReward.Uint64()),
