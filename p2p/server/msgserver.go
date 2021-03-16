@@ -109,10 +109,10 @@ func (p *MessageServer) readLoop() {
 				return
 			}
 			p.workerCount.Add(1)
-			p.workerLimiter <- struct{}{}
+			//p.workerLimiter <- struct{}{}
 			go func(msg Message) {
 				p.handleMessage(msg)
-				<-p.workerLimiter
+				//<-p.workerLimiter
 				p.workerCount.Done()
 			}(msg.(Message))
 

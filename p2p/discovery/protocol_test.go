@@ -208,7 +208,7 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 
 func TestFindNodeProtocol_FindNode_Concurrency(t *testing.T) {
 
-	concurrency := 5
+	concurrency := 100
 
 	sim := service.NewSimulator()
 	n1 := newTestNode(sim)
