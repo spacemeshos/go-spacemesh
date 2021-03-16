@@ -13,7 +13,7 @@ import (
 const mainLoggerName = "00000.defaultLogger"
 
 // determine the level of messages we show.
-var debugMode = true
+var debugMode = false
 
 // should we format out logs in json
 var jsonLog = false
