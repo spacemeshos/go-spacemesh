@@ -107,6 +107,8 @@ func (id NodeID) ShortString() string {
 }
 
 // BytesToNodeID deserializes a byte slice into a NodeID
+// TODO: length of the input will be made exact when the NodeID is compressed into
+// one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
 func BytesToNodeID(b []byte) (*NodeID, error) {
 	if len(b) < 32 {
 		return nil, fmt.Errorf("Invalid input length, input too short")
