@@ -2,9 +2,15 @@
 # ################ MESH ################
 
 
-def parse_layer_hash_from_layer_query_res(layer_query):
-    # {'layer': ['hash': '[\d\w=]+']}
-    return layer_query['layer'][0]['hash']
+# TODO: this and the following function should return a list of values and not issue only the first object
+def parse_layer_hash_from_layer_query_res(layer_query_response):
+    # {..., 'layer': [{'hash': '[\d\w=]+', ...}]}
+    return layer_query_response['layer'][0]['hash']
+
+
+def parse_state_root_hash_from_layer_query_res(layer_query_response):
+    # {'layer': [..., 'root_state_hash': '[\d\w=]+'], ...}
+    return layer_query_response['layer'][0]['root_state_hash']
 
 
 def parse_layer_per_epoch_msg(msg):

@@ -70,17 +70,30 @@ class ApiHandler:
         print(f"wait for next epoch - {next_epoch_ind}, epoch first layer {first_layer}")
         return self.wait_for_layer(first_layer)
 
+    def get_from_all_miners_layer_query(self, layer_num, parsing_func):
+        results = []
+        layer_query_responses = self.sender.send_all_layer_request(layer_num)
+        for layer_info in layer_query_responses:
+            results.append(parsing_func(layer_info))
+        return results
+
     def request_layer_hash(self, layer_num):
-        layer_hashes = []
-        layers_info = self.sender.send_all_layer_request(layer_num)
-        for layer_info in layers_info:
-            layer_hashes.append(parser.parse_layer_hash_from_layer_query_res(layer_info))
-        return layer_hashes
+        return self.get_from_all_miners_layer_query(layer_num, parser.parse_layer_hash_from_layer_query_res)
+
+    def request_layer_state_root_hash(self, layer_num):
+        return self.get_from_all_miners_layer_query(layer_num, parser.parse_state_root_hash_from_layer_query_res)
 
     def is_layer_hash_equal(self, layer_num):
         layer_hashes = self.request_layer_hash(layer_num)
         if not conv.all_list_items_equal(layer_hashes):
             print(f"not all layer hashes equal for layer {layer_num}\nlayer_hashes: {layer_hashes}")
+            return False
+        return True
+
+    def is_state_root_hash_equal(self, layer_num):
+        sr_hash = self.request_layer_state_root_hash(layer_num)
+        if not conv.all_list_items_equal(sr_hash):
+            print(f"not all layer state root hashes are equal on layer {layer_num}\nstate_root_hashes: {sr_hash}")
             return False
         return True
 
@@ -96,50 +109,3 @@ class ApiHandler:
         if not api_entry:
             raise ValueError(f"{api} is not a valid api")
         return api_entry
-
-    # def get_node_atx_on_epoch(self, node_ip, epoch_number, node_id=None):
-    #     """
-    #     :param node_ip: str, node ip to query
-    #     :param epoch_number: int, epoch number
-    #     :param node_id: str, node is in base64
-    #     :return: dict, an atx object - 'layer': {'number': 4}, 'smesher_id': {'id': ''}, 'coinbase': {'address': ''},
-    #                     'prev_atx': {'id': ''}, 'commitment_size': ''}
-    #             if a result has matched the node ip or node id if supplied
-    #     """
-    #     print(f"#@!#@! node ip {node_ip}")
-    #     print(f"#@!#@! epoch number {epoch_number}")
-    #     node_id_b64 = node_id if node_id else self.sender.get_node_id_by_node_ip(node_ip)
-    #     print("#@! #@! node_id ", node_id_b64)
-    #     first_layer, last_layer = self.get_epochs_layer_range(epoch_number, self.sender.layers_per_epoch)
-    #     current_layer, _ = self.sender.send_current_layer()
-    #     if current_layer < last_layer:
-    #         raise ValueError(f"the epoch {epoch_number} is too advanced, current layer is {current_layer}, "
-    #                          f"layers per epoch {self.sender.layers_per_epoch}")
-    #     res = self.sender.send_layer_query(first_layer, node_ip, end_layer=last_layer)[0]
-    #     # TODO: move this to a parser
-    #     if 'layer' not in res:
-    #         print("#@! could not find 'layer' in response #@!#@!#@!#@!\n\n")
-    #         return
-    #     counter = first_layer
-    #     for layer in res['layer']:
-    #         print("#@!#@! going over layer", counter)
-    #         counter += 1
-    #         if 'activations' not in layer:
-    #             continue
-    #         for atx in layer['activations']:
-    #             print("#@! atx['smesher_id']['id']: ", atx['smesher_id']['id'])
-    #             if atx['smesher_id']['id'] == node_id_b64:
-    #                 print("#@!#@! atx\n", atx, "\n\n")
-    #                 return atx
-    # @staticmethod
-    # def parse_atx_from_layer_query_res(layer_query):
-    #     if 'layer' not in layer_query:
-    #         return
-    #     for layer in layer_query['layer']:
-    #         if 'activations' not in layer:
-    #             continue
-    #         for atx in layer['activations']:
-    #             if atx['smesher_id']['id'] == node_id_b64:
-    #                 print("#@!#@! atx\n", atx, "\n\n")
-    #                 return atx
-

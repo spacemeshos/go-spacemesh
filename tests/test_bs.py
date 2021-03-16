@@ -1,7 +1,7 @@
 from pytest_testconfig import config as testconfig
 
 from tests import analyse, queries
-from tests.assertions.mesh_assertion import assert_layer_hash
+from tests.assertions.mesh_assertion import assert_layer_hash, assert_equal_state_roots
 from tests.convenience import sleep_print_backwards
 from tests.hare.assert_hare import validate_hare
 from tests.setup_network import setup_network
@@ -21,6 +21,7 @@ def test_transactions(init_session, setup_network):
     # validate all accounts balance/nonce
     # send txs from all accounts between themselves
     # validate all accounts balance/nonce
+
     namespace = init_session
     layers_per_epoch = int(testconfig['client']['args']['layers-per-epoch'])
     layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
@@ -109,6 +110,6 @@ def test_mining(init_session, setup_network):
 
     analyse.analyze_mining(testconfig['namespace'], current_layer, layers_per_epoch, layer_avg_size, total_pods)
     assert_layer_hash(api_handler, last_layer)
-    queries.assert_equal_state_roots(current_index, ns)
+    assert_equal_state_roots(api_handler, last_layer)
     queries.assert_no_contextually_invalid_atxs(current_index, ns)
     validate_hare(current_index, ns)  # validate hare
