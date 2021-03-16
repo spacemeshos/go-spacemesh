@@ -126,6 +126,8 @@ func BytesToNodeID(b []byte) (*NodeID, error) {
 }
 
 //StringToNodeID deserializes a string into a NodeID
+// TODO: length of the input will be made exact when the NodeID is compressed into
+// one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
 func StringToNodeID(s string) (*NodeID, error) {
 	strLen := len(s)
 	if strLen < 64 {
