@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -18,7 +19,7 @@ func (*syncMock) FetchAtxReferences(atx *types.ActivationTx) error {
 	return nil
 }
 
-func (*syncMock) FetchPoetProof(poetProofRef []byte) error {
+func (*syncMock) FetchPoetProof(ctx context.Context, poetProofRef []byte) error {
 	panic("implement me")
 }
 

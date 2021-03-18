@@ -20,68 +20,70 @@ var (
 )
 
 func layerIdsReqFactory(lyr types.LayerID) requestFactory {
-	return func(s networker, peer p2ppeers.Peer) (chan interface{}, error) {
+	return func(ctx context.Context, s networker, peer p2ppeers.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
 			if len(msg) == 0 || msg == nil {
-				s.Warning("peer %v responded with nil to layer %v request", peer, lyr)
+				s.WithContext(ctx).With().Warning("peer responded with nil to layer request", peer, lyr)
 				return
 			}
 			ids, err := types.BytesToBlockIds(msg)
 			if err != nil {
-				s.Error("could not unmarshal mesh.LayerIDs response ", err)
+				s.WithContext(ctx).With().Error("could not unmarshal mesh.LayerIDs response", log.Err(err))
 				return
 			}
 			ch <- ids
 		}
-		if err := s.SendRequest(context.TODO(), layerIdsMsg, lyr.Bytes(), peer, foo); err != nil {
+		if err := s.SendRequest(ctx, layerIdsMsg, lyr.Bytes(), peer, foo); err != nil {
 			return nil, err
 		}
 		return ch, nil
 	}
 }
 
-func getEpochAtxIds(epoch types.EpochID, s networker, peer p2ppeers.Peer) (chan interface{}, error) {
+func getEpochAtxIds(ctx context.Context, epoch types.EpochID, s networker, peer p2ppeers.Peer) (chan interface{}, error) {
 	ch := make(chan interface{}, 1)
 	foo := func(msg []byte) {
 		defer close(ch)
 		if len(msg) == 0 || msg == nil {
-			s.Warning("peer %v responded with nil to atx %v request", peer, epoch)
+			s.WithContext(ctx).With().Warning("peer responded with nil to atx request",
+				log.FieldNamed("peer", peer),
+				epoch)
 			return
 		}
 		var atxIDs []types.ATXID
 		err := types.BytesToInterface(msg, &atxIDs)
 		if err != nil {
-			s.Error("could not unmarshal mesh.LayerIDs response ", err)
+			s.WithContext(ctx).With().Error("could not unmarshal mesh.LayerIDs response", log.Err(err))
 			return
 		}
 		ch <- atxIDs
 	}
-	if err := s.SendRequest(context.TODO(), atxIdsMsg, epoch.ToBytes(), peer, foo); err != nil {
+	if err := s.SendRequest(ctx, atxIdsMsg, epoch.ToBytes(), peer, foo); err != nil {
 		return nil, err
 	}
 	return ch, nil
 }
 
 func hashReqFactory(lyr types.LayerID) requestFactory {
-	return func(s networker, peer p2ppeers.Peer) (chan interface{}, error) {
+	return func(ctx context.Context, s networker, peer p2ppeers.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
 			if len(msg) == 0 || msg == nil {
-				s.Warning("peer %v responded with nil to hash request layer %v", peer, lyr)
+				s.WithContext(ctx).With().Warning("peer responded with nil to hash request", log.FieldNamed("peer", peer), lyr)
 				return
 			}
 			if len(msg) != types.Hash32Length {
-				s.Error("received layer hash in wrong length, len %v", len(msg))
+				s.WithContext(ctx).With().Error("received layer hash of wrong length", log.Int("len", len(msg)))
 				return
 			}
 			var h types.Hash32
 			h.SetBytes(msg)
 			ch <- &peerHashPair{peer: peer, hash: h}
 		}
-		if err := s.SendRequest(context.TODO(), layerHashMsg, lyr.Bytes(), peer, foo); err != nil {
+		if err := s.SendRequest(ctx, layerHashMsg, lyr.Bytes(), peer, foo); err != nil {
 			return nil, err
 		}
 
@@ -91,23 +93,23 @@ func hashReqFactory(lyr types.LayerID) requestFactory {
 }
 
 func atxHashReqFactory(ep types.EpochID) requestFactory {
-	return func(s networker, peer p2ppeers.Peer) (chan interface{}, error) {
+	return func(ctx context.Context, s networker, peer p2ppeers.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
 			if len(msg) == 0 || msg == nil {
-				s.Warning("peer %v responded with nil to hash request layer %v", peer, ep)
+				s.WithContext(ctx).With().Warning("peer responded with nil to hash request", log.FieldNamed("peer", peer), ep)
 				return
 			}
 			if len(msg) != types.Hash32Length {
-				s.Error("received layer hash in wrong length, len %v", len(msg))
+				s.WithContext(ctx).With().Error("received layer hash of wrong length", log.Int("len", len(msg)))
 				return
 			}
 			var h types.Hash32
 			h.SetBytes(msg)
 			ch <- &peerHashPair{peer: peer, hash: h}
 		}
-		if err := s.SendRequest(context.TODO(), atxIdrHashMsg, ep.ToBytes(), peer, foo); err != nil {
+		if err := s.SendRequest(ctx, atxIdrHashMsg, ep.ToBytes(), peer, foo); err != nil {
 			return nil, err
 		}
 
@@ -118,23 +120,23 @@ func atxHashReqFactory(ep types.EpochID) requestFactory {
 
 func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]item, error)) batchRequestFactory {
 	//convert to chan
-	return func(infra networker, peer p2ppeers.Peer, ids []types.Hash32) (chan []item, error) {
+	return func(ctx context.Context, infra networker, peer p2ppeers.Peer, ids []types.Hash32) (chan []item, error) {
 		ch := make(chan []item, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
 			if len(msg) == 0 || msg == nil {
-				infra.Warning("peer %v responded with nil to block request", peer)
+				infra.With().Warning("peer responded with nil to block request", log.FieldNamed("peer", peer))
 				return
 			}
 
 			items, err := asItems(msg)
 			if err != nil {
-				infra.Error("fetch failed bad response: %v", err)
+				infra.With().Error("fetch failed, bad response", log.Err(err))
 				return
 			}
 
 			if valid, err := validateItemIds(ids, items); !valid {
-				infra.Error("fetch failed bad response: %v", err)
+				infra.With().Error("fetch failed, bad response", log.Err(err))
 				return
 			}
 
@@ -142,7 +144,7 @@ func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]
 		}
 
 		tmr := newFetchRequestTimer(msgtype)
-		if err := encodeAndSendRequest(msgtype, ids, infra, peer, foo); err != nil {
+		if err := encodeAndSendRequest(ctx, msgtype, ids, infra, peer, foo); err != nil {
 			return nil, err
 		}
 		tmr.ObserveDuration()
@@ -206,32 +208,32 @@ func calcAndSetIds(atxs []types.ActivationTx) []types.ActivationTx {
 }
 
 func poetReqFactory(poetProofRef []byte) requestFactory {
-	return func(s networker, peer p2ppeers.Peer) (chan interface{}, error) {
+	return func(ctx context.Context, s networker, peer p2ppeers.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		resHandler := func(msg []byte) {
-			s.Info("handle PoET proof response")
+			s.Info("handle poet proof response")
 			defer close(ch)
 			if len(msg) == 0 || msg == nil {
-				s.Warning("peer responded with nil to poet request %v", peer, poetProofRef)
+				s.With().Warning("peer responded with nil to poet request", log.FieldNamed("peer", peer))
 				return
 			}
 
 			var proofMessage types.PoetProofMessage
 			err := types.BytesToInterface(msg, &proofMessage)
 			if err != nil {
-				s.Error("could not unmarshal PoET proof message: %v", err)
+				s.With().Error("could not unmarshal poet proof message", log.Err(err))
 				return
 			}
 
 			if valid, err := validatePoetRef(proofMessage, poetProofRef); !valid {
-				s.Error("failed validating poet response", err)
+				s.With().Error("failed validating poet response", log.Err(err))
 				return
 			}
 
 			ch <- proofMessage
 		}
 
-		if err := s.SendRequest(context.TODO(), poetMsg, poetProofRef, peer, resHandler); err != nil {
+		if err := s.SendRequest(ctx, poetMsg, poetProofRef, peer, resHandler); err != nil {
 			return nil, err
 		}
 
@@ -274,12 +276,12 @@ func validateItemIds(ids []types.Hash32, items []item) (bool, error) {
 	return true, nil
 }
 
-func encodeAndSendRequest(req server.MessageType, ids []types.Hash32, s networker, peer p2ppeers.Peer, foo func(msg []byte)) error {
+func encodeAndSendRequest(ctx context.Context, req server.MessageType, ids []types.Hash32, s networker, peer p2ppeers.Peer, foo func(msg []byte)) error {
 	bts, err := types.InterfaceToBytes(ids)
 	if err != nil {
 		return err
 	}
-	if err := s.SendRequest(context.TODO(), req, bts, peer, foo); err != nil {
+	if err := s.SendRequest(ctx, req, bts, peer, foo); err != nil {
 		return err
 	}
 	return nil

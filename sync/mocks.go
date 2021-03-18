@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -236,5 +237,5 @@ func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *
 	_ = msh.AddBlock(mesh.GenesisBlock())
 	clock := mockClock{Layer: expectedLayers + 1}
 	lg.Info("current layer %v", clock.GetCurrentLayer())
-	return NewSync(swarm, msh, txpool, atxdb, blockEligibilityValidatorMock{}, poetDb, conf, &clock, lg)
+	return NewSync(context.TODO(), swarm, msh, txpool, atxdb, blockEligibilityValidatorMock{}, poetDb, conf, &clock, lg)
 }

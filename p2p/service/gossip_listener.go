@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -33,7 +34,7 @@ func NewListener(net Service, syncer Syncer, log log.Log) *Listener {
 // Syncer is interface for sync services
 type Syncer interface {
 	FetchAtxReferences(atx *types.ActivationTx) error
-	FetchPoetProof(poetProofRef []byte) error
+	FetchPoetProof(ctx context.Context, poetProofRef []byte) error
 	ListenToGossip() bool
 	IsSynced() bool
 }

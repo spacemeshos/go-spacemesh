@@ -54,7 +54,7 @@ func SyncFactory(name string, serv service.Service) *Syncer {
 	l := log.NewDefault(name)
 	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 	blockValidator := blockEligibilityValidatorMock{}
-	sync := NewSync(serv, getMesh(memoryDB, name), state.NewTxMemPool(), activation.NewAtxMemPool(), blockValidator, poetDb, conf, ts, l)
+	sync := NewSync(context.TODO(), serv, getMesh(memoryDB, name), state.NewTxMemPool(), activation.NewAtxMemPool(), blockValidator, poetDb, conf, ts, l)
 	return sync
 }
 

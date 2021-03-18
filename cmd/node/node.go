@@ -573,7 +573,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 			log.Int("layers_per_epoch", app.Config.BaseConfig.LayersPerEpoch))
 	}
 
-	syncer := sync.NewSync(swarm, msh, app.txPool, atxdb, eValidator, poetDb, syncConf, clock, app.addLogger(SyncLogger, lg))
+	syncer := sync.NewSync(ctx, swarm, msh, app.txPool, atxdb, eValidator, poetDb, syncConf, clock, app.addLogger(SyncLogger, lg))
 	blockOracle := miner.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
@@ -793,15 +793,15 @@ func (app *SpacemeshApp) stopServices() {
 	close(app.term)
 
 	if app.newjsonAPIService != nil {
-		log.Info("Stopping new JSON gateway service...")
+		log.Info("stopping new json gateway service...")
 		if err := app.newjsonAPIService.Close(); err != nil {
-			log.Error("error stopping new JSON gateway server: %s", err)
+			log.Error("error stopping new json gateway server: %s", err)
 		}
 	}
 
 	if app.newgrpcAPIService != nil {
-		log.Info("Stopping new GRPC service...")
-		app.newgrpcAPIService.Close()
+		log.Info("stopping new GRPC service...")
+		_ = app.newgrpcAPIService.Close()
 	}
 
 	if app.jsonAPIService != nil {

@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -13,8 +14,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
-type requestFactory func(com networker, peer p2ppeers.Peer) (chan interface{}, error)
-type batchRequestFactory func(com networker, peer p2ppeers.Peer, id []types.Hash32) (chan []item, error)
+type requestFactory func(ctx context.Context, com networker, peer p2ppeers.Peer) (chan interface{}, error)
+type batchRequestFactory func(ctx context.Context, com networker, peer p2ppeers.Peer, id []types.Hash32) (chan []item, error)
 
 type networker interface {
 	GetPeers() []p2ppeers.Peer
@@ -52,7 +53,7 @@ func (w *worker) Clone() *worker {
 	return &worker{Logger: w.Logger, Once: w.Once, workCount: w.workCount, output: w.output, work: w.work}
 }
 
-func newPeersWorker(s networker, peers []p2ppeers.Peer, mu *sync.Once, reqFactory requestFactory) worker {
+func newPeersWorker(ctx context.Context, s networker, peers []p2ppeers.Peer, mu *sync.Once, reqFactory requestFactory) worker {
 	count := int32(1)
 	numOfpeers := len(peers)
 	output := make(chan interface{}, numOfpeers)
@@ -62,12 +63,13 @@ func newPeersWorker(s networker, peers []p2ppeers.Peer, mu *sync.Once, reqFactor
 	lg := s.WithName("peersWrkr")
 	for _, p := range peers {
 		peer := p
+		lg := lg.WithFields(log.FieldNamed("peer_id", peer))
 		peerFunc := func() {
 			defer wg.Done()
-			lg.Debug("send request Peer: %v", peer)
-			ch, err := reqFactory(s, peer)
+			lg.Debug("send request")
+			ch, err := reqFactory(ctx, s, peer)
 			if err != nil {
-				s.Error("request failed: %s", err)
+				lg.With().Error("request failed", log.Err(err))
 				return
 			}
 
@@ -77,11 +79,11 @@ func newPeersWorker(s networker, peers []p2ppeers.Peer, mu *sync.Once, reqFactor
 				lg.Debug("worker received interrupt")
 				return
 			case <-timeout:
-				lg.Error("request to %v timed out", peer)
+				lg.Error("request timed out")
 				return
 			case v := <-ch:
 				if v != nil {
-					lg.Debug("Peer: %v responded", peer)
+					lg.Debug("peer responded")
 					output <- v
 				}
 			}
@@ -98,31 +100,31 @@ func newPeersWorker(s networker, peers []p2ppeers.Peer, mu *sync.Once, reqFactor
 	}
 
 	return worker{Logger: lg, Once: mu, workCount: &count, output: output, work: wrkFunc}
-
 }
 
-func newNeighborhoodWorker(s networker, count int, reqFactory requestFactory) worker {
+func newNeighborhoodWorker(ctx context.Context, s networker, count int, reqFactory requestFactory) worker {
 	output := make(chan interface{}, count)
 	acount := int32(count)
 	mu := &sync.Once{}
-	lg := s.WithName("HoodWrker")
+	lg := s.WithName("HoodWrker").WithContext(ctx)
 	workFunc := func() {
 		peers := s.GetPeers()
 		for _, p := range peers {
 			peer := p
-			lg.Info("send request Peer: %v", peer)
-			ch, _ := reqFactory(s, peer)
+			lg := lg.WithFields(log.FieldNamed("peer_id", peer))
+			lg.Info("send request to peer")
+			ch, _ := reqFactory(ctx, s, peer)
 			timeout := time.After(s.GetTimeout())
 			select {
 			case <-s.GetExit():
 				lg.Debug("worker received interrupt")
 				return
 			case <-timeout:
-				lg.Error("request to %v timed out", peer)
+				lg.Error("request to peer timed out")
 			case v := <-ch:
 				if v != nil {
-					lg.Info("Peer: %v responded ", peer)
-					lg.Debug("Peer: %v response was  %v", v)
+					lg.Info("peer responded")
+					lg.With().Debug("peer response", log.String("response", fmt.Sprint(v)))
 					output <- v
 					return
 				}
@@ -134,15 +136,15 @@ func newNeighborhoodWorker(s networker, count int, reqFactory requestFactory) wo
 
 }
 
-func newFetchWorker(s networker, count int, reqFactory batchRequestFactory, idsChan chan []types.Hash32, name string) worker {
+func newFetchWorker(ctx context.Context, s networker, count int, reqFactory batchRequestFactory, idsChan chan []types.Hash32, name string) worker {
 	output := make(chan interface{}, 10)
 	acount := int32(count)
 	mu := &sync.Once{}
-	lg := s.WithName("FetchWrker")
+	lg := s.WithName("FetchWrker").WithContext(ctx)
 	workFunc := func() {
 		for ids := range idsChan {
 			if ids == nil {
-				lg.Info("close fetch worker ")
+				lg.Info("close fetch worker")
 				return
 			}
 			leftToFetch := toMap(ids)
@@ -150,13 +152,13 @@ func newFetchWorker(s networker, count int, reqFactory batchRequestFactory, idsC
 		next:
 			for _, p := range s.GetPeers() {
 				peer := p
+				lg := lg.WithFields(log.FieldNamed("peer_id", peer))
 				remainingItems := toSlice(leftToFetch)
 				idsStr := concatShortIds(remainingItems)
 				lg.With().Info("send fetch request",
 					log.String("type", name),
-					log.FieldNamed("peer_id", peer),
 					log.String("ids", idsStr))
-				ch, _ := reqFactory(s, peer, remainingItems)
+				ch, _ := reqFactory(ctx, s, peer, remainingItems)
 				timeout := time.After(s.GetTimeout())
 				select {
 				case <-s.GetExit():
@@ -165,13 +167,11 @@ func newFetchWorker(s networker, count int, reqFactory batchRequestFactory, idsC
 				case <-timeout:
 					lg.With().Error("fetch request timed out",
 						log.String("type", name),
-						log.FieldNamed("peer_id", peer),
 						log.String("ids", idsStr))
 				case v := <-ch:
 					if v != nil && len(v) > 0 {
 						lg.With().Info("peer responded to fetch request",
 							log.String("type", name),
-							log.FieldNamed("peer_id", peer),
 							log.String("ids", idsStr))
 						// 	remove ids from leftToFetch add to fetched
 						for _, itm := range v {

@@ -2,6 +2,7 @@ package activation
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -756,7 +757,7 @@ func (db *DB) HandleGossipAtx(data service.GossipMessage, syncer service.Syncer)
 		return
 	}
 
-	if err := syncer.FetchPoetProof(atx.GetPoetProofRef()); err != nil {
+	if err := syncer.FetchPoetProof(context.TODO(), atx.GetPoetProofRef()); err != nil {
 		db.log.Warning("received ATX (%v) with syntactically invalid or missing PoET proof (%x): %v",
 			atx.ShortString(), atx.GetShortPoetProofRef(), err)
 		return

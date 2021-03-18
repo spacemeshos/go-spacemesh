@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -31,7 +32,7 @@ type blockQueue struct {
 	reverseDepMap map[types.Hash32][]interface{}
 }
 
-func newValidationQueue(srvr networker, conf Configuration, sy syncer) *blockQueue {
+func newValidationQueue(ctx context.Context, srvr networker, conf Configuration, sy syncer) *blockQueue {
 	vq := &blockQueue{
 		fetchQueue: fetchQueue{
 			Log:                 srvr.WithName("blockFetchQueue"),
@@ -50,7 +51,7 @@ func newValidationQueue(srvr networker, conf Configuration, sy syncer) *blockQue
 		syncer:        sy,
 	}
 	vq.handleFetch = vq.handleBlocks
-	go vq.work()
+	go vq.work(ctx)
 
 	return vq
 }
