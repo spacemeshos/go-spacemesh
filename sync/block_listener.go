@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -35,9 +36,9 @@ func (bl *BlockListener) Close() {
 }
 
 // Start starts the main listening goroutine
-func (bl *BlockListener) Start() {
+func (bl *BlockListener) Start(ctx context.Context) {
 	if bl.startLock.TryLock() {
-		go bl.listenToGossipBlocks()
+		go bl.listenToGossipBlocks(log.WithNewSessionID(ctx))
 	}
 }
 
@@ -53,7 +54,7 @@ func NewBlockListener(net service.Service, sync *Syncer, concurrency int, logger
 	return &bl
 }
 
-func (bl *BlockListener) listenToGossipBlocks() {
+func (bl *BlockListener) listenToGossipBlocks(ctx context.Context) {
 	bl.wg.Add(1)
 	defer bl.wg.Done()
 	for {
@@ -75,23 +76,24 @@ func (bl *BlockListener) listenToGossipBlocks() {
 					return
 				}
 				tmr := newMilliTimer(gossipBlockTime)
-				bl.handleBlock(data)
+				bl.handleBlock(ctx, data)
 				tmr.ObserveDuration()
 			}()
 		}
 	}
 }
 
-func (bl *BlockListener) handleBlock(data service.GossipMessage) {
+func (bl *BlockListener) handleBlock(ctx context.Context, data service.GossipMessage) {
+	logger := bl.WithContext(ctx)
 	var blk types.Block
-	err := types.BytesToInterface(data.Bytes(), &blk)
-	if err != nil {
-		bl.Error("received invalid block %v", data.Bytes(), err)
+	if err := types.BytesToInterface(data.Bytes(), &blk); err != nil {
+		logger.With().Error("received invalid block", log.Int("data_len", len(data.Bytes())), log.Err(err))
 		return
 	}
 
 	// set the block id when received
 	blk.Initialize()
+	logger = logger.WithFields(blk.ID())
 
 	activeSet := 0
 	if blk.ActiveSet != nil {
@@ -102,8 +104,7 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 	if blk.RefBlock != nil {
 		refBlock = blk.RefBlock.String()
 	}
-	bl.Log.With().Info("got new block",
-		blk.ID(),
+	logger.With().Info("got new block",
 		blk.LayerIndex,
 		blk.LayerIndex.GetEpoch(),
 		log.String("sender_id", blk.MinerID().ShortString()),
@@ -119,17 +120,17 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 	// check if known
 	if _, err := bl.GetBlock(blk.ID()); err == nil {
 		data.ReportValidation(config.NewBlockProtocol)
-		bl.With().Info("we already know this block", blk.ID())
+		logger.Info("we already know this block")
 		return
 	}
-	txs, atxs, err := bl.blockSyntacticValidation(&blk)
+	txs, atxs, err := bl.blockSyntacticValidation(ctx, &blk)
 	if err != nil {
-		bl.With().Error("failed to validate block", blk.ID(), log.Err(err))
+		logger.With().Error("failed to validate block", log.Err(err))
 		return
 	}
 	data.ReportValidation(config.NewBlockProtocol)
 	if err := bl.AddBlockWithTxs(&blk, txs, atxs); err != nil {
-		bl.With().Error("failed to add block to database", blk.ID(), log.Err(err))
+		logger.With().Error("failed to add block to database", log.Err(err))
 		return
 	}
 

@@ -2,7 +2,6 @@ package sync
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -123,8 +122,7 @@ func newNeighborhoodWorker(ctx context.Context, s networker, count int, reqFacto
 				lg.Error("request to peer timed out")
 			case v := <-ch:
 				if v != nil {
-					lg.Info("peer responded")
-					lg.With().Debug("peer response", log.String("response", fmt.Sprint(v)))
+					lg.Info("got non-nil response from peer")
 					output <- v
 					return
 				}
@@ -133,7 +131,6 @@ func newNeighborhoodWorker(ctx context.Context, s networker, count int, reqFacto
 	}
 
 	return worker{Logger: lg, Once: mu, workCount: &acount, output: output, work: workFunc}
-
 }
 
 func newFetchWorker(ctx context.Context, s networker, count int, reqFactory batchRequestFactory, idsChan chan []types.Hash32, name string) worker {

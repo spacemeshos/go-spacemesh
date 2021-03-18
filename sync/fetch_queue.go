@@ -33,7 +33,7 @@ type fetchQueue struct {
 	*sync.Mutex
 	workerInfra networker
 	pending     map[types.Hash32][]chan bool
-	handleFetch func(fj fetchJob)
+	handleFetch func(context.Context, fetchJob)
 	checkLocal  checkLocalFunc
 	queue       chan []types.Hash32 //types.TransactionID //todo make buffered
 	name        string
@@ -91,9 +91,11 @@ func (fq *fetchQueue) work(ctx context.Context) {
 					break //fmt.Errorf("channel closed")
 				}
 
-				logger.Info("fetched %ss %s", fq.name, concatShortIds(bjb.ids))
-				fq.handleFetch(bjb)
-				logger.Info("next batch")
+				logger.With().Info("attempting to fetch objects",
+					log.String("type", fq.name),
+					log.String("ids", concatShortIds(bjb.ids)))
+				fq.handleFetch(ctx, bjb)
+				logger.Info("done fetching, going to next batch")
 			}
 			wg.Done()
 		}()
@@ -203,9 +205,8 @@ func (tx txQueue) HandleTxs(txids []types.TransactionID) ([]*types.Transaction, 
 	return txs, nil
 }
 
-func updateTxDependencies(invalidate func(id types.Hash32, valid bool), txpool txMemPool) func(fj fetchJob) {
-	return func(fj fetchJob) {
-
+func updateTxDependencies(invalidate func(id types.Hash32, valid bool), txpool txMemPool) func(context.Context, fetchJob) {
+	return func(ctx context.Context, fj fetchJob) {
 		mp := map[types.Hash32]*types.Transaction{}
 
 		for _, item := range fj.items {
@@ -269,9 +270,9 @@ func (atx atxQueue) HandleAtxs(atxids []types.ATXID) ([]*types.ActivationTx, err
 	return atxs, nil
 }
 
-func updateAtxDependencies(ctx context.Context, invalidate func(id types.Hash32, valid bool), sValidateAtx sValidateAtxFunc, fetchAtxRefs sFetchAtxFunc, atxDB atxDB, fetchProof fetchPoetProofFunc, logger log.Log) func(fj fetchJob) {
+func updateAtxDependencies(ctx context.Context, invalidate func(id types.Hash32, valid bool), sValidateAtx sValidateAtxFunc, fetchAtxRefs sFetchAtxFunc, atxDB atxDB, fetchProof fetchPoetProofFunc, logger log.Log) func(context.Context, fetchJob) {
 	logger = logger.WithContext(ctx)
-	return func(fj fetchJob) {
+	return func(ctx context.Context, fj fetchJob) {
 		fetchProofCalcID(ctx, logger, fetchProof, fj)
 
 		mp := map[types.Hash32]*types.ActivationTx{}
@@ -281,7 +282,7 @@ func updateAtxDependencies(ctx context.Context, invalidate func(id types.Hash32,
 		}
 
 		for _, id := range fj.ids {
-			logger = logger.WithFields(log.String("job_id", id.String()))
+			logger = logger.WithContext(ctx).WithFields(log.String("job_id", id.String()))
 			if atx, ok := mp[id]; ok {
 				logger.With().Info("atx queue work item", atx.ID())
 				if err := fetchAtxRefs(atx); err != nil {
@@ -307,7 +308,6 @@ func updateAtxDependencies(ctx context.Context, invalidate func(id types.Hash32,
 			}
 		}
 	}
-
 }
 
 func getDoneChan(deps []chan bool) chan bool {

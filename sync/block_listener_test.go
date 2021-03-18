@@ -70,13 +70,13 @@ func TestBlockListener(t *testing.T) {
 	bl2 := ListenerFactory(n2, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}, "listener2", 3)
 	defer bl2.Close()
 	defer bl1.Close()
-	bl2.Start()
+	bl2.Start(context.TODO())
 	atx1 := atx(signer.PublicKey().String())
 
 	atx2 := atx(signer2.PublicKey().String())
 	atx3 := atx(signer3.PublicKey().String())
 
-	bl2.Start()
+	bl2.Start(context.TODO())
 
 	proofMessage := makePoetProofMessage(t)
 	if err := bl1.poetDb.ValidateAndStore(&proofMessage); err != nil {
@@ -135,7 +135,7 @@ func TestBlockListener(t *testing.T) {
 		t.Error(err)
 	}
 
-	bl2.syncLayer(0, []types.BlockID{block1.ID()})
+	bl2.syncLayer(context.TODO(), 0, []types.BlockID{block1.ID()})
 
 	b, err := bl2.GetBlock(block1.ID())
 	if err != nil {
@@ -156,7 +156,7 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 	bl2 := ListenerFactory(n2, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}, "listener2", 3)
 	defer bl2.Close()
 	defer bl1.Close()
-	bl2.Start()
+	bl2.Start(context.TODO())
 
 	atx1 := atx(signer.PublicKey().String())
 
@@ -216,7 +216,7 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 	bl2 := ListenerFactory(n2, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}, "listener2", 3)
 	defer bl2.Close()
 	defer bl1.Close()
-	bl2.Start()
+	bl2.Start(context.TODO())
 
 	atx1 := atx(signer.PublicKey().String())
 
@@ -386,7 +386,7 @@ func TestBlockListenerViewTraversal(t *testing.T) {
 	bl3 := ListenerFactory(n3, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n2.PublicKey()} }}, "TestBlockListener_2", 2)
 	defer bl2.Close()
 	defer bl1.Close()
-	bl2.Start()
+	bl2.Start(context.TODO())
 
 	atx := atx(signer.PublicKey().String())
 
@@ -447,7 +447,7 @@ func TestBlockListenerViewTraversal(t *testing.T) {
 	bl1.AddBlock(block10)
 	bl3.AddBlock(block11)
 
-	bl2.syncLayer(1, []types.BlockID{block10.ID(), block11.ID()})
+	bl2.syncLayer(context.TODO(), 1, []types.BlockID{block10.ID(), block11.ID()})
 	bl2.atxDb = alwaysOkAtxDb{}
 	b, err := bl2.GetBlock(block10.ID())
 	if err != nil {
@@ -517,7 +517,7 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	bl2 := ListenerFactory(n2, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}, "TestBlockListener_2", 2)
 	defer bl2.Close()
 	defer bl1.Close()
-	bl2.Start()
+	bl2.Start(context.TODO())
 
 	atx := atx(signer.PublicKey().String())
 
@@ -566,7 +566,7 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	bl1.AddBlock(block4)
 	bl1.AddBlock(block5)
 
-	go bl2.syncLayer(5, []types.BlockID{block5.ID(), block6.ID()})
+	go bl2.syncLayer(context.TODO(), 5, []types.BlockID{block5.ID(), block6.ID()})
 	time.Sleep(1 * time.Second) // wait for fetch
 
 	b, err := bl2.GetBlock(block1.ID())
@@ -598,9 +598,9 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	bl1 := ListenerFactory(n1, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n2.PublicKey()} }}, "TestBlockListener_ListenToGossipBlocks1", 1)
 	bl2 := ListenerFactory(n2, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}, "TestBlockListener_ListenToGossipBlocks2", 1)
 
-	bl1.Start()
+	bl1.Start(context.TODO())
 	bl1.Syncer.Start(context.TODO())
-	bl2.Start()
+	bl2.Start(context.TODO())
 
 	tx, err := types.NewSignedTx(1, types.BytesToAddress([]byte{0x01}), 10, 100, 10, signing.NewEdSigner())
 	assert.NoError(t, err)

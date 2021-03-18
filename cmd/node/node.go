@@ -682,7 +682,7 @@ func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm se
 }
 
 func (app *SpacemeshApp) startServices(ctx context.Context) {
-	app.blockListener.Start()
+	app.blockListener.Start(ctx)
 	go app.startSyncer(ctx)
 
 	if err := app.hare.Start(ctx); err != nil {
