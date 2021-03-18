@@ -1328,7 +1328,7 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 
 	before := sync.GetCurrentLayer()
 	go func() {
-		if err := sync.gossipSyncForOneFullLayer(current); err != nil {
+		if err := sync.gossipSyncForOneFullLayer(context.TODO(), current); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -1657,15 +1657,15 @@ func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 	b.ATXID = atx0
 
 	b.TxIDs = []types.TransactionID{txid1, txid2, txid1}
-	_, _, err := s.blockSyntacticValidation(b)
+	_, _, err := s.blockSyntacticValidation(context.TODO(), b)
 	r.EqualError(err, errNoActiveSet.Error())
 
 	b.ActiveSet = &[]types.ATXID{}
-	_, _, err = s.blockSyntacticValidation(b)
+	_, _, err = s.blockSyntacticValidation(context.TODO(), b)
 	r.EqualError(err, errZeroActiveSet.Error())
 
 	b.ActiveSet = &[]types.ATXID{atx1, atx2, atx3}
-	_, _, err = s.blockSyntacticValidation(b)
+	_, _, err = s.blockSyntacticValidation(context.TODO(), b)
 	r.EqualError(err, errDupTx.Error())
 
 	b.ActiveSet = &[]types.ATXID{atx1}
@@ -1696,7 +1696,7 @@ func TestSyncer_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	block1ID := block1.ID()
 	b.RefBlock = &block1ID
 	b.ATXID = a.ID()
-	_, _, err := s.blockSyntacticValidation(b)
+	_, _, err := s.blockSyntacticValidation(context.TODO(), b)
 	r.Equal(err, fmt.Errorf("failed to fetch ref block %v", *b.RefBlock))
 
 	tries := 5
@@ -1710,7 +1710,7 @@ func TestSyncer_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	}
 	err = syncs[1].AddBlock(block1)
 	r.NoError(err)
-	_, _, err = s.blockSyntacticValidation(b)
+	_, _, err = s.blockSyntacticValidation(context.TODO(), b)
 	r.NoError(err)
 }
 
@@ -1727,7 +1727,7 @@ func TestSyncer_fetchBlock(t *testing.T) {
 	block1.ATXID = atx.ID()
 	block1.Initialize()
 	block1ID := block1.ID()
-	res := s.fetchBlock(block1ID)
+	res := s.fetchBlock(context.TODO(), block1ID)
 	r.False(res)
 
 	tries := 5
@@ -1741,7 +1741,7 @@ func TestSyncer_fetchBlock(t *testing.T) {
 	}
 	err := syncs[1].AddBlock(block1)
 	r.NoError(err)
-	res = s.fetchBlock(block1ID)
+	res = s.fetchBlock(context.TODO(), block1ID)
 	r.True(res)
 
 }
