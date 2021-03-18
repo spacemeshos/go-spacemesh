@@ -2,6 +2,7 @@ package activation
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -774,10 +775,9 @@ func (db *DB) HandleAtxData(data []byte, syncer service.Fetcher) error {
 		return fmt.Errorf("nil nipst in gossip")
 	}
 
-	if err := syncer.GetPoetProof(atx.GetPoetProofRef()); err != nil {
+	if err := syncer.GetPoetProof(context.TODO(), atx.GetPoetProofRef()); err != nil {
 		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
 			atx.ShortString(), atx.GetShortPoetProofRef(), err)
-
 	}
 
 	if err := db.FetchAtxReferences(atx, syncer); err != nil {

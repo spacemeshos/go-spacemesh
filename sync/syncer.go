@@ -162,7 +162,7 @@ type Syncer struct {
 var _ service.Fetcher = (*Syncer)(nil)
 
 // NewSync fires a sync every sm.SyncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxDB atxDB, bv blockEligibilityValidator, poetdb poetDb, conf Configuration, clock ticker, logger log.Log) *Syncer {
+func NewSync(ctx context.Context, srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxDB atxDB, bv blockEligibilityValidator, poetdb poetDb, conf Configuration, clock ticker, logger log.Log) *Syncer {
 	exit := make(chan struct{})
 
 	srvr := &net{
@@ -192,9 +192,9 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxDB atx
 		awaitCh:                   make(chan struct{}),
 	}
 
-	s.blockQueue = newValidationQueue(srvr, conf, s)
-	s.txQueue = newTxQueue(s)
-	s.atxQueue = newAtxQueue(s, s.FetchPoetProof)
+	s.blockQueue = newValidationQueue(ctx, srvr, conf, s)
+	s.txQueue = newTxQueue(ctx, s)
+	s.atxQueue = newAtxQueue(ctx, s, s.FetchPoetProof)
 	srvr.RegisterBytesMsgHandler(layerHashMsg, newLayerHashRequestHandler(layers, logger))
 	srvr.RegisterBytesMsgHandler(blockMsg, newBlockRequestHandler(layers, logger))
 	srvr.RegisterBytesMsgHandler(layerIdsMsg, newLayerBlockIdsRequestHandler(layers, logger))
@@ -214,7 +214,7 @@ func (s *Syncer) ForceSync() {
 
 // Close closes all running goroutines
 func (s *Syncer) Close() {
-	s.Info("Closing syncer")
+	s.Info("closing sync")
 	s.startLock.Lock()
 	close(s.exit)
 	close(s.forceSync)
@@ -234,7 +234,7 @@ func (s *Syncer) Close() {
 func (s *Syncer) isClosed() bool {
 	select {
 	case <-s.exit:
-		s.Info("receive interrupt")
+		s.Info("received interrupt")
 		return true
 	default:
 		return false
@@ -303,7 +303,7 @@ func (s *Syncer) Start(ctx context.Context) {
 			return
 		}
 		s.Info("start syncer")
-		go s.run()
+		go s.run(log.WithNewSessionID(ctx))
 		s.forceSync <- true
 		return
 	}
@@ -311,7 +311,7 @@ func (s *Syncer) Start(ctx context.Context) {
 }
 
 // fires a sync every sm.SyncInterval or on force sync from outside
-func (s *Syncer) run() {
+func (s *Syncer) run(ctx context.Context) {
 	s.Debug("start running")
 	for {
 		select {
@@ -319,14 +319,14 @@ func (s *Syncer) run() {
 			s.Debug("work stopped")
 			return
 		case <-s.forceSync:
-			go s.synchronise()
+			go s.synchronise(ctx)
 		case <-s.syncTimer.C:
-			go s.synchronise()
+			go s.synchronise(ctx)
 		}
 	}
 }
 
-func (s *Syncer) synchronise() {
+func (s *Syncer) synchronise(ctx context.Context) {
 	// only one concurrent synchronise
 	if s.syncLock.TryLock() == false {
 		return
@@ -338,7 +338,7 @@ func (s *Syncer) synchronise() {
 
 	// node is synced and blocks from current layer have already been validated
 	if curr == s.ProcessedLayer() {
-		s.Debug("node is synced")
+		s.WithContext(ctx).Debug("node is synced")
 		// fully-synced, make sure we listen to p2p
 		s.setGossipBufferingStatus(done)
 		return
@@ -347,15 +347,15 @@ func (s *Syncer) synchronise() {
 	// we have all the data of the prev layers so we can simply validate
 	if s.weaklySynced(curr) {
 		s.handleWeaklySynced()
-		if err := s.syncEpochActivations(curr.GetEpoch()); err != nil {
+		if err := s.syncEpochActivations(ctx, curr.GetEpoch()); err != nil {
 			if curr.GetEpoch().IsGenesis() {
-				s.With().Info("cannot fetch epoch atxs (expected during genesis)", curr, log.Err(err))
+				s.WithContext(ctx).With().Info("cannot fetch epoch atxs (expected during genesis)", curr, log.Err(err))
 			} else {
-				s.With().Error("cannot fetch epoch atxs", curr, log.Err(err))
+				s.WithContext(ctx).With().Error("cannot fetch epoch atxs", curr, log.Err(err))
 			}
 		}
 	} else {
-		s.handleNotSynced(s.ProcessedLayer() + 1)
+		s.handleNotSynced(ctx, s.ProcessedLayer()+1)
 	}
 }
 
@@ -440,15 +440,16 @@ func (s *Syncer) handleCurrentLayer() error {
 	return nil
 }
 
-func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
-	s.Info("node is out of sync, setting gossip-synced to false and starting sync")
+func (s *Syncer) handleNotSynced(ctx context.Context, currentSyncLayer types.LayerID) {
+	logger := s.WithContext(ctx)
+	logger.Info("node is out of sync, setting gossip-synced to false and starting sync")
 	events.ReportNodeStatusUpdate()
 	s.setGossipBufferingStatus(pending) // don't listen to gossip while not synced
 
 	// first, bring all the data of the prev layers
 	// Note: lastTicked() is not constant but updates as ticks are received
 	for ; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
-		s.With().Info("syncing layer",
+		logger.With().Info("syncing layer",
 			log.FieldNamed("current_sync_layer", currentSyncLayer),
 			log.FieldNamed("last_ticked_layer", s.GetCurrentLayer()))
 
@@ -456,19 +457,19 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 			return
 		}
 
-		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
+		lyr, err := s.getLayerFromNeighbors(ctx, currentSyncLayer)
 		if err != nil {
-			s.With().Info("could not get layer from neighbors", currentSyncLayer, log.Err(err))
+			logger.With().Info("could not get layer from neighbors", currentSyncLayer, log.Err(err))
 			return
 		}
 
 		if len(lyr.Blocks()) == 0 {
 			if err := s.SetZeroBlockLayer(currentSyncLayer); err != nil {
-				s.With().Error("handleNotSynced failed", currentSyncLayer, log.Err(err))
+				logger.With().Error("handleNotSynced failed", currentSyncLayer, log.Err(err))
 				return
 			}
 		}
-		s.syncAtxs(currentSyncLayer)
+		s.syncAtxs(ctx, currentSyncLayer)
 		s.ValidateLayer(lyr) // wait for layer validation
 	}
 
@@ -479,22 +480,23 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 	}
 
 	// wait for two ticks to ensure we are fully synced before we open gossip or validate the current layer
-	err := s.gossipSyncForOneFullLayer(currentSyncLayer)
-	if err != nil {
-		s.With().Error("failed getting layer from db even though we listened to gossip",
+	if err := s.gossipSyncForOneFullLayer(currentSyncLayer); err != nil {
+		logger.With().Error("failed getting layer from db even though we listened to gossip",
 			currentSyncLayer,
 			log.Err(err))
 	}
 }
 
-func (s *Syncer) syncAtxs(currentSyncLayer types.LayerID) {
+func (s *Syncer) syncAtxs(ctx context.Context, currentSyncLayer types.LayerID) {
 	lastLayerOfEpoch := (currentSyncLayer.GetEpoch() + 1).FirstLayer() - 1
 	if currentSyncLayer == lastLayerOfEpoch {
-		if err := s.syncEpochActivations(currentSyncLayer.GetEpoch()); err != nil {
+		if err := s.syncEpochActivations(ctx, currentSyncLayer.GetEpoch()); err != nil {
 			if currentSyncLayer.GetEpoch().IsGenesis() {
-				s.With().Info("cannot fetch epoch atxs (expected during genesis)", currentSyncLayer, log.Err(err))
+				s.WithContext(ctx).With().Info("cannot fetch epoch atxs (expected during genesis)",
+					currentSyncLayer,
+					log.Err(err))
 			} else {
-				s.With().Error("cannot fetch epoch atxs", currentSyncLayer, log.Err(err))
+				s.WithContext(ctx).With().Error("cannot fetch epoch atxs", currentSyncLayer, log.Err(err))
 			}
 		}
 	}
@@ -563,14 +565,14 @@ func (s *Syncer) waitLayer(ch timesync.LayerTimer) bool {
 	return false
 }
 
-func (s *Syncer) getLayerFromNeighbors(currentSyncLayer types.LayerID) (*types.Layer, error) {
+func (s *Syncer) getLayerFromNeighbors(ctx context.Context, currentSyncLayer types.LayerID) (*types.Layer, error) {
 	if len(s.peers.GetPeers()) == 0 {
 		return nil, fmt.Errorf("no peers ")
 	}
 
 	// fetch layer hash from each peer
-	s.With().Info("fetch layer hash", currentSyncLayer)
-	m, err := s.fetchLayerHashes(currentSyncLayer)
+	s.WithContext(ctx).With().Info("fetch layer hash", currentSyncLayer)
+	m, err := s.fetchLayerHashes(ctx, currentSyncLayer)
 	if err != nil {
 		if err == errNoBlocksInLayer {
 			return types.NewLayer(currentSyncLayer), nil
@@ -579,42 +581,43 @@ func (s *Syncer) getLayerFromNeighbors(currentSyncLayer types.LayerID) (*types.L
 	}
 
 	if s.isClosed() {
-		return nil, fmt.Errorf("interupt")
+		return nil, fmt.Errorf("received interrupt")
 	}
 
 	// fetch ids for each hash
 	s.With().Info("fetch layer ids", currentSyncLayer)
-	blockIds, err := s.fetchLayerBlockIds(m, currentSyncLayer)
+	blockIds, err := s.fetchLayerBlockIds(ctx, m, currentSyncLayer)
 	if err != nil {
 		return nil, err
 	}
 
 	if s.isClosed() {
-		return nil, fmt.Errorf("interupt")
+		return nil, fmt.Errorf("received interrupt")
 	}
 
 	blocksArr, err := s.syncLayer(currentSyncLayer, blockIds)
 	if len(blocksArr) == 0 || err != nil {
-		return nil, fmt.Errorf("could not get blocks for layer %v %v", currentSyncLayer, err)
+		return nil, fmt.Errorf("could not get blocks for layer %v: %v", currentSyncLayer, err)
 	}
 
-	return types.NewExistingLayer(types.LayerID(currentSyncLayer), blocksArr), nil
+	return types.NewExistingLayer(currentSyncLayer, blocksArr), nil
 }
 
-func (s *Syncer) syncEpochActivations(epoch types.EpochID) error {
-	s.With().Info("syncing atxs", epoch)
+func (s *Syncer) syncEpochActivations(ctx context.Context, epoch types.EpochID) error {
+	logger := s.WithContext(ctx)
+	logger.With().Info("syncing atxs", epoch)
 	hashes, err := s.fetchEpochAtxHashes(epoch)
 	if err != nil {
 		return err
 	}
 
-	atxIds, err := s.fetchEpochAtxs(hashes, epoch)
+	atxIds, err := s.fetchEpochAtxs(ctx, hashes, epoch)
 	if err != nil {
 		return err
 	}
 
-	s.With().Info("fetched atxs for epoch", epoch, log.Int("count", len(atxIds)))
-	s.With().Debug("fetched atxs for epoch",
+	logger.With().Info("fetched atxs for epoch", epoch, log.Int("count", len(atxIds)))
+	logger.With().Debug("fetched atxs for epoch",
 		epoch,
 		log.Int("count", len(atxIds)),
 		log.String("atxs", fmt.Sprint(atxIds)))
@@ -969,15 +972,19 @@ func (s *Syncer) GetTxs(IDs []types.TransactionID) error {
 	return err
 }
 
-func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2ppeers.Peer, lyr types.LayerID) ([]types.BlockID, error) {
+func (s *Syncer) fetchLayerBlockIds(ctx context.Context, m map[types.Hash32][]p2ppeers.Peer, lyr types.LayerID) ([]types.BlockID, error) {
+	logger := s.WithContext(ctx)
 	// send request to different users according to returned hashes
 	idSet := make(map[types.BlockID]struct{}, s.LayerSize)
 	ids := make([]types.BlockID, 0, s.LayerSize)
 	for h, peers := range m {
+		logger := logger.WithFields(h)
+		logger.With().Debug("attempting to fetch block ids from peers", log.Int("num_peers", len(peers)))
 	NextHash:
 		for _, peer := range peers {
-			s.With().Debug("send request", log.String("peer", peer.String()))
-			ch, err := layerIdsReqFactory(lyr)(s, peer)
+			logger := logger.WithFields(log.FieldNamed("peer_id", peer))
+			logger.Debug("send request")
+			ch, err := layerIdsReqFactory(lyr)(ctx, s, peer)
 			if err != nil {
 				return nil, err
 			}
@@ -985,51 +992,55 @@ func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2ppeers.Peer, lyr type
 			timeout := time.After(s.Configuration.RequestTimeout)
 			select {
 			case <-s.GetExit():
-				s.Debug("worker received interrupt")
-				return nil, fmt.Errorf("interupt")
+				logger.Debug("worker received interrupt")
+				return nil, fmt.Errorf("received interrupt")
 			case <-timeout:
-				s.With().Error("layer ids request timed out", log.String("peer", peer.String()))
+				logger.Error("layer ids request timed out")
 				continue
 			case v := <-ch:
 				if v != nil {
-					s.With().Debug("peer responded to layer ids request", log.String("peer", peer.String()))
+					blockIds := v.([]types.BlockID)
+					logger.Debug("peer responded to layer ids request",
+						log.Int("num_ids", len(blockIds)))
 					// peer returned set with bad hash ask next peer
-					res := types.CalcBlocksHash32(v.([]types.BlockID), nil)
-
-					if h != res {
-						s.With().Warning("layer ids hash does not match request",
-							log.String("peer", peer.String()))
+					if res := types.CalcBlocksHash32(blockIds, nil); h != res {
+						logger.Warning("layer ids hash does not match request")
 					}
 
-					for _, bid := range v.([]types.BlockID) {
+					for _, bid := range blockIds {
 						if _, exists := idSet[bid]; !exists {
+							logger.With().Debug("got data from peer on new block",
+								log.FieldNamed("new_block_id", bid))
 							idSet[bid] = struct{}{}
 							ids = append(ids, bid)
 						}
 					}
-					// fetch for next hash
+
+					// fetch next block hash
 					break NextHash
+				} else {
+					logger.Debug("got nil response from peer")
 				}
 			}
 		}
 	}
 
 	if len(ids) == 0 {
-		s.Info("could not get layer ids from any peer")
+		logger.Info("could not get block ids from any peer")
 	}
-
 	return ids, nil
 }
 
-func (s *Syncer) fetchEpochAtxs(m map[types.Hash32][]p2ppeers.Peer, epoch types.EpochID) ([]types.ATXID, error) {
+func (s *Syncer) fetchEpochAtxs(ctx context.Context, m map[types.Hash32][]p2ppeers.Peer, epoch types.EpochID) ([]types.ATXID, error) {
+	logger := s.WithContext(ctx)
 	// send request to different users according to returned hashes
 	idSet := make(map[types.ATXID]struct{}, s.LayerSize)
 	ids := make([]types.ATXID, 0, s.LayerSize)
 	for h, peers := range m {
 	NextHash:
 		for _, peer := range peers {
-			s.With().Debug("send request", log.String("peer", peer.String()))
-			ch, err := getEpochAtxIds(epoch, s, peer)
+			logger.With().Debug("send request", log.String("peer", peer.String()))
+			ch, err := getEpochAtxIds(ctx, epoch, s, peer)
 			if err != nil {
 				return nil, err
 			}
@@ -1037,20 +1048,20 @@ func (s *Syncer) fetchEpochAtxs(m map[types.Hash32][]p2ppeers.Peer, epoch types.
 			timeout := time.After(s.Configuration.RequestTimeout)
 			select {
 			case <-s.GetExit():
-				s.Debug("worker received interrupt")
-				return nil, fmt.Errorf("interupt")
+				logger.Debug("worker received interrupt")
+				return nil, fmt.Errorf("received interrupt")
 			case <-timeout:
-				s.With().Error("layer ids request timed out", log.String("peer", peer.String()))
+				logger.With().Error("layer ids request timed out", log.String("peer", peer.String()))
 				continue
 			case v := <-ch:
 				if v != nil {
-					s.With().Debug("peer responded to epoch atx ids request",
+					logger.With().Debug("peer responded to epoch atx ids request",
 						log.String("peer", peer.String()))
 					// peer returned set with bad hash ask next peer
 					res := types.CalcATXIdsHash32(v.([]types.ATXID), nil)
 
 					if h != res {
-						s.With().Warning("epoch atx ids hash does not match request",
+						logger.With().Warning("epoch atx ids hash does not match request",
 							log.String("peer", peer.String()))
 					}
 
@@ -1068,7 +1079,7 @@ func (s *Syncer) fetchEpochAtxs(m map[types.Hash32][]p2ppeers.Peer, epoch types.
 	}
 
 	if len(ids) == 0 {
-		s.Info("could not get atx ids from any peer")
+		logger.Info("could not get atx ids from any peer")
 	}
 
 	return ids, nil
@@ -1079,9 +1090,9 @@ type peerHashPair struct {
 	hash types.Hash32
 }
 
-func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[types.Hash32][]p2ppeers.Peer, error) {
+func (s *Syncer) fetchLayerHashes(ctx context.Context, lyr types.LayerID) (map[types.Hash32][]p2ppeers.Peer, error) {
 	// get layer hash from each peer
-	wrk := newPeersWorker(s, s.GetPeers(), &sync.Once{}, hashReqFactory(lyr))
+	wrk := newPeersWorker(ctx, s, s.GetPeers(), &sync.Once{}, hashReqFactory(lyr))
 	go wrk.Work()
 	m := make(map[types.Hash32][]p2ppeers.Peer)
 	layerHasBlocks := false
@@ -1092,7 +1103,6 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[types.Hash32][]p2ppeer
 				layerHasBlocks = true
 				m[pair.hash] = append(m[pair.hash], pair.peer)
 			}
-
 		}
 	}
 
@@ -1110,7 +1120,7 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[types.Hash32][]p2ppeer
 
 func (s *Syncer) fetchEpochAtxHashes(ep types.EpochID) (map[types.Hash32][]p2ppeers.Peer, error) {
 	// get layer hash from each peer
-	wrk := newPeersWorker(s, s.GetPeers(), &sync.Once{}, atxHashReqFactory(ep))
+	wrk := newPeersWorker(context.TODO(), s, s.GetPeers(), &sync.Once{}, atxHashReqFactory(ep))
 	go wrk.Work()
 	m := make(map[types.Hash32][]p2ppeers.Peer)
 	layerHasBlocks := false
@@ -1147,9 +1157,9 @@ func fetchWithFactory(wrk worker) chan interface{} {
 }
 
 // FetchPoetProof fetches a poet proof from network peers
-func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
+func (s *Syncer) FetchPoetProof(ctx context.Context, poetProofRef []byte) error {
 	if !s.poetDb.HasProof(poetProofRef) {
-		out := <-fetchWithFactory(newNeighborhoodWorker(s, 1, poetReqFactory(poetProofRef)))
+		out := <-fetchWithFactory(newNeighborhoodWorker(ctx, s, 1, poetReqFactory(poetProofRef)))
 		if out == nil {
 			return fmt.Errorf("could not find PoET proof with any neighbor")
 		}
@@ -1163,10 +1173,10 @@ func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
 }
 
 // GetPoetProof fetches a poet proof from network peers
-func (s *Syncer) GetPoetProof(hash types.Hash32) error {
+func (s *Syncer) GetPoetProof(ctx context.Context, hash types.Hash32) error {
 	poetProofRef := hash.Bytes()
 	if !s.poetDb.HasProof(poetProofRef) {
-		out := <-fetchWithFactory(newNeighborhoodWorker(s, 1, poetReqFactory(poetProofRef)))
+		out := <-fetchWithFactory(newNeighborhoodWorker(ctx, s, 1, poetReqFactory(poetProofRef)))
 		if out == nil {
 			return fmt.Errorf("could not find PoET proof with any neighbor")
 		}

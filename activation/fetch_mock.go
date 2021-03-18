@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"context"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -38,7 +39,7 @@ func (f *fetchMock) FetchAtx(ID types.ATXID) error {
 	return nil
 }
 
-func (*fetchMock) GetPoetProof(types.Hash32) error {
+func (*fetchMock) GetPoetProof(context.Context, types.Hash32) error {
 	return nil
 }
 

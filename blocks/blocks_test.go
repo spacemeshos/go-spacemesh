@@ -1,6 +1,7 @@
 package blocks
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -117,7 +118,7 @@ func (f fetchMock) FetchAtx(ID types.ATXID) error {
 	return f.returnError()
 }
 
-func (f fetchMock) GetPoetProof(ID types.Hash32) error {
+func (f fetchMock) GetPoetProof(ctx context.Context, ID types.Hash32) error {
 	return f.returnError()
 }
 

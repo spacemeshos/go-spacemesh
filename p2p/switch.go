@@ -342,8 +342,8 @@ func (s *Switch) SendWrappedMessage(ctx context.Context, nodeID p2pcrypto.Public
 	return s.sendMessageImpl(ctx, nodeID, protocol, payload)
 }
 
-// SendMessage sends a p2p message to a peer using it's public key. the provided public key must belong
-// to one of our connected neighbors. otherwise an error will return.
+// SendMessage sends a p2p message to a peer using its public key. The provided public key must belong
+// to one of our connected neighbors, otherwise an error will be returned.
 func (s *Switch) SendMessage(ctx context.Context, peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error {
 	return s.sendMessageImpl(ctx, peerPubkey, protocol, service.DataBytes{Payload: payload})
 }

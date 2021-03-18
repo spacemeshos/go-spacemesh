@@ -424,7 +424,7 @@ func (l *Logic) GetTxs(IDs []types.TransactionID) error {
 }
 
 // GetPoetProof gets poet proof from remote peer
-func (l *Logic) GetPoetProof(id types.Hash32) error {
+func (l *Logic) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	res := <-l.fetcher.GetHash(id, fetch.Hint(strconv.Itoa(POETDB)), true)
 	if res.Err != nil {
 		return res.Err
