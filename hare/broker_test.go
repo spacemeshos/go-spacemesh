@@ -175,7 +175,7 @@ func TestBroker_RegisterUnregister(t *testing.T) {
 	broker.Start(context.TODO())
 	broker.Register(context.TODO(), instanceID1)
 	assert.Equal(t, 1, len(broker.outbox))
-	broker.Unregister(instanceID1)
+	broker.Unregister(context.TODO(), instanceID1)
 	assert.Nil(t, broker.outbox[instanceID1])
 }
 
@@ -526,14 +526,14 @@ func TestBroker_Flow(t *testing.T) {
 
 	b.Register(context.TODO(), 3)
 	b.Register(context.TODO(), 4)
-	b.Unregister(2)
+	b.Unregister(context.TODO(), 2)
 	r.Equal(instanceID0, b.minDeleted)
 
 	// check still receiving msgs on ch1
 	b.inbox <- newMockGossipMsg(m.Message)
 	<-ch1
 
-	b.Unregister(1)
+	b.Unregister(context.TODO(), 1)
 	r.Equal(instanceID2, b.minDeleted)
 }
 

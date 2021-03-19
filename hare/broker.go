@@ -232,8 +232,9 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			// has instance, just send
 			out, exist := b.outbox[msgInstID]
 			if !exist {
-				logger.With().Panic("missing broker instance for layer")
+				msgLogger.With().Panic("missing broker instance for layer")
 			}
+			msgLogger.Debug("broker forwarding message to outbox")
 			out <- iMsg
 
 		case task := <-b.tasks:
@@ -341,14 +342,14 @@ func (b *Broker) Register(ctx context.Context, id instanceID) (chan *Msg, error)
 }
 
 // Unregister a layer from receiving messages
-func (b *Broker) Unregister(id instanceID) {
+func (b *Broker) Unregister(ctx context.Context, id instanceID) {
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
 	b.tasks <- func() {
 		delete(b.outbox, id) // delete matching outbox
 		b.cleanOldLayers()
-		b.With().Info("hare broker unregistered layer", types.LayerID(id))
+		b.WithContext(ctx).With().Info("hare broker unregistered layer", types.LayerID(id))
 		wg.Done()
 	}
 

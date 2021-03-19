@@ -218,7 +218,7 @@ func newRandBlockID(rng *rand.Rand) (id types.BlockID) {
 type mockBlockProvider struct {
 }
 
-func (mbp *mockBlockProvider) HandleValidatedLayer(types.LayerID, []types.BlockID) {
+func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
 }
 
 func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
