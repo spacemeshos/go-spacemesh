@@ -87,6 +87,7 @@ func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
 			log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
+
 	// verify role
 	if !res {
 		ev.WithContext(ctx).With().Warning("validate message failed: role is invalid",
