@@ -332,9 +332,9 @@ func (h *Hare) Start(ctx context.Context) error {
 	h.WithContext(ctx).With().Info("starting protocol", log.String("protocol", protoName))
 
 	// Create separate contexts for each subprocess. This allows us to better track the flow of messages.
-	ctxBroker := log.WithNewSessionID(ctx, log.String("protocol", protoName + "_broker"))
-	ctxTickLoop := log.WithNewSessionID(ctx, log.String("protocol", protoName + "_tickloop"))
-	ctxOutputLoop := log.WithNewSessionID(ctx, log.String("protocol", protoName + "_outputloop"))
+	ctxBroker := log.WithNewSessionID(ctx, log.String("protocol", protoName+"_broker"))
+	ctxTickLoop := log.WithNewSessionID(ctx, log.String("protocol", protoName+"_tickloop"))
+	ctxOutputLoop := log.WithNewSessionID(ctx, log.String("protocol", protoName+"_outputloop"))
 
 	if err := h.broker.Start(ctxBroker); err != nil {
 		return err

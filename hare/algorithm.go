@@ -96,7 +96,7 @@ type StateQuerier interface {
 // Messages are sent as type Message. Upon receiving, the public key is added to this wrapper (public key extraction).
 type Msg struct {
 	*Message
-	PubKey *signing.PublicKey
+	PubKey    *signing.PublicKey
 	RequestID string
 }
 
