@@ -27,7 +27,7 @@ type blockQueue struct {
 	syncer
 	fetchQueue
 	Configuration
-	callbacks     map[interface{}]func(res bool) error
+	callbacks     map[interface{}]func(ctx context.Context, res bool) error
 	depMap        map[interface{}]map[types.Hash32]struct{}
 	reverseDepMap map[types.Hash32][]interface{}
 }
@@ -47,7 +47,7 @@ func newValidationQueue(ctx context.Context, srvr networker, conf Configuration,
 		Configuration: conf,
 		depMap:        make(map[interface{}]map[types.Hash32]struct{}),
 		reverseDepMap: make(map[types.Hash32][]interface{}),
-		callbacks:     make(map[interface{}]func(res bool) error),
+		callbacks:     make(map[interface{}]func(ctx2 context.Context, res bool) error),
 		syncer:        sy,
 	}
 	vq.handleFetch = vq.handleBlocks
@@ -81,51 +81,53 @@ func (vq *blockQueue) handleBlocks(ctx context.Context, bjb fetchJob) {
 			continue
 		}
 
+		vq.WithContext(ctx).Info("starting handling blocks")
 		go vq.handleBlock(log.WithNewRequestID(ctx, b.ID()), id, b)
 	}
 }
 
 func (vq *blockQueue) handleBlock(ctx context.Context, id types.Hash32, block *types.Block) {
-	logger := vq.WithContext(ctx)
+	logger := vq.WithContext(ctx).WithFields(block.ID())
 	logger.With().Info("start handling block", block.Fields()...)
 	if err := vq.fetchBlockDataForValidation(ctx, block); err != nil {
-		logger.With().Error("fetching block data failed", append(block.Fields(), log.Err(err))...)
+		logger.With().Error("fetching block data failed", log.Err(err))
 		vq.updateDependencies(ctx, id, false)
 		return
 	}
 	if err := vq.fastValidation(block); err != nil {
-		logger.With().Error("block fast validation failed", append(block.Fields(), log.Err(err))...)
+		logger.With().Error("block fast validation failed", log.Err(err))
 		vq.updateDependencies(ctx, id, false)
 		return
 	}
-	logger.With().Info("finished block fast validation", block.Fields()...)
+	logger.Info("finished block fast validation")
 	vq.handleBlockDependencies(ctx, block)
 }
 
 // handles new block dependencies
 // if there are unknown blocks in the view they are added to the fetch queue
 func (vq *blockQueue) handleBlockDependencies(ctx context.Context, blk *types.Block) {
-	logger := vq.WithContext(ctx)
+	logger := vq.WithContext(ctx).WithFields(blk.ID())
 	logger.Debug("handle block dependencies")
 	res, err := vq.addDependencies(ctx, blk.ID(), blk.ViewEdges, vq.finishBlockCallback(blk))
 
 	if err != nil {
 		vq.updateDependencies(ctx, blk.Hash32(), false)
-		logger.With().Error("failed to add dependencies", append(blk.Fields(), log.Err(err))...)
+		logger.With().Error("failed to add dependencies", log.Err(err))
 		return
 	}
 
 	if res == false {
-		vq.With().Debug("pending done", blk.ID())
+		logger.With().Debug("pending done", blk.ID())
 		vq.updateDependencies(ctx, blk.Hash32(), true)
 	}
 	logger.Debug("added dependencies to queue")
 }
 
-func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) error {
-	return func(res bool) error {
+func (vq *blockQueue) finishBlockCallback(block *types.Block) func(ctx context.Context, res bool) error {
+	return func(ctx context.Context, res bool) error {
+		logger := vq.WithContext(ctx).WithFields(block.ID())
 		if !res {
-			vq.With().Info("finished block, invalid", block.ID())
+			logger.Info("finished block, invalid")
 			return nil
 		}
 
@@ -136,7 +138,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 		}
 
 		// validate block's votes
-		if valid, err := validateVotes(block, vq.ForBlockInView, vq.Hdist, vq.Log); valid == false || err != nil {
+		if valid, err := validateVotes(block, vq.ForBlockInView, vq.Hdist); valid == false || err != nil {
 			return fmt.Errorf("validate votes failed for block: %s errmsg: %s", block.ID().String(), err)
 		}
 
@@ -151,7 +153,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 			vq.HandleLateBlock(block)
 		}
 
-		vq.With().Info("finished block, valid", block.ID())
+		logger.Info("finished block, valid")
 		return nil
 	}
 }
@@ -166,21 +168,21 @@ func (vq *blockQueue) updateDependencies(ctx context.Context, block types.Hash32
 	vq.Unlock()
 
 	doneQueue := make([]types.Hash32, 0, len(vq.depMap))
-	doneQueue = vq.removefromDepMaps(block, valid, doneQueue)
+	doneQueue = vq.removefromDepMaps(ctx, block, valid, doneQueue)
 	for {
 		if len(doneQueue) == 0 {
 			break
 		}
 		block = doneQueue[0]
 		doneQueue = doneQueue[1:]
-		doneQueue = vq.removefromDepMaps(block, valid, doneQueue)
+		doneQueue = vq.removefromDepMaps(ctx, block, valid, doneQueue)
 	}
 }
 
 // removes block from dependencies maps and calls the blocks callback\
 // dependencies can be of type block/layer
 // for block jobs we need to return  a list of finished blocks
-func (vq *blockQueue) removefromDepMaps(block types.Hash32, valid bool, doneBlocks []types.Hash32) []types.Hash32 {
+func (vq *blockQueue) removefromDepMaps(ctx context.Context, block types.Hash32, valid bool, doneBlocks []types.Hash32) []types.Hash32 {
 	vq.fetchQueue.invalidate(block, valid)
 	vq.Lock()
 	defer vq.Unlock()
@@ -191,8 +193,8 @@ func (vq *blockQueue) removefromDepMaps(block types.Hash32, valid bool, doneBloc
 			vq.Debug("run callback for %v, %v", dep, reflect.TypeOf(dep))
 			if callback, ok := vq.callbacks[dep]; ok {
 				delete(vq.callbacks, dep)
-				if err := callback(valid); err != nil {
-					vq.Error(" %v callback Failed %v", dep, err)
+				if err := callback(ctx, valid); err != nil {
+					vq.Error("%v callback failed: %v", dep, err)
 					continue
 				}
 				switch id := dep.(type) {
@@ -206,7 +208,7 @@ func (vq *blockQueue) removefromDepMaps(block types.Hash32, valid bool, doneBloc
 	return doneBlocks
 }
 
-func (vq *blockQueue) addDependencies(ctx context.Context, jobID interface{}, blks []types.BlockID, finishCallback func(res bool) error) (bool, error) {
+func (vq *blockQueue) addDependencies(ctx context.Context, jobID interface{}, blks []types.BlockID, finishCallback func(ctx context.Context, res bool) error) (bool, error) {
 	defer vq.shutdownRecover()
 	logger := vq.WithContext(ctx).WithFields(log.String("job_id", fmt.Sprint(jobID)))
 
@@ -239,7 +241,7 @@ func (vq *blockQueue) addDependencies(ctx context.Context, jobID interface{}, bl
 	// if no missing dependencies return
 	if len(dependencies) == 0 {
 		vq.Unlock()
-		return false, finishCallback(true)
+		return false, finishCallback(ctx, true)
 	}
 
 	// add callback to job

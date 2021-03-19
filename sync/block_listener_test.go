@@ -315,7 +315,7 @@ func TestBlockListener_ValidateVotesGoodFlow(t *testing.T) {
 	bl1.AddBlock(block5)
 	bl1.AddBlock(block6)
 	bl1.AddBlock(block7)
-	valid, err := validateVotes(block1, bl1.ForBlockInView, bl1.Hdist, log.NewDefault(""))
+	valid, err := validateVotes(block1, bl1.ForBlockInView, bl1.Hdist)
 	assert.NoError(t, err)
 	assert.True(t, valid)
 }
@@ -364,7 +364,7 @@ func TestBlockListener_ValidateVotesBadFlow(t *testing.T) {
 	bl1.AddBlock(block5)
 	bl1.AddBlock(block6)
 	bl1.AddBlock(block7)
-	valid, err := validateVotes(block1, bl1.ForBlockInView, bl1.Hdist, log.NewDefault(""))
+	valid, err := validateVotes(block1, bl1.ForBlockInView, bl1.Hdist)
 	assert.Error(t, err)
 	assert.False(t, valid)
 }
