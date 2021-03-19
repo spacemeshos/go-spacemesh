@@ -213,7 +213,7 @@ func (mgm *mockGossipMessage) ReportValidation(protocol string) {
 }
 
 func newMockGossipMsg(msg *Message) *mockGossipMessage {
-	return &mockGossipMessage{&Msg{msg, nil}, p2pcrypto.NewRandomPubkey(), make(chan service.MessageValidation, 10)}
+	return &mockGossipMessage{&Msg{Message: msg, PubKey: nil}, p2pcrypto.NewRandomPubkey(), make(chan service.MessageValidation, 10)}
 }
 
 func TestBroker_Send(t *testing.T) {
@@ -355,25 +355,25 @@ func TestBroker_updateSynchronicity(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
 	b.isNodeSynced = trueFunc
-	b.updateSynchronicity(1)
-	r.True(b.isSynced(1))
+	b.updateSynchronicity(context.TODO(), 1)
+	r.True(b.isSynced(context.TODO(), 1))
 	b.isNodeSynced = falseFunc
-	b.updateSynchronicity(1)
-	r.True(b.isSynced(1))
-	b.updateSynchronicity(2)
-	r.False(b.isSynced(2))
+	b.updateSynchronicity(context.TODO(), 1)
+	r.True(b.isSynced(context.TODO(), 1))
+	b.updateSynchronicity(context.TODO(), 2)
+	r.False(b.isSynced(context.TODO(), 2))
 }
 
 func TestBroker_isSynced(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
 	b.isNodeSynced = trueFunc
-	r.True(b.isSynced(1))
+	r.True(b.isSynced(context.TODO(), 1))
 	b.isNodeSynced = falseFunc
-	r.True(b.isSynced(1))
-	r.False(b.isSynced(2))
+	r.True(b.isSynced(context.TODO(), 1))
+	r.False(b.isSynced(context.TODO(), 2))
 	b.isNodeSynced = trueFunc
-	r.False(b.isSynced(2))
+	r.False(b.isSynced(context.TODO(), 2))
 }
 
 func TestBroker_Register4(t *testing.T) {
@@ -459,25 +459,25 @@ func Test_validate(t *testing.T) {
 	m := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
 	m.InnerMsg.InstanceID = 1
 	b.latestLayer = 2
-	e := b.validate(m.Message)
+	e := b.validate(context.TODO(), m.Message)
 	r.EqualError(e, errUnregistered.Error())
 
 	m.InnerMsg.InstanceID = 2
-	e = b.validate(m.Message)
+	e = b.validate(context.TODO(), m.Message)
 	r.EqualError(e, errRegistration.Error())
 
 	m.InnerMsg.InstanceID = 3
-	e = b.validate(m.Message)
+	e = b.validate(context.TODO(), m.Message)
 	r.EqualError(e, errEarlyMsg.Error())
 
 	m.InnerMsg.InstanceID = 2
 	b.outbox[2] = make(chan *Msg)
 	b.syncState[2] = false
-	e = b.validate(m.Message)
+	e = b.validate(context.TODO(), m.Message)
 	r.EqualError(e, errNotSynced.Error())
 
 	b.syncState[2] = true
-	e = b.validate(m.Message)
+	e = b.validate(context.TODO(), m.Message)
 	r.Nil(e)
 }
 
@@ -545,7 +545,7 @@ func TestBroker_Synced(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		wg.Add(1)
 		go func(j int) {
-			r.True(b.Synced(instanceID(j)))
+			r.True(b.Synced(context.TODO(), instanceID(j)))
 			wg.Done()
 		}(i)
 	}

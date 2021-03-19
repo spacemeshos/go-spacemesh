@@ -97,6 +97,7 @@ type StateQuerier interface {
 type Msg struct {
 	*Message
 	PubKey *signing.PublicKey
+	RequestID string
 }
 
 func (m *Msg) String() string {
@@ -120,6 +121,7 @@ func (m *Msg) Bytes() []byte {
 // An extracted public key is considered valid if it represents an active identity for a consensus view.
 func newMsg(ctx context.Context, hareMsg *Message, querier StateQuerier) (*Msg, error) {
 	logger := log.AppLog.WithContext(ctx)
+
 	// extract pub key
 	pubKey, err := ed25519.ExtractPublicKey(hareMsg.InnerMsg.Bytes(), hareMsg.Sig)
 	if err != nil {
@@ -128,6 +130,7 @@ func newMsg(ctx context.Context, hareMsg *Message, querier StateQuerier) (*Msg, 
 			log.Int("sig_len", len(hareMsg.Sig)))
 		return nil, err
 	}
+
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
 	res, err := querier.IsIdentityActiveOnConsensusView(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceID))
@@ -149,7 +152,16 @@ func newMsg(ctx context.Context, hareMsg *Message, querier StateQuerier) (*Msg, 
 		return nil, errors.New("inactive identity")
 	}
 
-	return &Msg{hareMsg, pub}, nil
+	msg := &Msg{Message: hareMsg, PubKey: pub}
+
+	// add reqID from context
+	if reqID, ok := log.ExtractRequestID(ctx); ok {
+		msg.RequestID = reqID
+	} else {
+		logger.Warning("no requestID in context, cannot add to new hare message")
+	}
+
+	return msg, nil
 }
 
 // consensusProcess is an entity (a single participant) in the Hare protocol.
@@ -389,34 +401,33 @@ func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Msg) {
 
 // the very first step of handling a message
 func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
-	logger := proc.WithContext(ctx)
+	logger := proc.WithContext(ctx).WithFields(
+		log.String("msg_type", m.InnerMsg.Type.String()),
+		log.FieldNamed("sender_id", m.PubKey),
+		log.Int32("current_k", proc.k),
+		log.Int32("msg_k", m.InnerMsg.K),
+		types.LayerID(proc.instanceID))
+
+	// Try to extract reqID from message and restore it to context
+	if m.RequestID == "" {
+		logger.Warning("no reqID found in hare message, cannot restore to context")
+	} else {
+		ctx = log.WithRequestID(ctx, m.RequestID)
+		logger = logger.WithContext(ctx)
+	}
 
 	// Note: instanceID is already verified by the broker
-	logger.With().Debug("received message",
-		log.Int32("current_k", proc.k),
-		types.LayerID(proc.instanceID),
-		log.String("sender_id", m.PubKey.ShortString()),
-		log.FieldNamed("msg_layer_id", types.LayerID(m.InnerMsg.InstanceID)),
-		log.String("msg_type", m.InnerMsg.Type.String()))
+	logger.Debug("received message")
 
 	// validate context
-	mType := m.InnerMsg.Type.String()
 	if err := proc.validator.ContextuallyValidateMessage(ctx, m, proc.k); err != nil {
 		// early message, keep for later
 		if err == errEarlyMsg {
-			logger.With().Debug("early message detected, keeping",
-				log.String("msg_type", mType),
-				log.String("sender_id", m.PubKey.ShortString()),
-				log.Int32("current_k", proc.k),
-				log.Int32("msg_k", m.InnerMsg.K),
-				types.LayerID(proc.instanceID),
-				log.Err(err))
+			logger.With().Debug("early message detected, keeping", log.Err(err))
 
 			// validate syntax for early messages
 			if !proc.validator.SyntacticallyValidateMessage(ctx, m) {
-				logger.With().Warning("early message failed syntactic validation, discarding",
-					log.String("msg_type", mType),
-					log.String("sender_id", m.PubKey.ShortString()))
+				logger.Warning("early message failed syntactic validation, discarding")
 				return
 			}
 
@@ -425,34 +436,19 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 		}
 
 		// not an early message but also contextually invalid
-		logger.With().Error("late message failed contextual validation, discarding",
-			log.String("msg_type", mType),
-			log.String("sender_id", m.PubKey.ShortString()),
-			log.Int32("current_k", proc.k),
-			log.Int32("msg_k", m.InnerMsg.K),
-			types.LayerID(proc.instanceID), log.Err(err))
+		logger.With().Error("late message failed contextual validation, discarding", log.Err(err))
 		return
 	}
 
 	// validate syntax for contextually valid messages
 	if !proc.validator.SyntacticallyValidateMessage(ctx, m) {
-		logger.With().Warning("message failed syntactic validation, discarding",
-			log.String("msg_type", mType),
-			log.String("sender_id", m.PubKey.ShortString()),
-			log.Int32("current_k", proc.k),
-			log.Int32("msg_k", m.InnerMsg.K),
-			types.LayerID(proc.instanceID))
+		logger.Warning("message failed syntactic validation, discarding")
 		return
 	}
 
 	// warn on late pre-round msgs
 	if m.InnerMsg.Type == pre && proc.k != -1 {
-		logger.With().Warning("encountered late preround message",
-			log.String("msg_type", mType),
-			log.String("sender_id", m.PubKey.ShortString()),
-			log.Int32("current_k", proc.k),
-			log.Int32("msg_k", m.InnerMsg.K),
-			types.LayerID(proc.instanceID))
+		logger.Warning("encountered late preround message")
 	}
 
 	// valid, continue to process msg by type

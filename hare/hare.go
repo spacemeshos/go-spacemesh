@@ -207,7 +207,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) {
 
 	h.layerLock.Unlock()
 
-	if !h.broker.Synced(instanceID(id)) { // if not synced don't start consensus
+	if !h.broker.Synced(ctx, instanceID(id)) { // if not synced don't start consensus
 		logger.Info("not starting hare since node is not synced")
 		return
 	}

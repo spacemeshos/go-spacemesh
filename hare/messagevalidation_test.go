@@ -103,7 +103,7 @@ func TestEligibilityValidator_validateRole(t *testing.T) {
 func TestMessageValidator_IsStructureValid(t *testing.T) {
 	validator := defaultValidator()
 	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), nil))
-	m := &Msg{&Message{}, nil}
+	m := &Msg{Message: &Message{}, PubKey: nil}
 	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
 	m.PubKey = generateSigning(t).PublicKey()
 	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), m))

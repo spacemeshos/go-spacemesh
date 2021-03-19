@@ -137,7 +137,7 @@ func generateSigning(*testing.T) Signer {
 }
 
 func buildMessage(msg *Message) *Msg {
-	return &Msg{msg, nil}
+	return &Msg{Message: msg, PubKey: nil}
 }
 
 func buildBroker(net NetworkService, testName string) *Broker {
