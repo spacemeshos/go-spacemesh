@@ -480,6 +480,7 @@ func (s *Syncer) handleNotSynced(ctx context.Context, currentSyncLayer types.Lay
 		}
 		s.syncAtxs(ctx, currentSyncLayer)
 		s.ValidateLayer(lyr) // wait for layer validation
+		logger.With().Info("done with layer", log.FieldNamed("current_sync_layer", currentSyncLayer))
 	}
 
 	// if we are in the first epoch, we need to listen to gossip still
@@ -638,22 +639,25 @@ func (s *Syncer) syncEpochActivations(ctx context.Context, epoch types.EpochID) 
 }
 
 func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, blockIds []types.BlockID) ([]*types.Block, error) {
+	logger := s.WithContext(ctx).WithFields(layerID)
+	logger.Info("attempting to sync blocks for layer")
 	ch := make(chan bool, 1)
-	foo := func(res bool) error {
-		s.With().Info("sync layer done", layerID)
+	foo := func(ctx context.Context, res bool) error {
+		logger.WithContext(ctx).Info("sync layer done")
 		ch <- res
 		return nil
 	}
 
 	tmr := newMilliTimer(syncLayerTime)
+	defer tmr.ObserveDuration()
 	if res, err := s.blockQueue.addDependencies(ctx, layerID, blockIds, foo); err != nil {
 		return nil, fmt.Errorf("failed adding layer %v blocks to queue %v", layerID, err)
 	} else if res == false {
-		s.With().Info("no missing blocks for layer", layerID)
+		logger.Info("no missing blocks for layer")
 		return s.LayerBlocks(layerID)
 	}
 
-	s.With().Info("wait for blocks", layerID, log.Int("num_blocks", len(blockIds)))
+	logger.With().Info("wait for layer blocks", log.Int("num_blocks", len(blockIds)))
 	select {
 	case <-s.exit:
 		return nil, fmt.Errorf("received interupt")
@@ -663,9 +667,13 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, blockIds 
 		}
 	}
 
-	tmr.ObserveDuration()
-
-	return s.LayerBlocks(layerID)
+	blocks, err := s.LayerBlocks(layerID)
+	if err != nil {
+		logger.With().Error("failed to get layer blocks", log.Err(err))
+	} else {
+		logger.With().Info("got layer blocks", log.Int("count", len(blocks)))
+	}
+	return blocks, err
 }
 
 func (s *Syncer) fastValidation(block *types.Block) error {
@@ -776,7 +784,7 @@ func (s *Syncer) blockSyntacticValidation(ctx context.Context, block *types.Bloc
 	}
 
 	// validate block's votes
-	if valid, err := validateVotes(block, s.ForBlockInView, s.Hdist, s.Log); valid == false || err != nil {
+	if valid, err := validateVotes(block, s.ForBlockInView, s.Hdist); valid == false || err != nil {
 		return nil, nil, fmt.Errorf("validate votes failed for block %v, %v", block.ID(), err)
 	}
 
@@ -786,7 +794,7 @@ func (s *Syncer) blockSyntacticValidation(ctx context.Context, block *types.Bloc
 func (s *Syncer) validateBlockView(ctx context.Context, blk *types.Block) bool {
 	ch := make(chan bool, 1)
 	defer close(ch)
-	foo := func(res bool) error {
+	foo := func(ctx context.Context, res bool) error {
 		s.WithContext(ctx).Info("view validated",
 			blk.ID(),
 			log.Bool("result", res),
@@ -843,7 +851,7 @@ func (s *Syncer) FetchAtxReferences(atx *types.ActivationTx) error {
 func (s *Syncer) fetchBlock(ctx context.Context, ID types.BlockID) bool {
 	ch := make(chan bool, 1)
 	defer close(ch)
-	foo := func(res bool) error {
+	foo := func(ctx context.Context, res bool) error {
 		s.WithContext(ctx).With().Info("single block fetched",
 			ID,
 			log.Bool("result", res))
@@ -862,7 +870,7 @@ func (s *Syncer) fetchBlock(ctx context.Context, ID types.BlockID) bool {
 	return <-ch
 }
 
-func validateVotes(blk *types.Block, forBlockfunc forBlockInView, depth int, lg log.Log) (bool, error) {
+func validateVotes(blk *types.Block, forBlockfunc forBlockInView, depth int) (bool, error) {
 	view := map[types.BlockID]struct{}{}
 	for _, b := range blk.ViewEdges {
 		view[b] = struct{}{}

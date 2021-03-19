@@ -176,7 +176,6 @@ func (m *DB) LayerBlocks(index types.LayerID) ([]*types.Block, error) {
 	}
 
 	return blocks, nil
-
 }
 
 // ForBlockInView traverses all blocks in a view and uses blockHandler func on each block
