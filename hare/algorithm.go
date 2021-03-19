@@ -294,7 +294,7 @@ func (proc *consensusProcess) eventLoop(ctx context.Context) {
 				return
 			}
 			m := builder.SetType(pre).Sign(proc.signing).Build()
-			proc.sendMessage(m)
+			proc.sendMessage(ctx, m)
 		} else {
 			logger.With().Info("should not participate",
 				log.Int32("current_k", proc.k),
@@ -417,7 +417,7 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 	}
 
 	// Note: instanceID is already verified by the broker
-	logger.Debug("received message")
+	logger.Debug("consensus process received message")
 
 	// validate context
 	if err := proc.validator.ContextuallyValidateMessage(ctx, m, proc.k); err != nil {
@@ -457,7 +457,7 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 
 // process the message by its type
 func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
-	proc.WithContext(ctx).Debug("processing message",
+	proc.WithContext(ctx).With().Debug("processing message",
 		log.String("msg_type", m.InnerMsg.Type.String()),
 		log.Int("num_values", len(m.InnerMsg.Values)))
 	// TODO: fix metrics
@@ -475,7 +475,7 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 	case notify: // end of round 4
 		proc.processNotifyMsg(ctx, m)
 	default:
-		proc.WithContext(ctx).Warning("unknown message type",
+		proc.WithContext(ctx).With().Warning("unknown message type",
 			log.Int("msg_type", int(m.InnerMsg.Type)),
 			log.String("sender_id", m.PubKey.ShortString()))
 	}
@@ -483,19 +483,21 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 
 // sends a message to the network.
 // Returns true if the message is assumed to be sent, false otherwise.
-func (proc *consensusProcess) sendMessage(msg *Msg) bool {
+func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
+	logger := proc.WithContext(ctx)
+
 	// invalid msg
 	if msg == nil {
-		proc.Error("sendMessage was called with nil")
+		logger.Error("sendMessage was called with nil")
 		return false
 	}
 
 	if err := proc.network.Broadcast(protoName, msg.Bytes()); err != nil {
-		proc.With().Error("could not broadcast round message", log.Err(err))
+		logger.With().Error("could not broadcast round message", log.Err(err))
 		return false
 	}
 
-	proc.With().Info("should participate: message sent",
+	logger.With().Info("should participate: message sent",
 		log.String("current_set", proc.s.String()),
 		log.String("msg_type", msg.InnerMsg.Type.String()),
 		log.Int32("current_k", proc.k),
@@ -554,7 +556,7 @@ func (proc *consensusProcess) beginStatusRound(ctx context.Context) {
 		return
 	}
 	statusMsg := b.SetType(status).Sign(proc.signing).Build()
-	proc.sendMessage(statusMsg)
+	proc.sendMessage(ctx, statusMsg)
 }
 
 func (proc *consensusProcess) beginProposalRound(ctx context.Context) {
@@ -572,7 +574,7 @@ func (proc *consensusProcess) beginProposalRound(ctx context.Context) {
 		svp := proc.statusesTracker.BuildSVP()
 		if svp != nil {
 			proposalMsg := builder.SetType(proposal).SetSVP(svp).Sign(proc.signing).Build()
-			proc.sendMessage(proposalMsg)
+			proc.sendMessage(ctx, proposalMsg)
 		} else {
 			proc.Error("failed to build SVP (nil) after verifying SVP is ready")
 		}
@@ -594,12 +596,12 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 
 		builder, err := proc.initDefaultBuilder(proposedSet)
 		if err != nil {
-			proc.With().Error("init default builder failed", log.Err(err))
+			proc.WithContext(ctx).With().Error("init default builder failed", log.Err(err))
 			return
 		}
 		builder = builder.SetType(commit).Sign(proc.signing)
 		commitMsg := builder.Build()
-		proc.sendMessage(commitMsg)
+		proc.sendMessage(ctx, commitMsg)
 	}
 }
 
@@ -660,7 +662,7 @@ func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 
 	builder = builder.SetType(notify).SetCertificate(proc.certificate).Sign(proc.signing)
 	notifyMsg := builder.Build()
-	if proc.sendMessage(notifyMsg) { // on success, mark sent
+	if proc.sendMessage(ctx, notifyMsg) { // on success, mark sent
 		proc.notifySent = true
 	}
 }

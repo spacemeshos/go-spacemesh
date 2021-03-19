@@ -333,18 +333,18 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.network = net
 
-	b := proc.sendMessage(nil)
+	b := proc.sendMessage(context.TODO(), nil)
 	r.Equal(0, net.count)
 	r.False(b)
 	msg := buildStatusMsg(generateSigning(t), proc.s, 0)
 
 	net.err = errors.New("mock network failed error")
-	b = proc.sendMessage(msg)
+	b = proc.sendMessage(context.TODO(), msg)
 	r.False(b)
 	r.Equal(1, net.count)
 
 	net.err = nil
-	b = proc.sendMessage(msg)
+	b = proc.sendMessage(context.TODO(), msg)
 	r.True(b)
 }
 
