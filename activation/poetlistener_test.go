@@ -63,7 +63,7 @@ func (m *mockMsg) RequestID() string {
 
 func (m *mockMsg) ValidationCompletedChan() chan service.MessageValidation { panic("implement me") }
 
-func (m *mockMsg) ReportValidation(protocol string) {
+func (m *mockMsg) ReportValidation(ctx context.Context, protocol string) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.validationReported = true

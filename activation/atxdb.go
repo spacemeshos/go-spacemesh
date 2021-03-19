@@ -756,7 +756,7 @@ func (db *DB) HandleGossipAtx(ctx context.Context, data service.GossipMessage, s
 		db.log.WithContext(ctx).With().Error("error handling atx data", log.Err(err))
 		return
 	}
-	data.ReportValidation(AtxProtocol)
+	data.ReportValidation(ctx, AtxProtocol)
 }
 
 // HandleAtxData handles atxs received either by gossip or sync

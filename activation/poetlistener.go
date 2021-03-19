@@ -75,7 +75,7 @@ func (l *PoetListener) handlePoetProofMessage(gossipMessage service.GossipMessag
 		return
 	}
 
-	gossipMessage.ReportValidation(PoetProofProtocol)
+	gossipMessage.ReportValidation(context.TODO(), PoetProofProtocol)
 
 	if err := l.poetDb.storeProof(&proofMessage); err != nil {
 		l.Log.Error("failed to store PoET proof: %v", err)

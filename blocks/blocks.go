@@ -101,7 +101,7 @@ func (bh *BlockHandler) HandleBlock(ctx context.Context, data service.GossipMess
 		bh.With().Error("error handling block data", log.Err(err))
 		return
 	}
-	data.ReportValidation(NewBlockProtocol)
+	data.ReportValidation(ctx, NewBlockProtocol)
 }
 
 // HandleBlockData handles blocks from gossip and sync

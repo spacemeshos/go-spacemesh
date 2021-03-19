@@ -25,6 +25,8 @@ var instanceID5 = instanceID(5)
 var instanceID6 = instanceID(6)
 var instanceID7 = instanceID(7)
 
+const reqID = "abracadabra"
+
 func trueFunc() bool {
 	return true
 }
@@ -187,9 +189,8 @@ type mockGossipMessage struct {
 
 func (mgm *mockGossipMessage) Bytes() []byte {
 	var w bytes.Buffer
-	_, err := xdr.Marshal(&w, mgm.msg.Message)
-	if err != nil {
-		log.Error("Could not marshal err=%v", err)
+	if _, err := xdr.Marshal(&w, mgm.msg.Message); err != nil {
+		log.With().Error("could not marshal message", log.Err(err))
 		return nil
 	}
 
@@ -205,15 +206,16 @@ func (mgm *mockGossipMessage) Sender() p2pcrypto.PublicKey {
 }
 
 func (mgm *mockGossipMessage) RequestID() string {
-	return "fake_request_id"
+	return reqID
 }
 
-func (mgm *mockGossipMessage) ReportValidation(protocol string) {
-	mgm.vComp <- service.NewMessageValidation(mgm.sender, nil, "")
+func (mgm *mockGossipMessage) ReportValidation(ctx context.Context, protocol string) {
+	reqID, _ := log.ExtractRequestID(ctx)
+	mgm.vComp <- service.NewMessageValidation(mgm.sender, nil, "", reqID)
 }
 
 func newMockGossipMsg(msg *Message) *mockGossipMessage {
-	return &mockGossipMessage{&Msg{Message: msg, PubKey: nil}, p2pcrypto.NewRandomPubkey(), make(chan service.MessageValidation, 10)}
+	return &mockGossipMessage{&Msg{msg, nil, ""}, p2pcrypto.NewRandomPubkey(), make(chan service.MessageValidation, 10)}
 }
 
 func TestBroker_Send(t *testing.T) {
@@ -235,11 +237,14 @@ func TestBroker_Send(t *testing.T) {
 	msg.InnerMsg.InstanceID = 1
 	m = newMockGossipMsg(msg)
 	broker.inbox <- m
-	// nothing happens since this is an  invalid InnerMsg
+	// nothing happens since this is an invalid InnerMsg
 
 	mev.valid = true
 	broker.inbox <- m
-	assertMsg(t, m)
+	mv := assertMsg(t, m)
+
+	// test that the requestID survived the roundtrip journey
+	require.Equal(t, reqID, mv.RequestID())
 }
 
 func TestBroker_Register(t *testing.T) {
@@ -254,15 +259,15 @@ func TestBroker_Register(t *testing.T) {
 	assert.Equal(t, 0, len(broker.pending[instanceID1]))
 }
 
-func assertMsg(t *testing.T, msg *mockGossipMessage) {
+func assertMsg(t *testing.T, msg *mockGossipMessage) (m service.MessageValidation) {
 	tm := time.NewTimer(2 * time.Second)
 	select {
 	case <-tm.C:
 		t.Error("Timeout")
 		t.FailNow()
-	case <-msg.ValidationCompletedChan():
-		return
+	case m = <-msg.ValidationCompletedChan():
 	}
+	return
 }
 
 func TestBroker_Register2(t *testing.T) {
@@ -303,7 +308,6 @@ func TestBroker_Register3(t *testing.T) {
 		case <-timer.C:
 			t.FailNow()
 		}
-
 	}
 }
 
