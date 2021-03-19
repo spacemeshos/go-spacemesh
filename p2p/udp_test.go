@@ -124,7 +124,7 @@ func TestUDPMux_sendMessageImpl(t *testing.T) {
 	require.NotNil(t, m)
 	data := service.DataBytes{Payload: []byte(testStr)}
 
-	err := m.sendMessageImpl(sendto.PublicKey(), testStr, data)
+	err := m.sendMessageImpl(context.TODO(), sendto.PublicKey(), testStr, data)
 
 	require.Error(t, err)
 	require.True(t, lookupcalled)
@@ -142,7 +142,7 @@ func TestUDPMux_sendMessageImpl(t *testing.T) {
 		return c, nil
 	}
 
-	err = m.sendMessageImpl(sendto.PublicKey(), testStr, data)
+	err = m.sendMessageImpl(context.TODO(), sendto.PublicKey(), testStr, data)
 
 	require.Equal(t, ErrNoSession, err)
 	require.True(t, lookupcalled)
@@ -159,7 +159,7 @@ func TestUDPMux_sendMessageImpl(t *testing.T) {
 		return c, nil
 	}
 
-	err = m.sendMessageImpl(sendto.PublicKey(), testStr, data)
+	err = m.sendMessageImpl(context.TODO(), sendto.PublicKey(), testStr, data)
 
 	require.Equal(t, senderr, err)
 	require.True(t, lookupcalled)
@@ -174,7 +174,7 @@ func TestUDPMux_sendMessageImpl(t *testing.T) {
 		return c, nil
 	}
 
-	err = m.sendMessageImpl(sendto.PublicKey(), testStr, data)
+	err = m.sendMessageImpl(context.TODO(), sendto.PublicKey(), testStr, data)
 
 	require.NoError(t, err)
 	require.True(t, lookupcalled)
@@ -286,7 +286,7 @@ func Test_RoundTrip(t *testing.T) {
 		return ndinfo2, nil
 	}
 
-	err = m.SendMessage(nd2.PublicKey(), testStr, []byte(testStr))
+	err = m.SendMessage(context.TODO(), nd2.PublicKey(), testStr, []byte(testStr))
 
 	require.NoError(t, err)
 	tm := time.NewTimer(time.Second)
