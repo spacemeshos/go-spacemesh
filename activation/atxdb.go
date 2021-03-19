@@ -784,6 +784,6 @@ func (db *DB) HandleGossipAtx(data service.GossipMessage, syncer service.Syncer)
 		// TODO: blacklist peer
 		return
 	}
-	data.ReportValidation(AtxProtocol)
+	data.ReportValidation(context.TODO(), AtxProtocol)
 	db.log.With().Info("stored and propagated new syntactically valid ATX", atx.ID())
 }

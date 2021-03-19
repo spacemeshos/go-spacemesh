@@ -89,7 +89,7 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 				select {
 				case got := <-mc:
 					atomic.AddInt32(numgot, 1)
-					got.ReportValidation(exampleGossipProto)
+					got.ReportValidation(ctx, exampleGossipProto)
 					return nil
 				case <-ctx.Done():
 					return errors.New("timed out")

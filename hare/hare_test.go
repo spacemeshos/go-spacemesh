@@ -213,7 +213,6 @@ func TestHare_collectOutput(t *testing.T) {
 	output, ok = h.outputs[types.LayerID(mockid)] // todo : replace with getresult if this is yields a race
 	require.False(t, ok)
 	require.Nil(t, output)
-
 }
 
 func TestHare_collectOutput2(t *testing.T) {
@@ -331,7 +330,6 @@ func TestHare_onTick(t *testing.T) {
 	res, err := h.GetResult(types.LayerID(types.GetEffectiveGenesis() + 2))
 	require.Equal(t, errNoResult, err)
 	require.Equal(t, []types.BlockID(nil), res)
-
 }
 
 type BlockIDSlice []types.BlockID
@@ -448,5 +446,4 @@ func TestHare_oldestInBuffer(t *testing.T) {
 
 	lyr = h.oldestResultInBuffer()
 	require.True(t, lyr == 2)
-
 }
