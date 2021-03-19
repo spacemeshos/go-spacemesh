@@ -140,8 +140,7 @@ peerLoop:
 		wg.Add(1)
 		go func(pubkey p2pcrypto.PublicKey) {
 			// TODO: replace peer ?
-			err := p.net.SendMessage(ctx, pubkey, nextProt, payload)
-			if err != nil {
+			if err := p.net.SendMessage(ctx, pubkey, nextProt, payload); err != nil {
 				p.WithContext(ctx).With().Warning("failed sending",
 					log.FieldNamed("to", pubkey),
 					log.Err(err))

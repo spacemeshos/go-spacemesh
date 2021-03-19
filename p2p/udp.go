@@ -134,17 +134,17 @@ func (mux *UDPMux) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, prot
 
 // SendWrappedMessage is a proxy method to the sendMessageImpl. it sends a wrapped message and used within MessageServer
 func (mux *UDPMux) SendWrappedMessage(ctx context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
-	return mux.sendMessageImpl(nodeID, protocol, payload)
+	return mux.sendMessageImpl(ctx, nodeID, protocol, payload)
 }
 
 // SendMessage is a proxy method to the sendMessageImpl.
-func (mux *UDPMux) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error {
-	return mux.sendMessageImpl(peerPubkey, protocol, service.DataBytes{Payload: payload})
+func (mux *UDPMux) SendMessage(ctx context.Context, peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error {
+	return mux.sendMessageImpl(ctx, peerPubkey, protocol, service.DataBytes{Payload: payload})
 }
 
 // sendMessageImpl finds the peer address, wraps the message as a protocol message with p2p metadata and sends it.
 // it handles looking up the peer ip address and encrypting the message.
-func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol string, payload service.Data) error {
+func (mux *UDPMux) sendMessageImpl(ctx context.Context, peerPubkey p2pcrypto.PublicKey, protocol string, payload service.Data) error {
 	var err error
 	var peer *node.Info
 
@@ -156,7 +156,7 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 
 	addr := &net.UDPAddr{IP: net.ParseIP(peer.IP.String()), Port: int(peer.DiscoveryPort)}
 
-	conn, err := mux.cpool.GetConnection(context.TODO(), addr, peer.PublicKey())
+	conn, err := mux.cpool.GetConnection(ctx, addr, peer.PublicKey())
 
 	if err != nil {
 		return err
@@ -201,7 +201,7 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 		return err
 	}
 
-	mux.logger.With().Debug("sent udp message",
+	mux.logger.WithContext(ctx).With().Debug("sent udp message",
 		log.String("protocol", protocol),
 		log.String("to", peer.String()),
 		log.Int("len", len(realfinal)))

@@ -62,8 +62,8 @@ func TestPropagateMessage(t *testing.T) {
 	peersMu := sync.Mutex{}
 	handledPeers := make(map[p2ppeers.Peer]bool)
 	net.EXPECT().
-		SendMessage(gomock.Any(), gomock.Any(), "test", []byte("test")).
-		Do(func(peer p2pcrypto.PublicKey, _ ...interface{}) {
+		SendMessage(context.TODO(), gomock.Any(), "test", []byte("test")).
+		Do(func(ctx context.Context, peer p2pcrypto.PublicKey, _ ...interface{}) {
 			peersMu.Lock()
 			handledPeers[peer] = true
 			peersMu.Unlock()
