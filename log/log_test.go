@@ -214,9 +214,9 @@ func TestContextualLogging(t *testing.T) {
 		L, M, N, RequestID, SessionID, Foo string
 	}
 	expect := entry{
-		L: "INFO",
-		M: teststr,
-		N: mainLoggerName,
+		L:         "INFO",
+		M:         teststr,
+		N:         mainLoggerName,
 		RequestID: reqID,
 	}
 	got := entry{}
@@ -229,11 +229,11 @@ func TestContextualLogging(t *testing.T) {
 	contextualLogger = AppLog.WithContext(ctx)
 	contextualLogger.Info(teststr)
 	expect = entry{
-		L: "INFO",
-		M: teststr,
-		N: mainLoggerName,
+		L:         "INFO",
+		M:         teststr,
+		N:         mainLoggerName,
 		SessionID: sesID,
-		Foo: "bar",
+		Foo:       "bar",
 	}
 	got = entry{}
 	r.NoError(json.Unmarshal(buf.Bytes(), &got))
