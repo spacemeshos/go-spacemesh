@@ -1671,11 +1671,11 @@ func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 	b.ActiveSet = &[]types.ATXID{atx1}
 
 	b.ATXID = *types.EmptyATXID
-	_, _, err = s.blockSyntacticValidation(b)
+	_, _, err = s.blockSyntacticValidation(context.TODO(), b)
 	r.EqualError(err, errInvalidATXID.Error())
 
 	b.ATXID = goldenATXID
-	_, _, err = s.blockSyntacticValidation(b)
+	_, _, err = s.blockSyntacticValidation(context.TODO(), b)
 	r.EqualError(err, errInvalidATXID.Error())
 }
 

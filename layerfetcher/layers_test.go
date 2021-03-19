@@ -107,7 +107,7 @@ func (m mockFetcher) GetHashes(hash []types.Hash32, hint fetch.Hint, validateAnd
 type mockBlocks struct {
 }
 
-func (m mockBlocks) HandleBlockData(date []byte, fetcher service.Fetcher) error {
+func (m mockBlocks) HandleBlockData(ctx context.Context, date []byte, fetcher service.Fetcher) error {
 	panic("implement me")
 }
 
@@ -168,22 +168,22 @@ func Test_receiveLayerHash(t *testing.T) {
 
 	hashRes := RandomHash()
 	// test happy flow - get 4 responses
-	l.receiveLayerHash(1, net.peers[0], numOfPeers, hashRes.Bytes(), nil)
+	l.receiveLayerHash(context.TODO(), 1, net.peers[0], numOfPeers, hashRes.Bytes(), nil)
 	assert.Equal(t, net.sendCalled, 0)
 
 	// test aggregation by hash
 	hashRes2 := RandomHash()
 	for i := 1; i < numOfPeers; i++ {
-		l.receiveLayerHash(1, net.peers[i], numOfPeers, hashRes2.Bytes(), nil)
+		l.receiveLayerHash(context.TODO(), 1, net.peers[i], numOfPeers, hashRes2.Bytes(), nil)
 	}
 
 	assert.Equal(t, net.sendCalled, 2)
 
 	//test error flow
-	l.receiveLayerHash(1, net.peers[0], numOfPeers, hashRes.Bytes(), nil)
+	l.receiveLayerHash(context.TODO(), 1, net.peers[0], numOfPeers, hashRes.Bytes(), nil)
 
 	for i := 1; i < numOfPeers; i++ {
-		l.receiveLayerHash(1, net.peers[i], numOfPeers, nil, fmt.Errorf("error"))
+		l.receiveLayerHash(context.TODO(), 1, net.peers[i], numOfPeers, nil, fmt.Errorf("error"))
 	}
 	// no additional sends should happen
 	assert.Equal(t, net.sendCalled, 2)
@@ -198,7 +198,7 @@ func TestLogic_PollLayer(t *testing.T) {
 		net.peers = append(net.peers, p2pcrypto.NewRandomPubkey())
 	}
 
-	l.PollLayer(1)
+	l.PollLayer(context.TODO(), 1)
 
 	assert.Equal(t, numOfPeers, net.sendCalled)
 }

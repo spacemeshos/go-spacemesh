@@ -47,7 +47,7 @@ func (*fetchMock) GetTxs([]types.TransactionID) error {
 	return nil
 }
 
-func (*fetchMock) GetBlocks([]types.BlockID) error {
+func (*fetchMock) GetBlocks(context.Context, []types.BlockID) error {
 	return nil
 }
 

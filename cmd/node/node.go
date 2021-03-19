@@ -630,9 +630,9 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, atxdb, swarm, msh, nipstBuilder, postClient, clock, syncer, store, app.addLogger("atxBuilder", lg))
 
-	gossipListener.AddListener(state.IncomingTxProtocol, priorityq.Low, processor.HandleTxData)
-	gossipListener.AddListener(activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
-	gossipListener.AddListener(blocks.NewBlockProtocol, priorityq.High, blockListener.HandleBlock)
+	gossipListener.AddListener(ctx, state.IncomingTxProtocol, priorityq.Low, processor.HandleTxData)
+	gossipListener.AddListener(ctx, activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
+	gossipListener.AddListener(ctx, blocks.NewBlockProtocol, priorityq.High, blockListener.HandleBlock)
 
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener

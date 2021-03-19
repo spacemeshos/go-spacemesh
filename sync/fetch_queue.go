@@ -12,7 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type fetchPoetProofFunc func(ctx context.Context, poetProofRef types.Hash32) error
+type fetchPoetProofFunc func(ctx context.Context, poetProofRef []byte) error
 type sValidateAtxFunc func(atx *types.ActivationTx) error
 type sFetchAtxFunc func(atx *types.ActivationTx) error
 type checkLocalFunc func(ids []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32)
@@ -333,7 +333,7 @@ func fetchProofCalcID(ctx context.Context, logger log.Log, fetchPoetProof fetchP
 	for _, item := range fj.items {
 		atx := item.(*types.ActivationTx)
 		atx.CalcAndSetID() //todo put it somewhere that will cause less confusion
-		if err := fetchPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
+		if err := fetchPoetProof(ctx, atx.GetPoetProofRef().Bytes()); err != nil {
 			logger.With().Error("received atx with syntactically invalid or missing PoET proof",
 				atx.ID(),
 				log.String("short_poet_proof_ref", fmt.Sprintf("%x", atx.GetShortPoetProofRef())),

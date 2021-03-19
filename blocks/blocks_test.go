@@ -126,7 +126,7 @@ func (f fetchMock) GetTxs(IDs []types.TransactionID) error {
 	return f.returnError()
 }
 
-func (f fetchMock) GetBlocks(IDs []types.BlockID) error {
+func (f fetchMock) GetBlocks(ctx context.Context, IDs []types.BlockID) error {
 	return f.returnError()
 }
 
@@ -192,16 +192,16 @@ func TestBlockHandler_BlockSyntacticValidation(t *testing.T) {
 	b := &types.Block{}
 
 	fetch := newFetchMock()
-	err := s.blockSyntacticValidation(b, fetch)
+	err := s.blockSyntacticValidation(context.TODO(), b, fetch)
 	r.EqualError(err, errNoActiveSet.Error())
 
 	b.ActiveSet = &[]types.ATXID{}
-	err = s.blockSyntacticValidation(b, fetch)
+	err = s.blockSyntacticValidation(context.TODO(), b, fetch)
 	r.EqualError(err, errZeroActiveSet.Error())
 
 	b.ActiveSet = &[]types.ATXID{atx1, atx2, atx3}
 	b.TxIDs = []types.TransactionID{txid1, txid2, txid1}
-	err = s.blockSyntacticValidation(b, fetch)
+	err = s.blockSyntacticValidation(context.TODO(), b, fetch)
 	r.EqualError(err, errDupTx.Error())
 }
 
@@ -230,11 +230,11 @@ func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	b.RefBlock = &block1ID
 	b.ATXID = a.ID()
 	fetch.retError = true
-	err := s.blockSyntacticValidation(b, fetch)
+	err := s.blockSyntacticValidation(context.TODO(), b, fetch)
 	r.Equal(err, fmt.Errorf("failed to fetch ref block %v e: error", *b.RefBlock))
 
 	fetch.retError = false
-	err = s.blockSyntacticValidation(b, fetch)
+	err = s.blockSyntacticValidation(context.TODO(), b, fetch)
 	r.NoError(err)
 	assert.Equal(t, 2, fetch.getBlockCalled[block1ID])
 }

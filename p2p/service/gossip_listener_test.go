@@ -35,7 +35,7 @@ func (m *syncMock) GetTxs(IDs []types.TransactionID) error {
 	return nil
 }
 
-func (m *syncMock) GetBlocks(IDs []types.BlockID) error {
+func (m *syncMock) GetBlocks(ctx context.Context, IDs []types.BlockID) error {
 	return nil
 }
 
@@ -68,18 +68,18 @@ func Test_AddListener(t *testing.T) {
 	wg := sync.WaitGroup{}
 
 	wg.Add(2)
-	fun := func(data GossipMessage, syncer Fetcher) {
+	fun := func(ctx context.Context, data GossipMessage, syncer Fetcher) {
 		atomic.AddInt32(&channelCount, 1)
 		wg.Done()
 	}
 
-	fun2 := func(data GossipMessage, syncer Fetcher) {
+	fun2 := func(ctx context.Context, data GossipMessage, syncer Fetcher) {
 		atomic.AddInt32(&secondChannel, 1)
 		wg.Done()
 	}
 
-	l.AddListener("channel1", priorityq.Mid, fun)
-	l.AddListener("channel2", priorityq.Mid, fun2)
+	l.AddListener(context.TODO(), "channel1", priorityq.Mid, fun)
+	l.AddListener(context.TODO(), "channel2", priorityq.Mid, fun2)
 
 	assert.NoError(t, n1.Broadcast("channel1", []byte{}))
 	assert.NoError(t, n1.Broadcast("channel2", []byte{}))
@@ -98,16 +98,16 @@ func Test_AddListener_notSynced(t *testing.T) {
 
 	var channelCount, secondChannel int32
 
-	fun := func(data GossipMessage, syncer Fetcher) {
+	fun := func(ctx context.Context, data GossipMessage, syncer Fetcher) {
 		atomic.AddInt32(&channelCount, 1)
 	}
 
-	fun2 := func(data GossipMessage, syncer Fetcher) {
+	fun2 := func(ctx context.Context, data GossipMessage, syncer Fetcher) {
 		atomic.AddInt32(&secondChannel, 1)
 	}
 
-	l.AddListener("channel1", priorityq.Mid, fun)
-	l.AddListener("channel2", priorityq.Mid, fun2)
+	l.AddListener(context.TODO(), "channel1", priorityq.Mid, fun)
+	l.AddListener(context.TODO(), "channel2", priorityq.Mid, fun2)
 
 	assert.NoError(t, n1.Broadcast("channel1", []byte{}))
 	assert.NoError(t, n1.Broadcast("channel2", []byte{}))

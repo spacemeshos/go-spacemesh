@@ -686,23 +686,24 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, blockIds 
 	return blocks, err
 }
 
-func (s *Syncer) getBlocks(jobID types.LayerID, blockIds []types.BlockID) error {
+func (s *Syncer) getBlocks(ctx context.Context, jobID types.LayerID, blockIds []types.BlockID) error {
+	logger := s.WithContext(ctx).WithFields(jobID)
 	ch := make(chan bool, 1)
-	foo := func(res bool) error {
-		s.With().Info("get blocks for layer done", jobID)
+	foo := func(ctx context.Context, res bool) error {
+		logger.Info("get blocks for layer done")
 		ch <- res
 		return nil
 	}
 
 	tmr := newMilliTimer(syncLayerTime)
-	if res, err := s.blockQueue.addDependencies(jobID, blockIds, foo); err != nil {
+	if res, err := s.blockQueue.addDependencies(ctx, jobID, blockIds, foo); err != nil {
 		return fmt.Errorf("failed adding layer %v blocks to queue %v", jobID, err)
 	} else if res == false {
-		s.With().Info("no missing blocks for layer", jobID)
+		logger.Info("no missing blocks for layer")
 		return nil
 	}
 
-	s.With().Info("wait for blocks", jobID, log.Int("num_blocks", len(blockIds)))
+	logger.With().Info("wait for blocks", log.Int("num_blocks", len(blockIds)))
 	select {
 	case <-s.exit:
 		return fmt.Errorf("received interrupt")
@@ -718,8 +719,8 @@ func (s *Syncer) getBlocks(jobID types.LayerID, blockIds []types.BlockID) error 
 }
 
 // GetBlocks fetches list of blocks from peers
-func (s *Syncer) GetBlocks(blockIds []types.BlockID) error {
-	return s.getBlocks(types.LayerID(rand.Int31()), blockIds)
+func (s *Syncer) GetBlocks(ctx context.Context, blockIds []types.BlockID) error {
+	return s.getBlocks(ctx, types.LayerID(rand.Int31()), blockIds)
 }
 
 func (s *Syncer) fastValidation(block *types.Block) error {
