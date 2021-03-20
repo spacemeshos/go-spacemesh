@@ -196,7 +196,7 @@ func (mux *UDPMux) sendMessageImpl(ctx context.Context, peerPubkey p2pcrypto.Pub
 
 	realfinal := p2pcrypto.PrependPubkey(final, mux.local.PublicKey())
 
-	err = conn.Send(realfinal)
+	err = conn.Send(ctx, realfinal)
 	if err != nil {
 		return err
 	}

@@ -396,7 +396,7 @@ func (s *Switch) sendMessageImpl(ctx context.Context, peerPubKey p2pcrypto.Publi
 		return errors.New("encryption failed")
 	}
 
-	err = conn.Send(final)
+	err = conn.Send(ctx, final)
 
 	s.logger.WithContext(ctx).With().Debug("direct message sent successfully",
 		log.FieldNamed("peer_id", conn.RemotePublicKey()))

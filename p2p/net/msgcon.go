@@ -31,7 +31,7 @@ type MsgConnection struct {
 	w           io.Writer
 	closed      bool
 	deadliner   deadliner
-	messages    chan []byte
+	messages    chan msgToSend
 	stopSending chan struct{}
 
 	msgSizeLimit int
@@ -54,7 +54,7 @@ func newMsgConnection(conn readWriteCloseAddresser, netw networker,
 		deadliner:    conn,
 		networker:    netw,
 		session:      session,
-		messages:     make(chan []byte, MessageQueueSize),
+		messages:     make(chan msgToSend, MessageQueueSize),
 		stopSending:  make(chan struct{}),
 		msgSizeLimit: msgSizeLimit,
 	}
@@ -147,28 +147,32 @@ func (c *MsgConnection) publish(ctx context.Context, message []byte) {
 func (c *MsgConnection) sendListener() {
 	for {
 		select {
-		case buf := <-c.messages:
+		case m := <-c.messages:
 			//todo: we are hiding the error here...
-			err := c.SendSock(buf)
-			if err != nil {
-				log.Error("cannot send message to peer %v", err)
+			if err := c.SendSock(m.payload); err != nil {
+				log.With().Error("cannot send message to peer",
+					log.String("requestId", m.reqID),
+					log.Err(err))
 			}
 		case <-c.stopSending:
 			return
-
 		}
 	}
 }
 
 // Send pushes a message to the messages queue
-func (c *MsgConnection) Send(m []byte) error {
+func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
 	c.wmtx.Lock()
 	if c.closed {
 		c.wmtx.Unlock()
 		return fmt.Errorf("connection was closed")
 	}
 	c.wmtx.Unlock()
-	c.messages <- m
+
+	// try to extract a requestID from the context
+	reqID, _ := log.ExtractRequestID(ctx)
+
+	c.messages <- msgToSend{m, reqID}
 	return nil
 }
 
