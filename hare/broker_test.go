@@ -91,7 +91,7 @@ func TestBroker_Received(t *testing.T) {
 	assert.Nil(t, err)
 
 	serMsg := createMessage(t, instanceID1)
-	n2.Broadcast(protoName, serMsg)
+	n2.Broadcast(context.TODO(), protoName, serMsg)
 	waitForMessages(t, inbox, instanceID1, 1)
 }
 
@@ -117,7 +117,7 @@ func TestBroker_Abort(t *testing.T) {
 
 func sendMessages(t *testing.T, instanceID instanceID, n *service.Node, count int) {
 	for i := 0; i < count; i++ {
-		n.Broadcast(protoName, createMessage(t, instanceID))
+		n.Broadcast(context.TODO(), protoName, createMessage(t, instanceID))
 	}
 }
 

@@ -19,7 +19,7 @@ type StateAPI interface {
 
 // NetworkAPI is an API to nodes gossip network
 type NetworkAPI interface {
-	Broadcast(channel string, data []byte) error
+	Broadcast(ctx context.Context, channel string, data []byte) error
 	SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey)
 }
 

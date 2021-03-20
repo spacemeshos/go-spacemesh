@@ -26,7 +26,7 @@ type meshProvider interface {
 }
 
 type broadcaster interface {
-	Broadcast(channel string, data []byte) error
+	Broadcast(ctx context.Context, channel string, data []byte) error
 }
 
 type poetNumberOfTickProvider struct {
@@ -141,7 +141,7 @@ func (b *Builder) Start(ctx context.Context) {
 		return
 	}
 	atomic.StoreUint32(&b.started, 1)
-	go b.loop()
+	go b.loop(ctx)
 }
 
 // Stop stops the atx builder.
@@ -175,7 +175,7 @@ func (b *Builder) waitOrStop(ch chan struct{}) error {
 }
 
 // loop is the main loop that tries to create an atx per tick received from the global clock
-func (b *Builder) loop() {
+func (b *Builder) loop(ctx context.Context) {
 	err := b.loadChallenge()
 	if err != nil {
 		log.Info("challenge not loaded: %s", err)
@@ -193,7 +193,7 @@ func (b *Builder) loop() {
 			return
 		default:
 		}
-		if err := b.PublishActivationTx(); err != nil {
+		if err := b.PublishActivationTx(ctx); err != nil {
 			if _, stopRequested := err.(StopRequestedError); stopRequested {
 				return
 			}
@@ -361,7 +361,7 @@ func (b *Builder) loadChallenge() error {
 }
 
 // PublishActivationTx attempts to publish an atx, it returns an error if an atx cannot be created.
-func (b *Builder) PublishActivationTx() error {
+func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	b.discardChallengeIfStale()
 	if b.challenge != nil {
 		b.log.With().Info("using existing atx challenge", b.currentEpoch())
@@ -423,7 +423,7 @@ func (b *Builder) PublishActivationTx() error {
 
 	atxReceived := b.db.AwaitAtx(atx.ID())
 	defer b.db.UnsubscribeAtx(atx.ID())
-	size, err := b.signAndBroadcast(atx)
+	size, err := b.signAndBroadcast(ctx, atx)
 	if err != nil {
 		b.log.With().Error("failed to publish atx", append(atx.Fields(size), log.Err(err))...)
 		return err
@@ -464,7 +464,7 @@ func (b *Builder) discardChallenge() {
 	}
 }
 
-func (b *Builder) signAndBroadcast(atx *types.ActivationTx) (int, error) {
+func (b *Builder) signAndBroadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {
 	if err := b.SignAtx(atx); err != nil {
 		return 0, fmt.Errorf("failed to sign ATX: %v", err)
 	}
@@ -472,7 +472,7 @@ func (b *Builder) signAndBroadcast(atx *types.ActivationTx) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to serialize ATX: %v", err)
 	}
-	if err := b.net.Broadcast(AtxProtocol, buf); err != nil {
+	if err := b.net.Broadcast(ctx, AtxProtocol, buf); err != nil {
 		return 0, fmt.Errorf("failed to broadcast ATX: %v", err)
 	}
 	return len(buf), nil

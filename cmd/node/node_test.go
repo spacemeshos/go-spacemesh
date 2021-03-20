@@ -396,7 +396,7 @@ type NetMock struct {
 func (NetMock) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey) {
 	return nil, nil
 }
-func (NetMock) Broadcast(string, []byte) error {
+func (NetMock) Broadcast(context.Context, string, []byte) error {
 	return nil
 }
 
