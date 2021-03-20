@@ -484,6 +484,12 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 // sends a message to the network.
 // Returns true if the message is assumed to be sent, false otherwise.
 func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
+	// invalid msg
+	if msg == nil {
+		proc.WithContext(ctx).Error("sendMessage was called with nil")
+		return false
+	}
+
 	// generate a new requestID for this message
 	ctx = log.WithNewRequestID(ctx,
 		log.String("current_set", proc.s.String()),
@@ -491,12 +497,6 @@ func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
 		log.Int32("current_k", proc.k),
 		types.LayerID(proc.instanceID))
 	logger := proc.WithContext(ctx)
-
-	// invalid msg
-	if msg == nil {
-		logger.Error("sendMessage was called with nil")
-		return false
-	}
 
 	if err := proc.network.Broadcast(ctx, protoName, msg.Bytes()); err != nil {
 		logger.With().Error("could not broadcast round message", log.Err(err))
