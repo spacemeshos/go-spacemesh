@@ -638,8 +638,8 @@ func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcry
 
 // Broadcast creates a gossip message signs it and disseminate it to neighbors.
 // this message must be validated by our own node first just as any other message.
-func (s *Switch) Broadcast(protocol string, payload []byte) error {
-	return s.gossip.Broadcast(payload, protocol)
+func (s *Switch) Broadcast(ctx context.Context, protocol string, payload []byte) error {
+	return s.gossip.Broadcast(ctx, payload, protocol)
 }
 
 // Neighborhood : a small circle of peers we try to keep connections to. if a connection

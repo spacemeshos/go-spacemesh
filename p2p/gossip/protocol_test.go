@@ -71,7 +71,7 @@ func TestPropagateMessage(t *testing.T) {
 		}).
 		AnyTimes()
 
-	protocol.propagateMessage(context.TODO(), []byte("test"), types.CalcHash12([]byte("test")), "test", exclude)
+	protocol.propagateMessage(context.TODO(), []byte("test"), "test", exclude)
 
 	assert.Equal(t, false, handledPeers[exclude], "peer should be excluded")
 	for i := 1; i < len(peers); i++ {

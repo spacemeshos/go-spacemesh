@@ -66,7 +66,7 @@ func (m *mockP2p) RegisterGossipProtocol(string, priorityq.Priority) chan servic
 	return make(chan service.GossipMessage)
 }
 
-func (m *mockP2p) Broadcast(string, []byte) error {
+func (m *mockP2p) Broadcast(context.Context, string, []byte) error {
 	m.count++
 	return m.err
 }
@@ -565,7 +565,7 @@ type mockNet struct {
 	err           error
 }
 
-func (m *mockNet) Broadcast(protocol string, payload []byte) error {
+func (m *mockNet) Broadcast(ctx context.Context, protocol string, payload []byte) error {
 	m.callBroadcast++
 	return m.err
 }
