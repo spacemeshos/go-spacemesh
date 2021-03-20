@@ -299,7 +299,7 @@ func (s SpacemeshGrpcService) StartMining(ctx context.Context, message *pb.InitP
 	if err != nil {
 		return nil, err
 	}
-	err = s.Mining.StartPost(addr, message.LogicalDrive, message.CommitmentSize)
+	err = s.Mining.StartPost(ctx, addr, message.LogicalDrive, message.CommitmentSize)
 	if err != nil {
 		return nil, err
 	}

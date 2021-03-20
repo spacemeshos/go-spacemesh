@@ -188,8 +188,7 @@ func TestLayers_AddBlock(t *testing.T) {
 
 func addLayer(id types.LayerID, layerSize int, msh *Mesh) *types.Layer {
 	for i := 0; i < layerSize; i++ {
-
-		block1 := types.NewExistingBlock(id, []byte(rand.String(8)))
+		block1 := types.NewExistingBlock(id, []byte(rand.String(8)), nil)
 		block1.Initialize()
 
 		err := msh.AddBlock(block1)
