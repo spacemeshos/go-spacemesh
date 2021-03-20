@@ -2,6 +2,7 @@ package state
 
 import (
 	"container/list"
+	"context"
 	"fmt"
 	"math/big"
 	"sync"
@@ -340,7 +341,7 @@ func (tp *TransactionProcessor) HandleTxData(data service.GossipMessage, syncer 
 		log.Uint64("gas", tx.GasLimit),
 		log.String("recipient", tx.Recipient.String()),
 		log.String("origin", tx.Origin().String()))
-	data.ReportValidation(ctx, IncomingTxProtocol)
+	data.ReportValidation(context.TODO(), IncomingTxProtocol)
 	tp.pool.Put(tx.ID(), tx)
 }
 

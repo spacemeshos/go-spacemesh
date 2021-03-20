@@ -119,7 +119,7 @@ func (bl *BlockListener) handleBlock(ctx context.Context, data service.GossipMes
 	)
 	// check if known
 	if _, err := bl.GetBlock(blk.ID()); err == nil {
-		data.ReportValidation(config.NewBlockProtocol)
+		data.ReportValidation(ctx, config.NewBlockProtocol)
 		logger.Info("we already know this block")
 		return
 	}
@@ -128,7 +128,7 @@ func (bl *BlockListener) handleBlock(ctx context.Context, data service.GossipMes
 		logger.With().Error("failed to validate block", log.Err(err))
 		return
 	}
-	data.ReportValidation(config.NewBlockProtocol)
+	data.ReportValidation(ctx, config.NewBlockProtocol)
 	if err := bl.AddBlockWithTxs(&blk, txs, atxs); err != nil {
 		logger.With().Error("failed to add block to database", log.Err(err))
 		return

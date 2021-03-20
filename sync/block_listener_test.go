@@ -634,7 +634,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	data, err := types.InterfaceToBytes(&blk)
 	require.NoError(t, err)
 	bl1.ForceSync()
-	err = n2.Broadcast(config.NewBlockProtocol, data)
+	err = n2.Broadcast(context.TODO(), config.NewBlockProtocol, data)
 	assert.NoError(t, err)
 
 	time.Sleep(1 * time.Second)
