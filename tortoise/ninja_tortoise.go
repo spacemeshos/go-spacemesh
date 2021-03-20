@@ -332,7 +332,7 @@ func (ni *ninjaTortoise) globalOpinion(v vec, layerSize int, delta float64) vec 
 
 	if float64(netSupport) > threshold {
 		return support
-	} else if float64(netSupport) < -1 * threshold {
+	} else if float64(netSupport) < -1*threshold {
 		return against
 	} else {
 		// in future, use weak coin here for self-healing
