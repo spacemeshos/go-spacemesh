@@ -93,7 +93,7 @@ type NetMock struct {
 	atxDb            atxDBProvider
 }
 
-func (n *NetMock) Broadcast(_ string, d []byte) error {
+func (n *NetMock) Broadcast(_ context.Context, _ string, d []byte) error {
 	n.lastTransmission = d
 	go n.hookToAtxPool(d)
 	return nil
@@ -193,7 +193,7 @@ type FaultyNetMock struct {
 	retErr bool
 }
 
-func (n *FaultyNetMock) Broadcast(_ string, d []byte) error {
+func (n *FaultyNetMock) Broadcast(_ context.Context, _ string, d []byte) error {
 	n.bt = d
 	if n.retErr {
 		return fmt.Errorf("faulty")
@@ -322,7 +322,7 @@ func publishAtx(b *Builder, meshLayer types.LayerID, clockEpoch types.EpochID, b
 		return NewNIPSTWithChallenge(challenge, poetBytes), nil
 	}
 	layerClockMock.currentLayer = clockEpoch.FirstLayer() + 3
-	err = b.PublishActivationTx()
+	err = b.PublishActivationTx(context.TODO())
 	nipstBuilderMock.buildNipstFunc = nil
 	return net.lastTransmission != nil, builtNipst, err
 }
@@ -705,7 +705,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	setActivesetSizeInCache(t, defaultActiveSetSize)
 
 	layerClockMock.currentLayer = types.EpochID(1).FirstLayer() + 3
-	err = b.PublishActivationTx()
+	err = b.PublishActivationTx(context.TODO())
 	assert.EqualError(t, err, "target epoch has passed")
 
 	// test load in correct epoch
@@ -713,7 +713,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	err = b.loadChallenge()
 	assert.NoError(t, err)
 	layers.latestLayer = 22
-	err = b.PublishActivationTx()
+	err = b.PublishActivationTx(context.TODO())
 	assert.NoError(t, err)
 	act := newActivationTx(b.nodeID, 2, atx.ID(), atx.PubLayerID+10, 0, atx.ID(), coinbase, 0, defaultView, npst2)
 	err = b.SignAtx(act)
@@ -731,7 +731,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	err = b.loadChallenge()
 	assert.NoError(t, err)
 	layerClockMock.currentLayer = types.EpochID(4).FirstLayer() + 3
-	err = b.PublishActivationTx()
+	err = b.PublishActivationTx(context.TODO())
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
 	assert.EqualError(t, err, "target epoch has passed")
 	assert.True(t, db.hadNone)

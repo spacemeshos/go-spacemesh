@@ -80,7 +80,7 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 	for i := 0; i < MSGS; i++ {
 		msg := []byte(RandString(MSGSIZE))
 		rnd := rand.Int31n(int32(len(its.Instances)))
-		_ = its.Instances[rnd].Broadcast(exampleGossipProto, msg)
+		_ = its.Instances[rnd].Broadcast(context.TODO(), exampleGossipProto, msg)
 		for _, mc := range its.gossipProtocols {
 			ctx := ctx
 			mc := mc

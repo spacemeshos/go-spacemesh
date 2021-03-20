@@ -9,7 +9,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -39,7 +38,7 @@ func TestProcessMessage(t *testing.T) {
 
 	isSent = false
 	err = protocol.processMessage(context.TODO(), p2pcrypto.NewRandomPubkey(), "test", service.DataBytes{Payload: []byte("test")})
-	assert.NoError(t, err, "err  should be nil")
+	assert.NoError(t, err, "err should be nil")
 	assert.Equal(t, false, isSent, "message shouldn't be sent, cause it's already done previously")
 }
 

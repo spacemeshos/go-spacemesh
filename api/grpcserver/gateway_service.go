@@ -31,7 +31,7 @@ func NewGatewayService(net api.NetworkAPI) *GatewayService {
 }
 
 // BroadcastPoet accepts a binary poet message to broadcast to the network
-func (s GatewayService) BroadcastPoet(_ context.Context, in *pb.BroadcastPoetRequest) (*pb.BroadcastPoetResponse, error) {
+func (s GatewayService) BroadcastPoet(ctx context.Context, in *pb.BroadcastPoetRequest) (*pb.BroadcastPoetResponse, error) {
 	log.Info("GRPC GatewayService.BroadcastPoet")
 
 	if len(in.Data) == 0 {
@@ -39,7 +39,7 @@ func (s GatewayService) BroadcastPoet(_ context.Context, in *pb.BroadcastPoetReq
 	}
 
 	// Note that we broadcast a poet message regardless of whether or not we are currently in sync
-	if err := s.Network.Broadcast(activation.PoetProofProtocol, in.Data); err != nil {
+	if err := s.Network.Broadcast(ctx, activation.PoetProofProtocol, in.Data); err != nil {
 		log.Error("failed to broadcast poet message: %s", err)
 		return nil, status.Errorf(codes.Internal, "failed to broadcast message")
 	}

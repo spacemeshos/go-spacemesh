@@ -81,8 +81,8 @@ func Test_AddListener(t *testing.T) {
 	l.AddListener(context.TODO(), "channel1", priorityq.Mid, fun)
 	l.AddListener(context.TODO(), "channel2", priorityq.Mid, fun2)
 
-	assert.NoError(t, n1.Broadcast("channel1", []byte{}))
-	assert.NoError(t, n1.Broadcast("channel2", []byte{}))
+	assert.NoError(t, n1.Broadcast(context.TODO(), "channel1", []byte{}))
+	assert.NoError(t, n1.Broadcast(context.TODO(), "channel2", []byte{}))
 
 	wg.Wait()
 	assert.Equal(t, atomic.LoadInt32(&channelCount), int32(1))
@@ -109,8 +109,8 @@ func Test_AddListener_notSynced(t *testing.T) {
 	l.AddListener(context.TODO(), "channel1", priorityq.Mid, fun)
 	l.AddListener(context.TODO(), "channel2", priorityq.Mid, fun2)
 
-	assert.NoError(t, n1.Broadcast("channel1", []byte{}))
-	assert.NoError(t, n1.Broadcast("channel2", []byte{}))
+	assert.NoError(t, n1.Broadcast(context.TODO(), "channel1", []byte{}))
+	assert.NoError(t, n1.Broadcast(context.TODO(), "channel2", []byte{}))
 
 	assert.Equal(t, atomic.LoadInt32(&channelCount), int32(0))
 	assert.Equal(t, atomic.LoadInt32(&secondChannel), int32(0))
