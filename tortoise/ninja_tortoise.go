@@ -326,11 +326,16 @@ func getIdsFromSet(bids map[types.BlockID]struct{}) patternID {
 func (ni *ninjaTortoise) globalOpinion(v vec, layerSize int, delta float64) vec {
 	threshold := globalThreshold * delta * float64(layerSize)
 	ni.logger.With().Debug("global opinion", v, log.String("threshold", fmt.Sprint(threshold)))
-	if float64(v[0]) > threshold {
+
+	// calculate net support
+	netSupport := v[0] - v[1]
+
+	if float64(netSupport) > threshold {
 		return support
-	} else if float64(v[1]) > threshold {
+	} else if float64(netSupport) < -1 * threshold {
 		return against
 	} else {
+		// in future, use weak coin here for self-healing
 		return abstain
 	}
 }
