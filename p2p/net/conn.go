@@ -37,6 +37,11 @@ const (
 // MessageQueueSize is the size for queue of messages before pushing them on the socket
 const MessageQueueSize = 250
 
+type msgToSend struct {
+	payload []byte
+	reqID   string
+}
+
 // Connection is an interface stating the API of all secured connections in the system
 type Connection interface {
 	fmt.Stringer
@@ -51,7 +56,7 @@ type Connection interface {
 	Session() NetworkSession
 	SetSession(session NetworkSession)
 
-	Send(m []byte) error
+	Send(ctx context.Context, m []byte) error
 	Close() error
 	Closed() bool
 }
@@ -73,7 +78,7 @@ type FormattedConnection struct {
 	w           formattedWriter
 	closed      bool
 	deadliner   deadliner
-	messages    chan []byte
+	messages    chan msgToSend
 	stopSending chan struct{}
 	close       io.Closer
 
@@ -125,7 +130,7 @@ func newConnection(conn readWriteCloseAddresser, netw networker,
 		deadliner:    conn,
 		networker:    netw,
 		session:      session,
-		messages:     make(chan []byte, MessageQueueSize),
+		messages:     make(chan msgToSend, MessageQueueSize),
 		stopSending:  make(chan struct{}),
 		msgSizeLimit: msgSizeLimit,
 	}
@@ -218,11 +223,12 @@ func (c *FormattedConnection) publish(ctx context.Context, message []byte) {
 func (c *FormattedConnection) sendListener() {
 	for {
 		select {
-		case buf := <-c.messages:
+		case m := <-c.messages:
 			//todo: we are hiding the error here...
-			err := c.SendSock(buf)
-			if err != nil {
-				c.logger.With().Error("cannot send message to peer", log.Err(err))
+			if err := c.SendSock(m.payload); err != nil {
+				c.logger.With().Error("cannot send message to peer",
+					log.String("requestID", m.reqID),
+					log.Err(err))
 			}
 		case <-c.stopSending:
 			return
@@ -232,14 +238,18 @@ func (c *FormattedConnection) sendListener() {
 }
 
 // Send pushes a message into the queue if the connection is not closed.
-func (c *FormattedConnection) Send(m []byte) error {
+func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 	c.wmtx.Lock()
 	if c.closed {
 		c.wmtx.Unlock()
 		return fmt.Errorf("connection was closed")
 	}
 	c.wmtx.Unlock()
-	c.messages <- m
+
+	// try to extract a requestID from the context
+	reqID, _ := log.ExtractRequestID(ctx)
+
+	c.messages <- msgToSend{m, reqID}
 	return nil
 }
 

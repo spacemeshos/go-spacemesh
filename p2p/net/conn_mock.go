@@ -98,7 +98,7 @@ func (cm ConnectionMock) SendCount() int32 {
 }
 
 // Send mocks the interface.
-func (cm *ConnectionMock) Send(m []byte) error {
+func (cm *ConnectionMock) Send(ctx context.Context, m []byte) error {
 	atomic.AddInt32(&cm.sendCnt, int32(1))
 	time.Sleep(time.Duration(cm.sendDelayMs) * time.Millisecond)
 	return cm.sendRes

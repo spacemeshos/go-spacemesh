@@ -42,7 +42,7 @@ func TestSendMessage(t *testing.T) {
 	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
 	go conn.beginEventProcessing(context.TODO())
 	msg := "hello"
-	err := conn.Send([]byte(msg))
+	err := conn.Send(context.TODO(), []byte(msg))
 	assert.NoError(t, err)
 	select {
 	case <-rwcam.writeWaitChan:
