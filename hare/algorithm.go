@@ -37,7 +37,7 @@ type Rolacle interface {
 // NetworkService provides the registration and broadcast abilities in the network.
 type NetworkService interface {
 	RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage
-	Broadcast(protocol string, payload []byte) error
+	Broadcast(ctx context.Context, protocol string, payload []byte) error
 }
 
 // Signer provides signing and public-key getter.
@@ -484,6 +484,12 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 // sends a message to the network.
 // Returns true if the message is assumed to be sent, false otherwise.
 func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
+	// generate a new requestID for this message
+	ctx = log.WithNewRequestID(ctx,
+		log.String("current_set", proc.s.String()),
+		log.String("msg_type", msg.InnerMsg.Type.String()),
+		log.Int32("current_k", proc.k),
+		types.LayerID(proc.instanceID))
 	logger := proc.WithContext(ctx)
 
 	// invalid msg
@@ -492,7 +498,7 @@ func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
 		return false
 	}
 
-	if err := proc.network.Broadcast(protoName, msg.Bytes()); err != nil {
+	if err := proc.network.Broadcast(ctx, protoName, msg.Bytes()); err != nil {
 		logger.With().Error("could not broadcast round message", log.Err(err))
 		return false
 	}

@@ -124,14 +124,14 @@ func (m *p2pManipulator) RegisterGossipProtocol(protocol string, prio priorityq.
 	return wch
 }
 
-func (m *p2pManipulator) Broadcast(protocol string, payload []byte) error {
+func (m *p2pManipulator) Broadcast(ctx context.Context, protocol string, payload []byte) error {
 	msg, _ := MessageFromBuffer(payload)
 	if msg.InnerMsg.InstanceID == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != -1 {
 		log.Warning("Not broadcasting in manipulator")
 		return m.err
 	}
 
-	e := m.nd.Broadcast(protocol, payload)
+	e := m.nd.Broadcast(ctx, protocol, payload)
 	return e
 }
 

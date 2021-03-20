@@ -70,7 +70,7 @@ type Service interface {
 	RegisterDirectProtocol(protocol string) chan DirectMessage
 	SubscribePeerEvents() (new chan p2pcrypto.PublicKey, del chan p2pcrypto.PublicKey)
 	GossipReady() <-chan struct{}
-	Broadcast(protocol string, payload []byte) error
+	Broadcast(ctx context.Context, protocol string, payload []byte) error
 	Shutdown()
 }
 

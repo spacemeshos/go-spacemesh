@@ -409,7 +409,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 						events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot serialize block")
 						return
 					}
-					if err = t.network.Broadcast(blocks.NewBlockProtocol, bytes); err != nil {
+					if err = t.network.Broadcast(ctx, blocks.NewBlockProtocol, bytes); err != nil {
 						logger.With().Error("failed to send block", log.Err(err))
 					}
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "")

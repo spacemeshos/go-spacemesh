@@ -282,7 +282,7 @@ func (sn *Node) sleep(delay uint32) {
 }
 
 // Broadcast disseminates a message to all simulated nodes. sends to yourself first.
-func (sn *Node) Broadcast(protocol string, payload []byte) error {
+func (sn *Node) Broadcast(ctx context.Context, protocol string, payload []byte) error {
 	go func() {
 		sn.sleep(sn.sndDelay)
 		sn.sim.mutex.Lock()

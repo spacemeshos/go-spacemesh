@@ -84,9 +84,9 @@ func (p *Protocol) Close() {
 }
 
 // Broadcast is the actual broadcast procedure - process the message internally and loop on peers and add the message to their queues
-func (p *Protocol) Broadcast(payload []byte, nextProt string) error {
-	p.With().Debug("broadcasting message", log.String("from_type", nextProt))
-	return p.processMessage(context.TODO(), p.localNodePubkey, nextProt, service.DataBytes{Payload: payload})
+func (p *Protocol) Broadcast(ctx context.Context, payload []byte, nextProt string) error {
+	p.WithContext(ctx).With().Debug("broadcasting message", log.String("from_type", nextProt))
+	return p.processMessage(ctx, p.localNodePubkey, nextProt, service.DataBytes{Payload: payload})
 	//todo: should this ever return error ? then when processMessage should return error ?. should it block?
 }
 
@@ -108,28 +108,27 @@ func (p *Protocol) markMessageAsOld(h types.Hash12) bool {
 
 func (p *Protocol) processMessage(ctx context.Context, sender p2pcrypto.PublicKey, protocol string, msg service.Data) error {
 	h := types.CalcMessageHash12(msg.Bytes(), protocol)
-	fields := []log.LoggableField{
+	logger := p.WithContext(ctx).WithFields(
 		log.String("from", sender.String()),
 		log.String("protocol", protocol),
-		log.String("hash", util.Bytes2Hex(h[:])),
-	}
-	p.WithContext(ctx).With().Debug("checking gossip message newness", fields...)
+		log.String("hash", util.Bytes2Hex(h[:])))
+	logger.Debug("checking gossip message newness")
 	if p.markMessageAsOld(h) {
 		metrics.OldGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
 		// todo : - have some more metrics for termination
 		// todo	: - maybe tell the peer we got this message already?
 		// todo : - maybe block this peer since he sends us old messages
-		p.Log.WithContext(ctx).With().Debug("gossip message is old, dropping", fields...)
+		logger.Debug("gossip message is old, dropping")
 		return nil
 	}
 
-	p.Log.WithContext(ctx).Event().Debug("gossip message is new, processing", fields...)
+	logger.Event().Debug("gossip message is new, processing")
 	metrics.NewGossipMessages.With("protocol", protocol).Add(1)
 	return p.net.ProcessGossipProtocolMessage(ctx, sender, protocol, msg, p.propagateQ)
 }
 
 // send a message to all the peers.
-func (p *Protocol) propagateMessage(ctx context.Context, payload []byte, h types.Hash12, nextProt string, exclude p2pcrypto.PublicKey) {
+func (p *Protocol) propagateMessage(ctx context.Context, payload []byte, nextProt string, exclude p2pcrypto.PublicKey) {
 	//TODO soon : don't wait for mesaage to send and if we finished sending last message one of the peers send the next message to him.
 	// limit the number of simultaneous sends. *consider other messages (mainly sync)
 	var wg sync.WaitGroup
@@ -143,8 +142,6 @@ peerLoop:
 			// TODO: replace peer ?
 			if err := p.net.SendMessage(ctx, pubkey, nextProt, payload); err != nil {
 				p.WithContext(ctx).With().Warning("failed sending",
-					log.String("protocol", nextProt),
-					h,
 					log.FieldNamed("to", pubkey),
 					log.Err(err))
 			}
@@ -156,8 +153,6 @@ peerLoop:
 
 func (p *Protocol) handlePQ(ctx context.Context) {
 	for {
-		// Generate new reqID for each message
-		ctx := log.WithNewRequestID(ctx)
 		mi, err := p.pq.Read()
 		if err != nil {
 			p.WithContext(ctx).With().Info("priority queue was closed, exiting", log.Err(err))
@@ -168,12 +163,22 @@ func (p *Protocol) handlePQ(ctx context.Context) {
 			p.WithContext(ctx).Error("could not convert to message validation, ignoring message")
 			continue
 		}
+		// read message requestID
 		h := types.CalcMessageHash12(m.Message(), m.Protocol())
-		p.WithContext(ctx).With().Debug("new_gossip_message_relay",
+		extraFields := []log.LoggableField{
+			h,
 			log.FieldNamed("from", m.Sender()),
 			log.String("protocol", m.Protocol()),
-			h)
-		p.propagateMessage(ctx, m.Message(), h, m.Protocol(), m.Sender())
+		}
+		var msgCtx context.Context
+		if m.RequestID() == "" {
+			msgCtx = log.WithNewRequestID(ctx, extraFields...)
+			p.WithContext(msgCtx).Warning("message in queue has no requestID, generated new requestID")
+		} else {
+			msgCtx = log.WithRequestID(ctx, m.RequestID(), extraFields...)
+		}
+		p.WithContext(msgCtx).Debug("new_gossip_message_relay")
+		p.propagateMessage(msgCtx, m.Message(), m.Protocol(), m.Sender())
 	}
 }
 
