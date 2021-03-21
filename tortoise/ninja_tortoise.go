@@ -681,12 +681,10 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 						ni.TVote[p] = make(map[blockIDLayerTuple]vec)
 					}
 
-					ni.logger.With().Debug("block voting based on global opinion of pattern",
-						p,
-						blt)
+					ni.logger.With().Debug("block voting based on global opinion of pattern", p, blt)
 					vote := ni.globalOpinion(ni.TTally[p][blt], ni.AvgLayerSize, float64(p.LayerID-idx))
-
 					ni.TVote[p][blt] = vote
+
 					if vote != abstain {
 						// Count explicit (non-abstain) votes
 						ni.logger.With().Debug("counting explicit vote",
