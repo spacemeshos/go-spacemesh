@@ -360,9 +360,8 @@ func (s *Switch) sendMessageImpl(ctx context.Context, peerPubKey p2pcrypto.Publi
 	}
 
 	conn, err = s.cPool.GetConnectionIfExists(peerPubKey)
-
 	if err != nil {
-		return errors.New("this peer isn't a neighbor or connection lost")
+		return fmt.Errorf("peer not a neighbor or connection lost: %v", err)
 	}
 
 	session := conn.Session()
