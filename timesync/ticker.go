@@ -90,8 +90,8 @@ const sendTickThreshold = 500 * time.Millisecond
 // if some of the subscribers where not listening, they are skipped. In that case, errMissedTicks is returned along the number of subscribers not listening
 func (t *Ticker) Notify() (int, error) {
 	t.m.Lock()
+	defer t.m.Unlock()
 	if !t.started {
-		t.m.Unlock()
 		return 0, errNotStarted
 	}
 
@@ -106,22 +106,22 @@ func (t *Ticker) Notify() (int, error) {
 
 	// the tick was delayed by more than the threshold
 	if t.timeSinceLastTick() > sendTickThreshold {
-		t.log.With().Warning("skipping tick since we missed the time of the tick by more than the allowed threshold", log.String("threshold", sendTickThreshold.String()))
-		t.m.Unlock()
+		t.log.With().Warning("skipping tick since we missed the time of the tick by more than the allowed threshold",
+			log.FieldNamed("current_layer", layer),
+			log.String("threshold", sendTickThreshold.String()))
 		return 0, errMissedTickTime
 	}
 
 	// already ticked
 	if layer <= t.lastTickedLayer {
 		t.log.With().Warning("skipping tick to avoid double ticking the same layer (time was not monotonic)",
-			log.FieldNamed("current_layer", layer), log.FieldNamed("last_ticked_layer", t.lastTickedLayer))
-		t.m.Unlock()
+			log.FieldNamed("current_layer", layer),
+			log.FieldNamed("last_ticked_layer", t.lastTickedLayer))
 		return 0, errNotMonotonic
 	}
 	missedTicks := 0
 	t.log.Event().Info("release tick", layer)
 	for ch := range t.subscribers { // notify all subscribers
-
 		// non-blocking notify
 		select {
 		case ch <- layer:
@@ -133,7 +133,6 @@ func (t *Ticker) Notify() (int, error) {
 	}
 
 	t.lastTickedLayer = layer // update last ticked layer
-	t.m.Unlock()
 
 	if missedTicks > 0 {
 		t.log.With().Error("missed ticks for layer", layer, log.Int("missed_count", missedTicks))
