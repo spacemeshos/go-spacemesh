@@ -212,49 +212,49 @@ func calcVrfFrac(sig []byte) fixed.Fixed {
 	return fixed.FracFromBytes(sha[:8])
 }
 
-func (o *Oracle) prepareEligibilityCheck(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (fixed.Fixed, fixed.Fixed, fixed.Fixed, bool, error) {
+func (o *Oracle) prepareEligibilityCheck(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (int, fixed.Fixed, fixed.Fixed, bool, error) {
 	msg, err := o.buildVRFMessage(layer, round)
 	if err != nil {
 		o.Error("eligibility: could not build VRF message")
-		return fixed.Fixed{}, fixed.Fixed{}, fixed.Fixed{}, true, err
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
 	// validate message
 	res, err := o.vrfVerifier(msg, sig, id.VRFPublicKey)
 	if err != nil {
 		o.Error("eligibility: VRF verification failed: %v", err)
-		return fixed.Fixed{}, fixed.Fixed{}, fixed.Fixed{}, true, err
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 	if !res {
 		o.With().Info("eligibility: a node did not pass VRF signature verification",
 			id,
 			layer)
-		return fixed.Fixed{}, fixed.Fixed{}, fixed.Fixed{}, true, nil
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, nil
 	}
 
 	// get active set size
 	totalWeight, err := o.totalWeight(layer)
 	if err != nil {
-		return fixed.Fixed{}, fixed.Fixed{}, fixed.Fixed{}, true, err
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
 	// require totalWeight > 0
 	if totalWeight == 0 {
 		o.Warning("eligibility: total weight is zero")
-		return fixed.Fixed{}, fixed.Fixed{}, fixed.Fixed{}, true, errors.New("total weight is zero")
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, errors.New("total weight is zero")
 	}
 
 	// calc hash & check threshold
 	minerWeight, err := o.minerWeight(layer, id)
 	if err != nil {
-		return fixed.Fixed{}, fixed.Fixed{}, fixed.Fixed{}, true, err
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
 	// ensure miner weight fits in int
 	if uint64(int(minerWeight)) != minerWeight {
 		panic(fmt.Sprintf("minerWeight overflows int (%d)", minerWeight))
 	}
-	n := fixed.New(int(minerWeight))
+	n := int(minerWeight)
 
 	// calc p
 	p := fixed.One
@@ -278,15 +278,15 @@ func (o *Oracle) Validate(layer types.LayerID, round int32, committeeSize int, i
 	defer func() {
 		if msg := recover(); msg != nil {
 			o.Log.With().Error("panic in Validate",
-				log.Uint64("n", uint64(n.Value())),
-				log.Uint64("p", uint64(p.Value())),
+				log.Uint64("n", uint64(n)),
+				log.String("p", p.String()),
 			)
 			panic(msg)
 		}
 	}()
 
-	x := fixed.New(int(eligibilityCount))
-	if !fixed.BinCDF(n, p, x.Sub(fixed.One)).GreaterThan(vrfFrac) && vrfFrac.LessThan(fixed.BinCDF(n, p, x)) {
+	x := int(eligibilityCount)
+	if !fixed.BinCDF(n, p, x-1).GreaterThan(vrfFrac) && vrfFrac.LessThan(fixed.BinCDF(n, p, x)) {
 		return true, nil
 	}
 	o.With().Warning("eligibility: node did not pass VRF eligibility threshold",
@@ -294,10 +294,10 @@ func (o *Oracle) Validate(layer types.LayerID, round int32, committeeSize int, i
 		log.Int32("round", round),
 		log.Int("committee_size", committeeSize),
 		id,
-		log.Int("eligibilityCount", int(eligibilityCount)),
-		log.Int("n", n.Floor()),
+		log.Uint64("eligibilityCount", uint64(eligibilityCount)),
+		log.Uint64("n", uint64(n)),
 		log.String("p", fmt.Sprintf("%g", p.Float())),
-		log.Int("x", x.Floor()),
+		log.Uint64("x", uint64(x)),
 	)
 	return false, nil
 }
@@ -313,19 +313,19 @@ func (o *Oracle) CalcEligibility(layer types.LayerID, round int32, committeeSize
 	defer func() {
 		if msg := recover(); msg != nil {
 			o.Log.With().Error("panic in CalcEligibility",
-				log.Uint64("n", uint64(n.Value())),
-				log.Uint64("p", uint64(p.Value())),
+				log.Int("n", n),
+				log.String("p", p.String()),
 			)
 			panic(msg)
 		}
 	}()
 
-	for x := fixed.New(0); x.Value() < n.Value(); x = x.Add(fixed.One) {
+	for x := 0; x < n; x++ {
 		if fixed.BinCDF(n, p, x).GreaterThan(vrfFrac) {
-			return uint16(x.Floor()), nil
+			return uint16(x), nil
 		}
 	}
-	return uint16(n.Floor()), nil
+	return uint16(n), nil
 }
 
 // Proof returns the role proof for the current Layer & Round
