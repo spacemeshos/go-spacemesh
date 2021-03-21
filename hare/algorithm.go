@@ -121,22 +121,29 @@ func newMsg(hareMsg *Message, querier StateQuerier) (*Msg, error) {
 	// extract pub key
 	pubKey, err := ed25519.ExtractPublicKey(hareMsg.InnerMsg.Bytes(), hareMsg.Sig)
 	if err != nil {
-		log.With().Error("newMsg construction failed: could not extract public key", log.Err(err), log.Int("sig len", len(hareMsg.Sig)))
+		log.With().Error("newMsg construction failed: could not extract public key",
+			log.Err(err),
+			log.Int("sig len", len(hareMsg.Sig)))
 		return nil, err
 	}
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
 	res, err := querier.IsIdentityActiveOnConsensusView(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceID))
 	if err != nil {
-		log.With().Error("error while checking if identity is active", log.String("sender_id", pub.ShortString()),
-			log.Err(err), types.LayerID(hareMsg.InnerMsg.InstanceID), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
+		log.With().Error("error while checking if identity is active",
+			log.String("sender_id", pub.ShortString()),
+			log.Err(err),
+			types.LayerID(hareMsg.InnerMsg.InstanceID),
+			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("is identity active query failed")
 	}
 
 	// check query result
 	if !res {
-		log.With().Error("identity is not active", log.String("sender_id", pub.ShortString()),
-			types.LayerID(hareMsg.InnerMsg.InstanceID), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
+		log.With().Error("identity is not active",
+			log.String("sender_id", pub.ShortString()),
+			types.LayerID(hareMsg.InnerMsg.InstanceID),
+			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("inactive identity")
 	}
 
@@ -185,7 +192,7 @@ func newConsensusProcess(cfg config.Config, instanceID instanceID, s *Set, oracl
 		signing:           signing,
 		nid:               nid,
 		network:           p2p,
-		preRoundTracker:   newPreRoundTracker(cfg.F+1, cfg.N),
+		preRoundTracker:   newPreRoundTracker(cfg.F+1, cfg.N, logger),
 		notifyTracker:     newNotifyTracker(cfg.N),
 		cfg:               cfg,
 		terminationReport: terminationReport,
@@ -247,12 +254,18 @@ func (proc *consensusProcess) SetInbox(inbox chan *Msg) {
 
 // runs the main loop of the protocol
 func (proc *consensusProcess) eventLoop() {
-	proc.With().Info("Consensus Process Started",
-		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
-		types.LayerID(proc.instanceID), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("current_set", proc.s.String()), log.Int("set_size", proc.s.Size()))
+	proc.With().Info("consensus process started",
+		log.Int("Hare-N", proc.cfg.N),
+		log.Int("f", proc.cfg.F),
+		log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
+		types.LayerID(proc.instanceID),
+		log.Int("exp_leaders", proc.cfg.ExpectedLeaders),
+		log.String("current_set", proc.s.String()),
+		log.Int("set_size", proc.s.Size()))
 
 	// start the timer
 	timer := time.NewTimer(time.Duration(proc.cfg.RoundDuration) * time.Second)
+	defer timer.Stop()
 
 	// check participation and send message
 	go func() {
@@ -261,13 +274,15 @@ func (proc *consensusProcess) eventLoop() {
 			// set pre-round InnerMsg and send
 			builder, err := proc.initDefaultBuilder(proc.s)
 			if err != nil {
-				proc.Error("init default builder failed: %v", err)
+				proc.With().Error("init default builder failed", log.Err(err))
 				return
 			}
 			m := builder.SetType(pre).Sign(proc.signing).Build()
 			proc.sendMessage(m)
 		} else {
-			log.Info("shouldn't participate ")
+			proc.With().Info("should not participate",
+				log.Int32("current_k", proc.k),
+				types.LayerID(proc.instanceID))
 		}
 	}()
 
@@ -280,14 +295,25 @@ PreRound:
 		case <-timer.C:
 			break PreRound
 		case <-proc.CloseChannel():
+			proc.With().Info("terminating during preround: received termination signal",
+				log.Int32("current_k", proc.k),
+				types.LayerID(proc.instanceID))
 			return
 		}
 	}
+	proc.With().Debug("preround ended, filtering preliminary set",
+		types.LayerID(proc.instanceID),
+		log.Int("set_size", proc.s.Size()))
 	proc.preRoundTracker.FilterSet(proc.s)
+	proc.With().Debug("preround set size after filtering",
+		types.LayerID(proc.instanceID),
+		log.Int("set_size", proc.s.Size()))
 	if proc.s.Size() == 0 {
-		proc.Event().Error("Fatal: PreRound ended with empty set", types.LayerID(proc.instanceID))
+		proc.Event().Error("preround ended with empty set", types.LayerID(proc.instanceID))
 	} else {
-		proc.Info("PreRound ended")
+		proc.With().Info("preround ended",
+			log.Int("set_size", proc.s.Size()),
+			types.LayerID(proc.instanceID))
 	}
 	proc.advanceToNextRound() // K was initialized to -1, K should be 0
 
@@ -309,14 +335,19 @@ PreRound:
 
 			// exit if we reached the limit on number of iterations
 			if proc.k/4 >= int32(proc.cfg.LimitIterations) {
-				proc.Warning("terminating: reached iterations limit")
+				proc.With().Warning("terminating: reached iterations limit",
+					log.Int("limit", proc.cfg.LimitIterations),
+					log.Int32("current_k", proc.k),
+					types.LayerID(proc.instanceID))
 				proc.report(notCompleted)
 				return
 			}
 
 			proc.onRoundBegin()
 		case <-proc.CloseChannel(): // close event
-			proc.Info("terminating: received termination signal")
+			proc.With().Info("terminating: received termination signal",
+				log.Int32("current_k", proc.k),
+				types.LayerID(proc.instanceID))
 			proc.report(notCompleted)
 			return
 		}
@@ -342,7 +373,8 @@ func (proc *consensusProcess) onEarlyMessage(m *Msg) {
 
 	pub := m.PubKey
 	if _, exist := proc.pending[pub.String()]; exist { // ignore, already received
-		proc.Warning("Already received message from sender %v", pub.ShortString())
+		proc.With().Warning("already received message from sender",
+			log.String("sender_id", pub.ShortString()))
 		return
 	}
 
@@ -353,16 +385,19 @@ func (proc *consensusProcess) onEarlyMessage(m *Msg) {
 func (proc *consensusProcess) handleMessage(m *Msg) {
 	// Note: instanceID is already verified by the broker
 
-	proc.With().Debug("Received message", log.String("msg_type", m.InnerMsg.Type.String()))
+	proc.With().Debug("received message",
+		log.Int32("current_k", proc.k),
+		types.LayerID(proc.instanceID),
+		log.String("sender_id", m.PubKey.ShortString()),
+		log.FieldNamed("msg_layer_id", types.LayerID(m.InnerMsg.InstanceID)),
+		log.String("msg_type", m.InnerMsg.Type.String()))
 
 	// validate context
-	err := proc.validator.ContextuallyValidateMessage(m, proc.k)
-	if err != nil {
-		mType := m.InnerMsg.Type.String()
-
+	mType := m.InnerMsg.Type.String()
+	if err := proc.validator.ContextuallyValidateMessage(m, proc.k); err != nil {
 		// early message, keep for later
 		if err == errEarlyMsg {
-			proc.With().Debug("Early message detected, keeping",
+			proc.With().Debug("early message detected, keeping",
 				log.String("msg_type", mType),
 				log.String("sender_id", m.PubKey.ShortString()),
 				log.Int32("current_k", proc.k),
@@ -372,7 +407,7 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 
 			// validate syntax for early messages
 			if !proc.validator.SyntacticallyValidateMessage(m) {
-				proc.With().Warning("Early message failed syntactic validation",
+				proc.With().Warning("early message failed syntactic validation, discarding",
 					log.String("msg_type", mType),
 					log.String("sender_id", m.PubKey.ShortString()))
 				return
@@ -383,7 +418,7 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 		}
 
 		// not an early message but also contextually invalid
-		proc.With().Error("Late message failed contextual validation",
+		proc.With().Error("late message failed contextual validation, discarding",
 			log.String("msg_type", mType),
 			log.String("sender_id", m.PubKey.ShortString()),
 			log.Int32("current_k", proc.k),
@@ -394,22 +429,34 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 
 	// validate syntax for contextually valid messages
 	if !proc.validator.SyntacticallyValidateMessage(m) {
-		proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey.ShortString())
+		proc.With().Warning("message failed syntactic validation, discarding",
+			log.String("msg_type", mType),
+			log.String("sender_id", m.PubKey.ShortString()),
+			log.Int32("current_k", proc.k),
+			log.Int32("msg_k", m.InnerMsg.K),
+			types.LayerID(proc.instanceID))
 		return
 	}
 
 	// warn on late pre-round msgs
 	if m.InnerMsg.Type == pre && proc.k != -1 {
-		proc.With().Warning("encountered late PreRound message", log.String("sender_id", m.PubKey.ShortString()), types.LayerID(proc.instanceID))
+		proc.With().Warning("encountered late preround message",
+			log.String("msg_type", mType),
+			log.String("sender_id", m.PubKey.ShortString()),
+			log.Int32("current_k", proc.k),
+			log.Int32("msg_k", m.InnerMsg.K),
+			types.LayerID(proc.instanceID))
 	}
 
-	// valid, continue process msg by type
+	// valid, continue to process msg by type
 	proc.processMsg(m)
 }
 
 // process the message by its type
 func (proc *consensusProcess) processMsg(m *Msg) {
-	proc.Debug("Processing message of type %v", m.InnerMsg.Type.String())
+	proc.With().Debug("processing message",
+		log.String("msg_type", m.InnerMsg.Type.String()),
+		log.Int("num_values", len(m.InnerMsg.Values)))
 	// TODO: fix metrics
 	// metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(m.InnerMsg.InstanceID), 10), "reporter", "processMsg").Add(1)
 
@@ -425,7 +472,9 @@ func (proc *consensusProcess) processMsg(m *Msg) {
 	case notify: // end of round 4
 		proc.processNotifyMsg(m)
 	default:
-		proc.Warning("Unknown message type: %v , pubkey %v", m.InnerMsg.Type, m.PubKey.ShortString())
+		proc.With().Warning("unknown message type",
+			log.Int("msg_type", int(m.InnerMsg.Type)),
+			log.String("sender_id", m.PubKey.ShortString()))
 	}
 }
 
@@ -439,20 +488,21 @@ func (proc *consensusProcess) sendMessage(msg *Msg) bool {
 	}
 
 	if err := proc.network.Broadcast(protoName, msg.Bytes()); err != nil {
-		proc.Error("Could not broadcast round message ", err.Error())
+		proc.With().Error("could not broadcast round message", log.Err(err))
 		return false
 	}
 
-	proc.With().Info("message sent",
+	proc.With().Info("should participate: message sent",
 		log.String("current_set", proc.s.String()),
 		log.String("msg_type", msg.InnerMsg.Type.String()),
+		log.Int32("current_k", proc.k),
 		types.LayerID(proc.instanceID))
 	return true
 }
 
 // logic of the end of a round by the round type
 func (proc *consensusProcess) onRoundEnd() {
-	proc.With().Debug("End of round", log.Int32("K", proc.k), types.LayerID(proc.instanceID))
+	proc.With().Debug("end of round", log.Int32("current_k", proc.k), types.LayerID(proc.instanceID))
 
 	// reset trackers
 	switch proc.currentRound() {
@@ -477,7 +527,8 @@ func (proc *consensusProcess) onRoundEnd() {
 func (proc *consensusProcess) advanceToNextRound() {
 	proc.k++
 	if proc.k >= 4 && proc.k%4 == 0 {
-		proc.Event().Warning("Starting new iteration", log.Int32("round_counter", proc.k),
+		proc.Event().Warning("starting new iteration",
+			log.Int32("current_k", proc.k),
 			types.LayerID(proc.instanceID))
 	}
 }
@@ -493,7 +544,7 @@ func (proc *consensusProcess) beginStatusRound() {
 
 	b, err := proc.initDefaultBuilder(proc.s)
 	if err != nil {
-		proc.Error("init default builder failed: %v", err)
+		proc.With().Error("init default builder failed", log.Err(err))
 		return
 	}
 	statusMsg := b.SetType(status).Sign(proc.signing).Build()
@@ -509,7 +560,7 @@ func (proc *consensusProcess) beginProposalRound() {
 	if proc.statusesTracker.IsSVPReady() && proc.shouldParticipate() {
 		builder, err := proc.initDefaultBuilder(proc.statusesTracker.ProposalSet(defaultSetSize))
 		if err != nil {
-			proc.Error("init default builder failed: %v", err)
+			proc.With().Error("init default builder failed", log.Err(err))
 			return
 		}
 		svp := proc.statusesTracker.BuildSVP()
@@ -517,7 +568,7 @@ func (proc *consensusProcess) beginProposalRound() {
 			proposalMsg := builder.SetType(proposal).SetSVP(svp).Sign(proc.signing).Build()
 			proc.sendMessage(proposalMsg)
 		} else {
-			proc.Error("Failed to build SVP (nil) after verifying SVP is ready ")
+			proc.Error("failed to build SVP (nil) after verifying SVP is ready")
 		}
 	}
 }
@@ -537,7 +588,7 @@ func (proc *consensusProcess) beginCommitRound() {
 
 		builder, err := proc.initDefaultBuilder(proposedSet)
 		if err != nil {
-			proc.Error("init default builder failed: %v", err)
+			proc.With().Error("init default builder failed", log.Err(err))
 			return
 		}
 		builder = builder.SetType(commit).Sign(proc.signing)
@@ -555,29 +606,31 @@ func (proc *consensusProcess) beginNotifyRound() {
 
 	// send notify message only once
 	if proc.notifySent {
-		proc.Info("Begin notify round: notify already sent")
+		proc.Info("begin notify round: notify already sent")
 		return
 	}
 
 	if proc.proposalTracker.IsConflicting() {
-		proc.Warning("Begin notify round: proposal is conflicting")
+		proc.Warning("begin notify round: proposal is conflicting")
 		return
 	}
 
 	if !proc.commitTracker.HasEnoughCommits() {
-		proc.With().Warning("Begin notify round: not enough commits", log.Int("expected", proc.cfg.F+1), log.Int("actual", proc.commitTracker.CommitCount()))
+		proc.With().Warning("begin notify round: not enough commits",
+			log.Int("expected", proc.cfg.F+1),
+			log.Int("actual", proc.commitTracker.CommitCount()))
 		return
 	}
 
 	cert := proc.commitTracker.BuildCertificate()
 	if cert == nil {
-		proc.Error("Begin notify round: Build certificate returned nil")
+		proc.Error("begin notify round: BuildCertificate returned nil")
 		return
 	}
 
 	s := proc.proposalTracker.ProposedSet()
 	if s == nil {
-		proc.Error("Begin notify round: ProposedSet returned nil")
+		proc.Error("begin notify round: ProposedSet returned nil")
 		return
 	}
 
@@ -593,7 +646,7 @@ func (proc *consensusProcess) beginNotifyRound() {
 	// build & send notify message
 	builder, err := proc.initDefaultBuilder(proc.s)
 	if err != nil {
-		proc.Error("init default builder failed: %v", err)
+		proc.With().Error("init default builder failed", log.Err(err))
 		return
 	}
 
@@ -625,7 +678,7 @@ func (proc *consensusProcess) onRoundBegin() {
 	case notifyRound:
 		proc.beginNotifyRound()
 	default:
-		proc.Panic("Current round out of bounds. Expected: 0-3, Found: ", proc.currentRound())
+		proc.Panic("current round out of bounds. Expected: 0-3, Found: %v", proc.currentRound())
 	}
 
 	if len(proc.pending) == 0 { // no pending messages
@@ -643,7 +696,7 @@ func (proc *consensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error
 	builder = builder.SetRoundCounter(proc.k).SetKi(proc.ki).SetValues(s)
 	proof, err := proc.oracle.Proof(types.LayerID(proc.instanceID), proc.k)
 	if err != nil {
-		proc.Error("Could not initialize default builder err=%v", err)
+		proc.With().Error("could not initialize default builder", log.Err(err))
 		return nil, err
 	}
 	builder.SetRoleProof(proof)
@@ -668,7 +721,9 @@ func (proc *consensusProcess) processProposalMsg(msg *Msg) {
 	} else if currRnd == commitRound { // late proposal
 		proc.proposalTracker.OnLateProposal(msg)
 	} else {
-		proc.Error("Received proposal message for processing in an invalid context: K=%v", msg.InnerMsg.K)
+		proc.With().Error("received proposal message for processing in an invalid context",
+			log.Int32("current_k", proc.k),
+			log.Int32("msg_k", msg.InnerMsg.K))
 	}
 }
 
@@ -681,7 +736,7 @@ func (proc *consensusProcess) processNotifyMsg(msg *Msg) {
 	s := NewSet(msg.InnerMsg.Values)
 
 	if ignored := proc.notifyTracker.OnNotify(msg); ignored {
-		proc.Warning("Ignoring notification sent from %v", msg.PubKey.ShortString())
+		proc.With().Warning("ignoring notification", log.String("sender_id", msg.PubKey.ShortString()))
 		return
 	}
 
@@ -695,15 +750,19 @@ func (proc *consensusProcess) processNotifyMsg(msg *Msg) {
 	}
 
 	if proc.notifyTracker.NotificationsCount(s) < proc.cfg.F+1 { // not enough
-		proc.Debug("Not enough notifications for termination. Expected: %v Actual: %v",
-			proc.cfg.F+1, proc.notifyTracker.NotificationsCount(s))
+		proc.With().Debug("not enough notifications for termination",
+			log.Int("expected", proc.cfg.F+1),
+			log.Int("actual", proc.notifyTracker.NotificationsCount(s)))
 		return
 	}
 
 	// enough notifications, should terminate
 	proc.s = s // update to the agreed set
-	proc.Event().Info("Consensus process terminated", log.String("current_set", proc.s.String()),
-		types.LayerID(proc.instanceID), log.Int("set_size", proc.s.Size()))
+	proc.Event().Info("consensus process terminated",
+		log.String("current_set", proc.s.String()),
+		log.Int32("current_k", proc.k),
+		types.LayerID(proc.instanceID),
+		log.Int("set_size", proc.s.Size()))
 	proc.report(completed)
 	close(proc.CloseChannel())
 	proc.terminating = true
@@ -747,8 +806,10 @@ func (proc *consensusProcess) endOfStatusRound() {
 	// assumption: AnalyzeStatuses calls vtFunc for every recorded status message
 	before := time.Now()
 	proc.statusesTracker.AnalyzeStatuses(vtFunc)
-	proc.Event().Info("status round ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
-		types.LayerID(proc.instanceID), log.String("analyze_duration", time.Since(before).String()))
+	proc.Event().Info("status round ended",
+		log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
+		types.LayerID(proc.instanceID),
+		log.String("analyze_duration", time.Since(before).String()))
 }
 
 // checks if we should participate in the current round
@@ -770,13 +831,13 @@ func (proc *consensusProcess) shouldParticipate() bool {
 
 	if role := proc.currentRole(); role == passive {
 		proc.With().Info("should not participate: passive",
-			log.Int32("round", proc.k), types.LayerID(proc.instanceID))
+			log.Int32("current_k", proc.k), types.LayerID(proc.instanceID))
 		return false
 	}
 
 	// should participate
 	proc.With().Info("should participate",
-		log.Int32("round", proc.k),
+		log.Int32("current_k", proc.k),
 		types.LayerID(proc.instanceID))
 	return true
 }
@@ -785,13 +846,14 @@ func (proc *consensusProcess) shouldParticipate() bool {
 func (proc *consensusProcess) currentRole() role {
 	proof, err := proc.oracle.Proof(types.LayerID(proc.instanceID), proc.k)
 	if err != nil {
-		proc.With().Error("Could not retrieve proof from oracle", log.Err(err))
+		proc.With().Error("could not retrieve eligibility proof from oracle", log.Err(err))
 		return passive
 	}
 
-	res, err := proc.oracle.Eligible(types.LayerID(proc.instanceID), proc.k, expectedCommitteeSize(proc.k, proc.cfg.N, proc.cfg.ExpectedLeaders), proc.nid, proof)
+	res, err := proc.oracle.Eligible(types.LayerID(proc.instanceID),
+		proc.k, expectedCommitteeSize(proc.k, proc.cfg.N, proc.cfg.ExpectedLeaders), proc.nid, proof)
 	if err != nil {
-		proc.With().Error("Could not check our eligibility", log.Err(err))
+		proc.With().Error("failed to check eligibility", log.Err(err))
 		return passive
 	}
 
