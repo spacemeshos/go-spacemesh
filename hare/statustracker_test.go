@@ -8,6 +8,7 @@ import (
 func buildStatusMsg(signing Signer, s *Set, ki int32) *Msg {
 	builder := newMessageBuilder()
 	builder.SetType(status).SetInstanceID(instanceID1).SetRoundCounter(statusRound).SetKi(ki).SetValues(s)
+	builder.SetEligibilityCount(1)
 	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 
 	return builder.Build()

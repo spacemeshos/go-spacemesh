@@ -2,6 +2,7 @@ package hare
 
 import (
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
@@ -55,6 +56,7 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 
 func TestEligibilityValidator_validateRole(t *testing.T) {
 	oracle := &mockRolacle{}
+	types.SetLayersPerEpoch(10)
 	ev := newEligibilityValidator(oracle, 10, &mockIDProvider{}, 1, 5, log.NewDefault(""))
 	ev.oracle = oracle
 	res, err := ev.validateRole(nil)

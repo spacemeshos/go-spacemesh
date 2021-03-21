@@ -99,6 +99,9 @@ func (st *statusTracker) BuildSVP() *aggregatedMessages {
 	}
 
 	// TODO: set aggregated signature
+	if len(svp.Messages) == 0 {
+		return nil
+	}
 
 	return svp
 }
