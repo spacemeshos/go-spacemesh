@@ -684,13 +684,30 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 					ni.logger.With().Debug("block voting based on global opinion of pattern",
 						p,
 						blt)
-					if vote := ni.globalOpinion(ni.TTally[p][blt], ni.AvgLayerSize, float64(p.LayerID-idx)); vote != abstain {
-						ni.TVote[p][blt] = vote
+					vote := ni.globalOpinion(ni.TTally[p][blt], ni.AvgLayerSize, float64(p.LayerID-idx))
+
+					ni.TVote[p][blt] = vote
+					if vote != abstain {
+						// Count explicit (non-abstain) votes
+						ni.logger.With().Debug("counting explicit vote",
+							p,
+							bid,
+							idx,
+							vote)
 						if vote == support {
 							bids = append(bids, bid)
 						}
+					} else if p == zeroPattern && vote == abstain {
+						// In the special case of the zero pattern, we consider an abstain an explicit vote in favor
+						ni.logger.With().Debug("counting abstain on zero pattern as explicit support vote",
+							p,
+							bid,
+							idx,
+							vote)
+						bids = append(bids, bid)
 					} else {
-						ni.TVote[p][blt] = vote
+						// In all cases other than the zero pattern, abstain does not count and causes the layer not
+						// to advance
 						ni.logger.With().Debug(
 							"block support below threshold, block abstains from vote on pattern, "+
 								"pattern is incomplete and will not be promoted",
