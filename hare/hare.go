@@ -154,7 +154,7 @@ func (h *Hare) oldestResultInBuffer() types.LayerID {
 }
 
 // ErrTooLate means that the consensus was terminated too late
-var ErrTooLate = errors.New("consensus process %v finished too late")
+var ErrTooLate = errors.New("consensus process finished too late")
 
 // records the provided output.
 func (h *Hare) collectOutput(output TerminationOutput) error {
@@ -168,7 +168,7 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 
 	// check validity of the collected output
 	if !h.validate(blocks) {
-		h.Error("Failed to validate the collected output set")
+		h.Error("failed to validate the collected output set")
 	}
 
 	id := output.ID()
@@ -191,18 +191,21 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 }
 
 // the logic that happens when a new layer arrives.
-// this function triggers the start of new CPs.
+// this function triggers the start of new consensus processes.
 func (h *Hare) onTick(id types.LayerID) {
 	h.layerLock.Lock()
 	if id > h.lastLayer {
 		h.lastLayer = id
+	} else {
+		h.With().Error("received out of order layer tick",
+			log.FieldNamed("last_layer", h.lastLayer),
+			log.FieldNamed("this_layer", id))
 	}
 
 	h.layerLock.Unlock()
-	h.Debug("hare got tick, sleeping for %v", h.networkDelta)
 
 	if !h.broker.Synced(instanceID(id)) { // if not synced don't start consensus
-		h.With().Info("not starting hare since the node is not synced", id)
+		h.With().Info("not starting hare since node is not synced", id)
 		return
 	}
 
@@ -212,8 +215,15 @@ func (h *Hare) onTick(id types.LayerID) {
 	}
 
 	// call to start the calculation of active set size beforehand
-	go h.rolacle.IsIdentityActiveOnConsensusView(h.nid.Key, id)
+	go func() {
+		// this is called only for its side effects, but at least print the error if it returns one
+		if isActive, err := h.rolacle.IsIdentityActiveOnConsensusView(h.nid.Key, id); err != nil {
+			h.With().Error("error checking if identity is active",
+				log.Bool("isActive", isActive), log.Err(err))
+		}
+	}()
 
+	h.Debug("hare got tick, sleeping for %v", h.networkDelta)
 	ti := time.NewTimer(h.networkDelta)
 	select {
 	case <-ti.C:
@@ -224,14 +234,15 @@ func (h *Hare) onTick(id types.LayerID) {
 	}
 
 	h.Debug("get hare results")
-	// retrieve set form orphan blocks
+
+	// retrieve set from orphan blocks
 	blocks, err := h.msh.LayerBlockIds(h.lastLayer)
 	if err != nil {
-		h.With().Error("No blocks for consensus", id, log.Err(err))
+		h.With().Error("no blocks for consensus", id, log.Err(err))
 		return
 	}
 
-	h.Debug("received %v new blocks ", len(blocks))
+	h.With().Debug("received new blocks", log.Int("count", len(blocks)))
 	set := NewEmptySet(len(blocks))
 	for _, b := range blocks {
 		set.Add(b)
@@ -240,18 +251,18 @@ func (h *Hare) onTick(id types.LayerID) {
 	instID := instanceID(id)
 	c, err := h.broker.Register(instID)
 	if err != nil {
-		h.Warning("Could not register CP for layer %v on broker err=%v", id, err)
+		h.With().Warning("could not register consensus process on broker", id, log.Err(err))
 		return
 	}
 	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.network, h.outputChan)
 	cp.SetInbox(c)
-	e := cp.Start()
-	if e != nil {
-		h.Error("Could not start consensus process %v", e.Error())
+	if err := cp.Start(); err != nil {
+		h.With().Error("could not start consensus process", log.Err(err))
 		h.broker.Unregister(cp.ID())
 		return
 	}
-	h.With().Info("number of consensus processes", log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
+	h.With().Info("number of consensus processes (after +1)",
+		log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
 	// TODO: fix metrics
 	//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(id), 10)).Add(1)
 }
@@ -264,19 +275,17 @@ var (
 // GetResult returns the hare output for the provided range.
 // Returns error iff the request for the upper is too old.
 func (h *Hare) GetResult(lid types.LayerID) ([]types.BlockID, error) {
-
 	if h.outOfBufferRange(instanceID(lid)) {
 		return nil, errTooOld
 	}
 
 	h.mu.RLock()
+	defer h.mu.RUnlock()
 	blks, ok := h.outputs[lid]
 	if !ok {
-		h.mu.RUnlock()
 		return nil, errNoResult
 	}
 
-	h.mu.RUnlock()
 	return blks, nil
 }
 
@@ -286,15 +295,15 @@ func (h *Hare) outputCollectionLoop() {
 		select {
 		case out := <-h.outputChan:
 			if out.Completed() { // CP completed, collect the output
-				err := h.collectOutput(out)
-				if err != nil {
+				if err := h.collectOutput(out); err != nil {
 					h.With().Warning("error collecting output from hare", log.Err(err))
 				}
 			}
 
-			// anyway, unregister from broker
-			h.broker.Unregister(out.ID()) // unregister from broker after termination
-			h.With().Info("number of consensus processes", log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
+			// either way, unregister from broker
+			h.broker.Unregister(out.ID())
+			h.With().Info("number of consensus processes (after -1)",
+				log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
 			// TODO: fix metrics
 			//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(out.ID()), 10)).Add(-1)
 		case <-h.CloseChannel():
@@ -317,7 +326,7 @@ func (h *Hare) tickLoop() {
 
 // Start starts listening for layers and outputs.
 func (h *Hare) Start() error {
-	h.Log.Info("Starting %v", protoName)
+	h.With().Info("starting protocol", log.String("protocol", protoName))
 	err := h.broker.Start()
 	if err != nil {
 		return err
