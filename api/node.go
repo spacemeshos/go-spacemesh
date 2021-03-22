@@ -2,9 +2,10 @@ package api
 
 import (
 	"context"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"time"
 )
 
 // StateAPI is an API to global state
@@ -81,6 +82,8 @@ type TxAPI interface {
 	GetBalance(types.Address) uint64
 	GetNonce(types.Address) uint64
 	GetAllAccounts() (*types.MultipleAccountsState, error)
+	//TODO: fix the discrepancy between SmesherID and NodeID (see https://github.com/spacemeshos/go-spacemesh/issues/2269)
+	GetRewardsBySmesherID(types.NodeID) ([]types.Reward, error)
 }
 
 // PeerCounter is an api to get amount of connected peers
