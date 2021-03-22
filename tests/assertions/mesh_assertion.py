@@ -60,15 +60,13 @@ def assert_blocks_num_in_epochs(block_map, from_layer, to_layer, layers_per_epoc
     if from_layer == 0:
         print(f"refactoring starting layer from 0 to {layers_per_epoch}, not validating first epoch")
         from_layer = layers_per_epoch * 2
-        if from_layer == to_layer:
-            return
-
-    assert from_layer <= to_layer, f"starting layer ({from_layer}) must be bigger than ending layer ({to_layer})"
-
+    if from_layer == to_layer:
+        raise ValueError("no valid range was given, first layer equals the last, layers value:", from_layer)
+    if from_layer < to_layer:
+        raise ValueError(f"starting layer ({from_layer}) must be bigger than ending layer ({to_layer})")
     if from_layer % layers_per_epoch != 0 or to_layer % layers_per_epoch != 0:
-        print(f"layer to start from and layer to end at must be at the beginning and ending of an epoch respectively")
-        print(f"from layer={from_layer}, to layer={to_layer}")
-        assert 0
+        raise ValueError(f"start layer and end layer must be at the beginning and ending of an epoch respectively, "
+                         f"start={from_layer}, end={to_layer}")
 
     print("validating node")
     for node in block_map:

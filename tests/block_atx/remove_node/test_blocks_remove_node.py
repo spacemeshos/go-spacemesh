@@ -3,10 +3,11 @@ import time
 from pytest_testconfig import config as testconfig
 
 from tests import queries as q
+from tests.assertions.mesh_assertion import assert_blocks_num_in_epochs
 from tests.convenience import sleep_print_backwards
 from tests.deployment import delete_deployment
 from tests.setup_network import setup_mul_network
-from tests.utils import validate_blocks_per_nodes, get_pod_id
+from tests.utils import get_pod_id
 
 
 # epoch 0:
@@ -71,8 +72,8 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     # assert that each node has created layer_avg/number_of_nodes
     print(f"-------- validating blocks per nodes in epoch {epoch_2} --------")
     e2_first_layer, e2_last_layer = api_handler.get_epoch_layer_range(epoch_2)
-    validate_blocks_per_nodes(block_map, e2_first_layer, e2_last_layer+1, layers_per_epoch, layer_avg_size, num_miners,
-                              ignore_lst=deleted_pods_lst)
+    assert_blocks_num_in_epochs(block_map, e2_first_layer, e2_last_layer+1, layers_per_epoch, layer_avg_size, num_miners
+                                , ignore_lst=deleted_pods_lst)
     # wait an epoch
     api_handler.wait_for_next_epoch()
 
@@ -84,8 +85,8 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     print(f"-------- validating blocks per nodes in epoch {epoch_3} --------")
     # assert that each node has created layer_avg/number_of_nodes
     e3_first_layer, e3_last_layer = api_handler.get_epoch_layer_range(epoch_3)
-    validate_blocks_per_nodes(block_map, e3_first_layer, e3_last_layer+1, layers_per_epoch, layer_avg_size, num_miners,
-                              ignore_lst=deleted_pods_lst)
+    assert_blocks_num_in_epochs(block_map, e3_first_layer, e3_last_layer+1, layers_per_epoch, layer_avg_size, num_miners
+                                , ignore_lst=deleted_pods_lst)
     # wait an epoch
     api_handler.wait_for_next_epoch()
 
@@ -96,8 +97,8 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     print(f"-------- validating blocks per nodes in epoch {epoch_4} --------")
     # assert that each node has created layer_avg/number_of_nodes
     e4_first_layer, e4_last_layer = api_handler.get_epoch_layer_range(epoch_4)
-    validate_blocks_per_nodes(block_map, e4_first_layer, e4_last_layer+1, layers_per_epoch, layer_avg_size, num_miners-1,
-                              ignore_lst=deleted_pods_lst)
+    assert_blocks_num_in_epochs(block_map, e4_first_layer, e4_last_layer+1, layers_per_epoch, layer_avg_size,
+                                num_miners-1, ignore_lst=deleted_pods_lst)
     # wait an epoch
     api_handler.wait_for_next_epoch()
 
@@ -110,5 +111,5 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     e5_first_layer, e5_last_layer = api_handler.get_epoch_layer_range(epoch_5)
     # assert that each node has created layer_avg/number_of_nodes
     print(f"-------- validating blocks per nodes in epoch {epoch_5} --------")
-    validate_blocks_per_nodes(block_map, e5_first_layer, e5_last_layer+1, layers_per_epoch, layer_avg_size, num_miners,
-                              ignore_lst=deleted_pods_lst)
+    assert_blocks_num_in_epochs(block_map, e5_first_layer, e5_last_layer+1, layers_per_epoch, layer_avg_size, num_miners
+                                , ignore_lst=deleted_pods_lst)

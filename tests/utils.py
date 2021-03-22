@@ -94,63 +94,6 @@ def wait_for_next_layer(namespace, cl_num, timeout):
     return
 
 
-# TODO there might be a better place for a validation func than utils
-def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch, layer_avg_size, num_miners,
-                              ignore_lst=None):
-    """
-    validate average block creation per node epoch wise,
-    from_layer and to_layer must be a multiplication of layers_per_epoch.
-    First epoch will be ignored
-
-    :param block_map: dictionary, map between nodes to blocks each created
-    :param from_layer: int, starting layer to check from
-    :param to_layer: int, end layer to check up to
-    :param layers_per_epoch: int, number of layers per epoch
-    :param layer_avg_size: int, average number of blocks per layer
-    (layer_avg_size * layers_per_epoch will give us the number of blocks that should be created per epoch)
-    :param num_miners: int, number of miners
-    :param ignore_lst: list, a list of pod names to be ignored
-
-    """
-    # layers count start from 0
-    if from_layer == 0:
-        print(f"refactoring starting layer from 0 to {layers_per_epoch}, not validating first epoch")
-        from_layer = layers_per_epoch * 2
-        if from_layer == to_layer:
-            return
-
-    assert from_layer <= to_layer, f"starting layer ({from_layer}) must be bigger than ending layer ({to_layer})"
-
-    if from_layer % layers_per_epoch != 0 or to_layer % layers_per_epoch != 0:
-        print(f"layer to start from and layer to end at must be at the beginning and ending of an epoch respectively")
-        print(f"from layer={from_layer}, to layer={to_layer}")
-        assert 0
-
-    print("validating node")
-    for node in block_map:
-        if ignore_lst and node in ignore_lst:
-            print(f"SKIPPING NODE {node}, ", end="")
-            continue
-
-        print(f"{node}, ", end="")
-        node_lays = block_map[node].layers
-        blocks_sum = sum([len(node_lays[x]) for x in range(from_layer, to_layer)])
-        blocks_per_layer = blocks_sum / (to_layer - from_layer)
-        wanted_res = int((layer_avg_size * layers_per_epoch) / num_miners) / layers_per_epoch
-        ass_err = f"node {node} failed creating the avg block size"
-        ass_err += f"\nblocks created per layer {blocks_per_layer}, wanted average block per node {wanted_res}, " \
-                   f"layer_avg_size {layer_avg_size}, layers_per_epoch {layers_per_epoch}, num_miners {num_miners}, " \
-                   f"blocks_sum {blocks_sum}, to_layer {to_layer}, from_layer {from_layer}, blocks {node_lays}"
-        assert blocks_per_layer == wanted_res, ass_err
-
-        print(f"successfully validated {node}",
-              f"\nblocks created per layer {blocks_per_layer}, wanted average block per node {wanted_res}, ",
-              f"layer_avg_size {layer_avg_size}, layers_per_epoch {layers_per_epoch}, num_miners {num_miners}, ",
-              f"blocks_sum {blocks_sum}, to_layer {to_layer}, from_layer {from_layer}")
-
-    print("\nvalidation succeeded!\n")
-
-
 def get_pod_id(ns, pod_name):
     hits = q.query_protocol_started(ns, pod_name, "HARE_PROTOCOL")
     if not hits:
