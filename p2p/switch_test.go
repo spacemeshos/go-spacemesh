@@ -1142,7 +1142,7 @@ func TestSwarm_SendMessage(t *testing.T) {
 	}
 
 	err = p.SendMessage(context.TODO(), someky, proto, []byte("LOL"))
-	require.Equal(t, err, errors.New("this peer isn't a neighbor or connection lost"))
+	require.Equal(t, errors.New("peer not a neighbor or connection lost: no conn"), err)
 
 	cp.fExists = func(pk p2pcrypto.PublicKey) (connection net.Connection, err error) {
 		return net.NewConnectionMock(pk), nil
