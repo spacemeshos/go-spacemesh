@@ -415,7 +415,7 @@ dockertest-tx-stress: dockerbuild-test dockerrun-tx-stress
 
 
 # The following is used to run tests one after the other locally
-dockerrun-test: dockerbuild-test-elk dockerrun-p2p-elk dockerrun-mining-elk dockerrun-hare-elk dockerrun-sync-elk dockerrun-late-nodes-elk dockerrun-blocks-add-node-elk dockerrun-blocks-remove-node-elk
+dockerrun-test: dockerbuild-test-elk dockerrun-p2p-elk dockerrun-mining-elk dockerrun-hare-elk dockerrun-sync-elk dockerrun-late-nodes-elk dockerrun-blocks-add-node-elk dockerrun-blocks-remove-node-elk dockerrun-tortoise-beacon-elk
 .PHONY: dockerrun-test
 
 dockerrun-all: dockerpush dockerrun-test
