@@ -382,7 +382,7 @@ loop:
 			}
 			log.Info("all miners finished reading %v atxs, layer %v done in %v", eventDb.GetAtxCreationDone(epoch), layer, time.Since(startLayer))
 			for _, atxID := range eventDb.GetCreatedAtx(epoch) {
-				if _, found := eventDb.Atxs[atxID]; !found {
+				if !eventDb.AtxIDExists(atxID) {
 					log.Info("atx %v not propagated", atxID)
 					errors++
 					continue
