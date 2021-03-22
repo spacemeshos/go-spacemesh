@@ -8,7 +8,7 @@ type Config struct { // TODO(nkryuchkov): use unused fields
 	RoundsNumber   uint64 `mapstructure:"tortoise-beacon-rounds-number"` // number of rounds
 	WakeupDelta    int    `mapstructure:"tortoise-beacon-wakeup-delta"`  // the wakeup delta after tick
 	Theta          int    `mapstructure:"tortoise-beacon-theta"`
-	HDist          int    `mapstructure:"tortoise-beacon-hdist"`
+	HDist          int    `mapstructure:"tortoise-beacon-hdist"` // TODO(nkryuchkov): consider using global hdist
 	TAve           int    `mapstructure:"tortoise-beacon-t-ave"`
 }
 

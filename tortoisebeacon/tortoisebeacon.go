@@ -121,7 +121,7 @@ func New(
 
 // Start starts listening for layers and outputs.
 func (tb *TortoiseBeacon) Start() error {
-	tb.Log.Info("Starting %v", protoName)
+	tb.Log.Info("Starting %v with the following config: %+v", protoName, tb.config)
 
 	tb.backgroundWG.Add(1)
 	go func() {

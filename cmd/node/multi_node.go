@@ -25,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 )
 
 // ManualClock is a clock that releases ticks on demand and not according to a real world clock
@@ -159,6 +160,8 @@ func getTestDefaultConfig() *config.Config {
 	cfg.SyncInterval = 2
 	cfg.SyncValidationDelta = 5
 	cfg.GoldenATXID = "0x5678"
+
+	cfg.TortoiseBeacon = tortoisebeacon.TestConfig()
 
 	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
 

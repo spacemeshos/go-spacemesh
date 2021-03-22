@@ -175,6 +175,25 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.HareEligibility.EpochOffset, "eligibility-epoch-offset",
 		config.HareEligibility.EpochOffset, "The constant layer (within an epoch) for which we traverse its view for the purpose of counting consensus active set")
 
+	/**======================== Tortoise Beacon Flags ========================== **/
+
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.ATXThreshold, "tortoise-beacon-atx-threshold",
+		config.TortoiseBeacon.ATXThreshold, "TODO") // TODO(nkryuchkov): fill
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.VotesNumber, "tortoise-beacon-votes-number",
+		config.TortoiseBeacon.VotesNumber, "TODO") // TODO(nkryuchkov): fill
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.BeaconDuration, "tortoise-beacon-duration",
+		config.TortoiseBeacon.VotesNumber, "TODO") // TODO(nkryuchkov): fill
+	cmd.PersistentFlags().Uint64Var(&config.TortoiseBeacon.RoundsNumber, "tortoise-beacon-rounds-number",
+		config.TortoiseBeacon.RoundsNumber, "TODO") // TODO(nkryuchkov): fill
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.WakeupDelta, "tortoise-beacon-wakeup-delta",
+		config.TortoiseBeacon.WakeupDelta, "TODO") // TODO(nkryuchkov): fill
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.Theta, "tortoise-beacon-theta",
+		config.TortoiseBeacon.Theta, "TODO") // TODO(nkryuchkov): fill
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.HDist, "tortoise-beacon-hdist",
+		config.TortoiseBeacon.HDist, "TODO") // TODO(nkryuchkov): fill
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.TAve, "tortoise-beacon-t-ave",
+		config.TortoiseBeacon.TAve, "TODO") // TODO(nkryuchkov): fill
+
 	/**======================== PoST Flags ========================== **/
 
 	cmd.PersistentFlags().StringVar(&config.POST.DataDir, "post-datadir",
