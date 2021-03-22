@@ -18,7 +18,6 @@ func (p *protocol) newPingRequestHandler() func(msg server.Message) []byte {
 	return func(msg server.Message) []byte {
 		plogger := p.logger.WithFields(log.String("type", "ping"), log.String("from", msg.Sender().String()))
 		plogger.Debug("handle request")
-		plogger.Warning("In ping request handler")
 		pinged := &node.Info{}
 		err := types.BytesToInterface(msg.Bytes(), pinged)
 		if err != nil {
@@ -40,7 +39,6 @@ func (p *protocol) newPingRequestHandler() func(msg server.Message) []byte {
 		}
 
 		plogger.Debug("Sending pong message")
-		plogger.Warning("Sending pong message")
 		return payload
 	}
 }
