@@ -3,6 +3,7 @@ package server
 
 import (
 	"container/list"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -32,6 +33,12 @@ type Item struct {
 	timestamp time.Time
 }
 
+// ResponseHandlers contains handlers for received response handlers
+type ResponseHandlers struct {
+	okCallback   func(msg []byte)
+	failCallBack func(err error)
+}
+
 // MessageServer is a request-response multiplexer on top of the p2p layer. it provides a way to register
 // message types on top of a protocol and declare request and response handlers. it matches incoming responses to requests.
 type MessageServer struct {
@@ -41,7 +48,7 @@ type MessageServer struct {
 	network            Service
 	pendMutex          sync.RWMutex
 	pendingQueue       *list.List                                   //queue of pending messages
-	resHandlers        map[uint64]func(msg []byte)                  //response handlers by request ReqID
+	resHandlers        map[uint64]ResponseHandlers                  //response handlers by request ReqID
 	msgRequestHandlers map[MessageType]func(message Message) []byte //request handlers by request type
 	ingressChannel     chan service.DirectMessage                   //chan to relay messages into the server
 	requestLifetime    time.Duration                                //time a request can stay in the pending queue until evicted
@@ -61,7 +68,7 @@ func NewMsgServer(network Service, name string, requestLifetime time.Duration, c
 	p := &MessageServer{
 		Log:                logger,
 		name:               name,
-		resHandlers:        make(map[uint64]func(msg []byte)),
+		resHandlers:        make(map[uint64]ResponseHandlers),
 		pendingQueue:       list.New(),
 		network:            network,
 		ingressChannel:     network.RegisterDirectProtocolWithChannel(name, c),
@@ -89,7 +96,7 @@ func (p *MessageServer) readLoop() {
 	for {
 		select {
 		case <-p.exit:
-			p.Debug("shutting down protocol ", p.name)
+			p.With().Debug("shutting down protocol", log.String("protocol", p.name))
 			close(p.exit)
 			return
 		case <-timer.C:
@@ -121,7 +128,13 @@ func (p *MessageServer) cleanStaleMessages() {
 		if elem != nil {
 			item := elem.Value.(Item)
 			if time.Since(item.timestamp) > p.requestLifetime {
-				p.Debug("cleanStaleMessages remove request ", item.id)
+				p.With().Debug("cleanStaleMessages remove request", log.Uint64("id", item.id))
+				p.pendMutex.RLock()
+				foo, okFoo := p.resHandlers[item.id]
+				p.pendMutex.RUnlock()
+				if okFoo {
+					foo.failCallBack(fmt.Errorf("response timeout"))
+				}
 				p.removeFromPending(item.id)
 			} else {
 				p.Debug("cleanStaleMessages no more stale messages")
@@ -141,11 +154,11 @@ func (p *MessageServer) removeFromPending(reqID uint64) {
 		next = e.Next()
 		if reqID == e.Value.(Item).id {
 			p.pendingQueue.Remove(e)
-			p.Debug("removed request ", e.Value.(Item).id)
+			p.With().Debug("removed request", log.Uint64("request_id", reqID))
 			break
 		}
 	}
-	p.Debug("delete request result %v handler", reqID)
+	p.With().Debug("delete request result handler", log.Uint64("request_id", reqID))
 	delete(p.resHandlers, reqID)
 	p.pendMutex.Unlock()
 }
@@ -164,29 +177,32 @@ func (p *MessageServer) handleRequestMessage(msg Message, data *service.DataMsgW
 
 	foo, okFoo := p.msgRequestHandlers[MessageType(data.MsgType)]
 	if !okFoo {
-		p.With().Error("handler missing for request", log.Uint64("request_id", data.ReqID), log.String("protocol", p.name), log.Uint32("msg_type", data.MsgType))
+		p.With().Error("handler missing for request",
+			log.Uint64("request_id", data.ReqID),
+			log.String("protocol", p.name),
+			log.Uint32("msg_type", data.MsgType))
 		return
 	}
 
 	p.Debug("handle request type %v", data.MsgType)
 	rmsg := &service.DataMsgWrapper{MsgType: data.MsgType, ReqID: data.ReqID, Payload: foo(msg)}
 	if sendErr := p.network.SendWrappedMessage(msg.Sender(), p.name, rmsg); sendErr != nil {
-		p.Error("Error sending response message: %s", sendErr)
+		p.With().Error("Error sending response message", log.Err(sendErr))
 	}
 	p.Debug("handleRequestMessage close")
 }
 
 func (p *MessageServer) handleResponseMessage(headers *service.DataMsgWrapper) {
 	//get and remove from pendingMap
-	p.Log.With().Debug("handleResponseMessage", log.Uint64("req_id", headers.ReqID))
+	p.Log.With().Debug("handleResponseMessage", log.Uint64("request_id", headers.ReqID))
 	p.pendMutex.RLock()
 	foo, okFoo := p.resHandlers[headers.ReqID]
 	p.pendMutex.RUnlock()
 	p.removeFromPending(headers.ReqID)
 	if okFoo {
-		foo(headers.Payload)
+		foo.okCallback(headers.Payload)
 	} else {
-		p.Error("Cant find handler %v", headers.ReqID)
+		p.With().Error("can't find handler", log.Uint64("request_id", headers.ReqID))
 	}
 	p.Debug("handleResponseMessage close")
 }
@@ -209,23 +225,23 @@ func (p *MessageServer) RegisterBytesMsgHandler(msgType MessageType, reqHandler 
 }
 
 // SendRequest sends a request of a specific message.
-func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte)) error {
+func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), timeoutHandler func(err error)) error {
 	reqID := p.newReqID()
 	p.pendMutex.Lock()
-	p.resHandlers[reqID] = resHandler
+	p.resHandlers[reqID] = ResponseHandlers{resHandler, timeoutHandler}
 	p.pendingQueue.PushBack(Item{id: reqID, timestamp: time.Now()})
 	p.pendMutex.Unlock()
 	msg := &service.DataMsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
 	if sendErr := p.network.SendWrappedMessage(address, p.name, msg); sendErr != nil {
 		p.With().Error("sending message failed",
 			log.Uint32("msg_type", uint32(msgType)),
-			address.Field("recipient"),
+			log.FieldNamed("recipient", address),
 			log.Int("msglen", len(payload)),
 			log.Err(sendErr))
 		p.removeFromPending(reqID)
 		return sendErr
 	}
-	p.Log.With().Debug("sent request", log.Uint64("req_id", reqID))
+	p.Log.With().Debug("sent request", log.Uint64("request_id", reqID))
 	return nil
 }
 

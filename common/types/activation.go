@@ -4,13 +4,15 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"sort"
+	"strings"
+
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/sha256-simd"
-	"sort"
-	"strings"
+
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // EpochID is the running epoch number. It's zero-based, so the genesis epoch has EpochID == 0.
@@ -22,6 +24,12 @@ func (l EpochID) ToBytes() []byte { return util.Uint64ToBytes(uint64(l)) }
 // IsGenesis returns true if this epoch is in genesis. The first two epochs are considered genesis epochs.
 func (l EpochID) IsGenesis() bool {
 	return l < 2
+}
+
+// NeedsGoldenPositioningATX returns true if ATXs in this epoch require positioning ATX to be equal to the Golden ATX.
+// All ATXs in epoch 1 must have the Golden ATX as positioning ATX.
+func (l EpochID) NeedsGoldenPositioningATX() bool {
+	return l == 1
 }
 
 // FirstLayer returns the layer ID of the first layer in the epoch.
@@ -51,7 +59,7 @@ func (t ATXID) Bytes() []byte {
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (t ATXID) Field() log.Field { return t.Hash32().Field("atx_id") }
+func (t ATXID) Field() log.Field { return log.FieldNamed("atx_id", t.Hash32()) }
 
 // Compare returns true if other (the given ATXID) is less than this ATXID, by lexicographic comparison.
 func (t ATXID) Compare(other ATXID) bool {
@@ -169,7 +177,6 @@ type ActivationTx struct {
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
 func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, nipst *NIPST, commitment *PostProof) *ActivationTx {
-
 	atx := &ActivationTx{
 		InnerActivationTx: &InnerActivationTx{
 			ActivationTxHeader: &ActivationTxHeader{
@@ -207,6 +214,7 @@ func (atx *ActivationTx) Fields(size int) []log.LoggableField {
 		log.FieldNamed("sender_id", atx.NodeID),
 		log.FieldNamed("prev_atx_id", atx.PrevATXID),
 		log.FieldNamed("pos_atx_id", atx.PositioningATX),
+		log.FieldNamed("coinbase", atx.Coinbase),
 		atx.PubLayerID,
 		atx.PubLayerID.GetEpoch(),
 		log.Uint64("sequence_number", atx.Sequence),
@@ -232,8 +240,8 @@ func (atx *ActivationTx) CalcAndSetID() {
 }
 
 // GetPoetProofRef returns the reference to the PoET proof.
-func (atx *ActivationTx) GetPoetProofRef() []byte {
-	return atx.Nipst.PostProof.Challenge
+func (atx *ActivationTx) GetPoetProofRef() Hash32 {
+	return CalcHash32(atx.Nipst.PostProof.Challenge)
 }
 
 // GetShortPoetProofRef returns the first 5 characters of the PoET proof reference, for logging purposes.

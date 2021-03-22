@@ -4,6 +4,7 @@ config_map_name: conf
 
 script_on_exit: '' #'./k8s/log-client-pods.sh'
 
+total_pods: 15
 genesis_delta: -1000
 deployment_ready_time_out: 500
 single_pod_ready_time_out: 60
@@ -14,6 +15,13 @@ bootstrap:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-sync'
   replicas: 1
+  resources:
+    requests:
+      memory: '512M'
+      cpu: '1'
+    limits:
+      memory: '512M'
+      cpu: '1'
   args:
     randcon: '8'
     hare-committee-size: '20'
@@ -21,16 +29,24 @@ bootstrap:
     hare-round-duration-sec: '10'
     layer-duration-sec: '10'
     layer-average-size: '20'
+    golden-atx: '0x5678'
     data-folder: '/bin/data/'
     expected-layers: '50'
     storage-path: 'spacemesh-sync-data'
     remote-data: 'true'
     hdist: '5'
-    version: 'newestSamples/'
+    version: '/newestSamplesGoldenATX/'
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-sync'
   replicas: 9
+  resources:
+    requests:
+      memory: '512M'
+      cpu: '1'
+    limits:
+      memory: '512M'
+      cpu: '1'
   args:
     randcon: '8'
     hare-committee-size: '20'
@@ -38,16 +54,24 @@ client:
     hare-round-duration-sec: '10'
     layer-duration-sec: '10'
     layer-average-size: '20'
+    golden-atx: '0x5678'
     data-folder: '/bin/data/'
     expected-layers: '50'
     storage-path: 'spacemesh-sync-data'
     remote-data: 'true'
     hdist: '5'
-    version: 'newestSamples/'
+    version: '/newestSamplesGoldenATX/'
 clientv2:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-sync'
   replicas: 9
+  resources:
+    requests:
+      memory: '512M'
+      cpu: '1'
+    limits:
+      memory: '512M'
+      cpu: '1'
   args:
     randcon: '8'
     hare-committee-size: '20'
@@ -56,6 +80,7 @@ clientv2:
     layer-duration-sec: '10'
     layer-average-size: '20'
     expected-layers: '50'
+    golden-atx: '0x5678'
     storage-path: 'spacemesh-sync-data'
     hdist: '5'
     data-folder: '/usr/share/spacemesh/'

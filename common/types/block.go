@@ -4,12 +4,15 @@ package types
 import (
 	"bytes"
 	"fmt"
+	"sort"
+	"sync/atomic"
+	"time"
+
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"sort"
-	"sync/atomic"
 )
 
 // BlockID is a 20-byte sha256 sum of the serialized block, used to identify it.
@@ -35,20 +38,20 @@ func (id BlockID) AsHash32() Hash32 {
 	return Hash20(id).ToHash32()
 }
 
-var layersPerEpoch int32 = 0
+var layersPerEpoch int32
 
 // EffectiveGenesis marks when actual blocks would start being crated in the network, this will take account the first
 // genesis epoch and the following epoch in which ATXs are published
-var EffectiveGenesis int32 = 0
+var EffectiveGenesis int32
 
 func getLayersPerEpoch() int32 {
 	return atomic.LoadInt32(&layersPerEpoch)
 }
 
 // SetLayersPerEpoch sets global parameter of layers per epoch, all conversion from layer to epoch use this param
-func SetLayersPerEpoch(l int32) {
-	atomic.StoreInt32(&layersPerEpoch, l)
-	atomic.StoreInt32(&EffectiveGenesis, getLayersPerEpoch()*2-1)
+func SetLayersPerEpoch(layers int32) {
+	atomic.StoreInt32(&layersPerEpoch, layers)
+	atomic.StoreInt32(&EffectiveGenesis, layers*2-1)
 }
 
 // LayerID is a uint64 representing a layer number. It is zero-based.
@@ -101,6 +104,45 @@ func (id NodeID) ToBytes() []byte {
 func (id NodeID) ShortString() string {
 	name := id.Key
 	return Shorten(name, 5)
+}
+
+// BytesToNodeID deserializes a byte slice into a NodeID
+// TODO: length of the input will be made exact when the NodeID is compressed into
+// one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
+func BytesToNodeID(b []byte) (*NodeID, error) {
+	if len(b) < 32 {
+		return nil, fmt.Errorf("Invalid input length, input too short")
+	}
+	if len(b) > 64 {
+		return nil, fmt.Errorf("Invalid input length, input too long")
+	}
+
+	pubKey := b[0:32]
+	vrfKey := b[32:]
+	return &NodeID{
+		Key:          util.Bytes2Hex(pubKey),
+		VRFPublicKey: []byte(util.Bytes2Hex(vrfKey)),
+	}, nil
+}
+
+//StringToNodeID deserializes a string into a NodeID
+// TODO: length of the input will be made exact when the NodeID is compressed into
+// one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
+func StringToNodeID(s string) (*NodeID, error) {
+	strLen := len(s)
+	if strLen < 64 {
+		return nil, fmt.Errorf("Invalid input length, input too short")
+	}
+	if strLen > 128 {
+		return nil, fmt.Errorf("Invalid input length, input too long")
+	}
+	//portion of the string corresponding to the Edwards public key
+	pubKey := s[:64]
+	vrfKey := s[64:]
+	return &NodeID{
+		Key:          pubKey,
+		VRFPublicKey: []byte(vrfKey),
+	}, nil
 }
 
 // Field returns a log field. Implements the LoggableField interface.
@@ -177,13 +219,22 @@ func (b *Block) Bytes() []byte {
 
 // Fields returns an array of LoggableFields for logging
 func (b *Block) Fields() []log.LoggableField {
+	activeSet := 0
+	if b.ActiveSet != nil {
+		activeSet = len(*b.ActiveSet)
+	}
+
 	return []log.LoggableField{
 		b.ID(),
 		b.LayerIndex,
-		b.MinerID(),
+		b.LayerIndex.GetEpoch(),
+		log.FieldNamed("miner_id", b.MinerID()),
 		log.Int("view_edges", len(b.ViewEdges)),
 		log.Int("vote_count", len(b.BlockVotes)),
+		b.ATXID,
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
+		log.FieldNamed("ref_block", b.RefBlock),
+		log.Int("active_set_size", activeSet),
 		log.Int("tx_count", len(b.TxIDs)),
 	}
 }
@@ -286,7 +337,7 @@ func NewExistingLayer(idx LayerID, blocks []*Block) *Layer {
 // NewExistingBlock returns a block in the given layer with the given arbitrary data. The block is signed with a random
 // keypair that isn't stored anywhere. This method should be phased out of use in production code (it's currently used
 // in tests and the temporary genesis flow).
-func NewExistingBlock(layerIndex LayerID, data []byte) *Block {
+func NewExistingBlock(layerIndex LayerID, data []byte, txs []TransactionID) *Block {
 	b := Block{
 		MiniBlock: MiniBlock{
 			BlockHeader: BlockHeader{
@@ -294,6 +345,7 @@ func NewExistingBlock(layerIndex LayerID, data []byte) *Block {
 				ViewEdges:  make([]BlockID, 0, 10),
 				LayerIndex: layerIndex,
 				Data:       data},
+			TxIDs: txs,
 		}}
 	b.Signature = signing.NewEdSigner().Sign(b.Bytes())
 	b.Initialize()
@@ -318,4 +370,16 @@ func SortBlockIDs(ids []BlockID) []BlockID {
 func SortBlocks(ids []*Block) []*Block {
 	sort.Slice(ids, func(i, j int) bool { return ids[i].ID().Compare(ids[j].ID()) })
 	return ids
+}
+
+// RandomBlockID generates random block id
+func RandomBlockID() BlockID {
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, 8)
+	_, err := rand.Read(b)
+	// Note that err == nil only if we read len(b) bytes.
+	if err != nil {
+		return BlockID{}
+	}
+	return BlockID(CalcHash32(b).ToHash20())
 }

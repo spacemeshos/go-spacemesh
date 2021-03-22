@@ -21,7 +21,7 @@ func TestNewPeerWorker(t *testing.T) {
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
 	defer syncObj2.Close()
-	bl1 := types.NewExistingBlock(types.GetEffectiveGenesis()+1, []byte(rand.String(8)))
+	bl1 := types.NewExistingBlock(types.GetEffectiveGenesis()+1, []byte(rand.String(8)), nil)
 	err := syncObj1.AddBlock(bl1)
 	assert.NoError(t, err)
 
@@ -55,13 +55,13 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 	r.NoError(err)
 	ref := sha256.Sum256(poetProofBytes)
 
-	w := newNeighborhoodWorker(s1, 1, poetReqFactory(ref[:]))
+	w := newNeighborhoodWorker(s1, 1, poetReqFactory(types.CalcHash32(ref[:]).Bytes()))
 	go w.Work()
 	assert.NotNil(t, <-w.output)
 	r.NoError(err)
 }
 
-var longConf = Configuration{1000, 1, 300, 5 * time.Minute, 1 * time.Second, 10 * time.Hour, 100, 5, false}
+var longConf = Configuration{1000, 1, 300, 5 * time.Minute, 1 * time.Second, 10 * time.Hour, 100, 5, false, goldenATXID}
 
 func TestNeighborhoodWorkerClose(t *testing.T) {
 	r := require.New(t)

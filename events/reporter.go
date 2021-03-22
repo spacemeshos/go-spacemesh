@@ -3,10 +3,12 @@ package events
 import (
 	"errors"
 	"fmt"
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"sync"
+	"go.uber.org/zap/zapcore"
 )
 
 // reporter is the event reporter singleton.
@@ -42,13 +44,13 @@ func ReportTxWithValidity(tx *types.Transaction, valid bool) {
 	if reporter != nil {
 		if reporter.blocking {
 			reporter.channelTransaction <- txWithValidity
-			log.Info("reported tx on channelTransaction: %v", txWithValidity)
+			log.Debug("reported tx on channelTransaction: %v", txWithValidity)
 		} else {
 			select {
 			case reporter.channelTransaction <- txWithValidity:
-				log.Info("reported tx on channelTransaction: %v", txWithValidity)
+				log.Debug("reported tx on channelTransaction: %v", txWithValidity)
 			default:
-				log.Info("not reporting tx as no one is listening: %v", txWithValidity)
+				log.Debug("not reporting tx as no one is listening: %v", txWithValidity)
 			}
 		}
 	}
@@ -70,15 +72,20 @@ func ReportNewActivation(activation *types.ActivationTx) {
 	})
 
 	if reporter != nil {
+		innerBytes, err := activation.InnerBytes()
+		if err != nil {
+			log.Error("error attempting to report activation: unable to encode activation")
+			return
+		}
 		if reporter.blocking {
 			reporter.channelActivation <- activation
-			log.Info("reported activation")
+			log.With().Debug("reported activation", activation.Fields(len(innerBytes))...)
 		} else {
 			select {
 			case reporter.channelActivation <- activation:
-				log.Info("reported activation")
+				log.With().Debug("reported activation", activation.Fields(len(innerBytes))...)
 			default:
-				log.Info("not reporting activation as no one is listening")
+				log.With().Debug("not reporting activation as no one is listening", activation.Fields(len(innerBytes))...)
 			}
 		}
 	}
@@ -90,20 +97,21 @@ func ReportRewardReceived(r Reward) {
 	defer mu.RUnlock()
 
 	Publish(RewardReceived{
-		Coinbase: r.Coinbase.String(),
-		Amount:   r.Total,
+		Coinbase:  r.Coinbase.String(),
+		Amount:    r.Total,
+		SmesherID: r.Smesher.ToBytes(),
 	})
 
 	if reporter != nil {
 		if reporter.blocking {
 			reporter.channelReward <- r
-			log.Info("reported reward: %v", r)
+			log.Debug("reported reward: %v", r)
 		} else {
 			select {
 			case reporter.channelReward <- r:
-				log.Info("reported reward: %v", r)
+				log.Debug("reported reward: %v", r)
 			default:
-				log.Info("not reporting reward as no one is listening: %v", r)
+				log.Debug("not reporting reward as no one is listening: %v", r)
 			}
 		}
 	}
@@ -118,7 +126,7 @@ func ReportNewBlock(blk *types.Block) {
 	})
 }
 
-// ReportValidBlock reports a valid block
+// ReportValidBlock reports a block's validity
 func ReportValidBlock(blockID types.BlockID, valid bool) {
 	Publish(ValidBlock{
 		ID:    blockID.String(),
@@ -153,13 +161,13 @@ func ReportNewLayer(layer NewLayer) {
 	if reporter != nil {
 		if reporter.blocking {
 			reporter.channelLayer <- layer
-			log.With().Info("reported new layer", layer)
+			log.With().Debug("reported new layer", layer)
 		} else {
 			select {
 			case reporter.channelLayer <- layer:
-				log.With().Info("reported new layer", layer)
+				log.With().Debug("reported new layer", layer)
 			default:
-				log.With().Info("not reporting new layer as no one is listening", layer)
+				log.With().Debug("not reporting new layer as no one is listening", layer)
 			}
 		}
 	}
@@ -173,13 +181,13 @@ func ReportError(err NodeError) {
 	if reporter != nil {
 		if reporter.blocking {
 			reporter.channelError <- err
-			log.Info("reported error: %v", err)
+			log.Debug("reported error: %v", err)
 		} else {
 			select {
 			case reporter.channelError <- err:
-				log.Info("reported error: %v", err)
+				log.Debug("reported error: %v", err)
 			default:
-				log.Info("not reporting error as buffer is full: %v", err)
+				log.Debug("not reporting error as buffer is full: %v", err)
 			}
 		}
 	}
@@ -204,13 +212,13 @@ func ReportNodeStatusUpdate() {
 	if reporter != nil {
 		if reporter.blocking {
 			reporter.channelStatus <- struct{}{}
-			log.Info("reported status update")
+			log.Debug("reported status update")
 		} else {
 			select {
 			case reporter.channelStatus <- struct{}{}:
-				log.Info("reported status update")
+				log.Debug("reported status update")
 			default:
-				log.Info("not reporting status update as no one is listening")
+				log.Debug("not reporting status update as no one is listening")
 			}
 		}
 	}
@@ -224,13 +232,13 @@ func ReportReceipt(r TxReceipt) {
 	if reporter != nil {
 		if reporter.blocking {
 			reporter.channelReceipt <- r
-			log.Info("reported receipt: %v", r)
+			log.Debug("reported receipt: %v", r)
 		} else {
 			select {
 			case reporter.channelReceipt <- r:
-				log.Info("reported receipt: %v", r)
+				log.Debug("reported receipt: %v", r)
 			default:
-				log.Info("not reporting receipt as no one is listening: %v", r)
+				log.Debug("not reporting receipt as no one is listening: %v", r)
 			}
 		}
 	}
@@ -244,13 +252,13 @@ func ReportAccountUpdate(a types.Address) {
 	if reporter != nil {
 		if reporter.blocking {
 			reporter.channelAccount <- a
-			log.Info("reported account update: %v", a)
+			log.With().Debug("reported account update", a)
 		} else {
 			select {
 			case reporter.channelAccount <- a:
-				log.Info("reported account update: %v", a)
+				log.With().Debug("reported account update", a)
 			default:
-				log.Info("not reporting account update as no one is listening: %v", a)
+				log.With().Debug("not reporting account update as no one is listening", a)
 			}
 		}
 	}
@@ -378,7 +386,7 @@ func SubscribeToLayers(newLayerCh timesync.LayerTimer) {
 			for {
 				select {
 				case layer := <-newLayerCh:
-					log.With().Info("reporter got new layer", layer)
+					log.With().Debug("reporter got new layer", layer)
 					ReportNodeStatusUpdate()
 				case <-reporter.stopChan:
 					return
@@ -387,16 +395,6 @@ func SubscribeToLayers(newLayerCh timesync.LayerTimer) {
 		}()
 	}
 }
-
-// The type and severity of a reported error
-const (
-	NodeErrorTypeError = iota
-	NodeErrorTypePanic
-	NodeErrorTypePanicSync
-	NodeErrorTypePanicP2P
-	NodeErrorTypePanicHare
-	NodeErrorTypeSignalShutdown
-)
 
 // The status of a layer
 const (
@@ -423,7 +421,7 @@ func (nl NewLayer) Field() log.Field {
 type NodeError struct {
 	Msg   string
 	Trace string
-	Type  int
+	Level zapcore.Level
 }
 
 // TxReceipt represents a transaction receipt
@@ -443,10 +441,10 @@ type Reward struct {
 	Total       uint64
 	LayerReward uint64
 	Coinbase    types.Address
-	// TODO: We don't currently have a way to get these two.
-	// See https://github.com/spacemeshos/go-spacemesh/issues/2068
+	// TODO: We don't currently have a way to get the Layer Computed.
+	// See https://github.com/spacemeshos/go-spacemesh/issues/2275
 	//LayerComputed
-	//Smesher
+	Smesher types.NodeID
 }
 
 // TransactionWithValidity wraps a tx with its validity info

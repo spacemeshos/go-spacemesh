@@ -23,7 +23,6 @@ const (
 	defaultConfigFileName = "./config.toml"
 	defaultDataDirName    = "spacemesh"
 	// NewBlockProtocol indicates the protocol name for new blocks arriving.
-	NewBlockProtocol = "newBlock"
 )
 
 var (
@@ -83,6 +82,8 @@ type BaseConfig struct {
 
 	CoinbaseAccount string `mapstructure:"coinbase"`
 
+	GoldenATXID string `mapstructure:"golden-atx"`
+
 	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
 
 	SyncRequestTimeout int `mapstructure:"sync-request-timeout"` // ms the timeout for direct request in the sync
@@ -102,6 +103,8 @@ type BaseConfig struct {
 	BlockCacheSize int `mapstructure:"block-cache-size"`
 
 	AlwaysListen bool `mapstructure:"always-listen"` // force gossip to always be on (for testing)
+
+	Profiler bool `mapstructure:"profiler"`
 }
 
 // LoggerConfig holds the logging level for each module.
@@ -111,8 +114,8 @@ type LoggerConfig struct {
 	PostLoggerLevel           string `mapstructure:"post"`
 	StateDbLoggerLevel        string `mapstructure:"stateDb"`
 	StateLoggerLevel          string `mapstructure:"state"`
-	AtxDbStoreLoggerLevel     string `mapstructure:"atxDb"`
-	PoetDbStoreLoggerLevel    string `mapstructure:"poetDb"`
+	AtxDbStoreLoggerLevel     string `mapstructure:"atxDbStore"`
+	PoetDbStoreLoggerLevel    string `mapstructure:"poetDbStore"`
 	StoreLoggerLevel          string `mapstructure:"store"`
 	PoetDbLoggerLevel         string `mapstructure:"poetDb"`
 	MeshDBLoggerLevel         string `mapstructure:"meshDb"`
@@ -160,6 +163,7 @@ func defaultBaseConfig() BaseConfig {
 		LayerDurationSec:    30,
 		LayersPerEpoch:      3,
 		PoETServer:          "127.0.0.1",
+		GoldenATXID:         "0x5678", // TODO: Change the value
 		Hdist:               5,
 		GenesisActiveSet:    5,
 		BlockCacheSize:      20,
@@ -168,6 +172,7 @@ func defaultBaseConfig() BaseConfig {
 		SyncValidationDelta: 30,
 		AtxsPerBlock:        100,
 		TxsPerBlock:         100,
+		Profiler:            false,
 	}
 }
 

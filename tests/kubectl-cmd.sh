@@ -2,7 +2,7 @@
 
 set -xe
 
-export end_point='http://'$1':9090/'$3
+export end_point='http://'$1':9093/'$3
 
 # Example:
 # kubectl exec -it curl -n sm -- curl --request POST --data '{ "data": "foo" }' $end_point

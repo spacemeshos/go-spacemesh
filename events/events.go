@@ -42,6 +42,14 @@ func InitializeEventPubsub(ur string) {
 	}
 }
 
+// CloseEventPubSub closes events pubsub and destroys it
+func CloseEventPubSub() {
+	if publisher != nil {
+		publisher.Close()
+		publisher = nil
+	}
+}
+
 // EventPublisher is the struct that publishes events to subscribers by topics.
 type EventPublisher struct {
 	*Publisher
@@ -162,8 +170,9 @@ func (ValidTx) GetChannel() ChannelID {
 
 // RewardReceived signals reward has been received
 type RewardReceived struct {
-	Coinbase string
-	Amount   uint64
+	Coinbase  string
+	Amount    uint64
+	SmesherID []byte
 }
 
 // GetChannel gets the message type which means on which this message should be sent
