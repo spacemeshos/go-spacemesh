@@ -36,6 +36,12 @@ Note that bors also has a "dry run" mode (trigged by the command `bors try`). Th
 
 It's not necessary to run any additional tests when bors merges code to `develop`. The only thing that needs to happen on a push to `develop` is that a new docker image must be generated and pushed to dockerhub.
 
+### CI status
+
+a.k.a.: You're lying! Your "CI: passing" badge is static and doesn't reflect the true status!
+
+As described above, bors ensures that no commit to `develop` can break the build. This is why our status is always passing: it's static, but it's not a lie!
+
 ## Testing locally
 
 There is a robust tool called [`act`](https://github.com/nektos/act) that mimics the GA environment locally. It can be installed using Homebrew by running:
