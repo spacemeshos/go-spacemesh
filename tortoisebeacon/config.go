@@ -10,7 +10,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		K:           6,
-		WakeupDelta: 10,
+		WakeupDelta: 30,
 	}
 }
 
