@@ -17,7 +17,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	requirer := require.New(t)
 	conf := TestConfig()
 
-	mwc := mockWeakCoin{}
+	mwc := MockWeakCoin{}
 
 	atxPool := activation.NewAtxMemPool()
 	logger := log.NewDefault("TortoiseBeacon")

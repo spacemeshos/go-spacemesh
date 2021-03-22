@@ -550,8 +550,14 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
 	tBeaconConf := tortoisebeacon.DefaultConfig()
 
+	// TODO(nkryuchkov): use real weak coin
+	weakCoin := tortoisebeacon.MockWeakCoin{}
+
 	// TODO(nkryuchkov): pass correct args
-	tBeacon := tortoisebeacon.New(tBeaconConf, swarm, atxdb, tBeaconDB, nil, clock.Subscribe(), app.addLogger(TBeaconLogger, lg))
+	tBeacon := tortoisebeacon.New(tBeaconConf, swarm, atxdb, tBeaconDB, weakCoin, clock.Subscribe(), app.addLogger(TBeaconLogger, lg))
+	if err := tBeacon.Start(); err != nil {
+		app.log.Panic("Failed to start tortoise beacon: %v", err)
+	}
 
 	var msh *mesh.Mesh
 	var trtl tortoise.Tortoise
