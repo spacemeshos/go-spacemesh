@@ -43,6 +43,14 @@ func (m *Message) Field() log.Field {
 	return log.String("message", m.String())
 }
 
+// TypeString returns a string (for logging) with the type, if known
+func (m *Message) TypeString() string {
+	if m.InnerMsg != nil {
+		return m.InnerMsg.Type.String()
+	}
+	return "missing InnerMsg, type unknown"
+}
+
 // certificate is a collection of messages and the set of values.
 // Typically used as a collection of commit messages.
 type certificate struct {

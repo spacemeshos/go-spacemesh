@@ -84,7 +84,7 @@ func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
 			log.Err(err),
 			log.String("sender_id", m.PubKey.ShortString()),
 			types.LayerID(m.InnerMsg.InstanceID),
-			log.String("msg_type", m.InnerMsg.Type.String()))
+			log.String("msg_type", m.TypeString()))
 		return false
 	}
 
@@ -93,7 +93,7 @@ func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
 		ev.WithContext(ctx).With().Warning("validate message failed: role is invalid",
 			log.String("sender_id", m.PubKey.ShortString()),
 			types.LayerID(m.InnerMsg.InstanceID),
-			log.String("msg_type", m.InnerMsg.Type.String()))
+			log.String("msg_type", m.TypeString()))
 		return false
 	}
 
@@ -242,7 +242,7 @@ func (v *syntaxContextValidator) SyntacticallyValidateMessage(ctx context.Contex
 		logger.With().Warning("syntax validation failed: set is nil",
 			log.String("sender_id", m.PubKey.ShortString()),
 			types.LayerID(m.InnerMsg.InstanceID),
-			log.String("msg_type", m.InnerMsg.Type.String()))
+			log.String("msg_type", m.TypeString()))
 		return false
 	}
 
@@ -250,7 +250,7 @@ func (v *syntaxContextValidator) SyntacticallyValidateMessage(ctx context.Contex
 		logger.With().Warning("syntax validation failed: set is empty",
 			log.String("sender_id", m.PubKey.ShortString()),
 			types.LayerID(m.InnerMsg.InstanceID),
-			log.String("msg_type", m.InnerMsg.Type.String()))
+			log.String("msg_type", m.TypeString()))
 		return false
 	}
 
