@@ -184,12 +184,15 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	builder2.AtxDb = atxDbMock{}
 	builder1.AtxDb = atxDbMock{}
 
-	b1, err := builder1.createBlock(types.GetEffectiveGenesis()+2, types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
+	atxId1 := types.ATXID(types.HexToHash32("dead"))
+	atxId2 := types.ATXID(types.HexToHash32("beef"))
+
+	b1, err := builder1.createBlock(types.GetEffectiveGenesis()+2, atxId1, types.BlockEligibilityProof{}, nil, nil)
 	assert.NoError(t, err)
-	b2, err := builder2.createBlock(types.GetEffectiveGenesis()+2, types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
+	b2, err := builder2.createBlock(types.GetEffectiveGenesis()+2, atxId2, types.BlockEligibilityProof{}, nil, nil)
 	assert.NoError(t, err)
 
-	assert.True(t, b1.ID() != b2.ID(), "ids are identical")
+	assert.NotEqual(t, b1.ID(), b2.ID(), "ids are identical")
 }
 
 var (
