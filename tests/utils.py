@@ -158,8 +158,6 @@ def validate_beacons(log_messages):
 
     assert len(log_messages) > 0, f"no log messages"
 
-    [print(f"tortoise beacon for epoch {log.epoch}: {log.beacon}") for log in log_messages]
-
     for log in log_messages:
         if log.epoch not in epoch_messages:
             epoch_messages[log.epoch] = dict()

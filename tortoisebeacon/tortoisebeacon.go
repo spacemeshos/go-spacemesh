@@ -18,7 +18,6 @@ const (
 	protoName       = "TORTOISE_BEACON_PROTOCOL"
 	cleanupInterval = 30 * time.Second
 	cleanupEpochs   = 1000
-	theta           = 1 // TODO(nkryuchkov): change
 )
 
 var (
@@ -636,13 +635,13 @@ func (tb *TortoiseBeacon) calculateVotes(epoch types.EpochID, round uint64) (vot
 	votesAgainst = make([]types.Hash32, 0)
 
 	for k, v := range votesForMap {
-		if v > threshold() || tb.weakCoin.WeakCoin(epoch, round) {
+		if v > tb.threshold() || tb.weakCoin.WeakCoin(epoch, round) {
 			votesFor = append(votesFor, k)
 		}
 	}
 
 	for k, v := range votesAgainstMap {
-		if v > threshold() || !tb.weakCoin.WeakCoin(epoch, round) {
+		if v > tb.threshold() || !tb.weakCoin.WeakCoin(epoch, round) {
 			votesAgainst = append(votesAgainst, k)
 		}
 	}
@@ -665,7 +664,7 @@ func (tb *TortoiseBeacon) calculateVotes(epoch types.EpochID, round uint64) (vot
 // Messages from round K - 1 received in round K + 2 are late.
 // Therefore, counting more than K + 2 rounds is not needed.
 func (tb *TortoiseBeacon) lastPossibleRound() uint64 {
-	return tb.config.K + 2
+	return tb.config.RoundsNumber + 2
 }
 
 func calculateBeacon(m map[EpochRoundPair]map[types.Hash32]struct{}) types.Hash32 {
@@ -698,6 +697,10 @@ func calculateBeacon(m map[EpochRoundPair]map[types.Hash32]struct{}) types.Hash3
 	hasher.Sum(res[:0])
 
 	return res
+}
+
+func (tb *TortoiseBeacon) threshold() int {
+	return tb.config.Theta * tb.config.TAve
 }
 
 func hashATXList(atxList []types.ATXID) types.Hash32 {

@@ -2,10 +2,15 @@ package tortoisebeacon
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 func TestTortoiseCore(t *testing.T) {
@@ -68,9 +73,29 @@ func TestTortoiseCore(t *testing.T) {
 		},
 	}
 
+	requirer := require.New(t)
+	conf := TestConfig()
+
+	mwc := MockWeakCoin{}
+
+	atxPool := activation.NewAtxMemPool()
+	logger := log.NewDefault("TortoiseBeacon")
+	genesisTime := time.Now().Add(time.Second * 10)
+	ld := time.Duration(10) * time.Second
+	types.SetLayersPerEpoch(1)
+	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, log.NewDefault("clock"))
+	clock.StartNotifying()
+	ticker := clock.Subscribe()
+
+	sim := service.NewSimulator()
+	n1 := sim.NewNode()
+
+	tb := New(conf, n1, atxPool, nil, mwc, ticker, logger)
+	requirer.NotNil(tb)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotValid, gotGrades := TortoiseCore(tt.args.distance, tt.args.localVotes, tt.args.voteWeightsFor, tt.args.voteWeightsAgainst, tt.args.weakCoin)
+			gotValid, gotGrades := tb.TortoiseCore(tt.args.distance, tt.args.localVotes, tt.args.voteWeightsFor, tt.args.voteWeightsAgainst, tt.args.weakCoin)
 
 			r.Equal(gotValid, tt.wantValid)
 			r.Equal(gotGrades, tt.wantGrades)
