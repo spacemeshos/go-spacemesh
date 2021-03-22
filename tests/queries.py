@@ -68,6 +68,11 @@ def get_app_started_msgs(namespace, pod_name):
     return get_all_msg_containing(namespace, pod_name, app_started_msg)
 
 
+def get_beacon_msgs(namespace, pod_name):
+    beacon_msg = "Calculated beacon"
+    return get_all_msg_containing(namespace, pod_name, beacon_msg)
+
+
 def get_all_msg_containing(namespace, pod_name, msg_data, find_fails=False, from_ts=None, to_ts=None, is_print=True):
     """
     Queries for all logs with msg_data in their content {"M": msg_data}

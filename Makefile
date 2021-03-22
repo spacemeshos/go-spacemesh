@@ -349,6 +349,19 @@ dockertest-blocks-remove-node-elk: dockerbuild-test-elk dockerrun-blocks-remove-
 .PHONY: dockertest-blocks-remove-node-elk
 
 
+dockerrun-tortoise-beacon-elk:
+ifndef ES_PASS
+	$(error ES_PASS is not set)
+endif
+
+	$(DOCKERRUN) pytest -s -v tortoise_beacon/test_tortoise_beacon.py --tc-file=tortoise_beacon/config.yaml --tc-format=yaml
+
+.PHONY: dockerrun-tortoise-beacon-elk
+
+dockertest-tortoise-beacon-elk: dockerbuild-test-elk dockerrun-tortoise-beacon-elk
+.PHONY: dockertest-tortoise-beacon-elk
+
+
 dockerrun-blocks-stress:
 ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)

@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import datetime, timedelta
 from functools import wraps
 from kubernetes.client.rest import ApiException
@@ -26,7 +27,8 @@ def api_call(client_ip, data, api, namespace, port="9093", retry=3, interval=1):
     while True:
         try:
             res = stream(CoreV1ApiClient().connect_post_namespaced_pod_exec, name="curl", namespace=namespace,
-                         command=["curl", "-s", "--request", "POST", "--data", data, f"http://{client_ip}:{port}/{api}"],
+                         command=["curl", "-s", "--request", "POST", "--data", data,
+                                  f"http://{client_ip}:{port}/{api}"],
                          stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
         except ApiException as e:
             print(f"got an ApiException while streaming: {e}")
@@ -149,6 +151,28 @@ def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch,
               f"blocks_sum {blocks_sum}, to_layer {to_layer}, from_layer {from_layer}")
 
     print("\nvalidation succeeded!\n")
+
+
+def validate_beacons(log_messages):
+    epoch_messages = defaultdict(dict)
+
+    assert len(log_messages) > 0, f"no log messages"
+
+    [print(f"tortoise beacon for epoch {log.epoch}: {log.beacon}") for log in log_messages]
+
+    for log in log_messages:
+        if log.epoch not in epoch_messages:
+            epoch_messages[log.epoch] = dict()
+
+        if log.beacon not in epoch_messages[log.epoch]:
+            epoch_messages[log.epoch][log.beacon] = 0
+
+        epoch_messages[log.epoch][log.beacon] += 1
+
+    for epoch, beacons in epoch_messages.items():
+        assert len(beacons) == 1, f"all beacons in epoch {epoch} were not same, saw: {beacons}"
+
+    print(f"successfully validated beacons")
 
 
 def get_pod_id(ns, pod_name):
@@ -285,7 +309,7 @@ def exec_wait(cmd, retry=1, interval=1, is_print=True):
     if ret_code and ret_code != "0" and retry:
         print(f"return code: {ret_code}, failed, retrying in {interval} seconds (retries left: {retry})")
         time.sleep(interval)
-        ret_code = exec_wait(cmd, retry-1, interval, is_print=False)
+        ret_code = exec_wait(cmd, retry - 1, interval, is_print=False)
     else:
         print(f"return code: {ret_code}")
 
@@ -387,7 +411,8 @@ def timing(func):
         start = time.time()
         result = func(*args, **kwargs)
         end = time.time()
-        return result, end-start
+        return result, end - start
+
     return wrapper
 
 
