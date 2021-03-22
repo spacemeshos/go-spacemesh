@@ -1,7 +1,7 @@
 package tortoisebeacon
 
 // Config is the configuration of the Tortoise Beacon.
-type Config struct {
+type Config struct { // TODO(nkryuchkov): use unused fields
 	ATXThreshold   int    `mapstructure:"tortoise-beacon-atx-threshold"` // max allowed amount of ATXs in proposal message
 	VotesNumber    int    `mapstructure:"tortoise-beacon-votes-number"`  // max allowed amount of votes in voting message
 	BeaconDuration int    `mapstructure:"tortoise-beacon-duration"`      // Messages of the beacon are very large, we need to spread the sending of these messages, so that clients with slow connection can also participate. The solution is to run the protocol for a long enough period of time so that messages can be sent throughout this time
