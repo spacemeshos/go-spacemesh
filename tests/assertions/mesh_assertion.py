@@ -56,13 +56,14 @@ def assert_blocks_num_in_epochs(block_map, from_layer, to_layer, layers_per_epoc
     :param ignore_lst: list, a list of pod names to be ignored
 
     """
-    # layers count start from 0
-    if from_layer == 0:
+    # miners start creating blocks only from epoch 2
+    min_layer_number = layers_per_epoch * 2
+    if from_layer < min_layer_number:
         print(f"refactoring starting layer from 0 to {layers_per_epoch}, not validating first epoch")
-        from_layer = layers_per_epoch * 2
+        from_layer = min_layer_number
     if from_layer == to_layer:
         raise ValueError("no valid range was given, first layer equals the last, layers value:", from_layer)
-    if from_layer < to_layer:
+    if from_layer > to_layer:
         raise ValueError(f"starting layer ({from_layer}) must be bigger than ending layer ({to_layer})")
     if from_layer % layers_per_epoch != 0 or to_layer % layers_per_epoch != 0:
         raise ValueError(f"start layer and end layer must be at the beginning and ending of an epoch respectively, "
