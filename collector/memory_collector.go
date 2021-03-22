@@ -178,5 +178,6 @@ func (c *MemoryCollector) AtxIDExists(atxID string) bool {
 	c.lck.Lock()
 	_, found := c.Atxs[atxID]
 	c.lck.Unlock()
+
 	return found
 }
