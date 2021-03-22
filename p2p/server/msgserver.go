@@ -184,7 +184,7 @@ func (p *MessageServer) handleRequestMessage(ctx context.Context, msg Message, d
 		logger.With().Error("handler missing for request",
 			log.Uint64("req_id", data.ReqID),
 			log.String("protocol", p.name),
-			log.Uint32("msg_type", data.MsgType))
+			log.Uint32("p2p_msg_type", data.MsgType))
 		return
 	}
 
@@ -240,7 +240,7 @@ func (p *MessageServer) SendRequest(ctx context.Context, msgType MessageType, pa
 	msg := &service.DataMsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
 	if sendErr := p.network.SendWrappedMessage(ctx, address, p.name, msg); sendErr != nil {
 		p.WithContext(ctx).With().Error("sending message failed",
-			log.Uint32("msg_type", uint32(msgType)),
+			log.Uint32("p2p_msg_type", uint32(msgType)),
 			log.FieldNamed("recipient", address),
 			log.Int("msglen", len(payload)),
 			log.Err(sendErr))

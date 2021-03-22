@@ -138,7 +138,7 @@ func newMsg(ctx context.Context, hareMsg *Message, querier StateQuerier) (*Msg, 
 			log.String("sender_id", pub.ShortString()),
 			log.Err(err),
 			types.LayerID(hareMsg.InnerMsg.InstanceID),
-			log.String("msg_type", hareMsg.TypeString()))
+			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("is identity active query failed")
 	}
 
@@ -147,7 +147,7 @@ func newMsg(ctx context.Context, hareMsg *Message, querier StateQuerier) (*Msg, 
 		logger.With().Error("identity is not active",
 			log.String("sender_id", pub.ShortString()),
 			types.LayerID(hareMsg.InnerMsg.InstanceID),
-			log.String("msg_type", hareMsg.TypeString()))
+			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("inactive identity")
 	}
 
@@ -401,7 +401,7 @@ func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Msg) {
 // the very first step of handling a message
 func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 	logger := proc.WithContext(ctx).WithFields(
-		log.String("msg_type", m.TypeString()),
+		log.String("msg_type", m.InnerMsg.Type.String()),
 		log.FieldNamed("sender_id", m.PubKey),
 		log.Int32("current_k", proc.k),
 		log.Int32("msg_k", m.InnerMsg.K),
@@ -457,7 +457,7 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 // process the message by its type
 func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 	proc.WithContext(ctx).With().Debug("processing message",
-		log.String("msg_type", m.TypeString()),
+		log.String("msg_type", m.InnerMsg.Type.String()),
 		log.Int("num_values", len(m.InnerMsg.Values)))
 	// TODO: fix metrics
 	// metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(m.InnerMsg.InstanceID), 10), "reporter", "processMsg").Add(1)
@@ -475,7 +475,7 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 		proc.processNotifyMsg(ctx, m)
 	default:
 		proc.WithContext(ctx).With().Warning("unknown message type",
-			log.String("msg_type", m.TypeString()),
+			log.String("msg_type", m.InnerMsg.Type.String()),
 			log.String("sender_id", m.PubKey.ShortString()))
 	}
 }
@@ -492,7 +492,7 @@ func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
 	// generate a new requestID for this message
 	ctx = log.WithNewRequestID(ctx,
 		log.String("current_set", proc.s.String()),
-		log.String("msg_type", msg.TypeString()),
+		log.String("msg_type", msg.InnerMsg.Type.String()),
 		log.Int32("current_k", proc.k),
 		types.LayerID(proc.instanceID))
 	logger := proc.WithContext(ctx)
@@ -504,7 +504,7 @@ func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
 
 	logger.With().Info("should participate: message sent",
 		log.String("current_set", proc.s.String()),
-		log.String("msg_type", msg.TypeString()),
+		log.String("msg_type", msg.InnerMsg.Type.String()),
 		log.Int32("current_k", proc.k),
 		types.LayerID(proc.instanceID))
 	return true
