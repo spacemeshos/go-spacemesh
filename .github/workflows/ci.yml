@@ -53,8 +53,8 @@ jobs:
           make lint
   unittests:
     runs-on: ubuntu-latest
-    # should take around 8-10 mins
-    timeout-minutes: 15
+    # might take up to 15-20 mins
+    timeout-minutes: 20
     steps:
       - name: checkout
         uses: actions/checkout@v2
