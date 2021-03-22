@@ -229,5 +229,5 @@ Close and reopen powershell to load the new PATH. You can then run the command `
 - Spacemesh Protocol [video overview](https://www.youtube.com/watch?v=jvtHFOlA1GI)
 
 ### Got Questions?
-- Introduce yourself and ask anything on the [spacemesh gitter channel](https://gitter.im/spacemesh-os/Lobby).
+- Introduce yourself and ask anything on [Discord](http://chat.spacemesh.io/).
 - DM [@teamspacemesh](https://twitter.com/teamspacemesh)
