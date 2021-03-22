@@ -82,7 +82,7 @@ func (s GlobalStateService) Account(_ context.Context, in *pb.AccountRequest) (*
 	addr := types.BytesToAddress(in.AccountId.Address)
 	acct, err := s.getAccount(addr)
 	if err != nil {
-		log.Error("unable to fetch projected account state: %s", err)
+		log.With().Error("unable to fetch projected account state", log.Err(err))
 		return nil, status.Errorf(codes.Internal, "error fetching projected account data")
 	}
 
@@ -147,7 +147,7 @@ func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDa
 	if filterAccount {
 		acct, err := s.getAccount(addr)
 		if err != nil {
-			log.Error("unable to fetch projected account state: %s", err)
+			log.With().Error("unable to fetch projected account state", log.Err(err))
 			return nil, status.Errorf(codes.Internal, "error fetching projected account data")
 		}
 		res.AccountItem = append(res.AccountItem, &pb.AccountData{Datum: &pb.AccountData_AccountWrapper{
@@ -205,7 +205,7 @@ func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDa
 	dbRewards, err := s.Mesh.GetRewardsBySmesherID(*smesherID)
 	if err != nil {
 		log.With().Error("unable to fetch projected reward state for smesher",
-			log.String("smesher", smesherID.String()),
+			log.FieldNamed("smesher_id", smesherID),
 			log.Err(err))
 		return nil, status.Errorf(codes.Internal, "error getting rewards data")
 	}
@@ -301,7 +301,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 				// nonce.
 				acct, err := s.getAccount(addr)
 				if err != nil {
-					log.Error("unable to fetch projected account state: %s", err)
+					log.With().Error("unable to fetch projected account state", log.Err(err))
 					return status.Errorf(codes.Internal, "error fetching projected account data")
 				}
 				if err := stream.Send(&pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_AccountWrapper{
@@ -478,7 +478,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			// nonce.
 			acct, err := s.getAccount(updatedAccount)
 			if err != nil {
-				log.Error("unable to fetch projected account state: %s", err)
+				log.With().Error("unable to fetch projected account state", log.Err(err))
 				return status.Errorf(codes.Internal, "error fetching projected account data")
 			}
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_AccountWrapper{

@@ -206,7 +206,7 @@ func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
 	// Report the status update, as well as the layer itself.
 	layer, err := msh.GetLayer(idx)
 	if err != nil {
-		msh.Error("error reading layer data for layer %v: %s", layer, err)
+		msh.With().Error("error reading layer data for layer", layer, log.Err(err))
 	} else {
 		events.ReportNewLayer(events.NewLayer{
 			Layer:  layer,
@@ -217,7 +217,7 @@ func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
 	msh.lkMutex.Lock()
 	if idx > msh.latestLayer {
 		events.ReportNodeStatusUpdate()
-		msh.Info("set latest known layer to %v", idx)
+		msh.With().Info("set latest known layer", idx)
 		msh.latestLayer = idx
 		if err := msh.general.Put(constLATEST, idx.Bytes()); err != nil {
 			msh.Error("could not persist Latest layer index")
@@ -761,12 +761,12 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 	coinbasesAndSmeshers := make(map[types.Address]map[string]uint64)
 	for _, bl := range l.Blocks() {
 		if bl.ATXID == *types.EmptyATXID {
-			msh.With().Info("skipping reward distribution for block with no ATX", bl.LayerIndex, bl.ID())
+			msh.With().Info("skipping reward distribution for block with no atx", bl.LayerIndex, bl.ID())
 			continue
 		}
 		atx, err := msh.AtxDB.GetAtxHeader(bl.ATXID)
 		if err != nil {
-			msh.With().Warning("Atx from block not found in db", log.Err(err), bl.ID(), bl.ATXID)
+			msh.With().Warning("atx from block not found in db", log.Err(err), bl.ID(), bl.ATXID)
 			continue
 		}
 		coinbases = append(coinbases, atx.Coinbase)
@@ -779,7 +779,7 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 	}
 
 	if len(coinbases) == 0 {
-		msh.With().Info("no valid blocks for layer ", l.Index())
+		msh.With().Info("no valid blocks for layer", l.Index())
 		return
 	}
 
@@ -802,6 +802,10 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 	// the recipient (i.e., coinbase) account, whereas reporting requires knowing the associated smesherid
 	// as well. We report rewards below once we unpack the data structure containing the association between
 	// rewards and smesherids.
+
+	// Applying rewards (here), reporting them, and adding them to the database (below) should be atomic. Right now,
+	// they're not. Also, ApplyRewards does not return an error if it fails.
+	// TODO: fix this.
 	msh.ApplyRewards(l.Index(), coinbases, blockTotalReward)
 
 	blockLayerReward, blockLayerRewardMod := calculateActualRewards(l.Index(), layerReward, numBlocks)
@@ -822,7 +826,7 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 		for smesherString, cnt := range smesherAccountEntry {
 			smesherEntry, err := types.StringToNodeID(smesherString)
 			if err != nil {
-				log.With().Error("unable to convert bytes to nodeID", log.Err(err))
+				log.With().Error("unable to convert bytes to nodeid", log.Err(err))
 				return
 			}
 			events.ReportRewardReceived(events.Reward{
@@ -859,7 +863,7 @@ func (msh *Mesh) GetATXs(atxIds []types.ATXID) (map[types.ATXID]*types.Activatio
 	for _, id := range atxIds {
 		t, err := msh.GetFullAtx(id)
 		if err != nil {
-			msh.Warning("could not get atx %v  from database, %v", id.ShortString(), err)
+			msh.With().Warning("could not get atx from database", id, log.Err(err))
 			mIds = append(mIds, id)
 		} else {
 			atxs[t.ID()] = t
