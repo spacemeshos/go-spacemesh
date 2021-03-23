@@ -181,8 +181,6 @@ func AddCommands(cmd *cobra.Command) {
 		config.TortoiseBeacon.ATXThreshold, "TODO") // TODO(nkryuchkov): fill
 	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.VotesNumber, "tortoise-beacon-votes-number",
 		config.TortoiseBeacon.VotesNumber, "TODO") // TODO(nkryuchkov): fill
-	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.BeaconDuration, "tortoise-beacon-duration",
-		config.TortoiseBeacon.VotesNumber, "TODO") // TODO(nkryuchkov): fill
 	cmd.PersistentFlags().Uint64Var(&config.TortoiseBeacon.RoundsNumber, "tortoise-beacon-rounds-number",
 		config.TortoiseBeacon.RoundsNumber, "TODO") // TODO(nkryuchkov): fill
 	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.WakeupDelta, "tortoise-beacon-wakeup-delta",
