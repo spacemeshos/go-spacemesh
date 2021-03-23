@@ -16,6 +16,7 @@ type DB struct {
 	log   log.Log
 }
 
+// NewDB creates a Tortoise Beacon DB.
 func NewDB(dbStore database.Database, log log.Log) *DB {
 	db := &DB{
 		store: dbStore,
@@ -25,6 +26,7 @@ func NewDB(dbStore database.Database, log log.Log) *DB {
 	return db
 }
 
+// GetTortoiseBeacon gets a Tortoise Beacon value for an epoch.
 func (db *DB) GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, bool) {
 	id, err := db.store.Get(epochID.ToBytes())
 	if err != nil {
@@ -34,12 +36,13 @@ func (db *DB) GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, bool) {
 	return types.BytesToHash(id), true
 }
 
+// SetTortoiseBeacon sets a Tortoise Beacon value for an epoch.
 func (db *DB) SetTortoiseBeacon(epochID types.EpochID, beacon types.Hash32) error {
 	db.log.Info("added tortoise beacon for epoch %v", epochID)
 
 	err := db.store.Put(epochID.ToBytes(), beacon.Bytes())
 	if err != nil {
-		return fmt.Errorf("failed to add tortoise beacon: %v", err)
+		return fmt.Errorf("failed to add tortoise beacon: %w", err)
 	}
 
 	return nil

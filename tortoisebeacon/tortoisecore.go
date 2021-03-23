@@ -2,6 +2,7 @@ package tortoisebeacon
 
 import "github.com/spacemeshos/go-spacemesh/common/types"
 
+// TortoiseCore performs Tortoise Core algorithm.
 func (tb *TortoiseBeacon) TortoiseCore(distance int, localVotes map[types.ATXID]bool, voteWeightsFor,
 	voteWeightsAgainst []types.ATXID, weakCoin bool) (valid map[types.ATXID]bool, grades map[types.ATXID]int) {
 

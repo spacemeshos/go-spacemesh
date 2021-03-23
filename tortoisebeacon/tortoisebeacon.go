@@ -20,6 +20,7 @@ const (
 	cleanupEpochs   = 1000
 )
 
+// Tortoise Beacon errors.
 var (
 	ErrUnknownMessageType  = errors.New("unknown message type")
 	ErrBeaconNotCalculated = errors.New("beacon is not calculated for this epoch")
@@ -38,11 +39,13 @@ type weakCoin interface {
 	WeakCoin(epoch types.EpochID, round uint64) bool
 }
 
+// EpochRoundPair is a pair of epoch and round.
 type EpochRoundPair struct {
 	EpochID types.EpochID
 	Round   uint64
 }
 
+// TortoiseBeacon represents Tortoise Beacon.
 type TortoiseBeacon struct {
 	Closer
 	log.Log
@@ -86,6 +89,7 @@ type TortoiseBeacon struct {
 	backgroundWG sync.WaitGroup
 }
 
+// New returns a new TortoiseBeacon.
 func New(
 	conf Config,
 	net p2p.Service,
@@ -140,6 +144,7 @@ func (tb *TortoiseBeacon) Start() error {
 	return nil
 }
 
+// Close closes TortoiseBeacon.
 func (tb *TortoiseBeacon) Close() error {
 	tb.Log.Info("Closing %v", protoName)
 	tb.Closer.Close()
@@ -148,6 +153,7 @@ func (tb *TortoiseBeacon) Close() error {
 	return nil
 }
 
+// Get returns a Tortoise Beacon value as types.Hash32 for a certain epoch.
 // TODO(nkryuchkov): remove either Get or GetBeacon
 func (tb *TortoiseBeacon) Get(epochID types.EpochID) (types.Hash32, error) {
 	if tb.tortoiseBeaconDB != nil {
@@ -173,6 +179,7 @@ func (tb *TortoiseBeacon) Get(epochID types.EpochID) (types.Hash32, error) {
 	return beacon, nil
 }
 
+// GetBeacon returns a Tortoise Beacon value as []byte for a certain epoch.
 func (tb *TortoiseBeacon) GetBeacon(epochNumber types.EpochID) []byte {
 	v, err := tb.Get(epochNumber)
 	if err != nil {
@@ -417,7 +424,7 @@ func (tb *TortoiseBeacon) handleWeakCoinMessage(m WeakCoinMessage) error {
 	return nil
 }
 
-func (tb *TortoiseBeacon) classifyMessage(m Message, epoch types.EpochID) MessageType {
+func (tb *TortoiseBeacon) classifyMessage(m message, epoch types.EpochID) MessageType {
 	tb.currentRoundsMu.Lock()
 	currentRound := tb.currentRounds[epoch]
 	tb.currentRoundsMu.Unlock()
@@ -681,11 +688,6 @@ func calculateBeacon(m map[EpochRoundPair]map[types.Hash32]struct{}) types.Hash3
 	sort.Slice(allHashes, func(i, j int) bool {
 		return strings.Compare(allHashes[i].String(), allHashes[j].String()) == -1
 	})
-
-	stringHashes := make([]string, 0)
-	for _, hash := range allHashes {
-		stringHashes = append(stringHashes, hash.String())
-	}
 
 	for _, hash := range allHashes {
 		if _, err := hasher.Write(hash.Bytes()); err != nil {

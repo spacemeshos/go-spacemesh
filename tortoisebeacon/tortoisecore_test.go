@@ -93,12 +93,16 @@ func TestTortoiseCore(t *testing.T) {
 	tb := New(conf, n1, atxPool, nil, mwc, ticker, logger)
 	requirer.NotNil(tb)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotValid, gotGrades := tb.TortoiseCore(tt.args.distance, tt.args.localVotes, tt.args.voteWeightsFor, tt.args.voteWeightsAgainst, tt.args.weakCoin)
+	for _, tc := range tests {
+		tc := tc
 
-			r.Equal(gotValid, tt.wantValid)
-			r.Equal(gotGrades, tt.wantGrades)
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			gotValid, gotGrades := tb.TortoiseCore(tc.args.distance, tc.args.localVotes, tc.args.voteWeightsFor, tc.args.voteWeightsAgainst, tc.args.weakCoin)
+
+			r.Equal(gotValid, tc.wantValid)
+			r.Equal(gotGrades, tc.wantGrades)
 		})
 	}
 }

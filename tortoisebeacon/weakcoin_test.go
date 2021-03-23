@@ -9,6 +9,8 @@ import (
 )
 
 func TestWeakCoinGenerator_GenerateProposal(t *testing.T) {
+	t.Parallel()
+
 	r := require.New(t)
 
 	wcg := NewWeakCoinGenerator(defaultPrefix, defaultThreshold, nil)

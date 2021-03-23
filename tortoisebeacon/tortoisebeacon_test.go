@@ -14,6 +14,8 @@ import (
 )
 
 func TestTortoiseBeacon(t *testing.T) {
+	t.Parallel()
+
 	requirer := require.New(t)
 	conf := TestConfig()
 
@@ -70,6 +72,8 @@ func awaitEpoch(clock *timesync.TimeClock, epoch types.EpochID) {
 }
 
 func TestTortoiseBeacon_classifyMessage(t *testing.T) {
+	t.Parallel()
+
 	r := require.New(t)
 
 	epoch := types.EpochID(3)
@@ -94,6 +98,8 @@ func TestTortoiseBeacon_classifyMessage(t *testing.T) {
 	for _, tc := range tt {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			m := VotingMessage{RoundID: tc.round}
 			result := tb.classifyMessage(m, epoch)
 			r.Equal(tc.msgType, result)
@@ -102,6 +108,8 @@ func TestTortoiseBeacon_classifyMessage(t *testing.T) {
 }
 
 func Test_hashATXList(t *testing.T) {
+	t.Parallel()
+
 	r := require.New(t)
 
 	tt := []struct {
@@ -119,6 +127,8 @@ func Test_hashATXList(t *testing.T) {
 	for _, tc := range tt {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := hashATXList(tc.atxList).String()
 			r.Equal(tc.expected, result)
 		})

@@ -15,6 +15,7 @@ const (
 	defaultThreshold = byte(0x80) // TODO(nkryuchkov): consider using int
 )
 
+// WeakCoinGenerator generates weak coin.
 type WeakCoinGenerator interface {
 	Publish(epoch types.EpochID, round uint64) error
 }
@@ -28,7 +29,8 @@ type weakCoinGenerator struct {
 	net       p2p.Service
 }
 
-func NewWeakCoinGenerator(prefix string, threshold byte, net p2p.Service) *weakCoinGenerator {
+// NewWeakCoinGenerator returns a new weakCoinGenerator.
+func NewWeakCoinGenerator(prefix string, threshold byte, net p2p.Service) WeakCoinGenerator {
 	rng := amcl.NewRAND()
 	pub := []byte{1}
 	rng.Seed(len(pub), []byte{2})
@@ -83,6 +85,7 @@ func (wcg *weakCoinGenerator) generateProposal(epoch types.EpochID, round uint64
 	return sum, nil
 }
 
+// WeakCoinMessage defines weak coin message format.
 type WeakCoinMessage struct {
 	// TODO(nkryuchkov): implement
 }
