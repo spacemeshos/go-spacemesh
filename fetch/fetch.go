@@ -399,7 +399,7 @@ func (f *Fetch) requestHashBatchFromPeers() {
 	var requestList []requestMessage
 	f.activeReqM.RLock()
 	for hash, req := range f.activeRequests {
-		f.log.Info("batching %v", hash.ShortString())
+		f.log.Debug("batching %v", hash.ShortString())
 		requestList = append(requestList, requestMessage{Hash: hash, Hint: req[0].hint})
 	}
 	f.activeReqM.RUnlock()

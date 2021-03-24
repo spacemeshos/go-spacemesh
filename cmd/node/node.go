@@ -178,7 +178,6 @@ type SpacemeshApp struct {
 	closers        []interface{ Close() }
 	log            log.Log
 	txPool         *state.TxMempool
-	fetch          *fetch.Fetch
 	layerFetch     *layerfetcher.Logic
 	loggers        map[string]*zap.AtomicLevel
 	term           chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
@@ -586,9 +585,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	}
 	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, lg)
 
-	fetcher := fetch.NewFetch(app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
+	remoteFetchService := fetch.NewFetch(app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
 
-	layerFetch := layerfetcher.NewLogic(app.Config.LAYERS, blockListener, atxdb, poetDb, atxdb, processor, swarm, fetcher, msh, app.addLogger(Fetcher, lg))
+	layerFetch := layerfetcher.NewLogic(app.Config.LAYERS, blockListener, atxdb, poetDb, atxdb, processor, swarm, remoteFetchService, msh, app.addLogger(Fetcher, lg))
 	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore)
 
 	syncer := sync.NewSync(swarm, msh, app.txPool, atxdb, eValidator, poetDb, syncConf, clock, layerFetch, app.addLogger(SyncLogger, lg))
@@ -654,7 +653,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	app.oracle = blockOracle
 	app.txProcessor = processor
 	app.atxDb = atxdb
-	app.fetch = fetcher
 	app.layerFetch = layerFetch
 
 	return nil

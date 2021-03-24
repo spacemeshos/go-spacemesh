@@ -484,7 +484,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 			return
 		}
 
-		lyr, err := s.getLayerFromNeighbors2(currentSyncLayer)
+		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
 		if err != nil {
 			s.With().Info("could not get layer from neighbors", currentSyncLayer, log.Err(err))
 			return
@@ -591,7 +591,7 @@ func (s *Syncer) waitLayer(ch timesync.LayerTimer) bool {
 	return false
 }
 
-func (s *Syncer) getLayerFromNeighbors2(currentSyncLayer types.LayerID) (*types.Layer, error) {
+func (s *Syncer) getLayerFromNeighbors(currentSyncLayer types.LayerID) (*types.Layer, error) {
 	ch := s.fetcher.PollLayer(currentSyncLayer)
 	res := <-ch
 	if res.Err != nil {
@@ -601,44 +601,6 @@ func (s *Syncer) getLayerFromNeighbors2(currentSyncLayer types.LayerID) (*types.
 		return nil, res.Err
 	}
 	return s.GetLayer(currentSyncLayer)
-}
-
-func (s *Syncer) getLayerFromNeighbors(currentSyncLayer types.LayerID) (*types.Layer, error) {
-	if len(s.peers.GetPeers()) == 0 {
-		return nil, fmt.Errorf("no peers ")
-	}
-
-	// fetch layer hash from each peer
-	s.With().Info("fetch layer hash", currentSyncLayer)
-	m, err := s.fetchLayerHashes(currentSyncLayer)
-	if err != nil {
-		if err == errNoBlocksInLayer {
-			return types.NewLayer(currentSyncLayer), nil
-		}
-		return nil, err
-	}
-
-	if s.isClosed() {
-		return nil, fmt.Errorf("interupt")
-	}
-
-	// fetch ids for each hash
-	s.With().Info("fetch layer ids", currentSyncLayer)
-	blockIds, err := s.fetchLayerBlockIds(m, currentSyncLayer)
-	if err != nil {
-		return nil, err
-	}
-
-	if s.isClosed() {
-		return nil, fmt.Errorf("interupt")
-	}
-
-	blocksArr, err := s.syncLayer(currentSyncLayer, blockIds)
-	if len(blocksArr) == 0 || err != nil {
-		return nil, fmt.Errorf("could not get blocks for layer %v %v", currentSyncLayer, err)
-	}
-
-	return types.NewExistingLayer(types.LayerID(currentSyncLayer), blocksArr), nil
 }
 
 func (s *Syncer) syncEpochActivations(epoch types.EpochID) error {
@@ -806,8 +768,6 @@ func (s *Syncer) fetchAllReferencedAtxs(blk *types.Block) error {
 		}
 	}
 	return s.fetcher.GetAtxs(atxs)
-	//_, err := s.atxQueue.HandleAtxs(atxs)
-	//return err
 }
 
 func (s *Syncer) fetchBlockDataForValidation(blk *types.Block) error {
@@ -1206,19 +1166,6 @@ func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
 // GetPoetProof fetches a poet proof from network peers
 func (s *Syncer) GetPoetProof(hash types.Hash32) error {
 	return s.fetcher.GetPoetProof(hash)
-	/*poetProofRef := hash.Bytes()
-	if !s.poetDb.HasProof(poetProofRef) {
-		out := <-fetchWithFactory(newNeighborhoodWorker(s, 1, poetReqFactory(poetProofRef)))
-		if out == nil {
-			return fmt.Errorf("could not find PoET proof with any neighbor")
-		}
-		proofMessage := out.(types.PoetProofMessage)
-		err := s.poetDb.ValidateAndStore(&proofMessage)
-		if err != nil {
-			return err
-		}
-	}
-	return nil*/
 }
 
 func (s *Syncer) atxCheckLocal(atxIds []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32) {

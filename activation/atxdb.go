@@ -525,11 +525,11 @@ func (db *DB) storeAtxUnlocked(atx *types.ActivationTx) error {
 	}
 
 	// todo: this changed so that a full atx will be written - inherently there will be double data with atx header
-	atxBodyBytes, err := types.InterfaceToBytes(atx)
+	atxBytes, err := types.InterfaceToBytes(atx)
 	if err != nil {
 		return err
 	}
-	err = db.atxs.Put(getAtxBodyKey(atx.ID()), atxBodyBytes)
+	err = db.atxs.Put(getAtxBodyKey(atx.ID()), atxBytes)
 	if err != nil {
 		return err
 	}
@@ -721,13 +721,9 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	if err != nil {
 		return nil, err
 	}
-	/*header, err := db.GetAtxHeader(id)
-	if err != nil {
-		return nil, err
-	}
-	atx.ActivationTxHeader = header
+	atx.ActivationTxHeader.SetID(&id)
+	db.atxHeaderCache.Add(id, atx.ActivationTxHeader)
 
-	*/
 	return atx, nil
 }
 
@@ -778,7 +774,7 @@ func (db *DB) HandleAtxData(data []byte, syncer service.Fetcher) error {
 	}
 
 	if err := syncer.GetPoetProof(atx.GetPoetProofRef()); err != nil {
-		return fmt.Errorf("received ATX (%v) with syntactically invalid or missing PoET proof (%x): %v",
+		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
 			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err)
 
 	}
@@ -825,16 +821,3 @@ func (db *DB) FetchAtxReferences(atx *types.ActivationTx, f service.Fetcher) err
 
 	return nil
 }
-
-/*
-type DbAdapter struct {
-	db *DB
-}
-
-func (d *DbAdapter) Get(id types.Hash32) ([]byte, error) {
-	return d.db.GetFullAtx(id)
-}
-
-func (db *DB) GetAdapter() {
-
-}*/
