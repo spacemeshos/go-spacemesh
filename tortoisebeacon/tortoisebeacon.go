@@ -11,7 +11,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 const (
@@ -30,13 +29,17 @@ type epochATXGetter interface {
 	GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID)
 }
 
-type tortoiseBeaconDB interface {
-	GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, bool)
-	SetTortoiseBeacon(epochID types.EpochID, beacon types.Hash32) error
+type broadcaster interface {
+	Broadcast(channel string, data []byte) error
 }
 
 type weakCoin interface {
 	WeakCoin(epoch types.EpochID, round uint64) bool
+}
+
+type tortoiseBeaconDB interface {
+	GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, bool)
+	SetTortoiseBeacon(epochID types.EpochID, beacon types.Hash32) error
 }
 
 // EpochRoundPair is a pair of epoch and round.
@@ -52,7 +55,7 @@ type TortoiseBeacon struct {
 
 	config Config
 
-	net               p2p.Service
+	net               broadcaster
 	epochATXGetter    epochATXGetter
 	tortoiseBeaconDB  tortoiseBeaconDB
 	weakCoin          weakCoin
@@ -92,7 +95,7 @@ type TortoiseBeacon struct {
 // New returns a new TortoiseBeacon.
 func New(
 	conf Config,
-	net p2p.Service,
+	net broadcaster,
 	epochATXGetter epochATXGetter,
 	tortoiseBeaconDB tortoiseBeaconDB,
 	weakCoin weakCoin,

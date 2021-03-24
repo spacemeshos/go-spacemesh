@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/amcl/BLS381"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 const (
@@ -26,11 +25,11 @@ type weakCoinGenerator struct {
 	signer    *BLS381.BlsSigner
 	prefix    string
 	threshold byte
-	net       p2p.Service
+	net       broadcaster
 }
 
 // NewWeakCoinGenerator returns a new weakCoinGenerator.
-func NewWeakCoinGenerator(prefix string, threshold byte, net p2p.Service) WeakCoinGenerator {
+func NewWeakCoinGenerator(prefix string, threshold byte, net broadcaster) WeakCoinGenerator {
 	rng := amcl.NewRAND()
 	pub := []byte{1}
 	rng.Seed(len(pub), []byte{2})
