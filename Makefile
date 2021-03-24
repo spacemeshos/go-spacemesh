@@ -49,7 +49,7 @@ DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(BRANCH)
 
 # We use a docker image corresponding to the commithash for staging and trying, to be safe
 # filter here is used as a logical OR operation
-ifeq ($(BRANCH),$(filter $(BRANCH),staging trying)
+ifeq ($(BRANCH),$(filter $(BRANCH),staging trying))
 	DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
 endif
 
