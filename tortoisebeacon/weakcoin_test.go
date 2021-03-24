@@ -18,7 +18,7 @@ func TestWeakCoinGenerator_GenerateProposal(t *testing.T) {
 	round := uint64(1)
 	expected := 0xb9
 
-	p, err := wcg.generateProposal(epoch, round)
+	p, err := wcg.(*weakCoinGenerator).generateProposal(epoch, round)
 	r.NoError(err)
 
 	r.EqualValues(expected, p)
