@@ -1,9 +1,10 @@
 package collector
 
 import (
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"sync"
 )
 
 // MemoryCollector is an in memory database to store collected events

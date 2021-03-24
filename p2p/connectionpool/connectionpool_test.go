@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	net2 "net"
+	"sync"
 	"testing"
 	"time"
 )
@@ -257,7 +258,7 @@ func TestRandom(t *testing.T) {
 		key  p2pcrypto.PublicKey
 		addr string
 	}
-
+	wg := sync.WaitGroup{}
 	peerCnt := 30
 	peers := make([]Peer, 0)
 	for i := 0; i < peerCnt; i++ {
@@ -268,7 +269,6 @@ func TestRandom(t *testing.T) {
 	nMock.SetDialDelayMs(50)
 	nMock.SetDialResult(nil)
 	cPool := NewConnectionPool(nMock.Dial, generatePublicKey(), log.NewDefault(t.Name()))
-	rand.Seed(time.Now().UnixNano())
 	for {
 		r := rand.Int31n(3)
 		if r == 0 {
@@ -280,28 +280,26 @@ func TestRandom(t *testing.T) {
 				_ = cPool.OnNewConnection(net.NewConnectionEvent{Conn: rConn})
 			}()
 		} else if r == 1 {
+			wg.Add(1)
 			go func() {
+				defer wg.Done()
 				peer := peers[rand.Int31n(int32(peerCnt))]
 				addr := net2.TCPAddr{IP: net2.ParseIP(peer.addr)}
 				conn, err := cPool.GetConnection(&addr, peer.key)
-				select {
-				case <-cPool.shutdownCtx.Done():
+				if err != nil {
 					require.Equal(t, context.Canceled, err)
-				default:
-					require.NoError(t, err)
 				}
 				nMock.PublishClosingConnection(net.ConnectionWithErr{Conn: conn, Err: errors.New("testerr")})
 			}()
 		} else {
+			wg.Add(1)
 			go func() {
+				defer wg.Done()
 				peer := peers[rand.Int31n(int32(peerCnt))]
 				addr := net2.TCPAddr{IP: net2.ParseIP(peer.addr)}
 				_, err := cPool.GetConnection(&addr, peer.key)
-				select {
-				case <-cPool.shutdownCtx.Done():
+				if err != nil {
 					require.Equal(t, context.Canceled, err)
-				default:
-					require.NoError(t, err)
 				}
 			}()
 		}
@@ -312,6 +310,8 @@ func TestRandom(t *testing.T) {
 			break
 		}
 	}
+	wg.Wait()
+
 }
 
 func TestConnectionPool_GetConnectionIfExists(t *testing.T) {
