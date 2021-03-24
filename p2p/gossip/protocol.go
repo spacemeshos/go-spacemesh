@@ -140,10 +140,16 @@ peerLoop:
 		wg.Add(1)
 		go func(pubkey p2pcrypto.PublicKey) {
 			// TODO: replace peer ?
-			if err := p.net.SendMessage(ctx, pubkey, nextProt, payload); err != nil {
-				p.WithContext(ctx).With().Warning("failed sending",
-					log.FieldNamed("to", pubkey),
-					log.Err(err))
+
+			// Add recipient to context for logs
+			msgCtx := ctx
+			if reqID, ok := log.ExtractRequestID(ctx); ok {
+				// overwrite the existing reqID with the same and add the field
+				msgCtx = log.WithRequestID(ctx, reqID, log.FieldNamed("to", pubkey))
+			}
+
+			if err := p.net.SendMessage(msgCtx, pubkey, nextProt, payload); err != nil {
+				p.WithContext(msgCtx).With().Warning("failed sending", log.Err(err))
 			}
 			wg.Done()
 		}(peer)

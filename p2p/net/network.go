@@ -231,8 +231,7 @@ func (n *Net) createSecuredConnection(ctx context.Context, address net.Addr, rem
 		conn.Close()
 		return nil, err
 	}
-	err = conn.Send(ctx, handshakeMessage)
-	if err != nil {
+	if err := conn.Send(ctx, handshakeMessage); err != nil {
 		conn.Close()
 		return nil, err
 	}
