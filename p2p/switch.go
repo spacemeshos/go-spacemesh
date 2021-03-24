@@ -364,10 +364,12 @@ func (s *Switch) sendMessageImpl(ctx context.Context, peerPubKey p2pcrypto.Publi
 		return fmt.Errorf("peer not a neighbor or connection lost: %v", err)
 	}
 
+	logger := s.logger.WithContext(ctx).WithFields(
+		log.FieldNamed("peer_id", conn.RemotePublicKey()))
+
 	session := conn.Session()
 	if session == nil {
-		s.logger.WithContext(ctx).With().Warning("failed to send message to peer, no valid session",
-			log.FieldNamed("peer_id", conn.RemotePublicKey()))
+		logger.Warning("failed to send message to peer, no valid session")
 		return ErrNoSession
 	}
 
@@ -395,12 +397,13 @@ func (s *Switch) sendMessageImpl(ctx context.Context, peerPubKey p2pcrypto.Publi
 		return errors.New("encryption failed")
 	}
 
-	err = conn.Send(ctx, final)
+	if err := conn.Send(ctx, final); err != nil {
+		logger.With().Error("error sending direct message", log.Err(err))
+		return err
+	}
 
-	s.logger.WithContext(ctx).With().Debug("direct message sent successfully",
-		log.FieldNamed("peer_id", conn.RemotePublicKey()))
-
-	return err
+	logger.Debug("direct message sent successfully")
+	return nil
 }
 
 // RegisterDirectProtocol registers an handler for a direct messaging based protocol.
