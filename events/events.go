@@ -170,8 +170,9 @@ func (ValidTx) GetChannel() ChannelID {
 
 // RewardReceived signals reward has been received
 type RewardReceived struct {
-	Coinbase string
-	Amount   uint64
+	Coinbase  string
+	Amount    uint64
+	SmesherID []byte
 }
 
 // GetChannel gets the message type which means on which this message should be sent

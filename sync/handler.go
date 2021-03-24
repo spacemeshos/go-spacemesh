@@ -90,7 +90,7 @@ func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []b
 	return func(msg []byte) []byte {
 		var blockids []types.Hash32
 		if err := types.BytesToInterface(msg, &blockids); err != nil {
-			logger.Error("Error unmarshalling block request message", err)
+			logger.With().Error("error unmarshalling block request message", log.Err(err))
 			return nil
 		}
 
@@ -102,10 +102,10 @@ func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []b
 			blk, err := msh.GetBlock(blockID)
 			if err != nil {
 				if err == database.ErrNotFound {
-					logger.With().Warning("unfamiliar block was requested (id: %s)", blockID, log.Err(err))
+					logger.With().Warning("unfamiliar block was requested", blockID, log.Err(err))
 					continue
 				}
-				logger.With().Error("Error handling block request message", blockID, log.Err(err))
+				logger.With().Error("error handling block request message", blockID, log.Err(err))
 				continue
 			}
 
@@ -113,7 +113,7 @@ func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []b
 		}
 		bbytes, err := types.InterfaceToBytes(blocks)
 		if err != nil {
-			logger.Error("Error marshaling response message (FetchBlockResp) ", err)
+			logger.With().Error("error marshaling response message (FetchBlockResp)", log.Err(err))
 			return nil
 		}
 
@@ -127,7 +127,7 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 		var txids []types.TransactionID
 		err := types.BytesToInterface(msg, &txids)
 		if err != nil {
-			logger.Error("Error marshalling request", err)
+			logger.Error("error marshalling request", err)
 			return nil
 		}
 		logger.With().Info("handle tx request", types.TxIdsField(txids))

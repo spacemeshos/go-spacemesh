@@ -1,6 +1,10 @@
 package node
 
 import (
+	"bufio"
+	"fmt"
+	"io"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -291,6 +295,37 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	collect.Start(false)
 	ActivateGrpcServer(apps[0])
 
+	go func() {
+		r := bufio.NewReader(poetHarness.Stdout)
+		for {
+			line, _, err := r.ReadLine()
+			if err == io.EOF || err == os.ErrClosed {
+				return
+			}
+			if err != nil {
+				log.Error("Failed to read PoET stdout: %v", err)
+				return
+			}
+
+			fmt.Printf("[PoET stdout] %v\n", string(line))
+		}
+	}()
+	go func() {
+		r := bufio.NewReader(poetHarness.Stderr)
+		for {
+			line, _, err := r.ReadLine()
+			if err == io.EOF || err == os.ErrClosed {
+				return
+			}
+			if err != nil {
+				log.Error("Failed to read PoET stderr: %v", err)
+				return
+			}
+
+			fmt.Printf("[PoET stderr] %v\n", string(line))
+		}
+	}()
+
 	if err := poetHarness.Start([]string{"127.0.0.1:9092"}); err != nil {
 		log.Panic("failed to start poet server: %v", err)
 	}
@@ -347,7 +382,7 @@ loop:
 			}
 			log.Info("all miners finished reading %v atxs, layer %v done in %v", eventDb.GetAtxCreationDone(epoch), layer, time.Since(startLayer))
 			for _, atxID := range eventDb.GetCreatedAtx(epoch) {
-				if _, found := eventDb.Atxs[atxID]; !found {
+				if !eventDb.AtxIDExists(atxID) {
 					log.Info("atx %v not propagated", atxID)
 					errors++
 					continue
