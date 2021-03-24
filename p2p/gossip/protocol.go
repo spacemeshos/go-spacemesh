@@ -84,7 +84,7 @@ func (p *Protocol) Close() {
 
 // Broadcast is the actual broadcast procedure - process the message internally and loop on peers and add the message to their queues
 func (p *Protocol) Broadcast(payload []byte, nextProt string) error {
-	p.Log.Debug("Broadcasting message from type %s", nextProt)
+	p.With().Debug("broadcasting message", log.String("from_type", nextProt))
 	return p.processMessage(p.localNodePubkey, nextProt, service.DataBytes{Payload: payload})
 	//todo: should this ever return error ? then when processMessage should return error ?. should it block?
 }
@@ -107,16 +107,22 @@ func (p *Protocol) markMessageAsOld(h types.Hash12) bool {
 
 func (p *Protocol) processMessage(sender p2pcrypto.PublicKey, protocol string, msg service.Data) error {
 	h := types.CalcMessageHash12(msg.Bytes(), protocol)
+	fields := []log.LoggableField{
+		log.String("from", sender.String()),
+		log.String("protocol", protocol),
+		log.String("hash", util.Bytes2Hex(h[:])),
+	}
+	p.With().Debug("checking gossip message newness", fields...)
 	if p.markMessageAsOld(h) {
 		metrics.OldGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
 		// todo : - have some more metrics for termination
 		// todo	: - maybe tell the peer we got this message already?
 		// todo : - maybe block this peer since he sends us old messages
-		p.Log.With().Debug("old_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.String("hash", util.Bytes2Hex(h[:])))
+		p.Log.With().Debug("gossip message is old, dropping", fields...)
 		return nil
 	}
 
-	p.Log.Event().Debug("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.String("hash", util.Bytes2Hex(h[:])))
+	p.Log.Event().Debug("gossip message is new, processing", fields...)
 	metrics.NewGossipMessages.With("protocol", protocol).Add(1)
 	return p.net.ProcessGossipProtocolMessage(sender, protocol, msg, p.propagateQ)
 }
@@ -136,10 +142,10 @@ peerLoop:
 			// TODO: replace peer ?
 			err := p.net.SendMessage(pubkey, nextProt, payload)
 			if err != nil {
-				p.With().Warning("Failed sending",
+				p.With().Warning("failed sending",
 					log.String("protocol", nextProt),
-					h.Field("hash"),
-					pubkey.Field("to"),
+					h,
+					log.FieldNamed("to", pubkey),
 					log.Err(err))
 			}
 			wg.Done()
@@ -162,9 +168,9 @@ func (p *Protocol) handlePQ() {
 		}
 		h := types.CalcMessageHash12(m.Message(), m.Protocol())
 		p.Log.With().Debug("new_gossip_message_relay",
-			m.Sender().Field("from"),
+			log.FieldNamed("from", m.Sender()),
 			log.String("protocol", m.Protocol()),
-			h.Field("hash"))
+			h)
 		p.propagateMessage(m.Message(), h, m.Protocol(), m.Sender())
 	}
 }
@@ -172,7 +178,7 @@ func (p *Protocol) handlePQ() {
 func (p *Protocol) getPriority(protoName string) priorityq.Priority {
 	v, exist := p.priorities[protoName]
 	if !exist {
-		p.With().Warning("note: no priority found for protocol",
+		p.With().Warning("no priority found for protocol",
 			log.String("protoName", protoName))
 		return priorityq.Low
 	}
@@ -187,7 +193,7 @@ func (p *Protocol) propagationEventLoop() {
 		select {
 		case msgV := <-p.propagateQ:
 			if err := p.pq.Write(p.getPriority(msgV.Protocol()), msgV); err != nil {
-				p.With().Error("fatal: could not write to priority queue",
+				p.With().Error("could not write to priority queue",
 					log.Err(err),
 					log.String("protocol", msgV.Protocol()))
 			}
