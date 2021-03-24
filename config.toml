@@ -24,7 +24,7 @@ security-param = 20
 fast-sync = true
 tcp-port = 7513
 node-id = ""
-new-node= false
+new-node = false
 dial-timeout = "1m"
 conn-keepalive = "48h"
 network-id = 1 # 0 - MainNet, 1 - TestNet
@@ -56,7 +56,7 @@ json-port = 9093
 max-allowed-time-drift = "10s"
 ntp-queries = 5
 default-timeout-latency = "10s"
-ntp-servers = ["time-a-wwv.nist.gov","time-b-wwv.nist.gov","time-c-wwv.nist.gov","time.google.com","time1.google.com","time3.google.com","time4.google.com","time.asia.apple.com","time.americas.apple.com"]
+ntp-servers = ["time-a-wwv.nist.gov", "time-b-wwv.nist.gov", "time-c-wwv.nist.gov", "time.google.com", "time1.google.com", "time3.google.com", "time4.google.com", "time.asia.apple.com", "time.americas.apple.com"]
 
 # Hare Config
 [hare]
@@ -64,6 +64,15 @@ hare-round-duration-sec = "5"
 hare-committee-size = 10
 hare-max-adversaries = 5
 hare-wakeup-delta = 5
+
+# Tortoise Beacon Config
+[tortoise-beacon]
+tortoise-beacon-atx-threshold = 50 # TODO(nkryuchkov): change
+tortoise-beacon-rounds-number = 6
+tortoise-beacon-wakeup-delta = 30
+tortoise-beacon-theta = 1 # TODO(nkryuchkov): change
+tortoise-beacon-hdist = 20
+tortoise-beacon-t-ave = 1 # TODO(nkryuchkov): change
 
 [logging]
 app = "info"
