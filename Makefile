@@ -139,7 +139,7 @@ docker-local-build:
 	cd cmd/p2p ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-p2p
 	cd cmd/sync ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-sync
 	cd cmd/integration ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-harness
-	cd build ; docker build -f ../DockerfilePrebuiltBinary -t $(DOCKER_IMAGE_REPO):$(BRANCH) .
+	cd build ; docker build -f ../DockerfilePrebuiltBinary -t $(DOCKER_IMAGE) .
 .PHONY: docker-local-build
 
 
@@ -213,7 +213,7 @@ list-versions:
 
 
 dockerbuild-go:
-	docker build -t $(DOCKER_IMAGE_REPO):$(BRANCH) .
+	docker build -t $(DOCKER_IMAGE) .
 .PHONY: dockerbuild-go
 
 
@@ -245,7 +245,7 @@ dockerpush-only:
 
 # for develop, we push an additional copy of the image using the commithash for archival
 ifeq ($(BRANCH),develop)
-	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
+	docker tag $(DOCKER_IMAGE) spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
 	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
 endif
 .PHONY: dockerpush-only
