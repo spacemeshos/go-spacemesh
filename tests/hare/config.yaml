@@ -4,6 +4,7 @@ config_map_name: conf
 
 script_on_exit: '' #'./k8s/log-client-pods.sh'
 
+is_dump: True
 total_pods: 20
 genesis_delta: 70
 deployment_ready_time_out: 180
@@ -30,6 +31,7 @@ bootstrap:
     layer-duration-sec: '80'
     executable-path: '/bin/go-hare'
     layers-per-epoch: '3'
+    grpc: 'gateway,globalstate,transaction'
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-harness'

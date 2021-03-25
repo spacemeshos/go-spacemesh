@@ -38,6 +38,7 @@ bootstrap:
     sync-request-timeout: '5000'
     hdist: '5'
     executable-path: '/bin/go-spacemesh'
+    grpc: 'gateway,globalstate,transaction,node,mesh,smesher'
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-harness'
@@ -66,6 +67,7 @@ client:
     sync-request-timeout: '5000'
     hdist: '5'
     executable-path: '/bin/go-spacemesh'
+    grpc: 'gateway,globalstate,transaction,node,mesh,smesher'
 elastic:
   host: elastic.spacemesh.io
   port: 9200

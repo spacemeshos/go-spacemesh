@@ -36,6 +36,7 @@ bootstrap:
     remote-data: 'true'
     hdist: '5'
     version: '/newestSamplesGoldenATX/'
+    grpc: 'gateway,globalstate,transaction'
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-sync'
@@ -61,6 +62,7 @@ client:
     remote-data: 'true'
     hdist: '5'
     version: '/newestSamplesGoldenATX/'
+    grpc: 'gateway,globalstate,transaction'
 clientv2:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-sync'
@@ -84,6 +86,7 @@ clientv2:
     storage-path: 'spacemesh-sync-data'
     hdist: '5'
     data-folder: '/usr/share/spacemesh/'
+    grpc: 'gateway,globalstate,transaction'
   deployment_type: statefulset
 elastic:
   host: elastic.spacemesh.io
