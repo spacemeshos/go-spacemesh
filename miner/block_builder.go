@@ -7,6 +7,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/rand"
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -14,9 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"math/rand"
-	"sync"
-	"time"
 )
 
 const defaultGasLimit = 10
@@ -279,7 +279,6 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 			EligibilityProof: eligibilityProof,
 			Data:             nil,
 			Coin:             t.weakCoinToss.GetResult(),
-			Timestamp:        time.Now().UnixNano(),
 			BlockVotes:       votes,
 			ViewEdges:        viewEdges,
 		},
