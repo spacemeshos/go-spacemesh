@@ -92,6 +92,7 @@ clientv2:
     eligibility-epoch-offset: '0'
     genesis-active-size: '51'
     executable-path: '/bin/go-spacemesh'
+    grpc: 'gateway,globalstate,transaction,node,mesh,smesher'
   deployment_type: deployment
 elastic:
   host: elastic.spacemesh.io

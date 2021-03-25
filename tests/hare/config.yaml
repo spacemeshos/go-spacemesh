@@ -52,6 +52,7 @@ client:
     layer-duration-sec: '80'
     layers-per-epoch: '3'
     executable-path: '/bin/go-hare'
+    grpc: 'gateway,globalstate,transaction'
 elastic:
   host: elastic.spacemesh.io
   port: 9200
