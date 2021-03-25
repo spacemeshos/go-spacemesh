@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
-	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -18,7 +16,6 @@ import (
 	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
@@ -61,6 +58,11 @@ type LayerFetch interface {
 	FetchBlock(ID types.BlockID) error
 	GetPoetProof(id types.Hash32) error
 	Start()
+	Close()
+}
+
+type peers interface {
+	GetPeers() []p2ppeers.Peer
 	Close()
 }
 
@@ -166,14 +168,10 @@ type Syncer struct {
 	gossipSynced         status
 	awaitCh              chan struct{}
 
-	blockQueue *blockQueue
-	txQueue    *txQueue
-	atxQueue   *atxQueue
-
 	fetcher LayerFetch
 }
 
-var _ service.Fetcher = (*Syncer)(nil)
+//var _ service.Fetcher = (*Syncer)(nil)
 
 // NewSync fires a sync every sm.SyncInterval or on force space from outside
 func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxDB atxDB, bv blockEligibilityValidator, poetdb poetDb, conf Configuration, clock ticker, layerFetch LayerFetch, logger log.Log) *Syncer {
@@ -208,18 +206,6 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxDB atx
 		fetcher:                   layerFetch,
 	}
 
-	s.blockQueue = nil //newValidationQueue(srvr, conf, s)
-	s.txQueue = nil    //newTxQueue(s)
-	s.atxQueue = nil   //newAtxQueue(s, s.FetchPoetProof)
-	srvr.RegisterBytesMsgHandler(layerHashMsg, newLayerHashRequestHandler(layers, logger))
-	srvr.RegisterBytesMsgHandler(blockMsg, newBlockRequestHandler(layers, logger))
-	srvr.RegisterBytesMsgHandler(layerIdsMsg, newLayerBlockIdsRequestHandler(layers, logger))
-	srvr.RegisterBytesMsgHandler(txMsg, newTxsRequestHandler(s, logger))
-	srvr.RegisterBytesMsgHandler(atxMsg, newAtxsRequestHandler(s, logger))
-	srvr.RegisterBytesMsgHandler(poetMsg, newPoetRequestHandler(s, logger))
-	srvr.RegisterBytesMsgHandler(atxIdsMsg, newEpochAtxsRequestHandler(s, logger))
-	srvr.RegisterBytesMsgHandler(atxIdrHashMsg, newAtxHashRequestHandler(s, logger))
-
 	return s
 }
 
@@ -239,9 +225,6 @@ func (s *Syncer) Close() {
 	s.syncLock.Lock()
 	s.syncLock.Unlock()
 	s.MessageServer.Close()
-	//s.blockQueue.Close()
-	//s.atxQueue.Close()
-	//s.txQueue.Close()
 
 	s.Info("sync closed")
 }
@@ -518,7 +501,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 func (s *Syncer) syncAtxs(currentSyncLayer types.LayerID) {
 	lastLayerOfEpoch := (currentSyncLayer.GetEpoch() + 1).FirstLayer() - 1
 	if currentSyncLayer == lastLayerOfEpoch {
-		if err := s.syncEpochActivations(currentSyncLayer.GetEpoch()); err != nil {
+		if err := s.fetcher.GetEpochATXs(currentSyncLayer.GetEpoch()); err != nil {
 			if currentSyncLayer.GetEpoch().IsGenesis() {
 				s.With().Info("cannot fetch epoch atxs (expected during genesis)", currentSyncLayer, log.Err(err))
 			} else {
@@ -535,7 +518,7 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 	// listen to gossip
 	s.setGossipBufferingStatus(inProgress)
 	// subscribe and wait for two ticks
-	s.With().Info("waiting for two ticks while p2p is open", currentSyncLayer.GetEpoch())
+	s.Info("waiting for two ticks while p2p is open, epoch %v", currentSyncLayer.GetEpoch())
 	ch := s.ticker.Subscribe()
 
 	if done := s.waitLayer(ch); done {
@@ -603,97 +586,6 @@ func (s *Syncer) getLayerFromNeighbors(currentSyncLayer types.LayerID) (*types.L
 	return s.GetLayer(currentSyncLayer)
 }
 
-func (s *Syncer) syncEpochActivations(epoch types.EpochID) error {
-	s.With().Info("syncing atxs", epoch)
-	hashes, err := s.fetchEpochAtxHashes(epoch)
-	if err != nil {
-		return err
-	}
-
-	atxIds, err := s.fetchEpochAtxs(hashes, epoch)
-	if err != nil {
-		return err
-	}
-
-	s.With().Info("fetched atxs for epoch", epoch, log.Int("count", len(atxIds)))
-	s.With().Debug("fetched atxs for epoch",
-		epoch,
-		log.Int("count", len(atxIds)),
-		log.String("atxs", fmt.Sprint(atxIds)))
-
-	_, err = s.atxQueue.HandleAtxs(atxIds)
-
-	return err
-}
-
-// GetAtxs fetches list of atxs from remote peers if possible
-func (s *Syncer) GetAtxs(IDs []types.ATXID) error {
-	_, err := s.atxQueue.HandleAtxs(IDs)
-	return err
-}
-
-func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*types.Block, error) {
-	ch := make(chan bool, 1)
-	foo := func(res bool) error {
-		s.With().Info("sync layer done", layerID)
-		ch <- res
-		return nil
-	}
-
-	tmr := newMilliTimer(syncLayerTime)
-	if res, err := s.blockQueue.addDependencies(layerID, blockIds, foo); err != nil {
-		return nil, fmt.Errorf("failed adding layer %v blocks to queue %v", layerID, err)
-	} else if res == false {
-		s.With().Info("no missing blocks for layer", layerID)
-		return s.LayerBlocks(layerID)
-	}
-
-	s.With().Info("wait for blocks", layerID, log.Int("num_blocks", len(blockIds)))
-	select {
-	case <-s.exit:
-		return nil, fmt.Errorf("received interupt")
-	case result := <-ch:
-		if !result {
-			return nil, fmt.Errorf("could not get all blocks for layer %v", layerID)
-		}
-	}
-
-	tmr.ObserveDuration()
-
-	return s.LayerBlocks(layerID)
-}
-
-func (s *Syncer) getBlocks(jobID types.LayerID, blockIds []types.BlockID) error {
-	ch := make(chan bool, 1)
-	foo := func(res bool) error {
-		s.With().Info("get blocks for layer done", jobID)
-		ch <- res
-		return nil
-	}
-
-	tmr := newMilliTimer(syncLayerTime)
-	if res, err := s.blockQueue.addDependencies(jobID, blockIds, foo); err != nil {
-		return fmt.Errorf("failed adding layer %v blocks to queue %v", jobID, err)
-	} else if res == false {
-		s.With().Info("no missing blocks for layer", jobID)
-		return nil
-	}
-
-	s.With().Info("wait for blocks", jobID, log.Int("num_blocks", len(blockIds)))
-	select {
-	case <-s.exit:
-		return fmt.Errorf("received interrupt")
-	case result := <-ch:
-		if !result {
-			return nil
-		}
-	}
-
-	tmr.ObserveDuration()
-
-	return nil
-}
-
 // GetBlocks fetches list of blocks from peers
 func (s *Syncer) GetBlocks(blockIds []types.BlockID) error {
 	return s.fetcher.GetBlocks(blockIds)
@@ -744,10 +636,7 @@ func (s *Syncer) fetchRefBlock(block *types.Block) error {
 	_, err := s.GetBlock(*block.RefBlock)
 	if err != nil {
 		s.With().Info("fetching block", *block.RefBlock)
-		fetched := s.fetchBlock(*block.RefBlock)
-		if !fetched {
-			return fmt.Errorf("failed to fetch ref block %v", *block.RefBlock)
-		}
+		return s.fetcher.FetchBlock(*block.RefBlock)
 	}
 	return nil
 }
@@ -778,126 +667,6 @@ func (s *Syncer) fetchBlockDataForValidation(blk *types.Block) error {
 		}
 	}
 	return s.fetchAllReferencedAtxs(blk)
-}
-
-func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
-	// A block whose associated ATX is the GoldenATXID or the EmptyATXID - either of these - is syntactically invalid.
-	if block.ATXID == *types.EmptyATXID || block.ATXID == s.GoldenATXID {
-		return nil, nil, errInvalidATXID
-	}
-
-	// validate unique tx atx
-	if err := s.fetchBlockDataForValidation(block); err != nil {
-		return nil, nil, err
-	}
-
-	if err := s.fastValidation(block); err != nil {
-		return nil, nil, err
-	}
-
-	// data availability
-	txs, atxs, err := s.dataAvailability(block)
-	if err != nil {
-		return nil, nil, fmt.Errorf("DataAvailabilty failed for block %v err: %v", block.ID(), err)
-	}
-
-	// validate block's view
-	valid := s.validateBlockView(block)
-	if valid == false {
-		return nil, nil, fmt.Errorf("block %v not syntacticly valid", block.ID())
-	}
-
-	// validate block's votes
-	if valid, err := validateVotes(block, s.ForBlockInView, s.Hdist, s.Log); valid == false || err != nil {
-		return nil, nil, fmt.Errorf("validate votes failed for block %v, %v", block.ID(), err)
-	}
-
-	return txs, atxs, nil
-}
-
-func (s *Syncer) validateBlockView(blk *types.Block) bool {
-	ch := make(chan bool, 1)
-	defer close(ch)
-	foo := func(res bool) error {
-		s.With().Info("view validated",
-			blk.ID(),
-			log.Bool("result", res),
-			blk.LayerIndex)
-		ch <- res
-		return nil
-	}
-	if res, err := s.blockQueue.addDependencies(blk.ID(), blk.ViewEdges, foo); err != nil {
-		s.Error(fmt.Sprintf("block %v not syntactically valid", blk.ID()), err)
-		return false
-	} else if res == false {
-		s.With().Debug("no missing blocks in view",
-			blk.ID(),
-			blk.LayerIndex)
-		return true
-	}
-
-	return <-ch
-}
-
-func (s *Syncer) fetchAtx(ID types.ATXID) (*types.ActivationTx, error) {
-	atxs, err := s.atxQueue.HandleAtxs([]types.ATXID{ID})
-	if err != nil {
-		return nil, err
-	}
-	if len(atxs) == 0 {
-		return nil, fmt.Errorf("ATX %v not fetched", ID.ShortString())
-	}
-	return atxs[0], nil
-}
-
-// FetchAtx fetches an ATX from remote peer
-func (s *Syncer) FetchAtx(ID types.ATXID) error {
-	_, e := s.fetchAtx(ID)
-	return e
-}
-
-// FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db
-func (s *Syncer) FetchAtxReferences(atx *types.ActivationTx) error {
-	if atx.PositioningATX != s.GoldenATXID {
-		s.With().Info("going to fetch pos atx", atx.PositioningATX, atx.ID())
-		_, err := s.fetchAtx(atx.PositioningATX)
-		if err != nil {
-			return err
-		}
-	}
-
-	if atx.PrevATXID != *types.EmptyATXID {
-		s.With().Info("going to fetch prev atx", atx.PrevATXID, atx.ID())
-		_, err := s.fetchAtx(atx.PrevATXID)
-		if err != nil {
-			return err
-		}
-	}
-	s.With().Info("done fetching references for atx", atx.ID())
-
-	return nil
-}
-
-func (s *Syncer) fetchBlock(ID types.BlockID) bool {
-	ch := make(chan bool, 1)
-	defer close(ch)
-	foo := func(res bool) error {
-		s.With().Info("single block fetched",
-			ID,
-			log.Bool("result", res))
-		ch <- res
-		return nil
-	}
-	id := types.CalcHash32(append(ID.Bytes(), []byte(strconv.Itoa(rand.Int()))...))
-	if res, err := s.blockQueue.addDependencies(id, []types.BlockID{ID}, foo); err != nil {
-		s.Error(fmt.Sprintf("block %v not syntactically valid", ID), err)
-		return false
-	} else if res == false {
-		// block already found
-		return true
-	}
-
-	return <-ch
 }
 
 // FetchBlock fetches a single block from peers
@@ -943,143 +712,12 @@ func validateVotes(blk *types.Block, forBlockfunc forBlockInView, depth int, lg 
 	return true, nil
 }
 
-func (s *Syncer) dataAvailability(blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
-
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	var txres []*types.Transaction
-	var txerr error
-
-	if len(blk.TxIDs) > 0 {
-		txres, txerr = s.txQueue.HandleTxs(blk.TxIDs)
-	}
-
-	var atxres []*types.ActivationTx
-
-	if txerr != nil {
-		return nil, nil, fmt.Errorf("failed fetching block %v transactions %v", blk.ID(), txerr)
-	}
-
-	s.With().Info("fetched all block data", blk.Fields()...)
-	return txres, atxres, nil
-}
-
-// GetTxs fetches txs from peers if necessary
-func (s *Syncer) GetTxs(IDs []types.TransactionID) error {
-	_, err := s.txQueue.HandleTxs(IDs)
-	return err
-}
-
-func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2ppeers.Peer, lyr types.LayerID) ([]types.BlockID, error) {
-	// send request to different users according to returned hashes
-	idSet := make(map[types.BlockID]struct{}, s.LayerSize)
-	ids := make([]types.BlockID, 0, s.LayerSize)
-	for h, peers := range m {
-	NextHash:
-		for _, peer := range peers {
-			s.With().Debug("send request", log.String("peer", peer.String()))
-			ch, err := layerIdsReqFactory(lyr)(s, peer)
-			if err != nil {
-				return nil, err
-			}
-
-			timeout := time.After(s.Configuration.RequestTimeout)
-			select {
-			case <-s.GetExit():
-				s.Debug("worker received interrupt")
-				return nil, fmt.Errorf("interupt")
-			case <-timeout:
-				s.With().Error("layer ids request timed out", log.String("peer", peer.String()))
-				continue
-			case v := <-ch:
-				if v != nil {
-					s.With().Debug("peer responded to layer ids request", log.String("peer", peer.String()))
-					// peer returned set with bad hash ask next peer
-					res := types.CalcBlocksHash32(v.([]types.BlockID), nil)
-
-					if h != res {
-						s.With().Warning("layer ids hash does not match request",
-							log.String("peer", peer.String()))
-					}
-
-					for _, bid := range v.([]types.BlockID) {
-						if _, exists := idSet[bid]; !exists {
-							idSet[bid] = struct{}{}
-							ids = append(ids, bid)
-						}
-					}
-					// fetch for next hash
-					break NextHash
-				}
-			}
-		}
-	}
-
-	if len(ids) == 0 {
-		s.Info("could not get layer ids from any peer")
-	}
-
-	return ids, nil
-}
-
-func (s *Syncer) fetchEpochAtxs(m map[types.Hash32][]p2ppeers.Peer, epoch types.EpochID) ([]types.ATXID, error) {
-	// send request to different users according to returned hashes
-	idSet := make(map[types.ATXID]struct{}, s.LayerSize)
-	ids := make([]types.ATXID, 0, s.LayerSize)
-	for h, peers := range m {
-	NextHash:
-		for _, peer := range peers {
-			s.With().Debug("send request", log.String("peer", peer.String()))
-			ch, err := getEpochAtxIds(epoch, s, peer)
-			if err != nil {
-				return nil, err
-			}
-
-			timeout := time.After(s.Configuration.RequestTimeout)
-			select {
-			case <-s.GetExit():
-				s.Debug("worker received interrupt")
-				return nil, fmt.Errorf("interupt")
-			case <-timeout:
-				s.With().Error("layer ids request timed out", log.String("peer", peer.String()))
-				continue
-			case v := <-ch:
-				if v != nil {
-					s.With().Debug("peer responded to epoch atx ids request",
-						log.String("peer", peer.String()))
-					// peer returned set with bad hash ask next peer
-					res := types.CalcATXIdsHash32(v.([]types.ATXID), nil)
-
-					if h != res {
-						s.With().Warning("epoch atx ids hash does not match request",
-							log.String("peer", peer.String()))
-					}
-
-					for _, bid := range v.([]types.ATXID) {
-						if _, exists := idSet[bid]; !exists {
-							idSet[bid] = struct{}{}
-							ids = append(ids, bid)
-						}
-					}
-					// fetch for next hash
-					break NextHash
-				}
-			}
-		}
-	}
-
-	if len(ids) == 0 {
-		s.Info("could not get atx ids from any peer")
-	}
-
-	return ids, nil
-}
-
 type peerHashPair struct {
 	peer p2ppeers.Peer
 	hash types.Hash32
 }
 
+/*
 func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[types.Hash32][]p2ppeers.Peer, error) {
 	// get layer hash from each peer
 	wrk := newPeersWorker(s, s.GetPeers(), &sync.Once{}, hashReqFactory(lyr))
@@ -1162,86 +800,10 @@ func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
 	}
 	return nil
 }
-
+*/
 // GetPoetProof fetches a poet proof from network peers
 func (s *Syncer) GetPoetProof(hash types.Hash32) error {
 	return s.fetcher.GetPoetProof(hash)
-}
-
-func (s *Syncer) atxCheckLocal(atxIds []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32) {
-	// look in pool
-	unprocessedItems := make(map[types.Hash32]item, len(atxIds))
-	missingInPool := make([]types.ATXID, 0, len(atxIds))
-	for _, t := range atxIds {
-		id := types.ATXID(t)
-		if x, err := s.atxDb.GetFullAtx(id); err == nil {
-			atx := x
-			s.With().Debug("found atx in atx db", id)
-			unprocessedItems[id.Hash32()] = atx
-		} else {
-			s.With().Debug("atx not in atx pool", id)
-			missingInPool = append(missingInPool, id)
-		}
-	}
-	// look in db
-	dbAtxs, missing := s.GetATXs(missingInPool)
-
-	dbItems := make(map[types.Hash32]item, len(dbAtxs))
-	for i, k := range dbAtxs {
-		dbItems[i.Hash32()] = k
-	}
-
-	missingItems := make([]types.Hash32, 0, len(missing))
-	for _, i := range missing {
-		missingItems = append(missingItems, i.Hash32())
-	}
-
-	return unprocessedItems, dbItems, missingItems
-}
-
-func (s *Syncer) txCheckLocal(txIds []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32) {
-	// look in pool
-	unprocessedItems := make(map[types.Hash32]item)
-	missingInPool := make([]types.TransactionID, 0)
-	for _, t := range txIds {
-		id := types.TransactionID(t)
-		if tx, err := s.txpool.Get(id); err == nil {
-			s.With().Debug("found tx in tx pool", id)
-			unprocessedItems[id.Hash32()] = tx
-		} else {
-			s.With().Debug("tx not in tx pool", id)
-			missingInPool = append(missingInPool, id)
-		}
-	}
-	// look in db
-	dbTxs, missing := s.GetTransactions(missingInPool)
-
-	dbItems := make(map[types.Hash32]item, len(dbTxs))
-	for _, k := range dbTxs {
-		dbItems[k.Hash32()] = k
-	}
-
-	missingItems := make([]types.Hash32, 0, len(missing))
-	for i := range missing {
-		missingItems = append(missingItems, i.Hash32())
-	}
-
-	return unprocessedItems, dbItems, missingItems
-}
-
-func (s *Syncer) blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32) {
-	// look in pool
-	dbItems := make(map[types.Hash32]item)
-	for _, id := range blockIds {
-		res, err := s.GetBlock(types.BlockID(id.ToHash20()))
-		if err != nil {
-			s.With().Debug("get block failed", log.String("id", id.ShortString()))
-			continue
-		}
-		dbItems[id] = res
-	}
-
-	return nil, dbItems, nil
 }
 
 func (s *Syncer) getAndValidateLayer(id types.LayerID) error {

@@ -83,7 +83,7 @@ func (mockSyncer) ListenToGossip() bool {
 	return true
 }
 
-func (mockSyncer) FetchPoetProof([]byte) error { return nil }
+func (mockSyncer) GetPoetProof(h types.Hash32) error { return nil }
 
 func (m mockSyncer) IsSynced() bool { return !m.notSynced }
 

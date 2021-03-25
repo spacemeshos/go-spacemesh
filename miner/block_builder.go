@@ -29,7 +29,7 @@ type signer interface {
 }
 
 type syncer interface {
-	FetchPoetProof(poetProofRef []byte) error
+	GetPoetProof(poetProofRef types.Hash32) error
 	ListenToGossip() bool
 	IsSynced() bool
 }
