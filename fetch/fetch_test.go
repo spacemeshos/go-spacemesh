@@ -88,7 +88,7 @@ func (m mockNet) SubscribePeerEvents() (new chan p2pcrypto.PublicKey, del chan p
 	return nil, nil
 }
 
-func (m mockNet) Broadcast(protocol string, payload []byte) error {
+func (m mockNet) Broadcast(ctx context.Context, protocol string, payload []byte) error {
 	return nil
 }
 

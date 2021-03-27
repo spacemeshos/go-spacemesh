@@ -19,8 +19,6 @@ import (
 )
 
 var (
-	// ErrClosedIncomingChannel is sent when the connection is closed because the underlying formatter incoming channel was closed
-	ErrClosedIncomingChannel = errors.New("unexpected closed incoming channel")
 	// ErrConnectionClosed is sent when the connection is closed after Close was called
 	ErrConnectionClosed = errors.New("connections was intentionally closed")
 )
@@ -112,9 +110,16 @@ type formattedWriter interface {
 	WriteRecord([]byte) (int, error)
 }
 
+type fmtConnection interface {
+	Connection
+	SendSock([]byte) error
+	setupIncoming(context.Context, time.Duration) error
+	beginEventProcessing(context.Context)
+}
+
 // Create a new connection wrapping a net.Conn with a provided connection manager
 func newConnection(conn readWriteCloseAddresser, netw networker,
-	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) *FormattedConnection {
+	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) fmtConnection {
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &FormattedConnection{
@@ -235,7 +240,6 @@ func (c *FormattedConnection) sendListener() {
 			}
 		case <-c.stopSending:
 			return
-
 		}
 	}
 }
