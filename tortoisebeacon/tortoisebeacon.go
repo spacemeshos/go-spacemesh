@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/sha256-simd"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -317,6 +318,8 @@ func (tb *TortoiseBeacon) handleEpoch(epoch types.EpochID) {
 	tb.Log.With().Info("Calculated beacon",
 		log.Uint64("epoch", uint64(epoch)),
 		log.String("beacon", beacon.String()))
+
+	events.ReportCalculatedTortoiseBeacon(epoch, beacon.String())
 
 	tb.beaconsMu.Lock()
 	tb.beacons[epoch] = beacon

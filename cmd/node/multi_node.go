@@ -391,6 +391,19 @@ loop:
 					continue
 				}
 			}
+			beacons := eventDb.GetTortoiseBeacons(epoch)
+			log.Info("all miners finished calculating %v tortoise beacons, epoch %v done in %v", len(beacons), epoch, time.Since(startLayer))
+			if len(beacons) != 0 {
+				first := beacons[0]
+				for _, beacon := range beacons {
+					if first != beacon {
+						log.Info("tortoise beacons %v and %v differ", first, beacon)
+						errors++
+						continue
+					}
+				}
+			}
+
 			errors = 0
 
 			startLayer = time.Now()

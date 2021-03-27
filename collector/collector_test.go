@@ -1,11 +1,12 @@
 package collector
 
 import (
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"time"
 )
 
 type MockDb struct {
@@ -63,6 +64,12 @@ func (m *MockDb) StoreAtx(event *events.NewAtx) error {
 
 func (m *MockDb) StoreAtxValid(event *events.ValidAtx) error {
 	m.msgs[6]++
+	m.total++
+	return nil
+}
+
+func (m *MockDb) StoreTortoiseBeaconCalculated(event *events.TortoiseBeaconCalculated) error {
+	m.msgs[10]++
 	m.total++
 	return nil
 }

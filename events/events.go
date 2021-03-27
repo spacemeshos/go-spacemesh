@@ -17,6 +17,7 @@ const (
 	EventRewardReceived
 	EventCreatedBlock
 	EventCreatedAtx
+	EventCalculatedTortoiseBeacon
 )
 
 // publisher is the event publisher singleton.
@@ -190,4 +191,15 @@ type AtxCreated struct {
 // GetChannel gets the message type which means on which this message should be sent
 func (AtxCreated) GetChannel() ChannelID {
 	return EventCreatedAtx
+}
+
+// TortoiseBeaconCalculated signals this miner has calculated a tortoise beacon.
+type TortoiseBeaconCalculated struct {
+	Epoch  types.EpochID
+	Beacon string
+}
+
+// GetChannel gets the message type which means on which this message should be sent
+func (TortoiseBeaconCalculated) GetChannel() ChannelID {
+	return EventCalculatedTortoiseBeacon
 }
