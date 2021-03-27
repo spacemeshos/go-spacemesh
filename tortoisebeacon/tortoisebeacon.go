@@ -43,11 +43,13 @@ type tortoiseBeaconDB interface {
 	SetTortoiseBeacon(epochID types.EpochID, beacon types.Hash32) error
 }
 
-// EpochRoundPair is a pair of epoch and round.
-type EpochRoundPair struct {
+type epochRoundPair struct {
 	EpochID types.EpochID
 	Round   uint64
 }
+
+type hashSet = map[types.Hash32]struct{}
+type votesMap = map[epochRoundPair]hashSet
 
 // TortoiseBeacon represents Tortoise Beacon.
 type TortoiseBeacon struct {
@@ -81,8 +83,8 @@ type TortoiseBeacon struct {
 	lateProposalsList map[types.EpochID][][]types.ATXID
 
 	votesMu      sync.RWMutex
-	votesFor     map[EpochRoundPair]map[types.Hash32]struct{}
-	votesAgainst map[EpochRoundPair]map[types.Hash32]struct{}
+	votesFor     votesMap
+	votesAgainst votesMap
 
 	beaconsMu sync.RWMutex
 	beacons   map[types.EpochID]types.Hash32
@@ -120,8 +122,8 @@ func New(
 		timelyProposalsList:  make(map[types.EpochID][][]types.ATXID),
 		delayedProposalsList: make(map[types.EpochID][][]types.ATXID),
 		lateProposalsList:    make(map[types.EpochID][][]types.ATXID),
-		votesFor:             make(map[EpochRoundPair]map[types.Hash32]struct{}),
-		votesAgainst:         make(map[EpochRoundPair]map[types.Hash32]struct{}),
+		votesFor:             make(votesMap),
+		votesAgainst:         make(votesMap),
 		beacons:              make(map[types.EpochID]types.Hash32),
 		beaconsReady:         make(map[types.EpochID]chan struct{}),
 	}
@@ -312,7 +314,7 @@ func (tb *TortoiseBeacon) handleEpoch(epoch types.EpochID) {
 		log.Uint64("epoch", uint64(epoch)))
 
 	// After K rounds had passed, tally up votes for proposals using simple tortoise vote counting
-	beacon := tb.calculateBeacon(tb.votesFor)
+	beacon := tb.calculateBeacon(tb.votesFor, epoch)
 	tb.timelyProposalsMu.Unlock()
 
 	tb.Log.With().Info("Calculated beacon",
@@ -373,7 +375,7 @@ func (tb *TortoiseBeacon) handleVotingMessage(m VotingMessage) error {
 	currentRound := tb.currentRounds[epoch]
 	tb.currentRoundsMu.Unlock()
 
-	pair := EpochRoundPair{
+	pair := epochRoundPair{
 		EpochID: epoch,
 		Round:   currentRound,
 	}
@@ -390,12 +392,12 @@ func (tb *TortoiseBeacon) handleVotingMessage(m VotingMessage) error {
 			tb.votesMu.Lock()
 
 			if _, ok := tb.votesFor[pair]; !ok {
-				tb.votesFor[pair] = make(map[types.Hash32]struct{})
+				tb.votesFor[pair] = make(hashSet)
 			}
 			tb.votesFor[pair][hash] = struct{}{}
 
 			if _, ok := tb.votesAgainst[pair]; !ok {
-				tb.votesAgainst[pair] = make(map[types.Hash32]struct{})
+				tb.votesAgainst[pair] = make(hashSet)
 			}
 			tb.votesAgainst[pair][hash] = struct{}{}
 
@@ -591,7 +593,7 @@ func (tb *TortoiseBeacon) calculateVotes(epoch types.EpochID, round uint64) (vot
 		countFor := 1
 		countAgainst := 0
 		for i := uint64(1); i < round; i++ {
-			key := EpochRoundPair{
+			key := epochRoundPair{
 				EpochID: epoch,
 				Round:   i, // proposals from the previous round are needed
 			}
@@ -615,7 +617,7 @@ func (tb *TortoiseBeacon) calculateVotes(epoch types.EpochID, round uint64) (vot
 		countFor := 0
 		countAgainst := 1
 		for i := uint64(1); i < round; i++ {
-			key := EpochRoundPair{
+			key := epochRoundPair{
 				EpochID: epoch,
 				Round:   i, // proposals from the previous round are needed
 			}
@@ -680,14 +682,21 @@ func (tb *TortoiseBeacon) lastPossibleRound() uint64 {
 	return tb.config.RoundsNumber + 2
 }
 
-func (tb *TortoiseBeacon) calculateBeacon(m map[EpochRoundPair]map[types.Hash32]struct{}) types.Hash32 {
+func (tb *TortoiseBeacon) calculateBeacon(votes votesMap, epoch types.EpochID) types.Hash32 {
 	hasher := sha256.New()
 
 	allHashes := make([]types.Hash32, 0)
 
-	for _, hashList := range m {
-		for hash := range hashList {
-			allHashes = append(allHashes, hash)
+	for round := uint64(0); round < tb.lastPossibleRound(); round++ {
+		epochRound := epochRoundPair{
+			EpochID: epoch,
+			Round:   round,
+		}
+
+		if hashList, ok := votes[epochRound]; ok {
+			for hash := range hashList {
+				allHashes = append(allHashes, hash)
+			}
 		}
 	}
 
@@ -701,6 +710,7 @@ func (tb *TortoiseBeacon) calculateBeacon(m map[EpochRoundPair]map[types.Hash32]
 	}
 
 	tb.Log.With().Info("Going to calculate tortoise beacon from this hash list",
+		log.Uint64("epoch", uint64(epoch)),
 		log.String("hashes", strings.Join(stringHashes, ", ")))
 
 	for _, hash := range allHashes {
