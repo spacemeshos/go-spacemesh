@@ -16,9 +16,12 @@ const TBVotingProtocol = "TBVotingGossip"
 const TBWeakCoinProtocol = "TBWeakCoinGossip"
 
 // HandleProposalMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
+// TODO(nkryuchkov): Consider not calculating own proposals.
 func (tb *TortoiseBeacon) HandleProposalMessage(data service.GossipMessage, sync service.Fetcher) {
-	var m ProposalMessage
+	tb.Log.With().Info("New proposal message",
+		log.String("from", data.Sender().String()))
 
+	var m ProposalMessage
 	err := types.BytesToInterface(data.Bytes(), &m)
 	if err != nil {
 		tb.Log.With().Error("Received invalid proposal message",
@@ -40,9 +43,12 @@ func (tb *TortoiseBeacon) HandleProposalMessage(data service.GossipMessage, sync
 }
 
 // HandleVotingMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
+// TODO(nkryuchkov): Consider not calculating own votes.
 func (tb *TortoiseBeacon) HandleVotingMessage(data service.GossipMessage, sync service.Fetcher) {
-	var m VotingMessage
+	tb.Log.With().Info("New voting message",
+		log.String("from", data.Sender().String()))
 
+	var m VotingMessage
 	err := types.BytesToInterface(data.Bytes(), &m)
 	if err != nil {
 		tb.Log.With().Error("Received invalid voting message",

@@ -702,30 +702,26 @@ func (tb *TortoiseBeacon) calculateBeacon(votes votesMap, epoch types.EpochID) t
 
 	allHashes := make([]types.Hash32, 0)
 
-	for round := uint64(0); round < tb.config.RoundsNumber; round++ {
+	for round := uint64(1); round <= tb.config.RoundsNumber; round++ {
 		epochRound := epochRoundPair{
 			EpochID: epoch,
 			Round:   round,
 		}
 
-		if hashList, ok := votes[epochRound]; ok {
-			stringHashes := make([]string, 0, len(hashList))
+		stringHashes := make([]string, 0)
 
+		if hashList, ok := votes[epochRound]; ok {
 			for hash := range hashList {
 				allHashes = append(allHashes, hash)
 				stringHashes = append(stringHashes, hash.String())
 			}
-
-			tb.Log.With().Info(fmt.Sprintf("Tortoise beacon hashes epoch %v round %v", epoch, round),
-				log.Uint64("epoch_id", uint64(epoch)),
-				log.Uint64("round", round),
-				log.String("hashes", strings.Join(stringHashes, ", ")))
 		}
+
+		tb.Log.With().Info(fmt.Sprintf("Tortoise beacon hashes epoch %v round %v", epoch, round),
+			log.Uint64("epoch_id", uint64(epoch)),
+			log.Uint64("round", round),
+			log.String("hashes", strings.Join(stringHashes, ", ")))
 	}
-	//  AssertionError: all beacons in epoch 2 were not same, saw:
-	// {'0x224451484fe1e61b08f634279600a8dcd82d3190a20cd3364a6023ac35be1b94': 46,
-	//  '0x27c88a89b3071184aea7bedb8589e394a2eebce92e74145c9e129f6d9a3eb139': 2,
-	//  '0xbfe29d6ef1861a13293f00b734fca93bc2c8f141e548e7fe2c97221b5b2cf28a': 3}
 
 	sort.Slice(allHashes, func(i, j int) bool {
 		return strings.Compare(allHashes[i].String(), allHashes[j].String()) == -1
