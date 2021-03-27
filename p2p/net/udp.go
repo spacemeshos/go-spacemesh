@@ -39,7 +39,7 @@ type UDPListener interface {
 	SetWriteDeadline(t time.Time) error
 }
 
-type connWrapper struct{
+type connWrapper struct {
 	uConn udpConn
 	mConn *MsgConnection
 }
