@@ -112,7 +112,15 @@ func (n *Net) Start(ctx context.Context, listener net.Listener) { // todo: maybe
 	n.listenAddress = listener.Addr().(*net.TCPAddr)
 	n.logger.WithContext(ctx).With().Info("started tcp server listening for connections",
 		log.String("tcpaddr", listener.Addr().String()))
-	go n.accept(ctx, listener)
+
+	// This channel enforces the limit on the number of incoming connections
+	// Each message sent to the channel represents a "token" that allows one additional incoming connection
+	pending := make(chan struct{}, n.config.MaxPendingConnections)
+	for i := 0; i < n.config.MaxPendingConnections; i++ {
+		pending <- struct{}{}
+	}
+
+	go n.accept(ctx, listener, pending)
 }
 
 // LocalAddr returns the local listening address. panics before calling Start or if Start errored
@@ -277,15 +285,11 @@ func (n *Net) Shutdown() {
 	}
 }
 
-func (n *Net) accept(ctx context.Context, listen net.Listener) {
+func (n *Net) accept(ctx context.Context, listen net.Listener, pending chan struct{}) {
 	n.logger.WithContext(ctx).Debug("waiting for incoming connections")
-	pending := make(chan struct{}, n.config.MaxPendingConnections)
-
-	for i := 0; i < n.config.MaxPendingConnections; i++ {
-		pending <- struct{}{}
-	}
 
 	for {
+		// Grab a token to accept another incoming connection
 		<-pending
 		netConn, err := listen.Accept()
 		if err != nil {
@@ -298,6 +302,8 @@ func (n *Net) accept(ctx context.Context, listen net.Listener) {
 			}
 
 			n.logger.WithContext(ctx).With().Warning("failed to accept connection request", log.Err(err))
+
+			// Connection failed, replace the token
 			pending <- struct{}{}
 			continue
 		}
@@ -308,21 +314,28 @@ func (n *Net) accept(ctx context.Context, listen net.Listener) {
 			log.String("network", netConn.RemoteAddr().Network()))
 		conn := netConn.(*net.TCPConn)
 		n.tcpSocketConfig(conn) // TODO maybe only set this after session handshake to prevent denial of service with big messages
-		c := newConnection(netConn, n, nil, nil, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger.WithContext(ctx))
-		go func(con Connection) {
-			defer func() { pending <- struct{}{} }()
-			err := c.setupIncoming(ctx, n.config.SessionTimeout)
-			if err != nil {
-				n.logger.WithContext(ctx).Event().Warning("incoming connection failed",
-					log.String("remote_addr", c.remoteAddr.String()),
-					log.Err(err))
-				return
-			}
-			go c.beginEventProcessing(ctx)
-		}(c)
+		c := newConnection(netConn, n, nil, nil, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger)
 
-		// network won't publish the connection before it the remote node had established a session
+		// Handle the incoming connection asynchronously
+		go n.acceptAsync(ctx, c, pending)
 	}
+}
+
+func (n *Net) acceptAsync(ctx context.Context, conn fmtConnection, pending chan struct{}) {
+	// Return the new connection token once the connection is closed
+	defer func() { pending <- struct{}{} }()
+
+	if err := conn.setupIncoming(ctx, n.config.SessionTimeout); err != nil {
+		n.logger.WithContext(ctx).Event().Warning("incoming connection failed",
+			log.String("remote_addr", conn.RemoteAddr().String()),
+			log.Err(err))
+		return
+	}
+
+	// The connection is automatically closed when there's no more to read, no need to close it here
+	conn.beginEventProcessing(ctx)
+
+	// network won't publish the connection before the remote node has established a session
 }
 
 // SubscribeOnNewRemoteConnections registers a callback for a new connection event. all registered callbacks are called before moving.

@@ -63,7 +63,7 @@ func TestReceiveError(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	netw.SubscribeClosingConnections(func(ctx context.Context, closedConn ConnectionWithErr) {
-		assert.Equal(t, conn.id, closedConn.Conn.ID())
+		assert.Equal(t, conn.ID(), closedConn.Conn.ID())
 		wg.Done()
 	})
 
@@ -141,7 +141,7 @@ func TestErrClose(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	netw.SubscribeClosingConnections(func(ctx context.Context, closedConn ConnectionWithErr) {
-		assert.Equal(t, conn.id, closedConn.Conn.ID())
+		assert.Equal(t, conn.ID(), closedConn.Conn.ID())
 		wg.Done()
 	})
 

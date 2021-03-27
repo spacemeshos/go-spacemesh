@@ -7,10 +7,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"math/rand"
 	"sync"
 
-	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -397,7 +397,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 						events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot serialize block")
 						return
 					}
-					if err = t.network.Broadcast(ctx, config.NewBlockProtocol, bytes); err != nil {
+					if err = t.network.Broadcast(ctx, blocks.NewBlockProtocol, bytes); err != nil {
 						logger.With().Error("failed to send block", log.Err(err))
 					}
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "")

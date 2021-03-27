@@ -73,12 +73,14 @@ func TestNet_EnqueueMessage(t *testing.T) {
 	if timedout > 0 {
 		t.Fatal("timedout")
 	}
+	n.Shutdown()
 }
 
 type mockListener struct {
-	calledCount  int32
-	connReleaser chan struct{}
-	accpetResErr error
+	calledCount    int32
+	connReleaser   chan struct{}
+	acceptResError error
+	acceptFn       func() (net.Conn, error)
 }
 
 func newMockListener() *mockListener {
@@ -86,14 +88,17 @@ func newMockListener() *mockListener {
 }
 
 func (ml *mockListener) Accept() (net.Conn, error) {
+	if ml.acceptFn != nil {
+		return ml.acceptFn()
+	}
 	<-ml.connReleaser
 	atomic.AddInt32(&ml.calledCount, 1)
 	<-ml.connReleaser
 	var c net.Conn = nil
-	if ml.accpetResErr == nil {
+	if ml.acceptResError == nil {
 		c, _ = net.Pipe() // just for the interface lolz
 	}
-	return c, ml.accpetResErr
+	return c, ml.acceptResError
 }
 
 func (ml *mockListener) releaseConn() {
@@ -129,7 +134,7 @@ func Test_Net_LimitedConnections(t *testing.T) {
 	require.NoError(t, err)
 	listener := newMockListener()
 	n.Start(context.TODO(), listener)
-	listener.accpetResErr = tempErr("demo connection will close and allow more")
+	listener.acceptResError = tempErr("demo connection will close and allow more")
 	for i := 0; i < cfg.MaxPendingConnections; i++ {
 		listener.releaseConn()
 	}
@@ -146,6 +151,7 @@ func Test_Net_LimitedConnections(t *testing.T) {
 	<-done
 	<-done
 	require.Equal(t, atomic.LoadInt32(&listener.calledCount), int32(cfg.MaxPendingConnections)+1)
+	n.Shutdown()
 }
 
 func TestHandlePreSessionIncomingMessage2(t *testing.T) {
@@ -184,4 +190,66 @@ func TestHandlePreSessionIncomingMessage2(t *testing.T) {
 	r.Equal(int32(0), bobsAliceConn.SendCount())
 
 	wg.Wait()
+	bobsNet.Shutdown()
+}
+
+func TestMaxPendingConnections(t *testing.T) {
+	r := require.New(t)
+	cfg := config.DefaultConfig()
+
+	ln, err := node.NewNodeIdentity()
+	require.NoError(t, err)
+	n, err := NewNet(cfg, ln, log.NewDefault(t.Name()))
+	require.NoError(t, err)
+
+	// Create many new connections
+	pending := make(chan struct{})
+	for i := 0; i < cfg.MaxPendingConnections-1; i++ {
+		conn := NewConnectionMock(ln.PublicKey())
+		go n.acceptAsync(context.TODO(), conn, pending)
+	}
+
+	// Now create one that we can shut down at will
+	conn := NewConnectionMock(ln.PublicKey())
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	conn.eventProcessing = func() {
+		wg.Wait()
+	}
+
+	// this waitgroup makes sure that this goroutine terminates when we release the connection
+	wgSuccess := sync.WaitGroup{}
+	wgSuccess.Add(1)
+	go func() {
+		n.acceptAsync(context.TODO(), conn, pending)
+		wgSuccess.Done()
+	}()
+
+	// Make sure that the listener does not accept a new connection until we terminate one
+	counter := 0
+
+	chDone := make(chan struct{}, 2)
+	listener := newMockListener()
+	listener.acceptFn = func() (net.Conn, error) {
+		counter++
+		// release the test to complete
+		chDone <- struct{}{}
+		return nil, tempErr("keep waiting")
+	}
+
+	// This should wait (since all tokens are currently in use)
+	go n.accept(context.TODO(), listener, pending)
+
+	// Now release one connection, releasing one token
+	wg.Done()
+
+	// Wait for it to be released
+	wgSuccess.Wait()
+
+	// Wait for the new connection to be accepted
+	<-chDone
+
+	// Make sure only one new connection was accepted
+	r.Equal(1, counter, "expected exactly one listener to be released")
+	n.Shutdown()
 }
