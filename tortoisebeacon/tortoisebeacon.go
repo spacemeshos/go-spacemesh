@@ -2,6 +2,7 @@ package tortoisebeacon
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -701,7 +702,7 @@ func (tb *TortoiseBeacon) calculateBeacon(votes votesMap, epoch types.EpochID) t
 				stringHashes = append(stringHashes, hash.String())
 			}
 
-			tb.Log.With().Info("Tortoise beacon hashes",
+			tb.Log.With().Info(fmt.Sprintf("Tortoise beacon hashes epoch %v round %v", epoch, round),
 				log.Uint64("epoch_id", uint64(epoch)),
 				log.Uint64("round", round),
 				log.String("hashes", strings.Join(stringHashes, ", ")))
@@ -717,7 +718,7 @@ func (tb *TortoiseBeacon) calculateBeacon(votes votesMap, epoch types.EpochID) t
 		stringHashes = append(stringHashes, hash.String())
 	}
 
-	tb.Log.With().Info("Going to calculate tortoise beacon from this hash list",
+	tb.Log.With().Info(fmt.Sprintf("Going to calculate tortoise beacon from this hash list epoch %v", epoch),
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.String("hashes", strings.Join(stringHashes, ", ")))
 
