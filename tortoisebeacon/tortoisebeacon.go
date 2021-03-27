@@ -694,9 +694,17 @@ func (tb *TortoiseBeacon) calculateBeacon(votes votesMap, epoch types.EpochID) t
 		}
 
 		if hashList, ok := votes[epochRound]; ok {
+			stringHashes := make([]string, 0, len(hashList))
+
 			for hash := range hashList {
 				allHashes = append(allHashes, hash)
+				stringHashes = append(stringHashes, hash.String())
 			}
+
+			tb.Log.With().Info("Tortoise beacon hashes",
+				log.Uint64("epoch_id", uint64(epoch)),
+				log.Uint64("round", round),
+				log.String("hashes", strings.Join(stringHashes, ", ")))
 		}
 	}
 
@@ -710,7 +718,7 @@ func (tb *TortoiseBeacon) calculateBeacon(votes votesMap, epoch types.EpochID) t
 	}
 
 	tb.Log.With().Info("Going to calculate tortoise beacon from this hash list",
-		log.Uint64("epoch", uint64(epoch)),
+		log.Uint64("epoch_id", uint64(epoch)),
 		log.String("hashes", strings.Join(stringHashes, ", ")))
 
 	for _, hash := range allHashes {
