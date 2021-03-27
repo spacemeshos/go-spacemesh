@@ -196,7 +196,7 @@ func (c *MemoryCollector) AtxIDExists(atxID string) bool {
 	return found
 }
 
-// GetTortoiseBeacon ...
+// GetTortoiseBeacons returns a list of tortoise beacons for a given epoch.
 func (c *MemoryCollector) GetTortoiseBeacons(epoch types.EpochID) []string {
 	c.lck.RLock()
 	defer c.lck.RUnlock()
