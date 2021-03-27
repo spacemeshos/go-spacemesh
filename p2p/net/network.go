@@ -204,7 +204,6 @@ func (n *Net) tcpSocketConfig(tcpconn *net.TCPConn) {
 }
 
 func (n *Net) createConnection(ctx context.Context, address net.Addr, remotePub p2pcrypto.PublicKey, session NetworkSession) (ManagedConnection, error) {
-
 	if n.isShuttingDown {
 		return nil, fmt.Errorf("can't dial because the connection is shutting down")
 	}
@@ -220,7 +219,6 @@ func (n *Net) createConnection(ctx context.Context, address net.Addr, remotePub 
 }
 
 func (n *Net) createSecuredConnection(ctx context.Context, address net.Addr, remotePubkey p2pcrypto.PublicKey) (ManagedConnection, error) {
-
 	session := createSession(n.localNode.PrivateKey(), remotePubkey)
 	conn, err := n.createConnection(ctx, address, remotePubkey, session)
 	if err != nil {
@@ -276,13 +274,16 @@ func (n *Net) Shutdown() {
 
 func (n *Net) accept(listen net.Listener) {
 	n.logger.Debug("Waiting for incoming connections...")
-	pending := make(chan struct{}, n.config.MaxPendingConnections)
 
+	// This channel enforces the limit on the number of incoming connections
+	// Each message sent to the channel represents a "token" that allows one additional incoming connection
+	pending := make(chan struct{}, n.config.MaxPendingConnections)
 	for i := 0; i < n.config.MaxPendingConnections; i++ {
 		pending <- struct{}{}
 	}
 
 	for {
+		// Grab a token to accept another incoming connection
 		<-pending
 		netConn, err := listen.Accept()
 		if err != nil {
@@ -295,6 +296,8 @@ func (n *Net) accept(listen net.Listener) {
 			}
 
 			n.logger.Warning("Failed to accept connection request err:%v", err)
+
+			// Connection failed, replace the token
 			pending <- struct{}{}
 			continue
 		}
@@ -304,16 +307,21 @@ func (n *Net) accept(listen net.Listener) {
 		n.tcpSocketConfig(conn) // TODO maybe only set this after session handshake to prevent denial of service with big messages
 		c := newConnection(netConn, n, nil, nil, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger)
 		go func(con Connection) {
-			defer func() { pending <- struct{}{} }()
-			err := c.setupIncoming(n.config.SessionTimeout)
-			if err != nil {
+			if err := c.setupIncoming(n.config.SessionTimeout); err != nil {
 				n.logger.Event().Warning("conn_incoming_failed", log.String("remote", c.remoteAddr.String()), log.Err(err))
 				return
 			}
-			go c.beginEventProcessing()
+
+			// Asynchronously handle the new connection
+			func() {
+				// Return the new connection token once the connection is closed
+				defer func() { pending <- struct{}{} }()
+				// The connection is automatically closed when there's no more to read, no need to close it here
+				c.beginEventProcessing()
+			}()
 		}(c)
 
-		// network won't publish the connection before it the remote node had established a session
+		// network won't publish the connection before the remote node has established a session
 	}
 }
 

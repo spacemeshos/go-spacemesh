@@ -237,7 +237,7 @@ func TestUDPNet_Cache(t *testing.T) {
 	addr2 := testUDPAddr()
 	n.addConn(addr2, &udpConnMock{CreatedFunc: func() time.Time {
 		return time.Now()
-	}})
+	}}, &MsgConnection{})
 	require.Len(t, n.incomingConn, 1)
 
 	for i := 1; i < maxUDPConn-1; i++ {
@@ -249,7 +249,7 @@ func TestUDPNet_Cache(t *testing.T) {
 		}
 		n.addConn(addrx, &udpConnMock{CreatedFunc: func() time.Time {
 			return time.Now()
-		}})
+		}}, &MsgConnection{})
 	}
 
 	require.Len(t, n.incomingConn, maxUDPConn-1)
@@ -263,7 +263,7 @@ func TestUDPNet_Cache(t *testing.T) {
 
 	n.addConn(addrx, &udpConnMock{CreatedFunc: func() time.Time {
 		return time.Now().Add(-maxUDPLife - 1*time.Second)
-	}})
+	}}, &MsgConnection{})
 
 	require.Len(t, n.incomingConn, maxUDPConn)
 
@@ -275,7 +275,7 @@ func TestUDPNet_Cache(t *testing.T) {
 	}
 	n.addConn(addrx2, &udpConnMock{CreatedFunc: func() time.Time {
 		return time.Now()
-	}})
+	}}, &MsgConnection{})
 
 	require.Len(t, n.incomingConn, maxUDPConn)
 
@@ -304,7 +304,7 @@ func TestUDPNet_Cache(t *testing.T) {
 		_, okk = n.incomingConn[addrxx.String()]
 	}
 
-	n.addConn(addrxx, somecon)
+	n.addConn(addrxx, somecon, &MsgConnection{})
 
 	c, err := n.getConn(addrxx)
 	require.Error(t, err)
@@ -363,7 +363,7 @@ func TestUDPNet_Cache2(t *testing.T) {
 			return addr
 		}
 		mconn := newMsgConnection(conn, n, pk, ns, n.config.MsgSizeLimit, n.config.DialTimeout, n.logger)
-		n.addConn(addr, conn)
+		n.addConn(addr, conn, &MsgConnection{})
 		go mconn.beginEventProcessing()
 	}
 

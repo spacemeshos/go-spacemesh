@@ -18,8 +18,6 @@ import (
 )
 
 var (
-	// ErrClosedIncomingChannel is sent when the connection is closed because the underlying formatter incoming channel was closed
-	ErrClosedIncomingChannel = errors.New("unexpected closed incoming channel")
 	// ErrConnectionClosed is sent when the connection is closed after Close was called
 	ErrConnectionClosed = errors.New("connections was intentionally closed")
 )
@@ -215,7 +213,6 @@ func (c *FormattedConnection) sendListener() {
 			}
 		case <-c.stopSending:
 			return
-
 		}
 	}
 }

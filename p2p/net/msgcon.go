@@ -28,6 +28,7 @@ type MsgConnection struct {
 	r           io.Reader
 	wmtx        sync.Mutex
 	w           io.Writer
+	closer      io.Closer
 	closed      bool
 	deadliner   deadliner
 	messages    chan []byte
@@ -49,6 +50,7 @@ func newMsgConnection(conn readWriteCloseAddresser, netw networker,
 		remoteAddr:   conn.RemoteAddr(),
 		r:            conn,
 		w:            conn,
+		closer:       conn,
 		deadline:     deadline,
 		deadliner:    conn,
 		networker:    netw,
@@ -138,13 +140,11 @@ func (c *MsgConnection) sendListener() {
 		select {
 		case buf := <-c.messages:
 			//todo: we are hiding the error here...
-			err := c.SendSock(buf)
-			if err != nil {
-				log.Error("cannot send message to peer %v", err)
+			if err := c.SendSock(buf); err != nil {
+				log.With().Error("cannot send message to peer", log.Err(err))
 			}
 		case <-c.stopSending:
 			return
-
 		}
 	}
 }
@@ -192,6 +192,9 @@ func (c *MsgConnection) closeUnlocked() error {
 		return ErrAlreadyClosed
 	}
 	c.closed = true
+	if err := c.closer.Close(); err != nil {
+		c.logger.With().Error("error closing connection io", log.Err(err))
+	}
 	return nil
 }
 
@@ -199,8 +202,7 @@ func (c *MsgConnection) closeUnlocked() error {
 func (c *MsgConnection) Close() error {
 	c.wmtx.Lock()
 	defer c.wmtx.Unlock()
-	err := c.closeUnlocked()
-	if err != nil {
+	if err := c.closeUnlocked(); err != nil {
 		return err
 	}
 	close(c.stopSending)
