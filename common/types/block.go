@@ -167,7 +167,6 @@ type BlockHeader struct {
 	EligibilityProof BlockEligibilityProof
 	Data             []byte
 	Coin             bool
-	Timestamp        int64
 	BlockVotes       []BlockID
 	ViewEdges        []BlockID
 }
