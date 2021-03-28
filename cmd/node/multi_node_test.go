@@ -5,5 +5,5 @@ import (
 )
 
 func TestMultiNode(t *testing.T) {
-	StartMultiNode(5, 10, 100, "/tmp/data")
+	StartMultiNode(5, 10, 10, "/tmp/data")
 }
