@@ -647,9 +647,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	gossipListener.AddListener(state.IncomingTxProtocol, priorityq.Low, processor.HandleTxData)
 	gossipListener.AddListener(activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
 	gossipListener.AddListener(blocks.NewBlockProtocol, priorityq.High, blockListener.HandleBlock)
-	gossipListener.AddListener(tortoisebeacon.TBProposalProtocol, priorityq.High, tBeacon.HandleProposalMessage)
-	gossipListener.AddListener(tortoisebeacon.TBVotingProtocol, priorityq.High, tBeacon.HandleVotingMessage)
-	//gossipListener.AddListener(tortoisebeacon.TBWeakCoinProtocol, priorityq.Low, tBeacon.HandleWeakCoinMessage)
+	gossipListener.AddListener(tortoisebeacon.TBProposalProtocol, priorityq.Low, tBeacon.HandleProposalMessage)
+	gossipListener.AddListener(tortoisebeacon.TBVotingProtocol, priorityq.Low, tBeacon.HandleVotingMessage)
+	gossipListener.AddListener(tortoisebeacon.TBWeakCoinProtocol, priorityq.Low, tBeacon.HandleWeakCoinMessage)
 
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener
