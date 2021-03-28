@@ -2,11 +2,12 @@ package hare
 
 import (
 	"errors"
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
-	"sync"
 )
 
 const inboxCapacity = 1024 // inbox size per instance
@@ -308,9 +309,12 @@ func (b *Broker) Register(id instanceID) (chan *Msg, error) {
 		b.updateLatestLayer(id)
 
 		if len(b.outbox) >= b.limit {
-			resErr <- errTooMany
-			resCh <- nil
-			return
+			//unregister the earliest layer to make space for the new layer
+			//cannot call unregister here because unregister blocks and this would cause a deadlock
+			id := b.minDeleted + 1
+			delete(b.outbox, id)
+			b.cleanOldLayers()
+			b.With().Info("unregistered layer due to maximum concurrent processes", types.LayerID(id))
 		}
 
 		if b.isSynced(id) {
