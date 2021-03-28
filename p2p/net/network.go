@@ -313,7 +313,7 @@ func (n *Net) accept(listen net.Listener) {
 			}
 
 			// Asynchronously handle the new connection
-			func() {
+			go func() {
 				// Return the new connection token once the connection is closed
 				defer func() { pending <- struct{}{} }()
 				// The connection is automatically closed when there's no more to read, no need to close it here
