@@ -16,6 +16,19 @@ const (
 	LateMessage
 )
 
+func (m MessageType) String() string {
+	switch m {
+	case TimelyMessage:
+		return "timely"
+	case DelayedMessage:
+		return "delayed"
+	case LateMessage:
+		return "late"
+	default:
+		return "unknown"
+	}
+}
+
 type message interface {
 	Epoch() types.EpochID
 }

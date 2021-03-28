@@ -69,6 +69,33 @@ func (tb *TortoiseBeacon) HandleVotingMessage(data service.GossipMessage, sync s
 	data.ReportValidation(TBVotingProtocol)
 }
 
+func (tb *TortoiseBeacon) HandleVotingMessageDiff(data service.GossipMessage, sync service.Fetcher) {
+	from := data.Sender()
+
+	tb.Log.With().Info("New voting message",
+		log.String("from", from.String()))
+
+	var m VotingMessage
+	err := types.BytesToInterface(data.Bytes(), &m)
+	if err != nil {
+		tb.Log.With().Error("Received invalid voting message",
+			log.String("message", string(data.Bytes())),
+			log.Err(err))
+
+		return
+	}
+
+	if err := tb.handleVotingMessageDiff(from, m); err != nil {
+		tb.Log.With().Error("Failed to handle voting message",
+			log.String("message", m.String()),
+			log.Err(err))
+
+		return
+	}
+
+	data.ReportValidation(TBVotingProtocol)
+}
+
 // HandleWeakCoinMessage defines method to handle Tortoise Beacon Weak Coin Messages from gossip.
 func (tb *TortoiseBeacon) HandleWeakCoinMessage(data service.GossipMessage, sync service.Fetcher) {
 	var m WeakCoinMessage
