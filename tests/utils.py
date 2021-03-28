@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 from kubernetes.client.rest import ApiException
 from kubernetes.stream import stream
+from kubernetes import client
 import functools
 import ntpath
 import os
@@ -19,6 +20,7 @@ import tests.queries as q
 
 ES_SS_NAME = "elasticsearch-master"
 LOGSTASH_SS_NAME = "logstash"
+KIBANA_SS_NAME = "kibana"
 
 
 def api_call(client_ip, data, api, namespace, port="9093", retry=3, interval=1):
@@ -233,7 +235,9 @@ def wait_genesis(genesis_time, genesis_delta):
         time.sleep(delta_from_genesis)
 
 
-def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME, logstash_ss_name=LOGSTASH_SS_NAME):
+def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME,
+                                                  logstash_ss_name=LOGSTASH_SS_NAME,
+                                                  kibana_ss_name=KIBANA_SS_NAME):
     es_timeout = 240
     try:
         print("waiting for ES to be ready")
@@ -251,7 +255,53 @@ def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME, logstas
         print(f"got an exception while waiting for Logstash to be ready: {e}")
         raise Exception(f"logstash took over than {ls_timeout} to start")
 
-    return logstash_sleep_time + es_sleep_time
+    kb_timeout = 240
+    try:
+        print("waiting for kibana to be ready")
+        kibana_sleep_time = statefulset.wait_to_statefulset_to_be_ready(kibana_ss_name, namespace, time_out=ls_timeout)
+    except Exception as e:
+        print(f"got an exception while waiting for keban to be ready: {e}")
+        raise Exception(f"keban took over than {kb_timeout} to start")
+    else:
+        kibana_ip = get_kibana_ip(kibana_ss_name, namespace)
+        print(f"kibana started successfully. ip: {kibana_ip}")
+
+    return es_sleep_time + logstash_sleep_time + kibana_sleep_time
+
+
+def get_kibana_ip(kibana_ss_name, namespace, retries=30, sleep_interval=1):
+    def get_kibana_service(services_):
+        for serv in services_.items:
+            print(serv.metadata.name)
+            if serv.metadata.name == kibana_ss_name:
+                return serv
+        return None
+
+    k8s_client = client.CoreV1Api()
+
+    for attempt in range(retries):
+
+        services = k8s_client.list_namespaced_service(namespace=namespace)
+
+        if not services:
+            # list_namespaced_service sometimes gets stuck and return an empty result
+            # if not received namespaced services -> try again in {interval} time until reaching timeout
+            print(f"KIBANA: k8s client failed to get active services in {namespace},"
+                  f" attempt: {attempt}, retrying in {sleep_interval}")
+            time.sleep(sleep_interval)
+            continue
+
+        kibana_service = get_kibana_service(services)
+
+        if not kibana_service.status.load_balancer.ingress:
+            # Amit: sometimes service will be returned before being assigned with an IP address
+            print("KIBANA: service returned without ip address, retrying")
+            time.sleep(sleep_interval)
+            continue
+
+        return kibana_service.status.load_balancer.ingress[0].ip
+
+    raise Exception("KIBANA: max retries count expired")
 
 
 def exec_wait(cmd, retry=1, interval=1, is_print=True):
