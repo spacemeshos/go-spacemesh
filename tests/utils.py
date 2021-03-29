@@ -169,6 +169,7 @@ def validate_beacons(log_messages):
 
     for epoch, beacons in epoch_messages.items():
         assert len(beacons) == 1, f"all beacons in epoch {epoch} were not same, saw: {beacons}"
+        print(f"all beacons in epoch {epoch} were same, saw: {beacons}")
 
     print(f"successfully validated beacons")
 
