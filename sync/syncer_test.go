@@ -213,8 +213,10 @@ func SyncMockFactoryManClock(number int, conf Configuration, name string, dbType
 			blocks: make(map[types.Hash32]*types.Block),
 		}
 		layerFetcher := layerfetcher.NewLogic(layerfetcher.Config{RequestTimeout: 3}, store, store, store, store, store, net, f, msh, l)
-		poet := poetDb()
-		layerFetcher.AddDBs(msh.Blocks(), atxDB, msh.Transactions(), nil)
+		poetDB := database.NewMemDatabase()
+		poet := activation.NewPoetDb(poetDB, log.NewDefault("poetDb"))
+		//poet := poetDb()
+		layerFetcher.AddDBs(msh.Blocks(), atxDB, msh.Transactions(), poetDB)
 
 		sync := NewSync(net, msh, txpool, atxpool, blockValidator, poet, conf, ticker, layerFetcher, l)
 		nodes = append(nodes, sync)
@@ -388,7 +390,11 @@ func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
 	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
 	r.NoError(err)
 	ref := sha256.Sum256(poetProofBytes)
-
+	s0.fetcher.Start()
+	defer s0.fetcher.Close()
+	s1.fetcher.Start()
+	defer s1.fetcher.Close()
+	log.Info("new code")
 	err = s1.GetPoetProof(types.CalcHash32(ref[:]))
 	r.NoError(err)
 }
