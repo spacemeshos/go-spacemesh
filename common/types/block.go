@@ -92,7 +92,7 @@ type NodeID struct {
 // String returns a string representation of the NodeID, for logging purposes.
 // It implements the Stringer interface.
 func (id NodeID) String() string {
-	return id.Key + "|" + util.Bytes2Hex(id.VRFPublicKey)
+	return id.Key + string(id.VRFPublicKey)
 }
 
 // ToBytes returns the byte representation of the Edwards public key.
