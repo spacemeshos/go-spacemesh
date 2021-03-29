@@ -41,7 +41,7 @@ type UDPListener interface {
 
 type connWrapper struct {
 	uConn udpConn
-	mConn *MsgConnection
+	mConn msgConn
 }
 
 func (cw connWrapper) Close() error {
@@ -158,16 +158,11 @@ func NodeAddr(info *node.Info) *net.UDPAddr {
 
 // Send writes a udp packet to the target with the given data
 func (n *UDPNet) Send(to *node.Info, data []byte) error {
-
 	ns := n.cache.GetOrCreate(to.PublicKey())
-
 	sealed := ns.SealMessage(data)
 	final := p2pcrypto.PrependPubkey(sealed, n.local.PublicKey())
-
 	addr := NodeAddr(to)
-
 	_, err := n.conn.WriteToUDP(final, addr)
-
 	return err
 }
 
@@ -293,7 +288,7 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 	}
 }
 
-func (n *UDPNet) addConn(addr net.Addr, ucw udpConn, conn *MsgConnection) {
+func (n *UDPNet) addConn(addr net.Addr, ucw udpConn, conn msgConn) {
 	evicted := false
 	lastk := ""
 	if len(n.incomingConn) >= maxUDPConn {
@@ -311,10 +306,10 @@ func (n *UDPNet) addConn(addr net.Addr, ucw udpConn, conn *MsgConnection) {
 		}
 
 		if !evicted {
-			delete(n.incomingConn, lastk)
 			if err := n.incomingConn[lastk].Close(); err != nil {
 				n.logger.With().Warning("error closing udp socket", log.Err(err))
 			}
+			delete(n.incomingConn, lastk)
 		}
 	}
 

@@ -125,8 +125,61 @@ func TestUDPNet_Sanity(t *testing.T) {
 	}
 }
 
-func TestUDPNet_Dial(t *testing.T) {
+func TestUDPNet_Dial(t *testing.T) {}
 
+type msgConnMock struct {
+	CloseFunc	func() error
+}
+
+func (mcm msgConnMock) beginEventProcessing() {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) String() string {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) ID() string {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) RemotePublicKey() p2pcrypto.PublicKey {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) SetRemotePublicKey(p2pcrypto.PublicKey) {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) Created() time.Time {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) RemoteAddr() net.Addr {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) Session() NetworkSession {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) SetSession(NetworkSession) {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) Send([]byte) error {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) Close() error {
+	if mcm.CloseFunc != nil {
+		return mcm.CloseFunc()
+	}
+	return nil
+}
+
+func (mcm msgConnMock) Closed() bool {
+	panic("not implemented")
 }
 
 type udpConnMock struct {
@@ -310,13 +363,12 @@ func TestUDPNet_Cache(t *testing.T) {
 	require.Error(t, err)
 	require.Nil(t, c)
 	require.True(t, closed)
-
 }
 
 func TestUDPNet_Cache2(t *testing.T) {
 	// This test fails by panic before latest fix to udp.go. it crashed the testnet.
 	// instead we now give up on "Closing" from within the "connection" when there's an error since
-	// we provide the errors from the level above anyway, so closing should be preformed there.
+	// we provide the errors from the level above anyway, so closing should be performed there.
 	localnode, _ := node.NewNodeIdentity()
 	n, err := NewUDPNet(config.DefaultConfig(), localnode, log.NewDefault(t.Name()))
 	require.NoError(t, err)
@@ -346,12 +398,10 @@ func TestUDPNet_Cache2(t *testing.T) {
 		return ucm
 	}
 
-	createAndRunConn := func(fs ...func(mock *udpConnMock)) {
-		pk := p2pcrypto.NewRandomPubkey()
-		ns := NewSessionMock(pk)
+	createAndRunConn := func(fs func(mock *udpConnMock), ft func(mock *msgConnMock)) {
 		conn := newCon()
-		for _, f := range fs {
-			f(conn)
+		if fs != nil {
+			fs(conn)
 		}
 		addr := testUDPAddr()
 		_, ok := n.incomingConn[addr.String()]
@@ -362,24 +412,29 @@ func TestUDPNet_Cache2(t *testing.T) {
 		conn.RemoteAddrFunc = func() net.Addr {
 			return addr
 		}
-		mconn := newMsgConnection(conn, n, pk, ns, n.config.MsgSizeLimit, n.config.DialTimeout, n.logger)
-		n.addConn(addr, conn, &MsgConnection{})
-		go mconn.beginEventProcessing()
+		mconn := &msgConnMock{}
+		if ft != nil {
+			ft(mconn)
+		}
+		n.addConn(addr, conn, mconn)
 	}
 
 	for i := 0; i < maxUDPConn; i++ {
-		createAndRunConn()
+		createAndRunConn(nil, nil)
 	}
 
 	require.Len(t, n.incomingConn, maxUDPConn)
-	createAndRunConn()
+	createAndRunConn(nil, nil)
 
 	// Make sure one connection was evicted and replaced
 	require.Len(t, n.incomingConn, maxUDPConn)
 
-	createAndRunConn() // This gets into the closing code path and panics if Close is called twice
+	// This gets into the closing code path and panics if Close is called twice
+	createAndRunConn(nil, nil)
 
+	// Make sure close is called on both conn objects at eviction
 	closed := 0
+	closed2 := 0
 	createAndRunConn(func(mock *udpConnMock) {
 		mock.CreatedFunc = func() time.Time {
 			return time.Now().Add(-maxUDPLife * 2)
@@ -391,11 +446,17 @@ func TestUDPNet_Cache2(t *testing.T) {
 			closed++
 			return nil
 		}
+	}, func(mock *msgConnMock) {
+		mock.CloseFunc = func() error {
+			closed2++
+			return nil
+		}
 	})
 
-	createAndRunConn() // this gets into the closing code path of older than 24 hours.
-	require.Equal(t, closed, 1)
-
+	// this gets into the closing code path of older than 24 hours
+	createAndRunConn(nil, nil)
+	require.Equal(t, 1, closed)
+	require.Equal(t, 1, closed2)
 }
 
 func Test_UDPIncomingConnClose(t *testing.T) {

@@ -37,9 +37,14 @@ type MsgConnection struct {
 	msgSizeLimit int
 }
 
+type msgConn interface {
+	Connection
+	beginEventProcessing()
+}
+
 // Create a new connection wrapping a net.Conn with a provided connection manager
 func newMsgConnection(conn readWriteCloseAddresser, netw networker,
-	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) *MsgConnection {
+	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) msgConn {
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &MsgConnection{
