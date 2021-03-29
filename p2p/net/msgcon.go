@@ -17,17 +17,17 @@ import (
 // It resembles the Connection interface but suits a packet oriented socket.
 type MsgConnection struct {
 	// metadata for logging / debugging
-	logger     log.Log
-	id         string // uuid for logging
-	created    time.Time
-	remotePub  p2pcrypto.PublicKey
-	remoteAddr net.Addr
-	networker  networker // network context
-	session    NetworkSession
-	deadline   time.Duration
-	r          io.Reader
-	wmtx       sync.Mutex
-	w          io.Writer
+	logger      log.Log
+	id          string // uuid for logging
+	created     time.Time
+	remotePub   p2pcrypto.PublicKey
+	remoteAddr  net.Addr
+	networker   networker // network context
+	session     NetworkSession
+	deadline    time.Duration
+	r           io.Reader
+	wmtx        sync.Mutex
+	w           io.Writer
 	closed      bool
 	deadliner   deadliner
 	messages    chan []byte
@@ -47,13 +47,13 @@ func newMsgConnection(conn readWriteCloseAddresser, netw networker,
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &MsgConnection{
-		logger:     log,
-		id:         crypto.UUIDString(),
-		created:    time.Now(),
-		remotePub:  remotePub,
-		remoteAddr: conn.RemoteAddr(),
-		r:          conn,
-		w:          conn,
+		logger:       log,
+		id:           crypto.UUIDString(),
+		created:      time.Now(),
+		remotePub:    remotePub,
+		remoteAddr:   conn.RemoteAddr(),
+		r:            conn,
+		w:            conn,
 		deadline:     deadline,
 		deadliner:    conn,
 		networker:    netw,

@@ -128,7 +128,7 @@ func TestUDPNet_Sanity(t *testing.T) {
 func TestUDPNet_Dial(t *testing.T) {}
 
 type msgConnMock struct {
-	CloseFunc	func() error
+	CloseFunc func() error
 }
 
 func (mcm msgConnMock) beginEventProcessing() {
