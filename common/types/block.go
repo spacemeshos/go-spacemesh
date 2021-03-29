@@ -4,14 +4,15 @@ package types
 import (
 	"bytes"
 	"fmt"
+	"sort"
+	"sync/atomic"
+	"time"
+
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"sort"
-	"sync/atomic"
-	"time"
 )
 
 // BlockID is a 20-byte sha256 sum of the serialized block, used to identify it.
@@ -105,6 +106,45 @@ func (id NodeID) ShortString() string {
 	return Shorten(name, 5)
 }
 
+// BytesToNodeID deserializes a byte slice into a NodeID
+// TODO: length of the input will be made exact when the NodeID is compressed into
+// one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
+func BytesToNodeID(b []byte) (*NodeID, error) {
+	if len(b) < 32 {
+		return nil, fmt.Errorf("Invalid input length, input too short")
+	}
+	if len(b) > 64 {
+		return nil, fmt.Errorf("Invalid input length, input too long")
+	}
+
+	pubKey := b[0:32]
+	vrfKey := b[32:]
+	return &NodeID{
+		Key:          util.Bytes2Hex(pubKey),
+		VRFPublicKey: []byte(util.Bytes2Hex(vrfKey)),
+	}, nil
+}
+
+//StringToNodeID deserializes a string into a NodeID
+// TODO: length of the input will be made exact when the NodeID is compressed into
+// one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
+func StringToNodeID(s string) (*NodeID, error) {
+	strLen := len(s)
+	if strLen < 64 {
+		return nil, fmt.Errorf("Invalid input length, input too short")
+	}
+	if strLen > 128 {
+		return nil, fmt.Errorf("Invalid input length, input too long")
+	}
+	//portion of the string corresponding to the Edwards public key
+	pubKey := s[:64]
+	vrfKey := s[64:]
+	return &NodeID{
+		Key:          pubKey,
+		VRFPublicKey: []byte(vrfKey),
+	}, nil
+}
+
 // Field returns a log field. Implements the LoggableField interface.
 func (id NodeID) Field() log.Field { return log.String("node_id", id.Key) }
 
@@ -127,7 +167,6 @@ type BlockHeader struct {
 	EligibilityProof BlockEligibilityProof
 	Data             []byte
 	Coin             bool
-	Timestamp        int64
 	BlockVotes       []BlockID
 	ViewEdges        []BlockID
 }
