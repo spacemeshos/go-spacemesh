@@ -28,7 +28,6 @@ type MsgConnection struct {
 	r          io.Reader
 	wmtx       sync.Mutex
 	w          io.Writer
-	//closer      io.Closer
 	closed      bool
 	deadliner   deadliner
 	messages    chan []byte
@@ -55,7 +54,6 @@ func newMsgConnection(conn readWriteCloseAddresser, netw networker,
 		remoteAddr: conn.RemoteAddr(),
 		r:          conn,
 		w:          conn,
-		//closer:       conn,
 		deadline:     deadline,
 		deadliner:    conn,
 		networker:    netw,
@@ -197,9 +195,6 @@ func (c *MsgConnection) closeUnlocked() error {
 		return ErrAlreadyClosed
 	}
 	c.closed = true
-	//if err := c.closer.Close(); err != nil {
-	//	c.logger.With().Error("error closing connection io", log.Err(err))
-	//}
 	return nil
 }
 

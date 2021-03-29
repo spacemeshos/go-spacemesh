@@ -308,7 +308,11 @@ func (n *Net) accept(listen net.Listener) {
 		c := newConnection(netConn, n, nil, nil, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger)
 		go func(con Connection) {
 			if err := c.setupIncoming(n.config.SessionTimeout); err != nil {
-				n.logger.Event().Warning("conn_incoming_failed", log.String("remote", c.remoteAddr.String()), log.Err(err))
+				// Return the new connection token immediately as new connection failed
+				pending <- struct{}{}
+				n.logger.Event().Warning("conn_incoming_failed",
+					log.String("remote", c.remoteAddr.String()),
+					log.Err(err))
 				return
 			}
 
