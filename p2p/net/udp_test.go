@@ -290,7 +290,7 @@ func TestUDPNet_Cache(t *testing.T) {
 	addr2 := testUDPAddr()
 	n.addConn(addr2, &udpConnMock{CreatedFunc: func() time.Time {
 		return time.Now()
-	}}, &MsgConnection{})
+	}}, &MsgConnection{stopSending: make(chan struct{})})
 	require.Len(t, n.incomingConn, 1)
 
 	for i := 1; i < maxUDPConn-1; i++ {
@@ -302,7 +302,7 @@ func TestUDPNet_Cache(t *testing.T) {
 		}
 		n.addConn(addrx, &udpConnMock{CreatedFunc: func() time.Time {
 			return time.Now()
-		}}, &MsgConnection{})
+		}}, &MsgConnection{stopSending: make(chan struct{})})
 	}
 
 	require.Len(t, n.incomingConn, maxUDPConn-1)
@@ -316,7 +316,7 @@ func TestUDPNet_Cache(t *testing.T) {
 
 	n.addConn(addrx, &udpConnMock{CreatedFunc: func() time.Time {
 		return time.Now().Add(-maxUDPLife - 1*time.Second)
-	}}, &MsgConnection{})
+	}}, &MsgConnection{stopSending: make(chan struct{})})
 
 	require.Len(t, n.incomingConn, maxUDPConn)
 
@@ -328,7 +328,7 @@ func TestUDPNet_Cache(t *testing.T) {
 	}
 	n.addConn(addrx2, &udpConnMock{CreatedFunc: func() time.Time {
 		return time.Now()
-	}}, &MsgConnection{})
+	}}, &MsgConnection{stopSending: make(chan struct{})})
 
 	require.Len(t, n.incomingConn, maxUDPConn)
 
@@ -357,7 +357,7 @@ func TestUDPNet_Cache(t *testing.T) {
 		_, okk = n.incomingConn[addrxx.String()]
 	}
 
-	n.addConn(addrxx, somecon, &MsgConnection{})
+	n.addConn(addrxx, somecon, &MsgConnection{stopSending: make(chan struct{})})
 
 	c, err := n.getConn(addrxx)
 	require.Error(t, err)

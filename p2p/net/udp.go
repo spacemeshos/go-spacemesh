@@ -45,7 +45,6 @@ type connWrapper struct {
 }
 
 func (cw connWrapper) Close() error {
-	//return cw.mConn.Close()
 	err1 := cw.mConn.Close()
 	err2 := cw.uConn.Close()
 	if err1 != nil || err2 != nil {
