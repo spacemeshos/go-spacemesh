@@ -159,10 +159,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 	}
 
 	bo.eligibilityMutex.Lock()
-	bo.eligibilityMutex.Lock()
 	bo.proofsEpoch = epochNumber
-	bo.eligibilityMutex.Unlock()
-
 	bo.eligibilityProofs = eligibilityProofs
 	bo.eligibilityMutex.Unlock()
 
