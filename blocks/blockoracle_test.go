@@ -81,13 +81,13 @@ func TestBlockOracle(t *testing.T) {
 	r := require.New(t)
 
 	// Happy flow with small numbers that can be inspected manually
-	testBlockOracleAndValidator(r, 2*defaultAtxWeight, 2, 1)
+	testBlockOracleAndValidator(r, 10*defaultAtxWeight, 10, 20)
 
 	// Big, realistic numbers
 	// testBlockOracleAndValidator(r, 3000*defaultAtxWeight, 200, 4032) // commented out because it takes VERY long
 
 	// More miners than blocks (ensure at least one block per activation)
-	// testBlockOracleAndValidator(r, 10*defaultAtxWeight, 2, 2)
+	testBlockOracleAndValidator(r, 10*defaultAtxWeight, 2, 2)
 }
 
 func testBlockOracleAndValidator(r *require.Assertions, totalWeight uint64, committeeSize uint32, layersPerEpoch uint16) {
