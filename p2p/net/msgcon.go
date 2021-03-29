@@ -17,18 +17,18 @@ import (
 // It resembles the Connection interface but suits a packet oriented socket.
 type MsgConnection struct {
 	// metadata for logging / debugging
-	logger      log.Log
-	id          string // uuid for logging
-	created     time.Time
-	remotePub   p2pcrypto.PublicKey
-	remoteAddr  net.Addr
-	networker   networker // network context
-	session     NetworkSession
-	deadline    time.Duration
-	r           io.Reader
-	wmtx        sync.Mutex
-	w           io.Writer
-	closer      io.Closer
+	logger     log.Log
+	id         string // uuid for logging
+	created    time.Time
+	remotePub  p2pcrypto.PublicKey
+	remoteAddr net.Addr
+	networker  networker // network context
+	session    NetworkSession
+	deadline   time.Duration
+	r          io.Reader
+	wmtx       sync.Mutex
+	w          io.Writer
+	//closer      io.Closer
 	closed      bool
 	deadliner   deadliner
 	messages    chan []byte
@@ -43,14 +43,14 @@ func newMsgConnection(conn readWriteCloseAddresser, netw networker,
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &MsgConnection{
-		logger:       log,
-		id:           crypto.UUIDString(),
-		created:      time.Now(),
-		remotePub:    remotePub,
-		remoteAddr:   conn.RemoteAddr(),
-		r:            conn,
-		w:            conn,
-		closer:       conn,
+		logger:     log,
+		id:         crypto.UUIDString(),
+		created:    time.Now(),
+		remotePub:  remotePub,
+		remoteAddr: conn.RemoteAddr(),
+		r:          conn,
+		w:          conn,
+		//closer:       conn,
 		deadline:     deadline,
 		deadliner:    conn,
 		networker:    netw,
@@ -192,9 +192,9 @@ func (c *MsgConnection) closeUnlocked() error {
 		return ErrAlreadyClosed
 	}
 	c.closed = true
-	if err := c.closer.Close(); err != nil {
-		c.logger.With().Error("error closing connection io", log.Err(err))
-	}
+	//if err := c.closer.Close(); err != nil {
+	//	c.logger.With().Error("error closing connection io", log.Err(err))
+	//}
 	return nil
 }
 

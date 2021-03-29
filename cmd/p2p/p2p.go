@@ -48,8 +48,7 @@ func NewP2PApp() *P2PApp {
 // Cleanup closes all services
 func (app *P2PApp) Cleanup() {
 	for _, c := range app.closers {
-		err := c.Close()
-		if err != nil {
+		if err := c.Close(); err != nil {
 			log.With().Warning("error closing service", log.Err(err))
 		}
 	}

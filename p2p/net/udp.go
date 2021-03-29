@@ -45,6 +45,7 @@ type connWrapper struct {
 }
 
 func (cw connWrapper) Close() error {
+	//return cw.mConn.Close()
 	err1 := cw.mConn.Close()
 	err2 := cw.uConn.Close()
 	if err1 != nil || err2 != nil {
@@ -310,10 +311,10 @@ func (n *UDPNet) addConn(addr net.Addr, ucw udpConn, conn *MsgConnection) {
 		}
 
 		if !evicted {
+			delete(n.incomingConn, lastk)
 			if err := n.incomingConn[lastk].Close(); err != nil {
 				n.logger.With().Warning("error closing udp socket", log.Err(err))
 			}
-			delete(n.incomingConn, lastk)
 		}
 	}
 
