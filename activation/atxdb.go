@@ -65,7 +65,7 @@ type DB struct {
 	atxHeaderCache      AtxCache
 	meshDb              *mesh.DB
 	LayersPerEpoch      uint16
-	goldenATXID       types.ATXID
+	goldenATXID         types.ATXID
 	nipstValidator      nipstValidator
 	pendingTotalWeight  map[types.Hash12]*sync.Mutex
 	pTotalWeightLock    sync.Mutex
@@ -85,7 +85,7 @@ func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPe
 		atxHeaderCache:     NewAtxCache(600),
 		meshDb:             meshDb,
 		LayersPerEpoch:     layersPerEpoch,
-		goldenATXID:      goldenATXID,
+		goldenATXID:        goldenATXID,
 		nipstValidator:     nipstValidator,
 		pendingTotalWeight: make(map[types.Hash12]*sync.Mutex),
 		log:                log,

@@ -501,14 +501,14 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, "expected distance of one epoch (1000 layers) from pos atx but found 1011")
 
 	// Empty positioning atx.
-	atx = newActivationTx(idx1, 1, prevAtx.ID(), 2000, 0, *types.EmptyATXID, coinbase, 3, blocks, &types.NIPST{})
+	atx = newActivationTx(idx1, 1, prevAtx.ID(), *types.EmptyATXID, 2000, 0, 1, 3, coinbase, &types.NIPST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "empty positioning atx")
 
 	// Using Golden ATX in epochs other than 1 is not allowed. Testing epoch 0.
-	atx = newActivationTx(idx1, 0, *types.EmptyATXID, 0, 0, goldenATXID, coinbase, 3, blocks, &types.NIPST{})
+	atx = newActivationTx(idx1, 0, *types.EmptyATXID, goldenATXID, 0, 0, 1, 3, coinbase, &types.NIPST{})
 	atx.Commitment = &types.PostProof{}
 	atx.CommitmentMerkleRoot = []byte{}
 	err = SignAtx(signer, atx)
@@ -517,7 +517,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, "golden atx used for atx in epoch 0, but is only valid in epoch 1")
 
 	// Using Golden ATX in epochs other than 1 is not allowed. Testing epoch 2.
-	atx = newActivationTx(idx1, 1, prevAtx.ID(), 2000, 0, goldenATXID, coinbase, 3, blocks, &types.NIPST{})
+	atx = newActivationTx(idx1, 1, prevAtx.ID(), goldenATXID, 2000, 0, 1, 3, coinbase, &types.NIPST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
@@ -1005,7 +1005,7 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 	r.NoError(err)
 
 	arbitraryAtxID := types.ATXID(types.HexToHash32("11111"))
-	malformedAtx := types.NewActivationTx(newChallenge(nodeID, 0, arbitraryAtxID, goldenATXID, 0), [20]byte{}, nil, nil)
+	malformedAtx := types.NewActivationTx(newChallenge(nodeID, 0, arbitraryAtxID, goldenATXID, 0), [20]byte{}, nil, 0, nil)
 	err = atxdb.ContextuallyValidateAtx(malformedAtx.ActivationTxHeader)
 	r.EqualError(err,
 		fmt.Sprintf("could not fetch node last atx: atx for node %v does not exist", nodeID.ShortString()))
