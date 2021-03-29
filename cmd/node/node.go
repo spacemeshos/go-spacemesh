@@ -176,6 +176,7 @@ type SpacemeshApp struct {
 	atxDb          *activation.DB
 	poetListener   *activation.PoetListener
 	edSgn          *signing.EdSigner
+	tBeacon        *tortoisebeacon.TortoiseBeacon
 	closers        []interface{ Close() }
 	log            log.Log
 	txPool         *state.TxMempool
@@ -665,6 +666,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	app.oracle = blockOracle
 	app.txProcessor = processor
 	app.atxDb = atxdb
+	app.tBeacon = tBeacon
 
 	return nil
 }
@@ -840,6 +842,12 @@ func (app *SpacemeshApp) stopServices() {
 	if app.clock != nil {
 		app.log.Info("%v closing clock", app.nodeID.Key)
 		app.clock.Close()
+	}
+
+	if app.tBeacon != nil {
+		log.Info("Stopping tortoise beacon...")
+		// does not return any errors
+		app.tBeacon.Close()
 	}
 
 	if app.poetListener != nil {
