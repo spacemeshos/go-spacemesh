@@ -22,8 +22,7 @@ func (tb *TortoiseBeacon) HandleProposalMessage(data service.GossipMessage, sync
 		log.String("from", data.Sender().String()))
 
 	var m ProposalMessage
-	err := types.BytesToInterface(data.Bytes(), &m)
-	if err != nil {
+	if err := types.BytesToInterface(data.Bytes(), &m); err != nil {
 		tb.Log.With().Error("Received invalid proposal message",
 			log.String("message", string(data.Bytes())),
 			log.Err(err))
@@ -45,39 +44,13 @@ func (tb *TortoiseBeacon) HandleProposalMessage(data service.GossipMessage, sync
 // HandleVotingMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
 // TODO(nkryuchkov): Consider not calculating own votes.
 func (tb *TortoiseBeacon) HandleVotingMessage(data service.GossipMessage, sync service.Fetcher) {
-	tb.Log.With().Info("New voting message",
-		log.String("from", data.Sender().String()))
-
-	var m VotingMessage
-	err := types.BytesToInterface(data.Bytes(), &m)
-	if err != nil {
-		tb.Log.With().Error("Received invalid voting message",
-			log.String("message", string(data.Bytes())),
-			log.Err(err))
-
-		return
-	}
-
-	if err := tb.handleVotingMessage(m); err != nil {
-		tb.Log.With().Error("Failed to handle voting message",
-			log.String("message", m.String()),
-			log.Err(err))
-
-		return
-	}
-
-	data.ReportValidation(TBVotingProtocol)
-}
-
-func (tb *TortoiseBeacon) HandleVotingMessageDiff(data service.GossipMessage, sync service.Fetcher) {
 	from := data.Sender()
 
 	tb.Log.With().Info("New voting message",
 		log.String("from", from.String()))
 
 	var m VotingMessage
-	err := types.BytesToInterface(data.Bytes(), &m)
-	if err != nil {
+	if err := types.BytesToInterface(data.Bytes(), &m); err != nil {
 		tb.Log.With().Error("Received invalid voting message",
 			log.String("message", string(data.Bytes())),
 			log.Err(err))
@@ -85,7 +58,7 @@ func (tb *TortoiseBeacon) HandleVotingMessageDiff(data service.GossipMessage, sy
 		return
 	}
 
-	if err := tb.handleVotingMessageDiff(from, m); err != nil {
+	if err := tb.handleVotingMessage(from, m); err != nil {
 		tb.Log.With().Error("Failed to handle voting message",
 			log.String("message", m.String()),
 			log.Err(err))

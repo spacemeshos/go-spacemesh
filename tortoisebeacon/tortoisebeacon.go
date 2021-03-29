@@ -395,66 +395,7 @@ func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage) error {
 	}
 }
 
-func (tb *TortoiseBeacon) handleVotingMessage(m VotingMessage) error {
-	epoch := m.Epoch()
-
-	tb.currentRoundsMu.Lock()
-	currentRound := tb.currentRounds[epoch]
-	tb.currentRoundsMu.Unlock()
-
-	pair := epochRoundPair{
-		EpochID: epoch,
-		Round:   currentRound,
-	}
-
-	mt := tb.classifyMessage(m, epoch)
-	switch mt {
-	case TimelyMessage:
-		tb.Log.With().Debug("Received timely VotingMessage",
-			log.Uint64("epoch", uint64(m.Epoch())),
-			log.Uint64("round", m.Round()),
-			log.String("message", m.String()))
-
-		for _, hash := range m.VotesFor() {
-			tb.votesMu.Lock()
-
-			if _, ok := tb.votesFor[pair]; !ok {
-				tb.votesFor[pair] = make(hashSet)
-			}
-			tb.votesFor[pair][hash] = struct{}{}
-
-			if _, ok := tb.votesAgainst[pair]; !ok {
-				tb.votesAgainst[pair] = make(hashSet)
-			}
-			tb.votesAgainst[pair][hash] = struct{}{}
-
-			tb.votesMu.Unlock()
-		}
-
-		return nil
-
-	case DelayedMessage:
-		tb.Log.With().Debug("Received delayed VotingMessage",
-			log.Uint64("epoch", uint64(m.Epoch())),
-			log.Uint64("round", m.Round()),
-			log.String("message", m.String()))
-
-		return nil
-
-	case LateMessage:
-		tb.Log.With().Debug("Received late VotingMessage",
-			log.Uint64("epoch", uint64(m.Epoch())),
-			log.Uint64("round", m.Round()),
-			log.String("message", m.String()))
-
-		return nil
-
-	default:
-		return ErrUnknownMessageType
-	}
-}
-
-func (tb *TortoiseBeacon) handleVotingMessageDiff(from p2pcrypto.PublicKey, message VotingMessage) error {
+func (tb *TortoiseBeacon) handleVotingMessage(from p2pcrypto.PublicKey, message VotingMessage) error {
 	epoch := message.Epoch()
 
 	tb.currentRoundsMu.Lock()
@@ -639,7 +580,7 @@ func (tb *TortoiseBeacon) sendVotingMessages(epoch types.EpochID, round uint64) 
 	} else {
 		// next rounds, send vote
 		// construct a message that points to all messages from previous round received by δ
-		votesFor, votesAgainst = tb.calculateVotesDiff(epoch, currentRound)
+		votesFor, votesAgainst = tb.calculateVotes(epoch, currentRound)
 	}
 
 	m := NewVotingMessage(epoch, currentRound, votesFor, votesAgainst)
@@ -664,93 +605,8 @@ func (tb *TortoiseBeacon) sendVotingMessages(epoch types.EpochID, round uint64) 
 	return nil
 }
 
-// TODO(nkryuchkov): send and handle votes diff instead of votes list
 // TODO(nkryuchkov): refactor this
-func (tb *TortoiseBeacon) calculateVotes(epoch types.EpochID, round uint64) (votesFor []types.Hash32, votesAgainst []types.Hash32) {
-	votesForMap := make(map[types.Hash32]int)
-	votesAgainstMap := make(map[types.Hash32]int)
-
-	tb.timelyProposalsMu.Lock()
-
-	for _, proposals := range tb.timelyProposalsList[epoch] {
-		proposalsHash := hashATXList(proposals)
-
-		countFor := 1
-		countAgainst := 0
-		for i := uint64(1); i < round; i++ {
-			key := epochRoundPair{
-				EpochID: epoch,
-				Round:   i, // proposals from the previous round are needed
-			}
-
-			if _, ok := tb.votesFor[key][proposalsHash]; ok {
-				countFor++
-			}
-
-			if _, ok := tb.votesAgainst[key][proposalsHash]; ok {
-				countAgainst++
-			}
-		}
-
-		votesForMap[proposalsHash] = countFor
-		votesAgainstMap[proposalsHash] = countAgainst
-	}
-
-	for _, proposals := range tb.delayedProposalsList[epoch] {
-		proposalsHash := hashATXList(proposals)
-
-		countFor := 0
-		countAgainst := 1
-		for i := uint64(1); i < round; i++ {
-			key := epochRoundPair{
-				EpochID: epoch,
-				Round:   i, // proposals from the previous round are needed
-			}
-
-			if _, ok := tb.votesFor[key][proposalsHash]; ok {
-				countFor++
-			}
-
-			if _, ok := tb.votesAgainst[key][proposalsHash]; ok {
-				countAgainst++
-			}
-		}
-
-		if _, ok := votesForMap[proposalsHash]; !ok {
-			votesForMap[proposalsHash] = countFor
-		} else {
-			votesForMap[proposalsHash] += countFor
-		}
-
-		if _, ok := votesAgainstMap[proposalsHash]; !ok {
-			votesAgainstMap[proposalsHash] = countAgainst
-		} else {
-			votesAgainstMap[proposalsHash] += countAgainst
-		}
-	}
-
-	tb.timelyProposalsMu.Unlock()
-
-	votesFor = make([]types.Hash32, 0)
-	votesAgainst = make([]types.Hash32, 0)
-
-	for k, v := range votesForMap {
-		if v > tb.threshold() || tb.weakCoin.WeakCoin(epoch, round) {
-			votesFor = append(votesFor, k)
-		}
-	}
-
-	for k, v := range votesAgainstMap {
-		if v > tb.threshold() || !tb.weakCoin.WeakCoin(epoch, round) {
-			votesAgainst = append(votesAgainst, k)
-		}
-	}
-
-	return votesFor, votesAgainst
-}
-
-// TODO(nkryuchkov): refactor this
-func (tb *TortoiseBeacon) calculateVotesDiff(epoch types.EpochID, round uint64) (votesFor []types.Hash32, votesAgainst []types.Hash32) {
+func (tb *TortoiseBeacon) calculateVotes(epoch types.EpochID, round uint64) (votesFor, votesAgainst []types.Hash32) {
 	votesCount := make(map[types.Hash32]int)
 
 	votesFor = make([]types.Hash32, 0)
@@ -862,39 +718,39 @@ func (tb *TortoiseBeacon) calculateVotesDiff(epoch types.EpochID, round uint64) 
 		}
 
 		return
-	} else {
-		ownThisRoundVotes := votes{
-			votesFor:     make(map[types.Hash32]struct{}),
-			votesAgainst: make(map[types.Hash32]struct{}),
-		}
-
-		for vote, count := range votesCount {
-			switch {
-			case count > tb.threshold():
-				ownThisRoundVotes.votesFor[vote] = struct{}{}
-			case count < -tb.threshold():
-				ownThisRoundVotes.votesAgainst[vote] = struct{}{}
-			case tb.weakCoin.WeakCoin(epoch, round):
-				ownThisRoundVotes.votesFor[vote] = struct{}{}
-			case !tb.weakCoin.WeakCoin(epoch, round):
-				ownThisRoundVotes.votesAgainst[vote] = struct{}{}
-			}
-		}
-
-		for vote := range ownThisRoundVotes.votesFor {
-			if _, ok := ownFirstRoundsVotes.votesFor[vote]; !ok {
-				votesFor = append(votesFor, vote)
-			}
-		}
-
-		for vote := range ownThisRoundVotes.votesAgainst {
-			if _, ok := ownFirstRoundsVotes.votesAgainst[vote]; !ok {
-				votesAgainst = append(votesAgainst, vote)
-			}
-		}
-
-		return
 	}
+
+	ownThisRoundVotes := votes{
+		votesFor:     make(map[types.Hash32]struct{}),
+		votesAgainst: make(map[types.Hash32]struct{}),
+	}
+
+	for vote, count := range votesCount {
+		switch {
+		case count > tb.threshold():
+			ownThisRoundVotes.votesFor[vote] = struct{}{}
+		case count < -tb.threshold():
+			ownThisRoundVotes.votesAgainst[vote] = struct{}{}
+		case tb.weakCoin.WeakCoin(epoch, round):
+			ownThisRoundVotes.votesFor[vote] = struct{}{}
+		case !tb.weakCoin.WeakCoin(epoch, round):
+			ownThisRoundVotes.votesAgainst[vote] = struct{}{}
+		}
+	}
+
+	for vote := range ownThisRoundVotes.votesFor {
+		if _, ok := ownFirstRoundsVotes.votesFor[vote]; !ok {
+			votesFor = append(votesFor, vote)
+		}
+	}
+
+	for vote := range ownThisRoundVotes.votesAgainst {
+		if _, ok := ownFirstRoundsVotes.votesAgainst[vote]; !ok {
+			votesAgainst = append(votesAgainst, vote)
+		}
+	}
+
+	return
 }
 
 func (tb *TortoiseBeacon) voteWeight(pk p2pcrypto.PublicKey) int {
