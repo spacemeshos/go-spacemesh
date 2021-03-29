@@ -62,14 +62,14 @@ const (
 	layerFirst            = 0
 	layerVerified         = 8
 	layerLatest           = 10
-	layerCurrent          = 12
 	rewardAmount          = 5551234
 	receiptIndex          = 42
 )
 
 var (
-	networkMock = NetworkMock{}
-	mempoolMock = MempoolMock{
+	layerCurrent = 12
+	networkMock  = NetworkMock{}
+	mempoolMock  = MempoolMock{
 		poolByAddress: make(map[types.Address]types.TransactionID),
 		poolByTxid:    make(map[types.TransactionID]*types.Transaction),
 	}
@@ -177,7 +177,7 @@ func (t *TxAPIMock) GetAllAccounts() (res *types.MultipleAccountsState, err erro
 	accounts := make(map[string]types.AccountState)
 	for address, balance := range t.balances {
 		accounts[address.String()] = types.AccountState{
-			Balance: balance,
+			Balance: balance.Uint64(),
 			Nonce:   t.nonces[address],
 		}
 	}
@@ -374,7 +374,7 @@ type GenesisTimeMock struct {
 }
 
 func (t GenesisTimeMock) GetCurrentLayer() types.LayerID {
-	return layerCurrent
+	return types.LayerID(layerCurrent)
 }
 
 func (t GenesisTimeMock) GetGenesisTime() time.Time {
@@ -474,8 +474,8 @@ func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
 }
 
 func TestNewServersConfig(t *testing.T) {
-	port1, err := node.GetUnboundedPort()
-	port2, err := node.GetUnboundedPort()
+	port1, err := node.GetUnboundedPort("tcp", 0)
+	port2, err := node.GetUnboundedPort("tcp", 0)
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
 	grpcService := NewServerWithInterface(port1, "localhost")
@@ -543,8 +543,22 @@ func TestNodeService(t *testing.T) {
 			require.Equal(t, build, res.BuildString.Value)
 		}},
 		{"Status", func(t *testing.T) {
+			// First do a mock checking during a genesis layer
+			// During genesis all layers should be set to current layer
+			oldCurLayer := layerCurrent
+			layerCurrent = layersPerEpoch // end of first epoch
 			req := &pb.StatusRequest{}
 			res, err := c.Status(context.Background(), req)
+			require.NoError(t, err)
+			require.Equal(t, uint64(0), res.Status.ConnectedPeers)
+			require.Equal(t, false, res.Status.IsSynced)
+			require.Equal(t, uint32(layerCurrent), res.Status.SyncedLayer.Number)
+			require.Equal(t, uint32(layerCurrent), res.Status.TopLayer.Number)
+			require.Equal(t, uint32(layerCurrent), res.Status.VerifiedLayer.Number)
+
+			// Now do a mock check post-genesis
+			layerCurrent = oldCurLayer
+			res, err = c.Status(context.Background(), req)
 			require.NoError(t, err)
 			require.Equal(t, uint64(0), res.Status.ConnectedPeers)
 			require.Equal(t, false, res.Status.IsSynced)
@@ -1060,7 +1074,7 @@ func TestMeshService(t *testing.T) {
 					name: "MinLayer too high",
 					run: func(t *testing.T) {
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
-							MinLayer: &pb.LayerNumber{Number: layerCurrent + 1},
+							MinLayer: &pb.LayerNumber{Number: uint32(layerCurrent + 1)},
 						})
 						require.Error(t, err, "expected an error")
 						require.Contains(t, err.Error(), "`LatestLayer` must be less than")
@@ -1857,7 +1871,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.NotNil(t, resBlock.SmesherId)
 
 	require.Equal(t, len(block1.TxIDs), len(resBlock.Transactions))
-	require.Equal(t, block1.ID().Bytes(), resBlock.Id)
+	require.Equal(t, types.Hash20(block1.ID()).Bytes(), resBlock.Id)
 
 	// Check the tx as well
 	resTx := resBlock.Transactions[0]

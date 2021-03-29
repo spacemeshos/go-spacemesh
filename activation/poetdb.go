@@ -2,15 +2,17 @@ package activation
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"sync"
+
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/hash"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/poet/verifier"
 	"github.com/spacemeshos/sha256-simd"
-	"sync"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type poetProofKey [sha256.Size]byte
@@ -76,7 +78,7 @@ func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string,
 func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 	ref, err := proofMessage.Ref()
 	if err != nil {
-		return fmt.Errorf("failed to get PoET proof message refference: %v", err)
+		return fmt.Errorf("failed to get PoET proof message reference: %v", err)
 	}
 
 	messageBytes, err := types.InterfaceToBytes(proofMessage)

@@ -2,9 +2,11 @@ package blocks
 
 import (
 	"fmt"
+
+	"github.com/spacemeshos/sha256-simd"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/sha256-simd"
 )
 
 // VRFValidationFunction is the VRF validation function.
@@ -47,8 +49,6 @@ func NewBlockEligibilityValidator(
 // an error that explains why validation failed.
 func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (bool, error) {
 	var weight, totalWeight uint64
-	var vrfPubkey []byte
-	var genesisNoAtx bool
 
 	epochNumber := block.LayerIndex.GetEpoch()
 	if epochNumber == 0 {
@@ -77,18 +77,17 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 		}
 		totalWeight += atxHeader.GetWeight()
 	}
-	if block.ATXID == *types.EmptyATXID {
-		if !epochNumber.IsGenesis() {
-			return false, fmt.Errorf("no associated ATX in epoch %v", epochNumber)
-		}
-		genesisNoAtx = true
-	} else {
-		atx, err := v.getValidAtx(block)
-		if err != nil {
-			return false, err
-		}
-		weight, vrfPubkey = atx.GetWeight(), atx.NodeID.VRFPublicKey
+	if block.ATXID == *types.EmptyATXID && !epochNumber.IsGenesis() {
+		return false, fmt.Errorf("no associated ATX in epoch %v", epochNumber)
 	}
+
+	atx, err := v.getValidAtx(block)
+	if err != nil {
+		return false, err
+	}
+	weight = atx.GetWeight()
+	vrfPubkey := atx.NodeID.VRFPublicKey
+
 	if epochNumber.IsGenesis() {
 		v.log.With().Info("using genesisTotalWeight",
 			block.ID(), log.Uint64("genesisTotalWeight", v.genesisTotalWeight))
@@ -110,10 +109,6 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	message := serializeVRFMessage(epochBeacon, epochNumber, counter)
 	vrfSig := block.EligibilityProof.Sig
 
-	if genesisNoAtx {
-		v.log.Info("skipping VRF validation, genesis block with no ATX") // TODO
-		return true, nil
-	}
 	res, err := v.validateVRF(message, vrfSig, vrfPubkey)
 	if err != nil {
 		return false, fmt.Errorf("eligibility VRF validation failed: %v", err)

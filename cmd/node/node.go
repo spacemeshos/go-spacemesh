@@ -15,6 +15,7 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"cloud.google.com/go/profiler"
 	"github.com/spacemeshos/amcl"
 	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/post/shared"
@@ -256,6 +257,16 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 		return err
 	}
 
+	if app.Config.Profiler {
+		if err := profiler.Start(profiler.Config{
+			Service:        "go-spacemesh",
+			ServiceVersion: fmt.Sprintf("%s+%s+%s", cmdp.Version, cmdp.Branch, cmdp.Commit),
+			MutexProfiling: true,
+		}); err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "failed to start profiler:", err)
+		}
+	}
+
 	// override default config in timesync since timesync is using TimeCongigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
 
@@ -305,7 +316,7 @@ func (app *SpacemeshApp) setupLogging() {
 	}
 	log.Info(msg)
 	if err := events.InitializeEventReporter(app.Config.PublishEventsURL); err != nil {
-		log.Error("unable to initialize event reporter: %s", err)
+		log.With().Error("unable to initialize event reporter", log.Err(err))
 	}
 }
 
@@ -315,11 +326,11 @@ func (app *SpacemeshApp) getAppInfo() string {
 }
 
 // Cleanup stops all app services
-func (app *SpacemeshApp) Cleanup(cmd *cobra.Command, args []string) {
-	log.Info("App Cleanup starting...")
+func (app *SpacemeshApp) Cleanup(*cobra.Command, []string) {
+	log.Info("app cleanup starting...")
 	app.stopServices()
 	// add any other Cleanup tasks here....
-	log.Info("App Cleanup completed\n\n")
+	log.Info("app cleanup completed\n\n")
 }
 
 func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) {
@@ -337,7 +348,7 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 		bytes := util.FromHex(id)
 		if len(bytes) == 0 {
 			// todo: should we panic here?
-			log.Error("cannot read config entry for :%s", id)
+			app.log.With().Error("cannot read config entry for genesis account", log.String("acct_id", id))
 			continue
 		}
 
@@ -345,7 +356,9 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 		state.CreateAccount(addr)
 		state.AddBalance(addr, acc.Balance)
 		state.SetNonce(addr, acc.Nonce)
-		app.log.Info("Genesis account created: %s, Balance: %s", id, acc.Balance.Uint64())
+		app.log.With().Info("genesis account created",
+			log.String("acct_id", id),
+			log.Uint64("balance", acc.Balance))
 	}
 
 	_, err := state.Commit()
@@ -518,7 +531,12 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	app.closers = append(app.closers, appliedTxs)
 	processor := state.NewTransactionProcessor(db, appliedTxs, meshAndPoolProjector, app.txPool, lg.WithName("state"))
 
-	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
+	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
+	if goldenATXID == *types.EmptyATXID {
+		app.log.Panic("invalid Golden ATX ID")
+	}
+
+	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 	beaconProvider := &blocks.EpochBeaconProvider{}
 
 	var msh *mesh.Mesh
@@ -532,6 +550,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		app.setupGenesis(processor, msh)
 	}
+
 	eValidator := blocks.NewBlockEligibilityValidator(layerSize, app.Config.GenesisTotalWeight, layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, msh, app.addLogger(BlkEligibilityLogger, lg))
 
 	syncConf := sync.Configuration{Concurrency: 4,
@@ -543,6 +562,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		Hdist:           app.Config.Hdist,
 		AtxsLimit:       app.Config.AtxsPerBlock,
 		AlwaysListen:    app.Config.AlwaysListen,
+		GoldenATXID:     goldenATXID,
 	}
 
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
@@ -583,7 +603,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	blockProducer := miner.NewBlockBuilder(cfg, sgn, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
 
 	bCfg := blocks.Config{
-		Depth: app.Config.Hdist,
+		Depth:       app.Config.Hdist,
+		GoldenATXID: goldenATXID,
 	}
 	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, lg)
 
@@ -594,12 +615,19 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	coinBase := types.HexToAddress(app.Config.CoinbaseAccount)
 
 	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
-		app.log.Panic("invalid Coinbase account")
+		app.log.Panic("invalid coinbase account")
 	}
 	if app.Config.SpaceToCommit == 0 {
 		app.Config.SpaceToCommit = app.Config.POST.SpacePerUnit
 	}
-	atxBuilder := activation.NewBuilder(nodeID, coinBase, app.Config.SpaceToCommit, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock, syncer, store, app.addLogger("atxBuilder", lg))
+
+	builderConfig := activation.Config{
+		CoinbaseAccount: coinBase,
+		GoldenATXID:     goldenATXID,
+		LayersPerEpoch:  layersPerEpoch,
+	}
+
+	atxBuilder := activation.NewBuilder(builderConfig, app.Config.SpaceToCommit, nodeID, sgn, atxdb, swarm, msh, nipstBuilder, postClient, clock, syncer, store, app.addLogger("atxBuilder", lg))
 
 	gossipListener.AddListener(state.IncomingTxProtocol, priorityq.Low, processor.HandleTxData)
 	gossipListener.AddListener(activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
@@ -772,7 +800,7 @@ func (app *SpacemeshApp) stopServices() {
 	close(app.term)
 
 	if app.jsonAPIService != nil {
-		log.Info("Stopping JSON gateway service...")
+		log.Info("stopping JSON gateway service...")
 		if err := app.jsonAPIService.Close(); err != nil {
 			log.Error("error stopping JSON gateway server: %s", err)
 		}
@@ -780,6 +808,7 @@ func (app *SpacemeshApp) stopServices() {
 
 	if app.grpcAPIService != nil {
 		log.Info("Stopping GRPC service...")
+		// does not return any errors
 		app.grpcAPIService.Close()
 	}
 
@@ -848,7 +877,7 @@ func (app *SpacemeshApp) stopServices() {
 func (app *SpacemeshApp) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	f, err := app.getIdentityFile()
 	if err != nil {
-		log.Warning("Failed to find identity file: %v", err)
+		log.With().Warning("failed to find identity file", log.Err(err))
 
 		edSgn := signing.NewEdSigner()
 		f = filepath.Join(shared.GetInitDir(app.Config.POST.DataDir, edSgn.PublicKey().Bytes()), edKeyFileName)
@@ -860,7 +889,7 @@ func (app *SpacemeshApp) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to write identity file: %v", err)
 		}
-		log.Warning("Created new identity with public key %v", edSgn.PublicKey())
+		log.With().Warning("created new identity", edSgn.PublicKey())
 		return edSgn, nil
 	}
 
@@ -875,7 +904,7 @@ func (app *SpacemeshApp) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	if edSgn.PublicKey().String() != filepath.Base(filepath.Dir(f)) {
 		return nil, fmt.Errorf("identity file path ('%s') does not match public key (%s)", filepath.Dir(f), edSgn.PublicKey().String())
 	}
-	log.Info("Loaded identity from file ('%s')", f)
+	log.With().Info("loaded identity from file", log.String("file", f))
 	return edSgn, nil
 }
 
@@ -908,7 +937,7 @@ func (app *SpacemeshApp) getIdentityFile() (string, error) {
 
 func (app *SpacemeshApp) startSyncer() {
 	if app.P2P == nil {
-		app.log.Error("Syncer is started before P2P is initialized")
+		app.log.Error("syncer started before P2P is initialized")
 	} else {
 		<-app.P2P.GossipReady()
 	}
@@ -917,7 +946,7 @@ func (app *SpacemeshApp) startSyncer() {
 
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
 func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
-	log.With().Info("Starting Spacemesh", log.String("data-dir", app.Config.DataDir()), log.String("post-dir", app.Config.POST.DataDir))
+	log.With().Info("starting Spacemesh", log.String("data-dir", app.Config.DataDir()), log.String("post-dir", app.Config.POST.DataDir))
 
 	err := filesystem.ExistOrCreate(app.Config.DataDir())
 	if err != nil {
@@ -968,7 +997,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	app.edSgn, err = app.LoadOrCreateEdSigner()
 	if err != nil {
-		log.Panic("Could not retrieve identity err=%v", err)
+		log.Panic("could not retrieve identity err=%v", err)
 	}
 
 	poetClient := activation.NewHTTPPoetClient(cmdp.Ctx, app.Config.PoETServer)
@@ -982,7 +1011,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	postClient, err := activation.NewPostClient(&app.Config.POST, util.Hex2Bytes(nodeID.Key))
 	if err != nil {
-		log.Error("failed to create post client: %v", err)
+		log.With().Error("failed to create post client", log.Err(err))
 	}
 
 	// This base logger must be debug level so that other, derived loggers are not a lower level.
@@ -993,20 +1022,20 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	dbStorepath := app.Config.DataDir()
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {
-		log.Error("cannot parse genesis time %v", err)
+		log.With().Error("cannot parse genesis time", log.Err(err))
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
 
-	log.Info("Initializing P2P services")
+	log.Info("initializing P2P services")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, app.addLogger(P2PLogger, lg), dbStorepath)
 	if err != nil {
-		log.Panic("Error starting p2p services. err: %v", err)
+		log.Panic("error starting p2p services. err: %v", err)
 	}
 
 	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, false, nil, uint32(app.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(app.Config.LayersPerEpoch), clock)
 	if err != nil {
-		log.Error("cannot start services %v", err.Error())
+		log.With().Error("cannot start services", log.Err(err))
 		return
 	}
 
