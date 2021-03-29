@@ -52,6 +52,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
 )
 
@@ -546,17 +547,15 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	}
 
 	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
-	//tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
-	//
-	//// TODO(nkryuchkov): use real weak coin
-	//weakCoin := tortoisebeacon.MockWeakCoin{}
-	//
-	//tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, swarm, atxdb, tBeaconDB, weakCoin, clock.Subscribe(), app.addLogger(TBeaconLogger, lg))
-	//if err := tBeacon.Start(); err != nil {
-	//	app.log.Panic("Failed to start tortoise beacon: %v", err)
-	//}
+	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
 
-	tBeacon := &blocks.EpochBeaconProvider{}
+	// TODO(nkryuchkov): use real weak coin
+	weakCoin := tortoisebeacon.MockWeakCoin{}
+
+	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, swarm, atxdb, tBeaconDB, weakCoin, clock.Subscribe(), app.addLogger(TBeaconLogger, lg))
+	if err := tBeacon.Start(); err != nil {
+		app.log.Panic("Failed to start tortoise beacon: %v", err)
+	}
 
 	var msh *mesh.Mesh
 	var trtl tortoise.Tortoise

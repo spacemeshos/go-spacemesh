@@ -104,7 +104,11 @@ type TortoiseBeacon struct {
 	// If a beacon for an epoch becomes ready, channel for this epoch becomes closed.
 	beaconsReady map[types.EpochID]chan struct{}
 
+	seenEpochs map[types.EpochID]struct{}
+
 	backgroundWG sync.WaitGroup
+	startedOnce  sync.Once
+	started      chan struct{}
 }
 
 // New returns a new TortoiseBeacon.
@@ -139,6 +143,8 @@ func New(
 		votesAgainst:         make(votesMap),
 		beacons:              make(map[types.EpochID]types.Hash32),
 		beaconsReady:         make(map[types.EpochID]chan struct{}),
+		seenEpochs:           make(map[types.EpochID]struct{}),
+		started:              make(chan struct{}),
 	}
 }
 
@@ -171,10 +177,14 @@ func (tb *TortoiseBeacon) initGenesisBeacons() {
 	closedCh := make(chan struct{})
 	close(closedCh)
 
-	for epoch := types.EpochID(0); epoch.IsGenesis(); epoch++ {
+	epoch := types.EpochID(0)
+	for ; epoch.IsGenesis(); epoch++ {
 		tb.beacons[epoch] = genesisBeacon
 		tb.beaconsReady[epoch] = closedCh
+		tb.seenEpochs[epoch] = struct{}{}
 	}
+
+	tb.beaconsReady[epoch] = make(chan struct{}) // get the next epoch ready
 }
 
 // Close closes TortoiseBeacon.
@@ -214,6 +224,10 @@ func (tb *TortoiseBeacon) Get(epochID types.EpochID) (types.Hash32, error) {
 
 // GetBeacon returns a Tortoise Beacon value as []byte for a certain epoch.
 func (tb *TortoiseBeacon) GetBeacon(epochNumber types.EpochID) []byte {
+	if err := tb.Wait(epochNumber); err != nil {
+		return nil
+	}
+
 	v, err := tb.Get(epochNumber)
 	if err != nil {
 		return nil
@@ -224,6 +238,8 @@ func (tb *TortoiseBeacon) GetBeacon(epochNumber types.EpochID) []byte {
 
 // Wait waits until beacon for this epoch becomes ready.
 func (tb *TortoiseBeacon) Wait(epochID types.EpochID) error {
+	tb.waitUntilStarted()
+
 	if tb.tortoiseBeaconDB != nil {
 		if _, ok := tb.tortoiseBeaconDB.GetTortoiseBeacon(epochID); ok {
 			return nil
@@ -240,6 +256,21 @@ func (tb *TortoiseBeacon) Wait(epochID types.EpochID) error {
 
 	<-ch
 	return nil
+}
+
+func (tb *TortoiseBeacon) waitUntilStarted() {
+	select {
+	case <-tb.CloseChannel():
+		return
+	case <-tb.started:
+		return
+	}
+}
+
+func (tb *TortoiseBeacon) setStarted() {
+	tb.startedOnce.Do(func() {
+		close(tb.started)
+	})
 }
 
 func (tb *TortoiseBeacon) cleanupLoop() {
@@ -279,6 +310,7 @@ func (tb *TortoiseBeacon) listenLayers() {
 	for {
 		select {
 		case <-tb.CloseChannel():
+			tb.setStarted()
 			return
 		case layer := <-tb.layerTicker:
 			tb.Log.With().Info("Received tick",
@@ -319,15 +351,20 @@ func (tb *TortoiseBeacon) handleEpoch(epoch types.EpochID) {
 		log.Uint64("epoch", uint64(epoch)))
 
 	tb.beaconsMu.Lock()
-
-	if _, ok := tb.beaconsReady[epoch]; ok {
+	if _, ok := tb.seenEpochs[epoch]; ok {
 		tb.beaconsMu.Unlock()
 
 		// Already handling this epoch
 		return
 	}
 
-	tb.beaconsReady[epoch] = make(chan struct{})
+	tb.seenEpochs[epoch] = struct{}{}
+
+	tb.setStarted()
+
+	if _, ok := tb.beaconsReady[epoch]; !ok {
+		tb.beaconsReady[epoch] = make(chan struct{})
+	}
 	tb.beaconsMu.Unlock()
 
 	tb.Log.With().Info("Starting round ticker",
@@ -351,8 +388,12 @@ func (tb *TortoiseBeacon) handleEpoch(epoch types.EpochID) {
 	events.ReportCalculatedTortoiseBeacon(epoch, beacon.String())
 
 	tb.beaconsMu.Lock()
+
 	tb.beacons[epoch] = beacon
 	close(tb.beaconsReady[epoch]) // indicate that value is ready
+
+	tb.beaconsReady[epoch+1] = make(chan struct{}) // get the next epoch ready
+
 	tb.beaconsMu.Unlock()
 }
 
