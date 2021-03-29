@@ -824,12 +824,20 @@ func (tb *TortoiseBeacon) calculateVotesDiff(epoch types.EpochID, round uint64) 
 			// TODO(nkryuchkov): consider caching to avoid recalculating votes
 			for pk, votesDiff := range thisRoundVotesDiff {
 				for vote := range votesDiff.votesFor {
-					delete(thisRoundVotes[pk].votesAgainst, vote)
-					thisRoundVotes[pk].votesFor[vote] = struct{}{}
+					if m := thisRoundVotes[pk].votesAgainst; m != nil {
+						delete(thisRoundVotes[pk].votesAgainst, vote)
+					}
+					if m := thisRoundVotes[pk].votesFor; m != nil {
+						thisRoundVotes[pk].votesFor[vote] = struct{}{}
+					}
 				}
 				for vote := range votesDiff.votesAgainst {
-					delete(thisRoundVotes[pk].votesFor, vote)
-					thisRoundVotes[pk].votesAgainst[vote] = struct{}{}
+					if m := thisRoundVotes[pk].votesFor; m != nil {
+						delete(thisRoundVotes[pk].votesFor, vote)
+					}
+					if m := thisRoundVotes[pk].votesAgainst; m != nil {
+						thisRoundVotes[pk].votesAgainst[vote] = struct{}{}
+					}
 				}
 			}
 
