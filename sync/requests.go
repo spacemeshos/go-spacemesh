@@ -121,22 +121,24 @@ func atxHashReqFactory(ep types.EpochID) requestFactory {
 func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]item, error)) batchRequestFactory {
 	//convert to chan
 	return func(ctx context.Context, infra networker, peer p2ppeers.Peer, ids []types.Hash32) (chan []item, error) {
+		logger := infra.WithContext(ctx)
 		ch := make(chan []item, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
 			if len(msg) == 0 || msg == nil {
-				infra.With().Warning("peer responded with nil to block request", log.FieldNamed("peer", peer))
+				logger.With().Warning("peer responded with nil to block request",
+					log.FieldNamed("peer", peer))
 				return
 			}
 
 			items, err := asItems(msg)
 			if err != nil {
-				infra.With().Error("fetch failed, bad response", log.Err(err))
+				logger.With().Error("fetch failed, bad response", log.Err(err))
 				return
 			}
 
-			if valid, err := validateItemIds(ids, items); !valid {
-				infra.With().Error("fetch failed, bad response", log.Err(err))
+			if valid, err := validateItemIds(logger, ids, items); !valid {
+				logger.With().Error("fetch failed, bad response", log.Err(err))
 				return
 			}
 
@@ -254,7 +256,7 @@ func validatePoetRef(proofMessage types.PoetProofMessage, poetProofRef []byte) (
 	return true, nil
 }
 
-func validateItemIds(ids []types.Hash32, items []item) (bool, error) {
+func validateItemIds(logger log.Log, ids []types.Hash32, items []item) (bool, error) {
 	mp := make(map[types.Hash32]struct{})
 	for _, id := range ids {
 		mp[id] = struct{}{}
@@ -269,7 +271,7 @@ func validateItemIds(ids []types.Hash32, items []item) (bool, error) {
 
 	if len(mp) > 0 {
 		for id := range mp {
-			log.Warning("item %s was not in response", id.ShortString())
+			logger.With().Warning("item was not in response", id)
 		}
 	}
 
