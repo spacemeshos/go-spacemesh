@@ -632,10 +632,12 @@ func (s *Syncer) syncEpochActivations(ctx context.Context, epoch types.EpochID) 
 		return err
 	}
 
+	atxFields := make([]log.LoggableField, len(atxIds))
+	for _, atxid := range atxIds {
+		atxFields = append(atxFields, atxid.Field())
+	}
 	logger.With().Info("fetched atxs for epoch", log.Int("count", len(atxIds)))
-	logger.With().Debug("fetched atxs for epoch",
-		log.Int("count", len(atxIds)),
-		log.String("atxs", fmt.Sprint(atxIds)))
+	logger.With().Debug("fetched atxs for epoch", atxFields...)
 
 	_, err = s.atxQueue.HandleAtxs(ctx, atxIds)
 

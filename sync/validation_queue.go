@@ -160,7 +160,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(ctx context.C
 
 // removes all dependencies for a block
 func (vq *blockQueue) updateDependencies(ctx context.Context, block types.Hash32, valid bool) {
-	vq.WithContext(ctx).Debug("invalidate block", block)
+	vq.WithContext(ctx).With().Debug("invalidate block", block)
 	vq.Lock()
 	//clean after block
 	delete(vq.depMap, block)
