@@ -224,9 +224,13 @@ func TestMaxPendingConnections(t *testing.T) {
 
 	// Make sure that the listener does not accept a new connection until we terminate one
 	counter := 0
+
+	chDone := make(chan struct{}, 2)
 	listener := newMockListener()
 	listener.acceptFn = func() (net.Conn, error) {
 		counter++
+		// release the test to complete
+		chDone<-struct{}{}
 		return nil, tempErr("keep waiting")
 	}
 
@@ -235,8 +239,12 @@ func TestMaxPendingConnections(t *testing.T) {
 
 	// Now release one connection
 	wg.Done()
+
 	// Wait for it to be released
 	wgSuccess.Wait()
+
+	// Wait for the new connection to be accepted
+	<-chDone
 
 	// Make sure only one new connection was accepted
 	r.Equal(1, counter, "expected exactly one listener to be released")
