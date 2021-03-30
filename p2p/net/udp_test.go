@@ -123,6 +123,7 @@ func TestUDPNet_Sanity(t *testing.T) {
 			return
 		}
 	}
+	udpnet.Shutdown()
 }
 
 func TestUDPNet_Dial(t *testing.T) {}
@@ -363,6 +364,7 @@ func TestUDPNet_Cache(t *testing.T) {
 	require.Error(t, err)
 	require.Nil(t, c)
 	require.True(t, closed)
+	n.Shutdown()
 }
 
 func TestUDPNet_Cache2(t *testing.T) {
@@ -457,6 +459,7 @@ func TestUDPNet_Cache2(t *testing.T) {
 	createAndRunConn(nil, nil)
 	require.Equal(t, 1, closed)
 	require.Equal(t, 1, closed2)
+	n.Shutdown()
 }
 
 func Test_UDPIncomingConnClose(t *testing.T) {
