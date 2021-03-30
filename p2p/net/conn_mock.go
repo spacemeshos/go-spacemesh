@@ -24,6 +24,8 @@ type ConnectionMock struct {
 	sendCnt     int32
 
 	closed bool
+
+	eventProcessing func()
 }
 
 // NewConnectionMock creates a ConnectionMock.
@@ -118,10 +120,26 @@ func (cm *ConnectionMock) Close() error {
 }
 
 func (cm *ConnectionMock) beginEventProcessing() {
-
+	if cm.eventProcessing != nil {
+		cm.eventProcessing()
+	} else {
+		// pretend we're doing some complicated processing
+		time.Sleep(time.Second * 10)
+	}
 }
 
 // String mocks the interface
 func (cm ConnectionMock) String() string {
 	return cm.id
+}
+
+// SendSock mocks the interface
+func (cm *ConnectionMock) SendSock([]byte) error {
+	panic("not implemented")
+}
+
+func (cm *ConnectionMock) setupIncoming(time.Duration) error {
+	// pretend we're negotiating a net connection
+	time.Sleep(time.Second * 1)
+	return nil
 }

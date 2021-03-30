@@ -111,7 +111,15 @@ func (n *Net) Start(listener net.Listener) { // todo: maybe add context
 	n.listener = listener
 	n.listenAddress = listener.Addr().(*net.TCPAddr)
 	n.logger.Info("Started TCP server listening for connections on tcp:%v", listener.Addr().String())
-	go n.accept(listener)
+
+	// This channel enforces the limit on the number of incoming connections
+	// Each message sent to the channel represents a "token" that allows one additional incoming connection
+	pending := make(chan struct{}, n.config.MaxPendingConnections)
+	for i := 0; i < n.config.MaxPendingConnections; i++ {
+		pending <- struct{}{}
+	}
+
+	go n.accept(listener, pending)
 }
 
 // LocalAddr returns the local listening address. panics before calling Start or if Start errored
@@ -272,15 +280,8 @@ func (n *Net) Shutdown() {
 	}
 }
 
-func (n *Net) accept(listen net.Listener) {
+func (n *Net) accept(listen net.Listener, pending chan struct{}) {
 	n.logger.Debug("Waiting for incoming connections...")
-
-	// This channel enforces the limit on the number of incoming connections
-	// Each message sent to the channel represents a "token" that allows one additional incoming connection
-	pending := make(chan struct{}, n.config.MaxPendingConnections)
-	for i := 0; i < n.config.MaxPendingConnections; i++ {
-		pending <- struct{}{}
-	}
 
 	for {
 		// Grab a token to accept another incoming connection
@@ -306,27 +307,27 @@ func (n *Net) accept(listen net.Listener) {
 		conn := netConn.(*net.TCPConn)
 		n.tcpSocketConfig(conn) // TODO maybe only set this after session handshake to prevent denial of service with big messages
 		c := newConnection(netConn, n, nil, nil, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger)
-		go func(con Connection) {
-			if err := c.setupIncoming(n.config.SessionTimeout); err != nil {
-				// Return the new connection token immediately as new connection failed
-				pending <- struct{}{}
-				n.logger.Event().Warning("conn_incoming_failed",
-					log.String("remote", c.remoteAddr.String()),
-					log.Err(err))
-				return
-			}
 
-			// Asynchronously handle the new connection
-			go func() {
-				// Return the new connection token once the connection is closed
-				defer func() { pending <- struct{}{} }()
-				// The connection is automatically closed when there's no more to read, no need to close it here
-				c.beginEventProcessing()
-			}()
-		}(c)
-
-		// network won't publish the connection before the remote node has established a session
+		// Handle the incoming connection asynchronously
+		go n.acceptAsync(c, pending)
 	}
+}
+
+func (n *Net) acceptAsync(conn fmtConnection, pending chan struct{}) {
+	// Return the new connection token once the connection is closed
+	defer func() { pending <- struct{}{} }()
+
+	if err := conn.setupIncoming(n.config.SessionTimeout); err != nil {
+		n.logger.Event().Warning("conn_incoming_failed",
+			log.String("remote", conn.RemoteAddr().String()),
+			log.Err(err))
+		return
+	}
+
+	// The connection is automatically closed when there's no more to read, no need to close it here
+	conn.beginEventProcessing()
+
+	// network won't publish the connection before the remote node has established a session
 }
 
 // SubscribeOnNewRemoteConnections registers a callback for a new connection event. all registered callbacks are called before moving.

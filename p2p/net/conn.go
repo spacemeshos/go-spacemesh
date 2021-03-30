@@ -104,9 +104,16 @@ type formattedWriter interface {
 	WriteRecord([]byte) (int, error)
 }
 
+type fmtConnection interface {
+	Connection
+	SendSock([]byte) error
+	setupIncoming(time.Duration) error
+	beginEventProcessing()
+}
+
 // Create a new connection wrapping a net.Conn with a provided connection manager
 func newConnection(conn readWriteCloseAddresser, netw networker,
-	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) *FormattedConnection {
+	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) fmtConnection {
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &FormattedConnection{
