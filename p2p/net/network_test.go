@@ -230,7 +230,7 @@ func TestMaxPendingConnections(t *testing.T) {
 	listener.acceptFn = func() (net.Conn, error) {
 		counter++
 		// release the test to complete
-		chDone<-struct{}{}
+		chDone <- struct{}{}
 		return nil, tempErr("keep waiting")
 	}
 
