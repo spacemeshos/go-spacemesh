@@ -89,9 +89,6 @@ type TortoiseBeacon struct {
 	delayedProposalsMu   sync.RWMutex
 	delayedProposalsList map[types.EpochID][][]types.ATXID
 
-	lateProposalsMu   sync.RWMutex
-	lateProposalsList map[types.EpochID][][]types.ATXID
-
 	votesMu         sync.RWMutex
 	incomingVotes   votesPerRound // 1st round - votes, other rounds - diff
 	votesCache      votesPerRound // all rounds - votes
@@ -137,7 +134,6 @@ func New(
 		currentRounds:        make(map[types.EpochID]uint64),
 		timelyProposalsList:  make(map[types.EpochID][][]types.ATXID),
 		delayedProposalsList: make(map[types.EpochID][][]types.ATXID),
-		lateProposalsList:    make(map[types.EpochID][][]types.ATXID),
 		incomingVotes:        make(votesPerRound),
 		votesCache:           make(votesPerRound),
 		ownVotes:             make(ownVotes),
@@ -312,7 +308,9 @@ func (tb *TortoiseBeacon) listenLayers() {
 		select {
 		case <-tb.CloseChannel():
 			tb.setStarted()
+
 			return
+
 		case layer := <-tb.layerTicker:
 			tb.Log.With().Info("Received tick",
 				log.Uint64("layer", uint64(layer)))
@@ -721,7 +719,6 @@ func (tb *TortoiseBeacon) calculateVotes(epoch types.EpochID, round uint64) (vot
 		if v, ok := tb.votesCache[thisRound]; ok {
 			thisRoundVotes = v
 		} else {
-
 			for pk, votesList := range firstRoundVotes {
 				votesForCopy := make(votesSet)
 				votesAgainstCopy := make(votesSet)
@@ -824,7 +821,7 @@ func (tb *TortoiseBeacon) calculateVotes(epoch types.EpochID, round uint64) (vot
 		}
 	}
 
-	return
+	return votesFor, votesAgainst
 }
 
 func (tb *TortoiseBeacon) voteWeight(pk p2pcrypto.PublicKey) int {
