@@ -209,8 +209,7 @@ func (mgm *mockGossipMessage) RequestID() string {
 	return reqID
 }
 
-func (mgm *mockGossipMessage) ReportValidation(ctx context.Context, protocol string) {
-	reqID, _ := log.ExtractRequestID(ctx)
+func (mgm *mockGossipMessage) ReportValidation(protocol string) {
 	mgm.vComp <- service.NewMessageValidation(mgm.sender, nil, "", reqID)
 }
 

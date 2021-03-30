@@ -33,7 +33,7 @@ func NewListener(net Service, syncer Fetcher, log log.Log) *Listener {
 
 // Syncer is interface for sync services
 type Syncer interface {
-	FetchAtxReferences(atx *types.ActivationTx) error
+	FetchAtxReferences(context.Context, *types.ActivationTx) error
 	FetchPoetProof(ctx context.Context, poetProofRef []byte) error
 	ListenToGossip() bool
 	GetBlock(ID types.BlockID) (*types.Block, error)
@@ -46,11 +46,11 @@ type Syncer interface {
 // Fetcher is a general interface that defines a component capable of fetching data from remote peers
 type Fetcher interface {
 	FetchBlock(types.BlockID) error
-	FetchAtx(types.ATXID) error
+	FetchAtx(context.Context, types.ATXID) error
 	GetPoetProof(context.Context, types.Hash32) error
 	GetTxs([]types.TransactionID) error
 	GetBlocks(context.Context, []types.BlockID) error
-	GetAtxs([]types.ATXID) error
+	GetAtxs(context.Context, []types.ATXID) error
 	ListenToGossip() bool
 	IsSynced() bool
 }
@@ -63,7 +63,7 @@ func (l *Listener) AddListener(ctx context.Context, channel string, priority pri
 	l.channels = append(l.channels, ch)
 	l.stoppers = append(l.stoppers, stop)
 	l.wg.Add(1)
-	go l.listenToGossip(ctx, dataHandler, ch, stop)
+	go l.listenToGossip(log.WithNewRequestID(ctx), dataHandler, ch, stop)
 }
 
 // Stop stops listening to all gossip channels
@@ -86,7 +86,7 @@ func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHan
 				// not accepting data
 				continue
 			}
-			dataHandler(ctx, data, l.syncer)
+			dataHandler(log.WithNewRequestID(ctx), data, l.syncer)
 		}
 	}
 }

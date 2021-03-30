@@ -756,17 +756,17 @@ func (db *DB) HandleGossipAtx(ctx context.Context, data service.GossipMessage, s
 		db.log.WithContext(ctx).With().Error("error handling atx data", log.Err(err))
 		return
 	}
-	data.ReportValidation(ctx, AtxProtocol)
+	data.ReportValidation(AtxProtocol)
 }
 
 // HandleAtxData handles atxs received either by gossip or sync
 func (db *DB) HandleAtxData(ctx context.Context, data []byte, syncer service.Fetcher) error {
-	logger := db.log.WithContext(ctx)
 	atx, err := types.BytesToAtx(data)
 	if err != nil {
 		return fmt.Errorf("cannot parse incoming atx")
 	}
 	atx.CalcAndSetID()
+	logger := db.log.WithContext(ctx).WithFields(atx.ID())
 
 	logger.With().Info("got new atx", atx.Fields(len(data))...)
 
@@ -776,12 +776,12 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, syncer service.Fet
 		return fmt.Errorf("nil nipst in gossip")
 	}
 
-	if err := syncer.GetPoetProof(context.TODO(), atx.GetPoetProofRef()); err != nil {
+	if err := syncer.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
 		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
 			atx.ShortString(), atx.GetShortPoetProofRef(), err)
 	}
 
-	if err := db.FetchAtxReferences(atx, syncer); err != nil {
+	if err := db.FetchAtxReferences(ctx, atx, syncer); err != nil {
 		return fmt.Errorf("received atx with missing references of prev or pos id %v, %v, %v, %v",
 			atx.ID(), atx.PrevATXID, atx.PositioningATX, log.Err(err))
 	}
@@ -803,23 +803,24 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, syncer service.Fet
 }
 
 // FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db
-func (db *DB) FetchAtxReferences(atx *types.ActivationTx, f service.Fetcher) error {
+func (db *DB) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx, f service.Fetcher) error {
+	logger := db.log.WithContext(ctx)
 	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != db.goldenATXID {
-		db.log.With().Info("going to fetch pos atx", atx.PositioningATX, atx.ID())
-		err := f.FetchAtx(atx.PositioningATX)
+		logger.With().Info("going to fetch pos atx", atx.PositioningATX, atx.ID())
+		err := f.FetchAtx(ctx, atx.PositioningATX)
 		if err != nil {
 			return err
 		}
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
-		db.log.With().Info("going to fetch prev atx", atx.PrevATXID, atx.ID())
-		err := f.FetchAtx(atx.PrevATXID)
+		logger.With().Info("going to fetch prev atx", atx.PrevATXID, atx.ID())
+		err := f.FetchAtx(ctx, atx.PrevATXID)
 		if err != nil {
 			return err
 		}
 	}
-	db.log.With().Info("done fetching references for atx", atx.ID())
+	logger.With().Info("done fetching references for atx", atx.ID())
 
 	return nil
 }

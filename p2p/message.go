@@ -1,10 +1,8 @@
 package p2p
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
@@ -58,10 +56,9 @@ func (pm gossipProtocolMessage) ValidationCompletedChan() chan service.MessageVa
 	return pm.validationChan
 }
 
-func (pm gossipProtocolMessage) ReportValidation(ctx context.Context, protocol string) {
-	reqID, _ := log.ExtractRequestID(ctx)
+func (pm gossipProtocolMessage) ReportValidation(protocol string) {
 	if pm.validationChan != nil {
-		pm.validationChan <- service.NewMessageValidation(pm.sender, pm.Bytes(), protocol, reqID)
+		pm.validationChan <- service.NewMessageValidation(pm.sender, pm.Bytes(), protocol, pm.requestID)
 	}
 }
 

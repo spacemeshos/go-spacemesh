@@ -307,11 +307,11 @@ func transfer(db *TransactionProcessor, sender, recipient types.Address, amount 
 }
 
 // HandleTxData handles data received on TX gossip channel
-func (tp *TransactionProcessor) HandleTxData(ctx context.Context, data service.GossipMessage, syncer service.Fetcher) {
+func (tp *TransactionProcessor) HandleTxData(ctx context.Context, data service.GossipMessage, _ service.Fetcher) {
 	logger := tp.WithContext(ctx)
 	tx, err := types.BytesToTransaction(data.Bytes())
 	if err != nil {
-		logger.With().Error("cannot parse incoming TX", log.Err(err))
+		logger.With().Error("cannot parse incoming tx", log.Err(err))
 		return
 	}
 	if err := tx.CalcAndSetOrigin(); err != nil {
@@ -338,7 +338,7 @@ func (tp *TransactionProcessor) HandleTxData(ctx context.Context, data service.G
 		log.Uint64("gas", tx.GasLimit),
 		log.String("recipient", tx.Recipient.String()),
 		log.String("origin", tx.Origin().String()))
-	data.ReportValidation(ctx, IncomingTxProtocol)
+	data.ReportValidation(IncomingTxProtocol)
 	tp.pool.Put(tx.ID(), tx)
 }
 

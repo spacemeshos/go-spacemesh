@@ -97,11 +97,19 @@ func (bh BlockHandler) validateVotes(blk *types.Block) error {
 
 // HandleBlock handles blocks from gossip
 func (bh *BlockHandler) HandleBlock(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
+	// restore the request ID and add context
+	if data.RequestID() != "" {
+		ctx = log.WithRequestID(ctx, data.RequestID())
+	} else {
+		ctx = log.WithNewRequestID(ctx)
+		bh.Warning("got block with no requestId, generated new id")
+	}
+
 	if err := bh.HandleBlockData(ctx, data.Bytes(), sync); err != nil {
 		bh.With().Error("error handling block data", log.Err(err))
 		return
 	}
-	data.ReportValidation(ctx, NewBlockProtocol)
+	data.ReportValidation(NewBlockProtocol)
 }
 
 // HandleBlockData handles blocks from gossip and sync
@@ -152,7 +160,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	}
 
 	// try fetch referenced ATXs
-	err := bh.fetchAllReferencedAtxs(block, syncer)
+	err := bh.fetchAllReferencedAtxs(ctx, block, syncer)
 	if err != nil {
 		return err
 	}
@@ -186,7 +194,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	return nil
 }
 
-func (bh *BlockHandler) fetchAllReferencedAtxs(blk *types.Block, syncer service.Fetcher) error {
+func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.Block, syncer service.Fetcher) error {
 	// As block with empty or Golden ATXID is considered syntactically invalid, explicit check is not needed here.
 	atxs := []types.ATXID{blk.ATXID}
 
@@ -201,7 +209,7 @@ func (bh *BlockHandler) fetchAllReferencedAtxs(blk *types.Block, syncer service.
 			return errNoActiveSet
 		}
 	}
-	err := syncer.GetAtxs(atxs)
+	err := syncer.GetAtxs(ctx, atxs)
 	return err
 }
 

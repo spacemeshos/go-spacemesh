@@ -13,8 +13,8 @@ import (
 )
 
 type fetchPoetProofFunc func(ctx context.Context, poetProofRef []byte) error
-type sValidateAtxFunc func(atx *types.ActivationTx) error
-type sFetchAtxFunc func(atx *types.ActivationTx) error
+type sValidateAtxFunc func(*types.ActivationTx) error
+type sFetchAtxFunc func(context.Context, *types.ActivationTx) error
 type checkLocalFunc func(ids []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32)
 
 type item interface {
@@ -250,16 +250,18 @@ func newAtxQueue(ctx context.Context, s *Syncer, fetchPoetProof fetchPoetProofFu
 }
 
 //we could get rid of this if we had a unified id type
-func (atx atxQueue) HandleAtxs(atxids []types.ATXID) ([]*types.ActivationTx, error) {
-	atx.Log.Debug("going to fetch %v", atxids)
+func (atx atxQueue) HandleAtxs(ctx context.Context, atxids []types.ATXID) ([]*types.ActivationTx, error) {
+	atxFields := make([]log.LoggableField, len(atxids))
 	atxItems := make([]types.Hash32, 0, len(atxids))
-	for _, i := range atxids {
-		atxItems = append(atxItems, i.Hash32())
+	for _, atxid := range atxids {
+		atxFields = append(atxFields, atxid.Field())
+		atxItems = append(atxItems, atxid.Hash32())
 	}
+	atx.Log.WithContext(ctx).With().Debug("going to fetch atxs", atxFields...)
 
 	atxres, err := atx.handle(atxItems)
 	if err != nil {
-		atx.Log.Error("cannot fetch all atxs for block: %v", err)
+		atx.Log.WithContext(ctx).With().Error("cannot fetch all atxs for block", log.Err(err))
 		return nil, err
 	}
 
@@ -286,7 +288,7 @@ func updateAtxDependencies(ctx context.Context, invalidate func(id types.Hash32,
 			logger = logger.WithContext(ctx).WithFields(log.String("job_id", id.String()))
 			if atx, ok := mp[id]; ok {
 				logger.With().Info("atx queue work item", atx.ID())
-				if err := fetchAtxRefs(atx); err != nil {
+				if err := fetchAtxRefs(ctx, atx); err != nil {
 					logger.With().Warning("failed to fetch referenced atxs", log.Err(err))
 					invalidate(id, false)
 					continue

@@ -637,14 +637,14 @@ func (s *Syncer) syncEpochActivations(ctx context.Context, epoch types.EpochID) 
 		log.Int("count", len(atxIds)),
 		log.String("atxs", fmt.Sprint(atxIds)))
 
-	_, err = s.atxQueue.HandleAtxs(atxIds)
+	_, err = s.atxQueue.HandleAtxs(ctx, atxIds)
 
 	return err
 }
 
 // GetAtxs fetches list of atxs from remote peers if possible
-func (s *Syncer) GetAtxs(IDs []types.ATXID) error {
-	_, err := s.atxQueue.HandleAtxs(IDs)
+func (s *Syncer) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
+	_, err := s.atxQueue.HandleAtxs(ctx, IDs)
 	return err
 }
 
@@ -776,7 +776,7 @@ func (s *Syncer) fetchRefBlock(ctx context.Context, block *types.Block) error {
 	return nil
 }
 
-func (s *Syncer) fetchAllReferencedAtxs(blk *types.Block) error {
+func (s *Syncer) fetchAllReferencedAtxs(ctx context.Context, blk *types.Block) error {
 	// As block with empty or Golden ATXID is considered syntactically invalid, explicit check is not needed here.
 	atxs := []types.ATXID{blk.ATXID}
 
@@ -791,7 +791,7 @@ func (s *Syncer) fetchAllReferencedAtxs(blk *types.Block) error {
 			return errNoActiveSet
 		}
 	}
-	_, err := s.atxQueue.HandleAtxs(atxs)
+	_, err := s.atxQueue.HandleAtxs(ctx, atxs)
 	return err
 }
 
@@ -802,7 +802,7 @@ func (s *Syncer) fetchBlockDataForValidation(ctx context.Context, blk *types.Blo
 			return err
 		}
 	}
-	return s.fetchAllReferencedAtxs(blk)
+	return s.fetchAllReferencedAtxs(ctx, blk)
 }
 
 func (s *Syncer) blockSyntacticValidation(ctx context.Context, block *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
@@ -844,7 +844,7 @@ func (s *Syncer) validateBlockView(ctx context.Context, blk *types.Block) bool {
 	ch := make(chan bool, 1)
 	defer close(ch)
 	foo := func(ctx context.Context, res bool) error {
-		s.WithContext(ctx).Info("view validated",
+		s.WithContext(ctx).With().Info("view validated",
 			blk.ID(),
 			log.Bool("result", res),
 			blk.LayerIndex)
@@ -864,8 +864,8 @@ func (s *Syncer) validateBlockView(ctx context.Context, blk *types.Block) bool {
 	return <-ch
 }
 
-func (s *Syncer) fetchAtx(ID types.ATXID) (*types.ActivationTx, error) {
-	atxs, err := s.atxQueue.HandleAtxs([]types.ATXID{ID})
+func (s *Syncer) fetchAtx(ctx context.Context, ID types.ATXID) (*types.ActivationTx, error) {
+	atxs, err := s.atxQueue.HandleAtxs(ctx, []types.ATXID{ID})
 	if err != nil {
 		return nil, err
 	}
@@ -876,29 +876,30 @@ func (s *Syncer) fetchAtx(ID types.ATXID) (*types.ActivationTx, error) {
 }
 
 // FetchAtx fetches an ATX from remote peer
-func (s *Syncer) FetchAtx(ID types.ATXID) error {
-	_, e := s.fetchAtx(ID)
+func (s *Syncer) FetchAtx(ctx context.Context, ID types.ATXID) error {
+	_, e := s.fetchAtx(ctx, ID)
 	return e
 }
 
 // FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db
-func (s *Syncer) FetchAtxReferences(atx *types.ActivationTx) error {
+func (s *Syncer) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx) error {
+	logger := s.WithContext(ctx).WithFields(atx.ID())
 	if atx.PositioningATX != s.GoldenATXID {
-		s.With().Info("going to fetch pos atx", atx.PositioningATX, atx.ID())
-		_, err := s.fetchAtx(atx.PositioningATX)
+		logger.With().Info("going to fetch pos atx", log.FieldNamed("pos_atx_id", atx.PositioningATX))
+		_, err := s.fetchAtx(ctx, atx.PositioningATX)
 		if err != nil {
 			return err
 		}
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
-		s.With().Info("going to fetch prev atx", atx.PrevATXID, atx.ID())
-		_, err := s.fetchAtx(atx.PrevATXID)
+		logger.With().Info("going to fetch prev atx", log.FieldNamed("prev_atx_id", atx.PrevATXID))
+		_, err := s.fetchAtx(ctx, atx.PrevATXID)
 		if err != nil {
 			return err
 		}
 	}
-	s.With().Info("done fetching references for atx", atx.ID())
+	logger.Info("done fetching references for atx")
 
 	return nil
 }

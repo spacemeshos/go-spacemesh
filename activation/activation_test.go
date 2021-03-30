@@ -908,7 +908,7 @@ func TestActivationDB_FetchAtxReferences(t *testing.T) {
 	atxList := []*types.ActivationTx{atx1, atx2, atx3, atx4, atx5}
 
 	for _, atx := range atxList {
-		r.NoError(activationDb.FetchAtxReferences(atx, fetcher))
+		r.NoError(activationDb.FetchAtxReferences(context.TODO(), atx, fetcher))
 	}
 
 	expected := map[types.ATXID]int{

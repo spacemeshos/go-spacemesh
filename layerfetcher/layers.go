@@ -299,16 +299,6 @@ func (l *Logic) receiveBlockHashes(ctx context.Context, layer types.LayerID, dat
 	l.notifyLayerPromiseResult(layer, nil)
 }
 
-func (l *Logic) handleEpochATXs(hash types.Hash32, data []byte) error {
-	var atxIDs []types.ATXID
-	err := types.BytesToInterface(data, atxIDs)
-	if err != nil {
-		return err
-	}
-
-	return l.GetAtxs(atxIDs)
-}
-
 // GetEpochATXs fetches all atxs received by peer for given layer
 func (l *Logic) GetEpochATXs(id types.EpochID) error {
 	res := <-l.fetcher.GetHash(types.CalcHash32(id.ToBytes()), fetch.Hint(strconv.Itoa(ATXIDsDB)), true)
@@ -360,7 +350,7 @@ func (f *Future) Result() error {
 }
 
 // FetchAtx returns error if ATX was not found
-func (l *Logic) FetchAtx(id types.ATXID) error {
+func (l *Logic) FetchAtx(ctx context.Context, id types.ATXID) error {
 	f := Future{l.fetcher.GetHash(id.Hash32(), fetch.Hint(strconv.Itoa(BlockDB)), true)}
 	return f.Result()
 }
@@ -372,7 +362,7 @@ func (l *Logic) FetchBlock(id types.BlockID) error {
 }
 
 // GetAtxs gets the data for given atx ids IDs and validates them. returns an error if at least one ATX cannot be fetched
-func (l *Logic) GetAtxs(IDs []types.ATXID) error {
+func (l *Logic) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
 	hashes := make([]types.Hash32, 0, len(IDs))
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.Hash32())

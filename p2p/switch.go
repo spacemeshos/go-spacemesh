@@ -468,6 +468,9 @@ func (s *Switch) processMessage(ctx context.Context, ime net.IncomingMessageEven
 	// Extract request context and add to log
 	if ime.RequestID != "" {
 		ctx = log.WithRequestID(ctx, ime.RequestID)
+	} else {
+		ctx = log.WithNewRequestID(ctx)
+		s.logger.WithContext(ctx).Warning("got incoming message event with no requestID, setting new id")
 	}
 
 	if s.config.MsgSizeLimit != config.UnlimitedMsgSize && len(ime.Message) > s.config.MsgSizeLimit {
@@ -624,7 +627,9 @@ func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcry
 	if msgchan == nil {
 		return ErrNoProtocol
 	}
-	s.logger.WithContext(ctx).With().Debug("forwarding message to protocol", log.String("protocol", protocol), h)
+	s.logger.WithContext(ctx).With().Debug("forwarding message to protocol",
+		log.String("protocol", protocol),
+		h)
 
 	metrics.QueueLength.With(metrics.ProtocolLabel, protocol).Set(float64(len(msgchan)))
 

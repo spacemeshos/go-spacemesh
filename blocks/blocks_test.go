@@ -114,7 +114,7 @@ func (f *fetchMock) GetBlock(ID types.BlockID) error {
 	return f.returnError()
 }
 
-func (f fetchMock) FetchAtx(ID types.ATXID) error {
+func (f fetchMock) FetchAtx(ctx context.Context, ID types.ATXID) error {
 	return f.returnError()
 }
 
@@ -130,7 +130,7 @@ func (f fetchMock) GetBlocks(ctx context.Context, IDs []types.BlockID) error {
 	return f.returnError()
 }
 
-func (f fetchMock) GetAtxs(IDs []types.ATXID) error {
+func (f fetchMock) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
 	return f.returnError()
 }
 

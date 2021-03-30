@@ -211,7 +211,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			}
 
 			// validation passed, report
-			msg.ReportValidation(messageCtx, protoName)
+			msg.ReportValidation(protoName)
 
 			if isEarly {
 				if _, exist := b.pending[msgInstID]; !exist { // create buffer if first msg

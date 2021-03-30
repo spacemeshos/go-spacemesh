@@ -30,7 +30,7 @@ func (*fetchMock) IsSynced() bool {
 	return true
 }
 
-func (f *fetchMock) FetchAtx(ID types.ATXID) error {
+func (f *fetchMock) FetchAtx(ctx context.Context, ID types.ATXID) error {
 	f.atxCalledMu.Lock()
 	defer f.atxCalledMu.Unlock()
 
@@ -51,6 +51,6 @@ func (*fetchMock) GetBlocks(context.Context, []types.BlockID) error {
 	return nil
 }
 
-func (*fetchMock) GetAtxs([]types.ATXID) error {
+func (*fetchMock) GetAtxs(context.Context, []types.ATXID) error {
 	return nil
 }

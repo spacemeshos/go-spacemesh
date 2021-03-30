@@ -19,7 +19,7 @@ func (m *syncMock) FetchBlock(ID types.BlockID) error {
 	return nil
 }
 
-func (m *syncMock) FetchAtx(ID types.ATXID) error {
+func (m *syncMock) FetchAtx(ctx context.Context, ID types.ATXID) error {
 	return nil
 }
 
@@ -39,11 +39,11 @@ func (m *syncMock) GetBlocks(ctx context.Context, IDs []types.BlockID) error {
 	return nil
 }
 
-func (m *syncMock) GetAtxs(IDs []types.ATXID) error {
+func (m *syncMock) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
 	return nil
 }
 
-func (*syncMock) FetchAtxReferences(atx *types.ActivationTx) error {
+func (*syncMock) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx) error {
 	return nil
 }
 

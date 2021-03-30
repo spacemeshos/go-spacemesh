@@ -27,7 +27,7 @@ func ApproveAPIGossipMessages(ctx context.Context, s Service) {
 			case m := <-gm:
 				msglen := len(m.Bytes())
 				log.With().Info("api_test_gossip: got test gossip message", log.Int("len", msglen))
-				m.ReportValidation(ctx, apiGossipProtocol)
+				m.ReportValidation(apiGossipProtocol)
 			case <-ctx.Done():
 				return
 			}

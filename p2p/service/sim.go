@@ -190,10 +190,9 @@ func (sm simGossipMessage) ValidationCompletedChan() chan MessageValidation {
 }
 
 // ReportValidation reports sm as a valid message for protocol.
-func (sm simGossipMessage) ReportValidation(ctx context.Context, protocol string) {
-	reqID, _ := log.ExtractRequestID(ctx)
+func (sm simGossipMessage) ReportValidation(protocol string) {
 	if sm.validationCompletedChan != nil {
-		sm.validationCompletedChan <- NewMessageValidation(sm.sender, sm.Bytes(), protocol, reqID)
+		sm.validationCompletedChan <- NewMessageValidation(sm.sender, sm.Bytes(), protocol, sm.RequestID())
 	}
 }
 

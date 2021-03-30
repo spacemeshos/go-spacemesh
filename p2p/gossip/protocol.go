@@ -92,6 +92,7 @@ func (p *Protocol) Broadcast(ctx context.Context, payload []byte, nextProt strin
 
 // Relay processes a message, if the message is new, it is passed for the protocol to validate and then propagated.
 func (p *Protocol) Relay(ctx context.Context, sender p2pcrypto.PublicKey, protocol string, msg service.Data) error {
+	p.WithContext(ctx).With().Debug("relaying message", log.String("from_type", protocol))
 	return p.processMessage(ctx, sender, protocol, msg)
 }
 
@@ -129,8 +130,8 @@ func (p *Protocol) processMessage(ctx context.Context, sender p2pcrypto.PublicKe
 
 // send a message to all the peers.
 func (p *Protocol) propagateMessage(ctx context.Context, payload []byte, nextProt string, exclude p2pcrypto.PublicKey) {
-	//TODO soon : don't wait for mesaage to send and if we finished sending last message one of the peers send the next message to him.
-	// limit the number of simultaneous sends. *consider other messages (mainly sync)
+	//TODO soon: don't wait for message to send and if we finished sending last message one of the peers send the next
+	// message. limit the number of simultaneous sends. consider other messages (mainly sync).
 	var wg sync.WaitGroup
 peerLoop:
 	for _, peer := range p.peers.GetPeers() {
@@ -179,7 +180,7 @@ func (p *Protocol) handlePQ(ctx context.Context) {
 		var msgCtx context.Context
 		if m.RequestID() == "" {
 			msgCtx = log.WithNewRequestID(ctx, extraFields...)
-			p.WithContext(msgCtx).Warning("message in queue has no requestID, generated new requestID")
+			p.WithContext(msgCtx).Warning("message in queue has no requestId, generated new requestId")
 		} else {
 			msgCtx = log.WithRequestID(ctx, m.RequestID(), extraFields...)
 		}
