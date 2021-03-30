@@ -686,6 +686,11 @@ func (tb *TortoiseBeacon) calculateVotes(epoch types.EpochID, round uint64) (vot
 		}
 	}
 
+	tb.votesCountCache[firstRound] = make(map[types.Hash32]int)
+	for k, v := range tb.votesCache[firstRound] {
+		tb.votesCache[firstRound][k] = v
+	}
+
 	ownFirstRoundsVotes := votes{
 		votesFor:     make(votesSet),
 		votesAgainst: make(votesSet),
