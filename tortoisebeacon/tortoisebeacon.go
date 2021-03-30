@@ -872,6 +872,10 @@ func (tb *TortoiseBeacon) calculateBeacon(epoch types.EpochID) types.Hash32 {
 					stringHashes = append(stringHashes, hash.String())
 				}
 			}
+
+			tb.Log.With().Info(fmt.Sprintf("Tortoise beacon round votes epoch %v round %v: %+v", epoch, round, roundVotes),
+				log.Uint64("epoch_id", uint64(epoch)),
+				log.Uint64("round", round))
 		}
 
 		tb.Log.With().Info(fmt.Sprintf("Tortoise beacon hashes epoch %v round %v", epoch, round),
