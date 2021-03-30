@@ -1781,7 +1781,7 @@ func TestSyncer_fetchBlock(t *testing.T) {
 	r.False(res)
 
 	tries := 5
-	for len(syncs[1].net.GetPeers()) == 0 {
+	for len(s.net.GetPeers()) == 0 {
 		time.Sleep(1 * time.Second)
 		tries--
 		if tries == 0 {
