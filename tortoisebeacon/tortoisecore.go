@@ -1,5 +1,7 @@
 package tortoisebeacon
 
+// TODO(nkryuchkov): remove this file.
+
 import "github.com/spacemeshos/go-spacemesh/common/types"
 
 // TortoiseCore performs Tortoise Core algorithm.
