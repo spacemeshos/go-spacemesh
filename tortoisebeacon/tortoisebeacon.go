@@ -866,21 +866,12 @@ func (tb *TortoiseBeacon) calculateBeacon(epoch types.EpochID) types.Hash32 {
 		stringHashes := make([]string, 0)
 
 		if roundVotes, ok := tb.votesCountCache[epochRound]; ok {
-			tb.Log.With().Info("Found votesCountCache",
-				log.Uint64("epoch", uint64(epochRound.EpochID)),
-				log.Uint64("round", epochRound.Round),
-				log.Int("len", len(roundVotes)))
-
 			for hash, count := range roundVotes {
 				if count >= tb.threshold() {
 					allHashes = append(allHashes, hash)
 					stringHashes = append(stringHashes, hash.String())
 				}
 			}
-		} else {
-			tb.Log.With().Info("Not found votesCountCache",
-				log.Uint64("epoch", uint64(epochRound.EpochID)),
-				log.Uint64("round", epochRound.Round))
 		}
 
 		tb.Log.With().Info(fmt.Sprintf("Tortoise beacon hashes epoch %v round %v", epoch, round),
