@@ -247,43 +247,56 @@ func (o *Oracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
 
 // Returns a map of all active nodes in the specified layer id
 func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
-	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
-	safeEp := sl.GetEpoch()
-
-	o.With().Info("safe layer and epoch", sl, safeEp)
-	// check genesis
-	// genesis is for 3 epochs with hare since it can only count active identities found in blocks
-	if safeEp < 3 {
-		return nil, errGenesis
-	}
-
 	// lock until any return
 	// note: no need to lock per safeEp - we do not expect many concurrent requests per safeEp (max two)
 	o.lock.Lock()
 	defer o.lock.Unlock()
 
-	// check cache
-	if val, exist := o.activesCache.Get(safeEp); exist {
-		return val.(map[string]struct{}), nil
-	}
+	// Loop until we find a suitable safe layer with contextually valid blocks
+	var activeSet map[types.BlockID]struct{}
+	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
+	var safeEp types.EpochID
 
-	// build a map of all blocks on the current layer
-	mp, err := o.blocksProvider.ContextuallyValidBlock(sl)
-	if err != nil {
-		return nil, err
-	}
+	// TODO: turn this number into a config param
+	for i := 0; i < 20; i++ {
+		sl = sl + types.LayerID(i)
+		safeEp = sl.GetEpoch()
 
-	// no contextually valid blocks
-	if len(mp) == 0 {
-		o.With().Error("could not calculate hare active set size: no contextually valid blocks",
-			layer,
-			layer.GetEpoch(),
-			log.FieldNamed("safe_layer_id", sl),
-			log.FieldNamed("safe_epoch_id", safeEp))
+		o.With().Info("trying candidate safe layer and epoch", sl, safeEp)
+
+		// check genesis
+		// genesis is for 3 epochs with hare since it can only count active identities found in blocks
+		if safeEp < 3 {
+			return nil, errGenesis
+		}
+
+		// check cache
+		if val, exist := o.activesCache.Get(safeEp); exist {
+			return val.(map[string]struct{}), nil
+		}
+
+		// build a map of all blocks on the current layer
+		if mp, err := o.blocksProvider.ContextuallyValidBlock(sl); err != nil {
+			return nil, err
+		} else if len(mp) == 0 {
+			// no contextually valid blocks: print error and keep looping
+			o.With().Error("no contextually valid blocks for candidate safe layer",
+				layer,
+				layer.GetEpoch(),
+				log.FieldNamed("safe_layer_id", sl),
+				log.FieldNamed("safe_epoch_id", safeEp))
+		} else {
+			activeSet = mp
+			o.With().Info("using safe layer with contextually valid blocks", sl, safeEp)
+			break
+		}
+	}
+	if len(activeSet) == 0 {
+		o.With().Error("could not calculate active set size, no safe layer found with contextually valid blocks")
 		return nil, errNoContextualBlocks
 	}
 
-	activeMap, err := o.getActiveSet(safeEp-1, mp)
+	activeMap, err := o.getActiveSet(safeEp-1, activeSet)
 	if err != nil {
 		o.With().Error("could not retrieve active set size",
 			log.Err(err),
@@ -294,7 +307,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 		return nil, err
 	}
 
-	// update
+	// update cache
 	o.activesCache.Add(safeEp, activeMap)
 
 	return activeMap, nil
