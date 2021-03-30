@@ -80,7 +80,7 @@ func newTurtle(bdp blockDataProvider, hdist, avgLayerSize int) *turtle {
 
 func (t *turtle) init(genesisLayer *types.Layer) {
 	// Mark the genesis layer as “good”
-	t.logger.With().Debug("Initializing genesis layer for verifying tortoise.", genesisLayer.Index(), genesisLayer.Hash().Field("hash"))
+	t.logger.With().Debug("Initializing genesis layer for verifying tortoise.", genesisLayer.Index(), genesisLayer.Hash().Field())
 	t.BlocksToBlocks[genesisLayer.Index()] = make(map[types.BlockID]Opinion)
 	for _, blk := range genesisLayer.Blocks() {
 		id := blk.ID()
@@ -295,10 +295,17 @@ func (t *turtle) processBlock(block *types.Block) error {
 	//When a new block arrives, we look up the block it points to in our table,
 	// and add the corresponding vector (multiplied by the block weight) to our own vote-totals vector.
 	//We then add the vote difference vector and the explicit vote vector to our vote-totals vector.
+
+	t.logger.With().Debug("Processing block", block.Fields()...)
+	t.logger.With().Debug("Getting baseblock", block.BaseBlock)
+
 	base, err := t.bdp.GetBlock(block.BaseBlock)
 	if err != nil {
 		return fmt.Errorf("can't find baseblock")
 	}
+
+	t.logger.With().Debug("block supports", types.BlockIdsField(block.BlockHeader.ForDiff))
+	t.logger.With().Debug("Checking baseblock", base.Fields()...)
 
 	lyr, ok := t.BlocksToBlocks[base.LayerIndex]
 	if !ok {
@@ -326,7 +333,7 @@ func (t *turtle) processBlock(block *types.Block) error {
 	}
 
 	//TODO: neutral ?
-
+	t.logger.With().Debug("Adding block to blocks table", block.Fields()...)
 	t.BlocksToBlocks[block.LayerIndex][blockid] = Opinion{BlocksOpinion: thisBlockOpinions}
 	return nil
 }

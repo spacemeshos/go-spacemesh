@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"strconv"
@@ -26,9 +27,15 @@ const disc = 2
 
 const memType = inmem
 
-func getPersistentMash() *mesh.DB {
-	db, _ := mesh.NewPersistentMeshDB(fmt.Sprintf(Path+"ninje_tortoise/"), 10, log.NewDefault("ninje_tortoise").WithOptions(log.Nop))
-	return db
+func getPersistentMash() (*mesh.DB, func() error) {
+	path := Path + "ninje_tortoise"
+	teardown := func() error { return os.RemoveAll(path) }
+	if err := teardown(); err != nil {
+		panic(err)
+	}
+	db, _ := mesh.NewPersistentMeshDB(fmt.Sprintf(path+
+		"/"), 10, log.NewDefault("ninje_tortoise").WithOptions(log.Nop))
+	return db, teardown
 }
 
 func persistenceTeardown() {
@@ -37,16 +44,6 @@ func persistenceTeardown() {
 
 func getInMemMesh() *mesh.DB {
 	return mesh.NewMemMeshDB(log.NewDefault(""))
-}
-
-func getMeshForBench() *mesh.DB {
-	switch memType {
-	case inmem:
-		return getInMemMesh()
-	case disc:
-		return getPersistentMash()
-	}
-	return nil
 }
 
 func AddLayer(m *mesh.DB, layer *types.Layer) error {
@@ -219,31 +216,19 @@ func turtleMakeAndProcessLayer(l types.LayerID, trtl *turtle, blocksPerLayer int
 	//}
 
 	for i := 0; i < blocksPerLayer; i++ {
-		blk := types.NewExistingBlock(l, []byte(strconv.Itoa(i)), nil)
-
+		blk := &types.Block{
+			MiniBlock: types.MiniBlock{
+				BlockHeader: types.BlockHeader{
+					LayerIndex: l,
+					Data:       []byte(strconv.Itoa(i))},
+				TxIDs: nil,
+			}}
 		blk.BaseBlock = b
 		blk.AgainstDiff = lists[0]
 		blk.ForDiff = lists[1]
 		blk.NeutralDiff = lists[2]
-		//if blocks != nil {
-		//	blk.ForDiff = append(blk.ForDiff, blocks...)
-		//badblocks:
-		//	for _, bi := range prevlyr {
-		//		for _, bj := range blocks {
-		//			if bi == bj {
-		//				continue badblocks
-		//			}
-		//		}
-		//		blk.AgainstDiff = append(blk.AgainstDiff, bi)
-		//	}
-		//} else {
-		//	blks, err := msh.LayerBlockIds(l-1)
-		//	if err != nil {
-		//		panic("db err")
-		//	}
-		//	blk.NeutralDiff = append(blk.NeutralDiff, blks...)
-		//}
-
+		blk.Signature = signing.NewEdSigner().Sign(b.Bytes())
+		blk.Initialize()
 		lyr.AddBlock(blk)
 		err = msh.AddBlock(blk)
 		if err != nil {
@@ -318,15 +303,14 @@ func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp
 	msh.InputVectorBackupFunc = ivp
 	b, lists, err := bbp()
 	fmt.Println("the base block for ", l, "is ", b)
+	fmt.Println("Against ", lists[0])
+	fmt.Println("For ", lists[1])
+	fmt.Println("Neutral ", lists[2])
 	if err != nil {
 		panic(fmt.Sprint("no base - ", err))
 	}
 	lyr := types.NewLayer(l)
 
-	prevlyr, err := msh.LayerBlockIds(l - 1)
-	if err != nil {
-		panic(err)
-	}
 	blocks, err := ivp(l - 1)
 	if err != nil {
 		blocks = nil
@@ -336,31 +320,19 @@ func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp
 	}
 
 	for i := 0; i < blocksPerLayer; i++ {
-		blk := types.NewExistingBlock(l, []byte(strconv.Itoa(i)), nil)
-
+		blk := &types.Block{
+			MiniBlock: types.MiniBlock{
+				BlockHeader: types.BlockHeader{
+					LayerIndex: l,
+					Data:       []byte(strconv.Itoa(i))},
+				TxIDs: nil,
+			}}
 		blk.BaseBlock = b
 		blk.AgainstDiff = lists[0]
 		blk.ForDiff = lists[1]
 		blk.NeutralDiff = lists[2]
-		if blocks != nil {
-			blk.ForDiff = append(blk.ForDiff, blocks...)
-		badblocks:
-			for _, bi := range prevlyr {
-				for _, bj := range blocks {
-					if bi == bj {
-						continue badblocks
-					}
-				}
-				blk.AgainstDiff = append(blk.AgainstDiff, bi)
-			}
-		} else {
-			blks, err := msh.LayerBlockIds(l - 1)
-			if err != nil {
-				panic("db err")
-			}
-			blk.NeutralDiff = append(blk.NeutralDiff, blks...)
-		}
-
+		blk.Signature = signing.NewEdSigner().Sign(b.Bytes())
+		blk.Initialize()
 		lyr.AddBlock(blk)
 	}
 	return lyr
@@ -393,8 +365,8 @@ func TestTurtle_Eviction(t *testing.T) {
 //}
 
 func TestTurtle_Recovery(t *testing.T) {
-
-	mdb := getPersistentMash()
+	log.DebugMode(true)
+	mdb, teardown := getPersistentMash()
 
 	getHareResults := func(l types.LayerID) ([]types.BlockID, error) {
 		return mdb.LayerBlockIds(l)
@@ -406,20 +378,28 @@ func TestTurtle_Recovery(t *testing.T) {
 	alg := verifyingTortoise(3, mdb, 5, lg)
 	l := mesh.GenesisLayer()
 
+	log.With().Info("The genesis is ", l.Index(), types.BlockIdsField(types.BlockIDs(l.Blocks())))
+	log.With().Info("The genesis is ", l.Blocks()[0].Fields()...)
+
 	l1 := createTurtleLayer(types.GetEffectiveGenesis()+1, mdb, alg.BaseBlock, getHareResults, 3)
-	AddLayer(mdb, l1)
+	require.NoError(t, AddLayer(mdb, l1))
 
 	l1res, _ := getHareResults(types.GetEffectiveGenesis() + 1)
+
+	log.With().Info("The first is ", l1.Index(), types.BlockIdsField(types.BlockIDs(l1.Blocks())))
+	log.With().Info("The first bb is ", l1.Index(), l1.Blocks()[0].BaseBlock, types.BlockIdsField(l1.Blocks()[0].ForDiff))
+
 	alg.HandleIncomingLayer(l1, l1res)
-	alg.Persist()
+	require.NoError(t, alg.Persist())
 
 	l2 := createTurtleLayer(types.GetEffectiveGenesis()+2, mdb, alg.BaseBlock, getHareResults, 3)
-	AddLayer(mdb, l2)
+	require.NoError(t, AddLayer(mdb, l2))
 	l2res, _ := getHareResults(types.GetEffectiveGenesis() + 2)
 	alg.HandleIncomingLayer(l2, l2res)
-	alg.Persist()
 
-	require.Equal(t, types.LayerID(types.GetEffectiveGenesis()+1), alg.LatestComplete())
+	require.NoError(t, alg.Persist())
+
+	require.Equal(t, int(types.GetEffectiveGenesis()+1), int(alg.LatestComplete()))
 
 	l31 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, 4)
 
@@ -436,6 +416,9 @@ func TestTurtle_Recovery(t *testing.T) {
 		if r := recover(); r != nil {
 			t.Log("Recovered from", r)
 		}
+
+		log.Info("I've recovered")
+
 		alg := recoveredVerifyingTortoise(mdb, lg)
 
 		l2res, _ := getHareResults(types.GetEffectiveGenesis() + 2)
@@ -453,7 +436,9 @@ func TestTurtle_Recovery(t *testing.T) {
 		alg.HandleIncomingLayer(l4, l4res)
 		alg.Persist()
 		assert.True(t, alg.LatestComplete() == types.GetEffectiveGenesis()+3)
-		return
+
+		require.NoError(t, teardown())
+
 	}()
 
 	l3res, _ := getHareResults(types.GetEffectiveGenesis() + 3)
