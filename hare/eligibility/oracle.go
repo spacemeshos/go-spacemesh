@@ -219,7 +219,7 @@ func (o *Oracle) Eligible(ctx context.Context, layer types.LayerID, round int32,
 	shaUint32 := binary.LittleEndian.Uint32(sha[:4])
 	// avoid division (no floating point) & do operations on uint64 to avoid overflow
 	if uint64(activeSetSize)*uint64(shaUint32) > uint64(committeeSize)*uint64(math.MaxUint32) {
-		o.With().Info("eligibility: node did not pass VRF eligibility threshold",
+		o.With().Info("eligibility: node did not pass vrf eligibility threshold",
 			id,
 			log.Int("committee_size", committeeSize),
 			log.Uint32("active_set_size", activeSetSize),
