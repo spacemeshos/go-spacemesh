@@ -124,7 +124,7 @@ func (cm *ConnectionMock) beginEventProcessing() {
 		cm.eventProcessing()
 	} else {
 		// pretend we're doing some complicated processing
-		time.Sleep(time.Second * 10)
+		time.Sleep(time.Second * 60)
 	}
 }
 

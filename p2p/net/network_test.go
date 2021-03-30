@@ -72,6 +72,7 @@ func TestNet_EnqueueMessage(t *testing.T) {
 	if timedout > 0 {
 		t.Fatal("timedout")
 	}
+	n.Shutdown()
 }
 
 type mockListener struct {
@@ -149,6 +150,7 @@ func Test_Net_LimitedConnections(t *testing.T) {
 	<-done
 	<-done
 	require.Equal(t, atomic.LoadInt32(&listener.calledCount), int32(cfg.MaxPendingConnections)+1)
+	n.Shutdown()
 }
 
 func TestHandlePreSessionIncomingMessage2(t *testing.T) {
@@ -187,12 +189,12 @@ func TestHandlePreSessionIncomingMessage2(t *testing.T) {
 	r.Equal(int32(0), bobsAliceConn.SendCount())
 
 	wg.Wait()
+	bobsNet.Shutdown()
 }
 
 func TestMaxPendingConnections(t *testing.T) {
 	r := require.New(t)
 	cfg := config.DefaultConfig()
-	cfg.SessionTimeout = 100 * time.Millisecond
 
 	ln, err := node.NewNodeIdentity()
 	require.NoError(t, err)
@@ -200,7 +202,7 @@ func TestMaxPendingConnections(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create many new connections
-	pending := make(chan struct{}, cfg.MaxPendingConnections)
+	pending := make(chan struct{})
 	for i := 0; i < cfg.MaxPendingConnections-1; i++ {
 		conn := NewConnectionMock(ln.PublicKey())
 		go n.acceptAsync(conn, pending)
@@ -234,10 +236,10 @@ func TestMaxPendingConnections(t *testing.T) {
 		return nil, tempErr("keep waiting")
 	}
 
-	// This should wait
+	// This should wait (since all tokens are currently in use)
 	go n.accept(listener, pending)
 
-	// Now release one connection
+	// Now release one connection, releasing one token
 	wg.Done()
 
 	// Wait for it to be released
