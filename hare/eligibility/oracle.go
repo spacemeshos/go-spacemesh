@@ -53,6 +53,7 @@ type Oracle struct {
 	vrfMsgCache          addGet
 	activesCache         addGet
 	genesisActiveSetSize int
+	hDist                int
 	blocksProvider       goodBlocksProvider
 	cfg                  eCfg.Config
 	log.Log
@@ -70,7 +71,6 @@ func safeLayer(layer types.LayerID, safetyParam types.LayerID) types.LayerID {
 
 func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID,
 	layersPerEpoch uint16, epochOffset types.LayerID) types.LayerID {
-
 	sl := safeLayer(layer, safetyParam)
 	if sl == types.GetEffectiveGenesis() {
 		return types.GetEffectiveGenesis()
@@ -92,9 +92,17 @@ func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID,
 }
 
 // New returns a new eligibility oracle instance.
-func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier verifierFunc, vrfSigner signer,
-	layersPerEpoch uint16, genesisActiveSet int, goodBlocksProvider goodBlocksProvider,
-	cfg eCfg.Config, log log.Log) *Oracle {
+func New(
+	beacon valueProvider,
+	activeSetFunc activeSetFunc,
+	vrfVerifier verifierFunc,
+	vrfSigner signer,
+	layersPerEpoch uint16,
+	genesisActiveSet int,
+	hDist int,
+	goodBlocksProvider goodBlocksProvider,
+	cfg eCfg.Config,
+	log log.Log) *Oracle {
 	vmc, e := lru.New(vrfMsgCacheSize)
 	if e != nil {
 		log.Panic("Could not create lru cache err=%v", e)
@@ -114,6 +122,7 @@ func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier verifier
 		vrfMsgCache:          vmc,
 		activesCache:         ac,
 		genesisActiveSetSize: genesisActiveSet,
+		hDist:                hDist,
 		blocksProvider:       goodBlocksProvider,
 		cfg:                  cfg,
 		Log:                  log,
@@ -251,43 +260,63 @@ func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round int32) ([
 
 // Returns a map of all active nodes in the specified layer id
 func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
+	// lock until any return
+	// note: no need to lock per safeEp - we do not expect many concurrent requests per safeEp (max two)
+	o.lock.Lock()
+	defer o.lock.Unlock()
+
+	// Loop until we find a suitable safe layer with contextually valid blocks
+	var activeSet map[types.BlockID]struct{}
 	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	safeEp := sl.GetEpoch()
 
-	o.With().Info("safe layer and epoch", sl, safeEp)
 	// check genesis
 	// genesis is for 3 epochs with hare since it can only count active identities found in blocks
 	if safeEp < 3 {
 		return nil, errGenesis
 	}
 
-	// lock until any return
-	// note: no need to lock per safeEp - we do not expect many concurrent requests per safeEp (max two)
-	o.lock.Lock()
-	defer o.lock.Unlock()
+	// Hdist is how long tortoise will wait for hare results for a given layer (denominated in layers). As a first
+	// approximation, we should be willing to look back about this many layers for a safe layer that contains some
+	// contextually valid blocks.
+	// TODO: consider iterating backwards rather than forwards
+	for i := 1; i < o.hDist*2+1 && uint64(i) < o.cfg.ConfidenceParam; i++ {
+		o.With().Info("trying candidate safe layer and epoch", sl, safeEp)
 
-	// check cache
-	if val, exist := o.activesCache.Get(safeEp); exist {
-		return val.(map[string]struct{}), nil
+		// check cache
+		if val, exist := o.activesCache.Get(safeEp); exist {
+			return val.(map[string]struct{}), nil
+		}
+
+		// build a map of all blocks on the current layer
+		if mp, err := o.blocksProvider.ContextuallyValidBlock(sl); err != nil {
+			return nil, err
+		} else if len(mp) == 0 {
+			// no contextually valid blocks: print error and keep looping
+			o.With().Warning("no contextually valid blocks for candidate safe layer",
+				layer,
+				layer.GetEpoch(),
+				log.FieldNamed("safe_layer_id", sl),
+				log.FieldNamed("safe_epoch_id", safeEp))
+		} else {
+			activeSet = mp
+			o.With().Info("using safe layer with contextually valid blocks", sl, safeEp)
+			break
+		}
+
+		// Advance safe layer (and maybe epoch) for next iteration by increasing the epochOffset param
+		sl = roundedSafeLayer(layer,
+			types.LayerID(o.cfg.ConfidenceParam),
+			o.layersPerEpoch,
+			types.LayerID(o.cfg.EpochOffset+i))
+		safeEp = sl.GetEpoch()
 	}
-
-	// build a map of all blocks on the current layer
-	mp, err := o.blocksProvider.ContextuallyValidBlock(sl)
-	if err != nil {
-		return nil, err
-	}
-
-	// no contextually valid blocks
-	if len(mp) == 0 {
-		o.With().Error("could not calculate hare active set size: no contextually valid blocks",
-			layer,
-			layer.GetEpoch(),
-			log.FieldNamed("safe_layer_id", sl),
-			log.FieldNamed("safe_epoch_id", safeEp))
+	if len(activeSet) == 0 {
+		o.With().Error("could not calculate active set size, no safe layer found with contextually valid blocks")
 		return nil, errNoContextualBlocks
 	}
 
-	activeMap, err := o.getActiveSet(safeEp-1, mp)
+	activeMap, err := o.getActiveSet(safeEp-1, activeSet)
 	if err != nil {
 		o.With().Error("could not retrieve active set size",
 			log.Err(err),
@@ -298,7 +327,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 		return nil, err
 	}
 
-	// update
+	// update cache
 	o.activesCache.Add(safeEp, activeMap)
 
 	return activeMap, nil
