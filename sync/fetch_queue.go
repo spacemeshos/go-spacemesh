@@ -285,7 +285,7 @@ func updateAtxDependencies(ctx context.Context, invalidate func(id types.Hash32,
 		}
 
 		for _, id := range fj.ids {
-			logger = logger.WithContext(ctx).WithFields(log.String("job_id", id.String()))
+			logger := logger.WithContext(ctx).WithFields(log.String("job_id", id.String()))
 			if atx, ok := mp[id]; ok {
 				logger.With().Info("atx queue work item", atx.ID())
 				if err := fetchAtxRefs(ctx, atx); err != nil {
@@ -303,7 +303,7 @@ func updateAtxDependencies(ctx context.Context, invalidate func(id types.Hash32,
 					invalidate(id, false)
 					continue
 				}
-				logger.Info("atx queue work item ok", atx.ID())
+				logger.With().Info("atx queue work item ok", atx.ID())
 				invalidate(id, true)
 			} else {
 				logger.Error("job returned with no response")
