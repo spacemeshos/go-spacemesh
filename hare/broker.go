@@ -311,10 +311,9 @@ func (b *Broker) Register(id instanceID) (chan *Msg, error) {
 		if len(b.outbox) >= b.limit {
 			//unregister the earliest layer to make space for the new layer
 			//cannot call unregister here because unregister blocks and this would cause a deadlock
-			id := b.minDeleted + 1
-			delete(b.outbox, id)
-			b.cleanOldLayers()
-			b.With().Info("unregistered layer due to maximum concurrent processes", types.LayerID(id))
+			instance := b.minDeleted + 1
+			b.cleanState(instance)
+			b.With().Info("unregistered layer due to maximum concurrent processes", types.LayerID(instance))
 		}
 
 		if b.isSynced(id) {
@@ -349,14 +348,18 @@ func (b *Broker) Register(id instanceID) (chan *Msg, error) {
 	return result, nil // reg ok
 }
 
+func (b *Broker) cleanState(id instanceID) {
+	delete(b.outbox, id)
+	b.cleanOldLayers()
+}
+
 // Unregister a layer from receiving messages
 func (b *Broker) Unregister(id instanceID) {
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
 	b.tasks <- func() {
-		delete(b.outbox, id) // delete matching outbox
-		b.cleanOldLayers()
+		b.cleanState(id)
 		b.With().Info("hare broker unregistered layer", types.LayerID(id))
 		wg.Done()
 	}
