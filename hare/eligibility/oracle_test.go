@@ -493,7 +493,7 @@ func TestOracle_activesNoContextuallyValid(t *testing.T) {
 	r.Len(mpRes, 0)
 
 	// Try again with a greater hDist
-	hDistLocal := hDist-1
+	hDistLocal := hDist - 1
 	o.hDist = hDistLocal
 	mpRes, err = o.actives(lyr)
 
