@@ -518,6 +518,7 @@ func TestOracle_activesNoContextuallyValid(t *testing.T) {
 
 func TestOracle_IsIdentityActive(t *testing.T) {
 	r := require.New(t)
+	types.SetLayersPerEpoch(10)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, genActive, hDist, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	mp := make(map[string]struct{})
 	edid := "11111"
@@ -549,6 +550,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 }
 
 func TestOracle_Eligible2(t *testing.T) {
+	types.SetLayersPerEpoch(10)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, genActive, hDist, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return createMapWithSize(9), errFoo
