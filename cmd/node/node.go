@@ -182,7 +182,6 @@ type SpacemeshApp struct {
 
 // LoadConfigFromFile tries to load configuration file if the config parameter was specified
 func LoadConfigFromFile() (*cfg.Config, error) {
-
 	fileLocation := viper.GetString("config")
 	vip := viper.New()
 	// read in default config if passed as param using viper
@@ -204,7 +203,6 @@ func LoadConfigFromFile() (*cfg.Config, error) {
 
 // ParseConfig unmarshal config file into struct
 func (app *SpacemeshApp) ParseConfig() error {
-
 	conf, err := LoadConfigFromFile()
 	app.Config = conf
 
@@ -213,7 +211,6 @@ func (app *SpacemeshApp) ParseConfig() error {
 
 // NewSpacemeshApp creates an instance of the spacemesh app
 func NewSpacemeshApp() *SpacemeshApp {
-
 	defaultConfig := cfg.DefaultConfig()
 	node := &SpacemeshApp{
 		Config:  &defaultConfig,
@@ -231,7 +228,6 @@ func (app *SpacemeshApp) introduction() {
 
 // Initialize does pre processing of flags and configuration files, it also initializes data dirs if they dont exist
 func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err error) {
-
 	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
@@ -246,9 +242,7 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 	}()
 
 	// parse the config file based on flags et al
-	err = app.ParseConfig()
-
-	if err != nil {
+	if err := app.ParseConfig(); err != nil {
 		log.Error(fmt.Sprintf("couldn't parse the config err=%v", err))
 	}
 
@@ -256,7 +250,6 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 	if err := cmdp.EnsureCLIFlags(cmd, app.Config); err != nil {
 		return err
 	}
-
 	if app.Config.Profiler {
 		if err := profiler.Start(profiler.Config{
 			Service:        "go-spacemesh",
