@@ -260,8 +260,8 @@ def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME,
         print("waiting for kibana to be ready")
         kibana_sleep_time = statefulset.wait_to_statefulset_to_be_ready(kibana_ss_name, namespace, time_out=ls_timeout)
     except Exception as e:
-        print(f"got an exception while waiting for keban to be ready: {e}")
-        raise Exception(f"keban took over than {kb_timeout} to start")
+        print(f"got an exception while waiting for kibana to be ready: {e}")
+        raise Exception(f"kibana took more than {kb_timeout} to start")
     else:
         kibana_ip = get_kibana_ip(kibana_ss_name, namespace)
         print(f"kibana started successfully. ip: {kibana_ip}")
