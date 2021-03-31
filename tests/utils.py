@@ -20,7 +20,7 @@ import tests.queries as q
 
 ES_SS_NAME = "elasticsearch-master"
 LOGSTASH_SS_NAME = "logstash"
-KIBANA_SS_NAME = "kibana"
+KIBANA_DEP_NAME = "kibana"
 
 
 def api_call(client_ip, data, api, namespace, port="9093", retry=3, interval=1):
@@ -237,7 +237,7 @@ def wait_genesis(genesis_time, genesis_delta):
 
 def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME,
                                                   logstash_ss_name=LOGSTASH_SS_NAME,
-                                                  kibana_ss_name=KIBANA_SS_NAME):
+                                                  kibana_dep_name=KIBANA_DEP_NAME):
     es_timeout = 240
     try:
         print("waiting for ES to be ready")
@@ -258,22 +258,22 @@ def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME,
     kb_timeout = 240
     try:
         print("waiting for kibana to be ready")
-        kibana_sleep_time = statefulset.wait_to_statefulset_to_be_ready(kibana_ss_name, namespace, time_out=ls_timeout)
+        kibana_sleep_time = statefulset.wait_to_statefulset_to_be_ready(kibana_dep_name, namespace, time_out=ls_timeout)
     except Exception as e:
         print(f"got an exception while waiting for kibana to be ready: {e}")
         raise Exception(f"kibana took more than {kb_timeout} to start")
     else:
-        kibana_ip = get_kibana_ip(kibana_ss_name, namespace)
+        kibana_ip = get_kibana_ip(kibana_dep_name, namespace)
         print(f"kibana started successfully. ip: {kibana_ip}")
 
     return es_sleep_time + logstash_sleep_time + kibana_sleep_time
 
 
-def get_kibana_ip(kibana_ss_name, namespace, retries=30, sleep_interval=1):
+def get_kibana_ip(kibana_dep_name, namespace, retries=30, sleep_interval=1):
     def get_kibana_service(services_):
         for serv in services_.items:
             print(serv.metadata.name)
-            if serv.metadata.name == kibana_ss_name:
+            if serv.metadata.name == kibana_dep_name:
                 return serv
         return None
 
