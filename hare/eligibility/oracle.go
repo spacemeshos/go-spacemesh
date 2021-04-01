@@ -275,7 +275,8 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	// Hdist is how long tortoise will wait for hare results for a given layer (denominated in layers). As a first
 	// approximation, we should be willing to look back about this many layers for a safe layer that contains some
 	// contextually valid blocks.
-	for i := 1; i < o.hDist*2+1; i++ {
+	// TODO: consider iterating backwards rather than forwards
+	for i := 1; i < o.hDist*2+1 && uint64(i) < o.cfg.ConfidenceParam; i++ {
 		o.With().Info("trying candidate safe layer and epoch", sl, safeEp)
 
 		// check cache

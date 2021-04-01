@@ -467,7 +467,7 @@ func TestOracle_activesNoContextuallyValid(t *testing.T) {
 	lyr := types.LayerID(100)
 
 	// This should fail since hDist is too low to allow checking any other layers
-	o := New(&mockValueProvider{1, nil}, nil, nil, nil, uint16(layersPerEpoch), genActive, 1, mockBlocksProvider{}, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, nil, nil, nil, uint16(layersPerEpoch), genActive, 1, mockBlocksProvider{}, eCfg.Config{ConfidenceParam: 10, EpochOffset: 0}, log.NewDefault(t.Name()))
 	o.activesCache = newMockCacher()
 	rsl := roundedSafeLayer(lyr, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	r.Equal(types.LayerID(80), rsl)
@@ -493,7 +493,7 @@ func TestOracle_activesNoContextuallyValid(t *testing.T) {
 	r.Len(mpRes, 0)
 
 	// Try again with a greater hDist
-	hDistLocal := hDist - 1
+	hDistLocal := 4
 	o.hDist = hDistLocal
 	mpRes, err = o.actives(lyr)
 
