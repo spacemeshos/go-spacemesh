@@ -32,12 +32,12 @@ type fetchQueue struct {
 	log.Log
 	batchRequestFactory
 	*sync.Mutex
-	workerInfra networker
-	pending     map[types.Hash32][]chan bool
-	handleFetch func(fj fetchJob)
-	checkLocal  checkLocalFunc
-	queue       chan []types.Hash32 //types.TransactionID //todo make buffered
-	name        string
+	workerInfra    networker
+	pending        map[types.Hash32][]chan bool
+	handleFetch    func(fj fetchJob)
+	checkLocal     checkLocalFunc
+	queue          chan []types.Hash32 //types.TransactionID //todo make buffered
+	name           string
 	requestTimeout time.Duration
 }
 
