@@ -111,7 +111,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # short-circuit success if no non-doc files were modified
-      status: ${{ needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.unittests.result == 'success' && needs.apptests.result == 'success') && 'success' || 'failure' }}
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.unittests.result == 'success' && needs.apptests.result == 'success')) && 'success' || 'failure' }}
     # this is the easiest way to access success/failure state of previous jobs in this workflow
     steps:
       - uses: act10ns/slack@v1
@@ -259,7 +259,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # short-circuit success if no non-doc files were modified
-      status: ${{ needs.filter-changes.outputs.nondocchanges == 'false' || (needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-blocks-remove-node.result == 'success' && needs.systemtest-mining.result == 'success' && needs.systemtest-p2p.result == 'success' && needs.systemtest-hare.result == 'success' && needs.systemtest-sync.result == 'success') && 'success' || 'failure' }}
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-blocks-remove-node.result == 'success' && needs.systemtest-mining.result == 'success' && needs.systemtest-p2p.result == 'success' && needs.systemtest-hare.result == 'success' && needs.systemtest-sync.result == 'success')) && 'success' || 'failure' }}
     steps:
       # print a single, clean status update to slack
       - uses: act10ns/slack@v1
