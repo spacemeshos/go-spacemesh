@@ -42,6 +42,7 @@ func newValidationQueue(srvr networker, conf Configuration, sy syncer) *blockQue
 			pending:             make(map[types.Hash32][]chan bool),
 			queue:               make(chan []types.Hash32, 1000),
 			name:                "Block",
+			requestTimeout:      conf.RequestTimeout,
 		},
 		Configuration: conf,
 		depMap:        make(map[interface{}]map[types.Hash32]struct{}),
