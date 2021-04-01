@@ -350,6 +350,7 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 }
 
 func (msh *Mesh) applyState(l *types.Layer) {
+	msh.With().Info("applying state of the layer")
 	msh.accumulateRewards(l, msh.config)
 	msh.pushTransactions(l)
 	msh.setLatestLayerInState(l.Index())
@@ -753,6 +754,7 @@ func (msh *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 }
 
 func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
+	msh.With().Info("Accumulating rewards")
 	coinbases := make([]types.Address, 0, len(l.Blocks()))
 	//the reason we are serializing the types.NodeID to a string instead of using it directly as a
 	//key in the map is due to Golang's restriction on only Comparable types used as map keys. Since

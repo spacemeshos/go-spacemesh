@@ -472,6 +472,7 @@ func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[type
 	for account, smesherAccountEntry := range accountBlockCount {
 		for smesherString, cnt := range smesherAccountEntry {
 			smesherEntry, err := types.StringToNodeID(smesherString)
+			m.Info("writing reward to database")
 			if err != nil {
 				return fmt.Errorf("could not convert String to NodeID for %v: %v", smesherString, err)
 			}
@@ -485,6 +486,7 @@ func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[type
 			}
 		}
 	}
+	//m.Info("writing rewards for smesher %v and coinbase %v", , )
 	return batch.Write()
 }
 
