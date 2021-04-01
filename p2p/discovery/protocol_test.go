@@ -33,7 +33,7 @@ type testNode struct {
 func newTestNode(simulator *service.Simulator) *testNode {
 	nd := simulator.NewNode()
 	d := &mockAddrBook{}
-	disc := newProtocol(nd.Info.PublicKey(), d, nd, log.NewDefault(nd.String()))
+	disc := newProtocol(context.TODO(), nd.Info.PublicKey(), d, nd, log.NewDefault(nd.String()))
 	return &testNode{nd, d, disc}
 }
 

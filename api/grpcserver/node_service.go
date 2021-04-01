@@ -69,14 +69,14 @@ func (s NodeService) Build(context.Context, *empty.Empty) (*pb.BuildResponse, er
 
 // Status returns a status object providing information about the connected peers, sync status,
 // current and verified layer
-func (s NodeService) Status(context.Context, *pb.StatusRequest) (*pb.StatusResponse, error) {
+func (s NodeService) Status(ctx context.Context, _ *pb.StatusRequest) (*pb.StatusResponse, error) {
 	log.Info("GRPC NodeService.Status")
 
 	curLayer, latestLayer, verifiedLayer := s.getLayers()
 	return &pb.StatusResponse{
 		Status: &pb.NodeStatus{
 			ConnectedPeers: s.PeerCounter.PeerCount(),              // number of connected peers
-			IsSynced:       s.Syncer.IsSynced(),                    // whether the node is synced
+			IsSynced:       s.Syncer.IsSynced(ctx),                 // whether the node is synced
 			SyncedLayer:    &pb.LayerNumber{Number: latestLayer},   // latest layer we saw from the network
 			TopLayer:       &pb.LayerNumber{Number: curLayer},      // current layer, based on time
 			VerifiedLayer:  &pb.LayerNumber{Number: verifiedLayer}, // latest verified layer
@@ -137,7 +137,7 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 			if err := stream.Send(&pb.StatusStreamResponse{
 				Status: &pb.NodeStatus{
 					ConnectedPeers: s.PeerCounter.PeerCount(),              // number of connected peers
-					IsSynced:       s.Syncer.IsSynced(),                    // whether the node is synced
+					IsSynced:       s.Syncer.IsSynced(stream.Context()),    // whether the node is synced
 					SyncedLayer:    &pb.LayerNumber{Number: latestLayer},   // latest layer we saw from the network
 					TopLayer:       &pb.LayerNumber{Number: curLayer},      // current layer, based on time
 					VerifiedLayer:  &pb.LayerNumber{Number: verifiedLayer}, // latest verified layer

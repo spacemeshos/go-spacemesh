@@ -164,10 +164,9 @@ var _ service.Fetcher = (*Syncer)(nil)
 // NewSync fires a sync every sm.SyncInterval or on force space from outside
 func NewSync(ctx context.Context, srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxDB atxDB, bv blockEligibilityValidator, poetdb poetDb, conf Configuration, clock ticker, logger log.Log) *Syncer {
 	exit := make(chan struct{})
-
 	srvr := &net{
 		RequestTimeout: conf.RequestTimeout,
-		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.Values.BufferSize), logger),
+		MessageServer:  server.NewMsgServer(ctx, srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.Values.BufferSize), logger),
 		peers:          p2ppeers.NewPeers(srv, logger.WithName("peers")),
 		exit:           exit,
 	}
@@ -288,35 +287,40 @@ func (s *Syncer) setGossipBufferingStatus(status status) {
 }
 
 // IsSynced returns true if the node is synced false otherwise
-func (s *Syncer) IsSynced() bool {
-	s.Info("sync state w: %v, g:%v layer : %v latest: %v", s.weaklySynced(s.GetCurrentLayer()), s.getGossipBufferingStatus(), s.GetCurrentLayer(), s.LatestLayer())
+func (s *Syncer) IsSynced(ctx context.Context) bool {
+	s.WithContext(ctx).Info("sync state w: %v, g:%v layer : %v latest: %v",
+		s.weaklySynced(s.GetCurrentLayer()),
+		s.getGossipBufferingStatus(),
+		s.GetCurrentLayer(),
+		s.LatestLayer())
 	return s.weaklySynced(s.GetCurrentLayer()) && s.getGossipBufferingStatus() == done
 }
 
 // Start starts the main pooling routine that checks the sync status every set interval
 // and calls synchronise if the node is out of sync
 func (s *Syncer) Start(ctx context.Context) {
+	logger := s.WithContext(ctx)
 	if s.startLock.TryLock() {
 		defer s.startLock.Unlock()
 		if s.isClosed() {
-			s.Warning("sync started after closed")
+			logger.Warning("sync started after closed")
 			return
 		}
-		s.Info("start syncer")
+		logger.Info("start syncer")
 		go s.run(log.WithNewSessionID(ctx))
 		s.forceSync <- true
 		return
 	}
-	s.Info("syncer already started")
+	logger.Info("syncer already started")
 }
 
 // fires a sync every sm.SyncInterval or on force sync from outside
 func (s *Syncer) run(ctx context.Context) {
-	s.Debug("start running")
+	s.WithContext(ctx).Debug("start running")
 	for {
 		select {
 		case <-s.exit:
-			s.Debug("work stopped")
+			s.WithContext(ctx).Debug("work stopped")
 			return
 		case <-s.forceSync:
 			go s.synchronise(ctx)
@@ -1025,7 +1029,7 @@ func (s *Syncer) fetchLayerBlockIds(ctx context.Context, m map[types.Hash32][]p2
 			case v := <-ch:
 				if v != nil {
 					blockIds := v.([]types.BlockID)
-					logger.Debug("peer responded to layer ids request",
+					logger.With().Debug("peer responded to layer ids request",
 						log.Int("num_ids", len(blockIds)))
 					// peer returned set with bad hash ask next peer
 					if res := types.CalcBlocksHash32(blockIds, nil); h != res {

@@ -155,7 +155,7 @@ func defaultFetch() (*Fetch, *mockNet) {
 		make(chan struct{}),
 	}
 	lg := log.NewDefault("fetch")
-	f := NewFetch(cfg, mckNet, lg)
+	f := NewFetch(context.TODO(), cfg, mckNet, lg)
 	f.net = mckNet
 	f.AddDB("db", database.NewMemDatabase())
 	f.AddDB("db2", database.NewMemDatabase())
@@ -173,7 +173,7 @@ func customFetch(cfg Config) (*Fetch, *mockNet) {
 
 	lg := log.NewDefault("fetch")
 
-	f := NewFetch(cfg, mckNet, lg)
+	f := NewFetch(context.TODO(), cfg, mckNet, lg)
 	f.net = mckNet
 	f.AddDB("db", database.NewMemDatabase())
 	return f, mckNet

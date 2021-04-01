@@ -120,9 +120,9 @@ type MessageNetwork struct {
 }
 
 // NewMessageNetwork creates a new instance of the fetch network server
-func NewMessageNetwork(requestTimeOut int, net service.Service, protocol string, log log.Log) *MessageNetwork {
+func NewMessageNetwork(ctx context.Context, requestTimeOut int, net service.Service, protocol string, log log.Log) *MessageNetwork {
 	return &MessageNetwork{
-		server.NewMsgServer(net.(server.Service), protocol, time.Duration(requestTimeOut)*time.Second, make(chan service.DirectMessage, p2pconf.Values.BufferSize), log),
+		server.NewMsgServer(ctx, net.(server.Service), protocol, time.Duration(requestTimeOut)*time.Second, make(chan service.DirectMessage, p2pconf.Values.BufferSize), log),
 		p2ppeers.NewPeers(net, log.WithName("peers")),
 		log,
 	}
@@ -164,8 +164,8 @@ type Fetch struct {
 }
 
 // NewFetch creates a new Fetch struct
-func NewFetch(cfg Config, network service.Service, logger log.Log) *Fetch {
-	srv := NewMessageNetwork(cfg.RequestTimeout, network, fetchProtocol, logger)
+func NewFetch(ctx context.Context, cfg Config, network service.Service, logger log.Log) *Fetch {
+	srv := NewMessageNetwork(ctx, cfg.RequestTimeout, network, fetchProtocol, logger)
 
 	f := &Fetch{
 		cfg:             cfg,

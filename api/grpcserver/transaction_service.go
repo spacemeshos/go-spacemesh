@@ -52,7 +52,7 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 		return nil, status.Error(codes.InvalidArgument, "`Transaction` payload empty")
 	}
 
-	if !s.syncer.IsSynced() {
+	if !s.syncer.IsSynced(ctx) {
 		return nil, status.Error(codes.FailedPrecondition,
 			"Cannot submit transaction, node is not in sync yet, try again later")
 	}

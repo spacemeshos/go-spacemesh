@@ -65,7 +65,7 @@ type Service interface {
 }
 
 // NewMsgServer registers a protocol and returns a new server to declare request and response handlers on.
-func NewMsgServer(network Service, name string, requestLifetime time.Duration, c chan service.DirectMessage, logger log.Log) *MessageServer {
+func NewMsgServer(ctx context.Context, network Service, name string, requestLifetime time.Duration, c chan service.DirectMessage, logger log.Log) *MessageServer {
 	p := &MessageServer{
 		Log:                logger,
 		name:               name,
@@ -79,7 +79,7 @@ func NewMsgServer(network Service, name string, requestLifetime time.Duration, c
 		workerLimiter:      make(chan struct{}, runtime.NumCPU()),
 	}
 
-	go p.readLoop(context.TODO())
+	go p.readLoop(log.WithNewSessionID(ctx))
 	return p
 }
 
@@ -117,7 +117,6 @@ func (p *MessageServer) readLoop(ctx context.Context) {
 				<-p.workerLimiter
 				p.workerCount.Done()
 			}(msg.(Message))
-
 		}
 	}
 }
@@ -188,7 +187,7 @@ func (p *MessageServer) handleRequestMessage(ctx context.Context, msg Message, d
 		return
 	}
 
-	logger.Debug("handle request type %v", data.MsgType)
+	logger.With().Debug("handle request", log.Uint32("p2p_msg_type", data.MsgType))
 	rmsg := &service.DataMsgWrapper{MsgType: data.MsgType, ReqID: data.ReqID, Payload: foo(msg)}
 	if sendErr := p.network.SendWrappedMessage(ctx, msg.Sender(), p.name, rmsg); sendErr != nil {
 		logger.With().Error("error sending response message", log.Err(sendErr))

@@ -77,30 +77,6 @@ type Config struct {
 	GoldenATXID    types.ATXID
 }
 
-// NewLogic creates a new instance of layer fetching logic
-func NewLogic(cfg Config, blocks blockHandler, atxs atxHandler, poet poetDb, network service.Service, fetcher fetch.Fetcher, log log.Log) *Logic {
-
-	srv := fetch.NewMessageNetwork(cfg.RequestTimeout, network, layersProtocol, log)
-	l := &Logic{
-		log:              log,
-		fetcher:          fetcher,
-		net:              srv,
-		layerHashResults: make(map[types.LayerID]map[p2ppeers.Peer]types.Hash32),
-		blockHashErrors:  make(map[types.LayerID]int),
-		layerResults:     make(map[types.LayerID][]chan LayerPromiseResult),
-		poetProofs:       poet,
-		atxs:             atxs,
-		blockHandler:     blocks,
-		layerResM:        sync.RWMutex{},
-		goldenATXID:      cfg.GoldenATXID,
-	}
-
-	srv.RegisterBytesMsgHandler(LayerHashDB, l.LayerHashReqReceiver)
-	srv.RegisterBytesMsgHandler(LayerBlocksDB, l.LayerHashBlocksReceiver)
-
-	return l
-}
-
 // DB hints per DB
 const (
 	BlockDB       = 1
