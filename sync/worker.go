@@ -134,18 +134,18 @@ func newNeighborhoodWorker(ctx context.Context, s networker, count int, reqFacto
 	return worker{Logger: lg, Once: mu, workCount: &acount, output: output, work: workFunc}
 }
 
-func newFetchWorker(ctx context.Context, s networker, count int, reqFactory batchRequestFactory, idsChan chan []types.Hash32, name string) worker {
+func newFetchWorker(ctx context.Context, s networker, count int, reqFactory batchRequestFactory, reqChan chan fetchRequest, name string) worker {
 	output := make(chan interface{}, 10)
 	acount := int32(count)
 	mu := &sync.Once{}
 	lg := s.WithName("FetchWrker").WithContext(ctx)
 	workFunc := func() {
-		for ids := range idsChan {
-			if ids == nil {
+		for fr := range reqChan {
+			if fr.ids == nil {
 				lg.Info("close fetch worker")
 				return
 			}
-			leftToFetch := toMap(ids)
+			leftToFetch := toMap(fr.ids)
 			var fetched []item
 		next:
 			for _, p := range s.GetPeers() {
@@ -187,7 +187,7 @@ func newFetchWorker(ctx context.Context, s networker, count int, reqFactory batc
 				}
 			}
 			//finished pass results to chan
-			output <- fetchJob{ids: ids, items: fetched}
+			output <- fetchJob{ids: fr.ids, items: fetched, reqID: fr.reqID}
 		}
 	}
 	return worker{Logger: lg, Once: mu, workCount: &acount, output: output, work: workFunc}

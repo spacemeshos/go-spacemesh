@@ -151,6 +151,8 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, sync s
 }
 
 func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *types.Block, syncer service.Fetcher) error {
+	bh.WithContext(ctx).With().Debug("syntactically validating block", block.ID())
+
 	// if there is a reference block - first validate it
 	if block.RefBlock != nil {
 		err := syncer.FetchBlock(*block.RefBlock)
@@ -167,7 +169,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 
 	// fast validation checks if there are no duplicate ATX in active set and no duplicate TXs as well
 	if err := bh.fastValidation(block); err != nil {
-		bh.With().Error("failed fast validation", block.ID(), log.Err(err))
+		bh.WithContext(ctx).With().Error("failed fast validation", block.ID(), log.Err(err))
 		return err
 	}
 
@@ -186,15 +188,17 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	}
 
 	// validate block's votes
-	//if valid, err := validateVotes(block, s.ForBlockInView, s.Hdist, s.Log); valid == false || err != nil {
 	if err := bh.validateVotes(block); err != nil {
 		return fmt.Errorf("validate votes failed for block %v, %v", block.ID(), err)
 	}
 
+	bh.WithContext(ctx).With().Debug("block syntactic validation done", block.ID())
 	return nil
 }
 
 func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.Block, syncer service.Fetcher) error {
+	bh.WithContext(ctx).With().Debug("block handler fetching all atxs referenced by block", blk.ID())
+
 	// As block with empty or Golden ATXID is considered syntactically invalid, explicit check is not needed here.
 	atxs := []types.ATXID{blk.ATXID}
 
@@ -210,6 +214,7 @@ func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.B
 		}
 	}
 	err := syncer.GetAtxs(ctx, atxs)
+	bh.WithContext(ctx).With().Debug("block handler done fetching atxs referenced by block", blk.ID(), log.Err(err))
 	return err
 }
 

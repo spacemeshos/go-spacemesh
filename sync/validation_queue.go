@@ -41,7 +41,7 @@ func newValidationQueue(ctx context.Context, srvr networker, conf Configuration,
 			batchRequestFactory: blockFetchReqFactory,
 			Mutex:               &sync.Mutex{},
 			pending:             make(map[types.Hash32][]chan bool),
-			queue:               make(chan []types.Hash32, 1000),
+			queue:               make(chan fetchRequest, 1000),
 			name:                "Block",
 		},
 		Configuration: conf,
@@ -255,7 +255,7 @@ func (vq *blockQueue) addDependencies(ctx context.Context, jobID interface{}, bl
 	if len(idsToPush) > 0 {
 		logger.With().Debug("adding dependencies to pending queue",
 			log.Int("count", len(idsToPush)))
-		vq.addToPending(idsToPush)
+		vq.addToPending(ctx, idsToPush)
 	}
 
 	logger.With().Debug("finished adding dependencies",

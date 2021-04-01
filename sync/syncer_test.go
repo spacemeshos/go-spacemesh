@@ -219,8 +219,8 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	syncObj.AddBlockWithTxs(block)
 	syncObj2.peers = getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey()})
 
-	ch := make(chan []types.Hash32, 1)
-	ch <- []types.Hash32{block.Hash32()}
+	ch := make(chan fetchRequest, 1)
+	ch <- fetchRequest{ids: []types.Hash32{block.Hash32()}}
 
 	output := fetchWithFactory(context.TODO(), newFetchWorker(context.TODO(), syncObj2, 1, newFetchReqFactory(blockMsg, blocksAsItems), ch, ""))
 
@@ -437,10 +437,10 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncObj1.AddBlockWithTxs(block2)
 	syncObj1.AddBlockWithTxs(block3)
 
-	ch := make(chan []types.Hash32, 3)
-	ch <- []types.Hash32{block1.Hash32()}
-	ch <- []types.Hash32{block2.Hash32()}
-	ch <- []types.Hash32{block3.Hash32()}
+	ch := make(chan fetchRequest, 3)
+	ch <- fetchRequest{ids: []types.Hash32{block1.Hash32()}}
+	ch <- fetchRequest{ids: []types.Hash32{block2.Hash32()}}
+	ch <- fetchRequest{ids: []types.Hash32{block3.Hash32()}}
 	close(ch)
 	output := fetchWithFactory(context.TODO(), newFetchWorker(context.TODO(), syncObj2, 1, newFetchReqFactory(blockMsg, blocksAsItems), ch, ""))
 
@@ -1447,8 +1447,8 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	}
 
 	// Block
-	bch := make(chan []types.Hash32, 1)
-	bch <- []types.Hash32{nonExistingBlockID.AsHash32()}
+	bch := make(chan fetchRequest, 1)
+	bch <- fetchRequest{ids: []types.Hash32{nonExistingBlockID.AsHash32()}}
 
 	output := fetchWithFactory(context.TODO(), newFetchWorker(context.TODO(), syncs[0], 1, newFetchReqFactory(blockMsg, blocksAsItems), bch, ""))
 
@@ -1461,7 +1461,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	// Tx
 
-	ch := syncs[0].txQueue.addToPendingGetCh([]types.Hash32{nonExistingTxID.Hash32()})
+	ch := syncs[0].txQueue.addToPendingGetCh(context.TODO(), []types.Hash32{nonExistingTxID.Hash32()})
 	select {
 	case out := <-ch:
 		assert.False(t, out)
@@ -1470,7 +1470,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	}
 
 	// Atx
-	ch = syncs[0].atxQueue.addToPendingGetCh([]types.Hash32{nonExistingAtxID.Hash32()})
+	ch = syncs[0].atxQueue.addToPendingGetCh(context.TODO(), []types.Hash32{nonExistingAtxID.Hash32()})
 	// PoET
 	select {
 	case out := <-ch:
@@ -1558,8 +1558,8 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	assert.Nil(t, err1)
 
 	// Block
-	ch := make(chan []types.Hash32, 1)
-	ch <- []types.Hash32{bl1.ID().AsHash32()}
+	ch := make(chan fetchRequest, 1)
+	ch <- fetchRequest{ids: []types.Hash32{bl1.ID().AsHash32()}}
 	output := fetchWithFactory(context.TODO(), newFetchWorker(context.TODO(), syncs[0], 1, newFetchReqFactory(blockMsg, blocksAsItems), ch, ""))
 
 	select {
@@ -1570,8 +1570,8 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	}
 
 	// Tx
-	ch = make(chan []types.Hash32, 1)
-	ch <- []types.Hash32{[32]byte{1}}
+	ch = make(chan fetchRequest, 1)
+	ch <- fetchRequest{ids: []types.Hash32{[32]byte{1}}}
 	output = fetchWithFactory(context.TODO(), newFetchWorker(context.TODO(), syncs[0], 1, newFetchReqFactory(txMsg, txsAsItems), ch, ""))
 
 	select {
@@ -1582,8 +1582,8 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	}
 
 	// Atx
-	ch = make(chan []types.Hash32, 1)
-	ch <- []types.Hash32{[32]byte{1}}
+	ch = make(chan fetchRequest, 1)
+	ch <- fetchRequest{ids: []types.Hash32{[32]byte{1}}}
 	output = fetchWithFactory(context.TODO(), newFetchWorker(context.TODO(), syncs[0], 1, newFetchReqFactory(atxMsg, atxsAsItems), ch, ""))
 
 	select {

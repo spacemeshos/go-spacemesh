@@ -26,6 +26,12 @@ type item interface {
 type fetchJob struct {
 	items []item
 	ids   []types.Hash32
+	reqID string
+}
+
+type fetchRequest struct {
+	ids   []types.Hash32
+	reqID string
 }
 
 //todo make the queue generic
@@ -37,7 +43,7 @@ type fetchQueue struct {
 	pending        map[types.Hash32][]chan bool
 	handleFetch    func(context.Context, fetchJob)
 	checkLocal     checkLocalFunc
-	queue          chan []types.Hash32 //types.TransactionID //todo make buffered
+	queue          chan fetchRequest //todo make buffered
 	name           string
 	requestTimeout time.Duration
 }
@@ -83,28 +89,38 @@ func (fq *fetchQueue) work(ctx context.Context) {
 			logger := logger.WithFields(log.Int("worker_num", j))
 			logger.Info("worker running work")
 			for out := range output {
-				logger.Info("new batch out of queue")
+				ctxLocal := ctx
+				loggerLocal := logger
+				loggerLocal.Info("new batch out of queue")
 				if out == nil {
-					logger.Info("close queue")
+					loggerLocal.Info("close queue")
 					break
 				}
 
 				bjb, ok := out.(fetchJob)
 				if !ok {
-					fq.Error(fmt.Sprintf("Type assertion err %v", out))
+					loggerLocal.Error(fmt.Sprintf("Type assertion err %v", out))
 					continue
 				}
 
-				logger.Debug("got ids from worker", log.Int("count", len(bjb.ids)))
+				// restore requestID from context
+				if bjb.reqID == "" {
+					loggerLocal.Warning("got fetch work job with no requestID")
+				} else {
+					ctxLocal = log.WithRequestID(ctxLocal, bjb.reqID)
+					loggerLocal = loggerLocal.WithContext(ctx)
+				}
+
+				loggerLocal.Debug("got ids from worker", log.Int("count", len(bjb.ids)))
 				if len(bjb.ids) == 0 {
 					break
 				}
 
-				logger.With().Info("attempting to fetch objects",
+				loggerLocal.With().Info("attempting to fetch objects",
 					log.String("type", fq.name),
 					log.String("ids", concatShortIds(bjb.ids)))
-				fq.handleFetch(ctx, bjb)
-				logger.Info("done fetching, going to next batch")
+				fq.handleFetch(ctxLocal, bjb)
+				loggerLocal.Info("done fetching, going to next batch")
 			}
 			wg.Done()
 		}(i)
@@ -112,11 +128,20 @@ func (fq *fetchQueue) work(ctx context.Context) {
 	wg.Wait()
 }
 
-func (fq *fetchQueue) addToPendingGetCh(ids []types.Hash32) chan bool {
-	return getDoneChan(fq.addToPending(ids))
+func (fq *fetchQueue) addToPendingGetCh(ctx context.Context, ids []types.Hash32) chan bool {
+	return getDoneChan(fq.addToPending(ctx, ids))
 }
 
-func (fq *fetchQueue) addToPending(ids []types.Hash32) []chan bool {
+func (fq *fetchQueue) addToPending(ctx context.Context, ids []types.Hash32) []chan bool {
+	fr := fetchRequest{ids: ids}
+
+	// get requestID from context
+	if reqID, ok := log.ExtractRequestID(ctx); ok {
+		fr.reqID = reqID
+	} else {
+		fq.Log.WithContext(ctx).Warning("got fetch request without requestID, cannot pass to fetch worker")
+	}
+
 	//defer fq.shutdownRecover()
 	fq.Lock()
 	deps := make([]chan bool, 0, len(ids))
@@ -127,7 +152,7 @@ func (fq *fetchQueue) addToPending(ids []types.Hash32) []chan bool {
 	}
 	fq.Unlock()
 	if len(ids) > 0 {
-		fq.queue <- ids
+		fq.queue <- fr
 	}
 	return deps
 }
@@ -153,7 +178,7 @@ func (fq *fetchQueue) handle(ctx context.Context, itemIds []types.Hash32) (map[t
 
 	unprocessedItems, _, missing := fq.checkLocal(ctx, itemIds)
 	if len(missing) > 0 {
-		output := fq.addToPendingGetCh(missing)
+		output := fq.addToPendingGetCh(ctx, missing)
 		timer := time.After(fq.requestTimeout)
 		select {
 		case <-timer:
@@ -187,7 +212,7 @@ func newTxQueue(ctx context.Context, s *Syncer) *txQueue {
 			batchRequestFactory: txFetchReqFactory,
 			checkLocal:          s.txCheckLocal,
 			pending:             make(map[types.Hash32][]chan bool),
-			queue:               make(chan []types.Hash32, 10000),
+			queue:               make(chan fetchRequest, 10000),
 			name:                "Tx",
 			requestTimeout:      s.Configuration.RequestTimeout,
 		},
@@ -200,12 +225,19 @@ func newTxQueue(ctx context.Context, s *Syncer) *txQueue {
 
 //we could get rid of this if we had a unified id type
 func (tx txQueue) HandleTxs(ctx context.Context, txids []types.TransactionID) ([]*types.Transaction, error) {
+	ctx = log.WithNewRequestID(ctx)
+	logger := tx.Log.WithContext(ctx)
+	txFields := make([]log.LoggableField, 0, len(txids))
 	txItems := make([]types.Hash32, 0, len(txids))
-	for _, i := range txids {
-		txItems = append(txItems, i.Hash32())
+	for _, txid := range txids {
+		txFields = append(txFields, txid.Field())
+		txItems = append(txItems, txid.Hash32())
 	}
 
+	logger.With().Info("going to fetch txs", log.Int("count", len(txids)))
+	logger.With().Debug("going to fetch txs", txFields...)
 	txres, err := tx.handle(ctx, txItems)
+	logger.Debug("fetch txs done")
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +283,7 @@ func newAtxQueue(ctx context.Context, s *Syncer, fetchPoetProof fetchPoetProofFu
 			Mutex:               &sync.Mutex{},
 			checkLocal:          s.atxCheckLocal,
 			pending:             make(map[types.Hash32][]chan bool),
-			queue:               make(chan []types.Hash32, 10000),
+			queue:               make(chan fetchRequest, 10000),
 			name:                "Atx",
 		},
 	}
@@ -263,6 +295,7 @@ func newAtxQueue(ctx context.Context, s *Syncer, fetchPoetProof fetchPoetProofFu
 
 //we could get rid of this if we had a unified id type
 func (atx atxQueue) HandleAtxs(ctx context.Context, atxids []types.ATXID) ([]*types.ActivationTx, error) {
+	ctx = log.WithNewRequestID(ctx)
 	logger := atx.Log.WithContext(ctx)
 	atxFields := make([]log.LoggableField, 0, len(atxids))
 	atxItems := make([]types.Hash32, 0, len(atxids))
@@ -270,9 +303,10 @@ func (atx atxQueue) HandleAtxs(ctx context.Context, atxids []types.ATXID) ([]*ty
 		atxFields = append(atxFields, atxid.Field())
 		atxItems = append(atxItems, atxid.Hash32())
 	}
+	logger.With().Info("going to fetch atxs", log.Int("count", len(atxids)))
 	logger.With().Debug("going to fetch atxs", atxFields...)
 	atxres, err := atx.handle(ctx, atxItems)
-	logger.Debug("fetch done")
+	logger.Debug("fetch atxs done")
 	if err != nil {
 		logger.With().Error("cannot fetch all atxs for block", log.Err(err))
 		return nil, err
@@ -287,9 +321,16 @@ func (atx atxQueue) HandleAtxs(ctx context.Context, atxids []types.ATXID) ([]*ty
 }
 
 func updateAtxDependencies(ctx context.Context, invalidate func(id types.Hash32, valid bool), sValidateAtx sValidateAtxFunc, fetchAtxRefs sFetchAtxFunc, atxDB atxDB, fetchProof fetchPoetProofFunc, logger log.Log) func(context.Context, fetchJob) {
-	logger = logger.WithContext(ctx)
 	return func(ctx context.Context, fj fetchJob) {
-		fetchProofCalcID(ctx, logger, fetchProof, fj)
+		lgr := logger.WithContext(ctx)
+		// restore reqID from context
+		if fj.reqID == "" {
+			lgr.WithContext(ctx).Warning("got fetch job result with no requestID")
+		} else {
+			ctx = log.WithRequestID(ctx, fj.reqID)
+			lgr = lgr.WithContext(ctx)
+		}
+		fetchProofCalcID(ctx, lgr, fetchProof, fj)
 
 		mp := map[types.Hash32]*types.ActivationTx{}
 		for _, item := range fj.items {
@@ -298,28 +339,28 @@ func updateAtxDependencies(ctx context.Context, invalidate func(id types.Hash32,
 		}
 
 		for _, id := range fj.ids {
-			logger := logger.WithContext(ctx).WithFields(log.String("job_id", id.String()))
+			lgrLocal := lgr.WithContext(ctx).WithFields(log.String("job_id", id.String()))
 			if atx, ok := mp[id]; ok {
-				logger.With().Info("update atx dependencies queue work item", atx.ID())
+				lgrLocal.With().Info("update atx dependencies queue work item", atx.ID())
 				if err := fetchAtxRefs(ctx, atx); err != nil {
-					logger.With().Warning("failed to fetch referenced atxs", log.Err(err))
+					lgrLocal.With().Warning("failed to fetch referenced atxs", log.Err(err))
 					invalidate(id, false)
 					continue
 				}
 				if err := sValidateAtx(atx); err != nil {
-					logger.With().Warning("failed to validate atx", atx.ID(), log.Err(err))
+					lgrLocal.With().Warning("failed to validate atx", atx.ID(), log.Err(err))
 					invalidate(id, false)
 					continue
 				}
 				if err := atxDB.ProcessAtx(atx); err != nil {
-					logger.Warning("failed to add atx to db", log.Err(err))
+					lgrLocal.Warning("failed to add atx to db", log.Err(err))
 					invalidate(id, false)
 					continue
 				}
-				logger.With().Info("atx queue work item ok", atx.ID())
+				lgrLocal.With().Info("atx queue work item ok", atx.ID())
 				invalidate(id, true)
 			} else {
-				logger.Error("job returned with no response")
+				lgrLocal.Error("job returned with no response")
 				invalidate(id, false)
 			}
 		}

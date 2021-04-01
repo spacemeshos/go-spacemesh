@@ -783,6 +783,8 @@ func (s *Syncer) fetchRefBlock(ctx context.Context, block *types.Block) error {
 }
 
 func (s *Syncer) fetchAllReferencedAtxs(ctx context.Context, blk *types.Block) error {
+	s.WithContext(ctx).With().Debug("syncer fetching all atxs referenced by block", blk.ID())
+
 	// As block with empty or Golden ATXID is considered syntactically invalid, explicit check is not needed here.
 	atxs := []types.ATXID{blk.ATXID}
 
@@ -798,6 +800,7 @@ func (s *Syncer) fetchAllReferencedAtxs(ctx context.Context, blk *types.Block) e
 		}
 	}
 	_, err := s.atxQueue.HandleAtxs(ctx, atxs)
+	s.WithContext(ctx).With().Debug("syncer done fetching all atxs referenced by block", blk.ID(), log.Err(err))
 	return err
 }
 
@@ -871,6 +874,7 @@ func (s *Syncer) validateBlockView(ctx context.Context, blk *types.Block) bool {
 }
 
 func (s *Syncer) fetchAtx(ctx context.Context, ID types.ATXID) (*types.ActivationTx, error) {
+	s.WithContext(ctx).With().Debug("attempting to fetch atx", ID)
 	atxs, err := s.atxQueue.HandleAtxs(ctx, []types.ATXID{ID})
 	if err != nil {
 		return nil, err
@@ -878,6 +882,7 @@ func (s *Syncer) fetchAtx(ctx context.Context, ID types.ATXID) (*types.Activatio
 	if len(atxs) == 0 {
 		return nil, fmt.Errorf("ATX %v not fetched", ID.ShortString())
 	}
+	s.WithContext(ctx).With().Debug("done fetching atx", ID)
 	return atxs[0], nil
 }
 
@@ -976,6 +981,7 @@ func validateVotes(blk *types.Block, forBlockfunc forBlockInView, depth int) (bo
 }
 
 func (s *Syncer) dataAvailability(ctx context.Context, blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
+	s.WithContext(ctx).With().Debug("checking data availability for block", blk.ID())
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	var txres []*types.Transaction
@@ -991,7 +997,7 @@ func (s *Syncer) dataAvailability(ctx context.Context, blk *types.Block) ([]*typ
 		return nil, nil, fmt.Errorf("failed fetching block %v transactions %v", blk.ID(), txerr)
 	}
 
-	s.WithContext(ctx).With().Info("fetched all block data", blk.Fields()...)
+	s.WithContext(ctx).With().Debug("done checking data availability for block", blk.ID())
 	return txres, atxres, nil
 }
 
