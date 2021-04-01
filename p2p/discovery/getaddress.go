@@ -13,10 +13,11 @@ import (
 
 // todo : calculate real udp max message size
 
-func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []byte {
-	return func(msg server.Message) []byte {
+func (p *protocol) newGetAddressesRequestHandler() func(context.Context, server.Message) []byte {
+	return func(ctx context.Context, msg server.Message) []byte {
 		t := time.Now()
-		plogger := p.logger.WithFields(log.String("type", "getaddresses"), log.String("from", msg.Sender().String()))
+		plogger := p.logger.WithContext(ctx).WithFields(log.String("type", "getaddresses"),
+			log.String("from", msg.Sender().String()))
 		plogger.Debug("got request")
 
 		// TODO: if we don't know who is that peer (a.k.a first time we hear from this address)
@@ -37,11 +38,13 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 		resp, err := types.InterfaceToBytes(results)
 
 		if err != nil {
-			plogger.Error("Error marshaling response message (GetAddress) %v", err)
+			plogger.With().Error("error marshaling response message (GetAddress)", log.Err(err))
 			return nil
 		}
 
-		plogger.With().Debug("Sending response", log.Int("size", len(results)), log.Duration("time_to_make", time.Since(t)))
+		plogger.With().Debug("sending response",
+			log.Int("size", len(results)),
+			log.Duration("time_to_make", time.Since(t)))
 		return resp
 	}
 }

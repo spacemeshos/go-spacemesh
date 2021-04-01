@@ -21,7 +21,7 @@ func TestProtocol_SendRequest(t *testing.T) {
 
 	//handler that returns some bytes on request
 
-	handler := func(msg []byte) []byte {
+	handler := func(ctx context.Context, msg []byte) []byte {
 		return []byte("some value to return")
 	}
 	// todo test nonbyte handlers
@@ -56,7 +56,7 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 
 	//handler that returns some bytes on request
 
-	handler := func(msg []byte) []byte {
+	handler := func(ctx context.Context, msg []byte) []byte {
 		time.Sleep(2 * time.Second)
 		return nil
 	}
@@ -100,7 +100,7 @@ func TestProtocol_Close(t *testing.T) {
 
 	//handler that returns some bytes on request
 
-	handler := func(msg []byte) []byte {
+	handler := func(ctx context.Context, msg []byte) []byte {
 		time.Sleep(60 * time.Second)
 		return nil
 	}

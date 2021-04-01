@@ -141,7 +141,7 @@ func (f MessageNetwork) GetRandomPeer() p2ppeers.Peer {
 type network interface {
 	GetRandomPeer() p2ppeers.Peer
 	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error
-	RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func([]byte) []byte)
+	RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(context.Context, []byte) []byte)
 }
 
 // Fetch is the main struct that contains network peers and logic to batch and dispatch hash fetch requests
@@ -245,7 +245,7 @@ func (f *Fetch) loop() {
 
 // FetchRequestHandler handles requests for sync from peersProvider, and basically reads data from database and puts it
 // in a response batch
-func (f *Fetch) FetchRequestHandler(data []byte) []byte {
+func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 	if f.stopped() {
 		return nil
 	}

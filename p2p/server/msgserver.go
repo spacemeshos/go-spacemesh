@@ -48,11 +48,11 @@ type MessageServer struct {
 	name               string //server name
 	network            Service
 	pendMutex          sync.RWMutex
-	pendingQueue       *list.List                                   //queue of pending messages
-	resHandlers        map[uint64]ResponseHandlers                  //response handlers by request ReqID
-	msgRequestHandlers map[MessageType]func(message Message) []byte //request handlers by request type
-	ingressChannel     chan service.DirectMessage                   //chan to relay messages into the server
-	requestLifetime    time.Duration                                //time a request can stay in the pending queue until evicted
+	pendingQueue       *list.List                                            //queue of pending messages
+	resHandlers        map[uint64]ResponseHandlers                           //response handlers by request ReqID
+	msgRequestHandlers map[MessageType]func(context.Context, Message) []byte //request handlers by request type
+	ingressChannel     chan service.DirectMessage                            //chan to relay messages into the server
+	requestLifetime    time.Duration                                         //time a request can stay in the pending queue until evicted
 	workerCount        sync.WaitGroup
 	workerLimiter      chan struct{}
 	exit               chan struct{}
@@ -73,7 +73,7 @@ func NewMsgServer(ctx context.Context, network Service, name string, requestLife
 		pendingQueue:       list.New(),
 		network:            network,
 		ingressChannel:     network.RegisterDirectProtocolWithChannel(name, c),
-		msgRequestHandlers: make(map[MessageType]func(message Message) []byte),
+		msgRequestHandlers: make(map[MessageType]func(context.Context, Message) []byte),
 		requestLifetime:    requestLifetime,
 		exit:               make(chan struct{}),
 		workerLimiter:      make(chan struct{}, runtime.NumCPU()),
@@ -188,7 +188,7 @@ func (p *MessageServer) handleRequestMessage(ctx context.Context, msg Message, d
 	}
 
 	logger.With().Debug("handle request", log.Uint32("p2p_msg_type", data.MsgType))
-	rmsg := &service.DataMsgWrapper{MsgType: data.MsgType, ReqID: data.ReqID, Payload: foo(msg)}
+	rmsg := &service.DataMsgWrapper{MsgType: data.MsgType, ReqID: data.ReqID, Payload: foo(ctx, msg)}
 	if sendErr := p.network.SendWrappedMessage(ctx, msg.Sender(), p.name, rmsg); sendErr != nil {
 		logger.With().Error("error sending response message", log.Err(sendErr))
 	}
@@ -213,19 +213,19 @@ func (p *MessageServer) handleResponseMessage(ctx context.Context, headers *serv
 }
 
 // RegisterMsgHandler sets the handler to act on a specific message request.
-func (p *MessageServer) RegisterMsgHandler(msgType MessageType, reqHandler func(message Message) []byte) {
+func (p *MessageServer) RegisterMsgHandler(msgType MessageType, reqHandler func(context.Context, Message) []byte) {
 	p.msgRequestHandlers[msgType] = reqHandler
 }
 
-func handlerFromBytesHandler(in func(msg []byte) []byte) func(message Message) []byte {
-	return func(message Message) []byte {
+func handlerFromBytesHandler(in func(context.Context, []byte) []byte) func(context.Context, Message) []byte {
+	return func(ctx context.Context, message Message) []byte {
 		payload := extractPayload(message)
-		return in(payload)
+		return in(ctx, payload)
 	}
 }
 
 // RegisterBytesMsgHandler sets the handler to act on a specific message request.
-func (p *MessageServer) RegisterBytesMsgHandler(msgType MessageType, reqHandler func([]byte) []byte) {
+func (p *MessageServer) RegisterBytesMsgHandler(msgType MessageType, reqHandler func(context.Context, []byte) []byte) {
 	p.RegisterMsgHandler(msgType, handlerFromBytesHandler(reqHandler))
 }
 

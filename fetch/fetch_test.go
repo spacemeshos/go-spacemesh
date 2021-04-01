@@ -58,7 +58,7 @@ type mockNet struct {
 	AckChannel  chan struct{}
 }
 
-func (m mockNet) RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func([]byte) []byte) {
+func (m mockNet) RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(context.Context, []byte) []byte) {
 }
 
 func (m mockNet) GetRandomPeer() p2ppeers.Peer {

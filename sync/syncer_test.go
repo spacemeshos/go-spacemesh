@@ -1507,25 +1507,25 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 
 	//setup mocks
 
-	layerHashesMock := func([]byte) []byte {
+	layerHashesMock := func(context.Context, []byte) []byte {
 		t.Log("return fake atx")
 		return util.Uint32ToBytes(11)
 	}
 
-	blockHandlerMock := func([]byte) []byte {
+	blockHandlerMock := func(context.Context, []byte) []byte {
 		t.Log("return fake block")
 		blk := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 		byts, _ := types.InterfaceToBytes([]types.Block{*blk})
 		return byts
 	}
 
-	txHandlerMock := func([]byte) []byte {
+	txHandlerMock := func(context.Context, []byte) []byte {
 		t.Log("return fake tx")
 		byts, _ := types.InterfaceToBytes(tx())
 		return byts
 	}
 
-	atxHandlerMock := func([]byte) []byte {
+	atxHandlerMock := func(context.Context, []byte) []byte {
 		t.Log("return fake atx")
 		byts, _ := types.InterfaceToBytes([]types.ActivationTx{*atx("")})
 		return byts
