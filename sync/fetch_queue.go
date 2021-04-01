@@ -285,6 +285,7 @@ func newAtxQueue(ctx context.Context, s *Syncer, fetchPoetProof fetchPoetProofFu
 			pending:             make(map[types.Hash32][]chan bool),
 			queue:               make(chan fetchRequest, 10000),
 			name:                "Atx",
+			requestTimeout:      s.Configuration.RequestTimeout,
 		},
 	}
 
