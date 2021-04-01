@@ -287,7 +287,7 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 	// Make sure the fetch times out correctly (rather than blocking)
 	// This will kill all the fetch queue workers so the request will not be processed
 	for i := 0; i < runtime.NumCPU(); i++ {
-		bl1.atxQueue.queue<-nil
+		bl1.atxQueue.queue <- nil
 	}
 	bl1.atxQueue.checkLocal = func([]types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32) {
 		// pretend there's nothing in the cache and everything is missing
