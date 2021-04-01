@@ -31,7 +31,7 @@ func (m *syncMock) GetBlock(ID types.BlockID) error {
 	return nil
 }
 
-func (m *syncMock) GetTxs(IDs []types.TransactionID) error {
+func (m *syncMock) GetTxs(ctx context.Context, IDs []types.TransactionID) error {
 	return nil
 }
 

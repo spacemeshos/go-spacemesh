@@ -314,7 +314,7 @@ func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 
 	r.False(s1.poetDb.HasProof(poetRef[:]))
 
-	atxs, err := s1.atxQueue.handle([]types.Hash32{atx1.Hash32()})
+	atxs, err := s1.atxQueue.handle(context.TODO(), []types.Hash32{atx1.Hash32()})
 	r.NoError(err)
 	r.Equal(1, len(atxs))
 
@@ -446,7 +446,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 
 	for out := range output {
 		block := out.(fetchJob).items[0].(*types.Block)
-		_, err := syncObj2.txQueue.HandleTxs(block.TxIDs)
+		_, err := syncObj2.txQueue.HandleTxs(context.TODO(), block.TxIDs)
 		if err != nil {
 			t.Error("could not fetch all txs", err)
 		}
@@ -973,7 +973,7 @@ func TestSyncer_Txs(t *testing.T) {
 	addTxsToPool(syncObj1.txpool, []*types.Transaction{tx1, tx2, tx3})
 	syncObj1.AddBlockWithTxs(block3)
 
-	_, err := syncObj2.txQueue.handle([]types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32()})
+	_, err := syncObj2.txQueue.handle(context.TODO(), []types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32()})
 	assert.Nil(t, err)
 }
 

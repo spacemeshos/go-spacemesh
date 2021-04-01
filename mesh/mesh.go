@@ -858,13 +858,13 @@ func GenesisLayer() *types.Layer {
 }
 
 // GetATXs uses GetFullAtx to return a list of atxs corresponding to atxIds requested
-func (msh *Mesh) GetATXs(atxIds []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
+func (msh *Mesh) GetATXs(ctx context.Context, atxIds []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
 	var mIds []types.ATXID
 	atxs := make(map[types.ATXID]*types.ActivationTx, len(atxIds))
 	for _, id := range atxIds {
 		t, err := msh.GetFullAtx(id)
 		if err != nil {
-			msh.With().Warning("could not get atx from database", id, log.Err(err))
+			msh.WithContext(ctx).With().Warning("could not get atx from database", id, log.Err(err))
 			mIds = append(mIds, id)
 		} else {
 			atxs[t.ID()] = t

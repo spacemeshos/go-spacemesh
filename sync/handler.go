@@ -165,7 +165,7 @@ func newAtxsRequestHandler(s *Syncer, logger log.Log) func(context.Context, []by
 			return nil
 		}
 		lgr.With().Info("handle atx request", types.AtxIdsField(atxids))
-		atxs, unknownAtx := s.GetATXs(atxids)
+		atxs, unknownAtx := s.GetATXs(ctx, atxids)
 		for _, t := range unknownAtx {
 			if tx, err := s.atxDb.GetFullAtx(t); err == nil {
 				atxs[t] = tx

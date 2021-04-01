@@ -40,7 +40,7 @@ type Syncer interface {
 type TxAPI interface {
 	AddressExists(types.Address) bool
 	ValidateNonceAndBalance(*types.Transaction) error
-	GetATXs([]types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID)
+	GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID)
 	GetLayer(types.LayerID) (*types.Layer, error)
 	GetRewards(types.Address) ([]types.Reward, error)
 	GetTransactions([]types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{})

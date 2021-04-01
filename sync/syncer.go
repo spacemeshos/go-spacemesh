@@ -827,7 +827,7 @@ func (s *Syncer) blockSyntacticValidation(ctx context.Context, block *types.Bloc
 	}
 
 	// data availability
-	txs, atxs, err := s.dataAvailability(block)
+	txs, atxs, err := s.dataAvailability(ctx, block)
 	if err != nil {
 		return nil, nil, fmt.Errorf("DataAvailabilty failed for block %v err: %v", block.ID(), err)
 	}
@@ -975,14 +975,14 @@ func validateVotes(blk *types.Block, forBlockfunc forBlockInView, depth int) (bo
 	return true, nil
 }
 
-func (s *Syncer) dataAvailability(blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
+func (s *Syncer) dataAvailability(ctx context.Context, blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	var txres []*types.Transaction
 	var txerr error
 
 	if len(blk.TxIDs) > 0 {
-		txres, txerr = s.txQueue.HandleTxs(blk.TxIDs)
+		txres, txerr = s.txQueue.HandleTxs(ctx, blk.TxIDs)
 	}
 
 	var atxres []*types.ActivationTx
@@ -991,13 +991,13 @@ func (s *Syncer) dataAvailability(blk *types.Block) ([]*types.Transaction, []*ty
 		return nil, nil, fmt.Errorf("failed fetching block %v transactions %v", blk.ID(), txerr)
 	}
 
-	s.With().Info("fetched all block data", blk.Fields()...)
+	s.WithContext(ctx).With().Info("fetched all block data", blk.Fields()...)
 	return txres, atxres, nil
 }
 
 // GetTxs fetches txs from peers if necessary
-func (s *Syncer) GetTxs(IDs []types.TransactionID) error {
-	_, err := s.txQueue.HandleTxs(IDs)
+func (s *Syncer) GetTxs(ctx context.Context, IDs []types.TransactionID) error {
+	_, err := s.txQueue.HandleTxs(ctx, IDs)
 	return err
 }
 
@@ -1216,7 +1216,7 @@ func (s *Syncer) GetPoetProof(ctx context.Context, hash types.Hash32) error {
 	return nil
 }
 
-func (s *Syncer) atxCheckLocal(atxIds []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32) {
+func (s *Syncer) atxCheckLocal(ctx context.Context, atxIds []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32) {
 	// look in pool
 	unprocessedItems := make(map[types.Hash32]item, len(atxIds))
 	missingInPool := make([]types.ATXID, 0, len(atxIds))
@@ -1224,15 +1224,15 @@ func (s *Syncer) atxCheckLocal(atxIds []types.Hash32) (map[types.Hash32]item, ma
 		id := types.ATXID(t)
 		if x, err := s.atxDb.GetFullAtx(id); err == nil {
 			atx := x
-			s.With().Debug("found atx in atx db", id)
+			s.WithContext(ctx).With().Debug("found atx in atx db", id)
 			unprocessedItems[id.Hash32()] = atx
 		} else {
-			s.With().Debug("atx not in atx pool", id)
+			s.WithContext(ctx).With().Debug("atx not in atx pool", id)
 			missingInPool = append(missingInPool, id)
 		}
 	}
 	// look in db
-	dbAtxs, missing := s.GetATXs(missingInPool)
+	dbAtxs, missing := s.GetATXs(ctx, missingInPool)
 
 	dbItems := make(map[types.Hash32]item, len(dbAtxs))
 	for i, k := range dbAtxs {
@@ -1247,17 +1247,17 @@ func (s *Syncer) atxCheckLocal(atxIds []types.Hash32) (map[types.Hash32]item, ma
 	return unprocessedItems, dbItems, missingItems
 }
 
-func (s *Syncer) txCheckLocal(txIds []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32) {
+func (s *Syncer) txCheckLocal(ctx context.Context, txIds []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32) {
 	// look in pool
 	unprocessedItems := make(map[types.Hash32]item)
 	missingInPool := make([]types.TransactionID, 0)
 	for _, t := range txIds {
 		id := types.TransactionID(t)
 		if tx, err := s.txpool.Get(id); err == nil {
-			s.With().Debug("found tx in tx pool", id)
+			s.WithContext(ctx).With().Debug("found tx in tx pool", id)
 			unprocessedItems[id.Hash32()] = tx
 		} else {
-			s.With().Debug("tx not in tx pool", id)
+			s.WithContext(ctx).With().Debug("tx not in tx pool", id)
 			missingInPool = append(missingInPool, id)
 		}
 	}
@@ -1277,13 +1277,13 @@ func (s *Syncer) txCheckLocal(txIds []types.Hash32) (map[types.Hash32]item, map[
 	return unprocessedItems, dbItems, missingItems
 }
 
-func (s *Syncer) blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32) {
+func (s *Syncer) blockCheckLocal(ctx context.Context, blockIds []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32) {
 	// look in pool
 	dbItems := make(map[types.Hash32]item)
 	for _, id := range blockIds {
 		res, err := s.GetBlock(types.BlockID(id.ToHash20()))
 		if err != nil {
-			s.With().Debug("get block failed", log.String("id", id.ShortString()))
+			s.WithContext(ctx).With().Debug("get block failed", log.String("id", id.ShortString()))
 			continue
 		}
 		dbItems[id] = res

@@ -15,7 +15,7 @@ import (
 type fetchPoetProofFunc func(ctx context.Context, poetProofRef []byte) error
 type sValidateAtxFunc func(*types.ActivationTx) error
 type sFetchAtxFunc func(context.Context, *types.ActivationTx) error
-type checkLocalFunc func(ids []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32)
+type checkLocalFunc func(ctx context.Context, ids []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32)
 
 type item interface {
 	Hash32() types.Hash32
@@ -137,22 +137,21 @@ func (fq *fetchQueue) invalidate(id types.Hash32, valid bool) {
 }
 
 //returns items out of itemIds that are not in the local database
-func (fq *fetchQueue) handle(itemIds []types.Hash32) (map[types.Hash32]item, error) {
+func (fq *fetchQueue) handle(ctx context.Context, itemIds []types.Hash32) (map[types.Hash32]item, error) {
 	if len(itemIds) == 0 {
-		fq.Debug("handle empty item ids slice")
+		fq.WithContext(ctx).Debug("handle empty item ids slice")
 		return nil, nil
 	}
 
-	unprocessedItems, _, missing := fq.checkLocal(itemIds)
+	unprocessedItems, _, missing := fq.checkLocal(ctx, itemIds)
 	if len(missing) > 0 {
-
 		output := fq.addToPendingGetCh(missing)
 
 		if success := <-output; !success {
 			return nil, fmt.Errorf("could not fetch all items")
 		}
 
-		unprocessedItems, _, missing = fq.checkLocal(itemIds)
+		unprocessedItems, _, missing = fq.checkLocal(ctx, itemIds)
 		if len(missing) > 0 {
 			return nil, errors.New("could not find all items even though fetch was successful")
 		}
@@ -187,13 +186,13 @@ func newTxQueue(ctx context.Context, s *Syncer) *txQueue {
 }
 
 //we could get rid of this if we had a unified id type
-func (tx txQueue) HandleTxs(txids []types.TransactionID) ([]*types.Transaction, error) {
+func (tx txQueue) HandleTxs(ctx context.Context, txids []types.TransactionID) ([]*types.Transaction, error) {
 	txItems := make([]types.Hash32, 0, len(txids))
 	for _, i := range txids {
 		txItems = append(txItems, i.Hash32())
 	}
 
-	txres, err := tx.handle(txItems)
+	txres, err := tx.handle(ctx, txItems)
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +258,7 @@ func (atx atxQueue) HandleAtxs(ctx context.Context, atxids []types.ATXID) ([]*ty
 	}
 	atx.Log.WithContext(ctx).With().Debug("going to fetch atxs", atxFields...)
 
-	atxres, err := atx.handle(atxItems)
+	atxres, err := atx.handle(ctx, atxItems)
 	if err != nil {
 		atx.Log.WithContext(ctx).With().Error("cannot fetch all atxs for block", log.Err(err))
 		return nil, err

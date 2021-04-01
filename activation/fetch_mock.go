@@ -43,7 +43,7 @@ func (*fetchMock) GetPoetProof(context.Context, types.Hash32) error {
 	return nil
 }
 
-func (*fetchMock) GetTxs([]types.TransactionID) error {
+func (*fetchMock) GetTxs(context.Context, []types.TransactionID) error {
 	return nil
 }
 

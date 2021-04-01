@@ -48,7 +48,7 @@ type Fetcher interface {
 	FetchBlock(types.BlockID) error
 	FetchAtx(context.Context, types.ATXID) error
 	GetPoetProof(context.Context, types.Hash32) error
-	GetTxs([]types.TransactionID) error
+	GetTxs(context.Context, []types.TransactionID) error
 	GetBlocks(context.Context, []types.BlockID) error
 	GetAtxs(context.Context, []types.ATXID) error
 	ListenToGossip() bool

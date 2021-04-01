@@ -173,7 +173,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 
 	// get the TXs
 	if len(block.TxIDs) > 0 {
-		err := syncer.GetTxs(block.TxIDs)
+		err := syncer.GetTxs(ctx, block.TxIDs)
 		if err != nil {
 			return fmt.Errorf("failed to fetch txs %v e: %v", block.ID(), err)
 		}
