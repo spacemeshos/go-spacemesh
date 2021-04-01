@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"sync"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -32,12 +33,13 @@ type fetchQueue struct {
 	log.Log
 	batchRequestFactory
 	*sync.Mutex
-	workerInfra networker
-	pending     map[types.Hash32][]chan bool
-	handleFetch func(context.Context, fetchJob)
-	checkLocal  checkLocalFunc
-	queue       chan []types.Hash32 //types.TransactionID //todo make buffered
-	name        string
+	workerInfra    networker
+	pending        map[types.Hash32][]chan bool
+	handleFetch    func(context.Context, fetchJob)
+	checkLocal     checkLocalFunc
+	queue          chan []types.Hash32 //types.TransactionID //todo make buffered
+	name           string
+	requestTimeout time.Duration
 }
 
 func (fq *fetchQueue) Close() {
@@ -152,15 +154,21 @@ func (fq *fetchQueue) handle(ctx context.Context, itemIds []types.Hash32) (map[t
 	unprocessedItems, _, missing := fq.checkLocal(ctx, itemIds)
 	if len(missing) > 0 {
 		output := fq.addToPendingGetCh(missing)
-		if success := <-output; !success {
-			return nil, fmt.Errorf("could not fetch all items")
-		}
-		unprocessedItems, _, missing = fq.checkLocal(ctx, itemIds)
-		if len(missing) > 0 {
-			return nil, errors.New("could not find all items even though fetch was successful")
+		timer := time.After(fq.requestTimeout)
+		select {
+		case <-timer:
+			return nil, fmt.Errorf("timed out fetching items")
+		case success := <-output:
+			if success {
+				unprocessedItems, _, missing = fq.checkLocal(ctx, itemIds)
+				if len(missing) > 0 {
+					return nil, errors.New("could not find all items even though fetch was successful")
+				}
+			} else {
+				return nil, fmt.Errorf("could not fetch all items")
+			}
 		}
 	}
-
 	return unprocessedItems, nil
 }
 
@@ -181,6 +189,7 @@ func newTxQueue(ctx context.Context, s *Syncer) *txQueue {
 			pending:             make(map[types.Hash32][]chan bool),
 			queue:               make(chan []types.Hash32, 10000),
 			name:                "Tx",
+			requestTimeout:      s.Configuration.RequestTimeout,
 		},
 	}
 
