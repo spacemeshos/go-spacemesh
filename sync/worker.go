@@ -141,7 +141,7 @@ func newFetchWorker(s networker, count int, reqFactory batchRequestFactory, idsC
 	workFunc := func() {
 		for ids := range idsChan {
 			if ids == nil {
-				lg.Info("close fetch worker ")
+				lg.Info("close fetch worker")
 				return
 			}
 			leftToFetch := toMap(ids)
@@ -182,7 +182,6 @@ func newFetchWorker(s networker, count int, reqFactory batchRequestFactory, idsC
 						if len(leftToFetch) == 0 {
 							break next
 						}
-
 					}
 					lg.Info("next peer")
 				}

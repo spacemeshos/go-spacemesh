@@ -5,6 +5,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/stretchr/testify/require"
+	"runtime"
 	"testing"
 	"time"
 
@@ -270,7 +272,8 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 	bl2.atxDb.ProcessAtx(atx3)
 	bl2.AddBlockWithTxs(block1)
 
-	res, err := bl1.atxQueue.handle([]types.Hash32{atx1.Hash32(), atx2.Hash32(), atx3.Hash32()})
+	atxHashes := []types.Hash32{atx1.Hash32(), atx2.Hash32(), atx3.Hash32()}
+	res, err := bl1.atxQueue.handle(atxHashes)
 	if err != nil {
 		t.Error(err)
 	}
@@ -280,6 +283,21 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 	}
 
 	assert.True(t, len(bl1.atxQueue.pending) == 0)
+
+	// Make sure the fetch times out correctly (rather than blocking)
+	// This will kill all the fetch queue workers so the request will not be processed
+	for i := 0; i < runtime.NumCPU(); i++ {
+		bl1.atxQueue.queue<-nil
+	}
+	bl1.atxQueue.checkLocal = func([]types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32) {
+		// pretend there's nothing in the cache and everything is missing
+		return nil, nil, atxHashes
+	}
+	res, err = bl1.atxQueue.handle(atxHashes)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "timed out fetching items")
+	require.Equal(t, 0, len(res))
+	require.Equal(t, 3, len(bl1.atxQueue.pending))
 
 	bl2.Close()
 	bl1.Close()

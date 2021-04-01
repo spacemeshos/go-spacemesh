@@ -66,13 +66,10 @@ func (fq *fetchQueue) shutdownRecover() {
 }
 
 //todo batches
-func (fq *fetchQueue) work() error {
-
+func (fq *fetchQueue) work() {
 	defer fq.shutdownRecover()
 	parallelWorkers := runtime.NumCPU()
-	output := fetchWithFactory(newFetchWorker(fq.workerInfra, runtime.NumCPU(), fq.batchRequestFactory, fq.queue, fq.name))
-	wg := sync.WaitGroup{}
-	wg.Add(parallelWorkers)
+	output := fetchWithFactory(newFetchWorker(fq.workerInfra, parallelWorkers, fq.batchRequestFactory, fq.queue, fq.name))
 	for i := 0; i < parallelWorkers; i++ {
 		go func() {
 			fq.Info("running work")
@@ -97,11 +94,8 @@ func (fq *fetchQueue) work() error {
 				fq.handleFetch(bjb)
 				fq.Info("next batch")
 			}
-			wg.Done()
 		}()
 	}
-	wg.Wait()
-	return nil
 }
 
 func (fq *fetchQueue) addToPendingGetCh(ids []types.Hash32) chan bool {
@@ -145,7 +139,6 @@ func (fq *fetchQueue) handle(itemIds []types.Hash32) (map[types.Hash32]item, err
 
 	unprocessedItems, _, missing := fq.checkLocal(itemIds)
 	if len(missing) > 0 {
-
 		output := fq.addToPendingGetCh(missing)
 		timer := time.After(fq.requestTimeout)
 		select {
@@ -317,7 +310,6 @@ func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValida
 			}
 		}
 	}
-
 }
 
 func getDoneChan(deps []chan bool) chan bool {
