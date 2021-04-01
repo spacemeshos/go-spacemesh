@@ -251,7 +251,7 @@ func newAtxQueue(ctx context.Context, s *Syncer, fetchPoetProof fetchPoetProofFu
 
 //we could get rid of this if we had a unified id type
 func (atx atxQueue) HandleAtxs(ctx context.Context, atxids []types.ATXID) ([]*types.ActivationTx, error) {
-	atxFields := make([]log.LoggableField, len(atxids))
+	atxFields := make([]log.LoggableField, 0, len(atxids))
 	atxItems := make([]types.Hash32, 0, len(atxids))
 	for _, atxid := range atxids {
 		atxFields = append(atxFields, atxid.Field())
