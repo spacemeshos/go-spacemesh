@@ -329,12 +329,12 @@ func (s SpacemeshGrpcService) GetMiningStats(ctx context.Context, empty *empty.E
 
 // GetNodeStatus returns a status object providing information about the connected peers, sync status,
 // current and verified layer
-func (s SpacemeshGrpcService) GetNodeStatus(context.Context, *empty.Empty) (*pb.NodeStatus, error) {
+func (s SpacemeshGrpcService) GetNodeStatus(ctx context.Context, _ *empty.Empty) (*pb.NodeStatus, error) {
 	return &pb.NodeStatus{
 		Peers:         s.PeerCounter.PeerCount(),
 		MinPeers:      uint64(s.Config.P2P.SwarmConfig.RandomConnections),
 		MaxPeers:      uint64(s.Config.P2P.MaxInboundPeers + s.Config.P2P.SwarmConfig.RandomConnections),
-		Synced:        s.Syncer.IsSynced(),
+		Synced:        s.Syncer.IsSynced(ctx),
 		SyncedLayer:   s.Tx.LatestLayer().Uint64(),
 		CurrentLayer:  s.GenTime.GetCurrentLayer().Uint64(),
 		VerifiedLayer: s.Tx.LatestLayerInState().Uint64(),
