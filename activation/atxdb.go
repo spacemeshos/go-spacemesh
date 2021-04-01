@@ -807,16 +807,14 @@ func (db *DB) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx, f
 	logger := db.log.WithContext(ctx)
 	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != db.goldenATXID {
 		logger.With().Info("going to fetch pos atx", atx.PositioningATX, atx.ID())
-		err := f.FetchAtx(ctx, atx.PositioningATX)
-		if err != nil {
+		if err := f.FetchAtx(ctx, atx.PositioningATX); err != nil {
 			return err
 		}
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
 		logger.With().Info("going to fetch prev atx", atx.PrevATXID, atx.ID())
-		err := f.FetchAtx(ctx, atx.PrevATXID)
-		if err != nil {
+		if err := f.FetchAtx(ctx, atx.PrevATXID); err != nil {
 			return err
 		}
 	}

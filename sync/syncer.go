@@ -1120,7 +1120,7 @@ type peerHashPair struct {
 func (s *Syncer) fetchLayerHashes(ctx context.Context, lyr types.LayerID) (map[types.Hash32][]p2ppeers.Peer, error) {
 	// get layer hash from each peer
 	wrk := newPeersWorker(ctx, s, s.GetPeers(), &sync.Once{}, hashReqFactory(lyr))
-	go wrk.Work()
+	go wrk.Work(ctx)
 	m := make(map[types.Hash32][]p2ppeers.Peer)
 	layerHasBlocks := false
 	for out := range wrk.output {
@@ -1148,7 +1148,7 @@ func (s *Syncer) fetchLayerHashes(ctx context.Context, lyr types.LayerID) (map[t
 func (s *Syncer) fetchEpochAtxHashes(ctx context.Context, ep types.EpochID) (map[types.Hash32][]p2ppeers.Peer, error) {
 	// get layer hash from each peer
 	wrk := newPeersWorker(ctx, s, s.GetPeers(), &sync.Once{}, atxHashReqFactory(ep))
-	go wrk.Work()
+	go wrk.Work(ctx)
 	m := make(map[types.Hash32][]p2ppeers.Peer)
 	layerHasBlocks := false
 	for out := range wrk.output {
@@ -1174,11 +1174,11 @@ func (s *Syncer) fetchEpochAtxHashes(ctx context.Context, ep types.EpochID) (map
 	return m, nil
 }
 
-func fetchWithFactory(wrk worker) chan interface{} {
+func fetchWithFactory(ctx context.Context, wrk worker) chan interface{} {
 	// each worker goroutine tries to fetch a block iteratively from each peer
-	go wrk.Work()
+	go wrk.Work(ctx)
 	for i := 0; int32(i) < atomic.LoadInt32(wrk.workCount)-1; i++ {
-		go wrk.Clone().Work()
+		go wrk.Clone().Work(ctx)
 	}
 	return wrk.output
 }
@@ -1186,7 +1186,7 @@ func fetchWithFactory(wrk worker) chan interface{} {
 // FetchPoetProof fetches a poet proof from network peers
 func (s *Syncer) FetchPoetProof(ctx context.Context, poetProofRef []byte) error {
 	if !s.poetDb.HasProof(poetProofRef) {
-		out := <-fetchWithFactory(newNeighborhoodWorker(ctx, s, 1, poetReqFactory(poetProofRef)))
+		out := <-fetchWithFactory(ctx, newNeighborhoodWorker(ctx, s, 1, poetReqFactory(poetProofRef)))
 		if out == nil {
 			return fmt.Errorf("could not find PoET proof with any neighbor")
 		}
@@ -1203,7 +1203,7 @@ func (s *Syncer) FetchPoetProof(ctx context.Context, poetProofRef []byte) error 
 func (s *Syncer) GetPoetProof(ctx context.Context, hash types.Hash32) error {
 	poetProofRef := hash.Bytes()
 	if !s.poetDb.HasProof(poetProofRef) {
-		out := <-fetchWithFactory(newNeighborhoodWorker(ctx, s, 1, poetReqFactory(poetProofRef)))
+		out := <-fetchWithFactory(ctx, newNeighborhoodWorker(ctx, s, 1, poetReqFactory(poetProofRef)))
 		if out == nil {
 			return fmt.Errorf("could not find PoET proof with any neighbor")
 		}

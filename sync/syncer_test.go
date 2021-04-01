@@ -222,7 +222,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	ch := make(chan []types.Hash32, 1)
 	ch <- []types.Hash32{block.Hash32()}
 
-	output := fetchWithFactory(newFetchWorker(context.TODO(), syncObj2, 1, newFetchReqFactory(blockMsg, blocksAsItems), ch, ""))
+	output := fetchWithFactory(context.TODO(), newFetchWorker(context.TODO(), syncObj2, 1, newFetchReqFactory(blockMsg, blocksAsItems), ch, ""))
 
 	timeout := time.NewTimer(2 * time.Second)
 	emptyID := types.BlockID{}
@@ -253,7 +253,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	timeout := time.NewTimer(2 * time.Second)
 
 	wrk := newPeersWorker(context.TODO(), syncObj2, []p2ppeers.Peer{nodes[0].PublicKey()}, &sync.Once{}, hashReqFactory(lid))
-	go wrk.Work()
+	go wrk.Work(context.TODO())
 
 	select {
 	case <-wrk.output:
@@ -381,7 +381,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	timeout := time.NewTimer(2 * time.Second)
 
 	wrk := newPeersWorker(context.TODO(), syncObj, []p2ppeers.Peer{nodes[1].PublicKey()}, &sync.Once{}, layerIdsReqFactory(lid))
-	go wrk.Work()
+	go wrk.Work(context.TODO())
 
 	select {
 	case intr := <-wrk.output:
@@ -442,7 +442,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	ch <- []types.Hash32{block2.Hash32()}
 	ch <- []types.Hash32{block3.Hash32()}
 	close(ch)
-	output := fetchWithFactory(newFetchWorker(context.TODO(), syncObj2, 1, newFetchReqFactory(blockMsg, blocksAsItems), ch, ""))
+	output := fetchWithFactory(context.TODO(), newFetchWorker(context.TODO(), syncObj2, 1, newFetchReqFactory(blockMsg, blocksAsItems), ch, ""))
 
 	for out := range output {
 		block := out.(fetchJob).items[0].(*types.Block)
@@ -1425,7 +1425,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	// Layer Hash
 
 	wrk := newPeersWorker(context.TODO(), syncs[0], []p2ppeers.Peer{nodes[1].PublicKey()}, &sync.Once{}, hashReqFactory(nonExistingLayerID))
-	go wrk.Work()
+	go wrk.Work(context.TODO())
 
 	select {
 	case out := <-wrk.output:
@@ -1437,7 +1437,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	// Layer Block Ids
 
 	wrk = newPeersWorker(context.TODO(), syncs[0], []p2ppeers.Peer{nodes[1].PublicKey()}, &sync.Once{}, layerIdsReqFactory(nonExistingLayerID))
-	go wrk.Work()
+	go wrk.Work(context.TODO())
 
 	select {
 	case out := <-wrk.output:
@@ -1450,7 +1450,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	bch := make(chan []types.Hash32, 1)
 	bch <- []types.Hash32{nonExistingBlockID.AsHash32()}
 
-	output := fetchWithFactory(newFetchWorker(context.TODO(), syncs[0], 1, newFetchReqFactory(blockMsg, blocksAsItems), bch, ""))
+	output := fetchWithFactory(context.TODO(), newFetchWorker(context.TODO(), syncs[0], 1, newFetchReqFactory(blockMsg, blocksAsItems), bch, ""))
 
 	select {
 	case out := <-output:
@@ -1479,7 +1479,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	}
 
-	output = fetchWithFactory(newNeighborhoodWorker(context.TODO(), syncs[0], 1, poetReqFactory(nonExistingPoetRef)))
+	output = fetchWithFactory(context.TODO(), newNeighborhoodWorker(context.TODO(), syncs[0], 1, poetReqFactory(nonExistingPoetRef)))
 
 	select {
 	case out := <-output:
@@ -1560,7 +1560,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	// Block
 	ch := make(chan []types.Hash32, 1)
 	ch <- []types.Hash32{bl1.ID().AsHash32()}
-	output := fetchWithFactory(newFetchWorker(context.TODO(), syncs[0], 1, newFetchReqFactory(blockMsg, blocksAsItems), ch, ""))
+	output := fetchWithFactory(context.TODO(), newFetchWorker(context.TODO(), syncs[0], 1, newFetchReqFactory(blockMsg, blocksAsItems), ch, ""))
 
 	select {
 	case out := <-output:
@@ -1572,7 +1572,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	// Tx
 	ch = make(chan []types.Hash32, 1)
 	ch <- []types.Hash32{[32]byte{1}}
-	output = fetchWithFactory(newFetchWorker(context.TODO(), syncs[0], 1, newFetchReqFactory(txMsg, txsAsItems), ch, ""))
+	output = fetchWithFactory(context.TODO(), newFetchWorker(context.TODO(), syncs[0], 1, newFetchReqFactory(txMsg, txsAsItems), ch, ""))
 
 	select {
 	case out := <-output:
@@ -1584,7 +1584,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	// Atx
 	ch = make(chan []types.Hash32, 1)
 	ch <- []types.Hash32{[32]byte{1}}
-	output = fetchWithFactory(newFetchWorker(context.TODO(), syncs[0], 1, newFetchReqFactory(atxMsg, atxsAsItems), ch, ""))
+	output = fetchWithFactory(context.TODO(), newFetchWorker(context.TODO(), syncs[0], 1, newFetchReqFactory(atxMsg, atxsAsItems), ch, ""))
 
 	select {
 	case out := <-output:
@@ -1595,7 +1595,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 
 	// PoET
 
-	output = fetchWithFactory(newNeighborhoodWorker(context.TODO(), syncs[0], 1, poetReqFactory([]byte{1})))
+	output = fetchWithFactory(context.TODO(), newNeighborhoodWorker(context.TODO(), syncs[0], 1, poetReqFactory([]byte{1})))
 
 	select {
 	case out := <-output:

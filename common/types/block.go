@@ -111,10 +111,10 @@ func (id NodeID) ShortString() string {
 // one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
 func BytesToNodeID(b []byte) (*NodeID, error) {
 	if len(b) < 32 {
-		return nil, fmt.Errorf("Invalid input length, input too short")
+		return nil, fmt.Errorf("invalid input length, input too short")
 	}
 	if len(b) > 64 {
-		return nil, fmt.Errorf("Invalid input length, input too long")
+		return nil, fmt.Errorf("invalid input length, input too long")
 	}
 
 	pubKey := b[0:32]
@@ -131,10 +131,10 @@ func BytesToNodeID(b []byte) (*NodeID, error) {
 func StringToNodeID(s string) (*NodeID, error) {
 	strLen := len(s)
 	if strLen < 64 {
-		return nil, fmt.Errorf("Invalid input length, input too short")
+		return nil, fmt.Errorf("invalid input length, input too short")
 	}
 	if strLen > 128 {
-		return nil, fmt.Errorf("Invalid input length, input too long")
+		return nil, fmt.Errorf("invalid input length, input too long")
 	}
 	//portion of the string corresponding to the Edwards public key
 	pubKey := s[:64]

@@ -69,12 +69,17 @@ func (fq *fetchQueue) work(ctx context.Context) {
 	logger := fq.WithContext(ctx)
 	defer fq.shutdownRecover()
 	parallelWorkers := runtime.NumCPU()
-	output := fetchWithFactory(newFetchWorker(ctx, fq.workerInfra, runtime.NumCPU(), fq.batchRequestFactory, fq.queue, fq.name))
+	output := fetchWithFactory(ctx, newFetchWorker(ctx, fq.workerInfra, parallelWorkers, fq.batchRequestFactory, fq.queue, fq.name))
+	logger.With().Debug("parallel fetching with worker factory",
+		log.Int("num_workers", parallelWorkers),
+		log.String("queue", fmt.Sprint(fq.queue)),
+		log.String("queue_name", fq.name))
 	wg := sync.WaitGroup{}
 	wg.Add(parallelWorkers)
 	for i := 0; i < parallelWorkers; i++ {
-		go func() {
-			logger.Info("running work")
+		go func(j int) {
+			logger := logger.WithFields(log.Int("worker_num", j))
+			logger.Info("worker running work")
 			for out := range output {
 				logger.Info("new batch out of queue")
 				if out == nil {
@@ -88,8 +93,9 @@ func (fq *fetchQueue) work(ctx context.Context) {
 					continue
 				}
 
+				logger.Debug("got ids from worker", log.Int("count", len(bjb.ids)))
 				if len(bjb.ids) == 0 {
-					break //fmt.Errorf("channel closed")
+					break
 				}
 
 				logger.With().Info("attempting to fetch objects",
@@ -99,7 +105,7 @@ func (fq *fetchQueue) work(ctx context.Context) {
 				logger.Info("done fetching, going to next batch")
 			}
 			wg.Done()
-		}()
+		}(i)
 	}
 	wg.Wait()
 }
@@ -146,11 +152,9 @@ func (fq *fetchQueue) handle(ctx context.Context, itemIds []types.Hash32) (map[t
 	unprocessedItems, _, missing := fq.checkLocal(ctx, itemIds)
 	if len(missing) > 0 {
 		output := fq.addToPendingGetCh(missing)
-
 		if success := <-output; !success {
 			return nil, fmt.Errorf("could not fetch all items")
 		}
-
 		unprocessedItems, _, missing = fq.checkLocal(ctx, itemIds)
 		if len(missing) > 0 {
 			return nil, errors.New("could not find all items even though fetch was successful")
@@ -250,17 +254,18 @@ func newAtxQueue(ctx context.Context, s *Syncer, fetchPoetProof fetchPoetProofFu
 
 //we could get rid of this if we had a unified id type
 func (atx atxQueue) HandleAtxs(ctx context.Context, atxids []types.ATXID) ([]*types.ActivationTx, error) {
+	logger := atx.Log.WithContext(ctx)
 	atxFields := make([]log.LoggableField, 0, len(atxids))
 	atxItems := make([]types.Hash32, 0, len(atxids))
 	for _, atxid := range atxids {
 		atxFields = append(atxFields, atxid.Field())
 		atxItems = append(atxItems, atxid.Hash32())
 	}
-	atx.Log.WithContext(ctx).With().Debug("going to fetch atxs", atxFields...)
-
+	logger.With().Debug("going to fetch atxs", atxFields...)
 	atxres, err := atx.handle(ctx, atxItems)
+	logger.Debug("fetch done")
 	if err != nil {
-		atx.Log.WithContext(ctx).With().Error("cannot fetch all atxs for block", log.Err(err))
+		logger.With().Error("cannot fetch all atxs for block", log.Err(err))
 		return nil, err
 	}
 
@@ -286,7 +291,7 @@ func updateAtxDependencies(ctx context.Context, invalidate func(id types.Hash32,
 		for _, id := range fj.ids {
 			logger := logger.WithContext(ctx).WithFields(log.String("job_id", id.String()))
 			if atx, ok := mp[id]; ok {
-				logger.With().Info("atx queue work item", atx.ID())
+				logger.With().Info("update atx dependencies queue work item", atx.ID())
 				if err := fetchAtxRefs(ctx, atx); err != nil {
 					logger.With().Warning("failed to fetch referenced atxs", log.Err(err))
 					invalidate(id, false)

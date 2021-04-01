@@ -37,13 +37,14 @@ type worker struct {
 	log.Logger
 }
 
-func (w *worker) Work() {
-	w.Debug("worker work")
+func (w *worker) Work(ctx context.Context) {
+	logger := w.WithContext(ctx)
+	logger.Debug("worker work")
 	w.work()
 	atomic.AddInt32(w.workCount, -1)
-	w.Debug("worker done")
+	logger.Debug("worker done")
 	if atomic.LoadInt32(w.workCount) == 0 { //close once everyone is finished
-		w.Debug("worker teardown")
+		logger.Debug("worker teardown")
 		w.Do(func() { close(w.output) })
 	}
 }
