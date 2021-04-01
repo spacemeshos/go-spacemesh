@@ -27,11 +27,11 @@ var instanceID7 = instanceID(7)
 
 const reqID = "abracadabra"
 
-func trueFunc() bool {
+func trueFunc(context.Context) bool {
 	return true
 }
 
-func falseFunc() bool {
+func falseFunc(context.Context) bool {
 	return false
 }
 

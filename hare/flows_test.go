@@ -186,7 +186,7 @@ func validateBlock([]types.BlockID) bool {
 	return true
 }
 
-func isSynced() bool {
+func isSynced(context.Context) bool {
 	return true
 }
 

@@ -55,7 +55,7 @@ func (*syncMock) ListenToGossip() bool {
 	return true
 }
 
-func (*syncMock) IsSynced() bool {
+func (*syncMock) IsSynced(context.Context) bool {
 	return true
 }
 

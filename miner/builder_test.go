@@ -86,7 +86,7 @@ func (mockSyncer) ListenToGossip() bool {
 
 func (mockSyncer) FetchPoetProof(context.Context, []byte) error { return nil }
 
-func (m mockSyncer) IsSynced() bool { return !m.notSynced }
+func (m mockSyncer) IsSynced(context.Context) bool { return !m.notSynced }
 
 type mockSyncerP struct {
 	synced bool
@@ -98,7 +98,7 @@ func (m mockSyncerP) ListenToGossip() bool {
 
 func (mockSyncerP) FetchPoetProof(context.Context, []byte) error { return nil }
 
-func (m mockSyncerP) IsSynced() bool { return m.synced }
+func (m mockSyncerP) IsSynced(context.Context) bool { return m.synced }
 
 type atxDbMock struct {
 }

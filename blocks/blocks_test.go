@@ -89,7 +89,7 @@ func (f fetchMock) ListenToGossip() bool {
 	return true
 }
 
-func (f fetchMock) IsSynced() bool {
+func (f fetchMock) IsSynced(context.Context) bool {
 	return true
 }
 

@@ -26,7 +26,7 @@ func (*fetchMock) ListenToGossip() bool {
 	return true
 }
 
-func (*fetchMock) IsSynced() bool {
+func (*fetchMock) IsSynced(context.Context) bool {
 	return true
 }
 

@@ -40,7 +40,7 @@ type Syncer interface {
 	//GetTxs(IDs []types.TransactionID) error
 	//GetBlocks(IDs []types.BlockID) error
 	//GetAtxs(IDs []types.ATXID) error
-	IsSynced() bool
+	IsSynced(context.Context) bool
 }
 
 // Fetcher is a general interface that defines a component capable of fetching data from remote peers
@@ -52,7 +52,7 @@ type Fetcher interface {
 	GetBlocks(context.Context, []types.BlockID) error
 	GetAtxs(context.Context, []types.ATXID) error
 	ListenToGossip() bool
-	IsSynced() bool
+	IsSynced(context.Context) bool
 }
 
 // AddListener adds a listener to a specific gossip channel

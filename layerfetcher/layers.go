@@ -302,7 +302,7 @@ func (l *Logic) blockReceiveFunc(data []byte) error {
 }
 
 // IsSynced indocates if this node is synced
-func (l *Logic) IsSynced() bool {
+func (l *Logic) IsSynced(context.Context) bool {
 	//todo: add this logic
 	return true
 }

@@ -128,7 +128,7 @@ type mockSyncer struct {
 	isSync bool
 }
 
-func (s *mockSyncer) IsSynced() bool {
+func (s *mockSyncer) IsSynced(context.Context) bool {
 	return s.isSync
 }
 

@@ -32,8 +32,8 @@ type GenesisTimeAPI interface {
 
 // Syncer is the API to get sync status and to start sync
 type Syncer interface {
-	IsSynced() bool
-	Start(ctx context.Context)
+	IsSynced(context.Context) bool
+	Start(context.Context)
 }
 
 // TxAPI is an api for getting transaction status

@@ -32,7 +32,7 @@ type signer interface {
 type syncer interface {
 	FetchPoetProof(ctx context.Context, poetProofRef []byte) error
 	ListenToGossip() bool
-	IsSynced() bool
+	IsSynced(context.Context) bool
 }
 
 type txPool interface {

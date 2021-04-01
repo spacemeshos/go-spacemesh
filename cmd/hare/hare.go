@@ -73,7 +73,7 @@ type HareApp struct {
 }
 
 // IsSynced returns true always as we assume the node is synced
-func IsSynced() bool {
+func IsSynced(context.Context) bool {
 	return true
 }
 

@@ -409,8 +409,8 @@ type SyncerMock struct {
 	isSynced    bool
 }
 
-func (s *SyncerMock) IsSynced() bool        { return s.isSynced }
-func (s *SyncerMock) Start(context.Context) { s.startCalled = true }
+func (s *SyncerMock) IsSynced(context.Context) bool { return s.isSynced }
+func (s *SyncerMock) Start(context.Context)         { s.startCalled = true }
 
 type MempoolMock struct {
 	// In the real state.TxMempool struct, there are multiple data structures and they're more complex,

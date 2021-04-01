@@ -14,7 +14,7 @@ const inboxCapacity = 1024 // inbox size per instance
 
 type startInstanceError error
 
-type syncStateFunc func() bool
+type syncStateFunc func(context.Context) bool
 
 type validator interface {
 	Validate(context.Context, *Msg) bool
@@ -275,7 +275,7 @@ func (b *Broker) updateSynchronicity(ctx context.Context, id instanceID) {
 
 	// not exist means unknown, check & set
 
-	if !b.isNodeSynced() {
+	if !b.isNodeSynced(ctx) {
 		b.WithContext(ctx).With().Info("node is not synced, marking layer as not synced", types.LayerID(id))
 		b.syncState[id] = false // mark not synced
 		return
