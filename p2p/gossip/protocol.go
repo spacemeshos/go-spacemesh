@@ -123,7 +123,7 @@ func (p *Protocol) processMessage(ctx context.Context, sender p2pcrypto.PublicKe
 		return nil
 	}
 
-	logger.Event().Debug("gossip message is new, processing")
+	logger.Event().Debug("gossip message is new, processing", log.String("protocol", protocol))
 	metrics.NewGossipMessages.With("protocol", protocol).Add(1)
 	return p.net.ProcessGossipProtocolMessage(ctx, sender, protocol, msg, p.propagateQ)
 }
