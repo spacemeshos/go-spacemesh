@@ -372,7 +372,7 @@ loop:
 				continue
 			}
 			log.Info("all miners tried to create block in %v", layer)
-			if eventDb.GetNumOfCreatedBlocks(layer) /* *numOfInstances */ != eventDb.GetReceivedBlocks(layer) {
+			if eventDb.GetNumOfCreatedBlocks(layer)*numOfInstances != eventDb.GetReceivedBlocks(layer) {
 				log.Warning("finished: %v, block received %v layer %v", eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer), layer)
 				time.Sleep(500 * time.Millisecond)
 				errors++

@@ -297,12 +297,16 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 	epoch := id.GetEpoch()
 	refBlock, err := t.getRefBlock(epoch)
 	if err != nil {
-		t.With().Debug("creating block with active set (no reference block for epoch)",
+		t.With().Warning("creating block with active set (no reference block for epoch)",
 			log.Int("active_set_size", len(activeSet)),
 			log.FieldNamed("ref_block", refBlock),
 			log.Err(err))
-		atxs := activeSet
-		b.ActiveSet = &atxs
+		if activeSet != nil {
+			b.ActiveSet = &activeSet
+		} else {
+			atxs := t.AtxDb.GetEpochAtxs(id.GetEpoch() - 1)
+			b.ActiveSet = &atxs
+		}
 	} else {
 		t.With().Debug("creating block with reference block (no active set)",
 			log.Int("active_set_size", len(activeSet)),
