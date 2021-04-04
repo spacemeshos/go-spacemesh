@@ -16,6 +16,7 @@ layer-duration-sec = "5"
 block-cache-size = "20"
 hdist = "5"
 coinbase = "0x1234"
+golden-atx = "0x5678"
 
 # Node Config
 [p2p]
@@ -55,6 +56,7 @@ json-port = 9093
 max-allowed-time-drift = "10s"
 ntp-queries = 5
 default-timeout-latency = "10s"
+ntp-servers = ["time-a-wwv.nist.gov","time-b-wwv.nist.gov","time-c-wwv.nist.gov","time.google.com","time1.google.com","time3.google.com","time4.google.com","time.asia.apple.com","time.americas.apple.com"]
 
 # Hare Config
 [hare]

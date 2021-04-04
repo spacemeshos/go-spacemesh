@@ -2,10 +2,11 @@ package types
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"strings"
 )
 
 // TransactionID is a 32-byte sha256 sum of the transaction, used as an identifier.
@@ -33,7 +34,7 @@ func (id TransactionID) Bytes() []byte {
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (id TransactionID) Field() log.Field { return id.Hash32().Field("tx_id") }
+func (id TransactionID) Field() log.Field { return log.FieldNamed("tx_id", id.Hash32()) }
 
 // TxIdsField returns a list of loggable fields for a given list of IDs
 func TxIdsField(ids []TransactionID) log.Field {
@@ -131,6 +132,8 @@ type Reward struct {
 	Layer               LayerID
 	TotalReward         uint64
 	LayerRewardEstimate uint64
+	SmesherID           NodeID
+	Coinbase            Address
 }
 
 // NewSignedTx is used in TESTS ONLY to generate signed txs

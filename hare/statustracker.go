@@ -43,7 +43,7 @@ func (st *statusTracker) RecordStatus(msg *Msg) {
 func (st *statusTracker) AnalyzeStatuses(isValid func(m *Msg) bool) {
 	st.count = 0
 	for key, m := range st.statuses {
-		if !isValid(m) || st.count >= st.threshold { // only keep valid Messages
+		if !isValid(m) { // only keep valid Messages
 			delete(st.statuses, key)
 		} else {
 			st.count += m.InnerMsg.EligibilityCount

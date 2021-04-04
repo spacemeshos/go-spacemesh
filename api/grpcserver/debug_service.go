@@ -43,7 +43,7 @@ func (d DebugService) Accounts(_ context.Context, in *empty.Empty) (*pb.Accounts
 	for address, accountData := range accounts.Accounts {
 		state := &pb.AccountState{
 			Counter: accountData.Nonce,
-			Balance: &pb.Amount{Value: accountData.Balance.Uint64()},
+			Balance: &pb.Amount{Value: accountData.Balance},
 		}
 
 		account := &pb.Account{

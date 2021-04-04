@@ -78,18 +78,27 @@ type BaseConfig struct {
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
 
-	GenesisConfPath    string `mapstructure:"genesis-conf"`
+	GenesisConfPath string `mapstructure:"genesis-conf"`
+
 	GenesisTotalWeight uint64 `mapstructure:"genesis-total-weight"` // the total weight for genesis
 
-	StartMining     bool   `mapstructure:"start-mining"`    // Should the node start mining
-	CoinbaseAccount string `mapstructure:"coinbase"`        // The account credited for mining rewards
-	SpaceToCommit   uint64 `mapstructure:"space-to-commit"` // Number of bytes to commit to mining
+	CoinbaseAccount string `mapstructure:"coinbase"`
 
-	SyncRequestTimeout  int `mapstructure:"sync-request-timeout"`  // ms the timeout for direct request in the sync
-	SyncInterval        int `mapstructure:"sync-interval"`         // sync interval in seconds
+	SpaceToCommit uint64 `mapstructure:"space-to-commit"` // Number of bytes to commit to mining
+
+	GoldenATXID string `mapstructure:"golden-atx"`
+
+	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
+
+	SyncRequestTimeout int `mapstructure:"sync-request-timeout"` // ms the timeout for direct request in the sync
+
+	SyncInterval int `mapstructure:"sync-interval"` // sync interval in seconds
+
 	SyncValidationDelta int `mapstructure:"sync-validation-delta"` // sync interval in seconds
 
 	PublishEventsURL string `mapstructure:"events-url"`
+
+	StartMining bool `mapstructure:"start-mining"`
 
 	AtxsPerBlock int `mapstructure:"atxs-per-block"`
 
@@ -98,6 +107,8 @@ type BaseConfig struct {
 	BlockCacheSize int `mapstructure:"block-cache-size"`
 
 	AlwaysListen bool `mapstructure:"always-listen"` // force gossip to always be on (for testing)
+
+	Profiler bool `mapstructure:"profiler"`
 }
 
 // LoggerConfig holds the logging level for each module.
@@ -107,8 +118,8 @@ type LoggerConfig struct {
 	PostLoggerLevel           string `mapstructure:"post"`
 	StateDbLoggerLevel        string `mapstructure:"stateDb"`
 	StateLoggerLevel          string `mapstructure:"state"`
-	AtxDbStoreLoggerLevel     string `mapstructure:"atxDb"`
-	PoetDbStoreLoggerLevel    string `mapstructure:"poetDb"`
+	AtxDbStoreLoggerLevel     string `mapstructure:"atxDbStore"`
+	PoetDbStoreLoggerLevel    string `mapstructure:"poetDbStore"`
 	StoreLoggerLevel          string `mapstructure:"store"`
 	PoetDbLoggerLevel         string `mapstructure:"poetDb"`
 	MeshDBLoggerLevel         string `mapstructure:"meshDb"`
@@ -165,6 +176,7 @@ func defaultBaseConfig() BaseConfig {
 		LayerDurationSec:    30,
 		LayersPerEpoch:      3,
 		PoETServer:          "127.0.0.1",
+		GoldenATXID:         "0x5678", // TODO: Change the value
 		Hdist:               5,
 		GenesisTotalWeight:  5 * 1024 * 1, // 5 miners * 1024 byte PoST * 1 PoET ticks
 		BlockCacheSize:      20,
@@ -173,6 +185,7 @@ func defaultBaseConfig() BaseConfig {
 		SyncValidationDelta: 30,
 		AtxsPerBlock:        100,
 		TxsPerBlock:         100,
+		Profiler:            false,
 	}
 }
 

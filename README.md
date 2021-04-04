@@ -16,7 +16,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/spacemeshos/go-spacemesh)](https://goreportcard.com/report/github.com/spacemeshos/go-spacemesh)
 [![Bors enabled](https://bors.tech/images/badge_small.svg)](https://app.bors.tech/repositories/22421)
 <a href="https://godoc.org/github.com/spacemeshos/go-spacemesh"><img src="https://img.shields.io/badge/godoc-LGTM-blue.svg"/></a>
-[![CI](https://github.com/spacemeshos/go-spacemesh/workflows/CI/badge.svg?branch=develop)](https://github.com/spacemeshos/go-spacemesh/actions)
+[![CI: passing](https://img.shields.io/badge/CI-passing-success?logo=github&style=flat)](https://github.com/spacemeshos/go-spacemesh/blob/develop/ci.md#ci-status)
 </p>
 <p align="center">
 <a href="https://gitcoin.co/profile/spacemeshos" title="Push Open Source Forward">
@@ -177,9 +177,10 @@ Assuming tn1.json is a testnet config file saved in the same directory as go-spa
 
 4. Use the CLI wallet to check your coinbase account balance and to transact
 
-#### Joining Spacemesh ([TweedleDee](https://testnet.spacemesh.io/#/?id=what-is-spacemesh-01-tweedledee)) Testnet (net id 118)
-1. Build go-spacemesh source code from this github release: [go-spacemesh 0.1.14](https://github.com/spacemeshos/go-spacemesh/releases/tag/v0.1.14).
-2. Follow the instructions on how to join a testnet with mining (above) and use [TweedleDee net id 118 config file](https://raw.githubusercontent.com/spacemeshos/smapp/v0.1.1/desktop/config.json) as your node's config file.  
+#### Joining Spacemesh ([TweedleDee](https://testnet.spacemesh.io/#/?id=what-is-spacemesh-01-tweedledee)) Testnet
+Find the latest Testnet release in the [releases](https://github.com/spacemeshos/go-spacemesh/releases/) and download the precompiled binary for your platform of choice (or you can compile `go-spacemesh` yourself, from source, using the release tag). The release notes contain a link to a `config.json` file that you'll need to join the testnet.
+
+Note that you must download (or build) precisely this version (latest Testnet release) of `go-spacemesh`, and the compatible config file, in order to join the current testnet. Older versions of the code may be incompatible with this testnet, and a different config file will not work.
 
 ---
 
@@ -228,5 +229,5 @@ Close and reopen powershell to load the new PATH. You can then run the command `
 - Spacemesh Protocol [video overview](https://www.youtube.com/watch?v=jvtHFOlA1GI)
 
 ### Got Questions?
-- Introduce yourself and ask anything on the [spacemesh gitter channel](https://gitter.im/spacemesh-os/Lobby).
+- Introduce yourself and ask anything on [Discord](http://chat.spacemesh.io/).
 - DM [@teamspacemesh](https://twitter.com/teamspacemesh)

@@ -17,6 +17,7 @@ type TimeConfig struct {
 	NtpQueries            int           `mapstructure:"ntp-queries"`
 	DefaultTimeoutLatency time.Duration `mapstructure:"default-timeout-latency"`
 	RefreshNtpInterval    time.Duration `mapstructure:"refresh-ntp-interval"`
+	NTPServers            []string      `mapstructure:"ntp-servers"`
 }
 
 //todo: this is a duplicate function found also in p2p config
@@ -37,6 +38,17 @@ func DefaultConfig() TimeConfig {
 		NtpQueries:            5,
 		DefaultTimeoutLatency: duration("10s"),
 		RefreshNtpInterval:    duration("30m"),
+		NTPServers: []string{
+			"time-a-wwv.nist.gov",
+			"time-b-wwv.nist.gov",
+			"time-c-wwv.nist.gov",
+			"time.google.com",
+			"time1.google.com",
+			"time3.google.com",
+			"time4.google.com",
+			"time.asia.apple.com",
+			"time.americas.apple.com",
+		},
 	}
 
 	return TimeConfigValues

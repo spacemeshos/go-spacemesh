@@ -3,12 +3,14 @@ package blocks
 import (
 	"errors"
 	"fmt"
+	"testing"
+
 	"github.com/spacemeshos/amcl/BLS381"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 var atxID = types.ATXID([32]byte{1, 3, 3, 7})
@@ -100,7 +102,7 @@ func testBlockOracleAndValidator(r *require.Assertions, totalWeight uint64, comm
 	for layer := layersPerEpoch * 2; layer < layersPerEpoch*uint16(numberOfEpochsToTest+2); layer++ {
 		activationDB.atxPublicationLayer = types.LayerID((layer/layersPerEpoch)*layersPerEpoch - 1)
 		layerID := types.LayerID(layer)
-		_, proofs, err := blockOracle.BlockEligible(layerID)
+		_, proofs, _, err := blockOracle.BlockEligible(layerID)
 		r.NoError(err)
 
 		for _, proof := range proofs {
@@ -138,7 +140,7 @@ func TestBlockOracleInGenesisReturnsNoAtx(t *testing.T) {
 	for layer := uint16(0); layer < layersPerEpoch; layer++ {
 		activationDB.atxPublicationLayer = types.LayerID((layer/layersPerEpoch)*layersPerEpoch - 1)
 		layerID := types.LayerID(layer)
-		atxID, _, err := blockOracle.BlockEligible(layerID)
+		atxID, _, _, err := blockOracle.BlockEligible(layerID)
 		r.NoError(err)
 		r.Equal(*types.EmptyATXID, atxID)
 	}
@@ -157,7 +159,7 @@ func TestBlockOracleEmptyActiveSet(t *testing.T) {
 	lg := log.NewDefault(nodeID.Key[:5])
 	blockOracle := NewMinerBlockOracle(committeeSize, totalWeight, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nodeID, func() bool { return true }, lg.WithName("blockOracle"))
 
-	_, proofs, err := blockOracle.BlockEligible(types.LayerID(layersPerEpoch * 3))
+	_, proofs, _, err := blockOracle.BlockEligible(types.LayerID(layersPerEpoch * 3))
 	r.EqualError(err, "zero total weight not allowed")
 	r.Nil(proofs)
 }
@@ -201,8 +203,8 @@ func TestBlockOracleNoActivationsForNode(t *testing.T) {
 	lg := log.NewDefault(nID.Key[:5])
 	blockOracle := NewMinerBlockOracle(committeeSize, totalWeight, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nID, func() bool { return true }, lg.WithName("blockOracle"))
 
-	_, proofs, err := blockOracle.BlockEligible(types.LayerID(layersPerEpoch * 2))
-	r.EqualError(err, "failed to get latest ATX: failed to get ATX ID for target epoch 2: not found")
+	_, proofs, _, err := blockOracle.BlockEligible(types.LayerID(layersPerEpoch * 2))
+	r.EqualError(err, "failed to get latest atx for node in epoch 2: failed to get atx id for target epoch 2: not found")
 	r.Nil(proofs)
 }
 
@@ -221,7 +223,7 @@ func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 
 	layerID := types.LayerID(layersPerEpoch * 2)
 
-	_, proofs, err := blockOracle.BlockEligible(layerID)
+	_, proofs, _, err := blockOracle.BlockEligible(layerID)
 	r.NoError(err)
 	r.NotNil(proofs)
 
@@ -254,7 +256,7 @@ func TestBlockOracleValidatorInvalidProof2(t *testing.T) {
 
 	layerID := types.LayerID(layersPerEpoch * 2)
 
-	_, proofs, err := blockOracle.BlockEligible(layerID)
+	_, proofs, _, err := blockOracle.BlockEligible(layerID)
 	r.NoError(err)
 	r.NotNil(proofs)
 
@@ -286,7 +288,7 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 
 	layerID := types.LayerID(layersPerEpoch * 2)
 
-	_, proofs, err := blockOracle.BlockEligible(layerID)
+	_, proofs, _, err := blockOracle.BlockEligible(layerID)
 	r.NoError(err)
 	r.NotNil(proofs)
 
@@ -350,7 +352,7 @@ func TestMinerBlockOracle_GetEligibleLayers(t *testing.T) {
 	for layer := layersPerEpoch * 2; layer < layersPerEpoch*uint16(numberOfEpochsToTest+2); layer++ {
 		activationDB.atxPublicationLayer = types.LayerID((layer/layersPerEpoch)*layersPerEpoch - 1)
 		layerID := types.LayerID(layer)
-		_, proofs, err := blockOracle.BlockEligible(layerID)
+		_, proofs, _, err := blockOracle.BlockEligible(layerID)
 		r.NoError(err)
 		if len(proofs) > 0 {
 			eligibleLayers++

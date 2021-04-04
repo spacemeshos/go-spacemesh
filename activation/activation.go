@@ -4,14 +4,16 @@ package activation
 
 import (
 	"fmt"
+	"sync"
+	"sync/atomic"
+
 	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/post/shared"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/post/shared"
-	"sync"
-	"sync/atomic"
 )
 
 // AtxProtocol is the protocol id for broadcasting atxs over gossip
@@ -76,17 +78,26 @@ const (
 	InitDone
 )
 
+// Config defines configuration for Builder
+type Config struct {
+	CoinbaseAccount types.Address
+	GoldenATXID     types.ATXID
+	LayersPerEpoch  uint16
+}
+
 // Builder struct is the struct that orchestrates the creation of activation transactions
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
 // calculate total weight and providing relevant view as proof
 type Builder struct {
 	signer
+	accountLock     sync.RWMutex
 	nodeID          types.NodeID
 	coinbaseAccount types.Address
+	goldenATXID     types.ATXID
+	layersPerEpoch  uint16
 	db              atxDBProvider
 	net             broadcaster
 	mesh            meshProvider
-	layersPerEpoch  uint16
 	tickProvider    poetNumberOfTickProvider
 	nipstBuilder    nipstBuilder
 	postProver      PostProverClient
@@ -97,7 +108,6 @@ type Builder struct {
 	started         uint32
 	store           bytesStore
 	syncer          syncer
-	accountLock     sync.RWMutex
 	initStatus      int32
 	initDone        chan struct{}
 	committedSpace  uint64
@@ -114,15 +124,16 @@ type syncer interface {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeID types.NodeID, coinbaseAccount types.Address, spaceToCommit uint64, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipstBuilder nipstBuilder, postProver PostProverClient, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
+func NewBuilder(conf Config, nodeID types.NodeID, spaceToCommit uint64, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipstBuilder nipstBuilder, postProver PostProverClient, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
 	return &Builder{
 		signer:          signer,
 		nodeID:          nodeID,
-		coinbaseAccount: coinbaseAccount,
+		coinbaseAccount: conf.CoinbaseAccount,
+		goldenATXID:     conf.GoldenATXID,
+		layersPerEpoch:  conf.LayersPerEpoch,
 		db:              db,
 		net:             net,
 		mesh:            mesh,
-		layersPerEpoch:  layersPerEpoch,
 		nipstBuilder:    nipstBuilder,
 		postProver:      postProver,
 		layerClock:      layerClock,
@@ -215,6 +226,7 @@ func (b *Builder) buildNipstChallenge(currentLayer types.LayerID) error {
 		}
 		challenge.EndTick = b.tickProvider.NumOfTicks()
 		challenge.PubLayerID = currentLayer.Add(b.layersPerEpoch)
+		challenge.PositioningATX = b.goldenATXID
 	} else {
 		challenge.PositioningATX = posAtx.ID()
 		challenge.PubLayerID = posAtx.PubLayerID.Add(b.layersPerEpoch)
@@ -428,7 +440,7 @@ func (b *Builder) PublishActivationTx() error {
 		return err
 	}
 
-	b.log.Event().Info("atx published!", atx.Fields(size)...)
+	b.log.Event().Info("atx published", atx.Fields(size)...)
 	events.ReportAtxCreated(true, uint64(b.currentEpoch()), atx.ShortString())
 
 	select {

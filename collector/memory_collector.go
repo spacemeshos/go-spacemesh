@@ -1,9 +1,10 @@
 package collector
 
 import (
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"sync"
 )
 
 // MemoryCollector is an in memory database to store collected events
@@ -170,4 +171,13 @@ func (c *MemoryCollector) GetReceivedBlocks(layer types.LayerID) int {
 	c.lck.RLock()
 	defer c.lck.RUnlock()
 	return len(c.gotBlockEvent[uint64(layer)])
+}
+
+// AtxIDExists checks if an ATX with a certain ID exists.
+func (c *MemoryCollector) AtxIDExists(atxID string) bool {
+	c.lck.Lock()
+	_, found := c.Atxs[atxID]
+	c.lck.Unlock()
+
+	return found
 }

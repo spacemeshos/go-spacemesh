@@ -148,7 +148,7 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	agg := &aggregatedMessages{}
 	r.Equal(errNilMsgsSlice, validator.validateAggregatedMessage(agg, funcs))
 
-	agg.Messages = make([]*Message, validator.threshold+1)
+	agg.Messages = makeMessages(validator.threshold - 1)
 	r.Equal(errMsgsCountMismatch, validator.validateAggregatedMessage(agg, funcs))
 
 	pg, msgs, sgn := initPg(t, validator)
@@ -190,6 +190,16 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	r.Nil(pg.PublicKey(msgs[0]))
 	validator.validateAggregatedMessage(agg, funcs)
 	r.NotNil(pg.PublicKey(msgs[0]))
+}
+
+func makeMessages(eligibilityCount int) []*Message {
+	return []*Message{
+		{
+			InnerMsg: &innerMessage{
+				EligibilityCount: uint16(eligibilityCount),
+			},
+		},
+	}
 }
 
 func TestSyntaxContextValidator_PreRoundContext(t *testing.T) {

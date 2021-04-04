@@ -397,3 +397,44 @@ func TestUDPNet_Cache2(t *testing.T) {
 	require.Equal(t, closed, 1)
 
 }
+
+func Test_UDPIncomingConnClose(t *testing.T) {
+	localnode, _ := node.NewNodeIdentity()
+	remotenode, _ := node.NewNodeIdentity()
+	n, err := NewUDPNet(config.DefaultConfig(), localnode, log.NewDefault(t.Name()+"_local"))
+	require.NoError(t, err)
+	require.NotNil(t, n)
+
+	remoten, rerr := NewUDPNet(config.DefaultConfig(), remotenode, log.NewDefault(t.Name()+"_remote"))
+	require.NoError(t, rerr)
+	require.NotNil(t, remoten)
+
+	ns := remoten.cache.GetOrCreate(localnode.PublicKey())
+	data := []byte("random message")
+	sealed := ns.SealMessage(data)
+	final := p2pcrypto.PrependPubkey(sealed, n.local.PublicKey())
+
+	addr := testUDPAddr()
+
+	donech := make(chan struct{})
+
+	lis := &udpConnMock{
+		ReadFromFunc: func(p []byte) (int, net.Addr, error) {
+			copy(p, final)
+			donech <- struct{}{}
+			return len(final), addr, nil
+		},
+		CloseFunc: func() error {
+			t.Fatal("Closed the listener")
+			return nil
+		},
+	}
+	n.conn = lis
+
+	go n.listenToUDPNetworkMessages(lis)
+	<-donech
+	<-donech
+	conn := n.incomingConn[addr.String()]
+	conn.Close()
+	time.Sleep(1 * time.Second)
+}

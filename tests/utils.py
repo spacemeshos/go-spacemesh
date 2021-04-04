@@ -152,7 +152,7 @@ def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch,
 
 
 def get_pod_id(ns, pod_name):
-    hits = q.get_all_msg_containing(ns, pod_name, "Starting HARE_PROTOCOL")
+    hits = q.query_protocol_started(ns, pod_name, "HARE_PROTOCOL")
     if not hits:
         return None
 
@@ -267,7 +267,7 @@ def exec_wait(cmd, retry=1, interval=1, is_print=True):
     :return: int, return code
     """
     # TODO: split this into 2 functions exec and exec_retry, the second will run the other
-    # TODO: shorten intervals once getting to a certain threshold
+    # TODO: optional, shorten intervals once getting to a certain threshold to increase chances of polling positively
     if is_print:
         print(f"\nrunning:\n{cmd}")
 
@@ -340,9 +340,12 @@ def is_pattern_in_file(path, look):
     return False
 
 
-def create_backup_file(path, filename, new_name):
+def create_backup_file(path, filename, new_name, new_path=None):
+    if not new_path:
+        new_path = path
+
     src_path = os.path.join(path, filename)
-    backup_path = os.path.join(path, new_name)
+    backup_path = os.path.join(new_path, new_name)
     try:
         print(f"copying {src_path} to {backup_path}")
         copyfile(src_path, backup_path)
@@ -388,3 +391,10 @@ def timing(func):
         end = time.time()
         return result, end-start
     return wrapper
+
+
+def get_env(name, is_must=True):
+    if name not in os.environ and is_must:
+        raise Exception(f"{name} environment variable must be set")
+    ret = os.getenv(name)
+    return ret

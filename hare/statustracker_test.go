@@ -104,5 +104,5 @@ func TestStatusTracker_AnalyzeStatuses(t *testing.T) {
 	tracker.RecordStatus(buildStatusMsg(generateSigning(t), s2, 1))
 	tracker.RecordStatus(buildStatusMsg(generateSigning(t), s2, 2))
 	tracker.AnalyzeStatuses(validate)
-	assert.Equal(t, 2, len(tracker.statuses))
+	assert.Equal(t, 3, int(tracker.count))
 }

@@ -1,3 +1,4 @@
+from datetime import datetime
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 import os
@@ -198,3 +199,34 @@ def wait_for_namespaced_deletion(name, namespace, deletion_func, list_func, time
             if item.metadata.name == name:
                 deleted = False
     return deleted
+
+
+def wait_for_daemonset_to_be_ready(name, namespace, timeout=None):
+    wait_for_to_be_ready("daemonset", name, namespace, timeout=timeout)
+
+
+def resolve_read_status_func(obj_name):
+    if obj_name == "daemonset":
+        return client.AppsV1Api().read_namespaced_daemon_set_status
+    else:
+        raise ValueError(f"resolve_read_status_func: {obj_name} is not a valid value")
+
+
+def wait_for_to_be_ready(obj_name, name, namespace, timeout=None):
+    start = datetime.now()
+    while True:
+        read_func = resolve_read_status_func(obj_name)
+        resp = read_func(name=name, namespace=namespace)
+        total_sleep_time = (datetime.now()-start).total_seconds()
+        number_ready = resp.status.number_ready
+        updated_number_scheduled = resp.status.updated_number_scheduled
+        if number_ready and updated_number_scheduled and number_ready == updated_number_scheduled:
+            print("Total time waiting for {3} {0} [size: {1}]: {2} sec".format(name, number_ready, total_sleep_time,
+                                                                               obj_name))
+            break
+        print("{0}/{1} pods ready {2} sec               ".format(number_ready, updated_number_scheduled, total_sleep_time), end="\r")
+        time.sleep(1)
+
+        if timeout and total_sleep_time > timeout:
+            raise Exception(f"Timeout waiting for {obj_name} to be ready")
+
