@@ -95,6 +95,10 @@ func (id NodeID) String() string {
 	return id.Key + string(id.VRFPublicKey)
 }
 
+func (id NodeID) KeyString() string {
+	return id.Key
+}
+
 // ToBytes returns the byte representation of the Edwards public key.
 func (id NodeID) ToBytes() []byte {
 	return util.Hex2Bytes(id.String())

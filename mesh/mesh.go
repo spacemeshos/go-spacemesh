@@ -777,7 +777,7 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 		if _, exists := coinbasesAndSmeshers[atx.Coinbase]; !exists {
 			coinbasesAndSmeshers[atx.Coinbase] = make(map[string]uint64)
 		}
-		coinbasesAndSmeshers[atx.Coinbase][atx.NodeID.String()]++
+		coinbasesAndSmeshers[atx.Coinbase][atx.NodeID.KeyString()]++
 	}
 
 	if len(coinbases) == 0 {
