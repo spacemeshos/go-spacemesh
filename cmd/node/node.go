@@ -534,13 +534,21 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	beaconProvider := &blocks.EpochBeaconProvider{}
 
 	var msh *mesh.Mesh
-	var trtl tortoise.Tortoise
-	if mdb.PersistentData() {
-		trtl = tortoise.NewRecoveredTortoise(mdb, app.addLogger(TrtlLogger, lg))
+	var trtl *tortoise.ThreadSafeVerifyingTortoise
+	trtlCfg := tortoise.Config{
+		LayerSyze: int(layerSize),
+		Database:  mdb,
+		Hdist:     app.Config.Hdist,
+		Log:       app.addLogger(TrtlLogger, lg),
+		Recovered: mdb.PersistentData(),
+	}
+
+	trtl = tortoise.NewVerifyingTortoise(trtlCfg)
+
+	if trtlCfg.Recovered {
 		msh = mesh.NewRecoveredMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
-		trtl = tortoise.NewTortoise(int(layerSize), mdb, app.Config.Hdist, app.addLogger(TrtlLogger, lg))
 		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		app.setupGenesis(processor, msh)
 	}
@@ -597,7 +605,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	}
 
 	database.SwitchCreationContext(dbStorepath, "") // currently only blockbuilder uses this mechanism
-	blockProducer := miner.NewBlockBuilder(minerCfg, sgn, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
+	blockProducer := miner.NewBlockBuilder(minerCfg, sgn, swarm, clock.Subscribe(), coinToss, msh, trtl, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
 
 	bCfg := blocks.Config{
 		Depth:       app.Config.Hdist,
@@ -669,7 +677,9 @@ func (app *SpacemeshApp) checkTimeDrifts() {
 // HareFactory returns a hare consensus algorithm according to the parameters is app.Config.Hare.SuperHare
 func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm service.Service, sgn hare.Signer, nodeID types.NodeID, syncer *sync.Syncer, msh *mesh.Mesh, hOracle hare.Rolacle, idStore *activation.IdentityStore, clock TickProvider, lg log.Log) HareService {
 	if app.Config.HARE.SuperHare {
-		return turbohare.New(ctx, msh)
+		hr := turbohare.New(ctx, msh)
+		mdb.InputVectorBackupFunc = hr.GetResult
+		return hr
 	}
 
 	// a function to validate we know the blocks
@@ -677,19 +687,18 @@ func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm se
 		for _, b := range ids {
 			res, err := mdb.GetBlock(b)
 			if err != nil {
-				app.log.With().Error("output set block not in database", b, log.Err(err))
+				app.log.WithContext(ctx).With().Error("output set block not in database", b, log.Err(err))
 				return false
 			}
 			if res == nil {
-				app.log.With().Error("output set block not in database (BUG BUG BUG - FetchBlock return err nil and res nil)", b)
+				app.log.WithContext(ctx).With().Error("output set block not in database (BUG BUG BUG - FetchBlock return err nil and res nil)", b)
 				return false
 			}
-
 		}
 
 		return true
 	}
-	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, validationFunc, syncer.IsSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, hOracle, clock.Subscribe(), app.addLogger(HareLogger, lg))
+	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, validationFunc, syncer.IsHareSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, hOracle, clock.Subscribe(), app.addLogger(HareLogger, lg))
 	return ha
 }
 

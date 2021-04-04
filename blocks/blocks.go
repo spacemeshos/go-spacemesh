@@ -64,37 +64,6 @@ func NewBlockHandler(cfg Config, m mesh, v blockValidator, lg log.Log) *BlockHan
 	}
 }
 
-func (bh BlockHandler) validateVotes(blk *types.Block) error {
-	view := map[types.BlockID]struct{}{}
-	for _, b := range blk.ViewEdges {
-		view[b] = struct{}{}
-	}
-
-	vote := map[types.BlockID]struct{}{}
-	for _, b := range blk.BlockVotes {
-		vote[b] = struct{}{}
-	}
-
-	traverse := func(b *types.Block) (stop bool, err error) {
-		if _, ok := vote[b.ID()]; ok {
-			delete(vote, b.ID())
-		}
-		return len(vote) == 0, nil
-	}
-
-	// traverse only through the last Hdist layers
-	lowestLayer := blk.LayerIndex - types.LayerID(bh.depth)
-	if blk.LayerIndex < types.LayerID(bh.depth) {
-		lowestLayer = 0
-	}
-	err := bh.traverse(view, lowestLayer, traverse)
-	if err == nil && len(vote) > 0 {
-		return fmt.Errorf("voting on blocks out of view (or out of Hdist), %v %s", vote, err)
-	}
-
-	return err
-}
-
 // HandleBlock handles blocks from gossip
 func (bh *BlockHandler) HandleBlock(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
 	// restore the request ID and add context
@@ -150,6 +119,10 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, sync s
 	return nil
 }
 
+func combineBlockDiffs(blk types.Block) []types.BlockID {
+	return append(blk.ForDiff, append(blk.AgainstDiff, blk.NeutralDiff...)...)
+}
+
 func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *types.Block, syncer service.Fetcher) error {
 	bh.WithContext(ctx).With().Debug("syntactically validating block", block.ID())
 
@@ -182,14 +155,9 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	}
 
 	// get and validate blocks views using the fetch
-	err = syncer.GetBlocks(ctx, block.ViewEdges)
+	err = syncer.GetBlocks(ctx, combineBlockDiffs(*block))
 	if err != nil {
 		return fmt.Errorf("failed to fetch view %v e: %v", block.ID(), err)
-	}
-
-	// validate block's votes
-	if err := bh.validateVotes(block); err != nil {
-		return fmt.Errorf("validate votes failed for block %v, %v", block.ID(), err)
 	}
 
 	bh.WithContext(ctx).With().Debug("block syntactic validation done", block.ID())

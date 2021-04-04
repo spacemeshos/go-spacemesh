@@ -121,7 +121,7 @@ func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(context.Context
 			return nil
 		}
 
-		lgr.Info("send block response")
+		lgr.With().Info("send block response", log.Int("block_size", len(bbytes)))
 		return bbytes
 	}
 }
@@ -202,5 +202,24 @@ func newPoetRequestHandler(s *Syncer, logger log.Log) func(context.Context, []by
 		}
 		lgr.Info("returning poet proof (id: %x) to neighbor", shortPoetRef)
 		return proofMessage
+	}
+}
+
+func newInputVecRequestHandler(s *Syncer, logger log.Log) func(context.Context, []byte) []byte {
+	return func(ctx context.Context, msg []byte) []byte {
+		lgr := logger.WithContext(ctx)
+		lyrid := util.BytesToUint64(msg)
+		input, err := s.DB.GetLayerInputVector(types.LayerID(lyrid))
+		if err != nil {
+			logger.Warning("unfamiliar layer input vector was requested (id: %x): %v", lyrid, err)
+			return nil
+		}
+		lgr.Info("returning input vector for (lyr: %x) to neighbor", lyrid)
+
+		blks, err := types.InterfaceToBytes(input)
+		if err != nil {
+			return nil
+		}
+		return blks
 	}
 }

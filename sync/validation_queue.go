@@ -109,7 +109,7 @@ func (vq *blockQueue) handleBlock(ctx context.Context, id types.Hash32, block *t
 func (vq *blockQueue) handleBlockDependencies(ctx context.Context, blk *types.Block) {
 	logger := vq.WithContext(ctx).WithFields(blk.ID())
 	logger.Debug("handle block dependencies")
-	res, err := vq.addDependencies(ctx, blk.ID(), blk.ViewEdges, vq.finishBlockCallback(blk))
+	res, err := vq.addDependencies(ctx, blk.ID(), append(append(blk.ForDiff, blk.NeutralDiff...), blk.AgainstDiff...), vq.finishBlockCallback(blk))
 
 	if err != nil {
 		vq.updateDependencies(ctx, blk.Hash32(), false)
@@ -136,11 +136,6 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(ctx context.C
 		_, _, err := vq.dataAvailability(ctx, block)
 		if err != nil {
 			return fmt.Errorf("DataAvailabilty failed for block: %v errmsg: %v", block.ID().String(), err)
-		}
-
-		// validate block's votes
-		if valid, err := validateVotes(block, vq.ForBlockInView, vq.Hdist); valid == false || err != nil {
-			return fmt.Errorf("validate votes failed for block: %s errmsg: %s", block.ID().String(), err)
 		}
 
 		err = vq.AddBlockWithTxs(block)
@@ -225,14 +220,14 @@ func (vq *blockQueue) addDependencies(ctx context.Context, jobID interface{}, bl
 		bid := id.AsHash32()
 		if vq.inQueue(bid) {
 			vq.reverseDepMap[bid] = append(vq.reverseDepMap[bid], jobID)
-			logger.With().Debug("adding already queued block to pending map", id)
+			logger.With().Info("adding already queued block to pending map", id)
 			dependencies[bid] = struct{}{}
 		} else {
 			//	check database
 			if _, err := vq.GetBlock(id); err != nil {
 				// add unknown block to queue
 				vq.reverseDepMap[bid] = append(vq.reverseDepMap[bid], jobID)
-				logger.With().Debug("adding unknown block to pending map", id)
+				logger.With().Info("adding unknown block to pending map", id)
 				dependencies[bid] = struct{}{}
 				idsToPush = append(idsToPush, id.AsHash32())
 			}
@@ -259,7 +254,7 @@ func (vq *blockQueue) addDependencies(ctx context.Context, jobID interface{}, bl
 		vq.addToPending(ctx, idsToPush)
 	}
 
-	logger.With().Debug("finished adding dependencies",
+	logger.With().Info("finished adding dependencies",
 		log.Int("count", len(dependencies)))
 	return true, nil
 }

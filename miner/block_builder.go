@@ -7,6 +7,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/rand"
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -14,9 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"math/rand"
-	"sync"
-	"time"
 )
 
 const defaultGasLimit = 10
@@ -47,6 +47,10 @@ type blockOracle interface {
 	BlockEligible(layerID types.LayerID) (types.ATXID, []types.BlockEligibilityProof, []types.ATXID, error)
 }
 
+type baseBlockProvider interface {
+	BaseBlock() (types.BlockID, [][]types.BlockID, error)
+}
+
 type atxDb interface {
 	GetEpochAtxs(epochID types.EpochID) []types.ATXID
 }
@@ -73,6 +77,7 @@ type BlockBuilder struct {
 	network         p2p.Service
 	weakCoinToss    weakCoinProvider
 	meshProvider    meshProvider
+	baseBlockP      baseBlockProvider
 	blockOracle     blockOracle
 	syncer          syncer
 	started         bool
@@ -94,7 +99,7 @@ type Config struct {
 }
 
 // NewBlockBuilder creates a struct of block builder type.
-func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin weakCoinProvider, orph meshProvider, hare hareResultProvider, blockOracle blockOracle, syncer syncer, projector projector, txPool txPool, atxDB atxDb, lg log.Log) *BlockBuilder {
+func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin weakCoinProvider, orph meshProvider, bbp baseBlockProvider, hare hareResultProvider, blockOracle blockOracle, syncer syncer, projector projector, txPool txPool, atxDB atxDb, lg log.Log) *BlockBuilder {
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(config.MinerID.Key)))
 
 	db, err := database.Create("builder", 16, 16, lg)
@@ -115,6 +120,7 @@ func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent
 		network:         net,
 		weakCoinToss:    weakCoin,
 		meshProvider:    orph,
+		baseBlockP:      bbp,
 		blockOracle:     blockOracle,
 		syncer:          syncer,
 		started:         false,
@@ -273,12 +279,24 @@ func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, 
 }
 
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID, activeSet []types.ATXID) (*types.Block, error) {
+
+	if id <= types.GetEffectiveGenesis() {
+		return nil, errors.New("cannot create blockBytes in genesis layer")
+	}
+
+	// TODO: use this instead have logic inside trtl
+	/*votes, err := t.getVotes(id)
 	votes, err := t.getVotes(id)
 	if err != nil {
 		return nil, err
 	}
 
 	viewEdges, err := t.meshProvider.GetOrphanBlocksBefore(id)
+	if err != nil {
+		return nil, err
+	}*/
+
+	base, diffs, err := t.baseBlockP.BaseBlock()
 	if err != nil {
 		return nil, err
 	}
@@ -290,9 +308,10 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 			EligibilityProof: eligibilityProof,
 			Data:             nil,
 			Coin:             t.weakCoinToss.GetResult(),
-			Timestamp:        time.Now().UnixNano(),
-			BlockVotes:       votes,
-			ViewEdges:        viewEdges,
+			BaseBlock:        base,
+			AgainstDiff:      diffs[0],
+			ForDiff:          diffs[1],
+			NeutralDiff:      diffs[2],
 		},
 		TxIDs: txids,
 	}
