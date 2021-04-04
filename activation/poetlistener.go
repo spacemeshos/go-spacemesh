@@ -31,7 +31,7 @@ func (l *PoetListener) Start(ctx context.Context) {
 	if l.started {
 		return
 	}
-	go l.loop()
+	go l.loop(ctx)
 	l.started = true
 }
 
@@ -41,17 +41,17 @@ func (l *PoetListener) Close() {
 	l.started = false
 }
 
-func (l *PoetListener) loop() {
+func (l *PoetListener) loop(ctx context.Context) {
 	for {
 		select {
 		case poetProof := <-l.poetProofMessages:
 			if poetProof == nil {
-				log.Error("nil poet message received!")
+				l.Log.WithContext(ctx).Error("nil poet message received")
 				continue
 			}
 			go l.handlePoetProofMessage(poetProof)
 		case <-l.exit:
-			l.Log.Info("listening stopped")
+			l.Log.WithContext(ctx).Info("listening stopped")
 			return
 		}
 	}

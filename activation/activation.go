@@ -246,6 +246,7 @@ func (b *Builder) buildNipstChallenge(currentLayer types.LayerID) error {
 // StartPost initiates post commitment generation process. It returns an error if a process is already in progress or
 // if a post has been already initialized
 func (b *Builder) StartPost(ctx context.Context, rewardAddress types.Address, dataDir string, space uint64) error {
+	logger := b.log.WithContext(ctx)
 	if !atomic.CompareAndSwapInt32(&b.initStatus, InitIdle, InitInProgress) {
 		switch atomic.LoadInt32(&b.initStatus) {
 		case InitDone:
@@ -273,7 +274,7 @@ func (b *Builder) StartPost(ctx context.Context, rewardAddress types.Address, da
 		}
 	}
 
-	b.log.With().Info("Starting PoST initialization",
+	logger.With().Info("starting post initialization",
 		log.String("datadir", dataDir),
 		log.String("space", fmt.Sprintf("%d", space)),
 		log.String("rewardAddress", fmt.Sprintf("%x", rewardAddress)),
@@ -285,7 +286,7 @@ func (b *Builder) StartPost(ctx context.Context, rewardAddress types.Address, da
 			// to create the initial proof (the commitment).
 			b.commitment, err = b.postProver.Execute(shared.ZeroChallenge)
 			if err != nil {
-				b.log.Error("PoST execution failed: %v", err)
+				logger.With().Error("post execution failed", log.Err(err))
 				atomic.StoreInt32(&b.initStatus, InitIdle)
 				return
 			}
@@ -294,13 +295,13 @@ func (b *Builder) StartPost(ctx context.Context, rewardAddress types.Address, da
 			// This would create the initial proof (the commitment) as well.
 			b.commitment, err = b.postProver.Initialize()
 			if err != nil {
-				b.log.Error("PoST initialization failed: %v", err)
+				logger.With().Error("post initialization failed", log.Err(err))
 				atomic.StoreInt32(&b.initStatus, InitIdle)
 				return
 			}
 		}
 
-		b.log.With().Info("PoST initialization completed",
+		logger.With().Info("post initialization completed",
 			log.String("datadir", dataDir),
 			log.String("space", fmt.Sprintf("%d", space)),
 			log.String("commitment merkle root", fmt.Sprintf("%x", b.commitment.MerkleRoot)),

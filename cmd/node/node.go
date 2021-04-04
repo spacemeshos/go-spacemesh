@@ -703,25 +703,25 @@ func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm se
 }
 
 func (app *SpacemeshApp) startServices(ctx context.Context) {
+	logger := log.AppLog.WithContext(ctx)
 	go app.startSyncer(ctx)
 
 	if err := app.hare.Start(ctx); err != nil {
-		log.Panic("cannot start hare")
+		logger.Panic("cannot start hare")
 	}
 	if err := app.blockProducer.Start(ctx); err != nil {
-		log.Panic("cannot start block producer")
+		logger.Panic("cannot start block producer")
 	}
 
 	app.poetListener.Start(ctx)
 
 	if app.Config.StartMining {
 		coinBase := types.HexToAddress(app.Config.CoinbaseAccount)
-		err := app.atxBuilder.StartPost(ctx, coinBase, app.Config.POST.DataDir, app.Config.POST.SpacePerUnit)
-		if err != nil {
-			log.With().Panic("error initializing post", log.Err(err))
+		if err := app.atxBuilder.StartPost(ctx, coinBase, app.Config.POST.DataDir, app.Config.POST.SpacePerUnit); err != nil {
+			logger.With().Panic("error initializing post", log.Err(err))
 		}
 	} else {
-		log.Info("manual post init")
+		logger.Info("manual post init")
 	}
 	app.atxBuilder.Start(ctx)
 	app.clock.StartNotifying()
