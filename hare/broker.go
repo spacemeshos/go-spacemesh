@@ -308,15 +308,16 @@ func (b *Broker) Register(id instanceID) (chan *Msg, error) {
 	regRequest := func() {
 		b.updateLatestLayer(id)
 
-		if len(b.outbox) >= b.limit {
-			//unregister the earliest layer to make space for the new layer
-			//cannot call unregister here because unregister blocks and this would cause a deadlock
-			instance := b.minDeleted + 1
-			b.cleanState(instance)
-			b.With().Info("unregistered layer due to maximum concurrent processes", types.LayerID(instance))
-		}
-
+		//first performing a check to see whether we are synced for this layer
 		if b.isSynced(id) {
+			if len(b.outbox) >= b.limit {
+				//unregister the earliest layer to make space for the new layer
+				//cannot call unregister here because unregister blocks and this would cause a deadlock
+				instance := b.minDeleted + 1
+				b.cleanState(instance)
+				b.With().Info("unregistered layer due to maximum concurrent processes", types.LayerID(instance))
+			}
+
 			b.outbox[id] = make(chan *Msg, inboxCapacity)
 
 			pendingForInstance := b.pending[id]
@@ -330,10 +331,11 @@ func (b *Broker) Register(id instanceID) (chan *Msg, error) {
 			resErr <- nil
 			resCh <- b.outbox[id]
 			return
+		} else {
+			resErr <- errInstanceNotSynced
+			resCh <- nil
+			return
 		}
-
-		resErr <- errInstanceNotSynced
-		resCh <- nil
 	}
 
 	b.tasks <- regRequest // send synced task
