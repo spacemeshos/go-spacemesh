@@ -35,7 +35,7 @@ bootstrap:
     storage-path: 'spacemesh-sync-data'
     remote-data: 'true'
     hdist: '5'
-    version: '/newestSamplesGoldenATX/'
+    version: 'trtl_new_samples/'
     grpc: 'gateway,globalstate,transaction'
 client:
   image: 'spacemeshos/go-spacemesh:develop'
@@ -61,7 +61,7 @@ client:
     storage-path: 'spacemesh-sync-data'
     remote-data: 'true'
     hdist: '5'
-    version: '/newestSamplesGoldenATX/'
+    version: 'trtl_new_samples/'
     grpc: 'gateway,globalstate,transaction'
 clientv2:
   image: 'spacemeshos/go-spacemesh:develop'
