@@ -519,10 +519,31 @@ func (tb *TortoiseBeacon) classifyMessage(m message, epoch types.EpochID) Messag
 
 	switch {
 	case round >= currentRound-1:
+		tb.Log.With().Info("Message is considered timely",
+			log.Uint64("epoch", uint64(epoch)),
+			log.Uint64("message_epoch", uint64(m.Epoch())),
+			log.Uint64("round", round),
+			log.Uint64("current_round", currentRound),
+			log.String("message", m.String()))
+
 		return TimelyMessage
 	case round == currentRound-2:
+		tb.Log.With().Info("Message is considered delayed",
+			log.Uint64("epoch", uint64(epoch)),
+			log.Uint64("message_epoch", uint64(m.Epoch())),
+			log.Uint64("round", round),
+			log.Uint64("current_round", currentRound),
+			log.String("message", m.String()))
+
 		return DelayedMessage
 	default:
+		tb.Log.With().Info("Message is considered late",
+			log.Uint64("epoch", uint64(epoch)),
+			log.Uint64("message_epoch", uint64(m.Epoch())),
+			log.Uint64("round", round),
+			log.Uint64("current_round", currentRound),
+			log.String("message", m.String()))
+
 		return LateMessage
 	}
 }
