@@ -331,11 +331,11 @@ func (b *Broker) Register(id instanceID) (chan *Msg, error) {
 			resErr <- nil
 			resCh <- b.outbox[id]
 			return
-		} else {
-			resErr <- errInstanceNotSynced
-			resCh <- nil
-			return
 		}
+
+		//if we are not synced, we return an InstanceNotSynced error
+		resErr <- errInstanceNotSynced
+		resCh <- nil
 	}
 
 	b.tasks <- regRequest // send synced task
