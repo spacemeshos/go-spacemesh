@@ -99,6 +99,6 @@ func (p *protocol) GetAddresses(ctx context.Context, server p2pcrypto.PublicKey)
 			log.Duration("time_elapsed", time.Since(start)))
 		return nodes, nil
 	case <-timeout.C:
-		return nil, errors.New("request timed out")
+		return nil, errors.New("getaddress request timed out")
 	}
 }

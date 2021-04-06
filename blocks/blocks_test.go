@@ -80,7 +80,7 @@ type fetchMock struct {
 	getTxsCalled   map[types.TransactionID]int
 }
 
-func (f fetchMock) FetchBlock(ID types.BlockID) error {
+func (f fetchMock) FetchBlock(ctx context.Context, ID types.BlockID) error {
 	f.getBlockCalled[ID]++
 	return f.returnError()
 }

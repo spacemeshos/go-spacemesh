@@ -938,9 +938,9 @@ func (s *Syncer) fetchBlock(ctx context.Context, ID types.BlockID) bool {
 }
 
 // FetchBlock fetches a single block from peers
-func (s *Syncer) FetchBlock(ID types.BlockID) error {
-	if !s.fetchBlock(context.TODO(), ID) {
-		return fmt.Errorf("stuff")
+func (s *Syncer) FetchBlock(ctx context.Context, ID types.BlockID) error {
+	if !s.fetchBlock(ctx, ID) {
+		return fmt.Errorf("error in FetchBlock")
 	}
 	return nil
 }
@@ -1084,7 +1084,7 @@ func (s *Syncer) fetchEpochAtxs(ctx context.Context, m map[types.Hash32][]p2ppee
 				logger.Debug("worker received interrupt")
 				return nil, fmt.Errorf("received interrupt")
 			case <-timeout:
-				logger.With().Error("layer ids request timed out", log.String("peer", peer.String()))
+				logger.With().Error("epoch atxs request timed out", log.String("peer", peer.String()))
 				continue
 			case v := <-ch:
 				if v != nil {

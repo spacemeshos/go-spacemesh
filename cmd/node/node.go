@@ -80,6 +80,7 @@ const (
 	HareLogger           = "hare"
 	BlockBuilderLogger   = "blockBuilder"
 	BlockListenerLogger  = "blockListener"
+	BlockHandlerLogger   = "blockHandler"
 	PoetListenerLogger   = "poetListener"
 	NipstBuilderLogger   = "nipstBuilder"
 	AtxBuilderLogger     = "atxBuilder"
@@ -605,7 +606,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		Depth:       app.Config.Hdist,
 		GoldenATXID: goldenATXID,
 	}
-	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, lg)
+	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, app.addLogger(BlockHandlerLogger, lg))
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))
 

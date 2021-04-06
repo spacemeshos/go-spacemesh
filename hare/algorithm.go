@@ -503,11 +503,7 @@ func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
 		return false
 	}
 
-	logger.With().Info("should participate: message sent",
-		log.String("current_set", proc.s.String()),
-		log.String("msg_type", msg.InnerMsg.Type.String()),
-		log.Int32("current_k", proc.k),
-		types.LayerID(proc.instanceID))
+	logger.Info("should participate: message sent")
 	return true
 }
 
@@ -530,10 +526,11 @@ func (proc *consensusProcess) onRoundEnd(ctx context.Context) {
 			sStr = s.String()
 		}
 		logger.Event().Info("proposal round ended",
+			log.Int("set_size", proc.s.Size()),
 			log.String("proposed_set", sStr),
 			log.Bool("is_conflicting", proc.proposalTracker.IsConflicting()))
 	case commitRound:
-		logger.Info("commit round ended")
+		logger.With().Info("commit round ended", log.Int("set_size", proc.s.Size()))
 	}
 }
 
@@ -612,7 +609,7 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 }
 
 func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
-	logger := proc.WithContext(ctx)
+	logger := proc.WithContext(ctx).WithFields(types.LayerID(proc.instanceID))
 
 	// release proposal & commit trackers
 	defer func() {
@@ -668,6 +665,7 @@ func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 
 	builder = builder.SetType(notify).SetCertificate(proc.certificate).Sign(proc.signing)
 	notifyMsg := builder.Build()
+	logger.With().Debug("sending notify message", notifyMsg)
 	if proc.sendMessage(ctx, notifyMsg) { // on success, mark sent
 		proc.notifySent = true
 	}
@@ -826,6 +824,7 @@ func (proc *consensusProcess) endOfStatusRound() {
 	proc.Event().Info("status round ended",
 		log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
 		types.LayerID(proc.instanceID),
+		log.Int("set_size", proc.s.Size()),
 		log.String("analyze_duration", time.Since(before).String()))
 }
 

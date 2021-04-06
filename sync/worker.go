@@ -79,7 +79,7 @@ func newPeersWorker(ctx context.Context, s networker, peers []p2ppeers.Peer, mu 
 				lg.Debug("worker received interrupt")
 				return
 			case <-timeout:
-				lg.Error("request timed out")
+				lg.Error("sync worker request timed out")
 				return
 			case v := <-ch:
 				if v != nil {

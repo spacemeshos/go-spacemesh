@@ -11,16 +11,21 @@ import (
 
 func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(context.Context, []byte) []byte {
 	return func(ctx context.Context, msg []byte) []byte {
-		lgr := logger.WithContext(ctx)
 		lyrid := types.LayerID(util.BytesToUint64(msg))
-		lgr.With().Info("handle layer hash request", lyrid)
+		lgr := logger.WithContext(ctx).WithFields(lyrid)
+		lgr.Info("handle layer hash request")
 		layer, err := layers.GetLayer(lyrid)
 		if err != nil {
 			if err == database.ErrNotFound {
-				lgr.With().Warning("hashes requested for unfamiliar layer", lyrid)
+				// we expect this error in the case of a genesis layer
+				if types.EpochID(lyrid).IsGenesis() {
+					lgr.Info("hashes requested for genesis layer which is not present in database (expected)")
+				} else {
+					lgr.Warning("hashes requested for unfamiliar layer")
+				}
 				return nil
 			}
-			lgr.With().Error("error handling layer request message", lyrid, log.Err(err))
+			lgr.With().Error("error handling layer request message", log.Err(err))
 			return nil
 		}
 

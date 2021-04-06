@@ -14,10 +14,7 @@ const NewBlockProtocol = "newBlock"
 
 var (
 	errDupTx = errors.New("duplicate TransactionID in block")
-
 	errDupAtx = errors.New("duplicate ATXID in block")
-	//errTooManyAtxs     = errors.New("too many atxs in blocks")
-	//errNoBlocksInLayer = errors.New("layer has no blocks")
 	errNoActiveSet   = errors.New("block does not declare active set")
 	errZeroActiveSet = errors.New("block declares empty active set")
 )
@@ -102,11 +99,11 @@ func (bh *BlockHandler) HandleBlock(ctx context.Context, data service.GossipMess
 		ctx = log.WithRequestID(ctx, data.RequestID())
 	} else {
 		ctx = log.WithNewRequestID(ctx)
-		bh.Warning("got block with no requestId, generated new id")
+		bh.WithContext(ctx).Warning("got block from gossip with no requestId, generated new id")
 	}
 
 	if err := bh.HandleBlockData(ctx, data.Bytes(), sync); err != nil {
-		bh.With().Error("error handling block data", log.Err(err))
+		bh.WithContext(ctx).With().Error("error handling block data", log.Err(err))
 		return
 	}
 	data.ReportValidation(NewBlockProtocol)
@@ -121,8 +118,9 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, sync s
 
 	// set the block id when received
 	blk.Initialize()
-	logger := bh.WithContext(ctx).WithFields(blk.ID())
+	logger := bh.WithContext(ctx)
 	logger.With().Info("got new block", blk.Fields()...)
+	logger = logger.WithFields(blk.ID(), blk.Layer())
 
 	// check if known
 	if _, err := bh.mesh.GetBlock(blk.ID()); err == nil {
@@ -155,7 +153,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 
 	// if there is a reference block - first validate it
 	if block.RefBlock != nil {
-		err := syncer.FetchBlock(*block.RefBlock)
+		err := syncer.FetchBlock(ctx, *block.RefBlock)
 		if err != nil {
 			return fmt.Errorf("failed to fetch ref block %v e: %v", *block.RefBlock, err)
 		}
@@ -192,7 +190,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 		return fmt.Errorf("validate votes failed for block %v, %v", block.ID(), err)
 	}
 
-	bh.WithContext(ctx).With().Debug("block syntactic validation done", block.ID())
+	bh.WithContext(ctx).With().Debug("validation done: block is syntactically valid", block.ID())
 	return nil
 }
 
@@ -221,7 +219,7 @@ func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.B
 func (bh *BlockHandler) fastValidation(block *types.Block) error {
 	// block eligibility
 	if eligible, err := bh.validator.BlockSignedAndEligible(block); err != nil || !eligible {
-		return fmt.Errorf("block eligibiliy check failed - err %v", err)
+		return fmt.Errorf("block eligibility check failed - err %v", err)
 	}
 
 	// validate unique tx atx

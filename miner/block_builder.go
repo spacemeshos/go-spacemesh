@@ -397,8 +397,11 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 						events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot serialize block")
 						return
 					}
-					if err = t.network.Broadcast(ctx, blocks.NewBlockProtocol, bytes); err != nil {
-						logger.With().Error("failed to send block", log.Err(err))
+
+					// generate a new requestID for the new block message
+					blockCtx := log.WithNewRequestID(ctx, layerID, blk.ID())
+					if err = t.network.Broadcast(blockCtx, blocks.NewBlockProtocol, bytes); err != nil {
+						logger.WithContext(blockCtx).With().Error("failed to send block", log.Err(err))
 					}
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "")
 				}()

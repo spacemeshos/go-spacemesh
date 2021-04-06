@@ -332,7 +332,7 @@ func (l *Logic) FetchAtx(ctx context.Context, id types.ATXID) error {
 }
 
 // FetchBlock gets data for a single block id and validates it
-func (l *Logic) FetchBlock(id types.BlockID) error {
+func (l *Logic) FetchBlock(ctx context.Context, id types.BlockID) error {
 	res := <-l.fetcher.GetHash(id.AsHash32(), fetch.Hint(strconv.Itoa(BlockDB)), true)
 	return res.Err
 }
