@@ -15,7 +15,7 @@ type syncMock struct {
 	Synced bool
 }
 
-func (m *syncMock) FetchBlock(ID types.BlockID) error {
+func (m *syncMock) FetchBlock(ctx context.Context, ID types.BlockID) error {
 	return nil
 }
 

@@ -45,7 +45,7 @@ type Syncer interface {
 
 // Fetcher is a general interface that defines a component capable of fetching data from remote peers
 type Fetcher interface {
-	FetchBlock(types.BlockID) error
+	FetchBlock(context.Context, types.BlockID) error
 	FetchAtx(context.Context, types.ATXID) error
 	GetPoetProof(context.Context, types.Hash32) error
 	GetTxs(context.Context, []types.TransactionID) error
@@ -63,7 +63,7 @@ func (l *Listener) AddListener(ctx context.Context, channel string, priority pri
 	l.channels = append(l.channels, ch)
 	l.stoppers = append(l.stoppers, stop)
 	l.wg.Add(1)
-	go l.listenToGossip(log.WithNewRequestID(ctx), dataHandler, ch, stop)
+	go l.listenToGossip(log.WithNewSessionID(ctx), dataHandler, ch, stop)
 }
 
 // Stop stops listening to all gossip channels

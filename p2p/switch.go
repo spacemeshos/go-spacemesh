@@ -637,6 +637,10 @@ func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcry
 	gpm := gossipProtocolMessage{sender: sender, data: data, validationChan: validationCompletedChan}
 	if requestID, ok := log.ExtractRequestID(ctx); ok {
 		gpm.requestID = requestID
+	} else {
+		s.logger.WithContext(ctx).With().Warning("no requestId set in context processing gossip message",
+			log.String("protocol", protocol),
+			h)
 	}
 	msgchan <- gpm
 
@@ -646,6 +650,11 @@ func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcry
 // Broadcast creates a gossip message signs it and disseminate it to neighbors.
 // this message must be validated by our own node first just as any other message.
 func (s *Switch) Broadcast(ctx context.Context, protocol string, payload []byte) error {
+	// context should already contain a requestID for an incoming message
+	if _, ok := log.ExtractRequestID(ctx); !ok {
+		ctx = log.WithNewRequestID(ctx)
+		s.logger.WithContext(ctx).Info("new broadcast message with no requestId, generated one")
+	}
 	return s.gossip.Broadcast(ctx, payload, protocol)
 }
 

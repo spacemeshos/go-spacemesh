@@ -18,7 +18,7 @@ func newFetchMock() *fetchMock {
 	}
 }
 
-func (*fetchMock) FetchBlock(types.BlockID) error {
+func (*fetchMock) FetchBlock(context.Context, types.BlockID) error {
 	return nil
 }
 

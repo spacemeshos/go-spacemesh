@@ -25,9 +25,11 @@ const (
 // This requires a requestId string, and optionally, other LoggableFields that are added to
 // context and printed in contextual logs.
 func WithRequestID(ctx context.Context, requestID string, fields ...LoggableField) context.Context {
-	// Warn if overwriting
+	// Warn if overwriting. This is expected. It happens every time an inbound request triggers a new
+	// outbound request, e.g., a newly-received block causes us to request the blocks and ATXs it refers to.
+	// But it's important that we log the old and new reqIDs here so that the thread can be followed.
 	if curRequestID, ok := ExtractRequestID(ctx); ok && curRequestID != requestID {
-		AppLog.WithContext(ctx).With().Warning("overwriting requestID in context",
+		AppLog.WithContext(ctx).With().Info("overwriting requestID in context",
 			String("old_request_id", curRequestID),
 			String("new_request_id", requestID))
 	}
