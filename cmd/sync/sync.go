@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -25,7 +26,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"path/filepath"
 	"strings"
 )
 
@@ -121,7 +121,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	lg.Info("local db path: %v layers per epoch: %v", path, app.Config.LayersPerEpoch)
 
 	if remote {
-		if err := getData(app.Config.DataDir(), version, lg); err != nil {
+		if err := getData(path, version, lg); err != nil {
 			lg.With().Error("could not download data for test", log.Err(err))
 			return
 		}
@@ -167,7 +167,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 			}
 		} else {
 			lg.With().Info("loaded layer from disk", types.LayerID(i))
-			app.sync.ValidateLayer(lyr)
+			app.sync.ValidateLayer(lyr, types.BlockIDs(lyr.Blocks()))
 		}
 	}
 
@@ -246,7 +246,7 @@ func getData(path, prefix string, lg log.Log) error {
 
 		err = ioutil.WriteFile(dest, data, 0644)
 		if err != nil {
-			lg.Info("%v", err)
+			lg.Error("%v", err)
 			return err
 		}
 		count++
