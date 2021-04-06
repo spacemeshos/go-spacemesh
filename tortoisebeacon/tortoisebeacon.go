@@ -653,6 +653,22 @@ func (tb *TortoiseBeacon) sendVotingMessages(epoch types.EpochID, round uint64) 
 		votesFor, votesAgainst = tb.calculateVotes(epoch, currentRound)
 	}
 
+	stringVotesFor := make([]string, 0, len(votesFor))
+	for _, vote := range votesFor {
+		stringVotesFor = append(stringVotesFor, vote.String())
+	}
+
+	stringVotesAgainst := make([]string, 0, len(votesAgainst))
+	for _, vote := range votesAgainst {
+		stringVotesAgainst = append(stringVotesAgainst, vote.String())
+	}
+
+	tb.Log.With().Info("Going to send votes",
+		log.Uint64("epoch", uint64(epoch)),
+		log.Uint64("round", round),
+		log.String("for", strings.Join(stringVotesFor, ", ")),
+		log.String("against", strings.Join(stringVotesAgainst, ", ")))
+
 	m := NewVotingMessage(epoch, currentRound, votesFor, votesAgainst)
 	serializedMessage, err := types.InterfaceToBytes(m)
 	if err != nil {
