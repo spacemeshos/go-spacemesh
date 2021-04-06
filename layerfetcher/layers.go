@@ -502,7 +502,10 @@ func (l *Logic) FetchAtx(id types.ATXID) error {
 
 // FetchBlock gets data for a single block id and validates it
 func (l *Logic) FetchBlock(id types.BlockID) error {
-	res := <-l.fetcher.GetHash(id.AsHash32(), BlockDB, false)
+	res, open := <-l.fetcher.GetHash(id.AsHash32(), BlockDB, false)
+	if !open {
+		return fmt.Errorf("stopped on call for id %v", id.String())
+	}
 	if res.Err != nil {
 		return res.Err
 	}
@@ -546,7 +549,11 @@ func (l *Logic) GetBlocks(IDs []types.BlockID) error {
 	}
 	results := l.fetcher.GetHashes(hashes, BlockDB, false)
 	for hash, resC := range results {
-		res := <-resC
+		res, open := <-resC
+		if !open {
+			l.log.Info("res channel for %v is closed", hash.ShortString())
+			continue
+		}
 		if res.Err != nil {
 			l.log.Error("cannot find block %v err %v", hash.String(), res.Err)
 			continue

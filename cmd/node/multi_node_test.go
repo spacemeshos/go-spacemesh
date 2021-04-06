@@ -5,6 +5,6 @@ import (
 )
 
 func TestMultiNode(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 	StartMultiNode(5, 10, 10, "/tmp/data")
 }

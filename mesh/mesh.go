@@ -622,7 +622,10 @@ func (msh *Mesh) AddBlock(blk *types.Block) error {
 	msh.Debug("add block %d", blk.ID())
 	if err := msh.DB.AddBlock(blk); err != nil {
 		msh.Warning("failed to add block %v  %v", blk.ID(), err)
-		return err
+
+		if blk.ID() != GenesisBlock().ID() {
+			return err
+		}
 	}
 
 	l, err := msh.GetLayer(blk.LayerIndex)
