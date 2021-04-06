@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -94,7 +95,8 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	lg.Info("layers per epoch: %d", app.Config.LayersPerEpoch)
 	lg.Info("hdist: %d", app.Config.Hdist)
 
-	path := app.Config.DataDir() + version
+	path := app.Config.DataDir()
+	fullpath := filepath.Join(path, version) + "/"
 
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, lg.WithName("p2p"), app.Config.DataDir())
 
@@ -119,12 +121,12 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	lg.Info("local db path: %v layers per epoch: %v", path, app.Config.LayersPerEpoch)
 
 	if remote {
-		if err := getData(app.Config.DataDir(), version, lg); err != nil {
+		if err := getData(path, version, lg); err != nil {
 			lg.With().Error("could not download data for test", log.Err(err))
 			return
 		}
 	}
-	poetDbStore, err := database.NewLDBDatabase(path+"poet", 0, 0, lg.WithName("poetDbStore"))
+	poetDbStore, err := database.NewLDBDatabase(fullpath+"poet", 0, 0, lg.WithName("poetDbStore"))
 	if err != nil {
 		lg.Error("error: ", err)
 		return
@@ -132,12 +134,12 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 
 	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb").WithOptions(log.Nop))
 
-	mshdb, err := mesh.NewPersistentMeshDB(path, 5, lg.WithOptions(log.Nop))
+	mshdb, err := mesh.NewPersistentMeshDB(fullpath, 5, lg.WithOptions(log.Nop))
 	if err != nil {
 		lg.Error("error: ", err)
 		return
 	}
-	atxdbStore, err := database.NewLDBDatabase(path+"atx", 0, 0, lg)
+	atxdbStore, err := database.NewLDBDatabase(fullpath+"atx", 0, 0, lg)
 	if err != nil {
 		lg.Error("error: ", err)
 		return
@@ -163,7 +165,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 			}
 		} else {
 			lg.Info("loaded layer %v from disk ", i)
-			sync.ValidateLayer(lyr)
+			sync.ValidateLayer(lyr, types.BlockIDs(lyr.Blocks()))
 		}
 	}
 
@@ -187,9 +189,14 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 
 //GetData downloads data from remote storage
 func getData(path, prefix string, lg log.Log) error {
-	dirs := []string{"general", "poet", "atx", "nipst", "blocks", "ids", "layers", "transactions", "validity", "unappliedTxs"}
+	fullpath := filepath.Join(path, version)
+	dirs := []string{"appliedTxs", "atx", "ids", "mesh", "poet", "state", "store",
+		"mesh/blocks", "mesh/general", "mesh/inputvector", "mesh/layers", "mesh/transactions",
+		"mesh/unappliedTxs", "mesh/validity", "mesh/general", "builder"}
 	for _, dir := range dirs {
-		if err := filesystem.ExistOrCreate(path + prefix + "/" + dir); err != nil {
+		dirpath := filepath.Join(fullpath, dir)
+		lg.Info("Creating db folder %v", dirpath)
+		if err := filesystem.ExistOrCreate(dirpath); err != nil {
 			return err
 		}
 	}
@@ -241,11 +248,11 @@ func getData(path, prefix string, lg log.Log) error {
 			continue
 		}
 
-		lg.Info("downloading: %v to %v", attrs.Name, path+attrs.Name)
+		lg.Info("downloading: %v to %v", attrs.Name, filepath.Join(path, attrs.Name))
 
-		err = ioutil.WriteFile(path+attrs.Name, data, 0644)
+		err = ioutil.WriteFile(filepath.Join(path, attrs.Name), data, 0644)
 		if err != nil {
-			lg.Info("%v", err)
+			lg.Error("%v", err)
 			return err
 		}
 		count++

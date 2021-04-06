@@ -38,6 +38,7 @@ type Logger interface {
 	Debug(format string, args ...interface{})
 	Error(format string, args ...interface{})
 	Warning(format string, args ...interface{})
+	With() FieldLogger
 	WithName(prefix string) Log
 }
 
