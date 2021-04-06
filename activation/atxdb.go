@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"math"
 )
 
 const topAtxKey = "topAtxKey"
@@ -44,10 +43,6 @@ func getAtxBodyKey(atxID types.ATXID) []byte {
 	return []byte(fmt.Sprintf("b_%v", atxID.Bytes()))
 }
 
-func getEpochWeightKey(epochID types.EpochID) []byte {
-	return []byte(fmt.Sprintf("w_%v", epochID.ToBytes()))
-}
-
 var errInvalidSig = fmt.Errorf("identity not found when validating signature, invalid atx")
 
 type atxChan struct {
@@ -72,7 +67,6 @@ type DB struct {
 	log                 log.Log
 	calcTotalWeightFunc func(targetEpoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error)
 	processAtxMutex     sync.Mutex
-	epochWeightMutex    sync.Mutex // used only for updating total epoch weight, reading can be done lock-free
 	atxChannels         map[types.ATXID]*atxChan
 }
 
@@ -494,11 +488,6 @@ func (db *DB) StoreAtx(ech types.EpochID, atx *types.ActivationTx) error {
 		return err
 	}
 
-	err = db.addToEpochWeight(atx.TargetEpoch(), atx.GetWeight())
-	if err != nil {
-		return err
-	}
-
 	db.log.With().Info("finished storing atx in epoch", atx.ID(), ech)
 	return nil
 }
@@ -666,35 +655,18 @@ func (db *DB) GetPosAtxID() (types.ATXID, error) {
 	return idAndLayer.AtxID, nil
 }
 
-// addToEpochWeight increments the total weight of epochID by additionalWeight. It is thread-safe.
-func (db *DB) addToEpochWeight(epochID types.EpochID, additionalWeight uint64) error {
-	db.epochWeightMutex.Lock()
-	defer db.epochWeightMutex.Unlock()
-
-	weight, err := db.GetEpochWeight(epochID)
-	if err != nil && err != database.ErrNotFound {
-		return fmt.Errorf("failed to get previous weight: %v", err)
-	}
-	newWeight := weight + additionalWeight
-	if newWeight < weight {
-		newWeight = math.MaxUint64
-		db.log.Warning("newWeight for epoch %d overflows! previous weight=%d, additional weight=%d, setting newWeight=%d",
-			epochID, weight, additionalWeight, newWeight)
-	}
-	err = db.atxs.Put(getEpochWeightKey(epochID), util.Uint64ToBytes(newWeight))
-	if err != nil {
-		return fmt.Errorf("failed to write new weight: %v", err)
-	}
-	return nil
-}
-
 // GetEpochWeight returns the total weight of ATXs targeting the given epochID.
-func (db *DB) GetEpochWeight(epochID types.EpochID) (uint64, error) {
-	w, err := db.atxs.Get(getEpochWeightKey(epochID))
-	if err != nil {
-		return 0, err
+func (db *DB) GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID, error) {
+	weight := uint64(0)
+	activeSet := db.GetEpochAtxs(epochID - 1)
+	for _, atxID := range activeSet {
+		atxHeader, err := db.GetAtxHeader(atxID)
+		if err != nil {
+			return 0, nil, err
+		}
+		weight += atxHeader.GetWeight()
 	}
-	return util.BytesToUint64(w), nil
+	return weight, activeSet, nil
 }
 
 // GetAtxHeader returns the ATX header by the given ID. This function is thread safe and will return an error if the ID
@@ -788,7 +760,7 @@ func (db *DB) HandleAtxData(data []byte, syncer service.Fetcher) error {
 
 	db.log.With().Info("got new atx", atx.Fields(len(data))...)
 
-	//todo fetch from neighbour (#1925)
+	// todo fetch from neighbour (#1925)
 	if atx.Nipst == nil {
 		db.log.Panic("nil nipst in gossip")
 		return fmt.Errorf("nil nipst in gossip")

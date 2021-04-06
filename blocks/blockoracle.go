@@ -17,7 +17,7 @@ import (
 type activationDB interface {
 	GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error)
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
-	GetEpochWeight(epochID types.EpochID) (uint64, error)
+	GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID, error)
 }
 
 type vrfSigner interface {
@@ -108,9 +108,9 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.LayerID][]types.BlockEligibilityProof, error) {
 	epochBeacon := bo.beaconProvider.GetBeacon(epochNumber)
 
-	var weight, totalWeight uint64
-	// get the previous epochs total weight
-	totalWeight, err := bo.atxDB.GetEpochWeight(epochNumber)
+	var weight uint64
+	// get the previous epoch's total weight
+	totalWeight, activeSet, err := bo.atxDB.GetEpochWeight(epochNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get epoch %v weight: %v", epochNumber, err)
 	}
@@ -130,7 +130,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 		epochNumber,
 		log.String("epoch_beacon", fmt.Sprint(epochBeacon)))
 
-	if epochNumber.IsGenesis() {
+	if epochNumber.IsGenesis() { // TODO: This should never happen - should we panic or print an error maybe?
 		weight, totalWeight = 1024, bo.genesisTotalWeight // TODO: replace 1024 with configured weight
 		bo.log.With().Info("genesis epoch detected, using GenesisTotalWeight",
 			log.Uint64("total_weight", totalWeight))
@@ -159,6 +159,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 	}
 
 	bo.eligibilityMutex.Lock()
+	bo.epochAtxs = activeSet
 	bo.proofsEpoch = epochNumber
 	bo.eligibilityProofs = eligibilityProofs
 	bo.eligibilityMutex.Unlock()

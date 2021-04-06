@@ -73,8 +73,8 @@ func (a mockActivationDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeade
 	return nil, errors.New("wrong atx id")
 }
 
-func (a mockActivationDB) GetEpochWeight(epochID types.EpochID) (uint64, error) {
-	return uint64(len(a.GetEpochAtxs(epochID-1))) * defaultAtxWeight, nil
+func (a mockActivationDB) GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID, error) {
+	return uint64(len(a.GetEpochAtxs(epochID-1))) * defaultAtxWeight, nil, nil
 }
 
 func TestBlockOracle(t *testing.T) {

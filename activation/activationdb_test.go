@@ -330,6 +330,7 @@ func Test_DBSanity(t *testing.T) {
 }
 
 func TestMesh_processBlockATXs(t *testing.T) {
+	types.SetLayersPerEpoch(layersPerEpochBig)
 	totalWeightCache.Purge()
 	atxdb, _, _ := getAtxDb("t6")
 
@@ -377,20 +378,10 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	assertEpochWeight(t, atxdb, 3, 100*100*3) // 3 from `atxs2`
 }
 
-func TestDB_addToEpochWeight(t *testing.T) {
-	r := require.New(t)
-
-	atxdb, _, _ := getAtxDb("t6")
-	r.NoError(atxdb.addToEpochWeight(123, 1<<64-100))
-	r.NoError(atxdb.addToEpochWeight(123, 200))
-
-	assertEpochWeight(t, atxdb, 123, 1<<64-1)
-}
-
 func assertEpochWeight(t *testing.T, atxdb *DB, epochID types.EpochID, expectedWeight uint64) {
-	epochWeight, err := atxdb.GetEpochWeight(epochID)
+	epochWeight, _, err := atxdb.GetEpochWeight(epochID)
 	assert.NoError(t, err)
-	assert.Equal(t, expectedWeight, epochWeight,
+	assert.Equal(t, int(expectedWeight), int(epochWeight),
 		fmt.Sprintf("expectedWeight (%d) != epochWeight (%d)", expectedWeight, epochWeight))
 }
 
