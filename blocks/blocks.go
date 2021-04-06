@@ -13,8 +13,8 @@ import (
 const NewBlockProtocol = "newBlock"
 
 var (
-	errDupTx = errors.New("duplicate TransactionID in block")
-	errDupAtx = errors.New("duplicate ATXID in block")
+	errDupTx         = errors.New("duplicate TransactionID in block")
+	errDupAtx        = errors.New("duplicate ATXID in block")
 	errNoActiveSet   = errors.New("block does not declare active set")
 	errZeroActiveSet = errors.New("block declares empty active set")
 )
