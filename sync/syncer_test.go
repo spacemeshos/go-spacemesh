@@ -1323,7 +1323,7 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	syncedMsh := getMesh(memoryDB, Path+t.Name()+"synced_"+time.Now().String())
 	synecdAtxPool := activation.NewAtxMemPool()
 	_ = NewSync(syncedMiner, syncedMsh, state.NewTxMemPool(), synecdAtxPool, blockEligibilityValidatorMock{}, newMockPoetDb(), conf, timer, l.WithName("synced"))
-	atx := types.NewActivationTx(types.NIPSTChallenge{}, types.Address{}, &types.NIPST{}, &types.PostProof{})
+	atx := types.NewActivationTx(types.NIPSTChallenge{}, types.Address{}, &types.NIPST{}, 0, &types.PostProof{})
 	atx.CalcAndSetID()
 	fmt.Println("ATX ID ", atx.ID())
 
