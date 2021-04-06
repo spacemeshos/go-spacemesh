@@ -518,7 +518,7 @@ func (tb *TortoiseBeacon) classifyMessage(m message, epoch types.EpochID) Messag
 	}
 
 	switch {
-	case currentRound-round <= 1, round-currentRound == 1:
+	case currentRound-round <= 1, currentRound < round:
 		tb.Log.With().Info("Message is considered timely",
 			log.Uint64("epoch", uint64(epoch)),
 			log.Uint64("message_epoch", uint64(m.Epoch())),

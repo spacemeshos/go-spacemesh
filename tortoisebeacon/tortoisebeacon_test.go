@@ -79,20 +79,20 @@ func TestTortoiseBeacon_classifyMessage(t *testing.T) {
 	epoch := types.EpochID(3)
 	round := uint64(4)
 
-	tb := TortoiseBeacon{
-		currentRounds: map[types.EpochID]uint64{
-			epoch: round,
-		},
-	}
-
 	tt := []struct {
-		name    string
-		round   uint64
-		msgType MessageType
+		name         string
+		currentRound uint64
+		messageRound uint64
+		msgType      MessageType
 	}{
-		{"Timely", 3, TimelyMessage},
-		{"Delayed", 2, DelayedMessage},
-		{"Late", 1, LateMessage},
+		{"Timely 1", 0, 0, TimelyMessage},
+		{"Late 1", round, 0, LateMessage},
+		{"Late 2", round, 1, LateMessage},
+		{"Delayed 1", round, 2, DelayedMessage},
+		{"Timely 2", round, 3, TimelyMessage},
+		{"Timely 3", round, 4, TimelyMessage},
+		{"Timely 4", round, 5, TimelyMessage},
+		{"Timely 5", round, 6, TimelyMessage},
 	}
 
 	for _, tc := range tt {
@@ -100,7 +100,14 @@ func TestTortoiseBeacon_classifyMessage(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			m := VotingMessage{RoundID: tc.round}
+			tb := TortoiseBeacon{
+				Log: log.NewDefault("TortoiseBeacon"),
+				currentRounds: map[types.EpochID]uint64{
+					epoch: tc.currentRound,
+				},
+			}
+
+			m := VotingMessage{RoundID: tc.messageRound}
 			result := tb.classifyMessage(m, epoch)
 			r.Equal(tc.msgType, result)
 		})
