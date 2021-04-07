@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -165,25 +166,17 @@ type BlockHeader struct {
 	EligibilityProof BlockEligibilityProof
 	Data             []byte
 	Coin             bool
-	BlockVotes       []BlockID
-	ViewEdges        []BlockID
+
+	BaseBlock BlockID
+
+	AgainstDiff []BlockID
+	ForDiff     []BlockID
+	NeutralDiff []BlockID
 }
 
 // Layer returns the block's LayerID.
 func (b BlockHeader) Layer() LayerID {
 	return b.LayerIndex
-}
-
-// AddVote adds a vote to the list of block votes.
-func (b *BlockHeader) AddVote(id BlockID) {
-	// todo: do this in a sorted manner
-	b.BlockVotes = append(b.BlockVotes, id)
-}
-
-// AddView adds a block to this block's view.
-func (b *BlockHeader) AddView(id BlockID) {
-	// todo: do this in a sorted manner
-	b.ViewEdges = append(b.ViewEdges, id)
 }
 
 // MiniBlock includes all of a block's fields, except for the signature. This structure is serialized and signed to
@@ -224,10 +217,11 @@ func (b *Block) Fields() []log.LoggableField {
 	return []log.LoggableField{
 		b.ID(),
 		b.LayerIndex,
-		b.LayerIndex.GetEpoch(),
-		log.FieldNamed("miner_id", b.MinerID()),
-		log.Int("view_edges", len(b.ViewEdges)),
-		log.Int("vote_count", len(b.BlockVotes)),
+		b.MinerID(),
+		log.String("base_block", b.BaseBlock.String()),
+		log.Int("supports", len(b.ForDiff)),
+		log.Int("againsts", len(b.AgainstDiff)),
+		log.Int("abstains", len(b.NeutralDiff)),
 		b.ATXID,
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
 		log.FieldNamed("ref_block", b.RefBlock),
@@ -280,6 +274,15 @@ func BlockIDs(blocks []*Block) []BlockID {
 		ids = append(ids, block.ID())
 	}
 	return ids
+}
+
+// BlockIdsField returns a list of loggable fields for a given list of BlockIDs
+func BlockIdsField(ids []BlockID) log.Field {
+	strs := []string{}
+	for _, a := range ids {
+		strs = append(strs, a.String())
+	}
+	return log.String("block_ids", strings.Join(strs, ", "))
 }
 
 // Layer contains a list of blocks and their corresponding LayerID.
@@ -338,8 +341,6 @@ func NewExistingBlock(layerIndex LayerID, data []byte, txs []TransactionID) *Blo
 	b := Block{
 		MiniBlock: MiniBlock{
 			BlockHeader: BlockHeader{
-				BlockVotes: make([]BlockID, 0, 10),
-				ViewEdges:  make([]BlockID, 0, 10),
 				LayerIndex: layerIndex,
 				Data:       data},
 			TxIDs: txs,
