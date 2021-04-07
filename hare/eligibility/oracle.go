@@ -19,8 +19,7 @@ const vrfMsgCacheSize = 20 // numRounds per layer is <= 2. numConcurrentLayers<=
 const activesCacheSize = 5 // we don't expect to handle more than two layers concurrently
 
 var (
-	errGenesis            = errors.New("no data about active nodes for genesis")
-	errNoContextualBlocks = errors.New("no contextually valid blocks")
+	errGenesis = errors.New("no data about active nodes for genesis")
 )
 
 type valueProvider interface {
@@ -185,18 +184,18 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 func (o *Oracle) Eligible(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	msg, err := o.buildVRFMessage(ctx, layer, round)
 	if err != nil {
-		o.Error("eligibility: could not build VRF message")
+		o.Error("eligibility: could not build vrf message")
 		return false, err
 	}
 
 	// validate message
 	res, err := o.vrfVerifier(msg, sig, id.VRFPublicKey)
 	if err != nil {
-		o.Error("eligibility: VRF verification failed: %v", err)
+		o.With().Error("eligibility: vrf verification failed", log.Err(err))
 		return false, err
 	}
 	if !res {
-		o.With().Info("eligibility: a node did not pass VRF signature verification",
+		o.With().Info("eligibility: a node did not pass vrf signature verification",
 			id,
 			layer)
 		return false, nil
@@ -217,6 +216,7 @@ func (o *Oracle) Eligible(ctx context.Context, layer types.LayerID, round int32,
 	// calc hash & check threshold
 	sha := sha256.Sum256(sig)
 	shaUint32 := binary.LittleEndian.Uint32(sha[:4])
+
 	// avoid division (no floating point) & do operations on uint64 to avoid overflow
 	if uint64(activeSetSize)*uint64(shaUint32) > uint64(committeeSize)*uint64(math.MaxUint32) {
 		o.With().Info("eligibility: node did not pass vrf eligibility threshold",
@@ -250,7 +250,7 @@ func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round int32) ([
 }
 
 // Returns a map of all active nodes in the specified layer id
-func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
+func (o *Oracle) actives(layer types.LayerID) (activeMap map[string]struct{}, err error) {
 	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	safeEp := sl.GetEpoch()
 
@@ -272,22 +272,23 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	}
 
 	// build a map of all blocks on the current layer
-	mp, err := o.blocksProvider.ContextuallyValidBlock(sl)
-	if err != nil {
-		return nil, err
+	mp, err2 := o.blocksProvider.ContextuallyValidBlock(sl)
+	if err2 != nil {
+		return nil, err2
 	}
 
-	// no contextually valid blocks
+	// no contextually valid blocks: for now we just fall back on an empty active set. this will go away when we
+	// upgrade hare eligibility to use the tortoise beacon.
 	if len(mp) == 0 {
-		o.With().Error("could not calculate hare active set size: no contextually valid blocks",
+		o.With().Warning("no contextually valid blocks in layer, using active set of size zero",
 			layer,
 			layer.GetEpoch(),
 			log.FieldNamed("safe_layer_id", sl),
 			log.FieldNamed("safe_epoch_id", safeEp))
-		return nil, errNoContextualBlocks
+		return
 	}
 
-	activeMap, err := o.getActiveSet(safeEp-1, mp)
+	activeMap, err = o.getActiveSet(safeEp-1, mp)
 	if err != nil {
 		o.With().Error("could not retrieve active set size",
 			log.Err(err),
@@ -298,10 +299,9 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 		return nil, err
 	}
 
-	// update
+	// update cache
 	o.activesCache.Add(safeEp, activeMap)
-
-	return activeMap, nil
+	return
 }
 
 // IsIdentityActiveOnConsensusView returns true if the provided identity is active on the consensus view derived

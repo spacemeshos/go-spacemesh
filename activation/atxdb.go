@@ -259,8 +259,7 @@ func (db *DB) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]st
 	traversalFunc := db.createTraversalActiveSetCounterFunc(countedAtxs, penalties, db.LayersPerEpoch, epoch)
 
 	startTime := time.Now()
-	err := db.meshDb.ForBlockInView(blocks, firstLayerOfPrevEpoch, traversalFunc)
-	if err != nil {
+	if err := db.meshDb.ForBlockInView(blocks, firstLayerOfPrevEpoch, traversalFunc); err != nil {
 		return nil, err
 	}
 	db.log.With().Info("done calculating active set size",
