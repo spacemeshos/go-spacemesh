@@ -310,6 +310,12 @@ func (b *Broker) Register(id instanceID) (chan *Msg, error) {
 
 		//first performing a check to see whether we are synced for this layer
 		if b.isSynced(id) {
+			//this section of code does not need to be protected against possible race conditions
+			//this is because this function will be added to a queue of tasks that will all be
+			//executed sequentially and synchronously. There is still the concern that two or more
+			//calls to Register will be executed out of order, but since Register is only called
+			//on a tick of a new layer, the likelihood of trying to execute Register on a later
+			//instanceID before an earlier one is very very low
 			if len(b.outbox) >= b.limit {
 				//unregister the earliest layer to make space for the new layer
 				//cannot call unregister here because unregister blocks and this would cause a deadlock
