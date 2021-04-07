@@ -18,7 +18,7 @@ const vrfMsgCacheSize = 20 // numRounds per layer is <= 2. numConcurrentLayers<=
 const activesCacheSize = 5 // we don't expect to handle more than two layers concurrently
 
 var (
-	errGenesis            = errors.New("no data about active nodes for genesis")
+	errGenesis = errors.New("no data about active nodes for genesis")
 )
 
 type valueProvider interface {
