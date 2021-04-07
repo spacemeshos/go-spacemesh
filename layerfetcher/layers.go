@@ -155,7 +155,7 @@ func (l *Logic) PollLayer(ctx context.Context, layer types.LayerID) chan LayerPr
 		timeoutFunc := func(err error) {
 			l.receiveLayerHash(ctx, layer, p, len(peers), nil, err)
 		}
-		err := l.net.SendRequest(context.TODO(), LayerBlocksDB, layer.Bytes(), p, receiveForPeerFunc, timeoutFunc)
+		err := l.net.SendRequest(ctx, LayerBlocksDB, layer.Bytes(), p, receiveForPeerFunc, timeoutFunc)
 		if err != nil {
 			l.receiveLayerHash(ctx, layer, p, len(peers), nil, err)
 		}
@@ -226,7 +226,7 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 		errFunc := func(err error) {
 			l.receiveBlockHashes(ctx, id, nil, err)
 		}
-		err := l.net.SendRequest(context.TODO(), LayerHashDB, hash.Bytes(), peer[remainingPeers], receiveForPeerFunc, errFunc)
+		err := l.net.SendRequest(ctx, LayerHashDB, hash.Bytes(), peer[remainingPeers], receiveForPeerFunc, errFunc)
 		if err != nil {
 			l.receiveBlockHashes(ctx, id, nil, err)
 		}
