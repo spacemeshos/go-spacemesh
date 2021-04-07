@@ -297,8 +297,8 @@ func (l *Logic) getPoetResult(hash types.Hash32, data []byte) error {
 }
 
 // blockReceiveFunc handles blocks received via fetch
-func (l *Logic) blockReceiveFunc(data []byte) error {
-	return l.blockHandler.HandleBlockData(context.TODO(), data, l)
+func (l *Logic) blockReceiveFunc(ctx context.Context, data []byte) error {
+	return l.blockHandler.HandleBlockData(ctx, data, l)
 }
 
 // IsSynced indocates if this node is synced
@@ -364,7 +364,7 @@ func (l *Logic) GetBlocks(ctx context.Context, IDs []types.BlockID) error {
 	results := l.fetcher.GetHashes(hashes, fetch.Hint(strconv.Itoa(BlockDB)), true)
 	for _, resC := range results {
 		res := <-resC
-		err := l.blockReceiveFunc(res.Data)
+		err := l.blockReceiveFunc(ctx, res.Data)
 		if err != nil {
 			return err
 		}
