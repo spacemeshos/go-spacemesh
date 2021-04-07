@@ -42,6 +42,7 @@ func TestFields(t *testing.T) {
 
 func TestStringToNodeID(t *testing.T) {
 	pubkey := genByte32()
+	pubkey2 := genByte32()
 	nodeID1 := NodeID{
 		Key:          util.Bytes2Hex(pubkey[:]),
 		VRFPublicKey: []byte(nil),
@@ -57,6 +58,12 @@ func TestStringToNodeID(t *testing.T) {
 	_, err = StringToNodeID(string(pubkey[:10]))
 	r.Error(err, "Expected error converting too-short string to NodeID")
 
+	//Test too long : make sure that everything after the first 64 characters is ignored
+	longString := nodeID1.String() + string(pubkey2[:])
+	reversed, err = StringToNodeID(string(longString))
+	r.NoError(err, "Error converting too-long string to NodeID")
+	r.Equal(nodeID1.Key, reversed.Key, "NodeID does not match for too-long string")
+	r.Equal([]byte{}, reversed.VRFPublicKey, "VRF Key is not empty for too-long string")
 }
 
 func TestBytesToNodeID(t *testing.T) {
@@ -79,4 +86,12 @@ func TestBytesToNodeID(t *testing.T) {
 	rand.Read(x[:])
 	_, err = BytesToNodeID(x[:])
 	r.Error(err, "Expected error converting too-short byte array to NodeID")
+
+	// Test too long
+	longSlice := append(bytes, x[:]...)
+	reversed, err = BytesToNodeID(longSlice)
+	r.NoError(err, "Error converting too-long byte array to NodeID")
+	r.Equal(nodeID1.Key, reversed.Key, "NodeID Key does not match for too-long")
+	r.Equal([]byte{}, reversed.VRFPublicKey, "VRF Key is not empty for too-long")
+
 }
