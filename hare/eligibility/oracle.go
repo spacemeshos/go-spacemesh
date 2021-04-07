@@ -181,18 +181,18 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	msg, err := o.buildVRFMessage(layer, round)
 	if err != nil {
-		o.Error("eligibility: could not build VRF message")
+		o.Error("eligibility: could not build vrf message")
 		return false, err
 	}
 
 	// validate message
 	res, err := o.vrfVerifier(msg, sig, id.VRFPublicKey)
 	if err != nil {
-		o.Error("eligibility: VRF verification failed: %v", err)
+		o.With().Error("eligibility: vrf verification failed", log.Err(err))
 		return false, err
 	}
 	if !res {
-		o.With().Info("eligibility: a node did not pass VRF signature verification",
+		o.With().Info("eligibility: a node did not pass vrf signature verification",
 			id,
 			layer)
 		return false, nil
@@ -213,9 +213,10 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 	// calc hash & check threshold
 	sha := sha256.Sum256(sig)
 	shaUint32 := binary.LittleEndian.Uint32(sha[:4])
+
 	// avoid division (no floating point) & do operations on uint64 to avoid overflow
 	if uint64(activeSetSize)*uint64(shaUint32) > uint64(committeeSize)*uint64(math.MaxUint32) {
-		o.With().Info("eligibility: node did not pass VRF eligibility threshold",
+		o.With().Info("eligibility: node did not pass vrf eligibility threshold",
 			id,
 			log.Int("committee_size", committeeSize),
 			log.Uint32("active_set_size", activeSetSize),
