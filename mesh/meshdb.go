@@ -486,7 +486,6 @@ func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[type
 			}
 		}
 	}
-	//m.Info("writing rewards for smesher %v and coinbase %v", , )
 	return batch.Write()
 }
 
