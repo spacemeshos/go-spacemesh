@@ -19,7 +19,6 @@ const activesCacheSize = 5 // we don't expect to handle more than two layers con
 
 var (
 	errGenesis            = errors.New("no data about active nodes for genesis")
-	errNoContextualBlocks = errors.New("no contextually valid blocks")
 )
 
 type valueProvider interface {
