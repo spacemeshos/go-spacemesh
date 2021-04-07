@@ -459,6 +459,36 @@ func TestOracle_activesSafeLayer(t *testing.T) {
 	r.NoError(err)
 }
 
+func TestOracle_activesNoContextuallyValid(t *testing.T) {
+	r := require.New(t)
+	layersPerEpoch := 20
+	types.SetLayersPerEpoch(int32(layersPerEpoch))
+	mp := createMapWithSize(9)
+	lyr := types.LayerID(100)
+
+	// This should fail since hDist is too low to allow checking any other layers
+	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 2, genActive, mockBlocksProvider{}, eCfg.Config{ConfidenceParam: 10, EpochOffset: 0}, log.NewDefault(t.Name()))
+	o.layersPerEpoch = uint16(layersPerEpoch)
+	o.activesCache = newMockCacher()
+	rsl := roundedSafeLayer(lyr, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
+	r.Equal(types.LayerID(80), rsl)
+	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+		ep := rsl.GetEpoch()
+		r.Equal(ep-1, epoch)
+		return mp, nil
+	}
+
+	bmp := make(map[types.LayerID]map[types.BlockID]struct{})
+	mp1 := make(map[types.BlockID]struct{})
+	bmp[rsl] = mp1
+	o.blocksProvider = &bProvider{bmp}
+	mpRes, err := o.actives(lyr)
+
+	// This should not fail but it should return an empty set
+	r.NoError(err)
+	r.Len(mpRes, 0)
+}
+
 func TestOracle_IsIdentityActive(t *testing.T) {
 	r := require.New(t)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))

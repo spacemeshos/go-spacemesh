@@ -246,7 +246,7 @@ func (o *Oracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
 }
 
 // Returns a map of all active nodes in the specified layer id
-func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
+func (o *Oracle) actives(layer types.LayerID) (activeMap map[string]struct{}, err error) {
 	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	safeEp := sl.GetEpoch()
 
@@ -270,20 +270,21 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	// build a map of all blocks on the current layer
 	mp, err := o.blocksProvider.ContextuallyValidBlock(sl)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	// no contextually valid blocks
+	// no contextually valid blocks: for now we just fall back on an empty active set. this will go away when we
+	// upgrade hare eligibility to use the tortoise beacon.
 	if len(mp) == 0 {
-		o.With().Error("could not calculate hare active set size: no contextually valid blocks",
+		o.With().Warning("no contextually valid blocks in layer, using active set of size zero",
 			layer,
 			layer.GetEpoch(),
 			log.FieldNamed("safe_layer_id", sl),
 			log.FieldNamed("safe_epoch_id", safeEp))
-		return nil, errNoContextualBlocks
+		return activeMap, nil
 	}
 
-	activeMap, err := o.getActiveSet(safeEp-1, mp)
+	activeMap, err = o.getActiveSet(safeEp-1, mp)
 	if err != nil {
 		o.With().Error("could not retrieve active set size",
 			log.Err(err),
@@ -294,10 +295,9 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 		return nil, err
 	}
 
-	// update
+	// update cache
 	o.activesCache.Add(safeEp, activeMap)
-
-	return activeMap, nil
+	return
 }
 
 // IsIdentityActiveOnConsensusView returns true if the provided identity is active on the consensus view derived
