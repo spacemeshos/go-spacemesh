@@ -44,7 +44,7 @@ func TestStringToNodeID(t *testing.T) {
 	pubkey := genByte32()
 	nodeID1 := NodeID{
 		Key:          util.Bytes2Hex(pubkey[:]),
-		VRFPublicKey: []byte("22222"),
+		VRFPublicKey: []byte(nil),
 	}
 	nodeIDStr := nodeID1.String()
 	reversed, err := StringToNodeID(nodeIDStr)
@@ -52,17 +52,11 @@ func TestStringToNodeID(t *testing.T) {
 	r := require.New(t)
 	r.NoError(err, "Error converting string to NodeID")
 	r.Equal(nodeID1.Key, reversed.Key, "Node ID deserialization Key does not match")
-	r.Equal(nodeID1.VRFPublicKey, reversed.VRFPublicKey, "Node ID deserialization VRF Key does not match")
 
 	// Test too short
 	_, err = StringToNodeID(string(pubkey[:10]))
 	r.Error(err, "Expected error converting too-short string to NodeID")
 
-	// Test too long
-	var x [129]byte
-	rand.Read(x[:])
-	_, err = StringToNodeID(string(x[:]))
-	r.Error(err, "Expected error converting too-long string to NodeID")
 }
 
 func TestBytesToNodeID(t *testing.T) {
@@ -79,17 +73,10 @@ func TestBytesToNodeID(t *testing.T) {
 	r := require.New(t)
 	r.NoError(err, "Error converting bytes to NodeID")
 	r.Equal(nodeID1.Key, reversed.Key, "NodeID Key does not match")
-	r.Equal(nodeID1.VRFPublicKey, reversed.VRFPublicKey, "NodeID VRF Key does not match")
 
 	// Test too short
 	var x [31]byte
 	rand.Read(x[:])
 	_, err = BytesToNodeID(x[:])
 	r.Error(err, "Expected error converting too-short byte array to NodeID")
-
-	// Test too long
-	var y [65]byte
-	rand.Read(y[:])
-	_, err = BytesToNodeID(y[:])
-	r.Error(err, "Expected error converting too-long byte array to NodeID")
 }

@@ -351,6 +351,7 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 }
 
 func (msh *Mesh) applyState(l *types.Layer) {
+	msh.With().Info("applying state of the layer", l)
 	msh.accumulateRewards(l, msh.config)
 	msh.pushTransactions(l)
 	msh.setLatestLayerInState(l.Index())
@@ -754,6 +755,7 @@ func (msh *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 }
 
 func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
+	msh.With().Info("accumulating rewards", l)
 	coinbases := make([]types.Address, 0, len(l.Blocks()))
 	//the reason we are serializing the types.NodeID to a string instead of using it directly as a
 	//key in the map is due to Golang's restriction on only Comparable types used as map keys. Since
@@ -828,7 +830,7 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 		for smesherString, cnt := range smesherAccountEntry {
 			smesherEntry, err := types.StringToNodeID(smesherString)
 			if err != nil {
-				log.With().Error("unable to convert bytes to nodeid", log.Err(err))
+				log.With().Error("unable to convert string to nodeid", log.Err(err), log.String("smesherString", smesherString))
 				return
 			}
 			events.ReportRewardReceived(events.Reward{

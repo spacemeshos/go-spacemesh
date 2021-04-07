@@ -486,15 +486,15 @@ func TestMeshDB_testGetRewards(t *testing.T) {
 
 	smesher1 := types.NodeID{
 		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer1.PublicKey().Bytes(),
+		VRFPublicKey: []byte(nil),
 	}
 	smesher2 := types.NodeID{
-		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer2.PublicKey().Bytes(),
+		Key:          signer2.PublicKey().String(),
+		VRFPublicKey: []byte(nil),
 	}
 	smesher3 := types.NodeID{
-		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer3.PublicKey().Bytes(),
+		Key:          signer3.PublicKey().String(),
+		VRFPublicKey: []byte(nil),
 	}
 
 	smesher1String := smesher1.String()
@@ -567,19 +567,19 @@ func TestMeshDB_testGetRewardsBySmesher(t *testing.T) {
 
 	smesher1 := types.NodeID{
 		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer1.PublicKey().Bytes(),
+		VRFPublicKey: []byte(nil),
 	}
 	smesher2 := types.NodeID{
-		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer2.PublicKey().Bytes(),
+		Key:          signer2.PublicKey().String(),
+		VRFPublicKey: []byte(nil),
 	}
 	smesher3 := types.NodeID{
-		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer3.PublicKey().Bytes(),
+		Key:          signer3.PublicKey().String(),
+		VRFPublicKey: []byte(nil),
 	}
 	smesher4 := types.NodeID{
-		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer4.PublicKey().Bytes(),
+		Key:          signer4.PublicKey().String(),
+		VRFPublicKey: []byte(nil),
 	}
 
 	smesher1String := smesher1.String()
@@ -652,19 +652,19 @@ func TestMeshDB_testGetRewardsBySmesherChangingLayer(t *testing.T) {
 
 	smesher1 := types.NodeID{
 		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer1.PublicKey().Bytes(),
+		VRFPublicKey: []byte(nil),
 	}
 	smesher2 := types.NodeID{
-		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer2.PublicKey().Bytes(),
+		Key:          signer2.PublicKey().String(),
+		VRFPublicKey: []byte(nil),
 	}
 	smesher3 := types.NodeID{
-		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer3.PublicKey().Bytes(),
+		Key:          signer3.PublicKey().String(),
+		VRFPublicKey: []byte(nil),
 	}
 	smesher4 := types.NodeID{
-		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer4.PublicKey().Bytes(),
+		Key:          signer4.PublicKey().String(),
+		VRFPublicKey: []byte(nil),
 	}
 
 	smesher1String := smesher1.String()
@@ -743,19 +743,19 @@ func TestMeshDB_testGetRewardsBySmesherMultipleSmeshers(t *testing.T) {
 
 	smesher1 := types.NodeID{
 		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer1.PublicKey().Bytes(),
+		VRFPublicKey: []byte(nil),
 	}
 	smesher2 := types.NodeID{
-		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer2.PublicKey().Bytes(),
+		Key:          signer2.PublicKey().String(),
+		VRFPublicKey: []byte(nil),
 	}
 	smesher3 := types.NodeID{
-		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer3.PublicKey().Bytes(),
+		Key:          signer3.PublicKey().String(),
+		VRFPublicKey: []byte(nil),
 	}
 	smesher4 := types.NodeID{
-		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer4.PublicKey().Bytes(),
+		Key:          signer4.PublicKey().String(),
+		VRFPublicKey: []byte(nil),
 	}
 
 	smesher1String := smesher1.String()
@@ -821,19 +821,19 @@ func TestMeshDB_testGetRewardsBySmesherMultipleSmeshersAndLayers(t *testing.T) {
 
 	smesher1 := types.NodeID{
 		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer1.PublicKey().Bytes(),
+		VRFPublicKey: []byte(nil),
 	}
 	smesher2 := types.NodeID{
-		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer2.PublicKey().Bytes(),
+		Key:          signer2.PublicKey().String(),
+		VRFPublicKey: []byte(nil),
 	}
 	smesher3 := types.NodeID{
-		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer3.PublicKey().Bytes(),
+		Key:          signer3.PublicKey().String(),
+		VRFPublicKey: []byte(nil),
 	}
 	smesher4 := types.NodeID{
-		Key:          signer1.PublicKey().String(),
-		VRFPublicKey: signer4.PublicKey().Bytes(),
+		Key:          signer4.PublicKey().String(),
+		VRFPublicKey: []byte(nil),
 	}
 
 	smesher1String := smesher1.String()

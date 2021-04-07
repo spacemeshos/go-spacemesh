@@ -471,6 +471,13 @@ func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[type
 	for account, smesherAccountEntry := range accountBlockCount {
 		for smesherString, cnt := range smesherAccountEntry {
 			smesherEntry, err := types.StringToNodeID(smesherString)
+			m.With().Info("writing reward to database",
+				l,
+				log.Uint64("total_reward", totalReward.Uint64()),
+				log.Uint64("layer_reward", layerReward.Uint64()),
+				account,
+				log.String("smesherString", smesherString),
+				log.Uint64("reward_count", cnt))
 			if err != nil {
 				return fmt.Errorf("could not convert String to NodeID for %v: %v", smesherString, err)
 			}

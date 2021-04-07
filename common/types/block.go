@@ -90,9 +90,10 @@ type NodeID struct {
 }
 
 // String returns a string representation of the NodeID, for logging purposes.
+// Changed this implementation to only log the Edwards Public Key
 // It implements the Stringer interface.
 func (id NodeID) String() string {
-	return id.Key + string(id.VRFPublicKey)
+	return id.Key
 }
 
 // ToBytes returns the byte representation of the Edwards public key.
@@ -113,15 +114,13 @@ func BytesToNodeID(b []byte) (*NodeID, error) {
 	if len(b) < 32 {
 		return nil, fmt.Errorf("Invalid input length, input too short")
 	}
-	if len(b) > 64 {
-		return nil, fmt.Errorf("Invalid input length, input too long")
-	}
-
+	// Note that we don't care when the input is too long, because we are only deserializing the first 32
+	// bytes into the Edwards public key. The VRFKey is not used by the deserializaiton at all, and thus
+	// it is returned as empty
 	pubKey := b[0:32]
-	vrfKey := b[32:]
 	return &NodeID{
 		Key:          util.Bytes2Hex(pubKey),
-		VRFPublicKey: []byte(util.Bytes2Hex(vrfKey)),
+		VRFPublicKey: []byte{},
 	}, nil
 }
 
@@ -133,15 +132,14 @@ func StringToNodeID(s string) (*NodeID, error) {
 	if strLen < 64 {
 		return nil, fmt.Errorf("invalid length, input too short")
 	}
-	if strLen > 128 {
-		return nil, fmt.Errorf("invalid length, input too long")
-	}
-	//portion of the string corresponding to the Edwards public key
+	// portion of the string corresponding to the Edwards public key
+	// Note that we don't care when the input is too long, because we are only deserializing the first 32
+	// bytes into the Edwards public key. The VRFKey is not used by the deserializaiton at all, and thus
+	// it is returned as empty
 	pubKey := s[:64]
-	vrfKey := s[64:]
 	return &NodeID{
 		Key:          pubKey,
-		VRFPublicKey: []byte(vrfKey),
+		VRFPublicKey: []byte{},
 	}, nil
 }
 
