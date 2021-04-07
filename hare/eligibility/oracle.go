@@ -269,9 +269,9 @@ func (o *Oracle) actives(layer types.LayerID) (activeMap map[string]struct{}, er
 	}
 
 	// build a map of all blocks on the current layer
-	mp, err := o.blocksProvider.ContextuallyValidBlock(sl)
-	if err != nil {
-		return
+	mp, err2 := o.blocksProvider.ContextuallyValidBlock(sl)
+	if err2 != nil {
+		return nil, err2
 	}
 
 	// no contextually valid blocks: for now we just fall back on an empty active set. this will go away when we
@@ -282,7 +282,7 @@ func (o *Oracle) actives(layer types.LayerID) (activeMap map[string]struct{}, er
 			layer.GetEpoch(),
 			log.FieldNamed("safe_layer_id", sl),
 			log.FieldNamed("safe_epoch_id", safeEp))
-		return activeMap, nil
+		return
 	}
 
 	activeMap, err = o.getActiveSet(safeEp-1, mp)
