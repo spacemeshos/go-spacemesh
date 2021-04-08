@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/weakcoin"
 )
 
 const (
@@ -74,7 +75,7 @@ type TortoiseBeacon struct {
 	epochATXGetter    epochATXGetter
 	tortoiseBeaconDB  tortoiseBeaconDB
 	weakCoin          weakCoin
-	weakCoinGenerator WeakCoinGenerator
+	weakCoinPublisher weakcoin.Publisher
 
 	layerMu   sync.RWMutex
 	lastLayer types.LayerID
@@ -120,7 +121,7 @@ func New(
 	layerTicker chan types.LayerID,
 	logger log.Log,
 ) *TortoiseBeacon {
-	wcg := NewWeakCoinGenerator(defaultPrefix, defaultThreshold, net)
+	wcg := weakcoin.NewWeakCoinGenerator(weakcoin.DefaultPrefix, weakcoin.DefaultThreshold, net, logger)
 
 	return &TortoiseBeacon{
 		Log:               logger,
@@ -130,7 +131,7 @@ func New(
 		epochATXGetter:    epochATXGetter,
 		tortoiseBeaconDB:  tortoiseBeaconDB,
 		weakCoin:          weakCoin,
-		weakCoinGenerator: wcg,
+		weakCoinPublisher: wcg,
 		layerTicker:       layerTicker,
 		networkDelta:      time.Duration(conf.WakeupDelta) * time.Second,
 		currentRounds:     make(map[types.EpochID]uint64),
@@ -401,132 +402,6 @@ func (tb *TortoiseBeacon) handleEpoch(epoch types.EpochID) {
 	tb.beaconsMu.Unlock()
 }
 
-func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage) error {
-	epoch := m.Epoch()
-
-	mt := tb.classifyMessage(m, epoch)
-
-	proposalsHash := hashATXList(m.Proposals())
-
-	switch mt {
-	case TimelyMessage:
-		tb.Log.With().Info("Received timely ProposalMessage",
-			log.Uint64("epoch", uint64(m.Epoch())),
-			log.String("message", m.String()))
-
-		tb.timelyProposalsMu.Lock()
-
-		if _, ok := tb.timelyProposals[epoch]; !ok {
-			tb.timelyProposals[epoch] = make(map[types.Hash32]struct{})
-		}
-
-		tb.timelyProposals[epoch][proposalsHash] = struct{}{}
-
-		tb.timelyProposalsMu.Unlock()
-
-		return nil
-
-	case DelayedMessage:
-		tb.Log.With().Info("Received delayed ProposalMessage",
-			log.Uint64("epoch", uint64(m.Epoch())),
-			log.String("message", m.String()))
-
-		tb.delayedProposalsMu.Lock()
-
-		if _, ok := tb.delayedProposals[epoch]; !ok {
-			tb.delayedProposals[epoch] = make(map[types.Hash32]struct{})
-		}
-
-		tb.delayedProposals[epoch][proposalsHash] = struct{}{}
-
-		tb.delayedProposalsMu.Unlock()
-
-		return nil
-
-	case LateMessage:
-		tb.Log.With().Info("Received late ProposalMessage",
-			log.Uint64("epoch", uint64(m.Epoch())),
-			log.Int("type", int(mt)))
-
-		return nil
-
-	default:
-		tb.Log.With().Info("Received ProposalMessage of unknown type",
-			log.Uint64("epoch", uint64(m.Epoch())),
-			log.String("message", m.String()))
-
-		return ErrUnknownMessageType
-	}
-}
-
-func (tb *TortoiseBeacon) handleVotingMessage(from p2pcrypto.PublicKey, message VotingMessage) error {
-	epoch := message.Epoch()
-
-	tb.currentRoundsMu.Lock()
-	currentRound := tb.currentRounds[epoch]
-	tb.currentRoundsMu.Unlock()
-
-	mt := tb.classifyMessage(message, epoch)
-	switch mt {
-	case TimelyMessage:
-		tb.Log.With().Info("Received timely VotingMessage, counting it",
-			log.Uint64("epoch", uint64(message.Epoch())),
-			log.Uint64("round", message.Round()),
-			log.String("message", message.String()))
-
-		thisRound := epochRoundPair{
-			EpochID: epoch,
-			Round:   currentRound,
-		}
-
-		tb.votesMu.Lock()
-		defer tb.votesMu.Unlock()
-
-		if _, ok := tb.incomingVotes[thisRound]; !ok {
-			tb.incomingVotes[thisRound] = make(votesPerPK)
-		}
-
-		votesFor := make(votesSet)
-		votesAgainst := make(votesSet)
-
-		for _, vote := range message.VotesFor() {
-			votesFor[vote] = struct{}{}
-		}
-
-		for _, vote := range message.VotesAgainst() {
-			votesAgainst[vote] = struct{}{}
-		}
-
-		tb.incomingVotes[thisRound][from] = votes{
-			votesFor:     votesFor,
-			votesAgainst: votesAgainst,
-		}
-
-		return nil
-
-	case DelayedMessage, LateMessage:
-		tb.Log.With().Info(fmt.Sprintf("Received %v VotingMessage, ignoring it", mt.String()),
-			log.Uint64("epoch", uint64(message.Epoch())),
-			log.Uint64("round", message.Round()),
-			log.String("message", message.String()))
-
-		return nil
-
-	default:
-		tb.Log.With().Info("Received VotingMessage of unknown type",
-			log.Uint64("epoch", uint64(message.Epoch())),
-			log.Uint64("round", message.Round()),
-			log.Int("type", int(mt)))
-
-		return ErrUnknownMessageType
-	}
-}
-
-func (tb *TortoiseBeacon) handleWeakCoinMessage(m WeakCoinMessage) error {
-	// TODO(nkryuchkov): implement
-	return nil
-}
-
 func (tb *TortoiseBeacon) classifyMessage(m message, epoch types.EpochID) MessageType {
 	tb.currentRoundsMu.Lock()
 	currentRound := tb.currentRounds[epoch]
@@ -627,7 +502,7 @@ func (tb *TortoiseBeacon) sendProposal(epoch types.EpochID) error {
 
 	tb.timelyProposalsMu.Unlock()
 
-	if err := tb.weakCoinGenerator.Publish(epoch, 1); err != nil {
+	if err := tb.weakCoinPublisher.Publish(epoch, 1); err != nil {
 		tb.Log.With().Error("Failed to publish weak coin message",
 			log.Uint64("epoch", uint64(epoch)),
 			log.Err(err))
@@ -676,7 +551,7 @@ func (tb *TortoiseBeacon) sendVotingMessages(epoch types.EpochID, round uint64) 
 		return fmt.Errorf("broadcast voting message: %w", err)
 	}
 
-	if err := tb.weakCoinGenerator.Publish(epoch, currentRound); err != nil {
+	if err := tb.weakCoinPublisher.Publish(epoch, currentRound); err != nil {
 		tb.Log.With().Error("Failed to publish weak coin message",
 			log.Uint64("epoch", uint64(epoch)),
 			log.Err(err))

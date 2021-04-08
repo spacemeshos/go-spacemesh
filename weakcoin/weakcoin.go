@@ -1,4 +1,4 @@
-package tortoisebeacon
+package weakcoin
 
 import (
 	"fmt"
@@ -7,19 +7,29 @@ import (
 	"github.com/spacemeshos/amcl/BLS381"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (
-	defaultPrefix    = "prefix"
-	defaultThreshold = byte(0x80) // TODO(nkryuchkov): consider using int
+	// DefaultPrefix defines default weak coin proposal prefix.
+	DefaultPrefix = "prefix"
+	// DefaultThreshold defines default weak coin threshold.
+	DefaultThreshold = byte(0x80) // TODO(nkryuchkov): consider using int
+	// GossipProtocol is weak coin Gossip protocol name.
+	GossipProtocol = "WeakCoinGossip"
 )
 
-// WeakCoinGenerator generates weak coin.
-type WeakCoinGenerator interface {
+type broadcaster interface {
+	Broadcast(channel string, data []byte) error
+}
+
+// Publisher publishes a weak coin message.
+type Publisher interface {
 	Publish(epoch types.EpochID, round uint64) error
 }
 
 type weakCoinGenerator struct {
+	Log       log.Log
 	pk        []byte
 	sk        []byte
 	signer    *BLS381.BlsSigner
@@ -29,7 +39,7 @@ type weakCoinGenerator struct {
 }
 
 // NewWeakCoinGenerator returns a new weakCoinGenerator.
-func NewWeakCoinGenerator(prefix string, threshold byte, net broadcaster) WeakCoinGenerator {
+func NewWeakCoinGenerator(prefix string, threshold byte, net broadcaster, logger log.Log) Publisher {
 	rng := amcl.NewRAND()
 	pub := []byte{1}
 	rng.Seed(len(pub), []byte{2})
@@ -37,6 +47,7 @@ func NewWeakCoinGenerator(prefix string, threshold byte, net broadcaster) WeakCo
 	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
 
 	wcg := &weakCoinGenerator{
+		Log:       logger,
 		pk:        vrfPub,
 		sk:        vrfPriv,
 		signer:    vrfSigner,
@@ -60,7 +71,7 @@ func (wcg *weakCoinGenerator) Publish(epoch types.EpochID, round uint64) error {
 		return fmt.Errorf("serialize weak coin message: %w", err)
 	}
 
-	if err := wcg.net.Broadcast(TBWeakCoinProtocol, serializedMessage); err != nil {
+	if err := wcg.net.Broadcast(GossipProtocol, serializedMessage); err != nil {
 		return fmt.Errorf("broadcast weak coin message: %w", err)
 	}
 

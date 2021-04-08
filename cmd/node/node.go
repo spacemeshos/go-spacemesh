@@ -54,6 +54,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
+	"github.com/spacemeshos/go-spacemesh/weakcoin"
 )
 
 const edKeyFileName = "key.bin"
@@ -650,7 +651,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	gossipListener.AddListener(blocks.NewBlockProtocol, priorityq.High, blockListener.HandleBlock)
 	gossipListener.AddListener(tortoisebeacon.TBProposalProtocol, priorityq.Low, tBeacon.HandleProposalMessage)
 	gossipListener.AddListener(tortoisebeacon.TBVotingProtocol, priorityq.Low, tBeacon.HandleVotingMessage)
-	gossipListener.AddListener(tortoisebeacon.TBWeakCoinProtocol, priorityq.Low, tBeacon.HandleWeakCoinMessage)
+	gossipListener.AddListener(weakcoin.GossipProtocol, priorityq.Low, tBeacon.HandleWeakCoinMessage)
 
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener

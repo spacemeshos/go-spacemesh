@@ -1,4 +1,4 @@
-package tortoisebeacon
+package weakcoin
 
 import (
 	"testing"
@@ -13,7 +13,7 @@ func TestWeakCoinGenerator_GenerateProposal(t *testing.T) {
 
 	r := require.New(t)
 
-	wcg := NewWeakCoinGenerator(defaultPrefix, defaultThreshold, nil)
+	wcg := NewWeakCoinGenerator(DefaultPrefix, DefaultThreshold, nil)
 	epoch := types.EpochID(3)
 	round := uint64(1)
 	expected := 0xb9
