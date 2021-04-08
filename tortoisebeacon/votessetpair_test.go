@@ -88,8 +88,8 @@ func Test_votesSetPair_Diff(t *testing.T) {
 			t.Parallel()
 
 			votesFor, votesAgainst := tc.currentRound.Diff(tc.firstRound)
-			r.EqualValues(tc.votesFor, votesFor)
-			r.EqualValues(tc.votesAgainst, votesAgainst)
+			r.EqualValues(tc.votesFor.Sort(), votesFor.Sort())
+			r.EqualValues(tc.votesAgainst.Sort(), votesAgainst.Sort())
 		})
 	}
 }

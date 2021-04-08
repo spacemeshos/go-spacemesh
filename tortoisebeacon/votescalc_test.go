@@ -70,8 +70,8 @@ func TestTortoiseBeacon_calcVotesFromProposals(t *testing.T) {
 			}
 
 			votesFor, votesAgainst := tb.calcVotesFromProposals(tc.epoch)
-			r.EqualValues(tc.votesFor, votesFor)
-			r.EqualValues(tc.votesAgainst, votesAgainst)
+			r.EqualValues(tc.votesFor.Sort(), votesFor.Sort())
+			r.EqualValues(tc.votesAgainst.Sort(), votesAgainst.Sort())
 		})
 	}
 }
@@ -190,8 +190,8 @@ func TestTortoiseBeacon_calcVotesDelta(t *testing.T) {
 			}
 
 			forDiff, againstDiff := tb.calcVotesDelta(tc.epoch, tc.round)
-			r.EqualValues(tc.forDiff, forDiff)
-			r.EqualValues(tc.againstDiff, againstDiff)
+			r.EqualValues(tc.forDiff.Sort(), forDiff.Sort())
+			r.EqualValues(tc.againstDiff.Sort(), againstDiff.Sort())
 		})
 	}
 }
@@ -833,15 +833,6 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 			name:  "Case 2",
 			epoch: 5,
 			round: 5,
-			ownFirstRoundVotes: votesSetPair{
-				VotesFor: map[types.Hash32]struct{}{
-					types.HexToHash32("0x1"): {},
-					types.HexToHash32("0x2"): {},
-				},
-				VotesAgainst: map[types.Hash32]struct{}{
-					types.HexToHash32("0x3"): {},
-				},
-			},
 			votesCount: votesCountMap{
 				types.HexToHash32("0x1"): threshold * 2,
 				types.HexToHash32("0x2"): -threshold * 3,
@@ -876,7 +867,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 				weakCoin:        tc.weakCoin,
 			}
 
-			result := tb.calcOwnCurrentRoundVotes(tc.epoch, tc.round, tc.ownFirstRoundVotes, tc.votesCount)
+			result := tb.calcOwnCurrentRoundVotes(tc.epoch, tc.round, tc.votesCount)
 			r.EqualValues(tc.result, result)
 		})
 	}

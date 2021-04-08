@@ -68,7 +68,7 @@ func (tb *TortoiseBeacon) calcVotesDelta(epoch types.EpochID, round types.RoundI
 		log.Uint64("round", uint64(round)),
 		log.String("votesCount", fmt.Sprint(votesCount)))
 
-	ownCurrentRoundVotes := tb.calcOwnCurrentRoundVotes(epoch, round, ownFirstRoundVotes, votesCount)
+	ownCurrentRoundVotes := tb.calcOwnCurrentRoundVotes(epoch, round, votesCount)
 
 	tb.Log.With().Info("Calculated votes for one round",
 		log.Uint64("epoch", uint64(epoch)),
@@ -255,12 +255,7 @@ func (tb *TortoiseBeacon) copyFirstRoundVotes(epoch types.EpochID) votesPerPK {
 	return thisRoundVotes
 }
 
-func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(
-	epoch types.EpochID,
-	round types.RoundID,
-	ownFirstRoundVotes votesSetPair,
-	votesCount votesCountMap,
-) votesSetPair {
+func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, round types.RoundID, votesCount votesCountMap) votesSetPair {
 	ownCurrentRoundVotes := votesSetPair{
 		VotesFor:     make(hashSet),
 		VotesAgainst: make(hashSet),
@@ -271,7 +266,6 @@ func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(
 		Round:   round,
 	}
 
-	tb.ownVotes[currentRound] = ownFirstRoundVotes
 	// TODO(nkryuchkov): as pointer is shared, ensure that maps are not modified
 	tb.votesCountCache[currentRound] = votesCount
 
@@ -287,6 +281,8 @@ func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(
 			ownCurrentRoundVotes.VotesAgainst[vote] = struct{}{}
 		}
 	}
+
+	tb.ownVotes[currentRound] = ownCurrentRoundVotes
 
 	return ownCurrentRoundVotes
 }

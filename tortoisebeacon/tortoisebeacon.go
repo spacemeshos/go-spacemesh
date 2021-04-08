@@ -45,7 +45,6 @@ type epochRoundPair struct {
 }
 
 type (
-	hashList      = []types.Hash32
 	hashSet       = map[types.Hash32]struct{}
 	votesPerPK    = map[p2pcrypto.PublicKey]votesSetPair
 	votesPerRound = map[epochRoundPair]votesPerPK
