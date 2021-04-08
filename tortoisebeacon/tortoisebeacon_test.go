@@ -25,6 +25,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	logger := log.NewDefault("TortoiseBeacon")
 	genesisTime := time.Now().Add(time.Second * 10)
 	ld := time.Duration(10) * time.Second
+
 	types.SetLayersPerEpoch(1)
 	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, log.NewDefault("clock"))
 	clock.StartNotifying()

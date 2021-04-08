@@ -57,11 +57,11 @@ func (wcg *weakCoinGenerator) Publish(epoch types.EpochID, round uint64) error {
 	// TODO(nkryuchkov): fix conversion
 	serializedMessage, err := types.InterfaceToBytes(p)
 	if err != nil {
-		return err
+		return fmt.Errorf("serialize weak coin message: %w", err)
 	}
 
 	if err := wcg.net.Broadcast(TBWeakCoinProtocol, serializedMessage); err != nil {
-		return err
+		return fmt.Errorf("broadcast weak coin message: %w", err)
 	}
 
 	return nil
@@ -70,9 +70,10 @@ func (wcg *weakCoinGenerator) Publish(epoch types.EpochID, round uint64) error {
 func (wcg *weakCoinGenerator) generateProposal(epoch types.EpochID, round uint64) (byte, error) {
 	// TODO(nkryuchkov): concat bytes from numbers instead
 	msg := []byte(fmt.Sprintf("%s%d%d", wcg.prefix, epoch, round))
+
 	result, err := wcg.signer.Sign(msg)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("sign message: %w", err)
 	}
 
 	// TODO: use another implementation

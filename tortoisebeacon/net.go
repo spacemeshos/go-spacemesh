@@ -16,7 +16,6 @@ const TBVotingProtocol = "TBVotingGossip"
 const TBWeakCoinProtocol = "TBWeakCoinGossip"
 
 // HandleProposalMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
-// TODO(nkryuchkov): Consider not calculating own proposals.
 func (tb *TortoiseBeacon) HandleProposalMessage(data service.GossipMessage, sync service.Fetcher) {
 	tb.Log.With().Info("New proposal message",
 		log.String("from", data.Sender().String()))
@@ -42,7 +41,6 @@ func (tb *TortoiseBeacon) HandleProposalMessage(data service.GossipMessage, sync
 }
 
 // HandleVotingMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
-// TODO(nkryuchkov): Consider not calculating own votes.
 func (tb *TortoiseBeacon) HandleVotingMessage(data service.GossipMessage, sync service.Fetcher) {
 	from := data.Sender()
 
