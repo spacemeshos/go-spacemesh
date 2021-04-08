@@ -80,12 +80,13 @@ func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID) hashLi
 				}
 			}
 
-			tb.Log.With().Info(fmt.Sprintf("Tortoise beacon round votes epoch %v round %v: %+v", epoch, round, roundVotes),
+			tb.Log.With().Info("Tortoise beacon round votes",
 				log.Uint64("epoch_id", uint64(epoch)),
-				log.Uint64("round", uint64(round)))
+				log.Uint64("round", uint64(round)),
+				log.String("roundVotes", fmt.Sprint(roundVotes)))
 		}
 
-		tb.Log.With().Info(fmt.Sprintf("Tortoise beacon hashes epoch %v round %v", epoch, round),
+		tb.Log.With().Info("Tortoise beacon hashes",
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.Uint64("round", uint64(round)),
 			log.String("hashes", strings.Join(stringHashes, ", ")))

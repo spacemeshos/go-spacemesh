@@ -7,16 +7,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
-// Mock mocks weak coin.
-type Mock struct{}
+// RandomMock mocks weak coin returning random value as weak coin.
+type RandomMock struct{}
 
 // PublishProposal publishes a proposal.
-func (m Mock) PublishProposal(epoch types.EpochID, round types.RoundID) error {
+func (m RandomMock) PublishProposal(epoch types.EpochID, round types.RoundID) error {
 	return nil
 }
 
 // Get gets weak coin value.
-func (m Mock) Get(epoch types.EpochID, round types.RoundID) bool {
+func (m RandomMock) Get(epoch types.EpochID, round types.RoundID) bool {
 	if rand.Intn(2) == 0 {
 		return false
 	}
@@ -25,6 +25,26 @@ func (m Mock) Get(epoch types.EpochID, round types.RoundID) bool {
 }
 
 // HandleSerializedMessage handles serialized message.
-func (m Mock) HandleSerializedMessage(data service.GossipMessage, sync service.Fetcher) {
+func (m RandomMock) HandleSerializedMessage(data service.GossipMessage, sync service.Fetcher) {
+	return
+}
+
+// ValueMock mocks weak coin returning set value.
+type ValueMock struct {
+	Value bool
+}
+
+// PublishProposal publishes a proposal.
+func (m ValueMock) PublishProposal(epoch types.EpochID, round types.RoundID) error {
+	return nil
+}
+
+// Get gets weak coin value.
+func (m ValueMock) Get(epoch types.EpochID, round types.RoundID) bool {
+	return m.Value
+}
+
+// HandleSerializedMessage handles serialized message.
+func (m ValueMock) HandleSerializedMessage(data service.GossipMessage, sync service.Fetcher) {
 	return
 }

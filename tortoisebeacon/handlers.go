@@ -150,8 +150,8 @@ func (tb *TortoiseBeacon) handleVotingMessage(from p2pcrypto.PublicKey, message 
 			tb.incomingVotes[thisRound] = make(votesPerPK)
 		}
 
-		votesFor := make(votesSet)
-		votesAgainst := make(votesSet)
+		votesFor := make(hashSet)
+		votesAgainst := make(hashSet)
 
 		for _, vote := range message.For() {
 			votesFor[vote] = struct{}{}
@@ -161,9 +161,9 @@ func (tb *TortoiseBeacon) handleVotingMessage(from p2pcrypto.PublicKey, message 
 			votesAgainst[vote] = struct{}{}
 		}
 
-		tb.incomingVotes[thisRound][from] = votes{
-			votesFor:     votesFor,
-			votesAgainst: votesAgainst,
+		tb.incomingVotes[thisRound][from] = votesSetPair{
+			VotesFor:     votesFor,
+			VotesAgainst: votesAgainst,
 		}
 
 		return nil

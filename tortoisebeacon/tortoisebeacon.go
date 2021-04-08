@@ -46,17 +46,13 @@ type epochRoundPair struct {
 
 type (
 	hashList      = []types.Hash32
-	votesSet      = map[types.Hash32]struct{}
-	votesPerPK    = map[p2pcrypto.PublicKey]votes
+	hashSet       = map[types.Hash32]struct{}
+	votesPerPK    = map[p2pcrypto.PublicKey]votesSetPair
 	votesPerRound = map[epochRoundPair]votesPerPK
-	ownVotes      = map[epochRoundPair]votes
+	ownVotes      = map[epochRoundPair]votesSetPair
 	votesCountMap = map[types.Hash32]int
+	proposalsMap  = map[types.EpochID]hashSet
 )
-
-type votes struct {
-	votesFor     votesSet
-	votesAgainst votesSet
-}
 
 // TortoiseBeacon represents Tortoise Beacon.
 type TortoiseBeacon struct {
@@ -80,10 +76,10 @@ type TortoiseBeacon struct {
 	currentRounds   map[types.EpochID]types.RoundID
 
 	timelyProposalsMu sync.RWMutex
-	timelyProposals   map[types.EpochID]map[types.Hash32]struct{}
+	timelyProposals   proposalsMap
 
 	delayedProposalsMu sync.RWMutex
-	delayedProposals   map[types.EpochID]map[types.Hash32]struct{}
+	delayedProposals   proposalsMap
 
 	votesMu         sync.RWMutex
 	incomingVotes   votesPerRound // 1st round - votes, other rounds - diff
@@ -125,8 +121,8 @@ func New(
 		layerTicker:      layerTicker,
 		networkDelta:     time.Duration(conf.WakeupDelta) * time.Second,
 		currentRounds:    make(map[types.EpochID]types.RoundID),
-		timelyProposals:  make(map[types.EpochID]map[types.Hash32]struct{}),
-		delayedProposals: make(map[types.EpochID]map[types.Hash32]struct{}),
+		timelyProposals:  make(map[types.EpochID]hashSet),
+		delayedProposals: make(map[types.EpochID]hashSet),
 		incomingVotes:    make(votesPerRound),
 		votesCache:       make(votesPerRound),
 		ownVotes:         make(ownVotes),
