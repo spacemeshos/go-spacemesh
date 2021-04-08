@@ -15,8 +15,8 @@ const TBProposalProtocol = "TBProposalGossip"
 // TBVotingProtocol is Tortoise Beacon voting Gossip protocol name.
 const TBVotingProtocol = "TBVotingGossip"
 
-// HandleProposalMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
-func (tb *TortoiseBeacon) HandleProposalMessage(data service.GossipMessage, sync service.Fetcher) {
+// HandleSerializedProposalMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
+func (tb *TortoiseBeacon) HandleSerializedProposalMessage(data service.GossipMessage, sync service.Fetcher) {
 	tb.Log.With().Info("New proposal message",
 		log.String("from", data.Sender().String()))
 
@@ -45,8 +45,6 @@ func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage) error {
 
 	mt := tb.classifyMessage(m, epoch)
 
-	proposalsHash := hashATXList(m.Proposals())
-
 	switch mt {
 	case TimelyMessage:
 		tb.Log.With().Info("Received timely ProposalMessage",
@@ -59,7 +57,7 @@ func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage) error {
 			tb.timelyProposals[epoch] = make(map[types.Hash32]struct{})
 		}
 
-		tb.timelyProposals[epoch][proposalsHash] = struct{}{}
+		tb.timelyProposals[epoch][m.Proposals().Hash()] = struct{}{}
 
 		tb.timelyProposalsMu.Unlock()
 
@@ -76,7 +74,7 @@ func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage) error {
 			tb.delayedProposals[epoch] = make(map[types.Hash32]struct{})
 		}
 
-		tb.delayedProposals[epoch][proposalsHash] = struct{}{}
+		tb.delayedProposals[epoch][m.Proposals().Hash()] = struct{}{}
 
 		tb.delayedProposalsMu.Unlock()
 
@@ -98,8 +96,8 @@ func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage) error {
 	}
 }
 
-// HandleVotingMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
-func (tb *TortoiseBeacon) HandleVotingMessage(data service.GossipMessage, sync service.Fetcher) {
+// HandleSerializedVotingMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
+func (tb *TortoiseBeacon) HandleSerializedVotingMessage(data service.GossipMessage, sync service.Fetcher) {
 	from := data.Sender()
 
 	tb.Log.With().Info("New voting message",
@@ -137,7 +135,7 @@ func (tb *TortoiseBeacon) handleVotingMessage(from p2pcrypto.PublicKey, message 
 	case TimelyMessage:
 		tb.Log.With().Info("Received timely VotingMessage, counting it",
 			log.Uint64("epoch", uint64(message.Epoch())),
-			log.Uint64("round", message.Round()),
+			log.Uint64("round", uint64(message.Round())),
 			log.String("message", message.String()))
 
 		thisRound := epochRoundPair{
@@ -155,11 +153,11 @@ func (tb *TortoiseBeacon) handleVotingMessage(from p2pcrypto.PublicKey, message 
 		votesFor := make(votesSet)
 		votesAgainst := make(votesSet)
 
-		for _, vote := range message.VotesFor() {
+		for _, vote := range message.For() {
 			votesFor[vote] = struct{}{}
 		}
 
-		for _, vote := range message.VotesAgainst() {
+		for _, vote := range message.Against() {
 			votesAgainst[vote] = struct{}{}
 		}
 
@@ -173,7 +171,7 @@ func (tb *TortoiseBeacon) handleVotingMessage(from p2pcrypto.PublicKey, message 
 	case DelayedMessage, LateMessage:
 		tb.Log.With().Info(fmt.Sprintf("Received %v VotingMessage, ignoring it", mt.String()),
 			log.Uint64("epoch", uint64(message.Epoch())),
-			log.Uint64("round", message.Round()),
+			log.Uint64("round", uint64(message.Round())),
 			log.String("message", message.String()))
 
 		return nil
@@ -181,9 +179,38 @@ func (tb *TortoiseBeacon) handleVotingMessage(from p2pcrypto.PublicKey, message 
 	default:
 		tb.Log.With().Info("Received VotingMessage of unknown type",
 			log.Uint64("epoch", uint64(message.Epoch())),
-			log.Uint64("round", message.Round()),
+			log.Uint64("round", uint64(message.Round())),
 			log.Int("type", int(mt)))
 
 		return ErrUnknownMessageType
 	}
+}
+
+func (tb *TortoiseBeacon) classifyMessage(m message, epoch types.EpochID) MessageType {
+	tb.currentRoundsMu.Lock()
+	currentRound := tb.currentRounds[epoch]
+	tb.currentRoundsMu.Unlock()
+
+	messageRound := types.RoundID(1)
+	if vm, ok := m.(VotingMessage); ok {
+		messageRound = vm.Round()
+	}
+
+	classification := LateMessage
+
+	switch {
+	case currentRound-messageRound <= 1, currentRound < messageRound:
+		classification = TimelyMessage
+	case messageRound == currentRound-2:
+		classification = DelayedMessage
+	}
+
+	tb.Log.With().Info(fmt.Sprintf("Message is considered %s", classification.String()),
+		log.Uint64("epoch", uint64(epoch)),
+		log.Uint64("message_epoch", uint64(m.Epoch())),
+		log.Uint64("message_round", uint64(messageRound)),
+		log.Uint64("current_round", uint64(currentRound)),
+		log.String("message", m.String()))
+
+	return classification
 }

@@ -3,15 +3,11 @@ package tortoisebeacon
 import (
 	"errors"
 	"fmt"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/spacemeshos/sha256-simd"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/weakcoin"
@@ -21,6 +17,7 @@ const (
 	protoName       = "TORTOISE_BEACON_PROTOCOL"
 	cleanupInterval = 30 * time.Second
 	cleanupEpochs   = 1000
+	firstRound      = types.RoundID(1)
 )
 
 // Tortoise Beacon errors.
@@ -37,10 +34,6 @@ type broadcaster interface {
 	Broadcast(channel string, data []byte) error
 }
 
-type weakCoin interface {
-	WeakCoin(epoch types.EpochID, round uint64) bool
-}
-
 type tortoiseBeaconDB interface {
 	GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, bool)
 	SetTortoiseBeacon(epochID types.EpochID, beacon types.Hash32) error
@@ -48,10 +41,11 @@ type tortoiseBeaconDB interface {
 
 type epochRoundPair struct {
 	EpochID types.EpochID
-	Round   uint64
+	Round   types.RoundID
 }
 
 type (
+	hashList      = []types.Hash32
 	votesSet      = map[types.Hash32]struct{}
 	votesPerPK    = map[p2pcrypto.PublicKey]votes
 	votesPerRound = map[epochRoundPair]votesPerPK
@@ -66,16 +60,15 @@ type votes struct {
 
 // TortoiseBeacon represents Tortoise Beacon.
 type TortoiseBeacon struct {
-	Closer
+	util.Closer
 	log.Log
 
 	config Config
 
-	net               broadcaster
-	epochATXGetter    epochATXGetter
-	tortoiseBeaconDB  tortoiseBeaconDB
-	weakCoin          weakCoin
-	weakCoinPublisher weakcoin.Publisher
+	net              broadcaster
+	epochATXGetter   epochATXGetter
+	tortoiseBeaconDB tortoiseBeaconDB
+	weakCoin         weakcoin.WeakCoin
 
 	layerMu   sync.RWMutex
 	lastLayer types.LayerID
@@ -84,7 +77,7 @@ type TortoiseBeacon struct {
 	networkDelta time.Duration
 
 	currentRoundsMu sync.RWMutex
-	currentRounds   map[types.EpochID]uint64
+	currentRounds   map[types.EpochID]types.RoundID
 
 	timelyProposalsMu sync.RWMutex
 	timelyProposals   map[types.EpochID]map[types.Hash32]struct{}
@@ -117,34 +110,31 @@ func New(
 	net broadcaster,
 	epochATXGetter epochATXGetter,
 	tortoiseBeaconDB tortoiseBeaconDB,
-	weakCoin weakCoin,
+	weakCoin weakcoin.WeakCoin,
 	layerTicker chan types.LayerID,
 	logger log.Log,
 ) *TortoiseBeacon {
-	wcg := weakcoin.NewWeakCoinGenerator(weakcoin.DefaultPrefix, weakcoin.DefaultThreshold, net, logger)
-
 	return &TortoiseBeacon{
-		Log:               logger,
-		Closer:            NewCloser(),
-		config:            conf,
-		net:               net,
-		epochATXGetter:    epochATXGetter,
-		tortoiseBeaconDB:  tortoiseBeaconDB,
-		weakCoin:          weakCoin,
-		weakCoinPublisher: wcg,
-		layerTicker:       layerTicker,
-		networkDelta:      time.Duration(conf.WakeupDelta) * time.Second,
-		currentRounds:     make(map[types.EpochID]uint64),
-		timelyProposals:   make(map[types.EpochID]map[types.Hash32]struct{}),
-		delayedProposals:  make(map[types.EpochID]map[types.Hash32]struct{}),
-		incomingVotes:     make(votesPerRound),
-		votesCache:        make(votesPerRound),
-		ownVotes:          make(ownVotes),
-		votesCountCache:   make(map[epochRoundPair]map[types.Hash32]int),
-		beacons:           make(map[types.EpochID]types.Hash32),
-		beaconsReady:      make(map[types.EpochID]chan struct{}),
-		seenEpochs:        make(map[types.EpochID]struct{}),
-		started:           make(chan struct{}),
+		Log:              logger,
+		Closer:           util.NewCloser(),
+		config:           conf,
+		net:              net,
+		epochATXGetter:   epochATXGetter,
+		tortoiseBeaconDB: tortoiseBeaconDB,
+		weakCoin:         weakCoin,
+		layerTicker:      layerTicker,
+		networkDelta:     time.Duration(conf.WakeupDelta) * time.Second,
+		currentRounds:    make(map[types.EpochID]types.RoundID),
+		timelyProposals:  make(map[types.EpochID]map[types.Hash32]struct{}),
+		delayedProposals: make(map[types.EpochID]map[types.Hash32]struct{}),
+		incomingVotes:    make(votesPerRound),
+		votesCache:       make(votesPerRound),
+		ownVotes:         make(ownVotes),
+		votesCountCache:  make(map[epochRoundPair]map[types.Hash32]int),
+		beacons:          make(map[types.EpochID]types.Hash32),
+		beaconsReady:     make(map[types.EpochID]chan struct{}),
+		seenEpochs:       make(map[types.EpochID]struct{}),
+		started:          make(chan struct{}),
 	}
 }
 
@@ -375,69 +365,7 @@ func (tb *TortoiseBeacon) handleEpoch(epoch types.EpochID) {
 	tb.Log.With().Info("Starting round ticker",
 		log.Uint64("epoch", uint64(epoch)))
 
-	tb.roundTicker(epoch)
-
-	// K rounds passed
-	tb.timelyProposalsMu.Lock()
-	tb.Log.With().Info("Calculating beacon",
-		log.Uint64("epoch", uint64(epoch)))
-
-	// After K rounds had passed, tally up votes for proposals using simple tortoise vote counting
-	beacon := tb.calculateBeacon(epoch)
-	tb.timelyProposalsMu.Unlock()
-
-	tb.Log.With().Info("Calculated beacon",
-		log.Uint64("epoch", uint64(epoch)),
-		log.String("beacon", beacon.String()))
-
-	events.ReportCalculatedTortoiseBeacon(epoch, beacon.String())
-
-	tb.beaconsMu.Lock()
-
-	tb.beacons[epoch] = beacon
-	close(tb.beaconsReady[epoch]) // indicate that value is ready
-
-	tb.beaconsReady[epoch+1] = make(chan struct{}) // get the next epoch ready
-
-	tb.beaconsMu.Unlock()
-}
-
-func (tb *TortoiseBeacon) classifyMessage(m message, epoch types.EpochID) MessageType {
-	tb.currentRoundsMu.Lock()
-	currentRound := tb.currentRounds[epoch]
-	tb.currentRoundsMu.Unlock()
-
-	round := uint64(1)
-	if vm, ok := m.(VotingMessage); ok {
-		round = vm.Round()
-	}
-
-	classification := LateMessage
-
-	switch {
-	case currentRound-round <= 1, currentRound < round:
-		classification = TimelyMessage
-	case round == currentRound-2:
-		classification = DelayedMessage
-	}
-
-	tb.Log.With().Info(fmt.Sprintf("Message is considered %s", classification.String()),
-		log.Uint64("epoch", uint64(epoch)),
-		log.Uint64("message_epoch", uint64(m.Epoch())),
-		log.Uint64("round", round),
-		log.Uint64("current_round", currentRound),
-		log.String("message", m.String()))
-
-	return classification
-}
-
-// For K rounds: In each round that lasts δ, wait for proposals to come in.
-func (tb *TortoiseBeacon) roundTicker(epoch types.EpochID) {
-	tb.currentRoundsMu.Lock()
-	tb.currentRounds[epoch] = 1
-	tb.currentRoundsMu.Unlock()
-
-	if err := tb.sendProposal(epoch); err != nil {
+	if err := tb.runProposalPhase(epoch); err != nil {
 		tb.Log.With().Error("Failed to send proposal",
 			log.Uint64("epoch", uint64(epoch)),
 			log.Err(err))
@@ -445,35 +373,56 @@ func (tb *TortoiseBeacon) roundTicker(epoch types.EpochID) {
 		return
 	}
 
-	// rounds 2 to K
+	if err := tb.runConsensusPhase(epoch); err != nil {
+		tb.Log.With().Error("Failed to run consensus phase",
+			log.Uint64("epoch", uint64(epoch)),
+			log.Err(err))
+	}
+
+	// K rounds passed
+	// After K rounds had passed, tally up votes for proposals using simple tortoise vote counting
+	tb.calcBeacon(epoch)
+}
+
+func (tb *TortoiseBeacon) runConsensusPhase(epoch types.EpochID) error {
+	// For K rounds: In each round that lasts δ, wait for proposals to come in.
+	if err := tb.sendProposalVote(epoch); err != nil {
+		tb.Log.With().Error("Failed to send first voting message",
+			log.Uint64("epoch", uint64(epoch)),
+			log.Err(err))
+
+		return err
+	}
+
+	// rounds 1 to K
 	ticker := time.NewTicker(tb.networkDelta)
 	defer ticker.Stop()
 
-	// Round 1 is already happened at this point, starting from round 2.
 	// For next rounds,
 	// wait for δ time, and construct a message that points to all messages from previous round received by δ.
-	for round := uint64(2); round <= tb.lastPossibleRound(); round++ {
+	for round := firstRound + 1; round <= tb.lastPossibleRound(); round++ {
 		select {
 		case <-ticker.C:
-			if err := tb.sendVotingMessages(epoch, round); err != nil {
+			if err := tb.sendVotesDelta(epoch, round); err != nil {
 				tb.Log.With().Error("Failed to send voting messages",
 					log.Uint64("epoch", uint64(epoch)),
-					log.Uint64("round", round),
+					log.Uint64("round", uint64(round)),
 					log.Err(err))
 
-				return
+				return err
 			}
 
 		case <-tb.CloseChannel():
-			return
+			return nil
 		}
 	}
+
+	return nil
 }
 
-func (tb *TortoiseBeacon) sendProposal(epoch types.EpochID) error {
-	// round 1
+func (tb *TortoiseBeacon) runProposalPhase(epoch types.EpochID) error {
 	// take all ATXs received in last epoch (i - 1)
-	atxList := tb.epochATXGetter.GetEpochAtxs(epoch - 1)
+	atxList := ATXIDList(tb.epochATXGetter.GetEpochAtxs(epoch - 1))
 
 	// concat them into a single proposal message
 	m := NewProposalMessage(epoch, atxList)
@@ -490,7 +439,7 @@ func (tb *TortoiseBeacon) sendProposal(epoch types.EpochID) error {
 		return fmt.Errorf("broadcast proposal message: %w", err)
 	}
 
-	proposalsHash := hashATXList(atxList)
+	proposalsHash := atxList.Hash()
 
 	tb.timelyProposalsMu.Lock()
 
@@ -502,7 +451,7 @@ func (tb *TortoiseBeacon) sendProposal(epoch types.EpochID) error {
 
 	tb.timelyProposalsMu.Unlock()
 
-	if err := tb.weakCoinPublisher.Publish(epoch, 1); err != nil {
+	if err := tb.weakCoin.PublishProposal(epoch, 1); err != nil {
 		tb.Log.With().Error("Failed to publish weak coin message",
 			log.Uint64("epoch", uint64(epoch)),
 			log.Err(err))
@@ -511,33 +460,31 @@ func (tb *TortoiseBeacon) sendProposal(epoch types.EpochID) error {
 	return nil
 }
 
-func (tb *TortoiseBeacon) sendVotingMessages(epoch types.EpochID, round uint64) error {
-	// TODO(nkryuchkov): Should round and currentRound be equal?
-	tb.currentRoundsMu.Lock()
-	tb.currentRounds[epoch]++
-	currentRound := tb.currentRounds[epoch]
-	tb.currentRoundsMu.Unlock()
+func (tb *TortoiseBeacon) sendProposalVote(epoch types.EpochID) error {
+	tb.setCurrentRound(epoch, firstRound)
+	// round 1, send hashed proposal
+	// create a voting message that references all seen proposals within δ time frame and send it
+	votesFor, votesAgainst := tb.calcVotesFromProposals(epoch)
 
-	votesFor, votesAgainst := tb.calculateVotes(epoch, round, currentRound)
+	return tb.sendVote(epoch, firstRound, votesFor, votesAgainst)
+}
 
-	stringVotesFor := make([]string, 0, len(votesFor))
-	for _, vote := range votesFor {
-		stringVotesFor = append(stringVotesFor, vote.String())
-	}
+func (tb *TortoiseBeacon) sendVotesDelta(epoch types.EpochID, round types.RoundID) error {
+	tb.setCurrentRound(epoch, round)
+	// next rounds, send vote
+	// construct a message that points to all messages from previous round received by δ
+	votesFor, votesAgainst := tb.calcVotesDelta(epoch, round)
 
-	stringVotesAgainst := make([]string, 0, len(votesAgainst))
-	for _, vote := range votesAgainst {
-		stringVotesAgainst = append(stringVotesAgainst, vote.String())
-	}
+	return tb.sendVote(epoch, round, votesFor, votesAgainst)
+}
 
-	tb.Log.With().Info("Going to send votes",
-		log.Uint64("epoch", uint64(epoch)),
-		log.Uint64("round", round),
-		log.Uint64("current_round", currentRound),
-		log.String("for", strings.Join(stringVotesFor, ", ")),
-		log.String("against", strings.Join(stringVotesAgainst, ", ")))
-
-	m := NewVotingMessage(epoch, currentRound, votesFor, votesAgainst)
+func (tb *TortoiseBeacon) sendVote(
+	epoch types.EpochID,
+	round types.RoundID,
+	votesFor,
+	votesAgainst hashList,
+) error {
+	m := NewVotingMessage(epoch, round, votesFor, votesAgainst)
 
 	serializedMessage, err := types.InterfaceToBytes(m)
 	if err != nil {
@@ -551,7 +498,7 @@ func (tb *TortoiseBeacon) sendVotingMessages(epoch types.EpochID, round uint64) 
 		return fmt.Errorf("broadcast voting message: %w", err)
 	}
 
-	if err := tb.weakCoinPublisher.Publish(epoch, currentRound); err != nil {
+	if err := tb.weakCoin.PublishProposal(epoch, round); err != nil {
 		tb.Log.With().Error("Failed to publish weak coin message",
 			log.Uint64("epoch", uint64(epoch)),
 			log.Err(err))
@@ -560,255 +507,10 @@ func (tb *TortoiseBeacon) sendVotingMessages(epoch types.EpochID, round uint64) 
 	return nil
 }
 
-func (tb *TortoiseBeacon) calculateVotes(epoch types.EpochID, round, currentRound uint64) (votesFor, votesAgainst []types.Hash32) {
-	if round == 1 {
-		// round 1, send hashed proposal
-		// create a voting message that references all seen proposals within δ time frame and send it
-		return tb.calculateVotesFromProposals(epoch)
-	}
-
-	// next rounds, send vote
-	// construct a message that points to all messages from previous round received by δ
-	return tb.calculateNextVotesFromPrevious(epoch, currentRound)
-}
-
-func (tb *TortoiseBeacon) calculateVotesFromProposals(epoch types.EpochID) (votesFor, votesAgainst []types.Hash32) {
-	votesFor = make([]types.Hash32, 0)
-	votesAgainst = make([]types.Hash32, 0)
-
-	stringVotesFor := make([]string, 0)
-	stringVotesAgainst := make([]string, 0)
-
-	tb.timelyProposalsMu.RLock()
-	timelyProposals := tb.timelyProposals[epoch]
-	tb.timelyProposalsMu.RUnlock()
-
-	tb.delayedProposalsMu.Lock()
-	delayedProposals := tb.delayedProposals[epoch]
-	tb.delayedProposalsMu.Unlock()
-
-	for p := range timelyProposals {
-		votesFor = append(votesFor, p)
-		stringVotesFor = append(stringVotesFor, p.String())
-	}
-
-	for p := range delayedProposals {
-		votesAgainst = append(votesAgainst, p)
-		stringVotesAgainst = append(stringVotesAgainst, p.String())
-	}
-
-	tb.Log.With().Info("Calculated votes from proposals",
-		log.Uint64("epoch", uint64(epoch)),
-		log.String("for", strings.Join(stringVotesFor, ", ")),
-		log.String("against", strings.Join(stringVotesAgainst, ", ")))
-
-	return votesFor, votesAgainst
-}
-
-func (tb *TortoiseBeacon) calculateNextVotesFromPrevious(epoch types.EpochID, round uint64) (votesForDiff, votesAgainstDiff []types.Hash32) {
-	tb.votesMu.Lock()
-	defer tb.votesMu.Unlock()
-
-	votesCount := tb.countFirstRoundVotes(epoch)
-	ownFirstRoundsVotes := tb.calculateOwnFirstRoundVotes(epoch, votesCount)
-	tb.fillVotes(epoch, round, votesCount)
-	ownCurrentRoundVotes := tb.calculateOwnCurrentRoundVotes(epoch, round, ownFirstRoundsVotes, votesCount)
-
-	return tb.calculateOwnCurrentRoundVotesDiff(ownCurrentRoundVotes, ownFirstRoundsVotes)
-}
-
-func (tb *TortoiseBeacon) calculateOwnCurrentRoundVotesDiff(ownCurrentRoundVotes, ownFirstRoundsVotes votes) (votesForDiff, votesAgainstDiff []types.Hash32) {
-	votesForDiff = make([]types.Hash32, 0)
-	votesAgainstDiff = make([]types.Hash32, 0)
-
-	for vote := range ownCurrentRoundVotes.votesFor {
-		if _, ok := ownFirstRoundsVotes.votesFor[vote]; !ok {
-			votesForDiff = append(votesForDiff, vote)
-		}
-	}
-
-	for vote := range ownCurrentRoundVotes.votesAgainst {
-		if _, ok := ownFirstRoundsVotes.votesAgainst[vote]; !ok {
-			votesAgainstDiff = append(votesAgainstDiff, vote)
-		}
-	}
-
-	return votesForDiff, votesAgainstDiff
-}
-
-func (tb *TortoiseBeacon) calculateOwnCurrentRoundVotes(epoch types.EpochID, round uint64, ownFirstRoundsVotes votes, votesCount votesCountMap) votes {
-	ownCurrentRoundVotes := votes{
-		votesFor:     make(votesSet),
-		votesAgainst: make(votesSet),
-	}
-
-	currentRound := epochRoundPair{
-		EpochID: epoch,
-		Round:   round,
-	}
-
-	tb.ownVotes[currentRound] = ownFirstRoundsVotes
-	// TODO(nkryuchkov): as pointer is shared, ensure that maps are not modified
-	tb.votesCountCache[currentRound] = votesCount
-
-	for vote, count := range votesCount {
-		switch {
-		case count > tb.threshold():
-			ownCurrentRoundVotes.votesFor[vote] = struct{}{}
-		case count < -tb.threshold():
-			ownCurrentRoundVotes.votesAgainst[vote] = struct{}{}
-		case tb.weakCoin.WeakCoin(epoch, round):
-			ownCurrentRoundVotes.votesFor[vote] = struct{}{}
-		case !tb.weakCoin.WeakCoin(epoch, round):
-			ownCurrentRoundVotes.votesAgainst[vote] = struct{}{}
-		}
-	}
-	return ownCurrentRoundVotes
-}
-
-func (tb *TortoiseBeacon) fillVotes(epoch types.EpochID, round uint64, votesCount votesCountMap) {
-	firstRound := epochRoundPair{
-		EpochID: epoch,
-		Round:   1,
-	}
-
-	firstRoundIncomingVotes := tb.incomingVotes[firstRound]
-
-	for i := uint64(2); i < round; i++ {
-		thisRound := epochRoundPair{
-			EpochID: epoch,
-			Round:   i,
-		}
-
-		thisRoundVotesDiff := tb.incomingVotes[thisRound]
-
-		thisRoundVotes := make(votesPerPK)
-		if cache, ok := tb.votesCache[thisRound]; ok {
-			thisRoundVotes = cache
-		} else {
-			for pk, votesList := range firstRoundIncomingVotes {
-				votesForCopy := make(votesSet)
-				votesAgainstCopy := make(votesSet)
-
-				for k, v := range votesList.votesFor {
-					votesForCopy[k] = v
-				}
-
-				for k, v := range votesList.votesAgainst {
-					votesAgainstCopy[k] = v
-				}
-
-				thisRoundVotes[pk] = votes{
-					votesFor:     votesForCopy,
-					votesAgainst: votesAgainstCopy,
-				}
-			}
-
-			// TODO(nkryuchkov): consider caching to avoid recalculating votes
-			for pk, votesDiff := range thisRoundVotesDiff {
-				for vote := range votesDiff.votesFor {
-					if m := thisRoundVotes[pk].votesAgainst; m != nil {
-						delete(thisRoundVotes[pk].votesAgainst, vote)
-					}
-					if m := thisRoundVotes[pk].votesFor; m != nil {
-						thisRoundVotes[pk].votesFor[vote] = struct{}{}
-					}
-				}
-				for vote := range votesDiff.votesAgainst {
-					if m := thisRoundVotes[pk].votesFor; m != nil {
-						delete(thisRoundVotes[pk].votesFor, vote)
-					}
-					if m := thisRoundVotes[pk].votesAgainst; m != nil {
-						thisRoundVotes[pk].votesAgainst[vote] = struct{}{}
-					}
-				}
-			}
-
-			tb.votesCache[thisRound] = thisRoundVotes
-		}
-
-		for pk, votesList := range thisRoundVotes {
-			for vote := range votesList.votesFor {
-				votesCount[vote] += tb.voteWeight(pk)
-			}
-
-			for vote := range votesList.votesAgainst {
-				votesCount[vote] -= tb.voteWeight(pk)
-			}
-		}
-	}
-}
-
-func (tb *TortoiseBeacon) calculateOwnFirstRoundVotes(epoch types.EpochID, votesCount votesCountMap) votes {
-	ownFirstRoundsVotes := votes{
-		votesFor:     make(votesSet),
-		votesAgainst: make(votesSet),
-	}
-
-	for vote, count := range votesCount {
-		switch {
-		case count > tb.threshold():
-			ownFirstRoundsVotes.votesFor[vote] = struct{}{}
-		case count < -tb.threshold():
-			ownFirstRoundsVotes.votesAgainst[vote] = struct{}{}
-		case tb.weakCoin.WeakCoin(epoch, 1):
-			ownFirstRoundsVotes.votesFor[vote] = struct{}{}
-		case !tb.weakCoin.WeakCoin(epoch, 1):
-			ownFirstRoundsVotes.votesAgainst[vote] = struct{}{}
-		}
-	}
-
-	firstRound := epochRoundPair{
-		EpochID: epoch,
-		Round:   1,
-	}
-
-	// TODO(nkryuchkov): as pointer is shared, ensure that maps are not changed
-	tb.ownVotes[firstRound] = ownFirstRoundsVotes
-
-	return ownFirstRoundsVotes
-}
-
-func (tb *TortoiseBeacon) countFirstRoundVotes(epoch types.EpochID) votesCountMap {
-	firstRound := epochRoundPair{
-		EpochID: epoch,
-		Round:   1,
-	}
-
-	tb.votesCache[firstRound] = make(map[p2pcrypto.PublicKey]votes)
-
-	firstRoundVotes := tb.incomingVotes[firstRound]
-	// TODO(nkryuchkov): as pointer is shared, ensure that maps are not changed
-	tb.votesCache[firstRound] = firstRoundVotes
-
-	votesCount := make(map[types.Hash32]int)
-	for pk, votesList := range firstRoundVotes {
-		firstRoundVotesFor := make(votesSet)
-		firstRoundVotesAgainst := make(votesSet)
-
-		for vote := range votesList.votesFor {
-			votesCount[vote] += tb.voteWeight(pk)
-			firstRoundVotesFor[vote] = struct{}{}
-		}
-
-		for vote := range votesList.votesAgainst {
-			votesCount[vote] -= tb.voteWeight(pk)
-			firstRoundVotesAgainst[vote] = struct{}{}
-		}
-
-		// copy to cache
-		tb.votesCache[firstRound][pk] = votes{
-			votesFor:     firstRoundVotesFor,
-			votesAgainst: firstRoundVotesAgainst,
-		}
-	}
-
-	tb.votesCountCache[firstRound] = make(map[types.Hash32]int)
-	for k, v := range tb.votesCache[firstRound] {
-		tb.votesCache[firstRound][k] = v
-	}
-
-	return votesCount
+func (tb *TortoiseBeacon) setCurrentRound(epoch types.EpochID, round types.RoundID) {
+	tb.currentRoundsMu.Lock()
+	tb.currentRounds[epoch] = round
+	tb.currentRoundsMu.Unlock()
 }
 
 func (tb *TortoiseBeacon) voteWeight(pk p2pcrypto.PublicKey) int {
@@ -830,105 +532,10 @@ func (tb *TortoiseBeacon) voteWeight(pk p2pcrypto.PublicKey) int {
 // Messages from round K received in round K + 2 are delayed.
 // Messages from round K received in round K + 3 are late.
 // Therefore, counting more than K + 3 rounds is not needed.
-func (tb *TortoiseBeacon) lastPossibleRound() uint64 {
-	return tb.config.RoundsNumber + 3
-}
-
-func (tb *TortoiseBeacon) calculateBeacon(epoch types.EpochID) types.Hash32 {
-	hasher := sha256.New()
-
-	allHashes := make([]types.Hash32, 0)
-
-	for round := uint64(1); round <= tb.config.RoundsNumber; round++ {
-		epochRound := epochRoundPair{
-			EpochID: epoch,
-			Round:   round,
-		}
-
-		stringHashes := make([]string, 0)
-
-		if roundVotes, ok := tb.votesCountCache[epochRound]; ok {
-			for hash, count := range roundVotes {
-				if count >= tb.threshold() {
-					allHashes = append(allHashes, hash)
-					stringHashes = append(stringHashes, hash.String())
-				}
-			}
-
-			tb.Log.With().Info(fmt.Sprintf("Tortoise beacon round votes epoch %v round %v: %+v", epoch, round, roundVotes),
-				log.Uint64("epoch_id", uint64(epoch)),
-				log.Uint64("round", round))
-		}
-
-		tb.Log.With().Info(fmt.Sprintf("Tortoise beacon hashes epoch %v round %v", epoch, round),
-			log.Uint64("epoch_id", uint64(epoch)),
-			log.Uint64("round", round),
-			log.String("hashes", strings.Join(stringHashes, ", ")))
-	}
-
-	sort.Slice(allHashes, func(i, j int) bool {
-		return strings.Compare(allHashes[i].String(), allHashes[j].String()) == -1
-	})
-
-	stringHashes := make([]string, 0, len(allHashes))
-	for _, hash := range allHashes {
-		stringHashes = append(stringHashes, hash.String())
-	}
-
-	tb.Log.With().Info(fmt.Sprintf("Going to calculate tortoise beacon from this hash list epoch %v", epoch),
-		log.Uint64("epoch_id", uint64(epoch)),
-		log.String("hashes", strings.Join(stringHashes, ", ")))
-
-	for _, hash := range allHashes {
-		if _, err := hasher.Write(hash.Bytes()); err != nil {
-			panic("should not happen") // an error is never returned: https://golang.org/pkg/hash/#Hash
-		}
-	}
-
-	var res types.Hash32
-
-	hasher.Sum(res[:0])
-
-	return res
+func (tb *TortoiseBeacon) lastPossibleRound() types.RoundID {
+	return types.RoundID(tb.config.RoundsNumber) + 3
 }
 
 func (tb *TortoiseBeacon) threshold() int {
 	return tb.config.Theta * tb.config.TAve
-}
-
-func hashATXList(atxList []types.ATXID) types.Hash32 {
-	hasher := sha256.New()
-
-	for _, id := range atxList {
-		if _, err := hasher.Write(id.Bytes()); err != nil {
-			panic("should not happen") // an error is never returned: https://golang.org/pkg/hash/#Hash
-		}
-	}
-
-	var res types.Hash32
-
-	hasher.Sum(res[:0])
-
-	return res
-}
-
-// Closer adds the ability to close objects.
-type Closer struct {
-	channel chan struct{} // closeable go routines listen to this channel
-}
-
-// NewCloser creates a new (not closed) closer.
-func NewCloser() Closer {
-	return Closer{make(chan struct{})}
-}
-
-// Close signals all listening instances to close.
-// Note: should be called only once.
-func (closer *Closer) Close() {
-	close(closer.channel)
-}
-
-// CloseChannel returns the channel to wait on for close signal.
-func (closer *Closer) CloseChannel() chan struct{} {
-	return closer.channel
 }

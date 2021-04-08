@@ -2,23 +2,25 @@ package hare
 
 import (
 	"errors"
+	"math/rand"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/amcl"
 	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
-	"math/rand"
-	"testing"
-	"time"
 )
 
 type HareWrapper struct {
 	totalCP     int
-	termination Closer
+	termination util.Closer
 	lCh         []chan types.LayerID
 	hare        []*Hare
 	initialSets []*Set // all initial sets
@@ -30,7 +32,7 @@ func newHareWrapper(totalCp int) *HareWrapper {
 	hs := new(HareWrapper)
 	hs.lCh = make([]chan types.LayerID, 0)
 	hs.totalCP = totalCp
-	hs.termination = NewCloser()
+	hs.termination = util.NewCloser()
 	hs.outputs = make(map[instanceID][]*Set, 0)
 
 	return hs

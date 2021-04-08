@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/weakcoin"
 )
 
 func TestTortoiseBeacon(t *testing.T) {
@@ -19,7 +20,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	requirer := require.New(t)
 	conf := TestConfig()
 
-	mwc := MockWeakCoin{}
+	mwc := weakcoin.Mock{}
 
 	atxPool := activation.NewAtxMemPool()
 	logger := log.NewDefault("TortoiseBeacon")
@@ -27,13 +28,14 @@ func TestTortoiseBeacon(t *testing.T) {
 	ld := time.Duration(10) * time.Second
 
 	types.SetLayersPerEpoch(1)
+
 	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, log.NewDefault("clock"))
 	clock.StartNotifying()
-	ticker := clock.Subscribe()
 
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
+	ticker := clock.Subscribe()
 	tb := New(conf, n1, atxPool, nil, mwc, ticker, logger)
 	requirer.NotNil(tb)
 
@@ -69,76 +71,5 @@ func awaitEpoch(clock *timesync.TimeClock, epoch types.EpochID) {
 		if layer.GetEpoch() > epoch {
 			return
 		}
-	}
-}
-
-func TestTortoiseBeacon_classifyMessage(t *testing.T) {
-	t.Parallel()
-
-	r := require.New(t)
-
-	epoch := types.EpochID(3)
-	round := uint64(4)
-
-	tt := []struct {
-		name         string
-		currentRound uint64
-		messageRound uint64
-		msgType      MessageType
-	}{
-		{"Timely 1", 0, 0, TimelyMessage},
-		{"Late 1", round, 0, LateMessage},
-		{"Late 2", round, 1, LateMessage},
-		{"Delayed 1", round, 2, DelayedMessage},
-		{"Timely 2", round, 3, TimelyMessage},
-		{"Timely 3", round, 4, TimelyMessage},
-		{"Timely 4", round, 5, TimelyMessage},
-		{"Timely 5", round, 6, TimelyMessage},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			tb := TortoiseBeacon{
-				Log: log.NewDefault("TortoiseBeacon"),
-				currentRounds: map[types.EpochID]uint64{
-					epoch: tc.currentRound,
-				},
-			}
-
-			m := VotingMessage{RoundID: tc.messageRound}
-			result := tb.classifyMessage(m, epoch)
-			r.Equal(tc.msgType, result)
-		})
-	}
-}
-
-func Test_hashATXList(t *testing.T) {
-	t.Parallel()
-
-	r := require.New(t)
-
-	tt := []struct {
-		name     string
-		atxList  []types.ATXID
-		expected string
-	}{
-		{
-			name:     "Case 1",
-			atxList:  []types.ATXID{types.ATXID(types.CalcHash32([]byte("1")))},
-			expected: "0x9c2e4d8fe97d881430de4e754b4205b9c27ce96715231cffc4337340cb110280",
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			result := hashATXList(tc.atxList).String()
-			r.Equal(tc.expected, result)
-		})
 	}
 }

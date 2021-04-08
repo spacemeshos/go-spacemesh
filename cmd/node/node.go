@@ -70,6 +70,7 @@ const (
 	TBeaconDbStoreLogger = "tbDbStore"
 	TBeaconDbLogger      = "tbDb"
 	TBeaconLogger        = "tBeaconLogger"
+	WeakCoinLogger       = "wcLogger"
 	PoetDbStoreLogger    = "poetDbStore"
 	StoreLogger          = "store"
 	PoetDbLogger         = "poetDb"
@@ -551,10 +552,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
 
-	// TODO(nkryuchkov): use real weak coin
-	weakCoin := tortoisebeacon.MockWeakCoin{}
+	wc := weakcoin.NewWeakCoin(weakcoin.DefaultPrefix, weakcoin.DefaultThreshold, swarm, app.addLogger(WeakCoinLogger, lg))
 
-	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, swarm, atxdb, tBeaconDB, weakCoin, clock.Subscribe(), app.addLogger(TBeaconLogger, lg))
+	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, swarm, atxdb, tBeaconDB, wc, clock.Subscribe(), app.addLogger(TBeaconLogger, lg))
 	if err := tBeacon.Start(); err != nil {
 		app.log.Panic("Failed to start tortoise beacon: %v", err)
 	}
@@ -649,9 +649,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	gossipListener.AddListener(state.IncomingTxProtocol, priorityq.Low, processor.HandleTxData)
 	gossipListener.AddListener(activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
 	gossipListener.AddListener(blocks.NewBlockProtocol, priorityq.High, blockListener.HandleBlock)
-	gossipListener.AddListener(tortoisebeacon.TBProposalProtocol, priorityq.Low, tBeacon.HandleProposalMessage)
-	gossipListener.AddListener(tortoisebeacon.TBVotingProtocol, priorityq.Low, tBeacon.HandleVotingMessage)
-	gossipListener.AddListener(weakcoin.GossipProtocol, priorityq.Low, tBeacon.HandleWeakCoinMessage)
+	gossipListener.AddListener(tortoisebeacon.TBProposalProtocol, priorityq.Low, tBeacon.HandleSerializedProposalMessage)
+	gossipListener.AddListener(tortoisebeacon.TBVotingProtocol, priorityq.Low, tBeacon.HandleSerializedVotingMessage)
+	gossipListener.AddListener(weakcoin.GossipProtocol, priorityq.Low, wc.HandleSerializedMessage)
 
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener

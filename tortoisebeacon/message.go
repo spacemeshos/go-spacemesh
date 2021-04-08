@@ -37,11 +37,11 @@ type message interface {
 // ProposalMessage is a message type which is used when sending proposals.
 type ProposalMessage struct {
 	EpochID      types.EpochID `json:"epoch_id"`
-	ProposalList []types.ATXID `json:"proposal_list"`
+	ProposalList ATXIDList     `json:"proposal_list"`
 }
 
 // NewProposalMessage returns a new ProposalMessage.
-func NewProposalMessage(epoch types.EpochID, atxList []types.ATXID) *ProposalMessage {
+func NewProposalMessage(epoch types.EpochID, atxList ATXIDList) *ProposalMessage {
 	return &ProposalMessage{
 		EpochID:      epoch,
 		ProposalList: atxList,
@@ -54,13 +54,8 @@ func (p ProposalMessage) Epoch() types.EpochID {
 }
 
 // Proposals returns proposals.
-func (p ProposalMessage) Proposals() []types.ATXID {
+func (p ProposalMessage) Proposals() ATXIDList {
 	return p.ProposalList
-}
-
-// Hash returns hash.
-func (p ProposalMessage) Hash() types.Hash32 {
-	return hashATXList(p.ProposalList)
 }
 
 // String returns a string form of ProposalMessage.
@@ -75,19 +70,19 @@ func (p ProposalMessage) String() string {
 
 // VotingMessage is a message type which is used when sending votes.
 type VotingMessage struct {
-	EpochID       types.EpochID  `json:"epoch_id"`
-	RoundID       uint64         `json:"round_id"`
-	HashesFor     []types.Hash32 `json:"hashes_for"`
-	HashesAgainst []types.Hash32 `json:"hashes_against"`
+	EpochID      types.EpochID  `json:"epoch_id"`
+	RoundID      types.RoundID  `json:"round_id"`
+	VotesFor     []types.Hash32 `json:"votes_for"`
+	VotesAgainst []types.Hash32 `json:"votes_against"`
 }
 
 // NewVotingMessage returns a new VotingMessage.
-func NewVotingMessage(epoch types.EpochID, round uint64, hashesFor, hashesAgainst []types.Hash32) *VotingMessage {
+func NewVotingMessage(epoch types.EpochID, round types.RoundID, votesFor, votesAgainst []types.Hash32) *VotingMessage {
 	return &VotingMessage{
-		EpochID:       epoch,
-		RoundID:       round,
-		HashesFor:     hashesFor,
-		HashesAgainst: hashesAgainst,
+		EpochID:      epoch,
+		RoundID:      round,
+		VotesFor:     votesFor,
+		VotesAgainst: votesAgainst,
 	}
 }
 
@@ -97,18 +92,18 @@ func (v VotingMessage) Epoch() types.EpochID {
 }
 
 // Round returns round.
-func (v VotingMessage) Round() uint64 {
+func (v VotingMessage) Round() types.RoundID {
 	return v.RoundID
 }
 
-// VotesFor returns a list of ATX hashes which are votes for.
-func (v VotingMessage) VotesFor() []types.Hash32 {
-	return v.HashesFor
+// For returns a list of ATX hashes which are votes for.
+func (v VotingMessage) For() []types.Hash32 {
+	return v.VotesFor
 }
 
-// VotesAgainst returns a list of ATX hashes which are votes against.
-func (v VotingMessage) VotesAgainst() []types.Hash32 {
-	return v.HashesAgainst
+// Against returns a list of ATX hashes which are votes against.
+func (v VotingMessage) Against() []types.Hash32 {
+	return v.VotesAgainst
 }
 
 // String returns a string form of VotingMessage.
