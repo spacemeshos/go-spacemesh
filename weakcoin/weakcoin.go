@@ -25,7 +25,7 @@ type broadcaster interface {
 	Broadcast(channel string, data []byte) error
 }
 
-// Publisher publishes a weak coin message.
+// WeakCoin defines weak coin interface.
 type WeakCoin interface {
 	Get(epoch types.EpochID, round types.RoundID) bool
 	PublishProposal(epoch types.EpochID, round types.RoundID) error
