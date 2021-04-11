@@ -315,7 +315,7 @@ func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp
 	if err != nil {
 		blocks = nil
 	}
-	if err := msh.SaveLayerInputVector(l-1, blocks); err != nil {
+	if err := msh.SaveLayerInputVectorByID(l-1, blocks); err != nil {
 		panic("db is fucked up")
 	}
 

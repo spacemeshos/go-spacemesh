@@ -159,6 +159,11 @@ func (m *DB) Transactions() database.Database {
 	return m.transactions
 }
 
+// InputVector exports the inputvector DB
+func (m *DB) InputVector() database.Database {
+	return m.inputVector
+}
+
 // ErrAlreadyExist error returned when adding an existing value to the database
 var ErrAlreadyExist = errors.New("block already exists in database")
 
@@ -315,17 +320,17 @@ func (m *DB) SaveContextualValidity(id types.BlockID, valid bool) error {
 }
 
 // SaveLayerInputVector saves the input vote vector for a layer (hare results)
-func (m *DB) SaveLayerInputVector(lyrid types.LayerID, vector []types.BlockID) error {
+func (m *DB) SaveLayerInputVector(hash types.Hash32, vector []types.BlockID) error {
 	bytes, err := types.InterfaceToBytes(vector)
 	if err != nil {
 		return err
 	}
 
-	return m.inputVector.Put(lyrid.Bytes(), bytes)
+	return m.inputVector.Put(hash.Bytes(), bytes)
 }
 
-func (m *DB) defaulGetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
-	by, err := m.inputVector.Get(lyrid.Bytes())
+func (m *DB) defaulGetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) {
+	by, err := m.inputVector.Get(types.CalcHash32(id.Bytes()).Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -335,11 +340,37 @@ func (m *DB) defaulGetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, er
 }
 
 // GetLayerInputVector gets the input vote vector for a layer (hare results)
-func (m *DB) GetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
-	if m.InputVectorBackupFunc != nil {
-		return m.InputVectorBackupFunc(lyrid)
+func (m *DB) GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error) {
+	by, err := m.inputVector.Get(hash.Bytes())
+	if err != nil {
+		return nil, err
 	}
-	return m.defaulGetLayerInputVector(lyrid)
+	var v []types.BlockID
+	err = types.BytesToInterface(by, &v)
+	return v, err
+}
+
+// GetLayerInputVectorByID gets the input vote vector for a layer (hare results)
+func (m *DB) GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) {
+	if m.InputVectorBackupFunc != nil {
+		return m.InputVectorBackupFunc(id)
+	}
+	return m.defaulGetLayerInputVectorByID(id)
+}
+
+// SaveLayerInputVectorByID gets the input vote vector for a layer (hare results)
+func (msh *DB) SaveLayerInputVectorByID(id types.LayerID, blks []types.BlockID) error {
+	return msh.SaveLayerInputVector(types.CalcHash32(id.Bytes()), blks)
+}
+
+// GetLayerHashInputVector gets the input vote vector for a layer (hare results) using its hash
+func (msh *Mesh) GetLayerHashInputVector(h types.Hash32) ([]types.BlockID, error) {
+	return msh.GetLayerInputVector(h)
+}
+
+// SaveLayerHashInputVector saves the input vote vector for a layer (hare results) using its hash
+func (msh *Mesh) SaveLayerHashInputVector(h types.Hash32, data []byte) error {
+	return msh.inputVector.Put(h.Bytes(), data)
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {

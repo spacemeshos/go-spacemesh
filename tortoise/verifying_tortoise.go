@@ -13,8 +13,8 @@ type blockDataProvider interface {
 	GetBlock(id types.BlockID) (*types.Block, error)
 	LayerBlockIds(l types.LayerID) (ids []types.BlockID, err error)
 
-	GetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error)
-	SaveLayerInputVector(lyrid types.LayerID, vector []types.BlockID) error
+	GetLayerInputVectorByID(lyrid types.LayerID) ([]types.BlockID, error)
+	SaveLayerInputVectorByID(lyrid types.LayerID, vector []types.BlockID) error
 
 	SaveContextualValidity(id types.BlockID, valid bool) error
 
@@ -136,7 +136,7 @@ func (t *turtle) getSingleInputVectorFromDB(lyrid types.LayerID, blockid types.B
 		return support, nil
 	}
 
-	input, err := t.bdp.GetLayerInputVector(lyrid)
+	input, err := t.bdp.GetLayerInputVectorByID(lyrid)
 	if err != nil {
 		return abstain, err
 	}
@@ -229,7 +229,7 @@ func (t *turtle) opinionMatches(layerid types.LayerID, blockid types.BlockID, op
 			return nil, err
 		}
 
-		res, err := t.bdp.GetLayerInputVector(i)
+		res, err := t.bdp.GetLayerInputVectorByID(i)
 		if err != nil {
 			t.logger.With().Debug("input vector is empty adding neutral diffs", i)
 			for _, b := range blks {
@@ -455,7 +455,7 @@ loop:
 		if i == idx {
 			input = t.inputVectorForLayer(blks, inputVector)
 		} else {
-			raw, err := t.bdp.GetLayerInputVector(i)
+			raw, err := t.bdp.GetLayerInputVectorByID(i)
 			if err != nil {
 				// this sets the input to abstain
 				t.logger.With().Warning("input vector abstains on all blocks", i)

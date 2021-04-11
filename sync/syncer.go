@@ -57,6 +57,7 @@ type LayerFetch interface {
 	GetBlocks(IDs []types.BlockID) error
 	FetchBlock(ID types.BlockID) error
 	GetPoetProof(id types.Hash32) error
+	GetInputVector(id types.LayerID) error
 	Start()
 	Close()
 }
@@ -496,7 +497,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 		// TODO: implement handling hare terminating with no valid blocks.
 		// 	currently hareForLayer is nil if hare hasn't terminated yet.
 		//	 ACT: hare should save something in the db when terminating empty set, sync should check it.
-		hareForLayer, err := s.DB.GetLayerInputVector(lyr.Index())
+		hareForLayer, err := s.GetLayerInputVectorByID(lyr.Index())
 		if err != nil {
 			s.Log.With().Warning("validating layer without input vector", lyr.Index(), log.Err(err))
 		}
@@ -540,6 +541,8 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 	if flayer, exit = s.waitLayer(ch); exit {
 		return fmt.Errorf("cloed while buffering first layer")
 	}
+
+	s.Info("################# Current sync layer syncing %v", currentSyncLayer)
 
 	if err := s.syncSingleLayer(currentSyncLayer); err != nil {
 		return err
@@ -729,6 +732,11 @@ func (s *Syncer) GetPoetProof(hash types.Hash32) error {
 	return s.fetcher.GetPoetProof(hash)
 }
 
+// GetInputVector fetches a inputvector for layer from network peers
+func (s *Syncer) GetInputVector(id types.LayerID) error {
+	return s.fetcher.GetInputVector(id)
+}
+
 func (s *Syncer) getAndValidateLayer(id types.LayerID) error {
 	s.validatingLayerMutex.Lock()
 	s.validatingLayer = id
@@ -743,7 +751,7 @@ func (s *Syncer) getAndValidateLayer(id types.LayerID) error {
 	}
 
 	// TODO: Get hare results a.k.a input vector from - db/hare and replace this
-	inputVector, err := s.DB.GetLayerInputVector(id)
+	inputVector, err := s.GetLayerInputVectorByID(id)
 	if err != nil {
 		inputVector = nil
 	}
