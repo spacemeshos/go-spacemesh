@@ -386,10 +386,10 @@ func (msh *Mesh) HandleValidatedLayer(validatedLayer types.LayerID, layer []type
 
 	msh.Log.With().Info("Mesh validating layer", lyr.Index().Field(), log.Int("valid_blocks", len(blocks)), log.Int("invalid_blocks", len(invalidBlocks)))
 
-	msh.ValidateLayer(lyr, types.BlockIDs(blocks))
-	if err := msh.SaveLayerInputVector(msh.GetLayerHash(lyr.Index()), types.BlockIDs(blocks)); err != nil {
+	if err := msh.SaveLayerInputVectorByID(lyr.Index(), types.BlockIDs(blocks)); err != nil {
 		msh.Log.With().Error("Saving layer input vector failed", lyr.Index().Field())
 	}
+	msh.ValidateLayer(lyr, types.BlockIDs(blocks))
 }
 
 func (msh *Mesh) getInvalidBlocksByHare(hareLayer *types.Layer) (invalid []*types.Block) {

@@ -50,8 +50,6 @@ type turtle struct {
 
 	// using the array to be able to iterate from latest elements easily.
 	BlocksToBlocks map[types.LayerID]map[types.BlockID]Opinion // records hdist, for each block, its votes about every previous block
-	// Use this to be able to lookup blocks Opinion without iterating the array.
-	BlocksToBlocksIndex map[types.BlockID]int
 
 	// TODO: Tal says - We keep a vector containing our vote totals (positive and negative) for every previous block
 	//	that's not needed here, probably for self healing?
@@ -65,15 +63,14 @@ func (t *turtle) SetLogger(log2 log.Log) {
 // newTurtle creates a new verifying tortoise algorithm instance. XXX: maybe rename?
 func newTurtle(bdp blockDataProvider, hdist, avgLayerSize int) *turtle {
 	t := &turtle{
-		logger:              log.NewDefault("trtl"),
-		Hdist:               types.LayerID(hdist),
-		bdp:                 bdp,
-		Last:                0,
-		AvgLayerSize:        avgLayerSize,
-		GoodBlocksIndex:     make(map[types.BlockID]struct{}),
-		BlocksToBlocks:      make(map[types.LayerID]map[types.BlockID]Opinion, hdist),
-		BlocksToBlocksIndex: make(map[types.BlockID]int),
-		MaxExceptions:       hdist * avgLayerSize * 100,
+		logger:          log.NewDefault("trtl"),
+		Hdist:           types.LayerID(hdist),
+		bdp:             bdp,
+		Last:            0,
+		AvgLayerSize:    avgLayerSize,
+		GoodBlocksIndex: make(map[types.BlockID]struct{}),
+		BlocksToBlocks:  make(map[types.LayerID]map[types.BlockID]Opinion, hdist),
+		MaxExceptions:   hdist * avgLayerSize * 100,
 	}
 	return t
 }
@@ -372,6 +369,8 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer, inputVector []types.Bl
 	}
 
 	// Go over all blocks, in order. For block i , mark it “good” if
+	blockscount := len(newlyr.Blocks())
+	goodblocks := len(t.GoodBlocksIndex)
 markingLoop:
 	for _, b := range newlyr.Blocks() {
 		// (1) the base block is marked as good.
@@ -435,6 +434,8 @@ markingLoop:
 		t.logger.With().Debug("marking good block", b.ID(), b.LayerIndex)
 		t.GoodBlocksIndex[b.ID()] = struct{}{}
 	}
+
+	t.logger.With().Info("finished marking good blocks", log.Int("total_blocks", blockscount), log.Int("good_blocks", len(t.GoodBlocksIndex)-goodblocks))
 
 	idx := newlyr.Index()
 	wasVerified := t.Verified
