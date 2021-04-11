@@ -359,18 +359,13 @@ func (m *DB) GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) 
 }
 
 // SaveLayerInputVectorByID gets the input vote vector for a layer (hare results)
-func (msh *DB) SaveLayerInputVectorByID(id types.LayerID, blks []types.BlockID) error {
-	return msh.SaveLayerInputVector(types.CalcHash32(id.Bytes()), blks)
-}
-
-// GetLayerHashInputVector gets the input vote vector for a layer (hare results) using its hash
-func (msh *Mesh) GetLayerHashInputVector(h types.Hash32) ([]types.BlockID, error) {
-	return msh.GetLayerInputVector(h)
+func (m *DB) SaveLayerInputVectorByID(id types.LayerID, blks []types.BlockID) error {
+	return m.SaveLayerInputVector(types.CalcHash32(id.Bytes()), blks)
 }
 
 // SaveLayerHashInputVector saves the input vote vector for a layer (hare results) using its hash
-func (msh *Mesh) SaveLayerHashInputVector(h types.Hash32, data []byte) error {
-	return msh.inputVector.Put(h.Bytes(), data)
+func (m *DB) SaveLayerHashInputVector(h types.Hash32, data []byte) error {
+	return m.inputVector.Put(h.Bytes(), data)
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {

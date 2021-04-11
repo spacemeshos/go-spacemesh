@@ -1,7 +1,11 @@
 package sync
 
 import (
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"math"
+	"testing"
+
 	//"testing"
 	"time"
 
@@ -22,48 +26,47 @@ func (blockBuilderMock) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	return nil
 }
 
-//
-//func TestCreateBaseline(t *testing.T) {
-//	t.Skip()
-//	const (
-//		numOfLayers    = 51  // 201
-//		blocksPerLayer = 200 // 200
-//		txPerBlock     = 5   // 50
-//		atxPerBlock    = 5   // 5
-//	)
-//
-//	goldenATXID := types.ATXID(types.HexToHash32("77777"))
-//
-//	id := Path
-//	lg := log.NewDefault(id)
-//	mshdb, _ := mesh.NewPersistentMeshDB(id, 5, lg.WithOptions(log.Nop))
-//	nipstStore, _ := database.NewLDBDatabase(id+"nipst", 0, 0, lg.WithName("nipstDbStore").WithOptions(log.Nop))
-//	defer nipstStore.Close()
-//	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
-//	defer atxdbStore.Close()
-//	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, uint16(1000), goldenATXID, &validatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
-//	trtl := tortoise.NewVerifyingTortoise(tortoise.Config{LayerSyze: blocksPerLayer, Database: mshdb, Hdist: 1, Log: lg.WithName("trtl")})
-//	msh := mesh.NewMesh(mshdb, atxdb, rewardConf, trtl, &mockTxMemPool{}, &mockState{}, lg.WithOptions(log.Nop))
-//	defer msh.Close()
-//	poetDbStore, err := database.NewLDBDatabase(id+"poet", 0, 0, lg.WithName("poetDbStore").WithOptions(log.Nop))
-//	if err != nil {
-//		lg.Error("error: ", err)
-//		return
-//	}
-//
-//	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb").WithOptions(log.Nop))
-//	proofMessage := makePoetProofMessage(t)
-//	proof, _ = proofMessage.Ref()
-//	if err := poetDb.ValidateAndStore(&proofMessage); err != nil {
-//		t.Error(err)
-//	}
-//
-//	poetDb.ValidateAndStore(&proofMessage)
-//
-//	lg.Info("start creating baseline")
-//	createBaseline(msh, numOfLayers, blocksPerLayer, blocksPerLayer, txPerBlock, atxPerBlock)
-//}
-//
+func TestCreateBaseline(t *testing.T) {
+	t.Skip()
+	const (
+		numOfLayers    = 51  // 201
+		blocksPerLayer = 200 // 200
+		txPerBlock     = 5   // 50
+		atxPerBlock    = 5   // 5
+	)
+
+	goldenATXID := types.ATXID(types.HexToHash32("77777"))
+
+	id := Path
+	lg := log.NewDefault(id)
+	mshdb, _ := mesh.NewPersistentMeshDB(id, 5, lg.WithOptions(log.Nop))
+	nipstStore, _ := database.NewLDBDatabase(id+"nipst", 0, 0, lg.WithName("nipstDbStore").WithOptions(log.Nop))
+	defer nipstStore.Close()
+	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
+	defer atxdbStore.Close()
+	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, uint16(1000), goldenATXID, &validatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
+	trtl := tortoise.NewVerifyingTortoise(tortoise.Config{LayerSyze: blocksPerLayer, Database: mshdb, Hdist: 1, Log: lg.WithName("trtl")})
+	msh := mesh.NewMesh(mshdb, atxdb, rewardConf, trtl, &mockTxMemPool{}, &mockState{}, lg.WithOptions(log.Nop))
+	defer msh.Close()
+	poetDbStore, err := database.NewLDBDatabase(id+"poet", 0, 0, lg.WithName("poetDbStore").WithOptions(log.Nop))
+	if err != nil {
+		lg.Error("error: ", err)
+		return
+	}
+
+	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb").WithOptions(log.Nop))
+	proofMessage := makePoetProofMessage(t)
+	proof, _ = proofMessage.Ref()
+	if err := poetDb.ValidateAndStore(&proofMessage); err != nil {
+		t.Error(err)
+	}
+
+	poetDb.ValidateAndStore(&proofMessage)
+
+	lg.Info("start creating baseline")
+	createBaseline(msh, numOfLayers, blocksPerLayer, blocksPerLayer, txPerBlock, atxPerBlock)
+}
+
 func txs(num int) ([]*types.Transaction, []types.TransactionID) {
 	txs := make([]*types.Transaction, 0, num)
 	ids := make([]types.TransactionID, 0, num)

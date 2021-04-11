@@ -36,7 +36,7 @@ type TxProcessor interface {
 type layerDB interface {
 	GetLayerHash(ID types.LayerID) types.Hash32
 	GetLayerHashBlocks(hash types.Hash32) []types.BlockID
-	GetLayerHashInputVector(hash types.Hash32) ([]types.BlockID, error)
+	GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error)
 	SaveLayerHashInputVector(id types.Hash32, data []byte) error
 }
 
@@ -200,7 +200,7 @@ func (l *Logic) LayerHashBlocksReceiver(msg []byte) []byte {
 	h := types.BytesToHash(msg)
 
 	blocks := l.layerDB.GetLayerHashBlocks(h)
-	vector, err := l.layerDB.GetLayerHashInputVector(h)
+	vector, err := l.layerDB.GetLayerInputVector(h)
 	if err != nil {
 		// TODO: We need to diff empty set and no results in sync somehow.
 		l.log.Error("didn't have input vector for layer ")
@@ -617,7 +617,7 @@ func (l *Logic) GetPoetProof(id types.Hash32) error {
 	return nil
 }
 
-// GetPoetProof gets poet proof from remote peer
+// GetInputVector gets input vector data from remote peer
 func (l *Logic) GetInputVector(id types.LayerID) error {
 	l.log.With().Info("getting inputvector for layer", id)
 	res := <-l.fetcher.GetHash(types.CalcHash32(id.Bytes()), IVDB, false)

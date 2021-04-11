@@ -72,7 +72,7 @@ type layerDBMock struct {
 	hashes  map[types.LayerID]types.Hash32
 }
 
-func (l *layerDBMock) GetLayerHashInputVector(hash types.Hash32) ([]types.BlockID, error) {
+func (l *layerDBMock) GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error) {
 	return l.vectors[hash], nil
 }
 
