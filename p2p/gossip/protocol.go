@@ -110,7 +110,7 @@ func (p *Protocol) markMessageAsOld(h types.Hash12) bool {
 func (p *Protocol) processMessage(ctx context.Context, sender p2pcrypto.PublicKey, protocol string, msg service.Data) error {
 	h := types.CalcMessageHash12(msg.Bytes(), protocol)
 	logger := p.WithContext(ctx).WithFields(
-		log.String("from", sender.String()),
+		log.FieldNamed("msg_sender", sender),
 		log.String("protocol", protocol),
 		log.String("hash", util.Bytes2Hex(h[:])))
 	logger.Debug("checking gossip message newness")
@@ -174,7 +174,7 @@ func (p *Protocol) handlePQ(ctx context.Context) {
 		h := types.CalcMessageHash12(m.Message(), m.Protocol())
 		extraFields := []log.LoggableField{
 			h,
-			log.FieldNamed("from", m.Sender()),
+			log.FieldNamed("msg_sender", m.Sender()),
 			log.String("protocol", m.Protocol()),
 		}
 		var msgCtx context.Context
