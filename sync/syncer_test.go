@@ -1312,6 +1312,37 @@ func TestSyncer_handleNotSyncedFlow(t *testing.T) {
 	r.Equal(1, ts.countSub)
 }
 
+// Make sure this can be called successfully several times for the same layer
+func TestSyncer_handleNotSyncedZeroBlocksLayer(t *testing.T) {
+	r := require.New(t)
+	ts := &mockClock{Layer: 10}
+	syncs, nodes := SyncMockFactoryManClock(1, conf, t.Name(), memoryDB, newMockPoetDb, ts)
+	sync := syncs[0]
+	sync.peers = getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey()})
+	lv := &mockLayerValidator{0, 0, 0, nil}
+	sync.Mesh.Validator = lv
+	sync.SetLatestLayer(1)
+	r.NoError(sync.SetZeroBlockLayer(1))
+	r.Equal(0, lv.countValidated)
+	r.Equal(types.LayerID(0), lv.processedLayer)
+	sync.handleNotSynced(1)
+	r.Equal(1, lv.countValidated)
+	r.Equal(1, lv.processedLayer)
+}
+
+func TestSyncer_SetZeroBlockLayer(t *testing.T) {
+	r := require.New(t)
+	txpool := state.NewTxMemPool()
+	atxpool := activation.NewAtxMemPool()
+	ts := &mockClock{Layer: 10}
+	sync := NewSync(service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String()), txpool, atxpool, blockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, log.NewDefault(t.Name()))
+	sync.SetLatestLayer(1)
+
+	// We should be able to perform this successfully multiple times for the same layer
+	r.NoError(sync.SetZeroBlockLayer(1))
+	r.NoError(sync.SetZeroBlockLayer(1))
+}
+
 func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	types.SetLayersPerEpoch(100)
 	r := require.New(t)
