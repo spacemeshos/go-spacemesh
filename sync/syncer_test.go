@@ -1315,7 +1315,7 @@ func TestSyncer_handleNotSyncedFlow(t *testing.T) {
 // Make sure this can be called successfully several times for the same layer
 func TestSyncer_handleNotSyncedZeroBlocksLayer(t *testing.T) {
 	r := require.New(t)
-	ts := &mockClock{Layer: 10}
+	ts := &mockClock{Layer: 2}
 	syncs, nodes := SyncMockFactoryManClock(1, conf, t.Name(), memoryDB, newMockPoetDb, ts)
 	sync := syncs[0]
 	sync.peers = getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey()})
@@ -1325,9 +1325,10 @@ func TestSyncer_handleNotSyncedZeroBlocksLayer(t *testing.T) {
 	r.NoError(sync.SetZeroBlockLayer(1))
 	r.Equal(0, lv.countValidated)
 	r.Equal(types.LayerID(0), lv.processedLayer)
-	sync.handleNotSynced(1)
-	r.Equal(1, lv.countValidated)
-	r.Equal(1, lv.processedLayer)
+	go sync.handleNotSynced(1)
+	time.Sleep(100 * time.Millisecond)
+	r.Equal(1, lv.countValidate)
+	r.Equal(types.LayerID(1), lv.processedLayer)
 }
 
 func TestSyncer_SetZeroBlockLayer(t *testing.T) {

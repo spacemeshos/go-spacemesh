@@ -611,17 +611,16 @@ func (msh *Mesh) AddBlock(blk *types.Block) error {
 func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 	msh.Info("setting zero block layer %v", lyr)
 	// check database for layer
-	_, err := msh.GetLayer(lyr)
-
-	if err == nil {
-		// layer exists
-		msh.Info("layer has blocks, dont set layer to 0 ")
-		return fmt.Errorf("layer exists")
-	}
-
-	if err != database.ErrNotFound {
-		// database error
-		return fmt.Errorf("could not fetch layer from database %s", err)
+	if l, err := msh.GetLayer(lyr); err != nil {
+		if err != database.ErrNotFound {
+			msh.With().Error("error trying to fetch layer from database", lyr, log.Err(err))
+			return err
+		}
+	} else if len(l.Blocks()) != 0 {
+		msh.With().Error("layer has blocks, cannot tag as zero block layer",
+			l,
+			log.Int("num_blocks", len(l.Blocks())))
+		return fmt.Errorf("layer has blocks")
 	}
 
 	msh.SetLatestLayer(lyr)
