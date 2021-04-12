@@ -128,12 +128,12 @@ func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]
 
 			items, err := asItems(msg)
 			if err != nil {
-				infra.Error("fetch failed bad response: %v", err)
+				infra.With().Error("fetch failed items bad response", log.Err(err))
 				return
 			}
 
 			if valid, err := validateItemIds(ids, items); !valid {
-				infra.Error("fetch failed bad response: %v", err)
+				infra.With().Error("fetch failed validating bad response", log.Err(err))
 				return
 			}
 
@@ -231,6 +231,35 @@ func poetReqFactory(poetProofRef []byte) requestFactory {
 		}
 
 		if err := s.SendRequest(poetMsg, poetProofRef, peer, resHandler, func(err error) {}); err != nil {
+			return nil, err
+		}
+
+		return ch, nil
+	}
+}
+
+func inputVectorReqFactory(lyreq []byte) requestFactory {
+	return func(s networker, peer p2ppeers.Peer) (chan interface{}, error) {
+		ch := make(chan interface{}, 1)
+		resHandler := func(msg []byte) {
+			s.Info("handle inputvec response")
+			defer close(ch)
+			if len(msg) == 0 || msg == nil {
+				s.Warning("peer responded with nil to inputvec request %v", peer, lyreq)
+				return
+			}
+
+			var valid []types.BlockID
+			err := types.BytesToInterface(msg, &valid)
+			if err != nil {
+				s.Error("could not unmarshal PoET proof message: %v", err)
+				return
+			}
+
+			ch <- valid
+		}
+
+		if err := s.SendRequest(inputVecMsg, lyreq, peer, resHandler, func(err error) {}); err != nil {
 			return nil, err
 		}
 
