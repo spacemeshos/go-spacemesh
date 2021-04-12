@@ -43,13 +43,22 @@ DOCKERRUNARGS := --rm -e ES_PASSWD="$(ES_PASSWD)" \
 	-e PROJECT_NAME=$(PROJECT_NAME) \
 	-e ES_USER=$(ES_USER) \
 	-e ES_PASS=$(ES_PASS) \
-	-e MAIN_ES_IP=$(MAIN_ES_IP) \
-	-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-	go-spacemesh-python:$(BRANCH)
+	-e MAIN_ES_IP=$(MAIN_ES_IP)
+
+DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(BRANCH)
+
+# We use a docker image corresponding to the commithash for staging and trying, to be safe
+# filter here is used as a logical OR operation
+ifeq ($(BRANCH),$(filter $(BRANCH),staging trying))
+	DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
+endif
+
+DOCKERRUNARGS := $(DOCKERRUNARGS) -e CLIENT_DOCKER_IMAGE=spacemeshos/$(DOCKER_IMAGE)
+
 ifdef INTERACTIVE
-	DOCKERRUN := docker run -it $(DOCKERRUNARGS)
+	DOCKERRUN := docker run -it $(DOCKERRUNARGS) go-spacemesh-python:$(BRANCH)
 else
-	DOCKERRUN := docker run -i $(DOCKERRUNARGS)
+	DOCKERRUN := docker run -i $(DOCKERRUNARGS) go-spacemesh-python:$(BRANCH)
 endif
 
 all: install build
@@ -130,7 +139,7 @@ docker-local-build:
 	cd cmd/p2p ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-p2p
 	cd cmd/sync ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-sync
 	cd cmd/integration ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-harness
-	cd build ; docker build -f ../DockerfilePrebuiltBinary -t $(DOCKER_IMAGE_REPO):$(BRANCH) .
+	cd build ; docker build -f ../DockerfilePrebuiltBinary -t $(DOCKER_IMAGE) .
 .PHONY: docker-local-build
 
 
@@ -204,7 +213,7 @@ list-versions:
 
 
 dockerbuild-go:
-	docker build -t $(DOCKER_IMAGE_REPO):$(BRANCH) .
+	docker build -t $(DOCKER_IMAGE) .
 .PHONY: dockerbuild-go
 
 
@@ -231,11 +240,12 @@ dockerpush: dockerbuild-go dockerpush-only
 
 dockerpush-only:
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
-	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
-	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
+	docker tag $(DOCKER_IMAGE) spacemeshos/$(DOCKER_IMAGE)
+	docker push spacemeshos/$(DOCKER_IMAGE)
 
+# for develop, we push an additional copy of the image using the commithash for archival
 ifeq ($(BRANCH),develop)
-	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
+	docker tag $(DOCKER_IMAGE) spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
 	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
 endif
 .PHONY: dockerpush-only
