@@ -164,7 +164,7 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, t
 		msh.pushLayersToState(msh.LatestLayerInState()+1, msh.trtl.LatestComplete())
 	}
 
-	msh.With().Info("recovered mesh from disc",
+	msh.With().Info("recovered mesh from disk",
 		log.FieldNamed("latest_layer", msh.latestLayer),
 		log.FieldNamed("validated_layer", msh.ProcessedLayer()),
 		log.String("layer_hash", util.Bytes2Hex(msh.layerHash)),
@@ -206,7 +206,7 @@ func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
 	// Report the status update, as well as the layer itself.
 	layer, err := msh.GetLayer(idx)
 	if err != nil {
-		msh.Error("error reading layer data for layer", layer, log.Err(err))
+		msh.With().Error("error reading layer data", idx, log.Err(err))
 	} else {
 		events.ReportNewLayer(events.NewLayer{
 			Layer:  layer,
