@@ -48,7 +48,7 @@ func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage) error {
 	switch mt {
 	case TimelyMessage:
 		tb.Log.With().Info("Received timely ProposalMessage",
-			log.Uint64("epoch", uint64(m.Epoch())),
+			log.Uint64("epoch_id", uint64(m.Epoch())),
 			log.String("message", m.String()))
 
 		tb.timelyProposalsMu.Lock()
@@ -65,7 +65,7 @@ func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage) error {
 
 	case DelayedMessage:
 		tb.Log.With().Info("Received delayed ProposalMessage",
-			log.Uint64("epoch", uint64(m.Epoch())),
+			log.Uint64("epoch_id", uint64(m.Epoch())),
 			log.String("message", m.String()))
 
 		tb.delayedProposalsMu.Lock()
@@ -82,14 +82,14 @@ func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage) error {
 
 	case LateMessage:
 		tb.Log.With().Info("Received late ProposalMessage",
-			log.Uint64("epoch", uint64(m.Epoch())),
+			log.Uint64("epoch_id", uint64(m.Epoch())),
 			log.Int("type", int(mt)))
 
 		return nil
 
 	default:
 		tb.Log.With().Info("Received ProposalMessage of unknown type",
-			log.Uint64("epoch", uint64(m.Epoch())),
+			log.Uint64("epoch_id", uint64(m.Epoch())),
 			log.String("message", m.String()))
 
 		return ErrUnknownMessageType
@@ -134,7 +134,7 @@ func (tb *TortoiseBeacon) handleVotingMessage(from p2pcrypto.PublicKey, message 
 	switch mt {
 	case TimelyMessage:
 		tb.Log.With().Info("Received timely VotingMessage, counting it",
-			log.Uint64("epoch", uint64(message.Epoch())),
+			log.Uint64("epoch_id", uint64(message.Epoch())),
 			log.Uint64("round", uint64(message.Round())),
 			log.String("message", message.String()))
 
@@ -170,7 +170,7 @@ func (tb *TortoiseBeacon) handleVotingMessage(from p2pcrypto.PublicKey, message 
 
 	case DelayedMessage, LateMessage:
 		tb.Log.With().Info(fmt.Sprintf("Received %v VotingMessage, ignoring it", mt.String()),
-			log.Uint64("epoch", uint64(message.Epoch())),
+			log.Uint64("epoch_id", uint64(message.Epoch())),
 			log.Uint64("round", uint64(message.Round())),
 			log.String("message", message.String()))
 
@@ -178,7 +178,7 @@ func (tb *TortoiseBeacon) handleVotingMessage(from p2pcrypto.PublicKey, message 
 
 	default:
 		tb.Log.With().Info("Received VotingMessage of unknown type",
-			log.Uint64("epoch", uint64(message.Epoch())),
+			log.Uint64("epoch_id", uint64(message.Epoch())),
 			log.Uint64("round", uint64(message.Round())),
 			log.Int("type", int(mt)))
 
@@ -206,7 +206,7 @@ func (tb *TortoiseBeacon) classifyMessage(m message, epoch types.EpochID) Messag
 	}
 
 	tb.Log.With().Info(fmt.Sprintf("Message is considered %s", classification.String()),
-		log.Uint64("epoch", uint64(epoch)),
+		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("message_epoch", uint64(m.Epoch())),
 		log.Uint64("message_round", uint64(messageRound)),
 		log.Uint64("current_round", uint64(currentRound)),

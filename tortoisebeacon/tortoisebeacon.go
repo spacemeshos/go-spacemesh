@@ -324,7 +324,7 @@ func (tb *TortoiseBeacon) handleLayer(layer types.LayerID) {
 	epoch := layer.GetEpoch()
 	tb.Log.With().Info("tortoise beacon got tick",
 		log.Uint64("layer", uint64(layer)),
-		log.Uint64("epoch", uint64(epoch)))
+		log.Uint64("epoch_id", uint64(epoch)))
 
 	tb.handleEpoch(epoch)
 }
@@ -332,13 +332,13 @@ func (tb *TortoiseBeacon) handleLayer(layer types.LayerID) {
 func (tb *TortoiseBeacon) handleEpoch(epoch types.EpochID) {
 	if epoch.IsGenesis() {
 		tb.Log.With().Info("not starting tortoise beacon since we are in genesis epoch",
-			log.Uint64("epoch", uint64(epoch)))
+			log.Uint64("epoch_id", uint64(epoch)))
 
 		return
 	}
 
 	tb.Log.With().Info("Handling epoch",
-		log.Uint64("epoch", uint64(epoch)))
+		log.Uint64("epoch_id", uint64(epoch)))
 
 	tb.beaconsMu.Lock()
 	if _, ok := tb.seenEpochs[epoch]; ok {
@@ -358,11 +358,11 @@ func (tb *TortoiseBeacon) handleEpoch(epoch types.EpochID) {
 	tb.beaconsMu.Unlock()
 
 	tb.Log.With().Info("Starting round ticker",
-		log.Uint64("epoch", uint64(epoch)))
+		log.Uint64("epoch_id", uint64(epoch)))
 
 	if err := tb.runProposalPhase(epoch); err != nil {
 		tb.Log.With().Error("Failed to send proposal",
-			log.Uint64("epoch", uint64(epoch)),
+			log.Uint64("epoch_id", uint64(epoch)),
 			log.Err(err))
 
 		return
@@ -370,7 +370,7 @@ func (tb *TortoiseBeacon) handleEpoch(epoch types.EpochID) {
 
 	if err := tb.runConsensusPhase(epoch); err != nil {
 		tb.Log.With().Error("Failed to run consensus phase",
-			log.Uint64("epoch", uint64(epoch)),
+			log.Uint64("epoch_id", uint64(epoch)),
 			log.Err(err))
 	}
 
@@ -380,27 +380,27 @@ func (tb *TortoiseBeacon) handleEpoch(epoch types.EpochID) {
 }
 
 func (tb *TortoiseBeacon) runConsensusPhase(epoch types.EpochID) error {
-	// For K rounds: In each round that lasts δ, wait for proposals to come in.
+	// rounds 1 to K
+	ticker := time.NewTicker(tb.networkDelta)
+	defer ticker.Stop()
+
 	if err := tb.sendProposalVote(epoch); err != nil {
 		tb.Log.With().Error("Failed to send first voting message",
-			log.Uint64("epoch", uint64(epoch)),
+			log.Uint64("epoch_id", uint64(epoch)),
 			log.Err(err))
 
 		return err
 	}
 
-	// rounds 1 to K
-	ticker := time.NewTicker(tb.networkDelta)
-	defer ticker.Stop()
-
+	// For K rounds: In each round that lasts δ, wait for proposals to come in.
 	// For next rounds,
 	// wait for δ time, and construct a message that points to all messages from previous round received by δ.
-	for round := firstRound + 1; round <= tb.lastPossibleRound(); round++ {
+	for round := firstRound + 1; round <= tb.lastRound(); round++ {
 		select {
 		case <-ticker.C:
 			if err := tb.sendVotesDelta(epoch, round); err != nil {
 				tb.Log.With().Error("Failed to send voting messages",
-					log.Uint64("epoch", uint64(epoch)),
+					log.Uint64("epoch_id", uint64(epoch)),
 					log.Uint64("round", uint64(round)),
 					log.Err(err))
 
@@ -411,6 +411,8 @@ func (tb *TortoiseBeacon) runConsensusPhase(epoch types.EpochID) error {
 			return nil
 		}
 	}
+
+	tb.waitAfterLastRoundStarted()
 
 	return nil
 }
@@ -448,7 +450,7 @@ func (tb *TortoiseBeacon) runProposalPhase(epoch types.EpochID) error {
 
 	if err := tb.weakCoin.PublishProposal(epoch, 1); err != nil {
 		tb.Log.With().Error("Failed to publish weak coin message",
-			log.Uint64("epoch", uint64(epoch)),
+			log.Uint64("epoch_id", uint64(epoch)),
 			log.Err(err))
 	}
 
@@ -495,7 +497,7 @@ func (tb *TortoiseBeacon) sendVote(
 
 	if err := tb.weakCoin.PublishProposal(epoch, round); err != nil {
 		tb.Log.With().Error("Failed to publish weak coin message",
-			log.Uint64("epoch", uint64(epoch)),
+			log.Uint64("epoch_id", uint64(epoch)),
 			log.Err(err))
 	}
 
@@ -520,15 +522,20 @@ func (tb *TortoiseBeacon) voteWeight(pk p2pcrypto.PublicKey) int {
 // Note that honest users cannot disagree on timing by more than δ,
 // so if a proposal is timely for any honest user,
 // it cannot be late for any honest user (and vice versa).
-//
-// K is the last round (counting starts from 1).
-// That means:
-// Messages from round K received in round K + 1 are timely.
-// Messages from round K received in round K + 2 are delayed.
-// Messages from round K received in round K + 3 are late.
-// Therefore, counting more than K + 3 rounds is not needed.
-func (tb *TortoiseBeacon) lastPossibleRound() types.RoundID {
-	return types.RoundID(tb.config.RoundsNumber) + 3
+func (tb *TortoiseBeacon) lastRound() types.RoundID {
+	return types.RoundID(tb.config.RoundsNumber)
+}
+
+func (tb *TortoiseBeacon) waitAfterLastRoundStarted() {
+	// Last round + next round for timely messages + next round for delayed messages (late messages may be ignored).
+	const roundsToWait = 3
+	timeToWait := time.Duration(roundsToWait*tb.config.WakeupDelta) * time.Second
+	timer := time.NewTimer(timeToWait)
+
+	select {
+	case <-tb.CloseChannel():
+	case <-timer.C:
+	}
 }
 
 func (tb *TortoiseBeacon) threshold() int {

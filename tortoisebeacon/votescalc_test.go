@@ -91,33 +91,17 @@ func TestTortoiseBeacon_calcVotesDelta(t *testing.T) {
 	const round = 3
 
 	tt := []struct {
-		name             string
-		epoch            types.EpochID
-		round            types.RoundID
-		timelyProposals  proposalsMap
-		delayedProposals proposalsMap
-		incomingVotes    map[epochRoundPair]votesPerPK
-		forDiff          hashList
-		againstDiff      hashList
+		name          string
+		epoch         types.EpochID
+		round         types.RoundID
+		incomingVotes map[epochRoundPair]votesPerPK
+		forDiff       hashList
+		againstDiff   hashList
 	}{
 		{
 			name:  "Case 1",
 			epoch: epoch,
 			round: round,
-			timelyProposals: proposalsMap{
-				epoch: map[types.Hash32]struct{}{
-					types.HexToHash32("0x1"): {},
-					types.HexToHash32("0x2"): {},
-					types.HexToHash32("0x3"): {},
-				},
-			},
-			delayedProposals: proposalsMap{
-				epoch: map[types.Hash32]struct{}{
-					types.HexToHash32("0x4"): {},
-					types.HexToHash32("0x5"): {},
-					types.HexToHash32("0x6"): {},
-				},
-			},
 			incomingVotes: map[epochRoundPair]votesPerPK{
 				epochRoundPair{EpochID: epoch, Round: 1}: {
 					pk1: votesSetPair{
@@ -180,13 +164,11 @@ func TestTortoiseBeacon_calcVotesDelta(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log:              log.NewDefault("TortoiseBeacon"),
-				incomingVotes:    tc.incomingVotes,
-				timelyProposals:  tc.timelyProposals,
-				delayedProposals: tc.delayedProposals,
-				votesCache:       map[epochRoundPair]votesPerPK{},
-				votesCountCache:  map[epochRoundPair]map[types.Hash32]int{},
-				ownVotes:         map[epochRoundPair]votesSetPair{},
+				Log:             log.NewDefault("TortoiseBeacon"),
+				incomingVotes:   tc.incomingVotes,
+				votesCache:      map[epochRoundPair]votesPerPK{},
+				votesCountCache: map[epochRoundPair]map[types.Hash32]int{},
+				ownVotes:        map[epochRoundPair]votesSetPair{},
 			}
 
 			forDiff, againstDiff := tb.calcVotesDelta(tc.epoch, tc.round)

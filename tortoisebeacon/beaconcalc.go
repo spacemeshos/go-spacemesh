@@ -12,7 +12,7 @@ import (
 
 func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID) {
 	tb.Log.With().Info("Calculating beacon",
-		log.Uint64("epoch", uint64(epoch)))
+		log.Uint64("epoch_id", uint64(epoch)))
 
 	allHashes := tb.calcTortoiseBeaconHashList(epoch)
 
@@ -21,14 +21,14 @@ func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID) {
 		stringHashes = append(stringHashes, hash.String())
 	}
 
-	tb.Log.With().Info(fmt.Sprintf("Going to calculate tortoise beacon from this hash list epoch %v", epoch),
+	tb.Log.With().Info("Going to calculate tortoise beacon from this hash list",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.String("hashes", strings.Join(stringHashes, ", ")))
 
 	beacon := allHashes.Hash()
 
 	tb.Log.With().Info("Calculated beacon",
-		log.Uint64("epoch", uint64(epoch)),
+		log.Uint64("epoch_id", uint64(epoch)),
 		log.String("beacon", beacon.String()))
 
 	events.ReportCalculatedTortoiseBeacon(epoch, beacon.String())
@@ -48,7 +48,7 @@ func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID) hashLi
 
 	lastRound := epochRoundPair{
 		EpochID: epoch,
-		Round:   types.RoundID(tb.config.RoundsNumber),
+		Round:   tb.lastRound(),
 	}
 
 	votes, ok := tb.ownVotes[lastRound]

@@ -33,7 +33,7 @@ func (tb *TortoiseBeacon) calcVotesFromProposals(epoch types.EpochID) (votesFor,
 	tb.delayedProposalsMu.Unlock()
 
 	tb.Log.With().Info("Calculated votes from proposals",
-		log.Uint64("epoch", uint64(epoch)),
+		log.Uint64("epoch_id", uint64(epoch)),
 		log.String("for", fmt.Sprint(votesFor)),
 		log.String("against", fmt.Sprint(votesAgainst)))
 
@@ -47,16 +47,15 @@ func (tb *TortoiseBeacon) calcVotesDelta(epoch types.EpochID, round types.RoundI
 	votesCount := tb.countFirstRoundVotes(epoch)
 
 	tb.Log.With().Info("Calculated first round votes",
-		log.Uint64("epoch", uint64(epoch)),
+		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round", uint64(round)),
-		log.String("timelyProposals", fmt.Sprint(tb.timelyProposals)),
-		log.String("delayedProposals", fmt.Sprint(tb.delayedProposals)),
+		log.String("incomingVotes", fmt.Sprint(tb.incomingVotes[epochRoundPair{EpochID: epoch, Round: 1}])),
 		log.String("votesCount", fmt.Sprint(votesCount)))
 
 	ownFirstRoundVotes := tb.calcOwnFirstRoundVotes(epoch, votesCount)
 
 	tb.Log.With().Info("Calculated own first round votes",
-		log.Uint64("epoch", uint64(epoch)),
+		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round", uint64(round)),
 		log.String("votesCount", fmt.Sprint(votesCount)),
 		log.String("ownFirstRoundVotes", fmt.Sprint(ownFirstRoundVotes)))
@@ -64,14 +63,14 @@ func (tb *TortoiseBeacon) calcVotesDelta(epoch types.EpochID, round types.RoundI
 	tb.calcVotesCount(epoch, round, votesCount)
 
 	tb.Log.With().Info("Calculated votes count",
-		log.Uint64("epoch", uint64(epoch)),
+		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round", uint64(round)),
 		log.String("votesCount", fmt.Sprint(votesCount)))
 
 	ownCurrentRoundVotes := tb.calcOwnCurrentRoundVotes(epoch, round, votesCount)
 
 	tb.Log.With().Info("Calculated votes for one round",
-		log.Uint64("epoch", uint64(epoch)),
+		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round", uint64(round)),
 		log.String("for", fmt.Sprint(ownCurrentRoundVotes.VotesFor)),
 		log.String("against", fmt.Sprint(ownCurrentRoundVotes.VotesAgainst)))
@@ -79,7 +78,7 @@ func (tb *TortoiseBeacon) calcVotesDelta(epoch types.EpochID, round types.RoundI
 	votesFor, votesAgainst := ownCurrentRoundVotes.Diff(ownFirstRoundVotes)
 
 	tb.Log.With().Info("Calculated votes diff for one round",
-		log.Uint64("epoch", uint64(epoch)),
+		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round", uint64(round)),
 		log.String("for", fmt.Sprint(votesFor)),
 		log.String("against", fmt.Sprint(votesAgainst)))
