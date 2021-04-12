@@ -2,6 +2,7 @@ package grpcserver
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -36,7 +37,6 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 

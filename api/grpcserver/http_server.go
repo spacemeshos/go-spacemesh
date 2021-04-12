@@ -1,12 +1,13 @@
 package grpcserver
 
 import (
+	"context"
 	"fmt"
+
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	gw "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"net/http"
 )
