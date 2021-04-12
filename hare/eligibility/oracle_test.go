@@ -5,6 +5,7 @@ import (
 	"fmt"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spacemeshos/amcl/BLS381"
+	"github.com/spacemeshos/fixed"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -132,7 +133,7 @@ func TestOracle_BuildVRFMessage(t *testing.T) {
 
 func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &mockSigner{[]byte{1, 2, 3}, nil}, 5, 5, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &mockSigner{[]byte{1, 2, 3}, nil}, 5, 1, 5, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	mCache := newMockCacher()
 	o.vrfMsgCache = mCache
 
@@ -158,8 +159,7 @@ func defaultOracle(t testing.TB) *Oracle {
 
 func mockOracle(t testing.TB, layersPerEpoch uint16) *Oracle {
 	types.SetLayersPerEpoch(int32(layersPerEpoch))
-	o := New(&mockValueProvider{1, nil}, nil, buildVerifier(true, nil), nil,
-		layersPerEpoch, genWeight, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, nil, buildVerifier(true, nil), nil, layersPerEpoch, 1024, genWeight, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	return o
 }
 
@@ -341,7 +341,7 @@ func (m *mockBufferedActiveSetProvider) ActiveSet(epoch types.EpochID, _ map[typ
 func createMapWithSize(n int) map[string]uint64 {
 	m := make(map[string]uint64)
 	for i := 0; i < n; i++ {
-		m[strconv.Itoa(i)] = uint64(i + 1)
+		m[strconv.Itoa(i)] = uint64(i+1) * 1024
 	}
 
 	return m
@@ -389,8 +389,8 @@ func Test_BlsSignVerify(t *testing.T) {
 	o := defaultOracle(t)
 	getActiveSet := func(types.EpochID, map[types.BlockID]struct{}) (map[string]uint64, error) {
 		return map[string]uint64{
-			"my_key": 1,
-			"abc":    9,
+			"my_key": 1 * 1024,
+			"abc":    9 * 1024,
 		}, nil
 	}
 	o.getActiveSet = getActiveSet
@@ -431,7 +431,7 @@ func TestOracle_Proof(t *testing.T) {
 
 func TestOracle_activeSetSizeCache(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, genWeight, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, 1, genWeight, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error) {
 		return createMapWithSize(17), nil
 	}
@@ -600,4 +600,56 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	v, err = o.IsIdentityActiveOnConsensusView(edid, 100)
 	r.NoError(err)
 	r.True(v)
+}
+
+func TestOracle_CalcEligibility_withSpaceUnits(t *testing.T) {
+	r := require.New(t)
+	numOfMiners := 50
+	committeeSize := 800
+	types.SetLayersPerEpoch(10)
+	o := New(&mockValueProvider{1, nil}, nil, buildVerifier(true, nil), nil, 10, 1024, genWeight, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o.getActiveSet = (&mockActiveSetProvider{numOfMiners}).ActiveSet
+
+	var eligibilityCount uint16
+	sig := make([]byte, 64)
+	for pubkey := range createMapWithSize(numOfMiners) {
+		n, err := rand.Read(sig)
+		r.NoError(err)
+		r.Equal(64, n)
+		nodeID := types.NodeID{Key: pubkey}
+
+		res, err := o.CalcEligibility(types.LayerID(50), 1, committeeSize, nodeID, sig)
+		r.NoError(err)
+
+		valid, err := o.Validate(types.LayerID(50), 1, committeeSize, nodeID, sig, res)
+		r.NoError(err)
+		r.True(valid)
+
+		eligibilityCount += res
+	}
+
+	diff := committeeSize - int(eligibilityCount)
+	if diff < 0 {
+		diff = -diff
+	}
+	t.Logf("diff=%d (%g%% of committeeSize)", diff, 100*float64(diff)/float64(committeeSize))
+	r.Less(diff, committeeSize/10) // up to 10% difference
+	// While it's theoretically possible to get a result higher than 10%, I've run this many times and haven't seen
+	// anything higher than 6% and it's usually under 3%.
+}
+
+func TestMaxSupportedN(t *testing.T) {
+	n := maxSupportedN
+	p := fixed.DivUint64(800, uint64(n*100))
+	x := 0
+
+	require.Panics(t, func() {
+		fixed.BinCDF(n+1, p, x)
+	})
+
+	require.NotPanics(t, func() {
+		for x = 0; x < 800; x++ {
+			fixed.BinCDF(n, p, x)
+		}
+	})
 }

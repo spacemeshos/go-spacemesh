@@ -14,8 +14,9 @@ import (
 	"sync"
 )
 
-const vrfMsgCacheSize = 20 // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
-const activesCacheSize = 5 // we don't expect to handle more than two layers concurrently
+const vrfMsgCacheSize = 20       // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
+const activesCacheSize = 5       // we don't expect to handle more than two layers concurrently
+const maxSupportedN = 1073741824 // higher values result in an overflow
 
 var (
 	errGenesis            = errors.New("no data about active nodes for genesis")
@@ -49,6 +50,7 @@ type Oracle struct {
 	vrfSigner          signer
 	vrfVerifier        verifierFunc
 	layersPerEpoch     uint16
+	spacePerUnit       uint64
 	vrfMsgCache        addGet
 	activesCache       addGet
 	genesisTotalWeight uint64
@@ -92,7 +94,7 @@ func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID,
 
 // New returns a new eligibility oracle instance.
 func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier verifierFunc, vrfSigner signer,
-	layersPerEpoch uint16, genesisTotalWeight uint64, goodBlocksProvider goodBlocksProvider,
+	layersPerEpoch uint16, spacePerUnit uint64, genesisTotalWeight uint64, goodBlocksProvider goodBlocksProvider,
 	cfg eCfg.Config, log log.Log) *Oracle {
 	vmc, e := lru.New(vrfMsgCacheSize)
 	if e != nil {
@@ -110,6 +112,7 @@ func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier verifier
 		vrfVerifier:        vrfVerifier,
 		vrfSigner:          vrfSigner,
 		layersPerEpoch:     layersPerEpoch,
+		spacePerUnit:       spacePerUnit,
 		vrfMsgCache:        vmc,
 		activesCache:       ac,
 		genesisTotalWeight: genesisTotalWeight,
@@ -209,59 +212,69 @@ func calcVrfFrac(sig []byte) fixed.Fixed {
 	return fixed.FracFromBytes(sha[:8])
 }
 
-func (o *Oracle) prepareEligibilityCheck(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (fixed.Fixed, fixed.Fixed, fixed.Fixed, bool, error) {
+func (o *Oracle) prepareEligibilityCheck(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (n int, p fixed.Fixed, vrfFrac fixed.Fixed, done bool, err error) {
 	msg, err := o.buildVRFMessage(layer, round)
 	if err != nil {
 		o.Error("eligibility: could not build VRF message")
-		return fixed.Fixed{}, fixed.Fixed{}, fixed.Fixed{}, true, err
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
 	// validate message
 	res, err := o.vrfVerifier(msg, sig, id.VRFPublicKey)
 	if err != nil {
 		o.Error("eligibility: VRF verification failed: %v", err)
-		return fixed.Fixed{}, fixed.Fixed{}, fixed.Fixed{}, true, err
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 	if !res {
 		o.With().Info("eligibility: a node did not pass VRF signature verification",
 			id,
 			layer)
-		return fixed.Fixed{}, fixed.Fixed{}, fixed.Fixed{}, true, nil
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, nil
 	}
 
 	// get active set size
 	totalWeight, err := o.totalWeight(layer)
 	if err != nil {
-		return fixed.Fixed{}, fixed.Fixed{}, fixed.Fixed{}, true, err
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
 	// require totalWeight > 0
 	if totalWeight == 0 {
 		o.Warning("eligibility: total weight is zero")
-		return fixed.Fixed{}, fixed.Fixed{}, fixed.Fixed{}, true, errors.New("total weight is zero")
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, errors.New("total weight is zero")
 	}
 
 	// calc hash & check threshold
 	minerWeight, err := o.minerWeight(layer, id)
 	if err != nil {
-		return fixed.Fixed{}, fixed.Fixed{}, fixed.Fixed{}, true, err
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
+
+	minerUnits := minerWeight / o.spacePerUnit
+	// TODO: Consider checking/disallowing space not in round units
+	totalUnits := totalWeight / o.spacePerUnit
+	// TODO: If space is not in round units, only consider the amount of space in round units for the total weight
 
 	// ensure miner weight fits in int
-	if uint64(int(minerWeight)) != minerWeight {
-		panic(fmt.Sprintf("minerWeight overflows int (%d)", minerWeight))
+	if uint64(int(minerUnits)) != minerUnits {
+		o.Panic(fmt.Sprintf("minerUnits overflows int (%d)", minerUnits))
 	}
-	n := fixed.New(int(minerWeight))
 
 	// calc p
-	p := fixed.One
-	if committeeSize < int(totalWeight) {
-		p = fixed.DivUint64(uint64(committeeSize), totalWeight)
+	if committeeSize < int(totalUnits) {
+		p = fixed.DivUint64(uint64(committeeSize), totalUnits)
 	} else {
-		o.Log.With().Warning("wanted committee size smaller than total weight!",
-			log.Int("committeeSize", committeeSize), log.Uint64("totalWeight", totalWeight))
+		p = fixed.One
+		o.With().Warning("committee size is not smaller than total units",
+			log.Int("committeeSize", committeeSize), log.Uint64("totalUnits", totalUnits))
 	}
-	return n, p, calcVrfFrac(sig), false, nil
+
+	if minerUnits > maxSupportedN {
+		return 0, fixed.Fixed{}, fixed.Fixed{}, false,
+			fmt.Errorf("miner weight exceeds supported maximum (id: %v, weight: %d, units: %d, max: %d",
+				id, minerWeight, minerUnits, maxSupportedN)
+	}
+	return int(minerUnits), p, calcVrfFrac(sig), false, nil
 }
 
 // Validate validates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is the role
@@ -274,16 +287,18 @@ func (o *Oracle) Validate(layer types.LayerID, round int32, committeeSize int, i
 
 	defer func() {
 		if msg := recover(); msg != nil {
-			o.Log.With().Error("panic in Validate",
-				log.Uint64("n", uint64(n.Value())),
-				log.Uint64("p", uint64(p.Value())),
+			o.With().Error("panic in Validate",
+				log.String("msg", fmt.Sprint(msg)),
+				log.Int("n", n),
+				log.String("p", p.String()),
+				log.String("vrfFrac", vrfFrac.String()),
 			)
-			panic(msg)
+			o.Panic("%s", msg)
 		}
 	}()
 
-	x := fixed.New(int(eligibilityCount))
-	if !fixed.BinCDF(n, p, x.Sub(fixed.One)).GreaterThan(vrfFrac) && vrfFrac.LessThan(fixed.BinCDF(n, p, x)) {
+	x := int(eligibilityCount)
+	if !fixed.BinCDF(n, p, x-1).GreaterThan(vrfFrac) && vrfFrac.LessThan(fixed.BinCDF(n, p, x)) {
 		return true, nil
 	}
 	o.With().Warning("eligibility: node did not pass VRF eligibility threshold",
@@ -291,10 +306,11 @@ func (o *Oracle) Validate(layer types.LayerID, round int32, committeeSize int, i
 		log.Int32("round", round),
 		log.Int("committee_size", committeeSize),
 		id,
-		log.Int("eligibilityCount", int(eligibilityCount)),
-		log.Int("n", n.Floor()),
-		log.String("p", fmt.Sprintf("%g", p.Float())),
-		log.Int("x", x.Floor()),
+		log.Uint64("eligibilityCount", uint64(eligibilityCount)),
+		log.Int("n", n),
+		log.String("p", p.String()),
+		log.String("vrfFrac", vrfFrac.String()),
+		log.Int("x", x),
 	)
 	return false, nil
 }
@@ -309,20 +325,22 @@ func (o *Oracle) CalcEligibility(layer types.LayerID, round int32, committeeSize
 
 	defer func() {
 		if msg := recover(); msg != nil {
-			o.Log.With().Error("panic in CalcEligibility",
-				log.Uint64("n", uint64(n.Value())),
-				log.Uint64("p", uint64(p.Value())),
+			o.With().Error("panic in CalcEligibility",
+				log.String("msg", fmt.Sprint(msg)),
+				log.Int("n", n),
+				log.String("p", p.String()),
+				log.String("vrfFrac", vrfFrac.String()),
 			)
-			panic(msg)
+			o.Panic("%s", msg)
 		}
 	}()
 
-	for x := fixed.New(0); x.Value() < n.Value(); x = x.Add(fixed.One) {
+	for x := 0; x < n; x++ {
 		if fixed.BinCDF(n, p, x).GreaterThan(vrfFrac) {
-			return uint16(x.Floor()), nil
+			return uint16(x), nil
 		}
 	}
-	return uint16(n.Floor()), nil
+	return uint16(n), nil
 }
 
 // Proof returns the role proof for the current Layer & Round
