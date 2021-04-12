@@ -272,6 +272,7 @@ func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *
 	}
 
 	_ = msh.AddBlock(mesh.GenesisBlock())
+	_ = msh.SaveLayerInputVectorByID(mesh.GenesisLayer().Index(), []types.BlockID{mesh.GenesisBlock().ID()})
 	clock := mockClock{Layer: expectedLayers + 1}
 	lg.Info("current layer %v", clock.GetCurrentLayer())
 
