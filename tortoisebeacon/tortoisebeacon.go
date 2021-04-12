@@ -475,12 +475,7 @@ func (tb *TortoiseBeacon) sendVotesDelta(epoch types.EpochID, round types.RoundI
 	return tb.sendVote(epoch, round, votesFor, votesAgainst)
 }
 
-func (tb *TortoiseBeacon) sendVote(
-	epoch types.EpochID,
-	round types.RoundID,
-	votesFor,
-	votesAgainst hashList,
-) error {
+func (tb *TortoiseBeacon) sendVote(epoch types.EpochID, round types.RoundID, votesFor, votesAgainst hashList) error {
 	m := NewVotingMessage(epoch, round, votesFor, votesAgainst)
 
 	serializedMessage, err := types.InterfaceToBytes(m)
