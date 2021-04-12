@@ -474,6 +474,10 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	app.log = app.addLogger(AppLogger, lg)
 
+	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
+	// using context passed down to them)
+	logger := app.log.WithContext(ctx)
+
 	postClient.SetLogger(app.addLogger(PostLogger, lg))
 
 	db, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "state"), 0, 0, app.addLogger(StateDbLogger, lg))
@@ -528,7 +532,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
 	if goldenATXID == *types.EmptyATXID {
-		app.log.Panic("invalid golden atx id")
+		logger.Panic("invalid golden atx id")
 	}
 
 	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
@@ -569,14 +573,14 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	}
 
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
-		app.log.With().Panic("number of atxs per block required is bigger than the limit",
+		logger.With().Panic("number of atxs per block required is bigger than the limit",
 			log.Int("atxs_per_block", app.Config.AtxsPerBlock),
 			log.Int("limit", miner.AtxsPerBlockLimit))
 	}
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 	if app.Config.HareEligibility.EpochOffset >= app.Config.BaseConfig.LayersPerEpoch {
-		app.log.With().Panic("epoch offset cannot be greater than or equal to the number of layers per epoch",
+		logger.With().Panic("epoch offset cannot be greater than or equal to the number of layers per epoch",
 			log.Int("epoch_offset", app.Config.HareEligibility.EpochOffset),
 			log.Int("layers_per_epoch", app.Config.BaseConfig.LayersPerEpoch))
 	}
@@ -621,7 +625,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	coinBase := types.HexToAddress(app.Config.CoinbaseAccount)
 
 	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
-		app.log.Panic("invalid coinbase account")
+		logger.Panic("invalid coinbase account")
 	}
 
 	builderConfig := activation.Config{
@@ -667,7 +671,7 @@ func (app *SpacemeshApp) checkTimeDrifts() {
 		case <-checkTimeSync.C:
 			_, err := timesync.CheckSystemClockDrift()
 			if err != nil {
-				app.log.With().Error("system time couldn't synchronize", log.Err(err))
+				app.log.With().Error("unable to synchronize system time", log.Err(err))
 				cmdp.Cancel()
 				return
 			}
