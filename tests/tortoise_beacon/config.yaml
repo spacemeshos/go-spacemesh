@@ -74,4 +74,4 @@ elastic:
   host: elastic.spacemesh.io
   port: 9200
   username: spacemesh
-is_dump: True
+is_dump: True # TODO(nkryuchkov): remove after testing
