@@ -206,7 +206,7 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v2
-      - name: hare system test
+      - name: sync system test
         run: make dockertest-sync-elk
   systemtest-tortoise-beacon:
     # only run on push, not on pull_request
@@ -217,7 +217,7 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v2
-      - name: hare system test
+      - name: tortoise beacon system test
         run: make dockertest-tortoise-beacon-elk
 
 
