@@ -208,6 +208,17 @@ jobs:
         uses: actions/checkout@v2
       - name: hare system test
         run: make dockertest-sync-elk
+  systemtest-tortoise-beacon:
+    # only run on push, not on pull_request
+    if: github.event_name == 'push'
+    needs: dockerpush
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: hare system test
+        run: make dockertest-tortoise-beacon-elk
 
 
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
@@ -223,9 +234,10 @@ jobs:
       - systemtest-p2p
       - systemtest-hare
       - systemtest-sync
+      - systemtest-tortoise-beacon
     runs-on: ubuntu-latest
     env:
-      status: ${{ needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-blocks-remove-node.result == 'success' && needs.systemtest-mining.result == 'success' && needs.systemtest-p2p.result == 'success' && needs.systemtest-hare.result == 'success' && needs.systemtest-sync.result == 'success' && 'success' || 'failure' }}
+      status: ${{ needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-blocks-remove-node.result == 'success' && needs.systemtest-mining.result == 'success' && needs.systemtest-p2p.result == 'success' && needs.systemtest-hare.result == 'success' && needs.systemtest-sync.result == 'success' && needs.systemtest-tortoise-beacon.result == 'success' && 'success' || 'failure' }}
     steps:
       # print a single, clean status update to slack
       - uses: act10ns/slack@v1
