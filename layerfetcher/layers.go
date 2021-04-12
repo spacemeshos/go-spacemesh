@@ -502,7 +502,7 @@ func (f *Future) Result() fetch.HashDataPromiseResult {
 
 // FetchAtx returns error if ATX was not found
 func (l *Logic) FetchAtx(id types.ATXID) error {
-	f := Future{l.fetcher.GetHash(id.Hash32(), ATXDB, true), nil}
+	f := Future{l.fetcher.GetHash(id.Hash32(), ATXDB, false), nil}
 	if f.Result().Err != nil {
 		return f.Result().Err
 	}
