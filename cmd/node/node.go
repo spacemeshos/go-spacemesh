@@ -451,6 +451,7 @@ func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
 }
 
 func (app *SpacemeshApp) initServices(ctx context.Context,
+	logger log.Log,
 	nodeID types.NodeID,
 	swarm service.Service,
 	dbStorepath string,
@@ -473,10 +474,6 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
 
 	app.log = app.addLogger(AppLogger, lg)
-
-	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
-	// using context passed down to them)
-	logger := app.log.WithContext(ctx)
 
 	postClient.SetLogger(app.addLogger(PostLogger, lg))
 
@@ -707,8 +704,7 @@ func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm se
 	return ha
 }
 
-func (app *SpacemeshApp) startServices(ctx context.Context) {
-	logger := log.AppLog.WithContext(ctx)
+func (app *SpacemeshApp) startServices(ctx context.Context, logger log.Log) {
 	go app.startSyncer(ctx)
 
 	if err := app.hare.Start(ctx); err != nil {
@@ -949,51 +945,54 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	// we use the main app context
 	ctx := cmdp.Ctx
 
-	log.With().Info("starting spacemesh",
+	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
+	// using context passed down to them)
+	logger := log.AppLog.WithContext(ctx)
+
+	logger.With().Info("starting spacemesh",
 		log.String("data-dir", app.Config.DataDir()),
 		log.String("post-dir", app.Config.POST.DataDir))
 
 	err := filesystem.ExistOrCreate(app.Config.DataDir())
 	if err != nil {
-		log.With().Error("data-dir not found or could not be created", log.Err(err))
+		logger.With().Error("data-dir not found or could not be created", log.Err(err))
 	}
 
 	/* Setup monitoring */
 
 	if app.Config.MemProfile != "" {
-		log.Info("starting mem profiling")
+		logger.Info("starting mem profiling")
 		f, err := os.Create(app.Config.MemProfile)
 		if err != nil {
-			log.With().Error("could not create memory profile", log.Err(err))
+			logger.With().Error("could not create memory profile", log.Err(err))
 		}
 		defer f.Close()
 		runtime.GC() // get up-to-date statistics
 		if err := pprof.WriteHeapProfile(f); err != nil {
-			log.With().Error("could not write memory profile", log.Err(err))
+			logger.With().Error("could not write memory profile", log.Err(err))
 		}
 	}
 
 	if app.Config.CPUProfile != "" {
-		log.Info("starting cpu profile")
+		logger.Info("starting cpu profile")
 		f, err := os.Create(app.Config.CPUProfile)
 		if err != nil {
-			log.With().Error("could not create cpu profile", log.Err(err))
+			logger.With().Error("could not create cpu profile", log.Err(err))
 		}
 		defer f.Close()
 		if err := pprof.StartCPUProfile(f); err != nil {
-			log.With().Error("could not start cpu profile", log.Err(err))
+			logger.With().Error("could not start cpu profile", log.Err(err))
 		}
 		defer pprof.StopCPUProfile()
 	}
 
 	if app.Config.PprofHTTPServer {
-		log.Info("starting pprof server")
+		logger.Info("starting pprof server")
 		srv := &http.Server{Addr: ":6060"}
 		defer srv.Shutdown(ctx)
 		go func() {
-			err := srv.ListenAndServe()
-			if err != nil {
-				log.With().Error("cannot start http server", log.Err(err))
+			if err := srv.ListenAndServe(); err != nil {
+				logger.With().Error("cannot start http server", log.Err(err))
 			}
 		}()
 	}
@@ -1002,7 +1001,7 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 
 	app.edSgn, err = app.LoadOrCreateEdSigner()
 	if err != nil {
-		log.With().Panic("could not retrieve identity", log.Err(err))
+		logger.With().Panic("could not retrieve identity", log.Err(err))
 	}
 
 	poetClient := activation.NewHTTPPoetClient(ctx, app.Config.PoETServer)
@@ -1016,7 +1015,7 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 
 	postClient, err := activation.NewPostClient(&app.Config.POST, util.Hex2Bytes(nodeID.Key))
 	if err != nil {
-		log.With().Error("failed to create post client", log.Err(err))
+		logger.With().Error("failed to create post client", log.Err(err))
 	}
 
 	// This base logger must be debug level so that other, derived loggers are not a lower level.
@@ -1027,18 +1026,19 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	dbStorepath := app.Config.DataDir()
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {
-		log.With().Error("cannot parse genesis time", log.Err(err))
+		logger.With().Error("cannot parse genesis time", log.Err(err))
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
 
-	log.Info("initializing p2p services")
+	logger.Info("initializing p2p services")
 	swarm, err := p2p.New(ctx, app.Config.P2P, app.addLogger(P2PLogger, lg), dbStorepath)
 	if err != nil {
-		log.With().Panic("error starting p2p services", log.Err(err))
+		logger.With().Panic("error starting p2p services", log.Err(err))
 	}
 
 	if err = app.initServices(ctx,
+		logger,
 		nodeID,
 		swarm,
 		dbStorepath,
@@ -1051,7 +1051,7 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 		vrfSigner,
 		uint16(app.Config.LayersPerEpoch),
 		clock); err != nil {
-		log.With().Error("cannot start services", log.Err(err))
+		logger.With().Error("cannot start services", log.Err(err))
 		return
 	}
 
@@ -1059,16 +1059,16 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 		metrics.StartCollectingMetrics(app.Config.MetricsPort)
 	}
 
-	app.startServices(ctx)
+	app.startServices(ctx, logger)
 
 	// P2P must start last to not block when sending messages to protocols
 	if err = app.P2P.Start(ctx); err != nil {
-		log.With().Panic("error starting p2p services", log.Err(err))
+		logger.With().Panic("error starting p2p services", log.Err(err))
 	}
 
 	app.startAPIServices(ctx, app.P2P)
 	events.SubscribeToLayers(clock.Subscribe())
-	log.Info("app started")
+	logger.Info("app started")
 
 	// notify anyone who might be listening that the app has finished starting.
 	// this can be used by, e.g., app tests.
