@@ -204,10 +204,10 @@ func (msh *Mesh) LatestLayer() types.LayerID {
 
 // SetLatestLayer sets the latest layer we saw from the network
 func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
-	// Report the status update, as well as the layer itself.
+	// Report the status update, as well as the layer itself
 	layer, err := msh.GetLayer(idx)
 	if err != nil {
-		msh.With().Error("error reading layer data for layer", layer, log.Err(err))
+		msh.With().Error("error reading layer data", idx, log.Err(err))
 	} else {
 		events.ReportNewLayer(events.NewLayer{
 			Layer:  layer,
@@ -610,19 +610,19 @@ func (msh *Mesh) AddBlock(blk *types.Block) error {
 
 // SetZeroBlockLayer tags lyr as a layer without blocks
 func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
-	msh.Info("setting zero block layer %v", lyr)
+	msh.With().Info("tagging zero block layer", lyr)
 	// check database for layer
 	_, err := msh.GetLayer(lyr)
 
 	if err == nil {
 		// layer exists
-		msh.Info("layer has blocks, dont set layer to 0 ")
+		msh.With().Info("layer has blocks, not tagging as zero layer", lyr)
 		return fmt.Errorf("layer exists")
 	}
 
 	if err != database.ErrNotFound {
 		// database error
-		return fmt.Errorf("could not fetch layer from database %s", err)
+		return fmt.Errorf("could not fetch layer from database: %s", err)
 	}
 
 	msh.SetLatestLayer(lyr)

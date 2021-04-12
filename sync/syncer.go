@@ -494,7 +494,7 @@ func (s *Syncer) handleNotSynced(ctx context.Context, currentSyncLayer types.Lay
 
 		if len(lyr.Blocks()) == 0 {
 			if err := s.SetZeroBlockLayer(currentSyncLayer); err != nil {
-				logger.With().Error("handleNotSynced failed", currentSyncLayer, log.Err(err))
+				logger.With().Error("error attempting to tag zero block layer", currentSyncLayer, log.Err(err))
 				return
 			}
 		}
@@ -637,7 +637,7 @@ func (s *Syncer) waitLayer(ch timesync.LayerTimer) (types.LayerID, bool) {
 
 func (s *Syncer) getLayerFromNeighbors(ctx context.Context, currentSyncLayer types.LayerID) (*types.Layer, error) {
 	if len(s.peers.GetPeers()) == 0 {
-		return nil, fmt.Errorf("no peers ")
+		return nil, fmt.Errorf("no peers")
 	}
 
 	// fetch layer hash from each peer

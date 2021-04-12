@@ -1469,7 +1469,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	}
 
 	if len(syncs[0].GetPeers()) == 0 {
-		t.Error("syncer has no peers ")
+		t.Error("syncer has no peers")
 		t.Fail()
 	}
 
