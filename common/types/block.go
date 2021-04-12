@@ -4,14 +4,16 @@ package types
 import (
 	"bytes"
 	"fmt"
+	"sort"
+	"strings"
+	"sync/atomic"
+	"time"
+
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"sort"
-	"sync/atomic"
-	"time"
 )
 
 // BlockID is a 20-byte sha256 sum of the serialized block, used to identify it.
@@ -105,6 +107,45 @@ func (id NodeID) ShortString() string {
 	return Shorten(name, 5)
 }
 
+// BytesToNodeID deserializes a byte slice into a NodeID
+// TODO: length of the input will be made exact when the NodeID is compressed into
+// one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
+func BytesToNodeID(b []byte) (*NodeID, error) {
+	if len(b) < 32 {
+		return nil, fmt.Errorf("Invalid input length, input too short")
+	}
+	if len(b) > 64 {
+		return nil, fmt.Errorf("Invalid input length, input too long")
+	}
+
+	pubKey := b[0:32]
+	vrfKey := b[32:]
+	return &NodeID{
+		Key:          util.Bytes2Hex(pubKey),
+		VRFPublicKey: []byte(util.Bytes2Hex(vrfKey)),
+	}, nil
+}
+
+//StringToNodeID deserializes a string into a NodeID
+// TODO: length of the input will be made exact when the NodeID is compressed into
+// one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
+func StringToNodeID(s string) (*NodeID, error) {
+	strLen := len(s)
+	if strLen < 64 {
+		return nil, fmt.Errorf("Invalid input length, input too short")
+	}
+	if strLen > 128 {
+		return nil, fmt.Errorf("Invalid input length, input too long")
+	}
+	//portion of the string corresponding to the Edwards public key
+	pubKey := s[:64]
+	vrfKey := s[64:]
+	return &NodeID{
+		Key:          pubKey,
+		VRFPublicKey: []byte(vrfKey),
+	}, nil
+}
+
 // Field returns a log field. Implements the LoggableField interface.
 func (id NodeID) Field() log.Field { return log.String("node_id", id.Key) }
 
@@ -127,26 +168,17 @@ type BlockHeader struct {
 	EligibilityProof BlockEligibilityProof
 	Data             []byte
 	Coin             bool
-	Timestamp        int64
-	BlockVotes       []BlockID
-	ViewEdges        []BlockID
+
+	BaseBlock BlockID
+
+	AgainstDiff []BlockID
+	ForDiff     []BlockID
+	NeutralDiff []BlockID
 }
 
 // Layer returns the block's LayerID.
 func (b BlockHeader) Layer() LayerID {
 	return b.LayerIndex
-}
-
-// AddVote adds a vote to the list of block votes.
-func (b *BlockHeader) AddVote(id BlockID) {
-	// todo: do this in a sorted manner
-	b.BlockVotes = append(b.BlockVotes, id)
-}
-
-// AddView adds a block to this block's view.
-func (b *BlockHeader) AddView(id BlockID) {
-	// todo: do this in a sorted manner
-	b.ViewEdges = append(b.ViewEdges, id)
 }
 
 // MiniBlock includes all of a block's fields, except for the signature. This structure is serialized and signed to
@@ -187,10 +219,11 @@ func (b *Block) Fields() []log.LoggableField {
 	return []log.LoggableField{
 		b.ID(),
 		b.LayerIndex,
-		b.LayerIndex.GetEpoch(),
-		log.FieldNamed("miner_id", b.MinerID()),
-		log.Int("view_edges", len(b.ViewEdges)),
-		log.Int("vote_count", len(b.BlockVotes)),
+		b.MinerID(),
+		log.String("base_block", b.BaseBlock.String()),
+		log.Int("supports", len(b.ForDiff)),
+		log.Int("againsts", len(b.AgainstDiff)),
+		log.Int("abstains", len(b.NeutralDiff)),
 		b.ATXID,
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
 		log.FieldNamed("ref_block", b.RefBlock),
@@ -243,6 +276,15 @@ func BlockIDs(blocks []*Block) []BlockID {
 		ids = append(ids, block.ID())
 	}
 	return ids
+}
+
+// BlockIdsField returns a list of loggable fields for a given list of BlockIDs
+func BlockIdsField(ids []BlockID) log.Field {
+	strs := []string{}
+	for _, a := range ids {
+		strs = append(strs, a.String())
+	}
+	return log.String("block_ids", strings.Join(strs, ", "))
 }
 
 // Layer contains a list of blocks and their corresponding LayerID.
@@ -301,8 +343,6 @@ func NewExistingBlock(layerIndex LayerID, data []byte, txs []TransactionID) *Blo
 	b := Block{
 		MiniBlock: MiniBlock{
 			BlockHeader: BlockHeader{
-				BlockVotes: make([]BlockID, 0, 10),
-				ViewEdges:  make([]BlockID, 0, 10),
 				LayerIndex: layerIndex,
 				Data:       data},
 			TxIDs: txs,

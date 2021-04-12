@@ -186,34 +186,27 @@ func (tp *TransactionProcessor) GetLayerStateRoot(layer types.LayerID) (types.Ha
 	return x, nil
 }
 
-// ApplyRewards applies reward reward to miners vector miners in for layer
+// ApplyRewards applies reward reward to miners vector for layer
 // TODO: convert rewards to uint64 (see https://github.com/spacemeshos/go-spacemesh/issues/2069)
 func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int) {
 	rewardConverted := reward.Uint64()
 	for _, account := range miners {
-		tp.Log.With().Info("Reward applied",
+		tp.Log.With().Info("reward applied",
 			log.String("account", account.Short()),
 			log.Uint64("reward", rewardConverted),
 			layer,
 		)
 		tp.AddBalance(account, rewardConverted)
-		events.ReportRewardReceived(events.Reward{
-			Layer:       layer,
-			Total:       rewardConverted,
-			LayerReward: rewardConverted * uint64(len(miners)),
-			Coinbase:    account,
-		})
 	}
-	newHash, err := tp.Commit()
 
+	newHash, err := tp.Commit()
 	if err != nil {
-		tp.Log.Error("trie write error %v", err)
+		tp.With().Error("trie write error", log.Err(err))
 		return
 	}
 
-	err = tp.addStateToHistory(layer, newHash)
-	if err != nil {
-		tp.Log.Error("failed to add state to history: %v", err)
+	if err = tp.addStateToHistory(layer, newHash); err != nil {
+		tp.With().Error("failed to add state to history", log.Err(err))
 	}
 }
 
