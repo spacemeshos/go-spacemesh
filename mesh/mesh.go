@@ -220,7 +220,7 @@ func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
 		msh.With().Info("set latest known layer", idx)
 		msh.latestLayer = idx
 		if err := msh.general.Put(constLATEST, idx.Bytes()); err != nil {
-			msh.Error("could not persist Latest layer index")
+			msh.Error("could not persist latest layer index")
 		}
 	}
 }
