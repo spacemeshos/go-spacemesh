@@ -28,8 +28,6 @@ func (p *protocol) newPingRequestHandler() func(msg server.Message) []byte {
 			plogger.Error("msg contents were not valid err=", err)
 			return nil
 		}
-		//only update the last pinged time once we know everything is valid
-		p.lastDiscoveryPing = time.Now()
 		//pong
 		payload, err := types.InterfaceToBytes(p.local)
 		// TODO: include the resolved To address

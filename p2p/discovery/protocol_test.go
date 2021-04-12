@@ -38,7 +38,6 @@ func newTestNode(simulator *service.Simulator) *testNode {
 	return &testNode{nd, d, disc}
 }
 
-//document this code and test
 func TestPing_Ping(t *testing.T) {
 
 	sim := service.NewSimulator()
@@ -81,12 +80,13 @@ func TestDiscoveryPing(t *testing.T) {
 		}, nil
 	}
 	justnow := time.Now()
-	//explain what happens inside GetAddresses => synchronous, ping should have happened
+	log.Info("Justnow: %v", justnow)
 	n1.dscv.GetAddresses(n2.svc.PublicKey())
 
 	// since n2 has never pinged n1, the GetAddresses method should result in a ping from n2 to n1
-	// this means that n1.dscv.lastDiscoveryPing should be after justnow
-	if !n1.dscv.lastDiscoveryPing.After(justnow) {
+	// this means that n2.svc.LastPinged should be after justnow
+	// n2.svc.LastPinged records the time the ping message is sent to n1
+	if !n2.svc.LastPinged.After(justnow) {
 		t.Errorf("test case 1 : unpinged address should receive a ping during the GetAddresses request")
 	}
 
@@ -101,7 +101,7 @@ func TestDiscoveryPing(t *testing.T) {
 	justnow = time.Now()
 
 	n1.dscv.GetAddresses(n2.svc.PublicKey())
-	if n1.dscv.lastDiscoveryPing.After(justnow) {
+	if n2.svc.LastPinged.After(justnow) {
 		t.Errorf("test case 2 : recently pinged address should not receive a ping during the GetAddresses request")
 	}
 

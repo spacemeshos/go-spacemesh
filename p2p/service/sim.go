@@ -39,6 +39,7 @@ type Node struct {
 	sndDelay      uint32
 	rcvDelay      uint32
 	randBehaviour bool
+	LastPinged    time.Time
 }
 
 // NewSimulator Creates a p2p simulation by providing nodes as p2p services and bridge them.
@@ -115,8 +116,9 @@ func (s *Simulator) NewFaulty(isRandBehaviour bool, maxBroadcastDelaySec uint32,
 func (s *Simulator) NewNode() *Node {
 	n := node.GenerateRandomNodeData()
 	sn := &Node{
-		sim:  s,
-		Info: n,
+		sim:        s,
+		Info:       n,
+		LastPinged: time.Unix(0, 0),
 	}
 	s.createdNode(sn)
 	return sn
@@ -236,11 +238,13 @@ func (sn *Node) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protoco
 
 // SendWrappedMessage send a wrapped message to another simulated node.
 func (sn *Node) SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *DataMsgWrapper) error {
+	log.Info("Send wrapped message")
 	return sn.sendMessageImpl(nodeID, protocol, payload)
 }
 
 // SendMessage send a message to another simulated node.
 func (sn *Node) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error {
+	log.Info("Send message")
 	return sn.sendMessageImpl(peerPubkey, protocol, DataBytes{Payload: payload})
 }
 
@@ -256,6 +260,14 @@ func (sn *Node) sendMessageImpl(nodeID p2pcrypto.PublicKey, protocol string, pay
 	thec, ok := sn.sim.protocolDirectHandler[nodeID][protocol]
 	sn.sim.mutex.RUnlock()
 	if ok {
+		if protocol == "/udp/v2/discovery" {
+			//this is a message intended for the message server, and the discovery protocol
+			data := payload.(*DataMsgWrapper)
+			if data.Req && data.MsgType == 0 {
+				sn.LastPinged = time.Now()
+				log.Info(sn.LastPinged.String())
+			}
+		}
 		thec <- simDirectMessage{simulatorMetadata(), payload, sn.Info.PublicKey()}
 		return nil
 	}
