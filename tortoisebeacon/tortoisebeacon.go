@@ -183,8 +183,8 @@ func (tb *TortoiseBeacon) Close() error {
 	return nil
 }
 
-// Get returns a Tortoise Beacon value as types.Hash32 for a certain epoch.
-// TODO(nkryuchkov): Remove either Get or GetBeacon.
+// Get returns a Tortoise Beacon value as types.Hash32 for a certain epoch or an error if it doesn't exist.
+// TODO(nkryuchkov): Consider making unexported.
 func (tb *TortoiseBeacon) Get(epochID types.EpochID) (types.Hash32, error) {
 	if tb.tortoiseBeaconDB != nil {
 		if val, ok := tb.tortoiseBeaconDB.GetTortoiseBeacon(epochID); ok {
@@ -209,7 +209,7 @@ func (tb *TortoiseBeacon) Get(epochID types.EpochID) (types.Hash32, error) {
 	return beacon, nil
 }
 
-// GetBeacon returns a Tortoise Beacon value as []byte for a certain epoch.
+// GetBeacon waits until a Tortoise Beacon value is ready for a certain epoch and returns it as []byte.
 func (tb *TortoiseBeacon) GetBeacon(epochNumber types.EpochID) []byte {
 	if err := tb.Wait(epochNumber); err != nil {
 		return nil

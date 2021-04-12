@@ -42,6 +42,7 @@ type ProposalMessage struct {
 
 // NewProposalMessage returns a new ProposalMessage.
 func NewProposalMessage(epoch types.EpochID, atxList ATXIDList) *ProposalMessage {
+	// TODO(nkryuchkov): Sign message.
 	return &ProposalMessage{
 		EpochID:      epoch,
 		ProposalList: atxList,
@@ -78,6 +79,7 @@ type VotingMessage struct {
 
 // NewVotingMessage returns a new VotingMessage.
 func NewVotingMessage(epoch types.EpochID, round types.RoundID, votesFor, votesAgainst []types.Hash32) *VotingMessage {
+	// TODO(nkryuchkov): Sign message.
 	return &VotingMessage{
 		EpochID:      epoch,
 		RoundID:      round,

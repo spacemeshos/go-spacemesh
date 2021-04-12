@@ -257,7 +257,6 @@ func TestTortoiseBeacon_countFirstRoundVotes(t *testing.T) {
 	}
 }
 
-// TODO(nkryuchkov): fix
 func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 	t.Parallel()
 

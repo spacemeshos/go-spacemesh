@@ -14,11 +14,11 @@ type Config struct { // TODO(nkryuchkov): use unused fields
 func DefaultConfig() Config {
 	return Config{
 		ATXThreshold: 50, // TODO(nkryuchkov): change
-		RoundsNumber: 6,
-		WakeupDelta:  30,
-		Theta:        1, // TODO(nkryuchkov): change
-		HDist:        20,
-		TAve:         1, // TODO(nkryuchkov): change
+		RoundsNumber: 6,  // TODO(nkryuchkov): arbitrary for now, find a better number
+		WakeupDelta:  30, // TODO(nkryuchkov): arbitrary for now, find a better number
+		Theta:        1,  // TODO(nkryuchkov): change
+		HDist:        20, // TODO(nkryuchkov): arbitrary for now, find a better number
+		TAve:         1,  // TODO(nkryuchkov): change
 	}
 }
 
