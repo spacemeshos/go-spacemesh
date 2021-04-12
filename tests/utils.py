@@ -159,13 +159,13 @@ def validate_beacons(log_messages):
     assert len(log_messages) > 0, f"no log messages"
 
     for log in log_messages:
-        if log.epoch not in epoch_messages:
-            epoch_messages[log.epoch] = dict()
+        if log.epoch_id not in epoch_messages:
+            epoch_messages[log.epoch_id] = dict()
 
-        if log.beacon not in epoch_messages[log.epoch]:
-            epoch_messages[log.epoch][log.beacon] = 0
+        if log.beacon not in epoch_messages[log.epoch_id]:
+            epoch_messages[log.epoch_id][log.beacon] = 0
 
-        epoch_messages[log.epoch][log.beacon] += 1
+        epoch_messages[log.epoch_id][log.beacon] += 1
 
     for epoch, beacons in epoch_messages.items():
         assert len(beacons) == 1, f"all beacons in epoch {epoch} were not same, saw: {beacons}"
