@@ -40,3 +40,13 @@ func (hl hashList) Hash() types.Hash32 {
 
 	return hash
 }
+
+// Hash hashes hash list.
+func (hl hashList) AsStrings() []string {
+	hashes := make([]string, 0, len(hl))
+	for _, hash := range hl {
+		hashes = append(hashes, hash.String())
+	}
+
+	return hashes
+}

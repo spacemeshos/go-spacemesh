@@ -44,7 +44,7 @@ func (tb *TortoiseBeacon) calcVotesDelta(epoch types.EpochID, round types.RoundI
 	tb.votesMu.Lock()
 	defer tb.votesMu.Unlock()
 
-	votesCount := tb.countFirstRoundVotes(epoch)
+	votesCount := tb.firstRoundVotes(epoch)
 
 	tb.Log.With().Info("Calculated first round votes",
 		log.Uint64("epoch_id", uint64(epoch)),
@@ -86,7 +86,7 @@ func (tb *TortoiseBeacon) calcVotesDelta(epoch types.EpochID, round types.RoundI
 	return votesFor, votesAgainst
 }
 
-func (tb *TortoiseBeacon) countFirstRoundVotes(epoch types.EpochID) votesCountMap {
+func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) votesCountMap {
 	firstRoundInThisEpoch := epochRoundPair{
 		EpochID: epoch,
 		Round:   1,

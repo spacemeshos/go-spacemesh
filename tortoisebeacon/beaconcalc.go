@@ -16,14 +16,9 @@ func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID) {
 
 	allHashes := tb.calcTortoiseBeaconHashList(epoch)
 
-	stringHashes := make([]string, 0, len(allHashes))
-	for _, hash := range allHashes {
-		stringHashes = append(stringHashes, hash.String())
-	}
-
 	tb.Log.With().Info("Going to calculate tortoise beacon from this hash list",
 		log.Uint64("epoch_id", uint64(epoch)),
-		log.String("hashes", strings.Join(stringHashes, ", ")))
+		log.String("hashes", strings.Join(allHashes.AsStrings(), ", ")))
 
 	beacon := allHashes.Hash()
 

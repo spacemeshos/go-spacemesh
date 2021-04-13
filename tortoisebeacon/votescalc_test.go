@@ -178,7 +178,7 @@ func TestTortoiseBeacon_calcVotesDelta(t *testing.T) {
 	}
 }
 
-func TestTortoiseBeacon_countFirstRoundVotes(t *testing.T) {
+func TestTortoiseBeacon_firstRoundVotes(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
@@ -251,7 +251,7 @@ func TestTortoiseBeacon_countFirstRoundVotes(t *testing.T) {
 				votesCountCache: map[epochRoundPair]map[types.Hash32]int{},
 			}
 
-			votesCount := tb.countFirstRoundVotes(tc.epoch)
+			votesCount := tb.firstRoundVotes(tc.epoch)
 			r.EqualValues(tc.votesCount, votesCount)
 		})
 	}
@@ -384,7 +384,7 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 				ownVotes:        map[epochRoundPair]votesSetPair{},
 			}
 
-			votesCount := tb.countFirstRoundVotes(tc.epoch)
+			votesCount := tb.firstRoundVotes(tc.epoch)
 			result := tb.calcOwnFirstRoundVotes(tc.epoch, votesCount)
 			r.EqualValues(tc.result, result)
 		})
@@ -490,7 +490,7 @@ func TestTortoiseBeacon_calcVotesCount(t *testing.T) {
 				votesCountCache: map[epochRoundPair]map[types.Hash32]int{},
 			}
 
-			votesCount := tb.countFirstRoundVotes(tc.epoch)
+			votesCount := tb.firstRoundVotes(tc.epoch)
 			tb.calcVotesCount(tc.epoch, tc.upToRound, votesCount)
 			r.EqualValues(tc.result, votesCount)
 		})
