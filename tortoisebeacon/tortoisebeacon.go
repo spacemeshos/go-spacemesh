@@ -277,6 +277,9 @@ func (tb *TortoiseBeacon) cleanupLoop() {
 
 func (tb *TortoiseBeacon) cleanup() {
 	// TODO(nkryuchkov): implement a better solution, consider https://github.com/golang/go/issues/20135
+	tb.beaconsMu.Lock()
+	defer tb.beaconsMu.Unlock()
+
 	for e := range tb.beacons {
 		if tb.epochIsOutdated(e) {
 			delete(tb.beacons, e)
@@ -407,23 +410,23 @@ func (tb *TortoiseBeacon) runConsensusPhase(epoch types.EpochID) error {
 	for round := firstRound + 1; round <= tb.lastRound(); round++ {
 		select {
 		case <-ticker.C:
-			go func() {
+			go func(epoch types.EpochID, round types.RoundID) {
 				if err := tb.sendVotesDelta(epoch, round); err != nil {
 					tb.Log.With().Error("Failed to send voting messages",
 						log.Uint64("epoch_id", uint64(epoch)),
 						log.Uint64("round", uint64(round)),
 						log.Err(err))
 				}
-			}()
+			}(epoch, round)
 
-			go func() {
+			go func(epoch types.EpochID, round types.RoundID) {
 				if err := tb.weakCoin.PublishProposal(epoch, round); err != nil {
 					tb.Log.With().Error("Failed to publish weak coin proposal",
 						log.Uint64("epoch_id", uint64(epoch)),
 						log.Uint64("round", uint64(round)),
 						log.Err(err))
 				}
-			}()
+			}(epoch, round)
 
 		case <-tb.CloseChannel():
 			return nil
