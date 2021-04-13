@@ -10,8 +10,7 @@ import (
 func (wc *weakCoin) HandleSerializedMessage(data service.GossipMessage, sync service.Fetcher) {
 	var m Message
 
-	err := types.BytesToInterface(data.Bytes(), &m)
-	if err != nil {
+	if err := types.BytesToInterface(data.Bytes(), &m); err != nil {
 		wc.Log.With().Error("Received invalid weak coin message",
 			log.String("message", string(data.Bytes())),
 			log.Err(err))
@@ -31,6 +30,15 @@ func (wc *weakCoin) HandleSerializedMessage(data service.GossipMessage, sync ser
 }
 
 func (wc *weakCoin) handleWeakCoinMessage(m Message) error {
-	// TODO(nkryuchkov): implement
+	pair := epochRoundPair{
+		EpochID: m.Epoch,
+		Round:   m.Round,
+	}
+
+	wc.proposalsMu.Lock()
+	defer wc.proposalsMu.Unlock()
+
+	wc.proposals[pair] = append(wc.proposals[pair], m.Proposal)
+
 	return nil
 }

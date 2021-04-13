@@ -384,13 +384,22 @@ func (tb *TortoiseBeacon) runConsensusPhase(epoch types.EpochID) error {
 	ticker := time.NewTicker(tb.networkDelta)
 	defer ticker.Stop()
 
-	if err := tb.sendProposalVote(epoch); err != nil {
-		tb.Log.With().Error("Failed to send first voting message",
-			log.Uint64("epoch_id", uint64(epoch)),
-			log.Err(err))
+	go func() {
+		if err := tb.sendProposalVote(epoch); err != nil {
+			tb.Log.With().Error("Failed to send first voting message",
+				log.Uint64("epoch_id", uint64(epoch)),
+				log.Err(err))
+		}
+	}()
 
-		return err
-	}
+	go func() {
+		if err := tb.weakCoin.PublishProposal(epoch, firstRound); err != nil {
+			tb.Log.With().Error("Failed to publish weak coin proposal",
+				log.Uint64("epoch_id", uint64(epoch)),
+				log.Uint64("round", uint64(firstRound)),
+				log.Err(err))
+		}
+	}()
 
 	// For K rounds: In each round that lasts δ, wait for proposals to come in.
 	// For next rounds,
@@ -398,14 +407,23 @@ func (tb *TortoiseBeacon) runConsensusPhase(epoch types.EpochID) error {
 	for round := firstRound + 1; round <= tb.lastRound(); round++ {
 		select {
 		case <-ticker.C:
-			if err := tb.sendVotesDelta(epoch, round); err != nil {
-				tb.Log.With().Error("Failed to send voting messages",
-					log.Uint64("epoch_id", uint64(epoch)),
-					log.Uint64("round", uint64(round)),
-					log.Err(err))
+			go func() {
+				if err := tb.sendVotesDelta(epoch, round); err != nil {
+					tb.Log.With().Error("Failed to send voting messages",
+						log.Uint64("epoch_id", uint64(epoch)),
+						log.Uint64("round", uint64(round)),
+						log.Err(err))
+				}
+			}()
 
-				return err
-			}
+			go func() {
+				if err := tb.weakCoin.PublishProposal(epoch, round); err != nil {
+					tb.Log.With().Error("Failed to publish weak coin proposal",
+						log.Uint64("epoch_id", uint64(epoch)),
+						log.Uint64("round", uint64(round)),
+						log.Err(err))
+				}
+			}()
 
 		case <-tb.CloseChannel():
 			return nil
