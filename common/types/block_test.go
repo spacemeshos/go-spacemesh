@@ -60,7 +60,8 @@ func TestStringToNodeID(t *testing.T) {
 
 	//Test too long : make sure that everything after the first 64 characters is ignored
 	longString := nodeID1.String() + string(pubkey2[:])
-	reversed, err = StringToNodeID(string(longString))
+	r.Greater(len(longString), len(nodeID1.String()))
+	reversed, err = StringToNodeID(longString)
 	r.NoError(err, "Error converting too-long string to NodeID")
 	r.Equal(nodeID1.Key, reversed.Key, "NodeID does not match for too-long string")
 	r.Equal([]byte{}, reversed.VRFPublicKey, "VRF Key is not empty for too-long string")
@@ -89,6 +90,7 @@ func TestBytesToNodeID(t *testing.T) {
 
 	// Test too long
 	longSlice := append(bytes, x[:]...)
+	r.Greater(len(longSlice), len(bytes))
 	reversed, err = BytesToNodeID(longSlice)
 	r.NoError(err, "Error converting too-long byte array to NodeID")
 	r.Equal(nodeID1.Key, reversed.Key, "NodeID Key does not match for too-long")
