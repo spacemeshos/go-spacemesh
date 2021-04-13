@@ -213,6 +213,11 @@ func calcVrfFrac(sig []byte) fixed.Fixed {
 }
 
 func (o *Oracle) prepareEligibilityCheck(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (n int, p fixed.Fixed, vrfFrac fixed.Fixed, done bool, err error) {
+	if committeeSize < 1 {
+		o.Error("committee size must be positive (received %d)", committeeSize)
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, nil
+	}
+
 	msg, err := o.buildVRFMessage(layer, round)
 	if err != nil {
 		o.Error("eligibility: could not build VRF message")
@@ -255,26 +260,30 @@ func (o *Oracle) prepareEligibilityCheck(layer types.LayerID, round int32, commi
 	totalUnits := totalWeight / o.spacePerUnit
 	// TODO: If space is not in round units, only consider the amount of space in round units for the total weight
 
+	n = int(minerUnits)
+
 	// ensure miner weight fits in int
-	if uint64(int(minerUnits)) != minerUnits {
+	if uint64(n) != minerUnits {
 		o.Panic(fmt.Sprintf("minerUnits overflows int (%d)", minerUnits))
 	}
 
 	// calc p
-	if committeeSize < int(totalUnits) {
-		p = fixed.DivUint64(uint64(committeeSize), totalUnits)
-	} else {
-		p = fixed.One
-		o.With().Warning("committee size is not smaller than total units",
-			log.Int("committeeSize", committeeSize), log.Uint64("totalUnits", totalUnits))
+	if committeeSize > int(totalUnits) {
+		o.With().Warning("committee size is greater than total units",
+			log.Int("committeeSize", committeeSize),
+			log.Uint64("totalUnits", totalUnits),
+		)
+		totalUnits *= uint64(committeeSize)
+		n *= committeeSize
 	}
+	p = fixed.DivUint64(uint64(committeeSize), totalUnits)
 
 	if minerUnits > maxSupportedN {
 		return 0, fixed.Fixed{}, fixed.Fixed{}, false,
 			fmt.Errorf("miner weight exceeds supported maximum (id: %v, weight: %d, units: %d, max: %d",
 				id, minerWeight, minerUnits, maxSupportedN)
 	}
-	return int(minerUnits), p, calcVrfFrac(sig), false, nil
+	return n, p, calcVrfFrac(sig), false, nil
 }
 
 // Validate validates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is the role
