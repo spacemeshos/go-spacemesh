@@ -3,7 +3,6 @@ package weakcoin
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -80,8 +79,6 @@ func NewWeakCoin(prefix string, threshold types.Hash32, net broadcaster, logger 
 
 	return wc
 }
-
-var ErrNoProposals = errors.New("no proposals")
 
 func (wc *weakCoin) Get(epoch types.EpochID, round types.RoundID) bool {
 	if epoch.IsGenesis() {
