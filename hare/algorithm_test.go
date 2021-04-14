@@ -148,7 +148,7 @@ func buildBroker(net NetworkService, testName string) *Broker {
 
 func buildBrokerLimit4(net NetworkService, testName string) *Broker {
 	return newBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil},
-		(&mockSyncer{true}).IsSynced, 10, 4, Closer{make(chan struct{})}, log.NewDefault(testName))
+		(&mockSyncer{true}).IsSynced, 10, 4, util.NewCloser(), log.NewDefault(testName))
 }
 
 type mockEligibilityValidator struct {
