@@ -15,10 +15,10 @@ import (
 )
 
 type activationDB interface {
-	GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error)
-	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
+	GetNodeAtxIDForEpoch(types.NodeID, types.EpochID) (types.ATXID, error)
+	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
 	GetIdentity(edID string) (types.NodeID, error)
-	GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID)
+	GetEpochAtxs(types.EpochID) []types.ATXID
 }
 
 type vrfSigner interface {
@@ -86,8 +86,7 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 	}
 
 	if bo.proofsEpoch != epochNumber {
-		err := bo.calcEligibilityProofs(epochNumber)
-		if err != nil {
+		if err := bo.calcEligibilityProofs(epochNumber); err != nil {
 			bo.log.With().Error("failed to calculate eligibility proofs", epochNumber, log.Err(err))
 			return *types.EmptyATXID, nil, nil, err
 		}

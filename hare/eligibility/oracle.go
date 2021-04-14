@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"github.com/hashicorp/golang-lru"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -19,23 +20,20 @@ const activesCacheSize = 5 // we don't expect to handle more than two layers con
 
 var (
 	errGenesis            = errors.New("no data about active nodes for genesis")
-	errNoContextualBlocks = errors.New("no contextually valid blocks")
 )
 
 type valueProvider interface {
 	Value(layer types.LayerID) (uint32, error)
 }
 
-// a func to retrieve the active set size for the provided layer
-// this func is assumed to be cpu intensive and hence we cache its results
-type activeSetFunc func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
-
 type signer interface {
 	Sign(msg []byte) ([]byte, error)
 }
 
-type goodBlocksProvider interface {
-	ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error)
+type atxProvider interface {
+	// GetEpochAtxs is used to get the active set for an epoch
+	GetEpochAtxs(types.EpochID) []types.ATXID
+	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
 }
 
 // a function to verify the message with the signature and its public key.
@@ -45,7 +43,7 @@ type verifierFunc = func(msg, sig, pub []byte) (bool, error)
 type Oracle struct {
 	lock                 sync.Mutex
 	beacon               valueProvider
-	getActiveSet         activeSetFunc
+	atxdb                atxProvider
 	vrfSigner            signer
 	vrfVerifier          verifierFunc
 	layersPerEpoch       uint16
@@ -53,7 +51,6 @@ type Oracle struct {
 	activesCache         addGet
 	genesisActiveSetSize int
 	hDist                int
-	blocksProvider       goodBlocksProvider
 	cfg                  eCfg.Config
 	log.Log
 }
@@ -68,38 +65,15 @@ func safeLayer(layer types.LayerID, safetyParam types.LayerID) types.LayerID {
 	return layer - safetyParam
 }
 
-func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID,
-	layersPerEpoch uint16, epochOffset types.LayerID) types.LayerID {
-	sl := safeLayer(layer, safetyParam)
-	if sl == types.GetEffectiveGenesis() {
-		return types.GetEffectiveGenesis()
-	}
-
-	se := types.LayerID(sl.GetEpoch()) // the safe epoch
-
-	roundedLayer := se*types.LayerID(layersPerEpoch) + epochOffset
-	if sl >= roundedLayer { // the safe layer is after the rounding threshold
-		return roundedLayer // round to threshold
-	}
-
-	if roundedLayer <= types.LayerID(layersPerEpoch) { // we can't go before genesis
-		return types.GetEffectiveGenesis() // just return genesis
-	}
-
-	// round to the previous epoch threshold
-	return roundedLayer - types.LayerID(layersPerEpoch)
-}
-
 // New returns a new eligibility oracle instance.
 func New(
 	beacon valueProvider,
-	activeSetFunc activeSetFunc,
+	atxdb atxProvider,
 	vrfVerifier verifierFunc,
 	vrfSigner signer,
 	layersPerEpoch uint16,
 	genesisActiveSet int,
 	hDist int,
-	goodBlocksProvider goodBlocksProvider,
 	cfg eCfg.Config,
 	log log.Log) *Oracle {
 	vmc, e := lru.New(vrfMsgCacheSize)
@@ -114,7 +88,7 @@ func New(
 
 	return &Oracle{
 		beacon:               beacon,
-		getActiveSet:         activeSetFunc,
+		atxdb:				  atxdb,
 		vrfVerifier:          vrfVerifier,
 		vrfSigner:            vrfSigner,
 		layersPerEpoch:       layersPerEpoch,
@@ -122,7 +96,6 @@ func New(
 		activesCache:         ac,
 		genesisActiveSetSize: genesisActiveSet,
 		hDist:                hDist,
-		blocksProvider:       goodBlocksProvider,
 		cfg:                  cfg,
 		Log:                  log,
 	}
@@ -179,7 +152,7 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 			return uint32(o.genesisActiveSetSize), nil
 		}
 
-		o.With().Error("activeSetSize erred while calling actives func", log.Err(err), layer)
+		o.With().Error("error calling actives func", log.Err(err), layer)
 		return 0, err
 	}
 
@@ -261,71 +234,39 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	o.lock.Lock()
 	defer o.lock.Unlock()
 
-	// Loop until we find a suitable safe layer with contextually valid blocks
-	var activeSet map[types.BlockID]struct{}
-	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
-	safeEp := sl.GetEpoch()
-
-	// check genesis
-	// genesis is for 3 epochs with hare since it can only count active identities found in blocks
-	if safeEp < 3 {
+	// we can't read blocks during genesis epochs as there are none
+	if layer.GetEpoch().IsGenesis() {
 		return nil, errGenesis
 	}
 
-	// Hdist is how long tortoise will wait for hare results for a given layer (denominated in layers). As a first
-	// approximation, we should be willing to look back about this many layers for a safe layer that contains some
-	// contextually valid blocks.
-	// TODO: consider iterating backwards rather than forwards
-	for i := 1; i < o.hDist*2+1 && uint64(i) < o.cfg.ConfidenceParam; i++ {
-		o.With().Info("trying candidate safe layer and epoch", sl, safeEp)
+	// check cache first
+	if val, exist := o.activesCache.Get(layer.GetEpoch()); exist {
+		return val.(map[string]struct{}), nil
+	}
 
-		// check cache
-		if val, exist := o.activesCache.Get(safeEp); exist {
-			return val.(map[string]struct{}), nil
-		}
+	// get the active set for the epoch
+	atxs := o.atxdb.GetEpochAtxs(layer.GetEpoch())
+	if len(atxs) == 0 {
+		return nil, fmt.Errorf("empty active set for layer %v in non-genesis epoch %v",
+			layer, layer.GetEpoch())
+	}
 
-		// build a map of all blocks on the current layer
-		if mp, err := o.blocksProvider.ContextuallyValidBlock(sl); err != nil {
-			return nil, err
-		} else if len(mp) == 0 {
-			// no contextually valid blocks: print error and keep looping
-			o.With().Warning("no contextually valid blocks for candidate safe layer",
+	// extract the nodeIDs
+	activeMap := make(map[string]struct{}, len(atxs))
+	for _, atxid := range atxs {
+		atx, err := o.atxdb.GetAtxHeader(atxid)
+		if err != nil {
+			o.With().Error("failed to fetch atx for layer in non-genesis epoch",
 				layer,
 				layer.GetEpoch(),
-				log.FieldNamed("safe_layer_id", sl),
-				log.FieldNamed("safe_epoch_id", safeEp))
-		} else {
-			activeSet = mp
-			o.With().Info("using safe layer with contextually valid blocks", sl, safeEp)
-			break
+				log.Err(err))
+			return nil, err
 		}
-
-		// Advance safe layer (and maybe epoch) for next iteration by increasing the epochOffset param
-		sl = roundedSafeLayer(layer,
-			types.LayerID(o.cfg.ConfidenceParam),
-			o.layersPerEpoch,
-			types.LayerID(o.cfg.EpochOffset+i))
-		safeEp = sl.GetEpoch()
-	}
-	if len(activeSet) == 0 {
-		o.With().Error("could not calculate active set size, no safe layer found with contextually valid blocks")
-		return nil, errNoContextualBlocks
+		activeMap[atx.NodeID.Key] = struct{}{}
 	}
 
-	activeMap, err := o.getActiveSet(safeEp-1, activeSet)
-	if err != nil {
-		o.With().Error("could not retrieve active set size",
-			log.Err(err),
-			layer,
-			layer.GetEpoch(),
-			log.FieldNamed("safe_layer_id", sl),
-			log.FieldNamed("safe_epoch_id", safeEp))
-		return nil, err
-	}
-
-	// update cache
-	o.activesCache.Add(safeEp, activeMap)
-
+	// update cache and return
+	o.activesCache.Add(layer.GetEpoch(), activeMap)
 	return activeMap, nil
 }
 

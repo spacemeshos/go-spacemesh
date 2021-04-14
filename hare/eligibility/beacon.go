@@ -11,8 +11,8 @@ import (
 const nilVal = 0
 
 type patternProvider interface {
-	// GetPatternId returns the pattern ID of the given Layer
-	// the pattern ID is defined to be the hash of blocks in a Layer
+	// ContextuallyValidBlock returns the pattern ID of the given layer
+	// the pattern ID is defined to be the hash of blocks in a layer
 	ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error)
 }
 
@@ -46,7 +46,7 @@ func NewBeacon(patternProvider patternProvider, confidenceParam uint64, lg log.L
 	}
 }
 
-// Value returns the unpredictable and agreed value for the given Layer
+// Value returns the unpredictable and agreed value for the given layer
 // Note: Value is concurrency-safe but not concurrency-optimized
 func (b *Beacon) Value(layer types.LayerID) (uint32, error) {
 	sl := safeLayer(layer, types.LayerID(b.confidenceParam))
@@ -60,14 +60,16 @@ func (b *Beacon) Value(layer types.LayerID) (uint32, error) {
 	// consider adding a lock if concurrency-optimized is important
 	v, err := b.patternProvider.ContextuallyValidBlock(sl)
 	if err != nil {
-		b.Log.With().Error("Could not get pattern ID",
-			log.Err(err), layer, log.FieldNamed("sl_id", sl))
+		b.Log.With().Error("could not get pattern id",
+			log.Err(err),
+			layer,
+			log.FieldNamed("sl_id", sl))
 		return nilVal, errors.New("could not calc Beacon value")
 	}
 
 	// notify if there are no contextually valid blocks
 	if len(v) == 0 {
-		b.Log.With().Warning("hare Beacon: zero contextually valid blocks (ignore if genesis first layers)",
+		b.Log.With().Warning("hare beacon: zero contextually valid blocks (ignore during genesis)",
 			layer, log.FieldNamed("sl_id", sl))
 	}
 

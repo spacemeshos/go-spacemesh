@@ -193,7 +193,6 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 
 func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.ATXID, penalties map[string]struct{}, layersPerEpoch uint16, epoch types.EpochID) func(b *types.Block) (bool, error) {
 	traversalFunc := func(b *types.Block) (stop bool, err error) {
-
 		// count unique ATXs
 		if b.ActiveSet == nil {
 			return false, nil
@@ -205,7 +204,7 @@ func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.A
 				return false, fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortString())
 			}
 
-			// todo: should we accept only eopch -1 atxs?
+			// todo: should we accept only epoch -1 atxs?
 
 			// make sure the target epoch is our epoch
 			if atx.TargetEpoch() != epoch {
@@ -223,7 +222,6 @@ func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.A
 			}
 
 			if prevID, exist := countedAtxs[atx.NodeID.Key]; exist { // same miner
-
 				if prevID != id { // different atx for same epoch
 					db.log.With().Error("encountered second atx for the same miner on the same epoch",
 						log.FieldNamed("first_atx", prevID),
@@ -244,7 +242,7 @@ func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.A
 	return traversalFunc
 }
 
-// CalcActiveSetSize - returns the active set size that matches the view of the contextually valid blocks in the provided layer
+// CalcActiveSetSize returns the set of active node IDs for the ATXs pointed to by the provided blocks
 func (db *DB) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 	if epoch == 0 {
 		return nil, errors.New("tried to retrieve active set for epoch 0")
@@ -258,8 +256,7 @@ func (db *DB) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]st
 	traversalFunc := db.createTraversalActiveSetCounterFunc(countedAtxs, penalties, db.LayersPerEpoch, epoch)
 
 	startTime := time.Now()
-	err := db.meshDb.ForBlockInView(blocks, firstLayerOfPrevEpoch, traversalFunc)
-	if err != nil {
+	if err := db.meshDb.ForBlockInView(blocks, firstLayerOfPrevEpoch, traversalFunc); err != nil {
 		return nil, err
 	}
 	db.log.With().Info("done calculating active set size",
@@ -274,7 +271,7 @@ func (db *DB) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]st
 	return result, nil
 }
 
-// CalcActiveSetFromView traverses the view found in a - the activation tx and counts number of active ids published
+// CalcActiveSetFromView traverses the view found in the activation tx and counts number of active ids published
 // in the epoch prior to the epoch that a was published at, this number is the number of active ids in the next epoch
 // the function returns error if the view is not found
 func (db *DB) CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochID) (uint32, error) {
@@ -643,8 +640,7 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 			break
 		}
 		var a types.ATXID
-		err := types.BytesToInterface(atxIterator.Value(), &a)
-		if err != nil {
+		if err := types.BytesToInterface(atxIterator.Value(), &a); err != nil {
 			db.log.Panic("cannot parse atx from DB")
 			break
 		}
