@@ -469,7 +469,7 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.Layer
 
 	if minGood < types.LayerID(math.MaxUint64) {
 		ni.logger.With().Info("found minimal good layer",
-			log.FieldNamed("cur_layer", lyr.Index()),
+			log.FieldNamed("cur_layer_id", lyr.Index()),
 			log.Int("cur_layer_num_blocks", len(lyr.Blocks())),
 			log.FieldNamed("min_good_layer", minGood),
 			ni.TGood[minGood])
