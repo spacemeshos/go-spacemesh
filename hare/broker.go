@@ -3,11 +3,12 @@ package hare
 import (
 	"context"
 	"errors"
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
-	"sync"
 )
 
 const inboxCapacity = 1024 // inbox size per instance
@@ -303,13 +304,21 @@ func (b *Broker) Register(ctx context.Context, id instanceID) (chan *Msg, error)
 	regRequest := func() {
 		b.updateLatestLayer(ctx, id)
 
-		if len(b.outbox) >= b.limit {
-			resErr <- errTooMany
-			resCh <- nil
-			return
-		}
-
+		// first performing a check to see whether we are synced for this layer
 		if b.isSynced(ctx, id) {
+			// This section of code does not need to be protected against possible race conditions
+			// because this function will be added to a queue of tasks that will all be
+			// executed sequentially and synchronously. There is still the concern that two or more
+			// calls to Register will be executed out of order, but Register is only called
+			// on a new layer tick, and anyway updateLatestLayer would panic in this case.
+			if len(b.outbox) >= b.limit {
+				//unregister the earliest layer to make space for the new layer
+				//cannot call unregister here because unregister blocks and this would cause a deadlock
+				instance := b.minDeleted + 1
+				b.cleanState(instance)
+				b.With().Info("unregistered layer due to maximum concurrent processes", types.LayerID(instance))
+			}
+
 			b.outbox[id] = make(chan *Msg, inboxCapacity)
 
 			pendingForInstance := b.pending[id]
@@ -325,6 +334,7 @@ func (b *Broker) Register(ctx context.Context, id instanceID) (chan *Msg, error)
 			return
 		}
 
+		// if we are not synced, we return an InstanceNotSynced error
 		resErr <- errInstanceNotSynced
 		resCh <- nil
 	}
@@ -341,14 +351,18 @@ func (b *Broker) Register(ctx context.Context, id instanceID) (chan *Msg, error)
 	return result, nil // reg ok
 }
 
+func (b *Broker) cleanState(id instanceID) {
+	delete(b.outbox, id)
+	b.cleanOldLayers()
+}
+
 // Unregister a layer from receiving messages
 func (b *Broker) Unregister(ctx context.Context, id instanceID) {
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
 	b.tasks <- func() {
-		delete(b.outbox, id) // delete matching outbox
-		b.cleanOldLayers()
+		b.cleanState(id)
 		b.WithContext(ctx).With().Info("hare broker unregistered layer", types.LayerID(id))
 		wg.Done()
 	}
