@@ -3,6 +3,7 @@
 package activation
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -27,7 +28,7 @@ type meshProvider interface {
 }
 
 type broadcaster interface {
-	Broadcast(channel string, data []byte) error
+	Broadcast(ctx context.Context, channel string, data []byte) error
 }
 
 type poetNumberOfTickProvider struct {
@@ -146,12 +147,12 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvide
 }
 
 // Start is the main entry point of the atx builder. it runs the main loop of the builder and shouldn't be called more than once
-func (b *Builder) Start() {
+func (b *Builder) Start(ctx context.Context) {
 	if atomic.LoadUint32(&b.started) == 1 {
 		return
 	}
 	atomic.StoreUint32(&b.started, 1)
-	go b.loop()
+	go b.loop(ctx)
 }
 
 // Stop stops the atx builder.
@@ -185,7 +186,7 @@ func (b *Builder) waitOrStop(ch chan struct{}) error {
 }
 
 // loop is the main loop that tries to create an atx per tick received from the global clock
-func (b *Builder) loop() {
+func (b *Builder) loop(ctx context.Context) {
 	err := b.loadChallenge()
 	if err != nil {
 		log.Info("challenge not loaded: %s", err)
@@ -203,7 +204,7 @@ func (b *Builder) loop() {
 			return
 		default:
 		}
-		if err := b.PublishActivationTx(); err != nil {
+		if err := b.PublishActivationTx(ctx); err != nil {
 			if _, stopRequested := err.(StopRequestedError); stopRequested {
 				return
 			}
@@ -244,7 +245,7 @@ func (b *Builder) buildNipstChallenge(currentLayer types.LayerID) error {
 
 // StartPost initiates post commitment generation process. It returns an error if a process is already in progress or
 // if a post has been already initialized
-func (b *Builder) StartPost(rewardAddress types.Address, dataDir string, space uint64) error {
+func (b *Builder) StartPost(ctx context.Context, rewardAddress types.Address, dataDir string, space uint64) error {
 	if !atomic.CompareAndSwapInt32(&b.initStatus, InitIdle, InitInProgress) {
 		switch atomic.LoadInt32(&b.initStatus) {
 		case InitDone:
@@ -372,7 +373,7 @@ func (b *Builder) loadChallenge() error {
 }
 
 // PublishActivationTx attempts to publish an atx, it returns an error if an atx cannot be created.
-func (b *Builder) PublishActivationTx() error {
+func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	b.discardChallengeIfStale()
 	if b.challenge != nil {
 		b.log.With().Info("using existing atx challenge", b.currentEpoch())
@@ -434,7 +435,7 @@ func (b *Builder) PublishActivationTx() error {
 
 	atxReceived := b.db.AwaitAtx(atx.ID())
 	defer b.db.UnsubscribeAtx(atx.ID())
-	size, err := b.signAndBroadcast(atx)
+	size, err := b.signAndBroadcast(ctx, atx)
 	if err != nil {
 		b.log.With().Error("failed to publish atx", append(atx.Fields(size), log.Err(err))...)
 		return err
@@ -475,7 +476,7 @@ func (b *Builder) discardChallenge() {
 	}
 }
 
-func (b *Builder) signAndBroadcast(atx *types.ActivationTx) (int, error) {
+func (b *Builder) signAndBroadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {
 	if err := b.SignAtx(atx); err != nil {
 		return 0, fmt.Errorf("failed to sign ATX: %v", err)
 	}
@@ -483,7 +484,7 @@ func (b *Builder) signAndBroadcast(atx *types.ActivationTx) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to serialize ATX: %v", err)
 	}
-	if err := b.net.Broadcast(AtxProtocol, buf); err != nil {
+	if err := b.net.Broadcast(ctx, AtxProtocol, buf); err != nil {
 		return 0, fmt.Errorf("failed to broadcast ATX: %v", err)
 	}
 	return len(buf), nil

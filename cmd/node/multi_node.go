@@ -2,6 +2,7 @@ package node
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -231,7 +232,7 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.
 		return nil, err
 	}
 
-	err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
+	err = smApp.initServices(context.TODO(), nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +291,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	eventDb := collector.NewMemoryCollector()
 	collect := collector.NewCollector(eventDb, pubsubAddr)
 	for _, a := range apps {
-		a.startServices()
+		a.startServices(context.TODO())
 	}
 	collect.Start(false)
 	ActivateGrpcServer(apps[0])
@@ -382,7 +383,7 @@ loop:
 			}
 			log.Info("all miners finished reading %v atxs, layer %v done in %v", eventDb.GetAtxCreationDone(epoch), layer, time.Since(startLayer))
 			for _, atxID := range eventDb.GetCreatedAtx(epoch) {
-				if _, found := eventDb.Atxs[atxID]; !found {
+				if !eventDb.AtxIDExists(atxID) {
 					log.Info("atx %v not propagated", atxID)
 					errors++
 					continue

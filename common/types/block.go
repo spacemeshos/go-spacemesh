@@ -4,14 +4,15 @@ package types
 import (
 	"bytes"
 	"fmt"
+	"sort"
+	"sync/atomic"
+	"time"
+
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"sort"
-	"sync/atomic"
-	"time"
 )
 
 // BlockID is a 20-byte sha256 sum of the serialized block, used to identify it.
@@ -89,9 +90,10 @@ type NodeID struct {
 }
 
 // String returns a string representation of the NodeID, for logging purposes.
+// Changed this implementation to only log the Edwards Public Key
 // It implements the Stringer interface.
 func (id NodeID) String() string {
-	return id.Key + string(id.VRFPublicKey)
+	return id.Key
 }
 
 // ToBytes returns the byte representation of the Edwards public key.
@@ -103,6 +105,42 @@ func (id NodeID) ToBytes() []byte {
 func (id NodeID) ShortString() string {
 	name := id.Key
 	return Shorten(name, 5)
+}
+
+// BytesToNodeID deserializes a byte slice into a NodeID
+// TODO: length of the input will be made exact when the NodeID is compressed into
+// one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
+func BytesToNodeID(b []byte) (*NodeID, error) {
+	if len(b) < 32 {
+		return nil, fmt.Errorf("Invalid input length, input too short")
+	}
+	// Note that we don't care when the input is too long, because we are only deserializing the first 32
+	// bytes into the Edwards public key. The VRFKey is not used by the deserializaiton at all, and thus
+	// it is returned as empty
+	pubKey := b[0:32]
+	return &NodeID{
+		Key:          util.Bytes2Hex(pubKey),
+		VRFPublicKey: []byte{},
+	}, nil
+}
+
+//StringToNodeID deserializes a string into a NodeID
+// TODO: length of the input will be made exact when the NodeID is compressed into
+// one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
+func StringToNodeID(s string) (*NodeID, error) {
+	strLen := len(s)
+	if strLen < 64 {
+		return nil, fmt.Errorf("invalid length, input too short")
+	}
+	// portion of the string corresponding to the Edwards public key
+	// Note that we don't care when the input is too long, because we are only deserializing the first 32
+	// bytes into the Edwards public key. The VRFKey is not used by the deserializaiton at all, and thus
+	// it is returned as empty
+	pubKey := s[:64]
+	return &NodeID{
+		Key:          pubKey,
+		VRFPublicKey: []byte{},
+	}, nil
 }
 
 // Field returns a log field. Implements the LoggableField interface.
@@ -127,7 +165,6 @@ type BlockHeader struct {
 	EligibilityProof BlockEligibilityProof
 	Data             []byte
 	Coin             bool
-	Timestamp        int64
 	BlockVotes       []BlockID
 	ViewEdges        []BlockID
 }

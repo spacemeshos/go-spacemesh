@@ -2,20 +2,21 @@
 package miner
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/blocks"
+	"math/rand"
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"math/rand"
-	"sync"
-	"time"
 )
 
 const defaultGasLimit = 10
@@ -29,9 +30,9 @@ type signer interface {
 }
 
 type syncer interface {
-	FetchPoetProof(poetProofRef []byte) error
+	FetchPoetProof(ctx context.Context, poetProofRef []byte) error
 	ListenToGossip() bool
-	IsSynced() bool
+	IsSynced(context.Context) bool
 }
 
 type txPool interface {
@@ -129,7 +130,7 @@ func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent
 
 // Start starts the process of creating a block, it listens for txs and atxs received by gossip, and starts querying
 // block oracle when it should create a block. This function returns an error if Start was already called once
-func (t *BlockBuilder) Start() error {
+func (t *BlockBuilder) Start(ctx context.Context) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.started {
@@ -137,7 +138,7 @@ func (t *BlockBuilder) Start() error {
 	}
 
 	t.started = true
-	go t.createBlockLoop()
+	go t.createBlockLoop(log.WithNewSessionID(ctx))
 	return nil
 }
 
@@ -214,40 +215,29 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	// not genesis, get from hare
 	bottom, top := calcHdistRange(id, t.hdist)
 
-	// first try to get the hare result for this layer and use that as our vote. if that fails, we just vote for the
-	// whole layer (i.e., all of the blocks we received).
-	if res, err := t.hareResult.GetResult(bottom); err != nil { // no result for bottom, take the whole layer
-		t.With().Warning("could not get hare result for bottom layer, adding votes for the whole layer instead",
-			log.Err(err),
-			log.FieldNamed("bottom", bottom),
-			log.FieldNamed("top", top),
-			log.FieldNamed("hdist", t.hdist))
-		ids, e := t.meshProvider.LayerBlockIds(bottom)
-		if e != nil {
-			t.With().Error("could not get block ids for layer", bottom, log.Err(e))
-			return nil, e
-		}
-		t.With().Warning("adding votes for all blocks in layer", log.Int("num_blocks", len(ids)))
-
-		// set votes to whole layer
-		votes = ids
-	} else { // got result, just set
-		votes = res
-	}
-
-	// add rest of hdist range
-	for i := bottom + 1; i <= top; i++ {
-		res, err := t.hareResult.GetResult(i)
-		if err != nil {
-			t.With().Warning("could not get hare result for layer in hdist range, not adding votes for layer",
+	// add votes
+	// for layers that are missing hare votes, we vote for the "zero pattern", i.e., nothing at all.
+	// this is the only way to guarantee consensus if the hare isn't working (without self-healing).
+	// note that "top" here is set to one layer before the current layer, so hare should have
+	// finished for this layer by now.
+	for i := bottom; i <= top; i++ {
+		if res, err := t.hareResult.GetResult(i); err != nil {
+			t.With().Warning("could not get hare result for layer in hdist range, voting for zero pattern",
 				i,
 				log.Err(err),
 				log.FieldNamed("bottom", bottom),
 				log.FieldNamed("top", top),
+				log.FieldNamed("currentLayer", id),
 				log.FieldNamed("hdist", t.hdist))
-			continue
+			// no hare result, don't vote for anything
+		} else {
+			// use hare result to set votes
+			t.With().Info("adding votes for layer (using hare result)",
+				i,
+				log.FieldNamed("currentLayer", id),
+				log.Int("numVotes", len(res)))
+			votes = append(votes, res...)
 		}
-		votes = append(votes, res...)
 	}
 
 	votes = filterUnknownBlocks(votes, t.meshProvider.GetBlock)
@@ -289,7 +279,6 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 			EligibilityProof: eligibilityProof,
 			Data:             nil,
 			Coin:             t.weakCoinToss.GetResult(),
-			Timestamp:        time.Now().UnixNano(),
 			BlockVotes:       votes,
 			ViewEdges:        viewEdges,
 		},
@@ -353,7 +342,8 @@ func selectAtxs(atxs []types.ATXID, atxsPerBlock int) []types.ATXID {
 	return selected
 }
 
-func (t *BlockBuilder) createBlockLoop() {
+func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
+	logger := t.WithContext(ctx)
 	for {
 		select {
 
@@ -361,21 +351,21 @@ func (t *BlockBuilder) createBlockLoop() {
 			return
 
 		case layerID := <-t.beginRoundEvent:
-			t.With().Debug("builder got layer", layerID)
-			if !t.syncer.IsSynced() {
-				t.Debug("not synced yet, not building a block in this round")
+			logger.With().Debug("builder got layer", layerID)
+			if !t.syncer.IsSynced(ctx) {
+				logger.Debug("not synced yet, not building a block in this round")
 				continue
 			}
 
 			atxID, proofs, atxs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
 				events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to check for block eligibility")
-				t.With().Error("failed to check for block eligibility", layerID, log.Err(err))
+				logger.With().Error("failed to check for block eligibility", layerID, log.Err(err))
 				continue
 			}
 			if len(proofs) == 0 {
 				events.ReportDoneCreatingBlock(false, uint64(layerID), "")
-				t.With().Info("not eligible for blocks in layer", layerID)
+				logger.With().Info("not eligible for blocks in layer", layerID)
 				continue
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
@@ -385,30 +375,33 @@ func (t *BlockBuilder) createBlockLoop() {
 				txList, _, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to get txs for block")
-					t.With().Error("failed to get txs for block", layerID, log.Err(err))
+					logger.With().Error("failed to get txs for block", layerID, log.Err(err))
 					continue
 				}
 				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList, atxs)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot create new block")
-					t.With().Error("failed to create new block", log.Err(err))
+					logger.With().Error("failed to create new block", log.Err(err))
 					continue
 				}
 				err = t.meshProvider.AddBlockWithTxs(blk)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to store block")
-					t.With().Error("failed to store block", blk.ID(), log.Err(err))
+					logger.With().Error("failed to store block", blk.ID(), log.Err(err))
 					continue
 				}
 				go func() {
 					bytes, err := types.InterfaceToBytes(blk)
 					if err != nil {
-						t.With().Error("failed to serialize block", log.Err(err))
+						logger.With().Error("failed to serialize block", log.Err(err))
 						events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot serialize block")
 						return
 					}
-					if err = t.network.Broadcast(blocks.NewBlockProtocol, bytes); err != nil {
-						t.With().Error("failed to send block", log.Err(err))
+
+					// generate a new requestID for the new block message
+					blockCtx := log.WithNewRequestID(ctx, layerID, blk.ID())
+					if err = t.network.Broadcast(blockCtx, blocks.NewBlockProtocol, bytes); err != nil {
+						logger.WithContext(blockCtx).With().Error("failed to send block", log.Err(err))
 					}
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "")
 				}()

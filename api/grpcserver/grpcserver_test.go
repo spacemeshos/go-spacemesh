@@ -138,7 +138,7 @@ func (s *NetworkMock) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey
 	return make(chan p2pcrypto.PublicKey), make(chan p2pcrypto.PublicKey)
 }
 
-func (s *NetworkMock) Broadcast(_ string, payload []byte) error {
+func (s *NetworkMock) Broadcast(_ context.Context, _ string, payload []byte) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if s.broadCastErr {
@@ -237,6 +237,20 @@ func (t *TxAPIMock) GetRewards(types.Address) (rewards []types.Reward, err error
 			Layer:               layerFirst,
 			TotalReward:         rewardAmount,
 			LayerRewardEstimate: rewardAmount,
+			SmesherID:           nodeID,
+			Coinbase:            addr1,
+		},
+	}, nil
+}
+
+func (t *TxAPIMock) GetRewardsBySmesherID(types.NodeID) (rewards []types.Reward, err error) {
+	return []types.Reward{
+		{
+			Layer:               layerFirst,
+			TotalReward:         rewardAmount,
+			LayerRewardEstimate: rewardAmount,
+			SmesherID:           nodeID,
+			Coinbase:            addr1,
 		},
 	}, nil
 }
@@ -276,7 +290,7 @@ func (t *TxAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
 	return types.NewExistingLayer(tid, blocks), nil
 }
 
-func (t *TxAPIMock) GetATXs([]types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
+func (t *TxAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
 	atxs := map[types.ATXID]*types.ActivationTx{
 		globalAtx.ID():  globalAtx,
 		globalAtx2.ID(): globalAtx2,
@@ -357,7 +371,7 @@ func (*MiningAPIMock) MiningStats() (int, uint64, string, string) {
 	return miningStatus, remainingBytes, addr1.String(), dataDir
 }
 
-func (*MiningAPIMock) StartPost(types.Address, string, uint64) error {
+func (*MiningAPIMock) StartPost(context.Context, types.Address, string, uint64) error {
 	return nil
 }
 
@@ -395,8 +409,8 @@ type SyncerMock struct {
 	isSynced    bool
 }
 
-func (s *SyncerMock) IsSynced() bool { return s.isSynced }
-func (s *SyncerMock) Start()         { s.startCalled = true }
+func (s *SyncerMock) IsSynced(context.Context) bool { return s.isSynced }
+func (s *SyncerMock) Start(context.Context)         { s.startCalled = true }
 
 type MempoolMock struct {
 	// In the real state.TxMempool struct, there are multiple data structures and they're more complex,
@@ -430,7 +444,7 @@ func (m MempoolMock) GetTxIdsByAddress(addr types.Address) (ids []types.Transact
 }
 
 func launchServer(t *testing.T, services ...ServiceAPI) func() {
-	err := networkMock.Broadcast("", []byte{0x00})
+	err := networkMock.Broadcast(context.TODO(), "", []byte{0x00})
 	require.NoError(t, err)
 
 	grpcService := NewServerWithInterface(cfg.GrpcServerPort, "localhost")
@@ -444,6 +458,7 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	// start gRPC and json servers
 	grpcService.Start()
 	jsonService.StartService(
+		context.TODO(),
 		cfg.StartDebugService,
 		cfg.StartGatewayService,
 		cfg.StartGlobalStateService,
@@ -702,18 +717,91 @@ func TestGlobalStateService(t *testing.T) {
 			checkAccountDataQueryItemAccount(t, res.AccountItem[1].Datum)
 		}},
 		{"SmesherDataQuery", func(t *testing.T) {
+			res, err := c.SmesherDataQuery(context.Background(), &pb.SmesherDataQueryRequest{
+				SmesherId: &pb.SmesherId{
+					Id: nodeID.ToBytes(),
+				},
+				MaxResults: uint32(10),
+				Offset:     uint32(0),
+			})
+			require.NoError(t, err)
+			require.Equal(t, uint32(1), res.TotalResults)
+			require.Equal(t, 1, len(res.Rewards))
+			require.Equal(t, uint32(layerFirst), res.Rewards[0].Layer.Number)
+			require.Equal(t, uint64(rewardAmount), res.Rewards[0].Total.Value)
+			require.Equal(t, uint64(rewardAmount), res.Rewards[0].LayerReward.Value)
+			require.Equal(t, addr1.Bytes(), res.Rewards[0].Coinbase.Address)
+			require.Equal(t, nodeID.ToBytes(), res.Rewards[0].Smesher.Id)
+		}},
+		{"SmesherDataQueryNullArgs", func(t *testing.T) {
 			_, err := c.SmesherDataQuery(context.Background(), &pb.SmesherDataQueryRequest{})
 			require.Error(t, err)
-			statusCode := status.Code(err)
-			require.Equal(t, codes.Unimplemented, statusCode)
+			require.Contains(t, err.Error(), "`Id` must be provided")
 		}},
-		{"SmesherRewardStream", func(t *testing.T) {
-			stream, err := c.SmesherRewardStream(context.Background(), &pb.SmesherRewardStreamRequest{})
-			// We expect to be able to open the stream but for it to fail upon the first request
-			require.NoError(t, err)
-			_, err = stream.Recv()
-			statusCode := status.Code(err)
-			require.Equal(t, codes.Unimplemented, statusCode)
+		{"SmesherDataQueryNoID", func(t *testing.T) {
+			_, err := c.SmesherDataQuery(context.Background(), &pb.SmesherDataQueryRequest{
+				SmesherId:  &pb.SmesherId{},
+				MaxResults: uint32(10),
+				Offset:     uint32(0),
+			})
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "`Id.Id` must be provided")
+		}},
+		{name: "SmesherRewardStream_Basic", run: func(t *testing.T) {
+			generateRunFn := func(req *pb.SmesherRewardStreamRequest) func(*testing.T) {
+				return func(*testing.T) {
+					// Just try opening and immediately closing the stream
+					stream, err := c.SmesherRewardStream(context.Background(), req)
+					require.NoError(t, err, "unexpected error opening stream")
+
+					// Do we need this? It doesn't seem to cause any harm
+					stream.Context().Done()
+				}
+			}
+			generateRunFnError := func(msg string, req *pb.SmesherRewardStreamRequest) func(*testing.T) {
+				return func(t *testing.T) {
+					// there should be no error opening the stream
+					stream, err := c.SmesherRewardStream(context.Background(), req)
+					require.NoError(t, err, "unexpected error opening stream")
+
+					// sending a request should generate an error
+					_, err = stream.Recv()
+					require.Error(t, err, "expected an error")
+					require.Contains(t, err.Error(), msg, "received unexpected error")
+					statusCode := status.Code(err)
+					require.Equal(t, codes.InvalidArgument, statusCode, "expected InvalidArgument error")
+
+					// Do we need this? It doesn't seem to cause any harm
+					stream.Context().Done()
+				}
+			}
+			subtests := []struct {
+				name string
+				run  func(*testing.T)
+			}{
+				{
+					name: "missing ID",
+					run:  generateRunFnError("`Id` must be provided", &pb.SmesherRewardStreamRequest{}),
+				},
+				{
+					name: "empty ID",
+					run: generateRunFnError("`Id.Id` must be provided", &pb.SmesherRewardStreamRequest{
+						Id: &pb.SmesherId{},
+					}),
+				},
+
+				//These tests should be successful
+				{
+					name: "valid address",
+					run: generateRunFn(&pb.SmesherRewardStreamRequest{
+						Id: &pb.SmesherId{Id: []byte("smesher1")},
+					}),
+				},
+			}
+			//Run sub-subtests
+			for _, r := range subtests {
+				t.Run(r.name, r.run)
+			}
 		}},
 		{"AppEventStream", func(t *testing.T) {
 			stream, err := c.AppEventStream(context.Background(), &pb.AppEventStreamRequest{})
@@ -2251,6 +2339,7 @@ func checkAccountDataQueryItemReward(t *testing.T, dataItem interface{}) {
 		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
 		require.Equal(t, uint64(rewardAmount), x.Reward.LayerReward.Value)
 		require.Equal(t, addr1.Bytes(), x.Reward.Coinbase.Address)
+		require.Equal(t, nodeID.ToBytes(), x.Reward.Smesher.Id)
 	default:
 		require.Fail(t, "inner account data item has wrong data type")
 	}

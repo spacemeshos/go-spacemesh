@@ -2,6 +2,7 @@ package state
 
 import (
 	"container/list"
+	"context"
 	"fmt"
 	"math/big"
 	"sync"
@@ -186,34 +187,27 @@ func (tp *TransactionProcessor) GetLayerStateRoot(layer types.LayerID) (types.Ha
 	return x, nil
 }
 
-// ApplyRewards applies reward reward to miners vector miners in for layer
+// ApplyRewards applies reward reward to miners vector for layer
 // TODO: convert rewards to uint64 (see https://github.com/spacemeshos/go-spacemesh/issues/2069)
 func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int) {
 	rewardConverted := reward.Uint64()
 	for _, account := range miners {
-		tp.Log.With().Info("Reward applied",
+		tp.Log.With().Info("reward applied",
 			log.String("account", account.Short()),
 			log.Uint64("reward", rewardConverted),
 			layer,
 		)
 		tp.AddBalance(account, rewardConverted)
-		events.ReportRewardReceived(events.Reward{
-			Layer:       layer,
-			Total:       rewardConverted,
-			LayerReward: rewardConverted * uint64(len(miners)),
-			Coinbase:    account,
-		})
 	}
-	newHash, err := tp.Commit()
 
+	newHash, err := tp.Commit()
 	if err != nil {
-		tp.Log.Error("trie write error %v", err)
+		tp.With().Error("trie write error", log.Err(err))
 		return
 	}
 
-	err = tp.addStateToHistory(layer, newHash)
-	if err != nil {
-		tp.Log.Error("failed to add state to history: %v", err)
+	if err = tp.addStateToHistory(layer, newHash); err != nil {
+		tp.With().Error("failed to add state to history", log.Err(err))
 	}
 }
 
@@ -313,26 +307,30 @@ func transfer(db *TransactionProcessor, sender, recipient types.Address, amount 
 }
 
 // HandleTxData handles data received on TX gossip channel
-func (tp *TransactionProcessor) HandleTxData(data service.GossipMessage, syncer service.Fetcher) {
+func (tp *TransactionProcessor) HandleTxData(ctx context.Context, data service.GossipMessage, _ service.Fetcher) {
+	logger := tp.WithContext(ctx)
 	tx, err := types.BytesToTransaction(data.Bytes())
 	if err != nil {
-		tp.With().Error("cannot parse incoming TX", log.Err(err))
+		logger.With().Error("cannot parse incoming tx", log.Err(err))
 		return
 	}
 	if err := tx.CalcAndSetOrigin(); err != nil {
-		tp.With().Error("failed to calc transaction origin", tx.ID(), log.Err(err))
+		logger.With().Error("failed to calc transaction origin", tx.ID(), log.Err(err))
 		return
 	}
 	if !tp.AddressExists(tx.Origin()) {
-		tp.With().Error("transaction origin does not exist", log.String("transaction", tx.String()),
-			tx.ID(), log.String("origin", tx.Origin().Short()), log.Err(err))
+		logger.With().Error("transaction origin does not exist",
+			log.String("transaction", tx.String()),
+			tx.ID(),
+			log.String("origin", tx.Origin().Short()),
+			log.Err(err))
 		return
 	}
 	if err := tp.ValidateNonceAndBalance(tx); err != nil {
-		tp.With().Error("nonce and balance validation failed", tx.ID(), log.Err(err))
+		logger.With().Error("nonce and balance validation failed", tx.ID(), log.Err(err))
 		return
 	}
-	tp.Log.With().Info("got new tx",
+	logger.With().Info("got new tx",
 		tx.ID(),
 		log.Uint64("nonce", tx.AccountNonce),
 		log.Uint64("amount", tx.Amount),

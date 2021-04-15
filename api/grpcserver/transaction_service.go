@@ -45,14 +45,14 @@ func NewTransactionService(
 }
 
 // SubmitTransaction allows a new tx to be submitted
-func (s TransactionService) SubmitTransaction(_ context.Context, in *pb.SubmitTransactionRequest) (*pb.SubmitTransactionResponse, error) {
+func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.SubmitTransactionRequest) (*pb.SubmitTransactionResponse, error) {
 	log.Info("GRPC TransactionService.SubmitTransaction")
 
 	if len(in.Transaction) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "`Transaction` payload empty")
 	}
 
-	if !s.syncer.IsSynced() {
+	if !s.syncer.IsSynced(ctx) {
 		return nil, status.Error(codes.FailedPrecondition,
 			"Cannot submit transaction, node is not in sync yet, try again later")
 	}
@@ -83,7 +83,7 @@ func (s TransactionService) SubmitTransaction(_ context.Context, in *pb.SubmitTr
 	log.Info("GRPC TransactionService.SubmitTransaction BROADCAST tx address: %x (len: %v), amount: %v, gas limit: %v, fee: %v, id: %v, nonce: %v",
 		tx.Recipient, len(tx.Recipient), tx.Amount, tx.GasLimit, tx.Fee, tx.ID().ShortString(), tx.AccountNonce)
 	go func() {
-		if err := s.Network.Broadcast(state.IncomingTxProtocol, in.Transaction); err != nil {
+		if err := s.Network.Broadcast(ctx, state.IncomingTxProtocol, in.Transaction); err != nil {
 			log.Error("error broadcasting incoming tx: %v", err)
 		}
 	}()

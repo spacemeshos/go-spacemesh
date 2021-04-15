@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -18,8 +19,6 @@ import (
 )
 
 var (
-	// ErrClosedIncomingChannel is sent when the connection is closed because the underlying formatter incoming channel was closed
-	ErrClosedIncomingChannel = errors.New("unexpected closed incoming channel")
 	// ErrConnectionClosed is sent when the connection is closed after Close was called
 	ErrConnectionClosed = errors.New("connections was intentionally closed")
 )
@@ -36,6 +35,11 @@ const (
 // MessageQueueSize is the size for queue of messages before pushing them on the socket
 const MessageQueueSize = 250
 
+type msgToSend struct {
+	payload []byte
+	reqID   string
+}
+
 // Connection is an interface stating the API of all secured connections in the system
 type Connection interface {
 	fmt.Stringer
@@ -50,7 +54,7 @@ type Connection interface {
 	Session() NetworkSession
 	SetSession(session NetworkSession)
 
-	Send(m []byte) error
+	Send(ctx context.Context, m []byte) error
 	Close() error
 	Closed() bool
 }
@@ -72,7 +76,7 @@ type FormattedConnection struct {
 	w           formattedWriter
 	closed      bool
 	deadliner   deadliner
-	messages    chan []byte
+	messages    chan msgToSend
 	stopSending chan struct{}
 	close       io.Closer
 
@@ -81,8 +85,8 @@ type FormattedConnection struct {
 
 type networker interface {
 	HandlePreSessionIncomingMessage(c Connection, msg []byte) error
-	EnqueueMessage(ime IncomingMessageEvent)
-	SubscribeClosingConnections(func(c ConnectionWithErr))
+	EnqueueMessage(ctx context.Context, ime IncomingMessageEvent)
+	SubscribeClosingConnections(func(context.Context, ConnectionWithErr))
 	publishClosingConnection(c ConnectionWithErr)
 	NetworkID() int8
 }
@@ -106,9 +110,16 @@ type formattedWriter interface {
 	WriteRecord([]byte) (int, error)
 }
 
+type fmtConnection interface {
+	Connection
+	SendSock([]byte) error
+	setupIncoming(context.Context, time.Duration) error
+	beginEventProcessing(context.Context)
+}
+
 // Create a new connection wrapping a net.Conn with a provided connection manager
 func newConnection(conn readWriteCloseAddresser, netw networker,
-	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) *FormattedConnection {
+	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) fmtConnection {
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &FormattedConnection{
@@ -124,7 +135,7 @@ func newConnection(conn readWriteCloseAddresser, netw networker,
 		deadliner:    conn,
 		networker:    netw,
 		session:      session,
-		messages:     make(chan []byte, MessageQueueSize),
+		messages:     make(chan msgToSend, MessageQueueSize),
 		stopSending:  make(chan struct{}),
 		msgSizeLimit: msgSizeLimit,
 	}
@@ -172,8 +183,18 @@ func (c *FormattedConnection) Created() time.Time {
 	return c.created
 }
 
-func (c *FormattedConnection) publish(message []byte) {
-	c.networker.EnqueueMessage(IncomingMessageEvent{c, message})
+func (c *FormattedConnection) publish(ctx context.Context, message []byte) {
+	// Print a log line to establish a link between the originating sessionID and this requestID,
+	// before the sessionID disappears.
+	c.logger.WithContext(ctx).Debug("enqueuing incoming message")
+
+	// Rather than store the context on the heap, which is an antipattern, we instead extract the sessionID and store
+	// that.
+	ime := IncomingMessageEvent{Conn: c, Message: message}
+	if requestID, ok := log.ExtractRequestID(ctx); ok {
+		ime.RequestID = requestID
+	}
+	c.networker.EnqueueMessage(ctx, ime)
 }
 
 // NOTE: this is left here intended to help debugging in the future.
@@ -207,28 +228,36 @@ func (c *FormattedConnection) publish(message []byte) {
 func (c *FormattedConnection) sendListener() {
 	for {
 		select {
-		case buf := <-c.messages:
+		case m := <-c.messages:
+			c.logger.With().Debug("sending outgoing message",
+				log.String("requestID", m.reqID))
+
 			//todo: we are hiding the error here...
-			err := c.SendSock(buf)
-			if err != nil {
-				log.Error("cannot send message to peer %v", err)
+			if err := c.SendSock(m.payload); err != nil {
+				c.logger.With().Error("cannot send message to peer",
+					log.String("requestID", m.reqID),
+					log.Err(err))
 			}
 		case <-c.stopSending:
 			return
-
 		}
 	}
 }
 
 // Send pushes a message into the queue if the connection is not closed.
-func (c *FormattedConnection) Send(m []byte) error {
+func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 	c.wmtx.Lock()
 	if c.closed {
 		c.wmtx.Unlock()
 		return fmt.Errorf("connection was closed")
 	}
 	c.wmtx.Unlock()
-	c.messages <- m
+
+	// try to extract a requestID from the context
+	reqID, _ := log.ExtractRequestID(ctx)
+
+	c.logger.WithContext(ctx).Debug("enqueuing outgoing message")
+	c.messages <- msgToSend{m, reqID}
 	return nil
 }
 
@@ -299,7 +328,7 @@ var (
 	ErrMsgExceededLimit = errors.New("message size exceeded limit")
 )
 
-func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
+func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Duration) error {
 	be := make(chan struct {
 		b []byte
 		e error
@@ -356,7 +385,7 @@ func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
 }
 
 // Read from the incoming new messages and send down the connection
-func (c *FormattedConnection) beginEventProcessing() {
+func (c *FormattedConnection) beginEventProcessing(ctx context.Context) {
 	//TODO: use a buffer pool
 	var err error
 	var buf []byte
@@ -374,7 +403,7 @@ func (c *FormattedConnection) beginEventProcessing() {
 		if len(buf) > 0 {
 			newbuf := make([]byte, len(buf))
 			copy(newbuf, buf)
-			c.publish(newbuf)
+			c.publish(log.WithNewRequestID(ctx), newbuf)
 		}
 
 		if err != nil {

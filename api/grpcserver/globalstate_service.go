@@ -1,6 +1,8 @@
 package grpcserver
 
 import (
+	"bytes"
+
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -80,7 +82,7 @@ func (s GlobalStateService) Account(_ context.Context, in *pb.AccountRequest) (*
 	addr := types.BytesToAddress(in.AccountId.Address)
 	acct, err := s.getAccount(addr)
 	if err != nil {
-		log.Error("unable to fetch projected account state: %s", err)
+		log.With().Error("unable to fetch projected account state", log.Err(err))
 		return nil, status.Errorf(codes.Internal, "error fetching projected account data")
 	}
 
@@ -133,11 +135,10 @@ func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDa
 					Total:       &pb.Amount{Value: r.TotalReward},
 					LayerReward: &pb.Amount{Value: r.LayerRewardEstimate},
 					// Leave this out for now as this is changing
+					// See https://github.com/spacemeshos/go-spacemesh/issues/2275
 					//LayerComputed: 0,
 					Coinbase: &pb.AccountId{Address: addr.Bytes()},
-					// TODO: There is currently no way to get this for a reward.
-					// See https://github.com/spacemeshos/go-spacemesh/issues/2068
-					//Smesher:  nil,
+					Smesher:  &pb.SmesherId{Id: r.SmesherID.ToBytes()},
 				},
 			}})
 		}
@@ -146,7 +147,7 @@ func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDa
 	if filterAccount {
 		acct, err := s.getAccount(addr)
 		if err != nil {
-			log.Error("unable to fetch projected account state: %s", err)
+			log.With().Error("unable to fetch projected account state", log.Err(err))
 			return nil, status.Errorf(codes.Internal, "error fetching projected account data")
 		}
 		res.AccountItem = append(res.AccountItem, &pb.AccountData{Datum: &pb.AccountData_AccountWrapper{
@@ -184,13 +185,65 @@ func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDa
 }
 
 // SmesherDataQuery returns historical info on smesher rewards
-func (s GlobalStateService) SmesherDataQuery(context.Context, *pb.SmesherDataQueryRequest) (*pb.SmesherDataQueryResponse, error) {
+func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDataQueryRequest) (*pb.SmesherDataQueryResponse, error) {
 	log.Info("GRPC GlobalStateService.SmesherDataQuery")
 
-	// TODO: implement me! We don't currently have a way to read rewards per-smesher.
-	// See https://github.com/spacemeshos/go-spacemesh/issues/2068
+	if in.SmesherId == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "`Id` must be provided")
+	}
+	if in.SmesherId.Id == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "`Id.Id` must be provided")
+	}
 
-	return nil, status.Errorf(codes.Unimplemented, "this endpoint has not yet been implemented")
+	smesherIDBytes := in.SmesherId.Id
+	smesherID, err := types.BytesToNodeID(smesherIDBytes)
+	if err != nil {
+		log.With().Error("unable to convert bytes to nodeID", log.Err(err))
+		return nil, status.Errorf(codes.Internal, "error deserializing NodeID")
+	}
+
+	dbRewards, err := s.Mesh.GetRewardsBySmesherID(*smesherID)
+	if err != nil {
+		log.With().Error("unable to fetch projected reward state for smesher",
+			log.FieldNamed("smesher_id", smesherID),
+			log.Err(err))
+		return nil, status.Errorf(codes.Internal, "error getting rewards data")
+	}
+
+	res := &pb.SmesherDataQueryResponse{}
+	for _, r := range dbRewards {
+		res.Rewards = append(res.Rewards, &pb.Reward{
+			Layer:       &pb.LayerNumber{Number: uint32(r.Layer)},
+			Total:       &pb.Amount{Value: r.TotalReward},
+			LayerReward: &pb.Amount{Value: r.LayerRewardEstimate},
+			// Leave this out for now as this is changing
+			//LayerComputed: 0,
+			Coinbase: &pb.AccountId{Address: r.Coinbase.Bytes()},
+			Smesher:  &pb.SmesherId{Id: r.SmesherID.ToBytes()},
+		})
+	}
+
+	// MAX RESULTS, OFFSET
+	// There is some code duplication here as this is implemented in other Query endpoints,
+	// but without generics, there's no clean way to do this for different types.
+
+	// Adjust for max results, offset
+	res.TotalResults = uint32(len(res.Rewards))
+	offset := in.Offset
+
+	if offset > uint32(len(res.Rewards)) {
+		return &pb.SmesherDataQueryResponse{}, nil
+	}
+
+	// If the max results is too high, trim it. If MaxResults is zero, that means unlimited
+	// (since we have no way to distinguish between zero and its not being provided).
+	maxResults := in.MaxResults
+	if maxResults == 0 || offset+maxResults > uint32(len(res.Rewards)) {
+		maxResults = uint32(len(res.Rewards)) - offset
+	}
+	res.Rewards = res.Rewards[offset : offset+maxResults]
+
+	return res, nil
 }
 
 // STREAMS
@@ -248,7 +301,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 				// nonce.
 				acct, err := s.getAccount(addr)
 				if err != nil {
-					log.Error("unable to fetch projected account state: %s", err)
+					log.With().Error("unable to fetch projected account state", log.Err(err))
 					return status.Errorf(codes.Internal, "error fetching projected account data")
 				}
 				if err := stream.Send(&pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_AccountWrapper{
@@ -274,11 +327,10 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 						Total:       &pb.Amount{Value: reward.Total},
 						LayerReward: &pb.Amount{Value: reward.LayerReward},
 						// Leave this out for now as this is changing
+						// See https://github.com/spacemeshos/go-spacemesh/issues/2275
 						//LayerComputed: 0,
 						Coinbase: &pb.AccountId{Address: addr.Bytes()},
-						// TODO: There is currently no way to get this for a reward.
-						// See https://github.com/spacemeshos/go-spacemesh/issues/2068
-						//Smesher:  nil,
+						Smesher:  &pb.SmesherId{Id: reward.Smesher.ToBytes()},
 					},
 				}}}); err != nil {
 					return err
@@ -320,13 +372,49 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 }
 
 // SmesherRewardStream exposes a stream of smesher rewards
-func (s GlobalStateService) SmesherRewardStream(*pb.SmesherRewardStreamRequest, pb.GlobalStateService_SmesherRewardStreamServer) error {
+func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamRequest, stream pb.GlobalStateService_SmesherRewardStreamServer) error {
 	log.Info("GRPC GlobalStateService.SmesherRewardStream")
 
-	// TODO: implement me! We don't currently have a way to read rewards per-smesher.
-	// See https://github.com/spacemeshos/go-spacemesh/issues/2068
+	if in.Id == nil {
+		return status.Errorf(codes.InvalidArgument, "`Id` must be provided")
+	}
+	if in.Id.Id == nil {
+		return status.Errorf(codes.InvalidArgument, "`Id.Id` must be provided")
+	}
+	smesherIDBytes := in.Id.Id
 
-	return status.Errorf(codes.Unimplemented, "this endpoint has not yet been implemented")
+	// subscribe to the rewards channel
+	channelReward := events.GetRewardChannel()
+
+	for {
+		select {
+		case reward, ok := <-channelReward:
+			if !ok {
+				//shut down the reward channel
+				log.Info("Reward channel closed, shutting down")
+				return nil
+			}
+			//filter on the smesherID
+			if comp := bytes.Compare(reward.Smesher.ToBytes(), smesherIDBytes); comp == 0 {
+				if err := stream.Send(&pb.SmesherRewardStreamResponse{
+					Reward: &pb.Reward{
+						Layer:       &pb.LayerNumber{Number: uint32(reward.Layer)},
+						Total:       &pb.Amount{Value: reward.Total},
+						LayerReward: &pb.Amount{Value: reward.LayerReward},
+						// Leave this out for now as this is changing
+						//LayerComputed: 0,
+						Coinbase: &pb.AccountId{Address: reward.Coinbase.Bytes()},
+						Smesher:  &pb.SmesherId{Id: reward.Smesher.ToBytes()},
+					},
+				}); err != nil {
+					return err
+				}
+			}
+		case <-stream.Context().Done():
+			log.Info("SmesherRewardStream closing stream, client disconnected")
+			return nil
+		}
+	}
 }
 
 // AppEventStream exposes a stream of emitted app events
@@ -390,7 +478,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			// nonce.
 			acct, err := s.getAccount(updatedAccount)
 			if err != nil {
-				log.Error("unable to fetch projected account state: %s", err)
+				log.With().Error("unable to fetch projected account state", log.Err(err))
 				return status.Errorf(codes.Internal, "error fetching projected account data")
 			}
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_AccountWrapper{
@@ -413,11 +501,10 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 					Total:       &pb.Amount{Value: reward.Total},
 					LayerReward: &pb.Amount{Value: reward.LayerReward},
 					// Leave this out for now as this is changing
+					// See https://github.com/spacemeshos/go-spacemesh/issues/2275
 					//LayerComputed: 0,
 					Coinbase: &pb.AccountId{Address: reward.Coinbase.Bytes()},
-					// TODO: There is currently no way to get this for a reward.
-					// See https://github.com/spacemeshos/go-spacemesh/issues/2068
-					//Smesher:  nil,
+					Smesher:  &pb.SmesherId{Id: reward.Smesher.ToBytes()},
 				},
 			}}}); err != nil {
 				return err

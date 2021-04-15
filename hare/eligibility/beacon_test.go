@@ -31,7 +31,7 @@ func TestBeacon_Value(t *testing.T) {
 	r := require.New(t)
 
 	b := NewBeacon(nil, 0, log.NewDefault(t.Name()))
-	c := newMockCasher()
+	c := newMockCacher()
 	b.cache = c
 
 	genesisGoodPtrn := map[types.BlockID]struct{}{}

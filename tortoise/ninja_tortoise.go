@@ -15,9 +15,15 @@ import (
 type vec [2]int
 type patternID uint32 // this hash does not include the layer id
 
-const ( // Threshold
-	window          = 10
-	globalThreshold = 0.6
+const (
+	// These two thresholds control how tortoise votes on blocks and layers (patterns).
+	// The first is used when voting for or against blocks (in a layer/pattern).
+	// The second is used when voting for or against a layer (to promote it to newly-good as a pbase candidate).
+	// They should be independent, but the existing tortoise tests expect the second to be a fixed ratio of the first.
+	// NOTE: These have been lowered (from 0.6 and 0.5, respectively) for the testnet.
+	globalThreshold   = 0.5
+	newLayerThreshold = 0.5 * (globalThreshold / 0.6) // adjust to match global threshold
+	window            = 10
 )
 
 var ( // correction vectors type
@@ -153,6 +159,10 @@ func newNinjaTortoise(layerSize int, blocks database, hdist int, log log.Log) *n
 func (ni *ninjaTortoise) saveOpinion() error {
 	for b, vec := range ni.TVote[ni.PBase] {
 		valid := vec == support
+		ni.logger.With().Debug("saving block contextual validity",
+			b.BlockID,
+			b.LayerID,
+			log.Bool("is_valid", valid))
 		if err := ni.db.SaveContextualValidity(b.id(), valid); err != nil {
 			return err
 		}
@@ -268,6 +278,8 @@ func (ni *ninjaTortoise) processBlock(b *types.Block) {
 		}
 
 		vp := votingPattern{id: getIdsFromSet(v), LayerID: layerID}
+		// if we set a block here that we don't also explicitly process, there will be an error later in
+		// handleIncomingLayer
 		ni.TPattern[vp] = v
 		if _, ok := ni.Patterns[vp.Layer()]; !ok {
 			ni.Patterns[vp.Layer()] = map[votingPattern]struct{}{}
@@ -429,16 +441,17 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.Layer
 			log.Int("num_blocks", len(lyr.Blocks())),
 			log.Int("num_updated_patterns", len(sUpdated)))
 		for p := range sUpdated {
-			// if a majority supports p (p is good)
+			// if a minimum threshold supports p (p is good)
 			// according to tal we dont have to know the exact amount, we can multiply layer size by number of layers
 			jGood, found := ni.TGood[j]
-			threshold := 0.5 * float64(types.LayerID(ni.AvgLayerSize)*(ni.Last-p.Layer()))
+			threshold := newLayerThreshold * float64(types.LayerID(ni.AvgLayerSize)*(ni.Last-p.Layer()))
 			ni.logger.With().Debug("checking pattern",
 				p,
 				log.FieldNamed("jGood", jGood),
 				log.Bool("found", found),
 				log.Int("support", ni.TSupport[p]),
 				log.String("threshold", fmt.Sprint(threshold)))
+
 			if (jGood != p || !found) && float64(ni.TSupport[p]) > threshold {
 				ni.logger.With().Debug("new pattern has enough support",
 					p,
@@ -510,7 +523,8 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 		}
 
 		if vp, found = ni.TExplicit[b]; !found {
-			ni.logger.Panic(fmt.Sprintf("block %s from layer %v has no explicit voting, something went wrong", b, blk.Layer()))
+			ni.logger.With().Error("block in view has no explicit voting", b, blk.Layer())
+			return
 		}
 
 		for _, ex := range vp {
@@ -641,6 +655,10 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 
 			// add explicit votes
 			addPtrnVt := ni.addPatternVote(p, view)
+
+			// if a block exists in this view but is not in TExplicit, there will be an error here
+			// view comes from TPattern
+			// all blocks processed in processBlock exist in TExplicit
 			for bl := range view {
 				addPtrnVt(bl)
 			}
@@ -669,16 +687,31 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 						ni.TVote[p] = make(map[blockIDLayerTuple]vec)
 					}
 
-					ni.logger.With().Debug("block voting based on global opinion of pattern",
-						p,
-						blt)
-					if vote := ni.globalOpinion(ni.TTally[p][blt], ni.AvgLayerSize, float64(p.LayerID-idx)); vote != abstain {
-						ni.TVote[p][blt] = vote
+					ni.logger.With().Debug("block voting based on global opinion of pattern", p, blt)
+					vote := ni.globalOpinion(ni.TTally[p][blt], ni.AvgLayerSize, float64(p.LayerID-idx))
+					ni.TVote[p][blt] = vote
+
+					if vote != abstain {
+						// Count explicit (non-abstain) votes
+						ni.logger.With().Debug("counting explicit vote",
+							p,
+							bid,
+							idx,
+							vote)
 						if vote == support {
 							bids = append(bids, bid)
 						}
+					} else if p == zeroPattern && vote == abstain {
+						// In the special case of the zero pattern, we consider an abstain an explicit vote in favor
+						ni.logger.With().Debug("counting abstain on zero pattern as explicit support vote",
+							p,
+							bid,
+							idx,
+							vote)
+						bids = append(bids, bid)
 					} else {
-						ni.TVote[p][blt] = vote
+						// In all cases other than the zero pattern, abstain does not count and causes the layer not
+						// to advance
 						ni.logger.With().Debug(
 							"block support below threshold, block abstains from vote on pattern, "+
 								"pattern is incomplete and will not be promoted",
