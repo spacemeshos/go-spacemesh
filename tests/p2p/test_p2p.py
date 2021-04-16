@@ -232,7 +232,7 @@ def test_many_gossip_messages(setup_clients, add_elk, add_node_pool, add_curl):
         assert total_expected_gossip == len(after), assertion_msg
 
 
-def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000, prop_sleep_time=30, num_of_msg=100,
+def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000, prop_sleep_time=20, num_of_msg=100,
               expected_ret="{'status': {}}", msg_field="data"):
     """
     sends a protocol message to a random node and asserts its propagation
