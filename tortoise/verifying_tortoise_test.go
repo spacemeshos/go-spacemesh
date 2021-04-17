@@ -67,7 +67,7 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 
 			trtl.logger.Info("Counting votes of blocks in layer %v on %v (lyr: %v)", l, i.String(), blk.LayerIndex)
 
-			for bid, opinionVote := range trtl.BlocksToBlocks[l] {
+			for bid, opinionVote := range trtl.BlockOpinionsByLayer[l] {
 				opinionVote, ok := opinionVote.BlocksOpinion[i]
 				if !ok {
 					continue
@@ -343,10 +343,10 @@ func TestTurtle_Eviction(t *testing.T) {
 	avgPerLayer := 10
 	voteNegative := 0
 	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
-	require.Equal(t, len(trtl.BlocksToBlocks),
+	require.Equal(t, len(trtl.BlockOpinionsByLayer),
 		(defaultTestHdist + 2))
 	count := 0
-	for _, blks := range trtl.BlocksToBlocks {
+	for _, blks := range trtl.BlockOpinionsByLayer {
 		count += len(blks)
 	}
 	require.Equal(t, count,
@@ -360,7 +360,7 @@ func TestTurtle_Eviction(t *testing.T) {
 //	avgPerLayer := 30
 //	voteNegative := 5
 //	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
-//	require.Equal(t, len(trtl.BlocksToBlocks),
+//	require.Equal(t, len(trtl.BlockOpinionsByLayer),
 //		(defaultTestHdist+2)*avgPerLayer)
 //}
 

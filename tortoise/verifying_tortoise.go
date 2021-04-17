@@ -158,6 +158,27 @@ func (t *turtle) getSingleInputVectorFromDB(lyrid types.LayerID, blockid types.B
 	return against, nil
 }
 
+func (t *turtle) checkBlockAndGetInputVector(exceptionBlockid, sourceBlockid types.BlockID, layerIndex types.LayerID) (vec, *types.Block, bool) {
+	if exceptionBlock, err := t.bdp.GetBlock(exceptionBlockid); err != nil {
+		t.logger.Panic("can't find %v from block's %v diff ", exceptionBlockid, sourceBlockid)
+	} else if exceptionBlock.LayerIndex < layerIndex {
+		t.logger.With().Debug("not marking block good because it points to block older than base block",
+			sourceBlockid,
+			log.FieldNamed("older_block", exceptionBlockid),
+			log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
+			log.FieldNamed("base_block_lyr", layerIndex))
+	} else if v, err := t.getSingleInputVectorFromDB(exceptionBlock.LayerIndex, exceptionBlockid); err != nil {
+		t.logger.With().Error("unable to get single input vector for exception block",
+			sourceBlockid,
+			log.FieldNamed("older_block", exceptionBlockid),
+			log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
+			log.FieldNamed("base_block_lyr", layerIndex))
+	} else {
+		return v, exceptionBlock, true
+	}
+	return abstain, &types.Block{}, false
+}
+
 func (t *turtle) inputVectorForLayer(lyrBlocks []types.BlockID, input []types.BlockID) map[types.BlockID]vec {
 	lyrResult := make(map[types.BlockID]vec, len(lyrBlocks))
 	//XXX : input vector must be pointer so we can differentiate
@@ -342,34 +363,34 @@ func (t *turtle) processBlock(block *types.Block) error {
 	t.logger.With().Debug("block supports", types.BlockIdsField(block.BlockHeader.ForDiff))
 	t.logger.With().Debug("checking baseblock", base.Fields()...)
 
-	lyr, ok := t.BlockOpinionsByLayer[base.LayerIndex]
+	layerOpinions, ok := t.BlockOpinionsByLayer[base.LayerIndex]
 	if !ok {
 		return fmt.Errorf("baseblock layer not found %v, %v", block.BaseBlock, base.LayerIndex)
 	}
 
-	baseBlockOpinion, ok := lyr[base.ID()]
+	baseBlockOpinion, ok := layerOpinions[base.ID()]
 	if !ok {
 		return fmt.Errorf("baseblock not found in layer %v, %v", block.BaseBlock, base.LayerIndex)
 	}
 
-	// TODO: save and vote negative on blocks that exceed the max exception list size (DoS prevention)
+	// TODO: save and vote against blocks that exceed the max exception list size (DoS prevention)
 	blockid := block.ID()
 
-	thisBlockOpinions := make(map[types.BlockID]vec)
+	opinion := make(map[types.BlockID]vec)
 	for blk, vote := range baseBlockOpinion.BlocksOpinion {
-		thisBlockOpinions[blk] = vote
+		opinion[blk] = vote
 	}
 
 	for _, b := range block.ForDiff {
-		thisBlockOpinions[b] = thisBlockOpinions[b].Add(support.Multiply(t.BlockWeight(blockid, b)))
+		opinion[b] = opinion[b].Add(support.Multiply(t.BlockWeight(blockid, b)))
 	}
 	for _, b := range block.AgainstDiff {
-		thisBlockOpinions[b] = thisBlockOpinions[b].Add(against.Multiply(t.BlockWeight(blockid, b)))
+		opinion[b] = opinion[b].Add(against.Multiply(t.BlockWeight(blockid, b)))
 	}
 
 	// TODO: neutral ?
 	t.logger.With().Debug("adding block to blocks table", block.Fields()...)
-	t.BlockOpinionsByLayer[block.LayerIndex][blockid] = Opinion{BlocksOpinion: thisBlockOpinions}
+	t.BlockOpinionsByLayer[block.LayerIndex][blockid] = Opinion{BlocksOpinion: opinion}
 	return nil
 }
 
@@ -385,25 +406,31 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer, inputVector []types.Bl
 	}
 
 	if len(newlyr.Blocks()) == 0 {
-		return // todo: something else to do on empty layer?
+		t.logger.With().Warning("attempted to handle empty layer", newlyr)
+		return
+		// todo: something else to do on empty layer?
 	}
 
 	if newlyr.Index() <= types.GetEffectiveGenesis() {
+		t.logger.With().Debug("not attempting to handle genesis layer", newlyr)
 		return
 	}
+
 	// TODO: handle late blocks
 
 	defer t.evict()
 
-	t.logger.With().Info("start handling layer", newlyr.Index(), log.Int("blocks", len(newlyr.Blocks())))
+	t.logger.With().Info("start handling incoming layer",
+		newlyr.Index(),
+		log.Int("num_blocks", len(newlyr.Blocks())))
 
-	// update tables with blocks
+	// process the votes in all layer blocks and update tables
 	for _, b := range newlyr.Blocks() {
 		if _, ok := t.BlockOpinionsByLayer[b.LayerIndex]; !ok {
 			t.BlockOpinionsByLayer[b.LayerIndex] = make(map[types.BlockID]Opinion, t.AvgLayerSize)
 		}
 		if err := t.processBlock(b); err != nil {
-			log.Panic(fmt.Sprintf("something is wrong err:%v", err))
+			log.Panic(fmt.Sprintf("error processing block %v: %v", b.ID(), err))
 		}
 	}
 
@@ -424,80 +451,29 @@ markingLoop:
 			t.logger.Panic(fmt.Sprint("block not found ", b.BaseBlock, "err", err))
 		}
 
-		// (2) all diffs appear after the block base block and are consistent with the input vote vector.
-		for exfor := range b.ForDiff {
-			exblk, err := t.bdp.GetBlock(b.ForDiff[exfor])
-			if err != nil {
-				t.logger.Panic("can't find %v from block's %v diff ", exfor, b.ID())
-			}
-			if exblk.LayerIndex < baseBlock.LayerIndex {
-				t.logger.With().Debug("not marking block good because it points to block older than base block",
-					b.ID(),
-					log.FieldNamed("older_block", b.ForDiff[exfor]),
-					log.FieldNamed("older_layer", exblk.LayerIndex),
-					log.FieldNamed("base_block_lyr", baseBlock.LayerIndex))
-				continue markingLoop
-			}
-			if v, err := t.getSingleInputVectorFromDB(exblk.LayerIndex, exblk.ID()); err != nil || v != support {
-				t.logger.With().Debug("not adding block to good blocks because its vote differs from input vector",
-					b.ID(),
-					log.FieldNamed("voted_block", b.ForDiff[exfor]),
-					log.FieldNamed("older_layer", exblk.LayerIndex),
-					log.String("input_vote", v.String()),
-					log.String("block_vote", "support"),
-					log.Err(err))
-				continue markingLoop
-			}
+		// (2) all diffs appear after the base block and are consistent with the input vote vector.
+		voteClasses := []struct {
+			name     string
+			diffList []types.BlockID
+			vector   vec
+		}{
+			{"support", b.ForDiff, support},
+			{"against", b.AgainstDiff, against},
+			{"neutral", b.NeutralDiff, abstain},
 		}
-
-		for exag := range b.AgainstDiff {
-			exblk, err := t.bdp.GetBlock(b.AgainstDiff[exag])
-			if err != nil {
-				//todo: dangling pointers?
-				t.logger.Panic("can't find %v from block's %v diff ", exag, b.ID())
-			}
-			if exblk.LayerIndex < baseBlock.LayerIndex {
-				t.logger.With().Debug("not marking block good because it points to block older than base block",
-					b.ID(),
-					log.FieldNamed("older_block", b.AgainstDiff[exag]),
-					log.FieldNamed("older_layer", exblk.LayerIndex),
-					log.FieldNamed("base_block_lyr", baseBlock.LayerIndex))
-				continue markingLoop
-			}
-			if v, err := t.getSingleInputVectorFromDB(exblk.LayerIndex, exblk.ID()); err != nil || v != against {
-				t.logger.With().Debug("not adding block to good blocks because its vote differs from input vector",
-					b.ID(),
-					log.FieldNamed("voted_block", b.AgainstDiff[exag]),
-					log.FieldNamed("older_layer", exblk.LayerIndex),
-					log.String("input_vote", v.String()),
-					log.String("block_vote", "support"),
-					log.Err(err))
-				continue markingLoop
-			}
-		}
-
-		for exneu := range b.NeutralDiff {
-			exblk, err := t.bdp.GetBlock(b.NeutralDiff[exneu])
-			if err != nil {
-				t.logger.Panic("can't find %v from block's %v diff ", exneu, b.ID())
-			}
-			if exblk.LayerIndex < baseBlock.LayerIndex {
-				t.logger.With().Debug("not marking block good because it points to block older than base block",
-					b.ID(),
-					log.FieldNamed("older_block", b.NeutralDiff[exneu]),
-					log.FieldNamed("older_layer", exblk.LayerIndex),
-					log.FieldNamed("base_block_lyr", baseBlock.LayerIndex))
-				continue markingLoop
-			}
-			if v, err := t.getSingleInputVectorFromDB(exblk.LayerIndex, exblk.ID()); err != nil || v != abstain {
-				t.logger.With().Debug("not adding block to good blocks because its vote differs from input vector",
-					b.ID(),
-					log.FieldNamed("voted_block", b.NeutralDiff[exneu]),
-					log.FieldNamed("older_layer", exblk.LayerIndex),
-					log.String("input_vote", v.String()),
-					log.String("block_vote", "neutral"),
-					log.Err(err))
-				continue markingLoop
+		for _, voteClass := range voteClasses {
+			for _, exceptionBlockId := range voteClass.diffList {
+				if singleInputVector, exceptionBlock, ok := t.checkBlockAndGetInputVector(exceptionBlockId, b.ID(), baseBlock.LayerIndex); ok {
+					if singleInputVector != voteClass.vector {
+						t.logger.With().Debug("not adding block to good blocks because its vote differs from input vector",
+							b.ID(),
+							log.FieldNamed("older_block", exceptionBlock.ID()),
+							log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
+							log.String("input_vote", singleInputVector.String()),
+							log.String("block_vote", voteClass.name))
+						continue markingLoop
+					}
+				}
 			}
 		}
 		t.logger.With().Debug("marking good block", b.ID(), b.LayerIndex)
@@ -509,7 +485,7 @@ markingLoop:
 	t.logger.With().Info("starting layer verification",
 		log.FieldNamed("was_verified", pbaseOld),
 		log.FieldNamed("target_verification",
-		newlyr.Index()))
+			newlyr.Index()))
 
 loop:
 	for i := pbaseOld + 1; i < idx; i++ {
