@@ -341,7 +341,6 @@ func (t *turtle) processBlock(block *types.Block) error {
 // HandleIncomingLayer processes all layer block votes
 // returns the old pbase and new pbase after taking into account the blocks votes
 func (t *turtle) HandleIncomingLayer(newlyr *types.Layer, inputVector []types.BlockID) (types.LayerID, types.LayerID) {
-
 	if t.Last < newlyr.Index() {
 		t.Last = newlyr.Index()
 	}
@@ -365,18 +364,20 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer, inputVector []types.Bl
 		if !ok {
 			t.BlocksToBlocks[b.LayerIndex] = make(map[types.BlockID]Opinion, t.AvgLayerSize)
 		}
-		err := t.processBlock(b)
-		if err != nil {
+		if err := t.processBlock(b); err != nil {
 			log.Panic(fmt.Sprintf("something is wrong err:%v", err))
 		}
 	}
 
-	// Go over all blocks, in order. For block i , mark it “good” if
+	// Go over all blocks, in order. For block i , mark it “good” if:
 markingLoop:
 	for _, b := range newlyr.Blocks() {
 		// (1) the base block is marked as good.
 		if _, good := t.GoodBlocksIndex[b.BaseBlock]; !good {
-			t.logger.With().Debug("skip marking block as good because baseblock is not good", newlyr.Index(), b.ID(), log.FieldNamed("base_block", b.BaseBlock))
+			t.logger.With().Debug("not marking block as good because baseblock is not good",
+				newlyr.Index(),
+				b.ID(),
+				log.FieldNamed("base_block", b.BaseBlock))
 			continue markingLoop
 		}
 
@@ -385,19 +386,28 @@ markingLoop:
 			panic(fmt.Sprint("block not found ", b.BaseBlock, "err", err))
 		}
 
-		// (2) all diffs appear after the block base block and consistent with the input vote vector.
-
+		// (2) all diffs appear after the block base block and are consistent with the input vote vector.
 		for exfor := range b.ForDiff {
 			exblk, err := t.bdp.GetBlock(b.ForDiff[exfor])
 			if err != nil {
 				t.logger.Panic("can't find %v from block's %v diff ", exfor, b.ID())
 			}
 			if exblk.LayerIndex < baseBlock.LayerIndex {
-				t.logger.With().Debug("not adding block to good blocks because it points to block older than base block", b.ID(), log.FieldNamed("older_block", b.ForDiff[exfor]), log.FieldNamed("older_layer", exblk.LayerIndex), log.FieldNamed("base_block_lyr", baseBlock.LayerIndex))
+				t.logger.With().Debug("not marking block good because it points to block older than base block",
+					b.ID(),
+					log.FieldNamed("older_block", b.ForDiff[exfor]),
+					log.FieldNamed("older_layer", exblk.LayerIndex),
+					log.FieldNamed("base_block_lyr", baseBlock.LayerIndex))
 				continue markingLoop
 			}
 			if v, err := t.getSingleInputVectorFromDB(exblk.LayerIndex, exblk.ID()); err != nil || v != support {
-				t.logger.With().Debug("not adding block to good blocks because it votes different from our input vector", b.ID(), log.FieldNamed("voted_block", b.ForDiff[exfor]), log.FieldNamed("older_layer", exblk.LayerIndex), log.String("input_vote", v.String()), log.String("block_vote", "support"), log.Err(err))
+				t.logger.With().Debug("not adding block to good blocks because its vote differs from input vector",
+					b.ID(),
+					log.FieldNamed("voted_block", b.ForDiff[exfor]),
+					log.FieldNamed("older_layer", exblk.LayerIndex),
+					log.String("input_vote", v.String()),
+					log.String("block_vote", "support"),
+					log.Err(err))
 				continue markingLoop
 			}
 		}
@@ -409,11 +419,21 @@ markingLoop:
 				t.logger.Panic("can't find %v from block's %v diff ", exag, b.ID())
 			}
 			if exblk.LayerIndex < baseBlock.LayerIndex {
-				t.logger.With().Debug("not adding block to good blocks because it points to block older than base block", b.ID(), log.FieldNamed("older_block", b.AgainstDiff[exag]), log.FieldNamed("older_layer", exblk.LayerIndex), log.FieldNamed("base_block_lyr", baseBlock.LayerIndex))
+				t.logger.With().Debug("not marking block good because it points to block older than base block",
+					b.ID(),
+					log.FieldNamed("older_block", b.AgainstDiff[exag]),
+					log.FieldNamed("older_layer", exblk.LayerIndex),
+					log.FieldNamed("base_block_lyr", baseBlock.LayerIndex))
 				continue markingLoop
 			}
 			if v, err := t.getSingleInputVectorFromDB(exblk.LayerIndex, exblk.ID()); err != nil || v != against {
-				t.logger.With().Debug("not adding block to good blocks because it votes different from our input vector", b.ID(), log.FieldNamed("voted_block", b.AgainstDiff[exag]), log.FieldNamed("older_layer", exblk.LayerIndex), log.String("input_vote", v.String()), log.String("block_vote", "against"), log.Err(err))
+				t.logger.With().Debug("not adding block to good blocks because its vote differs from input vector",
+					b.ID(),
+					log.FieldNamed("voted_block", b.AgainstDiff[exag]),
+					log.FieldNamed("older_layer", exblk.LayerIndex),
+					log.String("input_vote", v.String()),
+					log.String("block_vote", "support"),
+					log.Err(err))
 				continue markingLoop
 			}
 		}
@@ -424,11 +444,21 @@ markingLoop:
 				t.logger.Panic("can't find %v from block's %v diff ", exneu, b.ID())
 			}
 			if exblk.LayerIndex < baseBlock.LayerIndex {
-				t.logger.With().Debug("not adding block to good blocks because it points to block older than base block", b.ID(), log.FieldNamed("older_block", b.NeutralDiff[exneu]), log.FieldNamed("older_layer", exblk.LayerIndex), log.FieldNamed("base_block_lyr", baseBlock.LayerIndex))
+				t.logger.With().Debug("not marking block good because it points to block older than base block",
+					b.ID(),
+					log.FieldNamed("older_block", b.NeutralDiff[exneu]),
+					log.FieldNamed("older_layer", exblk.LayerIndex),
+					log.FieldNamed("base_block_lyr", baseBlock.LayerIndex))
 				continue markingLoop
 			}
 			if v, err := t.getSingleInputVectorFromDB(exblk.LayerIndex, exblk.ID()); err != nil || v != abstain {
-				t.logger.With().Debug("not adding block to good blocks because it votes different from our input vector", b.ID(), log.FieldNamed("voted_block", b.NeutralDiff[exneu]), log.FieldNamed("older_layer", exblk.LayerIndex), log.String("input_vote", v.String()), log.String("block_vote", "neutral"), log.Err(err))
+				t.logger.With().Debug("not adding block to good blocks because its vote differs from input vector",
+					b.ID(),
+					log.FieldNamed("voted_block", b.NeutralDiff[exneu]),
+					log.FieldNamed("older_layer", exblk.LayerIndex),
+					log.String("input_vote", v.String()),
+					log.String("block_vote", "neutral"),
+					log.Err(err))
 				continue markingLoop
 			}
 		}
@@ -438,10 +468,13 @@ markingLoop:
 
 	idx := newlyr.Index()
 	wasVerified := t.Verified
-	t.logger.With().Info("starting layer verification", log.FieldNamed("was_verified", wasVerified), log.FieldNamed("target_verification", newlyr.Index()))
-	i := wasVerified + 1
+	t.logger.With().Info("starting layer verification",
+		log.FieldNamed("was_verified", wasVerified),
+		log.FieldNamed("target_verification",
+		newlyr.Index()))
+
 loop:
-	for ; i < idx; i++ {
+	for i := wasVerified + 1; i < idx; i++ {
 		t.logger.With().Info("verifying layer", i)
 
 		blks, err := t.bdp.LayerBlockIds(i)
@@ -470,12 +503,11 @@ loop:
 
 		contextualValidity := make(map[types.BlockID]bool, len(blks))
 
-		// Count good blocks votes..
+		// Count good blocks votes
 		// Declare the vote vector “verified” up to position k if the total weight exceeds the confidence threshold in all positions up to k .
 		for blk, vote := range input {
 			// Count the votes for the input vote vector by summing the weight of the good blocks
 			sum := abstain
-			//t.logger.Info("counting votes for block %v", blk)
 			for j := t.Last; j > i && j-i < t.Hdist; j-- {
 				// check if the block is good
 				for bid, op := range t.BlocksToBlocks[j] {
@@ -499,25 +531,33 @@ loop:
 			}
 
 			// check that the total weight exceeds the confidence threshold in all positions up
-			threshold := float64(globalThreshold*float64(i-wasVerified)) * float64(t.AvgLayerSize)
+			threshold := globalThreshold * float64(i-wasVerified) * float64(t.AvgLayerSize)
 			t.logger.With().Debug("global opinion", sum, log.String("threshold", fmt.Sprint(threshold)))
 			gop := globalOpinion(sum, t.AvgLayerSize, float64(i-wasVerified))
-			t.logger.With().Debug("calculated global opinion on block", log.FieldNamed("voted_block", blk), i, log.String("global_opinion", gop.String()), log.String("sum", fmt.Sprintf("[%v, %v]", sum[0], sum[1])))
+			t.logger.With().Debug("calculated global opinion on block",
+				log.FieldNamed("voted_block", blk),
+				i,
+				log.String("global_opinion", gop.String()),
+				log.String("sum", fmt.Sprintf("[%v, %v]", sum[0], sum[1])))
 			if gop != vote {
 				// TODO: trigger self healing after a while ?
-				t.logger.With().Warning("global opinion is different from vote", log.String("global_opinion", gop.String()), log.String("vote", vote.String()))
+				t.logger.With().Warning("global opinion is different from vote",
+					log.String("global_opinion", gop.String()),
+					log.String("vote", vote.String()))
 				break loop
 			}
 
 			if gop == abstain {
-				t.logger.With().Warning("global opinion on a block is abstain hence can't verify layer", log.String("global_opinion", gop.String()), log.String("vote", vote.String()))
+				t.logger.With().Warning("global opinion on a block is abstain hence can't verify layer",
+					log.String("global_opinion", gop.String()),
+					log.String("vote", vote.String()))
 				break loop
 			}
 
 			contextualValidity[blk] = gop == support
 		}
 
-		//Declare the vote vector “verified” up to position k.
+		// Declare the vote vector “verified” up to position k
 		for blk, v := range contextualValidity {
 			if err := t.bdp.SaveContextualValidity(blk, v); err != nil {
 				// panic?
@@ -526,7 +566,6 @@ loop:
 		}
 		t.Verified = i
 		t.logger.With().Info("verified layer", i)
-
 	}
 
 	return wasVerified, t.Verified
