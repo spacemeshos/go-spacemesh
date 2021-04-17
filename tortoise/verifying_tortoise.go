@@ -48,8 +48,9 @@ type turtle struct {
 
 	Verified types.LayerID
 
-	// using the array to be able to iterate from latest elements easily.
-	BlocksToBlocks map[types.LayerID]map[types.BlockID]Opinion // records hdist, for each block, its votes about every previous block
+	// using the array to be able to iterate from latest elements easily
+	BlocksToBlocks map[types.LayerID]map[types.BlockID]Opinion // records hdist, for each block, its votes about every
+	// previous block
 	// Use this to be able to lookup blocks Opinion without iterating the array.
 	BlocksToBlocksIndex map[types.BlockID]int
 
@@ -80,7 +81,9 @@ func newTurtle(bdp blockDataProvider, hdist, avgLayerSize int) *turtle {
 
 func (t *turtle) init(genesisLayer *types.Layer) {
 	// Mark the genesis layer as “good”
-	t.logger.With().Debug("Initializing genesis layer for verifying tortoise.", genesisLayer.Index(), genesisLayer.Hash().Field())
+	t.logger.With().Debug("initializing genesis layer for verifying tortoise",
+		genesisLayer.Index(),
+		genesisLayer.Hash().Field())
 	t.BlocksToBlocks[genesisLayer.Index()] = make(map[types.BlockID]Opinion)
 	for _, blk := range genesisLayer.Blocks() {
 		id := blk.ID()
@@ -104,15 +107,15 @@ func (t *turtle) evict() {
 	}
 	// The window is the last [Verified - hdist] layers.
 	window := t.Verified - t.Hdist
-	t.logger.Info("Window starts %v", window)
+	t.logger.Info("window starts %v", window)
 	// evict from last evicted to the beginning of our window.
 	for lyr := t.Evict; lyr < window; lyr++ {
-		t.logger.Info("removing lyr %v", lyr)
+		t.logger.Info("removing layer %v", lyr)
 		for blk := range t.BlocksToBlocks[lyr] {
 			delete(t.GoodBlocksIndex, blk)
 		}
 		delete(t.BlocksToBlocks, lyr)
-		t.logger.Debug("evict block %v from maps ", lyr)
+		t.logger.Debug("evict block %v from maps", lyr)
 
 	}
 	t.Evict = window
@@ -141,7 +144,10 @@ func (t *turtle) getSingleInputVectorFromDB(lyrid types.LayerID, blockid types.B
 		return abstain, err
 	}
 
-	t.logger.With().Debug("got input vector from db", lyrid, log.FieldNamed("query_block", blockid), log.String("input", blockIDsToString(input)))
+	t.logger.With().Debug("got input vector from db",
+		lyrid,
+		log.FieldNamed("query_block", blockid),
+		log.String("input", blockIDsToString(input)))
 
 	for _, bl := range input {
 		if bl == blockid {
@@ -182,16 +188,29 @@ func (t *turtle) BaseBlock() (types.BlockID, [][]types.BlockID, error) {
 	for i := t.Last; i > t.Last-t.Hdist; i-- {
 		for blk, op := range t.BlocksToBlocks[i] {
 			if _, ok := t.GoodBlocksIndex[blk]; !ok {
-				t.logger.With().Debug("can't use a not good block", log.FieldNamed("last_layer", t.Last), i, blk)
+				t.logger.With().Debug("can't use a block not marked good",
+					log.FieldNamed("last_layer", t.Last),
+					i,
+					blk)
 				continue
 			}
 			afn, err := t.opinionMatches(i, blk, op)
 			if err != nil {
-				t.logger.With().Debug("can't use block error %v", log.FieldNamed("last_layer", t.Last), i, blk, log.Err(err))
+				t.logger.With().Debug("can't use block: error %v",
+					log.FieldNamed("last_layer", t.Last),
+					i,
+					blk,
+					log.Err(err))
 				continue
 			}
 
-			t.logger.With().Info("choose baseblock", log.FieldNamed("last_layer", t.Last), log.FieldNamed("base_block_layer", i), blk, log.Int("against_count", len(afn[0])), log.Int("support_count", len(afn[1])), log.Int("neutral_count", len(afn[2])))
+			t.logger.With().Info("choose baseblock",
+				log.FieldNamed("last_layer", t.Last),
+				log.FieldNamed("base_block_layer", i),
+				blk,
+				log.Int("against_count", len(afn[0])),
+				log.Int("support_count", len(afn[1])),
+				log.Int("neutral_count", len(afn[2])))
 
 			return blk, [][]types.BlockID{blockMapToArray(afn[0]), blockMapToArray(afn[1]), blockMapToArray(afn[2])}, nil
 		}
@@ -234,7 +253,10 @@ func (t *turtle) opinionMatches(layerid types.LayerID, blockid types.BlockID, op
 			t.logger.With().Debug("input vector is empty adding neutral diffs", i)
 			for _, b := range blks {
 				if v, ok := opinion2.BlocksOpinion[b]; !ok || v != abstain {
-					t.logger.With().Debug("added diff", log.FieldNamed("base_block_candidate", blockid), log.FieldNamed("diff_block", b), log.String("diff", "neutral"))
+					t.logger.With().Debug("added diff",
+						log.FieldNamed("base_block_candidate", blockid),
+						log.FieldNamed("diff_block", b),
+						log.String("diff", "neutral"))
 					neutralDiff[b] = struct{}{}
 				}
 			}
@@ -250,7 +272,10 @@ func (t *turtle) opinionMatches(layerid types.LayerID, blockid types.BlockID, op
 		for _, b := range res {
 			inRes[b] = struct{}{}
 			if v, ok := opinion2.BlocksOpinion[b]; !ok || v != support {
-				t.logger.With().Debug("added diff", log.FieldNamed("base_block_candidate", blockid), log.FieldNamed("diff_block", b), log.String("diff", "support"))
+				t.logger.With().Debug("added diff",
+					log.FieldNamed("base_block_candidate", blockid),
+					log.FieldNamed("diff_block", b),
+					log.String("diff", "support"))
 				forDiff[b] = struct{}{}
 			}
 		}
@@ -261,7 +286,10 @@ func (t *turtle) opinionMatches(layerid types.LayerID, blockid types.BlockID, op
 			}
 			// TODO: maybe we don't need this if it is not included.
 			if v, ok := opinion2.BlocksOpinion[b]; !ok || v != against {
-				t.logger.With().Debug("added diff", log.FieldNamed("base_block_candidate", blockid), log.FieldNamed("diff_block", b), log.String("diff", "against"))
+				t.logger.With().Debug("added diff",
+					log.FieldNamed("base_block_candidate", blockid),
+					log.FieldNamed("diff_block", b),
+					log.String("diff", "against"))
 				againstDiff[b] = struct{}{}
 			}
 		}
@@ -296,8 +324,8 @@ func (t *turtle) processBlock(block *types.Block) error {
 	// and add the corresponding vector (multiplied by the block weight) to our own vote-totals vector.
 	//We then add the vote difference vector and the explicit vote vector to our vote-totals vector.
 
-	t.logger.With().Debug("Processing block", block.Fields()...)
-	t.logger.With().Debug("Getting baseblock", block.BaseBlock)
+	t.logger.With().Debug("processing block", block.Fields()...)
+	t.logger.With().Debug("getting baseblock", block.BaseBlock)
 
 	base, err := t.bdp.GetBlock(block.BaseBlock)
 	if err != nil {
@@ -305,7 +333,7 @@ func (t *turtle) processBlock(block *types.Block) error {
 	}
 
 	t.logger.With().Debug("block supports", types.BlockIdsField(block.BlockHeader.ForDiff))
-	t.logger.With().Debug("Checking baseblock", base.Fields()...)
+	t.logger.With().Debug("checking baseblock", base.Fields()...)
 
 	lyr, ok := t.BlocksToBlocks[base.LayerIndex]
 	if !ok {
@@ -333,7 +361,7 @@ func (t *turtle) processBlock(block *types.Block) error {
 	}
 
 	//TODO: neutral ?
-	t.logger.With().Debug("Adding block to blocks table", block.Fields()...)
+	t.logger.With().Debug("adding block to blocks table", block.Fields()...)
 	t.BlocksToBlocks[block.LayerIndex][blockid] = Opinion{BlocksOpinion: thisBlockOpinions}
 	return nil
 }
@@ -497,14 +525,15 @@ loop:
 		}
 
 		if len(input) == 0 {
-			t.logger.With().Warning("no blocks in input vector can't verify", i)
+			t.logger.With().Warning("no blocks in input vector, can't verify layer", i)
 			break
 		}
 
 		contextualValidity := make(map[types.BlockID]bool, len(blks))
 
 		// Count good blocks votes
-		// Declare the vote vector “verified” up to position k if the total weight exceeds the confidence threshold in all positions up to k .
+		// Declare the vote vector “verified” up to position k if the total weight exceeds the confidence threshold in
+		// all positions up to k
 		for blk, vote := range input {
 			// Count the votes for the input vote vector by summing the weight of the good blocks
 			sum := abstain
@@ -513,19 +542,26 @@ loop:
 				for bid, op := range t.BlocksToBlocks[j] {
 					_, isgood := t.GoodBlocksIndex[bid]
 					if !isgood {
-						t.logger.With().Debug("block not good hence not counting", log.FieldNamed("voting_block", bid), log.FieldNamed("voted_block", blk))
+						t.logger.With().Debug("block not good hence not counting",
+							log.FieldNamed("voting_block", bid),
+							log.FieldNamed("voted_block", blk))
 						continue
 					}
 
-					// check if this block has Opinion on this block. (TODO: maybe doesn't have Opinion means AGAINST?)
+					// check if this block has opinion on this block. (TODO: maybe no opinion means AGAINST?)
 					opinionVote, ok := op.BlocksOpinion[blk]
 					if !ok {
-						t.logger.With().Debug("no opinion on block", log.FieldNamed("voting_block", bid), log.FieldNamed("voted_block", blk))
+						t.logger.With().Debug("no opinion on block",
+							log.FieldNamed("voting_block", bid),
+							log.FieldNamed("voted_block", blk))
 						continue
 					}
 
-					t.logger.With().Debug("adding block opinion to vote sum", log.FieldNamed("voting_block", bid), log.FieldNamed("voted_block", blk),
-						log.String("vote", opinionVote.String()), log.String("sum", fmt.Sprintf("[%v, %v]", sum[0], sum[1])))
+					t.logger.With().Debug("adding block opinion to vote sum",
+						log.FieldNamed("voting_block", bid),
+						log.FieldNamed("voted_block", blk),
+						log.String("vote", opinionVote.String()),
+						log.String("sum", fmt.Sprintf("[%v, %v]", sum[0], sum[1])))
 					sum = sum.Add(opinionVote.Multiply(t.BlockWeight(bid, blk)))
 				}
 			}
