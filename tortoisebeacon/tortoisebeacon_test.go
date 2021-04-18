@@ -6,7 +6,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -22,7 +21,6 @@ func TestTortoiseBeacon(t *testing.T) {
 
 	mwc := weakcoin.RandomMock{}
 
-	atxPool := activation.NewAtxMemPool()
 	logger := log.NewDefault("TortoiseBeacon")
 	genesisTime := time.Now().Add(time.Second * 10)
 	ld := time.Duration(10) * time.Second
@@ -35,14 +33,16 @@ func TestTortoiseBeacon(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
+	epoch := types.EpochID(2)
+	atxList := []types.ATXID{types.ATXID(types.HexToHash32("0x01"))}
+	atxGetter := newMockATXGetter(atxList)
+
 	ticker := clock.Subscribe()
-	tb := New(conf, n1, atxPool, nil, mwc, ticker, logger)
+	tb := New(conf, n1, atxGetter, nil, mwc, ticker, logger)
 	requirer.NotNil(tb)
 
 	err := tb.Start()
 	requirer.NoError(err)
-
-	epoch := types.EpochID(2)
 
 	t.Logf("Awaiting epoch %v", epoch)
 	awaitEpoch(clock, epoch)
@@ -71,5 +71,93 @@ func awaitEpoch(clock *timesync.TimeClock, epoch types.EpochID) {
 		if layer.GetEpoch() > epoch {
 			return
 		}
+	}
+}
+
+func TestTortoiseBeacon_threshold(t *testing.T) {
+	t.Parallel()
+
+	r := require.New(t)
+
+	tt := []struct {
+		name      string
+		theta     float64
+		tAve      int
+		threshold int
+	}{
+		{
+			name:      "Case 1",
+			theta:     0.5,
+			tAve:      10,
+			threshold: 5,
+		},
+		{
+			name:      "Case 2",
+			theta:     0.3,
+			tAve:      10,
+			threshold: 3,
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			tb := TortoiseBeacon{
+				Log: log.NewDefault("TortoiseBeacon"),
+				config: Config{
+					Theta: tc.theta,
+					TAve:  tc.tAve,
+				},
+			}
+
+			threshold := tb.threshold()
+			r.EqualValues(tc.threshold, threshold)
+		})
+	}
+}
+
+func TestTortoiseBeacon_beaconCalcDuration(t *testing.T) {
+	t.Parallel()
+
+	r := require.New(t)
+
+	tt := []struct {
+		name         string
+		roundsNumber uint64
+		wakeupDelta  time.Duration
+		duration     time.Duration
+	}{
+		{
+			name:         "Case 1",
+			roundsNumber: 5,
+			wakeupDelta:  10 * time.Second,
+			duration:     1 * time.Minute,
+		},
+		{
+			name:         "Case 2",
+			roundsNumber: 300,
+			wakeupDelta:  30 * time.Minute,
+			duration:     180 * time.Hour,
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			tb := TortoiseBeacon{
+				Log: log.NewDefault("TortoiseBeacon"),
+				config: Config{
+					RoundsNumber: tc.roundsNumber,
+					WakeupDelta:  tc.wakeupDelta,
+				},
+			}
+
+			duration := tb.beaconCalcDuration()
+			r.EqualValues(tc.duration, duration)
+		})
 	}
 }

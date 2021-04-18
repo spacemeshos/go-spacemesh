@@ -23,10 +23,9 @@ services:
           "--hare-committee-size", "${SMESH_HARE_COMMITTEE_SIZE:-80}",
           "--hare-max-adversaries", "${SMESH_HARE_MAX_ADVERSARIES:-39}",
           "--tortoise-beacon-atx-threshold", "${SMESH_TORTOISE-BEACON-ATX-THRESHOLD:-50}"
-          "--tortoise-beacon-rounds-number", "${SMESH_TORTOISE-BEACON-ROUNDS-NUMBER:-6}"
-          "--tortoise-beacon-wakeup-delta", "${SMESH_TORTOISE-BEACON-WAKEUP-DELTA:-30}"
-          "--tortoise-beacon-theta", "${SMESH_TORTOISE-BEACON-THETA:-1}"
-          "--tortoise-beacon-hdist", "${SMESH_TORTOISE-BEACON-HDIST:-20}"
+          "--tortoise-beacon-rounds-number", "${SMESH_TORTOISE-BEACON-ROUNDS-NUMBER:-300}"
+          "--tortoise-beacon-wakeup-delta", "${SMESH_TORTOISE-BEACON-WAKEUP-DELTA:-30m}"
+          "--tortoise-beacon-theta", "${SMESH_TORTOISE-BEACON-THETA:-0.25}"
           "--tortoise-beacon-t-ave", "${SMESH_TORTOISE-BEACON-T-AVE:-1}"
           "--sync-request-timeout", "${SMESH_SYNC_REQ_TIMEOUT:-60000}",
           "--post-labels", "${SMESH_POST_LABELS:-100}",

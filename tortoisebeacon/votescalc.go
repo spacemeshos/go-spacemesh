@@ -37,7 +37,7 @@ func (tb *TortoiseBeacon) calcVotesFromProposals(epoch types.EpochID) (votesFor,
 		log.String("for", fmt.Sprint(votesFor)),
 		log.String("against", fmt.Sprint(votesAgainst)))
 
-	return votesFor, votesAgainst
+	return votesFor.Sort(), votesAgainst.Sort()
 }
 
 func (tb *TortoiseBeacon) calcVotesDelta(epoch types.EpochID, round types.RoundID) (forDiff, againstDiff hashList) {
@@ -83,7 +83,7 @@ func (tb *TortoiseBeacon) calcVotesDelta(epoch types.EpochID, round types.RoundI
 		log.String("for", fmt.Sprint(votesFor)),
 		log.String("against", fmt.Sprint(votesAgainst)))
 
-	return votesFor, votesAgainst
+	return votesFor.Sort(), votesAgainst.Sort()
 }
 
 func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) votesCountMap {
@@ -92,25 +92,25 @@ func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) votesCountMap {
 		Round:   1,
 	}
 
+	// protected by tb.votesMu
 	tb.votesCache[firstRoundInThisEpoch] = make(map[p2pcrypto.PublicKey]votesSetPair)
-
-	firstRoundVotes := tb.incomingVotes[firstRoundInThisEpoch]
+	firstRoundIncomingVotes := tb.incomingVotes[firstRoundInThisEpoch]
 	// TODO(nkryuchkov): as pointer is shared, ensure that maps are not changed
-	tb.votesCache[firstRoundInThisEpoch] = firstRoundVotes
+	tb.votesCache[firstRoundInThisEpoch] = firstRoundIncomingVotes
 
-	votesCount := make(map[types.Hash32]int)
+	firstRoundVotesCount := make(map[types.Hash32]int)
 
-	for pk, votesList := range firstRoundVotes {
+	for pk, votesList := range firstRoundIncomingVotes {
 		firstRoundVotesFor := make(hashSet)
 		firstRoundVotesAgainst := make(hashSet)
 
 		for vote := range votesList.VotesFor {
-			votesCount[vote] += tb.voteWeight(pk)
+			firstRoundVotesCount[vote] += tb.voteWeight(pk)
 			firstRoundVotesFor[vote] = struct{}{}
 		}
 
 		for vote := range votesList.VotesAgainst {
-			votesCount[vote] -= tb.voteWeight(pk)
+			firstRoundVotesCount[vote] -= tb.voteWeight(pk)
 			firstRoundVotesAgainst[vote] = struct{}{}
 		}
 
@@ -121,12 +121,13 @@ func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) votesCountMap {
 		}
 	}
 
+	// protected by tb.votesMu
 	tb.votesCountCache[firstRoundInThisEpoch] = make(map[types.Hash32]int)
-	for k, v := range tb.votesCache[firstRoundInThisEpoch] {
-		tb.votesCache[firstRoundInThisEpoch][k] = v
+	for k, v := range firstRoundVotesCount {
+		tb.votesCountCache[firstRoundInThisEpoch][k] = v
 	}
 
-	return votesCount
+	return firstRoundVotesCount
 }
 
 func (tb *TortoiseBeacon) calcOwnFirstRoundVotes(epoch types.EpochID, votesCount votesCountMap) votesSetPair {

@@ -373,8 +373,8 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 
 			tb := TortoiseBeacon{
 				config: Config{
-					Theta: threshold,
-					TAve:  1,
+					Theta: 1,
+					TAve:  threshold,
 				},
 				Log:             log.NewDefault("TortoiseBeacon"),
 				weakCoin:        tc.weakCoin,
@@ -839,8 +839,8 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 
 			tb := TortoiseBeacon{
 				config: Config{
-					Theta: threshold,
-					TAve:  1,
+					Theta: 1,
+					TAve:  threshold,
 				},
 				Log:             log.NewDefault("TortoiseBeacon"),
 				ownVotes:        map[epochRoundPair]votesSetPair{},

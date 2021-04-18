@@ -167,6 +167,12 @@ def validate_beacons(log_messages):
 
         epoch_messages[log.epoch_id][log.beacon] += 1
 
+        assert log.beacon != '0x0000000000000000000000000000000000000000000000000000000000000000', \
+            f"beacon in epoch {log.epoch_id} is 0x00...00: {log.beacon}"
+
+        assert log.beacon != '0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', \
+            f"beacon in epoch {log.epoch_id} is sha256(\"\"): {log.beacon}"
+
     for epoch, beacons in epoch_messages.items():
         assert len(beacons) == 1, f"all beacons in epoch {epoch} were not same, saw: {beacons}"
         print(f"all beacons in epoch {epoch} were same, saw: {beacons}")

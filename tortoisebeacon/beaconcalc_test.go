@@ -145,7 +145,6 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 				votesCountCache:  map[epochRoundPair]map[types.Hash32]int{},
 				beacons:          make(map[types.EpochID]types.Hash32),
 				beaconsReady:     make(map[types.EpochID]chan struct{}),
-				seenEpochs:       make(map[types.EpochID]struct{}),
 			}
 
 			tb.initGenesisBeacons()

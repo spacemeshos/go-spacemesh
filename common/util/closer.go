@@ -20,3 +20,13 @@ func (closer *Closer) Close() {
 func (closer *Closer) CloseChannel() chan struct{} {
 	return closer.channel
 }
+
+// IsClosed returns whether the channel is closed.
+func (closer *Closer) IsClosed() bool {
+	select {
+	case <-closer.channel:
+		return true
+	default:
+		return false
+	}
+}

@@ -81,7 +81,7 @@ func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage) error {
 		return nil
 
 	case LateMessage:
-		tb.Log.With().Info("Received late ProposalMessage",
+		tb.Log.With().Warning("Received late ProposalMessage",
 			log.Uint64("epoch_id", uint64(m.Epoch())),
 			log.Int("type", int(mt)))
 
@@ -166,7 +166,7 @@ func (tb *TortoiseBeacon) handleVotingMessage(from p2pcrypto.PublicKey, message 
 		return nil
 
 	case DelayedMessage, LateMessage:
-		tb.Log.With().Info(fmt.Sprintf("Received %v VotingMessage, ignoring it", mt.String()),
+		tb.Log.With().Warning(fmt.Sprintf("Received %v VotingMessage, ignoring it", mt.String()),
 			log.Uint64("epoch_id", uint64(message.Epoch())),
 			log.Uint64("round", uint64(messageRound)),
 			log.String("message", message.String()))
@@ -188,6 +188,8 @@ func (tb *TortoiseBeacon) classifyMessage(m message, epoch types.EpochID) Messag
 	currentRound := tb.currentRounds[epoch]
 	tb.currentRoundsMu.Unlock()
 
+	// If ProposalMessage, messageRound == 1.
+	// If VotingMessage, messageRound is extracted from message.
 	messageRound := types.RoundID(1)
 	if vm, ok := m.(VotingMessage); ok {
 		messageRound = vm.Round()

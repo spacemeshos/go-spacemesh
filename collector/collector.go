@@ -219,7 +219,7 @@ loop:
 			if err != nil {
 				log.Error("cannot parse received message %v", err)
 			}
-			log.Debug("got new atx created %v", e)
+			log.Debug("got new tortoise beacon calculated %v", e)
 			err = c.db.StoreTortoiseBeaconCalculated(&e)
 			if err != nil {
 				log.Error("cannot write message %v", err)

@@ -63,6 +63,11 @@ func (l LayerID) GetEpoch() EpochID {
 	return EpochID(uint64(l) / uint64(getLayersPerEpoch()))
 }
 
+// FirstInEpoch returns whether this LayerID is first in epoch.
+func (l LayerID) FirstInEpoch() bool {
+	return uint64(l)%uint64(getLayersPerEpoch()) == 0
+}
+
 // GetEffectiveGenesis returns when actual blocks would be created
 func GetEffectiveGenesis() LayerID {
 	return LayerID(atomic.LoadInt32(&EffectiveGenesis))
