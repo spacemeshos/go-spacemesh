@@ -66,7 +66,7 @@ func (a vec) String() string {
 	return "abstain"
 }
 
-func globalOpinion(v vec, layerSize int, delta float64) vec {
+func calculateGlobalOpinion(v vec, layerSize int, delta float64) vec {
 	threshold := globalThreshold * delta * float64(layerSize)
 	if float64(v[0]) > threshold {
 		return support

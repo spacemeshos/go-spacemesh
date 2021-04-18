@@ -77,7 +77,7 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 				sum = sum.Add(opinionVote.Multiply(trtl.BlockWeight(bid, i)))
 			}
 		}
-		gop := globalOpinion(sum, trtl.AvgLayerSize, 1)
+		gop := calculateGlobalOpinion(sum, trtl.AvgLayerSize, 1)
 		if gop != vote {
 			require.Fail(t, fmt.Sprintf("crashing test block %v should be %v but %v", i, vote, sum))
 		}

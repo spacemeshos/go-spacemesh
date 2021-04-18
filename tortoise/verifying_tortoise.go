@@ -557,22 +557,22 @@ layerLoop:
 			// check that the total weight exceeds the confidence threshold in all positions up
 			threshold := globalThreshold * float64(i-pbaseOld) * float64(t.AvgLayerSize)
 			t.logger.With().Debug("global opinion", sum, log.String("threshold", fmt.Sprint(threshold)))
-			glopinion := globalOpinion(sum, t.AvgLayerSize, float64(i-pbaseOld))
+			globalOpinion := calculateGlobalOpinion(sum, t.AvgLayerSize, float64(i-pbaseOld))
 			t.logger.With().Debug("calculated global opinion on block",
 				log.FieldNamed("voted_block", blk),
 				i,
-				log.String("global_opinion", glopinion.String()),
+				log.String("global_opinion", globalOpinion.String()),
 				log.String("sum", fmt.Sprintf("[%v, %v]", sum[0], sum[1])))
 
 			// If, for any block in this layer, the global opinion (summed votes) disagrees with our vote (what the
 			// input vector says), or if the global opinion is abstain, then we do not verify this layer. Otherwise,
 			// we do.
 
-			if glopinion != vote {
+			if globalOpinion != vote {
 				// TODO: trigger self healing after a while?
 				t.logger.With().Warning("global opinion on block differs from our vote, cannot verify layer",
 					blk,
-					log.String("global_opinion", glopinion.String()),
+					log.String("global_opinion", globalOpinion.String()),
 					log.String("vote", vote.String()))
 				break layerLoop
 			}
@@ -583,15 +583,15 @@ layerLoop:
 			// equipped to handle this scenario, but the full tortoise is.
 			// TODO: should we trigger self-healing in this scenario, after a while?
 			// TODO: should we give up trying to verify later layers, too?
-			if glopinion == abstain {
+			if globalOpinion == abstain {
 				t.logger.With().Warning("global opinion on block is abstain, cannot verify layer",
 					blk,
-					log.String("global_opinion", glopinion.String()),
+					log.String("global_opinion", globalOpinion.String()),
 					log.String("vote", vote.String()))
 				break layerLoop
 			}
 
-			contextualValidity[blk] = glopinion == support
+			contextualValidity[blk] = globalOpinion == support
 		}
 
 		// Declare the vote vector “verified” up to position k (up to this layer)
