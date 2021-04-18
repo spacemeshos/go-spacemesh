@@ -437,7 +437,7 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer, inputVector []types.Bl
 	// Go over all blocks, in order. Mark block i “good” if:
 markingLoop:
 	for _, b := range newlyr.Blocks() {
-		// (1) the base block is marked as good.
+		// (1) the base block is marked as good
 		if _, good := t.GoodBlocksIndex[b.BaseBlock]; !good {
 			t.logger.With().Debug("not marking block as good because baseblock is not good",
 				newlyr.Index(),
@@ -451,7 +451,7 @@ markingLoop:
 			t.logger.Panic(fmt.Sprint("block not found ", b.BaseBlock, "err", err))
 		}
 
-		// (2) all diffs appear after the base block and are consistent with the input vote vector.
+		// (2) all diffs appear after the base block and are consistent with the input vote vector
 		voteClasses := []struct {
 			name     string
 			diffList []types.BlockID
@@ -473,6 +473,8 @@ markingLoop:
 							log.String("block_vote", voteClass.name))
 						continue markingLoop
 					}
+				} else {
+					continue markingLoop
 				}
 			}
 		}
@@ -484,8 +486,7 @@ markingLoop:
 	pbaseOld = t.Verified
 	t.logger.With().Info("starting layer verification",
 		log.FieldNamed("was_verified", pbaseOld),
-		log.FieldNamed("target_verification",
-			newlyr.Index()))
+		log.FieldNamed("target_verification", newlyr.Index()))
 
 loop:
 	for i := pbaseOld + 1; i < idx; i++ {
@@ -496,21 +497,13 @@ loop:
 			t.logger.With().Warning("can't find layer in db, skipping verification", i)
 			continue // Panic? can't get layer
 		}
-
-		var input map[types.BlockID]vec
-
-		if i == idx {
-			input = t.inputVectorForLayer(blks, inputVector)
-		} else {
-			raw, err := t.bdp.GetLayerInputVector(i)
-			if err != nil {
-				// this sets the input to abstain
-				t.logger.With().Warning("input vector abstains on all blocks", i)
-			}
-			input = t.inputVectorForLayer(blks, raw)
+		raw, err := t.bdp.GetLayerInputVector(i)
+		if err != nil {
+			// this sets the input to abstain
+			t.logger.With().Warning("input vector abstains on all blocks", i)
 		}
-
-		if len(input) == 0 {
+		inputVectorForLayer := t.inputVectorForLayer(blks, raw)
+		if len(inputVectorForLayer) == 0 {
 			t.logger.With().Warning("no blocks in input vector, can't verify layer", i)
 			break
 		}
@@ -520,15 +513,22 @@ loop:
 		// Count good blocks votes
 		// Declare the vote vector “verified” up to position k if the total weight exceeds the confidence threshold in
 		// all positions up to k
-		for blk, vote := range input {
+		for blk, vote := range inputVectorForLayer {
 			// Count the votes for the input vote vector by summing the weight of the good blocks
 			sum := abstain
-			for j := t.Last; j > i && j-i < t.Hdist; j-- {
+
+			// Step backwards from the latest received layer to i+1, but only count votes for the interval [i, i+Hdist]
+			var startLayer types.LayerID
+			if t.Last < i+t.Hdist {
+				startLayer = t.Last
+			} else {
+				startLayer = i+t.Hdist-1
+			}
+			for j := startLayer; j > i ; j-- {
 				// check if the block is good
 				for bid, op := range t.BlockOpinionsByLayer[j] {
-					_, isgood := t.GoodBlocksIndex[bid]
-					if !isgood {
-						t.logger.With().Debug("block not good hence not counting",
+					if _, isgood := t.GoodBlocksIndex[bid]; !isgood {
+						t.logger.With().Debug("not counting vote of block not marked good",
 							log.FieldNamed("voting_block", bid),
 							log.FieldNamed("voted_block", blk))
 						continue
@@ -555,28 +555,29 @@ loop:
 			// check that the total weight exceeds the confidence threshold in all positions up
 			threshold := globalThreshold * float64(i-pbaseOld) * float64(t.AvgLayerSize)
 			t.logger.With().Debug("global opinion", sum, log.String("threshold", fmt.Sprint(threshold)))
-			gop := globalOpinion(sum, t.AvgLayerSize, float64(i-pbaseOld))
+			glopinion := globalOpinion(sum, t.AvgLayerSize, float64(i-pbaseOld))
 			t.logger.With().Debug("calculated global opinion on block",
 				log.FieldNamed("voted_block", blk),
 				i,
-				log.String("global_opinion", gop.String()),
+				log.String("global_opinion", glopinion.String()),
 				log.String("sum", fmt.Sprintf("[%v, %v]", sum[0], sum[1])))
-			if gop != vote {
+
+			if glopinion != vote {
 				// TODO: trigger self healing after a while ?
 				t.logger.With().Warning("global opinion is different from vote",
-					log.String("global_opinion", gop.String()),
+					log.String("global_opinion", glopinion.String()),
 					log.String("vote", vote.String()))
 				break loop
 			}
 
-			if gop == abstain {
+			if glopinion == abstain {
 				t.logger.With().Warning("global opinion on a block is abstain hence can't verify layer",
-					log.String("global_opinion", gop.String()),
+					log.String("global_opinion", glopinion.String()),
 					log.String("vote", vote.String()))
 				break loop
 			}
 
-			contextualValidity[blk] = gop == support
+			contextualValidity[blk] = glopinion == support
 		}
 
 		// Declare the vote vector “verified” up to position k

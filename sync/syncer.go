@@ -429,7 +429,7 @@ func (s *Syncer) handleLayersTillCurrent() {
 	return
 }
 
-// handle the current consensus layer if its is older than s.ValidationDelta
+// handle the current consensus layer if it is older than s.ValidationDelta
 func (s *Syncer) handleCurrentLayer() error {
 	curr := s.GetCurrentLayer()
 	if s.LatestLayer() == curr && time.Now().Sub(s.LayerToTime(s.LatestLayer())) > s.ValidationDelta {
@@ -515,8 +515,8 @@ func (s *Syncer) syncAtxs(currentSyncLayer types.LayerID) {
 	}
 }
 
-//Waits two ticks (while weakly-synced) in order to ensure that we listened to gossip for one full layer
-//after that we are assumed to have all the data required for validation so we can validate and open gossip
+// Waits two ticks (while weakly-synced) in order to ensure that we listened to gossip for one full layer
+// after that we are assumed to have all the data required for validation so we can validate and open gossip
 // opening gossip in weakly-synced transition us to fully-synced
 func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error {
 	// listen to gossip
@@ -1313,7 +1313,10 @@ func (s *Syncer) getAndValidateLayer(id types.LayerID) error {
 		inputVector = nil
 	}
 
-	s.Log.With().Info("getAndValidateLayer ", id.Field(), log.String("input_vector", fmt.Sprint(inputVector)), log.String("blocks", fmt.Sprint(types.BlockIDs(lyr.Blocks()))))
+	s.Log.With().Info("getAndValidateLayer",
+		id.Field(),
+		log.String("input_vector", fmt.Sprint(inputVector)),
+		log.String("blocks", fmt.Sprint(types.BlockIDs(lyr.Blocks()))))
 
 	s.ValidateLayer(lyr, inputVector) // wait for layer validation
 	return nil

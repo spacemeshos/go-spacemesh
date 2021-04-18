@@ -77,7 +77,7 @@ func (a vec) String() string {
 }
 
 func globalOpinion(v vec, layerSize int, delta float64) vec {
-	threshold := float64(globalThreshold*delta) * float64(layerSize)
+	threshold := globalThreshold * delta * float64(layerSize)
 	if float64(v[0]) > threshold {
 		return support
 	} else if float64(v[1]) > threshold {
