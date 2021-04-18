@@ -211,7 +211,8 @@ func (tb *TortoiseBeacon) Get(epochID types.EpochID) (types.Hash32, error) {
 func (tb *TortoiseBeacon) GetBeacon(epochNumber types.EpochID) []byte {
 	if err := tb.Wait(epochNumber); err != nil {
 		tb.Log.With().Error("Failed to wait for tortoise beacon value calculation",
-			log.Uint64("epoch_id", uint64(epochNumber)))
+			log.Uint64("epoch_id", uint64(epochNumber)),
+			log.Err(err))
 
 		return nil
 	}
@@ -242,7 +243,7 @@ func (tb *TortoiseBeacon) Wait(epochID types.EpochID) error {
 		return ErrBeaconNotCalculated
 	}
 
-	timeout := time.NewTimer(tb.beaconCalcDuration())
+	timeout := time.NewTimer(tb.beaconCalcTimeout())
 	defer timeout.Stop()
 
 	select {
@@ -570,7 +571,7 @@ func (tb *TortoiseBeacon) threshold() int {
 	return int(tb.config.Theta * float64(tb.config.TAve))
 }
 
-func (tb *TortoiseBeacon) beaconCalcDuration() time.Duration {
-	const extraTimeMultiplier = 1.2 // 20% more time
+func (tb *TortoiseBeacon) beaconCalcTimeout() time.Duration {
+	const extraTimeMultiplier = 4 // 4 epochs
 	return time.Duration(extraTimeMultiplier * float64(tb.config.RoundsNumber) * float64(tb.config.WakeupDelta))
 }

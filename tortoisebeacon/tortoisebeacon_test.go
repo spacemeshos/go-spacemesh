@@ -118,7 +118,7 @@ func TestTortoiseBeacon_threshold(t *testing.T) {
 	}
 }
 
-func TestTortoiseBeacon_beaconCalcDuration(t *testing.T) {
+func TestTortoiseBeacon_beaconCalcTimeout(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
@@ -133,13 +133,13 @@ func TestTortoiseBeacon_beaconCalcDuration(t *testing.T) {
 			name:         "Case 1",
 			roundsNumber: 5,
 			wakeupDelta:  10 * time.Second,
-			duration:     1 * time.Minute,
+			duration:     200 * time.Second,
 		},
 		{
 			name:         "Case 2",
 			roundsNumber: 300,
 			wakeupDelta:  30 * time.Minute,
-			duration:     180 * time.Hour,
+			duration:     600 * time.Hour,
 		},
 	}
 
@@ -156,7 +156,7 @@ func TestTortoiseBeacon_beaconCalcDuration(t *testing.T) {
 				},
 			}
 
-			duration := tb.beaconCalcDuration()
+			duration := tb.beaconCalcTimeout()
 			r.EqualValues(tc.duration, duration)
 		})
 	}
