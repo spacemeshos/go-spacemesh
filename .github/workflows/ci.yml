@@ -18,24 +18,38 @@ env:
 
 # Trigger the workflow on all pull requests, and on push to specific branches
 on:
+  # run for all pull requests and pushes to certain branches
   pull_request:
-    # Don't trigger tests if only updating docs
-    paths-ignore:
-      - '**.md'
   push:
     branches:
       - staging
       - trying
-    # Don't trigger tests if only updating docs
-    paths-ignore:
-      - '**.md'
 
 jobs:
+  ## stage 0: check which files were changed
+  filter-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      nondocchanges: ${{ steps.filter.outputs.nondoc }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          # this pattern matches using picomatch syntax (used by this third party Action), which is slightly
+          # different than GitHub syntax: it matches any file in any path ending in '.md'. this checks if
+          # any non-markdown files were changed.
+          filters: |
+            nondoc:
+              - '!**/*.md'
+
   ## stage 1: run unit tests and app tests as a preqrequisite
   ## these run on all pushes to all pull requests, all branches
   ## note that secrets may not be accessible in this phase
   quicktests:
     runs-on: ubuntu-latest
+    needs: filter-changes
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     # should not take more than 2-3 mins
     timeout-minutes: 5
     steps:
@@ -53,6 +67,8 @@ jobs:
           make lint
   unittests:
     runs-on: ubuntu-latest
+    needs: filter-changes
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     # should take around 8-10 mins
     timeout-minutes: 15
     steps:
@@ -68,6 +84,8 @@ jobs:
         run: make test-no-app-test
   apptests:
     runs-on: ubuntu-latest
+    needs: filter-changes
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     # should take around 7-9 mins
     timeout-minutes: 15
     steps:
@@ -86,12 +104,14 @@ jobs:
     # run regardless of status of previous jobs but skip if the required secret is not accessible
     if: always()
     needs:
+      - filter-changes
       - quicktests
       - unittests
       - apptests
     runs-on: ubuntu-latest
     env:
-      status: ${{ needs.quicktests.result == 'success' && needs.unittests.result == 'success' && needs.apptests.result == 'success' && 'success' || 'failure' }}
+      # short-circuit success if no non-doc files were modified
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.unittests.result == 'success' && needs.apptests.result == 'success')) && 'success' || 'failure' }}
     # this is the easiest way to access success/failure state of previous jobs in this workflow
     steps:
       - uses: act10ns/slack@v1
@@ -120,9 +140,7 @@ jobs:
     # should take 2-3 mins
     timeout-minutes: 7
     needs:
-      - quicktests
-      - unittests
-      - apptests
+      - ci-stage1
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -132,10 +150,12 @@ jobs:
 
   ## stage 3: finally run system tests in parallel if everything else passes
   systemtest-latenodes:
-    # only run on push, not on pull_request
-    if: github.event_name == 'push'
-    needs: dockerpush
     runs-on: ubuntu-latest
+    # only run on push, not on pull_request
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
+    needs:
+      - filter-changes
+      - dockerpush
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -143,10 +163,12 @@ jobs:
       - name: late nodes system test
         run: make dockertest-late-nodes-elk
   systemtest-blocks-add-node:
-    # only run on push, not on pull_request
-    if: github.event_name == 'push'
-    needs: dockerpush
     runs-on: ubuntu-latest
+    # only run on push, not on pull_request
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
+    needs:
+      - filter-changes
+      - dockerpush
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -154,10 +176,12 @@ jobs:
       - name: blocks add node test
         run: make dockertest-blocks-add-node-elk
   systemtest-blocks-remove-node:
-    # only run on push, not on pull_request
-    if: github.event_name == 'push'
-    needs: dockerpush
     runs-on: ubuntu-latest
+    # only run on push, not on pull_request
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
+    needs:
+      - filter-changes
+      - dockerpush
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -165,10 +189,12 @@ jobs:
       - name: remove node test
         run: make dockertest-blocks-remove-node-elk
   systemtest-mining:
-    # only run on push, not on pull_request
-    if: github.event_name == 'push'
-    needs: dockerpush
     runs-on: ubuntu-latest
+    # only run on push, not on pull_request
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
+    needs:
+      - filter-changes
+      - dockerpush
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -176,10 +202,12 @@ jobs:
       - name: mining system test
         run: make dockertest-mining-elk
   systemtest-p2p:
-    # only run on push, not on pull_request
-    if: github.event_name == 'push'
-    needs: dockerpush
     runs-on: ubuntu-latest
+    # only run on push, not on pull_request
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
+    needs:
+      - filter-changes
+      - dockerpush
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -187,10 +215,12 @@ jobs:
       - name: p2p system test
         run: make dockertest-p2p-elk
   systemtest-hare:
-    # only run on push, not on pull_request
-    if: github.event_name == 'push'
-    needs: dockerpush
     runs-on: ubuntu-latest
+    # only run on push, not on pull_request
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
+    needs:
+      - filter-changes
+      - dockerpush
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -198,10 +228,12 @@ jobs:
       - name: hare system test
         run: make dockertest-hare-elk
   systemtest-sync:
-    # only run on push, not on pull_request
-    if: github.event_name == 'push'
-    needs: dockerpush
     runs-on: ubuntu-latest
+    # only run on push, not on pull_request
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
+    needs:
+      - filter-changes
+      - dockerpush
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -209,10 +241,12 @@ jobs:
       - name: sync system test
         run: make dockertest-sync-elk
   systemtest-tortoise-beacon:
-    # only run on push, not on pull_request
-    if: github.event_name == 'push'
-    needs: dockerpush
     runs-on: ubuntu-latest
+    # only run on push, not on pull_request
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
+    needs:
+      - filter-changes
+      - dockerpush
     timeout-minutes: 80
     steps:
       - name: checkout
@@ -226,6 +260,7 @@ jobs:
   ci-stage2:
     if: always() && github.event_name == 'push' && needs.ci-stage1.result == 'success'
     needs:
+      - filter-changes
       - ci-stage1
       - systemtest-latenodes
       - systemtest-blocks-add-node
@@ -237,7 +272,8 @@ jobs:
       - systemtest-tortoise-beacon
     runs-on: ubuntu-latest
     env:
-      status: ${{ needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-blocks-remove-node.result == 'success' && needs.systemtest-mining.result == 'success' && needs.systemtest-p2p.result == 'success' && needs.systemtest-hare.result == 'success' && needs.systemtest-sync.result == 'success' && needs.systemtest-tortoise-beacon.result == 'success' && 'success' || 'failure' }}
+      # short-circuit success if no non-doc files were modified
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-blocks-remove-node.result == 'success' && needs.systemtest-mining.result == 'success' && needs.systemtest-p2p.result == 'success' && needs.systemtest-hare.result == 'success' && needs.systemtest-sync.result == 'success' && needs.systemtest-tortoise-beacon.result == 'success')) && 'success' || 'failure' }}
     steps:
       # print a single, clean status update to slack
       - uses: act10ns/slack@v1
