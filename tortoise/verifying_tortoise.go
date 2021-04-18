@@ -179,33 +179,37 @@ func (t *turtle) checkBlockAndGetInputVector(exceptionBlockid, sourceBlockid typ
 	return abstain, &types.Block{}, false
 }
 
-func (t *turtle) inputVectorForLayer(lyrBlocks []types.BlockID, input []types.BlockID) map[types.BlockID]vec {
-	lyrResult := make(map[types.BlockID]vec, len(lyrBlocks))
-	//XXX : input vector must be pointer so we can differentiate
-	// no support votes to no results at all.
+func (t *turtle) inputVectorForLayer(layerBlocks []types.BlockID, input []types.BlockID) (layerResult map[types.BlockID]vec) {
+	layerResult = make(map[types.BlockID]vec, len(layerBlocks))
+	// XXX: input vector must be a pointer so we can differentiate
+	// between no support votes and no results at all.
 	if input == nil {
-		// hare didn't finish hence we don't have Opinion
+		// hare didn't finish, so we have no opinion on blocks in this layer
 		// TODO: get hare Opinion when hare finishes
-		for _, b := range lyrBlocks {
-			lyrResult[b] = abstain
+		for _, b := range layerBlocks {
+			layerResult[b] = abstain
 		}
-		return lyrResult
+		return
 	}
 
+	// add support for all blocks in input vector
 	for _, b := range input {
-		lyrResult[b] = support
+		layerResult[b] = support
 	}
 
-	for _, b := range lyrBlocks {
-		if _, ok := lyrResult[b]; !ok {
-			lyrResult[b] = against
+	// vote against all layer blocks not in input vector
+	for _, b := range layerBlocks {
+		if _, ok := layerResult[b]; !ok {
+			layerResult[b] = against
 		}
 	}
-	return lyrResult
+	return
 }
 
 func (t *turtle) BaseBlock() (types.BlockID, [][]types.BlockID, error) {
 	// Try to find a block counting only good blocks
+	// TODO: could we do better than just grabbing the first non-error, good block, as below?
+	// e.g., trying to minimize the size of the exception list instead
 	for i := t.Last; i > t.Last-t.Hdist; i-- {
 		for block, opinion := range t.BlockOpinionsByLayer[i] {
 			if _, ok := t.GoodBlocksIndex[block]; !ok {
@@ -374,23 +378,21 @@ func (t *turtle) processBlock(block *types.Block) error {
 	}
 
 	// TODO: save and vote against blocks that exceed the max exception list size (DoS prevention)
-	blockid := block.ID()
-
 	opinion := make(map[types.BlockID]vec)
 	for blk, vote := range baseBlockOpinion.BlocksOpinion {
 		opinion[blk] = vote
 	}
 
 	for _, b := range block.ForDiff {
-		opinion[b] = opinion[b].Add(support.Multiply(t.BlockWeight(blockid, b)))
+		opinion[b] = opinion[b].Add(support.Multiply(t.BlockWeight(block.ID(), b)))
 	}
 	for _, b := range block.AgainstDiff {
-		opinion[b] = opinion[b].Add(against.Multiply(t.BlockWeight(blockid, b)))
+		opinion[b] = opinion[b].Add(against.Multiply(t.BlockWeight(block.ID(), b)))
 	}
 
 	// TODO: neutral ?
 	t.logger.With().Debug("adding block to blocks table", block.Fields()...)
-	t.BlockOpinionsByLayer[block.LayerIndex][blockid] = Opinion{BlocksOpinion: opinion}
+	t.BlockOpinionsByLayer[block.LayerIndex][block.ID()] = Opinion{BlocksOpinion: opinion}
 	return nil
 }
 
@@ -488,32 +490,32 @@ markingLoop:
 		log.FieldNamed("was_verified", pbaseOld),
 		log.FieldNamed("target_verification", newlyr.Index()))
 
-loop:
+layerLoop:
 	for i := pbaseOld + 1; i < idx; i++ {
 		t.logger.With().Info("verifying layer", i)
 
-		blks, err := t.bdp.LayerBlockIds(i)
+		layerBlockIds, err := t.bdp.LayerBlockIds(i)
 		if err != nil {
 			t.logger.With().Warning("can't find layer in db, skipping verification", i)
 			continue // Panic? can't get layer
 		}
-		raw, err := t.bdp.GetLayerInputVector(i)
+		rawLayerInputVector, err := t.bdp.GetLayerInputVector(i)
 		if err != nil {
 			// this sets the input to abstain
 			t.logger.With().Warning("input vector abstains on all blocks", i)
 		}
-		inputVectorForLayer := t.inputVectorForLayer(blks, raw)
-		if len(inputVectorForLayer) == 0 {
+		layerVotes := t.inputVectorForLayer(layerBlockIds, rawLayerInputVector)
+		if len(layerVotes) == 0 {
 			t.logger.With().Warning("no blocks in input vector, can't verify layer", i)
 			break
 		}
 
-		contextualValidity := make(map[types.BlockID]bool, len(blks))
+		contextualValidity := make(map[types.BlockID]bool, len(layerBlockIds))
 
-		// Count good blocks votes
+		// Count the votes of good blocks. vote is our opinion on this block.
 		// Declare the vote vector “verified” up to position k if the total weight exceeds the confidence threshold in
 		// all positions up to k
-		for blk, vote := range inputVectorForLayer {
+		for blk, vote := range layerVotes {
 			// Count the votes for the input vote vector by summing the weight of the good blocks
 			sum := abstain
 
@@ -534,7 +536,7 @@ loop:
 						continue
 					}
 
-					// check if this block has opinion on this block. (TODO: maybe no opinion means AGAINST?)
+					// check if this block has an opinion on this block (TODO: maybe no opinion means AGAINST?)
 					opinionVote, ok := op.BlocksOpinion[blk]
 					if !ok {
 						t.logger.With().Debug("no opinion on block",
@@ -562,25 +564,38 @@ loop:
 				log.String("global_opinion", glopinion.String()),
 				log.String("sum", fmt.Sprintf("[%v, %v]", sum[0], sum[1])))
 
+			// If, for any block in this layer, the global opinion (summed votes) disagrees with our vote (what the
+			// input vector says), or if the global opinion is abstain, then we do not verify this layer. Otherwise,
+			// we do.
+
 			if glopinion != vote {
-				// TODO: trigger self healing after a while ?
-				t.logger.With().Warning("global opinion is different from vote",
+				// TODO: trigger self healing after a while?
+				t.logger.With().Warning("global opinion on block differs from our vote, cannot verify layer",
+					blk,
 					log.String("global_opinion", glopinion.String()),
 					log.String("vote", vote.String()))
-				break loop
+				break layerLoop
 			}
 
+			// An abstain vote on a single block in this layer means that we should abstain from voting on the entire
+			// layer. This usually means everyone is still waiting for Hare to finish, so we cannot verify this layer.
+			// This condition should be temporary, except during a balancing attack. The verifying tortoise is not
+			// equipped to handle this scenario, but the full tortoise is.
+			// TODO: should we trigger self-healing in this scenario, after a while?
+			// TODO: should we give up trying to verify later layers, too?
 			if glopinion == abstain {
-				t.logger.With().Warning("global opinion on a block is abstain hence can't verify layer",
+				t.logger.With().Warning("global opinion on block is abstain, cannot verify layer",
+					blk,
 					log.String("global_opinion", glopinion.String()),
 					log.String("vote", vote.String()))
-				break loop
+				break layerLoop
 			}
 
 			contextualValidity[blk] = glopinion == support
 		}
 
-		// Declare the vote vector “verified” up to position k
+		// Declare the vote vector “verified” up to position k (up to this layer)
+		// and record the contextual validity for all blocks in this layer
 		for blk, v := range contextualValidity {
 			if err := t.bdp.SaveContextualValidity(blk, v); err != nil {
 				// panic?
