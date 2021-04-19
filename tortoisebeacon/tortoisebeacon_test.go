@@ -74,50 +74,6 @@ func awaitEpoch(clock *timesync.TimeClock, epoch types.EpochID) {
 	}
 }
 
-func TestTortoiseBeacon_threshold(t *testing.T) {
-	t.Parallel()
-
-	r := require.New(t)
-
-	tt := []struct {
-		name      string
-		theta     float64
-		tAve      int
-		threshold int
-	}{
-		{
-			name:      "Case 1",
-			theta:     0.5,
-			tAve:      10,
-			threshold: 5,
-		},
-		{
-			name:      "Case 2",
-			theta:     0.3,
-			tAve:      10,
-			threshold: 3,
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			tb := TortoiseBeacon{
-				Log: log.NewDefault("TortoiseBeacon"),
-				config: Config{
-					Theta: tc.theta,
-					TAve:  tc.tAve,
-				},
-			}
-
-			threshold := tb.threshold()
-			r.EqualValues(tc.threshold, threshold)
-		})
-	}
-}
-
 func TestTortoiseBeacon_beaconCalcTimeout(t *testing.T) {
 	t.Parallel()
 
@@ -158,6 +114,90 @@ func TestTortoiseBeacon_beaconCalcTimeout(t *testing.T) {
 
 			duration := tb.beaconCalcTimeout()
 			r.EqualValues(tc.duration, duration)
+		})
+	}
+}
+
+func TestTortoiseBeacon_votingThreshold(t *testing.T) {
+	t.Parallel()
+
+	r := require.New(t)
+
+	tt := []struct {
+		name      string
+		theta     float64
+		tAve      int
+		threshold int
+	}{
+		{
+			name:      "Case 1",
+			theta:     0.5,
+			tAve:      10,
+			threshold: 5,
+		},
+		{
+			name:      "Case 2",
+			theta:     0.3,
+			tAve:      10,
+			threshold: 3,
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			tb := TortoiseBeacon{
+				Log: log.NewDefault("TortoiseBeacon"),
+				config: Config{
+					Theta: tc.theta,
+					TAve:  tc.tAve,
+				},
+			}
+
+			threshold := tb.votingThreshold()
+			r.EqualValues(tc.threshold, threshold)
+		})
+	}
+}
+
+func TestTortoiseBeacon_atxThreshold(t *testing.T) {
+	t.Parallel()
+
+	r := require.New(t)
+
+	tt := []struct {
+		name      string
+		kappa     int
+		q         float64
+		w         int
+		threshold float64
+	}{
+		{
+			name:      "Case 1",
+			kappa:     40,
+			q:         1.0 / 3.0,
+			w:         60,
+			threshold: 0.5,
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			tb := TortoiseBeacon{
+				Log: log.NewDefault("TortoiseBeacon"),
+				config: Config{
+					Kappa: tc.kappa,
+					Q:     tc.q,
+				},
+			}
+
+			threshold := tb.atxThreshold(tc.w)
+			r.InDelta(tc.threshold, threshold, 0.00001)
 		})
 	}
 }

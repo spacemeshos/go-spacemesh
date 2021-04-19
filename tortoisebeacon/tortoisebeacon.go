@@ -3,6 +3,7 @@ package tortoisebeacon
 import (
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -567,11 +568,15 @@ func (tb *TortoiseBeacon) waitAfterLastRoundStarted() {
 	}
 }
 
-func (tb *TortoiseBeacon) threshold() int {
-	return int(tb.config.Theta * float64(tb.config.TAve))
-}
-
 func (tb *TortoiseBeacon) beaconCalcTimeout() time.Duration {
 	const extraTimeMultiplier = 4 // 4 epochs
 	return time.Duration(extraTimeMultiplier * float64(tb.config.RoundsNumber) * float64(tb.config.WakeupDelta))
+}
+
+func (tb *TortoiseBeacon) votingThreshold() int {
+	return int(tb.config.Theta * float64(tb.config.TAve))
+}
+
+func (tb *TortoiseBeacon) atxThreshold(totalWeight int) float64 {
+	return 1 - math.Pow(2.0, -(float64(tb.config.Kappa)/((1.0-tb.config.Q)*float64(totalWeight))))
 }

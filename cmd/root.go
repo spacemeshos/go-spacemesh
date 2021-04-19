@@ -177,8 +177,10 @@ func AddCommands(cmd *cobra.Command) {
 
 	/**======================== Tortoise Beacon Flags ========================== **/
 
-	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.ATXThreshold, "tortoise-beacon-atx-threshold",
-		config.TortoiseBeacon.ATXThreshold, "ATX difficulty threshold in proposal message")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.Kappa, "tortoise-beacon-kappa",
+		config.TortoiseBeacon.Kappa, "Security parameter (for calculating ATX threshold)")
+	cmd.PersistentFlags().Float64Var(&config.TortoiseBeacon.Q, "tortoise-beacon-q",
+		config.TortoiseBeacon.Q, "Ratio of dishonest spacetime (for calculating ATX threshold)")
 	cmd.PersistentFlags().Uint64Var(&config.TortoiseBeacon.RoundsNumber, "tortoise-beacon-rounds-number",
 		config.TortoiseBeacon.RoundsNumber, "Amount of rounds in every epoch")
 	cmd.PersistentFlags().DurationVar(&config.TortoiseBeacon.WakeupDelta, "tortoise-beacon-wakeup-delta",

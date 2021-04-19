@@ -67,10 +67,11 @@ hare-wakeup-delta = 5
 
 # Tortoise Beacon Config
 [tortoise-beacon]
-tortoise-beacon-atx-threshold = 50 # TODO(nkryuchkov): change
+tortoise-beacon-kappa = 40
+tortoise-beacon-q = 0.33333
 tortoise-beacon-rounds-number = 300
 tortoise-beacon-wakeup-delta = "30m"
-tortoise-beacon-theta = 0.25 # TODO(nkryuchkov): change
+tortoise-beacon-theta = 0.25
 tortoise-beacon-t-ave = 1 # TODO(nkryuchkov): change
 
 [logging]
