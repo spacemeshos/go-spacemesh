@@ -12,6 +12,7 @@ from tests import config as conf
 from tests import convenience as conv
 from tests import pod
 from tests.context import Context
+from tests.convenience import str2bool
 from tests.es_dump import es_reindex
 from tests.k8s_handler import add_elastic_cluster, add_kibana_cluster, add_logstash_cluster, add_fluent_bit_cluster, \
     fluent_bit_teardown, wait_for_daemonset_to_be_ready
@@ -60,6 +61,32 @@ class NetworkDeploymentInfo:
         return ret_str
 
 
+def pytest_configure():
+    # set a global variable for set_namespace fixture to use in order to figure out whether or not to delete the
+    # namespace at the end of the test, default value is True
+    pytest.delete_namespace = True
+
+
+def pytest_addoption(parser):
+    # add command line flags
+    # delns - whether or not to delete the namespace after test was done
+    parser.addoption(
+        "--delns", action="store", default=True, help="whether or not to delete the namespace at the end of the run"
+    )
+    # namespace - current namespace value, if None a namespace will be randomly created
+    parser.addoption("--namespace", action="store", default=None, help="namespace name")
+
+
+@pytest.fixture(scope='session')
+def delete_ns(request):
+    return str2bool(request.config.getoption("--delns"))
+
+
+@pytest.fixture(scope='session')
+def namespace(request):
+    return request.config.getoption("--namespace")
+
+
 @pytest.fixture(scope='session')
 def load_config():
     kube_config_var = os.getenv('KUBECONFIG', '~/.kube/config')
@@ -99,48 +126,50 @@ def set_docker_images():
 
 
 @pytest.fixture(scope='session')
-def session_id():
+def session_id(namespace):
+    if namespace:
+        return namespace
     return random_id(length=5)
 
 
 @pytest.fixture(scope='session')
-def set_namespace(request, session_id, load_config):
-
+def set_namespace(request, session_id, load_config, delete_ns):
     v1 = CoreV1ApiClient()
 
-    def _setup_namespace():
+    def setup_namespace():
 
         if testconfig['namespace'] == '':
             testconfig['namespace'] = session_id
 
         print("\nRun tests in namespace: {0}".format(testconfig['namespace']))
-        print("Kibana URL: http://kibana.spacemesh.io/app/kibana#/discover?_g=(refreshInterval:(pause:!t,value:0))&_a=("
-              "columns:!(M),filters:!(('$state':(store:appState),meta:(alias:!n,disabled:!f,index:'8a91d9d0-c24f-11e9-9"
-              "a59-a76b835079b3',key:kubernetes.namespace_name,negate:!f,params:(query:{0},type:phrase),type:phrase,val"
-              "ue:{0}),query:(match:(kubernetes.namespace_name:(query:{0},type:phrase))))))"
-              .format(testconfig['namespace']), "\n")
         namespaces_list = [ns.metadata.name for ns in v1.list_namespace().items]
         if testconfig['namespace'] in namespaces_list:
+            pytest.delete_namespace = False
             return
 
         body = client.V1Namespace()
         body.metadata = client.V1ObjectMeta(name=testconfig['namespace'])
         v1.create_namespace(body)
 
-    def fin():
+    def fin(conditions):
         # On teardown we wish to report on pods that were restarted by k8s during the test
         restarted_pods = pod.check_for_restarted_pods(testconfig['namespace'])
         if restarted_pods:
             print('\n\nAttention!!! The following pods were restarted during test: {0}\n\n'.format(restarted_pods))
-
-        if hasattr(request, 'param') and request.param == 'doNotDeleteNameSpace':
-            print("\nDo not delete namespace: {0}".format(testconfig['namespace']))
-        else:
+        if all(condition is True for condition in conditions):
             print("\nDeleting test namespace: {0}".format(testconfig['namespace']))
             v1.delete_namespace(name=testconfig['namespace'], body=client.V1DeleteOptions())
+        else:
+            exit_msg = f"NOTICE!!! namespace {session_id} was not deleted!!!\n" \
+                       f"please make sure to delete it after use:\n" \
+                       f"kubectl delete namespace -n {session_id}"
+            print(exit_msg)
 
-    request.addfinalizer(fin)
-    return _setup_namespace()
+    setup_namespace()
+    yield
+    # delete namespace if was not mentioned otherwise in the command line args (delete_ns) and if global arg is set to
+    # True (pytest.delete_namespace)
+    fin([delete_ns, pytest.delete_namespace])
 
 
 @pytest.fixture(scope='session')
@@ -283,10 +312,15 @@ def add_elk(init_session, request):
     wait_for_minimal_elk_cluster_ready(init_session)
     yield
     fluent_bit_teardown(init_session)
-    dump_es_to_main_server(init_session, index_date, request.session.testsfailed)
+    # in case the dumping process has failed the namespace won't be deleted if this global var is set to False
+    pytest.delete_namespace = dump_es_to_main_server(init_session, index_date, request.session.testsfailed)
 
 
 def dump_es_to_main_server(init_session, index_date, testsfailed):
-    not_dumped = es_reindex(init_session, index_date) if testsfailed else True
-    if not_dumped and "is_dump" in testconfig.keys() and conv.str2bool(testconfig["is_dump"]):
-        es_reindex(init_session, index_date)
+    # dump local ES content into main ES server if the test has failed
+    if testsfailed:
+        return es_reindex(init_session, index_date)
+    # dump local ES content into main ES server if is_dump argument is in the tests config.py file
+    if "is_dump" in testconfig.keys() and conv.str2bool(testconfig["is_dump"]):
+        return es_reindex(init_session, index_date)
+    return True

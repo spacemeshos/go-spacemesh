@@ -1,4 +1,5 @@
 import json
+from os import _exit
 import requests
 import time
 
@@ -56,13 +57,13 @@ def elasticdump_direct(namespace, index_date, limit=500):
     ut.exec_wait(dump_data)
 
 
-def es_reindex(namespace, index_date, port=9200):
+def es_reindex(namespace, index_date, port=9200, timeout=1000):
     indx = INDX.format(namespace=namespace, index_date=index_date)
     try:
         es_ip = ES(namespace).es_ip
     except Exception as e:
         print(f"failed getting local ES IP: {e}\ncannot reindex ES!!!")
-        return
+        return False
     dump_req_body = {
         "source": {
             "remote": {
@@ -84,15 +85,17 @@ def es_reindex(namespace, index_date, port=9200):
     post_url = f"http://{cnf.ES_USER_LOCAL}:{cnf.ES_PASS_LOCAL}@{cnf.MAIN_ES_URL}/_reindex?wait_for_completion=false"
     headers = {"Content-Type": "application/json"}
     try:
-        requests.post(url=post_url, data=json.dumps(dump_req_body), headers=headers, timeout=900)
+        requests.post(url=post_url, data=json.dumps(dump_req_body), headers=headers, timeout=timeout)
     except Exception as e:
         print(f"elk dumping POST has failed: {e}")
-        return
+        return False
     try:
         _, time_waiting = wait_for_dump_to_end(es_ip, cnf.MAIN_ES_IP, indx)
         print(f"total time waiting:", time_waiting)
     except Exception as e:
         print(e)
+        return False
+    return True
 
 
 @ut.timing
