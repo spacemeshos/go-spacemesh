@@ -619,13 +619,14 @@ func (l *Logic) GetPoetProof(id types.Hash32) error {
 
 // GetInputVector gets input vector data from remote peer
 func (l *Logic) GetInputVector(id types.LayerID) error {
-	l.log.With().Info("getting inputvector for layer", id)
+	l.log.With().Info("getting inputvector for layer", id, types.CalcHash32(id.Bytes()))
 	res := <-l.fetcher.GetHash(types.CalcHash32(id.Bytes()), IVDB, false)
 	if res.Err != nil {
 		return res.Err
 	}
 	// if result is local we don't need to process it again
 	if !res.IsLocal {
+		l.log.With().Info("SaveLayerHashInputVector: Saving input vector", id, res.Hash)
 		return l.layerDB.SaveLayerHashInputVector(res.Hash, res.Data)
 	}
 	return nil
