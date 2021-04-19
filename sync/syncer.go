@@ -543,7 +543,7 @@ func (s *Syncer) syncAtxs(ctx context.Context, currentSyncLayer types.LayerID) {
 // after that we are assumed to have all the data required for validation so we can validate and open gossip
 // opening gossip in weakly-synced transition us to fully-synced
 func (s *Syncer) gossipSyncForOneFullLayer(ctx context.Context, currentSyncLayer types.LayerID) error {
-	logger := s.WithContext(ctx)
+	logger := s.WithContext(ctx).WithFields(currentSyncLayer)
 
 	// listen to gossip
 	// subscribe and wait for two ticks
@@ -554,7 +554,7 @@ func (s *Syncer) gossipSyncForOneFullLayer(ctx context.Context, currentSyncLayer
 	var flayer types.LayerID
 
 	if flayer, exit = s.waitLayer(ch); exit {
-		return fmt.Errorf("cloed while buffering first layer")
+		return fmt.Errorf("closed while buffering first layer")
 	}
 
 	if err := s.syncSingleLayer(ctx, currentSyncLayer); err != nil {
@@ -575,7 +575,7 @@ func (s *Syncer) gossipSyncForOneFullLayer(ctx context.Context, currentSyncLayer
 	s.setGossipBufferingStatus(inProgress2)
 
 	if _, done := s.waitLayer(ch); done {
-		return fmt.Errorf("cloed while buffering second layer ")
+		return fmt.Errorf("closed while buffering second layer")
 	}
 
 	if err := s.syncSingleLayer(ctx, flayer); err != nil {

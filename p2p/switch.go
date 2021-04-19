@@ -613,8 +613,8 @@ func (s *Switch) ProcessDirectProtocolMessage(ctx context.Context, sender p2pcry
 	return nil
 }
 
-// ProcessGossipProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will send
-// the message syntactic validation result on the validationCompletedChan ASAP
+// ProcessGossipProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will
+// send the message syntactic validation result on the validationCompletedChan ASAP
 func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, ownMessage bool, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
 	h := types.CalcMessageHash12(data.Bytes(), protocol)
 
