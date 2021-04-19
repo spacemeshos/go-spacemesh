@@ -567,7 +567,7 @@ func (proc *consensusProcess) beginProposalRound(ctx context.Context) {
 	// done with building proposal, reset statuses tracking
 	defer func() { proc.statusesTracker = nil }()
 
-	if proc.statusesTracker.IsSVPReady() && proc.shouldParticipate(context.TODO()) {
+	if proc.statusesTracker.IsSVPReady() && proc.shouldParticipate(ctx) {
 		builder, err := proc.initDefaultBuilder(proc.statusesTracker.ProposalSet(defaultSetSize))
 		if err != nil {
 			proc.With().Error("init default builder failed", log.Err(err))
@@ -592,7 +592,7 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 	if proposedSet != nil { // has proposal to commit on
 
 		// check participation
-		if !proc.shouldParticipate(context.TODO()) {
+		if !proc.shouldParticipate(ctx) {
 			return
 		}
 

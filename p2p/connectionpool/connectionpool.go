@@ -246,10 +246,8 @@ func (cp *ConnectionPool) GetConnection(ctx context.Context, address inet.Addr, 
 		go func() {
 			if conn, err := cp.dialFunc(cp.shutdownCtx, address, remotePub); err != nil {
 				cp.handleDialResult(remotePub, dialResult{nil, err})
-			} else {
-				if err := cp.handleNewConnection(ctx, remotePub, conn, net.Local); err != nil {
-					cp.logger.WithContext(ctx).With().Warning("error handing new outgoing connection", log.Err(err))
-				}
+			} else if err := cp.handleNewConnection(ctx, remotePub, conn, net.Local); err != nil {
+				cp.logger.WithContext(ctx).With().Warning("error handing new outgoing connection", log.Err(err))
 			}
 			cp.dialWait.Done()
 		}()

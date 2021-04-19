@@ -100,8 +100,7 @@ func (d *Discovery) Attempt(key p2pcrypto.PublicKey) {
 }
 
 func (d *Discovery) refresh(ctx context.Context, peersToGet int) error {
-	err := d.bootstrapper.Bootstrap(ctx, peersToGet)
-	if err != nil {
+	if err := d.bootstrapper.Bootstrap(ctx, peersToGet); err != nil {
 		d.logger.With().Error("addrbook refresh error", log.Err(err))
 		return err
 	}
@@ -203,6 +202,6 @@ func (d *Discovery) Remove(key p2pcrypto.PublicKey) {
 
 // Bootstrap runs a refresh and tries to get a minimum number of nodes in the addrBook.
 func (d *Discovery) Bootstrap(ctx context.Context) error {
-	d.logger.Debug("Starting node bootstrap")
+	d.logger.Debug("starting node bootstrap")
 	return d.refresh(ctx, d.config.RandomConnections)
 }

@@ -148,12 +148,12 @@ func (c *MsgConnection) sendListener() {
 	for {
 		select {
 		case m := <-c.messages:
-			c.logger.With().Debug("sending outgoing message",
+			c.logger.With().Debug("msgconnection: sending outgoing message",
 				log.String("requestID", m.reqID))
 
 			//todo: we are hiding the error here...
 			if err := c.SendSock(m.payload); err != nil {
-				log.With().Error("cannot send message to peer",
+				log.With().Error("msgconnection: cannot send message to peer",
 					log.String("requestId", m.reqID),
 					log.Err(err))
 			}

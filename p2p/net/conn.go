@@ -224,18 +224,17 @@ func (c *FormattedConnection) sendListener() {
 	for {
 		select {
 		case m := <-c.messages:
-			c.logger.With().Debug("sending outgoing message",
+			c.logger.With().Debug("connection: sending outgoing message",
 				log.String("requestID", m.reqID))
 
 			//todo: we are hiding the error here...
 			if err := c.SendSock(m.payload); err != nil {
-				c.logger.With().Error("cannot send message to peer",
+				c.logger.With().Error("connection: cannot send message to peer",
 					log.String("requestID", m.reqID),
 					log.Err(err))
 			}
 		case <-c.stopSending:
 			return
-
 		}
 	}
 }

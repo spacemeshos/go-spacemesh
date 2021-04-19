@@ -48,7 +48,7 @@ func newValidationQueue(ctx context.Context, srvr networker, conf Configuration,
 		Configuration: conf,
 		depMap:        make(map[interface{}]map[types.Hash32]struct{}),
 		reverseDepMap: make(map[types.Hash32][]interface{}),
-		callbacks:     make(map[interface{}]func(ctx2 context.Context, res bool) error),
+		callbacks:     make(map[interface{}]func(context.Context, bool) error),
 		syncer:        sy,
 	}
 	vq.handleFetch = vq.handleBlocks
