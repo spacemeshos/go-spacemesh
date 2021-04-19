@@ -162,7 +162,7 @@ func TestTortoiseBeacon_votingThreshold(t *testing.T) {
 	}
 }
 
-func TestTortoiseBeacon_atxThreshold(t *testing.T) {
+func TestTortoiseBeacon_atxThresholdFraction(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
@@ -196,7 +196,7 @@ func TestTortoiseBeacon_atxThreshold(t *testing.T) {
 				},
 			}
 
-			threshold := tb.atxThreshold(tc.w)
+			threshold := tb.atxThresholdFraction(tc.w)
 			r.InDelta(tc.threshold, threshold, 0.00001)
 		})
 	}

@@ -577,6 +577,7 @@ func (tb *TortoiseBeacon) votingThreshold() int {
 	return int(tb.config.Theta * float64(tb.config.TAve))
 }
 
-func (tb *TortoiseBeacon) atxThreshold(totalWeight int) float64 {
+// TODO(nkryuchkov): Use when total weight is implemented.
+func (tb *TortoiseBeacon) atxThresholdFraction(totalWeight int) float64 {
 	return 1 - math.Pow(2.0, -(float64(tb.config.Kappa)/((1.0-tb.config.Q)*float64(totalWeight))))
 }
