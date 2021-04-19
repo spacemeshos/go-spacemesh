@@ -179,12 +179,19 @@ func (fq *fetchQueue) handle(ctx context.Context, itemIds []types.Hash32) (map[t
 	unprocessedItems, _, missing := fq.checkLocal(ctx, itemIds)
 	if len(missing) > 0 {
 		output := fq.addToPendingGetCh(ctx, missing)
-		if success := <-output; !success {
-			return nil, fmt.Errorf("could not fetch all items")
-		}
-		unprocessedItems, _, missing = fq.checkLocal(ctx, itemIds)
-		if len(missing) > 0 {
-			return nil, errors.New("could not find all items even though fetch was successful")
+		timer := time.After(fq.requestTimeout)
+		select {
+		case <-timer:
+			return nil, fmt.Errorf("timed out fetching items")
+		case success := <-output:
+			if success {
+				unprocessedItems, _, missing = fq.checkLocal(ctx, itemIds)
+				if len(missing) > 0 {
+					return nil, errors.New("could not find all items even though fetch was successful")
+				}
+			} else {
+				return nil, fmt.Errorf("could not fetch all items")
+			}
 		}
 	}
 	return unprocessedItems, nil
