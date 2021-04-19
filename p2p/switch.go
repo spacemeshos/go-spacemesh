@@ -606,18 +606,19 @@ func (s *Switch) ProcessDirectProtocolMessage(ctx context.Context, sender p2pcry
 	if msgchan == nil {
 		return ErrNoProtocol
 	}
-	s.logger.WithContext(ctx).With().Debug("forwarding message to protocol", log.String("protocol", protocol))
+	s.logger.WithContext(ctx).With().Debug("forwarding direct message to protocol",
+		log.Int("queue_length", len(msgchan)),
+		log.String("protocol", protocol))
 
 	metrics.QueueLength.With(metrics.ProtocolLabel, protocol).Set(float64(len(msgchan)))
 
-	//TODO: check queue length
+	// TODO: check queue length
 	msgchan <- directProtocolMessage{metadata, sender, data}
-
 	return nil
 }
 
-// ProcessGossipProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will send
-// the message syntactic validation result on the validationCompletedChan ASAP
+// ProcessGossipProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will
+// send the message syntactic validation result on the validationCompletedChan ASAP
 func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
 	h := types.CalcMessageHash12(data.Bytes(), protocol)
 
@@ -626,8 +627,9 @@ func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcry
 	if msgchan == nil {
 		return ErrNoProtocol
 	}
-	s.logger.WithContext(ctx).With().Debug("forwarding message to protocol",
+	s.logger.WithContext(ctx).With().Debug("forwarding gossip message to protocol",
 		log.String("protocol", protocol),
+		log.Int("queue_length", len(msgchan)),
 		h)
 
 	metrics.QueueLength.With(metrics.ProtocolLabel, protocol).Set(float64(len(msgchan)))
@@ -642,7 +644,6 @@ func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcry
 			h)
 	}
 	msgchan <- gpm
-
 	return nil
 }
 
