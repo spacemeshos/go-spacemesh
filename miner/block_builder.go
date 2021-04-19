@@ -370,7 +370,9 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
-			//reducedAtxList := selectAtxs(atxList, t.atxsPerBlock)
+			logger.With().Info("eligible for one or more blocks in layer",
+				log.Int("count", len(proofs)),
+				layerID)
 			for _, eligibilityProof := range proofs {
 				txList, _, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {

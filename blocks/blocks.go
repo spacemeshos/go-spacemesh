@@ -142,13 +142,19 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, sync s
 	if blk.Layer() <= bh.mesh.ProcessedLayer() { //|| blk.Layer() == bh.mesh.getValidatingLayer() {
 		logger.With().Error("block is late",
 			log.FieldNamed("block_layer", blk.Layer()),
-			log.FieldNamed("processed_layer", bh.mesh.ProcessedLayer()))
+			log.FieldNamed("processed_layer", bh.mesh.ProcessedLayer()),
+			log.FieldNamed("miner_id", blk.MinerID()))
 		bh.mesh.HandleLateBlock(&blk)
 	}
 	return nil
 }
 
 func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *types.Block, syncer service.Fetcher) error {
+	// Add layer to context, for logging purposes, since otherwise the context will be lost here below
+	if reqID, ok := log.ExtractRequestID(ctx); ok {
+		ctx = log.WithRequestID(ctx, reqID, block.Layer())
+	}
+
 	bh.WithContext(ctx).With().Debug("syntactically validating block", block.ID())
 
 	// if there is a reference block - first validate it

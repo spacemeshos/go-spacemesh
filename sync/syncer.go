@@ -669,7 +669,7 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, blockIds 
 	if res, err := s.blockQueue.addDependencies(ctx, layerID, blockIds, foo); err != nil {
 		return nil, fmt.Errorf("failed adding layer %v blocks to queue %v", layerID, err)
 	} else if res == false {
-		logger.Info("no missing blocks for layer")
+		logger.Info("syncLayer: no missing blocks for layer")
 		return s.LayerBlocks(layerID)
 	}
 
@@ -692,8 +692,10 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, blockIds 
 	return blocks, err
 }
 
-func (s *Syncer) getBlocks(ctx context.Context, jobID types.LayerID, blockIds []types.BlockID) error {
-	logger := s.WithContext(ctx).WithFields(jobID)
+func (s *Syncer) getBlocks(ctx context.Context, blockIds []types.BlockID) error {
+	// Generate a random job ID
+	jobID := rand.Int31()
+	logger := s.WithContext(ctx).WithFields(log.Int32("jobID", jobID))
 	ch := make(chan bool, 1)
 	foo := func(ctx context.Context, res bool) error {
 		logger.Info("get blocks for layer done")
@@ -705,7 +707,7 @@ func (s *Syncer) getBlocks(ctx context.Context, jobID types.LayerID, blockIds []
 	if res, err := s.blockQueue.addDependencies(ctx, jobID, blockIds, foo); err != nil {
 		return fmt.Errorf("failed adding layer %v blocks to queue %v", jobID, err)
 	} else if res == false {
-		logger.Info("no missing blocks for layer")
+		logger.Info("getBlocks: no missing blocks for layer")
 		return nil
 	}
 
@@ -720,13 +722,12 @@ func (s *Syncer) getBlocks(ctx context.Context, jobID types.LayerID, blockIds []
 	}
 
 	tmr.ObserveDuration()
-
 	return nil
 }
 
 // GetBlocks fetches list of blocks from peers
 func (s *Syncer) GetBlocks(ctx context.Context, blockIds []types.BlockID) error {
-	return s.getBlocks(ctx, types.LayerID(rand.Int31()), blockIds)
+	return s.getBlocks(ctx, blockIds)
 }
 
 func (s *Syncer) fastValidation(block *types.Block) error {
