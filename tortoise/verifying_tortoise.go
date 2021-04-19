@@ -417,7 +417,7 @@ func (t *turtle) processBlock(block *types.Block) error {
 // HandleIncomingLayer processes all layer block votes
 // returns the old pbase and new pbase after taking into account the blocks votes
 // TODO: inputVector is unused here, fix this
-func (t *turtle) HandleIncomingLayer(newlyr *types.Layer, inputVector []types.BlockID) (pbaseOld, pbaseNew types.LayerID) {
+func (t *turtle) HandleIncomingLayer(newlyr *types.Layer) (pbaseOld, pbaseNew types.LayerID) {
 	// These are our starting values
 	pbaseOld = t.Verified
 	pbaseNew = t.Verified
@@ -491,6 +491,10 @@ layerLoop:
 			t.logger.With().Warning("can't find layer in db, skipping verification", i)
 			continue // Panic? can't get layer
 		}
+
+		// TODO: implement handling hare terminating with no valid blocks.
+		// 	currently input vector is nil if hare hasn't terminated yet.
+		//	 ACT: hare should save something in the db when terminating empty set, sync should check it.
 		rawLayerInputVector, err := t.bdp.GetLayerInputVector(i)
 		if err != nil {
 			// this sets the input to abstain

@@ -482,15 +482,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 			}
 		}
 		s.syncAtxs(currentSyncLayer)
-
-		// TODO: implement handling hare terminating with no valid blocks.
-		// 	currently hareForLayer is nil if hare hasn't terminated yet.
-		//	 ACT: hare should save something in the db when terminating empty set, sync should check it.
-		hareForLayer, err := s.DB.GetLayerInputVector(lyr.Index())
-		if err != nil {
-			s.Log.With().Warning("validating layer without input vector", lyr.Index(), log.Err(err))
-		}
-		s.ValidateLayer(lyr, hareForLayer) // wait for layer validation
+		s.ValidateLayer(lyr) // wait for layer validation
 	}
 
 	// wait for two ticks to ensure we are fully synced before we open gossip or validate the current layer
@@ -1307,18 +1299,11 @@ func (s *Syncer) getAndValidateLayer(id types.LayerID) error {
 		return err
 	}
 
-	// TODO: Get hare results a.k.a input vector from - db/hare and replace this
-	inputVector, err := s.DB.GetLayerInputVector(id)
-	if err != nil {
-		inputVector = nil
-	}
-
 	s.Log.With().Info("getAndValidateLayer",
 		id.Field(),
-		log.String("input_vector", fmt.Sprint(inputVector)),
 		log.String("blocks", fmt.Sprint(types.BlockIDs(lyr.Blocks()))))
 
-	s.ValidateLayer(lyr, inputVector) // wait for layer validation
+	s.ValidateLayer(lyr) // wait for layer validation
 	return nil
 }
 

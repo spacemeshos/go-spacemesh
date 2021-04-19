@@ -76,11 +76,11 @@ func (trtl *ThreadSafeVerifyingTortoise) BaseBlock() (types.BlockID, [][]types.B
 
 //HandleIncomingLayer processes all layer block votes
 // returns the old verified layer and new verified layer after taking into account the blocks votes
-func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ll *types.Layer, inputVector []types.BlockID) (types.LayerID, types.LayerID) {
+func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ll *types.Layer) (types.LayerID, types.LayerID) {
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()
 	oldVerified := trtl.trtl.Verified
-	trtl.trtl.HandleIncomingLayer(ll, inputVector)
+	trtl.trtl.HandleIncomingLayer(ll)
 	newVerified := trtl.trtl.Verified
 	return oldVerified, newVerified
 }
@@ -91,7 +91,7 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleLateBlock(b *types.Block) (types.
 	//todo feed all layers from b's layer to tortoise
 	l := types.NewLayer(b.Layer())
 	l.AddBlock(b)
-	oldVerified, newVerified := trtl.HandleIncomingLayer(l, []types.BlockID{}) // block wasn't in input vector for sure.
+	oldVerified, newVerified := trtl.HandleIncomingLayer(l) // block wasn't in input vector for sure.
 	log.With().Info("late block ", b.Layer(), b.ID())
 	return oldVerified, newVerified
 }

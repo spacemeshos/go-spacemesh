@@ -22,11 +22,6 @@ func init() {
 
 const Path = "../tmp/tortoise/"
 
-const inmem = 1
-const disc = 2
-
-const memType = inmem
-
 func getPersistentMash() (*mesh.DB, func() error) {
 	path := Path + "ninje_tortoise"
 	teardown := func() error { return os.RemoveAll(path) }
@@ -36,10 +31,6 @@ func getPersistentMash() (*mesh.DB, func() error) {
 	db, _ := mesh.NewPersistentMeshDB(fmt.Sprintf(path+
 		"/"), 10, log.NewDefault("ninje_tortoise").WithOptions(log.Nop))
 	return db, teardown
-}
-
-func persistenceTeardown() {
-	os.RemoveAll(Path)
 }
 
 func getInMemMesh() *mesh.DB {
@@ -146,7 +137,7 @@ func turtleSanity(t testing.TB, layers types.LayerID, blocksPerLayer, voteNegati
 
 	hm := func(l types.LayerID) (ids []types.BlockID, err error) {
 		if l < mesh.GenesisLayer().Index() {
-			panic("should'nt happen")
+			panic("shouldn't happen")
 		}
 		if l == mesh.GenesisLayer().Index() {
 			return types.BlockIDs(mesh.GenesisLayer().Blocks()), nil
@@ -211,9 +202,6 @@ func turtleMakeAndProcessLayer(l types.LayerID, trtl *turtle, blocksPerLayer int
 		panic(fmt.Sprint("no base - ", err))
 	}
 	lyr := types.NewLayer(l)
-	//if err := msh.SaveLayerInputVector(l, blocks); err != nil {
-	//	panic("db is fucked up")
-	//}
 
 	for i := 0; i < blocksPerLayer; i++ {
 		blk := &types.Block{
@@ -236,16 +224,13 @@ func turtleMakeAndProcessLayer(l types.LayerID, trtl *turtle, blocksPerLayer int
 		}
 	}
 
-	blocks, err := hm(l)
-	if err != nil {
-		blocks = nil
+	// write blocks to database first; the verifying tortoise will subsequently read them
+	if blocks, err := hm(l); err != nil {
+		panic(fmt.Sprintf("error getting blocks for layer %v: %v", l, err))
+	} else if err := msh.SaveLayerInputVector(l, blocks); err != nil {
+		panic(fmt.Sprintf("error saving input vector to database for layer %v: %v", l, err))
 	}
-
-	if blocks == nil {
-		trtl.HandleIncomingLayer(lyr, nil)
-	} else {
-		trtl.HandleIncomingLayer(lyr, blocks)
-	}
+	trtl.HandleIncomingLayer(lyr)
 }
 
 func Test_TurtleAbstainsInMiddle(t *testing.T) {
@@ -384,18 +369,15 @@ func TestTurtle_Recovery(t *testing.T) {
 	l1 := createTurtleLayer(types.GetEffectiveGenesis()+1, mdb, alg.BaseBlock, getHareResults, 3)
 	require.NoError(t, AddLayer(mdb, l1))
 
-	l1res, _ := getHareResults(types.GetEffectiveGenesis() + 1)
-
 	log.With().Info("The first is ", l1.Index(), types.BlockIdsField(types.BlockIDs(l1.Blocks())))
 	log.With().Info("The first bb is ", l1.Index(), l1.Blocks()[0].BaseBlock, types.BlockIdsField(l1.Blocks()[0].ForDiff))
 
-	alg.HandleIncomingLayer(l1, l1res)
+	alg.HandleIncomingLayer(l1)
 	require.NoError(t, alg.Persist())
 
 	l2 := createTurtleLayer(types.GetEffectiveGenesis()+2, mdb, alg.BaseBlock, getHareResults, 3)
 	require.NoError(t, AddLayer(mdb, l2))
-	l2res, _ := getHareResults(types.GetEffectiveGenesis() + 2)
-	alg.HandleIncomingLayer(l2, l2res)
+	alg.HandleIncomingLayer(l2)
 
 	require.NoError(t, alg.Persist())
 
@@ -421,19 +403,16 @@ func TestTurtle_Recovery(t *testing.T) {
 
 		alg := recoveredVerifyingTortoise(mdb, lg)
 
-		l2res, _ := getHareResults(types.GetEffectiveGenesis() + 2)
-		alg.HandleIncomingLayer(l2, l2res)
+		alg.HandleIncomingLayer(l2)
 
 		l3 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, 3)
 		AddLayer(mdb, l3)
-		l3res, _ := getHareResults(types.GetEffectiveGenesis() + 3)
-		alg.HandleIncomingLayer(l3, l3res)
+		alg.HandleIncomingLayer(l3)
 		alg.Persist()
 
 		l4 := createTurtleLayer(types.GetEffectiveGenesis()+4, mdb, alg.BaseBlock, getHareResults, 3)
 		AddLayer(mdb, l4)
-		l4res, _ := getHareResults(types.GetEffectiveGenesis() + 4)
-		alg.HandleIncomingLayer(l4, l4res)
+		alg.HandleIncomingLayer(l4)
 		alg.Persist()
 		assert.True(t, alg.LatestComplete() == types.GetEffectiveGenesis()+3)
 
@@ -441,6 +420,5 @@ func TestTurtle_Recovery(t *testing.T) {
 
 	}()
 
-	l3res, _ := getHareResults(types.GetEffectiveGenesis() + 3)
-	alg.HandleIncomingLayer(l32, l3res) //crash
+	alg.HandleIncomingLayer(l32) //crash
 }
