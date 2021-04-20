@@ -146,10 +146,10 @@ You specify these parameters by providing go-spacemesh with a json config file. 
 ```
 
 ##### Example
-Assuming tn1.json is a testnet config file saved in the same directory as go-spacemesh, use the following command to join the testnet. The data folder will be created in the same directory as go-spacemesh. The node will use TCP port 7152 and UDP port 7152 for p2p connections:
+Assuming tn1.json is a testnet config file saved in the same directory as go-spacemesh, use the following command to join the testnet. The data folder will be created in the same directory as go-spacemesh. The node will use TCP port 7513 and UDP port 7513 for p2p connections:
 
 ```bash
-./go-spacemesh --tcp-port 7152 --config ./tn1.json -d ./sm_data
+./go-spacemesh --tcp-port 7513 --config ./tn1.json -d ./sm_data
 ```
 
 4. Build the [CLI Wallet](https://github.com/spacemeshos/CLIWallet) from source code and run it:
@@ -172,7 +172,7 @@ Assuming tn1.json is a testnet config file saved in the same directory as go-spa
 
 ##### Example
 ```bash
-./go-spacemesh --tcp-port 7152 --config ./tn1.json -d ./sm_data --coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --start-mining --post-datadir ./post_data
+./go-spacemesh --tcp-port 7513 --config ./tn1.json -d ./sm_data --coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --start-mining --post-datadir ./post_data
 ```
 
 4. Use the CLI wallet to check your coinbase account balance and to transact
