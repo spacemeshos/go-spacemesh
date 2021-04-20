@@ -97,6 +97,9 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, err
 			log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
 		}
 	}
+	if err := ll.SaveLayerInputVectorByID(GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
+		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
+	}
 	return ll, nil
 }
 
@@ -129,6 +132,9 @@ func NewMemMeshDB(log log.Log) *DB {
 	for _, blk := range GenesisLayer().Blocks() {
 		ll.AddBlock(blk)
 		ll.SaveContextualValidity(blk.ID(), true)
+	}
+	if err := ll.SaveLayerInputVectorByID(GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
+		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
 	}
 	return ll
 }
