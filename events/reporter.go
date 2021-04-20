@@ -74,10 +74,9 @@ func ReportNewActivation(activation *types.ActivationTx) {
 }
 
 // SubscribeToRewards subscribes a channel to rewards events
-func SubscribeToRewards(subscriber chan Reward) {
+func SubscribeToRewards (subscriber chan Reward) {
 	mu.RLock()
 	defer mu.RUnlock()
-
 	if reporter != nil {
 		reporter.rewardsSubs = append(reporter.rewardsSubs, subscriber)
 	}

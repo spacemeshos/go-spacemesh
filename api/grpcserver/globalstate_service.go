@@ -277,7 +277,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 		channelAccount = events.GetAccountChannel()
 	}
 	if filterReward {
-		channelReward := make(chan events.Reward, 30)
+		channelReward = make(chan events.Reward, 30)
 		events.SubscribeToRewards(channelReward)
 	}
 	if filterReceipt {
@@ -459,7 +459,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 	}
 	if filterReward {
 		// needs to be buffered to avoid reporter from being blocked on slow streaming connections
-		channelReward := make(chan events.Reward, 30)
+		channelReward = make(chan events.Reward, 30)
 		events.SubscribeToRewards(channelReward)
 	}
 	if filterReceipt {
