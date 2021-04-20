@@ -121,7 +121,13 @@ def add_deployment_dir(namespace, dir_path, delete=False):
                 k8s_client.create_namespaced_role_binding(body=dep, namespace=namespace)
             elif dep["kind"] == 'ClusterRoleBinding':
                 k8s_client = client.RbacAuthorizationV1Api()
-                k8s_client.create_cluster_role_binding(body=dep)
+                try:
+                    k8s_client.create_cluster_role_binding(body=dep)
+                except ApiException as e:
+                    if e.status == 409:
+                        print(f"cluster role binding already exists")
+                        continue
+                    raise e
             elif dep["kind"] == 'ConfigMap':
                 k8s_client = client.CoreV1Api()
                 k8s_client.create_namespaced_config_map(body=dep, namespace=namespace)

@@ -162,7 +162,7 @@ def set_namespace(request, session_id, load_config, delete_ns):
         else:
             exit_msg = f"NOTICE!!! namespace {session_id} was not deleted!!!\n" \
                        f"please make sure to delete it after use:\n" \
-                       f"kubectl delete namespace -n {session_id}"
+                       f"kubectl delete namespace {session_id}"
             print(exit_msg)
 
     setup_namespace()

@@ -260,14 +260,30 @@ DELIM=::
 endif
 
 
+get-namespace-cmd-arg:
+ifdef namespace
+    EXTRA_PARAMS:=$(EXTRA_PARAMS) --namespace=$(namespace)
+endif
+.PHONY: get-namespace-cmd-arg
+
+get-delns-cmd-arg:
+ifdef delns
+    EXTRA_PARAMS:=$(EXTRA_PARAMS) --delns=$(delns)
+endif
+.PHONY: get-delns-cmd-arg
+
+
+get_extra_params: get-namespace-cmd-arg get-delns-cmd-arg
+
+
 dockerrun-p2p-elk:
 ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
-	$(DOCKERRUN) pytest -s -v p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 .PHONY: dockerrun-p2p-elk
 
-dockertest-p2p-elk: dockerbuild-test-elk dockerrun-p2p-elk
+dockertest-p2p-elk: dockerbuild-test-elk get_extra_params dockerrun-p2p-elk
 .PHONY: dockertest-p2p-elk
 
 
@@ -275,10 +291,10 @@ dockerrun-mining-elk:
 ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
-	$(DOCKERRUN) pytest -s -v test_bs.py --tc-file=config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v test_bs.py --tc-file=config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 .PHONY: dockerrun-mining-elk
 
-dockertest-mining-elk: dockerbuild-test-elk dockerrun-mining-elk
+dockertest-mining-elk: dockerbuild-test-elk get_extra_params dockerrun-mining-elk
 .PHONY: dockertest-mining-elk
 
 
@@ -286,11 +302,11 @@ dockerrun-hare-elk:
 ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
-	$(DOCKERRUN) pytest -s -v hare/test_hare.py::test_hare_sanity --tc-file=hare/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v hare/test_hare.py::test_hare_sanity --tc-file=hare/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 .PHONY: dockerrun-hare-elk
 
 
-dockertest-hare-elk: dockerbuild-test-elk dockerrun-hare-elk
+dockertest-hare-elk: dockerbuild-test-elk get_extra_params dockerrun-hare-elk
 .PHONY: dockertest-hare-elk
 
 
@@ -299,11 +315,11 @@ ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
 
-	$(DOCKERRUN) pytest -s -v sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 
 .PHONY: dockerrun-sync-elk
 
-dockertest-sync-elk: dockerbuild-test-elk dockerrun-sync-elk
+dockertest-sync-elk: dockerbuild-test-elk get_extra_params dockerrun-sync-elk
 .PHONY: dockertest-sync-elk
 
 
@@ -312,11 +328,11 @@ ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
 
-	$(DOCKERRUN) pytest -s -v late_nodes/test_delayed.py --tc-file=late_nodes/delayed_config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v late_nodes/test_delayed.py --tc-file=late_nodes/delayed_config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 
 .PHONY: dockerrun-late-nodes-elk
 
-dockertest-late-nodes-elk: dockerbuild-test-elk dockerrun-late-nodes-elk
+dockertest-late-nodes-elk: dockerbuild-test-elk get_extra_params dockerrun-late-nodes-elk
 .PHONY: dockertest-late-nodes-elk
 
 
@@ -325,11 +341,11 @@ ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
 
-	$(DOCKERRUN) pytest -s -v sync/genesis/test_genesis_voting.py --tc-file=sync/genesis/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v sync/genesis/test_genesis_voting.py --tc-file=sync/genesis/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 
 .PHONY: dockerrun-genesis-voting-elk
 
-dockertest-genesis-voting-elk: dockerbuild-test-elk dockerrun-genesis-voting-elk
+dockertest-genesis-voting-elk: dockerbuild-test-elk get_extra_params dockerrun-genesis-voting-elk
 .PHONY: dockertest-genesis-voting-elk
 
 
@@ -338,11 +354,11 @@ ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
 
-	$(DOCKERRUN) pytest -s -v block_atx/add_node/test_blocks_add_node.py --tc-file=block_atx/add_node/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v block_atx/add_node/test_blocks_add_node.py --tc-file=block_atx/add_node/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 
 .PHONY: dockerrun-blocks-add-node-elk
 
-dockertest-blocks-add-node-elk: dockerbuild-test-elk dockerrun-blocks-add-node-elk
+dockertest-blocks-add-node-elk: dockerbuild-test-elk get_extra_params dockerrun-blocks-add-node-elk
 .PHONY: dockertest-blocks-add-node-elk
 
 
@@ -351,11 +367,11 @@ ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
 
-	$(DOCKERRUN) pytest -s -v block_atx/remove_node/test_blocks_remove_node.py --tc-file=block_atx/remove_node/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v block_atx/remove_node/test_blocks_remove_node.py --tc-file=block_atx/remove_node/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 
 .PHONY: dockerrun-blocks-remove-node-elk
 
-dockertest-blocks-remove-node-elk: dockerbuild-test-elk dockerrun-blocks-remove-node-elk
+dockertest-blocks-remove-node-elk: dockerbuild-test-elk get_extra_params dockerrun-blocks-remove-node-elk
 .PHONY: dockertest-blocks-remove-node-elk
 
 
