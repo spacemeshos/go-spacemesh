@@ -458,6 +458,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		channelAccount = events.GetAccountChannel()
 	}
 	if filterReward {
+		// needs to be buffered to avoid reporter from being blocked on slow streaming connections
 		channelReward := make(chan events.Reward, 30)
 		events.SubscribeToRewards(channelReward)
 	}

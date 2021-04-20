@@ -73,6 +73,7 @@ func ReportNewActivation(activation *types.ActivationTx) {
 	}
 }
 
+// SubscribeToRewards subscribes a channel to rewards events
 func SubscribeToRewards(subscriber chan Reward) {
 	mu.RLock()
 	defer mu.RUnlock()
@@ -82,6 +83,7 @@ func SubscribeToRewards(subscriber chan Reward) {
 	}
 }
 
+// UnsubscribeFromRewards unsubscribes a channel from rewards events
 func UnsubscribeFromRewards(subscriber chan Reward) {
 	mu.RLock()
 	defer mu.RUnlock()
