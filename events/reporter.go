@@ -132,8 +132,17 @@ func ReportNewLayer(layer NewLayer) {
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		reporter.channelLayer <- layer
-		log.With().Debug("reported new layer", layer)
+		if reporter.blocking {
+			reporter.channelLayer <- layer
+			log.With().Debug("reported new layer", layer)
+		} else {
+			select {
+			case reporter.channelLayer <- layer:
+				log.With().Debug("reported new layer", layer)
+			default:
+				log.With().Debug("not reporting new layer as no one is listening", layer)
+			}
+		}
 	}
 }
 
@@ -143,8 +152,17 @@ func ReportError(err NodeError) {
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		reporter.channelError <- err
-		log.Debug("reported error: %v", err)
+		if reporter.blocking {
+			reporter.channelError <- err
+			log.Debug("reported error: %v", err)
+		} else {
+			select {
+			case reporter.channelError <- err:
+				log.Debug("reported error: %v", err)
+			default:
+				log.Debug("not reporting error as buffer is full: %v", err)
+			}
+		}
 	}
 }
 
@@ -165,8 +183,17 @@ func ReportNodeStatusUpdate() {
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		reporter.channelStatus <- struct{}{}
-		log.Debug("reported status update")
+		if reporter.blocking {
+			reporter.channelStatus <- struct{}{}
+			log.Debug("reported status update")
+		} else {
+			select {
+			case reporter.channelStatus <- struct{}{}:
+				log.Debug("reported status update")
+			default:
+				log.Debug("not reporting status update as no one is listening")
+			}
+		}
 	}
 }
 
@@ -176,8 +203,17 @@ func ReportReceipt(r TxReceipt) {
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		reporter.channelReceipt <- r
-		log.Debug("reported receipt: %v", r)
+		if reporter.blocking {
+			reporter.channelReceipt <- r
+			log.Debug("reported receipt: %v", r)
+		} else {
+			select {
+			case reporter.channelReceipt <- r:
+				log.Debug("reported receipt: %v", r)
+			default:
+				log.Debug("not reporting receipt as no one is listening: %v", r)
+			}
+		}
 	}
 }
 
@@ -187,8 +223,17 @@ func ReportAccountUpdate(a types.Address) {
 	defer mu.RUnlock()
 
 	if reporter != nil {
+		if reporter.blocking {
 			reporter.channelAccount <- a
 			log.With().Debug("reported account update", a)
+		} else {
+			select {
+			case reporter.channelAccount <- a:
+				log.With().Debug("reported account update", a)
+			default:
+				log.With().Debug("not reporting account update as no one is listening", a)
+			}
+		}
 	}
 }
 
