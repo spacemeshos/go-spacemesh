@@ -245,7 +245,7 @@ func inputVectorReqFactory(lyreq []byte) requestFactory {
 			s.Info("handle inputvec response")
 			defer close(ch)
 			if len(msg) == 0 || msg == nil {
-				s.Warning("peer responded with nil to inputvec request %v", peer, lyreq)
+				s.With().Warning("peer responded with nil to inputvec request", peer)
 				return
 			}
 
