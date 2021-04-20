@@ -73,6 +73,31 @@ func ReportNewActivation(activation *types.ActivationTx) {
 	}
 }
 
+func SubscribeToRewards(subscriber chan Reward) {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	if reporter != nil {
+		reporter.rewardsSubs = append(reporter.rewardsSubs, subscriber)
+	}
+}
+
+func UnsubscribeFromRewards(subscriber chan Reward) {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	if reporter != nil {
+		for i, s := range reporter.rewardsSubs {
+			if s == subscriber {
+				reporter.rewardsSubs[i] = reporter.rewardsSubs[len(reporter.rewardsSubs)-1]
+				reporter.rewardsSubs = reporter.rewardsSubs[:len(reporter.rewardsSubs)-1]
+				break
+			}
+		}
+
+	}
+}
+
 // ReportRewardReceived reports a new reward
 func ReportRewardReceived(r Reward) {
 	mu.RLock()
@@ -84,9 +109,13 @@ func ReportRewardReceived(r Reward) {
 		SmesherID: r.Smesher.ToBytes(),
 	})
 
-	if reporter != nil {
-		reporter.channelReward <- r
-		log.Debug("reported reward: %v", r)
+	if reporter != nil && len(reporter.rewardsSubs) > 0 {
+		log.Info("about to report reward: %v", r)
+		for _, sub := range reporter.rewardsSubs {
+			sub <- r
+		}
+
+		log.Info("reported reward to subscriber: %v", r)
 	}
 }
 
@@ -303,17 +332,6 @@ func GetAccountChannel() chan types.Address {
 	return nil
 }
 
-// GetRewardChannel returns a channel for rewards
-func GetRewardChannel() chan Reward {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	if reporter != nil {
-		return reporter.channelReward
-	}
-	return nil
-}
-
 // GetReceiptChannel returns a channel for tx receipts
 func GetReceiptChannel() chan TxReceipt {
 	mu.RLock()
@@ -434,10 +452,10 @@ type EventReporter struct {
 	channelError       chan NodeError
 	channelStatus      chan struct{}
 	channelAccount     chan types.Address
-	channelReward      chan Reward
 	channelReceipt     chan TxReceipt
 	stopChan           chan struct{}
 	blocking           bool
+	rewardsSubs 	   []chan Reward
 }
 
 func newEventReporter(bufsize int, blocking bool) *EventReporter {
@@ -447,10 +465,10 @@ func newEventReporter(bufsize int, blocking bool) *EventReporter {
 		channelLayer:       make(chan NewLayer, bufsize),
 		channelStatus:      make(chan struct{}, bufsize),
 		channelAccount:     make(chan types.Address, bufsize),
-		channelReward:      make(chan Reward, bufsize),
 		channelReceipt:     make(chan TxReceipt, bufsize),
 		channelError:       make(chan NodeError, bufsize),
 		stopChan:           make(chan struct{}),
+		rewardsSubs: 		[]chan Reward{},
 		blocking:           blocking,
 	}
 }
@@ -466,9 +484,11 @@ func CloseEventReporter() {
 		close(reporter.channelError)
 		close(reporter.channelStatus)
 		close(reporter.channelAccount)
-		close(reporter.channelReward)
 		close(reporter.channelReceipt)
 		close(reporter.stopChan)
+		for _, c := range reporter.rewardsSubs {
+			close(c)
+		}
 		reporter = nil
 	}
 }

@@ -277,7 +277,8 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 		channelAccount = events.GetAccountChannel()
 	}
 	if filterReward {
-		channelReward = events.GetRewardChannel()
+		channelReward := make(chan events.Reward, 30)
+		events.SubscribeToRewards(channelReward)
 	}
 	if filterReceipt {
 		channelReceipt = events.GetReceiptChannel()
@@ -363,6 +364,9 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 			}
 		case <-stream.Context().Done():
 			log.Info("AccountDataStream closing stream, client disconnected")
+			if channelReward != nil {
+				events.UnsubscribeFromRewards(channelReward)
+			}
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate
@@ -384,11 +388,13 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 	smesherIDBytes := in.Id.Id
 
 	// subscribe to the rewards channel
-	channelReward := events.GetRewardChannel()
+
+	channelRewards := make(chan events.Reward, 30)
+	events.SubscribeToRewards(channelRewards)
 
 	for {
 		select {
-		case reward, ok := <-channelReward:
+		case reward, ok := <-channelRewards:
 			if !ok {
 				//shut down the reward channel
 				log.Info("Reward channel closed, shutting down")
@@ -412,6 +418,7 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 			}
 		case <-stream.Context().Done():
 			log.Info("SmesherRewardStream closing stream, client disconnected")
+			events.UnsubscribeFromRewards(channelRewards)
 			return nil
 		}
 	}
@@ -451,7 +458,8 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		channelAccount = events.GetAccountChannel()
 	}
 	if filterReward {
-		channelReward = events.GetRewardChannel()
+		channelReward := make(chan events.Reward, 30)
+		events.SubscribeToRewards(channelReward)
 	}
 	if filterReceipt {
 		channelReceipt = events.GetReceiptChannel()
@@ -555,10 +563,16 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			}
 		case <-stream.Context().Done():
 			log.Info("AccountDataStream closing stream, client disconnected")
+
+			if channelReward != nil {
+				events.UnsubscribeFromRewards(channelReward)
+			}
+
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate
 		// that the service needs to shut down?
 		// See https://github.com/spacemeshos/go-spacemesh/issues/2075
+
 	}
 }
