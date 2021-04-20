@@ -130,7 +130,7 @@ func TestTurtle_HandleIncomingLayer_VoteAbstain(t *testing.T) {
 
 // voteNegative - the amoutn of blocks to vote negative per layer
 // voteAbstain - the amoutn of layers to vote abstain because we always abstain on a whole layer
-func turtleSanity(t testing.TB, layers types.LayerID, blocksPerLayer, voteNegative int, voteAbstain int) (trtl *turtle, negative []types.BlockID, abstains []types.BlockID) {
+func turtleSanity(t *testing.T, layers types.LayerID, blocksPerLayer, voteNegative int, voteAbstain int) (trtl *turtle, negative []types.BlockID, abstains []types.BlockID) {
 	msh := getInMemMesh()
 
 	newlyrs := make(map[types.LayerID]struct{})
@@ -186,14 +186,14 @@ func turtleSanity(t testing.TB, layers types.LayerID, blocksPerLayer, voteNegati
 
 	var l types.LayerID
 	for l = mesh.GenesisLayer().Index() + 1; l <= layers; l++ {
-		turtleMakeAndProcessLayer(l, trtl, blocksPerLayer, msh, hm)
+		turtleMakeAndProcessLayer(t, l, trtl, blocksPerLayer, msh, hm)
 		fmt.Println("Handled ", l, "========================================================================")
 	}
 
 	return
 }
 
-func turtleMakeAndProcessLayer(l types.LayerID, trtl *turtle, blocksPerLayer int, msh *mesh.DB, hm func(id types.LayerID) ([]types.BlockID, error)) {
+func turtleMakeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, msh *mesh.DB, hm func(id types.LayerID) ([]types.BlockID, error)) {
 	fmt.Println("choosing base block layer ", l)
 	msh.InputVectorBackupFunc = hm
 	b, lists, err := trtl.BaseBlock()
@@ -225,11 +225,12 @@ func turtleMakeAndProcessLayer(l types.LayerID, trtl *turtle, blocksPerLayer int
 	}
 
 	// write blocks to database first; the verifying tortoise will subsequently read them
-	if blocks, err := hm(l); err != nil {
-		panic(fmt.Sprintf("error getting blocks for layer %v: %v", l, err))
-	} else if err := msh.SaveLayerInputVector(l, blocks); err != nil {
-		panic(fmt.Sprintf("error saving input vector to database for layer %v: %v", l, err))
+	blocks, err := hm(l)
+	if err == nil {
+		// save blocks to db for this layer
+		require.NoError(t, msh.SaveLayerInputVector(l, blocks))
 	}
+
 	trtl.HandleIncomingLayer(lyr)
 }
 
@@ -272,7 +273,7 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 
 	var l types.LayerID
 	for l = types.GetEffectiveGenesis() + 1; l < layers; l++ {
-		turtleMakeAndProcessLayer(l, trtl, blocksPerLayer, msh, layerfuncs[l-types.GetEffectiveGenesis()-1])
+		turtleMakeAndProcessLayer(t, l, trtl, blocksPerLayer, msh, layerfuncs[l-types.GetEffectiveGenesis()-1])
 		fmt.Println("Handled ", l, " Verified ", trtl.Verified, "========================================================================")
 	}
 
