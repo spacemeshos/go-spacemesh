@@ -237,14 +237,14 @@ func (p *MessageServer) SendRequest(ctx context.Context, msgType MessageType, pa
 	p.pendingQueue.PushBack(Item{id: reqID, timestamp: time.Now()})
 	p.pendMutex.Unlock()
 	msg := &service.DataMsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
-	if sendErr := p.network.SendWrappedMessage(ctx, address, p.name, msg); sendErr != nil {
+	if err := p.network.SendWrappedMessage(ctx, address, p.name, msg); err != nil {
 		p.WithContext(ctx).With().Error("sending message failed",
 			log.Uint32("p2p_msg_type", uint32(msgType)),
 			log.FieldNamed("recipient", address),
 			log.Int("msglen", len(payload)),
-			log.Err(sendErr))
+			log.Err(err))
 		p.removeFromPending(reqID)
-		return sendErr
+		return err
 	}
 	p.WithContext(ctx).With().Debug("sent request", log.Uint64("req_id", reqID))
 	return nil
