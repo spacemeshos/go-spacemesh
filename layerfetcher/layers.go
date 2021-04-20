@@ -136,15 +136,16 @@ func (l *Logic) LayerHashBlocksReceiver(msg []byte) []byte {
 // fetch block ids from all peers
 // fetch ATXs and Txs per block
 func (l *Logic) PollLayer(ctx context.Context, layer types.LayerID) chan LayerPromiseResult {
-	result := make(chan LayerPromiseResult)
+	l.log.WithContext(ctx).With().Info("polling for layer", layer)
+	result := make(chan LayerPromiseResult, 1)
 
 	l.layerResM.Lock()
 	l.layerResults[layer] = append(l.layerResults[layer], result)
 	l.layerResM.Unlock()
 
-	peers := l.net.GetPeers()
 	// request layers from all peers since different peers can have different layer structures (in extreme cases)
 	// we ask for all blocks so that we know
+	peers := l.net.GetPeers()
 	for _, p := range peers {
 		// build custom receiver for each peer so that receiver will know which peer the hash came from
 		// so that it could request relevant block ids from the same peer

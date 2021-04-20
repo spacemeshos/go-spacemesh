@@ -2,21 +2,30 @@ package grpcserver
 
 import (
 	"bytes"
+	"context"
+	"errors"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // GlobalStateService exposes global state data, output from the STF
 type GlobalStateService struct {
-	Mesh    api.TxAPI
-	Mempool api.MempoolAPI
+	Mesh                             api.TxAPI
+	Mempool                          api.MempoolAPI
+	globalStateStreamRewardsChannel  chan events.Reward
+	globalStateStreamReceiptsChannel chan events.TxReceipt
+	globalStateStreamAccountChannel  chan types.Address
+	globalStateStreamLayerChannel    chan events.NewLayer
+	accountDataStreamRewardsChannel  chan events.Reward
+	accountDataStreamReceiptsChannel chan events.TxReceipt
+	accountDataStreamAccountChannel  chan types.Address
+	smesherRewardStreamRewardChannel chan events.Reward
 }
 
 // RegisterService registers this service with a grpc server instance
@@ -274,13 +283,37 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 		channelReceipt chan events.TxReceipt
 	)
 	if filterAccount {
-		channelAccount = events.GetAccountChannel()
+		if s.accountDataStreamAccountChannel == nil {
+			channelAccount = events.SubscribeToAccounts()
+			if channelAccount == nil {
+				log.Error("Reporter is not running")
+				return errors.New("Reporter is not running")
+			}
+		} else {
+			channelAccount = s.accountDataStreamAccountChannel
+		}
 	}
 	if filterReward {
-		channelReward = events.GetRewardChannel()
+		if s.accountDataStreamRewardsChannel == nil {
+			channelReward = events.SubscribeToRewards()
+			if channelReward == nil {
+				log.Error("Reporter is not running")
+				return errors.New("Reporter is not running")
+			}
+		} else {
+			channelReward = s.accountDataStreamRewardsChannel
+		}
 	}
 	if filterReceipt {
-		channelReceipt = events.GetReceiptChannel()
+		if s.accountDataStreamReceiptsChannel == nil {
+			channelReceipt = events.SubscribeToReceipts()
+			if channelReceipt == nil {
+				log.Error("Reporter is not running")
+				return errors.New("Reporter is not running")
+			}
+		} else {
+			channelReceipt = s.accountDataStreamReceiptsChannel
+		}
 	}
 
 	for {
@@ -363,6 +396,15 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 			}
 		case <-stream.Context().Done():
 			log.Info("AccountDataStream closing stream, client disconnected")
+			if channelReward != nil {
+				events.UnsubscribeFromRewards(channelReward)
+			}
+			if channelAccount != nil {
+				events.UnsubscribeFromAccounts(channelAccount)
+			}
+			if channelReceipt != nil {
+				events.UnsubscribeFromReceipts(channelReceipt)
+			}
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate
@@ -384,11 +426,16 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 	smesherIDBytes := in.Id.Id
 
 	// subscribe to the rewards channel
-	channelReward := events.GetRewardChannel()
+
+	channelRewards := events.SubscribeToRewards()
+	if channelRewards == nil {
+		log.Error("Reporter is not running")
+		return errors.New("Reporter is not running")
+	}
 
 	for {
 		select {
-		case reward, ok := <-channelReward:
+		case reward, ok := <-channelRewards:
 			if !ok {
 				//shut down the reward channel
 				log.Info("Reward channel closed, shutting down")
@@ -412,6 +459,7 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 			}
 		case <-stream.Context().Done():
 			log.Info("SmesherRewardStream closing stream, client disconnected")
+			events.UnsubscribeFromRewards(channelRewards)
 			return nil
 		}
 	}
@@ -448,18 +496,54 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		channelLayer   chan events.NewLayer
 	)
 	if filterAccount {
-		channelAccount = events.GetAccountChannel()
+		if s.globalStateStreamAccountChannel == nil {
+			channelAccount = events.SubscribeToAccounts()
+			if channelAccount == nil {
+				log.Error("Reporter is not running")
+				return errors.New("Reporter is not running")
+			}
+		} else {
+			channelAccount = s.globalStateStreamAccountChannel
+		}
 	}
 	if filterReward {
-		channelReward = events.GetRewardChannel()
+		// needs to be buffered to avoid reporter from being blocked on slow streaming connections
+		if s.globalStateStreamRewardsChannel == nil {
+			channelReward = events.SubscribeToRewards()
+			if channelReward == nil {
+				log.Error("Reporter is not running")
+				return errors.New("Reporter is not running")
+			}
+		} else {
+			channelReward = s.globalStateStreamRewardsChannel
+		}
+		if channelReward == nil {
+			// what to do here
+		}
 	}
 	if filterReceipt {
-		channelReceipt = events.GetReceiptChannel()
+		if s.globalStateStreamReceiptsChannel == nil {
+			channelReceipt = events.SubscribeToReceipts()
+			if channelReceipt == nil {
+				log.Error("Reporter is not running")
+				return errors.New("Reporter is not running")
+			}
+		} else {
+			channelReceipt = s.globalStateStreamReceiptsChannel
+		}
 	}
 	if filterState {
 		// Whenever new state is applied to the mesh, a new layer is reported.
 		// There is no separate reporting specifically for new state.
-		channelLayer = events.GetLayerChannel()
+		if s.globalStateStreamLayerChannel != nil {
+			channelLayer = s.globalStateStreamLayerChannel
+		} else {
+			channelLayer = events.SubscribeToLayerChannel()
+			if channelLayer == nil {
+				log.Error("Reporter is not running")
+				return errors.New("Reporter is not running")
+			}
+		}
 	}
 
 	for {
@@ -555,10 +639,21 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			}
 		case <-stream.Context().Done():
 			log.Info("AccountDataStream closing stream, client disconnected")
+
+			if channelReward != nil {
+				events.UnsubscribeFromRewards(channelReward)
+			}
+			if channelAccount != nil {
+				events.UnsubscribeFromAccounts(channelAccount)
+			}
+			if channelReceipt != nil {
+				events.UnsubscribeFromReceipts(channelReceipt)
+			}
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate
 		// that the service needs to shut down?
 		// See https://github.com/spacemeshos/go-spacemesh/issues/2075
+
 	}
 }

@@ -1,27 +1,31 @@
 package grpcserver
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // MeshService exposes mesh data such as accounts, blocks, and transactions
 type MeshService struct {
-	Mesh             api.TxAPI // Mesh
-	Mempool          api.MempoolAPI
-	GenTime          api.GenesisTimeAPI
-	LayersPerEpoch   int
-	NetworkID        int8
-	LayerDurationSec int
-	LayerAvgSize     int
-	TxsPerBlock      int
+	Mesh              api.TxAPI // Mesh
+	Mempool           api.MempoolAPI
+	GenTime           api.GenesisTimeAPI
+	LayersPerEpoch    int
+	NetworkID         int8
+	LayerDurationSec  int
+	LayerAvgSize      int
+	TxsPerBlock       int
+	layerChannel      chan events.NewLayer
+	activationChannel chan *types.ActivationTx
+	txChannel         chan events.TransactionWithValidity
 }
 
 // RegisterService registers this service with a grpc server instance
@@ -440,10 +444,26 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 		activationsStream chan *types.ActivationTx
 	)
 	if filterTx {
-		txStream = events.GetNewTxChannel()
+		if s.txChannel == nil {
+			txStream = events.SubscribeToTxChannel()
+			if txStream == nil {
+				log.Error("Reporter is not running")
+				return errors.New("Reporter is not running")
+			}
+		} else {
+			txStream = s.txChannel
+		}
 	}
 	if filterActivations {
-		activationsStream = events.GetActivationsChannel()
+		if s.activationChannel == nil {
+			activationsStream = events.SubscribeToActivations()
+			if activationsStream == nil {
+				log.Error("Reporter is not running")
+				return errors.New("Reporter is not running")
+			}
+		} else {
+			activationsStream = s.activationChannel
+		}
 	}
 
 	for {
@@ -508,7 +528,16 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 // LayerStream exposes a stream of all mesh data per layer
 func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService_LayerStreamServer) error {
 	log.Info("GRPC MeshService.LayerStream")
-	layerStream := events.GetLayerChannel()
+	var layerStream chan events.NewLayer
+	if s.layerChannel == nil {
+		layerStream = events.SubscribeToLayerChannel()
+		if layerStream == nil {
+			log.Error("Reporter is not running")
+			return errors.New("Reporter is not running")
+		}
+	} else {
+		layerStream = s.layerChannel
+	}
 
 	for {
 		select {

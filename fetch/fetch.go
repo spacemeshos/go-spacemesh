@@ -20,7 +20,12 @@ import (
 // Hint marks which DB should be queried for a certain provided hash
 type Hint string
 
-// priority defines whether data will be fetched at once or batched and waited for up to "batchTimeout"
+// Field returns a loggable field
+func (h Hint) Field() log.Field {
+	return log.String("hint", string(h))
+}
+
+// priority defines whether Data will be fetched at once or batched and waited for up to "batchTimeout"
 // until fetched
 type priority uint16
 
@@ -132,7 +137,7 @@ func NewMessageNetwork(ctx context.Context, requestTimeOut int, net service.Serv
 func (f MessageNetwork) GetRandomPeer() p2ppeers.Peer {
 	peers := f.peersProvider.GetPeers()
 	if len(peers) == 0 {
-		f.Log.Panic("cannot send fetch - no peers found")
+		f.Log.Panic("cannot send fetch: no peers found")
 	}
 	rand.Seed(time.Now().Unix()) // initialize global pseudo random generator
 	return peers[rand.Intn(len(peers))]
@@ -184,10 +189,10 @@ func NewFetch(ctx context.Context, cfg Config, network service.Service, logger l
 }
 
 // Start starts handling fetch requests
-func (f *Fetch) Start() {
+func (f *Fetch) Start(ctx context.Context) {
 	f.onlyOnce.Do(func() {
 		f.net.RegisterBytesMsgHandler(fetch, f.FetchRequestHandler)
-		go f.loop()
+		go f.loop(ctx)
 	})
 }
 
@@ -217,8 +222,9 @@ func (f *Fetch) AddDB(hint Hint, db database.Database) {
 
 // here we receive all requests for hashes for all DBs and batch them together before we send the request to peer
 // there can be a priority request that will not be batched
-func (f *Fetch) loop() {
-	f.log.Info("starting main loop")
+func (f *Fetch) loop(ctx context.Context) {
+	logger := f.log.WithContext(ctx)
+	logger.Info("starting main fetch loop")
 	for {
 		select {
 		case req := <-f.requestReceiver:
@@ -227,6 +233,7 @@ func (f *Fetch) loop() {
 			f.activeRequests[req.hash] = append(f.activeRequests[req.hash], req)
 			rLen := len(f.activeRequests)
 			f.activeReqM.Unlock()
+			logger.With().Info("request added to queue", req.hash)
 			if req.priority > Low {
 				f.sendBatch([]requestMessage{{req.hint, req.hash}})
 				break
@@ -246,6 +253,7 @@ func (f *Fetch) loop() {
 // FetchRequestHandler handles requests for sync from peersProvider, and basically reads data from database and puts it
 // in a response batch
 func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
+	logger := f.log.WithContext(ctx)
 	if f.stopped() {
 		return nil
 	}
@@ -253,6 +261,7 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 	var requestBatch requestBatch
 	err := types.BytesToInterface(data, requestBatch)
 	if err != nil {
+		logger.With().Error("cannot parse request", log.Err(err))
 		return []byte{}
 	}
 	resBatch := responseBatch{
@@ -265,12 +274,15 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 		db, ok := f.dbs[r.Hint]
 		if !ok {
 			//db not found, don't return response here
+			logger.With().Warning("db not found", r.Hint)
 			continue
 		}
 		res, err := db.Get(r.Hash.Bytes())
 		if err != nil {
-			// no value found
+			logger.With().Warning("remote peer requested non existing hash", r.Hash, log.Err(err))
 			continue
+		} else {
+			logger.With().Info("responded to hash req", r.Hash, log.Int("num_bytes", len(res)))
 		}
 		// add response to batch
 		m := responseMessage{
@@ -280,11 +292,15 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 		resBatch.Responses = append(resBatch.Responses, m)
 	}
 
-	bts, err := types.InterfaceToBytes(resBatch)
+	bts, err := types.InterfaceToBytes(&resBatch)
 	if err != nil {
-		f.log.Error("cannot parse message")
+		logger.With().Error("cannot parse message", log.Err(err))
 		return nil
 	}
+	logger.With().Info("returning response",
+		log.FieldNamed("batch_id", resBatch.ID),
+		log.Int("num_responses", len(resBatch.Responses)),
+		log.Int("total_bytes", len(bts)))
 	return bts
 }
 
@@ -305,7 +321,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 	batch, has := f.activeBatches[response.ID]
 	f.activeBatchM.RUnlock()
 	if !has {
-		f.log.Warning("unknown batch response received, or already invalidated %v", response.ID)
+		f.log.With().Warning("unknown batch response received, or already invalidated", response.ID)
 		return
 	}
 
@@ -354,6 +370,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 				Hash: h,
 			}
 		}
+		f.log.With().Warning("hash was not found in response", batchMap[h].Hint, h)
 	}
 
 	//delete the hash of waiting batch
@@ -367,6 +384,7 @@ func (f *Fetch) requestHashBatchFromPeers() {
 	var requestList []requestMessage
 	f.activeReqM.RLock()
 	for hash, req := range f.activeRequests {
+		f.log.With().Debug("batching", hash)
 		requestList = append(requestList, requestMessage{Hash: hash, Hint: req[0].hint})
 	}
 	f.activeReqM.RUnlock()
@@ -393,6 +411,7 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 	f.activeBatchM.Unlock()
 	// timeout function will be called if no response was received for the hashes sent
 	timeoutFunc := func(err error) {
+		f.log.With().Error("request timed out", batch.ID)
 		f.handleHashError(batch.ID, err)
 	}
 
@@ -478,7 +497,7 @@ func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashD
 
 	//check if we already have this hash locally
 	if _, ok := f.dbs[h]; !ok {
-		f.log.Panic("tried to fetch data from DB that doesn't exist locally: %v", h)
+		f.log.With().Panic("tried to fetch data from db that doesn't exist locally", h)
 	}
 
 	if b, err := f.dbs[h].Get(hash.Bytes()); err == nil {

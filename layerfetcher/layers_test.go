@@ -107,7 +107,7 @@ func (m mockFetcher) GetHashes(hash []types.Hash32, hint fetch.Hint, validateAnd
 type mockBlocks struct {
 }
 
-func (m mockBlocks) HandleBlockData(ctx context.Context, date []byte, fetcher service.Fetcher) error {
+func (m mockBlocks) HandleBlockData(context.Context, []byte, service.Fetcher) error {
 	panic("implement me")
 }
 

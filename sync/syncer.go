@@ -48,7 +48,7 @@ type blockEligibilityValidator interface {
 
 type ticker interface {
 	Subscribe() timesync.LayerTimer
-	Unsubscribe(timer timesync.LayerTimer)
+	Unsubscribe(timesync.LayerTimer)
 	GetCurrentLayer() types.LayerID
 	LayerToTime(types.LayerID) time.Time
 }
