@@ -51,8 +51,6 @@ type turtle struct {
 	// use 2D array to be able to iterate from latest elements easily
 	BlockOpinionsByLayer map[types.LayerID]map[types.BlockID]Opinion // records hdist, for each block, its votes about every
 	// previous block
-	// Use this to be able to lookup blocks Opinion without iterating the array.
-	BlocksToBlocksIndex map[types.BlockID]int
 
 	// TODO: Tal says: We keep a vector containing our vote totals (positive and negative) for every previous block
 	// that's not needed here, probably for self healing?
@@ -73,7 +71,6 @@ func newTurtle(bdp blockDataProvider, hdist, avgLayerSize int) *turtle {
 		AvgLayerSize:         avgLayerSize,
 		GoodBlocksIndex:      make(map[types.BlockID]struct{}),
 		BlockOpinionsByLayer: make(map[types.LayerID]map[types.BlockID]Opinion, hdist),
-		BlocksToBlocksIndex:  make(map[types.BlockID]int),
 		MaxExceptions:        hdist * avgLayerSize * 100,
 	}
 	return t
@@ -551,9 +548,7 @@ layerLoop:
 			}
 
 			// check that the total weight exceeds the confidence threshold in all positions up
-			threshold := globalThreshold * float64(i-pbaseOld) * float64(t.AvgLayerSize)
-			t.logger.With().Debug("global opinion", sum, log.String("threshold", fmt.Sprint(threshold)))
-			globalOpinion := calculateGlobalOpinion(sum, t.AvgLayerSize, float64(i-pbaseOld))
+			globalOpinion := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(i-pbaseOld))
 			t.logger.With().Debug("calculated global opinion on block",
 				log.FieldNamed("voted_block", blk),
 				i,

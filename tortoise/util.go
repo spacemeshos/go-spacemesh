@@ -66,8 +66,9 @@ func (a vec) String() string {
 	return "abstain"
 }
 
-func calculateGlobalOpinion(v vec, layerSize int, delta float64) vec {
+func calculateGlobalOpinion(logger log.Log, v vec, layerSize int, delta float64) vec {
 	threshold := globalThreshold * delta * float64(layerSize)
+	logger.With().Debug("global opinion", v, log.String("threshold", fmt.Sprint(threshold)))
 	if float64(v[0]) > threshold {
 		return support
 	} else if float64(v[1]) > threshold {
