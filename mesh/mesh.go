@@ -37,7 +37,7 @@ var TORTOISE = []byte("tortoise")
 var VERIFIED = []byte("verified")
 
 type tortoise interface {
-	HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID)
+	HandleIncomingLayer(layer *types.Layer, inputVector []types.BlockID) (types.LayerID, types.LayerID)
 	LatestComplete() types.LayerID
 	Persist() error
 	HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID)
@@ -45,7 +45,7 @@ type tortoise interface {
 
 // Validator interface to be used in tests to mock validation flow
 type Validator interface {
-	ValidateLayer(layer *types.Layer)
+	ValidateLayer(layer *types.Layer, inputVector []types.BlockID)
 	HandleLateBlock(bl *types.Block)
 	ProcessedLayer() types.LayerID
 	SetProcessedLayer(lyr types.LayerID)
@@ -164,7 +164,7 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, t
 		msh.pushLayersToState(msh.LatestLayerInState()+1, msh.trtl.LatestComplete())
 	}
 
-	msh.With().Info("recovered mesh from disc",
+	msh.With().Info("recovered mesh from disk",
 		log.FieldNamed("latest_layer", msh.latestLayer),
 		log.FieldNamed("validated_layer", msh.ProcessedLayer()),
 		log.String("layer_hash", util.Bytes2Hex(msh.layerHash)),
@@ -206,7 +206,7 @@ func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
 	// Report the status update, as well as the layer itself.
 	layer, err := msh.GetLayer(idx)
 	if err != nil {
-		msh.Error("error reading layer data for layer", layer, log.Err(err))
+		msh.With().Error("error reading layer data", idx, log.Err(err))
 	} else {
 		events.ReportNewLayer(events.NewLayer{
 			Layer:  layer,
@@ -220,7 +220,7 @@ func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
 		msh.With().Info("set latest known layer", idx)
 		msh.latestLayer = idx
 		if err := msh.general.Put(constLATEST, idx.Bytes()); err != nil {
-			msh.Error("could not persist Latest layer index")
+			msh.Error("could not persist latest layer index")
 		}
 	}
 }
@@ -266,7 +266,7 @@ func (vl *validator) HandleLateBlock(b *types.Block) {
 	vl.pushLayersToState(oldPbase, newPbase)
 }
 
-func (vl *validator) ValidateLayer(lyr *types.Layer) {
+func (vl *validator) ValidateLayer(lyr *types.Layer, inputVector []types.BlockID) {
 	vl.With().Info("validate layer", lyr)
 	if len(lyr.Blocks()) == 0 {
 		vl.With().Info("skip validation of layer with no blocks", lyr)
@@ -278,7 +278,7 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 		return
 	}
 
-	oldPbase, newPbase := vl.trtl.HandleIncomingLayer(lyr)
+	oldPbase, newPbase := vl.trtl.HandleIncomingLayer(lyr, inputVector)
 	vl.SetProcessedLayer(lyr.Index())
 
 	if err := vl.trtl.Persist(); err != nil {
@@ -378,6 +378,18 @@ func (msh *Mesh) HandleValidatedLayer(validatedLayer types.LayerID, layer []type
 	// updateStateWithLayer, inside applyState. No need to report here.
 	msh.updateStateWithLayer(validatedLayer, lyr)
 	msh.reInsertTxsToPool(blocks, invalidBlocks, lyr.Index())
+
+	// get the full layer incl invalid blocks
+	for _, bl := range invalidBlocks {
+		lyr.AddBlock(bl)
+	}
+
+	msh.Log.With().Info("Mesh validating layer", lyr.Index().Field(), log.Int("valid_blocks", len(blocks)), log.Int("invalid_blocks", len(invalidBlocks)))
+
+	msh.ValidateLayer(lyr, types.BlockIDs(blocks))
+	if err := msh.SaveLayerInputVector(lyr.Index(), types.BlockIDs(blocks)); err != nil {
+		msh.Log.With().Error("Saving layer input vector failed", lyr.Index().Field())
+	}
 }
 
 func (msh *Mesh) getInvalidBlocksByHare(hareLayer *types.Layer) (invalid []*types.Block) {
@@ -599,17 +611,16 @@ func (msh *Mesh) AddBlock(blk *types.Block) error {
 func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 	msh.Info("setting zero block layer %v", lyr)
 	// check database for layer
-	_, err := msh.GetLayer(lyr)
-
-	if err == nil {
-		// layer exists
-		msh.Info("layer has blocks, dont set layer to 0 ")
-		return fmt.Errorf("layer exists")
-	}
-
-	if err != database.ErrNotFound {
-		// database error
-		return fmt.Errorf("could not fetch layer from database %s", err)
+	if l, err := msh.GetLayer(lyr); err != nil {
+		if err != database.ErrNotFound {
+			msh.With().Error("error trying to fetch layer from database", lyr, log.Err(err))
+			return err
+		}
+	} else if len(l.Blocks()) != 0 {
+		msh.With().Error("layer has blocks, cannot tag as zero block layer",
+			l,
+			log.Int("num_blocks", len(l.Blocks())))
+		return fmt.Errorf("layer has blocks")
 	}
 
 	msh.SetLatestLayer(lyr)
@@ -704,7 +715,7 @@ func (msh *Mesh) handleOrphanBlocks(blk *types.Block) {
 	}
 	msh.orphanBlocks[blk.Layer()][blk.ID()] = struct{}{}
 	msh.Debug("Added block %s to orphans", blk.ID())
-	for _, b := range blk.ViewEdges {
+	for _, b := range append(blk.ForDiff, append(blk.AgainstDiff, blk.NeutralDiff...)...) {
 		for layerID, layermap := range msh.orphanBlocks {
 			if _, has := layermap[b]; has {
 				msh.Log.With().Debug("delete block from orphans", b)
