@@ -165,7 +165,7 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, t
 		msh.pushLayersToState(msh.LatestLayerInState()+1, msh.trtl.LatestComplete())
 	}
 
-	msh.With().Info("recovered mesh from disc",
+	msh.With().Info("recovered mesh from disk",
 		log.FieldNamed("latest_layer", msh.latestLayer),
 		log.FieldNamed("validated_layer", msh.ProcessedLayer()),
 		log.String("layer_hash", util.Bytes2Hex(msh.layerHash)),
@@ -221,7 +221,7 @@ func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
 		msh.With().Info("set latest known layer", idx)
 		msh.latestLayer = idx
 		if err := msh.general.Put(constLATEST, idx.Bytes()); err != nil {
-			msh.Error("could not persist Latest layer index")
+			msh.Error("could not persist latest layer index")
 		}
 	}
 }
@@ -612,17 +612,19 @@ func (msh *Mesh) AddBlock(blk *types.Block) error {
 func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 	msh.With().Info("tagging zero block layer", lyr)
 	// check database for layer
-	_, err := msh.GetLayer(lyr)
-
-	if err == nil {
-		// layer exists
-		msh.With().Info("layer has blocks, not tagging as zero layer", lyr)
-		return fmt.Errorf("layer exists")
-	}
-
-	if err != database.ErrNotFound {
+	if l, err := msh.GetLayer(lyr); err != nil {
 		// database error
-		return fmt.Errorf("could not fetch layer from database: %s", err)
+		if err != database.ErrNotFound {
+			msh.With().Error("error trying to fetch layer from database", lyr, log.Err(err))
+			return err
+		}
+	} else if len(l.Blocks()) != 0 {
+		// layer exists
+		msh.With().Error("layer has blocks, cannot tag as zero block layer",
+			lyr,
+			l,
+			log.Int("num_blocks", len(l.Blocks())))
+		return fmt.Errorf("layer has blocks")
 	}
 
 	msh.SetLatestLayer(lyr)
