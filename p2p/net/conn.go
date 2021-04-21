@@ -351,7 +351,7 @@ func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Du
 		}{b: msg, e: err}
 		err = c.deadliner.SetReadDeadline(time.Time{}) // disable read deadline
 		if err != nil {
-			c.logger.Warning("could not set a read deadline err:", err)
+			c.logger.With().Warning("could not set a read deadline", log.Err(err))
 		}
 	}()
 

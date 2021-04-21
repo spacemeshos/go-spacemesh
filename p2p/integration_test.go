@@ -61,7 +61,7 @@ func (its *P2PIntegrationSuite) Test_SendingMessage() {
 			its.T().Fatal("got wrong message")
 		}
 	case <-tm:
-		its.T().Fatal("failed to deliver message within second")
+		its.T().Fatal("failed to deliver message within 10 seconds")
 	}
 	conn.Close()
 }
@@ -102,7 +102,7 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 	errs := errg.Wait()
 	its.T().Log(errs)
 	its.NoError(errs)
-	its.Equal(int(numgot), (its.BootstrappedNodeCount+its.BootstrapNodesCount)*MSGS)
+	its.Equal((its.BootstrappedNodeCount+its.BootstrapNodesCount)*MSGS, int(numgot))
 	testLog("%v All nodes got all messages in %v", its.T().Name(), time.Since(tm))
 	cancel()
 }
