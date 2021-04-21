@@ -52,14 +52,16 @@ type Broker struct {
 	isNodeSynced   syncStateFunc // provider function to check if the node is currently synced
 	layersPerEpoch uint16
 	inbox          chan service.GossipMessage
+	queue          priorityq.PriorityQueue
+	queueChannel   chan struct{} // used to synchronize the message queues
 	syncState      map[instanceID]bool
 	outbox         map[instanceID]chan *Msg
-	pending        map[instanceID][]*Msg // the buffer of pending messages for the next layer
+	pending        map[instanceID][]*Msg // the buffer of pending early messages for the next layer
 	tasks          chan func()           // a channel to synchronize tasks (register/unregister) with incoming messages handling
 	latestLayer    instanceID            // the latest layer to attempt register (successfully or unsuccessfully)
 	isStarted      bool
 	minDeleted     instanceID
-	limit          int // max number of consensus processes simultaneously
+	limit          int // max number of simultaneous consensus processes
 }
 
 func newBroker(networkService NetworkService, eValidator validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, limit int, closer Closer, log log.Log) *Broker {
@@ -78,6 +80,7 @@ func newBroker(networkService NetworkService, eValidator validator, stateQuerier
 		latestLayer:    instanceID(types.GetEffectiveGenesis()),
 		minDeleted:     0,
 		limit:          limit,
+		queue:          priorityq.New(inboxCapacity), // TODO: set capacity correctly
 	}
 }
 
@@ -91,6 +94,7 @@ func (b *Broker) Start() error {
 	b.isStarted = true
 
 	b.inbox = b.network.RegisterGossipProtocol(protoName, priorityq.Mid)
+	go b.queueLoop()
 	go b.eventLoop()
 
 	return nil
@@ -101,7 +105,6 @@ var (
 	errNotSynced         = errors.New("layer is not synced")
 	errFutureMsg         = errors.New("future message")
 	errRegistration      = errors.New("failed during registration")
-	errTooMany           = errors.New("too many concurrent consensus processes running")
 	errInstanceNotSynced = errors.New("instance not synchronized")
 )
 
@@ -141,14 +144,59 @@ func (b *Broker) validate(m *Message) error {
 	return nil
 }
 
-// listens to incoming messages and incoming tasks
-func (b *Broker) eventLoop() {
+// separate listener routine that receives gossip messages and adds them to the priority queue
+func (b *Broker) queueLoop() {
 	for {
 		select {
 		case msg := <-b.inbox:
+			logger := b.WithFields(log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
+			logger.Debug("hare broker received inbound gossip message")
 			if msg == nil {
-				b.With().Error("broker message validation failed: called with nil",
-					log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
+				logger.Error("broker message validation failed: called with nil")
+				continue
+			}
+
+			// prioritize based on signature: outbound messages (self-generated) get priority
+			priority := priorityq.Mid
+			if msg.IsOwnMessage() {
+				priority = priorityq.High
+			}
+			logger.With().Debug("assigned message priority", log.Int("priority", int(priority)))
+
+			if err := b.queue.Write(priority, msg); err != nil {
+				logger.With().Error("error writing inbound message to priority queue, dropping", log.Err(err))
+			}
+
+			// indicate to the listener that there's a new message in the queue
+			b.queueChannel <- struct{}{}
+
+		case <-b.CloseChannel():
+			b.Info("broker exiting")
+			b.queue.Close()
+
+			// when closing we still need to release the listener to notice that the queue is closing
+			b.queueChannel <- struct{}{}
+			return
+		}
+	}
+}
+
+// listens to incoming messages and incoming tasks
+func (b *Broker) eventLoop() {
+	for {
+		b.With().Info("broker queue sizes",
+			log.Int("msg_queue_size", len(b.queueChannel)),
+			log.Int("task_queue_size", len(b.tasks)))
+		select {
+		case <-b.queueChannel:
+			rawMsg, err := b.queue.Read()
+			if err != nil {
+				b.With().Info("priority queue was closed, exiting", log.Err(err))
+				return
+			}
+			msg, ok := rawMsg.(service.GossipMessage)
+			if !ok {
+				b.Error("could not convert priority queue message, ignoring")
 				continue
 			}
 
@@ -158,7 +206,6 @@ func (b *Broker) eventLoop() {
 				b.With().Error("could not build message", h, log.Err(err))
 				continue
 			}
-
 			if hareMsg.InnerMsg == nil {
 				b.With().Error("broker message validation failed",
 					h,
@@ -246,9 +293,6 @@ func (b *Broker) eventLoop() {
 
 		case task := <-b.tasks:
 			task()
-		case <-b.CloseChannel():
-			b.Warning("broker exiting")
-			return
 		}
 	}
 }

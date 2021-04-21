@@ -31,12 +31,17 @@ func (pm directProtocolMessage) Bytes() []byte {
 
 type gossipProtocolMessage struct {
 	sender         p2pcrypto.PublicKey
+	ownMessage     bool
 	data           service.Data
 	validationChan chan service.MessageValidation
 }
 
 func (pm gossipProtocolMessage) Sender() p2pcrypto.PublicKey {
 	return pm.sender // DirectSender
+}
+
+func (pm gossipProtocolMessage) IsOwnMessage() bool {
+	return pm.ownMessage
 }
 
 func (pm gossipProtocolMessage) Data() service.Data {

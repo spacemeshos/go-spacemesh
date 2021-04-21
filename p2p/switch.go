@@ -253,7 +253,7 @@ func (s *Switch) onClosedConnection(cwe net.ConnectionWithErr) {
 // returns error if the Switch is already running or there was an error starting one of the needed services.
 func (s *Switch) Start() error {
 	if atomic.LoadUint32(&s.started) == 1 {
-		return errors.New("Switch already running")
+		return errors.New("switch already running")
 	}
 
 	var err error
@@ -606,7 +606,7 @@ func (s *Switch) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protoc
 
 // ProcessGossipProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will send
 // the message syntactic validation result on the validationCompletedChan ASAP
-func (s *Switch) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
+func (s *Switch) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, ownMessage bool, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
 	h := types.CalcMessageHash12(data.Bytes(), protocol)
 
 	// route authenticated message to the registered protocol
@@ -619,7 +619,7 @@ func (s *Switch) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protoc
 	metrics.QueueLength.With(metrics.ProtocolLabel, protocol).Set(float64(len(msgchan)))
 
 	// TODO: check queue length
-	msgchan <- gossipProtocolMessage{sender, data, validationCompletedChan}
+	msgchan <- gossipProtocolMessage{sender, ownMessage, data, validationCompletedChan}
 
 	return nil
 }

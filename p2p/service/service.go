@@ -50,6 +50,7 @@ type DirectMessage interface {
 // GossipMessage is an interface that represents a simple gossip message structure
 type GossipMessage interface {
 	Sender() p2pcrypto.PublicKey
+	IsOwnMessage() bool
 	Bytes() []byte
 	ValidationCompletedChan() chan MessageValidation
 	ReportValidation(protocol string)
