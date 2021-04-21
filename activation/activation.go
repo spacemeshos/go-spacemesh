@@ -220,14 +220,14 @@ func (b *Builder) loop() {
 func (b *Builder) buildNipstChallenge() error {
 	<-b.syncer.Await()
 	challenge := &types.NIPSTChallenge{NodeID: b.nodeID}
-	if atxID, pubLayerID, endTick, err := b.GetPositioningAtxInfo(); err != nil {
+	atxID, pubLayerID, endTick, err := b.GetPositioningAtxInfo()
+	if err != nil {
 		return fmt.Errorf("failed to get positioning ATX: %v", err)
-	} else {
-		challenge.PositioningATX = atxID
-		challenge.PubLayerID = pubLayerID.Add(b.layersPerEpoch)
-		challenge.StartTick = endTick
-		challenge.EndTick = endTick + b.tickProvider.NumOfTicks()
 	}
+	challenge.PositioningATX = atxID
+	challenge.PubLayerID = pubLayerID.Add(b.layersPerEpoch)
+	challenge.StartTick = endTick
+	challenge.EndTick = endTick + b.tickProvider.NumOfTicks()
 	if prevAtx, err := b.GetPrevAtx(b.nodeID); err != nil {
 		challenge.CommitmentMerkleRoot = b.commitment.MerkleRoot
 	} else {
