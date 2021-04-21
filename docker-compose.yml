@@ -25,7 +25,7 @@ services:
           "--tortoise-beacon-kappa", "${SMESH_TORTOISE-BEACON-KAPPA:-40}"
           "--tortoise-beacon-q", "${SMESH_TORTOISE-BEACON-Q:-0.33333}"
           "--tortoise-beacon-rounds-number", "${SMESH_TORTOISE-BEACON-ROUNDS-NUMBER:-300}"
-          "--tortoise-beacon-wakeup-delta", "${SMESH_TORTOISE-BEACON-WAKEUP-DELTA:-30m}"
+          "--tortoise-beacon-wakeup-delta", "${SMESH_TORTOISE-BEACON-ROUND-DURATION-SEC:-1800}"
           "--tortoise-beacon-theta", "${SMESH_TORTOISE-BEACON-THETA:-0.25}"
           "--tortoise-beacon-t-ave", "${SMESH_TORTOISE-BEACON-T-AVE:-1}"
           "--sync-request-timeout", "${SMESH_SYNC_REQ_TIMEOUT:-60000}",

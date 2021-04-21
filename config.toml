@@ -70,7 +70,7 @@ hare-wakeup-delta = 5
 tortoise-beacon-kappa = 40
 tortoise-beacon-q = 0.33333
 tortoise-beacon-rounds-number = 300
-tortoise-beacon-wakeup-delta = "30m"
+tortoise-beacon-round-duration-sec = 1800 # 30 minutes
 tortoise-beacon-theta = 0.25
 tortoise-beacon-t-ave = 1 # TODO(nkryuchkov): change
 

@@ -30,6 +30,12 @@ bootstrap:
     layer-duration-sec: '40'
     layer-average-size: '50'
     hare-wakeup-delta: '7'
+    tortoise-beacon-kappa: '40'
+    tortoise-beacon-q: '0.33333'
+    tortoise-beacon-rounds-number: '6'
+    tortoise-beacon-round-duration-sec: 30
+    tortoise-beacon-theta: '1'
+    tortoise-beacon-t-ave: '1'
     layers-per-epoch: '5'
     coinbase: '0x4321'
     eligibility-confidence-param: '5'
@@ -60,7 +66,7 @@ client:
     tortoise-beacon-kappa: '40'
     tortoise-beacon-q: '0.33333'
     tortoise-beacon-rounds-number: '6'
-    tortoise-beacon-wakeup-delta: '30s'
+    tortoise-beacon-round-duration-sec: 30
     tortoise-beacon-theta: '1'
     tortoise-beacon-t-ave: '1'
     layers-per-epoch: '5'

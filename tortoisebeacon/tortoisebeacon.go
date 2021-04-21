@@ -71,8 +71,8 @@ type TortoiseBeacon struct {
 	layerMu   sync.RWMutex
 	lastLayer types.LayerID
 
-	layerTicker  chan types.LayerID
-	networkDelta time.Duration
+	layerTicker   chan types.LayerID
+	roundDuration time.Duration
 
 	currentRoundsMu sync.RWMutex
 	currentRounds   map[types.EpochID]types.RoundID
@@ -119,7 +119,7 @@ func New(
 		tortoiseBeaconDB: tortoiseBeaconDB,
 		weakCoin:         weakCoin,
 		layerTicker:      layerTicker,
-		networkDelta:     conf.WakeupDelta,
+		roundDuration:    time.Duration(conf.RoundDuration) * time.Second,
 		currentRounds:    make(map[types.EpochID]types.RoundID),
 		timelyProposals:  make(map[types.EpochID]hashSet),
 		delayedProposals: make(map[types.EpochID]hashSet),
@@ -395,7 +395,7 @@ func (tb *TortoiseBeacon) handleEpoch(epoch types.EpochID) {
 
 func (tb *TortoiseBeacon) runConsensusPhase(epoch types.EpochID) error {
 	// rounds 1 to K
-	ticker := time.NewTicker(tb.networkDelta)
+	ticker := time.NewTicker(tb.roundDuration)
 	defer ticker.Stop()
 
 	go func() {
@@ -559,7 +559,7 @@ func (tb *TortoiseBeacon) lastRound() types.RoundID {
 func (tb *TortoiseBeacon) waitAfterLastRoundStarted() {
 	// Last round + next round for timely messages + next round for delayed messages (late messages may be ignored).
 	const roundsToWait = 3
-	timeToWait := roundsToWait * tb.config.WakeupDelta
+	timeToWait := roundsToWait * tb.roundDuration
 	timer := time.NewTimer(timeToWait)
 
 	select {
@@ -570,7 +570,7 @@ func (tb *TortoiseBeacon) waitAfterLastRoundStarted() {
 
 func (tb *TortoiseBeacon) beaconCalcTimeout() time.Duration {
 	const extraTimeMultiplier = 4 // 4 epochs
-	return time.Duration(extraTimeMultiplier * float64(tb.config.RoundsNumber) * float64(tb.config.WakeupDelta))
+	return time.Duration(extraTimeMultiplier * float64(tb.config.RoundsNumber) * float64(tb.roundDuration))
 }
 
 func (tb *TortoiseBeacon) votingThreshold() int {

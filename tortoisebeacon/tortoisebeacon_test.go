@@ -80,22 +80,22 @@ func TestTortoiseBeacon_beaconCalcTimeout(t *testing.T) {
 	r := require.New(t)
 
 	tt := []struct {
-		name         string
-		roundsNumber uint64
-		wakeupDelta  time.Duration
-		duration     time.Duration
+		name             string
+		roundsNumber     uint64
+		roundDurationSec int
+		duration         time.Duration
 	}{
 		{
-			name:         "Case 1",
-			roundsNumber: 5,
-			wakeupDelta:  10 * time.Second,
-			duration:     200 * time.Second,
+			name:             "Case 1",
+			roundsNumber:     5,
+			roundDurationSec: 10,
+			duration:         200 * time.Second,
 		},
 		{
-			name:         "Case 2",
-			roundsNumber: 300,
-			wakeupDelta:  30 * time.Minute,
-			duration:     600 * time.Hour,
+			name:             "Case 2",
+			roundsNumber:     300,
+			roundDurationSec: 30 * 60,
+			duration:         600 * time.Hour,
 		},
 	}
 
@@ -107,8 +107,8 @@ func TestTortoiseBeacon_beaconCalcTimeout(t *testing.T) {
 			tb := TortoiseBeacon{
 				Log: log.NewDefault("TortoiseBeacon"),
 				config: Config{
-					RoundsNumber: tc.roundsNumber,
-					WakeupDelta:  tc.wakeupDelta,
+					RoundsNumber:  tc.roundsNumber,
+					RoundDuration: tc.roundDurationSec,
 				},
 			}
 
