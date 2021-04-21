@@ -8,7 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/weakcoin"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
 
 func TestTortoiseBeacon_calcVotesFromProposals(t *testing.T) {

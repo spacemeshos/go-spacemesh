@@ -53,8 +53,8 @@ import (
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
-	"github.com/spacemeshos/go-spacemesh/weakcoin"
 )
 
 const edKeyFileName = "key.bin"

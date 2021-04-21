@@ -11,7 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/weakcoin"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
 
 const (

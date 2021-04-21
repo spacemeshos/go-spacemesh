@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/weakcoin"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
 
 func TestTortoiseBeacon(t *testing.T) {
