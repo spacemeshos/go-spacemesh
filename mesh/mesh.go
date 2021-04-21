@@ -37,7 +37,7 @@ var TORTOISE = []byte("tortoise")
 var VERIFIED = []byte("verified")
 
 type tortoise interface {
-	HandleIncomingLayer(layer *types.Layer, inputVector []types.BlockID) (types.LayerID, types.LayerID)
+	HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID)
 	LatestComplete() types.LayerID
 	Persist() error
 	HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID)
@@ -45,7 +45,7 @@ type tortoise interface {
 
 // Validator interface to be used in tests to mock validation flow
 type Validator interface {
-	ValidateLayer(layer *types.Layer, inputVector []types.BlockID)
+	ValidateLayer(layer *types.Layer)
 	HandleLateBlock(bl *types.Block)
 	ProcessedLayer() types.LayerID
 	SetProcessedLayer(lyr types.LayerID)
@@ -266,7 +266,7 @@ func (vl *validator) HandleLateBlock(b *types.Block) {
 	vl.pushLayersToState(oldPbase, newPbase)
 }
 
-func (vl *validator) ValidateLayer(lyr *types.Layer, inputVector []types.BlockID) {
+func (vl *validator) ValidateLayer(lyr *types.Layer) {
 	vl.With().Info("validate layer", lyr)
 	if len(lyr.Blocks()) == 0 {
 		vl.With().Info("skip validation of layer with no blocks", lyr)
@@ -278,7 +278,7 @@ func (vl *validator) ValidateLayer(lyr *types.Layer, inputVector []types.BlockID
 		return
 	}
 
-	oldPbase, newPbase := vl.trtl.HandleIncomingLayer(lyr, inputVector)
+	oldPbase, newPbase := vl.trtl.HandleIncomingLayer(lyr)
 	vl.SetProcessedLayer(lyr.Index())
 
 	if err := vl.trtl.Persist(); err != nil {
@@ -384,12 +384,12 @@ func (msh *Mesh) HandleValidatedLayer(validatedLayer types.LayerID, layer []type
 		lyr.AddBlock(bl)
 	}
 
-	msh.Log.With().Info("Mesh validating layer", lyr.Index().Field(), log.Int("valid_blocks", len(blocks)), log.Int("invalid_blocks", len(invalidBlocks)))
+	msh.Log.With().Info("mesh validating layer", lyr.Index().Field(), log.Int("valid_blocks", len(blocks)), log.Int("invalid_blocks", len(invalidBlocks)))
 
-	msh.ValidateLayer(lyr, types.BlockIDs(blocks))
 	if err := msh.SaveLayerInputVector(lyr.Index(), types.BlockIDs(blocks)); err != nil {
-		msh.Log.With().Error("Saving layer input vector failed", lyr.Index().Field())
+		msh.Log.With().Error("saving layer input vector failed", lyr.Index().Field())
 	}
+	msh.ValidateLayer(lyr)
 }
 
 func (msh *Mesh) getInvalidBlocksByHare(hareLayer *types.Layer) (invalid []*types.Block) {
