@@ -152,9 +152,9 @@ func (db *LDBDatabase) Close() {
 	}
 	err := db.db.Close()
 	if err == nil {
-		db.log.Info("Database closed")
+		db.log.With().Info("database closed", log.String("file", db.fn))
 	} else {
-		db.log.Error("Failed to close database", "err", err)
+		db.log.With().Error("failed to close database", log.String("file", db.fn), log.Err(err))
 	}
 }
 
