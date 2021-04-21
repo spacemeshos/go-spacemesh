@@ -315,16 +315,6 @@ func (n *Net) accept(ctx context.Context, listen net.Listener, pending chan stru
 		conn := netConn.(*net.TCPConn)
 		n.tcpSocketConfig(conn) // TODO maybe only set this after session handshake to prevent denial of service with big messages
 		c := newConnection(netConn, n, nil, nil, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger.WithContext(ctx))
-		go func(con Connection) {
-			defer func() { pending <- struct{}{} }()
-			if err := c.setupIncoming(ctx, n.config.SessionTimeout); err != nil {
-				n.logger.WithContext(ctx).Event().Warning("incoming connection failed",
-					log.String("remote_addr", con.RemoteAddr().String()),
-					log.Err(err))
-				return
-			}
-			go c.beginEventProcessing(ctx)
-		}(c)
 
 		// Handle the incoming connection asynchronously
 		go n.acceptAsync(ctx, c, pending)
@@ -336,8 +326,8 @@ func (n *Net) acceptAsync(ctx context.Context, conn fmtConnection, pending chan 
 	defer func() { pending <- struct{}{} }()
 
 	if err := conn.setupIncoming(ctx, n.config.SessionTimeout); err != nil {
-		n.logger.Event().Warning("conn_incoming_failed",
-			log.String("remote", conn.RemoteAddr().String()),
+		n.logger.WithContext(ctx).Event().Warning("incoming connection failed",
+			log.String("remote_addr", conn.RemoteAddr().String()),
 			log.Err(err))
 		return
 	}
