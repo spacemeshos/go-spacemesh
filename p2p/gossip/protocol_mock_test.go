@@ -117,17 +117,19 @@ func (mr *MockbaseNetworkMockRecorder) SubscribePeerEvents() *gomock.Call {
 }
 
 // ProcessGossipProtocolMessage mocks base method
-func (m *MockbaseNetwork) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
+func (m *MockbaseNetwork) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, isOwnMessage bool, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ProcessGossipProtocolMessage", sender, protocol, data, validationCompletedChan)
+	ret := m.ctrl.Call(m, "ProcessGossipProtocolMessage", sender, isOwnMessage, protocol, data, validationCompletedChan)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ProcessGossipProtocolMessage indicates an expected call of ProcessGossipProtocolMessage
-func (mr *MockbaseNetworkMockRecorder) ProcessGossipProtocolMessage(sender, protocol, data, validationCompletedChan interface{}) *gomock.Call {
+func (mr *MockbaseNetworkMockRecorder) ProcessGossipProtocolMessage(sender, isOwnMessage, protocol, data, validationCompletedChan interface{
+}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessGossipProtocolMessage", reflect.TypeOf((*MockbaseNetwork)(nil).ProcessGossipProtocolMessage), sender, protocol, data, validationCompletedChan)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessGossipProtocolMessage", reflect.TypeOf((*MockbaseNetwork)(nil).ProcessGossipProtocolMessage), sender, isOwnMessage, protocol, data, validationCompletedChan)
+
 }
 
 // MockprioQ is a mock of prioQ interface

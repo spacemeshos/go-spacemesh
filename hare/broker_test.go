@@ -238,6 +238,10 @@ func (mgm *mockGossipMessage) Sender() p2pcrypto.PublicKey {
 	return mgm.sender
 }
 
+func (mgm *mockGossipMessage) IsOwnMessage() bool {
+	panic("not implemented")
+}
+
 func (mgm *mockGossipMessage) ReportValidation(protocol string) {
 	mgm.vComp <- service.NewMessageValidation(mgm.sender, nil, "")
 }

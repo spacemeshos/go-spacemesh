@@ -29,15 +29,15 @@ func TestProcessMessage(t *testing.T) {
 
 	isSent := false
 	net.EXPECT().
-		ProcessGossipProtocolMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		ProcessGossipProtocolMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Do(func(...interface{}) { isSent = true })
 
-	err := protocol.processMessage(p2pcrypto.NewRandomPubkey(), "test", service.DataBytes{Payload: []byte("test")})
+	err := protocol.processMessage(p2pcrypto.NewRandomPubkey(), false, "test", service.DataBytes{Payload: []byte("test")})
 	assert.NoError(t, err, "err should be nil")
 	assert.Equal(t, true, isSent, "message should be sent")
 
 	isSent = false
-	err = protocol.processMessage(p2pcrypto.NewRandomPubkey(), "test", service.DataBytes{Payload: []byte("test")})
+	err = protocol.processMessage(p2pcrypto.NewRandomPubkey(), false, "test", service.DataBytes{Payload: []byte("test")})
 	assert.NoError(t, err, "err  should be nil")
 	assert.Equal(t, false, isSent, "message shouldn't be sent, cause it's already done previously")
 }
