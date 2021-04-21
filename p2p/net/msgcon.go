@@ -37,9 +37,14 @@ type MsgConnection struct {
 	msgSizeLimit int
 }
 
+type msgConn interface {
+	Connection
+	beginEventProcessing(context.Context)
+}
+
 // Create a new connection wrapping a net.Conn with a provided connection manager
 func newMsgConnection(conn readWriteCloseAddresser, netw networker,
-	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) *MsgConnection {
+	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) msgConn {
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &MsgConnection{
@@ -218,8 +223,7 @@ func (c *MsgConnection) closeUnlocked() error {
 func (c *MsgConnection) Close() error {
 	c.wmtx.Lock()
 	defer c.wmtx.Unlock()
-	err := c.closeUnlocked()
-	if err != nil {
+	if err := c.closeUnlocked(); err != nil {
 		return err
 	}
 	close(c.stopSending)

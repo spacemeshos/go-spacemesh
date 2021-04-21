@@ -274,8 +274,7 @@ func (s *Switch) Start(ctx context.Context) error {
 
 	s.discover.SetLocalAddresses(tcpAddress.Port, udpAddress.Port) // todo: pass net.Addr and convert in discovery
 
-	err = s.udpServer.Start()
-	if err != nil {
+	if err := s.udpServer.Start(); err != nil {
 		return err
 	}
 
@@ -435,6 +434,7 @@ func (s *Switch) Shutdown() {
 		s.discover.Shutdown()
 		s.cPool.Shutdown()
 		s.network.Shutdown()
+		// udpServer (udpMux) shuts down the udpnet as well
 		s.udpServer.Shutdown()
 
 		for i := range s.directProtocolHandlers {
