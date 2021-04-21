@@ -104,14 +104,12 @@ func TestTortoiseBeacon_beaconCalcTimeout(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tb := TortoiseBeacon{
-				Log: log.NewDefault("TortoiseBeacon"),
-				config: Config{
-					RoundsNumber:  tc.roundsNumber,
-					RoundDuration: tc.roundDurationSec,
-				},
+			conf := Config{
+				RoundsNumber:  tc.roundsNumber,
+				RoundDuration: tc.roundDurationSec,
 			}
 
+			tb := New(conf, nil, nil, nil, nil, nil, log.Log{})
 			duration := tb.beaconCalcTimeout()
 			r.EqualValues(tc.duration, duration)
 		})
