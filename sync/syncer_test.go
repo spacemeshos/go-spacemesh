@@ -1326,7 +1326,7 @@ func TestSyncer_handleNotSyncedZeroBlocksLayer(t *testing.T) {
 	r.NoError(sync.SetZeroBlockLayer(1))
 	r.Equal(0, lv.countValidated)
 	r.Equal(types.LayerID(0), lv.processedLayer)
-	go sync.handleNotSynced(1)
+	go sync.handleNotSynced(context.TODO(), 1)
 	time.Sleep(100 * time.Millisecond)
 	r.Equal(1, lv.countValidate)
 	r.Equal(types.LayerID(1), lv.processedLayer)
@@ -1339,7 +1339,7 @@ func TestSyncer_SetZeroBlockLayer(t *testing.T) {
 	txpool := state.NewTxMemPool()
 	atxpool := activation.NewAtxMemPool()
 	ts := &mockClock{Layer: 10}
-	sync := NewSync(service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String()), txpool, atxpool, blockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, log.NewDefault(t.Name()))
+	sync := NewSync(context.TODO(), service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String()), txpool, atxpool, blockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, log.NewDefault(t.Name()))
 	defer sync.Close()
 	sync.SetLatestLayer(1)
 
