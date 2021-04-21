@@ -22,12 +22,12 @@ services:
           "--genesis-active-size", "${SMESH_GENESIS_ACTIVE_SIZE:-200}",
           "--hare-committee-size", "${SMESH_HARE_COMMITTEE_SIZE:-80}",
           "--hare-max-adversaries", "${SMESH_HARE_MAX_ADVERSARIES:-39}",
-          "--tortoise-beacon-kappa", "${SMESH_TORTOISE-BEACON-KAPPA:-40}"
-          "--tortoise-beacon-q", "${SMESH_TORTOISE-BEACON-Q:-0.33333}"
-          "--tortoise-beacon-rounds-number", "${SMESH_TORTOISE-BEACON-ROUNDS-NUMBER:-300}"
-          "--tortoise-beacon-wakeup-delta", "${SMESH_TORTOISE-BEACON-ROUND-DURATION-SEC:-1800}"
-          "--tortoise-beacon-theta", "${SMESH_TORTOISE-BEACON-THETA:-0.25}"
-          "--tortoise-beacon-t-ave", "${SMESH_TORTOISE-BEACON-T-AVE:-1}"
+          "--tortoise-beacon-kappa", "${SMESH_TORTOISE-BEACON-KAPPA:-40}",
+          "--tortoise-beacon-q", "${SMESH_TORTOISE-BEACON-Q:-0.33333}",
+          "--tortoise-beacon-rounds-number", "${SMESH_TORTOISE-BEACON-ROUNDS-NUMBER:-300}",
+          "--tortoise-beacon-round-duration-sec", "${SMESH_TORTOISE-BEACON-ROUND-DURATION-SEC:-1800}",
+          "--tortoise-beacon-theta", "${SMESH_TORTOISE-BEACON-THETA:-0.25}",
+          "--tortoise-beacon-t-ave", "${SMESH_TORTOISE-BEACON-T-AVE:-1}",
           "--sync-request-timeout", "${SMESH_SYNC_REQ_TIMEOUT:-60000}",
           "--post-labels", "${SMESH_POST_LABELS:-100}",
           "--max-inbound", "${SMESH_MAX_INBOUND:-12}",
