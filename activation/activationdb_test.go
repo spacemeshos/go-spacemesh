@@ -880,7 +880,7 @@ func TestActivationDb_TopAtx(t *testing.T) {
 	atxdb, _, _ := getAtxDb("t8")
 
 	// ATX stored should become top ATX
-	atx, err := createAndStoreAtx(atxdb, 0)
+	atx, err := createAndStoreAtx(atxdb, 1)
 	r.NoError(err)
 
 	topAtx, err := atxdb.getTopAtx()

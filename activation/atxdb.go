@@ -566,7 +566,13 @@ func (db *DB) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 func (db *DB) getTopAtx() (atxIDAndLayer, error) {
 	topAtxBytes, err := db.atxs.Get([]byte(topAtxKey))
 	if err != nil {
-		return atxIDAndLayer{}, err
+		if err == database.ErrNotFound {
+			return atxIDAndLayer{
+				AtxID:   db.goldenATXID,
+				LayerID: 0,
+			}, nil
+		}
+		return atxIDAndLayer{}, fmt.Errorf("failed to get top atx: %v", err)
 	}
 	var topAtx atxIDAndLayer
 	err = types.BytesToInterface(topAtxBytes, &topAtx)

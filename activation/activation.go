@@ -217,21 +217,16 @@ func (b *Builder) loop() {
 	}
 }
 
-func (b *Builder) buildNipstChallenge(currentLayer types.LayerID) error {
+func (b *Builder) buildNipstChallenge() error {
 	<-b.syncer.Await()
 	challenge := &types.NIPSTChallenge{NodeID: b.nodeID}
-	if posAtx, err := b.GetPositioningAtx(); err != nil {
-		if b.currentEpoch() != 0 {
-			return fmt.Errorf("failed to get positioning ATX: %v", err)
-		}
-		challenge.EndTick = b.tickProvider.NumOfTicks()
-		challenge.PubLayerID = currentLayer.Add(b.layersPerEpoch)
-		challenge.PositioningATX = b.goldenATXID
+	if atxID, pubLayerID, endTick, err := b.GetPositioningAtxInfo(); err != nil {
+		return fmt.Errorf("failed to get positioning ATX: %v", err)
 	} else {
-		challenge.PositioningATX = posAtx.ID()
-		challenge.PubLayerID = posAtx.PubLayerID.Add(b.layersPerEpoch)
-		challenge.StartTick = posAtx.EndTick
-		challenge.EndTick = posAtx.EndTick + b.tickProvider.NumOfTicks()
+		challenge.PositioningATX = atxID
+		challenge.PubLayerID = pubLayerID.Add(b.layersPerEpoch)
+		challenge.StartTick = endTick
+		challenge.EndTick = endTick + b.tickProvider.NumOfTicks()
 	}
 	if prevAtx, err := b.GetPrevAtx(b.nodeID); err != nil {
 		challenge.CommitmentMerkleRoot = b.commitment.MerkleRoot
@@ -382,7 +377,7 @@ func (b *Builder) PublishActivationTx() error {
 		b.log.With().Info("using existing atx challenge", b.currentEpoch())
 	} else {
 		b.log.With().Info("building new atx challenge", b.currentEpoch())
-		err := b.buildNipstChallenge(b.layerClock.GetCurrentLayer())
+		err := b.buildNipstChallenge()
 		if err != nil {
 			return err
 		}
@@ -489,14 +484,18 @@ func (b *Builder) signAndBroadcast(atx *types.ActivationTx) (int, error) {
 	return len(buf), nil
 }
 
-// GetPositioningAtx return the latest atx to be used as a positioning atx
-func (b *Builder) GetPositioningAtx() (*types.ActivationTxHeader, error) {
+// GetPositioningAtxInfo return the following details about the latest atx, to be used as a positioning atx:
+// 	atxID, pubLayerID, endTick
+func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, uint64, error) {
 	if id, err := b.db.GetPosAtxID(); err != nil {
-		return nil, fmt.Errorf("cannot find pos atx: %v", err)
+		return types.ATXID{}, 0, 0, fmt.Errorf("cannot find pos atx: %v", err)
+	} else if id == b.goldenATXID {
+		b.log.With().Info("using golden atx as positioning atx", id)
+		return id, 0, 0, nil
 	} else if atx, err := b.db.GetAtxHeader(id); err != nil {
-		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
+		return types.ATXID{}, 0, 0, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
 	} else {
-		return atx, nil
+		return id, atx.PubLayerID, atx.EndTick, nil
 	}
 }
 
