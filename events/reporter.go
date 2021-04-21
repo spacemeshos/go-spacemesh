@@ -74,7 +74,7 @@ func ReportNewActivation(activation *types.ActivationTx) {
 }
 
 // SubscribeToRewards subscribes a channel to rewards events
-func SubscribeToRewards (subscriber chan Reward) {
+func SubscribeToRewards(subscriber chan Reward) {
 	mu.RLock()
 	defer mu.RUnlock()
 	if reporter != nil {
@@ -456,7 +456,7 @@ type EventReporter struct {
 	channelReceipt     chan TxReceipt
 	stopChan           chan struct{}
 	blocking           bool
-	rewardsSubs 	   []chan Reward
+	rewardsSubs        []chan Reward
 }
 
 func newEventReporter(bufsize int, blocking bool) *EventReporter {
@@ -469,7 +469,7 @@ func newEventReporter(bufsize int, blocking bool) *EventReporter {
 		channelReceipt:     make(chan TxReceipt, bufsize),
 		channelError:       make(chan NodeError, bufsize),
 		stopChan:           make(chan struct{}),
-		rewardsSubs: 		[]chan Reward{},
+		rewardsSubs:        []chan Reward{},
 		blocking:           blocking,
 	}
 }
