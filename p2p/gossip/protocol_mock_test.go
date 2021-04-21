@@ -125,7 +125,7 @@ func (m *MockbaseNetwork) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKe
 }
 
 // ProcessGossipProtocolMessage indicates an expected call of ProcessGossipProtocolMessage
-func (mr *MockbaseNetworkMockRecorder) ProcessGossipProtocolMessage(sender, isOwnMessage, protocol, data, validationCompletedChan interface{
+func (mr *MockbaseNetworkMockRecorder) ProcessGossipProtocolMessage(sender, isOwnMessage, protocol, data, validationCompletedChan interface {
 }) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessGossipProtocolMessage", reflect.TypeOf((*MockbaseNetwork)(nil).ProcessGossipProtocolMessage), sender, isOwnMessage, protocol, data, validationCompletedChan)
