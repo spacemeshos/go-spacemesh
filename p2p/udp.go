@@ -46,7 +46,6 @@ type UDPMux struct {
 
 // NewUDPMux creates a new udp protocol server
 func NewUDPMux(localNode node.LocalNode, lookuper Lookuper, udpNet udpNetwork, networkid int8, logger log.Log) *UDPMux {
-
 	cpool := connectionpool.NewConnectionPool(udpNet.Dial, localNode.PublicKey(), logger.WithName("udp_cpool"))
 
 	um := &UDPMux{

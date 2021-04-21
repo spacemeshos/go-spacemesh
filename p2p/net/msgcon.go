@@ -36,9 +36,14 @@ type MsgConnection struct {
 	msgSizeLimit int
 }
 
+type msgConn interface {
+	Connection
+	beginEventProcessing()
+}
+
 // Create a new connection wrapping a net.Conn with a provided connection manager
 func newMsgConnection(conn readWriteCloseAddresser, netw networker,
-	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) *MsgConnection {
+	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) msgConn {
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &MsgConnection{
@@ -138,13 +143,11 @@ func (c *MsgConnection) sendListener() {
 		select {
 		case buf := <-c.messages:
 			//todo: we are hiding the error here...
-			err := c.SendSock(buf)
-			if err != nil {
-				log.Error("cannot send message to peer %v", err)
+			if err := c.SendSock(buf); err != nil {
+				log.With().Error("cannot send message to peer", log.Err(err))
 			}
 		case <-c.stopSending:
 			return
-
 		}
 	}
 }
@@ -199,8 +202,7 @@ func (c *MsgConnection) closeUnlocked() error {
 func (c *MsgConnection) Close() error {
 	c.wmtx.Lock()
 	defer c.wmtx.Unlock()
-	err := c.closeUnlocked()
-	if err != nil {
+	if err := c.closeUnlocked(); err != nil {
 		return err
 	}
 	close(c.stopSending)
