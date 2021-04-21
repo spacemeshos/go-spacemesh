@@ -21,6 +21,11 @@ endif
 # Also allows BRANCH to be manually set
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
+# If running in detached mode, use the commithash instead
+ifeq ($(BRANCH),HEAD)
+    BRANCH = $(SHA)
+endif
+
 # Setup the -ldflags option to pass vars defined here to app vars
 LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 
