@@ -121,10 +121,8 @@ func (fq *fetchQueue) work(ctx context.Context) {
 				fq.handleFetch(ctxLocal, bjb)
 				loggerLocal.Info("done fetching, going to next batch")
 			}
-			wg.Done()
 		}(i)
 	}
-	wg.Wait()
 }
 
 func (fq *fetchQueue) addToPendingGetCh(ctx context.Context, ids []types.Hash32) chan bool {
