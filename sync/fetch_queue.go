@@ -82,8 +82,6 @@ func (fq *fetchQueue) work(ctx context.Context) {
 		log.Int("num_workers", parallelWorkers),
 		log.String("queue", fmt.Sprint(fq.queue)),
 		log.String("queue_name", fq.name))
-	wg := sync.WaitGroup{}
-	wg.Add(parallelWorkers)
 	for i := 0; i < parallelWorkers; i++ {
 		go func(j int) {
 			logger := logger.WithFields(log.Int("worker_num", j))
@@ -99,7 +97,7 @@ func (fq *fetchQueue) work(ctx context.Context) {
 
 				bjb, ok := out.(fetchJob)
 				if !ok {
-					loggerLocal.Error(fmt.Sprintf("Type assertion err %v", out))
+					loggerLocal.Error(fmt.Sprintf("type assertion err %v", out))
 					continue
 				}
 
@@ -122,10 +120,8 @@ func (fq *fetchQueue) work(ctx context.Context) {
 				fq.handleFetch(ctxLocal, bjb)
 				loggerLocal.Info("done fetching, going to next batch")
 			}
-			wg.Done()
 		}(i)
 	}
-	wg.Wait()
 }
 
 func (fq *fetchQueue) addToPendingGetCh(ctx context.Context, ids []types.Hash32) chan bool {
@@ -223,7 +219,8 @@ func newTxQueue(ctx context.Context, s *Syncer) *txQueue {
 	return q
 }
 
-//we could get rid of this if we had a unified id type
+// HandleTxs handles transactions
+// we could get rid of this if we had a unified id type
 func (tx txQueue) HandleTxs(ctx context.Context, txids []types.TransactionID) ([]*types.Transaction, error) {
 	ctx = log.WithNewRequestID(ctx)
 	logger := tx.Log.WithContext(ctx)
@@ -294,7 +291,8 @@ func newAtxQueue(ctx context.Context, s *Syncer, fetchPoetProof fetchPoetProofFu
 	return q
 }
 
-//we could get rid of this if we had a unified id type
+// HandleAtxs handles ATXs
+// we could get rid of this if we had a unified id type
 func (atx atxQueue) HandleAtxs(ctx context.Context, atxids []types.ATXID) ([]*types.ActivationTx, error) {
 	ctx = log.WithNewRequestID(ctx)
 	logger := atx.Log.WithContext(ctx)
@@ -321,7 +319,7 @@ func (atx atxQueue) HandleAtxs(ctx context.Context, atxids []types.ATXID) ([]*ty
 	return atxs, nil
 }
 
-func updateAtxDependencies(ctx context.Context, invalidate func(id types.Hash32, valid bool), sValidateAtx sValidateAtxFunc, fetchAtxRefs sFetchAtxFunc, atxDB atxDB, fetchProof fetchPoetProofFunc, logger log.Log) func(context.Context, fetchJob) {
+func updateAtxDependencies(_ context.Context, invalidate func(id types.Hash32, valid bool), sValidateAtx sValidateAtxFunc, fetchAtxRefs sFetchAtxFunc, atxDB atxDB, fetchProof fetchPoetProofFunc, logger log.Log) func(context.Context, fetchJob) {
 	return func(ctx context.Context, fj fetchJob) {
 		lgr := logger.WithContext(ctx)
 		// restore reqID from context

@@ -22,8 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-type forBlockInView func(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
-
 type txMemPool interface {
 	Get(id types.TransactionID) (*types.Transaction, error)
 	Put(id types.TransactionID, item *types.Transaction)

@@ -181,7 +181,6 @@ func newFetchWorker(ctx context.Context, s networker, count int, reqFactory batc
 						if len(leftToFetch) == 0 {
 							break next
 						}
-
 					}
 					lg.Info("next peer")
 				}
