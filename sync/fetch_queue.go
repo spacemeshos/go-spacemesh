@@ -72,7 +72,6 @@ func (fq *fetchQueue) work() {
 	output := fetchWithFactory(newFetchWorker(fq.workerInfra, parallelWorkers, fq.batchRequestFactory, fq.queue, fq.name))
 	for i := 0; i < parallelWorkers; i++ {
 		go func() {
-			fq.Info("running work")
 			for out := range output {
 				fq.Info("new batch out of queue")
 				if out == nil {
