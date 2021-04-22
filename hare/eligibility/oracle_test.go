@@ -15,7 +15,6 @@ import (
 	"strconv"
 	"sync"
 	"testing"
-	"time"
 )
 
 const defSafety = types.LayerID(35)
@@ -133,7 +132,7 @@ func TestOracle_BuildVRFMessage(t *testing.T) {
 
 func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &mockSigner{[]byte{1, 2, 3}, nil}, 5, 1, 5, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &mockSigner{[]byte{1, 2, 3}, nil}, 5, 1, 5, 1, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	mCache := newMockCacher()
 	o.vrfMsgCache = mCache
 
@@ -159,7 +158,7 @@ func defaultOracle(t testing.TB) *Oracle {
 
 func mockOracle(t testing.TB, layersPerEpoch uint16) *Oracle {
 	types.SetLayersPerEpoch(int32(layersPerEpoch))
-	o := New(&mockValueProvider{1, nil}, nil, buildVerifier(true, nil), nil, layersPerEpoch, 1024, genWeight, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, nil, buildVerifier(true, nil), nil, layersPerEpoch, 1, genWeight, 1, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	return o
 }
 
@@ -225,25 +224,6 @@ func TestOracle_CalcEligibility_ZeroCommitteeSize(t *testing.T) {
 
 		r.NoError(err)
 		r.Equal(uint16(0), res)
-	}
-}
-
-func TestOracle_CalcEligibility_AllEligible(t *testing.T) {
-	r := require.New(t)
-	o := defaultOracle(t)
-	o.getActiveSet = (&mockActiveSetProvider{1}).ActiveSet
-
-	nodeID := types.NodeID{Key: strconv.Itoa(0)}
-	sig := make([]byte, 64)
-	for i := 0; i < 1000; i++ {
-		n, err := rand.Read(sig)
-		r.NoError(err)
-		r.Equal(64, n)
-
-		res, err := o.CalcEligibility(types.LayerID(cfg.ConfidenceParam+21), 0, 1, nodeID, sig)
-
-		r.NoError(err)
-		r.Equal(uint16(1), res)
 	}
 }
 
@@ -317,14 +297,6 @@ func Test_safeLayer(t *testing.T) {
 	assert.Equal(t, types.LayerID(100-safety), safeLayer(100, safety))
 }
 
-func genBytes() []byte {
-	rnd := make([]byte, 1000)
-	rand.Seed(time.Now().UnixNano())
-	rand.Read(rnd)
-
-	return rnd
-}
-
 type mockBufferedActiveSetProvider struct {
 	size map[types.EpochID]int
 }
@@ -341,7 +313,7 @@ func (m *mockBufferedActiveSetProvider) ActiveSet(epoch types.EpochID, _ map[typ
 func createMapWithSize(n int) map[string]uint64 {
 	m := make(map[string]uint64)
 	for i := 0; i < n; i++ {
-		m[strconv.Itoa(i)] = uint64(i+1) * 1024
+		m[strconv.Itoa(i)] = uint64(i + 1)
 	}
 
 	return m
@@ -431,7 +403,7 @@ func TestOracle_Proof(t *testing.T) {
 
 func TestOracle_activeSetSizeCache(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, 1, genWeight, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, 1, genWeight, 1, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error) {
 		return createMapWithSize(17), nil
 	}
@@ -607,7 +579,7 @@ func TestOracle_CalcEligibility_withSpaceUnits(t *testing.T) {
 	numOfMiners := 50
 	committeeSize := 800
 	types.SetLayersPerEpoch(10)
-	o := New(&mockValueProvider{1, nil}, nil, buildVerifier(true, nil), nil, 10, 1024, genWeight, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, nil, buildVerifier(true, nil), nil, 10, 1, genWeight, 1, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	o.getActiveSet = (&mockActiveSetProvider{numOfMiners}).ActiveSet
 
 	var eligibilityCount uint16

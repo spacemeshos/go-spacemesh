@@ -54,6 +54,7 @@ type Oracle struct {
 	vrfMsgCache        addGet
 	activesCache       addGet
 	genesisTotalWeight uint64
+	genesisMinerWeight uint64
 	blocksProvider     goodBlocksProvider
 	cfg                eCfg.Config
 	log.Log
@@ -94,7 +95,7 @@ func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID,
 
 // New returns a new eligibility oracle instance.
 func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier verifierFunc, vrfSigner signer,
-	layersPerEpoch uint16, spacePerUnit uint64, genesisTotalWeight uint64, goodBlocksProvider goodBlocksProvider,
+	layersPerEpoch uint16, spacePerUnit, genesisTotalWeight, genesisMinerWeight uint64, goodBlocksProvider goodBlocksProvider,
 	cfg eCfg.Config, log log.Log) *Oracle {
 	vmc, e := lru.New(vrfMsgCacheSize)
 	if e != nil {
@@ -116,6 +117,7 @@ func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier verifier
 		vrfMsgCache:        vmc,
 		activesCache:       ac,
 		genesisTotalWeight: genesisTotalWeight,
+		genesisMinerWeight: genesisMinerWeight,
 		blocksProvider:     goodBlocksProvider,
 		cfg:                cfg,
 		Log:                log,
@@ -188,7 +190,7 @@ func (o *Oracle) minerWeight(layer types.LayerID, id types.NodeID) (uint64, erro
 	actives, err := o.actives(layer)
 	if err != nil {
 		if err == errGenesis { // we are in genesis
-			return o.genesisTotalWeight / 50, nil
+			return o.genesisMinerWeight, nil
 		}
 
 		o.With().Error("minerWeight erred while calling actives func", log.Err(err), layer)
@@ -260,6 +262,11 @@ func (o *Oracle) prepareEligibilityCheck(layer types.LayerID, round int32, commi
 	totalUnits := totalWeight / o.spacePerUnit
 	// TODO: If space is not in round units, only consider the amount of space in round units for the total weight
 
+	o.With().Info("prep",
+		log.Uint64("minerWeight", minerWeight),
+		log.Uint64("totalWeight", totalWeight),
+		log.Uint64("o.spacePerUnit", o.spacePerUnit),
+	)
 	n = int(minerUnits)
 
 	// ensure miner weight fits in int
@@ -343,6 +350,13 @@ func (o *Oracle) CalcEligibility(layer types.LayerID, round int32, committeeSize
 			o.Panic("%s", msg)
 		}
 	}()
+
+	o.With().Info("params",
+		log.Int("committeeSize", committeeSize),
+		log.Int("n", n),
+		log.String("p", fmt.Sprintf("%g", p.Float())),
+		log.String("vrfFrac", fmt.Sprintf("%g", vrfFrac.Float())),
+	)
 
 	for x := 0; x < n; x++ {
 		if fixed.BinCDF(n, p, x).GreaterThan(vrfFrac) {
