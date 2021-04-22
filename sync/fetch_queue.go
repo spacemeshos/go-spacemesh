@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"sync"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -31,12 +32,13 @@ type fetchQueue struct {
 	log.Log
 	batchRequestFactory
 	*sync.Mutex
-	workerInfra networker
-	pending     map[types.Hash32][]chan bool
-	handleFetch func(fj fetchJob)
-	checkLocal  checkLocalFunc
-	queue       chan []types.Hash32 //types.TransactionID //todo make buffered
-	name        string
+	workerInfra    networker
+	pending        map[types.Hash32][]chan bool
+	handleFetch    func(fj fetchJob)
+	checkLocal     checkLocalFunc
+	queue          chan []types.Hash32 //types.TransactionID //todo make buffered
+	name           string
+	requestTimeout time.Duration
 }
 
 func (fq *fetchQueue) Close() {
@@ -64,16 +66,12 @@ func (fq *fetchQueue) shutdownRecover() {
 }
 
 //todo batches
-func (fq *fetchQueue) work() error {
-
+func (fq *fetchQueue) work() {
 	defer fq.shutdownRecover()
 	parallelWorkers := runtime.NumCPU()
-	output := fetchWithFactory(newFetchWorker(fq.workerInfra, runtime.NumCPU(), fq.batchRequestFactory, fq.queue, fq.name))
-	wg := sync.WaitGroup{}
-	wg.Add(parallelWorkers)
+	output := fetchWithFactory(newFetchWorker(fq.workerInfra, parallelWorkers, fq.batchRequestFactory, fq.queue, fq.name))
 	for i := 0; i < parallelWorkers; i++ {
 		go func() {
-			fq.Info("running work")
 			for out := range output {
 				fq.Info("new batch out of queue")
 				if out == nil {
@@ -95,11 +93,8 @@ func (fq *fetchQueue) work() error {
 				fq.handleFetch(bjb)
 				fq.Info("next batch")
 			}
-			wg.Done()
 		}()
 	}
-	wg.Wait()
-	return nil
 }
 
 func (fq *fetchQueue) addToPendingGetCh(ids []types.Hash32) chan bool {
@@ -143,19 +138,22 @@ func (fq *fetchQueue) handle(itemIds []types.Hash32) (map[types.Hash32]item, err
 
 	unprocessedItems, _, missing := fq.checkLocal(itemIds)
 	if len(missing) > 0 {
-
 		output := fq.addToPendingGetCh(missing)
-
-		if success := <-output; !success {
-			return nil, fmt.Errorf("could not fetch all items")
-		}
-
-		unprocessedItems, _, missing = fq.checkLocal(itemIds)
-		if len(missing) > 0 {
-			return nil, errors.New("could not find all items even though fetch was successful")
+		timer := time.After(fq.requestTimeout)
+		select {
+		case <-timer:
+			return nil, fmt.Errorf("timed out fetching items")
+		case success := <-output:
+			if success {
+				unprocessedItems, _, missing = fq.checkLocal(itemIds)
+				if len(missing) > 0 {
+					return nil, errors.New("could not find all items even though fetch was successful")
+				}
+			} else {
+				return nil, fmt.Errorf("could not fetch all items")
+			}
 		}
 	}
-
 	return unprocessedItems, nil
 }
 
@@ -176,6 +174,7 @@ func newTxQueue(s *Syncer) *txQueue {
 			pending:             make(map[types.Hash32][]chan bool),
 			queue:               make(chan []types.Hash32, 10000),
 			name:                "Tx",
+			requestTimeout:      s.Configuration.RequestTimeout,
 		},
 	}
 
@@ -240,6 +239,7 @@ func newAtxQueue(s *Syncer, fetchPoetProof fetchPoetProofFunc) *atxQueue {
 			pending:             make(map[types.Hash32][]chan bool),
 			queue:               make(chan []types.Hash32, 10000),
 			name:                "Atx",
+			requestTimeout:      s.Configuration.RequestTimeout,
 		},
 	}
 
@@ -309,7 +309,6 @@ func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValida
 			}
 		}
 	}
-
 }
 
 func getDoneChan(deps []chan bool) chan bool {
