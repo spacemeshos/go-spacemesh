@@ -253,7 +253,7 @@ func (s *Switch) onClosedConnection(cwe net.ConnectionWithErr) {
 // returns error if the Switch is already running or there was an error starting one of the needed services.
 func (s *Switch) Start() error {
 	if atomic.LoadUint32(&s.started) == 1 {
-		return errors.New("Switch already running")
+		return errors.New("switch already running")
 	}
 
 	var err error
@@ -274,8 +274,7 @@ func (s *Switch) Start() error {
 
 	s.discover.SetLocalAddresses(tcpAddress.Port, udpAddress.Port) // todo: pass net.Addr and convert in discovery
 
-	err = s.udpServer.Start()
-	if err != nil {
+	if err := s.udpServer.Start(); err != nil {
 		return err
 	}
 
@@ -433,6 +432,7 @@ func (s *Switch) Shutdown() {
 		s.discover.Shutdown()
 		s.cPool.Shutdown()
 		s.network.Shutdown()
+		// udpServer (udpMux) shuts down the udpnet as well
 		s.udpServer.Shutdown()
 
 		for i := range s.directProtocolHandlers {

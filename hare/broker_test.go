@@ -2,7 +2,11 @@ package hare
 
 import (
 	"bytes"
-	"github.com/nullstyle/go-xdr/xdr3"
+	"sync"
+	"testing"
+	"time"
+
+	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -10,9 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"sync"
-	"testing"
-	"time"
 )
 
 var instanceID0 = instanceID(0)
@@ -92,6 +93,40 @@ func TestBroker_Received(t *testing.T) {
 	serMsg := createMessage(t, instanceID1)
 	n2.Broadcast(protoName, serMsg)
 	waitForMessages(t, inbox, instanceID1, 1)
+}
+
+//test that after registering the maximum number of protocols,
+//the earliest one gets unregistered in favor of the newest one
+func TestBroker_MaxConcurrentProcesses(t *testing.T) {
+	sim := service.NewSimulator()
+	n1 := sim.NewNode()
+	n2 := sim.NewNode()
+
+	broker := buildBrokerLimit4(n1, t.Name())
+	broker.Start()
+
+	broker.Register(instanceID1)
+	broker.Register(instanceID2)
+	broker.Register(instanceID3)
+	broker.Register(instanceID4)
+	assert.Equal(t, 4, len(broker.outbox))
+
+	//this statement should cause inbox1 to be unregistered
+	inbox5, _ := broker.Register(instanceID5)
+	assert.Equal(t, 4, len(broker.outbox))
+
+	serMsg := createMessage(t, instanceID5)
+	n2.Broadcast(protoName, serMsg)
+	waitForMessages(t, inbox5, instanceID5, 1)
+	assert.Nil(t, broker.outbox[instanceID1])
+
+	inbox6, _ := broker.Register(instanceID6)
+	assert.Equal(t, 4, len(broker.outbox))
+	assert.Nil(t, broker.outbox[instanceID2])
+
+	serMsg = createMessage(t, instanceID6)
+	n2.Broadcast(protoName, serMsg)
+	waitForMessages(t, inbox6, instanceID6, 1)
 }
 
 // test that aborting the broker aborts
