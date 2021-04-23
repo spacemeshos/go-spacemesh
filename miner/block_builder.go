@@ -94,7 +94,22 @@ type Config struct {
 }
 
 // NewBlockBuilder creates a struct of block builder type.
-func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin weakCoinProvider, orph meshProvider, bbp baseBlockProvider, hare hareResultProvider, blockOracle blockOracle, syncer syncer, projector projector, txPool txPool, atxDB atxDb, lg log.Log) *BlockBuilder {
+func NewBlockBuilder(
+	config Config,
+	sgn signer,
+	net p2p.Service,
+	beginRoundEvent chan types.LayerID,
+	weakCoin weakCoinProvider,
+	orph meshProvider,
+	bbp baseBlockProvider,
+	hare hareResultProvider,
+	blockOracle blockOracle,
+	syncer syncer,
+	projector projector,
+	txPool txPool,
+	atxDB atxDb,
+	lg log.Log,
+	) *BlockBuilder {
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(config.MinerID.Key)))
 
 	db, err := database.Create("builder", 16, 16, lg)
@@ -157,18 +172,18 @@ func (t *BlockBuilder) Close() error {
 }
 
 type hareResultProvider interface {
-	GetResult(lid types.LayerID) ([]types.BlockID, error)
+	GetResult(types.LayerID) ([]types.BlockID, error)
 }
 
 type weakCoinProvider interface {
-	GetResult() bool
+	GetWeakCoinForLayer(types.LayerID) (bool, error)
 }
 
 type meshProvider interface {
-	LayerBlockIds(index types.LayerID) ([]types.BlockID, error)
-	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
-	GetBlock(id types.BlockID) (*types.Block, error)
-	AddBlockWithTxs(blk *types.Block) error
+	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
+	GetOrphanBlocksBefore(types.LayerID) ([]types.BlockID, error)
+	GetBlock(types.BlockID) (*types.Block, error)
+	AddBlockWithTxs(*types.Block) error
 }
 
 func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID, top types.LayerID) {
@@ -284,13 +299,19 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 		return nil, err
 	}
 
+	// get weak coin value
+	coinflip, err := t.weakCoinToss.GetWeakCoinForLayer(id)
+	if err != nil {
+		t.With().Error("missing weak coin value for layer", id)
+	}
+
 	b := types.MiniBlock{
 		BlockHeader: types.BlockHeader{
 			LayerIndex:       id,
 			ATXID:            atxID,
 			EligibilityProof: eligibilityProof,
 			Data:             nil,
-			Coin:             t.weakCoinToss.GetResult(),
+			Coin:             coinflip,
 			BaseBlock:        base,
 			AgainstDiff:      diffs[0],
 			ForDiff:          diffs[1],

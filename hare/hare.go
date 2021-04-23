@@ -86,37 +86,29 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeID, 
 	h := new(Hare)
 
 	h.Closer = NewCloser()
-
 	h.Log = logger
-
 	h.config = conf
-
 	h.network = p2p
 	h.beginLayer = beginLayer
 
 	ev := newEligibilityValidator(rolacle, layersPerEpoch, idProvider, conf.N, conf.ExpectedLeaders, logger)
 	h.broker = newBroker(p2p, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, h.Closer, logger)
-
 	h.sign = sign
-
 	h.msh = obp
 	h.rolacle = rolacle
 
 	h.networkDelta = time.Duration(conf.WakeupDelta) * time.Second
 	// todo: this should be loaded from global config
 	h.bufferSize = LayerBuffer // XXX: must be at least the size of `hdist`
-
 	h.lastLayer = 0
-
 	h.outputChan = make(chan TerminationOutput, h.bufferSize)
-	h.outputs = make(map[types.LayerID][]types.BlockID, h.bufferSize) //  we keep results about LayerBuffer past layers
-
+	h.outputs = make(map[types.LayerID][]types.BlockID, h.bufferSize) // we keep results about LayerBuffer past layers
+	h.coinflips = make(map[types.LayerID]bool) // no buffer size for now, TODO: do we need one?
 	h.factory = func(conf config.Config, instanceId instanceID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
 		return newConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, ev, logger)
 	}
 
 	h.validate = validate
-
 	h.nid = nid
 
 	return h
@@ -174,9 +166,7 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 	}
 
 	id := output.ID()
-
 	h.msh.HandleValidatedLayer(types.LayerID(id), blocks)
-
 	if h.outOfBufferRange(id) {
 		return ErrTooLate
 	}
@@ -186,7 +176,6 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 		delete(h.outputs, h.oldestResultInBuffer())
 	}
 	h.outputs[types.LayerID(id)] = blocks
-
 	h.mu.Unlock()
 
 	return nil
@@ -196,6 +185,7 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 // this probably does not need to be stored in the database since it's only used when building blocks, and that only
 // happens when the node is fully synced and Hare is working.
 func (h *Hare) collectCoinflip(id instanceID, coinflip bool) {
+	// TODO: do we need to check buffer range?
 	// bytearray is stored little endian, so leftmost byte is least significant
 	h.mu.Lock()
 	h.coinflips[types.LayerID(id)] = coinflip
@@ -300,6 +290,16 @@ func (h *Hare) GetResult(lid types.LayerID) ([]types.BlockID, error) {
 	}
 
 	return blks, nil
+}
+
+// GetWeakCoinForLayer returns the weak coin flip value for the layer.
+// It returns an error if no value has been recorded for the layer.
+func (h *Hare) GetWeakCoinForLayer(lid types.LayerID) (coinflip bool, err error) {
+	coinflip, ok := h.coinflips[lid]
+	if !ok {
+		err = errNoResult
+	}
+	return
 }
 
 // listens to outputs arriving from consensus processes.

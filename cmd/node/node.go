@@ -132,19 +132,20 @@ type Service interface {
 // HareService is basic definition of hare algorithm service, providing consensus results for a layer
 type HareService interface {
 	Service
-	GetResult(id types.LayerID) ([]types.BlockID, error)
+	GetResult(types.LayerID) ([]types.BlockID, error)
+	GetWeakCoinForLayer(types.LayerID) (bool, error)
 }
 
 // TickProvider is an interface to a glopbal system clock that releases ticks on each layer
 type TickProvider interface {
 	Subscribe() timesync.LayerTimer
-	Unsubscribe(timer timesync.LayerTimer)
+	Unsubscribe(timesync.LayerTimer)
 	GetCurrentLayer() types.LayerID
 	StartNotifying()
 	GetGenesisTime() time.Time
-	LayerToTime(id types.LayerID) time.Time
+	LayerToTime(types.LayerID) time.Time
 	Close()
-	AwaitLayer(layerID types.LayerID) chan struct{}
+	AwaitLayer(types.LayerID) chan struct{}
 }
 
 // SpacemeshApp is the cli app singleton
@@ -367,14 +368,6 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 	}
 }
 
-type weakCoinStub struct {
-}
-
-// GetResult returns the weak coin toss result
-func (weakCoinStub) GetResult() bool {
-	return true
-}
-
 // Wrap the top-level logger to add context info and set the level for a
 // specific module.
 func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
@@ -487,8 +480,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	}
 	app.closers = append(app.closers, db)
 
-	coinToss := weakCoinStub{}
-
 	atxdbstore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "atx"), 0, 0, app.addLogger(AtxDbStoreLogger, lg))
 	if err != nil {
 		return err
@@ -596,10 +587,10 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	}
 
 	gossipListener := service.NewListener(swarm, syncer, app.addLogger(GossipListener, lg))
-	ha := app.HareFactory(mdb, swarm, sgn, nodeID, syncer, msh, hOracle, idStore, clock, lg)
+	rabbit := app.HareFactory(mdb, swarm, sgn, nodeID, syncer, msh, hOracle, idStore, clock, lg)
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
-	cfg := miner.Config{
+	config := miner.Config{
 		Hdist:          app.Config.Hdist,
 		MinerID:        nodeID,
 		AtxsPerBlock:   app.Config.AtxsPerBlock,
@@ -608,7 +599,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	}
 
 	database.SwitchCreationContext(dbStorepath, "") // currently only blockbuilder uses this mechanism
-	blockProducer := miner.NewBlockBuilder(cfg, sgn, swarm, clock.Subscribe(), coinToss, msh, trtl, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
+	blockProducer := miner.NewBlockBuilder(config, sgn, swarm, clock.Subscribe(), rabbit, msh, trtl, rabbit, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
 
 	bCfg := blocks.Config{
 		Depth:       app.Config.Hdist,
@@ -645,7 +636,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	app.syncer = syncer
 	app.clock = clock
 	app.state = processor
-	app.hare = ha
+	app.hare = rabbit
 	app.P2P = swarm
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
