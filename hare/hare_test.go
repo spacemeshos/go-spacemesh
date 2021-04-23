@@ -38,6 +38,10 @@ func (m mockReport) Completed() bool {
 	return m.c
 }
 
+func (m mockReport) Coinflip() bool {
+	return false
+}
+
 type mockConsensusProcess struct {
 	Closer
 	t    chan TerminationOutput

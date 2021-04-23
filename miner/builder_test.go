@@ -24,12 +24,11 @@ import (
 )
 
 const selectCount = 100
-const layersPerEpoch = 10
 
 type MockCoin struct{}
 
-func (m MockCoin) GetResult() bool {
-	return rand.Int()%2 == 0
+func (m MockCoin) GetWeakCoinForLayer(types.LayerID) (bool, error) {
+	return rand.Int()%2 == 0, nil
 }
 
 type MockHare struct {

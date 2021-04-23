@@ -483,13 +483,13 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 }
 
 func TestProcOutput_Id(t *testing.T) {
-	po := procReport{instanceID1, nil, false}
+	po := procReport{instanceID1, nil, false, false}
 	assert.Equal(t, po.ID(), instanceID1)
 }
 
 func TestProcOutput_Set(t *testing.T) {
 	es := NewDefaultEmptySet()
-	po := procReport{instanceID1, es, false}
+	po := procReport{instanceID1, es, false, false}
 	assert.True(t, es.Equals(po.Set()))
 }
 
