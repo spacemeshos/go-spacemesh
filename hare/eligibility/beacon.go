@@ -1,6 +1,7 @@
 package eligibility
 
 import (
+	"context"
 	"encoding/binary"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -41,7 +42,7 @@ func NewBeacon(beaconGetter blocks.BeaconGetter, confidenceParam uint64, logger 
 // Value returns the beacon value for an epoch
 // Note: Value is concurrency-safe but not concurrency-optimized
 // TODO: does this ever return an error? If not, remove it
-func (b *Beacon) Value(epochID types.EpochID) (uint32, error) {
+func (b *Beacon) Value(ctx context.Context, epochID types.EpochID) (uint32, error) {
 	// check cache
 	if val, ok := b.cache.Get(epochID); ok {
 		return val.(uint32), nil
@@ -50,7 +51,7 @@ func (b *Beacon) Value(epochID types.EpochID) (uint32, error) {
 	// TODO: do we need a lock here?
 	v := b.beaconGetter.GetBeacon(epochID)
 	value := binary.LittleEndian.Uint32(v)
-	b.With().Debug("hare eligibility beacon value for epoch",
+	b.WithContext(ctx).With().Debug("hare eligibility beacon value for epoch",
 		epochID,
 		log.String("beacon_hex", util.Bytes2Hex(v)),
 		log.Uint32("beacon_dec", value))

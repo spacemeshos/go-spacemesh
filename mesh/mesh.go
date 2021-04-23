@@ -3,6 +3,7 @@
 package mesh
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -203,7 +204,7 @@ func (msh *Mesh) LatestLayer() types.LayerID {
 
 // SetLatestLayer sets the latest layer we saw from the network
 func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
-	// Report the status update, as well as the layer itself.
+	// Report the status update, as well as the layer itself
 	layer, err := msh.GetLayer(idx)
 	if err != nil {
 		msh.With().Error("error reading layer data", idx, log.Err(err))
@@ -360,20 +361,20 @@ func (msh *Mesh) applyState(l *types.Layer) {
 }
 
 // HandleValidatedLayer handles layer valid blocks as decided by hare
-func (msh *Mesh) HandleValidatedLayer(validatedLayer types.LayerID, layer []types.BlockID) {
+func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID) {
 	var blocks []*types.Block
 
 	for _, blockID := range layer {
 		block, err := msh.GetBlock(blockID)
 		if err != nil {
 			// stop processing this hare result, wait until tortoise pushes this layer into state
-			msh.Error("hare terminated with block that is not present in mesh")
+			msh.WithContext(ctx).Error("hare terminated with block that is not present in mesh")
 			return
 		}
 		blocks = append(blocks, block)
 	}
 	lyr := types.NewExistingLayer(validatedLayer, blocks)
-	invalidBlocks := msh.getInvalidBlocksByHare(lyr)
+	invalidBlocks := msh.getInvalidBlocksByHare(ctx, lyr)
 	// Reporting of the validated layer happens deep inside this call stack, below
 	// updateStateWithLayer, inside applyState. No need to report here.
 	msh.updateStateWithLayer(validatedLayer, lyr)
@@ -392,10 +393,10 @@ func (msh *Mesh) HandleValidatedLayer(validatedLayer types.LayerID, layer []type
 	msh.ValidateLayer(lyr)
 }
 
-func (msh *Mesh) getInvalidBlocksByHare(hareLayer *types.Layer) (invalid []*types.Block) {
+func (msh *Mesh) getInvalidBlocksByHare(ctx context.Context, hareLayer *types.Layer) (invalid []*types.Block) {
 	dbLayer, err := msh.GetLayer(hareLayer.Index())
 	if err != nil {
-		msh.Panic("failed to get layer, err: %v", err)
+		msh.WithContext(ctx).With().Panic("failed to get layer", log.Err(err))
 		return
 	}
 	exists := make(map[types.BlockID]struct{})
@@ -609,15 +610,18 @@ func (msh *Mesh) AddBlock(blk *types.Block) error {
 
 // SetZeroBlockLayer tags lyr as a layer without blocks
 func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
-	msh.Info("setting zero block layer %v", lyr)
+	msh.With().Info("tagging zero block layer", lyr)
 	// check database for layer
 	if l, err := msh.GetLayer(lyr); err != nil {
+		// database error
 		if err != database.ErrNotFound {
 			msh.With().Error("error trying to fetch layer from database", lyr, log.Err(err))
 			return err
 		}
 	} else if len(l.Blocks()) != 0 {
+		// layer exists
 		msh.With().Error("layer has blocks, cannot tag as zero block layer",
+			lyr,
 			l,
 			log.Int("num_blocks", len(l.Blocks())))
 		return fmt.Errorf("layer has blocks")
@@ -830,6 +834,7 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 		log.Uint64("total_reward_remainder", blockTotalRewardMod.Uint64()),
 		log.Uint64("layer_reward_remainder", blockLayerRewardMod.Uint64()),
 	)
+
 	// Report the rewards for each coinbase and each smesherID within each coinbase.
 	// This can be thought of as a partition of the reward amongst all the smesherIDs
 	// that added the coinbase into the block.
@@ -868,13 +873,13 @@ func GenesisLayer() *types.Layer {
 }
 
 // GetATXs uses GetFullAtx to return a list of atxs corresponding to atxIds requested
-func (msh *Mesh) GetATXs(atxIds []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
+func (msh *Mesh) GetATXs(ctx context.Context, atxIds []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
 	var mIds []types.ATXID
 	atxs := make(map[types.ATXID]*types.ActivationTx, len(atxIds))
 	for _, id := range atxIds {
 		t, err := msh.GetFullAtx(id)
 		if err != nil {
-			msh.With().Warning("could not get atx from database", id, log.Err(err))
+			msh.WithContext(ctx).With().Warning("could not get atx from database", id, log.Err(err))
 			mIds = append(mIds, id)
 		} else {
 			atxs[t.ID()] = t

@@ -388,7 +388,7 @@ type NetMock struct {
 func (NetMock) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey) {
 	return nil, nil
 }
-func (NetMock) Broadcast(string, []byte) error {
+func (NetMock) Broadcast(context.Context, string, []byte) error {
 	return nil
 }
 
@@ -428,7 +428,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 		r.NoError(app.Initialize(cmd, args))
 		app.Config.API.GrpcServerPort = port
 		app.Config.DataDirParent = path
-		app.startAPIServices(NetMock{})
+		app.startAPIServices(context.TODO(), NetMock{})
 	}
 	defer app.stopServices()
 
@@ -500,7 +500,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
 		app.Config.DataDirParent = path
-		app.startAPIServices(NetMock{})
+		app.startAPIServices(context.TODO(), NetMock{})
 	}
 	defer app.stopServices()
 	str, err := testArgs()
@@ -898,7 +898,7 @@ func TestSpacemeshApp_P2PInterface(t *testing.T) {
 	// We need to listen on a different port
 	listener, err := inet.Listen("tcp", fmt.Sprintf("%s:%d", addr, 9270))
 	r.NoError(err)
-	p2pnet.Start(listener)
+	p2pnet.Start(context.TODO(), listener)
 	defer p2pnet.Shutdown()
 
 	// Try to connect before we start the P2P service: this should fail
@@ -912,7 +912,7 @@ func TestSpacemeshApp_P2PInterface(t *testing.T) {
 	app.Config.P2P.AcquirePort = false
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.AppLog, app.Config.DataDir())
 	r.NoError(err)
-	r.NoError(swarm.Start())
+	r.NoError(swarm.Start(context.TODO()))
 	defer swarm.Shutdown()
 
 	// Try to connect again: this should succeed

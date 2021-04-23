@@ -31,8 +31,8 @@ var defaultBackoffFunc = func(tries int) time.Duration { return time.Second * ti
 var ErrBootAbort = errors.New("bootstrap canceled by signal")
 
 type pingerGetAddresser interface {
-	Ping(p p2pcrypto.PublicKey) error
-	GetAddresses(server p2pcrypto.PublicKey) ([]*node.Info, error)
+	Ping(context.Context, p2pcrypto.PublicKey) error
+	GetAddresses(context.Context, p2pcrypto.PublicKey) ([]*node.Info, error)
 }
 
 // refresher is used to bootstrap and requestAddresses peers in the addrbook
@@ -149,15 +149,15 @@ type queryResult struct {
 }
 
 // pingThenGetAddresses is sending a ping, then getaddress, then return results on given chan.
-func pingThenGetAddresses(p pingerGetAddresser, addr *node.Info, qr chan queryResult) {
+func pingThenGetAddresses(ctx context.Context, p pingerGetAddresser, addr *node.Info, qr chan queryResult) {
 	// TODO: check whether we pinged recently and maybe skip pinging
-	err := p.Ping(addr.PublicKey())
+	err := p.Ping(ctx, addr.PublicKey())
 
 	if err != nil {
 		qr <- queryResult{src: addr, err: err}
 		return
 	}
-	res, err := p.GetAddresses(addr.PublicKey())
+	res, err := p.GetAddresses(ctx, addr.PublicKey())
 
 	if err != nil {
 		qr <- queryResult{src: addr, err: err}
@@ -200,7 +200,7 @@ func (r *refresher) requestAddresses(ctx context.Context, servers []*node.Info) 
 
 			r.lastQueries[addr.PublicKey()] = time.Now()
 
-			go pingThenGetAddresses(r.disc, addr, reschan)
+			go pingThenGetAddresses(ctx, r.disc, addr, reschan)
 		}
 
 		if pending == 0 {
