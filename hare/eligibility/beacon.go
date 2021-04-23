@@ -1,7 +1,6 @@
 package eligibility
 
 import (
-	"crypto/sha256"
 	"encoding/binary"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -39,34 +38,24 @@ func NewBeacon(beaconGetter blocks.BeaconGetter, confidenceParam uint64, logger 
 	}
 }
 
-// Value returns the unpredictable and agreed value for the given layer
+// Value returns the beacon value for an epoch
 // Note: Value is concurrency-safe but not concurrency-optimized
-func (b *Beacon) Value(layer types.LayerID) (uint32, error) {
-	sl := safeLayer(layer, types.LayerID(b.confidenceParam))
-	logger := b.WithFields(layer,
-		log.FieldNamed("safe_layer", sl),
-		log.FieldNamed("safe_epoch", sl.GetEpoch()))
-
+// TODO: does this ever return an error? If not, remove it
+func (b *Beacon) Value(epochID types.EpochID) (uint32, error) {
 	// check cache
-	if val, exist := b.cache.Get(sl); exist {
+	if val, ok := b.cache.Get(epochID); ok {
 		return val.(uint32), nil
 	}
 
 	// TODO: do we need a lock here?
-	v := b.beaconGetter.GetBeacon(sl.GetEpoch())
-	logger.With().Debug("raw beacon value for safe epoch", log.String("beacon_hex", util.Bytes2Hex(v)))
-
-	// hash in the layer
-	layerHash := sha256.Sum256(sl.Bytes())
-	for i := range layerHash[:4] {
-		v[i] ^= layerHash[i]
-	}
+	v := b.beaconGetter.GetBeacon(epochID)
 	value := binary.LittleEndian.Uint32(v)
-	logger.With().Debug("final beacon value for safe epoch and layer",
+	b.With().Debug("hare eligibility beacon value for epoch",
+		epochID,
 		log.String("beacon_hex", util.Bytes2Hex(v)),
 		log.Uint32("beacon_dec", value))
 
 	// update and return
-	b.cache.Add(sl, value)
+	b.cache.Add(epochID, value)
 	return value, nil
 }

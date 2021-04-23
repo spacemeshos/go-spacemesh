@@ -23,7 +23,7 @@ var (
 )
 
 type valueProvider interface {
-	Value(layer types.LayerID) (uint32, error)
+	Value(epoch types.EpochID) (uint32, error)
 }
 
 // a func to retrieve the active set size for the provided layer
@@ -141,19 +141,22 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 		return val.([]byte), nil
 	}
 
-	// get value from Beacon
-	v, err := o.beacon.Value(layer)
+	// get value from beacon
+	v, err := o.beacon.Value(layer.GetEpoch())
 	if err != nil {
-		o.With().Error("Could not get hare Beacon value", log.Err(err), layer, log.Int32("round", round))
+		o.With().Error("could not get hare beacon value for epoch",
+			log.Err(err),
+			layer,
+			layer.GetEpoch(),
+			log.Int32("round", round))
 		return nil, err
 	}
 
 	// marshal message
 	var w bytes.Buffer
 	msg := vrfMessage{Beacon: v, Round: round, Layer: layer}
-	_, err = xdr.Marshal(&w, &msg)
-	if err != nil {
-		o.With().Error("Fatal: could not marshal xdr", log.Err(err))
+	if _, err := xdr.Marshal(&w, &msg); err != nil {
+		o.With().Error("could not marshal xdr", log.Err(err))
 		return nil, err
 	}
 
