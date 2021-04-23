@@ -103,7 +103,7 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeID, 
 	h.lastLayer = 0
 	h.outputChan = make(chan TerminationOutput, h.bufferSize)
 	h.outputs = make(map[types.LayerID][]types.BlockID, h.bufferSize) // we keep results about LayerBuffer past layers
-	h.coinflips = make(map[types.LayerID]bool) // no buffer size for now, TODO: do we need one?
+	h.coinflips = make(map[types.LayerID]bool)                        // no buffer size for now, TODO: do we need one?
 	h.factory = func(conf config.Config, instanceId instanceID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
 		return newConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, ev, logger)
 	}

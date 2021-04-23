@@ -47,7 +47,7 @@ func (pre *preRoundTracker) OnPreRound(msg *Msg) {
 	if shaUint32 < pre.bestVRF {
 		pre.bestVRF = shaUint32
 		// store lowest-order bit as coin toss value
-		pre.coinflip = sha[0] & byte(1) == byte(1)
+		pre.coinflip = sha[0]&byte(1) == byte(1)
 		pre.logger.With().Info("got new best vrf value",
 			log.String("sender_id", pub.ShortString()),
 			log.String("vrf_value", fmt.Sprintf("%x", shaUint32)),
