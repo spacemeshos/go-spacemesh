@@ -3,6 +3,7 @@ package node
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -147,6 +148,15 @@ type TickProvider interface {
 	AwaitLayer(layerID types.LayerID) chan struct{}
 }
 
+// Tortoise beacon mock (waiting for #2267)
+type tortoiseBeaconMock struct {}
+
+// GetBeacon returns a very simple pseudo-random beacon value based on the input epoch ID
+func (tortoiseBeaconMock) GetBeacon(epochID types.EpochID) []byte {
+	sha := sha256.Sum256(epochID.ToBytes())
+	return sha[:4]
+}
+
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
 	*cobra.Command
@@ -182,7 +192,6 @@ type SpacemeshApp struct {
 
 // LoadConfigFromFile tries to load configuration file if the config parameter was specified
 func LoadConfigFromFile() (*cfg.Config, error) {
-
 	fileLocation := viper.GetString("config")
 	vip := viper.New()
 	// read in default config if passed as param using viper
@@ -204,7 +213,6 @@ func LoadConfigFromFile() (*cfg.Config, error) {
 
 // ParseConfig unmarshal config file into struct
 func (app *SpacemeshApp) ParseConfig() error {
-
 	conf, err := LoadConfigFromFile()
 	app.Config = conf
 
@@ -213,7 +221,6 @@ func (app *SpacemeshApp) ParseConfig() error {
 
 // NewSpacemeshApp creates an instance of the spacemesh app
 func NewSpacemeshApp() *SpacemeshApp {
-
 	defaultConfig := cfg.DefaultConfig()
 	node := &SpacemeshApp{
 		Config:  &defaultConfig,
@@ -550,7 +557,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	}
 
 	trtl = tortoise.NewVerifyingTortoise(trtlCfg)
-
 	if trtlCfg.Recovered {
 		msh = mesh.NewRecoveredMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
@@ -591,7 +597,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	if isFixedOracle { // fixed rolacle, take the provided rolacle
 		hOracle = rolacle
 	} else { // regular oracle, build and use it
-		beacon := eligibility.NewBeacon(mdb, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
+		beacon := eligibility.NewBeacon(tortoiseBeaconMock{}, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
 		hOracle = eligibility.New(beacon, atxdb.CalcActiveSetSize, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	}
 
