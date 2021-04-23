@@ -300,7 +300,7 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
 def test_many_gossip_sim(setup_clients, add_elk, add_node_pool, add_curl):
     api = 'v1/gateway/broadcastpoet'
     msg_size = 10000  # 1kb TODO: increase up to 2mb
-    test_messages = 100
+    test_messages = 75
     pods_num = len(setup_clients.pods)
 
     prev_num_of_msg = len(query_message(
