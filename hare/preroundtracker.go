@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
@@ -33,13 +34,15 @@ func newPreRoundTracker(threshold int, expectedSize int, logger log.Log) *preRou
 }
 
 // OnPreRound tracks pre-round messages
-func (pre *preRoundTracker) OnPreRound(msg *Msg) {
+func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
+	logger := pre.logger.WithContext(ctx)
+
 	pub := msg.PubKey
 
 	// check for winning VRF
 	sha := sha256.Sum256(msg.InnerMsg.RoleProof)
 	shaUint32 := binary.LittleEndian.Uint32(sha[:4])
-	pre.logger.With().Debug("received preround message",
+	logger.With().Debug("received preround message",
 		log.String("sender_id", pub.ShortString()),
 		log.Int("num_values", len(msg.InnerMsg.Values)),
 		log.String("vrf_value", fmt.Sprintf("%x", shaUint32)))
@@ -58,7 +61,7 @@ func (pre *preRoundTracker) OnPreRound(msg *Msg) {
 	alreadyTracked := NewDefaultEmptySet()  // assume nothing tracked so far
 
 	if set, exist := pre.preRound[pub.String()]; exist { // not first pre-round msg from this sender
-		pre.logger.With().Debug("duplicate preround msg sender", log.String("sender_id", pub.ShortString()))
+		logger.With().Debug("duplicate preround msg sender", log.String("sender_id", pub.ShortString()))
 		alreadyTracked = set              // update already tracked Values
 		sToTrack.Subtract(alreadyTracked) // subtract the already tracked Values
 	}
