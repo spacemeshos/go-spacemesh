@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -17,12 +18,12 @@ func (bo *hareOracle) IsIdentityActiveOnConsensusView(string, types.LayerID) (bo
 }
 
 // Eligible checks eligibility for an identity in a round
-func (bo *hareOracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
+func (bo *hareOracle) Eligible(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	// note: we don't use the proof in the oracle server. we keep it just for the future syntax
 	// todo: maybe replace k to be uint32 like hare wants, and don't use -1 for blocks
 	return bo.oc.Eligible(layer, round, committeeSize, id, sig)
 }
 
-func (bo *hareOracle) Proof(types.LayerID, int32) ([]byte, error) {
+func (bo *hareOracle) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
 	return []byte{}, nil
 }

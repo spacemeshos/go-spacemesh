@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -51,7 +52,7 @@ func TestNet_EnqueueMessage(t *testing.T) {
 			msg := make([]byte, 10)
 			randmsg(msg)
 			fmt.Printf("pushing %v to %v \r\n", hex.EncodeToString(msg), sum%n.queuesCount)
-			n.EnqueueMessage(IncomingMessageEvent{NewConnectionMock(rnode.PublicKey()), msg})
+			n.EnqueueMessage(context.TODO(), IncomingMessageEvent{Conn: NewConnectionMock(rnode.PublicKey()), Message: msg})
 			fmt.Printf("pushed %v to %v \r\n", hex.EncodeToString(msg), sum%n.queuesCount)
 			tx := time.NewTimer(time.Second * 2)
 			defer wg.Done()
@@ -132,7 +133,7 @@ func Test_Net_LimitedConnections(t *testing.T) {
 	//n.SubscribeOnNewRemoteConnections(counter)
 	require.NoError(t, err)
 	listener := newMockListener()
-	n.Start(listener)
+	n.Start(context.TODO(), listener)
 	listener.acceptResError = tempErr("demo connection will close and allow more")
 	for i := 0; i < cfg.MaxPendingConnections; i++ {
 		listener.releaseConn()
@@ -205,7 +206,7 @@ func TestMaxPendingConnections(t *testing.T) {
 	pending := make(chan struct{})
 	for i := 0; i < cfg.MaxPendingConnections-1; i++ {
 		conn := NewConnectionMock(ln.PublicKey())
-		go n.acceptAsync(conn, pending)
+		go n.acceptAsync(context.TODO(), conn, pending)
 	}
 
 	// Now create one that we can shut down at will
@@ -220,7 +221,7 @@ func TestMaxPendingConnections(t *testing.T) {
 	wgSuccess := sync.WaitGroup{}
 	wgSuccess.Add(1)
 	go func() {
-		n.acceptAsync(conn, pending)
+		n.acceptAsync(context.TODO(), conn, pending)
 		wgSuccess.Done()
 	}()
 
@@ -237,7 +238,7 @@ func TestMaxPendingConnections(t *testing.T) {
 	}
 
 	// This should wait (since all tokens are currently in use)
-	go n.accept(listener, pending)
+	go n.accept(context.TODO(), listener, pending)
 
 	// Now release one connection, releasing one token
 	wg.Done()

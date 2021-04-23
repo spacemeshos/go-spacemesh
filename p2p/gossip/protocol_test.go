@@ -1,6 +1,7 @@
 package gossip
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -8,7 +9,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -29,16 +29,16 @@ func TestProcessMessage(t *testing.T) {
 
 	isSent := false
 	net.EXPECT().
-		ProcessGossipProtocolMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		ProcessGossipProtocolMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Do(func(...interface{}) { isSent = true })
 
-	err := protocol.processMessage(p2pcrypto.NewRandomPubkey(), "test", service.DataBytes{Payload: []byte("test")})
+	err := protocol.processMessage(context.TODO(), p2pcrypto.NewRandomPubkey(), "test", service.DataBytes{Payload: []byte("test")})
 	assert.NoError(t, err, "err should be nil")
 	assert.Equal(t, true, isSent, "message should be sent")
 
 	isSent = false
-	err = protocol.processMessage(p2pcrypto.NewRandomPubkey(), "test", service.DataBytes{Payload: []byte("test")})
-	assert.NoError(t, err, "err  should be nil")
+	err = protocol.processMessage(context.TODO(), p2pcrypto.NewRandomPubkey(), "test", service.DataBytes{Payload: []byte("test")})
+	assert.NoError(t, err, "err should be nil")
 	assert.Equal(t, false, isSent, "message shouldn't be sent, cause it's already done previously")
 }
 
@@ -62,15 +62,15 @@ func TestPropagateMessage(t *testing.T) {
 	peersMu := sync.Mutex{}
 	handledPeers := make(map[p2ppeers.Peer]bool)
 	net.EXPECT().
-		SendMessage(gomock.Any(), "test", []byte("test")).
-		Do(func(peer p2pcrypto.PublicKey, _ ...interface{}) {
+		SendMessage(context.TODO(), gomock.Any(), "test", []byte("test")).
+		Do(func(ctx context.Context, peer p2pcrypto.PublicKey, _ ...interface{}) {
 			peersMu.Lock()
 			handledPeers[peer] = true
 			peersMu.Unlock()
 		}).
 		AnyTimes()
 
-	protocol.propagateMessage([]byte("test"), types.CalcHash12([]byte("test")), "test", exclude)
+	protocol.propagateMessage(context.TODO(), []byte("test"), "test", exclude)
 
 	assert.Equal(t, false, handledPeers[exclude], "peer should be excluded")
 	for i := 1; i < len(peers); i++ {
@@ -101,7 +101,7 @@ func TestPropagationEventLoop(t *testing.T) {
 		Do(func() { time.Sleep(time.Minute * 5) }).
 		AnyTimes()
 
-	go protocol.propagationEventLoop()
+	go protocol.propagationEventLoop(context.TODO())
 
 	protocol.propagateQ <- service.MessageValidation{}
 	time.Sleep(time.Second * 2)

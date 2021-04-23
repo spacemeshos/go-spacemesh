@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -96,7 +97,7 @@ func TestUDPNet_Sanity(t *testing.T) {
 		err  error
 	}{buf: []byte(testMsg), n: len([]byte(testMsg)), addr: addr2, err: nil}
 
-	go udpnet.listenToUDPNetworkMessages(mockconn)
+	go udpnet.listenToUDPNetworkMessages(context.TODO(), mockconn)
 
 	mockconn.releaseCount <- struct{}{}
 
@@ -132,7 +133,7 @@ type msgConnMock struct {
 	CloseFunc func() error
 }
 
-func (mcm msgConnMock) beginEventProcessing() {
+func (mcm msgConnMock) beginEventProcessing(context.Context) {
 	panic("not implemented")
 }
 
@@ -168,7 +169,7 @@ func (mcm msgConnMock) SetSession(NetworkSession) {
 	panic("not implemented")
 }
 
-func (mcm msgConnMock) Send([]byte) error {
+func (mcm msgConnMock) Send(context.Context, []byte) error {
 	panic("not implemented")
 }
 
@@ -495,7 +496,7 @@ func Test_UDPIncomingConnClose(t *testing.T) {
 	}
 	n.conn = lis
 
-	go n.listenToUDPNetworkMessages(lis)
+	go n.listenToUDPNetworkMessages(context.TODO(), lis)
 	<-donech
 	<-donech
 	conn := n.incomingConn[addr.String()]
