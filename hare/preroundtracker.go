@@ -1,8 +1,12 @@
 package hare
 
 import (
+	"crypto/sha256"
+	"encoding/binary"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"math"
 )
 
 // preRoundTracker tracks pre-round messages.
@@ -12,6 +16,7 @@ type preRoundTracker struct {
 	preRound  map[string]*Set  // maps PubKey->Set of already tracked Values
 	tracker   *RefCountTracker // keeps track of seen Values
 	threshold uint32           // the threshold to prove a value
+	bestVRF   [4]byte          // the lowest VRF value seen in the round
 	logger    log.Log
 }
 
@@ -21,6 +26,8 @@ func newPreRoundTracker(threshold int, expectedSize int, logger log.Log) *preRou
 	pre.tracker = NewRefCountTracker()
 	pre.threshold = uint32(threshold)
 	pre.logger = logger
+	//pre.bestVRF = make([]byte, binary.MaxVarintLen32)
+	binary.LittleEndian.PutUint32(pre.bestVRF[:], math.MaxUint32)
 
 	return pre
 }
@@ -28,9 +35,22 @@ func newPreRoundTracker(threshold int, expectedSize int, logger log.Log) *preRou
 // OnPreRound tracks pre-round messages
 func (pre *preRoundTracker) OnPreRound(msg *Msg) {
 	pub := msg.PubKey
+
+	// check for winning VRF
+	sha := sha256.Sum256(msg.InnerMsg.RoleProof)
+	shaUint32 := binary.LittleEndian.Uint32(sha[:4])
 	pre.logger.With().Debug("received preround message",
 		log.String("sender_id", pub.ShortString()),
-		log.Int("num_values", len(msg.InnerMsg.Values)))
+		log.Int("num_values", len(msg.InnerMsg.Values)),
+		log.String("vrf_value", fmt.Sprintf("%x", shaUint32)))
+	// TODO: make sure we don't need a mutex here
+	if shaUint32 < binary.LittleEndian.Uint32(pre.bestVRF[:]) {
+		binary.LittleEndian.PutUint32(pre.bestVRF[:], shaUint32)
+		pre.logger.With().Info("got new best vrf value",
+			log.String("sender_id", pub.ShortString()),
+			log.String("vrf_value", fmt.Sprintf("%x", shaUint32)))
+	}
+
 	sToTrack := NewSet(msg.InnerMsg.Values) // assume track all Values
 	alreadyTracked := NewDefaultEmptySet()  // assume nothing tracked so far
 

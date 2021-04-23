@@ -55,6 +55,7 @@ const (
 type procReport struct {
 	id        instanceID
 	set       *Set
+	bestVRF   uint32
 	completed bool
 }
 
@@ -66,12 +67,16 @@ func (cpo procReport) Set() *Set {
 	return cpo.set
 }
 
+func (cpo procReport) BestVRF() uint32 {
+	return cpo.bestVRF
+}
+
 func (cpo procReport) Completed() bool {
 	return cpo.completed
 }
 
 func (proc *consensusProcess) report(completed bool) {
-	proc.terminationReport <- procReport{proc.instanceID, proc.s, completed}
+	proc.terminationReport <- procReport{proc.instanceID, proc.s, proc.preRoundTracker.bestVRF, completed}
 }
 
 var _ TerminationOutput = (*procReport)(nil)
@@ -289,7 +294,7 @@ func (proc *consensusProcess) eventLoop() {
 PreRound:
 	for {
 		select {
-		// listen to pre-round Messages
+		// listen to pre-round messages
 		case msg := <-proc.inbox:
 			proc.handleMessage(msg)
 		case <-timer.C:

@@ -54,10 +54,6 @@ type atxDb interface {
 	GetEpochAtxs(epochID types.EpochID) []types.ATXID
 }
 
-type atxPool interface {
-	GetAllItems() []*types.ActivationTx
-}
-
 // BlockBuilder is the struct that orchestrates the building of blocks, it is responsible for receiving hare results.
 // referencing txs and atxs from mem pool and referencing them in the created block
 // it is also responsible for listening to the clock and querying when a block should be created according to the block oracle
@@ -204,6 +200,7 @@ func filterUnknownBlocks(blocks []types.BlockID, validate func(id types.BlockID)
 	return filtered
 }
 
+// TODO: currently unused, other than in tests
 func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	var votes []types.BlockID
 
@@ -278,22 +275,9 @@ func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, 
 }
 
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID, activeSet []types.ATXID) (*types.Block, error) {
-
 	if id <= types.GetEffectiveGenesis() {
 		return nil, errors.New("cannot create blockBytes in genesis layer")
 	}
-
-	// TODO: use this instead have logic inside trtl
-	/*votes, err := t.getVotes(id)
-	votes, err := t.getVotes(id)
-	if err != nil {
-		return nil, err
-	}
-
-	viewEdges, err := t.meshProvider.GetOrphanBlocksBefore(id)
-	if err != nil {
-		return nil, err
-	}*/
 
 	base, diffs, err := t.baseBlockP.BaseBlock()
 	if err != nil {
@@ -341,8 +325,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 
 	if b.ActiveSet != nil {
 		t.With().Info("storing ref block", epoch, bl.ID())
-		err := t.storeRefBlock(epoch, bl.ID())
-		if err != nil {
+		if err := t.storeRefBlock(epoch, bl.ID()); err != nil {
 			t.With().Error("cannot store ref block", epoch, log.Err(err))
 			//todo: panic?
 		}
@@ -399,7 +382,6 @@ func (t *BlockBuilder) createBlockLoop() {
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
-			//reducedAtxList := selectAtxs(atxList, t.atxsPerBlock)
 			for _, eligibilityProof := range proofs {
 				txList, _, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {

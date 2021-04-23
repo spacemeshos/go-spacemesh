@@ -29,6 +29,7 @@ type Consensus interface {
 type TerminationOutput interface {
 	ID() instanceID
 	Set() *Set
+	BestVRF() []byte
 	Completed() bool
 }
 
@@ -66,6 +67,7 @@ type Hare struct {
 	outputChan chan TerminationOutput
 	mu         sync.RWMutex
 	outputs    map[types.LayerID][]types.BlockID
+	coinflips  map[types.LayerID]bool
 
 	factory consensusFactory
 
@@ -156,7 +158,7 @@ func (h *Hare) oldestResultInBuffer() types.LayerID {
 // ErrTooLate means that the consensus was terminated too late
 var ErrTooLate = errors.New("consensus process finished too late")
 
-// records the provided output.
+// records the provided output
 func (h *Hare) collectOutput(output TerminationOutput) error {
 	set := output.Set()
 	blocks := make([]types.BlockID, len(set.values))
@@ -188,6 +190,18 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 	h.mu.Unlock()
 
 	return nil
+}
+
+// record weak coin flip results
+// this probably does not need to be stored in the database since it's only used when building blocks, and that only
+// happens when the node is fully synced and Hare is working.
+func (h *Hare) collectCoinflip(id instanceID, bestVRF []byte) {
+	// bytearray is stored little endian, so leftmost byte is least significant
+	h.mu.Lock()
+	coinflip := bestVRF[0] >> 7 == byte(1)
+	h.coinflips[types.LayerID(id)] = coinflip
+	h.mu.Unlock()
+	h.With().Info("weak coin flip value for layer", types.LayerID(id), log.Bool("coinflip", coinflip))
 }
 
 // the logic that happens when a new layer arrives.
@@ -294,6 +308,8 @@ func (h *Hare) outputCollectionLoop() {
 	for {
 		select {
 		case out := <-h.outputChan:
+			// collect coinflip data regardless of completion
+			h.collectCoinflip(out.ID(), out.BestVRF())
 			if out.Completed() { // CP completed, collect the output
 				if err := h.collectOutput(out); err != nil {
 					h.With().Warning("error collecting output from hare", log.Err(err))
