@@ -128,11 +128,11 @@ func TestPreRoundTracker_FilterSet(t *testing.T) {
 func TestPreRoundTracker_BestVRF(t *testing.T) {
 	r := require.New(t)
 
-	values := []struct{
-		proof []byte
-		val uint32
+	values := []struct {
+		proof   []byte
+		val     uint32
 		bestVal uint32
-		coin bool
+		coin    bool
 	}{
 		// order matters! lowest VRF value wins
 		// first is input bytes, second is output sha256 checksum as uint32 (lowest order four bytes),
@@ -141,9 +141,9 @@ func TestPreRoundTracker_BestVRF(t *testing.T) {
 		{[]byte{1}, 789771595, 789771595, true},
 		{[]byte{2}, 3384066523, 789771595, true},
 		{[]byte{3}, 149769992, 149769992, false},
-		{[]byte{4}, 1352412645, 149769992,false},
-		{[]byte{1,0}, 206888007, 149769992,false},
-		{[]byte{1,0,0}, 131879163, 131879163,true},
+		{[]byte{4}, 1352412645, 149769992, false},
+		{[]byte{1, 0}, 206888007, 149769992, false},
+		{[]byte{1, 0, 0}, 131879163, 131879163, true},
 	}
 
 	// check default coin value
