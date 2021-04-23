@@ -38,6 +38,7 @@ const MessageQueueSize = 250
 type msgToSend struct {
 	payload []byte
 	reqID   string
+	peerID  string
 }
 
 // Connection is an interface stating the API of all secured connections in the system
@@ -186,7 +187,7 @@ func (c *FormattedConnection) Created() time.Time {
 func (c *FormattedConnection) publish(ctx context.Context, message []byte) {
 	// Print a log line to establish a link between the originating sessionID and this requestID,
 	// before the sessionID disappears.
-	c.logger.WithContext(ctx).Debug("enqueuing incoming message")
+	c.logger.WithContext(ctx).Debug("connection: enqueuing incoming message")
 
 	// Rather than store the context on the heap, which is an antipattern, we instead extract the sessionID and store
 	// that.
@@ -230,12 +231,14 @@ func (c *FormattedConnection) sendListener() {
 		select {
 		case m := <-c.messages:
 			c.logger.With().Debug("connection: sending outgoing message",
-				log.String("requestID", m.reqID))
+				log.String("peer_id", m.peerID),
+				log.String("requestId", m.reqID))
 
 			//todo: we are hiding the error here...
 			if err := c.SendSock(m.payload); err != nil {
 				c.logger.With().Error("connection: cannot send message to peer",
-					log.String("requestID", m.reqID),
+					log.String("peer_id", m.peerID),
+					log.String("requestId", m.reqID),
 					log.Err(err))
 			}
 		case <-c.stopSending:
@@ -253,11 +256,12 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 	}
 	c.wmtx.Unlock()
 
-	// try to extract a requestID from the context
+	// extract some useful context
 	reqID, _ := log.ExtractRequestID(ctx)
+	peerID, _ := ctx.Value(log.PeerIDKey).(string)
 
-	c.logger.WithContext(ctx).Debug("enqueuing outgoing message")
-	c.messages <- msgToSend{m, reqID}
+	c.logger.WithContext(ctx).Debug("connection: enqueuing outgoing message")
+	c.messages <- msgToSend{m, reqID, peerID}
 	return nil
 }
 
@@ -411,8 +415,7 @@ func (c *FormattedConnection) beginEventProcessing(ctx context.Context) {
 		}
 	}
 
-	cerr := c.Close()
-	if cerr != ErrAlreadyClosed {
+	if cerr := c.Close(); cerr != ErrAlreadyClosed {
 		c.networker.publishClosingConnection(ConnectionWithErr{c, err})
 	}
 }

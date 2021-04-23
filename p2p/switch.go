@@ -363,6 +363,7 @@ func (s *Switch) sendMessageImpl(ctx context.Context, peerPubKey p2pcrypto.Publi
 	}
 
 	logger := s.logger.WithContext(ctx).WithFields(
+		log.FieldNamed("from_id", s.LocalNode().PublicKey()),
 		log.FieldNamed("peer_id", conn.RemotePublicKey()))
 
 	session := conn.Session()
@@ -395,6 +396,8 @@ func (s *Switch) sendMessageImpl(ctx context.Context, peerPubKey p2pcrypto.Publi
 		return errors.New("encryption failed")
 	}
 
+	// Add context on the recipient, since it's lost in the sealed message
+	ctx = context.WithValue(ctx, log.PeerIDKey, conn.RemotePublicKey().String())
 	if err := conn.Send(ctx, final); err != nil {
 		logger.With().Error("error sending direct message", log.Err(err))
 		return err

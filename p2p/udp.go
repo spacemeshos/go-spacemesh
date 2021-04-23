@@ -202,7 +202,7 @@ func (mux *UDPMux) sendMessageImpl(ctx context.Context, peerPubkey p2pcrypto.Pub
 
 	mux.logger.WithContext(ctx).With().Debug("sent udp message",
 		log.String("protocol", protocol),
-		log.String("to", peer.String()),
+		log.String("peer_addr", peer.String()),
 		log.Int("len", len(realfinal)))
 	return nil
 }

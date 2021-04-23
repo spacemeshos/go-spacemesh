@@ -110,7 +110,7 @@ func (c *MsgConnection) Created() time.Time {
 func (c *MsgConnection) publish(ctx context.Context, message []byte) {
 	// Print a log line to establish a link between the originating sessionID and this requestID,
 	// before the sessionID disappears.
-	c.logger.WithContext(ctx).Debug("enqueuing incoming message")
+	c.logger.WithContext(ctx).Debug("msgconnection: enqueuing incoming message")
 
 	// Rather than store the context on the heap, which is an antipattern, we instead extract the relevant IDs and
 	// store those.
@@ -154,11 +154,13 @@ func (c *MsgConnection) sendListener() {
 		select {
 		case m := <-c.messages:
 			c.logger.With().Debug("msgconnection: sending outgoing message",
-				log.String("requestID", m.reqID))
+				log.String("peer_id", m.peerID),
+				log.String("requestId", m.reqID))
 
 			//todo: we are hiding the error here...
 			if err := c.SendSock(m.payload); err != nil {
 				log.With().Error("msgconnection: cannot send message to peer",
+					log.String("peer_id", m.peerID),
 					log.String("requestId", m.reqID),
 					log.Err(err))
 			}
@@ -177,11 +179,12 @@ func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
 	}
 	c.wmtx.Unlock()
 
-	// try to extract a requestID from the context
+	// extract some useful context
 	reqID, _ := log.ExtractRequestID(ctx)
+	peerID, _ := ctx.Value(log.PeerIDKey).(string)
 
-	c.logger.WithContext(ctx).Debug("enqueuing outgoing message")
-	c.messages <- msgToSend{m, reqID}
+	c.logger.WithContext(ctx).Debug("msgconnection: enqueuing outgoing message")
+	c.messages <- msgToSend{m, reqID, peerID}
 	return nil
 }
 
@@ -267,8 +270,7 @@ func (c *MsgConnection) beginEventProcessing(ctx context.Context) {
 		}
 	}
 
-	cerr := c.Close()
-	if cerr != ErrAlreadyClosed {
+	if cerr := c.Close(); cerr != ErrAlreadyClosed {
 		c.networker.publishClosingConnection(ConnectionWithErr{c, err})
 	}
 }

@@ -146,7 +146,7 @@ peerLoop:
 			msgCtx := ctx
 			if reqID, ok := log.ExtractRequestID(ctx); ok {
 				// overwrite the existing reqID with the same and add the field
-				msgCtx = log.WithRequestID(ctx, reqID, log.FieldNamed("to", pubkey))
+				msgCtx = log.WithRequestID(ctx, reqID, log.FieldNamed("to_id", pubkey))
 			}
 
 			if err := p.net.SendMessage(msgCtx, pubkey, nextProt, payload); err != nil {
