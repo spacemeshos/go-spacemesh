@@ -104,7 +104,7 @@ func (builder *messageBuilder) Build() *Msg {
 }
 
 func (builder *messageBuilder) SetCertificate(certificate *certificate) *messageBuilder {
-	builder.msg.InnerMsg.Cert = certificate
+	builder.inner.Cert = certificate
 	return builder
 }
 

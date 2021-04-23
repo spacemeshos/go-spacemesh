@@ -218,7 +218,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	r := require.New(t)
 	net := &mockP2p{}
 	broker := buildBroker(net, t.Name())
-	broker.Start()
+	_ = broker.Start()
 	proc := generateConsensusProcess(t)
 	proc.network = net
 	oracle := &mockRolacle{}
@@ -226,10 +226,12 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	mValidator := &mockMessageValidator{}
 	proc.validator = mValidator
 	proc.inbox, _ = broker.Register(proc.ID())
-	msg := BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
+	msg := BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1), []byte{1})
 	oracle.isEligible = true
 	mValidator.syntaxValid = false
+	r.False(proc.preRoundTracker.coinflip, "default coinflip should be false")
 	proc.handleMessage(msg)
+	r.False(proc.preRoundTracker.coinflip, "invalid message should not change coinflip")
 	r.Equal(1, mValidator.countSyntax)
 	r.Equal(1, mValidator.countContext)
 	mValidator.syntaxValid = true
@@ -237,16 +239,19 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	r.NotEqual(0, mValidator.countContext)
 	mValidator.contextValid = nil
 	proc.handleMessage(msg)
+	r.True(proc.preRoundTracker.coinflip)
 	r.Equal(0, len(proc.pending))
 	r.Equal(3, mValidator.countContext)
 	r.Equal(3, mValidator.countSyntax)
 	mValidator.contextValid = errors.New("not valid")
 	proc.handleMessage(msg)
+	r.True(proc.preRoundTracker.coinflip)
 	r.Equal(4, mValidator.countContext)
 	r.Equal(3, mValidator.countSyntax)
 	r.Equal(0, len(proc.pending))
 	mValidator.contextValid = errEarlyMsg
 	proc.handleMessage(msg)
+	r.True(proc.preRoundTracker.coinflip)
 	r.Equal(1, len(proc.pending))
 }
 
@@ -271,12 +276,12 @@ func generateConsensusProcess(t *testing.T) *consensusProcess {
 
 	s := NewSetFromValues(value1)
 	oracle := eligibility.New()
-	signing := signing.NewEdSigner()
+	signer := signing.NewEdSigner()
 	_, vrfPub := BLS381.GenKeyPair(BLS381.DefaultSeed())
-	oracle.Register(true, signing.PublicKey().String())
+	oracle.Register(true, signer.PublicKey().String())
 	output := make(chan TerminationOutput, 1)
 
-	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, signing, types.NodeID{Key: signing.PublicKey().String(), VRFPublicKey: vrfPub}, n1, output, truer{}, log.NewDefault(signing.PublicKey().String()))
+	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, signer, types.NodeID{Key: signer.PublicKey().String(), VRFPublicKey: vrfPub}, n1, output, truer{}, log.NewDefault(signer.PublicKey().String()))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
@@ -355,9 +360,11 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 func TestConsensusProcess_procPre(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	s := NewDefaultEmptySet()
-	m := BuildPreRoundMsg(generateSigning(t), s)
+	m := BuildPreRoundMsg(generateSigning(t), s, []byte{1})
+	require.False(t, proc.preRoundTracker.coinflip)
 	proc.processPreRoundMsg(m)
-	assert.Equal(t, 1, len(proc.preRoundTracker.preRound))
+	require.Equal(t, 1, len(proc.preRoundTracker.preRound))
+	require.True(t, proc.preRoundTracker.coinflip)
 }
 
 func TestConsensusProcess_procStatus(t *testing.T) {
@@ -366,7 +373,7 @@ func TestConsensusProcess_procStatus(t *testing.T) {
 	s := NewDefaultEmptySet()
 	m := BuildStatusMsg(generateSigning(t), s)
 	proc.processStatusMsg(m)
-	assert.Equal(t, 1, len(proc.statusesTracker.statuses))
+	require.Equal(t, 1, len(proc.statusesTracker.statuses))
 }
 
 func TestConsensusProcess_procProposal(t *testing.T) {
@@ -419,7 +426,6 @@ func TestConsensusProcess_procNotify(t *testing.T) {
 }
 
 func TestConsensusProcess_Termination(t *testing.T) {
-
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound()
 	s := NewSetFromValues(value1)
@@ -454,7 +460,7 @@ func TestConsensusProcess_currentRound(t *testing.T) {
 func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	r := require.New(t)
 	proc := generateConsensusProcess(t)
-	m := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
+	m := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet(), nil)
 	proc.advanceToNextRound()
 	proc.onEarlyMessage(buildMessage(nil))
 	r.Equal(0, len(proc.pending))
@@ -462,24 +468,16 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	r.Equal(1, len(proc.pending))
 	proc.onEarlyMessage(m)
 	r.Equal(1, len(proc.pending))
-	m2 := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
+	m2 := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet(), nil)
 	proc.onEarlyMessage(m2)
-	m3 := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
+	m3 := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet(), nil)
 	proc.onEarlyMessage(m3)
 	r.Equal(3, len(proc.pending))
 	proc.onRoundBegin()
 
 	// make sure we wait enough for the go routine to be executed
-	timeout := time.NewTimer(1 * time.Second)
-	tk := time.NewTicker(100 * time.Microsecond)
-	select {
-	case <-timeout.C:
-		r.Equal(0, len(proc.pending))
-	case <-tk.C:
-		if 0 == len(proc.pending) {
-			return
-		}
-	}
+	time.Sleep(100 * time.Microsecond)
+	r.Zero(len(proc.pending))
 }
 
 func TestProcOutput_Id(t *testing.T) {
@@ -508,7 +506,7 @@ func TestConsensusProcess_beginRound1(t *testing.T) {
 	oracle := &mockRolacle{MockStateQuerier: MockStateQuerier{true, nil}}
 	proc.oracle = oracle
 	s := NewDefaultEmptySet()
-	m := BuildPreRoundMsg(generateSigning(t), s)
+	m := BuildPreRoundMsg(generateSigning(t), s, nil)
 	proc.statusesTracker.RecordStatus(m)
 
 	preStatusTracker := proc.statusesTracker

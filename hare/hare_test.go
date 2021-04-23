@@ -106,7 +106,7 @@ func TestHare_Start(t *testing.T) {
 
 	h := createHare(n1, log.NewDefault(t.Name()))
 
-	h.broker.Start() // todo: fix that hack. this will cause h.Start to return err
+	_ = h.broker.Start() // todo: fix that hack. this will cause h.Start to return err
 
 	/*err := h.Start()
 	require.Error(t, err)*/
@@ -129,7 +129,7 @@ func TestHare_GetResult(t *testing.T) {
 	mockid := instanceID(0)
 	set := NewSetFromValues(value1)
 
-	h.collectOutput(mockReport{mockid, set, true})
+	_ = h.collectOutput(mockReport{mockid, set, true})
 
 	res, err = h.GetResult(types.LayerID(0))
 	r.NoError(err)
@@ -154,7 +154,7 @@ func TestHare_GetResult2(t *testing.T) {
 		return newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan)
 	}
 
-	h.Start()
+	_ = h.Start()
 
 	for i := 1; i <= h.bufferSize; i++ {
 		h.beginLayer <- types.LayerID(i)
@@ -183,7 +183,7 @@ func TestHare_collectOutputCheckValidation(t *testing.T) {
 	set := NewSetFromValues(value1)
 
 	// default validation is true
-	h.collectOutput(mockReport{mockid, set, true})
+	_ = h.collectOutput(mockReport{mockid, set, true})
 	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
 	require.Equal(t, output[0], value1)
@@ -206,14 +206,14 @@ func TestHare_collectOutput(t *testing.T) {
 	mockid := instanceID1
 	set := NewSetFromValues(value1)
 
-	h.collectOutput(mockReport{mockid, set, true})
+	_ = h.collectOutput(mockReport{mockid, set, true})
 	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
 	require.Equal(t, output[0], value1)
 
 	mockid = instanceID2
 
-	output, ok = h.outputs[types.LayerID(mockid)] // todo : replace with getresult if this is yields a race
+	output, ok = h.outputs[types.LayerID(mockid)] // todo: replace with getresult if this yields a race
 	require.False(t, ok)
 	require.Nil(t, output)
 
@@ -229,7 +229,7 @@ func TestHare_collectOutput2(t *testing.T) {
 	mockid := instanceID0
 	set := NewSetFromValues(value1)
 
-	h.collectOutput(mockReport{mockid, set, true})
+	_ = h.collectOutput(mockReport{mockid, set, true})
 	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
 	require.Equal(t, output[0], value1)
@@ -254,9 +254,9 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 	n1 := sim.NewNode()
 
 	h := createHare(n1, log.NewDefault(t.Name()))
-	h.Start()
+	_ = h.Start()
 	mo := mockReport{8, NewEmptySet(0), true}
-	h.broker.Register(mo.ID())
+	_, _ = h.broker.Register(mo.ID())
 	time.Sleep(1 * time.Second)
 	h.outputChan <- mo
 	time.Sleep(1 * time.Second)
@@ -297,7 +297,7 @@ func TestHare_onTick(t *testing.T) {
 		createdChan <- struct{}{}
 		return nmcp
 	}
-	h.Start()
+	_ = h.Start()
 
 	var wg sync.WaitGroup
 
@@ -310,7 +310,7 @@ func TestHare_onTick(t *testing.T) {
 		wg.Done()
 	}()
 
-	//collect output one more time
+	// collect output one more time
 	wg.Wait()
 	time.Sleep(100 * time.Millisecond)
 	res2, err := h.GetResult(types.LayerID(types.GetEffectiveGenesis() + 1))
@@ -329,9 +329,9 @@ func TestHare_onTick(t *testing.T) {
 		wg.Done()
 	}()
 
-	//collect output one more time
+	// collect output one more time
 	wg.Wait()
-	res, err := h.GetResult(types.LayerID(types.GetEffectiveGenesis() + 2))
+	res, err := h.GetResult(types.GetEffectiveGenesis() + 2)
 	require.Equal(t, errNoResult, err)
 	require.Equal(t, []types.BlockID(nil), res)
 
@@ -361,7 +361,7 @@ func TestHare_outputBuffer(t *testing.T) {
 		h.lastLayer = i
 		mockid := instanceID(i)
 		set := NewSetFromValues(value1)
-		h.collectOutput(mockReport{mockid, set, true})
+		_ = h.collectOutput(mockReport{mockid, set, true})
 		_, ok := h.outputs[types.LayerID(mockid)]
 		require.True(t, ok)
 		require.Equal(t, int(i+1), len(h.outputs))
@@ -373,11 +373,10 @@ func TestHare_outputBuffer(t *testing.T) {
 	// add another output
 	mockid := instanceID(lasti + 1)
 	set := NewSetFromValues(value1)
-	h.collectOutput(mockReport{mockid, set, true})
+	_ = h.collectOutput(mockReport{mockid, set, true})
 	_, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
 	require.Equal(t, h.bufferSize, len(h.outputs))
-
 }
 
 func TestHare_IsTooLate(t *testing.T) {
@@ -390,7 +389,7 @@ func TestHare_IsTooLate(t *testing.T) {
 		mockid := instanceID(i)
 		set := NewSetFromValues(value1)
 		h.lastLayer = i
-		h.collectOutput(mockReport{mockid, set, true})
+		_ = h.collectOutput(mockReport{mockid, set, true})
 		_, ok := h.outputs[types.LayerID(mockid)]
 		require.True(t, ok)
 		exp := int(i + 1)
@@ -415,7 +414,7 @@ func TestHare_oldestInBuffer(t *testing.T) {
 		mockid := instanceID(i)
 		set := NewSetFromValues(value1)
 		h.lastLayer = i
-		h.collectOutput(mockReport{mockid, set, true})
+		_ = h.collectOutput(mockReport{mockid, set, true})
 		_, ok := h.outputs[types.LayerID(mockid)]
 		require.True(t, ok)
 		exp := int(i + 1)
@@ -433,7 +432,7 @@ func TestHare_oldestInBuffer(t *testing.T) {
 	mockid := instanceID(lasti + 1)
 	set := NewSetFromValues(value1)
 	h.lastLayer = lasti + 1
-	h.collectOutput(mockReport{mockid, set, true})
+	_ = h.collectOutput(mockReport{mockid, set, true})
 	_, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
 	require.Equal(t, h.bufferSize, len(h.outputs))
@@ -444,7 +443,7 @@ func TestHare_oldestInBuffer(t *testing.T) {
 	mockid = instanceID(lasti + 2)
 	set = NewSetFromValues(value1)
 	h.lastLayer = lasti + 2
-	h.collectOutput(mockReport{mockid, set, true})
+	_ = h.collectOutput(mockReport{mockid, set, true})
 	_, ok = h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
 	require.Equal(t, h.bufferSize, len(h.outputs))
@@ -452,4 +451,21 @@ func TestHare_oldestInBuffer(t *testing.T) {
 	lyr = h.oldestResultInBuffer()
 	require.True(t, lyr == 2)
 
+}
+
+func TestHare_GetWeakCoinForLayer(t *testing.T) {
+	r := require.New(t)
+	sim := service.NewSimulator()
+	n1 := sim.NewNode()
+
+	h := createHare(n1, log.NewDefault(t.Name()))
+
+	res, err := h.GetWeakCoinForLayer(types.LayerID(0))
+	r.Equal(errNoResult, err)
+	r.False(res) // default value is False
+
+	h.collectCoinflip(instanceID(0), true)
+	res, err = h.GetWeakCoinForLayer(types.LayerID(0))
+	r.NoError(err)
+	r.True(res)
 }
