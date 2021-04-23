@@ -150,7 +150,7 @@ type TickProvider interface {
 }
 
 // Tortoise beacon mock (waiting for #2267)
-type tortoiseBeaconMock struct {}
+type tortoiseBeaconMock struct{}
 
 // GetBeacon returns a very simple pseudo-random beacon value based on the input epoch ID
 func (tortoiseBeaconMock) GetBeacon(epochID types.EpochID) []byte {
