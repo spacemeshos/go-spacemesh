@@ -50,13 +50,12 @@ const (
 	notCompleted = false
 )
 
-// procReport is the termination report of the CP.
-// It consists of the layer id, the set we agreed on (if available) and a flag to indicate if the CP completed.
+// procReport is the termination report of the CP
 type procReport struct {
-	id        instanceID
-	set       *Set
-	bestVRF   uint32
-	completed bool
+	id        instanceID // layer id
+	set       *Set       // agreed-upon set
+	coinflip  bool       // weak coin value
+	completed bool       // whether the CP completed
 }
 
 func (cpo procReport) ID() instanceID {
@@ -67,8 +66,8 @@ func (cpo procReport) Set() *Set {
 	return cpo.set
 }
 
-func (cpo procReport) BestVRF() uint32 {
-	return cpo.bestVRF
+func (cpo procReport) Coinflip() bool {
+	return cpo.coinflip
 }
 
 func (cpo procReport) Completed() bool {
@@ -76,7 +75,7 @@ func (cpo procReport) Completed() bool {
 }
 
 func (proc *consensusProcess) report(completed bool) {
-	proc.terminationReport <- procReport{proc.instanceID, proc.s, proc.preRoundTracker.bestVRF, completed}
+	proc.terminationReport <- procReport{proc.instanceID, proc.s, proc.preRoundTracker.coinflip, completed}
 }
 
 var _ TerminationOutput = (*procReport)(nil)

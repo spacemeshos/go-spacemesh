@@ -29,7 +29,7 @@ type Consensus interface {
 type TerminationOutput interface {
 	ID() instanceID
 	Set() *Set
-	BestVRF() []byte
+	Coinflip() bool
 	Completed() bool
 }
 
@@ -195,10 +195,9 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 // record weak coin flip results
 // this probably does not need to be stored in the database since it's only used when building blocks, and that only
 // happens when the node is fully synced and Hare is working.
-func (h *Hare) collectCoinflip(id instanceID, bestVRF []byte) {
+func (h *Hare) collectCoinflip(id instanceID, coinflip bool) {
 	// bytearray is stored little endian, so leftmost byte is least significant
 	h.mu.Lock()
-	coinflip := bestVRF[0] >> 7 == byte(1)
 	h.coinflips[types.LayerID(id)] = coinflip
 	h.mu.Unlock()
 	h.With().Info("weak coin flip value for layer", types.LayerID(id), log.Bool("coinflip", coinflip))
@@ -309,7 +308,7 @@ func (h *Hare) outputCollectionLoop() {
 		select {
 		case out := <-h.outputChan:
 			// collect coinflip data regardless of completion
-			h.collectCoinflip(out.ID(), out.BestVRF())
+			h.collectCoinflip(out.ID(), out.Coinflip())
 			if out.Completed() { // CP completed, collect the output
 				if err := h.collectOutput(out); err != nil {
 					h.With().Warning("error collecting output from hare", log.Err(err))

@@ -16,7 +16,8 @@ type preRoundTracker struct {
 	preRound  map[string]*Set  // maps PubKey->Set of already tracked Values
 	tracker   *RefCountTracker // keeps track of seen Values
 	threshold uint32           // the threshold to prove a value
-	bestVRF   [4]byte          // the lowest VRF value seen in the round
+	bestVRF   uint32           // the lowest VRF value seen in the round
+	coinflip  bool             // the value of the weak coin (based on bestVRF)
 	logger    log.Log
 }
 
@@ -26,8 +27,7 @@ func newPreRoundTracker(threshold int, expectedSize int, logger log.Log) *preRou
 	pre.tracker = NewRefCountTracker()
 	pre.threshold = uint32(threshold)
 	pre.logger = logger
-	//pre.bestVRF = make([]byte, binary.MaxVarintLen32)
-	binary.LittleEndian.PutUint32(pre.bestVRF[:], math.MaxUint32)
+	pre.bestVRF = math.MaxUint32
 
 	return pre
 }
@@ -44,11 +44,14 @@ func (pre *preRoundTracker) OnPreRound(msg *Msg) {
 		log.Int("num_values", len(msg.InnerMsg.Values)),
 		log.String("vrf_value", fmt.Sprintf("%x", shaUint32)))
 	// TODO: make sure we don't need a mutex here
-	if shaUint32 < binary.LittleEndian.Uint32(pre.bestVRF[:]) {
-		binary.LittleEndian.PutUint32(pre.bestVRF[:], shaUint32)
+	if shaUint32 < pre.bestVRF {
+		pre.bestVRF = shaUint32
+		// store lowest-order bit as coin toss value
+		pre.coinflip = sha[0] & byte(1) == byte(1)
 		pre.logger.With().Info("got new best vrf value",
 			log.String("sender_id", pub.ShortString()),
-			log.String("vrf_value", fmt.Sprintf("%x", shaUint32)))
+			log.String("vrf_value", fmt.Sprintf("%x", shaUint32)),
+			log.Bool("weak_coin", pre.coinflip))
 	}
 
 	sToTrack := NewSet(msg.InnerMsg.Values) // assume track all Values
