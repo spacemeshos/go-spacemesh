@@ -109,7 +109,7 @@ func NewBlockBuilder(
 	txPool txPool,
 	atxDB atxDb,
 	lg log.Log,
-	) *BlockBuilder {
+) *BlockBuilder {
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(config.MinerID.Key)))
 
 	db, err := database.Create("builder", 16, 16, lg)
