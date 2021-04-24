@@ -150,12 +150,10 @@ func NewPostManager(id []byte, cfg config.Config, store bytesStore, logger log.L
 	if err != nil {
 		return nil, err
 	}
-	diskState, err := mgr.init.DiskState()
-	if err != nil {
-		return nil, err
-	}
 
-	if diskState.InitState == initialization.InitStateCompleted {
+	if completed, err := mgr.init.Completed(); err != nil {
+		return nil, err
+	} else if completed == true {
 		mgr.initStatus = statusCompleted
 		close(mgr.initCompletedChan)
 	}
@@ -174,31 +172,32 @@ func (mgr *PostManager) PostStatus() (*PostStatus, error) {
 		return emptyStatus, nil
 	}
 
-	diskState, err := mgr.init.DiskState()
-	if err != nil {
-		return nil, err
-	}
+	// MERGE-2 FIX
+	//diskState, err := mgr.init.DiskState()
+	//if err != nil {
+	//	return nil, err
+	//}
 	status := &PostStatus{}
 	status.LastOptions = options
-	status.BytesWritten = diskState.BytesWritten
-
-	if mgr.initStatus == statusInProgress {
-		status.FilesStatus = filesStatusPartial
-		status.InitInProgress = true
-		return status, nil
-	}
-
-	switch diskState.InitState {
-	case initialization.InitStateNotStarted:
-		status.FilesStatus = filesStatusNotFound
-	case initialization.InitStateCompleted:
-		status.FilesStatus = filesStatusCompleted
-	case initialization.InitStateStopped:
-		status.FilesStatus = filesStatusPartial
-	case initialization.InitStateCrashed:
-		status.FilesStatus = filesStatusPartial
-		status.ErrorMessage = "crashed"
-	}
+	//status.BytesWritten = diskState.BytesWritten
+	//
+	//if mgr.initStatus == statusInProgress {
+	//	status.FilesStatus = filesStatusPartial
+	//	status.InitInProgress = true
+	//	return status, nil
+	//}
+	//
+	//switch diskState.InitState {
+	//case initialization.InitStateNotStarted:
+	//	status.FilesStatus = filesStatusNotFound
+	//case initialization.InitStateCompleted:
+	//	status.FilesStatus = filesStatusCompleted
+	//case initialization.InitStateStopped:
+	//	status.FilesStatus = filesStatusPartial
+	//case initialization.InitStateCrashed:
+	//	status.FilesStatus = filesStatusPartial
+	//	status.ErrorMessage = "crashed"
+	//}
 	return status, nil
 }
 
@@ -252,10 +251,10 @@ func (mgr *PostManager) CreatePostData(options *PostOptions) (chan struct{}, err
 		mgr.initStatus = statusIdle
 		return nil, err
 	}
-	if err := newInit.VerifyInitAllowed(); err != nil {
-		mgr.initStatus = statusIdle
-		return nil, err
-	}
+	//if err := newInit.VerifyInitAllowed(); err != nil { MERGE-2 FIX
+	//	mgr.initStatus = statusIdle
+	//	return nil, err
+	//}
 
 	if options.ComputeProviderID == BestProviderID {
 		p, err := mgr.BestProvider()

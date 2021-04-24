@@ -212,9 +212,9 @@ func buildNIPoST(r *require.Assertions, postCfg config.Config, nipostChallenge t
 	nb := NewNIPoSTBuilder(minerID, postProvider, poetProver,
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 
-	npst, err := nb.BuildNIPoST(&nipostChallenge, nil, nil)
+	nipost, err := nb.BuildNIPoST(&nipostChallenge, nil, nil)
 	r.NoError(err)
-	return npst
+	return nipost
 }
 
 func TestNewNIPoSTBuilderNotInitialized(t *testing.T) {
@@ -380,7 +380,8 @@ func TestValidator_Validate(t *testing.T) {
 
 func validateNIPoST(minerID []byte, nipost *types.NIPoST, challenge types.Hash32, poetDb poetDbAPI, postCfg config.Config) error {
 	v := &Validator{poetDb, postCfg}
-	return v.Validate(*signing.NewPublicKey(minerID), nipost, challenge)
+	// MERGE-2 FIX -- space param
+	return v.Validate(*signing.NewPublicKey(minerID), nipost, 100, challenge)
 }
 
 func TestNIPoSTBuilder_TimeoutUnsubscribe(t *testing.T) {

@@ -187,6 +187,8 @@ func (nb *NIPoSTBuilder) BuildNIPoST(challenge *types.Hash32, atxExpired, stop c
 			log.String("duration", time.Now().Sub(startTime).String()))
 
 		nipost.PoST = proof
+
+		proofMetadata.ID = nil // ID doesn't need to be included when metadata is embedded inside ATX.
 		nipost.PoSTMetadata = proofMetadata
 		nb.persist()
 	}

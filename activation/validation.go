@@ -8,7 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/proving"
-	"github.com/spacemeshos/post/validation"
+	"github.com/spacemeshos/post/verifying"
 )
 
 // Validator contains the dependencies required to validate NIPoSTs
@@ -24,7 +24,7 @@ func NewValidator(poetDb poetDbAPI, postCfg config.Config) *Validator {
 
 // Validate validates a NIPoST, given a miner id and expected challenge. It returns an error if an issue is found or nil
 // if the NIPoST is valid.
-func (v *Validator) Validate(minerID signing.PublicKey, nipost *types.NIPoST, expectedChallenge types.Hash32) error {
+func (v *Validator) Validate(minerID signing.PublicKey, nipost *types.NIPoST, space uint64, expectedChallenge types.Hash32) error {
 	if !bytes.Equal(nipost.Challenge[:], expectedChallenge[:]) {
 		return errors.New("nipost challenge is not equal to expected challenge")
 	}
@@ -64,5 +64,6 @@ func (v *Validator) Validate(minerID signing.PublicKey, nipost *types.NIPoST, ex
 // ValidatePoST validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
 // validation failed.
 func (v *Validator) ValidatePoST(id []byte, PoST *types.PoST, PoSTMetadata *types.PoSTMetadata) error {
-	return validation.Validate(id, (*proving.Proof)(PoST), (*proving.ProofMetadata)(PoSTMetadata))
+	PoSTMetadata.ID = id
+	return verifying.Verify((*proving.Proof)(PoST), (*proving.ProofMetadata)(PoSTMetadata))
 }

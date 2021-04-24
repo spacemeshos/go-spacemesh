@@ -589,7 +589,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		hOracle = rolacle
 	} else { // regular oracle, build and use it
 		beacon := eligibility.NewBeacon(mdb, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
-		hOracle = eligibility.New(beacon, atxdb.GetMinerWeightsInEpochFromView, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.POST.SpacePerUnit, app.Config.GenesisTotalWeight, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+		hOracle = eligibility.New(beacon, atxdb.GetMinerWeightsInEpochFromView, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.POST.UnitSize, app.Config.GenesisTotalWeight, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	}
 
 	gossipListener := service.NewListener(swarm, syncer, app.addLogger(GossipListener, lg))
@@ -630,15 +630,21 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	//	app.Config.SpaceToCommit = app.Config.POST.SpacePerUnit
 	//}
 	//
-	//builderConfig := activation.Config{
-	//	CoinbaseAccount: coinBase,
-	//	GoldenATXID:     goldenATXID,
-	//	LayersPerEpoch:  layersPerEpoch,
-	//}
 
-	//atxBuilder := activation.NewBuilder(builderConfig, nodeID, app.Config.SpaceToCommit, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock, syncer, store, app.addLogger("atxBuilder", lg))
+	coinbaseAddr := types.HexToAddress(app.Config.CoinbaseAccount)
+	if app.Config.StartSmeshing {
+		if coinbaseAddr.Big().Uint64() == 0 {
+			app.log.Panic("invalid Coinbase account")
+		}
+	}
 
-	atxBuilder := activation.NewBuilder(nodeID, sgn, atxdb, swarm, msh, layersPerEpoch, nipostBuilder, postMgr, clock, syncer, store, app.addLogger("atxBuilder", lg))
+	builderConfig := activation.Config{
+		CoinbaseAccount: coinbaseAddr,
+		GoldenATXID:     goldenATXID,
+		LayersPerEpoch:  layersPerEpoch,
+	}
+
+	atxBuilder := activation.NewBuilder(builderConfig, nodeID, app.Config.SpaceToCommit, sgn, atxdb, swarm, msh, layersPerEpoch, nipostBuilder, postMgr, clock, syncer, store, app.addLogger("atxBuilder", lg))
 
 	gossipListener.AddListener(state.IncomingTxProtocol, priorityq.Low, processor.HandleTxData)
 	gossipListener.AddListener(activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
@@ -729,11 +735,7 @@ func (app *SpacemeshApp) startServices() {
 	app.poetListener.Start()
 
 	if app.Config.StartSmeshing {
-		coinbase := types.HexToAddress(app.Config.CoinbaseAccount)
-		if coinbase.Big().Uint64() == 0 {
-			app.log.Panic("invalid Coinbase account")
-		}
-
+		coinbaseAddr := types.HexToAddress(app.Config.CoinbaseAccount)
 		go func() {
 			if completedChan, ok := app.postMgr.InitCompleted(); !ok {
 				doneChan, err := app.postMgr.CreatePostData(&app.Config.PostOptions)
@@ -751,7 +753,7 @@ func (app *SpacemeshApp) startServices() {
 				}
 			}
 
-			if err := app.atxBuilder.StartSmeshing(coinbase); err != nil {
+			if err := app.atxBuilder.StartSmeshing(coinbaseAddr); err != nil {
 				log.Panic("Failed to start smeshing: %v", err)
 			}
 		}()

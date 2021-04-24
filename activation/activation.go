@@ -46,7 +46,7 @@ type idStore interface {
 }
 
 type nipostValidator interface {
-	Validate(id signing.PublicKey, NIPoST *types.NIPoST, expectedChallenge types.Hash32) error
+	Validate(id signing.PublicKey, NIPoST *types.NIPoST, space uint64, expectedChallenge types.Hash32) error
 	ValidatePoST(id []byte, PoST *types.PoST, PoSTMetadata *types.PoSTMetadata) error
 }
 
@@ -389,7 +389,6 @@ func (b *Builder) PublishActivationTx() error {
 		return err
 	}
 
-	var activeSetSize uint32
 	var initialPoST *types.PoST
 	if b.challenge.PrevATXID == *types.EmptyATXID {
 		initialPoST = b.initialPoST

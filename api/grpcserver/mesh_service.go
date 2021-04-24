@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/post/shared"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"

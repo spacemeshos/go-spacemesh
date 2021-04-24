@@ -16,8 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/shared"
-	"sync"
-	"time"
 )
 
 const topAtxKey = "topAtxKey"
@@ -434,9 +432,7 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	db.log.With().Info("Validated NIPoST", log.String("challenge_hash", hash.String()), atx.ID())
 
 	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeID.Key))
-	// MERGE FIX
-	//	if err = db.nipstValidator.Validate(*pubKey, atx.Nipst, atx.Space, *hash); err != nil {
-	if err = db.nipostValidator.Validate(*pubKey, atx.NIPoST, *hash); err != nil {
+	if err = db.nipostValidator.Validate(*pubKey, atx.NIPoST, atx.Space, *hash); err != nil {
 		return fmt.Errorf("NIPoST not valid: %v", err)
 	}
 

@@ -309,9 +309,9 @@ type NIPoST struct {
 	// the time he learned the challenge constructed from the PoET.
 	PoST *PoST
 
-	// PoSTMetadata is the PoST metadata, associated with the proof,
-	// which is expected to be verified upon during its syntactic validation,
-	// while the metadata is to be verified during the contextual validation.
+	// PoSTMetadata is the PoST metadata, associated with the proof.
+	// The proof should be verified upon the metadata during the syntactic validation,
+	// while the metadata should be verified during the contextual validation.
 	PoSTMetadata *PoSTMetadata
 }
 

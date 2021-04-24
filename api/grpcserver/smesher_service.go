@@ -162,7 +162,7 @@ func (s SmesherService) PostComputeProviders(context.Context, *empty.Empty) (*pb
 }
 
 // CreatePostData requests that the node begin post init
-func (s SmesherService) CreatePostData(context.Context, *pb.CreatePostDataRequest) (*pb.CreatePostDataResponse, error) {
+func (s SmesherService) CreatePostData(_ context.Context, in *pb.CreatePostDataRequest) (*pb.CreatePostDataResponse, error) {
 	log.Info("GRPC SmesherService.CreatePostData")
 
 	if in.Data == nil {
@@ -186,7 +186,7 @@ func (s SmesherService) CreatePostData(context.Context, *pb.CreatePostDataReques
 }
 
 // StopPostDataCreationSession requests that the node stop ongoing post data creation
-func (s SmesherService) StopPostDataCreationSession(context.Context, *pb.StopPostDataCreationSessionRequest) (*pb.StopPostDataCreationSessionResponse, error) {
+func (s SmesherService) StopPostDataCreationSession(_ context.Context, in *pb.StopPostDataCreationSessionRequest) (*pb.StopPostDataCreationSessionResponse, error) {
 	log.Info("GRPC SmesherService.StopPostDataCreationSession")
 
 	if err := s.post.StopPostDataCreationSession(in.DeleteFiles); err != nil {
@@ -203,7 +203,7 @@ func (s SmesherService) StopPostDataCreationSession(context.Context, *pb.StopPos
 // STREAMS
 
 // PostDataCreationProgressStream exposes a stream of updates during post init
-func (s SmesherService) PostDataCreationProgressStream(*empty.Empty, pb.SmesherService_PostDataCreationProgressStreamServer) error {
+func (s SmesherService) PostDataCreationProgressStream(_ *empty.Empty, stream pb.SmesherService_PostDataCreationProgressStreamServer) error {
 	log.Info("GRPC SmesherService.PostDataCreationProgressStream")
 
 	statusChan := s.post.PostDataCreationProgressStream()

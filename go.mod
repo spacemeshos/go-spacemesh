@@ -1,5 +1,7 @@
 module github.com/spacemeshos/go-spacemesh
 
+replace github.com/spacemeshos/post => /Users/moshababo/dev/post
+
 require (
 	cloud.google.com/go v0.68.0
 	cloud.google.com/go/storage v1.10.0

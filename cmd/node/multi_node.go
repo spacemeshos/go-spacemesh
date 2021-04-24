@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"strconv"
 	"sync"
@@ -139,7 +140,7 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 	cfg.POST.LabelSize = 8
 	cfg.POST.NumFiles = 1
 
-	cfg.GenesisTotalWeight = cfg.POST.SpacePerUnit * uint64(numOfInstances) // * 1 PoET ticks
+	cfg.GenesisTotalWeight = cfg.POST.UnitSize * uint64(numOfInstances) // * 1 PoET ticks
 	// MERGE FIX -- CHECK
 
 	cfg.PostOptions = activation.DefaultPostOptions()
