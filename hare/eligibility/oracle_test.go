@@ -186,26 +186,34 @@ func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 
 func TestOracle_IsEligible(t *testing.T) {
 	types.SetLayersPerEpoch(defLayersPerEpoch)
-	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 0, genActive, hDist, cfg, log.NewDefault(t.Name()))
+	atxdb := &mockActiveSetProvider{size: 10}
+	o := New(&mockValueProvider{1, nil}, atxdb, nil, nil, 0, genActive, hDist, cfg, log.NewDefault(t.Name()))
 	o.layersPerEpoch = 10
+
+	// VRF is ineligible
 	o.vrfVerifier = buildVerifier(false, errFoo)
 	res, err := o.Eligible(context.TODO(), types.LayerID(1), 0, 1, types.NodeID{}, []byte{})
-	assert.NotNil(t, err)
-	assert.False(t, res)
+	require.Error(t, err)
+	require.False(t, res)
 
+	// VRF eligible but zero committee size
 	o.vrfVerifier = buildVerifier(true, nil)
 	res, err = o.Eligible(context.TODO(), types.LayerID(50), 1, 0, types.NodeID{}, []byte{})
-	assert.Nil(t, err)
-	assert.False(t, res)
+	require.NoError(t, err)
+	require.False(t, res)
 
+	// VRF eligible but empty active set
+	o.atxdb = &mockActiveSetProvider{size: 0}
 	res, err = o.Eligible(context.TODO(), types.LayerID(cfg.ConfidenceParam*2+11), 1, 0, types.NodeID{}, []byte{})
-	assert.NotNil(t, err)
-	assert.Equal(t, "active set size is zero", err.Error())
-	assert.False(t, res)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "empty active set")
+	require.False(t, res)
 
+	// eligible
+	o.atxdb = atxdb
 	res, err = o.Eligible(context.TODO(), types.LayerID(50), 1, 10, types.NodeID{}, []byte{})
-	assert.Nil(t, err)
-	assert.True(t, res)
+	require.NoError(t, err)
+	require.True(t, res)
 }
 
 func Test_safeLayer(t *testing.T) {
