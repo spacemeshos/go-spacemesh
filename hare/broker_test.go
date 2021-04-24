@@ -310,7 +310,6 @@ func TestBroker_Register2(t *testing.T) {
 	broker := buildBroker(n1, t.Name())
 	broker.Start(context.TODO())
 	broker.Register(context.TODO(), instanceID1)
-	broker.Register(context.TODO(), instanceID1)
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
 	m.InnerMsg.InstanceID = instanceID1
 	msg := newMockGossipMsg(m)
