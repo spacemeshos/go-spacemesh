@@ -1,28 +1,12 @@
 package api
 
 import (
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/priorityq"
-	"time"
 )
-
-// Service is an interface for receiving messages via gossip
-type Service interface {
-	RegisterGossipProtocol(string, priorityq.Priority) chan service.GossipMessage
-}
-
-// StateAPI is an API to global state
-// TODO: Remove me once the old API is removed. These are not used by the new
-// API implementation as this interface has been completely folded into the TxAPI.
-// see https://github.com/spacemeshos/go-spacemesh/issues/2077
-type StateAPI interface {
-	GetBalance(address types.Address) uint64
-	GetNonce(address types.Address) uint64
-	Exist(address types.Address) bool
-}
 
 // NetworkAPI is an API to nodes gossip network
 type NetworkAPI interface {
@@ -35,11 +19,6 @@ type PostAPI = activation.PostProvider
 
 // SmeshingAPI is an alias to SmeshingProvider.
 type SmeshingAPI = activation.SmeshingProvider
-
-// OracleAPI gets eligible layers from oracle
-type OracleAPI interface {
-	GetEligibleLayers() []types.LayerID
-}
 
 // GenesisTimeAPI is an API to get genesis time and current layer of the system
 type GenesisTimeAPI interface {
@@ -78,9 +57,19 @@ type TxAPI interface {
 	GetLayerStateRoot(types.LayerID) (types.Hash32, error)
 	GetBalance(types.Address) uint64
 	GetNonce(types.Address) uint64
+	GetAllAccounts() (*types.MultipleAccountsState, error)
+	//TODO: fix the discrepancy between SmesherID and NodeID (see https://github.com/spacemeshos/go-spacemesh/issues/2269)
+	GetRewardsBySmesherID(types.NodeID) ([]types.Reward, error)
 }
 
 // PeerCounter is an api to get amount of connected peers
 type PeerCounter interface {
 	PeerCount() uint64
+}
+
+// MempoolAPI is an API for reading mempool data that's useful for API services
+type MempoolAPI interface {
+	Get(types.TransactionID) (*types.Transaction, error)
+	GetTxIdsByAddress(types.Address) []types.TransactionID
+	GetProjection(types.Address, uint64, uint64) (uint64, uint64)
 }

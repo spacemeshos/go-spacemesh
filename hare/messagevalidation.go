@@ -33,12 +33,12 @@ func newEligibilityValidator(oracle Rolacle, layersPerEpoch uint16, idProvider i
 // check eligibility of the provided message by the oracle.
 func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 	if m == nil {
-		ev.Error("Eligibility validator: called with nil")
+		ev.Error("eligibility validator: called with nil")
 		return false, errors.New("fatal: nil message")
 	}
 
 	if m.InnerMsg == nil {
-		ev.Error("Eligibility validator: InnerMsg is nil")
+		ev.Error("eligibility validator: InnerMsg is nil")
 		return false, errors.New("fatal: nil inner message")
 	}
 
@@ -50,18 +50,23 @@ func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 
 	nID, err := ev.identityProvider.GetIdentity(pub.String())
 	if err != nil {
-		ev.With().Error("Eligibility validator: GetIdentity failed (ignore if the safe layer is in genesis)", log.Err(err), log.String("sender_id", pub.ShortString()))
+		ev.With().Error("eligibility validator: GetIdentity failed (ignore if the safe layer is in genesis)",
+			log.Err(err),
+			log.String("sender_id", pub.ShortString()))
 		return false, err
 	}
 
 	// validate role
-	res, err := ev.oracle.Eligible(layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nID, m.InnerMsg.RoleProof)
+	res, err := ev.oracle.Validate(layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nID, m.InnerMsg.RoleProof, m.InnerMsg.EligibilityCount)
 	if err != nil {
-		ev.With().Error("Eligibility validator: could not retrieve eligibility result", log.Err(err), log.String("sender_id", pub.ShortString()))
+		ev.With().Error("eligibility validator: could not retrieve eligibility result",
+			log.Err(err),
+			log.String("sender_id", pub.ShortString()))
 		return false, err
 	}
 	if !res {
-		ev.With().Error("Eligibility validator: sender is not eligible to participate", log.String("sender_id", pub.ShortString()))
+		ev.With().Error("eligibility validator: sender is not eligible to participate",
+			log.String("sender_id", pub.ShortString()))
 		return false, nil
 	}
 
@@ -72,14 +77,19 @@ func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 func (ev *eligibilityValidator) Validate(m *Msg) bool {
 	res, err := ev.validateRole(m)
 	if err != nil {
-		ev.With().Error("Error occurred while validating role", log.Err(err), log.String("sender_id", m.PubKey.ShortString()),
-			types.LayerID(m.InnerMsg.InstanceID), log.String("msg_type", m.InnerMsg.Type.String()))
+		ev.With().Error("error occurred while validating role",
+			log.Err(err),
+			log.String("sender_id", m.PubKey.ShortString()),
+			types.LayerID(m.InnerMsg.InstanceID),
+			log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
 	// verify role
 	if !res {
-		ev.With().Warning("Validate message failed: role is invalid", log.String("sender_id", m.PubKey.ShortString()),
-			types.LayerID(m.InnerMsg.InstanceID), log.String("msg_type", m.InnerMsg.Type.String()))
+		ev.With().Warning("validate message failed: role is invalid",
+			log.String("sender_id", m.PubKey.ShortString()),
+			types.LayerID(m.InnerMsg.InstanceID),
+			log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
 
@@ -207,29 +217,34 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, currentK in
 // SyntacticallyValidateMessage the syntax of the provided message.
 func (v *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bool {
 	if m == nil {
-		v.Warning("Syntax validation failed: m is nil")
+		v.Warning("syntax validation failed: m is nil")
 		return false
 	}
 
 	if m.PubKey == nil {
-		v.Warning("Syntax validation failed: missing public key")
+		v.Warning("syntax validation failed: missing public key")
 		return false
 	}
 
 	if m.InnerMsg == nil {
-		v.Warning("Syntax validation failed: inner message is nil")
+		v.With().Warning("syntax validation failed: inner message is nil",
+			log.String("sender_id", m.PubKey.ShortString()))
 		return false
 	}
 
 	if m.InnerMsg.Values == nil {
-		v.With().Warning("Syntax validation failed: set is nil",
-			log.String("sender_id", m.PubKey.ShortString()), types.LayerID(m.InnerMsg.InstanceID), log.String("msg_type", m.InnerMsg.Type.String()))
+		v.With().Warning("syntax validation failed: set is nil",
+			log.String("sender_id", m.PubKey.ShortString()),
+			types.LayerID(m.InnerMsg.InstanceID),
+			log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
 
 	if len(m.InnerMsg.Values) == 0 {
-		v.With().Warning("Syntax validation failed: set is empty",
-			log.String("sender_id", m.PubKey.ShortString()), types.LayerID(m.InnerMsg.InstanceID), log.String("msg_type", m.InnerMsg.Type.String()))
+		v.With().Warning("syntax validation failed: set is empty",
+			log.String("sender_id", m.PubKey.ShortString()),
+			types.LayerID(m.InnerMsg.InstanceID),
+			log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
 
@@ -246,7 +261,8 @@ func (v *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bool {
 	case notify:
 		return v.validateCertificate(m.InnerMsg.Cert)
 	default:
-		v.Error("Unknown message type encountered during syntactic validator: ", m.InnerMsg.Type)
+		v.With().Error("unknown message type encountered during syntactic validation",
+			log.Int("msg_type", int(m.InnerMsg.Type)))
 		return false
 	}
 }
@@ -276,8 +292,13 @@ func (v *syntaxContextValidator) validateAggregatedMessage(aggMsg *aggregatedMes
 		return errNilMsgsSlice
 	}
 
-	if len(aggMsg.Messages) != v.threshold { // must include exactly f+1 Messages
-		v.Warning("Aggregated validation failed: number of messages does not match. Expected: %v Actual: %v",
+	var count int
+	for _, m := range aggMsg.Messages {
+		count += int(m.InnerMsg.EligibilityCount)
+	}
+
+	if count < v.threshold { // must fit eligibility threshold
+		v.Warning("Aggregated validation failed: total eligibility of messages does not match. Expected: %v Actual: %v",
 			v.threshold, len(aggMsg.Messages))
 		return errMsgsCountMismatch
 	}
@@ -335,15 +356,17 @@ func (v *syntaxContextValidator) validateAggregatedMessage(aggMsg *aggregatedMes
 
 func (v *syntaxContextValidator) validateSVP(msg *Msg) bool {
 	defer func(startTime time.Time) {
-		v.With().Debug("SVP validation duration", log.String("duration", time.Now().Sub(startTime).String()))
+		v.With().Debug("svp validation duration", log.String("duration", time.Now().Sub(startTime).String()))
 	}(time.Now())
 	proposalIter := iterationFromCounter(msg.InnerMsg.K)
 	validateSameIteration := func(m *Msg) bool {
 		statusIter := iterationFromCounter(m.InnerMsg.K)
 		if proposalIter != statusIter { // not same iteration
-			v.With().Warning("Proposal validation failed: not same iteration",
-				log.String("sender_id", m.PubKey.ShortString()), types.LayerID(m.InnerMsg.InstanceID),
-				log.Int32("expected", proposalIter), log.Int32("actual", statusIter))
+			v.With().Warning("proposal validation failed: not same iteration",
+				log.String("sender_id", m.PubKey.ShortString()),
+				types.LayerID(m.InnerMsg.InstanceID),
+				log.Int32("expected", proposalIter),
+				log.Int32("actual", statusIter))
 			return false
 		}
 

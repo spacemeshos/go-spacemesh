@@ -14,7 +14,7 @@ import (
 )
 
 func TestNewBlockEvent(t *testing.T) {
-	url := "tcp://localhost:56565"
+	url := "tcp://localhost:12321"
 
 	eventPublisher, err := NewEventPublisher(url)
 	assert.NoError(t, err)
@@ -116,7 +116,7 @@ func TestReportError(t *testing.T) {
 	nodeErr := NodeError{
 		Msg:   "hi there",
 		Trace: "<trace goes here>",
-		Type:  NodeErrorTypeError,
+		Level: zapcore.ErrorLevel,
 	}
 
 	// There should be no error reporting an event before initializing the reporter
@@ -151,7 +151,7 @@ func TestReportError(t *testing.T) {
 
 		// now check errors sent through logging
 		msg := <-stream
-		require.Equal(t, int(zapcore.ErrorLevel), msg.Type)
+		require.Equal(t, zapcore.ErrorLevel, msg.Level)
 		require.Equal(t, "abracadabra", msg.Msg)
 	}()
 
@@ -166,7 +166,7 @@ func TestReportError(t *testing.T) {
 			ReportError(NodeError{
 				Msg:   entry.Message,
 				Trace: string(debug.Stack()),
-				Type:  int(entry.Level),
+				Level: entry.Level,
 			})
 		}
 		return nil

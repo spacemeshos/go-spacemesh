@@ -1,10 +1,19 @@
 package node
 
 import (
+	"bufio"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+	"sync"
+	"time"
+
 	"github.com/spacemeshos/amcl"
 	"github.com/spacemeshos/amcl/BLS381"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/api"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/collector"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -16,10 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/post/initialization"
-	"io/ioutil"
-	"strconv"
-	"sync"
-	"time"
 )
 
 // ManualClock is a clock that releases ticks on demand and not according to a real world clock
@@ -122,7 +127,7 @@ func (clk *ManualClock) GetGenesisTime() time.Time {
 // Close does nothing because this clock is manual
 func (clk *ManualClock) Close() {}
 
-func getTestDefaultConfig() *config.Config {
+func getTestDefaultConfig(numOfInstances int) *config.Config {
 	cfg, err := LoadConfigFromFile()
 	if err != nil {
 		log.Error("cannot load config from file")
@@ -133,6 +138,9 @@ func getTestDefaultConfig() *config.Config {
 	cfg.POST.NumLabels = 1 << 10
 	cfg.POST.LabelSize = 8
 	cfg.POST.NumFiles = 1
+
+	cfg.GenesisTotalWeight = cfg.POST.SpacePerUnit * uint64(numOfInstances) // * 1 PoET ticks
+	// MERGE FIX -- CHECK
 
 	cfg.PostOptions = activation.DefaultPostOptions()
 	cfg.PostOptions.DataSize = 1 << 10
@@ -156,16 +164,34 @@ func getTestDefaultConfig() *config.Config {
 	cfg.SyncRequestTimeout = 500
 	cfg.SyncInterval = 2
 	cfg.SyncValidationDelta = 5
+	cfg.GoldenATXID = "0x5678"
+
 	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
+
 	return cfg
 }
 
 // ActivateGrpcServer starts a grpc server on the provided node
 func ActivateGrpcServer(smApp *SpacemeshApp) {
-	smApp.Config.API.StartGrpcServer = true
-	layerDuration := smApp.Config.LayerDurationSec
-	smApp.grpcAPIService = api.NewGrpcService(smApp.Config.API.GrpcServerPort, smApp.P2P, smApp.state, smApp.mesh, smApp.txPool, smApp.oracle, smApp.clock, layerDuration, nil, nil, nil)
-	smApp.grpcAPIService.StartService()
+	// Activate the API services used by app_test
+	smApp.Config.API.StartGatewayService = true
+	smApp.Config.API.StartGlobalStateService = true
+	smApp.Config.API.StartTransactionService = true
+	smApp.Config.API.GrpcServerPort = 9094
+	smApp.grpcAPIService = grpcserver.NewServerWithInterface(smApp.Config.API.GrpcServerPort, smApp.Config.API.GrpcServerInterface)
+	smApp.gatewaySvc = grpcserver.NewGatewayService(smApp.P2P)
+	smApp.globalstateSvc = grpcserver.NewGlobalStateService(smApp.mesh, smApp.txPool)
+	smApp.txService = grpcserver.NewTransactionService(smApp.P2P, smApp.mesh, smApp.txPool, smApp.syncer)
+	smApp.gatewaySvc.RegisterService(smApp.grpcAPIService)
+	smApp.globalstateSvc.RegisterService(smApp.grpcAPIService)
+	smApp.txService.RegisterService(smApp.grpcAPIService)
+	smApp.grpcAPIService.Start()
+
+	// MERGE FIX
+	//smApp.Config.API.StartGrpcServer = true
+	//layerDuration := smApp.Config.LayerDurationSec
+	//smApp.grpcAPIService = api.NewGrpcService(smApp.Config.API.GrpcServerPort, smApp.P2P, smApp.state, smApp.mesh, smApp.txPool, smApp.oracle, smApp.clock, layerDuration, nil, nil, nil)
+	//smApp.grpcAPIService.StartService()
 }
 
 // GracefulShutdown stops the current services running in apps
@@ -197,6 +223,8 @@ type network interface {
 func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network, edSgn *signing.EdSigner) (*SpacemeshApp, error) {
 	smApp := NewSpacemeshApp()
 	smApp.Config = &cfg
+	// MERGE FIX
+	//smApp.Config.SpaceToCommit = smApp.Config.POST.SpacePerUnit << (i % 5)
 	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
 	smApp.Config.GenesisTime = genesisTime
 	smApp.Config.POST.DataDir, _ = ioutil.TempDir("", "sm-app-test-post-datadir")
@@ -225,10 +253,9 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.
 
 // StartMultiNode Starts the run of a number of nodes, running in process consensus between them.
 // this also runs a single transaction between the nodes.
-func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPath string) {
-	cfg := getTestDefaultConfig()
+func StartMultiNode(numOfInstances, layerAvgSize int, runTillLayer uint32, dbPath string) {
+	cfg := getTestDefaultConfig(numOfInstances)
 	cfg.LayerAvgSize = layerAvgSize
-	numOfInstances := numOfinstances
 	net := service.NewSimulator()
 	path := dbPath + time.Now().Format(time.RFC3339)
 
@@ -252,7 +279,9 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 		log.Error("cannot parse genesis time %v", err)
 	}
 	pubsubAddr := "tcp://localhost:55666"
-	events.InitializeEventReporter(pubsubAddr)
+	if err := events.InitializeEventReporter(pubsubAddr); err != nil {
+		log.With().Error("error initializing event reporter", log.Err(err))
+	}
 	clock := NewManualClock(gTime)
 
 	apps := make([]*SpacemeshApp, 0, numOfInstances)
@@ -278,7 +307,38 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	collect.Start(false)
 	ActivateGrpcServer(apps[0])
 
-	if err := poetHarness.Start([]string{"127.0.0.1:9091"}); err != nil {
+	go func() {
+		r := bufio.NewReader(poetHarness.Stdout)
+		for {
+			line, _, err := r.ReadLine()
+			if err == io.EOF || err == os.ErrClosed {
+				return
+			}
+			if err != nil {
+				log.Error("Failed to read PoET stdout: %v", err)
+				return
+			}
+
+			fmt.Printf("[PoET stdout] %v\n", string(line))
+		}
+	}()
+	go func() {
+		r := bufio.NewReader(poetHarness.Stderr)
+		for {
+			line, _, err := r.ReadLine()
+			if err == io.EOF || err == os.ErrClosed {
+				return
+			}
+			if err != nil {
+				log.Error("Failed to read PoET stderr: %v", err)
+				return
+			}
+
+			fmt.Printf("[PoET stderr] %v\n", string(line))
+		}
+	}()
+
+	if err := poetHarness.Start([]string{"127.0.0.1:9094"}); err != nil {
 		log.Panic("failed to start poet server: %v", err)
 	}
 
@@ -334,7 +394,7 @@ loop:
 			}
 			log.Info("all miners finished reading %v atxs, layer %v done in %v", eventDb.GetAtxCreationDone(epoch), layer, time.Since(startLayer))
 			for _, atxID := range eventDb.GetCreatedAtx(epoch) {
-				if _, found := eventDb.Atxs[atxID]; !found {
+				if !eventDb.AtxIDExists(atxID) {
 					log.Info("atx %v not propagated", atxID)
 					errors++
 					continue
@@ -351,5 +411,7 @@ loop:
 			time.Sleep(200 * time.Millisecond)
 		}
 	}
+	events.CloseEventReporter()
+	events.CloseEventPubSub()
 	collect.Stop()
 }

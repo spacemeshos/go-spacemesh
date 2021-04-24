@@ -17,11 +17,11 @@
 package state
 
 import (
+	"testing"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/stretchr/testify/assert"
-	"math/big"
-	"testing"
 	//	checker "gopkg.in/check.v1"
 )
 
@@ -38,11 +38,11 @@ func TestDump(t *testing.T) {
 	s.state, _ = New(types.Hash32{}, NewDatabase(s.db))
 	// generate a few entries
 	obj1 := s.state.GetOrNewStateObj(toAddr([]byte{0x01}))
-	obj1.AddBalance(big.NewInt(22))
+	obj1.AddBalance(22)
 	obj2 := s.state.GetOrNewStateObj(toAddr([]byte{0x01, 0x02}))
 	obj2.SetNonce(10)
 	obj3 := s.state.GetOrNewStateObj(toAddr([]byte{0x02}))
-	obj3.SetBalance(big.NewInt(44))
+	obj3.SetBalance(44)
 
 	// write some of them to the trie
 	s.state.updateStateObj(obj1)
@@ -55,16 +55,16 @@ func TestDump(t *testing.T) {
 	"root": "ba94994b7d4b6590b615f0a8ab543445312fd303fdab013f0b0fba920f8f228b",
 	"accounts": {
 		"0000000000000000000000000000000000000001": {
-			"balance": "22",
-			"nonce": 0
+			"nonce": 0,
+			"balance": 22
 		},
 		"0000000000000000000000000000000000000002": {
-			"balance": "44",
-			"nonce": 0
+			"nonce": 0,
+			"balance": 44
 		},
 		"0000000000000000000000000000000000000102": {
-			"balance": "0",
-			"nonce": 10
+			"nonce": 10,
+			"balance": 0
 		}
 	}
 }`
@@ -80,12 +80,12 @@ func TestLookupPastState(t *testing.T) {
 	s.state, _ = New(types.Hash32{}, sdb)
 	// generate a few entries
 	obj1 := s.state.GetOrNewStateObj(toAddr([]byte{0x01}))
-	obj1.AddBalance(big.NewInt(22))
+	obj1.AddBalance(22)
 
 	oldState, err := s.state.Commit()
 	assert.NoError(t, err)
 
-	obj1.AddBalance(big.NewInt(10))
+	obj1.AddBalance(10)
 	_, err = s.state.Commit()
 	assert.NoError(t, err)
 
@@ -105,7 +105,7 @@ func compareStateObjects(so0, so1 *Object, t *testing.T) {
 	if so0.Address() != so1.Address() {
 		t.Fatalf("Address mismatch: have %v, want %v", so0.address, so1.address)
 	}
-	if so0.Balance().Cmp(so1.Balance()) != 0 {
+	if so0.Balance() != so1.Balance() {
 		t.Fatalf("Balance mismatch: have %v, want %v", so0.Balance(), so1.Balance())
 	}
 	if so0.Nonce() != so1.Nonce() {

@@ -15,3 +15,10 @@ Closes #
 - [ ] Explain motivation or link existing issue(s)
 - [ ] Test changes and document test plan
 - [ ] Update documentation as needed
+
+## DevOps Notes
+<!-- Please uncheck these items as applicable to make DevOps aware of changes that may affect releases -->
+- [x] This PR does not require configuration changes (e.g., environment variables, GitHub secrets, VM resources)
+- [x] This PR does not affect public APIs
+- [x] This PR does not rely on a new version of external services (PoET, elasticsearch, etc.)
+- [x] This PR does not make changes to log messages (which monitoring infrastructure may rely on)

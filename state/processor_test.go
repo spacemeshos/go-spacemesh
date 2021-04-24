@@ -2,6 +2,10 @@ package state
 
 import (
 	crand "crypto/rand"
+	"math/big"
+	"math/rand"
+	"testing"
+
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -10,9 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"math/big"
-	"math/rand"
-	"testing"
 )
 
 type ProcessorStateSuite struct {
@@ -50,7 +51,7 @@ func (s *ProcessorStateSuite) SetupTest() {
 
 func createAccount(state *TransactionProcessor, addr types.Address, balance int64, nonce uint64) *Object {
 	obj1 := state.GetOrNewStateObj(addr)
-	obj1.AddBalance(big.NewInt(balance))
+	obj1.AddBalance(uint64(balance))
 	obj1.SetNonce(nonce)
 	state.updateStateObj(obj1)
 	return obj1
@@ -97,16 +98,16 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 	"root": "6de6ffd7eda4c1aa4de66051e4ad05afc1233e089f9e9afaf8174a4dc483fa57",
 	"accounts": {
 		"0000000000000000000000000000000000000002": {
-			"balance": "44",
-			"nonce": 0
+			"nonce": 0,
+			"balance": 44
 		},
 		"0000000000000000000000000000000000000102": {
-			"balance": "2",
-			"nonce": 10
+			"nonce": 10,
+			"balance": 2
 		},
 		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
-			"balance": "15",
-			"nonce": 1
+			"nonce": 1,
+			"balance": 15
 		}
 	}
 }`
@@ -203,7 +204,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyRewards() {
 		types.HexToAddress("ddd"),
 		types.HexToAddress("bbb"),
 		types.HexToAddress("aaa")},
-		big.NewInt(1000),
+		big.NewInt(int64(1000)),
 	)
 
 	assert.Equal(s.T(), s.processor.GetBalance(types.HexToAddress("aaa")), uint64(2000))
@@ -244,16 +245,16 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	"root": "0fb9e074115e49b9a1d33949de2578459c158d8885ca10ad9edcd5d3a84fd67c",
 	"accounts": {
 		"0000000000000000000000000000000000000002": {
-			"balance": "47",
-			"nonce": 0
+			"nonce": 0,
+			"balance": 47
 		},
 		"0000000000000000000000000000000000000102": {
-			"balance": "2",
-			"nonce": 10
+			"nonce": 10,
+			"balance": 2
 		},
 		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
-			"balance": "1",
-			"nonce": 4
+			"nonce": 4,
+			"balance": 1
 		}
 	}
 }`
@@ -312,16 +313,16 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	"root": "4b7174d31e60ef1ed970137079e2b8044d9c381422dbcbe16e561d8a51a9f651",
 	"accounts": {
 		"0000000000000000000000000000000000000002": {
-			"balance": "44",
-			"nonce": 0
+			"nonce": 0,
+			"balance": 44
 		},
 		"198d6e08b28e813feb01e4a400839b85e18080ce": {
-			"balance": "28",
-			"nonce": 11
+			"nonce": 11,
+			"balance": 28
 		},
 		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
-			"balance": "19",
-			"nonce": 2
+			"nonce": 2,
+			"balance": 19
 		}
 	}
 }`
@@ -340,16 +341,16 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	"root": "9273645f6b9a62f32500021f5e0a89d3eb6ffd36b1b9f9f82fcaad4555951e97",
 	"accounts": {
 		"0000000000000000000000000000000000000002": {
-			"balance": "44",
-			"nonce": 0
+			"nonce": 0,
+			"balance": 44
 		},
 		"198d6e08b28e813feb01e4a400839b85e18080ce": {
-			"balance": "42",
-			"nonce": 10
+			"nonce": 10,
+			"balance": 42
 		},
 		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
-			"balance": "15",
-			"nonce": 1
+			"nonce": 1,
+			"balance": 15
 		}
 	}
 }`
@@ -407,7 +408,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 			for dstAccount == srcAccount {
 				dstAccount = accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
 			}
-			t := createTransaction(s.T(), processor.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]), dstAccount.address, (rand.Uint64()%srcAccount.Balance().Uint64())/100, 5, signers[src])
+			t := createTransaction(s.T(), processor.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]), dstAccount.address, (rand.Uint64()%srcAccount.Balance())/100, 5, signers[src])
 			trns = append(trns, t)
 
 			log.Info("transaction %v nonce %v amount %v", t.Origin().Hex(), t.AccountNonce, t.Amount)
@@ -448,7 +449,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance()
 	r := require.New(s.T())
 	signer := signing.NewEdSigner()
 	origin := types.BytesToAddress(signer.PublicKey().Bytes())
-	s.processor.SetBalance(origin, big.NewInt(100))
+	s.processor.SetBalance(origin, 100)
 	s.processor.SetNonce(origin, 5)
 	s.projector.balanceDiff = 10
 	s.projector.nonceDiff = 2
@@ -461,7 +462,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance_W
 	r := require.New(s.T())
 	signer := signing.NewEdSigner()
 	origin := types.BytesToAddress(signer.PublicKey().Bytes())
-	s.processor.SetBalance(origin, big.NewInt(100))
+	s.processor.SetBalance(origin, 100)
 	s.processor.SetNonce(origin, 5)
 	s.projector.balanceDiff = 10
 	s.projector.nonceDiff = 2
@@ -474,7 +475,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance_I
 	r := require.New(s.T())
 	signer := signing.NewEdSigner()
 	origin := types.BytesToAddress(signer.PublicKey().Bytes())
-	s.processor.SetBalance(origin, big.NewInt(100))
+	s.processor.SetBalance(origin, 100)
 	s.processor.SetNonce(origin, 5)
 	s.projector.balanceDiff = 10
 	s.projector.nonceDiff = 2

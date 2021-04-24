@@ -157,10 +157,10 @@ func (nb *NIPoSTBuilder) BuildNIPoST(challenge *types.Hash32, atxExpired, stop c
 			nb.poetDB.UnsubscribeFromProofRef(nb.state.PoetServiceID, nb.state.PoetRound.ID)
 			return nil, fmt.Errorf("atx expired while waiting for poet proof, target epoch ended")
 		case <-stop:
-			return nil, &StopRequestedError{}
+			return nil, StopRequestedError{}
 		}
 
-		membership, err := nb.poetDB.GetMembershipMap(poetProofRef)
+		membership, err := nb.poetDB.GetMembershipMap(types.CalcHash32(poetProofRef).Bytes())
 		if err != nil {
 			log.Panic("failed to fetch membership for PoET proof")              // TODO: handle inconsistent state
 			return nil, fmt.Errorf("failed to fetch membership for PoET proof") // inconsistent state

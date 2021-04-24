@@ -14,7 +14,7 @@ def add_multi_clients(testconfig, deployment_id, container_specs, size=2, client
     :param deployment_id: string, namespace id
     :param container_specs:
     :param size: int, number of replicas
-    :param client_title: string, client title in yml file (client, client_v2 etc)
+    :param client_title: string, client title in yml file (client, clientv2 etc)
     :param ret_dep: boolean, if 'True' RETURN deployment name in addition
     :return: list (strings), list of pods names
     """
@@ -146,7 +146,7 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
     bs_pod['pod_ip'] = resp.status.pod_ip
 
     match = search_phrase_in_pod_log(bs_pod['name'], namespace, 'bootstrap',
-                                     r"Local node identity >> (?P<bootstrap_key>\w+)")
+                                     r"local node identity.*\"key\"\s*:\s*\"(?P<bootstrap_key>\w+)")
 
     if not match:
         raise Exception("Failed to read container logs in {0}".format('bootstrap'))
@@ -161,7 +161,7 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
                                name="client", file_path=None, oracle=None, poet=None, dep_time_out=120):
     # setting stateful and deployment configuration files
     # default deployment method is 'deployment'
-    dep_method = client_config["deployment_type"] if "deployment_type" in client_config.keys() else "deployment"
+    dep_method = client_config.get("deployment_type", "deployment")
     try:
         dep_file_path, ss_file_path = _setup_dep_ss_file_path(file_path, dep_method, 'client')
     except ValueError as e:
@@ -169,7 +169,7 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
         return None
 
     # this function used to be the way to extract the client title
-    # in case we want a different title (client_v2 for example) we can specify it
+    # in case we want a different title (clientv2 for example) we can specify it
     # directly in "name" input
     def _extract_label():
         return client_deployment_info.deployment_name.split('-')[1]

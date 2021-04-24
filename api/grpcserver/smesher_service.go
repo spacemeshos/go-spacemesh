@@ -32,14 +32,14 @@ func NewSmesherService(post api.PostAPI, smeshing api.SmeshingAPI) *SmesherServi
 }
 
 // IsSmeshing reports whether the node is smeshing
-func (s SmesherService) IsSmeshing(ctx context.Context, in *empty.Empty) (*pb.IsSmeshingResponse, error) {
+func (s SmesherService) IsSmeshing(context.Context, *empty.Empty) (*pb.IsSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.IsSmeshing")
 
 	return &pb.IsSmeshingResponse{IsSmeshing: s.smeshing.Smeshing()}, nil
 }
 
 // StartSmeshing requests that the node begin smeshing
-func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingRequest) (*pb.StartSmeshingResponse, error) {
+func (s SmesherService) StartSmeshing(_ context.Context, in *pb.StartSmeshingRequest) (*pb.StartSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.StartSmeshing")
 
 	// TODO(moshababo): check why JSON request via HTTP gateway doesn't decode `coinbase` properly,
@@ -61,7 +61,7 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 }
 
 // StopSmeshing requests that the node stop smeshing
-func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingRequest) (*pb.StopSmeshingResponse, error) {
+func (s SmesherService) StopSmeshing(context.Context, *pb.StopSmeshingRequest) (*pb.StopSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.StopSmeshing")
 
 	if err := s.smeshing.StopSmeshing(); err != nil {
@@ -74,7 +74,7 @@ func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingReq
 }
 
 // SmesherID returns the smesher ID of this node
-func (s SmesherService) SmesherID(ctx context.Context, in *empty.Empty) (*pb.SmesherIDResponse, error) {
+func (s SmesherService) SmesherID(context.Context, *empty.Empty) (*pb.SmesherIDResponse, error) {
 	log.Info("GRPC SmesherService.SmesherID")
 
 	addr := util.Hex2Bytes(s.smeshing.SmesherID().Key)
@@ -82,7 +82,7 @@ func (s SmesherService) SmesherID(ctx context.Context, in *empty.Empty) (*pb.Sme
 }
 
 // Coinbase returns the current coinbase setting of this node
-func (s SmesherService) Coinbase(ctx context.Context, in *empty.Empty) (*pb.CoinbaseResponse, error) {
+func (s SmesherService) Coinbase(context.Context, *empty.Empty) (*pb.CoinbaseResponse, error) {
 	log.Info("GRPC SmesherService.Coinbase")
 
 	addr := s.smeshing.Coinbase()
@@ -90,7 +90,7 @@ func (s SmesherService) Coinbase(ctx context.Context, in *empty.Empty) (*pb.Coin
 }
 
 // SetCoinbase sets the current coinbase setting of this node
-func (s SmesherService) SetCoinbase(ctx context.Context, in *pb.SetCoinbaseRequest) (*pb.SetCoinbaseResponse, error) {
+func (s SmesherService) SetCoinbase(_ context.Context, in *pb.SetCoinbaseRequest) (*pb.SetCoinbaseResponse, error) {
 	log.Info("GRPC SmesherService.SetCoinbase")
 
 	if in.Id == nil {
@@ -106,19 +106,25 @@ func (s SmesherService) SetCoinbase(ctx context.Context, in *pb.SetCoinbaseReque
 }
 
 // MinGas returns the current mingas setting of this node
-func (s SmesherService) MinGas(ctx context.Context, in *empty.Empty) (*pb.MinGasResponse, error) {
+func (s SmesherService) MinGas(context.Context, *empty.Empty) (*pb.MinGasResponse, error) {
 	log.Info("GRPC SmesherService.MinGas")
 	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
 }
 
 // SetMinGas sets the mingas setting of this node
-func (s SmesherService) SetMinGas(ctx context.Context, in *pb.SetMinGasRequest) (*pb.SetMinGasResponse, error) {
+func (s SmesherService) SetMinGas(context.Context, *pb.SetMinGasRequest) (*pb.SetMinGasResponse, error) {
 	log.Info("GRPC SmesherService.SetMinGas")
 	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
 }
 
+// EstimatedRewards returns estimated smeshing rewards over the next epoch
+func (s SmesherService) EstimatedRewards(context.Context, *pb.EstimatedRewardsRequest) (*pb.EstimatedRewardsResponse, error) {
+	log.Info("GRPC SmesherService.EstimatedRewards")
+	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
+}
+
 // PostStatus returns post data status
-func (s SmesherService) PostStatus(ctx context.Context, in *empty.Empty) (*pb.PostStatusResponse, error) {
+func (s SmesherService) PostStatus(context.Context, *empty.Empty) (*pb.PostStatusResponse, error) {
 	log.Info("GRPC SmesherService.PostStatus")
 
 	postStatus, err := s.post.PostStatus()
@@ -130,7 +136,7 @@ func (s SmesherService) PostStatus(ctx context.Context, in *empty.Empty) (*pb.Po
 }
 
 // PostComputeProviders returns a list of available post compute providers
-func (s SmesherService) PostComputeProviders(ctx context.Context, in *empty.Empty) (*pb.PostComputeProvidersResponse, error) {
+func (s SmesherService) PostComputeProviders(context.Context, *empty.Empty) (*pb.PostComputeProvidersResponse, error) {
 	log.Info("GRPC SmesherService.PostComputeProviders")
 
 	providers := s.post.PostComputeProviders()
@@ -156,7 +162,7 @@ func (s SmesherService) PostComputeProviders(ctx context.Context, in *empty.Empt
 }
 
 // CreatePostData requests that the node begin post init
-func (s SmesherService) CreatePostData(ctx context.Context, in *pb.CreatePostDataRequest) (*pb.CreatePostDataResponse, error) {
+func (s SmesherService) CreatePostData(context.Context, *pb.CreatePostDataRequest) (*pb.CreatePostDataResponse, error) {
 	log.Info("GRPC SmesherService.CreatePostData")
 
 	if in.Data == nil {
@@ -180,7 +186,7 @@ func (s SmesherService) CreatePostData(ctx context.Context, in *pb.CreatePostDat
 }
 
 // StopPostDataCreationSession requests that the node stop ongoing post data creation
-func (s SmesherService) StopPostDataCreationSession(ctx context.Context, in *pb.StopPostDataCreationSessionRequest) (*pb.StopPostDataCreationSessionResponse, error) {
+func (s SmesherService) StopPostDataCreationSession(context.Context, *pb.StopPostDataCreationSessionRequest) (*pb.StopPostDataCreationSessionResponse, error) {
 	log.Info("GRPC SmesherService.StopPostDataCreationSession")
 
 	if err := s.post.StopPostDataCreationSession(in.DeleteFiles); err != nil {
@@ -197,7 +203,7 @@ func (s SmesherService) StopPostDataCreationSession(ctx context.Context, in *pb.
 // STREAMS
 
 // PostDataCreationProgressStream exposes a stream of updates during post init
-func (s SmesherService) PostDataCreationProgressStream(request *empty.Empty, stream pb.SmesherService_PostDataCreationProgressStreamServer) error {
+func (s SmesherService) PostDataCreationProgressStream(*empty.Empty, pb.SmesherService_PostDataCreationProgressStreamServer) error {
 	log.Info("GRPC SmesherService.PostDataCreationProgressStream")
 
 	statusChan := s.post.PostDataCreationProgressStream()

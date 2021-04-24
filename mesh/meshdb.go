@@ -5,15 +5,16 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"math/big"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 )
 
 type layerMutex struct {
@@ -24,19 +25,21 @@ type layerMutex struct {
 // DB represents a mesh database instance
 type DB struct {
 	log.Log
-	blockCache         blockCache
-	layers             database.Database
-	blocks             database.Database
-	transactions       database.Database
-	contextualValidity database.Database
-	general            database.Database
-	unappliedTxs       database.Database
-	unappliedTxsMutex  sync.Mutex
-	blockMutex         sync.RWMutex
-	orphanBlocks       map[types.LayerID]map[types.BlockID]struct{}
-	layerMutex         map[types.LayerID]*layerMutex
-	lhMutex            sync.Mutex
-	exit               chan struct{}
+	blockCache            blockCache
+	layers                database.Database
+	blocks                database.Database
+	transactions          database.Database
+	contextualValidity    database.Database
+	general               database.Database
+	unappliedTxs          database.Database
+	inputVector           database.Database
+	unappliedTxsMutex     sync.Mutex
+	blockMutex            sync.RWMutex
+	orphanBlocks          map[types.LayerID]map[types.BlockID]struct{}
+	layerMutex            map[types.LayerID]*layerMutex
+	lhMutex               sync.Mutex
+	InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
+	exit                  chan struct{}
 }
 
 // NewPersistentMeshDB creates an instance of a mesh database
@@ -65,6 +68,10 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize mesh unappliedTxs db: %v", err)
 	}
+	iv, err := database.NewLDBDatabase(filepath.Join(path, "inputvector"), 0, 0, log)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize mesh unappliedTxs db: %v", err)
+	}
 
 	ll := &DB{
 		Log:                log,
@@ -75,12 +82,21 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, err
 		general:            gdb,
 		contextualValidity: vdb,
 		unappliedTxs:       utx,
+		inputVector:        iv,
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
 	}
-	ll.AddBlock(GenesisBlock())
-	ll.SaveContextualValidity(GenesisBlock().ID(), true)
+
+	for _, blk := range GenesisLayer().Blocks() {
+		ll.Log.With().Info("Adding genesis block ", blk.ID(), blk.LayerIndex)
+		if err := ll.AddBlock(blk); err != nil {
+			log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
+		}
+		if err := ll.SaveContextualValidity(blk.ID(), true); err != nil {
+			log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
+		}
+	}
 	return ll, nil
 }
 
@@ -105,12 +121,15 @@ func NewMemMeshDB(log log.Log) *DB {
 		contextualValidity: database.NewMemDatabase(),
 		transactions:       database.NewMemDatabase(),
 		unappliedTxs:       database.NewMemDatabase(),
+		inputVector:        database.NewMemDatabase(),
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
 	}
-	ll.AddBlock(GenesisBlock())
-	ll.SaveContextualValidity(GenesisBlock().ID(), true)
+	for _, blk := range GenesisLayer().Blocks() {
+		ll.AddBlock(blk)
+		ll.SaveContextualValidity(blk.ID(), true)
+	}
 	return ll
 }
 
@@ -121,12 +140,13 @@ func (m *DB) Close() {
 	m.layers.Close()
 	m.transactions.Close()
 	m.unappliedTxs.Close()
+	m.inputVector.Close()
 	m.general.Close()
 	m.contextualValidity.Close()
 }
 
 // ErrAlreadyExist error returned when adding an existing value to the database
-var ErrAlreadyExist = errors.New("block already exist in database")
+var ErrAlreadyExist = errors.New("block already exists in database")
 
 // AddBlock adds a block to the database
 func (m *DB) AddBlock(bl *types.Block) error {
@@ -215,7 +235,7 @@ func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID
 		}
 
 		// push children to bfs queue
-		for _, id := range block.ViewEdges {
+		for _, id := range append(block.ForDiff, append(block.AgainstDiff, block.NeutralDiff...)...) {
 			if _, found := seenBlocks[id]; !found {
 				seenBlocks[id] = struct{}{}
 				blocksToVisit.PushBack(id)
@@ -239,7 +259,7 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 
 	blockIds, err := types.BytesToBlockIds(idsBytes)
 	if err != nil {
-		return nil, errors.New("could not get all blocks from database ")
+		return nil, errors.New("could not get all blocks from database")
 	}
 
 	return blockIds, nil
@@ -278,6 +298,34 @@ func (m *DB) SaveContextualValidity(id types.BlockID, valid bool) error {
 	}
 	m.Debug("save contextual validity %v %v", id, valid)
 	return m.contextualValidity.Put(id.Bytes(), v)
+}
+
+// SaveLayerInputVector saves the input vote vector for a layer (hare results)
+func (m *DB) SaveLayerInputVector(lyrid types.LayerID, vector []types.BlockID) error {
+	bytes, err := types.InterfaceToBytes(vector)
+	if err != nil {
+		return err
+	}
+
+	return m.inputVector.Put(lyrid.Bytes(), bytes)
+}
+
+func (m *DB) defaulGetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
+	by, err := m.inputVector.Get(lyrid.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	var v []types.BlockID
+	err = types.BytesToInterface(by, &v)
+	return v, err
+}
+
+// GetLayerInputVector gets the input vote vector for a layer (hare results)
+func (m *DB) GetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
+	if m.InputVectorBackupFunc != nil {
+		return m.InputVectorBackupFunc(lyrid)
+	}
+	return m.defaulGetLayerInputVector(lyrid)
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {
@@ -352,13 +400,27 @@ func (m *DB) getLayerMutex(index types.LayerID) *layerMutex {
 	return ll
 }
 
-func getRewardKey(l types.LayerID, account types.Address) []byte {
-	str := string(getRewardKeyPrefix(account)) + "_" + strconv.FormatUint(l.Uint64(), 10)
+// Schema: "r_<coinbase>_<smesherId>_<layerId> -> reward struct"
+func getRewardKey(l types.LayerID, account types.Address, smesherID types.NodeID) []byte {
+	str := string(getRewardKeyPrefix(account)) + "_" + smesherID.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
 	return []byte(str)
 }
 
 func getRewardKeyPrefix(account types.Address) []byte {
-	str := "reward_" + account.String()
+	str := "r_" + account.String()
+	return []byte(str)
+}
+
+// This function gets the reward key for a particular smesherID
+// format for the index "s_<smesherid>_<accountid>_<layerid> -> r_<accountid>_<smesherid>_<layerid> -> the actual reward"
+func getSmesherRewardKey(l types.LayerID, smesherID types.NodeID, account types.Address) []byte {
+	str := string(getSmesherRewardKeyPrefix(smesherID)) + "_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
+	return []byte(str)
+}
+
+//use r_ for one and s_ for the other so the namespaces can't collide
+func getSmesherRewardKeyPrefix(smesherID types.NodeID) []byte {
+	str := "s_" + smesherID.String()
 	return []byte(str)
 }
 
@@ -422,25 +484,52 @@ func (m *DB) writeTransactions(l types.LayerID, txs []*types.Transaction) error 
 	return nil
 }
 
+// WriteTransaction writes a single transaction to the db
+func (m *DB) WriteTransaction(l types.LayerID, t *types.Transaction) error {
+	bytes, err := types.InterfaceToBytes(newDbTransaction(t))
+	if err != nil {
+		return fmt.Errorf("could not marshall tx %v to bytes: %v", t.ID().ShortString(), err)
+	}
+	if err := m.transactions.Put(t.ID().Bytes(), bytes); err != nil {
+		return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
+	}
+	// write extra index for querying txs by account
+	if err := m.transactions.Put(getTransactionOriginKey(l, t), t.ID().Bytes()); err != nil {
+		return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
+	}
+	if err := m.transactions.Put(getTransactionDestKey(l, t), t.ID().Bytes()); err != nil {
+		return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
+	}
+	m.Debug("wrote tx %v to db", t.ID().ShortString())
+
+	return nil
+}
+
+//We're not using the existing reward type because the layer is implicit in the key
 type dbReward struct {
 	TotalReward         uint64
 	LayerRewardEstimate uint64
+	SmesherID           types.NodeID
+	Coinbase            types.Address
 	// TotalReward - LayerRewardEstimate = FeesEstimate
 }
 
-func (m *DB) writeTransactionRewards(l types.LayerID, accounts []types.Address, totalReward, layerReward *big.Int) error {
-	actBlockCnt := make(map[types.Address]uint64)
-	for _, account := range accounts {
-		actBlockCnt[account]++
-	}
-
+func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[types.Address]map[string]uint64, totalReward, layerReward *big.Int) error {
 	batch := m.transactions.NewBatch()
-	for account, cnt := range actBlockCnt {
-		reward := dbReward{TotalReward: cnt * totalReward.Uint64(), LayerRewardEstimate: cnt * layerReward.Uint64()}
-		if b, err := types.InterfaceToBytes(&reward); err != nil {
-			return fmt.Errorf("could not marshal reward for %v: %v", account.Short(), err)
-		} else if err := batch.Put(getRewardKey(l, account), b); err != nil {
-			return fmt.Errorf("could not write reward to %v to database: %v", account.Short(), err)
+	for account, smesherAccountEntry := range accountBlockCount {
+		for smesherString, cnt := range smesherAccountEntry {
+			smesherEntry, err := types.StringToNodeID(smesherString)
+			if err != nil {
+				return fmt.Errorf("could not convert String to NodeID for %v: %v", smesherString, err)
+			}
+			reward := dbReward{TotalReward: cnt * totalReward.Uint64(), LayerRewardEstimate: cnt * layerReward.Uint64(), SmesherID: *smesherEntry, Coinbase: account}
+			if b, err := types.InterfaceToBytes(&reward); err != nil {
+				return fmt.Errorf("could not marshal reward for %v: %v", account.Short(), err)
+			} else if err := batch.Put(getRewardKey(l, account, *smesherEntry), b); err != nil {
+				return fmt.Errorf("could not write reward to %v to database: %v", account.Short(), err)
+			} else if err := batch.Put(getSmesherRewardKey(l, *smesherEntry, account), getRewardKey(l, account, *smesherEntry)); err != nil {
+				return fmt.Errorf("could not write reward key for smesherID %v to database: %v", smesherEntry.ShortString(), err)
+			}
 		}
 	}
 	return batch.Write()
@@ -455,7 +544,7 @@ func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err erro
 		}
 		str := string(it.Key())
 		strs := strings.Split(str, "_")
-		layer, err := strconv.ParseUint(strs[2], 10, 64)
+		layer, err := strconv.ParseUint(strs[3], 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("wrong key in db %s: %v", it.Key(), err)
 		}
@@ -468,6 +557,42 @@ func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err erro
 			Layer:               types.LayerID(layer),
 			TotalReward:         reward.TotalReward,
 			LayerRewardEstimate: reward.LayerRewardEstimate,
+			SmesherID:           reward.SmesherID,
+			Coinbase:            reward.Coinbase,
+		})
+	}
+	return
+}
+
+// GetRewardsBySmesherID retrieves rewards by smesherID
+func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Reward, err error) {
+	it := m.transactions.Find(getSmesherRewardKeyPrefix(smesherID))
+	for it.Next() {
+		if it.Key() == nil {
+			break
+		}
+		str := string(it.Key())
+		strs := strings.Split(str, "_")
+		layer, err := strconv.ParseUint(strs[3], 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing db key %s: %v", it.Key(), err)
+		}
+		//find the key to the actual reward struct, which is in it.Value()
+		var reward dbReward
+		rewardBytes, err := m.transactions.Get(it.Value())
+
+		if err != nil {
+			return nil, fmt.Errorf("wrong key in db %s: %v", it.Value(), err)
+		}
+		if err = types.BytesToInterface(rewardBytes, &reward); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
+		}
+		rewards = append(rewards, types.Reward{
+			Layer:               types.LayerID(layer),
+			TotalReward:         reward.TotalReward,
+			LayerRewardEstimate: reward.LayerRewardEstimate,
+			SmesherID:           reward.SmesherID,
+			Coinbase:            reward.Coinbase,
 		})
 	}
 	return
@@ -693,11 +818,10 @@ func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks
 
 // ContextuallyValidBlock - returns the contextually valid blocks for the provided layer
 func (m *DB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error) {
-
 	if layer == 0 || layer == 1 {
 		v, err := m.LayerBlockIds(layer)
 		if err != nil {
-			m.Error("Could not get layer block ids for layer %v err=%v", layer, err)
+			m.With().Error("could not get layer block ids", layer, log.Err(err))
 			return nil, err
 		}
 
@@ -709,27 +833,30 @@ func (m *DB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]stru
 		return mp, nil
 	}
 
-	blks, err := m.LayerBlocks(layer)
+	blockIds, err := m.LayerBlockIds(layer)
 	if err != nil {
 		return nil, err
 	}
 
 	validBlks := make(map[types.BlockID]struct{})
 
-	for _, b := range blks {
-		valid, err := m.ContextualValidity(b.ID())
-
+	for _, b := range blockIds {
+		valid, err := m.ContextualValidity(b)
 		if err != nil {
-			m.Error("could not get contextual validity for block %v in layer %v err=%v", b.ID(), layer, err)
+			m.With().Error("could not get contextual validity", b, layer, log.Err(err))
 		}
 
 		if !valid {
 			continue
 		}
 
-		validBlks[b.ID()] = struct{}{}
+		validBlks[b] = struct{}{}
 	}
 
+	m.With().Info("count of contextually valid blocks in layer",
+		layer,
+		log.Int("count_valid", len(validBlks)),
+		log.Int("count_total", len(blockIds)))
 	return validBlks, nil
 }
 

@@ -1,4 +1,4 @@
-FROM python:latest AS tests_base
+FROM python:3.8 AS tests_base
 
 WORKDIR /go-spacemesh/tests
 
@@ -18,8 +18,10 @@ RUN mkdir -p /usr/local/gcloud \
 
 FROM tests_base AS with_requirements
 
-COPY tests/requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install pipenv
+COPY tests/Pipfile .
+COPY tests/Pipfile.lock .
+RUN pipenv install --system
 
 FROM with_requirements AS tests_runner
 

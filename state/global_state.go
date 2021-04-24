@@ -2,12 +2,12 @@ package state
 
 import (
 	"fmt"
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/trie"
-	"math/big"
-	"sync"
 )
 
 // DB is the struct that performs logging of all account states. It consists of a state trie that contains all
@@ -56,6 +56,22 @@ func (state *DB) Error() error {
 	return state.dbErr
 }
 
+// GetAllAccounts returns a dump of all accounts in global state
+func (state *DB) GetAllAccounts() (*types.MultipleAccountsState, error) {
+	// Commit state to store so accounts in memory are included
+	if _, err := state.Commit(); err != nil {
+		return nil, err
+	}
+
+	// We cannot lock before the call to Commit since that also acquires a lock
+	// But we need to lock here to ensure consistency between the state root and
+	// the account data
+	state.lock.Lock()
+	defer state.lock.Unlock()
+	accounts := state.RawDump()
+	return &accounts, nil
+}
+
 // Exist reports whether the given account address exists in the state.
 // Notably this also returns true for suicided accounts.
 func (state *DB) Exist(addr types.Address) bool {
@@ -75,7 +91,7 @@ func (state *DB) Empty(addr types.Address) bool {
 func (state *DB) GetBalance(addr types.Address) uint64 {
 	StateObj := state.getStateObj(addr)
 	if StateObj != nil {
-		return StateObj.Balance().Uint64()
+		return StateObj.Balance()
 	}
 	return 0
 }
@@ -95,7 +111,7 @@ func (state *DB) GetNonce(addr types.Address) uint64 {
  */
 
 // AddBalance adds amount to the account associated with addr.
-func (state *DB) AddBalance(addr types.Address, amount *big.Int) {
+func (state *DB) AddBalance(addr types.Address, amount uint64) {
 	stateObj := state.GetOrNewStateObj(addr)
 	if stateObj != nil {
 		stateObj.AddBalance(amount)
@@ -103,7 +119,7 @@ func (state *DB) AddBalance(addr types.Address, amount *big.Int) {
 }
 
 // SubBalance subtracts amount from the account associated with addr.
-func (state *DB) SubBalance(addr types.Address, amount *big.Int) {
+func (state *DB) SubBalance(addr types.Address, amount uint64) {
 	StateObj := state.GetOrNewStateObj(addr)
 	if StateObj != nil {
 		StateObj.SubBalance(amount)
@@ -111,7 +127,7 @@ func (state *DB) SubBalance(addr types.Address, amount *big.Int) {
 }
 
 // SetBalance sets balance to the specific address, it does not return error if address was not found
-func (state *DB) SetBalance(addr types.Address, amount *big.Int) {
+func (state *DB) SetBalance(addr types.Address, amount uint64) {
 	stateObj := state.GetOrNewStateObj(addr)
 	if stateObj != nil {
 		stateObj.SetBalance(amount)
@@ -158,7 +174,7 @@ func (state *DB) getStateObj(addr types.Address) (StateObj *Object) {
 		state.setError(err)
 		return nil
 	}
-	var data Account
+	var data types.AccountState
 	if err := rlp.DecodeBytes(enc, &data); err != nil {
 		log.Error("Failed to decode state object", "addr", addr, "err", err)
 		return nil
@@ -190,7 +206,7 @@ func (state *DB) GetOrNewStateObj(addr types.Address) *Object {
 // the given address, it is overwritten and returned as the second return value.
 func (state *DB) createObject(addr types.Address) (newObj, prev *Object) {
 	prev = state.getStateObj(addr)
-	newObj = newObject(state, addr, Account{})
+	newObj = newObject(state, addr, types.AccountState{})
 	newObj.setNonce(0)
 	/*if prev == nil {
 		state.journal.append(createObjectChange{account: &addr})

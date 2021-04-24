@@ -1,8 +1,9 @@
+import base64
 from datetime import datetime
+import json
 import random
 import re
 
-from tests.tx_generator import config as conf
 from tests.tx_generator.k8s_handler import api_call, aws_api_call
 
 
@@ -14,11 +15,10 @@ class WalletAPI:
 
     """
 
-    ADDRESS_SIZE_HEX = 40
-    balance_api = 'v1/balance'
-    get_tx_api = 'v1/gettransaction'
-    nonce_api = 'v1/nonce'
-    submit_api = 'v1/submittransaction'
+    ADDRESS_SIZE_BYTES = 20
+    account_api = 'v1/globalstate/account'
+    get_tx_api = 'v1/transaction/transactionsstate'
+    submit_api = 'v1/transaction/submittransaction'
 
     def __init__(self, namespace, clients_lst, fixed_node=None):
         """
@@ -33,21 +33,29 @@ class WalletAPI:
         self.tx_ids = []
 
     def submit_tx(self, to, src, gas_price, amount, nonce, tx_bytes):
-        a_ok_pat = "[\'\"]value[\'\"]:\s?[\'\"]ok[\'\"]"
         print(f"\n{datetime.now()}: submit transaction\nfrom {src}\nto {to}")
         pod_ip, pod_name = self.random_node()
         print(f"nonce: {nonce}, amount: {amount}, gas-price: {gas_price}, total: {amount+gas_price}")
-        tx_field = '{"tx":' + str(list(tx_bytes)) + '}'
+        tx_str = base64.b64encode(tx_bytes).decode('utf-8')
+        print(f"txbytes in base64: {tx_str}")
+        tx_field = '{"transaction": "' + tx_str + '"}'
         out = self.send_api_call(pod_ip, tx_field, self.submit_api)
         print(f"{datetime.now()}: submit result: {out}")
         if not out:
             print("cannot parse submission result, result is none")
             return False
 
-        if re.search(a_ok_pat, out):
-            self.tx_ids.append(self.extract_tx_id(out))
-            return True
+        res = self.decode_response(out)
+        try:
+            if res['txstate']['state'] == 'TRANSACTION_STATE_MEMPOOL':
+                print("tx submission successful")
+                self.tx_ids.append(self.extract_tx_id(out))
+                return True
+        except KeyError:
+            print(f"failed to parse transaction!\n\n{res}")
+            return False
 
+        print("tx submission failed, bad status or txstate")
         return False
 
     def get_tx_by_id(self, tx_id):
@@ -60,32 +68,40 @@ class WalletAPI:
         return self.extract_tx_id(out)
 
     def get_nonce_value(self, acc):
-        res = self._get_nonce(acc)
-        return WalletAPI.extract_nonce_from_resp(res)
+        return self._get_nonce(acc)
 
     def get_balance_value(self, acc):
-        res = self._get_balance(acc)
-        return WalletAPI.extract_balance_from_resp(res)
+        return self._get_balance(acc)
 
     def _get_nonce(self, acc):
-        return self._make_address_api_call(acc, "nonce", self.nonce_api)
+        return self._make_address_api_call(acc, "counter")
 
     def _get_balance(self, acc):
-        return self._make_address_api_call(acc, "balance", self.balance_api)
+        return self._make_address_api_call(acc, "balance")
 
-    def _make_address_api_call(self, acc, resource, api_res):
-        # check balance/nonce
-        print(f"\ngetting {resource} for", acc)
+    def _make_address_api_call(self, acc, resource):
+        # get account state to check balance/nonce
+        print(f"\ngetting {resource} of {acc}")
         pod_ip, pod_name = self.random_node()
-        data = '{"address":"' + acc[-self.ADDRESS_SIZE_HEX:] + '"}'
-        if acc == conf.acc_pub:
-            data = '{"address":"' + acc + '"}'
 
-        print(f"querying for the {resource} of {acc}")
-        out = self.send_api_call(pod_ip, data, api_res)
+        # API expects binary address in base64 format, must be converted to string to pass into curl
+        address = base64.b64encode(bytes.fromhex(acc)[-self.ADDRESS_SIZE_BYTES:]).decode('utf-8')
+        data = '{"account_id": {"address":"' + address + '"}}'
+        print(f"api input: {data}")
+        out = self.send_api_call(pod_ip, data, self.account_api)
+        print(f"api output: {out}")
 
-        print(f"{resource} output={out}")
-        return out
+        # Try to decode the response. If we fail that probably just means the data isn't there.
+        try:
+            out = self.decode_response(out)['account_wrapper']['state_projected']
+        except json.decoder.JSONDecodeError:
+            raise Exception(f"missing or malformed account data for address {acc}")
+
+        # GRPC doesn't include zero values so use intelligent defaults here
+        if resource == 'balance':
+            return int(out.get('balance', {}).get('value', 0))
+        elif resource == 'counter':
+            return int(out.get('counter', 0))
 
     def random_node(self):
         """
@@ -120,37 +136,6 @@ class WalletAPI:
     # ======================= utils =======================
 
     @staticmethod
-    def extract_value_from_resp(val):
-        if not val:
-            print("cannot extract value, input is None")
-            return None
-
-        res_pat = "value[\'\"]:\s?[\'\"]([0-9]+)"
-        group_num = 1
-
-        match = re.search(res_pat, val)
-        if match:
-            return match.group(group_num)
-
-        return None
-
-    @staticmethod
-    def extract_nonce_from_resp(nonce_res):
-        res = WalletAPI.extract_value_from_resp(nonce_res)
-        if res:
-            return int(res)
-
-        return None
-
-    @staticmethod
-    def extract_balance_from_resp(balance_res):
-        res = WalletAPI.extract_value_from_resp(balance_res)
-        if res:
-            return int(res)
-
-        return None
-
-    @staticmethod
     def extract_tx_id(tx_output):
         if not tx_output:
             print("cannot extract id from output, input is None")
@@ -172,3 +157,9 @@ class WalletAPI:
         :return: list, a list of 32 integers (32 bytes rep)
         """
         return list(bytearray.fromhex(hex_str))
+
+    @staticmethod
+    def decode_response(res):
+        p = re.compile('(?<!\\\\)\'')
+        res = p.sub('\"', res)
+        return json.loads(res)

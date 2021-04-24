@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -56,34 +59,37 @@ type DB struct {
 	sync.RWMutex
 	// todo: think about whether we need one db or several(#1922)
 	idStore
-	atxs              database.Database
-	atxHeaderCache    AtxCache
-	meshDb            *mesh.DB
-	LayersPerEpoch    uint16
-	nipostValidator   nipostValidator
-	pendingActiveSet  map[types.Hash12]*sync.Mutex
-	log               log.Log
-	calcActiveSetFunc func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
-	processAtxMutex   sync.Mutex
-	assLock           sync.Mutex
-	atxChannels       map[types.ATXID]*atxChan
+	atxs                database.Database
+	atxHeaderCache      AtxCache
+	meshDb              *mesh.DB
+	LayersPerEpoch      uint16
+	goldenATXID         types.ATXID
+	nipostValidator     nipostValidator
+	pendingTotalWeight  map[types.Hash12]*sync.Mutex
+	pTotalWeightLock    sync.Mutex
+	log                 log.Log
+	calcTotalWeightFunc func(targetEpoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error)
+	processAtxMutex     sync.Mutex
+	//assLock           sync.Mutex MERGE FIX -- REMOVE?
+	atxChannels map[types.ATXID]*atxChan
 }
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
 // their validity
-func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint16, nipostValidator nipostValidator, log log.Log) *DB {
+func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint16, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
 	db := &DB{
-		idStore:          idStore,
-		atxs:             dbStore,
-		atxHeaderCache:   NewAtxCache(600),
-		meshDb:           meshDb,
-		LayersPerEpoch:   layersPerEpoch,
-		nipostValidator:  nipostValidator,
-		pendingActiveSet: make(map[types.Hash12]*sync.Mutex),
-		log:              log,
-		atxChannels:      make(map[types.ATXID]*atxChan),
+		idStore:            idStore,
+		atxs:               dbStore,
+		atxHeaderCache:     NewAtxCache(600),
+		meshDb:             meshDb,
+		LayersPerEpoch:     layersPerEpoch,
+		goldenATXID:        goldenATXID,
+		nipostValidator:    nipostValidator,
+		pendingTotalWeight: make(map[types.Hash12]*sync.Mutex),
+		log:                log,
+		atxChannels:        make(map[types.ATXID]*atxChan),
 	}
-	db.calcActiveSetFunc = db.CalcActiveSetSize
+	db.calcTotalWeightFunc = db.GetMinerWeightsInEpochFromView
 	return db
 }
 
@@ -162,14 +168,17 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 		return nil
 	}
 	epoch := atx.PubLayerID.GetEpoch()
-	db.log.With().Info("processing atx", atx.ID(), epoch, log.FieldNamed("atx_node_id", atx.NodeID),
+	db.log.With().Info("processing atx",
+		atx.ID(),
+		epoch,
+		log.FieldNamed("atx_node_id", atx.NodeID),
 		atx.PubLayerID)
 	err := db.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	if err != nil {
-		db.log.With().Error("ATX failed contextual validation", atx.ID(), log.Err(err))
+		db.log.With().Error("atx failed contextual validation", atx.ID(), log.Err(err))
 		// TODO: Blacklist this miner
 	} else {
-		db.log.With().Info("ATX is valid", atx.ID())
+		db.log.With().Info("atx is valid", atx.ID())
 	}
 	err = db.StoreAtx(epoch, atx)
 	if err != nil {
@@ -178,15 +187,16 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 
 	err = db.StoreNodeIdentity(atx.NodeID)
 	if err != nil {
-		db.log.With().Error("cannot store node identity", log.FieldNamed("atx_node_id", atx.NodeID),
-			atx.ID(), log.Err(err))
+		db.log.With().Error("cannot store node identity",
+			log.FieldNamed("atx_node_id", atx.NodeID),
+			atx.ID(),
+			log.Err(err))
 	}
 	return nil
 }
 
-func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.ATXID, penalties map[string]struct{}, layersPerEpoch uint16, epoch types.EpochID) func(b *types.Block) (bool, error) {
-
-	traversalFunc := func(b *types.Block) (stop bool, err error) {
+func (db *DB) createTraversalFuncForMinerWeights(minerWeight map[string]uint64, targetEpoch types.EpochID) func(b *types.Block) (bool, error) {
+	return func(b *types.Block) (stop bool, err error) {
 
 		// count unique ATXs
 		if b.ActiveSet == nil {
@@ -202,102 +212,79 @@ func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.A
 			// todo: should we accept only eopch -1 atxs?
 
 			// make sure the target epoch is our epoch
-			if atx.TargetEpoch() != epoch {
-				db.log.With().Debug("atx found, but targeting epoch doesn't match publication epoch", atx.ID(),
+			if atx.TargetEpoch() != targetEpoch {
+				db.log.With().Debug("atx found in relevant layer, but target epoch doesn't match requested epoch",
+					atx.ID(),
 					log.FieldNamed("atx_target_epoch", atx.TargetEpoch()),
-					log.FieldNamed("actual_epoch", epoch))
+					log.FieldNamed("requested_epoch", targetEpoch))
 				continue
 			}
 
-			// ignore atx from nodes in penalty
-			if _, exist := penalties[atx.NodeID.Key]; exist {
-				db.log.With().Debug("ignoring atx from node in penalty", atx.NodeID, atx.ID())
-				continue
-			}
-
-			if prevID, exist := countedAtxs[atx.NodeID.Key]; exist { // same miner
-
-				if prevID != id { // different atx for same epoch
-					db.log.With().Error("Encountered second atx for the same miner on the same epoch",
-						log.FieldNamed("first_atx", prevID), log.FieldNamed("second_atx", id))
-
-					penalties[atx.NodeID.Key] = struct{}{} // mark node in penalty
-					delete(countedAtxs, atx.NodeID.Key)    // remove the penalized node from counted
-				}
-				continue
-			}
-
-			countedAtxs[atx.NodeID.Key] = id
+			minerWeight[atx.NodeID.Key] = atx.GetWeight()
 		}
 
 		return false, nil
 	}
-
-	return traversalFunc
 }
 
-// CalcActiveSetSize - returns the active set size that matches the view of the contextually valid blocks in the provided layer
-func (db *DB) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
-
-	if epoch == 0 {
-		return nil, errors.New("tried to retrieve active set for epoch 0")
+// GetMinerWeightsInEpochFromView returns a map of miner IDs and each one's weight targeting targetEpoch, by traversing
+// the provided view.
+func (db *DB) GetMinerWeightsInEpochFromView(targetEpoch types.EpochID, view map[types.BlockID]struct{}) (map[string]uint64, error) {
+	if targetEpoch == 0 {
+		return nil, errors.New("tried to retrieve miner weights for targetEpoch 0")
 	}
 
-	firstLayerOfPrevEpoch := (epoch - 1).FirstLayer()
+	firstLayerOfPrevEpoch := (targetEpoch - 1).FirstLayer()
 
-	countedAtxs := make(map[string]types.ATXID)
-	penalties := make(map[string]struct{})
+	minerWeight := make(map[string]uint64)
 
-	traversalFunc := db.createTraversalActiveSetCounterFunc(countedAtxs, penalties, db.LayersPerEpoch, epoch)
+	traversalFunc := db.createTraversalFuncForMinerWeights(minerWeight, targetEpoch)
 
 	startTime := time.Now()
-	err := db.meshDb.ForBlockInView(blocks, firstLayerOfPrevEpoch, traversalFunc)
+	err := db.meshDb.ForBlockInView(view, firstLayerOfPrevEpoch, traversalFunc)
 	if err != nil {
 		return nil, err
 	}
-	db.log.With().Info("done calculating active set size",
-		log.Int("size", len(countedAtxs)),
+	db.log.With().Info("done calculating miner weights",
+		log.Int("numMiners", len(minerWeight)),
 		log.String("duration", time.Now().Sub(startTime).String()))
 
-	result := make(map[string]struct{}, len(countedAtxs))
-	for k := range countedAtxs {
-		result[k] = struct{}{}
-	}
-
-	return result, nil
+	return minerWeight, nil
 }
 
-// CalcActiveSetFromView traverses the view found in a - the activation tx and counts number of active ids published
-// in the epoch prior to the epoch that a was published at, this number is the number of active ids in the next epoch
-// the function returns error if the view is not found
-func (db *DB) CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochID) (uint32, error) {
-	if pubEpoch < 1 {
-		return 0, fmt.Errorf("publication epoch cannot be less than 1, found %v", pubEpoch)
+// CalcTotalWeightFromView traverses the provided view and returns the total weight of the ATXs found targeting
+// targetEpoch. The function returns error if the view is not found.
+func (db *DB) CalcTotalWeightFromView(view []types.BlockID, targetEpoch types.EpochID) (uint64, error) {
+	if targetEpoch < 1 {
+		return 0, fmt.Errorf("targetEpoch cannot be less than 1, got %v", targetEpoch)
 	}
 	viewHash := types.CalcBlocksHash12(view)
-	count, found := activesetCache.Get(viewHash)
+	totalWeight, found := totalWeightCache.Get(viewHash)
 	if found {
-		return count, nil
+		return totalWeight, nil
 	}
 	// check if we have a running calculation for this hash
-	db.assLock.Lock()
-	mu, alreadyRunning := db.pendingActiveSet[viewHash]
+	db.pTotalWeightLock.Lock()
+	mu, alreadyRunning := db.pendingTotalWeight[viewHash]
 	if alreadyRunning {
-		db.assLock.Unlock()
+		db.pTotalWeightLock.Unlock()
 		// if there is a running calculation, wait for it to end and get the result
 		mu.Lock()
-		count, found := activesetCache.Get(viewHash)
+		totalWeight, found = totalWeightCache.Get(viewHash)
 		if found {
 			mu.Unlock()
-			return count, nil
+			return totalWeight, nil
 		}
-		// if not found, keep running mutex and calculate active set size
+		// if not found, keep running mutex, ensure it's still in the pending map and calculate total weight
+		db.pTotalWeightLock.Lock()
+		db.pendingTotalWeight[viewHash] = mu
+		db.pTotalWeightLock.Unlock()
 	} else {
 		// if no running calc, insert new one
 		mu = &sync.Mutex{}
-		db.pendingActiveSet[viewHash] = mu
-		db.pendingActiveSet[viewHash].Lock()
-		db.assLock.Unlock()
+		mu.Lock()
+		db.pendingTotalWeight[viewHash] = mu
+		db.pTotalWeightLock.Unlock()
 	}
 
 	mp := map[types.BlockID]struct{}{}
@@ -305,26 +292,29 @@ func (db *DB) CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochID
 		mp[blk] = struct{}{}
 	}
 
-	countedAtxs, err := db.calcActiveSetFunc(pubEpoch, mp)
+	atxWeights, err := db.calcTotalWeightFunc(targetEpoch, mp)
 	if err != nil {
-		mu.Unlock()
 		db.deleteLock(viewHash)
+		mu.Unlock()
 		return 0, err
 	}
-	activesetCache.Add(viewHash, uint32(len(countedAtxs)))
-	mu.Unlock()
+	totalWeight = 0
+	for _, w := range atxWeights {
+		totalWeight += w
+	}
+	totalWeightCache.Add(viewHash, totalWeight)
 	db.deleteLock(viewHash)
+	mu.Unlock()
 
-	return uint32(len(countedAtxs)), nil
-
+	return totalWeight, nil
 }
 
 func (db *DB) deleteLock(viewHash types.Hash12) {
-	db.assLock.Lock()
-	if _, exist := db.pendingActiveSet[viewHash]; exist {
-		delete(db.pendingActiveSet, viewHash)
+	db.pTotalWeightLock.Lock()
+	if _, exist := db.pendingTotalWeight[viewHash]; exist {
+		delete(db.pendingTotalWeight, viewHash)
 	}
-	db.assLock.Unlock()
+	db.pTotalWeightLock.Unlock()
 }
 
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
@@ -344,8 +334,13 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	if err != nil {
 		return fmt.Errorf("cannot validate atx sig atx id %v err %v", atx.ShortString(), err)
 	}
+
 	if atx.NodeID.Key != pub.String() {
 		return fmt.Errorf("node ids don't match")
+	}
+
+	if atx.PositioningATX == *types.EmptyATXID {
+		return fmt.Errorf("empty positioning atx")
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
@@ -359,7 +354,7 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		}
 
 		if prevATX.NodeID.Key != atx.NodeID.Key {
-			return fmt.Errorf("previous ATX belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v",
+			return fmt.Errorf("previous atx belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v",
 				atx.ShortString(), atx.NodeID.Key, prevATX.NodeID.Key)
 		}
 
@@ -406,9 +401,13 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		if err := db.nipostValidator.ValidatePoST(pub.Bytes(), atx.InitialPoST, &initialPoSTMetadata); err != nil {
 			return fmt.Errorf("invalid initial PoST: %v", err)
 		}
+		// MERGE FIX
+		//if err := db.nipstValidator.VerifyPost(*pub, atx.Commitment, atx.Space); err != nil {
+		//	return fmt.Errorf("invalid commitment proof: %v", err)
+		//}
 	}
 
-	if atx.PositioningATX != *types.EmptyATXID {
+	if atx.PositioningATX != db.goldenATXID {
 		posAtx, err := db.GetAtxHeader(atx.PositioningATX)
 		if err != nil {
 			return fmt.Errorf("positioning atx not found")
@@ -418,13 +417,13 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 				atx.PubLayerID, posAtx.PubLayerID)
 		}
 		if uint64(atx.PubLayerID-posAtx.PubLayerID) > uint64(db.LayersPerEpoch) {
-			return fmt.Errorf("expected distance of one epoch (%v layers) from pos ATX but found %v",
+			return fmt.Errorf("expected distance of one epoch (%v layers) from pos atx but found %v",
 				db.LayersPerEpoch, atx.PubLayerID-posAtx.PubLayerID)
 		}
 	} else {
 		publicationEpoch := atx.PubLayerID.GetEpoch()
-		if !publicationEpoch.IsGenesis() {
-			return fmt.Errorf("no positioning atx found")
+		if !publicationEpoch.NeedsGoldenPositioningATX() {
+			return fmt.Errorf("golden atx used for atx in epoch %d, but is only valid in epoch 1", publicationEpoch)
 		}
 	}
 
@@ -435,6 +434,8 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	db.log.With().Info("Validated NIPoST", log.String("challenge_hash", hash.String()), atx.ID())
 
 	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeID.Key))
+	// MERGE FIX
+	//	if err = db.nipstValidator.Validate(*pubKey, atx.Nipst, atx.Space, *hash); err != nil {
 	if err = db.nipostValidator.Validate(*pubKey, atx.NIPoST, *hash); err != nil {
 		return fmt.Errorf("NIPoST not valid: %v", err)
 	}
@@ -448,9 +449,10 @@ func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 	if atx.PrevATXID != *types.EmptyATXID {
 		lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
 		if err != nil {
-			db.log.With().Error("could not fetch node last ATX", atx.ID(),
-				log.FieldNamed("atx_node_id", atx.NodeID), log.Err(err))
-			return fmt.Errorf("could not fetch node last ATX: %v", err)
+			db.log.With().Error("could not fetch node last atx", atx.ID(),
+				log.FieldNamed("atx_node_id", atx.NodeID),
+				log.Err(err))
+			return fmt.Errorf("could not fetch node last atx: %v", err)
 		}
 		// last atx is not the one referenced
 		if lastAtx != atx.PrevATXID {
@@ -459,11 +461,11 @@ func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 	} else {
 		lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
 		if _, ok := err.(ErrAtxNotFound); err != nil && !ok {
-			db.log.Error("fetching ATX ids failed: %v", err)
+			db.log.With().Error("fetching atx ids failed", log.Err(err))
 			return err
 		}
 		if err == nil { // we found an ATX for this node ID, although it reported no prevATX -- this is invalid
-			return fmt.Errorf("no prevATX reported, but other ATX with same nodeID (%v) found: %v",
+			return fmt.Errorf("no prevATX reported, but other atx with same nodeID (%v) found: %v",
 				atx.NodeID.ShortString(), lastAtx.ShortString())
 		}
 	}
@@ -504,8 +506,7 @@ func (db *DB) StoreAtx(ech types.EpochID, atx *types.ActivationTx) error {
 		return err
 	}
 
-	db.log.Info("finished storing atx %v, in epoch %v", atx.ShortString(), ech)
-
+	db.log.With().Info("finished storing atx in epoch", atx.ID(), ech)
 	return nil
 }
 
@@ -558,7 +559,7 @@ type atxIDAndLayer struct {
 func (db *DB) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 	currentTopAtx, err := db.getTopAtx()
 	if err != nil && err != database.ErrNotFound {
-		return fmt.Errorf("failed to get current ATX: %v", err)
+		return fmt.Errorf("failed to get current atx: %v", err)
 	}
 	if err == nil && currentTopAtx.LayerID >= atx.PubLayerID {
 		return nil
@@ -570,12 +571,12 @@ func (db *DB) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 	}
 	topAtxBytes, err := types.InterfaceToBytes(&newTopAtx)
 	if err != nil {
-		return fmt.Errorf("failed to marshal top ATX: %v", err)
+		return fmt.Errorf("failed to marshal top atx: %v", err)
 	}
 
 	err = db.atxs.Put([]byte(topAtxKey), topAtxBytes)
 	if err != nil {
-		return fmt.Errorf("failed to store top ATX: %v", err)
+		return fmt.Errorf("failed to store top atx: %v", err)
 	}
 	return nil
 }
@@ -588,7 +589,7 @@ func (db *DB) getTopAtx() (atxIDAndLayer, error) {
 	var topAtx atxIDAndLayer
 	err = types.BytesToInterface(topAtxBytes, &topAtx)
 	if err != nil {
-		return atxIDAndLayer{}, fmt.Errorf("failed to unmarshal top ATX: %v", err)
+		return atxIDAndLayer{}, fmt.Errorf("failed to unmarshal top atx: %v", err)
 	}
 	return topAtx, nil
 }
@@ -597,7 +598,7 @@ func (db *DB) getTopAtx() (atxIDAndLayer, error) {
 func (db *DB) addAtxToNodeID(nodeID types.NodeID, atx *types.ActivationTx) error {
 	err := db.atxs.Put(getNodeAtxKey(nodeID, atx.PubLayerID.GetEpoch()), atx.ID().Bytes())
 	if err != nil {
-		return fmt.Errorf("failed to store ATX ID for node: %v", err)
+		return fmt.Errorf("failed to store atx ID for node: %v", err)
 	}
 	return nil
 }
@@ -606,7 +607,7 @@ func (db *DB) addNodeAtxToEpoch(epoch types.EpochID, nodeID types.NodeID, atx *t
 	db.log.Info("added atx %v to epoch %v", atx.ID().ShortString(), epoch)
 	err := db.atxs.Put(getNodeAtxEpochKey(atx.PubLayerID.GetEpoch(), nodeID), atx.ID().Bytes())
 	if err != nil {
-		return fmt.Errorf("failed to store ATX ID for node: %v", err)
+		return fmt.Errorf("failed to store atx ID for node: %v", err)
 	}
 	return nil
 }
@@ -645,8 +646,11 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 		}
 		atxs = append(atxs, a)
 	}
-	db.log.Info("returned epoch %v atxs %v %v", epochID, len(atxs), atxs)
-	return atxs
+	db.log.With().Info("returned epoch atxs", epochID, log.Int("count", len(atxs)))
+	db.log.With().Debug("returned epoch atxs", epochID,
+		log.Int("count", len(atxs)),
+		log.String("atxs", fmt.Sprint(atxs)))
+	return
 }
 
 // GetNodeAtxIDForEpoch returns an atx published by the provided nodeID for the specified targetEpoch. meaning the atx
@@ -667,6 +671,20 @@ func (db *DB) GetPosAtxID() (types.ATXID, error) {
 		return *types.EmptyATXID, err
 	}
 	return idAndLayer.AtxID, nil
+}
+
+// GetEpochWeight returns the total weight of ATXs targeting the given epochID.
+func (db *DB) GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID, error) {
+	weight := uint64(0)
+	activeSet := db.GetEpochAtxs(epochID - 1)
+	for _, atxID := range activeSet {
+		atxHeader, err := db.GetAtxHeader(atxID)
+		if err != nil {
+			return 0, nil, err
+		}
+		weight += atxHeader.GetWeight()
+	}
+	return weight, activeSet, nil
 }
 
 // GetAtxHeader returns the ATX header by the given ID. This function is thread safe and will return an error if the ID
@@ -738,52 +756,79 @@ func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.Activ
 }
 
 // HandleGossipAtx handles the atx gossip data channel
-func (db *DB) HandleGossipAtx(data service.GossipMessage, syncer service.Syncer) {
+func (db *DB) HandleGossipAtx(data service.GossipMessage, syncer service.Fetcher) {
 	if data == nil {
 		return
 	}
-	atx, err := types.BytesToAtx(data.Bytes())
+	err := db.HandleAtxData(data.Bytes(), syncer)
 	if err != nil {
-		db.log.Error("cannot parse incoming ATX")
+		db.log.With().Error("error handling atx data", log.Err(err))
 		return
+	}
+	data.ReportValidation(AtxProtocol)
+}
+
+// HandleAtxData handles atxs received either by gossip or sync
+func (db *DB) HandleAtxData(data []byte, syncer service.Fetcher) error {
+	atx, err := types.BytesToAtx(data)
+	if err != nil {
+		return fmt.Errorf("cannot parse incoming atx")
 	}
 	atx.CalcAndSetID()
 
-	db.log.With().Info("got new ATX", atx.Fields(len(data.Bytes()))...)
+	db.log.With().Info("got new atx", atx.Fields(len(data))...)
 
-	//todo fetch from neighbour (#1925)
+	// todo fetch from neighbour (#1925)
 	if atx.NIPoST == nil {
-		db.log.Panic("nil nipost in gossip")
-		return
+		db.log.Panic("nil nipst in gossip")
+		return fmt.Errorf("nil nipst in gossip")
 	}
 
-	if err := syncer.FetchPoetProof(atx.GetPoetProofRef()); err != nil {
-		db.log.Warning("received ATX (%v) with syntactically invalid or missing PoET proof (%x): %v",
+	if err := syncer.GetPoetProof(atx.GetPoetProofRef()); err != nil {
+		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
 			atx.ShortString(), atx.GetShortPoetProofRef(), err)
-		return
+
 	}
 
-	if err := syncer.FetchAtxReferences(atx); err != nil {
-		db.log.With().Warning("received ATX with missing references of prev or pos id",
+	if err := db.FetchAtxReferences(atx, syncer); err != nil {
+		return fmt.Errorf("received atx with missing references of prev or pos id %v, %v, %v, %v",
 			atx.ID(), atx.PrevATXID, atx.PositioningATX, log.Err(err))
-		return
 	}
 
 	err = db.SyntacticallyValidateAtx(atx)
 	events.ReportValidActivation(atx, err == nil)
 	if err != nil {
-		db.log.Warning("received syntactically invalid ATX %v: %v", atx.ShortString(), err)
-		// TODO: blacklist peer
-		return
+		return fmt.Errorf("received syntactically invalid atx %v: %v", atx.ShortString(), err)
 	}
 
-	//db.pool.Put(atx)
 	err = db.ProcessAtx(atx)
 	if err != nil {
-		db.log.Warning("cannot process ATX %v: %v", atx.ShortString(), err)
+		return fmt.Errorf("cannot process atx %v: %v", atx.ShortString(), err)
 		// TODO: blacklist peer
-		return
 	}
-	data.ReportValidation(AtxProtocol)
-	db.log.With().Info("stored and propagated new syntactically valid ATX", atx.ID())
+
+	db.log.With().Info("stored and propagated new syntactically valid atx", atx.ID())
+	return nil
+}
+
+// FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db
+func (db *DB) FetchAtxReferences(atx *types.ActivationTx, f service.Fetcher) error {
+	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != db.goldenATXID {
+		db.log.With().Info("going to fetch pos atx", atx.PositioningATX, atx.ID())
+		err := f.FetchAtx(atx.PositioningATX)
+		if err != nil {
+			return err
+		}
+	}
+
+	if atx.PrevATXID != *types.EmptyATXID {
+		db.log.With().Info("going to fetch prev atx", atx.PrevATXID, atx.ID())
+		err := f.FetchAtx(atx.PrevATXID)
+		if err != nil {
+			return err
+		}
+	}
+	db.log.With().Info("done fetching references for atx", atx.ID())
+
+	return nil
 }

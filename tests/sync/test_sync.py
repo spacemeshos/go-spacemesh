@@ -48,9 +48,9 @@ def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
 
 def search_pod_logs(namespace, pod_name, term):
     current_index = get_curr_ind()
-    api = ES().get_search_api()
-    fltr = Q("match_phrase", kubernetes__pod_name=pod_name) & Q("match_phrase", kubernetes__namespace_name=namespace)
-    s = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time")
+    api = ES(namespace).get_search_api()
+    fltr = Q("match_phrase", kubernetes__pod__name=pod_name) & Q("match_phrase", kubernetes__namespace=namespace)
+    s = Search(using=api).query('bool').filter(fltr).sort("time")
     res = s.execute()
     full = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time").extra(size=res.hits.total)
     res = full.execute()
@@ -71,7 +71,7 @@ def check_pod_logs(pod_name, data):
     return False
 
 
-def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exit):
+def test_sync_gradually_add_nodes(init_session, add_elk, add_node_pool, setup_bootstrap, save_log_on_exit):
     current_index = get_curr_ind()
     bs_info = setup_bootstrap.pods[0]
 
@@ -98,20 +98,21 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
 
     delete_pod(testconfig['namespace'], clients[0])
 
-    print("sleep for 20 sec")
-    time.sleep(20)
-
     print("waiting for pods to be done with sync")
 
     start = time.time()
     sleep = 30  # seconds
-    num_iter = 25  # total of 5 minutes
+    num_iter = 25  # wait up to 12.5 minutes
     for i in range(num_iter):
         done = 0
+
+        print("not done yet, sleeping for " + str(sleep) + " seconds")
+        time.sleep(sleep)
+
         for j in range(0, num_clients):
             pod_name = clients[j]
             if not check_pod_logs(pod_name, SYNC_DONE):  # not all done
-                print("pod " + pod_name + " still not done. Going to sleep")
+                print("pod " + pod_name + " still not done")
                 break  # stop check and sleep
             else:
                 print("pod " + pod_name + " done")
@@ -120,9 +121,6 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
         if done == num_clients:
             print("all pods done")
             break
-
-        print("not done yet sleep for " + str(sleep) + " seconds")
-        time.sleep(sleep)
 
     assert done == num_clients
 

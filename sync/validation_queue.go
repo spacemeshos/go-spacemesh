@@ -10,7 +10,7 @@ import (
 )
 
 type syncer interface {
-	AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs []*types.ActivationTx) error
+	AddBlockWithTxs(blk *types.Block) error
 	GetBlock(id types.BlockID) (*types.Block, error)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 	HandleLateBlock(bl *types.Block)
@@ -86,18 +86,18 @@ func (vq *blockQueue) handleBlocks(bjb fetchJob) {
 }
 
 func (vq *blockQueue) handleBlock(id types.Hash32, block *types.Block) {
-	vq.With().Info("start handling", block.ID(), block.MinerID())
+	vq.With().Info("start handling block", block.Fields()...)
 	if err := vq.fetchBlockDataForValidation(block); err != nil {
-		vq.Error("block fetching data failed", block.ID(), log.Err(err))
+		vq.With().Error("fetching block data failed", append(block.Fields(), log.Err(err))...)
 		vq.updateDependencies(id, false)
 		return
 	}
 	if err := vq.fastValidation(block); err != nil {
-		vq.Error("block validation failed", block.ID(), log.Err(err))
+		vq.With().Error("block fast validation failed", append(block.Fields(), log.Err(err))...)
 		vq.updateDependencies(id, false)
 		return
 	}
-	vq.With().Info("finish fast validation", block.ID())
+	vq.With().Info("finished block fast validation", block.Fields()...)
 	vq.handleBlockDependencies(block)
 }
 
@@ -105,11 +105,11 @@ func (vq *blockQueue) handleBlock(id types.Hash32, block *types.Block) {
 // if there are unknown blocks in the view they are added to the fetch queue
 func (vq *blockQueue) handleBlockDependencies(blk *types.Block) {
 	vq.With().Debug("handle dependencies", blk.ID())
-	res, err := vq.addDependencies(blk.ID(), blk.ViewEdges, vq.finishBlockCallback(blk))
+	res, err := vq.addDependencies(blk.ID(), append(append(blk.ForDiff, blk.NeutralDiff...), blk.AgainstDiff...), vq.finishBlockCallback(blk))
 
 	if err != nil {
 		vq.updateDependencies(blk.Hash32(), false)
-		vq.With().Error("failed to add dependencies", blk.ID(), log.Err(err))
+		vq.With().Error("failed to add dependencies", append(blk.Fields(), log.Err(err))...)
 		return
 	}
 
@@ -128,17 +128,12 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 		}
 
 		// data availability
-		txs, atxs, err := vq.dataAvailability(block)
+		_, _, err := vq.dataAvailability(block)
 		if err != nil {
 			return fmt.Errorf("DataAvailabilty failed for block: %v errmsg: %v", block.ID().String(), err)
 		}
 
-		// validate block's votes
-		if valid, err := validateVotes(block, vq.ForBlockInView, vq.Hdist, vq.Log); valid == false || err != nil {
-			return fmt.Errorf("validate votes failed for block: %s errmsg: %s", block.ID().String(), err)
-		}
-
-		err = vq.AddBlockWithTxs(block, txs, atxs)
+		err = vq.AddBlockWithTxs(block)
 
 		if err != nil && err != mesh.ErrAlreadyExist {
 			return err
@@ -220,7 +215,7 @@ func (vq *blockQueue) addDependencies(jobID interface{}, blks []types.BlockID, f
 		bid := id.AsHash32()
 		if vq.inQueue(bid) {
 			vq.reverseDepMap[bid] = append(vq.reverseDepMap[bid], jobID)
-			vq.With().Debug("adding already queued block to pending map",
+			vq.With().Info("adding already queued block to pending map",
 				id,
 				log.String("job_id", fmt.Sprintf("%v", jobID)))
 			dependencies[bid] = struct{}{}
@@ -229,7 +224,7 @@ func (vq *blockQueue) addDependencies(jobID interface{}, blks []types.BlockID, f
 			if _, err := vq.GetBlock(id); err != nil {
 				// add unknown block to queue
 				vq.reverseDepMap[bid] = append(vq.reverseDepMap[bid], jobID)
-				vq.With().Debug("adding unknown block to pending map",
+				vq.With().Info("adding unknown block to pending map",
 					id,
 					log.String("job_id", fmt.Sprintf("%v", jobID)))
 				dependencies[bid] = struct{}{}
@@ -253,13 +248,13 @@ func (vq *blockQueue) addDependencies(jobID interface{}, blks []types.BlockID, f
 	// addToPending needs the mutex so we must release before
 	vq.Unlock()
 	if len(idsToPush) > 0 {
-		vq.With().Debug("adding dependencies to pending queue",
+		vq.With().Info("adding dependencies to pending queue",
 			log.Int("count", len(idsToPush)),
 			log.String("job_id", fmt.Sprintf("%v", jobID)))
 		vq.addToPending(idsToPush)
 	}
 
-	vq.With().Debug("finished adding dependencies",
+	vq.With().Info("finished adding dependencies",
 		log.Int("count", len(dependencies)),
 		log.String("job_id", fmt.Sprintf("%v", jobID)))
 	return true, nil

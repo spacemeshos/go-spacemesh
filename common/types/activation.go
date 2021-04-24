@@ -4,13 +4,15 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"sort"
+	"strings"
+
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/sha256-simd"
-	"sort"
-	"strings"
+
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // EpochID is the running epoch number. It's zero-based, so the genesis epoch has EpochID == 0.
@@ -22,6 +24,12 @@ func (l EpochID) ToBytes() []byte { return util.Uint64ToBytes(uint64(l)) }
 // IsGenesis returns true if this epoch is in genesis. The first two epochs are considered genesis epochs.
 func (l EpochID) IsGenesis() bool {
 	return l < 2
+}
+
+// NeedsGoldenPositioningATX returns true if ATXs in this epoch require positioning ATX to be equal to the Golden ATX.
+// All ATXs in epoch 1 must have the Golden ATX as positioning ATX.
+func (l EpochID) NeedsGoldenPositioningATX() bool {
+	return l == 1
 }
 
 // FirstLayer returns the layer ID of the first layer in the epoch.
@@ -51,7 +59,7 @@ func (t ATXID) Bytes() []byte {
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (t ATXID) Field() log.Field { return t.Hash32().Field("atx_id") }
+func (t ATXID) Field() log.Field { return log.FieldNamed("atx_id", t.Hash32()) }
 
 // Compare returns true if other (the given ATXID) is less than this ATXID, by lexicographic comparison.
 func (t ATXID) Compare(other ATXID) bool {
@@ -75,10 +83,11 @@ func CalcAtxHash32Presorted(sortedView []ATXID, additionalBytes []byte) Hash32 {
 var EmptyATXID = &ATXID{}
 
 // ActivationTxHeader is the header of an activation transaction. It includes all fields from the NIPoSTChallenge, as
-// well as the coinbase address and active set size.
+// well as the coinbase address and total weight.
 type ActivationTxHeader struct {
 	NIPoSTChallenge
 	id       *ATXID // non-exported cache of the ATXID
+	Space    uint64
 	Coinbase Address
 }
 
@@ -109,6 +118,12 @@ func (atxh *ActivationTxHeader) TargetEpoch() EpochID {
 // SetID sets the ATXID in this ATX's cache.
 func (atxh *ActivationTxHeader) SetID(id *ATXID) {
 	atxh.id = id
+}
+
+// GetWeight returns the ATX's weight = space * ticks.
+func (atxh *ActivationTxHeader) GetWeight() uint64 {
+	// TODO: Limit the number of bits this can occupy
+	return atxh.Space * (atxh.EndTick - atxh.StartTick)
 }
 
 // NIPoSTChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
@@ -168,11 +183,12 @@ type ActivationTx struct {
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
-func NewActivationTx(challenge NIPoSTChallenge, coinbase Address, nipost *NIPoST, initialPoST *PoST) *ActivationTx {
+func NewActivationTx(challenge NIPoSTChallenge, coinbase Address, nipost *NIPoST, space uint64, initialPoST *PoST) *ActivationTx {
 	atx := &ActivationTx{
 		InnerActivationTx: &InnerActivationTx{
 			ActivationTxHeader: &ActivationTxHeader{
 				NIPoSTChallenge: challenge,
+				Space:           space,
 				Coinbase:        coinbase,
 			},
 			NIPoST:      nipost,
@@ -206,8 +222,13 @@ func (atx *ActivationTx) Fields(size int) []log.LoggableField {
 		log.FieldNamed("sender_id", atx.NodeID),
 		log.FieldNamed("prev_atx_id", atx.PrevATXID),
 		log.FieldNamed("pos_atx_id", atx.PositioningATX),
+		log.FieldNamed("coinbase", atx.Coinbase),
 		atx.PubLayerID,
 		atx.PubLayerID.GetEpoch(),
+		log.Uint64("space", atx.Space),
+		log.Uint64("start_tick", atx.StartTick),
+		log.Uint64("end_tick", atx.EndTick),
+		log.Uint64("weight", atx.GetWeight()),
 		log.Uint64("sequence_number", atx.Sequence),
 		log.String("NIPoSTChallenge", challenge),
 		log.String("initialPoST", initialPoST),
@@ -231,8 +252,8 @@ func (atx *ActivationTx) CalcAndSetID() {
 }
 
 // GetPoetProofRef returns the reference to the PoET proof.
-func (atx *ActivationTx) GetPoetProofRef() []byte {
-	return atx.NIPoST.PoSTMetadata.Challenge
+func (atx *ActivationTx) GetPoetProofRef() Hash32 {
+	return CalcHash32(atx.NIPoST.PoSTMetadata.Challenge)
 }
 
 // GetShortPoetProofRef returns the first 5 characters of the PoET proof reference, for logging purposes.

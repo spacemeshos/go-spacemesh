@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	cfg "github.com/spacemeshos/go-spacemesh/config"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	cfg "github.com/spacemeshos/go-spacemesh/config"
 )
 
 var (
@@ -31,7 +33,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.OracleServerWorldID, "oracle_server_worldid",
 		config.OracleServerWorldID, "The worldid to use with the oracle server (temporary) ")
 	cmd.PersistentFlags().StringVar(&config.PoETServer, "poet-server",
-		config.OracleServer, "The poet server url. (temporary) ")
+		config.PoETServer, "The poet server url. (temporary) ")
 	cmd.PersistentFlags().StringVar(&config.GenesisTime, "genesis-time",
 		config.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
 	cmd.PersistentFlags().IntVar(&config.LayerDurationSec, "layer-duration-sec",
@@ -52,12 +54,18 @@ func AddCommands(cmd *cobra.Command) {
 		config.GenesisConfPath, "add genesis configuration")
 	cmd.PersistentFlags().StringVar(&config.CoinbaseAccount, "coinbase",
 		config.CoinbaseAccount, "coinbase account to accumulate rewards")
-	cmd.PersistentFlags().IntVar(&config.GenesisActiveSet, "genesis-active-size",
-		config.GenesisActiveSet, "The active set size for the genesis flow")
+	cmd.PersistentFlags().StringVar(&config.GoldenATXID, "golden-atx",
+		config.GoldenATXID, "golden ATX hash")
+	cmd.PersistentFlags().Uint64Var(&config.SpaceToCommit, "space-to-commit",
+		config.SpaceToCommit, "number of bytes to commit to mining")
+	cmd.PersistentFlags().Uint64Var(&config.GenesisTotalWeight, "genesis-total-weight",
+		config.GenesisTotalWeight, "The active set size for the genesis flow")
 	cmd.PersistentFlags().IntVar(&config.BlockCacheSize, "block-cache-size",
 		config.BlockCacheSize, "size in layers of meshdb block cache")
 	cmd.PersistentFlags().StringVar(&config.PublishEventsURL, "events-url",
 		config.PublishEventsURL, "publish events to this url; if no url specified no events will be published")
+	cmd.PersistentFlags().BoolVar(&config.Profiler, "profiler",
+		config.Profiler, "enable profiler")
 
 	cmd.PersistentFlags().IntVar(&config.SyncRequestTimeout, "sync-request-timeout",
 		config.SyncRequestTimeout, "the timeout in ms for direct requests in the sync")
@@ -81,7 +89,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().Int8Var(&config.P2P.NetworkID, "network-id",
 		config.P2P.NetworkID, "NetworkID to run on (0 - mainnet, 1 - testnet)")
 	cmd.PersistentFlags().DurationVar(&config.P2P.ResponseTimeout, "response-timeout",
-		config.P2P.ResponseTimeout, "Timeout for waiting on resposne message")
+		config.P2P.ResponseTimeout, "Timeout for waiting on response message")
 	cmd.PersistentFlags().DurationVar(&config.P2P.SessionTimeout, "session-timeout",
 		config.P2P.SessionTimeout, "Timeout for waiting on session message")
 	cmd.PersistentFlags().StringVar(&config.P2P.NodeID, "node-id",
@@ -116,43 +124,31 @@ func AddCommands(cmd *cobra.Command) {
 		config.TIME.DefaultTimeoutLatency, "Default timeout to ntp query")
 	cmd.PersistentFlags().DurationVar(&config.TIME.RefreshNtpInterval, "refresh-ntp-interval",
 		config.TIME.RefreshNtpInterval, "Refresh intervals to ntp")
+	cmd.PersistentFlags().StringSliceVar(&config.TIME.NTPServers,
+		"ntp-servers", config.TIME.NTPServers, "A list of NTP servers to query (e.g., 'time.google.com'). Overrides the list in config. Must contain more servers than the number of ntp-queries.")
 	cmd.PersistentFlags().IntVar(&config.P2P.MsgSizeLimit, "msg-size-limit",
 		config.P2P.MsgSizeLimit, "The message size limit in bytes for incoming messages")
 
 	/** ======================== API Flags ========================== **/
 
-	// StartJSONApiServerFlag determines if json api server should be started
+	// StartJSONServer determines if json api server should be started
 	cmd.PersistentFlags().BoolVar(&config.API.StartJSONServer, "json-server",
-		config.API.StartJSONServer, "StartService the json http server. "+
-			"Note that starting the Json server also starts the grpc server. ",
-	)
-	// StartJSONApiServerFlag determines if json api server should be started
-	cmd.PersistentFlags().BoolVar(&config.API.StartNewJSONServer, "json-server-new",
-		config.API.StartNewJSONServer, "Start the new grpc-gateway (json http) server. "+
+		config.API.StartJSONServer, "Start the grpc-gateway (json http) server. "+
 			"The gateway server will be enabled for all corresponding, enabled GRPC services.",
 	)
-	// JSONServerPortFlag determines the json api server local listening port
+	// JSONServerPort determines the json api server local listening port
 	cmd.PersistentFlags().IntVar(&config.API.JSONServerPort, "json-port",
 		config.API.JSONServerPort, "JSON api server port")
-	// NewJSONServerPortFlag determines the json api server local listening port (for new server)
-	cmd.PersistentFlags().IntVar(&config.API.NewJSONServerPort, "json-port-new",
-		config.API.NewJSONServerPort, "New JSON api server port")
-	// StartGrpcAPIServerFlag determines if the grpc server should be started
-	cmd.PersistentFlags().BoolVar(&config.API.StartGrpcServer, "grpc-server",
-		config.API.StartGrpcServer, "StartService the grpc server. "+
-			"Note: This service will soon be deprecated. Use --grpc instead.")
+	// StartGrpcServices determines which (if any) GRPC API services should be started
 	cmd.PersistentFlags().StringSliceVar(&config.API.StartGrpcServices, "grpc",
 		config.API.StartGrpcServices, "Comma-separated list of individual grpc services to enable "+
-			"(node,mesh,globalstate,transaction,smesher)")
-	// GrpcServerPortFlag determines the grpc server local listening port
+			"(gateway,globalstate,mesh,node,smesher,transaction)")
+	// GrpcServerPort determines the grpc server local listening port
 	cmd.PersistentFlags().IntVar(&config.API.GrpcServerPort, "grpc-port",
 		config.API.GrpcServerPort, "GRPC api server port")
-	// NewGrpcServerFlag determines the grpc server local listening port (for new server)
-	cmd.PersistentFlags().IntVar(&config.API.NewGrpcServerPort, "grpc-port-new",
-		config.API.NewGrpcServerPort, "New GRPC api server port")
-	// NewGrpcServerInterface determines the interface the GRPC server listens on
-	cmd.PersistentFlags().StringVar(&config.API.NewGrpcServerInterface, "grpc-interface-new",
-		config.API.NewGrpcServerInterface, "New GRPC api server interface")
+	// GrpcServerInterface determines the interface the GRPC server listens on
+	cmd.PersistentFlags().StringVar(&config.API.GrpcServerInterface, "grpc-interface",
+		config.API.GrpcServerInterface, "GRPC api server interface")
 
 	/**======================== Hare Flags ========================== **/
 

@@ -19,7 +19,7 @@ func TestLoadConfig(t *testing.T) {
 func TestConfig_DataDir(t *testing.T) {
 	sep := string(filepath.Separator)
 
-	config := DefaultConfig()
+	config := DefaultTestConfig()
 	config.DataDirParent = "~" + sep + "space-a-mesh"
 	config.P2P.NetworkID = 88
 	expectedDataDir := filesystem.GetUserHomeDirectory() + sep + "space-a-mesh" + sep + "88"

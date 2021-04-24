@@ -23,7 +23,6 @@ const (
 	defaultConfigFileName = "./config.toml"
 	defaultDataDirName    = "spacemesh"
 	// NewBlockProtocol indicates the protocol name for new blocks arriving.
-	NewBlockProtocol = "newBlock"
 )
 
 var (
@@ -82,7 +81,13 @@ type BaseConfig struct {
 
 	GenesisConfPath string `mapstructure:"genesis-conf"`
 
+	GenesisTotalWeight uint64 `mapstructure:"genesis-total-weight"` // the total weight for genesis
+
 	CoinbaseAccount string `mapstructure:"coinbase"`
+
+	SpaceToCommit uint64 `mapstructure:"space-to-commit"` // Number of bytes to commit to mining
+
+	GoldenATXID string `mapstructure:"golden-atx"`
 
 	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
 
@@ -103,6 +108,8 @@ type BaseConfig struct {
 	BlockCacheSize int `mapstructure:"block-cache-size"`
 
 	AlwaysListen bool `mapstructure:"always-listen"` // force gossip to always be on (for testing)
+
+	Profiler bool `mapstructure:"profiler"`
 }
 
 // LoggerConfig holds the logging level for each module.
@@ -112,8 +119,8 @@ type LoggerConfig struct {
 	PostLoggerLevel           string `mapstructure:"post"`
 	StateDbLoggerLevel        string `mapstructure:"stateDb"`
 	StateLoggerLevel          string `mapstructure:"state"`
-	AtxDbStoreLoggerLevel     string `mapstructure:"atxDb"`
-	PoetDbStoreLoggerLevel    string `mapstructure:"poetDb"`
+	AtxDbStoreLoggerLevel     string `mapstructure:"atxDbStore"`
+	PoetDbStoreLoggerLevel    string `mapstructure:"poetDbStore"`
 	StoreLoggerLevel          string `mapstructure:"store"`
 	PoetDbLoggerLevel         string `mapstructure:"poetDb"`
 	MeshDBLoggerLevel         string `mapstructure:"meshDb"`
@@ -148,6 +155,15 @@ func DefaultConfig() Config {
 	}
 }
 
+// DefaultTestConfig returns the default config for tests.
+func DefaultTestConfig() Config {
+	conf := DefaultConfig()
+	conf.BaseConfig = defaultTestConfig()
+	conf.P2P = p2pConfig.DefaultTestConfig()
+	conf.API = apiConfig.DefaultTestConfig()
+	return conf
+}
+
 // DefaultBaseConfig returns a default configuration for spacemesh
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
@@ -162,15 +178,23 @@ func defaultBaseConfig() BaseConfig {
 		LayerDurationSec:    30,
 		LayersPerEpoch:      3,
 		PoETServer:          "127.0.0.1",
+		GoldenATXID:         "0x5678", // TODO: Change the value
 		Hdist:               5,
-		GenesisActiveSet:    5,
+		GenesisTotalWeight:  5 * 1024 * 1, // 5 miners * 1024 byte PoST * 1 PoET ticks
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,
 		SyncValidationDelta: 30,
 		AtxsPerBlock:        100,
 		TxsPerBlock:         100,
+		Profiler:            false,
 	}
+}
+
+func defaultTestConfig() BaseConfig {
+	conf := defaultBaseConfig()
+	conf.MetricsPort += 10000
+	return conf
 }
 
 // LoadConfig load the config file

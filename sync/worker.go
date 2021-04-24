@@ -17,7 +17,7 @@ type batchRequestFactory func(com networker, peer p2ppeers.Peer, id []types.Hash
 
 type networker interface {
 	GetPeers() []p2ppeers.Peer
-	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte)) error
+	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), errHandler func(err error)) error
 	GetTimeout() time.Duration
 	GetExit() chan struct{}
 	log.Logger
@@ -153,7 +153,7 @@ func newFetchWorker(s networker, count int, reqFactory batchRequestFactory, idsC
 				idsStr := concatShortIds(remainingItems)
 				lg.With().Info("send fetch request",
 					log.String("type", name),
-					peer.Field("peer_id"),
+					log.FieldNamed("peer_id", peer),
 					log.String("ids", idsStr))
 				ch, _ := reqFactory(s, peer, remainingItems)
 				timeout := time.After(s.GetTimeout())
@@ -164,13 +164,13 @@ func newFetchWorker(s networker, count int, reqFactory batchRequestFactory, idsC
 				case <-timeout:
 					lg.With().Error("fetch request timed out",
 						log.String("type", name),
-						peer.Field("peer_id"),
+						log.FieldNamed("peer_id", peer),
 						log.String("ids", idsStr))
 				case v := <-ch:
 					if v != nil && len(v) > 0 {
 						lg.With().Info("peer responded to fetch request",
 							log.String("type", name),
-							peer.Field("peer_id"),
+							log.FieldNamed("peer_id", peer),
 							log.String("ids", idsStr))
 						// 	remove ids from leftToFetch add to fetched
 						for _, itm := range v {

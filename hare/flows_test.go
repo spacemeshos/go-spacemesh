@@ -143,8 +143,12 @@ func (trueOracle) Register(bool, string) {
 func (trueOracle) Unregister(bool, string) {
 }
 
-func (trueOracle) Eligible(types.LayerID, int32, int, types.NodeID, []byte) (bool, error) {
+func (trueOracle) Validate(types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
 	return true, nil
+}
+
+func (trueOracle) CalcEligibility(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+	return 1, nil
 }
 
 func (trueOracle) Proof(types.LayerID, int32) ([]byte, error) {
@@ -243,7 +247,7 @@ func Test_multipleCPs(t *testing.T) {
 	totalCp := 3
 	test := newHareWrapper(totalCp)
 	totalNodes := 20
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 3, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
+	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 5, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
 	rng := BLS381.DefaultSeed()
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)

@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/net/context"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
@@ -42,7 +43,7 @@ func NewNodeService(
 }
 
 // Echo returns the response for an echo api request. It's used for E2E tests.
-func (s NodeService) Echo(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
+func (s NodeService) Echo(_ context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
 	log.Info("GRPC NodeService.Echo")
 	if in.Msg != nil {
 		return &pb.EchoResponse{Msg: &pb.SimpleString{Value: in.Msg.Value}}, nil
@@ -51,7 +52,7 @@ func (s NodeService) Echo(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResp
 }
 
 // Version returns the version of the node software as a semver string
-func (s NodeService) Version(ctx context.Context, in *empty.Empty) (*pb.VersionResponse, error) {
+func (s NodeService) Version(context.Context, *empty.Empty) (*pb.VersionResponse, error) {
 	log.Info("GRPC NodeService.Version")
 	return &pb.VersionResponse{
 		VersionString: &pb.SimpleString{Value: cmd.Version},
@@ -59,7 +60,7 @@ func (s NodeService) Version(ctx context.Context, in *empty.Empty) (*pb.VersionR
 }
 
 // Build returns the build of the node software
-func (s NodeService) Build(ctx context.Context, in *empty.Empty) (*pb.BuildResponse, error) {
+func (s NodeService) Build(context.Context, *empty.Empty) (*pb.BuildResponse, error) {
 	log.Info("GRPC NodeService.Build")
 	return &pb.BuildResponse{
 		BuildString: &pb.SimpleString{Value: cmd.Commit},
@@ -68,21 +69,38 @@ func (s NodeService) Build(ctx context.Context, in *empty.Empty) (*pb.BuildRespo
 
 // Status returns a status object providing information about the connected peers, sync status,
 // current and verified layer
-func (s NodeService) Status(ctx context.Context, request *pb.StatusRequest) (*pb.StatusResponse, error) {
+func (s NodeService) Status(context.Context, *pb.StatusRequest) (*pb.StatusResponse, error) {
 	log.Info("GRPC NodeService.Status")
+
+	curLayer, latestLayer, verifiedLayer := s.getLayers()
 	return &pb.StatusResponse{
 		Status: &pb.NodeStatus{
-			ConnectedPeers: s.PeerCounter.PeerCount(),            // number of connected peers
-			IsSynced:       s.Syncer.IsSynced(),                  // whether the node is synced
-			SyncedLayer:    s.Mesh.LatestLayer().Uint64(),        // latest layer we saw from the network
-			TopLayer:       s.GenTime.GetCurrentLayer().Uint64(), // current layer, based on time
-			VerifiedLayer:  s.Mesh.LatestLayerInState().Uint64(), // latest verified layer
+			ConnectedPeers: s.PeerCounter.PeerCount(),              // number of connected peers
+			IsSynced:       s.Syncer.IsSynced(),                    // whether the node is synced
+			SyncedLayer:    &pb.LayerNumber{Number: latestLayer},   // latest layer we saw from the network
+			TopLayer:       &pb.LayerNumber{Number: curLayer},      // current layer, based on time
+			VerifiedLayer:  &pb.LayerNumber{Number: verifiedLayer}, // latest verified layer
 		},
 	}, nil
 }
 
+func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
+	// We cannot get meaningful data from the mesh during the genesis epochs since there are no blocks in these
+	// epochs, so just return the current layer instead
+	curLayerObj := s.GenTime.GetCurrentLayer()
+	curLayer = uint32(curLayerObj)
+	if curLayerObj.GetEpoch().IsGenesis() {
+		latestLayer = curLayer
+		verifiedLayer = curLayer
+	} else {
+		latestLayer = uint32(s.Mesh.LatestLayer())
+		verifiedLayer = uint32(s.Mesh.LatestLayerInState())
+	}
+	return
+}
+
 // SyncStart requests that the node start syncing the mesh (if it isn't already syncing)
-func (s NodeService) SyncStart(ctx context.Context, request *pb.SyncStartRequest) (*pb.SyncStartResponse, error) {
+func (s NodeService) SyncStart(context.Context, *pb.SyncStartRequest) (*pb.SyncStartResponse, error) {
 	log.Info("GRPC NodeService.SyncStart")
 	s.Syncer.Start()
 	return &pb.SyncStartResponse{
@@ -91,7 +109,7 @@ func (s NodeService) SyncStart(ctx context.Context, request *pb.SyncStartRequest
 }
 
 // Shutdown requests a graceful shutdown
-func (s NodeService) Shutdown(ctx context.Context, request *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
+func (s NodeService) Shutdown(context.Context, *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
 	log.Info("GRPC NodeService.Shutdown")
 	cmd.Cancel()
 	return &pb.ShutdownResponse{
@@ -102,7 +120,7 @@ func (s NodeService) Shutdown(ctx context.Context, request *pb.ShutdownRequest) 
 // STREAMS
 
 // StatusStream exposes a stream of node status updates
-func (s NodeService) StatusStream(request *pb.StatusStreamRequest, stream pb.NodeService_StatusStreamServer) error {
+func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeService_StatusStreamServer) error {
 	log.Info("GRPC NodeService.StatusStream")
 	statusStream := events.GetStatusChannel()
 
@@ -115,13 +133,14 @@ func (s NodeService) StatusStream(request *pb.StatusStreamRequest, stream pb.Nod
 				log.Info("StatusStream closed, shutting down")
 				return nil
 			}
+			curLayer, latestLayer, verifiedLayer := s.getLayers()
 			if err := stream.Send(&pb.StatusStreamResponse{
 				Status: &pb.NodeStatus{
-					ConnectedPeers: s.PeerCounter.PeerCount(),            // number of connected peers
-					IsSynced:       s.Syncer.IsSynced(),                  // whether the node is synced
-					SyncedLayer:    s.Mesh.LatestLayer().Uint64(),        // latest layer we saw from the network
-					TopLayer:       s.GenTime.GetCurrentLayer().Uint64(), // current layer, based on time
-					VerifiedLayer:  s.Mesh.LatestLayerInState().Uint64(), // latest verified layer
+					ConnectedPeers: s.PeerCounter.PeerCount(),              // number of connected peers
+					IsSynced:       s.Syncer.IsSynced(),                    // whether the node is synced
+					SyncedLayer:    &pb.LayerNumber{Number: latestLayer},   // latest layer we saw from the network
+					TopLayer:       &pb.LayerNumber{Number: curLayer},      // current layer, based on time
+					VerifiedLayer:  &pb.LayerNumber{Number: verifiedLayer}, // latest verified layer
 				},
 			}); err != nil {
 				return err
@@ -136,7 +155,7 @@ func (s NodeService) StatusStream(request *pb.StatusStreamRequest, stream pb.Nod
 }
 
 // ErrorStream exposes a stream of node errors
-func (s NodeService) ErrorStream(request *pb.ErrorStreamRequest, stream pb.NodeService_ErrorStreamServer) error {
+func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService_ErrorStreamServer) error {
 	log.Info("GRPC NodeService.ErrorStream")
 	errorStream := events.GetErrorChannel()
 
@@ -148,8 +167,8 @@ func (s NodeService) ErrorStream(request *pb.ErrorStreamRequest, stream pb.NodeS
 				return nil
 			}
 			if err := stream.Send(&pb.ErrorStreamResponse{Error: &pb.NodeError{
-				ErrorType:  convertErrorType(nodeError.Type),
-				Message:    nodeError.Msg,
+				Level:      convertErrorLevel(nodeError.Level),
+				Msg:        nodeError.Msg,
 				StackTrace: nodeError.Trace,
 			}}); err != nil {
 				return err
@@ -163,19 +182,24 @@ func (s NodeService) ErrorStream(request *pb.ErrorStreamRequest, stream pb.NodeS
 	}
 }
 
-func convertErrorType(errType int) pb.NodeError_NodeErrorType {
-	switch errType {
-	case events.NodeErrorTypePanic:
-		return pb.NodeError_NODE_ERROR_TYPE_PANIC
-	case events.NodeErrorTypePanicHare:
-		return pb.NodeError_NODE_ERROR_TYPE_PANIC_HARE
-	case events.NodeErrorTypePanicSync:
-		return pb.NodeError_NODE_ERROR_TYPE_PANIC_SYNC
-	case events.NodeErrorTypePanicP2P:
-		return pb.NodeError_NODE_ERROR_TYPE_PANIC_P2P
-	case events.NodeErrorTypeSignalShutdown:
-		return pb.NodeError_NODE_ERROR_TYPE_SIGNAL_SHUT_DOWN
+// Convert internal error level into level understood by the API
+func convertErrorLevel(level zapcore.Level) pb.LogLevel {
+	switch level {
+	case zapcore.DebugLevel:
+		return pb.LogLevel_LOG_LEVEL_DEBUG
+	case zapcore.InfoLevel:
+		return pb.LogLevel_LOG_LEVEL_INFO
+	case zapcore.WarnLevel:
+		return pb.LogLevel_LOG_LEVEL_WARN
+	case zapcore.ErrorLevel:
+		return pb.LogLevel_LOG_LEVEL_ERROR
+	case zapcore.DPanicLevel:
+		return pb.LogLevel_LOG_LEVEL_DPANIC
+	case zapcore.PanicLevel:
+		return pb.LogLevel_LOG_LEVEL_PANIC
+	case zapcore.FatalLevel:
+		return pb.LogLevel_LOG_LEVEL_FATAL
 	default:
-		return pb.NodeError_NODE_ERROR_TYPE_UNSPECIFIED
+		return pb.LogLevel_LOG_LEVEL_UNSPECIFIED
 	}
 }

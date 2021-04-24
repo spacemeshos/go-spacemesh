@@ -101,3 +101,11 @@ func DefaultConfig() Config {
 		MsgSizeLimit:          UnlimitedMsgSize,
 	}
 }
+
+// DefaultTestConfig returns the default config for tests.
+func DefaultTestConfig() Config {
+	conf := DefaultConfig()
+	conf.TCPPort += 10000
+	conf.TCPInterface = "127.0.0.1"
+	return conf
+}

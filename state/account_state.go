@@ -1,21 +1,22 @@
 package state
 
 import (
+	"io"
+	"math/big"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/rlp"
-	"io"
-	"math/big"
 )
 
 // AccountState is the interface defined to query a single account state
 type AccountState interface {
-	GetBalance() *big.Int
+	GetBalance() uint64
 	GetNonce() uint64
 	SetNonce(newNonce uint64)
-	AddBalance(amount *big.Int)
-	SubBalance(amount *big.Int)
-	SetBalance(amount *big.Int)
+	AddBalance(amount uint64)
+	SubBalance(amount uint64)
+	SetBalance(amount uint64)
 	GetAddress() types.Address
 }
 
@@ -24,21 +25,12 @@ type AccountState interface {
 type Object struct {
 	address  types.Address
 	addrHash types.Hash32
-	account  Account
+	account  types.AccountState
 	db       *DB
 }
 
-// Account struct represents basic account info: nonce and balance
-type Account struct {
-	Nonce   uint64
-	Balance *big.Int
-}
-
 // newObject creates a state object.
-func newObject(db *DB, address types.Address, data Account) *Object {
-	if data.Balance == nil {
-		data.Balance = new(big.Int)
-	}
+func newObject(db *DB, address types.Address, data types.AccountState) *Object {
 	return &Object{
 		db:       db,
 		address:  address,
@@ -54,17 +46,16 @@ func (state *Object) EncodeRLP(w io.Writer) error {
 
 // AddBalance removes amount from c's balance.
 // It is used to add funds to the destination account of a transfer.
-func (state *Object) AddBalance(amount *big.Int) {
+func (state *Object) AddBalance(amount uint64) {
 	// EIP158: We must check emptiness for the objects such that the account
 	// clearing (0,0,0 objects) can take effect.
-	if amount.Sign() == 0 {
+	if amount == 0 {
 		if state.empty() {
 			state.touch()
 		}
-
 		return
 	}
-	state.SetBalance(new(big.Int).Add(state.Balance(), amount))
+	state.SetBalance(state.Balance() + amount)
 }
 
 func (state *Object) touch() {
@@ -73,25 +64,25 @@ func (state *Object) touch() {
 
 // empty returns whether the account is considered empty.
 func (state *Object) empty() bool {
-	return state.account.Nonce == 0 && state.account.Balance.Sign() == 0
+	return state.account.Nonce == 0 && state.account.Balance == 0
 }
 
 // SubBalance removes amount from c's balance.
 // It is used to remove funds from the origin account of a transfer.
-func (state *Object) SubBalance(amount *big.Int) {
-	if amount.Sign() == 0 {
+func (state *Object) SubBalance(amount uint64) {
+	if amount == 0 {
 		return
 	}
-	state.SetBalance(new(big.Int).Sub(state.Balance(), amount))
+	state.SetBalance(state.Balance() - amount)
 }
 
 // SetBalance sets the balance for current account
-func (state *Object) SetBalance(amount *big.Int) {
+func (state *Object) SetBalance(amount uint64) {
 	state.setBalance(amount)
 	state.db.makeDirtyObj(state)
 }
 
-func (state *Object) setBalance(amount *big.Int) {
+func (state *Object) setBalance(amount uint64) {
 	state.account.Balance = amount
 }
 
@@ -124,7 +115,7 @@ func (state *Object) setNonce(nonce uint64) {
 }
 
 // Balance returns the account current balance
-func (state *Object) Balance() *big.Int {
+func (state *Object) Balance() uint64 {
 	return state.account.Balance
 }
 

@@ -5,19 +5,20 @@ package activation
 import (
 	"errors"
 	"fmt"
+	"sync"
+
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/shared"
-	"sync"
 )
 
 // AtxProtocol is the protocol id for broadcasting atxs over gossip
 const AtxProtocol = "AtxGossip"
 
-var activesetCache = NewActivesetCache(1000)
+var totalWeightCache = NewTotalWeightCache(1000)
 
 type meshProvider interface {
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
@@ -32,7 +33,7 @@ type poetNumberOfTickProvider struct {
 }
 
 func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
-	return 0
+	return 1
 }
 
 type nipostBuilder interface {
@@ -51,7 +52,7 @@ type nipostValidator interface {
 
 type atxDBProvider interface {
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
-	CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochID) (uint32, error)
+	CalcTotalWeightFromView(view []types.BlockID, pubEpoch types.EpochID) (uint64, error)
 	GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error)
 	GetPosAtxID() (types.ATXID, error)
 	AwaitAtx(id types.ATXID) chan struct{}
@@ -91,17 +92,26 @@ type SmeshingProvider interface {
 // A compile time check to ensure that Builder fully implements the SmeshingProvider interface.
 var _ SmeshingProvider = (*Builder)(nil)
 
+// Config defines configuration for Builder
+type Config struct {
+	CoinbaseAccount types.Address
+	GoldenATXID     types.ATXID
+	LayersPerEpoch  uint16
+}
+
 // Builder struct is the struct that orchestrates the creation of activation transactions
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
-// calculate active set size and providing relevant view as proof
+// calculate total weight and providing relevant view as proof
 type Builder struct {
 	signer
+	accountLock     sync.RWMutex
 	nodeID          types.NodeID
 	coinbaseAccount types.Address
+	goldenATXID     types.ATXID
+	layersPerEpoch  uint16
 	db              atxDBProvider
 	net             broadcaster
 	mesh            meshProvider
-	layersPerEpoch  uint16
 	tickProvider    poetNumberOfTickProvider
 	nipostBuilder   nipostBuilder
 	post            PostProvider
@@ -113,26 +123,29 @@ type Builder struct {
 	mtx             sync.Mutex
 	store           bytesStore
 	syncer          syncer
-	accountLock     sync.RWMutex
 	log             log.Log
+	committedSpace  uint64
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeID types.NodeID, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipostBuilder nipostBuilder, post PostProvider, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
+func NewBuilder(cfg Config, nodeID types.NodeID, spaceToCommit uint64, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipostBuilder nipostBuilder, post PostProvider, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
 	return &Builder{
-		signer:         signer,
-		nodeID:         nodeID,
-		db:             db,
-		net:            net,
-		mesh:           mesh,
-		layersPerEpoch: layersPerEpoch,
-		nipostBuilder:  nipostBuilder,
-		post:           post,
-		layerClock:     layerClock,
-		stop:           make(chan struct{}),
-		syncer:         syncer,
-		store:          store,
-		log:            log,
+		signer:          signer,
+		nodeID:          nodeID,
+		coinbaseAccount: cfg.CoinbaseAccount,
+		goldenATXID:     cfg.GoldenATXID,
+		layersPerEpoch:  cfg.LayersPerEpoch,
+		db:              db,
+		net:             net,
+		mesh:            mesh,
+		nipostBuilder:   nipostBuilder,
+		post:            post,
+		layerClock:      layerClock,
+		stop:            make(chan struct{}),
+		syncer:          syncer,
+		store:           store,
+		committedSpace:  spaceToCommit,
+		log:             log,
 	}
 }
 
@@ -235,8 +248,10 @@ func (b *Builder) loop() {
 			if _, stopRequested := err.(StopRequestedError); stopRequested {
 				return
 			}
+			currentLayer := b.layerClock.GetCurrentLayer()
+			b.log.With().Error("atx construction errored", log.Err(err), currentLayer, currentLayer.GetEpoch())
 			events.ReportAtxCreated(false, uint64(b.currentEpoch()), "")
-			<-b.layerClock.AwaitLayer(b.layerClock.GetCurrentLayer() + 1)
+			<-b.layerClock.AwaitLayer(currentLayer + 1)
 		}
 	}
 }
@@ -250,6 +265,7 @@ func (b *Builder) buildNIPoSTChallenge(currentLayer types.LayerID) error {
 		}
 		challenge.EndTick = b.tickProvider.NumOfTicks()
 		challenge.PubLayerID = currentLayer.Add(b.layersPerEpoch)
+		challenge.PositioningATX = b.goldenATXID
 	} else {
 		challenge.PositioningATX = posAtx.ID()
 		challenge.PubLayerID = posAtx.PubLayerID.Add(b.layersPerEpoch)
@@ -379,10 +395,7 @@ func (b *Builder) PublishActivationTx() error {
 		initialPoST = b.initialPoST
 	}
 
-	atx := types.NewActivationTx(*b.challenge, b.Coinbase(), nipost, initialPoST)
-
-	b.log.With().Info("active ids seen for epoch", log.FieldNamed("atx_pub_epoch", pubEpoch),
-		log.Uint32("view_cnt", activeSetSize))
+	atx := types.NewActivationTx(*b.challenge, b.Coinbase(), nipost, b.committedSpace, initialPoST)
 
 	atxReceived := b.db.AwaitAtx(atx.ID())
 	defer b.db.UnsubscribeAtx(atx.ID())
@@ -392,7 +405,7 @@ func (b *Builder) PublishActivationTx() error {
 		return err
 	}
 
-	b.log.Event().Info("atx published!", atx.Fields(size)...)
+	b.log.Event().Info("atx published", atx.Fields(size)...)
 	events.ReportAtxCreated(true, uint64(b.currentEpoch()), atx.ShortString())
 
 	select {

@@ -4,7 +4,8 @@ config_map_name: conf
 
 script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
 
-genesis_delta: 200
+total_pods: 50
+genesis_delta: 75
 single_pod_ready_time_out: 60
 deployment_ready_time_out: 180
 config_path: '../config.toml'
@@ -15,15 +16,15 @@ bootstrap:
   replicas: 1
   resources:
     requests:
-      memory: '1024M'
-      cpu: '1'
+      memory: '2048M'
+      cpu: '2'
     limits:
       memory: '2048M'
       cpu: '2'
   args:
     randcon: '8'
-    hare-committee-size: '50'
-    hare-max-adversaries: '24'
+    hare-committee-size: '800'
+    hare-max-adversaries: '399'
     hare-round-duration-sec: '10'
     hare-exp-leaders: '10'
     layer-duration-sec: '60'
@@ -33,8 +34,12 @@ bootstrap:
     coinbase: '0x4321'
     eligibility-confidence-param: '5'
     eligibility-epoch-offset: '0'
-    genesis-active-size: '50'
+    post-space: '1024'
+    space-to-commit: '2048'
+    genesis-total-weight: '51200'
     executable-path: '/bin/go-spacemesh'
+#    grpc-port: '19092'
+#    json-port: '19093'
   deployment_type: deployment
 client:
   image: 'spacemeshos/go-spacemesh:develop'
@@ -42,15 +47,15 @@ client:
   replicas: 49
   resources:
     requests:
-      memory: '1024M'
-      cpu: '1'
+      memory: '2048M'
+      cpu: '2'
     limits:
       memory: '2048M'
       cpu: '2'
   args:
     randcon: '8'
-    hare-committee-size: '50'
-    hare-max-adversaries: '24'
+    hare-committee-size: '800'
+    hare-max-adversaries: '399'
     hare-round-duration-sec: '10'
     hare-exp-leaders: '10'
     layer-duration-sec: '60'
@@ -60,8 +65,11 @@ client:
     coinbase: '0x1234'
     eligibility-confidence-param: '5'
     eligibility-epoch-offset: '0'
-    genesis-active-size: '50'
+    post-space: '1024'
+    genesis-total-weight: '51200'
     executable-path: '/bin/go-spacemesh'
+#    grpc-port: '19092'
+#    json-port: '19093'
   deployment_type: deployment
 elastic:
   host: elastic.spacemesh.io

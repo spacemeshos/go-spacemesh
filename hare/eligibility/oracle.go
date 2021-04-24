@@ -3,19 +3,20 @@ package eligibility
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/binary"
 	"errors"
+	"fmt"
 	"github.com/hashicorp/golang-lru"
 	"github.com/nullstyle/go-xdr/xdr3"
+	"github.com/spacemeshos/fixed"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"math"
 	"sync"
 )
 
-const vrfMsgCacheSize = 20 // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
-const activesCacheSize = 5 // we don't expect to handle more than two layers concurrently
+const vrfMsgCacheSize = 20       // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
+const activesCacheSize = 5       // we don't expect to handle more than two layers concurrently
+const maxSupportedN = 1073741824 // higher values result in an overflow
 
 var (
 	errGenesis            = errors.New("no data about active nodes for genesis")
@@ -28,7 +29,7 @@ type valueProvider interface {
 
 // a func to retrieve the active set size for the provided layer
 // this func is assumed to be cpu intensive and hence we cache its results
-type activeSetFunc func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
+type activeSetFunc func(epoch types.EpochID, view map[types.BlockID]struct{}) (map[string]uint64, error)
 
 type signer interface {
 	Sign(msg []byte) ([]byte, error)
@@ -43,17 +44,18 @@ type verifierFunc = func(msg, sig, pub []byte) (bool, error)
 
 // Oracle is the hare eligibility oracle
 type Oracle struct {
-	lock                 sync.Mutex
-	beacon               valueProvider
-	getActiveSet         activeSetFunc
-	vrfSigner            signer
-	vrfVerifier          verifierFunc
-	layersPerEpoch       uint16
-	vrfMsgCache          addGet
-	activesCache         addGet
-	genesisActiveSetSize int
-	blocksProvider       goodBlocksProvider
-	cfg                  eCfg.Config
+	lock               sync.Mutex
+	beacon             valueProvider
+	getActiveSet       activeSetFunc
+	vrfSigner          signer
+	vrfVerifier        verifierFunc
+	layersPerEpoch     uint16
+	spacePerUnit       uint64
+	vrfMsgCache        addGet
+	activesCache       addGet
+	genesisTotalWeight uint64
+	blocksProvider     goodBlocksProvider
+	cfg                eCfg.Config
 	log.Log
 }
 
@@ -92,7 +94,7 @@ func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID,
 
 // New returns a new eligibility oracle instance.
 func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier verifierFunc, vrfSigner signer,
-	layersPerEpoch uint16, genesisActiveSet int, goodBlocksProvider goodBlocksProvider,
+	layersPerEpoch uint16, spacePerUnit uint64, genesisTotalWeight uint64, goodBlocksProvider goodBlocksProvider,
 	cfg eCfg.Config, log log.Log) *Oracle {
 	vmc, e := lru.New(vrfMsgCacheSize)
 	if e != nil {
@@ -105,17 +107,18 @@ func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier verifier
 	}
 
 	return &Oracle{
-		beacon:               beacon,
-		getActiveSet:         activeSetFunc,
-		vrfVerifier:          vrfVerifier,
-		vrfSigner:            vrfSigner,
-		layersPerEpoch:       layersPerEpoch,
-		vrfMsgCache:          vmc,
-		activesCache:         ac,
-		genesisActiveSetSize: genesisActiveSet,
-		blocksProvider:       goodBlocksProvider,
-		cfg:                  cfg,
-		Log:                  log,
+		beacon:             beacon,
+		getActiveSet:       activeSetFunc,
+		vrfVerifier:        vrfVerifier,
+		vrfSigner:          vrfSigner,
+		layersPerEpoch:     layersPerEpoch,
+		spacePerUnit:       spacePerUnit,
+		vrfMsgCache:        vmc,
+		activesCache:       ac,
+		genesisTotalWeight: genesisTotalWeight,
+		blocksProvider:     goodBlocksProvider,
+		cfg:                cfg,
+		Log:                log,
 	}
 }
 
@@ -134,10 +137,10 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 	key := buildKey(layer, round)
 
 	o.lock.Lock()
+	defer o.lock.Unlock()
 
 	// check cache
 	if val, exist := o.vrfMsgCache.Get(key); exist {
-		o.lock.Unlock()
 		return val.([]byte), nil
 	}
 
@@ -145,7 +148,6 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 	v, err := o.beacon.Value(layer)
 	if err != nil {
 		o.With().Error("Could not get hare Beacon value", log.Err(err), layer, log.Int32("round", round))
-		o.lock.Unlock()
 		return nil, err
 	}
 
@@ -155,93 +157,212 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 	_, err = xdr.Marshal(&w, &msg)
 	if err != nil {
 		o.With().Error("Fatal: could not marshal xdr", log.Err(err))
-		o.lock.Unlock()
 		return nil, err
 	}
 
 	val := w.Bytes()
 	o.vrfMsgCache.Add(key, val) // update cache
 
-	o.lock.Unlock()
 	return val, nil
 }
 
-func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
+func (o *Oracle) totalWeight(layer types.LayerID) (uint64, error) {
 	actives, err := o.actives(layer)
 	if err != nil {
 		if err == errGenesis { // we are in genesis
-			return uint32(o.genesisActiveSetSize), nil
+			return o.genesisTotalWeight, nil
 		}
 
-		o.With().Error("activeSetSize erred while calling actives func", log.Err(err), layer)
+		o.With().Error("totalWeight erred while calling actives func", log.Err(err), layer)
 		return 0, err
 	}
 
-	return uint32(len(actives)), nil
+	var totalWeight uint64
+	for _, w := range actives {
+		totalWeight += w
+	}
+	return totalWeight, nil
 }
 
-// Eligible checks if ID is eligible on the given Layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
-func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
+func (o *Oracle) minerWeight(layer types.LayerID, id types.NodeID) (uint64, error) {
+	actives, err := o.actives(layer)
+	if err != nil {
+		if err == errGenesis { // we are in genesis
+			return o.genesisTotalWeight / 50, nil
+		}
+
+		o.With().Error("minerWeight erred while calling actives func", log.Err(err), layer)
+		return 0, err
+	}
+
+	w, ok := actives[id.Key]
+	if !ok {
+		o.With().Debug("miner is not active in specified layer",
+			log.Int("active_set_size", len(actives)),
+			log.String("actives", fmt.Sprintf("%v", actives)),
+			layer, log.String("id.Key", id.Key),
+		)
+		return 0, errors.New("miner is not active in specified layer")
+	}
+	return w, nil
+}
+
+func calcVrfFrac(sig []byte) fixed.Fixed {
+	sha := sha256.Sum256(sig)
+	return fixed.FracFromBytes(sha[:8])
+}
+
+func (o *Oracle) prepareEligibilityCheck(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (n int, p fixed.Fixed, vrfFrac fixed.Fixed, done bool, err error) {
+	if committeeSize < 1 {
+		o.Error("committee size must be positive (received %d)", committeeSize)
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, nil
+	}
+
 	msg, err := o.buildVRFMessage(layer, round)
 	if err != nil {
 		o.Error("eligibility: could not build VRF message")
-		return false, err
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
 	// validate message
 	res, err := o.vrfVerifier(msg, sig, id.VRFPublicKey)
 	if err != nil {
 		o.Error("eligibility: VRF verification failed: %v", err)
-		return false, err
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 	if !res {
 		o.With().Info("eligibility: a node did not pass VRF signature verification",
 			id,
 			layer)
-		return false, nil
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, nil
 	}
 
 	// get active set size
-	activeSetSize, err := o.activeSetSize(layer)
+	totalWeight, err := o.totalWeight(layer)
 	if err != nil {
-		return false, err
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
-	// require activeSetSize > 0
-	if activeSetSize == 0 {
-		o.Warning("eligibility: active set size is zero")
-		return false, errors.New("active set size is zero")
+	// require totalWeight > 0
+	if totalWeight == 0 {
+		o.Warning("eligibility: total weight is zero")
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, errors.New("total weight is zero")
 	}
 
 	// calc hash & check threshold
-	sha := sha256.Sum256(sig)
-	shaUint32 := binary.LittleEndian.Uint32(sha[:4])
-	// avoid division (no floating point) & do operations on uint64 to avoid overflow
-	if uint64(activeSetSize)*uint64(shaUint32) > uint64(committeeSize)*uint64(math.MaxUint32) {
-		o.With().Info("eligibility: node did not pass VRF eligibility threshold",
-			id,
-			log.Int("committee_size", committeeSize),
-			log.Uint32("active_set_size", activeSetSize),
-			log.Int32("round", round),
-			layer)
-		return false, nil
+	minerWeight, err := o.minerWeight(layer, id)
+	if err != nil {
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
-	// lower or equal
-	return true, nil
+	minerUnits := minerWeight / o.spacePerUnit
+	// TODO: Consider checking/disallowing space not in round units
+	totalUnits := totalWeight / o.spacePerUnit
+	// TODO: If space is not in round units, only consider the amount of space in round units for the total weight
+
+	n = int(minerUnits)
+
+	// ensure miner weight fits in int
+	if uint64(n) != minerUnits {
+		o.Panic(fmt.Sprintf("minerUnits overflows int (%d)", minerUnits))
+	}
+
+	// calc p
+	if committeeSize > int(totalUnits) {
+		o.With().Warning("committee size is greater than total units",
+			log.Int("committeeSize", committeeSize),
+			log.Uint64("totalUnits", totalUnits),
+		)
+		totalUnits *= uint64(committeeSize)
+		n *= committeeSize
+	}
+	p = fixed.DivUint64(uint64(committeeSize), totalUnits)
+
+	if minerUnits > maxSupportedN {
+		return 0, fixed.Fixed{}, fixed.Fixed{}, false,
+			fmt.Errorf("miner weight exceeds supported maximum (id: %v, weight: %d, units: %d, max: %d",
+				id, minerWeight, minerUnits, maxSupportedN)
+	}
+	return n, p, calcVrfFrac(sig), false, nil
+}
+
+// Validate validates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is the role
+// proof and assuming commSize as the expected committee size.
+func (o *Oracle) Validate(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
+	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(layer, round, committeeSize, id, sig)
+	if done || err != nil {
+		return false, err
+	}
+
+	defer func() {
+		if msg := recover(); msg != nil {
+			o.With().Error("panic in Validate",
+				log.String("msg", fmt.Sprint(msg)),
+				log.Int("n", n),
+				log.String("p", p.String()),
+				log.String("vrfFrac", vrfFrac.String()),
+			)
+			o.Panic("%s", msg)
+		}
+	}()
+
+	x := int(eligibilityCount)
+	if !fixed.BinCDF(n, p, x-1).GreaterThan(vrfFrac) && vrfFrac.LessThan(fixed.BinCDF(n, p, x)) {
+		return true, nil
+	}
+	o.With().Warning("eligibility: node did not pass VRF eligibility threshold",
+		layer,
+		log.Int32("round", round),
+		log.Int("committee_size", committeeSize),
+		id,
+		log.Uint64("eligibilityCount", uint64(eligibilityCount)),
+		log.Int("n", n),
+		log.String("p", p.String()),
+		log.String("vrfFrac", vrfFrac.String()),
+		log.Int("x", x),
+	)
+	return false, nil
+}
+
+// CalcEligibility calculates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is
+// the role proof and assuming commSize as the expected committee size.
+func (o *Oracle) CalcEligibility(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(layer, round, committeeSize, id, sig)
+	if done {
+		return 0, err
+	}
+
+	defer func() {
+		if msg := recover(); msg != nil {
+			o.With().Error("panic in CalcEligibility",
+				log.String("msg", fmt.Sprint(msg)),
+				log.Int("n", n),
+				log.String("p", p.String()),
+				log.String("vrfFrac", vrfFrac.String()),
+			)
+			o.Panic("%s", msg)
+		}
+	}()
+
+	for x := 0; x < n; x++ {
+		if fixed.BinCDF(n, p, x).GreaterThan(vrfFrac) {
+			return uint16(x), nil
+		}
+	}
+	return uint16(n), nil
 }
 
 // Proof returns the role proof for the current Layer & Round
 func (o *Oracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
 	msg, err := o.buildVRFMessage(layer, round)
 	if err != nil {
-		o.Error("Proof: could not build VRF message err=%v", err)
+		o.With().Error("proof: could not build VRF message", log.Err(err))
 		return nil, err
 	}
 
 	sig, err := o.vrfSigner.Sign(msg)
 	if err != nil {
-		o.Error("Proof: could not sign VRF message err=%v", err)
+		o.With().Error("proof: could not sign VRF message", log.Err(err))
 		return nil, err
 	}
 
@@ -249,11 +370,11 @@ func (o *Oracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
 }
 
 // Returns a map of all active nodes in the specified layer id
-func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
+func (o *Oracle) actives(layer types.LayerID) (map[string]uint64, error) {
 	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	safeEp := sl.GetEpoch()
 
-	o.Info("safe layer %v, epoch %v", sl, safeEp)
+	o.With().Info("safe layer and epoch", sl, safeEp)
 	// check genesis
 	// genesis is for 3 epochs with hare since it can only count active identities found in blocks
 	if safeEp < 3 {
@@ -263,41 +384,43 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	// lock until any return
 	// note: no need to lock per safeEp - we do not expect many concurrent requests per safeEp (max two)
 	o.lock.Lock()
+	defer o.lock.Unlock()
 
 	// check cache
 	if val, exist := o.activesCache.Get(safeEp); exist {
-		o.lock.Unlock()
-		return val.(map[string]struct{}), nil
+		return val.(map[string]uint64), nil
 	}
 
 	// build a map of all blocks on the current layer
 	mp, err := o.blocksProvider.ContextuallyValidBlock(sl)
 	if err != nil {
-		o.lock.Unlock()
 		return nil, err
 	}
 
 	// no contextually valid blocks
 	if len(mp) == 0 {
-		o.With().Error("Could not calculate hare active set size: no contextually valid blocks",
-			layer, layer.GetEpoch(),
-			log.FieldNamed("safe_layer_id", sl), log.FieldNamed("safe_epoch_id", safeEp))
-		o.lock.Unlock()
+		o.With().Error("could not calculate hare active set size: no contextually valid blocks",
+			layer,
+			layer.GetEpoch(),
+			log.FieldNamed("safe_layer_id", sl),
+			log.FieldNamed("safe_epoch_id", safeEp))
 		return nil, errNoContextualBlocks
 	}
 
 	activeMap, err := o.getActiveSet(safeEp-1, mp)
 	if err != nil {
-		o.With().Error("Could not retrieve active set size", log.Err(err), layer, layer.GetEpoch(),
-			log.FieldNamed("safe_layer_id", sl), log.FieldNamed("safe_epoch_id", safeEp))
-		o.lock.Unlock()
+		o.With().Error("could not retrieve active set size",
+			log.Err(err),
+			layer,
+			layer.GetEpoch(),
+			log.FieldNamed("safe_layer_id", sl),
+			log.FieldNamed("safe_epoch_id", safeEp))
 		return nil, err
 	}
 
 	// update
 	o.activesCache.Add(safeEp, activeMap)
 
-	o.lock.Unlock()
 	return activeMap, nil
 }
 
@@ -310,7 +433,8 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerI
 			return true, nil // all ids are active in genesis
 		}
 
-		o.With().Error("IsIdentityActiveOnConsensusView erred while calling actives func", layer, log.Err(err))
+		o.With().Error("method IsIdentityActiveOnConsensusView erred while calling actives func",
+			layer, log.Err(err))
 		return false, err
 	}
 	_, exist := actives[edID]

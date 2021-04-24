@@ -34,7 +34,7 @@ func layerIdsReqFactory(lyr types.LayerID) requestFactory {
 			}
 			ch <- ids
 		}
-		if err := s.SendRequest(layerIdsMsg, lyr.Bytes(), peer, foo); err != nil {
+		if err := s.SendRequest(layerIdsMsg, lyr.Bytes(), peer, foo, func(err error) {}); err != nil {
 			return nil, err
 		}
 		return ch, nil
@@ -57,7 +57,7 @@ func getEpochAtxIds(epoch types.EpochID, s networker, peer p2ppeers.Peer) (chan 
 		}
 		ch <- atxIDs
 	}
-	if err := s.SendRequest(atxIdsMsg, epoch.ToBytes(), peer, foo); err != nil {
+	if err := s.SendRequest(atxIdsMsg, epoch.ToBytes(), peer, foo, func(err error) {}); err != nil {
 		return nil, err
 	}
 	return ch, nil
@@ -80,7 +80,7 @@ func hashReqFactory(lyr types.LayerID) requestFactory {
 			h.SetBytes(msg)
 			ch <- &peerHashPair{peer: peer, hash: h}
 		}
-		if err := s.SendRequest(layerHashMsg, lyr.Bytes(), peer, foo); err != nil {
+		if err := s.SendRequest(layerHashMsg, lyr.Bytes(), peer, foo, func(err error) {}); err != nil {
 			return nil, err
 		}
 
@@ -106,7 +106,7 @@ func atxHashReqFactory(ep types.EpochID) requestFactory {
 			h.SetBytes(msg)
 			ch <- &peerHashPair{peer: peer, hash: h}
 		}
-		if err := s.SendRequest(atxIdrHashMsg, ep.ToBytes(), peer, foo); err != nil {
+		if err := s.SendRequest(atxIdrHashMsg, ep.ToBytes(), peer, foo, func(err error) {}); err != nil {
 			return nil, err
 		}
 
@@ -128,12 +128,12 @@ func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]
 
 			items, err := asItems(msg)
 			if err != nil {
-				infra.Error("fetch failed bad response : %v", err)
+				infra.With().Error("fetch failed items bad response", log.Err(err))
 				return
 			}
 
 			if valid, err := validateItemIds(ids, items); !valid {
-				infra.Error("fetch failed bad response : %v", err)
+				infra.With().Error("fetch failed validating bad response", log.Err(err))
 				return
 			}
 
@@ -211,7 +211,7 @@ func poetReqFactory(poetProofRef []byte) requestFactory {
 			s.Info("handle PoET proof response")
 			defer close(ch)
 			if len(msg) == 0 || msg == nil {
-				s.Warning("peer responded with nil to poet request %v", peer, poetProofRef)
+				s.Warning("peer %v responded with nil to poet request %v", peer, poetProofRef)
 				return
 			}
 
@@ -230,7 +230,36 @@ func poetReqFactory(poetProofRef []byte) requestFactory {
 			ch <- proofMessage
 		}
 
-		if err := s.SendRequest(poetMsg, poetProofRef, peer, resHandler); err != nil {
+		if err := s.SendRequest(poetMsg, poetProofRef, peer, resHandler, func(err error) {}); err != nil {
+			return nil, err
+		}
+
+		return ch, nil
+	}
+}
+
+func inputVectorReqFactory(lyreq []byte) requestFactory {
+	return func(s networker, peer p2ppeers.Peer) (chan interface{}, error) {
+		ch := make(chan interface{}, 1)
+		resHandler := func(msg []byte) {
+			s.Info("handle inputvec response")
+			defer close(ch)
+			if len(msg) == 0 || msg == nil {
+				s.Warning("peer responded with nil to inputvec request %v", peer, lyreq)
+				return
+			}
+
+			var valid []types.BlockID
+			err := types.BytesToInterface(msg, &valid)
+			if err != nil {
+				s.Error("could not unmarshal PoET proof message: %v", err)
+				return
+			}
+
+			ch <- valid
+		}
+
+		if err := s.SendRequest(inputVecMsg, lyreq, peer, resHandler, func(err error) {}); err != nil {
 			return nil, err
 		}
 
@@ -244,8 +273,8 @@ func validatePoetRef(proofMessage types.PoetProofMessage, poetProofRef []byte) (
 		return false, fmt.Errorf("could marshal PoET response for validation %v", err)
 	}
 	b := sha256.Sum256(poetProofBytes)
-	if bytes.Compare(b[:], poetProofRef) != 0 {
-		return false, fmt.Errorf("poet recived was diffrent then requested")
+	if bytes.Compare(types.CalcHash32(b[:]).Bytes(), poetProofRef) != 0 {
+		return false, fmt.Errorf("poet received value was different than requested")
 	}
 
 	return true, nil
@@ -266,7 +295,7 @@ func validateItemIds(ids []types.Hash32, items []item) (bool, error) {
 
 	if len(mp) > 0 {
 		for id := range mp {
-			log.Warning("item %s was not in response ", id.ShortString())
+			log.Warning("item %s was not in response", id.ShortString())
 		}
 	}
 
@@ -278,7 +307,7 @@ func encodeAndSendRequest(req server.MessageType, ids []types.Hash32, s networke
 	if err != nil {
 		return err
 	}
-	if err := s.SendRequest(req, bts, peer, foo); err != nil {
+	if err := s.SendRequest(req, bts, peer, foo, func(err error) {}); err != nil {
 		return err
 	}
 	return nil

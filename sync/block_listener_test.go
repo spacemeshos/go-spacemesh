@@ -1,27 +1,6 @@
 package sync
 
-import (
-	"testing"
-	"time"
-
-	"github.com/spacemeshos/sha256-simd"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
-	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/state"
-	"github.com/spacemeshos/go-spacemesh/timesync"
-)
-
+/*
 const atxLimit = 100
 
 type PeersMock struct {
@@ -40,7 +19,7 @@ func init() {
 	types.SetLayersPerEpoch(4)
 }
 
-func ListenerFactory(serv service.Service, peers peers, name string, layer types.LayerID) *BlockListener {
+func ListenerFactory(serv service.Service, peers peers, name string, layer types.LayerID) *blocks.BlockHandler {
 	sync := SyncFactory(name, serv)
 	sync.peers = peers
 	nbl := NewBlockListener(serv, sync, 2, log.NewDefault(name))
@@ -57,6 +36,26 @@ func SyncFactory(name string, serv service.Service) *Syncer {
 	return sync
 }
 
+func makePoetProofMessage(t *testing.T) types.PoetProofMessage {
+	r := require.New(t)
+	file, err := os.Open(filepath.Join("..", "activation", "test_resources", "poet.proof"))
+	r.NoError(err)
+
+	var poetProof types.PoetProof
+	_, err = xdr.Unmarshal(file, &poetProof)
+	r.NoError(err)
+	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
+	poetID := []byte("poet_id_12345")
+	roundID := "1337"
+
+	return types.PoetProofMessage{
+		PoetProof:     poetProof,
+		PoetServiceID: poetID,
+		RoundID:       roundID,
+		Signature:     nil,
+	}
+}
+
 func TestBlockListener(t *testing.T) {
 	sim := service.NewSimulator()
 	signer := signing.NewEdSigner()
@@ -70,10 +69,10 @@ func TestBlockListener(t *testing.T) {
 	defer bl2.Close()
 	defer bl1.Close()
 	bl2.Start()
-	atx1 := atx(signer.PublicKey().String())
+	atx1 := blocks.atx(signer.PublicKey().String())
 
-	atx2 := atx(signer2.PublicKey().String())
-	atx3 := atx(signer3.PublicKey().String())
+	atx2 := blocks.atx(signer2.PublicKey().String())
+	atx3 := blocks.atx(signer3.PublicKey().String())
 
 	bl2.Start()
 
@@ -104,15 +103,15 @@ func TestBlockListener(t *testing.T) {
 	err = bl2.ProcessAtxs([]*types.ActivationTx{atx1})
 	assert.NoError(t, err)
 
-	block1 := types.NewExistingBlock(0, []byte(rand.String(8)))
+	block1 := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
 	block1.Signature = signer.Sign(block1.Bytes())
 	block1.ATXID = atx1.ID()
 	block1.ActiveSet = &[]types.ATXID{atx1.ID()}
-	block2 := types.NewExistingBlock(0, []byte(rand.String(8)))
+	block2 := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
 	block2.Signature = signer2.Sign(block2.Bytes())
 	block2.ActiveSet = &[]types.ATXID{atx2.ID()}
 	block2.ATXID = atx2.ID()
-	block3 := types.NewExistingBlock(0, []byte(rand.String(8)))
+	block3 := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
 	block3.Signature = signer3.Sign(block3.Bytes())
 	block3.ActiveSet = &[]types.ATXID{atx3.ID()}
 	block3.ATXID = atx3.ID()
@@ -129,14 +128,14 @@ func TestBlockListener(t *testing.T) {
 	bl1.AddBlock(block2)
 	bl1.AddBlock(block3)
 
-	_, err = bl1.GetBlock(block1.ID())
+	_, err = bl1.FetchBlock(block1.ID())
 	if err != nil {
 		t.Error(err)
 	}
 
 	bl2.syncLayer(0, []types.BlockID{block1.ID()})
 
-	b, err := bl2.GetBlock(block1.ID())
+	b, err := bl2.FetchBlock(block1.ID())
 	if err != nil {
 		t.Error(err)
 	}
@@ -174,15 +173,15 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 	assert.NoError(t, err)
 	// Push a block with tx1 and and atx1 into bl1.
 
-	block := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	block.Signature = signer.Sign(block.Bytes())
 	block.TxIDs = append(block.TxIDs, tx1.ID())
 	block.ActiveSet = &[]types.ATXID{atx1.ID()}
 	block.ATXID = atx1.ID()
-	err = bl1.AddBlockWithTxs(block, []*types.Transaction{tx1}, []*types.ActivationTx{atx1})
+	err = bl1.AddBlockWithTxs(block, []*types.Transaction{tx1})
 	require.NoError(t, err)
 
-	_, err = bl1.GetBlock(block.ID())
+	_, err = bl1.FetchBlock(block.ID())
 	require.NoError(t, err)
 
 	// Verify that bl2 doesn't have them in mempool.
@@ -232,16 +231,16 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 	atx1.NIPoST.PoSTMetadata.Challenge = poetRef[:]
 
 	// Push a block with tx1 and and atx1 into bl1.
-	block := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	block.Signature = signer.Sign(block.Bytes())
 	block.TxIDs = append(block.TxIDs, tx1.ID())
 	block.ActiveSet = &[]types.ATXID{atx1.ID()}
 
 	// adding block to peer1
-	err = bl1.AddBlockWithTxs(block, []*types.Transaction{}, nil)
+	err = bl1.AddBlockWithTxs(block, []*types.Transaction{})
 	require.NoError(t, err)
 
-	_, err = bl1.GetBlock(block.ID())
+	_, err = bl1.FetchBlock(block.ID())
 	require.NoError(t, err)
 
 	_, _, err = bl2.dataAvailability(block)
@@ -256,36 +255,36 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 	// attach proof to ATX
 	atx2.NIPoST.PoSTMetadata.Challenge = poetRef[:]
 	// create a block containing tx2 and atx2
-	tBlock := types.NewExistingBlock(1, []byte(rand.String(8)))
+	tBlock := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	tBlock.Signature = signer.Sign(tBlock.Bytes())
 	tBlock.TxIDs = append(tBlock.TxIDs, tx2.ID())
 	tBlock.ActiveSet = &[]types.ATXID{atx2.ID()}
 
 	// Push tx2 poet proof into bl1.
-	err = bl1.AddBlockWithTxs(tBlock, []*types.Transaction{tx2}, nil)
+	err = bl1.AddBlockWithTxs(tBlock, []*types.Transaction{tx2})
 	require.NoError(t, err)
 
-	_, err = bl1.GetBlock(tBlock.ID())
+	_, err = bl1.FetchBlock(tBlock.ID())
 	require.NoError(t, err)
 
-	/*_, _, err = bl2.dataAvailability(tBlock)
-	require.Error(t, err)*/
+	//_, _, err = bl2.dataAvailability(tBlock)
+	//require.Error(t, err)
 }
 
 func TestBlockListener_ValidateVotesGoodFlow(t *testing.T) {
-	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block1 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 
-	block2 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block2 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 
-	block3 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block3 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 
-	block4 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block4 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 
-	block5 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block5 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 
-	block6 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block6 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 
-	block7 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block7 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 
 	block1.AddView(block2.ID())
 	block1.AddView(block3.ID())
@@ -322,19 +321,19 @@ func TestBlockListener_ValidateVotesGoodFlow(t *testing.T) {
 }
 
 func TestBlockListener_ValidateVotesBadFlow(t *testing.T) {
-	block1 := types.NewExistingBlock(7, []byte(rand.String(8)))
+	block1 := types.NewExistingBlock(7, []byte(rand.String(8)), nil)
 
-	block2 := types.NewExistingBlock(8, []byte(rand.String(8)))
+	block2 := types.NewExistingBlock(8, []byte(rand.String(8)), nil)
 
-	block3 := types.NewExistingBlock(8, []byte(rand.String(8)))
+	block3 := types.NewExistingBlock(8, []byte(rand.String(8)), nil)
 
-	block4 := types.NewExistingBlock(9, []byte(rand.String(8)))
+	block4 := types.NewExistingBlock(9, []byte(rand.String(8)), nil)
 
-	block5 := types.NewExistingBlock(9, []byte(rand.String(8)))
+	block5 := types.NewExistingBlock(9, []byte(rand.String(8)), nil)
 
-	block6 := types.NewExistingBlock(9, []byte(rand.String(8)))
+	block6 := types.NewExistingBlock(9, []byte(rand.String(8)), nil)
 
-	block7 := types.NewExistingBlock(10, []byte(rand.String(8)))
+	block7 := types.NewExistingBlock(10, []byte(rand.String(8)), nil)
 
 	block1.AddView(block2.ID())
 	block1.AddView(block3.ID())
@@ -448,42 +447,42 @@ func TestBlockListenerViewTraversal(t *testing.T) {
 
 	bl2.syncLayer(1, []types.BlockID{block10.ID(), block11.ID()})
 	bl2.atxDb = alwaysOkAtxDb{}
-	b, err := bl2.GetBlock(block10.ID())
+	b, err := bl2.FetchBlock(block10.ID())
 	if err != nil {
 		t.Error(err)
 	}
 
-	b, err = bl2.GetBlock(block11.ID())
+	b, err = bl2.FetchBlock(block11.ID())
 	if err != nil {
 		t.Error(err)
 	}
 
-	b, err = bl1.GetBlock(block1.ID())
+	b, err = bl1.FetchBlock(block1.ID())
 	if err != nil {
 		t.Error(err)
 	}
 
-	b, err = bl2.GetBlock(block1.ID())
+	b, err = bl2.FetchBlock(block1.ID())
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = bl2.GetBlock(block2.ID())
+	_, err = bl2.FetchBlock(block2.ID())
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = bl2.GetBlock(block3.ID())
+	_, err = bl2.FetchBlock(block3.ID())
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = bl2.GetBlock(block4.ID())
+	_, err = bl2.FetchBlock(block4.ID())
 	if err != nil {
 		t.Error(err)
 	}
 
-	b, err = bl2.GetBlock(block5.ID())
+	b, err = bl2.FetchBlock(block5.ID())
 	if err != nil {
 		t.Error(err)
 	}
@@ -495,7 +494,7 @@ func TestBlockListenerViewTraversal(t *testing.T) {
 }
 
 func createBlock(activationTx types.ActivationTx, signer *signing.EdSigner) *types.Block {
-	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block1 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	block1.ATXID = activationTx.ID()
 	block1.ActiveSet = &[]types.ATXID{activationTx.ID()}
 	block1.Signature = signer.Sign(block1.Bytes())
@@ -530,27 +529,27 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	err = bl2.ProcessAtxs([]*types.ActivationTx{&atx1})
 	assert.NoError(t, err)
 
-	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block1 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	block1.ATXID = *types.EmptyATXID
 	block1.Signature = signer.Sign(block1.Bytes())
 
-	block2 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block2 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	block2.ATXID = *types.EmptyATXID
 	block2.Signature = signer.Sign(block2.Bytes())
 
-	block3 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block3 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	block3.ATXID = *types.EmptyATXID
 	block3.Signature = signer.Sign(block3.Bytes())
 
-	block4 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block4 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	block4.ATXID = *types.EmptyATXID
 	block4.Signature = signer.Sign(block4.Bytes())
 
-	block5 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block5 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	block5.ATXID = *types.EmptyATXID
 	block5.Signature = signer.Sign(block5.Bytes())
 
-	block6 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block6 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	block6.ATXID = *types.EmptyATXID
 	block6.Signature = signer.Sign(block5.Bytes())
 
@@ -568,19 +567,19 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	go bl2.syncLayer(5, []types.BlockID{block5.ID(), block6.ID()})
 	time.Sleep(1 * time.Second) // wait for fetch
 
-	b, err := bl2.GetBlock(block1.ID())
+	b, err := bl2.FetchBlock(block1.ID())
 	assert.Error(t, err)
 
-	_, err = bl2.GetBlock(block2.ID())
+	_, err = bl2.FetchBlock(block2.ID())
 	assert.Error(t, err)
 
-	_, err = bl2.GetBlock(block3.ID())
+	_, err = bl2.FetchBlock(block3.ID())
 	assert.Error(t, err)
 
-	_, err = bl2.GetBlock(block4.ID())
+	_, err = bl2.FetchBlock(block4.ID())
 	assert.Error(t, err)
 
-	b, err = bl2.GetBlock(block5.ID())
+	b, err = bl2.FetchBlock(block5.ID())
 	assert.Error(t, err)
 
 	assert.Equal(t, 0, len(bl2.blockQueue.pending))
@@ -621,14 +620,14 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	err = activation.SignAtx(signer, atx)
 	assert.NoError(t, err)
 
-	blk := types.NewExistingBlock(1, []byte(rand.String(8)))
+	blk := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	blk.TxIDs = append(blk.TxIDs, tx.ID())
 	blk.ActiveSet = &[]types.ATXID{atx.ID()}
 	blk.Signature = signer.Sign(blk.Bytes())
 	blk.ATXID = atx.ID()
 	blk.Initialize()
 
-	bl2.AddBlockWithTxs(blk, []*types.Transaction{tx}, []*types.ActivationTx{atx})
+	bl2.AddBlockWithTxs(blk, []*types.Transaction{tx})
 
 	data, err := types.InterfaceToBytes(&blk)
 	require.NoError(t, err)
@@ -645,7 +644,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 			t.Error("timed out ")
 			return
 		default:
-			if b, err := bl1.GetBlock(blk.ID()); err == nil {
+			if b, err := bl1.FetchBlock(blk.ID()); err == nil {
 				bBytes, err := types.InterfaceToBytes(*b)
 				assert.NoError(t, err)
 				blBytes, err := types.InterfaceToBytes(*blk)
@@ -657,13 +656,16 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 		}
 	}
 }
+*/
 
+/*
 func TestBlockListener_AtxCache(t *testing.T) {
 	sim := service.NewSimulator()
 	signer := signing.NewEdSigner()
 	n1 := sim.NewNode()
 	// n2 := sim.NewNode()
-	bl1 := ListenerFactory(n1, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{ /*n2.PublicKey()*/ } }}, "listener1", 3)
+	bl1 := ListenerFactory(n1,
+		PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{}}, "listener1", 3)
 
 	atxDb := mesh.NewAtxDbMock()
 	bl1.Mesh.AtxDB = atxDb
@@ -674,42 +676,42 @@ func TestBlockListener_AtxCache(t *testing.T) {
 	atx2 := atx(signer.PublicKey().String())
 
 	// Push block with tx1 and and atx1 into bl1.
-	blk1 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	blk1 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	blk1.Signature = signer.Sign(blk1.Bytes())
 	blk1.TxIDs = append(blk1.TxIDs, tx1.ID())
 	//blk1.ATXIDs = append(blk1.ATXIDs, atx1.ID())
 	//blk1.ATXIDs = append(blk1.ATXIDs, atx2.ID())
 
-	err := bl1.AddBlockWithTxs(blk1, []*types.Transaction{tx1}, []*types.ActivationTx{atx1, atx2})
+	err := bl1.AddBlockWithTxs(blk1, []*types.Transaction{tx1})
 	require.NoError(t, err)
 	require.Equal(t, 2, atxDb.ProcCnt)
-	_, err = bl1.GetBlock(blk1.ID())
+	_, err = bl1.FetchBlock(blk1.ID())
 	require.NoError(t, err)
 
 	// Push different block with same transactions - not expected to process atxs
-	blk2 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	blk2 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	blk2.Signature = signer.Sign(blk2.Bytes())
 	blk2.TxIDs = append(blk2.TxIDs, tx1.ID())
 	//blk2.ATXIDs = append(blk2.ATXIDs, atx1.ID())
 	//blk2.ATXIDs = append(blk2.ATXIDs, atx2.ID())
 
-	err = bl1.AddBlockWithTxs(blk2, []*types.Transaction{tx1}, []*types.ActivationTx{atx1, atx2})
+	err = bl1.AddBlockWithTxs(blk2, []*types.Transaction{tx1})
 	require.NoError(t, err)
 	require.Equal(t, 4, atxDb.ProcCnt)
-	_, err = bl1.GetBlock(blk2.ID())
+	_, err = bl1.FetchBlock(blk2.ID())
 	require.NoError(t, err)
 
 	// Push different block with subset of transactions - expected to process atxs
-	blk3 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	blk3 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	blk3.Signature = signer.Sign(blk3.Bytes())
 	blk3.TxIDs = append(blk3.TxIDs, tx1.ID())
 	//blk3.ATXIDs = append(blk3.ATXIDs, atx1.ID())
 
-	err = bl1.AddBlockWithTxs(blk3, []*types.Transaction{tx1}, []*types.ActivationTx{atx1})
+	err = bl1.AddBlockWithTxs(blk3, []*types.Transaction{tx1})
 	require.NoError(t, err)
 	require.Equal(t, 5, atxDb.ProcCnt)
-	_, err = bl1.GetBlock(blk3.ID())
+	_, err = bl1.FetchBlock(blk3.ID())
 	require.NoError(t, err)
-}
+}*/
 
 // todo integration testing

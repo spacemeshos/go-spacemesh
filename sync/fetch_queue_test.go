@@ -1,6 +1,10 @@
 package sync
 
 import (
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/state"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"testing"
 	"time"
 
@@ -14,6 +18,32 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
+
+type PeersMock struct {
+	getPeers func() []p2ppeers.Peer
+}
+
+func (pm PeersMock) GetPeers() []p2ppeers.Peer {
+	return pm.getPeers()
+}
+
+func (pm PeersMock) Close() {
+	return
+}
+
+func init() {
+	types.SetLayersPerEpoch(4)
+}
+
+func SyncFactory(name string, serv service.Service) *Syncer {
+	tick := 20 * time.Second
+	ts := timesync.NewClock(timesync.RealClock{}, tick, time.Now(), log.NewDefault("clock"))
+	l := log.NewDefault(name)
+	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
+	blockValidator := blockEligibilityValidatorMock{}
+	sync := NewSync(serv, getMesh(memoryDB, name), state.NewTxMemPool(), activation.NewAtxMemPool(), blockValidator, poetDb, conf, ts, l)
+	return sync
+}
 
 func TestBlockListener_TestTxQueue(t *testing.T) {
 	sim := service.NewSimulator()
@@ -36,10 +66,11 @@ func TestBlockListener_TestTxQueue(t *testing.T) {
 	//missing
 	id4 := tx4.ID()
 
-	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block1 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	block1.TxIDs = []types.TransactionID{id1, id2, id3}
 	block1.Initialize()
-	bl2.AddBlockWithTxs(block1, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	addTxsToPool(bl2.txpool, []*types.Transaction{tx1, tx2, tx3})
+	bl2.AddBlockWithTxs(block1)
 
 	ch := queue.addToPendingGetCh([]types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32()})
 	timeout := time.After(1 * time.Second)
@@ -90,7 +121,7 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 	bl2.Start()
 	queue := bl1.atxQueue
 
-	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block1 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	atx1 := atx(signer.PublicKey().String())
 	atx2 := atx(signer.PublicKey().String())
 	atx3 := atx(signer.PublicKey().String())
@@ -122,7 +153,10 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 	err = bl1.ProcessAtxs([]*types.ActivationTx{atx1})
 	assert.NoError(t, err)
 
-	bl2.AddBlockWithTxs(block1, []*types.Transaction{}, []*types.ActivationTx{atx1, atx2, atx3})
+	bl2.atxDb.ProcessAtx(atx1)
+	bl2.atxDb.ProcessAtx(atx2)
+	bl2.atxDb.ProcessAtx(atx3)
+	bl2.AddBlockWithTxs(block1)
 
 	ch := queue.addToPendingGetCh([]types.Hash32{atx1.Hash32(), atx2.Hash32(), atx3.Hash32()})
 	timeout := time.After(1 * time.Second)
@@ -175,9 +209,10 @@ func TestBlockListener_TestTxQueueHandle(t *testing.T) {
 	id2 := tx2.ID()
 	id3 := tx3.ID()
 
-	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block1 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	block1.TxIDs = []types.TransactionID{id1, id2, id3}
-	bl2.AddBlockWithTxs(block1, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	addTxsToPool(bl2.txpool, []*types.Transaction{tx1, tx2, tx3})
+	bl2.AddBlockWithTxs(block1)
 
 	res, err := queue.handle([]types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32()})
 	if err != nil {
@@ -216,7 +251,7 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
 	poetRef := sha256.Sum256(poetProofBytes)
 
-	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block1 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	atx1 := atx(signer.PublicKey().String())
 	atx1.NIPoST.PoSTMetadata.Challenge = poetRef[:]
 	err = activation.SignAtx(signer, atx1)
@@ -230,7 +265,10 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 	err = activation.SignAtx(signer, atx3)
 	assert.NoError(t, err)
 
-	bl2.AddBlockWithTxs(block1, []*types.Transaction{}, []*types.ActivationTx{atx1, atx2, atx3})
+	bl2.atxDb.ProcessAtx(atx1)
+	bl2.atxDb.ProcessAtx(atx2)
+	bl2.atxDb.ProcessAtx(atx3)
+	bl2.AddBlockWithTxs(block1)
 
 	res, err := bl1.atxQueue.handle([]types.Hash32{atx1.Hash32(), atx2.Hash32(), atx3.Hash32()})
 	if err != nil {

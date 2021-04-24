@@ -15,9 +15,9 @@ const d50milli = 50 * time.Millisecond
 func TestClock_StartClock(t *testing.T) {
 	tick := d50milli
 	c := RealClock{}
+	then := time.Now()
 	ts := NewClock(c, tick, c.Now(), log.NewDefault(t.Name()))
 	tk := ts.Subscribe()
-	then := time.Now()
 	ts.StartNotifying()
 
 	select {
@@ -33,9 +33,9 @@ func TestClock_StartClock_BeforeEpoch(t *testing.T) {
 	tmr := RealClock{}
 
 	waitTime := 2 * d50milli
+	then := time.Now()
 	ts := NewClock(tmr, tick, tmr.Now().Add(2*d50milli), log.NewDefault(t.Name()))
 	tk := ts.Subscribe()
-	then := time.Now()
 	ts.StartNotifying()
 
 	fmt.Println(waitTime)
@@ -62,6 +62,7 @@ func TestClock_TickFutureGenesis(t *testing.T) {
 
 func TestClock_TickPastGenesis(t *testing.T) {
 	tmr := &RealClock{}
+	start := time.Now()
 	ticker := NewClock(tmr, 2*d50milli, tmr.Now().Add(-7*d50milli), log.NewDefault(t.Name()))
 	expectedTimeToTick := d50milli // tickInterval is 100ms and the genesis tick (layer 1) was 350ms ago
 	/*
@@ -73,7 +74,6 @@ func TestClock_TickPastGenesis(t *testing.T) {
 	*/
 	sub := ticker.Subscribe()
 	ticker.StartNotifying()
-	start := time.Now()
 	x := <-sub
 	duration := time.Since(start)
 	assert.Equal(t, types.LayerID(5), x)
