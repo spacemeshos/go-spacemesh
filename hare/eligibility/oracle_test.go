@@ -353,9 +353,9 @@ func TestOracle_activeSetSizeCache(t *testing.T) {
 
 func TestOracle_actives(t *testing.T) {
 	r := require.New(t)
+	types.SetLayersPerEpoch(defLayersPerEpoch)
 	n := 9
 	atxdb := &mockActiveSetProvider{
-		size: 0,
 		getEpochAtxsFn: func(types.EpochID) []types.ATXID {
 			atxids := make([]types.ATXID, n)
 			for i := 0; i < n; i++ {
@@ -364,7 +364,9 @@ func TestOracle_actives(t *testing.T) {
 			return atxids
 		},
 		getAtxHeaderFn: func(atxid types.ATXID) (*types.ActivationTxHeader, error) {
-			return &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: atxid.ShortString()}}}, nil
+			return &types.ActivationTxHeader{
+				NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: atxid.Hash32().String()}},
+			}, nil
 		},
 	}
 	o := New(&mockValueProvider{1, nil}, atxdb, nil, nil, 5, genActive, hDist, cfg, log.NewDefault(t.Name()))
@@ -378,7 +380,10 @@ func TestOracle_actives(t *testing.T) {
 	r.NoError(err)
 	r.Equal(v, v2)
 	for i := 0; i < n; i++ {
-		_, exist := v[fmt.Sprintf("%x", i)]
+		// this works too:
+		//atxid := types.ATXID(types.BytesToHash([]byte{byte(i)}))
+		//_, exist := v[atxid.Hash32().String()]
+		_, exist := v[fmt.Sprintf("0x%064x", i)]
 		r.True(exist)
 	}
 }
