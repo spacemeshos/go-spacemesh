@@ -317,7 +317,7 @@ func (msh *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerI
 }
 
 func (msh *Mesh) persistLayerHashes(l *types.Layer) {
-	hash := msh.calcLayerHash(l)
+	hash := msh.calcValidLayerHash(l)
 	msh.persistLayerHash(l.Index(), hash)
 	prevHash := types.Hash32{}
 	var err error
@@ -459,7 +459,7 @@ func (msh *Mesh) logStateRoot(layerID types.LayerID) {
 	)
 }
 
-func (msh *Mesh) calcLayerHash(layer *types.Layer) types.Hash32 {
+func (msh *Mesh) calcValidLayerHash(layer *types.Layer) types.Hash32 {
 	validBlocks, _ := msh.BlocksByValidity(layer.Blocks())
 	msh.layerHash = types.CalcBlocksHash32(types.BlockIDs(validBlocks), msh.layerHash).Bytes()
 
@@ -476,12 +476,7 @@ func (msh *Mesh) persistLastLayerHash() {
 	}
 }
 
-func (msh *Mesh) persistLayerHash(layerID types.LayerID, hash types.Hash32) {
-	if err := msh.general.Put(msh.getLayerHashKey(layerID), hash.Bytes()); err != nil {
-		msh.With().Error("failed to persist layer hash", log.Err(err), msh.ProcessedLayer(),
-			log.String("layer_hash", hash.Hex()))
-	}
-
+func (msh *Mesh) SaveLayerBlockHash(layerID types.LayerID, hash types.Hash32) {
 	// we store a double index here because most of the code uses layer ID as key, currently only sync reads layer by hash
 	// when this changes we can simply point to the layes
 	if err := msh.general.Put(hash.Bytes(), layerID.Bytes()); err != nil {
@@ -507,17 +502,6 @@ func (msh *Mesh) getRunningLayerHash(layerID types.LayerID) (types.Hash32, error
 	return hash, nil
 }
 
-// GetLayerHash returns layer hash for received blocks
-func (msh *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
-	h := types.Hash32{}
-	bts, err := msh.general.Get(msh.getLayerHashKey(layerID))
-	if err != nil {
-		return types.Hash32{}
-	}
-	h.SetBytes(bts)
-	return h
-}
-
 // GetLayerHashBlocks returns blocks for given hash
 func (msh *Mesh) GetLayerHashBlocks(h types.Hash32) []types.BlockID {
 	layerIDBytes, err := msh.general.Get(h.Bytes())
@@ -533,8 +517,10 @@ func (msh *Mesh) GetLayerHashBlocks(h types.Hash32) []types.BlockID {
 	return mBlocks
 }
 
-func (msh *Mesh) getLayerHashKey(layerID types.LayerID) []byte {
-	return []byte(fmt.Sprintf("layerHash_%v", layerID.Bytes()))
+
+
+func (msh *Mesh) getLayerBlockHashKey(layerID types.LayerID) []byte {
+	return []byte(fmt.Sprintf("layerBlockHash_%v", layerID.Bytes()))
 }
 
 func (msh *Mesh) getRunningLayerHashKey(layerID types.LayerID) []byte {

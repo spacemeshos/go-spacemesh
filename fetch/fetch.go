@@ -306,7 +306,7 @@ func (f *Fetch) FetchRequestHandler(data []byte) []byte {
 		}
 		res, err := db.Get(r.Hash.Bytes())
 		if err != nil {
-			f.log.Warning("requested non existing hash %v %v", r.Hash.Hex(), err)
+			f.log.Warning("remote peer requested non existing hash %v %v", r.Hash.Hex(), err)
 			continue
 		} else {
 			f.log.Info("responded to hash req %v bytes %v", r.Hash.ShortString(), len(res))
