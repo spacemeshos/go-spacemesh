@@ -178,13 +178,13 @@ func hashLayerAndRound(instanceID types.LayerID, round int32) uint32 {
 }
 
 // Validate is required to conform to the Rolacle interface, but should never be called.
-func (fo *FixedRolacle) Validate(types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
+func (fo *FixedRolacle) Validate(context.Context, types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
 	panic("implement me!")
 }
 
 // CalcEligibility returns 1 if the miner is eligible in given layer, and 0 otherwise.
-func (fo *FixedRolacle) CalcEligibility(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
-	eligible, err := fo.eligible(layer, round, committeeSize, id, sig)
+func (fo *FixedRolacle) CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+	eligible, err := fo.eligible(ctx, layer, round, committeeSize, id, sig)
 	if eligible {
 		return 1, nil
 	}

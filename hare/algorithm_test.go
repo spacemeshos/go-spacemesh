@@ -43,11 +43,11 @@ type mockRolacle struct {
 	MockStateQuerier
 }
 
-func (mr *mockRolacle) Validate(context.Context, types.LayerID, int32, int, types.NodeID, []byte, eligibilityCount uint16) (bool, error) {
+func (mr *mockRolacle) Validate(context.Context, types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
 	return mr.isEligible, mr.err
 }
 
-func (mr *mockRolacle) CalcEligibility(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+func (mr *mockRolacle) CalcEligibility(context.Context, types.LayerID, int32, int, types.NodeID, []byte) (uint16, error) {
 	if mr.isEligible {
 		return 1, nil
 	}

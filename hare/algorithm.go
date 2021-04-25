@@ -30,7 +30,7 @@ const ( // constants of the different roles
 // Rolacle is the roles oracle provider.
 type Rolacle interface {
 	Validate(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error)
-	CalcEligibility(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error)
+	CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error)
 	Proof(ctx context.Context, layer types.LayerID, round int32) ([]byte, error)
 	IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error)
 }

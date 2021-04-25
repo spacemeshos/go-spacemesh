@@ -299,8 +299,8 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 
 // Validate validates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is the role
 // proof and assuming commSize as the expected committee size.
-func (o *Oracle) Validate(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
-	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(layer, round, committeeSize, id, sig)
+func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
+	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, sig)
 	if done || err != nil {
 		return false, err
 	}
@@ -337,8 +337,8 @@ func (o *Oracle) Validate(layer types.LayerID, round int32, committeeSize int, i
 
 // CalcEligibility calculates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is
 // the role proof and assuming commSize as the expected committee size.
-func (o *Oracle) CalcEligibility(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
-	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(layer, round, committeeSize, id, sig)
+func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, sig)
 	if done {
 		return 0, err
 	}

@@ -192,7 +192,7 @@ func TestOracle_CalcEligibility_ErrorFromActiveSet(t *testing.T) {
 		return nil, errFoo
 	}
 
-	res, err := o.CalcEligibility(types.LayerID(50), 0, 1, types.NodeID{}, []byte{})
+	res, err := o.CalcEligibility(context.TODO(), types.LayerID(50), 0, 1, types.NodeID{}, []byte{})
 
 	r.EqualError(err, errFoo.Error())
 	r.Equal(uint16(0), res)
@@ -221,7 +221,7 @@ func TestOracle_CalcEligibility_ZeroCommitteeSize(t *testing.T) {
 		r.NoError(err)
 		r.Equal(64, n)
 
-		res, err := o.CalcEligibility(types.LayerID(cfg.ConfidenceParam+11), 0, 0, nodeID, sig)
+		res, err := o.CalcEligibility(context.TODO(), types.LayerID(cfg.ConfidenceParam+11), 0, 0, nodeID, sig)
 
 		r.NoError(err)
 		r.Equal(uint16(0), res)
@@ -246,7 +246,7 @@ func TestOracle_CalcEligibility(t *testing.T) {
 		res, err := o.CalcEligibility(context.TODO(), types.LayerID(50), 1, committeeSize, nodeID, sig)
 		r.NoError(err)
 
-		valid, err := o.Validate(types.LayerID(50), 1, committeeSize, nodeID, sig, res)
+		valid, err := o.Validate(context.TODO(), types.LayerID(50), 1, committeeSize, nodeID, sig, res)
 		r.NoError(err)
 		r.True(valid)
 
@@ -280,10 +280,10 @@ func BenchmarkOracle_CalcEligibility(b *testing.B) {
 	}
 	b.ResetTimer()
 	for _, nodeID := range nodeIDs {
-		res, err := o.CalcEligibility(types.LayerID(50), 1, committeeSize, nodeID, sig)
+		res, err := o.CalcEligibility(context.TODO(), types.LayerID(50), 1, committeeSize, nodeID, sig)
 
 		if err == nil {
-			valid, err := o.Validate(types.LayerID(50), 1, committeeSize, nodeID, sig, res)
+			valid, err := o.Validate(context.TODO(), types.LayerID(50), 1, committeeSize, nodeID, sig, res)
 			r.NoError(err)
 			r.True(valid)
 		}
@@ -373,11 +373,11 @@ func Test_BlsSignVerify(t *testing.T) {
 	proof, err := o.Proof(context.TODO(), 50, 1)
 	assert.NoError(t, err)
 
-	res, err := o.CalcEligibility(50, 1, 10, id, proof)
+	res, err := o.CalcEligibility(context.TODO(), 50, 1, 10, id, proof)
 	assert.NoError(t, err)
 	assert.Equal(t, uint16(1), res)
 
-	valid, err := o.Validate(50, 1, 10, id, proof, 1)
+	valid, err := o.Validate(context.TODO(), 50, 1, 10, id, proof, 1)
 	assert.NoError(t, err)
 	assert.True(t, valid)
 }
@@ -591,10 +591,10 @@ func TestOracle_CalcEligibility_withSpaceUnits(t *testing.T) {
 		r.Equal(64, n)
 		nodeID := types.NodeID{Key: pubkey}
 
-		res, err := o.CalcEligibility(types.LayerID(50), 1, committeeSize, nodeID, sig)
+		res, err := o.CalcEligibility(context.TODO(), types.LayerID(50), 1, committeeSize, nodeID, sig)
 		r.NoError(err)
 
-		valid, err := o.Validate(types.LayerID(50), 1, committeeSize, nodeID, sig, res)
+		valid, err := o.Validate(context.TODO(), types.LayerID(50), 1, committeeSize, nodeID, sig, res)
 		r.NoError(err)
 		r.True(valid)
 

@@ -23,10 +23,10 @@ func (bo *localOracle) Register(isHonest bool, pubkey string) {
 }
 
 func (bo *localOracle) Validate(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
-	return bo.oc.Validate(layer, round, committeeSize, id, sig, eligibilityCount)
+	return bo.oc.Validate(ctx, layer, round, committeeSize, id, sig, eligibilityCount)
 }
 
-func (bo *localOracle) CalcEligibility(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+func (bo *localOracle) CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
 	return bo.oc.CalcEligibility(ctx, layer, round, committeeSize, id, sig)
 }
 

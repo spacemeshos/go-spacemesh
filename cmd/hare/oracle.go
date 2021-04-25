@@ -24,7 +24,7 @@ func (bo *hareOracle) Validate(ctx context.Context, layer types.LayerID, round i
 	return bo.oc.Eligible(layer, round, committeeSize, id, sig)
 }
 
-func (bo *hareOracle) CalcEligibility(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+func (bo *hareOracle) CalcEligibility(_ context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
 	eligible, err := bo.oc.Eligible(layer, round, committeeSize, id, sig)
 	if eligible {
 		return 1, nil
