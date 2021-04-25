@@ -279,22 +279,9 @@ func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, 
 }
 
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID, activeSet []types.ATXID) (*types.Block, error) {
-
 	if id <= types.GetEffectiveGenesis() {
 		return nil, errors.New("cannot create blockBytes in genesis layer")
 	}
-
-	// TODO: use this instead have logic inside trtl
-	/*votes, err := t.getVotes(id)
-	votes, err := t.getVotes(id)
-	if err != nil {
-		return nil, err
-	}
-
-	viewEdges, err := t.meshProvider.GetOrphanBlocksBefore(id)
-	if err != nil {
-		return nil, err
-	}*/
 
 	base, diffs, err := t.baseBlockP.BaseBlock()
 	if err != nil {

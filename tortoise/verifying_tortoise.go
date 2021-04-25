@@ -48,12 +48,8 @@ type turtle struct {
 
 	Verified types.LayerID
 
-	// use 2D array to be able to iterate from latest elements easily
-	BlockOpinionsByLayer map[types.LayerID]map[types.BlockID]Opinion // records hdist, for each block, its votes about every
-	// previous block
-
-	// TODO: Tal says: We keep a vector containing our vote totals (positive and negative) for every previous block
-	// that's not needed here, probably for self healing?
+	// this matrix stores the opinion of each block about other blocks
+	BlockOpinionsByLayer map[types.LayerID]map[types.BlockID]Opinion
 }
 
 // SetLogger sets the Log instance for this turtle
