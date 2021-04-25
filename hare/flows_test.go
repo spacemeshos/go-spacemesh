@@ -148,7 +148,7 @@ func (trueOracle) Validate(context.Context, types.LayerID, int32, int, types.Nod
 	return true, nil
 }
 
-func (trueOracle) CalcEligibility(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+func (trueOracle) CalcEligibility(context.Context, types.LayerID, int32, int, types.NodeID, []byte) (uint16, error) {
 	return 1, nil
 }
 

@@ -92,11 +92,11 @@ func (mho *mockHashOracle) calcThreshold(committeeSize int) uint32 {
 	return uint32(uint64(committeeSize) * uint64(mho.hasher.MaxValue()) / uint64(numClients))
 }
 
-func (mho *mockHashOracle) Validate(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
+func (mho *mockHashOracle) Validate(context.Context, types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
 	panic("implement me!")
 }
 
-func (mho *mockHashOracle) CalcEligibility(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+func (mho *mockHashOracle) CalcEligibility(context.Context, types.LayerID, int32, int, types.NodeID, []byte) (uint16, error) {
 	panic("implement me!")
 }
 
