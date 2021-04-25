@@ -41,7 +41,7 @@ data:
       elasticsearch {
         hosts => ["elasticsearch-master:9200"]
         manage_template => false
-        index => "fluent-bit-NAMESPACE-%{+YYYY.MM.dd}"
+        index => "fluent-bit-%{+YYYY.MM.dd}-NAMESPACE"
         user => "REP_ES_USER"
         password => "REP_ES_PASS"
       }

@@ -95,7 +95,7 @@ class NodePoolDep:
         retry = 800
         interval = 10
         ut.exec_wait(
-            self.gcloud_delete.format(project_name=self.project_name , pool_name=self.pool_name,
+            self.gcloud_delete.format(project_name=self.project_name, pool_name=self.pool_name,
                                       cluster_name=self.cluster_name, zone=self.zone),
             retry=retry, interval=interval
         )

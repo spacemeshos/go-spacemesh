@@ -1,5 +1,4 @@
 import json
-from os import _exit
 import requests
 import time
 
@@ -9,7 +8,8 @@ import tests.utils as ut
 
 
 SHIPPER = "fluent-bit"
-INDX = SHIPPER+"-{namespace}-{index_date}"
+# correlates with logstash index format (under pipline-config.yml)
+INDX = SHIPPER+"-{index_date}-{namespace}"
 DMP_CMD = "elasticdump --input=http://{es_input_user}:{es_input_pass}@{es_ip}:9200/{index} " \
           "--output={file_name}.json --type={type} --limit={limit} --concurrency=50"
 REST_CMD = "elasticdump --input={file_name}.json --concurrency=50 " \
@@ -58,6 +58,15 @@ def elasticdump_direct(namespace, index_date, limit=500):
 
 
 def es_reindex(namespace, index_date, port=9200, timeout=1000):
+    """
+    reindexing local ES data to the main ES server
+
+    :param namespace: string, namespace name
+    :param index_date: string, date of the index creation
+    :param port: int, local ES port
+    :param timeout: int, dumping timeout
+    :return: boolean, True if succeeded False if failed
+    """
     indx = INDX.format(namespace=namespace, index_date=index_date)
     try:
         es_ip = ES(namespace).es_ip
@@ -93,7 +102,7 @@ def es_reindex(namespace, index_date, port=9200, timeout=1000):
         _, time_waiting = wait_for_dump_to_end(es_ip, cnf.MAIN_ES_IP, indx)
         print(f"total time waiting:", time_waiting)
     except Exception as e:
-        print(e)
+        print(f"got an exception while waiting for dumping to be done: {e}")
         return False
     return True
 
