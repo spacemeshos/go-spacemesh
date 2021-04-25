@@ -2,6 +2,7 @@ package activation
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"sort"
 	"sync"
@@ -92,7 +93,7 @@ type NetMock struct {
 	atxDb            atxDBProvider
 }
 
-func (n *NetMock) Broadcast(_ string, d []byte) error {
+func (n *NetMock) Broadcast(_ context.Context, _ string, d []byte) error {
 	n.lastTransmission = d
 	go n.hookToAtxPool(d)
 	return nil
@@ -192,7 +193,7 @@ type FaultyNetMock struct {
 	retErr bool
 }
 
-func (n *FaultyNetMock) Broadcast(_ string, d []byte) error {
+func (n *FaultyNetMock) Broadcast(_ context.Context, _ string, d []byte) error {
 	n.bt = d
 	if n.retErr {
 		return fmt.Errorf("faulty")
@@ -324,7 +325,7 @@ func publishAtx(b *Builder, meshLayer types.LayerID, clockEpoch types.EpochID, b
 		return NewNIPSTWithChallenge(challenge, poetBytes), nil
 	}
 	layerClockMock.currentLayer = clockEpoch.FirstLayer() + 3
-	err = b.PublishActivationTx()
+	err = b.PublishActivationTx(context.TODO())
 	nipstBuilderMock.buildNipstFunc = nil
 	return net.lastTransmission != nil, builtNipst, err
 }
@@ -705,7 +706,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	setTotalWeightInCache(t, defaultTotalWeight)
 
 	layerClockMock.currentLayer = types.EpochID(1).FirstLayer() + 3
-	err = b.PublishActivationTx()
+	err = b.PublishActivationTx(context.TODO())
 	assert.EqualError(t, err, "target epoch has passed")
 
 	// test load in correct epoch
@@ -713,7 +714,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	err = b.loadChallenge()
 	assert.NoError(t, err)
 	layers.latestLayer = 22
-	err = b.PublishActivationTx()
+	err = b.PublishActivationTx(context.TODO())
 	assert.NoError(t, err)
 	act := newActivationTx(b.nodeID, 2, atx.ID(), atx.ID(), atx.PubLayerID+10, 101, 1, 0, coinbase, npst2)
 	err = b.SignAtx(act)
@@ -731,7 +732,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	err = b.loadChallenge()
 	assert.NoError(t, err)
 	layerClockMock.currentLayer = types.EpochID(4).FirstLayer() + 3
-	err = b.PublishActivationTx()
+	err = b.PublishActivationTx(context.TODO())
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
 	assert.EqualError(t, err, "target epoch has passed")
 	assert.True(t, db.hadNone)
@@ -774,28 +775,28 @@ func TestStartPost(t *testing.T) {
 	// Attempt to initialize with invalid space.
 	// This test verifies that the params are being set in the post client.
 	assert.Nil(t, builder.commitment)
-	err = builder.StartPost(coinbase2, drive, 1000)
+	err = builder.StartPost(context.TODO(), coinbase2, drive, 1000)
 	assert.EqualError(t, err, "space (1000) must be a power of 2")
 	assert.Nil(t, builder.commitment)
 	assert.Equal(t, postProver.Cfg().SpacePerUnit, uint64(1000))
 
 	// Attempt to initialize again
 	assert.Nil(t, builder.commitment)
-	err = builder.StartPost(coinbase2, drive, 1024)
+	err = builder.StartPost(context.TODO(), coinbase2, drive, 1024)
 	assert.EqualError(t, err, "already started")
 	assert.Nil(t, builder.commitment)
 
 	// Reinitialize.
 	builder = NewBuilder(bc, id, 0, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder2"))
 	assert.Nil(t, builder.commitment)
-	err = builder.StartPost(coinbase2, drive, 1024)
+	err = builder.StartPost(context.TODO(), coinbase2, drive, 1024)
 	assert.NoError(t, err)
 	time.Sleep(100 * time.Millisecond) // Introducing a small delay since the procedure is async.
 	assert.NotNil(t, builder.commitment)
 	assert.Equal(t, postProver.Cfg().SpacePerUnit, uint64(1024))
 
 	// Attempt to initialize again.
-	err = builder.StartPost(coinbase2, drive, 1024)
+	err = builder.StartPost(context.TODO(), coinbase2, drive, 1024)
 	assert.EqualError(t, err, "already initialized")
 	assert.NotNil(t, builder.commitment)
 
@@ -803,12 +804,12 @@ func TestStartPost(t *testing.T) {
 	// and so will result in running the execution phase instead of the initialization phase.
 	// This test verifies that a call to StartPost with a different space param will return an error.
 	execBuilder := NewBuilder(bc, id, 0, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
-	err = execBuilder.StartPost(coinbase2, drive, 2048)
+	err = execBuilder.StartPost(context.TODO(), coinbase2, drive, 2048)
 	assert.EqualError(t, err, "config mismatch")
 
 	// Call StartPost with the correct space param.
 	assert.Nil(t, execBuilder.commitment)
-	err = execBuilder.StartPost(coinbase2, drive, 1024)
+	err = execBuilder.StartPost(context.TODO(), coinbase2, drive, 1024)
 	time.Sleep(100 * time.Millisecond)
 	assert.NoError(t, err)
 	assert.NotNil(t, execBuilder.commitment)
@@ -908,7 +909,7 @@ func TestActivationDB_FetchAtxReferences(t *testing.T) {
 	atxList := []*types.ActivationTx{atx1, atx2, atx3, atx4, atx5}
 
 	for _, atx := range atxList {
-		r.NoError(activationDb.FetchAtxReferences(atx, fetcher))
+		r.NoError(activationDb.FetchAtxReferences(context.TODO(), atx, fetcher))
 	}
 
 	expected := map[types.ATXID]int{

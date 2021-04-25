@@ -93,7 +93,7 @@ type messageBuilder struct {
 // newMessageBuilder returns a new, empty message builder.
 // One should not assume any values are pre-set.
 func newMessageBuilder() *messageBuilder {
-	m := &messageBuilder{&Msg{&Message{}, nil}, &innerMessage{}}
+	m := &messageBuilder{&Msg{Message: &Message{}, PubKey: nil}, &innerMessage{}}
 	m.msg.InnerMsg = m.inner
 
 	return m

@@ -37,7 +37,7 @@ func (n networkSessionImpl) ID() p2pcrypto.PublicKey {
 	return n.peerPubkey
 }
 
-// Encrypt encrypts in binary data with the session's sym enc key.
+// SealMessage encrypts in binary data with the session's sym enc key.
 func (n networkSessionImpl) SealMessage(message []byte) []byte {
 	if n.sharedSecret == nil {
 		log.Panic("tried to seal a message before initializing session with a shared secret")
@@ -45,7 +45,7 @@ func (n networkSessionImpl) SealMessage(message []byte) []byte {
 	return n.sharedSecret.Seal(message)
 }
 
-// Decrypt decrypts in binary data that was encrypted with the session's sym enc key.
+// OpenMessage decrypts in binary data that was encrypted with the session's sym enc key.
 func (n networkSessionImpl) OpenMessage(boxedMessage []byte) (message []byte, err error) {
 	if n.sharedSecret == nil {
 		log.Panic("tried to open a message before initializing session with a shared secret")

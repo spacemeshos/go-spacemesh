@@ -1,6 +1,7 @@
 package mesh
 
 import (
+	"context"
 	"math/big"
 	"strconv"
 	"testing"
@@ -224,7 +225,7 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	// this should be played until numOfLayers -1 if we want to compare states
 	for i := 0; i < numOfLayers-1; i++ {
 		blockIds := copyLayer(t, mesh, mesh2, atxDB2, types.LayerID(i))
-		mesh2.HandleValidatedLayer(types.LayerID(i), blockIds)
+		mesh2.HandleValidatedLayer(context.TODO(), types.LayerID(i), blockIds)
 	}
 	// test states are the same when one input is from tortoise and the other from hare
 	assert.Equal(t, s.Txs, s2.Txs)
@@ -252,15 +253,15 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	// this should be played until numOfLayers -1 if we want to compare states
 	for i := 0; i < numOfLayers-3; i++ {
 		blockIds := copyLayer(t, mesh, mesh3, atxDB3, types.LayerID(i))
-		mesh3.HandleValidatedLayer(types.LayerID(i), blockIds)
+		mesh3.HandleValidatedLayer(context.TODO(), types.LayerID(i), blockIds)
 	}
 	s3Len := len(s3.Txs)
 	blockIds := copyLayer(t, mesh, mesh3, atxDB3, types.LayerID(numOfLayers-2))
-	mesh3.HandleValidatedLayer(types.LayerID(numOfLayers-2), blockIds)
+	mesh3.HandleValidatedLayer(context.TODO(), types.LayerID(numOfLayers-2), blockIds)
 	assert.Equal(t, s3Len, len(s3.Txs))
 
 	blockIds = copyLayer(t, mesh, mesh3, atxDB3, types.LayerID(numOfLayers-3))
-	mesh3.HandleValidatedLayer(types.LayerID(numOfLayers-3), blockIds)
+	mesh3.HandleValidatedLayer(context.TODO(), types.LayerID(numOfLayers-3), blockIds)
 	assert.Equal(t, s.Txs, s3.Txs)
 }
 

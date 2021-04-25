@@ -1,6 +1,7 @@
 package eligibility
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	lru "github.com/hashicorp/golang-lru"
@@ -104,28 +105,28 @@ func TestOracle_BuildVRFMessage(t *testing.T) {
 	r := require.New(t)
 	o := Oracle{vrfMsgCache: newMockCacher(), Log: log.NewDefault(t.Name())}
 	o.beacon = &mockValueProvider{1, errFoo}
-	_, err := o.buildVRFMessage(types.LayerID(1), 1)
+	_, err := o.buildVRFMessage(context.TODO(), types.LayerID(1), 1)
 	r.Equal(errFoo, err)
 
 	o.beacon = &mockValueProvider{1, nil}
-	m, err := o.buildVRFMessage(1, 2)
+	m, err := o.buildVRFMessage(context.TODO(), 1, 2)
 	r.NoError(err)
 	m2, ok := o.vrfMsgCache.Get(buildKey(1, 2))
 	r.True(ok)
 	r.Equal(m, m2) // check same as in cache
 
 	// check not same for different round
-	m4, err := o.buildVRFMessage(1, 3)
+	m4, err := o.buildVRFMessage(context.TODO(), 1, 3)
 	r.NoError(err)
 	r.NotEqual(m, m4)
 
 	// check not same for different layer
-	m5, err := o.buildVRFMessage(2, 2)
+	m5, err := o.buildVRFMessage(context.TODO(), 2, 2)
 	r.NoError(err)
 	r.NotEqual(m, m5)
 
 	o.beacon = &mockValueProvider{5, nil} // set different value
-	m3, err := o.buildVRFMessage(1, 2)
+	m3, err := o.buildVRFMessage(context.TODO(), 1, 2)
 	r.NoError(err)
 	r.Equal(m, m3) // check same result (from cache)
 }
@@ -141,7 +142,7 @@ func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	for i := 0; i < total; i++ {
 		wg.Add(1)
 		go func(x int) {
-			_, err := o.buildVRFMessage(1, int32(x%10))
+			_, err := o.buildVRFMessage(context.TODO(), 1, int32(x%10))
 			r.NoError(err)
 			wg.Done()
 		}(i)
@@ -167,7 +168,7 @@ func TestOracle_CalcEligibility_ErrorFromVerifier(t *testing.T) {
 	o := defaultOracle(t)
 	o.vrfVerifier = buildVerifier(false, errFoo)
 
-	res, err := o.CalcEligibility(types.LayerID(1), 0, 1, types.NodeID{}, []byte{})
+	res, err := o.CalcEligibility(context.TODO(), types.LayerID(1), 0, 1, types.NodeID{}, []byte{})
 
 	r.EqualError(err, errFoo.Error())
 	r.Equal(uint16(0), res)
@@ -178,7 +179,7 @@ func TestOracle_CalcEligibility_ErrorFromBeacon(t *testing.T) {
 	o := defaultOracle(t)
 	o.beacon = &mockValueProvider{0, errFoo}
 
-	res, err := o.CalcEligibility(types.LayerID(1), 0, 1, types.NodeID{}, []byte{})
+	res, err := o.CalcEligibility(context.TODO(), types.LayerID(1), 0, 1, types.NodeID{}, []byte{})
 
 	r.EqualError(err, errFoo.Error())
 	r.Equal(uint16(0), res)
@@ -202,7 +203,7 @@ func TestOracle_CalcEligibility_ZeroTotalWeight(t *testing.T) {
 	o := defaultOracle(t)
 	o.getActiveSet = (&mockActiveSetProvider{0}).ActiveSet
 
-	res, err := o.CalcEligibility(types.LayerID(cfg.ConfidenceParam*2+11), 0, 1, types.NodeID{}, []byte{})
+	res, err := o.CalcEligibility(context.TODO(), types.LayerID(cfg.ConfidenceParam*2+11), 0, 1, types.NodeID{}, []byte{})
 
 	r.EqualError(err, "total weight is zero")
 	r.Equal(uint16(0), res)
@@ -242,7 +243,7 @@ func TestOracle_CalcEligibility(t *testing.T) {
 		r.Equal(64, n)
 		nodeID := types.NodeID{Key: pubkey}
 
-		res, err := o.CalcEligibility(types.LayerID(50), 1, committeeSize, nodeID, sig)
+		res, err := o.CalcEligibility(context.TODO(), types.LayerID(50), 1, committeeSize, nodeID, sig)
 		r.NoError(err)
 
 		valid, err := o.Validate(types.LayerID(50), 1, committeeSize, nodeID, sig, res)
@@ -369,7 +370,7 @@ func Test_BlsSignVerify(t *testing.T) {
 	o.vrfVerifier = BLS381.Verify2
 	o.vrfSigner = BLS381.NewBlsSigner(pr)
 	id := types.NodeID{Key: "my_key", VRFPublicKey: pu}
-	proof, err := o.Proof(50, 1)
+	proof, err := o.Proof(context.TODO(), 50, 1)
 	assert.NoError(t, err)
 
 	res, err := o.CalcEligibility(50, 1, 10, id, proof)
@@ -384,19 +385,19 @@ func Test_BlsSignVerify(t *testing.T) {
 func TestOracle_Proof(t *testing.T) {
 	o := defaultOracle(t)
 	o.beacon = &mockValueProvider{0, errMy}
-	sig, err := o.Proof(2, 3)
+	sig, err := o.Proof(context.TODO(), 2, 3)
 	assert.Nil(t, sig)
 	assert.EqualError(t, err, errMy.Error())
 
 	o.beacon = &mockValueProvider{0, nil}
 	o.vrfSigner = &mockSigner{nil, errMy}
-	sig, err = o.Proof(2, 3)
+	sig, err = o.Proof(context.TODO(), 2, 3)
 	assert.Nil(t, sig)
 	assert.EqualError(t, err, errMy.Error())
 
 	mySig := []byte{1, 2}
 	o.vrfSigner = &mockSigner{mySig, nil}
-	sig, err = o.Proof(2, 3)
+	sig, err = o.Proof(context.TODO(), 2, 3)
 	assert.Nil(t, err)
 	assert.Equal(t, mySig, sig)
 }

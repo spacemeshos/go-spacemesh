@@ -52,7 +52,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 
 	epochNumber := block.LayerIndex.GetEpoch()
 	if epochNumber == 0 {
-		v.log.With().Warning("skipping epoch 0 block validation.",
+		v.log.With().Warning("skipping epoch 0 block validation",
 			block.ID(), block.LayerIndex)
 		return true, nil
 	}

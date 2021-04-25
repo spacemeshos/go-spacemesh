@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -16,7 +17,7 @@ func (bo *hareOracle) IsIdentityActiveOnConsensusView(string, types.LayerID) (bo
 	return true, nil
 }
 
-func (bo *hareOracle) Validate(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
+func (bo *hareOracle) Validate(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
 	if eligibilityCount != 1 {
 		return false, nil
 	}
@@ -31,6 +32,6 @@ func (bo *hareOracle) CalcEligibility(layer types.LayerID, round int32, committe
 	return 0, err
 }
 
-func (bo *hareOracle) Proof(types.LayerID, int32) ([]byte, error) {
+func (bo *hareOracle) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
 	return []byte{}, nil
 }

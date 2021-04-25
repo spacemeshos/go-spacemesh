@@ -66,7 +66,7 @@ type UDPNet struct {
 	regNewRemoteConn []func(NewConnectionEvent)
 
 	clsMutex           sync.RWMutex
-	closingConnections []func(ConnectionWithErr)
+	closingConnections []func(context.Context, ConnectionWithErr)
 
 	incomingConn map[string]connWrapper
 
@@ -90,7 +90,7 @@ func NewUDPNet(config config.Config, localEntity node.LocalNode, log log.Log) (*
 }
 
 // SubscribeClosingConnections registers a callback for a new connection event. all registered callbacks are called before moving.
-func (n *UDPNet) SubscribeClosingConnections(f func(connection ConnectionWithErr)) {
+func (n *UDPNet) SubscribeClosingConnections(f func(ctx context.Context, connection ConnectionWithErr)) {
 	n.clsMutex.Lock()
 	n.closingConnections = append(n.closingConnections, f)
 	n.clsMutex.Unlock()
@@ -99,7 +99,7 @@ func (n *UDPNet) SubscribeClosingConnections(f func(connection ConnectionWithErr
 func (n *UDPNet) publishClosingConnection(connection ConnectionWithErr) {
 	n.clsMutex.RLock()
 	for _, f := range n.closingConnections {
-		f(connection)
+		f(context.TODO(), connection)
 	}
 	n.clsMutex.RUnlock()
 }
@@ -120,10 +120,11 @@ func (n *UDPNet) publishNewRemoteConnectionEvent(conn Connection, node *node.Inf
 }
 
 // Start will start reading messages from the udp socket and pass them up the channels
-func (n *UDPNet) Start(listener UDPListener) {
+func (n *UDPNet) Start(ctx context.Context, listener UDPListener) {
 	n.conn = listener
-	n.logger.Info("Started UDP server listening for messages on udp:%v", listener.LocalAddr().String())
-	go n.listenToUDPNetworkMessages(listener)
+	n.logger.WithContext(ctx).With().Info("started udp server listening for messages",
+		log.String("udpaddr", listener.LocalAddr().String()))
+	go n.listenToUDPNetworkMessages(ctx, listener)
 }
 
 // LocalAddr returns the local listening addr, will panic before running Start. or if start errored
@@ -170,7 +171,7 @@ func (n *UDPNet) IncomingMessages() chan IncomingMessageEvent {
 	return n.msgChan
 }
 
-// Dial creates a Connection interface which is wrapped around a udp socket with a session and start listening on messages form it.
+// Dial creates a Connection interface which is wrapped around a udp socket with a session and start listening on messages from it.
 // it uses the `connect` syscall
 func (n *UDPNet) Dial(ctx context.Context, address net.Addr, remotePublicKey p2pcrypto.PublicKey) (Connection, error) {
 	udpcon, err := net.DialUDP("udp", nil, address.(*net.UDPAddr))
@@ -183,7 +184,7 @@ func (n *UDPNet) Dial(ctx context.Context, address net.Addr, remotePublicKey p2p
 	conn := newMsgConnection(udpcon, n, remotePublicKey, ns, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger)
 
 	// The connection is automatically closed when there's nothing more to read, no need to close it here
-	go conn.beginEventProcessing()
+	go conn.beginEventProcessing(log.WithNewSessionID(ctx, log.String("netproto", "udp")))
 	return conn, nil
 }
 
@@ -193,10 +194,13 @@ func (n *UDPNet) HandlePreSessionIncomingMessage(c Connection, msg []byte) error
 }
 
 // EnqueueMessage pushes an incoming message event into the queue
-func (n *UDPNet) EnqueueMessage(ime IncomingMessageEvent) {
+func (n *UDPNet) EnqueueMessage(ctx context.Context, ime IncomingMessageEvent) {
 	select {
 	case n.msgChan <- ime:
-		n.logger.With().Debug("recv udp message", log.String("from", ime.Conn.RemotePublicKey().String()), log.String("fromaddr", ime.Conn.RemoteAddr().String()), log.Int("len", len(ime.Message)))
+		n.logger.WithContext(ctx).With().Debug("recv udp message",
+			log.String("from", ime.Conn.RemotePublicKey().String()),
+			log.String("fromaddr", ime.Conn.RemoteAddr().String()),
+			log.Int("len", len(ime.Message)))
 	case <-n.shutdown:
 		return
 	}
@@ -208,7 +212,7 @@ func (n *UDPNet) NetworkID() int8 {
 }
 
 // main listening loop
-func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
+func (n *UDPNet) listenToUDPNetworkMessages(ctx context.Context, listener net.PacketConn) {
 	n.logger.Info("listening for incoming udp connections")
 
 	buf := make([]byte, maxMessageSize) // todo: buffer pool ?
@@ -228,7 +232,8 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 
 		if n.config.MsgSizeLimit != config.UnlimitedMsgSize && size > n.config.MsgSizeLimit {
 			n.logger.With().Error("listenToUDPNetworkMessages: message is too big",
-				log.Int("limit", n.config.MsgSizeLimit), log.Int("actual", size))
+				log.Int("limit", n.config.MsgSizeLimit),
+				log.Int("actual", size))
 			continue
 		}
 
@@ -241,26 +246,32 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 			_, pk, err := p2pcrypto.ExtractPubkey(copybuf)
 
 			if err != nil {
-				n.logger.Warning("error can't extract public key from udp message. (Addr=%v), err=%v", addr.String(), err)
+				n.logger.With().Warning("error can't extract public key from udp message",
+					log.String("addr", addr.String()),
+					log.Err(err))
 				continue
 			}
 
 			ns := n.cache.GetOrCreate(pk)
 
 			if ns == nil {
-				n.logger.Warning("could not create session with %v:%v skipping message..", addr.String(), pk.String())
+				n.logger.With().Warning("could not create session, skipping message",
+					log.String("addr", addr.String()),
+					log.String("pk", pk.String()))
 				continue
 			}
 
 			host, port, err := net.SplitHostPort(addr.String())
 			if err != nil {
-				n.logger.Warning("could not parse address skipping message from  %v %s", addr.String(), pk)
+				n.logger.With().Warning("could not parse address, skipping message",
+					log.String("addr", addr.String()),
+					log.String("pk", pk.String()))
 				continue
 			}
 
 			iport, err := strconv.Atoi(port)
 			if err != nil {
-				n.logger.Warning("failed converting port to int %v", port)
+				n.logger.With().Warning("failed converting port to int", log.String("port", port))
 				continue
 			}
 
@@ -277,7 +288,7 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 			n.addConn(addr, conn, mconn)
 
 			// mconn will be closed when the connection is evicted (or at shutdown)
-			go mconn.beginEventProcessing()
+			go mconn.beginEventProcessing(context.TODO())
 		}
 
 		if err := conn.PushIncoming(copybuf); err != nil {

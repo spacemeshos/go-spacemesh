@@ -146,15 +146,14 @@ func (db *LDBDatabase) Close() {
 		errc := make(chan error)
 		db.quitChan <- errc
 		if err := <-errc; err != nil {
-			db.log.Error("Metrics collection failed", "err", err)
+			db.log.With().Error("metrics collection failed", log.Err(err))
 		}
 		db.quitChan = nil
 	}
-	err := db.db.Close()
-	if err == nil {
-		db.log.With().Info("database closed", log.String("file", db.fn))
-	} else {
+	if err := db.db.Close(); err != nil {
 		db.log.With().Error("failed to close database", log.String("file", db.fn), log.Err(err))
+	} else {
+		db.log.With().Info("database closed", log.String("file", db.fn))
 	}
 }
 

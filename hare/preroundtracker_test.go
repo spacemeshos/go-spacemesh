@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -47,7 +48,7 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 
 	m1 := BuildPreRoundMsg(verifier, s)
 	tracker := newPreRoundTracker(lowThresh10, lowThresh10, log.AppLog)
-	tracker.OnPreRound(m1)
+	tracker.OnPreRound(context.TODO(), m1)
 	assert.Equal(t, 1, len(tracker.preRound))      // one msg
 	assert.Equal(t, 2, len(tracker.tracker.table)) // two Values
 	g, _ := tracker.preRound[verifier.PublicKey().String()]
@@ -56,13 +57,13 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	nSet := NewSetFromValues(value3, value4)
 	m2 := BuildPreRoundMsg(verifier, nSet)
 	m2.InnerMsg.EligibilityCount = 2
-	tracker.OnPreRound(m2)
+	tracker.OnPreRound(context.TODO(), m2)
 	h, _ := tracker.preRound[verifier.PublicKey().String()]
 	assert.True(t, h.Equals(s.Union(nSet)))
 
 	interSet := NewSetFromValues(value1, value2, value5)
 	m3 := BuildPreRoundMsg(verifier, interSet)
-	tracker.OnPreRound(m3)
+	tracker.OnPreRound(context.TODO(), m3)
 	h, _ = tracker.preRound[verifier.PublicKey().String()]
 	assert.True(t, h.Equals(s.Union(nSet).Union(interSet)))
 	assert.EqualValues(t, 1, tracker.tracker.CountStatus(value1))
@@ -79,7 +80,7 @@ func TestPreRoundTracker_CanProveValueAndSet(t *testing.T) {
 	for i := 0; i < lowThresh10; i++ {
 		assert.False(t, tracker.CanProveSet(s))
 		m1 := BuildPreRoundMsg(generateSigning(t), s)
-		tracker.OnPreRound(m1)
+		tracker.OnPreRound(context.TODO(), m1)
 	}
 
 	assert.True(t, tracker.CanProveValue(value1))
@@ -92,9 +93,9 @@ func TestPreRoundTracker_UpdateSet(t *testing.T) {
 	s1 := NewSetFromValues(value1, value2, value3)
 	s2 := NewSetFromValues(value1, value2, value4)
 	prMsg1 := BuildPreRoundMsg(generateSigning(t), s1)
-	tracker.OnPreRound(prMsg1)
+	tracker.OnPreRound(context.TODO(), prMsg1)
 	prMsg2 := BuildPreRoundMsg(generateSigning(t), s2)
-	tracker.OnPreRound(prMsg2)
+	tracker.OnPreRound(context.TODO(), prMsg2)
 	assert.True(t, tracker.CanProveValue(value1))
 	assert.True(t, tracker.CanProveValue(value2))
 	assert.False(t, tracker.CanProveSet(s1))
@@ -106,10 +107,10 @@ func TestPreRoundTracker_OnPreRound2(t *testing.T) {
 	s1 := NewSetFromValues(value1)
 	verifier := generateSigning(t)
 	prMsg1 := BuildPreRoundMsg(verifier, s1)
-	tracker.OnPreRound(prMsg1)
+	tracker.OnPreRound(context.TODO(), prMsg1)
 	assert.Equal(t, 1, len(tracker.preRound))
 	prMsg2 := BuildPreRoundMsg(verifier, s1)
-	tracker.OnPreRound(prMsg2)
+	tracker.OnPreRound(context.TODO(), prMsg2)
 	assert.Equal(t, 1, len(tracker.preRound))
 }
 
@@ -117,9 +118,9 @@ func TestPreRoundTracker_FilterSet(t *testing.T) {
 	tracker := newPreRoundTracker(2, 2, log.AppLog)
 	s1 := NewSetFromValues(value1, value2)
 	prMsg1 := BuildPreRoundMsg(generateSigning(t), s1)
-	tracker.OnPreRound(prMsg1)
+	tracker.OnPreRound(context.TODO(), prMsg1)
 	prMsg2 := BuildPreRoundMsg(generateSigning(t), s1)
-	tracker.OnPreRound(prMsg2)
+	tracker.OnPreRound(context.TODO(), prMsg2)
 	set := NewSetFromValues(value1, value2, value3)
 	tracker.FilterSet(set)
 	assert.True(t, set.Equals(s1))

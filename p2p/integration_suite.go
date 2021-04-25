@@ -56,7 +56,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 		if its.BeforeHook != nil {
 			its.BeforeHook(i, boot[i])
 		}
-		_ = boot[i].Start() // ignore error ?
+		_ = boot[i].Start(context.TODO()) // ignore error ?
 
 		if its.AfterHook != nil {
 			its.AfterHook(i, boot[i])
@@ -101,7 +101,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 				its.BeforeHook(i, swarm[i])
 			}
 
-			err := swarm[i].Start() // ignore error?
+			err := swarm[i].Start(context.TODO()) // ignore error?
 			if err != nil {
 				finchan <- err
 				return
@@ -122,7 +122,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 	testLog("Launched all processes 🎉, now waiting...")
 
 	i := 0
-lop:
+loop:
 	for {
 		select {
 		case err := <-finchan:
@@ -131,7 +131,7 @@ lop:
 				its.T().Fatal(err)
 			}
 			if i == len(swarm) {
-				break lop
+				break loop
 			}
 		case <-totalTimeout.C:
 			its.T().Fatal("timeout")
