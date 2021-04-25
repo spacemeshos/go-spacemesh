@@ -725,6 +725,8 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, blockIds 
 	logger.With().Info("wait for layer blocks",
 		log.Int("num_blocks", len(blockIds)),
 		types.BlockIdsField(blockIds))
+
+	// LANE: need a timeout here
 	select {
 	case <-s.exit:
 		return nil, fmt.Errorf("received interupt")

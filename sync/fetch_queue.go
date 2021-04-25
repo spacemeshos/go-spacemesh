@@ -83,11 +83,10 @@ func (fq *fetchQueue) work(ctx context.Context) {
 		log.String("queue", fmt.Sprint(fq.queue)),
 		log.String("queue_name", fq.name))
 	for i := 0; i < parallelWorkers; i++ {
-		go func(j int) {
+		go func(j int, ctxLocal context.Context) {
 			logger := logger.WithFields(log.Int("worker_num", j))
 			logger.Info("worker running work")
 			for out := range output {
-				ctxLocal := ctx
 				loggerLocal := logger
 				loggerLocal.Info("new batch out of queue")
 				if out == nil {
@@ -120,7 +119,7 @@ func (fq *fetchQueue) work(ctx context.Context) {
 				fq.handleFetch(ctxLocal, bjb)
 				loggerLocal.Info("done fetching, going to next batch")
 			}
-		}(i)
+		}(i, ctx)
 	}
 }
 
