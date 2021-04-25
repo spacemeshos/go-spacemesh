@@ -84,9 +84,8 @@ func (fq *fetchQueue) work(ctx context.Context) {
 	wg := sync.WaitGroup{}
 	wg.Add(parallelWorkers)
 	for i := 0; i < parallelWorkers; i++ {
-		go func(j int) {
-			ctxLocal := log.WithNewSessionID(ctx, log.Int("worker_num", j))
-			logger := fq.WithContext(ctxLocal)
+		go func(j int, ctxLocal context.Context) {
+			logger := fq.WithContext(ctx).WithFields(log.Int("worker_num", j))
 			logger.Info("worker running work")
 			for out := range output {
 				loggerLocal := logger
@@ -121,7 +120,7 @@ func (fq *fetchQueue) work(ctx context.Context) {
 				fq.handleFetch(ctxLocal, bjb)
 				loggerLocal.Info("done fetching, going to next batch")
 			}
-		}(i)
+		}(i, ctx)
 	}
 }
 

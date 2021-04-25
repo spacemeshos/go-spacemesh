@@ -674,6 +674,8 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, blockIds 
 	}
 
 	logger.With().Info("wait for layer blocks", log.Int("num_blocks", len(blockIds)))
+
+	timeout := time.After(s.GetTimeout())
 	select {
 	case <-s.exit:
 		return nil, fmt.Errorf("received interrupt")
@@ -681,6 +683,8 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, blockIds 
 		if !result {
 			return nil, fmt.Errorf("could not get all blocks for layer %v", layerID)
 		}
+	case <-timeout:
+		return nil, fmt.Errorf("timed out waiting for results for layer %v", layerID)
 	}
 
 	blocks, err := s.LayerBlocks(layerID)
@@ -775,8 +779,7 @@ func (s *Syncer) fetchRefBlock(ctx context.Context, block *types.Block) error {
 	_, err := s.GetBlock(*block.RefBlock)
 	if err != nil {
 		s.With().Info("fetching block", *block.RefBlock)
-		fetched := s.fetchBlock(ctx, *block.RefBlock)
-		if !fetched {
+		if ok := s.fetchBlock(ctx, *block.RefBlock); !ok {
 			return fmt.Errorf("failed to fetch ref block %v", *block.RefBlock)
 		}
 	}
@@ -807,8 +810,7 @@ func (s *Syncer) fetchAllReferencedAtxs(ctx context.Context, blk *types.Block) e
 
 func (s *Syncer) fetchBlockDataForValidation(ctx context.Context, blk *types.Block) error {
 	if blk.RefBlock != nil {
-		err := s.fetchRefBlock(ctx, blk)
-		if err != nil {
+		if err := s.fetchRefBlock(ctx, blk); err != nil {
 			return err
 		}
 	}
@@ -918,8 +920,8 @@ func (s *Syncer) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx
 
 func (s *Syncer) fetchBlock(ctx context.Context, ID types.BlockID) bool {
 	ch := make(chan bool, 1)
-	defer close(ch)
 	foo := func(ctx context.Context, res bool) error {
+		defer close(ch)
 		s.WithContext(ctx).With().Info("single block fetched",
 			ID,
 			log.Bool("result", res))
@@ -935,7 +937,13 @@ func (s *Syncer) fetchBlock(ctx context.Context, ID types.BlockID) bool {
 		return true
 	}
 
-	return <-ch
+	timeout := time.After(s.GetTimeout())
+	select {
+	case result := <-ch:
+		return result
+	case <-timeout:
+		return false
+	}
 }
 
 // FetchBlock fetches a single block from peers

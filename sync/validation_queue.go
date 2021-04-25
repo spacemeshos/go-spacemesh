@@ -53,8 +53,7 @@ func newValidationQueue(ctx context.Context, srvr networker, conf Configuration,
 		syncer:        sy,
 	}
 	vq.handleFetch = vq.handleBlocks
-	go vq.work(ctx)
-
+	go vq.work(log.WithNewSessionID(ctx))
 	return vq
 }
 
