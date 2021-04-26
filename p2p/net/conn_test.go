@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -21,7 +22,7 @@ func TestSendReceiveMessage(t *testing.T) {
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
-	go conn.beginEventProcessing()
+	go conn.beginEventProcessing(context.TODO())
 	msg := "hello"
 	err := conn.SendSock([]byte(msg))
 	assert.NoError(t, err)
@@ -39,9 +40,9 @@ func TestSendMessage(t *testing.T) {
 	rPub := p2pcrypto.NewRandomPubkey()
 	rwcam.writeWaitChan = make(chan []byte)
 	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
-	go conn.beginEventProcessing()
+	go conn.beginEventProcessing(context.TODO())
 	msg := "hello"
-	err := conn.Send([]byte(msg))
+	err := conn.Send(context.TODO(), []byte(msg))
 	assert.NoError(t, err)
 	select {
 	case <-rwcam.writeWaitChan:
@@ -61,12 +62,12 @@ func TestReceiveError(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	netw.SubscribeClosingConnections(func(closedConn ConnectionWithErr) {
-		assert.Equal(t, conn.id, closedConn.Conn.ID())
+	netw.SubscribeClosingConnections(func(ctx context.Context, closedConn ConnectionWithErr) {
+		assert.Equal(t, conn.ID(), closedConn.Conn.ID())
 		wg.Done()
 	})
 
-	go conn.beginEventProcessing()
+	go conn.beginEventProcessing(context.TODO())
 
 	rwcam.SetReadResult([]byte{}, fmt.Errorf("fail"))
 	wg.Wait()
@@ -78,7 +79,7 @@ func TestSendError(t *testing.T) {
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
-	go conn.beginEventProcessing()
+	go conn.beginEventProcessing(context.TODO())
 
 	rwcam.SetWriteResult(fmt.Errorf("fail"))
 	msg := "hello"
@@ -93,7 +94,7 @@ func TestPreSessionMessage(t *testing.T) {
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, nil, msgSizeLimit, time.Second, netw.logger)
 	rwcam.SetReadResult([]byte{3, 1, 1, 1}, nil)
-	err := conn.setupIncoming(time.Millisecond)
+	err := conn.setupIncoming(context.TODO(), time.Millisecond)
 	require.NoError(t, err)
 	assert.Equal(t, rwcam.CloseCount(), 0)
 	require.Equal(t, int32(1), netw.PreSessionCount())
@@ -105,7 +106,7 @@ func TestPreSessionMessageAfterSession(t *testing.T) {
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, nil, msgSizeLimit, time.Second, netw.logger)
 	rwcam.SetReadResult([]byte{3, 1, 1, 1}, nil)
-	go conn.beginEventProcessing()
+	go conn.beginEventProcessing(context.TODO())
 	time.Sleep(50 * time.Millisecond)
 	assert.Equal(t, rwcam.CloseCount(), 1)
 }
@@ -116,7 +117,7 @@ func TestConn_Limit(t *testing.T) {
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, nil, 1, time.Second, netw.logger)
 	rwcam.SetReadResult([]byte{5, 1, 2, 3, 4, 5, 6}, nil)
-	err := conn.setupIncoming(time.Second)
+	err := conn.setupIncoming(context.TODO(), time.Second)
 	assert.EqualError(t, err, ErrMsgExceededLimit.Error())
 }
 
@@ -127,7 +128,7 @@ func TestPreSessionError(t *testing.T) {
 	conn := newConnection(rwcam, netw, rPub, nil, msgSizeLimit, time.Second, netw.logger)
 	netw.SetPreSessionResult(fmt.Errorf("fail"))
 	rwcam.SetReadResult(append([]byte{1}, []byte("0")...), nil)
-	err := conn.setupIncoming(time.Second)
+	err := conn.setupIncoming(context.TODO(), time.Second)
 	require.Error(t, err)
 }
 
@@ -139,12 +140,12 @@ func TestErrClose(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	netw.SubscribeClosingConnections(func(closedConn ConnectionWithErr) {
-		assert.Equal(t, conn.id, closedConn.Conn.ID())
+	netw.SubscribeClosingConnections(func(ctx context.Context, closedConn ConnectionWithErr) {
+		assert.Equal(t, conn.ID(), closedConn.Conn.ID())
 		wg.Done()
 	})
 
-	go conn.beginEventProcessing()
+	go conn.beginEventProcessing(context.TODO())
 	rwcam.SetReadResult(nil, errors.New("not working"))
 	wg.Wait()
 	assert.Equal(t, 1, rwcam.CloseCount())
@@ -155,13 +156,13 @@ func TestClose(t *testing.T) {
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
 	c := make(chan struct{}, 1)
-	netw.SubscribeClosingConnections(func(connection ConnectionWithErr) {
+	netw.SubscribeClosingConnections(func(ctx context.Context, connection ConnectionWithErr) {
 		c <- struct{}{}
 	})
 
 	rwcam.SetWriteResult(errors.New("x"))
 	rwcam.SetReadResult(nil, errors.New("x"))
-	go conn.beginEventProcessing()
+	go conn.beginEventProcessing(context.TODO())
 	//conn.Close()
 	//err := conn.Send([]byte{3, 1,2,3})
 	//assert.NoError(t, err)
@@ -177,7 +178,7 @@ func TestDoubleClose(t *testing.T) {
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
 
-	go conn.beginEventProcessing()
+	go conn.beginEventProcessing(context.TODO())
 	conn.Close()
 	time.Sleep(time.Millisecond * 10)
 	assert.Equal(t, 1, rwcam.CloseCount())
