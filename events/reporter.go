@@ -42,8 +42,17 @@ func ReportTxWithValidity(tx *types.Transaction, valid bool) {
 		Valid:       valid,
 	}
 	if reporter != nil {
-		reporter.channelTransaction <- txWithValidity
-		log.Debug("reported tx on channelTransaction: %v", txWithValidity)
+		if reporter.blocking {
+			reporter.channelTransaction <- txWithValidity
+			log.Debug("reported tx on channelTransaction: %v", txWithValidity)
+		} else {
+			select {
+			case reporter.channelTransaction <- txWithValidity:
+				log.Debug("reported tx on channelTransaction: %v", txWithValidity)
+			default:
+				log.Debug("not reporting tx as no one is listening: %v", txWithValidity)
+			}
+		}
 	}
 }
 
@@ -68,8 +77,17 @@ func ReportNewActivation(activation *types.ActivationTx) {
 			log.Error("error attempting to report activation: unable to encode activation")
 			return
 		}
-		reporter.channelActivation <- activation
-		log.With().Debug("reported activation", activation.Fields(len(innerBytes))...)
+		if reporter.blocking {
+			reporter.channelActivation <- activation
+			log.With().Debug("reported activation", activation.Fields(len(innerBytes))...)
+		} else {
+			select {
+			case reporter.channelActivation <- activation:
+				log.With().Debug("reported activation", activation.Fields(len(innerBytes))...)
+			default:
+				log.With().Debug("not reporting activation as no one is listening", activation.Fields(len(innerBytes))...)
+			}
+		}
 	}
 }
 
