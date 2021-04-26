@@ -390,7 +390,8 @@ func TestOracle_actives(t *testing.T) {
 
 func TestOracle_concurrentActives(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, genActive, hDist, cfg, log.NewDefault(t.Name()))
+	types.SetLayersPerEpoch(defLayersPerEpoch)
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 10}, nil, nil, 5, genActive, hDist, cfg, log.NewDefault(t.Name()))
 
 	mc := newMockCacher()
 	o.activesCache = mc
