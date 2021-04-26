@@ -1,6 +1,7 @@
 package weakcoin
 
 import (
+	"context"
 	"math/rand"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -35,7 +36,7 @@ func (m RandomMock) Get(epoch types.EpochID, round types.RoundID) bool {
 }
 
 // HandleSerializedMessage handles serialized message.
-func (m RandomMock) HandleSerializedMessage(data service.GossipMessage, sync service.Fetcher) {
+func (m RandomMock) HandleSerializedMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
 	return
 }
 
@@ -63,6 +64,6 @@ func (m ValueMock) Get(epoch types.EpochID, round types.RoundID) bool {
 }
 
 // HandleSerializedMessage handles serialized message.
-func (m ValueMock) HandleSerializedMessage(data service.GossipMessage, sync service.Fetcher) {
+func (m ValueMock) HandleSerializedMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
 	return
 }

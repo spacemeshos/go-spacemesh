@@ -1,6 +1,7 @@
 package tortoisebeacon
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -34,7 +35,7 @@ type epochATXGetter interface {
 }
 
 type broadcaster interface {
-	Broadcast(channel string, data []byte) error
+	Broadcast(ctx context.Context, channel string, data []byte) error
 }
 
 type tortoiseBeaconDB interface {
@@ -418,7 +419,8 @@ func (tb *TortoiseBeacon) runProposalPhase(epoch types.EpochID) error {
 	tb.Log.With().Debug("Serialized proposal message",
 		log.String("message", string(serializedMessage)))
 
-	if err := tb.net.Broadcast(TBProposalProtocol, serializedMessage); err != nil {
+	// TODO(nkryuchkov): pass correct context
+	if err := tb.net.Broadcast(context.TODO(), TBProposalProtocol, serializedMessage); err != nil {
 		return fmt.Errorf("broadcast proposal message: %w", err)
 	}
 
@@ -472,7 +474,8 @@ func (tb *TortoiseBeacon) sendVote(epoch types.EpochID, round types.RoundID, vot
 	tb.Log.With().Debug("Serialized voting message",
 		log.String("message", string(serializedMessage)))
 
-	if err := tb.net.Broadcast(TBVotingProtocol, serializedMessage); err != nil {
+	// TODO(nkryuchkov): pass correct context
+	if err := tb.net.Broadcast(context.TODO(), TBVotingProtocol, serializedMessage); err != nil {
 		return fmt.Errorf("broadcast voting message: %w", err)
 	}
 

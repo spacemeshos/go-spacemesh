@@ -2,6 +2,7 @@ package weakcoin
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"math/big"
@@ -35,7 +36,7 @@ type epochRoundPair struct {
 }
 
 type broadcaster interface {
-	Broadcast(channel string, data []byte) error
+	Broadcast(ctx context.Context, channel string, data []byte) error
 }
 
 // WeakCoin defines weak coin interface.
@@ -44,7 +45,7 @@ type WeakCoin interface {
 	PublishProposal(epoch types.EpochID, round types.RoundID) error
 	OnRoundStarted(epoch types.EpochID, round types.RoundID)
 	OnRoundFinished(epoch types.EpochID, round types.RoundID)
-	HandleSerializedMessage(data service.GossipMessage, sync service.Fetcher)
+	HandleSerializedMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher)
 }
 
 type weakCoin struct {
@@ -127,7 +128,8 @@ func (wc *weakCoin) PublishProposal(epoch types.EpochID, round types.RoundID) er
 		return fmt.Errorf("serialize weak coin message: %w", err)
 	}
 
-	if err := wc.net.Broadcast(GossipProtocol, serializedMessage); err != nil {
+	// TODO(nkryuchkov): pass correct context
+	if err := wc.net.Broadcast(context.Background(), GossipProtocol, serializedMessage); err != nil {
 		return fmt.Errorf("broadcast weak coin message: %w", err)
 	}
 

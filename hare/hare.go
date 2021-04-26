@@ -2,8 +2,8 @@ package hare
 
 import (
 	"context"
-	"fmt"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"

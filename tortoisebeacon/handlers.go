@@ -1,6 +1,7 @@
 package tortoisebeacon
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -16,7 +17,8 @@ const TBProposalProtocol = "TBProposalGossip"
 const TBVotingProtocol = "TBVotingGossip"
 
 // HandleSerializedProposalMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
-func (tb *TortoiseBeacon) HandleSerializedProposalMessage(data service.GossipMessage, sync service.Fetcher) {
+// TODO(nkryuchkov): use context
+func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
 	tb.Log.With().Info("New proposal message",
 		log.String("from", data.Sender().String()))
 
@@ -97,7 +99,8 @@ func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage) error {
 }
 
 // HandleSerializedVotingMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
-func (tb *TortoiseBeacon) HandleSerializedVotingMessage(data service.GossipMessage, sync service.Fetcher) {
+// TODO(nkryuchkov): use context
+func (tb *TortoiseBeacon) HandleSerializedVotingMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
 	from := data.Sender()
 
 	tb.Log.With().Info("New voting message",

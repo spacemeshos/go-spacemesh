@@ -1,6 +1,7 @@
 package weakcoin
 
 import (
+	"context"
 	"errors"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -9,7 +10,8 @@ import (
 )
 
 // HandleSerializedMessage defines method to handle Tortoise Beacon Weak Coin Messages from gossip.
-func (wc *weakCoin) HandleSerializedMessage(data service.GossipMessage, sync service.Fetcher) {
+// TODO(nkryuchkov): use context
+func (wc *weakCoin) HandleSerializedMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
 	var m Message
 
 	if err := types.BytesToInterface(data.Bytes(), &m); err != nil {
