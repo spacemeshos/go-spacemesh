@@ -34,6 +34,7 @@ type gossipProtocolMessage struct {
 	ownMessage     bool
 	data           service.Data
 	validationChan chan service.MessageValidation
+	requestID      string
 }
 
 func (pm gossipProtocolMessage) Sender() p2pcrypto.PublicKey {
@@ -48,6 +49,10 @@ func (pm gossipProtocolMessage) Data() service.Data {
 	return pm.data
 }
 
+func (pm gossipProtocolMessage) RequestID() string {
+	return pm.requestID
+}
+
 func (pm gossipProtocolMessage) Bytes() []byte {
 	return pm.data.Bytes()
 }
@@ -58,7 +63,7 @@ func (pm gossipProtocolMessage) ValidationCompletedChan() chan service.MessageVa
 
 func (pm gossipProtocolMessage) ReportValidation(protocol string) {
 	if pm.validationChan != nil {
-		pm.validationChan <- service.NewMessageValidation(pm.sender, pm.Bytes(), protocol)
+		pm.validationChan <- service.NewMessageValidation(pm.sender, pm.Bytes(), protocol, pm.requestID)
 	}
 }
 
@@ -88,16 +93,16 @@ func CreatePayload(data service.Data) (*Payload, error) {
 	switch x := data.(type) {
 	case service.DataBytes:
 		if x.Payload == nil {
-			return nil, fmt.Errorf("cant send empty payload")
+			return nil, fmt.Errorf("unable to send empty payload")
 		}
 		return &Payload{Payload: x.Bytes()}, nil
 	case *service.DataMsgWrapper:
 		return &Payload{Wrapped: x}, nil
 	case nil:
-		return nil, fmt.Errorf("cant send empty payload")
+		return nil, fmt.Errorf("unable to send empty payload")
 	default:
 	}
-	return nil, fmt.Errorf("cant determine paylaod type")
+	return nil, fmt.Errorf("unable to determine payload type")
 }
 
 // ExtractData is a helper function to extract the payload data from a message payload.

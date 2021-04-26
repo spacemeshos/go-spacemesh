@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net"
@@ -179,6 +180,11 @@ func (sm simGossipMessage) IsOwnMessage() bool {
 	return sm.ownMessage
 }
 
+// RequestID
+func (sm simGossipMessage) RequestID() string {
+	return "fake_request_id"
+}
+
 // Bytes is the message's binary data in byte array format.
 func (sm simGossipMessage) Bytes() []byte {
 	return sm.msg.Bytes()
@@ -192,12 +198,12 @@ func (sm simGossipMessage) ValidationCompletedChan() chan MessageValidation {
 // ReportValidation reports sm as a valid message for protocol.
 func (sm simGossipMessage) ReportValidation(protocol string) {
 	if sm.validationCompletedChan != nil {
-		sm.validationCompletedChan <- NewMessageValidation(sm.sender, sm.Bytes(), protocol)
+		sm.validationCompletedChan <- NewMessageValidation(sm.sender, sm.Bytes(), protocol, sm.RequestID())
 	}
 }
 
 // Start is here to satisfy the Service interface.
-func (sn *Node) Start() error {
+func (sn *Node) Start(ctx context.Context) error {
 	// on simulation this doesn't really matter yet.
 	return nil
 }
@@ -214,6 +220,7 @@ func simulatorMetadata() P2PMetadata {
 
 // ProcessDirectProtocolMessage passes a direct message to the protocol.
 func (sn *Node) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protocol string, payload Data, _ P2PMetadata) error {
+	// TODO: fix this
 	//sn.sleep(sn.rcvDelay)
 	sn.sim.mutex.RLock()
 	c, ok := sn.sim.protocolDirectHandler[sn.PublicKey()][protocol]
@@ -226,7 +233,7 @@ func (sn *Node) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protoco
 }
 
 // ProcessGossipProtocolMessage passes a gossip message to the protocol.
-func (sn *Node) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, ownMessage bool, protocol string, data Data, validationCompletedChan chan MessageValidation) error {
+func (sn *Node) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, ownMessage bool, protocol string, data Data, validationCompletedChan chan MessageValidation) error {
 	sn.sim.mutex.RLock()
 	c, ok := sn.sim.protocolGossipHandler[sn.PublicKey()][protocol]
 	sn.sim.mutex.RUnlock()
@@ -241,13 +248,13 @@ func (sn *Node) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, ownMess
 // returns error if the node cant be found. corresponds to `SendMessage`
 
 // SendWrappedMessage send a wrapped message to another simulated node.
-func (sn *Node) SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *DataMsgWrapper) error {
-	return sn.sendMessageImpl(nodeID, protocol, payload)
+func (sn *Node) SendWrappedMessage(ctx context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload *DataMsgWrapper) error {
+	return sn.sendMessageImpl(ctx, nodeID, protocol, payload)
 }
 
 // SendMessage send a message to another simulated node.
-func (sn *Node) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error {
-	return sn.sendMessageImpl(peerPubkey, protocol, DataBytes{Payload: payload})
+func (sn *Node) SendMessage(ctx context.Context, peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error {
+	return sn.sendMessageImpl(ctx, peerPubkey, protocol, DataBytes{Payload: payload})
 }
 
 // GossipReady is a chan which is closed when we established initial min connections with peers.
@@ -257,7 +264,7 @@ func (sn *Node) GossipReady() <-chan struct{} {
 	return c
 }
 
-func (sn *Node) sendMessageImpl(nodeID p2pcrypto.PublicKey, protocol string, payload Data) error {
+func (sn *Node) sendMessageImpl(ctx context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload Data) error {
 	sn.sim.mutex.RLock()
 	thec, ok := sn.sim.protocolDirectHandler[nodeID][protocol]
 	sn.sim.mutex.RUnlock()
@@ -281,7 +288,7 @@ func (sn *Node) sleep(delay uint32) {
 }
 
 // Broadcast disseminates a message to all simulated nodes. sends to yourself first.
-func (sn *Node) Broadcast(protocol string, payload []byte) error {
+func (sn *Node) Broadcast(ctx context.Context, protocol string, payload []byte) error {
 	go func() {
 		sn.sleep(sn.sndDelay)
 		sn.sim.mutex.Lock()

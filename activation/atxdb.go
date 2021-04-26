@@ -2,6 +2,7 @@ package activation
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -746,41 +747,41 @@ func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.Activ
 }
 
 // HandleGossipAtx handles the atx gossip data channel
-func (db *DB) HandleGossipAtx(data service.GossipMessage, syncer service.Fetcher) {
+func (db *DB) HandleGossipAtx(ctx context.Context, data service.GossipMessage, syncer service.Fetcher) {
 	if data == nil {
 		return
 	}
-	err := db.HandleAtxData(data.Bytes(), syncer)
+	err := db.HandleAtxData(ctx, data.Bytes(), syncer)
 	if err != nil {
-		db.log.With().Error("error handling atx data", log.Err(err))
+		db.log.WithContext(ctx).With().Error("error handling atx data", log.Err(err))
 		return
 	}
 	data.ReportValidation(AtxProtocol)
 }
 
 // HandleAtxData handles atxs received either by gossip or sync
-func (db *DB) HandleAtxData(data []byte, syncer service.Fetcher) error {
+func (db *DB) HandleAtxData(ctx context.Context, data []byte, syncer service.Fetcher) error {
 	atx, err := types.BytesToAtx(data)
 	if err != nil {
 		return fmt.Errorf("cannot parse incoming atx")
 	}
 	atx.CalcAndSetID()
+	logger := db.log.WithContext(ctx).WithFields(atx.ID())
 
-	db.log.With().Info("got new atx", atx.Fields(len(data))...)
+	logger.With().Info("got new atx", atx.Fields(len(data))...)
 
 	//todo fetch from neighbour (#1925)
 	if atx.Nipst == nil {
-		db.log.Panic("nil nipst in gossip")
+		logger.Panic("nil nipst in gossip")
 		return fmt.Errorf("nil nipst in gossip")
 	}
 
-	if err := syncer.GetPoetProof(atx.GetPoetProofRef()); err != nil {
+	if err := syncer.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
 		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
 			atx.ShortString(), atx.GetShortPoetProofRef(), err)
-
 	}
 
-	if err := db.FetchAtxReferences(atx, syncer); err != nil {
+	if err := db.FetchAtxReferences(ctx, atx, syncer); err != nil {
 		return fmt.Errorf("received atx with missing references of prev or pos id %v, %v, %v, %v",
 			atx.ID(), atx.PrevATXID, atx.PositioningATX, log.Err(err))
 	}
@@ -797,28 +798,27 @@ func (db *DB) HandleAtxData(data []byte, syncer service.Fetcher) error {
 		// TODO: blacklist peer
 	}
 
-	db.log.With().Info("stored and propagated new syntactically valid atx", atx.ID())
+	logger.With().Info("stored and propagated new syntactically valid atx", atx.ID())
 	return nil
 }
 
 // FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db
-func (db *DB) FetchAtxReferences(atx *types.ActivationTx, f service.Fetcher) error {
+func (db *DB) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx, f service.Fetcher) error {
+	logger := db.log.WithContext(ctx)
 	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != db.goldenATXID {
-		db.log.With().Info("going to fetch pos atx", atx.PositioningATX, atx.ID())
-		err := f.FetchAtx(atx.PositioningATX)
-		if err != nil {
+		logger.With().Info("going to fetch pos atx", atx.PositioningATX, atx.ID())
+		if err := f.FetchAtx(ctx, atx.PositioningATX); err != nil {
 			return err
 		}
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
-		db.log.With().Info("going to fetch prev atx", atx.PrevATXID, atx.ID())
-		err := f.FetchAtx(atx.PrevATXID)
-		if err != nil {
+		logger.With().Info("going to fetch prev atx", atx.PrevATXID, atx.ID())
+		if err := f.FetchAtx(ctx, atx.PrevATXID); err != nil {
 			return err
 		}
 	}
-	db.log.With().Info("done fetching references for atx", atx.ID())
+	logger.With().Info("done fetching references for atx", atx.ID())
 
 	return nil
 }
