@@ -28,7 +28,7 @@ type peersManager interface {
 type baseNetwork interface {
 	SendMessage(ctx context.Context, peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
 	SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey)
-	ProcessGossipProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error
+	ProcessGossipProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, ownMessage bool, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error
 }
 
 // Protocol runs the gossip protocol using the given peers and service.

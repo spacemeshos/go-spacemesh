@@ -29,7 +29,7 @@ func TestProcessMessage(t *testing.T) {
 
 	isSent := false
 	net.EXPECT().
-		ProcessGossipProtocolMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		ProcessGossipProtocolMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Do(func(...interface{}) { isSent = true })
 
 	err := protocol.processMessage(context.TODO(), p2pcrypto.NewRandomPubkey(), false, "test", service.DataBytes{Payload: []byte("test")})
@@ -83,24 +83,8 @@ func TestPropagationEventLoop(t *testing.T) {
 	defer ctrl.Finish()
 
 	protocol := NewProtocol(config.SwarmConfig{}, nil, nil, nil, logger)
-	pq := NewMockprioQ(ctrl)
-	protocol.pq = pq
 
 	var isWritten, isClosed bool
-	pq.EXPECT().
-		Write(gomock.Any(), gomock.Any()).
-		Do(func(_ interface{}, _ interface{}) { isWritten = true }).
-		AnyTimes()
-
-	pq.EXPECT().
-		Close().
-		Do(func() { isClosed = true })
-
-	pq.EXPECT().
-		Read().
-		Do(func() { time.Sleep(time.Minute * 5) }).
-		AnyTimes()
-
 	go protocol.propagationEventLoop(context.TODO())
 
 	protocol.propagateQ <- service.MessageValidation{}
@@ -118,5 +102,4 @@ func TestPropagationEventLoop(t *testing.T) {
 	time.Sleep(time.Second * 2)
 	assert.Equal(t, false, isWritten, "message should not be written")
 	assert.Equal(t, true, isClosed, "listener should be shut down")
-
 }
