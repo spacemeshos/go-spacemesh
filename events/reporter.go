@@ -74,28 +74,27 @@ func ReportNewActivation(activation *types.ActivationTx) {
 }
 
 // SubscribeToRewards subscribes a channel to rewards events
-func SubscribeToRewards(subscriber chan Reward) {
+func SubscribeToRewards(bufsize int) chan Reward {
 	mu.RLock()
 	defer mu.RUnlock()
 	if reporter != nil {
-		reporter.rewardsSubs = append(reporter.rewardsSubs, subscriber)
+		newChan := make(chan Reward, bufsize)
+		reporter.rewardsSubs[newChan] = struct{}{}
+		return newChan
 	}
+	return nil
 }
 
 // UnsubscribeFromRewards unsubscribes a channel from rewards events
+// do we need to close the subscriber channel here?
 func UnsubscribeFromRewards(subscriber chan Reward) {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		for i, s := range reporter.rewardsSubs {
-			if s == subscriber {
-				reporter.rewardsSubs[i] = reporter.rewardsSubs[len(reporter.rewardsSubs)-1]
-				reporter.rewardsSubs = reporter.rewardsSubs[:len(reporter.rewardsSubs)-1]
-				break
-			}
+		if _, exists := reporter.rewardsSubs[subscriber]; exists {
+			delete(reporter.rewardsSubs, subscriber)
 		}
-
 	}
 }
 
@@ -112,7 +111,7 @@ func ReportRewardReceived(r Reward) {
 
 	if reporter != nil && len(reporter.rewardsSubs) > 0 {
 		log.Info("about to report reward: %v", r)
-		for _, sub := range reporter.rewardsSubs {
+		for sub := range reporter.rewardsSubs {
 			select {
 			case sub <- r:
 			default:
@@ -459,7 +458,7 @@ type EventReporter struct {
 	channelReceipt     chan TxReceipt
 	stopChan           chan struct{}
 	blocking           bool
-	rewardsSubs        []chan Reward
+	rewardsSubs        map[chan Reward]struct{}
 }
 
 func newEventReporter(bufsize int, blocking bool) *EventReporter {
@@ -472,7 +471,7 @@ func newEventReporter(bufsize int, blocking bool) *EventReporter {
 		channelReceipt:     make(chan TxReceipt, bufsize),
 		channelError:       make(chan NodeError, bufsize),
 		stopChan:           make(chan struct{}),
-		rewardsSubs:        []chan Reward{},
+		rewardsSubs:        make(map[chan Reward]struct{}),
 		blocking:           blocking,
 	}
 }
@@ -490,7 +489,7 @@ func CloseEventReporter() {
 		close(reporter.channelAccount)
 		close(reporter.channelReceipt)
 		close(reporter.stopChan)
-		for _, c := range reporter.rewardsSubs {
+		for c := range reporter.rewardsSubs {
 			close(c)
 		}
 		reporter = nil
