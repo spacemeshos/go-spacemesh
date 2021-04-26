@@ -81,8 +81,8 @@ func newBroker(networkService NetworkService, eValidator validator, stateQuerier
 		latestLayer:    instanceID(types.GetEffectiveGenesis()),
 		minDeleted:     0,
 		limit:          limit,
-		queue:          priorityq.New(inboxCapacity), // TODO: set capacity correctly
-		queueChannel:	make(chan struct{}, inboxCapacity), // TODO: set capacity correctly
+		queue:          priorityq.New(inboxCapacity),       // TODO: set capacity correctly
+		queueChannel:   make(chan struct{}, inboxCapacity), // TODO: set capacity correctly
 	}
 }
 

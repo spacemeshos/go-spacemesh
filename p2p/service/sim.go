@@ -169,9 +169,9 @@ type SimGossipMessage struct {
 // NewSimGossipMessage creates and returns a new SimGossipMessage
 func NewSimGossipMessage(sender p2pcrypto.PublicKey, ownMessage bool, msg Data) SimGossipMessage {
 	return SimGossipMessage{
-		sender: sender,
+		sender:     sender,
 		ownMessage: ownMessage,
-		msg: msg,
+		msg:        msg,
 	}
 }
 
