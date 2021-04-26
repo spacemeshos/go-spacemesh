@@ -105,13 +105,13 @@ func SubscribeToRewards(bufsize int) chan Reward {
 
 // UnsubscribeFromRewards unsubscribes a channel from rewards events
 // do we need to close the subscriber channel here?
-func UnsubscribeFromRewards(subscriber chan Reward) {
+func UnsubscribeFromRewards(subscriptionChannel chan Reward) {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		if _, exists := reporter.rewardsSubs[subscriber]; exists {
-			delete(reporter.rewardsSubs, subscriber)
+		if _, exists := reporter.rewardsSubs[subscriptionChannel]; exists {
+			delete(reporter.rewardsSubs, subscriptionChannel)
 		}
 	}
 }
@@ -127,7 +127,7 @@ func ReportRewardReceived(r Reward) {
 		SmesherID: r.Smesher.ToBytes(),
 	})
 
-	if reporter != nil && len(reporter.rewardsSubs) > 0 {
+	if reporter != nil {
 		log.Info("about to report reward: %v", r)
 		for sub := range reporter.rewardsSubs {
 			select {
@@ -272,7 +272,7 @@ func ReportAccountUpdate(a types.Address) {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	if reporter != nil && len(reporter.accountsSubs) > 0 {
+	if reporter != nil {
 		log.Info("about to report account update for: %v", a)
 		for sub := range reporter.accountsSubs {
 			select {
@@ -340,6 +340,7 @@ func GetStatusChannel() chan struct{} {
 	return nil
 }
 
+// SubscribeToAccounts subscribes a channel to account update events
 func SubscribeToAccounts(bufsize int) chan types.Address {
 	mu.RLock()
 	defer mu.RUnlock()
@@ -352,15 +353,15 @@ func SubscribeToAccounts(bufsize int) chan types.Address {
 	return nil
 }
 
-// UnsubscribeFromRewards unsubscribes a channel from rewards events
+// UnsubscribeFromAccounts unsubscribes a channel from accounts events
 // do we need to close the subscriber channel here?
-func UnsubscribeFromAccounts(subscriber chan types.Address) {
+func UnsubscribeFromAccounts(subscriptionChannel chan types.Address) {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		if _, exists := reporter.accountsSubs[subscriber]; exists {
-			delete(reporter.accountsSubs, subscriber)
+		if _, exists := reporter.accountsSubs[subscriptionChannel]; exists {
+			delete(reporter.accountsSubs, subscriptionChannel)
 		}
 	}
 }
