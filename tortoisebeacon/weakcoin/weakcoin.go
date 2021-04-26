@@ -82,6 +82,7 @@ func NewWeakCoin(prefix string, threshold types.Hash32, net broadcaster, logger 
 		net:          net,
 		proposals:    make(map[epochRoundPair][]types.Hash32),
 		activeRounds: make(map[epochRoundPair]struct{}),
+		weakCoins:    make(map[epochRoundPair]bool),
 	}
 
 	return wc
