@@ -82,6 +82,7 @@ func newBroker(networkService NetworkService, eValidator validator, stateQuerier
 		minDeleted:     0,
 		limit:          limit,
 		queue:          priorityq.New(inboxCapacity), // TODO: set capacity correctly
+		queueChannel:	make(chan struct{}), // TODO: set capacity correctly
 	}
 }
 

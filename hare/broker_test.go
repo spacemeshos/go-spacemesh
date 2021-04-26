@@ -171,7 +171,7 @@ func waitForMessages(t *testing.T, inbox chan *Msg, instanceID instanceID, msgCo
 					return
 				}
 			case <-tm.C:
-				t.Errorf("Timedout waiting for msg %v", i)
+				t.Errorf("Timed out waiting for msg %v", i)
 				t.Fail()
 				return
 			}
