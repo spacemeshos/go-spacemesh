@@ -1,6 +1,7 @@
 package mesh
 
 import (
+	"context"
 	"math/big"
 	"strconv"
 	"testing"
@@ -189,7 +190,7 @@ func TestMesh_integration(t *testing.T) {
 
 		l, err := layers.GetLayer(types.LayerID(i))
 		assert.NoError(t, err)
-		layers.ValidateLayer(l, nil)
+		layers.ValidateLayer(l)
 	}
 	// since there can be a difference of up to x lerners where x is the number of blocks due to round up of penalties when distributed among all blocks
 	totalPayout := l3Rewards + ConfigTst().BaseReward.Int64()
@@ -215,7 +216,7 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 		createLayer(t, mesh, types.LayerID(i), numOfBlocks, maxTxs, atxDB)
 		l, err := mesh.GetLayer(types.LayerID(i))
 		assert.NoError(t, err)
-		mesh.ValidateLayer(l, nil)
+		mesh.ValidateLayer(l)
 	}
 
 	s2 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
@@ -224,7 +225,7 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	// this should be played until numOfLayers -1 if we want to compare states
 	for i := 0; i < numOfLayers-1; i++ {
 		blockIds := copyLayer(t, mesh, mesh2, atxDB2, types.LayerID(i))
-		mesh2.HandleValidatedLayer(types.LayerID(i), blockIds)
+		mesh2.HandleValidatedLayer(context.TODO(), types.LayerID(i), blockIds)
 	}
 	// test states are the same when one input is from tortoise and the other from hare
 	assert.Equal(t, s.Txs, s2.Txs)
@@ -232,7 +233,7 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	for i := 0; i < numOfLayers; i++ {
 		l, err := mesh.GetLayer(types.LayerID(i))
 		assert.NoError(t, err)
-		mesh2.ValidateLayer(l, nil)
+		mesh2.ValidateLayer(l)
 	}
 	// test state is the same if receiving result from tortoise after same result from hare received
 	assert.ObjectsAreEqualValues(s.Txs, s2.Txs)
@@ -252,15 +253,15 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	// this should be played until numOfLayers -1 if we want to compare states
 	for i := 0; i < numOfLayers-3; i++ {
 		blockIds := copyLayer(t, mesh, mesh3, atxDB3, types.LayerID(i))
-		mesh3.HandleValidatedLayer(types.LayerID(i), blockIds)
+		mesh3.HandleValidatedLayer(context.TODO(), types.LayerID(i), blockIds)
 	}
 	s3Len := len(s3.Txs)
 	blockIds := copyLayer(t, mesh, mesh3, atxDB3, types.LayerID(numOfLayers-2))
-	mesh3.HandleValidatedLayer(types.LayerID(numOfLayers-2), blockIds)
+	mesh3.HandleValidatedLayer(context.TODO(), types.LayerID(numOfLayers-2), blockIds)
 	assert.Equal(t, s3Len, len(s3.Txs))
 
 	blockIds = copyLayer(t, mesh, mesh3, atxDB3, types.LayerID(numOfLayers-3))
-	mesh3.HandleValidatedLayer(types.LayerID(numOfLayers-3), blockIds)
+	mesh3.HandleValidatedLayer(context.TODO(), types.LayerID(numOfLayers-3), blockIds)
 	assert.Equal(t, s.Txs, s3.Txs)
 }
 
@@ -292,7 +293,7 @@ type meshValidatorBatchMock struct {
 	processedLayer types.LayerID
 }
 
-func (m *meshValidatorBatchMock) ValidateLayer(lyr *types.Layer, inputVector []types.BlockID) {
+func (m *meshValidatorBatchMock) ValidateLayer(lyr *types.Layer) {
 	m.SetProcessedLayer(lyr.Index())
 	layerID := lyr.Index()
 	if layerID == 0 {
@@ -337,19 +338,19 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 	l4, err := mesh.GetLayer(4)
 	assert.NoError(t, err)
 	// Test negative case
-	mesh.ValidateLayer(l4, nil)
+	mesh.ValidateLayer(l4)
 	assert.Equal(t, oldTotal, s.TotalReward)
 
 	l5, err := mesh.GetLayer(5)
 	assert.NoError(t, err)
 	// Since batch size is 6, rewards will not be applied yet at this point
-	mesh.ValidateLayer(l5, nil)
+	mesh.ValidateLayer(l5)
 	assert.Equal(t, oldTotal, s.TotalReward)
 
 	l6, err := mesh.GetLayer(6)
 	assert.NoError(t, err)
 	// Rewards will be applied at this point
-	mesh.ValidateLayer(l6, nil)
+	mesh.ValidateLayer(l6)
 
 	// When distributing rewards to blocks they are rounded down, so we have to allow up to numOfBlocks difference
 	totalPayout := firstLayerRewards + ConfigTst().BaseReward.Int64()

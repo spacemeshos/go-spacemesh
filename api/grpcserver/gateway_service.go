@@ -1,12 +1,13 @@
 package grpcserver
 
 import (
+	"context"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"golang.org/x/net/context"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
@@ -31,7 +32,7 @@ func NewGatewayService(net api.NetworkAPI) *GatewayService {
 }
 
 // BroadcastPoet accepts a binary poet message to broadcast to the network
-func (s GatewayService) BroadcastPoet(_ context.Context, in *pb.BroadcastPoetRequest) (*pb.BroadcastPoetResponse, error) {
+func (s GatewayService) BroadcastPoet(ctx context.Context, in *pb.BroadcastPoetRequest) (*pb.BroadcastPoetResponse, error) {
 	log.Info("GRPC GatewayService.BroadcastPoet")
 
 	if len(in.Data) == 0 {
@@ -39,7 +40,7 @@ func (s GatewayService) BroadcastPoet(_ context.Context, in *pb.BroadcastPoetReq
 	}
 
 	// Note that we broadcast a poet message regardless of whether or not we are currently in sync
-	if err := s.Network.Broadcast(activation.PoetProofProtocol, in.Data); err != nil {
+	if err := s.Network.Broadcast(ctx, activation.PoetProofProtocol, in.Data); err != nil {
 		log.Error("failed to broadcast poet message: %s", err)
 		return nil, status.Errorf(codes.Internal, "failed to broadcast message")
 	}

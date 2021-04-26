@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"math/big"
 	"time"
 
@@ -50,7 +51,7 @@ func (m *meshValidatorMock) Persist() error {
 	return nil
 }
 
-func (m *meshValidatorMock) HandleIncomingLayer(lyr *types.Layer, inputVector []types.BlockID) (types.LayerID, types.LayerID) {
+func (m *meshValidatorMock) HandleIncomingLayer(lyr *types.Layer) (types.LayerID, types.LayerID) {
 	m.countValidate++
 	m.calls++
 	m.vl = lyr.Index()
@@ -238,5 +239,5 @@ func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *
 	_ = msh.AddBlock(mesh.GenesisBlock())
 	clock := mockClock{Layer: expectedLayers + 1}
 	lg.Info("current layer %v", clock.GetCurrentLayer())
-	return NewSync(swarm, msh, txpool, atxdb, blockEligibilityValidatorMock{}, poetDb, conf, &clock, lg)
+	return NewSync(context.TODO(), swarm, msh, txpool, atxdb, blockEligibilityValidatorMock{}, poetDb, conf, &clock, lg)
 }

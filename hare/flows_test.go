@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"context"
 	"errors"
 	"math/rand"
 	"testing"
@@ -125,14 +126,14 @@ func (m *p2pManipulator) RegisterGossipProtocol(protocol string, prio priorityq.
 	return wch
 }
 
-func (m *p2pManipulator) Broadcast(protocol string, payload []byte) error {
+func (m *p2pManipulator) Broadcast(ctx context.Context, protocol string, payload []byte) error {
 	msg, _ := MessageFromBuffer(payload)
 	if msg.InnerMsg.InstanceID == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != -1 {
 		log.Warning("Not broadcasting in manipulator")
 		return m.err
 	}
 
-	e := m.nd.Broadcast(protocol, payload)
+	e := m.nd.Broadcast(ctx, protocol, payload)
 	return e
 }
 
@@ -145,11 +146,11 @@ func (trueOracle) Register(bool, string) {
 func (trueOracle) Unregister(bool, string) {
 }
 
-func (trueOracle) Eligible(types.LayerID, int32, int, types.NodeID, []byte) (bool, error) {
+func (trueOracle) Eligible(context.Context, types.LayerID, int32, int, types.NodeID, []byte) (bool, error) {
 	return true, nil
 }
 
-func (trueOracle) Proof(types.LayerID, int32) ([]byte, error) {
+func (trueOracle) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
 	x := make([]byte, 100)
 	return x, nil
 }
@@ -187,7 +188,7 @@ func validateBlock([]types.BlockID) bool {
 	return true
 }
 
-func isSynced() bool {
+func isSynced(context.Context) bool {
 	return true
 }
 
@@ -219,7 +220,7 @@ func newRandBlockID(rng *rand.Rand) (id types.BlockID) {
 type mockBlockProvider struct {
 }
 
-func (mbp *mockBlockProvider) HandleValidatedLayer(types.LayerID, []types.BlockID) {
+func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
 }
 
 func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
@@ -256,7 +257,7 @@ func Test_multipleCPs(t *testing.T) {
 		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
 		h := createMaatuf(cfg, rng, test.lCh[i], s, oracle, t.Name())
 		test.hare = append(test.hare, h)
-		e := h.Start()
+		e := h.Start(context.TODO())
 		r.NoError(e)
 	}
 
@@ -291,7 +292,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
 		h := createMaatuf(cfg, rng, test.lCh[i], mp2p, oracle, t.Name())
 		test.hare = append(test.hare, h)
-		e := h.Start()
+		e := h.Start(context.TODO())
 		r.NoError(e)
 	}
 
