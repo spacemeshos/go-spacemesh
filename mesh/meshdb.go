@@ -100,7 +100,7 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, err
 	if err := ll.SaveLayerInputVectorByID(GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
 		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
 	}
-	return ll, nil
+	return ll, err
 }
 
 // PersistentData checks to see if db is empty
