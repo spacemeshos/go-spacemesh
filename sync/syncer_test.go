@@ -40,6 +40,7 @@ var (
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
+	types.SetLayersPerEpoch(3)
 }
 
 type fetchMock struct {
@@ -216,7 +217,8 @@ func SyncMockFactoryManClock(number int, conf Configuration, name string, dbType
 		poetDB := database.NewMemDatabase()
 		poet := activation.NewPoetDb(poetDB, log.NewDefault("poetDb"))
 		//poet := poetDb()
-		layerFetcher.AddDBs(msh.Blocks(), atxDB, msh.Transactions(), poetDB)
+		layerFetcher.AddDBs(msh.Blocks(), atxDB, msh.Transactions(), poetDB, msh.InputVector())
+		layerFetcher.Start()
 
 		sync := NewSync(net, msh, txpool, atxpool, blockValidator, poet, conf, ticker, layerFetcher, l)
 		nodes = append(nodes, sync)
@@ -386,16 +388,17 @@ func TestSyncProtocol_FetchInputVector(t *testing.T) {
 
 	_, err := types.InterfaceToBytes(input)
 	r.NoError(err)
-	s0.InputVectorBackupFunc = func(id types.LayerID) ([]types.BlockID, error) {
-		return input, nil
-	}
+	r.NoError(s0.SaveLayerInputVectorByID(1, input))
 
-	got, err := s0.GetLayerInputVector(1)
+	got, err := s0.GetLayerInputVectorByID(1)
 	r.NoError(err)
 	r.Equal(input, got)
-
-	bids, err := s1.syncInputVector(types.LayerID(1))
+	//
+	err = s1.GetInputVector(types.LayerID(1))
 	r.NoError(err)
+	bids, err := s1.GetLayerInputVectorByID(1)
+	r.NoError(err)
+	r.Equal(input, got)
 	require.Equal(t, bids, input)
 }
 
@@ -1153,6 +1156,9 @@ func TestFetchLayerBlockIds(t *testing.T) {
 	syncObj1.AddBlock(block2)
 	syncObj2.AddBlock(block2)
 
+	require.NoError(t, syncObj1.SaveLayerInputVectorByID(1, []types.BlockID{block1.ID(), block2.ID()}))
+	require.NoError(t, syncObj2.SaveLayerInputVectorByID(1, []types.BlockID{block1.ID(), block2.ID()}))
+
 	syncObj1.SetZeroBlockLayer(2)
 	syncObj2.SetZeroBlockLayer(2)
 
@@ -1450,20 +1456,37 @@ func TestSyncer_handleNotSyncedFlow(t *testing.T) {
 }
 
 func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
-	types.SetLayersPerEpoch(100)
+	types.SetLayersPerEpoch(3)
 	r := require.New(t)
 	timer := &mockClock{Layer: 5}
 	sim := service.NewSimulator()
 	l := log.NewDefault(t.Name())
 
+	/* ###################### Setup Synced miner ####################333 */
+
 	syncedMiner := sim.NewNode()
-	syncedMsh := getMesh(memoryDB, Path+t.Name()+"synced_"+time.Now().String())
 	synecdAtxPool := activation.NewAtxMemPool()
-	_ = NewSync(syncedMiner, syncedMsh, state.NewTxMemPool(), synecdAtxPool, blockEligibilityValidatorMock{}, newMockPoetDb(), conf, timer,nil, l.WithName("synced"))
+	atxDb := database.NewMemDatabase()
+	syncedMsh := getMesh(memoryDB, Path+t.Name()+"_synced_"+time.Now().String(), atxDb)
+	f := fetch2.NewFetch(fetch2.DefaultConfig(), syncedMiner, l)
+	store := &storeMock{
+		msh:    syncedMsh,
+		blocks: make(map[types.Hash32]*types.Block),
+	}
+	layerFetcher := layerfetcher.NewLogic(layerfetcher.Config{RequestTimeout: 3}, store, store, store, store, store, syncedMiner, f, syncedMsh, l)
+	layerFetcher.Start()
+	defer layerFetcher.Close()
+	poetDB := database.NewMemDatabase()
+	//poet := activation.NewPoetDb(poetDB, log.NewDefault("poetDb"))
+	//poet := poetDb()
+	//atxdb := activation.NewDB(atxDb, &mockIStore{}, syncedMsh.DB, layersPerEpoch, goldenATXID, &validatorMock{}, l.WithName("atxDB"))
+	layerFetcher.AddDBs(syncedMsh.Blocks(), atxDb, syncedMsh.Transactions(), poetDB, syncedMsh.InputVector())
+	_ = NewSync(syncedMiner, syncedMsh, state.NewTxMemPool(), synecdAtxPool, blockEligibilityValidatorMock{}, newMockPoetDb(), conf, timer, layerFetcher, l.WithName("synced"))
 	atx := types.NewActivationTx(types.NIPSTChallenge{}, types.Address{}, &types.NIPST{}, &types.PostProof{})
 	atx.CalcAndSetID()
-	fmt.Println("ATX ID ", atx.ID())
+	fmt.Println("ATX ID ", atx.ShortString())
 
+	var blocks []types.BlockID
 	layers := types.LayerID(7)
 	for i := types.LayerID(1); i < layers; i++ {
 		blk := types.NewExistingBlock(i, []byte(rand.String(8)), nil)
@@ -1471,43 +1494,61 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 		blk.ActiveSet = &[]types.ATXID{atx.ID()} // mock
 		blk.Signature = signing.NewEdSigner().Sign(blk.Bytes())
 		blk.Initialize()
-		syncedMsh.AddBlock(blk)
-		syncedMsh.SaveLayerInputVector(i, []types.BlockID{blk.ID()})
+		r.NoError(syncedMsh.AddBlock(blk))
+		r.NoError(syncedMsh.SaveLayerInputVectorByID(i, []types.BlockID{blk.ID()}))
 		fmt.Printf("Added block %v to layer %v \r\n", blk.ID(), blk.LayerIndex)
+		blocks = append(blocks, blk.ID())
 	}
 
-	net := sim.NewNode()
-	blockValidator := blockEligibilityValidatorMock{}
-	txpool := state.NewTxMemPool()
-	atxpool := activation.NewAtxMemPool()
-	//ch := ts.Subscribe()
-	msh := getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String(), nil)
+	/*  ##################### Setup syncing miner #########################3 */
 
-	msh.AddBlock(types.NewExistingBlock(1, []byte(rand.String(8)), nil))
-	msh.AddBlock(types.NewExistingBlock(2, []byte(rand.String(8)), nil))
-	msh.AddBlock(types.NewExistingBlock(3, []byte(rand.String(8)), nil))
-	msh.AddBlock(types.NewExistingBlock(4, []byte(rand.String(8)), nil))
-	msh.AddBlock(types.NewExistingBlock(5, []byte(rand.String(8)), nil))
-	msh.AddBlock(types.NewExistingBlock(6, []byte(rand.String(8)), nil))
-	msh.AddBlock(types.NewExistingBlock(7, []byte(rand.String(8)), nil))
+	//blockValidator := blockEligibilityValidatorMock{}
 
-	sync := NewSync(net, msh, txpool, atxpool, blockValidator, newMockPoetDb(), conf, timer, nil, l)
+	nsMiner := sim.NewNode()
+	nsAtxPool := activation.NewAtxMemPool()
+	nsatxDb := database.NewMemDatabase()
+	nsMsh := getMesh(memoryDB, Path+t.Name()+"_synced_"+time.Now().String(), nsatxDb)
+	nsF := fetch2.NewFetch(fetch2.DefaultConfig(), nsMiner, l)
+	nsStore := &storeMock{
+		msh:    nsMsh,
+		blocks: make(map[types.Hash32]*types.Block),
+	}
+	nslayerFetcher := layerfetcher.NewLogic(layerfetcher.Config{RequestTimeout: 3}, nsStore, nsStore, nsStore, nsStore, nsStore, nsMiner, nsF, nsMsh, l)
+	nslayerFetcher.Start()
+	defer nslayerFetcher.Close()
+	nspoetDB := database.NewMemDatabase()
+	//poet := activation.NewPoetDb(poetDB, log.NewDefault("poetDb"))
+	//poet := poetDb()
+	//atxdb := activation.NewDB(atxDb, &mockIStore{}, syncedMsh.DB, layersPerEpoch, goldenATXID, &validatorMock{}, l.WithName("atxDB"))
+	nslayerFetcher.AddDBs(nsMsh.Blocks(), nsatxDb, nsMsh.Transactions(), nspoetDB, nsMsh.InputVector())
+	nssync := NewSync(nsMiner, nsMsh, state.NewTxMemPool(), nsAtxPool, blockEligibilityValidatorMock{}, newMockPoetDb(), conf, timer, nslayerFetcher, l.WithName("synced"))
+	//atx := types.NewActivationTx(types.NIPSTChallenge{}, types.Address{}, &types.NIPST{}, &types.PostProof{})
+	//atx.CalcAndSetID()
 
-	atxpool.Put(atx)
-	err := msh.ProcessAtxs([]*types.ActivationTx{atx})
+	//msh.AddBlock(types.NewExistingBlock(1, []byte(rand.String(8)), nil))
+	//msh.AddBlock(types.NewExistingBlock(2, []byte(rand.String(8)), nil))
+	//msh.AddBlock(types.NewExistingBlock(3, []byte(rand.String(8)), nil))
+	//msh.AddBlock(types.NewExistingBlock(4, []byte(rand.String(8)), nil))
+	//msh.AddBlock(types.NewExistingBlock(5, []byte(rand.String(8)), nil))
+	//msh.AddBlock(types.NewExistingBlock(6, []byte(rand.String(8)), nil))
+	//msh.AddBlock(types.NewExistingBlock(7, []byte(rand.String(8)), nil))
+
+	nsAtxPool.Put(atx)
+	err := nsMsh.ProcessAtxs([]*types.ActivationTx{atx})
 	if err != nil {
 		panic("WOWOWO")
 	}
 
 	lv := &mockLayerValidator{0, 0, 0, nil}
-	sync.peers = PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{net.PublicKey()} }}
-	sync.syncLock.Lock()
-	sync.Mesh.Validator = lv
-	sync.SetLatestLayer(5)
+	nssync.syncLock.Lock()
+	nssync.peers = PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{syncedMiner.PublicKey()} }}
+	nssync.Mesh.Validator = lv
+	nssync.SetLatestLayer(5)
+	nssync.syncLock.Unlock()
 
-	sync.Start()
+	//nssync.Start()
 	time.Sleep(250 * time.Millisecond)
-	current := sync.GetCurrentLayer()
+	current := nssync.GetCurrentLayer()
 
 	// make sure not validated before the call
 	_, ok := lv.validatedLayers[current]
@@ -1516,9 +1557,9 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	_, ok = lv.validatedLayers[current+1]
 	r.False(ok)
 
-	before := sync.GetCurrentLayer()
+	before := nssync.GetCurrentLayer()
 	go func() {
-		if err := sync.gossipSyncForOneFullLayer(current); err != nil {
+		if err := nssync.gossipSyncForOneFullLayer(current); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -1533,13 +1574,14 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	timer.Tick()
 
 	//time.Sleep(1 * time.Second)
+	//
 	//timer.Layer = timer.Layer + 1
 	//log.Info("layer %v", timer.GetCurrentLayer())
 	//timer.Tick()
 
 	time.Sleep(1 * time.Second)
 
-	after := sync.GetCurrentLayer()
+	after := nssync.GetCurrentLayer()
 	_, _ = before, after // TODO: commented out due to flakyness
 	//r.Equal(before+2, after)
 	r.Equal(2, lv.countValidate)

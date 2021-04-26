@@ -105,11 +105,6 @@ type Mesh struct {
 	txMutex            sync.Mutex
 }
 
-// GetLayerVerifyingVector is a stub for returning verifying vector
-func (msh *Mesh) GetLayerVerifyingVector(hash types.Hash32) []types.BlockID {
-	return []types.BlockID{}
-}
-
 // NewMesh creates a new instant of a mesh
 func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPool, pr txProcessor, logger log.Log) *Mesh {
 	ll := &Mesh{
@@ -322,7 +317,7 @@ func (msh *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerI
 }
 
 func (msh *Mesh) persistLayerHashes(l *types.Layer) {
-	hash := msh.calcLayerHash(l)
+	hash := msh.calcValidLayerHash(l)
 	msh.persistLayerHash(l.Index(), hash)
 	prevHash := types.Hash32{}
 	var err error
@@ -391,10 +386,10 @@ func (msh *Mesh) HandleValidatedLayer(validatedLayer types.LayerID, layer []type
 
 	msh.Log.With().Info("Mesh validating layer", lyr.Index().Field(), log.Int("valid_blocks", len(blocks)), log.Int("invalid_blocks", len(invalidBlocks)))
 
-	msh.ValidateLayer(lyr, types.BlockIDs(blocks))
-	if err := msh.SaveLayerInputVector(lyr.Index(), types.BlockIDs(blocks)); err != nil {
+	if err := msh.SaveLayerInputVectorByID(lyr.Index(), types.BlockIDs(blocks)); err != nil {
 		msh.Log.With().Error("Saving layer input vector failed", lyr.Index().Field())
 	}
+	msh.ValidateLayer(lyr, types.BlockIDs(blocks))
 }
 
 func (msh *Mesh) getInvalidBlocksByHare(hareLayer *types.Layer) (invalid []*types.Block) {
@@ -464,7 +459,7 @@ func (msh *Mesh) logStateRoot(layerID types.LayerID) {
 	)
 }
 
-func (msh *Mesh) calcLayerHash(layer *types.Layer) types.Hash32 {
+func (msh *Mesh) calcValidLayerHash(layer *types.Layer) types.Hash32 {
 	validBlocks, _ := msh.BlocksByValidity(layer.Blocks())
 	msh.layerHash = types.CalcBlocksHash32(types.BlockIDs(validBlocks), msh.layerHash).Bytes()
 
@@ -478,20 +473,6 @@ func (msh *Mesh) persistLastLayerHash() {
 	if err := msh.general.Put(constLAYERHASH, msh.layerHash); err != nil {
 		msh.With().Error("failed to persist last layer hash", log.Err(err), msh.ProcessedLayer(),
 			log.String("layer_hash", util.Bytes2Hex(msh.layerHash)))
-	}
-}
-
-func (msh *Mesh) persistLayerHash(layerID types.LayerID, hash types.Hash32) {
-	if err := msh.general.Put(msh.getLayerHashKey(layerID), hash.Bytes()); err != nil {
-		msh.With().Error("failed to persist layer hash", log.Err(err), msh.ProcessedLayer(),
-			log.String("layer_hash", hash.Hex()))
-	}
-
-	// we store a double index here because most of the code uses layer ID as key, currently only sync reads layer by hash
-	// when this changes we can simply point to the layes
-	if err := msh.general.Put(hash.Bytes(), layerID.Bytes()); err != nil {
-		msh.With().Error("failed to persist layer hash", log.Err(err), msh.ProcessedLayer(),
-			log.String("layer_hash", hash.Hex()))
 	}
 }
 
@@ -512,17 +493,6 @@ func (msh *Mesh) getRunningLayerHash(layerID types.LayerID) (types.Hash32, error
 	return hash, nil
 }
 
-// GetLayerHash returns layer hash for received blocks
-func (msh *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
-	h := types.Hash32{}
-	bts, err := msh.general.Get(msh.getLayerHashKey(layerID))
-	if err != nil {
-		return types.Hash32{}
-	}
-	h.SetBytes(bts)
-	return h
-}
-
 // GetLayerHashBlocks returns blocks for given hash
 func (msh *Mesh) GetLayerHashBlocks(h types.Hash32) []types.BlockID {
 	layerIDBytes, err := msh.general.Get(h.Bytes())
@@ -538,8 +508,8 @@ func (msh *Mesh) GetLayerHashBlocks(h types.Hash32) []types.BlockID {
 	return mBlocks
 }
 
-func (msh *Mesh) getLayerHashKey(layerID types.LayerID) []byte {
-	return []byte(fmt.Sprintf("layerHash_%v", layerID.Bytes()))
+func (msh *Mesh) getLayerBlockHashKey(layerID types.LayerID) []byte {
+	return []byte(fmt.Sprintf("layerBlockHash_%v", layerID.Bytes()))
 }
 
 func (msh *Mesh) getRunningLayerHashKey(layerID types.LayerID) []byte {

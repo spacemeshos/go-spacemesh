@@ -36,7 +36,8 @@ type TxProcessor interface {
 type layerDB interface {
 	GetLayerHash(ID types.LayerID) types.Hash32
 	GetLayerHashBlocks(hash types.Hash32) []types.BlockID
-	GetLayerVerifyingVector(hash types.Hash32) []types.BlockID
+	GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error)
+	SaveLayerHashInputVector(id types.Hash32, data []byte) error
 }
 
 type atxIDsDB interface {
@@ -133,6 +134,7 @@ const (
 	ATXDB   fetch.Hint = "ATXDB"
 	TXDB    fetch.Hint = "TXDB"
 	POETDB  fetch.Hint = "POETDB"
+	IVDB    fetch.Hint = "IVDB"
 
 	layersProtocol = "/layers/2.0/"
 
@@ -158,11 +160,12 @@ func (l *Logic) Close() {
 }
 
 // AddDBs adds dbs that will be queried when sync requests are received. these databases will be exposed to external callers
-func (l *Logic) AddDBs(blockDB, AtxDB, TxDB, poetDB database.Store) {
+func (l *Logic) AddDBs(blockDB, AtxDB, TxDB, poetDB, IvDB database.Store) {
 	l.fetcher.AddDB(BlockDB, blockDB)
 	l.fetcher.AddDB(ATXDB, AtxDB)
 	l.fetcher.AddDB(TXDB, TxDB)
 	l.fetcher.AddDB(POETDB, poetDB)
+	l.fetcher.AddDB(IVDB, IvDB)
 }
 
 // LayerPromiseResult is the result of trying to fetch an entire layer- if this fails the error will be added to result
@@ -197,7 +200,11 @@ func (l *Logic) LayerHashBlocksReceiver(msg []byte) []byte {
 	h := types.BytesToHash(msg)
 
 	blocks := l.layerDB.GetLayerHashBlocks(h)
-	vector := l.layerDB.GetLayerVerifyingVector(h)
+	vector, err := l.layerDB.GetLayerInputVector(h)
+	if err != nil {
+		// TODO: We need to diff empty set and no results in sync somehow.
+		l.log.Error("didn't have input vector for layer ")
+	}
 	//latest := l.gossipBlocks.Get() todo: implement this
 	b := layerBlocks{
 		blocks,
@@ -395,7 +402,12 @@ func (l *Logic) receiveBlockHashes(layer types.LayerID, data []byte, expectedRes
 		retErr := l.GetBlocks(blocks.Blocks)
 		// if there is an error this means that the entire layer cannot be validated and therefore sync should fail
 		if retErr != nil {
-			l.log.Error("received error for layer id %v", retErr)
+			l.log.With().Error("received error for layer id", log.Err(retErr))
+		}
+
+		ivErr := l.GetInputVector(layer)
+		if ivErr != nil {
+			l.log.With().Error("received error for inputvecor of layer", log.Err(ivErr))
 		}
 	}
 
@@ -490,7 +502,7 @@ func (f *Future) Result() fetch.HashDataPromiseResult {
 
 // FetchAtx returns error if ATX was not found
 func (l *Logic) FetchAtx(id types.ATXID) error {
-	f := Future{l.fetcher.GetHash(id.Hash32(), ATXDB, true), nil}
+	f := Future{l.fetcher.GetHash(id.Hash32(), ATXDB, false), nil}
 	if f.Result().Err != nil {
 		return f.Result().Err
 	}
@@ -601,6 +613,21 @@ func (l *Logic) GetPoetProof(id types.Hash32) error {
 	// if result is local we don't need to process it again
 	if !res.IsLocal {
 		return l.getPoetResult(res.Hash, res.Data)
+	}
+	return nil
+}
+
+// GetInputVector gets input vector data from remote peer
+func (l *Logic) GetInputVector(id types.LayerID) error {
+	l.log.With().Info("getting inputvector for layer", id, types.CalcHash32(id.Bytes()))
+	res := <-l.fetcher.GetHash(types.CalcHash32(id.Bytes()), IVDB, false)
+	if res.Err != nil {
+		return res.Err
+	}
+	// if result is local we don't need to process it again
+	if !res.IsLocal {
+		l.log.With().Info("SaveLayerHashInputVector: Saving input vector", id, res.Hash)
+		return l.layerDB.SaveLayerHashInputVector(res.Hash, res.Data)
 	}
 	return nil
 }

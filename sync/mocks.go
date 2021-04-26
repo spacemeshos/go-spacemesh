@@ -272,6 +272,7 @@ func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *
 	}
 
 	_ = msh.AddBlock(mesh.GenesisBlock())
+	_ = msh.SaveLayerInputVectorByID(mesh.GenesisLayer().Index(), []types.BlockID{mesh.GenesisBlock().ID()})
 	clock := mockClock{Layer: expectedLayers + 1}
 	lg.Info("current layer %v", clock.GetCurrentLayer())
 
@@ -282,7 +283,7 @@ func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *
 
 	lCfg := layerfetcher.Config{RequestTimeout: 20}
 	layerFetch := layerfetcher.NewLogic(lCfg, blockHandler, atxdb, poetDb, atxdb, mockTxProcessor{}, swarm, fetcher, msh, lg)
-	layerFetch.AddDBs(mshdb.Blocks(), atxdbStore, mshdb.Transactions(), poetStorage)
+	layerFetch.AddDBs(mshdb.Blocks(), atxdbStore, mshdb.Transactions(), poetStorage, mshdb.InputVector())
 	layerFetch.Start()
 	return NewSync(swarm, msh, txpool, atxdb, blockEligibilityValidatorMock{}, poetDb, conf, &clock, layerFetch, lg)
 }

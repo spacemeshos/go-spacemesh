@@ -104,19 +104,13 @@ type Switch struct {
 }
 
 func (s *Switch) waitForBoot() error {
-	_, ok := <-s.bootChan
-	if !ok {
-		return s.bootErr
-	}
-	return nil
+	<-s.bootChan
+	return s.bootErr
 }
 
 func (s *Switch) waitForGossip() error {
-	_, ok := <-s.gossipC
-	if !ok {
-		return s.gossipErr
-	}
-	return nil
+	<-s.gossipC
+	return s.gossipErr
 }
 
 // GossipReady is a chan which is closed when we established initial min connections with peers.
@@ -288,14 +282,12 @@ func (s *Switch) Start() error {
 	if s.config.SwarmConfig.Bootstrap {
 		go func() {
 			b := time.Now()
-			err := s.discover.Bootstrap(s.ctx)
-			if err != nil {
-				s.bootErr = err
-				close(s.bootChan)
+			s.bootErr = s.discover.Bootstrap(s.ctx)
+			close(s.bootChan)
+			if s.bootErr != nil {
 				s.Shutdown()
 				return
 			}
-			close(s.bootChan)
 			size := s.discover.Size()
 			s.logger.Event().Info("discovery_bootstrap",
 				log.Bool("success", size >= s.config.SwarmConfig.RandomConnections && s.bootErr == nil),
@@ -311,20 +303,18 @@ func (s *Switch) Start() error {
 		s.gossip.Start()
 		go func() {
 			if s.config.SwarmConfig.Bootstrap {
-				if err := s.waitForBoot(); err != nil {
+				if s.waitForBoot() != nil {
 					return
 				}
 			}
-			err := s.startNeighborhood() // non blocking
 			//todo:maybe start listening only after we got enough outbound neighbors?
-			if err != nil {
-				s.gossipErr = err
-				close(s.gossipC)
+			s.gossipErr = s.startNeighborhood() // non blocking
+			close(s.gossipC)
+			if s.gossipErr != nil {
 				s.Shutdown()
 				return
 			}
 			<-s.initial
-			close(s.gossipC)
 		}() // todo handle error async
 	}
 
@@ -700,6 +690,16 @@ loop:
 	}
 }
 
+func (s *Switch) closeInitial() {
+	select {
+	case <-s.initial:
+		// Nothing to do if channel is closed.
+	default:
+		// Close channel if it is not closed.
+		close(s.initial)
+	}
+}
+
 // askForMorePeers checks the number of peers required and tries to match this number. if there are enough peers it returns.
 // if it failed it issues a one second timeout and then sends a request to try again.
 func (s *Switch) askForMorePeers() {
@@ -712,32 +712,26 @@ func (s *Switch) askForMorePeers() {
 		// If 0 connections are required, the condition above is always true,
 		// so gossip needs to be considered ready in this case.
 		if s.config.SwarmConfig.RandomConnections == 0 {
-			select {
-			case <-s.initial:
-				// Nothing to do if channel is closed.
-				break
-			default:
-				// Close channel if it is not closed.
-				close(s.initial)
-			}
+			s.closeInitial()
+			return
 		}
-		return
+		s.logger.Warning("already has %d peers fo %d required", numpeers, s.config.SwarmConfig.RandomConnections)
+	} else {
+		// try to connect eq peers
+		s.getMorePeers(req)
+		// check number of peers after
+		s.outpeersMutex.RLock()
+		numpeers = len(s.outpeers)
+		s.outpeersMutex.RUnlock()
 	}
 
-	// try to connect eq peers
-	s.getMorePeers(req)
-
-	// check number of peers after
-	s.outpeersMutex.RLock()
-	numpeers = len(s.outpeers)
-	s.outpeersMutex.RUnlock()
 	// announce if initial number of peers achieved
 	// todo: better way then going in this every time ?
 	if numpeers >= s.config.SwarmConfig.RandomConnections {
 		s.initOnce.Do(func() {
 			s.logger.With().Info("gossip connected to initial required neighbors",
 				log.Int("n", len(s.outpeers)))
-			close(s.initial)
+			s.closeInitial()
 			s.outpeersMutex.RLock()
 			var strs []string
 			for pk := range s.outpeers {
@@ -748,6 +742,9 @@ func (s *Switch) askForMorePeers() {
 		})
 		return
 	}
+
+	s.logger.Warning("needs more %d peers", s.config.SwarmConfig.RandomConnections-numpeers)
+
 	// if we could'nt get any maybe were initializing
 	// wait a little bit before trying again
 	tmr := time.NewTimer(NoResultsInterval)
@@ -903,6 +900,7 @@ func (s *Switch) addIncomingPeer(n p2pcrypto.PublicKey) error {
 	s.inpeersMutex.Unlock()
 	if !exist {
 		s.publishNewPeer(n)
+		s.discover.Attempt(n) // or good?
 		metrics.InboundPeers.Add(1)
 	}
 	return nil

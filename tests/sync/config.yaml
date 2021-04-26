@@ -35,7 +35,7 @@ bootstrap:
     storage-path: 'spacemesh-sync-data'
     remote-data: 'true'
     hdist: '5'
-    version: 'trtl_new_samples/'
+    version: 'trtl_sync_latest/'
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-sync'
@@ -60,7 +60,7 @@ client:
     storage-path: 'spacemesh-sync-data'
     remote-data: 'true'
     hdist: '5'
-    version: 'trtl_new_samples/'
+    version: 'trtl_sync_latest/'
 clientv2:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-sync'

@@ -13,8 +13,8 @@ type blockDataProvider interface {
 	GetBlock(id types.BlockID) (*types.Block, error)
 	LayerBlockIds(l types.LayerID) (ids []types.BlockID, err error)
 
-	GetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error)
-	SaveLayerInputVector(lyrid types.LayerID, vector []types.BlockID) error
+	GetLayerInputVectorByID(lyrid types.LayerID) ([]types.BlockID, error)
+	SaveLayerInputVectorByID(lyrid types.LayerID, vector []types.BlockID) error
 
 	SaveContextualValidity(id types.BlockID, valid bool) error
 
@@ -50,8 +50,6 @@ type turtle struct {
 
 	// using the array to be able to iterate from latest elements easily.
 	BlocksToBlocks map[types.LayerID]map[types.BlockID]Opinion // records hdist, for each block, its votes about every previous block
-	// Use this to be able to lookup blocks Opinion without iterating the array.
-	BlocksToBlocksIndex map[types.BlockID]int
 
 	// TODO: Tal says - We keep a vector containing our vote totals (positive and negative) for every previous block
 	//	that's not needed here, probably for self healing?
@@ -65,15 +63,14 @@ func (t *turtle) SetLogger(log2 log.Log) {
 // newTurtle creates a new verifying tortoise algorithm instance. XXX: maybe rename?
 func newTurtle(bdp blockDataProvider, hdist, avgLayerSize int) *turtle {
 	t := &turtle{
-		logger:              log.NewDefault("trtl"),
-		Hdist:               types.LayerID(hdist),
-		bdp:                 bdp,
-		Last:                0,
-		AvgLayerSize:        avgLayerSize,
-		GoodBlocksIndex:     make(map[types.BlockID]struct{}),
-		BlocksToBlocks:      make(map[types.LayerID]map[types.BlockID]Opinion, hdist),
-		BlocksToBlocksIndex: make(map[types.BlockID]int),
-		MaxExceptions:       hdist * avgLayerSize * 100,
+		logger:          log.NewDefault("trtl"),
+		Hdist:           types.LayerID(hdist),
+		bdp:             bdp,
+		Last:            0,
+		AvgLayerSize:    avgLayerSize,
+		GoodBlocksIndex: make(map[types.BlockID]struct{}),
+		BlocksToBlocks:  make(map[types.LayerID]map[types.BlockID]Opinion, hdist),
+		MaxExceptions:   hdist * avgLayerSize * 100,
 	}
 	return t
 }
@@ -136,7 +133,7 @@ func (t *turtle) getSingleInputVectorFromDB(lyrid types.LayerID, blockid types.B
 		return support, nil
 	}
 
-	input, err := t.bdp.GetLayerInputVector(lyrid)
+	input, err := t.bdp.GetLayerInputVectorByID(lyrid)
 	if err != nil {
 		return abstain, err
 	}
@@ -229,7 +226,7 @@ func (t *turtle) opinionMatches(layerid types.LayerID, blockid types.BlockID, op
 			return nil, err
 		}
 
-		res, err := t.bdp.GetLayerInputVector(i)
+		res, err := t.bdp.GetLayerInputVectorByID(i)
 		if err != nil {
 			t.logger.With().Debug("input vector is empty adding neutral diffs", i)
 			for _, b := range blks {
@@ -372,6 +369,8 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer, inputVector []types.Bl
 	}
 
 	// Go over all blocks, in order. For block i , mark it “good” if
+	blockscount := len(newlyr.Blocks())
+	goodblocks := len(t.GoodBlocksIndex)
 markingLoop:
 	for _, b := range newlyr.Blocks() {
 		// (1) the base block is marked as good.
@@ -436,6 +435,8 @@ markingLoop:
 		t.GoodBlocksIndex[b.ID()] = struct{}{}
 	}
 
+	t.logger.With().Info("finished marking good blocks", log.Int("total_blocks", blockscount), log.Int("good_blocks", len(t.GoodBlocksIndex)-goodblocks))
+
 	idx := newlyr.Index()
 	wasVerified := t.Verified
 	t.logger.With().Info("starting layer verification", log.FieldNamed("was_verified", wasVerified), log.FieldNamed("target_verification", newlyr.Index()))
@@ -455,7 +456,7 @@ loop:
 		if i == idx {
 			input = t.inputVectorForLayer(blks, inputVector)
 		} else {
-			raw, err := t.bdp.GetLayerInputVector(i)
+			raw, err := t.bdp.GetLayerInputVectorByID(i)
 			if err != nil {
 				// this sets the input to abstain
 				t.logger.With().Warning("input vector abstains on all blocks", i)

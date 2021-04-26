@@ -72,6 +72,20 @@ type layerDBMock struct {
 	hashes  map[types.LayerID]types.Hash32
 }
 
+func (l *layerDBMock) GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error) {
+	return l.vectors[hash], nil
+}
+
+func (l *layerDBMock) SaveLayerHashInputVector(id types.Hash32, data []byte) error {
+	var blocks []types.BlockID
+	err := types.BytesToInterface(data, blocks)
+	if err != nil {
+		return err
+	}
+	l.vectors[id] = blocks
+	return nil
+}
+
 func newLayerDBMock() *layerDBMock {
 	return &layerDBMock{
 		layers:  make(map[types.Hash32][]types.BlockID),
