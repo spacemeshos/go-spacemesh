@@ -407,6 +407,8 @@ func (tb *TortoiseBeacon) runConsensusPhase(epoch types.EpochID) error {
 	}()
 
 	go func() {
+		tb.weakCoin.OnRoundStarted(epoch, firstRound)
+
 		if err := tb.weakCoin.PublishProposal(epoch, firstRound); err != nil {
 			tb.Log.With().Error("Failed to publish weak coin proposal",
 				log.Uint64("epoch_id", uint64(epoch)),
@@ -421,6 +423,8 @@ func (tb *TortoiseBeacon) runConsensusPhase(epoch types.EpochID) error {
 	for round := firstRound + 1; round <= tb.lastRound(); round++ {
 		select {
 		case <-ticker.C:
+			tb.weakCoin.OnRoundFinished(epoch, round-1)
+
 			go func(epoch types.EpochID, round types.RoundID) {
 				if err := tb.sendVotesDelta(epoch, round); err != nil {
 					tb.Log.With().Error("Failed to send voting messages",
@@ -431,6 +435,8 @@ func (tb *TortoiseBeacon) runConsensusPhase(epoch types.EpochID) error {
 			}(epoch, round)
 
 			go func(epoch types.EpochID, round types.RoundID) {
+				tb.weakCoin.OnRoundStarted(epoch, round)
+
 				if err := tb.weakCoin.PublishProposal(epoch, round); err != nil {
 					tb.Log.With().Error("Failed to publish weak coin proposal",
 						log.Uint64("epoch_id", uint64(epoch)),
@@ -445,6 +451,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(epoch types.EpochID) error {
 	}
 
 	tb.waitAfterLastRoundStarted()
+	tb.weakCoin.OnRoundFinished(epoch, tb.lastRound())
 
 	return nil
 }

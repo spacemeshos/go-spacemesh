@@ -1,6 +1,8 @@
 package weakcoin
 
 import (
+	"errors"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -29,6 +31,8 @@ func (wc *weakCoin) HandleSerializedMessage(data service.GossipMessage, sync ser
 	data.ReportValidation(GossipProtocol)
 }
 
+var ErrMalformedMessage = errors.New("malformed weak coin message")
+
 func (wc *weakCoin) handleWeakCoinMessage(m Message) error {
 	pair := epochRoundPair{
 		EpochID: m.Epoch,
@@ -37,6 +41,17 @@ func (wc *weakCoin) handleWeakCoinMessage(m Message) error {
 
 	wc.proposalsMu.Lock()
 	defer wc.proposalsMu.Unlock()
+
+	wc.activeRoundsMu.RLock()
+	defer wc.activeRoundsMu.RUnlock()
+
+	if _, ok := wc.activeRounds[pair]; !ok {
+		wc.Log.Warning("Received malformed weak coin message",
+			log.Uint64("epoch_id", uint64(m.Epoch)),
+			log.Uint64("round", uint64(m.Round)))
+
+		return ErrMalformedMessage
+	}
 
 	wc.proposals[pair] = append(wc.proposals[pair], m.Proposal)
 

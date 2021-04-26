@@ -48,3 +48,13 @@ func (m ValueMock) Get(epoch types.EpochID, round types.RoundID) bool {
 func (m ValueMock) HandleSerializedMessage(data service.GossipMessage, sync service.Fetcher) {
 	return
 }
+
+// HandleSerializedMessage handles serialized message.
+func (m RandomMock) OnRoundStarted(data service.GossipMessage, sync service.Fetcher) {
+	return
+}
+
+// HandleSerializedMessage handles serialized message.
+func (m RandomMock) OnRoundFinished(data service.GossipMessage, sync service.Fetcher) {
+	return
+}
