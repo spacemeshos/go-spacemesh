@@ -165,6 +165,14 @@ type simGossipMessage struct {
 	validationCompletedChan chan MessageValidation
 }
 
+func NewSimGossipMessage(sender p2pcrypto.PublicKey, ownMessage bool, msg Data) simGossipMessage {
+	return simGossipMessage{
+		sender: sender,
+		ownMessage: ownMessage,
+		msg: msg,
+	}
+}
+
 // Data is the message's binary data in byte array format.
 func (sm simGossipMessage) Data() Data {
 	return sm.msg
@@ -311,11 +319,13 @@ func (sn *Node) Broadcast(ctx context.Context, protocol string, payload []byte) 
 		sn.sim.mutex.Unlock()
 
 		if mychan != nil {
+			// ownMessage is true for self-generated messages (outbound)
 			mychan <- simGossipMessage{sn.Info.PublicKey(), true, DataBytes{Payload: payload}, nil}
 		}
 
 		for _, c := range sendees {
-			c <- simGossipMessage{sn.Info.PublicKey(), true, DataBytes{Payload: payload}, nil}
+			// ownMessage is false for all other nodes (inbound)
+			c <- simGossipMessage{sn.Info.PublicKey(), false, DataBytes{Payload: payload}, nil}
 		}
 
 		log.Debug("%v >> All ( Gossip ) (%v)", sn.Info.PublicKey(), payload)

@@ -82,7 +82,7 @@ func newBroker(networkService NetworkService, eValidator validator, stateQuerier
 		minDeleted:     0,
 		limit:          limit,
 		queue:          priorityq.New(inboxCapacity), // TODO: set capacity correctly
-		queueChannel:	make(chan struct{}), // TODO: set capacity correctly
+		queueChannel:	make(chan struct{}, inboxCapacity), // TODO: set capacity correctly
 	}
 }
 
@@ -93,12 +93,15 @@ func (b *Broker) Start(ctx context.Context) error {
 		return startInstanceError(errors.New("instance already started"))
 	}
 
-	b.isStarted = true
+	inbox := b.network.RegisterGossipProtocol(protoName, priorityq.Mid)
+	return b.startWithInbox(ctx, inbox)
+}
 
-	b.inbox = b.network.RegisterGossipProtocol(protoName, priorityq.Mid)
+func (b *Broker) startWithInbox(ctx context.Context, inbox chan service.GossipMessage) error {
+	b.isStarted = true
+	b.inbox = inbox
 	go b.queueLoop(ctx)
 	go b.eventLoop(ctx)
-
 	return nil
 }
 
@@ -287,7 +290,8 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			if !exist {
 				msgLogger.With().Panic("missing broker instance for layer")
 			}
-			msgLogger.Debug("broker forwarding message to outbox")
+			msgLogger.With().Debug("broker forwarding message to outbox",
+				log.Int("outbox_queue_size", len(out)))
 			out <- iMsg
 
 		case task := <-b.tasks:
