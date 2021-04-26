@@ -2106,6 +2106,9 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		checkAccountDataItemReward(t, res.Datum.Datum)
 
 		res, err = stream.Recv()
+		if err != nil {
+			log.Error("Error thrown : %v", err)
+		}
 		require.NoError(t, err, "got error from stream")
 		checkAccountDataItemAccount(t, res.Datum.Datum)
 
