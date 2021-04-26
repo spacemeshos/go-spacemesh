@@ -32,7 +32,7 @@ func Publish(event Event) {
 }
 
 // InitializeEventPubsub initializes the global pubsub broadcaster server
-func InitializeEventPubsub(ur string) error{
+func InitializeEventPubsub(ur string) error {
 	var err error
 	publisher, err = NewEventPublisher(ur)
 	return err
