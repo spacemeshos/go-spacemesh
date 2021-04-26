@@ -448,7 +448,7 @@ func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) {
 	// we store a double index here because most of the code uses layer ID as key, currently only sync reads layer by hash
 	// when this changes we can simply point to the layes
 	if err := m.general.Put(hash.Bytes(), layerID.Bytes()); err != nil {
-		m.With().Error("failed to persist layer hash", log.Err(err),layerID,
+		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
 			log.String("layer_hash", hash.Hex()))
 	}
 }

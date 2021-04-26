@@ -517,8 +517,6 @@ func (msh *Mesh) GetLayerHashBlocks(h types.Hash32) []types.BlockID {
 	return mBlocks
 }
 
-
-
 func (msh *Mesh) getLayerBlockHashKey(layerID types.LayerID) []byte {
 	return []byte(fmt.Sprintf("layerBlockHash_%v", layerID.Bytes()))
 }
