@@ -171,13 +171,13 @@ func newFetchWorker(ctx context.Context, s networker, count int, reqFactory batc
 						lg.With().Info("peer responded to fetch request",
 							log.String("type", name),
 							log.String("ids", idsStr))
-						// 	remove ids from leftToFetch add to fetched
+						// remove ids from leftToFetch and add to fetched
 						for _, itm := range v {
 							fetched = append(fetched, itm)
 							delete(leftToFetch, itm.Hash32())
 						}
 
-						//if no more left to fetch
+						// if no more left to fetch
 						if len(leftToFetch) == 0 {
 							break next
 						}
@@ -185,7 +185,7 @@ func newFetchWorker(ctx context.Context, s networker, count int, reqFactory batc
 					lg.Info("next peer")
 				}
 			}
-			//finished pass results to chan
+			// send results to chan
 			output <- fetchJob{ids: fr.ids, items: fetched, reqID: fr.reqID}
 		}
 	}
