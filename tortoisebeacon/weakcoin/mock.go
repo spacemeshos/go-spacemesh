@@ -10,6 +10,16 @@ import (
 // RandomMock mocks weak coin returning random value as weak coin.
 type RandomMock struct{}
 
+// OnRoundStarted should be called when round is started.
+func (m RandomMock) OnRoundStarted(epoch types.EpochID, round types.RoundID) {
+	return
+}
+
+// OnRoundFinished should be called when round is finished.
+func (m RandomMock) OnRoundFinished(epoch types.EpochID, round types.RoundID) {
+	return
+}
+
 // PublishProposal publishes a proposal.
 func (m RandomMock) PublishProposal(epoch types.EpochID, round types.RoundID) error {
 	return nil
@@ -34,6 +44,14 @@ type ValueMock struct {
 	Value bool
 }
 
+// OnRoundStarted should be called when round is started.
+func (m ValueMock) OnRoundStarted(epoch types.EpochID, round types.RoundID) {
+}
+
+// OnRoundFinished should be called when round is finished.
+func (m ValueMock) OnRoundFinished(epoch types.EpochID, round types.RoundID) {
+}
+
 // PublishProposal publishes a proposal.
 func (m ValueMock) PublishProposal(epoch types.EpochID, round types.RoundID) error {
 	return nil
@@ -46,15 +64,5 @@ func (m ValueMock) Get(epoch types.EpochID, round types.RoundID) bool {
 
 // HandleSerializedMessage handles serialized message.
 func (m ValueMock) HandleSerializedMessage(data service.GossipMessage, sync service.Fetcher) {
-	return
-}
-
-// HandleSerializedMessage handles serialized message.
-func (m RandomMock) OnRoundStarted(data service.GossipMessage, sync service.Fetcher) {
-	return
-}
-
-// HandleSerializedMessage handles serialized message.
-func (m RandomMock) OnRoundFinished(data service.GossipMessage, sync service.Fetcher) {
 	return
 }

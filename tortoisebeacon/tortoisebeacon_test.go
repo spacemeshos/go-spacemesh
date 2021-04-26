@@ -33,7 +33,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	epoch := types.EpochID(2)
+	layer := types.LayerID(2)
 	atxList := []types.ATXID{types.ATXID(types.HexToHash32("0x01"))}
 	atxGetter := newMockATXGetter(atxList)
 
@@ -44,75 +44,26 @@ func TestTortoiseBeacon(t *testing.T) {
 	err := tb.Start()
 	requirer.NoError(err)
 
-	t.Logf("Awaiting epoch %v", epoch)
-	awaitEpoch(clock, epoch)
+	t.Logf("Awaiting epoch %v", layer)
+	awaitLayer(clock, layer)
 
-	t.Logf("Waiting for beacon value for epoch %v", epoch)
-
-	err = tb.Wait(epoch)
-	requirer.NoError(err)
-
-	t.Logf("Beacon value for epoch %v is ready", epoch)
-
-	v, err := tb.Get(epoch)
+	v, err := tb.Get(layer)
 	requirer.NoError(err)
 
 	expected := "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-	requirer.Equal(expected, v.String())
+	requirer.Equal(expected, types.BytesToHash(v).String())
 
 	requirer.NoError(tb.Close())
 }
 
-func awaitEpoch(clock *timesync.TimeClock, epoch types.EpochID) {
+func awaitLayer(clock *timesync.TimeClock, epoch types.LayerID) {
 	layerTicker := clock.Subscribe()
 
 	for layer := range layerTicker {
 		// Wait until required epoch passes.
-		if layer.GetEpoch() > epoch {
+		if layer > epoch {
 			return
 		}
-	}
-}
-
-func TestTortoiseBeacon_beaconCalcTimeout(t *testing.T) {
-	t.Parallel()
-
-	r := require.New(t)
-
-	tt := []struct {
-		name             string
-		roundsNumber     uint64
-		roundDurationSec int
-		duration         time.Duration
-	}{
-		{
-			name:             "Case 1",
-			roundsNumber:     5,
-			roundDurationSec: 10,
-			duration:         200 * time.Second,
-		},
-		{
-			name:             "Case 2",
-			roundsNumber:     300,
-			roundDurationSec: 30 * 60,
-			duration:         600 * time.Hour,
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			conf := Config{
-				RoundsNumber:  tc.roundsNumber,
-				RoundDuration: tc.roundDurationSec,
-			}
-
-			tb := New(conf, nil, nil, nil, nil, nil, log.Log{})
-			duration := tb.beaconCalcTimeout()
-			r.EqualValues(tc.duration, duration)
-		})
 	}
 }
 

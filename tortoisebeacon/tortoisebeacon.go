@@ -182,94 +182,34 @@ func (tb *TortoiseBeacon) Close() error {
 	return nil
 }
 
-// Get returns a Tortoise Beacon value as types.Hash32 for a certain epoch or an error if it doesn't exist.
-// TODO(nkryuchkov): Consider making unexported.
-func (tb *TortoiseBeacon) Get(epochID types.EpochID) (types.Hash32, error) {
+// Get returns a Tortoise Beacon value as []byte for a certain epoch or an error if it doesn't exist.
+func (tb *TortoiseBeacon) Get(layerID types.LayerID) ([]byte, error) {
+	epochID := layerID.GetEpoch()
+
 	if tb.tortoiseBeaconDB != nil {
 		if val, ok := tb.tortoiseBeaconDB.GetTortoiseBeacon(epochID); ok {
-			return val, nil
+			return val.Bytes(), nil
 		}
 	}
 
 	tb.beaconsMu.RLock()
+	defer tb.beaconsMu.RUnlock()
+
 	beacon, ok := tb.beacons[epochID]
-	tb.beaconsMu.RUnlock()
 
 	if !ok {
-		return types.Hash32{}, ErrBeaconNotCalculated
+		if beacon, ok = tb.beacons[epochID-1]; !ok {
+			return nil, ErrBeaconNotCalculated
+		}
 	}
 
 	if tb.tortoiseBeaconDB != nil {
 		if err := tb.tortoiseBeaconDB.SetTortoiseBeacon(epochID, beacon); err != nil {
-			return types.Hash32{}, fmt.Errorf("update beacon in DB: %w", err)
+			return nil, fmt.Errorf("update beacon in DB: %w", err)
 		}
 	}
 
-	return beacon, nil
-}
-
-// GetBeacon waits until a Tortoise Beacon value is ready for a certain epoch and returns it as []byte.
-func (tb *TortoiseBeacon) GetBeacon(epochNumber types.EpochID) []byte {
-	if err := tb.Wait(epochNumber); err != nil {
-		tb.Log.With().Error("Failed to wait for tortoise beacon value calculation",
-			log.Uint64("epoch_id", uint64(epochNumber)),
-			log.Err(err))
-
-		return nil
-	}
-
-	v, err := tb.Get(epochNumber)
-	if err != nil {
-		return nil
-	}
-
-	return v.Bytes()
-}
-
-// Wait waits until beacon for this epoch becomes ready.
-func (tb *TortoiseBeacon) Wait(epochID types.EpochID) error {
-	tb.waitUntilStarted()
-
-	if tb.tortoiseBeaconDB != nil {
-		if _, ok := tb.tortoiseBeaconDB.GetTortoiseBeacon(epochID); ok {
-			return nil
-		}
-	}
-
-	tb.beaconsMu.RLock()
-	ready, ok := tb.beaconsReady[epochID]
-	tb.beaconsMu.RUnlock()
-
-	if !ok {
-		return ErrBeaconNotCalculated
-	}
-
-	timeout := time.NewTimer(tb.beaconCalcTimeout())
-	defer timeout.Stop()
-
-	select {
-	case <-ready:
-		return nil
-	case <-tb.CloseChannel():
-		return nil
-	case <-timeout.C:
-		return ErrTimeout
-	}
-}
-
-func (tb *TortoiseBeacon) waitUntilStarted() {
-	select {
-	case <-tb.CloseChannel():
-		return
-	case <-tb.started:
-		return
-	}
-}
-
-func (tb *TortoiseBeacon) setStarted() {
-	tb.startedOnce.Do(func() {
-		close(tb.started)
-	})
+	return beacon.Bytes(), nil
 }
 
 func (tb *TortoiseBeacon) cleanupLoop() {
@@ -312,10 +252,7 @@ func (tb *TortoiseBeacon) listenLayers() {
 	for {
 		select {
 		case <-tb.CloseChannel():
-			tb.setStarted()
-
 			return
-
 		case layer := <-tb.layerTicker:
 			tb.Log.With().Info("Received tick",
 				log.Uint64("layer", uint64(layer)))
@@ -364,7 +301,6 @@ func (tb *TortoiseBeacon) handleEpoch(epoch types.EpochID) {
 		log.Uint64("epoch_id", uint64(epoch)))
 
 	tb.beaconsMu.Lock()
-	tb.setStarted()
 
 	if _, ok := tb.beaconsReady[epoch]; !ok {
 		tb.beaconsReady[epoch] = make(chan struct{})
@@ -573,11 +509,6 @@ func (tb *TortoiseBeacon) waitAfterLastRoundStarted() {
 	case <-tb.CloseChannel():
 	case <-timer.C:
 	}
-}
-
-func (tb *TortoiseBeacon) beaconCalcTimeout() time.Duration {
-	const extraTimeMultiplier = 4 // 4 epochs
-	return time.Duration(extraTimeMultiplier * float64(tb.config.RoundsNumber) * float64(tb.roundDuration))
 }
 
 func (tb *TortoiseBeacon) votingThreshold() int {

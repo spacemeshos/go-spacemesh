@@ -86,7 +86,7 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 	}
 
 	if bo.proofsEpoch != epochNumber {
-		err := bo.calcEligibilityProofs(epochNumber)
+		err := bo.calcEligibilityProofs(layerID)
 		if err != nil {
 			bo.log.With().Error("failed to calculate eligibility proofs", epochNumber, log.Err(err))
 			return *types.EmptyATXID, nil, nil, err
@@ -107,8 +107,16 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 	return bo.atxID, proofs, activeSet, nil
 }
 
-func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
-	epochBeacon := bo.beaconProvider.GetBeacon(epochNumber)
+func (bo *Oracle) calcEligibilityProofs(layerNumber types.LayerID) error {
+	epochNumber := layerNumber.GetEpoch()
+	layerBeacon, err := bo.beaconProvider.Get(layerNumber)
+	if err != nil {
+		bo.log.Error("Failed to get beacon",
+			log.Uint64("layer_id", uint64(layerNumber)),
+			log.Err(err))
+
+		return err
+	}
 
 	// get the previous epochs total ATXs
 	activeSet := bo.atxDB.GetEpochAtxs(epochNumber - 1)
@@ -126,7 +134,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 		log.Uint32("active_set_size", activeSetSize))
 	bo.log.With().Debug("calculating eligibility",
 		epochNumber,
-		log.String("epoch_beacon", fmt.Sprint(epochBeacon)))
+		log.String("layer_beacon", fmt.Sprint(layerBeacon)))
 
 	if epochNumber.IsGenesis() {
 		bo.log.With().Info("genesis epoch detected, using GenesisActiveSetSize",
@@ -143,7 +151,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 	bo.eligibilityProofs = map[types.LayerID][]types.BlockEligibilityProof{}
 	bo.eligibilityMutex.Unlock()
 	for counter := uint32(0); counter < numberOfEligibleBlocks; counter++ {
-		message := serializeVRFMessage(epochBeacon, epochNumber, counter)
+		message := serializeVRFMessage(layerBeacon, epochNumber, counter)
 		vrfSig, err := bo.vrfSigner.Sign(message)
 		if err != nil {
 			bo.log.With().Error("could not sign message", log.Err(err))

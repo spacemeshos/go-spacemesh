@@ -46,12 +46,15 @@ func NewBlockEligibilityValidator(committeeSize, genesisActiveSetSize uint32, la
 // BlockSignedAndEligible checks that a given block is signed and eligible. It returns true with no error or false and
 // an error that explains why validation failed.
 func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (bool, error) {
-	epochNumber := block.LayerIndex.GetEpoch()
+	layerNumber := block.LayerIndex
+
+	epochNumber := layerNumber.GetEpoch()
 	if epochNumber == 0 {
 		v.log.With().Warning("skipping epoch 0 block validation.",
 			block.ID(), block.LayerIndex)
 		return true, nil
 	}
+
 	var err error
 	activeSetBlock := block
 	if block.RefBlock != nil {
@@ -62,6 +65,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 		}
 
 	}
+
 	if activeSetBlock.ActiveSet == nil {
 		return false, fmt.Errorf("cannot get active set from block %v", activeSetBlock.ID())
 	}
@@ -90,7 +94,11 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 			numberOfEligibleBlocks, activeSetSize)
 	}
 
-	epochBeacon := v.beaconProvider.GetBeacon(epochNumber)
+	epochBeacon, err := v.beaconProvider.Get(layerNumber)
+	if err != nil {
+		return false, fmt.Errorf("get beacon for layer %v: %w", layerNumber, err)
+	}
+
 	message := serializeVRFMessage(epochBeacon, epochNumber, counter)
 	vrfSig := block.EligibilityProof.Sig
 

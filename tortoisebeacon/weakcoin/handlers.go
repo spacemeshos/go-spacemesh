@@ -31,6 +31,7 @@ func (wc *weakCoin) HandleSerializedMessage(data service.GossipMessage, sync ser
 	data.ReportValidation(GossipProtocol)
 }
 
+// ErrMalformedMessage is returned when weak coin message is malformed.
 var ErrMalformedMessage = errors.New("malformed weak coin message")
 
 func (wc *weakCoin) handleWeakCoinMessage(m Message) error {
