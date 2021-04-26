@@ -118,7 +118,6 @@ func ReportRewardReceived(r Reward) {
 			default:
 				log.Debug("reporter would block on subscriber %v", sub)
 			}
-			sub <- r
 		}
 		log.Info("reported reward to subscriber: %v", r)
 	}
