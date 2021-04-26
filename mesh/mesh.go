@@ -476,15 +476,6 @@ func (msh *Mesh) persistLastLayerHash() {
 	}
 }
 
-func (msh *Mesh) SaveLayerBlockHash(layerID types.LayerID, hash types.Hash32) {
-	// we store a double index here because most of the code uses layer ID as key, currently only sync reads layer by hash
-	// when this changes we can simply point to the layes
-	if err := msh.general.Put(hash.Bytes(), layerID.Bytes()); err != nil {
-		msh.With().Error("failed to persist layer hash", log.Err(err), msh.ProcessedLayer(),
-			log.String("layer_hash", hash.Hex()))
-	}
-}
-
 func (msh *Mesh) persistRunningLayerHash(layerID types.LayerID, hash types.Hash32) {
 	if err := msh.general.Put(msh.getRunningLayerHashKey(layerID), hash.Bytes()); err != nil {
 		msh.With().Error("failed to persist running layer hash", log.Err(err), msh.ProcessedLayer(),
