@@ -554,7 +554,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 
 	wc := weakcoin.NewWeakCoin(weakcoin.DefaultPrefix, weakcoin.DefaultThreshold, swarm, app.addLogger(WeakCoinLogger, lg))
 
-	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, swarm, atxdb, tBeaconDB, wc, clock.Subscribe(), app.addLogger(TBeaconLogger, lg))
+	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
+	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, ld, swarm, atxdb, tBeaconDB, wc, clock.Subscribe(), app.addLogger(TBeaconLogger, lg))
 	if err := tBeacon.Start(); err != nil {
 		app.log.Panic("Failed to start tortoise beacon: %v", err)
 	}

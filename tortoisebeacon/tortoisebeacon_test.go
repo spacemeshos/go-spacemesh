@@ -38,7 +38,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	atxGetter := newMockATXGetter(atxList)
 
 	ticker := clock.Subscribe()
-	tb := New(conf, n1, atxGetter, nil, mwc, ticker, logger)
+	tb := New(conf, ld, n1, atxGetter, nil, mwc, ticker, logger)
 	requirer.NotNil(tb)
 
 	err := tb.Start()
@@ -147,6 +147,116 @@ func TestTortoiseBeacon_atxThresholdFraction(t *testing.T) {
 
 			threshold := tb.atxThresholdFraction(tc.w)
 			r.InDelta(tc.threshold, threshold, 0.00001)
+		})
+	}
+}
+
+func TestTortoiseBeacon_beaconAlreadyCalculated(t *testing.T) {
+	t.Parallel()
+
+	r := require.New(t)
+
+	tt := []struct {
+		name           string
+		layersPerEpoch int32
+		layerDuration  time.Duration
+		roundDuration  time.Duration
+		roundsNumber   uint64
+		layerID        types.LayerID
+		result         bool
+	}{
+		{
+			name:           "Case 1",
+			layersPerEpoch: 10,
+			layerDuration:  5 * time.Second,
+			roundDuration:  3 * time.Second,
+			roundsNumber:   4,
+			layerID:        0,
+			result:         false,
+		},
+		{
+			name:           "Case 2",
+			layersPerEpoch: 10,
+			layerDuration:  5 * time.Second,
+			roundDuration:  3 * time.Second,
+			roundsNumber:   4,
+			layerID:        1,
+			result:         false,
+		},
+		{
+			name:           "Case 3",
+			layersPerEpoch: 10,
+			layerDuration:  5 * time.Second,
+			roundDuration:  3 * time.Second,
+			roundsNumber:   4,
+			layerID:        2,
+			result:         false,
+		},
+		{
+			name:           "Case 4",
+			layersPerEpoch: 10,
+			layerDuration:  5 * time.Second,
+			roundDuration:  3 * time.Second,
+			roundsNumber:   4,
+			layerID:        3,
+			result:         true,
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			tb := TortoiseBeacon{
+				Log: log.NewDefault("TortoiseBeacon"),
+				config: Config{
+					RoundsNumber: tc.roundsNumber,
+				},
+				layerDuration: tc.layerDuration,
+				roundDuration: tc.roundDuration,
+			}
+
+			types.SetLayersPerEpoch(tc.layersPerEpoch)
+
+			result := tb.beaconAlreadyCalculated(tc.layerID)
+			r.Equal(tc.result, result)
+		})
+	}
+}
+
+func Test_ceilDuration(t *testing.T) {
+	t.Parallel()
+
+	r := require.New(t)
+
+	tt := []struct {
+		name     string
+		duration time.Duration
+		multiple time.Duration
+		result   time.Duration
+	}{
+		{
+			name:     "Case 1",
+			duration: 7 * time.Second,
+			multiple: 5 * time.Second,
+			result:   10 * time.Second,
+		},
+		{
+			name:     "Case 2",
+			duration: 5 * time.Second,
+			multiple: 5 * time.Second,
+			result:   5 * time.Second,
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := ceilDuration(tc.duration, tc.multiple)
+			r.Equal(tc.result, result)
 		})
 	}
 }
