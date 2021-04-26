@@ -274,7 +274,8 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 		channelReceipt chan events.TxReceipt
 	)
 	if filterAccount {
-		channelAccount = events.GetAccountChannel()
+		channelAccount = events.SubscribeToAccounts(30)
+		log.Info("Subscribed to the account stream")
 	}
 	if filterReward {
 		channelReward = events.SubscribeToRewards(30)
@@ -369,6 +370,9 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 			if channelReward != nil {
 				events.UnsubscribeFromRewards(channelReward)
 			}
+			if channelAccount != nil {
+				events.UnsubscribeFromAccounts(channelAccount)
+			}
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate
@@ -460,7 +464,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		channelLayer   chan events.NewLayer
 	)
 	if filterAccount {
-		channelAccount = events.GetAccountChannel()
+		channelAccount = events.SubscribeToAccounts(30)
 	}
 	if filterReward {
 		// needs to be buffered to avoid reporter from being blocked on slow streaming connections
@@ -576,7 +580,9 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if channelReward != nil {
 				events.UnsubscribeFromRewards(channelReward)
 			}
-
+			if channelAccount != nil {
+				events.UnsubscribeFromAccounts(channelAccount)
+			}
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate

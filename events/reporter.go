@@ -272,18 +272,16 @@ func ReportAccountUpdate(a types.Address) {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	if reporter != nil {
-		if reporter.blocking {
-			reporter.channelAccount <- a
-			log.With().Debug("reported account update", a)
-		} else {
+	if reporter != nil && len(reporter.accountsSubs) > 0 {
+		log.Info("about to report account update for: %v", a)
+		for sub := range reporter.accountsSubs {
 			select {
-			case reporter.channelAccount <- a:
-				log.With().Debug("reported account update", a)
+			case sub <- a:
 			default:
-				log.With().Debug("not reporting account update as no one is listening", a)
+				log.Debug("reporter would block on subscriber %v", sub)
 			}
 		}
+		log.Info("reported account update to subscribers: %v", a)
 	}
 }
 
@@ -342,15 +340,29 @@ func GetStatusChannel() chan struct{} {
 	return nil
 }
 
-// GetAccountChannel returns a channel for account data updates
-func GetAccountChannel() chan types.Address {
+func SubscribeToAccounts(bufsize int) chan types.Address {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		return reporter.channelAccount
+		newChan := make(chan types.Address, bufsize)
+		reporter.accountsSubs[newChan] = struct{}{}
+		return newChan
 	}
 	return nil
+}
+
+// UnsubscribeFromRewards unsubscribes a channel from rewards events
+// do we need to close the subscriber channel here?
+func UnsubscribeFromAccounts(subscriber chan types.Address) {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	if reporter != nil {
+		if _, exists := reporter.accountsSubs[subscriber]; exists {
+			delete(reporter.accountsSubs, subscriber)
+		}
+	}
 }
 
 // GetReceiptChannel returns a channel for tx receipts
@@ -472,11 +484,11 @@ type EventReporter struct {
 	channelLayer       chan NewLayer
 	channelError       chan NodeError
 	channelStatus      chan struct{}
-	channelAccount     chan types.Address
 	channelReceipt     chan TxReceipt
 	stopChan           chan struct{}
 	blocking           bool
 	rewardsSubs        map[chan Reward]struct{}
+	accountsSubs       map[chan types.Address]struct{}
 }
 
 func newEventReporter(bufsize int, blocking bool) *EventReporter {
@@ -485,11 +497,11 @@ func newEventReporter(bufsize int, blocking bool) *EventReporter {
 		channelActivation:  make(chan *types.ActivationTx, bufsize),
 		channelLayer:       make(chan NewLayer, bufsize),
 		channelStatus:      make(chan struct{}, bufsize),
-		channelAccount:     make(chan types.Address, bufsize),
 		channelReceipt:     make(chan TxReceipt, bufsize),
 		channelError:       make(chan NodeError, bufsize),
 		stopChan:           make(chan struct{}),
 		rewardsSubs:        make(map[chan Reward]struct{}),
+		accountsSubs:       make(map[chan types.Address]struct{}),
 		blocking:           blocking,
 	}
 }
@@ -504,10 +516,12 @@ func CloseEventReporter() {
 		close(reporter.channelLayer)
 		close(reporter.channelError)
 		close(reporter.channelStatus)
-		close(reporter.channelAccount)
 		close(reporter.channelReceipt)
 		close(reporter.stopChan)
 		for c := range reporter.rewardsSubs {
+			close(c)
+		}
+		for c := range reporter.accountsSubs {
 			close(c)
 		}
 		reporter = nil

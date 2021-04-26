@@ -2128,6 +2128,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		Index:   receiptIndex,
 	})
 
+	log.Info("Published tx receipt")
 	// publish a reward
 	events.ReportRewardReceived(events.Reward{
 		Layer:       layerFirst,
