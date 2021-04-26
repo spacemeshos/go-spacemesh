@@ -313,7 +313,7 @@ func (mgm *mockGossipMessage) Sender() p2pcrypto.PublicKey {
 }
 
 func (mgm *mockGossipMessage) IsOwnMessage() bool {
-	panic("not implemented")
+	return false
 }
 
 func (mgm *mockGossipMessage) RequestID() string {
