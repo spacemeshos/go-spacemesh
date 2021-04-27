@@ -307,9 +307,11 @@ func (m *meshValidatorBatchMock) ValidateLayer(_ context.Context, lyr *types.Lay
 	m.mesh.pushLayersToState(prevPBase, prevPBase)
 }
 
-func (m *meshValidatorBatchMock) ProcessedLayer() types.LayerID                 { panic("implement me") }
-func (m *meshValidatorBatchMock) SetProcessedLayer(lyr types.LayerID)           { m.processedLayer = lyr }
-func (m *meshValidatorBatchMock) HandleLateBlock(context.Context, *types.Block) { panic("implement me") }
+func (m *meshValidatorBatchMock) ProcessedLayer() types.LayerID       { panic("implement me") }
+func (m *meshValidatorBatchMock) SetProcessedLayer(lyr types.LayerID) { m.processedLayer = lyr }
+func (m *meshValidatorBatchMock) HandleLateBlock(context.Context, *types.Block) {
+	panic("implement me")
+}
 
 func TestMesh_AccumulateRewards(t *testing.T) {
 	types.SetLayersPerEpoch(1)
