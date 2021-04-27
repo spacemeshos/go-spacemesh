@@ -1456,13 +1456,13 @@ func TestSyncer_handleNotSyncedZeroBlocksLayer(t *testing.T) {
 	sync := syncs[0]
 	defer sync.Close()
 	sync.peers = getPeersMock([]p2ppeers.Peer{nodes[1].PublicKey()})
-	lv := &mockLayerValidator{0, 0, 0, nil, make(chan struct{})}
+	lv := &mockLayerValidator{0, 0, 0, nil, make(chan struct{}, 1)}
 	sync.Mesh.Validator = lv
 	sync.SetLatestLayer(1)
 	r.NoError(sync.SetZeroBlockLayer(1))
 	r.Equal(0, lv.countValidated)
 	r.Equal(types.LayerID(0), lv.processedLayer)
-	sync.handleNotSynced(context.TODO(), 1)
+	go sync.handleNotSynced(context.TODO(), 1)
 	select {
 	case <-time.After(10 * time.Second):
 		r.Fail("timed out")
@@ -1471,7 +1471,6 @@ func TestSyncer_handleNotSyncedZeroBlocksLayer(t *testing.T) {
 	}
 	r.Equal(1, lv.countValidate)
 	r.Equal(types.LayerID(1), lv.processedLayer)
-	sync.Close()
 }
 
 func TestSyncer_SetZeroBlockLayer(t *testing.T) {
