@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"math/big"
 	"time"
 
@@ -78,7 +79,7 @@ func (m *meshValidatorMock) Persist() error {
 	return nil
 }
 
-func (m *meshValidatorMock) HandleIncomingLayer(lyr *types.Layer, inputVector []types.BlockID) (types.LayerID, types.LayerID) {
+func (m *meshValidatorMock) HandleIncomingLayer(lyr *types.Layer) (types.LayerID, types.LayerID) {
 	m.countValidate++
 	m.calls++
 	m.vl = lyr.Index()
@@ -284,5 +285,5 @@ func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *
 	layerFetch := layerfetcher.NewLogic(lCfg, blockHandler, atxdb, poetDb, atxdb, mockTxProcessor{}, swarm, fetcher, msh, lg)
 	layerFetch.AddDBs(mshdb.Blocks(), atxdbStore, mshdb.Transactions(), poetStorage)
 	layerFetch.Start()
-	return NewSync(swarm, msh, txpool, atxdb, blockEligibilityValidatorMock{}, poetDb, conf, &clock, layerFetch, lg)
+	return NewSync(context.TODO(), swarm, msh, txpool, atxdb, blockEligibilityValidatorMock{}, poetDb, conf, &clock, layerFetch, lg)
 }

@@ -103,10 +103,10 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, err
 // PersistentData checks to see if db is empty
 func (m *DB) PersistentData() bool {
 	if _, err := m.general.Get(constLATEST); err == nil {
-		m.Info("found data to recover on disc")
+		m.Info("found data to recover on disk")
 		return true
 	}
-	m.Info("did not find data to recover on disc")
+	m.Info("did not find data to recover on disk")
 	return false
 }
 
@@ -209,7 +209,6 @@ func (m *DB) LayerBlocks(index types.LayerID) ([]*types.Block, error) {
 	}
 
 	return blocks, nil
-
 }
 
 // ForBlockInView traverses all blocks in a view and uses blockHandler func on each block
@@ -821,7 +820,7 @@ func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks
 	for _, b := range blocks {
 		valid, err := m.ContextualValidity(b.ID())
 		if err != nil {
-			m.With().Error("could not get contextual validity", b.ID(), log.Err(err))
+			m.With().Error("could not get contextual validity by block", b.ID(), log.Err(err))
 		}
 		if valid {
 			validBlocks = append(validBlocks, b)
@@ -859,7 +858,7 @@ func (m *DB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]stru
 	for _, b := range blockIds {
 		valid, err := m.ContextualValidity(b)
 		if err != nil {
-			m.With().Error("could not get contextual validity", b, layer, log.Err(err))
+			m.With().Error("could not get contextual validity by layer", b, layer, log.Err(err))
 		}
 
 		if !valid {

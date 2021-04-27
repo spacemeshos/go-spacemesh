@@ -1,6 +1,7 @@
 package fetch
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -60,7 +61,7 @@ type mockNet struct {
 func (m mockNet) Close() {
 }
 
-func (m mockNet) RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func([]byte) []byte) {
+func (m mockNet) RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(context.Context, []byte) []byte) {
 }
 
 func (m mockNet) GetRandomPeer() p2ppeers.Peer {
@@ -68,7 +69,7 @@ func (m mockNet) GetRandomPeer() p2ppeers.Peer {
 	return pub1
 }
 
-func (m mockNet) Start() error {
+func (m mockNet) Start(ctx context.Context) error {
 	return nil
 }
 
@@ -90,7 +91,7 @@ func (m mockNet) SubscribePeerEvents() (new chan p2pcrypto.PublicKey, del chan p
 	return nil, nil
 }
 
-func (m mockNet) Broadcast(protocol string, payload []byte) error {
+func (m mockNet) Broadcast(ctx context.Context, protocol string, payload []byte) error {
 	return nil
 }
 
@@ -101,7 +102,7 @@ func (m mockNet) RegisterDirectProtocolWithChannel(protocol string, ingressChann
 	return nil
 }
 
-func (m mockNet) SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
+func (m mockNet) SendWrappedMessage(ctx context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
 	return nil
 }
 
@@ -110,7 +111,7 @@ func (m mockNet) GetPeers() []p2ppeers.Peer {
 	return []p2ppeers.Peer{pub1}
 }
 
-func (m *mockNet) SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error {
+func (m *mockNet) SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error {
 	if m.ReturnError {
 		if m.SendAck {
 			m.AckChannel <- struct{}{}
@@ -157,7 +158,7 @@ func defaultFetch() (*Fetch, *mockNet) {
 		make(chan struct{}),
 	}
 	lg := log.NewDefault("fetch")
-	f := NewFetch(cfg, mckNet, lg)
+	f := NewFetch(context.TODO(), cfg, mckNet, lg)
 	f.net = mckNet
 	f.AddDB("db", database.NewMemDatabase())
 	f.AddDB("db2", database.NewMemDatabase())
@@ -175,7 +176,7 @@ func customFetch(cfg Config) (*Fetch, *mockNet) {
 
 	lg := log.NewDefault("fetch")
 
-	f := NewFetch(cfg, mckNet, lg)
+	f := NewFetch(context.TODO(), cfg, mckNet, lg)
 	f.net = mckNet
 	f.AddDB("db", database.NewMemDatabase())
 	return f, mckNet

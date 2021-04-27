@@ -2,6 +2,7 @@
 package fetch
 
 import (
+	"context"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -132,9 +133,9 @@ type MessageNetwork struct {
 }
 
 // NewMessageNetwork creates a new instance of the fetch network server
-func NewMessageNetwork(requestTimeOut int, net service.Service, protocol string, log log.Log) *MessageNetwork {
+func NewMessageNetwork(ctx context.Context, requestTimeOut int, net service.Service, protocol string, log log.Log) *MessageNetwork {
 	return &MessageNetwork{
-		server.NewMsgServer(net.(server.Service), protocol, time.Duration(requestTimeOut)*time.Second, make(chan service.DirectMessage, p2pconf.Values.BufferSize), log),
+		server.NewMsgServer(ctx, net.(server.Service), protocol, time.Duration(requestTimeOut)*time.Second, make(chan service.DirectMessage, p2pconf.Values.BufferSize), log),
 		p2ppeers.NewPeers(net, log.WithName("peers")),
 		log,
 	}
@@ -156,7 +157,7 @@ func (f MessageNetwork) GetPeers() []p2ppeers.Peer {
 
 type network interface {
 	GetPeers() []p2ppeers.Peer
-	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error
+	SendRequest(ctx context.Context,msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error
 	RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func([]byte) []byte)
 	Close()
 }
@@ -182,9 +183,8 @@ type Fetch struct {
 }
 
 // NewFetch creates a new Fetch struct
-func NewFetch(cfg Config, network service.Service, logger log.Log) *Fetch {
-
-	srv := NewMessageNetwork(cfg.RequestTimeout, network, fetchProtocol, logger)
+func NewFetch(ctx context.Context, cfg Config, network service.Service, logger log.Log) *Fetch {
+	srv := NewMessageNetwork(ctx, cfg.RequestTimeout, network, fetchProtocol, logger)
 
 	f := &Fetch{
 		cfg:             cfg,
@@ -279,7 +279,7 @@ func (f *Fetch) loop() {
 
 // FetchRequestHandler handles requests for sync from peersProvider, and basically reads Data from database and puts it
 // in a response batch
-func (f *Fetch) FetchRequestHandler(data []byte) []byte {
+func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 	if f.stopped() {
 		return nil
 	}
@@ -444,7 +444,7 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 		// get random peer
 		p := GetRandomPeer(f.net.GetPeers())
 		f.log.Info("sending request batch %v items %v", batch.ID.Hex(), len(batch.Requests))
-		err := f.net.SendRequest(fetch, bytes, p, f.receiveResponse, timeoutFunc)
+		err := f.net.SendRequest(context.TODO(), fetch, bytes, p, f.receiveResponse, timeoutFunc)
 		// if call succeeded, continue to other requests
 		if err != nil {
 			retries++
