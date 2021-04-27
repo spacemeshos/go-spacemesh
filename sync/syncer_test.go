@@ -135,11 +135,11 @@ func (s storeMock) ValidateAndStoreMsg(data []byte) error {
 	return nil
 }
 
-func (s storeMock) HandleAtxData(data []byte, syncer service.Fetcher) error {
+func (s storeMock) HandleAtxData(ctx context.Context, data []byte, syncer service.Fetcher) error {
 	return nil
 }
 
-func (s *storeMock) HandleBlockData(data []byte, fetcher service.Fetcher) error {
+func (s *storeMock) HandleBlockData(ctx context.Context, data []byte, fetcher service.Fetcher) error {
 	var b types.Block
 
 	err := types.BytesToInterface(data, &b)
@@ -207,19 +207,19 @@ func SyncMockFactoryManClock(number int, conf Configuration, name string, dbType
 		txpool := state.NewTxMemPool()
 		atxpool := activation.NewAtxMemPool()
 		atxDB := database.NewMemDatabase()
-		f := fetch2.NewFetch(fetch2.DefaultConfig(), net, l)
+		f := fetch2.NewFetch(context.TODO(), fetch2.DefaultConfig(), net, l)
 		msh := getMesh(dbType, Path+name+"_"+time.Now().String(), atxDB)
 		store := &storeMock{
 			msh:    msh,
 			blocks: make(map[types.Hash32]*types.Block),
 		}
-		layerFetcher := layerfetcher.NewLogic(layerfetcher.Config{RequestTimeout: 3}, store, store, store, store, store, net, f, msh, l)
+		layerFetcher := layerfetcher.NewLogic(context.TODO(), layerfetcher.Config{RequestTimeout: 3}, store, store, store, store, store, net, f, msh, l)
 		poetDB := database.NewMemDatabase()
 		poet := activation.NewPoetDb(poetDB, log.NewDefault("poetDb"))
 		//poet := poetDb()
 		layerFetcher.AddDBs(msh.Blocks(), atxDB, msh.Transactions(), poetDB)
 
-		sync := NewSync(context.TODO(),net, msh, txpool, atxpool, blockValidator, poet, conf, ticker, layerFetcher, l)
+		sync := NewSync(context.TODO(), net, msh, txpool, atxpool, blockValidator, poet, conf, ticker, layerFetcher, l)
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
 	}
@@ -275,6 +275,7 @@ func addTxsToPool(pool txMemPool, txs []*types.Transaction) {
 }
 
 func TestSyncer_Start(t *testing.T) {
+	types.SetLayersPerEpoch(3)
 	syncs, _, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	syn := syncs[0]
 
@@ -394,9 +395,8 @@ func TestSyncProtocol_FetchInputVector(t *testing.T) {
 	r.NoError(err)
 	r.Equal(input, got)
 
-	bids, err := s1.syncInputVector(context.TODO(),types.LayerID(1))
+	got, err = s1.GetLayerInputVector(types.LayerID(1))
 	r.NoError(err)
-	require.Equal(t, bids, input)
 }
 
 func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
@@ -420,7 +420,7 @@ func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
 	s1.fetcher.Start()
 	defer s1.fetcher.Close()
 	log.Info("new code")
-	err = s1.GetPoetProof(types.CalcHash32(ref[:]))
+	err = s1.GetPoetProof(context.TODO(), types.CalcHash32(ref[:]))
 	r.NoError(err)
 }
 
@@ -579,23 +579,11 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncObj1.AddBlockWithTxs(block2)
 	syncObj1.AddBlockWithTxs(block3)
 
-	ch := make(chan fetchRequest, 3)
-	ch <- fetchRequest{ids: []types.Hash32{block1.Hash32()}}
-	ch <- fetchRequest{ids: []types.Hash32{block2.Hash32()}}
-	ch <- fetchRequest{ids: []types.Hash32{block3.Hash32()}}
+	ch := make(chan []types.Hash32, 3)
+	ch <- []types.Hash32{block1.Hash32()}
+	ch <- []types.Hash32{block2.Hash32()}
+	ch <- []types.Hash32{block3.Hash32()}
 	close(ch)
-	//output := fetchWithFactory(newFetchWorker(syncObj2, 1, newFetchReqFactory(blockMsg, blocksAsItems), ch, ""))
-
-	/*for out := range output {
-		block := out.(fetchJob).items[0].(*types.Block)
-		_, err := syncObj2.txQueue.HandleTxs(context.TODO(), block.TxIDs)
-		if err != nil {
-			t.Error("could not fetch all txs", err)
-		}
-		syncObj2.Debug("add block to layer %v", block)
-
-		//syncObj2.AddBlockWithTxs(block, txs, atxs)
-	}*/
 }
 
 func TestSyncProtocol_SyncNodes(t *testing.T) {
@@ -841,7 +829,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()), nil)
 		blockValidator := blockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-		sync := NewSync(context.TODO(),s, msh, state.NewTxMemPool(), activation.NewAtxMemPool(), blockValidator, poetDb, conf, ts, nil, l)
+		sync := NewSync(context.TODO(), s, msh, state.NewTxMemPool(), activation.NewAtxMemPool(), blockValidator, poetDb, conf, ts, nil, l)
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)
 	}
@@ -967,7 +955,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), nil)
 		blockValidator := blockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-		sync := NewSync(context.TODO(),s, msh, state.NewTxMemPool(), activation.NewAtxMemPool(), blockValidator, poetDb, conf, ts, nil, l)
+		sync := NewSync(context.TODO(), s, msh, state.NewTxMemPool(), activation.NewAtxMemPool(), blockValidator, poetDb, conf, ts, nil, l)
 		ts.StartNotifying()
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)
@@ -1159,7 +1147,7 @@ func TestFetchLayerBlockIds(t *testing.T) {
 	mp[hash1] = append(mp[hash1], nodes[0].PublicKey())
 	hash2 := types.CalcBlocksHash32([]types.BlockID{block2.ID()}, nil)
 	mp[hash2] = append(mp[hash2], nodes[1].PublicKey())
-	layerRes := syncObj3.fetcher.PollLayer(1)
+	layerRes := syncObj3.fetcher.PollLayer(context.TODO(), 1)
 	r := <-layerRes
 	assert.NoError(t, r.Err)
 
@@ -1438,7 +1426,7 @@ func TestSyncer_handleNotSyncedFlow(t *testing.T) {
 	txpool := state.NewTxMemPool()
 	atxpool := activation.NewAtxMemPool()
 	ts := &mockClock{Layer: 10}
-	sync := NewSync(context.TODO(),service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String(), nil), txpool, atxpool, blockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, nil, log.NewDefault(t.Name()))
+	sync := NewSync(context.TODO(), service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String(), nil), txpool, atxpool, blockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, nil, log.NewDefault(t.Name()))
 	defer sync.Close()
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.Mesh.Validator = lv
@@ -1477,7 +1465,7 @@ func TestSyncer_SetZeroBlockLayer(t *testing.T) {
 	txpool := state.NewTxMemPool()
 	atxpool := activation.NewAtxMemPool()
 	ts := &mockClock{Layer: 10}
-	sync := NewSync(context.TODO(), service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String()), txpool, atxpool, blockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, log.NewDefault(t.Name()))
+	sync := NewSync(context.TODO(), service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String(), database.NewMemDatabase()), txpool, atxpool, blockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, nil, log.NewDefault(t.Name()))
 	defer sync.Close()
 	sync.SetLatestLayer(1)
 
@@ -1494,9 +1482,9 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	l := log.NewDefault(t.Name())
 
 	syncedMiner := sim.NewNode()
-	syncedMsh := getMesh(memoryDB, Path+t.Name()+"synced_"+time.Now().String())
+	syncedMsh := getMesh(memoryDB, Path+t.Name()+"synced_"+time.Now().String(), database.NewMemDatabase())
 	synecdAtxPool := activation.NewAtxMemPool()
-	_ = NewSync(context.TODO(),syncedMiner, syncedMsh, state.NewTxMemPool(), synecdAtxPool, blockEligibilityValidatorMock{}, newMockPoetDb(), conf, timer,nil, l.WithName("synced"))
+	_ = NewSync(context.TODO(), syncedMiner, syncedMsh, state.NewTxMemPool(), synecdAtxPool, blockEligibilityValidatorMock{}, newMockPoetDb(), conf, timer, nil, l.WithName("synced"))
 	atx := types.NewActivationTx(types.NIPSTChallenge{}, types.Address{}, &types.NIPST{}, &types.PostProof{})
 	atx.CalcAndSetID()
 	fmt.Println("ATX ID ", atx.ID())
@@ -1528,7 +1516,7 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	msh.AddBlock(types.NewExistingBlock(6, []byte(rand.String(8)), nil))
 	msh.AddBlock(types.NewExistingBlock(7, []byte(rand.String(8)), nil))
 
-	sync := NewSync(context.TODO(),net, msh, txpool, atxpool, blockValidator, newMockPoetDb(), conf, timer, nil, l)
+	sync := NewSync(context.TODO(), net, msh, txpool, atxpool, blockValidator, newMockPoetDb(), conf, timer, nil, l)
 
 	atxpool.Put(atx)
 	err := msh.ProcessAtxs([]*types.ActivationTx{atx})

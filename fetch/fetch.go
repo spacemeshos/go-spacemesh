@@ -157,8 +157,8 @@ func (f MessageNetwork) GetPeers() []p2ppeers.Peer {
 
 type network interface {
 	GetPeers() []p2ppeers.Peer
-	SendRequest(ctx context.Context,msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error
-	RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func([]byte) []byte)
+	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error
+	RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(ctx context.Context, b []byte) []byte)
 	Close()
 }
 

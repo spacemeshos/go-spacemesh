@@ -279,10 +279,10 @@ func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *
 	blockHandler := blocks.NewBlockHandler(blocks.Config{Depth: 10}, msh, blockEligibilityValidatorMock{}, lg)
 
 	fCfg := fetch.DefaultConfig()
-	fetcher := fetch.NewFetch(fCfg, swarm, lg)
+	fetcher := fetch.NewFetch(context.TODO(), fCfg, swarm, lg)
 
 	lCfg := layerfetcher.Config{RequestTimeout: 20}
-	layerFetch := layerfetcher.NewLogic(lCfg, blockHandler, atxdb, poetDb, atxdb, mockTxProcessor{}, swarm, fetcher, msh, lg)
+	layerFetch := layerfetcher.NewLogic(nil, lCfg, blockHandler, atxdb, poetDb, atxdb, mockTxProcessor{}, swarm, fetcher, msh, lg)
 	layerFetch.AddDBs(mshdb.Blocks(), atxdbStore, mshdb.Transactions(), poetStorage)
 	layerFetch.Start()
 	return NewSync(context.TODO(), swarm, msh, txpool, atxdb, blockEligibilityValidatorMock{}, poetDb, conf, &clock, layerFetch, lg)

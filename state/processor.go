@@ -308,7 +308,7 @@ func transfer(db *TransactionProcessor, sender, recipient types.Address, amount 
 }
 
 // HandleTxGossipData handles data sent from gossip
-func (tp *TransactionProcessor) HandleTxGossipData(data service.GossipMessage, syncer service.Fetcher) {
+func (tp *TransactionProcessor) HandleTxGossipData(ctx context.Context, data service.GossipMessage, syncer service.Fetcher) {
 	err := tp.HandleTxData(data.Bytes())
 	if err != nil {
 		tp.With().Error("invalid tx", log.Err(err))

@@ -129,7 +129,7 @@ func (m mockBlocks) HandleBlockData(ctx context.Context, date []byte, fetcher se
 type mockAtx struct {
 }
 
-func (m mockAtx) HandleAtxData(data []byte, syncer service.Fetcher) error {
+func (m mockAtx) HandleAtxData(ctx context.Context, data []byte, syncer service.Fetcher) error {
 	panic("implement me")
 }
 
@@ -156,7 +156,7 @@ func Test_LayerHashReceiver(t *testing.T) {
 	l := NewMockLogic(&mockNet{}, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerHash"))
 	h := RandomHash()
 	db.hashes[layerID] = h
-	l.LayerHashBlocksReceiver(layerID.Bytes())
+	l.LayerHashBlocksReceiver(context.TODO(), layerID.Bytes())
 }
 
 func TestLogic_LayerHashBlocksReceiver(t *testing.T) {
@@ -165,7 +165,7 @@ func TestLogic_LayerHashBlocksReceiver(t *testing.T) {
 	h := RandomHash()
 	db.layers[h] = []types.BlockID{types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID()}
 
-	outB := l.LayerHashBlocksReceiver(h.Bytes())
+	outB := l.LayerHashBlocksReceiver(context.TODO(), h.Bytes())
 	var act []types.BlockID
 	err := types.BytesToInterface(outB, &act)
 	assert.NoError(t, err)

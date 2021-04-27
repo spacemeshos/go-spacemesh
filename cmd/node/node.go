@@ -592,12 +592,12 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	}
 	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, lg)
 
-	remoteFetchService := fetch.NewFetch(app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
+	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
 
-	layerFetch := layerfetcher.NewLogic(app.Config.LAYERS, blockListener, atxdb, poetDb, atxdb, processor, swarm, remoteFetchService, msh, app.addLogger(Fetcher, lg))
+	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxdb, poetDb, atxdb, processor, swarm, remoteFetchService, msh, app.addLogger(Fetcher, lg))
 	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore)
 
-	syncer := sync.NewSync(swarm, msh, app.txPool, atxdb, eValidator, poetDb, syncConf, clock, layerFetch, app.addLogger(SyncLogger, lg))
+	syncer := sync.NewSync(ctx, swarm, msh, app.txPool, atxdb, eValidator, poetDb, syncConf, clock, layerFetch, app.addLogger(SyncLogger, lg))
 	blockOracle := blocks.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
@@ -624,12 +624,6 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	database.SwitchCreationContext(dbStorepath, "") // currently only blockbuilder uses this mechanism
 	blockProducer := miner.NewBlockBuilder(minerCfg, sgn, swarm, clock.Subscribe(), coinToss, msh, trtl, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
 
-	bCfg := blocks.Config{
-		Depth:       app.Config.Hdist,
-		GoldenATXID: goldenATXID,
-	}
-	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, lg)
-
 	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))
 
 	nipstBuilder := activation.NewNIPSTBuilder(util.Hex2Bytes(nodeID.Key), postClient, poetClient, poetDb, store, app.addLogger(NipstBuilderLogger, lg))
@@ -648,7 +642,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, atxdb, swarm, msh, nipstBuilder, postClient, clock, syncer, store, app.addLogger("atxBuilder", lg))
 
-	gossipListener.AddListener(ctx, state.IncomingTxProtocol, priorityq.Low, processor.HandleTxData)
+	gossipListener.AddListener(ctx, state.IncomingTxProtocol, priorityq.Low, processor.HandleTxGossipData)
 	gossipListener.AddListener(ctx, activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
 	gossipListener.AddListener(ctx, blocks.NewBlockProtocol, priorityq.High, blockListener.HandleBlock)
 

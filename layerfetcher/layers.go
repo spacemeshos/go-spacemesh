@@ -2,8 +2,8 @@
 package layerfetcher
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -20,7 +20,7 @@ import (
 
 // atxHandler defines handling function for incoming ATXs
 type atxHandler interface {
-	HandleAtxData(data []byte, syncer service.Fetcher) error
+	HandleAtxData(ctx context.Context, data []byte, syncer service.Fetcher) error
 }
 
 // blockHandler defines handling function for blocks
@@ -101,9 +101,9 @@ func DefaultConfig() Config {
 }
 
 // NewLogic creates a new instance of layer fetching logic
-func NewLogic(cfg Config, blocks blockHandler, atxs atxHandler, poet poetDb, atxIDs atxIDsDB, txs TxProcessor, network service.Service, fetcher fetch.Fetcher, layers layerDB, log log.Log) *Logic {
+func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHandler, poet poetDb, atxIDs atxIDsDB, txs TxProcessor, network service.Service, fetcher fetch.Fetcher, layers layerDB, log log.Log) *Logic {
 
-	srv := fetch.NewMessageNetwork(cfg.RequestTimeout, network, layersProtocol, log)
+	srv := fetch.NewMessageNetwork(ctx, cfg.RequestTimeout, network, layersProtocol, log)
 	l := &Logic{
 		log:                  log,
 		fetcher:              fetcher,
@@ -173,7 +173,7 @@ type LayerPromiseResult struct {
 }
 
 // LayerHashReqReceiver returns the layer hash for the given layer ID
-func (l *Logic) LayerHashReqReceiver(msg []byte) []byte {
+func (l *Logic) LayerHashReqReceiver(ctx context.Context, msg []byte) []byte {
 	lyr := types.LayerID(util.BytesToUint64(msg))
 	h := l.layerDB.GetLayerHash(lyr)
 	l.log.Info("got layer hash request %v, responding with %v", lyr, h.Hex())
@@ -181,7 +181,7 @@ func (l *Logic) LayerHashReqReceiver(msg []byte) []byte {
 }
 
 // epochATXsReceiver returns the layer hash for the given layer ID
-func (l *Logic) epochATXsReceiver(msg []byte) []byte {
+func (l *Logic) epochATXsReceiver(ctx context.Context, msg []byte) []byte {
 	l.log.Info("got epoch atxs request ")
 	lyr := types.EpochID(util.BytesToUint64(msg))
 	atxs := l.atxIds.GetEpochAtxs(lyr)
@@ -194,7 +194,7 @@ func (l *Logic) epochATXsReceiver(msg []byte) []byte {
 
 // LayerHashBlocksReceiver returns the block IDs for the specified layer hash,
 // it also returns the validation vector for this hash and latest blocks received in gossip
-func (l *Logic) LayerHashBlocksReceiver(msg []byte) []byte {
+func (l *Logic) LayerHashBlocksReceiver(ctx context.Context, msg []byte) []byte {
 	h := types.BytesToHash(msg)
 
 	blocks := l.layerDB.GetLayerHashBlocks(h)
@@ -242,7 +242,7 @@ func (l *Logic) PollLayer(ctx context.Context, layer types.LayerID) chan LayerPr
 		timeoutFunc := func(err error) {
 			l.receiveLayerHash(ctx, layer, peer, len(peers), nil, err)
 		}
-		err := l.net.SendRequest(ctx, LayerBlocksDB, layer.Bytes(), p, receiveForPeerFunc, timeoutFunc)
+		err := l.net.SendRequest(ctx, LayerHashMsg, layer.Bytes(), p, receiveForPeerFunc, timeoutFunc)
 		if err != nil {
 			l.receiveLayerHash(ctx, layer, peer, len(peers), nil, err)
 		}
@@ -312,7 +312,7 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 	//todo: think if we should aggregate or ask from multiple peers to have some redundancy in requests
 	for hash, peer := range hashes {
 		if hash == emptyHash {
-			l.receiveBlockHashes(ctx,id, nil, len(hashes), ErrZeroLayer)
+			l.receiveBlockHashes(ctx, id, nil, len(hashes), ErrZeroLayer)
 			continue
 		}
 		//build receiver function
@@ -323,7 +323,7 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 		errFunc := func(err error) {
 			l.receiveBlockHashes(ctx, id, nil, len(hashes), err)
 		}
-		err := l.net.SendRequest(ctx, LayerHashDB, hash.Bytes(), peer[remainingPeers], receiveForPeerFunc, errFunc)
+		err := l.net.SendRequest(ctx, LayerBlocksMsg, hash.Bytes(), peer[remainingPeers], receiveForPeerFunc, errFunc)
 		if err != nil {
 			l.receiveBlockHashes(ctx, id, nil, len(hashes), err)
 		}
@@ -408,7 +408,7 @@ type epochAtxRes struct {
 }
 
 // GetEpochATXs fetches all atxs received by peer for given layer
-func (l *Logic) GetEpochATXs(ctx context.Context,id types.EpochID) error {
+func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 	resCh := make(chan epochAtxRes, 1)
 
 	//build receiver function
@@ -435,12 +435,12 @@ func (l *Logic) GetEpochATXs(ctx context.Context,id types.EpochID) error {
 	if res.Error != nil {
 		return res.Error
 	}
-	return l.GetAtxs(res.Atxs)
+	return l.GetAtxs(ctx, res.Atxs)
 }
 
 // getAtxResults is called when an ATX result is received
-func (l *Logic) getAtxResults(hash types.Hash32, data []byte) error {
-	return l.atxs.HandleAtxData(data, l)
+func (l *Logic) getAtxResults(ctx context.Context, hash types.Hash32, data []byte) error {
+	return l.atxs.HandleAtxData(ctx, data, l)
 }
 
 func (l *Logic) getTxResult(hash types.Hash32, data []byte) error {
@@ -494,7 +494,7 @@ func (l *Logic) FetchAtx(ctx context.Context, id types.ATXID) error {
 		return f.Result().Err
 	}
 	if !f.Result().IsLocal {
-		return l.getAtxResults(f.Result().Hash, f.Result().Data)
+		return l.getAtxResults(nil, f.Result().Hash, f.Result().Data)
 	}
 	return nil
 }
@@ -529,7 +529,7 @@ func (l *Logic) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
 			return res.Err
 		}
 		if !res.IsLocal {
-			err := l.getAtxResults(hash, res.Data)
+			err := l.getAtxResults(nil, hash, res.Data)
 			if err != nil {
 				return err
 			}

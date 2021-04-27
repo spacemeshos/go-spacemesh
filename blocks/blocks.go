@@ -187,7 +187,6 @@ func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.B
 	}
 	if len(atxs) > 0 {
 		return syncer.GetAtxs(ctx, atxs)
-	bh.WithContext(ctx).With().Debug("block handler done fetching atxs referenced by block", blk.ID(), log.Err(err))
 	}
 	return nil
 }
