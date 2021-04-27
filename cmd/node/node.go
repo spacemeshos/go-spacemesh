@@ -545,7 +545,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		Recovered: mdb.PersistentData(),
 	}
 
-	trtl = tortoise.NewVerifyingTortoise(trtlCfg)
+	trtl = tortoise.NewVerifyingTortoise(ctx, trtlCfg)
 
 	if trtlCfg.Recovered {
 		msh = mesh.NewRecoveredMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))

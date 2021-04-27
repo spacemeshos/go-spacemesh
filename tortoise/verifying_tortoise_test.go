@@ -183,7 +183,7 @@ func turtleSanity(t *testing.T, layers types.LayerID, blocksPerLayer, voteNegati
 
 	trtl = newTurtle(msh, defaultTestHdist, blocksPerLayer)
 	gen := mesh.GenesisLayer()
-	trtl.init(gen)
+	trtl.init(context.TODO(), gen)
 
 	var l types.LayerID
 	for l = mesh.GenesisLayer().Index() + 1; l <= layers; l++ {
@@ -197,7 +197,7 @@ func turtleSanity(t *testing.T, layers types.LayerID, blocksPerLayer, voteNegati
 func turtleMakeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, msh *mesh.DB, hm func(id types.LayerID) ([]types.BlockID, error)) {
 	fmt.Println("choosing base block layer ", l)
 	msh.InputVectorBackupFunc = hm
-	b, lists, err := trtl.BaseBlock()
+	b, lists, err := trtl.BaseBlock(context.TODO())
 	fmt.Println("the base block for ", l, "is ", b)
 	if err != nil {
 		panic(fmt.Sprint("no base - ", err))
@@ -270,7 +270,7 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 
 	trtl := newTurtle(msh, defaultTestHdist, blocksPerLayer)
 	gen := mesh.GenesisLayer()
-	trtl.init(gen)
+	trtl.init(context.TODO(), gen)
 
 	var l types.LayerID
 	for l = types.GetEffectiveGenesis() + 1; l < layers; l++ {
@@ -282,13 +282,13 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 	//todo: also check votes with requireVote
 }
 
-type baseBlockProvider func() (types.BlockID, [][]types.BlockID, error)
+type baseBlockProvider func(context.Context) (types.BlockID, [][]types.BlockID, error)
 type inputVectorProvider func(l types.LayerID) ([]types.BlockID, error)
 
 func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp inputVectorProvider, blocksPerLayer int) *types.Layer {
 	fmt.Println("choosing base block layer ", l)
 	msh.InputVectorBackupFunc = ivp
-	b, lists, err := bbp()
+	b, lists, err := bbp(context.TODO())
 	fmt.Println("the base block for ", l, "is ", b)
 	fmt.Println("Against ", lists[0])
 	fmt.Println("For ", lists[1])
@@ -362,7 +362,7 @@ func TestTurtle_Recovery(t *testing.T) {
 	mdb.InputVectorBackupFunc = getHareResults
 
 	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(3, mdb, 5, lg)
+	alg := verifyingTortoise(context.TODO(), 3, mdb, 5, lg)
 	l := mesh.GenesisLayer()
 
 	log.With().Info("The genesis is ", l.Index(), types.BlockIdsField(types.BlockIDs(l.Blocks())))
@@ -387,7 +387,7 @@ func TestTurtle_Recovery(t *testing.T) {
 
 	l31 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, 4)
 
-	l32 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, func() (types.BlockID, [][]types.BlockID, error) {
+	l32 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, func(context.Context) (types.BlockID, [][]types.BlockID, error) {
 		diffs := make([][]types.BlockID, 3)
 		diffs[0] = make([]types.BlockID, 0)
 		diffs[1] = types.BlockIDs(l.Blocks())

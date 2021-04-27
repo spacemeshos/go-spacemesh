@@ -48,7 +48,7 @@ type blockOracle interface {
 }
 
 type baseBlockProvider interface {
-	BaseBlock() (types.BlockID, [][]types.BlockID, error)
+	BaseBlock(context.Context) (types.BlockID, [][]types.BlockID, error)
 }
 
 type atxDb interface {
@@ -278,12 +278,20 @@ func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, 
 	return
 }
 
-func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID, activeSet []types.ATXID) (*types.Block, error) {
+func (t *BlockBuilder) createBlock(
+	ctx context.Context,
+	id types.LayerID,
+	atxID types.ATXID,
+	eligibilityProof types.BlockEligibilityProof,
+	txids []types.TransactionID,
+	activeSet []types.ATXID,
+) (*types.Block, error) {
+	logger := t.WithContext(ctx)
 	if id <= types.GetEffectiveGenesis() {
 		return nil, errors.New("cannot create blockBytes in genesis layer")
 	}
 
-	base, diffs, err := t.baseBlockP.BaseBlock()
+	base, diffs, err := t.baseBlockP.BaseBlock(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -305,14 +313,14 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 	epoch := id.GetEpoch()
 	refBlock, err := t.getRefBlock(epoch)
 	if err != nil {
-		t.With().Debug("creating block with active set (no reference block for epoch)",
+		logger.With().Debug("creating block with active set (no reference block for epoch)",
 			log.Int("active_set_size", len(activeSet)),
 			log.FieldNamed("ref_block", refBlock),
 			log.Err(err))
 		atxs := activeSet
 		b.ActiveSet = &atxs
 	} else {
-		t.With().Debug("creating block with reference block (no active set)",
+		logger.With().Debug("creating block with reference block (no active set)",
 			log.Int("active_set_size", len(activeSet)),
 			log.FieldNamed("ref_block", refBlock))
 		b.RefBlock = &refBlock
@@ -328,15 +336,15 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 	bl.Initialize()
 
 	if b.ActiveSet != nil {
-		t.With().Info("storing ref block", epoch, bl.ID())
+		logger.With().Info("storing ref block", epoch, bl.ID())
 		err := t.storeRefBlock(epoch, bl.ID())
 		if err != nil {
-			t.With().Error("cannot store ref block", epoch, log.Err(err))
+			logger.With().Error("cannot store ref block", epoch, log.Err(err))
 			//todo: panic?
 		}
 	}
 
-	t.Event().Info("block created", bl.Fields()...)
+	logger.Event().Info("block created", bl.Fields()...)
 	return bl, nil
 }
 
@@ -398,7 +406,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 					logger.With().Error("failed to get txs for block", layerID, log.Err(err))
 					continue
 				}
-				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList, atxs)
+				blk, err := t.createBlock(ctx, layerID, atxID, eligibilityProof, txList, atxs)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot create new block")
 					logger.With().Error("failed to create new block", log.Err(err))

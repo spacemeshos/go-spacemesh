@@ -25,18 +25,18 @@ type Config struct {
 }
 
 // NewVerifyingTortoise creates a new verifying tortoise wrapper
-func NewVerifyingTortoise(cfg Config) *ThreadSafeVerifyingTortoise {
+func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingTortoise {
 	if cfg.Recovered {
 		return recoveredVerifyingTortoise(cfg.Database, cfg.Log)
 	}
-	return verifyingTortoise(cfg.LayerSyze, cfg.Database, cfg.Hdist, cfg.Log)
+	return verifyingTortoise(ctx, cfg.LayerSyze, cfg.Database, cfg.Hdist, cfg.Log)
 }
 
 // verifyingTortoise creates a new verifying tortoise wrapper
-func verifyingTortoise(layerSize int, mdb blockDataProvider, hdist int, lg log.Log) *ThreadSafeVerifyingTortoise {
+func verifyingTortoise(ctx context.Context, layerSize int, mdb blockDataProvider, hdist int, lg log.Log) *ThreadSafeVerifyingTortoise {
 	alg := &ThreadSafeVerifyingTortoise{trtl: newTurtle(mdb, hdist, layerSize)}
 	alg.trtl.SetLogger(lg)
-	alg.trtl.init(mesh.GenesisLayer())
+	alg.trtl.init(ctx, mesh.GenesisLayer())
 	return alg
 }
 
@@ -65,9 +65,9 @@ func (trtl *ThreadSafeVerifyingTortoise) LatestComplete() types.LayerID {
 }
 
 // BaseBlock chooses a base block and creates a differences list. needs the hare results for latest layers.
-func (trtl *ThreadSafeVerifyingTortoise) BaseBlock() (types.BlockID, [][]types.BlockID, error) {
+func (trtl *ThreadSafeVerifyingTortoise) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
 	trtl.mutex.Lock()
-	block, diffs, err := trtl.trtl.BaseBlock()
+	block, diffs, err := trtl.trtl.BaseBlock(ctx)
 	trtl.mutex.Unlock()
 	if err != nil {
 		return types.BlockID{}, nil, err
