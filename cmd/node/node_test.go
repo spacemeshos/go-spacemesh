@@ -4,6 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/spacemeshos/amcl/BLS381"
+	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/eligibility"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/stretchr/testify/assert"
 	"io"
 	"io/ioutil"
 	inet "net"
@@ -560,20 +566,18 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	// Use a unique port
 	port := 1240
 
-	/*
-		clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1) * time.Second, time.Now(), log.NewDefault("clock"))
-		net := service.NewSimulator()
-		cfg := getTestDefaultConfig()
-		poetHarness, err := activation.NewHTTPPoetHarness(false)
-		assert.NoError(t, err)
-		app, err := InitSingleInstance(*cfg,0, time.Now().Add(1 *time.Second).Format(time.RFC3339), BLS381.DefaultSeed(), path,eligibility.New(),poetHarness.HTTPPoetClient, clock, net)
-	*/
-
-	app := NewSpacemeshApp()
-
 	path, cleanup, err := tempDir()
 	require.NoError(t, err)
 	defer cleanup()
+
+	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), log.NewDefault("clock"))
+	net := service.NewSimulator()
+	cfg := getTestDefaultConfig()
+	poetHarness, err := activation.NewHTTPPoetHarness(false)
+	assert.NoError(t, err)
+	app, err := InitSingleInstance(*cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), BLS381.DefaultSeed(), path, eligibility.New(), poetHarness.HTTPPoetClient, clock, net)
+
+	//app := NewSpacemeshApp()
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		defer app.Cleanup(cmd, args)
