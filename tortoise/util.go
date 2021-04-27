@@ -93,8 +93,8 @@ func (blt blockIDLayerTuple) id() types.BlockID {
 
 // Opinion is a tuple of block and layer id. It stores a block's opinion about many other blocks.
 type Opinion struct {
-	BILT          blockIDLayerTuple
-	BlocksOpinion map[types.BlockID]vec
+	BlockAndLayer blockIDLayerTuple
+	BlockOpinions map[types.BlockID]vec
 }
 
 type retriever interface {

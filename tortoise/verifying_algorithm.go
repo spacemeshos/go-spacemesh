@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"context"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -43,12 +44,12 @@ func verifyingTortoise(layerSize int, mdb blockDataProvider, hdist int, lg log.L
 func recoveredVerifyingTortoise(mdb blockDataProvider, lg log.Log) *ThreadSafeVerifyingTortoise {
 	tmp, err := RecoverVerifyingTortoise(mdb)
 	if err != nil {
-		lg.Panic("could not recover tortoise state from disc ", err)
+		lg.With().Panic("could not recover tortoise state from disk", log.Err(err))
 	}
 
 	trtl := tmp.(*turtle)
 
-	lg.Info("recovered tortoise from disc")
+	lg.Info("recovered tortoise from disk")
 	trtl.bdp = mdb
 	trtl.logger = lg
 
@@ -76,30 +77,30 @@ func (trtl *ThreadSafeVerifyingTortoise) BaseBlock() (types.BlockID, [][]types.B
 
 //HandleIncomingLayer processes all layer block votes
 // returns the old verified layer and new verified layer after taking into account the blocks votes
-func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ll *types.Layer) (types.LayerID, types.LayerID) {
+func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context, ll *types.Layer) (types.LayerID, types.LayerID) {
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()
 	oldVerified := trtl.trtl.Verified
-	trtl.trtl.HandleIncomingLayer(ll)
+	trtl.trtl.HandleIncomingLayer(ctx, ll)
 	newVerified := trtl.trtl.Verified
 	return oldVerified, newVerified
 }
 
 // HandleLateBlock processes a late blocks votes (for late block definition see white paper)
 // returns the old verified layer and new verified layer after taking into account the blocks votes
-func (trtl *ThreadSafeVerifyingTortoise) HandleLateBlock(b *types.Block) (types.LayerID, types.LayerID) {
+func (trtl *ThreadSafeVerifyingTortoise) HandleLateBlock(ctx context.Context, b *types.Block) (types.LayerID, types.LayerID) {
 	//todo feed all layers from b's layer to tortoise
 	l := types.NewLayer(b.Layer())
 	l.AddBlock(b)
-	oldVerified, newVerified := trtl.HandleIncomingLayer(l) // block wasn't in input vector for sure.
-	log.With().Info("late block ", b.Layer(), b.ID())
+	oldVerified, newVerified := trtl.HandleIncomingLayer(ctx, l) // block wasn't in input vector for sure
+	trtl.trtl.logger.WithContext(ctx).With().Info("late block", b.Layer(), b.ID())
 	return oldVerified, newVerified
 }
 
 // Persist saves a copy of the current tortoise state to the database
-func (trtl *ThreadSafeVerifyingTortoise) Persist() error {
+func (trtl *ThreadSafeVerifyingTortoise) Persist(ctx context.Context) error {
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()
-	log.Info("persist tortoise ")
+	trtl.trtl.logger.WithContext(ctx).Info("persist tortoise")
 	return trtl.trtl.persist()
 }

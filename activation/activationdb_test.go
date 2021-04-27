@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"os"
@@ -46,7 +47,7 @@ func createLayerWithAtx2(t require.TestingT, msh *mesh.Mesh, id types.LayerID, n
 
 type MeshValidatorMock struct{}
 
-func (m *MeshValidatorMock) Persist() error {
+func (m *MeshValidatorMock) Persist(context.Context) error {
 	return nil
 }
 
@@ -54,10 +55,10 @@ func (m *MeshValidatorMock) LatestComplete() types.LayerID {
 	panic("implement me")
 }
 
-func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
+func (m *MeshValidatorMock) HandleIncomingLayer(_ context.Context, layer *types.Layer) (types.LayerID, types.LayerID) {
 	return layer.Index() - 1, layer.Index()
 }
-func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
+func (m *MeshValidatorMock) HandleLateBlock(_ context.Context, bl *types.Block) (types.LayerID, types.LayerID) {
 	return bl.Layer() - 1, bl.Layer()
 }
 
@@ -67,7 +68,7 @@ func (MockState) GetAllAccounts() (*types.MultipleAccountsState, error) {
 	panic("implement me")
 }
 
-func (MockState) ValidateAndAddTxToPool(tx *types.Transaction) error {
+func (MockState) ValidateAndAddTxToPool(*types.Transaction) error {
 	panic("implement me")
 }
 

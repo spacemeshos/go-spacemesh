@@ -537,17 +537,17 @@ func TestSyncProtocol_SyncNodes(t *testing.T) {
 	syncObj2.AddBlockWithTxs(block9)
 	syncObj2.AddBlockWithTxs(block10)
 
-	syncObj1.getAndValidateLayer(1)
-	syncObj1.getAndValidateLayer(2)
-	syncObj1.getAndValidateLayer(3)
-	syncObj1.getAndValidateLayer(4)
-	syncObj1.getAndValidateLayer(5)
+	syncObj1.getAndValidateLayer(context.TODO(), 1)
+	syncObj1.getAndValidateLayer(context.TODO(), 2)
+	syncObj1.getAndValidateLayer(context.TODO(), 3)
+	syncObj1.getAndValidateLayer(context.TODO(), 4)
+	syncObj1.getAndValidateLayer(context.TODO(), 5)
 
-	syncObj2.getAndValidateLayer(1)
-	syncObj2.getAndValidateLayer(2)
-	syncObj2.getAndValidateLayer(3)
-	syncObj2.getAndValidateLayer(4)
-	syncObj2.getAndValidateLayer(5)
+	syncObj2.getAndValidateLayer(context.TODO(), 1)
+	syncObj2.getAndValidateLayer(context.TODO(), 2)
+	syncObj2.getAndValidateLayer(context.TODO(), 3)
+	syncObj2.getAndValidateLayer(context.TODO(), 4)
+	syncObj2.getAndValidateLayer(context.TODO(), 5)
 
 	syncObj3.SyncInterval = time.Millisecond * 20
 	syncObj3.Start(context.TODO())
@@ -635,10 +635,10 @@ func syncTest(dpType string, t *testing.T) {
 	block12 := types.NewExistingBlock(6, []byte(rand.String(8)), []types.TransactionID{tx7.ID(), tx8.ID()})
 	block10.Signature = signer.Sign(block10.Bytes())
 
-	syncObj1.ValidateLayer(mesh.GenesisLayer())
-	syncObj2.ValidateLayer(mesh.GenesisLayer())
-	syncObj3.ValidateLayer(mesh.GenesisLayer())
-	syncObj4.ValidateLayer(mesh.GenesisLayer())
+	syncObj1.ValidateLayer(context.TODO(), mesh.GenesisLayer())
+	syncObj2.ValidateLayer(context.TODO(), mesh.GenesisLayer())
+	syncObj3.ValidateLayer(context.TODO(), mesh.GenesisLayer())
+	syncObj4.ValidateLayer(context.TODO(), mesh.GenesisLayer())
 
 	addTxsToPool(syncObj1.txpool, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
 	syncObj1.AddBlock(block2)
@@ -1041,7 +1041,7 @@ func TestFetchLayerBlockIds(t *testing.T) {
 	}
 
 	syncObj3.handleNotSynced(context.TODO(), 2)
-	assert.NoError(t, syncObj3.getAndValidateLayer(2))
+	assert.NoError(t, syncObj3.getAndValidateLayer(context.TODO(), 2))
 	l, err := syncObj3.GetLayer(2)
 	assert.NoError(t, err)
 	assert.True(t, len(l.Blocks()) == 0)
@@ -1130,7 +1130,7 @@ func TestFetchLayerBlockIdsNoResponse(t *testing.T) {
 	syncObj4.AddBlock(block4)
 	syncObj3.AddBlock(block5)
 	syncObj4.AddBlock(block5)
-	if err := syncObj5.getAndValidateLayer(2); err != nil {
+	if err := syncObj5.getAndValidateLayer(context.TODO(), 2); err != nil {
 		t.Fail()
 	}
 
@@ -1151,15 +1151,15 @@ func TestFetchLayerBlockIdsNoResponse(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, len(lyr.Blocks()) == 2)
 
-	err = syncObj5.getAndValidateLayer(3)
+	err = syncObj5.getAndValidateLayer(context.TODO(), 3)
 	assert.NoError(t, err)
 
 	//check that we got layer 4
-	err = syncObj5.getAndValidateLayer(4)
+	err = syncObj5.getAndValidateLayer(context.TODO(), 4)
 	assert.NoError(t, err)
 
 	//check that we got layer 5
-	err = syncObj5.getAndValidateLayer(5)
+	err = syncObj5.getAndValidateLayer(context.TODO(), 5)
 	assert.NoError(t, err)
 }
 
@@ -1179,11 +1179,11 @@ func (m *mockLayerValidator) SetProcessedLayer(lyr types.LayerID) {
 	m.processedLayer = lyr
 }
 
-func (m *mockLayerValidator) HandleLateBlock(bl *types.Block) {
+func (m *mockLayerValidator) HandleLateBlock(context.Context, *types.Block) {
 	panic("implement me")
 }
 
-func (m *mockLayerValidator) ValidateLayer(lyr *types.Layer) {
+func (m *mockLayerValidator) ValidateLayer(_ context.Context, lyr *types.Layer) {
 	log.Info("mock Validate layer %d", lyr.Index())
 	m.countValidate++
 	m.processedLayer = lyr.Index()
@@ -1447,7 +1447,7 @@ type mockTimedValidator struct {
 	calls int
 }
 
-func (m *mockTimedValidator) HandleLateBlock(bl *types.Block) {
+func (m *mockTimedValidator) HandleLateBlock(context.Context, *types.Block) {
 	return
 }
 
@@ -1455,11 +1455,11 @@ func (m *mockTimedValidator) ProcessedLayer() types.LayerID {
 	return 1
 }
 
-func (m *mockTimedValidator) SetProcessedLayer(lyr types.LayerID) {
+func (m *mockTimedValidator) SetProcessedLayer(types.LayerID) {
 	panic("implement me")
 }
 
-func (m *mockTimedValidator) ValidateLayer(lyr *types.Layer) {
+func (m *mockTimedValidator) ValidateLayer(_ context.Context, lyr *types.Layer) {
 	log.Info("Validate layer %d", lyr.Index())
 	m.calls++
 	time.Sleep(m.delay)

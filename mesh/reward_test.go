@@ -190,7 +190,7 @@ func TestMesh_integration(t *testing.T) {
 
 		l, err := layers.GetLayer(types.LayerID(i))
 		assert.NoError(t, err)
-		layers.ValidateLayer(l)
+		layers.ValidateLayer(context.TODO(), l)
 	}
 	// since there can be a difference of up to x lerners where x is the number of blocks due to round up of penalties when distributed among all blocks
 	totalPayout := l3Rewards + ConfigTst().BaseReward.Int64()
@@ -216,7 +216,7 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 		createLayer(t, mesh, types.LayerID(i), numOfBlocks, maxTxs, atxDB)
 		l, err := mesh.GetLayer(types.LayerID(i))
 		assert.NoError(t, err)
-		mesh.ValidateLayer(l)
+		mesh.ValidateLayer(context.TODO(), l)
 	}
 
 	s2 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
@@ -233,7 +233,7 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	for i := 0; i < numOfLayers; i++ {
 		l, err := mesh.GetLayer(types.LayerID(i))
 		assert.NoError(t, err)
-		mesh2.ValidateLayer(l)
+		mesh2.ValidateLayer(context.TODO(), l)
 	}
 	// test state is the same if receiving result from tortoise after same result from hare received
 	assert.ObjectsAreEqualValues(s.Txs, s2.Txs)
@@ -243,7 +243,7 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	assert.NoError(t, err)
 
 	blk := layer4.Blocks()[0]
-	mesh2.HandleLateBlock(blk)
+	mesh2.HandleLateBlock(context.TODO(), blk)
 	assert.Equal(t, s.Txs, s2.Txs)
 
 	// test that state does not advance when layer x +2 is received before layer x+1, and then test that all layers are pushed
@@ -293,7 +293,7 @@ type meshValidatorBatchMock struct {
 	processedLayer types.LayerID
 }
 
-func (m *meshValidatorBatchMock) ValidateLayer(lyr *types.Layer) {
+func (m *meshValidatorBatchMock) ValidateLayer(_ context.Context, lyr *types.Layer) {
 	m.SetProcessedLayer(lyr.Index())
 	layerID := lyr.Index()
 	if layerID == 0 {
@@ -307,9 +307,9 @@ func (m *meshValidatorBatchMock) ValidateLayer(lyr *types.Layer) {
 	m.mesh.pushLayersToState(prevPBase, prevPBase)
 }
 
-func (m *meshValidatorBatchMock) ProcessedLayer() types.LayerID       { panic("implement me") }
-func (m *meshValidatorBatchMock) SetProcessedLayer(lyr types.LayerID) { m.processedLayer = lyr }
-func (m *meshValidatorBatchMock) HandleLateBlock(*types.Block)        { panic("implement me") }
+func (m *meshValidatorBatchMock) ProcessedLayer() types.LayerID                 { panic("implement me") }
+func (m *meshValidatorBatchMock) SetProcessedLayer(lyr types.LayerID)           { m.processedLayer = lyr }
+func (m *meshValidatorBatchMock) HandleLateBlock(context.Context, *types.Block) { panic("implement me") }
 
 func TestMesh_AccumulateRewards(t *testing.T) {
 	types.SetLayersPerEpoch(1)
@@ -338,19 +338,19 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 	l4, err := mesh.GetLayer(4)
 	assert.NoError(t, err)
 	// Test negative case
-	mesh.ValidateLayer(l4)
+	mesh.ValidateLayer(context.TODO(), l4)
 	assert.Equal(t, oldTotal, s.TotalReward)
 
 	l5, err := mesh.GetLayer(5)
 	assert.NoError(t, err)
 	// Since batch size is 6, rewards will not be applied yet at this point
-	mesh.ValidateLayer(l5)
+	mesh.ValidateLayer(context.TODO(), l5)
 	assert.Equal(t, oldTotal, s.TotalReward)
 
 	l6, err := mesh.GetLayer(6)
 	assert.NoError(t, err)
 	// Rewards will be applied at this point
-	mesh.ValidateLayer(l6)
+	mesh.ValidateLayer(context.TODO(), l6)
 
 	// When distributing rewards to blocks they are rounded down, so we have to allow up to numOfBlocks difference
 	totalPayout := firstLayerRewards + ConfigTst().BaseReward.Int64()

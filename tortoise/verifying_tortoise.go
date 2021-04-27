@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -81,7 +82,7 @@ func (t *turtle) init(genesisLayer *types.Layer) {
 	for _, blk := range genesisLayer.Blocks() {
 		id := blk.ID()
 		t.BlockOpinionsByLayer[genesisLayer.Index()][blk.ID()] = Opinion{
-			BlocksOpinion: make(map[types.BlockID]vec),
+			BlockOpinions: make(map[types.BlockID]vec),
 		}
 		t.GoodBlocksIndex[id] = struct{}{}
 	}
@@ -285,7 +286,7 @@ func (t *turtle) calculateExceptions(layerid types.LayerID, blockid types.BlockI
 		if err != nil {
 			if err != leveldb.ErrClosed {
 				// todo: empty layer? maybe skip verify differently
-				t.logger.Panic("can't find old layer %v", i)
+				t.logger.With().Panic("can't find old layer", i)
 			}
 			return nil, err
 		}
@@ -295,7 +296,7 @@ func (t *turtle) calculateExceptions(layerid types.LayerID, blockid types.BlockI
 		if err != nil {
 			t.logger.With().Debug("input vector is empty, adding neutral diffs", i, log.Err(err))
 			for _, b := range layerBlockIds {
-				if v, ok := opinion2.BlocksOpinion[b]; !ok || v != abstain {
+				if v, ok := opinion2.BlockOpinions[b]; !ok || v != abstain {
 					t.logger.With().Debug("added diff",
 						log.FieldNamed("base_block_candidate", blockid),
 						log.FieldNamed("diff_block", b),
@@ -310,7 +311,7 @@ func (t *turtle) calculateExceptions(layerid types.LayerID, blockid types.BlockI
 
 		for _, b := range layerInputVector {
 			inInputVector[b] = struct{}{}
-			if v, ok := opinion2.BlocksOpinion[b]; !ok || v != support {
+			if v, ok := opinion2.BlockOpinions[b]; !ok || v != support {
 				// Block is in input vector but no base block vote or base block doesn't support it:
 				// add diff FOR this block
 				t.logger.With().Debug("added diff",
@@ -328,7 +329,7 @@ func (t *turtle) calculateExceptions(layerid types.LayerID, blockid types.BlockI
 			}
 
 			// TODO: maybe we don't need this if it is not included
-			if v, ok := opinion2.BlocksOpinion[b]; !ok || v != against {
+			if v, ok := opinion2.BlockOpinions[b]; !ok || v != against {
 				// Layer block has no base block vote or base block supports, but not in input vector:
 				// add diff AGAINST this block
 				t.logger.With().Debug("added diff",
@@ -390,7 +391,7 @@ func (t *turtle) processBlock(block *types.Block) error {
 
 	// TODO: save and vote against blocks that exceed the max exception list size (DoS prevention)
 	opinion := make(map[types.BlockID]vec)
-	for blk, vote := range baseBlockOpinion.BlocksOpinion {
+	for blk, vote := range baseBlockOpinion.BlockOpinions {
 		opinion[blk] = vote
 	}
 
@@ -403,14 +404,15 @@ func (t *turtle) processBlock(block *types.Block) error {
 
 	// TODO: neutral ?
 	t.logger.With().Debug("adding block to blocks table", block.Fields()...)
-	t.BlockOpinionsByLayer[block.LayerIndex][block.ID()] = Opinion{BlocksOpinion: opinion}
+	t.BlockOpinionsByLayer[block.LayerIndex][block.ID()] = Opinion{BlockOpinions: opinion}
 	return nil
 }
 
 // HandleIncomingLayer processes all layer block votes
 // returns the old pbase and new pbase after taking into account the blocks votes
-// TODO: inputVector is unused here, fix this
-func (t *turtle) HandleIncomingLayer(newlyr *types.Layer) (pbaseOld, pbaseNew types.LayerID) {
+func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) (pbaseOld, pbaseNew types.LayerID) {
+	logger := t.logger.WithContext(ctx).WithFields(newlyr)
+
 	// These are our starting values
 	pbaseOld = t.Verified
 	pbaseNew = t.Verified
@@ -420,13 +422,13 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer) (pbaseOld, pbaseNew ty
 	}
 
 	if len(newlyr.Blocks()) == 0 {
-		t.logger.With().Warning("attempted to handle empty layer", newlyr)
+		logger.Warning("attempted to handle empty layer")
 		return
 		// todo: something else to do on empty layer?
 	}
 
 	if newlyr.Index() <= types.GetEffectiveGenesis() {
-		t.logger.With().Debug("not attempting to handle genesis layer", newlyr)
+		logger.Debug("not attempting to handle genesis layer")
 		return
 	}
 
@@ -434,9 +436,7 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer) (pbaseOld, pbaseNew ty
 
 	defer t.evict()
 
-	t.logger.With().Info("start handling incoming layer",
-		newlyr.Index(),
-		log.Int("num_blocks", len(newlyr.Blocks())))
+	logger.With().Info("start handling incoming layer", log.Int("num_blocks", len(newlyr.Blocks())))
 
 	// process the votes in all layer blocks and update tables
 	for _, b := range newlyr.Blocks() {
@@ -444,7 +444,7 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer) (pbaseOld, pbaseNew ty
 			t.BlockOpinionsByLayer[b.LayerIndex] = make(map[types.BlockID]Opinion, t.AvgLayerSize)
 		}
 		if err := t.processBlock(b); err != nil {
-			log.Panic(fmt.Sprintf("error processing block %v: %v", b.ID(), err))
+			logger.With().Panic("error processing block", b.ID(), log.Err(err))
 		}
 	}
 
@@ -452,36 +452,35 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer) (pbaseOld, pbaseNew ty
 	for _, b := range newlyr.Blocks() {
 		// (1) the base block is marked as good
 		if _, good := t.GoodBlocksIndex[b.BaseBlock]; !good {
-			t.logger.With().Debug("not marking block as good because baseblock is not good",
-				newlyr.Index(),
+			logger.With().Debug("not marking block as good because baseblock is not good",
 				b.ID(),
 				log.FieldNamed("base_block", b.BaseBlock))
 		} else if baseBlock, err := t.bdp.GetBlock(b.BaseBlock); err != nil {
-			t.logger.Panic(fmt.Sprint("block not found ", b.BaseBlock, "err", err))
+			logger.With().Panic("base block not found", b.BaseBlock, log.Err(err))
 		} else if t.checkBlockAndGetInputVector(b.ForDiff, "support", support, b.ID(), baseBlock.LayerIndex) &&
 			t.checkBlockAndGetInputVector(b.AgainstDiff, "against", against, b.ID(), baseBlock.LayerIndex) &&
 			t.checkBlockAndGetInputVector(b.NeutralDiff, "abstain", abstain, b.ID(), baseBlock.LayerIndex) {
 			// (2) all diffs appear after the base block and are consistent with the input vote vector
-			t.logger.With().Debug("marking good block", b.ID(), b.LayerIndex)
+			logger.With().Debug("marking good block", b.ID(), b.LayerIndex)
 			t.GoodBlocksIndex[b.ID()] = struct{}{}
 		} else {
-			t.logger.With().Debug("not marking block good", b.ID(), b.LayerIndex)
+			logger.With().Debug("not marking block good", b.ID(), b.LayerIndex)
 		}
 	}
 
 	idx := newlyr.Index()
 	pbaseOld = t.Verified
-	t.logger.With().Info("starting layer verification",
+	logger.With().Info("starting layer verification",
 		log.FieldNamed("was_verified", pbaseOld),
 		log.FieldNamed("target_verification", newlyr.Index()))
 
 layerLoop:
 	for i := pbaseOld + 1; i < idx; i++ {
-		t.logger.With().Info("verifying layer", i)
+		logger.With().Info("verifying layer", i)
 
 		layerBlockIds, err := t.bdp.LayerBlockIds(i)
 		if err != nil {
-			t.logger.With().Warning("can't find layer in db, skipping verification", i)
+			logger.With().Warning("can't find layer in db, skipping verification", i)
 			continue // Panic? can't get layer
 		}
 
@@ -491,11 +490,11 @@ layerLoop:
 		rawLayerInputVector, err := t.bdp.GetLayerInputVector(i)
 		if err != nil {
 			// this sets the input to abstain
-			t.logger.With().Warning("input vector abstains on all blocks", i)
+			logger.With().Warning("input vector abstains on all blocks", i)
 		}
 		layerVotes := t.inputVectorForLayer(layerBlockIds, rawLayerInputVector)
 		if len(layerVotes) == 0 {
-			t.logger.With().Warning("no blocks in input vector, can't verify layer", i)
+			logger.With().Warning("no blocks in input vector, can't verify layer", i)
 			break
 		}
 
@@ -519,22 +518,22 @@ layerLoop:
 				// check if the block is good
 				for bid, op := range t.BlockOpinionsByLayer[j] {
 					if _, isgood := t.GoodBlocksIndex[bid]; !isgood {
-						t.logger.With().Debug("not counting vote of block not marked good",
+						logger.With().Debug("not counting vote of block not marked good",
 							log.FieldNamed("voting_block", bid),
 							log.FieldNamed("voted_block", blk))
 						continue
 					}
 
 					// check if this block has an opinion on this block (TODO: maybe no opinion means AGAINST?)
-					opinionVote, ok := op.BlocksOpinion[blk]
+					opinionVote, ok := op.BlockOpinions[blk]
 					if !ok {
-						t.logger.With().Debug("no opinion on block",
+						logger.With().Debug("no opinion on block",
 							log.FieldNamed("voting_block", bid),
 							log.FieldNamed("voted_block", blk))
 						continue
 					}
 
-					t.logger.With().Debug("adding block opinion to vote sum",
+					logger.With().Debug("adding block opinion to vote sum",
 						log.FieldNamed("voting_block", bid),
 						log.FieldNamed("voted_block", blk),
 						log.String("vote", opinionVote.String()),
@@ -545,7 +544,7 @@ layerLoop:
 
 			// check that the total weight exceeds the confidence threshold in all positions up
 			globalOpinion := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(i-pbaseOld))
-			t.logger.With().Debug("calculated global opinion on block",
+			logger.With().Debug("calculated global opinion on block",
 				log.FieldNamed("voted_block", blk),
 				i,
 				log.String("global_opinion", globalOpinion.String()),
@@ -557,7 +556,7 @@ layerLoop:
 
 			if globalOpinion != vote {
 				// TODO: trigger self healing after a while?
-				t.logger.With().Warning("global opinion on block differs from our vote, cannot verify layer",
+				logger.With().Warning("global opinion on block differs from our vote, cannot verify layer",
 					blk,
 					log.String("global_opinion", globalOpinion.String()),
 					log.String("vote", vote.String()))
@@ -571,7 +570,7 @@ layerLoop:
 			// TODO: should we trigger self-healing in this scenario, after a while?
 			// TODO: should we give up trying to verify later layers, too?
 			if globalOpinion == abstain {
-				t.logger.With().Warning("global opinion on block is abstain, cannot verify layer",
+				logger.With().Warning("global opinion on block is abstain, cannot verify layer",
 					blk,
 					log.String("global_opinion", globalOpinion.String()),
 					log.String("vote", vote.String()))
@@ -586,12 +585,12 @@ layerLoop:
 		for blk, v := range contextualValidity {
 			if err := t.bdp.SaveContextualValidity(blk, v); err != nil {
 				// panic?
-				t.logger.With().Error("error saving contextual validity on block", blk.Field(), log.Err(err))
+				logger.With().Error("error saving contextual validity on block", blk.Field(), log.Err(err))
 			}
 		}
 		t.Verified = i
 		pbaseNew = i
-		t.logger.With().Info("verified layer", i)
+		logger.With().Info("verified layer", i)
 	}
 
 	return

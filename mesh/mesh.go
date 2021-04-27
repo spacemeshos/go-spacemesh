@@ -38,16 +38,16 @@ var TORTOISE = []byte("tortoise")
 var VERIFIED = []byte("verified")
 
 type tortoise interface {
-	HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID)
+	HandleIncomingLayer(context.Context, *types.Layer) (types.LayerID, types.LayerID)
 	LatestComplete() types.LayerID
-	Persist() error
-	HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID)
+	Persist(context.Context) error
+	HandleLateBlock(context.Context, *types.Block) (types.LayerID, types.LayerID)
 }
 
 // Validator interface to be used in tests to mock validation flow
 type Validator interface {
-	ValidateLayer(layer *types.Layer)
-	HandleLateBlock(bl *types.Block)
+	ValidateLayer(context.Context, *types.Layer)
+	HandleLateBlock(context.Context, *types.Block)
 	ProcessedLayer() types.LayerID
 	SetProcessedLayer(lyr types.LayerID)
 }
@@ -258,19 +258,20 @@ func (vl *validator) SetProcessedLayer(lyr types.LayerID) {
 	vl.processedLayer = lyr
 }
 
-func (vl *validator) HandleLateBlock(b *types.Block) {
-	vl.With().Info("validate late block", b.ID())
-	oldPbase, newPbase := vl.trtl.HandleLateBlock(b)
-	if err := vl.trtl.Persist(); err != nil {
-		vl.With().Error("could not persist tortoise on late block", b.ID(), b.Layer())
+func (vl *validator) HandleLateBlock(ctx context.Context, b *types.Block) {
+	vl.WithContext(ctx).With().Info("validate late block", b.ID())
+	oldPbase, newPbase := vl.trtl.HandleLateBlock(ctx, b)
+	if err := vl.trtl.Persist(ctx); err != nil {
+		vl.WithContext(ctx).With().Error("could not persist tortoise on late block", b.ID(), b.Layer())
 	}
 	vl.pushLayersToState(oldPbase, newPbase)
 }
 
-func (vl *validator) ValidateLayer(lyr *types.Layer) {
-	vl.With().Info("validate layer", lyr)
+func (vl *validator) ValidateLayer(ctx context.Context, lyr *types.Layer) {
+	logger := vl.WithContext(ctx).WithFields(lyr)
+	logger.Info("validate layer")
 	if len(lyr.Blocks()) == 0 {
-		vl.With().Info("skip validation of layer with no blocks", lyr)
+		logger.Info("skip validation of layer with no blocks")
 		vl.SetProcessedLayer(lyr.Index())
 		events.ReportNewLayer(events.NewLayer{
 			Layer:  lyr,
@@ -279,21 +280,21 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 		return
 	}
 
-	oldPbase, newPbase := vl.trtl.HandleIncomingLayer(lyr)
+	oldPbase, newPbase := vl.trtl.HandleIncomingLayer(ctx, lyr)
 	vl.SetProcessedLayer(lyr.Index())
 
-	if err := vl.trtl.Persist(); err != nil {
-		vl.With().Error("could not persist tortoise", lyr)
+	if err := vl.trtl.Persist(ctx); err != nil {
+		logger.Error("could not persist tortoise")
 	}
 	if err := vl.general.Put(constPROCESSED, lyr.Index().Bytes()); err != nil {
-		vl.With().Error("could not persist validated layer", lyr)
+		logger.Error("could not persist validated layer")
 	}
 	vl.pushLayersToState(oldPbase, newPbase)
 	events.ReportNewLayer(events.NewLayer{
 		Layer:  lyr,
 		Status: events.LayerStatusTypeConfirmed,
 	})
-	vl.With().Info("done validating layer", lyr)
+	logger.Info("done validating layer")
 }
 
 func (msh *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerID) {
@@ -385,12 +386,15 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 		lyr.AddBlock(bl)
 	}
 
-	msh.Log.With().Info("mesh validating layer", lyr.Index().Field(), log.Int("valid_blocks", len(blocks)), log.Int("invalid_blocks", len(invalidBlocks)))
+	msh.Log.With().Info("mesh validating layer",
+		lyr.Index().Field(),
+		log.Int("valid_blocks", len(blocks)),
+		log.Int("invalid_blocks", len(invalidBlocks)))
 
 	if err := msh.SaveLayerInputVector(lyr.Index(), types.BlockIDs(blocks)); err != nil {
 		msh.Log.With().Error("saving layer input vector failed", lyr.Index().Field())
 	}
-	msh.ValidateLayer(lyr)
+	msh.ValidateLayer(ctx, lyr)
 }
 
 func (msh *Mesh) getInvalidBlocksByHare(ctx context.Context, hareLayer *types.Layer) (invalid []*types.Block) {

@@ -141,11 +141,11 @@ func (m meshMock) ForBlockInView(view map[types.BlockID]struct{}, layer types.La
 	panic("implement me")
 }
 
-func (m meshMock) GetBlock(ID types.BlockID) (*types.Block, error) {
+func (m meshMock) GetBlock(types.BlockID) (*types.Block, error) {
 	panic("implement me")
 }
 
-func (m meshMock) AddBlockWithTxs(blk *types.Block) error {
+func (m meshMock) AddBlockWithTxs(*types.Block) error {
 	panic("implement me")
 }
 
@@ -153,14 +153,14 @@ func (m meshMock) ProcessedLayer() types.LayerID {
 	panic("implement me")
 }
 
-func (m meshMock) HandleLateBlock(blk *types.Block) {
+func (m meshMock) HandleLateBlock(context.Context, *types.Block) {
 	panic("implement me")
 }
 
 type verifierMock struct {
 }
 
-func (v verifierMock) BlockSignedAndEligible(block *types.Block) (bool, error) {
+func (v verifierMock) BlockSignedAndEligible(*types.Block) (bool, error) {
 	return true, nil
 }
 

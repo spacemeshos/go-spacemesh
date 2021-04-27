@@ -25,7 +25,7 @@ type mesh interface {
 	GetBlock(ID types.BlockID) (*types.Block, error)
 	AddBlockWithTxs(blk *types.Block) error
 	ProcessedLayer() types.LayerID
-	HandleLateBlock(blk *types.Block)
+	HandleLateBlock(context.Context, *types.Block)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 }
 
@@ -113,7 +113,7 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, sync s
 			log.FieldNamed("block_layer", blk.Layer()),
 			log.FieldNamed("processed_layer", bh.mesh.ProcessedLayer()),
 			log.FieldNamed("miner_id", blk.MinerID()))
-		bh.mesh.HandleLateBlock(&blk)
+		bh.mesh.HandleLateBlock(ctx, &blk)
 	}
 	return nil
 }

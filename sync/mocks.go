@@ -47,11 +47,11 @@ func (m *meshValidatorMock) LatestComplete() types.LayerID {
 	panic("implement me")
 }
 
-func (m *meshValidatorMock) Persist() error {
+func (m *meshValidatorMock) Persist(context.Context) error {
 	return nil
 }
 
-func (m *meshValidatorMock) HandleIncomingLayer(lyr *types.Layer) (types.LayerID, types.LayerID) {
+func (m *meshValidatorMock) HandleIncomingLayer(_ context.Context, lyr *types.Layer) (types.LayerID, types.LayerID) {
 	m.countValidate++
 	m.calls++
 	m.vl = lyr.Index()
@@ -63,7 +63,7 @@ func (m *meshValidatorMock) HandleIncomingLayer(lyr *types.Layer) (types.LayerID
 	return lyr.Index(), lyr.Index() - 1
 }
 
-func (m *meshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
+func (m *meshValidatorMock) HandleLateBlock(_ context.Context, bl *types.Block) (types.LayerID, types.LayerID) {
 	return bl.Layer(), bl.Layer() - 1
 
 }

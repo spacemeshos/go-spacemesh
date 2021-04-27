@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -59,7 +60,7 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 			trtl.logger.Info("Counting votes of blocks in layer %v on %v (lyr: %v)", l, i.String(), blk.LayerIndex)
 
 			for bid, opinionVote := range trtl.BlockOpinionsByLayer[l] {
-				opinionVote, ok := opinionVote.BlocksOpinion[i]
+				opinionVote, ok := opinionVote.BlockOpinions[i]
 				if !ok {
 					continue
 				}
@@ -231,7 +232,7 @@ func turtleMakeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, bloc
 		require.NoError(t, msh.SaveLayerInputVector(l, blocks))
 	}
 
-	trtl.HandleIncomingLayer(lyr)
+	trtl.HandleIncomingLayer(context.TODO(), lyr)
 }
 
 func Test_TurtleAbstainsInMiddle(t *testing.T) {
@@ -373,14 +374,14 @@ func TestTurtle_Recovery(t *testing.T) {
 	log.With().Info("The first is ", l1.Index(), types.BlockIdsField(types.BlockIDs(l1.Blocks())))
 	log.With().Info("The first bb is ", l1.Index(), l1.Blocks()[0].BaseBlock, types.BlockIdsField(l1.Blocks()[0].ForDiff))
 
-	alg.HandleIncomingLayer(l1)
-	require.NoError(t, alg.Persist())
+	alg.HandleIncomingLayer(context.TODO(), l1)
+	require.NoError(t, alg.Persist(context.TODO()))
 
 	l2 := createTurtleLayer(types.GetEffectiveGenesis()+2, mdb, alg.BaseBlock, getHareResults, 3)
 	require.NoError(t, AddLayer(mdb, l2))
-	alg.HandleIncomingLayer(l2)
+	alg.HandleIncomingLayer(context.TODO(), l2)
 
-	require.NoError(t, alg.Persist())
+	require.NoError(t, alg.Persist(context.TODO()))
 
 	require.Equal(t, int(types.GetEffectiveGenesis()+1), int(alg.LatestComplete()))
 
@@ -404,22 +405,22 @@ func TestTurtle_Recovery(t *testing.T) {
 
 		alg := recoveredVerifyingTortoise(mdb, lg)
 
-		alg.HandleIncomingLayer(l2)
+		alg.HandleIncomingLayer(context.TODO(), l2)
 
 		l3 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, 3)
 		AddLayer(mdb, l3)
-		alg.HandleIncomingLayer(l3)
-		alg.Persist()
+		alg.HandleIncomingLayer(context.TODO(), l3)
+		alg.Persist(context.TODO())
 
 		l4 := createTurtleLayer(types.GetEffectiveGenesis()+4, mdb, alg.BaseBlock, getHareResults, 3)
 		AddLayer(mdb, l4)
-		alg.HandleIncomingLayer(l4)
-		alg.Persist()
+		alg.HandleIncomingLayer(context.TODO(), l4)
+		alg.Persist(context.TODO())
 		assert.True(t, alg.LatestComplete() == types.GetEffectiveGenesis()+3)
 
 		require.NoError(t, teardown())
 
 	}()
 
-	alg.HandleIncomingLayer(l32) //crash
+	alg.HandleIncomingLayer(context.TODO(), l32) //crash
 }

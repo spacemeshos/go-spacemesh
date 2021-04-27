@@ -423,7 +423,7 @@ func (s *Syncer) handleLayersTillCurrent(ctx context.Context) {
 		if s.isClosed() {
 			return
 		}
-		if err := s.getAndValidateLayer(currentSyncLayer); err != nil {
+		if err := s.getAndValidateLayer(ctx, currentSyncLayer); err != nil {
 			if currentSyncLayer.GetEpoch().IsGenesis() {
 				logger.With().Info("failed getting layer even though we are weakly synced (expected during genesis)",
 					log.FieldNamed("currentSyncLayer", currentSyncLayer),
@@ -444,7 +444,7 @@ func (s *Syncer) handleLayersTillCurrent(ctx context.Context) {
 func (s *Syncer) handleCurrentLayer(ctx context.Context) error {
 	curr := s.GetCurrentLayer()
 	if s.LatestLayer() == curr && time.Now().Sub(s.LayerToTime(s.LatestLayer())) > s.ValidationDelta {
-		if err := s.getAndValidateLayer(s.LatestLayer()); err != nil {
+		if err := s.getAndValidateLayer(ctx, s.LatestLayer()); err != nil {
 			if err != database.ErrNotFound {
 				s.WithContext(ctx).With().Panic("failed handling current layer",
 					log.FieldNamed("current_layer", s.LatestLayer()),
@@ -498,7 +498,7 @@ func (s *Syncer) handleNotSynced(ctx context.Context, currentSyncLayer types.Lay
 		}
 		s.syncAtxs(ctx, currentSyncLayer)
 		logger.With().Info("done with layer", log.FieldNamed("current_sync_layer", currentSyncLayer))
-		s.ValidateLayer(lyr) // wait for layer validation
+		s.ValidateLayer(ctx, lyr) // wait for layer validation
 	}
 
 	// wait for two ticks to ensure we are fully synced before we open gossip or validate the current layer
@@ -548,7 +548,7 @@ func (s *Syncer) gossipSyncForOneFullLayer(ctx context.Context, currentSyncLayer
 	}
 
 	// get & validate first tick
-	if err := s.getAndValidateLayer(currentSyncLayer); err != nil {
+	if err := s.getAndValidateLayer(ctx, currentSyncLayer); err != nil {
 		if err != database.ErrNotFound {
 			return err
 		}
@@ -569,7 +569,7 @@ func (s *Syncer) gossipSyncForOneFullLayer(ctx context.Context, currentSyncLayer
 	}
 
 	// get & validate second tick
-	if err := s.getAndValidateLayer(flayer); err != nil {
+	if err := s.getAndValidateLayer(ctx, flayer); err != nil {
 		if err != database.ErrNotFound {
 			return err
 		}
@@ -1332,7 +1332,7 @@ func (s *Syncer) blockCheckLocal(ctx context.Context, blockIds []types.Hash32) (
 	return nil, dbItems, nil
 }
 
-func (s *Syncer) getAndValidateLayer(id types.LayerID) error {
+func (s *Syncer) getAndValidateLayer(ctx context.Context, id types.LayerID) error {
 	s.validatingLayerMutex.Lock()
 	s.validatingLayer = id
 	defer func() {
@@ -1349,7 +1349,7 @@ func (s *Syncer) getAndValidateLayer(id types.LayerID) error {
 		id.Field(),
 		log.String("blocks", fmt.Sprint(types.BlockIDs(lyr.Blocks()))))
 
-	s.ValidateLayer(lyr) // wait for layer validation
+	s.ValidateLayer(ctx, lyr) // wait for layer validation
 	return nil
 }
 

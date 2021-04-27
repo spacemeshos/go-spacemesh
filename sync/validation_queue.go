@@ -11,10 +11,10 @@ import (
 )
 
 type syncer interface {
-	AddBlockWithTxs(blk *types.Block) error
-	GetBlock(id types.BlockID) (*types.Block, error)
+	AddBlockWithTxs(*types.Block) error
+	GetBlock(types.BlockID) (*types.Block, error)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
-	HandleLateBlock(bl *types.Block)
+	HandleLateBlock(context.Context, *types.Block)
 	ProcessedLayer() types.LayerID
 	dataAvailability(context.Context, *types.Block) ([]*types.Transaction, []*types.ActivationTx, error)
 	getValidatingLayer() types.LayerID
@@ -146,7 +146,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(ctx context.C
 
 		// run late block through tortoise only if its new to us
 		if (block.Layer() <= vq.ProcessedLayer() || block.Layer() == vq.getValidatingLayer()) && err != mesh.ErrAlreadyExist {
-			vq.HandleLateBlock(block)
+			vq.HandleLateBlock(ctx, block)
 		}
 
 		logger.Info("finished block, valid")
