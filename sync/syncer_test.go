@@ -1533,12 +1533,12 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	nsAtxPool := activation.NewAtxMemPool()
 	nsatxDb := database.NewMemDatabase()
 	nsMsh := getMesh(memoryDB, Path+t.Name()+"_synced_"+time.Now().String(), nsatxDb)
-	nsF := fetch2.NewFetch(context.TODO(),fetch2.DefaultConfig(), nsMiner, l)
+	nsF := fetch2.NewFetch(context.TODO(), fetch2.DefaultConfig(), nsMiner, l)
 	nsStore := &storeMock{
 		msh:    nsMsh,
 		blocks: make(map[types.Hash32]*types.Block),
 	}
-	nslayerFetcher := layerfetcher.NewLogic(context.TODO(),layerfetcher.Config{RequestTimeout: 3}, nsStore, nsStore, nsStore, nsStore, nsStore, nsMiner, nsF, nsMsh, l)
+	nslayerFetcher := layerfetcher.NewLogic(context.TODO(), layerfetcher.Config{RequestTimeout: 3}, nsStore, nsStore, nsStore, nsStore, nsStore, nsMiner, nsF, nsMsh, l)
 	nslayerFetcher.Start()
 	defer nslayerFetcher.Close()
 	nspoetDB := database.NewMemDatabase()
