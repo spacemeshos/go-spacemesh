@@ -179,8 +179,8 @@ func (b *Broker) queueLoop(ctx context.Context) {
 			b.Info("broker exiting")
 			b.queue.Close()
 
-			// when closing we still need to release the listener to notice that the queue is closing
-			b.queueChannel <- struct{}{}
+			// release the listener to notice that the queue is closing
+			close(b.queueChannel)
 			return
 		}
 	}

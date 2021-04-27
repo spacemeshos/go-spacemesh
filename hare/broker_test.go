@@ -98,12 +98,12 @@ func TestBroker_Received(t *testing.T) {
 
 // test that self-generated (outbound) messages are handled before incoming messages
 func TestBroker_Priority(t *testing.T) {
+	log.DebugMode(true)
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-
 	broker := buildBroker(n1, t.Name())
 
-	// this allows us to throttle how fast the broker processes incoming messages
+	// this allows us to pause and release broker processing of incoming messages
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	broker.eValidator = &mockEligibilityValidator{validationFn: func(context.Context, *Msg) bool {
@@ -112,7 +112,8 @@ func TestBroker_Priority(t *testing.T) {
 	}}
 
 	// take control of the broker inbox so we can feed it messages in a deterministic order
-	msgChan := make(chan service.GossipMessage, 11)
+	// make the channel blocking (no buffer) so we can be sure the messages have been processed
+	msgChan := make(chan service.GossipMessage)
 	assert.NoError(t, broker.startWithInbox(context.TODO(), msgChan))
 	outbox, err := broker.Register(context.TODO(), instanceID1)
 	assert.Nil(t, err)
@@ -136,6 +137,7 @@ func TestBroker_Priority(t *testing.T) {
 
 	// first, broadcast a bunch of simulated inbound messages
 	for i := 0; i < 10; i++ {
+		// channel send is blocking, so we're sure the messages have been processed
 		msgChan <- service.NewSimGossipMessage(
 			n1.Info.PublicKey(),
 			false,
@@ -146,7 +148,7 @@ func TestBroker_Priority(t *testing.T) {
 	// now broadcast one outbound message
 	msgChan <- service.NewSimGossipMessage(n1.Info.PublicKey(), true, service.DataBytes{Payload: serMsgOutbound})
 
-	// release the waiting listener
+	// release the waiting listener (hare event loop)
 	wg.Done()
 
 	// we expect the outbound message to be prioritized and arrive first
@@ -156,7 +158,10 @@ func TestBroker_Priority(t *testing.T) {
 		case x := <-outbox:
 			switch i {
 			case 0:
-				// first message should be outbound
+				// first message (already queued) should be inbound
+				assert.Equal(t, roleProofInbound, x.InnerMsg.RoleProof, "expected inbound msg %d", i)
+			case 1:
+				// second message should be outbound
 				assert.Equal(t, roleProofOutbound, x.InnerMsg.RoleProof, "expected outbound msg %d", i)
 			default:
 				// all subsequent messages should be inbound
@@ -168,6 +173,32 @@ func TestBroker_Priority(t *testing.T) {
 		}
 	}
 	assert.Len(t, outbox, 0, "expected broker queue to be empty")
+
+	// Test shutdown flow
+
+	// Listener to make sure internal queue channel is closed
+	wg2 := sync.WaitGroup{}
+	wg2.Add(1)
+	res := make(chan bool)
+	go func() {
+		timeout := time.NewTimer(time.Second)
+		wg2.Done()
+		select {
+		case <-timeout.C:
+			assert.Fail(t, "timed out waiting for channel close")
+			res<-false
+		case _, ok := <-broker.queueChannel:
+			assert.False(t, ok, "expected channel close")
+			res<-!ok
+		}
+	}()
+
+	// Make sure the listener is listening
+	wg2.Wait()
+	broker.Close()
+	_, err = broker.queue.Read()
+	assert.Error(t, err, "expected broker priority queue to be closed")
+	assert.True(t, <-res)
 }
 
 // test that after registering the maximum number of protocols,
