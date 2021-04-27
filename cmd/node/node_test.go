@@ -41,14 +41,14 @@ import (
 )
 
 func tempDir() (dir string, cleanup func() error, err error) {
-	path, err := ioutil.TempDir("", "datadir_")
+	path, err := ioutil.TempDir("/tmp", "datadir_")
 	if err != nil {
 		return "", nil, err
 	}
 	cleanup = func() error {
 		return os.RemoveAll(path)
 	}
-	return
+	return path, cleanup, err
 }
 
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
@@ -559,6 +559,15 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	// Use a unique port
 	port := 1240
+
+/*
+	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1) * time.Second, time.Now(), log.NewDefault("clock"))
+	net := service.NewSimulator()
+	cfg := getTestDefaultConfig()
+	poetHarness, err := activation.NewHTTPPoetHarness(false)
+	assert.NoError(t, err)
+	app, err := InitSingleInstance(*cfg,0, time.Now().Add(1 *time.Second).Format(time.RFC3339), BLS381.DefaultSeed(), path,eligibility.New(),poetHarness.HTTPPoetClient, clock, net)
+*/
 
 	app := NewSpacemeshApp()
 
