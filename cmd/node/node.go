@@ -596,9 +596,13 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
 	var hOracle hare.Rolacle
-	if isFixedOracle { // fixed rolacle, take the provided rolacle
+	if isFixedOracle {
+		// fixed rolacle, take the provided rolacle
 		hOracle = rolacle
-	} else { // regular oracle, build and use it
+	} else {
+		// regular oracle, build and use it
+		// TODO: this mock will be replaced by the real Tortoise beacon once
+		//   https://github.com/spacemeshos/go-spacemesh/pull/2267 is complete
 		beacon := eligibility.NewBeacon(tortoiseBeaconMock{}, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
 		hOracle = eligibility.New(beacon, atxdb.CalcActiveSetSize, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	}
