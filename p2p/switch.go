@@ -287,11 +287,13 @@ func (s *Switch) Start(ctx context.Context) error {
 				s.Shutdown()
 				return
 			}
+			close(s.bootChan)
 			size := s.discover.Size()
 			s.logger.Event().Info("discovery_bootstrap",
 				log.Bool("success", size >= s.config.SwarmConfig.RandomConnections && s.bootErr == nil),
 				log.Int("size", size),
 				log.Duration("time_elapsed", time.Since(b)))
+
 		}()
 	}
 
@@ -394,7 +396,7 @@ func (s *Switch) sendMessageImpl(ctx context.Context, peerPubKey p2pcrypto.Publi
 		return err
 	}
 
-	logger.Debug("direct message sent successfully")
+	logger.Info("direct message sent successfully")
 	return nil
 }
 
