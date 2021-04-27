@@ -107,10 +107,10 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh
-func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPool, pr txProcessor, logger log.Log) *Mesh {
+func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txInvalidator txMemPool, pr txProcessor, logger log.Log) *Mesh {
 	ll := &Mesh{
 		Log:                logger,
-		trtl:               mesh,
+		trtl:               trtl,
 		txPool:             txInvalidator,
 		txProcessor:        pr,
 		done:               make(chan struct{}),

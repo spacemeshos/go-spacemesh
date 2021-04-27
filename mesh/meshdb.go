@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"container/list"
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -22,6 +23,8 @@ type layerMutex struct {
 	layerWorkers uint32
 }
 
+var ErrInvalidLayer = errors.New("layer invalid")
+
 // DB represents a mesh database instance
 type DB struct {
 	log.Log
@@ -36,6 +39,7 @@ type DB struct {
 	unappliedTxsMutex     sync.Mutex
 	blockMutex            sync.RWMutex
 	orphanBlocks          map[types.LayerID]map[types.BlockID]struct{}
+	invalidatedLayers     map[types.LayerID]struct{} // layers for which Hare has failed
 	layerMutex            map[types.LayerID]*layerMutex
 	lhMutex               sync.Mutex
 	InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
@@ -89,12 +93,12 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, err
 	}
 
 	for _, blk := range GenesisLayer().Blocks() {
-		ll.Log.With().Info("Adding genesis block ", blk.ID(), blk.LayerIndex)
+		ll.Log.With().Info("adding genesis block", blk.ID(), blk.LayerIndex)
 		if err := ll.AddBlock(blk); err != nil {
-			log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
+			log.With().Error("error inserting genesis block to db", blk.ID(), blk.LayerIndex)
 		}
 		if err := ll.SaveContextualValidity(blk.ID(), true); err != nil {
-			log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
+			log.With().Error("error inserting genesis block to db", blk.ID(), blk.LayerIndex)
 		}
 	}
 	return ll, nil
@@ -309,9 +313,24 @@ func (m *DB) SaveLayerInputVector(lyrid types.LayerID, vector []types.BlockID) e
 	return m.inputVector.Put(lyrid.Bytes(), bytes)
 }
 
-func (m *DB) defaulGetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
+// InvalidateLayer receives notification from Hare that it failed for a layer. If Hare explicitly fails for a
+// layer, we consider all blocks in that layer to be invalid. Note that simply not having received a layer from Hare
+// as _validated_ is not sufficient information since we might still be waiting for Hare to finish for the layer. This
+// method lets us know that Hare has given up.
+func (m *DB) InvalidateLayer(ctx context.Context, layerID types.LayerID) {
+	m.WithContext(ctx).With().Info("recording hare invalidated layer in mesh", layerID)
+	m.invalidatedLayers[layerID] = struct{}{}
+}
+
+func (m *DB) defaultGetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
 	by, err := m.inputVector.Get(lyrid.Bytes())
 	if err != nil {
+		// check if this layer was marked invalid
+		if _, ok := m.invalidatedLayers[lyrid]; ok {
+			return nil, ErrInvalidLayer
+		}
+
+		// otherwise, no result, so we're still waiting for Hare results (or won't ever get them) for this layer
 		return nil, err
 	}
 	var v []types.BlockID
@@ -324,7 +343,7 @@ func (m *DB) GetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
 	if m.InputVectorBackupFunc != nil {
 		return m.InputVectorBackupFunc(lyrid)
 	}
-	return m.defaulGetLayerInputVector(lyrid)
+	return m.defaultGetLayerInputVector(lyrid)
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {

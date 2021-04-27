@@ -112,7 +112,7 @@ func (msq mockStateQuerier) IsIdentityActiveOnConsensusView(edID string, layer t
 	return true, nil
 }
 
-func validateBlocks(blocks []types.BlockID) bool {
+func validateBlocks([]types.BlockID) bool {
 	return true
 }
 

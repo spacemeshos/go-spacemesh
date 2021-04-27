@@ -676,7 +676,7 @@ func (app *SpacemeshApp) checkTimeDrifts() {
 	}
 }
 
-// HareFactory returns a hare consensus algorithm according to the parameters is app.Config.Hare.SuperHare
+// HareFactory returns a hare consensus algorithm according to the parameters in app.Config.Hare.SuperHare
 func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm service.Service, sgn hare.Signer, nodeID types.NodeID, syncer *sync.Syncer, msh *mesh.Mesh, hOracle hare.Rolacle, idStore *activation.IdentityStore, clock TickProvider, lg log.Log) HareService {
 	if app.Config.HARE.SuperHare {
 		hr := turbohare.New(ctx, msh)

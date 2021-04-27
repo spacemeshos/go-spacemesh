@@ -34,9 +34,13 @@ type TerminationOutput interface {
 	Completed() bool
 }
 
-type layers interface {
+type meshProvider interface {
+	// LayerBlockIds returns the block IDs stored for a layer
 	LayerBlockIds(layerID types.LayerID) ([]types.BlockID, error)
+	// HandleValidatedLayer receives Hare output when it succeeds
 	HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID)
+	// InvalidateLayer receives the signal that Hare failed for a layer
+	InvalidateLayer(ctx context.Context, layerID types.LayerID)
 }
 
 // checks if the collected output is valid
@@ -55,7 +59,7 @@ type Hare struct {
 
 	sign Signer
 
-	msh     layers
+	mesh    meshProvider
 	rolacle Rolacle
 
 	networkDelta time.Duration
@@ -79,10 +83,21 @@ type Hare struct {
 }
 
 // New returns a new Hare struct.
-func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeID, validate outputValidationFunc,
-	syncState syncStateFunc, obp layers, rolacle Rolacle,
-	layersPerEpoch uint16, idProvider identityProvider, stateQ StateQuerier,
-	beginLayer chan types.LayerID, logger log.Log) *Hare {
+func New(
+	conf config.Config,
+	p2p NetworkService,
+	sign Signer,
+	nid types.NodeID,
+	validate outputValidationFunc,
+	syncState syncStateFunc,
+	mesh meshProvider,
+	rolacle Rolacle,
+	layersPerEpoch uint16,
+	idProvider identityProvider,
+	stateQ StateQuerier,
+	beginLayer chan types.LayerID,
+	logger log.Log,
+) *Hare {
 	h := new(Hare)
 
 	h.Closer = NewCloser()
@@ -99,7 +114,7 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeID, 
 
 	h.sign = sign
 
-	h.msh = obp
+	h.mesh = mesh
 	h.rolacle = rolacle
 
 	h.networkDelta = time.Duration(conf.WakeupDelta) * time.Second
@@ -162,10 +177,8 @@ var ErrTooLate = errors.New("consensus process finished too late")
 func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) error {
 	set := output.Set()
 	blocks := make([]types.BlockID, len(set.values))
-	i := 0
 	for v := range set.values {
-		blocks[i] = v
-		i++
+		blocks = append(blocks, v)
 	}
 
 	// check validity of the collected output
@@ -175,7 +188,7 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 
 	id := output.ID()
 
-	h.msh.HandleValidatedLayer(ctx, types.LayerID(id), blocks)
+	h.mesh.HandleValidatedLayer(ctx, types.LayerID(id), blocks)
 
 	if h.outOfBufferRange(id) {
 		return ErrTooLate
@@ -239,7 +252,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) {
 	logger.Debug("get hare results")
 
 	// retrieve set from orphan blocks
-	blocks, err := h.msh.LayerBlockIds(h.lastLayer)
+	blocks, err := h.mesh.LayerBlockIds(h.lastLayer)
 	if err != nil {
 		logger.With().Error("no blocks for consensus", log.Err(err))
 		return
@@ -264,7 +277,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) {
 		h.broker.Unregister(ctx, cp.ID())
 		return
 	}
-	logger.With().Info("number of consensus processes (after +1)",
+	logger.With().Info("number of consensus processes (after register)",
 		log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
 	// TODO: fix metrics
 	//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(id), 10)).Add(1)
@@ -276,7 +289,7 @@ var (
 )
 
 // GetResult returns the hare output for the provided range.
-// Returns error iff the request for the upper is too old.
+// Returns error if the requested layer is too old.
 func (h *Hare) GetResult(lid types.LayerID) ([]types.BlockID, error) {
 	if h.outOfBufferRange(instanceID(lid)) {
 		return nil, errTooOld
@@ -288,7 +301,6 @@ func (h *Hare) GetResult(lid types.LayerID) ([]types.BlockID, error) {
 	if !ok {
 		return nil, errNoResult
 	}
-
 	return blks, nil
 }
 
@@ -298,14 +310,20 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 		select {
 		case out := <-h.outputChan:
 			if out.Completed() { // CP completed, collect the output
+				h.WithContext(ctx).With().Info("collecting results for completed hare instance",
+					types.LayerID(out.ID()))
 				if err := h.collectOutput(ctx, out); err != nil {
 					h.WithContext(ctx).With().Warning("error collecting output from hare", log.Err(err))
 				}
+			} else {
+				// Notify the mesh that Hare failed
+				h.WithContext(ctx).With().Info("recording hare instance failure", types.LayerID(out.ID()))
+				h.mesh.InvalidateLayer(ctx, types.LayerID(out.ID()))
 			}
 
 			// either way, unregister from broker
 			h.broker.Unregister(ctx, out.ID())
-			h.WithContext(ctx).With().Info("number of consensus processes (after -1)",
+			h.WithContext(ctx).With().Info("number of consensus processes (after unregister)",
 				log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
 			// TODO: fix metrics
 			//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(out.ID()), 10)).Add(-1)
