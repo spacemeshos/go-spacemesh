@@ -2059,7 +2059,14 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 }
 
 func TestAccountDataStream_comprehensive(t *testing.T) {
+	log.Info("initializing event stream")
+	events.CloseEventReporter()
+	err := events.InitializeEventReporterWithOptions("", 0, true)
+	require.NoError(t, err)
 	svc := NewGlobalStateService(txAPI, mempoolMock)
+	svc.accountChannel = events.SubscribeToAccounts(30)
+	svc.receiptsChannel = events.SubscribeToReceipts(30)
+	svc.rewardsChannel = events.SubscribeToRewards(30)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -2089,6 +2096,15 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
+	wg2 := sync.WaitGroup{}
+	wg2.Add(1)
+
+	wg3 := sync.WaitGroup{}
+	wg3.Add(1)
+
+	wg4 := sync.WaitGroup{}
+	wg4.Add(1)
+
 	// This will block so run it in a goroutine
 	go func() {
 		defer wg.Done()
@@ -2101,9 +2117,13 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		require.NoError(t, err, "got error from stream")
 		checkAccountDataItemReceipt(t, res.Datum.Datum)
 
+		wg2.Done()
+
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
 		checkAccountDataItemReward(t, res.Datum.Datum)
+
+		wg3.Done()
 
 		res, err = stream.Recv()
 		if err != nil {
@@ -2112,18 +2132,14 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		require.NoError(t, err, "got error from stream")
 		checkAccountDataItemAccount(t, res.Datum.Datum)
 
+		wg4.Done()
+
 		// look for EOF
 		// the next two events streamed should not be received! they should be
 		// filtered out
 		res, err = stream.Recv()
 		require.Equal(t, io.EOF, err, "expected EOF from stream")
 	}()
-
-	// initialize the streamer
-	log.Info("initializing event stream")
-	events.CloseEventReporter()
-	err = events.InitializeEventReporterWithOptions("", 0, true)
-	require.NoError(t, err)
 
 	// publish a receipt
 	events.ReportReceipt(events.TxReceipt{
@@ -2132,6 +2148,8 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	})
 
 	log.Info("Published tx receipt")
+
+	wg2.Wait()
 	// publish a reward
 	events.ReportRewardReceived(events.Reward{
 		Layer:       layerFirst,
@@ -2140,8 +2158,12 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		Coinbase:    addr1,
 	})
 
+	wg3.Wait()
+
 	// publish an account data update
 	events.ReportAccountUpdate(addr1)
+
+	wg4.Wait()
 
 	// test streaming a reward and account update that should be filtered out
 	// these should not be received
@@ -2152,12 +2174,20 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	log.Info("closing event stream")
 	events.CloseEventReporter()
 
-	// wait for the goroutine to finish
 	wg.Wait()
+	// wait for the goroutine to finish
 }
 
 func TestGlobalStateStream_comprehensive(t *testing.T) {
+	// initialize the streamer
+	log.Info("initializing event stream")
+	events.CloseEventReporter()
+	err := events.InitializeEventReporterWithOptions("", 0, true)
+	require.NoError(t, err)
 	svc := NewGlobalStateService(txAPI, mempoolMock)
+	svc.accountChannel = events.SubscribeToAccounts(30)
+	svc.rewardsChannel = events.SubscribeToRewards(30)
+	svc.receiptsChannel = events.SubscribeToReceipts(30)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -2185,6 +2215,17 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
+	wg2 := sync.WaitGroup{}
+	wg2.Add(1)
+
+	wg3 := sync.WaitGroup{}
+	wg3.Add(1)
+
+	wg4 := sync.WaitGroup{}
+	wg4.Add(1)
+
+	wg5 := sync.WaitGroup{}
+	wg5.Add(1)
 	// This will block so run it in a goroutine
 	go func() {
 		defer wg.Done()
@@ -2197,17 +2238,25 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		require.NoError(t, err, "got error from stream")
 		checkGlobalStateDataReceipt(t, res.Datum.Datum)
 
+		wg2.Done()
+
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
 		checkGlobalStateDataReward(t, res.Datum.Datum)
+
+		wg3.Done()
 
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
 		checkGlobalStateDataAccountWrapper(t, res.Datum.Datum)
 
+		wg4.Done()
+
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
 		checkGlobalStateDataGlobalState(t, res.Datum.Datum)
+
+		wg5.Done()
 
 		// look for EOF
 		// the next two events streamed should not be received! they should be
@@ -2216,17 +2265,13 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		require.Equal(t, io.EOF, err, "expected EOF from stream")
 	}()
 
-	// initialize the streamer
-	log.Info("initializing event stream")
-	events.CloseEventReporter()
-	err = events.InitializeEventReporterWithOptions("", 0, true)
-	require.NoError(t, err)
-
 	// publish a receipt
 	events.ReportReceipt(events.TxReceipt{
 		Address: addr1,
 		Index:   receiptIndex,
 	})
+
+	wg2.Wait()
 
 	// publish a reward
 	events.ReportRewardReceived(events.Reward{
@@ -2236,8 +2281,12 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		Coinbase:    addr1,
 	})
 
+	wg3.Wait()
+
 	// publish an account data update
 	events.ReportAccountUpdate(addr1)
+
+	wg4.Wait()
 
 	// publish a new layer
 	layer, err := txAPI.GetLayer(layerFirst)
@@ -2247,11 +2296,12 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		Status: events.LayerStatusTypeConfirmed,
 	})
 
+	wg5.Wait()
+
 	// close the stream
 	log.Info("closing event stream")
 	events.CloseEventReporter()
 
-	// wait for the goroutine to finish
 	wg.Wait()
 }
 
