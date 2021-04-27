@@ -280,6 +280,7 @@ func (vl *validator) ValidateLayer(ctx context.Context, lyr *types.Layer) {
 		return
 	}
 
+	// pass the layer to tortoise for processing
 	oldPbase, newPbase := vl.trtl.HandleIncomingLayer(ctx, lyr)
 	vl.SetProcessedLayer(lyr.Index())
 
@@ -361,15 +362,16 @@ func (msh *Mesh) applyState(l *types.Layer) {
 	})
 }
 
-// HandleValidatedLayer handles layer valid blocks as decided by hare
+// HandleValidatedLayer receives hare output once it finishes running for a given layer
 func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID) {
+	logger := msh.WithContext(ctx).WithFields(validatedLayer)
 	var blocks []*types.Block
 
 	for _, blockID := range layer {
 		block, err := msh.GetBlock(blockID)
 		if err != nil {
 			// stop processing this hare result, wait until tortoise pushes this layer into state
-			msh.WithContext(ctx).Error("hare terminated with block that is not present in mesh")
+			logger.Error("hare terminated with block that is not present in mesh")
 			return
 		}
 		blocks = append(blocks, block)
@@ -386,13 +388,12 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 		lyr.AddBlock(bl)
 	}
 
-	msh.Log.With().Info("mesh validating layer",
-		lyr.Index().Field(),
+	logger.With().Info("mesh validating layer",
 		log.Int("valid_blocks", len(blocks)),
 		log.Int("invalid_blocks", len(invalidBlocks)))
 
 	if err := msh.SaveLayerInputVector(lyr.Index(), types.BlockIDs(blocks)); err != nil {
-		msh.Log.With().Error("saving layer input vector failed", lyr.Index().Field())
+		logger.Error("saving layer input vector failed")
 	}
 	msh.ValidateLayer(ctx, lyr)
 }

@@ -291,6 +291,7 @@ func (t *BlockBuilder) createBlock(
 		return nil, errors.New("cannot create blockBytes in genesis layer")
 	}
 
+	// get the most up-to-date base block, and a list of diffs versus local opinion
 	base, diffs, err := t.baseBlockP.BaseBlock(ctx)
 	if err != nil {
 		return nil, err

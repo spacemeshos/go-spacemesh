@@ -86,8 +86,7 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 	}
 
 	if bo.proofsEpoch != epochNumber {
-		err := bo.calcEligibilityProofs(epochNumber)
-		if err != nil {
+		if err := bo.calcEligibilityProofs(epochNumber); err != nil {
 			bo.log.With().Error("failed to calculate eligibility proofs", epochNumber, log.Err(err))
 			return *types.EmptyATXID, nil, nil, err
 		}
