@@ -97,7 +97,10 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, err
 			log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
 		}
 	}
-	return ll, nil
+	if err := ll.SaveLayerInputVectorByID(GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
+		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
+	}
+	return ll, err
 }
 
 // PersistentData checks to see if db is empty
@@ -130,6 +133,9 @@ func NewMemMeshDB(log log.Log) *DB {
 		ll.AddBlock(blk)
 		ll.SaveContextualValidity(blk.ID(), true)
 	}
+	if err := ll.SaveLayerInputVectorByID(GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
+		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
+	}
 	return ll
 }
 
@@ -157,6 +163,11 @@ func (m *DB) Blocks() database.Database {
 // Transactions exports the transactions DB
 func (m *DB) Transactions() database.Database {
 	return m.transactions
+}
+
+// InputVector exports the inputvector DB
+func (m *DB) InputVector() database.Database {
+	return m.inputVector
 }
 
 // ErrAlreadyExist error returned when adding an existing value to the database
@@ -314,17 +325,17 @@ func (m *DB) SaveContextualValidity(id types.BlockID, valid bool) error {
 }
 
 // SaveLayerInputVector saves the input vote vector for a layer (hare results)
-func (m *DB) SaveLayerInputVector(lyrid types.LayerID, vector []types.BlockID) error {
+func (m *DB) SaveLayerInputVector(hash types.Hash32, vector []types.BlockID) error {
 	bytes, err := types.InterfaceToBytes(vector)
 	if err != nil {
 		return err
 	}
 
-	return m.inputVector.Put(lyrid.Bytes(), bytes)
+	return m.inputVector.Put(hash.Bytes(), bytes)
 }
 
-func (m *DB) defaulGetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
-	by, err := m.inputVector.Get(lyrid.Bytes())
+func (m *DB) defaulGetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) {
+	by, err := m.inputVector.Get(types.CalcHash32(id.Bytes()).Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -334,11 +345,35 @@ func (m *DB) defaulGetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, er
 }
 
 // GetLayerInputVector gets the input vote vector for a layer (hare results)
-func (m *DB) GetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
-	if m.InputVectorBackupFunc != nil {
-		return m.InputVectorBackupFunc(lyrid)
+func (m *DB) GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error) {
+	by, err := m.inputVector.Get(hash.Bytes())
+	if err != nil {
+		return nil, err
 	}
-	return m.defaulGetLayerInputVector(lyrid)
+	var v []types.BlockID
+	err = types.BytesToInterface(by, &v)
+	return v, err
+}
+
+// GetLayerInputVectorByID gets the input vote vector for a layer (hare results)
+func (m *DB) GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) {
+	if m.InputVectorBackupFunc != nil {
+		return m.InputVectorBackupFunc(id)
+	}
+	return m.defaulGetLayerInputVectorByID(id)
+}
+
+// SaveLayerInputVectorByID gets the input vote vector for a layer (hare results)
+func (m *DB) SaveLayerInputVectorByID(id types.LayerID, blks []types.BlockID) error {
+	hash := types.CalcHash32(id.Bytes())
+	m.With().Info("SaveLayerInputVectorByID: Saving input vector", id, hash)
+	return m.SaveLayerInputVector(hash, blks)
+}
+
+// SaveLayerHashInputVector saves the input vote vector for a layer (hare results) using its hash
+func (m *DB) SaveLayerHashInputVector(h types.Hash32, data []byte) error {
+	m.Info("saved input vector for hash %v", h.ShortString())
+	return m.inputVector.Put(h.Bytes(), data)
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {
@@ -376,12 +411,45 @@ func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 	}
 	m.Debug("added block %v to layer %v", blk.ID(), blk.LayerIndex)
 	blockIds = append(blockIds, blk.ID())
+	types.SortBlockIDs(blockIds)
 	w, err := types.BlockIdsToBytes(blockIds)
 	if err != nil {
 		return errors.New("could not encode layer blk ids")
 	}
 	m.layers.Put(blk.LayerIndex.Bytes(), w)
+	hash := types.CalcBlocksHash32(blockIds, nil)
+	m.persistLayerHash(blk.LayerIndex, hash)
+
 	return nil
+}
+
+func (m *DB) getLayerHashKey(layerID types.LayerID) []byte {
+	return []byte(fmt.Sprintf("layerHash_%v", layerID.Bytes()))
+}
+
+// GetLayerHash returns layer hash for received blocks
+func (m *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
+	h := types.Hash32{}
+	bts, err := m.general.Get(m.getLayerHashKey(layerID))
+	if err != nil {
+		return types.Hash32{}
+	}
+	h.SetBytes(bts)
+	return h
+}
+
+func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) {
+	if err := m.general.Put(m.getLayerHashKey(layerID), hash.Bytes()); err != nil {
+		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
+			log.String("layer_hash", hash.Hex()))
+	}
+
+	// we store a double index here because most of the code uses layer ID as key, currently only sync reads layer by hash
+	// when this changes we can simply point to the layes
+	if err := m.general.Put(hash.Bytes(), layerID.Bytes()); err != nil {
+		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
+			log.String("layer_hash", hash.Hex()))
+	}
 }
 
 // try delete layer Handler (deletes if pending pendingCount is 0)

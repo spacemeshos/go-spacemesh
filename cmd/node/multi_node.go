@@ -274,6 +274,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	if err != nil {
 		log.Error("cannot parse genesis time %v", err)
 	}
+	events.CloseEventPubSub()
 	pubsubAddr := "tcp://localhost:55666"
 	if err := events.InitializeEventReporter(pubsubAddr); err != nil {
 		log.With().Error("error initializing event reporter", log.Err(err))

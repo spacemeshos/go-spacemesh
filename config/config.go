@@ -175,7 +175,7 @@ func defaultBaseConfig() BaseConfig {
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,
-		SyncValidationDelta: 30,
+		SyncValidationDelta: 300,
 		AtxsPerBlock:        100,
 		TxsPerBlock:         100,
 		Profiler:            false,

@@ -56,6 +56,7 @@ type LayerFetch interface {
 	GetBlocks(ctx context.Context, IDs []types.BlockID) error
 	FetchBlock(ctx context.Context, ID types.BlockID) error
 	GetPoetProof(ctx context.Context, id types.Hash32) error
+	GetInputVector(id types.LayerID) error
 	Start()
 	Close()
 }
@@ -507,7 +508,10 @@ func (s *Syncer) handleNotSynced(ctx context.Context, currentSyncLayer types.Lay
 			}
 		}
 		s.syncAtxs(ctx, currentSyncLayer)
-		logger.With().Info("done with layer", log.FieldNamed("current_sync_layer", currentSyncLayer))
+
+		// TODO: implement handling hare terminating with no valid blocks.
+		// 	currently hareForLayer is nil if hare hasn't terminated yet.
+		//	 ACT: hare should save something in the db when terminating empty set, sync should check it.
 		s.ValidateLayer(lyr) // wait for layer validation
 	}
 
@@ -743,6 +747,11 @@ func (s *Syncer) FetchBlock(ctx context.Context, ID types.BlockID) error {
 // GetPoetProof fetches a poet proof from network peers
 func (s *Syncer) GetPoetProof(ctx context.Context, hash types.Hash32) error {
 	return s.fetcher.GetPoetProof(ctx, hash)
+}
+
+// GetInputVector fetches a inputvector for layer from network peers
+func (s *Syncer) GetInputVector(id types.LayerID) error {
+	return s.fetcher.GetInputVector(id)
 }
 
 func (s *Syncer) getAndValidateLayer(id types.LayerID) error {

@@ -723,6 +723,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	<-end
 
 	// This stops the app
+	app.stopServices()
 	cmdp.Cancel()
 
 	// Wait for everything to stop cleanly before ending test

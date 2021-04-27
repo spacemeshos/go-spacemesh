@@ -306,7 +306,7 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 		}
 		res, err := db.Get(r.Hash.Bytes())
 		if err != nil {
-			f.log.Warning("requested non existing hash %v %v", r.Hash.Hex(), err)
+			f.log.Warning("remote peer requested non existing hash %v %v", r.Hash.Hex(), err)
 			continue
 		} else {
 			f.log.Info("responded to hash req %v bytes %v", r.Hash.ShortString(), len(res))
@@ -385,7 +385,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 	//iterate all requests that didn't return value from peer and notify - they wioll be retried
 	err = fmt.Errorf("hash did not return")
 	for h := range batchMap {
-		f.log.Warning("hash was not found in response %v", h.ShortString())
+		f.log.Warning("%v hash was not found in response %v", batchMap[h].Hint, h.ShortString())
 	}
 
 	//delete the hash of waiting batch
