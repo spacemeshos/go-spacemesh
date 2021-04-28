@@ -49,6 +49,7 @@ func AddLayer(m *mesh.DB, layer *types.Layer) error {
 }
 
 var defaultTestHdist = config.DefaultConfig().Hdist
+var defaultTestZdist = config.DefaultConfig().Zdist
 
 func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) {
 	for _, i := range blocks {
@@ -181,7 +182,7 @@ func turtleSanity(t *testing.T, layers types.LayerID, blocksPerLayer, voteNegati
 		return sorted[voteNegative:], nil
 	}
 
-	trtl = newTurtle(msh, defaultTestHdist, blocksPerLayer)
+	trtl = newTurtle(msh, defaultTestHdist, defaultTestZdist, blocksPerLayer)
 	gen := mesh.GenesisLayer()
 	trtl.init(context.TODO(), gen)
 
@@ -268,7 +269,7 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 		})
 	}
 
-	trtl := newTurtle(msh, defaultTestHdist, blocksPerLayer)
+	trtl := newTurtle(msh, defaultTestHdist, defaultTestZdist, blocksPerLayer)
 	gen := mesh.GenesisLayer()
 	trtl.init(context.TODO(), gen)
 
@@ -330,16 +331,13 @@ func TestTurtle_Eviction(t *testing.T) {
 	avgPerLayer := 10
 	voteNegative := 0
 	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
-	require.Equal(t, len(trtl.BlockOpinionsByLayer),
-		(defaultTestHdist + 2))
+	require.Equal(t, defaultTestHdist + 2, len(trtl.BlockOpinionsByLayer))
 	count := 0
 	for _, blks := range trtl.BlockOpinionsByLayer {
 		count += len(blks)
 	}
-	require.Equal(t, count,
-		(defaultTestHdist+2)*avgPerLayer)
-	require.Equal(t, len(trtl.GoodBlocksIndex),
-		(defaultTestHdist+2)*avgPerLayer) // all blocks should be good
+	require.Equal(t, (defaultTestHdist+2)*avgPerLayer, count)
+	require.Equal(t, (defaultTestHdist+2)*avgPerLayer, len(trtl.GoodBlocksIndex)) // all blocks should be good
 }
 
 //func TestTurtle_Eviction2(t *testing.T) {
@@ -362,7 +360,7 @@ func TestTurtle_Recovery(t *testing.T) {
 	mdb.InputVectorBackupFunc = getHareResults
 
 	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), 3, mdb, 5, lg)
+	alg := verifyingTortoise(context.TODO(), 3, mdb, 5, 5, lg)
 	l := mesh.GenesisLayer()
 
 	log.With().Info("The genesis is ", l.Index(), types.BlockIdsField(types.BlockIDs(l.Blocks())))

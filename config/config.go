@@ -68,7 +68,8 @@ type BaseConfig struct {
 	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
 	LayerAvgSize     int    `mapstructure:"layer-average-size"`
 	LayersPerEpoch   int    `mapstructure:"layers-per-epoch"`
-	Hdist            int    `mapstructure:"hdist"`
+	Hdist            int    `mapstructure:"hdist"` // hare/input vector lookback distance
+	Zdist            int    `mapstructure:"zdist"` // hare result wait distance
 
 	PoETServer string `mapstructure:"poet-server"`
 
@@ -164,7 +165,8 @@ func defaultBaseConfig() BaseConfig {
 		LayersPerEpoch:      3,
 		PoETServer:          "127.0.0.1",
 		GoldenATXID:         "0x5678", // TODO: Change the value
-		Hdist:               5,
+		Hdist:               10,
+		Zdist:               5,
 		GenesisActiveSet:    5,
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,

@@ -221,6 +221,9 @@ type mockBlockProvider struct {
 func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
 }
 
+func (mbp *mockBlockProvider) InvalidateLayer(context.Context, types.LayerID) {
+}
+
 func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
 	return buildSet(), nil
 }

@@ -44,8 +44,12 @@ type turtle struct {
 	// last evicted layer
 	Evict types.LayerID
 
-	// hare lookback (distance)
+	// hare lookback (distance): up to Hdist layers back, we only consider hare results/input vector
 	Hdist types.LayerID
+
+	// hare result wait (distance): we wait up to Zdist layers for hare results/input vector, before invalidating
+	// a layer
+	Zdist types.LayerID
 
 	AvgLayerSize  int
 	MaxExceptions int
@@ -59,15 +63,16 @@ type turtle struct {
 }
 
 // SetLogger sets the Log instance for this turtle
-func (t *turtle) SetLogger(log2 log.Log) {
-	t.logger = log2
+func (t *turtle) SetLogger(logger log.Log) {
+	t.logger = logger
 }
 
 // newTurtle creates a new verifying tortoise algorithm instance. XXX: maybe rename?
-func newTurtle(bdp blockDataProvider, hdist, avgLayerSize int) *turtle {
+func newTurtle(bdp blockDataProvider, hdist, zdist, avgLayerSize int) *turtle {
 	t := &turtle{
 		logger:               log.NewDefault("trtl"),
 		Hdist:                types.LayerID(hdist),
+		Zdist:                types.LayerID(zdist),
 		bdp:                  bdp,
 		Last:                 0,
 		AvgLayerSize:         avgLayerSize,
@@ -325,11 +330,20 @@ func (t *turtle) calculateExceptions(
 			}
 		}
 
+		// attempt to read Hare results for layer
 		layerInputVector, err := t.bdp.GetLayerInputVector(layerID)
 		if err != nil {
 			if err == mesh.ErrInvalidLayer {
 				// Hare failed for this layer, vote against all blocks
-				logger.With().Debug("voting against all blocks in invalid layer", log.Err(err))
+				logger.With().Debug("voting against all blocks in invalid layer after hare failure", log.Err(err))
+
+				// leaving the input vector empty will have the desired result, below
+			} else if layerID < t.Last-t.Zdist {
+				// TODO: should this be currentLayer - zdist?
+				// this layer cannot be older than hdist before last, since that's where we start looking for a base
+				// block, but it can be older than zdist before last. after zdist layers, we give up waiting for hare
+				// results/input vector and mark the whole layer invalid.
+				logger.With().Debug("voting against all blocks in invalid layer older than zdist", log.Err(err))
 
 				// leaving the input vector empty will have the desired result, below
 			} else {

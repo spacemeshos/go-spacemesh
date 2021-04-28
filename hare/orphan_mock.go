@@ -9,7 +9,10 @@ type orphanMock struct {
 	f func() []types.BlockID
 }
 
-func (op *orphanMock) HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID) {
+func (op *orphanMock) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
+}
+
+func (op *orphanMock) InvalidateLayer(context.Context, types.LayerID) {
 }
 
 func (op *orphanMock) GetOrphanBlocks() []types.BlockID {

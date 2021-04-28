@@ -541,6 +541,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		LayerSyze: int(layerSize),
 		Database:  mdb,
 		Hdist:     app.Config.Hdist,
+		Zdist:     app.Config.Zdist,
 		Log:       app.addLogger(TrtlLogger, lg),
 		Recovered: mdb.PersistentData(),
 	}

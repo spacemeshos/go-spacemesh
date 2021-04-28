@@ -19,7 +19,8 @@ type ThreadSafeVerifyingTortoise struct {
 type Config struct {
 	LayerSyze int
 	Database  blockDataProvider
-	Hdist     int
+	Hdist     int // hare lookback distance: the distance over which we use the input vector/hare results
+	Zdist     int // hare result wait distance: the distance over which we're willing to wait for hare results
 	Log       log.Log
 	Recovered bool
 }
@@ -29,13 +30,16 @@ func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingT
 	if cfg.Recovered {
 		return recoveredVerifyingTortoise(cfg.Database, cfg.Log)
 	}
-	return verifyingTortoise(ctx, cfg.LayerSyze, cfg.Database, cfg.Hdist, cfg.Log)
+	return verifyingTortoise(ctx, cfg.LayerSyze, cfg.Database, cfg.Hdist, cfg.Zdist, cfg.Log)
 }
 
 // verifyingTortoise creates a new verifying tortoise wrapper
-func verifyingTortoise(ctx context.Context, layerSize int, mdb blockDataProvider, hdist int, lg log.Log) *ThreadSafeVerifyingTortoise {
-	alg := &ThreadSafeVerifyingTortoise{trtl: newTurtle(mdb, hdist, layerSize)}
-	alg.trtl.SetLogger(lg)
+func verifyingTortoise(ctx context.Context, layerSize int, mdb blockDataProvider, hdist int, zdist int, logger log.Log) *ThreadSafeVerifyingTortoise {
+	if hdist < zdist {
+		logger.With().Panic("hdist must be >= zdist", log.Int("hdist", hdist), log.Int("zdist", zdist))
+	}
+	alg := &ThreadSafeVerifyingTortoise{trtl: newTurtle(mdb, hdist, zdist, layerSize)}
+	alg.trtl.SetLogger(logger)
 	alg.trtl.init(ctx, mesh.GenesisLayer())
 	return alg
 }

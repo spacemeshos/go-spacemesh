@@ -53,7 +53,10 @@ func init() {
 type mockBlockProvider struct {
 }
 
-func (mbp *mockBlockProvider) HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID) {
+func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
+}
+
+func (mbp *mockBlockProvider) InvalidateLayer(context.Context, types.LayerID) {
 }
 
 func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {

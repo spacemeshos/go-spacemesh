@@ -23,6 +23,7 @@ type layerMutex struct {
 	layerWorkers uint32
 }
 
+// ErrInvalidLayer signifies that hare has failed for a given layer, thus marking it invalid
 var ErrInvalidLayer = errors.New("layer invalid")
 
 // DB represents a mesh database instance
