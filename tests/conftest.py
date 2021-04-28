@@ -167,7 +167,7 @@ def set_namespace(request, session_id, load_config, delete_ns):
 
     setup_namespace()
     yield
-    # delete namespace if was not mentioned otherwise in the command line args (delete_ns) and if global arg is set to
+    # delete namespace if was not mentioned otherwise in the command line args and if global arg is set to
     # True (pytest.delete_namespace)
     fin([delete_ns, pytest.delete_namespace])
 
