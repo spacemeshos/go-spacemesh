@@ -186,10 +186,10 @@ func TestBroker_Priority(t *testing.T) {
 		select {
 		case <-timeout.C:
 			assert.Fail(t, "timed out waiting for channel close")
-			res<-false
+			res <- false
 		case _, ok := <-broker.queueChannel:
 			assert.False(t, ok, "expected channel close")
-			res<-!ok
+			res <- !ok
 		}
 	}()
 
