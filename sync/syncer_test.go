@@ -277,7 +277,8 @@ func addTxsToPool(pool txMemPool, txs []*types.Transaction) {
 }
 
 func TestSyncer_Start(t *testing.T) {
-	syncs, _, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, _, clock := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	defer clock.Close()
 	syn := syncs[0]
 
 	syn.Start(context.TODO())
@@ -297,8 +298,8 @@ func createBlock(activationTx types.ActivationTx, signer *signing.EdSigner) *typ
 
 func TestSyncer_Close(t *testing.T) {
 	types.SetLayersPerEpoch(3)
-	syncs, _, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
-
+	syncs, _, clock := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	defer clock.Close()
 	sync := syncs[0]
 	sync1 := syncs[1]
 
@@ -379,7 +380,8 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 func TestSyncProtocol_FetchInputVector(t *testing.T) {
 	r := require.New(t)
 
-	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
+	syncs, nodes, clock := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
+	defer clock.Close()
 	s0 := syncs[0]
 	s1 := syncs[1]
 	s1.peers = getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey()})
@@ -405,7 +407,8 @@ func TestSyncProtocol_FetchInputVector(t *testing.T) {
 func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
 	r := require.New(t)
 
-	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
+	syncs, nodes, clock := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
+	defer clock.Close()
 	s0 := syncs[0]
 	s1 := syncs[1]
 	s1.peers = getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey()})
@@ -430,7 +433,8 @@ func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
 func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 	r := require.New(t)
 	signer := signing.NewEdSigner()
-	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
+	syncs, nodes, clock := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
+	defer clock.Close()
 	s0 := syncs[0]
 	s1 := syncs[1]
 	s1.peers = getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey()})
@@ -549,7 +553,8 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 */
 
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
-	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, nodes, clock := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	defer clock.Close()
 	signer := signing.NewEdSigner()
 	atx1 := atx(signer.PublicKey().String())
 
@@ -703,6 +708,7 @@ func syncTest(dpType string, t *testing.T) {
 	defer syncObj4.Close()
 	n1 := nodes[0]
 	n2 := nodes[1]
+	defer clock.Close()
 	//n4 := nodes[3]
 
 	syncObj1.peers = getPeersMock([]p2ppeers.Peer{n2.PublicKey()})
@@ -777,6 +783,7 @@ func syncTest(dpType string, t *testing.T) {
 		// Got a timeout! fail with a timeout error
 		case <-timeout:
 			t.Error("timed out ")
+			return
 		default:
 			if syncObj2.ProcessedLayer() >= 4 && syncObj3.ProcessedLayer() >= 4 {
 				log.Info("done!", syncObj2.ProcessedLayer(), syncObj3.ProcessedLayer())
@@ -806,6 +813,7 @@ type SyncIntegrationSuite struct {
 	p2p.IntegrationTestSuite
 	syncers []*Syncer
 	name    string
+	clock *timesync.TimeClock
 	// add more params you need
 }
 
@@ -827,6 +835,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	str := "2016-11-12T11:45:26.371Z"
 	start, _ := time.Parse(layout, str)
 	ts := timesync.NewClock(timesync.RealClock{}, tick, start, log.NewDefault(t.Name()))
+	sis.clock = ts
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.NewDefault(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()), nil)
@@ -1002,6 +1011,9 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	syncObj5 := sis.syncers[4]
 	defer syncObj5.Close()
 
+	if sis.clock != nil {
+		defer sis.clock.Close()
+	}
 	err := syncObj1.AddBlock(block2)
 	require.NoError(t, err)
 	err = syncObj2.AddBlock(block2)
@@ -1112,7 +1124,9 @@ func TestSyncer_Txs(t *testing.T) {
 
 func TestFetchLayerBlockIds(t *testing.T) {
 	// check tx validation
-	syncs, nodes, _ := SyncMockFactory(3, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, nodes, clock := SyncMockFactory(3, conf, t.Name(), memoryDB, newMockPoetDb)
+
+	defer clock.Close()
 
 	pm1 := getPeersMock([]p2ppeers.Peer{nodes[2].PublicKey()})
 	pm2 := getPeersMock([]p2ppeers.Peer{nodes[2].PublicKey()})
@@ -1333,7 +1347,8 @@ func (m *mockLayerValidator) ValidateLayer(lyr *types.Layer) {
 
 func TestSyncer_Synchronise(t *testing.T) {
 	r := require.New(t)
-	syncs, _, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, _, clock := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	defer clock.Close()
 	sync := syncs[0]
 	lv := &mockLayerValidator{0, 0, 0, nil, nil}
 	sync.Mesh.Validator = lv
@@ -1363,7 +1378,8 @@ func TestSyncer_Synchronise(t *testing.T) {
 func TestSyncer_Synchronise2(t *testing.T) {
 	r := require.New(t)
 	types.SetLayersPerEpoch(1)
-	syncs, _, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, _, clock := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	defer clock.Close()
 	sync := syncs[0]
 	defer sync.Close()
 	gen := types.GetEffectiveGenesis()
@@ -1413,7 +1429,8 @@ func TestSyncer_Synchronise2(t *testing.T) {
 
 func TestSyncer_ListenToGossip(t *testing.T) {
 	r := require.New(t)
-	syncs, _, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, _, clock := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	defer clock.Close()
 	sync := syncs[0]
 	defer sync.Close()
 	sync.AddBlockWithTxs(types.NewExistingBlock(1, []byte(rand.String(8)), nil))
@@ -1652,7 +1669,8 @@ func (m *mockTimedValidator) ValidateLayer(lyr *types.Layer) {
 
 func TestSyncer_ConcurrentSynchronise(t *testing.T) {
 	r := require.New(t)
-	syncs, _, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, _, clock := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	defer clock.Close()
 	sync := syncs[0]
 	sync.ticker = &mockClock{Layer: 3}
 	lv := &mockTimedValidator{1 * time.Second, 0}
@@ -2046,7 +2064,8 @@ func TestSyncer_AtxSetID(t *testing.T) {
 func TestSyncer_Await(t *testing.T) {
 	r := require.New(t)
 
-	syncs, _, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, _, clock := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	defer clock.Close()
 	syncer := syncs[0]
 	defer syncer.Close()
 	err := syncer.AddBlockWithTxs(types.NewExistingBlock(1, []byte(rand.String(8)), nil))
