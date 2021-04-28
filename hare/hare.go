@@ -188,7 +188,6 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 // happens when the node is fully synced and Hare is working.
 func (h *Hare) collectCoinflip(id instanceID, coinflip bool) {
 	// TODO: do we need to check buffer range?
-	// bytearray is stored little endian, so leftmost byte is least significant
 	h.mu.Lock()
 	h.coinflips[types.LayerID(id)] = coinflip
 	h.mu.Unlock()
