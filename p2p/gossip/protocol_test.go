@@ -78,17 +78,17 @@ func TestPropagateMessage(t *testing.T) {
 	}
 }
 
-type mockPriorityQueue struct{
+type mockPriorityQueue struct {
 	isWritten bool
-	isClosed bool
-	bus chan struct{}
-	called chan struct{}
+	isClosed  bool
+	bus       chan struct{}
+	called    chan struct{}
 }
 
 func (mpq *mockPriorityQueue) Write(priorityq.Priority, interface{}) error {
 	mpq.isWritten = true
-	mpq.called<-struct{}{}
-	mpq.bus<-struct{}{}
+	mpq.called <- struct{}{}
+	mpq.bus <- struct{}{}
 	return nil
 }
 
@@ -98,7 +98,7 @@ func (mpq mockPriorityQueue) Read() (interface{}, error) {
 
 func (mpq *mockPriorityQueue) Close() {
 	mpq.isClosed = true
-	mpq.called<-struct{}{}
+	mpq.called <- struct{}{}
 }
 
 func TestPropagationEventLoop(t *testing.T) {
