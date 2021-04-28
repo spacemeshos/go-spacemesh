@@ -988,8 +988,8 @@ func (s *Syncer) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx
 
 func (s *Syncer) fetchBlock(ctx context.Context, ID types.BlockID) bool {
 	ch := make(chan bool, 1)
-	defer close(ch)
 	foo := func(ctx context.Context, res bool) error {
+		defer close(ch)
 		s.WithContext(ctx).With().Info("single block fetched",
 			ID,
 			log.Bool("result", res))
