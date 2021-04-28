@@ -813,7 +813,7 @@ type SyncIntegrationSuite struct {
 	p2p.IntegrationTestSuite
 	syncers []*Syncer
 	name    string
-	clock *timesync.TimeClock
+	clock   *timesync.TimeClock
 	// add more params you need
 }
 
