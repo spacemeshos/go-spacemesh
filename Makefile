@@ -154,7 +154,7 @@ test:
 
 
 test-no-app-test:
-	ulimit -n 9999; go test -timeout 0 -p 1 -tags exclude_app_test ./...
+	ulimit -n 9999; go test -timeout 0 -p 1 -v -tags exclude_app_test ./...
 .PHONY: test
 
 
