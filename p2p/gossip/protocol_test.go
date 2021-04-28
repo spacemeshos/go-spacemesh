@@ -2,12 +2,12 @@ package gossip
 
 import (
 	"context"
+	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
+	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/assert"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -78,28 +78,55 @@ func TestPropagateMessage(t *testing.T) {
 	}
 }
 
+type mockPriorityQueue struct{
+	isWritten bool
+	isClosed bool
+	bus chan struct{}
+	called chan struct{}
+}
+
+func (mpq *mockPriorityQueue) Write(priorityq.Priority, interface{}) error {
+	mpq.isWritten = true
+	mpq.called<-struct{}{}
+	mpq.bus<-struct{}{}
+	return nil
+}
+
+func (mpq mockPriorityQueue) Read() (interface{}, error) {
+	return <-mpq.bus, nil
+}
+
+func (mpq *mockPriorityQueue) Close() {
+	mpq.isClosed = true
+	mpq.called<-struct{}{}
+}
+
 func TestPropagationEventLoop(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	protocol := NewProtocol(config.SwarmConfig{}, nil, nil, nil, log.AppLog)
+	called := make(chan struct{})
+	mpq := mockPriorityQueue{called: called, bus: make(chan struct{}, 10)}
+	protocol.pq = &mpq
 
-	protocol := NewProtocol(config.SwarmConfig{}, nil, nil, nil, logger)
-
-	var isWritten, isClosed bool
 	go protocol.propagationEventLoop(context.TODO())
 
 	protocol.propagateQ <- service.MessageValidation{}
-	time.Sleep(time.Second * 2)
-	assert.Equal(t, true, isWritten, "message should be written")
-	assert.Equal(t, false, isClosed, "listener should not be shut down yet")
+	<-called
+	assert.Equal(t, true, mpq.isWritten, "message should be written")
+	assert.Equal(t, false, mpq.isClosed, "listener should not be shut down yet")
 
-	isWritten = false
+	mpq.isWritten = false
 	protocol.shutdown <- struct{}{}
-	time.Sleep(time.Second * 2)
-	assert.Equal(t, false, isWritten, "message should not be written")
-	assert.Equal(t, true, isClosed, "listener should be shut down")
+	<-called
+	assert.Equal(t, false, mpq.isWritten, "message should not be written")
+	assert.Equal(t, true, mpq.isClosed, "listener should be shut down")
 
 	protocol.propagateQ <- service.MessageValidation{}
-	time.Sleep(time.Second * 2)
-	assert.Equal(t, false, isWritten, "message should not be written")
-	assert.Equal(t, true, isClosed, "listener should be shut down")
+	timeout := time.NewTimer(time.Second)
+	select {
+	case <-called:
+		assert.Fail(t, "queue should not be written to after shutdown")
+	case <-timeout.C:
+		assert.Equal(t, false, mpq.isWritten, "message should not be written")
+		assert.Equal(t, true, mpq.isClosed, "listener should be shut down")
+	}
 }
