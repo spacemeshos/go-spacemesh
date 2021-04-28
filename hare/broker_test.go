@@ -98,7 +98,6 @@ func TestBroker_Received(t *testing.T) {
 
 // test that self-generated (outbound) messages are handled before incoming messages
 func TestBroker_Priority(t *testing.T) {
-	log.DebugMode(true)
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	broker := buildBroker(n1, t.Name())
