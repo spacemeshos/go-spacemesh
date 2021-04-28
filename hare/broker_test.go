@@ -105,7 +105,13 @@ func TestBroker_Priority(t *testing.T) {
 	// this allows us to pause and release broker processing of incoming messages
 	wg := sync.WaitGroup{}
 	wg.Add(1)
+	wg2 := sync.WaitGroup{}
+	wg2.Add(1)
+	once := sync.Once{}
 	broker.eValidator = &mockEligibilityValidator{validationFn: func(context.Context, *Msg) bool {
+		// tell the sender that we've got one message
+		once.Do(wg2.Done)
+		// wait until all the messages are queued
 		wg.Wait()
 		return true
 	}}
@@ -137,6 +143,7 @@ func TestBroker_Priority(t *testing.T) {
 	// first, broadcast a bunch of simulated inbound messages
 	for i := 0; i < 10; i++ {
 		// channel send is blocking, so we're sure the messages have been processed
+		log.Info("sending inbound hare message")
 		msgChan <- service.NewSimGossipMessage(
 			n1.Info.PublicKey(),
 			false,
@@ -144,14 +151,22 @@ func TestBroker_Priority(t *testing.T) {
 		)
 	}
 
+	// make sure the listener has gotten at least one message
+	wg2.Wait()
+
 	// now broadcast one outbound message
+	log.Info("sending outbound hare message")
 	msgChan <- service.NewSimGossipMessage(n1.Info.PublicKey(), true, service.DataBytes{Payload: serMsgOutbound})
 
-	// release the waiting listener (hare event loop)
+	// we know that the hare queueLoop has received the previous message, but we don't know that it's actually been
+	// processed or added to the priority queue yet. in order to be certain of this, we have to send one more message.
+	msgChan <- nil
+
+	// all messages are queued, release the waiting listener (hare event loop)
 	wg.Done()
 
-	// we expect the outbound message to be prioritized and arrive first
-	tm := time.NewTimer(3 * time.Second)
+	// we expect the outbound message to be prioritized
+	tm := time.NewTimer(3 * time.Minute)
 	for i := 0; i < 11; i++ {
 		select {
 		case x := <-outbox:
@@ -176,12 +191,12 @@ func TestBroker_Priority(t *testing.T) {
 	// Test shutdown flow
 
 	// Listener to make sure internal queue channel is closed
-	wg2 := sync.WaitGroup{}
-	wg2.Add(1)
+	wg3 := sync.WaitGroup{}
+	wg3.Add(1)
 	res := make(chan bool)
 	go func() {
 		timeout := time.NewTimer(time.Second)
-		wg2.Done()
+		wg3.Done()
 		select {
 		case <-timeout.C:
 			assert.Fail(t, "timed out waiting for channel close")
@@ -193,7 +208,7 @@ func TestBroker_Priority(t *testing.T) {
 	}()
 
 	// Make sure the listener is listening
-	wg2.Wait()
+	wg3.Wait()
 	broker.Close()
 	_, err = broker.queue.Read()
 	assert.Error(t, err, "expected broker priority queue to be closed")
