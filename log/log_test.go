@@ -2,8 +2,10 @@ package log
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -107,7 +109,6 @@ func TestJsonLog(t *testing.T) {
 	var buf bytes.Buffer
 	logwriter = &buf
 	AppLog = NewDefault(mainLoggerName)
-	//AppLog = NewWithLevel(mainLoggerName, zap.NewAtomicLevelAt(zapcore.DebugLevel))
 
 	// Expect output not to be in JSON format
 	teststr := "test001"
@@ -130,6 +131,111 @@ func TestJsonLog(t *testing.T) {
 	}
 	Info(teststr)
 	got := entry{}
+	r.NoError(json.Unmarshal(buf.Bytes(), &got))
+	r.Equal(expect, got)
+}
+
+func TestContextualLogging(t *testing.T) {
+	// basic housekeeping
+	r := require.New(t)
+	reqID := "myRequestId"
+	sesID := "mySessionId"
+	teststr := "test003"
+	JSONLog(true)
+
+	// test basic context first: try to set and read context, roundtrip
+	ctx := context.Background()
+	ctx = WithRequestID(ctx, reqID)
+	if reqID2, ok := ExtractRequestID(ctx); ok {
+		r.Equal(reqID, reqID2)
+	} else {
+		r.Fail("failed to extract request ID after setting")
+	}
+	ctx = WithSessionID(ctx, sesID)
+	if sesID2, ok := ExtractSessionID(ctx); ok {
+		r.Equal(sesID, sesID2)
+	} else {
+		r.Fail("failed to extract session ID after setting")
+	}
+
+	// try again in reverse order
+	ctx = context.Background()
+	ctx = WithRequestID(WithSessionID(ctx, sesID), reqID)
+	if reqID2, ok := ExtractRequestID(ctx); ok {
+		r.Equal(reqID, reqID2)
+	} else {
+		r.Fail("failed to extract request ID after setting")
+	}
+	ctx = WithSessionID(ctx, sesID)
+	if sesID2, ok := ExtractSessionID(ctx); ok {
+		r.Equal(sesID, sesID2)
+	} else {
+		r.Fail("failed to extract session ID after setting")
+	}
+
+	// try re-setting (in reverse)
+	ctx = WithRequestID(WithSessionID(ctx, reqID), sesID)
+	if reqID2, ok := ExtractRequestID(ctx); ok {
+		r.Equal(sesID, reqID2)
+	} else {
+		r.Fail("failed to extract request ID after setting")
+	}
+	if sesID2, ok := ExtractSessionID(ctx); ok {
+		r.Equal(reqID, sesID2)
+	} else {
+		r.Fail("failed to extract session ID after setting")
+	}
+
+	// try setting new
+	ctx = WithNewRequestID(WithNewSessionID(context.Background()))
+	if reqID2, ok := ExtractRequestID(ctx); ok {
+		_, err := uuid.Parse(reqID2)
+		r.NoError(err)
+	} else {
+		r.Fail("failed to extract request ID after setting")
+	}
+	if sesID2, ok := ExtractSessionID(ctx); ok {
+		_, err := uuid.Parse(sesID2)
+		r.NoError(err)
+	} else {
+		r.Fail("failed to extract session ID after setting")
+	}
+
+	// Capture the log output
+	var buf bytes.Buffer
+	logwriter = &buf
+	AppLog = NewDefault(mainLoggerName)
+
+	// make sure we can set and read context
+	ctx = WithRequestID(context.Background(), reqID)
+	contextualLogger := AppLog.WithContext(ctx)
+	contextualLogger.Info(teststr)
+	type entry struct {
+		L, M, N, RequestID, SessionID, Foo string
+	}
+	expect := entry{
+		L:         "INFO",
+		M:         teststr,
+		N:         mainLoggerName,
+		RequestID: reqID,
+	}
+	got := entry{}
+	r.NoError(json.Unmarshal(buf.Bytes(), &got))
+	r.Equal(expect, got)
+
+	// test extra fields
+	buf.Reset()
+	ctx = WithSessionID(context.Background(), sesID, String("foo", "bar"))
+	contextualLogger = AppLog.WithContext(ctx)
+	contextualLogger.Info(teststr)
+	expect = entry{
+		L:         "INFO",
+		M:         teststr,
+		N:         mainLoggerName,
+		SessionID: sesID,
+		Foo:       "bar",
+	}
+	got = entry{}
 	r.NoError(json.Unmarshal(buf.Bytes(), &got))
 	r.Equal(expect, got)
 }
