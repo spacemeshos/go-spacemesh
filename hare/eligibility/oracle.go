@@ -94,7 +94,6 @@ func safeLayerRange(
 	return
 }
 
-
 // New returns a new eligibility oracle instance.
 func New(
 	beacon valueProvider,
@@ -314,7 +313,7 @@ func (o *Oracle) actives(targetLayer types.LayerID) (map[string]struct{}, error)
 	}
 
 	// if we failed to get a Hare active set, we fall back on reading the Tortoise active set targeting this epoch
-	atxs := o.atxdb.GetEpochAtxs(targetLayer.GetEpoch()-1)
+	atxs := o.atxdb.GetEpochAtxs(targetLayer.GetEpoch() - 1)
 	if len(atxs) == 0 {
 		return nil, fmt.Errorf("empty active set for layer %v in non-genesis epoch %v",
 			targetLayer, targetLayer.GetEpoch())
