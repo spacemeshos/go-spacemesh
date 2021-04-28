@@ -32,9 +32,17 @@ type signer interface {
 }
 
 type atxProvider interface {
-	// GetEpochAtxs is used to get the active set for an epoch
+	// ActiveSetFromBlocks gets the size of the active set (valid ATXs) for a set of blocks
+	ActiveSetFromBlocks(targetEpoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
+	// GetEpochAtxs is used to get the tortoise active set for an epoch
 	GetEpochAtxs(types.EpochID) []types.ATXID
+	// GetAtxHeader returns the ATX header for an ATX ID
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
+}
+
+type meshProvider interface {
+	// LayerContextuallyValidBlocks returns the set of contextually valid blocks from the mesh for a given layer
+	LayerContextuallyValidBlocks(types.LayerID) (map[types.BlockID]struct{}, error)
 }
 
 // a function to verify the message with the signature and its public key.
@@ -45,6 +53,7 @@ type Oracle struct {
 	lock                 sync.Mutex
 	beacon               valueProvider
 	atxdb                atxProvider
+	meshdb               meshProvider
 	vrfSigner            signer
 	vrfVerifier          verifierFunc
 	layersPerEpoch       uint16
@@ -56,40 +65,62 @@ type Oracle struct {
 	log.Log
 }
 
-// Returns the relative layer id that w.h.p. we have agreement on its contextually valid blocks
-// safe layer is defined to be the confidence param layers prior to the provided Layer
-func safeLayer(layer types.LayerID, safetyParam types.LayerID) types.LayerID {
-	if layer <= types.GetEffectiveGenesis()+safetyParam { // assuming genesis is zero
-		return types.GetEffectiveGenesis()
+// Returns a range of safe layers that should be used to construct the Hare active set for a given target layer
+// Safe layer is a layer prior to the input layer on which w.h.p. we have agreement (i.e., on its contextually valid
+// blocks), defined to be confidence param number of layers prior to the input layer.
+func safeLayerRange(
+	targetLayer types.LayerID,
+	safetyParam types.LayerID,
+	layersPerEpoch types.LayerID,
+	epochOffset types.LayerID,
+) (safeLayerStart, safeLayerEnd types.LayerID) {
+	safeLayer := targetLayer - safetyParam
+	safeEpoch := safeLayer.GetEpoch()
+	safeLayerStart = safeEpoch.FirstLayer()
+	safeLayerEnd = safeLayerStart + epochOffset
+
+	// If the safe layer is in the first epochOffset layers of an epoch,
+	// return a range from the beginning of the previous epoch
+	if safeLayer < safeLayerEnd {
+		safeLayerStart = safeLayerStart - layersPerEpoch
+		safeLayerEnd = safeLayerEnd - layersPerEpoch
 	}
 
-	return layer - safetyParam
+	// If any portion of the range is in the genesis layers, just return the effective genesis
+	if safeLayerStart <= types.GetEffectiveGenesis() {
+		return types.GetEffectiveGenesis(), types.GetEffectiveGenesis()
+	}
+
+	return
 }
+
 
 // New returns a new eligibility oracle instance.
 func New(
 	beacon valueProvider,
 	atxdb atxProvider,
+	meshdb meshProvider,
 	vrfVerifier verifierFunc,
 	vrfSigner signer,
 	layersPerEpoch uint16,
 	genesisActiveSet int,
 	hDist int,
 	cfg eCfg.Config,
-	log log.Log) *Oracle {
-	vmc, e := lru.New(vrfMsgCacheSize)
-	if e != nil {
-		log.Panic("Could not create lru cache err=%v", e)
+	logger log.Log) *Oracle {
+	vmc, err := lru.New(vrfMsgCacheSize)
+	if err != nil {
+		logger.With().Panic("could not create lru cache", log.Err(err))
 	}
 
-	ac, e := lru.New(activesCacheSize)
-	if e != nil {
-		log.Panic("Could not create lru cache err=%v", e)
+	ac, err := lru.New(activesCacheSize)
+	if err != nil {
+		logger.With().Panic("could not create lru cache", log.Err(err))
 	}
 
 	return &Oracle{
 		beacon:               beacon,
 		atxdb:                atxdb,
+		meshdb:               meshdb,
 		vrfVerifier:          vrfVerifier,
 		vrfSigner:            vrfSigner,
 		layersPerEpoch:       layersPerEpoch,
@@ -98,7 +129,7 @@ func New(
 		genesisActiveSetSize: genesisActiveSet,
 		hDist:                hDist,
 		cfg:                  cfg,
-		Log:                  log,
+		Log:                  logger,
 	}
 }
 
@@ -163,7 +194,8 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 	return uint32(len(actives)), nil
 }
 
-// Eligible checks if ID is eligible on the given Layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
+// Eligible checks if ID is eligible on the given Layer where msg is the VRF message, sig is the role proof and assuming
+// commSize as the expected committee size
 func (o *Oracle) Eligible(
 	ctx context.Context,
 	layer types.LayerID,
@@ -238,28 +270,54 @@ func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round int32) ([
 	return sig, nil
 }
 
-// Returns a map of all active nodes in the specified layer id
-func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
+// Returns a map of all active node IDs in the specified layer id
+func (o *Oracle) actives(targetLayer types.LayerID) (map[string]struct{}, error) {
 	// lock until any return
 	// note: no need to lock per safeEp - we do not expect many concurrent requests per safeEp (max two)
 	o.lock.Lock()
 	defer o.lock.Unlock()
 
 	// we can't read blocks during genesis epochs as there are none
-	if layer.GetEpoch().IsGenesis() {
+	if targetLayer.GetEpoch().IsGenesis() {
 		return nil, errGenesis
 	}
 
 	// check cache first
-	if val, exist := o.activesCache.Get(layer.GetEpoch()); exist {
+	if val, exist := o.activesCache.Get(targetLayer.GetEpoch()); exist {
 		return val.(map[string]struct{}), nil
 	}
 
-	// get the active set for the epoch
-	atxs := o.atxdb.GetEpochAtxs(layer.GetEpoch())
+	// we first try to get the hare active set for a range of safe layers: start with the set of active blocks
+	safeLayerStart, safeLayerEnd := safeLayerRange(
+		targetLayer, types.LayerID(o.cfg.ConfidenceParam), types.LayerID(o.layersPerEpoch), types.LayerID(o.cfg.EpochOffset))
+	activeBlockIDs := make(map[types.BlockID]struct{})
+	for layerID := safeLayerStart; layerID <= safeLayerEnd; layerID++ {
+		layerBlockIDs, err := o.meshdb.LayerContextuallyValidBlocks(layerID)
+		if err != nil {
+			return nil, fmt.Errorf("error getting active blocks for layer %v for target layer %v: %w",
+				layerID, targetLayer, err)
+		}
+		for blockID := range layerBlockIDs {
+			activeBlockIDs[blockID] = struct{}{}
+		}
+	}
+
+	// now read the set of ATXs referenced by these blocks
+	hareAtxs, err := o.atxdb.ActiveSetFromBlocks(safeLayerStart.GetEpoch(), activeBlockIDs)
+	if err != nil {
+		return nil, fmt.Errorf("error getting ATXs for target layer %v: %w", targetLayer, err)
+	}
+
+	if len(hareAtxs) > 0 {
+		o.activesCache.Add(targetLayer.GetEpoch(), hareAtxs)
+		return hareAtxs, nil
+	}
+
+	// if we failed to get a Hare active set, we fall back on reading the Tortoise active set targeting this epoch
+	atxs := o.atxdb.GetEpochAtxs(targetLayer.GetEpoch()-1)
 	if len(atxs) == 0 {
 		return nil, fmt.Errorf("empty active set for layer %v in non-genesis epoch %v",
-			layer, layer.GetEpoch())
+			targetLayer, targetLayer.GetEpoch())
 	}
 
 	// extract the nodeIDs
@@ -267,17 +325,13 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	for _, atxid := range atxs {
 		atx, err := o.atxdb.GetAtxHeader(atxid)
 		if err != nil {
-			o.With().Error("failed to fetch atx for layer in non-genesis epoch",
-				layer,
-				layer.GetEpoch(),
-				log.Err(err))
-			return nil, err
+			return nil, fmt.Errorf("error getting ATX %v for target layer %v: %w", atxid, targetLayer, err)
 		}
 		activeMap[atx.NodeID.Key] = struct{}{}
 	}
 
 	// update cache and return
-	o.activesCache.Add(layer.GetEpoch(), activeMap)
+	o.activesCache.Add(targetLayer.GetEpoch(), activeMap)
 	return activeMap, nil
 }
 

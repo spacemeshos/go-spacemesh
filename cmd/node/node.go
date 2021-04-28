@@ -538,7 +538,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
 	trtlCfg := tortoise.Config{
-		LayerSyze: int(layerSize),
+		LayerSize: int(layerSize),
 		Database:  mdb,
 		Hdist:     app.Config.Hdist,
 		Log:       app.addLogger(TrtlLogger, lg),
@@ -591,7 +591,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		hOracle = rolacle
 	} else { // regular oracle, build and use it
 		beacon := eligibility.NewBeacon(mdb, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
-		hOracle = eligibility.New(beacon, atxdb, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, app.Config.Hdist, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+		hOracle = eligibility.New(beacon, atxdb, mdb, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, app.Config.Hdist, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	}
 
 	gossipListener := service.NewListener(swarm, syncer, app.addLogger(GossipListener, lg))

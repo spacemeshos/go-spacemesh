@@ -13,7 +13,7 @@ const nilVal = 0
 type patternProvider interface {
 	// ContextuallyValidBlock returns the pattern ID of the given layer
 	// the pattern ID is defined to be the hash of blocks in a layer
-	ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error)
+	LayerContextuallyValidBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error)
 }
 
 type addGet interface {
@@ -49,7 +49,8 @@ func NewBeacon(patternProvider patternProvider, confidenceParam uint64, lg log.L
 // Value returns the unpredictable and agreed value for the given layer
 // Note: Value is concurrency-safe but not concurrency-optimized
 func (b *Beacon) Value(layer types.LayerID) (uint32, error) {
-	sl := safeLayer(layer, types.LayerID(b.confidenceParam))
+	// TODO: this is a temporary hack, it will go away when https://github.com/spacemeshos/go-spacemesh/pull/2394 is merged
+	sl := layer - types.LayerID(b.confidenceParam)
 	logger := b.Log.WithFields(layer, log.FieldNamed("sl_id", sl))
 
 	// check cache
@@ -57,9 +58,9 @@ func (b *Beacon) Value(layer types.LayerID) (uint32, error) {
 		return val.(uint32), nil
 	}
 
-	// note: multiple concurrent calls to ContextuallyValidBlock and calcValue can be made
+	// note: multiple concurrent calls to LayerContextuallyValidBlocks and calcValue can be made
 	// consider adding a lock if concurrency-optimized is important
-	v, err := b.patternProvider.ContextuallyValidBlock(sl)
+	v, err := b.patternProvider.LayerContextuallyValidBlocks(sl)
 	if err != nil {
 		logger.With().Error("could not get pattern id", log.Err(err))
 		return nilVal, errors.New("could not calculate beacon value")

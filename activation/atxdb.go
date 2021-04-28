@@ -86,7 +86,7 @@ func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPe
 		log:              log,
 		atxChannels:      make(map[types.ATXID]*atxChan),
 	}
-	db.calcActiveSetFunc = db.CalcActiveSetSize
+	db.calcActiveSetFunc = db.ActiveSetFromBlocks
 	return db
 }
 
@@ -243,18 +243,18 @@ func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.A
 	return traversalFunc
 }
 
-// CalcActiveSetSize returns the set of active node IDs for the ATXs pointed to by the provided blocks
-func (db *DB) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
-	if epoch == 0 {
-		return nil, errors.New("tried to retrieve active set for epoch 0")
+// ActiveSetFromBlocks returns the set of active node IDs for the ATXs pointed to by the provided blocks
+func (db *DB) ActiveSetFromBlocks(targetEpoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+	if targetEpoch == 0 {
+		return nil, errors.New("tried to retrieve active set for target epoch 0")
 	}
 
-	firstLayerOfPrevEpoch := (epoch - 1).FirstLayer()
+	firstLayerOfPrevEpoch := (targetEpoch - 1).FirstLayer()
 
 	countedAtxs := make(map[string]types.ATXID)
 	penalties := make(map[string]struct{})
 
-	traversalFunc := db.createTraversalActiveSetCounterFunc(countedAtxs, penalties, db.LayersPerEpoch, epoch)
+	traversalFunc := db.createTraversalActiveSetCounterFunc(countedAtxs, penalties, db.LayersPerEpoch, targetEpoch)
 
 	startTime := time.Now()
 	if err := db.meshDb.ForBlockInView(blocks, firstLayerOfPrevEpoch, traversalFunc); err != nil {

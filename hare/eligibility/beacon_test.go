@@ -14,7 +14,7 @@ type mockPatternProvider struct {
 	err        error
 }
 
-func (mpp *mockPatternProvider) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+func (mpp *mockPatternProvider) LayerContextuallyValidBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
 	if layer == types.GetEffectiveGenesis() {
 		return mpp.valGenesis, mpp.err
 	}

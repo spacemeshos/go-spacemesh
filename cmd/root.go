@@ -171,9 +171,9 @@ func AddCommands(cmd *cobra.Command) {
 	/**======================== Hare Eligibility Oracle Flags ========================== **/
 
 	cmd.PersistentFlags().Uint64Var(&config.HareEligibility.ConfidenceParam, "eligibility-confidence-param",
-		config.HareEligibility.ConfidenceParam, "The relative layer (with respect to the current layer) we are confident to have consensus about")
+		config.HareEligibility.ConfidenceParam, "The distance (in layers) we need to wait to have confidence about the contents of a layer")
 	cmd.PersistentFlags().IntVar(&config.HareEligibility.EpochOffset, "eligibility-epoch-offset",
-		config.HareEligibility.EpochOffset, "The constant layer (within an epoch) for which we traverse its view for the purpose of counting consensus active set")
+		config.HareEligibility.EpochOffset, "The number of layers we wait for blocks to arrive at the start of each epoch for purposes of establishing eligibility")
 
 	/**======================== PoST Flags ========================== **/
 

@@ -815,8 +815,8 @@ func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks
 	return validBlocks, invalidBlocks
 }
 
-// ContextuallyValidBlock - returns the contextually valid blocks for the provided layer
-func (m *DB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+// LayerContextuallyValidBlocks returns the set of contextually valid block IDs for the provided layer
+func (m *DB) LayerContextuallyValidBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
 	if layer == 0 || layer == 1 {
 		v, err := m.LayerBlockIds(layer)
 		if err != nil {

@@ -15,7 +15,7 @@ import (
 )
 
 type activationDB interface {
-	GetNodeAtxIDForEpoch(types.NodeID, types.EpochID) (types.ATXID, error)
+	GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error)
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
 	GetIdentity(edID string) (types.NodeID, error)
 	GetEpochAtxs(types.EpochID) []types.ATXID

@@ -42,7 +42,7 @@ func TestCreateBaseline(t *testing.T) {
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
 	defer atxdbStore.Close()
 	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, uint16(1000), goldenATXID, &validatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
-	trtl := tortoise.NewVerifyingTortoise(tortoise.Config{LayerSyze: blocksPerLayer, Database: mshdb, Hdist: 1, Log: lg.WithName("trtl")})
+	trtl := tortoise.NewVerifyingTortoise(tortoise.Config{LayerSize: blocksPerLayer, Database: mshdb, Hdist: 1, Log: lg.WithName("trtl")})
 	msh := mesh.NewMesh(mshdb, atxdb, rewardConf, trtl, &mockTxMemPool{}, &mockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
 	poetDbStore, err := database.NewLDBDatabase(id+"poet", 0, 0, lg.WithName("poetDbStore").WithOptions(log.Nop))

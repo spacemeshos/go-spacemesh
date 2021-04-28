@@ -253,7 +253,7 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	types.SetLayersPerEpoch(6)
 	atxdb.LayersPerEpoch = layersPerEpoch
 	epoch := layer.GetEpoch()
-	actives, err := atxdb.CalcActiveSetSize(epoch, blocksMap)
+	actives, err := atxdb.ActiveSetFromBlocks(epoch, blocksMap)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(actives))
 	_, ok := actives[id2.Key]
@@ -262,7 +262,7 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 
 func TestMesh_ActiveSetForLayerView2(t *testing.T) {
 	atxdb, _, _ := getAtxDb(t.Name())
-	actives, err := atxdb.CalcActiveSetSize(0, nil)
+	actives, err := atxdb.ActiveSetFromBlocks(0, nil)
 	assert.Error(t, err)
 	assert.Equal(t, "tried to retrieve active set for epoch 0", err.Error())
 	assert.Nil(t, actives)
