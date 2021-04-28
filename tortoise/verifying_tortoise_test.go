@@ -331,7 +331,7 @@ func TestTurtle_Eviction(t *testing.T) {
 	avgPerLayer := 10
 	voteNegative := 0
 	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
-	require.Equal(t, defaultTestHdist + 2, len(trtl.BlockOpinionsByLayer))
+	require.Equal(t, defaultTestHdist+2, len(trtl.BlockOpinionsByLayer))
 	count := 0
 	for _, blks := range trtl.BlockOpinionsByLayer {
 		count += len(blks)

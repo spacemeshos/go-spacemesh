@@ -39,7 +39,7 @@ type turtle struct {
 	bdp blockDataProvider
 
 	// last layer processed
-	Last  types.LayerID
+	Last types.LayerID
 
 	// last evicted layer
 	Evict types.LayerID
