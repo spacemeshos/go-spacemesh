@@ -50,7 +50,12 @@ func NewBeacon(patternProvider patternProvider, confidenceParam uint64, lg log.L
 // Note: Value is concurrency-safe but not concurrency-optimized
 func (b *Beacon) Value(layer types.LayerID) (uint32, error) {
 	// TODO: this is a temporary hack, it will go away when https://github.com/spacemeshos/go-spacemesh/pull/2394 is merged
-	sl := layer - types.LayerID(b.confidenceParam)
+	var sl types.LayerID
+	if layer <= types.GetEffectiveGenesis() + types.LayerID(b.confidenceParam) {
+		sl = types.GetEffectiveGenesis()
+	} else {
+		sl = layer - types.LayerID(b.confidenceParam)
+	}
 	logger := b.Log.WithFields(layer, log.FieldNamed("sl_id", sl))
 
 	// check cache

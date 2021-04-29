@@ -45,23 +45,23 @@ func TestBeacon_Value(t *testing.T) {
 	b.patternProvider = &mockPatternProvider{valGoodPtrn, genesisGoodPtrn, errFoo}
 	b.confidenceParam = cfg.ConfidenceParam
 	_, err := b.Value(100)
-	r.NotNil(err)
+	r.Error(err)
 	b.patternProvider = &mockPatternProvider{valGoodPtrn, genesisGoodPtrn, nil}
 	val, err := b.Value(100)
-	r.Nil(err)
+	r.NoError(err)
 	r.Equal(calcValue(valGoodPtrn), val)
 	r.Equal(2, c.numGet)
 	r.Equal(1, c.numAdd)
 
 	// ensure cache
 	val, err = b.Value(100)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, calcValue(valGoodPtrn), val)
 	r.Equal(3, c.numGet)
 	r.Equal(1, c.numAdd)
 
 	val, err = b.Value(1)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, calcValue(genesisGoodPtrn), val)
 }
 
