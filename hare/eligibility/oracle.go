@@ -179,8 +179,8 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	return val, nil
 }
 
-func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
-	actives, err := o.actives(layer)
+func (o *Oracle) activeSetSize(ctx context.Context, layer types.LayerID) (uint32, error) {
+	actives, err := o.actives(ctx, layer)
 	if err != nil {
 		if err == errGenesis { // we are in genesis
 			return uint32(o.genesisActiveSetSize), nil
@@ -223,7 +223,7 @@ func (o *Oracle) Eligible(
 	}
 
 	// get active set size
-	activeSetSize, err := o.activeSetSize(layer)
+	activeSetSize, err := o.activeSetSize(ctx, layer)
 	if err != nil {
 		return false, err
 	}
@@ -270,7 +270,10 @@ func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round int32) ([
 }
 
 // Returns a map of all active node IDs in the specified layer id
-func (o *Oracle) actives(targetLayer types.LayerID) (map[string]struct{}, error) {
+func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[string]struct{}, error) {
+	logger := o.WithContext(ctx).WithFields(log.FieldNamed("target_layer", targetLayer))
+	logger.Debug("hare oracle getting active set")
+
 	// lock until any return
 	// note: no need to lock per safeEp - we do not expect many concurrent requests per safeEp (max two)
 	o.lock.Lock()
@@ -283,12 +286,20 @@ func (o *Oracle) actives(targetLayer types.LayerID) (map[string]struct{}, error)
 
 	// check cache first
 	if val, exist := o.activesCache.Get(targetLayer.GetEpoch()); exist {
-		return val.(map[string]struct{}), nil
+		activeMap := val.(map[string]struct{})
+		logger.With().Debug("found value in cache", log.Int("count", len(activeMap)))
+		return activeMap, nil
 	}
 
 	// we first try to get the hare active set for a range of safe layers: start with the set of active blocks
 	safeLayerStart, safeLayerEnd := safeLayerRange(
 		targetLayer, types.LayerID(o.cfg.ConfidenceParam), types.LayerID(o.layersPerEpoch), types.LayerID(o.cfg.EpochOffset))
+	logger.With().Debug("got safe layer range",
+		log.FieldNamed("safe_layer_start", safeLayerStart),
+		log.FieldNamed("safe_layer_end", safeLayerEnd),
+		log.Uint64("confidence_param", o.cfg.ConfidenceParam),
+		log.Int("epoch_offset", o.cfg.EpochOffset),
+		log.Uint64("layers_per_epoch", uint64(o.layersPerEpoch)))
 	activeBlockIDs := make(map[types.BlockID]struct{})
 	for layerID := safeLayerStart; layerID <= safeLayerEnd; layerID++ {
 		layerBlockIDs, err := o.meshdb.LayerContextuallyValidBlocks(layerID)
@@ -300,20 +311,27 @@ func (o *Oracle) actives(targetLayer types.LayerID) (map[string]struct{}, error)
 			activeBlockIDs[blockID] = struct{}{}
 		}
 	}
+	logger.With().Debug("got blocks in safe layer range, reading active set from blocks",
+		log.Int("count", len(activeBlockIDs)))
 
 	// now read the set of ATXs referenced by these blocks
-	hareAtxs, err := o.atxdb.ActiveSetFromBlocks(safeLayerStart.GetEpoch(), activeBlockIDs)
+	hareActiveSet, err := o.atxdb.ActiveSetFromBlocks(safeLayerStart.GetEpoch(), activeBlockIDs)
 	if err != nil {
 		return nil, fmt.Errorf("error getting ATXs for target layer %v: %w", targetLayer, err)
 	}
 
-	if len(hareAtxs) > 0 {
-		o.activesCache.Add(targetLayer.GetEpoch(), hareAtxs)
-		return hareAtxs, nil
+	if len(hareActiveSet) > 0 {
+		logger.With().Debug("successfully got hare active set for layer range",
+			log.Int("count", len(hareActiveSet)))
+		o.activesCache.Add(targetLayer.GetEpoch(), hareActiveSet)
+		return hareActiveSet, nil
 	}
 
 	// if we failed to get a Hare active set, we fall back on reading the Tortoise active set targeting this epoch
+	logger.With().Warning("no hare active set for layer range, reading tortoise set for epoch instead",
+		targetLayer.GetEpoch())
 	atxs := o.atxdb.GetEpochAtxs(targetLayer.GetEpoch() - 1)
+	logger.With().Debug("got tortoise atxs", log.Int("count", len(atxs)), targetLayer.GetEpoch())
 	if len(atxs) == 0 {
 		return nil, fmt.Errorf("empty active set for layer %v in non-genesis epoch %v",
 			targetLayer, targetLayer.GetEpoch())
@@ -328,6 +346,7 @@ func (o *Oracle) actives(targetLayer types.LayerID) (map[string]struct{}, error)
 		}
 		activeMap[atx.NodeID.Key] = struct{}{}
 	}
+	logger.With().Debug("got tortoise active set", log.Int("count", len(activeMap)), targetLayer.GetEpoch())
 
 	// update cache and return
 	o.activesCache.Add(targetLayer.GetEpoch(), activeMap)
@@ -336,14 +355,14 @@ func (o *Oracle) actives(targetLayer types.LayerID) (map[string]struct{}, error)
 
 // IsIdentityActiveOnConsensusView returns true if the provided identity is active on the consensus view derived
 // from the specified layer, false otherwise.
-func (o *Oracle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
-	actives, err := o.actives(layer)
+func (o *Oracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error) {
+	actives, err := o.actives(ctx, layer)
 	if err != nil {
 		if err == errGenesis { // we are in genesis
 			return true, nil // all ids are active in genesis
 		}
 
-		o.With().Error("method IsIdentityActiveOnConsensusView erred while calling actives func",
+		o.WithContext(ctx).With().Error("method IsIdentityActiveOnConsensusView erred while calling actives func",
 			layer, log.Err(err))
 		return false, err
 	}

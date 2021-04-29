@@ -51,7 +51,7 @@ func NewBeacon(patternProvider patternProvider, confidenceParam uint64, lg log.L
 func (b *Beacon) Value(layer types.LayerID) (uint32, error) {
 	// TODO: this is a temporary hack, it will go away when https://github.com/spacemeshos/go-spacemesh/pull/2394 is merged
 	var sl types.LayerID
-	if layer <= types.GetEffectiveGenesis() + types.LayerID(b.confidenceParam) {
+	if layer <= types.GetEffectiveGenesis()+types.LayerID(b.confidenceParam) {
 		sl = types.GetEffectiveGenesis()
 	} else {
 		sl = layer - types.LayerID(b.confidenceParam)

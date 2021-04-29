@@ -43,17 +43,21 @@ type mockValueProvider struct {
 	err error
 }
 
-func (mvp *mockValueProvider) Value(layer types.LayerID) (uint32, error) {
+func (mvp *mockValueProvider) Value(types.LayerID) (uint32, error) {
 	return mvp.val, mvp.err
 }
 
 type mockActiveSetProvider struct {
 	size           int
+	getActiveSetFn func(types.EpochID, map[types.BlockID]struct{}) (map[string]struct{}, error)
 	getEpochAtxsFn func(types.EpochID) []types.ATXID
 	getAtxHeaderFn func(types.ATXID) (*types.ActivationTxHeader, error)
 }
 
-func (m *mockActiveSetProvider) ActiveSetFromBlocks(types.EpochID, map[types.BlockID]struct{}) (map[string]struct{}, error) {
+func (m *mockActiveSetProvider) ActiveSetFromBlocks(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+	if m.getActiveSetFn != nil {
+		return m.getActiveSetFn(epoch, blocks)
+	}
 	return createMapWithSize(m.size), nil
 }
 
@@ -302,14 +306,14 @@ func Test_ActiveSetSize(t *testing.T) {
 	o.atxdb = &mockActiveSetProvider{getAtxHeaderFn: func(types.ATXID) (*types.ActivationTxHeader, error) {
 		return nil, errFoo
 	}}
-	activeSetSize, err := o.activeSetSize(l + 19)
+	activeSetSize, err := o.activeSetSize(context.TODO(), l + 19)
 	assert.Error(t, err)
 	assert.Equal(t, errFoo, err)
 	assert.Equal(t, uint32(0), activeSetSize)
 }
 
 func assertActiveSetSize(t *testing.T, o *Oracle, expected uint32, l types.LayerID) {
-	activeSetSize, err := o.activeSetSize(l)
+	activeSetSize, err := o.activeSetSize(context.TODO(), l)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, activeSetSize)
 }
@@ -364,11 +368,11 @@ func TestOracle_activeSetSizeCache(t *testing.T) {
 	atxdb1 := &mockActiveSetProvider{size: 17}
 	atxdb2 := &mockActiveSetProvider{size: 19}
 	o := New(&mockValueProvider{1, nil}, atxdb1, &mockBlocksProvider{}, nil, nil, 5, genActive, hDist, cfg, log.NewDefault(t.Name()))
-	v1, e := o.activeSetSize(100)
+	v1, e := o.activeSetSize(context.TODO(), 100)
 	r.NoError(e)
 
 	o.atxdb = atxdb2
-	v2, e := o.activeSetSize(100)
+	v2, e := o.activeSetSize(context.TODO(), 100)
 	r.NoError(e)
 	r.Equal(v1, v2)
 }
@@ -392,13 +396,13 @@ func TestOracle_actives(t *testing.T) {
 		},
 	}
 	o := New(&mockValueProvider{1, nil}, atxdb, &mockBlocksProvider{}, nil, nil, 5, genActive, hDist, cfg, log.NewDefault(t.Name()))
-	_, err := o.actives(1)
+	_, err := o.actives(context.TODO(), 1)
 	r.EqualError(err, errGenesis.Error())
 
 	o.activesCache = newMockCacher()
-	v, err := o.actives(100)
+	v, err := o.actives(context.TODO(), 100)
 	r.NoError(err)
-	v2, err := o.actives(100)
+	v2, err := o.actives(context.TODO(), 100)
 	r.NoError(err)
 	r.Equal(v, v2)
 	for i := 0; i < n; i++ {
@@ -420,17 +424,18 @@ func TestOracle_concurrentActives(t *testing.T) {
 
 	// outstanding probability for concurrent access to calc active set size
 	for i := 0; i < 100; i++ {
-		go o.actives(100)
+		go o.actives(context.TODO(), 100)
 	}
 
 	// make sure we wait at least two calls duration
-	o.actives(100)
-	o.actives(100)
+	o.actives(context.TODO(), 100)
+	o.actives(context.TODO(), 100)
 
 	r.Equal(1, mc.numAdd)
 }
 
 func TestOracle_IsIdentityActive(t *testing.T) {
+	log.DebugMode(true)
 	r := require.New(t)
 	types.SetLayersPerEpoch(10)
 	edid := "11111"
@@ -438,25 +443,28 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 		return &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: edid}}}, nil
 	}}
 	o := New(&mockValueProvider{1, nil}, atxdb, &mockBlocksProvider{}, nil, nil, 5, genActive, hDist, cfg, log.NewDefault(t.Name()))
-	v, err := o.IsIdentityActiveOnConsensusView("22222", 1)
+	v, err := o.IsIdentityActiveOnConsensusView(context.TODO(), "22222", 1)
 	r.NoError(err)
 	r.True(v)
 
-	o.atxdb = &mockActiveSetProvider{size: 1, getAtxHeaderFn: func(types.ATXID) (*types.ActivationTxHeader, error) {
-		return &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: edid}}}, errFoo
+	o.atxdb = &mockActiveSetProvider{size: 1, getActiveSetFn: func(types.EpochID, map[types.BlockID]struct{}) (map[string]struct{}, error) {
+		return nil, errFoo
 	}}
-	_, err = o.IsIdentityActiveOnConsensusView("22222", 100)
-	r.Equal(errFoo, err)
+	_, err = o.IsIdentityActiveOnConsensusView(context.TODO(), "22222", 100)
+	r.Error(err)
+	r.Equal(errFoo, errors.Unwrap(err))
 
-	o.atxdb = &mockActiveSetProvider{size: 1, getAtxHeaderFn: func(types.ATXID) (*types.ActivationTxHeader, error) {
+	o.atxdb = &mockActiveSetProvider{size: 1, getActiveSetFn: func(types.EpochID, map[types.BlockID]struct{}) (map[string]struct{}, error) {
+		// return empty hare active set, forcing tortoise active set
+		return nil, nil
+	}, getAtxHeaderFn: func(types.ATXID) (*types.ActivationTxHeader, error) {
 		return &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: edid}}}, nil
 	}}
-
-	v, err = o.IsIdentityActiveOnConsensusView("22222", 100)
+	v, err = o.IsIdentityActiveOnConsensusView(context.TODO(), "22222", 100)
 	r.NoError(err)
 	r.False(v)
 
-	v, err = o.IsIdentityActiveOnConsensusView(edid, 100)
+	v, err = o.IsIdentityActiveOnConsensusView(context.TODO(), edid, 100)
 	r.NoError(err)
 	r.True(v)
 }
