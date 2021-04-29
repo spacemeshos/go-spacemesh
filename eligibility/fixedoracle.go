@@ -31,7 +31,7 @@ func New() *FixedRolacle {
 }
 
 // IsIdentityActiveOnConsensusView is use to satisfy the API, currently always returns true.
-func (fo *FixedRolacle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
+func (fo *FixedRolacle) IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error) {
 	return true, nil
 }
 

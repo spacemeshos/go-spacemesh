@@ -31,7 +31,7 @@ const ( // constants of the different roles
 type Rolacle interface {
 	Eligible(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error)
 	Proof(ctx context.Context, layer types.LayerID, round int32) ([]byte, error)
-	IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error)
+	IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error)
 }
 
 // NetworkService provides the registration and broadcast abilities in the network.
@@ -89,7 +89,7 @@ type State struct {
 // It returns true if the identity is active and false otherwise.
 // An error is set iff the identity could not be checked for activeness.
 type StateQuerier interface {
-	IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error)
+	IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error)
 }
 
 // Msg is the wrapper of the protocol's message.

@@ -43,7 +43,7 @@ type mockValueProvider struct {
 	err error
 }
 
-func (mvp *mockValueProvider) Value(types.LayerID) (uint32, error) {
+func (mvp *mockValueProvider) Value(context.Context, types.EpochID) (uint32, error) {
 	return mvp.val, mvp.err
 }
 
@@ -160,6 +160,7 @@ func (mc *mockCacher) Get(key interface{}) (value interface{}, ok bool) {
 
 func TestOracle_BuildVRFMessage(t *testing.T) {
 	r := require.New(t)
+	types.SetLayersPerEpoch(defLayersPerEpoch)
 	o := Oracle{vrfMsgCache: newMockCacher(), Log: log.NewDefault(t.Name())}
 	o.beacon = &mockValueProvider{1, errFoo}
 	_, err := o.buildVRFMessage(context.TODO(), types.LayerID(1), 1)
@@ -433,6 +434,43 @@ func TestOracle_concurrentActives(t *testing.T) {
 
 	r.Equal(1, mc.numAdd)
 }
+
+//type bProvider struct {
+//	mp map[types.LayerID]map[types.BlockID]struct{}
+//}
+//
+//func (p *bProvider) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+//	if mp, exist := p.mp[layer]; exist {
+//		return mp, nil
+//	}
+//
+//	return nil, errors.New("does not exist")
+//}
+//
+//func TestOracle_activesSafeLayer(t *testing.T) {
+//	r := require.New(t)
+//	types.SetLayersPerEpoch(2)
+//	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 2, genActive, mockBlocksProvider{}, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
+//	mp := createMapWithSize(9)
+//	o.activesCache = newMockCacher()
+//	lyr := types.LayerID(10)
+//	rsl := roundedSafeLayer(lyr, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
+//	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+//		ep := rsl.GetEpoch()
+//		r.Equal(ep-1, epoch)
+//		return mp, nil
+//	}
+//
+//	bmp := make(map[types.LayerID]map[types.BlockID]struct{})
+//	mp2 := make(map[types.BlockID]struct{})
+//	block1 := types.NewExistingBlock(0, []byte("some data"), nil)
+//	mp2[block1.ID()] = struct{}{}
+//	bmp[rsl] = mp2
+//	o.blocksProvider = &bProvider{bmp}
+//	mpRes, err := o.actives(lyr)
+//	r.NotNil(mpRes)
+//	r.NoError(err)
+//}
 
 func TestOracle_IsIdentityActive(t *testing.T) {
 	r := require.New(t)

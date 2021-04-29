@@ -24,7 +24,7 @@ var (
 )
 
 type valueProvider interface {
-	Value(layer types.LayerID) (uint32, error)
+	Value(context.Context, types.EpochID) (uint32, error)
 }
 
 type signer interface {
@@ -154,12 +154,13 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 		return val.([]byte), nil
 	}
 
-	// get value from Beacon
-	v, err := o.beacon.Value(layer)
+	// get value from beacon
+	v, err := o.beacon.Value(ctx, layer.GetEpoch())
 	if err != nil {
-		o.WithContext(ctx).With().Error("could not get hare beacon value",
+		o.WithContext(ctx).With().Error("could not get hare beacon value for epoch",
 			log.Err(err),
 			layer,
+			layer.GetEpoch(),
 			log.Int32("round", round))
 		return nil, err
 	}
@@ -167,8 +168,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	// marshal message
 	var w bytes.Buffer
 	msg := vrfMessage{Beacon: v, Round: round, Layer: layer}
-	_, err = xdr.Marshal(&w, &msg)
-	if err != nil {
+	if _, err := xdr.Marshal(&w, &msg); err != nil {
 		o.WithContext(ctx).With().Error("could not marshal xdr", log.Err(err))
 		return nil, err
 	}

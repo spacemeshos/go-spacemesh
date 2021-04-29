@@ -153,7 +153,7 @@ func (trueOracle) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
 	return x, nil
 }
 
-func (trueOracle) IsIdentityActiveOnConsensusView(string, types.LayerID) (bool, error) {
+func (trueOracle) IsIdentityActiveOnConsensusView(context.Context, string, types.LayerID) (bool, error) {
 	return true, nil
 }
 

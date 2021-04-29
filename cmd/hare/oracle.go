@@ -13,7 +13,7 @@ func newHareOracleFromClient(oc *oracleClient) *hareOracle {
 	return &hareOracle{oc: oc}
 }
 
-func (bo *hareOracle) IsIdentityActiveOnConsensusView(string, types.LayerID) (bool, error) {
+func (bo *hareOracle) IsIdentityActiveOnConsensusView(context.Context, string, types.LayerID) (bool, error) {
 	return true, nil
 }
 
