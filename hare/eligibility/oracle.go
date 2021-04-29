@@ -186,7 +186,7 @@ func (o *Oracle) activeSetSize(ctx context.Context, layer types.LayerID) (uint32
 			return uint32(o.genesisActiveSetSize), nil
 		}
 
-		o.With().Error("error calling actives func", log.Err(err), layer)
+		o.WithContext(ctx).With().Error("error calling actives func", log.Err(err), layer)
 		return 0, err
 	}
 
@@ -203,22 +203,25 @@ func (o *Oracle) Eligible(
 	id types.NodeID,
 	sig []byte,
 ) (bool, error) {
+	logger := o.WithContext(ctx).WithFields(
+		layer,
+		id,
+		log.Int32("round", round),
+		log.Int("committee_size", committeeSize))
 	msg, err := o.buildVRFMessage(ctx, layer, round)
 	if err != nil {
-		o.Error("eligibility: could not build VRF message")
+		logger.Error("eligibility: could not build vrf message")
 		return false, err
 	}
 
 	// validate message
 	res, err := o.vrfVerifier(msg, sig, id.VRFPublicKey)
 	if err != nil {
-		o.Error("eligibility: VRF verification failed: %v", err)
+		logger.With().Error("eligibility: vrf verification failed", log.Err(err))
 		return false, err
 	}
 	if !res {
-		o.With().Info("eligibility: a node did not pass VRF signature verification",
-			id,
-			layer)
+		logger.Info("eligibility: node did not pass vrf signature verification")
 		return false, nil
 	}
 
@@ -228,9 +231,9 @@ func (o *Oracle) Eligible(
 		return false, err
 	}
 
-	// require activeSetSize > 0
+	// this should never happen, because we should have already gotten an error, above
 	if activeSetSize == 0 {
-		o.Warning("eligibility: active set size is zero")
+		logger.Warning("eligibility: active set size is zero")
 		return false, errors.New("active set size is zero")
 	}
 
@@ -239,12 +242,8 @@ func (o *Oracle) Eligible(
 	shaUint32 := binary.LittleEndian.Uint32(sha[:4])
 	// avoid division (no floating point) & do operations on uint64 to avoid overflow
 	if uint64(activeSetSize)*uint64(shaUint32) > uint64(committeeSize)*uint64(math.MaxUint32) {
-		o.With().Info("eligibility: node did not pass vrf eligibility threshold",
-			id,
-			log.Int("committee_size", committeeSize),
-			log.Uint32("active_set_size", activeSetSize),
-			log.Int32("round", round),
-			layer)
+		logger.With().Info("eligibility: node did not pass vrf eligibility threshold",
+			log.Uint32("active_set_size", activeSetSize))
 		return false, nil
 	}
 
@@ -271,7 +270,9 @@ func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round int32) ([
 
 // Returns a map of all active node IDs in the specified layer id
 func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[string]struct{}, error) {
-	logger := o.WithContext(ctx).WithFields(log.FieldNamed("target_layer", targetLayer))
+	logger := o.WithContext(ctx).WithFields(
+		log.FieldNamed("target_layer", targetLayer),
+		log.FieldNamed("target_layer_epoch", targetLayer.GetEpoch()))
 	logger.Debug("hare oracle getting active set")
 
 	// lock until any return
@@ -299,7 +300,8 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 		log.FieldNamed("safe_layer_end", safeLayerEnd),
 		log.Uint64("confidence_param", o.cfg.ConfidenceParam),
 		log.Int("epoch_offset", o.cfg.EpochOffset),
-		log.Uint64("layers_per_epoch", uint64(o.layersPerEpoch)))
+		log.Uint64("layers_per_epoch", uint64(o.layersPerEpoch)),
+		log.FieldNamed("effective_genesis", types.GetEffectiveGenesis()))
 	activeBlockIDs := make(map[types.BlockID]struct{})
 	for layerID := safeLayerStart; layerID <= safeLayerEnd; layerID++ {
 		layerBlockIDs, err := o.meshdb.LayerContextuallyValidBlocks(layerID)
@@ -342,7 +344,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 	for _, atxid := range atxs {
 		atx, err := o.atxdb.GetAtxHeader(atxid)
 		if err != nil {
-			return nil, fmt.Errorf("error getting ATX %v for target layer %v: %w", atxid, targetLayer, err)
+			return nil, fmt.Errorf("inconsistent state: error getting ATX %v for target layer %v: %w", atxid, targetLayer, err)
 		}
 		activeMap[atx.NodeID.Key] = struct{}{}
 	}

@@ -213,31 +213,33 @@ func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 func TestOracle_IsEligible(t *testing.T) {
 	types.SetLayersPerEpoch(defLayersPerEpoch)
 	atxdb := &mockActiveSetProvider{size: 10}
+	nid := types.NodeID{Key: "fake_node_id"}
 	o := New(&mockValueProvider{1, nil}, atxdb, &mockBlocksProvider{}, nil, nil, 0, genActive, hDist, cfg, log.NewDefault(t.Name()))
 	o.layersPerEpoch = 10
 
 	// VRF is ineligible
 	o.vrfVerifier = buildVerifier(false, errFoo)
-	res, err := o.Eligible(context.TODO(), types.LayerID(1), 0, 1, types.NodeID{}, []byte{})
+	res, err := o.Eligible(context.TODO(), types.LayerID(1), 0, 1, nid, []byte{})
 	require.Error(t, err)
 	require.False(t, res)
 
-	// VRF eligible but zero committee size
+	// VRF eligible but committee size zero
 	o.vrfVerifier = buildVerifier(true, nil)
-	res, err = o.Eligible(context.TODO(), types.LayerID(50), 1, 0, types.NodeID{}, []byte{})
+	res, err = o.Eligible(context.TODO(), types.LayerID(50), 1, 0, nid, []byte{})
 	require.NoError(t, err)
 	require.False(t, res)
 
 	// VRF eligible but empty active set
 	o.atxdb = &mockActiveSetProvider{size: 0}
-	res, err = o.Eligible(context.TODO(), types.LayerID(cfg.ConfidenceParam*2+11), 1, 0, types.NodeID{}, []byte{})
+	// need to run on a layerID in a different epoch to avoid the cached value
+	res, err = o.Eligible(context.TODO(), types.LayerID(cfg.ConfidenceParam*2+11), 1, 1, nid, []byte{})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "empty active set")
 	require.False(t, res)
 
 	// eligible
 	o.atxdb = atxdb
-	res, err = o.Eligible(context.TODO(), types.LayerID(50), 1, 10, types.NodeID{}, []byte{})
+	res, err = o.Eligible(context.TODO(), types.LayerID(50), 1, 10, nid, []byte{})
 	require.NoError(t, err)
 	require.True(t, res)
 }
@@ -507,7 +509,6 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 }
 
 func TestOracle_Eligible2(t *testing.T) {
-	log.DebugMode(true)
 	types.SetLayersPerEpoch(10)
 	atxdb := &mockActiveSetProvider{size: 1, getActiveSetFn: func(types.EpochID, map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return nil, errFoo
