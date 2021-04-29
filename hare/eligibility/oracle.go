@@ -32,7 +32,7 @@ type signer interface {
 }
 
 type atxProvider interface {
-	// ActiveSetFromBlocks gets the size of the active set (valid ATXs) for a set of blocks
+	// ActiveSetFromBlocks gets the active set (node IDs) for a set of blocks
 	ActiveSetFromBlocks(targetEpoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
 	// GetEpochAtxs is used to get the tortoise active set for an epoch
 	GetEpochAtxs(types.EpochID) []types.ATXID

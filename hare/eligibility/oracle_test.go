@@ -54,7 +54,7 @@ type mockActiveSetProvider struct {
 }
 
 func (m *mockActiveSetProvider) ActiveSetFromBlocks(types.EpochID, map[types.BlockID]struct{}) (map[string]struct{}, error) {
-	panic("not implemented")
+	return createMapWithSize(m.size), nil
 }
 
 func (m *mockActiveSetProvider) GetEpochAtxs(epoch types.EpochID) []types.ATXID {
@@ -79,8 +79,8 @@ type mockBufferedActiveSetProvider struct {
 	size map[types.EpochID]int
 }
 
-func (m *mockBufferedActiveSetProvider) ActiveSetFromBlocks(types.EpochID, map[types.BlockID]struct{}) (map[string]struct{}, error) {
-	panic("not implemented")
+func (m *mockBufferedActiveSetProvider) ActiveSetFromBlocks(epochID types.EpochID, blockMap map[types.BlockID]struct{}) (map[string]struct{}, error) {
+	return createMapWithSize(m.size[epochID]), nil
 }
 
 func (m *mockBufferedActiveSetProvider) GetEpochAtxs(epoch types.EpochID) []types.ATXID {
