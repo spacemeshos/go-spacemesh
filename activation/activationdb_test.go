@@ -263,8 +263,7 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 func TestMesh_ActiveSetForLayerView2(t *testing.T) {
 	atxdb, _, _ := getAtxDb(t.Name())
 	actives, err := atxdb.ActiveSetFromBlocks(0, nil)
-	assert.Error(t, err)
-	assert.Equal(t, "tried to retrieve active set for epoch 0", err.Error())
+	assert.Equal(t, errGenesisEpoch, err)
 	assert.Nil(t, actives)
 }
 

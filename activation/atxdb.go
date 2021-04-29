@@ -44,7 +44,10 @@ func getAtxBodyKey(atxID types.ATXID) []byte {
 	return []byte(fmt.Sprintf("b_%v", atxID.Bytes()))
 }
 
-var errInvalidSig = fmt.Errorf("identity not found when validating signature, invalid atx")
+var (
+	errInvalidSig   = errors.New("identity not found when validating signature, invalid atx")
+	errGenesisEpoch = errors.New("tried to retrieve active set for target epoch 0")
+)
 
 type atxChan struct {
 	ch        chan struct{}
@@ -246,7 +249,7 @@ func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.A
 // ActiveSetFromBlocks returns the set of active node IDs for the ATXs pointed to by the provided blocks
 func (db *DB) ActiveSetFromBlocks(targetEpoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 	if targetEpoch == 0 {
-		return nil, errors.New("tried to retrieve active set for target epoch 0")
+		return nil, errGenesisEpoch
 	}
 
 	firstLayerOfPrevEpoch := (targetEpoch - 1).FirstLayer()
