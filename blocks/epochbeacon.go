@@ -5,6 +5,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
+// BeaconGetter gets a beacon value.
+type BeaconGetter interface {
+	GetBeacon(epochNumber types.EpochID) []byte
+}
+
 // EpochBeaconProvider holds all the dependencies for generating an epoch beacon. There are currently none.
 type EpochBeaconProvider struct{}
 
