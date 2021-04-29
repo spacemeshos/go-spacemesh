@@ -21,10 +21,12 @@ import (
 // data such as node status, software version, errors, etc. It can also be used to start
 // the sync process, or to shut down the node.
 type NodeService struct {
-	Mesh        api.TxAPI
-	GenTime     api.GenesisTimeAPI
-	PeerCounter api.PeerCounter
-	Syncer      api.Syncer
+	Mesh          api.TxAPI
+	GenTime       api.GenesisTimeAPI
+	PeerCounter   api.PeerCounter
+	Syncer        api.Syncer
+	statusChannel chan struct{}
+	errorChannel  chan events.NodeError
 }
 
 // RegisterService registers this service with a grpc server instance
@@ -123,7 +125,11 @@ func (s NodeService) Shutdown(context.Context, *pb.ShutdownRequest) (*pb.Shutdow
 // StatusStream exposes a stream of node status updates
 func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeService_StatusStreamServer) error {
 	log.Info("GRPC NodeService.StatusStream")
-	statusStream := events.GetStatusChannel()
+	var statusStream chan struct{}
+	if s.statusChannel == nil {
+		statusStream = events.SubscribeToStatus(30)
+	}
+	statusStream = s.statusChannel
 
 	for {
 		select {
@@ -158,7 +164,12 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 // ErrorStream exposes a stream of node errors
 func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService_ErrorStreamServer) error {
 	log.Info("GRPC NodeService.ErrorStream")
-	errorStream := events.GetErrorChannel()
+	var errorStream chan events.NodeError
+	if s.errorChannel == nil {
+		errorStream = events.SubscribeToErrors(30)
+	} else {
+		errorStream = s.errorChannel
+	}
 
 	for {
 		select {

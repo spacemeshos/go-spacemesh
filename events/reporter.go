@@ -203,17 +203,15 @@ func ReportError(err NodeError) {
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		if reporter.blocking {
-			reporter.channelError <- err
-			log.Debug("reported error: %v", err)
-		} else {
+		log.Info("about to report error updates for error : %v", err)
+		for sub := range reporter.errorSubs {
 			select {
-			case reporter.channelError <- err:
-				log.Debug("reported error: %v", err)
+			case sub <- err:
 			default:
-				log.Debug("not reporting error as buffer is full: %v", err)
+				log.Debug("reporter would block on subscriber %v", sub)
 			}
 		}
+		log.Info("reported error update to subscribers: %v", err)
 	}
 }
 
@@ -234,17 +232,15 @@ func ReportNodeStatusUpdate() {
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		if reporter.blocking {
-			reporter.channelStatus <- struct{}{}
-			log.Debug("reported status update")
-		} else {
+		log.Info("about to report status updates")
+		for sub := range reporter.statusSubs {
 			select {
-			case reporter.channelStatus <- struct{}{}:
-				log.Debug("reported status update")
+			case sub <- struct{}{}:
 			default:
-				log.Debug("not reporting status update as no one is listening")
+				log.Debug("reporter would block on subscriber %v", sub)
 			}
 		}
+		log.Info("reported status update to subscribers: %v")
 	}
 }
 
@@ -319,26 +315,56 @@ func GetLayerChannel() chan NewLayer {
 	return nil
 }
 
-// GetErrorChannel returns a channel for node errors
-func GetErrorChannel() chan NodeError {
+// SubscribeToErrors allows a goroutine to receive a channel for
+// error notifications
+func SubscribeToErrors(bufsize int) chan NodeError {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		return reporter.channelError
+		newChan := make(chan NodeError, bufsize)
+		reporter.errorSubs[newChan] = struct{}{}
+		return newChan
 	}
 	return nil
 }
 
-// GetStatusChannel returns a channel for node status messages
-func GetStatusChannel() chan struct{} {
+// UnsubscribeFromErrors allows a goroutine to unsubscribe from the error channel
+func UnsubscribeFromErrors(subscriberChannel chan NodeError) {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		return reporter.channelStatus
+		if _, exists := reporter.errorSubs[subscriberChannel]; exists {
+			delete(reporter.errorSubs, subscriberChannel)
+		}
+	}
+}
+
+// SubscribeToStatus subscribes a channel to receive status updates
+func SubscribeToStatus(bufsize int) chan struct{} {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	if reporter != nil {
+		newChan := make(chan struct{}, bufsize)
+		reporter.statusSubs[newChan] = struct{}{}
+		return newChan
 	}
 	return nil
+}
+
+// UnsubscribeFromStatus unsubscribes a channel from receiving status updates
+func UnsubscribeFromStatus(subscriberChannel chan struct{}) {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	if reporter != nil {
+		if _, exists := reporter.statusSubs[subscriberChannel]; exists {
+			delete(reporter.statusSubs, subscriberChannel)
+			return
+		}
+	}
 }
 
 // SubscribeToAccounts subscribes a channel to account update events
@@ -498,13 +524,13 @@ type EventReporter struct {
 	channelTransaction chan TransactionWithValidity
 	channelActivation  chan *types.ActivationTx
 	channelLayer       chan NewLayer
-	channelError       chan NodeError
-	channelStatus      chan struct{}
 	stopChan           chan struct{}
 	blocking           bool
 	rewardsSubs        map[chan Reward]struct{}
 	accountsSubs       map[chan types.Address]struct{}
 	receiptsSubs       map[chan TxReceipt]struct{}
+	statusSubs         map[chan struct{}]struct{}
+	errorSubs          map[chan NodeError]struct{}
 }
 
 func newEventReporter(bufsize int, blocking bool) *EventReporter {
@@ -512,12 +538,12 @@ func newEventReporter(bufsize int, blocking bool) *EventReporter {
 		channelTransaction: make(chan TransactionWithValidity, bufsize),
 		channelActivation:  make(chan *types.ActivationTx, bufsize),
 		channelLayer:       make(chan NewLayer, bufsize),
-		channelStatus:      make(chan struct{}, bufsize),
-		channelError:       make(chan NodeError, bufsize),
 		stopChan:           make(chan struct{}),
 		rewardsSubs:        make(map[chan Reward]struct{}),
 		accountsSubs:       make(map[chan types.Address]struct{}),
 		receiptsSubs:       make(map[chan TxReceipt]struct{}),
+		statusSubs:         make(map[chan struct{}]struct{}),
+		errorSubs:          make(map[chan NodeError]struct{}),
 		blocking:           blocking,
 	}
 }
@@ -530,8 +556,6 @@ func CloseEventReporter() {
 		close(reporter.channelTransaction)
 		close(reporter.channelActivation)
 		close(reporter.channelLayer)
-		close(reporter.channelError)
-		close(reporter.channelStatus)
 		close(reporter.stopChan)
 		for c := range reporter.rewardsSubs {
 			close(c)
@@ -540,6 +564,12 @@ func CloseEventReporter() {
 			close(c)
 		}
 		for c := range reporter.receiptsSubs {
+			close(c)
+		}
+		for c := range reporter.statusSubs {
+			close(c)
+		}
+		for c := range reporter.errorSubs {
 			close(c)
 		}
 		reporter = nil
