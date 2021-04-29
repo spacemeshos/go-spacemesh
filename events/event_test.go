@@ -1,16 +1,17 @@
 package events
 
 import (
+	"runtime/debug"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zapcore"
-	"runtime/debug"
-	"sync"
-	"testing"
-	"time"
 )
 
 func TestNewBlockEvent(t *testing.T) {
@@ -123,12 +124,12 @@ func TestReportError(t *testing.T) {
 	ReportError(nodeErr)
 
 	// Stream is nil before we initialize it
-	stream := GetErrorChannel()
+	stream := SubscribeToErrors(30)
 	require.Nil(t, stream, "expected stream not to be initialized")
 
 	err := InitializeEventReporterWithOptions("", 1, false)
 	require.NoError(t, err)
-	stream = GetErrorChannel()
+	stream = SubscribeToErrors(30)
 	require.NotNil(t, stream, "expected stream to be initialized")
 
 	// This one will be buffered
@@ -186,12 +187,12 @@ func TestReportNodeStatus(t *testing.T) {
 	ReportNodeStatusUpdate()
 
 	// Stream is nil before we initialize it
-	stream := GetStatusChannel()
+	stream := SubscribeToStatus(30)
 	require.Nil(t, stream, "expected stream not to be initialized")
 
 	err := InitializeEventReporter("")
 	require.NoError(t, err)
-	stream = GetStatusChannel()
+	stream = SubscribeToStatus(30)
 	require.NotNil(t, stream, "expected stream to be initialized")
 
 	// This will not be received as no one is listening
