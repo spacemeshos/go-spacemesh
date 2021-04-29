@@ -141,15 +141,24 @@ func buildMessage(msg *Message) *Msg {
 }
 
 func buildBroker(net NetworkService, testName string) *Broker {
-	return newBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil},
+	return newBroker(net, &mockEligibilityValidator{valid: true}, MockStateQuerier{true, nil},
 		(&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, Closer{make(chan struct{})}, log.NewDefault(testName))
 }
 
-type mockEligibilityValidator struct {
-	valid bool
+func buildBrokerLimit4(net NetworkService, testName string) *Broker {
+	return newBroker(net, &mockEligibilityValidator{valid: true}, MockStateQuerier{true, nil},
+		(&mockSyncer{true}).IsSynced, 10, 4, Closer{make(chan struct{})}, log.NewDefault(testName))
 }
 
-func (mev *mockEligibilityValidator) Validate(context.Context, *Msg) bool {
+type mockEligibilityValidator struct {
+	valid        bool
+	validationFn func(context.Context, *Msg) bool
+}
+
+func (mev *mockEligibilityValidator) Validate(ctx context.Context, msg *Msg) bool {
+	if mev.validationFn != nil {
+		return mev.validationFn(ctx, msg)
+	}
 	return mev.valid
 }
 
