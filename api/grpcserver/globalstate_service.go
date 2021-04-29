@@ -282,7 +282,6 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 			channelAccount = events.SubscribeToAccounts(30)
 		} else {
 			channelAccount = s.accountChannel
-			log.Info("Here 1")
 		}
 	}
 	if filterReward {
@@ -290,10 +289,6 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 			channelReward = events.SubscribeToRewards(30)
 		} else {
 			channelReward = s.rewardsChannel
-			log.Info("Here 2")
-		}
-		if channelReward == nil {
-			// what to do here?
 		}
 	}
 	if filterReceipt {
@@ -301,7 +296,6 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 			channelReceipt = events.SubscribeToReceipts(30)
 		} else {
 			channelReceipt = s.receiptsChannel
-			log.Info("Here 3")
 		}
 	}
 
@@ -417,10 +411,6 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 	// subscribe to the rewards channel
 
 	channelRewards := events.SubscribeToRewards(30)
-	//error checking
-	if channelRewards == nil {
-		//what to do here
-	}
 
 	for {
 		select {
@@ -493,7 +483,6 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 	}
 	if filterReward {
 		// needs to be buffered to avoid reporter from being blocked on slow streaming connections
-		//channelReward = make(chan events.Reward, 30)
 		if s.rewardsChannel == nil {
 			channelReward = events.SubscribeToRewards(30)
 		} else {
