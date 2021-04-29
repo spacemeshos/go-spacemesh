@@ -244,12 +244,29 @@ func TestOracle_IsEligible(t *testing.T) {
 	require.True(t, res)
 }
 
-// LANE: rewrite this method
-//func Test_safeLayer(t *testing.T) {
-//	const safety = 25
-//	assert.Equal(t, types.GetEffectiveGenesis(), safeLayer(1, safety))
-//	assert.Equal(t, types.LayerID(100-safety), safeLayer(100, safety))
-//}
+func Test_SafeLayerRange(t *testing.T) {
+	types.SetLayersPerEpoch(defLayersPerEpoch)
+	safetyParam := types.LayerID(10)
+	effGenesis := types.GetEffectiveGenesis()
+	testCases := []struct{
+		// input
+		targetLayer types.LayerID
+		safetyParam types.LayerID
+		layersPerEpoch types.LayerID
+		epochOffset types.LayerID
+		// expected output
+		safeLayerStart types.LayerID
+		safeLayerEnd types.LayerID
+	}{
+		{0, safetyParam, defLayersPerEpoch, 1, effGenesis, effGenesis},
+		{100, safetyParam, defLayersPerEpoch, 1, 80, 81},
+	}
+	for _, testCase := range testCases {
+		sls, sle := safeLayerRange(testCase.targetLayer, testCase.safetyParam, testCase.layersPerEpoch, testCase.epochOffset)
+		assert.Equal(t, testCase.safeLayerStart, sls, "got incorrect safeLayerStart")
+		assert.Equal(t, testCase.safeLayerEnd, sle, "got incorrect safeLayerEnd")
+	}
+}
 
 func Test_ZeroParticipants(t *testing.T) {
 	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 5}, &mockBlocksProvider{}, buildVerifier(true, nil), &mockSigner{}, defLayersPerEpoch, genActive, hDist, cfg, log.NewDefault(t.Name()))

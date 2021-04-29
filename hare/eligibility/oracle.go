@@ -74,6 +74,10 @@ func safeLayerRange(
 	layersPerEpoch types.LayerID,
 	epochOffset types.LayerID,
 ) (safeLayerStart, safeLayerEnd types.LayerID) {
+	// prevent overflow
+	if targetLayer <= safetyParam {
+		return types.GetEffectiveGenesis(), types.GetEffectiveGenesis()
+	}
 	safeLayer := targetLayer - safetyParam
 	safeEpoch := safeLayer.GetEpoch()
 	safeLayerStart = safeEpoch.FirstLayer()
@@ -82,6 +86,10 @@ func safeLayerRange(
 	// If the safe layer is in the first epochOffset layers of an epoch,
 	// return a range from the beginning of the previous epoch
 	if safeLayer < safeLayerEnd {
+		// prevent overflow
+		if safeLayerStart <= layersPerEpoch {
+			return types.GetEffectiveGenesis(), types.GetEffectiveGenesis()
+		}
 		safeLayerStart = safeLayerStart - layersPerEpoch
 		safeLayerEnd = safeLayerEnd - layersPerEpoch
 	}
