@@ -435,7 +435,6 @@ func TestOracle_concurrentActives(t *testing.T) {
 }
 
 func TestOracle_IsIdentityActive(t *testing.T) {
-	log.DebugMode(true)
 	r := require.New(t)
 	types.SetLayersPerEpoch(10)
 	edid := "11111"
@@ -470,14 +469,15 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 }
 
 func TestOracle_Eligible2(t *testing.T) {
+	log.DebugMode(true)
 	types.SetLayersPerEpoch(10)
-	atxdb := &mockActiveSetProvider{size: 1, getAtxHeaderFn: func(types.ATXID) (*types.ActivationTxHeader, error) {
-		return &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: "foo"}}}, errFoo
+	atxdb := &mockActiveSetProvider{size: 1, getActiveSetFn: func(types.EpochID, map[types.BlockID]struct{}) (map[string]struct{}, error) {
+		return nil, errFoo
 	}}
 	o := New(&mockValueProvider{1, nil}, atxdb, &mockBlocksProvider{}, nil, nil, 5, genActive, hDist, cfg, log.NewDefault(t.Name()))
 	o.vrfVerifier = func(msg, sig, pub []byte) (bool, error) {
 		return true, nil
 	}
 	_, err := o.Eligible(context.TODO(), 100, 1, 1, types.NodeID{}, []byte{})
-	assert.Equal(t, errFoo, err)
+	assert.Equal(t, errFoo, errors.Unwrap(err))
 }
