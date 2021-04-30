@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+// StartPushMetrics begins pushing metrics to the url specified by the --metrics-push flag
+// with period specified by the --metrics-push-period flag
 func StartPushMetrics(url string, periodSec int, nodeID, networkID string) {
 	period := time.Duration(periodSec) * time.Second
 	ticker := time.Tick(period)
