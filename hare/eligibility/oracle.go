@@ -342,7 +342,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 	logger.With().Warning("no hare active set for layer range, reading tortoise set for epoch instead",
 		targetLayer.GetEpoch())
 	atxs := o.atxdb.GetEpochAtxs(targetLayer.GetEpoch() - 1)
-	logger.With().Debug("got tortoise atxs", log.Int("count", len(atxs)), targetLayer.GetEpoch())
+	logger.With().Debug("got tortoise atxs", log.Int("count", len(atxs)))
 	if len(atxs) == 0 {
 		return nil, fmt.Errorf("empty active set for layer %v in epoch %v",
 			targetLayer, targetLayer.GetEpoch())
@@ -357,7 +357,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 		}
 		activeMap[atx.NodeID.Key] = struct{}{}
 	}
-	logger.With().Debug("got tortoise active set", log.Int("count", len(activeMap)), targetLayer.GetEpoch())
+	logger.With().Debug("got tortoise active set", log.Int("count", len(activeMap)))
 
 	// update cache and return
 	o.activesCache.Add(targetLayer.GetEpoch(), activeMap)
