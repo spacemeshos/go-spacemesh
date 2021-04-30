@@ -175,10 +175,12 @@ func (t *turtle) checkBlockAndGetInputVector(
 	logger := t.logger.WithContext(ctx).WithFields(log.FieldNamed("source_block_id", sourceBlockID))
 	for _, exceptionBlockID := range diffList {
 		if exceptionBlock, err := t.bdp.GetBlock(exceptionBlockID); err != nil {
-			logger.With().Panic("can't find block from block's diff",
+			logger.With().Error("inconsistent state: can't find block from block's diff",
 				log.FieldNamed("exception_block_id", exceptionBlockID))
+			return false
 		} else if exceptionBlock.LayerIndex < layerIndex {
-			logger.With().Debug("not marking block good because it points to block older than base block",
+			// TODO: can a base block exception list point to blocks in the same layer, or must they all be newer?
+			logger.With().Error("base block candidate points to older block",
 				log.FieldNamed("older_block", exceptionBlockID),
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
 				log.FieldNamed("base_block_lyr", layerIndex))
@@ -205,8 +207,7 @@ func (t *turtle) checkBlockAndGetInputVector(
 
 func (t *turtle) inputVectorForLayer(layerBlocks []types.BlockID, input []types.BlockID) (layerResult map[types.BlockID]vec) {
 	layerResult = make(map[types.BlockID]vec, len(layerBlocks))
-	// XXX: input vector must be a pointer so we can differentiate
-	// between no support votes and no results at all.
+	// TODO input vector must be a pointer so we can differentiate between no support votes and no results at all
 	if input == nil {
 		// hare didn't finish, so we have no opinion on blocks in this layer
 		// TODO: get hare Opinion when hare finishes
@@ -231,7 +232,8 @@ func (t *turtle) inputVectorForLayer(layerBlocks []types.BlockID, input []types.
 }
 
 // BaseBlock finds and returns a good block from a recent layer that's suitable to serve as a base block for opinions
-// for newly-constructed blocks
+// for newly-constructed blocks. Also includes vectors of exceptions, where the current local opinion differs from
+// (or is newer than) that of the base block.
 func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
 	logger := t.logger.WithContext(ctx)
 
@@ -278,8 +280,8 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 	return types.BlockID{0}, nil, errors.New("no good base block within exception vector limit")
 }
 
-// calculate and return a list of exceptions, i.e., differences between the opinions of a block and the local opinion
-// (based on Hare results)
+// calculate and return a list of exceptions, i.e., differences between the opinions of a base block and the local
+// opinion
 func (t *turtle) calculateExceptions(
 	ctx context.Context,
 	blockLayerID types.LayerID,
@@ -306,6 +308,10 @@ func (t *turtle) calculateExceptions(
 	// TODO: maybe we should vote back hdist but drill down check the base blocks
 
 	// Add latest layers input vector results to the diff
+	// Note: a block may only be selected as a candidate base block if it's marked "good", and it may only be marked
+	// "good" if its own base block is marked "good" and all exceptions it contains agree with our local opinion.
+	// And we may only add exceptions in layers after the base block layer, so no need to look back further here.
+	// TODO: check whether we can consider exceptions in the same layer, or only in later layers.
 	for layerID := blockLayerID; layerID <= t.Last; layerID++ {
 		logger := logger.WithFields(log.FieldNamed("diff_layer_id", layerID))
 		logger.Debug("checking input vector diffs")
@@ -347,7 +353,7 @@ func (t *turtle) calculateExceptions(
 
 				// leaving the input vector empty will have the desired result, below
 			} else {
-				// Still waiting for Hare results, vote neutral
+				// Still waiting for Hare results, vote neutral and move on
 				logger.With().Debug("input vector is empty, adding neutral diffs", log.Err(err))
 				for _, b := range layerBlockIds {
 					addDiffs(b, "neutral", abstain, neutralDiff)
@@ -489,21 +495,20 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) (
 
 	// Go over all blocks, in order. Mark block i “good” if:
 	for _, b := range newlyr.Blocks() {
+		logger := logger.WithFields(b.ID(), log.FieldNamed("base_block_id", b.BaseBlock))
 		// (1) the base block is marked as good
 		if _, good := t.GoodBlocksIndex[b.BaseBlock]; !good {
-			logger.With().Debug("not marking block as good because baseblock is not good",
-				b.ID(),
-				log.FieldNamed("base_block", b.BaseBlock))
+			logger.Debug("not marking block as good because baseblock is not good")
 		} else if baseBlock, err := t.bdp.GetBlock(b.BaseBlock); err != nil {
-			logger.With().Panic("base block not found", b.BaseBlock, log.Err(err))
+			logger.With().Error("inconsistent state: base block not found", log.Err(err))
 		} else if t.checkBlockAndGetInputVector(ctx, b.ForDiff, "support", support, b.ID(), baseBlock.LayerIndex) &&
 			t.checkBlockAndGetInputVector(ctx, b.AgainstDiff, "against", against, b.ID(), baseBlock.LayerIndex) &&
 			t.checkBlockAndGetInputVector(ctx, b.NeutralDiff, "abstain", abstain, b.ID(), baseBlock.LayerIndex) {
 			// (2) all diffs appear after the base block and are consistent with the input vote vector
-			logger.With().Debug("marking good block", b.ID(), b.LayerIndex)
+			logger.Debug("marking block good")
 			t.GoodBlocksIndex[b.ID()] = struct{}{}
 		} else {
-			logger.With().Debug("not marking block good", b.ID(), b.LayerIndex)
+			logger.Debug("not marking block good")
 		}
 	}
 
@@ -606,8 +611,8 @@ layerLoop:
 			// layer. This usually means everyone is still waiting for Hare to finish, so we cannot verify this layer.
 			// This condition should be temporary, except during a balancing attack. The verifying tortoise is not
 			// equipped to handle this scenario, but the full tortoise is.
+			// TODO: abstain only for entire layer at a time, not for individual blocks (optimization)
 			// TODO: should we trigger self-healing in this scenario, after a while?
-			// TODO: should we give up trying to verify later layers, too?
 			if globalOpinion == abstain {
 				logger.With().Warning("global opinion on block is abstain, cannot verify layer",
 					blk,

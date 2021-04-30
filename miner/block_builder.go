@@ -99,19 +99,34 @@ type Config struct {
 }
 
 // NewBlockBuilder creates a struct of block builder type.
-func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin weakCoinProvider, orph meshProvider, bbp baseBlockProvider, hare hareResultProvider, blockOracle blockOracle, syncer syncer, projector projector, txPool txPool, atxDB atxDb, lg log.Log) *BlockBuilder {
+func NewBlockBuilder(
+	config Config,
+	sgn signer,
+	net p2p.Service,
+	beginRoundEvent chan types.LayerID,
+	weakCoin weakCoinProvider,
+	orph meshProvider,
+	bbp baseBlockProvider,
+	hare hareResultProvider,
+	blockOracle blockOracle,
+	syncer syncer,
+	projector projector,
+	txPool txPool,
+	atxDB atxDb,
+	logger log.Log,
+) *BlockBuilder {
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(config.MinerID.Key)))
 
-	db, err := database.Create("builder", 16, 16, lg)
+	db, err := database.Create("builder", 16, 16, logger)
 	if err != nil {
-		lg.Panic("cannot create block builder DB %v", err)
+		logger.With().Panic("cannot create block builder database", log.Err(err))
 	}
 
 	return &BlockBuilder{
 		minerID:         config.MinerID,
 		signer:          sgn,
 		hdist:           types.LayerID(config.Hdist),
-		Log:             lg,
+		Log:             logger,
 		rnd:             rand.New(rand.NewSource(int64(seed))),
 		beginRoundEvent: beginRoundEvent,
 		stopChan:        make(chan struct{}),
@@ -182,7 +197,9 @@ func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID
 	}
 
 	if id < types.GetEffectiveGenesis() {
-		log.Panic("cannot get range from before effective genesis %v g: %v", id, types.GetEffectiveGenesis())
+		log.With().Panic("cannot get range from before effective genesis",
+			id,
+			log.FieldNamed("effective_genesis", types.GetEffectiveGenesis()))
 	}
 
 	bottom = types.GetEffectiveGenesis()
@@ -205,6 +222,7 @@ func filterUnknownBlocks(blocks []types.BlockID, validate func(id types.BlockID)
 	return filtered
 }
 
+// LANE TODO: remove this
 func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	var votes []types.BlockID
 
