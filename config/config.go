@@ -61,6 +61,9 @@ type BaseConfig struct {
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`
 
+	MetricsPush       string `mapstructure:"metrics-push"`
+	MetricsPushPeriod int    `mapstructure:"metrics-push-period"`
+
 	OracleServer        string `mapstructure:"oracle_server"`
 	OracleServerWorldID int    `mapstructure:"oracle_server_worldid"`
 
@@ -157,6 +160,8 @@ func defaultBaseConfig() BaseConfig {
 		TestMode:            defaultTestMode,
 		CollectMetrics:      false,
 		MetricsPort:         1010,
+		MetricsPush:         "", // "" = doesn't push
+		MetricsPushPeriod:   60,
 		OracleServer:        "http://localhost:3030",
 		OracleServerWorldID: 0,
 		GenesisTime:         time.Now().Format(time.RFC3339),

@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"runtime/pprof"
+	"strconv"
 	"time"
 
 	"cloud.google.com/go/profiler"
@@ -1070,6 +1071,12 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 
 	if app.Config.CollectMetrics {
 		metrics.StartCollectingMetrics(app.Config.MetricsPort)
+	}
+
+	if app.Config.MetricsPush != "" {
+		metrics.StartPushMetrics(app.Config.MetricsPush, app.Config.MetricsPushPeriod,
+			swarm.LocalNode().PublicKey().String(), strconv.Itoa(int(app.Config.P2P.NetworkID)))
+
 	}
 
 	app.startServices(ctx, logger)
