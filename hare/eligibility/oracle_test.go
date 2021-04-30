@@ -476,7 +476,6 @@ func TestOracle_concurrentActives(t *testing.T) {
 }
 
 func TestOracle_activesSafeLayer(t *testing.T) {
-	log.DebugMode(true)
 	r := require.New(t)
 	types.SetLayersPerEpoch(2)
 
@@ -514,6 +513,54 @@ func TestOracle_activesSafeLayer(t *testing.T) {
 	res, err = o.actives(context.TODO(), lyr)
 	r.NotNil(res)
 	r.NoError(err)
+}
+
+func TestOracle_HareToTortoiseFlow(t *testing.T) {
+	r := require.New(t)
+	types.SetLayersPerEpoch(10)
+
+	// HARE ACTIVE SET SUCCEEDS: NO NEED TO CHECK TORTOISE ACTIVE SET
+
+	// an activeSetProvider that returns an active set from blocks but no epoch ATXs: in this test we want to make sure
+	// that hare active set succeeds and tortoise active set fails
+	asp := &mockActiveSetProvider{size: 1, getEpochAtxsFn: func(types.EpochID) []types.ATXID {
+		r.Fail("tortoise active set should not be read")
+		return nil
+	}}
+	o := New(&mockValueProvider{1, nil}, asp, &mockBlocksProvider{}, nil, nil, 2, genActive, hDist, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
+	o.activesCache = newMockCacher()
+	lyr := types.LayerID(100)
+	res, err := o.actives(context.TODO(), lyr)
+	r.NotNil(res)
+	r.NoError(err)
+
+	// HARE ACTIVE SET EMPTY: CHECK TORTOISE ACTIVE SET
+
+	// blocksProvider provides no blocks (so empty hare active set), activeSetProvider provides epoch ATXs
+	mp := make(map[types.BlockID]struct{})
+	called := false
+	asp = &mockActiveSetProvider{size: 1, getActiveSetFn: func(epochID types.EpochID, blockMap map[types.BlockID]struct{}) (map[string]struct{}, error) {
+		r.Zero(len(blockMap), "expected no hare blocks")
+		return nil, nil
+	}, getEpochAtxsFn: func(epochID types.EpochID) []types.ATXID {
+		called = true
+		return []types.ATXID{{}}
+	}}
+	o = New(&mockValueProvider{1, nil}, asp, &mockBlocksProvider{mp: mp}, nil, nil, 2, genActive, hDist, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
+	o.activesCache = newMockCacher()
+	res, err = o.actives(context.TODO(), lyr)
+	r.True(called, "tortoise active set wasn't read")
+	r.NotNil(res)
+	r.NoError(err)
+
+	// BOTH EMPTY: ERROR
+
+	o = New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 0}, &mockBlocksProvider{mp: mp}, nil, nil, 2, genActive, hDist, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
+	o.activesCache = newMockCacher()
+	res, err = o.actives(context.TODO(), lyr)
+	r.Nil(res)
+	r.Error(err)
+	r.Contains(err.Error(), "empty active set for layer")
 }
 
 func TestOracle_IsIdentityActive(t *testing.T) {
