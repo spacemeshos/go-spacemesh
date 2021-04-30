@@ -475,6 +475,50 @@ func TestOracle_concurrentActives(t *testing.T) {
 	r.Equal(1, mc.numAdd)
 }
 
+// make sure the oracle collects blocks from all layers in the safe layer range
+func TestOracle_MultipleLayerBlocks(t *testing.T) {
+	r := require.New(t)
+	layersPerEpoch := 10
+	confidenceParam := 25
+	epochOffset := 5
+	types.SetLayersPerEpoch(int32(layersPerEpoch))
+
+	// a block provider that returns one distinct block per layer
+	lyr := types.LayerID(100)
+	o := New(&mockValueProvider{1, nil}, nil, nil, nil, nil, uint16(layersPerEpoch), genActive, hDist, eCfg.Config{ConfidenceParam: uint64(confidenceParam), EpochOffset: epochOffset}, log.NewDefault(t.Name()))
+	sls, sle := safeLayerRange(lyr, types.LayerID(confidenceParam), types.LayerID(layersPerEpoch), types.LayerID(epochOffset))
+	numLayers := int(sle-sls+1) // +1 because inclusive of endpoints
+	log.With().Info("layer range", log.FieldNamed("start", sls), log.FieldNamed("end", sle), log.Int("count", numLayers))
+	allBlocks := make(map[types.BlockID]bool, numLayers)
+	o.meshdb = &mockBlocksProvider{layerContextuallyValidBlocksFn: func(layerID types.LayerID) (map[types.BlockID]struct{}, error) {
+		mp := make(map[types.BlockID]struct{}, 1)
+		block := types.NewExistingBlock(layerID, layerID.Bytes(), nil)
+		mp[block.ID()] = struct{}{}
+		allBlocks[block.ID()] = false
+		return mp, nil
+	}}
+	o.atxdb = &mockActiveSetProvider{size: 1, getActiveSetFn: func(epochID types.EpochID, mp map[types.BlockID]struct{}) (map[string]struct{}, error) {
+		// make sure we got the expected number of blocks
+		r.Len(mp, numLayers, "expected one block per layer")
+		// make sure each block was returned previously and that it's only been seen once
+		for bid := range mp {
+			r.Contains(allBlocks, bid, "unknown block")
+			r.False(allBlocks[bid], "already saw this block")
+			allBlocks[bid] = true
+		}
+		ret := make(map[string]struct{}, 1)
+		ret["foo"] = struct{}{}
+		return ret, nil
+	}}
+	// make sure every block was seen
+	for _, val := range allBlocks {
+		r.True(val, "block was not seen")
+	}
+	_, err := o.actives(context.TODO(), lyr)
+	r.Len(allBlocks, numLayers, "expected one block per layer")
+	r.NoError(err)
+}
+
 func TestOracle_activesSafeLayer(t *testing.T) {
 	r := require.New(t)
 	types.SetLayersPerEpoch(2)
