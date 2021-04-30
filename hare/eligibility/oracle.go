@@ -201,7 +201,7 @@ func (o *Oracle) activeSetSize(ctx context.Context, layer types.LayerID) (uint32
 	return uint32(len(actives)), nil
 }
 
-// Eligible checks if ID is eligible on the given Layer where msg is the VRF message, sig is the role proof and assuming
+// Eligible checks if ID is eligible on the given layer where msg is the VRF message, sig is the role proof and assuming
 // commSize as the expected committee size
 func (o *Oracle) Eligible(
 	ctx context.Context,
@@ -241,7 +241,7 @@ func (o *Oracle) Eligible(
 
 	// this should never happen, because we should have already gotten an error, above
 	if activeSetSize == 0 {
-		logger.Warning("eligibility: active set size is zero")
+		logger.Error("eligibility: active set size is zero (but got no error from activeSetSize)")
 		return false, errors.New("active set size is zero")
 	}
 
@@ -325,6 +325,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 		log.Int("count", len(activeBlockIDs)))
 
 	// now read the set of ATXs referenced by these blocks
+	// TODO: can the set of blocks ever span multiple epochs?
 	hareActiveSet, err := o.atxdb.ActiveSetFromBlocks(safeLayerStart.GetEpoch(), activeBlockIDs)
 	if err != nil {
 		return nil, fmt.Errorf("error getting ATXs for target layer %v: %w", targetLayer, err)
@@ -343,7 +344,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 	atxs := o.atxdb.GetEpochAtxs(targetLayer.GetEpoch() - 1)
 	logger.With().Debug("got tortoise atxs", log.Int("count", len(atxs)), targetLayer.GetEpoch())
 	if len(atxs) == 0 {
-		return nil, fmt.Errorf("empty active set for layer %v in non-genesis epoch %v",
+		return nil, fmt.Errorf("empty active set for layer %v in epoch %v",
 			targetLayer, targetLayer.GetEpoch())
 	}
 
@@ -377,6 +378,5 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID strin
 		return false, err
 	}
 	_, exist := actives[edID]
-
 	return exist, nil
 }

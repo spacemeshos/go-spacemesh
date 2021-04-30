@@ -173,7 +173,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().Uint64Var(&config.HareEligibility.ConfidenceParam, "eligibility-confidence-param",
 		config.HareEligibility.ConfidenceParam, "The distance (in layers) we need to wait to have confidence about the contents of a layer")
 	cmd.PersistentFlags().IntVar(&config.HareEligibility.EpochOffset, "eligibility-epoch-offset",
-		config.HareEligibility.EpochOffset, "The number of layers we wait for blocks to arrive at the start of each epoch for purposes of establishing eligibility")
+		config.HareEligibility.EpochOffset, "The number of layers we wait for blocks to arrive at the start of each epoch (for purposes of establishing eligibility)")
 
 	/**======================== PoST Flags ========================== **/
 
