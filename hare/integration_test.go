@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
@@ -58,9 +59,9 @@ func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 		output := make(chan TerminationOutput, 1)
 		oracle.Register(true, signing.PublicKey().String())
 		proc := newConsensusProcess(cfg, instanceID1, his.initialSets[idx], oracle, NewMockStateQuerier(), 10, signing, types.NodeID{}, s, output, truer{}, lg)
-		c, _ := broker.Register(proc.ID())
+		c, _ := broker.Register(context.TODO(), proc.ID())
 		proc.SetInbox(c)
-		broker.Start()
+		broker.Start(context.TODO())
 		his.procs = append(his.procs, proc)
 		i++
 	}
@@ -69,7 +70,7 @@ func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 
 func (his *hareIntegrationThreeNodes) Test_16Nodes_AllHonest() {
 	for _, proc := range his.procs {
-		proc.Start()
+		proc.Start(context.TODO())
 	}
 
 	his.WaitForTimedTermination(his.T(), 60*time.Second)
@@ -111,9 +112,9 @@ func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 		output := make(chan TerminationOutput, 1)
 		oracle.Register(true, signing.PublicKey().String())
 		proc := newConsensusProcess(cfg, instanceID1, his.initialSets[idx], oracle, NewMockStateQuerier(), 10, signing, types.NodeID{}, s, output, truer{}, log.NewDefault(signing.PublicKey().String()))
-		c, _ := broker.Register(proc.ID())
+		c, _ := broker.Register(context.TODO(), proc.ID())
 		proc.SetInbox(c)
-		broker.Start()
+		broker.Start(context.TODO())
 		his.procs = append(his.procs, proc)
 		i++
 	}
@@ -122,7 +123,7 @@ func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 
 func (his *hareIntegration20Nodes) Test_20Nodes_AllHonest() {
 	for _, proc := range his.procs {
-		proc.Start()
+		proc.Start(context.TODO())
 	}
 
 	his.WaitForTimedTermination(his.T(), 120*time.Second)

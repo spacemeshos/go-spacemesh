@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -92,7 +93,7 @@ func (mho *mockHashOracle) calcThreshold(committeeSize int) uint32 {
 }
 
 // Eligible if a proof is valid for a given committee size
-func (mho *mockHashOracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
+func (mho *mockHashOracle) Eligible(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	if sig == nil {
 		log.Warning("Oracle query with proof=nil. Returning false")
 		return false, errors.New("sig is nil")
@@ -107,6 +108,6 @@ func (mho *mockHashOracle) Eligible(layer types.LayerID, round int32, committeeS
 	return false, nil
 }
 
-func (mho *mockHashOracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
+func (mho *mockHashOracle) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
 	return []byte{}, nil
 }

@@ -48,7 +48,7 @@ func NewBlockEligibilityValidator(committeeSize, genesisActiveSetSize uint32, la
 func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (bool, error) {
 	epochNumber := block.LayerIndex.GetEpoch()
 	if epochNumber == 0 {
-		v.log.With().Warning("skipping epoch 0 block validation.",
+		v.log.With().Warning("skipping epoch 0 block validation",
 			block.ID(), block.LayerIndex)
 		return true, nil
 	}

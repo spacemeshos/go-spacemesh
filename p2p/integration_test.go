@@ -48,9 +48,9 @@ func (its *P2PIntegrationSuite) Test_SendingMessage() {
 	recvChan := node2.directProtocolHandlers[exampleDirectProto]
 	require.NotNil(its.T(), recvChan)
 
-	conn, err := node1.cPool.GetConnection(node2.network.LocalAddr(), node2.lNode.PublicKey())
+	conn, err := node1.cPool.GetConnection(context.TODO(), node2.network.LocalAddr(), node2.lNode.PublicKey())
 	require.NoError(its.T(), err)
-	err = node1.SendMessage(node2.LocalNode().PublicKey(), exampleDirectProto, []byte(exMsg))
+	err = node1.SendMessage(context.TODO(), node2.LocalNode().PublicKey(), exampleDirectProto, []byte(exMsg))
 	require.NoError(its.T(), err)
 
 	tm := time.After(10 * time.Second)
@@ -61,7 +61,7 @@ func (its *P2PIntegrationSuite) Test_SendingMessage() {
 			its.T().Fatal("got wrong message")
 		}
 	case <-tm:
-		its.T().Fatal("failed to deliver message within second")
+		its.T().Fatal("failed to deliver message within 10 seconds")
 	}
 	conn.Close()
 }
@@ -80,7 +80,7 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 	for i := 0; i < MSGS; i++ {
 		msg := []byte(RandString(MSGSIZE))
 		rnd := rand.Int31n(int32(len(its.Instances)))
-		_ = its.Instances[rnd].Broadcast(exampleGossipProto, msg)
+		_ = its.Instances[rnd].Broadcast(context.TODO(), exampleGossipProto, msg)
 		for _, mc := range its.gossipProtocols {
 			ctx := ctx
 			mc := mc
@@ -102,7 +102,7 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 	errs := errg.Wait()
 	its.T().Log(errs)
 	its.NoError(errs)
-	its.Equal(int(numgot), (its.BootstrappedNodeCount+its.BootstrapNodesCount)*MSGS)
+	its.Equal((its.BootstrappedNodeCount+its.BootstrapNodesCount)*MSGS, int(numgot))
 	testLog("%v All nodes got all messages in %v", its.T().Name(), time.Since(tm))
 	cancel()
 }

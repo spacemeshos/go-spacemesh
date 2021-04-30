@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -27,11 +28,12 @@ func newStatusTracker(threshold int, expectedSize int) *statusTracker {
 }
 
 // RecordStatus records the given status message
-func (st *statusTracker) RecordStatus(msg *Msg) {
+func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
 	pub := msg.PubKey
 	_, exist := st.statuses[pub.String()]
 	if exist { // already handled this sender's status msg
-		st.Warning("Duplicated status message detected %v", pub.String())
+		st.WithContext(ctx).With().Warning("duplicate status message detected",
+			log.FieldNamed("sender_id", pub))
 		return
 	}
 
