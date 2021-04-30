@@ -18,7 +18,6 @@ import (
 
 const defSafety = types.LayerID(25)
 const defLayersPerEpoch = 10
-const defNonGenesisLayer = defLayersPerEpoch*2 + 1
 
 var errFoo = errors.New("some error")
 var errMy = errors.New("my error")
@@ -29,7 +28,7 @@ type mockBlocksProvider struct {
 	mp map[types.BlockID]struct{}
 }
 
-func (mbp mockBlocksProvider) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+func (mbp mockBlocksProvider) ContextuallyValidBlock(types.LayerID) (map[types.BlockID]struct{}, error) {
 	if mbp.mp == nil {
 		mbp.mp = make(map[types.BlockID]struct{})
 		block1 := types.NewExistingBlock(0, []byte("some data"), nil)
@@ -43,7 +42,7 @@ type mockValueProvider struct {
 	err error
 }
 
-func (mvp *mockValueProvider) Value(layer types.LayerID) (uint32, error) {
+func (mvp *mockValueProvider) Value(context.Context, types.EpochID) (uint32, error) {
 	return mvp.val, mvp.err
 }
 
@@ -51,7 +50,7 @@ type mockActiveSetProvider struct {
 	size int
 }
 
-func (m *mockActiveSetProvider) ActiveSet(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+func (m *mockActiveSetProvider) ActiveSet(types.EpochID, map[types.BlockID]struct{}) (map[string]struct{}, error) {
 	return createMapWithSize(m.size), nil
 }
 
@@ -77,7 +76,7 @@ type mockCacher struct {
 	mutex  sync.Mutex
 }
 
-func newMockCasher() *mockCacher {
+func newMockCacher() *mockCacher {
 	return &mockCacher{make(map[interface{}]interface{}), 0, 0, sync.Mutex{}}
 }
 
@@ -102,7 +101,8 @@ func (mc *mockCacher) Get(key interface{}) (value interface{}, ok bool) {
 
 func TestOracle_BuildVRFMessage(t *testing.T) {
 	r := require.New(t)
-	o := Oracle{vrfMsgCache: newMockCasher(), Log: log.NewDefault(t.Name())}
+	types.SetLayersPerEpoch(defLayersPerEpoch)
+	o := Oracle{vrfMsgCache: newMockCacher(), Log: log.NewDefault(t.Name())}
 	o.beacon = &mockValueProvider{1, errFoo}
 	_, err := o.buildVRFMessage(context.TODO(), types.LayerID(1), 1)
 	r.Equal(errFoo, err)
@@ -133,7 +133,7 @@ func TestOracle_BuildVRFMessage(t *testing.T) {
 func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	r := require.New(t)
 	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &mockSigner{[]byte{1, 2, 3}, nil}, 5, 5, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
-	mCache := newMockCasher()
+	mCache := newMockCacher()
 	o.vrfMsgCache = mCache
 
 	total := 1000
@@ -382,7 +382,7 @@ func TestOracle_actives(t *testing.T) {
 	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return mp, nil
 	}
-	o.activesCache = newMockCasher()
+	o.activesCache = newMockCacher()
 	v, err := o.actives(100)
 	r.NoError(err)
 	v2, err := o.actives(100)
@@ -404,7 +404,7 @@ func TestOracle_concurrentActives(t *testing.T) {
 	r := require.New(t)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 
-	mc := newMockCasher()
+	mc := newMockCacher()
 	o.activesCache = mc
 	mp := createMapWithSize(9)
 	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
@@ -440,7 +440,7 @@ func TestOracle_activesSafeLayer(t *testing.T) {
 	types.SetLayersPerEpoch(2)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 2, genActive, mockBlocksProvider{}, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
 	mp := createMapWithSize(9)
-	o.activesCache = newMockCasher()
+	o.activesCache = newMockCacher()
 	lyr := types.LayerID(10)
 	rsl := roundedSafeLayer(lyr, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {

@@ -28,13 +28,7 @@ type peersManager interface {
 type baseNetwork interface {
 	SendMessage(ctx context.Context, peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
 	SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey)
-	ProcessGossipProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error
-}
-
-type prioQ interface {
-	Write(prio priorityq.Priority, m interface{}) error
-	Read() (interface{}, error)
-	Close()
+	ProcessGossipProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, ownMessage bool, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error
 }
 
 // Protocol runs the gossip protocol using the given peers and service.
@@ -52,7 +46,7 @@ type Protocol struct {
 	oldMessageQ *types.DoubleCache
 
 	propagateQ chan service.MessageValidation
-	pq         prioQ
+	pq         priorityq.PriorityQueue
 	priorities map[string]priorityq.Priority
 }
 
@@ -86,14 +80,14 @@ func (p *Protocol) Close() {
 // Broadcast is the actual broadcast procedure - process the message internally and loop on peers and add the message to their queues
 func (p *Protocol) Broadcast(ctx context.Context, payload []byte, nextProt string) error {
 	p.WithContext(ctx).With().Debug("broadcasting message", log.String("from_type", nextProt))
-	return p.processMessage(ctx, p.localNodePubkey, nextProt, service.DataBytes{Payload: payload})
+	return p.processMessage(ctx, p.localNodePubkey, true, nextProt, service.DataBytes{Payload: payload})
 	//todo: should this ever return error ? then when processMessage should return error ?. should it block?
 }
 
 // Relay processes a message, if the message is new, it is passed for the protocol to validate and then propagated.
 func (p *Protocol) Relay(ctx context.Context, sender p2pcrypto.PublicKey, protocol string, msg service.Data) error {
 	p.WithContext(ctx).With().Debug("relaying message", log.String("from_type", protocol))
-	return p.processMessage(ctx, sender, protocol, msg)
+	return p.processMessage(ctx, sender, false, protocol, msg)
 }
 
 // SetPriority sets the priority for protoName in the queue.
@@ -107,7 +101,7 @@ func (p *Protocol) markMessageAsOld(h types.Hash12) bool {
 	return p.oldMessageQ.GetOrInsert(h)
 }
 
-func (p *Protocol) processMessage(ctx context.Context, sender p2pcrypto.PublicKey, protocol string, msg service.Data) error {
+func (p *Protocol) processMessage(ctx context.Context, sender p2pcrypto.PublicKey, ownMessage bool, protocol string, msg service.Data) error {
 	h := types.CalcMessageHash12(msg.Bytes(), protocol)
 	logger := p.WithContext(ctx).WithFields(
 		log.FieldNamed("msg_sender", sender),
@@ -125,7 +119,7 @@ func (p *Protocol) processMessage(ctx context.Context, sender p2pcrypto.PublicKe
 
 	logger.Event().Debug("gossip message is new, processing")
 	metrics.NewGossipMessages.With("protocol", protocol).Add(1)
-	return p.net.ProcessGossipProtocolMessage(ctx, sender, protocol, msg, p.propagateQ)
+	return p.net.ProcessGossipProtocolMessage(ctx, sender, ownMessage, protocol, msg, p.propagateQ)
 }
 
 // send a message to all the peers.

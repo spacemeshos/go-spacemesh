@@ -620,9 +620,9 @@ func (s *Switch) ProcessDirectProtocolMessage(ctx context.Context, sender p2pcry
 	return nil
 }
 
-// ProcessGossipProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will
-// send the message syntactic validation result on the validationCompletedChan ASAP
-func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
+// ProcessGossipProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will send
+// the message syntactic validation result on the validationCompletedChan ASAP
+func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, ownMessage bool, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
 	h := types.CalcMessageHash12(data.Bytes(), protocol)
 
 	// route authenticated message to the registered protocol
@@ -638,7 +638,7 @@ func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcry
 	metrics.QueueLength.With(metrics.ProtocolLabel, protocol).Set(float64(len(msgchan)))
 
 	// TODO: check queue length
-	gpm := gossipProtocolMessage{sender: sender, data: data, validationChan: validationCompletedChan}
+	gpm := gossipProtocolMessage{sender: sender, ownMessage: ownMessage, data: data, validationChan: validationCompletedChan}
 	if requestID, ok := log.ExtractRequestID(ctx); ok {
 		gpm.requestID = requestID
 	} else {
