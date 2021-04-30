@@ -523,44 +523,69 @@ func TestOracle_HareToTortoiseFlow(t *testing.T) {
 
 	// an activeSetProvider that returns an active set from blocks but no epoch ATXs: in this test we want to make sure
 	// that hare active set succeeds and tortoise active set fails
+	mp := make(map[types.BlockID]struct{})
+	block1 := types.NewExistingBlock(0, []byte("some data"), nil)
+	mp[block1.ID()] = struct{}{}
 	asp := &mockActiveSetProvider{size: 1, getEpochAtxsFn: func(types.EpochID) []types.ATXID {
 		r.Fail("tortoise active set should not be read")
 		return nil
 	}}
-	o := New(&mockValueProvider{1, nil}, asp, &mockBlocksProvider{}, nil, nil, 2, genActive, hDist, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
+	var called1, called2, called3, called4 bool
+	// blocksProvider that makes sure hare active set was read
+	bp := &mockBlocksProvider{layerContextuallyValidBlocksFn: func(types.LayerID) (map[types.BlockID]struct{}, error) {
+		called1 = true
+		// return blocks
+		return mp, nil
+	}}
+	o := New(&mockValueProvider{1, nil}, asp, bp, nil, nil, 2, genActive, hDist, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
 	o.activesCache = newMockCacher()
 	lyr := types.LayerID(100)
 	res, err := o.actives(context.TODO(), lyr)
 	r.NotNil(res)
 	r.NoError(err)
+	r.True(called1, "hare active set wasn't read")
 
 	// HARE ACTIVE SET EMPTY: CHECK TORTOISE ACTIVE SET
 
 	// blocksProvider provides no blocks (so empty hare active set), activeSetProvider provides epoch ATXs
-	mp := make(map[types.BlockID]struct{})
-	called := false
 	asp = &mockActiveSetProvider{size: 1, getActiveSetFn: func(epochID types.EpochID, blockMap map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		r.Zero(len(blockMap), "expected no hare blocks")
 		return nil, nil
 	}, getEpochAtxsFn: func(epochID types.EpochID) []types.ATXID {
-		called = true
+		called2 = true
 		return []types.ATXID{{}}
 	}}
-	o = New(&mockValueProvider{1, nil}, asp, &mockBlocksProvider{mp: mp}, nil, nil, 2, genActive, hDist, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
+	mp2 := make(map[types.BlockID]struct{})
+	o = New(&mockValueProvider{1, nil}, asp, &mockBlocksProvider{mp: mp2}, nil, nil, 2, genActive, hDist, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
 	o.activesCache = newMockCacher()
 	res, err = o.actives(context.TODO(), lyr)
-	r.True(called, "tortoise active set wasn't read")
+	r.True(called2, "tortoise active set wasn't read")
 	r.NotNil(res)
 	r.NoError(err)
 
 	// BOTH EMPTY: ERROR
 
-	o = New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 0}, &mockBlocksProvider{mp: mp}, nil, nil, 2, genActive, hDist, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
+	asp = &mockActiveSetProvider{size: 0, getActiveSetFn: func(epochID types.EpochID, blockMap map[types.BlockID]struct{}) (map[string]struct{}, error) {
+		r.Zero(len(blockMap), "expected no hare blocks")
+		return nil, nil
+	}, getEpochAtxsFn: func(epochID types.EpochID) []types.ATXID {
+		called3 = true
+		return nil
+	}}
+	// blocksProvider that makes sure hare active set was read
+	bp = &mockBlocksProvider{layerContextuallyValidBlocksFn: func(types.LayerID) (map[types.BlockID]struct{}, error) {
+		called4 = true
+		// return no blocks
+		return mp2, nil
+	}}
+	o = New(&mockValueProvider{1, nil}, asp, bp, nil, nil, 2, genActive, hDist, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
 	o.activesCache = newMockCacher()
 	res, err = o.actives(context.TODO(), lyr)
 	r.Nil(res)
 	r.Error(err)
 	r.Contains(err.Error(), "empty active set for layer")
+	r.True(called3, "tortoise active set wasn't read")
+	r.True(called4, "hare active set wasn't read")
 }
 
 func TestOracle_IsIdentityActive(t *testing.T) {
