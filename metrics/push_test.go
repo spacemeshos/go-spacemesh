@@ -4,6 +4,7 @@ import (
 	"github.com/go-kit/kit/metrics/prometheus"
 	stdprometheus "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
+	"github.com/prometheus/common/expfmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -18,7 +19,7 @@ func TestStartPushMetrics(t *testing.T) {
 		Namespace: Namespace,
 		Subsystem: "Tests",
 		Name:      testMetricName,
-		Help:      "Should be in r.Body",
+		Help:      "Should be equal 1",
 	}, nil)
 	testMetric.Add(1)
 
@@ -31,7 +32,7 @@ func TestStartPushMetrics(t *testing.T) {
 		res := string(resBytes)
 		t.Log(res)
 
-		if !strings.Contains(res, testMetricName) {
+		if !strings.Contains(res, testMetricName+" 1") {
 			t.Fatal("r.Body doesn't contains out test metric!")
 		}
 
@@ -40,7 +41,9 @@ func TestStartPushMetrics(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	pusher := push.New(ts.URL, "my_job").Gatherer(stdprometheus.DefaultGatherer)
+	pusher := push.New(ts.URL, "my_job").
+		Gatherer(stdprometheus.DefaultGatherer).
+		Format(expfmt.FmtText)
 	err := pusher.Push()
 	if err != nil {
 		t.Fatal("can't push to server", err)
