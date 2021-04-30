@@ -248,15 +248,15 @@ func Test_SafeLayerRange(t *testing.T) {
 	types.SetLayersPerEpoch(defLayersPerEpoch)
 	safetyParam := types.LayerID(10)
 	effGenesis := types.GetEffectiveGenesis()
-	testCases := []struct{
+	testCases := []struct {
 		// input
-		targetLayer types.LayerID
-		safetyParam types.LayerID
+		targetLayer    types.LayerID
+		safetyParam    types.LayerID
 		layersPerEpoch types.LayerID
-		epochOffset types.LayerID
+		epochOffset    types.LayerID
 		// expected output
 		safeLayerStart types.LayerID
-		safeLayerEnd types.LayerID
+		safeLayerEnd   types.LayerID
 	}{
 		{0, safetyParam, defLayersPerEpoch, 1, effGenesis, effGenesis},
 		{100, safetyParam, defLayersPerEpoch, 1, 80, 81},
@@ -326,7 +326,7 @@ func Test_ActiveSetSize(t *testing.T) {
 	o.atxdb = &mockActiveSetProvider{getAtxHeaderFn: func(types.ATXID) (*types.ActivationTxHeader, error) {
 		return nil, errFoo
 	}}
-	activeSetSize, err := o.activeSetSize(context.TODO(), l + 19)
+	activeSetSize, err := o.activeSetSize(context.TODO(), l+19)
 	assert.Error(t, err)
 	assert.Equal(t, errFoo, err)
 	assert.Equal(t, uint32(0), activeSetSize)
