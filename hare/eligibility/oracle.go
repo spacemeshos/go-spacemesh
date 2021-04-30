@@ -352,7 +352,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 	for _, atxid := range atxs {
 		atx, err := o.atxdb.GetAtxHeader(atxid)
 		if err != nil {
-			return nil, fmt.Errorf("inconsistent state: error getting ATX %v for target layer %v: %w", atxid, targetLayer, err)
+			return nil, fmt.Errorf("inconsistent state: error getting atx header %v for target layer %v: %w", atxid, targetLayer, err)
 		}
 		activeMap[atx.NodeID.Key] = struct{}{}
 	}
