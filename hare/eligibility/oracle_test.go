@@ -26,7 +26,7 @@ var genActive = 5
 var hDist = 10
 
 type mockBlocksProvider struct {
-	mp map[types.BlockID]struct{}
+	mp                             map[types.BlockID]struct{}
 	layerContextuallyValidBlocksFn func(types.LayerID) (map[types.BlockID]struct{}, error)
 }
 
@@ -271,7 +271,7 @@ func Test_SafeLayerRange(t *testing.T) {
 		// zero offset
 		{100, safetyParam, defLayersPerEpoch, 0, 90, 90},
 		// safetyParam < layersPerEpoch means only look back one epoch
-		{100, safetyParam-1, defLayersPerEpoch, 1, 90, 91},
+		{100, safetyParam - 1, defLayersPerEpoch, 1, 90, 91},
 		// larger epochOffset looks back further
 		{100, safetyParam, defLayersPerEpoch, 5, 80, 85},
 		// smaller safety param returns one epoch prior
