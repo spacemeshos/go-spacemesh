@@ -258,10 +258,27 @@ func Test_SafeLayerRange(t *testing.T) {
 		safeLayerStart types.LayerID
 		safeLayerEnd   types.LayerID
 	}{
+		// a target layer prior to effective genesis returns effective genesis
 		{0, safetyParam, defLayersPerEpoch, 1, effGenesis, effGenesis},
+		// large safety param also returns effective genesis
+		{100, 100, defLayersPerEpoch, 1, effGenesis, effGenesis},
+		// safe layer in first safetyParam + epochOffset layers of epoch, rewinds one epoch further (two prior to target)
 		{100, safetyParam, defLayersPerEpoch, 1, 80, 81},
+		// zero offset
+		{100, safetyParam, defLayersPerEpoch, 0, 90, 90},
+		// safetyParam < layersPerEpoch means only look back one epoch
+		{100, safetyParam-1, defLayersPerEpoch, 1, 90, 91},
+		// larger epochOffset looks back further
+		{100, safetyParam, defLayersPerEpoch, 5, 80, 85},
+		// smaller safety param returns one epoch prior
+		{100, 5, defLayersPerEpoch, 5, 90, 95},
+		// targetLayer within safetyParam returns one epoch prior
+		{105, 5, defLayersPerEpoch, 5, 90, 95},
+		// targetLayer after safetyParam+epochOffset returns start of same epoch
+		{105, 2, defLayersPerEpoch, 2, 100, 102},
 	}
 	for _, testCase := range testCases {
+		log.Info("testing safeLayerRange input: %v", testCase)
 		sls, sle := safeLayerRange(testCase.targetLayer, testCase.safetyParam, testCase.layersPerEpoch, testCase.epochOffset)
 		assert.Equal(t, testCase.safeLayerStart, sls, "got incorrect safeLayerStart")
 		assert.Equal(t, testCase.safeLayerEnd, sle, "got incorrect safeLayerEnd")
