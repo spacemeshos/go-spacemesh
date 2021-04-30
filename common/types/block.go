@@ -171,9 +171,15 @@ type BlockHeader struct {
 
 	BaseBlock BlockID
 
-	AgainstDiff []BlockID
-	ForDiff     []BlockID
-	NeutralDiff []BlockID
+	AgainstDiff []BlockID // base block explicitly supports a block that we want to vote against
+	ForDiff     []BlockID // any additional blocks we want to support that base block doesn't (incl. in newer layers)
+	NeutralDiff []BlockID // blocks that the base block is explicitly for or against for which we are neutral.
+	// NOTE on neutral votes: a base block is by default neutral on all blocks and layers that come after it, so
+	// there's no need to explicitly add neutral votes for more recent layers.
+	// TODO: optimize this data structure in two ways:
+	//   - neutral votes are only ever for an entire layer, never for a subset of blocks.
+	//   - collapse AgainstDiff and ForDiff into a single list.
+	//   see https://github.com/spacemeshos/go-spacemesh/issues/2369.
 }
 
 // Layer returns the block's LayerID.
