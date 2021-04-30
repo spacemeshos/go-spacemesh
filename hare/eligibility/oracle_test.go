@@ -27,9 +27,13 @@ var hDist = 10
 
 type mockBlocksProvider struct {
 	mp map[types.BlockID]struct{}
+	layerContextuallyValidBlocksFn func(types.LayerID) (map[types.BlockID]struct{}, error)
 }
 
-func (mbp mockBlocksProvider) LayerContextuallyValidBlocks(types.LayerID) (map[types.BlockID]struct{}, error) {
+func (mbp mockBlocksProvider) LayerContextuallyValidBlocks(layerID types.LayerID) (map[types.BlockID]struct{}, error) {
+	if mbp.layerContextuallyValidBlocksFn != nil {
+		return mbp.layerContextuallyValidBlocksFn(layerID)
+	}
 	if mbp.mp == nil {
 		mbp.mp = make(map[types.BlockID]struct{})
 		block1 := types.NewExistingBlock(0, []byte("some data"), nil)
@@ -471,42 +475,46 @@ func TestOracle_concurrentActives(t *testing.T) {
 	r.Equal(1, mc.numAdd)
 }
 
-//type bProvider struct {
-//	mp map[types.LayerID]map[types.BlockID]struct{}
-//}
-//
-//func (p *bProvider) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error) {
-//	if mp, exist := p.mp[layer]; exist {
-//		return mp, nil
-//	}
-//
-//	return nil, errors.New("does not exist")
-//}
-//
-//func TestOracle_activesSafeLayer(t *testing.T) {
-//	r := require.New(t)
-//	types.SetLayersPerEpoch(2)
-//	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 2, genActive, mockBlocksProvider{}, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
-//	mp := createMapWithSize(9)
-//	o.activesCache = newMockCacher()
-//	lyr := types.LayerID(10)
-//	rsl := roundedSafeLayer(lyr, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
-//	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
-//		ep := rsl.GetEpoch()
-//		r.Equal(ep-1, epoch)
-//		return mp, nil
-//	}
-//
-//	bmp := make(map[types.LayerID]map[types.BlockID]struct{})
-//	mp2 := make(map[types.BlockID]struct{})
-//	block1 := types.NewExistingBlock(0, []byte("some data"), nil)
-//	mp2[block1.ID()] = struct{}{}
-//	bmp[rsl] = mp2
-//	o.blocksProvider = &bProvider{bmp}
-//	mpRes, err := o.actives(lyr)
-//	r.NotNil(mpRes)
-//	r.NoError(err)
-//}
+func TestOracle_activesSafeLayer(t *testing.T) {
+	log.DebugMode(true)
+	r := require.New(t)
+	types.SetLayersPerEpoch(2)
+
+	// an activeSetProvider that returns an active set from blocks but no epoch ATXs: in this test we want to make sure
+	// that hare active set succeeds and tortoise active set fails
+	asp := &mockActiveSetProvider{size: 1, getEpochAtxsFn: func(types.EpochID) []types.ATXID { return nil }}
+
+	o := New(&mockValueProvider{1, nil}, asp, nil, nil, nil, 2, genActive, hDist, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
+	o.activesCache = newMockCacher()
+	lyr := types.LayerID(10)
+	sls, sle := safeLayerRange(lyr, types.LayerID(o.cfg.ConfidenceParam), types.LayerID(o.layersPerEpoch), types.LayerID(o.cfg.EpochOffset))
+	mp := make(map[types.BlockID]struct{})
+	block1 := types.NewExistingBlock(0, []byte("some data"), nil)
+	mp[block1.ID()] = struct{}{}
+	lastLayer := sls
+	mbp := &mockBlocksProvider{layerContextuallyValidBlocksFn: func(layerID types.LayerID) (map[types.BlockID]struct{}, error) {
+		// make sure it's called on each layer in the range, in turn
+		r.GreaterOrEqual(uint64(layerID), uint64(sls), "LayerContextuallyValidBlocks called on layer before safeLayerStart")
+		r.LessOrEqual(uint64(layerID), uint64(sle), "LayerContextuallyValidBlocks called on layer after safeLayerEnd")
+		r.Equal(lastLayer, layerID, "LayerContextuallyValidBlocks called on layer out of order")
+		lastLayer++
+		return mp, nil
+	}}
+	o.meshdb = mbp
+	res, err := o.actives(context.TODO(), lyr)
+	// we don't care what the output is here, just that there is output and no error
+	r.NotNil(res)
+	r.NoError(err)
+
+	bmp := make(map[types.LayerID]map[types.BlockID]struct{})
+	mp2 := make(map[types.BlockID]struct{})
+	mp2[block1.ID()] = struct{}{}
+	bmp[lastLayer] = mp2
+	o.meshdb = &mockBlocksProvider{mp: mp2}
+	res, err = o.actives(context.TODO(), lyr)
+	r.NotNil(res)
+	r.NoError(err)
+}
 
 func TestOracle_IsIdentityActive(t *testing.T) {
 	r := require.New(t)
