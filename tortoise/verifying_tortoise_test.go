@@ -49,8 +49,8 @@ func AddLayer(m *mesh.DB, layer *types.Layer) error {
 }
 
 var (
-	defaultTestHdist = config.DefaultConfig().Hdist
-	defaultTestZdist = config.DefaultConfig().Zdist
+	defaultTestHdist           = config.DefaultConfig().Hdist
+	defaultTestZdist           = config.DefaultConfig().Zdist
 	defaultTestConfidenceParam = config.DefaultConfig().ConfidenceParam
 )
 

@@ -26,8 +26,8 @@ const (
 )
 
 var (
-	defaultHomeDir  = filesystem.GetUserHomeDirectory()
-	defaultDataDir  = filepath.Join(defaultHomeDir, defaultDataDirName, "/")
+	defaultHomeDir = filesystem.GetUserHomeDirectory()
+	defaultDataDir = filepath.Join(defaultHomeDir, defaultDataDirName, "/")
 )
 
 // Config defines the top level configuration for a spacemesh node
@@ -67,8 +67,8 @@ type BaseConfig struct {
 	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
 	LayerAvgSize     int    `mapstructure:"layer-average-size"`
 	LayersPerEpoch   int    `mapstructure:"layers-per-epoch"`
-	Hdist            int    `mapstructure:"hdist"` // hare/input vector lookback distance
-	Zdist            int    `mapstructure:"zdist"` // hare result wait distance
+	Hdist            int    `mapstructure:"hdist"`                     // hare/input vector lookback distance
+	Zdist            int    `mapstructure:"zdist"`                     // hare result wait distance
 	ConfidenceParam  int    `mapstructure:"tortoise-confidence-param"` // layers to wait for global consensus
 
 	PoETServer string `mapstructure:"poet-server"`
