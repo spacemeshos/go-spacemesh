@@ -184,7 +184,6 @@ func (t *turtle) checkBlockAndGetInputVector(
 				log.FieldNamed("exception_block_id", exceptionBlockID))
 			return false
 		} else if exceptionBlock.LayerIndex < baseBlockLayer {
-			// TODO: can a base block exception list point to blocks in the same layer, or must they all be newer?
 			logger.With().Error("base block candidate points to older block",
 				log.FieldNamed("older_block", exceptionBlockID),
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
