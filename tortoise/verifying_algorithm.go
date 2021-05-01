@@ -17,12 +17,13 @@ type ThreadSafeVerifyingTortoise struct {
 
 // Config holds the arguments and dependencies to create a verifying tortoise instance.
 type Config struct {
-	LayerSyze int
-	Database  blockDataProvider
-	Hdist     int // hare lookback distance: the distance over which we use the input vector/hare results
-	Zdist     int // hare result wait distance: the distance over which we're willing to wait for hare results
-	Log       log.Log
-	Recovered bool
+	LayerSize       int
+	Database        blockDataProvider
+	Hdist           int // hare lookback distance: the distance over which we use the input vector/hare results
+	Zdist           int // hare result wait distance: the distance over which we're willing to wait for hare results
+	ConfidenceParam int // confidence wait distance: how long we wait for global consensus to be established
+	Log             log.Log
+	Recovered       bool
 }
 
 // NewVerifyingTortoise creates a new verifying tortoise wrapper
@@ -30,15 +31,23 @@ func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingT
 	if cfg.Recovered {
 		return recoveredVerifyingTortoise(cfg.Database, cfg.Log)
 	}
-	return verifyingTortoise(ctx, cfg.LayerSyze, cfg.Database, cfg.Hdist, cfg.Zdist, cfg.Log)
+	return verifyingTortoise(ctx, cfg.LayerSize, cfg.Database, cfg.Hdist, cfg.Zdist, cfg.ConfidenceParam, cfg.Log)
 }
 
 // verifyingTortoise creates a new verifying tortoise wrapper
-func verifyingTortoise(ctx context.Context, layerSize int, mdb blockDataProvider, hdist int, zdist int, logger log.Log) *ThreadSafeVerifyingTortoise {
+func verifyingTortoise(
+	ctx context.Context,
+	layerSize int,
+	mdb blockDataProvider,
+	hdist int,
+	zdist int,
+	confidenceParam int,
+	logger log.Log,
+) *ThreadSafeVerifyingTortoise {
 	if hdist < zdist {
 		logger.With().Panic("hdist must be >= zdist", log.Int("hdist", hdist), log.Int("zdist", zdist))
 	}
-	alg := &ThreadSafeVerifyingTortoise{trtl: newTurtle(mdb, hdist, zdist, layerSize)}
+	alg := &ThreadSafeVerifyingTortoise{trtl: newTurtle(mdb, hdist, zdist, confidenceParam, layerSize)}
 	alg.trtl.SetLogger(logger)
 	alg.trtl.init(ctx, mesh.GenesisLayer())
 	return alg

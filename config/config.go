@@ -28,7 +28,6 @@ const (
 var (
 	defaultHomeDir  = filesystem.GetUserHomeDirectory()
 	defaultDataDir  = filepath.Join(defaultHomeDir, defaultDataDirName, "/")
-	defaultTestMode = false
 )
 
 // Config defines the top level configuration for a spacemesh node
@@ -70,6 +69,7 @@ type BaseConfig struct {
 	LayersPerEpoch   int    `mapstructure:"layers-per-epoch"`
 	Hdist            int    `mapstructure:"hdist"` // hare/input vector lookback distance
 	Zdist            int    `mapstructure:"zdist"` // hare result wait distance
+	ConfidenceParam  int    `mapstructure:"tortoise-confidence-param"` // layers to wait for global consensus
 
 	PoETServer string `mapstructure:"poet-server"`
 
@@ -155,7 +155,7 @@ func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
 		DataDirParent:       defaultDataDir,
 		ConfigFile:          defaultConfigFileName,
-		TestMode:            defaultTestMode,
+		TestMode:            false,
 		CollectMetrics:      false,
 		MetricsPort:         1010,
 		OracleServer:        "http://localhost:3030",
@@ -167,6 +167,7 @@ func defaultBaseConfig() BaseConfig {
 		GoldenATXID:         "0x5678", // TODO: Change the value
 		Hdist:               10,
 		Zdist:               5,
+		ConfidenceParam:     5,
 		GenesisActiveSet:    5,
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,

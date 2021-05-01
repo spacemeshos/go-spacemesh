@@ -51,6 +51,10 @@ type turtle struct {
 	// a layer
 	Zdist types.LayerID
 
+	// the number of layers we wait until we have confidence that w.h.p. all honest nodes have reached consensus on the
+	// contents of a layer
+	ConfidenceParam types.LayerID
+
 	AvgLayerSize  int
 	MaxExceptions int
 
@@ -68,11 +72,12 @@ func (t *turtle) SetLogger(logger log.Log) {
 }
 
 // newTurtle creates a new verifying tortoise algorithm instance. XXX: maybe rename?
-func newTurtle(bdp blockDataProvider, hdist, zdist, avgLayerSize int) *turtle {
+func newTurtle(bdp blockDataProvider, hdist, zdist, confidenceParam, avgLayerSize int) *turtle {
 	t := &turtle{
 		logger:               log.NewDefault("trtl"),
 		Hdist:                types.LayerID(hdist),
 		Zdist:                types.LayerID(zdist),
+		ConfidenceParam:      types.LayerID(confidenceParam),
 		bdp:                  bdp,
 		Last:                 0,
 		AvgLayerSize:         avgLayerSize,
@@ -170,7 +175,7 @@ func (t *turtle) checkBlockAndGetInputVector(
 	className string,
 	voteVector vec,
 	sourceBlockID types.BlockID,
-	layerIndex types.LayerID,
+	baseBlockLayer types.LayerID,
 ) bool {
 	logger := t.logger.WithContext(ctx).WithFields(log.FieldNamed("source_block_id", sourceBlockID))
 	for _, exceptionBlockID := range diffList {
@@ -178,18 +183,18 @@ func (t *turtle) checkBlockAndGetInputVector(
 			logger.With().Error("inconsistent state: can't find block from block's diff",
 				log.FieldNamed("exception_block_id", exceptionBlockID))
 			return false
-		} else if exceptionBlock.LayerIndex < layerIndex {
+		} else if exceptionBlock.LayerIndex < baseBlockLayer {
 			// TODO: can a base block exception list point to blocks in the same layer, or must they all be newer?
 			logger.With().Error("base block candidate points to older block",
 				log.FieldNamed("older_block", exceptionBlockID),
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
-				log.FieldNamed("base_block_lyr", layerIndex))
+				log.FieldNamed("base_block_lyr", baseBlockLayer))
 			return false
 		} else if v, err := t.getSingleInputVectorFromDB(ctx, exceptionBlock.LayerIndex, exceptionBlockID); err != nil {
 			logger.With().Error("unable to get single input vector for exception block",
 				log.FieldNamed("older_block", exceptionBlockID),
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
-				log.FieldNamed("base_block_lyr", layerIndex),
+				log.FieldNamed("base_block_lyr", baseBlockLayer),
 				log.Err(err))
 			return false
 		} else if v != voteVector {
@@ -239,6 +244,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 
 	// look at good blocks backwards from most recent processed layer to find a suitable base block
 	// TODO: optimize by, e.g., trying to minimize the size of the exception list (rather than first match)
+	// see https://github.com/spacemeshos/go-spacemesh/issues/2402
 	for layerID := t.Last; layerID > t.Last-t.Hdist; layerID-- {
 		for block, opinion := range t.BlockOpinionsByLayer[layerID] {
 			if _, ok := t.GoodBlocksIndex[block]; !ok {
@@ -602,8 +608,9 @@ layerLoop:
 				log.String("sum", fmt.Sprintf("[%v, %v]", sum[0], sum[1])))
 
 			// If, for any block in this layer, the global opinion (summed block votes) disagrees with our vote (the
-			// input vector), or if the global opinion is abstain, then we do not verify this layer. Otherwise,
-			// we do.
+			// input vector), or if the global opinion is abstain, then we do not verify this layer. This could be the
+			// result of a reorg (e.g., resolution of a network partition), or a malicious peer during sync, or
+			// disagreement about Hare success.
 			if globalOpinionOnBlock != localOpinionOnBlock {
 				// TODO: trigger self healing after a while
 				logger.With().Warning("global opinion on block differs from our vote, cannot verify layer",
@@ -613,11 +620,13 @@ layerLoop:
 				break layerLoop
 			}
 
-			// An abstain vote on a single block in this layer means that we should abstain from voting on the entire
-			// layer. This usually means everyone is still waiting for Hare to finish, so we cannot verify this layer.
-			// This condition should be temporary. It could theoretically happen for a prolonged period during a
-			// balancing attack. The verifying tortoise will continue to fail in this case, but the full tortoise will
-			// enter self-healing.
+			// There are only two scenarios that could result in a global opinion of abstain: if everyone is still
+			// waiting for Hare to finish for a layer (i.e., it has not yet succeeded or failed), or a balancing attack.
+			// The former is temporary and will go away after `zdist' layers. And it should be true of an entire layer,
+			// not just of a single block. The latter could cause the global opinion of a single block to permanently
+			// be abstain. As long as the contextual validity of any block in a layer is unresolved, we cannot verify
+			// the layer (since the effectiveness of each transaction in the layer depends upon the contents of the
+			// entire layer and transaction ordering). Therefore we have to enter self-healing in this case.
 			// TODO: abstain only for entire layer at a time, not for individual blocks (optimization)
 			// TODO: trigger self-healing in this scenario, after a while
 			if globalOpinionOnBlock == abstain {

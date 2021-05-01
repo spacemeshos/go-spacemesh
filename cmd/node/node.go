@@ -548,7 +548,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
 	trtlCfg := tortoise.Config{
-		LayerSyze: int(layerSize),
+		LayerSize: int(layerSize),
 		Database:  mdb,
 		Hdist:     app.Config.Hdist,
 		Zdist:     app.Config.Zdist,

@@ -48,8 +48,11 @@ func AddLayer(m *mesh.DB, layer *types.Layer) error {
 	return nil
 }
 
-var defaultTestHdist = config.DefaultConfig().Hdist
-var defaultTestZdist = config.DefaultConfig().Zdist
+var (
+	defaultTestHdist = config.DefaultConfig().Hdist
+	defaultTestZdist = config.DefaultConfig().Zdist
+	defaultTestConfidenceParam = config.DefaultConfig().ConfidenceParam
+)
 
 func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) {
 	for _, i := range blocks {
@@ -182,7 +185,7 @@ func turtleSanity(t *testing.T, layers types.LayerID, blocksPerLayer, voteNegati
 		return sorted[voteNegative:], nil
 	}
 
-	trtl = newTurtle(msh, defaultTestHdist, defaultTestZdist, blocksPerLayer)
+	trtl = newTurtle(msh, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, blocksPerLayer)
 	gen := mesh.GenesisLayer()
 	trtl.init(context.TODO(), gen)
 
@@ -269,7 +272,7 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 		})
 	}
 
-	trtl := newTurtle(msh, defaultTestHdist, defaultTestZdist, blocksPerLayer)
+	trtl := newTurtle(msh, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, blocksPerLayer)
 	gen := mesh.GenesisLayer()
 	trtl.init(context.TODO(), gen)
 
@@ -360,7 +363,7 @@ func TestTurtle_Recovery(t *testing.T) {
 	mdb.InputVectorBackupFunc = getHareResults
 
 	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), 3, mdb, 5, 5, lg)
+	alg := verifyingTortoise(context.TODO(), 3, mdb, 5, 5, 5, lg)
 	l := mesh.GenesisLayer()
 
 	log.With().Info("The genesis is ", l.Index(), types.BlockIdsField(types.BlockIDs(l.Blocks())))
