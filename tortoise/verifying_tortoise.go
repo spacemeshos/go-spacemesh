@@ -528,18 +528,18 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) (
 layerLoop:
 	// attempt to verify each layer from the last verified up to one prior to the newly-arrived layer.
 	// this is the full range of unverified layers that we might possibly be able to verify at this point.
-	for candidateLayer := pbaseOld + 1; candidateLayer < newlyr.Index(); candidateLayer++ {
-		logger.With().Info("verifying layer", candidateLayer)
+	for candidateLayerID := pbaseOld + 1; candidateLayerID < newlyr.Index(); candidateLayerID++ {
+		logger.With().Info("verifying layer", candidateLayerID)
 
-		layerBlockIds, err := t.bdp.LayerBlockIds(candidateLayer)
+		layerBlockIds, err := t.bdp.LayerBlockIds(candidateLayerID)
 		if err != nil {
-			logger.With().Error("inconsistent state: can't find layer in database, skipping verification", candidateLayer)
+			logger.With().Error("inconsistent state: can't find layer in database, skipping verification", candidateLayerID)
 			continue // Panic?
 		}
 
 		// get the local opinion (input vector) for this layer. below, we calculate the global opinion on each block in
 		// the layer and check if it agrees with this local opinion.
-		rawLayerInputVector, err := t.bdp.GetLayerInputVector(candidateLayer)
+		rawLayerInputVector, err := t.bdp.GetLayerInputVector(candidateLayerID)
 		if err != nil {
 			if errors.Is(err, mesh.ErrInvalidLayer) {
 				// Hare already failed for this layer, so we want to vote against all blocks in the layer: an empty
@@ -547,12 +547,12 @@ layerLoop:
 				rawLayerInputVector = make([]types.BlockID, 0)
 			} else {
 				// otherwise, we want to abstain: leaving the map as nil does this
-				logger.With().Warning("input vector abstains on all blocks", candidateLayer)
+				logger.With().Warning("input vector abstains on all blocks", candidateLayerID)
 			}
 		}
 		localLayerOpinionVec := t.inputVectorForLayer(layerBlockIds, rawLayerInputVector)
 		if len(localLayerOpinionVec) == 0 {
-			logger.With().Warning("no blocks in input vector, can't verify layer", candidateLayer)
+			logger.With().Warning("no blocks in input vector, can't verify layer", candidateLayerID)
 			break
 		}
 
@@ -566,12 +566,12 @@ layerLoop:
 			// Count the votes for the input vote vector by summing the weight of the good blocks
 			sum := abstain
 
-			// Count votes for the hDist layers following the candidateLayer, up to the most recently verified layer.
-			lastVotingLayer := t.Last
-			if candidateLayer+t.Hdist < lastVotingLayer {
-				lastVotingLayer = candidateLayer + t.Hdist
+			// Count votes for the hDist layers following the candidateLayerID, up to the most recently verified layer.
+			lastVotingLayer := pbaseOld
+			if candidateLayerID+t.Hdist < lastVotingLayer {
+				lastVotingLayer = candidateLayerID + t.Hdist
 			}
-			for voteLayer := lastVotingLayer; voteLayer > candidateLayer; voteLayer-- {
+			for voteLayer := lastVotingLayer; voteLayer > candidateLayerID; voteLayer-- {
 				// sum the opinion of blocks we agree with, i.e., blocks marked "good"
 				for bid, op := range t.BlockOpinionsByLayer[voteLayer] {
 					if _, isgood := t.GoodBlocksIndex[bid]; !isgood {
@@ -600,24 +600,43 @@ layerLoop:
 			}
 
 			// check that the total weight exceeds the confidence threshold
-			globalOpinionOnBlock := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(candidateLayer-pbaseOld))
+			globalOpinionOnBlock := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(candidateLayerID-pbaseOld))
 			logger.With().Debug("calculated global opinion on block",
 				log.FieldNamed("block_voted_on", blockID),
-				candidateLayer,
+				candidateLayerID,
 				log.String("global_opinion", globalOpinionOnBlock.String()),
 				log.String("sum", fmt.Sprintf("[%v, %v]", sum[0], sum[1])))
+
+			// At this point, we have all of the data we need to make a decision. There are three possible outcomes:
+			// 1. verify the layer (if local and global consensus match, and global consensus is decided)
+			// 2. keep waiting to verify the layer (if not, and the layer is relatively recent)
+			// 3. trigger self-healing (if not, and the layer is sufficiently old)
+			consensusMatches := globalOpinionOnBlock != localOpinionOnBlock
+			globalOpinionDecided := globalOpinionOnBlock == abstain
+
+			if consensusMatches && globalOpinionDecided {
+				// Opinion on this block is decided, save and keep going
+				contextualValidity[blockID] = globalOpinionOnBlock == support
+				continue
+			}
+
+			// Verifying tortoise will wait `zdist' layers for consensus, then an additional `ConfidenceParam'
+			// layers until all other nodes achieve consensus. If it's still stuck after this point, then we
+			// trigger self-healing.
+			// TODO: allow verifying tortoise to continue to verify later layers, even after failing to verify a
+			// layer. See https://github.com/spacemeshos/go-spacemesh/issues/2403.
+			needsHealing := candidateLayerID - pbaseOld > t.Zdist + t.ConfidenceParam
 
 			// If, for any block in this layer, the global opinion (summed block votes) disagrees with our vote (the
 			// input vector), or if the global opinion is abstain, then we do not verify this layer. This could be the
 			// result of a reorg (e.g., resolution of a network partition), or a malicious peer during sync, or
 			// disagreement about Hare success.
-			if globalOpinionOnBlock != localOpinionOnBlock {
-				// TODO: trigger self healing after a while
+			if !consensusMatches {
 				logger.With().Warning("global opinion on block differs from our vote, cannot verify layer",
 					blockID,
 					log.String("global_opinion", globalOpinionOnBlock.String()),
 					log.String("vote", localOpinionOnBlock.String()))
-				break layerLoop
+
 			}
 
 			// There are only two scenarios that could result in a global opinion of abstain: if everyone is still
@@ -628,16 +647,20 @@ layerLoop:
 			// the layer (since the effectiveness of each transaction in the layer depends upon the contents of the
 			// entire layer and transaction ordering). Therefore we have to enter self-healing in this case.
 			// TODO: abstain only for entire layer at a time, not for individual blocks (optimization)
-			// TODO: trigger self-healing in this scenario, after a while
-			if globalOpinionOnBlock == abstain {
+			if !globalOpinionDecided {
 				logger.With().Warning("global opinion on block is abstain, cannot verify layer",
 					blockID,
 					log.String("global_opinion", globalOpinionOnBlock.String()),
 					log.String("vote", localOpinionOnBlock.String()))
-				break layerLoop
 			}
 
-			contextualValidity[blockID] = globalOpinionOnBlock == support
+			// If the layer is old enough, give up running the verifying tortoise and fall back on self-healing
+			if needsHealing {
+				return t.selfHealing(ctx, candidateLayerID)
+			}
+
+			// Otherwise, give up trying to verify layers and keep waiting
+			break layerLoop
 		}
 
 		// Declare the vote vector “verified” up to position k (up to this layer)
@@ -648,10 +671,18 @@ layerLoop:
 				logger.With().Error("error saving contextual validity on block", blk.Field(), log.Err(err))
 			}
 		}
-		t.Verified = candidateLayer
-		pbaseNew = candidateLayer
-		logger.With().Info("verified layer", candidateLayer)
+		t.Verified = candidateLayerID
+		pbaseNew = candidateLayerID
+		logger.With().Info("verified layer", candidateLayerID)
 	}
 
+	return
+}
+
+// Manually count all votes for all layers since the last verified layer. Self-healing does not take into consideration
+// local opinion, it relies solely on global opinion.
+func (t *turtle) selfHealing(ctx context.Context, startLayerID types.LayerID) (pbaseOld, pbaseNew types.LayerID) {
+	logger := t.logger.WithContext(ctx).WithFields(startLayerID)
+	logger.Info("self-healing ftw")
 	return
 }
