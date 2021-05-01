@@ -23,14 +23,6 @@ type blockDataProvider interface {
 	Retrieve(key []byte, v interface{}) (interface{}, error)
 }
 
-//func blockArrayToMap(ar []types.BlockID) (mp map[types.BlockID]struct{}) {
-//	mp = make(map[types.BlockID]struct{})
-//	for _, bid := range ar {
-//		mp[bid] = struct{}{}
-//	}
-//	return
-//}
-
 func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
 	arr := make([]types.BlockID, len(m))
 	i := 0
@@ -260,7 +252,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 			// Calculate the set of exceptions between the base block opinion and latest local opinion
 			exceptionVectorMap, err := t.calculateExceptions(ctx, layerID, block, opinion)
 			if err != nil {
-				logger.With().Debug("error calculating vote exceptions for block",
+				logger.With().Warning("error calculating vote exceptions for block",
 					log.FieldNamed("last_layer", t.Last),
 					layerID,
 					block,
@@ -313,22 +305,20 @@ func (t *turtle) calculateExceptions(
 		return []map[types.BlockID]struct{}{againstDiff, forDiff, neutralDiff}, nil
 	}
 
-	// TODO: maybe we should vote back hdist but drill down check the base blocks
-
 	// Add latest layers input vector results to the diff
 	// Note: a block may only be selected as a candidate base block if it's marked "good", and it may only be marked
 	// "good" if its own base block is marked "good" and all exceptions it contains agree with our local opinion.
-	// And we may only add exceptions in layers after the base block layer, so no need to look back further here.
-	// LANE TODO: Tal says otherwise, fix this
-	for layerID := blockLayerID; layerID <= t.Last; layerID++ {
+	// We only look for and store exceptions within the sliding window set of layers as an optimization, but a block
+	// can contain exceptions from any layer, back to genesis.
+	for layerID := t.Hdist; layerID <= t.Last; layerID++ {
 		logger := logger.WithFields(log.FieldNamed("diff_layer_id", layerID))
 		logger.Debug("checking input vector diffs")
 
 		layerBlockIds, err := t.bdp.LayerBlockIds(layerID)
 		if err != nil {
 			if err != leveldb.ErrClosed {
-				// todo: empty layer? maybe skip verify differently
-				logger.Error("no block ids for layer in database")
+				// this is expected, in cases where, e.g., Hare failed for a layer
+				logger.Warning("no block ids for layer in database")
 			}
 			return nil, err
 		}
