@@ -41,6 +41,7 @@ type DB struct {
 	blockMutex            sync.RWMutex
 	orphanBlocks          map[types.LayerID]map[types.BlockID]struct{}
 	invalidatedLayers     map[types.LayerID]struct{} // layers for which Hare has failed
+	coinflips             map[types.LayerID]bool // weak coinflip results from Hare
 	layerMutex            map[types.LayerID]*layerMutex
 	lhMutex               sync.Mutex
 	InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
@@ -89,6 +90,8 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, err
 		unappliedTxs:       utx,
 		inputVector:        iv,
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
+		invalidatedLayers:  make(map[types.LayerID]struct{}),
+		coinflips:			make(map[types.LayerID]bool),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
 	}
@@ -321,6 +324,20 @@ func (m *DB) SaveLayerInputVector(lyrid types.LayerID, vector []types.BlockID) e
 func (m *DB) InvalidateLayer(ctx context.Context, layerID types.LayerID) {
 	m.WithContext(ctx).With().Info("recording hare invalidated layer in mesh", layerID)
 	m.invalidatedLayers[layerID] = struct{}{}
+}
+
+// RecordCoinflip saves the weak coinflip result to memory for the given layer
+func (m *DB) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {
+	m.WithContext(ctx).With().Info("recording coinflip result for layer in mesh",
+		layerID,
+		log.Bool("coinflip", coinflip))
+	m.coinflips[layerID] = coinflip
+}
+
+// GetCoinflip returns the weak coinflip result for the given layer
+func (m *DB) GetCoinflip(ctx context.Context, layerID types.LayerID) (bool, bool) {
+	coin, exists := m.coinflips[layerID]
+	return coin, exists
 }
 
 func (m *DB) defaultGetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {

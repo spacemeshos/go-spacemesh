@@ -41,6 +41,8 @@ type meshProvider interface {
 	HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID)
 	// InvalidateLayer receives the signal that Hare failed for a layer
 	InvalidateLayer(ctx context.Context, layerID types.LayerID)
+	// RecordCoinflip records the weak coinflip result for a layer
+	RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool)
 }
 
 // checks if the collected output is valid
@@ -304,28 +306,30 @@ func (h *Hare) GetResult(lid types.LayerID) ([]types.BlockID, error) {
 	return blks, nil
 }
 
-// GetWeakCoinForLayer returns the weak coin flip value for the layer.
-// It returns an error if no value has been recorded for the layer.
-// TODO: this is a stub, to be replaced when https://github.com/spacemeshos/go-spacemesh/pull/2393 is merged
-func (h *Hare) GetWeakCoinForLayer(lid types.LayerID) (coinflip bool, err error) {
-	return lid.Bytes()[0] ^ byte(1) == byte(1), nil
-}
-
 // listens to outputs arriving from consensus processes.
 func (h *Hare) outputCollectionLoop(ctx context.Context) {
 	for {
 		select {
 		case out := <-h.outputChan:
+			layerID := types.LayerID(out.ID())
+
+			// collect coinflip, regardless of success
+			// TODO: this is a stub, to be replaced when https://github.com/spacemeshos/go-spacemesh/pull/2393 is merged
+			coin := layerID.Bytes()[0] ^ byte(1) == byte(1)
+			h.WithContext(ctx).With().Info("recording weak coinflip result for layer",
+				layerID,
+				log.Bool("coinflip", coin))
+			h.mesh.RecordCoinflip(ctx, layerID, coin)
+
 			if out.Completed() { // CP completed, collect the output
-				h.WithContext(ctx).With().Info("collecting results for completed hare instance",
-					types.LayerID(out.ID()))
+				h.WithContext(ctx).With().Info("collecting results for completed hare instance", layerID)
 				if err := h.collectOutput(ctx, out); err != nil {
 					h.WithContext(ctx).With().Warning("error collecting output from hare", log.Err(err))
 				}
 			} else {
 				// Notify the mesh that Hare failed
-				h.WithContext(ctx).With().Info("recording hare instance failure", types.LayerID(out.ID()))
-				h.mesh.InvalidateLayer(ctx, types.LayerID(out.ID()))
+				h.WithContext(ctx).With().Info("recording hare instance failure", layerID)
+				h.mesh.InvalidateLayer(ctx, layerID)
 			}
 
 			// either way, unregister from broker

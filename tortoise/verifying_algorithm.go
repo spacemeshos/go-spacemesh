@@ -88,7 +88,7 @@ func (trtl *ThreadSafeVerifyingTortoise) BaseBlock(ctx context.Context) (types.B
 	return block, diffs, err
 }
 
-//HandleIncomingLayer processes all layer block votes
+// HandleIncomingLayer processes all layer block votes
 // returns the old verified layer and new verified layer after taking into account the blocks votes
 func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context, ll *types.Layer) (types.LayerID, types.LayerID) {
 	trtl.mutex.Lock()

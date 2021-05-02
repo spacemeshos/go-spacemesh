@@ -135,7 +135,6 @@ type Service interface {
 type HareService interface {
 	Service
 	GetResult(id types.LayerID) ([]types.BlockID, error)
-	GetWeakCoinForLayer(types.LayerID) (bool, error)
 }
 
 // TickProvider is an interface to a glopbal system clock that releases ticks on each layer
