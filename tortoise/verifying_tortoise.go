@@ -465,12 +465,8 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 
 // HandleIncomingLayer processes all layer block votes
 // returns the old pbase and new pbase after taking into account the blocks votes
-func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) (pbaseOld, pbaseNew types.LayerID) {
+func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) {
 	logger := t.logger.WithContext(ctx).WithFields(newlyr)
-
-	// These are our starting values
-	pbaseOld = t.Verified
-	pbaseNew = t.Verified
 
 	if t.Last < newlyr.Index() {
 		t.Last = newlyr.Index()
@@ -527,15 +523,15 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) (
 	}
 
 	logger.With().Info("starting layer verification",
-		log.FieldNamed("prev_verified", pbaseOld),
+		log.FieldNamed("prev_verified", t.Verified),
 		log.FieldNamed("verification_target", newlyr.Index()))
 
 layerLoop:
 	// attempt to verify each layer from the last verified up to one prior to the newly-arrived layer.
 	// this is the full range of unverified layers that we might possibly be able to verify at this point.
-	// Note: pbaseOld is initialized to the effective genesis layer, so the first candidate layer here necessarily
+	// Note: t.Verified is initialized to the effective genesis layer, so the first candidate layer here necessarily
 	// follows and is post-genesis. There's no need for an additional check here.
-	for candidateLayerID := pbaseOld + 1; candidateLayerID < newlyr.Index(); candidateLayerID++ {
+	for candidateLayerID := t.Verified + 1; candidateLayerID < newlyr.Index(); candidateLayerID++ {
 		logger.With().Info("verifying layer", candidateLayerID)
 
 		layerBlockIds, err := t.bdp.LayerBlockIds(candidateLayerID)
@@ -573,7 +569,7 @@ layerLoop:
 		// exceeds the confidence threshold, and agrees with local opinion.
 		for blockID, localOpinionOnBlock := range localLayerOpinionVec {
 			// count votes for the hDist layers following the candidateLayerID, up to the most recently verified layer
-			lastVotingLayer := pbaseOld
+			lastVotingLayer := t.Verified
 			if candidateLayerID+t.Hdist < lastVotingLayer {
 				lastVotingLayer = candidateLayerID + t.Hdist
 			}
@@ -589,7 +585,7 @@ layerLoop:
 			})
 
 			// check that the total weight exceeds the confidence threshold
-			globalOpinionOnBlock := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(candidateLayerID-pbaseOld))
+			globalOpinionOnBlock := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(candidateLayerID-t.Verified))
 			logger.With().Debug("verifying tortoise calculated global opinion on block",
 				log.FieldNamed("block_voted_on", blockID),
 				candidateLayerID,
@@ -614,7 +610,7 @@ layerLoop:
 			// trigger self-healing.
 			// TODO: allow verifying tortoise to continue to verify later layers, even after failing to verify a
 			// layer. See https://github.com/spacemeshos/go-spacemesh/issues/2403.
-			needsHealing := candidateLayerID-pbaseOld > t.Zdist+t.ConfidenceParam
+			needsHealing := candidateLayerID-t.Verified > t.Zdist+t.ConfidenceParam
 
 			// If, for any block in this layer, the global opinion (summed block votes) disagrees with our vote (the
 			// input vector), or if the global opinion is abstain, then we do not verify this layer. This could be the
@@ -645,7 +641,8 @@ layerLoop:
 
 			// If the layer is old enough, give up running the verifying tortoise and fall back on self-healing
 			if needsHealing {
-				return t.selfHealing(ctx, newlyr.Index())
+				t.selfHealing(ctx, newlyr.Index())
+				return
 			}
 
 			// Otherwise, give up trying to verify layers and keep waiting
@@ -661,7 +658,6 @@ layerLoop:
 			}
 		}
 		t.Verified = candidateLayerID
-		pbaseNew = candidateLayerID
 		logger.With().Info("verifying tortoise verified layer", candidateLayerID)
 	}
 
@@ -707,10 +703,10 @@ func (t *turtle) sumVotesForBlock(
 // Manually count all votes for all layers since the last verified layer, up to the newly-arrived layer (there's no
 // point in going further since we have no new information about any newer layers). Self-healing does not take into
 // consideration local opinion, it relies solely on global opinion.
-func (t *turtle) selfHealing(ctx context.Context, endLayerID types.LayerID) (pbaseOld, pbaseNew types.LayerID) {
+func (t *turtle) selfHealing(ctx context.Context, endLayerID types.LayerID) {
 	// These are our starting values
-	pbaseOld = t.Verified
-	pbaseNew = t.Verified
+	pbaseOld := t.Verified
+	pbaseNew := t.Verified
 
 	// TODO: optimize this algorithm using, e.g., a triangular matrix rather than nested loops
 	for candidateLayerID := pbaseOld; candidateLayerID < endLayerID; candidateLayerID++ {
@@ -739,7 +735,7 @@ func (t *turtle) selfHealing(ctx context.Context, endLayerID types.LayerID) (pba
 			sum := t.sumVotesForBlock(ctx, blockID, candidateLayerID+1, t.Last, func(id types.BlockID) bool { return true })
 
 			// check that the total weight exceeds the confidence threshold
-			globalOpinionOnBlock := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(candidateLayerID-pbaseOld))
+			globalOpinionOnBlock := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(candidateLayerID-t.Verified))
 			logger.With().Debug("self-healing calculated global opinion on candidate block",
 				log.FieldNamed("global_opinion", globalOpinionOnBlock),
 				sum)
