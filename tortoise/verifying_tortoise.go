@@ -17,6 +17,7 @@ type blockDataProvider interface {
 
 	GetLayerInputVector(types.LayerID) ([]types.BlockID, error)
 	SaveLayerInputVector(types.LayerID, []types.BlockID) error
+	GetCoinflip(context.Context, types.LayerID) (bool, bool)
 
 	SaveContextualValidity(types.BlockID, bool) error
 
@@ -202,7 +203,7 @@ func (t *turtle) checkBlockAndGetInputVector(
 			logger.With().Debug("not adding block to good blocks because its vote differs from input vector",
 				log.FieldNamed("older_block", exceptionBlock.ID()),
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
-				log.String("input_vote", v.String()),
+				log.FieldNamed("input_vote", v),
 				log.String("block_vote", className))
 			return false
 		}
@@ -592,8 +593,8 @@ layerLoop:
 			logger.With().Debug("verifying tortoise calculated global opinion on block",
 				log.FieldNamed("block_voted_on", blockID),
 				candidateLayerID,
-				log.String("global_opinion", globalOpinionOnBlock.String()),
-				log.String("sum", fmt.Sprintf("[%v, %v]", sum[0], sum[1])))
+				log.FieldNamed("global_opinion", globalOpinionOnBlock),
+				sum)
 
 			// At this point, we have all of the data we need to make a decision. There are three possible outcomes:
 			// 1. verify the layer (if local and global consensus match, and global consensus is decided)
@@ -622,8 +623,8 @@ layerLoop:
 			if !consensusMatches {
 				logger.With().Warning("global opinion on block differs from our vote, cannot verify layer",
 					blockID,
-					log.String("global_opinion", globalOpinionOnBlock.String()),
-					log.String("vote", localOpinionOnBlock.String()))
+					log.FieldNamed("global_opinion", globalOpinionOnBlock),
+					log.FieldNamed("vote", localOpinionOnBlock))
 
 			}
 
@@ -638,8 +639,8 @@ layerLoop:
 			if !globalOpinionDecided {
 				logger.With().Warning("global opinion on block is abstain, cannot verify layer",
 					blockID,
-					log.String("global_opinion", globalOpinionOnBlock.String()),
-					log.String("vote", localOpinionOnBlock.String()))
+					log.FieldNamed("global_opinion", globalOpinionOnBlock),
+					log.FieldNamed("vote", localOpinionOnBlock))
 			}
 
 			// If the layer is old enough, give up running the verifying tortoise and fall back on self-healing
@@ -656,7 +657,7 @@ layerLoop:
 		for blk, v := range contextualValidity {
 			if err := t.bdp.SaveContextualValidity(blk, v); err != nil {
 				// panic?
-				logger.With().Error("error saving contextual validity on block", blk.Field(), log.Err(err))
+				logger.With().Error("error saving contextual validity on block", blk, log.Err(err))
 			}
 		}
 		t.Verified = candidateLayerID
@@ -691,7 +692,7 @@ func (t *turtle) sumVotesForBlock(
 			// no opinion (on a block in an older layer) counts as an explicit vote against the block
 			if opinionVote, exists := votingBlockOpinion.BlockOpinions[blockID]; exists {
 				logger.With().Debug("adding block opinion to vote sum",
-					log.String("vote", opinionVote.String()),
+					log.FieldNamed("vote", opinionVote),
 					sum)
 				sum = sum.Add(opinionVote.Multiply(t.BlockWeight(votingBlockID, blockID)))
 			} else {
@@ -707,62 +708,76 @@ func (t *turtle) sumVotesForBlock(
 // point in going further since we have no new information about any newer layers). Self-healing does not take into
 // consideration local opinion, it relies solely on global opinion.
 func (t *turtle) selfHealing(ctx context.Context, endLayerID types.LayerID) (pbaseOld, pbaseNew types.LayerID) {
-	logger := t.logger.WithContext(ctx).WithFields(endLayerID)
-	logger.Info("self-healing ftw")
-
 	// These are our starting values
 	pbaseOld = t.Verified
 	pbaseNew = t.Verified
 
 	// TODO: optimize this algorithm using, e.g., a triangular matrix rather than nested loops
 	for candidateLayerID := pbaseOld; candidateLayerID < endLayerID; candidateLayerID++ {
+		logger := t.logger.WithContext(ctx).WithFields(
+			log.FieldNamed("old_verified_layer", pbaseOld),
+			log.FieldNamed("new_verified_layer", pbaseNew),
+			log.FieldNamed("highest_candidate_layer", endLayerID),
+			log.FieldNamed("candidate_layer", candidateLayerID))
+
 		// Calculate the global opinion on all blocks in the layer
-		logger.With().Info("self-healing verifying layer", candidateLayerID)
+		logger.Info("self-healing verifying candidate layer")
 
 		layerBlockIds, err := t.bdp.LayerBlockIds(candidateLayerID)
 		if err != nil {
 			// TODO: consider making this a panic, as it means state cannot advance at all
-			logger.With().Error("inconsistent state: can't find layer in database, skipping verification",
-				candidateLayerID)
+			logger.Error("inconsistent state: can't find layer in database, skipping verification")
 			continue
 		}
 
 		// This map keeps track of the contextual validity of all blocks in this layer
 		contextualValidity := make(map[types.BlockID]bool, len(layerBlockIds))
 		for _, blockID := range layerBlockIds {
+			logger := logger.WithFields(log.FieldNamed("candidate_block_id", blockID))
+
 			// count all votes for or against this block by all blocks in later layers: don't filter out any
 			sum := t.sumVotesForBlock(ctx, blockID, candidateLayerID+1, t.Last, func(id types.BlockID) bool { return true })
 
 			// check that the total weight exceeds the confidence threshold
 			globalOpinionOnBlock := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(candidateLayerID-pbaseOld))
-			logger.With().Debug("self-healing calculated global opinion on block",
-				log.FieldNamed("block_voted_on", blockID),
-				candidateLayerID,
-				log.String("global_opinion", globalOpinionOnBlock.String()),
+			logger.With().Debug("self-healing calculated global opinion on candidate block",
+				log.FieldNamed("global_opinion", globalOpinionOnBlock),
 				sum)
 
 			// fall back on weak coin: if the global opinion is abstain for a single block in a layer, we instead use
 			// the weak coin to decide on the validity of all blocks in the layer
 			if globalOpinionOnBlock == abstain {
+				layerCoin, exists := t.bdp.GetCoinflip(ctx, candidateLayerID)
+				if !exists {
+					logger.Error("no weak coin value for candidate layer, self-healing cannot proceed")
+					return
+				}
 
+				// short-circuit all votes for all blocks in this layer to the weak coin value
+				logger.With().Info("re-scoring all blocks in candidate layer using weak coin",
+					log.Bool("coinflip", layerCoin))
+				for _, blockID := range layerBlockIds {
+					contextualValidity[blockID] = layerCoin
+				}
+				break
 			}
 
 			contextualValidity[blockID] = globalOpinionOnBlock == support
 		}
 
-		// TODO: do we overwrite the layer input vector here?
+		// TODO: do we overwrite the layer input vector in the database here?
 
 		// TODO: reprocess state if we changed the validity of any blocks
 
 		// record the contextual validity for all blocks in this layer
 		for blk, v := range contextualValidity {
 			if err := t.bdp.SaveContextualValidity(blk, v); err != nil {
-				logger.With().Error("error saving contextual validity on block", blk.Field(), log.Err(err))
+				logger.With().Error("error saving contextual validity on block", blk, log.Err(err))
 			}
 		}
 		t.Verified = candidateLayerID
 		pbaseNew = candidateLayerID
-		logger.With().Info("self healing verified layer", candidateLayerID)
+		logger.With().Info("self healing verified candidate layer")
 	}
 
 	return
