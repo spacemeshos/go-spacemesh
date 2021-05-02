@@ -167,7 +167,6 @@ type BlockHeader struct {
 	ATXID            ATXID
 	EligibilityProof BlockEligibilityProof
 	Data             []byte
-	Coin             bool
 
 	BaseBlock BlockID
 

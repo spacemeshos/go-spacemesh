@@ -135,6 +135,7 @@ type Service interface {
 type HareService interface {
 	Service
 	GetResult(id types.LayerID) ([]types.BlockID, error)
+	GetWeakCoinForLayer(types.LayerID) (bool, error)
 }
 
 // TickProvider is an interface to a glopbal system clock that releases ticks on each layer
@@ -371,14 +372,6 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 	}
 }
 
-type weakCoinStub struct {
-}
-
-// GetResult returns the weak coin toss result
-func (weakCoinStub) GetResult() bool {
-	return true
-}
-
 // Wrap the top-level logger to add context info and set the level for a
 // specific module.
 func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
@@ -492,8 +485,6 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		return err
 	}
 	app.closers = append(app.closers, db)
-
-	coinToss := weakCoinStub{}
 
 	atxdbstore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "atx"), 0, 0, app.addLogger(AtxDbStoreLogger, lg))
 	if err != nil {
@@ -622,7 +613,18 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	}
 
 	database.SwitchCreationContext(dbStorepath, "") // currently only blockbuilder uses this mechanism
-	blockProducer := miner.NewBlockBuilder(minerCfg, sgn, swarm, clock.Subscribe(), coinToss, msh, trtl, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
+	blockProducer := miner.NewBlockBuilder(
+		minerCfg,
+		sgn,
+		swarm,
+		clock.Subscribe(),
+		msh,
+		trtl,
+		blockOracle,
+		syncer,
+		stateAndMeshProjector,
+		app.txPool,
+		app.addLogger(BlockBuilderLogger, lg))
 
 	bCfg := blocks.Config{
 		Depth:       app.Config.Hdist,
@@ -692,7 +694,19 @@ func (app *SpacemeshApp) checkTimeDrifts() {
 }
 
 // HareFactory returns a hare consensus algorithm according to the parameters in app.Config.Hare.SuperHare
-func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm service.Service, sgn hare.Signer, nodeID types.NodeID, syncer *sync.Syncer, msh *mesh.Mesh, hOracle hare.Rolacle, idStore *activation.IdentityStore, clock TickProvider, lg log.Log) HareService {
+func (app *SpacemeshApp) HareFactory(
+	ctx context.Context,
+	mdb *mesh.DB,
+	swarm service.Service,
+	sgn hare.Signer,
+	nodeID types.NodeID,
+	syncer *sync.Syncer,
+	msh *mesh.Mesh,
+	hOracle hare.Rolacle,
+	idStore *activation.IdentityStore,
+	clock TickProvider,
+	lg log.Log,
+) HareService {
 	if app.Config.HARE.SuperHare {
 		hr := turbohare.New(ctx, msh)
 		mdb.InputVectorBackupFunc = hr.GetResult
@@ -715,7 +729,20 @@ func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm se
 
 		return true
 	}
-	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, validationFunc, syncer.IsHareSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, hOracle, clock.Subscribe(), app.addLogger(HareLogger, lg))
+	ha := hare.New(
+		app.Config.HARE,
+		swarm,
+		sgn,
+		nodeID,
+		validationFunc,
+		syncer.IsHareSynced,
+		msh,
+		hOracle,
+		uint16(app.Config.LayersPerEpoch),
+		idStore,
+		hOracle,
+		clock.Subscribe(),
+		app.addLogger(HareLogger, lg))
 	return ha
 }
 

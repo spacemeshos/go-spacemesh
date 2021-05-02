@@ -304,6 +304,13 @@ func (h *Hare) GetResult(lid types.LayerID) ([]types.BlockID, error) {
 	return blks, nil
 }
 
+// GetWeakCoinForLayer returns the weak coin flip value for the layer.
+// It returns an error if no value has been recorded for the layer.
+// TODO: this is a stub, to be replaced when https://github.com/spacemeshos/go-spacemesh/pull/2393 is merged
+func (h *Hare) GetWeakCoinForLayer(lid types.LayerID) (coinflip bool, err error) {
+	return lid.Bytes()[0] ^ byte(1) == byte(1), nil
+}
+
 // listens to outputs arriving from consensus processes.
 func (h *Hare) outputCollectionLoop(ctx context.Context) {
 	for {
