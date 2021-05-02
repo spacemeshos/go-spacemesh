@@ -44,7 +44,7 @@ type mockValueProvider struct {
 	err error
 }
 
-func (mvp *mockValueProvider) Value(types.LayerID) (uint32, error) {
+func (mvp *mockValueProvider) Value(context.Context, types.EpochID) (uint32, error) {
 	return mvp.val, mvp.err
 }
 
@@ -103,6 +103,7 @@ func (mc *mockCacher) Get(key interface{}) (value interface{}, ok bool) {
 
 func TestOracle_BuildVRFMessage(t *testing.T) {
 	r := require.New(t)
+	types.SetLayersPerEpoch(defLayersPerEpoch)
 	o := Oracle{vrfMsgCache: newMockCacher(), Log: log.NewDefault(t.Name())}
 	o.beacon = &mockValueProvider{1, errFoo}
 	_, err := o.buildVRFMessage(context.TODO(), types.LayerID(1), 1)
