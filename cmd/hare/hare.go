@@ -59,6 +59,9 @@ func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerI
 func (mbp *mockBlockProvider) InvalidateLayer(context.Context, types.LayerID) {
 }
 
+func (mbp *mockBlockProvider) RecordCoinflip(context.Context, types.LayerID, bool) {
+}
+
 func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
 	return buildSet(), nil
 }

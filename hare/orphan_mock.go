@@ -15,6 +15,9 @@ func (op *orphanMock) HandleValidatedLayer(context.Context, types.LayerID, []typ
 func (op *orphanMock) InvalidateLayer(context.Context, types.LayerID) {
 }
 
+func (op *orphanMock) RecordCoinflip(context.Context, types.LayerID, bool) {
+}
+
 func (op *orphanMock) GetOrphanBlocks() []types.BlockID {
 	if op.f != nil {
 		return op.f()
