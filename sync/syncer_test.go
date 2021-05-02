@@ -1333,9 +1333,6 @@ func (m *mockLayerValidator) HandleLateBlock(bl *types.Block) {
 func (m *mockLayerValidator) ValidateLayer(lyr *types.Layer) {
 	log.Info("mock Validate layer %d", lyr.Index())
 	m.countValidate++
-	if m.validated != nil {
-		m.validated <- struct{}{}
-	}
 	m.processedLayer = lyr.Index()
 	if m.validatedLayers == nil {
 		m.validatedLayers = make(map[types.LayerID]struct{})
@@ -1343,6 +1340,9 @@ func (m *mockLayerValidator) ValidateLayer(lyr *types.Layer) {
 
 	m.validatedLayers[lyr.Index()] = struct{}{}
 	log.Info("Validated count %d", m.countValidate)
+	if m.validated != nil {
+		m.validated <- struct{}{}
+	}
 }
 
 func TestSyncer_Synchronise(t *testing.T) {
