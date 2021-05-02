@@ -315,7 +315,7 @@ func (s *Syncer) Start(ctx context.Context) {
 			logger.Warning("sync started after closed")
 			return
 		}
-		logger.Info("start syncer")
+		logger.Debug("start syncer")
 		go s.run(log.WithNewSessionID(ctx))
 		s.forceSync <- true
 		return
