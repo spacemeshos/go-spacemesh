@@ -76,16 +76,14 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 	} else {
 		cachedEpochDescription = log.FieldNamed("cached_epoch_id", bo.proofsEpoch.Field())
 	}
-	bo.log.With().Info("asked for eligibility",
-		log.FieldNamed("epoch_id", epochNumber),
-		cachedEpochDescription)
+	bo.log.With().Info("asked for block eligibility", layerID, epochNumber, cachedEpochDescription)
 	if epochNumber.IsGenesis() {
-		bo.log.Info("asked for eligibility for genesis epoch, cannot create blocks here")
+		bo.log.With().Error("asked for block eligibility in genesis epoch, cannot create blocks here",
+			layerID, epochNumber, cachedEpochDescription)
 		return *types.EmptyATXID, nil, nil, nil
 	}
 	var proofs []types.BlockEligibilityProof
 	bo.eligibilityMutex.RLock()
-	bo.log.With().Info("block eligibility requested", layerID, epochNumber, bo.proofsEpoch)
 	if bo.proofsEpoch != epochNumber {
 		bo.eligibilityMutex.RUnlock()
 		newProofs, err := bo.calcEligibilityProofs(epochNumber)
@@ -98,7 +96,7 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 		proofs = bo.eligibilityProofs[layerID]
 		bo.eligibilityMutex.RUnlock()
 	}
-	bo.log.With().Info("got eligibility for blocks in layer",
+	bo.log.With().Info("got eligibility for blocks",
 		bo.nodeID, layerID, layerID.GetEpoch(),
 		log.Int("num_blocks", len(proofs)))
 
