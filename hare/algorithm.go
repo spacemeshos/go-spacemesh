@@ -326,7 +326,11 @@ PreRound:
 		types.LayerID(proc.instanceID),
 		log.Int("set_size", proc.s.Size()))
 	if proc.s.Size() == 0 {
-		logger.Event().Error("preround ended with empty set", types.LayerID(proc.instanceID))
+		logger.Event().Error("preround ended with empty set",
+			types.LayerID(proc.instanceID),
+			log.String("tracked_values", proc.preRoundTracker.tracker.String()),
+			log.Uint32("threshold", proc.preRoundTracker.threshold),
+		)
 	} else {
 		logger.With().Info("preround ended",
 			log.Int("set_size", proc.s.Size()),

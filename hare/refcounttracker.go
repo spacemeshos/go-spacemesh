@@ -1,5 +1,10 @@
 package hare
 
+import (
+	"bytes"
+	"fmt"
+)
+
 // RefCountTracker tracks the number of references of any object id.
 type RefCountTracker struct {
 	table map[interface{}]uint32
@@ -18,4 +23,15 @@ func (tracker *RefCountTracker) CountStatus(id interface{}) uint32 {
 // Track increases the count for the given object id.
 func (tracker *RefCountTracker) Track(id interface{}, count uint32) {
 	tracker.table[id] += count
+}
+
+func (tracker *RefCountTracker) String() string {
+	if len(tracker.table) == 0 {
+		return "(no tracked values)"
+	}
+	b := new(bytes.Buffer)
+	for id, count := range tracker.table {
+		b.WriteString(fmt.Sprintf("%v: %d, ", id, count))
+	}
+	return b.String()[:b.Len()-2]
 }
