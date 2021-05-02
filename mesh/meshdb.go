@@ -41,7 +41,7 @@ type DB struct {
 	blockMutex            sync.RWMutex
 	orphanBlocks          map[types.LayerID]map[types.BlockID]struct{}
 	invalidatedLayers     map[types.LayerID]struct{} // layers for which Hare has failed
-	coinflips             map[types.LayerID]bool // weak coinflip results from Hare
+	coinflips             map[types.LayerID]bool     // weak coinflip results from Hare
 	layerMutex            map[types.LayerID]*layerMutex
 	lhMutex               sync.Mutex
 	InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
@@ -91,7 +91,7 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, err
 		inputVector:        iv,
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		invalidatedLayers:  make(map[types.LayerID]struct{}),
-		coinflips:			make(map[types.LayerID]bool),
+		coinflips:          make(map[types.LayerID]bool),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
 	}

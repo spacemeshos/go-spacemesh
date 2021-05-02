@@ -315,7 +315,7 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 
 			// collect coinflip, regardless of success
 			// TODO: this is a stub, to be replaced when https://github.com/spacemeshos/go-spacemesh/pull/2393 is merged
-			coin := layerID.Bytes()[0] ^ byte(1) == byte(1)
+			coin := layerID.Bytes()[0]^byte(1) == byte(1)
 			h.WithContext(ctx).With().Info("recording weak coinflip result for layer",
 				layerID,
 				log.Bool("coinflip", coin))

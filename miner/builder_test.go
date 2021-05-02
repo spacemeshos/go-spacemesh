@@ -121,10 +121,10 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 }
 
 var (
-	block1  = types.NewExistingBlock(0, []byte(rand.String(8)), nil)
-	block2  = types.NewExistingBlock(0, []byte(rand.String(8)), nil)
-	block3  = types.NewExistingBlock(0, []byte(rand.String(8)), nil)
-	block4  = types.NewExistingBlock(0, []byte(rand.String(8)), nil)
+	block1 = types.NewExistingBlock(0, []byte(rand.String(8)), nil)
+	block2 = types.NewExistingBlock(0, []byte(rand.String(8)), nil)
+	block3 = types.NewExistingBlock(0, []byte(rand.String(8)), nil)
+	block4 = types.NewExistingBlock(0, []byte(rand.String(8)), nil)
 
 	coinbase = types.HexToAddress("aaaa")
 

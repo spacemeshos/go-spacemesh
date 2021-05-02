@@ -578,7 +578,7 @@ layerLoop:
 			}
 
 			// count the votes for the input vote vector by summing the voting weight of good blocks
-			sum := t.sumVotesForBlock(ctx, blockID, candidateLayerID + 1, lastVotingLayer, func(votingBlockID types.BlockID)bool {
+			sum := t.sumVotesForBlock(ctx, blockID, candidateLayerID+1, lastVotingLayer, func(votingBlockID types.BlockID) bool {
 				if _, isgood := t.GoodBlocksIndex[votingBlockID]; !isgood {
 					logger.With().Debug("not counting vote of block not marked good",
 						log.FieldNamed("voting_block", votingBlockID))
@@ -613,7 +613,7 @@ layerLoop:
 			// trigger self-healing.
 			// TODO: allow verifying tortoise to continue to verify later layers, even after failing to verify a
 			// layer. See https://github.com/spacemeshos/go-spacemesh/issues/2403.
-			needsHealing := candidateLayerID - pbaseOld > t.Zdist + t.ConfidenceParam
+			needsHealing := candidateLayerID-pbaseOld > t.Zdist+t.ConfidenceParam
 
 			// If, for any block in this layer, the global opinion (summed block votes) disagrees with our vote (the
 			// input vector), or if the global opinion is abstain, then we do not verify this layer. This could be the
@@ -731,7 +731,7 @@ func (t *turtle) selfHealing(ctx context.Context, endLayerID types.LayerID) (pba
 		contextualValidity := make(map[types.BlockID]bool, len(layerBlockIds))
 		for _, blockID := range layerBlockIds {
 			// count all votes for or against this block by all blocks in later layers: don't filter out any
-			sum := t.sumVotesForBlock(ctx, blockID, candidateLayerID + 1, t.Last, func(id types.BlockID)bool { return true })
+			sum := t.sumVotesForBlock(ctx, blockID, candidateLayerID+1, t.Last, func(id types.BlockID) bool { return true })
 
 			// check that the total weight exceeds the confidence threshold
 			globalOpinionOnBlock := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(candidateLayerID-pbaseOld))
