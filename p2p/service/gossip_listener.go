@@ -84,7 +84,7 @@ func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHan
 		case data := <-gossipChannel:
 			l.WithContext(ctx).With().Info("got gossip message, forwarding to data handler",
 				log.String("protocol", channel),
-				log.Int("protocol_gossip_queue_len", len(gossipChannel)))
+				log.Int("queue_length", len(gossipChannel)))
 			if !l.syncer.ListenToGossip() {
 				// not accepting data
 				continue
