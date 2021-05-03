@@ -631,7 +631,7 @@ func (msh *Mesh) AddBlockWithTxs(blk *types.Block) error {
 
 	err := msh.StoreTransactionsFromPool(blk)
 	if err != nil {
-		msh.Log.Error("not all txs were processed %v", err)
+		msh.With().Error("not all txs were processed", log.Err(err))
 	}
 
 	// Store block (delete if storing ATXs fails)

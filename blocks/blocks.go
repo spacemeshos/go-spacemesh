@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"time"
 )
 
 // NewBlockProtocol is the protocol indicator for gossip blocks
@@ -113,6 +114,7 @@ func (bh *BlockHandler) HandleBlock(ctx context.Context, data service.GossipMess
 func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, sync service.Fetcher) error {
 	logger := bh.WithContext(ctx)
 	logger.Info("handling data for new block")
+	start := time.Now()
 
 	var blk types.Block
 	if err := types.BytesToInterface(data, &blk); err != nil {
@@ -148,6 +150,8 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, sync s
 			log.FieldNamed("miner_id", blk.MinerID()))
 		bh.mesh.HandleLateBlock(&blk)
 	}
+
+	logger.With().Info("time to process block", log.Duration("duration", time.Since(start)))
 	return nil
 }
 

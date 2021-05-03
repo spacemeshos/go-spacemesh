@@ -158,11 +158,11 @@ func (p *MessageServer) removeFromPending(reqID uint64) {
 		next = e.Next()
 		if reqID == e.Value.(Item).id {
 			p.pendingQueue.Remove(e)
-			p.With().Debug("removed request", log.Uint64("req_id", reqID))
+			p.With().Debug("removed request", log.Uint64("p2p_request_id", reqID))
 			break
 		}
 	}
-	p.With().Debug("delete request result handler", log.Uint64("req_id", reqID))
+	p.With().Debug("delete request result handler", log.Uint64("p2p_request_id", reqID))
 	delete(p.resHandlers, reqID)
 	p.pendMutex.Unlock()
 }
@@ -183,7 +183,7 @@ func (p *MessageServer) handleRequestMessage(ctx context.Context, msg Message, d
 	foo, okFoo := p.msgRequestHandlers[MessageType(data.MsgType)]
 	if !okFoo {
 		logger.With().Error("handler missing for request",
-			log.Uint64("req_id", data.ReqID),
+			log.Uint64("p2p_request_id", data.ReqID),
 			log.String("protocol", p.name),
 			log.Uint32("p2p_msg_type", data.MsgType))
 		return
@@ -201,7 +201,7 @@ func (p *MessageServer) handleResponseMessage(ctx context.Context, headers *serv
 	logger := p.WithContext(ctx)
 
 	// get and remove from pendingMap
-	logger.With().Debug("handleResponseMessage", log.Uint64("req_id", headers.ReqID))
+	logger.With().Debug("handleResponseMessage", log.Uint64("p2p_request_id", headers.ReqID))
 	p.pendMutex.RLock()
 	foo, okFoo := p.resHandlers[headers.ReqID]
 	p.pendMutex.RUnlock()
@@ -209,7 +209,7 @@ func (p *MessageServer) handleResponseMessage(ctx context.Context, headers *serv
 	if okFoo {
 		foo.okCallback(headers.Payload)
 	} else {
-		logger.With().Error("can't find handler", log.Uint64("req_id", headers.ReqID))
+		logger.With().Error("can't find handler", log.Uint64("p2p_request_id", headers.ReqID))
 	}
 	logger.Debug("handleResponseMessage close")
 }
@@ -256,6 +256,7 @@ func (p *MessageServer) SendRequest(ctx context.Context, msgType MessageType, pa
 	return nil
 }
 
+// TODO: make these longer, and random, to make it easier to find them in the logs
 func (p *MessageServer) newReqID() uint64 {
 	return atomic.AddUint64(&p.ReqID, 1)
 }
