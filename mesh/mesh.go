@@ -657,7 +657,7 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 // blk - the block to add
 // txs - block txs that we dont have in our tx database yet
 func (msh *Mesh) AddBlockWithTxs(blk *types.Block) error {
-	msh.With().Debug("adding block", blk.Fields()...)
+	msh.With().Debug("adding block to mesh", blk.Fields()...)
 
 	err := msh.StoreTransactionsFromPool(blk)
 	if err != nil {
