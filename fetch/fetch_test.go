@@ -58,6 +58,9 @@ type mockNet struct {
 	AckChannel  chan struct{}
 }
 
+func (m mockNet) Close() {
+}
+
 func (m mockNet) RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(context.Context, []byte) []byte) {
 }
 
@@ -207,7 +210,7 @@ func TestFetch_requestHashFromPeers_AggregateAndValidate(t *testing.T) {
 	// set response mock
 	res := responseMessage{
 		Hash: h1,
-		data: []byte("a"),
+		Data: []byte("a"),
 	}
 	net.Responses[h1] = res
 
@@ -260,7 +263,7 @@ func TestFetch_GetHash_failNetwork(t *testing.T) {
 	// set response mock
 	bts := responseMessage{
 		Hash: h1,
-		data: []byte("a"),
+		Data: []byte("a"),
 	}
 	net.Responses[h1] = bts
 
@@ -296,15 +299,15 @@ func TestFetch_requestHashFromPeers_BatchRequestMax(t *testing.T) {
 	// set response mock
 	bts := responseMessage{
 		Hash: h1,
-		data: []byte("a"),
+		Data: []byte("a"),
 	}
 	bts2 := responseMessage{
 		Hash: h2,
-		data: []byte("a"),
+		Data: []byte("a"),
 	}
 	bts3 := responseMessage{
 		Hash: h3,
-		data: []byte("a"),
+		Data: []byte("a"),
 	}
 	net.Responses[h1] = bts
 	net.Responses[h2] = bts2

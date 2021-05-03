@@ -59,7 +59,7 @@ func (p *Peers) GetPeers() []Peer {
 	peers := p.snapshot.Load().([]Peer)
 	cpy := make([]Peer, len(peers))
 	copy(cpy, peers) // if we dont copy we will shuffle orig array
-	p.With().Info("now connected", log.Int("n_peers", len(cpy)))
+	p.With().Debug("now connected", log.Int("n_peers", len(cpy)))
 	p.rand.Shuffle(len(cpy), func(i, j int) { cpy[i], cpy[j] = cpy[j], cpy[i] }) // shuffle peers order
 	return cpy
 }
