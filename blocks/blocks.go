@@ -80,14 +80,16 @@ func (bh *BlockHandler) HandleBlock(ctx context.Context, data service.GossipMess
 
 // HandleBlockData handles blocks from gossip and sync
 func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, sync service.Fetcher) error {
+	logger := bh.WithContext(ctx)
+	logger.Info("handling data for new block")
+
 	var blk types.Block
 	if err := types.BytesToInterface(data, &blk); err != nil {
-		bh.WithContext(ctx).With().Error("received invalid block", log.Err(err))
+		logger.With().Error("received invalid block", log.Err(err))
 	}
 
 	// set the block id when received
 	blk.Initialize()
-	logger := bh.WithContext(ctx)
 	logger.With().Info("got new block", blk.Fields()...)
 	logger = logger.WithFields(blk.ID(), blk.Layer())
 
