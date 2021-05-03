@@ -48,7 +48,7 @@ func NewClock(c Clock, tickInterval time.Duration, genesisTime time.Time, logger
 }
 
 func (t *TimeClock) startClock() {
-	t.log.Info("starting global clock now=%v genesis=%v", t.clock.Now(), t.startEpoch)
+	t.log.Info("starting global clock now=%v genesis=%v %p", t.clock.Now(), t.startEpoch, t)
 
 	for {
 		currLayer := t.Ticker.TimeToLayer(t.clock.Now())    // get current layer
@@ -68,6 +68,7 @@ func (t *TimeClock) startClock() {
 			}
 		case <-t.stop:
 			tmr.Stop()
+			t.log.Info("stopping global clock %p", t)
 			return
 		}
 	}

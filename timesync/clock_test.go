@@ -54,6 +54,7 @@ func TestClock_TickFutureGenesis(t *testing.T) {
 	assert.Equal(t, types.LayerID(0), ticker.lastTickedLayer) // check assumption that we are on genesis = 0
 	sub := ticker.Subscribe()
 	ticker.StartNotifying()
+	defer ticker.Close()
 	x := <-sub
 	assert.Equal(t, types.LayerID(1), x)
 	x = <-sub
@@ -74,6 +75,7 @@ func TestClock_TickPastGenesis(t *testing.T) {
 	*/
 	sub := ticker.Subscribe()
 	ticker.StartNotifying()
+	defer ticker.Close()
 	x := <-sub
 	duration := time.Since(start)
 	assert.Equal(t, types.LayerID(5), x)
@@ -85,6 +87,7 @@ func TestClock_NewClock(t *testing.T) {
 	r := require.New(t)
 	tmr := &RealClock{}
 	ticker := NewClock(tmr, 100*time.Millisecond, tmr.Now().Add(-190*time.Millisecond), log.NewDefault(t.Name()))
+	defer ticker.Close()
 	r.Equal(types.LayerID(2), ticker.lastTickedLayer)
 }
 
