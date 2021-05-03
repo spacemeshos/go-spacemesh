@@ -515,7 +515,7 @@ func addBlockWithTxs(r *require.Assertions, msh *Mesh, id types.LayerID, valid b
 	err := msh.SaveContextualValidity(blk.ID(), valid)
 	r.NoError(err)
 
-	err = msh.AddBlockWithTxs(blk)
+	err = msh.AddBlockWithTxs(context.TODO(), blk)
 	r.NoError(err)
 	return blk
 }
@@ -540,7 +540,7 @@ func TestMesh_AddBlockWithTxs(t *testing.T) {
 
 	blk := types.NewExistingBlock(1, []byte("data"), nil)
 
-	err := mesh.AddBlockWithTxs(blk)
+	err := mesh.AddBlockWithTxs(context.TODO(), blk)
 	//r.EqualError(err, "failed to process ATXs: 💥")
 	_, err = meshDB.blocks.Get(blk.ID().AsHash32().Bytes())
 	r.NoError(err)
