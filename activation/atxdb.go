@@ -170,20 +170,19 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 		epoch,
 		log.FieldNamed("atx_node_id", atx.NodeID),
 		atx.PubLayerID)
-	err := db.ContextuallyValidateAtx(atx.ActivationTxHeader)
-	if err != nil {
-		db.log.With().Error("atx failed contextual validation", atx.ID(), log.Err(err))
+	if err := db.ContextuallyValidateAtx(atx.ActivationTxHeader); err != nil {
+		db.log.With().Error("atx failed contextual validation",
+			atx.ID(),
+			log.FieldNamed("atx_node_id", atx.NodeID),
+			log.Err(err))
 		// TODO: Blacklist this miner
 	} else {
 		db.log.With().Info("atx is valid", atx.ID())
 	}
-	err = db.StoreAtx(epoch, atx)
-	if err != nil {
+	if err := db.StoreAtx(epoch, atx); err != nil {
 		return fmt.Errorf("cannot store atx %s: %v", atx.ShortString(), err)
 	}
-
-	err = db.StoreNodeIdentity(atx.NodeID)
-	if err != nil {
+	if err := db.StoreNodeIdentity(atx.NodeID); err != nil {
 		db.log.With().Error("cannot store node identity",
 			log.FieldNamed("atx_node_id", atx.NodeID),
 			atx.ID(),
@@ -224,9 +223,9 @@ func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.A
 			}
 
 			if prevID, exist := countedAtxs[atx.NodeID.Key]; exist { // same miner
-
 				if prevID != id { // different atx for same epoch
 					db.log.With().Error("encountered second atx for the same miner on the same epoch",
+						log.FieldNamed("atx_node_id", atx.NodeID),
 						log.FieldNamed("first_atx", prevID),
 						log.FieldNamed("second_atx", id))
 

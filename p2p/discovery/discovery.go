@@ -68,8 +68,6 @@ type bootstrapper interface {
 var (
 	// ErrLookupFailed determines that we could'nt lookup this node in the routing table or network
 	ErrLookupFailed = errors.New("failed to lookup node in the network")
-	// ErrEmptyRoutingTable means that our routing table is empty thus we can't lookup any node (so we can't query any)
-	ErrEmptyRoutingTable = errors.New("no nodes to query - routing table is empty")
 )
 
 // Discovery is struct that holds the protocol components, the protocol definition, the addr book data structure and more.
@@ -109,7 +107,6 @@ func (d *Discovery) refresh(ctx context.Context, peersToGet int) error {
 
 // SelectPeers asks routing table to randomly select a slice of nodes in size `qty`
 func (d *Discovery) SelectPeers(ctx context.Context, qty int) []*node.Info {
-
 	if d.rt.NeedNewAddresses() {
 		err := d.refresh(ctx, qty) // TODO: use ctx with timeout, check errors
 		if err == ErrBootAbort {
