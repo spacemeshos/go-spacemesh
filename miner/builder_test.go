@@ -608,7 +608,7 @@ type mockMesh struct {
 	err error
 }
 
-func (m *mockMesh) AddBlockWithTxs(blk *types.Block) error {
+func (m *mockMesh) AddBlockWithTxs(context.Context, *types.Block) error {
 	return nil
 }
 

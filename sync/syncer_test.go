@@ -193,7 +193,7 @@ func TestSyncer_Close(t *testing.T) {
 	block.TxIDs = append(block.TxIDs, tx1.ID())
 	//block.ATXIDs = append(block.ATXIDs, atx1)
 
-	sync1.AddBlockWithTxs(block)
+	sync1.AddBlockWithTxs(context.TODO(), block)
 	sync1.Close()
 	sync.Start(context.TODO())
 	sync.Close()
@@ -216,7 +216,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	block := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	addTxsToPool(syncObj.txpool, []*types.Transaction{tx1})
 
-	syncObj.AddBlockWithTxs(block)
+	syncObj.AddBlockWithTxs(context.TODO(), block)
 	syncObj2.peers = getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey()})
 
 	ch := make(chan fetchRequest, 1)
@@ -249,7 +249,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	lid := types.LayerID(1)
 	block := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	addTxsToPool(syncObj1.txpool, []*types.Transaction{tx1})
-	syncObj1.AddBlockWithTxs(block)
+	syncObj1.AddBlockWithTxs(context.TODO(), block)
 	timeout := time.NewTimer(2 * time.Second)
 
 	wrk := newPeersWorker(context.TODO(), syncObj2, []p2ppeers.Peer{nodes[0].PublicKey()}, &sync.Once{}, hashReqFactory(lid))
@@ -365,18 +365,18 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	syncObj1.atxDb.ProcessAtx(atx3)
 	syncObj1.atxDb.ProcessAtx(atx4)
 
-	syncObj1.AddBlockWithTxs(block1)
+	syncObj1.AddBlockWithTxs(context.TODO(), block1)
 
 	block2 := types.NewExistingBlock(1, []byte(rand.String(8)), []types.TransactionID{tx2.ID()})
-	syncObj1.AddBlockWithTxs(block2)
+	syncObj1.AddBlockWithTxs(context.TODO(), block2)
 
 	block3 := types.NewExistingBlock(1, []byte(rand.String(8)), []types.TransactionID{tx3.ID()})
 
-	syncObj1.AddBlockWithTxs(block3)
+	syncObj1.AddBlockWithTxs(context.TODO(), block3)
 
 	block4 := types.NewExistingBlock(1, []byte(rand.String(8)), []types.TransactionID{tx4.ID()})
 
-	syncObj1.AddBlockWithTxs(block4)
+	syncObj1.AddBlockWithTxs(context.TODO(), block4)
 
 	timeout := time.NewTimer(2 * time.Second)
 
@@ -433,9 +433,9 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncObj1.atxDb.ProcessAtx(atx1)
 	syncObj1.atxDb.ProcessAtx(atx2)
 	syncObj1.atxDb.ProcessAtx(atx3)
-	syncObj1.AddBlockWithTxs(block1)
-	syncObj1.AddBlockWithTxs(block2)
-	syncObj1.AddBlockWithTxs(block3)
+	syncObj1.AddBlockWithTxs(context.TODO(), block1)
+	syncObj1.AddBlockWithTxs(context.TODO(), block2)
+	syncObj1.AddBlockWithTxs(context.TODO(), block3)
 
 	ch := make(chan fetchRequest, 3)
 	ch <- fetchRequest{ids: []types.Hash32{block1.Hash32()}}
@@ -495,24 +495,24 @@ func TestSyncProtocol_SyncNodes(t *testing.T) {
 	block10.Signature = signer.Sign(block10.Bytes())
 
 	addTxsToPool(syncObj1.txpool, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
-	syncObj1.AddBlockWithTxs(block3)
-	syncObj1.AddBlockWithTxs(block4)
-	syncObj1.AddBlockWithTxs(block5)
-	syncObj1.AddBlockWithTxs(block6)
-	syncObj1.AddBlockWithTxs(block7)
-	syncObj1.AddBlockWithTxs(block8)
-	syncObj1.AddBlockWithTxs(block9)
-	syncObj1.AddBlockWithTxs(block10)
+	syncObj1.AddBlockWithTxs(context.TODO(), block3)
+	syncObj1.AddBlockWithTxs(context.TODO(), block4)
+	syncObj1.AddBlockWithTxs(context.TODO(), block5)
+	syncObj1.AddBlockWithTxs(context.TODO(), block6)
+	syncObj1.AddBlockWithTxs(context.TODO(), block7)
+	syncObj1.AddBlockWithTxs(context.TODO(), block8)
+	syncObj1.AddBlockWithTxs(context.TODO(), block9)
+	syncObj1.AddBlockWithTxs(context.TODO(), block10)
 
 	addTxsToPool(syncObj2.txpool, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
-	syncObj2.AddBlockWithTxs(block3)
-	syncObj2.AddBlockWithTxs(block4)
-	syncObj2.AddBlockWithTxs(block5)
-	syncObj2.AddBlockWithTxs(block6)
-	syncObj2.AddBlockWithTxs(block7)
-	syncObj2.AddBlockWithTxs(block8)
-	syncObj2.AddBlockWithTxs(block9)
-	syncObj2.AddBlockWithTxs(block10)
+	syncObj2.AddBlockWithTxs(context.TODO(), block3)
+	syncObj2.AddBlockWithTxs(context.TODO(), block4)
+	syncObj2.AddBlockWithTxs(context.TODO(), block5)
+	syncObj2.AddBlockWithTxs(context.TODO(), block6)
+	syncObj2.AddBlockWithTxs(context.TODO(), block7)
+	syncObj2.AddBlockWithTxs(context.TODO(), block8)
+	syncObj2.AddBlockWithTxs(context.TODO(), block9)
+	syncObj2.AddBlockWithTxs(context.TODO(), block10)
 
 	syncObj1.getAndValidateLayer(1)
 	syncObj1.getAndValidateLayer(2)
@@ -620,16 +620,16 @@ func syncTest(dpType string, t *testing.T) {
 
 	addTxsToPool(syncObj1.txpool, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
 	syncObj1.AddBlock(block2)
-	syncObj1.AddBlockWithTxs(block3)
-	syncObj1.AddBlockWithTxs(block4)
-	syncObj1.AddBlockWithTxs(block5)
-	syncObj1.AddBlockWithTxs(block6)
-	syncObj1.AddBlockWithTxs(block7)
-	syncObj1.AddBlockWithTxs(block8)
-	syncObj1.AddBlockWithTxs(block9)
-	syncObj1.AddBlockWithTxs(block10)
-	syncObj1.AddBlockWithTxs(block11)
-	syncObj1.AddBlockWithTxs(block12)
+	syncObj1.AddBlockWithTxs(context.TODO(), block3)
+	syncObj1.AddBlockWithTxs(context.TODO(), block4)
+	syncObj1.AddBlockWithTxs(context.TODO(), block5)
+	syncObj1.AddBlockWithTxs(context.TODO(), block6)
+	syncObj1.AddBlockWithTxs(context.TODO(), block7)
+	syncObj1.AddBlockWithTxs(context.TODO(), block8)
+	syncObj1.AddBlockWithTxs(context.TODO(), block9)
+	syncObj1.AddBlockWithTxs(context.TODO(), block10)
+	syncObj1.AddBlockWithTxs(context.TODO(), block11)
+	syncObj1.AddBlockWithTxs(context.TODO(), block12)
 
 	syncObj1.Start(context.TODO())
 
@@ -770,12 +770,12 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	addTxsToPool(syncObj2.txpool, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
 	syncObj2.AddBlock(block1)
 	syncObj2.AddBlock(block2)
-	syncObj2.AddBlockWithTxs(block3)
-	syncObj2.AddBlockWithTxs(block4)
-	syncObj2.AddBlockWithTxs(block5)
-	syncObj2.AddBlockWithTxs(block6)
-	syncObj2.AddBlockWithTxs(block7)
-	syncObj2.AddBlockWithTxs(block8)
+	syncObj2.AddBlockWithTxs(context.TODO(), block3)
+	syncObj2.AddBlockWithTxs(context.TODO(), block4)
+	syncObj2.AddBlockWithTxs(context.TODO(), block5)
+	syncObj2.AddBlockWithTxs(context.TODO(), block6)
+	syncObj2.AddBlockWithTxs(context.TODO(), block7)
+	syncObj2.AddBlockWithTxs(context.TODO(), block8)
 	syncObj2.AddBlock(block9)
 	syncObj2.AddBlock(block10)
 
@@ -882,12 +882,12 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	require.NoError(t, err)
 
 	addTxsToPool(syncObj2.txpool, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
-	err = syncObj1.AddBlockWithTxs(block3)
-	err = syncObj1.AddBlockWithTxs(block4)
-	err = syncObj1.AddBlockWithTxs(block5)
-	err = syncObj1.AddBlockWithTxs(block6)
-	err = syncObj1.AddBlockWithTxs(block7)
-	err = syncObj1.AddBlockWithTxs(block8)
+	err = syncObj1.AddBlockWithTxs(context.TODO(), block3)
+	err = syncObj1.AddBlockWithTxs(context.TODO(), block4)
+	err = syncObj1.AddBlockWithTxs(context.TODO(), block5)
+	err = syncObj1.AddBlockWithTxs(context.TODO(), block6)
+	err = syncObj1.AddBlockWithTxs(context.TODO(), block7)
+	err = syncObj1.AddBlockWithTxs(context.TODO(), block8)
 
 	timeout := time.After(30 * time.Second)
 	syncObj1.Start(context.TODO())
@@ -971,7 +971,7 @@ func TestSyncer_Txs(t *testing.T) {
 	id3 := tx3.ID()
 	block3.TxIDs = []types.TransactionID{id1, id2, id3}
 	addTxsToPool(syncObj1.txpool, []*types.Transaction{tx1, tx2, tx3})
-	syncObj1.AddBlockWithTxs(block3)
+	syncObj1.AddBlockWithTxs(context.TODO(), block3)
 
 	_, err := syncObj2.txQueue.handle(context.TODO(), []types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32()})
 	assert.Nil(t, err)
@@ -1211,11 +1211,11 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	syncs, _, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	sync := syncs[0]
 	gen := types.GetEffectiveGenesis()
-	sync.AddBlockWithTxs(types.NewExistingBlock(1+gen, []byte(rand.String(8)), nil))
-	sync.AddBlockWithTxs(types.NewExistingBlock(2+gen, []byte(rand.String(8)), nil))
-	sync.AddBlockWithTxs(types.NewExistingBlock(3+gen, []byte(rand.String(8)), nil))
-	sync.AddBlockWithTxs(types.NewExistingBlock(4+gen, []byte(rand.String(8)), nil))
-	sync.AddBlockWithTxs(types.NewExistingBlock(5+gen, []byte(rand.String(8)), nil))
+	sync.AddBlockWithTxs(context.TODO(), types.NewExistingBlock(1+gen, []byte(rand.String(8)), nil))
+	sync.AddBlockWithTxs(context.TODO(), types.NewExistingBlock(2+gen, []byte(rand.String(8)), nil))
+	sync.AddBlockWithTxs(context.TODO(), types.NewExistingBlock(3+gen, []byte(rand.String(8)), nil))
+	sync.AddBlockWithTxs(context.TODO(), types.NewExistingBlock(4+gen, []byte(rand.String(8)), nil))
+	sync.AddBlockWithTxs(context.TODO(), types.NewExistingBlock(5+gen, []byte(rand.String(8)), nil))
 
 	lv := &mockLayerValidator{types.GetEffectiveGenesis(), 0, 0, nil}
 	sync.Mesh.Validator = lv
@@ -1259,7 +1259,7 @@ func TestSyncer_ListenToGossip(t *testing.T) {
 	r := require.New(t)
 	syncs, _, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	sync := syncs[0]
-	sync.AddBlockWithTxs(types.NewExistingBlock(1, []byte(rand.String(8)), nil))
+	sync.AddBlockWithTxs(context.TODO(), types.NewExistingBlock(1, []byte(rand.String(8)), nil))
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.Mesh.Validator = lv
 	sync.ticker = &mockClock{Layer: 1}
@@ -1772,7 +1772,7 @@ func TestSyncer_Await(t *testing.T) {
 
 	syncs, _, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	syncer := syncs[0]
-	err := syncer.AddBlockWithTxs(types.NewExistingBlock(1, []byte(rand.String(8)), nil))
+	err := syncer.AddBlockWithTxs(context.TODO(), types.NewExistingBlock(1, []byte(rand.String(8)), nil))
 	r.NoError(err)
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	syncer.Mesh.Validator = lv

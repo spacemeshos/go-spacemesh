@@ -74,11 +74,10 @@ func (fq *fetchQueue) shutdownRecover() {
 
 //todo batches
 func (fq *fetchQueue) work(ctx context.Context) {
-	logger := fq.WithContext(ctx)
 	defer fq.shutdownRecover()
 	parallelWorkers := runtime.NumCPU()
 	output := fetchWithFactory(ctx, newFetchWorker(ctx, fq.workerInfra, parallelWorkers, fq.batchRequestFactory, fq.queue, fq.name))
-	logger.With().Debug("parallel fetching with worker factory",
+	fq.WithContext(ctx).With().Debug("parallel fetching with worker factory",
 		log.Int("num_workers", parallelWorkers),
 		log.String("queue", fmt.Sprint(fq.queue)),
 		log.String("queue_name", fq.name))
@@ -86,10 +85,10 @@ func (fq *fetchQueue) work(ctx context.Context) {
 	wg.Add(parallelWorkers)
 	for i := 0; i < parallelWorkers; i++ {
 		go func(j int) {
-			logger := logger.WithFields(log.Int("worker_num", j))
+			ctxLocal := log.WithNewSessionID(ctx, log.Int("worker_num", j))
+			logger := fq.WithContext(ctxLocal)
 			logger.Info("worker running work")
 			for out := range output {
-				ctxLocal := ctx
 				loggerLocal := logger
 				loggerLocal.Info("new batch out of queue")
 				if out == nil {
@@ -108,10 +107,10 @@ func (fq *fetchQueue) work(ctx context.Context) {
 					loggerLocal.Warning("got fetch work job with no requestID")
 				} else {
 					ctxLocal = log.WithRequestID(ctxLocal, bjb.reqID)
-					loggerLocal = loggerLocal.WithContext(ctx)
+					loggerLocal = loggerLocal.WithContext(ctxLocal)
 				}
 
-				loggerLocal.Debug("got ids from worker", log.Int("count", len(bjb.ids)))
+				loggerLocal.With().Debug("got ids from worker", log.Int("count", len(bjb.ids)))
 				if len(bjb.ids) == 0 {
 					break
 				}
@@ -223,7 +222,7 @@ func newTxQueue(ctx context.Context, s *Syncer) *txQueue {
 	return q
 }
 
-//we could get rid of this if we had a unified id type
+// HandleTxs we could get rid of this if we had a unified id type
 func (tx txQueue) HandleTxs(ctx context.Context, txids []types.TransactionID) ([]*types.Transaction, error) {
 	ctx = log.WithNewRequestID(ctx)
 	logger := tx.Log.WithContext(ctx)

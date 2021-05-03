@@ -983,8 +983,6 @@ func validateVotes(blk *types.Block, forBlockfunc forBlockInView, depth int) (bo
 
 func (s *Syncer) dataAvailability(ctx context.Context, blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
 	s.WithContext(ctx).With().Debug("checking data availability for block", blk.ID())
-	wg := sync.WaitGroup{}
-	wg.Add(1)
 	var txres []*types.Transaction
 	var txerr error
 
@@ -995,7 +993,7 @@ func (s *Syncer) dataAvailability(ctx context.Context, blk *types.Block) ([]*typ
 	var atxres []*types.ActivationTx
 
 	if txerr != nil {
-		return nil, nil, fmt.Errorf("failed fetching block %v transactions %v", blk.ID(), txerr)
+		return nil, nil, fmt.Errorf("failed fetching block %v transactions: %v", blk.ID(), txerr)
 	}
 
 	s.WithContext(ctx).With().Debug("done checking data availability for block", blk.ID())

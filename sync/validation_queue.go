@@ -11,8 +11,8 @@ import (
 )
 
 type syncer interface {
-	AddBlockWithTxs(blk *types.Block) error
-	GetBlock(id types.BlockID) (*types.Block, error)
+	AddBlockWithTxs(context.Context, *types.Block) error
+	GetBlock(types.BlockID) (*types.Block, error)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 	HandleLateBlock(bl *types.Block)
 	ProcessedLayer() types.LayerID
@@ -143,7 +143,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(ctx context.C
 			return fmt.Errorf("validate votes failed for block: %s errmsg: %s", block.ID().String(), err)
 		}
 
-		err = vq.AddBlockWithTxs(block)
+		err = vq.AddBlockWithTxs(ctx, block)
 
 		if err != nil && err != mesh.ErrAlreadyExist {
 			return err
