@@ -121,10 +121,12 @@ func (p *MessageServer) readLoop(ctx context.Context) {
 	}
 }
 
-// clean stale messages after requests life time expire.
+// clean stale messages after request life time expires
 func (p *MessageServer) cleanStaleMessages() {
 	for {
 		p.pendMutex.RLock()
+		p.With().Debug("checking for stale messages in msgserver queue",
+			log.Int("queue_length", p.pendingQueue.Len()))
 		elem := p.pendingQueue.Front()
 		p.pendMutex.RUnlock()
 		if elem != nil {
@@ -198,7 +200,7 @@ func (p *MessageServer) handleRequestMessage(ctx context.Context, msg Message, d
 func (p *MessageServer) handleResponseMessage(ctx context.Context, headers *service.DataMsgWrapper) {
 	logger := p.WithContext(ctx)
 
-	//get and remove from pendingMap
+	// get and remove from pendingMap
 	logger.With().Debug("handleResponseMessage", log.Uint64("req_id", headers.ReqID))
 	p.pendMutex.RLock()
 	foo, okFoo := p.resHandlers[headers.ReqID]
@@ -232,6 +234,12 @@ func (p *MessageServer) RegisterBytesMsgHandler(msgType MessageType, reqHandler 
 // SendRequest sends a request of a specific message.
 func (p *MessageServer) SendRequest(ctx context.Context, msgType MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), timeoutHandler func(err error)) error {
 	reqID := p.newReqID()
+
+	// Add requestID to context
+	ctx = log.WithNewRequestID(ctx,
+		log.Uint64("p2p_request_id", reqID),
+		log.Uint32("p2p_msg_type", uint32(msgType)),
+		log.FieldNamed("recipient", address))
 	p.pendMutex.Lock()
 	p.resHandlers[reqID] = ResponseHandlers{resHandler, timeoutHandler}
 	p.pendingQueue.PushBack(Item{id: reqID, timestamp: time.Now()})
@@ -239,14 +247,12 @@ func (p *MessageServer) SendRequest(ctx context.Context, msgType MessageType, pa
 	msg := &service.DataMsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
 	if sendErr := p.network.SendWrappedMessage(ctx, address, p.name, msg); sendErr != nil {
 		p.WithContext(ctx).With().Error("sending message failed",
-			log.Uint32("p2p_msg_type", uint32(msgType)),
-			log.FieldNamed("recipient", address),
 			log.Int("msglen", len(payload)),
 			log.Err(sendErr))
 		p.removeFromPending(reqID)
 		return sendErr
 	}
-	p.WithContext(ctx).With().Debug("sent request", log.Uint64("req_id", reqID))
+	p.WithContext(ctx).Debug("sent request")
 	return nil
 }
 

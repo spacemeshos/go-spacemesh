@@ -287,8 +287,7 @@ func (s *Switch) Start(ctx context.Context) error {
 	if s.config.SwarmConfig.Bootstrap {
 		go func() {
 			b := time.Now()
-			err := s.discover.Bootstrap(s.ctx)
-			if err != nil {
+			if err := s.discover.Bootstrap(s.ctx); err != nil {
 				s.bootErr = err
 				close(s.bootChan)
 				s.Shutdown()
