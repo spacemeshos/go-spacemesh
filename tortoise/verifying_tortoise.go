@@ -398,6 +398,10 @@ func (t *turtle) calculateExceptions(
 	return []map[types.BlockID]struct{}{againstDiff, forDiff, neutralDiff}, nil
 }
 
+// Note: weight depends on more than just the weight of the voting block. It also depends on contextual factors such as whether
+// or not the block's ATX was received on time, and on how old the layer is.
+// TODO: for now it's probably sufficient to adjust weight based on whether the ATX was received on time, or late, for the
+// current epoch. Assign weight of zero to late ATXs for the current epoch?
 func (t *turtle) BlockWeight(votingBlock, blockVotedOn types.BlockID) int {
 	return 1
 }
