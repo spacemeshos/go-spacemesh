@@ -48,7 +48,7 @@ func (trtl *tortoise) HandleLateBlock(b *types.Block) (types.LayerID, types.Laye
 	l := types.NewLayer(b.Layer())
 	l.AddBlock(b)
 	oldPbase, newPbase := trtl.HandleIncomingLayer(l)
-	log.With().Info("late block", b.Layer(), b.ID())
+	trtl.logger.With().Info("late block", b.Layer(), b.ID(), b.MinerID())
 	return oldPbase, newPbase
 }
 
