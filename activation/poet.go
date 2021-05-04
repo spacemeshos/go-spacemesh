@@ -8,7 +8,10 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"reflect"
+	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/spacemeshos/poet/integration"
 
@@ -28,6 +31,8 @@ type HTTPPoetHarness struct {
 
 // A compile time check to ensure that HTTPPoetClient fully implements PoetProvingServiceClient.
 var _ PoetProvingServiceClient = (*HTTPPoetHarness)(nil)
+var basePort uint32 = 18550
+var harnessCounter uint32
 
 // NewHTTPPoetHarness returns a new instance of HTTPPoetHarness.
 func NewHTTPPoetHarness(disableBroadcast bool) (*HTTPPoetHarness, error) {
@@ -38,6 +43,14 @@ func NewHTTPPoetHarness(disableBroadcast bool) (*HTTPPoetHarness, error) {
 	cfg.DisableBroadcast = disableBroadcast
 	cfg.Reset = true
 	cfg.Duration = "4s"
+	cnt := atomic.AddUint32(&harnessCounter, 1)
+	port := basePort + (cnt * 10)
+	cfg.RESTListen = fmt.Sprintf("127.0.0.1:%d", port+1)
+
+	// TODO: export `rpcListen` from the harness config so we don't need reflection here
+	rpcListen := reflect.Indirect(reflect.ValueOf(&cfg).Elem()).FieldByName("rpcListen")
+	rpcListen = reflect.NewAt(rpcListen.Type(), unsafe.Pointer(rpcListen.UnsafeAddr())).Elem()
+	rpcListen.Set(reflect.ValueOf(fmt.Sprintf("127.0.0.1:%d", port)))
 
 	h, err := integration.NewHarness(cfg)
 	if err != nil {
