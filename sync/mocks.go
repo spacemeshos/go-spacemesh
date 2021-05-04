@@ -5,11 +5,15 @@ import (
 	"math/big"
 	"time"
 
+	"fmt"
 	"github.com/golang/protobuf/ptypes/duration"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -18,13 +22,37 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-type poetDbMock struct{}
+type poetDbMock struct {
+	Data map[types.Hash32][]byte
+}
 
 func (poetDbMock) GetProofMessage(proofRef []byte) ([]byte, error) { return proofRef, nil }
 
 func (poetDbMock) HasProof([]byte) bool { return true }
 
-func (poetDbMock) ValidateAndStore(*types.PoetProofMessage) error { return nil }
+func (p *poetDbMock) ValidateAndStore(m *types.PoetProofMessage) error {
+	b, e := m.Ref()
+	if e != nil {
+		return e
+	}
+	val, e := types.InterfaceToBytes(m.PoetProof)
+
+	p.Data[types.BytesToHash(b)] = val
+	return nil
+}
+
+func (p *poetDbMock) Get(b []byte) ([]byte, error) {
+	b, has := p.Data[types.BytesToHash(b)]
+	if !has {
+		return nil, fmt.Errorf("not found in mock db")
+	}
+	return b, nil
+}
+
+func (p *poetDbMock) Put(key, val []byte) error {
+	p.Data[types.BytesToHash(key)] = val
+	return nil
+}
 
 type blockEligibilityValidatorMock struct {
 }
@@ -44,7 +72,7 @@ type meshValidatorMock struct {
 }
 
 func (m *meshValidatorMock) LatestComplete() types.LayerID {
-	panic("implement me")
+	return types.LayerID(len(m.validatedLayers))
 }
 
 func (m *meshValidatorMock) Persist(context.Context) error {
@@ -75,7 +103,7 @@ func (s mockState) ValidateAndAddTxToPool(tx *types.Transaction) error {
 }
 
 func (s mockState) LoadState(types.LayerID) error {
-	panic("implement me")
+	return nil
 }
 
 func (s mockState) GetStateRoot() types.Hash32 {
@@ -222,10 +250,18 @@ func (m *mockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	return nil
 }
 
+type mockTxProcessor struct {
+}
+
+func (m mockTxProcessor) HandleTxSyncData(data []byte) error {
+	return nil
+}
+
 // NewSyncWithMocks returns a syncer instance that is backed by mocks of other modules
 // for use in testing
-func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *state.TxMempool, atxpool *activation.AtxMemDB, swarm service.Service, poetDb *activation.PoetDb, conf Configuration, goldenATXID types.ATXID, expectedLayers types.LayerID) *Syncer {
+func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *state.TxMempool, atxpool *activation.AtxMemDB, swarm service.Service, poetDb *activation.PoetDb, conf Configuration, goldenATXID types.ATXID, expectedLayers types.LayerID, poetStorage database.Database) *Syncer {
 	lg := log.NewDefault("sync_test")
+	lg.Info("new sync tester")
 	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, conf.LayersPerEpoch, goldenATXID, &validatorMock{}, lg.WithOptions(log.Nop))
 	var msh *mesh.Mesh
 	if mshdb.PersistentData() {
@@ -237,7 +273,18 @@ func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *
 	}
 
 	_ = msh.AddBlock(mesh.GenesisBlock())
+	_ = msh.SaveLayerInputVectorByID(mesh.GenesisLayer().Index(), []types.BlockID{mesh.GenesisBlock().ID()})
 	clock := mockClock{Layer: expectedLayers + 1}
 	lg.Info("current layer %v", clock.GetCurrentLayer())
-	return NewSync(context.TODO(), swarm, msh, txpool, atxdb, blockEligibilityValidatorMock{}, poetDb, conf, &clock, lg)
+
+	blockHandler := blocks.NewBlockHandler(blocks.Config{Depth: 10}, msh, blockEligibilityValidatorMock{}, lg)
+
+	fCfg := fetch.DefaultConfig()
+	fetcher := fetch.NewFetch(context.TODO(), fCfg, swarm, lg)
+
+	lCfg := layerfetcher.Config{RequestTimeout: 20}
+	layerFetch := layerfetcher.NewLogic(context.TODO(), lCfg, blockHandler, atxdb, poetDb, atxdb, mockTxProcessor{}, swarm, fetcher, msh, lg)
+	layerFetch.AddDBs(mshdb.Blocks(), atxdbStore, mshdb.Transactions(), poetStorage, mshdb.InputVector())
+	layerFetch.Start()
+	return NewSync(context.TODO(), swarm, msh, txpool, atxdb, blockEligibilityValidatorMock{}, poetDb, conf, &clock, layerFetch, lg)
 }

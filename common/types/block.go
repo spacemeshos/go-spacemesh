@@ -316,7 +316,7 @@ func (l *Layer) Blocks() []*Block {
 
 // Hash returns the 32-byte sha256 sum of the block IDs in this layer, sorted in lexicographic order.
 func (l Layer) Hash() Hash32 {
-	return CalcBlocksHash32(BlockIDs(l.blocks), nil)
+	return CalcBlocksHash32(SortBlockIDs(BlockIDs(l.blocks)), nil)
 }
 
 // AddBlock adds a block to this layer. Panics if the block's index doesn't match the layer.

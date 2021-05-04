@@ -15,10 +15,9 @@ type blockDataProvider interface {
 	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
 	LayerBlocks(types.LayerID) ([]*types.Block, error)
 
-	GetLayerInputVector(types.LayerID) ([]types.BlockID, error)
-	SaveLayerInputVector(types.LayerID, []types.BlockID) error
 	GetCoinflip(context.Context, types.LayerID) (bool, bool)
-
+	GetLayerInputVectorByID(types.LayerID) ([]types.BlockID, error)
+	SaveLayerInputVectorByID(types.LayerID, []types.BlockID) error
 	SaveContextualValidity(types.BlockID, bool) error
 
 	Persist(key []byte, v interface{}) error
@@ -153,7 +152,7 @@ func (t *turtle) getSingleInputVectorFromDB(ctx context.Context, lyrid types.Lay
 		return support, nil
 	}
 
-	input, err := t.bdp.GetLayerInputVector(lyrid)
+	input, err := t.bdp.GetLayerInputVectorByID(lyrid)
 	if err != nil {
 		return abstain, err
 	}
@@ -343,7 +342,7 @@ func (t *turtle) calculateExceptions(
 		}
 
 		// attempt to read Hare results for layer
-		layerInputVector, err := t.bdp.GetLayerInputVector(layerID)
+		layerInputVector, err := t.bdp.GetLayerInputVectorByID(layerID)
 		if err != nil {
 			if errors.Is(err, mesh.ErrInvalidLayer) {
 				// Hare failed for this layer, vote against all blocks
@@ -506,6 +505,8 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) {
 		}
 	}
 
+	blockscount := len(newlyr.Blocks())
+	goodblocks := len(t.GoodBlocksIndex)
 	// Go over all blocks, in order. Mark block i “good” if:
 	for _, b := range newlyr.Blocks() {
 		logger := logger.WithFields(b.ID(), log.FieldNamed("base_block_id", b.BaseBlock))
@@ -525,6 +526,10 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) {
 			logger.Debug("not marking block good")
 		}
 	}
+
+	logger.With().Info("finished marking good blocks",
+		log.Int("total_blocks", blockscount),
+		log.Int("good_blocks", len(t.GoodBlocksIndex)-goodblocks))
 
 	logger.With().Info("starting layer verification",
 		log.FieldNamed("prev_verified", t.Verified),
@@ -548,7 +553,7 @@ layerLoop:
 
 		// get the local opinion (input vector) for this layer. below, we calculate the global opinion on each block in
 		// the layer and check if it agrees with this local opinion.
-		rawLayerInputVector, err := t.bdp.GetLayerInputVector(candidateLayerID)
+		rawLayerInputVector, err := t.bdp.GetLayerInputVectorByID(candidateLayerID)
 		if err != nil {
 			if errors.Is(err, mesh.ErrInvalidLayer) {
 				// Hare already failed for this layer, so we want to vote against all blocks in the layer: an empty

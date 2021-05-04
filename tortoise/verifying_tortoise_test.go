@@ -233,7 +233,7 @@ func turtleMakeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, bloc
 	blocks, err := hm(l)
 	if err == nil {
 		// save blocks to db for this layer
-		require.NoError(t, msh.SaveLayerInputVector(l, blocks))
+		require.NoError(t, msh.SaveLayerInputVectorByID(l, blocks))
 	}
 
 	trtl.HandleIncomingLayer(context.TODO(), lyr)
@@ -306,7 +306,7 @@ func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp
 	if err != nil {
 		blocks = nil
 	}
-	if err := msh.SaveLayerInputVector(l-1, blocks); err != nil {
+	if err := msh.SaveLayerInputVectorByID(l-1, blocks); err != nil {
 		panic("db is fucked up")
 	}
 

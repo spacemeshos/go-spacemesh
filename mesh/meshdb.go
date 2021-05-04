@@ -105,7 +105,10 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, err
 			log.With().Error("error inserting genesis block to db", blk.ID(), blk.LayerIndex)
 		}
 	}
-	return ll, nil
+	if err := ll.SaveLayerInputVectorByID(GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
+		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
+	}
+	return ll, err
 }
 
 // PersistentData checks to see if db is empty
@@ -138,6 +141,9 @@ func NewMemMeshDB(log log.Log) *DB {
 		ll.AddBlock(blk)
 		ll.SaveContextualValidity(blk.ID(), true)
 	}
+	if err := ll.SaveLayerInputVectorByID(GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
+		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
+	}
 	return ll
 }
 
@@ -151,6 +157,25 @@ func (m *DB) Close() {
 	m.inputVector.Close()
 	m.general.Close()
 	m.contextualValidity.Close()
+}
+
+//todo: for now, these methods are used to export dbs to sync, think about merging the two packages
+
+// Blocks exports the block database
+func (m *DB) Blocks() database.Database {
+	m.blockMutex.RLock()
+	defer m.blockMutex.RUnlock()
+	return m.blocks
+}
+
+// Transactions exports the transactions DB
+func (m *DB) Transactions() database.Database {
+	return m.transactions
+}
+
+// InputVector exports the inputvector DB
+func (m *DB) InputVector() database.Database {
+	return m.inputVector
 }
 
 // ErrAlreadyExist error returned when adding an existing value to the database
@@ -283,7 +308,7 @@ func (m *DB) AddZeroBlockLayer(index types.LayerID) error {
 }
 
 func (m *DB) getBlockBytes(id types.BlockID) ([]byte, error) {
-	return m.blocks.Get(id.Bytes())
+	return m.blocks.Get(id.AsHash32().Bytes())
 }
 
 // ContextualValidity retrieves opinion on block from the database
@@ -308,13 +333,13 @@ func (m *DB) SaveContextualValidity(id types.BlockID, valid bool) error {
 }
 
 // SaveLayerInputVector saves the input vote vector for a layer (hare results)
-func (m *DB) SaveLayerInputVector(lyrid types.LayerID, vector []types.BlockID) error {
+func (m *DB) SaveLayerInputVector(hash types.Hash32, vector []types.BlockID) error {
 	bytes, err := types.InterfaceToBytes(vector)
 	if err != nil {
 		return err
 	}
 
-	return m.inputVector.Put(lyrid.Bytes(), bytes)
+	return m.inputVector.Put(hash.Bytes(), bytes)
 }
 
 // InvalidateLayer receives notification from Hare that it failed for a layer. If Hare explicitly fails for a
@@ -340,8 +365,8 @@ func (m *DB) GetCoinflip(ctx context.Context, layerID types.LayerID) (bool, bool
 	return coin, exists
 }
 
-func (m *DB) defaultGetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
-	by, err := m.inputVector.Get(lyrid.Bytes())
+func (m *DB) defaulGetLayerInputVectorByID(lyrid types.LayerID) ([]types.BlockID, error) {
+	by, err := m.inputVector.Get(types.CalcHash32(lyrid.Bytes()).Bytes())
 	if err != nil {
 		// check if this layer was marked invalid
 		if _, ok := m.invalidatedLayers[lyrid]; ok {
@@ -357,11 +382,35 @@ func (m *DB) defaultGetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, e
 }
 
 // GetLayerInputVector gets the input vote vector for a layer (hare results)
-func (m *DB) GetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error) {
-	if m.InputVectorBackupFunc != nil {
-		return m.InputVectorBackupFunc(lyrid)
+func (m *DB) GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error) {
+	by, err := m.inputVector.Get(hash.Bytes())
+	if err != nil {
+		return nil, err
 	}
-	return m.defaultGetLayerInputVector(lyrid)
+	var v []types.BlockID
+	err = types.BytesToInterface(by, &v)
+	return v, err
+}
+
+// GetLayerInputVectorByID gets the input vote vector for a layer (hare results)
+func (m *DB) GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) {
+	if m.InputVectorBackupFunc != nil {
+		return m.InputVectorBackupFunc(id)
+	}
+	return m.defaulGetLayerInputVectorByID(id)
+}
+
+// SaveLayerInputVectorByID gets the input vote vector for a layer (hare results)
+func (m *DB) SaveLayerInputVectorByID(id types.LayerID, blks []types.BlockID) error {
+	hash := types.CalcHash32(id.Bytes())
+	m.With().Info("SaveLayerInputVectorByID: Saving input vector", id, hash)
+	return m.SaveLayerInputVector(hash, blks)
+}
+
+// SaveLayerHashInputVector saves the input vote vector for a layer (hare results) using its hash
+func (m *DB) SaveLayerHashInputVector(h types.Hash32, data []byte) error {
+	m.Info("saved input vector for hash %v", h.ShortString())
+	return m.inputVector.Put(h.Bytes(), data)
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {
@@ -370,7 +419,7 @@ func (m *DB) writeBlock(bl *types.Block) error {
 		return fmt.Errorf("could not encode bl")
 	}
 
-	if err := m.blocks.Put(bl.ID().Bytes(), bytes); err != nil {
+	if err := m.blocks.Put(bl.ID().AsHash32().Bytes(), bytes); err != nil {
 		return fmt.Errorf("could not add bl %v to database %v", bl.ID(), err)
 	}
 
@@ -399,12 +448,45 @@ func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 	}
 	m.Debug("added block %v to layer %v", blk.ID(), blk.LayerIndex)
 	blockIds = append(blockIds, blk.ID())
+	types.SortBlockIDs(blockIds)
 	w, err := types.BlockIdsToBytes(blockIds)
 	if err != nil {
 		return errors.New("could not encode layer blk ids")
 	}
 	m.layers.Put(blk.LayerIndex.Bytes(), w)
+	hash := types.CalcBlocksHash32(blockIds, nil)
+	m.persistLayerHash(blk.LayerIndex, hash)
+
 	return nil
+}
+
+func (m *DB) getLayerHashKey(layerID types.LayerID) []byte {
+	return []byte(fmt.Sprintf("layerHash_%v", layerID.Bytes()))
+}
+
+// GetLayerHash returns layer hash for received blocks
+func (m *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
+	h := types.Hash32{}
+	bts, err := m.general.Get(m.getLayerHashKey(layerID))
+	if err != nil {
+		return types.Hash32{}
+	}
+	h.SetBytes(bts)
+	return h
+}
+
+func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) {
+	if err := m.general.Put(m.getLayerHashKey(layerID), hash.Bytes()); err != nil {
+		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
+			log.String("layer_hash", hash.Hex()))
+	}
+
+	// we store a double index here because most of the code uses layer ID as key, currently only sync reads layer by hash
+	// when this changes we can simply point to the layes
+	if err := m.general.Put(hash.Bytes(), layerID.Bytes()); err != nil {
+		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
+			log.String("layer_hash", hash.Hex()))
+	}
 }
 
 // try delete layer Handler (deletes if pending pendingCount is 0)
@@ -480,16 +562,17 @@ func getTransactionDestKeyPrefix(l types.LayerID, account types.Address) []byte 
 	return []byte(str)
 }
 
-type dbTransaction struct {
+// DbTransaction is the transaction type stored in DB
+type DbTransaction struct {
 	*types.Transaction
 	Origin types.Address
 }
 
-func newDbTransaction(tx *types.Transaction) *dbTransaction {
-	return &dbTransaction{Transaction: tx, Origin: tx.Origin()}
+func newDbTransaction(tx *types.Transaction) *DbTransaction {
+	return &DbTransaction{Transaction: tx, Origin: tx.Origin()}
 }
 
-func (t dbTransaction) getTransaction() *types.Transaction {
+func (t DbTransaction) getTransaction() *types.Transaction {
 	t.Transaction.SetOrigin(t.Origin)
 	return t.Transaction
 }
@@ -501,6 +584,7 @@ func (m *DB) writeTransactions(l types.LayerID, txs []*types.Transaction) error 
 		if err != nil {
 			return fmt.Errorf("could not marshall tx %v to bytes: %v", t.ID().ShortString(), err)
 		}
+		m.Log.Info("storing tx id %v size %v", t.ID().ShortString(), len(bytes))
 		if err := batch.Put(t.ID().Bytes(), bytes); err != nil {
 			return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
 		}
@@ -792,7 +876,7 @@ func (m *DB) GetTransaction(id types.TransactionID) (*types.Transaction, error) 
 	if err != nil {
 		return nil, fmt.Errorf("could not find transaction in database %v err=%v", hex.EncodeToString(id[:]), err)
 	}
-	var dbTx dbTransaction
+	var dbTx DbTransaction
 	err = types.BytesToInterface(tBytes, &dbTx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal transaction: %v", err)

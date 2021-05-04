@@ -44,7 +44,7 @@ func (mockSyncer) ListenToGossip() bool {
 	return true
 }
 
-func (mockSyncer) FetchPoetProof(context.Context, []byte) error { return nil }
+func (mockSyncer) GetPoetProof(ctx context.Context, h types.Hash32) error { return nil }
 
 func (m mockSyncer) IsSynced(context.Context) bool { return !m.notSynced }
 
