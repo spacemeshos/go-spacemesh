@@ -22,6 +22,10 @@ const (
 	firstRound      = types.RoundID(1)
 )
 
+var (
+	genesisBeacon = types.HexToHash32("0x00")
+)
+
 // Tortoise Beacon errors.
 var (
 	ErrUnknownMessageType  = errors.New("unknown message type")
@@ -93,13 +97,8 @@ type TortoiseBeacon struct {
 
 	beaconsMu sync.RWMutex
 	beacons   map[types.EpochID]types.Hash32
-	// beaconsReady indicates if beacons are ready.
-	// If a beacon for an epoch becomes ready, channel for this epoch becomes closed.
-	beaconsReady map[types.EpochID]chan struct{}
 
 	backgroundWG sync.WaitGroup
-	startedOnce  sync.Once
-	started      chan struct{}
 }
 
 // New returns a new TortoiseBeacon.
@@ -132,8 +131,6 @@ func New(
 		ownVotes:         make(ownVotes),
 		votesCountCache:  make(map[epochRoundPair]map[types.Hash32]int),
 		beacons:          make(map[types.EpochID]types.Hash32),
-		beaconsReady:     make(map[types.EpochID]chan struct{}),
-		started:          make(chan struct{}),
 	}
 }
 
@@ -163,18 +160,13 @@ func (tb *TortoiseBeacon) Start() error {
 }
 
 func (tb *TortoiseBeacon) initGenesisBeacons() {
-	genesisBeacon := types.Hash32{} // zeros
-
 	closedCh := make(chan struct{})
 	close(closedCh)
 
 	epoch := types.EpochID(0)
 	for ; epoch.IsGenesis(); epoch++ {
 		tb.beacons[epoch] = genesisBeacon
-		tb.beaconsReady[epoch] = closedCh
 	}
-
-	tb.beaconsReady[epoch] = make(chan struct{}) // get the next epoch ready
 }
 
 // Close closes TortoiseBeacon.
@@ -238,7 +230,6 @@ func (tb *TortoiseBeacon) cleanup() {
 	for e := range tb.beacons {
 		if tb.epochIsOutdated(e) {
 			delete(tb.beacons, e)
-			delete(tb.beaconsReady, e)
 		}
 	}
 }
@@ -303,13 +294,6 @@ func (tb *TortoiseBeacon) handleEpoch(epoch types.EpochID) {
 
 	tb.Log.With().Info("Handling epoch",
 		log.Uint64("epoch_id", uint64(epoch)))
-
-	tb.beaconsMu.Lock()
-
-	if _, ok := tb.beaconsReady[epoch]; !ok {
-		tb.beaconsReady[epoch] = make(chan struct{})
-	}
-	tb.beaconsMu.Unlock()
 
 	tb.Log.With().Info("Starting round ticker",
 		log.Uint64("epoch_id", uint64(epoch)))
@@ -397,7 +381,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(epoch types.EpochID) error {
 }
 
 func (tb *TortoiseBeacon) runProposalPhase(epoch types.EpochID) error {
-	// take all ATXs received in last epoch (i - 1)
+	// take all ATXs received in previous epoch
 	atxList := ATXIDList(tb.epochATXGetter.GetEpochAtxs(epoch - 1))
 	if len(atxList) == 0 {
 		return ErrEmptyProposalList

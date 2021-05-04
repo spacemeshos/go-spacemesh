@@ -29,12 +29,7 @@ func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID) {
 	events.ReportCalculatedTortoiseBeacon(epoch, beacon.String())
 
 	tb.beaconsMu.Lock()
-
 	tb.beacons[epoch] = beacon
-	close(tb.beaconsReady[epoch]) // indicate that value is ready
-
-	tb.beaconsReady[epoch+1] = make(chan struct{}) // get the next epoch ready
-
 	tb.beaconsMu.Unlock()
 }
 

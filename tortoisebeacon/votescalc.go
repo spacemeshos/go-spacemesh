@@ -121,6 +121,7 @@ func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) votesCountMap {
 		}
 	}
 
+	// TODO(nkryuchkov): Unused for now.
 	// protected by tb.votesMu
 	tb.votesCountCache[firstRoundInThisEpoch] = make(map[types.Hash32]int)
 	for k, v := range firstRoundVotesCount {
