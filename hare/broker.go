@@ -109,6 +109,7 @@ var (
 	errNotSynced         = errors.New("layer is not synced")
 	errFutureMsg         = errors.New("future message")
 	errRegistration      = errors.New("failed during registration")
+	errTooMany           = errors.New("too many concurrent consensus processes running")
 	errInstanceNotSynced = errors.New("instance not synchronized")
 )
 
