@@ -213,7 +213,12 @@ func (b *Builder) loop(ctx context.Context) {
 			currentLayer := b.layerClock.GetCurrentLayer()
 			b.log.With().Error("atx construction errored", log.Err(err), currentLayer, currentLayer.GetEpoch())
 			events.ReportAtxCreated(false, uint64(b.currentEpoch()), "")
-			<-b.layerClock.AwaitLayer(currentLayer + 1)
+			select {
+			case <-b.stop:
+				return
+			case <-b.layerClock.AwaitLayer(currentLayer + 1):
+				continue
+			}
 		}
 	}
 }

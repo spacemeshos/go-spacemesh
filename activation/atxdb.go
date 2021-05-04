@@ -41,7 +41,7 @@ func getAtxHeaderKey(atxID types.ATXID) []byte {
 }
 
 func getAtxBodyKey(atxID types.ATXID) []byte {
-	return []byte(fmt.Sprintf("b_%v", atxID.Bytes()))
+	return atxID.Bytes()
 }
 
 var errInvalidSig = fmt.Errorf("identity not found when validating signature, invalid atx")
@@ -503,11 +503,12 @@ func (db *DB) storeAtxUnlocked(atx *types.ActivationTx) error {
 		return err
 	}
 
-	atxBodyBytes, err := types.InterfaceToBytes(getAtxBody(atx))
+	// todo: this changed so that a full atx will be written - inherently there will be double data with atx header
+	atxBytes, err := types.InterfaceToBytes(atx)
 	if err != nil {
 		return err
 	}
-	err = db.atxs.Put(getAtxBodyKey(atx.ID()), atxBodyBytes)
+	err = db.atxs.Put(getAtxBodyKey(atx.ID()), atxBytes)
 	if err != nil {
 		return err
 	}
@@ -642,13 +643,13 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 	return
 }
 
-// GetNodeAtxIDForEpoch returns an atx published by the provided nodeID for the specified targetEpoch. meaning the atx
+// GetNodeAtxIDForEpoch returns an atx published by the provided nodeID for the specified publication epoch. meaning the atx
 // that the requested nodeID has published. it returns an error if no atx was found for provided nodeID
-func (db *DB) GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error) {
-	id, err := db.atxs.Get(getNodeAtxKey(nodeID, targetEpoch))
+func (db *DB) GetNodeAtxIDForEpoch(nodeID types.NodeID, publicationEpoch types.EpochID) (types.ATXID, error) {
+	id, err := db.atxs.Get(getNodeAtxKey(nodeID, publicationEpoch))
 	if err != nil {
-		return *types.EmptyATXID, fmt.Errorf("atx for node %v targeting epoch %v: %v",
-			nodeID.ShortString(), targetEpoch, err)
+		return *types.EmptyATXID, fmt.Errorf("atx for node %v with publication epoch %v: %v",
+			nodeID.ShortString(), publicationEpoch, err)
 	}
 	return types.ATXID(types.BytesToHash(id)), nil
 }
@@ -719,11 +720,9 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	if err != nil {
 		return nil, err
 	}
-	header, err := db.GetAtxHeader(id)
-	if err != nil {
-		return nil, err
-	}
-	atx.ActivationTxHeader = header
+	atx.ActivationTxHeader.SetID(&id)
+	db.atxHeaderCache.Add(id, atx.ActivationTxHeader)
+
 	return atx, nil
 }
 
@@ -776,12 +775,12 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, syncer service.Fet
 
 	if err := syncer.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
 		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
-			atx.ShortString(), atx.GetShortPoetProofRef(), err)
+			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err)
 	}
 
 	if err := db.FetchAtxReferences(ctx, atx, syncer); err != nil {
-		return fmt.Errorf("received atx with missing references of prev or pos id %v, %v, %v, %v",
-			atx.ID(), atx.PrevATXID, atx.PositioningATX, log.Err(err))
+		return fmt.Errorf("received ATX with missing references of prev or pos id %v, %v, %v, %v",
+			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), log.Err(err))
 	}
 
 	err = db.SyntacticallyValidateAtx(atx)

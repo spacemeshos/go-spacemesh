@@ -30,7 +30,7 @@ func (v *Validator) Validate(minerID signing.PublicKey, nipst *types.NIPST, spac
 		return errors.New("NIPST challenge is not equal to expected challenge")
 	}
 
-	if membership, err := v.poetDb.GetMembershipMap(types.CalcHash32(nipst.PostProof.Challenge).Bytes()); err != nil || !membership[*nipst.NipstChallenge] {
+	if membership, err := v.poetDb.GetMembershipMap(nipst.PostProof.Challenge); err != nil || !membership[*nipst.NipstChallenge] {
 		return fmt.Errorf("PoET proof chain invalid: %v", err)
 	}
 

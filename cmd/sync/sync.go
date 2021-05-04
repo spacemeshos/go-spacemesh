@@ -148,7 +148,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	txpool := state.NewTxMemPool()
 	atxpool := activation.NewAtxMemPool()
 
-	app.sync = sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, goldenATXID, types.LayerID(expectedLayers))
+	app.sync = sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, goldenATXID, types.LayerID(expectedLayers), poetDbStore)
 	if err = swarm.Start(cmdp.Ctx); err != nil {
 		log.With().Panic("error starting p2p", log.Err(err))
 	}
@@ -158,7 +158,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		lg.With().Info("getting layer", types.LayerID(i))
 		if lyr, err2 := app.sync.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
 			l := types.LayerID(i)
-			if !l.GetEpoch().IsGenesis() {
+			if l > types.GetEffectiveGenesis() {
 				lg.With().Info("finished loading layers from disk",
 					log.FieldNamed("layers_loaded", types.LayerID(i-1)),
 					log.Err(err2),
