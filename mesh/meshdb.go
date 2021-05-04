@@ -90,7 +90,7 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 
 	for _, blk := range GenesisLayer().Blocks() {
 		logger.With().Info("adding genesis block", blk.ID(), blk.LayerIndex)
-		if err := ll.AddBlock(blk); err != nil {
+		if err := ll.AddBlock(blk); err != nil && !errors.Is(err, ErrAlreadyExist) {
 			logger.With().Error("error inserting genesis block to db", blk.ID(), blk.LayerIndex, log.Err(err))
 			return nil, err
 		}
@@ -323,7 +323,7 @@ func (m *DB) SaveContextualValidity(id types.BlockID, valid bool) error {
 	} else {
 		v = constFalse
 	}
-	m.Debug("save contextual validity %v %v", id, valid)
+	m.With().Debug("saving block contextual validity", id, log.Bool("is_valid", valid))
 	return m.contextualValidity.Put(id.Bytes(), v)
 }
 
