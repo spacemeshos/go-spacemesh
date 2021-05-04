@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/fixed"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math/rand"
@@ -358,8 +358,7 @@ func assertActiveSetSize(t *testing.T, o *Oracle, expected uint64, l types.Layer
 	assert.Equal(t, expected, activeSetSize)
 }
 
-func Test_BlsSignVerify(t *testing.T) {
-	pr, pu := BLS381.GenKeyPair(BLS381.DefaultSeed())
+func Test_VrfSignVerify(t *testing.T) {
 	o := defaultOracle(t)
 	getActiveSet := func(types.EpochID, map[types.BlockID]struct{}) (map[string]uint64, error) {
 		return map[string]uint64{
@@ -368,9 +367,13 @@ func Test_BlsSignVerify(t *testing.T) {
 		}, nil
 	}
 	o.getActiveSet = getActiveSet
-	o.vrfVerifier = BLS381.Verify2
-	o.vrfSigner = BLS381.NewBlsSigner(pr)
-	id := types.NodeID{Key: "my_key", VRFPublicKey: pu}
+	o.vrfVerifier = signing.VRFVerify
+	seed := make([]byte, 32)
+	rand.Read(seed)
+	vrfSigner, vrfPubkey, err := signing.NewVRFSigner(seed)
+	assert.NoError(t, err)
+	o.vrfSigner = vrfSigner
+	id := types.NodeID{Key: "my_key", VRFPublicKey: vrfPubkey}
 	proof, err := o.Proof(context.TODO(), 50, 1)
 	assert.NoError(t, err)
 

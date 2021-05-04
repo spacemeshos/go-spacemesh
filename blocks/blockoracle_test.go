@@ -3,9 +3,9 @@ package blocks
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"testing"
 
-	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -15,18 +15,22 @@ import (
 
 var atxID = types.ATXID([32]byte{1, 3, 3, 7})
 var nodeID, vrfsgn = generateNodeIDAndSigner()
-var validateVRF = BLS381.Verify2
-var vrfPrivkey, vrfPubkey = BLS381.GenKeyPair(BLS381.DefaultSeed())
+var validateVRF = signing.VRFVerify
 var edSigner = signing.NewEdSigner()
 var activeSetAtxs = []types.ATXID{atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID} // 10 ATXs
 
 const defaultAtxWeight = 1024
 
 func generateNodeIDAndSigner() (types.NodeID, vrfSigner) {
+	edPubkey := edSigner.PublicKey()
+	vrfSigner, vrfPubkey, err := signing.NewVRFSigner(edPubkey.Bytes())
+	if err != nil {
+		panic("failed to create vrf signer")
+	}
 	return types.NodeID{
-		Key:          edSigner.PublicKey().String(),
+		Key:          edPubkey.String(),
 		VRFPublicKey: vrfPubkey,
-	}, BLS381.NewBlsSigner(vrfPrivkey)
+	}, vrfSigner
 }
 
 type mockActivationDB struct {
@@ -43,7 +47,7 @@ func (a mockActivationDB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXI
 }
 
 func (a mockActivationDB) GetIdentity(edID string) (types.NodeID, error) {
-	return types.NodeID{Key: edID, VRFPublicKey: vrfPubkey}, nil
+	return types.NodeID{Key: edID, VRFPublicKey: nodeID.VRFPublicKey}, nil
 }
 
 func (a mockActivationDB) GetNodeAtxIDForEpoch(nID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error) {
@@ -59,7 +63,7 @@ func (a mockActivationDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeade
 			NIPSTChallenge: types.NIPSTChallenge{
 				NodeID: types.NodeID{
 					Key:          edSigner.PublicKey().String(),
-					VRFPublicKey: vrfPubkey,
+					VRFPublicKey: nodeID.VRFPublicKey,
 				},
 				PubLayerID: a.atxPublicationLayer,
 				StartTick:  0,
@@ -192,7 +196,10 @@ func TestBlockOracleNoActivationsForNode(t *testing.T) {
 	committeeSize := uint32(200)
 	layersPerEpoch := uint16(10)
 	types.SetLayersPerEpoch(int32(layersPerEpoch))
-	_, publicKey := BLS381.GenKeyPair(BLS381.DefaultSeed())
+	seed := make([]byte, 32)
+	rand.Read(seed)
+	_, publicKey, err := signing.NewVRFSigner(seed)
+	r.NoError(err)
 	nID := types.NodeID{
 		Key:          "other key",
 		VRFPublicKey: publicKey,
@@ -223,11 +230,15 @@ func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 
 	layerID := types.LayerID(layersPerEpoch * 2)
 
-	_, proofs, _, err := blockOracle.BlockEligible(layerID)
-	r.NoError(err)
-	r.NotNil(proofs)
-
-	proof := proofs[0]
+	var proof types.BlockEligibilityProof
+	for ; ; layerID++ {
+		_, proofs, _, err := blockOracle.BlockEligible(layerID)
+		r.NoError(err)
+		if len(proofs) > 0 {
+			proof = proofs[0]
+			break
+		}
+	}
 	proof.Sig[0]++ // Messing with the proof 😈
 
 	validator := NewBlockEligibilityValidator(committeeSize, totalWeight, layersPerEpoch, activationDB, beaconProvider,
@@ -288,13 +299,17 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 
 	layerID := types.LayerID(layersPerEpoch * 2)
 
-	_, proofs, _, err := blockOracle.BlockEligible(layerID)
-	r.NoError(err)
-	r.NotNil(proofs)
-
-	proof := proofs[0]
-	for i := 1; proof.J == 0; i++ {
-		proof = proofs[i]
+	var proof types.BlockEligibilityProof
+	for ; ; layerID++ {
+		_, proofs, _, err := blockOracle.BlockEligible(layerID)
+		r.NoError(err)
+		if len(proofs) > 0 {
+			proof = proofs[0]
+			for i := 1; proof.J == 0; i++ {
+				proof = proofs[i]
+			}
+			break
+		}
 	}
 
 	validatorActivationDB := &mockActivationDB{atxPublicationLayer: types.LayerID(0), atxs: activationDB.atxs}
