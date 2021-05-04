@@ -47,9 +47,9 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	proofBytes, err := types.InterfaceToBytes(poetProof)
 	r.NoError(err)
 	expectedRef := sha256.Sum256(proofBytes)
-	r.Equal(expectedRef[:], ref)
+	r.Equal(types.CalcHash32(expectedRef[:]).Bytes(), ref)
 
-	membership, err := poetDb.GetMembershipMap(types.CalcHash32(ref).Bytes())
+	membership, err := poetDb.GetMembershipMap(ref)
 	r.NoError(err)
 	r.True(membership[types.BytesToHash([]byte("1"))])
 	r.False(membership[types.BytesToHash([]byte("5"))])
@@ -129,7 +129,7 @@ func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 
 	select {
 	case proofRef := <-ch:
-		membership, err := poetDb.GetMembershipMap(types.CalcHash32(proofRef).Bytes())
+		membership, err := poetDb.GetMembershipMap(proofRef)
 		r.NoError(err)
 		r.Equal(membershipSliceToMap(poetProof.Members), membership)
 	case <-time.After(2 * time.Millisecond):
@@ -142,7 +142,7 @@ func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 
 	select {
 	case proofRef := <-newCh:
-		membership, err := poetDb.GetMembershipMap(types.CalcHash32(proofRef).Bytes())
+		membership, err := poetDb.GetMembershipMap(proofRef)
 		r.NoError(err)
 		r.Equal(membershipSliceToMap(poetProof.Members), membership)
 	case <-time.After(2 * time.Millisecond):

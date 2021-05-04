@@ -104,19 +104,13 @@ type Switch struct {
 }
 
 func (s *Switch) waitForBoot() error {
-	_, ok := <-s.bootChan
-	if !ok {
-		return s.bootErr
-	}
-	return nil
+	<-s.bootChan
+	return s.bootErr
 }
 
 func (s *Switch) waitForGossip() error {
-	_, ok := <-s.gossipC
-	if !ok {
-		return s.gossipErr
-	}
-	return nil
+	<-s.gossipC
+	return s.gossipErr
 }
 
 // GossipReady is a chan which is closed when we established initial min connections with peers.
@@ -299,6 +293,7 @@ func (s *Switch) Start(ctx context.Context) error {
 				log.Bool("success", size >= s.config.SwarmConfig.RandomConnections && s.bootErr == nil),
 				log.Int("size", size),
 				log.Duration("time_elapsed", time.Since(b)))
+
 		}()
 	}
 
@@ -309,20 +304,18 @@ func (s *Switch) Start(ctx context.Context) error {
 		s.gossip.Start(log.WithNewSessionID(ctx))
 		go func() {
 			if s.config.SwarmConfig.Bootstrap {
-				if err := s.waitForBoot(); err != nil {
+				if s.waitForBoot() != nil {
 					return
 				}
 			}
-			err := s.startNeighborhood(ctx) // non blocking
 			//todo:maybe start listening only after we got enough outbound neighbors?
-			if err != nil {
-				s.gossipErr = err
-				close(s.gossipC)
+			s.gossipErr = s.startNeighborhood(ctx) // non blocking
+			close(s.gossipC)
+			if s.gossipErr != nil {
 				s.Shutdown()
 				return
 			}
 			<-s.initial
-			close(s.gossipC)
 		}() // todo handle error async
 	}
 
@@ -620,9 +613,9 @@ func (s *Switch) ProcessDirectProtocolMessage(ctx context.Context, sender p2pcry
 	return nil
 }
 
-// ProcessGossipProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will
-// send the message syntactic validation result on the validationCompletedChan ASAP
-func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
+// ProcessGossipProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will send
+// the message syntactic validation result on the validationCompletedChan ASAP
+func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, ownMessage bool, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
 	h := types.CalcMessageHash12(data.Bytes(), protocol)
 
 	// route authenticated message to the registered protocol
@@ -638,7 +631,7 @@ func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcry
 	metrics.QueueLength.With(metrics.ProtocolLabel, protocol).Set(float64(len(msgchan)))
 
 	// TODO: check queue length
-	gpm := gossipProtocolMessage{sender: sender, data: data, validationChan: validationCompletedChan}
+	gpm := gossipProtocolMessage{sender: sender, ownMessage: ownMessage, data: data, validationChan: validationCompletedChan}
 	if requestID, ok := log.ExtractRequestID(ctx); ok {
 		gpm.requestID = requestID
 	} else {
@@ -731,6 +724,16 @@ loop:
 	}
 }
 
+func (s *Switch) closeInitial() {
+	select {
+	case <-s.initial:
+		// Nothing to do if channel is closed.
+	default:
+		// Close channel if it is not closed.
+		close(s.initial)
+	}
+}
+
 // askForMorePeers checks the number of peers required and tries to match this number. if there are enough peers it returns.
 // if it failed it issues a one second timeout and then sends a request to try again.
 func (s *Switch) askForMorePeers(ctx context.Context) {
@@ -768,7 +771,7 @@ func (s *Switch) askForMorePeers(ctx context.Context) {
 		s.initOnce.Do(func() {
 			s.logger.WithContext(ctx).With().Info("gossip connected to initial required neighbors",
 				log.Int("n", len(s.outpeers)))
-			close(s.initial)
+			s.closeInitial()
 			s.outpeersMutex.RLock()
 			var strs []string
 			for pk := range s.outpeers {
@@ -780,6 +783,9 @@ func (s *Switch) askForMorePeers(ctx context.Context) {
 		})
 		return
 	}
+
+	s.logger.Warning("needs more %d peers", s.config.SwarmConfig.RandomConnections-numpeers)
+
 	// if we could'nt get any maybe were initializing
 	// wait a little bit before trying again
 	tmr := time.NewTimer(NoResultsInterval)
@@ -937,6 +943,7 @@ func (s *Switch) addIncomingPeer(n p2pcrypto.PublicKey) error {
 	s.inpeersMutex.Unlock()
 	if !exist {
 		s.publishNewPeer(n)
+		s.discover.Attempt(n) // or good?
 		metrics.InboundPeers.Add(1)
 	}
 	return nil

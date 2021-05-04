@@ -53,14 +53,16 @@ type Broker struct {
 	isNodeSynced   syncStateFunc // provider function to check if the node is currently synced
 	layersPerEpoch uint16
 	inbox          chan service.GossipMessage
+	queue          priorityq.PriorityQueue
+	queueChannel   chan struct{} // used to synchronize the message queues
 	syncState      map[instanceID]bool
 	outbox         map[instanceID]chan *Msg
-	pending        map[instanceID][]*Msg // the buffer of pending messages for the next layer
+	pending        map[instanceID][]*Msg // the buffer of pending early messages for the next layer
 	tasks          chan func()           // a channel to synchronize tasks (register/unregister) with incoming messages handling
 	latestLayer    instanceID            // the latest layer to attempt register (successfully or unsuccessfully)
 	isStarted      bool
 	minDeleted     instanceID
-	limit          int // max number of consensus processes simultaneously
+	limit          int // max number of simultaneous consensus processes
 }
 
 func newBroker(networkService NetworkService, eValidator validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, limit int, closer Closer, log log.Log) *Broker {
@@ -79,6 +81,8 @@ func newBroker(networkService NetworkService, eValidator validator, stateQuerier
 		latestLayer:    instanceID(types.GetEffectiveGenesis()),
 		minDeleted:     0,
 		limit:          limit,
+		queue:          priorityq.New(inboxCapacity),       // TODO: set capacity correctly
+		queueChannel:   make(chan struct{}, inboxCapacity), // TODO: set capacity correctly
 	}
 }
 
@@ -89,11 +93,15 @@ func (b *Broker) Start(ctx context.Context) error {
 		return startInstanceError(errors.New("instance already started"))
 	}
 
+	inbox := b.network.RegisterGossipProtocol(protoName, priorityq.Mid)
+	return b.startWithInbox(ctx, inbox)
+}
+
+func (b *Broker) startWithInbox(ctx context.Context, inbox chan service.GossipMessage) error {
 	b.isStarted = true
-
-	b.inbox = b.network.RegisterGossipProtocol(protoName, priorityq.Mid)
+	b.inbox = inbox
+	go b.queueLoop(ctx)
 	go b.eventLoop(ctx)
-
 	return nil
 }
 
@@ -102,7 +110,6 @@ var (
 	errNotSynced         = errors.New("layer is not synced")
 	errFutureMsg         = errors.New("future message")
 	errRegistration      = errors.New("failed during registration")
-	errTooMany           = errors.New("too many concurrent consensus processes running")
 	errInstanceNotSynced = errors.New("instance not synchronized")
 )
 
@@ -142,14 +149,60 @@ func (b *Broker) validate(ctx context.Context, m *Message) error {
 	return nil
 }
 
-// listens to incoming messages and incoming tasks
-func (b *Broker) eventLoop(ctx context.Context) {
-	logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
+// separate listener routine that receives gossip messages and adds them to the priority queue
+func (b *Broker) queueLoop(ctx context.Context) {
 	for {
 		select {
 		case msg := <-b.inbox:
+			logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
+			logger.Debug("hare broker received inbound gossip message")
 			if msg == nil {
 				logger.Error("broker message validation failed: called with nil")
+				continue
+			}
+
+			// prioritize based on signature: outbound messages (self-generated) get priority
+			priority := priorityq.Mid
+			if msg.IsOwnMessage() {
+				priority = priorityq.High
+			}
+			logger.With().Debug("assigned message priority", log.Int("priority", int(priority)))
+
+			if err := b.queue.Write(priority, msg); err != nil {
+				logger.With().Error("error writing inbound message to priority queue, dropping", log.Err(err))
+			}
+
+			// indicate to the listener that there's a new message in the queue
+			b.queueChannel <- struct{}{}
+
+		case <-b.CloseChannel():
+			b.Info("broker exiting")
+			b.queue.Close()
+
+			// release the listener to notice that the queue is closing
+			close(b.queueChannel)
+			return
+		}
+	}
+}
+
+// listens to incoming messages and incoming tasks
+func (b *Broker) eventLoop(ctx context.Context) {
+	for {
+		b.With().Info("broker queue sizes",
+			log.Int("msg_queue_size", len(b.queueChannel)),
+			log.Int("task_queue_size", len(b.tasks)))
+		select {
+		case <-b.queueChannel:
+			logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
+			rawMsg, err := b.queue.Read()
+			if err != nil {
+				logger.With().Info("priority queue was closed, exiting", log.Err(err))
+				return
+			}
+			msg, ok := rawMsg.(service.GossipMessage)
+			if !ok {
+				logger.Error("could not convert priority queue message, ignoring")
 				continue
 			}
 
@@ -237,14 +290,12 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			if !exist {
 				msgLogger.With().Panic("missing broker instance for layer")
 			}
-			msgLogger.Debug("broker forwarding message to outbox")
+			msgLogger.With().Debug("broker forwarding message to outbox",
+				log.Int("outbox_queue_size", len(out)))
 			out <- iMsg
 
 		case task := <-b.tasks:
 			task()
-		case <-b.CloseChannel():
-			logger.Warning("broker exiting")
-			return
 		}
 	}
 }
