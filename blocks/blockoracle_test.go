@@ -303,8 +303,10 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 	for ; ; layerID++ {
 		_, proofs, _, err := blockOracle.BlockEligible(layerID)
 		r.NoError(err)
-		if len(proofs) > 0 {
+		// we want a proof with J != 0, so we must have more than one proof in the list
+		if len(proofs) > 1 {
 			proof = proofs[0]
+			// we keep trying until J != 0
 			for i := 1; proof.J == 0; i++ {
 				proof = proofs[i]
 			}
