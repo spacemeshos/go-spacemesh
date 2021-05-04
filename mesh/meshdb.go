@@ -81,8 +81,11 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 		exit:               make(chan struct{}),
 	}
 	if err := ll.AddBlock(GenesisBlock()); err != nil {
-		logger.With().Error("error adding genesis block to mesh", GenesisBlock().ID(), log.Err(err))
-		return nil, err
+		// we can safely ignore this
+		if !errors.Is(err, ErrAlreadyExist) {
+			logger.With().Error("error adding genesis block to mesh", GenesisBlock().ID(), log.Err(err))
+			return nil, err
+		}
 	}
 	if err := ll.SaveContextualValidity(GenesisBlock().ID(), true); err != nil {
 		logger.With().Error("error saving contextual validity of genesis block", GenesisBlock().ID(), log.Err(err))
@@ -282,7 +285,7 @@ func (m *DB) SaveContextualValidity(id types.BlockID, valid bool) error {
 	} else {
 		v = constFalse
 	}
-	m.Debug("save contextual validity %v %v", id, valid)
+	m.With().Debug("saving block contextual validity", id, log.Bool("is_valid", valid))
 	return m.contextualValidity.Put(id.Bytes(), v)
 }
 
