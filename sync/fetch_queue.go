@@ -320,17 +320,17 @@ func (atx atxQueue) HandleAtxs(ctx context.Context, atxids []types.ATXID) ([]*ty
 	return atxs, nil
 }
 
-func updateAtxDependencies(ctx context.Context, invalidate func(id types.Hash32, valid bool), sValidateAtx sValidateAtxFunc, fetchAtxRefs sFetchAtxFunc, atxDB atxDB, fetchProof fetchPoetProofFunc, logger log.Log) func(context.Context, fetchJob) {
+func updateAtxDependencies(_ context.Context, invalidate func(id types.Hash32, valid bool), sValidateAtx sValidateAtxFunc, fetchAtxRefs sFetchAtxFunc, atxDB atxDB, fetchProof fetchPoetProofFunc, logger log.Log) func(context.Context, fetchJob) {
 	return func(ctx context.Context, fj fetchJob) {
-		lgr := logger.WithContext(ctx)
 		// restore reqID from context
 		if fj.reqID == "" {
-			lgr.WithContext(ctx).Warning("got fetch job result with no requestID")
+			logger = logger.WithContext(ctx)
+			logger.Warning("got fetch job result with no requestID")
 		} else {
 			ctx = log.WithRequestID(ctx, fj.reqID)
-			lgr = lgr.WithContext(ctx)
+			logger = logger.WithContext(ctx)
 		}
-		fetchProofCalcID(ctx, lgr, fetchProof, fj)
+		fetchProofCalcID(ctx, logger, fetchProof, fj)
 
 		mp := map[types.Hash32]*types.ActivationTx{}
 		for _, item := range fj.items {
@@ -339,7 +339,7 @@ func updateAtxDependencies(ctx context.Context, invalidate func(id types.Hash32,
 		}
 
 		for _, id := range fj.ids {
-			lgrLocal := lgr.WithContext(ctx).WithFields(log.String("job_id", id.String()))
+			lgrLocal := logger.WithFields(log.String("job_id", id.String()))
 			if atx, ok := mp[id]; ok {
 				lgrLocal.With().Info("update atx dependencies queue work item", atx.ID())
 				if err := fetchAtxRefs(ctx, atx); err != nil {

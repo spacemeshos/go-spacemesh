@@ -533,11 +533,11 @@ func (s *Syncer) gossipSyncForOneFullLayer(ctx context.Context, currentSyncLayer
 	ch := s.ticker.Subscribe()
 
 	if done := s.waitLayer(ch); done {
-		return fmt.Errorf("cloed while buffering first layer")
+		return fmt.Errorf("closed while buffering first layer")
 	}
 
 	if done := s.waitLayer(ch); done {
-		return fmt.Errorf("cloed while buffering second layer ")
+		return fmt.Errorf("closed while buffering second layer")
 	}
 
 	s.ticker.Unsubscribe(ch) // unsub, we won't be listening on this ch anymore
@@ -605,7 +605,7 @@ func (s *Syncer) getLayerFromNeighbors(ctx context.Context, currentSyncLayer typ
 	}
 
 	// fetch ids for each hash
-	s.With().Info("fetch layer ids", currentSyncLayer)
+	s.With().Info("fetch layer ids", currentSyncLayer, log.Int("count", len(m)))
 	blockIds, err := s.fetchLayerBlockIds(ctx, m, currentSyncLayer)
 	if err != nil {
 		return nil, err
@@ -676,7 +676,7 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, blockIds 
 	logger.With().Info("wait for layer blocks", log.Int("num_blocks", len(blockIds)))
 	select {
 	case <-s.exit:
-		return nil, fmt.Errorf("received interupt")
+		return nil, fmt.Errorf("received interrupt")
 	case result := <-ch:
 		if !result {
 			return nil, fmt.Errorf("could not get all blocks for layer %v", layerID)
@@ -1146,7 +1146,7 @@ func (s *Syncer) fetchLayerHashes(ctx context.Context, lyr types.LayerID) (map[t
 	if len(m) == 0 {
 		return nil, errors.New("could not get layer hashes from any peer")
 	}
-	s.With().Info("layer has blocks", lyr)
+	s.With().Info("layer has blocks", lyr, log.Int("count", len(m)))
 	return m, nil
 }
 

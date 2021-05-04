@@ -72,7 +72,7 @@ func hashReqFactory(lyr types.LayerID) requestFactory {
 		foo := func(msg []byte) {
 			defer close(ch)
 			if len(msg) == 0 || msg == nil {
-				s.WithContext(ctx).With().Warning("peer responded with nil to hash request", log.FieldNamed("peer", peer), lyr)
+				s.WithContext(ctx).With().Warning("peer responded with nil to layer hash request", log.FieldNamed("peer", peer), lyr)
 				return
 			}
 			if len(msg) != types.Hash32Length {
@@ -98,7 +98,7 @@ func atxHashReqFactory(ep types.EpochID) requestFactory {
 		foo := func(msg []byte) {
 			defer close(ch)
 			if len(msg) == 0 || msg == nil {
-				s.WithContext(ctx).With().Warning("peer responded with nil to hash request", log.FieldNamed("peer", peer), ep)
+				s.WithContext(ctx).With().Warning("peer responded with nil to atx hash request", log.FieldNamed("peer", peer), ep)
 				return
 			}
 			if len(msg) != types.Hash32Length {
