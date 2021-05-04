@@ -76,12 +76,12 @@ func TestEventReporter(t *testing.T) {
 	ReportNewTx(globalTx)
 
 	// Stream is nil before we initialize it
-	txStream := GetNewTxChannel()
+	txStream := SubscribeToTxChannel()
 	require.Nil(t, txStream, "expected tx stream not to be initialized")
 
 	err := InitializeEventReporter("")
 	require.NoError(t, err)
-	txStream = GetNewTxChannel()
+	txStream = SubscribeToTxChannel()
 	require.NotNil(t, txStream, "expected tx stream to be initialized")
 
 	// This will not be received as no one is listening
@@ -124,12 +124,12 @@ func TestReportError(t *testing.T) {
 	ReportError(nodeErr)
 
 	// Stream is nil before we initialize it
-	stream := SubscribeToErrors(30)
+	stream := SubscribeToErrors()
 	require.Nil(t, stream, "expected stream not to be initialized")
 
-	err := InitializeEventReporterWithOptions("", 1, false)
+	err := InitializeEventReporterWithOptions("", 30)
 	require.NoError(t, err)
-	stream = SubscribeToErrors(30)
+	stream = SubscribeToErrors()
 	require.NotNil(t, stream, "expected stream to be initialized")
 
 	// This one will be buffered
@@ -187,12 +187,12 @@ func TestReportNodeStatus(t *testing.T) {
 	ReportNodeStatusUpdate()
 
 	// Stream is nil before we initialize it
-	stream := SubscribeToStatus(30)
+	stream := SubscribeToStatus()
 	require.Nil(t, stream, "expected stream not to be initialized")
 
 	err := InitializeEventReporter("")
 	require.NoError(t, err)
-	stream = SubscribeToStatus(30)
+	stream = SubscribeToStatus()
 	require.NotNil(t, stream, "expected stream to be initialized")
 
 	// This will not be received as no one is listening

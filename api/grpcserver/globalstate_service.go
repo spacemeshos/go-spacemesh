@@ -3,6 +3,7 @@ package grpcserver
 import (
 	"bytes"
 	"context"
+	"errors"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
@@ -284,6 +285,10 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 	if filterAccount {
 		if s.accountDataStreamAccountChannel == nil {
 			channelAccount = events.SubscribeToAccounts()
+			if channelAccount == nil {
+				log.Error("Reporter is not running")
+				return errors.New("Reporter is not running")
+			}
 		} else {
 			channelAccount = s.accountDataStreamAccountChannel
 		}
@@ -291,6 +296,10 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 	if filterReward {
 		if s.accountDataStreamRewardsChannel == nil {
 			channelReward = events.SubscribeToRewards()
+			if channelReward == nil {
+				log.Error("Reporter is not running")
+				return errors.New("Reporter is not running")
+			}
 		} else {
 			channelReward = s.accountDataStreamRewardsChannel
 		}
@@ -298,6 +307,10 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 	if filterReceipt {
 		if s.accountDataStreamReceiptsChannel == nil {
 			channelReceipt = events.SubscribeToReceipts()
+			if channelReceipt == nil {
+				log.Error("Reporter is not running")
+				return errors.New("Reporter is not running")
+			}
 		} else {
 			channelReceipt = s.accountDataStreamReceiptsChannel
 		}
