@@ -46,6 +46,7 @@ func ReportTxWithValidity(tx *types.Transaction, valid bool) {
 		for sub := range reporter.transactionSubs {
 			select {
 			case sub <- txWithValidity:
+				log.Info("reported tx to subs")
 			default:
 				log.Debug("reporter would block on subscriber %v", sub)
 			}

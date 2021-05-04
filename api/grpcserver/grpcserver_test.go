@@ -1631,9 +1631,179 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	req.NoError(err)
 }
 
+func TestTransactionsStateStream_StateOnly(t *testing.T) {
+	events.CloseEventReporter()
+	err := events.InitializeEventReporterWithOptions("", 30)
+	grpcService := NewTransactionService(&networkMock, txAPI, mempoolMock, &SyncerMock{isSynced: true})
+	grpcService.layerChannel = events.SubscribeToLayerChannel()
+	grpcService.transactionChannel = events.SubscribeToTxChannel()
+	shutDown := launchServer(t, grpcService)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
+	c := pb.NewTransactionServiceClient(conn)
+	req := &pb.TransactionsStateStreamRequest{}
+	req.TransactionId = append(req.TransactionId, &pb.TransactionId{
+		Id: globalTx.ID().Bytes(),
+	})
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	syncChannel := make(chan struct{})
+	go func() {
+		defer wg.Done()
+		stream, err := c.TransactionsStateStream(context.Background(), req)
+		require.NoError(t, err)
+		res, err := stream.Recv()
+		syncChannel <- struct{}{}
+		require.NoError(t, err)
+		require.Nil(t, res.Transaction)
+		require.Equal(t, globalTx.ID().Bytes(), res.TransactionState.Id.Id)
+		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
+	}()
+
+	require.NoError(t, err)
+	events.ReportNewTx(globalTx)
+	<-syncChannel
+	events.CloseEventReporter()
+	wg.Wait()
+}
+
+func TestTransactionsStateStream_All(t *testing.T) {
+	events.CloseEventReporter()
+	err := events.InitializeEventReporterWithOptions("", 30)
+	grpcService := NewTransactionService(&networkMock, txAPI, mempoolMock, &SyncerMock{isSynced: true})
+	grpcService.layerChannel = events.SubscribeToLayerChannel()
+	grpcService.transactionChannel = events.SubscribeToTxChannel()
+	shutDown := launchServer(t, grpcService)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
+	c := pb.NewTransactionServiceClient(conn)
+	req := &pb.TransactionsStateStreamRequest{}
+	req.TransactionId = append(req.TransactionId, &pb.TransactionId{
+		Id: globalTx.ID().Bytes(),
+	})
+	req.IncludeTransactions = true
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		stream, err := c.TransactionsStateStream(context.Background(), req)
+		require.NoError(t, err)
+		res, err := stream.Recv()
+		require.NoError(t, err)
+		require.Equal(t, globalTx.ID().Bytes(), res.TransactionState.Id.Id)
+		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
+		checkTransaction(t, res.Transaction)
+	}()
+
+	require.NoError(t, err)
+	events.ReportNewTx(globalTx)
+	wg.Wait()
+}
+
+func TestTransactionService_SubmitThenStream(t *testing.T) {
+
+	events.CloseEventReporter()
+	err := events.InitializeEventReporterWithOptions("", 30)
+	grpcService := NewTransactionService(&networkMock, txAPI, mempoolMock, &SyncerMock{isSynced: true})
+	grpcService.layerChannel = events.SubscribeToLayerChannel()
+	grpcService.transactionChannel = events.SubscribeToTxChannel()
+	shutDown := launchServer(t, grpcService)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
+	c := pb.NewTransactionServiceClient(conn)
+	delete(txAPI.returnTx, globalTx.ID())
+	defer func() { txAPI.returnTx[globalTx.ID()] = globalTx }()
+
+	// STREAM
+	// Open the stream first and listen for new transactions
+	req := &pb.TransactionsStateStreamRequest{}
+	req.TransactionId = append(req.TransactionId, &pb.TransactionId{
+		Id: globalTx.ID().Bytes(),
+	})
+	req.IncludeTransactions = true
+
+	// Simulate the process by which a newly-broadcast tx lands in the mempool
+	wgBroadcast := sync.WaitGroup{}
+	wgBroadcast.Add(1)
+	go func() {
+		// Wait until the data is available
+		wgBroadcast.Wait()
+
+		// Read it
+		data := networkMock.GetBroadcast()
+
+		// Deserialize
+		tx, err := types.BytesToTransaction(data)
+		require.NotNil(t, tx, "expected transaction")
+		require.NoError(t, tx.CalcAndSetOrigin())
+		require.NoError(t, err, "error deserializing broadcast tx")
+
+		// We assume the data is valid here, and put it directly into the txpool
+		mempoolMock.Put(tx.ID(), tx)
+	}()
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		stream, err := c.TransactionsStateStream(context.Background(), req)
+		require.NoError(t, err)
+		res, err := stream.Recv()
+		require.NoError(t, err)
+		require.Equal(t, globalTx.ID().Bytes(), res.TransactionState.Id.Id)
+		// We expect the tx to go to the mempool
+		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.TransactionState.State)
+		checkTransaction(t, res.Transaction)
+	}()
+
+	// SUBMIT
+	require.NoError(t, err)
+	serializedTx, err := types.InterfaceToBytes(globalTx)
+	require.NoError(t, err, "error serializing tx")
+	res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
+		Transaction: serializedTx,
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(code.Code_OK), res.Status.Code)
+	require.Equal(t, globalTx.ID().Bytes(), res.Txstate.Id.Id)
+	require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
+	wgBroadcast.Done()
+
+	wg.Wait()
+}
+
 func TestTransactionService(t *testing.T) {
 
 	grpcService := NewTransactionService(&networkMock, txAPI, mempoolMock, &SyncerMock{isSynced: true})
+	grpcService.layerChannel = events.SubscribeToLayerChannel()
+	grpcService.transactionChannel = events.SubscribeToTxChannel()
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1771,123 +1941,6 @@ func TestTransactionService(t *testing.T) {
 			require.Equal(t, codes.InvalidArgument, statusCode)
 			require.Contains(t, err.Error(), "`TransactionId` must include")
 		}},
-		{"TransactionsStateStream_StateOnly", func(t *testing.T) {
-			// Set up the reporter
-			req := &pb.TransactionsStateStreamRequest{}
-			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
-				Id: globalTx.ID().Bytes(),
-			})
-
-			wg := sync.WaitGroup{}
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				stream, err := c.TransactionsStateStream(context.Background(), req)
-				require.NoError(t, err)
-				res, err := stream.Recv()
-				require.NoError(t, err)
-				require.Nil(t, res.Transaction)
-				require.Equal(t, globalTx.ID().Bytes(), res.TransactionState.Id.Id)
-				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
-			}()
-
-			events.CloseEventReporter()
-			err := events.InitializeEventReporterWithOptions("", 1)
-			require.NoError(t, err)
-			events.ReportNewTx(globalTx)
-			wg.Wait()
-		}},
-		{"TransactionsStateStream_All", func(t *testing.T) {
-			req := &pb.TransactionsStateStreamRequest{}
-			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
-				Id: globalTx.ID().Bytes(),
-			})
-			req.IncludeTransactions = true
-
-			wg := sync.WaitGroup{}
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				stream, err := c.TransactionsStateStream(context.Background(), req)
-				require.NoError(t, err)
-				res, err := stream.Recv()
-				require.NoError(t, err)
-				require.Equal(t, globalTx.ID().Bytes(), res.TransactionState.Id.Id)
-				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
-				checkTransaction(t, res.Transaction)
-			}()
-
-			events.CloseEventReporter()
-			err := events.InitializeEventReporterWithOptions("", 1)
-			require.NoError(t, err)
-			events.ReportNewTx(globalTx)
-			wg.Wait()
-		}},
-		// Submit a tx, then receive it over the stream
-		{"TransactionsState_SubmitThenStream", func(t *testing.T) {
-			// Remove the tx from the mesh so it only appears in the mempool
-			delete(txAPI.returnTx, globalTx.ID())
-			defer func() { txAPI.returnTx[globalTx.ID()] = globalTx }()
-
-			// STREAM
-			// Open the stream first and listen for new transactions
-			req := &pb.TransactionsStateStreamRequest{}
-			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
-				Id: globalTx.ID().Bytes(),
-			})
-			req.IncludeTransactions = true
-
-			// Simulate the process by which a newly-broadcast tx lands in the mempool
-			wgBroadcast := sync.WaitGroup{}
-			wgBroadcast.Add(1)
-			go func() {
-				// Wait until the data is available
-				wgBroadcast.Wait()
-
-				// Read it
-				data := networkMock.GetBroadcast()
-
-				// Deserialize
-				tx, err := types.BytesToTransaction(data)
-				require.NotNil(t, tx, "expected transaction")
-				require.NoError(t, tx.CalcAndSetOrigin())
-				require.NoError(t, err, "error deserializing broadcast tx")
-
-				// We assume the data is valid here, and put it directly into the txpool
-				mempoolMock.Put(tx.ID(), tx)
-			}()
-
-			wg := sync.WaitGroup{}
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				stream, err := c.TransactionsStateStream(context.Background(), req)
-				require.NoError(t, err)
-				res, err := stream.Recv()
-				require.NoError(t, err)
-				require.Equal(t, globalTx.ID().Bytes(), res.TransactionState.Id.Id)
-				// We expect the tx to go to the mempool
-				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.TransactionState.State)
-				checkTransaction(t, res.Transaction)
-			}()
-
-			// SUBMIT
-			events.CloseEventReporter()
-			err := events.InitializeEventReporterWithOptions("", 1)
-			require.NoError(t, err)
-			serializedTx, err := types.InterfaceToBytes(globalTx)
-			require.NoError(t, err, "error serializing tx")
-			res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
-				Transaction: serializedTx,
-			})
-			require.NoError(t, err)
-			require.Equal(t, int32(code.Code_OK), res.Status.Code)
-			require.Equal(t, globalTx.ID().Bytes(), res.Txstate.Id.Id)
-			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
-			wgBroadcast.Done()
-
-			wg.Wait()
-		}},
 	}
 
 	// Run subtests
@@ -1980,7 +2033,13 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 }
 
 func TestAccountMeshDataStream_comprehensive(t *testing.T) {
+	events.CloseEventReporter()
+	err := events.InitializeEventReporterWithOptions("", 30)
+	require.NoError(t, err)
 	grpcService := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	grpcService.activationChannel = events.SubscribeToActivations()
+	grpcService.layerChannel = events.SubscribeToLayerChannel()
+	grpcService.txChannel = events.SubscribeToTxChannel()
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -2009,6 +2068,8 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
+	syncChannel := make(chan struct{})
+
 	// This will block so run it in a goroutine
 	go func() {
 		defer wg.Done()
@@ -2021,10 +2082,14 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 		require.NoError(t, err, "got error from stream")
 		checkAccountMeshDataItemTx(t, res.Datum.Datum)
 
+		syncChannel <- struct{}{}
+
 		// second item should be an activation
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
 		checkAccountMeshDataItemActivation(t, res.Datum.Datum)
+
+		syncChannel <- struct{}{}
 
 		// look for EOF
 		// third and fourth events streamed should not be received! they should be
@@ -2034,17 +2099,16 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	}()
 
 	// initialize the streamer
-	log.Info("initializing event stream")
-	events.CloseEventReporter()
-	err = events.InitializeEventReporterWithOptions("", 0)
-	require.NoError(t, err)
 
 	// publish a tx
 	events.ReportNewTx(globalTx)
 
+	<-syncChannel
+
 	// publish an activation
 	events.ReportNewActivation(globalAtx)
 
+	<-syncChannel
 	// test streaming a tx and an atx that are filtered out
 	// these should not be received
 	events.ReportNewTx(globalTx2)
@@ -2061,7 +2125,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 func TestAccountDataStream_comprehensive(t *testing.T) {
 	log.Info("initializing event stream")
 	events.CloseEventReporter()
-	err := events.InitializeEventReporterWithOptions("", 0)
+	err := events.InitializeEventReporterWithOptions("", 30)
 	require.NoError(t, err)
 	svc := NewGlobalStateService(txAPI, mempoolMock)
 	svc.accountDataStreamAccountChannel = events.SubscribeToAccounts()
@@ -2172,7 +2236,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	// initialize the streamer
 	log.Info("initializing event stream")
 	events.CloseEventReporter()
-	err := events.InitializeEventReporterWithOptions("", 0)
+	err := events.InitializeEventReporterWithOptions("", 30)
 	require.NoError(t, err)
 	svc := NewGlobalStateService(txAPI, mempoolMock)
 	svc.globalStateStreamAccountChannel = events.SubscribeToAccounts()
@@ -2287,7 +2351,10 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 }
 
 func TestLayerStream_comprehensive(t *testing.T) {
+	log.Info("initializing event stream")
+	require.NoError(t, events.InitializeEventReporterWithOptions("", 30))
 	grpcService := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	grpcService.layerChannel = events.SubscribeToLayerChannel()
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -2328,10 +2395,6 @@ func TestLayerStream_comprehensive(t *testing.T) {
 		_, err = stream.Recv()
 		require.Equal(t, io.EOF, err, "expected EOF from stream")
 	}()
-
-	// initialize the streamer
-	log.Info("initializing event stream")
-	require.NoError(t, events.InitializeEventReporterWithOptions("", 0))
 
 	layer, err := txAPI.GetLayer(layerFirst)
 	require.NoError(t, err)

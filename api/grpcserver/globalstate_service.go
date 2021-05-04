@@ -428,6 +428,10 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 	// subscribe to the rewards channel
 
 	channelRewards := events.SubscribeToRewards()
+	if channelRewards == nil {
+		log.Error("Reporter is not running")
+		return errors.New("Reporter is not running")
+	}
 
 	for {
 		select {
@@ -494,6 +498,10 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 	if filterAccount {
 		if s.globalStateStreamAccountChannel == nil {
 			channelAccount = events.SubscribeToAccounts()
+			if channelAccount == nil {
+				log.Error("Reporter is not running")
+				return errors.New("Reporter is not running")
+			}
 		} else {
 			channelAccount = s.globalStateStreamAccountChannel
 		}
@@ -502,6 +510,10 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		// needs to be buffered to avoid reporter from being blocked on slow streaming connections
 		if s.globalStateStreamRewardsChannel == nil {
 			channelReward = events.SubscribeToRewards()
+			if channelReward == nil {
+				log.Error("Reporter is not running")
+				return errors.New("Reporter is not running")
+			}
 		} else {
 			channelReward = s.globalStateStreamRewardsChannel
 		}
@@ -512,6 +524,10 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 	if filterReceipt {
 		if s.globalStateStreamReceiptsChannel == nil {
 			channelReceipt = events.SubscribeToReceipts()
+			if channelReceipt == nil {
+				log.Error("Reporter is not running")
+				return errors.New("Reporter is not running")
+			}
 		} else {
 			channelReceipt = s.globalStateStreamReceiptsChannel
 		}
@@ -519,7 +535,15 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 	if filterState {
 		// Whenever new state is applied to the mesh, a new layer is reported.
 		// There is no separate reporting specifically for new state.
-		channelLayer = events.SubscribeToLayerChannel()
+		if s.globalStateStreamLayerChannel != nil {
+			channelLayer = s.globalStateStreamLayerChannel
+		} else {
+			channelLayer = events.SubscribeToLayerChannel()
+			if channelLayer == nil {
+				log.Error("Reporter is not running")
+				return errors.New("Reporter is not running")
+			}
+		}
 	}
 
 	for {
