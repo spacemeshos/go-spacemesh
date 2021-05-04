@@ -187,9 +187,10 @@ func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.B
 			return errNoActiveSet
 		}
 	}
-	err := syncer.GetAtxs(ctx, atxs)
-	bh.WithContext(ctx).With().Debug("block handler done fetching atxs referenced by block", blk.ID(), log.Err(err))
-	return err
+	if len(atxs) > 0 {
+		return syncer.GetAtxs(ctx, atxs)
+	}
+	return nil
 }
 
 func (bh *BlockHandler) fastValidation(block *types.Block) error {
