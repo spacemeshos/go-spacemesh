@@ -3,10 +3,10 @@ package eligibility
 import (
 	"context"
 	"errors"
-	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math/rand"
@@ -254,7 +254,7 @@ func Test_ActiveSetSize(t *testing.T) {
 	m[types.EpochID(39)] = 5
 	o := New(&mockValueProvider{1, nil}, (&mockBufferedActiveSetProvider{m}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	// TODO: remove this comment after inception problem is addressed
-	//assert.Equal(t, o.getActiveSet.ActiveSet(0), o.activeSetSize(1))
+	// assert.Equal(t, o.getActiveSet.ActiveSet(0), o.activeSetSize(1))
 	l := 19 + defSafety
 	assertActiveSetSize(t, o, 2, l)
 	assertActiveSetSize(t, o, 3, l+10)
@@ -276,15 +276,25 @@ func assertActiveSetSize(t *testing.T, o *Oracle, expected uint32, l types.Layer
 	assert.Equal(t, expected, activeSetSize)
 }
 
-func Test_BlsSignVerify(t *testing.T) {
-	pr, pu := BLS381.GenKeyPair(BLS381.DefaultSeed())
-	sr := BLS381.NewBlsSigner(pr)
-	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, BLS381.Verify2, sr, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
-	id := types.NodeID{Key: "abc", VRFPublicKey: pu}
-	proof, err := o.Proof(context.TODO(), 1, 1)
-	assert.Nil(t, err)
-	res, err := o.Eligible(context.TODO(), 1, 1, 10, id, proof)
-	assert.Nil(t, err)
+func Test_VrfSignVerify(t *testing.T) {
+	seed := make([]byte, 32)
+	rand.Read(seed)
+	vrfSigner, vrfPubkey, err := signing.NewVRFSigner(seed)
+	assert.NoError(t, err)
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, signing.VRFVerify, vrfSigner, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	getActiveSet := func(types.EpochID, map[types.BlockID]struct{}) (map[string]struct{}, error) {
+		return map[string]struct{}{
+			"my_key": {},
+			"abc":    {},
+		}, nil
+	}
+	o.getActiveSet = getActiveSet
+	id := types.NodeID{Key: "my_key", VRFPublicKey: vrfPubkey}
+	proof, err := o.Proof(context.TODO(), 50, 1)
+	assert.NoError(t, err)
+
+	res, err := o.Eligible(context.TODO(), 50, 1, 10, id, proof)
+	assert.NoError(t, err)
 	assert.True(t, res)
 }
 

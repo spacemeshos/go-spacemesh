@@ -3,7 +3,6 @@ package hare
 import (
 	"context"
 	"errors"
-	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
@@ -276,12 +275,14 @@ func generateConsensusProcess(t *testing.T) *consensusProcess {
 
 	s := NewSetFromValues(value1)
 	oracle := eligibility.New()
-	signing := signing.NewEdSigner()
-	_, vrfPub := BLS381.GenKeyPair(BLS381.DefaultSeed())
-	oracle.Register(true, signing.PublicKey().String())
+	edSigner := signing.NewEdSigner()
+	edPubkey := edSigner.PublicKey()
+	_, vrfPub, err := signing.NewVRFSigner(edSigner.Sign(edPubkey.Bytes()))
+	assert.NoError(t, err)
+	oracle.Register(true, edPubkey.String())
 	output := make(chan TerminationOutput, 1)
 
-	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, signing, types.NodeID{Key: signing.PublicKey().String(), VRFPublicKey: vrfPub}, n1, output, truer{}, log.NewDefault(signing.PublicKey().String()))
+	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, edSigner, types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}, n1, output, truer{}, log.NewDefault(edPubkey.String()))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
