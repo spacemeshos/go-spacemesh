@@ -441,10 +441,10 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 		activationsStream chan *types.ActivationTx
 	)
 	if filterTx {
-		txStream = events.GetNewTxChannel()
+		txStream = events.SubscribeToTxChannel()
 	}
 	if filterActivations {
-		activationsStream = events.GetActivationsChannel()
+		activationsStream = events.SubscribeToActivations()
 	}
 
 	for {
@@ -509,7 +509,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 // LayerStream exposes a stream of all mesh data per layer
 func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService_LayerStreamServer) error {
 	log.Info("GRPC MeshService.LayerStream")
-	layerStream := events.GetLayerChannel()
+	layerStream := events.SubscribeToLayerChannel()
 
 	for {
 		select {

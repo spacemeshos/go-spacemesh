@@ -42,17 +42,15 @@ func ReportTxWithValidity(tx *types.Transaction, valid bool) {
 		Valid:       valid,
 	}
 	if reporter != nil {
-		if reporter.blocking {
-			reporter.channelTransaction <- txWithValidity
-			log.Debug("reported tx on channelTransaction: %v", txWithValidity)
-		} else {
+		log.Info("about to report tx validity updates for : %v", txWithValidity)
+		for sub := range reporter.transactionSubs {
 			select {
-			case reporter.channelTransaction <- txWithValidity:
-				log.Debug("reported tx on channelTransaction: %v", txWithValidity)
+			case sub <- txWithValidity:
 			default:
-				log.Debug("not reporting tx as no one is listening: %v", txWithValidity)
+				log.Debug("reporter would block on subscriber %v", sub)
 			}
 		}
+		log.Info("reported tx validity update to subscribers: %v", txWithValidity)
 	}
 }
 
@@ -77,26 +75,24 @@ func ReportNewActivation(activation *types.ActivationTx) {
 			log.Error("error attempting to report activation: unable to encode activation")
 			return
 		}
-		if reporter.blocking {
-			reporter.channelActivation <- activation
-			log.With().Debug("reported activation", activation.Fields(len(innerBytes))...)
-		} else {
+		for sub := range reporter.activationSubs {
 			select {
-			case reporter.channelActivation <- activation:
+			case sub <- activation:
 				log.With().Debug("reported activation", activation.Fields(len(innerBytes))...)
 			default:
-				log.With().Debug("not reporting activation as no one is listening", activation.Fields(len(innerBytes))...)
+				log.Debug("reporter would block on subscriber %v", sub)
 			}
 		}
+
 	}
 }
 
 // SubscribeToRewards subscribes a channel to rewards events
-func SubscribeToRewards(bufsize int) chan Reward {
+func SubscribeToRewards() chan Reward {
 	mu.RLock()
 	defer mu.RUnlock()
 	if reporter != nil {
-		newChan := make(chan Reward, bufsize)
+		newChan := make(chan Reward, reporter.bufsize)
 		reporter.rewardsSubs[newChan] = struct{}{}
 		return newChan
 	}
@@ -183,17 +179,15 @@ func ReportNewLayer(layer NewLayer) {
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		if reporter.blocking {
-			reporter.channelLayer <- layer
-			log.With().Debug("reported new layer", layer)
-		} else {
+		log.Info("about to report new layer : %v", layer)
+		for sub := range reporter.layerSubs {
 			select {
-			case reporter.channelLayer <- layer:
-				log.With().Debug("reported new layer", layer)
+			case sub <- layer:
 			default:
-				log.With().Debug("not reporting new layer as no one is listening", layer)
+				log.Debug("reporter would block on subscriber %v", sub)
 			}
 		}
+		log.Info("reported layer update to subscribers: %v", layer)
 	}
 }
 
@@ -232,7 +226,6 @@ func ReportNodeStatusUpdate() {
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		log.Info("about to report status updates")
 		for sub := range reporter.statusSubs {
 			select {
 			case sub <- struct{}{}:
@@ -283,46 +276,99 @@ func ReportAccountUpdate(a types.Address) {
 }
 
 // GetNewTxChannel returns a channel of new transactions
-func GetNewTxChannel() chan TransactionWithValidity {
+// func GetNewTxChannel() chan TransactionWithValidity {
+// 	mu.RLock()
+// 	defer mu.RUnlock()
+
+// 	if reporter != nil {
+// 		return reporter.channelTransaction
+// 	}
+// 	return nil
+// }
+
+// SubscribeToTxChannel subscribes a process to tx updates
+func SubscribeToTxChannel() chan TransactionWithValidity {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		return reporter.channelTransaction
+		newChan := make(chan TransactionWithValidity, reporter.bufsize)
+		reporter.transactionSubs[newChan] = struct{}{}
+		return newChan
 	}
 	return nil
 }
 
-// GetActivationsChannel returns a channel of activations
-func GetActivationsChannel() chan *types.ActivationTx {
+// UnsibscribeFromTxChannel unsubscribes a process from tx updates
+func UnsubscribeFromTxChannel(subscriptionChannel chan TransactionWithValidity) {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		return reporter.channelActivation
+		if _, exists := reporter.transactionSubs[subscriptionChannel]; exists {
+			delete(reporter.transactionSubs, subscriptionChannel)
+		}
+	}
+}
+
+// SubscribeToActivations allows a process to subscribe to events of activations
+func SubscribeToActivations() chan *types.ActivationTx {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	if reporter != nil {
+		newChan := make(chan *types.ActivationTx, reporter.bufsize)
+		reporter.activationSubs[newChan] = struct{}{}
+		return newChan
 	}
 	return nil
 }
 
-// GetLayerChannel returns a channel of all layer data
-func GetLayerChannel() chan NewLayer {
+// UnsubscribeFromLayerChannel allows a process to unsubscribe from layer events
+func UnsubscribeFromActivations(subscriptionChannel chan *types.ActivationTx) {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		return reporter.channelLayer
+		if _, exists := reporter.activationSubs[subscriptionChannel]; exists {
+			delete(reporter.activationSubs, subscriptionChannel)
+		}
+	}
+}
+
+// SubscribeToLayerChannel allows a process to subscribe to events of newLayers
+func SubscribeToLayerChannel() chan NewLayer {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	if reporter != nil {
+		newChan := make(chan NewLayer, reporter.bufsize)
+		reporter.layerSubs[newChan] = struct{}{}
+		return newChan
 	}
 	return nil
+}
+
+// UnsubscribeFromLayerChannel allows a process to unsubscribe from layer events
+func UnsubscribeFromLayerChannel(subscriptionChannel chan NewLayer) {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	if reporter != nil {
+		if _, exists := reporter.layerSubs[subscriptionChannel]; exists {
+			delete(reporter.layerSubs, subscriptionChannel)
+		}
+	}
 }
 
 // SubscribeToErrors allows a goroutine to receive a channel for
 // error notifications
-func SubscribeToErrors(bufsize int) chan NodeError {
+func SubscribeToErrors() chan NodeError {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		newChan := make(chan NodeError, bufsize)
+		newChan := make(chan NodeError, reporter.bufsize)
 		reporter.errorSubs[newChan] = struct{}{}
 		return newChan
 	}
@@ -342,12 +388,12 @@ func UnsubscribeFromErrors(subscriberChannel chan NodeError) {
 }
 
 // SubscribeToStatus subscribes a channel to receive status updates
-func SubscribeToStatus(bufsize int) chan struct{} {
+func SubscribeToStatus() chan struct{} {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		newChan := make(chan struct{}, bufsize)
+		newChan := make(chan struct{}, reporter.bufsize)
 		reporter.statusSubs[newChan] = struct{}{}
 		return newChan
 	}
@@ -368,12 +414,12 @@ func UnsubscribeFromStatus(subscriberChannel chan struct{}) {
 }
 
 // SubscribeToAccounts subscribes a channel to account update events
-func SubscribeToAccounts(bufsize int) chan types.Address {
+func SubscribeToAccounts() chan types.Address {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		newChan := make(chan types.Address, bufsize)
+		newChan := make(chan types.Address, reporter.bufsize)
 		reporter.accountsSubs[newChan] = struct{}{}
 		return newChan
 	}
@@ -394,12 +440,12 @@ func UnsubscribeFromAccounts(subscriptionChannel chan types.Address) {
 }
 
 // SubscribeToReceipts allows a process to subscribe to receipt events
-func SubscribeToReceipts(bufsize int) chan TxReceipt {
+func SubscribeToReceipts() chan TxReceipt {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		newChan := make(chan TxReceipt, bufsize)
+		newChan := make(chan TxReceipt, reporter.bufsize)
 		reporter.receiptsSubs[newChan] = struct{}{}
 		return newChan
 	}
@@ -421,19 +467,19 @@ func UnsubscribeFromReceipts(subscriptionChannel chan TxReceipt) {
 // InitializeEventReporter initializes the event reporting interface
 func InitializeEventReporter(url string) error {
 	// By default use zero-buffer channels and non-blocking.
-	return InitializeEventReporterWithOptions(url, 0, false)
+	return InitializeEventReporterWithOptions(url, 0)
 }
 
 // InitializeEventReporterWithOptions initializes the event reporting interface with
 // a nonzero channel buffer. This is useful for testing, where we want reporting to
 // block.
-func InitializeEventReporterWithOptions(url string, bufsize int, blocking bool) error {
+func InitializeEventReporterWithOptions(url string, bufsize int) error {
 	mu.Lock()
 	defer mu.Unlock()
 	if reporter != nil {
 		return errors.New("reporter is already initialized, call CloseEventReporter before reinitializing")
 	}
-	reporter = newEventReporter(bufsize, blocking)
+	reporter = newEventReporter(bufsize)
 	if url != "" {
 		InitializeEventPubsub(url)
 	}
@@ -521,30 +567,30 @@ type TransactionWithValidity struct {
 
 // EventReporter is the struct that receives incoming events and dispatches them
 type EventReporter struct {
-	channelTransaction chan TransactionWithValidity
-	channelActivation  chan *types.ActivationTx
-	channelLayer       chan NewLayer
-	stopChan           chan struct{}
-	blocking           bool
-	rewardsSubs        map[chan Reward]struct{}
-	accountsSubs       map[chan types.Address]struct{}
-	receiptsSubs       map[chan TxReceipt]struct{}
-	statusSubs         map[chan struct{}]struct{}
-	errorSubs          map[chan NodeError]struct{}
+	stopChan        chan struct{}
+	rewardsSubs     map[chan Reward]struct{}
+	accountsSubs    map[chan types.Address]struct{}
+	receiptsSubs    map[chan TxReceipt]struct{}
+	statusSubs      map[chan struct{}]struct{}
+	errorSubs       map[chan NodeError]struct{}
+	layerSubs       map[chan NewLayer]struct{}
+	activationSubs  map[chan *types.ActivationTx]struct{}
+	transactionSubs map[chan TransactionWithValidity]struct{}
+	bufsize         int
 }
 
-func newEventReporter(bufsize int, blocking bool) *EventReporter {
+func newEventReporter(bufsize int) *EventReporter {
 	return &EventReporter{
-		channelTransaction: make(chan TransactionWithValidity, bufsize),
-		channelActivation:  make(chan *types.ActivationTx, bufsize),
-		channelLayer:       make(chan NewLayer, bufsize),
-		stopChan:           make(chan struct{}),
-		rewardsSubs:        make(map[chan Reward]struct{}),
-		accountsSubs:       make(map[chan types.Address]struct{}),
-		receiptsSubs:       make(map[chan TxReceipt]struct{}),
-		statusSubs:         make(map[chan struct{}]struct{}),
-		errorSubs:          make(map[chan NodeError]struct{}),
-		blocking:           blocking,
+		stopChan:        make(chan struct{}),
+		rewardsSubs:     make(map[chan Reward]struct{}),
+		accountsSubs:    make(map[chan types.Address]struct{}),
+		receiptsSubs:    make(map[chan TxReceipt]struct{}),
+		statusSubs:      make(map[chan struct{}]struct{}),
+		errorSubs:       make(map[chan NodeError]struct{}),
+		layerSubs:       make(map[chan NewLayer]struct{}),
+		activationSubs:  make(map[chan *types.ActivationTx]struct{}),
+		transactionSubs: make(map[chan TransactionWithValidity]struct{}),
+		bufsize:         bufsize,
 	}
 }
 
@@ -553,9 +599,6 @@ func CloseEventReporter() {
 	mu.Lock()
 	defer mu.Unlock()
 	if reporter != nil {
-		close(reporter.channelTransaction)
-		close(reporter.channelActivation)
-		close(reporter.channelLayer)
 		close(reporter.stopChan)
 		for c := range reporter.rewardsSubs {
 			close(c)
@@ -570,6 +613,15 @@ func CloseEventReporter() {
 			close(c)
 		}
 		for c := range reporter.errorSubs {
+			close(c)
+		}
+		for c := range reporter.layerSubs {
+			close(c)
+		}
+		for c := range reporter.activationSubs {
+			close(c)
+		}
+		for c := range reporter.transactionSubs {
 			close(c)
 		}
 		reporter = nil

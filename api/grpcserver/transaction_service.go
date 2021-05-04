@@ -171,9 +171,9 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 	}
 
 	// The tx channel tells us about newly received and newly created transactions
-	channelTx := events.GetNewTxChannel()
+	channelTx := events.SubscribeToTxChannel()
 	// The layer channel tells us about status updates
-	channelLayer := events.GetLayerChannel()
+	channelLayer := events.SubscribeToLayerChannel()
 
 	for {
 		select {

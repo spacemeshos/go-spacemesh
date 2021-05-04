@@ -127,7 +127,7 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 	log.Info("GRPC NodeService.StatusStream")
 	var statusStream chan struct{}
 	if s.statusChannel == nil {
-		statusStream = events.SubscribeToStatus(30)
+		statusStream = events.SubscribeToStatus()
 	}
 	statusStream = s.statusChannel
 
@@ -166,7 +166,7 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 	log.Info("GRPC NodeService.ErrorStream")
 	var errorStream chan events.NodeError
 	if s.errorChannel == nil {
-		errorStream = events.SubscribeToErrors(30)
+		errorStream = events.SubscribeToErrors()
 	} else {
 		errorStream = s.errorChannel
 	}

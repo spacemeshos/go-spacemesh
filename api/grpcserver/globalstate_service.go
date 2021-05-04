@@ -15,12 +15,16 @@ import (
 
 // GlobalStateService exposes global state data, output from the STF
 type GlobalStateService struct {
-	Mesh            api.TxAPI
-	Mempool         api.MempoolAPI
-	rewardsChannel  chan events.Reward
-	receiptsChannel chan events.TxReceipt
-	accountChannel  chan types.Address
-	layerChannel    chan events.NewLayer
+	Mesh                             api.TxAPI
+	Mempool                          api.MempoolAPI
+	globalStateStreamRewardsChannel  chan events.Reward
+	globalStateStreamReceiptsChannel chan events.TxReceipt
+	globalStateStreamAccountChannel  chan types.Address
+	globalStateStreamLayerChannel    chan events.NewLayer
+	accountDataStreamRewardsChannel  chan events.Reward
+	accountDataStreamReceiptsChannel chan events.TxReceipt
+	accountDataStreamAccountChannel  chan types.Address
+	smesherRewardStreamRewardChannel chan events.Reward
 }
 
 // RegisterService registers this service with a grpc server instance
@@ -278,24 +282,24 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 		channelReceipt chan events.TxReceipt
 	)
 	if filterAccount {
-		if s.accountChannel == nil {
-			channelAccount = events.SubscribeToAccounts(30)
+		if s.accountDataStreamAccountChannel == nil {
+			channelAccount = events.SubscribeToAccounts()
 		} else {
-			channelAccount = s.accountChannel
+			channelAccount = s.accountDataStreamAccountChannel
 		}
 	}
 	if filterReward {
-		if s.rewardsChannel == nil {
-			channelReward = events.SubscribeToRewards(30)
+		if s.accountDataStreamRewardsChannel == nil {
+			channelReward = events.SubscribeToRewards()
 		} else {
-			channelReward = s.rewardsChannel
+			channelReward = s.accountDataStreamRewardsChannel
 		}
 	}
 	if filterReceipt {
-		if s.receiptsChannel == nil {
-			channelReceipt = events.SubscribeToReceipts(30)
+		if s.accountDataStreamReceiptsChannel == nil {
+			channelReceipt = events.SubscribeToReceipts()
 		} else {
-			channelReceipt = s.receiptsChannel
+			channelReceipt = s.accountDataStreamReceiptsChannel
 		}
 	}
 
@@ -410,7 +414,7 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 
 	// subscribe to the rewards channel
 
-	channelRewards := events.SubscribeToRewards(30)
+	channelRewards := events.SubscribeToRewards()
 
 	for {
 		select {
@@ -475,34 +479,34 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		channelLayer   chan events.NewLayer
 	)
 	if filterAccount {
-		if s.accountChannel == nil {
-			channelAccount = events.SubscribeToAccounts(30)
+		if s.globalStateStreamAccountChannel == nil {
+			channelAccount = events.SubscribeToAccounts()
 		} else {
-			channelAccount = s.accountChannel
+			channelAccount = s.globalStateStreamAccountChannel
 		}
 	}
 	if filterReward {
 		// needs to be buffered to avoid reporter from being blocked on slow streaming connections
-		if s.rewardsChannel == nil {
-			channelReward = events.SubscribeToRewards(30)
+		if s.globalStateStreamRewardsChannel == nil {
+			channelReward = events.SubscribeToRewards()
 		} else {
-			channelReward = s.rewardsChannel
+			channelReward = s.globalStateStreamRewardsChannel
 		}
 		if channelReward == nil {
 			// what to do here
 		}
 	}
 	if filterReceipt {
-		if s.receiptsChannel == nil {
-			channelReceipt = events.SubscribeToReceipts(30)
+		if s.globalStateStreamReceiptsChannel == nil {
+			channelReceipt = events.SubscribeToReceipts()
 		} else {
-			channelReceipt = s.receiptsChannel
+			channelReceipt = s.globalStateStreamReceiptsChannel
 		}
 	}
 	if filterState {
 		// Whenever new state is applied to the mesh, a new layer is reported.
 		// There is no separate reporting specifically for new state.
-		channelLayer = events.GetLayerChannel()
+		channelLayer = events.SubscribeToLayerChannel()
 	}
 
 	for {
