@@ -187,29 +187,24 @@ func (tb *TortoiseBeacon) Close() error {
 }
 
 // Get returns a Tortoise Beacon value as []byte for a certain epoch or an error if it doesn't exist.
-func (tb *TortoiseBeacon) Get(layerID types.LayerID) ([]byte, error) {
-	epochID := layerID.GetEpoch()
-
+func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 	if tb.tortoiseBeaconDB != nil {
 		if val, ok := tb.tortoiseBeaconDB.GetTortoiseBeacon(epochID); ok {
 			return val.Bytes(), nil
 		}
 	}
 
+	if (epochID - 1).IsGenesis() {
+		genesisBeacon := types.Hash32{} // zeros
+		return genesisBeacon.Bytes(), nil
+	}
+
 	tb.beaconsMu.RLock()
 	defer tb.beaconsMu.RUnlock()
 
-	var beacon types.Hash32
-	var ok bool
-
-	if tb.beaconAlreadyCalculated(layerID) {
-		if beacon, ok = tb.beacons[epochID]; !ok {
-			return nil, ErrBeaconNotCalculated
-		}
-	} else {
-		if beacon, ok = tb.beacons[epochID-1]; !ok {
-			return nil, ErrBeaconNotCalculated
-		}
+	beacon, ok := tb.beacons[epochID-1]
+	if !ok {
+		return nil, ErrBeaconNotCalculated
 	}
 
 	if tb.tortoiseBeaconDB != nil {
@@ -529,16 +524,6 @@ func (tb *TortoiseBeacon) votingThreshold() int {
 // TODO(nkryuchkov): Use when total weight is implemented.
 func (tb *TortoiseBeacon) atxThresholdFraction(totalWeight int) float64 {
 	return 1 - math.Pow(2.0, -(float64(tb.config.Kappa)/((1.0-tb.config.Q)*float64(totalWeight))))
-}
-
-// TODO(nkryuchkov): add unit tests
-func (tb *TortoiseBeacon) beaconAlreadyCalculated(layerID types.LayerID) bool {
-	beaconCalcDuration := tb.roundDuration * time.Duration(tb.config.RoundsNumber)
-	roundedBeaconCalcDuration := ceilDuration(beaconCalcDuration, tb.layerDuration)
-	layerOrdinalInLayer := layerID.OrdinalInEpoch()
-	layersDuration := time.Duration(layerOrdinalInLayer) * tb.layerDuration
-
-	return layersDuration >= roundedBeaconCalcDuration
 }
 
 func ceilDuration(duration, multiple time.Duration) time.Duration {

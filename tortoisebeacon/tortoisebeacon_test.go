@@ -33,7 +33,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layer := types.LayerID(2)
+	layer := types.LayerID(3)
 	atxList := []types.ATXID{types.ATXID(types.HexToHash32("0x01"))}
 	atxGetter := newMockATXGetter(atxList)
 
@@ -47,7 +47,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	t.Logf("Awaiting epoch %v", layer)
 	awaitLayer(clock, layer)
 
-	v, err := tb.Get(layer)
+	v, err := tb.GetBeacon(layer.GetEpoch())
 	requirer.NoError(err)
 
 	expected := "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -147,80 +147,6 @@ func TestTortoiseBeacon_atxThresholdFraction(t *testing.T) {
 
 			threshold := tb.atxThresholdFraction(tc.w)
 			r.InDelta(tc.threshold, threshold, 0.00001)
-		})
-	}
-}
-
-func TestTortoiseBeacon_beaconAlreadyCalculated(t *testing.T) {
-	t.Parallel()
-
-	r := require.New(t)
-
-	tt := []struct {
-		name           string
-		layersPerEpoch int32
-		layerDuration  time.Duration
-		roundDuration  time.Duration
-		roundsNumber   uint64
-		layerID        types.LayerID
-		result         bool
-	}{
-		{
-			name:           "Case 1",
-			layersPerEpoch: 10,
-			layerDuration:  5 * time.Second,
-			roundDuration:  3 * time.Second,
-			roundsNumber:   4,
-			layerID:        0,
-			result:         false,
-		},
-		{
-			name:           "Case 2",
-			layersPerEpoch: 10,
-			layerDuration:  5 * time.Second,
-			roundDuration:  3 * time.Second,
-			roundsNumber:   4,
-			layerID:        1,
-			result:         false,
-		},
-		{
-			name:           "Case 3",
-			layersPerEpoch: 10,
-			layerDuration:  5 * time.Second,
-			roundDuration:  3 * time.Second,
-			roundsNumber:   4,
-			layerID:        2,
-			result:         false,
-		},
-		{
-			name:           "Case 4",
-			layersPerEpoch: 10,
-			layerDuration:  5 * time.Second,
-			roundDuration:  3 * time.Second,
-			roundsNumber:   4,
-			layerID:        3,
-			result:         true,
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			tb := TortoiseBeacon{
-				Log: log.NewDefault("TortoiseBeacon"),
-				config: Config{
-					RoundsNumber: tc.roundsNumber,
-				},
-				layerDuration: tc.layerDuration,
-				roundDuration: tc.roundDuration,
-			}
-
-			types.SetLayersPerEpoch(tc.layersPerEpoch)
-
-			result := tb.beaconAlreadyCalculated(tc.layerID)
-			r.Equal(tc.result, result)
 		})
 	}
 }

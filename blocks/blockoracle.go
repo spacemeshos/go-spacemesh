@@ -86,7 +86,7 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 	}
 
 	if bo.proofsEpoch != epochNumber {
-		err := bo.calcEligibilityProofs(layerID)
+		err := bo.calcEligibilityProofs(epochNumber)
 		if err != nil {
 			bo.log.With().Error("failed to calculate eligibility proofs", epochNumber, log.Err(err))
 			return *types.EmptyATXID, nil, nil, err
@@ -107,16 +107,19 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 	return bo.atxID, proofs, activeSet, nil
 }
 
-func (bo *Oracle) calcEligibilityProofs(layerNumber types.LayerID) error {
-	epochNumber := layerNumber.GetEpoch()
-	layerBeacon, err := bo.beaconProvider.Get(layerNumber)
+func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
+	layerBeacon, err := bo.beaconProvider.GetBeacon(epochNumber)
 	if err != nil {
-		bo.log.Error("Failed to get beacon",
-			log.Uint64("layer_id", uint64(layerNumber)),
+		bo.log.With().Error("Failed to get beacon",
+			log.Uint64("epoch_id", uint64(epochNumber)),
 			log.Err(err))
 
 		return err
 	}
+
+	bo.log.With().Info("Got beacon",
+		log.Uint64("epoch_id", uint64(epochNumber)),
+		log.Err(err))
 
 	// get the previous epochs total ATXs
 	activeSet := bo.atxDB.GetEpochAtxs(epochNumber - 1)

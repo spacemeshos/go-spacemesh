@@ -236,7 +236,7 @@ func (wc *weakCoin) calculateWeakCoin(epoch types.EpochID, round types.RoundID) 
 	coin := result.Cmp(big.NewInt(1)) == 1
 	wc.weakCoins[pair] = coin
 
-	wc.Log.Info("Calculated weak coin",
+	wc.Log.With().Info("Calculated weak coin",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round", uint64(round)),
 		log.Bool("weak_coin", coin))

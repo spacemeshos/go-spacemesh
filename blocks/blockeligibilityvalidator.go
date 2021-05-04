@@ -94,7 +94,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 			numberOfEligibleBlocks, activeSetSize)
 	}
 
-	epochBeacon, err := v.beaconProvider.Get(layerNumber)
+	epochBeacon, err := v.beaconProvider.GetBeacon(epochNumber)
 	if err != nil {
 		return false, fmt.Errorf("get beacon for layer %v: %w", layerNumber, err)
 	}
