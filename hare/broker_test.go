@@ -214,40 +214,6 @@ func TestBroker_Priority(t *testing.T) {
 	assert.True(t, <-res)
 }
 
-// test that after registering the maximum number of protocols,
-// the earliest one gets unregistered in favor of the newest one
-func TestBroker_MaxConcurrentProcesses(t *testing.T) {
-	sim := service.NewSimulator()
-	n1 := sim.NewNode()
-	n2 := sim.NewNode()
-
-	broker := buildBrokerLimit4(n1, t.Name())
-	broker.Start(context.TODO())
-
-	broker.Register(context.TODO(), instanceID1)
-	broker.Register(context.TODO(), instanceID2)
-	broker.Register(context.TODO(), instanceID3)
-	broker.Register(context.TODO(), instanceID4)
-	assert.Equal(t, 4, len(broker.outbox))
-
-	//this statement should cause inbox1 to be unregistered
-	inbox5, _ := broker.Register(context.TODO(), instanceID5)
-	assert.Equal(t, 4, len(broker.outbox))
-
-	serMsg := createMessage(t, instanceID5)
-	n2.Broadcast(context.TODO(), protoName, serMsg)
-	waitForMessages(t, inbox5, instanceID5, 1)
-	assert.Nil(t, broker.outbox[instanceID1])
-
-	inbox6, _ := broker.Register(context.TODO(), instanceID6)
-	assert.Equal(t, 4, len(broker.outbox))
-	assert.Nil(t, broker.outbox[instanceID2])
-
-	serMsg = createMessage(t, instanceID6)
-	n2.Broadcast(context.TODO(), protoName, serMsg)
-	waitForMessages(t, inbox6, instanceID6, 1)
-}
-
 // test that aborting the broker aborts
 func TestBroker_Abort(t *testing.T) {
 	sim := service.NewSimulator()
