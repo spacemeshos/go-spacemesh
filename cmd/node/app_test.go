@@ -51,9 +51,6 @@ func (suite *AppTestSuite) SetupTest() {
 }
 
 func (suite *AppTestSuite) TearDownTest() {
-	if err := suite.poetCleanup(true); err != nil {
-		log.Error("error while cleaning up PoET: %v", err)
-	}
 	for _, dbinst := range suite.dbs {
 		if err := os.RemoveAll(dbinst); err != nil {
 			panic(fmt.Sprintf("what happened : %v", err))
@@ -87,6 +84,12 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 		suite.apps = append(suite.apps, smApp)
 		suite.dbs = append(suite.dbs, dbStorepath)
 		name++
+	}
+}
+
+func (suite *AppTestSuite) ClosePoet() {
+	if err := suite.poetCleanup(true); err != nil {
+		log.Error("error while cleaning up PoET: %v", err)
 	}
 }
 
@@ -141,6 +144,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	var oldRoot types.Hash32
 	func() {
 		defer GracefulShutdown(suite.apps)
+		defer suite.ClosePoet()
 
 		for _, a := range suite.apps {
 			a.startServices(context.TODO(), log.AppLog)
@@ -549,6 +553,11 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.HareEligibility.ConfidenceParam = 3
 	smApp.Config.HareEligibility.EpochOffset = 0
 	smApp.Config.StartMining = true
+
+	smApp.Config.FETCH.RequestTimeout = 1
+	smApp.Config.FETCH.BatchTimeout = 1
+	smApp.Config.FETCH.BatchSize = 5
+	smApp.Config.FETCH.MaxRetiresForPeer = 5
 
 	rolacle := eligibility.New()
 	types.SetLayersPerEpoch(int32(smApp.Config.LayersPerEpoch))

@@ -25,14 +25,19 @@ data:
           remove_field => ["headers","host"]
         }
       }
-
-      json{
-        source => "message"
-        skip_on_invalid_json => true
+      if [message] =~ "\A\{.+\}\z" {
+        json {
+          source => "message"
+          skip_on_invalid_json => false
+        }
+        mutate {
+          remove_field => [
+            "message"
+          ]
+        }
       }
-
       mutate {
-        remove_field => ["log", "cloud", "ecs", "agent", "input", "tags", "docker", "container", "host", "message", "@version"]
+        remove_field => ["log", "cloud", "ecs", "agent", "input", "tags", "docker", "container", "host", "@version"]
         remove_field => ["headers","host"]
       }
     }

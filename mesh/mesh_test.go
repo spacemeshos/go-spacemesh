@@ -542,6 +542,6 @@ func TestMesh_AddBlockWithTxs(t *testing.T) {
 
 	err := mesh.AddBlockWithTxs(blk)
 	//r.EqualError(err, "failed to process ATXs: 💥")
-	_, err = meshDB.blocks.Get(blk.ID().Bytes())
+	_, err = meshDB.blocks.Get(blk.ID().AsHash32().Bytes())
 	r.NoError(err)
 }
