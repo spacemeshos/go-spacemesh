@@ -299,7 +299,7 @@ func SubscribeToTxChannel() chan TransactionWithValidity {
 	return nil
 }
 
-// UnsibscribeFromTxChannel unsubscribes a process from tx updates
+// UnsubscribeFromTxChannel unsubscribes a process from tx updates
 func UnsubscribeFromTxChannel(subscriptionChannel chan TransactionWithValidity) {
 	mu.RLock()
 	defer mu.RUnlock()
@@ -324,7 +324,7 @@ func SubscribeToActivations() chan *types.ActivationTx {
 	return nil
 }
 
-// UnsubscribeFromLayerChannel allows a process to unsubscribe from layer events
+// UnsubscribeFromActivations allows a process to unsubscribe from layer events
 func UnsubscribeFromActivations(subscriptionChannel chan *types.ActivationTx) {
 	mu.RLock()
 	defer mu.RUnlock()
