@@ -4,7 +4,6 @@ package turbohare
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -48,7 +47,6 @@ func (h *SuperHare) Start(ctx context.Context) error {
 					logger.With().Info("superhare got layer tick, simulating consensus process run", layerID)
 					time.Sleep(time.Second * time.Duration(h.conf.WakeupDelta+5*h.conf.RoundDuration))
 					// use lowest-order bit
-					logger.With().Info("layerID bytes", layerID, log.String("bytes", fmt.Sprintf("%x", layerID.Bytes())))
 					coinflip := layerID.Bytes()[0]&byte(1) == byte(1)
 					h.mesh.RecordCoinflip(ctx, layerID, coinflip)
 					logger.With().Info("superhare recorded coinflip", layerID, log.Bool("coinflip", coinflip))
