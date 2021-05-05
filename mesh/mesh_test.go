@@ -136,20 +136,6 @@ func (MockTxMemPool) Invalidate(types.TransactionID) {
 
 }
 
-type MockAtxMemPool struct{}
-
-func (MockAtxMemPool) Get(types.ATXID) (*types.ActivationTx, error) {
-	return &types.ActivationTx{}, nil
-}
-
-func (MockAtxMemPool) Put(*types.ActivationTx) {
-
-}
-
-func (MockAtxMemPool) Invalidate(types.ATXID) {
-
-}
-
 func getMesh(id string) *Mesh {
 	lg := log.NewDefault(id)
 	mmdb := NewMemMeshDB(lg)
@@ -320,7 +306,6 @@ func TestLayers_WakeUp(t *testing.T) {
 	assert.True(t, len(rBlock1.TxIDs) == len(block1.TxIDs), "block content was wrong")
 	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
 	//assert.True(t, len(rBlock1.ATXIDs) == len(block1.ATXIDs))
-
 }
 
 func TestLayers_OrphanBlocks(t *testing.T) {
@@ -352,7 +337,6 @@ func TestLayers_OrphanBlocks(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	arr3, _ := layers.GetOrphanBlocksBefore(4)
 	assert.True(t, len(arr3) == 1, "wrong layer")
-
 }
 
 func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {

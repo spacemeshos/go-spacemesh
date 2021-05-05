@@ -446,9 +446,9 @@ func (m *DB) getLayerHashKey(layerID types.LayerID) []byte {
 }
 
 // GetLayerHash returns layer hash for received blocks
-func (m *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
+func (msh *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
 	h := types.Hash32{}
-	bts, err := m.general.Get(m.getLayerHashKey(layerID))
+	bts, err := msh.general.Get(msh.getLayerHashKey(layerID))
 	if err != nil {
 		return types.Hash32{}
 	}

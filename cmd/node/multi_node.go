@@ -338,12 +338,10 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 		log.Panic("failed to start poet server: %v", err)
 	}
 
-	// startInLayer := 5 // delayed pod will start in this layer
 	defer GracefulShutdown(apps)
 
 	timeout := time.After(time.Duration(runTillLayer*60) * time.Second)
 
-	// stickyClientsDone := 0
 	startLayer := time.Now()
 	clock.Tick()
 	errors := 0

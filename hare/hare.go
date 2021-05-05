@@ -35,7 +35,7 @@ type TerminationOutput interface {
 	Completed() bool
 }
 
-type layers interface {
+type meshProvider interface {
 	LayerBlockIds(layerID types.LayerID) ([]types.BlockID, error)
 	HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID)
 	// RecordCoinflip records the weak coinflip result for a layer
@@ -58,7 +58,7 @@ type Hare struct {
 
 	sign Signer
 
-	msh     layers
+	msh     meshProvider
 	rolacle Rolacle
 
 	networkDelta time.Duration
@@ -84,7 +84,7 @@ type Hare struct {
 
 // New returns a new Hare struct.
 func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeID, validate outputValidationFunc,
-	syncState syncStateFunc, obp layers, rolacle Rolacle,
+	syncState syncStateFunc, obp meshProvider, rolacle Rolacle,
 	layersPerEpoch uint16, idProvider identityProvider, stateQ StateQuerier,
 	beginLayer chan types.LayerID, logger log.Log) *Hare {
 	h := new(Hare)
