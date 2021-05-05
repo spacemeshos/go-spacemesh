@@ -71,7 +71,6 @@ type BlockBuilder struct {
 	TransactionPool txPool
 	mu              sync.Mutex
 	network         p2p.Service
-	weakCoinToss    weakCoinProvider
 	meshProvider    meshProvider
 	baseBlockP      baseBlockProvider
 	blockOracle     blockOracle
@@ -100,7 +99,6 @@ func NewBlockBuilder(
 	sgn signer,
 	net p2p.Service,
 	beginRoundEvent chan types.LayerID,
-	weakCoin weakCoinProvider,
 	orph meshProvider,
 	bbp baseBlockProvider,
 	hare hareResultProvider,
@@ -129,7 +127,6 @@ func NewBlockBuilder(
 		hareResult:      hare,
 		mu:              sync.Mutex{},
 		network:         net,
-		weakCoinToss:    weakCoin,
 		meshProvider:    orph,
 		baseBlockP:      bbp,
 		blockOracle:     blockOracle,
@@ -174,10 +171,6 @@ func (t *BlockBuilder) Close() error {
 
 type hareResultProvider interface {
 	GetResult(types.LayerID) ([]types.BlockID, error)
-}
-
-type weakCoinProvider interface {
-	GetWeakCoinForLayer(types.LayerID) (bool, error)
 }
 
 type meshProvider interface {
@@ -300,19 +293,12 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 		return nil, err
 	}
 
-	// get weak coin value
-	coinflip, err := t.weakCoinToss.GetWeakCoinForLayer(id)
-	if err != nil {
-		t.With().Error("missing weak coin value for layer", id)
-	}
-
 	b := types.MiniBlock{
 		BlockHeader: types.BlockHeader{
 			LayerIndex:       id,
 			ATXID:            atxID,
 			EligibilityProof: eligibilityProof,
 			Data:             nil,
-			Coin:             coinflip,
 			BaseBlock:        base,
 			AgainstDiff:      diffs[0],
 			ForDiff:          diffs[1],

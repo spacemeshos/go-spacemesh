@@ -38,6 +38,8 @@ type TerminationOutput interface {
 type layers interface {
 	LayerBlockIds(layerID types.LayerID) ([]types.BlockID, error)
 	HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID)
+	// RecordCoinflip records the weak coinflip result for a layer
+	RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool)
 }
 
 // checks if the collected output is valid
@@ -183,17 +185,6 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 	return nil
 }
 
-// record weak coin flip results
-// this probably does not need to be stored in the database since it's only used when building blocks, and that only
-// happens when the node is fully synced and Hare is working.
-func (h *Hare) collectCoinflip(id instanceID, coinflip bool) {
-	// TODO: do we need to check buffer range?
-	h.mu.Lock()
-	h.coinflips[types.LayerID(id)] = coinflip
-	h.mu.Unlock()
-	h.With().Info("weak coin flip value for layer", types.LayerID(id), log.Bool("coinflip", coinflip))
-}
-
 // the logic that happens when a new layer arrives.
 // this function triggers the start of new consensus processes.
 func (h *Hare) onTick(ctx context.Context, id types.LayerID) {
@@ -295,32 +286,30 @@ func (h *Hare) GetResult(lid types.LayerID) ([]types.BlockID, error) {
 	return blks, nil
 }
 
-// GetWeakCoinForLayer returns the weak coin flip value for the layer.
-// It returns an error if no value has been recorded for the layer.
-func (h *Hare) GetWeakCoinForLayer(lid types.LayerID) (coinflip bool, err error) {
-	coinflip, ok := h.coinflips[lid]
-	if !ok {
-		err = errNoResult
-	}
-	return
-}
-
 // listens to outputs arriving from consensus processes.
 func (h *Hare) outputCollectionLoop(ctx context.Context) {
 	for {
 		select {
 		case out := <-h.outputChan:
-			// collect coinflip data regardless of completion
-			h.collectCoinflip(out.ID(), out.Coinflip())
+			layerID := types.LayerID(out.ID())
+			coin := out.Coinflip()
+			logger := h.WithContext(ctx).WithFields(layerID)
+
+			// collect coinflip, regardless of success
+			logger.With().Info("recording weak coinflip result for layer",
+				log.Bool("coinflip", coin))
+			h.msh.RecordCoinflip(ctx, layerID, coin)
+
 			if out.Completed() { // CP completed, collect the output
+				logger.With().Info("collecting results for completed hare instance", layerID)
 				if err := h.collectOutput(ctx, out); err != nil {
-					h.WithContext(ctx).With().Warning("error collecting output from hare", log.Err(err))
+					logger.With().Warning("error collecting output from hare", log.Err(err))
 				}
 			}
 
 			// either way, unregister from broker
 			h.broker.Unregister(ctx, out.ID())
-			h.WithContext(ctx).With().Info("number of consensus processes (after -1)",
+			logger.With().Info("number of consensus processes (after -1)",
 				log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
 			// TODO: fix metrics
 			//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(out.ID()), 10)).Add(-1)

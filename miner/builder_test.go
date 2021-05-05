@@ -26,12 +26,6 @@ import (
 
 const selectCount = 100
 
-type MockCoin struct{}
-
-func (m MockCoin) GetWeakCoinForLayer(types.LayerID) (bool, error) {
-	return rand.Int()%2 == 0, nil
-}
-
 type MockHare struct {
 	res map[types.LayerID][]types.BlockID
 }
@@ -818,7 +812,7 @@ func createBlockBuilder(ID string, n *service.Node, meshBlocks []*types.Block) *
 		LayersPerEpoch: 3,
 		TxsPerBlock:    selectCount,
 	}
-	bb := NewBlockBuilder(cfg, signing.NewEdSigner(), n, beginRound, MockCoin{}, &mockMesh{b: meshBlocks}, &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
+	bb := NewBlockBuilder(cfg, signing.NewEdSigner(), n, beginRound, &mockMesh{b: meshBlocks}, &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{}, [][]types.BlockID{[]types.BlockID{}, []types.BlockID{}, []types.BlockID{}}, nil
 	}}, &mockResult{}, &mockBlockOracle{}, &mockSyncer{}, mockProjector, nil, atxDbMock{}, log.NewDefault("mock_builder_"+"a"))
 	return bb

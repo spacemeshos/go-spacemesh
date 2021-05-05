@@ -4,7 +4,6 @@ package turbohare
 import (
 	"bytes"
 	"context"
-	"errors"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"sort"
@@ -43,10 +42,4 @@ func (h *SuperHare) GetResult(id types.LayerID) ([]types.BlockID, error) {
 	}
 	sort.Slice(blks, func(i, j int) bool { return bytes.Compare(blks[i].Bytes(), blks[j].Bytes()) == -1 })
 	return blks, nil
-}
-
-// GetWeakCoinForLayer is a stub for providing weak coin toss results
-func (h *SuperHare) GetWeakCoinForLayer(types.LayerID) (bool, error) {
-	log.Error("attempt to read weak coin results from superhare")
-	return false, errors.New("superhare does not provide weak coin results")
 }

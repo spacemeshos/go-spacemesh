@@ -60,6 +60,9 @@ func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, err
 	return buildSet(), nil
 }
 
+func (mbp *mockBlockProvider) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {
+}
+
 // HareApp represents an Hare application
 type HareApp struct {
 	*cmdp.BaseApp
