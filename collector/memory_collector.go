@@ -175,9 +175,8 @@ func (c *MemoryCollector) GetReceivedBlocks(layer types.LayerID) int {
 
 // AtxIDExists checks if an ATX with a certain ID exists.
 func (c *MemoryCollector) AtxIDExists(atxID string) bool {
-	c.lck.Lock()
+	c.lck.RLock()
 	_, found := c.Atxs[atxID]
-	c.lck.Unlock()
-
+	c.lck.RUnlock()
 	return found
 }
