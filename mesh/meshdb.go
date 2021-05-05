@@ -129,6 +129,7 @@ func NewMemMeshDB(log log.Log) *DB {
 		unappliedTxs:       database.NewMemDatabase(),
 		inputVector:        database.NewMemDatabase(),
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
+		coinflips:          make(map[types.LayerID]bool),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
 	}
