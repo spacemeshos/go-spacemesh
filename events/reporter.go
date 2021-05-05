@@ -486,7 +486,7 @@ func InitializeEventReporterWithOptions(url string, bufsize int) error {
 	}
 	reporter = newEventReporter(bufsize)
 	if url != "" {
-		InitializeEventPubsub(url)
+		return InitializeEventPubsub(url)
 	}
 	return nil
 }

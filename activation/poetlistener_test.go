@@ -51,6 +51,8 @@ type mockMsg struct {
 
 func (m *mockMsg) Sender() p2pcrypto.PublicKey { panic("implement me") }
 
+func (m *mockMsg) IsOwnMessage() bool { panic("not implemented") }
+
 func (m *mockMsg) Bytes() []byte {
 	b, err := types.InterfaceToBytes(&types.PoetProofMessage{})
 	if err != nil {
