@@ -42,16 +42,19 @@ func ReportTxWithValidity(tx *types.Transaction, valid bool) {
 		Valid:       valid,
 	}
 	if reporter != nil {
-		log.Info("about to report tx validity updates for : %v", txWithValidity)
+		log.With().Info("about to report tx validity updates", txWithValidity.Transaction.ID(),
+			log.Bool("validity", txWithValidity.Valid))
 		for sub := range reporter.transactionSubs {
 			select {
 			case sub <- txWithValidity:
-				log.Info("reported tx to subs")
+				log.With().Debug("reported tx to subs", txWithValidity.Transaction.ID(),
+					log.Bool("validity", txWithValidity.Valid))
 			default:
-				log.Debug("reporter would block on subscriber %v", sub)
+				log.Debug("reporter would block on subscriber")
 			}
 		}
-		log.Info("reported tx validity update to subscribers: %v", txWithValidity)
+		log.With().Info("reported tx validity update to subscribers: %v", txWithValidity.Transaction.ID(),
+			log.Bool("validity", txWithValidity.Valid))
 	}
 }
 
@@ -81,7 +84,7 @@ func ReportNewActivation(activation *types.ActivationTx) {
 			case sub <- activation:
 				log.With().Debug("reported activation", activation.Fields(len(innerBytes))...)
 			default:
-				log.Debug("reporter would block on subscriber %v", sub)
+				log.Debug("reporter would block on subscriber")
 			}
 		}
 
@@ -125,16 +128,16 @@ func ReportRewardReceived(r Reward) {
 	})
 
 	if reporter != nil {
-		log.Info("about to report reward: %v", r)
+		log.With().Info("about to report reward", r)
 		for sub := range reporter.rewardsSubs {
 			select {
 			case sub <- r:
-				log.Info("reporter send reward %v to subscriber", r)
+				log.With().Info("reporter send reward to subscriber", r)
 			default:
-				log.Debug("reporter would block on subscriber %v", sub)
+				log.Debug("reporter would block on subscriber")
 			}
 		}
-		log.Info("reported reward to subscriber: %v", r)
+		log.With().Info("reported reward to subscriber", r)
 	}
 }
 
@@ -180,15 +183,16 @@ func ReportNewLayer(layer NewLayer) {
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		log.Info("about to report new layer : %v", layer)
+		log.With().Info("about to report new layer", layer)
 		for sub := range reporter.layerSubs {
 			select {
 			case sub <- layer:
+				log.With().Debug("reporter new layer to subscriber", layer)
 			default:
-				log.Debug("reporter would block on subscriber %v", sub)
+				log.Debug("reporter would block on subscriber")
 			}
 		}
-		log.Info("reported layer update to subscribers: %v", layer)
+		log.With().Info("reported layer update to subscribers", layer)
 	}
 }
 
@@ -198,15 +202,16 @@ func ReportError(err NodeError) {
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		log.Info("about to report error updates for error : %v", err)
+		log.With().Info("about to report error updates for error", log.String("error-msg", err.Msg))
 		for sub := range reporter.errorSubs {
 			select {
 			case sub <- err:
+				log.With().Debug("reported error updates to subscriber for error", log.String("error-msg", err.Msg))
 			default:
-				log.Debug("reporter would block on subscriber %v", sub)
+				log.Debug("reporter would block on subscriber")
 			}
 		}
-		log.Info("reported error update to subscribers: %v", err)
+		log.With().Info("reported error update to subscribers: %v", log.String("error-msg", err.Msg))
 	}
 }
 
@@ -231,10 +236,9 @@ func ReportNodeStatusUpdate() {
 			select {
 			case sub <- struct{}{}:
 			default:
-				log.Debug("reporter would block on subscriber %v", sub)
+				log.Debug("reporter would block on subscriber")
 			}
 		}
-		log.Info("reported status update to subscribers: %v")
 	}
 }
 
@@ -244,16 +248,16 @@ func ReportReceipt(r TxReceipt) {
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		log.Info("about to report receipts for: %v", r)
+		log.With().Info("about to report receipts for", r, r.Address)
 		for sub := range reporter.receiptsSubs {
 			select {
 			case sub <- r:
-				log.Info("reporter send receipt %v to subscriber", r)
+				log.With().Debug("reporter send receipt to subscriber", r, r.Address)
 			default:
-				log.Debug("reporter would block on subscriber %v", sub)
+				log.Debug("reporter would block on subscriber")
 			}
 		}
-		log.Info("reported receipt to subscribers: %v", r)
+		log.With().Info("reported receipt to subscribers", r, r.Address)
 	}
 }
 
@@ -263,16 +267,16 @@ func ReportAccountUpdate(a types.Address) {
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		log.Info("about to report account update for: %v", a)
+		log.With().Info("about to report account update for", a)
 		for sub := range reporter.accountsSubs {
 			select {
 			case sub <- a:
-				log.Info("reporter send account %v to subscriber", a)
+				log.With().Info("reporter send account to subscriber", a)
 			default:
-				log.Debug("reporter would block on subscriber %v", sub)
+				log.Debug("reporter would block on subscriber")
 			}
 		}
-		log.Info("reported account update to subscribers: %v", a)
+		log.With().Info("reported account update to subscribers", a)
 	}
 }
 
@@ -467,8 +471,8 @@ func UnsubscribeFromReceipts(subscriptionChannel chan TxReceipt) {
 
 // InitializeEventReporter initializes the event reporting interface
 func InitializeEventReporter(url string) error {
-	// By default use zero-buffer channels and non-blocking.
-	return InitializeEventReporterWithOptions(url, 0)
+	// Need to buffer the channels so that slow subscribers can still receive updates
+	return InitializeEventReporterWithOptions(url, 30)
 }
 
 // InitializeEventReporterWithOptions initializes the event reporting interface with
@@ -548,6 +552,15 @@ type TxReceipt struct {
 	Address types.Address
 }
 
+func (t TxReceipt) String() string {
+	return fmt.Sprintf("ID: %v, Result: %v, Gas Used: %v, Fee: %v, Layer: %v, Index: %v",
+		t.ID, t.Result, t.GasUsed, t.Fee, t.Layer, t.Index)
+}
+
+func (t TxReceipt) Field() log.Field {
+	return log.String("transaction-receipt", t.String())
+}
+
 // Reward represents a reward object with extra data needed by the API
 type Reward struct {
 	Layer       types.LayerID
@@ -558,6 +571,15 @@ type Reward struct {
 	// See https://github.com/spacemeshos/go-spacemesh/issues/2275
 	//LayerComputed
 	Smesher types.NodeID
+}
+
+func (r Reward) String() string {
+	return fmt.Sprintf("Layer: %v, Total: %v, LayerReward: %v, Coinbase: %v, Smesher: %v",
+		r.Layer, r.Total, r.LayerReward, r.Coinbase, r.Smesher)
+}
+
+func (r Reward) Field() log.Field {
+	return log.String("reward", r.String())
 }
 
 // TransactionWithValidity wraps a tx with its validity info
