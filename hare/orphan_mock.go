@@ -6,7 +6,7 @@ import (
 )
 
 type orphanMock struct {
-	f func() []types.BlockID
+	f                 func() []types.BlockID
 	recordCoinflipsFn func(context.Context, types.LayerID, bool)
 }
 

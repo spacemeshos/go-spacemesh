@@ -468,7 +468,7 @@ func TestHare_WeakCoin(t *testing.T) {
 	om := &orphanMock{recordCoinflipsFn: func(_ context.Context, id types.LayerID, b bool) {
 		r.Equal(layerID, id)
 		r.True(b)
-		done<-struct{}{}
+		done <- struct{}{}
 	}}
 	h := New(cfg, n1, signing, types.NodeID{}, validateBlocks, (&mockSyncer{true}).IsSynced, om, oracle, 10, &mockIDProvider{}, NewMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
 	defer h.Close()
@@ -484,24 +484,24 @@ func TestHare_WeakCoin(t *testing.T) {
 		case <-done:
 		}
 	}
-	h.outputChan<-mockReport{instanceID(layerID), set, true, true}
-	h.outputChan<-mockReport{instanceID(layerID), set, false, true}
+	h.outputChan <- mockReport{instanceID(layerID), set, true, true}
+	h.outputChan <- mockReport{instanceID(layerID), set, false, true}
 	waitForMsg()
 	waitForMsg()
 	om.recordCoinflipsFn = func(_ context.Context, id types.LayerID, b bool) {
 		r.Equal(layerID, id)
 		r.False(b)
-		done<-struct{}{}
+		done <- struct{}{}
 	}
-	h.outputChan<-mockReport{instanceID(layerID), set, true, false}
-	h.outputChan<-mockReport{instanceID(layerID), set, false, false}
+	h.outputChan <- mockReport{instanceID(layerID), set, true, false}
+	h.outputChan <- mockReport{instanceID(layerID), set, false, false}
 	waitForMsg()
 	waitForMsg()
 	om.recordCoinflipsFn = func(_ context.Context, id types.LayerID, b bool) {
 		r.Equal(layerID+1, id)
 		r.True(b)
-		done<-struct{}{}
+		done <- struct{}{}
 	}
-	h.outputChan<-mockReport{instanceID(layerID+1), set, true, true}
+	h.outputChan <- mockReport{instanceID(layerID + 1), set, true, true}
 	waitForMsg()
 }
