@@ -557,6 +557,7 @@ func (t TxReceipt) String() string {
 		t.ID, t.Result, t.GasUsed, t.Fee, t.Layer, t.Index)
 }
 
+// Field returns a loggable field representation of the TxReceipt
 func (t TxReceipt) Field() log.Field {
 	return log.String("transaction-receipt", t.String())
 }
@@ -578,6 +579,7 @@ func (r Reward) String() string {
 		r.Layer, r.Total, r.LayerReward, r.Coinbase, r.Smesher)
 }
 
+// Field returns a loggable field representation of the Reward struct
 func (r Reward) Field() log.Field {
 	return log.String("reward", r.String())
 }
