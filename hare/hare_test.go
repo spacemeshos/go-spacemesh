@@ -449,7 +449,7 @@ func TestHare_oldestInBuffer(t *testing.T) {
 	require.Equal(t, h.bufferSize, len(h.outputs))
 
 	lyr = h.oldestResultInBuffer()
-	require.Equal(t, 2, lyr)
+	require.Equal(t, types.LayerID(2), lyr)
 }
 
 // make sure that Hare writes a weak coin value for a layer to the mesh after the CP completes,
