@@ -255,7 +255,7 @@ def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME,
         print(f"got an exception while waiting for Logstash to be ready: {e}")
         raise Exception(f"logstash took over than {ls_timeout} to start")
 
-    kb_timeout = 240
+    kb_timeout = 600
     try:
         print("waiting for kibana to be ready")
         kibana_sleep_time = statefulset.wait_to_statefulset_to_be_ready(kibana_dep_name, namespace, time_out=ls_timeout)
