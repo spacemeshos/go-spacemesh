@@ -56,6 +56,9 @@ type turtle struct {
 	// contents of a layer
 	ConfidenceParam types.LayerID
 
+	// the size of the tortoise sliding window which controls how far back the tortoise stores data
+	WindowSize types.LayerID
+
 	AvgLayerSize  int
 	MaxExceptions int
 
@@ -73,13 +76,14 @@ func (t *turtle) SetLogger(logger log.Log) {
 	t.logger = logger
 }
 
-// newTurtle creates a new verifying tortoise algorithm instance. XXX: maybe rename?
-func newTurtle(bdp blockDataProvider, hdist, zdist, confidenceParam, avgLayerSize int) *turtle {
+// newTurtle creates a new verifying tortoise algorithm instance
+func newTurtle(bdp blockDataProvider, hdist, zdist, confidenceParam, windowSize, avgLayerSize int) *turtle {
 	t := &turtle{
 		logger:               log.NewDefault("trtl"),
 		Hdist:                types.LayerID(hdist),
 		Zdist:                types.LayerID(zdist),
 		ConfidenceParam:      types.LayerID(confidenceParam),
+		WindowSize:			  types.LayerID(windowSize),
 		bdp:                  bdp,
 		Last:                 0,
 		AvgLayerSize:         avgLayerSize,
@@ -113,15 +117,15 @@ func (t *turtle) evict(ctx context.Context) {
 	logger := t.logger.WithContext(ctx)
 
 	// Don't evict before we've verified more than hdist
-	// TODO: fix potential leak when we can't verify but keep receiving layers
-
 	if t.Verified <= types.GetEffectiveGenesis()+t.Hdist {
 		return
 	}
-	// The window is the last [Verified - hdist] layers.
-	window := t.Verified - t.Hdist
-	logger.With().Info("window starts", window)
-	// evict from last evicted to the beginning of our window.
+
+	// TODO: fix potential leak when we can't verify but keep receiving layers
+	window := t.Verified - t.WindowSize
+	logger.With().Info("tortoise window start", window)
+
+	// evict from last evicted to the beginning of our window
 	for lyr := t.Evict; lyr < window; lyr++ {
 		logger.With().Info("removing layer", lyr)
 		for blk := range t.BlockOpinionsByLayer[lyr] {
@@ -246,6 +250,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 	// look at good blocks backwards from most recent processed layer to find a suitable base block
 	// TODO: optimize by, e.g., trying to minimize the size of the exception list (rather than first match)
 	// see https://github.com/spacemeshos/go-spacemesh/issues/2402
+	// TODO LANE: look back WindowSize?
 	for layerID := t.Last; layerID > t.Last-t.Hdist; layerID-- {
 		for block, opinion := range t.BlockOpinionsByLayer[layerID] {
 			if _, ok := t.GoodBlocksIndex[block]; !ok {
@@ -317,6 +322,7 @@ func (t *turtle) calculateExceptions(
 	// "good" if its own base block is marked "good" and all exceptions it contains agree with our local opinion.
 	// We only look for and store exceptions within the sliding window set of layers as an optimization, but a block
 	// can contain exceptions from any layer, back to genesis.
+	// TODO LANE: s/Hdist/WindowSize/
 	for layerID := t.Hdist; layerID <= t.Last; layerID++ {
 		logger := logger.WithFields(log.FieldNamed("diff_layer_id", layerID))
 		logger.Debug("checking input vector diffs")

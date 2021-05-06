@@ -74,6 +74,7 @@ type BaseConfig struct {
 	Hdist            int    `mapstructure:"hdist"`                     // hare/input vector lookback distance
 	Zdist            int    `mapstructure:"zdist"`                     // hare result wait distance
 	ConfidenceParam  int    `mapstructure:"tortoise-confidence-param"` // layers to wait for global consensus
+	WindowSize       int    `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)
 
 	PoETServer string `mapstructure:"poet-server"`
 
@@ -174,6 +175,7 @@ func defaultBaseConfig() BaseConfig {
 		Hdist:               10,
 		Zdist:               5,
 		ConfidenceParam:     5,
+		WindowSize:          100, // should be "a few thousand layers" in production
 		GenesisActiveSet:    5,
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,

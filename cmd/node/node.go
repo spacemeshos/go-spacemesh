@@ -542,12 +542,14 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
 	trtlCfg := tortoise.Config{
-		LayerSize: int(layerSize),
-		Database:  mdb,
-		Hdist:     app.Config.Hdist,
-		Zdist:     app.Config.Zdist,
-		Log:       app.addLogger(TrtlLogger, lg),
-		Recovered: mdb.PersistentData(),
+		LayerSize:       int(layerSize),
+		Database:        mdb,
+		Hdist:           app.Config.Hdist,
+		Zdist:           app.Config.Zdist,
+		ConfidenceParam: app.Config.ConfidenceParam,
+		WindowSize:      app.Config.WindowSize,
+		Log:             app.addLogger(TrtlLogger, lg),
+		Recovered:       mdb.PersistentData(),
 	}
 
 	trtl = tortoise.NewVerifyingTortoise(ctx, trtlCfg)

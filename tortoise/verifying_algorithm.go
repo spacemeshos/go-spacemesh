@@ -22,6 +22,7 @@ type Config struct {
 	Hdist           int // hare lookback distance: the distance over which we use the input vector/hare results
 	Zdist           int // hare result wait distance: the distance over which we're willing to wait for hare results
 	ConfidenceParam int // confidence wait distance: how long we wait for global consensus to be established
+	WindowSize      int // tortoise sliding window: how many layers we store data for
 	Log             log.Log
 	Recovered       bool
 }
@@ -31,7 +32,7 @@ func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingT
 	if cfg.Recovered {
 		return recoveredVerifyingTortoise(cfg.Database, cfg.Log)
 	}
-	return verifyingTortoise(ctx, cfg.LayerSize, cfg.Database, cfg.Hdist, cfg.Zdist, cfg.ConfidenceParam, cfg.Log)
+	return verifyingTortoise(ctx, cfg.LayerSize, cfg.Database, cfg.Hdist, cfg.Zdist, cfg.ConfidenceParam, cfg.WindowSize, cfg.Log)
 }
 
 // verifyingTortoise creates a new verifying tortoise wrapper
@@ -42,12 +43,13 @@ func verifyingTortoise(
 	hdist int,
 	zdist int,
 	confidenceParam int,
+	windowSize int,
 	logger log.Log,
 ) *ThreadSafeVerifyingTortoise {
 	if hdist < zdist {
 		logger.With().Panic("hdist must be >= zdist", log.Int("hdist", hdist), log.Int("zdist", zdist))
 	}
-	alg := &ThreadSafeVerifyingTortoise{trtl: newTurtle(mdb, hdist, zdist, confidenceParam, layerSize)}
+	alg := &ThreadSafeVerifyingTortoise{trtl: newTurtle(mdb, hdist, zdist, confidenceParam, windowSize, layerSize)}
 	alg.trtl.SetLogger(logger)
 	alg.trtl.init(ctx, mesh.GenesisLayer())
 	return alg
