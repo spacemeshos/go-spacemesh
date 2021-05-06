@@ -9,7 +9,7 @@ import tests.utils as ut
 
 SHIPPER = "fluent-bit"
 # correlates with logstash index format (under pipline-config.yml)
-INDX = SHIPPER+"-{index_date}-{namespace}"
+INDX = SHIPPER+"-{namespace}-{index_date}"
 DMP_CMD = "elasticdump --input=http://{es_input_user}:{es_input_pass}@{es_ip}:9200/{index} " \
           "--output={file_name}.json --type={type} --limit={limit} --concurrency=50"
 REST_CMD = "elasticdump --input={file_name}.json --concurrency=50 " \

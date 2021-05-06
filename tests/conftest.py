@@ -14,12 +14,12 @@ from tests import pod
 from tests.context import Context
 from tests.convenience import str2bool
 from tests.es_dump import es_reindex
-from tests.k8s_handler import add_elastic_cluster, add_kibana_cluster, add_logstash_cluster, add_fluent_bit_cluster, \
-    fluent_bit_teardown, wait_for_daemonset_to_be_ready
+from tests.k8s_handler import add_elastic_cluster, add_kibana_cluster, add_fluent_bit_cluster, fluent_bit_teardown, \
+    wait_for_daemonset_to_be_ready
 from tests.misc import CoreV1ApiClient
 from tests.node_pool_deployer import NodePoolDep
 from tests.setup_utils import setup_bootstrap_in_namespace, setup_clients_in_namespace
-from tests.utils import api_call, wait_for_minimal_elk_cluster_ready
+from tests.utils import api_call, wait_for_elk_cluster_ready
 
 
 def random_id(length):
@@ -306,13 +306,12 @@ def add_elk(init_session, request):
     # get today's date for filebeat data index
     index_date = datetime.utcnow().date().strftime("%Y.%m.%d")
     add_elastic_cluster(init_session)
-    add_logstash_cluster(init_session)
     add_fluent_bit_cluster(init_session)
     add_kibana_cluster(init_session)
-    wait_for_minimal_elk_cluster_ready(init_session)
+    wait_for_elk_cluster_ready(init_session)
     yield
     fluent_bit_teardown(init_session)
-    # in case the dumping process has failed the namespace won't be deleted if this global var is set to False
+    # in case the dumping process has failed the namespace won't be deleted if delete_namespace (global) is set to False
     pytest.delete_namespace = dump_es_to_main_server(init_session, index_date, request.session.testsfailed)
 
 
