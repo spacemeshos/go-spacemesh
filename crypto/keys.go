@@ -110,7 +110,7 @@ func (p *privateKeyImpl) Pretty() string {
 
 // Sign signs binary data with the private key.
 func (p *privateKeyImpl) Sign(msg []byte) []byte {
-	signature, err := p.k.Sign(in)
+	signature, err := p.k.Sign(msg)
 	if err != nil {
 		return nil
 	}
