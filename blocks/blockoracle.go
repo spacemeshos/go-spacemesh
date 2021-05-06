@@ -22,7 +22,7 @@ type activationDB interface {
 }
 
 type vrfSigner interface {
-	Sign(msg []byte) ([]byte, error)
+	Sign(msg []byte) []byte
 }
 
 // DefaultProofsEpoch is set such that it will never equal the current epoch
@@ -144,11 +144,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 	bo.eligibilityMutex.Unlock()
 	for counter := uint32(0); counter < numberOfEligibleBlocks; counter++ {
 		message := serializeVRFMessage(epochBeacon, epochNumber, counter)
-		vrfSig, err := bo.vrfSigner.Sign(message)
-		if err != nil {
-			bo.log.With().Error("could not sign message", log.Err(err))
-			return err
-		}
+		vrfSig := bo.vrfSigner.Sign(message)
 		vrfHash := sha256.Sum256(vrfSig)
 		eligibleLayer := calcEligibleLayer(epochNumber, bo.layersPerEpoch, vrfHash)
 		bo.eligibilityMutex.Lock()

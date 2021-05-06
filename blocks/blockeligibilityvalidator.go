@@ -10,7 +10,7 @@ import (
 )
 
 // VRFValidationFunction is the VRF validation function.
-type VRFValidationFunction func(message, signature, publicKey []byte) (bool, error)
+type VRFValidationFunction func(publicKey, message, signature []byte) bool
 
 type blockDB interface {
 	GetBlock(ID types.BlockID) (*types.Block, error)
@@ -94,12 +94,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	message := serializeVRFMessage(epochBeacon, epochNumber, counter)
 	vrfSig := block.EligibilityProof.Sig
 
-	res, err := v.validateVRF(message, vrfSig, vrfPubkey)
-	if err != nil {
-		return false, fmt.Errorf("eligibility VRF validation failed: %v", err)
-	}
-
-	if !res {
+	if !v.validateVRF(vrfPubkey, message, vrfSig) {
 		return false, fmt.Errorf("eligibility VRF validation failed")
 	}
 

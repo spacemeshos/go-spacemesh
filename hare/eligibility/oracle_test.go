@@ -54,9 +54,9 @@ func (m *mockActiveSetProvider) ActiveSet(types.EpochID, map[types.BlockID]struc
 	return createMapWithSize(m.size), nil
 }
 
-func buildVerifier(result bool, err error) verifierFunc {
-	return func(msg, sig []byte, pub []byte) (bool, error) {
-		return result, err
+func buildVerifier(result bool) verifierFunc {
+	return func(pub, msg, sig []byte) bool {
+		return result
 	}
 }
 
@@ -65,8 +65,8 @@ type mockSigner struct {
 	err error
 }
 
-func (s *mockSigner) Sign(msg []byte) ([]byte, error) {
-	return s.sig, s.err
+func (s *mockSigner) Sign(msg []byte) []byte {
+	return s.sig
 }
 
 type mockCacher struct {
@@ -132,7 +132,7 @@ func TestOracle_BuildVRFMessage(t *testing.T) {
 
 func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &mockSigner{[]byte{1, 2, 3}, nil}, 5, 5, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true), &mockSigner{[]byte{1, 2, 3}, nil}, 5, 5, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	mCache := newMockCacher()
 	o.vrfMsgCache = mCache
 
@@ -155,12 +155,12 @@ func TestOracle_IsEligible(t *testing.T) {
 	types.SetLayersPerEpoch(defLayersPerEpoch)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 0, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	o.layersPerEpoch = 10
-	o.vrfVerifier = buildVerifier(false, errFoo)
+	o.vrfVerifier = buildVerifier(false)
 	res, err := o.Eligible(context.TODO(), types.LayerID(1), 0, 1, types.NodeID{}, []byte{})
-	assert.NotNil(t, err)
+	assert.NoError(t, err)
 	assert.False(t, res)
 
-	o.vrfVerifier = buildVerifier(true, nil)
+	o.vrfVerifier = buildVerifier(true)
 	o.getActiveSet = (&mockActiveSetProvider{10}).ActiveSet
 	res, err = o.Eligible(context.TODO(), types.LayerID(50), 1, 0, types.NodeID{}, []byte{})
 	assert.Nil(t, err)
@@ -185,14 +185,14 @@ func Test_safeLayer(t *testing.T) {
 }
 
 func Test_ZeroParticipants(t *testing.T) {
-	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{5}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, defLayersPerEpoch, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{5}).ActiveSet, buildVerifier(true), &mockSigner{}, defLayersPerEpoch, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	res, err := o.Eligible(context.TODO(), 1, 0, 0, types.NodeID{Key: ""}, []byte{1})
 	assert.Nil(t, err)
 	assert.False(t, res)
 }
 
 func Test_AllParticipants(t *testing.T) {
-	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{5}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{5}).ActiveSet, buildVerifier(true), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	res, err := o.Eligible(context.TODO(), 0, 0, 5, types.NodeID{Key: ""}, []byte{1})
 	assert.Nil(t, err)
 	assert.True(t, res)
@@ -209,7 +209,7 @@ func genBytes() []byte {
 func Test_ExpectedCommitteeSize(t *testing.T) {
 	setSize := 1024
 	commSize := 1000
-	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{setSize}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{setSize}).ActiveSet, buildVerifier(true), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	count := 0
 	for i := 0; i < setSize; i++ {
 		res, err := o.Eligible(context.TODO(), 0, 0, commSize, types.NodeID{Key: ""}, genBytes())
@@ -252,7 +252,7 @@ func Test_ActiveSetSize(t *testing.T) {
 	m[types.EpochID(19)] = 2
 	m[types.EpochID(29)] = 3
 	m[types.EpochID(39)] = 5
-	o := New(&mockValueProvider{1, nil}, (&mockBufferedActiveSetProvider{m}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockBufferedActiveSetProvider{m}).ActiveSet, buildVerifier(true), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	// TODO: remove this comment after inception problem is addressed
 	// assert.Equal(t, o.getActiveSet.ActiveSet(0), o.activeSetSize(1))
 	l := 19 + defSafety
@@ -299,7 +299,7 @@ func Test_VrfSignVerify(t *testing.T) {
 }
 
 func TestOracle_Proof(t *testing.T) {
-	o := New(&mockValueProvider{0, errMy}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{0, errMy}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	sig, err := o.Proof(context.TODO(), 2, 3)
 	assert.Nil(t, sig)
 	assert.NotNil(t, err)
@@ -318,14 +318,14 @@ func TestOracle_Proof(t *testing.T) {
 }
 
 func TestOracle_Eligible(t *testing.T) {
-	o := New(&mockValueProvider{0, errMy}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{0, errMy}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	res, err := o.Eligible(context.TODO(), 1, 2, 3, types.NodeID{}, []byte{})
 	assert.False(t, res)
 	assert.NotNil(t, err)
 	assert.Equal(t, errMy, err)
 
 	o.beacon = &mockValueProvider{0, nil}
-	o.vrfVerifier = buildVerifier(false, nil)
+	o.vrfVerifier = buildVerifier(false)
 	res, err = o.Eligible(context.TODO(), 1, 2, 3, types.NodeID{}, []byte{})
 	assert.False(t, res)
 	assert.Nil(t, err)
@@ -507,8 +507,8 @@ func TestOracle_Eligible2(t *testing.T) {
 	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return createMapWithSize(9), errFoo
 	}
-	o.vrfVerifier = func(msg, sig, pub []byte) (bool, error) {
-		return true, nil
+	o.vrfVerifier = func(pub, msg, sig []byte) bool {
+		return true
 	}
 	_, err := o.Eligible(context.TODO(), 100, 1, 1, types.NodeID{}, []byte{})
 	assert.Equal(t, errFoo, err)
