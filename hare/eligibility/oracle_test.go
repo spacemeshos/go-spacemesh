@@ -62,7 +62,6 @@ func buildVerifier(result bool) verifierFunc {
 
 type mockSigner struct {
 	sig []byte
-	err error
 }
 
 func (s *mockSigner) Sign(msg []byte) []byte {
@@ -132,7 +131,7 @@ func TestOracle_BuildVRFMessage(t *testing.T) {
 
 func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true), &mockSigner{[]byte{1, 2, 3}, nil}, 5, 5, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true), &mockSigner{[]byte{1, 2, 3}}, 5, 5, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	mCache := newMockCacher()
 	o.vrfMsgCache = mCache
 
@@ -305,13 +304,12 @@ func TestOracle_Proof(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Equal(t, errMy, err)
 	o.beacon = &mockValueProvider{0, nil}
-	o.vrfSigner = &mockSigner{nil, errMy}
+	o.vrfSigner = &mockSigner{nil}
 	sig, err = o.Proof(context.TODO(), 2, 3)
 	assert.Nil(t, sig)
-	assert.NotNil(t, err)
-	assert.Equal(t, errMy, err)
+	assert.NoError(t, err)
 	mySig := []byte{1, 2}
-	o.vrfSigner = &mockSigner{mySig, nil}
+	o.vrfSigner = &mockSigner{mySig}
 	sig, err = o.Proof(context.TODO(), 2, 3)
 	assert.Nil(t, err)
 	assert.Equal(t, mySig, sig)
