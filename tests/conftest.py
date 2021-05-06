@@ -135,41 +135,34 @@ def session_id(namespace):
 @pytest.fixture(scope='session')
 def set_namespace(request, session_id, load_config, delete_ns):
     v1 = CoreV1ApiClient()
+    if testconfig['namespace'] == '':
+        testconfig['namespace'] = session_id
 
-    def setup_namespace():
+    print("\nRun tests in namespace: {0}".format(testconfig['namespace']))
+    namespaces_list = [ns.metadata.name for ns in v1.list_namespace().items]
+    if testconfig['namespace'] in namespaces_list:
+        pytest.delete_namespace = False
+        return
 
-        if testconfig['namespace'] == '':
-            testconfig['namespace'] = session_id
-
-        print("\nRun tests in namespace: {0}".format(testconfig['namespace']))
-        namespaces_list = [ns.metadata.name for ns in v1.list_namespace().items]
-        if testconfig['namespace'] in namespaces_list:
-            pytest.delete_namespace = False
-            return
-
-        body = client.V1Namespace()
-        body.metadata = client.V1ObjectMeta(name=testconfig['namespace'])
-        v1.create_namespace(body)
-
-    def fin(conditions):
-        # On teardown we wish to report on pods that were restarted by k8s during the test
-        restarted_pods = pod.check_for_restarted_pods(testconfig['namespace'])
-        if restarted_pods:
-            print('\n\nAttention!!! The following pods were restarted during test: {0}\n\n'.format(restarted_pods))
-        if all(condition is True for condition in conditions):
-            print("\nDeleting test namespace: {0}".format(testconfig['namespace']))
-            v1.delete_namespace(name=testconfig['namespace'], body=client.V1DeleteOptions())
-        else:
-            exit_msg = f"NOTICE!!! namespace {session_id} was not deleted!!!\n" \
-                       f"please make sure to delete it after use:\n" \
-                       f"kubectl delete namespace {session_id}"
-            print(exit_msg)
-
-    setup_namespace()
+    body = client.V1Namespace()
+    body.metadata = client.V1ObjectMeta(name=testconfig['namespace'])
+    v1.create_namespace(body)
     yield
     # delete namespace if was not mentioned otherwise in the command line args and if global arg is set to
     # True (pytest.delete_namespace)
-    fin([delete_ns, pytest.delete_namespace])
+    # fin([delete_ns, pytest.delete_namespace])
+    conditions = [delete_ns, pytest.delete_namespace]
+    restarted_pods = pod.check_for_restarted_pods(testconfig['namespace'])
+    if restarted_pods:
+        print('\n\nAttention!!! The following pods were restarted during test: {0}\n\n'.format(restarted_pods))
+    if all(condition is True for condition in conditions):
+        print("\nDeleting test namespace: {0}".format(testconfig['namespace']))
+        v1.delete_namespace(name=testconfig['namespace'], body=client.V1DeleteOptions())
+    else:
+        exit_msg = f"NOTICE!!! namespace {session_id} was not deleted!!!\n" \
+                   f"please make sure to delete it after use:\n" \
+                   f"kubectl delete namespace {session_id}"
+        print(exit_msg)
 
 
 @pytest.fixture(scope='session')
