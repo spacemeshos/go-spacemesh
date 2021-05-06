@@ -64,7 +64,6 @@ func buildVerifier(result bool) verifierFunc {
 
 type mockSigner struct {
 	sig []byte
-	err error
 }
 
 func (s *mockSigner) Sign([]byte) []byte {
@@ -134,7 +133,7 @@ func TestOracle_BuildVRFMessage(t *testing.T) {
 
 func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true), &mockSigner{[]byte{1, 2, 3}, nil}, 5, 1, 5, 1, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true), &mockSigner{[]byte{1, 2, 3}}, 5, 1, 5, 1, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	mCache := newMockCacher()
 	o.vrfMsgCache = mCache
 
@@ -160,18 +159,18 @@ func defaultOracle(t testing.TB) *Oracle {
 
 func mockOracle(t testing.TB, layersPerEpoch uint16) *Oracle {
 	types.SetLayersPerEpoch(int32(layersPerEpoch))
-	o := New(&mockValueProvider{1, nil}, nil, buildVerifier(true, nil), nil, layersPerEpoch, 1, genWeight, 1, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, nil, buildVerifier(true), nil, layersPerEpoch, 1, genWeight, 1, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	return o
 }
 
 func TestOracle_CalcEligibility_ErrorFromVerifier(t *testing.T) {
 	r := require.New(t)
 	o := defaultOracle(t)
-	o.vrfVerifier = buildVerifier(false, errFoo)
+	o.vrfVerifier = buildVerifier(false)
 
 	res, err := o.CalcEligibility(context.TODO(), types.LayerID(1), 0, 1, types.NodeID{}, []byte{})
 
-	r.EqualError(err, errFoo.Error())
+	r.NoError(err)
 	r.Equal(uint16(0), res)
 }
 
@@ -394,13 +393,13 @@ func TestOracle_Proof(t *testing.T) {
 	assert.EqualError(t, err, errMy.Error())
 
 	o.beacon = &mockValueProvider{0, nil}
-	o.vrfSigner = &mockSigner{nil, errMy}
+	o.vrfSigner = &mockSigner{nil}
 	sig, err = o.Proof(context.TODO(), 2, 3)
 	assert.Nil(t, sig)
-	assert.EqualError(t, err, errMy.Error())
+	assert.NoError(t, err)
 
 	mySig := []byte{1, 2}
-	o.vrfSigner = &mockSigner{mySig, nil}
+	o.vrfSigner = &mockSigner{mySig}
 	sig, err = o.Proof(context.TODO(), 2, 3)
 	assert.Nil(t, err)
 	assert.Equal(t, mySig, sig)
@@ -584,7 +583,7 @@ func TestOracle_CalcEligibility_withSpaceUnits(t *testing.T) {
 	numOfMiners := 50
 	committeeSize := 800
 	types.SetLayersPerEpoch(10)
-	o := New(&mockValueProvider{1, nil}, nil, buildVerifier(true, nil), nil, 10, 1, genWeight, 1, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, nil, buildVerifier(true), nil, 10, 1, genWeight, 1, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	o.getActiveSet = (&mockActiveSetProvider{numOfMiners}).ActiveSet
 
 	var eligibilityCount uint16
