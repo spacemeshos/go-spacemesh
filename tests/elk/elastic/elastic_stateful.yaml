@@ -13,7 +13,7 @@ spec:
   selector:
     matchLabels:
       app: "elasticsearch-master"
-  replicas: 1
+  replicas: 2
   podManagementPolicy: Parallel
   updateStrategy:
     type: RollingUpdate
