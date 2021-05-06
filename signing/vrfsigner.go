@@ -8,12 +8,12 @@ import (
 
 // VRFSigner is a signer for VRF purposes
 type VRFSigner struct {
-	privKey []byte
+	privateKey []byte
 }
 
 // Sign signs a message for VRF purposes
-func (s VRFSigner) Sign(m []byte) ([]byte, error) {
-	return ed25519.Sign(s.privKey, m), nil
+func (s VRFSigner) Sign(msg []byte) []byte {
+	return ed25519.Sign(s.privateKey, msg)
 }
 
 // NewVRFSigner creates a new VRFSigner from a 32-byte seed
@@ -25,10 +25,10 @@ func NewVRFSigner(seed []byte) (*VRFSigner, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return &VRFSigner{privKey: vrfPriv}, vrfPub, nil
+	return &VRFSigner{privateKey: vrfPriv}, vrfPub, nil
 }
 
 // VRFVerify verifies a message and signature, given a public key
-func VRFVerify(msg, sig, pub []byte) (bool, error) {
-	return ed25519.Verify(pub, msg, sig), nil
+func VRFVerify(pub, msg, sig []byte) bool {
+	return ed25519.Verify(pub, msg, sig)
 }

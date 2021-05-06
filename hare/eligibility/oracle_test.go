@@ -56,9 +56,9 @@ func (m *mockActiveSetProvider) ActiveSet(types.EpochID, map[types.BlockID]struc
 	return createMapWithSize(m.size), nil
 }
 
-func buildVerifier(result bool, err error) verifierFunc {
-	return func(msg, sig []byte, pub []byte) (bool, error) {
-		return result, err
+func buildVerifier(result bool) verifierFunc {
+	return func(pub, msg, sig []byte) bool {
+		return result
 	}
 }
 
@@ -67,8 +67,8 @@ type mockSigner struct {
 	err error
 }
 
-func (s *mockSigner) Sign([]byte) ([]byte, error) {
-	return s.sig, s.err
+func (s *mockSigner) Sign([]byte) []byte {
+	return s.sig
 }
 
 type mockCacher struct {
@@ -134,7 +134,7 @@ func TestOracle_BuildVRFMessage(t *testing.T) {
 
 func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &mockSigner{[]byte{1, 2, 3}, nil}, 5, 1, 5, 1, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true), &mockSigner{[]byte{1, 2, 3}, nil}, 5, 1, 5, 1, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	mCache := newMockCacher()
 	o.vrfMsgCache = mCache
 

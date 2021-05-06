@@ -463,7 +463,7 @@ func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
 }
 
 type vrfSigner interface {
-	Sign([]byte) ([]byte, error)
+	Sign([]byte) []byte
 }
 
 func (app *SpacemeshApp) initServices(ctx context.Context,
