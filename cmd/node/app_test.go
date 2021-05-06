@@ -223,7 +223,7 @@ type TestScenario struct {
 func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apicfg.Account2Private))
 	if err != nil {
-		log.Panic("could not build ed signer err=%v", err)
+		log.With().Panic("could not build ed signer", log.Err(err))
 	}
 	addr := types.Address{}
 	addr.SetBytes(acc1Signer.PublicKey().Bytes())
@@ -233,7 +233,7 @@ func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 		for i := 0; i < txsSent; i++ {
 			tx, err := types.NewSignedTx(uint64(txsSent-i), dst, 10, 1, 1, acc1Signer)
 			if err != nil {
-				log.Panic("panicked creating signed tx err=%v", err)
+				log.With().Panic("panicked creating signed tx", log.Err(err))
 			}
 			txbytes, _ := types.InterfaceToBytes(tx)
 			pbMsg := &pb.SubmitTransactionRequest{Transaction: txbytes}
@@ -260,7 +260,7 @@ func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apicfg.Account1Private))
 	if err != nil {
-		log.Panic("Could not build ed signer err=%v", err)
+		log.With().Panic("could not build ed signer", log.Err(err))
 	}
 
 	addr := types.Address{}
@@ -458,7 +458,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 
 	lateNodeKey := suite.apps[len(suite.apps)-1].nodeID.Key
 	for i, d := range datamap {
-		log.Info("Node %v in len(layerstoblocks) %v", i, len(d.layertoblocks))
+		log.Info("node %v in len(layerstoblocks) %v", i, len(d.layertoblocks))
 		if i == lateNodeKey { // skip late node
 			continue
 		}

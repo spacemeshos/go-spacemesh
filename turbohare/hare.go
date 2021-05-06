@@ -66,7 +66,7 @@ func (h *SuperHare) Close() {
 func (h *SuperHare) GetResult(id types.LayerID) ([]types.BlockID, error) {
 	blks, err := h.mesh.LayerBlockIds(id)
 	if err != nil {
-		log.With().Error("superhare failed to read block ids for layer", id, log.Err(err))
+		h.logger.With().Error("superhare failed to read block ids for layer", id, log.Err(err))
 		return nil, err
 	}
 	sort.Slice(blks, func(i, j int) bool { return bytes.Compare(blks[i].Bytes(), blks[j].Bytes()) == -1 })
