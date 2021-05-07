@@ -500,9 +500,8 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) {
 	// That would update the stored block opinions but it would not attempt to re-verify an already-verified layer.
 
 	if len(newlyr.Blocks()) == 0 {
-		logger.Warning("attempted to handle empty layer")
-		return
-		// todo: something else to do on empty layer?
+		// we allow empty layers but warn
+		logger.Warning("handling empty layer")
 	}
 
 	// TODO: handle late blocks
@@ -521,8 +520,8 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) {
 		}
 	}
 
-	blockscount := len(newlyr.Blocks())
-	goodblocks := len(t.GoodBlocksIndex)
+	numGood := 0
+
 	// Go over all blocks, in order. Mark block i “good” if:
 	for _, b := range newlyr.Blocks() {
 		logger := logger.WithFields(b.ID(), log.FieldNamed("base_block_id", b.BaseBlock))
@@ -538,14 +537,15 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) {
 			t.checkBlockAndGetInputVector(ctx, b.NeutralDiff, "abstain", abstain, b.ID(), baseBlock.LayerIndex) {
 			logger.Debug("marking block good")
 			t.GoodBlocksIndex[b.ID()] = struct{}{}
+			numGood++
 		} else {
 			logger.Debug("not marking block good")
 		}
 	}
 
 	logger.With().Info("finished marking good blocks",
-		log.Int("total_blocks", blockscount),
-		log.Int("good_blocks", len(t.GoodBlocksIndex)-goodblocks))
+		log.Int("total_blocks", len(newlyr.Blocks())),
+		log.Int("good_blocks", numGood))
 
 	logger.With().Info("starting layer verification",
 		log.FieldNamed("prev_verified", t.Verified),
@@ -663,9 +663,14 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) {
 			// Verifying tortoise will wait `zdist' layers for consensus, then an additional `ConfidenceParam'
 			// layers until all other nodes achieve consensus. If it's still stuck after this point, i.e., if the gap
 			// between the last verified layer and this candidate layer is greater than this distance, then we trigger
-			// self-healing.
-			if candidateLayerID-t.Verified > t.Zdist+t.ConfidenceParam {
-				t.selfHealing(ctx, newlyr.Index())
+			// self-healing. But there's no point in trying to heal a layer that's not at least Hdist layers old since
+			// we only consider the local opinion for recent layers.
+			if candidateLayerID < t.Last-t.Hdist && candidateLayerID-t.Verified > t.Zdist+t.ConfidenceParam {
+				lastLayer := newlyr.Index()
+				if lastLayer > t.Last-t.Hdist {
+					lastLayer = t.Last-t.Hdist
+				}
+				t.selfHealing(ctx, lastLayer)
 			}
 
 			// Otherwise, give up trying to verify layers and keep waiting
@@ -674,11 +679,10 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) {
 			return
 		}
 
-		// Declare the vote vector “verified” up to position k (up to this layer)
-		// and record the contextual validity for all blocks in this layer
+		// Declare the vote vector "verified" up to this layer and record the contextual validity for all blocks in this
+		// layer
 		for blk, v := range contextualValidity {
 			if err := t.bdp.SaveContextualValidity(blk, v); err != nil {
-				// panic?
 				logger.With().Error("error saving contextual validity on block", blk, log.Err(err))
 			}
 		}
@@ -775,13 +779,20 @@ func (t *turtle) selfHealing(ctx context.Context, endLayerID types.LayerID) {
 	pbaseNew := t.Verified
 
 	// TODO: optimize this algorithm using, e.g., a triangular matrix rather than nested loops
-	// TODO: make sure that we never run for layers newer than Hdist
 	for candidateLayerID := pbaseOld; candidateLayerID < endLayerID; candidateLayerID++ {
 		logger := t.logger.WithContext(ctx).WithFields(
 			log.FieldNamed("old_verified_layer", pbaseOld),
 			log.FieldNamed("new_verified_layer", pbaseNew),
 			log.FieldNamed("highest_candidate_layer", endLayerID),
-			log.FieldNamed("candidate_layer", candidateLayerID))
+			log.FieldNamed("candidate_layer", candidateLayerID),
+			log.FieldNamed("last_layer_received", t.Last),
+			log.FieldNamed("hdist", t.Hdist))
+
+		// we should never run on layers newer than Hdist back
+		if candidateLayerID > t.Last-t.Hdist {
+			logger.Error("cannot heal layer that's not at least hdist layers old")
+			return
+		}
 
 		// Calculate the global opinion on all blocks in the layer
 		// Note: we look at ALL blocks we've seen for the layer, not just those we've previously marked contextually valid
