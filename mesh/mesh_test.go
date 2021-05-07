@@ -62,8 +62,8 @@ func (m *MeshValidatorMock) LatestComplete() types.LayerID {
 func (m *MeshValidatorMock) HandleIncomingLayer(_ context.Context, layerID types.LayerID) (types.LayerID, types.LayerID) {
 	return layerID - 1, layerID
 }
-func (m *MeshValidatorMock) HandleLateBlock(_ context.Context, bl *types.Block) (types.LayerID, types.LayerID) {
-	return bl.Layer() - 1, bl.Layer()
+func (m *MeshValidatorMock) HandleLateBlocks(_ context.Context, bl []*types.Block) (types.LayerID, types.LayerID) {
+	return bl[0].Layer() - 1, bl[0].Layer()
 }
 
 type MockState struct{}
@@ -110,6 +110,7 @@ func (MockState) GetLayerStateRoot(types.LayerID) (types.Hash32, error) {
 func (MockState) GetBalance(types.Address) uint64 {
 	panic("implement me")
 }
+
 func (MockState) GetNonce(types.Address) uint64 {
 	panic("implement me")
 }

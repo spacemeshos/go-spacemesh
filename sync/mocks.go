@@ -91,9 +91,8 @@ func (m *meshValidatorMock) HandleIncomingLayer(_ context.Context, layerID types
 	return layerID, layerID - 1
 }
 
-func (m *meshValidatorMock) HandleLateBlock(_ context.Context, bl *types.Block) (types.LayerID, types.LayerID) {
-	return bl.Layer(), bl.Layer() - 1
-
+func (m *meshValidatorMock) HandleLateBlocks(_ context.Context, bl []*types.Block) (types.LayerID, types.LayerID) {
+	return bl[0].Layer(), bl[0].Layer() - 1
 }
 
 type mockState struct{}

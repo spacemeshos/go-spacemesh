@@ -55,11 +55,11 @@ func (m *MeshValidatorMock) LatestComplete() types.LayerID {
 	panic("implement me")
 }
 
-func (m *MeshValidatorMock) HandleIncomingLayer(_ context.Context, layer *types.Layer) (types.LayerID, types.LayerID) {
-	return layer.Index() - 1, layer.Index()
+func (m *MeshValidatorMock) HandleIncomingLayer(_ context.Context, layerID types.LayerID) (types.LayerID, types.LayerID) {
+	return layerID - 1, layerID
 }
-func (m *MeshValidatorMock) HandleLateBlock(_ context.Context, bl *types.Block) (types.LayerID, types.LayerID) {
-	return bl.Layer() - 1, bl.Layer()
+func (m *MeshValidatorMock) HandleLateBlocks(_ context.Context, bl []*types.Block) (types.LayerID, types.LayerID) {
+	return bl[0].Layer() - 1, bl[0].Layer()
 }
 
 type MockState struct{}

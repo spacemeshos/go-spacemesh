@@ -18,7 +18,6 @@ type blockDataProvider interface {
 
 	GetCoinflip(context.Context, types.LayerID) (bool, bool)
 	GetLayerInputVectorByID(types.LayerID) ([]types.BlockID, error)
-	SaveLayerInputVectorByID(types.LayerID, []types.BlockID) error
 	SaveContextualValidity(types.BlockID, bool) error
 
 	Persist(key []byte, v interface{}) error
@@ -82,7 +81,7 @@ func (t *turtle) SetLogger(logger log.Log) {
 
 // newTurtle creates a new verifying tortoise algorithm instance
 func newTurtle(bdp blockDataProvider, hdist, zdist, confidenceParam, windowSize, avgLayerSize int) *turtle {
-	t := &turtle{
+	return &turtle{
 		logger:               log.NewDefault("trtl"),
 		Hdist:                types.LayerID(hdist),
 		Zdist:                types.LayerID(zdist),
@@ -95,7 +94,11 @@ func newTurtle(bdp blockDataProvider, hdist, zdist, confidenceParam, windowSize,
 		BlockOpinionsByLayer: make(map[types.LayerID]map[types.BlockID]Opinion, hdist),
 		MaxExceptions:        hdist * avgLayerSize * 100,
 	}
-	return t
+}
+
+// cloneTurtle creates a new verifying tortoise instance using the params of this instance
+func (t *turtle) cloneTurtle() *turtle {
+	return newTurtle(t.bdp, int(t.Hdist), int(t.Zdist), int(t.ConfidenceParam), int(t.WindowSize), t.AvgLayerSize)
 }
 
 func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
@@ -482,36 +485,28 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	return nil
 }
 
-// HandleIncomingLayer processes all layer block votes
-// returns the old pbase and new pbase after taking into account the blocks votes
-func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) error {
-	logger := t.logger.WithContext(ctx).WithFields(newlyr)
-
-	if t.Last < newlyr.Index() {
-		t.Last = newlyr.Index()
-	}
-
-	if newlyr.Index() <= types.GetEffectiveGenesis() {
-		logger.Debug("not attempting to handle genesis layer")
+// ProcessNewBlocks processes the votes of a set of blocks, records their opinions, and marks good blocks good.
+// The blocks do not all have to be in the same layer, but if they span multiple layers, they must be sorted by
+// LayerID.
+func (t *turtle) ProcessNewBlocks(ctx context.Context, blocks []*types.Block) error {
+	logger := t.logger.WithContext(ctx)
+	lastLayerID := types.LayerID(0)
+	if len(blocks) == 0 {
+		// nothing to do
+		logger.Warning("cannot process empty block list")
 		return nil
 	}
 
-	// Note: we don't compare newlyr and t.Verified, so this method could be called again on an already-verified layer.
-	// That would update the stored block opinions but it would not attempt to re-verify an already-verified layer.
-
-	if len(newlyr.Blocks()) == 0 {
-		// we allow empty layers but warn
-		logger.Warning("handling empty layer")
-	}
-
-	// TODO: handle late blocks
-
 	defer t.evict(ctx)
-
-	logger.With().Info("start handling incoming layer", log.Int("num_blocks", len(newlyr.Blocks())))
+	logger.With().Info("tortoise handling incoming block data", log.Int("num_blocks", len(blocks)))
 
 	// process the votes in all layer blocks and update tables
-	for _, b := range newlyr.Blocks() {
+	for _, b := range blocks {
+		if b.LayerIndex < lastLayerID {
+			return errors.New("input blocks are not sorted by layerID")
+		} else if b.LayerIndex > lastLayerID {
+			lastLayerID = b.LayerIndex
+		}
 		if _, ok := t.BlockOpinionsByLayer[b.LayerIndex]; !ok {
 			t.BlockOpinionsByLayer[b.LayerIndex] = make(map[types.BlockID]Opinion, t.AvgLayerSize)
 		}
@@ -522,8 +517,8 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) e
 
 	numGood := 0
 
-	// Go over all blocks, in order. Mark block i “good” if:
-	for _, b := range newlyr.Blocks() {
+	// Go over all blocks, in order. Mark block i "good" if:
+	for _, b := range blocks {
 		logger := logger.WithFields(b.ID(), log.FieldNamed("base_block_id", b.BaseBlock))
 		// (1) the base block is marked as good
 		if _, good := t.GoodBlocksIndex[b.BaseBlock]; !good {
@@ -544,18 +539,50 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) e
 	}
 
 	logger.With().Info("finished marking good blocks",
-		log.Int("total_blocks", len(newlyr.Blocks())),
+		log.Int("total_blocks", len(blocks)),
 		log.Int("good_blocks", numGood))
 
-	logger.With().Info("starting layer verification",
-		log.FieldNamed("prev_verified", t.Verified),
-		log.FieldNamed("verification_target", newlyr.Index()))
+	// attempt to verify layers up to the latest one for which we have new block data
+	return t.verifyLayers(ctx, lastLayerID)
+}
+
+// HandleIncomingLayer processes all layer block votes
+// returns the old pbase and new pbase after taking into account the blocks votes
+func (t *turtle) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) error {
+	logger := t.logger.WithContext(ctx).WithFields(layerID)
+
+	if t.Last < layerID {
+		t.Last = layerID
+	}
+
+	if layerID <= types.GetEffectiveGenesis() {
+		logger.Debug("not attempting to handle genesis layer")
+		return nil
+	}
+
+	// Note: we don't compare newlyr and t.Verified, so this method could be called again on an already-verified layer.
+	// That would update the stored block opinions but it would not attempt to re-verify an already-verified layer.
+
+	// read layer blocks
+	layerBlocks, err := t.bdp.LayerBlocks(layerID)
+	if err != nil {
+		return fmt.Errorf("tortoise unable to read contents of layer %v: %w", layerID, err)
+	}
+
+	logger.With().Info("tortoise handling incoming layer", layerID, log.Int("num_blocks", len(layerBlocks)))
+	return t.ProcessNewBlocks(ctx, layerBlocks)
+}
+
+// loops over all layers from the last verified up to a new target layer and attempts to verify each in turn
+func (t *turtle) verifyLayers(ctx context.Context, targetLayerID types.LayerID) error {
+	logger := t.logger.WithContext(ctx).WithFields(log.FieldNamed("verification_target", targetLayerID))
+	logger.With().Info("starting layer verification", log.FieldNamed("prev_verified", t.Verified))
 
 	// attempt to verify each layer from the last verified up to one prior to the newly-arrived layer.
 	// this is the full range of unverified layers that we might possibly be able to verify at this point.
 	// Note: t.Verified is initialized to the effective genesis layer, so the first candidate layer here necessarily
 	// follows and is post-genesis. There's no need for an additional check here.
-	for candidateLayerID := t.Verified + 1; candidateLayerID < newlyr.Index(); candidateLayerID++ {
+	for candidateLayerID := t.Verified + 1; candidateLayerID < targetLayerID; candidateLayerID++ {
 		logger.With().Info("attempting to verify layer", candidateLayerID)
 
 		// note: if the following checks fail, we just return rather than trying to verify later layers.
@@ -615,8 +642,10 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) e
 				log.FieldNamed("global_opinion", globalOpinionOnBlock),
 				sum)
 
-			// At this point, we have all of the data we need to make a decision. There are three possible outcomes:
-			// 1. verify the layer (if local and global consensus match, and global consensus is decided)
+			// At this point, we have all of the data we need to make a decision on this block. There are three possible
+			// outcomes:
+			// 1. record our opinion on this block and go on evaluating the rest of the blocks in this layer to see if
+			//    we can verify the layer (if local and global consensus match, and global consensus is decided)
 			// 2. keep waiting to verify the layer (if not, and the layer is relatively recent)
 			// 3. trigger self-healing (if not, and the layer is sufficiently old)
 			consensusMatches := globalOpinionOnBlock == localOpinionOnBlock
@@ -661,7 +690,7 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) e
 			// self-healing. But there's no point in trying to heal a layer that's not at least Hdist layers old since
 			// we only consider the local opinion for recent layers.
 			if candidateLayerID < t.Last-t.Hdist && candidateLayerID-t.Verified > t.Zdist+t.ConfidenceParam {
-				lastLayer := newlyr.Index()
+				lastLayer := targetLayerID
 				if lastLayer > t.Last-t.Hdist {
 					lastLayer = t.Last - t.Hdist
 				}

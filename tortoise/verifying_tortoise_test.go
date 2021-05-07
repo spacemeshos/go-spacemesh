@@ -238,7 +238,7 @@ func turtleMakeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, bloc
 		require.NoError(t, msh.SaveLayerInputVectorByID(l, blocks))
 	}
 
-	trtl.HandleIncomingLayer(context.TODO(), lyr)
+	trtl.HandleIncomingLayer(context.TODO(), lyr.Index())
 }
 
 func Test_TurtleAbstainsInMiddle(t *testing.T) {
@@ -377,12 +377,12 @@ func TestTurtle_Recovery(t *testing.T) {
 	log.With().Info("The first is ", l1.Index(), types.BlockIdsField(types.BlockIDs(l1.Blocks())))
 	log.With().Info("The first bb is ", l1.Index(), l1.Blocks()[0].BaseBlock, types.BlockIdsField(l1.Blocks()[0].ForDiff))
 
-	alg.HandleIncomingLayer(context.TODO(), l1)
+	alg.HandleIncomingLayer(context.TODO(), l1.Index())
 	require.NoError(t, alg.Persist(context.TODO()))
 
 	l2 := createTurtleLayer(types.GetEffectiveGenesis()+2, mdb, alg.BaseBlock, getHareResults, 3)
 	require.NoError(t, AddLayer(mdb, l2))
-	alg.HandleIncomingLayer(context.TODO(), l2)
+	alg.HandleIncomingLayer(context.TODO(), l2.Index())
 
 	require.NoError(t, alg.Persist(context.TODO()))
 
@@ -408,16 +408,16 @@ func TestTurtle_Recovery(t *testing.T) {
 
 		alg := recoveredVerifyingTortoise(mdb, lg)
 
-		alg.HandleIncomingLayer(context.TODO(), l2)
+		alg.HandleIncomingLayer(context.TODO(), l2.Index())
 
 		l3 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, 3)
 		AddLayer(mdb, l3)
-		alg.HandleIncomingLayer(context.TODO(), l3)
+		alg.HandleIncomingLayer(context.TODO(), l3.Index())
 		alg.Persist(context.TODO())
 
 		l4 := createTurtleLayer(types.GetEffectiveGenesis()+4, mdb, alg.BaseBlock, getHareResults, 3)
 		AddLayer(mdb, l4)
-		alg.HandleIncomingLayer(context.TODO(), l4)
+		alg.HandleIncomingLayer(context.TODO(), l4.Index())
 		alg.Persist(context.TODO())
 		assert.True(t, alg.LatestComplete() == types.GetEffectiveGenesis()+3)
 
@@ -425,5 +425,5 @@ func TestTurtle_Recovery(t *testing.T) {
 
 	}()
 
-	alg.HandleIncomingLayer(context.TODO(), l32) //crash
+	alg.HandleIncomingLayer(context.TODO(), l32.Index()) //crash
 }

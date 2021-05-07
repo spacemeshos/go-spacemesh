@@ -41,7 +41,7 @@ type tortoise interface {
 	HandleIncomingLayer(context.Context, types.LayerID) (types.LayerID, types.LayerID)
 	LatestComplete() types.LayerID
 	Persist(context.Context) error
-	HandleLateBlock(context.Context, *types.Block) (types.LayerID, types.LayerID)
+	HandleLateBlocks(context.Context, []*types.Block) (types.LayerID, types.LayerID)
 }
 
 // Validator interface to be used in tests to mock validation flow
@@ -254,15 +254,19 @@ func (vl *validator) SetProcessedLayer(lyr types.LayerID) {
 
 func (vl *validator) HandleLateBlock(ctx context.Context, b *types.Block) {
 	vl.WithContext(ctx).With().Info("validate late block", b.ID())
-	// TODO block has already been added to database at this point, does it need to be explicitly passed into the
+	// TODO: block has already been added to database at this point, does it need to be explicitly passed into the
 	//   tortoise or can tortoise read it from the database?
-	oldPbase, newPbase := vl.trtl.HandleLateBlock(ctx, b)
+	// TODO: handle late blocks in batches
+	oldPbase, newPbase := vl.trtl.HandleLateBlocks(ctx, []*types.Block{b})
 	if err := vl.trtl.Persist(ctx); err != nil {
 		vl.WithContext(ctx).With().Error("could not persist tortoise on late block", b.ID(), b.Layer())
 	}
 	vl.pushLayersToState(oldPbase, newPbase)
 }
 
+// ValidateLayer performs fairly heavy lifting: it triggers tortoise to process the full contents of the layer (i.e.,
+// all of its blocks), then to attempt to validate all unvalidated layers up to this layer. It also applies state for
+// newly-validated layers.
 func (vl *validator) ValidateLayer(ctx context.Context, layerID types.LayerID) {
 	logger := vl.WithContext(ctx).WithFields(layerID)
 	logger.Info("validate layer")

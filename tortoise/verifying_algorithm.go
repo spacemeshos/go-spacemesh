@@ -13,7 +13,7 @@ import (
 // ThreadSafeVerifyingTortoise is a thread safe verifying tortoise wrapper, it just locks all actions.
 type ThreadSafeVerifyingTortoise struct {
 	trtl          *turtle
-	trtlForRerun  *turtle // a special instance of verifying tortoise for rerunning from scratch
+	logger        log.Log
 	rerunInterval time.Duration
 	lastRerun     time.Time
 	mutex         sync.RWMutex
@@ -66,29 +66,27 @@ func verifyingTortoise(
 	}
 	alg := &ThreadSafeVerifyingTortoise{
 		trtl: newTurtle(mdb, hdist, zdist, confidenceParam, windowSize, layerSize),
-		trtlForRerun: newTurtle(mdb, hdist, zdist, confidenceParam, windowSize, layerSize),
 	}
+	alg.logger = logger
 	alg.rerunInterval = rerunInterval
 	alg.lastRerun = time.Now()
 	alg.trtl.SetLogger(logger.WithFields(log.String("rerun", "false")))
 	alg.trtl.init(ctx, mesh.GenesisLayer())
-	alg.trtlForRerun.SetLogger(logger.WithFields(log.String("rerun", "true")))
-	alg.trtlForRerun.init(ctx, mesh.GenesisLayer())
 	return alg
 }
 
 // NewRecoveredVerifyingTortoise recovers a previously persisted tortoise copy from mesh.DB
-func recoveredVerifyingTortoise(mdb blockDataProvider, lg log.Log) *ThreadSafeVerifyingTortoise {
+func recoveredVerifyingTortoise(mdb blockDataProvider, logger log.Log) *ThreadSafeVerifyingTortoise {
 	tmp, err := RecoverVerifyingTortoise(mdb)
 	if err != nil {
-		lg.With().Panic("could not recover tortoise state from disk", log.Err(err))
+		logger.With().Panic("could not recover tortoise state from disk", log.Err(err))
 	}
 
 	trtl := tmp.(*turtle)
 
-	lg.Info("recovered tortoise from disk")
+	logger.Info("recovered tortoise from disk")
 	trtl.bdp = mdb
-	trtl.logger = lg
+	trtl.logger = logger
 
 	return &ThreadSafeVerifyingTortoise{trtl: trtl}
 }
@@ -112,20 +110,41 @@ func (trtl *ThreadSafeVerifyingTortoise) BaseBlock(ctx context.Context) (types.B
 	return block, diffs, err
 }
 
-// HandleIncomingLayer processes all layer block votes
-// returns the old verified layer and new verified layer after taking into account the blocks votes
-func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context, ll *types.Layer) (types.LayerID, types.LayerID) {
+// simple wrapper for thread safety and reading old and new pbase values
+func (trtl *ThreadSafeVerifyingTortoise) runAndReportLayers(ctx context.Context, fn func()) (types.LayerID, types.LayerID) {
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()
 	oldVerified := trtl.trtl.Verified
-	if err := trtl.trtl.HandleIncomingLayer(ctx, ll); err != nil {
-		trtl.trtl.logger.WithContext(ctx).With().Error("tortoise errored handling incoming layer",
-			ll.Index(),
-			log.Err(err))
-	}
+	fn()
 	newVerified := trtl.trtl.Verified
+	return oldVerified, newVerified
+}
 
-	// trigger a rerun from genesis once in a while
+// HandleLateBlocks processes votes and goodness for late blocks (for late block definition see white paper)
+// returns the old verified layer and new verified layer after taking into account the blocks votes
+func (trtl *ThreadSafeVerifyingTortoise) HandleLateBlocks(ctx context.Context, blocks []*types.Block) (types.LayerID, types.LayerID) {
+	return trtl.runAndReportLayers(ctx, func() {
+		if err := trtl.trtl.ProcessNewBlocks(ctx, blocks); err != nil {
+			trtl.logger.WithContext(ctx).With().Error("tortoise errored handling late blocks", log.Err(err))
+		}
+	})
+}
+
+// HandleIncomingLayer processes all layer block votes
+// returns the old verified layer and new verified layer after taking into account the blocks votes
+func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) (types.LayerID, types.LayerID) {
+	return trtl.runAndReportLayers(ctx, func() {
+		if err := trtl.trtl.HandleIncomingLayer(ctx, layerID); err != nil {
+			trtl.logger.WithContext(ctx).With().Error("tortoise errored handling incoming layer", log.Err(err))
+		}
+
+		// rerun if needed
+		trtl.rerunIfNeeded(ctx)
+	})
+}
+
+// trigger a rerun from genesis once in a while
+func (trtl *ThreadSafeVerifyingTortoise) rerunIfNeeded(ctx context.Context) {
 	// TODO: in future we can do something more sophisticated, using accounting to determine when enough changes to old
 	//   layers have accumulated (in terms of block weight) that our opinion could actually change. For now, we do the
 	//   Simplest Possible Thing (TM) and just rerun from genesis once in a while. This requires a different instance of
@@ -133,44 +152,26 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context
 	//   using the sliding window, simulating a full resync.
 	// TODO: should this happen "in the background" in a separate goroutine? Should it hold the mutex?
 	if time.Now().Sub(trtl.lastRerun) > trtl.rerunInterval {
-		logger := trtl.trtlForRerun.logger.WithContext(ctx)
+		logger := trtl.logger.WithContext(ctx)
 		logger.With().Info("triggering tortoise full rerun from genesis",
 			log.Duration("rerun_interval", trtl.rerunInterval),
 			log.Time("last_rerun", trtl.lastRerun))
 
-		// TODO: do we need to re-init before each run?
+		// start from scratch with a new tortoise instance for each rerun
+		trtlForRerun := trtl.trtl.cloneTurtle()
+		trtlForRerun.SetLogger(logger.WithFields(log.String("rerun", "true")))
+		trtlForRerun.init(ctx, mesh.GenesisLayer())
 
 		for layerID := types.GetEffectiveGenesis(); layerID < trtl.trtl.Last; layerID++ {
 			logger.With().Debug("rerunning tortoise for layer", layerID)
-			blocks, err := trtl.trtlForRerun.bdp.LayerBlocks(layerID)
-			if err != nil {
-				logger.With().Error("failed to get layer, tortoise rerun failed", layerID, log.Err(err))
-				break
-			}
-
-			if err := trtl.trtlForRerun.HandleIncomingLayer(ctx, types.NewExistingLayer(layerID, blocks)); err != nil {
-				logger.With().Error("tortoise rerun errored handling incoming layer, bailing",
-					ll.Index(),
-					log.Err(err))
+			if err := trtlForRerun.HandleIncomingLayer(ctx, layerID); err != nil {
+				logger.With().Error("tortoise rerun errored", log.Err(err))
 				break
 			}
 		}
 
 		trtl.lastRerun = time.Now()
 	}
-
-	return oldVerified, newVerified
-}
-
-// HandleLateBlock processes a late blocks votes (for late block definition see white paper)
-// returns the old verified layer and new verified layer after taking into account the blocks votes
-func (trtl *ThreadSafeVerifyingTortoise) HandleLateBlock(ctx context.Context, b *types.Block) (types.LayerID, types.LayerID) {
-	//todo feed all layers from b's layer to tortoise
-	l := types.NewLayer(b.Layer())
-	l.AddBlock(b)
-	oldVerified, newVerified := trtl.HandleIncomingLayer(ctx, l) // block wasn't in input vector for sure
-	trtl.trtl.logger.WithContext(ctx).With().Info("late block", b.Layer(), b.ID())
-	return oldVerified, newVerified
 }
 
 // Persist saves a copy of the current tortoise state to the database
