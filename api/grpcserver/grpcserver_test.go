@@ -2239,8 +2239,8 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	layer, err := txAPI.GetLayer(layerFirst)
 	require.NoError(t, err)
 	events.ReportLayerUpdate(events.LayerUpdate{
-		LayerID:  layer.Index(),
-		Status: events.LayerStatusTypeConfirmed,
+		LayerID: layer.Index(),
+		Status:  events.LayerStatusTypeConfirmed,
 	})
 
 	// close the stream
@@ -2301,8 +2301,8 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	layer, err := txAPI.GetLayer(layerFirst)
 	require.NoError(t, err)
 	events.ReportLayerUpdate(events.LayerUpdate{
-		LayerID:  layer.Index(),
-		Status: events.LayerStatusTypeConfirmed,
+		LayerID: layer.Index(),
+		Status:  events.LayerStatusTypeConfirmed,
 	})
 
 	// close the stream

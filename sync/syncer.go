@@ -162,14 +162,14 @@ type Syncer struct {
 	txpool txMemPool
 	atxDb  atxDB
 
-	syncLock             types.TryMutex
-	startLock            types.TryMutex
-	forceSync            chan bool
-	syncTimer            *time.Ticker
-	exit                 chan struct{}
-	gossipLock           sync.RWMutex
-	gossipSynced         status
-	awaitCh              chan struct{}
+	syncLock     types.TryMutex
+	startLock    types.TryMutex
+	forceSync    chan bool
+	syncTimer    *time.Ticker
+	exit         chan struct{}
+	gossipLock   sync.RWMutex
+	gossipSynced status
+	awaitCh      chan struct{}
 
 	fetcher LayerFetch
 }
