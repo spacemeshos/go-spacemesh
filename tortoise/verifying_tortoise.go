@@ -331,8 +331,7 @@ func (t *turtle) calculateExceptions(
 	// "good" if its own base block is marked "good" and all exceptions it contains agree with our local opinion.
 	// We only look for and store exceptions within the sliding window set of layers as an optimization, but a block
 	// can contain exceptions from any layer, back to genesis.
-	// TODO LANE: s/Hdist/WindowSize/
-	for layerID := t.Hdist; layerID <= t.Last; layerID++ {
+	for layerID := t.LastEvicted+1; layerID <= t.Last; layerID++ {
 		logger := logger.WithFields(log.FieldNamed("diff_layer_id", layerID))
 		logger.Debug("checking input vector diffs")
 
@@ -458,19 +457,27 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 		opinion[b] = support.Multiply(t.BlockWeight(block.ID(), b))
 	}
 	for _, b := range block.AgainstDiff {
+		// this could only happen in malicious blocks, and they should not pass a syntax check, but check here just
+		// to be extra safe
+		if _, alreadyVoted := opinion[b]; alreadyVoted {
+			return fmt.Errorf("conflicting votes found in block %v", block.ID())
+		}
 		opinion[b] = against.Multiply(t.BlockWeight(block.ID(), b))
 	}
 	for _, b := range block.NeutralDiff {
+		if _, alreadyVoted := opinion[b]; alreadyVoted {
+			return fmt.Errorf("conflicting votes found in block %v", block.ID())
+		}
 		opinion[b] = abstain
 	}
 	for blk, vote := range baseBlockOpinion.BlockOpinions {
-		// add original vote only if there were no exceptions
+		// add base block vote only if there were no exceptions
 		if _, exists := opinion[blk]; !exists {
 			opinion[blk] = vote
 		}
 	}
 
-	logger.With().Debug("adding block to blocks table")
+	logger.With().Debug("adding block to block opinions table")
 	t.BlockOpinionsByLayer[block.LayerIndex][block.ID()] = Opinion{BlockOpinions: opinion}
 	return nil
 }
@@ -544,7 +551,6 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) {
 		log.FieldNamed("prev_verified", t.Verified),
 		log.FieldNamed("verification_target", newlyr.Index()))
 
-layerLoop:
 	// attempt to verify each layer from the last verified up to one prior to the newly-arrived layer.
 	// this is the full range of unverified layers that we might possibly be able to verify at this point.
 	// Note: t.Verified is initialized to the effective genesis layer, so the first candidate layer here necessarily
@@ -552,12 +558,15 @@ layerLoop:
 	for candidateLayerID := t.Verified + 1; candidateLayerID < newlyr.Index(); candidateLayerID++ {
 		logger.With().Info("attempting to verify layer", candidateLayerID)
 
+		// note: if the following checks fail, we just return rather than trying to verify later layers.
+		// we don't presently support verifying layer N+1 when layer N hasn't been verified.
+
 		layerBlockIds, err := t.bdp.LayerBlockIds(candidateLayerID)
 		if err != nil {
 			// TODO: consider making this a panic, as it means state cannot advance at all
-			logger.With().Error("inconsistent state: can't find layer in database, skipping verification",
+			logger.With().Error("inconsistent state: can't find layer in database, unable to verify",
 				candidateLayerID)
-			continue
+			return
 		}
 
 		// get the local opinion (input vector) for this layer. below, we calculate the global opinion on each block in
@@ -567,17 +576,17 @@ layerLoop:
 			// an error here signifies a real database failure
 			// TODO: consider making this a panic, as it means state cannot advance at all
 			logger.With().Error("unable to calculate local opinion for layer", log.Err(err))
-			continue
+			return
 		}
 
 		// otherwise, nil means we should abstain
 		if rawLayerInputVector == nil {
-			logger.With().Warning("input vector abstains on all blocks", candidateLayerID)
+			logger.With().Warning("input vector abstains on all blocks in layer", candidateLayerID)
 		}
 		localLayerOpinionVec := t.voteVectorForLayer(layerBlockIds, rawLayerInputVector)
 		if len(localLayerOpinionVec) == 0 {
-			logger.With().Warning("no blocks in input vector, can't verify layer", candidateLayerID)
-			break
+			// warn about this to be safe, but we do allow empty layers and must be able to verify them
+			logger.With().Warning("empty vote vector for layer", candidateLayerID)
 		}
 
 		contextualValidity := make(map[types.BlockID]bool, len(layerBlockIds))
@@ -657,13 +666,12 @@ layerLoop:
 			// self-healing.
 			if candidateLayerID-t.Verified > t.Zdist+t.ConfidenceParam {
 				t.selfHealing(ctx, newlyr.Index())
-				return
 			}
 
 			// Otherwise, give up trying to verify layers and keep waiting
 			// TODO: continue to verify later layers, even after failing to verify a layer.
 			//   See https://github.com/spacemeshos/go-spacemesh/issues/2403.
-			break layerLoop
+			return
 		}
 
 		// Declare the vote vector “verified” up to position k (up to this layer)
@@ -776,13 +784,16 @@ func (t *turtle) selfHealing(ctx context.Context, endLayerID types.LayerID) {
 			log.FieldNamed("candidate_layer", candidateLayerID))
 
 		// Calculate the global opinion on all blocks in the layer
+		// Note: we look at ALL blocks we've seen for the layer, not just those we've previously marked contextually valid
 		logger.Info("self-healing verifying candidate layer")
 
 		layerBlockIds, err := t.bdp.LayerBlockIds(candidateLayerID)
 		if err != nil {
 			// TODO: consider making this a panic, as it means state cannot advance at all
-			logger.Error("inconsistent state: can't find layer in database, skipping verification")
-			continue
+			logger.Error("inconsistent state: can't find layer in database, cannot heal")
+
+			// there's no point in trying to verify later layers so just give up now
+			return
 		}
 
 		// This map keeps track of the contextual validity of all blocks in this layer
