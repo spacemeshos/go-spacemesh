@@ -87,7 +87,7 @@ func newTurtle(bdp blockDataProvider, hdist, zdist, confidenceParam, windowSize,
 		Hdist:                types.LayerID(hdist),
 		Zdist:                types.LayerID(zdist),
 		ConfidenceParam:      types.LayerID(confidenceParam),
-		WindowSize:			  types.LayerID(windowSize),
+		WindowSize:           types.LayerID(windowSize),
 		bdp:                  bdp,
 		Last:                 0,
 		AvgLayerSize:         avgLayerSize,
@@ -142,7 +142,7 @@ func (t *turtle) evict(ctx context.Context) {
 		}
 		delete(t.BlockOpinionsByLayer, lyr)
 	}
-	t.LastEvicted = windowStart-1
+	t.LastEvicted = windowStart - 1
 }
 
 func blockIDsToString(input []types.BlockID) string {
@@ -331,7 +331,7 @@ func (t *turtle) calculateExceptions(
 	// "good" if its own base block is marked "good" and all exceptions it contains agree with our local opinion.
 	// We only look for and store exceptions within the sliding window set of layers as an optimization, but a block
 	// can contain exceptions from any layer, back to genesis.
-	for layerID := t.LastEvicted+1; layerID <= t.Last; layerID++ {
+	for layerID := t.LastEvicted + 1; layerID <= t.Last; layerID++ {
 		logger := logger.WithFields(log.FieldNamed("diff_layer_id", layerID))
 		logger.Debug("checking input vector diffs")
 
@@ -668,7 +668,7 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) {
 			if candidateLayerID < t.Last-t.Hdist && candidateLayerID-t.Verified > t.Zdist+t.ConfidenceParam {
 				lastLayer := newlyr.Index()
 				if lastLayer > t.Last-t.Hdist {
-					lastLayer = t.Last-t.Hdist
+					lastLayer = t.Last - t.Hdist
 				}
 				t.selfHealing(ctx, lastLayer)
 			}
