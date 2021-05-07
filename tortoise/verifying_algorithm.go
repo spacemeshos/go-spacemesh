@@ -3,6 +3,7 @@ package tortoise
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -11,8 +12,11 @@ import (
 
 // ThreadSafeVerifyingTortoise is a thread safe verifying tortoise wrapper, it just locks all actions.
 type ThreadSafeVerifyingTortoise struct {
-	trtl  *turtle
-	mutex sync.RWMutex
+	trtl          *turtle
+	trtlForRerun  *turtle // a special instance of verifying tortoise for rerunning from scratch
+	rerunInterval time.Duration
+	lastRerun     time.Time
+	mutex         sync.RWMutex
 }
 
 // Config holds the arguments and dependencies to create a verifying tortoise instance.
@@ -25,6 +29,7 @@ type Config struct {
 	WindowSize      int // tortoise sliding window: how many layers we store data for
 	Log             log.Log
 	Recovered       bool
+	RerunInterval   time.Duration // how often to rerun from genesis
 }
 
 // NewVerifyingTortoise creates a new verifying tortoise wrapper
@@ -32,7 +37,16 @@ func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingT
 	if cfg.Recovered {
 		return recoveredVerifyingTortoise(cfg.Database, cfg.Log)
 	}
-	return verifyingTortoise(ctx, cfg.LayerSize, cfg.Database, cfg.Hdist, cfg.Zdist, cfg.ConfidenceParam, cfg.WindowSize, cfg.Log)
+	return verifyingTortoise(
+		ctx,
+		cfg.LayerSize,
+		cfg.Database,
+		cfg.Hdist,
+		cfg.Zdist,
+		cfg.ConfidenceParam,
+		cfg.WindowSize,
+		cfg.RerunInterval,
+		cfg.Log)
 }
 
 // verifyingTortoise creates a new verifying tortoise wrapper
@@ -40,18 +54,26 @@ func verifyingTortoise(
 	ctx context.Context,
 	layerSize int,
 	mdb blockDataProvider,
-	hdist int,
-	zdist int,
-	confidenceParam int,
+	hdist,
+	zdist,
+	confidenceParam,
 	windowSize int,
+	rerunInterval time.Duration,
 	logger log.Log,
 ) *ThreadSafeVerifyingTortoise {
 	if hdist < zdist {
 		logger.With().Panic("hdist must be >= zdist", log.Int("hdist", hdist), log.Int("zdist", zdist))
 	}
-	alg := &ThreadSafeVerifyingTortoise{trtl: newTurtle(mdb, hdist, zdist, confidenceParam, windowSize, layerSize)}
-	alg.trtl.SetLogger(logger)
+	alg := &ThreadSafeVerifyingTortoise{
+		trtl: newTurtle(mdb, hdist, zdist, confidenceParam, windowSize, layerSize),
+		trtlForRerun: newTurtle(mdb, hdist, zdist, confidenceParam, windowSize, layerSize),
+	}
+	alg.rerunInterval = rerunInterval
+	alg.lastRerun = time.Now()
+	alg.trtl.SetLogger(logger.WithFields(log.String("rerun", "false")))
 	alg.trtl.init(ctx, mesh.GenesisLayer())
+	alg.trtlForRerun.SetLogger(logger.WithFields(log.String("rerun", "true")))
+	alg.trtlForRerun.init(ctx, mesh.GenesisLayer())
 	return alg
 }
 
@@ -96,8 +118,47 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()
 	oldVerified := trtl.trtl.Verified
-	trtl.trtl.HandleIncomingLayer(ctx, ll)
+	if err := trtl.trtl.HandleIncomingLayer(ctx, ll); err != nil {
+		trtl.trtl.logger.WithContext(ctx).With().Error("tortoise errored handling incoming layer",
+			ll.Index(),
+			log.Err(err))
+	}
 	newVerified := trtl.trtl.Verified
+
+	// trigger a rerun from genesis once in a while
+	// TODO: in future we can do something more sophisticated, using accounting to determine when enough changes to old
+	//   layers have accumulated (in terms of block weight) that our opinion could actually change. For now, we do the
+	//   Simplest Possible Thing (TM) and just rerun from genesis once in a while. This requires a different instance of
+	//   tortoise since we don't want to mess with the state of the main tortoise. We re-stream layer data from genesis
+	//   using the sliding window, simulating a full resync.
+	// TODO: should this happen "in the background" in a separate goroutine? Should it hold the mutex?
+	if time.Now().Sub(trtl.lastRerun) > trtl.rerunInterval {
+		logger := trtl.trtlForRerun.logger.WithContext(ctx)
+		logger.With().Info("triggering tortoise full rerun from genesis",
+			log.Duration("rerun_interval", trtl.rerunInterval),
+			log.Time("last_rerun", trtl.lastRerun))
+
+		// TODO: do we need to re-init before each run?
+
+		for layerID := types.GetEffectiveGenesis(); layerID < trtl.trtl.Last; layerID++ {
+			logger.With().Debug("rerunning tortoise for layer", layerID)
+			blocks, err := trtl.trtlForRerun.bdp.LayerBlocks(layerID)
+			if err != nil {
+				logger.With().Error("failed to get layer, tortoise rerun failed", layerID, log.Err(err))
+				break
+			}
+
+			if err := trtl.trtlForRerun.HandleIncomingLayer(ctx, types.NewExistingLayer(layerID, blocks)); err != nil {
+				logger.With().Error("tortoise rerun errored handling incoming layer, bailing",
+					ll.Index(),
+					log.Err(err))
+				break
+			}
+		}
+
+		trtl.lastRerun = time.Now()
+	}
+
 	return oldVerified, newVerified
 }
 

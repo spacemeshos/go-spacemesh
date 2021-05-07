@@ -484,7 +484,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 
 // HandleIncomingLayer processes all layer block votes
 // returns the old pbase and new pbase after taking into account the blocks votes
-func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) {
+func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) error {
 	logger := t.logger.WithContext(ctx).WithFields(newlyr)
 
 	if t.Last < newlyr.Index() {
@@ -493,7 +493,7 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) {
 
 	if newlyr.Index() <= types.GetEffectiveGenesis() {
 		logger.Debug("not attempting to handle genesis layer")
-		return
+		return nil
 	}
 
 	// Note: we don't compare newlyr and t.Verified, so this method could be called again on an already-verified layer.
@@ -563,10 +563,7 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) {
 
 		layerBlockIds, err := t.bdp.LayerBlockIds(candidateLayerID)
 		if err != nil {
-			// TODO: consider making this a panic, as it means state cannot advance at all
-			logger.With().Error("inconsistent state: can't find layer in database, unable to verify",
-				candidateLayerID)
-			return
+			return fmt.Errorf("inconsistent state: can't find layer %v in database: %w", candidateLayerID, err)
 		}
 
 		// get the local opinion (input vector) for this layer. below, we calculate the global opinion on each block in
@@ -574,9 +571,7 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) {
 		rawLayerInputVector, err := t.layerOpinionVector(ctx, candidateLayerID)
 		if err != nil {
 			// an error here signifies a real database failure
-			// TODO: consider making this a panic, as it means state cannot advance at all
-			logger.With().Error("unable to calculate local opinion for layer", log.Err(err))
-			return
+			return fmt.Errorf("unable to calculate local opinion for layer %v: %w", candidateLayerID, err)
 		}
 
 		// otherwise, nil means we should abstain
@@ -676,7 +671,7 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) {
 			// Otherwise, give up trying to verify layers and keep waiting
 			// TODO: continue to verify later layers, even after failing to verify a layer.
 			//   See https://github.com/spacemeshos/go-spacemesh/issues/2403.
-			return
+			return nil
 		}
 
 		// Declare the vote vector "verified" up to this layer and record the contextual validity for all blocks in this
@@ -690,7 +685,7 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, newlyr *types.Layer) {
 		logger.With().Info("verifying tortoise verified layer", candidateLayerID)
 	}
 
-	return
+	return nil
 }
 
 // return the set of blocks we currently consider valid for the layer. factors in both local and global opinion,

@@ -550,6 +550,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		WindowSize:      app.Config.WindowSize,
 		Log:             app.addLogger(TrtlLogger, lg),
 		Recovered:       mdb.PersistentData(),
+		RerunInterval:   time.Hour, // rerun from genesis once per hour
 	}
 
 	trtl = tortoise.NewVerifyingTortoise(ctx, trtlCfg)

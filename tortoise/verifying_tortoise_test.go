@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -364,7 +365,7 @@ func TestTurtle_Recovery(t *testing.T) {
 	mdb.InputVectorBackupFunc = getHareResults
 
 	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), 3, mdb, 5, 5, 5, 20, lg)
+	alg := verifyingTortoise(context.TODO(), 3, mdb, 5, 5, 5, 20, time.Hour, lg)
 	l := mesh.GenesisLayer()
 
 	log.With().Info("The genesis is ", l.Index(), types.BlockIdsField(types.BlockIDs(l.Blocks())))
