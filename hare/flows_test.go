@@ -182,10 +182,6 @@ func Test_consensusIterations(t *testing.T) {
 	test.WaitForTimedTermination(t, 30*time.Second)
 }
 
-func validateBlock([]types.BlockID) bool {
-	return true
-}
-
 func isSynced(context.Context) bool {
 	return true
 }
@@ -237,7 +233,7 @@ func createMaatuf(tcfg config.Config, rng *amcl.RAND, layersCh chan types.LayerI
 	_, vrfPub := BLS381.GenKeyPair(rng)
 	// vrfSigner := BLS381.NewBlsSigner(vrfPriv)
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
-	hare := New(tcfg, p2p, ed, nodeID, validateBlock, isSynced, &mockBlockProvider{}, rolacle, 10, &mockIdentityP{nid: nodeID},
+	hare := New(tcfg, p2p, ed, nodeID, isSynced, &mockBlockProvider{}, rolacle, 10, &mockIdentityP{nid: nodeID},
 		&MockStateQuerier{true, nil}, layersCh, log.NewDefault(name+"_"+ed.PublicKey().ShortString()))
 
 	return hare

@@ -725,28 +725,11 @@ func (app *SpacemeshApp) HareFactory(
 		return hr
 	}
 
-	// a function to validate we know the blocks
-	validationFunc := func(ids []types.BlockID) bool {
-		for _, b := range ids {
-			res, err := mdb.GetBlock(b)
-			if err != nil {
-				app.log.WithContext(ctx).With().Error("output set block not in database", b, log.Err(err))
-				return false
-			}
-			if res == nil {
-				app.log.WithContext(ctx).With().Error("output set block not in database (BUG BUG BUG - FetchBlock return err nil and res nil)", b)
-				return false
-			}
-		}
-
-		return true
-	}
 	ha := hare.New(
 		app.Config.HARE,
 		swarm,
 		sgn,
 		nodeID,
-		validationFunc,
 		syncer.IsHareSynced,
 		msh,
 		hOracle,

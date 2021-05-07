@@ -108,7 +108,7 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, sync s
 		return nil
 	}
 
-	if blk.Layer() <= bh.mesh.ProcessedLayer() { //|| blk.Layer() == bh.mesh.getValidatingLayer() {
+	if blk.Layer() <= bh.mesh.ProcessedLayer() {
 		logger.With().Error("block is late",
 			log.FieldNamed("block_layer", blk.Layer()),
 			log.FieldNamed("processed_layer", bh.mesh.ProcessedLayer()),
@@ -145,6 +145,8 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	}
 
 	// fast validation checks if there are no duplicate ATX in active set and no duplicate TXs as well
+	// TODO: validate that there are no conflicts in the vote exception lists (e.g., that the block does not both
+	//   support and vote against a given block
 	if err := bh.fastValidation(block); err != nil {
 		bh.WithContext(ctx).With().Error("failed fast validation", block.ID(), log.Err(err))
 		return err

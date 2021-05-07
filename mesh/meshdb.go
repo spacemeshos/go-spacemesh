@@ -138,8 +138,9 @@ func NewMemMeshDB(log log.Log) *DB {
 		exit:               make(chan struct{}),
 	}
 	for _, blk := range GenesisLayer().Blocks() {
-		ll.AddBlock(blk)
-		ll.SaveContextualValidity(blk.ID(), true)
+		// these are only used for testing so we can safely ignore errors here
+		_ = ll.AddBlock(blk)
+		_ = ll.SaveContextualValidity(blk.ID(), true)
 	}
 	if err := ll.SaveLayerInputVectorByID(GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
 		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
@@ -285,7 +286,7 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	}
 
 	if len(idsBytes) == 0 {
-		//zero block layer
+		// zero block layer
 		return []types.BlockID{}, nil
 	}
 
@@ -328,7 +329,7 @@ func (m *DB) SaveContextualValidity(id types.BlockID, valid bool) error {
 	} else {
 		v = constFalse
 	}
-	m.Debug("save contextual validity %v %v", id, valid)
+	m.With().Debug("save block contextual validity", id, log.Bool("validity", valid))
 	return m.contextualValidity.Put(id.Bytes(), v)
 }
 
@@ -403,28 +404,29 @@ func (m *DB) GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) 
 // SaveLayerInputVectorByID gets the input vote vector for a layer (hare results)
 func (m *DB) SaveLayerInputVectorByID(id types.LayerID, blks []types.BlockID) error {
 	hash := types.CalcHash32(id.Bytes())
-	m.With().Info("SaveLayerInputVectorByID: Saving input vector", id, hash)
+	m.With().Info("SaveLayerInputVectorByID: saving input vector", id, hash)
 	return m.SaveLayerInputVector(hash, blks)
 }
 
 // SaveLayerHashInputVector saves the input vote vector for a layer (hare results) using its hash
 func (m *DB) SaveLayerHashInputVector(h types.Hash32, data []byte) error {
-	m.Info("saved input vector for hash %v", h.ShortString())
+	m.With().Info("saved input vector for hash", log.String("layerhash", h.ShortString()))
 	return m.inputVector.Put(h.Bytes(), data)
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {
 	bytes, err := types.InterfaceToBytes(bl)
 	if err != nil {
-		return fmt.Errorf("could not encode bl")
+		return fmt.Errorf("could not encode block")
 	}
 
 	if err := m.blocks.Put(bl.ID().AsHash32().Bytes(), bytes); err != nil {
-		return fmt.Errorf("could not add bl %v to database %v", bl.ID(), err)
+		return fmt.Errorf("could not add block %v to database: %w", bl.ID(), err)
 	}
 
-	m.updateLayerWithBlock(bl)
-
+	if err := m.updateLayerWithBlock(bl); err != nil {
+		return err
+	}
 	m.blockCache.put(bl)
 
 	return nil
@@ -443,17 +445,20 @@ func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 	} else {
 		blockIds, err = types.BytesToBlockIds(ids)
 		if err != nil {
-			return errors.New("could not get all blocks from database ")
+			return fmt.Errorf("could not get all blocks from database for layer %v: %w", blk.LayerIndex, err)
 		}
 	}
-	m.Debug("added block %v to layer %v", blk.ID(), blk.LayerIndex)
+	m.With().Debug("added block to database layer index", blk.ID(), blk.LayerIndex)
 	blockIds = append(blockIds, blk.ID())
 	types.SortBlockIDs(blockIds)
 	w, err := types.BlockIdsToBytes(blockIds)
 	if err != nil {
-		return errors.New("could not encode layer blk ids")
+		return fmt.Errorf("could not encode layer block ids for layer %v: %w", blk.LayerIndex, err)
 	}
-	m.layers.Put(blk.LayerIndex.Bytes(), w)
+	err = m.layers.Put(blk.LayerIndex.Bytes(), w)
+	if err != nil {
+		return fmt.Errorf("could not write updated layer index to database for layer %v: %w", blk.LayerIndex, err)
+	}
 	hash := types.CalcBlocksHash32(blockIds, nil)
 	m.persistLayerHash(blk.LayerIndex, hash)
 

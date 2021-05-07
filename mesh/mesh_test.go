@@ -59,8 +59,8 @@ func (m *MeshValidatorMock) LatestComplete() types.LayerID {
 	panic("implement me")
 }
 
-func (m *MeshValidatorMock) HandleIncomingLayer(_ context.Context, layer *types.Layer) (types.LayerID, types.LayerID) {
-	return layer.Index() - 1, layer.Index()
+func (m *MeshValidatorMock) HandleIncomingLayer(_ context.Context, layerID types.LayerID) (types.LayerID, types.LayerID) {
+	return layerID - 1, layerID
 }
 func (m *MeshValidatorMock) HandleLateBlock(_ context.Context, bl *types.Block) (types.LayerID, types.LayerID) {
 	return bl.Layer() - 1, bl.Layer()
@@ -68,7 +68,7 @@ func (m *MeshValidatorMock) HandleLateBlock(_ context.Context, bl *types.Block) 
 
 type MockState struct{}
 
-func (MockState) ValidateAndAddTxToPool(tx *types.Transaction) error {
+func (MockState) ValidateAndAddTxToPool(*types.Transaction) error {
 	panic("implement me")
 }
 
@@ -103,14 +103,14 @@ func (MockState) GetAllAccounts() (*types.MultipleAccountsState, error) {
 	panic("implement me")
 }
 
-func (MockState) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
+func (MockState) GetLayerStateRoot(types.LayerID) (types.Hash32, error) {
 	panic("implement me")
 }
 
-func (MockState) GetBalance(addr types.Address) uint64 {
+func (MockState) GetBalance(types.Address) uint64 {
 	panic("implement me")
 }
-func (MockState) GetNonce(addr types.Address) uint64 {
+func (MockState) GetNonce(types.Address) uint64 {
 	panic("implement me")
 }
 
@@ -136,20 +136,6 @@ func (MockTxMemPool) Invalidate(types.TransactionID) {
 
 }
 
-type MockAtxMemPool struct{}
-
-func (MockAtxMemPool) Get(types.ATXID) (*types.ActivationTx, error) {
-	return &types.ActivationTx{}, nil
-}
-
-func (MockAtxMemPool) Put(*types.ActivationTx) {
-
-}
-
-func (MockAtxMemPool) Invalidate(types.ATXID) {
-
-}
-
 func getMesh(id string) *Mesh {
 	lg := log.NewDefault(id)
 	mmdb := NewMemMeshDB(lg)
@@ -158,7 +144,6 @@ func getMesh(id string) *Mesh {
 }
 
 func TestLayers_AddBlock(t *testing.T) {
-
 	layers := getMesh("t1")
 	defer layers.Close()
 
@@ -188,12 +173,11 @@ func TestLayers_AddBlock(t *testing.T) {
 
 func addLayer(id types.LayerID, layerSize int, msh *Mesh) *types.Layer {
 	for i := 0; i < layerSize; i++ {
-
 		block1 := types.NewExistingBlock(id, []byte(rand.String(8)), nil)
 		block1.Initialize()
 
 		err := msh.AddBlock(block1)
-		msh.contextualValidity.Put(block1.ID().Bytes(), []byte{1})
+		_ = msh.contextualValidity.Put(block1.ID().Bytes(), []byte{1})
 		if err != nil {
 			panic("cannot add data to test")
 		}
@@ -238,11 +222,11 @@ func TestLayers_AddWrongLayer(t *testing.T) {
 	assert.NoError(t, err)
 	err = layers.SaveContextualValidity(block1.ID(), true)
 	assert.NoError(t, err)
-	layers.ValidateLayer(context.TODO(), l1)
+	layers.ValidateLayer(context.TODO(), l1.Index())
 	l2 := types.NewExistingLayer(2, []*types.Block{block2})
 	err = layers.AddBlock(block2)
 	assert.NoError(t, err)
-	layers.ValidateLayer(context.TODO(), l2)
+	layers.ValidateLayer(context.TODO(), l2.Index())
 	err = layers.AddBlock(block3)
 	assert.NoError(t, err)
 	_, err = layers.GetProcessedLayer(1)
@@ -262,7 +246,7 @@ func TestLayers_GetLayer(t *testing.T) {
 	l1 := types.NewExistingLayer(1, []*types.Block{block1})
 	err := layers.AddBlock(block1)
 	assert.NoError(t, err)
-	layers.ValidateLayer(context.TODO(), l1)
+	layers.ValidateLayer(context.TODO(), l1.Index())
 	l, err := layers.GetProcessedLayer(0)
 	err = layers.AddBlock(block2)
 	assert.NoError(t, err)

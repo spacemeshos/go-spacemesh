@@ -165,7 +165,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 			}
 		} else {
 			lg.Info("loaded layer %v from disk", i)
-			syncWithMocks.ValidateLayer(cmdp.Ctx, lyr)
+			syncWithMocks.ValidateLayer(cmdp.Ctx, lyr.Index())
 		}
 	}
 

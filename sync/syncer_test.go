@@ -248,10 +248,6 @@ func getMeshWithLevelDB(id string) *mesh.Mesh {
 	return mesh.NewMesh(mshdb, atxdb, rewardConf, &meshValidatorMock{}, &mockTxMemPool{}, &mockState{}, lg.WithOptions(log.Nop))
 }
 
-func persistenceTeardown() {
-	os.RemoveAll(Path)
-}
-
 func getMeshWithMemoryDB(id string, atxDb database.Database) *mesh.Mesh {
 	lg := log.NewDefault(id)
 	mshdb := mesh.NewMemMeshDB(lg)
@@ -751,10 +747,10 @@ func syncTest(dpType string, t *testing.T) {
 	block12 := types.NewExistingBlock(6, []byte(rand.String(8)), []types.TransactionID{tx7.ID(), tx8.ID()})
 	block10.Signature = signer.Sign(block10.Bytes())
 
-	syncObj1.ValidateLayer(context.TODO(), mesh.GenesisLayer())
-	syncObj2.ValidateLayer(context.TODO(), mesh.GenesisLayer())
-	syncObj3.ValidateLayer(context.TODO(), mesh.GenesisLayer())
-	syncObj4.ValidateLayer(context.TODO(), mesh.GenesisLayer())
+	syncObj1.ValidateLayer(context.TODO(), mesh.GenesisLayer().Index())
+	syncObj2.ValidateLayer(context.TODO(), mesh.GenesisLayer().Index())
+	syncObj3.ValidateLayer(context.TODO(), mesh.GenesisLayer().Index())
+	syncObj4.ValidateLayer(context.TODO(), mesh.GenesisLayer().Index())
 
 	addTxsToPool(syncObj1.txpool, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
 	syncObj1.AddBlock(block2)
@@ -1330,16 +1326,16 @@ func (m *mockLayerValidator) HandleLateBlock(context.Context, *types.Block) {
 	panic("implement me")
 }
 
-func (m *mockLayerValidator) ValidateLayer(_ context.Context, lyr *types.Layer) {
-	log.Info("mock Validate layer %d", lyr.Index())
+func (m *mockLayerValidator) ValidateLayer(_ context.Context, layerID types.LayerID) {
+	log.Info("mock validate layer %d", layerID)
 	m.countValidate++
-	m.processedLayer = lyr.Index()
+	m.processedLayer = layerID
 	if m.validatedLayers == nil {
 		m.validatedLayers = make(map[types.LayerID]struct{})
 	}
 
-	m.validatedLayers[lyr.Index()] = struct{}{}
-	log.Info("Validated count %d", m.countValidate)
+	m.validatedLayers[layerID] = struct{}{}
+	log.Info("validated count %d", m.countValidate)
 	if m.validated != nil {
 		m.validated <- struct{}{}
 	}
@@ -1661,8 +1657,8 @@ func (m *mockTimedValidator) SetProcessedLayer(types.LayerID) {
 	panic("implement me")
 }
 
-func (m *mockTimedValidator) ValidateLayer(_ context.Context, lyr *types.Layer) {
-	log.Info("Validate layer %d", lyr.Index())
+func (m *mockTimedValidator) ValidateLayer(_ context.Context, layerID types.LayerID) {
+	log.Info("mock validate layer %d", layerID)
 	m.calls++
 	time.Sleep(m.delay)
 }

@@ -45,9 +45,6 @@ type meshProvider interface {
 	RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool)
 }
 
-// checks if the collected output is valid
-type outputValidationFunc func(blocks []types.BlockID) bool
-
 // Hare is the orchestrator that starts new consensus processes and collects their output.
 type Hare struct {
 	Closer
@@ -77,8 +74,6 @@ type Hare struct {
 
 	factory consensusFactory
 
-	validate outputValidationFunc
-
 	nid types.NodeID
 
 	totalCPs int32
@@ -90,7 +85,6 @@ func New(
 	p2p NetworkService,
 	sign Signer,
 	nid types.NodeID,
-	validate outputValidationFunc,
 	syncState syncStateFunc,
 	mesh meshProvider,
 	rolacle Rolacle,
@@ -131,8 +125,6 @@ func New(
 	h.factory = func(conf config.Config, instanceId instanceID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
 		return newConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, ev, logger)
 	}
-
-	h.validate = validate
 
 	h.nid = nid
 
@@ -181,11 +173,6 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 	blocks := make([]types.BlockID, len(set.values))
 	for v := range set.values {
 		blocks = append(blocks, v)
-	}
-
-	// check validity of the collected output
-	if !h.validate(blocks) {
-		h.WithContext(ctx).Error("failed to validate the collected output set")
 	}
 
 	id := output.ID()
@@ -261,10 +248,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) {
 	}
 
 	logger.With().Debug("received new blocks", log.Int("count", len(blocks)))
-	set := NewEmptySet(len(blocks))
-	for _, b := range blocks {
-		set.Add(b)
-	}
+	set := NewSet(blocks)
 
 	instID := instanceID(id)
 	c, err := h.broker.Register(ctx, instID)

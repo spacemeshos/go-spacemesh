@@ -18,10 +18,6 @@ import (
 	"time"
 )
 
-func validateBlocks([]types.BlockID) bool {
-	return true
-}
-
 type mockReport struct {
 	id  instanceID
 	set *Set
@@ -81,7 +77,7 @@ func newMockConsensusProcess(cfg config.Config, instanceID instanceID, s *Set, o
 }
 
 func createHare(n1 p2p.Service, logger log.Log) *Hare {
-	return New(cfg, n1, signing2.NewEdSigner(), types.NodeID{}, validateBlocks, (&mockSyncer{true}).IsSynced, new(orphanMock), eligibility.New(), 10, &mockIDProvider{}, NewMockStateQuerier(), make(chan types.LayerID), logger)
+	return New(cfg, n1, signing2.NewEdSigner(), types.NodeID{}, (&mockSyncer{true}).IsSynced, new(orphanMock), eligibility.New(), 10, &mockIDProvider{}, NewMockStateQuerier(), make(chan types.LayerID), logger)
 }
 
 var _ Consensus = (*mockConsensusProcess)(nil)
@@ -168,30 +164,6 @@ func TestHare_GetResult2(t *testing.T) {
 
 	_, err = h.GetResult(0)
 	require.Equal(t, err, errTooOld)
-}
-
-func TestHare_collectOutputCheckValidation(t *testing.T) {
-	sim := service.NewSimulator()
-	n1 := sim.NewNode()
-
-	h := createHare(n1, log.NewDefault(t.Name()))
-
-	mockid := instanceID1
-	set := NewSetFromValues(value1)
-
-	// default validation is true
-	h.collectOutput(context.TODO(), mockReport{mockid, set, true})
-	output, ok := h.outputs[types.LayerID(mockid)]
-	require.True(t, ok)
-	require.Equal(t, output[0], value1)
-
-	h.validate = func(blocks []types.BlockID) bool {
-		return false
-	}
-	err := h.collectOutput(context.TODO(), mockReport{mockid, set, true})
-	require.NoError(t, err)
-	_, ok = h.outputs[types.LayerID(mockid)]
-	require.True(t, ok, "failure to validate should only log an error and succeed")
 }
 
 func TestHare_collectOutput(t *testing.T) {
@@ -281,7 +253,7 @@ func TestHare_onTick(t *testing.T) {
 		return blockset
 	}
 
-	h := New(cfg, n1, signing, types.NodeID{}, validateBlocks, (&mockSyncer{true}).IsSynced, om, oracle, 10, &mockIDProvider{}, NewMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
+	h := New(cfg, n1, signing, types.NodeID{}, (&mockSyncer{true}).IsSynced, om, oracle, 10, &mockIDProvider{}, NewMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
 	h.networkDelta = 0
 	h.bufferSize = 1
 

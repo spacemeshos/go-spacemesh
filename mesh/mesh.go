@@ -38,7 +38,7 @@ var TORTOISE = []byte("tortoise")
 var VERIFIED = []byte("verified")
 
 type tortoise interface {
-	HandleIncomingLayer(context.Context, *types.Layer) (types.LayerID, types.LayerID)
+	HandleIncomingLayer(context.Context, types.LayerID) (types.LayerID, types.LayerID)
 	LatestComplete() types.LayerID
 	Persist(context.Context) error
 	HandleLateBlock(context.Context, *types.Block) (types.LayerID, types.LayerID)
@@ -46,7 +46,7 @@ type tortoise interface {
 
 // Validator interface to be used in tests to mock validation flow
 type Validator interface {
-	ValidateLayer(context.Context, *types.Layer)
+	ValidateLayer(context.Context, types.LayerID)
 	HandleLateBlock(context.Context, *types.Block)
 	ProcessedLayer() types.LayerID
 	SetProcessedLayer(lyr types.LayerID)
@@ -204,16 +204,10 @@ func (msh *Mesh) LatestLayer() types.LayerID {
 
 // SetLatestLayer sets the latest layer we saw from the network
 func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
-	// Report the status update, as well as the layer itself
-	layer, err := msh.GetLayer(idx)
-	if err != nil {
-		msh.With().Error("error reading layer data", idx, log.Err(err))
-	} else {
-		events.ReportNewLayer(events.NewLayer{
-			Layer:  layer,
-			Status: events.LayerStatusTypeUnknown,
-		})
-	}
+	events.ReportLayerUpdate(events.LayerUpdate{
+		LayerID: idx,
+		Status:  events.LayerStatusTypeUnknown,
+	})
 	defer msh.lkMutex.Unlock()
 	msh.lkMutex.Lock()
 	if idx > msh.latestLayer {
@@ -260,6 +254,8 @@ func (vl *validator) SetProcessedLayer(lyr types.LayerID) {
 
 func (vl *validator) HandleLateBlock(ctx context.Context, b *types.Block) {
 	vl.WithContext(ctx).With().Info("validate late block", b.ID())
+	// TODO block has already been added to database at this point, does it need to be explicitly passed into the
+	//   tortoise or can tortoise read it from the database?
 	oldPbase, newPbase := vl.trtl.HandleLateBlock(ctx, b)
 	if err := vl.trtl.Persist(ctx); err != nil {
 		vl.WithContext(ctx).With().Error("could not persist tortoise on late block", b.ID(), b.Layer())
@@ -267,34 +263,27 @@ func (vl *validator) HandleLateBlock(ctx context.Context, b *types.Block) {
 	vl.pushLayersToState(oldPbase, newPbase)
 }
 
-func (vl *validator) ValidateLayer(ctx context.Context, lyr *types.Layer) {
-	logger := vl.WithContext(ctx).WithFields(lyr)
+func (vl *validator) ValidateLayer(ctx context.Context, layerID types.LayerID) {
+	logger := vl.WithContext(ctx).WithFields(layerID)
 	logger.Info("validate layer")
-	if len(lyr.Blocks()) == 0 {
-		logger.Info("skip validation of layer with no blocks")
-		vl.SetProcessedLayer(lyr.Index())
-		events.ReportNewLayer(events.NewLayer{
-			Layer:  lyr,
-			Status: events.LayerStatusTypeConfirmed,
-		})
-		return
-	}
 
 	// pass the layer to tortoise for processing
-	oldPbase, newPbase := vl.trtl.HandleIncomingLayer(ctx, lyr)
-	vl.SetProcessedLayer(lyr.Index())
+	oldPbase, newPbase := vl.trtl.HandleIncomingLayer(ctx, layerID)
+	vl.SetProcessedLayer(layerID)
 
 	if err := vl.trtl.Persist(ctx); err != nil {
 		logger.Error("could not persist tortoise")
 	}
-	if err := vl.general.Put(constPROCESSED, lyr.Index().Bytes()); err != nil {
-		logger.Error("could not persist validated layer")
+	if err := vl.general.Put(constPROCESSED, layerID.Bytes()); err != nil {
+		logger.Error("could not persist processed layer")
 	}
 	vl.pushLayersToState(oldPbase, newPbase)
-	events.ReportNewLayer(events.NewLayer{
-		Layer:  lyr,
-		Status: events.LayerStatusTypeConfirmed,
-	})
+	for newlyVerifiedLayer := oldPbase + 1; newlyVerifiedLayer <= newPbase; newlyVerifiedLayer++ {
+		events.ReportLayerUpdate(events.LayerUpdate{
+			LayerID: newlyVerifiedLayer,
+			Status:  events.LayerStatusTypeConfirmed,
+		})
+	}
 	logger.Info("done validating layer")
 }
 
@@ -356,10 +345,6 @@ func (msh *Mesh) applyState(l *types.Layer) {
 	msh.accumulateRewards(l, msh.config)
 	msh.pushTransactions(l)
 	msh.setLatestLayerInState(l.Index())
-	events.ReportNewLayer(events.NewLayer{
-		Layer:  l,
-		Status: events.LayerStatusTypeApproved,
-	})
 }
 
 // HandleValidatedLayer receives hare output once it finishes running for a given layer
@@ -376,10 +361,15 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 		}
 		blocks = append(blocks, block)
 	}
+
+	// report that hare "approved" this layer
+	events.ReportLayerUpdate(events.LayerUpdate{
+		LayerID: validatedLayer,
+		Status:  events.LayerStatusTypeApproved,
+	})
+
 	lyr := types.NewExistingLayer(validatedLayer, blocks)
 	invalidBlocks := msh.getInvalidBlocksByHare(ctx, lyr)
-	// Reporting of the validated layer happens deep inside this call stack, below
-	// updateStateWithLayer, inside applyState. No need to report here.
 	msh.updateStateWithLayer(validatedLayer, lyr)
 	msh.reInsertTxsToPool(blocks, invalidBlocks, lyr.Index())
 
@@ -395,7 +385,7 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 	if err := msh.SaveLayerInputVectorByID(lyr.Index(), types.BlockIDs(blocks)); err != nil {
 		logger.Error("saving layer input vector failed")
 	}
-	msh.ValidateLayer(ctx, lyr)
+	msh.ValidateLayer(ctx, lyr.Index())
 }
 
 func (msh *Mesh) getInvalidBlocksByHare(ctx context.Context, hareLayer *types.Layer) (invalid []*types.Block) {
@@ -659,23 +649,19 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 }
 
 // AddBlockWithTxs adds a block to the database
-// blk - the block to add
-// txs - block txs that we dont have in our tx database yet
 func (msh *Mesh) AddBlockWithTxs(blk *types.Block) error {
 	msh.With().Debug("adding block", blk.Fields()...)
 
-	err := msh.StoreTransactionsFromPool(blk)
-	if err != nil {
-		msh.Log.Error("not all txs were processed %v", err)
+	if err := msh.StoreTransactionsFromPool(blk); err != nil {
+		msh.Log.With().Error("not all txs were processed", log.Err(err))
 	}
 
 	// Store block (delete if storing ATXs fails)
-	err = msh.DB.AddBlock(blk)
-	if err != nil && err == ErrAlreadyExist {
-		return nil
-	}
+	if err := msh.DB.AddBlock(blk); err != nil {
+		if err == ErrAlreadyExist {
+			return nil
+		}
 
-	if err != nil {
 		msh.With().Error("failed to add block", blk.ID(), log.Err(err))
 		return err
 	}

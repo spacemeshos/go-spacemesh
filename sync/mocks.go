@@ -79,16 +79,16 @@ func (m *meshValidatorMock) Persist(context.Context) error {
 	return nil
 }
 
-func (m *meshValidatorMock) HandleIncomingLayer(_ context.Context, lyr *types.Layer) (types.LayerID, types.LayerID) {
+func (m *meshValidatorMock) HandleIncomingLayer(_ context.Context, layerID types.LayerID) (types.LayerID, types.LayerID) {
 	m.countValidate++
 	m.calls++
-	m.vl = lyr.Index()
+	m.vl = layerID
 	if m.validatedLayers == nil {
 		m.validatedLayers = make(map[types.LayerID]struct{})
 	}
-	m.validatedLayers[lyr.Index()] = struct{}{}
+	m.validatedLayers[layerID] = struct{}{}
 	time.Sleep(m.delay)
-	return lyr.Index(), lyr.Index() - 1
+	return layerID, layerID - 1
 }
 
 func (m *meshValidatorMock) HandleLateBlock(_ context.Context, bl *types.Block) (types.LayerID, types.LayerID) {
