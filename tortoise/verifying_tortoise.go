@@ -11,6 +11,7 @@ import (
 )
 
 type blockDataProvider interface {
+	ContextuallyValidBlock(types.LayerID) (map[types.BlockID]struct{}, error)
 	GetBlock(types.BlockID) (*types.Block, error)
 	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
 	LayerBlocks(types.LayerID) ([]*types.Block, error)
@@ -39,17 +40,20 @@ type turtle struct {
 
 	bdp blockDataProvider
 
-	// last layer processed
+	// last layer processed: note that tortoise does not have a concept of "current" layer (and it's not aware of the
+	// current time or latest tick). As far as Tortoise is concerned, Last is the current layer. This is a subjective
+	// view of time, but Tortoise receives layers as soon as Hare finishes processing them or when they are received via
+	// gossip, and there's nothing for Tortoise to verify without new data anyway.
 	Last types.LayerID
 
 	// last evicted layer
-	Evict types.LayerID
+	LastEvicted types.LayerID
 
 	// hare lookback (distance): up to Hdist layers back, we only consider hare results/input vector
 	Hdist types.LayerID
 
-	// hare result wait (distance): we wait up to Zdist layers for hare results/input vector, before invalidating
-	// a layer
+	// hare abort distance: we wait up to Zdist layers for hare results/input vector, before invalidating a layer
+	// without hare results.
 	Zdist types.LayerID
 
 	// the number of layers we wait until we have confidence that w.h.p. all honest nodes have reached consensus on the
@@ -108,7 +112,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 		t.GoodBlocksIndex[id] = struct{}{}
 	}
 	t.Last = genesisLayer.Index()
-	t.Evict = genesisLayer.Index()
+	t.LastEvicted = genesisLayer.Index()
 	t.Verified = genesisLayer.Index()
 }
 
@@ -116,25 +120,29 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 func (t *turtle) evict(ctx context.Context) {
 	logger := t.logger.WithContext(ctx)
 
-	// Don't evict before we've verified more than hdist
+	// Don't evict before we've verified at least hdist layers
 	if t.Verified <= types.GetEffectiveGenesis()+t.Hdist {
 		return
 	}
 
 	// TODO: fix potential leak when we can't verify but keep receiving layers
-	window := t.Verified - t.WindowSize
-	logger.With().Info("tortoise window start", window)
+
+	// prevent overflow
+	if t.Verified < t.WindowSize {
+		return
+	}
+	windowStart := t.Verified - t.WindowSize
+	logger.With().Info("tortoise window start", windowStart)
 
 	// evict from last evicted to the beginning of our window
-	for lyr := t.Evict; lyr < window; lyr++ {
-		logger.With().Info("removing layer", lyr)
+	for lyr := t.LastEvicted; lyr < windowStart; lyr++ {
+		logger.With().Info("evicting layer", lyr)
 		for blk := range t.BlockOpinionsByLayer[lyr] {
 			delete(t.GoodBlocksIndex, blk)
 		}
 		delete(t.BlockOpinionsByLayer, lyr)
-		logger.With().Debug("evict block from maps", lyr)
 	}
-	t.Evict = window
+	t.LastEvicted = windowStart-1
 }
 
 func blockIDsToString(input []types.BlockID) string {
@@ -215,27 +223,28 @@ func (t *turtle) checkBlockAndGetInputVector(
 	return true
 }
 
-func (t *turtle) inputVectorForLayer(layerBlocks []types.BlockID, input []types.BlockID) (layerResult map[types.BlockID]vec) {
-	layerResult = make(map[types.BlockID]vec, len(layerBlocks))
+// convert two vectors, of (1) raw candidate block IDs for a layer and (2) an opinion vector of blocks we believe belong
+// in the layer, into a map of votes for each of these blocks
+func (t *turtle) voteVectorForLayer(candidateBlocks []types.BlockID, opinionVec []types.BlockID) (voteMap map[types.BlockID]vec) {
+	voteMap = make(map[types.BlockID]vec, len(candidateBlocks))
 	// LANE TODO: test nil input vs. empty map input here
-	if input == nil {
-		// hare didn't finish, so we have no opinion on blocks in this layer
-		// TODO: get hare Opinion when hare finishes
-		for _, b := range layerBlocks {
-			layerResult[b] = abstain
+	if opinionVec == nil {
+		// nil means abstain, i.e., we have no opinion on blocks in this layer
+		for _, b := range candidateBlocks {
+			voteMap[b] = abstain
 		}
 		return
 	}
 
 	// add support for all blocks in input vector
-	for _, b := range input {
-		layerResult[b] = support
+	for _, b := range opinionVec {
+		voteMap[b] = support
 	}
 
 	// vote against all layer blocks not in input vector
-	for _, b := range layerBlocks {
-		if _, ok := layerResult[b]; !ok {
-			layerResult[b] = against
+	for _, b := range candidateBlocks {
+		if _, ok := voteMap[b]; !ok {
+			voteMap[b] = against
 		}
 	}
 	return
@@ -250,7 +259,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 	// look at good blocks backwards from most recent processed layer to find a suitable base block
 	// TODO: optimize by, e.g., trying to minimize the size of the exception list (rather than first match)
 	// see https://github.com/spacemeshos/go-spacemesh/issues/2402
-	// TODO LANE: look back WindowSize?
+	// TODO LANE: look back WindowSize? what happens here when we are in self-healing?
 	for layerID := t.Last; layerID > t.Last-t.Hdist; layerID-- {
 		for block, opinion := range t.BlockOpinionsByLayer[layerID] {
 			if _, ok := t.GoodBlocksIndex[block]; !ok {
@@ -347,31 +356,24 @@ func (t *turtle) calculateExceptions(
 			}
 		}
 
-		// attempt to read Hare results for layer
-		layerInputVector, err := t.bdp.GetLayerInputVectorByID(layerID)
+		// get local opinion for layer
+		layerInputVector, err := t.layerOpinionVector(ctx, layerID)
 		if err != nil {
-			if errors.Is(err, mesh.ErrInvalidLayer) {
-				// Hare failed for this layer, vote against all blocks
-				logger.With().Debug("voting against all blocks in invalid layer after hare failure", log.Err(err))
-
-				// leaving the input vector empty will have the desired result, below
-			} else if layerID < t.Last-t.Zdist {
-				// TODO: should this be currentLayer - zdist?
-				// this layer cannot be older than hdist before last, since that's where we start looking for a base
-				// block, but it can be older than zdist before last. after zdist layers, we give up waiting for hare
-				// results/input vector and mark the whole layer invalid.
-				logger.With().Debug("voting against all blocks in invalid layer older than zdist", log.Err(err))
-
-				// leaving the input vector empty will have the desired result, below
-			} else {
-				// Still waiting for Hare results, vote neutral and move on
-				logger.With().Debug("input vector is empty, adding neutral diffs", log.Err(err))
-				for _, b := range layerBlockIds {
-					addDiffs(b, "neutral", abstain, neutralDiff)
-				}
-				continue
-			}
+			// an error here signifies a real database failure
+			logger.With().Error("unable to calculate local opinion for layer", log.Err(err))
+			return nil, err
 		}
+
+		// otherwise, nil means we should abstain
+		if layerInputVector == nil {
+			// still waiting for Hare results, vote neutral and move on
+			logger.With().Debug("input vector is empty, adding neutral diffs", log.Err(err))
+			for _, b := range layerBlockIds {
+				addDiffs(b, "neutral", abstain, neutralDiff)
+			}
+			continue
+		}
+		logger.With().Debug("got local opinion vector for layer", log.Int("count", len(layerInputVector)))
 
 		inInputVector := make(map[types.BlockID]struct{})
 
@@ -403,10 +405,11 @@ func (t *turtle) calculateExceptions(
 	return []map[types.BlockID]struct{}{againstDiff, forDiff, neutralDiff}, nil
 }
 
-// Note: weight depends on more than just the weight of the voting block. It also depends on contextual factors such as whether
-// or not the block's ATX was received on time, and on how old the layer is.
-// TODO: for now it's probably sufficient to adjust weight based on whether the ATX was received on time, or late, for the
-// current epoch. Assign weight of zero to late ATXs for the current epoch?
+// BlockWeight returns the weight to assign to one block's vote for another.
+// Note: weight depends on more than just the weight of the voting block. It also depends on contextual factors such as
+// whether or not the block's ATX was received on time, and on how old the layer is.
+// TODO: for now it's probably sufficient to adjust weight based on whether the ATX was received on time, or late, for
+//   the current epoch. Assign weight of zero to late ATXs for the current epoch?
 func (t *turtle) BlockWeight(votingBlock, blockVotedOn types.BlockID) int {
 	return 1
 }
@@ -416,7 +419,7 @@ func (t *turtle) persist() error {
 	return t.bdp.Persist(mesh.TORTOISE, t)
 }
 
-// RecoverVerifyingTortoise retrieve latest saved tortoise from the database
+// RecoverVerifyingTortoise retrieves the latest saved tortoise from the database
 func RecoverVerifyingTortoise(mdb retriever) (interface{}, error) {
 	return mdb.Retrieve(mesh.TORTOISE, &turtle{})
 }
@@ -547,7 +550,7 @@ layerLoop:
 	// Note: t.Verified is initialized to the effective genesis layer, so the first candidate layer here necessarily
 	// follows and is post-genesis. There's no need for an additional check here.
 	for candidateLayerID := t.Verified + 1; candidateLayerID < newlyr.Index(); candidateLayerID++ {
-		logger.With().Info("verifying layer", candidateLayerID)
+		logger.With().Info("attempting to verify layer", candidateLayerID)
 
 		layerBlockIds, err := t.bdp.LayerBlockIds(candidateLayerID)
 		if err != nil {
@@ -559,18 +562,19 @@ layerLoop:
 
 		// get the local opinion (input vector) for this layer. below, we calculate the global opinion on each block in
 		// the layer and check if it agrees with this local opinion.
-		rawLayerInputVector, err := t.bdp.GetLayerInputVectorByID(candidateLayerID)
+		rawLayerInputVector, err := t.layerOpinionVector(ctx, candidateLayerID)
 		if err != nil {
-			if errors.Is(err, mesh.ErrInvalidLayer) {
-				// Hare already failed for this layer, so we want to vote against all blocks in the layer: an empty
-				// map will do the trick
-				rawLayerInputVector = make([]types.BlockID, 0)
-			} else {
-				// otherwise, we want to abstain: leaving the map as nil does this
-				logger.With().Warning("input vector abstains on all blocks", candidateLayerID)
-			}
+			// an error here signifies a real database failure
+			// TODO: consider making this a panic, as it means state cannot advance at all
+			logger.With().Error("unable to calculate local opinion for layer", log.Err(err))
+			continue
 		}
-		localLayerOpinionVec := t.inputVectorForLayer(layerBlockIds, rawLayerInputVector)
+
+		// otherwise, nil means we should abstain
+		if rawLayerInputVector == nil {
+			logger.With().Warning("input vector abstains on all blocks", candidateLayerID)
+		}
+		localLayerOpinionVec := t.voteVectorForLayer(layerBlockIds, rawLayerInputVector)
 		if len(localLayerOpinionVec) == 0 {
 			logger.With().Warning("no blocks in input vector, can't verify layer", candidateLayerID)
 			break
@@ -620,13 +624,6 @@ layerLoop:
 				continue
 			}
 
-			// Verifying tortoise will wait `zdist' layers for consensus, then an additional `ConfidenceParam'
-			// layers until all other nodes achieve consensus. If it's still stuck after this point, then we
-			// trigger self-healing.
-			// TODO: allow verifying tortoise to continue to verify later layers, even after failing to verify a
-			// layer. See https://github.com/spacemeshos/go-spacemesh/issues/2403.
-			needsHealing := candidateLayerID-t.Verified > t.Zdist+t.ConfidenceParam
-
 			// If, for any block in this layer, the global opinion (summed block votes) disagrees with our vote (the
 			// input vector), or if the global opinion is abstain, then we do not verify this layer. This could be the
 			// result of a reorg (e.g., resolution of a network partition), or a malicious peer during sync, or
@@ -654,13 +651,18 @@ layerLoop:
 					log.FieldNamed("vote", localOpinionOnBlock))
 			}
 
-			// If the layer is old enough, give up running the verifying tortoise and fall back on self-healing
-			if needsHealing {
+			// Verifying tortoise will wait `zdist' layers for consensus, then an additional `ConfidenceParam'
+			// layers until all other nodes achieve consensus. If it's still stuck after this point, i.e., if the gap
+			// between the last verified layer and this candidate layer is greater than this distance, then we trigger
+			// self-healing.
+			if candidateLayerID-t.Verified > t.Zdist+t.ConfidenceParam {
 				t.selfHealing(ctx, newlyr.Index())
 				return
 			}
 
 			// Otherwise, give up trying to verify layers and keep waiting
+			// TODO: continue to verify later layers, even after failing to verify a layer.
+			//   See https://github.com/spacemeshos/go-spacemesh/issues/2403.
 			break layerLoop
 		}
 
@@ -676,6 +678,47 @@ layerLoop:
 		logger.With().Info("verifying tortoise verified layer", candidateLayerID)
 	}
 
+	return
+}
+
+// return the set of blocks we currently consider valid for the layer. factors in both local and global opinion,
+// depending how old the layer is.
+func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) (opinionVec []types.BlockID, err error) {
+	logger := t.logger.WithContext(ctx).WithFields(layerID)
+
+	// for layers older than hdist, we vote according to global opinion
+	if layerID < t.Last-t.Hdist {
+		logger.Debug("using contextual valid blocks as opinion on old layer")
+		layerBlocks, err := t.bdp.ContextuallyValidBlock(layerID)
+		if err != nil {
+			return nil, err
+		}
+		logger.With().Debug("got contextually valid blocks set for layer", log.Int("count", len(layerBlocks)))
+		return blockMapToArray(layerBlocks), nil
+	}
+
+	// for newer layers, we vote according to the local opinion (input vector, from hare or sync)
+	opinionVec, err = t.bdp.GetLayerInputVectorByID(layerID)
+	if err != nil {
+		if errors.Is(err, mesh.ErrInvalidLayer) {
+			// Hare already failed for this layer, so we want to vote against all blocks in the layer. Just return an
+			// empty list.
+			// TODO: get hare opinion when it finishes (do we need to do anything special for this? won't we just get it
+			//   the next time we run?)
+			logger.Debug("tortoise local opinion is against all blocks in layer where hare failed")
+			return make([]types.BlockID, 0, 0), nil
+		} else if layerID < t.Last-t.Zdist {
+			// Layer has passed the Hare abort distance threshold, so we give up waiting for Hare results. At this point
+			// our opinion on this layer is that we vote against blocks (i.e., we support an empty layer).
+			logger.With().Debug("tortoise local opinion on layer older than hare abort window is against all blocks",
+				log.Err(err))
+			return make([]types.BlockID, 0, 0), nil
+		} else {
+			// Hare hasn't failed and layer has not passed the Hare abort threshold, so we abstain while we keep waiting
+			// for Hare results. A nil result means abstain.
+			logger.With().Warning("input vector abstains on all blocks", log.Err(err))
+		}
+	}
 	return
 }
 
@@ -724,6 +767,7 @@ func (t *turtle) selfHealing(ctx context.Context, endLayerID types.LayerID) {
 	pbaseNew := t.Verified
 
 	// TODO: optimize this algorithm using, e.g., a triangular matrix rather than nested loops
+	// TODO: make sure that we never run for layers newer than Hdist
 	for candidateLayerID := pbaseOld; candidateLayerID < endLayerID; candidateLayerID++ {
 		logger := t.logger.WithContext(ctx).WithFields(
 			log.FieldNamed("old_verified_layer", pbaseOld),

@@ -203,8 +203,8 @@ func (l *Logic) LayerHashBlocksReceiver(ctx context.Context, msg []byte) []byte 
 	blocks := l.layerDB.GetLayerHashBlocks(h)
 	vector, err := l.layerDB.GetLayerInputVector(h)
 	if err != nil {
-		// TODO: We need to diff empty set and no results in sync somehow.
-		l.log.Error("didn't have input vector for layer ")
+		// TODO: differentiate between empty set and no results in sync
+		l.log.Error("no input vector for layer")
 	}
 	//latest := l.gossipBlocks.Get() todo: implement this
 	b := layerBlocks{
