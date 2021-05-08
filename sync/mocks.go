@@ -265,7 +265,7 @@ func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *
 	var msh *mesh.Mesh
 	if mshdb.PersistentData() {
 		lg.Info("persistent data found ")
-		msh = mesh.NewRecoveredMesh(mshdb, atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
+		msh = mesh.NewRecoveredMesh(context.TODO(), mshdb, atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
 	} else {
 		lg.Info("no persistent data found ")
 		msh = mesh.NewMesh(mshdb, atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)

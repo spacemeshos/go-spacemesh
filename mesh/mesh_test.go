@@ -396,7 +396,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 		r.Equal(111, int(txns[i].TotalAmount))
 	}
 
-	msh.pushLayersToState(types.GetEffectiveGenesis()+1, types.GetEffectiveGenesis()+2)
+	msh.pushLayersToState(context.TODO(), types.GetEffectiveGenesis()+1, types.GetEffectiveGenesis()+2)
 	r.Equal(4, len(state.Txs))
 
 	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(state.Pool...))

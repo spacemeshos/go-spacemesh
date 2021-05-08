@@ -391,10 +391,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	var want string
 	for i := 0; i < testCycles; i++ {
 		numOfTransactions := rand.Intn(maxTransactions-minTransactions) + minTransactions
-		trns := []*types.Transaction{}
+		var trns []*types.Transaction
 		nonceTrack := make(map[*Object]int)
 		for j := 0; j < numOfTransactions; j++ {
-
 			src := int(rand.Uint32() % (uint32(len(accounts) - 1)))
 			srcAccount := accounts[src]
 			dstAccount := accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
@@ -431,11 +430,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 				s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
 			}
 		}
-
 	}
 
 	writtenMore := db.Len()
-
 	assert.True(s.T(), writtenMore > written)
 }
 
@@ -528,7 +525,7 @@ func TestTransactionProcessor_GetStateRoot(t *testing.T) {
 	r.NotEqual(types.Hash32{}, proc.rootHash)
 
 	expectedRoot := types.Hash32{1, 2, 3}
-	r.NoError(proc.addState(expectedRoot, 1))
+	r.NoError(proc.saveStateRoot(expectedRoot, 1))
 
 	actualRoot := proc.GetStateRoot()
 	r.Equal(expectedRoot, actualRoot)

@@ -18,7 +18,8 @@ type blockDataProvider interface {
 
 	GetCoinflip(context.Context, types.LayerID) (bool, bool)
 	GetLayerInputVectorByID(types.LayerID) ([]types.BlockID, error)
-	SaveContextualValidity(types.BlockID, bool) error
+	SaveContextualValidity(types.BlockID, types.LayerID, bool) error
+	ContextualValidity(types.BlockID) (bool, error)
 
 	Persist(key []byte, v interface{}) error
 	Retrieve(key []byte, v interface{}) (interface{}, error)
@@ -486,8 +487,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 }
 
 // ProcessNewBlocks processes the votes of a set of blocks, records their opinions, and marks good blocks good.
-// The blocks do not all have to be in the same layer, but if they span multiple layers, they must be sorted by
-// LayerID.
+// The blocks do not all have to be in the same layer, but if they span multiple layers, they must be sorted by LayerID.
 func (t *turtle) ProcessNewBlocks(ctx context.Context, blocks []*types.Block) error {
 	logger := t.logger.WithContext(ctx)
 	lastLayerID := types.LayerID(0)
@@ -547,7 +547,7 @@ func (t *turtle) ProcessNewBlocks(ctx context.Context, blocks []*types.Block) er
 }
 
 // HandleIncomingLayer processes all layer block votes
-// returns the old pbase and new pbase after taking into account the blocks votes
+// returns the old pbase and new pbase after taking into account block votes
 func (t *turtle) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) error {
 	logger := t.logger.WithContext(ctx).WithFields(layerID)
 
@@ -614,7 +614,7 @@ func (t *turtle) verifyLayers(ctx context.Context, targetLayerID types.LayerID) 
 		contextualValidity := make(map[types.BlockID]bool, len(layerBlockIds))
 
 		// Count the votes of good blocks. localOpinionOnBlock is our opinion on this block.
-		// Declare the vote vector “verified” up to position k if the total weight exceeds the confidence threshold in
+		// Declare the vote vector "verified" up to position k if the total weight exceeds the confidence threshold in
 		// all positions up to k: in other words, we can verify a layer k if the total weight of the global opinion
 		// exceeds the confidence threshold, and agrees with local opinion.
 		for blockID, localOpinionOnBlock := range localLayerOpinionVec {
@@ -706,7 +706,7 @@ func (t *turtle) verifyLayers(ctx context.Context, targetLayerID types.LayerID) 
 		// Declare the vote vector "verified" up to this layer and record the contextual validity for all blocks in this
 		// layer
 		for blk, v := range contextualValidity {
-			if err := t.bdp.SaveContextualValidity(blk, v); err != nil {
+			if err := t.bdp.SaveContextualValidity(blk, candidateLayerID, v); err != nil {
 				logger.With().Error("error saving contextual validity on block", blk, log.Err(err))
 			}
 		}
@@ -739,8 +739,6 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 		if errors.Is(err, mesh.ErrInvalidLayer) {
 			// Hare already failed for this layer, so we want to vote against all blocks in the layer. Just return an
 			// empty list.
-			// TODO: get hare opinion when it finishes (do we need to do anything special for this? won't we just get it
-			//   the next time we run?)
 			logger.Debug("tortoise local opinion is against all blocks in layer where hare failed")
 			return make([]types.BlockID, 0, 0), nil
 		} else if layerID < t.Last-t.Zdist {
@@ -824,7 +822,6 @@ func (t *turtle) selfHealing(ctx context.Context, endLayerID types.LayerID) {
 
 		layerBlockIds, err := t.bdp.LayerBlockIds(candidateLayerID)
 		if err != nil {
-			// TODO: consider making this a panic, as it means state cannot advance at all
 			logger.Error("inconsistent state: can't find layer in database, cannot heal")
 
 			// there's no point in trying to verify later layers so just give up now
@@ -872,7 +869,7 @@ func (t *turtle) selfHealing(ctx context.Context, endLayerID types.LayerID) {
 
 		// record the contextual validity for all blocks in this layer
 		for blk, v := range contextualValidity {
-			if err := t.bdp.SaveContextualValidity(blk, v); err != nil {
+			if err := t.bdp.SaveContextualValidity(blk, candidateLayerID, v); err != nil {
 				logger.With().Error("error saving contextual validity on block", blk, log.Err(err))
 			}
 		}

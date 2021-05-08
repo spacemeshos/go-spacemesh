@@ -2,6 +2,7 @@ package tortoise
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -91,7 +92,7 @@ func recoveredVerifyingTortoise(mdb blockDataProvider, logger log.Log) *ThreadSa
 	return &ThreadSafeVerifyingTortoise{trtl: trtl}
 }
 
-// LatestComplete returns the latest verified layer. TODO: rename?
+// LatestComplete returns the latest verified layer
 func (trtl *ThreadSafeVerifyingTortoise) LatestComplete() types.LayerID {
 	trtl.mutex.RLock()
 	verified := trtl.trtl.Verified
@@ -110,41 +111,66 @@ func (trtl *ThreadSafeVerifyingTortoise) BaseBlock(ctx context.Context) (types.B
 	return block, diffs, err
 }
 
-// simple wrapper for thread safety and reading old and new pbase values
-func (trtl *ThreadSafeVerifyingTortoise) runAndReportLayers(ctx context.Context, fn func()) (types.LayerID, types.LayerID) {
+// HandleLateBlocks processes votes and goodness for late blocks (for late block definition see white paper)
+// returns the old verified layer and new verified layer after taking into account the blocks votes
+func (trtl *ThreadSafeVerifyingTortoise) HandleLateBlocks(ctx context.Context, blocks []*types.Block) (types.LayerID, types.LayerID) {
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()
 	oldVerified := trtl.trtl.Verified
-	fn()
+	if err := trtl.trtl.ProcessNewBlocks(ctx, blocks); err != nil {
+		// consider panicking here instead, since it means tortoise is stuck
+		trtl.logger.WithContext(ctx).With().Error("tortoise errored handling late blocks", log.Err(err))
+	}
 	newVerified := trtl.trtl.Verified
 	return oldVerified, newVerified
 }
 
-// HandleLateBlocks processes votes and goodness for late blocks (for late block definition see white paper)
-// returns the old verified layer and new verified layer after taking into account the blocks votes
-func (trtl *ThreadSafeVerifyingTortoise) HandleLateBlocks(ctx context.Context, blocks []*types.Block) (types.LayerID, types.LayerID) {
-	return trtl.runAndReportLayers(ctx, func() {
-		if err := trtl.trtl.ProcessNewBlocks(ctx, blocks); err != nil {
-			trtl.logger.WithContext(ctx).With().Error("tortoise errored handling late blocks", log.Err(err))
-		}
-	})
-}
-
 // HandleIncomingLayer processes all layer block votes
 // returns the old verified layer and new verified layer after taking into account the blocks votes
-func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) (types.LayerID, types.LayerID) {
-	return trtl.runAndReportLayers(ctx, func() {
-		if err := trtl.trtl.HandleIncomingLayer(ctx, layerID); err != nil {
-			trtl.logger.WithContext(ctx).With().Error("tortoise errored handling incoming layer", log.Err(err))
-		}
+func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) (reverted bool, oldVerified, newVerified types.LayerID) {
+	trtl.mutex.Lock()
+	defer trtl.mutex.Unlock()
+	oldVerified = trtl.trtl.Verified
+	if err := trtl.trtl.HandleIncomingLayer(ctx, layerID); err != nil {
+		// consider panicking here instead, since it means tortoise is stuck
+		trtl.logger.WithContext(ctx).With().Error("tortoise errored handling incoming layer", log.Err(err))
+	}
+	newVerified = trtl.trtl.Verified
 
-		// rerun if needed
-		trtl.rerunIfNeeded(ctx)
-	})
+	// rerun if needed
+	reverted, revertLayer := trtl.rerunIfNeeded(ctx)
+	if reverted {
+		// make sure state is reapplied from far enough back if there was a state reversion
+		oldVerified = revertLayer
+	}
+
+	return
+}
+
+// this wrapper monitors the tortoise rerun for database changes that would cause us to need to revert state
+type bdpWrapper struct {
+	blockDataProvider
+	firstUpdatedLayer *types.LayerID
+}
+
+// SaveContextualValidity overrides the method in the embedded type to check if we've made changes
+func (bdp bdpWrapper) SaveContextualValidity(bid types.BlockID, lid types.LayerID, validityNew bool) error {
+	// we only need to know about the first updated layer
+	if bdp.firstUpdatedLayer == nil {
+		// first, get current value
+		validityCur, err := bdp.ContextualValidity(bid)
+		if err != nil {
+			return fmt.Errorf("error reading contextual validity of block %v: %w", bid, err)
+		}
+		if validityCur != validityNew {
+			bdp.firstUpdatedLayer = &lid
+		}
+	}
+	return bdp.blockDataProvider.SaveContextualValidity(bid, lid, validityNew)
 }
 
 // trigger a rerun from genesis once in a while
-func (trtl *ThreadSafeVerifyingTortoise) rerunIfNeeded(ctx context.Context) {
+func (trtl *ThreadSafeVerifyingTortoise) rerunIfNeeded(ctx context.Context) (reverted bool, revertLayer types.LayerID) {
 	// TODO: in future we can do something more sophisticated, using accounting to determine when enough changes to old
 	//   layers have accumulated (in terms of block weight) that our opinion could actually change. For now, we do the
 	//   Simplest Possible Thing (TM) and just rerun from genesis once in a while. This requires a different instance of
@@ -161,6 +187,8 @@ func (trtl *ThreadSafeVerifyingTortoise) rerunIfNeeded(ctx context.Context) {
 		trtlForRerun := trtl.trtl.cloneTurtle()
 		trtlForRerun.SetLogger(logger.WithFields(log.String("rerun", "true")))
 		trtlForRerun.init(ctx, mesh.GenesisLayer())
+		bdp := bdpWrapper{blockDataProvider: trtlForRerun.bdp}
+		trtlForRerun.bdp = bdp
 
 		for layerID := types.GetEffectiveGenesis(); layerID < trtl.trtl.Last; layerID++ {
 			logger.With().Debug("rerunning tortoise for layer", layerID)
@@ -170,8 +198,22 @@ func (trtl *ThreadSafeVerifyingTortoise) rerunIfNeeded(ctx context.Context) {
 			}
 		}
 
+		// revert state if necessary
+		// state will be reapplied in mesh after we return, no need to reapply here
+		if bdp.firstUpdatedLayer != nil {
+			logger.With().Warning("turtle rerun detected state changes, attempting to reapply state from first changed layer",
+				log.FieldNamed("first_layer", bdp.firstUpdatedLayer))
+			reverted = true
+			revertLayer = *bdp.firstUpdatedLayer
+		}
+
+		// swap out the turtle instances so its state is up to date
+		trtlForRerun.bdp = trtl.trtl.bdp
+		trtlForRerun.logger = trtl.trtl.logger
+		trtl.trtl = trtlForRerun
 		trtl.lastRerun = time.Now()
 	}
+	return
 }
 
 // Persist saves a copy of the current tortoise state to the database

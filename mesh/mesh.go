@@ -38,7 +38,7 @@ var TORTOISE = []byte("tortoise")
 var VERIFIED = []byte("verified")
 
 type tortoise interface {
-	HandleIncomingLayer(context.Context, types.LayerID) (types.LayerID, types.LayerID)
+	HandleIncomingLayer(context.Context, types.LayerID) (reverted bool, oldPbase, newPbase types.LayerID)
 	LatestComplete() types.LayerID
 	Persist(context.Context) error
 	HandleLateBlocks(context.Context, []*types.Block) (types.LayerID, types.LayerID)
@@ -128,7 +128,7 @@ func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txInvalida
 }
 
 // NewRecoveredMesh creates new instance of mesh with recovered mesh data fom database
-func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPool, pr txProcessor, logger log.Log) *Mesh {
+func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPool, pr txProcessor, logger log.Log) *Mesh {
 	msh := NewMesh(db, atxDb, rewardConfig, mesh, txInvalidator, pr, logger)
 
 	latest, err := db.general.Get(constLATEST)
@@ -162,7 +162,7 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, t
 	if msh.LatestLayerInState()+1 < msh.trtl.LatestComplete() {
 		// todo: add test for this case, or add random kill test on node
 		logger.Info("playing layers %v to %v to state", msh.LatestLayerInState()+1, msh.trtl.LatestComplete())
-		msh.pushLayersToState(msh.LatestLayerInState()+1, msh.trtl.LatestComplete())
+		msh.pushLayersToState(ctx, msh.LatestLayerInState()+1, msh.trtl.LatestComplete())
 	}
 
 	msh.With().Info("recovered mesh from disk",
@@ -254,14 +254,12 @@ func (vl *validator) SetProcessedLayer(lyr types.LayerID) {
 
 func (vl *validator) HandleLateBlock(ctx context.Context, b *types.Block) {
 	vl.WithContext(ctx).With().Info("validate late block", b.ID())
-	// TODO: block has already been added to database at this point, does it need to be explicitly passed into the
-	//   tortoise or can tortoise read it from the database?
 	// TODO: handle late blocks in batches
 	oldPbase, newPbase := vl.trtl.HandleLateBlocks(ctx, []*types.Block{b})
 	if err := vl.trtl.Persist(ctx); err != nil {
 		vl.WithContext(ctx).With().Error("could not persist tortoise on late block", b.ID(), b.Layer())
 	}
-	vl.pushLayersToState(oldPbase, newPbase)
+	vl.pushLayersToState(ctx, oldPbase, newPbase)
 }
 
 // ValidateLayer performs fairly heavy lifting: it triggers tortoise to process the full contents of the layer (i.e.,
@@ -272,7 +270,21 @@ func (vl *validator) ValidateLayer(ctx context.Context, layerID types.LayerID) {
 	logger.Info("validate layer")
 
 	// pass the layer to tortoise for processing
-	oldPbase, newPbase := vl.trtl.HandleIncomingLayer(ctx, layerID)
+	reverted, oldPbase, newPbase := vl.trtl.HandleIncomingLayer(ctx, layerID)
+	logger.With().Info("tortoise results",
+		log.Bool("reverted", reverted),
+		log.FieldNamed("old_pbase", oldPbase),
+		log.FieldNamed("new_pbase", newPbase))
+
+	// check for a state reversion: if tortoise reran and detected changes to historical data, it will request that
+	// state be reverted and reapplied. pushLayersToState, below, will handle the reapplication.
+	if reverted {
+		if err := vl.revertState(ctx, oldPbase); err != nil {
+			logger.Error("state reversion failed, unable to validate layer")
+			return
+		}
+	}
+
 	vl.SetProcessedLayer(layerID)
 
 	if err := vl.trtl.Persist(ctx); err != nil {
@@ -281,7 +293,7 @@ func (vl *validator) ValidateLayer(ctx context.Context, layerID types.LayerID) {
 	if err := vl.general.Put(constPROCESSED, layerID.Bytes()); err != nil {
 		logger.Error("could not persist processed layer")
 	}
-	vl.pushLayersToState(oldPbase, newPbase)
+	vl.pushLayersToState(ctx, oldPbase, newPbase)
 	for newlyVerifiedLayer := oldPbase + 1; newlyVerifiedLayer <= newPbase; newlyVerifiedLayer++ {
 		events.ReportLayerUpdate(events.LayerUpdate{
 			LayerID: newlyVerifiedLayer,
@@ -291,25 +303,41 @@ func (vl *validator) ValidateLayer(ctx context.Context, layerID types.LayerID) {
 	logger.Info("done validating layer")
 }
 
-func (msh *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerID) {
+// apply the state of a range of layers, including re-adding transactions from invalid blocks to the mempool
+func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types.LayerID) {
+	logger := msh.WithContext(ctx).WithFields(
+		log.FieldNamed("old_pbase", oldPbase),
+		log.FieldNamed("new_pbase", newPbase))
+	logger.Info("pushing layers to state")
+
 	for layerID := oldPbase; layerID < newPbase; layerID++ {
 		l, err := msh.GetLayer(layerID)
 		// TODO: propagate/handle error
 		if err != nil || l == nil {
 			if layerID.GetEpoch().IsGenesis() {
-				msh.With().Info("failed to get layer (expected for genesis layers)", layerID, log.Err(err))
+				logger.With().Info("failed to get layer (expected for genesis layers)", layerID, log.Err(err))
 			} else {
-				msh.With().Error("failed to get layer", layerID, log.Err(err))
+				logger.With().Error("failed to get layer", layerID, log.Err(err))
 			}
 			return
 		}
 		validBlocks, invalidBlocks := msh.BlocksByValidity(l.Blocks())
-		msh.updateStateWithLayer(layerID, types.NewExistingLayer(layerID, validBlocks))
+		msh.updateStateWithLayer(types.NewExistingLayer(layerID, validBlocks))
 		msh.logStateRoot(l.Index())
 		msh.persistLayerHashes(l)
 		msh.reInsertTxsToPool(validBlocks, invalidBlocks, l.Index())
 	}
 	msh.persistLastLayerHash()
+}
+
+// RevertState reverts to state as of a previous layer
+func (msh *Mesh) revertState(ctx context.Context, layerID types.LayerID) error {
+	logger := msh.WithContext(ctx).WithFields(layerID)
+	logger.Info("attempting to roll back state to previous layer")
+	if err := msh.LoadState(layerID); err != nil {
+		return fmt.Errorf("failed to revert state to layer %v: %w", layerID, err)
+	}
+	return nil
 }
 
 func (msh *Mesh) persistLayerHashes(l *types.Layer) {
@@ -330,16 +358,15 @@ func (msh *Mesh) persistLayerHashes(l *types.Layer) {
 
 func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l types.LayerID) {
 	seenTxIds := make(map[types.TransactionID]struct{})
-	uniqueTxIds(validBlocks, seenTxIds)
+	uniqueTxIds(validBlocks, seenTxIds) // run for the side effect, updating seenTxIds
 	returnedTxs := msh.getTxs(uniqueTxIds(invalidBlocks, seenTxIds), l)
 	grouped, accounts := msh.removeFromUnappliedTxs(returnedTxs)
 	for account := range accounts {
 		msh.removeRejectedFromAccountTxs(account, grouped, l)
 	}
 	for _, tx := range returnedTxs {
-		err := msh.ValidateAndAddTxToPool(tx)
-		// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
-		if err == nil {
+		if err := msh.ValidateAndAddTxToPool(tx); err == nil {
+			// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
 			msh.With().Info("transaction from contextually invalid block re-added to mempool", tx.ID())
 		}
 	}
@@ -374,7 +401,7 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 
 	lyr := types.NewExistingLayer(validatedLayer, blocks)
 	invalidBlocks := msh.getInvalidBlocksByHare(ctx, lyr)
-	msh.updateStateWithLayer(validatedLayer, lyr)
+	msh.updateStateWithLayer(lyr)
 	msh.reInsertTxsToPool(blocks, invalidBlocks, lyr.Index())
 
 	// get the full layer incl invalid blocks
@@ -411,29 +438,31 @@ func (msh *Mesh) getInvalidBlocksByHare(ctx context.Context, hareLayer *types.La
 	return
 }
 
-func (msh *Mesh) updateStateWithLayer(validatedLayer types.LayerID, layer *types.Layer) {
+// apply the state for a single layer. stores layer results for early layers, and applies previously stored results for
+// now-older layers.
+func (msh *Mesh) updateStateWithLayer(layer *types.Layer) {
 	msh.txMutex.Lock()
 	defer msh.txMutex.Unlock()
 	latest := msh.LatestLayerInState()
-	if validatedLayer <= latest {
+	if layer.Index() <= latest {
 		msh.With().Warning("result received after state has advanced",
-			log.FieldNamed("validatedLayer", validatedLayer),
+			log.FieldNamed("validatedLayer", layer.Index()),
 			log.FieldNamed("latestLayer", latest))
 		return
 	}
-	if msh.maxValidatedLayer < validatedLayer {
-		msh.maxValidatedLayer = validatedLayer
+	if msh.maxValidatedLayer < layer.Index() {
+		msh.maxValidatedLayer = layer.Index()
 	}
-	if validatedLayer > latest+1 {
+	if layer.Index() > latest+1 {
 		msh.With().Warning("early layer result received",
-			log.FieldNamed("validatedLayer", validatedLayer),
+			log.FieldNamed("validatedLayer", layer.Index()),
 			log.FieldNamed("maxValidatedLayer", msh.maxValidatedLayer),
 			log.FieldNamed("latestLayer", latest))
-		msh.nextValidLayers[validatedLayer] = layer
+		msh.nextValidLayers[layer.Index()] = layer
 		return
 	}
 	msh.applyState(layer)
-	for i := validatedLayer + 1; i <= msh.maxValidatedLayer; i++ {
+	for i := layer.Index() + 1; i <= msh.maxValidatedLayer; i++ {
 		nxtLayer, has := msh.nextValidLayers[i]
 		if !has {
 			break
@@ -454,7 +483,8 @@ func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) {
 }
 
 func (msh *Mesh) logStateRoot(layerID types.LayerID) {
-	msh.Event().Info("end of layer state root", layerID,
+	msh.Event().Info("end of layer state root",
+		layerID,
 		log.String("state_root", util.Bytes2Hex(msh.txProcessor.GetStateRoot().Bytes())),
 	)
 }
@@ -576,7 +606,7 @@ func (msh *Mesh) pushTransactions(l *types.Layer) {
 		msh.With().Error("failed to apply transactions",
 			l.Index(), log.Int("num_failed_txs", numFailedTxs), log.Err(err))
 		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
-		//  e.g. persist the last layer transactions were applied from and use that instead of `oldBase`
+		//  e.g. persist the last layer transactions were applied from and use that instead of `oldPbase`
 	}
 	msh.removeFromUnappliedTxs(validBlockTxs)
 	msh.With().Info("applied transactions",

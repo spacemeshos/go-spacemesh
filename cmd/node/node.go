@@ -556,7 +556,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	trtl = tortoise.NewVerifyingTortoise(ctx, trtlCfg)
 
 	if trtlCfg.Recovered {
-		msh = mesh.NewRecoveredMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
+		msh = mesh.NewRecoveredMesh(ctx, mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
 		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))

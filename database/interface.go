@@ -114,8 +114,8 @@ func SwitchCreationContext(path, context string) {
 	Create = c.CreateRealDB
 }
 
-// SwitchToMemCreationContext switches global DB creation function to create memory DBs (this funciton should be called in
-// tests 'init' function
+// SwitchToMemCreationContext switches global DB creation function to create memory DBs (this function should be called
+// in tests 'init' function)
 func SwitchToMemCreationContext() {
 	var c = ContextDBCreator{}
 	Create = c.CreateMemDB

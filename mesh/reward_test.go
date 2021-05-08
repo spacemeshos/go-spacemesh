@@ -299,11 +299,11 @@ func (m *meshValidatorBatchMock) ValidateLayer(_ context.Context, layerID types.
 		return
 	}
 	if layerID%m.batchSize == 0 {
-		m.mesh.pushLayersToState(layerID-m.batchSize, layerID)
+		m.mesh.pushLayersToState(context.TODO(), layerID-m.batchSize, layerID)
 		return
 	}
 	prevPBase := layerID - layerID%m.batchSize
-	m.mesh.pushLayersToState(prevPBase, prevPBase)
+	m.mesh.pushLayersToState(context.TODO(), prevPBase, prevPBase)
 }
 
 func (m *meshValidatorBatchMock) ProcessedLayer() types.LayerID       { panic("implement me") }

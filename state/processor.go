@@ -119,7 +119,8 @@ func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) e
 	return nil
 }
 
-// ApplyTransactions receives a batch of transaction to apply on state. Returns the number of transaction that failed to apply.
+// ApplyTransactions receives a batch of transactions to apply to state. Returns the number of transactions that we
+// failed to apply.
 func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
 	if len(txs) == 0 {
 		err := tp.addStateToHistory(layer, tp.GetStateRoot())
@@ -130,18 +131,14 @@ func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*ty
 	defer tp.mu.Unlock()
 	remaining := txs
 	remainingCount := len(remaining)
-	for { // Loop until there's nothing left to process
-		remaining = tp.Process(remaining, layer)
-		if remainingCount == len(remaining) {
-			break
-		}
-		remainingCount = len(remaining)
-	}
+
+	// loop over the transactions until there's nothing left to process
+	for remaining = tp.Process(remaining, layer); len(remaining) != remainingCount; remainingCount = len(remaining) {}
 
 	newHash, err := tp.Commit()
 
 	if err != nil {
-		return remainingCount, fmt.Errorf("failed to commit global state: %v", err)
+		return remainingCount, fmt.Errorf("failed to commit global state: %w", err)
 	}
 
 	err = tp.addStateToHistory(layer, newHash)
@@ -155,7 +152,7 @@ func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash t
 	if err != nil {
 		return err
 	}
-	err = tp.addState(newHash, layer)
+	err = tp.saveStateRoot(newHash, layer)
 	if err != nil {
 		return err
 	}
@@ -167,7 +164,7 @@ func getStateRootLayerKey(layer types.LayerID) []byte {
 	return append([]byte(newRootKey), layer.Bytes()...)
 }
 
-func (tp *TransactionProcessor) addState(stateRoot types.Hash32, layer types.LayerID) error {
+func (tp *TransactionProcessor) saveStateRoot(stateRoot types.Hash32, layer types.LayerID) error {
 	if err := tp.processorDb.Put(getStateRootLayerKey(layer), stateRoot.Bytes()); err != nil {
 		return err
 	}
@@ -222,10 +219,10 @@ func (tp *TransactionProcessor) LoadState(layer types.LayerID) error {
 	}
 	newState, err := New(state, tp.db)
 	if err != nil {
-		log.Panic("cannot revert- improper state: %v", err)
+		log.With().Panic("cannot revert, improper state", log.Err(err))
 	}
 
-	tp.Log.Info("reverted, new root %x", newState.IntermediateRoot(false))
+	tp.Log.With().Info("reverted, new root", newState.IntermediateRoot(false))
 	tp.Log.With().Info("reverted", log.String("root_hash", newState.IntermediateRoot(false).String()))
 
 	tp.DB = newState
@@ -260,17 +257,17 @@ var (
 	errNonce  = "incorrect nonce"
 )
 
-// ApplyTransaction applies provided transaction trans to the current state, but does not commit it to persistent
-// storage. it returns error if there is not enough balance in src account to perform the transaction and pay
-// fee or if the nonce is invalid
-func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction, layerID types.LayerID) error {
-	if !tp.Exist(trans.Origin()) {
+// ApplyTransaction applies provided transaction to the current state, but does not commit it to persistent
+// storage. It returns an error if the transaction is invalid, i.e., if there is not enough balance in the source
+// account to perform the transaction and pay the fee or if the nonce is incorrect.
+func (tp *TransactionProcessor) ApplyTransaction(tx *types.Transaction, layerID types.LayerID) error {
+	if !tp.Exist(tx.Origin()) {
 		return fmt.Errorf(errOrigin)
 	}
 
-	origin := tp.GetOrNewStateObj(trans.Origin())
+	origin := tp.GetOrNewStateObj(tx.Origin())
 
-	amountWithFee := trans.Fee + trans.Amount
+	amountWithFee := tx.Fee + tx.Amount
 
 	// todo: should we allow to spend all accounts balance?
 	if origin.Balance() <= amountWithFee {
@@ -278,20 +275,20 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction, layer
 		return fmt.Errorf(errFunds)
 	}
 
-	if !tp.checkNonce(trans) {
-		tp.Log.Error(errNonce+" should be %v actual %v", tp.GetNonce(trans.Origin()), trans.AccountNonce)
+	if !tp.checkNonce(tx) {
+		tp.Log.Error(errNonce+" should be %v actual %v", tp.GetNonce(tx.Origin()), tx.AccountNonce)
 		return fmt.Errorf(errNonce)
 	}
 
-	tp.SetNonce(trans.Origin(), tp.GetNonce(trans.Origin())+1) // TODO: Not thread-safe
-	transfer(tp, trans.Origin(), trans.Recipient, trans.Amount)
+	tp.SetNonce(tx.Origin(), tp.GetNonce(tx.Origin())+1) // TODO: Not thread-safe
+	transfer(tp, tx.Origin(), tx.Recipient, tx.Amount)
 
 	// subtract fee from account, fee will be sent to miners in layers after
-	tp.SubBalance(trans.Origin(), trans.Fee)
-	if err := tp.processorDb.Put(trans.ID().Bytes(), layerID.Bytes()); err != nil {
+	tp.SubBalance(tx.Origin(), tx.Fee)
+	if err := tp.processorDb.Put(tx.ID().Bytes(), layerID.Bytes()); err != nil {
 		return fmt.Errorf("failed to add to applied txs: %v", err)
 	}
-	tp.With().Info("transaction processed", log.String("transaction", trans.String()))
+	tp.With().Info("transaction processed", log.String("transaction", tx.String()))
 	return nil
 }
 

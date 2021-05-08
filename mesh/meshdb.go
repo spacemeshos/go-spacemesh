@@ -101,7 +101,7 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, err
 		if err := ll.AddBlock(blk); err != nil {
 			log.With().Error("error inserting genesis block to db", blk.ID(), blk.LayerIndex)
 		}
-		if err := ll.SaveContextualValidity(blk.ID(), true); err != nil {
+		if err := ll.SaveContextualValidity(blk.ID(), blk.LayerIndex, true); err != nil {
 			log.With().Error("error inserting genesis block to db", blk.ID(), blk.LayerIndex)
 		}
 	}
@@ -140,7 +140,7 @@ func NewMemMeshDB(log log.Log) *DB {
 	for _, blk := range GenesisLayer().Blocks() {
 		// these are only used for testing so we can safely ignore errors here
 		_ = ll.AddBlock(blk)
-		_ = ll.SaveContextualValidity(blk.ID(), true)
+		_ = ll.SaveContextualValidity(blk.ID(), blk.LayerIndex, true)
 	}
 	if err := ll.SaveLayerInputVectorByID(GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
 		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
@@ -322,7 +322,7 @@ func (m *DB) ContextualValidity(id types.BlockID) (bool, error) {
 }
 
 // SaveContextualValidity persists opinion on block to the database
-func (m *DB) SaveContextualValidity(id types.BlockID, valid bool) error {
+func (m *DB) SaveContextualValidity(id types.BlockID, _ types.LayerID, valid bool) error {
 	var v []byte
 	if valid {
 		v = constTrue
