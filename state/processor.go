@@ -133,7 +133,8 @@ func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*ty
 	remainingCount := len(remaining)
 
 	// loop over the transactions until there's nothing left to process
-	for remaining = tp.Process(remaining, layer); len(remaining) != remainingCount; remainingCount = len(remaining) {}
+	for remaining = tp.Process(remaining, layer); len(remaining) != remainingCount; remainingCount = len(remaining) {
+	}
 
 	newHash, err := tp.Commit()
 

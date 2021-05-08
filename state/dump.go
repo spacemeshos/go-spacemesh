@@ -48,10 +48,10 @@ func (state *DB) RawDump() types.MultipleAccountsState {
 
 // Dump dumps the current state into json form, encoded into bytes.
 func (state *DB) Dump() []byte {
-	stateJson, err := json.MarshalIndent(state.RawDump(), "", "	")
+	stateJSON, err := json.MarshalIndent(state.RawDump(), "", "	")
 	if err != nil {
 		fmt.Println("dump err", err)
 	}
 
-	return stateJson
+	return stateJSON
 }

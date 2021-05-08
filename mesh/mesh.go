@@ -38,7 +38,7 @@ var TORTOISE = []byte("tortoise")
 var VERIFIED = []byte("verified")
 
 type tortoise interface {
-	HandleIncomingLayer(context.Context, types.LayerID) (reverted bool, oldPbase, newPbase types.LayerID)
+	HandleIncomingLayer(context.Context, types.LayerID) (oldPbase, newPbase types.LayerID, reverted bool)
 	LatestComplete() types.LayerID
 	Persist(context.Context) error
 	HandleLateBlocks(context.Context, []*types.Block) (types.LayerID, types.LayerID)
@@ -270,7 +270,7 @@ func (vl *validator) ValidateLayer(ctx context.Context, layerID types.LayerID) {
 	logger.Info("validate layer")
 
 	// pass the layer to tortoise for processing
-	reverted, oldPbase, newPbase := vl.trtl.HandleIncomingLayer(ctx, layerID)
+	oldPbase, newPbase, reverted := vl.trtl.HandleIncomingLayer(ctx, layerID)
 	logger.With().Info("tortoise results",
 		log.Bool("reverted", reverted),
 		log.FieldNamed("old_pbase", oldPbase),

@@ -59,8 +59,8 @@ func (m *MeshValidatorMock) LatestComplete() types.LayerID {
 	panic("implement me")
 }
 
-func (m *MeshValidatorMock) HandleIncomingLayer(_ context.Context, layerID types.LayerID) (types.LayerID, types.LayerID) {
-	return layerID - 1, layerID
+func (m *MeshValidatorMock) HandleIncomingLayer(_ context.Context, layerID types.LayerID) (types.LayerID, types.LayerID, bool) {
+	return layerID - 1, layerID, false
 }
 func (m *MeshValidatorMock) HandleLateBlocks(_ context.Context, bl []*types.Block) (types.LayerID, types.LayerID) {
 	return bl[0].Layer() - 1, bl[0].Layer()
@@ -221,7 +221,7 @@ func TestLayers_AddWrongLayer(t *testing.T) {
 	l1 := types.NewExistingLayer(1, []*types.Block{block1})
 	err := layers.AddBlock(block1)
 	assert.NoError(t, err)
-	err = layers.SaveContextualValidity(block1.ID(), true)
+	err = layers.SaveContextualValidity(block1.ID(), block1.LayerIndex, true)
 	assert.NoError(t, err)
 	layers.ValidateLayer(context.TODO(), l1.Index())
 	l2 := types.NewExistingLayer(2, []*types.Block{block2})
@@ -497,7 +497,7 @@ func addBlockWithTxs(r *require.Assertions, msh *Mesh, id types.LayerID, valid b
 		msh.txPool.Put(tx.ID(), tx)
 	}
 	blk.Initialize()
-	err := msh.SaveContextualValidity(blk.ID(), valid)
+	err := msh.SaveContextualValidity(blk.ID(), blk.LayerIndex, valid)
 	r.NoError(err)
 
 	err = msh.AddBlockWithTxs(blk)

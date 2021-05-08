@@ -127,7 +127,7 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleLateBlocks(ctx context.Context, b
 
 // HandleIncomingLayer processes all layer block votes
 // returns the old verified layer and new verified layer after taking into account the blocks votes
-func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) (reverted bool, oldVerified, newVerified types.LayerID) {
+func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) (oldVerified, newVerified types.LayerID, reverted bool) {
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()
 	oldVerified = trtl.trtl.Verified

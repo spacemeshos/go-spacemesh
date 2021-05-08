@@ -55,8 +55,8 @@ func (m *MeshValidatorMock) LatestComplete() types.LayerID {
 	panic("implement me")
 }
 
-func (m *MeshValidatorMock) HandleIncomingLayer(_ context.Context, layerID types.LayerID) (types.LayerID, types.LayerID) {
-	return layerID - 1, layerID
+func (m *MeshValidatorMock) HandleIncomingLayer(_ context.Context, layerID types.LayerID) (types.LayerID, types.LayerID, bool) {
+	return layerID - 1, layerID, false
 }
 func (m *MeshValidatorMock) HandleLateBlocks(_ context.Context, bl []*types.Block) (types.LayerID, types.LayerID) {
 	return bl[0].Layer() - 1, bl[0].Layer()
@@ -99,7 +99,7 @@ func (MockState) AddressExists(types.Address) bool {
 	return true
 }
 
-func (MockState) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
+func (MockState) GetLayerStateRoot(types.LayerID) (types.Hash32, error) {
 	panic("implement me")
 }
 
