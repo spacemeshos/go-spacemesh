@@ -3,8 +3,6 @@ package hare
 import (
 	"context"
 	"errors"
-	"github.com/spacemeshos/amcl"
-	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -225,11 +223,13 @@ func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, err
 	return buildSet(), nil
 }
 
-func createMaatuf(tcfg config.Config, rng *amcl.RAND, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string) *Hare {
+func createMaatuf(tcfg config.Config, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string) *Hare {
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
-	_, vrfPub := BLS381.GenKeyPair(rng)
-	// vrfSigner := BLS381.NewBlsSigner(vrfPriv)
+	_, vrfPub, err := signing.NewVRFSigner(ed.Sign(pub.Bytes()))
+	if err != nil {
+		panic("failed to create vrf signer")
+	}
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
 	hare := New(tcfg, p2p, ed, nodeID, validateBlock, isSynced, &mockBlockProvider{}, rolacle, 10, &mockIdentityP{nid: nodeID},
 		&MockStateQuerier{true, nil}, layersCh, log.NewDefault(name+"_"+ed.PublicKey().ShortString()))
@@ -245,7 +245,6 @@ func Test_multipleCPs(t *testing.T) {
 	test := newHareWrapper(totalCp)
 	totalNodes := 20
 	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 5, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
-	rng := BLS381.DefaultSeed()
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)
 	oracle := &trueOracle{}
@@ -253,7 +252,7 @@ func Test_multipleCPs(t *testing.T) {
 		s := sim.NewNode()
 		// p2pm := &p2pManipulator{nd: s, err: errors.New("fake err")}
 		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
-		h := createMaatuf(cfg, rng, test.lCh[i], s, oracle, t.Name())
+		h := createMaatuf(cfg, test.lCh[i], s, oracle, t.Name())
 		test.hare = append(test.hare, h)
 		e := h.Start(context.TODO())
 		r.NoError(e)
@@ -280,7 +279,6 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	test := newHareWrapper(totalCp)
 	totalNodes := 20
 	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 3, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
-	rng := BLS381.DefaultSeed()
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)
 	oracle := &trueOracle{}
@@ -288,7 +286,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		s := sim.NewNode()
 		mp2p := &p2pManipulator{nd: s, stalledLayer: 1, err: errors.New("fake err")}
 		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
-		h := createMaatuf(cfg, rng, test.lCh[i], mp2p, oracle, t.Name())
+		h := createMaatuf(cfg, test.lCh[i], mp2p, oracle, t.Name())
 		test.hare = append(test.hare, h)
 		e := h.Start(context.TODO())
 		r.NoError(e)
