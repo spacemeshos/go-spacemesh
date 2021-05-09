@@ -22,7 +22,7 @@ data:
         Parser           docker
         Tag              kube.*
         Refresh_Interval 5
-        Mem_Buf_Limit    5MB
+        Mem_Buf_Limit    128MB
         Skip_Long_Lines  On
 
 
@@ -39,17 +39,24 @@ data:
         K8S-Logging.Parser  On
         K8S-Logging.Exclude On
 
+    [FILTER]
+        Name        record_modifier
+        Match       kube.*
+        Remove_key  log
+
 
   fluent-bit-output.conf: |-
 
     [OUTPUT]
-        Name          http
-        Match         kube.*
-        Host          logstash
-        Port          5044
-        format        json
-        Retry_Limit   False
-
+        Name            es
+        Match           kube.*
+        Host            elasticsearch-master
+        Port            9200
+        Retry_Limit     False
+        HTTP_User       REP_ES_USER
+        HTTP_Passwd     REP_ES_PASS
+        Logstash_Format True
+        Logstash_Prefix fluent-bit-NAMESPACE
 
 
 
