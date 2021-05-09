@@ -441,6 +441,10 @@ func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
 	return nil
 }
 
+type vrfSigner interface {
+	Sign([]byte) []byte
+}
+
 func (app *SpacemeshApp) initServices(ctx context.Context,
 	nodeID types.NodeID,
 	swarm service.Service,
@@ -451,7 +455,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	layerSize uint32,
 	postClient activation.PostProverClient,
 	poetClient activation.PoetProvingServiceClient,
-	vrfSigner *BLS381.BlsSigner,
+	vrfSigner vrfSigner,
 	layersPerEpoch uint16, clock TickProvider) error {
 
 	app.nodeID = nodeID
@@ -537,7 +541,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		app.setupGenesis(processor, msh)
 	}
 
-	eValidator := blocks.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, msh, app.addLogger(BlkEligibilityLogger, lg))
+	eValidator := blocks.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, signing.VRFVerify, msh, app.addLogger(BlkEligibilityLogger, lg))
 
 	syncConf := sync.Configuration{Concurrency: 4,
 		LayerSize:       int(layerSize),
@@ -573,7 +577,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		hOracle = rolacle
 	} else { // regular oracle, build and use it
 		beacon := eligibility.NewBeacon(mdb, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
-		hOracle = eligibility.New(beacon, atxdb.CalcActiveSetSize, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+		hOracle = eligibility.New(beacon, atxdb.CalcActiveSetSize, signing.VRFVerify, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	}
 
 	gossipListener := service.NewListener(swarm, syncer, app.addLogger(GossipListener, lg))
@@ -998,12 +1002,13 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 
 	poetClient := activation.NewHTTPPoetClient(ctx, app.Config.PoETServer)
 
-	rng := amcl.NewRAND()
-	pub := app.edSgn.PublicKey().Bytes()
-	rng.Seed(len(pub), app.edSgn.Sign(pub)) // assuming ed.private is random, the sig can be used as seed
-	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
-	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
-	nodeID := types.NodeID{Key: app.edSgn.PublicKey().String(), VRFPublicKey: vrfPub}
+	edPubkey := app.edSgn.PublicKey()
+	vrfSigner, vrfPub, err := signing.NewVRFSigner(app.edSgn.Sign(edPubkey.Bytes()))
+	if err != nil {
+		log.With().Panic("failed to create vrf signer", log.Err(err))
+	}
+
+	nodeID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 
 	postClient, err := activation.NewPostClient(&app.Config.POST, util.Hex2Bytes(nodeID.Key))
 	if err != nil {
