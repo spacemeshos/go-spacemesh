@@ -62,7 +62,7 @@ type DB struct {
 	meshDb              *mesh.DB
 	LayersPerEpoch      uint16
 	goldenATXID         types.ATXID
-	nipostValidator     nipostValidator
+	nipostValidator     NIPoSTValidator
 	pendingTotalWeight  map[types.Hash12]*sync.Mutex
 	pTotalWeightLock    sync.Mutex
 	log                 log.Log
@@ -74,7 +74,7 @@ type DB struct {
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
 // their validity
-func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint16, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
+func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint16, goldenATXID types.ATXID, nipostValidator NIPoSTValidator, log log.Log) *DB {
 	db := &DB{
 		idStore:            idStore,
 		atxs:               dbStore,
@@ -396,13 +396,9 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		// as expected from the initial PoST.
 		initialPoSTMetadata := *atx.NIPoST.PoSTMetadata
 		initialPoSTMetadata.Challenge = shared.ZeroChallenge
-		if err := db.nipostValidator.ValidatePoST(pub.Bytes(), atx.InitialPoST, &initialPoSTMetadata); err != nil {
+		if err := db.nipostValidator.ValidatePoST(pub.Bytes(), atx.InitialPoST, &initialPoSTMetadata, atx.NumUnits); err != nil {
 			return fmt.Errorf("invalid initial PoST: %v", err)
 		}
-		// MERGE FIX
-		//if err := db.nipstValidator.VerifyPost(*pub, atx.Commitment, atx.Space); err != nil {
-		//	return fmt.Errorf("invalid commitment proof: %v", err)
-		//}
 	}
 
 	if atx.PositioningATX != db.goldenATXID {
@@ -425,15 +421,16 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		}
 	}
 
-	hash, err := atx.NIPoSTChallenge.Hash()
+	expectedChallengeHash, err := atx.NIPoSTChallenge.Hash()
 	if err != nil {
-		return fmt.Errorf("cannot get NIPoST Challenge hash: %v", err)
+		return fmt.Errorf("failed to compute NIPoST's expected challenge hash: %v", err)
 	}
-	db.log.With().Info("Validated NIPoST", log.String("challenge_hash", hash.String()), atx.ID())
+
+	db.log.With().Info("Validating NIPoST", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
 	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeID.Key))
-	if err = db.nipostValidator.Validate(*pubKey, atx.NIPoST, atx.Space, *hash); err != nil {
-		return fmt.Errorf("NIPoST not valid: %v", err)
+	if err = db.nipostValidator.Validate(*pubKey, atx.NIPoST, *expectedChallengeHash, atx.NumUnits); err != nil {
+		return fmt.Errorf("invalid NIPoST: %v", err)
 	}
 
 	return nil

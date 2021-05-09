@@ -87,8 +87,8 @@ var EmptyATXID = &ATXID{}
 type ActivationTxHeader struct {
 	NIPoSTChallenge
 	id       *ATXID // non-exported cache of the ATXID
-	Space    uint64
 	Coinbase Address
+	NumUnits uint
 }
 
 // ShortString returns the first 5 characters of the ID, for logging purposes.
@@ -123,7 +123,7 @@ func (atxh *ActivationTxHeader) SetID(id *ATXID) {
 // GetWeight returns the ATX's weight = space * ticks.
 func (atxh *ActivationTxHeader) GetWeight() uint64 {
 	// TODO: Limit the number of bits this can occupy
-	return atxh.Space * (atxh.EndTick - atxh.StartTick)
+	return uint64(atxh.NumUnits) * (atxh.EndTick - atxh.StartTick)
 }
 
 // NIPoSTChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
@@ -183,13 +183,13 @@ type ActivationTx struct {
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
-func NewActivationTx(challenge NIPoSTChallenge, coinbase Address, nipost *NIPoST, space uint64, initialPoST *PoST) *ActivationTx {
+func NewActivationTx(challenge NIPoSTChallenge, coinbase Address, nipost *NIPoST, numUnits uint, initialPoST *PoST) *ActivationTx {
 	atx := &ActivationTx{
 		InnerActivationTx: &InnerActivationTx{
 			ActivationTxHeader: &ActivationTxHeader{
 				NIPoSTChallenge: challenge,
-				Space:           space,
 				Coinbase:        coinbase,
+				NumUnits:        numUnits,
 			},
 			NIPoST:      nipost,
 			InitialPoST: initialPoST,
@@ -225,7 +225,7 @@ func (atx *ActivationTx) Fields(size int) []log.LoggableField {
 		log.FieldNamed("coinbase", atx.Coinbase),
 		atx.PubLayerID,
 		atx.PubLayerID.GetEpoch(),
-		log.Uint64("space", atx.Space),
+		log.Uint64("num_units", uint64(atx.NumUnits)),
 		log.Uint64("start_tick", atx.StartTick),
 		log.Uint64("end_tick", atx.EndTick),
 		log.Uint64("weight", atx.GetWeight()),
@@ -318,8 +318,16 @@ type NIPoST struct {
 // PoST is an alias to proving.Proof.
 type PoST proving.Proof
 
-// PoSTMetadata is an alias to proving.ProofMetadata.
-type PoSTMetadata proving.ProofMetadata
+// PoSTMetadata is similar proving.ProofMetadata, but without fields which can be derived elsewhere (ID, NumUnits).
+type PoSTMetadata struct {
+	//	ID            []byte
+	Challenge     []byte
+	BitsPerLabel  uint
+	LabelsPerUnit uint
+	//	NumUnits      uint
+	K1 uint
+	K2 uint
+}
 
 // String returns a string representation of the PostProof, for logging purposes.
 // It implements the Stringer interface.

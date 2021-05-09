@@ -136,16 +136,15 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 	}
 
 	cfg.POST = activation.DefaultConfig()
-	cfg.POST.NumLabels = 1 << 10
-	cfg.POST.LabelSize = 8
+	cfg.POST.LabelsPerUnit = 1 << 10
+	cfg.POST.BitsPerLabel = 8
 	cfg.POST.NumFiles = 1
 
-	cfg.GenesisTotalWeight = cfg.POST.UnitSize * uint64(numOfInstances) // * 1 PoET ticks
-	// MERGE FIX -- CHECK
+	cfg.PostInitOpts = activation.DefaultPostInitOps()
+	cfg.PostInitOpts.NumUnits = cfg.POST.MinNumUnits + 1
+	cfg.PostInitOpts.ComputeProviderID = int(initialization.CPUProviderID())
 
-	cfg.PostOptions = activation.DefaultPostOptions()
-	cfg.PostOptions.DataSize = 1 << 10
-	cfg.PostOptions.ComputeProviderID = int(initialization.CPUProviderID())
+	cfg.GenesisTotalWeight = uint64(cfg.PostInitOpts.NumUnits) * uint64(numOfInstances) // * 1 PoET ticks
 
 	cfg.HARE.N = 5
 	cfg.HARE.F = 2
@@ -229,7 +228,7 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.
 	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
 	smApp.Config.GenesisTime = genesisTime
 	smApp.Config.POST.DataDir, _ = ioutil.TempDir("", "sm-app-test-post-datadir")
-	smApp.Config.PostOptions.DataDir = smApp.Config.POST.DataDir
+	smApp.Config.PostInitOpts.DataDir = smApp.Config.POST.DataDir
 
 	smApp.edSgn = edSgn
 

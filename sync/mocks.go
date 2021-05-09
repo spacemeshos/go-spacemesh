@@ -127,11 +127,14 @@ func (*mockIStore) GetIdentity(string) (types.NodeID, error) {
 
 type validatorMock struct{}
 
-func (*validatorMock) Validate(signing.PublicKey, *types.NIPoST, types.Hash32) error {
+// A compile time check to ensure that validatorMock fully implements the NIPoSTValidator interface.
+var _ activation.NIPoSTValidator = (*validatorMock)(nil)
+
+func (*validatorMock) Validate(signing.PublicKey, *types.NIPoST, types.Hash32, uint) error {
 	return nil
 }
 
-func (*validatorMock) ValidatePoST([]byte, *types.PoST, *types.PoSTMetadata) error {
+func (*validatorMock) ValidatePoST([]byte, *types.PoST, *types.PoSTMetadata, uint) error {
 	return nil
 }
 

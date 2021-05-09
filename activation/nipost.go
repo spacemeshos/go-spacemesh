@@ -72,14 +72,14 @@ func (nb *NIPoSTBuilder) persist() {
 
 // NIPoSTBuilder holds the required state and dependencies to create Non-Interactive Proofs of Space-Time (NIPoST).
 type NIPoSTBuilder struct {
-	minerID    []byte
-	post       PostProvider
-	poetProver PoetProvingServiceClient
-	poetDB     poetDbAPI
-	errChan    chan error
-	state      *builderState
-	store      bytesStore
-	log        log.Log
+	minerID      []byte
+	postProvider PostProvider
+	poetProver   PoetProvingServiceClient
+	poetDB       poetDbAPI
+	errChan      chan error
+	state        *builderState
+	store        bytesStore
+	log          log.Log
 }
 
 type poetDbAPI interface {
@@ -91,21 +91,21 @@ type poetDbAPI interface {
 // NewNIPoSTBuilder returns a NIPoSTBuilder.
 func NewNIPoSTBuilder(
 	minerID []byte,
-	post PostProvider,
+	postProvider PostProvider,
 	poetProver PoetProvingServiceClient,
 	poetDB poetDbAPI,
 	store bytesStore,
 	log log.Log,
 ) *NIPoSTBuilder {
 	return &NIPoSTBuilder{
-		minerID:    minerID,
-		post:       post,
-		poetProver: poetProver,
-		poetDB:     poetDB,
-		errChan:    make(chan error),
-		state:      &builderState{NIPoST: &types.NIPoST{}},
-		store:      store,
-		log:        log,
+		minerID:      minerID,
+		postProvider: postProvider,
+		poetProver:   poetProver,
+		poetDB:       poetDB,
+		errChan:      make(chan error),
+		state:        &builderState{NIPoST: &types.NIPoST{}},
+		store:        store,
+		log:          log,
 	}
 }
 
@@ -115,7 +115,7 @@ func NewNIPoSTBuilder(
 func (nb *NIPoSTBuilder) BuildNIPoST(challenge *types.Hash32, atxExpired, stop chan struct{}) (*types.NIPoST, error) {
 	nb.load(*challenge)
 
-	if _, ok := nb.post.InitCompleted(); !ok {
+	if _, ok := nb.postProvider.InitCompleted(); !ok {
 		return nil, errors.New("PoST init not completed")
 	}
 
@@ -178,7 +178,7 @@ func (nb *NIPoSTBuilder) BuildNIPoST(challenge *types.Hash32, atxExpired, stop c
 		nb.log.With().Info("starting PoST execution",
 			log.String("challenge", fmt.Sprintf("%x", nb.state.PoetProofRef)))
 		startTime := time.Now()
-		proof, proofMetadata, err := nb.post.GenerateProof(nb.state.PoetProofRef)
+		proof, proofMetadata, err := nb.postProvider.GenerateProof(nb.state.PoetProofRef)
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute PoST: %v", err)
 		}
@@ -188,7 +188,7 @@ func (nb *NIPoSTBuilder) BuildNIPoST(challenge *types.Hash32, atxExpired, stop c
 
 		nipost.PoST = proof
 
-		proofMetadata.ID = nil // ID doesn't need to be included when metadata is embedded inside ATX.
+		//proofMetadata.ID = nil // ID doesn't need to be included when metadata is embedded inside ATX.
 		nipost.PoSTMetadata = proofMetadata
 		nb.persist()
 	}

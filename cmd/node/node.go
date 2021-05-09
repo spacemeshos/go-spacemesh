@@ -589,7 +589,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		hOracle = rolacle
 	} else { // regular oracle, build and use it
 		beacon := eligibility.NewBeacon(mdb, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
-		hOracle = eligibility.New(beacon, atxdb.GetMinerWeightsInEpochFromView, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.POST.UnitSize, app.Config.GenesisTotalWeight, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+
+		var spacePerUnit = uint64(1) // arbitrary temp value -- this param usage need to be refactored once var-post PR is finalized and merged.
+		hOracle = eligibility.New(beacon, atxdb.GetMinerWeightsInEpochFromView, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), spacePerUnit, app.Config.GenesisTotalWeight, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	}
 
 	gossipListener := service.NewListener(swarm, syncer, app.addLogger(GossipListener, lg))
@@ -615,7 +617,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))
 
-	postMgr, err := activation.NewPostManager(util.Hex2Bytes(nodeID.Key), app.Config.POST, store, app.addLogger(PostLogger, lg))
+	postMgr, err := activation.NewPostManager(util.Hex2Bytes(nodeID.Key), app.Config.POST, app.addLogger(PostLogger, lg))
 	if err != nil {
 		app.log.Panic("Failed to create post manager: %v", err)
 	}
@@ -644,7 +646,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		LayersPerEpoch:  layersPerEpoch,
 	}
 
-	atxBuilder := activation.NewBuilder(builderConfig, nodeID, app.Config.SpaceToCommit, sgn, atxdb, swarm, msh, layersPerEpoch, nipostBuilder, postMgr, clock, syncer, store, app.addLogger("atxBuilder", lg))
+	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, atxdb, swarm, msh, layersPerEpoch, nipostBuilder, postMgr, clock, syncer, store, app.addLogger("atxBuilder", lg))
 
 	gossipListener.AddListener(state.IncomingTxProtocol, priorityq.Low, processor.HandleTxData)
 	gossipListener.AddListener(activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
@@ -737,23 +739,7 @@ func (app *SpacemeshApp) startServices() {
 	if app.Config.StartSmeshing {
 		coinbaseAddr := types.HexToAddress(app.Config.CoinbaseAccount)
 		go func() {
-			if completedChan, ok := app.postMgr.InitCompleted(); !ok {
-				doneChan, err := app.postMgr.CreatePostData(&app.Config.PostOptions)
-				if err != nil {
-					log.Panic("Failed to create post data: %v", err)
-				}
-				<-doneChan
-
-				// if completedChan isn't closed then the session failed
-				// and we can't start smeshing.
-				select {
-				case <-completedChan:
-				default:
-					return
-				}
-			}
-
-			if err := app.atxBuilder.StartSmeshing(coinbaseAddr); err != nil {
+			if err := app.atxBuilder.StartSmeshing(coinbaseAddr, &app.Config.PostInitOpts); err != nil {
 				log.Panic("Failed to start smeshing: %v", err)
 			}
 		}()
@@ -889,7 +875,7 @@ func (app *SpacemeshApp) stopServices() {
 
 	if app.atxBuilder != nil {
 		app.log.Info("closing atx builder")
-		_ = app.atxBuilder.StopSmeshing()
+		_ = app.atxBuilder.StopSmeshing(false)
 	}
 
 	/*if app.blockListener != nil {

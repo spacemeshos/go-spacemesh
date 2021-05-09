@@ -56,8 +56,6 @@ func AddCommands(cmd *cobra.Command) {
 		config.CoinbaseAccount, "coinbase account to accumulate rewards")
 	cmd.PersistentFlags().StringVar(&config.GoldenATXID, "golden-atx",
 		config.GoldenATXID, "golden ATX hash")
-	cmd.PersistentFlags().Uint64Var(&config.SpaceToCommit, "space-to-commit",
-		config.SpaceToCommit, "number of bytes to commit to mining")
 	cmd.PersistentFlags().Uint64Var(&config.GenesisTotalWeight, "genesis-total-weight",
 		config.GenesisTotalWeight, "The active set size for the genesis flow")
 	cmd.PersistentFlags().IntVar(&config.BlockCacheSize, "block-cache-size",
@@ -181,33 +179,29 @@ func AddCommands(cmd *cobra.Command) {
 
 	// TODO(moshababo): add usage desc
 
-	cmd.PersistentFlags().StringVar(&config.POST.DataDir, "post-datadir",
-		config.POST.DataDir, "The directory that contains post data files")
-	cmd.PersistentFlags().UintVar(&config.POST.NumFiles, "post-numfiles",
-		config.POST.NumFiles, "")
-	cmd.PersistentFlags().Uint64Var(&config.POST.NumLabels, "post-numlabels",
-		config.POST.NumLabels, "")
-	cmd.PersistentFlags().UintVar(&config.POST.LabelSize, "post-labelsize",
-		config.POST.LabelSize, "")
+	cmd.PersistentFlags().UintVar(&config.POST.BitsPerLabel, "post-bitsperlabel",
+		config.POST.BitsPerLabel, "")
+	cmd.PersistentFlags().UintVar(&config.POST.LabelsPerUnit, "post-labelsperunit",
+		config.POST.LabelsPerUnit, "")
 	cmd.PersistentFlags().UintVar(&config.POST.K1, "post-k1",
 		config.POST.K1, "")
 	cmd.PersistentFlags().UintVar(&config.POST.K2, "post-k2",
 		config.POST.K2, "")
 
-	/**======================== PoST Options Flags ========================== **/
+	/**======================== PoST init options Flags ========================== **/
 
 	// TODO(moshababo): add usage desc
 
-	cmd.PersistentFlags().StringVar(&config.PostOptions.DataDir, "post-options-datadir",
-		config.PostOptions.DataDir, "")
-	cmd.PersistentFlags().Uint64Var(&config.PostOptions.DataSize, "post-options-datasize",
-		config.PostOptions.DataSize, "")
-	cmd.PersistentFlags().BoolVar(&config.PostOptions.Append, "post-options-append",
-		config.PostOptions.Append, "")
-	cmd.PersistentFlags().BoolVar(&config.PostOptions.Throttle, "post-options-throttle",
-		config.PostOptions.Throttle, "")
-	cmd.PersistentFlags().IntVar(&config.PostOptions.ComputeProviderID, "post-options-provider-id",
-		config.PostOptions.ComputeProviderID, "")
+	cmd.PersistentFlags().StringVar(&config.PostInitOpts.DataDir, "post-init-datadir",
+		config.PostInitOpts.DataDir, "")
+	cmd.PersistentFlags().UintVar(&config.PostInitOpts.NumUnits, "post-init-numunits",
+		config.PostInitOpts.NumUnits, "")
+	cmd.PersistentFlags().UintVar(&config.PostInitOpts.NumFiles, "post-init-numfiles",
+		config.PostInitOpts.NumFiles, "")
+	cmd.PersistentFlags().IntVar(&config.PostInitOpts.ComputeProviderID, "post-init-provider",
+		config.PostInitOpts.ComputeProviderID, "")
+	cmd.PersistentFlags().BoolVar(&config.PostInitOpts.Throttle, "post-init-throttle",
+		config.PostInitOpts.Throttle, "")
 
 	/**========================Consensus Flags ========================== **/
 

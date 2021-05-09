@@ -45,9 +45,9 @@ type idStore interface {
 	GetIdentity(id string) (types.NodeID, error)
 }
 
-type nipostValidator interface {
-	Validate(id signing.PublicKey, NIPoST *types.NIPoST, space uint64, expectedChallenge types.Hash32) error
-	ValidatePoST(id []byte, PoST *types.PoST, PoSTMetadata *types.PoSTMetadata) error
+type NIPoSTValidator interface {
+	Validate(id signing.PublicKey, NIPoST *types.NIPoST, expectedChallenge types.Hash32, numUnits uint) error
+	ValidatePoST(id []byte, PoST *types.PoST, PoSTMetadata *types.PoSTMetadata, numUnits uint) error
 }
 
 type atxDBProvider interface {
@@ -80,8 +80,8 @@ type syncer interface {
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
 	Smeshing() bool
-	StartSmeshing(coinbase types.Address) error
-	StopSmeshing() error
+	StartSmeshing(coinbase types.Address, opts *PostInitOpts) error
+	StopSmeshing(deleteFiles bool) error
 	SmesherID() types.NodeID
 	Coinbase() types.Address
 	SetCoinbase(coinbase types.Address)
@@ -114,7 +114,7 @@ type Builder struct {
 	mesh            meshProvider
 	tickProvider    poetNumberOfTickProvider
 	nipostBuilder   nipostBuilder
-	post            PostProvider
+	postProvider    PostProvider
 	challenge       *types.NIPoSTChallenge
 	initialPoST     *types.PoST
 	layerClock      layerClock
@@ -128,7 +128,7 @@ type Builder struct {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(cfg Config, nodeID types.NodeID, spaceToCommit uint64, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipostBuilder nipostBuilder, post PostProvider, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
+func NewBuilder(cfg Config, nodeID types.NodeID, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipostBuilder nipostBuilder, post PostProvider, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
 	return &Builder{
 		signer:          signer,
 		nodeID:          nodeID,
@@ -139,12 +139,11 @@ func NewBuilder(cfg Config, nodeID types.NodeID, spaceToCommit uint64, signer si
 		net:             net,
 		mesh:            mesh,
 		nipostBuilder:   nipostBuilder,
-		post:            post,
+		postProvider:    post,
 		layerClock:      layerClock,
 		stop:            make(chan struct{}),
 		syncer:          syncer,
 		store:           store,
-		committedSpace:  spaceToCommit,
 		log:             log,
 	}
 }
@@ -159,18 +158,29 @@ func (b *Builder) Smeshing() bool {
 
 // StartSmeshing is the main entry point of the atx builder.
 // It runs the main loop of the builder and shouldn't be called more than once.
-// It returns error if post data is incomplete or missing.
-func (b *Builder) StartSmeshing(coinbase types.Address) error {
+// If the post data is incomplete or missing, data creation
+// session will be preceded. Changing of the post potions (e.g., number of labels),
+// after initial setup, is supported.
+func (b *Builder) StartSmeshing(coinbase types.Address, opts *PostInitOpts) error {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 
 	if b.started {
 		return errors.New("already started")
 	}
+	b.stop = make(chan struct{})
 
-	if _, ok := b.post.InitCompleted(); !ok {
-		return errors.New("PoST data creation not completed")
+	//if _, ok := b.postProvider.InitCompleted(); !ok {
+	doneChan, err := b.postProvider.CreatePostData(opts)
+	if err != nil {
+		return fmt.Errorf("failed to start creating post data: %v", err)
 	}
+	<-doneChan
+
+	if _, ok := b.postProvider.InitCompleted(); !ok {
+		return fmt.Errorf("failed to create post data: %v", b.postProvider.LastErr())
+	}
+	//}
 
 	b.started = true
 	go b.loop()
@@ -178,12 +188,16 @@ func (b *Builder) StartSmeshing(coinbase types.Address) error {
 }
 
 // StopSmeshing stops the atx builder.
-func (b *Builder) StopSmeshing() error {
+func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 
 	if b.started == false {
 		return errors.New("not started")
+	}
+
+	if err := b.postProvider.StopPostDataCreationSession(deleteFiles); err != nil {
+		return fmt.Errorf("failed to stop post data creation session: %v", err)
 	}
 
 	close(b.stop)
@@ -227,7 +241,7 @@ func (b *Builder) loop() {
 	// Once initialized, run the execution phase with zero-challenge,
 	// to create the initial proof (the commitment).
 	// TODO(moshababo): don't generate the commitment every time smeshing is starting, but once only.
-	b.initialPoST, _, err = b.post.GenerateProof(shared.ZeroChallenge)
+	b.initialPoST, _, err = b.postProvider.GenerateProof(shared.ZeroChallenge)
 	if err != nil {
 		b.log.Error("PoST execution failed: %v", err)
 		b.started = false
@@ -394,7 +408,7 @@ func (b *Builder) PublishActivationTx() error {
 		initialPoST = b.initialPoST
 	}
 
-	atx := types.NewActivationTx(*b.challenge, b.Coinbase(), nipost, b.committedSpace, initialPoST)
+	atx := types.NewActivationTx(*b.challenge, b.Coinbase(), nipost, b.postProvider.Config().NumUnits, initialPoST)
 
 	atxReceived := b.db.AwaitAtx(atx.ID())
 	defer b.db.UnsubscribeAtx(atx.ID())

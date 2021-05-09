@@ -1,13 +1,13 @@
 package activation
 
 import (
+	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/proving"
-	"github.com/spacemeshos/post/shared"
 	"sync"
 )
 
@@ -20,37 +20,39 @@ func DefaultConfig() config.Config {
 // based on a short benchmarking session.
 const BestProviderID = -1
 
-// DefaultPostOptions defines the default configuration for post options.
-func DefaultPostOptions() PostOptions {
+// DefaultPostInitOps defines the default options for post init.
+func DefaultPostInitOps() PostInitOpts {
 	cfg := DefaultConfig()
-	return PostOptions{
+	return PostInitOpts{
 		DataDir:           cfg.DataDir,
-		DataSize:          shared.DataSize(cfg.NumLabels, cfg.LabelSize),
-		Append:            false,
-		Throttle:          false,
+		NumUnits:          cfg.MinNumUnits + 1,
+		NumFiles:          cfg.NumFiles,
 		ComputeProviderID: BestProviderID,
+		Throttle:          false,
 	}
 }
 
-// PostOptions are the options used to initiate a post data creation session,
+// PostInitOpts are the options used to initiate a post data creation session,
 // either via the public smesher API, or on node launch (via cmd args).
-type PostOptions struct {
-	DataDir           string `mapstructure:"post-options-datadir"`
-	DataSize          uint64 `mapstructure:"post-options-datasize"`
-	Append            bool   `mapstructure:"post-options-append"`
-	Throttle          bool   `mapstructure:"post-options-throttle"`
-	ComputeProviderID int    `mapstructure:"post-options-provider-id"`
+type PostInitOpts struct {
+	DataDir           string `mapstructure:"post-init-datadir"`
+	NumUnits          uint   `mapstructure:"post-init-numunits"`
+	NumFiles          uint   `mapstructure:"post-init-numfiles"`
+	ComputeProviderID int    `mapstructure:"post-init-provider"`
+	Throttle          bool   `mapstructure:"post-init-throttle"`
 }
 
 // PostProvider defines the functionality required for the node's Smesher API.
 type PostProvider interface {
 	PostStatus() (*PostStatus, error)
 	PostComputeProviders() []initialization.ComputeProvider
-	CreatePostData(options *PostOptions) (chan struct{}, error)
+	CreatePostData(opts *PostInitOpts) (chan struct{}, error)
 	StopPostDataCreationSession(deleteFiles bool) error
 	PostDataCreationProgressStream() <-chan *PostStatus
 	InitCompleted() (chan struct{}, bool)
 	GenerateProof(challenge []byte) (*types.PoST, *types.PoSTMetadata, error)
+	LastErr() error
+	Config() config.Config
 }
 
 // A compile time check to ensure that PostManager fully implements the PostProvider interface.
@@ -61,7 +63,6 @@ type PostManager struct {
 	id []byte
 
 	cfg    config.Config
-	store  bytesStore
 	logger log.Log
 
 	stopMtx       sync.Mutex
@@ -73,6 +74,9 @@ type PostManager struct {
 	// init is the current initializer instance. It is being
 	// replaced at the beginning of every data creation session.
 	init *initialization.Initializer
+
+	lastOpts *PostInitOpts
+	lastErr  error
 
 	// startedChan indicates whether a data creation session has started.
 	// The channel instance is replaced in the end of the session.
@@ -90,12 +94,6 @@ const (
 	statusInProgress
 	statusCompleted
 )
-
-var postOptionsStoreKey = []byte("postOptions")
-
-var emptyStatus = &PostStatus{
-	FilesStatus: filesStatusNotFound,
-}
 
 type filesStatus int
 
@@ -116,77 +114,68 @@ const (
 
 // PostStatus indicates the a status regarding the post initialization.
 type PostStatus struct {
-	LastOptions    *PostOptions
-	FilesStatus    filesStatus
-	InitInProgress bool
-	BytesWritten   uint64
-	ErrorType      errorType
-	ErrorMessage   string
+	LastOpts         *PostInitOpts
+	FilesStatus      filesStatus
+	InitInProgress   bool
+	NumLabelsWritten uint64
+	ErrorType        errorType
+	ErrorMessage     string
 }
 
 // NewPostManager creates a new instance of PostManager.
-func NewPostManager(id []byte, cfg config.Config, store bytesStore, logger log.Log) (*PostManager, error) {
+func NewPostManager(id []byte, cfg config.Config, logger log.Log) (*PostManager, error) {
 	mgr := &PostManager{
 		id:                id,
-		cfg:               cfg,
-		store:             store,
+		cfg:               cfg, // LabelBatchSize, LabelSize, K1 & K2 will be used, others are to be overridden when calling to CreateDataSession.
 		logger:            logger,
 		initStatus:        statusIdle,
 		initCompletedChan: make(chan struct{}),
 		startedChan:       make(chan struct{}),
 	}
 
-	// Retrieve the last used options to override the configured datadir.
-	options, err := mgr.loadPostOptions()
-	if err != nil {
-		return nil, err
-	}
-	if options != nil {
-		mgr.cfg.DataDir = options.DataDir
-		mgr.cfg.NumLabels = shared.NumLabels(options.DataSize, mgr.cfg.LabelSize)
-	}
-
-	mgr.init, err = initialization.NewInitializer(&mgr.cfg, mgr.id)
-	if err != nil {
-		return nil, err
-	}
-
-	if completed, err := mgr.init.Completed(); err != nil {
-		return nil, err
-	} else if completed == true {
-		mgr.initStatus = statusCompleted
-		close(mgr.initCompletedChan)
-	}
-
-	return mgr, nil
-}
-
-// PostStatus returns the node's post data status.
-func (mgr *PostManager) PostStatus() (*PostStatus, error) {
-	options, err := mgr.loadPostOptions()
-	if err != nil {
-		return nil, err
-	}
-
-	if options == nil {
-		return emptyStatus, nil
-	}
-
-	// MERGE-2 FIX
+	//var err error
+	//mgr.init, err = initialization.NewInitializer(&mgr.cfg, mgr.id)
+	//if err != nil {
+	//	return nil, err
+	//}
 	//diskState, err := mgr.init.DiskState()
 	//if err != nil {
 	//	return nil, err
 	//}
-	status := &PostStatus{}
-	status.LastOptions = options
-	//status.BytesWritten = diskState.BytesWritten
 	//
-	//if mgr.initStatus == statusInProgress {
-	//	status.FilesStatus = filesStatusPartial
-	//	status.InitInProgress = true
-	//	return status, nil
+	//if diskState.InitState == initialization.InitStateCompleted {
+	//	mgr.initStatus = statusCompleted
+	//	close(mgr.initCompletedChan)
 	//}
-	//
+
+	return mgr, nil
+}
+
+var errNotInitialized = errors.New("not initialized")
+var errNotCompleted = errors.New("not completed")
+
+// PostStatus returns the node's post data status.
+func (mgr *PostManager) PostStatus() (*PostStatus, error) {
+	if mgr.init == nil {
+		return nil, errNotInitialized
+	}
+
+	numBytesWritten, err := mgr.init.NumBytesWritten()
+	if err != nil {
+		return nil, err
+	}
+	status := &PostStatus{}
+	status.LastOpts = mgr.lastOpts
+	status.NumLabelsWritten = numBytesWritten
+
+	if mgr.initStatus == statusInProgress {
+		status.FilesStatus = filesStatusPartial
+		status.InitInProgress = true
+		return status, nil
+	}
+
+	// MERGE-2 FIX -- NOT SPECIFYING FILES STATUS
+
 	//switch diskState.InitState {
 	//case initialization.InitStateNotStarted:
 	//	status.FilesStatus = filesStatusNotFound
@@ -224,8 +213,9 @@ func (mgr *PostManager) BestProvider() (*initialization.ComputeProvider, error) 
 }
 
 // CreatePostData starts (or continues) a data creation session.
-// It supports resuming a previously started session, as well as changing post options (e.g., data size) after initial setup.
-func (mgr *PostManager) CreatePostData(options *PostOptions) (chan struct{}, error) {
+// It supports resuming a previously started session, as well as changing post options (e.g., number of labels)
+// after initial setup.
+func (mgr *PostManager) CreatePostData(opts *PostInitOpts) (chan struct{}, error) {
 	mgr.initStatusMtx.Lock()
 	if mgr.initStatus == statusInProgress {
 		mgr.initStatusMtx.Unlock()
@@ -233,49 +223,52 @@ func (mgr *PostManager) CreatePostData(options *PostOptions) (chan struct{}, err
 	}
 	if mgr.initStatus == statusCompleted {
 		// Check whether the new request invalidates the current status.
-		var invalidate = options.DataDir != mgr.cfg.DataDir || shared.NumLabels(options.DataSize, mgr.cfg.LabelSize) != uint64(mgr.cfg.NumLabels)
+		var invalidate = opts.DataDir != mgr.lastOpts.DataDir || opts.NumUnits != mgr.lastOpts.NumUnits
 		if !invalidate {
 			mgr.initStatusMtx.Unlock()
-			return nil, fmt.Errorf("already completed")
+			//return nil, fmt.Errorf("already completed")
+			return mgr.doneChan, nil
 		}
 		mgr.initCompletedChan = make(chan struct{})
 	}
 	mgr.initStatus = statusInProgress
 	mgr.initStatusMtx.Unlock()
 
+	// Overriding the existing cfg with the new opts.
 	newCfg := mgr.cfg
-	newCfg.DataDir = options.DataDir
-	newCfg.NumLabels = shared.NumLabels(options.DataSize, mgr.cfg.LabelSize)
+	newCfg.DataDir = opts.DataDir
+	newCfg.NumUnits = opts.NumUnits
+	newCfg.NumFiles = opts.NumFiles
+
 	newInit, err := initialization.NewInitializer(&newCfg, mgr.id)
 	if err != nil {
 		mgr.initStatus = statusIdle
 		return nil, err
 	}
-	//if err := newInit.VerifyInitAllowed(); err != nil { MERGE-2 FIX
+
+	//if err := newInit.VerifyNotCompleted(); err != nil {
 	//	mgr.initStatus = statusIdle
 	//	return nil, err
 	//}
 
-	if options.ComputeProviderID == BestProviderID {
+	if opts.ComputeProviderID == BestProviderID {
 		p, err := mgr.BestProvider()
 		if err != nil {
 			return nil, err
 		}
 
-		mgr.logger.Info("Best compute provider found: id: %d, model: %v, computeAPI: %v", p.ID, p.Model, p.ComputeAPI)
-		options.ComputeProviderID = int(p.ID)
-	}
-
-	if err := mgr.storePostOptions(options); err != nil {
-		return nil, err
+		mgr.logger.Info("Found best compute provider: id: %d, model: %v, computeAPI: %v", p.ID, p.Model, p.ComputeAPI)
+		opts.ComputeProviderID = int(p.ID)
 	}
 
 	newInit.SetLogger(mgr.logger)
 	mgr.init = newInit
 	mgr.cfg = newCfg
+	mgr.lastOpts = opts
+	mgr.lastErr = nil
+
 	close(mgr.startedChan)
 	mgr.doneChan = make(chan struct{})
-
 	go func() {
 		defer func() {
 			mgr.startedChan = make(chan struct{})
@@ -283,23 +276,27 @@ func (mgr *PostManager) CreatePostData(options *PostOptions) (chan struct{}, err
 		}()
 
 		mgr.logger.With().Info("PoST initialization starting...",
-			log.String("datadir", options.DataDir),
-			log.String("numLabels", fmt.Sprintf("%d", options.DataSize)),
+			log.String("data_dir", opts.DataDir),
+			log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
+			log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
+			log.String("bits_per_label", fmt.Sprintf("%d", mgr.cfg.BitsPerLabel)),
 		)
 
-		if err := newInit.Initialize(uint(options.ComputeProviderID)); err != nil {
+		if err := newInit.Initialize(uint(opts.ComputeProviderID)); err != nil {
 			if err == initialization.ErrStopped {
 				mgr.logger.Info("PoST initialization stopped")
 			} else {
-				mgr.logger.Error("PoST initialization failed: %v", err)
+				mgr.lastErr = err
 			}
 			mgr.initStatus = statusIdle
 			return
 		}
 
 		mgr.logger.With().Info("PoST initialization completed",
-			log.String("datadir", options.DataDir),
-			log.String("numLabels", fmt.Sprintf("%d", options.DataSize)),
+			log.String("datadir", opts.DataDir),
+			log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
+			log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
+			log.String("bits_per_label", fmt.Sprintf("%d", mgr.cfg.BitsPerLabel)),
 		)
 
 		mgr.initStatus = statusCompleted
@@ -309,8 +306,8 @@ func (mgr *PostManager) CreatePostData(options *PostOptions) (chan struct{}, err
 	return mgr.doneChan, nil
 }
 
-// PostDataCreationProgressStream returns a stream of updates to post data file(s) during
-// the current or the upcoming data creation session.
+// PostDataCreationProgressStream returns a stream of updates regarding
+// the current or the upcoming post data creation session.
 func (mgr *PostManager) PostDataCreationProgressStream() <-chan *PostStatus {
 	// Wait for session to start because only then the initializer instance
 	// used for retrieving the progress updates is already set.
@@ -330,13 +327,14 @@ func (mgr *PostManager) PostDataCreationProgressStream() <-chan *PostStatus {
 				}
 			}
 
-			// Clone the first status and update relevant fields by using the channel updates.
+			// Clone the first status and update relevant fields by using the chan updates.
 			status := *firstStatus
-			status.BytesWritten = uint64(p * float64(status.LastOptions.DataSize))
+			status.NumLabelsWritten = uint64(p * float64(mgr.lastOpts.NumUnits*mgr.cfg.LabelsPerUnit))
 			if int(p) == 1 {
 				status.FilesStatus = filesStatusCompleted
 				status.InitInProgress = false
 			}
+
 			statusChan <- &status
 		}
 	}()
@@ -378,36 +376,34 @@ func (mgr *PostManager) InitCompleted() (chan struct{}, bool) {
 
 // GenerateProof generates a new PoST.
 func (mgr *PostManager) GenerateProof(challenge []byte) (*types.PoST, *types.PoSTMetadata, error) {
-	p, err := proving.NewProver(&mgr.cfg, mgr.id)
+	if mgr.initStatus != statusCompleted {
+		return nil, nil, errNotCompleted
+	}
+
+	prover, err := proving.NewProver(&mgr.cfg, mgr.id)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	p.SetLogger(mgr.logger)
-	proof, proofMetadata, err := p.GenerateProof(challenge)
-	return (*types.PoST)(proof), (*types.PoSTMetadata)(proofMetadata), err
+	prover.SetLogger(mgr.logger)
+	proof, proofMetadata, err := prover.GenerateProof(challenge)
+
+	p := (*types.PoST)(proof)
+
+	m := new(types.PoSTMetadata)
+	m.Challenge = proofMetadata.Challenge
+	m.BitsPerLabel = proofMetadata.BitsPerLabel
+	m.LabelsPerUnit = proofMetadata.LabelsPerUnit
+	m.K1 = proofMetadata.K1
+	m.K2 = proofMetadata.K2
+
+	return p, m, err
 }
 
-func (mgr *PostManager) storePostOptions(options *PostOptions) error {
-	b, err := types.InterfaceToBytes(options)
-	if err != nil {
-		return err
-	}
-
-	return mgr.store.Put(postOptionsStoreKey, b)
+func (mgr *PostManager) LastErr() error {
+	return mgr.lastErr
 }
 
-func (mgr *PostManager) loadPostOptions() (*PostOptions, error) {
-	b, err := mgr.store.Get(postOptionsStoreKey)
-	if err != nil || len(b) == 0 {
-		return nil, nil
-	}
-
-	val := &PostOptions{}
-	err = types.BytesToInterface(b, val)
-	if err != nil {
-		return nil, err
-	}
-
-	return val, nil
+func (mgr *PostManager) Config() config.Config {
+	return mgr.cfg
 }

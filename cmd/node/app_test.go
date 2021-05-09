@@ -583,11 +583,11 @@ func TestShutdown(t *testing.T) {
 	tempdir, _ := ioutil.TempDir("", "sm-test-post")
 	smApp.Config.POST = activation.DefaultConfig()
 	smApp.Config.POST.DataDir = tempdir
-	smApp.Config.POST.NumLabels = 1 << 10
-	smApp.Config.POST.LabelSize = 8
-	smApp.Config.PostOptions = activation.DefaultPostOptions()
-	smApp.Config.PostOptions.DataDir = tempdir
-	smApp.Config.PostOptions.ComputeProviderID = int(initialization.CPUProviderID())
+	smApp.Config.POST.BitsPerLabel = 8
+	smApp.Config.POST.LabelsPerUnit = 1 << 10
+	smApp.Config.PostInitOpts = activation.DefaultPostInitOps()
+	smApp.Config.PostInitOpts.DataDir = tempdir
+	smApp.Config.PostInitOpts.ComputeProviderID = int(initialization.CPUProviderID())
 
 	smApp.Config.HARE.N = 5
 	smApp.Config.HARE.F = 2

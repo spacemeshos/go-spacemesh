@@ -382,7 +382,7 @@ func (*PostAPIMock) PostComputeProviders() []initialization.ComputeProvider {
 	return nil
 }
 
-func (*PostAPIMock) CreatePostData(options *activation.PostOptions) (chan struct{}, error) {
+func (*PostAPIMock) CreatePostData(options *activation.PostInitOpts) (chan struct{}, error) {
 	return nil, nil
 }
 
@@ -405,7 +405,8 @@ func (*PostAPIMock) GenerateProof(challenge []byte) (*types.PoST, *types.PoSTMet
 	return nil, nil, nil
 }
 
-func (*PostAPIMock) SetLogger() {
+func (*PostAPIMock) LastErr() error {
+	return nil
 }
 
 // SmeshingAPIMock is a mock for Smeshing API.
@@ -418,7 +419,7 @@ func (*SmeshingAPIMock) Smeshing() bool {
 	return false
 }
 
-func (*SmeshingAPIMock) StartSmeshing(coinbase types.Address) error {
+func (*SmeshingAPIMock) StartSmeshing(*activation.PostInitOpts, types.Address) error {
 	return nil
 }
 
@@ -426,7 +427,7 @@ func (*SmeshingAPIMock) SmesherID() types.NodeID {
 	return nodeID
 }
 
-func (*SmeshingAPIMock) StopSmeshing() error {
+func (*SmeshingAPIMock) StopSmeshing(bool) error {
 	return nil
 }
 
@@ -1061,8 +1062,12 @@ func TestSmesherService(t *testing.T) {
 			require.Equal(t, codes.InvalidArgument, status.Code(err))
 		}},
 		{"StartSmeshing", func(t *testing.T) {
+			opts := &pb.PostInitOpts{}
+			coinbase := &pb.AccountId{Address: addr1.Bytes()}
+
 			res, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
-				Coinbase: &pb.AccountId{Address: addr1.Bytes()},
+				Opts:     opts,
+				Coinbase: coinbase,
 			})
 			require.NoError(t, err)
 			require.Equal(t, int32(code.Code_OK), res.Status.Code)
@@ -1107,27 +1112,9 @@ func TestSmesherService(t *testing.T) {
 			statusCode := status.Code(err)
 			require.Equal(t, codes.Unimplemented, statusCode)
 		}},
-		{"PostStatus", func(t *testing.T) {
-			_, err := c.PostStatus(context.Background(), &empty.Empty{})
-			require.NoError(t, err)
-		}},
 		{"PostComputeProviders", func(t *testing.T) {
 			_, err = c.PostComputeProviders(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
-		}},
-		{"CreatePostDataMissingArgs", func(t *testing.T) {
-			_, err := c.CreatePostData(context.Background(), &pb.CreatePostDataRequest{})
-			require.Equal(t, codes.InvalidArgument, status.Code(err))
-		}},
-		{"CreatePostData", func(t *testing.T) {
-			res, err := c.CreatePostData(context.Background(), &pb.CreatePostDataRequest{Data: &pb.PostData{}})
-			require.NoError(t, err)
-			require.Equal(t, int32(code.Code_OK), res.Status.Code)
-		}},
-		{"StopPostDataCreationSession", func(t *testing.T) {
-			res, err := c.StopPostDataCreationSession(context.Background(), &pb.StopPostDataCreationSessionRequest{})
-			require.NoError(t, err)
-			require.Equal(t, int32(code.Code_OK), res.Status.Code)
 		}},
 		{"PostDataCreationProgressStream", func(t *testing.T) {
 			stream, err := c.PostDataCreationProgressStream(context.Background(), &empty.Empty{})

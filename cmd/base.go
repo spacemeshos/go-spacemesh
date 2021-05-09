@@ -183,8 +183,8 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 			elem = reflect.ValueOf(&appCFG.POST).Elem()
 			assignFields(ff, elem, name)
 
-			ff = reflect.TypeOf(appCFG.PostOptions)
-			elem = reflect.ValueOf(&appCFG.PostOptions).Elem()
+			ff = reflect.TypeOf(appCFG.PostInitOpts)
+			elem = reflect.ValueOf(&appCFG.PostInitOpts).Elem()
 			assignFields(ff, elem, name)
 
 			ff = reflect.TypeOf(appCFG.LOGGING)

@@ -20,34 +20,27 @@ var (
 
 func TestPostManager(t *testing.T) {
 	req := require.New(t)
+	tempdir, _ := ioutil.TempDir("", "post-test")
 
-	cfg := *cfg
-	cfg.DataDir, _ = ioutil.TempDir("", "post-test")
-	store := NewMockDB()
-
-	mgr, err := NewPostManager(id, cfg, store, postLog)
+	mgr, err := NewPostManager(id, *cfg, postLog)
 	req.NoError(err)
 
-	// Check the initial status.
-	status, err := mgr.PostStatus()
-	req.NoError(err)
-	req.Equal(status, emptyStatus)
-
-	options := &PostOptions{
-		DataDir:           cfg.DataDir,
-		DataSize:          1 << 15,
+	opts := &PostInitOpts{
+		DataDir:           tempdir,
+		NumLabels:         1 << 15,
+		NumFiles:          1,
 		ComputeProviderID: int(initialization.CPUProviderID()),
 	}
 
 	var lastStatus = &PostStatus{}
 	go func() {
 		for status := range mgr.PostDataCreationProgressStream() {
-			req.Equal(options, status.LastOptions)
-			req.True(status.BytesWritten > lastStatus.BytesWritten)
+			req.Equal(opts, status.LastOpts)
+			req.True(status.NumLabelsWritten > lastStatus.NumLabelsWritten)
 			req.Empty(status.ErrorMessage)
 			req.Empty(status.ErrorType)
 
-			if status.BytesWritten == options.DataSize {
+			if status.NumLabelsWritten == shared.DataSize(opts.NumLabels, cfg.LabelSize) {
 				req.Equal(filesStatusCompleted, status.FilesStatus)
 				req.False(status.InitInProgress)
 			} else {
@@ -64,18 +57,18 @@ func TestPostManager(t *testing.T) {
 		}
 	}()
 
-	// Create PoST data.
-	doneChan, err := mgr.CreatePostData(options)
+	// Create data.
+	doneChan, err := mgr.CreatePostData(opts)
 	req.NoError(err)
 
 	// Compare the last status update to the status queried directly.
 	<-doneChan
-	status, err = mgr.PostStatus()
+	status, err := mgr.PostStatus()
 	req.NoError(err)
 	req.Equal(lastStatus, status)
 
 	// Try creating PoST data again.
-	doneChan, err = mgr.CreatePostData(options)
+	doneChan, err = mgr.CreatePostData(opts)
 	req.EqualError(err, "already completed")
 	req.Nil(doneChan)
 
@@ -84,7 +77,7 @@ func TestPostManager(t *testing.T) {
 	req.NoError(err)
 
 	// Try creating PoST data again.
-	doneChan, err = mgr.CreatePostData(options)
+	doneChan, err = mgr.CreatePostData(opts)
 	req.NoError(err)
 	<-doneChan
 
@@ -96,24 +89,14 @@ func TestPostManager(t *testing.T) {
 
 func TestPostManager_InitialStatus(t *testing.T) {
 	req := require.New(t)
+	tempdir, _ := ioutil.TempDir("", "post-test")
 
-	cfg := *cfg
-	cfg.DataDir, _ = ioutil.TempDir("", "post-test")
-	store := NewMockDB()
-
-	mgr, err := NewPostManager(id, cfg, store, postLog)
+	mgr, err := NewPostManager(id, *cfg, postLog)
 	req.NoError(err)
 
-	// Check initial status.
-	status, err := mgr.PostStatus()
-	req.NoError(err)
-	req.Equal(status, emptyStatus)
-
-	options := &PostOptions{
-		DataDir:           cfg.DataDir,
-		DataSize:          shared.DataSize(cfg.NumLabels, cfg.LabelSize),
-		ComputeProviderID: int(initialization.CPUProviderID()),
-	}
+	// Check the initial status.
+	_, err = mgr.PostStatus()
+	req.EqualError(err, errNotInitialized.Error())
 
 	var lastStatus = &PostStatus{}
 	go func() {
@@ -122,39 +105,75 @@ func TestPostManager_InitialStatus(t *testing.T) {
 		}
 	}()
 
-	// Create PoST data.
-	doneChan, err := mgr.CreatePostData(options)
+	// Create data.
+	doneChan, err := mgr.CreatePostData(&PostInitOpts{
+		DataDir:           tempdir,
+		NumLabels:         1 << 10,
+		NumFiles:          cfg.NumFiles,
+		ComputeProviderID: int(initialization.CPUProviderID()),
+	})
 	req.NoError(err)
 
 	// Compare the last status update to the status queried directly.
 	<-doneChan
-	status, err = mgr.PostStatus()
+	status, err := mgr.PostStatus()
 	req.NoError(err)
 	req.Equal(lastStatus, status)
 
 	// Re-instantiate PostManager.
-	mgr, err = NewPostManager(id, cfg, store, postLog)
+	mgr, err = NewPostManager(id, *cfg, postLog)
 	req.NoError(err)
 
 	// Check the initial status.
 	status, err = mgr.PostStatus()
+	req.EqualError(err, errNotInitialized.Error())
+}
+
+func TestPostManager_GenerateProof(t *testing.T) {
+	req := require.New(t)
+	tempdir, _ := ioutil.TempDir("", "post-test")
+	ch := make([]byte, 32)
+
+	mgr, err := NewPostManager(id, *cfg, postLog)
 	req.NoError(err)
-	req.Equal(lastStatus, status)
+
+	// Attempt to generate proof.
+	_, _, err = mgr.GenerateProof(ch)
+	req.EqualError(err, errNotCompleted.Error())
+
+	// Create data.
+	doneChan, err := mgr.CreatePostData(&PostInitOpts{
+		DataDir:           tempdir,
+		NumLabels:         1 << 10,
+		NumFiles:          cfg.NumFiles,
+		ComputeProviderID: int(initialization.CPUProviderID()),
+	})
+	req.NoError(err)
+
+	<-doneChan
+	_, _, err = mgr.GenerateProof(make([]byte, 32))
+	req.NoError(err)
+
+	// Re-instantiate PostManager.
+	mgr, err = NewPostManager(id, *cfg, postLog)
+	req.NoError(err)
+
+	// Attempt to generate proof.
+	_, _, err = mgr.GenerateProof(ch)
+	req.EqualError(err, errNotCompleted.Error())
 }
 
 func TestPostManager_Progress(t *testing.T) {
 	req := require.New(t)
+	tempdir, _ := ioutil.TempDir("", "post-test")
 
-	cfg := *cfg
-	cfg.DataDir, _ = ioutil.TempDir("", "post-test")
-	store := NewMockDB()
-
-	mgr, err := NewPostManager(id, cfg, store, postLog)
+	mgr, err := NewPostManager(id, *cfg, postLog)
 	req.NoError(err)
 
-	options := &PostOptions{
-		DataDir:           cfg.DataDir,
-		DataSize:          1 << 15,
+	opts := &PostInitOpts{
+		DataDir:           tempdir,
+		NumLabels:         1 << 15,
+		NumFiles:          1,
 		ComputeProviderID: int(initialization.CPUProviderID()),
 	}
 
@@ -171,9 +190,9 @@ func TestPostManager_Progress(t *testing.T) {
 		}
 	}()
 
-	// Create PoST data.
+	// Create data.
 	time.Sleep(1 * time.Second) // Short delay.
-	doneChan, err := mgr.CreatePostData(options)
+	doneChan, err := mgr.CreatePostData(opts)
 	req.NoError(err)
 	<-doneChan
 	wg.Wait()
@@ -195,8 +214,8 @@ func TestPostManager_Progress(t *testing.T) {
 		}
 	}()
 
-	// Create PoST data.
-	doneChan, err = mgr.CreatePostData(options)
+	// Create data.
+	doneChan, err = mgr.CreatePostData(opts)
 	req.NoError(err)
 	<-doneChan
 	wg.Wait()
@@ -204,32 +223,25 @@ func TestPostManager_Progress(t *testing.T) {
 
 func TestPostManager_Stop(t *testing.T) {
 	req := require.New(t)
+	tempdir, _ := ioutil.TempDir("", "post-test")
 
-	cfg := *cfg
-	cfg.DataDir, _ = ioutil.TempDir("", "post-test")
-	store := NewMockDB()
-
-	mgr, err := NewPostManager(id, cfg, store, postLog)
+	mgr, err := NewPostManager(id, *cfg, postLog)
 	req.NoError(err)
 
-	// Check initial status.
-	status, err := mgr.PostStatus()
-	req.NoError(err)
-	req.Equal(status, emptyStatus)
-
-	options := &PostOptions{
-		DataDir:           cfg.DataDir,
-		DataSize:          1 << 15,
+	opts := &PostInitOpts{
+		DataDir:           tempdir,
+		NumLabels:         1 << 15,
+		NumFiles:          1,
 		ComputeProviderID: int(initialization.CPUProviderID()),
 	}
 
-	// Create PoST data.
-	doneChan, err := mgr.CreatePostData(options)
+	// Create data.
+	doneChan, err := mgr.CreatePostData(opts)
 	req.NoError(err)
 	<-doneChan
 
 	// Try again.
-	doneChan, err = mgr.CreatePostData(options)
+	doneChan, err = mgr.CreatePostData(opts)
 	req.EqualError(err, "already completed")
 	req.Nil(doneChan)
 
@@ -238,7 +250,7 @@ func TestPostManager_Stop(t *testing.T) {
 	req.NoError(err)
 
 	// Try again.
-	doneChan, err = mgr.CreatePostData(options)
+	doneChan, err = mgr.CreatePostData(opts)
 	req.EqualError(err, "already completed")
 	req.Nil(doneChan)
 
@@ -247,51 +259,43 @@ func TestPostManager_Stop(t *testing.T) {
 	req.NoError(err)
 
 	// Try again.
-	doneChan, err = mgr.CreatePostData(options)
+	doneChan, err = mgr.CreatePostData(opts)
 	req.NoError(err)
 	<-doneChan
 
 	// Try again.
-	doneChan, err = mgr.CreatePostData(options)
+	doneChan, err = mgr.CreatePostData(opts)
 	req.EqualError(err, "already completed")
 	req.Nil(doneChan)
 }
 
 func TestPostManager_StopInProgress(t *testing.T) {
 	req := require.New(t)
+	tempdir, _ := ioutil.TempDir("", "post-test")
 
-	cfg := *cfg
-	cfg.DataDir, _ = ioutil.TempDir("", "post-test")
-	store := NewMockDB()
-
-	mgr, err := NewPostManager(id, cfg, store, postLog)
+	mgr, err := NewPostManager(id, *cfg, postLog)
 	req.NoError(err)
 
-	// Check initial status.
-	status, err := mgr.PostStatus()
-	req.NoError(err)
-	req.Equal(status, emptyStatus)
-
-	options := &PostOptions{
-		DataDir:           cfg.DataDir,
-		DataSize:          1 << 15,
+	opts := &PostInitOpts{
+		DataDir:           tempdir,
+		NumLabels:         1 << 15,
+		NumFiles:          1,
 		ComputeProviderID: int(initialization.CPUProviderID()),
 	}
 
-	// Create PoST data.
-	doneChan, err := mgr.CreatePostData(options)
+	// Create data.
+	doneChan, err := mgr.CreatePostData(opts)
 	req.NoError(err)
 
 	// Wait a bit for the init to progress.
 	time.Sleep(1 * time.Second)
 
 	// Check an intermediate status.
-	// MERGE-2 FIX -- TEST FAILURE
-	//status, err = mgr.PostStatus()
-	//req.NoError(err)
-	//req.Equal(options, status.LastOptions)
-	//req.True(status.InitInProgress)
-	//req.Equal(filesStatusPartial, status.FilesStatus)
+	status, err := mgr.PostStatus()
+	req.NoError(err)
+	req.Equal(opts, status.LastOpts)
+	req.True(status.InitInProgress)
+	req.Equal(filesStatusPartial, status.FilesStatus)
 
 	// Stop without files deletion.
 	err = mgr.StopPostDataCreationSession(false)
@@ -306,13 +310,13 @@ func TestPostManager_StopInProgress(t *testing.T) {
 	// Check status after stop.
 	status, err = mgr.PostStatus()
 	req.NoError(err)
-	req.Equal(options, status.LastOptions)
+	req.Equal(opts, status.LastOpts)
 	req.False(status.InitInProgress)
 	req.Equal(filesStatusPartial, status.FilesStatus)
-	req.True(status.BytesWritten > 0 && status.BytesWritten < options.DataSize)
+	req.True(status.NumLabelsWritten > 0 && status.NumLabelsWritten < shared.DataSize(opts.NumLabels, cfg.LabelSize))
 
 	// Continue creating PoST data.
-	doneChan, err = mgr.CreatePostData(options)
+	doneChan, err = mgr.CreatePostData(opts)
 	req.NoError(err)
 	<-doneChan
 }

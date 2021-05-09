@@ -1,6 +1,7 @@
 package grpcserver
 
 import (
+	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -42,17 +43,39 @@ func (s SmesherService) IsSmeshing(context.Context, *empty.Empty) (*pb.IsSmeshin
 func (s SmesherService) StartSmeshing(_ context.Context, in *pb.StartSmeshingRequest) (*pb.StartSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.StartSmeshing")
 
-	// TODO(moshababo): check why JSON request via HTTP gateway doesn't decode `coinbase` properly,
-	// see https://github.com/spacemeshos/api/issues/114
-
 	if in.Coinbase == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "`Coinbase` must be provided")
 	}
 
-	addr := types.BytesToAddress(in.Coinbase.Address)
-	if err := s.smeshing.StartSmeshing(addr); err != nil {
-		log.Error("failed to start smeshing: %v", err)
-		return nil, status.Error(codes.Internal, "failed to start smeshing")
+	if in.Opts == nil {
+		return nil, status.Error(codes.InvalidArgument, "`Opts` must be provided")
+	}
+
+	if in.Opts.DataDir == "" {
+		return nil, status.Error(codes.InvalidArgument, "`Opts.DataDir` must be provided")
+	}
+
+	if in.Opts.NumUnits == 0 {
+		return nil, status.Error(codes.InvalidArgument, "`Opts.NumUnits` must be provided")
+	}
+
+	if in.Opts.NumFiles == 0 {
+		return nil, status.Error(codes.InvalidArgument, "`Opts.NumFiles` must be provided")
+	}
+
+	coinbaseAddr := types.BytesToAddress(in.Coinbase.Address)
+	opts := &activation.PostInitOpts{
+		DataDir:           in.Opts.DataDir,
+		NumUnits:          uint(in.Opts.NumUnits),
+		NumFiles:          uint(in.Opts.NumFiles),
+		ComputeProviderID: int(in.Opts.ComputeProviderId),
+		Throttle:          in.Opts.Throttle,
+	}
+
+	if err := s.smeshing.StartSmeshing(coinbaseAddr, opts); err != nil {
+		err := fmt.Sprintf("failed to start smeshing: %v", err)
+		log.Error(err)
+		return nil, status.Error(codes.Internal, err)
 	}
 
 	return &pb.StartSmeshingResponse{
@@ -61,16 +84,64 @@ func (s SmesherService) StartSmeshing(_ context.Context, in *pb.StartSmeshingReq
 }
 
 // StopSmeshing requests that the node stop smeshing
-func (s SmesherService) StopSmeshing(context.Context, *pb.StopSmeshingRequest) (*pb.StopSmeshingResponse, error) {
+func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingRequest) (*pb.StopSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.StopSmeshing")
 
-	if err := s.smeshing.StopSmeshing(); err != nil {
-		log.Error("failed to stop smeshing: %v", err)
-		return nil, status.Error(codes.Internal, "failed to stop smeshing")
+	if err := s.smeshing.StopSmeshing(in.DeleteFiles); err != nil {
+		err := fmt.Sprintf("failed to stop smeshing: %v", err)
+		log.Error(err)
+		return nil, status.Error(codes.Internal, err)
 	}
+
 	return &pb.StopSmeshingResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
+}
+
+// PostComputeProviders returns a list of available post compute providers
+func (s SmesherService) PostComputeProviders(context.Context, *empty.Empty) (*pb.PostComputeProvidersResponse, error) {
+	log.Info("GRPC SmesherService.PostComputeProviders")
+
+	providers := s.post.PostComputeProviders()
+
+	res := &pb.PostComputeProvidersResponse{}
+	res.PostComputeProvider = make([]*pb.PostComputeProvider, len(providers))
+	for i, p := range providers {
+		hs, err := p.Benchmark()
+		if err != nil {
+			log.Error("failed to benchmark provider: %v", err)
+			return nil, status.Error(codes.Internal, "failed to benchmark provider")
+		}
+
+		res.PostComputeProvider[i] = &pb.PostComputeProvider{
+			Id:          uint32(p.ID),
+			Model:       p.Model,
+			ComputeApi:  pb.ComputeApiClass(p.ComputeAPI), // assuming enum values match.
+			Performance: uint64(hs),
+		}
+	}
+
+	return res, nil
+}
+
+// PostDataCreationProgressStream exposes a stream of updates during post init
+func (s SmesherService) PostDataCreationProgressStream(_ *empty.Empty, stream pb.SmesherService_PostDataCreationProgressStreamServer) error {
+	log.Info("GRPC SmesherService.PostDataCreationProgressStream")
+
+	statusChan := s.post.PostDataCreationProgressStream()
+	for {
+		select {
+		case status, more := <-statusChan:
+			if !more {
+				return nil
+			}
+			if err := stream.Send(&pb.PostDataCreationProgressStreamResponse{Status: statusToPbStatus(status)}); err != nil {
+				return err
+			}
+		case <-stream.Context().Done():
+			return nil
+		}
+	}
 }
 
 // SmesherID returns the smesher ID of this node
@@ -123,118 +194,33 @@ func (s SmesherService) EstimatedRewards(context.Context, *pb.EstimatedRewardsRe
 	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
 }
 
-// PostStatus returns post data status
-func (s SmesherService) PostStatus(context.Context, *empty.Empty) (*pb.PostStatusResponse, error) {
-	log.Info("GRPC SmesherService.PostStatus")
+// EstimatedRewards returns estimated smeshing rewards over the next epoch
+func (s SmesherService) Config(context.Context, *empty.Empty) (*pb.ConfigResponse, error) {
+	log.Info("GRPC SmesherService.Config")
 
-	postStatus, err := s.post.PostStatus()
-	if err != nil {
-		log.Error("failed retrieve post status: %v", err)
-		return nil, status.Error(codes.Internal, "failed retrieve post status")
-	}
-	return &pb.PostStatusResponse{Status: statusToPbStatus(postStatus)}, nil
-}
+	cfg := s.post.Config()
 
-// PostComputeProviders returns a list of available post compute providers
-func (s SmesherService) PostComputeProviders(context.Context, *empty.Empty) (*pb.PostComputeProvidersResponse, error) {
-	log.Info("GRPC SmesherService.PostComputeProviders")
-
-	providers := s.post.PostComputeProviders()
-
-	res := &pb.PostComputeProvidersResponse{}
-	res.PostComputeProvider = make([]*pb.PostComputeProvider, len(providers))
-	for i, p := range providers {
-		hs, err := p.Benchmark()
-		if err != nil {
-			log.Error("failed to benchmark provider: %v", err)
-			return nil, status.Error(codes.Internal, "failed to benchmark provider")
-		}
-
-		res.PostComputeProvider[i] = &pb.PostComputeProvider{
-			Id:          uint32(p.ID),
-			Model:       p.Model,
-			ComputeApi:  pb.ComputeApiClass(p.ComputeAPI), // assuming enum values match.
-			Performance: uint64(hs),
-		}
-	}
-
-	return res, nil
-}
-
-// CreatePostData requests that the node begin post init
-func (s SmesherService) CreatePostData(_ context.Context, in *pb.CreatePostDataRequest) (*pb.CreatePostDataResponse, error) {
-	log.Info("GRPC SmesherService.CreatePostData")
-
-	if in.Data == nil {
-		return nil, status.Error(codes.InvalidArgument, "`Data` must be provided")
-	}
-
-	if _, err := s.post.CreatePostData(&activation.PostOptions{
-		DataDir:           in.Data.Path,
-		DataSize:          in.Data.DataSize,
-		Append:            in.Data.Append,
-		Throttle:          in.Data.Throttle,
-		ComputeProviderID: int(in.Data.ProviderId),
-	}); err != nil {
-		log.Error("failed to start creating post data: %v", err)
-		return nil, status.Error(codes.Internal, "failed to start creating post data")
-	}
-
-	return &pb.CreatePostDataResponse{
-		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
+	return &pb.ConfigResponse{
+		BitsPerLabel:  uint32(cfg.BitsPerLabel),
+		LabelsPerUnit: uint64(cfg.LabelsPerUnit),
+		MinNumUnits:   uint32(cfg.MinNumUnits),
+		MaxNumUnits:   uint32(cfg.MaxNumUnits),
 	}, nil
-}
-
-// StopPostDataCreationSession requests that the node stop ongoing post data creation
-func (s SmesherService) StopPostDataCreationSession(_ context.Context, in *pb.StopPostDataCreationSessionRequest) (*pb.StopPostDataCreationSessionResponse, error) {
-	log.Info("GRPC SmesherService.StopPostDataCreationSession")
-
-	if err := s.post.StopPostDataCreationSession(in.DeleteFiles); err != nil {
-		log.Error("failed to stop post data creation session: %v", err)
-		return nil, status.Error(codes.Internal, "failed to stop")
-	}
-
-	return &pb.StopPostDataCreationSessionResponse{
-		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
-	}, nil
-
-}
-
-// STREAMS
-
-// PostDataCreationProgressStream exposes a stream of updates during post init
-func (s SmesherService) PostDataCreationProgressStream(_ *empty.Empty, stream pb.SmesherService_PostDataCreationProgressStreamServer) error {
-	log.Info("GRPC SmesherService.PostDataCreationProgressStream")
-
-	statusChan := s.post.PostDataCreationProgressStream()
-	for {
-		select {
-		case status, more := <-statusChan:
-			if !more {
-				return nil
-			}
-			if err := stream.Send(&pb.PostDataCreationProgressStreamResponse{Status: statusToPbStatus(status)}); err != nil {
-				return err
-			}
-		case <-stream.Context().Done():
-			return nil
-		}
-	}
 }
 
 func statusToPbStatus(status *activation.PostStatus) *pb.PostStatus {
 	pbStatus := &pb.PostStatus{}
 	pbStatus.InitInProgress = status.InitInProgress
-	pbStatus.BytesWritten = status.BytesWritten
+	pbStatus.LabelsWritten = status.NumLabelsWritten
 	pbStatus.ErrorType = pb.PostStatus_ErrorType(status.ErrorType) // assuming enum values match.
 	pbStatus.ErrorMessage = status.ErrorMessage
-	if status.LastOptions != nil {
-		pbStatus.PostData = &pb.PostData{
-			Path:       status.LastOptions.DataDir,
-			DataSize:   status.LastOptions.DataSize,
-			Append:     status.LastOptions.Append,
-			Throttle:   status.LastOptions.Throttle,
-			ProviderId: uint32(status.LastOptions.ComputeProviderID),
+	if status.LastOpts != nil {
+		pbStatus.LastOpts = &pb.PostInitOpts{
+			DataDir:           status.LastOpts.DataDir,
+			NumUnits:          uint32(status.LastOpts.NumUnits),
+			NumFiles:          uint32(status.LastOpts.NumFiles),
+			ComputeProviderId: uint32(status.LastOpts.ComputeProviderID),
+			Throttle:          status.LastOpts.Throttle,
 		}
 	}
 	return pbStatus

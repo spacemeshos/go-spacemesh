@@ -8,7 +8,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
-	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"testing"
@@ -41,7 +40,7 @@ func (p *postProviderMock) PostComputeProviders() []initialization.ComputeProvid
 	return nil
 }
 
-func (p *postProviderMock) CreatePostData(options *PostOptions) (chan struct{}, error) {
+func (p *postProviderMock) CreatePostData(options *PostInitOpts) (chan struct{}, error) {
 	return nil, nil
 }
 
@@ -137,7 +136,7 @@ func TestInitializePost(t *testing.T) {
 
 	var postProvider PostProvider
 	var err error
-	postProvider, err = NewPostManager(minerID, *cfg, database.NewMemDatabase(), log.NewDefault(string(minerID)))
+	postProvider, err = NewPostManager(minerID, *cfg, log.NewDefault(string(minerID)))
 	assert.NoError(err)
 	assert.NotNil(postProvider)
 
@@ -148,12 +147,12 @@ func TestInitializePost(t *testing.T) {
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 	datadir, _ := ioutil.TempDir("", "post-test")
 
-	options := &PostOptions{
+	done, err := postProvider.CreatePostData(&PostInitOpts{
 		DataDir:           datadir,
-		DataSize:          1 << 15,
+		NumLabels:         1 << 15,
+		NumFiles:          1,
 		ComputeProviderID: int(initialization.CPUProviderID()),
-	}
-	done, err := postProvider.CreatePostData(options)
+	})
 	assert.NoError(err)
 	<-done
 	defer func() {
@@ -192,7 +191,7 @@ func buildNIPoST(r *require.Assertions, postCfg config.Config, nipostChallenge t
 	}()
 
 	var postProvider PostProvider
-	postProvider, err = NewPostManager(minerID, postCfg, database.NewMemDatabase(), log.NewDefault(string(minerID)))
+	postProvider, err = NewPostManager(minerID, postCfg, log.NewDefault(string(minerID)))
 	r.NoError(err)
 	r.NotNil(postProvider)
 	defer func() {
@@ -200,12 +199,12 @@ func buildNIPoST(r *require.Assertions, postCfg config.Config, nipostChallenge t
 		r.NoError(err)
 	}()
 
-	options := &PostOptions{
+	done, err := postProvider.CreatePostData(&PostInitOpts{
 		DataDir:           postCfg.DataDir,
-		DataSize:          shared.DataSize(postCfg.NumLabels, postCfg.LabelSize),
+		NumLabels:         postCfg.NumLabels,
+		NumFiles:          postCfg.NumFiles,
 		ComputeProviderID: int(initialization.CPUProviderID()),
-	}
-	done, err := postProvider.CreatePostData(options)
+	})
 	r.NoError(err)
 	<-done
 
@@ -230,9 +229,8 @@ func TestNewNIPoSTBuilderNotInitialized(t *testing.T) {
 
 	cfg := *cfg
 	cfg.DataDir, _ = ioutil.TempDir("", "post-test")
-	store := NewMockDB()
 
-	postProvider, err := NewPostManager(minerIDNotInitialized, cfg, store, postLog)
+	postProvider, err := NewPostManager(minerIDNotInitialized, cfg, postLog)
 	r.NoError(err)
 
 	poetProver, err := NewHTTPPoetHarness(true)
@@ -250,12 +248,12 @@ func TestNewNIPoSTBuilderNotInitialized(t *testing.T) {
 	r.EqualError(err, "PoST init not completed")
 	r.Nil(npst)
 
-	options := &PostOptions{
+	done, err := postProvider.CreatePostData(&PostInitOpts{
 		DataDir:           cfg.DataDir,
-		DataSize:          1 << 15,
+		NumLabels:         1 << 15,
+		NumFiles:          1,
 		ComputeProviderID: int(initialization.CPUProviderID()),
-	}
-	done, err := postProvider.CreatePostData(options)
+	})
 	defer func() {
 		err := postProvider.StopPostDataCreationSession(true)
 		r.NoError(err)
