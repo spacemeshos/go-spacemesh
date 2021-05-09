@@ -147,6 +147,8 @@ def set_namespace(request, session_id, load_config, delete_ns):
     body = client.V1Namespace()
     body.metadata = client.V1ObjectMeta(name=testconfig['namespace'])
     v1.create_namespace(body)
+    # pytest considers any code after `yield` to be teardown code
+    # see: https://docs.pytest.org/en/reorganize-docs/yieldfixture.html
     yield
     # delete namespace if was not mentioned otherwise in the command line args and if global arg is set to
     # True (pytest.delete_namespace)
@@ -261,6 +263,8 @@ def start_poet(init_session, add_curl, setup_bootstrap):
 
 @pytest.fixture(scope='module')
 def save_log_on_exit(request):
+    # pytest considers any code after `yield` to be teardown code
+    # see: https://docs.pytest.org/en/reorganize-docs/yieldfixture.html
     yield
     if testconfig['script_on_exit'] != '' and request.session.testsfailed == 1:
         p = subprocess.Popen([testconfig['script_on_exit'], testconfig['namespace']],
@@ -289,6 +293,8 @@ def add_node_pool(session_id):
     print(f"total time waiting for clients node pool creation: {time_elapsed}")
     # wait for fluent bit daemonset to be ready after node pool creation
     wait_for_daemonset_to_be_ready("fluent-bit", session_id, timeout=60)
+    # pytest considers any code after `yield` to be teardown code
+    # see: https://docs.pytest.org/en/reorganize-docs/yieldfixture.html
     yield time_elapsed
     _, time_elapsed = deployer.remove_node_pool()
     print(f"total time waiting for clients node pool deletion: {time_elapsed}")
@@ -302,6 +308,8 @@ def add_elk(init_session, request):
     add_fluent_bit_cluster(init_session)
     add_kibana_cluster(init_session)
     wait_for_elk_cluster_ready(init_session)
+    # pytest considers any code after `yield` to be teardown code
+    # see: https://docs.pytest.org/en/reorganize-docs/yieldfixture.html
     yield
     fluent_bit_teardown(init_session)
     # in case the dumping process has failed the namespace won't be deleted if delete_namespace (global) is set to False
