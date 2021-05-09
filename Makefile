@@ -35,6 +35,16 @@ else
         DOCKER_IMAGE_REPO := go-spacemesh-dev
 endif
 
+# setting extra command line params for the CI tests pytest commands
+ifdef namespace
+    EXTRA_PARAMS:=$(EXTRA_PARAMS) --namespace=$(namespace)
+endif
+
+ifdef delns
+    EXTRA_PARAMS:=$(EXTRA_PARAMS) --delns=$(delns)
+endif
+
+
 # This prevents "the input device is not a TTY" error from docker in CI
 DOCKERRUNARGS := --rm -e ES_PASSWD="$(ES_PASSWD)" \
 	-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
@@ -260,22 +270,6 @@ DELIM=::
 endif
 
 
-get-namespace-cmd-arg:
-ifdef namespace
-    EXTRA_PARAMS:=$(EXTRA_PARAMS) --namespace=$(namespace)
-endif
-.PHONY: get-namespace-cmd-arg
-
-get-delns-cmd-arg:
-ifdef delns
-    EXTRA_PARAMS:=$(EXTRA_PARAMS) --delns=$(delns)
-endif
-.PHONY: get-delns-cmd-arg
-
-
-get_extra_params: get-namespace-cmd-arg get-delns-cmd-arg
-
-
 dockerrun-p2p-elk:
 ifndef ES_PASS
 	$(error ES_PASS is not set)
@@ -283,7 +277,7 @@ endif
 	$(DOCKERRUN) pytest -s -v p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 .PHONY: dockerrun-p2p-elk
 
-dockertest-p2p-elk: dockerbuild-test-elk get_extra_params dockerrun-p2p-elk
+dockertest-p2p-elk: dockerbuild-test-elk dockerrun-p2p-elk
 .PHONY: dockertest-p2p-elk
 
 
@@ -294,7 +288,7 @@ endif
 	$(DOCKERRUN) pytest -s -v test_bs.py --tc-file=config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 .PHONY: dockerrun-mining-elk
 
-dockertest-mining-elk: dockerbuild-test-elk get_extra_params dockerrun-mining-elk
+dockertest-mining-elk: dockerbuild-test-elk dockerrun-mining-elk
 .PHONY: dockertest-mining-elk
 
 
@@ -306,7 +300,7 @@ endif
 .PHONY: dockerrun-hare-elk
 
 
-dockertest-hare-elk: dockerbuild-test-elk get_extra_params dockerrun-hare-elk
+dockertest-hare-elk: dockerbuild-test-elk dockerrun-hare-elk
 .PHONY: dockertest-hare-elk
 
 
@@ -319,7 +313,7 @@ endif
 
 .PHONY: dockerrun-sync-elk
 
-dockertest-sync-elk: dockerbuild-test-elk get_extra_params dockerrun-sync-elk
+dockertest-sync-elk: dockerbuild-test-elk dockerrun-sync-elk
 .PHONY: dockertest-sync-elk
 
 
@@ -332,7 +326,7 @@ endif
 
 .PHONY: dockerrun-late-nodes-elk
 
-dockertest-late-nodes-elk: dockerbuild-test-elk get_extra_params dockerrun-late-nodes-elk
+dockertest-late-nodes-elk: dockerbuild-test-elk dockerrun-late-nodes-elk
 .PHONY: dockertest-late-nodes-elk
 
 
@@ -345,7 +339,7 @@ endif
 
 .PHONY: dockerrun-genesis-voting-elk
 
-dockertest-genesis-voting-elk: dockerbuild-test-elk get_extra_params dockerrun-genesis-voting-elk
+dockertest-genesis-voting-elk: dockerbuild-test-elk dockerrun-genesis-voting-elk
 .PHONY: dockertest-genesis-voting-elk
 
 
@@ -358,7 +352,7 @@ endif
 
 .PHONY: dockerrun-blocks-add-node-elk
 
-dockertest-blocks-add-node-elk: dockerbuild-test-elk get_extra_params dockerrun-blocks-add-node-elk
+dockertest-blocks-add-node-elk: dockerbuild-test-elk dockerrun-blocks-add-node-elk
 .PHONY: dockertest-blocks-add-node-elk
 
 
@@ -371,7 +365,7 @@ endif
 
 .PHONY: dockerrun-blocks-remove-node-elk
 
-dockertest-blocks-remove-node-elk: dockerbuild-test-elk get_extra_params dockerrun-blocks-remove-node-elk
+dockertest-blocks-remove-node-elk: dockerbuild-test-elk dockerrun-blocks-remove-node-elk
 .PHONY: dockertest-blocks-remove-node-elk
 
 
