@@ -387,6 +387,9 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 				logger.Debug("not synced yet, not building a block in this round")
 				continue
 			}
+			if layerID.GetEpoch().IsGenesis() {
+				continue
+			}
 
 			atxID, proofs, atxs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
