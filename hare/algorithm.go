@@ -236,13 +236,6 @@ func (proc *consensusProcess) Start(ctx context.Context) error {
 		return startInstanceError(errors.New("instance already started"))
 	}
 
-	/*
-		if proc.s.Size() == 0 { // empty set is not valid
-			logger.Error("consensusProcess cannot be started with an empty set")
-			return startInstanceError(errors.New("instance started with an empty set"))
-		}
-	*/
-
 	if proc.inbox == nil { // no inbox
 		logger.Error("consensusProcess cannot be started with nil inbox")
 		return startInstanceError(errors.New("instance started with nil inbox"))
@@ -790,7 +783,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 		log.Int("set_size", proc.s.Size()), log.Int32("K", proc.k))
 	proc.report(completed)
 	proc.terminating = true
-	//close(proc.CloseChannel())
+	close(proc.CloseChannel())
 }
 
 func (proc *consensusProcess) currentRound() int {
