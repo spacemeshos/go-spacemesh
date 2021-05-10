@@ -147,20 +147,24 @@ func buildMessage(msg *Message) *Msg {
 }
 
 func buildBroker(net NetworkService, testName string) *Broker {
-	return newBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil},
+	return newBroker(net, &mockEligibilityValidator{valid: true}, MockStateQuerier{true, nil},
 		(&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, Closer{make(chan struct{})}, log.NewDefault(testName))
 }
 
 func buildBrokerLimit4(net NetworkService, testName string) *Broker {
-	return newBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil},
+	return newBroker(net, &mockEligibilityValidator{valid: true}, MockStateQuerier{true, nil},
 		(&mockSyncer{true}).IsSynced, 10, 4, Closer{make(chan struct{})}, log.NewDefault(testName))
 }
 
 type mockEligibilityValidator struct {
-	valid bool
+	valid        bool
+	validationFn func(context.Context, *Msg) bool
 }
 
-func (mev *mockEligibilityValidator) Validate(context.Context, *Msg) bool {
+func (mev *mockEligibilityValidator) Validate(ctx context.Context, msg *Msg) bool {
+	if mev.validationFn != nil {
+		return mev.validationFn(ctx, msg)
+	}
 	return mev.valid
 }
 
@@ -182,11 +186,13 @@ func TestConsensusProcess_Start(t *testing.T) {
 	broker := buildBroker(n1, t.Name())
 	broker.Start(context.TODO())
 	proc := generateConsensusProcess(t)
-	proc.s = NewDefaultEmptySet()
 	inbox, _ := broker.Register(context.TODO(), proc.ID())
 	proc.SetInbox(inbox)
-	//err := proc.Start(context.TODO())
-	//assert.Equal(t, "instance started with an empty set", err.Error())
+	/*
+	proc.s = NewDefaultEmptySet()
+	err := proc.Start(context.TODO())
+	assert.Equal(t, "instance started with an empty set", err.Error())
+	*/
 	proc.s = NewSetFromValues(value1)
 	err := proc.Start(context.TODO())
 	assert.Equal(t, nil, err)
