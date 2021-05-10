@@ -10,9 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spacemeshos/amcl"
-	"github.com/spacemeshos/amcl/BLS381"
-
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/collector"
@@ -215,7 +212,7 @@ type network interface {
 
 // InitSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
-func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network) (*SpacemeshApp, error) {
+func InitSingleInstance(cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network) (*SpacemeshApp, error) {
 	smApp := NewSpacemeshApp()
 	smApp.Config = &cfg
 	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
@@ -223,8 +220,10 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.
 	edSgn := signing.NewEdSigner()
 	pub := edSgn.PublicKey()
 
-	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
-	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
+	vrfSigner, vrfPub, err := signing.NewVRFSigner(pub.Bytes())
+	if err != nil {
+		return nil, err
+	}
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
 
 	swarm := net.NewNode()
@@ -269,7 +268,6 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	}()
 
 	rolacle := eligibility.New()
-	rng := BLS381.DefaultSeed()
 	gTime, err := time.Parse(time.RFC3339, genesisTime)
 	if err != nil {
 		log.Error("cannot parse genesis time %v", err)
@@ -286,7 +284,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := path + string(name)
 		database.SwitchCreationContext(dbStorepath, string(name))
-		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net)
+		smApp, err := InitSingleInstance(*cfg, i, genesisTime, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net)
 		if err != nil {
 			log.Error("cannot run multi node %v", err)
 			return
