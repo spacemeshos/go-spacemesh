@@ -74,22 +74,20 @@ func (fq *fetchQueue) shutdownRecover() {
 
 //todo batches
 func (fq *fetchQueue) work(ctx context.Context) {
-	logger := fq.WithContext(ctx)
 	defer fq.shutdownRecover()
 	parallelWorkers := runtime.NumCPU()
 	output := fetchWithFactory(ctx, newFetchWorker(ctx, fq.workerInfra, parallelWorkers, fq.batchRequestFactory, fq.queue, fq.name))
-	logger.With().Debug("parallel fetching with worker factory",
+	fq.WithContext(ctx).With().Debug("parallel fetching with worker factory",
 		log.Int("num_workers", parallelWorkers),
 		log.String("queue", fmt.Sprint(fq.queue)),
 		log.String("queue_name", fq.name))
 	wg := sync.WaitGroup{}
 	wg.Add(parallelWorkers)
 	for i := 0; i < parallelWorkers; i++ {
-		go func(j int) {
-			logger := logger.WithFields(log.Int("worker_num", j))
+		go func(j int, ctxLocal context.Context) {
+			logger := fq.WithContext(ctx).WithFields(log.Int("worker_num", j))
 			logger.Info("worker running work")
 			for out := range output {
-				ctxLocal := ctx
 				loggerLocal := logger
 				loggerLocal.Info("new batch out of queue")
 				if out == nil {
@@ -108,10 +106,10 @@ func (fq *fetchQueue) work(ctx context.Context) {
 					loggerLocal.Warning("got fetch work job with no requestID")
 				} else {
 					ctxLocal = log.WithRequestID(ctxLocal, bjb.reqID)
-					loggerLocal = loggerLocal.WithContext(ctx)
+					loggerLocal = loggerLocal.WithContext(ctxLocal)
 				}
 
-				loggerLocal.Debug("got ids from worker", log.Int("count", len(bjb.ids)))
+				loggerLocal.With().Debug("got ids from worker", log.Int("count", len(bjb.ids)))
 				if len(bjb.ids) == 0 {
 					break
 				}
@@ -122,10 +120,8 @@ func (fq *fetchQueue) work(ctx context.Context) {
 				fq.handleFetch(ctxLocal, bjb)
 				loggerLocal.Info("done fetching, going to next batch")
 			}
-			wg.Done()
-		}(i)
+		}(i, ctx)
 	}
-	wg.Wait()
 }
 
 func (fq *fetchQueue) addToPendingGetCh(ctx context.Context, ids []types.Hash32) chan bool {
@@ -223,7 +219,7 @@ func newTxQueue(ctx context.Context, s *Syncer) *txQueue {
 	return q
 }
 
-//we could get rid of this if we had a unified id type
+// HandleTxs we could get rid of this if we had a unified id type
 func (tx txQueue) HandleTxs(ctx context.Context, txids []types.TransactionID) ([]*types.Transaction, error) {
 	ctx = log.WithNewRequestID(ctx)
 	logger := tx.Log.WithContext(ctx)
@@ -321,17 +317,17 @@ func (atx atxQueue) HandleAtxs(ctx context.Context, atxids []types.ATXID) ([]*ty
 	return atxs, nil
 }
 
-func updateAtxDependencies(ctx context.Context, invalidate func(id types.Hash32, valid bool), sValidateAtx sValidateAtxFunc, fetchAtxRefs sFetchAtxFunc, atxDB atxDB, fetchProof fetchPoetProofFunc, logger log.Log) func(context.Context, fetchJob) {
+func updateAtxDependencies(_ context.Context, invalidate func(id types.Hash32, valid bool), sValidateAtx sValidateAtxFunc, fetchAtxRefs sFetchAtxFunc, atxDB atxDB, fetchProof fetchPoetProofFunc, logger log.Log) func(context.Context, fetchJob) {
 	return func(ctx context.Context, fj fetchJob) {
-		lgr := logger.WithContext(ctx)
 		// restore reqID from context
 		if fj.reqID == "" {
-			lgr.WithContext(ctx).Warning("got fetch job result with no requestID")
+			logger = logger.WithContext(ctx)
+			logger.Warning("got fetch job result with no requestID")
 		} else {
 			ctx = log.WithRequestID(ctx, fj.reqID)
-			lgr = lgr.WithContext(ctx)
+			logger = logger.WithContext(ctx)
 		}
-		fetchProofCalcID(ctx, lgr, fetchProof, fj)
+		fetchProofCalcID(ctx, logger, fetchProof, fj)
 
 		mp := map[types.Hash32]*types.ActivationTx{}
 		for _, item := range fj.items {
@@ -340,7 +336,7 @@ func updateAtxDependencies(ctx context.Context, invalidate func(id types.Hash32,
 		}
 
 		for _, id := range fj.ids {
-			lgrLocal := lgr.WithContext(ctx).WithFields(log.String("job_id", id.String()))
+			lgrLocal := logger.WithFields(log.String("job_id", id.String()))
 			if atx, ok := mp[id]; ok {
 				lgrLocal.With().Info("update atx dependencies queue work item", atx.ID())
 				if err := fetchAtxRefs(ctx, atx); err != nil {

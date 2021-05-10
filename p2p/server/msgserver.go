@@ -121,10 +121,12 @@ func (p *MessageServer) readLoop(ctx context.Context) {
 	}
 }
 
-// clean stale messages after requests life time expire.
+// clean stale messages after request life time expires
 func (p *MessageServer) cleanStaleMessages() {
 	for {
 		p.pendMutex.RLock()
+		p.With().Debug("checking for stale messages in msgserver queue",
+			log.Int("queue_length", p.pendingQueue.Len()))
 		elem := p.pendingQueue.Front()
 		p.pendMutex.RUnlock()
 		if elem != nil {
@@ -156,11 +158,11 @@ func (p *MessageServer) removeFromPending(reqID uint64) {
 		next = e.Next()
 		if reqID == e.Value.(Item).id {
 			p.pendingQueue.Remove(e)
-			p.With().Debug("removed request", log.Uint64("req_id", reqID))
+			p.With().Debug("removed request", log.Uint64("p2p_request_id", reqID))
 			break
 		}
 	}
-	p.With().Debug("delete request result handler", log.Uint64("req_id", reqID))
+	p.With().Debug("delete request result handler", log.Uint64("p2p_request_id", reqID))
 	delete(p.resHandlers, reqID)
 	p.pendMutex.Unlock()
 }
@@ -181,9 +183,9 @@ func (p *MessageServer) handleRequestMessage(ctx context.Context, msg Message, d
 	foo, okFoo := p.msgRequestHandlers[MessageType(data.MsgType)]
 	if !okFoo {
 		logger.With().Error("handler missing for request",
-			log.Uint64("req_id", data.ReqID),
+			log.Uint64("p2p_request_id", data.ReqID),
 			log.String("protocol", p.name),
-			log.Uint32("msg_type", data.MsgType))
+			log.Uint32("p2p_msg_type", data.MsgType))
 		return
 	}
 
@@ -198,8 +200,8 @@ func (p *MessageServer) handleRequestMessage(ctx context.Context, msg Message, d
 func (p *MessageServer) handleResponseMessage(ctx context.Context, headers *service.DataMsgWrapper) {
 	logger := p.WithContext(ctx)
 
-	//get and remove from pendingMap
-	logger.With().Debug("handleResponseMessage", log.Uint64("req_id", headers.ReqID))
+	// get and remove from pendingMap
+	logger.With().Debug("handleResponseMessage", log.Uint64("p2p_request_id", headers.ReqID))
 	p.pendMutex.RLock()
 	foo, okFoo := p.resHandlers[headers.ReqID]
 	p.pendMutex.RUnlock()
@@ -207,7 +209,7 @@ func (p *MessageServer) handleResponseMessage(ctx context.Context, headers *serv
 	if okFoo {
 		foo.okCallback(headers.Payload)
 	} else {
-		logger.With().Error("can't find handler", log.Uint64("req_id", headers.ReqID))
+		logger.With().Error("can't find handler", log.Uint64("p2p_request_id", headers.ReqID))
 	}
 	logger.Debug("handleResponseMessage close")
 }
@@ -232,6 +234,12 @@ func (p *MessageServer) RegisterBytesMsgHandler(msgType MessageType, reqHandler 
 // SendRequest sends a request of a specific message.
 func (p *MessageServer) SendRequest(ctx context.Context, msgType MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), timeoutHandler func(err error)) error {
 	reqID := p.newReqID()
+
+	// Add requestID to context
+	ctx = log.WithNewRequestID(ctx,
+		log.Uint64("p2p_request_id", reqID),
+		log.Uint32("p2p_msg_type", uint32(msgType)),
+		log.FieldNamed("recipient", address))
 	p.pendMutex.Lock()
 	p.resHandlers[reqID] = ResponseHandlers{resHandler, timeoutHandler}
 	p.pendingQueue.PushBack(Item{id: reqID, timestamp: time.Now()})
@@ -239,17 +247,16 @@ func (p *MessageServer) SendRequest(ctx context.Context, msgType MessageType, pa
 	msg := &service.DataMsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
 	if sendErr := p.network.SendWrappedMessage(ctx, address, p.name, msg); sendErr != nil {
 		p.WithContext(ctx).With().Error("sending message failed",
-			log.Uint32("msg_type", uint32(msgType)),
-			log.FieldNamed("recipient", address),
 			log.Int("msglen", len(payload)),
 			log.Err(sendErr))
 		p.removeFromPending(reqID)
 		return sendErr
 	}
-	p.WithContext(ctx).With().Debug("sent request", log.Uint64("req_id", reqID))
+	p.WithContext(ctx).Debug("sent request")
 	return nil
 }
 
+// TODO: make these longer, and random, to make it easier to find them in the logs
 func (p *MessageServer) newReqID() uint64 {
 	return atomic.AddUint64(&p.ReqID, 1)
 }

@@ -6,6 +6,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/stretchr/testify/require"
+	"runtime"
 	"testing"
 	"time"
 
@@ -71,7 +73,7 @@ func TestBlockListener_TestTxQueue(t *testing.T) {
 	block1.TxIDs = []types.TransactionID{id1, id2, id3}
 	block1.Initialize()
 	addTxsToPool(bl2.txpool, []*types.Transaction{tx1, tx2, tx3})
-	bl2.AddBlockWithTxs(block1)
+	bl2.AddBlockWithTxs(context.TODO(), block1)
 
 	ch := queue.addToPendingGetCh(context.TODO(), []types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32()})
 	timeout := time.After(1 * time.Second)
@@ -157,7 +159,7 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 	bl2.atxDb.ProcessAtx(atx1)
 	bl2.atxDb.ProcessAtx(atx2)
 	bl2.atxDb.ProcessAtx(atx3)
-	bl2.AddBlockWithTxs(block1)
+	bl2.AddBlockWithTxs(context.TODO(), block1)
 
 	ch := queue.addToPendingGetCh(context.TODO(), []types.Hash32{atx1.Hash32(), atx2.Hash32(), atx3.Hash32()})
 	timeout := time.After(1 * time.Second)
@@ -213,7 +215,7 @@ func TestBlockListener_TestTxQueueHandle(t *testing.T) {
 	block1 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 	block1.TxIDs = []types.TransactionID{id1, id2, id3}
 	addTxsToPool(bl2.txpool, []*types.Transaction{tx1, tx2, tx3})
-	bl2.AddBlockWithTxs(block1)
+	bl2.AddBlockWithTxs(context.TODO(), block1)
 
 	res, err := queue.handle(context.TODO(), []types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32()})
 	if err != nil {
@@ -269,9 +271,10 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 	bl2.atxDb.ProcessAtx(atx1)
 	bl2.atxDb.ProcessAtx(atx2)
 	bl2.atxDb.ProcessAtx(atx3)
-	bl2.AddBlockWithTxs(block1)
+	bl2.AddBlockWithTxs(context.TODO(), block1)
 
-	res, err := bl1.atxQueue.handle(context.TODO(), []types.Hash32{atx1.Hash32(), atx2.Hash32(), atx3.Hash32()})
+	atxHashes := []types.Hash32{atx1.Hash32(), atx2.Hash32(), atx3.Hash32()}
+	res, err := bl1.atxQueue.handle(context.TODO(), atxHashes)
 	if err != nil {
 		t.Error(err)
 	}
@@ -281,6 +284,21 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 	}
 
 	assert.True(t, len(bl1.atxQueue.pending) == 0)
+
+	// Make sure the fetch times out correctly (rather than blocking)
+	// This will kill all the fetch queue workers so the request will not be processed
+	for i := 0; i < runtime.NumCPU(); i++ {
+		bl1.atxQueue.queue <- fetchRequest{}
+	}
+	bl1.atxQueue.checkLocal = func(context.Context, []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32) {
+		// pretend there's nothing in the cache and everything is missing
+		return nil, nil, atxHashes
+	}
+	res, err = bl1.atxQueue.handle(context.TODO(), atxHashes)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "timed out fetching items")
+	require.Equal(t, 0, len(res))
+	require.Equal(t, 3, len(bl1.atxQueue.pending))
 
 	bl2.Close()
 	bl1.Close()

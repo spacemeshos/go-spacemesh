@@ -165,7 +165,7 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, t
 		msh.pushLayersToState(msh.LatestLayerInState()+1, msh.trtl.LatestComplete())
 	}
 
-	msh.With().Info("recovered mesh from disc",
+	msh.With().Info("recovered mesh from disk",
 		log.FieldNamed("latest_layer", msh.latestLayer),
 		log.FieldNamed("validated_layer", msh.ProcessedLayer()),
 		log.String("layer_hash", util.Bytes2Hex(msh.layerHash)),
@@ -207,7 +207,7 @@ func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
 	// Report the status update, as well as the layer itself.
 	layer, err := msh.GetLayer(idx)
 	if err != nil {
-		msh.Error("error reading layer data for layer", layer, log.Err(err))
+		msh.With().Error("error reading layer data", idx, log.Err(err))
 	} else {
 		events.ReportNewLayer(events.NewLayer{
 			Layer:  layer,
@@ -221,7 +221,7 @@ func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
 		msh.With().Info("set latest known layer", idx)
 		msh.latestLayer = idx
 		if err := msh.general.Put(constLATEST, idx.Bytes()); err != nil {
-			msh.Error("could not persist Latest layer index")
+			msh.Error("could not persist latest layer index")
 		}
 	}
 }
@@ -601,17 +601,16 @@ func (msh *Mesh) AddBlock(blk *types.Block) error {
 func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 	msh.Info("setting zero block layer %v", lyr)
 	// check database for layer
-	_, err := msh.GetLayer(lyr)
-
-	if err == nil {
-		// layer exists
-		msh.Info("layer has blocks, dont set layer to 0 ")
-		return fmt.Errorf("layer exists")
-	}
-
-	if err != database.ErrNotFound {
-		// database error
-		return fmt.Errorf("could not fetch layer from database %s", err)
+	if l, err := msh.GetLayer(lyr); err != nil {
+		if err != database.ErrNotFound {
+			msh.With().Error("error trying to fetch layer from database", lyr, log.Err(err))
+			return err
+		}
+	} else if len(l.Blocks()) != 0 {
+		msh.With().Error("layer has blocks, cannot tag as zero block layer",
+			l,
+			log.Int("num_blocks", len(l.Blocks())))
+		return fmt.Errorf("layer has blocks")
 	}
 
 	msh.SetLatestLayer(lyr)
@@ -626,31 +625,28 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 // AddBlockWithTxs adds a block to the database
 // blk - the block to add
 // txs - block txs that we dont have in our tx database yet
-func (msh *Mesh) AddBlockWithTxs(blk *types.Block) error {
-	msh.With().Debug("adding block", blk.Fields()...)
+func (msh *Mesh) AddBlockWithTxs(ctx context.Context, blk *types.Block) error {
+	logger := msh.WithContext(ctx).WithFields(blk.ID())
+	logger.With().Debug("adding block to mesh", blk.Fields()...)
 
-	err := msh.StoreTransactionsFromPool(blk)
-	if err != nil {
-		msh.Log.Error("not all txs were processed %v", err)
+	if err := msh.StoreTransactionsFromPool(blk); err != nil {
+		logger.With().Error("not all txs were processed", log.Err(err))
 	}
 
 	// Store block (delete if storing ATXs fails)
-	err = msh.DB.AddBlock(blk)
-	if err != nil && err == ErrAlreadyExist {
-		return nil
-	}
-
-	if err != nil {
-		msh.With().Error("failed to add block", blk.ID(), log.Err(err))
+	if err := msh.DB.AddBlock(blk); err != nil {
+		if err == ErrAlreadyExist {
+			return nil
+		}
+		logger.With().Error("failed to add block", log.Err(err))
 		return err
 	}
 
 	msh.SetLatestLayer(blk.Layer())
-	// new block add to orphans
+	// add new block to orphans
 	msh.handleOrphanBlocks(blk)
-
 	events.ReportNewBlock(blk)
-	msh.With().Info("added block to database", blk.Fields()...)
+	logger.Info("added block to database")
 	return nil
 }
 

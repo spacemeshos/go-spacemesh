@@ -63,7 +63,7 @@ func (l *Listener) AddListener(ctx context.Context, channel string, priority pri
 	l.channels = append(l.channels, ch)
 	l.stoppers = append(l.stoppers, stop)
 	l.wg.Add(1)
-	go l.listenToGossip(log.WithNewSessionID(ctx), dataHandler, ch, stop)
+	go l.listenToGossip(log.WithNewSessionID(ctx), dataHandler, ch, stop, channel)
 }
 
 // Stop stops listening to all gossip channels
@@ -74,14 +74,17 @@ func (l *Listener) Stop() {
 	l.wg.Wait()
 }
 
-func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHandler, gossipChannel chan GossipMessage, stop chan struct{}) {
-	l.WithContext(ctx).Info("start listening")
+func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHandler, gossipChannel chan GossipMessage, stop chan struct{}, channel string) {
+	l.WithContext(ctx).Info("start listening to gossip", log.String("protocol", channel))
 	for {
 		select {
 		case <-stop:
 			l.wg.Done()
 			return
 		case data := <-gossipChannel:
+			l.WithContext(ctx).With().Info("got gossip message, forwarding to data handler",
+				log.String("protocol", channel),
+				log.Int("queue_length", len(gossipChannel)))
 			if !l.syncer.ListenToGossip() {
 				// not accepting data
 				continue

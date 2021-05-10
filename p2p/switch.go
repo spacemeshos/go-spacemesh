@@ -287,8 +287,7 @@ func (s *Switch) Start(ctx context.Context) error {
 	if s.config.SwarmConfig.Bootstrap {
 		go func() {
 			b := time.Now()
-			err := s.discover.Bootstrap(s.ctx)
-			if err != nil {
+			if err := s.discover.Bootstrap(s.ctx); err != nil {
 				s.bootErr = err
 				close(s.bootChan)
 				s.Shutdown()
@@ -607,19 +606,20 @@ func (s *Switch) ProcessDirectProtocolMessage(ctx context.Context, sender p2pcry
 	if msgchan == nil {
 		return ErrNoProtocol
 	}
-	s.logger.WithContext(ctx).With().Debug("forwarding message to protocol", log.String("protocol", protocol))
+	s.logger.WithContext(ctx).With().Debug("forwarding direct message to protocol",
+		log.Int("queue_length", len(msgchan)),
+		log.String("protocol", protocol))
 
 	metrics.QueueLength.With(metrics.ProtocolLabel, protocol).Set(float64(len(msgchan)))
 
-	//TODO: check queue length
+	// TODO: check queue length
 	msgchan <- directProtocolMessage{metadata, sender, data}
-
 	return nil
 }
 
 // ProcessGossipProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will send
 // the message syntactic validation result on the validationCompletedChan ASAP
-func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
+func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, ownMessage bool, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
 	h := types.CalcMessageHash12(data.Bytes(), protocol)
 
 	// route authenticated message to the registered protocol
@@ -627,14 +627,15 @@ func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcry
 	if msgchan == nil {
 		return ErrNoProtocol
 	}
-	s.logger.WithContext(ctx).With().Debug("forwarding message to protocol",
+	s.logger.WithContext(ctx).With().Debug("forwarding gossip message to protocol",
 		log.String("protocol", protocol),
+		log.Int("queue_length", len(msgchan)),
 		h)
 
 	metrics.QueueLength.With(metrics.ProtocolLabel, protocol).Set(float64(len(msgchan)))
 
 	// TODO: check queue length
-	gpm := gossipProtocolMessage{sender: sender, data: data, validationChan: validationCompletedChan}
+	gpm := gossipProtocolMessage{sender: sender, ownMessage: ownMessage, data: data, validationChan: validationCompletedChan}
 	if requestID, ok := log.ExtractRequestID(ctx); ok {
 		gpm.requestID = requestID
 	} else {
@@ -643,7 +644,6 @@ func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcry
 			h)
 	}
 	msgchan <- gpm
-
 	return nil
 }
 

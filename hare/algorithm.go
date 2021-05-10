@@ -476,7 +476,7 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 		proc.processNotifyMsg(ctx, m)
 	default:
 		proc.WithContext(ctx).With().Warning("unknown message type",
-			log.Int("msg_type", int(m.InnerMsg.Type)),
+			log.String("msg_type", m.InnerMsg.Type.String()),
 			log.String("sender_id", m.PubKey.ShortString()))
 	}
 }

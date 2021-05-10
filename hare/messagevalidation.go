@@ -268,7 +268,7 @@ func (v *syntaxContextValidator) SyntacticallyValidateMessage(ctx context.Contex
 		return v.validateCertificate(ctx, m.InnerMsg.Cert)
 	default:
 		logger.With().Error("unknown message type encountered during syntactic validation",
-			log.Int("msg_type", int(m.InnerMsg.Type)))
+			log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
 }

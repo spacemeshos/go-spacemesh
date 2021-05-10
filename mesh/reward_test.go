@@ -280,7 +280,7 @@ func copyLayer(t *testing.T, srcMesh, dstMesh *Mesh, dstAtxDb *AtxDbMock, id typ
 		atx, err := srcMesh.GetFullAtx(b.ATXID)
 		assert.NoError(t, err)
 		dstAtxDb.AddAtx(atx.ID(), atx)
-		err = dstMesh.AddBlockWithTxs(b)
+		err = dstMesh.AddBlockWithTxs(context.TODO(), b)
 		assert.NoError(t, err)
 		blockIds = append(blockIds, b.ID())
 	}

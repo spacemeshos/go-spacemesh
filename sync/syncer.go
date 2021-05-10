@@ -533,11 +533,11 @@ func (s *Syncer) gossipSyncForOneFullLayer(ctx context.Context, currentSyncLayer
 	ch := s.ticker.Subscribe()
 
 	if done := s.waitLayer(ch); done {
-		return fmt.Errorf("cloed while buffering first layer")
+		return fmt.Errorf("closed while buffering first layer")
 	}
 
 	if done := s.waitLayer(ch); done {
-		return fmt.Errorf("cloed while buffering second layer ")
+		return fmt.Errorf("closed while buffering second layer")
 	}
 
 	s.ticker.Unsubscribe(ch) // unsub, we won't be listening on this ch anymore
@@ -605,7 +605,7 @@ func (s *Syncer) getLayerFromNeighbors(ctx context.Context, currentSyncLayer typ
 	}
 
 	// fetch ids for each hash
-	s.With().Info("fetch layer ids", currentSyncLayer)
+	s.With().Info("fetch layer ids", currentSyncLayer, log.Int("count", len(m)))
 	blockIds, err := s.fetchLayerBlockIds(ctx, m, currentSyncLayer)
 	if err != nil {
 		return nil, err
@@ -669,18 +669,22 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, blockIds 
 	if res, err := s.blockQueue.addDependencies(ctx, layerID, blockIds, foo); err != nil {
 		return nil, fmt.Errorf("failed adding layer %v blocks to queue %v", layerID, err)
 	} else if res == false {
-		logger.Info("no missing blocks for layer")
+		logger.Info("syncLayer: no missing blocks for layer")
 		return s.LayerBlocks(layerID)
 	}
 
 	logger.With().Info("wait for layer blocks", log.Int("num_blocks", len(blockIds)))
+
+	timeout := time.After(s.GetTimeout())
 	select {
 	case <-s.exit:
-		return nil, fmt.Errorf("received interupt")
+		return nil, fmt.Errorf("received interrupt")
 	case result := <-ch:
 		if !result {
 			return nil, fmt.Errorf("could not get all blocks for layer %v", layerID)
 		}
+	case <-timeout:
+		return nil, fmt.Errorf("timed out waiting for results for layer %v", layerID)
 	}
 
 	blocks, err := s.LayerBlocks(layerID)
@@ -692,8 +696,10 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, blockIds 
 	return blocks, err
 }
 
-func (s *Syncer) getBlocks(ctx context.Context, jobID types.LayerID, blockIds []types.BlockID) error {
-	logger := s.WithContext(ctx).WithFields(jobID)
+func (s *Syncer) getBlocks(ctx context.Context, blockIds []types.BlockID) error {
+	// Generate a random job ID
+	jobID := rand.Int31()
+	logger := s.WithContext(ctx).WithFields(log.Int32("jobID", jobID))
 	ch := make(chan bool, 1)
 	foo := func(ctx context.Context, res bool) error {
 		logger.Info("get blocks for layer done")
@@ -705,7 +711,7 @@ func (s *Syncer) getBlocks(ctx context.Context, jobID types.LayerID, blockIds []
 	if res, err := s.blockQueue.addDependencies(ctx, jobID, blockIds, foo); err != nil {
 		return fmt.Errorf("failed adding layer %v blocks to queue %v", jobID, err)
 	} else if res == false {
-		logger.Info("no missing blocks for layer")
+		logger.Info("getBlocks: no missing blocks for layer")
 		return nil
 	}
 
@@ -720,13 +726,12 @@ func (s *Syncer) getBlocks(ctx context.Context, jobID types.LayerID, blockIds []
 	}
 
 	tmr.ObserveDuration()
-
 	return nil
 }
 
 // GetBlocks fetches list of blocks from peers
 func (s *Syncer) GetBlocks(ctx context.Context, blockIds []types.BlockID) error {
-	return s.getBlocks(ctx, types.LayerID(rand.Int31()), blockIds)
+	return s.getBlocks(ctx, blockIds)
 }
 
 func (s *Syncer) fastValidation(block *types.Block) error {
@@ -774,8 +779,7 @@ func (s *Syncer) fetchRefBlock(ctx context.Context, block *types.Block) error {
 	_, err := s.GetBlock(*block.RefBlock)
 	if err != nil {
 		s.With().Info("fetching block", *block.RefBlock)
-		fetched := s.fetchBlock(ctx, *block.RefBlock)
-		if !fetched {
+		if ok := s.fetchBlock(ctx, *block.RefBlock); !ok {
 			return fmt.Errorf("failed to fetch ref block %v", *block.RefBlock)
 		}
 	}
@@ -806,8 +810,7 @@ func (s *Syncer) fetchAllReferencedAtxs(ctx context.Context, blk *types.Block) e
 
 func (s *Syncer) fetchBlockDataForValidation(ctx context.Context, blk *types.Block) error {
 	if blk.RefBlock != nil {
-		err := s.fetchRefBlock(ctx, blk)
-		if err != nil {
+		if err := s.fetchRefBlock(ctx, blk); err != nil {
 			return err
 		}
 	}
@@ -917,8 +920,8 @@ func (s *Syncer) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx
 
 func (s *Syncer) fetchBlock(ctx context.Context, ID types.BlockID) bool {
 	ch := make(chan bool, 1)
-	defer close(ch)
 	foo := func(ctx context.Context, res bool) error {
+		defer close(ch)
 		s.WithContext(ctx).With().Info("single block fetched",
 			ID,
 			log.Bool("result", res))
@@ -934,7 +937,13 @@ func (s *Syncer) fetchBlock(ctx context.Context, ID types.BlockID) bool {
 		return true
 	}
 
-	return <-ch
+	timeout := time.After(s.GetTimeout())
+	select {
+	case result := <-ch:
+		return result
+	case <-timeout:
+		return false
+	}
 }
 
 // FetchBlock fetches a single block from peers
@@ -982,8 +991,6 @@ func validateVotes(blk *types.Block, forBlockfunc forBlockInView, depth int) (bo
 
 func (s *Syncer) dataAvailability(ctx context.Context, blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
 	s.WithContext(ctx).With().Debug("checking data availability for block", blk.ID())
-	wg := sync.WaitGroup{}
-	wg.Add(1)
 	var txres []*types.Transaction
 	var txerr error
 
@@ -994,7 +1001,7 @@ func (s *Syncer) dataAvailability(ctx context.Context, blk *types.Block) ([]*typ
 	var atxres []*types.ActivationTx
 
 	if txerr != nil {
-		return nil, nil, fmt.Errorf("failed fetching block %v transactions %v", blk.ID(), txerr)
+		return nil, nil, fmt.Errorf("failed fetching block %v transactions: %v", blk.ID(), txerr)
 	}
 
 	s.WithContext(ctx).With().Debug("done checking data availability for block", blk.ID())
@@ -1147,7 +1154,7 @@ func (s *Syncer) fetchLayerHashes(ctx context.Context, lyr types.LayerID) (map[t
 	if len(m) == 0 {
 		return nil, errors.New("could not get layer hashes from any peer")
 	}
-	s.With().Info("layer has blocks", lyr)
+	s.With().Info("layer has blocks", lyr, log.Int("count", len(m)))
 	return m, nil
 }
 

@@ -168,7 +168,6 @@ func pingThenGetAddresses(ctx context.Context, p pingerGetAddresser, addr *node.
 
 // requestAddresses will crawl the network looking for new peer addresses.
 func (r *refresher) requestAddresses(ctx context.Context, servers []*node.Info) []*node.Info {
-
 	// todo: here we stop only after we've tried querying or queried all addrs
 	// 	maybe we should stop after we've reached a certain amount ? (needMoreAddresses..)
 	// todo: revisit this area to think about if lastQueries is even needed, since we're going

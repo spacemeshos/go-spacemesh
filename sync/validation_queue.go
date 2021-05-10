@@ -11,8 +11,9 @@ import (
 )
 
 type syncer interface {
-	AddBlockWithTxs(blk *types.Block) error
-	GetBlock(id types.BlockID) (*types.Block, error)
+	// AddBlockWithTxs TODO: there's a missing link between this interface method and the implementation
+	AddBlockWithTxs(context.Context, *types.Block) error
+	GetBlock(types.BlockID) (*types.Block, error)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 	HandleLateBlock(bl *types.Block)
 	ProcessedLayer() types.LayerID
@@ -52,8 +53,7 @@ func newValidationQueue(ctx context.Context, srvr networker, conf Configuration,
 		syncer:        sy,
 	}
 	vq.handleFetch = vq.handleBlocks
-	go vq.work(ctx)
-
+	go vq.work(log.WithNewSessionID(ctx))
 	return vq
 }
 
@@ -135,7 +135,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(ctx context.C
 		// data availability
 		_, _, err := vq.dataAvailability(ctx, block)
 		if err != nil {
-			return fmt.Errorf("DataAvailabilty failed for block: %v errmsg: %v", block.ID().String(), err)
+			return fmt.Errorf("data availability check failed for block: %v errmsg: %v", block.ID().String(), err)
 		}
 
 		// validate block's votes
@@ -143,13 +143,13 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(ctx context.C
 			return fmt.Errorf("validate votes failed for block: %s errmsg: %s", block.ID().String(), err)
 		}
 
-		err = vq.AddBlockWithTxs(block)
+		err = vq.AddBlockWithTxs(ctx, block)
 
 		if err != nil && err != mesh.ErrAlreadyExist {
 			return err
 		}
 
-		// run late block through tortoise only if its new to us
+		// run late block through tortoise only if it's new to us
 		if (block.Layer() <= vq.ProcessedLayer() || block.Layer() == vq.getValidatingLayer()) && err != mesh.ErrAlreadyExist {
 			vq.HandleLateBlock(block)
 		}

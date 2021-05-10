@@ -167,7 +167,7 @@ type meshProvider interface {
 	LayerBlockIds(index types.LayerID) ([]types.BlockID, error)
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 	GetBlock(id types.BlockID) (*types.Block, error)
-	AddBlockWithTxs(blk *types.Block) error
+	AddBlockWithTxs(context.Context, *types.Block) error
 }
 
 func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID, top types.LayerID) {
@@ -370,7 +370,9 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
-			//reducedAtxList := selectAtxs(atxList, t.atxsPerBlock)
+			logger.With().Info("eligible for one or more blocks in layer",
+				log.Int("count", len(proofs)),
+				layerID)
 			for _, eligibilityProof := range proofs {
 				txList, _, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {
@@ -384,7 +386,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 					logger.With().Error("failed to create new block", log.Err(err))
 					continue
 				}
-				err = t.meshProvider.AddBlockWithTxs(blk)
+				err = t.meshProvider.AddBlockWithTxs(ctx, blk)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to store block")
 					logger.With().Error("failed to store block", blk.ID(), log.Err(err))
