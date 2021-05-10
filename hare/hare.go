@@ -218,7 +218,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		// it must don't return without starting consensus process or mark result as fail
 		// except if it's genesis layer
 		if err != nil {
-			h.outputChan <- procReport{ instanceID(id), &Set{}, notCompleted }
+			h.outputChan <- procReport{instanceID(id), &Set{}, notCompleted}
 		}
 	}()
 
@@ -245,7 +245,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 	}
 
 	if !h.broker.Synced(ctx, instanceID(id)) { // if not synced don't start consensus
-		err = errors.New("not starting hare since node is not synced" )
+		err = errors.New("not starting hare since node is not synced")
 		logger.Error(err.Error())
 		return
 	}

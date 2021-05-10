@@ -237,10 +237,10 @@ func (proc *consensusProcess) Start(ctx context.Context) error {
 	}
 
 	/*
-	if proc.s.Size() == 0 { // empty set is not valid
-		logger.Error("consensusProcess cannot be started with an empty set")
-		return startInstanceError(errors.New("instance started with an empty set"))
-	}
+		if proc.s.Size() == 0 { // empty set is not valid
+			logger.Error("consensusProcess cannot be started with an empty set")
+			return startInstanceError(errors.New("instance started with an empty set"))
+		}
 	*/
 
 	if proc.inbox == nil { // no inbox
