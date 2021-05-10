@@ -46,14 +46,10 @@ class WalletAPI:
             return False
 
         res = self.decode_response(out)
-        try:
-            if res['txstate']['state'] == 'TRANSACTION_STATE_MEMPOOL':
-                print("tx submission successful")
-                self.tx_ids.append(self.extract_tx_id(out))
-                return True
-        except KeyError:
-            print(f"failed to parse transaction!\n\n{res}")
-            return False
+        if res['txstate']['state'] == 'TRANSACTION_STATE_MEMPOOL':
+            print("tx submission successful")
+            self.tx_ids.append(self.extract_tx_id(out))
+            return True
 
         print("tx submission failed, bad status or txstate")
         return False
@@ -99,7 +95,7 @@ class WalletAPI:
 
         # GRPC doesn't include zero values so use intelligent defaults here
         if resource == 'balance':
-            return int(out.get('balance', {}).get('value', 0))
+            return int(out.get('balance', {'value': 0})['value'])
         elif resource == 'counter':
             return int(out.get('counter', 0))
 

@@ -167,7 +167,7 @@ def node_string(key, ip, port, discport):
 
 
 @functools.lru_cache(maxsize=1)
-def get_genesis_time_delta(genesis_time: float) -> datetime:
+def get_genesis_time_delta(genesis_time):
     return pytz.utc.localize(datetime.utcnow() + timedelta(seconds=genesis_time))
 
 
@@ -175,22 +175,20 @@ def get_conf(bs_info, client_config, genesis_time, setup_oracle=None, setup_poet
     """
     get_conf gather specification information into one ContainerSpec object
 
-    :type bs_info: dict
-    :type client_config: dict
-    :type genesis_time: float
-    :type args: dict
     :param bs_info: DeploymentInfo, bootstrap info
     :param client_config: DeploymentInfo, client info
     :param genesis_time: string, genesis time as set in suite specification file
     :param setup_oracle: string, oracle ip
     :param setup_poet: string, poet ip
-    :param args: dictionary, arguments for appendage in specification
+    :param args: list of strings, arguments for appendage in specification
     :return: ContainerSpec
     """
     genesis_time_delta = get_genesis_time_delta(genesis_time)
-    client_args = client_config.get('args', {})
+    client_args = {} if 'args' not in client_config else client_config['args']
     # append client arguments
-    client_args.update(args or {})
+    if args is not None:
+        for arg in args:
+            client_args[arg] = args[arg]
 
     # create a new container spec with client configuration
     cspec = ContainerSpec(cname='client', specs=client_config)
@@ -235,7 +233,7 @@ def wait_genesis(genesis_time, genesis_delta):
         time.sleep(delta_from_genesis)
 
 
-def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME, logstash_ss_name=LOGSTASH_SS_NAME):
+def wait_for_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME, logstash_ss_name=LOGSTASH_SS_NAME):
     es_timeout = 240
     try:
         print("waiting for ES to be ready")
@@ -243,17 +241,7 @@ def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME, logstas
     except Exception as e:
         print("elasticsearch statefulset readiness check has failed with err:", e)
         raise Exception(f"elasticsearch took over than {es_timeout} to start")
-
-    ls_timeout = 240
-    try:
-        print("waiting for logstash to be ready")
-        logstash_sleep_time = statefulset.wait_to_statefulset_to_be_ready(logstash_ss_name, namespace,
-                                                                          time_out=ls_timeout)
-    except Exception as e:
-        print(f"got an exception while waiting for Logstash to be ready: {e}")
-        raise Exception(f"logstash took over than {ls_timeout} to start")
-
-    return logstash_sleep_time + es_sleep_time
+    return es_sleep_time
 
 
 def exec_wait(cmd, retry=1, interval=1, is_print=True):

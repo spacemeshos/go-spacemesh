@@ -45,7 +45,7 @@ def transfer(wallet_api, frm, to, amount, gas_price=1, gas_limit=None, curr_nonc
     else:
         nonce = wallet_api.get_nonce_value(frm)
 
-    if nonce is None:
+    if str(nonce) == "None":
         raise Exception("could not resolve nonce")
 
     tx_gen = TxGenerator(pub=frm, pri=priv)
