@@ -3,7 +3,6 @@ package hare
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -146,7 +145,7 @@ func Test_PreroundEmptySet(t *testing.T) {
 	for x := range m {
 		for y := range m[x] {
 			if m[x][y] != 1 {
-				t.Error(fmt.Sprintf("at layer %v node %v has not emty set in result (%v)", x, y, m[x][y]))
+				t.Errorf("at layer %v node %v has not emty set in result (%v)", x, y, m[x][y])
 			}
 		}
 	}
@@ -179,7 +178,7 @@ func Test_NoEnoughStatuses(t *testing.T) {
 	for x := range m {
 		for y := range m[x] {
 			if m[x][y] != 1 {
-				t.Error(fmt.Sprintf("at layer %v node %v has not emty set in result (%v)", x, y, m[x][y]))
+				t.Errorf("at layer %v node %v has not emty set in result (%v)", x, y, m[x][y])
 			}
 		}
 	}
@@ -212,7 +211,7 @@ func Test_NoEnoughLeaders(t *testing.T) {
 	for x := range m {
 		for y := range m[x] {
 			if m[x][y] != 1 {
-				t.Error(fmt.Sprintf("at layer %v node %v has not emty set in result (%v)", x, y, m[x][y]))
+				t.Errorf("at layer %v node %v has not emty set in result (%v)", x, y, m[x][y])
 			}
 		}
 	}
@@ -245,7 +244,7 @@ func Test_NoEnoughCommits(t *testing.T) {
 	for x := range m {
 		for y := range m[x] {
 			if m[x][y] != 1 {
-				t.Error(fmt.Sprintf("at layer %v node %v has not emty set in result (%v)", x, y, m[x][y]))
+				t.Errorf("at layer %v node %v has not emty set in result (%v)", x, y, m[x][y])
 			}
 		}
 	}
@@ -278,7 +277,7 @@ func Test_NoEnoughNotifies(t *testing.T) {
 	for x := range m {
 		for y := range m[x] {
 			if m[x][y] != 1 {
-				t.Error(fmt.Sprintf("at layer %v node %v has not emty set in result (%v)", x, y, m[x][y]))
+				t.Errorf("at layer %v node %v has not emty set in result (%v)", x, y, m[x][y])
 			}
 		}
 	}
@@ -308,7 +307,7 @@ func Test_Succeeded(t *testing.T) {
 	for x := range m {
 		for y := range m[x] {
 			if m[x][y] != 1 {
-				t.Error(fmt.Sprintf("at layer %v node %v has emty set in result", x, y))
+				t.Errorf("at layer %v node %v has emty set in result", x, y)
 			}
 		}
 	}
