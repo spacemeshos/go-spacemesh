@@ -53,7 +53,7 @@ func ReportTxWithValidity(tx *types.Transaction, valid bool) {
 				log.Debug("reporter would block on subscriber")
 			}
 		}
-		log.With().Info("reported tx validity update to subscribers: %v", txWithValidity.Transaction.ID(),
+		log.With().Debug("reported tx validity update to subscribers", txWithValidity.Transaction.ID(),
 			log.Bool("validity", txWithValidity.Valid))
 	}
 }
@@ -132,12 +132,12 @@ func ReportRewardReceived(r Reward) {
 		for sub := range reporter.rewardsSubs {
 			select {
 			case sub <- r:
-				log.With().Info("reporter send reward to subscriber", r)
+				log.With().Debug("reporter send reward to subscriber", r)
 			default:
 				log.Debug("reporter would block on subscriber")
 			}
 		}
-		log.With().Info("reported reward to subscriber", r)
+		log.With().Debug("reported reward to subscribers", r)
 	}
 }
 
@@ -192,7 +192,7 @@ func ReportNewLayer(layer NewLayer) {
 				log.Debug("reporter would block on subscriber")
 			}
 		}
-		log.With().Info("reported layer update to subscribers", layer)
+		log.With().Debug("reported layer update to subscribers", layer)
 	}
 }
 
@@ -211,7 +211,7 @@ func ReportError(err NodeError) {
 				log.Debug("reporter would block on subscriber")
 			}
 		}
-		log.With().Info("reported error update to subscribers: %v", log.String("error-msg", err.Msg))
+		log.With().Debug("reported error update to subscribers")
 	}
 }
 
@@ -257,7 +257,7 @@ func ReportReceipt(r TxReceipt) {
 				log.Debug("reporter would block on subscriber")
 			}
 		}
-		log.With().Info("reported receipt to subscribers", r, r.Address)
+		log.With().Debug("reported receipt to subscribers", r, r.Address)
 	}
 }
 
@@ -271,12 +271,12 @@ func ReportAccountUpdate(a types.Address) {
 		for sub := range reporter.accountsSubs {
 			select {
 			case sub <- a:
-				log.With().Info("reporter send account to subscriber", a)
+				log.With().Debug("reporter send account to subscriber", a)
 			default:
 				log.Debug("reporter would block on subscriber")
 			}
 		}
-		log.With().Info("reported account update to subscribers", a)
+		log.With().Debug("reported account update to subscribers", a)
 	}
 }
 
