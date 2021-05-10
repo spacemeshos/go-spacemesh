@@ -151,7 +151,8 @@ func Test_PreroundEmptySet(t *testing.T) {
 	}
 }
 
-func _Test_NoEnoughStatuses(t *testing.T) {
+func Test_NoEnoughStatuses(t *testing.T) {
+	t.SkipNow()
 	types.SetLayersPerEpoch(1)
 	const nodes = 5
 	const layers = 2
@@ -184,7 +185,8 @@ func _Test_NoEnoughStatuses(t *testing.T) {
 	}
 }
 
-func _Test_NoEnoughLeaders(t *testing.T) {
+func Test_NoEnoughLeaders(t *testing.T) {
+	t.SkipNow()
 	types.SetLayersPerEpoch(1)
 	const nodes = 5
 	const layers = 2
@@ -217,7 +219,8 @@ func _Test_NoEnoughLeaders(t *testing.T) {
 	}
 }
 
-func _Test_NoEnoughCommits(t *testing.T) {
+func Test_NoEnoughCommits(t *testing.T) {
+	t.SkipNow()
 	types.SetLayersPerEpoch(1)
 	const nodes = 6
 	const layers = 2
@@ -250,7 +253,8 @@ func _Test_NoEnoughCommits(t *testing.T) {
 	}
 }
 
-func _Test_NoEnoughNotifies(t *testing.T) {
+func Test_NoEnoughNotifies(t *testing.T) {
+	t.SkipNow()
 	types.SetLayersPerEpoch(1)
 	const nodes = 6
 	const layers = 2
@@ -283,7 +287,8 @@ func _Test_NoEnoughNotifies(t *testing.T) {
 	}
 }
 
-func _Test_Succeeded(t *testing.T) {
+func Test_Succeeded(t *testing.T) {
+	t.SkipNow()
 	types.SetLayersPerEpoch(1)
 	const nodes = 6
 	const layers = 2
