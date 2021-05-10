@@ -21,7 +21,7 @@ type PrivateKey interface {
 	Key
 
 	GetPublicKey() PublicKey // get the pub key corresponding to this priv key
-	Sign([]byte) ([]byte, error)
+	Sign([]byte) []byte
 
 	// Decrypt binary data encrypted with the public key of this private key
 	Decrypt(in []byte) ([]byte, error)
@@ -109,12 +109,12 @@ func (p *privateKeyImpl) Pretty() string {
 }
 
 // Sign signs binary data with the private key.
-func (p *privateKeyImpl) Sign(in []byte) ([]byte, error) {
-	signature, err := p.k.Sign(in)
+func (p *privateKeyImpl) Sign(msg []byte) []byte {
+	signature, err := p.k.Sign(msg)
 	if err != nil {
-		return nil, err
+		return nil
 	}
-	return signature.Serialize(), nil
+	return signature.Serialize()
 }
 
 // Decrypt decrypts data encrypted with a public key using its matching private key
