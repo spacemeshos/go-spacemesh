@@ -62,9 +62,11 @@ type BaseConfig struct {
 
 	TestMode bool `mapstructure:"test-mode"`
 
-	CollectMetrics bool   `mapstructure:"metrics"`
-	MetricsPort    int    `mapstructure:"metrics-port"`
-	ProfilerUrl    string `mapstructure:"profiler-url"`
+	CollectMetrics bool `mapstructure:"metrics"`
+	MetricsPort    int  `mapstructure:"metrics-port"`
+
+	ProfilerName string `mapstructure:"profiler-name"`
+	ProfilerUrl  string `mapstructure:"profiler-url"`
 
 	OracleServer        string `mapstructure:"oracle_server"`
 	OracleServerWorldID int    `mapstructure:"oracle_server_worldid"`
@@ -76,10 +78,6 @@ type BaseConfig struct {
 	Hdist            int    `mapstructure:"hdist"`
 
 	PoETServer string `mapstructure:"poet-server"`
-
-	MemProfile string `mapstructure:"mem-profile"`
-
-	CPUProfile string `mapstructure:"cpu-profile"`
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
 
@@ -163,6 +161,7 @@ func defaultBaseConfig() BaseConfig {
 		CollectMetrics:      false,
 		MetricsPort:         1010,
 		ProfilerUrl:         "",
+		ProfilerName:        "gp-spacemesh",
 		OracleServer:        "http://localhost:3030",
 		OracleServerWorldID: 0,
 		GenesisTime:         time.Now().Format(time.RFC3339),

@@ -44,10 +44,6 @@ func AddCommands(cmd *cobra.Command) {
 		config.Hdist, "hdist")
 	cmd.PersistentFlags().BoolVar(&config.StartMining, "start-mining",
 		config.StartMining, "start mining")
-	cmd.PersistentFlags().StringVar(&config.MemProfile, "mem-profile",
-		config.MemProfile, "output memory profiling stat to filename")
-	cmd.PersistentFlags().StringVar(&config.CPUProfile, "cpu-profile",
-		config.CPUProfile, "output cpu profiling stat to filename")
 	cmd.PersistentFlags().BoolVar(&config.PprofHTTPServer, "pprof-server",
 		config.PprofHTTPServer, "enable http pprof server")
 	cmd.PersistentFlags().StringVar(&config.GenesisConfPath, "genesis-conf",
@@ -63,7 +59,9 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&config.PublishEventsURL, "events-url",
 		config.PublishEventsURL, "publish events to this url; if no url specified no events will be published")
 	cmd.PersistentFlags().StringVar(&config.ProfilerUrl, "profiler-url",
-		config.ProfilerUrl, "send profiler data to certain url, if no url no profiling will be sent")
+		config.ProfilerUrl, "send profiler data to certain url, if no url no profiling will be sent, format: http://<IP>:<PORT>")
+	cmd.PersistentFlags().StringVar(&config.ProfilerName, "profiler-name",
+		config.ProfilerUrl, "the name to use when sending profiles")
 
 	cmd.PersistentFlags().IntVar(&config.SyncRequestTimeout, "sync-request-timeout",
 		config.SyncRequestTimeout, "the timeout in ms for direct requests in the sync")

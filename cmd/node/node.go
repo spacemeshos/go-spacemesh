@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
-	"runtime/pprof"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -981,33 +980,6 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	}
 
 	/* Setup monitoring */
-
-	if app.Config.MemProfile != "" {
-		logger.Info("starting mem profiling")
-		f, err := os.Create(app.Config.MemProfile)
-		if err != nil {
-			logger.With().Error("could not create memory profile", log.Err(err))
-		}
-		defer f.Close()
-		runtime.GC() // get up-to-date statistics
-		if err := pprof.WriteHeapProfile(f); err != nil {
-			logger.With().Error("could not write memory profile", log.Err(err))
-		}
-	}
-
-	if app.Config.CPUProfile != "" {
-		logger.Info("starting cpu profile")
-		f, err := os.Create(app.Config.CPUProfile)
-		if err != nil {
-			logger.With().Error("could not create cpu profile", log.Err(err))
-		}
-		defer f.Close()
-		if err := pprof.StartCPUProfile(f); err != nil {
-			logger.With().Error("could not start cpu profile", log.Err(err))
-		}
-		defer pprof.StopCPUProfile()
-	}
-
 	if app.Config.PprofHTTPServer {
 		logger.Info("starting pprof server")
 		srv := &http.Server{Addr: ":6060"}
@@ -1021,7 +993,7 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 
 	if app.Config.ProfilerUrl != "" {
 		p, err := profiler.Start(profiler.Config{
-			ApplicationName: "go-spacemesh",
+			ApplicationName: app.Config.ProfilerName,
 			// app.Config.ProfilerUrl should be the pyroscope server address
 			// TODO: AuthToken? no need right now since server isn't public
 			ServerAddress: app.Config.ProfilerUrl,
