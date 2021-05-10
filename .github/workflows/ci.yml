@@ -238,7 +238,7 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v2
-      - name: hare system test
+      - name: sync system test
         run: make dockertest-sync-elk
 
 

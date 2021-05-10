@@ -3,6 +3,8 @@ package config
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"path/filepath"
 	"time"
 
@@ -42,6 +44,8 @@ type Config struct {
 	REWARD          mesh.Config           `mapstructure:"reward"`
 	POST            postConfig.Config     `mapstructure:"post"`
 	LOGGING         LoggerConfig          `mapstructure:"logging"`
+	LAYERS          layerfetcher.Config   `mapstructure:"layer-fetch"`
+	FETCH           fetch.Config          `mapstructure:"fetch"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -146,6 +150,8 @@ func DefaultConfig() Config {
 		TIME:            timeConfig.DefaultConfig(),
 		REWARD:          mesh.DefaultMeshConfig(),
 		POST:            activation.DefaultConfig(),
+		FETCH:           fetch.DefaultConfig(),
+		LAYERS:          layerfetcher.DefaultConfig(),
 	}
 }
 
@@ -169,7 +175,7 @@ func defaultBaseConfig() BaseConfig {
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,
-		SyncValidationDelta: 30,
+		SyncValidationDelta: 300,
 		AtxsPerBlock:        100,
 		TxsPerBlock:         100,
 		Profiler:            false,

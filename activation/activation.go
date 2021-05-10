@@ -209,7 +209,13 @@ func (b *Builder) loop(ctx context.Context) {
 				return
 			}
 			events.ReportAtxCreated(false, uint64(b.currentEpoch()), "")
-			<-b.layerClock.AwaitLayer(b.layerClock.GetCurrentLayer() + 1)
+			select {
+			case <-b.stop:
+				return
+			case <-b.layerClock.AwaitLayer(b.layerClock.GetCurrentLayer() + 1):
+				continue
+			}
+
 		}
 	}
 }
