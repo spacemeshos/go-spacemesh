@@ -1481,7 +1481,7 @@ func TestSyncer_handleNotSyncedZeroBlocksLayer(t *testing.T) {
 	r.Equal(types.LayerID(0), lv.processedLayer)
 	go sync.handleNotSynced(context.TODO(), 1)
 	select {
-	case <-time.After(10 * time.Second):
+	case <-time.After(12 * time.Second):
 		r.Fail("timed out")
 	case <-lv.validated:
 		break
