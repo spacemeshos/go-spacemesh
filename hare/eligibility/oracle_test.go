@@ -397,7 +397,6 @@ func TestOracle_Proof(t *testing.T) {
 	sig, err = o.Proof(context.TODO(), 2, 3)
 	assert.Nil(t, sig)
 	assert.NoError(t, err)
-
 	mySig := []byte{1, 2}
 	o.vrfSigner = &mockSigner{mySig}
 	sig, err = o.Proof(context.TODO(), 2, 3)
