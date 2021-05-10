@@ -73,6 +73,10 @@ func AddCommands(cmd *cobra.Command) {
 		config.AtxsPerBlock, "the number of atxs to select per block on block creation")
 	cmd.PersistentFlags().IntVar(&config.TxsPerBlock, "txs-per-block",
 		config.TxsPerBlock, "the number of transactions to select per block on block creation")
+	cmd.PersistentFlags().IntVar(&config.SyncInterval, "sync-interval",
+		config.SyncInterval, "the sync interval")
+	cmd.PersistentFlags().IntVar(&config.SyncValidationDelta, "sync-validation-delta",
+		config.SyncValidationDelta, "the sync validation deltal")
 
 	/** ======================== P2P Flags ========================== **/
 

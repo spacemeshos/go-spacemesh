@@ -18,7 +18,7 @@ bootstrap:
     hare-committee-size: '800'
     hare-max-adversaries: '399'
     hare-round-duration-sec: '10'
-    hare-exp-leaders: '10'
+    hare-exp-leaders: '160'
     layer-duration-sec: '70'
     layer-average-size: '50'
     hare-wakeup-delta: '20'
@@ -31,6 +31,8 @@ bootstrap:
     sync-request-timeout: '5000'
     hdist: '5'
     executable-path: '/bin/go-spacemesh'
+    sync-interval: '4'
+    sync-validation-delta: '16'
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-harness'
@@ -40,7 +42,7 @@ client:
     hare-committee-size: '800'
     hare-max-adversaries: '399'
     hare-round-duration-sec: '10'
-    hare-exp-leaders: '10'
+    hare-exp-leaders: '160'
     layer-duration-sec: '70'
     layer-average-size: '50'
     hare-wakeup-delta: '20'
@@ -53,6 +55,8 @@ client:
     sync-request-timeout: '5000'
     hdist: '5'
     executable-path: '/bin/go-spacemesh'
+    sync-interval: '4'
+    sync-validation-delta: '16'
 elastic:
   host: elastic.spacemesh.io
   port: 9200
