@@ -26,7 +26,7 @@ bootstrap:
     hare-committee-size: '800'
     hare-max-adversaries: '399'
     hare-round-duration-sec: '7'
-    hare-exp-leaders: '10'
+    hare-exp-leaders: '160'
     layer-duration-sec: '60'
     layer-average-size: '50'
     hare-wakeup-delta: '20'
@@ -38,7 +38,9 @@ bootstrap:
     space-to-commit: '2048'
     genesis-total-weight: '102400'
     executable-path: '/bin/go-spacemesh'
-#    grpc-port: '19092'
+    sync-interval: '4'
+    sync-validation-delta: '16'
+  #    grpc-port: '19092'
 #    json-port: '19093'
   deployment_type: deployment
 client:
@@ -57,7 +59,7 @@ client:
     hare-committee-size: '800'
     hare-max-adversaries: '399'
     hare-round-duration-sec: '7'
-    hare-exp-leaders: '10'
+    hare-exp-leaders: '160'
     layer-duration-sec: '60'
     layer-average-size: '50'
     hare-wakeup-delta: '20'
@@ -69,6 +71,8 @@ client:
     space-to-commit: '2048'
     genesis-total-weight: '102400'
     executable-path: '/bin/go-spacemesh'
+    sync-interval: '4'
+    sync-validation-delta: '16'
 #    grpc-port: '19092'
 #    json-port: '19093'
   deployment_type: deployment
