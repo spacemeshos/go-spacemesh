@@ -801,7 +801,7 @@ func (s *Switch) getMorePeers(ctx context.Context, numpeers int) int {
 	logger := s.logger.WithContext(ctx)
 
 	// discovery should provide us with random peers to connect to
-	nds := s.discover.SelectPeers(s.ctx, numpeers*2)
+	nds := s.discover.SelectPeers(s.ctx, numpeers)
 	ndsLen := len(nds)
 	if ndsLen == 0 {
 		logger.Debug("peer sampler returned nothing")
