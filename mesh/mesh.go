@@ -377,9 +377,11 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 		if err != nil {
 			// stop processing this hare result, wait until tortoise pushes this layer into state
 			msh.WithContext(ctx).Error("hare terminated with block that is not present in mesh")
-			return
+			// TODO: is it possible?! If yes, we have to finish hare with result here
+			// return
+		} else {
+			blocks = append(blocks, block)
 		}
-		blocks = append(blocks, block)
 	}
 	lyr := types.NewExistingLayer(validatedLayer, blocks)
 	invalidBlocks := msh.getInvalidBlocksByHare(ctx, lyr)
@@ -404,7 +406,8 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 func (msh *Mesh) getInvalidBlocksByHare(ctx context.Context, hareLayer *types.Layer) (invalid []*types.Block) {
 	dbLayer, err := msh.GetLayer(hareLayer.Index())
 	if err != nil {
-		msh.WithContext(ctx).With().Panic("failed to get layer", log.Err(err))
+		msh.WithContext(ctx).With().Error("failed to get layer", log.Err(err), hareLayer.Index())
+		//msh.WithContext(ctx).With().Panic("failed to get layer", log.Err(err))
 		return
 	}
 	exists := make(map[types.BlockID]struct{})
