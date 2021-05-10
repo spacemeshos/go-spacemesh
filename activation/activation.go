@@ -230,10 +230,12 @@ func (b *Builder) buildNipstChallenge() error {
 	if err != nil {
 		return fmt.Errorf("failed to get positioning ATX: %v", err)
 	}
+
 	challenge.PositioningATX = atxID
 	challenge.PubLayerID = pubLayerID.Add(b.layersPerEpoch)
 	challenge.StartTick = endTick
 	challenge.EndTick = endTick + b.tickProvider.NumOfTicks()
+
 	if prevAtx, err := b.GetPrevAtx(b.nodeID); err != nil {
 		challenge.CommitmentMerkleRoot = b.commitment.MerkleRoot
 	} else {
@@ -386,22 +388,32 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		b.log.With().Info("building new atx challenge", b.currentEpoch())
 		err := b.buildNipstChallenge()
 		if err != nil {
+			b.log.With().Error("failed to build new atx challenge", log.Err(err))
 			return err
 		}
 	}
+
+	b.log.With().Info("chellenge ready")
+
 	pubEpoch := b.challenge.PubLayerID.GetEpoch()
 
 	hash, err := b.challenge.Hash()
 	if err != nil {
+		b.log.With().Error("getting challenge hash failed", log.Err(err))
 		return fmt.Errorf("getting challenge hash failed: %v", err)
 	}
+
 	// ⏳ the following method waits for a PoET proof, which should take ~1 epoch
 	atxExpired := b.layerClock.AwaitLayer((pubEpoch + 2).FirstLayer()) // this fires when the target epoch is over
+
+	b.log.With().Info("build NIPST")
+
 	nipst, err := b.nipstBuilder.BuildNIPST(hash, atxExpired, b.stop)
 	if err != nil {
 		if _, stopRequested := err.(StopRequestedError); stopRequested {
 			return err
 		}
+		b.log.With().Error("failed to build nipst", log.Err(err))
 		return fmt.Errorf("failed to build nipst: %v", err)
 	}
 
@@ -411,6 +423,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		log.FieldNamed("current_layer", b.layerClock.GetCurrentLayer()),
 	)
 	if err := b.waitOrStop(b.layerClock.AwaitLayer(pubEpoch.FirstLayer())); err != nil {
+		b.log.With().Error("failed to wait of publication epoch", log.Err(err))
 		return err
 	}
 	b.log.Info("publication epoch has arrived!")

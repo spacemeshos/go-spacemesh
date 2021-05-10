@@ -746,25 +746,19 @@ func (s *Switch) askForMorePeers(ctx context.Context) {
 		// If 0 connections are required, the condition above is always true,
 		// so gossip needs to be considered ready in this case.
 		if s.config.SwarmConfig.RandomConnections == 0 {
-			select {
-			case <-s.initial:
-				// Nothing to do if channel is closed.
-				break
-			default:
-				// Close channel if it is not closed.
-				close(s.initial)
-			}
+			s.closeInitial()
+			return
 		}
-		return
+		s.logger.Warning("already has %d peers fo %d required", numpeers, s.config.SwarmConfig.RandomConnections)
+	} else {
+		// try to connect eq peers
+		s.getMorePeers(ctx, req)
+		// check number of peers after
+		s.outpeersMutex.RLock()
+		numpeers = len(s.outpeers)
+		s.outpeersMutex.RUnlock()
 	}
 
-	// try to connect eq peers
-	s.getMorePeers(ctx, req)
-
-	// check number of peers after
-	s.outpeersMutex.RLock()
-	numpeers = len(s.outpeers)
-	s.outpeersMutex.RUnlock()
 	// announce if initial number of peers achieved
 	// todo: better way then going in this every time ?
 	if numpeers >= s.config.SwarmConfig.RandomConnections {
@@ -807,7 +801,7 @@ func (s *Switch) getMorePeers(ctx context.Context, numpeers int) int {
 	logger := s.logger.WithContext(ctx)
 
 	// discovery should provide us with random peers to connect to
-	nds := s.discover.SelectPeers(s.ctx, numpeers)
+	nds := s.discover.SelectPeers(s.ctx, numpeers*2)
 	ndsLen := len(nds)
 	if ndsLen == 0 {
 		logger.Debug("peer sampler returned nothing")
