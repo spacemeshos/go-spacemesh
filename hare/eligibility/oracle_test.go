@@ -117,7 +117,7 @@ func createMapWithSize(n int) map[string]struct{} {
 	return m
 }
 
-func buildVerifier(result bool, err error) verifierFunc {
+func buildVerifier(result bool) verifierFunc {
 	return func(pub, msg, sig []byte) bool {
 		return result
 	}
@@ -194,7 +194,7 @@ func TestOracle_BuildVRFMessage(t *testing.T) {
 
 func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 10}, &mockBlocksProvider{}, buildVerifier(true, nil), &mockSigner{[]byte{1, 2, 3}}, 5, 5, hDist, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 10}, &mockBlocksProvider{}, buildVerifier(true), &mockSigner{[]byte{1, 2, 3}}, 5, 5, hDist, cfg, log.NewDefault(t.Name()))
 	mCache := newMockCacher()
 	o.vrfMsgCache = mCache
 
@@ -221,13 +221,13 @@ func TestOracle_IsEligible(t *testing.T) {
 	o.layersPerEpoch = 10
 
 	// VRF is ineligible
-	o.vrfVerifier = buildVerifier(false, errFoo)
+	o.vrfVerifier = buildVerifier(false)
 	res, err := o.Eligible(context.TODO(), types.LayerID(1), 0, 1, nid, []byte{})
 	require.Error(t, err)
 	require.False(t, res)
 
 	// VRF eligible but committee size zero
-	o.vrfVerifier = buildVerifier(true, nil)
+	o.vrfVerifier = buildVerifier(true)
 	res, err = o.Eligible(context.TODO(), types.LayerID(50), 1, 0, nid, []byte{})
 	require.NoError(t, err)
 	require.False(t, res)
@@ -289,14 +289,14 @@ func Test_SafeLayerRange(t *testing.T) {
 }
 
 func Test_ZeroParticipants(t *testing.T) {
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 5}, &mockBlocksProvider{}, buildVerifier(true, nil), &mockSigner{}, defLayersPerEpoch, genActive, hDist, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 5}, &mockBlocksProvider{}, buildVerifier(true), &mockSigner{}, defLayersPerEpoch, genActive, hDist, cfg, log.NewDefault(t.Name()))
 	res, err := o.Eligible(context.TODO(), 1, 0, 0, types.NodeID{Key: ""}, []byte{1})
 	assert.Nil(t, err)
 	assert.False(t, res)
 }
 
 func Test_AllParticipants(t *testing.T) {
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 5}, &mockBlocksProvider{}, buildVerifier(true, nil), &mockSigner{}, 10, genActive, hDist, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 5}, &mockBlocksProvider{}, buildVerifier(true), &mockSigner{}, 10, genActive, hDist, cfg, log.NewDefault(t.Name()))
 	res, err := o.Eligible(context.TODO(), 0, 0, 5, types.NodeID{Key: ""}, []byte{1})
 	assert.Nil(t, err)
 	assert.True(t, res)
@@ -313,7 +313,7 @@ func genBytes() []byte {
 func Test_ExpectedCommitteeSize(t *testing.T) {
 	setSize := 1024
 	commSize := 1000
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: setSize}, &mockBlocksProvider{}, buildVerifier(true, nil), &mockSigner{}, 10, genActive, hDist, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: setSize}, &mockBlocksProvider{}, buildVerifier(true), &mockSigner{}, 10, genActive, hDist, cfg, log.NewDefault(t.Name()))
 	count := 0
 	for i := 0; i < setSize; i++ {
 		res, err := o.Eligible(context.TODO(), 0, 0, commSize, types.NodeID{Key: ""}, genBytes())
@@ -334,7 +334,7 @@ func Test_ActiveSetSize(t *testing.T) {
 	m[types.EpochID(19)] = 2
 	m[types.EpochID(29)] = 3
 	m[types.EpochID(39)] = 5
-	o := New(&mockValueProvider{1, nil}, &mockBufferedActiveSetProvider{m}, &mockBlocksProvider{}, buildVerifier(true, nil), &mockSigner{}, 10, genActive, hDist, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, &mockBufferedActiveSetProvider{m}, &mockBlocksProvider{}, buildVerifier(true), &mockSigner{}, 10, genActive, hDist, cfg, log.NewDefault(t.Name()))
 	// TODO: remove this comment after inception problem is addressed
 	//assert.Equal(t, o.getActiveSet.ActiveSet(0), o.activeSetSize(1))
 	l := types.LayerID(19)
@@ -374,7 +374,7 @@ func Test_VrfSignVerify(t *testing.T) {
 }
 
 func TestOracle_Proof(t *testing.T) {
-	o := New(&mockValueProvider{0, errMy}, &mockActiveSetProvider{size: 10}, &mockBlocksProvider{}, buildVerifier(true, nil), &mockSigner{}, 10, genActive, hDist, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{0, errMy}, &mockActiveSetProvider{size: 10}, &mockBlocksProvider{}, buildVerifier(true), &mockSigner{}, 10, genActive, hDist, cfg, log.NewDefault(t.Name()))
 	sig, err := o.Proof(context.TODO(), 2, 3)
 	assert.Nil(t, sig)
 	assert.NotNil(t, err)
@@ -392,14 +392,14 @@ func TestOracle_Proof(t *testing.T) {
 }
 
 func TestOracle_Eligible(t *testing.T) {
-	o := New(&mockValueProvider{0, errMy}, &mockActiveSetProvider{size: 10}, &mockBlocksProvider{}, buildVerifier(true, nil), &mockSigner{}, 10, genActive, hDist, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{0, errMy}, &mockActiveSetProvider{size: 10}, &mockBlocksProvider{}, buildVerifier(true), &mockSigner{}, 10, genActive, hDist, cfg, log.NewDefault(t.Name()))
 	res, err := o.Eligible(context.TODO(), 1, 2, 3, types.NodeID{}, []byte{})
 	assert.False(t, res)
 	assert.NotNil(t, err)
 	assert.Equal(t, errMy, err)
 
 	o.beacon = &mockValueProvider{0, nil}
-	o.vrfVerifier = buildVerifier(false, nil)
+	o.vrfVerifier = buildVerifier(false)
 	res, err = o.Eligible(context.TODO(), 1, 2, 3, types.NodeID{}, []byte{})
 	assert.False(t, res)
 	assert.Nil(t, err)
