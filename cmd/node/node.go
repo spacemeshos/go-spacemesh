@@ -5,8 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof" // import for memory and network profiling
@@ -15,10 +13,12 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
-	"runtime/pprof"
 	"time"
 
-	"cloud.google.com/go/profiler"
+	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
+
+	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -263,16 +263,6 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 	if err := cmdp.EnsureCLIFlags(cmd, app.Config); err != nil {
 		return err
 	}
-	if app.Config.Profiler {
-		if err := profiler.Start(profiler.Config{
-			Service:        "go-spacemesh",
-			ServiceVersion: fmt.Sprintf("%s+%s+%s", cmdp.Version, cmdp.Branch, cmdp.Commit),
-			MutexProfiling: true,
-		}); err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, "failed to start profiler:", err)
-		}
-	}
-
 	// override default config in timesync since timesync is using TimeCongigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
 
@@ -990,42 +980,31 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	}
 
 	/* Setup monitoring */
-
-	if app.Config.MemProfile != "" {
-		logger.Info("starting mem profiling")
-		f, err := os.Create(app.Config.MemProfile)
-		if err != nil {
-			logger.With().Error("could not create memory profile", log.Err(err))
-		}
-		defer f.Close()
-		runtime.GC() // get up-to-date statistics
-		if err := pprof.WriteHeapProfile(f); err != nil {
-			logger.With().Error("could not write memory profile", log.Err(err))
-		}
-	}
-
-	if app.Config.CPUProfile != "" {
-		logger.Info("starting cpu profile")
-		f, err := os.Create(app.Config.CPUProfile)
-		if err != nil {
-			logger.With().Error("could not create cpu profile", log.Err(err))
-		}
-		defer f.Close()
-		if err := pprof.StartCPUProfile(f); err != nil {
-			logger.With().Error("could not start cpu profile", log.Err(err))
-		}
-		defer pprof.StopCPUProfile()
-	}
-
 	if app.Config.PprofHTTPServer {
 		logger.Info("starting pprof server")
 		srv := &http.Server{Addr: ":6060"}
 		defer srv.Shutdown(ctx)
 		go func() {
 			if err := srv.ListenAndServe(); err != nil {
-				logger.With().Error("cannot start http server", log.Err(err))
+				logger.With().Error("cannot start pprof http server", log.Err(err))
 			}
 		}()
+	}
+
+	if app.Config.ProfilerURL != "" {
+		p, err := profiler.Start(profiler.Config{
+			ApplicationName: app.Config.ProfilerName,
+			// app.Config.ProfilerURL should be the pyroscope server address
+			// TODO: AuthToken? no need right now since server isn't public
+			ServerAddress: app.Config.ProfilerURL,
+			// by default all profilers are enabled,
+		})
+		if err != nil {
+			logger.With().Error("cannot start profiling client")
+		} else {
+			defer p.Stop()
+		}
+
 	}
 
 	/* Create or load miner identity */
