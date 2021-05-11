@@ -1,7 +1,7 @@
 module github.com/spacemeshos/go-spacemesh
 
 require (
-	cloud.google.com/go v0.68.0
+	cloud.google.com/go v0.68.0 // indirect
 	cloud.google.com/go/storage v1.10.0
 	github.com/Microsoft/go-winio v0.4.14 // indirect
 	github.com/VividCortex/gohistogram v1.0.0 // indirect
@@ -10,7 +10,7 @@ require (
 	github.com/go-kit/kit v0.9.0
 	github.com/golang/mock v1.4.4
 	github.com/golang/protobuf v1.4.2
-	github.com/google/uuid v1.1.0
+	github.com/google/uuid v1.1.2
 	github.com/grpc-ecosystem/grpc-gateway v1.14.6
 	github.com/hashicorp/golang-lru v0.5.1
 	github.com/huin/goupnp v1.0.0
@@ -18,6 +18,7 @@ require (
 	github.com/nullstyle/go-xdr v0.0.0-20180726165426-f4c839f75077
 	github.com/prometheus/client_golang v0.9.3
 	github.com/prometheus/common v0.4.0
+	github.com/pyroscope-io/pyroscope v0.0.30
 	github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361
 	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect
 	github.com/spacemeshos/api/release/go v0.0.0-20201210094223-105249951c66
@@ -34,13 +35,10 @@ require (
 	github.com/syndtr/goleveldb v1.0.1-0.20190318030020-c3a204f8e965
 	go.uber.org/zap v1.15.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
-	golang.org/x/net v0.0.0-20201006153459-a7d1128ccaa0 // indirect
-	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
-	golang.org/x/sys v0.0.0-20201007165808-a893ed343c85 // indirect
+	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	google.golang.org/api v0.32.0
 	google.golang.org/genproto v0.0.0-20201007142714-5c0e72c5e71e
 	google.golang.org/grpc v1.32.0
-	gopkg.in/yaml.v2 v2.3.0 // indirect
 	nanomsg.org/go-mangos v1.4.0
 )
 
