@@ -153,8 +153,7 @@ func (c *MsgConnection) sendListener() {
 	for {
 		select {
 		case m := <-c.messages:
-			c.logger.With().Debug("sending outgoing message",
-				log.String("requestID", m.reqID))
+			c.logger.With().Debug("sending outgoing message", log.String("requestId", m.reqID))
 
 			//todo: we are hiding the error here...
 			if err := c.SendSock(m.payload); err != nil {
