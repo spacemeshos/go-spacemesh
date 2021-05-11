@@ -241,7 +241,7 @@ func (atx *ActivationTx) CalcAndSetID() {
 
 // GetPoetProofRef returns the reference to the PoET proof.
 func (atx *ActivationTx) GetPoetProofRef() Hash32 {
-	return CalcHash32(atx.Nipst.PostProof.Challenge)
+	return BytesToHash(atx.Nipst.PostProof.Challenge)
 }
 
 // GetShortPoetProofRef returns the first 5 characters of the PoET proof reference, for logging purposes.
@@ -272,9 +272,9 @@ func (proofMessage PoetProofMessage) Ref() ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %v",
 			proofMessage.PoetServiceID, proofMessage.RoundID, err)
 	}
-
 	ref := sha256.Sum256(poetProofBytes)
-	return ref[:], nil
+	h := CalcHash32(ref[:])
+	return h.Bytes(), nil
 }
 
 // PoetRound includes the PoET's round ID.
@@ -307,8 +307,7 @@ type PostProof proving.Proof
 // String returns a string representation of the PostProof, for logging purposes.
 // It implements the Stringer interface.
 func (p PostProof) String() string {
-	return fmt.Sprintf("challenge: %v, root: %v",
-		bytesToShortString(p.Challenge), bytesToShortString(p.MerkleRoot))
+	return fmt.Sprintf("challenge: %v", bytesToShortString(p.Challenge))
 }
 
 func bytesToShortString(b []byte) string {

@@ -10,9 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spacemeshos/amcl"
-	"github.com/spacemeshos/amcl/BLS381"
-
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/collector"
@@ -159,6 +156,13 @@ func getTestDefaultConfig() *config.Config {
 	cfg.SyncRequestTimeout = 500
 	cfg.SyncInterval = 2
 	cfg.SyncValidationDelta = 5
+
+	cfg.FETCH.RequestTimeout = 10
+	cfg.FETCH.MaxRetiresForPeer = 5
+	cfg.FETCH.BatchSize = 5
+	cfg.FETCH.BatchTimeout = 5
+
+	cfg.LAYERS.RequestTimeout = 10
 	cfg.GoldenATXID = "0x5678"
 
 	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
@@ -208,7 +212,7 @@ type network interface {
 
 // InitSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
-func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network) (*SpacemeshApp, error) {
+func InitSingleInstance(cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network) (*SpacemeshApp, error) {
 	smApp := NewSpacemeshApp()
 	smApp.Config = &cfg
 	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
@@ -216,8 +220,10 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.
 	edSgn := signing.NewEdSigner()
 	pub := edSgn.PublicKey()
 
-	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
-	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
+	vrfSigner, vrfPub, err := signing.NewVRFSigner(pub.Bytes())
+	if err != nil {
+		return nil, err
+	}
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
 
 	swarm := net.NewNode()
@@ -262,11 +268,11 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	}()
 
 	rolacle := eligibility.New()
-	rng := BLS381.DefaultSeed()
 	gTime, err := time.Parse(time.RFC3339, genesisTime)
 	if err != nil {
 		log.Error("cannot parse genesis time %v", err)
 	}
+	events.CloseEventPubSub()
 	pubsubAddr := "tcp://localhost:55666"
 	if err := events.InitializeEventReporter(pubsubAddr); err != nil {
 		log.With().Error("error initializing event reporter", log.Err(err))
@@ -278,7 +284,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := path + string(name)
 		database.SwitchCreationContext(dbStorepath, string(name))
-		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net)
+		smApp, err := InitSingleInstance(*cfg, i, genesisTime, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net)
 		if err != nil {
 			log.Error("cannot run multi node %v", err)
 			return
@@ -360,14 +366,14 @@ loop:
 			}
 
 			if eventDb.GetBlockCreationDone(layer) < numOfInstances {
-				log.Info("blocks done in layer %v: %v", layer, eventDb.GetBlockCreationDone(layer))
+				log.Warning("blocks done in layer %v: %v", layer, eventDb.GetBlockCreationDone(layer))
 				time.Sleep(500 * time.Millisecond)
 				errors++
 				continue
 			}
 			log.Info("all miners tried to create block in %v", layer)
 			if eventDb.GetNumOfCreatedBlocks(layer)*numOfInstances != eventDb.GetReceivedBlocks(layer) {
-				log.Info("finished: %v, block received %v layer %v", eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer), layer)
+				log.Warning("finished: %v, block received %v layer %v", eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer), layer)
 				time.Sleep(500 * time.Millisecond)
 				errors++
 				continue
@@ -375,7 +381,7 @@ loop:
 			log.Info("all miners got blocks for layer: %v created: %v received: %v", layer, eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer))
 			epoch := layer.GetEpoch()
 			if !(eventDb.GetAtxCreationDone(epoch) >= numOfInstances && eventDb.GetAtxCreationDone(epoch)%numOfInstances == 0) {
-				log.Info("atx not created %v in epoch %v, created only %v atxs", numOfInstances-eventDb.GetAtxCreationDone(epoch), epoch, eventDb.GetAtxCreationDone(epoch))
+				log.Warning("atx not created %v in epoch %v, created only %v atxs", numOfInstances-eventDb.GetAtxCreationDone(epoch), epoch, eventDb.GetAtxCreationDone(epoch))
 				time.Sleep(500 * time.Millisecond)
 				errors++
 				continue
@@ -383,7 +389,7 @@ loop:
 			log.Info("all miners finished reading %v atxs, layer %v done in %v", eventDb.GetAtxCreationDone(epoch), layer, time.Since(startLayer))
 			for _, atxID := range eventDb.GetCreatedAtx(epoch) {
 				if !eventDb.AtxIDExists(atxID) {
-					log.Info("atx %v not propagated", atxID)
+					log.Warning("atx %v not propagated", atxID)
 					errors++
 					continue
 				}

@@ -28,7 +28,7 @@ type valueProvider interface {
 }
 
 type signer interface {
-	Sign(msg []byte) ([]byte, error)
+	Sign(msg []byte) []byte
 }
 
 type atxProvider interface {
@@ -46,7 +46,7 @@ type meshProvider interface {
 }
 
 // a function to verify the message with the signature and its public key.
-type verifierFunc = func(msg, sig, pub []byte) (bool, error)
+type verifierFunc = func(pub, msg, sig []byte) bool
 
 // Oracle is the hare eligibility oracle
 type Oracle struct {
@@ -223,12 +223,7 @@ func (o *Oracle) Eligible(
 	}
 
 	// validate message
-	res, err := o.vrfVerifier(msg, sig, id.VRFPublicKey)
-	if err != nil {
-		logger.With().Error("eligibility: vrf verification failed", log.Err(err))
-		return false, err
-	}
-	if !res {
+	if !o.vrfVerifier(id.VRFPublicKey, msg, sig) {
 		logger.Info("eligibility: node did not pass vrf signature verification")
 		return false, nil
 	}
@@ -267,13 +262,7 @@ func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round int32) ([
 		return nil, err
 	}
 
-	sig, err := o.vrfSigner.Sign(msg)
-	if err != nil {
-		o.WithContext(ctx).With().Error("proof: could not sign vrf message", log.Err(err))
-		return nil, err
-	}
-
-	return sig, nil
+	return o.vrfSigner.Sign(msg), nil
 }
 
 // Returns a map of all active node IDs in the specified layer id

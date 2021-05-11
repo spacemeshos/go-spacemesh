@@ -324,7 +324,6 @@ func (sn *Node) Broadcast(_ context.Context, protocol string, payload []byte) er
 			// ownMessage is true for self-generated messages (outbound)
 			mychan <- SimGossipMessage{sn.Info.PublicKey(), true, DataBytes{Payload: payload}, nil}
 		}
-
 		for _, c := range sendees {
 			// ownMessage is false for all other nodes (inbound)
 			c <- SimGossipMessage{sn.Info.PublicKey(), false, DataBytes{Payload: payload}, nil}

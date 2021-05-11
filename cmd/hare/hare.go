@@ -18,8 +18,6 @@ import (
 	"go.uber.org/zap/zapcore"
 	"net/http"
 	"os"
-	"runtime"
-	"runtime/pprof"
 	"time"
 )
 
@@ -119,19 +117,6 @@ func validateBlocks(blocks []types.BlockID) bool {
 // Start the app
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	log.Info("starting hare main")
-
-	if app.Config.MemProfile != "" {
-		log.Info("starting mem profiling")
-		f, err := os.Create(app.Config.MemProfile)
-		if err != nil {
-			log.With().Error("could not create memory profile", log.Err(err))
-		}
-		defer f.Close()
-		runtime.GC() // get up-to-date statistics
-		if err := pprof.WriteHeapProfile(f); err != nil {
-			log.With().Error("could not write memory profile", log.Err(err))
-		}
-	}
 
 	if app.Config.PprofHTTPServer {
 		log.Info("starting pprof server")

@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math/rand"
@@ -118,18 +118,17 @@ func createMapWithSize(n int) map[string]struct{} {
 }
 
 func buildVerifier(result bool, err error) verifierFunc {
-	return func(msg, sig []byte, pub []byte) (bool, error) {
-		return result, err
+	return func(pub, msg, sig []byte) bool {
+		return result
 	}
 }
 
 type mockSigner struct {
 	sig []byte
-	err error
 }
 
-func (s *mockSigner) Sign(msg []byte) ([]byte, error) {
-	return s.sig, s.err
+func (s *mockSigner) Sign(msg []byte) []byte {
+	return s.sig
 }
 
 type mockCacher struct {
@@ -195,7 +194,7 @@ func TestOracle_BuildVRFMessage(t *testing.T) {
 
 func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 10}, &mockBlocksProvider{}, buildVerifier(true, nil), &mockSigner{[]byte{1, 2, 3}, nil}, 5, 5, hDist, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 10}, &mockBlocksProvider{}, buildVerifier(true, nil), &mockSigner{[]byte{1, 2, 3}}, 5, 5, hDist, cfg, log.NewDefault(t.Name()))
 	mCache := newMockCacher()
 	o.vrfMsgCache = mCache
 
@@ -359,15 +358,18 @@ func assertActiveSetSize(t *testing.T, o *Oracle, expected uint32, l types.Layer
 	assert.Equal(t, expected, activeSetSize)
 }
 
-func Test_BlsSignVerify(t *testing.T) {
-	pr, pu := BLS381.GenKeyPair(BLS381.DefaultSeed())
-	sr := BLS381.NewBlsSigner(pr)
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 10}, &mockBlocksProvider{}, BLS381.Verify2, sr, 10, genActive, hDist, cfg, log.NewDefault(t.Name()))
-	id := types.NodeID{Key: "abc", VRFPublicKey: pu}
-	proof, err := o.Proof(context.TODO(), 1, 1)
-	assert.Nil(t, err)
-	res, err := o.Eligible(context.TODO(), 1, 1, 10, id, proof)
-	assert.Nil(t, err)
+func Test_VrfSignVerify(t *testing.T) {
+	seed := make([]byte, 32)
+	rand.Read(seed)
+	vrfSigner, vrfPubkey, err := signing.NewVRFSigner(seed)
+	assert.NoError(t, err)
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 10}, &mockBlocksProvider{}, signing.VRFVerify, vrfSigner, 10, genActive, hDist, cfg, log.NewDefault(t.Name()))
+	id := types.NodeID{Key: "my_key", VRFPublicKey: vrfPubkey}
+	proof, err := o.Proof(context.TODO(), 50, 1)
+	assert.NoError(t, err)
+
+	res, err := o.Eligible(context.TODO(), 50, 1, 10, id, proof)
+	assert.NoError(t, err)
 	assert.True(t, res)
 }
 
@@ -378,13 +380,12 @@ func TestOracle_Proof(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Equal(t, errMy, err)
 	o.beacon = &mockValueProvider{0, nil}
-	o.vrfSigner = &mockSigner{nil, errMy}
+	o.vrfSigner = &mockSigner{nil}
 	sig, err = o.Proof(context.TODO(), 2, 3)
 	assert.Nil(t, sig)
-	assert.NotNil(t, err)
-	assert.Equal(t, errMy, err)
+	assert.NoError(t, err)
 	mySig := []byte{1, 2}
-	o.vrfSigner = &mockSigner{mySig, nil}
+	o.vrfSigner = &mockSigner{mySig}
 	sig, err = o.Proof(context.TODO(), 2, 3)
 	assert.Nil(t, err)
 	assert.Equal(t, mySig, sig)
@@ -487,7 +488,7 @@ func TestOracle_MultipleLayerBlocks(t *testing.T) {
 	lyr := types.LayerID(100)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, nil, uint16(layersPerEpoch), genActive, hDist, eCfg.Config{ConfidenceParam: uint64(confidenceParam), EpochOffset: epochOffset}, log.NewDefault(t.Name()))
 	sls, sle := safeLayerRange(lyr, types.LayerID(confidenceParam), types.LayerID(layersPerEpoch), types.LayerID(epochOffset))
-	numLayers := int(sle-sls+1) // +1 because inclusive of endpoints
+	numLayers := int(sle - sls + 1) // +1 because inclusive of endpoints
 	log.With().Info("layer range", log.FieldNamed("start", sls), log.FieldNamed("end", sle), log.Int("count", numLayers))
 	allBlocks := make(map[types.BlockID]bool, numLayers)
 	o.meshdb = &mockBlocksProvider{layerContextuallyValidBlocksFn: func(layerID types.LayerID) (map[types.BlockID]struct{}, error) {
@@ -672,8 +673,8 @@ func TestOracle_Eligible2(t *testing.T) {
 		return nil, errFoo
 	}}
 	o := New(&mockValueProvider{1, nil}, atxdb, &mockBlocksProvider{}, nil, nil, 5, genActive, hDist, cfg, log.NewDefault(t.Name()))
-	o.vrfVerifier = func(msg, sig, pub []byte) (bool, error) {
-		return true, nil
+	o.vrfVerifier = func(pub, msg, sig []byte) bool {
+		return true
 	}
 	_, err := o.Eligible(context.TODO(), 100, 1, 1, types.NodeID{}, []byte{})
 	assert.Equal(t, errFoo, errors.Unwrap(err))
