@@ -64,6 +64,9 @@ type BaseConfig struct {
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`
 
+	ProfilerName string `mapstructure:"profiler-name"`
+	ProfilerURL  string `mapstructure:"profiler-url"`
+
 	OracleServer        string `mapstructure:"oracle_server"`
 	OracleServerWorldID int    `mapstructure:"oracle_server_worldid"`
 
@@ -77,10 +80,6 @@ type BaseConfig struct {
 	WindowSize       int    `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)
 
 	PoETServer string `mapstructure:"poet-server"`
-
-	MemProfile string `mapstructure:"mem-profile"`
-
-	CPUProfile string `mapstructure:"cpu-profile"`
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
 
@@ -109,8 +108,6 @@ type BaseConfig struct {
 	BlockCacheSize int `mapstructure:"block-cache-size"`
 
 	AlwaysListen bool `mapstructure:"always-listen"` // force gossip to always be on (for testing)
-
-	Profiler bool `mapstructure:"profiler"`
 }
 
 // LoggerConfig holds the logging level for each module.
@@ -165,6 +162,8 @@ func defaultBaseConfig() BaseConfig {
 		TestMode:            false,
 		CollectMetrics:      false,
 		MetricsPort:         1010,
+		ProfilerURL:         "",
+		ProfilerName:        "gp-spacemesh",
 		OracleServer:        "http://localhost:3030",
 		OracleServerWorldID: 0,
 		GenesisTime:         time.Now().Format(time.RFC3339),
@@ -183,7 +182,6 @@ func defaultBaseConfig() BaseConfig {
 		SyncValidationDelta: 300,
 		AtxsPerBlock:        100,
 		TxsPerBlock:         100,
-		Profiler:            false,
 	}
 }
 
