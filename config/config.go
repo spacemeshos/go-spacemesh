@@ -66,7 +66,7 @@ type BaseConfig struct {
 	MetricsPort    int  `mapstructure:"metrics-port"`
 
 	ProfilerName string `mapstructure:"profiler-name"`
-	ProfilerUrl  string `mapstructure:"profiler-url"`
+	ProfilerURL  string `mapstructure:"profiler-url"`
 
 	OracleServer        string `mapstructure:"oracle_server"`
 	OracleServerWorldID int    `mapstructure:"oracle_server_worldid"`
@@ -160,7 +160,7 @@ func defaultBaseConfig() BaseConfig {
 		TestMode:            defaultTestMode,
 		CollectMetrics:      false,
 		MetricsPort:         1010,
-		ProfilerUrl:         "",
+		ProfilerURL:         "",
 		ProfilerName:        "gp-spacemesh",
 		OracleServer:        "http://localhost:3030",
 		OracleServerWorldID: 0,

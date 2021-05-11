@@ -991,12 +991,12 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 		}()
 	}
 
-	if app.Config.ProfilerUrl != "" {
+	if app.Config.ProfilerURL != "" {
 		p, err := profiler.Start(profiler.Config{
 			ApplicationName: app.Config.ProfilerName,
-			// app.Config.ProfilerUrl should be the pyroscope server address
+			// app.Config.ProfilerURL should be the pyroscope server address
 			// TODO: AuthToken? no need right now since server isn't public
-			ServerAddress: app.Config.ProfilerUrl,
+			ServerAddress: app.Config.ProfilerURL,
 			// by default all profilers are enabled,
 		})
 		if err != nil {
