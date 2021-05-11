@@ -154,10 +154,9 @@ func (c *MsgConnection) sendListener() {
 	for {
 		select {
 		case m := <-c.messages:
-			//todo: re insert when log loss is fixed
-			/*c.logger.With().Debug("msgconnection: sending outgoing message",
-			log.String("peer_id", m.peerID),
-			log.String("requestId", m.reqID))*/
+			c.logger.With().Debug("msgconnection: sending outgoing message",
+				log.String("peer_id", m.peerID),
+				log.String("requestId", m.reqID))
 
 			//todo: we are hiding the error here...
 			if err := c.SendSock(m.payload); err != nil {
