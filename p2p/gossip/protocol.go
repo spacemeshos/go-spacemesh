@@ -178,8 +178,10 @@ func (p *Protocol) handlePQ(ctx context.Context) {
 		} else {
 			msgCtx = log.WithRequestID(ctx, m.RequestID(), extraFields...)
 		}
-		p.WithContext(msgCtx).Debug("new_gossip_message_relay")
+		p.WithContext(msgCtx).With().Info("new_gossip_message_relay",
+			log.Int("priority_queue_length", p.pq.Length()))
 		p.propagateMessage(msgCtx, m.Message(), m.Protocol(), m.Sender())
+		p.WithContext(msgCtx).With().Info("finished propagating gossip message")
 	}
 }
 
@@ -200,11 +202,16 @@ func (p *Protocol) propagationEventLoop(ctx context.Context) {
 	for {
 		select {
 		case msgV := <-p.propagateQ:
+			// Note: this will block iff the priority queue is full
 			if err := p.pq.Write(p.getPriority(msgV.Protocol()), msgV); err != nil {
 				p.WithContext(ctx).With().Error("could not write to priority queue",
 					log.Err(err),
 					log.String("protocol", msgV.Protocol()))
 			}
+			p.WithContext(ctx).With().Info("wrote inbound message to priority queue",
+				log.String("protocol", msgV.Protocol()),
+				log.Int("priority_queue_length", p.pq.Length()),
+				log.Int("propagation_queue_length", len(p.propagateQ)))
 			metrics.PropagationQueueLen.Set(float64(len(p.propagateQ)))
 
 		case <-p.shutdown:

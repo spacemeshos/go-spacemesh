@@ -342,7 +342,7 @@ func (tp *TransactionProcessor) HandleTxData(ctx context.Context, data service.G
 		log.Uint64("gas", tx.GasLimit),
 		log.String("recipient", tx.Recipient.String()),
 		log.String("origin", tx.Origin().String()))
-	data.ReportValidation(IncomingTxProtocol)
+	data.ReportValidation(ctx, IncomingTxProtocol)
 	tp.pool.Put(tx.ID(), tx)
 }
 
