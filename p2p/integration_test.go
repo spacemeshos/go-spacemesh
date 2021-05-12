@@ -90,7 +90,7 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 				select {
 				case got := <-mc:
 					atomic.AddInt32(numgot, 1)
-					got.ReportValidation(exampleGossipProto)
+					got.ReportValidation(context.TODO(), exampleGossipProto)
 					log.Info("got back message %v", numgot)
 					return nil
 				case <-ctx.Done():

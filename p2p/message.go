@@ -1,8 +1,10 @@
 package p2p
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
@@ -61,8 +63,13 @@ func (pm gossipProtocolMessage) ValidationCompletedChan() chan service.MessageVa
 	return pm.validationChan
 }
 
-func (pm gossipProtocolMessage) ReportValidation(protocol string) {
+func (pm gossipProtocolMessage) ReportValidation(ctx context.Context, protocol string) {
 	if pm.validationChan != nil {
+		log.AppLog.WithContext(ctx).With().Info("reporting valid gossip message",
+			log.String("protocol", protocol),
+			log.String("requestId", pm.requestID),
+			log.FieldNamed("sender", pm.sender),
+			log.Int("validation_chan_len", len(pm.validationChan)))
 		pm.validationChan <- service.NewMessageValidation(pm.sender, pm.Bytes(), protocol, pm.requestID)
 	}
 }

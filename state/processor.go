@@ -318,7 +318,7 @@ func (tp *TransactionProcessor) HandleTxGossipData(ctx context.Context, data ser
 		tp.With().Error("invalid tx", log.Err(err))
 		return
 	}
-	data.ReportValidation(IncomingTxProtocol)
+	data.ReportValidation(ctx, IncomingTxProtocol)
 }
 
 // HandleTxData handles data received on TX gossip channel
