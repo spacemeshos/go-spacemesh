@@ -233,7 +233,7 @@ def wait_genesis(genesis_time, genesis_delta):
         time.sleep(delta_from_genesis)
 
 
-def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME, logstash_ss_name=LOGSTASH_SS_NAME):
+def wait_for_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME, logstash_ss_name=LOGSTASH_SS_NAME):
     es_timeout = 240
     try:
         print("waiting for ES to be ready")
@@ -241,17 +241,7 @@ def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME, logstas
     except Exception as e:
         print("elasticsearch statefulset readiness check has failed with err:", e)
         raise Exception(f"elasticsearch took over than {es_timeout} to start")
-
-    ls_timeout = 240
-    try:
-        print("waiting for logstash to be ready")
-        logstash_sleep_time = statefulset.wait_to_statefulset_to_be_ready(logstash_ss_name, namespace,
-                                                                          time_out=ls_timeout)
-    except Exception as e:
-        print(f"got an exception while waiting for Logstash to be ready: {e}")
-        raise Exception(f"logstash took over than {ls_timeout} to start")
-
-    return logstash_sleep_time + es_sleep_time
+    return es_sleep_time
 
 
 def exec_wait(cmd, retry=1, interval=1, is_print=True):
