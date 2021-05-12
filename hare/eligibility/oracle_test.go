@@ -223,7 +223,7 @@ func TestOracle_IsEligible(t *testing.T) {
 	// VRF is ineligible
 	o.vrfVerifier = buildVerifier(false)
 	res, err := o.Eligible(context.TODO(), types.LayerID(1), 0, 1, nid, []byte{})
-	require.Error(t, err)
+	require.NoError(t, err)
 	require.False(t, res)
 
 	// VRF eligible but committee size zero
