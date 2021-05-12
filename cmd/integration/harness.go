@@ -11,6 +11,7 @@ import (
 )
 
 const execPathLabel = "executable-path"
+const setGcTrace = "gc-trace"
 
 // Contains tells whether a contains x.
 // if it does it returns it's index otherwise -1
@@ -42,11 +43,13 @@ func newHarnessDefaultServerConfig(args []string) (*Harness, error) {
 	}
 	// next will be exec path value
 	execPath := args[execPathInd+1]
+
+	enableGcTrace := Contains(args, setGcTrace)!= -1
 	// remove executable path label and value
 	args = append(args[:execPathInd], args[execPathInd+2:]...)
 	args = append(args, "--acquire-port=false")
 	// set servers' configuration
-	cfg, errCfg := DefaultConfig(execPath)
+	cfg, errCfg := DefaultConfig(execPath, enableGcTrace)
 	if errCfg != nil {
 		return nil, fmt.Errorf("failed to build mock node: %v", errCfg)
 	}

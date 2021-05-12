@@ -18,14 +18,16 @@ type ServerConfig struct {
 	logLevel  string
 	rpcListen string
 	exe       string
+	gcTrace   bool
 }
 
 // DefaultConfig returns a newConfig with all default values.
-func DefaultConfig(execPath string) (*ServerConfig, error) {
+func DefaultConfig(execPath string, enableGcTrace bool) (*ServerConfig, error) {
 	cfg := &ServerConfig{
 		logLevel:  "debug",
 		rpcListen: "127.0.0.1:" + harnessPort,
 		exe:       execPath,
+		gcTrace:   enableGcTrace,
 	}
 
 	return cfg, nil
@@ -76,6 +78,14 @@ func (s *server) start(addArgs []string) error {
 	// Redirect stderr and stdout output to current harness buffers
 	s.cmd.Stdout = os.Stdout
 	s.cmd.Stderr = s.buff
+
+	//set env variable for gc tracing
+	if s.cfg.gcTrace {
+		err := os.Setenv("GODEBUG", "gctrace=1")
+		if err != nil {
+			log.With().Error("cannot enable gc tracing")
+		}
+	}
 
 	// start go-spacemesh server
 	if err := s.cmd.Start(); err != nil {

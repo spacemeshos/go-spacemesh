@@ -75,6 +75,7 @@ clientv2:
     layer-duration-sec: '60'
     layer-average-size: '20'
     hare-wakeup-delta: '10'
+    # gc-trace: 'true'
   deployment_type: deployment # default:deployment
 elastic:
   host: elastic.spacemesh.io
