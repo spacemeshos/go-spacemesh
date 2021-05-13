@@ -720,7 +720,7 @@ func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm se
 }
 
 func (app *SpacemeshApp) startServices(ctx context.Context, logger log.Log) {
-	app.layerFetch.Start()
+	app.layerFetch.Start(ctx)
 	go app.startSyncer(ctx)
 
 	if err := app.hare.Start(ctx); err != nil {

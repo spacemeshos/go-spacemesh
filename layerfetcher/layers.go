@@ -103,7 +103,6 @@ func DefaultConfig() Config {
 
 // NewLogic creates a new instance of layer fetching logic
 func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHandler, poet poetDb, atxIDs atxIDsDB, txs TxProcessor, network service.Service, fetcher fetch.Fetcher, layers layerDB, log log.Log) *Logic {
-
 	srv := fetch.NewMessageNetwork(ctx, cfg.RequestTimeout, network, layersProtocol, log)
 	l := &Logic{
 		log:                  log,
@@ -150,8 +149,8 @@ func (l *Logic) FetchFlow() {
 }
 
 // Start starts layerFetcher logic and fetch component
-func (l *Logic) Start() {
-	l.fetcher.Start()
+func (l *Logic) Start(ctx context.Context) {
+	l.fetcher.Start(ctx)
 }
 
 // Close closes all running workers
@@ -228,16 +227,16 @@ func (l *Logic) LayerHashBlocksReceiver(ctx context.Context, msg []byte) []byte 
 // fetch block ids from all peers
 // fetch ATXs and Txs per block
 func (l *Logic) PollLayer(ctx context.Context, layer types.LayerID) chan LayerPromiseResult {
-	l.log.Info("polling for layer %v", layer)
+	l.log.WithContext(ctx).With().Info("polling for layer", layer)
 	result := make(chan LayerPromiseResult, 1)
 
 	l.layerResM.Lock()
 	l.layerResultsChannels[layer] = append(l.layerResultsChannels[layer], result)
 	l.layerResM.Unlock()
 
-	peers := l.net.GetPeers()
 	// request layers from all peers since different peers can have different layer structures (in extreme cases)
 	// we ask for all blocks so that we know
+	peers := l.net.GetPeers()
 	for _, p := range peers {
 		// build custom receiver for each peer so that receiver will know which peer the hash came from
 		// so that it could request relevant block ids from the same peer

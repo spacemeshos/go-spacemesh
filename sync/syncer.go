@@ -43,21 +43,21 @@ type blockEligibilityValidator interface {
 
 type ticker interface {
 	Subscribe() timesync.LayerTimer
-	Unsubscribe(timer timesync.LayerTimer)
+	Unsubscribe(timesync.LayerTimer)
 	GetCurrentLayer() types.LayerID
 	LayerToTime(types.LayerID) time.Time
 }
 
 // LayerFetch definer interface for fetching data for layers
 type LayerFetch interface {
-	PollLayer(ctx context.Context, layer types.LayerID) chan layerfetcher.LayerPromiseResult
-	GetAtxs(ctx context.Context, IDs []types.ATXID) error
-	GetEpochATXs(ctx context.Context, id types.EpochID) error
-	GetBlocks(ctx context.Context, IDs []types.BlockID) error
-	FetchBlock(ctx context.Context, ID types.BlockID) error
-	GetPoetProof(ctx context.Context, id types.Hash32) error
-	GetInputVector(id types.LayerID) error
-	Start()
+	PollLayer(context.Context, types.LayerID) chan layerfetcher.LayerPromiseResult
+	GetAtxs(context.Context, []types.ATXID) error
+	GetEpochATXs(context.Context, types.EpochID) error
+	GetBlocks(context.Context, []types.BlockID) error
+	FetchBlock(context.Context, types.BlockID) error
+	GetPoetProof(context.Context, types.Hash32) error
+	GetInputVector(types.LayerID) error
+	Start(context.Context)
 	Close()
 }
 
@@ -180,7 +180,6 @@ type Syncer struct {
 
 // NewSync fires a sync every sm.SyncInterval or on force space from outside
 func NewSync(ctx context.Context, srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxDB atxDB, bv blockEligibilityValidator, poetdb poetDb, conf Configuration, clock ticker, layerFetch LayerFetch, logger log.Log) *Syncer {
-
 	exit := make(chan struct{})
 	srvr := &net{
 		RequestTimeout: conf.RequestTimeout,

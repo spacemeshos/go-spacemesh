@@ -217,9 +217,8 @@ func SyncMockFactoryManClock(number int, conf Configuration, name string, dbType
 		layerFetcher := layerfetcher.NewLogic(context.TODO(), layerfetcher.Config{RequestTimeout: 3}, store, store, store, store, store, net, f, msh, l)
 		poetDB := database.NewMemDatabase()
 		poet := activation.NewPoetDb(poetDB, log.NewDefault("poetDb"))
-		//poet := poetDb()
 		layerFetcher.AddDBs(msh.Blocks(), atxDB, msh.Transactions(), poetDB, msh.InputVector())
-		layerFetcher.Start()
+		layerFetcher.Start(context.TODO())
 
 		sync := NewSync(context.TODO(), net, msh, txpool, atxpool, blockValidator, poet, conf, ticker, layerFetcher, l)
 		nodes = append(nodes, sync)
@@ -421,9 +420,9 @@ func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
 	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
 	r.NoError(err)
 	ref := sha256.Sum256(poetProofBytes)
-	s0.fetcher.Start()
+	s0.fetcher.Start(context.TODO())
 	defer s0.fetcher.Close()
-	s1.fetcher.Start()
+	s1.fetcher.Start(context.TODO())
 	defer s1.fetcher.Close()
 	log.Info("new code")
 	err = s1.GetPoetProof(context.TODO(), types.CalcHash32(ref[:]))
@@ -1136,19 +1135,19 @@ func TestFetchLayerBlockIds(t *testing.T) {
 	block2 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
 
 	syncObj1 := syncs[0]
-	syncObj1.fetcher.Start()
+	syncObj1.fetcher.Start(context.TODO())
 	defer syncObj1.fetcher.Close()
 	syncObj1.peers = pm1 //override peers with mock
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
 	syncObj2.peers = pm2 //override peers with mock
-	syncObj2.fetcher.Start()
+	syncObj2.fetcher.Start(context.TODO())
 	defer syncObj2.Close()
 	defer syncObj2.fetcher.Close()
 	syncObj3 := syncs[2]
 	syncObj3.peers = pm3 //override peers with mock
 	defer syncObj3.Close()
-	syncObj3.fetcher.Start()
+	syncObj3.fetcher.Start(context.TODO())
 	defer syncObj3.fetcher.Close()
 
 	syncObj1.AddBlock(block1)
@@ -1223,30 +1222,30 @@ func TestFetchLayerBlockIdsNoResponse(t *testing.T) {
 	syncObj1 := syncs[0]
 	syncObj1.peers = pm1 //override peers with mock
 	syncObj1.atxDb = atxDb
-	syncObj1.fetcher.Start()
+	syncObj1.fetcher.Start(context.TODO())
 	defer syncObj1.fetcher.Close()
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
 	syncObj2.peers = pm2 //override peers with mock
-	syncObj2.fetcher.Start()
+	syncObj2.fetcher.Start(context.TODO())
 	defer syncObj2.fetcher.Close()
 	defer syncObj2.Close()
 	syncObj3 := syncs[2]
 	syncObj3.peers = pm3 //override peers with mock
 	syncObj3.atxDb = atxDb
-	syncObj3.fetcher.Start()
+	syncObj3.fetcher.Start(context.TODO())
 	defer syncObj3.fetcher.Close()
 	defer syncObj3.Close()
 	syncObj4 := syncs[3]
 	syncObj4.peers = pm4 //override peers with mock
 	syncObj4.atxDb = atxDb
-	syncObj4.fetcher.Start()
+	syncObj4.fetcher.Start(context.TODO())
 	defer syncObj4.fetcher.Close()
 	defer syncObj4.Close()
 
 	syncObj5 := syncs[4]
 	syncObj5.peers = pm5 //override peers with mock
-	syncObj5.fetcher.Start()
+	syncObj5.fetcher.Start(context.TODO())
 	defer syncObj5.fetcher.Close()
 	defer syncObj5.Close()
 
@@ -1526,7 +1525,7 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 		blocks: make(map[types.Hash32]*types.Block),
 	}
 	layerFetcher := layerfetcher.NewLogic(context.TODO(), layerfetcher.Config{RequestTimeout: 3}, store, store, store, store, store, syncedMiner, f, syncedMsh, l)
-	layerFetcher.Start()
+	layerFetcher.Start(context.TODO())
 	defer layerFetcher.Close()
 	poetDB := database.NewMemDatabase()
 	//poet := activation.NewPoetDb(poetDB, log.NewDefault("poetDb"))
@@ -1566,7 +1565,7 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 		blocks: make(map[types.Hash32]*types.Block),
 	}
 	nslayerFetcher := layerfetcher.NewLogic(context.TODO(), layerfetcher.Config{RequestTimeout: 3}, nsStore, nsStore, nsStore, nsStore, nsStore, nsMiner, nsF, nsMsh, l)
-	nslayerFetcher.Start()
+	nslayerFetcher.Start(context.TODO())
 	defer nslayerFetcher.Close()
 	nspoetDB := database.NewMemDatabase()
 	//poet := activation.NewPoetDb(poetDB, log.NewDefault("poetDb"))

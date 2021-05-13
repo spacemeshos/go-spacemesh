@@ -118,10 +118,10 @@ type mockFetcher struct {
 func (m mockFetcher) Stop() {
 }
 
-func (m mockFetcher) Start() {
+func (m mockFetcher) Start(context.Context) {
 }
 
-func (m mockFetcher) AddDB(hint fetch.Hint, db database.Store) {
+func (m mockFetcher) AddDB(fetch.Hint, database.Store) {
 
 }
 
@@ -136,14 +136,14 @@ func (m mockFetcher) GetHashes(hash []types.Hash32, hint fetch.Hint, validateAnd
 type mockBlocks struct {
 }
 
-func (m mockBlocks) HandleBlockData(ctx context.Context, date []byte, fetcher service.Fetcher) error {
+func (m mockBlocks) HandleBlockData(context.Context, []byte, service.Fetcher) error {
 	panic("implement me")
 }
 
 type mockAtx struct {
 }
 
-func (m mockAtx) HandleAtxData(ctx context.Context, data []byte, syncer service.Fetcher) error {
+func (m mockAtx) HandleAtxData(context.Context, []byte, service.Fetcher) error {
 	panic("implement me")
 }
 
