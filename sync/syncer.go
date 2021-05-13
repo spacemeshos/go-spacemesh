@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/monitoring"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -316,7 +317,9 @@ func (s *Syncer) Start(ctx context.Context) {
 
 // fires a sync every sm.SyncInterval or on force sync from outside
 func (s *Syncer) run(ctx context.Context) {
-	s.WithContext(ctx).Debug("start running")
+	// memory profiler has nothing to do with sync but this is a convenient place to run it
+	memlogger := monitoring.MemLogger{Logger: log.AppLog.WithName("memlogger").WithContext(ctx)}
+	s.WithContext(ctx).Debug("syncer running")
 	for {
 		select {
 		case <-s.exit:
@@ -325,6 +328,7 @@ func (s *Syncer) run(ctx context.Context) {
 		case <-s.forceSync:
 			go s.synchronise(ctx)
 		case <-s.syncTimer.C:
+			memlogger.LogMemoryUsage()
 			go s.synchronise(ctx)
 		}
 	}
