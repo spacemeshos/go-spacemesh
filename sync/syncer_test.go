@@ -1479,6 +1479,7 @@ func TestSyncer_handleNotSyncedZeroBlocksLayer(t *testing.T) {
 	r.NoError(sync.SetZeroBlockLayer(1))
 	r.Equal(0, lv.countValidated)
 	r.Equal(types.LayerID(0), lv.processedLayer)
+	time.Sleep(time.Second) // give layer fetcher a chance to start
 	go sync.handleNotSynced(context.TODO(), 1)
 	select {
 	case <-time.After(10 * time.Second):
