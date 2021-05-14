@@ -99,7 +99,7 @@ func TestHare_Start(t *testing.T) {
 
 	h := createHare(n1, log.NewDefault(t.Name()))
 
-	h.broker.Start(context.TODO()) // todo: fix that hack. this will cause h.Start to return err
+	h.broker.Start(context.TODO()) // todo: fix this hack. this will cause h.Start to return err.
 
 	/*err := h.Start()
 	require.Error(t, err)*/
@@ -122,11 +122,11 @@ func TestHare_GetResult(t *testing.T) {
 	mockid := instanceID(0)
 	set := NewSetFromValues(value1)
 
-	h.collectOutput(context.TODO(), mockReport{mockid, set, true})
+	r.NoError(h.collectOutput(context.TODO(), mockReport{mockid, set, true}))
 
 	res, err = h.GetResult(types.LayerID(0))
 	r.NoError(err)
-	r.Equal(res[0].Bytes(), value1.Bytes())
+	r.Equal(value1.Bytes(), res[0].Bytes())
 }
 
 func TestHare_GetResult2(t *testing.T) {
@@ -175,7 +175,7 @@ func TestHare_collectOutput(t *testing.T) {
 	mockid := instanceID1
 	set := NewSetFromValues(value1)
 
-	h.collectOutput(context.TODO(), mockReport{mockid, set, true})
+	require.NoError(t, h.collectOutput(context.TODO(), mockReport{mockid, set, true}))
 	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
 	require.Equal(t, output[0], value1)
@@ -197,7 +197,7 @@ func TestHare_collectOutput2(t *testing.T) {
 	mockid := instanceID0
 	set := NewSetFromValues(value1)
 
-	h.collectOutput(context.TODO(), mockReport{mockid, set, true})
+	require.NoError(t, h.collectOutput(context.TODO(), mockReport{mockid, set, true}))
 	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
 	require.Equal(t, output[0], value1)
@@ -265,7 +265,7 @@ func TestHare_onTick(t *testing.T) {
 		createdChan <- struct{}{}
 		return nmcp
 	}
-	h.Start(context.TODO())
+	require.NoError(t, h.Start(context.TODO()))
 
 	var wg sync.WaitGroup
 
@@ -281,7 +281,7 @@ func TestHare_onTick(t *testing.T) {
 	//collect output one more time
 	wg.Wait()
 	time.Sleep(100 * time.Millisecond)
-	res2, err := h.GetResult(types.LayerID(types.GetEffectiveGenesis() + 1))
+	res2, err := h.GetResult(types.GetEffectiveGenesis() + 1)
 	require.NoError(t, err)
 
 	SortBlockIDs(res2)
@@ -299,7 +299,7 @@ func TestHare_onTick(t *testing.T) {
 
 	//collect output one more time
 	wg.Wait()
-	res, err := h.GetResult(types.LayerID(types.GetEffectiveGenesis() + 2))
+	res, err := h.GetResult(types.GetEffectiveGenesis() + 2)
 	require.Equal(t, errNoResult, err)
 	require.Equal(t, []types.BlockID(nil), res)
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"io"
 	"io/ioutil"
 	"math"
@@ -1091,6 +1092,8 @@ func TestSmesherService(t *testing.T) {
 }
 
 func TestMeshService(t *testing.T) {
+	// run on a random port
+	cfg.GrpcServerPort = rand.Intn(9999)
 	grpcService := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
@@ -1473,7 +1476,7 @@ func TestMeshService(t *testing.T) {
 				// end layer after current layer
 				{
 					name: "end layer after current layer",
-					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
+					run: generateRunFnError("error reading layer data", &pb.LayersQueryRequest{
 						StartLayer: &pb.LayerNumber{Number: uint32(layerCurrent)},
 						EndLayer:   &pb.LayerNumber{Number: uint32(layerCurrent + 2)},
 					}),
@@ -1482,7 +1485,7 @@ func TestMeshService(t *testing.T) {
 				// start layer after current layer
 				{
 					name: "start layer after current layer",
-					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
+					run: generateRunFnError("error reading layer data", &pb.LayersQueryRequest{
 						StartLayer: &pb.LayerNumber{Number: uint32(layerCurrent + 2)},
 						EndLayer:   &pb.LayerNumber{Number: uint32(layerCurrent + 3)},
 					}),
@@ -1491,7 +1494,7 @@ func TestMeshService(t *testing.T) {
 				// layer after last received
 				{
 					name: "layer after last received",
-					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
+					run: generateRunFnError("error reading layer data", &pb.LayersQueryRequest{
 						StartLayer: &pb.LayerNumber{Number: uint32(layerLatest + 1)},
 						EndLayer:   &pb.LayerNumber{Number: uint32(layerLatest + 2)},
 					}),
@@ -1500,7 +1503,7 @@ func TestMeshService(t *testing.T) {
 				// very very large range
 				{
 					name: "very very large range",
-					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
+					run: generateRunFnError("error reading layer data", &pb.LayersQueryRequest{
 						StartLayer: &pb.LayerNumber{Number: 0},
 						EndLayer:   &pb.LayerNumber{Number: uint32(math.MaxUint32)},
 					}),

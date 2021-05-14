@@ -170,7 +170,7 @@ var ErrTooLate = errors.New("consensus process finished too late")
 // records the provided output.
 func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) error {
 	set := output.Set()
-	blocks := make([]types.BlockID, len(set.values))
+	blocks := make([]types.BlockID, 0, len(set.values))
 	for v := range set.values {
 		blocks = append(blocks, v)
 	}
