@@ -1125,6 +1125,7 @@ func TestSyncer_Txs(t *testing.T) {
 func TestFetchLayerBlockIds(t *testing.T) {
 	// check tx validation
 	syncs, nodes, clock := SyncMockFactory(3, conf, t.Name(), memoryDB, newMockPoetDb)
+	time.Sleep(time.Second)
 
 	defer clock.Close()
 
