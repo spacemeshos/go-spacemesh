@@ -218,6 +218,7 @@ func SyncMockFactoryManClock(number int, conf Configuration, name string, dbType
 		poetDB := database.NewMemDatabase()
 		poet := activation.NewPoetDb(poetDB, log.NewDefault("poetDb"))
 		layerFetcher.AddDBs(msh.Blocks(), atxDB, msh.Transactions(), poetDB, msh.InputVector())
+		// note: layer fetcher startup happens asynchronously, so it may not be fully running when this method returns
 		layerFetcher.Start(context.TODO())
 
 		sync := NewSync(context.TODO(), net, msh, txpool, atxpool, blockValidator, poet, conf, ticker, layerFetcher, l)
