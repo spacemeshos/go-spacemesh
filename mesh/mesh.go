@@ -399,24 +399,12 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 		Status:  events.LayerStatusTypeApproved,
 	})
 
-	lyr := types.NewExistingLayer(validatedLayer, blocks)
-	invalidBlocks := msh.getInvalidBlocksByHare(ctx, lyr)
-	msh.updateStateWithLayer(lyr)
-	msh.reInsertTxsToPool(blocks, invalidBlocks, lyr.Index())
+	logger.With().Info("saving input vector for layer", log.Int("valid_blocks", len(blocks)))
 
-	// get the full layer incl invalid blocks
-	for _, bl := range invalidBlocks {
-		lyr.AddBlock(bl)
-	}
-
-	logger.With().Info("mesh validating layer",
-		log.Int("valid_blocks", len(blocks)),
-		log.Int("invalid_blocks", len(invalidBlocks)))
-
-	if err := msh.SaveLayerInputVectorByID(lyr.Index(), types.BlockIDs(blocks)); err != nil {
+	if err := msh.SaveLayerInputVectorByID(validatedLayer, types.BlockIDs(blocks)); err != nil {
 		logger.Error("saving layer input vector failed")
 	}
-	msh.ValidateLayer(ctx, lyr.Index())
+	msh.ValidateLayer(ctx, validatedLayer)
 }
 
 func (msh *Mesh) getInvalidBlocksByHare(ctx context.Context, hareLayer *types.Layer) (invalid []*types.Block) {
