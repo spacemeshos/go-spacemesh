@@ -224,7 +224,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	obj1 := createAccount(s.processor, SignerToAddr(signer), 25, 0)
 	obj2 := createAccount(s.processor, toAddr([]byte{0x01, 02}), 1, 10)
 	obj3 := createAccount(s.processor, toAddr([]byte{0x02}), 44, 0)
-	s.processor.Commit()
+	_, err = s.processor.Commit()
+	assert.NoError(s.T(), err)
 
 	transactions := []*types.Transaction{
 		createTransaction(s.T(), obj1.Nonce()+3, obj3.address, 1, 5, signer),
@@ -233,8 +234,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer),
 	}
 
-	s.processor.ApplyTransactions(1, transactions)
-	//assert.Error(s.T(), err)
+	_, err = s.processor.ApplyTransactions(1, transactions)
+	assert.NoError(s.T(), err)
 
 	got := string(s.processor.Dump())
 

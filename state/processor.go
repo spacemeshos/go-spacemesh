@@ -133,17 +133,20 @@ func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*ty
 	remainingCount := len(remaining)
 
 	// loop over the transactions until there's nothing left to process
-	for remaining = tp.Process(remaining, layer); len(remaining) != remainingCount; remainingCount = len(remaining) {
+	for {
+		tp.With().Debug("applying transactions", log.Int("count_remaining", remainingCount))
+		remaining = tp.Process(remaining, layer)
+		if remainingCount == len(remaining) {
+			break
+		}
+		remainingCount = len(remaining)
 	}
 
 	newHash, err := tp.Commit()
-
 	if err != nil {
 		return remainingCount, fmt.Errorf("failed to commit global state: %w", err)
 	}
-
 	err = tp.addStateToHistory(layer, newHash)
-
 	return remainingCount, err
 }
 
