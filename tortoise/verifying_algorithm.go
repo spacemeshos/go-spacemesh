@@ -131,11 +131,18 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()
 	oldVerified = trtl.trtl.Verified
+	trtl.logger.WithContext(ctx).With().Info("handling incoming layer",
+		log.FieldNamed("old_pbase", oldVerified),
+		log.FieldNamed("incoming_layer", layerID))
 	if err := trtl.trtl.HandleIncomingLayer(ctx, layerID); err != nil {
 		// consider panicking here instead, since it means tortoise is stuck
 		trtl.logger.WithContext(ctx).With().Error("tortoise errored handling incoming layer", log.Err(err))
 	}
 	newVerified = trtl.trtl.Verified
+	trtl.logger.WithContext(ctx).With().Info("finished handling incoming layer",
+		log.FieldNamed("old_pbase", oldVerified),
+		log.FieldNamed("new_pbase", newVerified),
+		log.FieldNamed("incoming_layer", layerID))
 
 	// rerun if needed
 	reverted, revertLayer := trtl.rerunIfNeeded(ctx)
@@ -177,11 +184,12 @@ func (trtl *ThreadSafeVerifyingTortoise) rerunIfNeeded(ctx context.Context) (rev
 	//   tortoise since we don't want to mess with the state of the main tortoise. We re-stream layer data from genesis
 	//   using the sliding window, simulating a full resync.
 	// TODO: should this happen "in the background" in a separate goroutine? Should it hold the mutex?
+	logger := trtl.logger.WithContext(ctx)
+	logger.With().Info("checking if tortoise needs to rerun from genesis",
+		log.Duration("rerun_interval", trtl.rerunInterval),
+		log.Time("last_rerun", trtl.lastRerun))
 	if time.Now().Sub(trtl.lastRerun) > trtl.rerunInterval {
-		logger := trtl.logger.WithContext(ctx)
-		logger.With().Info("triggering tortoise full rerun from genesis",
-			log.Duration("rerun_interval", trtl.rerunInterval),
-			log.Time("last_rerun", trtl.lastRerun))
+		logger.With().Info("triggering tortoise full rerun from genesis")
 
 		// start from scratch with a new tortoise instance for each rerun
 		trtlForRerun := trtl.trtl.cloneTurtle()

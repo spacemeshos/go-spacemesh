@@ -589,7 +589,7 @@ func (m *DB) writeTransactions(l types.LayerID, txs []*types.Transaction) error 
 		if err != nil {
 			return fmt.Errorf("could not marshall tx %v to bytes: %v", t.ID().ShortString(), err)
 		}
-		m.Log.Info("storing tx id %v size %v", t.ID().ShortString(), len(bytes))
+		m.Log.With().Debug("storing transaction", t.ID(), log.Int("tx_length", len(bytes)))
 		if err := batch.Put(t.ID().Bytes(), bytes); err != nil {
 			return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
 		}

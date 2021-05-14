@@ -202,8 +202,7 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	// test state is the same if receiving result from tortoise after same result from hare received
 	// test state is the same after late block
 	// test panic after block from hare was not found in mesh
-	// test that state does not advance when layer x +2 is received before layer x+1, and then test that all layers are pushed
-
+	// test that state does not advance when layer x+2 is received before layer x+1, and then test that all layers are pushed
 	numOfLayers := 10
 	numOfBlocks := 10
 	maxTxs := 20
@@ -222,19 +221,24 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	s2 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
 	mesh2, atxDB2 := getMeshWithMapState("t2", s2)
 
-	// this should be played until numOfLayers -1 if we want to compare states
+	// this should be played until numOfLayers-1 if we want to compare states
 	for i := 0; i < numOfLayers-1; i++ {
 		blockIds := copyLayer(t, mesh, mesh2, atxDB2, types.LayerID(i))
 		mesh2.HandleValidatedLayer(context.TODO(), types.LayerID(i), blockIds)
 	}
+
 	// test states are the same when one input is from tortoise and the other from hare
-	assert.Equal(t, s.Txs, s2.Txs)
+	assert.NotEqual(t, s.Txs, s2.Txs)
 
 	for i := 0; i < numOfLayers; i++ {
 		l, err := mesh.GetLayer(types.LayerID(i))
 		assert.NoError(t, err)
 		mesh2.ValidateLayer(context.TODO(), l.Index())
 	}
+
+	// test states are the same when one input is from tortoise and the other from hare
+	assert.Equal(t, s.Txs, s2.Txs)
+
 	// test state is the same if receiving result from tortoise after same result from hare received
 	assert.ObjectsAreEqualValues(s.Txs, s2.Txs)
 
@@ -246,11 +250,11 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	mesh2.HandleLateBlock(context.TODO(), blk)
 	assert.Equal(t, s.Txs, s2.Txs)
 
-	// test that state does not advance when layer x +2 is received before layer x+1, and then test that all layers are pushed
+	// test that state does not advance when layer x+2 is received before layer x+1, and then test that all layers are pushed
 	s3 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
 	mesh3, atxDB3 := getMeshWithMapState("t3", s3)
 
-	// this should be played until numOfLayers -1 if we want to compare states
+	// this should be played until numOfLayers-1 if we want to compare states
 	for i := 0; i < numOfLayers-3; i++ {
 		blockIds := copyLayer(t, mesh, mesh3, atxDB3, types.LayerID(i))
 		mesh3.HandleValidatedLayer(context.TODO(), types.LayerID(i), blockIds)
@@ -262,6 +266,20 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 
 	blockIds = copyLayer(t, mesh, mesh3, atxDB3, types.LayerID(numOfLayers-3))
 	mesh3.HandleValidatedLayer(context.TODO(), types.LayerID(numOfLayers-3), blockIds)
+	assert.Greater(t, len(s3.Txs), s3Len) // expect txs from layer 6 to have been applied
+	s3Len = len(s3.Txs)
+
+	// re-validate layer 8 (applying layer 7 state)
+	mesh3.HandleValidatedLayer(context.TODO(), types.LayerID(numOfLayers-2), blockIds)
+	assert.Greater(t, len(s3.Txs), s3Len) // expect txs from layer 7 to have been applied
+	s3Len = len(s3.Txs)
+
+	// validate layer 9 (applying layer 8 state)
+	blockIds = copyLayer(t, mesh, mesh3, atxDB3, types.LayerID(numOfLayers-1))
+	mesh3.HandleValidatedLayer(context.TODO(), types.LayerID(numOfLayers-1), blockIds)
+	assert.Greater(t, len(s3.Txs), s3Len) // expect txs from layer 9 to have been applied
+
+	// now everything should have been applied
 	assert.Equal(t, s.Txs, s3.Txs)
 }
 
