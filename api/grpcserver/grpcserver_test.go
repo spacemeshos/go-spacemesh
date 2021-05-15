@@ -106,6 +106,9 @@ var (
 )
 
 func init() {
+	// run on a random port
+	cfg.GrpcServerPort = 1024 + rand.Intn(9999)
+
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
 	block1.ATXID = globalAtx.ID()
@@ -1092,8 +1095,6 @@ func TestSmesherService(t *testing.T) {
 }
 
 func TestMeshService(t *testing.T) {
-	// run on a random port
-	cfg.GrpcServerPort = rand.Intn(9999)
 	grpcService := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
