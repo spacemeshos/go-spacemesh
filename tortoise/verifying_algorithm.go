@@ -100,7 +100,7 @@ func (trtl *ThreadSafeVerifyingTortoise) LatestComplete() types.LayerID {
 	return verified
 }
 
-// BaseBlock chooses a base block and creates a differences list. needs the hare results for latest layers.
+// BaseBlock chooses a base block and creates a differences list.
 func (trtl *ThreadSafeVerifyingTortoise) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
 	trtl.mutex.Lock()
 	block, diffs, err := trtl.trtl.BaseBlock(ctx)
@@ -185,7 +185,7 @@ func (trtl *ThreadSafeVerifyingTortoise) rerunIfNeeded(ctx context.Context) (rev
 	//   using the sliding window, simulating a full resync.
 	// TODO: should this happen "in the background" in a separate goroutine? Should it hold the mutex?
 	logger := trtl.logger.WithContext(ctx)
-	logger.With().Info("checking if tortoise needs to rerun from genesis",
+	logger.With().Debug("checking if tortoise needs to rerun from genesis",
 		log.Duration("rerun_interval", trtl.rerunInterval),
 		log.Time("last_rerun", trtl.lastRerun))
 	if time.Now().Sub(trtl.lastRerun) > trtl.rerunInterval {

@@ -404,7 +404,7 @@ func (m *DB) GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) 
 // SaveLayerInputVectorByID gets the input vote vector for a layer (hare results)
 func (m *DB) SaveLayerInputVectorByID(id types.LayerID, blks []types.BlockID) error {
 	hash := types.CalcHash32(id.Bytes())
-	m.With().Info("SaveLayerInputVectorByID: saving input vector", id, hash)
+	m.With().Info("saving input vector by layerid", id, hash, log.Int("num_blocks", len(blks)))
 	return m.SaveLayerInputVector(hash, blks)
 }
 
@@ -968,7 +968,7 @@ func (m *DB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]stru
 	for _, b := range blockIds {
 		valid, err := m.ContextualValidity(b)
 		if err != nil {
-			m.With().Error("could not get contextual validity by layer", b, layer, log.Err(err))
+			m.With().Error("could not get contextual validity for block", b, layer, log.Err(err))
 		}
 
 		if !valid {

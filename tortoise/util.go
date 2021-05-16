@@ -21,7 +21,7 @@ var ( //correction vectors type
 
 // Field returns a log field. Implements the LoggableField interface.
 func (a vec) Field() log.Field {
-	return log.String("vote_vector", fmt.Sprint(a))
+	return log.String("vote_vector", fmt.Sprintf("%s (+%d, -%d)", a, a[0], a[1]))
 }
 
 func (a vec) Add(v vec) vec {
@@ -44,25 +44,20 @@ func simplifyVote(v vec) vec {
 	if v[0] > v[1] {
 		return support
 	}
-
 	if v[1] > v[0] {
 		return against
 	}
-
 	return abstain
 }
 
 func (a vec) String() string {
 	v := simplifyVote(a)
-
 	if v == support {
 		return "support"
 	}
-
 	if v == against {
 		return "against"
 	}
-
 	return "abstain"
 }
 
