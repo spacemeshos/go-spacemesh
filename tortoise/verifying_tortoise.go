@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/syndtr/goleveldb/leveldb"
+	"time"
 )
 
 type blockDataProvider interface {
@@ -73,6 +74,9 @@ type turtle struct {
 	// this matrix stores the opinion of each block about other blocks
 	// it stores every block, regardless of local opinion (i.e., regardless of whether it's marked as "good" or not)
 	BlockOpinionsByLayer map[types.LayerID]map[types.BlockID]Opinion
+
+	// how often we want to rerun from genesis
+	RerunInterval time.Duration
 }
 
 // SetLogger sets the Log instance for this turtle
@@ -81,7 +85,7 @@ func (t *turtle) SetLogger(logger log.Log) {
 }
 
 // newTurtle creates a new verifying tortoise algorithm instance
-func newTurtle(bdp blockDataProvider, hdist, zdist, confidenceParam, windowSize, avgLayerSize int) *turtle {
+func newTurtle(bdp blockDataProvider, hdist, zdist, confidenceParam, windowSize, avgLayerSize int, rerun time.Duration) *turtle {
 	return &turtle{
 		logger:               log.NewDefault("trtl"),
 		Hdist:                types.LayerID(hdist),
@@ -94,12 +98,13 @@ func newTurtle(bdp blockDataProvider, hdist, zdist, confidenceParam, windowSize,
 		GoodBlocksIndex:      make(map[types.BlockID]struct{}),
 		BlockOpinionsByLayer: make(map[types.LayerID]map[types.BlockID]Opinion, hdist),
 		MaxExceptions:        hdist * avgLayerSize * 100,
+		RerunInterval:        rerun,
 	}
 }
 
 // cloneTurtle creates a new verifying tortoise instance using the params of this instance
 func (t *turtle) cloneTurtle() *turtle {
-	return newTurtle(t.bdp, int(t.Hdist), int(t.Zdist), int(t.ConfidenceParam), int(t.WindowSize), t.AvgLayerSize)
+	return newTurtle(t.bdp, int(t.Hdist), int(t.Zdist), int(t.ConfidenceParam), int(t.WindowSize), t.AvgLayerSize, t.RerunInterval)
 }
 
 func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
@@ -117,7 +122,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	}
 	t.Last = genesisLayer.Index()
 	// set last evicted one layer earlier since we look for things starting one layer after last evicted
-	t.LastEvicted = genesisLayer.Index()-1
+	t.LastEvicted = genesisLayer.Index() - 1
 	t.Verified = genesisLayer.Index()
 }
 
@@ -143,7 +148,7 @@ func (t *turtle) evict(ctx context.Context) {
 	logger.With().Info("tortoise window start", windowStart)
 
 	// evict from last evicted to the beginning of our window
-	for layerToEvict := t.LastEvicted+1; layerToEvict < windowStart; layerToEvict++ {
+	for layerToEvict := t.LastEvicted + 1; layerToEvict < windowStart; layerToEvict++ {
 		logger.With().Debug("evicting layer", layerToEvict)
 		for blk := range t.BlockOpinionsByLayer[layerToEvict] {
 			delete(t.GoodBlocksIndex, blk)
@@ -320,7 +325,7 @@ func (t *turtle) calculateExceptions(
 ) ([]map[types.BlockID]struct{}, error) {
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.FieldNamed("base_block_layer_id", blockLayerID),
-		log.FieldNamed("base_block_id", blockID))
+		log.FieldNamed("base_block_candidate", blockID))
 
 	// using maps prevents duplicates
 	againstDiff := make(map[types.BlockID]struct{})
@@ -340,7 +345,7 @@ func (t *turtle) calculateExceptions(
 	// "good" if its own base block is marked "good" and all exceptions it contains agree with our local opinion.
 	// We only look for and store exceptions within the sliding window set of layers as an optimization, but a block
 	// can contain exceptions from any layer, back to genesis.
-	startLayer := t.LastEvicted+1
+	startLayer := t.LastEvicted + 1
 	if startLayer < types.GetEffectiveGenesis() {
 		startLayer = types.GetEffectiveGenesis()
 	}
@@ -361,7 +366,6 @@ func (t *turtle) calculateExceptions(
 		addDiffs := func(bid types.BlockID, voteClass string, voteVec vec, diffMap map[types.BlockID]struct{}) {
 			if v, ok := baseBlockOpinion.BlockOpinions[bid]; !ok || v != voteVec {
 				logger.With().Debug("added vote diff",
-					log.FieldNamed("base_block_candidate", blockID),
 					log.FieldNamed("diff_block", bid),
 					log.String("diff_class", voteClass))
 				diffMap[bid] = struct{}{}
@@ -560,10 +564,6 @@ func (t *turtle) ProcessNewBlocks(ctx context.Context, blocks []*types.Block) er
 func (t *turtle) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) error {
 	logger := t.logger.WithContext(ctx).WithFields(layerID)
 
-	if t.Last < layerID {
-		t.Last = layerID
-	}
-
 	if layerID <= types.GetEffectiveGenesis() {
 		logger.Debug("not attempting to handle genesis layer")
 		return nil
@@ -576,6 +576,10 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, layerID types.LayerID)
 	layerBlocks, err := t.bdp.LayerBlocks(layerID)
 	if err != nil {
 		return fmt.Errorf("unable to read contents of layer %v: %w", layerID, err)
+	}
+
+	if t.Last < layerID {
+		t.Last = layerID
 	}
 
 	logger.With().Info("tortoise handling incoming layer", log.Int("num_blocks", len(layerBlocks)))
@@ -593,7 +597,7 @@ func (t *turtle) verifyLayers(ctx context.Context, targetLayerID types.LayerID) 
 	// this is the full range of unverified layers that we might possibly be able to verify at this point.
 	// Note: t.Verified is initialized to the effective genesis layer, so the first candidate layer here necessarily
 	// follows and is post-genesis. There's no need for an additional check here.
-	for candidateLayerID := t.Verified+1; candidateLayerID < targetLayerID; candidateLayerID++ {
+	for candidateLayerID := t.Verified + 1; candidateLayerID < targetLayerID; candidateLayerID++ {
 		logger.With().Info("attempting to verify layer", candidateLayerID)
 
 		// note: if the following checks fail, we just return rather than trying to verify later layers.
@@ -739,7 +743,8 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 	logger := t.logger.WithContext(ctx).WithFields(layerID)
 
 	// for layers older than hdist, we vote according to global opinion
-	oldLayerCutoff := t.Last-t.Hdist
+	// TODO: what if this layer hasn't been verified yet? (it will have no contextually valid blocks)
+	oldLayerCutoff := t.Last - t.Hdist
 	if t.Hdist > t.Last {
 		oldLayerCutoff = 0
 	}

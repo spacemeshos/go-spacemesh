@@ -13,11 +13,10 @@ import (
 
 // ThreadSafeVerifyingTortoise is a thread safe verifying tortoise wrapper, it just locks all actions.
 type ThreadSafeVerifyingTortoise struct {
-	trtl          *turtle
-	logger        log.Log
-	rerunInterval time.Duration
-	lastRerun     time.Time
-	mutex         sync.RWMutex
+	trtl      *turtle
+	logger    log.Log
+	lastRerun time.Time
+	mutex     sync.RWMutex
 }
 
 // Config holds the arguments and dependencies to create a verifying tortoise instance.
@@ -66,12 +65,11 @@ func verifyingTortoise(
 		logger.With().Panic("hdist must be >= zdist", log.Int("hdist", hdist), log.Int("zdist", zdist))
 	}
 	alg := &ThreadSafeVerifyingTortoise{
-		trtl: newTurtle(mdb, hdist, zdist, confidenceParam, windowSize, layerSize),
+		trtl: newTurtle(mdb, hdist, zdist, confidenceParam, windowSize, layerSize, rerunInterval),
 	}
 	alg.logger = logger
-	alg.rerunInterval = rerunInterval
 	alg.lastRerun = time.Now()
-	alg.trtl.SetLogger(logger.WithFields(log.String("rerun", "false")))
+	alg.trtl.SetLogger(logger.WithFields(log.String("tortoise_rerun", "false")))
 	alg.trtl.init(ctx, mesh.GenesisLayer())
 	return alg
 }
@@ -83,13 +81,16 @@ func recoveredVerifyingTortoise(mdb blockDataProvider, logger log.Log) *ThreadSa
 		logger.With().Panic("could not recover tortoise state from disk", log.Err(err))
 	}
 
-	trtl := tmp.(*turtle)
+	trtl, ok := tmp.(*turtle)
+	if !ok {
+		logger.Panic("type error reading recovered tortoise state")
+	}
 
 	logger.Info("recovered tortoise from disk")
 	trtl.bdp = mdb
 	trtl.logger = logger
 
-	return &ThreadSafeVerifyingTortoise{trtl: trtl}
+	return &ThreadSafeVerifyingTortoise{trtl: trtl, lastRerun: time.Now(), logger: logger}
 }
 
 // LatestComplete returns the latest verified layer
@@ -186,14 +187,14 @@ func (trtl *ThreadSafeVerifyingTortoise) rerunIfNeeded(ctx context.Context) (rev
 	// TODO: should this happen "in the background" in a separate goroutine? Should it hold the mutex?
 	logger := trtl.logger.WithContext(ctx)
 	logger.With().Debug("checking if tortoise needs to rerun from genesis",
-		log.Duration("rerun_interval", trtl.rerunInterval),
+		log.Duration("rerun_interval", trtl.trtl.RerunInterval),
 		log.Time("last_rerun", trtl.lastRerun))
-	if time.Now().Sub(trtl.lastRerun) > trtl.rerunInterval {
+	if time.Now().Sub(trtl.lastRerun) > trtl.trtl.RerunInterval {
 		logger.With().Info("triggering tortoise full rerun from genesis")
 
 		// start from scratch with a new tortoise instance for each rerun
 		trtlForRerun := trtl.trtl.cloneTurtle()
-		trtlForRerun.SetLogger(logger.WithFields(log.String("rerun", "true")))
+		trtlForRerun.SetLogger(logger.WithFields(log.String("tortoise_rerun", "true")))
 		trtlForRerun.init(ctx, mesh.GenesisLayer())
 		bdp := bdpWrapper{blockDataProvider: trtlForRerun.bdp}
 		trtlForRerun.bdp = bdp

@@ -52,6 +52,7 @@ var (
 	defaultTestHdist           = config.DefaultConfig().Hdist
 	defaultTestZdist           = config.DefaultConfig().Zdist
 	defaultTestWindowSize      = 30 // make test faster
+	defaultTestRerunInterval   = time.Hour
 	defaultTestConfidenceParam = config.DefaultConfig().ConfidenceParam
 )
 
@@ -185,7 +186,7 @@ func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer, voteNeg
 		return sorted[voteNegative:], nil
 	}
 
-	trtl = newTurtle(msh, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, blocksPerLayer)
+	trtl = newTurtle(msh, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, blocksPerLayer, defaultTestRerunInterval)
 	trtl.init(context.TODO(), mesh.GenesisLayer())
 
 	var l types.LayerID
@@ -273,7 +274,7 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 		})
 	}
 
-	trtl := newTurtle(msh, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, blocksPerLayer)
+	trtl := newTurtle(msh, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, blocksPerLayer, defaultTestRerunInterval)
 	gen := mesh.GenesisLayer()
 	trtl.init(context.TODO(), gen)
 
@@ -294,10 +295,10 @@ func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp
 	fmt.Println("choosing base block for layer", l)
 	msh.InputVectorBackupFunc = ivp
 	b, lists, err := bbp(context.TODO())
-	fmt.Println("the base block for layer", l, "is", b)
-	fmt.Println("against", lists[0])
-	fmt.Println("for", lists[1])
-	fmt.Println("neutral", lists[2])
+	fmt.Println("the base block for layer", l, "is", b, ". exception lists:")
+	fmt.Println("\tagainst\t", lists[0])
+	fmt.Println("\tfor\t", lists[1])
+	fmt.Println("\tneutral\t", lists[2])
 	if err != nil {
 		panic(fmt.Sprint("no base - ", err))
 	}
@@ -353,8 +354,7 @@ func TestTurtle_Eviction(t *testing.T) {
 //		(defaultTestHdist+2)*avgPerLayer)
 //}
 
-func TestTurtle_Recovery(t *testing.T) {
-	log.DebugMode(true)
+func TestAddToMesh(t *testing.T) {
 	mdb, teardown := getPersistentMesh()
 	defer func() {
 		require.NoError(t, teardown())
@@ -367,7 +367,7 @@ func TestTurtle_Recovery(t *testing.T) {
 	mdb.InputVectorBackupFunc = getHareResults
 
 	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), 3, mdb, 5, 5, 5, 20, time.Hour, lg)
+	alg := verifyingTortoise(context.TODO(), 3, mdb, 5, 5, 5, 20, defaultTestRerunInterval, lg)
 	l := mesh.GenesisLayer()
 
 	log.With().Info("genesis is", l.Index(), types.BlockIdsField(types.BlockIDs(l.Blocks())))
@@ -380,12 +380,10 @@ func TestTurtle_Recovery(t *testing.T) {
 	log.With().Info("first bb is", l1.Index(), l1.Blocks()[0].BaseBlock, types.BlockIdsField(l1.Blocks()[0].ForDiff))
 
 	alg.HandleIncomingLayer(context.TODO(), l1.Index())
-	require.NoError(t, alg.Persist(context.TODO()))
 
 	l2 := createTurtleLayer(types.GetEffectiveGenesis()+2, mdb, alg.BaseBlock, getHareResults, 3)
 	require.NoError(t, addLayerToMesh(mdb, l2))
 	alg.HandleIncomingLayer(context.TODO(), l2.Index())
-	require.NoError(t, alg.Persist(context.TODO()))
 
 	require.Equal(t, int(types.GetEffectiveGenesis()+1), int(alg.LatestComplete()))
 
@@ -398,36 +396,65 @@ func TestTurtle_Recovery(t *testing.T) {
 		return l3a.Blocks()[0].ID(), diffs, nil
 	}, getHareResults, 5)
 
-	//defer func() {
-	//	recovered := false
-	//	if r := recover(); r != nil {
-	//		t.Log("recovered from", r)
-	//		recovered = true
-	//	}
-	//	require.True(t, recovered, "no crash detected")
-	//
-	//	log.Info("recovered")
-	//
-	//	alg := recoveredVerifyingTortoise(mdb, lg)
-	//	alg.HandleIncomingLayer(context.TODO(), l2.Index())
-	//
-	//	l3 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, 3)
-	//	addLayerToMesh(mdb, l3)
-	//	alg.HandleIncomingLayer(context.TODO(), l3.Index())
-	//	alg.Persist(context.TODO())
-	//
-	//	l4 := createTurtleLayer(types.GetEffectiveGenesis()+4, mdb, alg.BaseBlock, getHareResults, 3)
-	//	addLayerToMesh(mdb, l4)
-	//	alg.HandleIncomingLayer(context.TODO(), l4.Index())
-	//	alg.Persist(context.TODO())
-	//	assert.True(t, alg.LatestComplete() == types.GetEffectiveGenesis()+3)
-	//
-	//	require.NoError(t, teardown())
-	//}()
-
 	// this should fail as the blocks for this layer have not been added to the mesh yet
 	alg.HandleIncomingLayer(context.TODO(), l3b.Index())
 	require.Equal(t, int(types.GetEffectiveGenesis()+1), int(alg.LatestComplete()))
-	require.NoError(t, addLayerToMesh(mdb, l3b))
-	alg.HandleIncomingLayer(context.TODO(), l3b.Index())
+
+	l3 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, 3)
+	require.NoError(t, addLayerToMesh(mdb, l3))
+	alg.HandleIncomingLayer(context.TODO(), l3.Index())
+
+	l4 := createTurtleLayer(types.GetEffectiveGenesis()+4, mdb, alg.BaseBlock, getHareResults, 3)
+	require.NoError(t, addLayerToMesh(mdb, l4))
+	alg.HandleIncomingLayer(context.TODO(), l4.Index())
+	require.Equal(t, int(types.GetEffectiveGenesis()+3), int(alg.LatestComplete()), "wrong latest complete layer")
+}
+
+func TestPersistAndRecover(t *testing.T) {
+	mdb, teardown := getPersistentMesh()
+	defer func() {
+		require.NoError(t, teardown())
+	}()
+
+	getHareResults := func(l types.LayerID) ([]types.BlockID, error) {
+		return mdb.LayerBlockIds(l)
+	}
+
+	mdb.InputVectorBackupFunc = getHareResults
+
+	lg := log.NewDefault(t.Name())
+	alg := verifyingTortoise(context.TODO(), 3, mdb, 5, 5, 5, 20, defaultTestRerunInterval, lg)
+
+	l1 := createTurtleLayer(types.GetEffectiveGenesis()+1, mdb, alg.BaseBlock, getHareResults, 3)
+	require.NoError(t, addLayerToMesh(mdb, l1))
+	alg.HandleIncomingLayer(context.TODO(), l1.Index())
+	require.NoError(t, alg.Persist(context.TODO()))
+
+	l2 := createTurtleLayer(types.GetEffectiveGenesis()+2, mdb, alg.BaseBlock, getHareResults, 3)
+	require.NoError(t, addLayerToMesh(mdb, l2))
+	alg.HandleIncomingLayer(context.TODO(), l2.Index())
+	require.NoError(t, alg.Persist(context.TODO()))
+	require.Equal(t, int(types.GetEffectiveGenesis()+1), int(alg.LatestComplete()))
+
+	// now recover
+	alg2 := recoveredVerifyingTortoise(mdb, lg)
+	require.Equal(t, alg.LatestComplete(), alg2.LatestComplete())
+	require.Equal(t, alg.trtl.bdp, alg2.trtl.bdp)
+	require.Equal(t, alg.trtl.LastEvicted, alg2.trtl.LastEvicted)
+	require.Equal(t, alg.trtl.Verified, alg2.trtl.Verified)
+	require.Equal(t, alg.trtl.WindowSize, alg2.trtl.WindowSize)
+	require.Equal(t, alg.trtl.Last, alg2.trtl.Last)
+	require.Equal(t, alg.trtl.Hdist, alg2.trtl.Hdist)
+	require.Equal(t, alg.trtl.ConfidenceParam, alg2.trtl.ConfidenceParam)
+	require.Equal(t, alg.trtl.Zdist, alg2.trtl.Zdist)
+	require.Equal(t, alg.trtl.RerunInterval, alg2.trtl.RerunInterval)
+
+	l3 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, 3)
+	require.NoError(t, addLayerToMesh(mdb, l3))
+	alg.HandleIncomingLayer(context.TODO(), l3.Index())
+	alg2.HandleIncomingLayer(context.TODO(), l3.Index())
+
+	// expect identical results
+	require.Equal(t, int(types.GetEffectiveGenesis()+2), int(alg.LatestComplete()), "wrong latest complete layer")
+	require.Equal(t, int(types.GetEffectiveGenesis()+2), int(alg2.LatestComplete()), "wrong latest complete layer")
 }
