@@ -17,6 +17,8 @@ var reporter *EventReporter
 // we use a mutex to ensure thread safety
 var mu sync.RWMutex
 
+const EventQueueSize int = 30
+
 func init() {
 	mu = sync.RWMutex{}
 }
@@ -472,7 +474,7 @@ func UnsubscribeFromReceipts(subscriptionChannel chan TxReceipt) {
 // InitializeEventReporter initializes the event reporting interface
 func InitializeEventReporter(url string) error {
 	// Need to buffer the channels so that slow subscribers can still receive updates
-	return InitializeEventReporterWithOptions(url, 30)
+	return InitializeEventReporterWithOptions(url, EventQueueSize)
 }
 
 // InitializeEventReporterWithOptions initializes the event reporting interface with
