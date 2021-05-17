@@ -17,6 +17,7 @@ var reporter *EventReporter
 // we use a mutex to ensure thread safety
 var mu sync.RWMutex
 
+// EventQueueSize is a parameterized length of the channel buffers
 const EventQueueSize int = 30
 
 func init() {
