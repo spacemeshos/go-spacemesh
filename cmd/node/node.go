@@ -458,10 +458,8 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	app.nodeID = nodeID
 
-	name := nodeID.ShortString()
-
 	// This base logger must be debug level so that other, derived loggers are not a lower level.
-	lg := log.NewWithLevel(name, zap.NewAtomicLevelAt(zapcore.DebugLevel)).WithFields(nodeID)
+	lg := log.NewWithLevel(zap.NewAtomicLevelAt(zapcore.DebugLevel)).WithFields(nodeID)
 
 	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
 
@@ -1014,7 +1012,7 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	}
 
 	// This base logger must be debug level so that other, derived loggers are not a lower level.
-	lg := log.NewWithLevel(nodeID.ShortString(), zap.NewAtomicLevelAt(zapcore.DebugLevel)).WithFields(nodeID)
+	lg := log.NewWithLevel(zap.NewAtomicLevelAt(zapcore.DebugLevel)).WithFields(nodeID)
 
 	/* Initialize all protocol services */
 
