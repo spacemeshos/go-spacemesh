@@ -205,6 +205,10 @@ func (b *Builder) loop(ctx context.Context) {
 		default:
 		}
 		if err := b.PublishActivationTx(ctx); err != nil {
+			b.log.WithContext(ctx).With().Error("error attempting to publish atx",
+				b.layerClock.GetCurrentLayer(),
+				b.currentEpoch(),
+				log.Err(err))
 			if _, stopRequested := err.(StopRequestedError); stopRequested {
 				return
 			}
