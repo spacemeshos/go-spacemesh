@@ -236,7 +236,7 @@ func NewSpacemeshApp() *SpacemeshApp {
 }
 
 func (app *SpacemeshApp) introduction() {
-	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
+	log.Info("Welcome to Spacemesh. Spacemesh full node is starting... %v", os.Getenv("GODEBUG"))
 }
 
 // Initialize does pre processing of flags and configuration files, it also initializes data dirs if they dont exist

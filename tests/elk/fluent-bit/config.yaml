@@ -39,10 +39,10 @@ data:
         K8S-Logging.Parser  On
         K8S-Logging.Exclude On
 
-    [FILTER]
-        Name        record_modifier
-        Match       kube.*
-        Remove_key  log
+    # [FILTER]
+    #   Name        record_modifier
+    #    Match       kube.*
+    #    Remove_key  log
 
 
   fluent-bit-output.conf: |-

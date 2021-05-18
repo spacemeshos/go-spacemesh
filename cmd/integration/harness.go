@@ -43,10 +43,14 @@ func newHarnessDefaultServerConfig(args []string) (*Harness, error) {
 	}
 	// next will be exec path value
 	execPath := args[execPathInd+1]
-
-	enableGcTrace := Contains(args, setGcTrace) != -1
 	// remove executable path label and value
 	args = append(args[:execPathInd], args[execPathInd+2:]...)
+	// do the same for enable gc as it is a harness param
+	enableGcInd := Contains(args, setGcTrace)
+	enableGcTrace :=  enableGcInd != -1
+	if enableGcTrace {
+		args = append(args[:enableGcInd], args[enableGcInd+2:]...)
+	}
 	args = append(args, "--acquire-port=false")
 	// set servers' configuration
 	cfg, errCfg := DefaultConfig(execPath, enableGcTrace)
@@ -101,6 +105,8 @@ func main() {
 			case <-h.server.quit:
 				log.With().Info("harness: got a quit signal from subprocess")
 				break
+			case data := <- h.server.errStreamWriter.data:
+				log.Warning("%s", data.String())
 			}
 		}
 	}()

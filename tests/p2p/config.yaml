@@ -3,7 +3,7 @@ namespace: ''
 config_map_name: conf
 
 script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
-
+is_dump: True
 total_pods: 60
 genesis_delta: 180
 single_pod_ready_time_out: 60
@@ -52,6 +52,7 @@ client:
     layer-average-size: '20'
     hare-wakeup-delta: '10'
     executable-path: '/bin/go-p2p'
+    gc-trace: 'true'
   deployment_type: deployment # default:deployment
 # IMPORTANT: all clients on the same suite should contain the same args (hare-committee-size, hare-max-adversaries etc)!
 clientv2:
@@ -75,7 +76,6 @@ clientv2:
     layer-duration-sec: '60'
     layer-average-size: '20'
     hare-wakeup-delta: '10'
-    # gc-trace: 'true'
   deployment_type: deployment # default:deployment
 elastic:
   host: elastic.spacemesh.io

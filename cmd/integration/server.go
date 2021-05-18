@@ -54,6 +54,8 @@ type server struct {
 	quit chan struct{}
 	wg   sync.WaitGroup
 	buff *bytes.Buffer
+
+	errStreamWriter *IOChannelWriter
 }
 
 // newServer creates a new node server instance according to the passed cfg.
@@ -62,6 +64,7 @@ func newServer(cfg *ServerConfig) (*server, error) {
 		cfg:     cfg,
 		errChan: make(chan error, 5),
 		buff:    &bytes.Buffer{},
+		errStreamWriter: NewIOChannelWriter(),
 	}, nil
 }
 
@@ -77,14 +80,11 @@ func (s *server) start(addArgs []string) error {
 	s.cmd = exec.Command(s.cfg.exe, args...)
 	// Redirect stderr and stdout output to current harness buffers
 	s.cmd.Stdout = os.Stdout
-	s.cmd.Stderr = s.buff
-
+	s.cmd.Stderr = s.errStreamWriter
 	//set env variable for gc tracing
 	if s.cfg.gcTrace {
-		err := os.Setenv("GODEBUG", "gctrace=1")
-		if err != nil {
-			log.With().Error("cannot enable gc tracing")
-		}
+		log.Info("setting GODEBUG")
+		s.cmd.Env = append(s.cmd.Env, "GODEBUG=gctrace=1")
 	}
 
 	// start go-spacemesh server
@@ -128,4 +128,28 @@ func (s *server) stop() error {
 
 	s.quit = nil
 	return nil
+}
+
+type IOChannelWriter struct {
+	data chan *bytes.Buffer
+	stop chan struct{}
+}
+
+func NewIOChannelWriter() *IOChannelWriter {
+	return &IOChannelWriter{
+		data: make(chan *bytes.Buffer, 100),
+	}
+}
+
+func (w *IOChannelWriter) Write(buf []byte) (int, error){
+	select {
+	case w.data <- bytes.NewBuffer(buf):
+		return len(buf), nil
+	case <-w.stop:
+		return 0, fmt.Errorf("err stream closed")
+	}
+}
+
+func (w *IOChannelWriter) Stop() {
+	close(w.stop)
 }
