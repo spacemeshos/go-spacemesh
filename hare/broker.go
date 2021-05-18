@@ -229,9 +229,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 				msgLogger.With().Error("broker message validation failed", log.Err(errNilInner))
 				continue
 			}
-			msgLogger.With().Info("broker received hare message",
-				hareMsg,
-				log.Int("queue_length", len(b.inbox)))
+			msgLogger.With().Info("broker received hare message", log.Int("queue_length", len(b.inbox)))
 
 			// TODO: fix metrics
 			// metrics.MessageTypeCounter.With("type_id", hareMsg.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(msgInstID), 10), "reporter", "brokerHandler").Add(1)
