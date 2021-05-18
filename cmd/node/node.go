@@ -15,8 +15,6 @@ import (
 	"time"
 
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
-	"github.com/spacemeshos/amcl"
-	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
