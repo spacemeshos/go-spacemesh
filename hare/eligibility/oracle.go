@@ -341,16 +341,19 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 	defer func() {
 		if msg := recover(); msg != nil {
 			o.With().Error("panic in CalcEligibility",
+				layer, layer.GetEpoch(), log.Int32("round_id", round),
 				log.String("msg", fmt.Sprint(msg)),
+				log.Int("committeeSize", committeeSize),
 				log.Int("n", n),
-				log.String("p", p.String()),
-				log.String("vrfFrac", vrfFrac.String()),
+				log.String("p", fmt.Sprintf("%g", p.Float())),
+				log.String("vrfFrac", fmt.Sprintf("%g", vrfFrac.Float())),
 			)
 			o.Panic("%s", msg)
 		}
 	}()
 
 	o.With().Info("params",
+		layer, layer.GetEpoch(), log.Int32("round_id", round),
 		log.Int("committeeSize", committeeSize),
 		log.Int("n", n),
 		log.String("p", fmt.Sprintf("%g", p.Float())),
