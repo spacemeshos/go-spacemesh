@@ -131,7 +131,28 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleLateBlocks(ctx context.Context, b
 func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) (oldVerified, newVerified types.LayerID, reverted bool) {
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()
+
 	oldVerified = trtl.trtl.Verified
+
+	// first check if it's time for a total rerun
+	trtl.logger.With().Debug("checking if tortoise needs to rerun from genesis",
+		log.Duration("rerun_interval", trtl.trtl.RerunInterval),
+		log.Time("last_rerun", trtl.lastRerun))
+
+	// TODO: in future we can do something more sophisticated, using accounting to determine when enough changes to old
+	//   layers have accumulated (in terms of block weight) that our opinion could actually change. For now, we do the
+	//   Simplest Possible Thing (TM) and just rerun from genesis once in a while. This requires a different instance of
+	//   tortoise since we don't want to mess with the state of the main tortoise. We re-stream layer data from genesis
+	//   using the sliding window, simulating a full resync.
+	if time.Now().Sub(trtl.lastRerun) > trtl.trtl.RerunInterval {
+		if reverted, revertLayer := trtl.rerunFromGenesis(ctx); reverted {
+			// make sure state is reapplied from far enough back if there was a state reversion
+			oldVerified = revertLayer
+		}
+		trtl.lastRerun = time.Now()
+	}
+
+	// Even after a rerun, we still need to process the new incoming layer
 	trtl.logger.WithContext(ctx).With().Info("handling incoming layer",
 		log.FieldNamed("old_pbase", oldVerified),
 		log.FieldNamed("incoming_layer", layerID))
@@ -139,18 +160,12 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context
 		// consider panicking here instead, since it means tortoise is stuck
 		trtl.logger.WithContext(ctx).With().Error("tortoise errored handling incoming layer", log.Err(err))
 	}
+
 	newVerified = trtl.trtl.Verified
 	trtl.logger.WithContext(ctx).With().Info("finished handling incoming layer",
 		log.FieldNamed("old_pbase", oldVerified),
 		log.FieldNamed("new_pbase", newVerified),
 		log.FieldNamed("incoming_layer", layerID))
-
-	// rerun if needed
-	reverted, revertLayer := trtl.rerunIfNeeded(ctx)
-	if reverted {
-		// make sure state is reapplied from far enough back if there was a state reversion
-		oldVerified = revertLayer
-	}
 
 	return
 }
@@ -178,50 +193,41 @@ func (bdp bdpWrapper) SaveContextualValidity(bid types.BlockID, lid types.LayerI
 }
 
 // trigger a rerun from genesis once in a while
-func (trtl *ThreadSafeVerifyingTortoise) rerunIfNeeded(ctx context.Context) (reverted bool, revertLayer types.LayerID) {
-	// TODO: in future we can do something more sophisticated, using accounting to determine when enough changes to old
-	//   layers have accumulated (in terms of block weight) that our opinion could actually change. For now, we do the
-	//   Simplest Possible Thing (TM) and just rerun from genesis once in a while. This requires a different instance of
-	//   tortoise since we don't want to mess with the state of the main tortoise. We re-stream layer data from genesis
-	//   using the sliding window, simulating a full resync.
+func (trtl *ThreadSafeVerifyingTortoise) rerunFromGenesis(ctx context.Context) (reverted bool, revertLayer types.LayerID) {
 	// TODO: should this happen "in the background" in a separate goroutine? Should it hold the mutex?
 	logger := trtl.logger.WithContext(ctx)
-	logger.With().Debug("checking if tortoise needs to rerun from genesis",
-		log.Duration("rerun_interval", trtl.trtl.RerunInterval),
-		log.Time("last_rerun", trtl.lastRerun))
-	if time.Now().Sub(trtl.lastRerun) > trtl.trtl.RerunInterval {
-		logger.With().Info("triggering tortoise full rerun from genesis")
+	logger.With().Info("triggering tortoise full rerun from genesis")
 
-		// start from scratch with a new tortoise instance for each rerun
-		trtlForRerun := trtl.trtl.cloneTurtle()
-		trtlForRerun.SetLogger(logger.WithFields(log.String("tortoise_rerun", "true")))
-		trtlForRerun.init(ctx, mesh.GenesisLayer())
-		bdp := bdpWrapper{blockDataProvider: trtlForRerun.bdp}
-		trtlForRerun.bdp = bdp
+	// start from scratch with a new tortoise instance for each rerun
+	trtlForRerun := trtl.trtl.cloneTurtle()
+	trtlForRerun.SetLogger(logger.WithFields(log.String("tortoise_rerun", "true")))
+	trtlForRerun.init(ctx, mesh.GenesisLayer())
+	bdp := bdpWrapper{blockDataProvider: trtlForRerun.bdp}
+	trtlForRerun.bdp = bdp
 
-		for layerID := types.GetEffectiveGenesis(); layerID < trtl.trtl.Last; layerID++ {
-			logger.With().Debug("rerunning tortoise for layer", layerID)
-			if err := trtlForRerun.HandleIncomingLayer(ctx, layerID); err != nil {
-				logger.With().Error("tortoise rerun errored", log.Err(err))
-				break
-			}
+	for layerID := types.GetEffectiveGenesis(); layerID < trtl.trtl.Last; layerID++ {
+		logger.With().Debug("rerunning tortoise for layer", layerID)
+		if err := trtlForRerun.HandleIncomingLayer(ctx, layerID); err != nil {
+			logger.With().Error("tortoise rerun errored", log.Err(err))
+			// bail out completely if we encounter an error: don't revert state and don't swap out the trtl
+			// TODO: give this some more thought
+			return
 		}
-
-		// revert state if necessary
-		// state will be reapplied in mesh after we return, no need to reapply here
-		if bdp.firstUpdatedLayer != nil {
-			logger.With().Warning("turtle rerun detected state changes, attempting to reapply state from first changed layer",
-				log.FieldNamed("first_layer", bdp.firstUpdatedLayer))
-			reverted = true
-			revertLayer = *bdp.firstUpdatedLayer
-		}
-
-		// swap out the turtle instances so its state is up to date
-		trtlForRerun.bdp = trtl.trtl.bdp
-		trtlForRerun.logger = trtl.trtl.logger
-		trtl.trtl = trtlForRerun
-		trtl.lastRerun = time.Now()
 	}
+
+	// revert state if necessary
+	// state will be reapplied in mesh after we return, no need to reapply here
+	if bdp.firstUpdatedLayer != nil {
+		logger.With().Warning("turtle rerun detected state changes, attempting to reapply state from first changed layer",
+			log.FieldNamed("first_layer", bdp.firstUpdatedLayer))
+		reverted = true
+		revertLayer = *bdp.firstUpdatedLayer
+	}
+
+	// swap out the turtle instances so its state is up to date
+	trtlForRerun.bdp = trtl.trtl.bdp
+	trtlForRerun.logger = trtl.trtl.logger
+	trtl.trtl = trtlForRerun
 	return
 }
 

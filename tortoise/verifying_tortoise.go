@@ -26,6 +26,10 @@ type blockDataProvider interface {
 	Retrieve(key []byte, v interface{}) (interface{}, error)
 }
 
+var (
+	errNoBaseBlockFound = errors.New("no good base block within exception vector limit")
+)
+
 func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
 	arr := make([]types.BlockID, len(m))
 	i := 0
@@ -312,7 +316,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 	}
 
 	// TODO: special error encoding when exceeding exception list size
-	return types.BlockID{0}, nil, errors.New("no good base block within exception vector limit")
+	return types.BlockID{0}, nil, errNoBaseBlockFound
 }
 
 // calculate and return a list of exceptions, i.e., differences between the opinions of a base block and the local
@@ -356,8 +360,9 @@ func (t *turtle) calculateExceptions(
 		layerBlockIds, err := t.bdp.LayerBlockIds(layerID)
 		if err != nil {
 			if err != leveldb.ErrClosed {
-				// this is expected, in cases where, e.g., Hare failed for a layer
-				logger.Warning("no block ids for layer in database")
+				// this should not happen! we only look at layers up to the last processed layer, and we only process
+				// layers with valid block data.
+				logger.Error("no block ids for layer in database")
 			}
 			return nil, err
 		}
@@ -739,7 +744,7 @@ func (t *turtle) verifyLayers(ctx context.Context, targetLayerID types.LayerID) 
 
 // return the set of blocks we currently consider valid for the layer. factors in both local and global opinion,
 // depending how old the layer is.
-func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) (opinionVec []types.BlockID, err error) {
+func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) ([]types.BlockID, error) {
 	logger := t.logger.WithContext(ctx).WithFields(layerID)
 
 	// for layers older than hdist, we vote according to global opinion
@@ -759,7 +764,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 	}
 
 	// for newer layers, we vote according to the local opinion (input vector, from hare or sync)
-	opinionVec, err = t.bdp.GetLayerInputVectorByID(layerID)
+	opinionVec, err := t.bdp.GetLayerInputVectorByID(layerID)
 	if err != nil {
 		if errors.Is(err, mesh.ErrInvalidLayer) {
 			// Hare already failed for this layer, so we want to vote against all blocks in the layer. Just return an
@@ -778,7 +783,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 			logger.With().Warning("local opinion abstains on all blocks in layer", log.Err(err))
 		}
 	}
-	return
+	return opinionVec, nil
 }
 
 func (t *turtle) sumVotesForBlock(

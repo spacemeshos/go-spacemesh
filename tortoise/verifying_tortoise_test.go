@@ -49,6 +49,7 @@ func addLayerToMesh(m *mesh.DB, layer *types.Layer) error {
 }
 
 var (
+	defaultTestLayerSize       = 3
 	defaultTestHdist           = config.DefaultConfig().Hdist
 	defaultTestZdist           = config.DefaultConfig().Zdist
 	defaultTestWindowSize      = 30 // make test faster
@@ -300,7 +301,7 @@ func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp
 	fmt.Println("\tfor\t", lists[1])
 	fmt.Println("\tneutral\t", lists[2])
 	if err != nil {
-		panic(fmt.Sprint("no base - ", err))
+		panic(fmt.Sprint("no base block for layer:", err))
 	}
 	lyr := types.NewLayer(l)
 
@@ -367,13 +368,13 @@ func TestAddToMesh(t *testing.T) {
 	mdb.InputVectorBackupFunc = getHareResults
 
 	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), 3, mdb, 5, 5, 5, 20, defaultTestRerunInterval, lg)
+	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
 	l := mesh.GenesisLayer()
 
 	log.With().Info("genesis is", l.Index(), types.BlockIdsField(types.BlockIDs(l.Blocks())))
 	log.With().Info("genesis is", l.Blocks()[0].Fields()...)
 
-	l1 := createTurtleLayer(types.GetEffectiveGenesis()+1, mdb, alg.BaseBlock, getHareResults, 3)
+	l1 := createTurtleLayer(types.GetEffectiveGenesis()+1, mdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l1))
 
 	log.With().Info("first is", l1.Index(), types.BlockIdsField(types.BlockIDs(l1.Blocks())))
@@ -381,30 +382,23 @@ func TestAddToMesh(t *testing.T) {
 
 	alg.HandleIncomingLayer(context.TODO(), l1.Index())
 
-	l2 := createTurtleLayer(types.GetEffectiveGenesis()+2, mdb, alg.BaseBlock, getHareResults, 3)
+	l2 := createTurtleLayer(types.GetEffectiveGenesis()+2, mdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l2))
 	alg.HandleIncomingLayer(context.TODO(), l2.Index())
 
 	require.Equal(t, int(types.GetEffectiveGenesis()+1), int(alg.LatestComplete()))
 
-	l3a := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, 4)
-	l3b := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, func(context.Context) (types.BlockID, [][]types.BlockID, error) {
-		diffs := make([][]types.BlockID, 3)
-		diffs[0] = make([]types.BlockID, 0)
-		diffs[1] = types.BlockIDs(l.Blocks())
-		diffs[2] = make([]types.BlockID, 0)
-		return l3a.Blocks()[0].ID(), diffs, nil
-	}, getHareResults, 5)
+	l3a := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, defaultTestLayerSize+1)
 
 	// this should fail as the blocks for this layer have not been added to the mesh yet
-	alg.HandleIncomingLayer(context.TODO(), l3b.Index())
+	alg.HandleIncomingLayer(context.TODO(), l3a.Index())
 	require.Equal(t, int(types.GetEffectiveGenesis()+1), int(alg.LatestComplete()))
 
-	l3 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, 3)
+	l3 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l3))
 	alg.HandleIncomingLayer(context.TODO(), l3.Index())
 
-	l4 := createTurtleLayer(types.GetEffectiveGenesis()+4, mdb, alg.BaseBlock, getHareResults, 3)
+	l4 := createTurtleLayer(types.GetEffectiveGenesis()+4, mdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l4))
 	alg.HandleIncomingLayer(context.TODO(), l4.Index())
 	require.Equal(t, int(types.GetEffectiveGenesis()+3), int(alg.LatestComplete()), "wrong latest complete layer")
@@ -423,14 +417,14 @@ func TestPersistAndRecover(t *testing.T) {
 	mdb.InputVectorBackupFunc = getHareResults
 
 	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), 3, mdb, 5, 5, 5, 20, defaultTestRerunInterval, lg)
+	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
 
-	l1 := createTurtleLayer(types.GetEffectiveGenesis()+1, mdb, alg.BaseBlock, getHareResults, 3)
+	l1 := createTurtleLayer(types.GetEffectiveGenesis()+1, mdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l1))
 	alg.HandleIncomingLayer(context.TODO(), l1.Index())
 	require.NoError(t, alg.Persist(context.TODO()))
 
-	l2 := createTurtleLayer(types.GetEffectiveGenesis()+2, mdb, alg.BaseBlock, getHareResults, 3)
+	l2 := createTurtleLayer(types.GetEffectiveGenesis()+2, mdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l2))
 	alg.HandleIncomingLayer(context.TODO(), l2.Index())
 	require.NoError(t, alg.Persist(context.TODO()))
@@ -449,7 +443,7 @@ func TestPersistAndRecover(t *testing.T) {
 	require.Equal(t, alg.trtl.Zdist, alg2.trtl.Zdist)
 	require.Equal(t, alg.trtl.RerunInterval, alg2.trtl.RerunInterval)
 
-	l3 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, 3)
+	l3 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l3))
 	alg.HandleIncomingLayer(context.TODO(), l3.Index())
 	alg2.HandleIncomingLayer(context.TODO(), l3.Index())
@@ -457,4 +451,138 @@ func TestPersistAndRecover(t *testing.T) {
 	// expect identical results
 	require.Equal(t, int(types.GetEffectiveGenesis()+2), int(alg.LatestComplete()), "wrong latest complete layer")
 	require.Equal(t, int(types.GetEffectiveGenesis()+2), int(alg2.LatestComplete()), "wrong latest complete layer")
+}
+
+func TestRerunInterval(t *testing.T) {
+	r := require.New(t)
+	mdb, teardown := getPersistentMesh()
+	defer func() {
+		require.NoError(t, teardown())
+	}()
+	lg := log.NewDefault(t.Name())
+	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+	lastRerun := alg.lastRerun
+
+	getHareResults := func(l types.LayerID) ([]types.BlockID, error) {
+		return mdb.LayerBlockIds(l)
+	}
+	mdb.InputVectorBackupFunc = getHareResults
+
+	// no rerun
+	l1 := createTurtleLayer(types.GetEffectiveGenesis()+1, mdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
+	alg.HandleIncomingLayer(context.TODO(), l1.Index())
+	r.Equal(lastRerun, alg.lastRerun)
+
+	// force a rerun
+	alg.lastRerun = time.Now().Add(-alg.trtl.RerunInterval)
+	alg.HandleIncomingLayer(context.TODO(), l1.Index())
+	r.NotEqual(lastRerun, alg.lastRerun)
+	lastRerun = alg.lastRerun
+
+	// no rerun
+	alg.HandleIncomingLayer(context.TODO(), l1.Index())
+	r.Equal(lastRerun, alg.lastRerun)
+}
+
+func TestLayerOpinionVector(t *testing.T) {
+	log.DebugMode(true)
+	r := require.New(t)
+	mdb, teardown := getPersistentMesh()
+	defer func() {
+		require.NoError(t, teardown())
+	}()
+	lg := log.NewDefault(t.Name())
+	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+
+	getHareResults := func(l types.LayerID) ([]types.BlockID, error) {
+		return mdb.LayerBlockIds(l)
+	}
+	mdb.InputVectorBackupFunc = getHareResults
+	l0 := mesh.GenesisLayer()
+
+	// recent layer missing from mesh: should abstain and keep waiting
+	l1ID := l0.Index().Add(1)
+	opinionVec, err := alg.trtl.layerOpinionVector(context.TODO(), l1ID)
+	r.NoError(err)
+	r.Nil(opinionVec)
+	//r.Len(opinionVec, 0, "expected empty opinion vector")
+
+	// hare failed for layer: should vote against all blocks
+	mdb.InvalidateLayer(context.TODO(), l1ID)
+	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l1ID)
+	r.NoError(err)
+	r.Equal(make([]types.BlockID, 0, 0), opinionVec)
+
+	// old layer missing from mesh: should vote against all blocks
+	// simulate old layer by advancing Last
+	l2ID := l1ID.Add(1)
+	alg.trtl.Last = types.LayerID(defaultTestZdist) + l2ID.Add(10)
+	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
+	r.NoError(err)
+	r.Equal(make([]types.BlockID, 0, 0), opinionVec)
+}
+
+func TestBaseBlock(t *testing.T) {
+	log.DebugMode(true)
+	r := require.New(t)
+	mdb, teardown := getPersistentMesh()
+	defer func() {
+		require.NoError(t, teardown())
+	}()
+	lg := log.NewDefault(t.Name())
+	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+
+	getHareResults := func(l types.LayerID) ([]types.BlockID, error) {
+		return mdb.LayerBlockIds(l)
+	}
+	mdb.InputVectorBackupFunc = getHareResults
+
+	l0 := mesh.GenesisLayer()
+	expectBaseBlockLayer := func(layerID types.LayerID, numAgainst, numSupport, numNeutral int) {
+		baseBlockID, exceptions, err := alg.BaseBlock(context.TODO())
+		r.NoError(err)
+		// expect no exceptions
+		r.Len(exceptions, 3, "expected three vote exception arrays")
+		r.Len(exceptions[0], numAgainst, "wrong number of against exception votes")
+		r.Len(exceptions[1], numSupport, "wrong number of support exception votes")
+		r.Len(exceptions[2], numNeutral, "wrong number of neutral exception votes")
+		// expect a valid genesis base block
+		baseBlock, err := alg.trtl.bdp.GetBlock(baseBlockID)
+		r.NoError(err)
+		r.Equal(layerID, baseBlock.Layer(), "base block is from wrong layer")
+	}
+	// it should support all genesis blocks
+	expectBaseBlockLayer(l0.Index(), 0, len(mesh.GenesisLayer().Blocks()), 0)
+
+	l1 := createTurtleLayer(types.GetEffectiveGenesis()+1, mdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
+	require.NoError(t, addLayerToMesh(mdb, l1))
+	alg.HandleIncomingLayer(context.TODO(), l1.Index())
+	expectBaseBlockLayer(l1.Index(), 0, defaultTestLayerSize, 0)
+
+	l2 := createTurtleLayer(types.GetEffectiveGenesis()+2, mdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
+	require.NoError(t, addLayerToMesh(mdb, l2))
+	alg.HandleIncomingLayer(context.TODO(), l2.Index())
+	require.Equal(t, int(types.GetEffectiveGenesis()+1), int(alg.LatestComplete()))
+	expectBaseBlockLayer(l2.Index(), 0, defaultTestLayerSize, 0)
+
+	// add a layer that's not in the mesh
+	l3 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
+	//require.NoError(t, addLayerToMesh(mdb, l2))
+	alg.HandleIncomingLayer(context.TODO(), l3.Index())
+
+	// mark all blocks bad
+	alg.trtl.GoodBlocksIndex = make(map[types.BlockID]struct{}, 0)
+	baseBlockID, exceptions, err := alg.BaseBlock(context.TODO())
+	r.Equal(errNoBaseBlockFound, err)
+	r.Equal(types.BlockID{0}, baseBlockID)
+	r.Nil(exceptions)
+
+	//l3a := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, 4)
+	//l3b := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, func(context.Context) (types.BlockID, [][]types.BlockID, error) {
+	//	diffs := make([][]types.BlockID, 3)
+	//	diffs[0] = make([]types.BlockID, 0)    // against
+	//	diffs[1] = types.BlockIDs(l0.Blocks()) // support
+	//	diffs[2] = make([]types.BlockID, 0)    // neutral
+	//	return l3a.Blocks()[0].ID(), diffs, nil
+	//}, getHareResults, 5)
 }
