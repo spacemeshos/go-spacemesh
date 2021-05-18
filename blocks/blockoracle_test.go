@@ -291,6 +291,9 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 		r.NoError(err)
 		if len(proofs) > 0 {
 			proof = proofs[0]
+			if len(proofs) <= 1 {
+				break
+			}
 			for i := 1; proof.J == 0; i++ {
 				proof = proofs[i]
 			}
