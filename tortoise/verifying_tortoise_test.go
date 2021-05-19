@@ -292,9 +292,8 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 type baseBlockProvider func(context.Context) (types.BlockID, [][]types.BlockID, error)
 type inputVectorProvider func(l types.LayerID) ([]types.BlockID, error)
 
-func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp inputVectorProvider, blocksPerLayer int) *types.Layer {
+func generateBlocks(l types.LayerID, n int, bbp baseBlockProvider) (blocks []*types.Block) {
 	fmt.Println("choosing base block for layer", l)
-	msh.InputVectorBackupFunc = ivp
 	b, lists, err := bbp(context.TODO())
 	fmt.Println("the base block for layer", l, "is", b, ". exception lists:")
 	fmt.Println("\tagainst\t", lists[0])
@@ -303,17 +302,8 @@ func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp
 	if err != nil {
 		panic(fmt.Sprint("no base block for layer:", err))
 	}
-	lyr := types.NewLayer(l)
 
-	blocks, err := ivp(l - 1)
-	if err != nil {
-		blocks = nil
-	}
-	if err := msh.SaveLayerInputVectorByID(l-1, blocks); err != nil {
-		panic("database error")
-	}
-
-	for i := 0; i < blocksPerLayer; i++ {
+	for i := 0; i < n; i++ {
 		blk := &types.Block{
 			MiniBlock: types.MiniBlock{
 				BlockHeader: types.BlockHeader{
@@ -327,8 +317,25 @@ func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp
 		blk.NeutralDiff = lists[2]
 		blk.Signature = signing.NewEdSigner().Sign(b.Bytes())
 		blk.Initialize()
-		lyr.AddBlock(blk)
+		blocks = append(blocks, blk)
 	}
+	return
+}
+
+func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp inputVectorProvider, blocksPerLayer int) *types.Layer {
+	msh.InputVectorBackupFunc = ivp
+	blocks, err := ivp(l - 1)
+	if err != nil {
+		blocks = nil
+	}
+	if err := msh.SaveLayerInputVectorByID(l-1, blocks); err != nil {
+		panic("database error")
+	}
+	lyr := types.NewLayer(l)
+	for _, block := range generateBlocks(l, blocksPerLayer, bbp) {
+		lyr.AddBlock(block)
+	}
+
 	return lyr
 }
 
@@ -608,42 +615,105 @@ func TestCloneTurtle(t *testing.T) {
 	r.NotEqual(trtl.Last, trtl2.Last)
 }
 
+func TestGetSingleInputVector(t *testing.T) {
+	r := require.New(t)
+
+	mdb, teardown := getPersistentMesh()
+	defer func() {
+		require.NoError(t, teardown())
+	}()
+	lg := log.NewDefault(t.Name())
+	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+
+	l1ID := types.GetEffectiveGenesis()+1
+	blocks := generateBlocks(l1ID, 2, alg.BaseBlock)
+
+	// no input vector for layer
+	vec, err := alg.trtl.getSingleInputVectorFromDB(context.TODO(), l1ID, blocks[0].ID())
+	r.Equal(database.ErrNotFound, err)
+	r.Equal(abstain, vec)
+
+	// block included in input vector
+	r.NoError(mdb.SaveLayerInputVectorByID(l1ID, []types.BlockID{blocks[0].ID()}))
+	vec, err = alg.trtl.getSingleInputVectorFromDB(context.TODO(), l1ID, blocks[0].ID())
+	r.NoError(err)
+	r.Equal(support, vec)
+
+	// block not included in input vector
+	vec, err = alg.trtl.getSingleInputVectorFromDB(context.TODO(), l1ID, blocks[1].ID())
+	r.NoError(err)
+	r.Equal(against, vec)
+}
+
 func TestCheckBlockAndGetInputVector(t *testing.T) {
 	r := require.New(t)
+	mdb, teardown := getPersistentMesh()
+	defer func() {
+		require.NoError(t, teardown())
+	}()
+	lg := log.NewDefault(t.Name())
+	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
 
+	l1ID := types.GetEffectiveGenesis()+1
+	blocks := generateBlocks(l1ID, 3, alg.BaseBlock)
+	//l1 := createTurtleLayer(l1ID, mdb, alg.BaseBlock, mdb.LayerBlockIds, 1)
+	//block := l1.Blocks()[0]
+	diffList := []types.BlockID{blocks[0].ID()}
+
+	// missing block
+	r.False(alg.trtl.checkBlockAndGetInputVector(context.TODO(), diffList, "foo", support, l1ID))
+
+	// exception block older than base block
+	blocks[0].LayerIndex = mesh.GenesisLayer().Index()
+	r.NoError(mdb.AddBlock(blocks[0]))
+	r.False(alg.trtl.checkBlockAndGetInputVector(context.TODO(), diffList, "foo", support, l1ID))
+
+	// missing input vector for layer
+	r.NoError(mdb.AddBlock(blocks[1]))
+	diffList[0] = blocks[1].ID()
+	r.False(alg.trtl.checkBlockAndGetInputVector(context.TODO(), diffList, "foo", support, l1ID))
+
+	// good
+	r.NoError(mdb.SaveLayerInputVectorByID(l1ID, diffList))
+	r.True(alg.trtl.checkBlockAndGetInputVector(context.TODO(), diffList, "foo", support, l1ID))
+
+	// vote differs from input vector
+	diffList[0] = blocks[2].ID()
+	r.NoError(mdb.AddBlock(blocks[2]))
+	r.False(alg.trtl.checkBlockAndGetInputVector(context.TODO(), diffList, "foo", support, l1ID))
 }
 
-func TestCalculateExceptions(t *testing.T) {
-	r := require.New(t)
-
-}
-
-func TestProcessBlock(t *testing.T) {
-	r := require.New(t)
-
-}
-
-func TestProcessNewBlocks(t *testing.T) {
-	r := require.New(t)
-
-}
-
-func TestVerifyLayers(t *testing.T) {
-	r := require.New(t)
-
-}
-
-func TestSumVotesForBlock(t *testing.T) {
-	r := require.New(t)
-
-}
-
-func TestHealing(t *testing.T) {
-	r := require.New(t)
-
-}
-
-func TestRevert(t *testing.T) {
-	r := require.New(t)
-
-}
+//func TestCalculateExceptions(t *testing.T) {
+//	r := require.New(t)
+//
+//}
+//
+//func TestProcessBlock(t *testing.T) {
+//	r := require.New(t)
+//
+//}
+//
+//func TestProcessNewBlocks(t *testing.T) {
+//	r := require.New(t)
+//
+//}
+//
+//func TestVerifyLayers(t *testing.T) {
+//	r := require.New(t)
+//
+//}
+//
+//func TestSumVotesForBlock(t *testing.T) {
+//	r := require.New(t)
+//
+//}
+//
+//func TestHealing(t *testing.T) {
+//	r := require.New(t)
+//
+//}
+//
+//func TestRevert(t *testing.T) {
+//	r := require.New(t)
+//
+//}

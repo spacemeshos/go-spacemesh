@@ -205,10 +205,9 @@ func (t *turtle) checkBlockAndGetInputVector(
 	diffList []types.BlockID,
 	className string,
 	voteVector vec,
-	sourceBlockID types.BlockID,
 	baseBlockLayer types.LayerID,
 ) bool {
-	logger := t.logger.WithContext(ctx).WithFields(log.FieldNamed("source_block_id", sourceBlockID))
+	logger := t.logger.WithContext(ctx)
 	for _, exceptionBlockID := range diffList {
 		if exceptionBlock, err := t.bdp.GetBlock(exceptionBlockID); err != nil {
 			logger.With().Error("inconsistent state: can't find block from diff list",
@@ -545,9 +544,9 @@ func (t *turtle) ProcessNewBlocks(ctx context.Context, blocks []*types.Block) er
 			logger.With().Error("inconsistent state: base block not found", log.Err(err))
 		} else if true &&
 			// (2) all diffs appear after the base block and are consistent with the input vote vector
-			t.checkBlockAndGetInputVector(ctx, b.ForDiff, "support", support, b.ID(), baseBlock.LayerIndex) &&
-			t.checkBlockAndGetInputVector(ctx, b.AgainstDiff, "against", against, b.ID(), baseBlock.LayerIndex) &&
-			t.checkBlockAndGetInputVector(ctx, b.NeutralDiff, "abstain", abstain, b.ID(), baseBlock.LayerIndex) {
+			t.checkBlockAndGetInputVector(ctx, b.ForDiff, "support", support, baseBlock.LayerIndex) &&
+			t.checkBlockAndGetInputVector(ctx, b.AgainstDiff, "against", against, baseBlock.LayerIndex) &&
+			t.checkBlockAndGetInputVector(ctx, b.NeutralDiff, "abstain", abstain, baseBlock.LayerIndex) {
 			logger.Debug("marking block good")
 			t.GoodBlocksIndex[b.ID()] = struct{}{}
 			numGood++
