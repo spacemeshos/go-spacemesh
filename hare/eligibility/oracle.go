@@ -3,7 +3,6 @@ package eligibility
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"github.com/hashicorp/golang-lru"
@@ -213,12 +212,13 @@ func (o *Oracle) minerWeight(layer types.LayerID, id types.NodeID) (uint64, erro
 	return w, nil
 }
 
-func calcVrfFrac(sig []byte) fixed.Fixed {
-	sha := sha256.Sum256(sig)
-	return fixed.FracFromBytes(sha[:8])
+func calcVrfFrac(vrfSig []byte) fixed.Fixed {
+	return fixed.FracFromBytes(vrfSig[:8])
 }
 
-func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (n int, p fixed.Fixed, vrfFrac fixed.Fixed, done bool, err error) {
+func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round int32, committeeSize int,
+	id types.NodeID, vrfSig []byte) (n int, p fixed.Fixed, vrfFrac fixed.Fixed, done bool, err error) {
+
 	if committeeSize < 1 {
 		o.Error("committee size must be positive (received %d)", committeeSize)
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, nil
@@ -231,7 +231,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	}
 
 	// validate message
-	if !o.vrfVerifier(id.VRFPublicKey, msg, sig) {
+	if !o.vrfVerifier(id.VRFPublicKey, msg, vrfSig) {
 		o.With().Info("eligibility: a node did not pass VRF signature verification",
 			id,
 			layer)
@@ -289,7 +289,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 			fmt.Errorf("miner weight exceeds supported maximum (id: %v, weight: %d, units: %d, max: %d",
 				id, minerWeight, minerUnits, maxSupportedN)
 	}
-	return n, p, calcVrfFrac(sig), false, nil
+	return n, p, calcVrfFrac(vrfSig), false, nil
 }
 
 // Validate validates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is the role
@@ -332,8 +332,10 @@ func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round int32,
 
 // CalcEligibility calculates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is
 // the role proof and assuming commSize as the expected committee size.
-func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
-	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, sig)
+func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int,
+	id types.NodeID, vrfSig []byte) (uint16, error) {
+
+	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, vrfSig)
 	if done {
 		return 0, err
 	}

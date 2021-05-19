@@ -1,14 +1,12 @@
 package blocks
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"sort"
 	"strings"
 	"sync"
-
-	"github.com/spacemeshos/sha256-simd"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -142,10 +140,12 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 
 	eligibilityProofs := map[types.LayerID][]types.BlockEligibilityProof{}
 	for counter := uint32(0); counter < numberOfEligibleBlocks; counter++ {
-		message := serializeVRFMessage(epochBeacon, epochNumber, counter)
+		message, err := serializeVRFMessage(epochBeacon, epochNumber, counter)
+		if err != nil {
+			return nil, err
+		}
 		vrfSig := bo.vrfSigner.Sign(message)
-		vrfHash := sha256.Sum256(vrfSig)
-		eligibleLayer := calcEligibleLayer(epochNumber, bo.layersPerEpoch, vrfHash)
+		eligibleLayer := calcEligibleLayer(epochNumber, bo.layersPerEpoch, vrfSig)
 		eligibilityProofs[eligibleLayer] = append(eligibilityProofs[eligibleLayer], types.BlockEligibilityProof{
 			J:   counter,
 			Sig: vrfSig,
@@ -196,8 +196,8 @@ func (bo *Oracle) getValidAtxForEpoch(validForEpoch types.EpochID) (*types.Activ
 	return atx, nil
 }
 
-func calcEligibleLayer(epochNumber types.EpochID, layersPerEpoch uint16, vrfHash [32]byte) types.LayerID {
-	vrfInteger := binary.LittleEndian.Uint64(vrfHash[:8])
+func calcEligibleLayer(epochNumber types.EpochID, layersPerEpoch uint16, vrfSig []byte) types.LayerID {
+	vrfInteger := util.BytesToUint64(vrfSig)
 	eligibleLayerOffset := vrfInteger % uint64(layersPerEpoch)
 	return epochNumber.FirstLayer().Add(uint16(eligibleLayerOffset))
 }
@@ -225,12 +225,23 @@ func (bo *Oracle) getATXIDForEpoch(targetEpoch types.EpochID) (types.ATXID, erro
 	return latestATXID, err
 }
 
-func serializeVRFMessage(epochBeacon []byte, epochNumber types.EpochID, counter uint32) []byte {
-	message := make([]byte, len(epochBeacon)+binary.Size(epochNumber)+binary.Size(counter))
-	copy(message, epochBeacon)
-	binary.LittleEndian.PutUint64(message[len(epochBeacon):], uint64(epochNumber))
-	binary.LittleEndian.PutUint32(message[len(epochBeacon)+binary.Size(epochNumber):], counter)
-	return message
+type vrfMessage struct {
+	EpochBeacon []byte
+	EpochNumber types.EpochID
+	Counter     uint32
+}
+
+func serializeVRFMessage(epochBeacon []byte, epochNumber types.EpochID, counter uint32) ([]byte, error) {
+	m := vrfMessage{
+		EpochBeacon: epochBeacon,
+		EpochNumber: epochNumber,
+		Counter:     counter,
+	}
+	serialized, err := types.InterfaceToBytes(&m)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize vrf message: %v", err)
+	}
+	return serialized, nil
 }
 
 // GetEligibleLayers returns a list of layers in which the miner is eligible for at least one block. The list is

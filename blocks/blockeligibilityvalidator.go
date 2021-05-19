@@ -3,8 +3,6 @@ package blocks
 import (
 	"fmt"
 
-	"github.com/spacemeshos/sha256-simd"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -106,14 +104,17 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	}
 
 	epochBeacon := v.beaconProvider.GetBeacon(epochNumber)
-	message := serializeVRFMessage(epochBeacon, epochNumber, counter)
+	message, err := serializeVRFMessage(epochBeacon, epochNumber, counter)
+	if err != nil {
+		return false, err
+	}
 	vrfSig := block.EligibilityProof.Sig
 
 	if !v.validateVRF(vrfPubkey, message, vrfSig) {
 		return false, fmt.Errorf("eligibility VRF validation failed")
 	}
 
-	eligibleLayer := calcEligibleLayer(epochNumber, v.layersPerEpoch, sha256.Sum256(vrfSig))
+	eligibleLayer := calcEligibleLayer(epochNumber, v.layersPerEpoch, vrfSig)
 
 	if block.LayerIndex != eligibleLayer {
 		return false, fmt.Errorf("block layer (%v) does not match eligibility layer (%v)",
