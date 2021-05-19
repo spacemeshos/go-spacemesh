@@ -368,7 +368,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	o.getActiveSet = getActiveSet
 	o.vrfVerifier = signing.VRFVerify
 	seed := make([]byte, 32)
-	rand.Read(seed)
+	//rand.Read(seed)
 	vrfSigner, vrfPubkey, err := signing.NewVRFSigner(seed)
 	assert.NoError(t, err)
 	o.vrfSigner = vrfSigner
