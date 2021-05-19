@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"os"
 	"strconv"
@@ -29,8 +30,7 @@ func getPersistentMesh() (*mesh.DB, func() error) {
 	if err := teardown(); err != nil {
 		panic(err)
 	}
-	db, _ := mesh.NewPersistentMeshDB(fmt.Sprintf(path+
-		"/"), 10, log.NewDefault("ninja_tortoise").WithOptions(log.Nop))
+	db, _ := mesh.NewPersistentMeshDB(fmt.Sprintf(path+"/"), 10, log.NewDefault("ninja_tortoise").WithOptions(log.Nop))
 	return db, teardown
 }
 
@@ -361,9 +361,7 @@ func TestAddToMesh(t *testing.T) {
 		require.NoError(t, teardown())
 	}()
 
-	getHareResults := func(l types.LayerID) ([]types.BlockID, error) {
-		return mdb.LayerBlockIds(l)
-	}
+	getHareResults := mdb.LayerBlockIds
 
 	mdb.InputVectorBackupFunc = getHareResults
 
@@ -410,9 +408,7 @@ func TestPersistAndRecover(t *testing.T) {
 		require.NoError(t, teardown())
 	}()
 
-	getHareResults := func(l types.LayerID) ([]types.BlockID, error) {
-		return mdb.LayerBlockIds(l)
-	}
+	getHareResults := mdb.LayerBlockIds
 
 	mdb.InputVectorBackupFunc = getHareResults
 
@@ -463,13 +459,10 @@ func TestRerunInterval(t *testing.T) {
 	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
 	lastRerun := alg.lastRerun
 
-	getHareResults := func(l types.LayerID) ([]types.BlockID, error) {
-		return mdb.LayerBlockIds(l)
-	}
-	mdb.InputVectorBackupFunc = getHareResults
+	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
 
 	// no rerun
-	l1 := createTurtleLayer(types.GetEffectiveGenesis()+1, mdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
+	l1 := createTurtleLayer(types.GetEffectiveGenesis()+1, mdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
 	alg.HandleIncomingLayer(context.TODO(), l1.Index())
 	r.Equal(lastRerun, alg.lastRerun)
 
@@ -494,10 +487,7 @@ func TestLayerOpinionVector(t *testing.T) {
 	lg := log.NewDefault(t.Name())
 	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
 
-	getHareResults := func(l types.LayerID) ([]types.BlockID, error) {
-		return mdb.LayerBlockIds(l)
-	}
-	mdb.InputVectorBackupFunc = getHareResults
+	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
 	l0 := mesh.GenesisLayer()
 
 	// recent layer missing from mesh: should abstain and keep waiting
@@ -505,21 +495,42 @@ func TestLayerOpinionVector(t *testing.T) {
 	opinionVec, err := alg.trtl.layerOpinionVector(context.TODO(), l1ID)
 	r.NoError(err)
 	r.Nil(opinionVec)
-	//r.Len(opinionVec, 0, "expected empty opinion vector")
 
 	// hare failed for layer: should vote against all blocks
-	mdb.InvalidateLayer(context.TODO(), l1ID)
+	mdb.InputVectorBackupFunc = func(types.LayerID) ([]types.BlockID, error) {
+		return nil, mesh.ErrInvalidLayer
+	}
 	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l1ID)
 	r.NoError(err)
 	r.Equal(make([]types.BlockID, 0, 0), opinionVec)
 
 	// old layer missing from mesh: should vote against all blocks
+	// older than zdist, not as old as hdist
 	// simulate old layer by advancing Last
 	l2ID := l1ID.Add(1)
-	alg.trtl.Last = types.LayerID(defaultTestZdist) + l2ID.Add(10)
+	alg.trtl.Last = types.LayerID(defaultTestZdist) + l2ID.Add(1)
+	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
 	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
 	r.NoError(err)
 	r.Equal(make([]types.BlockID, 0, 0), opinionVec)
+
+	// very old layer (more than hdist layers back)
+	// if there are no contextually valid blocks, it's an error
+	alg.trtl.Last = types.LayerID(defaultTestHdist) + l2ID.Add(1)
+	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
+	r.Equal(database.ErrNotFound, err)
+	r.Nil(opinionVec)
+
+	// otherwise, we expect the set of contextually valid blocks
+	l2 := createTurtleLayer(l2ID, mdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
+	for _, b := range l2.Blocks() {
+		r.NoError(mdb.AddBlock(b))
+		r.NoError(mdb.SaveContextualValidity(b.ID(), l2ID, true))
+	}
+	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
+	r.NoError(err)
+	// this is the easiest way to compare a set of blockIDs
+	r.Equal(l2.Hash(), types.CalcBlocksHash32(types.SortBlockIDs(opinionVec), nil))
 }
 
 func TestBaseBlock(t *testing.T) {
@@ -532,9 +543,7 @@ func TestBaseBlock(t *testing.T) {
 	lg := log.NewDefault(t.Name())
 	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
 
-	getHareResults := func(l types.LayerID) ([]types.BlockID, error) {
-		return mdb.LayerBlockIds(l)
-	}
+	getHareResults := mdb.LayerBlockIds
 	mdb.InputVectorBackupFunc = getHareResults
 
 	l0 := mesh.GenesisLayer()
@@ -585,4 +594,12 @@ func TestBaseBlock(t *testing.T) {
 	//	diffs[2] = make([]types.BlockID, 0)    // neutral
 	//	return l3a.Blocks()[0].ID(), diffs, nil
 	//}, getHareResults, 5)
+}
+
+func TestHealing(t *testing.T) {
+
+}
+
+func TestRevert(t *testing.T) {
+
 }

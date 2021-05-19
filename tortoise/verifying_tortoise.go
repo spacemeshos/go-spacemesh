@@ -771,7 +771,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 			// empty list.
 			logger.Debug("local opinion is against all blocks in layer where hare failed")
 			return make([]types.BlockID, 0, 0), nil
-		} else if layerID < t.Last-t.Zdist {
+		} else if t.Last > t.Zdist && layerID < t.Last-t.Zdist {
 			// Layer has passed the Hare abort distance threshold, so we give up waiting for Hare results. At this point
 			// our opinion on this layer is that we vote against blocks (i.e., we support an empty layer).
 			logger.With().Debug("local opinion on layer older than hare abort window is against all blocks",

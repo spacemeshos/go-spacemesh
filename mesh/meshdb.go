@@ -366,7 +366,7 @@ func (m *DB) GetCoinflip(ctx context.Context, layerID types.LayerID) (bool, bool
 	return coin, exists
 }
 
-func (m *DB) defaulGetLayerInputVectorByID(lyrid types.LayerID) ([]types.BlockID, error) {
+func (m *DB) defaultGetLayerInputVectorByID(lyrid types.LayerID) ([]types.BlockID, error) {
 	by, err := m.inputVector.Get(types.CalcHash32(lyrid.Bytes()).Bytes())
 	if err != nil {
 		// check if this layer was marked invalid
@@ -398,7 +398,7 @@ func (m *DB) GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) 
 	if m.InputVectorBackupFunc != nil {
 		return m.InputVectorBackupFunc(id)
 	}
-	return m.defaulGetLayerInputVectorByID(id)
+	return m.defaultGetLayerInputVectorByID(id)
 }
 
 // SaveLayerInputVectorByID gets the input vote vector for a layer (hare results)
