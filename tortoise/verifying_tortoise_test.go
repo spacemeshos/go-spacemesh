@@ -478,7 +478,6 @@ func TestRerunInterval(t *testing.T) {
 }
 
 func TestLayerOpinionVector(t *testing.T) {
-	log.DebugMode(true)
 	r := require.New(t)
 	mdb, teardown := getPersistentMesh()
 	defer func() {
@@ -563,6 +562,7 @@ func TestBaseBlock(t *testing.T) {
 	// it should support all genesis blocks
 	expectBaseBlockLayer(l0.Index(), 0, len(mesh.GenesisLayer().Blocks()), 0)
 
+	// add a couple of incoming layers and make sure the base block layer advances as well
 	l1 := createTurtleLayer(types.GetEffectiveGenesis()+1, mdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l1))
 	alg.HandleIncomingLayer(context.TODO(), l1.Index())
@@ -574,10 +574,11 @@ func TestBaseBlock(t *testing.T) {
 	require.Equal(t, int(types.GetEffectiveGenesis()+1), int(alg.LatestComplete()))
 	expectBaseBlockLayer(l2.Index(), 0, defaultTestLayerSize, 0)
 
-	// add a layer that's not in the mesh
+	// add a layer that's not in the mesh and make sure it does not advance
 	l3 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
-	//require.NoError(t, addLayerToMesh(mdb, l2))
 	alg.HandleIncomingLayer(context.TODO(), l3.Index())
+	require.Equal(t, int(types.GetEffectiveGenesis()+1), int(alg.LatestComplete()))
+	expectBaseBlockLayer(l2.Index(), 0, defaultTestLayerSize, 0)
 
 	// mark all blocks bad
 	alg.trtl.GoodBlocksIndex = make(map[types.BlockID]struct{}, 0)
@@ -585,21 +586,64 @@ func TestBaseBlock(t *testing.T) {
 	r.Equal(errNoBaseBlockFound, err)
 	r.Equal(types.BlockID{0}, baseBlockID)
 	r.Nil(exceptions)
+}
 
-	//l3a := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, 4)
-	//l3b := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, func(context.Context) (types.BlockID, [][]types.BlockID, error) {
-	//	diffs := make([][]types.BlockID, 3)
-	//	diffs[0] = make([]types.BlockID, 0)    // against
-	//	diffs[1] = types.BlockIDs(l0.Blocks()) // support
-	//	diffs[2] = make([]types.BlockID, 0)    // neutral
-	//	return l3a.Blocks()[0].ID(), diffs, nil
-	//}, getHareResults, 5)
+func TestCloneTurtle(t *testing.T) {
+	r := require.New(t)
+	mdb, teardown := getPersistentMesh()
+	defer func() {
+		require.NoError(t, teardown())
+	}()
+	trtl := newTurtle(mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestLayerSize, defaultTestRerunInterval)
+	trtl.AvgLayerSize += 1 // make sure defaults aren't being read
+	trtl.Last = 10 // state should not be cloned
+	trtl2 := trtl.cloneTurtle()
+	r.Equal(trtl.bdp, trtl2.bdp)
+	r.Equal(trtl.Hdist, trtl2.Hdist)
+	r.Equal(trtl.Zdist, trtl2.Zdist)
+	r.Equal(trtl.ConfidenceParam, trtl2.ConfidenceParam)
+	r.Equal(trtl.WindowSize, trtl2.WindowSize)
+	r.Equal(trtl.AvgLayerSize, trtl2.AvgLayerSize)
+	r.Equal(trtl.RerunInterval, trtl2.RerunInterval)
+	r.NotEqual(trtl.Last, trtl2.Last)
+}
+
+func TestCheckBlockAndGetInputVector(t *testing.T) {
+	r := require.New(t)
+
+}
+
+func TestCalculateExceptions(t *testing.T) {
+	r := require.New(t)
+
+}
+
+func TestProcessBlock(t *testing.T) {
+	r := require.New(t)
+
+}
+
+func TestProcessNewBlocks(t *testing.T) {
+	r := require.New(t)
+
+}
+
+func TestVerifyLayers(t *testing.T) {
+	r := require.New(t)
+
+}
+
+func TestSumVotesForBlock(t *testing.T) {
+	r := require.New(t)
+
 }
 
 func TestHealing(t *testing.T) {
+	r := require.New(t)
 
 }
 
 func TestRevert(t *testing.T) {
+	r := require.New(t)
 
 }
