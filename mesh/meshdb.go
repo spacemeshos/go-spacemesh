@@ -378,6 +378,7 @@ func (m *DB) defaultGetLayerInputVectorByID(lyrid types.LayerID) ([]types.BlockI
 		return nil, err
 	}
 	var v []types.BlockID
+	// note: an EMPTY (non-nil) vector will come back as NIL here (this appears to be a quirk of XDR)
 	err = types.BytesToInterface(by, &v)
 	return v, err
 }

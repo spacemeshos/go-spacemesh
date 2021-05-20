@@ -28,6 +28,7 @@ type blockDataProvider interface {
 
 var (
 	errNoBaseBlockFound = errors.New("no good base block within exception vector limit")
+	errstrTooManyExceptions = "too many exceptions to base block vote"
 )
 
 func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
@@ -75,8 +76,8 @@ type turtle struct {
 
 	Verified types.LayerID
 
-	// this matrix stores the opinion of each block about other blocks
-	// it stores every block, regardless of local opinion (i.e., regardless of whether it's marked as "good" or not)
+	// this matrix stores the opinion of each block about other blocks. blocks are indexed by layer.
+	// it stores good and bad blocks
 	BlockOpinionsByLayer map[types.LayerID]map[types.BlockID]Opinion
 
 	// how often we want to rerun from genesis
@@ -288,7 +289,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 
 			// Calculate the set of exceptions between the base block opinion and latest local opinion
 			logger.With().Debug("found candidate base block", block, layerID)
-			exceptionVectorMap, err := t.calculateExceptions(ctx, layerID, block, opinion)
+			exceptionVectorMap, err := t.calculateExceptions(ctx, layerID, opinion)
 			if err != nil {
 				logger.With().Warning("error calculating vote exceptions for block",
 					log.FieldNamed("last_layer", t.Last),
@@ -323,12 +324,9 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 func (t *turtle) calculateExceptions(
 	ctx context.Context,
 	blockLayerID types.LayerID,
-	blockID types.BlockID,
-	baseBlockOpinion Opinion, // the block's opinion vector
+	baseBlockOpinion Opinion, // candidate base block's opinion vector
 ) ([]map[types.BlockID]struct{}, error) {
-	logger := t.logger.WithContext(ctx).WithFields(
-		log.FieldNamed("base_block_layer_id", blockLayerID),
-		log.FieldNamed("base_block_candidate", blockID))
+	logger := t.logger.WithContext(ctx).WithFields(log.FieldNamed("base_block_layer_id", blockLayerID))
 
 	// using maps prevents duplicates
 	againstDiff := make(map[types.BlockID]struct{})
@@ -361,7 +359,7 @@ func (t *turtle) calculateExceptions(
 			if err != leveldb.ErrClosed {
 				// this should not happen! we only look at layers up to the last processed layer, and we only process
 				// layers with valid block data.
-				logger.Error("no block ids for layer in database")
+				logger.With().Error("no block ids for layer in database", log.Err(err))
 			}
 			return nil, err
 		}
@@ -397,29 +395,35 @@ func (t *turtle) calculateExceptions(
 
 		inInputVector := make(map[types.BlockID]struct{})
 
+		// Add diffs FOR blocks that are in the input vector, but where the base block has no opinion or does not
+		// explicitly support the block
 		for _, b := range layerInputVector {
 			inInputVector[b] = struct{}{}
-			// Block is in input vector but no base block vote or base block doesn't support it:
-			// add diff FOR this block
 			addDiffs(b, "support", support, forDiff)
 		}
 
+		// Next, we need to make sure we vote AGAINST all blocks in the layer that are not in the input vector (and
+		// where we are no longer waiting for Hare results, see above)
 		for _, b := range layerBlockIds {
-			// Matches input vector, no diff (i.e., both support)
-			if _, ok := inInputVector[b]; ok {
-				continue
+			if _, ok := inInputVector[b]; !ok {
+				addDiffs(b, "against", against, againstDiff)
 			}
-
-			// Layer block has no base block vote or base block supports, but not in input vector AND we are no longer
-			// waiting for Hare results for this layer (see above): add diff AGAINST this block
-			addDiffs(b, "against", against, againstDiff)
 		}
+
+		// Finally, we need to consider the case where the base block supports a block in this layer that is not in our
+		// input vector (e.g., one we haven't seen), by adding a diff against the block
+		// TODO: this is not currently possible since base block opinions aren't indexed by layer.
+		//for b, v := range baseBlockOpinion.BlockOpinions {
+		//	if _, ok := inInputVector[b]; !ok && v != against {
+		//		addDiffs(b, "against", against, againstDiff)
+		//	}
+		//}
 	}
 
 	// check if exceeded max no. exceptions
 	explen := len(againstDiff) + len(forDiff) + len(neutralDiff)
 	if explen > t.MaxExceptions {
-		return nil, fmt.Errorf("too many exceptions to base block vote (%v)", explen)
+		return nil, fmt.Errorf("%s (%v)", errstrTooManyExceptions, explen)
 	}
 
 	return []map[types.BlockID]struct{}{againstDiff, forDiff, neutralDiff}, nil
@@ -782,6 +786,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 			logger.With().Warning("local opinion abstains on all blocks in layer", log.Err(err))
 		}
 	}
+	logger.With().Debug("got input vector for layer", log.Int("count", len(opinionVec)))
 	return opinionVec, nil
 }
 

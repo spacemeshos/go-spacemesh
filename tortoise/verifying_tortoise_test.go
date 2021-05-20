@@ -324,7 +324,7 @@ func generateBlocks(l types.LayerID, n int, bbp baseBlockProvider) (blocks []*ty
 
 func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp inputVectorProvider, blocksPerLayer int) *types.Layer {
 	msh.InputVectorBackupFunc = ivp
-	blocks, err := ivp(l - 1)
+	blocks, err := ivp(l-1)
 	if err != nil {
 		blocks = nil
 	}
@@ -521,16 +521,23 @@ func TestLayerOpinionVector(t *testing.T) {
 	r.Equal(make([]types.BlockID, 0, 0), opinionVec)
 
 	// very old layer (more than hdist layers back)
-	// if there are no contextually valid blocks, it's an error
+	// if the layer isn't in the mesh, it's an error
 	alg.trtl.Last = types.LayerID(defaultTestHdist) + l2ID.Add(1)
 	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
 	r.Equal(database.ErrNotFound, err)
 	r.Nil(opinionVec)
 
-	// otherwise, we expect the set of contextually valid blocks
+	// same layer in mesh, but no contextual validity info
 	l2 := createTurtleLayer(l2ID, mdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
 	for _, b := range l2.Blocks() {
 		r.NoError(mdb.AddBlock(b))
+	}
+	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
+	r.NoError(err)
+	r.Equal(make([]types.BlockID, 0, 0), opinionVec)
+
+	// otherwise, we expect the set of contextually valid blocks
+	for _, b := range l2.Blocks() {
 		r.NoError(mdb.SaveContextualValidity(b.ID(), l2ID, true))
 	}
 	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
@@ -540,7 +547,6 @@ func TestLayerOpinionVector(t *testing.T) {
 }
 
 func TestBaseBlock(t *testing.T) {
-	log.DebugMode(true)
 	r := require.New(t)
 	mdb, teardown := getPersistentMesh()
 	defer func() {
@@ -617,7 +623,6 @@ func TestCloneTurtle(t *testing.T) {
 
 func TestGetSingleInputVector(t *testing.T) {
 	r := require.New(t)
-
 	mdb, teardown := getPersistentMesh()
 	defer func() {
 		require.NoError(t, teardown())
@@ -656,8 +661,6 @@ func TestCheckBlockAndGetInputVector(t *testing.T) {
 
 	l1ID := types.GetEffectiveGenesis()+1
 	blocks := generateBlocks(l1ID, 3, alg.BaseBlock)
-	//l1 := createTurtleLayer(l1ID, mdb, alg.BaseBlock, mdb.LayerBlockIds, 1)
-	//block := l1.Blocks()[0]
 	diffList := []types.BlockID{blocks[0].ID()}
 
 	// missing block
@@ -683,11 +686,117 @@ func TestCheckBlockAndGetInputVector(t *testing.T) {
 	r.False(alg.trtl.checkBlockAndGetInputVector(context.TODO(), diffList, "foo", support, l1ID))
 }
 
-//func TestCalculateExceptions(t *testing.T) {
-//	r := require.New(t)
-//
-//}
-//
+func TestCalculateExceptions(t *testing.T) {
+	r := require.New(t)
+	mdb, teardown := getPersistentMesh()
+	defer func() {
+		require.NoError(t, teardown())
+	}()
+
+	lg := log.NewDefault(t.Name())
+	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+
+	// helper function for checking votes
+	expectVotes := func(votes []map[types.BlockID]struct{}, numAgainst, numFor, numNeutral int) {
+		r.Len(votes, 3, "vote vector size is wrong")
+		r.Len(votes[0], numAgainst) // against
+		r.Len(votes[1], numFor) // for
+		r.Len(votes[2], numNeutral) // neutral
+	}
+
+	// genesis layer
+	l0ID := types.GetEffectiveGenesis()
+	//opinion := Opinion{
+	//	BlockOpinions: nil,
+	//}
+	votes, err := alg.trtl.calculateExceptions(context.TODO(), l0ID, Opinion{})
+	r.NoError(err)
+	// expect votes in support of all genesis blocks
+	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks()), 0)
+
+	// no processed data: expect only support for genesis blocks
+	l1ID := l0ID.Add(1)
+	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{})
+	r.NoError(err)
+	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks()), 0)
+
+	// now advance the processed layer
+	alg.trtl.Last = l1ID
+
+	// missing layer data
+	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{})
+	r.Equal(database.ErrNotFound, err)
+	r.Nil(votes)
+
+	// layer opinion vector is nil (abstains): recent layer, in mesh, no input vector
+	l1 := createTurtleLayer(l1ID, mdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
+	r.NoError(addLayerToMesh(mdb, l1))
+	mdb.InputVectorBackupFunc = nil
+	//mdb.InputVectorBackupFunc = func(types.LayerID) ([]types.BlockID, error) {
+	//	return nil, nil
+	//}
+	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{})
+	r.NoError(err)
+	// expect no against, FOR only for l0, and NEUTRAL for l1
+	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks()), defaultTestLayerSize)
+
+	// adding diffs for: support all blocks in the layer
+	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
+	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{})
+	r.NoError(err)
+	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks())+defaultTestLayerSize, 0)
+
+	// adding diffs against: vote against all blocks in the layer
+	mdb.InputVectorBackupFunc = nil
+	// we cannot store an empty vector here (it comes back as nil), so just put another block ID in it
+	r.NoError(mdb.SaveLayerInputVectorByID(l1ID, []types.BlockID{mesh.GenesisBlock().ID()}))
+	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{})
+	r.NoError(err)
+	expectVotes(votes, defaultTestLayerSize, len(mesh.GenesisLayer().Blocks()), 0)
+
+	// compare opinions: all agree, no exceptions
+	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
+	opinion := Opinion{BlockOpinions: map[types.BlockID]vec{
+		mesh.GenesisBlock().ID(): support,
+		l1.Blocks()[0].ID(): support,
+		l1.Blocks()[1].ID(): support,
+		l1.Blocks()[2].ID(): support,
+	}}
+	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, opinion)
+	r.NoError(err)
+	expectVotes(votes, 0, 0, 0)
+
+	// compare opinions: all disagree, adds exceptions
+	opinion = Opinion{BlockOpinions: map[types.BlockID]vec{
+		mesh.GenesisBlock().ID(): against,
+		l1.Blocks()[0].ID(): against,
+		l1.Blocks()[1].ID(): against,
+		l1.Blocks()[2].ID(): against,
+	}}
+	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, opinion)
+	r.NoError(err)
+	expectVotes(votes, 0, 4, 0)
+
+	// exceeding max exceptions
+	alg.trtl.MaxExceptions = 10
+	l2ID := l1ID.Add(1)
+	l2 := createTurtleLayer(l2ID, mdb, alg.BaseBlock, mdb.LayerBlockIds, alg.trtl.MaxExceptions+1)
+	for _, block := range l2.Blocks() {
+		r.NoError(mdb.AddBlock(block))
+	}
+	createTurtleLayer(l2ID.Add(1), mdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
+	alg.trtl.Last = l2ID
+	votes, err = alg.trtl.calculateExceptions(context.TODO(), l2ID, Opinion{})
+	r.Error(err)
+	r.Contains(err.Error(), errstrTooManyExceptions, "expected too many exceptions error")
+	r.Nil(votes)
+
+	// advance the evicted layer
+	//l10ID := l0ID.Add(10)
+	//alg.trtl.LastEvicted = l1ID
+	//alg.trtl.Last = l10ID
+}
+
 //func TestProcessBlock(t *testing.T) {
 //	r := require.New(t)
 //
