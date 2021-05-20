@@ -324,7 +324,7 @@ func generateBlocks(l types.LayerID, n int, bbp baseBlockProvider) (blocks []*ty
 
 func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp inputVectorProvider, blocksPerLayer int) *types.Layer {
 	msh.InputVectorBackupFunc = ivp
-	blocks, err := ivp(l-1)
+	blocks, err := ivp(l - 1)
 	if err != nil {
 		blocks = nil
 	}
@@ -609,7 +609,7 @@ func TestCloneTurtle(t *testing.T) {
 	}()
 	trtl := newTurtle(mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestLayerSize, defaultTestRerunInterval)
 	trtl.AvgLayerSize += 1 // make sure defaults aren't being read
-	trtl.Last = 10 // state should not be cloned
+	trtl.Last = 10         // state should not be cloned
 	trtl2 := trtl.cloneTurtle()
 	r.Equal(trtl.bdp, trtl2.bdp)
 	r.Equal(trtl.Hdist, trtl2.Hdist)
@@ -630,7 +630,7 @@ func TestGetSingleInputVector(t *testing.T) {
 	lg := log.NewDefault(t.Name())
 	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
 
-	l1ID := types.GetEffectiveGenesis()+1
+	l1ID := types.GetEffectiveGenesis() + 1
 	blocks := generateBlocks(l1ID, 2, alg.BaseBlock)
 
 	// no input vector for layer
@@ -659,7 +659,7 @@ func TestCheckBlockAndGetInputVector(t *testing.T) {
 	lg := log.NewDefault(t.Name())
 	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
 
-	l1ID := types.GetEffectiveGenesis()+1
+	l1ID := types.GetEffectiveGenesis() + 1
 	blocks := generateBlocks(l1ID, 3, alg.BaseBlock)
 	diffList := []types.BlockID{blocks[0].ID()}
 
@@ -700,7 +700,7 @@ func TestCalculateExceptions(t *testing.T) {
 	expectVotes := func(votes []map[types.BlockID]struct{}, numAgainst, numFor, numNeutral int) {
 		r.Len(votes, 3, "vote vector size is wrong")
 		r.Len(votes[0], numAgainst) // against
-		r.Len(votes[1], numFor) // for
+		r.Len(votes[1], numFor)     // for
 		r.Len(votes[2], numNeutral) // neutral
 	}
 
@@ -752,9 +752,9 @@ func TestCalculateExceptions(t *testing.T) {
 	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
 	opinion := Opinion{BlockOpinions: map[types.BlockID]vec{
 		mesh.GenesisBlock().ID(): support,
-		l1.Blocks()[0].ID(): support,
-		l1.Blocks()[1].ID(): support,
-		l1.Blocks()[2].ID(): support,
+		l1.Blocks()[0].ID():      support,
+		l1.Blocks()[1].ID():      support,
+		l1.Blocks()[2].ID():      support,
 	}}
 	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, opinion)
 	r.NoError(err)
@@ -763,9 +763,9 @@ func TestCalculateExceptions(t *testing.T) {
 	// compare opinions: all disagree, adds exceptions
 	opinion = Opinion{BlockOpinions: map[types.BlockID]vec{
 		mesh.GenesisBlock().ID(): against,
-		l1.Blocks()[0].ID(): against,
-		l1.Blocks()[1].ID(): against,
-		l1.Blocks()[2].ID(): against,
+		l1.Blocks()[0].ID():      against,
+		l1.Blocks()[1].ID():      against,
+		l1.Blocks()[2].ID():      against,
 	}}
 	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, opinion)
 	r.NoError(err)
@@ -818,9 +818,7 @@ func TestProcessBlock(t *testing.T) {
 	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
 
 	// blocks in this layer will use the genesis block as their base block
-	l1ID := types.GetEffectiveGenesis()+1
-	//l1 := createTurtleLayer(l1ID, mdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
-	//r.NoError(addLayerToMesh(mdb, l1))
+	l1ID := types.GetEffectiveGenesis() + 1
 	l1Blocks := generateBlocks(l1ID, 3, alg.BaseBlock)
 	// add one block from the layer
 	blockWithMissingBaseBlock := l1Blocks[0]
@@ -836,7 +834,6 @@ func TestProcessBlock(t *testing.T) {
 		return blockWithMissingBaseBlock.ID(), make([][]types.BlockID, 3), nil
 	}
 	l2ID := l1ID.Add(1)
-	//l2 := createTurtleLayer(l2ID, mdb, baseBlockProviderFn, mdb.LayerBlockIds, defaultTestLayerSize)
 	l2Blocks := generateBlocks(l2ID, 3, baseBlockProviderFn)
 
 	// base block layer missing
@@ -865,10 +862,6 @@ func TestProcessBlock(t *testing.T) {
 	// add base block to DB
 	r.NoError(mdb.AddBlock(l2Blocks[0]))
 	baseBlockProviderFn = func(context.Context) (types.BlockID, [][]types.BlockID, error) {
-		//baseBlockAgainst := []types.BlockID{l1Blocks[0].ID()}
-		//baseBlockFor := []types.BlockID{l1Blocks[1].ID()}
-		//baseBlockNeutral := []types.BlockID{l1Blocks[2].ID()}
-		//return l2Blocks[0].ID(), [][]types.BlockID{baseBlockAgainst, baseBlockFor, baseBlockNeutral}, nil
 		return l2Blocks[0].ID(), make([][]types.BlockID, 3), nil
 	}
 	alg.trtl.BlockOpinionsByLayer[l2ID][l2Blocks[0].ID()] = Opinion{BlockOpinions: map[types.BlockID]vec{
@@ -882,9 +875,7 @@ func TestProcessBlock(t *testing.T) {
 	l3Blocks[0].AgainstDiff = []types.BlockID{
 		l1Blocks[1].ID(),
 	}
-	l3Blocks[0].ForDiff = []types.BlockID{
-		//l1Blocks[1].ID(),
-	}
+	l3Blocks[0].ForDiff = []types.BlockID{}
 	l3Blocks[0].NeutralDiff = []types.BlockID{
 		l1Blocks[0].ID(),
 	}
@@ -899,21 +890,149 @@ func TestProcessBlock(t *testing.T) {
 	r.Equal(expectedOpinionVector, alg.trtl.BlockOpinionsByLayer[l3ID][l3Blocks[0].ID()])
 }
 
-//func TestProcessNewBlocks(t *testing.T) {
-//	r := require.New(t)
-//
-//}
-//
-//func TestVerifyLayers(t *testing.T) {
-//	r := require.New(t)
-//
-//}
-//
-//func TestSumVotesForBlock(t *testing.T) {
-//	r := require.New(t)
-//
-//}
-//
+func TestProcessNewBlocks(t *testing.T) {
+	//r := require.New(t)
+
+	// empty input
+
+	// input not sorted by layer
+
+	// test eviction
+
+	// process some blocks: make sure opinions updated
+
+	// base block not marked good
+
+	// base block not found
+
+	// diffs appear before base block layer and/or are not consistent
+
+	// good base block: make sure block is marked good
+
+}
+
+func TestVerifyLayers(t *testing.T) {
+	//r := require.New(t)
+
+	// layer missing in database
+
+	// missing local opinion vector
+
+	// local opinion vector is nil
+
+	//
+}
+
+func TestVoteVectorForLayer(t *testing.T) {
+	r := require.New(t)
+
+	mdb, teardown := getPersistentMesh()
+	defer func() {
+		require.NoError(t, teardown())
+	}()
+
+	lg := log.NewDefault(t.Name())
+	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+	l1ID := types.GetEffectiveGenesis() + 1
+	l1Blocks := generateBlocks(l1ID, 3, alg.BaseBlock)
+	var blockIDs []types.BlockID
+	for _, block := range l1Blocks {
+		blockIDs = append(blockIDs, block.ID())
+	}
+
+	// nil input vector: abstain on all blocks in layer
+	voteMap := alg.trtl.voteVectorForLayer(blockIDs, nil)
+	r.Len(blockIDs, 3)
+	r.Equal(map[types.BlockID]vec{
+		blockIDs[0]: abstain,
+		blockIDs[1]: abstain,
+		blockIDs[2]: abstain,
+	}, voteMap)
+
+	// empty input vector: vote against everything
+	voteMap = alg.trtl.voteVectorForLayer(blockIDs, make([]types.BlockID, 0, 0))
+	r.Len(blockIDs, 3)
+	r.Equal(map[types.BlockID]vec{
+		blockIDs[0]: against,
+		blockIDs[1]: against,
+		blockIDs[2]: against,
+	}, voteMap)
+
+	// adds support for blocks in input vector
+	voteMap = alg.trtl.voteVectorForLayer(blockIDs, blockIDs[1:])
+	r.Len(blockIDs, 3)
+	r.Equal(map[types.BlockID]vec{
+		blockIDs[0]: against,
+		blockIDs[1]: support,
+		blockIDs[2]: support,
+	}, voteMap)
+}
+
+func TestSumVotesForBlock(t *testing.T) {
+	r := require.New(t)
+
+	mdb, teardown := getPersistentMesh()
+	defer func() {
+		require.NoError(t, teardown())
+	}()
+
+	lg := log.NewDefault(t.Name())
+	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+
+	// store a bunch of votes against a block
+	l1ID := types.GetEffectiveGenesis() + 1
+	l1Blocks := generateBlocks(l1ID, 4, alg.BaseBlock)
+	blockWeReallyDislike := l1Blocks[0]
+	blockWeReallyLike := l1Blocks[1]
+	blockWeReallyDontCare := l1Blocks[2]
+	blockWeNeverSaw := l1Blocks[3]
+	l2ID := l1ID.Add(1)
+	l2Blocks := generateBlocks(l2ID, 9, alg.BaseBlock)
+	alg.trtl.BlockOpinionsByLayer[l2ID] = map[types.BlockID]Opinion{
+		l2Blocks[0].ID(): {BlockOpinions: map[types.BlockID]vec{blockWeReallyDislike.ID(): against}},
+		l2Blocks[1].ID(): {BlockOpinions: map[types.BlockID]vec{blockWeReallyDislike.ID(): against}},
+		l2Blocks[2].ID(): {BlockOpinions: map[types.BlockID]vec{blockWeReallyDislike.ID(): against}},
+	}
+
+	// test filter
+	filterPassAll := func(types.BlockID) bool { return true }
+	filterRejectAll := func(types.BlockID) bool { return false }
+
+	// if we reject all blocks, we expect an abstain outcome
+	sum := alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, l2ID, filterRejectAll)
+	r.Equal(abstain, sum)
+
+	// if we allow all blocks to vote, we expect an against outcome
+	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, l2ID, filterPassAll)
+	r.Equal(against.Multiply(3), sum)
+
+	// add more blocks
+	alg.trtl.BlockOpinionsByLayer[l2ID] = map[types.BlockID]Opinion{
+		l2Blocks[0].ID(): {BlockOpinions: map[types.BlockID]vec{blockWeReallyDislike.ID(): against}},
+		l2Blocks[1].ID(): {BlockOpinions: map[types.BlockID]vec{blockWeReallyDislike.ID(): against}},
+		l2Blocks[2].ID(): {BlockOpinions: map[types.BlockID]vec{blockWeReallyDislike.ID(): against}},
+		l2Blocks[3].ID(): {BlockOpinions: map[types.BlockID]vec{blockWeReallyLike.ID(): support}},
+		l2Blocks[4].ID(): {BlockOpinions: map[types.BlockID]vec{blockWeReallyLike.ID(): support}},
+		l2Blocks[5].ID(): {BlockOpinions: map[types.BlockID]vec{blockWeReallyDontCare.ID(): abstain}},
+		l2Blocks[6].ID(): {BlockOpinions: map[types.BlockID]vec{}},
+		l2Blocks[7].ID(): {BlockOpinions: map[types.BlockID]vec{}},
+		l2Blocks[8].ID(): {BlockOpinions: map[types.BlockID]vec{}},
+	}
+	// some blocks explicitly vote against, others have no opinion
+	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, l2ID, filterPassAll)
+	r.Equal(against.Multiply(9), sum)
+	// some blocks vote for, others have no opinion
+	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyLike.ID(), l2ID, l2ID, filterPassAll)
+	r.Equal(support.Multiply(2).Add(against.Multiply(7)), sum)
+	// one block votes neutral, others have no opinion
+	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDontCare.ID(), l2ID, l2ID, filterPassAll)
+	r.Equal(abstain.Multiply(1).Add(against.Multiply(8)), sum)
+
+	// vote missing: counts against
+	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeNeverSaw.ID(), l2ID, l2ID, filterPassAll)
+	r.Equal(against.Multiply(9), sum)
+}
+
 //func TestHealing(t *testing.T) {
 //	r := require.New(t)
 //
