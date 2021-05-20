@@ -412,7 +412,8 @@ func (t *turtle) calculateExceptions(
 
 		// Finally, we need to consider the case where the base block supports a block in this layer that is not in our
 		// input vector (e.g., one we haven't seen), by adding a diff against the block
-		// TODO: this is not currently possible since base block opinions aren't indexed by layer.
+		// TODO: this is not currently possible since base block opinions aren't indexed by layer. See
+		// https://github.com/spacemeshos/go-spacemesh/issues/2424
 		//for b, v := range baseBlockOpinion.BlockOpinions {
 		//	if _, ok := inInputVector[b]; !ok && v != against {
 		//		addDiffs(b, "against", against, againstDiff)

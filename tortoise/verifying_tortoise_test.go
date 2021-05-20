@@ -706,9 +706,6 @@ func TestCalculateExceptions(t *testing.T) {
 
 	// genesis layer
 	l0ID := types.GetEffectiveGenesis()
-	//opinion := Opinion{
-	//	BlockOpinions: nil,
-	//}
 	votes, err := alg.trtl.calculateExceptions(context.TODO(), l0ID, Opinion{})
 	r.NoError(err)
 	// expect votes in support of all genesis blocks
@@ -732,9 +729,6 @@ func TestCalculateExceptions(t *testing.T) {
 	l1 := createTurtleLayer(l1ID, mdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
 	r.NoError(addLayerToMesh(mdb, l1))
 	mdb.InputVectorBackupFunc = nil
-	//mdb.InputVectorBackupFunc = func(types.LayerID) ([]types.BlockID, error) {
-	//	return nil, nil
-	//}
 	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{})
 	r.NoError(err)
 	// expect no against, FOR only for l0, and NEUTRAL for l1
@@ -780,21 +774,38 @@ func TestCalculateExceptions(t *testing.T) {
 	// exceeding max exceptions
 	alg.trtl.MaxExceptions = 10
 	l2ID := l1ID.Add(1)
+	l3ID := l2ID.Add(1)
 	l2 := createTurtleLayer(l2ID, mdb, alg.BaseBlock, mdb.LayerBlockIds, alg.trtl.MaxExceptions+1)
 	for _, block := range l2.Blocks() {
 		r.NoError(mdb.AddBlock(block))
 	}
-	createTurtleLayer(l2ID.Add(1), mdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
+	l3 := createTurtleLayer(l3ID, mdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
 	alg.trtl.Last = l2ID
 	votes, err = alg.trtl.calculateExceptions(context.TODO(), l2ID, Opinion{})
 	r.Error(err)
 	r.Contains(err.Error(), errstrTooManyExceptions, "expected too many exceptions error")
 	r.Nil(votes)
 
-	// advance the evicted layer
-	//l10ID := l0ID.Add(10)
-	//alg.trtl.LastEvicted = l1ID
-	//alg.trtl.Last = l10ID
+	// TODO: test adding base block opinion in support of a block that disagrees with the local opinion, e.g., a block
+	//   that this node has not seen yet. See https://github.com/spacemeshos/go-spacemesh/issues/2424.
+
+	// advance the evicted layer until the exception layer slides outside the sliding window
+	for _, block := range l3.Blocks() {
+		r.NoError(mdb.AddBlock(block))
+	}
+	l4ID := l3ID.Add(1)
+	l4 := createTurtleLayer(l4ID, mdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
+	for _, block := range l4.Blocks() {
+		r.NoError(mdb.AddBlock(block))
+	}
+	l5ID := l4ID.Add(1)
+	createTurtleLayer(l5ID, mdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
+	alg.trtl.LastEvicted = l2ID
+	alg.trtl.Last = l4ID
+	votes, err = alg.trtl.calculateExceptions(context.TODO(), l3ID, Opinion{})
+	r.NoError(err)
+	// expect votes FOR the blocks in the two intervening layers between the base block layer and the last layer
+	expectVotes(votes, 0, 2*defaultTestLayerSize, 0)
 }
 
 //func TestProcessBlock(t *testing.T) {
