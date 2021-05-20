@@ -33,6 +33,8 @@ var (
 	errstrBaseBlockLayerMissing = "baseblock layer not found"
 	errstrBaseBlockNotFoundInLayer = "baseblock not found in layer"
 	errstrConflictingVotes = "conflicting votes found in block"
+	errstrCantFindLayer = "inconsistent state: can't find layer in database"
+	errstrUnableToCalculateLocalOpinion = "unable to calculate local opinion for layer"
 )
 
 func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
@@ -618,7 +620,7 @@ func (t *turtle) verifyLayers(ctx context.Context, targetLayerID types.LayerID) 
 
 		layerBlockIds, err := t.bdp.LayerBlockIds(candidateLayerID)
 		if err != nil {
-			return fmt.Errorf("inconsistent state: can't find layer %v in database: %w", candidateLayerID, err)
+			return fmt.Errorf("%s %v: %w", errstrCantFindLayer, candidateLayerID, err)
 		}
 
 		// get the local opinion for this layer. below, we calculate the global opinion on each block in the layer and
@@ -626,7 +628,7 @@ func (t *turtle) verifyLayers(ctx context.Context, targetLayerID types.LayerID) 
 		rawLayerInputVector, err := t.layerOpinionVector(ctx, candidateLayerID)
 		if err != nil {
 			// an error here signifies a real database failure
-			return fmt.Errorf("unable to calculate local opinion for layer %v: %w", candidateLayerID, err)
+			return fmt.Errorf("%s %v: %w", errstrUnableToCalculateLocalOpinion, candidateLayerID, err)
 		}
 
 		// otherwise, nil means we should abstain

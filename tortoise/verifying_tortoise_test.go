@@ -24,6 +24,18 @@ func init() {
 
 const Path = "../tmp/tortoise/"
 
+type meshWrapper struct {
+	blockDataProvider
+	saveContextualValidityFn func(types.BlockID, types.LayerID, bool) error
+}
+
+func (mw meshWrapper) SaveContextualValidity(bid types.BlockID, lid types.LayerID, valid bool) error {
+	if mw.saveContextualValidityFn != nil {
+		return mw.saveContextualValidityFn(bid, lid, valid)
+	}
+	return mw.blockDataProvider.SaveContextualValidity(bid, lid, valid)
+}
+
 func getPersistentMesh() (*mesh.DB, func() error) {
 	path := Path + "ninja_tortoise"
 	teardown := func() error { return os.RemoveAll(path) }
@@ -912,15 +924,52 @@ func TestProcessNewBlocks(t *testing.T) {
 }
 
 func TestVerifyLayers(t *testing.T) {
-	//r := require.New(t)
+	r := require.New(t)
+
+	mdb, teardown := getPersistentMesh()
+	defer func() {
+		require.NoError(t, teardown())
+	}()
+
+	lg := log.NewDefault(t.Name())
+	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+	l1ID := types.GetEffectiveGenesis() + 1
+	//l1Blocks := generateBlocks(l1ID, defaultTestLayerSize, alg.BaseBlock)
+	l2ID := l1ID.Add(1)
+	//l2Blocks := generateBlocks(l2ID, defaultTestLayerSize, alg.BaseBlock)
 
 	// layer missing in database
+	err := alg.trtl.verifyLayers(context.TODO(), l2ID)
+	r.Error(err)
+	r.Contains(err.Error(), errstrCantFindLayer)
 
-	// missing local opinion vector
+	// empty layer: local opinion vector is nil, abstains on all blocks in layer
+	// no contextual validity data recorded
+	// layer should be verified
+	r.NoError(mdb.AddZeroBlockLayer(l1ID))
+	//for _, block := range l1Blocks {
+	//	r.NoError(mdb.AddBlock(block))
+	//}
 
-	// local opinion vector is nil
+	mdbWrapper := meshWrapper{
+		blockDataProvider:        mdb,
+		saveContextualValidityFn: func(types.BlockID, types.LayerID, bool) error {
+			r.Fail("should not save contextual validity")
+			return nil
+		},
+	}
+	alg.trtl.bdp = mdbWrapper
+	err = alg.trtl.verifyLayers(context.TODO(), l2ID)
+	r.NoError(err)
+	r.Equal(l1ID, alg.trtl.Verified)
 
-	//
+	// consensus doesn't match: fail to verify candidate layer
+
+	// global opinion undecided: fail to verify candidate layer
+
+	// failed to verify old layer: trigger self-healing
+
+	// consensus matches, global opinion decided: blocks marked contextually valid, layer is verified, t.Verified advances
 }
 
 func TestVoteVectorForLayer(t *testing.T) {
