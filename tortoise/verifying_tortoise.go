@@ -28,7 +28,11 @@ type blockDataProvider interface {
 
 var (
 	errNoBaseBlockFound = errors.New("no good base block within exception vector limit")
+	errBaseBlockNotInDatabase = errors.New("inconsistent state: can't find baseblock in database")
 	errstrTooManyExceptions = "too many exceptions to base block vote"
+	errstrBaseBlockLayerMissing = "baseblock layer not found"
+	errstrBaseBlockNotFoundInLayer = "baseblock not found in layer"
+	errstrConflictingVotes = "conflicting votes found in block"
 )
 
 func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
@@ -458,22 +462,22 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	logger.With().Debug("processing block", block.Fields()...)
 	logger.With().Debug("getting baseblock", log.FieldNamed("base_block_id", block.BaseBlock))
 
-	base, err := t.bdp.GetBlock(block.BaseBlock)
+	baseBlock, err := t.bdp.GetBlock(block.BaseBlock)
 	if err != nil {
-		return fmt.Errorf("inconsistent state: can't find baseblock in database")
+		return errBaseBlockNotInDatabase
 	}
 
 	logger.With().Debug("block supports", types.BlockIdsField(block.BlockHeader.ForDiff))
-	logger.With().Debug("checking baseblock", base.Fields()...)
+	logger.With().Debug("checking baseblock", baseBlock.Fields()...)
 
-	layerOpinions, ok := t.BlockOpinionsByLayer[base.LayerIndex]
+	layerOpinions, ok := t.BlockOpinionsByLayer[baseBlock.LayerIndex]
 	if !ok {
-		return fmt.Errorf("baseblock layer not found %v, %v", block.BaseBlock, base.LayerIndex)
+		return fmt.Errorf("%s: %v, %v", errstrBaseBlockLayerMissing, block.BaseBlock, baseBlock.LayerIndex)
 	}
 
-	baseBlockOpinion, ok := layerOpinions[base.ID()]
+	baseBlockOpinion, ok := layerOpinions[baseBlock.ID()]
 	if !ok {
-		return fmt.Errorf("baseblock not found in layer %v, %v", block.BaseBlock, base.LayerIndex)
+		return fmt.Errorf("%s: %v, %v", errstrBaseBlockNotFoundInLayer, block.BaseBlock, baseBlock.LayerIndex)
 	}
 
 	// TODO: this logic would be simpler if For and Against were a single list
@@ -486,13 +490,13 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 		// this could only happen in malicious blocks, and they should not pass a syntax check, but check here just
 		// to be extra safe
 		if _, alreadyVoted := opinion[b]; alreadyVoted {
-			return fmt.Errorf("conflicting votes found in block %v", block.ID())
+			return fmt.Errorf("%s %v", errstrConflictingVotes, block.ID())
 		}
 		opinion[b] = against.Multiply(t.BlockWeight(block.ID(), b))
 	}
 	for _, b := range block.NeutralDiff {
 		if _, alreadyVoted := opinion[b]; alreadyVoted {
-			return fmt.Errorf("conflicting votes found in block %v", block.ID())
+			return fmt.Errorf("%s %v", errstrConflictingVotes, block.ID())
 		}
 		opinion[b] = abstain
 	}

@@ -808,11 +808,97 @@ func TestCalculateExceptions(t *testing.T) {
 	expectVotes(votes, 0, 2*defaultTestLayerSize, 0)
 }
 
-//func TestProcessBlock(t *testing.T) {
-//	r := require.New(t)
-//
-//}
-//
+func TestProcessBlock(t *testing.T) {
+	r := require.New(t)
+	mdb, teardown := getPersistentMesh()
+	defer func() {
+		require.NoError(t, teardown())
+	}()
+	lg := log.NewDefault(t.Name())
+	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+
+	// blocks in this layer will use the genesis block as their base block
+	l1ID := types.GetEffectiveGenesis()+1
+	//l1 := createTurtleLayer(l1ID, mdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
+	//r.NoError(addLayerToMesh(mdb, l1))
+	l1Blocks := generateBlocks(l1ID, 3, alg.BaseBlock)
+	// add one block from the layer
+	blockWithMissingBaseBlock := l1Blocks[0]
+	r.NoError(mdb.AddBlock(blockWithMissingBaseBlock))
+	blockWithMissingBaseBlock.BaseBlock = l1Blocks[1].ID()
+
+	// missing base block
+	err := alg.trtl.processBlock(context.TODO(), blockWithMissingBaseBlock)
+	r.Equal(errBaseBlockNotInDatabase, err)
+
+	// blocks in this layer will use a block from the previous layer as their base block
+	baseBlockProviderFn := func(context.Context) (types.BlockID, [][]types.BlockID, error) {
+		return blockWithMissingBaseBlock.ID(), make([][]types.BlockID, 3), nil
+	}
+	l2ID := l1ID.Add(1)
+	//l2 := createTurtleLayer(l2ID, mdb, baseBlockProviderFn, mdb.LayerBlockIds, defaultTestLayerSize)
+	l2Blocks := generateBlocks(l2ID, 3, baseBlockProviderFn)
+
+	// base block layer missing
+	alg.trtl.BlockOpinionsByLayer[l2ID] = make(map[types.BlockID]Opinion, defaultTestLayerSize)
+	err = alg.trtl.processBlock(context.TODO(), l2Blocks[0])
+	r.Error(err)
+	r.Contains(err.Error(), errstrBaseBlockLayerMissing)
+
+	// base block opinion missing from layer
+	alg.trtl.BlockOpinionsByLayer[l1ID] = make(map[types.BlockID]Opinion, defaultTestLayerSize)
+	err = alg.trtl.processBlock(context.TODO(), l2Blocks[0])
+	r.Error(err)
+	r.Contains(err.Error(), errstrBaseBlockNotFoundInLayer)
+
+	// malicious (conflicting) voting pattern
+	l2Blocks[0].BaseBlock = mesh.GenesisBlock().ID()
+	l2Blocks[0].ForDiff = []types.BlockID{l1Blocks[1].ID()}
+	l2Blocks[0].AgainstDiff = l2Blocks[0].ForDiff
+	err = alg.trtl.processBlock(context.TODO(), l2Blocks[0])
+	r.Error(err)
+	r.Contains(err.Error(), errstrConflictingVotes)
+
+	// add vote diffs: make sure that base block votes flow through, but that block votes override them, and that the
+	// data structure is correctly updated
+
+	// add base block to DB
+	r.NoError(mdb.AddBlock(l2Blocks[0]))
+	baseBlockProviderFn = func(context.Context) (types.BlockID, [][]types.BlockID, error) {
+		//baseBlockAgainst := []types.BlockID{l1Blocks[0].ID()}
+		//baseBlockFor := []types.BlockID{l1Blocks[1].ID()}
+		//baseBlockNeutral := []types.BlockID{l1Blocks[2].ID()}
+		//return l2Blocks[0].ID(), [][]types.BlockID{baseBlockAgainst, baseBlockFor, baseBlockNeutral}, nil
+		return l2Blocks[0].ID(), make([][]types.BlockID, 3), nil
+	}
+	alg.trtl.BlockOpinionsByLayer[l2ID][l2Blocks[0].ID()] = Opinion{BlockOpinions: map[types.BlockID]vec{
+		// these votes all disagree with the block votes, below
+		l1Blocks[0].ID(): against,
+		l1Blocks[1].ID(): support,
+		l1Blocks[2].ID(): abstain,
+	}}
+	l3ID := l2ID.Add(1)
+	l3Blocks := generateBlocks(l3ID, 3, baseBlockProviderFn)
+	l3Blocks[0].AgainstDiff = []types.BlockID{
+		l1Blocks[1].ID(),
+	}
+	l3Blocks[0].ForDiff = []types.BlockID{
+		//l1Blocks[1].ID(),
+	}
+	l3Blocks[0].NeutralDiff = []types.BlockID{
+		l1Blocks[0].ID(),
+	}
+	alg.trtl.BlockOpinionsByLayer[l3ID] = make(map[types.BlockID]Opinion, defaultTestLayerSize)
+	err = alg.trtl.processBlock(context.TODO(), l3Blocks[0])
+	r.NoError(err)
+	expectedOpinionVector := Opinion{BlockOpinions: map[types.BlockID]vec{
+		l1Blocks[0].ID(): abstain, // from exception
+		l1Blocks[1].ID(): against, // from exception
+		l1Blocks[2].ID(): abstain, // from base block
+	}}
+	r.Equal(expectedOpinionVector, alg.trtl.BlockOpinionsByLayer[l3ID][l3Blocks[0].ID()])
+}
+
 //func TestProcessNewBlocks(t *testing.T) {
 //	r := require.New(t)
 //
