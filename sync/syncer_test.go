@@ -219,6 +219,7 @@ func SyncMockFactoryManClock(number int, conf Configuration, name string, dbType
 		poet := activation.NewPoetDb(poetDB, log.NewDefault("poetDb"))
 		//poet := poetDb()
 		layerFetcher.AddDBs(msh.Blocks(), atxDB, msh.Transactions(), poetDB, msh.InputVector())
+		// note: layer fetcher startup happens asynchronously, so it may not be fully running when this method returns
 		layerFetcher.Start()
 
 		sync := NewSync(context.TODO(), net, msh, txpool, atxpool, blockValidator, poet, conf, ticker, layerFetcher, l)
@@ -1125,6 +1126,7 @@ func TestSyncer_Txs(t *testing.T) {
 func TestFetchLayerBlockIds(t *testing.T) {
 	// check tx validation
 	syncs, nodes, clock := SyncMockFactory(3, conf, t.Name(), memoryDB, newMockPoetDb)
+	time.Sleep(time.Second)
 
 	defer clock.Close()
 
@@ -1479,6 +1481,7 @@ func TestSyncer_handleNotSyncedZeroBlocksLayer(t *testing.T) {
 	r.NoError(sync.SetZeroBlockLayer(1))
 	r.Equal(0, lv.countValidated)
 	r.Equal(types.LayerID(0), lv.processedLayer)
+	time.Sleep(time.Second) // give layer fetcher a chance to start
 	go sync.handleNotSynced(context.TODO(), 1)
 	select {
 	case <-time.After(10 * time.Second):
@@ -1675,9 +1678,10 @@ func TestSyncer_ConcurrentSynchronise(t *testing.T) {
 	sync.ticker = &mockClock{Layer: 3}
 	lv := &mockTimedValidator{1 * time.Second, 0}
 	sync.Validator = lv
-	sync.AddBlock(types.NewExistingBlock(1, []byte(rand.String(8)), nil))
-	sync.AddBlock(types.NewExistingBlock(2, []byte(rand.String(8)), nil))
-	sync.AddBlock(types.NewExistingBlock(3, []byte(rand.String(8)), nil))
+	r.NoError(sync.AddBlock(types.NewExistingBlock(1, []byte(rand.String(8)), nil)))
+	r.NoError(sync.AddBlock(types.NewExistingBlock(2, []byte(rand.String(8)), nil)))
+	r.NoError(sync.AddBlock(types.NewExistingBlock(3, []byte(rand.String(8)), nil)))
+	time.Sleep(100 * time.Millisecond)
 	go sync.synchronise(context.TODO())
 	time.Sleep(100 * time.Millisecond)
 	sync.synchronise(context.TODO())
