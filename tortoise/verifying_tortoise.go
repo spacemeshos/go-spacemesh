@@ -612,8 +612,17 @@ func (t *turtle) verifyLayers(ctx context.Context, targetLayerID types.LayerID) 
 	// this is the full range of unverified layers that we might possibly be able to verify at this point.
 	// Note: t.Verified is initialized to the effective genesis layer, so the first candidate layer here necessarily
 	// follows and is post-genesis. There's no need for an additional check here.
-	for candidateLayerID := t.Verified + 1; candidateLayerID < targetLayerID; candidateLayerID++ {
-		logger.With().Info("attempting to verify layer", candidateLayerID)
+candidateLayerLoop:
+	for candidateLayerID := t.Verified+1; candidateLayerID < targetLayerID; candidateLayerID++ {
+		logger := logger.WithFields(log.FieldNamed("candidate_layer", candidateLayerID))
+
+		// it's possible that self-healing already validated a layer
+		if t.Verified >= candidateLayerID {
+			logger.Info("self-healing already validated this layer")
+			continue
+		}
+
+		logger.Info("attempting to verify candidate layer")
 
 		// note: if the following checks fail, we just return rather than trying to verify later layers.
 		// we don't presently support verifying layer N+1 when layer N hasn't been verified.
@@ -655,7 +664,7 @@ func (t *turtle) verifyLayers(ctx context.Context, targetLayerID types.LayerID) 
 			}
 
 			// count the votes of the input vote vector by summing the voting weight of good blocks
-			logger.With().Debug("summing votes for block",
+			logger.With().Debug("summing votes for candidate layer block",
 				blockID,
 				log.FieldNamed("layer_start", candidateLayerID+1),
 				log.FieldNamed("layer_end", lastVotingLayer))
@@ -720,15 +729,20 @@ func (t *turtle) verifyLayers(ctx context.Context, targetLayerID types.LayerID) 
 
 			// Verifying tortoise will wait `zdist' layers for consensus, then an additional `ConfidenceParam'
 			// layers until all other nodes achieve consensus. If it's still stuck after this point, i.e., if the gap
-			// between the last verified layer and this candidate layer is greater than this distance, then we trigger
+			// between this unverified candidate layer and the latest layer is greater than this distance, then we trigger
 			// self-healing. But there's no point in trying to heal a layer that's not at least Hdist layers old since
 			// we only consider the local opinion for recent layers.
-			if candidateLayerID < t.Last-t.Hdist && candidateLayerID-t.Verified > t.Zdist+t.ConfidenceParam {
+			if candidateLayerID < t.Last-t.Hdist && t.Last-candidateLayerID > t.Zdist+t.ConfidenceParam {
 				lastLayer := targetLayerID
+				// don't attempt to heal layers newer than Hdist
 				if lastLayer > t.Last-t.Hdist {
 					lastLayer = t.Last - t.Hdist
 				}
 				t.selfHealing(ctx, lastLayer)
+
+				// short-circuit processing of this layer, but allow verification of later layers to continue after
+				// self-healing has finished
+				break candidateLayerLoop
 			}
 
 			// Otherwise, give up trying to verify layers and keep waiting
@@ -805,8 +819,8 @@ func (t *turtle) sumVotesForBlock(
 ) (sum vec) {
 	sum = abstain
 	logger := t.logger.WithContext(ctx).WithFields(
-		log.FieldNamed("sum_votes_start_layer", startLayer),
-		log.FieldNamed("sum_votes_end_layer", endLayer),
+		log.FieldNamed("start_layer", startLayer),
+		log.FieldNamed("end_layer", endLayer),
 		log.FieldNamed("block_voting_on", blockID))
 	for voteLayer := startLayer; voteLayer <= endLayer; voteLayer++ {
 		logger.With().Debug("summing layer votes",
@@ -844,11 +858,11 @@ func (t *turtle) selfHealing(ctx context.Context, endLayerID types.LayerID) {
 	pbaseNew := t.Verified
 
 	// TODO: optimize this algorithm using, e.g., a triangular matrix rather than nested loops
-	for candidateLayerID := pbaseOld; candidateLayerID < endLayerID; candidateLayerID++ {
+	for candidateLayerID := pbaseOld+1; candidateLayerID < endLayerID; candidateLayerID++ {
 		logger := t.logger.WithContext(ctx).WithFields(
 			log.FieldNamed("old_verified_layer", pbaseOld),
 			log.FieldNamed("new_verified_layer", pbaseNew),
-			log.FieldNamed("highest_candidate_layer", endLayerID),
+			log.FieldNamed("target_layer", endLayerID),
 			log.FieldNamed("candidate_layer", candidateLayerID),
 			log.FieldNamed("last_layer_received", t.Last),
 			log.FieldNamed("hdist", t.Hdist))
@@ -897,8 +911,8 @@ func (t *turtle) selfHealing(ctx context.Context, endLayerID types.LayerID) {
 				// short-circuit all votes for all blocks in this layer to the weak coin value
 				logger.With().Info("re-scoring all blocks in candidate layer using weak coin",
 					log.Bool("coinflip", layerCoin))
-				for _, blockID := range layerBlockIds {
-					contextualValidity[blockID] = layerCoin
+				for _, bid := range layerBlockIds {
+					contextualValidity[bid] = layerCoin
 				}
 				break
 			}
@@ -907,8 +921,6 @@ func (t *turtle) selfHealing(ctx context.Context, endLayerID types.LayerID) {
 		}
 
 		// TODO: do we overwrite the layer input vector in the database here?
-
-		// TODO: reprocess state if we changed the validity of any blocks
 
 		// record the contextual validity for all blocks in this layer
 		for blk, v := range contextualValidity {

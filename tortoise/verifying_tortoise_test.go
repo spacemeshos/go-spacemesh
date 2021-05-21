@@ -26,6 +26,7 @@ const Path = "../tmp/tortoise/"
 
 type meshWrapper struct {
 	blockDataProvider
+	inputVectorBackupFn func(types.LayerID) ([]types.BlockID, error)
 	saveContextualValidityFn func(types.BlockID, types.LayerID, bool) error
 }
 
@@ -34,6 +35,13 @@ func (mw meshWrapper) SaveContextualValidity(bid types.BlockID, lid types.LayerI
 		return mw.saveContextualValidityFn(bid, lid, valid)
 	}
 	return mw.blockDataProvider.SaveContextualValidity(bid, lid, valid)
+}
+
+func (mw meshWrapper) GetLayerInputVectorByID(lid types.LayerID) ([]types.BlockID, error) {
+	if mw.inputVectorBackupFn != nil {
+		return mw.inputVectorBackupFn(lid)
+	}
+	return mw.blockDataProvider.GetLayerInputVectorByID(lid)
 }
 
 func getPersistentMesh() (*mesh.DB, func() error) {
@@ -934,9 +942,12 @@ func TestVerifyLayers(t *testing.T) {
 	lg := log.NewDefault(t.Name())
 	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
 	l1ID := types.GetEffectiveGenesis() + 1
-	//l1Blocks := generateBlocks(l1ID, defaultTestLayerSize, alg.BaseBlock)
 	l2ID := l1ID.Add(1)
-	//l2Blocks := generateBlocks(l2ID, defaultTestLayerSize, alg.BaseBlock)
+	l2Blocks := generateBlocks(l2ID, defaultTestLayerSize, alg.BaseBlock)
+	l3ID := l2ID.Add(1)
+	l3Blocks := generateBlocks(l3ID, defaultTestLayerSize, alg.BaseBlock)
+	l4ID := l3ID.Add(1)
+	l4Blocks := generateBlocks(l4ID, defaultTestLayerSize, alg.BaseBlock)
 
 	// layer missing in database
 	err := alg.trtl.verifyLayers(context.TODO(), l2ID)
@@ -947,9 +958,6 @@ func TestVerifyLayers(t *testing.T) {
 	// no contextual validity data recorded
 	// layer should be verified
 	r.NoError(mdb.AddZeroBlockLayer(l1ID))
-	//for _, block := range l1Blocks {
-	//	r.NoError(mdb.AddBlock(block))
-	//}
 
 	mdbWrapper := meshWrapper{
 		blockDataProvider:        mdb,
@@ -961,15 +969,103 @@ func TestVerifyLayers(t *testing.T) {
 	alg.trtl.bdp = mdbWrapper
 	err = alg.trtl.verifyLayers(context.TODO(), l2ID)
 	r.NoError(err)
-	r.Equal(l1ID, alg.trtl.Verified)
+	r.Equal(int(l1ID), int(alg.trtl.Verified))
+
+	for _, block := range l2Blocks {
+		r.NoError(mdb.AddBlock(block))
+	}
+	// L3 blocks support all L2 blocks
+	l2SupportVec := Opinion{BlockOpinions: map[types.BlockID]vec{
+		l2Blocks[0].ID(): support,
+		l2Blocks[1].ID(): support,
+		l2Blocks[2].ID(): support,
+	}}
+	alg.trtl.BlockOpinionsByLayer[l3ID] = map[types.BlockID]Opinion{
+		l3Blocks[0].ID(): l2SupportVec,
+		l3Blocks[1].ID(): l2SupportVec,
+		l3Blocks[2].ID(): l2SupportVec,
+	}
+	alg.trtl.Last = l3ID
+
+	// voting blocks not marked good, both global and local opinion is abstain, verified layer does not advance
+	err = alg.trtl.verifyLayers(context.TODO(), l3ID)
+	r.NoError(err)
+	r.Equal(int(l1ID), int(alg.trtl.Verified))
+
+	// now mark voting blocks good
+	alg.trtl.GoodBlocksIndex[l3Blocks[0].ID()] = struct{}{}
+	alg.trtl.GoodBlocksIndex[l3Blocks[1].ID()] = struct{}{}
+	alg.trtl.GoodBlocksIndex[l3Blocks[2].ID()] = struct{}{}
 
 	// consensus doesn't match: fail to verify candidate layer
+	// global opinion: good, local opinion: abstain
+	err = alg.trtl.verifyLayers(context.TODO(), l3ID)
+	r.NoError(err)
+	r.Equal(int(l1ID), int(alg.trtl.Verified))
 
-	// global opinion undecided: fail to verify candidate layer
+	// mark local opinion of L2 good so verified layer advances
+	// do the reverse for L3: local opinion is good, global opinion is undecided
+	var l2BlockIDs, l3BlockIDs []types.BlockID
+	for _, block := range l2Blocks {
+		l2BlockIDs = append(l2BlockIDs, block.ID())
+	}
+	mdbWrapper.inputVectorBackupFn = mdb.LayerBlockIds
+	mdbWrapper.saveContextualValidityFn = nil
+	alg.trtl.bdp = mdbWrapper
+	for _, block := range l3Blocks {
+		r.NoError(mdb.AddBlock(block))
+		l3BlockIDs = append(l3BlockIDs, block.ID())
+	}
+	r.NoError(mdb.SaveLayerInputVectorByID(l3ID, l3BlockIDs))
+	l3VoteVec := Opinion{BlockOpinions: map[types.BlockID]vec{
+		// support these so global opinion is support
+		l2Blocks[0].ID(): support,
+		l2Blocks[1].ID(): support,
+		l2Blocks[2].ID(): support,
+
+		// abstain
+		l3Blocks[0].ID(): abstain,
+		l3Blocks[1].ID(): abstain,
+		l3Blocks[2].ID(): abstain,
+	}}
+	alg.trtl.BlockOpinionsByLayer[l4ID] = map[types.BlockID]Opinion{
+		l4Blocks[0].ID(): l3VoteVec,
+		l4Blocks[1].ID(): l3VoteVec,
+		l4Blocks[2].ID(): l3VoteVec,
+	}
+	alg.trtl.Last = l4ID
+	alg.trtl.GoodBlocksIndex[l4Blocks[0].ID()] = struct{}{}
+	alg.trtl.GoodBlocksIndex[l4Blocks[1].ID()] = struct{}{}
+	alg.trtl.GoodBlocksIndex[l4Blocks[2].ID()] = struct{}{}
+
+	// verified layer advances one step, but L3 is not verified because global opinion is undecided
+	err = alg.trtl.verifyLayers(context.TODO(), l4ID)
+	r.NoError(err)
+	r.Equal(int(l2ID), int(alg.trtl.Verified))
+
+	// weight not exceeded
+	l3VoteVec = Opinion{BlockOpinions: map[types.BlockID]vec{
+		// support these so global opinion is support
+		l2Blocks[0].ID(): support,
+		l2Blocks[1].ID(): support,
+		l2Blocks[2].ID(): support,
+
+		l3Blocks[0].ID(): support,
+		l3Blocks[1].ID(): support,
+		l3Blocks[2].ID(): support,
+	}}
+	// modify vote so one block votes in support of L3 blocks, two blocks continue to abstain, so threshold not met
+	alg.trtl.BlockOpinionsByLayer[l4ID][l4Blocks[0].ID()] = l3VoteVec
+	err = alg.trtl.verifyLayers(context.TODO(), l4ID)
+	r.NoError(err)
+	r.Equal(int(l2ID), int(alg.trtl.Verified))
 
 	// failed to verify old layer: trigger self-healing
-
-	// consensus matches, global opinion decided: blocks marked contextually valid, layer is verified, t.Verified advances
+	mdb.RecordCoinflip(context.TODO(), l3ID, true)
+	alg.trtl.Last = l4ID + alg.trtl.Hdist
+	err = alg.trtl.verifyLayers(context.TODO(), l4ID)
+	r.NoError(err)
+	r.Equal(int(l3ID), int(alg.trtl.Verified))
 }
 
 func TestVoteVectorForLayer(t *testing.T) {
@@ -989,8 +1085,13 @@ func TestVoteVectorForLayer(t *testing.T) {
 		blockIDs = append(blockIDs, block.ID())
 	}
 
+	// empty input: expect empty output
+	emptyVec := make([]types.BlockID, 0, 0)
+	voteMap := alg.trtl.voteVectorForLayer(emptyVec, emptyVec)
+	r.Equal(map[types.BlockID]vec{}, voteMap)
+
 	// nil input vector: abstain on all blocks in layer
-	voteMap := alg.trtl.voteVectorForLayer(blockIDs, nil)
+	voteMap = alg.trtl.voteVectorForLayer(blockIDs, nil)
 	r.Len(blockIDs, 3)
 	r.Equal(map[types.BlockID]vec{
 		blockIDs[0]: abstain,
