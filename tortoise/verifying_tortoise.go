@@ -732,11 +732,15 @@ candidateLayerLoop:
 			// between this unverified candidate layer and the latest layer is greater than this distance, then we trigger
 			// self-healing. But there's no point in trying to heal a layer that's not at least Hdist layers old since
 			// we only consider the local opinion for recent layers.
-			if candidateLayerID < t.Last-t.Hdist && t.Last-candidateLayerID > t.Zdist+t.ConfidenceParam {
+			if candidateLayerID > t.Last {
+				logger.With().Panic("candidate layer is higher than last layer received",
+					log.FieldNamed("last_layer", t.Last))
+			}
+			if candidateLayerID < t.layerCutoff() && t.Last-candidateLayerID > t.Zdist+t.ConfidenceParam {
 				lastLayer := targetLayerID
 				// don't attempt to heal layers newer than Hdist
-				if lastLayer > t.Last-t.Hdist {
-					lastLayer = t.Last - t.Hdist
+				if lastLayer > t.layerCutoff() {
+					lastLayer = t.layerCutoff()
 				}
 				t.selfHealing(ctx, lastLayer)
 
@@ -766,6 +770,15 @@ candidateLayerLoop:
 	return nil
 }
 
+// for layers older than this point, we vote according to global opinion (rather than local opinion)
+func (t *turtle) layerCutoff() types.LayerID {
+	// if we haven't seen at least Hdist layers yet, we always rely on local opinion
+	if t.Last < t.Hdist {
+		return 0
+	}
+	return t.Last - t.Hdist
+}
+
 // return the set of blocks we currently consider valid for the layer. factors in both local and global opinion,
 // depending how old the layer is.
 func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) ([]types.BlockID, error) {
@@ -773,10 +786,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 
 	// for layers older than hdist, we vote according to global opinion
 	// TODO: what if this layer hasn't been verified yet? (it will have no contextually valid blocks)
-	oldLayerCutoff := t.Last - t.Hdist
-	if t.Hdist > t.Last {
-		oldLayerCutoff = 0
-	}
+	oldLayerCutoff := t.layerCutoff()
 	if layerID < oldLayerCutoff {
 		logger.Debug("using contextually valid blocks as opinion on old layer")
 		layerBlocks, err := t.bdp.ContextuallyValidBlock(layerID)
