@@ -34,6 +34,17 @@ func NewListener(net Service, syncer Fetcher, shouldListenToGossip enableGossipF
 		wg:                   sync.WaitGroup{},
 	}
 }
+// Syncer is interface for sync services
+type Syncer interface {
+	FetchAtxReferences(context.Context, *types.ActivationTx) error
+	FetchPoetProof(ctx context.Context, poetProofRef []byte) error
+	ListenToGossip() bool
+	GetBlock(ID types.BlockID) (*types.Block, error)
+	//GetTxs(IDs []types.TransactionID) error
+	//GetBlocks(IDs []types.BlockID) error
+	//GetAtxs(IDs []types.ATXID) error
+	IsSynced(context.Context) bool
+}
 
 // Fetcher is a general interface that defines a component capable of fetching data from remote peers
 type Fetcher interface {
