@@ -28,10 +28,11 @@ type blockDataProvider interface {
 
 var (
 	errNoBaseBlockFound = errors.New("no good base block within exception vector limit")
-	errBaseBlockNotInDatabase = errors.New("inconsistent state: can't find baseblock in database")
+	errBaseBlockNotInDatabase = errors.New("inconsistent state: can't find base block in database")
+	errNotSorted = errors.New("input blocks are not sorted by layerID")
 	errstrTooManyExceptions = "too many exceptions to base block vote"
-	errstrBaseBlockLayerMissing = "baseblock layer not found"
-	errstrBaseBlockNotFoundInLayer = "baseblock not found in layer"
+	errstrBaseBlockLayerMissing = "base block layer not found"
+	errstrBaseBlockNotFoundInLayer = "base block opinions not found in layer"
 	errstrConflictingVotes = "conflicting votes found in block"
 	errstrCantFindLayer = "inconsistent state: can't find layer in database"
 	errstrUnableToCalculateLocalOpinion = "unable to calculate local opinion for layer"
@@ -525,13 +526,16 @@ func (t *turtle) ProcessNewBlocks(ctx context.Context, blocks []*types.Block) er
 		return nil
 	}
 
+	// we perform eviction here because it should happen after the verified layer advances, and this is the method that
+	// calls verifyLayers
 	defer t.evict(ctx)
+
 	logger.With().Info("tortoise handling incoming block data", log.Int("num_blocks", len(blocks)))
 
 	// process the votes in all layer blocks and update tables
 	for _, b := range blocks {
 		if b.LayerIndex < lastLayerID {
-			return errors.New("input blocks are not sorted by layerID")
+			return errNotSorted
 		} else if b.LayerIndex > lastLayerID {
 			lastLayerID = b.LayerIndex
 		}
@@ -569,6 +573,13 @@ func (t *turtle) ProcessNewBlocks(ctx context.Context, blocks []*types.Block) er
 	logger.With().Info("finished marking good blocks",
 		log.Int("total_blocks", len(blocks)),
 		log.Int("good_blocks", numGood))
+
+	if t.Last < lastLayerID {
+		logger.With().Warning("got blocks for new layer before receiving layer, updating highest layer seen",
+			log.FieldNamed("previous_highest", t.Last),
+			log.FieldNamed("new_highest", lastLayerID))
+		t.Last = lastLayerID
+	}
 
 	// attempt to verify layers up to the latest one for which we have new block data
 	return t.verifyLayers(ctx, lastLayerID)

@@ -911,28 +911,77 @@ func TestProcessBlock(t *testing.T) {
 }
 
 func TestProcessNewBlocks(t *testing.T) {
-	//r := require.New(t)
+	log.DebugMode(true)
+	r := require.New(t)
+
+	mdb, teardown := getPersistentMesh()
+	defer func() {
+		require.NoError(t, teardown())
+	}()
+
+	lg := log.NewDefault(t.Name())
+	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+	l1ID := types.GetEffectiveGenesis() + 1
+	l2ID := l1ID.Add(1)
+	l1Blocks := generateBlocks(l1ID, defaultTestLayerSize, alg.BaseBlock)
+	l2Blocks := generateBlocks(l2ID, defaultTestLayerSize, alg.BaseBlock)
+
+	for _, block := range l1Blocks {
+		r.NoError(mdb.AddBlock(block))
+	}
+	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
 
 	// empty input
+	r.Nil(alg.trtl.ProcessNewBlocks(context.TODO(), []*types.Block{}))
 
 	// input not sorted by layer
+	blocksOutOfOrder := []*types.Block{l2Blocks[0], l1Blocks[0]}
+	err := alg.trtl.ProcessNewBlocks(context.TODO(), blocksOutOfOrder)
+	r.Equal(errNotSorted, err)
 
-	// test eviction
+	// process some blocks: make sure opinions updated and block marked good
+	l1Blocks[0].ForDiff = []types.BlockID{l1Blocks[1].ID(), l1Blocks[2].ID()}
+	r.NoError(alg.trtl.ProcessNewBlocks(context.TODO(), []*types.Block{l1Blocks[0]}))
+	r.Contains(alg.trtl.BlockOpinionsByLayer, l1ID)
+	r.Contains(alg.trtl.BlockOpinionsByLayer[l1ID], l1Blocks[0].ID())
+	r.Equal(alg.trtl.BlockOpinionsByLayer[l1ID][l1Blocks[0].ID()], Opinion{BlockOpinions: map[types.BlockID]vec{
+		l1Blocks[1].ID(): support,
+		l1Blocks[2].ID(): support,
+	}})
+	r.Contains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
+	r.Equal(alg.trtl.GoodBlocksIndex[l1Blocks[0].ID()], struct{}{})
 
-	// process some blocks: make sure opinions updated
+	// base block opinion missing: input block should also not be marked good
+	l1Blocks[1].BaseBlock = l1Blocks[2].ID()
+	r.NoError(alg.trtl.ProcessNewBlocks(context.TODO(), []*types.Block{l1Blocks[1]}))
+	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[1].ID())
 
-	// base block not marked good
+	// base block not marked good: input block should also not be marked good
+	alg.trtl.BlockOpinionsByLayer[l1ID][l1Blocks[2].ID()] = Opinion{BlockOpinions: map[types.BlockID]vec{}}
+	l1Blocks[1].BaseBlock = l1Blocks[2].ID()
+	r.NoError(alg.trtl.ProcessNewBlocks(context.TODO(), []*types.Block{l1Blocks[1]}))
+	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[1].ID())
 
 	// base block not found
+	l1Blocks[2].BaseBlock = l2Blocks[0].ID()
+	r.NoError(alg.trtl.ProcessNewBlocks(context.TODO(), []*types.Block{l1Blocks[2]}))
+	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[2].ID())
 
 	// diffs appear before base block layer and/or are not consistent
+	// base block in L1 but this block contains a FOR vote for the genesis block in L0
+	l2Blocks[0].BaseBlock = l1Blocks[0].ID()
+	r.NoError(alg.trtl.ProcessNewBlocks(context.TODO(), []*types.Block{l2Blocks[0]}))
+	r.NotContains(alg.trtl.GoodBlocksIndex, l2Blocks[0].ID())
 
-	// good base block: make sure block is marked good
-
+	// test eviction
+	r.Equal(int(mesh.GenesisLayer().Index())-1, int(alg.trtl.LastEvicted))
+	// move verified up a bunch to make sure eviction occurs
+	alg.trtl.Verified = types.GetEffectiveGenesis() + alg.trtl.Hdist + alg.trtl.WindowSize
+	r.NoError(alg.trtl.ProcessNewBlocks(context.TODO(), []*types.Block{l2Blocks[0]}))
+	r.Equal(int(alg.trtl.Verified)-int(alg.trtl.WindowSize)-1, int(alg.trtl.LastEvicted))
 }
 
 func TestVerifyLayers(t *testing.T) {
-	log.DebugMode(true)
 	r := require.New(t)
 
 	mdb, teardown := getPersistentMesh()
