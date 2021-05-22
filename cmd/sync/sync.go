@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"time"
 
@@ -50,6 +51,21 @@ var version string
 var remote bool
 
 func init() {
+
+	//catch the os interupt signal
+	signals := make(chan os.Signal)
+	signal.Notify(signals, os.Interrupt)
+
+	go func() {
+		<-signals
+		signal.Stop(signals)
+
+		lg := log.NewDefault("sync_test")
+		lg.Info("Received CTRL-C. Exit")
+		os.Exit(1)
+
+	}()
+
 	//path to remote storage
 	cmd.PersistentFlags().StringVarP(&bucket, "storage-path", "z", "spacemesh-sync-data", "Specify storage bucket name")
 
