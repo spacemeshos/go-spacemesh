@@ -34,6 +34,7 @@ func NewListener(net Service, syncer Fetcher, shouldListenToGossip enableGossipF
 		wg:                   sync.WaitGroup{},
 	}
 }
+
 // Syncer is interface for sync services
 type Syncer interface {
 	FetchAtxReferences(context.Context, *types.ActivationTx) error
