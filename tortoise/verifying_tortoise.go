@@ -931,6 +931,7 @@ func (t *turtle) selfHealing(ctx context.Context, endLayerID types.LayerID) {
 		}
 
 		// TODO: do we overwrite the layer input vector in the database here?
+		// TODO: reprocess state if we changed the validity of any blocks
 
 		// record the contextual validity for all blocks in this layer
 		for blk, v := range contextualValidity {
