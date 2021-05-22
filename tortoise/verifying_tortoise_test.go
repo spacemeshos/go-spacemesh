@@ -932,6 +932,7 @@ func TestProcessNewBlocks(t *testing.T) {
 }
 
 func TestVerifyLayers(t *testing.T) {
+	log.DebugMode(true)
 	r := require.New(t)
 
 	mdb, teardown := getPersistentMesh()
@@ -948,6 +949,10 @@ func TestVerifyLayers(t *testing.T) {
 	l3Blocks := generateBlocks(l3ID, defaultTestLayerSize, alg.BaseBlock)
 	l4ID := l3ID.Add(1)
 	l4Blocks := generateBlocks(l4ID, defaultTestLayerSize, alg.BaseBlock)
+	l5ID := l4ID.Add(1)
+	l5Blocks := generateBlocks(l5ID, defaultTestLayerSize, alg.BaseBlock)
+	l6ID := l5ID.Add(1)
+	l6Blocks := generateBlocks(l6ID, defaultTestLayerSize, alg.BaseBlock)
 
 	// layer missing in database
 	err := alg.trtl.verifyLayers(context.TODO(), l2ID)
@@ -1005,7 +1010,7 @@ func TestVerifyLayers(t *testing.T) {
 
 	// mark local opinion of L2 good so verified layer advances
 	// do the reverse for L3: local opinion is good, global opinion is undecided
-	var l2BlockIDs, l3BlockIDs []types.BlockID
+	var l2BlockIDs, l3BlockIDs, l4BlockIDs, l5BlockIDs []types.BlockID
 	for _, block := range l2Blocks {
 		l2BlockIDs = append(l2BlockIDs, block.ID())
 	}
@@ -1016,8 +1021,18 @@ func TestVerifyLayers(t *testing.T) {
 		r.NoError(mdb.AddBlock(block))
 		l3BlockIDs = append(l3BlockIDs, block.ID())
 	}
+	for _, block := range l4Blocks {
+		r.NoError(mdb.AddBlock(block))
+		l4BlockIDs = append(l4BlockIDs, block.ID())
+	}
+	for _, block := range l5Blocks {
+		r.NoError(mdb.AddBlock(block))
+		l5BlockIDs = append(l5BlockIDs, block.ID())
+	}
 	r.NoError(mdb.SaveLayerInputVectorByID(l3ID, l3BlockIDs))
-	l3VoteVec := Opinion{BlockOpinions: map[types.BlockID]vec{
+	r.NoError(mdb.SaveLayerInputVectorByID(l4ID, l4BlockIDs))
+	r.NoError(mdb.SaveLayerInputVectorByID(l5ID, l5BlockIDs))
+	l4Votes := Opinion{BlockOpinions: map[types.BlockID]vec{
 		// support these so global opinion is support
 		l2Blocks[0].ID(): support,
 		l2Blocks[1].ID(): support,
@@ -1029,43 +1044,87 @@ func TestVerifyLayers(t *testing.T) {
 		l3Blocks[2].ID(): abstain,
 	}}
 	alg.trtl.BlockOpinionsByLayer[l4ID] = map[types.BlockID]Opinion{
-		l4Blocks[0].ID(): l3VoteVec,
-		l4Blocks[1].ID(): l3VoteVec,
-		l4Blocks[2].ID(): l3VoteVec,
+		l4Blocks[0].ID(): l4Votes,
+		l4Blocks[1].ID(): l4Votes,
+		l4Blocks[2].ID(): l4Votes,
 	}
 	alg.trtl.Last = l4ID
 	alg.trtl.GoodBlocksIndex[l4Blocks[0].ID()] = struct{}{}
 	alg.trtl.GoodBlocksIndex[l4Blocks[1].ID()] = struct{}{}
 	alg.trtl.GoodBlocksIndex[l4Blocks[2].ID()] = struct{}{}
+	l5Votes := Opinion{BlockOpinions: map[types.BlockID]vec{
+		l2Blocks[0].ID(): support,
+		l2Blocks[1].ID(): support,
+		l2Blocks[2].ID(): support,
+		l3Blocks[0].ID(): abstain,
+		l3Blocks[1].ID(): abstain,
+		l3Blocks[2].ID(): abstain,
+		l4Blocks[0].ID(): support,
+		l4Blocks[1].ID(): support,
+		l4Blocks[2].ID(): support,
+	}}
+	alg.trtl.BlockOpinionsByLayer[l5ID] = map[types.BlockID]Opinion{
+		l5Blocks[0].ID(): l5Votes,
+		l5Blocks[1].ID(): l5Votes,
+		l5Blocks[2].ID(): l5Votes,
+	}
+	alg.trtl.GoodBlocksIndex[l5Blocks[0].ID()] = struct{}{}
+	alg.trtl.GoodBlocksIndex[l5Blocks[1].ID()] = struct{}{}
+	alg.trtl.GoodBlocksIndex[l5Blocks[2].ID()] = struct{}{}
+	l6Votes := Opinion{BlockOpinions: map[types.BlockID]vec{
+		l2Blocks[0].ID(): support,
+		l2Blocks[1].ID(): support,
+		l2Blocks[2].ID(): support,
+		l3Blocks[0].ID(): abstain,
+		l3Blocks[1].ID(): abstain,
+		l3Blocks[2].ID(): abstain,
+		l4Blocks[0].ID(): support,
+		l4Blocks[1].ID(): support,
+		l4Blocks[2].ID(): support,
+		l5Blocks[0].ID(): support,
+		l5Blocks[1].ID(): support,
+		l5Blocks[2].ID(): support,
+	}}
+	alg.trtl.BlockOpinionsByLayer[l6ID] = map[types.BlockID]Opinion{
+		l6Blocks[0].ID(): l6Votes,
+		l6Blocks[1].ID(): l6Votes,
+		l6Blocks[2].ID(): l6Votes,
+	}
+	alg.trtl.GoodBlocksIndex[l6Blocks[0].ID()] = struct{}{}
+	alg.trtl.GoodBlocksIndex[l6Blocks[1].ID()] = struct{}{}
+	alg.trtl.GoodBlocksIndex[l6Blocks[2].ID()] = struct{}{}
 
-	// verified layer advances one step, but L3 is not verified because global opinion is undecided
+	// verified layer advances one step, but L3 is not verified because global opinion is undecided, so verification
+	// stops there
 	err = alg.trtl.verifyLayers(context.TODO(), l4ID)
 	r.NoError(err)
 	r.Equal(int(l2ID), int(alg.trtl.Verified))
 
 	// weight not exceeded
-	l3VoteVec = Opinion{BlockOpinions: map[types.BlockID]vec{
-		// support these so global opinion is support
+	l4Votes = Opinion{BlockOpinions: map[types.BlockID]vec{
 		l2Blocks[0].ID(): support,
 		l2Blocks[1].ID(): support,
 		l2Blocks[2].ID(): support,
 
+		// change from abstain to support
 		l3Blocks[0].ID(): support,
 		l3Blocks[1].ID(): support,
 		l3Blocks[2].ID(): support,
 	}}
 	// modify vote so one block votes in support of L3 blocks, two blocks continue to abstain, so threshold not met
-	alg.trtl.BlockOpinionsByLayer[l4ID][l4Blocks[0].ID()] = l3VoteVec
+	alg.trtl.BlockOpinionsByLayer[l4ID][l4Blocks[0].ID()] = l4Votes
 	err = alg.trtl.verifyLayers(context.TODO(), l4ID)
 	r.NoError(err)
 	r.Equal(int(l2ID), int(alg.trtl.Verified))
 
-	// failed to verify old layer: trigger self-healing
+	// failed to verify old layer: trigger self-healing. self-healing should advance verification two steps, over the
+	// previously stuck layer (l3) and the following layer (l4) since it's old enough, then hand control back to the
+	// ordinary verifying tortoise which should continue and verify l5.
 	mdb.RecordCoinflip(context.TODO(), l3ID, true)
-	alg.trtl.Last = l4ID + alg.trtl.Hdist
-	err = alg.trtl.verifyLayers(context.TODO(), l4ID)
+	alg.trtl.Last = l4ID + alg.trtl.Hdist + 1
+	err = alg.trtl.verifyLayers(context.TODO(), l6ID)
 	r.NoError(err)
-	r.Equal(int(l3ID), int(alg.trtl.Verified))
+	r.Equal(int(l5ID), int(alg.trtl.Verified))
 }
 
 func TestVoteVectorForLayer(t *testing.T) {

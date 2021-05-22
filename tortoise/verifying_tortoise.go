@@ -746,7 +746,7 @@ candidateLayerLoop:
 
 				// short-circuit processing of this layer, but allow verification of later layers to continue after
 				// self-healing has finished
-				break candidateLayerLoop
+				continue candidateLayerLoop
 			}
 
 			// Otherwise, give up trying to verify layers and keep waiting
@@ -831,10 +831,11 @@ func (t *turtle) sumVotesForBlock(
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.FieldNamed("start_layer", startLayer),
 		log.FieldNamed("end_layer", endLayer),
-		log.FieldNamed("block_voting_on", blockID))
+		log.FieldNamed("block_voting_on", blockID),
+		log.FieldNamed("layer_voting_on", startLayer-1))
 	for voteLayer := startLayer; voteLayer <= endLayer; voteLayer++ {
+		logger := logger.WithFields(voteLayer)
 		logger.With().Debug("summing layer votes",
-			voteLayer,
 			log.Int("count", len(t.BlockOpinionsByLayer[voteLayer])))
 		for votingBlockID, votingBlockOpinion := range t.BlockOpinionsByLayer[voteLayer] {
 			logger := logger.WithFields(log.FieldNamed("voting_block", votingBlockID))
@@ -885,7 +886,7 @@ func (t *turtle) selfHealing(ctx context.Context, endLayerID types.LayerID) {
 
 		// Calculate the global opinion on all blocks in the layer
 		// Note: we look at ALL blocks we've seen for the layer, not just those we've previously marked contextually valid
-		logger.Info("self-healing verifying candidate layer")
+		logger.Info("self-healing attempting to verify candidate layer")
 
 		layerBlockIds, err := t.bdp.LayerBlockIds(candidateLayerID)
 		if err != nil {
