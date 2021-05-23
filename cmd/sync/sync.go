@@ -35,7 +35,22 @@ var cmd = &cobra.Command{
 	Short: "start sync",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("starting sync")
+
+		//catch the os interupt signal
+		signals := make(chan os.Signal, 1)
+		signal.Notify(signals, os.Interrupt)
+
 		syncApp := newSyncApp()
+		go func() {
+			<-signals
+			syncApp.Cleanup()
+			signal.Stop(signals)
+
+			fmt.Println("Received interrupt signal. Exits")
+			os.Exit(1)
+
+		}()
+
 		log.With().Info("initializing new sync app", log.String("DataDir", syncApp.Config.DataDir()))
 		defer syncApp.Cleanup()
 		syncApp.Initialize(cmd)
@@ -51,20 +66,6 @@ var version string
 var remote bool
 
 func init() {
-
-	//catch the os interupt signal
-	signals := make(chan os.Signal)
-	signal.Notify(signals, os.Interrupt)
-
-	go func() {
-		<-signals
-		signal.Stop(signals)
-
-		lg := log.NewDefault("sync_test")
-		lg.Info("Received CTRL-C. Exit")
-		os.Exit(1)
-
-	}()
 
 	//path to remote storage
 	cmd.PersistentFlags().StringVarP(&bucket, "storage-path", "z", "spacemesh-sync-data", "Specify storage bucket name")
@@ -93,6 +94,7 @@ func newSyncApp() *syncApp {
 
 func (app *syncApp) Cleanup() {
 	err := os.RemoveAll(app.Config.DataDir())
+
 	if err != nil {
 		app.sync.With().Error("failed to cleanup sync", log.Err(err))
 	}
