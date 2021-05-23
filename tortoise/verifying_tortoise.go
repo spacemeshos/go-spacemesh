@@ -345,7 +345,6 @@ func (t *turtle) calculateExceptions(
 		for _, i := range types.BlockIDs(mesh.GenesisLayer().Blocks()) {
 			forDiff[i] = struct{}{}
 		}
-		return []map[types.BlockID]struct{}{againstDiff, forDiff, neutralDiff}, nil
 	}
 
 	// Add latest layers input vector results to the diff
@@ -354,8 +353,8 @@ func (t *turtle) calculateExceptions(
 	// We only look for and store exceptions within the sliding window set of layers as an optimization, but a block
 	// can contain exceptions from any layer, back to genesis.
 	startLayer := t.LastEvicted + 1
-	if startLayer < types.GetEffectiveGenesis() {
-		startLayer = types.GetEffectiveGenesis()
+	if startLayer <= types.GetEffectiveGenesis() {
+		startLayer = types.GetEffectiveGenesis().Add(1)
 	}
 	for layerID := startLayer; layerID <= t.Last; layerID++ {
 		logger := logger.WithFields(log.FieldNamed("diff_layer_id", layerID))
@@ -457,7 +456,9 @@ func RecoverVerifyingTortoise(mdb retriever) (interface{}, error) {
 }
 
 func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
-	logger := t.logger.WithContext(ctx).WithFields(log.FieldNamed("processing_block_id", block.ID()))
+	logger := t.logger.WithContext(ctx).WithFields(
+		log.FieldNamed("processing_block_id", block.ID()),
+		log.FieldNamed("processing_block_layer", block.LayerIndex))
 
 	// When a new block arrives, we look up the block it points to in our table,
 	// and add the corresponding vector (multiplied by the block weight) to our own vote-totals vector.
@@ -518,12 +519,27 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 // ProcessNewBlocks processes the votes of a set of blocks, records their opinions, and marks good blocks good.
 // The blocks do not all have to be in the same layer, but if they span multiple layers, they must be sorted by LayerID.
 func (t *turtle) ProcessNewBlocks(ctx context.Context, blocks []*types.Block) error {
+	lastLayerID, err := t.processBlocks(ctx, blocks)
+	if err != nil {
+		return err
+	}
+
+	// no error, but nothing further to do
+	if lastLayerID == nil {
+		return nil
+	}
+
+	// attempt to verify layers up to the latest one for which we have new block data
+	return t.verifyLayers(ctx, *lastLayerID)
+}
+
+func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) (*types.LayerID, error) {
 	logger := t.logger.WithContext(ctx)
 	lastLayerID := types.LayerID(0)
 	if len(blocks) == 0 {
 		// nothing to do
 		logger.Warning("cannot process empty block list")
-		return nil
+		return nil, nil
 	}
 
 	// we perform eviction here because it should happen after the verified layer advances, and this is the method that
@@ -535,7 +551,7 @@ func (t *turtle) ProcessNewBlocks(ctx context.Context, blocks []*types.Block) er
 	// process the votes in all layer blocks and update tables
 	for _, b := range blocks {
 		if b.LayerIndex < lastLayerID {
-			return errNotSorted
+			return nil, errNotSorted
 		} else if b.LayerIndex > lastLayerID {
 			lastLayerID = b.LayerIndex
 		}
@@ -581,18 +597,32 @@ func (t *turtle) ProcessNewBlocks(ctx context.Context, blocks []*types.Block) er
 		t.Last = lastLayerID
 	}
 
-	// attempt to verify layers up to the latest one for which we have new block data
-	return t.verifyLayers(ctx, lastLayerID)
+	return &lastLayerID, nil
 }
 
 // HandleIncomingLayer processes all layer block votes
 // returns the old pbase and new pbase after taking into account block votes
 func (t *turtle) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) error {
+	lastLayerID, err := t.handleLayerBlocks(ctx, layerID)
+	if err != nil {
+		return err
+	}
+
+	// no error but nothing to do
+	if lastLayerID == nil {
+		return nil
+	}
+
+	// attempt to verify layers up to the latest one for which we have new block data
+	return t.verifyLayers(ctx, *lastLayerID)
+}
+
+func (t *turtle) handleLayerBlocks(ctx context.Context, layerID types.LayerID) (*types.LayerID, error) {
 	logger := t.logger.WithContext(ctx).WithFields(layerID)
 
 	if layerID <= types.GetEffectiveGenesis() {
 		logger.Debug("not attempting to handle genesis layer")
-		return nil
+		return nil, nil
 	}
 
 	// Note: we don't compare newlyr and t.Verified, so this method could be called again on an already-verified layer.
@@ -601,7 +631,7 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, layerID types.LayerID)
 	// read layer blocks
 	layerBlocks, err := t.bdp.LayerBlocks(layerID)
 	if err != nil {
-		return fmt.Errorf("unable to read contents of layer %v: %w", layerID, err)
+		return nil, fmt.Errorf("unable to read contents of layer %v: %w", layerID, err)
 	}
 
 	if t.Last < layerID {
@@ -609,7 +639,7 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, layerID types.LayerID)
 	}
 
 	logger.With().Info("tortoise handling incoming layer", log.Int("num_blocks", len(layerBlocks)))
-	return t.ProcessNewBlocks(ctx, layerBlocks)
+	return t.processBlocks(ctx, layerBlocks)
 }
 
 // loops over all layers from the last verified up to a new target layer and attempts to verify each in turn
@@ -775,7 +805,7 @@ candidateLayerLoop:
 			}
 		}
 		t.Verified = candidateLayerID
-		logger.With().Info("verified layer", candidateLayerID)
+		logger.With().Info("verified candidate layer")
 	}
 
 	return nil
@@ -874,24 +904,30 @@ func (t *turtle) sumVotesForBlock(
 // Manually count all votes for all layers since the last verified layer, up to the newly-arrived layer (there's no
 // point in going further since we have no new information about any newer layers). Self-healing does not take into
 // consideration local opinion, it relies solely on global opinion.
-func (t *turtle) selfHealing(ctx context.Context, endLayerID types.LayerID) {
+func (t *turtle) selfHealing(ctx context.Context, targetLayerID types.LayerID) {
 	// These are our starting values
 	pbaseOld := t.Verified
 	pbaseNew := t.Verified
 
 	// TODO: optimize this algorithm using, e.g., a triangular matrix rather than nested loops
-	for candidateLayerID := pbaseOld+1; candidateLayerID < endLayerID; candidateLayerID++ {
+	for candidateLayerID := pbaseOld+1; candidateLayerID < targetLayerID; candidateLayerID++ {
 		logger := t.logger.WithContext(ctx).WithFields(
 			log.FieldNamed("old_verified_layer", pbaseOld),
 			log.FieldNamed("new_verified_layer", pbaseNew),
-			log.FieldNamed("target_layer", endLayerID),
+			log.FieldNamed("target_layer", targetLayerID),
 			log.FieldNamed("candidate_layer", candidateLayerID),
 			log.FieldNamed("last_layer_received", t.Last),
 			log.FieldNamed("hdist", t.Hdist))
 
-		// we should never run on layers newer than Hdist back
-		if candidateLayerID > t.Last-t.Hdist {
-			logger.Error("cannot heal layer that's not at least hdist layers old")
+		// we should never run on layers newer than Hdist back (from last layer received)
+		// when bootstrapping, don't attempt any verification at all
+		latestLayerWeCanVerify := t.Last - t.Hdist
+		if t.Last < t.Hdist {
+			latestLayerWeCanVerify = mesh.GenesisLayer().Index()
+		}
+		if candidateLayerID > latestLayerWeCanVerify {
+			logger.With().Error("cannot heal layer that's not at least hdist layers old",
+				log.FieldNamed("highest_healable_layer", latestLayerWeCanVerify))
 			return
 		}
 
@@ -943,6 +979,7 @@ func (t *turtle) selfHealing(ctx context.Context, endLayerID types.LayerID) {
 		}
 
 		// TODO: do we overwrite the layer input vector in the database here?
+		// TODO: do we mark approved blocks good? do we update other blocks' opinions of them?
 		// TODO: reprocess state if we changed the validity of any blocks
 
 		// record the contextual validity for all blocks in this layer
