@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pyroscope
+  labels:
+    app: pyroscope
+    heritage: Helm
+  creationTimestamp: null
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: pyroscope
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        name: pyroscope
+    spec:
+      containers:
+      - args:
+        - pyroscope server
+        command:
+        - /bin/sh
+        - -c
+        image: pyroscope/pyroscope:latest
+        name: pyroscope
+        ports:
+        - containerPort: 4040
+        resources:
+          limits:
+            cpu: "1"
+            memory: 2Gi
+          requests:
+            cpu: "1"
+            memory: 2Gi
+
+

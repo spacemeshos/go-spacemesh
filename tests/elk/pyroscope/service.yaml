@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pyroscope
+  labels:
+    app: pyroscope
+    heritage: Helm
+  creationTimestamp: null
+spec:
+  ports:
+  - name: http
+    port: 4040
+    targetPort: 4040
+  selector:
+    name: pyroscope
+  type: NodePort
+status:
+  loadBalancer: {}
