@@ -691,18 +691,12 @@ candidateLayerLoop:
 		// all positions up to k: in other words, we can verify a layer k if the total weight of the global opinion
 		// exceeds the confidence threshold, and agrees with local opinion.
 		for blockID, localOpinionOnBlock := range localLayerOpinionVec {
-			// count votes for the hDist layers following the candidateLayerID, up to the last received layer
-			lastVotingLayer := t.Last
-			if candidateLayerID+t.Hdist < lastVotingLayer {
-				lastVotingLayer = candidateLayerID + t.Hdist
-			}
-
 			// count the votes of the input vote vector by summing the voting weight of good blocks
 			logger.With().Debug("summing votes for candidate layer block",
 				blockID,
 				log.FieldNamed("layer_start", candidateLayerID+1),
-				log.FieldNamed("layer_end", lastVotingLayer))
-			sum := t.sumVotesForBlock(ctx, blockID, candidateLayerID+1, lastVotingLayer, func(votingBlockID types.BlockID) bool {
+				log.FieldNamed("layer_end", t.Last))
+			sum := t.sumVotesForBlock(ctx, blockID, candidateLayerID+1, func(votingBlockID types.BlockID) bool {
 				if _, isgood := t.GoodBlocksIndex[votingBlockID]; !isgood {
 					logger.With().Debug("not counting vote of block not marked good",
 						log.FieldNamed("voting_block", votingBlockID))
@@ -863,16 +857,16 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 func (t *turtle) sumVotesForBlock(
 	ctx context.Context,
 	blockID types.BlockID, // the block we're summing votes for/against
-	startLayer, endLayer types.LayerID,
+	startLayer types.LayerID,
 	filter func(types.BlockID) bool,
 ) (sum vec) {
 	sum = abstain
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.FieldNamed("start_layer", startLayer),
-		log.FieldNamed("end_layer", endLayer),
+		log.FieldNamed("end_layer", t.Last),
 		log.FieldNamed("block_voting_on", blockID),
 		log.FieldNamed("layer_voting_on", startLayer-1))
-	for voteLayer := startLayer; voteLayer <= endLayer; voteLayer++ {
+	for voteLayer := startLayer; voteLayer <= t.Last; voteLayer++ {
 		logger := logger.WithFields(voteLayer)
 		logger.With().Debug("summing layer votes",
 			log.Int("count", len(t.BlockOpinionsByLayer[voteLayer])))
@@ -908,6 +902,7 @@ func (t *turtle) selfHealing(ctx context.Context, targetLayerID types.LayerID) {
 	pbaseNew := t.Verified
 
 	// TODO: optimize this algorithm using, e.g., a triangular matrix rather than nested loops
+
 	for candidateLayerID := pbaseOld+1; candidateLayerID < targetLayerID; candidateLayerID++ {
 		logger := t.logger.WithContext(ctx).WithFields(
 			log.FieldNamed("old_verified_layer", pbaseOld),
@@ -947,7 +942,10 @@ func (t *turtle) selfHealing(ctx context.Context, targetLayerID types.LayerID) {
 			logger := logger.WithFields(log.FieldNamed("candidate_block_id", blockID))
 
 			// count all votes for or against this block by all blocks in later layers: don't filter out any
-			sum := t.sumVotesForBlock(ctx, blockID, candidateLayerID+1, t.Last, func(id types.BlockID) bool { return true })
+			// TODO: we have a problem here. t.BlockOpinionsByLayer is never updated after we initially receive and
+			//   process new blocks, so self-healing is never applied.
+			// block/layer data was received).
+			sum := t.sumVotesForBlock(ctx, blockID, candidateLayerID+1, func(id types.BlockID) bool { return true })
 
 			// check that the total weight exceeds the confidence threshold
 			globalOpinionOnBlock := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(t.Last-candidateLayerID))
