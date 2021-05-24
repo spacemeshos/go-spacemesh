@@ -8,53 +8,51 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
 
-func TestTortoiseBeacon(t *testing.T) {
-	t.Parallel()
-
-	requirer := require.New(t)
-	conf := TestConfig()
-
-	mwc := weakcoin.RandomMock{}
-
-	logger := log.NewDefault("TortoiseBeacon")
-	genesisTime := time.Now().Add(time.Second * 10)
-	ld := time.Duration(10) * time.Second
-
-	types.SetLayersPerEpoch(1)
-
-	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, log.NewDefault("clock"))
-	clock.StartNotifying()
-
-	sim := service.NewSimulator()
-	n1 := sim.NewNode()
-
-	layer := types.LayerID(3)
-	atxList := []types.ATXID{types.ATXID(types.HexToHash32("0x01"))}
-	atxGetter := newMockATXGetter(atxList)
-
-	ticker := clock.Subscribe()
-	tb := New(conf, ld, n1, atxGetter, nil, mwc, ticker, logger)
-	requirer.NotNil(tb)
-
-	err := tb.Start()
-	requirer.NoError(err)
-
-	t.Logf("Awaiting epoch %v", layer)
-	awaitLayer(clock, layer)
-
-	v, err := tb.GetBeacon(layer.GetEpoch())
-	requirer.NoError(err)
-
-	expected := "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-	requirer.Equal(expected, types.BytesToHash(v).String())
-
-	requirer.NoError(tb.Close())
-}
+//func TestTortoiseBeacon(t *testing.T) {
+//	t.Parallel()
+//
+//	requirer := require.New(t)
+//	conf := TestConfig()
+//
+//	mwc := weakcoin.RandomMock{}
+//
+//	logger := log.NewDefault("TortoiseBeacon")
+//	genesisTime := time.Now().Add(time.Second * 10)
+//	ld := time.Duration(10) * time.Second
+//
+//	types.SetLayersPerEpoch(1)
+//
+//	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, log.NewDefault("clock"))
+//	clock.StartNotifying()
+//
+//	sim := service.NewSimulator()
+//	n1 := sim.NewNode()
+//
+//	layer := types.LayerID(3)
+//	atxList := []types.ATXID{types.ATXID(types.HexToHash32("0x01"))}
+//	atxGetter := newMockATXGetter(atxList)
+//
+//	ticker := clock.Subscribe()
+//	tb := New(conf, ld, n1, atxGetter, nil, mwc, ticker, logger)
+//	requirer.NotNil(tb)
+//
+//	err := tb.Start()
+//	requirer.NoError(err)
+//
+//	t.Logf("Awaiting epoch %v", layer)
+//	awaitLayer(clock, layer)
+//
+//	v, err := tb.GetBeacon(layer.GetEpoch())
+//	requirer.NoError(err)
+//
+//	expected := "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+//	requirer.Equal(expected, types.BytesToHash(v).String())
+//
+//	requirer.NoError(tb.Close())
+//}
 
 func awaitLayer(clock *timesync.TimeClock, epoch types.LayerID) {
 	layerTicker := clock.Subscribe()
