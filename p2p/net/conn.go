@@ -187,7 +187,9 @@ func (c *FormattedConnection) Created() time.Time {
 func (c *FormattedConnection) publish(ctx context.Context, message []byte) {
 	// Print a log line to establish a link between the originating sessionID and this requestID,
 	// before the sessionID disappears.
-	c.logger.WithContext(ctx).Debug("connection: enqueuing incoming message")
+
+	//todo: re insert if log loss is fixed
+	//c.logger.WithContext(ctx).Debug("connection: enqueuing incoming message")
 
 	// Rather than store the context on the heap, which is an antipattern, we instead extract the sessionID and store
 	// that.
@@ -230,9 +232,10 @@ func (c *FormattedConnection) sendListener() {
 	for {
 		select {
 		case m := <-c.messages:
-			c.logger.With().Debug("connection: sending outgoing message",
-				log.String("peer_id", m.peerID),
-				log.String("requestId", m.reqID))
+			//todo: re insert when log loss is fixed
+			/*c.logger.With().Debug("connection: sending outgoing message",
+			log.String("peer_id", m.peerID),
+			log.String("requestId", m.reqID))*/
 
 			//todo: we are hiding the error here...
 			if err := c.SendSock(m.payload); err != nil {
@@ -260,7 +263,8 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 	reqID, _ := log.ExtractRequestID(ctx)
 	peerID, _ := ctx.Value(log.PeerIDKey).(string)
 
-	c.logger.WithContext(ctx).Debug("connection: enqueuing outgoing message")
+	//todo: re insert when log loss is fixed
+	//c.logger.WithContext(ctx).Debug("connection: enqueuing outgoing message")
 	c.messages <- msgToSend{m, reqID, peerID}
 	return nil
 }

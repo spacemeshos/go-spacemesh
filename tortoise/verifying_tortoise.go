@@ -13,8 +13,8 @@ type blockDataProvider interface {
 	GetBlock(id types.BlockID) (*types.Block, error)
 	LayerBlockIds(l types.LayerID) (ids []types.BlockID, err error)
 
-	GetLayerInputVector(lyrid types.LayerID) ([]types.BlockID, error)
-	SaveLayerInputVector(lyrid types.LayerID, vector []types.BlockID) error
+	GetLayerInputVectorByID(lyrid types.LayerID) ([]types.BlockID, error)
+	SaveLayerInputVectorByID(lyrid types.LayerID, vector []types.BlockID) error
 
 	SaveContextualValidity(id types.BlockID, valid bool) error
 
@@ -136,7 +136,7 @@ func (t *turtle) getSingleInputVectorFromDB(lyrid types.LayerID, blockid types.B
 		return support, nil
 	}
 
-	input, err := t.bdp.GetLayerInputVector(lyrid)
+	input, err := t.bdp.GetLayerInputVectorByID(lyrid)
 	if err != nil {
 		return abstain, err
 	}
@@ -295,7 +295,7 @@ func (t *turtle) calculateExceptions(layerid types.LayerID, blockid types.BlockI
 		}
 
 		// TODO: how to differentiate between missing Hare results, and Hare failed/gave up waiting?
-		layerInputVector, err := t.bdp.GetLayerInputVector(i)
+		layerInputVector, err := t.bdp.GetLayerInputVectorByID(i)
 		if err != nil {
 			t.logger.With().Debug("input vector is empty, adding neutral diffs", i, log.Err(err))
 			for _, b := range layerBlockIds {
@@ -452,6 +452,8 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer) (pbaseOld, pbaseNew ty
 		}
 	}
 
+	blockscount := len(newlyr.Blocks())
+	goodblocks := len(t.GoodBlocksIndex)
 	// Go over all blocks, in order. Mark block i “good” if:
 	for _, b := range newlyr.Blocks() {
 		// (1) the base block is marked as good
@@ -473,6 +475,8 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer) (pbaseOld, pbaseNew ty
 		}
 	}
 
+	t.logger.With().Info("finished marking good blocks", log.Int("total_blocks", blockscount), log.Int("good_blocks", len(t.GoodBlocksIndex)-goodblocks))
+
 	idx := newlyr.Index()
 	pbaseOld = t.Verified
 	t.logger.With().Info("starting layer verification",
@@ -492,7 +496,7 @@ layerLoop:
 		// TODO: implement handling hare terminating with no valid blocks.
 		// 	currently input vector is nil if hare hasn't terminated yet.
 		//	 ACT: hare should save something in the db when terminating empty set, sync should check it.
-		rawLayerInputVector, err := t.bdp.GetLayerInputVector(i)
+		rawLayerInputVector, err := t.bdp.GetLayerInputVectorByID(i)
 		if err != nil {
 			// this sets the input to abstain
 			t.logger.With().Warning("input vector abstains on all blocks", i)

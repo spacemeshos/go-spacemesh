@@ -121,10 +121,10 @@ type TortoiseBeacon struct {
 }
 
 // a function to verify the message with the signature and its public key.
-type verifierFunc = func(msg, sig, pub []byte) (bool, error)
+type verifierFunc = func(msg, sig, pub []byte) bool
 
 type signer interface {
-	Sign(msg []byte) ([]byte, error)
+	Sign(msg []byte) []byte
 }
 
 type layerClock interface {
@@ -648,10 +648,7 @@ func (tb *TortoiseBeacon) atxThreshold(totalATXWeightInThisEpoch int) (*big.Int,
 	fractionBigFloat := new(big.Float).SetFloat64(fractionFloat64)
 
 	emptyMessage := make([]byte, 0)
-	maxPossibleNumberBytes, err := tb.vrfSigner.Sign(emptyMessage)
-	if err != nil {
-		return nil, fmt.Errorf("sign VRF: %w", err)
-	}
+	maxPossibleNumberBytes := tb.vrfSigner.Sign(emptyMessage)
 
 	for i := range maxPossibleNumberBytes {
 		maxPossibleNumberBytes[i] = 0xFF
@@ -672,12 +669,7 @@ func (tb *TortoiseBeacon) calcSignature(epoch types.EpochID) ([]byte, error) {
 		return nil, fmt.Errorf("calculate proposal: %w", err)
 	}
 
-	vrfSig, err := tb.vrfSigner.Sign(p)
-	if err != nil {
-		return nil, fmt.Errorf("sign message: %w", err)
-	}
-
-	return vrfSig, nil
+	return tb.vrfSigner.Sign(p), nil
 }
 
 func (tb *TortoiseBeacon) calcProposal(epoch types.EpochID) ([]byte, error) {

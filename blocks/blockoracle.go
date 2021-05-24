@@ -22,7 +22,7 @@ type activationDB interface {
 }
 
 type vrfSigner interface {
-	Sign(msg []byte) ([]byte, error)
+	Sign(msg []byte) []byte
 }
 
 // DefaultProofsEpoch is set such that it will never equal the current epoch
@@ -108,7 +108,7 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 }
 
 func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
-	layerBeacon, err := bo.beaconProvider.GetBeacon(epochNumber)
+	epochBeacon, err := bo.beaconProvider.GetBeacon(epochNumber)
 	if err != nil {
 		bo.log.With().Error("Failed to get beacon",
 			log.Uint64("epoch_id", uint64(epochNumber)),
@@ -137,7 +137,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 		log.Uint32("active_set_size", activeSetSize))
 	bo.log.With().Debug("calculating eligibility",
 		epochNumber,
-		log.String("layer_beacon", fmt.Sprint(layerBeacon)))
+		log.String("epoch_beacon", fmt.Sprint(epochBeacon)))
 
 	if epochNumber.IsGenesis() {
 		bo.log.With().Info("genesis epoch detected, using GenesisActiveSetSize",
@@ -154,12 +154,8 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 	bo.eligibilityProofs = map[types.LayerID][]types.BlockEligibilityProof{}
 	bo.eligibilityMutex.Unlock()
 	for counter := uint32(0); counter < numberOfEligibleBlocks; counter++ {
-		message := serializeVRFMessage(layerBeacon, epochNumber, counter)
-		vrfSig, err := bo.vrfSigner.Sign(message)
-		if err != nil {
-			bo.log.With().Error("could not sign message", log.Err(err))
-			return err
-		}
+		message := serializeVRFMessage(epochBeacon, epochNumber, counter)
+		vrfSig := bo.vrfSigner.Sign(message)
 		vrfHash := sha256.Sum256(vrfSig)
 		eligibleLayer := calcEligibleLayer(epochNumber, bo.layersPerEpoch, vrfHash)
 		bo.eligibilityMutex.Lock()

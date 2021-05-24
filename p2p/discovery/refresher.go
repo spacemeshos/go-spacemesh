@@ -16,8 +16,8 @@ import (
 const (
 
 	// minTimeBetweenQueries is a minimum time between attempts to query a peer.
-	minTimeBetweenQueries = 500 * time.Millisecond
-	// lastQueriesCacheSize is the maximum size of the query cache map
+	minTimeBetweenQueries = 5 * time.Second
+	// lastQueriesCacheSiz9e is the maximum size of the query cache map
 	lastQueriesCacheSize = 100
 
 	maxConcurrentRequests = 3
@@ -93,10 +93,11 @@ loop:
 		servers = srv[:util.Min(numpeers, len(srv))]
 		res := r.requestAddresses(ctx, servers)
 		tries++
-		r.logger.Info("Bootstrap: try %d gave %v results", tries, len(res))
 
 		newsize := r.book.NumAddresses()
 		wanted := numpeers
+
+		r.logger.With().Info("bootstrap attempt finished", log.Int("tries", tries), log.Int("results", len(res)), log.Int("addbook_size", newsize))
 
 		if newsize-size >= wanted {
 			r.logger.Info("Achieved bootstrap objective, got %v needed %v", newsize-size, wanted)

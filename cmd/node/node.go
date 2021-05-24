@@ -3,6 +3,7 @@ package node
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -12,12 +13,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
-	"runtime/pprof"
 	"time"
 
-	"cloud.google.com/go/profiler"
-	"github.com/spacemeshos/amcl"
-	"github.com/spacemeshos/amcl/BLS381"
+	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -35,9 +34,11 @@ import (
 	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
@@ -53,7 +54,6 @@ import (
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
 )
 
@@ -91,6 +91,7 @@ const (
 	NipstBuilderLogger   = "nipstBuilder"
 	AtxBuilderLogger     = "atxBuilder"
 	GossipListener       = "gossipListener"
+	Fetcher              = "fetcher"
 )
 
 // Cmd is the cobra wrapper for the node, that allows adding parameters to it
@@ -154,6 +155,15 @@ type TickProvider interface {
 	AwaitLayer(layerID types.LayerID) chan struct{}
 }
 
+// Tortoise beacon mock (waiting for #2267)
+type tortoiseBeaconMock struct{}
+
+// GetBeacon returns a very simple pseudo-random beacon value based on the input epoch ID
+func (tortoiseBeaconMock) GetBeacon(epochID types.EpochID) []byte {
+	sha := sha256.Sum256(epochID.ToBytes())
+	return sha[:4]
+}
+
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
 	*cobra.Command
@@ -183,6 +193,7 @@ type SpacemeshApp struct {
 	closers        []interface{ Close() }
 	log            log.Log
 	txPool         *state.TxMempool
+	layerFetch     *layerfetcher.Logic
 	loggers        map[string]*zap.AtomicLevel
 	term           chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
 	started        chan struct{} // this channel is closed once the app has finished starting
@@ -258,16 +269,6 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 	if err := cmdp.EnsureCLIFlags(cmd, app.Config); err != nil {
 		return err
 	}
-	if app.Config.Profiler {
-		if err := profiler.Start(profiler.Config{
-			Service:        "go-spacemesh",
-			ServiceVersion: fmt.Sprintf("%s+%s+%s", cmdp.Version, cmdp.Branch, cmdp.Commit),
-			MutexProfiling: true,
-		}); err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, "failed to start profiler:", err)
-		}
-	}
-
 	// override default config in timesync since timesync is using TimeCongigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
 
@@ -457,6 +458,10 @@ func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
 	return nil
 }
 
+type vrfSigner interface {
+	Sign([]byte) []byte
+}
+
 func (app *SpacemeshApp) initServices(ctx context.Context,
 	logger log.Log,
 	nodeID types.NodeID,
@@ -468,7 +473,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	layerSize uint32,
 	postClient activation.PostProverClient,
 	poetClient activation.PoetProvingServiceClient,
-	vrfSigner *BLS381.BlsSigner,
+	vrfSigner vrfSigner,
 	layersPerEpoch uint16, clock TickProvider) error {
 
 	app.nodeID = nodeID
@@ -555,7 +560,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	mtwg := tortoisebeacon.MockTotalWeightGetter{}
 
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, ld, swarm, atxdb, tBeaconDB, mtwg, BLS381.Verify2, vrfSigner, wc, clock, app.addLogger(TBeaconLogger, lg))
+	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, ld, swarm, atxdb, tBeaconDB, mtwg, signing.VRFVerify, vrfSigner, wc, clock, app.addLogger(TBeaconLogger, lg))
 	if err := tBeacon.Start(ctx); err != nil {
 		app.log.Panic("Failed to start tortoise beacon: %v", err)
 	}
@@ -571,7 +576,6 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	}
 
 	trtl = tortoise.NewVerifyingTortoise(trtlCfg)
-
 	if trtlCfg.Recovered {
 		msh = mesh.NewRecoveredMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
@@ -580,7 +584,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		app.setupGenesis(processor, msh)
 	}
 
-	eValidator := blocks.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, tBeacon, BLS381.Verify2, msh, app.addLogger(BlkEligibilityLogger, lg))
+	eValidator := blocks.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, tBeacon, signing.VRFVerify, msh, app.addLogger(BlkEligibilityLogger, lg))
 
 	syncConf := sync.Configuration{Concurrency: 4,
 		LayerSize:       int(layerSize),
@@ -607,19 +611,34 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 			log.Int("layers_per_epoch", app.Config.BaseConfig.LayersPerEpoch))
 	}
 
-	syncer := sync.NewSync(ctx, swarm, msh, app.txPool, atxdb, eValidator, poetDb, syncConf, clock, app.addLogger(SyncLogger, lg))
+	bCfg := blocks.Config{
+		Depth:       app.Config.Hdist,
+		GoldenATXID: goldenATXID,
+	}
+	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, lg)
+
+	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
+
+	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxdb, poetDb, atxdb, processor, swarm, remoteFetchService, msh, app.addLogger(Fetcher, lg))
+	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, mdb.InputVector())
+
+	syncer := sync.NewSync(ctx, swarm, msh, app.txPool, atxdb, eValidator, poetDb, syncConf, clock, layerFetch, app.addLogger(SyncLogger, lg))
 	blockOracle := blocks.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, tBeacon, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
 	var hOracle hare.Rolacle
-	if isFixedOracle { // fixed rolacle, take the provided rolacle
+	if isFixedOracle {
+		// fixed rolacle, take the provided rolacle
 		hOracle = rolacle
-	} else { // regular oracle, build and use it
-		beacon := eligibility.NewBeacon(mdb, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
-		hOracle = eligibility.New(beacon, atxdb.CalcActiveSetSize, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+	} else {
+		// regular oracle, build and use it
+		// TODO: this mock will be replaced by the real Tortoise beacon once
+		//   https://github.com/spacemeshos/go-spacemesh/pull/2267 is complete
+		beacon := eligibility.NewBeacon(tBeacon, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
+		hOracle = eligibility.New(beacon, atxdb.CalcActiveSetSize, signing.VRFVerify, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	}
 
-	gossipListener := service.NewListener(swarm, syncer, app.addLogger(GossipListener, lg))
+	gossipListener := service.NewListener(swarm, layerFetch, app.addLogger(GossipListener, lg))
 	ha := app.HareFactory(ctx, mdb, swarm, sgn, nodeID, syncer, msh, hOracle, idStore, clock, lg)
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
@@ -633,12 +652,6 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	database.SwitchCreationContext(dbStorepath, "") // currently only blockbuilder uses this mechanism
 	blockProducer := miner.NewBlockBuilder(minerCfg, sgn, swarm, clock.Subscribe(), coinToss, msh, trtl, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
-
-	bCfg := blocks.Config{
-		Depth:       app.Config.Hdist,
-		GoldenATXID: goldenATXID,
-	}
-	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, app.addLogger(BlockHandlerLogger, lg))
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))
 
@@ -658,7 +671,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, atxdb, swarm, msh, nipstBuilder, postClient, clock, syncer, store, app.addLogger("atxBuilder", lg))
 
-	gossipListener.AddListener(ctx, state.IncomingTxProtocol, priorityq.Low, processor.HandleTxData)
+	gossipListener.AddListener(ctx, state.IncomingTxProtocol, priorityq.Low, processor.HandleTxGossipData)
 	gossipListener.AddListener(ctx, activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
 	gossipListener.AddListener(ctx, blocks.NewBlockProtocol, priorityq.High, blockListener.HandleBlock)
 	gossipListener.AddListener(ctx, tortoisebeacon.TBProposalProtocol, priorityq.Low, tBeacon.HandleSerializedProposalMessage)
@@ -681,6 +694,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	app.oracle = blockOracle
 	app.txProcessor = processor
 	app.atxDb = atxdb
+	app.layerFetch = layerFetch
 	app.tBeacon = tBeacon
 
 	return nil
@@ -736,6 +750,7 @@ func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm se
 }
 
 func (app *SpacemeshApp) startServices(ctx context.Context, logger log.Log) {
+	app.layerFetch.Start()
 	go app.startSyncer(ctx)
 
 	if err := app.hare.Start(ctx); err != nil {
@@ -882,6 +897,11 @@ func (app *SpacemeshApp) stopServices() {
 		app.P2P.Shutdown()
 	}
 
+	if app.layerFetch != nil {
+		app.log.Info("%v closing layerFetch", app.nodeID.Key)
+		app.layerFetch.Close()
+	}
+
 	if app.syncer != nil {
 		app.log.Info("closing sync")
 		app.syncer.Close()
@@ -996,42 +1016,31 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	}
 
 	/* Setup monitoring */
-
-	if app.Config.MemProfile != "" {
-		logger.Info("starting mem profiling")
-		f, err := os.Create(app.Config.MemProfile)
-		if err != nil {
-			logger.With().Error("could not create memory profile", log.Err(err))
-		}
-		defer f.Close()
-		runtime.GC() // get up-to-date statistics
-		if err := pprof.WriteHeapProfile(f); err != nil {
-			logger.With().Error("could not write memory profile", log.Err(err))
-		}
-	}
-
-	if app.Config.CPUProfile != "" {
-		logger.Info("starting cpu profile")
-		f, err := os.Create(app.Config.CPUProfile)
-		if err != nil {
-			logger.With().Error("could not create cpu profile", log.Err(err))
-		}
-		defer f.Close()
-		if err := pprof.StartCPUProfile(f); err != nil {
-			logger.With().Error("could not start cpu profile", log.Err(err))
-		}
-		defer pprof.StopCPUProfile()
-	}
-
 	if app.Config.PprofHTTPServer {
 		logger.Info("starting pprof server")
 		srv := &http.Server{Addr: ":6060"}
 		defer srv.Shutdown(ctx)
 		go func() {
 			if err := srv.ListenAndServe(); err != nil {
-				logger.With().Error("cannot start http server", log.Err(err))
+				logger.With().Error("cannot start pprof http server", log.Err(err))
 			}
 		}()
+	}
+
+	if app.Config.ProfilerURL != "" {
+		p, err := profiler.Start(profiler.Config{
+			ApplicationName: app.Config.ProfilerName,
+			// app.Config.ProfilerURL should be the pyroscope server address
+			// TODO: AuthToken? no need right now since server isn't public
+			ServerAddress: app.Config.ProfilerURL,
+			// by default all profilers are enabled,
+		})
+		if err != nil {
+			logger.With().Error("cannot start profiling client")
+		} else {
+			defer p.Stop()
+		}
+
 	}
 
 	/* Create or load miner identity */
@@ -1043,12 +1052,13 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 
 	poetClient := activation.NewHTTPPoetClient(ctx, app.Config.PoETServer)
 
-	rng := amcl.NewRAND()
-	pub := app.edSgn.PublicKey().Bytes()
-	rng.Seed(len(pub), app.edSgn.Sign(pub)) // assuming ed.private is random, the sig can be used as seed
-	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
-	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
-	nodeID := types.NodeID{Key: app.edSgn.PublicKey().String(), VRFPublicKey: vrfPub}
+	edPubkey := app.edSgn.PublicKey()
+	vrfSigner, vrfPub, err := signing.NewVRFSigner(app.edSgn.Sign(edPubkey.Bytes()))
+	if err != nil {
+		logger.With().Panic("failed to create vrf signer", log.Err(err))
+	}
+
+	nodeID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 
 	postClient, err := activation.NewPostClient(&app.Config.POST, util.Hex2Bytes(nodeID.Key))
 	if err != nil {

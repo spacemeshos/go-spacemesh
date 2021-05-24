@@ -68,11 +68,7 @@ func (tb *TortoiseBeacon) handleProposalMessage(sender p2pcrypto.PublicKey, m Pr
 	}
 
 	// Ensure that epoch is the same.
-	ok, err := tb.vrfVerifier(currentEpochProposal, m.VRFSignature, sender.Bytes())
-	if err != nil {
-		return fmt.Errorf("VRF verifier: %w", err)
-	}
-
+	ok := tb.vrfVerifier(currentEpochProposal, m.VRFSignature, sender.Bytes())
 	if !ok {
 		return nil
 	}
@@ -200,11 +196,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, from p2p
 	}
 
 	// Ensure that epoch is the same.
-	ok, err := tb.vrfVerifier(currentEpochProposal, message.Signature, from.Bytes())
-	if err != nil {
-		return fmt.Errorf("VRF verifier: %w", err)
-	}
-
+	ok := tb.vrfVerifier(currentEpochProposal, message.Signature, from.Bytes())
 	if !ok {
 		tb.Log.With().Warning("Received malformed message, bad signature",
 			log.String("from", from.String()))
@@ -276,11 +268,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(ctx context.Context, from
 	}
 
 	// Ensure that epoch is the same.
-	ok, err := tb.vrfVerifier(currentEpochProposal, message.Signature, from.Bytes())
-	if err != nil {
-		return fmt.Errorf("VRF verifier: %w", err)
-	}
-
+	ok := tb.vrfVerifier(currentEpochProposal, message.Signature, from.Bytes())
 	if !ok {
 		tb.Log.With().Warning("Received malformed message, bad signature",
 			log.String("from", from.String()))
