@@ -395,6 +395,15 @@ func (s *Syncer) handleWeaklySynced(ctx context.Context) {
 		return
 	}
 
+	// this is a special patch to when we are weakly synced but should still try and get input vector in case we've missed it
+	_, err := s.getLayerFromNeighbors(ctx, s.GetCurrentLayer())
+	// retry this next iteration - but dont set node as synced
+	if err != nil {
+		logger.With().Error("node is out of sync", log.Err(err))
+		s.setGossipBufferingStatus(pending)
+		return
+	}
+
 	// validate current layer if more than s.ValidationDelta has passed
 	// TODO: remove this since hare runs it?
 	if err := s.handleCurrentLayer(ctx); err != nil {
@@ -410,7 +419,6 @@ func (s *Syncer) handleWeaklySynced(ctx context.Context) {
 	// fully-synced, make sure we listen to p2p
 	s.setGossipBufferingStatus(done)
 	logger.Info("node is synced")
-	return
 }
 
 // validate all layers except current one

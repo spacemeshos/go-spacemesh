@@ -278,6 +278,16 @@ func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, 
 	return
 }
 
+// stopped returns if we should stop
+func (t *BlockBuilder) stopped() bool {
+	select {
+	case <-t.stopChan:
+		return true
+	default:
+		return false
+	}
+}
+
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID, activeSet []types.ATXID) (*types.Block, error) {
 
 	if id <= types.GetEffectiveGenesis() {
@@ -415,10 +425,14 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 					continue
 				}
 				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList, atxs)
+
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot create new block")
 					logger.With().Error("failed to create new block", log.Err(err))
 					continue
+				}
+				if t.stopped() {
+					return
 				}
 				err = t.meshProvider.AddBlockWithTxs(blk)
 				if err != nil {

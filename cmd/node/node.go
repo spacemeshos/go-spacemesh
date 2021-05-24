@@ -845,6 +845,10 @@ func (app *SpacemeshApp) stopServices() {
 		app.clock.Close()
 	}
 
+	if app.gossipListener != nil {
+		app.gossipListener.Stop()
+	}
+
 	if app.poetListener != nil {
 		app.log.Info("closing poet listener")
 		app.poetListener.Close()
@@ -878,10 +882,6 @@ func (app *SpacemeshApp) stopServices() {
 	if app.mesh != nil {
 		app.log.Info("closing mesh")
 		app.mesh.Close()
-	}
-
-	if app.gossipListener != nil {
-		app.gossipListener.Stop()
 	}
 
 	events.CloseEventReporter()

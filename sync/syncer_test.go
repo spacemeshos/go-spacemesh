@@ -2085,6 +2085,7 @@ func TestSyncer_Await(t *testing.T) {
 	defer clock.Close()
 	syncer := syncs[0]
 	defer syncer.Close()
+	defer syncs[1].Close()
 	err := syncer.AddBlockWithTxs(types.NewExistingBlock(1, []byte(rand.String(8)), nil))
 	r.NoError(err)
 	lv := &mockLayerValidator{0, 0, 0, nil, nil}
