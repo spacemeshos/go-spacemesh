@@ -942,9 +942,8 @@ func (t *turtle) selfHealing(ctx context.Context, targetLayerID types.LayerID) {
 			logger := logger.WithFields(log.FieldNamed("candidate_block_id", blockID))
 
 			// count all votes for or against this block by all blocks in later layers: don't filter out any
-			// TODO: we have a problem here. t.BlockOpinionsByLayer is never updated after we initially receive and
-			//   process new blocks, so self-healing is never applied.
-			// block/layer data was received).
+			// TODO: t.BlockOpinionsByLayer is never updated after we initially receive and process new blocks, so
+			//   self-healing is never applied to its contents. do we need to update it here when healing?
 			sum := t.sumVotesForBlock(ctx, blockID, candidateLayerID+1, func(id types.BlockID) bool { return true })
 
 			// check that the total weight exceeds the confidence threshold
@@ -956,6 +955,7 @@ func (t *turtle) selfHealing(ctx context.Context, targetLayerID types.LayerID) {
 			// fall back on weak coin: if the global opinion is abstain for a single block in a layer, we instead use
 			// the weak coin to decide on the validity of all blocks in the layer
 			if globalOpinionOnBlock == abstain {
+				// TODO: use weak coin for each _voting_ layer rather than for single _candidate_ layer?
 				layerCoin, exists := t.bdp.GetCoinflip(ctx, candidateLayerID)
 				if !exists {
 					logger.Error("no weak coin value for candidate layer, self-healing cannot proceed")
