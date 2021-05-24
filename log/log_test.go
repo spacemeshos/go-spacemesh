@@ -39,13 +39,13 @@ func TestLogLevel(t *testing.T) {
 	// Capture the log output
 	var buf bytes.Buffer
 	logwriter = &buf
-	AppLog = NewFromLog(NewWithLevel(zap.NewAtomicLevelAt(zapcore.DebugLevel)).logger.Named(mainLoggerName))
+	AppLog = NewWithLevel(mainLoggerName, zap.NewAtomicLevelAt(zapcore.DebugLevel))
 
 	// Instantiate a logger and a sublogger
 	nid := FakeNodeID{key: "abc123"}
 	nidEncoded := fmt.Sprintf("{\"node_id\": \"%s\"}", nid.key)
 	loggerName := "logtest"
-	logger := NewFromLog(NewWithLevel(zap.NewAtomicLevelAt(zapcore.InfoLevel), hookFn).WithFields(nid).logger.Named(loggerName))
+	logger := NewWithLevel(loggerName, zap.NewAtomicLevelAt(zapcore.InfoLevel), hookFn).WithFields(nid)
 
 	lvl := zap.NewAtomicLevel()
 	r.NoError(lvl.UnmarshalText([]byte("INFO")))
