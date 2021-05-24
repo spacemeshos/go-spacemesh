@@ -128,8 +128,9 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 	var statusStream chan struct{}
 	if s.statusChannel == nil {
 		statusStream = events.SubscribeToStatus()
+	} else {
+		statusStream = s.statusChannel
 	}
-	statusStream = s.statusChannel
 
 	for {
 		select {

@@ -187,8 +187,6 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 		channelLayer = s.layerChannel
 	}
 
-	log.Info("here")
-
 	for {
 		select {
 		case tx, ok := <-channelTx:
