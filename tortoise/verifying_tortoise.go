@@ -519,28 +519,22 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 // ProcessNewBlocks processes the votes of a set of blocks, records their opinions, and marks good blocks good.
 // The blocks do not all have to be in the same layer, but if they span multiple layers, they must be sorted by LayerID.
 func (t *turtle) ProcessNewBlocks(ctx context.Context, blocks []*types.Block) error {
-	lastLayerID, err := t.processBlocks(ctx, blocks)
-	if err != nil {
+	if len(blocks) == 0 {
+		// nothing to do
+		t.logger.WithContext(ctx).Warning("cannot process empty block list")
+		return nil
+	}
+	if err := t.processBlocks(ctx, blocks); err != nil {
 		return err
 	}
 
-	// no error, but nothing further to do
-	if lastLayerID == nil {
-		return nil
-	}
-
 	// attempt to verify layers up to the latest one for which we have new block data
-	return t.verifyLayers(ctx, *lastLayerID)
+	return t.verifyLayers(ctx)
 }
 
-func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) (*types.LayerID, error) {
+func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) error {
 	logger := t.logger.WithContext(ctx)
 	lastLayerID := types.LayerID(0)
-	if len(blocks) == 0 {
-		// nothing to do
-		logger.Warning("cannot process empty block list")
-		return nil, nil
-	}
 
 	// we perform eviction here because it should happen after the verified layer advances, and this is the method that
 	// calls verifyLayers
@@ -551,7 +545,7 @@ func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) (*typ
 	// process the votes in all layer blocks and update tables
 	for _, b := range blocks {
 		if b.LayerIndex < lastLayerID {
-			return nil, errNotSorted
+			return errNotSorted
 		} else if b.LayerIndex > lastLayerID {
 			lastLayerID = b.LayerIndex
 		}
@@ -597,32 +591,26 @@ func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) (*typ
 		t.Last = lastLayerID
 	}
 
-	return &lastLayerID, nil
+	return nil
 }
 
 // HandleIncomingLayer processes all layer block votes
 // returns the old pbase and new pbase after taking into account block votes
 func (t *turtle) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) error {
-	lastLayerID, err := t.handleLayerBlocks(ctx, layerID)
-	if err != nil {
+	if err := t.handleLayerBlocks(ctx, layerID); err != nil {
 		return err
 	}
 
-	// no error but nothing to do
-	if lastLayerID == nil {
-		return nil
-	}
-
 	// attempt to verify layers up to the latest one for which we have new block data
-	return t.verifyLayers(ctx, *lastLayerID)
+	return t.verifyLayers(ctx)
 }
 
-func (t *turtle) handleLayerBlocks(ctx context.Context, layerID types.LayerID) (*types.LayerID, error) {
+func (t *turtle) handleLayerBlocks(ctx context.Context, layerID types.LayerID) error {
 	logger := t.logger.WithContext(ctx).WithFields(layerID)
 
 	if layerID <= types.GetEffectiveGenesis() {
 		logger.Debug("not attempting to handle genesis layer")
-		return nil, nil
+		return nil
 	}
 
 	// Note: we don't compare newlyr and t.Verified, so this method could be called again on an already-verified layer.
@@ -631,7 +619,12 @@ func (t *turtle) handleLayerBlocks(ctx context.Context, layerID types.LayerID) (
 	// read layer blocks
 	layerBlocks, err := t.bdp.LayerBlocks(layerID)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read contents of layer %v: %w", layerID, err)
+		return fmt.Errorf("unable to read contents of layer %v: %w", layerID, err)
+	}
+	if len(layerBlocks) == 0 {
+		// nothing to do
+		t.logger.WithContext(ctx).Warning("cannot process empty layer block list")
+		return nil
 	}
 
 	if t.Last < layerID {
@@ -643,9 +636,9 @@ func (t *turtle) handleLayerBlocks(ctx context.Context, layerID types.LayerID) (
 }
 
 // loops over all layers from the last verified up to a new target layer and attempts to verify each in turn
-func (t *turtle) verifyLayers(ctx context.Context, targetLayerID types.LayerID) error {
+func (t *turtle) verifyLayers(ctx context.Context) error {
 	logger := t.logger.WithContext(ctx).WithFields(
-		log.FieldNamed("verification_target", targetLayerID),
+		log.FieldNamed("verification_target", t.Last),
 		log.FieldNamed("prev_verified", t.Verified))
 	logger.Info("starting layer verification")
 
@@ -654,7 +647,7 @@ func (t *turtle) verifyLayers(ctx context.Context, targetLayerID types.LayerID) 
 	// Note: t.Verified is initialized to the effective genesis layer, so the first candidate layer here necessarily
 	// follows and is post-genesis. There's no need for an additional check here.
 candidateLayerLoop:
-	for candidateLayerID := t.Verified+1; candidateLayerID < targetLayerID; candidateLayerID++ {
+	for candidateLayerID := t.Verified+1; candidateLayerID < t.Last; candidateLayerID++ {
 		logger := logger.WithFields(log.FieldNamed("candidate_layer", candidateLayerID))
 
 		// it's possible that self-healing already validated a layer
@@ -719,7 +712,7 @@ candidateLayerLoop:
 			})
 
 			// check that the total weight exceeds the confidence threshold
-			globalOpinionOnBlock := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(candidateLayerID-t.Verified))
+			globalOpinionOnBlock := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(t.Last-candidateLayerID))
 			logger.With().Debug("verifying tortoise calculated global opinion on block",
 				log.FieldNamed("block_voted_on", blockID),
 				candidateLayerID,
@@ -778,7 +771,7 @@ candidateLayerLoop:
 					log.FieldNamed("last_layer", t.Last))
 			}
 			if candidateLayerID < t.layerCutoff() && t.Last-candidateLayerID > t.Zdist+t.ConfidenceParam {
-				lastLayer := targetLayerID
+				lastLayer := t.Last
 				// don't attempt to heal layers newer than Hdist
 				if lastLayer > t.layerCutoff() {
 					lastLayer = t.layerCutoff()
@@ -826,6 +819,11 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 	logger := t.logger.WithContext(ctx).WithFields(layerID)
 
 	// for layers older than hdist, we vote according to global opinion
+	// Note: we are required to have an opinion on sufficiently old blocks and layers (see ConfidenceParam) when
+	// constructing blocks, i.e., here. so in theory we should call self-healing here if we're still undecided about
+	// an old layer. in practice we do not since we re-run layer verification every time we receive new block or layer
+	// data, so the opinion we read here is always the most up to date. we may want to change this in future. see
+	// https://github.com/spacemeshos/go-spacemesh/issues/2415.
 	// TODO: what if this layer hasn't been verified yet? (it will have no contextually valid blocks)
 	oldLayerCutoff := t.layerCutoff()
 	if layerID < oldLayerCutoff {
@@ -952,7 +950,7 @@ func (t *turtle) selfHealing(ctx context.Context, targetLayerID types.LayerID) {
 			sum := t.sumVotesForBlock(ctx, blockID, candidateLayerID+1, t.Last, func(id types.BlockID) bool { return true })
 
 			// check that the total weight exceeds the confidence threshold
-			globalOpinionOnBlock := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(candidateLayerID-t.Verified))
+			globalOpinionOnBlock := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(t.Last-candidateLayerID))
 			logger.With().Debug("self-healing calculated global opinion on candidate block",
 				log.FieldNamed("global_opinion", globalOpinionOnBlock),
 				sum)
@@ -980,7 +978,6 @@ func (t *turtle) selfHealing(ctx context.Context, targetLayerID types.LayerID) {
 
 		// TODO: do we overwrite the layer input vector in the database here?
 		// TODO: do we mark approved blocks good? do we update other blocks' opinions of them?
-		// TODO: reprocess state if we changed the validity of any blocks
 
 		// record the contextual validity for all blocks in this layer
 		for blk, v := range contextualValidity {
