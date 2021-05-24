@@ -965,7 +965,8 @@ func TestVerifyLayers(t *testing.T) {
 	l6Blocks := generateBlocks(l6ID, defaultTestLayerSize, alg.BaseBlock)
 
 	// layer missing in database
-	err := alg.trtl.verifyLayers(context.TODO(), l2ID)
+	alg.trtl.Last = l2ID
+	err := alg.trtl.verifyLayers(context.TODO())
 	r.Error(err)
 	r.Contains(err.Error(), errstrCantFindLayer)
 
@@ -982,7 +983,7 @@ func TestVerifyLayers(t *testing.T) {
 		},
 	}
 	alg.trtl.bdp = mdbWrapper
-	err = alg.trtl.verifyLayers(context.TODO(), l2ID)
+	err = alg.trtl.verifyLayers(context.TODO())
 	r.NoError(err)
 	r.Equal(int(l1ID), int(alg.trtl.Verified))
 
@@ -1003,7 +1004,7 @@ func TestVerifyLayers(t *testing.T) {
 	alg.trtl.Last = l3ID
 
 	// voting blocks not marked good, both global and local opinion is abstain, verified layer does not advance
-	err = alg.trtl.verifyLayers(context.TODO(), l3ID)
+	err = alg.trtl.verifyLayers(context.TODO())
 	r.NoError(err)
 	r.Equal(int(l1ID), int(alg.trtl.Verified))
 
@@ -1014,7 +1015,7 @@ func TestVerifyLayers(t *testing.T) {
 
 	// consensus doesn't match: fail to verify candidate layer
 	// global opinion: good, local opinion: abstain
-	err = alg.trtl.verifyLayers(context.TODO(), l3ID)
+	err = alg.trtl.verifyLayers(context.TODO())
 	r.NoError(err)
 	r.Equal(int(l1ID), int(alg.trtl.Verified))
 
@@ -1106,7 +1107,7 @@ func TestVerifyLayers(t *testing.T) {
 
 	// verified layer advances one step, but L3 is not verified because global opinion is undecided, so verification
 	// stops there
-	err = alg.trtl.verifyLayers(context.TODO(), l4ID)
+	err = alg.trtl.verifyLayers(context.TODO())
 	r.NoError(err)
 	r.Equal(int(l2ID), int(alg.trtl.Verified))
 
@@ -1123,7 +1124,7 @@ func TestVerifyLayers(t *testing.T) {
 	}}
 	// modify vote so one block votes in support of L3 blocks, two blocks continue to abstain, so threshold not met
 	alg.trtl.BlockOpinionsByLayer[l4ID][l4Blocks[0].ID()] = l4Votes
-	err = alg.trtl.verifyLayers(context.TODO(), l4ID)
+	err = alg.trtl.verifyLayers(context.TODO())
 	r.NoError(err)
 	r.Equal(int(l2ID), int(alg.trtl.Verified))
 
@@ -1132,7 +1133,7 @@ func TestVerifyLayers(t *testing.T) {
 	// ordinary verifying tortoise which should continue and verify l5.
 	mdb.RecordCoinflip(context.TODO(), l3ID, true)
 	alg.trtl.Last = l4ID + alg.trtl.Hdist + 1
-	err = alg.trtl.verifyLayers(context.TODO(), l6ID)
+	err = alg.trtl.verifyLayers(context.TODO())
 	r.NoError(err)
 	r.Equal(int(l5ID), int(alg.trtl.Verified))
 }
@@ -1210,11 +1211,12 @@ func TestSumVotesForBlock(t *testing.T) {
 	filterRejectAll := func(types.BlockID) bool { return false }
 
 	// if we reject all blocks, we expect an abstain outcome
-	sum := alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, l2ID, filterRejectAll)
+	alg.trtl.Last = l2ID
+	sum := alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, filterRejectAll)
 	r.Equal(abstain, sum)
 
 	// if we allow all blocks to vote, we expect an against outcome
-	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, l2ID, filterPassAll)
+	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, filterPassAll)
 	r.Equal(against.Multiply(3), sum)
 
 	// add more blocks
@@ -1230,17 +1232,17 @@ func TestSumVotesForBlock(t *testing.T) {
 		l2Blocks[8].ID(): {BlockOpinions: map[types.BlockID]vec{}},
 	}
 	// some blocks explicitly vote against, others have no opinion
-	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, l2ID, filterPassAll)
+	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, filterPassAll)
 	r.Equal(against.Multiply(9), sum)
 	// some blocks vote for, others have no opinion
-	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyLike.ID(), l2ID, l2ID, filterPassAll)
+	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyLike.ID(), l2ID, filterPassAll)
 	r.Equal(support.Multiply(2).Add(against.Multiply(7)), sum)
 	// one block votes neutral, others have no opinion
-	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDontCare.ID(), l2ID, l2ID, filterPassAll)
+	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDontCare.ID(), l2ID, filterPassAll)
 	r.Equal(abstain.Multiply(1).Add(against.Multiply(8)), sum)
 
 	// vote missing: counts against
-	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeNeverSaw.ID(), l2ID, l2ID, filterPassAll)
+	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeNeverSaw.ID(), l2ID, filterPassAll)
 	r.Equal(against.Multiply(9), sum)
 }
 
@@ -1301,9 +1303,9 @@ func TestHealing(t *testing.T) {
 		}
 
 		// process votes of layer blocks but don't attempt to verify a layer
-		_, err := alg.trtl.handleLayerBlocks(context.TODO(), l1ID)
+		err := alg.trtl.handleLayerBlocks(context.TODO(), l1ID)
 		r.NoError(err)
-		_, err = alg.trtl.handleLayerBlocks(context.TODO(), l2ID)
+		err = alg.trtl.handleLayerBlocks(context.TODO(), l2ID)
 		r.NoError(err)
 		alg.trtl.selfHealing(context.TODO(), l2ID)
 		checkVerifiedLayer(l1ID)
