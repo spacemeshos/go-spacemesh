@@ -9,18 +9,14 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/spacemeshos/amcl"
-	"github.com/spacemeshos/amcl/BLS381"
-	"github.com/spacemeshos/sha256-simd"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
 const (
-	// DefaultPrefix defines default weak coin proposal prefix.
-	DefaultPrefix = "prefix"
+	// Prefix defines weak coin proposal prefix.
+	proposalPrefix = "WeakCoin"
 	// GossipProtocol is weak coin Gossip protocol name.
 	GossipProtocol = "WeakCoinGossip"
 )
@@ -50,38 +46,42 @@ type WeakCoin interface {
 
 type weakCoin struct {
 	Log            log.Log
-	pk             []byte
-	sk             []byte
-	signer         *BLS381.BlsSigner
-	prefix         string
+	verifier       verifierFunc
+	signer         signer
 	threshold      *big.Int
 	net            broadcaster
 	proposalsMu    sync.RWMutex
-	proposals      map[epochRoundPair][]types.Hash32
+	proposals      map[epochRoundPair][][]byte
 	activeRoundsMu sync.RWMutex
 	activeRounds   map[epochRoundPair]struct{}
 	weakCoinsMu    sync.RWMutex
 	weakCoins      map[epochRoundPair]bool
 }
 
+// a function to verify the message with the signature and its public key.
+type verifierFunc = func(msg, sig, pub []byte) (bool, error)
+
+type signer interface {
+	Sign(msg []byte) ([]byte, error)
+}
+
 // NewWeakCoin returns a new WeakCoin.
-func NewWeakCoin(prefix string, threshold types.Hash32, net broadcaster, logger log.Log) WeakCoin {
-	rng := amcl.NewRAND()
-	pub := []byte{1}
-	rng.Seed(len(pub), []byte{2})
-	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
-	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
+func NewWeakCoin(
+	threshold types.Hash32,
+	net broadcaster,
+	vrfVerifier verifierFunc,
+	vrfSigner signer,
+	logger log.Log,
+) WeakCoin {
 	thresholdBigInt := new(big.Int).SetBytes(threshold[:])
 
 	wc := &weakCoin{
 		Log:          logger,
-		pk:           vrfPub,
-		sk:           vrfPriv,
+		verifier:     vrfVerifier,
 		signer:       vrfSigner,
-		prefix:       prefix,
 		threshold:    thresholdBigInt,
 		net:          net,
-		proposals:    make(map[epochRoundPair][]types.Hash32),
+		proposals:    make(map[epochRoundPair][][]byte),
 		activeRounds: make(map[epochRoundPair]struct{}),
 		weakCoins:    make(map[epochRoundPair]bool),
 	}
@@ -136,37 +136,35 @@ func (wc *weakCoin) PublishProposal(epoch types.EpochID, round types.RoundID) er
 	return nil
 }
 
-func (wc *weakCoin) proposalExceedsThreshold(proposal types.Hash32) bool {
+func (wc *weakCoin) proposalExceedsThreshold(proposal []byte) bool {
 	proposalInt := new(big.Int).SetBytes(proposal[:])
 
 	return proposalInt.Cmp(wc.threshold) == 1
 }
 
-func (wc *weakCoin) generateProposal(epoch types.EpochID, round types.RoundID) (types.Hash32, error) {
+func (wc *weakCoin) generateProposal(epoch types.EpochID, round types.RoundID) ([]byte, error) {
 	msg := bytes.Buffer{}
 
-	msg.WriteString(wc.prefix)
+	msg.WriteString(proposalPrefix)
 
 	epochBuf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(epochBuf, uint64(epoch))
 	if _, err := msg.Write(epochBuf); err != nil {
-		return types.Hash32{}, err
+		return nil, err
 	}
 
 	roundBuf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(roundBuf, uint64(round))
 	if _, err := msg.Write(roundBuf); err != nil {
-		return types.Hash32{}, err
+		return nil, err
 	}
 
 	vrfSig, err := wc.signer.Sign(msg.Bytes())
 	if err != nil {
-		return types.Hash32{}, fmt.Errorf("sign message: %w", err)
+		return nil, fmt.Errorf("sign message: %w", err)
 	}
 
-	vrfHash := sha256.Sum256(vrfSig)
-
-	return vrfHash, nil
+	return vrfSig, nil
 }
 
 func (wc *weakCoin) OnRoundStarted(epoch types.EpochID, round types.RoundID) {

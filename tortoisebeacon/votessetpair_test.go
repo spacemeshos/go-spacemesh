@@ -17,43 +17,43 @@ func Test_votesSetPair_Diff(t *testing.T) {
 		name         string
 		firstRound   votesSetPair
 		currentRound votesSetPair
-		votesFor     hashList
-		votesAgainst hashList
+		votesFor     proposalList
+		votesAgainst proposalList
 	}{
 		{
 			name: "Case 1",
 			firstRound: votesSetPair{
-				VotesFor: map[types.Hash32]struct{}{
+				ValidVotes: map[types.Hash32]struct{}{
 					types.HexToHash32("0xA"): {},
 					types.HexToHash32("0xB"): {},
 				},
-				VotesAgainst: map[types.Hash32]struct{}{
+				InvalidVotes: map[types.Hash32]struct{}{
 					types.HexToHash32("0xC"): {},
 				},
 			},
 			currentRound: votesSetPair{
-				VotesFor: map[types.Hash32]struct{}{
+				ValidVotes: map[types.Hash32]struct{}{
 					types.HexToHash32("0xA"): {},
 				},
-				VotesAgainst: map[types.Hash32]struct{}{
+				InvalidVotes: map[types.Hash32]struct{}{
 					types.HexToHash32("0xB"): {},
 					types.HexToHash32("0xC"): {},
 				},
 			},
-			votesFor:     hashList{},
-			votesAgainst: hashList{types.HexToHash32("0xB")},
+			votesFor:     proposalList{},
+			votesAgainst: proposalList{types.HexToHash32("0xB")},
 		},
 		{
 			name: "Case 2",
 			firstRound: votesSetPair{
-				VotesFor: map[types.Hash32]struct{}{
+				ValidVotes: map[types.Hash32]struct{}{
 					types.HexToHash32("0x0"): {},
 					types.HexToHash32("0x1"): {},
 					types.HexToHash32("0x2"): {},
 					types.HexToHash32("0x3"): {},
 					types.HexToHash32("0x4"): {},
 				},
-				VotesAgainst: map[types.Hash32]struct{}{
+				InvalidVotes: map[types.Hash32]struct{}{
 					types.HexToHash32("0x5"): {},
 					types.HexToHash32("0x6"): {},
 					types.HexToHash32("0x7"): {},
@@ -62,13 +62,13 @@ func Test_votesSetPair_Diff(t *testing.T) {
 				},
 			},
 			currentRound: votesSetPair{
-				VotesFor: map[types.Hash32]struct{}{
+				ValidVotes: map[types.Hash32]struct{}{
 					types.HexToHash32("0x0"): {},
 					types.HexToHash32("0x1"): {},
 					types.HexToHash32("0x8"): {},
 					types.HexToHash32("0x9"): {},
 				},
-				VotesAgainst: map[types.Hash32]struct{}{
+				InvalidVotes: map[types.Hash32]struct{}{
 					types.HexToHash32("0x2"): {},
 					types.HexToHash32("0x3"): {},
 					types.HexToHash32("0x4"): {},
@@ -77,8 +77,8 @@ func Test_votesSetPair_Diff(t *testing.T) {
 					types.HexToHash32("0x7"): {},
 				},
 			},
-			votesFor:     hashList{types.HexToHash32("0x8"), types.HexToHash32("0x9")},
-			votesAgainst: hashList{types.HexToHash32("0x2"), types.HexToHash32("0x3"), types.HexToHash32("0x4")},
+			votesFor:     proposalList{types.HexToHash32("0x8"), types.HexToHash32("0x9")},
+			votesAgainst: proposalList{types.HexToHash32("0x2"), types.HexToHash32("0x3"), types.HexToHash32("0x4")},
 		},
 	}
 

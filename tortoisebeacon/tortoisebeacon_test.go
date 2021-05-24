@@ -101,7 +101,6 @@ func TestTortoiseBeacon_votingThreshold(t *testing.T) {
 				Log: log.NewDefault("TortoiseBeacon"),
 				config: Config{
 					Theta: tc.theta,
-					TAve:  tc.tAve,
 				},
 			}
 

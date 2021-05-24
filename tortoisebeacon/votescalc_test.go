@@ -19,36 +19,36 @@ func TestTortoiseBeacon_calcVotesFromProposals(t *testing.T) {
 	const epoch = 1
 
 	tt := []struct {
-		name             string
-		epoch            types.EpochID
-		timelyProposals  proposalsMap
-		delayedProposals proposalsMap
-		votesFor         hashList
-		votesAgainst     hashList
+		name                      string
+		epoch                     types.EpochID
+		validProposals            proposalsMap
+		potentiallyValidProposals proposalsMap
+		votesFor                  proposalList
+		votesAgainst              proposalList
 	}{
 		{
 			name:  "Case 1",
 			epoch: epoch,
-			timelyProposals: proposalsMap{
+			validProposals: proposalsMap{
 				epoch: map[types.Hash32]struct{}{
 					types.HexToHash32("0x1"): {},
 					types.HexToHash32("0x2"): {},
 					types.HexToHash32("0x3"): {},
 				},
 			},
-			delayedProposals: proposalsMap{
+			potentiallyValidProposals: proposalsMap{
 				epoch: map[types.Hash32]struct{}{
 					types.HexToHash32("0x4"): {},
 					types.HexToHash32("0x5"): {},
 					types.HexToHash32("0x6"): {},
 				},
 			},
-			votesFor: hashList{
+			votesFor: proposalList{
 				types.HexToHash32("0x1"),
 				types.HexToHash32("0x2"),
 				types.HexToHash32("0x3"),
 			},
-			votesAgainst: hashList{
+			votesAgainst: proposalList{
 				types.HexToHash32("0x4"),
 				types.HexToHash32("0x5"),
 				types.HexToHash32("0x6"),
@@ -62,11 +62,11 @@ func TestTortoiseBeacon_calcVotesFromProposals(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log:              log.NewDefault("TortoiseBeacon"),
-				timelyProposals:  tc.timelyProposals,
-				delayedProposals: tc.delayedProposals,
-				votesCache:       map[epochRoundPair]votesPerPK{},
-				votesCountCache:  map[epochRoundPair]map[types.Hash32]int{},
+				Log:                       log.NewDefault("TortoiseBeacon"),
+				validProposals:            tc.validProposals,
+				potentiallyValidProposals: tc.potentiallyValidProposals,
+				votesCache:                map[epochRoundPair]votesPerPK{},
+				votesCountCache:           map[epochRoundPair]map[types.Hash32]int{},
 			}
 
 			votesFor, votesAgainst := tb.calcVotesFromProposals(tc.epoch)
@@ -95,8 +95,8 @@ func TestTortoiseBeacon_calcVotesDelta(t *testing.T) {
 		epoch         types.EpochID
 		round         types.RoundID
 		incomingVotes map[epochRoundPair]votesPerPK
-		forDiff       hashList
-		againstDiff   hashList
+		forDiff       proposalList
+		againstDiff   proposalList
 	}{
 		{
 			name:  "Case 1",
@@ -105,56 +105,56 @@ func TestTortoiseBeacon_calcVotesDelta(t *testing.T) {
 			incomingVotes: map[epochRoundPair]votesPerPK{
 				epochRoundPair{EpochID: epoch, Round: 1}: {
 					pk1: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x1"): {},
 							types.HexToHash32("0x2"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x3"): {},
 						},
 					},
 					pk2: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x1"): {},
 							types.HexToHash32("0x4"): {},
 							types.HexToHash32("0x5"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x6"): {},
 						},
 					},
 				},
 				epochRoundPair{EpochID: epoch, Round: 2}: {
 					pk1: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x3"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x2"): {},
 						},
 					},
 					pk2: votesSetPair{
-						VotesFor:     map[types.Hash32]struct{}{},
-						VotesAgainst: map[types.Hash32]struct{}{},
+						ValidVotes:   map[types.Hash32]struct{}{},
+						InvalidVotes: map[types.Hash32]struct{}{},
 					},
 				},
 				epochRoundPair{EpochID: epoch, Round: 3}: {
 					pk1: votesSetPair{
-						VotesFor:     map[types.Hash32]struct{}{},
-						VotesAgainst: map[types.Hash32]struct{}{},
+						ValidVotes:   map[types.Hash32]struct{}{},
+						InvalidVotes: map[types.Hash32]struct{}{},
 					},
 					pk2: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x6"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x5"): {},
 						},
 					},
 				},
 			},
-			forDiff:     hashList{},
-			againstDiff: hashList{},
+			forDiff:     proposalList{},
+			againstDiff: proposalList{},
 		},
 	}
 
@@ -171,7 +171,7 @@ func TestTortoiseBeacon_calcVotesDelta(t *testing.T) {
 				ownVotes:        map[epochRoundPair]votesSetPair{},
 			}
 
-			forDiff, againstDiff := tb.calcVotesDelta(tc.epoch, tc.round)
+			forDiff, againstDiff := tb.calcVotes(tc.epoch, tc.round)
 			r.EqualValues(tc.forDiff.Sort(), forDiff.Sort())
 			r.EqualValues(tc.againstDiff.Sort(), againstDiff.Sort())
 		})
@@ -206,23 +206,23 @@ func TestTortoiseBeacon_firstRoundVotes(t *testing.T) {
 			incomingVotes: map[epochRoundPair]votesPerPK{
 				epochRoundPair{EpochID: epoch, Round: 1}: {
 					pk1: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x1"): {},
 							types.HexToHash32("0x2"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x3"): {},
 							types.HexToHash32("0x5"): {},
 							types.HexToHash32("0x6"): {},
 						},
 					},
 					pk2: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x1"): {},
 							types.HexToHash32("0x4"): {},
 							types.HexToHash32("0x5"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x6"): {},
 						},
 					},
@@ -287,22 +287,22 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 			incomingVotes: map[epochRoundPair]votesPerPK{
 				epochRoundPair{EpochID: epoch, Round: 1}: {
 					pk1: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x1"): {},
 							types.HexToHash32("0x2"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x3"): {},
 							types.HexToHash32("0x6"): {},
 						},
 					},
 					pk2: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x1"): {},
 							types.HexToHash32("0x4"): {},
 							types.HexToHash32("0x5"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x6"): {},
 						},
 					},
@@ -310,10 +310,10 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 			},
 			weakCoin: weakcoin.ValueMock{Value: false},
 			result: votesSetPair{
-				VotesFor: hashSet{
+				ValidVotes: hashSet{
 					types.HexToHash32("0x1"): {},
 				},
-				VotesAgainst: hashSet{
+				InvalidVotes: hashSet{
 					types.HexToHash32("0x2"): {},
 					types.HexToHash32("0x3"): {},
 					types.HexToHash32("0x4"): {},
@@ -329,22 +329,22 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 			incomingVotes: map[epochRoundPair]votesPerPK{
 				epochRoundPair{EpochID: epoch, Round: 1}: {
 					pk1: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x1"): {},
 							types.HexToHash32("0x2"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x3"): {},
 							types.HexToHash32("0x6"): {},
 						},
 					},
 					pk2: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x1"): {},
 							types.HexToHash32("0x4"): {},
 							types.HexToHash32("0x5"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x6"): {},
 						},
 					},
@@ -352,14 +352,14 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 			},
 			weakCoin: weakcoin.ValueMock{Value: true},
 			result: votesSetPair{
-				VotesFor: hashSet{
+				ValidVotes: hashSet{
 					types.HexToHash32("0x1"): {},
 					types.HexToHash32("0x2"): {},
 					types.HexToHash32("0x3"): {},
 					types.HexToHash32("0x4"): {},
 					types.HexToHash32("0x5"): {},
 				},
-				VotesAgainst: hashSet{
+				InvalidVotes: hashSet{
 					types.HexToHash32("0x6"): {},
 				},
 			},
@@ -374,7 +374,6 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 			tb := TortoiseBeacon{
 				config: Config{
 					Theta: 1,
-					TAve:  threshold,
 				},
 				Log:             log.NewDefault("TortoiseBeacon"),
 				weakCoin:        tc.weakCoin,
@@ -419,49 +418,49 @@ func TestTortoiseBeacon_calcVotesCount(t *testing.T) {
 			incomingVotes: map[epochRoundPair]votesPerPK{
 				epochRoundPair{EpochID: epoch, Round: 1}: {
 					pk1: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x1"): {},
 							types.HexToHash32("0x2"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x3"): {},
 						},
 					},
 					pk2: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x1"): {},
 							types.HexToHash32("0x4"): {},
 							types.HexToHash32("0x5"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x6"): {},
 						},
 					},
 				},
 				epochRoundPair{EpochID: epoch, Round: 2}: {
 					pk1: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x3"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x2"): {},
 						},
 					},
 					pk2: votesSetPair{
-						VotesFor:     map[types.Hash32]struct{}{},
-						VotesAgainst: map[types.Hash32]struct{}{},
+						ValidVotes:   map[types.Hash32]struct{}{},
+						InvalidVotes: map[types.Hash32]struct{}{},
 					},
 				},
 				epochRoundPair{EpochID: epoch, Round: 3}: {
 					pk1: votesSetPair{
-						VotesFor:     map[types.Hash32]struct{}{},
-						VotesAgainst: map[types.Hash32]struct{}{},
+						ValidVotes:   map[types.Hash32]struct{}{},
+						InvalidVotes: map[types.Hash32]struct{}{},
 					},
 					pk2: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x6"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x5"): {},
 						},
 					},
@@ -525,61 +524,61 @@ func TestTortoiseBeacon_calcOneRoundVotes(t *testing.T) {
 			incomingVotes: map[epochRoundPair]votesPerPK{
 				epochRoundPair{EpochID: epoch, Round: 1}: {
 					pk1: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x1"): {},
 							types.HexToHash32("0x2"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x3"): {},
 						},
 					},
 					pk2: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x4"): {},
 							types.HexToHash32("0x5"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x6"): {},
 						},
 					},
 				},
 				epochRoundPair{EpochID: epoch, Round: 2}: {
 					pk1: votesSetPair{
-						VotesFor:     map[types.Hash32]struct{}{},
-						VotesAgainst: map[types.Hash32]struct{}{},
+						ValidVotes:   map[types.Hash32]struct{}{},
+						InvalidVotes: map[types.Hash32]struct{}{},
 					},
 					pk2: votesSetPair{
-						VotesFor:     map[types.Hash32]struct{}{},
-						VotesAgainst: map[types.Hash32]struct{}{},
+						ValidVotes:   map[types.Hash32]struct{}{},
+						InvalidVotes: map[types.Hash32]struct{}{},
 					},
 				},
 				epochRoundPair{EpochID: epoch, Round: 3}: {
 					pk1: votesSetPair{
-						VotesFor:     map[types.Hash32]struct{}{},
-						VotesAgainst: map[types.Hash32]struct{}{},
+						ValidVotes:   map[types.Hash32]struct{}{},
+						InvalidVotes: map[types.Hash32]struct{}{},
 					},
 					pk2: votesSetPair{
-						VotesFor:     map[types.Hash32]struct{}{},
-						VotesAgainst: map[types.Hash32]struct{}{},
+						ValidVotes:   map[types.Hash32]struct{}{},
+						InvalidVotes: map[types.Hash32]struct{}{},
 					},
 				},
 			},
 			result: votesPerPK{
 				pk1: votesSetPair{
-					VotesFor: map[types.Hash32]struct{}{
+					ValidVotes: map[types.Hash32]struct{}{
 						types.HexToHash32("0x1"): {},
 						types.HexToHash32("0x2"): {},
 					},
-					VotesAgainst: map[types.Hash32]struct{}{
+					InvalidVotes: map[types.Hash32]struct{}{
 						types.HexToHash32("0x3"): {},
 					},
 				},
 				pk2: votesSetPair{
-					VotesFor: map[types.Hash32]struct{}{
+					ValidVotes: map[types.Hash32]struct{}{
 						types.HexToHash32("0x4"): {},
 						types.HexToHash32("0x5"): {},
 					},
-					VotesAgainst: map[types.Hash32]struct{}{
+					InvalidVotes: map[types.Hash32]struct{}{
 						types.HexToHash32("0x6"): {},
 					},
 				},
@@ -592,20 +591,20 @@ func TestTortoiseBeacon_calcOneRoundVotes(t *testing.T) {
 			incomingVotes: map[epochRoundPair]votesPerPK{
 				epochRoundPair{EpochID: epoch, Round: 1}: {
 					pk1: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x1"): {},
 							types.HexToHash32("0x2"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x3"): {},
 						},
 					},
 					pk2: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x4"): {},
 							types.HexToHash32("0x5"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x6"): {},
 						},
 					},
@@ -613,29 +612,29 @@ func TestTortoiseBeacon_calcOneRoundVotes(t *testing.T) {
 				epochRoundPair{EpochID: epoch, Round: 2}: {
 					// Should *NOT* affect the result (2 != 3).
 					pk1: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x3"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x2"): {},
 						},
 					},
 					pk2: votesSetPair{
-						VotesFor:     map[types.Hash32]struct{}{},
-						VotesAgainst: map[types.Hash32]struct{}{},
+						ValidVotes:   map[types.Hash32]struct{}{},
+						InvalidVotes: map[types.Hash32]struct{}{},
 					},
 				},
 				epochRoundPair{EpochID: epoch, Round: 3}: {
 					pk1: votesSetPair{
-						VotesFor:     map[types.Hash32]struct{}{},
-						VotesAgainst: map[types.Hash32]struct{}{},
+						ValidVotes:   map[types.Hash32]struct{}{},
+						InvalidVotes: map[types.Hash32]struct{}{},
 					},
 					// Should affect the result (3 == 3).
 					pk2: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x6"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x5"): {},
 						},
 					},
@@ -643,20 +642,20 @@ func TestTortoiseBeacon_calcOneRoundVotes(t *testing.T) {
 			},
 			result: votesPerPK{
 				pk1: votesSetPair{
-					VotesFor: map[types.Hash32]struct{}{
+					ValidVotes: map[types.Hash32]struct{}{
 						types.HexToHash32("0x1"): {},
 						types.HexToHash32("0x2"): {},
 					},
-					VotesAgainst: map[types.Hash32]struct{}{
+					InvalidVotes: map[types.Hash32]struct{}{
 						types.HexToHash32("0x3"): {},
 					},
 				},
 				pk2: votesSetPair{
-					VotesFor: map[types.Hash32]struct{}{
+					ValidVotes: map[types.Hash32]struct{}{
 						types.HexToHash32("0x4"): {},
 						types.HexToHash32("0x6"): {},
 					},
-					VotesAgainst: map[types.Hash32]struct{}{
+					InvalidVotes: map[types.Hash32]struct{}{
 						types.HexToHash32("0x5"): {},
 					},
 				},
@@ -707,20 +706,20 @@ func TestTortoiseBeacon_copyFirstRoundVotes(t *testing.T) {
 			incomingVotes: map[epochRoundPair]votesPerPK{
 				epochRoundPair{EpochID: epoch, Round: 1}: {
 					pk1: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x1"): {},
 							types.HexToHash32("0x2"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x3"): {},
 						},
 					},
 					pk2: votesSetPair{
-						VotesFor: map[types.Hash32]struct{}{
+						ValidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x4"): {},
 							types.HexToHash32("0x5"): {},
 						},
-						VotesAgainst: map[types.Hash32]struct{}{
+						InvalidVotes: map[types.Hash32]struct{}{
 							types.HexToHash32("0x6"): {},
 						},
 					},
@@ -728,20 +727,20 @@ func TestTortoiseBeacon_copyFirstRoundVotes(t *testing.T) {
 			},
 			result: votesPerPK{
 				pk1: votesSetPair{
-					VotesFor: map[types.Hash32]struct{}{
+					ValidVotes: map[types.Hash32]struct{}{
 						types.HexToHash32("0x1"): {},
 						types.HexToHash32("0x2"): {},
 					},
-					VotesAgainst: map[types.Hash32]struct{}{
+					InvalidVotes: map[types.Hash32]struct{}{
 						types.HexToHash32("0x3"): {},
 					},
 				},
 				pk2: votesSetPair{
-					VotesFor: map[types.Hash32]struct{}{
+					ValidVotes: map[types.Hash32]struct{}{
 						types.HexToHash32("0x4"): {},
 						types.HexToHash32("0x5"): {},
 					},
-					VotesAgainst: map[types.Hash32]struct{}{
+					InvalidVotes: map[types.Hash32]struct{}{
 						types.HexToHash32("0x6"): {},
 					},
 				},
@@ -786,11 +785,11 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 			epoch: 5,
 			round: 5,
 			ownFirstRoundVotes: votesSetPair{
-				VotesFor: map[types.Hash32]struct{}{
+				ValidVotes: map[types.Hash32]struct{}{
 					types.HexToHash32("0x1"): {},
 					types.HexToHash32("0x2"): {},
 				},
-				VotesAgainst: map[types.Hash32]struct{}{
+				InvalidVotes: map[types.Hash32]struct{}{
 					types.HexToHash32("0x3"): {},
 				},
 			},
@@ -801,11 +800,11 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 			},
 			weakCoin: weakcoin.ValueMock{Value: true},
 			result: votesSetPair{
-				VotesFor: map[types.Hash32]struct{}{
+				ValidVotes: map[types.Hash32]struct{}{
 					types.HexToHash32("0x1"): {},
 					types.HexToHash32("0x3"): {},
 				},
-				VotesAgainst: map[types.Hash32]struct{}{
+				InvalidVotes: map[types.Hash32]struct{}{
 					types.HexToHash32("0x2"): {},
 				},
 			},
@@ -821,10 +820,10 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 			},
 			weakCoin: weakcoin.ValueMock{Value: false},
 			result: votesSetPair{
-				VotesFor: map[types.Hash32]struct{}{
+				ValidVotes: map[types.Hash32]struct{}{
 					types.HexToHash32("0x1"): {},
 				},
-				VotesAgainst: map[types.Hash32]struct{}{
+				InvalidVotes: map[types.Hash32]struct{}{
 					types.HexToHash32("0x2"): {},
 					types.HexToHash32("0x3"): {},
 				},
@@ -840,7 +839,6 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 			tb := TortoiseBeacon{
 				config: Config{
 					Theta: 1,
-					TAve:  threshold,
 				},
 				Log:             log.NewDefault("TortoiseBeacon"),
 				ownVotes:        map[epochRoundPair]votesSetPair{},

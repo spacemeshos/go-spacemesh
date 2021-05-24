@@ -24,14 +24,14 @@ func TestTortoiseBeacon_classifyMessage(t *testing.T) {
 		messageRound types.RoundID
 		msgType      MessageType
 	}{
-		{"Timely 1", 0, 0, TimelyMessage},
-		{"Late 1", round, 0, LateMessage},
-		{"Late 2", round, 1, LateMessage},
-		{"Delayed 1", round, 2, DelayedMessage},
-		{"Timely 2", round, 3, TimelyMessage},
-		{"Timely 3", round, 4, TimelyMessage},
-		{"Timely 4", round, 5, TimelyMessage},
-		{"Timely 5", round, 6, TimelyMessage},
+		{"Valid 1", 0, 0, ValidMessage},
+		{"Invalid 1", round, 0, InvalidMessage},
+		{"Invalid 2", round, 1, InvalidMessage},
+		{"Potentially Valid 1", round, 2, PotentiallyValidMessage},
+		{"Valid 2", round, 3, ValidMessage},
+		{"Valid 3", round, 4, ValidMessage},
+		{"Valid 4", round, 5, ValidMessage},
+		{"Valid 5", round, 6, ValidMessage},
 	}
 
 	for _, tc := range tt {
@@ -47,7 +47,7 @@ func TestTortoiseBeacon_classifyMessage(t *testing.T) {
 			}
 
 			m := VotingMessage{RoundID: tc.messageRound}
-			result := tb.classifyMessage(m, epoch)
+			result := tb.classifyProposalMessage(m, epoch)
 			r.Equal(tc.msgType, result)
 		})
 	}
@@ -94,14 +94,14 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log:             log.NewDefault("TortoiseBeacon"),
-				timelyProposals: proposalsMap{},
+				Log:            log.NewDefault("TortoiseBeacon"),
+				validProposals: proposalsMap{},
 			}
 
 			err := tb.handleProposalMessage(tc.message)
 			r.NoError(err)
 
-			r.EqualValues(tc.expected, tb.timelyProposals)
+			r.EqualValues(tc.expected, tb.validProposals)
 		})
 	}
 }
@@ -143,8 +143,8 @@ func TestTortoiseBeacon_handleVotingMessage(t *testing.T) {
 			expected: map[epochRoundPair]votesPerPK{
 				epochRoundPair{EpochID: epoch, Round: round}: {
 					pk1: votesSetPair{
-						VotesFor:     map[types.Hash32]struct{}{hash: {}},
-						VotesAgainst: map[types.Hash32]struct{}{},
+						ValidVotes:   map[types.Hash32]struct{}{hash: {}},
+						InvalidVotes: map[types.Hash32]struct{}{},
 					},
 				},
 			},
@@ -165,8 +165,8 @@ func TestTortoiseBeacon_handleVotingMessage(t *testing.T) {
 			expected: map[epochRoundPair]votesPerPK{
 				epochRoundPair{EpochID: epoch, Round: round}: {
 					pk1: votesSetPair{
-						VotesFor:     map[types.Hash32]struct{}{hash: {}},
-						VotesAgainst: map[types.Hash32]struct{}{},
+						ValidVotes:   map[types.Hash32]struct{}{hash: {}},
+						InvalidVotes: map[types.Hash32]struct{}{},
 					},
 				},
 			},

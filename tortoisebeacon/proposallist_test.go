@@ -15,17 +15,17 @@ func Test_hashList_Hash(t *testing.T) {
 
 	tt := []struct {
 		name     string
-		hashes   hashList
+		hashes   proposalList
 		expected types.Hash32
 	}{
 		{
 			name:     "Case 1",
-			hashes:   hashList{types.HexToHash32("0x1"), types.HexToHash32("0x2"), types.HexToHash32("0x3")},
+			hashes:   proposalList{types.HexToHash32("0x1"), types.HexToHash32("0x2"), types.HexToHash32("0x3")},
 			expected: types.HexToHash32("0x9701f34c80e1ef7f8125e5d4d2d7e19b509e25d26e462d5308b5abb95b64783e"),
 		},
 		{
 			name: "Case 2",
-			hashes: hashList{
+			hashes: proposalList{
 				types.HexToHash32("0x1"),
 				types.HexToHash32("0x2"),
 				types.HexToHash32("0x4"),
