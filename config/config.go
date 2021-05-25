@@ -78,6 +78,8 @@ type BaseConfig struct {
 	Zdist            int    `mapstructure:"zdist"`                     // hare result wait distance
 	ConfidenceParam  int    `mapstructure:"tortoise-confidence-param"` // layers to wait for global consensus
 	WindowSize       int    `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)
+	GlobalThreshold  uint8  `mapstructure:"tortoise-global-threshold"` // threshold for finalizing blocks and layers
+	LocalThreshold   uint8  `mapstructure:"tortoise-local-threshold"`  // threshold for choosing when to use weak coin
 
 	PoETServer string `mapstructure:"poet-server"`
 
@@ -175,6 +177,8 @@ func defaultBaseConfig() BaseConfig {
 		Zdist:               5,
 		ConfidenceParam:     5,
 		WindowSize:          100, // should be "a few thousand layers" in production
+		GlobalThreshold:     60, // in percentage terms, must be in interval [0, 100]
+		LocalThreshold:      20, // in percentage terms, must be in interval [0, 100]
 		GenesisActiveSet:    5,
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,

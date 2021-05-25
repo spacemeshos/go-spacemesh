@@ -23,7 +23,7 @@ func init() {
 
 type meshWrapper struct {
 	blockDataProvider
-	inputVectorBackupFn func(types.LayerID) ([]types.BlockID, error)
+	inputVectorBackupFn      func(types.LayerID) ([]types.BlockID, error)
 	saveContextualValidityFn func(types.BlockID, types.LayerID, bool) error
 }
 
@@ -66,6 +66,8 @@ var (
 	defaultTestHdist           = config.DefaultConfig().Hdist
 	defaultTestZdist           = config.DefaultConfig().Zdist
 	defaultTestWindowSize      = 30 // make test faster
+	defaultTestGlobalThreshold = uint8(60)
+	defaultTestLocalThreshold  = uint8(20)
 	defaultTestRerunInterval   = time.Hour
 	defaultTestConfidenceParam = config.DefaultConfig().ConfidenceParam
 )
@@ -200,7 +202,8 @@ func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer, voteNeg
 		return sorted[voteNegative:], nil
 	}
 
-	trtl = newTurtle(msh, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, blocksPerLayer, defaultTestRerunInterval)
+	trtl = defaultTurtle(t)
+	trtl.AvgLayerSize = blocksPerLayer
 	trtl.init(context.TODO(), mesh.GenesisLayer())
 
 	var l types.LayerID
@@ -291,7 +294,8 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 		})
 	}
 
-	trtl := newTurtle(msh, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, blocksPerLayer, defaultTestRerunInterval)
+	trtl := defaultTurtle(t)
+	trtl.AvgLayerSize = blocksPerLayer
 	gen := mesh.GenesisLayer()
 	trtl.init(context.TODO(), gen)
 
@@ -384,9 +388,7 @@ func TestAddToMesh(t *testing.T) {
 	getHareResults := mdb.LayerBlockIds
 
 	mdb.InputVectorBackupFunc = getHareResults
-
-	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+	alg := defaultAlgorithm(t, mdb)
 	l := mesh.GenesisLayer()
 
 	log.With().Info("genesis is", l.Index(), types.BlockIdsField(types.BlockIDs(l.Blocks())))
@@ -428,9 +430,7 @@ func TestPersistAndRecover(t *testing.T) {
 	getHareResults := mdb.LayerBlockIds
 
 	mdb.InputVectorBackupFunc = getHareResults
-
-	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+	alg := defaultAlgorithm(t, mdb)
 
 	l1 := createTurtleLayer(types.GetEffectiveGenesis()+1, mdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l1))
@@ -444,7 +444,7 @@ func TestPersistAndRecover(t *testing.T) {
 	require.Equal(t, int(types.GetEffectiveGenesis()+1), int(alg.LatestComplete()))
 
 	// now recover
-	alg2 := recoveredVerifyingTortoise(mdb, lg)
+	alg2 := recoveredVerifyingTortoise(mdb, alg.logger)
 	require.Equal(t, alg.LatestComplete(), alg2.LatestComplete())
 	require.Equal(t, alg.trtl.bdp, alg2.trtl.bdp)
 	require.Equal(t, alg.trtl.LastEvicted, alg2.trtl.LastEvicted)
@@ -469,8 +469,7 @@ func TestPersistAndRecover(t *testing.T) {
 func TestRerunInterval(t *testing.T) {
 	r := require.New(t)
 	mdb := getPersistentMesh(t)
-	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+	alg := defaultAlgorithm(t, mdb)
 	lastRerun := alg.lastRerun
 
 	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
@@ -494,8 +493,7 @@ func TestRerunInterval(t *testing.T) {
 func TestLayerOpinionVector(t *testing.T) {
 	r := require.New(t)
 	mdb := getPersistentMesh(t)
-	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+	alg := defaultAlgorithm(t, mdb)
 
 	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
 	l0 := mesh.GenesisLayer()
@@ -553,8 +551,7 @@ func TestLayerOpinionVector(t *testing.T) {
 func TestBaseBlock(t *testing.T) {
 	r := require.New(t)
 	mdb := getPersistentMesh(t)
-	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+	alg := defaultAlgorithm(t, mdb)
 
 	getHareResults := mdb.LayerBlockIds
 	mdb.InputVectorBackupFunc = getHareResults
@@ -602,10 +599,24 @@ func TestBaseBlock(t *testing.T) {
 	r.Nil(exceptions)
 }
 
+func defaultTurtle(t *testing.T) *turtle {
+	mdb := getPersistentMesh(t)
+	return newTurtle(
+		mdb,
+		defaultTestHdist,
+		defaultTestZdist,
+		defaultTestConfidenceParam,
+		defaultTestWindowSize,
+		defaultTestLayerSize,
+		defaultTestGlobalThreshold,
+		defaultTestLocalThreshold,
+		defaultTestRerunInterval,
+	)
+}
+
 func TestCloneTurtle(t *testing.T) {
 	r := require.New(t)
-	mdb := getPersistentMesh(t)
-	trtl := newTurtle(mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestLayerSize, defaultTestRerunInterval)
+	trtl := defaultTurtle(t)
 	trtl.AvgLayerSize += 1 // make sure defaults aren't being read
 	trtl.Last = 10         // state should not be cloned
 	trtl2 := trtl.cloneTurtle()
@@ -615,15 +626,32 @@ func TestCloneTurtle(t *testing.T) {
 	r.Equal(trtl.ConfidenceParam, trtl2.ConfidenceParam)
 	r.Equal(trtl.WindowSize, trtl2.WindowSize)
 	r.Equal(trtl.AvgLayerSize, trtl2.AvgLayerSize)
+	r.Equal(trtl.GlobalThreshold, trtl2.GlobalThreshold)
+	r.Equal(trtl.LocalThreshold, trtl2.LocalThreshold)
 	r.Equal(trtl.RerunInterval, trtl2.RerunInterval)
 	r.NotEqual(trtl.Last, trtl2.Last)
+}
+
+func defaultAlgorithm(t *testing.T, mdb *mesh.DB) *ThreadSafeVerifyingTortoise {
+	return verifyingTortoise(
+		context.TODO(),
+		defaultTestLayerSize,
+		mdb,
+		defaultTestHdist,
+		defaultTestZdist,
+		defaultTestConfidenceParam,
+		defaultTestWindowSize,
+		defaultTestGlobalThreshold,
+		defaultTestLocalThreshold,
+		defaultTestRerunInterval,
+		log.NewDefault(t.Name()),
+	)
 }
 
 func TestGetSingleInputVector(t *testing.T) {
 	r := require.New(t)
 	mdb := getPersistentMesh(t)
-	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+	alg := defaultAlgorithm(t, mdb)
 
 	l1ID := types.GetEffectiveGenesis() + 1
 	blocks := generateBlocks(l1ID, 2, alg.BaseBlock)
@@ -648,8 +676,7 @@ func TestGetSingleInputVector(t *testing.T) {
 func TestCheckBlockAndGetInputVector(t *testing.T) {
 	r := require.New(t)
 	mdb := getPersistentMesh(t)
-	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+	alg := defaultAlgorithm(t, mdb)
 
 	l1ID := types.GetEffectiveGenesis() + 1
 	blocks := generateBlocks(l1ID, 3, alg.BaseBlock)
@@ -681,9 +708,7 @@ func TestCheckBlockAndGetInputVector(t *testing.T) {
 func TestCalculateExceptions(t *testing.T) {
 	r := require.New(t)
 	mdb := getPersistentMesh(t)
-
-	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+	alg := defaultAlgorithm(t, mdb)
 
 	// helper function for checking votes
 	expectVotes := func(votes []map[types.BlockID]struct{}, numAgainst, numFor, numNeutral int) {
@@ -800,8 +825,7 @@ func TestCalculateExceptions(t *testing.T) {
 func TestProcessBlock(t *testing.T) {
 	r := require.New(t)
 	mdb := getPersistentMesh(t)
-	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+	alg := defaultAlgorithm(t, mdb)
 
 	// blocks in this layer will use the genesis block as their base block
 	l1ID := types.GetEffectiveGenesis() + 1
@@ -880,9 +904,7 @@ func TestProcessNewBlocks(t *testing.T) {
 	r := require.New(t)
 
 	mdb := getPersistentMesh(t)
-
-	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+	alg := defaultAlgorithm(t, mdb)
 	l1ID := types.GetEffectiveGenesis() + 1
 	l2ID := l1ID.Add(1)
 	l1Blocks := generateBlocks(l1ID, defaultTestLayerSize, alg.BaseBlock)
@@ -947,9 +969,7 @@ func TestVerifyLayers(t *testing.T) {
 	r := require.New(t)
 
 	mdb := getPersistentMesh(t)
-
-	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+	alg := defaultAlgorithm(t, mdb)
 	l1ID := types.GetEffectiveGenesis() + 1
 	l2ID := l1ID.Add(1)
 	l2Blocks := generateBlocks(l2ID, defaultTestLayerSize, alg.BaseBlock)
@@ -974,7 +994,7 @@ func TestVerifyLayers(t *testing.T) {
 	r.NoError(mdb.AddZeroBlockLayer(l1ID))
 
 	mdbWrapper := meshWrapper{
-		blockDataProvider:        mdb,
+		blockDataProvider: mdb,
 		saveContextualValidityFn: func(types.BlockID, types.LayerID, bool) error {
 			r.Fail("should not save contextual validity")
 			return nil
@@ -1140,8 +1160,7 @@ func TestVoteVectorForLayer(t *testing.T) {
 	r := require.New(t)
 
 	mdb := getPersistentMesh(t)
-	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+	alg := defaultAlgorithm(t, mdb)
 	l1ID := types.GetEffectiveGenesis() + 1
 	l1Blocks := generateBlocks(l1ID, 3, alg.BaseBlock)
 	var blockIDs []types.BlockID
@@ -1186,8 +1205,7 @@ func TestSumVotesForBlock(t *testing.T) {
 	r := require.New(t)
 
 	mdb := getPersistentMesh(t)
-	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+	alg := defaultAlgorithm(t, mdb)
 
 	// store a bunch of votes against a block
 	l1ID := types.GetEffectiveGenesis() + 1
@@ -1249,8 +1267,7 @@ func TestHealing(t *testing.T) {
 	r := require.New(t)
 
 	mdb := getPersistentMesh(t)
-	lg := log.NewDefault(t.Name())
-	alg := verifyingTortoise(context.TODO(), defaultTestLayerSize, mdb, defaultTestHdist, defaultTestZdist, defaultTestConfidenceParam, defaultTestWindowSize, defaultTestRerunInterval, lg)
+	alg := defaultAlgorithm(t, mdb)
 
 	// store a bunch of votes against a block
 	l0ID := types.GetEffectiveGenesis()
@@ -1265,7 +1282,7 @@ func TestHealing(t *testing.T) {
 	}
 
 	// don't attempt to heal recent layers
-	t.Run("don't heal recent layers", func (t *testing.T) {
+	t.Run("don't heal recent layers", func(t *testing.T) {
 		checkVerifiedLayer(l0ID)
 
 		// while bootstrapping there should be no healing
@@ -1281,7 +1298,7 @@ func TestHealing(t *testing.T) {
 	// next, initiate healing without block votes, using the weak coin toss
 
 	// missing coinflip
-	t.Run("healing fails when layer coinflip is missing", func (t *testing.T) {
+	t.Run("healing fails when layer coinflip is missing", func(t *testing.T) {
 		checkVerifiedLayer(l0ID)
 		alg.trtl.Last = alg.trtl.Hdist + l2ID
 		alg.trtl.selfHealing(context.TODO(), l2ID)
@@ -1289,7 +1306,7 @@ func TestHealing(t *testing.T) {
 	})
 
 	// coinflip true
-	t.Run("healing confirms blocks when coinflip is true", func (t *testing.T) {
+	t.Run("healing confirms blocks when coinflip is true", func(t *testing.T) {
 		checkVerifiedLayer(l0ID)
 		mdb.RecordCoinflip(context.TODO(), l1ID, true)
 		alg.trtl.selfHealing(context.TODO(), l2ID)
@@ -1305,7 +1322,7 @@ func TestHealing(t *testing.T) {
 
 	// coinflip false
 	l3ID := l2ID.Add(1)
-	t.Run("healing does not confirm blocks when coinflip is false", func (t *testing.T) {
+	t.Run("healing does not confirm blocks when coinflip is false", func(t *testing.T) {
 		checkVerifiedLayer(l1ID)
 		mdb.RecordCoinflip(context.TODO(), l2ID, false)
 		alg.trtl.selfHealing(context.TODO(), l3ID)
@@ -1319,7 +1336,7 @@ func TestHealing(t *testing.T) {
 
 	// make sure vote of non-good blocks are counted
 	l4ID := l3ID.Add(1)
-	t.Run("count vote of non-good blocks", func (t *testing.T) {
+	t.Run("count vote of non-good blocks", func(t *testing.T) {
 		checkVerifiedLayer(l2ID)
 
 		// advance further so we can heal this layer
@@ -1340,7 +1357,7 @@ func TestHealing(t *testing.T) {
 
 	// can heal when half of votes are missing (doesn't meet threshold)
 	l5ID := l4ID.Add(1)
-	t.Run("can heal when lots of votes are missing", func (t *testing.T) {
+	t.Run("can heal when lots of votes are missing", func(t *testing.T) {
 		checkVerifiedLayer(l3ID)
 		alg.trtl.Last = alg.trtl.Hdist + l4ID
 		mdb.RecordCoinflip(context.TODO(), l4ID, true)

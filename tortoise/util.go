@@ -8,10 +8,6 @@ import (
 
 type vec [2]int
 
-const (
-	globalThreshold = 0.6
-)
-
 var ( //correction vectors type
 	// Opinion vectors
 	support = vec{1, 0}
@@ -61,14 +57,21 @@ func (a vec) String() string {
 	return "abstain"
 }
 
-func calculateGlobalOpinion(logger log.Log, v vec, layerSize int, delta float64) vec {
-	threshold := globalThreshold * delta * float64(layerSize)
-	logger.With().Debug("global opinion", v, log.String("threshold", fmt.Sprint(threshold)))
-	if float64(v[0]) > threshold {
+func calculateGlobalOpinion(logger log.Log, v vec, layerSize int, globalThreshold uint8, delta float64) vec {
+	threshold := float64(globalThreshold / 100) * delta * float64(layerSize)
+	netVote := float64(v[0]-v[1])
+	logger.With().Debug("global opinion",
+		v,
+		log.String("threshold", fmt.Sprint(threshold)),
+		log.String("net_vote", fmt.Sprint(netVote)))
+	if netVote > threshold {
+		// try net positive vote
 		return support
-	} else if float64(v[1]) > threshold {
+	} else if netVote < -1 * threshold {
+		// try net negative vote
 		return against
 	} else {
+		// neither threshold was crossed, so abstain
 		return abstain
 	}
 }

@@ -26,6 +26,8 @@ type Config struct {
 	Hdist           int // hare lookback distance: the distance over which we use the input vector/hare results
 	Zdist           int // hare result wait distance: the distance over which we're willing to wait for hare results
 	ConfidenceParam int // confidence wait distance: how long we wait for global consensus to be established
+	GlobalThreshold uint8 // threshold required to finalize blocks and layers (0-100)
+	LocalThreshold  uint8 // threshold that determines whether a node votes based on local or global opinion (0-100)
 	WindowSize      int // tortoise sliding window: how many layers we store data for
 	Log             log.Log
 	Recovered       bool
@@ -45,6 +47,8 @@ func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingT
 		cfg.Zdist,
 		cfg.ConfidenceParam,
 		cfg.WindowSize,
+		cfg.GlobalThreshold,
+		cfg.LocalThreshold,
 		cfg.RerunInterval,
 		cfg.Log)
 }
@@ -58,14 +62,19 @@ func verifyingTortoise(
 	zdist,
 	confidenceParam,
 	windowSize int,
+	globalThreshold,
+	localThreshold uint8,
 	rerunInterval time.Duration,
 	logger log.Log,
 ) *ThreadSafeVerifyingTortoise {
 	if hdist < zdist {
 		logger.With().Panic("hdist must be >= zdist", log.Int("hdist", hdist), log.Int("zdist", zdist))
 	}
+	if globalThreshold > 100 || localThreshold > 100 {
+		logger.With().Panic("global and local threshold values must be in the interval [0, 100]")
+	}
 	alg := &ThreadSafeVerifyingTortoise{
-		trtl: newTurtle(mdb, hdist, zdist, confidenceParam, windowSize, layerSize, rerunInterval),
+		trtl: newTurtle(mdb, hdist, zdist, confidenceParam, windowSize, layerSize, globalThreshold, localThreshold, rerunInterval),
 	}
 	alg.logger = logger
 	alg.lastRerun = time.Now()

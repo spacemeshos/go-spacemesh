@@ -540,6 +540,8 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		Zdist:           app.Config.Zdist,
 		ConfidenceParam: app.Config.ConfidenceParam,
 		WindowSize:      app.Config.WindowSize,
+		GlobalThreshold: app.Config.GlobalThreshold,
+		LocalThreshold:  app.Config.LocalThreshold,
 		Log:             app.addLogger(TrtlLogger, lg),
 		Recovered:       mdb.PersistentData(),
 		RerunInterval:   time.Hour, // rerun from genesis once per hour

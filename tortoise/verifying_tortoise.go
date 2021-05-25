@@ -27,14 +27,14 @@ type blockDataProvider interface {
 }
 
 var (
-	errNoBaseBlockFound = errors.New("no good base block within exception vector limit")
-	errBaseBlockNotInDatabase = errors.New("inconsistent state: can't find base block in database")
-	errNotSorted = errors.New("input blocks are not sorted by layerID")
-	errstrTooManyExceptions = "too many exceptions to base block vote"
-	errstrBaseBlockLayerMissing = "base block layer not found"
-	errstrBaseBlockNotFoundInLayer = "base block opinions not found in layer"
-	errstrConflictingVotes = "conflicting votes found in block"
-	errstrCantFindLayer = "inconsistent state: can't find layer in database"
+	errNoBaseBlockFound                 = errors.New("no good base block within exception vector limit")
+	errBaseBlockNotInDatabase           = errors.New("inconsistent state: can't find base block in database")
+	errNotSorted                        = errors.New("input blocks are not sorted by layerID")
+	errstrTooManyExceptions             = "too many exceptions to base block vote"
+	errstrBaseBlockLayerMissing         = "base block layer not found"
+	errstrBaseBlockNotFoundInLayer      = "base block opinions not found in layer"
+	errstrConflictingVotes              = "conflicting votes found in block"
+	errstrCantFindLayer                 = "inconsistent state: can't find layer in database"
 	errstrUnableToCalculateLocalOpinion = "unable to calculate local opinion for layer"
 )
 
@@ -76,6 +76,10 @@ type turtle struct {
 	// the size of the tortoise sliding window which controls how far back the tortoise stores data
 	WindowSize types.LayerID
 
+	// thresholds used for determining finality, and whether to use local or global results, respectively
+	GlobalThreshold uint8
+	LocalThreshold  uint8
+
 	AvgLayerSize  int
 	MaxExceptions int
 
@@ -97,13 +101,25 @@ func (t *turtle) SetLogger(logger log.Log) {
 }
 
 // newTurtle creates a new verifying tortoise algorithm instance
-func newTurtle(bdp blockDataProvider, hdist, zdist, confidenceParam, windowSize, avgLayerSize int, rerun time.Duration) *turtle {
+func newTurtle(
+	bdp blockDataProvider,
+	hdist,
+	zdist,
+	confidenceParam,
+	windowSize,
+	avgLayerSize int,
+	globalThreshold,
+	localThreshold uint8,
+	rerun time.Duration,
+) *turtle {
 	return &turtle{
 		logger:               log.NewDefault("trtl"),
 		Hdist:                types.LayerID(hdist),
 		Zdist:                types.LayerID(zdist),
 		ConfidenceParam:      types.LayerID(confidenceParam),
 		WindowSize:           types.LayerID(windowSize),
+		GlobalThreshold:      globalThreshold,
+		LocalThreshold:       localThreshold,
 		bdp:                  bdp,
 		Last:                 0,
 		AvgLayerSize:         avgLayerSize,
@@ -116,7 +132,17 @@ func newTurtle(bdp blockDataProvider, hdist, zdist, confidenceParam, windowSize,
 
 // cloneTurtle creates a new verifying tortoise instance using the params of this instance
 func (t *turtle) cloneTurtle() *turtle {
-	return newTurtle(t.bdp, int(t.Hdist), int(t.Zdist), int(t.ConfidenceParam), int(t.WindowSize), t.AvgLayerSize, t.RerunInterval)
+	return newTurtle(
+		t.bdp,
+		int(t.Hdist),
+		int(t.Zdist),
+		int(t.ConfidenceParam),
+		int(t.WindowSize),
+		t.AvgLayerSize,
+		t.GlobalThreshold,
+		t.LocalThreshold,
+		t.RerunInterval,
+	)
 }
 
 func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
@@ -647,7 +673,7 @@ func (t *turtle) verifyLayers(ctx context.Context) error {
 	// Note: t.Verified is initialized to the effective genesis layer, so the first candidate layer here necessarily
 	// follows and is post-genesis. There's no need for an additional check here.
 candidateLayerLoop:
-	for candidateLayerID := t.Verified+1; candidateLayerID < t.Last; candidateLayerID++ {
+	for candidateLayerID := t.Verified + 1; candidateLayerID < t.Last; candidateLayerID++ {
 		logger := logger.WithFields(log.FieldNamed("candidate_layer", candidateLayerID))
 
 		// it's possible that self-healing already validated a layer
@@ -706,7 +732,7 @@ candidateLayerLoop:
 			})
 
 			// check that the total weight exceeds the confidence threshold
-			globalOpinionOnBlock := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(t.Last-candidateLayerID))
+			globalOpinionOnBlock := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, float64(t.Last-candidateLayerID))
 			logger.With().Debug("verifying tortoise calculated global opinion on block",
 				log.FieldNamed("block_voted_on", blockID),
 				candidateLayerID,
@@ -866,6 +892,7 @@ func (t *turtle) sumVotesForBlock(
 		log.FieldNamed("end_layer", t.Last),
 		log.FieldNamed("block_voting_on", blockID),
 		log.FieldNamed("layer_voting_on", startLayer-1))
+	// TODO LANE: need to factor in theta
 	for voteLayer := startLayer; voteLayer <= t.Last; voteLayer++ {
 		logger := logger.WithFields(voteLayer)
 		logger.With().Debug("summing layer votes",
@@ -903,7 +930,7 @@ func (t *turtle) selfHealing(ctx context.Context, targetLayerID types.LayerID) {
 
 	// TODO: optimize this algorithm using, e.g., a triangular matrix rather than nested loops
 
-	for candidateLayerID := pbaseOld+1; candidateLayerID < targetLayerID; candidateLayerID++ {
+	for candidateLayerID := pbaseOld + 1; candidateLayerID < targetLayerID; candidateLayerID++ {
 		logger := t.logger.WithContext(ctx).WithFields(
 			log.FieldNamed("old_verified_layer", pbaseOld),
 			log.FieldNamed("new_verified_layer", pbaseNew),
@@ -947,7 +974,7 @@ func (t *turtle) selfHealing(ctx context.Context, targetLayerID types.LayerID) {
 			sum := t.sumVotesForBlock(ctx, blockID, candidateLayerID+1, func(id types.BlockID) bool { return true })
 
 			// check that the total weight exceeds the confidence threshold
-			globalOpinionOnBlock := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(t.Last-candidateLayerID))
+			globalOpinionOnBlock := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, float64(t.Last-candidateLayerID))
 			logger.With().Debug("self-healing calculated global opinion on candidate block",
 				log.FieldNamed("global_opinion", globalOpinionOnBlock),
 				sum)
