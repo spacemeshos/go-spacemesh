@@ -1366,6 +1366,8 @@ func TestSyncer_Synchronise(t *testing.T) {
 	syncs, _, clock := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	defer clock.Close()
 	sync := syncs[0]
+	defer sync.Close()
+	defer syncs[1].Close()
 	lv := &mockLayerValidator{0, 0, 0, nil, nil}
 	sync.Mesh.Validator = lv
 
@@ -1398,6 +1400,7 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	defer clock.Close()
 	sync := syncs[0]
 	defer sync.Close()
+	defer syncs[1].Close()
 	gen := types.GetEffectiveGenesis()
 	sync.AddBlockWithTxs(types.NewExistingBlock(1+gen, []byte(rand.String(8)), nil))
 	sync.AddBlockWithTxs(types.NewExistingBlock(2+gen, []byte(rand.String(8)), nil))
