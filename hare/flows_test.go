@@ -273,7 +273,7 @@ func Test_multipleCPs(t *testing.T) {
 		}
 	}()
 
-	test.WaitForTimedTermination(t, 30*time.Second)
+	test.WaitForTimedTermination(t, 60*time.Second)
 }
 
 // Test - run multiple CPs where one of them runs more than one iteration
