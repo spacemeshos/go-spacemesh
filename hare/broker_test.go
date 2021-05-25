@@ -59,9 +59,7 @@ func createMessage(t *testing.T, instanceID instanceID) []byte {
 	msg := b.SetPubKey(sr.PublicKey()).SetInstanceID(instanceID).Sign(sr).Build()
 
 	var w bytes.Buffer
-	_, err := xdr.Marshal(&w, msg.Message)
-
-	if err != nil {
+	if _, err := xdr.Marshal(&w, msg.Message); err != nil {
 		assert.Fail(t, "Failed to marshal data")
 	}
 
@@ -98,8 +96,127 @@ func TestBroker_Received(t *testing.T) {
 	waitForMessages(t, inbox, instanceID1, 1)
 }
 
-//test that after registering the maximum number of protocols,
-//the earliest one gets unregistered in favor of the newest one
+// test that self-generated (outbound) messages are handled before incoming messages
+func TestBroker_Priority(t *testing.T) {
+	sim := service.NewSimulator()
+	n1 := sim.NewNode()
+	broker := buildBroker(n1, t.Name())
+
+	// this allows us to pause and release broker processing of incoming messages
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	wg2 := sync.WaitGroup{}
+	wg2.Add(1)
+	once := sync.Once{}
+	broker.eValidator = &mockEligibilityValidator{validationFn: func(context.Context, *Msg) bool {
+		// tell the sender that we've got one message
+		once.Do(wg2.Done)
+		// wait until all the messages are queued
+		wg.Wait()
+		return true
+	}}
+
+	// take control of the broker inbox so we can feed it messages in a deterministic order
+	// make the channel blocking (no buffer) so we can be sure the messages have been processed
+	msgChan := make(chan service.GossipMessage)
+	assert.NoError(t, broker.startWithInbox(context.TODO(), msgChan))
+	outbox, err := broker.Register(context.TODO(), instanceID1)
+	assert.Nil(t, err)
+
+	createMessageWithRoleProof := func(roleProof []byte) []byte {
+		sr := signing.NewEdSigner()
+		b := newMessageBuilder()
+		msg := b.SetPubKey(sr.PublicKey()).SetInstanceID(instanceID1).SetRoleProof(roleProof).Sign(sr).Build()
+
+		var w bytes.Buffer
+		if _, err := xdr.Marshal(&w, msg.Message); err != nil {
+			assert.Fail(t, "failed to marshal data")
+		}
+
+		return w.Bytes()
+	}
+	roleProofInbound := []byte{1, 2, 3}
+	roleProofOutbound := []byte{3, 2, 1}
+	serMsgInbound := createMessageWithRoleProof(roleProofInbound)
+	serMsgOutbound := createMessageWithRoleProof(roleProofOutbound)
+
+	// first, broadcast a bunch of simulated inbound messages
+	for i := 0; i < 10; i++ {
+		// channel send is blocking, so we're sure the messages have been processed
+		log.Info("sending inbound hare message")
+		msgChan <- service.NewSimGossipMessage(
+			n1.Info.PublicKey(),
+			false,
+			service.DataBytes{Payload: serMsgInbound},
+		)
+	}
+
+	// make sure the listener has gotten at least one message
+	wg2.Wait()
+
+	// now broadcast one outbound message
+	log.Info("sending outbound hare message")
+	msgChan <- service.NewSimGossipMessage(n1.Info.PublicKey(), true, service.DataBytes{Payload: serMsgOutbound})
+
+	// we know that the hare queueLoop has received the previous message, but we don't know that it's actually been
+	// processed or added to the priority queue yet. in order to be certain of this, we have to send one more message.
+	msgChan <- nil
+
+	// all messages are queued, release the waiting listener (hare event loop)
+	wg.Done()
+
+	// we expect the outbound message to be prioritized
+	tm := time.NewTimer(3 * time.Minute)
+	for i := 0; i < 11; i++ {
+		select {
+		case x := <-outbox:
+			switch i {
+			case 0:
+				// first message (already queued) should be inbound
+				assert.Equal(t, roleProofInbound, x.InnerMsg.RoleProof, "expected inbound msg %d", i)
+			case 1:
+				// second message should be outbound
+				assert.Equal(t, roleProofOutbound, x.InnerMsg.RoleProof, "expected outbound msg %d", i)
+			default:
+				// all subsequent messages should be inbound
+				assert.Equal(t, roleProofInbound, x.InnerMsg.RoleProof, "expected inbound msg %d", i)
+			}
+		case <-tm.C:
+			assert.Fail(t, "timed out waiting for message", "msg %d", i)
+			return
+		}
+	}
+	assert.Len(t, outbox, 0, "expected broker queue to be empty")
+
+	// Test shutdown flow
+
+	// Listener to make sure internal queue channel is closed
+	wg3 := sync.WaitGroup{}
+	wg3.Add(1)
+	res := make(chan bool)
+	go func() {
+		timeout := time.NewTimer(time.Second)
+		wg3.Done()
+		select {
+		case <-timeout.C:
+			assert.Fail(t, "timed out waiting for channel close")
+			res <- false
+		case _, ok := <-broker.queueChannel:
+			assert.False(t, ok, "expected channel close")
+			res <- !ok
+		}
+	}()
+
+	// Make sure the listener is listening
+	wg3.Wait()
+	broker.Close()
+	_, err = broker.queue.Read()
+	assert.Error(t, err, "expected broker priority queue to be closed")
+	assert.True(t, <-res)
+}
+
+// test that after registering the maximum number of protocols,
+// the earliest one gets unregistered in favor of the newest one
 func TestBroker_MaxConcurrentProcesses(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
@@ -171,7 +288,7 @@ func waitForMessages(t *testing.T, inbox chan *Msg, instanceID instanceID, msgCo
 					return
 				}
 			case <-tm.C:
-				t.Errorf("Timedout waiting for msg %v", i)
+				t.Errorf("Timed out waiting for msg %v", i)
 				t.Fail()
 				return
 			}
@@ -240,6 +357,10 @@ func (mgm *mockGossipMessage) Sender() p2pcrypto.PublicKey {
 	return mgm.sender
 }
 
+func (mgm *mockGossipMessage) IsOwnMessage() bool {
+	return false
+}
+
 func (mgm *mockGossipMessage) RequestID() string {
 	return reqID
 }
@@ -256,7 +377,7 @@ func TestBroker_Send(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	broker := buildBroker(n1, t.Name())
-	mev := &mockEligibilityValidator{false}
+	mev := &mockEligibilityValidator{valid: false}
 	broker.eValidator = mev
 	broker.Start(context.TODO())
 

@@ -326,7 +326,7 @@ func TestUDPNet_Cache(t *testing.T) {
 	_, ok2 := n.incomingConn[addrx2.String()]
 	for ok2 {
 		addrx2 = testUDPAddr()
-		_, ok = n.incomingConn[addrx2.String()]
+		_, ok2 = n.incomingConn[addrx2.String()]
 	}
 	n.addConn(addrx2, &udpConnMock{CreatedFunc: func() time.Time {
 		return time.Now()

@@ -71,6 +71,7 @@ func NewWeakCoin(prefix string, threshold types.Hash32, net broadcaster, logger 
 	rng.Seed(len(pub), []byte{2})
 	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
 	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
+
 	thresholdBigInt := new(big.Int).SetBytes(threshold[:])
 
 	wc := &weakCoin{

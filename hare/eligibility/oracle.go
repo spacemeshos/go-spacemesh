@@ -24,7 +24,7 @@ var (
 )
 
 type valueProvider interface {
-	Value(layer types.LayerID) (uint32, error)
+	Value(context.Context, types.EpochID) (uint32, error)
 }
 
 // a func to retrieve the active set size for the provided layer
@@ -32,7 +32,7 @@ type valueProvider interface {
 type activeSetFunc func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
 
 type signer interface {
-	Sign(msg []byte) ([]byte, error)
+	Sign(msg []byte) []byte
 }
 
 type goodBlocksProvider interface {
@@ -40,7 +40,7 @@ type goodBlocksProvider interface {
 }
 
 // a function to verify the message with the signature and its public key.
-type verifierFunc = func(msg, sig, pub []byte) (bool, error)
+type verifierFunc = func(pub, msg, sig []byte) bool
 
 // Oracle is the hare eligibility oracle
 type Oracle struct {
@@ -142,12 +142,13 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 		return val.([]byte), nil
 	}
 
-	// get value from Beacon
-	v, err := o.beacon.Value(layer)
+	// get value from beacon
+	v, err := o.beacon.Value(ctx, layer.GetEpoch())
 	if err != nil {
-		o.WithContext(ctx).With().Error("could not get hare beacon value",
+		o.WithContext(ctx).With().Error("could not get hare beacon value for epoch",
 			log.Err(err),
 			layer,
+			layer.GetEpoch(),
 			log.Int32("round", round))
 		return nil, err
 	}
@@ -155,8 +156,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	// marshal message
 	var w bytes.Buffer
 	msg := vrfMessage{Beacon: v, Round: round, Layer: layer}
-	_, err = xdr.Marshal(&w, &msg)
-	if err != nil {
+	if _, err := xdr.Marshal(&w, &msg); err != nil {
 		o.WithContext(ctx).With().Error("could not marshal xdr", log.Err(err))
 		return nil, err
 	}
@@ -190,12 +190,7 @@ func (o *Oracle) Eligible(ctx context.Context, layer types.LayerID, round int32,
 	}
 
 	// validate message
-	res, err := o.vrfVerifier(msg, sig, id.VRFPublicKey)
-	if err != nil {
-		o.Error("eligibility: VRF verification failed: %v", err)
-		return false, err
-	}
-	if !res {
+	if !o.vrfVerifier(id.VRFPublicKey, msg, sig) {
 		o.With().Info("eligibility: a node did not pass VRF signature verification",
 			id,
 			layer)
@@ -240,13 +235,7 @@ func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round int32) ([
 		return nil, err
 	}
 
-	sig, err := o.vrfSigner.Sign(msg)
-	if err != nil {
-		o.WithContext(ctx).With().Error("proof: could not sign vrf message", log.Err(err))
-		return nil, err
-	}
-
-	return sig, nil
+	return o.vrfSigner.Sign(msg), nil
 }
 
 // Returns a map of all active nodes in the specified layer id

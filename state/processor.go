@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/trie"
@@ -306,31 +307,50 @@ func transfer(db *TransactionProcessor, sender, recipient types.Address, amount 
 	db.AddBalance(recipient, amount)
 }
 
-// HandleTxData handles data received on TX gossip channel
-func (tp *TransactionProcessor) HandleTxData(ctx context.Context, data service.GossipMessage, _ service.Fetcher) {
-	logger := tp.WithContext(ctx)
-	tx, err := types.BytesToTransaction(data.Bytes())
+// HandleTxGossipData handles data sent from gossip
+func (tp *TransactionProcessor) HandleTxGossipData(ctx context.Context, data service.GossipMessage, syncer service.Fetcher) {
+	err := tp.HandleTxData(data.Bytes())
 	if err != nil {
-		logger.With().Error("cannot parse incoming tx", log.Err(err))
+		tp.With().Error("invalid tx", log.Err(err))
 		return
 	}
+	data.ReportValidation(IncomingTxProtocol)
+}
+
+// HandleTxData handles data received on TX gossip channel
+func (tp *TransactionProcessor) HandleTxData(data []byte) error {
+	tx, err := types.BytesToTransaction(data)
+	if err != nil {
+		tp.With().Error("cannot parse incoming TX", log.Err(err))
+		return err
+	}
+	return tp.handleTransaction(tx)
+}
+
+// HandleTxSyncData handles data received on TX sync
+func (tp *TransactionProcessor) HandleTxSyncData(data []byte) error {
+	var tx mesh.DbTransaction
+	err := types.BytesToInterface(data, &tx)
+	if err != nil {
+		tp.With().Error("cannot parse incoming TX", log.Err(err))
+		return err
+	}
+	err = tx.CalcAndSetOrigin()
+	if err != nil {
+		return err
+	}
+	// we don't validate the tx, todo: this is copied from old sync, unless I am wrong i think some validation is needed
+	tp.pool.Put(tx.Transaction.ID(), tx.Transaction)
+	return nil
+}
+
+func (tp *TransactionProcessor) handleTransaction(tx *types.Transaction) error {
 	if err := tx.CalcAndSetOrigin(); err != nil {
-		logger.With().Error("failed to calc transaction origin", tx.ID(), log.Err(err))
-		return
+		tp.With().Error("failed to calc transaction origin", tx.ID(), log.Err(err))
+		return err
 	}
-	if !tp.AddressExists(tx.Origin()) {
-		logger.With().Error("transaction origin does not exist",
-			log.String("transaction", tx.String()),
-			tx.ID(),
-			log.String("origin", tx.Origin().Short()),
-			log.Err(err))
-		return
-	}
-	if err := tp.ValidateNonceAndBalance(tx); err != nil {
-		logger.With().Error("nonce and balance validation failed", tx.ID(), log.Err(err))
-		return
-	}
-	logger.With().Info("got new tx",
+
+	tp.Log.With().Info("got new tx",
 		tx.ID(),
 		log.Uint64("nonce", tx.AccountNonce),
 		log.Uint64("amount", tx.Amount),
@@ -338,8 +358,19 @@ func (tp *TransactionProcessor) HandleTxData(ctx context.Context, data service.G
 		log.Uint64("gas", tx.GasLimit),
 		log.String("recipient", tx.Recipient.String()),
 		log.String("origin", tx.Origin().String()))
-	data.ReportValidation(IncomingTxProtocol)
+
+	if !tp.AddressExists(tx.Origin()) {
+		tp.With().Error("transaction origin does not exist", log.String("transaction", tx.String()),
+			tx.ID(), log.String("origin", tx.Origin().Short()))
+		return fmt.Errorf("transaction origin does not exist")
+	}
+	if err := tp.ValidateNonceAndBalance(tx); err != nil {
+		tp.With().Error("nonce and balance validation failed", tx.ID(), log.Err(err))
+		return fmt.Errorf("nonce and balance validation failed")
+	}
+
 	tp.pool.Put(tx.ID(), tx)
+	return nil
 }
 
 // ValidateAndAddTxToPool validates the provided tx nonce and balance with projector and puts it in the transaction pool

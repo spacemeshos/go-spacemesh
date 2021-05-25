@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
@@ -143,20 +142,24 @@ func buildMessage(msg *Message) *Msg {
 }
 
 func buildBroker(net NetworkService, testName string) *Broker {
-	return newBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil},
+	return newBroker(net, &mockEligibilityValidator{valid: true}, MockStateQuerier{true, nil},
 		(&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, util.NewCloser(), log.NewDefault(testName))
 }
 
 func buildBrokerLimit4(net NetworkService, testName string) *Broker {
-	return newBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil},
+	return newBroker(net, &mockEligibilityValidator{valid: true}, MockStateQuerier{true, nil},
 		(&mockSyncer{true}).IsSynced, 10, 4, util.NewCloser(), log.NewDefault(testName))
 }
 
 type mockEligibilityValidator struct {
-	valid bool
+	valid        bool
+	validationFn func(context.Context, *Msg) bool
 }
 
-func (mev *mockEligibilityValidator) Validate(context.Context, *Msg) bool {
+func (mev *mockEligibilityValidator) Validate(ctx context.Context, msg *Msg) bool {
+	if mev.validationFn != nil {
+		return mev.validationFn(ctx, msg)
+	}
 	return mev.valid
 }
 
@@ -274,12 +277,14 @@ func generateConsensusProcess(t *testing.T) *consensusProcess {
 
 	s := NewSetFromValues(value1)
 	oracle := eligibility.New()
-	signing := signing.NewEdSigner()
-	_, vrfPub := BLS381.GenKeyPair(BLS381.DefaultSeed())
-	oracle.Register(true, signing.PublicKey().String())
+	edSigner := signing.NewEdSigner()
+	edPubkey := edSigner.PublicKey()
+	_, vrfPub, err := signing.NewVRFSigner(edSigner.Sign(edPubkey.Bytes()))
+	assert.NoError(t, err)
+	oracle.Register(true, edPubkey.String())
 	output := make(chan TerminationOutput, 1)
 
-	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, signing, types.NodeID{Key: signing.PublicKey().String(), VRFPublicKey: vrfPub}, n1, output, truer{}, log.NewDefault(signing.PublicKey().String()))
+	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, edSigner, types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}, n1, output, truer{}, log.NewDefault(edPubkey.String()))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
