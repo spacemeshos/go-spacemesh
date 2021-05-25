@@ -1692,9 +1692,10 @@ func TestSyncer_ConcurrentSynchronise(t *testing.T) {
 	sync.ticker = &mockClock{Layer: 3}
 	lv := &mockTimedValidator{1 * time.Second, 0}
 	sync.Validator = lv
-	sync.AddBlock(types.NewExistingBlock(1, []byte(rand.String(8)), nil))
-	sync.AddBlock(types.NewExistingBlock(2, []byte(rand.String(8)), nil))
-	sync.AddBlock(types.NewExistingBlock(3, []byte(rand.String(8)), nil))
+	r.NoError(sync.AddBlock(types.NewExistingBlock(1, []byte(rand.String(8)), nil)))
+	r.NoError(sync.AddBlock(types.NewExistingBlock(2, []byte(rand.String(8)), nil)))
+	r.NoError(sync.AddBlock(types.NewExistingBlock(3, []byte(rand.String(8)), nil)))
+	time.Sleep(100 * time.Millisecond)
 	go sync.synchronise(context.TODO())
 	time.Sleep(100 * time.Millisecond)
 	sync.synchronise(context.TODO())
