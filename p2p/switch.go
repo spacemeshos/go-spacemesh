@@ -442,20 +442,25 @@ func (s *Switch) Shutdown() {
 			//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
 		}
 
-		s.peerLock.Lock()
-		for _, ch := range s.newPeerSub {
-			close(ch)
-		}
-		for _, ch := range s.delPeerSub {
-			close(ch)
-		}
-		s.delPeerSub = nil
-		s.newPeerSub = nil
-		s.peerLock.Unlock()
+		s.cleanupPeers()
 		if s.releaseUpnp != nil {
 			s.releaseUpnp()
 		}
 	})
+}
+
+// close peers related channels
+func (s *Switch) cleanupPeers() {
+	s.peerLock.Lock()
+	defer s.peerLock.Unlock()
+	for _, ch := range s.newPeerSub {
+		close(ch)
+	}
+	for _, ch := range s.delPeerSub {
+		close(ch)
+	}
+	s.delPeerSub = nil
+	s.newPeerSub = nil
 }
 
 // process an incoming message
