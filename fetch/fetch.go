@@ -120,7 +120,7 @@ func DefaultConfig() Config {
 		MaxRetiresForPeer:    2,
 		BatchSize:            20,
 		RequestTimeout:       10,
-		MaxRetriesForRequest: 10,
+		MaxRetriesForRequest: 20,
 	}
 }
 
@@ -395,7 +395,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 		f.activeReqM.Lock()
 		reqs := f.activeRequests[h]
 		invalidatedRequests := 0
-		for _, req := range reqs {
+		for i, req := range reqs {
 			req.retries++
 			if req.retries > f.cfg.MaxRetriesForRequest {
 				f.log.Error("returning error to request %v %v %v %p", req.hash.ShortString(), len(req.returnChan), len(reqs), req)
@@ -406,6 +406,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 					IsLocal: false,
 				}
 				invalidatedRequests++
+				f.activeRequests[h] = reqs[i+1:]
 			}
 		}
 		if invalidatedRequests == len(reqs) {
