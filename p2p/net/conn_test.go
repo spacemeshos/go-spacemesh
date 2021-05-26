@@ -48,8 +48,46 @@ func TestSendMessage(t *testing.T) {
 	case <-rwcam.writeWaitChan:
 		rcvmsg := <-rwcam.writeWaitChan
 		assert.Equal(t, rcvmsg, []byte(msg))
-	case <-time.After(5 * time.Second):
+	case <-time.After(2 * time.Second):
 		assert.Fail(t, "timeout waiting for message to be sent")
+	}
+}
+
+func TestSendMutex(t *testing.T) {
+	netw := NewNetworkMock()
+	rwcam := NewReadWriteCloseAddresserMock()
+	rPub := p2pcrypto.NewRandomPubkey()
+	rwcam.writeWaitChan = make(chan []byte) // unbuffered channel, write is blocking
+	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
+	go conn.beginEventProcessing(context.TODO())
+	msg := "hello"
+	err := conn.Send(context.TODO(), []byte(msg))
+	assert.NoError(t, err)
+
+	// SendSock should now be blocked on Write. make sure we can continue to send while Write is blocked.
+	done := make(chan struct{})
+	go func() {
+		err := conn.Send(context.TODO(), []byte(msg))
+		assert.NoError(t, err)
+		close(done)
+	}()
+	select {
+	case <-done:
+		// success
+		break
+	case <-time.After(time.Second):
+		assert.Fail(t, "timed out waiting for message to be sent")
+	}
+
+	// make sure we can read both messages
+	for i := 0; i < 2; i++ {
+		select {
+		case <-rwcam.writeWaitChan:
+			rcvmsg := <-rwcam.writeWaitChan
+			assert.Equal(t, rcvmsg, []byte(msg))
+		case <-time.After(2 * time.Second):
+			assert.Fail(t, "timeout waiting for message to be sent")
+		}
 	}
 }
 
@@ -71,7 +109,6 @@ func TestReceiveError(t *testing.T) {
 
 	rwcam.SetReadResult([]byte{}, fmt.Errorf("fail"))
 	wg.Wait()
-
 }
 
 func TestSendError(t *testing.T) {
@@ -169,7 +206,6 @@ func TestClose(t *testing.T) {
 	time.Sleep(time.Millisecond * 1000) // block a little bit
 	assert.Equal(t, 1, rwcam.CloseCount())
 	<-c
-
 }
 
 func TestDoubleClose(t *testing.T) {
@@ -203,5 +239,4 @@ func TestGettersToBoostCoverage(t *testing.T) {
 	assert.Equal(t, rPub, conn.RemotePublicKey())
 	assert.NotNil(t, conn.Session())
 	assert.Equal(t, addr.String(), conn.RemoteAddr().String())
-
 }
