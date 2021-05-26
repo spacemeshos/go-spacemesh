@@ -121,7 +121,7 @@ type TortoiseBeacon struct {
 }
 
 // a function to verify the message with the signature and its public key.
-type verifierFunc = func(msg, sig, pub []byte) bool
+type verifierFunc = func(pub, msg, sig []byte) bool
 
 type signer interface {
 	Sign(msg []byte) []byte
@@ -333,9 +333,6 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	}
 
 	tb.Log.With().Info("Handling epoch",
-		log.Uint64("epoch_id", uint64(epoch)))
-
-	tb.Log.With().Info("Starting round ticker",
 		log.Uint64("epoch_id", uint64(epoch)))
 
 	if err := tb.runProposalPhase(epoch); err != nil {
