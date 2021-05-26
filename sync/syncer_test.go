@@ -1363,6 +1363,7 @@ func (m *mockLayerValidator) ValidateLayer(lyr *types.Layer) {
 
 func TestSyncer_Synchronise(t *testing.T) {
 	r := require.New(t)
+	types.SetLayersPerEpoch(3)
 	syncs, _, clock := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	defer clock.Close()
 	sync := syncs[0]
