@@ -21,7 +21,7 @@ const (
 	// defaultTCPInterface is the inet interface that P2P listens on by default
 	defaultTCPInterface = "0.0.0.0"
 	// defaultMessageQueueSize is the number of outbound messages we allow to be queued
-	defaultMessageQueueSize = 5000
+	defaultMessageQueueSize = 250
 )
 
 // Values specifies default values for node config params.
