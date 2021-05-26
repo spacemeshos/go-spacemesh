@@ -253,7 +253,6 @@ func (l *Logic) PollLayer(ctx context.Context, layer types.LayerID) chan LayerPr
 			l.receiveLayerHash(ctx, layer, peer, len(peers), nil, err)
 		}
 		err := l.net.SendRequest(ctx, LayerHashMsg, layer.Bytes(), p, receiveForPeerFunc, timeoutFunc)
-		l.log.Info("request sent %v", err)
 		if err != nil {
 			l.receiveLayerHash(ctx, layer, peer, len(peers), nil, err)
 		}
