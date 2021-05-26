@@ -20,6 +20,8 @@ const (
 	defaultTCPPort = 7513
 	// defaultTCPInterface is the inet interface that P2P listens on by default
 	defaultTCPInterface = "0.0.0.0"
+	// defaultMessageQueueSize is the number of outbound messages we allow to be queued
+	defaultMessageQueueSize = 5000
 )
 
 // Values specifies default values for node config params.
@@ -34,7 +36,7 @@ func init() {
 func duration(duration string) (dur time.Duration) {
 	dur, err := time.ParseDuration(duration)
 	if err != nil {
-		log.Error("Could not parse duration string returning 0, error:", err)
+		log.With().Error("could not parse duration string returning 0", log.Err(err))
 	}
 	return dur
 }
@@ -56,6 +58,7 @@ type Config struct {
 	SwarmConfig           SwarmConfig   `mapstructure:"swarm"`
 	BufferSize            int           `mapstructure:"buffer-size"`
 	MsgSizeLimit          int           `mapstructure:"msg-size-limit"` // in bytes
+	MessageQueueSize      int           `mapstructure:"message-queue-size"`
 }
 
 // SwarmConfig specifies swarm config params.
@@ -99,5 +102,6 @@ func DefaultConfig() Config {
 		SwarmConfig:           SwarmConfigValues,
 		BufferSize:            10000,
 		MsgSizeLimit:          UnlimitedMsgSize,
+		MessageQueueSize:      defaultMessageQueueSize,
 	}
 }

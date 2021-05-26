@@ -224,7 +224,8 @@ func (n *Net) createConnection(ctx context.Context, address net.Addr, remotePub 
 	}
 
 	n.logger.Debug("Connected to %s...", address.String())
-	return newConnection(netConn, n, remotePub, session, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger), nil
+	return newConnection(
+		netConn, n, remotePub, session, n.config.MsgSizeLimit, n.config.MessageQueueSize, n.config.ResponseTimeout, n.logger), nil
 }
 
 func (n *Net) createSecuredConnection(ctx context.Context, address net.Addr, remotePubkey p2pcrypto.PublicKey) (ManagedConnection, error) {
@@ -314,7 +315,8 @@ func (n *Net) accept(ctx context.Context, listen net.Listener, pending chan stru
 			log.String("network", netConn.RemoteAddr().Network()))
 		conn := netConn.(*net.TCPConn)
 		n.tcpSocketConfig(conn) // TODO maybe only set this after session handshake to prevent denial of service with big messages
-		c := newConnection(netConn, n, nil, nil, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger.WithContext(ctx))
+		c := newConnection(
+			netConn, n, nil, nil, n.config.MsgSizeLimit, n.config.MessageQueueSize, n.config.ResponseTimeout, n.logger.WithContext(ctx))
 
 		// Handle the incoming connection asynchronously
 		go n.acceptAsync(ctx, c, pending)

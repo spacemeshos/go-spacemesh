@@ -32,9 +32,6 @@ const (
 	Remote
 )
 
-// MessageQueueSize is the size for queue of messages before pushing them on the socket
-const MessageQueueSize = 250
-
 type msgToSend struct {
 	payload []byte
 	reqID   string
@@ -119,10 +116,16 @@ type fmtConnection interface {
 }
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
-func newConnection(conn readWriteCloseAddresser, netw networker,
-	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) fmtConnection {
-
-	// todo parametrize channel size - hard-coded for now
+func newConnection(
+	conn readWriteCloseAddresser,
+	netw networker,
+	remotePub p2pcrypto.PublicKey,
+	session NetworkSession,
+	msgSizeLimit int,
+	msgQueueSize int,
+	deadline time.Duration,
+	log log.Log,
+) fmtConnection {
 	connection := &FormattedConnection{
 		logger:       log,
 		id:           crypto.UUIDString(),
@@ -136,7 +139,7 @@ func newConnection(conn readWriteCloseAddresser, netw networker,
 		deadliner:    conn,
 		networker:    netw,
 		session:      session,
-		messages:     make(chan msgToSend, MessageQueueSize),
+		messages:     make(chan msgToSend, msgQueueSize),
 		stopSending:  make(chan struct{}),
 		msgSizeLimit: msgSizeLimit,
 	}
@@ -263,8 +266,7 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 	reqID, _ := log.ExtractRequestID(ctx)
 	peerID, _ := ctx.Value(log.PeerIDKey).(string)
 
-	//todo: re insert when log loss is fixed
-	//c.logger.WithContext(ctx).Debug("connection: enqueuing outgoing message")
+	c.logger.WithContext(ctx).Debug("connection: enqueuing outgoing message")
 	c.messages <- msgToSend{m, reqID, peerID}
 	return nil
 }

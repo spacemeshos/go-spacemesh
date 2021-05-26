@@ -43,8 +43,16 @@ type msgConn interface {
 }
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
-func newMsgConnection(conn readWriteCloseAddresser, netw networker,
-	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) msgConn {
+func newMsgConnection(
+	conn readWriteCloseAddresser,
+	netw networker,
+	remotePub p2pcrypto.PublicKey,
+	session NetworkSession,
+	msgSizeLimit int,
+	msgQueueSize int,
+	deadline time.Duration,
+	log log.Log,
+) msgConn {
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &MsgConnection{
@@ -59,7 +67,7 @@ func newMsgConnection(conn readWriteCloseAddresser, netw networker,
 		deadliner:    conn,
 		networker:    netw,
 		session:      session,
-		messages:     make(chan msgToSend, MessageQueueSize),
+		messages:     make(chan msgToSend, msgQueueSize),
 		stopSending:  make(chan struct{}),
 		msgSizeLimit: msgSizeLimit,
 	}
@@ -185,8 +193,7 @@ func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
 	reqID, _ := log.ExtractRequestID(ctx)
 	peerID, _ := ctx.Value(log.PeerIDKey).(string)
 
-	//todo: re insert when log loss is fixed
-	//c.logger.WithContext(ctx).Debug("msgconnection: enqueuing outgoing message")
+	c.logger.WithContext(ctx).Debug("msgconnection: enqueuing outgoing message")
 	c.messages <- msgToSend{m, reqID, peerID}
 	return nil
 }

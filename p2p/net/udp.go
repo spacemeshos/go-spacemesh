@@ -181,7 +181,8 @@ func (n *UDPNet) Dial(ctx context.Context, address net.Addr, remotePublicKey p2p
 
 	ns := n.cache.GetOrCreate(remotePublicKey)
 
-	conn := newMsgConnection(udpcon, n, remotePublicKey, ns, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger)
+	conn := newMsgConnection(
+		udpcon, n, remotePublicKey, ns, n.config.MsgSizeLimit, n.config.MessageQueueSize, n.config.ResponseTimeout, n.logger)
 
 	// The connection is automatically closed when there's nothing more to read, no need to close it here
 	go conn.beginEventProcessing(log.WithNewSessionID(ctx, log.String("netproto", "udp")))
@@ -283,7 +284,8 @@ func (n *UDPNet) listenToUDPNetworkMessages(ctx context.Context, listener net.Pa
 				remote:    addr,
 			}
 
-			mconn := newMsgConnection(conn, n, pk, ns, n.config.MsgSizeLimit, n.config.DialTimeout, n.logger)
+			mconn := newMsgConnection(
+				conn, n, pk, ns, n.config.MsgSizeLimit, n.config.MessageQueueSize, n.config.DialTimeout, n.logger)
 			n.publishNewRemoteConnectionEvent(mconn, node.NewNode(pk, net.ParseIP(host), 0, uint16(iport)))
 			n.addConn(addr, conn, mconn)
 
