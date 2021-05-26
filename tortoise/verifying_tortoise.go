@@ -878,10 +878,9 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 						if coin {
 							// heads on the weak coin means vote for all blocks in the layer
 							return layerBlockIds, nil
-						} else {
-							// tails on the weak coin means vote against all blocks in the layer
-							return voteAgainstAll, nil
 						}
+						// tails on the weak coin means vote against all blocks in the layer
+						return voteAgainstAll, nil
 					}
 					return nil, fmt.Errorf("%s %v", errstrNoCoinflip, layerID)
 				} // (nothing to do if local opinion is against, just don't include block in output)
@@ -889,17 +888,17 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 			logger.With().Debug("local opinion supports blocks in old, unverified layer",
 				log.Int("count", len(layerBlocks)))
 			return blockMapToArray(layerBlocks), nil
-		} else {
-			// this layer has been verified, so we should be able to read the set of contextual blocks
-			logger.Debug("using contextually valid blocks as opinion on old, verified layer")
-			layerBlocks, err := t.bdp.ContextuallyValidBlock(layerID)
-			if err != nil {
-				return nil, err
-			}
-			logger.With().Debug("got contextually valid blocks for layer",
-				log.Int("count", len(layerBlocks)))
-			return blockMapToArray(layerBlocks), nil
 		}
+
+		// this layer has been verified, so we should be able to read the set of contextual blocks
+		logger.Debug("using contextually valid blocks as opinion on old, verified layer")
+		layerBlocks, err := t.bdp.ContextuallyValidBlock(layerID)
+		if err != nil {
+			return nil, err
+		}
+		logger.With().Debug("got contextually valid blocks for layer",
+			log.Int("count", len(layerBlocks)))
+		return blockMapToArray(layerBlocks), nil
 	}
 
 	// for newer layers, we vote according to the local opinion (input vector, from hare or sync)

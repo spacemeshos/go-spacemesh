@@ -93,7 +93,7 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 				sum = sum.Add(opinionVote.Multiply(trtl.BlockWeight(bid, i)))
 			}
 		}
-		globalOpinion := calculateOpinionWithThreshold(trtl.logger, sum, trtl.AvgLayerSize, 1)
+		globalOpinion := calculateOpinionWithThreshold(trtl.logger, sum, trtl.AvgLayerSize, trtl.GlobalThreshold, 1)
 		require.Equal(t, vote, globalOpinion, "test block %v expected vote %v but got %v", i, vote, sum)
 	}
 }
@@ -617,8 +617,8 @@ func defaultTurtle(t *testing.T) *turtle {
 func TestCloneTurtle(t *testing.T) {
 	r := require.New(t)
 	trtl := defaultTurtle(t)
-	trtl.AvgLayerSize += 1 // make sure defaults aren't being read
-	trtl.Last = 10         // state should not be cloned
+	trtl.AvgLayerSize++ // make sure defaults aren't being read
+	trtl.Last = 10      // state should not be cloned
 	trtl2 := trtl.cloneTurtle()
 	r.Equal(trtl.bdp, trtl2.bdp)
 	r.Equal(trtl.Hdist, trtl2.Hdist)
