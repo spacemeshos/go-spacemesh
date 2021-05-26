@@ -275,21 +275,19 @@ func (c *FormattedConnection) SendSock(m []byte) error {
 		c.wmtx.Unlock()
 		return fmt.Errorf("connection was closed")
 	}
+	c.wmtx.Unlock()
 
-	err := c.deadliner.SetWriteDeadline(time.Now().Add(c.deadline))
-	if err != nil {
+	if err := c.deadliner.SetWriteDeadline(time.Now().Add(c.deadline)); err != nil {
 		return err
 	}
-	_, err = c.w.WriteRecord(m)
-	if err != nil {
-		cerr := c.closeUnlocked()
-		c.wmtx.Unlock()
-		if cerr != ErrAlreadyClosed {
+	if _, err := c.w.WriteRecord(m); err != nil {
+		c.wmtx.Lock()
+		if err := c.closeUnlocked(); err != ErrAlreadyClosed {
 			c.networker.publishClosingConnection(ConnectionWithErr{c, err}) // todo: reconsider
 		}
+		c.wmtx.Unlock()
 		return err
 	}
-	c.wmtx.Unlock()
 	metrics.PeerRecv.With(metrics.PeerIDLabel, c.remotePub.String()).Add(float64(len(m)))
 	return nil
 }
