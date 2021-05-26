@@ -156,7 +156,8 @@ func (c *MsgConnection) sendListener() {
 		case m := <-c.messages:
 			c.logger.With().Debug("msgconnection: sending outgoing message",
 				log.String("peer_id", m.peerID),
-				log.String("requestId", m.reqID))
+				log.String("requestId", m.reqID),
+				log.Int("queue_length", len(c.messages)))
 
 			//todo: we are hiding the error here...
 			if err := c.SendSock(m.payload); err != nil {
@@ -173,6 +174,7 @@ func (c *MsgConnection) sendListener() {
 
 // Send pushes a message to the messages queue
 func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
+	c.logger.WithContext(ctx).Debug("waiting for send lock")
 	c.wmtx.Lock()
 	if c.closed {
 		c.wmtx.Unlock()
@@ -184,8 +186,12 @@ func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
 	reqID, _ := log.ExtractRequestID(ctx)
 	peerID, _ := ctx.Value(log.PeerIDKey).(string)
 
-	//todo: re insert when log loss is fixed
-	//c.logger.WithContext(ctx).Debug("msgconnection: enqueuing outgoing message")
+	c.logger.WithContext(ctx).With().Debug("msgconnection: enqueuing outgoing message",
+		log.Int("queue_length", len(c.messages)))
+	if len(c.messages) > 10 {
+		c.logger.WithContext(ctx).With().Warning("msgconnection: outbound send queue backlog",
+			log.Int("queue_length", len(c.messages)))
+	}
 	c.messages <- msgToSend{m, reqID, peerID}
 	return nil
 }
