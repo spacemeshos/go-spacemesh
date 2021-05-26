@@ -271,9 +271,7 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 		return
 	}
 
-	l.log.Error("got")
 	l.layerHashResM.Lock()
-	l.log.Error("got here")
 
 	if _, ok := l.layerHashResults[id]; !ok {
 		l.layerHashResults[id] = make(map[p2ppeers.Peer]*types.Hash32)
