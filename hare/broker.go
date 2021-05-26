@@ -189,7 +189,7 @@ func (b *Broker) queueLoop(ctx context.Context) {
 // listens to incoming messages and incoming tasks
 func (b *Broker) eventLoop(ctx context.Context) {
 	for {
-		b.With().Info("broker queue sizes",
+		b.With().Debug("broker queue sizes",
 			log.Int("msg_queue_size", len(b.queueChannel)),
 			log.Int("task_queue_size", len(b.tasks)))
 		select {
@@ -229,9 +229,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 				msgLogger.With().Error("broker message validation failed", log.Err(errNilInner))
 				continue
 			}
-			msgLogger.With().Info("broker received hare message",
-				hareMsg,
-				log.Int("queue_length", len(b.inbox)))
+			msgLogger.With().Info("broker received hare message", log.Int("queue_length", len(b.inbox)))
 
 			// TODO: fix metrics
 			// metrics.MessageTypeCounter.With("type_id", hareMsg.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(msgInstID), 10), "reporter", "brokerHandler").Add(1)
@@ -267,7 +265,8 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			}
 
 			// validation passed, report
-			msg.ReportValidation(protoName)
+			msg.ReportValidation(ctx, protoName)
+			msgLogger.With().Info("broker reported hare message as valid", hareMsg)
 
 			if isEarly {
 				if _, exist := b.pending[msgInstID]; !exist { // create buffer if first msg

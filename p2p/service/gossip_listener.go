@@ -75,7 +75,7 @@ func (l *Listener) Stop() {
 }
 
 func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHandler, gossipChannel chan GossipMessage, stop chan struct{}, channel string) {
-	l.WithContext(ctx).Info("start listening to gossip", log.String("protocol", channel))
+	l.WithContext(ctx).With().Info("start listening to gossip", log.String("protocol", channel))
 	for {
 		select {
 		case <-stop:

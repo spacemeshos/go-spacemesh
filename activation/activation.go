@@ -205,6 +205,10 @@ func (b *Builder) loop(ctx context.Context) {
 		default:
 		}
 		if err := b.PublishActivationTx(ctx); err != nil {
+			b.log.WithContext(ctx).With().Error("error attempting to publish atx",
+				b.layerClock.GetCurrentLayer(),
+				b.currentEpoch(),
+				log.Err(err))
 			if _, stopRequested := err.(StopRequestedError); stopRequested {
 				return
 			}
@@ -388,7 +392,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 
 	hash, err := b.challenge.Hash()
 	if err != nil {
-		return fmt.Errorf("getting challenge hash failed: %v", err)
+		return fmt.Errorf("getting challenge hash failed: %w", err)
 	}
 	// ⏳ the following method waits for a PoET proof, which should take ~1 epoch
 	atxExpired := b.layerClock.AwaitLayer((pubEpoch + 2).FirstLayer()) // this fires when the target epoch is over
@@ -397,7 +401,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		if _, stopRequested := err.(StopRequestedError); stopRequested {
 			return err
 		}
-		return fmt.Errorf("failed to build nipst: %v", err)
+		return fmt.Errorf("failed to build nipst: %w", err)
 	}
 
 	b.log.With().Info("awaiting atx publication epoch",

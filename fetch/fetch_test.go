@@ -182,7 +182,7 @@ func customFetch(cfg Config) (*Fetch, *mockNet) {
 func TestFetch_GetHash(t *testing.T) {
 	f, _ := defaultFetch()
 	defer f.Stop()
-	f.Start()
+	f.Start(context.TODO())
 	f.cfg.BatchTimeout = 2000 // make sure we never hit the batch timeout
 	h1 := randomHash()
 	hint := Hint("db")
@@ -249,7 +249,7 @@ func TestFetch_requestHashFromPeers_AggregateAndValidate(t *testing.T) {
 
 func TestFetch_GetHash_StartStopSanity(t *testing.T) {
 	f, _ := defaultFetch()
-	f.Start()
+	f.Start(context.TODO())
 	f.Stop()
 }
 
@@ -314,7 +314,7 @@ func TestFetch_requestHashFromPeers_BatchRequestMax(t *testing.T) {
 	hint := Hint("db")
 
 	defer f.Stop()
-	f.Start()
+	f.Start(context.TODO())
 	//test hash aggregation
 	r1 := f.GetHash(h1, hint, false)
 	r2 := f.GetHash(h2, hint, false)

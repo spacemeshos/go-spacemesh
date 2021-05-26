@@ -12,12 +12,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
-	"runtime/pprof"
 	"time"
 
-	"cloud.google.com/go/profiler"
-	"github.com/spacemeshos/amcl"
-	"github.com/spacemeshos/amcl/BLS381"
+	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -253,16 +250,6 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 	if err := cmdp.EnsureCLIFlags(cmd, app.Config); err != nil {
 		return err
 	}
-	if app.Config.Profiler {
-		if err := profiler.Start(profiler.Config{
-			Service:        "go-spacemesh",
-			ServiceVersion: fmt.Sprintf("%s+%s+%s", cmdp.Version, cmdp.Branch, cmdp.Commit),
-			MutexProfiling: true,
-		}); err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, "failed to start profiler:", err)
-		}
-	}
-
 	// override default config in timesync since timesync is using TimeCongigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
 
@@ -452,6 +439,10 @@ func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
 	return nil
 }
 
+type vrfSigner interface {
+	Sign([]byte) []byte
+}
+
 func (app *SpacemeshApp) initServices(ctx context.Context,
 	nodeID types.NodeID,
 	swarm service.Service,
@@ -462,7 +453,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	layerSize uint32,
 	postClient activation.PostProverClient,
 	poetClient activation.PoetProvingServiceClient,
-	vrfSigner *BLS381.BlsSigner,
+	vrfSigner vrfSigner,
 	layersPerEpoch uint16, clock TickProvider) error {
 
 	app.nodeID = nodeID
@@ -548,7 +539,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		app.setupGenesis(processor, msh)
 	}
 
-	eValidator := blocks.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, msh, app.addLogger(BlkEligibilityLogger, lg))
+	eValidator := blocks.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, signing.VRFVerify, msh, app.addLogger(BlkEligibilityLogger, lg))
 
 	syncConf := sync.Configuration{Concurrency: 4,
 		LayerSize:       int(layerSize),
@@ -584,7 +575,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		hOracle = rolacle
 	} else { // regular oracle, build and use it
 		beacon := eligibility.NewBeacon(mdb, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
-		hOracle = eligibility.New(beacon, atxdb.CalcActiveSetSize, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+		hOracle = eligibility.New(beacon, atxdb.CalcActiveSetSize, signing.VRFVerify, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	}
 
 	gossipListener := service.NewListener(swarm, syncer, app.addLogger(GossipListener, lg))
@@ -973,43 +964,31 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	}
 
 	/* Setup monitoring */
-
-	if app.Config.MemProfile != "" {
-		log.Info("starting mem profiling")
-		f, err := os.Create(app.Config.MemProfile)
-		if err != nil {
-			log.With().Error("could not create memory profile", log.Err(err))
-		}
-		defer f.Close()
-		runtime.GC() // get up-to-date statistics
-		if err := pprof.WriteHeapProfile(f); err != nil {
-			log.With().Error("could not write memory profile", log.Err(err))
-		}
-	}
-
-	if app.Config.CPUProfile != "" {
-		log.Info("starting cpu profile")
-		f, err := os.Create(app.Config.CPUProfile)
-		if err != nil {
-			log.With().Error("could not create cpu profile", log.Err(err))
-		}
-		defer f.Close()
-		if err := pprof.StartCPUProfile(f); err != nil {
-			log.With().Error("could not start cpu profile", log.Err(err))
-		}
-		defer pprof.StopCPUProfile()
-	}
-
 	if app.Config.PprofHTTPServer {
 		log.Info("starting pprof server")
 		srv := &http.Server{Addr: ":6060"}
 		defer srv.Shutdown(ctx)
 		go func() {
-			err := srv.ListenAndServe()
-			if err != nil {
-				log.With().Error("cannot start http server", log.Err(err))
+			if err := srv.ListenAndServe(); err != nil {
+				log.With().Error("cannot start pprof http server", log.Err(err))
 			}
 		}()
+	}
+
+	if app.Config.ProfilerURL != "" {
+		p, err := profiler.Start(profiler.Config{
+			ApplicationName: app.Config.ProfilerName,
+			// app.Config.ProfilerURL should be the pyroscope server address
+			// TODO: AuthToken? no need right now since server isn't public
+			ServerAddress: app.Config.ProfilerURL,
+			// by default all profilers are enabled,
+		})
+		if err != nil {
+			log.With().Error("cannot start profiling client")
+		} else {
+			defer p.Stop()
+		}
+
 	}
 
 	/* Create or load miner identity */
@@ -1021,12 +1000,13 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 
 	poetClient := activation.NewHTTPPoetClient(ctx, app.Config.PoETServer)
 
-	rng := amcl.NewRAND()
-	pub := app.edSgn.PublicKey().Bytes()
-	rng.Seed(len(pub), app.edSgn.Sign(pub)) // assuming ed.private is random, the sig can be used as seed
-	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
-	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
-	nodeID := types.NodeID{Key: app.edSgn.PublicKey().String(), VRFPublicKey: vrfPub}
+	edPubkey := app.edSgn.PublicKey()
+	vrfSigner, vrfPub, err := signing.NewVRFSigner(app.edSgn.Sign(edPubkey.Bytes()))
+	if err != nil {
+		log.With().Panic("failed to create vrf signer", log.Err(err))
+	}
+
+	nodeID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 
 	postClient, err := activation.NewPostClient(&app.Config.POST, util.Hex2Bytes(nodeID.Key))
 	if err != nil {

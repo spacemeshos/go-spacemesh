@@ -85,7 +85,8 @@ func NewWithLevel(module string, level zap.AtomicLevel, hooks ...func(zapcore.En
 	consoleCore := zapcore.NewCore(enc, consoleSyncer, level)
 	core := zapcore.RegisterHooks(consoleCore, hooks...)
 	log := zap.New(core).Named(module)
-	return NewFromLog(log)
+	// this is redundant but it makes searching the logs much easier
+	return NewFromLog(log).WithFields(String("module", module))
 }
 
 // NewDefault creates a Log with the default log level

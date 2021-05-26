@@ -656,13 +656,13 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 	return
 }
 
-// GetNodeAtxIDForEpoch returns an atx published by the provided nodeID for the specified targetEpoch. meaning the atx
-// that the requested nodeID has published. it returns an error if no atx was found for provided nodeID
-func (db *DB) GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error) {
-	id, err := db.atxs.Get(getNodeAtxKey(nodeID, targetEpoch))
+// GetNodeAtxIDForEpoch returns an atx published by the provided nodeID for the specified epoch. meaning the atx
+// that the requested nodeID has published. it returns an error if no atx was found for provided nodeID.
+func (db *DB) GetNodeAtxIDForEpoch(nodeID types.NodeID, epoch types.EpochID) (types.ATXID, error) {
+	id, err := db.atxs.Get(getNodeAtxKey(nodeID, epoch))
 	if err != nil {
-		return *types.EmptyATXID, fmt.Errorf("atx for node %v targeting epoch %v: %v",
-			nodeID.ShortString(), targetEpoch, err)
+		return *types.EmptyATXID, fmt.Errorf("atx for node %v for epoch %v: %w",
+			nodeID.ShortString(), epoch, err)
 	}
 	return types.ATXID(types.BytesToHash(id)), nil
 }
@@ -754,7 +754,7 @@ func (db *DB) HandleGossipAtx(ctx context.Context, data service.GossipMessage, s
 		db.log.WithContext(ctx).With().Error("error handling atx data", log.Err(err))
 		return
 	}
-	data.ReportValidation(AtxProtocol)
+	data.ReportValidation(ctx, AtxProtocol)
 }
 
 // HandleAtxData handles atxs received either by gossip or sync

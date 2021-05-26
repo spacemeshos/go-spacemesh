@@ -31,7 +31,7 @@ func (l *PoetListener) Start(ctx context.Context) {
 	if l.started {
 		return
 	}
-	go l.loop()
+	go l.loop(ctx)
 	l.started = true
 }
 
@@ -41,7 +41,7 @@ func (l *PoetListener) Close() {
 	l.started = false
 }
 
-func (l *PoetListener) loop() {
+func (l *PoetListener) loop(ctx context.Context) {
 	for {
 		select {
 		case poetProof := <-l.poetProofMessages:
@@ -49,7 +49,7 @@ func (l *PoetListener) loop() {
 				log.Error("nil poet message received!")
 				continue
 			}
-			go l.handlePoetProofMessage(poetProof)
+			go l.handlePoetProofMessage(ctx, poetProof)
 		case <-l.exit:
 			l.Log.Info("listening stopped")
 			return
@@ -57,7 +57,7 @@ func (l *PoetListener) loop() {
 	}
 }
 
-func (l *PoetListener) handlePoetProofMessage(gossipMessage service.GossipMessage) {
+func (l *PoetListener) handlePoetProofMessage(ctx context.Context, gossipMessage service.GossipMessage) {
 	// ⚠️ IMPORTANT: We must not ensure that the node is synced! PoET messages must be propagated regardless.
 	var proofMessage types.PoetProofMessage
 	if err := types.BytesToInterface(gossipMessage.Bytes(), &proofMessage); err != nil {
@@ -75,7 +75,7 @@ func (l *PoetListener) handlePoetProofMessage(gossipMessage service.GossipMessag
 		return
 	}
 
-	gossipMessage.ReportValidation(PoetProofProtocol)
+	gossipMessage.ReportValidation(ctx, PoetProofProtocol)
 
 	if err := l.poetDb.storeProof(&proofMessage); err != nil {
 		l.Log.Error("failed to store PoET proof: %v", err)

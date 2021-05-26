@@ -59,10 +59,10 @@ const newRootKey = "root"
 func NewTransactionProcessor(allStates, processorDb database.Database, projector Projector, txPool *TxMempool, logger log.Log) *TransactionProcessor {
 	stateDb, err := New(types.Hash32{}, NewDatabase(allStates))
 	if err != nil {
-		log.Panic("cannot load state db, %v", err)
+		log.With().Panic("cannot load state db", log.Err(err))
 	}
 	root := stateDb.IntermediateRoot(false)
-	log.Info("started processor with state root %x", root)
+	log.With().Info("started processor", log.FieldNamed("state_root", root))
 	return &TransactionProcessor{
 		Log:          logger,
 		DB:           stateDb,
@@ -158,7 +158,7 @@ func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash t
 	if err != nil {
 		return err
 	}
-	tp.Log.With().Info("new state root", layer, log.String("state_root", newHash.String()))
+	tp.Log.With().Info("new state root", layer, log.FieldNamed("state_root", newHash))
 	return nil
 }
 
@@ -221,11 +221,11 @@ func (tp *TransactionProcessor) LoadState(layer types.LayerID) error {
 	}
 	newState, err := New(state, tp.db)
 	if err != nil {
-		log.Panic("cannot revert- improper state: %v", err)
+		log.With().Panic("cannot revert, improper state", log.Err(err))
 	}
 
-	tp.Log.Info("reverted, new root %x", newState.IntermediateRoot(false))
-	tp.Log.With().Info("reverted", log.String("root_hash", newState.IntermediateRoot(false).String()))
+	tp.Log.With().Info("reverted",
+		log.FieldNamed("root_hash", newState.IntermediateRoot(false)))
 
 	tp.DB = newState
 	tp.rootMu.Lock()
@@ -273,12 +273,16 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction, layer
 
 	// todo: should we allow to spend all accounts balance?
 	if origin.Balance() <= amountWithFee {
-		tp.Log.Error(errFunds+" have: %v need: %v", origin.Balance(), amountWithFee)
+		tp.Log.With().Error(errFunds,
+			log.Uint64("balance_have", origin.Balance()),
+			log.Uint64("balance_need", amountWithFee))
 		return fmt.Errorf(errFunds)
 	}
 
 	if !tp.checkNonce(trans) {
-		tp.Log.Error(errNonce+" should be %v actual %v", tp.GetNonce(trans.Origin()), trans.AccountNonce)
+		tp.Log.With().Error(errNonce,
+			log.Uint64("nonce_correct", tp.GetNonce(trans.Origin())),
+			log.Uint64("nonce_actual", trans.AccountNonce))
 		return fmt.Errorf(errNonce)
 	}
 
@@ -315,7 +319,7 @@ func (tp *TransactionProcessor) HandleTxData(ctx context.Context, data service.G
 		return
 	}
 	if err := tx.CalcAndSetOrigin(); err != nil {
-		logger.With().Error("failed to calc transaction origin", tx.ID(), log.Err(err))
+		logger.With().Error("failed to calculate transaction origin", tx.ID(), log.Err(err))
 		return
 	}
 	if !tp.AddressExists(tx.Origin()) {
@@ -338,7 +342,7 @@ func (tp *TransactionProcessor) HandleTxData(ctx context.Context, data service.G
 		log.Uint64("gas", tx.GasLimit),
 		log.String("recipient", tx.Recipient.String()),
 		log.String("origin", tx.Origin().String()))
-	data.ReportValidation(IncomingTxProtocol)
+	data.ReportValidation(ctx, IncomingTxProtocol)
 	tp.pool.Put(tx.ID(), tx)
 }
 

@@ -22,7 +22,7 @@ type activationDB interface {
 }
 
 type vrfSigner interface {
-	Sign(msg []byte) ([]byte, error)
+	Sign(msg []byte) []byte
 }
 
 // DefaultProofsEpoch is set such that it will never equal the current epoch
@@ -144,11 +144,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 	bo.eligibilityMutex.Unlock()
 	for counter := uint32(0); counter < numberOfEligibleBlocks; counter++ {
 		message := serializeVRFMessage(epochBeacon, epochNumber, counter)
-		vrfSig, err := bo.vrfSigner.Sign(message)
-		if err != nil {
-			bo.log.With().Error("could not sign message", log.Err(err))
-			return err
-		}
+		vrfSig := bo.vrfSigner.Sign(message)
 		vrfHash := sha256.Sum256(vrfSig)
 		eligibleLayer := calcEligibleLayer(epochNumber, bo.layersPerEpoch, vrfHash)
 		bo.eligibilityMutex.Lock()
@@ -196,7 +192,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 func (bo *Oracle) getValidAtxForEpoch(validForEpoch types.EpochID) (*types.ActivationTxHeader, error) {
 	atxID, err := bo.getATXIDForEpoch(validForEpoch - 1)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get atx id for target epoch %v: %v", validForEpoch, err)
+		return nil, fmt.Errorf("failed to get atx id for target epoch %v: %w", validForEpoch, err)
 	}
 	atx, err := bo.atxDB.GetAtxHeader(atxID)
 	if err != nil {
@@ -223,10 +219,10 @@ func getNumberOfEligibleBlocks(activeSetSize, committeeSize uint32, layersPerEpo
 	return numberOfEligibleBlocks, nil
 }
 
-func (bo *Oracle) getATXIDForEpoch(targetEpoch types.EpochID) (types.ATXID, error) {
-	latestATXID, err := bo.atxDB.GetNodeAtxIDForEpoch(bo.nodeID, targetEpoch)
+func (bo *Oracle) getATXIDForEpoch(epoch types.EpochID) (types.ATXID, error) {
+	latestATXID, err := bo.atxDB.GetNodeAtxIDForEpoch(bo.nodeID, epoch)
 	if err != nil {
-		bo.log.With().Info("did not find atx ids for node",
+		bo.log.With().Warning("did not find atx ids for node",
 			log.FieldNamed("atx_node_id", bo.nodeID),
 			log.Err(err))
 		return types.ATXID{}, err

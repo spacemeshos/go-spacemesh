@@ -101,6 +101,10 @@ func (mpq *mockPriorityQueue) Close() {
 	mpq.called <- struct{}{}
 }
 
+func (mpq *mockPriorityQueue) Length() int {
+	return len(mpq.bus)
+}
+
 func TestPropagationEventLoop(t *testing.T) {
 	protocol := NewProtocol(config.SwarmConfig{}, nil, nil, nil, log.AppLog)
 	called := make(chan struct{})

@@ -18,10 +18,12 @@ import (
 
 // TransactionService exposes transaction data, and a submit tx endpoint
 type TransactionService struct {
-	Network api.NetworkAPI // P2P Swarm
-	Mesh    api.TxAPI      // Mesh
-	Mempool api.MempoolAPI
-	syncer  api.Syncer
+	Network            api.NetworkAPI // P2P Swarm
+	Mesh               api.TxAPI      // Mesh
+	Mempool            api.MempoolAPI
+	syncer             api.Syncer
+	transactionChannel chan events.TransactionWithValidity
+	layerChannel       chan events.NewLayer
 }
 
 // RegisterService registers this service with a grpc server instance
@@ -171,9 +173,19 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 	}
 
 	// The tx channel tells us about newly received and newly created transactions
-	channelTx := events.GetNewTxChannel()
+	var channelTx chan events.TransactionWithValidity
+	if s.transactionChannel == nil {
+		channelTx = events.SubscribeToTxChannel()
+	} else {
+		channelTx = s.transactionChannel
+	}
 	// The layer channel tells us about status updates
-	channelLayer := events.GetLayerChannel()
+	var channelLayer chan events.NewLayer
+	if s.layerChannel == nil {
+		channelLayer = events.SubscribeToLayerChannel()
+	} else {
+		channelLayer = s.layerChannel
+	}
 
 	for {
 		select {

@@ -1,16 +1,17 @@
 package events
 
 import (
+	"runtime/debug"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zapcore"
-	"runtime/debug"
-	"sync"
-	"testing"
-	"time"
 )
 
 func TestNewBlockEvent(t *testing.T) {
@@ -75,12 +76,12 @@ func TestEventReporter(t *testing.T) {
 	ReportNewTx(globalTx)
 
 	// Stream is nil before we initialize it
-	txStream := GetNewTxChannel()
+	txStream := SubscribeToTxChannel()
 	require.Nil(t, txStream, "expected tx stream not to be initialized")
 
 	err := InitializeEventReporter("")
 	require.NoError(t, err)
-	txStream = GetNewTxChannel()
+	txStream = SubscribeToTxChannel()
 	require.NotNil(t, txStream, "expected tx stream to be initialized")
 
 	// This will not be received as no one is listening
@@ -123,12 +124,12 @@ func TestReportError(t *testing.T) {
 	ReportError(nodeErr)
 
 	// Stream is nil before we initialize it
-	stream := GetErrorChannel()
+	stream := SubscribeToErrors()
 	require.Nil(t, stream, "expected stream not to be initialized")
 
-	err := InitializeEventReporterWithOptions("", 1, false)
+	err := InitializeEventReporterWithOptions("", 30)
 	require.NoError(t, err)
-	stream = GetErrorChannel()
+	stream = SubscribeToErrors()
 	require.NotNil(t, stream, "expected stream to be initialized")
 
 	// This one will be buffered
@@ -186,12 +187,12 @@ func TestReportNodeStatus(t *testing.T) {
 	ReportNodeStatusUpdate()
 
 	// Stream is nil before we initialize it
-	stream := GetStatusChannel()
+	stream := SubscribeToStatus()
 	require.Nil(t, stream, "expected stream not to be initialized")
 
 	err := InitializeEventReporter("")
 	require.NoError(t, err)
-	stream = GetStatusChannel()
+	stream = SubscribeToStatus()
 	require.NotNil(t, stream, "expected stream to be initialized")
 
 	// This will not be received as no one is listening
