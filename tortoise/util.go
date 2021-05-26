@@ -57,9 +57,9 @@ func (a vec) String() string {
 	return "abstain"
 }
 
-func calculateGlobalOpinion(logger log.Log, v vec, layerSize int, globalThreshold uint8, delta float64) vec {
-	threshold := float64(globalThreshold / 100) * delta * float64(layerSize)
-	netVote := float64(v[0]-v[1])
+func calculateOpinionWithThreshold(logger log.Log, v vec, layerSize int, theta uint8, delta float64) vec {
+	threshold := float64(theta/100) * delta * float64(layerSize)
+	netVote := float64(v[0] - v[1])
 	logger.With().Debug("global opinion",
 		v,
 		log.String("threshold", fmt.Sprint(threshold)),
@@ -67,7 +67,7 @@ func calculateGlobalOpinion(logger log.Log, v vec, layerSize int, globalThreshol
 	if netVote > threshold {
 		// try net positive vote
 		return support
-	} else if netVote < -1 * threshold {
+	} else if netVote < -1*threshold {
 		// try net negative vote
 		return against
 	} else {

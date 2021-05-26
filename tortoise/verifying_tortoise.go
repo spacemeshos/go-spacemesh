@@ -30,6 +30,7 @@ var (
 	errNoBaseBlockFound                 = errors.New("no good base block within exception vector limit")
 	errBaseBlockNotInDatabase           = errors.New("inconsistent state: can't find base block in database")
 	errNotSorted                        = errors.New("input blocks are not sorted by layerID")
+	errstrNoCoinflip                    = "no weak coin value for current layer"
 	errstrTooManyExceptions             = "too many exceptions to base block vote"
 	errstrBaseBlockLayerMissing         = "base block layer not found"
 	errstrBaseBlockNotFoundInLayer      = "base block opinions not found in layer"
@@ -275,7 +276,8 @@ func (t *turtle) checkBlockAndGetInputVector(
 
 // convert two vectors, of (1) raw candidate block IDs for a layer and (2) an opinion vector of blocks we believe belong
 // in the layer, into a map of votes for each of these blocks
-func (t *turtle) voteVectorForLayer(candidateBlocks []types.BlockID, opinionVec []types.BlockID) (voteMap map[types.BlockID]vec) {
+func (t *turtle) voteVectorForLayer(
+	candidateBlocks []types.BlockID, opinionVec []types.BlockID) (voteMap map[types.BlockID]vec) {
 	voteMap = make(map[types.BlockID]vec, len(candidateBlocks))
 	// LANE TODO: test nil input vs. empty map input here
 	if opinionVec == nil {
@@ -309,7 +311,6 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 	// look at good blocks backwards from most recent processed layer to find a suitable base block
 	// TODO: optimize by, e.g., trying to minimize the size of the exception list (rather than first match)
 	// see https://github.com/spacemeshos/go-spacemesh/issues/2402
-	// TODO LANE: what happens here when we are in self-healing?
 	for layerID := t.Last; layerID > t.LastEvicted; layerID-- {
 		for block, opinion := range t.BlockOpinionsByLayer[layerID] {
 			if _, ok := t.GoodBlocksIndex[block]; !ok {
@@ -731,8 +732,9 @@ candidateLayerLoop:
 				return true
 			})
 
-			// check that the total weight exceeds the confidence threshold
-			globalOpinionOnBlock := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, float64(t.Last-candidateLayerID))
+			// check that the total weight exceeds the global threshold
+			globalOpinionOnBlock := calculateOpinionWithThreshold(
+				t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, float64(t.Last-candidateLayerID))
 			logger.With().Debug("verifying tortoise calculated global opinion on block",
 				log.FieldNamed("block_voted_on", blockID),
 				candidateLayerID,
@@ -837,23 +839,67 @@ func (t *turtle) layerCutoff() types.LayerID {
 // depending how old the layer is.
 func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) ([]types.BlockID, error) {
 	logger := t.logger.WithContext(ctx).WithFields(layerID)
+	var voteAbstain, voteAgainstAll []types.BlockID // nil slice, by default
+	voteAgainstAll = make([]types.BlockID, 0, 0)
 
 	// for layers older than hdist, we vote according to global opinion
-	// Note: we are required to have an opinion on sufficiently old blocks and layers (see ConfidenceParam) when
-	// constructing blocks, i.e., here. so in theory we should call self-healing here if we're still undecided about
-	// an old layer. in practice we do not since we re-run layer verification every time we receive new block or layer
-	// data, so the opinion we read here is always the most up to date. we may want to change this in future. see
-	// https://github.com/spacemeshos/go-spacemesh/issues/2415.
-	// TODO: what if this layer hasn't been verified yet? (it will have no contextually valid blocks)
 	oldLayerCutoff := t.layerCutoff()
 	if layerID < oldLayerCutoff {
-		logger.Debug("using contextually valid blocks as opinion on old layer")
-		layerBlocks, err := t.bdp.ContextuallyValidBlock(layerID)
-		if err != nil {
-			return nil, err
+		if layerID > t.Verified {
+			// this layer has not yet been verified
+			// we must have an opinion about older layers at this point. if the layer hasn't been verified yet, count votes
+			// and see if they pass the local threshold. if not, use the current weak coin instead to determine our vote for
+			// the blocks in the layer.
+			// TODO: do we need to/can we somehow cache this?
+			logger.Info("counting votes for and against blocks in old, unverified layer")
+			layerBlockIds, err := t.bdp.LayerBlockIds(layerID)
+			if err != nil {
+				return nil, err
+			}
+			layerBlocks := make(map[types.BlockID]struct{}, len(layerBlockIds))
+			for _, blockID := range layerBlockIds {
+				logger := logger.WithFields(log.FieldNamed("candidate_block_id", blockID))
+				sum := t.sumVotesForBlock(ctx, blockID, layerID+1, func(id types.BlockID) bool { return true })
+				localOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.AvgLayerSize, t.LocalThreshold, 1)
+				logger.Debug("local opinion on block in old layer",
+					log.FieldNamed("vote_vec", sum),
+					log.FieldNamed("local_opinion", localOpinionOnBlock))
+				if localOpinionOnBlock == support {
+					layerBlocks[blockID] = struct{}{}
+				} else if localOpinionOnBlock == abstain {
+					// abstain means the votes for and against this block did not cross the local threshold.
+					// if any block in this layer doesn't cross the local threshold, rescore the entire layer using the
+					// weak coin
+					// TODO: finalize which layer we read the coinflip for
+					if coin, exists := t.bdp.GetCoinflip(ctx, t.Last); exists {
+						logger.Info("rescoring all blocks in old layer using weak coin",
+							log.Int("count", len(layerBlockIds)),
+							log.Bool("coinflip", coin))
+						if coin {
+							// heads on the weak coin means vote for all blocks in the layer
+							return layerBlockIds, nil
+						} else {
+							// tails on the weak coin means vote against all blocks in the layer
+							return voteAgainstAll, nil
+						}
+					}
+					return nil, fmt.Errorf("%s %v", errstrNoCoinflip, layerID)
+				} // (nothing to do if local opinion is against, just don't include block in output)
+			}
+			logger.With().Debug("local opinion supports blocks in old, unverified layer",
+				log.Int("count", len(layerBlocks)))
+			return blockMapToArray(layerBlocks), nil
+		} else {
+			// this layer has been verified, so we should be able to read the set of contextual blocks
+			logger.Debug("using contextually valid blocks as opinion on old, verified layer")
+			layerBlocks, err := t.bdp.ContextuallyValidBlock(layerID)
+			if err != nil {
+				return nil, err
+			}
+			logger.With().Debug("got contextually valid blocks for layer",
+				log.Int("count", len(layerBlocks)))
+			return blockMapToArray(layerBlocks), nil
 		}
-		logger.With().Debug("got contextually valid blocks for layer", log.Int("count", len(layerBlocks)))
-		return blockMapToArray(layerBlocks), nil
 	}
 
 	// for newer layers, we vote according to the local opinion (input vector, from hare or sync)
@@ -863,17 +909,18 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 			// Hare already failed for this layer, so we want to vote against all blocks in the layer. Just return an
 			// empty list.
 			logger.Debug("local opinion is against all blocks in layer where hare failed")
-			return make([]types.BlockID, 0, 0), nil
+			return voteAgainstAll, nil
 		} else if t.Last > t.Zdist && layerID < t.Last-t.Zdist {
 			// Layer has passed the Hare abort distance threshold, so we give up waiting for Hare results. At this point
 			// our opinion on this layer is that we vote against blocks (i.e., we support an empty layer).
 			logger.With().Debug("local opinion on layer older than hare abort window is against all blocks",
 				log.Err(err))
-			return make([]types.BlockID, 0, 0), nil
+			return voteAgainstAll, nil
 		} else {
 			// Hare hasn't failed and layer has not passed the Hare abort threshold, so we abstain while we keep waiting
-			// for Hare results. A nil result means abstain.
+			// for Hare results.
 			logger.With().Warning("local opinion abstains on all blocks in layer", log.Err(err))
+			return voteAbstain, nil
 		}
 	}
 	logger.With().Debug("got input vector for layer", log.Int("count", len(opinionVec)))
@@ -969,33 +1016,17 @@ func (t *turtle) selfHealing(ctx context.Context, targetLayerID types.LayerID) {
 			logger := logger.WithFields(log.FieldNamed("candidate_block_id", blockID))
 
 			// count all votes for or against this block by all blocks in later layers: don't filter out any
-			// TODO: t.BlockOpinionsByLayer is never updated after we initially receive and process new blocks, so
-			//   self-healing is never applied to its contents. do we need to update it here when healing?
 			sum := t.sumVotesForBlock(ctx, blockID, candidateLayerID+1, func(id types.BlockID) bool { return true })
 
-			// check that the total weight exceeds the confidence threshold
-			globalOpinionOnBlock := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, float64(t.Last-candidateLayerID))
+			// check that the total weight exceeds the global threshold
+			globalOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, float64(t.Last-candidateLayerID))
 			logger.With().Debug("self-healing calculated global opinion on candidate block",
 				log.FieldNamed("global_opinion", globalOpinionOnBlock),
 				sum)
 
-			// fall back on weak coin: if the global opinion is abstain for a single block in a layer, we instead use
-			// the weak coin to decide on the validity of all blocks in the layer
 			if globalOpinionOnBlock == abstain {
-				// TODO: use weak coin for each _voting_ layer rather than for single _candidate_ layer?
-				layerCoin, exists := t.bdp.GetCoinflip(ctx, candidateLayerID)
-				if !exists {
-					logger.Error("no weak coin value for candidate layer, self-healing cannot proceed")
-					return
-				}
-
-				// short-circuit all votes for all blocks in this layer to the weak coin value
-				logger.With().Info("re-scoring all blocks in candidate layer using weak coin",
-					log.Bool("coinflip", layerCoin))
-				for _, bid := range layerBlockIds {
-					contextualValidity[bid] = layerCoin
-				}
-				break
+				logger.With().Info("self-healing failed to verify candidate layer, will reattempt later")
+				return
 			}
 
 			contextualValidity[blockID] = globalOpinionOnBlock == support
