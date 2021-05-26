@@ -153,7 +153,9 @@ func (c *MsgConnection) sendListener() {
 	for {
 		select {
 		case m := <-c.messages:
-			c.logger.With().Debug("sending outgoing message", log.String("requestId", m.reqID))
+			c.logger.With().Debug("sending outgoing message",
+				log.String("requestId", m.reqID),
+				log.Int("queue_length", len(c.messages)))
 
 			//todo: we are hiding the error here...
 			if err := c.SendSock(m.payload); err != nil {
@@ -169,6 +171,7 @@ func (c *MsgConnection) sendListener() {
 
 // Send pushes a message to the messages queue
 func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
+	c.logger.WithContext(ctx).Debug("waiting for send lock")
 	c.wmtx.Lock()
 	if c.closed {
 		c.wmtx.Unlock()
@@ -179,7 +182,12 @@ func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
 	// try to extract a requestID from the context
 	reqID, _ := log.ExtractRequestID(ctx)
 
-	c.logger.WithContext(ctx).Debug("enqueuing outgoing message")
+	c.logger.WithContext(ctx).With().Debug("enqueuing outgoing message",
+		log.Int("queue_length", len(c.messages)))
+	if len(c.messages) > 10 {
+		c.logger.WithContext(ctx).With().Warning("outbound send queue backlog",
+			log.Int("queue_length", len(c.messages)))
+	}
 	c.messages <- msgToSend{m, reqID}
 	return nil
 }

@@ -229,7 +229,9 @@ func (c *FormattedConnection) sendListener() {
 	for {
 		select {
 		case m := <-c.messages:
-			c.logger.With().Debug("sending outgoing message", log.String("requestId", m.reqID))
+			c.logger.With().Debug("sending outgoing message",
+				log.String("requestId", m.reqID),
+				log.Int("queue_length", len(c.messages)))
 
 			//todo: we are hiding the error here...
 			if err := c.SendSock(m.payload); err != nil {
@@ -245,6 +247,7 @@ func (c *FormattedConnection) sendListener() {
 
 // Send pushes a message into the queue if the connection is not closed.
 func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
+	c.logger.WithContext(ctx).Debug("waiting for send lock")
 	c.wmtx.Lock()
 	if c.closed {
 		c.wmtx.Unlock()
@@ -255,7 +258,12 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 	// try to extract a requestID from the context
 	reqID, _ := log.ExtractRequestID(ctx)
 
-	c.logger.WithContext(ctx).Debug("enqueuing outgoing message")
+	c.logger.WithContext(ctx).With().Debug("enqueuing outgoing message",
+		log.Int("queue_length", len(c.messages)))
+	if len(c.messages) > 10 {
+		c.logger.WithContext(ctx).With().Warning("outbound send queue backlog",
+			log.Int("queue_length", len(c.messages)))
+	}
 	c.messages <- msgToSend{m, reqID}
 	return nil
 }
@@ -350,7 +358,7 @@ func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Du
 		}{b: msg, e: err}
 		err = c.deadliner.SetReadDeadline(time.Time{}) // disable read deadline
 		if err != nil {
-			c.logger.Warning("could not set a read deadline err:", err)
+			c.logger.With().Warning("could not set a read deadline", log.Err(err))
 		}
 	}()
 
