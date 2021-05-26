@@ -204,6 +204,7 @@ func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer, voteNeg
 
 	trtl = defaultTurtle(t)
 	trtl.AvgLayerSize = blocksPerLayer
+	trtl.bdp = msh
 	trtl.init(context.TODO(), mesh.GenesisLayer())
 
 	var l types.LayerID
@@ -219,11 +220,13 @@ func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerL
 	makeLayer(t, l, trtl, blocksPerLayer, msh, inputVectorFn)
 
 	// write blocks to database first; the verifying tortoise will subsequently read them
-	blocks, err := inputVectorFn(l)
-	require.NoError(t, err)
+	if blocks, err := inputVectorFn(l); err != nil {
+		trtl.logger.With().Warning("error from input vector fn", log.Err(err))
+	} else {
+		// save blocks to db for this layer
+		require.NoError(t, msh.SaveLayerInputVectorByID(l, blocks))
+	}
 
-	// save blocks to db for this layer
-	require.NoError(t, msh.SaveLayerInputVectorByID(l, blocks))
 	require.NoError(t, trtl.HandleIncomingLayer(context.TODO(), l))
 }
 
@@ -296,6 +299,7 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 
 	trtl := defaultTurtle(t)
 	trtl.AvgLayerSize = blocksPerLayer
+	trtl.bdp = msh
 	gen := mesh.GenesisLayer()
 	trtl.init(context.TODO(), gen)
 

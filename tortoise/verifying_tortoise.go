@@ -889,7 +889,6 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 				log.Int("count", len(layerBlocks)))
 			return blockMapToArray(layerBlocks), nil
 		}
-
 		// this layer has been verified, so we should be able to read the set of contextual blocks
 		logger.Debug("using contextually valid blocks as opinion on old, verified layer")
 		layerBlocks, err := t.bdp.ContextuallyValidBlock(layerID)
