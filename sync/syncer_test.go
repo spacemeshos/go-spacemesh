@@ -1461,6 +1461,15 @@ func TestSyncer_ListenToGossip(t *testing.T) {
 	r.False(sync.gossipSynced == done)
 	assert.False(t, sync.ListenToGossip())
 
+	retries := 10
+	for len(sync.net.peers.GetPeers()) == 0 {
+		retries--
+		if retries == 0 {
+			r.Fail("peers didnt boot in time")
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 	//run sync
 	sync.synchronise(context.TODO())
 
