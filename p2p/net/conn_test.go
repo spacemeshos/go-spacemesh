@@ -49,7 +49,7 @@ func TestSendMessage(t *testing.T) {
 		rcvmsg := <-rwcam.writeWaitChan
 		assert.Equal(t, rcvmsg, []byte(msg))
 	case <-time.After(2 * time.Second):
-		assert.Fail(t, "timeout waiting for message to be sent")
+		assert.Fail(t, "timed out waiting for message to be sent")
 	}
 }
 
@@ -64,7 +64,18 @@ func TestSendMutex(t *testing.T) {
 	err := conn.Send(context.TODO(), []byte(msg))
 	assert.NoError(t, err)
 
-	// SendSock should now be blocked on Write. make sure we can continue to send while Write is blocked.
+	// Make sure SendSock received the message and tried to send it (and is blocking on Write)
+	for i := 0; i < 10; i++ {
+		if rwcam.WriteCount() >= 1 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if rwcam.WriteCount() < 1 {
+		assert.Fail(t, "timed out waiting for SendSock to block")
+	}
+
+	// Now try sending another message and make sure it doesn't block
 	done := make(chan struct{})
 	go func() {
 		err := conn.Send(context.TODO(), []byte(msg))
@@ -86,7 +97,7 @@ func TestSendMutex(t *testing.T) {
 			rcvmsg := <-rwcam.writeWaitChan
 			assert.Equal(t, rcvmsg, []byte(msg))
 		case <-time.After(2 * time.Second):
-			assert.Fail(t, "timeout waiting for message to be sent")
+			assert.Fail(t, "timed out waiting for message to be received")
 		}
 	}
 }
