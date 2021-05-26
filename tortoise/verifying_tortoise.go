@@ -563,10 +563,6 @@ func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) error
 	logger := t.logger.WithContext(ctx)
 	lastLayerID := types.LayerID(0)
 
-	// we perform eviction here because it should happen after the verified layer advances, and this is the method that
-	// calls verifyLayers
-	defer t.evict(ctx)
-
 	logger.With().Info("tortoise handling incoming block data", log.Int("num_blocks", len(blocks)))
 
 	// process the votes in all layer blocks and update tables
@@ -668,6 +664,9 @@ func (t *turtle) verifyLayers(ctx context.Context) error {
 		log.FieldNamed("verification_target", t.Last),
 		log.FieldNamed("prev_verified", t.Verified))
 	logger.Info("starting layer verification")
+
+	// we perform eviction here because it should happen after the verified layer advances
+	defer t.evict(ctx)
 
 	// attempt to verify each layer from the last verified up to one prior to the newly-arrived layer.
 	// this is the full range of unverified layers that we might possibly be able to verify at this point.
