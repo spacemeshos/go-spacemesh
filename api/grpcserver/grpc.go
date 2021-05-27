@@ -2,12 +2,13 @@ package grpcserver
 
 import (
 	"fmt"
+	"net"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
-	"net"
-	"time"
 )
 
 // ServiceAPI allows individual grpc services to register the grpc server
@@ -59,7 +60,7 @@ func (s *Server) startInternal() {
 // Close stops the server
 func (s *Server) Close() error {
 	log.Info("Stopping new grpc server...")
-	s.GrpcServer.Stop()
+	s.GrpcServer.GracefulStop()
 
 	// We don't return any errors but we want to conform to io.Closer so return a nil error
 	return nil
