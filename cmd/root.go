@@ -52,8 +52,10 @@ func AddCommands(cmd *cobra.Command) {
 		config.CoinbaseAccount, "coinbase account to accumulate rewards")
 	cmd.PersistentFlags().StringVar(&config.GoldenATXID, "golden-atx",
 		config.GoldenATXID, "golden ATX hash")
-	cmd.PersistentFlags().IntVar(&config.GenesisActiveSet, "genesis-active-size",
-		config.GenesisActiveSet, "The active set size for the genesis flow")
+	cmd.PersistentFlags().Uint64Var(&config.SpaceToCommit, "space-to-commit",
+		config.SpaceToCommit, "number of bytes to commit to mining")
+	cmd.PersistentFlags().Uint64Var(&config.GenesisTotalWeight, "genesis-total-weight",
+		config.GenesisTotalWeight, "The active set size for the genesis flow")
 	cmd.PersistentFlags().IntVar(&config.BlockCacheSize, "block-cache-size",
 		config.BlockCacheSize, "size in layers of meshdb block cache")
 	cmd.PersistentFlags().StringVar(&config.PublishEventsURL, "events-url",

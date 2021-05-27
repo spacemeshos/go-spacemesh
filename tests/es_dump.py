@@ -108,7 +108,7 @@ def es_reindex(namespace, index_date, port=9200, timeout=1000):
 
 
 @ut.timing
-def wait_for_dump_to_end(src_ip, dst_ip, indx, port=9200, timeout=900, usr=cnf.ES_USER_LOCAL, pwd=cnf.ES_PASS_LOCAL):
+def wait_for_dump_to_end(src_ip, dst_ip, indx, port=9200, timeout=3600, usr=cnf.ES_USER_LOCAL, pwd=cnf.ES_PASS_LOCAL):
     orig_timeout = timeout
     url = "http://{usr}:{pwd}@{ip}:{port}/{indx}/_stats"
     src_url = url.format(ip=src_ip, port=port, indx=indx, usr=usr, pwd=pwd)

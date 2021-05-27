@@ -8,7 +8,7 @@ services:
           "--coinbase", "${SMESH_COINBASE:-0x1234}",
           "--golden-atx", "${SMESH_GOLDEN_ATX:-0x5678}",
           "--poet-server", "${SMESH_POET_SERVER:?SMESH_POET_SERVER Must be specified}",
-          "--post-space", "${SMESH_POST_SPACE:-1048576}",
+          "--post-space", "${SMESH_POST_SPACE:-1024}",
           "--test-mode",
           "--start-mining",
           "--randcon",  "${SMESH_RANDCON:-8}",
@@ -19,9 +19,11 @@ services:
           "--eligibility-confidence-param",  "${SMESH_CONFIDENCE_PARAM:-25}",
           "--eligibility-epoch-offset", "0",
           "--layer-average-size", "${SMESH_LAYER_SIZE:-200}",
-          "--genesis-active-size", "${SMESH_GENESIS_ACTIVE_SIZE:-200}",
-          "--hare-committee-size", "${SMESH_HARE_COMMITTEE_SIZE:-80}",
-          "--hare-max-adversaries", "${SMESH_HARE_MAX_ADVERSARIES:-39}",
+          "--genesis-total-weight", "${SMESH_GENESIS_TOTAL_WEIGHT:-26214400}",
+          "--hare-committee-size", "${SMESH_HARE_COMMITTEE_SIZE:-800}",
+          "--hare-max-adversaries", "${SMESH_HARE_MAX_ADVERSARIES:-399}",
+          "--sync-request-timeout", "${SMESH_SYNC_REQ_TIMEOUT:-60000}", 
+          "--post-labels", "${SMESH_POST_LABELS:-100}", 
           "--tortoise-beacon-kappa", "${SMESH_TORTOISE-BEACON-KAPPA:-40}",
           "--tortoise-beacon-q", "${SMESH_TORTOISE-BEACON-Q:-0.33333}",
           "--tortoise-beacon-rounds-number", "${SMESH_TORTOISE-BEACON-ROUNDS-NUMBER:-300}",
@@ -32,7 +34,7 @@ services:
           "--post-labels", "${SMESH_POST_LABELS:-100}",
           "--max-inbound", "${SMESH_MAX_INBOUND:-12}",
           "--genesis-time", "${SMESH_GENESIS_TIME:?SMESH_GENESIS_TIME Must be specified}",
-          "--bootstrap",
+          "--bootstrap", 
           "--bootnodes", "${SMESH_BOOTNODES:?SMESH_BOOTNODES Must be specified}",
           "--executable-path", "/bin/go-spacemesh",
           "-d", "/root/spacemeshdata/" ]
@@ -40,14 +42,14 @@ services:
         - "${SMESH_PORT:-7513}:${SMESH_PORT:-7513}"
      networks:
        spacemesh: {}
-
+       
      volumes:
         - "${SMESH_HOST_DATA_PATH:-smesh-data}:/root"
 
 
 volumes:
   smesh-data:
-
+        
 # Specify network interface name to make firewall rules easier.
 networks:
   spacemesh:

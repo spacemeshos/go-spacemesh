@@ -155,11 +155,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired, stop cha
 	if initialized, _, err := nb.postProver.IsInitialized(); !initialized || err != nil {
 		return nil, errors.New("PoST not initialized")
 	}
-
-	cfg := nb.postProver.Cfg()
 	nipst := nb.state.Nipst
-
-	nipst.Space = cfg.SpacePerUnit
 
 	// Phase 0: Submit challenge to PoET service.
 	if nb.state.PoetRound == nil {
@@ -197,7 +193,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired, stop cha
 			nb.poetDB.UnsubscribeFromProofRef(nb.state.PoetServiceID, nb.state.PoetRound.ID)
 			return nil, fmt.Errorf("atx expired while waiting for poet proof, target epoch ended")
 		case <-stop:
-			return nil, &StopRequestedError{}
+			return nil, StopRequestedError{}
 		}
 
 		membership, err := nb.poetDB.GetMembershipMap(poetProofRef)
@@ -243,7 +239,6 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired, stop cha
 // NewNIPSTWithChallenge is a convenience method FOR TESTS ONLY. TODO: move this out of production code.
 func NewNIPSTWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPST {
 	return &types.NIPST{
-		Space:          0,
 		NipstChallenge: challenge,
 		PostProof: &types.PostProof{
 			Challenge:    poetRef,
