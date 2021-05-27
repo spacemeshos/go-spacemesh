@@ -1000,6 +1000,7 @@ func TestProcessNewBlocks(t *testing.T) {
 }
 
 func TestVerifyLayers(t *testing.T) {
+	log.DebugMode(true)
 	r := require.New(t)
 
 	mdb := getPersistentMesh(t)
@@ -1159,11 +1160,12 @@ func TestVerifyLayers(t *testing.T) {
 
 	// verified layer advances one step, but L3 is not verified because global opinion is undecided, so verification
 	// stops there
-	err = alg.trtl.verifyLayers(context.TODO())
-	r.NoError(err)
-	r.Equal(int(l2ID), int(alg.trtl.Verified))
+	t.Run("global opinion undecided", func(t *testing.T) {
+		err = alg.trtl.verifyLayers(context.TODO())
+		r.NoError(err)
+		r.Equal(int(l2ID), int(alg.trtl.Verified))
+	})
 
-	// weight not exceeded
 	l4Votes = Opinion{BlockOpinions: map[types.BlockID]vec{
 		l2Blocks[0].ID(): support,
 		l2Blocks[1].ID(): support,
@@ -1174,20 +1176,75 @@ func TestVerifyLayers(t *testing.T) {
 		l3Blocks[1].ID(): support,
 		l3Blocks[2].ID(): support,
 	}}
-	// modify vote so one block votes in support of L3 blocks, two blocks continue to abstain, so threshold not met
-	alg.trtl.BlockOpinionsByLayer[l4ID][l4Blocks[0].ID()] = l4Votes
-	err = alg.trtl.verifyLayers(context.TODO())
-	r.NoError(err)
-	r.Equal(int(l2ID), int(alg.trtl.Verified))
 
-	// failed to verify old layer: trigger self-healing. self-healing should advance verification two steps, over the
-	// previously stuck layer (l3) and the following layer (l4) since it's old enough, then hand control back to the
-	// ordinary verifying tortoise which should continue and verify l5.
-	mdb.RecordCoinflip(context.TODO(), l3ID, true)
-	alg.trtl.Last = l4ID + alg.trtl.Hdist + 1
-	err = alg.trtl.verifyLayers(context.TODO())
-	r.NoError(err)
-	r.Equal(int(l5ID), int(alg.trtl.Verified))
+	// weight not exceeded
+	t.Run("weight not exceeded", func(t *testing.T) {
+		// modify vote so one block votes in support of L3 blocks, two blocks continue to abstain, so threshold not met
+		alg.trtl.BlockOpinionsByLayer[l4ID][l4Blocks[0].ID()] = l4Votes
+		err = alg.trtl.verifyLayers(context.TODO())
+		r.NoError(err)
+		r.Equal(int(l2ID), int(alg.trtl.Verified))
+	})
+
+	t.Run("self-healing", func(t *testing.T) {
+		// test self-healing: self-healing can verify layers that are stuck for specific reasons, i.e., where local and
+		// global opinion differ (or local opinion is missing).
+		alg.trtl.Hdist = 1
+
+		// add more votes in favor of l3 blocks
+		alg.trtl.BlockOpinionsByLayer[l4ID][l4Blocks[1].ID()] = l4Votes
+		alg.trtl.BlockOpinionsByLayer[l4ID][l4Blocks[2].ID()] = l4Votes
+		l5Votes := Opinion{BlockOpinions: map[types.BlockID]vec{
+			l2Blocks[0].ID(): support,
+			l2Blocks[1].ID(): support,
+			l2Blocks[2].ID(): support,
+			l3Blocks[0].ID(): support,
+			l3Blocks[1].ID(): support,
+			l3Blocks[2].ID(): support,
+			l4Blocks[0].ID(): support,
+			l4Blocks[1].ID(): support,
+			l4Blocks[2].ID(): support,
+		}}
+		alg.trtl.BlockOpinionsByLayer[l5ID] = map[types.BlockID]Opinion{
+			l5Blocks[0].ID(): l5Votes,
+			l5Blocks[1].ID(): l5Votes,
+			l5Blocks[2].ID(): l5Votes,
+		}
+		l6Votes := Opinion{BlockOpinions: map[types.BlockID]vec{
+			l2Blocks[0].ID(): support,
+			l2Blocks[1].ID(): support,
+			l2Blocks[2].ID(): support,
+			l3Blocks[0].ID(): support,
+			l3Blocks[1].ID(): support,
+			l3Blocks[2].ID(): support,
+			l4Blocks[0].ID(): support,
+			l4Blocks[1].ID(): support,
+			l4Blocks[2].ID(): support,
+			l5Blocks[0].ID(): support,
+			l5Blocks[1].ID(): support,
+			l5Blocks[2].ID(): support,
+		}}
+		alg.trtl.BlockOpinionsByLayer[l6ID] = map[types.BlockID]Opinion{
+			l6Blocks[0].ID(): l6Votes,
+			l6Blocks[1].ID(): l6Votes,
+			l6Blocks[2].ID(): l6Votes,
+		}
+
+		// simulate a layer that's before the oldLayerCutoff, but past Verified, that has no contextually valid blocks
+		// in the database. this should trigger self-healing.
+
+		// erase all good blocks data so the ordinary verifying tortoise can't count any votes. this should trigger
+		// self-healing which ignores local data, including the set of good blocks.
+		alg.trtl.GoodBlocksIndex = make(map[types.BlockID]struct{}, 0)
+
+		// self-healing should advance verification two steps, over the
+		// previously stuck layer (l3) and the following layer (l4) since it's old enough, then hand control back to the
+		// ordinary verifying tortoise which should continue and verify l5.
+		alg.trtl.Last = l4ID + alg.trtl.Hdist + 1
+		err = alg.trtl.verifyLayers(context.TODO())
+		r.NoError(err)
+		r.Equal(int(l5ID), int(alg.trtl.Verified))
+	})
 }
 
 func TestVoteVectorForLayer(t *testing.T) {

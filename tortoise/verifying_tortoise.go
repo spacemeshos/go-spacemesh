@@ -279,7 +279,6 @@ func (t *turtle) checkBlockAndGetInputVector(
 func (t *turtle) voteVectorForLayer(
 	candidateBlocks []types.BlockID, opinionVec []types.BlockID) (voteMap map[types.BlockID]vec) {
 	voteMap = make(map[types.BlockID]vec, len(candidateBlocks))
-	// LANE TODO: test nil input vs. empty map input here
 	if opinionVec == nil {
 		// nil means abstain, i.e., we have no opinion on blocks in this layer
 		for _, b := range candidateBlocks {
@@ -662,7 +661,7 @@ func (t *turtle) handleLayerBlocks(ctx context.Context, layerID types.LayerID) e
 func (t *turtle) verifyLayers(ctx context.Context) error {
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.FieldNamed("verification_target", t.Last),
-		log.FieldNamed("prev_verified", t.Verified))
+		log.FieldNamed("old_verified", t.Verified))
 	logger.Info("starting layer verification")
 
 	// we perform eviction here because it should happen after the verified layer advances
@@ -835,7 +834,7 @@ func (t *turtle) layerCutoff() types.LayerID {
 }
 
 // return the set of blocks we currently consider valid for the layer. factors in both local and global opinion,
-// depending how old the layer is.
+// depending how old the layer is, and also uses weak coin to break ties.
 func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) ([]types.BlockID, error) {
 	logger := t.logger.WithContext(ctx).WithFields(layerID)
 	var voteAbstain, voteAgainstAll []types.BlockID // nil slice, by default
