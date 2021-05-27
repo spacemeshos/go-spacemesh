@@ -193,6 +193,11 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 	timer := timesync.RealClock{}
 	ticker = timesync.NewClock(timer, tick, timer.Now().Add(tick*-4), log.NewDefault("clock"))
 	syncs, p2ps = SyncMockFactoryManClock(number, conf, name, dbType, poetDb, ticker)
+	for _, syncer := range syncs {
+		if waitForPeers(syncer, number-1) == false {
+			panic("peers did not load")
+		}
+	}
 	ticker.StartNotifying()
 	return syncs, p2ps, ticker
 }
@@ -1363,10 +1368,11 @@ func (m *mockLayerValidator) ValidateLayer(lyr *types.Layer) {
 
 func TestSyncer_Synchronise(t *testing.T) {
 	r := require.New(t)
-	types.SetLayersPerEpoch(3)
+	types.SetLayersPerEpoch(1)
 	syncs, _, clock := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
-	defer clock.Close()
+	clock.Close()
 	sync := syncs[0]
+	sync.ticker = &mockClock{Layer: 1}
 	defer sync.Close()
 	defer syncs[1].Close()
 	lv := &mockLayerValidator{0, 0, 0, nil, nil}
@@ -1461,20 +1467,24 @@ func TestSyncer_ListenToGossip(t *testing.T) {
 	r.False(sync.gossipSynced == done)
 	assert.False(t, sync.ListenToGossip())
 
-	retries := 10
-	for len(sync.net.peers.GetPeers()) == 0 {
-		retries--
-		if retries == 0 {
-			r.Fail("peers didnt boot in time")
-			break
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
 	//run sync
 	sync.synchronise(context.TODO())
 
 	//check gossip open
 	assert.True(t, sync.ListenToGossip())
+}
+
+func waitForPeers(sync *Syncer, expectedNumOfPeers int) bool {
+	retries := 20
+	for len(sync.net.peers.GetPeers()) != expectedNumOfPeers {
+		retries--
+		if retries == 0 {
+			return false
+		}
+		log.Warning("sync doesn't have enough peers e: %v a: %v %p", expectedNumOfPeers, len(sync.net.peers.GetPeers()), sync)
+		time.Sleep(200 * time.Millisecond)
+	}
+	return true
 }
 
 func TestSyncer_handleNotSyncedFlow(t *testing.T) {
@@ -2106,7 +2116,6 @@ func TestSyncer_Await(t *testing.T) {
 	syncer.Mesh.Validator = lv
 	syncer.ticker = &mockClock{Layer: 1}
 	syncer.SetLatestLayer(1)
-
 	ch := syncer.Await()
 	r.False(closed(ch))
 
