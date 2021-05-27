@@ -380,8 +380,8 @@ func (t *turtle) calculateExceptions(
 	// We only look for and store exceptions within the sliding window set of layers as an optimization, but a block
 	// can contain exceptions from any layer, back to genesis.
 	startLayer := t.LastEvicted + 1
-	if startLayer <= types.GetEffectiveGenesis() {
-		startLayer = types.GetEffectiveGenesis().Add(1)
+	if startLayer < types.GetEffectiveGenesis() {
+		startLayer = types.GetEffectiveGenesis()
 	}
 	for layerID := startLayer; layerID <= t.Last; layerID++ {
 		logger := logger.WithFields(log.FieldNamed("diff_layer_id", layerID))
