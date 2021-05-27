@@ -310,12 +310,14 @@ func (s *Switch) Start(ctx context.Context) error {
 			}
 			//todo:maybe start listening only after we got enough outbound neighbors?
 			s.gossipErr = s.startNeighborhood(ctx) // non blocking
-			close(s.gossipC)
+
 			if s.gossipErr != nil {
+				close(s.gossipC)
 				s.Shutdown()
 				return
 			}
 			<-s.initial
+			close(s.gossipC)
 		}() // todo handle error async
 	}
 

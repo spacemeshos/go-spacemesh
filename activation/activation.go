@@ -20,7 +20,7 @@ import (
 // AtxProtocol is the protocol id for broadcasting atxs over gossip
 const AtxProtocol = "AtxGossip"
 
-var activesetCache = NewActivesetCache(1000)
+var totalWeightCache = NewTotalWeightCache(1000)
 
 type meshProvider interface {
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
@@ -35,7 +35,7 @@ type poetNumberOfTickProvider struct {
 }
 
 func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
-	return 0
+	return 1
 }
 
 type nipstBuilder interface {
@@ -48,13 +48,13 @@ type idStore interface {
 }
 
 type nipstValidator interface {
-	Validate(id signing.PublicKey, nipst *types.NIPST, expectedChallenge types.Hash32) error
+	Validate(minerID signing.PublicKey, nipst *types.NIPST, space uint64, expectedChallenge types.Hash32) error
 	VerifyPost(id signing.PublicKey, proof *types.PostProof, space uint64) error
 }
 
 type atxDBProvider interface {
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
-	CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochID) (uint32, error)
+	CalcTotalWeightFromView(view []types.BlockID, pubEpoch types.EpochID) (uint64, error)
 	GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error)
 	GetPosAtxID() (types.ATXID, error)
 	AwaitAtx(id types.ATXID) chan struct{}
@@ -88,7 +88,7 @@ type Config struct {
 
 // Builder struct is the struct that orchestrates the creation of activation transactions
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
-// calculate active set size and providing relevant view as proof
+// calculate total weight and providing relevant view as proof
 type Builder struct {
 	signer
 	accountLock     sync.RWMutex
@@ -111,6 +111,7 @@ type Builder struct {
 	syncer          syncer
 	initStatus      int32
 	initDone        chan struct{}
+	committedSpace  uint64
 	log             log.Log
 }
 
@@ -124,7 +125,7 @@ type syncer interface {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, nipstBuilder nipstBuilder, postProver PostProverClient, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
+func NewBuilder(conf Config, nodeID types.NodeID, spaceToCommit uint64, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipstBuilder nipstBuilder, postProver PostProverClient, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
 	return &Builder{
 		signer:          signer,
 		nodeID:          nodeID,
@@ -138,10 +139,11 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvide
 		postProver:      postProver,
 		layerClock:      layerClock,
 		stop:            make(chan struct{}),
-		syncer:          syncer,
 		store:           store,
+		syncer:          syncer,
 		initStatus:      InitIdle,
 		initDone:        make(chan struct{}),
+		committedSpace:  spaceToCommit,
 		log:             log,
 	}
 }
@@ -181,7 +183,7 @@ func (b *Builder) waitOrStop(ch chan struct{}) error {
 	case <-ch:
 		return nil
 	case <-b.stop:
-		return &StopRequestedError{}
+		return StopRequestedError{}
 	}
 }
 
@@ -208,34 +210,30 @@ func (b *Builder) loop(ctx context.Context) {
 			if _, stopRequested := err.(StopRequestedError); stopRequested {
 				return
 			}
+			currentLayer := b.layerClock.GetCurrentLayer()
+			b.log.With().Error("atx construction errored", log.Err(err), currentLayer, currentLayer.GetEpoch())
 			events.ReportAtxCreated(false, uint64(b.currentEpoch()), "")
 			select {
 			case <-b.stop:
 				return
-			case <-b.layerClock.AwaitLayer(b.layerClock.GetCurrentLayer() + 1):
+			case <-b.layerClock.AwaitLayer(currentLayer + 1):
 				continue
 			}
-
 		}
 	}
 }
 
-func (b *Builder) buildNipstChallenge(currentLayer types.LayerID) error {
+func (b *Builder) buildNipstChallenge() error {
 	<-b.syncer.Await()
 	challenge := &types.NIPSTChallenge{NodeID: b.nodeID}
-	if posAtx, err := b.GetPositioningAtx(); err != nil {
-		if b.currentEpoch() != 0 {
-			return fmt.Errorf("failed to get positioning ATX: %v", err)
-		}
-		challenge.EndTick = b.tickProvider.NumOfTicks()
-		challenge.PubLayerID = currentLayer.Add(b.layersPerEpoch)
-		challenge.PositioningATX = b.goldenATXID
-	} else {
-		challenge.PositioningATX = posAtx.ID()
-		challenge.PubLayerID = posAtx.PubLayerID.Add(b.layersPerEpoch)
-		challenge.StartTick = posAtx.EndTick
-		challenge.EndTick = posAtx.EndTick + b.tickProvider.NumOfTicks()
+	atxID, pubLayerID, endTick, err := b.GetPositioningAtxInfo()
+	if err != nil {
+		return fmt.Errorf("failed to get positioning ATX: %v", err)
 	}
+	challenge.PositioningATX = atxID
+	challenge.PubLayerID = pubLayerID.Add(b.layersPerEpoch)
+	challenge.StartTick = endTick
+	challenge.EndTick = endTick + b.tickProvider.NumOfTicks()
 	if prevAtx, err := b.GetPrevAtx(b.nodeID); err != nil {
 		challenge.CommitmentMerkleRoot = b.commitment.MerkleRoot
 	} else {
@@ -386,7 +384,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		b.log.With().Info("using existing atx challenge", b.currentEpoch())
 	} else {
 		b.log.With().Info("building new atx challenge", b.currentEpoch())
-		err := b.buildNipstChallenge(b.layerClock.GetCurrentLayer())
+		err := b.buildNipstChallenge()
 		if err != nil {
 			return err
 		}
@@ -429,16 +427,12 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		return err
 	}
 
-	var activeSetSize uint32
 	var commitment *types.PostProof
 	if b.challenge.PrevATXID == *types.EmptyATXID {
 		commitment = b.commitment
 	}
 
-	atx := types.NewActivationTx(*b.challenge, b.getCoinbaseAccount(), nipst, commitment)
-
-	b.log.With().Info("active ids seen for epoch", log.FieldNamed("atx_pub_epoch", pubEpoch),
-		log.Uint32("view_cnt", activeSetSize))
+	atx := types.NewActivationTx(*b.challenge, b.getCoinbaseAccount(), nipst, b.committedSpace, commitment)
 
 	atxReceived := b.db.AwaitAtx(atx.ID())
 	defer b.db.UnsubscribeAtx(atx.ID())
@@ -463,10 +457,10 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 			b.discardChallenge()
 			return fmt.Errorf("target epoch has passed")
 		case <-b.stop:
-			return &StopRequestedError{}
+			return StopRequestedError{}
 		}
 	case <-b.stop:
-		return &StopRequestedError{}
+		return StopRequestedError{}
 	}
 	b.discardChallenge()
 	return nil
@@ -497,14 +491,18 @@ func (b *Builder) signAndBroadcast(ctx context.Context, atx *types.ActivationTx)
 	return len(buf), nil
 }
 
-// GetPositioningAtx return the latest atx to be used as a positioning atx
-func (b *Builder) GetPositioningAtx() (*types.ActivationTxHeader, error) {
+// GetPositioningAtxInfo return the following details about the latest atx, to be used as a positioning atx:
+// 	atxID, pubLayerID, endTick
+func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, uint64, error) {
 	if id, err := b.db.GetPosAtxID(); err != nil {
-		return nil, fmt.Errorf("cannot find pos atx: %v", err)
+		return types.ATXID{}, 0, 0, fmt.Errorf("cannot find pos atx: %v", err)
+	} else if id == b.goldenATXID {
+		b.log.With().Info("using golden atx as positioning atx", id)
+		return id, 0, 0, nil
 	} else if atx, err := b.db.GetAtxHeader(id); err != nil {
-		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
+		return types.ATXID{}, 0, 0, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
 	} else {
-		return atx, nil
+		return id, atx.PubLayerID, atx.EndTick, nil
 	}
 }
 
