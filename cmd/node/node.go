@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	gsync "sync"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -820,17 +821,28 @@ func (app *SpacemeshApp) stopServices() {
 	// note: there is no guarantee that a listening go-routine will close before stopServices exits
 	close(app.term)
 
+	// in case grpc/http service shutdown routines block, we fire them off and wait
+	wg := gsync.WaitGroup{}
+
 	if app.jsonAPIService != nil {
-		log.Info("stopping json gateway service")
-		if err := app.jsonAPIService.Close(); err != nil {
-			log.With().Error("error stopping json gateway server", log.Err(err))
-		}
+		wg.Add(1)
+		go func() {
+			log.Info("stopping json gateway service")
+			if err := app.jsonAPIService.Close(); err != nil {
+				log.With().Error("error stopping json gateway server", log.Err(err))
+			}
+			wg.Done()
+		}()
 	}
 
 	if app.grpcAPIService != nil {
-		log.Info("stopping grpc service")
-		// does not return any errors
-		_ = app.grpcAPIService.Close()
+		wg.Add(1)
+		go func() {
+			log.Info("stopping grpc service")
+			// does not return any errors
+			_ = app.grpcAPIService.Close()
+			wg.Done()
+		}()
 	}
 
 	if app.blockProducer != nil {
@@ -892,6 +904,7 @@ func (app *SpacemeshApp) stopServices() {
 			closer.Close()
 		}
 	}
+	wg.Wait()
 }
 
 // LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists
