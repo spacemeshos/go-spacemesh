@@ -319,13 +319,13 @@ type inputVectorProvider func(l types.LayerID) ([]types.BlockID, error)
 func generateBlocks(l types.LayerID, n int, bbp baseBlockProvider) (blocks []*types.Block) {
 	fmt.Println("choosing base block for layer", l)
 	b, lists, err := bbp(context.TODO())
+	if err != nil {
+		panic(fmt.Sprint("no base block for layer: ", err))
+	}
 	fmt.Println("the base block for layer", l, "is", b, ". exception lists:")
 	fmt.Println("\tagainst\t", lists[0])
 	fmt.Println("\tfor\t", lists[1])
 	fmt.Println("\tneutral\t", lists[2])
-	if err != nil {
-		panic(fmt.Sprint("no base block for layer:", err))
-	}
 
 	for i := 0; i < n; i++ {
 		blk := &types.Block{
@@ -495,6 +495,7 @@ func TestRerunInterval(t *testing.T) {
 }
 
 func TestLayerOpinionVector(t *testing.T) {
+	log.DebugMode(true)
 	r := require.New(t)
 	mdb := getPersistentMesh(t)
 	alg := defaultAlgorithm(t, mdb)
@@ -534,18 +535,39 @@ func TestLayerOpinionVector(t *testing.T) {
 	r.Nil(opinionVec)
 
 	// same layer in mesh, but no contextual validity info
+	// expect error about missing weak coin
+	alg.trtl.Last = l0.Index()
+	l1 := createTurtleLayer(l1ID, mdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
+	for _, b := range l1.Blocks() {
+		r.NoError(mdb.AddBlock(b))
+	}
+	alg.trtl.Last = l1ID
 	l2 := createTurtleLayer(l2ID, mdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
 	for _, b := range l2.Blocks() {
 		r.NoError(mdb.AddBlock(b))
 	}
+	alg.trtl.Last = types.LayerID(defaultTestHdist) + l2ID.Add(1)
+	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
+	r.Contains(err.Error(), errstrNoCoinflip)
+	r.Nil(opinionVec)
+
+	// coinflip true: expect support for all layer blocks
+	mdb.RecordCoinflip(context.TODO(), alg.trtl.Last, true)
+	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
+	r.NoError(err)
+	r.Equal(l2.Hash(), types.CalcBlocksHash32(types.SortBlockIDs(opinionVec), nil))
+
+	// coinflip false: expect vote against all blocks in layer
+	mdb.RecordCoinflip(context.TODO(), alg.trtl.Last, false)
 	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
 	r.NoError(err)
 	r.Equal(make([]types.BlockID, 0, 0), opinionVec)
 
-	// otherwise, we expect the set of contextually valid blocks
+	// for a verified layer, we expect the set of contextually valid blocks
 	for _, b := range l2.Blocks() {
 		r.NoError(mdb.SaveContextualValidity(b.ID(), l2ID, true))
 	}
+	alg.trtl.Verified = l2ID
 	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
 	r.NoError(err)
 	// this is the easiest way to compare a set of blockIDs

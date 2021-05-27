@@ -58,10 +58,13 @@ func (a vec) String() string {
 }
 
 func calculateOpinionWithThreshold(logger log.Log, v vec, layerSize int, theta uint8, delta float64) vec {
-	threshold := float64(theta/100) * delta * float64(layerSize)
+	threshold := float64(theta) / 100 * delta * float64(layerSize)
 	netVote := float64(v[0] - v[1])
-	logger.With().Debug("global opinion",
+	logger.With().Debug("threshold opinion",
 		v,
+		log.Int("theta", int(theta)),
+		log.Int("layer_size", layerSize),
+		log.String("delta", fmt.Sprint(delta)),
 		log.String("threshold", fmt.Sprint(threshold)),
 		log.String("net_vote", fmt.Sprint(netVote)))
 	if netVote > threshold {

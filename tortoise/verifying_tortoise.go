@@ -850,8 +850,9 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 			// and see if they pass the local threshold. if not, use the current weak coin instead to determine our vote for
 			// the blocks in the layer.
 			// TODO: do we need to/can we somehow cache this?
-			logger.Info("counting votes for and against blocks in old, unverified layer")
 			layerBlockIds, err := t.bdp.LayerBlockIds(layerID)
+			logger.With().Info("counting votes for and against blocks in old, unverified layer",
+				log.Int("num_blocks", len(layerBlockIds)))
 			if err != nil {
 				return nil, err
 			}
@@ -860,8 +861,8 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 				logger := logger.WithFields(log.FieldNamed("candidate_block_id", blockID))
 				sum := t.sumVotesForBlock(ctx, blockID, layerID+1, func(id types.BlockID) bool { return true })
 				localOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.AvgLayerSize, t.LocalThreshold, 1)
-				logger.Debug("local opinion on block in old layer",
-					log.FieldNamed("vote_vec", sum),
+				logger.With().Debug("local opinion on block in old layer",
+					sum,
 					log.FieldNamed("local_opinion", localOpinionOnBlock))
 				if localOpinionOnBlock == support {
 					layerBlocks[blockID] = struct{}{}
@@ -871,7 +872,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 					// weak coin
 					// TODO: finalize which layer we read the coinflip for
 					if coin, exists := t.bdp.GetCoinflip(ctx, t.Last); exists {
-						logger.Info("rescoring all blocks in old layer using weak coin",
+						logger.With().Info("rescoring all blocks in old layer using weak coin",
 							log.Int("count", len(layerBlockIds)),
 							log.Bool("coinflip", coin))
 						if coin {
@@ -881,7 +882,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 						// tails on the weak coin means vote against all blocks in the layer
 						return voteAgainstAll, nil
 					}
-					return nil, fmt.Errorf("%s %v", errstrNoCoinflip, layerID)
+					return nil, fmt.Errorf("%s %v", errstrNoCoinflip, t.Last)
 				} // (nothing to do if local opinion is against, just don't include block in output)
 			}
 			logger.With().Debug("local opinion supports blocks in old, unverified layer",
@@ -910,7 +911,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 		} else if t.Last > t.Zdist && layerID < t.Last-t.Zdist {
 			// Layer has passed the Hare abort distance threshold, so we give up waiting for Hare results. At this point
 			// our opinion on this layer is that we vote against blocks (i.e., we support an empty layer).
-			logger.With().Debug("local opinion on layer older than hare abort window is against all blocks",
+			logger.With().Debug("local opinion on layer beyond hare abort window is against all blocks",
 				log.Err(err))
 			return voteAgainstAll, nil
 		} else {
