@@ -8,7 +8,7 @@
 data-folder = "~/.spacemesh-data"
 test-mode = false
 metrics = false
-metrics-port = 2020
+metrics-port = 12020
 oracle_server = "http://localhost:3030"
 oracle_server_worldid = 0
 genesis-time = "2019-02-13T17:02:00+00:00"
@@ -21,7 +21,7 @@ golden-atx = "0x5678"
 [p2p]
 security-param = 20
 fast-sync = true
-tcp-port = 7513
+tcp-port = 17513
 node-id = ""
 new-node= false
 dial-timeout = "1m"
@@ -47,8 +47,8 @@ bootnodes = [] # example : spacemesh://j7qWfWaJRVp25ZsnCu9rJ4PmhigZBtesB4YmQHqqP
 [api]
 grpc-server = true
 json-server = true
-grpc-port = 9092
-json-port = 9093
+grpc-port = 19092
+json-port = 19093
 
 # Time sync NTP Config
 [time]
@@ -59,8 +59,8 @@ default-timeout-latency = "10s"
 # Hare Config
 [hare]
 hare-round-duration-sec = "5"
-hare-committee-size = 10
-hare-max-adversaries = 5
+hare-committee-size = 800
+hare-max-adversaries = 399
 hare-wakeup-delta = 5
 
 [logging]
@@ -71,10 +71,8 @@ state = "info"
 atxDbStore = "info"
 poetDbStore = "info"
 store = "info"
-poetDb = "info"
 meshDb = "info"
 trtl = "info"
-atxDb = "info"
 block-eligibility = "info"
 mesh = "info"
 sync = "info"

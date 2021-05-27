@@ -126,7 +126,7 @@ func (clk *ManualClock) GetGenesisTime() time.Time {
 // Close does nothing because this clock is manual
 func (clk *ManualClock) Close() {}
 
-func getTestDefaultConfig() *config.Config {
+func getTestDefaultConfig(numOfInstances int) *config.Config {
 	cfg, err := LoadConfigFromFile()
 	if err != nil {
 		log.Error("cannot load config from file")
@@ -138,6 +138,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.POST.NumProvenLabels = 10
 	cfg.POST.SpacePerUnit = 1 << 10 // 1KB.
 	cfg.POST.NumFiles = 1
+	cfg.GenesisTotalWeight = cfg.POST.SpacePerUnit * uint64(numOfInstances) // * 1 PoET ticks
 
 	cfg.HARE.N = 5
 	cfg.HARE.F = 2
@@ -179,6 +180,7 @@ func ActivateGrpcServer(smApp *SpacemeshApp) {
 	smApp.Config.API.StartGatewayService = true
 	smApp.Config.API.StartGlobalStateService = true
 	smApp.Config.API.StartTransactionService = true
+	smApp.Config.API.GrpcServerPort = 9094
 	smApp.grpcAPIService = grpcserver.NewServerWithInterface(smApp.Config.API.GrpcServerPort, smApp.Config.API.GrpcServerInterface)
 	smApp.gatewaySvc = grpcserver.NewGatewayService(smApp.P2P)
 	smApp.globalstateSvc = grpcserver.NewGlobalStateService(smApp.mesh, smApp.txPool)
@@ -218,6 +220,7 @@ type network interface {
 func InitSingleInstance(cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network) (*SpacemeshApp, error) {
 	smApp := NewSpacemeshApp()
 	smApp.Config = &cfg
+	smApp.Config.SpaceToCommit = smApp.Config.POST.SpacePerUnit << (i % 5)
 	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
 	smApp.Config.GenesisTime = genesisTime
 	edSgn := signing.NewEdSigner()
@@ -250,10 +253,9 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, storePath 
 
 // StartMultiNode Starts the run of a number of nodes, running in process consensus between them.
 // this also runs a single transaction between the nodes.
-func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPath string) {
-	cfg := getTestDefaultConfig()
+func StartMultiNode(numOfInstances, layerAvgSize int, runTillLayer uint32, dbPath string) {
+	cfg := getTestDefaultConfig(numOfInstances)
 	cfg.LayerAvgSize = layerAvgSize
-	numOfInstances := numOfinstances
 	net := service.NewSimulator()
 	path := dbPath + time.Now().Format(time.RFC3339)
 
@@ -335,7 +337,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 		}
 	}()
 
-	if err := poetHarness.Start([]string{"127.0.0.1:9092"}); err != nil {
+	if err := poetHarness.Start([]string{"127.0.0.1:9094"}); err != nil {
 		log.Panic("failed to start poet server: %v", err)
 	}
 
