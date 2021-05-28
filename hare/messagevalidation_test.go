@@ -109,12 +109,14 @@ func TestMessageValidator_IsStructureValid(t *testing.T) {
 	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
 	m.PubKey = generateSigning(t).PublicKey()
 	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
+
+	// empty set is allowed now
 	m.InnerMsg = &innerMessage{}
-	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
+	assert.True(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
 	m.InnerMsg.Values = nil
-	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
+	assert.True(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
 	m.InnerMsg.Values = NewDefaultEmptySet().ToSlice()
-	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
+	assert.True(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
 }
 
 type mockValidator struct {
@@ -166,7 +168,7 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	msgs[0].Sig = tmp
 	inner := msgs[0].InnerMsg.Values
 	msgs[0].InnerMsg.Values = nil
-	r.Equal(errInnerSyntax, validator.validateAggregatedMessage(context.TODO(), agg, funcs))
+	//r.Equal(errInnerSyntax, validator.validateAggregatedMessage(context.TODO(), agg, funcs))
 
 	msgs[0].InnerMsg.Values = inner
 	validator.roleValidator = &mockValidator{}
@@ -290,7 +292,7 @@ func (pg pubGetter) PublicKey(m *Message) *signing.PublicKey {
 func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
 	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, truer{}, newPubGetter(), log.NewDefault("Validator"))
 	m := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
-	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
+	assert.True(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
 	m = BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
 	assert.True(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
 }
