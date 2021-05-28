@@ -4,6 +4,7 @@ import re
 import time
 from collections import defaultdict
 from datetime import datetime
+from typing import Dict, List
 
 from elasticsearch_dsl import Search, Q
 
@@ -210,7 +211,7 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
     return s
 
 
-atx = collections.namedtuple('atx', ['atx_id', 'layer_id', 'published_in_epoch', 'timestamp'])
+Atx = collections.namedtuple('atx', ['atx_id', 'layer_id', 'published_in_epoch', 'timestamp', 'weight', 'node_id'])
 
 
 # TODO this can be a util function
@@ -218,7 +219,7 @@ def parseAtx(log_messages):
     node2blocks = {}
     for log in log_messages:
         nid = re.split(r'\.', log.N)[0]
-        matched_atx = atx(log.atx_id, log.layer_id, log.epoch_id, log.T)
+        matched_atx = Atx(log.atx_id, log.layer_id, log.epoch_id, log.T, log.weight, log.node_id)
         if nid in node2blocks:
             node2blocks[nid].append(matched_atx)
         else:
@@ -298,12 +299,41 @@ def node_published_atx(deployment, node_id, epoch_id):
     return len(output) != 0
 
 
-def get_atx_per_node(deployment):
+def get_atx_per_node(deployment) -> Dict[str, List[Atx]]:
     block_fields = {"M": "atx published"}
     atx_logs = query_message(current_index, deployment, deployment, block_fields, True)
     print("found " + str(len(atx_logs)) + " atxs")
     nodes = parseAtx(atx_logs)
     return nodes
+
+
+def get_atxs(deployment) -> List[Atx]:
+    # based on log: atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v,
+    # published in epoch: %v, active set: %v miner: %v view %v
+    atx_filter = {"M": "atx published"}
+    atx_logs = query_message(current_index, deployment, deployment, atx_filter, True)
+    print(f"found {len(atx_logs)} atxs")
+
+    atxs = []
+    for log in atx_logs:
+        atxs.append(Atx(log.atx_id, log.layer_id, log.epoch_id, log.T, log.weight, log.node_id))
+    return atxs
+
+
+Block = collections.namedtuple("Block", ("node_id", "block_id", "layer_id", "epoch_id", "atx_id"))
+
+
+def get_blocks(deployment) -> List[Block]:
+    # based on log: atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v,
+    # published in epoch: %v, active set: %v miner: %v view %v
+    blocks_filter = {"M": CREATED_BLOCK_MSG}
+    block_logs = query_message(current_index, deployment, deployment, blocks_filter, True)
+    print(f"found {len(block_logs)} blocks")
+
+    blocks = []
+    for log in block_logs:
+        blocks.append(Block(log.node_id, log.block_id, log.layer_id, log.epoch_id, log.atx_id))
+    return blocks
 
 
 def get_nodes_up(deployment):

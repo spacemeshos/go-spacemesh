@@ -28,9 +28,9 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVarP(&multiConfig.BlocksPerLayer, "blocks", "b",
 		10, "blocks per layer")
 	cmd.PersistentFlags().IntVarP(&multiConfig.NumberOfNodes, "nodes", "n",
-		10, "number of nodes")
+		5, "number of nodes")
 	cmd.PersistentFlags().Uint32VarP(&multiConfig.RunUntilLayer, "layer", "l",
-		10, "run until layer")
+		50, "run until layer")
 }
 
 // Cmd is node simulator cmd

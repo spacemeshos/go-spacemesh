@@ -87,7 +87,11 @@ type BaseConfig struct {
 
 	GenesisConfPath string `mapstructure:"genesis-conf"`
 
+	GenesisTotalWeight uint64 `mapstructure:"genesis-total-weight"` // the total weight for genesis
+
 	CoinbaseAccount string `mapstructure:"coinbase"`
+
+	SpaceToCommit uint64 `mapstructure:"space-to-commit"` // Number of bytes to commit to mining
 
 	GoldenATXID string `mapstructure:"golden-atx"`
 
@@ -156,6 +160,15 @@ func DefaultConfig() Config {
 	}
 }
 
+// DefaultTestConfig returns the default config for tests.
+func DefaultTestConfig() Config {
+	conf := DefaultConfig()
+	conf.BaseConfig = defaultTestConfig()
+	conf.P2P = p2pConfig.DefaultTestConfig()
+	conf.API = apiConfig.DefaultTestConfig()
+	return conf
+}
+
 // DefaultBaseConfig returns a default configuration for spacemesh
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
@@ -177,9 +190,10 @@ func defaultBaseConfig() BaseConfig {
 		Zdist:               5,
 		ConfidenceParam:     5,
 		WindowSize:          100, // should be "a few thousand layers" in production
-		GlobalThreshold:     60, // in percentage terms, must be in interval [0, 100]
-		LocalThreshold:      20, // in percentage terms, must be in interval [0, 100]
+		GlobalThreshold:     60,  // in percentage terms, must be in interval [0, 100]
+		LocalThreshold:      20,  // in percentage terms, must be in interval [0, 100]
 		GenesisActiveSet:    5,
+		GenesisTotalWeight:  5 * 1024 * 1, // 5 miners * 1024 byte PoST * 1 PoET ticks
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,
@@ -187,6 +201,12 @@ func defaultBaseConfig() BaseConfig {
 		AtxsPerBlock:        100,
 		TxsPerBlock:         100,
 	}
+}
+
+func defaultTestConfig() BaseConfig {
+	conf := defaultBaseConfig()
+	conf.MetricsPort += 10000
+	return conf
 }
 
 // LoadConfig load the config file
