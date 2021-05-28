@@ -79,7 +79,7 @@ type syncer interface {
 
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
-	Smeshing() bool
+	Status() SmeshingStatus
 	StartSmeshing(coinbase types.Address, opts *PostInitOpts) error
 	StopSmeshing(deleteFiles bool) error
 	SmesherID() types.NodeID
@@ -98,6 +98,14 @@ type Config struct {
 	GoldenATXID     types.ATXID
 	LayersPerEpoch  uint16
 }
+
+type SmeshingStatus int32
+
+const (
+	SmeshingStatusIdle SmeshingStatus = iota
+	SmeshingStatusCreatingPostData
+	SmeshingStatusActive
+)
 
 // Builder struct is the struct that orchestrates the creation of activation transactions
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
@@ -119,7 +127,7 @@ type Builder struct {
 	initialPoST     *types.PoST
 	layerClock      layerClock
 	stop            chan struct{}
-	started         bool
+	status          SmeshingStatus
 	mtx             sync.Mutex
 	store           bytesStore
 	syncer          syncer
@@ -145,15 +153,16 @@ func NewBuilder(cfg Config, nodeID types.NodeID, signer signer, db atxDBProvider
 		syncer:          syncer,
 		store:           store,
 		log:             log,
+		status:          SmeshingStatusIdle,
 	}
 }
 
 // Smeshing returns true iff atx builder started.
-func (b *Builder) Smeshing() bool {
+func (b *Builder) Status() SmeshingStatus {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 
-	return b.started
+	return b.status
 }
 
 // StartSmeshing is the main entry point of the atx builder.
@@ -163,27 +172,32 @@ func (b *Builder) Smeshing() bool {
 // after initial setup, is supported.
 func (b *Builder) StartSmeshing(coinbase types.Address, opts *PostInitOpts) error {
 	b.mtx.Lock()
-	defer b.mtx.Unlock()
-
-	if b.started {
+	if b.status != SmeshingStatusIdle {
+		b.mtx.Unlock()
 		return errors.New("already started")
 	}
 	b.stop = make(chan struct{})
+	b.status = SmeshingStatusCreatingPostData
+	b.mtx.Unlock()
 
-	//if _, ok := b.postProvider.InitCompleted(); !ok {
 	doneChan, err := b.postProvider.CreatePostData(opts)
 	if err != nil {
+		b.status = SmeshingStatusIdle
 		return fmt.Errorf("failed to start creating post data: %v", err)
 	}
-	<-doneChan
 
-	if _, ok := b.postProvider.InitCompleted(); !ok {
-		return fmt.Errorf("failed to create post data: %v", b.postProvider.LastErr())
-	}
-	//}
+	go func() {
+		<-doneChan
+		if _, ok := b.postProvider.InitCompleted(); !ok {
+			b.status = SmeshingStatusIdle
+			b.log.Error("failed to create post data: %v", b.postProvider.LastErr())
+			return
+		}
 
-	b.started = true
-	go b.loop()
+		b.status = SmeshingStatusActive
+		go b.loop()
+	}()
+
 	return nil
 }
 
@@ -192,7 +206,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 
-	if b.started == false {
+	if b.status == SmeshingStatusIdle {
 		return errors.New("not started")
 	}
 
@@ -201,7 +215,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	}
 
 	close(b.stop)
-	b.started = false
+	b.status = SmeshingStatusIdle
 
 	return nil
 }
@@ -244,7 +258,7 @@ func (b *Builder) loop() {
 	b.initialPoST, _, err = b.postProvider.GenerateProof(shared.ZeroChallenge)
 	if err != nil {
 		b.log.Error("PoST execution failed: %v", err)
-		b.started = false
+		b.status = SmeshingStatusIdle
 		return
 	}
 
@@ -408,7 +422,7 @@ func (b *Builder) PublishActivationTx() error {
 		initialPoST = b.initialPoST
 	}
 
-	atx := types.NewActivationTx(*b.challenge, b.Coinbase(), nipost, b.postProvider.Config().NumUnits, initialPoST)
+	atx := types.NewActivationTx(*b.challenge, b.Coinbase(), nipost, b.postProvider.LastOpts().NumUnits, initialPoST)
 
 	atxReceived := b.db.AwaitAtx(atx.ID())
 	defer b.db.UnsubscribeAtx(atx.ID())

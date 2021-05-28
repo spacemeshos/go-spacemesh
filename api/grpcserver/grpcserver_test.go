@@ -374,8 +374,8 @@ type PostAPIMock struct{}
 // A compile time check to ensure that PostAPIMock fully implements the PostAPI interface.
 var _ api.PostAPI = (*PostAPIMock)(nil)
 
-func (*PostAPIMock) PostStatus() (*activation.PostStatus, error) {
-	return &activation.PostStatus{}, nil
+func (*PostAPIMock) PostStatus() (*activation.SessionStatus, error) {
+	return &activation.SessionStatus{}, nil
 }
 
 func (*PostAPIMock) PostComputeProviders() []initialization.ComputeProvider {
@@ -390,9 +390,9 @@ func (*PostAPIMock) StopPostDataCreationSession(bool) error {
 	return nil
 }
 
-func (*PostAPIMock) PostDataCreationProgressStream() <-chan *activation.PostStatus {
-	c := make(chan *activation.PostStatus, 1)
-	c <- &activation.PostStatus{}
+func (*PostAPIMock) PostDataCreationProgressStream() <-chan *activation.SessionStatus {
+	c := make(chan *activation.SessionStatus, 1)
+	c <- &activation.SessionStatus{}
 	close(c)
 	return c
 }

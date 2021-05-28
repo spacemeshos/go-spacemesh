@@ -32,7 +32,7 @@ type postProviderMock struct {
 // A compile time check to ensure that postProviderMock fully implements the PostProvider interface.
 var _ PostProvider = (*postProviderMock)(nil)
 
-func (p *postProviderMock) PostStatus() (*PostStatus, error) {
+func (p *postProviderMock) PostStatus() (*SessionStatus, error) {
 	return nil, nil
 }
 
@@ -48,7 +48,7 @@ func (p *postProviderMock) StopPostDataCreationSession(deleteFiles bool) error {
 	return nil
 }
 
-func (p *postProviderMock) PostDataCreationProgressStream() <-chan *PostStatus {
+func (p *postProviderMock) PostDataCreationProgressStream() <-chan *SessionStatus {
 	return nil
 }
 

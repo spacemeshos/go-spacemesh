@@ -33,10 +33,21 @@ func NewSmesherService(post api.PostAPI, smeshing api.SmeshingAPI) *SmesherServi
 }
 
 // IsSmeshing reports whether the node is smeshing
-func (s SmesherService) IsSmeshing(context.Context, *empty.Empty) (*pb.IsSmeshingResponse, error) {
-	log.Info("GRPC SmesherService.IsSmeshing")
+func (s SmesherService) SmeshingStatus(context.Context, *empty.Empty) (*pb.SmeshingStatusResponse, error) {
+	log.Info("GRPC SmesherService.SmeshingStatus")
 
-	return &pb.IsSmeshingResponse{IsSmeshing: s.smeshing.Smeshing()}, nil
+	res := &pb.SmeshingStatusResponse{}
+
+	switch s.smeshing.Status() {
+	case activation.SmeshingStatusIdle:
+		res.Status = pb.SmeshingStatusResponse_SMESHING_STATUS_IDLE
+	case activation.SmeshingStatusCreatingPostData:
+		res.Status = pb.SmeshingStatusResponse_SMESHING_STATUS_CREATING_POST_DATA
+	case activation.SmeshingStatusActive:
+		res.Status = pb.SmeshingStatusResponse_SMESHING_STATUS_ACTIVE
+	}
+
+	return res, nil
 }
 
 // StartSmeshing requests that the node begin smeshing
@@ -99,7 +110,7 @@ func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingReq
 }
 
 // PostComputeProviders returns a list of available post compute providers
-func (s SmesherService) PostComputeProviders(context.Context, *empty.Empty) (*pb.PostComputeProvidersResponse, error) {
+func (s SmesherService) PostComputeProviders(ctx context.Context, in *pb.PostComputeProvidersRequest) (*pb.PostComputeProvidersResponse, error) {
 	log.Info("GRPC SmesherService.PostComputeProviders")
 
 	providers := s.post.PostComputeProviders()
@@ -107,17 +118,21 @@ func (s SmesherService) PostComputeProviders(context.Context, *empty.Empty) (*pb
 	res := &pb.PostComputeProvidersResponse{}
 	res.PostComputeProvider = make([]*pb.PostComputeProvider, len(providers))
 	for i, p := range providers {
-		hs, err := p.Benchmark()
-		if err != nil {
-			log.Error("failed to benchmark provider: %v", err)
-			return nil, status.Error(codes.Internal, "failed to benchmark provider")
+		var hashesPerSec int
+		if in.Benchmark {
+			var err error
+			hashesPerSec, err = p.Benchmark()
+			if err != nil {
+				log.Error("failed to benchmark provider: %v", err)
+				return nil, status.Error(codes.Internal, "failed to benchmark provider")
+			}
 		}
 
 		res.PostComputeProvider[i] = &pb.PostComputeProvider{
 			Id:          uint32(p.ID),
 			Model:       p.Model,
 			ComputeApi:  pb.ComputeApiClass(p.ComputeAPI), // assuming enum values match.
-			Performance: uint64(hs),
+			Performance: uint64(hashesPerSec),
 		}
 	}
 
@@ -127,6 +142,10 @@ func (s SmesherService) PostComputeProviders(context.Context, *empty.Empty) (*pb
 // PostDataCreationProgressStream exposes a stream of updates during post init
 func (s SmesherService) PostDataCreationProgressStream(_ *empty.Empty, stream pb.SmesherService_PostDataCreationProgressStreamServer) error {
 	log.Info("GRPC SmesherService.PostDataCreationProgressStream")
+
+	if initStatus := s.post.InitStatus(); initStatus != activation.StatusInProgress {
+		return status.Errorf(codes.FailedPrecondition, "no post data creation session is in progress")
+	}
 
 	statusChan := s.post.PostDataCreationProgressStream()
 	for {
@@ -142,6 +161,7 @@ func (s SmesherService) PostDataCreationProgressStream(_ *empty.Empty, stream pb
 			return nil
 		}
 	}
+
 }
 
 // SmesherID returns the smesher ID of this node
@@ -208,19 +228,16 @@ func (s SmesherService) Config(context.Context, *empty.Empty) (*pb.ConfigRespons
 	}, nil
 }
 
-func statusToPbStatus(status *activation.PostStatus) *pb.PostStatus {
-	pbStatus := &pb.PostStatus{}
-	pbStatus.InitInProgress = status.InitInProgress
-	pbStatus.LabelsWritten = status.NumLabelsWritten
-	pbStatus.ErrorType = pb.PostStatus_ErrorType(status.ErrorType) // assuming enum values match.
-	pbStatus.ErrorMessage = status.ErrorMessage
-	if status.LastOpts != nil {
-		pbStatus.LastOpts = &pb.PostInitOpts{
-			DataDir:           status.LastOpts.DataDir,
-			NumUnits:          uint32(status.LastOpts.NumUnits),
-			NumFiles:          uint32(status.LastOpts.NumFiles),
-			ComputeProviderId: uint32(status.LastOpts.ComputeProviderID),
-			Throttle:          status.LastOpts.Throttle,
+func statusToPbStatus(status *activation.SessionStatus) *pb.SessionStatus {
+	pbStatus := &pb.SessionStatus{}
+	pbStatus.NumLabelsWritten = status.NumLabelsWritten
+	if status.SessionOpts != nil {
+		pbStatus.SessionOpts = &pb.PostInitOpts{
+			DataDir:           status.SessionOpts.DataDir,
+			NumUnits:          uint32(status.SessionOpts.NumUnits),
+			NumFiles:          uint32(status.SessionOpts.NumFiles),
+			ComputeProviderId: uint32(status.SessionOpts.ComputeProviderID),
+			Throttle:          status.SessionOpts.Throttle,
 		}
 	}
 	return pbStatus

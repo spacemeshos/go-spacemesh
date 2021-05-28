@@ -32,10 +32,10 @@ func TestPostManager(t *testing.T) {
 		ComputeProviderID: int(initialization.CPUProviderID()),
 	}
 
-	var lastStatus = &PostStatus{}
+	var lastStatus = &SessionStatus{}
 	go func() {
 		for status := range mgr.PostDataCreationProgressStream() {
-			req.Equal(opts, status.LastOpts)
+			req.Equal(opts, status.SessionOpts)
 			req.True(status.NumLabelsWritten > lastStatus.NumLabelsWritten)
 			req.Empty(status.ErrorMessage)
 			req.Empty(status.ErrorType)
@@ -98,7 +98,7 @@ func TestPostManager_InitialStatus(t *testing.T) {
 	_, err = mgr.PostStatus()
 	req.EqualError(err, errNotInitialized.Error())
 
-	var lastStatus = &PostStatus{}
+	var lastStatus = &SessionStatus{}
 	go func() {
 		for status := range mgr.PostDataCreationProgressStream() {
 			lastStatus = status
@@ -293,7 +293,7 @@ func TestPostManager_StopInProgress(t *testing.T) {
 	// Check an intermediate status.
 	status, err := mgr.PostStatus()
 	req.NoError(err)
-	req.Equal(opts, status.LastOpts)
+	req.Equal(opts, status.SessionOpts)
 	req.True(status.InitInProgress)
 	req.Equal(filesStatusPartial, status.FilesStatus)
 
@@ -310,7 +310,7 @@ func TestPostManager_StopInProgress(t *testing.T) {
 	// Check status after stop.
 	status, err = mgr.PostStatus()
 	req.NoError(err)
-	req.Equal(opts, status.LastOpts)
+	req.Equal(opts, status.SessionOpts)
 	req.False(status.InitInProgress)
 	req.Equal(filesStatusPartial, status.FilesStatus)
 	req.True(status.NumLabelsWritten > 0 && status.NumLabelsWritten < shared.DataSize(opts.NumLabels, cfg.LabelSize))

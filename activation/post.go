@@ -44,14 +44,15 @@ type PostInitOpts struct {
 
 // PostProvider defines the functionality required for the node's Smesher API.
 type PostProvider interface {
-	PostStatus() (*PostStatus, error)
 	PostComputeProviders() []initialization.ComputeProvider
 	CreatePostData(opts *PostInitOpts) (chan struct{}, error)
 	StopPostDataCreationSession(deleteFiles bool) error
-	PostDataCreationProgressStream() <-chan *PostStatus
+	PostDataCreationProgressStream() <-chan *SessionStatus
+	InitStatus() InitStatus
 	InitCompleted() (chan struct{}, bool)
 	GenerateProof(challenge []byte) (*types.PoST, *types.PoSTMetadata, error)
 	LastErr() error
+	LastOpts() *PostInitOpts
 	Config() config.Config
 }
 
@@ -68,7 +69,7 @@ type PostManager struct {
 	stopMtx       sync.Mutex
 	initStatusMtx sync.Mutex
 
-	initStatus        initStatus
+	initStatus        InitStatus
 	initCompletedChan chan struct{}
 
 	// init is the current initializer instance. It is being
@@ -87,12 +88,12 @@ type PostManager struct {
 	doneChan chan struct{}
 }
 
-type initStatus int32
+type InitStatus int32
 
 const (
-	statusIdle initStatus = iota
-	statusInProgress
-	statusCompleted
+	StatusIdle InitStatus = iota
+	StatusInProgress
+	StatusCompleted
 )
 
 type filesStatus int
@@ -112,14 +113,10 @@ const (
 	errorTypeFilesWriteError errorType = 3
 )
 
-// PostStatus indicates the a status regarding the post initialization.
-type PostStatus struct {
-	LastOpts         *PostInitOpts
-	FilesStatus      filesStatus
-	InitInProgress   bool
+// SessionStatus indicates the a status regarding the post data creation session.
+type SessionStatus struct {
+	SessionOpts      *PostInitOpts
 	NumLabelsWritten uint64
-	ErrorType        errorType
-	ErrorMessage     string
 }
 
 // NewPostManager creates a new instance of PostManager.
@@ -128,7 +125,7 @@ func NewPostManager(id []byte, cfg config.Config, logger log.Log) (*PostManager,
 		id:                id,
 		cfg:               cfg, // LabelBatchSize, LabelSize, K1 & K2 will be used, others are to be overridden when calling to CreateDataSession.
 		logger:            logger,
-		initStatus:        statusIdle,
+		initStatus:        StatusIdle,
 		initCompletedChan: make(chan struct{}),
 		startedChan:       make(chan struct{}),
 	}
@@ -144,7 +141,7 @@ func NewPostManager(id []byte, cfg config.Config, logger log.Log) (*PostManager,
 	//}
 	//
 	//if diskState.InitState == initialization.InitStateCompleted {
-	//	mgr.initStatus = statusCompleted
+	//	mgr.InitStatus = StatusCompleted
 	//	close(mgr.initCompletedChan)
 	//}
 
@@ -153,42 +150,6 @@ func NewPostManager(id []byte, cfg config.Config, logger log.Log) (*PostManager,
 
 var errNotInitialized = errors.New("not initialized")
 var errNotCompleted = errors.New("not completed")
-
-// PostStatus returns the node's post data status.
-func (mgr *PostManager) PostStatus() (*PostStatus, error) {
-	if mgr.init == nil {
-		return nil, errNotInitialized
-	}
-
-	numBytesWritten, err := mgr.init.NumBytesWritten()
-	if err != nil {
-		return nil, err
-	}
-	status := &PostStatus{}
-	status.LastOpts = mgr.lastOpts
-	status.NumLabelsWritten = numBytesWritten
-
-	if mgr.initStatus == statusInProgress {
-		status.FilesStatus = filesStatusPartial
-		status.InitInProgress = true
-		return status, nil
-	}
-
-	// MERGE-2 FIX -- NOT SPECIFYING FILES STATUS
-
-	//switch diskState.InitState {
-	//case initialization.InitStateNotStarted:
-	//	status.FilesStatus = filesStatusNotFound
-	//case initialization.InitStateCompleted:
-	//	status.FilesStatus = filesStatusCompleted
-	//case initialization.InitStateStopped:
-	//	status.FilesStatus = filesStatusPartial
-	//case initialization.InitStateCrashed:
-	//	status.FilesStatus = filesStatusPartial
-	//	status.ErrorMessage = "crashed"
-	//}
-	return status, nil
-}
 
 // PostComputeProviders returns a list of available compute providers for creating the post data.
 func (mgr *PostManager) PostComputeProviders() []initialization.ComputeProvider {
@@ -217,11 +178,11 @@ func (mgr *PostManager) BestProvider() (*initialization.ComputeProvider, error) 
 // after initial setup.
 func (mgr *PostManager) CreatePostData(opts *PostInitOpts) (chan struct{}, error) {
 	mgr.initStatusMtx.Lock()
-	if mgr.initStatus == statusInProgress {
+	if mgr.initStatus == StatusInProgress {
 		mgr.initStatusMtx.Unlock()
 		return nil, fmt.Errorf("data creation session in-progress")
 	}
-	if mgr.initStatus == statusCompleted {
+	if mgr.initStatus == StatusCompleted {
 		// Check whether the new request invalidates the current status.
 		var invalidate = opts.DataDir != mgr.lastOpts.DataDir || opts.NumUnits != mgr.lastOpts.NumUnits
 		if !invalidate {
@@ -231,23 +192,22 @@ func (mgr *PostManager) CreatePostData(opts *PostInitOpts) (chan struct{}, error
 		}
 		mgr.initCompletedChan = make(chan struct{})
 	}
-	mgr.initStatus = statusInProgress
+	mgr.initStatus = StatusInProgress
 	mgr.initStatusMtx.Unlock()
 
 	// Overriding the existing cfg with the new opts.
 	newCfg := mgr.cfg
 	newCfg.DataDir = opts.DataDir
-	newCfg.NumUnits = opts.NumUnits
 	newCfg.NumFiles = opts.NumFiles
 
 	newInit, err := initialization.NewInitializer(&newCfg, mgr.id)
 	if err != nil {
-		mgr.initStatus = statusIdle
+		mgr.initStatus = StatusIdle
 		return nil, err
 	}
 
 	//if err := newInit.VerifyNotCompleted(); err != nil {
-	//	mgr.initStatus = statusIdle
+	//	mgr.InitStatus = StatusIdle
 	//	return nil, err
 	//}
 
@@ -282,13 +242,13 @@ func (mgr *PostManager) CreatePostData(opts *PostInitOpts) (chan struct{}, error
 			log.String("bits_per_label", fmt.Sprintf("%d", mgr.cfg.BitsPerLabel)),
 		)
 
-		if err := newInit.Initialize(uint(opts.ComputeProviderID)); err != nil {
+		if err := newInit.Initialize(uint(opts.ComputeProviderID), opts.NumUnits); err != nil {
 			if err == initialization.ErrStopped {
 				mgr.logger.Info("PoST initialization stopped")
 			} else {
 				mgr.lastErr = err
 			}
-			mgr.initStatus = statusIdle
+			mgr.initStatus = StatusIdle
 			return
 		}
 
@@ -299,7 +259,7 @@ func (mgr *PostManager) CreatePostData(opts *PostInitOpts) (chan struct{}, error
 			log.String("bits_per_label", fmt.Sprintf("%d", mgr.cfg.BitsPerLabel)),
 		)
 
-		mgr.initStatus = statusCompleted
+		mgr.initStatus = StatusCompleted
 		close(mgr.initCompletedChan)
 	}()
 
@@ -308,33 +268,23 @@ func (mgr *PostManager) CreatePostData(opts *PostInitOpts) (chan struct{}, error
 
 // PostDataCreationProgressStream returns a stream of updates regarding
 // the current or the upcoming post data creation session.
-func (mgr *PostManager) PostDataCreationProgressStream() <-chan *PostStatus {
+func (mgr *PostManager) PostDataCreationProgressStream() <-chan *SessionStatus {
 	// Wait for session to start because only then the initializer instance
 	// used for retrieving the progress updates is already set.
 	<-mgr.startedChan
 
-	statusChan := make(chan *PostStatus, 1024)
+	statusChan := make(chan *SessionStatus, 1024)
 	go func() {
 		defer close(statusChan)
-		var firstStatus *PostStatus
-		for p := range mgr.init.Progress() {
-			// Retrieve the first status after init started.
-			if firstStatus == nil {
-				var err error
-				firstStatus, err = mgr.PostStatus()
-				if err != nil {
-					return
-				}
-			}
 
-			// Clone the first status and update relevant fields by using the chan updates.
-			status := *firstStatus
-			status.NumLabelsWritten = uint64(p * float64(mgr.lastOpts.NumUnits*mgr.cfg.LabelsPerUnit))
-			if int(p) == 1 {
-				status.FilesStatus = filesStatusCompleted
-				status.InitInProgress = false
-			}
+		initialStatus := new(SessionStatus)
+		initialStatus.SessionOpts = mgr.lastOpts
+		initialStatus.NumLabelsWritten = mgr.init.SessionNumLabelsWritten()
+		statusChan <- initialStatus
 
+		for numLabelsWritten := range mgr.init.SessionNumLabelsWrittenChan() {
+			status := *initialStatus
+			status.NumLabelsWritten = numLabelsWritten
 			statusChan <- &status
 		}
 	}()
@@ -348,7 +298,7 @@ func (mgr *PostManager) StopPostDataCreationSession(deleteFiles bool) error {
 	mgr.stopMtx.Lock()
 	defer mgr.stopMtx.Unlock()
 
-	if mgr.initStatus == statusInProgress {
+	if mgr.initStatus == StatusInProgress {
 		if err := mgr.init.Stop(); err != nil {
 			return err
 		}
@@ -362,7 +312,7 @@ func (mgr *PostManager) StopPostDataCreationSession(deleteFiles bool) error {
 			return err
 		}
 
-		mgr.initStatus = statusIdle
+		mgr.initStatus = StatusIdle
 		mgr.initCompletedChan = make(chan struct{})
 	}
 
@@ -371,12 +321,16 @@ func (mgr *PostManager) StopPostDataCreationSession(deleteFiles bool) error {
 
 // InitCompleted indicates whether the post init phase has been completed.
 func (mgr *PostManager) InitCompleted() (chan struct{}, bool) {
-	return mgr.initCompletedChan, mgr.initStatus == statusCompleted
+	return mgr.initCompletedChan, mgr.initStatus == StatusCompleted
+}
+
+func (mgr *PostManager) InitStatus() InitStatus {
+	return mgr.initStatus
 }
 
 // GenerateProof generates a new PoST.
 func (mgr *PostManager) GenerateProof(challenge []byte) (*types.PoST, *types.PoSTMetadata, error) {
-	if mgr.initStatus != statusCompleted {
+	if mgr.initStatus != StatusCompleted {
 		return nil, nil, errNotCompleted
 	}
 
@@ -387,8 +341,9 @@ func (mgr *PostManager) GenerateProof(challenge []byte) (*types.PoST, *types.PoS
 
 	prover.SetLogger(mgr.logger)
 	proof, proofMetadata, err := prover.GenerateProof(challenge)
-
-	p := (*types.PoST)(proof)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	m := new(types.PoSTMetadata)
 	m.Challenge = proofMetadata.Challenge
@@ -397,11 +352,17 @@ func (mgr *PostManager) GenerateProof(challenge []byte) (*types.PoST, *types.PoS
 	m.K1 = proofMetadata.K1
 	m.K2 = proofMetadata.K2
 
-	return p, m, err
+	p := (*types.PoST)(proof)
+
+	return p, m, nil
 }
 
 func (mgr *PostManager) LastErr() error {
 	return mgr.lastErr
+}
+
+func (mgr *PostManager) LastOpts() *PostInitOpts {
+	return mgr.lastOpts
 }
 
 func (mgr *PostManager) Config() config.Config {
