@@ -41,7 +41,7 @@ type Protocol struct {
 
 	peers peersManager
 
-	shutdown chan struct{}
+	shutdownCtx context.Context
 
 	oldMessageQ *types.DoubleCache
 
@@ -51,7 +51,7 @@ type Protocol struct {
 }
 
 // NewProtocol creates a new gossip protocol instance.
-func NewProtocol(config config.SwarmConfig, base baseNetwork, peersManager peersManager, localNodePubkey p2pcrypto.PublicKey, logger log.Log) *Protocol {
+func NewProtocol(ctx context.Context, config config.SwarmConfig, base baseNetwork, peersManager peersManager, localNodePubkey p2pcrypto.PublicKey, logger log.Log) *Protocol {
 	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
 	return &Protocol{
 		Log:             logger,
@@ -59,7 +59,7 @@ func NewProtocol(config config.SwarmConfig, base baseNetwork, peersManager peers
 		net:             base,
 		localNodePubkey: localNodePubkey,
 		peers:           peersManager,
-		shutdown:        make(chan struct{}),
+		shutdownCtx:     ctx,
 		oldMessageQ:     types.NewDoubleCache(oldMessageCacheSize), // todo : remember to drain this
 		propagateQ:      make(chan service.MessageValidation, propagateHandleBufferSize),
 		pq:              priorityq.New(propagateHandleBufferSize),
@@ -70,11 +70,6 @@ func NewProtocol(config config.SwarmConfig, base baseNetwork, peersManager peers
 // Start a loop that process peers events
 func (p *Protocol) Start(ctx context.Context) {
 	go p.propagationEventLoop(ctx) // TODO consider running several consumers
-}
-
-// Close stops all protocol routines.
-func (p *Protocol) Close() {
-	close(p.shutdown)
 }
 
 // Broadcast is the actual broadcast procedure - process the message internally and loop on peers and add the message to their queues
@@ -154,6 +149,9 @@ peerLoop:
 
 func (p *Protocol) handlePQ(ctx context.Context) {
 	for {
+		if p.isShuttingDown() {
+			return
+		}
 		mi, err := p.pq.Read()
 		if err != nil {
 			p.WithContext(ctx).With().Info("priority queue was closed, exiting", log.Err(err))
@@ -193,11 +191,23 @@ func (p *Protocol) getPriority(protoName string) priorityq.Priority {
 	return v
 }
 
+func (p *Protocol) isShuttingDown() bool {
+	select {
+	case <-p.shutdownCtx.Done():
+		return true
+	default:
+	}
+	return false
+}
+
 // pushes messages that passed validation into the priority queue
 func (p *Protocol) propagationEventLoop(ctx context.Context) {
 	go p.handlePQ(ctx)
 
 	for {
+		if p.isShuttingDown() {
+			return
+		}
 		select {
 		case msgV := <-p.propagateQ:
 			if err := p.pq.Write(p.getPriority(msgV.Protocol()), msgV); err != nil {
@@ -207,7 +217,7 @@ func (p *Protocol) propagationEventLoop(ctx context.Context) {
 			}
 			metrics.PropagationQueueLen.Set(float64(len(p.propagateQ)))
 
-		case <-p.shutdown:
+		case <-p.shutdownCtx.Done():
 			p.pq.Close()
 			p.WithContext(ctx).Error("propagate event loop stopped: protocol shutdown")
 			return

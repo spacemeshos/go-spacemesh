@@ -29,7 +29,7 @@ func TestNet_EnqueueMessage(t *testing.T) {
 	cfg := config.DefaultConfig()
 	ln, err := node.NewNodeIdentity()
 	assert.NoError(t, err)
-	n, err := NewNet(cfg, ln, log.NewDefault(t.Name()))
+	n, err := NewNet(context.TODO(), cfg, ln, log.NewDefault(t.Name()))
 	require.NoError(t, err)
 
 	var rndmtx sync.Mutex
@@ -129,7 +129,7 @@ func Test_Net_LimitedConnections(t *testing.T) {
 
 	ln, err := node.NewNodeIdentity()
 	require.NoError(t, err)
-	n, err := NewNet(cfg, ln, log.NewDefault(t.Name()))
+	n, err := NewNet(context.TODO(), cfg, ln, log.NewDefault(t.Name()))
 	//n.SubscribeOnNewRemoteConnections(counter)
 	require.NoError(t, err)
 	listener := newMockListener()
@@ -164,7 +164,7 @@ func TestHandlePreSessionIncomingMessage2(t *testing.T) {
 	bobsAliceConn := NewConnectionMock(aliceNode.PublicKey())
 	bobsAliceConn.Addr = &net.TCPAddr{IP: aliceNodeInfo.IP, Port: int(aliceNodeInfo.ProtocolPort)}
 
-	bobsNet, err := NewNet(config.DefaultConfig(), bobNode, log.NewDefault(t.Name()))
+	bobsNet, err := NewNet(context.TODO(), config.DefaultConfig(), bobNode, log.NewDefault(t.Name()))
 	r.NoError(err)
 	bobsNet.SubscribeOnNewRemoteConnections(func(event NewConnectionEvent) {
 		r.Equal(aliceNode.PublicKey().String(), event.Conn.Session().ID().String(), "wrong session received")
@@ -199,7 +199,7 @@ func TestMaxPendingConnections(t *testing.T) {
 
 	ln, err := node.NewNodeIdentity()
 	require.NoError(t, err)
-	n, err := NewNet(cfg, ln, log.NewDefault(t.Name()))
+	n, err := NewNet(context.TODO(), cfg, ln, log.NewDefault(t.Name()))
 	require.NoError(t, err)
 
 	// Create many new connections
