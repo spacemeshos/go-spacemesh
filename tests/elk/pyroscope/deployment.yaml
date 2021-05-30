@@ -5,35 +5,38 @@ metadata:
   labels:
     app: pyroscope
     heritage: Helm
-  creationTimestamp: null
 spec:
   replicas: 1
   selector:
     matchLabels:
-      name: pyroscope
-  strategy: {}
+      app: pyroscope
+  strategy:
+    type: Recreate
   template:
     metadata:
-      creationTimestamp: null
       labels:
-        name: pyroscope
+        app: pyroscope
     spec:
+      nodeSelector:
+        app: pyroscope
+      tolerations:
+        - key: "app"
+          operator: "Equal"
+          value: pyroscope
+          effect: "NoSchedule"
       containers:
-      - args:
-        - pyroscope server
-        command:
-        - /bin/sh
-        - -c
-        image: pyroscope/pyroscope:latest
-        name: pyroscope
-        ports:
-        - containerPort: 4040
-        resources:
-          limits:
-            cpu: "1"
-            memory: 2Gi
-          requests:
-            cpu: "1"
-            memory: 2Gi
+        - name: pyroscope
+          image: "pyroscope/pyroscope:latest"
+          imagePullPolicy: "IfNotPresent"
+          command: ["/bin/sh", "-c", "pyroscope server"]
+          ports:
+            - containerPort: 4040
+          resources:
+            limits:
+              cpu: "2"
+              memory: 4Gi
+            requests:
+              cpu: "2"
+              memory: 4Gi
 
 

@@ -53,6 +53,11 @@ def add_kibana_cluster(namespace):
     add_deployment_dir(namespace, conf.KIBANA_CONF_DIR)
 
 
+def add_pyroscope_cluster(namespace):
+    print("\nDeploying Pyroscope\n")
+    add_deployment_dir(namespace, conf.PYROSCOPE_CONF_DIR)
+
+
 def add_logstash_cluster(namespace):
     print("\nDeploying LogStash\n")
     add_deployment_dir(namespace, conf.LOGSTASH_CONF_DIR)
@@ -236,3 +241,30 @@ def wait_for_to_be_ready(obj_name, name, namespace, timeout=None):
         if timeout and total_sleep_time > timeout:
             raise Exception(f"Timeout waiting for {obj_name} to be ready")
 
+
+def get_external_ip(namespace, name, retry=3, interval=1):
+    # timeout is in seconds
+    print("Getting ip for {0} in namespace {1}".format(name, namespace))
+    k8s_client = client.CoreV1Api()
+    # list_namespaced_service sometimes gets stuck and return an empty result
+    # if not received namespaced services -> try again in {interval} time until reaching timeout
+    ip = None
+    while ip is None:
+        print("trying again")
+        services = None
+        while not services and retry:
+            services = k8s_client.list_namespaced_service(namespace=namespace)
+            if services:
+                break
+            print(f"k8s client failed to get active services in {namespace}, retrying in {interval}")
+            time.sleep(interval)
+            retry -= 1
+
+        for serv in services.items:
+            # Amit: following a bug - sometimes elasticsearch-master service will be returned before being assigned with
+            # an IP address, in that case run this function again recursively.
+            if serv.metadata.name != name:
+                continue
+            if serv.status.load_balancer.ingress:
+                ip = serv.status.load_balancer.ingress[0].ip
+    return ip

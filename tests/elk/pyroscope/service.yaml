@@ -7,12 +7,11 @@ metadata:
     heritage: Helm
   creationTimestamp: null
 spec:
+  type: LoadBalancer
   ports:
   - name: http
+    protocol: TCP
     port: 4040
     targetPort: 4040
   selector:
-    name: pyroscope
-  type: NodePort
-status:
-  loadBalancer: {}
+    app: pyroscope

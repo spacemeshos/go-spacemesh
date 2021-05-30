@@ -11,6 +11,7 @@ FILEBEAT_CONF_DIR = './elk/filebeat/'
 FLUENT_BIT_CONF_DIR = './elk/fluent-bit/'
 KIBANA_CONF_DIR = './elk/kibana/'
 LOGSTASH_CONF_DIR = './elk/logstash/'
+PYROSCOPE_CONF_DIR = './elk/pyroscope/'
 
 ES_USER_LOCAL = ut.get_env("ES_USER")
 ES_PASS_LOCAL = ut.get_env("ES_PASS")
@@ -20,4 +21,5 @@ MAIN_ES_URL = f"{MAIN_ES_IP}:9200"
 
 BOOTSTRAP_PORT = 7513
 ORACLE_SERVER_PORT = 3030
+PROFILER_SERVER_PORT = 4040
 POET_SERVER_PORT = 80

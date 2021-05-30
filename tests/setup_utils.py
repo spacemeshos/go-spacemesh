@@ -76,7 +76,7 @@ def _setup_dep_ss_file_path(file_path, dep_type, node_type):
     return dep_file_path, ss_file_path
 
 
-def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config, gen_time_del, oracle=None, poet=None,
+def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config, gen_time_del, oracle=None, poet=None, pyroscope=None,
                                  file_path=None, dep_time_out=180):
     """
     adds a bootstrap node to a specific namespace
@@ -87,6 +87,7 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
     :param gen_time_del: string, genesis time as set in suite specification file
     :param oracle: string, oracle ip
     :param poet: string, poet ip
+    :param pyroscope: string, pyroscope ip
     :param file_path: string, optional, full path to deployment yaml
     :param dep_time_out: int, deployment timeout
 
@@ -112,6 +113,9 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
 
     if poet:
         bootstrap_args['poet_server'] = '{0}:{1}'.format(poet, conf.POET_SERVER_PORT)
+
+    if pyroscope:
+        bootstrap_args['profiler-url'] = 'https://{0}:{1}'.format(pyroscope, conf.PROFILER_SERVER_PORT)
 
     gen_delta = get_genesis_time_delta(gen_time_del)
     cspec.append_args(genesis_time=gen_delta.isoformat('T', 'seconds'),
@@ -158,7 +162,7 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
 
 
 def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_info, client_config, genesis_time,
-                               name="client", file_path=None, oracle=None, poet=None, dep_time_out=120):
+                               name="client", file_path=None, oracle=None, poet=None, pyroscope=None, dep_time_out=120):
     # setting stateful and deployment configuration files
     # default deployment method is 'deployment'
     dep_method = client_config.get("deployment_type", "deployment")
@@ -175,7 +179,7 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
         return client_deployment_info.deployment_name.split('-')[1]
 
     cspec = get_conf(bs_deployment_info, client_config, genesis_time, setup_oracle=oracle,
-                     setup_poet=poet)
+                     setup_poet=poet, setup_pyroscope=pyroscope)
 
     k8s_file, k8s_create_func = choose_k8s_object_create(client_config, dep_file_path, ss_file_path)
     resp = k8s_create_func(k8s_file, namespace,

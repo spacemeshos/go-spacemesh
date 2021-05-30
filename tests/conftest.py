@@ -14,8 +14,8 @@ from tests import pod
 from tests.context import Context
 from tests.convenience import str2bool
 from tests.es_dump import es_reindex
-from tests.k8s_handler import add_elastic_cluster, add_kibana_cluster, add_fluent_bit_cluster, fluent_bit_teardown, \
-    wait_for_daemonset_to_be_ready
+from tests.k8s_handler import add_elastic_cluster, add_kibana_cluster, add_fluent_bit_cluster, add_pyroscope_cluster, fluent_bit_teardown, \
+    wait_for_daemonset_to_be_ready, get_external_ip
 from tests.misc import CoreV1ApiClient
 from tests.node_pool_deployer import NodePoolDep
 from tests.setup_utils import setup_bootstrap_in_namespace, setup_clients_in_namespace
@@ -185,11 +185,12 @@ def setup_bootstrap(init_session):
     :return: DeploymentInfo type, containing the settings info of the new node
     """
     bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
-
+    pyroscope = get_external_ip(testconfig['namespace'], "pyroscope")
     bootstrap_deployment_info = setup_bootstrap_in_namespace(testconfig['namespace'],
                                                              bootstrap_deployment_info,
                                                              testconfig['bootstrap'],
                                                              testconfig['genesis_delta'],
+                                                             pyroscope=pyroscope,
                                                              dep_time_out=testconfig['deployment_ready_time_out'])
 
     return bootstrap_deployment_info
@@ -206,12 +207,14 @@ def setup_clients(init_session, setup_bootstrap):
              contains the settings info of the new client node
     """
     client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
+    pyroscope = get_external_ip(testconfig['namespace'], "pyroscope")
     client_info = setup_clients_in_namespace(testconfig['namespace'],
                                              setup_bootstrap.pods[0],
                                              client_info,
                                              testconfig['client'],
                                              testconfig['genesis_delta'],
                                              poet=setup_bootstrap.pods[0]['pod_ip'],
+                                             pyroscope=pyroscope,
                                              dep_time_out=testconfig['deployment_ready_time_out'])
 
     return client_info
@@ -229,7 +232,7 @@ def setup_mul_clients(init_session, setup_bootstrap):
              contains the settings info of the new clients nodes
     """
     clients_infos = []
-
+    pyroscope = get_external_ip(testconfig['namespace'], "pyroscope")
     for key in testconfig:
         if "client" in key:
             client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
@@ -239,6 +242,7 @@ def setup_mul_clients(init_session, setup_bootstrap):
                                                      testconfig[key],
                                                      testconfig['genesis_delta'],
                                                      poet=setup_bootstrap.pods[0]['pod_ip'],
+                                                     pyroscope=pyroscope,
                                                      dep_time_out=testconfig['deployment_ready_time_out'])
             clients_infos.append(client_info)
 
@@ -314,6 +318,15 @@ def add_elk(init_session, request):
     fluent_bit_teardown(init_session)
     # in case the dumping process has failed the namespace won't be deleted if delete_namespace (global) is set to False
     pytest.delete_namespace = dump_es_to_main_server(init_session, index_date, request.session.testsfailed)
+
+
+@pytest.fixture(scope='module')
+def add_pyroscope(init_session, request):
+    # get today's date for filebeat data index
+    index_date = datetime.utcnow().date().strftime("%Y.%m.%d")
+    add_pyroscope_cluster(init_session)
+
+    # yield
 
 
 def dump_es_to_main_server(init_session, index_date, testsfailed):

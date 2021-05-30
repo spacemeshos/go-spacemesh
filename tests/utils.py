@@ -171,7 +171,7 @@ def get_genesis_time_delta(genesis_time: float) -> datetime:
     return pytz.utc.localize(datetime.utcnow() + timedelta(seconds=genesis_time))
 
 
-def get_conf(bs_info, client_config, genesis_time, setup_oracle=None, setup_poet=None, args=None):
+def get_conf(bs_info, client_config, genesis_time, setup_oracle=None, setup_poet=None, setup_pyroscope=None, args=None):
     """
     get_conf gather specification information into one ContainerSpec object
 
@@ -184,6 +184,7 @@ def get_conf(bs_info, client_config, genesis_time, setup_oracle=None, setup_poet
     :param genesis_time: string, genesis time as set in suite specification file
     :param setup_oracle: string, oracle ip
     :param setup_poet: string, poet ip
+    :param setup_pyroscope: string, poet pyroscope ip, name
     :param args: dictionary, arguments for appendage in specification
     :return: ContainerSpec
     """
@@ -201,7 +202,10 @@ def get_conf(bs_info, client_config, genesis_time, setup_oracle=None, setup_poet
 
     # append poet configuration
     if setup_poet:
-        client_args['poet_server'] = '{0}:{1}'.format(setup_poet, conf.POET_SERVER_PORT)
+        client_args['poet_server'] = '{0}:{1}'.format(setup_poet, conf.POET_SERVER_PORT)    # append poet configuration
+
+    if setup_pyroscope:
+        client_args['profiler-url'] = 'http://{0}:{1}'.format(setup_pyroscope, conf.PROFILER_SERVER_PORT)
 
     bootnodes = node_string(bs_info['key'], bs_info['pod_ip'], conf.BOOTSTRAP_PORT, conf.BOOTSTRAP_PORT)
     cspec.append_args(bootnodes=bootnodes, genesis_time=genesis_time_delta.isoformat('T', 'seconds'))
