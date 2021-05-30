@@ -456,7 +456,9 @@ func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) {
 	// update validated layer only after applying transactions since loading of state depends on processedLayer param.
 	msh.pMutex.Lock()
 	if err := msh.general.Put(VERIFIED, lyr.Bytes()); err != nil {
-		msh.Panic("could not persist validated layer index %d: %v", lyr, err.Error())
+		// can happen if database already closed
+		msh.Error("could not persist validated layer index %d: %v", lyr, err.Error())
+		// TODO: return here without setting latestLayerInState ?
 	}
 	msh.latestLayerInState = lyr
 	msh.pMutex.Unlock()
