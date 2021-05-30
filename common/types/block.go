@@ -126,7 +126,7 @@ func BytesToNodeID(b []byte) (*NodeID, error) {
 	}, nil
 }
 
-//StringToNodeID deserializes a string into a NodeID
+// StringToNodeID deserializes a string into a NodeID
 // TODO: length of the input will be made exact when the NodeID is compressed into
 // one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
 func StringToNodeID(s string) (*NodeID, error) {
@@ -137,7 +137,7 @@ func StringToNodeID(s string) (*NodeID, error) {
 	if strLen > 128 {
 		return nil, fmt.Errorf("invalid length, input too long")
 	}
-	//portion of the string corresponding to the Edwards public key
+	// portion of the string corresponding to the Edwards public key
 	pubKey := s[:64]
 	vrfKey := s[64:]
 	return &NodeID{
@@ -186,7 +186,7 @@ func (b BlockHeader) Layer() LayerID {
 type MiniBlock struct {
 	BlockHeader
 	TxIDs []TransactionID
-	//ATXIDs    []ATXID
+	// ATXIDs    []ATXID
 	ActiveSet *[]ATXID
 	RefBlock  *BlockID
 }
@@ -219,7 +219,8 @@ func (b *Block) Fields() []log.LoggableField {
 	return []log.LoggableField{
 		b.ID(),
 		b.LayerIndex,
-		b.MinerID(),
+		b.LayerIndex.GetEpoch(),
+		log.FieldNamed("miner_id", b.MinerID()),
 		log.String("base_block", b.BaseBlock.String()),
 		log.Int("supports", len(b.ForDiff)),
 		log.Int("againsts", len(b.AgainstDiff)),

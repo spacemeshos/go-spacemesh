@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-var msgSizeLimit = config.DefaultConfig().P2P.MsgSizeLimit
+var msgSizeLimit = config.DefaultTestConfig().P2P.MsgSizeLimit
 
 func TestSendReceiveMessage(t *testing.T) {
 	netw := NewNetworkMock()

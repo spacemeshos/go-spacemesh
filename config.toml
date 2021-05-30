@@ -61,8 +61,8 @@ ntp-servers = ["time-a-wwv.nist.gov","time-b-wwv.nist.gov","time-c-wwv.nist.gov"
 # Hare Config
 [hare]
 hare-round-duration-sec = "5"
-hare-committee-size = 10
-hare-max-adversaries = 5
+hare-committee-size = 800
+hare-max-adversaries = 399
 hare-wakeup-delta = 5
 
 [logging]

@@ -117,7 +117,6 @@ func init() {
 
 func NewNIPSTWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPST {
 	return &types.NIPST{
-		Space:          commitmentSize,
 		NipstChallenge: challenge,
 		PostProof: &types.PostProof{
 			Challenge:    poetRef,
@@ -356,6 +355,7 @@ func newAtx(challenge types.NIPSTChallenge, nipst *types.NIPST, coinbase types.A
 			ActivationTxHeader: &types.ActivationTxHeader{
 				NIPSTChallenge: challenge,
 				Coinbase:       coinbase,
+				Space:          commitmentSize,
 			},
 			Nipst: nipst,
 		},
@@ -402,7 +402,7 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 	return buf.String()
 }
 
-var cfg = config.DefaultConfig()
+var cfg = config.DefaultTestConfig()
 
 type SyncerMock struct {
 	startCalled bool
@@ -1618,7 +1618,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 		context.Background(),
 		&pb.SubmitTransactionRequest{Transaction: serializedTx},
 	)
-	req.Error(err)
+	req.EqualError(err, "rpc error: code = FailedPrecondition desc = Cannot submit transaction, node is not in sync yet, try again later")
 	req.Nil(res)
 
 	syncer.isSynced = true
@@ -1629,6 +1629,9 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 		&pb.SubmitTransactionRequest{Transaction: serializedTx},
 	)
 	req.NoError(err)
+	// TODO: randomly got an error here, should investigate. Added specific error check above, as this error should have
+	//  happened there first.
+	//  Received unexpected error: "rpc error: code = Unimplemented desc = unknown service spacemesh.v1.TransactionService"
 }
 
 func TestTransactionService(t *testing.T) {
@@ -1940,7 +1943,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if bytes.Compare(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) != 0 {
 				continue
 			}
-			if a.CommitmentSize != globalAtx.Nipst.Space {
+			if a.CommitmentSize != globalAtx.Space {
 				continue
 			}
 			// found a match
@@ -2059,6 +2062,9 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 }
 
 func TestAccountDataStream_comprehensive(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	svc := NewGlobalStateService(txAPI, mempoolMock)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
@@ -2252,6 +2258,9 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 }
 
 func TestLayerStream_comprehensive(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	grpcService := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
@@ -2471,6 +2480,7 @@ func checkGlobalStateDataGlobalState(t *testing.T, dataItem interface{}) {
 }
 
 func TestMultiService(t *testing.T) {
+	cfg.GrpcServerPort = 9192
 	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
 	svc2 := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, svc1, svc2)
