@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
 	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof" // import for memory and network profiling
@@ -18,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 
-	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -995,22 +995,6 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 		}()
 	}
 
-	if app.Config.ProfilerURL != "" {
-		p, err := profiler.Start(profiler.Config{
-			ApplicationName: app.Config.ProfilerName,
-			// app.Config.ProfilerURL should be the pyroscope server address
-			// TODO: AuthToken? no need right now since server isn't public
-			ServerAddress: app.Config.ProfilerURL,
-			// by default all profilers are enabled,
-		})
-		if err != nil {
-			logger.With().Error("cannot start profiling client")
-		} else {
-			defer p.Stop()
-		}
-
-	}
-
 	/* Create or load miner identity */
 
 	app.edSgn, err = app.LoadOrCreateEdSigner()
@@ -1027,6 +1011,22 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	}
 
 	nodeID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
+
+	if app.Config.ProfilerURL != "" {
+		p, err := profiler.Start(profiler.Config{
+			ApplicationName: nodeID.ShortString(),
+			// app.Config.ProfilerURL should be the pyroscope server address
+			// TODO: AuthToken? no need right now since server isn't public
+			ServerAddress: app.Config.ProfilerURL,
+			// by default all profilers are enabled,
+		})
+		if err != nil {
+			logger.With().Error("cannot start profiling client")
+		} else {
+			defer p.Stop()
+		}
+
+	}
 
 	postClient, err := activation.NewPostClient(&app.Config.POST, util.Hex2Bytes(nodeID.Key))
 	if err != nil {
