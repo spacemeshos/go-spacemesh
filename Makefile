@@ -44,6 +44,10 @@ ifdef delns
     EXTRA_PARAMS:=$(EXTRA_PARAMS) --delns=$(delns)
 endif
 
+ifdef dump
+    EXTRA_PARAMS:=$(EXTRA_PARAMS) --dump=$(dump)
+endif
+
 
 # This prevents "the input device is not a TTY" error from docker in CI
 DOCKERRUNARGS := --rm -e ES_PASSWD="$(ES_PASSWD)" \
