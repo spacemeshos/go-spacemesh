@@ -1,7 +1,7 @@
 namespace: ''
 
 config_map_name: conf
-is_dump: True
+
 script_on_exit: '' #'./k8s/log-client-pods.sh'
 
 total_pods: 15

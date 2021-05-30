@@ -75,6 +75,7 @@ def pytest_addoption(parser):
     )
     # namespace - current namespace value, if None a namespace will be randomly created
     parser.addoption("--namespace", action="store", default=None, help="namespace name")
+    parser.addoption("--dump", action="store", default=False, help="whether or not to dump ES when done")
 
 
 @pytest.fixture(scope='session')
@@ -85,6 +86,11 @@ def delete_ns(request):
 @pytest.fixture(scope='session')
 def input_namespace(request):
     return request.config.getoption("--namespace")
+
+
+@pytest.fixture(scope='session')
+def input_dump(request):
+    return str2bool(request.config.getoption("--dump"))
 
 
 @pytest.fixture(scope='session')
@@ -287,25 +293,15 @@ def add_elk(init_session, request):
     wait_for_elk_cluster_ready(init_session)
 
 
-def dump_es_to_main_server(init_session, index_date, testsfailed):
-    # dump local ES content into main ES server if the test has failed
-    if testsfailed:
-        return es_reindex(init_session, index_date)
-    # dump local ES content into main ES server if is_dump argument is in the tests config.py file
-    if "is_dump" in testconfig.keys() and conv.str2bool(testconfig["is_dump"]):
-        return es_reindex(init_session, index_date)
-    return True
-
-
 @pytest.fixture(scope='session')
-def teardown(request, session_id, delete_ns):
+def teardown(request, session_id, delete_ns, input_dump):
     # pytest considers any code after `yield` to be teardown code
     # see: https://docs.pytest.org/en/reorganize-docs/yieldfixture.html
     yield
     # TODO: move this to the app engine?
     fluent_bit_teardown(session_id)
     # dump ES content either if tests has failed of whether is_dump param was set to True in the test config file
-    is_dump = request.session.testsfailed == 1 or ("is_dump" in testconfig.keys() and conv.str2bool(testconfig["is_dump"]))
+    is_dump = request.session.testsfailed == 1 or input_dump
     dump_params = {}
     if is_dump:
         dump_params = {"index_date": pytest.index_date, "es_ip": ES(session_id).get_elastic_ip(),
