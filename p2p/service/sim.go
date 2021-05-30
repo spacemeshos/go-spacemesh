@@ -63,8 +63,8 @@ func (s *Simulator) SubscribeToPeerEvents(myid p2pcrypto.Key) (chan p2pcrypto.Pu
 		keys = append(keys, nd.PublicKey())
 	}
 	s.mutex.RUnlock()
-	newp := make(chan p2pcrypto.PublicKey, len(keys)+1)
-	delp := make(chan p2pcrypto.PublicKey, len(keys)+1)
+	newp := make(chan p2pcrypto.PublicKey, (len(keys)+1)*3)
+	delp := make(chan p2pcrypto.PublicKey, (len(keys)+1)*3)
 	s.subLock.Lock()
 	s.newPeersSubs = append(s.newPeersSubs, newp)
 	s.delPeersSubs = append(s.delPeersSubs, delp)
@@ -78,7 +78,7 @@ func (s *Simulator) SubscribeToPeerEvents(myid p2pcrypto.Key) (chan p2pcrypto.Pu
 func (s *Simulator) publishNewPeer(peer p2pcrypto.PublicKey) {
 	s.subLock.Lock()
 	for _, ch := range s.newPeersSubs {
-		log.Info("publish on chan with len %v, cap %v", len(ch), cap(ch))
+		log.Info("publish new peer on chan with len %v, cap %v", len(ch), cap(ch))
 		ch <- peer
 	}
 	s.subLock.Unlock()

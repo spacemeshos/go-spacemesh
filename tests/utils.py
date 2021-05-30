@@ -167,7 +167,7 @@ def node_string(key, ip, port, discport):
 
 
 @functools.lru_cache(maxsize=1)
-def get_genesis_time_delta(genesis_time):
+def get_genesis_time_delta(genesis_time: float) -> datetime:
     return pytz.utc.localize(datetime.utcnow() + timedelta(seconds=genesis_time))
 
 
@@ -175,20 +175,22 @@ def get_conf(bs_info, client_config, genesis_time, setup_oracle=None, setup_poet
     """
     get_conf gather specification information into one ContainerSpec object
 
+    :type bs_info: dict
+    :type client_config: dict
+    :type genesis_time: float
+    :type args: dict
     :param bs_info: DeploymentInfo, bootstrap info
     :param client_config: DeploymentInfo, client info
     :param genesis_time: string, genesis time as set in suite specification file
     :param setup_oracle: string, oracle ip
     :param setup_poet: string, poet ip
-    :param args: list of strings, arguments for appendage in specification
+    :param args: dictionary, arguments for appendage in specification
     :return: ContainerSpec
     """
     genesis_time_delta = get_genesis_time_delta(genesis_time)
-    client_args = {} if 'args' not in client_config else client_config['args']
+    client_args = client_config.get('args', {})
     # append client arguments
-    if args is not None:
-        for arg in args:
-            client_args[arg] = args[arg]
+    client_args.update(args or {})
 
     # create a new container spec with client configuration
     cspec = ContainerSpec(cname='client', specs=client_config)

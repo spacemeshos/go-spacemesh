@@ -149,6 +149,7 @@ func defaultFetch() (*Fetch, *mockNet) {
 		3,
 		3,
 		3,
+		3,
 	}
 
 	mckNet := &mockNet{make(map[types.Hash32]int),
@@ -224,7 +225,7 @@ func TestFetch_requestHashFromPeers_AggregateAndValidate(t *testing.T) {
 		returnChan:           make(chan HashDataPromiseResult, 6),
 	}
 
-	f.activeRequests[h1] = []request{request1, request1, request1}
+	f.activeRequests[h1] = []*request{&request1, &request1, &request1}
 	f.requestHashBatchFromPeers()
 
 	// test aggregation of messages before calling fetch from peer
@@ -233,7 +234,7 @@ func TestFetch_requestHashFromPeers_AggregateAndValidate(t *testing.T) {
 
 	// test incorrect hash fail
 	request1.validateResponseHash = true
-	f.activeRequests[h1] = []request{request1, request1, request1}
+	f.activeRequests[h1] = []*request{&request1, &request1, &request1}
 	f.requestHashBatchFromPeers()
 
 	close(request1.returnChan)
@@ -278,7 +279,7 @@ func TestFetch_GetHash_failNetwork(t *testing.T) {
 		hint:                 hint,
 		returnChan:           make(chan HashDataPromiseResult, f.cfg.MaxRetiresForPeer),
 	}
-	f.activeRequests[h1] = []request{request1, request1, request1}
+	f.activeRequests[h1] = []*request{&request1, &request1, &request1}
 	f.requestHashBatchFromPeers()
 
 	// test aggregation of messages before calling fetch from peer

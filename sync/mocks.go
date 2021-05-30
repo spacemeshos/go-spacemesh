@@ -72,7 +72,7 @@ type meshValidatorMock struct {
 }
 
 func (m *meshValidatorMock) LatestComplete() types.LayerID {
-	return types.LayerID(len(m.validatedLayers))
+	return m.vl
 }
 
 func (m *meshValidatorMock) Persist() error {
@@ -156,7 +156,7 @@ func (*mockIStore) GetIdentity(string) (types.NodeID, error) {
 
 type validatorMock struct{}
 
-func (*validatorMock) Validate(signing.PublicKey, *types.NIPST, types.Hash32) error {
+func (*validatorMock) Validate(signing.PublicKey, *types.NIPST, uint64, types.Hash32) error {
 	return nil
 }
 
@@ -265,15 +265,13 @@ func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *
 	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, conf.LayersPerEpoch, goldenATXID, &validatorMock{}, lg.WithOptions(log.Nop))
 	var msh *mesh.Mesh
 	if mshdb.PersistentData() {
-		lg.Info("persistent data found ")
+		lg.Info("persistent data found")
 		msh = mesh.NewRecoveredMesh(mshdb, atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
 	} else {
-		lg.Info("no persistent data found ")
+		lg.Info("no persistent data found")
 		msh = mesh.NewMesh(mshdb, atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
 	}
 
-	_ = msh.AddBlock(mesh.GenesisBlock())
-	_ = msh.SaveLayerInputVectorByID(mesh.GenesisLayer().Index(), []types.BlockID{mesh.GenesisBlock().ID()})
 	clock := mockClock{Layer: expectedLayers + 1}
 	lg.Info("current layer %v", clock.GetCurrentLayer())
 

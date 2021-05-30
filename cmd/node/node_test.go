@@ -24,10 +24,11 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/go-spacemesh/api/config"
+	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -316,7 +317,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	// Reset flags and config
 	resetFlags()
 	events.CloseEventReporter()
-	app.Config.API = config.DefaultConfig()
+	app.Config.API = apiConfig.DefaultTestConfig()
 
 	r.Equal(false, app.Config.API.StartNodeService)
 	r.Equal(false, app.Config.API.StartMeshService)
@@ -329,7 +330,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	// Reset flags and config
 	resetFlags()
 	events.CloseEventReporter()
-	app.Config.API = config.DefaultConfig()
+	app.Config.API = apiConfig.DefaultTestConfig()
 
 	r.Equal(false, app.Config.API.StartNodeService)
 	r.Equal(false, app.Config.API.StartMeshService)
@@ -571,7 +572,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), log.NewDefault("clock"))
 	net := service.NewSimulator()
-	cfg := getTestDefaultConfig()
+	cfg := getTestDefaultConfig(1)
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	assert.NoError(t, err)
 	app, err := InitSingleInstance(*cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(), poetHarness.HTTPPoetClient, clock, net)
@@ -755,6 +756,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	defer cleanup()
 
 	app := NewSpacemeshApp()
+	cfg := config.DefaultTestConfig()
+	app.Config = &cfg
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		defer app.Cleanup(cmd, args)
@@ -818,7 +821,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	// Construct some mock tx data
 	// The tx origin must be the hardcoded test account or else it will have no balance.
-	signer, err := signing.NewEdSignerFromBuffer(util.FromHex(config.Account1Private))
+	signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiConfig.Account1Private))
 	require.NoError(t, err)
 	txorigin := types.Address{}
 	txorigin.SetBytes(signer.PublicKey().Bytes())

@@ -278,6 +278,16 @@ func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, 
 	return
 }
 
+// stopped returns if we should stop
+func (t *BlockBuilder) stopped() bool {
+	select {
+	case <-t.stopChan:
+		return true
+	default:
+		return false
+	}
+}
+
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID, activeSet []types.ATXID) (*types.Block, error) {
 
 	if id <= types.GetEffectiveGenesis() {
@@ -387,6 +397,9 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 				logger.Debug("not synced yet, not building a block in this round")
 				continue
 			}
+			if layerID.GetEpoch().IsGenesis() {
+				continue
+			}
 
 			atxID, proofs, atxs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
@@ -396,7 +409,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 			}
 			if len(proofs) == 0 {
 				events.ReportDoneCreatingBlock(false, uint64(layerID), "")
-				logger.With().Info("not eligible for blocks in layer", layerID)
+				logger.With().Info("not eligible for blocks in layer", layerID, layerID.GetEpoch())
 				continue
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
@@ -412,10 +425,14 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 					continue
 				}
 				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList, atxs)
+
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot create new block")
 					logger.With().Error("failed to create new block", log.Err(err))
 					continue
+				}
+				if t.stopped() {
+					return
 				}
 				err = t.meshProvider.AddBlockWithTxs(blk)
 				if err != nil {

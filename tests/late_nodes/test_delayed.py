@@ -105,10 +105,9 @@ def test_add_delayed_nodes(init_session, add_elk, add_node_pool, add_curl, setup
 
     print("Running validation")
     expect_hare(current_index, ns, first_layer_of_last_epoch, total_layers - 1, total, f)  # validate hare
-    atx_last_epoch = query_atx_published(current_index, ns, first_layer_of_last_epoch)
-    atx_last_epoch += query_atx_published(current_index, ns, first_layer_of_last_epoch + 1)
-    atx_last_epoch += query_atx_published(current_index, ns, first_layer_of_last_epoch + 2)
-    atx_last_epoch += query_atx_published(current_index, ns, first_layer_of_last_epoch + 3)
+    atx_last_epoch = list()
+    for layer in range(first_layer_of_last_epoch, first_layer_of_last_epoch+layers_per_epoch-1):
+        atx_last_epoch += query_atx_published(current_index, ns, layer)
 
     queries.assert_equal_layer_hashes(current_index, ns)
     assert len(atx_last_epoch) == total  # validate num of atxs in last epoch
