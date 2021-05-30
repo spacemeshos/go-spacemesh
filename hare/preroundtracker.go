@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -26,23 +27,26 @@ func newPreRoundTracker(threshold int, expectedSize int, logger log.Log) *preRou
 }
 
 // OnPreRound tracks pre-round messages
-func (pre *preRoundTracker) OnPreRound(msg *Msg) {
+func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
+	logger := pre.logger.WithContext(ctx)
+
 	pub := msg.PubKey
-	pre.logger.With().Debug("received preround message",
+	logger.With().Debug("received preround message",
 		log.String("sender_id", pub.ShortString()),
 		log.Int("num_values", len(msg.InnerMsg.Values)))
+	eligibilityCount := uint32(msg.InnerMsg.EligibilityCount)
 	sToTrack := NewSet(msg.InnerMsg.Values) // assume track all Values
 	alreadyTracked := NewDefaultEmptySet()  // assume nothing tracked so far
 
 	if set, exist := pre.preRound[pub.String()]; exist { // not first pre-round msg from this sender
-		pre.logger.With().Debug("duplicate preround msg sender", log.String("sender_id", pub.ShortString()))
+		logger.With().Debug("duplicate preround msg sender", log.String("sender_id", pub.ShortString()))
 		alreadyTracked = set              // update already tracked Values
 		sToTrack.Subtract(alreadyTracked) // subtract the already tracked Values
 	}
 
 	// record Values
 	for v := range sToTrack.values {
-		pre.tracker.Track(v)
+		pre.tracker.Track(v, eligibilityCount)
 	}
 
 	// update the union to include new Values
@@ -50,7 +54,7 @@ func (pre *preRoundTracker) OnPreRound(msg *Msg) {
 }
 
 // CanProveValue returns true if the given value is provable, false otherwise.
-// a value is said to be provable if it has at least threshold pre-round messages to support it.
+// a value is said to be provable if it has at least threshold pre-round votes to support it.
 func (pre *preRoundTracker) CanProveValue(value types.BlockID) bool {
 	// at least threshold occurrences of a given value
 	countStatus := pre.tracker.CountStatus(value)

@@ -175,7 +175,7 @@ func TestNIPSTBuilderWithClients(t *testing.T) {
 
 	npst := buildNIPST(r, postCfg, nipstChallenge, poetDb)
 
-	err := validateNIPST(npst, postCfg, nipstChallenge, poetDb, minerID)
+	err := validateNIPST(npst, postCfg.SpacePerUnit, postCfg, nipstChallenge, poetDb, minerID)
 	r.NoError(err)
 }
 
@@ -249,7 +249,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	r.NoError(err)
 	r.NotNil(npst)
 
-	err = validateNIPST(npst, postCfg, nipstChallenge, poetDb, minerIDNotInitialized)
+	err = validateNIPST(npst, postCfg.SpacePerUnit, postCfg, nipstChallenge, poetDb, minerIDNotInitialized)
 	r.NoError(err)
 }
 
@@ -328,31 +328,31 @@ func TestValidator_Validate(t *testing.T) {
 
 	npst := buildNIPST(r, postCfg, nipstChallenge, poetDb)
 
-	err := validateNIPST(npst, postCfg, nipstChallenge, poetDb, minerID)
+	err := validateNIPST(npst, postCfg.SpacePerUnit, postCfg, nipstChallenge, poetDb, minerID)
 	r.NoError(err)
 
 	newPostCfg := postCfg
 	newPostCfg.SpacePerUnit++
-	err = validateNIPST(npst, newPostCfg, nipstChallenge, poetDb, minerID)
+	err = validateNIPST(npst, postCfg.SpacePerUnit, newPostCfg, nipstChallenge, poetDb, minerID)
 	r.EqualError(err, "PoST space (1024) is less than a single space unit (1025)")
 
 	newPostCfg = postCfg
 	newPostCfg.Difficulty++
-	err = validateNIPST(npst, newPostCfg, nipstChallenge, poetDb, minerID)
+	err = validateNIPST(npst, postCfg.SpacePerUnit, newPostCfg, nipstChallenge, poetDb, minerID)
 	r.EqualError(err, "PoST proof invalid: validation failed: number of derived leaf indices (8) doesn't match number of included proven leaves (9)")
 
 	newPostCfg = postCfg
 	newPostCfg.NumProvenLabels += 5
-	err = validateNIPST(npst, newPostCfg, nipstChallenge, poetDb, minerID)
+	err = validateNIPST(npst, postCfg.SpacePerUnit, newPostCfg, nipstChallenge, poetDb, minerID)
 	r.EqualError(err, "PoST proof invalid: validation failed: number of derived leaf indices (12) doesn't match number of included proven leaves (9)")
 
-	err = validateNIPST(npst, postCfg, types.BytesToHash([]byte("lerner")), poetDb, minerID)
+	err = validateNIPST(npst, postCfg.SpacePerUnit, postCfg, types.BytesToHash([]byte("lerner")), poetDb, minerID)
 	r.EqualError(err, "NIPST challenge is not equal to expected challenge")
 }
 
-func validateNIPST(npst *types.NIPST, postCfg config.Config, nipstChallenge types.Hash32, poetDb poetDbAPI, minerID []byte) error {
+func validateNIPST(npst *types.NIPST, space uint64, postCfg config.Config, nipstChallenge types.Hash32, poetDb poetDbAPI, minerID []byte) error {
 	v := &Validator{&postCfg, poetDb}
-	return v.Validate(*signing.NewPublicKey(minerID), npst, nipstChallenge)
+	return v.Validate(*signing.NewPublicKey(minerID), npst, space, nipstChallenge)
 }
 
 func TestNIPSTBuilder_TimeoutUnsubscribe(t *testing.T) {
@@ -385,6 +385,6 @@ func TestNIPSTBuilder_Close(t *testing.T) {
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 	hash := types.BytesToHash([]byte("anton"))
 	npst, err := nb.BuildNIPST(&hash, nil, closedChan) // closedChan will timeout immediately
-	r.IsType(&StopRequestedError{}, err)
+	r.IsType(StopRequestedError{}, err)
 	r.Nil(npst)
 }

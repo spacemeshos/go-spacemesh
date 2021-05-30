@@ -113,7 +113,7 @@ func (id NodeID) ShortString() string {
 // one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
 func BytesToNodeID(b []byte) (*NodeID, error) {
 	if len(b) < 32 {
-		return nil, fmt.Errorf("Invalid input length, input too short")
+		return nil, fmt.Errorf("invalid input length, input too short")
 	}
 	// Note that we don't care when the input is too long, because we are only deserializing the first 32
 	// bytes into the Edwards public key. The VRFKey is not used by the deserializaiton at all, and thus
@@ -125,13 +125,13 @@ func BytesToNodeID(b []byte) (*NodeID, error) {
 	}, nil
 }
 
-//StringToNodeID deserializes a string into a NodeID
+// StringToNodeID deserializes a string into a NodeID
 // TODO: length of the input will be made exact when the NodeID is compressed into
 // one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
 func StringToNodeID(s string) (*NodeID, error) {
 	strLen := len(s)
 	if strLen < 64 {
-		return nil, fmt.Errorf("Invalid input length, input too short")
+		return nil, fmt.Errorf("invalid length, input too short")
 	}
 	// portion of the string corresponding to the Edwards public key
 	// Note that we don't care when the input is too long, because we are only deserializing the first 32
@@ -184,7 +184,7 @@ func (b BlockHeader) Layer() LayerID {
 type MiniBlock struct {
 	BlockHeader
 	TxIDs []TransactionID
-	//ATXIDs    []ATXID
+	// ATXIDs    []ATXID
 	ActiveSet *[]ATXID
 	RefBlock  *BlockID
 }
@@ -217,7 +217,8 @@ func (b *Block) Fields() []log.LoggableField {
 	return []log.LoggableField{
 		b.ID(),
 		b.LayerIndex,
-		b.MinerID(),
+		b.LayerIndex.GetEpoch(),
+		log.FieldNamed("miner_id", b.MinerID()),
 		log.String("base_block", b.BaseBlock.String()),
 		log.Int("supports", len(b.ForDiff)),
 		log.Int("againsts", len(b.AgainstDiff)),
@@ -309,7 +310,7 @@ func (l *Layer) Blocks() []*Block {
 
 // Hash returns the 32-byte sha256 sum of the block IDs in this layer, sorted in lexicographic order.
 func (l Layer) Hash() Hash32 {
-	return CalcBlocksHash32(BlockIDs(l.blocks), nil)
+	return CalcBlocksHash32(SortBlockIDs(BlockIDs(l.blocks)), nil)
 }
 
 // AddBlock adds a block to this layer. Panics if the block's index doesn't match the layer.

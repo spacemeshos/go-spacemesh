@@ -26,6 +26,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"strings"
 )
 
 // Sync cmd
@@ -33,16 +34,16 @@ var cmd = &cobra.Command{
 	Use:   "sync",
 	Short: "start sync",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Starting sync")
+		fmt.Println("starting sync")
 		syncApp := newSyncApp()
-		log.With().Info("Initializing NewSyncApp", log.String("DataDir", syncApp.Config.DataDir()))
+		log.With().Info("initializing new sync app", log.String("DataDir", syncApp.Config.DataDir()))
 		defer syncApp.Cleanup()
 		syncApp.Initialize(cmd)
 		syncApp.start(cmd, args)
 	},
 }
 
-//////////////////////////////
+// ////////////////////////////
 
 var expectedLayers int
 var bucket string
@@ -50,17 +51,17 @@ var version string
 var remote bool
 
 func init() {
-	//path to remote storage
+	// path to remote storage
 	cmd.PersistentFlags().StringVarP(&bucket, "storage-path", "z", "spacemesh-sync-data", "Specify storage bucket name")
 
-	//expected layers
+	// expected layers
 	cmd.PersistentFlags().IntVar(&expectedLayers, "expected-layers", 101, "expected number of layers")
 
-	//fetch from remote
+	// fetch from remote
 	cmd.PersistentFlags().BoolVar(&remote, "remote-data", false, "fetch from remote")
 
-	//request timeout
-	cmd.PersistentFlags().StringVarP(&version, "version", "v", "FullBlocks/", "data version")
+	// request timeout
+	cmd.PersistentFlags().StringVarP(&version, "version", "v", "samples/", "data version")
 
 	cmdp.AddCommands(cmd)
 }
@@ -78,26 +79,25 @@ func newSyncApp() *syncApp {
 func (app *syncApp) Cleanup() {
 	err := os.RemoveAll(app.Config.DataDir())
 	if err != nil {
-		app.sync.Error("failed to cleanup sync: %v", err)
+		app.sync.With().Error("failed to cleanup sync", log.Err(err))
 	}
 }
 
 func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.NewDefault("sync_test")
-	lg.Info("------------ Start sync test -----------")
-	lg.Info("data folder: %s", app.Config.DataDir())
-	lg.Info("storage path: %s", bucket)
-	lg.Info("download from remote storage: %v", remote)
-	lg.Info("expected layers: %d", expectedLayers)
-	lg.Info("request timeout: %d", app.Config.SyncRequestTimeout)
-	lg.Info("data version: %s", version)
-	lg.Info("layers per epoch: %d", app.Config.LayersPerEpoch)
-	lg.Info("hdist: %d", app.Config.Hdist)
+	lg.With().Info("------------ Start sync test -----------",
+		log.String("data_folder", app.Config.DataDir()),
+		log.String("storage_path", bucket),
+		log.Bool("download_from_remote_storage", remote),
+		log.Int("expected_layers", expectedLayers),
+		log.Int("request_timeout", app.Config.SyncRequestTimeout),
+		log.String("data_version", version),
+		log.Int("layers_per_epoch", app.Config.LayersPerEpoch),
+		log.Int("hdist", app.Config.Hdist),
+	)
 
 	path := app.Config.DataDir()
-	fullpath := filepath.Join(path, version) + "/"
-
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, lg.WithName("p2p"), app.Config.DataDir())
 
 	if err != nil {
@@ -126,52 +126,54 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 			return
 		}
 	}
-	poetDbStore, err := database.NewLDBDatabase(fullpath+"poet", 0, 0, lg.WithName("poetDbStore"))
+	poetDbStore, err := database.NewLDBDatabase(filepath.Join(path, "poet"), 0, 0, lg.WithName("poetDbStore"))
 	if err != nil {
-		lg.Error("error: ", err)
+		lg.With().Error("error creating poet database", log.Err(err))
 		return
 	}
 
 	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb").WithOptions(log.Nop))
 
-	mshdb, err := mesh.NewPersistentMeshDB(fullpath, 5, lg.WithOptions(log.Nop))
+	mshdb, err := mesh.NewPersistentMeshDB(filepath.Join(path, "mesh"), 5, lg.WithOptions(log.Nop))
 	if err != nil {
-		lg.Error("error: ", err)
+		lg.With().Error("error creating mesh database", log.Err(err))
 		return
 	}
-	atxdbStore, err := database.NewLDBDatabase(fullpath+"atx", 0, 0, lg)
+	atxdbStore, err := database.NewLDBDatabase(filepath.Join(path, "atx"), 0, 0, lg)
 	if err != nil {
-		lg.Error("error: ", err)
+		lg.With().Error("error creating atx database", log.Err(err))
 		return
 	}
 
 	txpool := state.NewTxMemPool()
 	atxpool := activation.NewAtxMemPool()
 
-	sync := sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, goldenATXID, types.LayerID(expectedLayers))
-	app.sync = sync
-	if err = swarm.Start(); err != nil {
-		log.Panic("error starting p2p err=%v", err)
+	app.sync = sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, goldenATXID, types.LayerID(expectedLayers), poetDbStore)
+	if err = swarm.Start(cmdp.Ctx); err != nil {
+		log.With().Panic("error starting p2p", log.Err(err))
 	}
 
 	i := conf.LayersPerEpoch * 2
 	for ; ; i++ {
-		log.Info("getting layer %v", i)
-		if lyr, err2 := sync.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
+		lg.With().Info("getting layer", types.LayerID(i))
+		if lyr, err2 := app.sync.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
 			l := types.LayerID(i)
-			if !l.GetEpoch().IsGenesis() {
-				lg.Info("loaded %v layers from disk %v", i-1, err2)
+			if l > types.GetEffectiveGenesis() {
+				lg.With().Info("finished loading layers from disk",
+					log.FieldNamed("layers_loaded", types.LayerID(i-1)),
+					log.Err(err2),
+				)
 				break
 			}
 		} else {
-			lg.Info("loaded layer %v from disk ", i)
-			sync.ValidateLayer(lyr, types.BlockIDs(lyr.Blocks()))
+			lg.With().Info("loaded layer from disk", types.LayerID(i))
+			app.sync.ValidateLayer(lyr)
 		}
 	}
 
 	sleep := time.Duration(10) * time.Second
 	lg.Info("wait %v sec", sleep)
-	app.sync.Start()
+	app.sync.Start(cmdp.Ctx)
 	for app.sync.ProcessedLayer() < types.LayerID(expectedLayers) {
 		app.sync.ForceSync()
 		lg.Info("sleep for %v sec", 30)
@@ -179,28 +181,18 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 
 	}
 
-	lg.Info("%v verified layers %v", app.BaseApp.Config.P2P.NodeID, app.sync.ProcessedLayer())
-	lg.Event().Info("sync done")
+	lg.Event().Info("sync done",
+		log.String("node_id", app.BaseApp.Config.P2P.NodeID),
+		log.FieldNamed("verified_layers", app.sync.ProcessedLayer()),
+	)
 	for {
 		lg.Info("keep busy sleep for %v sec", 60)
 		time.Sleep(60 * time.Second)
 	}
 }
 
-//GetData downloads data from remote storage
+// GetData downloads data from remote storage
 func getData(path, prefix string, lg log.Log) error {
-	fullpath := filepath.Join(path, version)
-	dirs := []string{"appliedTxs", "atx", "ids", "mesh", "poet", "state", "store",
-		"mesh/blocks", "mesh/general", "mesh/inputvector", "mesh/layers", "mesh/transactions",
-		"mesh/unappliedTxs", "mesh/validity", "builder"}
-	for _, dir := range dirs {
-		dirpath := filepath.Join(fullpath, dir)
-		lg.Info("Creating db folder %v", dirpath)
-		if err := filesystem.ExistOrCreate(dirpath); err != nil {
-			return err
-		}
-	}
-
 	c := http.Client{
 		Transport: &http.Transport{
 			MaxIdleConnsPerHost: 10,
@@ -236,21 +228,23 @@ func getData(path, prefix string, lg log.Log) error {
 			return err
 		}
 
-		defer rc.Close()
-
 		data, err := ioutil.ReadAll(rc)
+		_ = rc.Close()
 		if err != nil {
 			return err
 		}
 
-		//skip main folder
+		// skip main folder
 		if attrs.Name == version {
 			continue
 		}
+		dest := path + strings.TrimPrefix(attrs.Name, version)
+		if err := ensureDirExists(dest); err != nil {
+			return err
+		}
+		lg.Info("downloading: %v to %v", attrs.Name, dest)
 
-		lg.Info("downloading: %v to %v", attrs.Name, filepath.Join(path, attrs.Name))
-
-		err = ioutil.WriteFile(filepath.Join(path, attrs.Name), data, 0644)
+		err = ioutil.WriteFile(dest, data, 0644)
 		if err != nil {
 			lg.Error("%v", err)
 			return err
@@ -262,9 +256,14 @@ func getData(path, prefix string, lg log.Log) error {
 	return nil
 }
 
+func ensureDirExists(path string) error {
+	dir, _ := filepath.Split(path)
+	return filesystem.ExistOrCreate(dir)
+}
+
 func main() {
 	if err := cmd.Execute(); err != nil {
-		log.Info("error ", err)
+		log.With().Info("error", log.Err(err))
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

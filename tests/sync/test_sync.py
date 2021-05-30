@@ -102,7 +102,7 @@ def test_sync_gradually_add_nodes(init_session, add_elk, add_node_pool, setup_bo
 
     start = time.time()
     sleep = 30  # seconds
-    num_iter = 25  # wait up to 12.5 minutes
+    num_iter = 12  # wait up to 12.5 minutes
     for i in range(num_iter):
         done = 0
 

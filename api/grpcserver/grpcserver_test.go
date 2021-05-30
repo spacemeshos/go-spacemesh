@@ -2,6 +2,7 @@ package grpcserver
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -36,7 +37,6 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
@@ -117,7 +117,6 @@ func init() {
 
 func NewNIPSTWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPST {
 	return &types.NIPST{
-		Space:          commitmentSize,
 		NipstChallenge: challenge,
 		PostProof: &types.PostProof{
 			Challenge:    poetRef,
@@ -138,7 +137,7 @@ func (s *NetworkMock) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey
 	return make(chan p2pcrypto.PublicKey), make(chan p2pcrypto.PublicKey)
 }
 
-func (s *NetworkMock) Broadcast(_ string, payload []byte) error {
+func (s *NetworkMock) Broadcast(_ context.Context, _ string, payload []byte) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if s.broadCastErr {
@@ -290,7 +289,7 @@ func (t *TxAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
 	return types.NewExistingLayer(tid, blocks), nil
 }
 
-func (t *TxAPIMock) GetATXs([]types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
+func (t *TxAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
 	atxs := map[types.ATXID]*types.ActivationTx{
 		globalAtx.ID():  globalAtx,
 		globalAtx2.ID(): globalAtx2,
@@ -356,6 +355,7 @@ func newAtx(challenge types.NIPSTChallenge, nipst *types.NIPST, coinbase types.A
 			ActivationTxHeader: &types.ActivationTxHeader{
 				NIPSTChallenge: challenge,
 				Coinbase:       coinbase,
+				Space:          commitmentSize,
 			},
 			Nipst: nipst,
 		},
@@ -371,7 +371,7 @@ func (*MiningAPIMock) MiningStats() (int, uint64, string, string) {
 	return miningStatus, remainingBytes, addr1.String(), dataDir
 }
 
-func (*MiningAPIMock) StartPost(types.Address, string, uint64) error {
+func (*MiningAPIMock) StartPost(context.Context, types.Address, string, uint64) error {
 	return nil
 }
 
@@ -402,15 +402,15 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 	return buf.String()
 }
 
-var cfg = config.DefaultConfig()
+var cfg = config.DefaultTestConfig()
 
 type SyncerMock struct {
 	startCalled bool
 	isSynced    bool
 }
 
-func (s *SyncerMock) IsSynced() bool { return s.isSynced }
-func (s *SyncerMock) Start()         { s.startCalled = true }
+func (s *SyncerMock) IsSynced(context.Context) bool { return s.isSynced }
+func (s *SyncerMock) Start(context.Context)         { s.startCalled = true }
 
 type MempoolMock struct {
 	// In the real state.TxMempool struct, there are multiple data structures and they're more complex,
@@ -444,7 +444,7 @@ func (m MempoolMock) GetTxIdsByAddress(addr types.Address) (ids []types.Transact
 }
 
 func launchServer(t *testing.T, services ...ServiceAPI) func() {
-	err := networkMock.Broadcast("", []byte{0x00})
+	err := networkMock.Broadcast(context.TODO(), "", []byte{0x00})
 	require.NoError(t, err)
 
 	grpcService := NewServerWithInterface(cfg.GrpcServerPort, "localhost")
@@ -458,6 +458,7 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	// start gRPC and json servers
 	grpcService.Start()
 	jsonService.StartService(
+		context.TODO(),
 		cfg.StartDebugService,
 		cfg.StartGatewayService,
 		cfg.StartGlobalStateService,
@@ -1617,7 +1618,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 		context.Background(),
 		&pb.SubmitTransactionRequest{Transaction: serializedTx},
 	)
-	req.Error(err)
+	req.EqualError(err, "rpc error: code = FailedPrecondition desc = Cannot submit transaction, node is not in sync yet, try again later")
 	req.Nil(res)
 
 	syncer.isSynced = true
@@ -1628,6 +1629,9 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 		&pb.SubmitTransactionRequest{Transaction: serializedTx},
 	)
 	req.NoError(err)
+	// TODO: randomly got an error here, should investigate. Added specific error check above, as this error should have
+	//  happened there first.
+	//  Received unexpected error: "rpc error: code = Unimplemented desc = unknown service spacemesh.v1.TransactionService"
 }
 
 func TestTransactionService(t *testing.T) {
@@ -1939,7 +1943,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if bytes.Compare(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) != 0 {
 				continue
 			}
-			if a.CommitmentSize != globalAtx.Nipst.Space {
+			if a.CommitmentSize != globalAtx.Space {
 				continue
 			}
 			// found a match
@@ -2058,6 +2062,9 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 }
 
 func TestAccountDataStream_comprehensive(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	svc := NewGlobalStateService(txAPI, mempoolMock)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
@@ -2251,6 +2258,9 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 }
 
 func TestLayerStream_comprehensive(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	grpcService := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
@@ -2470,6 +2480,7 @@ func checkGlobalStateDataGlobalState(t *testing.T, dataItem interface{}) {
 }
 
 func TestMultiService(t *testing.T) {
+	cfg.GrpcServerPort = 9192
 	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
 	svc2 := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, svc1, svc2)

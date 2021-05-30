@@ -1,6 +1,7 @@
 package log
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"runtime/debug"
@@ -48,10 +49,10 @@ func (l Log) Panic(format string, args ...interface{}) {
 // Field is a log field holding a name and value
 type Field zap.Field
 
-// Field satisfy loggable field interface.
+// Field satisfies loggable field interface
 func (f Field) Field() Field { return f }
 
-// FieldNamed returns a field with the provided name instead of the default.
+// FieldNamed returns a field with the provided name instead of the default
 func FieldNamed(name string, field LoggableField) Field {
 	if field == nil || (reflect.ValueOf(field).Kind() == reflect.Ptr && reflect.ValueOf(field).IsNil()) {
 		return String(name, "nil")
@@ -66,17 +67,17 @@ func String(name, val string) Field {
 	return Field(zap.String(name, val))
 }
 
-// Int returns an int Field.
+// Int returns an int Field
 func Int(name string, val int) Field {
 	return Field(zap.Int(name, val))
 }
 
-// Int32 returns an int32 Field.
+// Int32 returns an int32 Field
 func Int32(name string, val int32) Field {
 	return Field(zap.Int32(name, val))
 }
 
-// Uint32 returns an uint32 Field.
+// Uint32 returns an uint32 Field
 func Uint32(name string, val uint32) Field {
 	return Field(zap.Uint32(name, val))
 }
@@ -86,7 +87,7 @@ func Uint64(name string, val uint64) Field {
 	return Field(zap.Uint64(name, val))
 }
 
-// Namespace make next fields be inside a namespace.
+// Namespace make next fields be inside a namespace
 func Namespace(name string) Field {
 	return Field(zap.Namespace(name))
 }
@@ -148,20 +149,34 @@ func (l Log) WithName(prefix string) Log {
 	return Log{lgr}
 }
 
-// WithFields returns a logger with fields permanently appended to it.
+// WithFields returns a logger with fields permanently appended to it
 func (l Log) WithFields(fields ...LoggableField) Log {
 	lgr := l.logger.With(unpack(fields)...)
 	return Log{logger: lgr}
 }
 
+// WithContext creates a Log from an existing log and a context object
+func (l Log) WithContext(ctx context.Context) Log {
+	var fields []LoggableField
+	if ctx != nil {
+		if ctxRequestID, ok := ExtractRequestID(ctx); ok {
+			fields = append(fields, append(ExtractRequestFields(ctx), String("requestId", ctxRequestID))...)
+		}
+		if ctxSessionID, ok := ExtractSessionID(ctx); ok {
+			fields = append(fields, append(ExtractSessionFields(ctx), String("sessionId", ctxSessionID))...)
+		}
+	}
+	return l.WithFields(fields...)
+}
+
 const eventKey = "event"
 
-// Event returns a logger with the Event field appended to it.
+// Event returns a logger with the Event field appended to it
 func (l Log) Event() FieldLogger {
 	return FieldLogger{l: l.logger.With(zap.Field(Bool(eventKey, true)))}
 }
 
-// Nop is an option that disables this logger.
+// Nop is an option that disables this logger
 var Nop = zap.WrapCore(func(zapcore.Core) zapcore.Core {
 	return zapcore.NewNopCore()
 })
@@ -191,4 +206,9 @@ func (fl FieldLogger) Error(msg string, fields ...LoggableField) {
 // Warning prints message with fields
 func (fl FieldLogger) Warning(msg string, fields ...LoggableField) {
 	fl.l.Warn(msg, unpack(fields)...)
+}
+
+// Panic prints message with fields
+func (fl FieldLogger) Panic(msg string, fields ...LoggableField) {
+	fl.l.Panic(msg, unpack(fields)...)
 }
