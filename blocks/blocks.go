@@ -123,7 +123,6 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, sync s
 
 	// set the block id when received
 	blk.Initialize()
-	logger.With().Info("got new block", blk.Fields()...)
 	logger = logger.WithFields(blk.ID(), blk.Layer())
 
 	// check if known
@@ -131,6 +130,7 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, sync s
 		logger.Info("we already know this block")
 		return nil
 	}
+	logger.With().Info("got new block", blk.Fields()...)
 
 	if err := bh.blockSyntacticValidation(ctx, &blk, sync); err != nil {
 		logger.With().Error("failed to validate block", log.Err(err))
