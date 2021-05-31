@@ -83,7 +83,7 @@ We welcome contributions large and small and we actively accept contributions.
   and is MIT licensed open source software.
 - We welcome collaborators to the Spacemesh core dev team.
 - You don’t have to contribute code! Many important types of contributions are
-- important for our project. See:
+  important for our project. See:
   [How to Contribute to Open Source?](https://opensource.guide/how-to-contribute/#what-it-means-to-contribute)
 - To get started, please read our
   [contributions guidelines](https://github.com/spacemeshos/go-spacemesh/blob/master/CONTRIBUTING.md)
