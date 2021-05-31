@@ -323,10 +323,8 @@ def add_elk(init_session, request):
 @pytest.fixture(scope='module')
 def add_pyroscope(init_session, request):
     # get today's date for filebeat data index
-    index_date = datetime.utcnow().date().strftime("%Y.%m.%d")
     add_pyroscope_cluster(init_session)
-
-    # yield
+    # todo: teardown?
 
 
 def dump_es_to_main_server(init_session, index_date, testsfailed):

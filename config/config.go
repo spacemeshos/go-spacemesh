@@ -174,7 +174,7 @@ func defaultBaseConfig() BaseConfig {
 		CollectMetrics:      false,
 		MetricsPort:         1010,
 		ProfilerURL:         "",
-		ProfilerName:        "gp-spacemesh",
+		ProfilerName:        "",
 		OracleServer:        "http://localhost:3030",
 		OracleServerWorldID: 0,
 		GenesisTime:         time.Now().Format(time.RFC3339),

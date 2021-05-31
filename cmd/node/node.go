@@ -1013,9 +1013,13 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	nodeID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 
 	if app.Config.ProfilerURL != "" {
+		appname := nodeID.ShortString()
+		if app.Config.ProfilerName != "" {
+			appname = app.Config.ProfilerName
+		}
 		p, err := profiler.Start(profiler.Config{
-			ApplicationName: nodeID.ShortString(),
-			// app.Config.ProfilerURL should be the pyroscope server address
+			ApplicationName: appname,
+			// app.Config.ProfilerURL should be the pyroscope server address (format http://ip:port)
 			// TODO: AuthToken? no need right now since server isn't public
 			ServerAddress: app.Config.ProfilerURL,
 			// by default all profilers are enabled,
