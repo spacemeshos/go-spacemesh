@@ -205,11 +205,11 @@ func (p *Protocol) propagationEventLoop(ctx context.Context) {
 	go p.handlePQ(ctx)
 
 	for {
-		if p.isShuttingDown() {
-			return
-		}
 		select {
 		case msgV := <-p.propagateQ:
+			if p.isShuttingDown() {
+				return
+			}
 			if err := p.pq.Write(p.getPriority(msgV.Protocol()), msgV); err != nil {
 				p.WithContext(ctx).With().Error("could not write to priority queue",
 					log.Err(err),
