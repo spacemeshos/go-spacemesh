@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"syscall"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -243,7 +244,7 @@ func (app *SpacemeshApp) introduction() {
 func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err error) {
 	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
 	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
+	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 
 	// Goroutine that listens for Ctrl ^ C command
 	// and triggers the quit app
