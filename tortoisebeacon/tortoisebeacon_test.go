@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
@@ -65,88 +64,88 @@ func awaitLayer(clock *timesync.TimeClock, epoch types.LayerID) {
 	}
 }
 
-func TestTortoiseBeacon_votingThreshold(t *testing.T) {
-	t.Parallel()
+//func TestTortoiseBeacon_votingThreshold(t *testing.T) {
+//	t.Parallel()
+//
+//	r := require.New(t)
+//
+//	tt := []struct {
+//		name      string
+//		theta     float64
+//		tAve      int
+//		threshold int
+//	}{
+//		{
+//			name:      "Case 1",
+//			theta:     0.5,
+//			tAve:      10,
+//			threshold: 5,
+//		},
+//		{
+//			name:      "Case 2",
+//			theta:     0.3,
+//			tAve:      10,
+//			threshold: 3,
+//		},
+//	}
+//
+//	for _, tc := range tt {
+//		tc := tc
+//		t.Run(tc.name, func(t *testing.T) {
+//			t.Parallel()
+//
+//			tb := TortoiseBeacon{
+//				Log: log.NewDefault("TortoiseBeacon"),
+//				config: Config{
+//					Theta: tc.theta,
+//				},
+//			}
+//
+//			threshold := tb.votingThreshold()
+//			r.EqualValues(tc.threshold, threshold)
+//		})
+//	}
+//}
 
-	r := require.New(t)
-
-	tt := []struct {
-		name      string
-		theta     float64
-		tAve      int
-		threshold int
-	}{
-		{
-			name:      "Case 1",
-			theta:     0.5,
-			tAve:      10,
-			threshold: 5,
-		},
-		{
-			name:      "Case 2",
-			theta:     0.3,
-			tAve:      10,
-			threshold: 3,
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			tb := TortoiseBeacon{
-				Log: log.NewDefault("TortoiseBeacon"),
-				config: Config{
-					Theta: tc.theta,
-				},
-			}
-
-			threshold := tb.votingThreshold()
-			r.EqualValues(tc.threshold, threshold)
-		})
-	}
-}
-
-func TestTortoiseBeacon_atxThresholdFraction(t *testing.T) {
-	t.Parallel()
-
-	r := require.New(t)
-
-	tt := []struct {
-		name      string
-		kappa     int
-		q         float64
-		w         int
-		threshold float64
-	}{
-		{
-			name:      "Case 1",
-			kappa:     40,
-			q:         1.0 / 3.0,
-			w:         60,
-			threshold: 0.5,
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			tb := TortoiseBeacon{
-				Log: log.NewDefault("TortoiseBeacon"),
-				config: Config{
-					Kappa: tc.kappa,
-					Q:     tc.q,
-				},
-			}
-
-			threshold := tb.atxThresholdFraction(tc.w)
-			r.InDelta(tc.threshold, threshold, 0.00001)
-		})
-	}
-}
+//func TestTortoiseBeacon_atxThresholdFraction(t *testing.T) {
+//	t.Parallel()
+//
+//	r := require.New(t)
+//
+//	tt := []struct {
+//		name      string
+//		kappa     int
+//		q         float64
+//		w         int
+//		threshold float64
+//	}{
+//		{
+//			name:      "Case 1",
+//			kappa:     40,
+//			q:         1.0 / 3.0,
+//			w:         60,
+//			threshold: 0.5,
+//		},
+//	}
+//
+//	for _, tc := range tt {
+//		tc := tc
+//		t.Run(tc.name, func(t *testing.T) {
+//			t.Parallel()
+//
+//			tb := TortoiseBeacon{
+//				Log: log.NewDefault("TortoiseBeacon"),
+//				config: Config{
+//					Kappa: tc.kappa,
+//					Q:     tc.q,
+//				},
+//			}
+//
+//			threshold := tb.atxThresholdFraction(tc.w)
+//			r.InDelta(tc.threshold, threshold, 0.00001)
+//		})
+//	}
+//}
 
 func Test_ceilDuration(t *testing.T) {
 	t.Parallel()
