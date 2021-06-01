@@ -556,11 +556,8 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	// TODO(nkryuchkov): Enable weak coin when finished.
 	//wc := weakcoin.NewWeakCoin(weakcoin.DefaultThreshold, swarm, BLS381.Verify2, vrfSigner, app.addLogger(WeakCoinLogger, lg))
 	wc := weakcoin.ValueMock{Value: false}
-	// TODO(nkryuchkov): Use real total weight getter.
-	mtwg := tortoisebeacon.MockTotalWeightGetter{}
-
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, ld, swarm, atxdb, tBeaconDB, mtwg, signing.VRFVerify, vrfSigner, wc, clock, app.addLogger(TBeaconLogger, lg))
+	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, ld, swarm, atxdb, tBeaconDB, signing.VRFVerify, vrfSigner, wc, clock, app.addLogger(TBeaconLogger, lg))
 	if err := tBeacon.Start(ctx); err != nil {
 		app.log.Panic("Failed to start tortoise beacon: %v", err)
 	}

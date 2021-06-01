@@ -105,7 +105,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 
 	epochBeacon, err := v.beaconProvider.GetBeacon(epochNumber)
 	if err != nil {
-		return false, fmt.Errorf("get beacon for layer %v: %w", layerNumber, err)
+		return false, fmt.Errorf("get beacon for epoch %v: %w", epochNumber, err)
 	}
 
 	message, err := serializeVRFMessage(epochBeacon, epochNumber, counter)

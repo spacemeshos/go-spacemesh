@@ -42,18 +42,24 @@ func (tb *TortoiseBeacon) calcVotesFromProposals(epoch types.EpochID) firstRound
 	return votes
 }
 
-func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID) votesSetPair {
+func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID) (votesSetPair, error) {
 	tb.votesMu.Lock()
 	defer tb.votesMu.Unlock()
 
-	votesCount := tb.firstRoundVotes(epoch)
+	votesCount, err := tb.firstRoundVotes(epoch)
+	if err != nil {
+		return votesSetPair{}, fmt.Errorf("calc first round votes: %w", err)
+	}
 
 	tb.Log.With().Info("Calculated first round votes",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round", uint64(round)),
 		log.String("votesCount", fmt.Sprint(votesCount)))
 
-	ownFirstRoundVotes := tb.calcOwnFirstRoundVotes(epoch, votesCount)
+	ownFirstRoundVotes, err := tb.calcOwnFirstRoundVotes(epoch, votesCount)
+	if err != nil {
+		return votesSetPair{}, fmt.Errorf("calc own first round votes: %w", err)
+	}
 
 	tb.Log.With().Info("Calculated own first round votes",
 		log.Uint64("epoch_id", uint64(epoch)),
@@ -61,14 +67,19 @@ func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID) vo
 		log.String("votesCount", fmt.Sprint(votesCount)),
 		log.String("ownFirstRoundVotes", fmt.Sprint(ownFirstRoundVotes)))
 
-	tb.calcVotesCount(epoch, round, votesCount)
+	if err := tb.calcVotesCount(epoch, round, votesCount); err != nil {
+		return votesSetPair{}, fmt.Errorf("calc votes count: %w", err)
+	}
 
 	tb.Log.With().Info("Calculated votes count",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round", uint64(round)),
 		log.String("votesCount", fmt.Sprint(votesCount)))
 
-	ownCurrentRoundVotes := tb.calcOwnCurrentRoundVotes(epoch, round, votesCount)
+	ownCurrentRoundVotes, err := tb.calcOwnCurrentRoundVotes(epoch, round, votesCount)
+	if err != nil {
+		return votesSetPair{}, fmt.Errorf("calc own current round votes: %w", err)
+	}
 
 	tb.Log.With().Info("Calculated votes for one round",
 		log.Uint64("epoch_id", uint64(epoch)),
@@ -76,10 +87,10 @@ func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID) vo
 		log.String("for", fmt.Sprint(ownCurrentRoundVotes.ValidVotes)),
 		log.String("against", fmt.Sprint(ownCurrentRoundVotes.InvalidVotes)))
 
-	return ownCurrentRoundVotes
+	return ownCurrentRoundVotes, nil
 }
 
-func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) votesCountMap {
+func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) (votesCountMap, error) {
 	firstRoundInThisEpoch := epochRoundPair{
 		EpochID: epoch,
 		Round:   1,
@@ -96,13 +107,18 @@ func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) votesCountMap {
 		firstRoundVotesFor := make(hashSet)
 		firstRoundVotesAgainst := make(hashSet)
 
+		voteWeight, err := tb.voteWeight(nodeID, epoch)
+		if err != nil {
+			return nil, fmt.Errorf("get vote weight: %w", err)
+		}
+
 		for vote := range votesList.ValidVotes {
-			firstRoundVotesCount[vote] += tb.voteWeight(nodeID)
+			firstRoundVotesCount[vote] += int(voteWeight)
 			firstRoundVotesFor[vote] = struct{}{}
 		}
 
 		for vote := range votesList.InvalidVotes {
-			firstRoundVotesCount[vote] -= tb.voteWeight(nodeID)
+			firstRoundVotesCount[vote] -= int(voteWeight)
 			firstRoundVotesAgainst[vote] = struct{}{}
 		}
 	}
@@ -114,21 +130,26 @@ func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) votesCountMap {
 		tb.votesCountCache[firstRoundInThisEpoch][k] = v
 	}
 
-	return firstRoundVotesCount
+	return firstRoundVotesCount, nil
 }
 
-func (tb *TortoiseBeacon) calcOwnFirstRoundVotes(epoch types.EpochID, votesCount votesCountMap) votesSetPair {
+func (tb *TortoiseBeacon) calcOwnFirstRoundVotes(epoch types.EpochID, votesCount votesCountMap) (votesSetPair, error) {
 	ownFirstRoundsVotes := votesSetPair{
 		ValidVotes:   make(hashSet),
 		InvalidVotes: make(hashSet),
 	}
 
+	votingThreshold, err := tb.votingThreshold(epoch)
+	if err != nil {
+		return votesSetPair{}, fmt.Errorf("voting threshold: %w", err)
+	}
+
 	// TODO(nkryuchkov): we don't need to use weak coin in the 1st round, because no votes to count: only timely things, because 1st votes are different than other rounds
 	for vote, count := range votesCount {
 		switch {
-		case count >= tb.votingThreshold():
+		case count >= votingThreshold:
 			ownFirstRoundsVotes.ValidVotes[vote] = struct{}{}
-		case count <= -tb.votingThreshold():
+		case count <= -votingThreshold:
 			ownFirstRoundsVotes.InvalidVotes[vote] = struct{}{}
 		case tb.weakCoin.Get(epoch, 1):
 			ownFirstRoundsVotes.ValidVotes[vote] = struct{}{}
@@ -145,10 +166,10 @@ func (tb *TortoiseBeacon) calcOwnFirstRoundVotes(epoch types.EpochID, votesCount
 	// TODO(nkryuchkov): as pointer is shared, ensure that maps are not changed
 	tb.ownVotes[firstRoundInThisEpoch] = ownFirstRoundsVotes
 
-	return ownFirstRoundsVotes
+	return ownFirstRoundsVotes, nil
 }
 
-func (tb *TortoiseBeacon) calcVotesCount(epoch types.EpochID, upToRound types.RoundID, votesCount votesCountMap) {
+func (tb *TortoiseBeacon) calcVotesCount(epoch types.EpochID, upToRound types.RoundID, votesCount votesCountMap) error {
 	for round := firstRound + 1; round <= upToRound; round++ {
 		thisRound := epochRoundPair{
 			EpochID: epoch,
@@ -158,19 +179,26 @@ func (tb *TortoiseBeacon) calcVotesCount(epoch types.EpochID, upToRound types.Ro
 		thisRoundVotes := tb.incomingVotes[thisRound]
 
 		for pk, votesList := range thisRoundVotes {
+			voteWeight, err := tb.voteWeight(pk, epoch)
+			if err != nil {
+				return fmt.Errorf("vote weight: %w", err)
+			}
+
 			for vote := range votesList.ValidVotes {
-				votesCount[vote] += tb.voteWeight(pk)
+				votesCount[vote] += int(voteWeight)
 			}
 
 			for vote := range votesList.InvalidVotes {
-				votesCount[vote] -= tb.voteWeight(pk)
+				votesCount[vote] -= int(voteWeight)
 			}
 		}
 	}
+
+	return nil
 }
 
 // TODO(nkryuchkov): rename votesCount to votesMargin
-func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, round types.RoundID, votesMargin votesCountMap) votesSetPair {
+func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, round types.RoundID, votesMargin votesCountMap) (votesSetPair, error) {
 	ownCurrentRoundVotes := votesSetPair{
 		ValidVotes:   make(hashSet),
 		InvalidVotes: make(hashSet),
@@ -181,15 +209,20 @@ func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, round ty
 		Round:   round,
 	}
 
+	votingThreshold, err := tb.votingThreshold(epoch)
+	if err != nil {
+		return votesSetPair{}, fmt.Errorf("voting threshold: %w", err)
+	}
+
 	// TODO(nkryuchkov): as pointer is shared, ensure that maps are not modified
 	tb.votesCountCache[currentRound] = votesMargin
 
 	// TODO(nkryuchkov): should happen after weak coin for this round is calculated; consider calculating in two steps
 	for vote, weightCount := range votesMargin {
 		switch {
-		case weightCount >= tb.votingThreshold():
+		case weightCount >= votingThreshold:
 			ownCurrentRoundVotes.ValidVotes[vote] = struct{}{}
-		case weightCount <= -tb.votingThreshold():
+		case weightCount <= -votingThreshold:
 			ownCurrentRoundVotes.InvalidVotes[vote] = struct{}{}
 		case tb.weakCoin.Get(epoch, round):
 			ownCurrentRoundVotes.ValidVotes[vote] = struct{}{}
@@ -200,5 +233,5 @@ func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, round ty
 
 	tb.ownVotes[currentRound] = ownCurrentRoundVotes
 
-	return ownCurrentRoundVotes
+	return ownCurrentRoundVotes, nil
 }

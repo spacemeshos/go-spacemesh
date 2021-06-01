@@ -50,16 +50,6 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 }
 
 func (tb *TortoiseBeacon) handleProposalMessage(sender p2pcrypto.PublicKey, m ProposalMessage) error {
-	exceeds, err := tb.proposalExceedsThreshold(m.VRFSignature, tb.totalWeightGetter.GetTotalWeight())
-	if err != nil {
-		return fmt.Errorf("proposalExceedsThreshold: %w", err)
-	}
-
-	if exceeds {
-		tb.Log.With().Warning("Rejected proposal message which exceeds threshold")
-		return nil
-	}
-
 	epoch := tb.currentEpoch()
 
 	currentEpochProposal, err := tb.calcProposal(epoch)
@@ -70,6 +60,21 @@ func (tb *TortoiseBeacon) handleProposalMessage(sender p2pcrypto.PublicKey, m Pr
 	// Ensure that epoch is the same.
 	ok := tb.vrfVerifier(sender.Bytes(), currentEpochProposal, m.VRFSignature)
 	if !ok {
+		return nil
+	}
+
+	epochWeight, _, err := tb.atxDB.GetEpochWeight(epoch)
+	if err != nil {
+		return fmt.Errorf("get epoch weight: %w", err)
+	}
+
+	exceeds, err := tb.proposalExceedsThreshold(m.VRFSignature, epochWeight)
+	if err != nil {
+		return fmt.Errorf("proposalExceedsThreshold: %w", err)
+	}
+
+	if exceeds {
+		tb.Log.With().Warning("Rejected proposal message which exceeds threshold")
 		return nil
 	}
 
@@ -198,8 +203,12 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, from p2p
 	// Ensure that epoch is the same.
 	ok := tb.vrfVerifier(from.Bytes(), currentEpochProposal, message.Signature)
 	if !ok {
-		tb.Log.With().Warning("Received malformed message, bad signature",
-			log.String("from", from.String()))
+		tb.Log.With().Warning("Received malformed first voting message, bad signature",
+			log.String("from", from.String()),
+			log.Uint64("epoch_id", uint64(currentEpoch)),
+			log.String("expected_message", util.Bytes2Hex(currentEpochProposal)),
+			log.String("signature", util.Bytes2Hex(message.Signature)))
+
 		return nil
 	}
 
@@ -270,8 +279,12 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(ctx context.Context, from
 	// Ensure that epoch is the same.
 	ok := tb.vrfVerifier(from.Bytes(), currentEpochProposal, message.Signature)
 	if !ok {
-		tb.Log.With().Warning("Received malformed message, bad signature",
-			log.String("from", from.String()))
+		tb.Log.With().Warning("Received malformed following voting message, bad signature",
+			log.String("from", from.String()),
+			log.Uint64("epoch_id", uint64(currentEpoch)),
+			log.String("expected_message", util.Bytes2Hex(currentEpochProposal)),
+			log.String("signature", util.Bytes2Hex(message.Signature)))
+
 		return nil
 	}
 

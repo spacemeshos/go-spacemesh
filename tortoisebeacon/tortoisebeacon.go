@@ -49,10 +49,6 @@ type tortoiseBeaconDB interface {
 	SetTortoiseBeacon(epochID types.EpochID, beacon types.Hash32) error
 }
 
-type totalWeightGetter interface {
-	GetTotalWeight() int
-}
-
 type epochRoundPair struct {
 	EpochID types.EpochID
 	Round   types.RoundID
@@ -82,13 +78,12 @@ type TortoiseBeacon struct {
 	config        Config
 	layerDuration time.Duration
 
-	net               broadcaster
-	atxDB             *activation.DB
-	totalWeightGetter totalWeightGetter
-	tortoiseBeaconDB  tortoiseBeaconDB
-	vrfVerifier       verifierFunc
-	vrfSigner         signer
-	weakCoin          weakcoin.WeakCoin
+	net              broadcaster
+	atxDB            *activation.DB
+	tortoiseBeaconDB tortoiseBeaconDB
+	vrfVerifier      verifierFunc
+	vrfSigner        signer
+	weakCoin         weakcoin.WeakCoin
 
 	layerMu   sync.RWMutex
 	lastLayer types.LayerID
@@ -142,7 +137,6 @@ func New(
 	net broadcaster,
 	atxDB *activation.DB,
 	tortoiseBeaconDB tortoiseBeaconDB,
-	totalWeightGetter totalWeightGetter,
 	vrfVerifier verifierFunc,
 	vrfSigner signer,
 	weakCoin weakcoin.WeakCoin,
@@ -157,7 +151,6 @@ func New(
 		net:                       net,
 		atxDB:                     atxDB,
 		tortoiseBeaconDB:          tortoiseBeaconDB,
-		totalWeightGetter:         totalWeightGetter,
 		vrfVerifier:               vrfVerifier,
 		vrfSigner:                 vrfSigner,
 		weakCoin:                  weakCoin,
@@ -238,10 +231,19 @@ func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 	tb.beaconsMu.RLock()
 	defer tb.beaconsMu.RUnlock()
 
-	beacon, ok := tb.beacons[epochID-1]
-	if !ok {
-		return nil, ErrBeaconNotCalculated
+	var beacon types.Hash32
+	var ok bool
+	for i := 0; i < 50; i++ {
+		beacon, ok = tb.beacons[epochID-1]
+		if !ok {
+			tb.Log.Warning("beacon not calculated yet, waiting")
+			time.Sleep(1 * time.Second)
+			continue
+			//return nil, ErrBeaconNotCalculated
+		}
+		break
 	}
+	tb.Log.Error("beacon not calculated after all attempts")
 
 	if tb.tortoiseBeaconDB != nil {
 		if err := tb.tortoiseBeaconDB.SetTortoiseBeacon(epochID, beacon); err != nil {
@@ -351,7 +353,11 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 
 	// K rounds passed
 	// After K rounds had passed, tally up votes for proposals using simple tortoise vote counting
-	tb.calcBeacon(epoch)
+	if err := tb.calcBeacon(epoch); err != nil {
+		tb.Log.With().Error("Failed to calculate beacon",
+			log.Uint64("epoch_id", uint64(epoch)),
+			log.Err(err))
+	}
 }
 
 func (tb *TortoiseBeacon) runProposalPhase(epoch types.EpochID) error {
@@ -360,9 +366,16 @@ func (tb *TortoiseBeacon) runProposalPhase(epoch types.EpochID) error {
 		return fmt.Errorf("calculate signed proposal: %w", err)
 	}
 
-	totalWeight := tb.totalWeightGetter.GetTotalWeight()
+	tb.Log.With().Info("Calculated proposal signature",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.String("signature", util.Bytes2Hex(proposedSignature)))
 
-	exceeds, err := tb.proposalExceedsThreshold(proposedSignature, totalWeight)
+	epochWeight, _, err := tb.atxDB.GetEpochWeight(epoch)
+	if err != nil {
+		return fmt.Errorf("get epoch weight: %w", err)
+	}
+
+	exceeds, err := tb.proposalExceedsThreshold(proposedSignature, epochWeight)
 	if err != nil {
 		return fmt.Errorf("proposalExceedsThreshold: %w", err)
 	}
@@ -406,10 +419,10 @@ func (tb *TortoiseBeacon) runProposalPhase(epoch types.EpochID) error {
 	return nil
 }
 
-func (tb *TortoiseBeacon) proposalExceedsThreshold(proposal []byte, totalWeight int) (bool, error) {
+func (tb *TortoiseBeacon) proposalExceedsThreshold(proposal []byte, epochWeight uint64) (bool, error) {
 	proposalInt := new(big.Int).SetBytes(proposal[:])
 
-	threshold, err := tb.atxThreshold(totalWeight)
+	threshold, err := tb.atxThreshold(epochWeight)
 	if err != nil {
 		return false, fmt.Errorf("atxThreshold: %w", err)
 	}
@@ -514,7 +527,11 @@ func (tb *TortoiseBeacon) sendProposalVote(ctx context.Context, epoch types.Epoc
 func (tb *TortoiseBeacon) sendVotesDelta(ctx context.Context, epoch types.EpochID, round types.RoundID) error {
 	// next rounds, send vote
 	// construct a message that points to all messages from previous round received by δ
-	ownCurrentRoundVotes := tb.calcVotes(epoch, round)
+	ownCurrentRoundVotes, err := tb.calcVotes(epoch, round)
+	if err != nil {
+		return fmt.Errorf("calculate votes: %w", err)
+	}
+
 	return tb.sendFollowingVote(ctx, epoch, round, ownCurrentRoundVotes)
 }
 
@@ -601,11 +618,26 @@ func (tb *TortoiseBeacon) setCurrentRound(epoch types.EpochID, round types.Round
 	tb.currentRounds[epoch] = round
 }
 
-func (tb *TortoiseBeacon) voteWeight(pk p2pcrypto.PublicKey) int {
-	// TODO(nkryuchkov): implement
-	// TODO(nkryuchkov):
-	// comes from an ATX, same as ATX weight, use node id instead of PK
-	return 1
+func (tb *TortoiseBeacon) voteWeight(pk p2pcrypto.PublicKey, epochID types.EpochID) (uint64, error) {
+	// TODO(nkryuchkov): enable
+	return 1, nil
+
+	//nodeID := types.NodeID{
+	//	Key:          pk.String(),
+	//	VRFPublicKey: nil,
+	//}
+	//
+	//atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(nodeID, epochID)
+	//if err != nil {
+	//	return 0, fmt.Errorf("atx ID for epoch: %w", err)
+	//}
+	//
+	//atx, err := tb.atxDB.GetAtxHeader(atxID)
+	//if err != nil {
+	//	return 0, fmt.Errorf("atx header: %w", err)
+	//}
+	//
+	//return atx.GetWeight(), nil
 }
 
 // Each smesher partitions the valid proposals received in the previous epoch into three sets:
@@ -631,17 +663,21 @@ func (tb *TortoiseBeacon) waitAfterLastRoundStarted() {
 	}
 }
 
-func (tb *TortoiseBeacon) votingThreshold() int {
-	totalATXWeightInThisEpoch := tb.totalWeightGetter.GetTotalWeight()
-	return int(tb.config.Theta * float64(totalATXWeightInThisEpoch))
+func (tb *TortoiseBeacon) votingThreshold(epochID types.EpochID) (int, error) {
+	epochWeight, _, err := tb.atxDB.GetEpochWeight(epochID)
+	if err != nil {
+		return 0, fmt.Errorf("get epoch weight: %w", err)
+	}
+
+	return int(tb.config.Theta * float64(epochWeight)), nil
 }
 
-func (tb *TortoiseBeacon) atxThresholdFraction(totalATXWeightInThisEpoch int) float64 {
-	return 1 - math.Pow(2.0, -(float64(tb.config.Kappa)/((1.0-tb.config.Q)*float64(totalATXWeightInThisEpoch))))
+func (tb *TortoiseBeacon) atxThresholdFraction(epochWeight uint64) float64 {
+	return 1 - math.Pow(2.0, -(float64(tb.config.Kappa)/((1.0-tb.config.Q)*float64(epochWeight))))
 }
 
-func (tb *TortoiseBeacon) atxThreshold(totalATXWeightInThisEpoch int) (*big.Int, error) {
-	fractionFloat64 := tb.atxThresholdFraction(totalATXWeightInThisEpoch)
+func (tb *TortoiseBeacon) atxThreshold(epochWeight uint64) (*big.Int, error) {
+	fractionFloat64 := tb.atxThresholdFraction(epochWeight)
 	fractionBigFloat := new(big.Float).SetFloat64(fractionFloat64)
 
 	emptyMessage := make([]byte, 0)
@@ -666,7 +702,12 @@ func (tb *TortoiseBeacon) calcSignature(epoch types.EpochID) ([]byte, error) {
 		return nil, fmt.Errorf("calculate proposal: %w", err)
 	}
 
-	return tb.vrfSigner.Sign(p), nil
+	signature := tb.vrfSigner.Sign(p)
+	tb.Log.With().Info("Calculated signature",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.String("proposal", util.Bytes2Hex(p)),
+		log.String("signature", util.Bytes2Hex(signature)))
+	return signature, nil
 }
 
 func (tb *TortoiseBeacon) calcProposal(epoch types.EpochID) ([]byte, error) {

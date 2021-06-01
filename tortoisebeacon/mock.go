@@ -13,9 +13,3 @@ func newMockATXGetter(atxList []types.ATXID) *mockATXGetter {
 func (m mockATXGetter) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 	return m.atxList
 }
-
-type MockTotalWeightGetter struct{}
-
-func (m MockTotalWeightGetter) GetTotalWeight() int {
-	return 0
-}
