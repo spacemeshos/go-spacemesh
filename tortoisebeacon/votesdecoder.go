@@ -2,7 +2,6 @@ package tortoisebeacon
 
 import "github.com/bits-and-blooms/bitset"
 
-// TODO(nkryuchkov): extract decoder
 func (tb *TortoiseBeacon) decodeVotes(votesBitVector []uint64, firstRound firstRoundVotes) votesSetPair {
 	result := votesSetPair{
 		ValidVotes:   make(hashSet),

@@ -66,7 +66,7 @@ type (
 	firstRoundVotesPerEpoch = map[types.EpochID]firstRoundVotesPerPK
 	votesPerRound           = map[epochRoundPair]votesPerPK
 	ownVotes                = map[epochRoundPair]votesSetPair
-	votesCountMap           = map[proposal]int
+	votesMarginMap          = map[proposal]int
 	proposalsMap            = map[types.EpochID]hashSet
 )
 
@@ -103,11 +103,10 @@ type TortoiseBeacon struct {
 	potentiallyValidProposals   proposalsMap
 
 	votesMu                  sync.RWMutex
-	firstRoundIncomingVotes  firstRoundVotesPerEpoch             // all rounds - votes (decoded votes)
-	firstRoundOutcomingVotes map[types.EpochID]firstRoundVotes   // all rounds - votes (decoded votes)
-	incomingVotes            votesPerRound                       // all rounds - votes (decoded votes)
-	ownVotes                 ownVotes                            // all rounds - own votes
-	votesCountCache          map[epochRoundPair]map[proposal]int // TODO(nkryuchkov): consider removing
+	firstRoundIncomingVotes  firstRoundVotesPerEpoch           // all rounds - votes (decoded votes)
+	firstRoundOutcomingVotes map[types.EpochID]firstRoundVotes // all rounds - votes (decoded votes)
+	incomingVotes            votesPerRound                     // all rounds - votes (decoded votes)
+	ownVotes                 ownVotes                          // all rounds - own votes
 
 	beaconsMu sync.RWMutex
 	beacons   map[types.EpochID]types.Hash32
@@ -161,7 +160,6 @@ func New(
 		validProposals:            make(map[types.EpochID]hashSet),
 		potentiallyValidProposals: make(map[types.EpochID]hashSet),
 		ownVotes:                  make(ownVotes),
-		votesCountCache:           make(map[epochRoundPair]map[proposal]int),
 		beacons:                   make(map[types.EpochID]types.Hash32),
 		incomingVotes:             map[epochRoundPair]votesPerPK{},
 		firstRoundIncomingVotes:   map[types.EpochID]firstRoundVotesPerPK{},
@@ -385,12 +383,6 @@ func (tb *TortoiseBeacon) runProposalPhase(epoch types.EpochID) error {
 		return nil
 	}
 
-	// TODO(nkryuchkov): should be VRF(prefix+epoch_id), sent only if it passes a threshold
-	// TODO(nkryuchkov): if a received value does not pass a threshold, it should be rejected
-	// proposal message has a ptr to ATX (ATX ID) and VRF
-	// ptr to ATX == miner's unique ID
-	// epoch in prop. msg. can be removed
-
 	// concat them into a single proposal message
 	m := ProposalMessage{VRFSignature: proposedSignature}
 
@@ -434,13 +426,6 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	// rounds 1 to K
 	ticker := time.NewTicker(tb.votingRoundDuration + tb.weakCoinRoundDuration)
 	defer ticker.Stop()
-
-	// TODO(nkryuchkov):
-	// There are two types of messages: voting and communication. Beginning of voting round - send voting message.
-	// A voting round consists of two entities: voting and weak coin, can have different length
-
-	// force adversary to vote before weak coin is known, votes should be sent at the beginning of the round,
-	// weak coin should be sent after votes for this round are received
 
 	go func() {
 		if err := tb.sendVotes(ctx, epoch, firstRound); err != nil {
@@ -486,7 +471,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 
 				// TODO(nkryuchkov):
 				// should be published only after we should have received them
-				if err := tb.weakCoin.PublishProposal(epoch, round); err != nil {
+				if err := tb.weakCoin.PublishProposal(ctx, epoch, round); err != nil {
 					tb.Log.With().Error("Failed to publish weak coin proposal",
 						log.Uint64("epoch_id", uint64(epoch)),
 						log.Uint64("round", uint64(round)),
@@ -514,7 +499,7 @@ func (tb *TortoiseBeacon) sendVotes(ctx context.Context, epoch types.EpochID, ro
 		return tb.sendProposalVote(ctx, epoch)
 	}
 
-	return tb.sendVotesDelta(ctx, epoch, round)
+	return tb.sendVotesDifference(ctx, epoch, round)
 }
 
 func (tb *TortoiseBeacon) sendProposalVote(ctx context.Context, epoch types.EpochID) error {
@@ -524,7 +509,7 @@ func (tb *TortoiseBeacon) sendProposalVote(ctx context.Context, epoch types.Epoc
 	return tb.sendFirstRoundVote(ctx, epoch, votes)
 }
 
-func (tb *TortoiseBeacon) sendVotesDelta(ctx context.Context, epoch types.EpochID, round types.RoundID) error {
+func (tb *TortoiseBeacon) sendVotesDifference(ctx context.Context, epoch types.EpochID, round types.RoundID) error {
 	// next rounds, send vote
 	// construct a message that points to all messages from previous round received by δ
 	ownCurrentRoundVotes, err := tb.calcVotes(epoch, round)
@@ -535,14 +520,6 @@ func (tb *TortoiseBeacon) sendVotesDelta(ctx context.Context, epoch types.EpochI
 	return tb.sendFollowingVote(ctx, epoch, round, ownCurrentRoundVotes)
 }
 
-// TODO(nkryuchkov):
-// encoding:
-// Very 1st voting message is different:
-// Send ids of all potential votes to vote for,
-// we send a list of votes for and potential votes for (subset of possible votes),
-// also send a list of votes for.
-// Then, voting message is a bit vector, which length is equal to length of subset of possible votes.
-// We need a threshold in config for max total votes.
 func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes votesSetPair) error {
 	bitVector := tb.encodeVotes(ownCurrentRoundVotes, tb.firstRoundOutcomingVotes[epoch])
 
@@ -565,7 +542,6 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 	tb.Log.With().Debug("Serialized voting message",
 		log.String("message", string(serializedMessage)))
 
-	// TODO(nkryuchkov): pass correct context
 	if err := tb.net.Broadcast(ctx, TBFollowingVotingProtocol, serializedMessage); err != nil {
 		return fmt.Errorf("broadcast voting message: %w", err)
 	}
@@ -620,24 +596,27 @@ func (tb *TortoiseBeacon) setCurrentRound(epoch types.EpochID, round types.Round
 
 func (tb *TortoiseBeacon) voteWeight(pk p2pcrypto.PublicKey, epochID types.EpochID) (uint64, error) {
 	// TODO(nkryuchkov): enable
-	return 1, nil
+	enabled := false
+	if !enabled {
+		return 1, nil
+	}
 
-	//nodeID := types.NodeID{
-	//	Key:          pk.String(),
-	//	VRFPublicKey: nil,
-	//}
-	//
-	//atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(nodeID, epochID)
-	//if err != nil {
-	//	return 0, fmt.Errorf("atx ID for epoch: %w", err)
-	//}
-	//
-	//atx, err := tb.atxDB.GetAtxHeader(atxID)
-	//if err != nil {
-	//	return 0, fmt.Errorf("atx header: %w", err)
-	//}
-	//
-	//return atx.GetWeight(), nil
+	nodeID := types.NodeID{
+		Key:          pk.String(),
+		VRFPublicKey: nil,
+	}
+
+	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(nodeID, epochID)
+	if err != nil {
+		return 0, fmt.Errorf("atx ID for epoch: %w", err)
+	}
+
+	atx, err := tb.atxDB.GetAtxHeader(atxID)
+	if err != nil {
+		return 0, fmt.Errorf("atx header: %w", err)
+	}
+
+	return atx.GetWeight(), nil
 }
 
 // Each smesher partitions the valid proposals received in the previous epoch into three sets:
@@ -707,6 +686,7 @@ func (tb *TortoiseBeacon) calcSignature(epoch types.EpochID) ([]byte, error) {
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.String("proposal", util.Bytes2Hex(p)),
 		log.String("signature", util.Bytes2Hex(signature)))
+
 	return signature, nil
 }
 

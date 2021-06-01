@@ -1,7 +1,7 @@
 package tortoisebeacon
 
 // Config is the configuration of the Tortoise Beacon.
-type Config struct { // TODO(nkryuchkov): use unused fields
+type Config struct {
 	Kappa                 int     `mapstructure:"tortoise-beacon-kappa"`                        // Security parameter (for calculating ATX threshold)
 	Q                     float64 `mapstructure:"tortoise-beacon-q"`                            // Ratio of dishonest spacetime (for calculating ATX threshold)
 	RoundsNumber          uint64  `mapstructure:"tortoise-beacon-rounds-number"`                // Amount of rounds in every epoch

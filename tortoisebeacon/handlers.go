@@ -189,10 +189,6 @@ func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Con
 }
 
 func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, from p2pcrypto.PublicKey, message FirstVotingMessage) error {
-	// TODO(nkryuchkov):
-	// we don't care when voting message is received, count all of them, no matter what round is,
-	// two messages for the same round from one miner are invalid
-	// if a round of a received message is greater than the current round, we need to store it until we get to calculation of that round
 	currentEpoch := tb.currentEpoch()
 
 	currentEpochProposal, err := tb.calcProposal(currentEpoch)

@@ -186,7 +186,7 @@ package tortoisebeacon
 //		epoch         types.EpochID
 //		upToRound     types.RoundID
 //		incomingVotes map[epochRoundPair]votesPerPK
-//		votesCount    votesCountMap
+//		votesCount    votesMarginMap
 //	}{
 //		{
 //			name:      "Case 1",
@@ -398,7 +398,7 @@ package tortoisebeacon
 //		epoch         types.EpochID
 //		upToRound     types.RoundID
 //		incomingVotes map[epochRoundPair]votesPerPK
-//		result        votesCountMap
+//		result        votesMarginMap
 //	}{
 //		{
 //			name:      "Case 1",
@@ -479,7 +479,7 @@ package tortoisebeacon
 //			}
 //
 //			votesCount := tb.firstRoundVotes(tc.epoch)
-//			tb.calcVotesCount(tc.epoch, tc.upToRound, votesCount)
+//			tb.calcVotesMargin(tc.epoch, tc.upToRound, votesCount)
 //			r.EqualValues(tc.result, votesCount)
 //		})
 //	}
@@ -765,7 +765,7 @@ package tortoisebeacon
 //		epoch              types.EpochID
 //		round              types.RoundID
 //		ownFirstRoundVotes votesSetPair
-//		votesCount         votesCountMap
+//		votesCount         votesMarginMap
 //		weakCoin           weakcoin.WeakCoin
 //		result             votesSetPair
 //	}{
@@ -782,7 +782,7 @@ package tortoisebeacon
 //					types.HexToHash32("0x3"): {},
 //				},
 //			},
-//			votesCount: votesCountMap{
+//			votesCount: votesMarginMap{
 //				types.HexToHash32("0x1"): threshold * 2,
 //				types.HexToHash32("0x2"): -threshold * 3,
 //				types.HexToHash32("0x3"): threshold / 2,
@@ -802,7 +802,7 @@ package tortoisebeacon
 //			name:  "Case 2",
 //			epoch: 5,
 //			round: 5,
-//			votesCount: votesCountMap{
+//			votesCount: votesMarginMap{
 //				types.HexToHash32("0x1"): threshold * 2,
 //				types.HexToHash32("0x2"): -threshold * 3,
 //				types.HexToHash32("0x3"): threshold / 2,

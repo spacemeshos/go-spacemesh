@@ -38,7 +38,7 @@ type broadcaster interface {
 // WeakCoin defines weak coin interface.
 type WeakCoin interface {
 	Get(epoch types.EpochID, round types.RoundID) bool
-	PublishProposal(epoch types.EpochID, round types.RoundID) error
+	PublishProposal(ctx context.Context, epoch types.EpochID, round types.RoundID) error
 	OnRoundStarted(epoch types.EpochID, round types.RoundID)
 	OnRoundFinished(epoch types.EpochID, round types.RoundID)
 	HandleSerializedMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher)
@@ -105,7 +105,7 @@ func (wc *weakCoin) Get(epoch types.EpochID, round types.RoundID) bool {
 	return wc.weakCoins[pair]
 }
 
-func (wc *weakCoin) PublishProposal(epoch types.EpochID, round types.RoundID) error {
+func (wc *weakCoin) PublishProposal(ctx context.Context, epoch types.EpochID, round types.RoundID) error {
 	p, err := wc.generateProposal(epoch, round)
 	if err != nil {
 		return err
@@ -122,14 +122,13 @@ func (wc *weakCoin) PublishProposal(epoch types.EpochID, round types.RoundID) er
 		Proposal: p,
 	}
 
-	// TODO(nkryuchkov): fix conversion
 	serializedMessage, err := types.InterfaceToBytes(message)
 	if err != nil {
 		return fmt.Errorf("serialize weak coin message: %w", err)
 	}
 
 	// TODO(nkryuchkov): pass correct context
-	if err := wc.net.Broadcast(context.Background(), GossipProtocol, serializedMessage); err != nil {
+	if err := wc.net.Broadcast(ctx, GossipProtocol, serializedMessage); err != nil {
 		return fmt.Errorf("broadcast weak coin message: %w", err)
 	}
 
