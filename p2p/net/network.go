@@ -61,7 +61,7 @@ type Net struct {
 	listener      net.Listener
 	listenAddress *net.TCPAddr // Address to open connection: localhost:9999
 
-	isShuttingDown bool
+	shutdownCtx context.Context
 
 	regMutex         sync.RWMutex
 	regNewRemoteConn []func(NewConnectionEvent)
@@ -85,7 +85,7 @@ type NewConnectionEvent struct {
 
 // NewNet creates a new network.
 // It attempts to tcp listen on address. e.g. localhost:1234 .
-func NewNet(conf config.Config, localEntity node.LocalNode, logger log.Log) (*Net, error) {
+func NewNet(ctx context.Context, conf config.Config, localEntity node.LocalNode, logger log.Log) (*Net, error) {
 	qcount := DefaultQueueCount      // todo : get from cfg
 	qsize := DefaultMessageQueueSize // todo : get from cfg
 
@@ -98,6 +98,7 @@ func NewNet(conf config.Config, localEntity node.LocalNode, logger log.Log) (*Ne
 		queuesCount:           qcount,
 		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount),
 		config:                conf,
+		shutdownCtx:           ctx,
 	}
 
 	for imq := range n.incomingMessagesQueue {
@@ -214,7 +215,7 @@ func (n *Net) tcpSocketConfig(tcpconn *net.TCPConn) {
 }
 
 func (n *Net) createConnection(ctx context.Context, address net.Addr, remotePub p2pcrypto.PublicKey, session NetworkSession) (ManagedConnection, error) {
-	if n.isShuttingDown {
+	if n.isShuttingDown() {
 		return nil, fmt.Errorf("can't dial because the connection is shutting down")
 	}
 
@@ -277,13 +278,21 @@ func (n *Net) Dial(ctx context.Context, address net.Addr, remotePubkey p2pcrypto
 
 // Shutdown initiate a graceful closing of the TCP listener and all other internal routines
 func (n *Net) Shutdown() {
-	n.isShuttingDown = true
 	if n.listener != nil {
 		err := n.listener.Close()
 		if err != nil {
 			n.logger.With().Error("error closing listener", log.Err(err))
 		}
 	}
+}
+
+func (n *Net) isShuttingDown() bool {
+	select {
+	case <-n.shutdownCtx.Done():
+		return true
+	default:
+	}
+	return false
 }
 
 func (n *Net) accept(ctx context.Context, listen net.Listener, pending chan struct{}) {
@@ -294,7 +303,7 @@ func (n *Net) accept(ctx context.Context, listen net.Listener, pending chan stru
 		<-pending
 		netConn, err := listen.Accept()
 		if err != nil {
-			if n.isShuttingDown {
+			if n.isShuttingDown() {
 				return
 			}
 			if !Temporary(err) {
