@@ -44,11 +44,6 @@ data:
         Match       kube.*
         Remove_key  log
 
-    [FILTER]
-        Name    lua
-        Match   *
-        script  /fluent-bit/scripts/to_str.lua
-        call    to_str
 
   fluent-bit-output.conf: |-
 
@@ -77,27 +72,3 @@ data:
         Format      regex
         Regex       panic*
         Time_Key    time
-
-  to_str.lua: |-
-    function to_str(tag, timestamp, record)
-         source = record["source"]
-         if (source == nil)
-         then
-           return 0, 0, 0
-         else
-             new_record = record
-
-             local result = { }
-             local from  = 1
-             local delim_from, delim_to = string.find( source, "/", from  )
-             while delim_from do
-                 table.insert( result, string.sub( source, from , delim_from-1 ) )
-                 from  = delim_to + 1
-                 delim_from, delim_to = string.find( source, "/", from  )
-             end
-             table.insert( result, string.sub( source, from  ) )
-             new_record["appname"] = result[7]
-             new_record["filename"] = string.sub( result[8], 1, -5 )
-             return 1, timestamp, new_record
-         end
-      end

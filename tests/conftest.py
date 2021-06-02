@@ -9,13 +9,11 @@ import string
 import subprocess
 
 from tests import config as conf
-from tests import convenience as conv
 from tests import pod
 from tests.context import Context, ES
 from tests.convenience import str2bool
-from tests.es_dump import es_reindex
-from tests.gcloud_tasks.add_task_to_queue import create_google_cloud_task
-from tests.k8s_handler import add_elastic_cluster, add_kibana_cluster, add_fluent_bit_cluster, fluent_bit_teardown, \
+from tests.app_engine.gcloud_tasks.add_task_to_queue import create_google_cloud_task
+from tests.k8s_handler import add_elastic_cluster, add_kibana_cluster, add_fluent_bit_cluster, \
     wait_for_daemonset_to_be_ready
 from tests.misc import CoreV1ApiClient
 from tests.node_pool_deployer import NodePoolDep
@@ -298,12 +296,31 @@ def teardown(request, session_id, delete_ns, input_dump):
     # pytest considers any code after `yield` to be teardown code
     # see: https://docs.pytest.org/en/reorganize-docs/yieldfixture.html
     yield
-    # TODO: move this to the app engine?
-    fluent_bit_teardown(session_id)
     # dump ES content either if tests has failed of whether is_dump param was set to True in the test config file
     is_dump = request.session.testsfailed == 1 or input_dump
     dump_params = {}
     if is_dump:
-        dump_params = {"index_date": pytest.index_date, "es_ip": ES(session_id).get_elastic_ip(),
-                       "es_user": conf.ES_USER_LOCAL, "es_pass": conf.ES_PASS_LOCAL, "main_es_ip": conf.MAIN_ES_IP}
-    create_google_cloud_task(session_id, delete_ns, is_dump, conf.CLUSTER_NAME, conf.CLUSTER_ZONE, **dump_params)
+        dump_params = {
+            "index_date": pytest.index_date,
+            "es_ip": ES(session_id).get_elastic_ip(),
+            "es_user": conf.ES_USER_LOCAL,
+            "es_pass": conf.ES_PASS_LOCAL,
+            "main_es_ip": conf.MAIN_ES_IP,
+            "dump_queue_name": conf.DUMP_QUEUE_NAME,
+            "dump_queue_zone": conf.DUMP_QUEUE_ZONE,
+        }
+    queue_params = {
+        "project_id": conf.PROJECT_ID,
+        "queue_name": conf.TD_QUEUE_NAME,
+        "queue_zone": conf.TD_QUEUE_ZONE,
+    }
+    payload = {
+        "namespace": session_id,
+        "is_delns": delete_ns,
+        "is_dump": is_dump,
+        "project_id": conf.PROJECT_ID,
+        "pool_name": f"pool-{session_id}",
+        "cluster_name": conf.CLUSTER_NAME,
+        "node_pool_zone": conf.CLUSTER_ZONE,
+    }
+    create_google_cloud_task(queue_params, payload, **dump_params)

@@ -54,9 +54,6 @@ spec:
             - name: config
               mountPath: /fluent-bit/etc/parsers_custom.conf
               subPath: parsers.conf
-            - name: scripts
-              mountPath: /fluent-bit/scripts/to_str.lua
-              subPath: to_str.lua
 
       terminationGracePeriodSeconds: 10
       nodeSelector:
@@ -74,8 +71,5 @@ spec:
           hostPath:
             path: /var/lib/docker/containers
         - name: config
-          configMap:
-            name: fluent-bit-config
-        - name: scripts
           configMap:
             name: fluent-bit-config
