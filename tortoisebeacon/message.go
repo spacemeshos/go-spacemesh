@@ -8,7 +8,8 @@ import (
 
 // ProposalMessage is a message type which is used when sending proposals.
 type ProposalMessage struct {
-	VRFSignature []byte `json:"vrf_signature"`
+	MinerID      types.NodeID
+	VRFSignature []byte
 }
 
 // String returns a string form of ProposalMessage.
@@ -22,9 +23,11 @@ func (p ProposalMessage) String() string {
 }
 
 type FirstVotingMessage struct {
-	ValidVotes            [][]byte `json:"valid_votes"`
-	PotentiallyValidVotes [][]byte `json:"potentially_valid_votes"`
-	Signature             []byte   `json:"signature"`
+	// TODO: miner ID
+	MinerID                   types.NodeID
+	ValidProposals            [][]byte
+	PotentiallyValidProposals [][]byte
+	Signature                 []byte // implement extracting pk from signature
 }
 
 // String returns a string form of FirstVotingMessage.
@@ -38,9 +41,10 @@ func (v FirstVotingMessage) String() string {
 }
 
 type FollowingVotingMessage struct {
-	RoundID        types.RoundID `json:"round_id"`
-	VotesBitVector []uint64      `json:"votes_bit_vector"`
-	Signature      []byte        `json:"signature"`
+	// TODO: miner ID
+	RoundID        types.RoundID
+	VotesBitVector []uint64
+	Signature      []byte
 }
 
 // String returns a string form of FollowingVotingMessage.

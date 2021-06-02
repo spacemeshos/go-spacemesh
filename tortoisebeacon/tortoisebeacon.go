@@ -231,6 +231,7 @@ func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 
 	var beacon types.Hash32
 	var ok bool
+	// TODO: remove
 	for i := 0; i < 50; i++ {
 		beacon, ok = tb.beacons[epochID-1]
 		if !ok {
@@ -411,6 +412,7 @@ func (tb *TortoiseBeacon) runProposalPhase(epoch types.EpochID) error {
 	return nil
 }
 
+// TODO: consider making generic
 func (tb *TortoiseBeacon) proposalExceedsThreshold(proposal []byte, epochWeight uint64) (bool, error) {
 	proposalInt := new(big.Int).SetBytes(proposal[:])
 
@@ -542,7 +544,8 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 	tb.Log.With().Debug("Serialized voting message",
 		log.String("message", string(serializedMessage)))
 
-	if err := tb.net.Broadcast(ctx, TBFollowingVotingProtocol, serializedMessage); err != nil {
+	// TODO: rename to SendToGossip
+	if err := tb.net.Broadcast(ctx, TBFirstVotingProtocol, serializedMessage); err != nil {
 		return fmt.Errorf("broadcast voting message: %w", err)
 	}
 
@@ -651,16 +654,18 @@ func (tb *TortoiseBeacon) votingThreshold(epochID types.EpochID) (int, error) {
 	return int(tb.config.Theta * float64(epochWeight)), nil
 }
 
+// TODO: should be fixed point
 func (tb *TortoiseBeacon) atxThresholdFraction(epochWeight uint64) float64 {
 	return 1 - math.Pow(2.0, -(float64(tb.config.Kappa)/((1.0-tb.config.Q)*float64(epochWeight))))
 }
 
+// TODO: consider having a generic function for probabilities
 func (tb *TortoiseBeacon) atxThreshold(epochWeight uint64) (*big.Int, error) {
 	fractionFloat64 := tb.atxThresholdFraction(epochWeight)
 	fractionBigFloat := new(big.Float).SetFloat64(fractionFloat64)
 
 	emptyMessage := make([]byte, 0)
-	maxPossibleNumberBytes := tb.vrfSigner.Sign(emptyMessage)
+	maxPossibleNumberBytes := tb.vrfSigner.Sign(emptyMessage) // TODO: have a constant for that
 
 	for i := range maxPossibleNumberBytes {
 		maxPossibleNumberBytes[i] = 0xFF
@@ -690,7 +695,16 @@ func (tb *TortoiseBeacon) calcSignature(epoch types.EpochID) ([]byte, error) {
 	return signature, nil
 }
 
+// rename to eligibilityProof
+func (tb *TortoiseBeacon) calcVotingSignature(epoch types.EpochID) ([]byte, error) {
+	// TODO: sign with ed25519, message is xdr encoded
+	// signature = ed25519(private_key, epoch)
+
+	return ed25519.Sign(privateKey, wholeMessage)
+}
+
 func (tb *TortoiseBeacon) calcProposal(epoch types.EpochID) ([]byte, error) {
+	// TODO: use xdr
 	msg := bytes.Buffer{}
 
 	msg.WriteString(proposalPrefix)

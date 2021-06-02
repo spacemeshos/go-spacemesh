@@ -11,6 +11,9 @@ func (tb *TortoiseBeacon) calcVotesFromProposals(epoch types.EpochID) firstRound
 	valid := make(proposalList, 0)
 	potentiallyValid := make(proposalList, 0)
 
+	// TODO: have a mixed list of all sorted proposals
+	// have one bit vector: valid proposals
+
 	tb.validProposalsMu.RLock()
 
 	for p := range tb.validProposals[epoch] {
@@ -37,6 +40,9 @@ func (tb *TortoiseBeacon) calcVotesFromProposals(epoch types.EpochID) firstRound
 		PotentiallyValidVotes: potentiallyValid,
 	}
 
+	// TODO: also send a bit vector
+	// TODO: initialize margin vector to initial votes
+	// TODO: use weight
 	tb.firstRoundOutcomingVotes[epoch] = votes
 
 	return votes
@@ -46,6 +52,7 @@ func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID) (v
 	tb.votesMu.Lock()
 	defer tb.votesMu.Unlock()
 
+	// TODO: initialize votes margin when we create a proposal list
 	votesMargin, err := tb.firstRoundVotes(epoch)
 	if err != nil {
 		return votesSetPair{}, fmt.Errorf("calc first round votes: %w", err)
@@ -124,6 +131,8 @@ func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) (votesMarginMap, 
 	return firstRoundVotesMargin, nil
 }
 
+// TODO: for every round excluding first round
+// TODO: consider having a vector of opinions
 func (tb *TortoiseBeacon) calcOwnFirstRoundVotes(epoch types.EpochID, votesMargin votesMarginMap) (votesSetPair, error) {
 	ownFirstRoundsVotes := votesSetPair{
 		ValidVotes:   make(hashSet),
@@ -135,16 +144,20 @@ func (tb *TortoiseBeacon) calcOwnFirstRoundVotes(epoch types.EpochID, votesMargi
 		return votesSetPair{}, fmt.Errorf("voting threshold: %w", err)
 	}
 
+	coinToss := tb.weakCoin.Get(epoch, 1)
+
 	for vote, margin := range votesMargin {
 		switch {
 		case margin >= votingThreshold:
 			ownFirstRoundsVotes.ValidVotes[vote] = struct{}{}
 		case margin <= -votingThreshold:
 			ownFirstRoundsVotes.InvalidVotes[vote] = struct{}{}
-		case tb.weakCoin.Get(epoch, 1):
-			ownFirstRoundsVotes.ValidVotes[vote] = struct{}{}
-		case !tb.weakCoin.Get(epoch, 1):
-			ownFirstRoundsVotes.InvalidVotes[vote] = struct{}{}
+		default:
+			if coinToss {
+				ownFirstRoundsVotes.ValidVotes[vote] = struct{}{}
+			} else {
+				ownFirstRoundsVotes.InvalidVotes[vote] = struct{}{}
+			}
 		}
 	}
 
@@ -158,6 +171,7 @@ func (tb *TortoiseBeacon) calcOwnFirstRoundVotes(epoch types.EpochID, votesMargi
 	return ownFirstRoundsVotes, nil
 }
 
+// TODO: same calculation, do incremental part on receiving (vector of margins)
 func (tb *TortoiseBeacon) calcVotesMargin(epoch types.EpochID, upToRound types.RoundID, votesMargin votesMarginMap) error {
 	for round := firstRound + 1; round <= upToRound; round++ {
 		thisRound := epochRoundPair{

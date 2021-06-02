@@ -60,6 +60,10 @@ func (tb *TortoiseBeacon) handleProposalMessage(sender p2pcrypto.PublicKey, m Pr
 	// Ensure that epoch is the same.
 	ok := tb.vrfVerifier(sender.Bytes(), currentEpochProposal, m.VRFSignature)
 	if !ok {
+		// TODO: attach telemetry
+		tb.Log.With().Warning("Received malformed proposal message: VRF is not verified",
+			log.String("sender", m.MinerID.String()),
+			log.String("sender_short", m.MinerID.ShortString()))
 		return nil
 	}
 
@@ -68,6 +72,7 @@ func (tb *TortoiseBeacon) handleProposalMessage(sender p2pcrypto.PublicKey, m Pr
 		return fmt.Errorf("get epoch weight: %w", err)
 	}
 
+	// TODO: rename to proposal passes eligibility threshold (below the threshold)
 	exceeds, err := tb.proposalExceedsThreshold(m.VRFSignature, epochWeight)
 	if err != nil {
 		return fmt.Errorf("proposalExceedsThreshold: %w", err)
@@ -97,8 +102,9 @@ func (tb *TortoiseBeacon) handleProposalMessage(sender p2pcrypto.PublicKey, m Pr
 	atxEpoch := atxHeader.PubLayerID.GetEpoch()
 	nextEpochStart := tb.clock.LayerToTime((atxEpoch + 1).FirstLayer())
 
+	// TODO: fix conditions (9 cases)
 	switch {
-	case atxTimestamp.Before(nextEpochStart):
+	case atxTimestamp.Before(nextEpochStart): // TODO: and proposal message was received before the end of proposal round
 		tb.Log.With().Info("Received valid proposal message",
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.String("message", m.String()))
@@ -113,7 +119,7 @@ func (tb *TortoiseBeacon) handleProposalMessage(sender p2pcrypto.PublicKey, m Pr
 
 		tb.validProposalsMu.Unlock()
 
-	case atxTimestamp.Before(nextEpochStart.Add(tb.votingRoundDuration)):
+	case atxTimestamp.Before(nextEpochStart.Add(tb.config.GracePeriodDurationSec)): // TODO: fix
 		tb.Log.With().Info("Received potentially valid proposal message",
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.String("message", m.String()))
@@ -189,14 +195,19 @@ func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Con
 }
 
 func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, from p2pcrypto.PublicKey, message FirstVotingMessage) error {
+	// TODO: check for ATX (also for following voting messages), same conditions as for proposals, except when it's received
+	// check if PK has an ATX in the previous epoch (any time0
+
 	currentEpoch := tb.currentEpoch()
 
+	// use the whole message instead
 	currentEpochProposal, err := tb.calcProposal(currentEpoch)
 	if err != nil {
 		return fmt.Errorf("calculate proposal: %w", err)
 	}
 
 	// Ensure that epoch is the same.
+	// TODO: not vrf verifier,should be eligibility verifier
 	ok := tb.vrfVerifier(from.Bytes(), currentEpochProposal, message.Signature)
 	if !ok {
 		tb.Log.With().Warning("Received malformed first voting message, bad signature",
@@ -227,10 +238,19 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, from p2p
 		tb.firstRoundIncomingVotes[currentEpoch] = make(firstRoundVotesPerPK)
 	}
 
+	// TODO: no need to store each vote separately
+	// have a separate table for an epoch with one bit in it if atx/miner is voted already
 	if _, ok := tb.incomingVotes[thisRound][from]; ok {
 		tb.Log.With().Warning("Received malformed message, already received a voting message for these PK and round",
 			log.String("from", from.String()),
 			log.Uint64("round_id", uint64(firstRound)))
+
+		// TODO: report this miner through gossip
+		// TODO: store evidence, generate malfeasance proof: union of two whole voting messages
+		// TODO: handle malfeasance proof: we have a blacklist, on receiving, add to blacklist
+		// TODO: blacklist format: key is epoch when blacklisting started, value is link to proof (union of messages)
+		// TODO: ban id forever globally across packages since this epoch
+		// TODO: (not tortoise beacon) do the same for ATXs
 
 		return nil
 	}
@@ -255,6 +275,9 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, from p2p
 		InvalidVotes: invalidVotesMap,
 	}
 
+	// this is used for bit vector calculation
+	// TODO: store sorted mixed valid+potentiallyValid
+	//
 	tb.firstRoundIncomingVotes[currentEpoch][from] = firstRoundVotes{
 		ValidVotes:            validVotesList,
 		PotentiallyValidVotes: potentiallyValidVotesList,
