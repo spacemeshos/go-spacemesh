@@ -24,7 +24,7 @@ func TestSendReceiveMessage(t *testing.T) {
 	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
 	go conn.beginEventProcessing(context.TODO())
 	msg := "hello"
-	err := conn.SendSock([]byte(msg))
+	err := conn.sendSock([]byte(msg))
 	assert.NoError(t, err)
 	assert.Equal(t, len(msg)+1, len(rwcam.WriteOut())) // the +1 is because of the delimited wire format
 	rwcam.SetReadResult(rwcam.WriteOut(), nil)
@@ -61,18 +61,19 @@ func TestSendMutex(t *testing.T) {
 	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
 	go conn.beginEventProcessing(context.TODO())
 	msg := "hello"
+
+	// Send an initial message
 	err := conn.Send(context.TODO(), []byte(msg))
 	assert.NoError(t, err)
 
-	// Make sure SendSock received the message and tried to send it (and is blocking on Write)
-	for i := 0; i < 10; i++ {
-		if rwcam.WriteCount() >= 1 {
-			break
+	// Make sure sendSock received the message and tried to send it (and is blocking on Write)
+	timeout := time.After(1 * time.Second)
+	for rwcam.WriteCount() < 1 {
+		select {
+		case <-timeout:
+			assert.Fail(t, "timed out waiting for sendSock to call Write")
+		case <-time.After(100 * time.Millisecond):
 		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	if rwcam.WriteCount() < 1 {
-		assert.Fail(t, "timed out waiting for SendSock to block")
 	}
 
 	// Now try sending another message and make sure it doesn't block
@@ -131,7 +132,7 @@ func TestSendError(t *testing.T) {
 
 	rwcam.SetWriteResult(fmt.Errorf("fail"))
 	msg := "hello"
-	err := conn.SendSock([]byte(msg))
+	err := conn.sendSock([]byte(msg))
 	assert.Error(t, err)
 	assert.Equal(t, "fail", err.Error())
 }

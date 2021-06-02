@@ -160,7 +160,7 @@ func (c *MsgConnection) sendListener() {
 			log.String("requestId", m.reqID))*/
 
 			//todo: we are hiding the error here...
-			if err := c.SendSock(m.payload); err != nil {
+			if err := c.sendSock(m.payload); err != nil {
 				log.With().Error("msgconnection: cannot send message to peer",
 					log.String("peer_id", m.peerID),
 					log.String("requestId", m.reqID),
@@ -191,8 +191,8 @@ func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
 	return nil
 }
 
-// SendSock sends a message directly on the socket
-func (c *MsgConnection) SendSock(m []byte) error {
+// sendSock sends a message directly on the socket
+func (c *MsgConnection) sendSock(m []byte) error {
 	c.wmtx.Lock()
 	if c.closed {
 		c.wmtx.Unlock()

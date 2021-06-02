@@ -113,7 +113,7 @@ type formattedWriter interface {
 
 type fmtConnection interface {
 	Connection
-	SendSock([]byte) error
+	sendSock([]byte) error
 	setupIncoming(context.Context, time.Duration) error
 	beginEventProcessing(context.Context)
 }
@@ -238,7 +238,7 @@ func (c *FormattedConnection) sendListener() {
 			log.String("requestId", m.reqID))*/
 
 			//todo: we are hiding the error here...
-			if err := c.SendSock(m.payload); err != nil {
+			if err := c.sendSock(m.payload); err != nil {
 				c.logger.With().Error("connection: cannot send message to peer",
 					log.String("peer_id", m.peerID),
 					log.String("requestId", m.reqID),
@@ -269,8 +269,8 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 	return nil
 }
 
-// SendSock sends a message directly on the socket without waiting for the queue.
-func (c *FormattedConnection) SendSock(m []byte) error {
+// sendSock sends a message directly on the socket without waiting for the queue.
+func (c *FormattedConnection) sendSock(m []byte) error {
 	c.wmtx.Lock()
 	if c.closed {
 		c.wmtx.Unlock()
