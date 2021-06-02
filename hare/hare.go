@@ -254,7 +254,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 	if err != nil {
 		logger.With().Error("no blocks found for hare, using empty set", log.Err(err))
 		// just fail here, it will end hare with empty set result
-		return // ?
+		// return // ?
 		// TODO: there can be a difference between just fail with empty set
 		// TODO:   and achieve consensus on empty set
 	}
