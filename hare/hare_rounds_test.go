@@ -120,7 +120,7 @@ func runNodesFor(t *testing.T, nodes, leaders, maxLayers, limitIterations, concu
 	return w
 }
 
-func Test_xfalurePreRoundEmptySet(t *testing.T) {
+func Test_HarePreRoundEmptySet(t *testing.T) {
 	types.SetLayersPerEpoch(1)
 	const nodes = 5
 	const layers = 2
@@ -153,7 +153,7 @@ func Test_xfalurePreRoundEmptySet(t *testing.T) {
 	}
 }
 
-func Test_xfailureNoEnoughStatuses(t *testing.T) {
+func Test_HareNoEnoughStatuses(t *testing.T) {
 	if skipMoreTests {
 		t.SkipNow()
 	}
@@ -190,7 +190,7 @@ func Test_xfailureNoEnoughStatuses(t *testing.T) {
 	}
 }
 
-func Test_xfailureNoEnoughLeaders(t *testing.T) {
+func Test_HareNoEnoughLeaders(t *testing.T) {
 	if skipMoreTests {
 		t.SkipNow()
 	}
@@ -226,7 +226,7 @@ func Test_xfailureNoEnoughLeaders(t *testing.T) {
 	}
 }
 
-func Test_xfailureNoEnoughCommits(t *testing.T) {
+func Test_HareNoEnoughCommits(t *testing.T) {
 	if skipMoreTests {
 		t.SkipNow()
 	}
@@ -262,7 +262,7 @@ func Test_xfailureNoEnoughCommits(t *testing.T) {
 	}
 }
 
-func Test_xfailureNoEnoughNotifies(t *testing.T) {
+func Test_HareNoEnoughNotifies(t *testing.T) {
 	if skipMoreTests {
 		t.SkipNow()
 	}
@@ -298,7 +298,7 @@ func Test_xfailureNoEnoughNotifies(t *testing.T) {
 	}
 }
 
-func Test_xfailureSucceeded(t *testing.T) {
+func Test_HareComplete(t *testing.T) {
 	if skipMoreTests {
 		t.SkipNow()
 	}

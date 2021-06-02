@@ -167,9 +167,6 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 
 	msgs[0].Sig = tmp
 	inner := msgs[0].InnerMsg.Values
-	msgs[0].InnerMsg.Values = nil
-	//r.Equal(errInnerSyntax, validator.validateAggregatedMessage(context.TODO(), agg, funcs))
-
 	msgs[0].InnerMsg.Values = inner
 	validator.roleValidator = &mockValidator{}
 	r.Equal(errInnerEligibility, validator.validateAggregatedMessage(context.TODO(), agg, funcs))

@@ -238,24 +238,6 @@ func (v *syntaxContextValidator) SyntacticallyValidateMessage(ctx context.Contex
 		return false
 	}
 
-	/*
-		empty set messages are allowed now
-		if m.InnerMsg.Values == nil {
-			logger.With().Warning("syntax validation failed: set is nil",
-				log.String("sender_id", m.PubKey.ShortString()),
-				types.LayerID(m.InnerMsg.InstanceID),
-				log.String("msg_type", m.InnerMsg.Type.String()))
-			return false
-		}
-
-		if len(m.InnerMsg.Values) == 0 {
-			logger.With().Warning("syntax validation failed: set is empty",
-				log.String("sender_id", m.PubKey.ShortString()),
-				types.LayerID(m.InnerMsg.InstanceID),
-				log.String("msg_type", m.InnerMsg.Type.String()))
-			return false
-		}*/
-
 	claimedRound := m.InnerMsg.K % 4
 	switch m.InnerMsg.Type {
 	case pre:

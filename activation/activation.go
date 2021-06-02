@@ -391,7 +391,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		}
 	}
 
-	b.log.With().Info("chellenge ready")
+	b.log.With().Info("challenge ready")
 
 	pubEpoch := b.challenge.PubLayerID.GetEpoch()
 
