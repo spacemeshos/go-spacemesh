@@ -3,18 +3,19 @@ package eligibility
 import (
 	"context"
 	"encoding/binary"
+	"testing"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 type mockBeaconProvider struct {
 	value []byte
 }
 
-func (mbp mockBeaconProvider) GetBeacon(types.EpochID) []byte {
-	return mbp.value
+func (mbp mockBeaconProvider) GetBeacon(types.EpochID) ([]byte, error) {
+	return mbp.value, nil
 }
 
 func TestBeacon_Value(t *testing.T) {

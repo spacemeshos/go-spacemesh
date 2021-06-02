@@ -2,9 +2,11 @@ package tortoisebeacon
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -12,9 +14,13 @@ import (
 
 // TBProposalProtocol is Tortoise Beacon proposal Gossip protocol name.
 const TBProposalProtocol = "TBProposalGossip"
+const TBFirstVotingProtocol = "TBFirstVotingGossip"
+const TBFollowingVotingProtocol = "TBFollowingVotingGossip"
 
-// TBVotingProtocol is Tortoise Beacon voting Gossip protocol name.
-const TBVotingProtocol = "TBVotingGossip"
+var (
+	// ErrMalformedProposal is returned if proposal message is malformed.
+	ErrMalformedProposal = errors.New("malformed proposal message")
+)
 
 // HandleSerializedProposalMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
 // TODO(nkryuchkov): use context
@@ -31,8 +37,9 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 		return
 	}
 
-	if err := tb.handleProposalMessage(m); err != nil {
+	if err := tb.handleProposalMessage(data.Sender(), m); err != nil {
 		tb.Log.With().Error("Failed to handle proposal message",
+			log.String("sender", data.Sender().String()),
 			log.String("message", m.String()),
 			log.Err(err))
 
@@ -42,71 +49,101 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 	data.ReportValidation(TBProposalProtocol)
 }
 
-func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage) error {
-	epoch := m.Epoch()
+func (tb *TortoiseBeacon) handleProposalMessage(sender p2pcrypto.PublicKey, m ProposalMessage) error {
+	epoch := tb.currentEpoch()
 
-	mt := tb.classifyMessage(m, epoch)
+	currentEpochProposal, err := tb.calcProposal(epoch)
+	if err != nil {
+		return fmt.Errorf("calculate proposal: %w", err)
+	}
 
-	switch mt {
-	case TimelyMessage:
-		tb.Log.With().Info("Received timely ProposalMessage",
-			log.Uint64("epoch_id", uint64(m.Epoch())),
+	// Ensure that epoch is the same.
+	ok := tb.vrfVerifier(sender.Bytes(), currentEpochProposal, m.VRFSignature)
+	if !ok {
+		return nil
+	}
+
+	epochWeight, _, err := tb.atxDB.GetEpochWeight(epoch)
+	if err != nil {
+		return fmt.Errorf("get epoch weight: %w", err)
+	}
+
+	exceeds, err := tb.proposalExceedsThreshold(m.VRFSignature, epochWeight)
+	if err != nil {
+		return fmt.Errorf("proposalExceedsThreshold: %w", err)
+	}
+
+	if exceeds {
+		tb.Log.With().Warning("Rejected proposal message which exceeds threshold")
+		return nil
+	}
+
+	nodeID := types.NodeID{Key: sender.String()}
+	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(nodeID, epoch)
+	if err != nil {
+		return err
+	}
+
+	atxHeader, err := tb.atxDB.GetAtxHeader(atxID)
+	if err != nil {
+		return err
+	}
+
+	atxTimestamp, err := tb.atxDB.GetAtxTimestamp(atxID)
+	if err != nil {
+		return err
+	}
+
+	atxEpoch := atxHeader.PubLayerID.GetEpoch()
+	nextEpochStart := tb.clock.LayerToTime((atxEpoch + 1).FirstLayer())
+
+	switch {
+	case atxTimestamp.Before(nextEpochStart):
+		tb.Log.With().Info("Received valid proposal message",
+			log.Uint64("epoch_id", uint64(epoch)),
 			log.String("message", m.String()))
 
-		tb.timelyProposalsMu.Lock()
+		tb.validProposalsMu.Lock()
 
-		if _, ok := tb.timelyProposals[epoch]; !ok {
-			tb.timelyProposals[epoch] = make(map[types.Hash32]struct{})
+		if _, ok := tb.validProposals[epoch]; !ok {
+			tb.validProposals[epoch] = make(map[string]struct{})
 		}
 
-		tb.timelyProposals[epoch][m.Proposals().Hash()] = struct{}{}
+		tb.validProposals[epoch][util.Bytes2Hex(m.VRFSignature)] = struct{}{}
 
-		tb.timelyProposalsMu.Unlock()
+		tb.validProposalsMu.Unlock()
 
-		return nil
-
-	case DelayedMessage:
-		tb.Log.With().Info("Received delayed ProposalMessage",
-			log.Uint64("epoch_id", uint64(m.Epoch())),
+	case atxTimestamp.Before(nextEpochStart.Add(tb.votingRoundDuration)):
+		tb.Log.With().Info("Received potentially valid proposal message",
+			log.Uint64("epoch_id", uint64(epoch)),
 			log.String("message", m.String()))
 
-		tb.delayedProposalsMu.Lock()
+		tb.potentiallyValidProposalsMu.Lock()
 
-		if _, ok := tb.delayedProposals[epoch]; !ok {
-			tb.delayedProposals[epoch] = make(map[types.Hash32]struct{})
+		if _, ok := tb.potentiallyValidProposals[epoch]; !ok {
+			tb.potentiallyValidProposals[epoch] = make(map[string]struct{})
 		}
 
-		tb.delayedProposals[epoch][m.Proposals().Hash()] = struct{}{}
+		tb.potentiallyValidProposals[epoch][util.Bytes2Hex(m.VRFSignature)] = struct{}{}
 
-		tb.delayedProposalsMu.Unlock()
-
-		return nil
-
-	case LateMessage:
-		tb.Log.With().Warning("Received late ProposalMessage",
-			log.Uint64("epoch_id", uint64(m.Epoch())),
-			log.Int("type", int(mt)))
-
-		return nil
+		tb.potentiallyValidProposalsMu.Unlock()
 
 	default:
-		tb.Log.With().Info("Received ProposalMessage of unknown type",
-			log.Uint64("epoch_id", uint64(m.Epoch())),
-			log.String("message", m.String()))
-
-		return ErrUnknownMessageType
+		tb.Log.With().Warning("Received invalid proposal message",
+			log.Uint64("epoch_id", uint64(epoch)))
 	}
+
+	return nil
 }
 
-// HandleSerializedVotingMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
-// TODO(nkryuchkov): use context
-func (tb *TortoiseBeacon) HandleSerializedVotingMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
+// HandleSerializedFirstVotingMessage defines method to handle Tortoise Beacon first voting Messages from gossip.
+func (tb *TortoiseBeacon) HandleSerializedFirstVotingMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
 	from := data.Sender()
 
 	tb.Log.With().Info("New voting message",
 		log.String("from", from.String()))
 
-	var m VotingMessage
+	var m FirstVotingMessage
 	if err := types.BytesToInterface(data.Bytes(), &m); err != nil {
 		tb.Log.With().Error("Received invalid voting message",
 			log.String("message", string(data.Bytes())),
@@ -115,104 +152,175 @@ func (tb *TortoiseBeacon) HandleSerializedVotingMessage(ctx context.Context, dat
 		return
 	}
 
-	if err := tb.handleVotingMessage(from, m); err != nil {
+	if err := tb.handleFirstVotingMessage(ctx, from, m); err != nil {
 		tb.Log.With().Error("Failed to handle voting message",
-			log.String("message", m.String()),
 			log.Err(err))
 
 		return
 	}
 
-	data.ReportValidation(TBVotingProtocol)
+	data.ReportValidation(TBFirstVotingProtocol)
 }
 
-func (tb *TortoiseBeacon) handleVotingMessage(from p2pcrypto.PublicKey, message VotingMessage) error {
-	messageEpoch := message.Epoch()
-	messageRound := message.Round()
+// HandleSerializedFollowingVotingMessage defines method to handle Tortoise Beacon following voting Messages from gossip.
+func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
+	from := data.Sender()
 
-	mt := tb.classifyMessage(message, messageEpoch)
-	switch mt {
-	case TimelyMessage:
-		tb.Log.With().Info("Received timely VotingMessage, counting it",
-			log.Uint64("epoch_id", uint64(message.Epoch())),
-			log.Uint64("round", uint64(messageRound)),
-			log.String("message", message.String()))
+	tb.Log.With().Info("New voting message",
+		log.String("from", from.String()))
 
-		thisRound := epochRoundPair{
-			EpochID: messageEpoch,
-			Round:   messageRound,
-		}
+	var m FollowingVotingMessage
+	if err := types.BytesToInterface(data.Bytes(), &m); err != nil {
+		tb.Log.With().Error("Received invalid voting message",
+			log.String("message", string(data.Bytes())),
+			log.Err(err))
 
-		tb.votesMu.Lock()
-		defer tb.votesMu.Unlock()
-
-		if _, ok := tb.incomingVotes[thisRound]; !ok {
-			tb.incomingVotes[thisRound] = make(votesPerPK)
-		}
-
-		votesFor := make(hashSet)
-		votesAgainst := make(hashSet)
-
-		for _, vote := range message.For() {
-			votesFor[vote] = struct{}{}
-		}
-
-		for _, vote := range message.Against() {
-			votesAgainst[vote] = struct{}{}
-		}
-
-		tb.incomingVotes[thisRound][from] = votesSetPair{
-			VotesFor:     votesFor,
-			VotesAgainst: votesAgainst,
-		}
-
-		return nil
-
-	case DelayedMessage, LateMessage:
-		tb.Log.With().Warning(fmt.Sprintf("Received %v VotingMessage, ignoring it", mt.String()),
-			log.Uint64("epoch_id", uint64(message.Epoch())),
-			log.Uint64("round", uint64(messageRound)),
-			log.String("message", message.String()))
-
-		return nil
-
-	default:
-		tb.Log.With().Info("Received VotingMessage of unknown type",
-			log.Uint64("epoch_id", uint64(message.Epoch())),
-			log.Uint64("round", uint64(messageRound)),
-			log.Int("type", int(mt)))
-
-		return ErrUnknownMessageType
+		return
 	}
+
+	if err := tb.handleFollowingVotingMessage(ctx, from, m); err != nil {
+		tb.Log.With().Error("Failed to handle voting message",
+			log.Err(err))
+
+		return
+	}
+
+	data.ReportValidation(TBFollowingVotingProtocol)
 }
 
-func (tb *TortoiseBeacon) classifyMessage(m message, epoch types.EpochID) MessageType {
-	tb.currentRoundsMu.Lock()
-	currentRound := tb.currentRounds[epoch]
-	tb.currentRoundsMu.Unlock()
+func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, from p2pcrypto.PublicKey, message FirstVotingMessage) error {
+	currentEpoch := tb.currentEpoch()
 
-	// If ProposalMessage, messageRound == 1.
-	// If VotingMessage, messageRound is extracted from message.
-	messageRound := types.RoundID(1)
-	if vm, ok := m.(VotingMessage); ok {
-		messageRound = vm.Round()
+	currentEpochProposal, err := tb.calcProposal(currentEpoch)
+	if err != nil {
+		return fmt.Errorf("calculate proposal: %w", err)
 	}
 
-	classification := LateMessage
+	// Ensure that epoch is the same.
+	ok := tb.vrfVerifier(from.Bytes(), currentEpochProposal, message.Signature)
+	if !ok {
+		tb.Log.With().Warning("Received malformed first voting message, bad signature",
+			log.String("from", from.String()),
+			log.Uint64("epoch_id", uint64(currentEpoch)),
+			log.String("expected_message", util.Bytes2Hex(currentEpochProposal)),
+			log.String("signature", util.Bytes2Hex(message.Signature)))
 
-	switch {
-	case currentRound-messageRound <= 1, currentRound < messageRound:
-		classification = TimelyMessage
-	case messageRound == currentRound-2:
-		classification = DelayedMessage
+		return nil
 	}
 
-	tb.Log.With().Info(fmt.Sprintf("Message is considered %s", classification.String()),
-		log.Uint64("epoch_id", uint64(epoch)),
-		log.Uint64("message_epoch", uint64(m.Epoch())),
-		log.Uint64("message_round", uint64(messageRound)),
-		log.Uint64("current_round", uint64(currentRound)),
-		log.String("message", m.String()))
+	tb.Log.With().Info("Received first round voting message, counting it",
+		log.String("message", message.String()))
 
-	return classification
+	thisRound := epochRoundPair{
+		EpochID: currentEpoch,
+		Round:   firstRound,
+	}
+
+	tb.votesMu.Lock()
+	defer tb.votesMu.Unlock()
+
+	if _, ok := tb.incomingVotes[thisRound]; !ok {
+		tb.incomingVotes[thisRound] = make(votesPerPK)
+	}
+
+	if _, ok := tb.firstRoundIncomingVotes[currentEpoch]; !ok {
+		tb.firstRoundIncomingVotes[currentEpoch] = make(firstRoundVotesPerPK)
+	}
+
+	if _, ok := tb.incomingVotes[thisRound][from]; ok {
+		tb.Log.With().Warning("Received malformed message, already received a voting message for these PK and round",
+			log.String("from", from.String()),
+			log.Uint64("round_id", uint64(firstRound)))
+
+		return nil
+	}
+
+	validVotesMap := make(hashSet)
+	invalidVotesMap := make(hashSet)
+	validVotesList := make([]proposal, 0)
+	potentiallyValidVotesList := make([]proposal, 0)
+
+	for _, vote := range message.ValidVotes {
+		validVotesMap[util.Bytes2Hex(vote)] = struct{}{}
+		validVotesList = append(validVotesList, util.Bytes2Hex(vote))
+	}
+
+	for _, vote := range message.PotentiallyValidVotes {
+		invalidVotesMap[util.Bytes2Hex(vote)] = struct{}{}
+		potentiallyValidVotesList = append(potentiallyValidVotesList, util.Bytes2Hex(vote))
+	}
+
+	tb.incomingVotes[thisRound][from] = votesSetPair{
+		ValidVotes:   validVotesMap,
+		InvalidVotes: invalidVotesMap,
+	}
+
+	tb.firstRoundIncomingVotes[currentEpoch][from] = firstRoundVotes{
+		ValidVotes:            validVotesList,
+		PotentiallyValidVotes: potentiallyValidVotesList,
+	}
+
+	return nil
+}
+
+func (tb *TortoiseBeacon) handleFollowingVotingMessage(ctx context.Context, from p2pcrypto.PublicKey, message FollowingVotingMessage) error {
+	currentEpoch := tb.currentEpoch()
+	messageRound := message.RoundID
+
+	currentEpochProposal, err := tb.calcProposal(currentEpoch)
+	if err != nil {
+		return fmt.Errorf("calculate proposal: %w", err)
+	}
+
+	// Ensure that epoch is the same.
+	ok := tb.vrfVerifier(from.Bytes(), currentEpochProposal, message.Signature)
+	if !ok {
+		tb.Log.With().Warning("Received malformed following voting message, bad signature",
+			log.String("from", from.String()),
+			log.Uint64("epoch_id", uint64(currentEpoch)),
+			log.String("expected_message", util.Bytes2Hex(currentEpochProposal)),
+			log.String("signature", util.Bytes2Hex(message.Signature)))
+
+		return nil
+	}
+
+	tb.Log.With().Info("Received VotingMessage, counting it",
+		log.Uint64("round", uint64(messageRound)),
+		log.String("message", message.String()))
+
+	thisRound := epochRoundPair{
+		EpochID: currentEpoch,
+		Round:   messageRound,
+	}
+
+	tb.votesMu.Lock()
+	defer tb.votesMu.Unlock()
+
+	if _, ok := tb.incomingVotes[thisRound]; !ok {
+		tb.incomingVotes[thisRound] = make(votesPerPK)
+	}
+
+	if _, ok := tb.incomingVotes[thisRound][from]; ok {
+		tb.Log.With().Warning("Received malformed message, already received a voting message for these PK and round",
+			log.String("from", from.String()),
+			log.Uint64("round_id", uint64(message.RoundID)))
+
+		return nil
+	}
+
+	firstRoundIncomingVotes := tb.firstRoundIncomingVotes[currentEpoch][from]
+	tb.incomingVotes[thisRound][from] = tb.decodeVotes(message.VotesBitVector, firstRoundIncomingVotes)
+
+	return nil
+}
+
+func (tb *TortoiseBeacon) currentEpoch() types.EpochID {
+	return tb.currentLayer().GetEpoch()
+}
+
+func (tb *TortoiseBeacon) currentLayer() types.LayerID {
+	tb.layerMu.RLock()
+	defer tb.layerMu.RUnlock()
+
+	return tb.lastLayer
 }

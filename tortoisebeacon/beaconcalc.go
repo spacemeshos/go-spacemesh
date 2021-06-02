@@ -10,15 +10,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID) {
+func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID) error {
 	tb.Log.With().Info("Calculating beacon",
 		log.Uint64("epoch_id", uint64(epoch)))
 
-	allHashes := tb.calcTortoiseBeaconHashList(epoch)
+	allHashes, err := tb.calcTortoiseBeaconHashList(epoch)
+	if err != nil {
+		return fmt.Errorf("calc tortoise beacon hash list: %w", err)
+	}
 
 	tb.Log.With().Info("Going to calculate tortoise beacon from this hash list",
 		log.Uint64("epoch_id", uint64(epoch)),
-		log.String("hashes", strings.Join(allHashes.AsStrings(), ", ")))
+		log.String("hashes", strings.Join(allHashes, ", ")))
 
 	beacon := allHashes.Hash()
 
@@ -31,25 +34,31 @@ func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID) {
 	tb.beaconsMu.Lock()
 	tb.beacons[epoch] = beacon
 	tb.beaconsMu.Unlock()
+
+	return nil
 }
 
-func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID) hashList {
-	allHashes := make(hashList, 0)
+func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID) (proposalList, error) {
+	allHashes := make(proposalList, 0)
 
 	lastRound := epochRoundPair{
 		EpochID: epoch,
-		Round:   tb.lastRound(),
+		Round:   tb.lastPossibleRound(),
 	}
 
 	votes, ok := tb.ownVotes[lastRound]
 	if !ok {
-		_, _ = tb.calcVotesDelta(epoch, lastRound.Round)
-		if votes, ok = tb.ownVotes[lastRound]; !ok {
-			panic("calcVotesDelta didn't calculate own votes")
+		// re-calculate votes
+		v, err := tb.calcVotes(epoch, lastRound.Round)
+		if err != nil {
+			return nil, fmt.Errorf("recalculate votes: %w", err)
 		}
+
+		votes = v
 	}
 
-	for vote := range votes.VotesFor {
+	// output from VRF
+	for vote := range votes.ValidVotes {
 		allHashes = append(allHashes, vote)
 	}
 
@@ -59,8 +68,8 @@ func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID) hashLi
 		log.String("votes", fmt.Sprint(votes)))
 
 	sort.Slice(allHashes, func(i, j int) bool {
-		return strings.Compare(allHashes[i].String(), allHashes[j].String()) == -1
+		return strings.Compare(allHashes[i], allHashes[j]) == -1
 	})
 
-	return allHashes
+	return allHashes, nil
 }

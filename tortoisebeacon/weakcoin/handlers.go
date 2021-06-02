@@ -14,6 +14,8 @@ import (
 func (wc *weakCoin) HandleSerializedMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
 	var m Message
 
+	// TODO(nkryuchkov): check VRF. if invalid, ignore the message
+
 	if err := types.BytesToInterface(data.Bytes(), &m); err != nil {
 		wc.Log.With().Error("Received invalid weak coin message",
 			log.String("message", string(data.Bytes())),

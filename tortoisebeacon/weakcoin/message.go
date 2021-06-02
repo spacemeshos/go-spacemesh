@@ -8,9 +8,10 @@ import (
 
 // Message defines weak coin message format.
 type Message struct {
-	Epoch    types.EpochID
-	Round    types.RoundID
-	Proposal types.Hash32
+	Epoch     types.EpochID
+	Round     types.RoundID
+	Proposal  []byte
+	Signature []byte
 }
 
 func (w Message) String() string {

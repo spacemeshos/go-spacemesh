@@ -1,26 +1,26 @@
 package tortoisebeacon
 
 type votesSetPair struct {
-	VotesFor     hashSet
-	VotesAgainst hashSet
+	ValidVotes   hashSet
+	InvalidVotes hashSet
 }
 
 // Diff calculates difference delta from originRound to currentRound.
-func (currentRound votesSetPair) Diff(originRound votesSetPair) (votesFor, votesAgainst hashList) {
-	votesForDiff := make(hashList, 0)
-	votesAgainstDiff := make(hashList, 0)
+func (currentRound votesSetPair) Diff(originRound votesSetPair) (votesFor, votesAgainst proposalList) {
+	votesForDiff := make(proposalList, 0)
+	votesAgainstDiff := make(proposalList, 0)
 
-	for vote := range currentRound.VotesFor {
-		if _, ok := originRound.VotesFor[vote]; !ok {
+	for vote := range currentRound.ValidVotes {
+		if _, ok := originRound.ValidVotes[vote]; !ok {
 			votesForDiff = append(votesForDiff, vote)
 		}
 	}
 
-	for vote := range currentRound.VotesAgainst {
-		if _, ok := originRound.VotesAgainst[vote]; !ok {
+	for vote := range currentRound.InvalidVotes {
+		if _, ok := originRound.InvalidVotes[vote]; !ok {
 			votesAgainstDiff = append(votesAgainstDiff, vote)
 		}
 	}
 
-	return votesForDiff, votesAgainstDiff
+	return votesForDiff.Sort(), votesAgainstDiff.Sort()
 }
