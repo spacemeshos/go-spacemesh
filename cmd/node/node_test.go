@@ -910,7 +910,7 @@ func TestSpacemeshApp_P2PInterface(t *testing.T) {
 	// Initialize the network: we don't want to listen but this lets us dial out
 	l, err := node.NewNodeIdentity()
 	r.NoError(err)
-	p2pnet, err := net.NewNet(app.Config.P2P, l, log.AppLog)
+	p2pnet, err := net.NewNet(context.TODO(), app.Config.P2P, l, log.AppLog)
 	r.NoError(err)
 	// We need to listen on a different port
 	listener, err := inet.Listen("tcp", fmt.Sprintf("%s:%d", addr, 9270))
