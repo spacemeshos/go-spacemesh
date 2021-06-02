@@ -188,11 +188,6 @@ func TestConsensusProcess_Start(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	inbox, _ := broker.Register(context.TODO(), proc.ID())
 	proc.SetInbox(inbox)
-	/*
-		proc.s = NewDefaultEmptySet()
-		err := proc.Start(context.TODO())
-		assert.Equal(t, "instance started with an empty set", err.Error())
-	*/
 	proc.s = NewSetFromValues(value1)
 	err := proc.Start(context.TODO())
 	assert.Equal(t, nil, err)

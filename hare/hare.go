@@ -160,20 +160,17 @@ var ErrTooLate = errors.New("consensus process finished too late")
 
 // records the provided output.
 func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) error {
-	var blocks []types.BlockID
-	if output.Completed() {
-		set := output.Set()
-		blocks = make([]types.BlockID, len(set.values))
-		i := 0
-		for v := range set.values {
-			blocks[i] = v
-			i++
-		}
+	set := output.Set()
+	blocks := make([]types.BlockID, len(set.values))
+	i := 0
+	for v := range set.values {
+		blocks[i] = v
+		i++
+	}
 
-		// check validity of the collected output
-		if !h.validate(blocks) {
-			h.WithContext(ctx).Error("failed to validate the collected output set")
-		}
+	// check validity of the collected output
+	if !h.validate(blocks) {
+		h.WithContext(ctx).Error("failed to validate the collected output set")
 	}
 
 	id := output.ID()
@@ -215,7 +212,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 	}
 
 	defer func() {
-		// it must don't return without starting consensus process or mark result as fail
+		// it must not return without starting consensus process or mark result as fail
 		// except if it's genesis layer
 		if err != nil {
 			h.outputChan <- procReport{instanceID(id), &Set{}, notCompleted}
@@ -255,9 +252,11 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 	// retrieve set from orphan blocks
 	blocks, err := h.msh.LayerBlockIds(h.lastLayer)
 	if err != nil {
-		// we have to try achieve consensus on empty set or fail, otherwise it will be the delayed consensus process forever
-		logger.With().Error("", log.Err(err))
-		//return
+		logger.With().Error("no blocks found for hare, using empty set", log.Err(err))
+		// just fail here, it will end hare with empty set result
+		return // ?
+		// TODO: there can be a difference between just fail with empty set
+		// TODO:   and achieve consensus on empty set
 	}
 
 	logger.With().Debug("received new blocks", log.Int("count", len(blocks)))
@@ -270,7 +269,6 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 	c, err := h.broker.Register(ctx, instID)
 	if err != nil {
 		logger.With().Error("could not register consensus process on broker", log.Err(err))
-		err = errors.New("could not register consensus process on broker")
 		return
 	}
 	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.network, h.outputChan)
@@ -295,9 +293,6 @@ var (
 // GetResult returns the hare output for the provided range.
 // Returns error iff the request for the upper is too old.
 func (h *Hare) GetResult(lid types.LayerID) ([]types.BlockID, error) {
-
-	h.With().Warning("GetResult", lid)
-
 	if h.outOfBufferRange(instanceID(lid)) {
 		return nil, errTooOld
 	}
@@ -320,7 +315,6 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 			if err := h.collectOutput(ctx, out); err != nil {
 				h.WithContext(ctx).With().Warning("error collecting output from hare", log.Err(err))
 			}
-			// either way, unregister from broker
 			h.broker.Unregister(ctx, out.ID())
 			h.WithContext(ctx).With().Info("number of consensus processes (after -1)",
 				log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
