@@ -1,9 +1,7 @@
 package tortoisebeacon
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -15,14 +13,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
 
 const (
 	protoName       = "TORTOISE_BEACON_PROTOCOL"
-	proposalPrefix  = "TortoiseBeacon"
+	proposalPrefix  = "TortoiseBeaconProposal"
 	cleanupInterval = 30 * time.Second
 	cleanupEpochs   = 1000
 	firstRound      = types.RoundID(1)
@@ -55,14 +53,15 @@ type epochRoundPair struct {
 }
 
 type (
+	nodeID          = string
 	proposal        = string
 	hashSet         = map[proposal]struct{}
 	firstRoundVotes = struct {
 		ValidVotes            []proposal
 		PotentiallyValidVotes []proposal
 	}
-	firstRoundVotesPerPK    = map[p2pcrypto.PublicKey]firstRoundVotes
-	votesPerPK              = map[p2pcrypto.PublicKey]votesSetPair
+	firstRoundVotesPerPK    = map[nodeID]firstRoundVotes
+	votesPerPK              = map[nodeID]votesSetPair
 	firstRoundVotesPerEpoch = map[types.EpochID]firstRoundVotesPerPK
 	votesPerRound           = map[epochRoundPair]votesPerPK
 	ownVotes                = map[epochRoundPair]votesSetPair
@@ -76,11 +75,13 @@ type TortoiseBeacon struct {
 	log.Log
 
 	config        Config
+	minerID       types.NodeID
 	layerDuration time.Duration
 
 	net              broadcaster
 	atxDB            *activation.DB
 	tortoiseBeaconDB tortoiseBeaconDB
+	edSigner         *signing.EdSigner
 	vrfVerifier      verifierFunc
 	vrfSigner        signer
 	weakCoin         weakcoin.WeakCoin
@@ -88,10 +89,13 @@ type TortoiseBeacon struct {
 	layerMu   sync.RWMutex
 	lastLayer types.LayerID
 
-	clock                 layerClock
-	layerTicker           chan types.LayerID
-	votingRoundDuration   time.Duration
-	weakCoinRoundDuration time.Duration
+	clock                    layerClock
+	layerTicker              chan types.LayerID
+	gracePeriodDuration      time.Duration
+	proposalDuration         time.Duration
+	firstVotingRoundDuration time.Duration
+	votingRoundDuration      time.Duration
+	weakCoinRoundDuration    time.Duration
 
 	currentRoundsMu sync.RWMutex
 	currentRounds   map[types.EpochID]types.RoundID
@@ -132,10 +136,12 @@ type layerClock interface {
 // New returns a new TortoiseBeacon.
 func New(
 	conf Config,
+	minerID types.NodeID,
 	layerDuration time.Duration,
 	net broadcaster,
 	atxDB *activation.DB,
 	tortoiseBeaconDB tortoiseBeaconDB,
+	edSigner *signing.EdSigner,
 	vrfVerifier verifierFunc,
 	vrfSigner signer,
 	weakCoin weakcoin.WeakCoin,
@@ -146,15 +152,20 @@ func New(
 		Log:                       logger,
 		Closer:                    util.NewCloser(),
 		config:                    conf,
+		minerID:                   minerID,
 		layerDuration:             layerDuration,
 		net:                       net,
 		atxDB:                     atxDB,
 		tortoiseBeaconDB:          tortoiseBeaconDB,
+		edSigner:                  edSigner,
 		vrfVerifier:               vrfVerifier,
 		vrfSigner:                 vrfSigner,
 		weakCoin:                  weakCoin,
 		clock:                     clock,
-		votingRoundDuration:       time.Duration(conf.VotingRoundDuration) * time.Second,
+		gracePeriodDuration:       time.Duration(conf.ProposalDurationSec) * time.Second,
+		proposalDuration:          time.Duration(conf.ProposalDurationSec) * time.Second,
+		firstVotingRoundDuration:  time.Duration(conf.FirstVotingRoundDurationSec) * time.Second,
+		votingRoundDuration:       time.Duration(conf.VotingRoundDurationSec) * time.Second,
 		weakCoinRoundDuration:     time.Duration(conf.WeakCoinRoundDuration) * time.Second,
 		currentRounds:             make(map[types.EpochID]types.RoundID),
 		validProposals:            make(map[types.EpochID]hashSet),
@@ -336,7 +347,7 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	tb.Log.With().Info("Handling epoch",
 		log.Uint64("epoch_id", uint64(epoch)))
 
-	if err := tb.runProposalPhase(epoch); err != nil {
+	if err := tb.runProposalPhase(ctx, epoch); err != nil {
 		tb.Log.With().Error("Failed to send proposal",
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.Err(err))
@@ -359,8 +370,8 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	}
 }
 
-func (tb *TortoiseBeacon) runProposalPhase(epoch types.EpochID) error {
-	proposedSignature, err := tb.calcSignature(epoch)
+func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.EpochID) error {
+	proposedSignature, err := tb.calcProposalSignature(epoch)
 	if err != nil {
 		return fmt.Errorf("calculate signed proposal: %w", err)
 	}
@@ -374,28 +385,23 @@ func (tb *TortoiseBeacon) runProposalPhase(epoch types.EpochID) error {
 		return fmt.Errorf("get epoch weight: %w", err)
 	}
 
-	exceeds, err := tb.proposalExceedsThreshold(proposedSignature, epochWeight)
+	passes, err := tb.proposalPassesEligibilityThreshold(proposedSignature, epochWeight)
 	if err != nil {
-		return fmt.Errorf("proposalExceedsThreshold: %w", err)
+		return fmt.Errorf("proposalPassesEligibilityThreshold: %w", err)
 	}
 
-	if exceeds {
+	if !passes {
 		// proposal is not sent
 		return nil
 	}
 
 	// concat them into a single proposal message
-	m := ProposalMessage{VRFSignature: proposedSignature}
-
-	serializedMessage, err := types.InterfaceToBytes(m)
-	if err != nil {
-		return fmt.Errorf("serialize proposal message: %w", err)
+	m := ProposalMessage{
+		MinerID:      tb.minerID,
+		VRFSignature: proposedSignature,
 	}
 
-	tb.Log.With().Debug("Serialized proposal message",
-		log.String("message", string(serializedMessage)))
-
-	if err := tb.net.Broadcast(tb.Context(), TBProposalProtocol, serializedMessage); err != nil {
+	if err := tb.sendToGossip(ctx, TBProposalProtocol, m); err != nil {
 		return fmt.Errorf("broadcast proposal message: %w", err)
 	}
 
@@ -412,8 +418,7 @@ func (tb *TortoiseBeacon) runProposalPhase(epoch types.EpochID) error {
 	return nil
 }
 
-// TODO: consider making generic
-func (tb *TortoiseBeacon) proposalExceedsThreshold(proposal []byte, epochWeight uint64) (bool, error) {
+func (tb *TortoiseBeacon) proposalPassesEligibilityThreshold(proposal []byte, epochWeight uint64) (bool, error) {
 	proposalInt := new(big.Int).SetBytes(proposal[:])
 
 	threshold, err := tb.atxThreshold(epochWeight)
@@ -421,7 +426,7 @@ func (tb *TortoiseBeacon) proposalExceedsThreshold(proposal []byte, epochWeight 
 		return false, fmt.Errorf("atxThreshold: %w", err)
 	}
 
-	return proposalInt.Cmp(threshold) == 1, nil
+	return proposalInt.Cmp(threshold) == -1, nil
 }
 
 func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.EpochID) error {
@@ -522,42 +527,7 @@ func (tb *TortoiseBeacon) sendVotesDifference(ctx context.Context, epoch types.E
 	return tb.sendFollowingVote(ctx, epoch, round, ownCurrentRoundVotes)
 }
 
-func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes votesSetPair) error {
-	bitVector := tb.encodeVotes(ownCurrentRoundVotes, tb.firstRoundOutcomingVotes[epoch])
-
-	sig, err := tb.calcSignature(epoch)
-	if err != nil {
-		return fmt.Errorf("calcSignature: %w", err)
-	}
-
-	m := FollowingVotingMessage{
-		RoundID:        round,
-		VotesBitVector: bitVector,
-		Signature:      sig,
-	}
-
-	serializedMessage, err := types.InterfaceToBytes(m)
-	if err != nil {
-		return fmt.Errorf("serialize voting message: %w", err)
-	}
-
-	tb.Log.With().Debug("Serialized voting message",
-		log.String("message", string(serializedMessage)))
-
-	// TODO: rename to SendToGossip
-	if err := tb.net.Broadcast(ctx, TBFirstVotingProtocol, serializedMessage); err != nil {
-		return fmt.Errorf("broadcast voting message: %w", err)
-	}
-
-	return nil
-}
-
 func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.EpochID, vote firstRoundVotes) error {
-	sig, err := tb.calcSignature(epoch)
-	if err != nil {
-		return fmt.Errorf("calcSignature: %w", err)
-	}
-
 	valid := make([][]byte, 0)
 	potentiallyValid := make([][]byte, 0)
 
@@ -569,21 +539,49 @@ func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 		potentiallyValid = append(potentiallyValid, util.Hex2Bytes(v))
 	}
 
-	m := FirstVotingMessage{
-		ValidVotes:            valid,
-		PotentiallyValidVotes: potentiallyValid,
-		Signature:             sig,
+	mb := FirstVotingMessageBody{
+		MinerID:                   tb.minerID,
+		ValidProposals:            valid,
+		PotentiallyValidProposals: potentiallyValid,
 	}
 
-	serializedMessage, err := types.InterfaceToBytes(m)
+	sig, err := tb.calcEligibilityProof(mb)
 	if err != nil {
-		return fmt.Errorf("serialize voting message: %w", err)
+		return fmt.Errorf("calcEligibilityProof: %w", err)
 	}
 
-	tb.Log.With().Debug("Serialized voting message",
-		log.String("message", string(serializedMessage)))
+	m := FirstVotingMessage{
+		FirstVotingMessageBody: mb,
+		Signature:              sig,
+	}
 
-	if err := tb.net.Broadcast(ctx, TBFirstVotingProtocol, serializedMessage); err != nil {
+	if err := tb.sendToGossip(ctx, TBFirstVotingProtocol, m); err != nil {
+		return fmt.Errorf("sendToGossip: %w", err)
+	}
+
+	return nil
+}
+
+func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes votesSetPair) error {
+	bitVector := tb.encodeVotes(ownCurrentRoundVotes, tb.firstRoundOutcomingVotes[epoch])
+
+	mb := FollowingVotingMessageBody{
+		MinerID:        tb.minerID,
+		RoundID:        round,
+		VotesBitVector: bitVector,
+	}
+
+	sig, err := tb.calcEligibilityProof(mb)
+	if err != nil {
+		return fmt.Errorf("calcProposalSignature: %w", err)
+	}
+
+	m := FollowingVotingMessage{
+		FollowingVotingMessageBody: mb,
+		Signature:                  sig,
+	}
+
+	if err := tb.sendToGossip(ctx, TBFollowingVotingProtocol, m); err != nil {
 		return fmt.Errorf("broadcast voting message: %w", err)
 	}
 
@@ -597,7 +595,7 @@ func (tb *TortoiseBeacon) setCurrentRound(epoch types.EpochID, round types.Round
 	tb.currentRounds[epoch] = round
 }
 
-func (tb *TortoiseBeacon) voteWeight(pk p2pcrypto.PublicKey, epochID types.EpochID) (uint64, error) {
+func (tb *TortoiseBeacon) voteWeight(pk nodeID, epochID types.EpochID) (uint64, error) {
 	// TODO(nkryuchkov): enable
 	enabled := false
 	if !enabled {
@@ -605,7 +603,7 @@ func (tb *TortoiseBeacon) voteWeight(pk p2pcrypto.PublicKey, epochID types.Epoch
 	}
 
 	nodeID := types.NodeID{
-		Key:          pk.String(),
+		Key:          pk,
 		VRFPublicKey: nil,
 	}
 
@@ -680,7 +678,7 @@ func (tb *TortoiseBeacon) atxThreshold(epochWeight uint64) (*big.Int, error) {
 	return threshold, nil
 }
 
-func (tb *TortoiseBeacon) calcSignature(epoch types.EpochID) ([]byte, error) {
+func (tb *TortoiseBeacon) calcProposalSignature(epoch types.EpochID) ([]byte, error) {
 	p, err := tb.calcProposal(epoch)
 	if err != nil {
 		return nil, fmt.Errorf("calculate proposal: %w", err)
@@ -695,28 +693,25 @@ func (tb *TortoiseBeacon) calcSignature(epoch types.EpochID) ([]byte, error) {
 	return signature, nil
 }
 
-// rename to eligibilityProof
-func (tb *TortoiseBeacon) calcVotingSignature(epoch types.EpochID) ([]byte, error) {
-	// TODO: sign with ed25519, message is xdr encoded
-	// signature = ed25519(private_key, epoch)
-
-	return ed25519.Sign(privateKey, wholeMessage)
-}
-
-func (tb *TortoiseBeacon) calcProposal(epoch types.EpochID) ([]byte, error) {
-	// TODO: use xdr
-	msg := bytes.Buffer{}
-
-	msg.WriteString(proposalPrefix)
-
-	epochBuf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(epochBuf, uint64(epoch))
-	if _, err := msg.Write(epochBuf); err != nil {
+func (tb *TortoiseBeacon) calcEligibilityProof(message interface{}) ([]byte, error) {
+	encoded, err := types.InterfaceToBytes(message)
+	if err != nil {
 		return nil, err
 	}
 
-	proposal := msg.Bytes()
-	return proposal, nil
+	return tb.edSigner.Sign(encoded), nil
+}
+
+func (tb *TortoiseBeacon) calcProposal(epoch types.EpochID) ([]byte, error) {
+	message := struct {
+		prefix string
+		epoch  uint64
+	}{
+		prefix: proposalPrefix,
+		epoch:  uint64(epoch),
+	}
+
+	return types.InterfaceToBytes(message)
 }
 
 func ceilDuration(duration, multiple time.Duration) time.Duration {
@@ -726,4 +721,13 @@ func ceilDuration(duration, multiple time.Duration) time.Duration {
 	}
 
 	return result
+}
+
+func (tb *TortoiseBeacon) sendToGossip(ctx context.Context, channel string, data interface{}) error {
+	serialized, err := types.InterfaceToBytes(data)
+	if err != nil {
+		return fmt.Errorf("serializing: %w", err)
+	}
+
+	return tb.net.Broadcast(ctx, channel, serialized)
 }

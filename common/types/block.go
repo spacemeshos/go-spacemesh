@@ -96,7 +96,7 @@ type NodeID struct {
 	// Key is the miner's Edwards public key
 	Key string
 
-	// VRFPublicKey is the miner's public key used for VRF. The VRF scheme used is BLS.
+	// VRFPublicKey is the miner's public key used for VRF.
 	VRFPublicKey []byte
 }
 

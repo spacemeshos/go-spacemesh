@@ -22,12 +22,14 @@ func (p ProposalMessage) String() string {
 	return string(bytes)
 }
 
-type FirstVotingMessage struct {
-	// TODO: miner ID
+type FirstVotingMessageBody struct {
 	MinerID                   types.NodeID
 	ValidProposals            [][]byte
 	PotentiallyValidProposals [][]byte
-	Signature                 []byte // implement extracting pk from signature
+}
+type FirstVotingMessage struct {
+	FirstVotingMessageBody
+	Signature []byte // TODO: implement extracting pk from signature
 }
 
 // String returns a string form of FirstVotingMessage.
@@ -40,11 +42,15 @@ func (v FirstVotingMessage) String() string {
 	return string(bytes)
 }
 
-type FollowingVotingMessage struct {
-	// TODO: miner ID
+type FollowingVotingMessageBody struct {
+	MinerID        types.NodeID
 	RoundID        types.RoundID
 	VotesBitVector []uint64
-	Signature      []byte
+}
+
+type FollowingVotingMessage struct {
+	FollowingVotingMessageBody
+	Signature []byte
 }
 
 // String returns a string form of FollowingVotingMessage.

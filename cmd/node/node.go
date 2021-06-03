@@ -3,7 +3,6 @@ package node
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -153,15 +152,6 @@ type TickProvider interface {
 	LayerToTime(id types.LayerID) time.Time
 	Close()
 	AwaitLayer(layerID types.LayerID) chan struct{}
-}
-
-// Tortoise beacon mock (waiting for #2267)
-type tortoiseBeaconMock struct{}
-
-// GetBeacon returns a very simple pseudo-random beacon value based on the input epoch ID
-func (tortoiseBeaconMock) GetBeacon(epochID types.EpochID) []byte {
-	sha := sha256.Sum256(epochID.ToBytes())
-	return sha[:4]
 }
 
 // SpacemeshApp is the cli app singleton
@@ -467,7 +457,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	nodeID types.NodeID,
 	swarm service.Service,
 	dbStorepath string,
-	sgn hare.Signer,
+	sgn *signing.EdSigner,
 	isFixedOracle bool,
 	rolacle hare.Rolacle,
 	layerSize uint32,
@@ -557,7 +547,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	//wc := weakcoin.NewWeakCoin(weakcoin.DefaultThreshold, swarm, BLS381.Verify2, vrfSigner, app.addLogger(WeakCoinLogger, lg))
 	wc := weakcoin.ValueMock{Value: false}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, ld, swarm, atxdb, tBeaconDB, signing.VRFVerify, vrfSigner, wc, clock, app.addLogger(TBeaconLogger, lg))
+	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, nodeID, ld, swarm, atxdb, tBeaconDB, sgn, signing.VRFVerify, vrfSigner, wc, clock, app.addLogger(TBeaconLogger, lg))
 	if err := tBeacon.Start(ctx); err != nil {
 		app.log.Panic("Failed to start tortoise beacon: %v", err)
 	}

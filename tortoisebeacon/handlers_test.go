@@ -133,7 +133,7 @@ package tortoisebeacon
 //			expected: map[epochRoundPair]votesPerPK{
 //				epochRoundPair{EpochID: epoch, Round: round}: {
 //					pk1: votesSetPair{
-//						ValidVotes:   map[types.Hash32]struct{}{hash: {}},
+//						ValidProposals:   map[types.Hash32]struct{}{hash: {}},
 //						InvalidVotes: map[types.Hash32]struct{}{},
 //					},
 //				},
@@ -155,7 +155,7 @@ package tortoisebeacon
 //			expected: map[epochRoundPair]votesPerPK{
 //				epochRoundPair{EpochID: epoch, Round: round}: {
 //					pk1: votesSetPair{
-//						ValidVotes:   map[types.Hash32]struct{}{hash: {}},
+//						ValidProposals:   map[types.Hash32]struct{}{hash: {}},
 //						InvalidVotes: map[types.Hash32]struct{}{},
 //					},
 //				},

@@ -15,7 +15,7 @@ package tortoisebeacon
 //		{
 //			name: "Case 1",
 //			firstRound: votesSetPair{
-//				ValidVotes: map[types.Hash32]struct{}{
+//				ValidProposals: map[types.Hash32]struct{}{
 //					types.HexToHash32("0xA"): {},
 //					types.HexToHash32("0xB"): {},
 //				},
@@ -24,7 +24,7 @@ package tortoisebeacon
 //				},
 //			},
 //			currentRound: votesSetPair{
-//				ValidVotes: map[types.Hash32]struct{}{
+//				ValidProposals: map[types.Hash32]struct{}{
 //					types.HexToHash32("0xA"): {},
 //				},
 //				InvalidVotes: map[types.Hash32]struct{}{
@@ -38,7 +38,7 @@ package tortoisebeacon
 //		{
 //			name: "Case 2",
 //			firstRound: votesSetPair{
-//				ValidVotes: map[types.Hash32]struct{}{
+//				ValidProposals: map[types.Hash32]struct{}{
 //					types.HexToHash32("0x0"): {},
 //					types.HexToHash32("0x1"): {},
 //					types.HexToHash32("0x2"): {},
@@ -54,7 +54,7 @@ package tortoisebeacon
 //				},
 //			},
 //			currentRound: votesSetPair{
-//				ValidVotes: map[types.Hash32]struct{}{
+//				ValidProposals: map[types.Hash32]struct{}{
 //					types.HexToHash32("0x0"): {},
 //					types.HexToHash32("0x1"): {},
 //					types.HexToHash32("0x8"): {},

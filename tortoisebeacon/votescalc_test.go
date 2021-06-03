@@ -94,7 +94,7 @@ package tortoisebeacon
 //			incomingVotes: map[epochRoundPair]votesPerPK{
 //				epochRoundPair{EpochID: epoch, Round: 1}: {
 //					pk1: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x1"): {},
 //							types.HexToHash32("0x2"): {},
 //						},
@@ -103,7 +103,7 @@ package tortoisebeacon
 //						},
 //					},
 //					pk2: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x1"): {},
 //							types.HexToHash32("0x4"): {},
 //							types.HexToHash32("0x5"): {},
@@ -115,7 +115,7 @@ package tortoisebeacon
 //				},
 //				epochRoundPair{EpochID: epoch, Round: 2}: {
 //					pk1: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x3"): {},
 //						},
 //						InvalidVotes: map[types.Hash32]struct{}{
@@ -123,17 +123,17 @@ package tortoisebeacon
 //						},
 //					},
 //					pk2: votesSetPair{
-//						ValidVotes:   map[types.Hash32]struct{}{},
+//						ValidProposals:   map[types.Hash32]struct{}{},
 //						InvalidVotes: map[types.Hash32]struct{}{},
 //					},
 //				},
 //				epochRoundPair{EpochID: epoch, Round: 3}: {
 //					pk1: votesSetPair{
-//						ValidVotes:   map[types.Hash32]struct{}{},
+//						ValidProposals:   map[types.Hash32]struct{}{},
 //						InvalidVotes: map[types.Hash32]struct{}{},
 //					},
 //					pk2: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x6"): {},
 //						},
 //						InvalidVotes: map[types.Hash32]struct{}{
@@ -195,7 +195,7 @@ package tortoisebeacon
 //			incomingVotes: map[epochRoundPair]votesPerPK{
 //				epochRoundPair{EpochID: epoch, Round: 1}: {
 //					pk1: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x1"): {},
 //							types.HexToHash32("0x2"): {},
 //						},
@@ -206,7 +206,7 @@ package tortoisebeacon
 //						},
 //					},
 //					pk2: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x1"): {},
 //							types.HexToHash32("0x4"): {},
 //							types.HexToHash32("0x5"): {},
@@ -276,7 +276,7 @@ package tortoisebeacon
 //			incomingVotes: map[epochRoundPair]votesPerPK{
 //				epochRoundPair{EpochID: epoch, Round: 1}: {
 //					pk1: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x1"): {},
 //							types.HexToHash32("0x2"): {},
 //						},
@@ -286,7 +286,7 @@ package tortoisebeacon
 //						},
 //					},
 //					pk2: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x1"): {},
 //							types.HexToHash32("0x4"): {},
 //							types.HexToHash32("0x5"): {},
@@ -299,7 +299,7 @@ package tortoisebeacon
 //			},
 //			weakCoin: weakcoin.ValueMock{Value: false},
 //			result: votesSetPair{
-//				ValidVotes: hashSet{
+//				ValidProposals: hashSet{
 //					types.HexToHash32("0x1"): {},
 //				},
 //				InvalidVotes: hashSet{
@@ -318,7 +318,7 @@ package tortoisebeacon
 //			incomingVotes: map[epochRoundPair]votesPerPK{
 //				epochRoundPair{EpochID: epoch, Round: 1}: {
 //					pk1: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x1"): {},
 //							types.HexToHash32("0x2"): {},
 //						},
@@ -328,7 +328,7 @@ package tortoisebeacon
 //						},
 //					},
 //					pk2: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x1"): {},
 //							types.HexToHash32("0x4"): {},
 //							types.HexToHash32("0x5"): {},
@@ -341,7 +341,7 @@ package tortoisebeacon
 //			},
 //			weakCoin: weakcoin.ValueMock{Value: true},
 //			result: votesSetPair{
-//				ValidVotes: hashSet{
+//				ValidProposals: hashSet{
 //					types.HexToHash32("0x1"): {},
 //					types.HexToHash32("0x2"): {},
 //					types.HexToHash32("0x3"): {},
@@ -407,7 +407,7 @@ package tortoisebeacon
 //			incomingVotes: map[epochRoundPair]votesPerPK{
 //				epochRoundPair{EpochID: epoch, Round: 1}: {
 //					pk1: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x1"): {},
 //							types.HexToHash32("0x2"): {},
 //						},
@@ -416,7 +416,7 @@ package tortoisebeacon
 //						},
 //					},
 //					pk2: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x1"): {},
 //							types.HexToHash32("0x4"): {},
 //							types.HexToHash32("0x5"): {},
@@ -428,7 +428,7 @@ package tortoisebeacon
 //				},
 //				epochRoundPair{EpochID: epoch, Round: 2}: {
 //					pk1: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x3"): {},
 //						},
 //						InvalidVotes: map[types.Hash32]struct{}{
@@ -436,17 +436,17 @@ package tortoisebeacon
 //						},
 //					},
 //					pk2: votesSetPair{
-//						ValidVotes:   map[types.Hash32]struct{}{},
+//						ValidProposals:   map[types.Hash32]struct{}{},
 //						InvalidVotes: map[types.Hash32]struct{}{},
 //					},
 //				},
 //				epochRoundPair{EpochID: epoch, Round: 3}: {
 //					pk1: votesSetPair{
-//						ValidVotes:   map[types.Hash32]struct{}{},
+//						ValidProposals:   map[types.Hash32]struct{}{},
 //						InvalidVotes: map[types.Hash32]struct{}{},
 //					},
 //					pk2: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x6"): {},
 //						},
 //						InvalidVotes: map[types.Hash32]struct{}{
@@ -513,7 +513,7 @@ package tortoisebeacon
 //			incomingVotes: map[epochRoundPair]votesPerPK{
 //				epochRoundPair{EpochID: epoch, Round: 1}: {
 //					pk1: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x1"): {},
 //							types.HexToHash32("0x2"): {},
 //						},
@@ -522,7 +522,7 @@ package tortoisebeacon
 //						},
 //					},
 //					pk2: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x4"): {},
 //							types.HexToHash32("0x5"): {},
 //						},
@@ -533,28 +533,28 @@ package tortoisebeacon
 //				},
 //				epochRoundPair{EpochID: epoch, Round: 2}: {
 //					pk1: votesSetPair{
-//						ValidVotes:   map[types.Hash32]struct{}{},
+//						ValidProposals:   map[types.Hash32]struct{}{},
 //						InvalidVotes: map[types.Hash32]struct{}{},
 //					},
 //					pk2: votesSetPair{
-//						ValidVotes:   map[types.Hash32]struct{}{},
+//						ValidProposals:   map[types.Hash32]struct{}{},
 //						InvalidVotes: map[types.Hash32]struct{}{},
 //					},
 //				},
 //				epochRoundPair{EpochID: epoch, Round: 3}: {
 //					pk1: votesSetPair{
-//						ValidVotes:   map[types.Hash32]struct{}{},
+//						ValidProposals:   map[types.Hash32]struct{}{},
 //						InvalidVotes: map[types.Hash32]struct{}{},
 //					},
 //					pk2: votesSetPair{
-//						ValidVotes:   map[types.Hash32]struct{}{},
+//						ValidProposals:   map[types.Hash32]struct{}{},
 //						InvalidVotes: map[types.Hash32]struct{}{},
 //					},
 //				},
 //			},
 //			result: votesPerPK{
 //				pk1: votesSetPair{
-//					ValidVotes: map[types.Hash32]struct{}{
+//					ValidProposals: map[types.Hash32]struct{}{
 //						types.HexToHash32("0x1"): {},
 //						types.HexToHash32("0x2"): {},
 //					},
@@ -563,7 +563,7 @@ package tortoisebeacon
 //					},
 //				},
 //				pk2: votesSetPair{
-//					ValidVotes: map[types.Hash32]struct{}{
+//					ValidProposals: map[types.Hash32]struct{}{
 //						types.HexToHash32("0x4"): {},
 //						types.HexToHash32("0x5"): {},
 //					},
@@ -580,7 +580,7 @@ package tortoisebeacon
 //			incomingVotes: map[epochRoundPair]votesPerPK{
 //				epochRoundPair{EpochID: epoch, Round: 1}: {
 //					pk1: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x1"): {},
 //							types.HexToHash32("0x2"): {},
 //						},
@@ -589,7 +589,7 @@ package tortoisebeacon
 //						},
 //					},
 //					pk2: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x4"): {},
 //							types.HexToHash32("0x5"): {},
 //						},
@@ -601,7 +601,7 @@ package tortoisebeacon
 //				epochRoundPair{EpochID: epoch, Round: 2}: {
 //					// Should *NOT* affect the result (2 != 3).
 //					pk1: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x3"): {},
 //						},
 //						InvalidVotes: map[types.Hash32]struct{}{
@@ -609,18 +609,18 @@ package tortoisebeacon
 //						},
 //					},
 //					pk2: votesSetPair{
-//						ValidVotes:   map[types.Hash32]struct{}{},
+//						ValidProposals:   map[types.Hash32]struct{}{},
 //						InvalidVotes: map[types.Hash32]struct{}{},
 //					},
 //				},
 //				epochRoundPair{EpochID: epoch, Round: 3}: {
 //					pk1: votesSetPair{
-//						ValidVotes:   map[types.Hash32]struct{}{},
+//						ValidProposals:   map[types.Hash32]struct{}{},
 //						InvalidVotes: map[types.Hash32]struct{}{},
 //					},
 //					// Should affect the result (3 == 3).
 //					pk2: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x6"): {},
 //						},
 //						InvalidVotes: map[types.Hash32]struct{}{
@@ -631,7 +631,7 @@ package tortoisebeacon
 //			},
 //			result: votesPerPK{
 //				pk1: votesSetPair{
-//					ValidVotes: map[types.Hash32]struct{}{
+//					ValidProposals: map[types.Hash32]struct{}{
 //						types.HexToHash32("0x1"): {},
 //						types.HexToHash32("0x2"): {},
 //					},
@@ -640,7 +640,7 @@ package tortoisebeacon
 //					},
 //				},
 //				pk2: votesSetPair{
-//					ValidVotes: map[types.Hash32]struct{}{
+//					ValidProposals: map[types.Hash32]struct{}{
 //						types.HexToHash32("0x4"): {},
 //						types.HexToHash32("0x6"): {},
 //					},
@@ -695,7 +695,7 @@ package tortoisebeacon
 //			incomingVotes: map[epochRoundPair]votesPerPK{
 //				epochRoundPair{EpochID: epoch, Round: 1}: {
 //					pk1: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x1"): {},
 //							types.HexToHash32("0x2"): {},
 //						},
@@ -704,7 +704,7 @@ package tortoisebeacon
 //						},
 //					},
 //					pk2: votesSetPair{
-//						ValidVotes: map[types.Hash32]struct{}{
+//						ValidProposals: map[types.Hash32]struct{}{
 //							types.HexToHash32("0x4"): {},
 //							types.HexToHash32("0x5"): {},
 //						},
@@ -716,7 +716,7 @@ package tortoisebeacon
 //			},
 //			result: votesPerPK{
 //				pk1: votesSetPair{
-//					ValidVotes: map[types.Hash32]struct{}{
+//					ValidProposals: map[types.Hash32]struct{}{
 //						types.HexToHash32("0x1"): {},
 //						types.HexToHash32("0x2"): {},
 //					},
@@ -725,7 +725,7 @@ package tortoisebeacon
 //					},
 //				},
 //				pk2: votesSetPair{
-//					ValidVotes: map[types.Hash32]struct{}{
+//					ValidProposals: map[types.Hash32]struct{}{
 //						types.HexToHash32("0x4"): {},
 //						types.HexToHash32("0x5"): {},
 //					},
@@ -774,7 +774,7 @@ package tortoisebeacon
 //			epoch: 5,
 //			round: 5,
 //			ownFirstRoundVotes: votesSetPair{
-//				ValidVotes: map[types.Hash32]struct{}{
+//				ValidProposals: map[types.Hash32]struct{}{
 //					types.HexToHash32("0x1"): {},
 //					types.HexToHash32("0x2"): {},
 //				},
@@ -789,7 +789,7 @@ package tortoisebeacon
 //			},
 //			weakCoin: weakcoin.ValueMock{Value: true},
 //			result: votesSetPair{
-//				ValidVotes: map[types.Hash32]struct{}{
+//				ValidProposals: map[types.Hash32]struct{}{
 //					types.HexToHash32("0x1"): {},
 //					types.HexToHash32("0x3"): {},
 //				},
@@ -809,7 +809,7 @@ package tortoisebeacon
 //			},
 //			weakCoin: weakcoin.ValueMock{Value: false},
 //			result: votesSetPair{
-//				ValidVotes: map[types.Hash32]struct{}{
+//				ValidProposals: map[types.Hash32]struct{}{
 //					types.HexToHash32("0x1"): {},
 //				},
 //				InvalidVotes: map[types.Hash32]struct{}{

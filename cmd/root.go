@@ -156,7 +156,7 @@ func AddCommands(cmd *cobra.Command) {
 	// F determines the max number of adversaries in the Hare committee
 	cmd.PersistentFlags().IntVar(&config.HARE.F, "hare-max-adversaries",
 		config.HARE.F, "Max number of adversaries in the Hare committee")
-	// VotingRoundDuration determines the duration of a round in the Hare protocol
+	// RoundDuration determines the duration of a round in the Hare protocol
 	cmd.PersistentFlags().IntVar(&config.HARE.RoundDuration, "hare-round-duration-sec",
 		config.HARE.RoundDuration, "Duration of round in the Hare protocol")
 	cmd.PersistentFlags().IntVar(&config.HARE.WakeupDelta, "hare-wakeup-delta",
@@ -183,8 +183,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.TortoiseBeacon.Q, "Ratio of dishonest spacetime (for calculating ATX threshold)")
 	cmd.PersistentFlags().Uint64Var(&config.TortoiseBeacon.RoundsNumber, "tortoise-beacon-rounds-number",
 		config.TortoiseBeacon.RoundsNumber, "Amount of rounds in every epoch")
-	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.VotingRoundDuration, "tortoise-beacon-voting-round-duration-sec",
-		config.TortoiseBeacon.VotingRoundDuration, "Voting round duration in seconds")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.VotingRoundDurationSec, "tortoise-beacon-voting-round-duration-sec",
+		config.TortoiseBeacon.VotingRoundDurationSec, "Voting round duration in seconds")
 	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.WeakCoinRoundDuration, "tortoise-beacon-weak-coin-round-duration-sec",
 		config.TortoiseBeacon.WeakCoinRoundDuration, "Weak coin round duration in seconds")
 	cmd.PersistentFlags().Float64Var(&config.TortoiseBeacon.Theta, "tortoise-beacon-theta",

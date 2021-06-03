@@ -54,7 +54,7 @@ func (m ValueMock) OnRoundFinished(epoch types.EpochID, round types.RoundID) {
 }
 
 // PublishProposal publishes a proposal.
-func (m ValueMock) PublishProposal(epoch types.EpochID, round types.RoundID) error {
+func (m ValueMock) PublishProposal(ctx context.Context, epoch types.EpochID, round types.RoundID) error {
 	return nil
 }
 
