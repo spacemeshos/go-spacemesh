@@ -599,7 +599,7 @@ func (msh *Mesh) AddBlock(blk *types.Block) error {
 
 // SetZeroBlockLayer tags lyr as a layer without blocks
 func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
-	msh.Info("setting zero block layer %v", lyr)
+	msh.With().Info("setting zero block layer", lyr)
 	// check database for layer
 	if l, err := msh.GetLayer(lyr); err != nil {
 		if err != database.ErrNotFound {
