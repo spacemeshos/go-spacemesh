@@ -140,9 +140,11 @@ peerLoop:
 			msgCtx := ctx
 			if reqID, ok := log.ExtractRequestID(ctx); ok {
 				// overwrite the existing reqID with the same and add the field
+				// (there is currently no easier way to add a field to log ctx)
 				msgCtx = log.WithRequestID(ctx, reqID, log.FieldNamed("to", pubkey))
 			}
 
+			p.WithContext(msgCtx).Debug("propagating gossip message to peer")
 			if err := p.net.SendMessage(msgCtx, pubkey, nextProt, payload); err != nil {
 				p.WithContext(msgCtx).With().Warning("failed sending", log.Err(err))
 			}
@@ -180,6 +182,10 @@ func (p *Protocol) handlePQ(ctx context.Context) {
 		}
 		p.WithContext(msgCtx).With().Info("new_gossip_message_relay",
 			log.Int("priority_queue_length", p.pq.Length()))
+		if p.pq.Length() > 20 {
+			p.WithContext(msgCtx).With().Warning("outbound gossip message queue backlog",
+				log.Int("priority_queue_length", p.pq.Length()))
+		}
 		p.propagateMessage(msgCtx, m.Message(), m.Protocol(), m.Sender())
 		p.WithContext(msgCtx).With().Info("finished propagating gossip message")
 	}
