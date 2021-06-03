@@ -50,5 +50,5 @@ def create_google_cloud_task(queue_params, payload, path='/', in_seconds=None, *
         task['schedule_time'] = timestamp
     # Use the client to build and send the task.
     response = client.create_task(parent=parent, task=task)
-    print('Created task {}'.format(response.name))
+    print('\nCreated task {}'.format(response.name))
     return response

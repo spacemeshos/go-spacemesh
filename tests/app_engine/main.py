@@ -27,6 +27,7 @@ app = Flask(__name__)
 
 @app.route('/', methods=['POST'])
 def teardown():
+    print(f"teardown")
     payload = request.get_data(as_text=True) or '(empty payload)'
     try:
         payload_dict = json.loads(payload)
@@ -41,6 +42,7 @@ def teardown():
         return str(e)
     namespace = payload_dict['namespace']
     project_id = payload_dict["project_id"]
+    print(f"starting teardown process for {namespace}")
     # delete node pool
     try:
         nodepool_handler.remove_node_pool(project_id, payload_dict["pool_name"], payload_dict["cluster_name"],
@@ -57,7 +59,7 @@ def teardown():
         dump_queue_params = {"project_id": project_id, "queue_name": dump_queue_name, "queue_zone": dump_queue_zone}
         create_google_cloud_task(dump_queue_params, payload_dict, path=DUMP_APP_ROUTE, in_seconds=None,
                                  **payload_dict["dump_params"])
-    elif str2bool(payload_dict["id_delns"]):
+    elif str2bool(payload_dict["is_delns"]):
         try:
             delete_namespace(namespace, project_id, payload_dict["node_pool_zone"], payload_dict["cluster_name"])
             print(f"namespace {namespace} was deleted")
