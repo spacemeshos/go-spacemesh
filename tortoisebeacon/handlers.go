@@ -205,7 +205,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, message 
 	}
 	if !ok {
 		tb.Log.With().Warning("Received malformed first voting message, bad signature",
-			log.String("from", from.String()),
+			log.String("from", from.Key),
 			log.Uint64("epoch_id", uint64(currentEpoch)),
 			log.String("signature", util.Bytes2Hex(message.Signature)))
 
@@ -233,9 +233,10 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, message 
 
 	// TODO: no need to store each vote separately
 	// have a separate table for an epoch with one bit in it if atx/miner is voted already
-	if _, ok := tb.incomingVotes[thisRound][from.String()]; ok {
-		tb.Log.With().Warning("Received malformed first votimg message, already received a voting message for these PK and round",
-			log.String("from", from.String()),
+	if _, ok := tb.incomingVotes[thisRound][from.Key]; ok {
+		tb.Log.With().Warning("Received malformed first voting message, already received a voting message for these PK and round",
+			log.String("from", from.Key),
+			log.Uint64("epoch_id", uint64(currentEpoch)),
 			log.Uint64("round_id", uint64(firstRound)))
 
 		// TODO: report this miner through gossip
@@ -247,6 +248,12 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, message 
 
 		return nil
 	}
+
+	tb.Log.With().Info("Received first voting message, counting it",
+		log.String("from", from.Key),
+		log.Uint64("epoch_id", uint64(currentEpoch)),
+		log.Uint64("round_id", uint64(firstRound)),
+		log.String("message", message.String()))
 
 	validVotesMap := make(hashSet)
 	invalidVotesMap := make(hashSet)
@@ -263,7 +270,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, message 
 		potentiallyValidVotesList = append(potentiallyValidVotesList, util.Bytes2Hex(vote))
 	}
 
-	tb.incomingVotes[thisRound][from.String()] = votesSetPair{
+	tb.incomingVotes[thisRound][from.Key] = votesSetPair{
 		ValidVotes:   validVotesMap,
 		InvalidVotes: invalidVotesMap,
 	}
@@ -271,7 +278,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, message 
 	// this is used for bit vector calculation
 	// TODO: store sorted mixed valid+potentiallyValid
 	//
-	tb.firstRoundIncomingVotes[currentEpoch][from.String()] = firstRoundVotes{
+	tb.firstRoundIncomingVotes[currentEpoch][from.Key] = firstRoundVotes{
 		ValidVotes:            validVotesList,
 		PotentiallyValidVotes: potentiallyValidVotesList,
 	}
@@ -281,6 +288,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, message 
 
 func (tb *TortoiseBeacon) handleFollowingVotingMessage(ctx context.Context, message FollowingVotingMessage) error {
 	currentEpoch := tb.currentEpoch()
+	//currentEpoch := message.EpochID
 	messageRound := message.RoundID
 
 	from := message.MinerID
@@ -292,17 +300,13 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(ctx context.Context, mess
 	}
 	if !ok {
 		tb.Log.With().Warning("Received malformed following voting message, bad signature",
-			log.String("from", from.String()),
+			log.String("from", from.Key),
 			log.Uint64("epoch_id", uint64(currentEpoch)),
 			//log.String("expected_message", util.Bytes2Hex(currentEpochProposal)),
 			log.String("signature", util.Bytes2Hex(message.Signature)))
 
 		return nil
 	}
-
-	tb.Log.With().Info("Received VotingMessage, counting it",
-		log.Uint64("round", uint64(messageRound)),
-		log.String("message", message.String()))
 
 	thisRound := epochRoundPair{
 		EpochID: currentEpoch,
@@ -316,16 +320,23 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(ctx context.Context, mess
 		tb.incomingVotes[thisRound] = make(votesPerPK)
 	}
 
-	if _, ok := tb.incomingVotes[thisRound][from.String()]; ok {
+	if _, ok := tb.incomingVotes[thisRound][from.Key]; ok {
 		tb.Log.With().Warning("Received malformed following voting message, already received a voting message for these PK and round",
-			log.String("from", from.String()),
-			log.Uint64("round_id", uint64(message.RoundID)))
+			log.String("from", from.Key),
+			log.Uint64("epoch_id", uint64(currentEpoch)),
+			log.Uint64("round_id", uint64(messageRound)))
 
 		return nil
 	}
 
-	firstRoundIncomingVotes := tb.firstRoundIncomingVotes[currentEpoch][from.String()]
-	tb.incomingVotes[thisRound][from.String()] = tb.decodeVotes(message.VotesBitVector, firstRoundIncomingVotes)
+	tb.Log.With().Info("Received following voting message, counting it",
+		log.String("from", from.Key),
+		log.Uint64("epoch_id", uint64(currentEpoch)),
+		log.Uint64("round_id", uint64(messageRound)),
+		log.String("message", message.String()))
+
+	firstRoundIncomingVotes := tb.firstRoundIncomingVotes[currentEpoch][from.Key]
+	tb.incomingVotes[thisRound][from.Key] = tb.decodeVotes(message.VotesBitVector, firstRoundIncomingVotes)
 
 	return nil
 }

@@ -2,8 +2,8 @@ package tortoisebeacon
 
 // Config is the configuration of the Tortoise Beacon.
 type Config struct {
-	Kappa                       int     `mapstructure:"tortoise-beacon-kappa"`                           // Security parameter (for calculating ATX threshold)
-	Q                           float64 `mapstructure:"tortoise-beacon-q"`                               // Ratio of dishonest spacetime (for calculating ATX threshold)
+	Kappa                       uint64  `mapstructure:"tortoise-beacon-kappa"`                           // Security parameter (for calculating ATX threshold)
+	Q                           string  `mapstructure:"tortoise-beacon-q"`                               // Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.
 	RoundsNumber                uint64  `mapstructure:"tortoise-beacon-rounds-number"`                   // Amount of rounds in every epoch
 	GracePeriodDurationSec      int     `mapstructure:"tortoise-beacon-grace-period-duration-sec"`       // TODO: comment
 	ProposalDurationSec         int     `mapstructure:"tortoise-beacon-proposal-duration-sec"`           // Proposal phase duration in seconds
@@ -18,7 +18,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		Kappa:                       40,
-		Q:                           1.0 / 3.0,
+		Q:                           "1/3",
 		RoundsNumber:                300,
 		GracePeriodDurationSec:      2 * 60,      // 2 minutes
 		ProposalDurationSec:         2 * 60,      // 2 minutes
@@ -34,7 +34,7 @@ func DefaultConfig() Config {
 func TestConfig() Config {
 	return Config{
 		Kappa:                       40,
-		Q:                           1.0 / 3.0,
+		Q:                           "1/3",
 		RoundsNumber:                2,
 		GracePeriodDurationSec:      1,
 		ProposalDurationSec:         1,

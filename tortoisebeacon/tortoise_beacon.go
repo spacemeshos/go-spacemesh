@@ -4,12 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
 	"sync"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/ALTree/bigfloat"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -20,7 +19,7 @@ import (
 
 const (
 	protoName       = "TORTOISE_BEACON_PROTOCOL"
-	proposalPrefix  = "TortoiseBeaconProposal"
+	proposalPrefix  = "TBP"
 	cleanupInterval = 30 * time.Second
 	cleanupEpochs   = 1000
 	firstRound      = types.RoundID(1)
@@ -79,7 +78,7 @@ type TortoiseBeacon struct {
 	layerDuration time.Duration
 
 	net              broadcaster
-	atxDB            *activation.DB
+	atxDB            activationDB
 	tortoiseBeaconDB tortoiseBeaconDB
 	edSigner         *signing.EdSigner
 	vrfVerifier      verifierFunc
@@ -91,6 +90,7 @@ type TortoiseBeacon struct {
 
 	clock                    layerClock
 	layerTicker              chan types.LayerID
+	q                        *big.Rat
 	gracePeriodDuration      time.Duration
 	proposalDuration         time.Duration
 	firstVotingRoundDuration time.Duration
@@ -139,7 +139,7 @@ func New(
 	minerID types.NodeID,
 	layerDuration time.Duration,
 	net broadcaster,
-	atxDB *activation.DB,
+	atxDB activationDB,
 	tortoiseBeaconDB tortoiseBeaconDB,
 	edSigner *signing.EdSigner,
 	vrfVerifier verifierFunc,
@@ -148,6 +148,11 @@ func New(
 	clock layerClock,
 	logger log.Log,
 ) *TortoiseBeacon {
+	q, ok := new(big.Rat).SetString(conf.Q)
+	if !ok {
+		panic("bad q parameter")
+	}
+
 	return &TortoiseBeacon{
 		Log:                       logger,
 		Closer:                    util.NewCloser(),
@@ -162,6 +167,7 @@ func New(
 		vrfSigner:                 vrfSigner,
 		weakCoin:                  weakCoin,
 		clock:                     clock,
+		q:                         q,
 		gracePeriodDuration:       time.Duration(conf.ProposalDurationSec) * time.Second,
 		proposalDuration:          time.Duration(conf.ProposalDurationSec) * time.Second,
 		firstVotingRoundDuration:  time.Duration(conf.FirstVotingRoundDurationSec) * time.Second,
@@ -566,7 +572,8 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 	bitVector := tb.encodeVotes(ownCurrentRoundVotes, tb.firstRoundOutcomingVotes[epoch])
 
 	mb := FollowingVotingMessageBody{
-		MinerID:        tb.minerID,
+		MinerID: tb.minerID,
+		//EpochID:        epoch,
 		RoundID:        round,
 		VotesBitVector: bitVector,
 	}
@@ -652,27 +659,45 @@ func (tb *TortoiseBeacon) votingThreshold(epochID types.EpochID) (int, error) {
 	return int(tb.config.Theta * float64(epochWeight)), nil
 }
 
-// TODO: should be fixed point
-func (tb *TortoiseBeacon) atxThresholdFraction(epochWeight uint64) float64 {
-	return 1 - math.Pow(2.0, -(float64(tb.config.Kappa)/((1.0-tb.config.Q)*float64(epochWeight))))
+func (tb *TortoiseBeacon) atxThresholdFraction(epochWeight uint64) *big.Float {
+	// threshold(k, q, W) = 1 - (2 ^ (- (k/((1-q)*W))
+	// Floating point: 1 - math.Pow(2.0, -(float64(tb.config.Kappa)/((1.0-tb.config.Q)*float64(epochWeight))))
+	// Fixed point:
+	return new(big.Float).Sub(
+		new(big.Float).SetInt64(1),
+		bigfloat.Pow(
+			new(big.Float).SetInt64(2),
+			new(big.Float).SetRat(
+				new(big.Rat).Neg(
+					new(big.Rat).Quo(
+						new(big.Rat).SetUint64(tb.config.Kappa),
+						new(big.Rat).Mul(
+							new(big.Rat).Sub(
+								new(big.Rat).SetInt64(1.0),
+								tb.q,
+							),
+							new(big.Rat).SetUint64(epochWeight),
+						),
+					),
+				),
+			),
+		),
+	)
 }
 
 // TODO: consider having a generic function for probabilities
 func (tb *TortoiseBeacon) atxThreshold(epochWeight uint64) (*big.Int, error) {
-	fractionFloat64 := tb.atxThresholdFraction(epochWeight)
-	fractionBigFloat := new(big.Float).SetFloat64(fractionFloat64)
+	const signatureLength = 64
 
-	emptyMessage := make([]byte, 0)
-	maxPossibleNumberBytes := tb.vrfSigner.Sign(emptyMessage) // TODO: have a constant for that
+	fraction := tb.atxThresholdFraction(epochWeight)
 
-	for i := range maxPossibleNumberBytes {
-		maxPossibleNumberBytes[i] = 0xFF
-	}
+	two := big.NewInt(2)
+	signatureLengthBigInt := big.NewInt(signatureLength)
 
-	maxPossibleNumberBigInt := new(big.Int).SetBytes(maxPossibleNumberBytes[:])
+	maxPossibleNumberBigInt := new(big.Int).Exp(two, signatureLengthBigInt, nil)
 	maxPossibleNumberBigFloat := new(big.Float).SetInt(maxPossibleNumberBigInt)
 
-	thresholdBigFloat := new(big.Float).Mul(maxPossibleNumberBigFloat, fractionBigFloat)
+	thresholdBigFloat := new(big.Float).Mul(maxPossibleNumberBigFloat, fraction)
 	threshold, _ := thresholdBigFloat.Int(nil)
 
 	return threshold, nil
@@ -703,12 +728,12 @@ func (tb *TortoiseBeacon) calcEligibilityProof(message interface{}) ([]byte, err
 }
 
 func (tb *TortoiseBeacon) calcProposal(epoch types.EpochID) ([]byte, error) {
-	message := struct {
-		prefix string
-		epoch  uint64
+	message := &struct {
+		Prefix string
+		Epoch  uint64
 	}{
-		prefix: proposalPrefix,
-		epoch:  uint64(epoch),
+		Prefix: proposalPrefix,
+		Epoch:  uint64(epoch),
 	}
 
 	return types.InterfaceToBytes(message)
