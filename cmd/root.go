@@ -183,6 +183,12 @@ func AddCommands(cmd *cobra.Command) {
 		config.TortoiseBeacon.Q, "Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.")
 	cmd.PersistentFlags().Uint64Var(&config.TortoiseBeacon.RoundsNumber, "tortoise-beacon-rounds-number",
 		config.TortoiseBeacon.RoundsNumber, "Amount of rounds in every epoch")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.GracePeriodDurationSec, "tortoise-beacon-grace-period-duration-sec",
+		config.TortoiseBeacon.GracePeriodDurationSec, "Grace period duration in seconds")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.ProposalDurationSec, "tortoise-beacon-proposal-duration-sec",
+		config.TortoiseBeacon.ProposalDurationSec, "Proposal duration in seconds")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.FirstVotingRoundDurationSec, "tortoise-beacon-first-voting-round-duration-sec",
+		config.TortoiseBeacon.FirstVotingRoundDurationSec, "First voting round duration in seconds")
 	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.VotingRoundDurationSec, "tortoise-beacon-voting-round-duration-sec",
 		config.TortoiseBeacon.VotingRoundDurationSec, "Voting round duration in seconds")
 	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.WeakCoinRoundDuration, "tortoise-beacon-weak-coin-round-duration-sec",

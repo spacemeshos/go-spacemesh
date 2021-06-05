@@ -156,6 +156,7 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 			tb := TortoiseBeacon{
 				config: Config{
 					RoundsNumber: rounds,
+					Theta:        1,
 				},
 				Log:                       log.NewDefault("TortoiseBeacon"),
 				validProposals:            tc.validProposals,

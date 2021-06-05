@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -119,9 +120,6 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 
 	hash := types.HexToHash32("0x12345678")
 
-	_, pk1, err := p2pcrypto.GenerateKeyPair()
-	r.NoError(err)
-
 	genesisTime := time.Now().Add(time.Second * 10)
 	ld := time.Duration(10) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, log.NewDefault("clock"))
@@ -148,8 +146,8 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 		mock.AnythingOfType("types.ATXID")).
 		Return(time.Now(), nil)
 
-	const epoch = 3
-	const round = 5
+	const epoch = 0
+	const round = 1
 
 	types.SetLayersPerEpoch(1)
 
@@ -166,7 +164,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 		name          string
 		epoch         types.EpochID
 		currentRounds map[types.EpochID]types.RoundID
-		from          p2pcrypto.PublicKey
+		from          string
 		message       FirstVotingMessage
 		expected      map[epochRoundPair]votesPerPK
 	}{
@@ -176,7 +174,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 			currentRounds: map[types.EpochID]types.RoundID{
 				epoch: round,
 			},
-			from: pk1,
+			from: minerID.Key,
 			message: FirstVotingMessage{
 				FirstVotingMessageBody: FirstVotingMessageBody{
 					MinerID:                   minerID,
@@ -186,8 +184,8 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 			},
 			expected: map[epochRoundPair]votesPerPK{
 				epochRoundPair{EpochID: epoch, Round: round}: {
-					pk1.String(): votesSetPair{
-						ValidVotes:   hashSet{hash.String(): {}},
+					minerID.Key: votesSetPair{
+						ValidVotes:   hashSet{util.Bytes2Hex(hash[:]): {}},
 						InvalidVotes: hashSet{},
 					},
 				},
@@ -199,7 +197,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 			currentRounds: map[types.EpochID]types.RoundID{
 				epoch: round + 1,
 			},
-			from: pk1,
+			from: minerID.Key,
 			message: FirstVotingMessage{
 				FirstVotingMessageBody: FirstVotingMessageBody{
 					MinerID:                   minerID,
@@ -209,8 +207,8 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 			},
 			expected: map[epochRoundPair]votesPerPK{
 				epochRoundPair{EpochID: epoch, Round: round}: {
-					pk1.String(): votesSetPair{
-						ValidVotes:   hashSet{hash.String(): {}},
+					minerID.Key: votesSetPair{
+						ValidVotes:   hashSet{util.Bytes2Hex(hash[:]): {}},
 						InvalidVotes: hashSet{},
 					},
 				},

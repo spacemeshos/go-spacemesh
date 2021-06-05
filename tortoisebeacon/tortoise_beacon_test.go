@@ -37,6 +37,9 @@ func TestTortoiseBeacon(t *testing.T) {
 	requirer := require.New(t)
 	conf := TestConfig()
 
+	mockDB := &mockActivationDB{}
+	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(10), nil, nil)
+
 	mwc := &weakcoin.MockWeakCoin{}
 	mwc.On("OnRoundStarted",
 		mock.AnythingOfType("types.EpochID"),
@@ -82,7 +85,9 @@ func TestTortoiseBeacon(t *testing.T) {
 	goldenATXID := types.ATXID(types.HexToHash32("11111"))
 
 	atxdb := activation.NewDB(database.NewMemDatabase(), idStore, memesh, 3, goldenATXID, &validatorMock{}, lg.WithName("atxDB"))
-	tb := New(conf, minerID, ld, n1, atxdb, nil, edSgn, signing.VRFVerify, vrfSigner, mwc, clock, logger)
+	_ = atxdb
+
+	tb := New(conf, minerID, ld, n1, mockDB, nil, edSgn, signing.VRFVerify, vrfSigner, mwc, clock, logger)
 	requirer.NotNil(tb)
 
 	err = tb.Start(context.TODO())
@@ -185,12 +190,18 @@ func TestTortoiseBeacon_atxThresholdFraction(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
+			q, ok := new(big.Rat).SetString(tc.q)
+			if !ok {
+				panic("bad q parameter")
+			}
+
 			tb := TortoiseBeacon{
 				Log: log.NewDefault("TortoiseBeacon"),
 				config: Config{
 					Kappa: tc.kappa,
 					Q:     tc.q,
 				},
+				q: q,
 			}
 
 			threshold := tb.atxThresholdFraction(tc.w)
