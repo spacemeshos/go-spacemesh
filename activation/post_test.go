@@ -139,7 +139,7 @@ func TestPostManager_GenerateProof(t *testing.T) {
 
 	// Attempt to generate proof.
 	_, _, err = mgr.GenerateProof(ch)
-	req.EqualError(err, errNotCompleted.Error())
+	req.EqualError(err, errNotComplete.Error())
 
 	// Create data.
 	doneChan, err := mgr.CreatePostData(&PostInitOpts{
@@ -160,7 +160,7 @@ func TestPostManager_GenerateProof(t *testing.T) {
 
 	// Attempt to generate proof.
 	_, _, err = mgr.GenerateProof(ch)
-	req.EqualError(err, errNotCompleted.Error())
+	req.EqualError(err, errNotComplete.Error())
 }
 
 func TestPostManager_Progress(t *testing.T) {

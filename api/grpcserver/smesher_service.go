@@ -33,21 +33,10 @@ func NewSmesherService(post api.PostAPI, smeshing api.SmeshingAPI) *SmesherServi
 }
 
 // IsSmeshing reports whether the node is smeshing
-func (s SmesherService) SmeshingStatus(context.Context, *empty.Empty) (*pb.SmeshingStatusResponse, error) {
-	log.Info("GRPC SmesherService.SmeshingStatus")
+func (s SmesherService) IsSmeshing(context.Context, *empty.Empty) (*pb.IsSmeshingResponse, error) {
+	log.Info("GRPC SmesherService.IsSmeshing")
 
-	res := &pb.SmeshingStatusResponse{}
-
-	switch s.smeshing.Status() {
-	case activation.SmeshingStatusIdle:
-		res.Status = pb.SmeshingStatusResponse_SMESHING_STATUS_IDLE
-	case activation.SmeshingStatusCreatingPostData:
-		res.Status = pb.SmeshingStatusResponse_SMESHING_STATUS_CREATING_POST_DATA
-	case activation.SmeshingStatusActive:
-		res.Status = pb.SmeshingStatusResponse_SMESHING_STATUS_ACTIVE
-	}
-
-	return res, nil
+	return &pb.IsSmeshingResponse{IsSmeshing: s.smeshing.Smeshing()}, nil
 }
 
 // StartSmeshing requests that the node begin smeshing
@@ -109,6 +98,14 @@ func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingReq
 	}, nil
 }
 
+// PostStatus returns post data status
+func (s SmesherService) PostStatus(context.Context, *empty.Empty) (*pb.PostStatusResponse, error) {
+	log.Info("GRPC SmesherService.PostStatus")
+
+	postStatus := s.post.PostStatus()
+	return &pb.PostStatusResponse{Status: statusToPbStatus(postStatus)}, nil
+}
+
 // PostComputeProviders returns a list of available post compute providers
 func (s SmesherService) PostComputeProviders(ctx context.Context, in *pb.PostComputeProvidersRequest) (*pb.PostComputeProvidersResponse, error) {
 	log.Info("GRPC SmesherService.PostComputeProviders")
@@ -143,10 +140,6 @@ func (s SmesherService) PostComputeProviders(ctx context.Context, in *pb.PostCom
 func (s SmesherService) PostDataCreationProgressStream(_ *empty.Empty, stream pb.SmesherService_PostDataCreationProgressStreamServer) error {
 	log.Info("GRPC SmesherService.PostDataCreationProgressStream")
 
-	if initStatus := s.post.InitStatus(); initStatus != activation.StatusInProgress {
-		return status.Errorf(codes.FailedPrecondition, "no post data creation session is in progress")
-	}
-
 	statusChan := s.post.PostDataCreationProgressStream()
 	for {
 		select {
@@ -161,7 +154,6 @@ func (s SmesherService) PostDataCreationProgressStream(_ *empty.Empty, stream pb
 			return nil
 		}
 	}
-
 }
 
 // SmesherID returns the smesher ID of this node
@@ -228,17 +220,25 @@ func (s SmesherService) Config(context.Context, *empty.Empty) (*pb.ConfigRespons
 	}, nil
 }
 
-func statusToPbStatus(status *activation.SessionStatus) *pb.SessionStatus {
-	pbStatus := &pb.SessionStatus{}
+func statusToPbStatus(status *activation.PostStatus) *pb.PostStatus {
+	pbStatus := &pb.PostStatus{}
+
+	pbStatus.InitStatus = pb.PostStatus_InitStatus(status.InitStatus) // assuming enum values match.
 	pbStatus.NumLabelsWritten = status.NumLabelsWritten
-	if status.SessionOpts != nil {
-		pbStatus.SessionOpts = &pb.PostInitOpts{
-			DataDir:           status.SessionOpts.DataDir,
-			NumUnits:          uint32(status.SessionOpts.NumUnits),
-			NumFiles:          uint32(status.SessionOpts.NumFiles),
-			ComputeProviderId: uint32(status.SessionOpts.ComputeProviderID),
-			Throttle:          status.SessionOpts.Throttle,
+
+	if status.Error != nil {
+		pbStatus.ErrorMessage = status.Error.Error()
+	}
+
+	if status.InitOpts != nil {
+		pbStatus.InitOpts = &pb.PostInitOpts{
+			DataDir:           status.InitOpts.DataDir,
+			NumUnits:          uint32(status.InitOpts.NumUnits),
+			NumFiles:          uint32(status.InitOpts.NumFiles),
+			ComputeProviderId: uint32(status.InitOpts.ComputeProviderID),
+			Throttle:          status.InitOpts.Throttle,
 		}
 	}
+
 	return pbStatus
 }

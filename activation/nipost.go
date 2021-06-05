@@ -115,8 +115,8 @@ func NewNIPoSTBuilder(
 func (nb *NIPoSTBuilder) BuildNIPoST(challenge *types.Hash32, atxExpired, stop chan struct{}) (*types.NIPoST, error) {
 	nb.load(*challenge)
 
-	if _, ok := nb.postProvider.InitCompleted(); !ok {
-		return nil, errors.New("PoST init not completed")
+	if nb.postProvider.InitStatusComplete() {
+		return nil, errors.New("PoST init not complete")
 	}
 
 	nipost := nb.state.NIPoST

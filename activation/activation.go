@@ -79,7 +79,7 @@ type syncer interface {
 
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
-	Status() SmeshingStatus
+	Smeshing() bool
 	StartSmeshing(coinbase types.Address, opts *PostInitOpts) error
 	StopSmeshing(deleteFiles bool) error
 	SmesherID() types.NodeID
@@ -103,8 +103,8 @@ type SmeshingStatus int32
 
 const (
 	SmeshingStatusIdle SmeshingStatus = iota
-	SmeshingStatusCreatingPostData
-	SmeshingStatusActive
+	SmeshingStatusPendingPostInit
+	SmeshingStatusStarted
 )
 
 // Builder struct is the struct that orchestrates the creation of activation transactions
@@ -158,11 +158,11 @@ func NewBuilder(cfg Config, nodeID types.NodeID, signer signer, db atxDBProvider
 }
 
 // Smeshing returns true iff atx builder started.
-func (b *Builder) Status() SmeshingStatus {
+func (b *Builder) Smeshing() bool {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 
-	return b.status
+	return b.status == SmeshingStatusStarted
 }
 
 // StartSmeshing is the main entry point of the atx builder.
@@ -177,7 +177,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts *PostInitOpts) erro
 		return errors.New("already started")
 	}
 	b.stop = make(chan struct{})
-	b.status = SmeshingStatusCreatingPostData
+	b.status = SmeshingStatusPendingPostInit
 	b.mtx.Unlock()
 
 	doneChan, err := b.postProvider.CreatePostData(opts)
@@ -188,13 +188,13 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts *PostInitOpts) erro
 
 	go func() {
 		<-doneChan
-		if _, ok := b.postProvider.InitCompleted(); !ok {
+		if initStatus := b.postProvider.InitStatus(); initStatus != InitStatusComplete {
 			b.status = SmeshingStatusIdle
-			b.log.Error("failed to create post data: %v", b.postProvider.LastErr())
+			b.log.Error("failed to create post data: %v", b.postProvider.LastError())
 			return
 		}
 
-		b.status = SmeshingStatusActive
+		b.status = SmeshingStatusStarted
 		go b.loop()
 	}()
 
