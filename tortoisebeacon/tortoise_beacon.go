@@ -407,6 +407,10 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 		VRFSignature: proposedSignature,
 	}
 
+	tb.Log.With().Info("Going to send proposal",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.String("message", m.String()))
+
 	if err := tb.sendToGossip(ctx, TBProposalProtocol, m); err != nil {
 		return fmt.Errorf("broadcast proposal message: %w", err)
 	}
@@ -561,6 +565,11 @@ func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 		Signature:              sig,
 	}
 
+	tb.Log.With().Info("Going to send first round vote",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint64("round", uint64(1)),
+		log.String("message", m.String()))
+
 	if err := tb.sendToGossip(ctx, TBFirstVotingProtocol, m); err != nil {
 		return fmt.Errorf("sendToGossip: %w", err)
 	}
@@ -572,8 +581,8 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 	bitVector := tb.encodeVotes(ownCurrentRoundVotes, tb.firstRoundOutcomingVotes[epoch])
 
 	mb := FollowingVotingMessageBody{
-		MinerID: tb.minerID,
-		//EpochID:        epoch,
+		MinerID:        tb.minerID,
+		EpochID:        epoch,
 		RoundID:        round,
 		VotesBitVector: bitVector,
 	}
@@ -587,6 +596,11 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 		FollowingVotingMessageBody: mb,
 		Signature:                  sig,
 	}
+
+	tb.Log.With().Info("Going to send following round vote",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint64("round", uint64(round)),
+		log.String("message", m.String()))
 
 	if err := tb.sendToGossip(ctx, TBFollowingVotingProtocol, m); err != nil {
 		return fmt.Errorf("broadcast voting message: %w", err)

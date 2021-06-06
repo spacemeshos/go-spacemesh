@@ -43,8 +43,8 @@ func (v FirstVotingMessage) String() string {
 }
 
 type FollowingVotingMessageBody struct {
-	MinerID types.NodeID
-	//EpochID        types.EpochID
+	MinerID        types.NodeID
+	EpochID        types.EpochID
 	RoundID        types.RoundID
 	VotesBitVector []uint64
 }

@@ -106,6 +106,11 @@ func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) (votesMarginMap, 
 	// protected by tb.votesMu
 	firstRoundIncomingVotes := tb.incomingVotes[firstRoundInThisEpoch]
 
+	tb.Log.With().Info("First round incoming votes",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint64("round", uint64(1)),
+		log.String("votes", fmt.Sprint(firstRoundIncomingVotes)))
+
 	firstRoundVotesMargin := make(map[proposal]int)
 
 	for nodeID, votesList := range firstRoundIncomingVotes {
@@ -127,6 +132,11 @@ func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) (votesMarginMap, 
 			firstRoundVotesAgainst[vote] = struct{}{}
 		}
 	}
+
+	tb.Log.With().Info("First round votes margin",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint64("round", uint64(1)),
+		log.String("votes_margin", fmt.Sprint(firstRoundVotesMargin)))
 
 	return firstRoundVotesMargin, nil
 }

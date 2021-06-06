@@ -5,7 +5,7 @@ type Config struct {
 	Kappa                       uint64  `mapstructure:"tortoise-beacon-kappa"`                           // Security parameter (for calculating ATX threshold)
 	Q                           string  `mapstructure:"tortoise-beacon-q"`                               // Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.
 	RoundsNumber                uint64  `mapstructure:"tortoise-beacon-rounds-number"`                   // Amount of rounds in every epoch
-	GracePeriodDurationSec      int     `mapstructure:"tortoise-beacon-grace-period-duration-sec"`       // TODO: comment
+	GracePeriodDurationSec      int     `mapstructure:"tortoise-beacon-grace-period-duration-sec"`       // Grace period duration in seconds
 	ProposalDurationSec         int     `mapstructure:"tortoise-beacon-proposal-duration-sec"`           // Proposal phase duration in seconds
 	FirstVotingRoundDurationSec int     `mapstructure:"tortoise-beacon-first-voting-round-duration-sec"` // First voting round duration in seconds
 	VotingRoundDurationSec      int     `mapstructure:"tortoise-beacon-voting-round-duration-sec"`       // Voting round duration in seconds

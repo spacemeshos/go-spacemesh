@@ -287,8 +287,8 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, message 
 }
 
 func (tb *TortoiseBeacon) handleFollowingVotingMessage(ctx context.Context, message FollowingVotingMessage) error {
-	currentEpoch := tb.currentEpoch()
-	//currentEpoch := message.EpochID
+	//currentEpoch := tb.currentEpoch()
+	currentEpoch := message.EpochID
 	messageRound := message.RoundID
 
 	from := message.MinerID

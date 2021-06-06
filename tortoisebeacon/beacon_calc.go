@@ -49,6 +49,10 @@ func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID) (propo
 	votes, ok := tb.ownVotes[lastRound]
 	if !ok {
 		// re-calculate votes
+		tb.Log.With().Info("Own votes not found, re-calculating",
+			log.Uint64("epoch_id", uint64(epoch)),
+			log.Uint64("round", uint64(lastRound.Round)))
+
 		v, err := tb.calcVotes(epoch, lastRound.Round)
 		if err != nil {
 			return nil, fmt.Errorf("recalculate votes: %w", err)
