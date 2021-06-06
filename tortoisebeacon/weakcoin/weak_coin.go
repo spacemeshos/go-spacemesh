@@ -128,7 +128,6 @@ func (wc *weakCoin) PublishProposal(ctx context.Context, epoch types.EpochID, ro
 		return fmt.Errorf("serialize weak coin message: %w", err)
 	}
 
-	// TODO(nkryuchkov): pass correct context
 	if err := wc.net.Broadcast(ctx, GossipProtocol, serializedMessage); err != nil {
 		return fmt.Errorf("broadcast weak coin message: %w", err)
 	}

@@ -37,7 +37,7 @@ func TestConfig() Config {
 		Q:                           "1/3",
 		RoundsNumber:                2,
 		GracePeriodDurationSec:      1,
-		ProposalDurationSec:         1,
+		ProposalDurationSec:         2,
 		FirstVotingRoundDurationSec: 1,
 		VotingRoundDurationSec:      1,
 		WeakCoinRoundDuration:       1,

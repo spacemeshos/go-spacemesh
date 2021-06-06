@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -49,11 +50,12 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 }
 
 func (tb *TortoiseBeacon) handleProposalMessage(ctx context.Context, m ProposalMessage) error {
+	receivedTimestamp := time.Now()
 	currentEpoch := tb.currentEpoch()
 
-	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(m.MinerID, currentEpoch)
+	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(m.MinerID, currentEpoch-1)
 	if err != nil {
-		tb.Log.With().Warning("Miner has no ATXs in the current epoch")
+		tb.Log.With().Warning("Miner has no ATXs in the previous epoch")
 		return nil
 	}
 
@@ -100,9 +102,8 @@ func (tb *TortoiseBeacon) handleProposalMessage(ctx context.Context, m ProposalM
 	atxEpoch := atxHeader.PubLayerID.GetEpoch()
 	nextEpochStart := tb.clock.LayerToTime((atxEpoch + 1).FirstLayer())
 
-	// TODO: fix conditions (9 cases)
 	switch {
-	case atxTimestamp.Before(nextEpochStart): // TODO: and proposal message was received before the end of proposal round
+	case tb.isValidProposalMessage(atxTimestamp, nextEpochStart, receivedTimestamp):
 		tb.Log.With().Info("Received valid proposal message",
 			log.Uint64("epoch_id", uint64(currentEpoch)),
 			log.String("message", m.String()))
@@ -117,7 +118,7 @@ func (tb *TortoiseBeacon) handleProposalMessage(ctx context.Context, m ProposalM
 
 		tb.validProposalsMu.Unlock()
 
-	case atxTimestamp.Before(nextEpochStart.Add(tb.gracePeriodDuration)):
+	case tb.isPotentiallyValidProposalMessage(atxTimestamp, nextEpochStart, receivedTimestamp):
 		tb.Log.With().Info("Received potentially valid proposal message",
 			log.Uint64("epoch_id", uint64(currentEpoch)),
 			log.String("message", m.String()))
@@ -138,6 +139,20 @@ func (tb *TortoiseBeacon) handleProposalMessage(ctx context.Context, m ProposalM
 	}
 
 	return nil
+}
+
+func (tb *TortoiseBeacon) isPotentiallyValidProposalMessage(atxTimestamp time.Time, nextEpochStart time.Time, receivedTimestamp time.Time) bool {
+	delayedATX := atxTimestamp.Before(nextEpochStart.Add(tb.gracePeriodDuration))
+	delayedProposal := tb.receivedBeforeProposalPhaseFinished(tb.currentEpoch(), receivedTimestamp.Add(-tb.gracePeriodDuration))
+
+	return delayedATX && delayedProposal
+}
+
+func (tb *TortoiseBeacon) isValidProposalMessage(atxTimestamp time.Time, nextEpochStart time.Time, receivedTimestamp time.Time) bool {
+	timelyATX := atxTimestamp.Before(nextEpochStart)
+	timelyProposal := tb.receivedBeforeProposalPhaseFinished(tb.currentEpoch(), receivedTimestamp)
+
+	return timelyATX && timelyProposal
 }
 
 // HandleSerializedFirstVotingMessage defines method to handle Tortoise Beacon first voting Messages from gossip.
@@ -193,11 +208,14 @@ func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Con
 }
 
 func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, message FirstVotingMessage) error {
-	// TODO: check for ATX (also for following voting messages), same conditions as for proposals, except when it's received
-	// check if PK has an ATX in the previous epoch (any time)
 	currentEpoch := tb.currentEpoch()
-
 	from := message.MinerID
+
+	_, err := tb.atxDB.GetNodeAtxIDForEpoch(from, currentEpoch-1)
+	if err != nil {
+		tb.Log.With().Warning("Miner has no ATXs in the previous epoch")
+		return nil
+	}
 
 	ok, err := tb.verifyEligibilityProof(message.FirstVotingMessageBody, from, message.Signature)
 	if err != nil {
@@ -290,8 +308,13 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(ctx context.Context, mess
 	//currentEpoch := tb.currentEpoch()
 	currentEpoch := message.EpochID
 	messageRound := message.RoundID
-
 	from := message.MinerID
+
+	_, err := tb.atxDB.GetNodeAtxIDForEpoch(from, currentEpoch-1)
+	if err != nil {
+		tb.Log.With().Warning("Miner has no ATXs in the previous epoch")
+		return nil
+	}
 
 	// Ensure that epoch is the same.
 	ok, err := tb.verifyEligibilityProof(message.FollowingVotingMessageBody, from, message.Signature)
