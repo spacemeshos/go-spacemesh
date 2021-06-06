@@ -233,7 +233,7 @@ def wait_genesis(genesis_time, genesis_delta):
         time.sleep(delta_from_genesis)
 
 
-def wait_for_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME, logstash_ss_name=LOGSTASH_SS_NAME):
+def wait_for_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME):
     es_timeout = 240
     try:
         print("waiting for ES to be ready")
