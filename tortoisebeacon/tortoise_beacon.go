@@ -106,11 +106,12 @@ type TortoiseBeacon struct {
 	potentiallyValidProposalsMu sync.RWMutex
 	potentiallyValidProposals   proposalsMap
 
-	votesMu                  sync.RWMutex
-	firstRoundIncomingVotes  firstRoundVotesPerEpoch           // all rounds - votes (decoded votes)
-	firstRoundOutcomingVotes map[types.EpochID]firstRoundVotes // all rounds - votes (decoded votes)
-	incomingVotes            votesPerRound                     // all rounds - votes (decoded votes)
-	ownVotes                 ownVotes                          // all rounds - own votes
+	votesMu                         sync.RWMutex
+	firstRoundIncomingVotes         firstRoundVotesPerEpoch           // all rounds - votes (decoded votes)
+	firstRoundOutcomingVotes        map[types.EpochID]firstRoundVotes // all rounds - votes (decoded votes)
+	incomingVotes                   votesPerRound                     // all rounds - votes (decoded votes)
+	ownVotes                        ownVotes                          // all rounds - own votes
+	proposalPhaseFinishedTimestamps map[types.EpochID]time.Time
 
 	beaconsMu sync.RWMutex
 	beacons   map[types.EpochID]types.Hash32
@@ -154,33 +155,34 @@ func New(
 	}
 
 	return &TortoiseBeacon{
-		Log:                       logger,
-		Closer:                    util.NewCloser(),
-		config:                    conf,
-		minerID:                   minerID,
-		layerDuration:             layerDuration,
-		net:                       net,
-		atxDB:                     atxDB,
-		tortoiseBeaconDB:          tortoiseBeaconDB,
-		edSigner:                  edSigner,
-		vrfVerifier:               vrfVerifier,
-		vrfSigner:                 vrfSigner,
-		weakCoin:                  weakCoin,
-		clock:                     clock,
-		q:                         q,
-		gracePeriodDuration:       time.Duration(conf.ProposalDurationSec) * time.Second,
-		proposalDuration:          time.Duration(conf.ProposalDurationSec) * time.Second,
-		firstVotingRoundDuration:  time.Duration(conf.FirstVotingRoundDurationSec) * time.Second,
-		votingRoundDuration:       time.Duration(conf.VotingRoundDurationSec) * time.Second,
-		weakCoinRoundDuration:     time.Duration(conf.WeakCoinRoundDuration) * time.Second,
-		currentRounds:             make(map[types.EpochID]types.RoundID),
-		validProposals:            make(map[types.EpochID]hashSet),
-		potentiallyValidProposals: make(map[types.EpochID]hashSet),
-		ownVotes:                  make(ownVotes),
-		beacons:                   make(map[types.EpochID]types.Hash32),
-		incomingVotes:             map[epochRoundPair]votesPerPK{},
-		firstRoundIncomingVotes:   map[types.EpochID]firstRoundVotesPerPK{},
-		firstRoundOutcomingVotes:  map[types.EpochID]firstRoundVotes{},
+		Log:                             logger,
+		Closer:                          util.NewCloser(),
+		config:                          conf,
+		minerID:                         minerID,
+		layerDuration:                   layerDuration,
+		net:                             net,
+		atxDB:                           atxDB,
+		tortoiseBeaconDB:                tortoiseBeaconDB,
+		edSigner:                        edSigner,
+		vrfVerifier:                     vrfVerifier,
+		vrfSigner:                       vrfSigner,
+		weakCoin:                        weakCoin,
+		clock:                           clock,
+		q:                               q,
+		gracePeriodDuration:             time.Duration(conf.GracePeriodDurationSec) * time.Second,
+		proposalDuration:                time.Duration(conf.ProposalDurationSec) * time.Second,
+		firstVotingRoundDuration:        time.Duration(conf.FirstVotingRoundDurationSec) * time.Second,
+		votingRoundDuration:             time.Duration(conf.VotingRoundDurationSec) * time.Second,
+		weakCoinRoundDuration:           time.Duration(conf.WeakCoinRoundDuration) * time.Second,
+		currentRounds:                   make(map[types.EpochID]types.RoundID),
+		validProposals:                  make(map[types.EpochID]hashSet),
+		potentiallyValidProposals:       make(map[types.EpochID]hashSet),
+		ownVotes:                        make(ownVotes),
+		beacons:                         make(map[types.EpochID]types.Hash32),
+		proposalPhaseFinishedTimestamps: map[types.EpochID]time.Time{},
+		incomingVotes:                   map[epochRoundPair]votesPerPK{},
+		firstRoundIncomingVotes:         map[types.EpochID]firstRoundVotesPerPK{},
+		firstRoundOutcomingVotes:        map[types.EpochID]firstRoundVotes{},
 	}
 }
 
@@ -343,6 +345,8 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 }
 
 func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) {
+	// TODO: check when epoch started, adjust waiting time for this timestamp
+
 	if epoch.IsGenesis() {
 		tb.Log.With().Info("not starting tortoise beacon since we are in genesis epoch",
 			log.Uint64("epoch_id", uint64(epoch)))
@@ -397,9 +401,18 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 	}
 
 	if !passes {
+		tb.Log.With().Info("Proposal doesn't pass threshold",
+			log.Uint64("epoch_id", uint64(epoch)),
+			log.String("proposal", util.Bytes2Hex(proposedSignature)),
+			log.Uint64("weight", epochWeight))
 		// proposal is not sent
 		return nil
 	}
+
+	tb.Log.With().Info("Proposal passes threshold",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.String("proposal", util.Bytes2Hex(proposedSignature)),
+		log.Uint64("weight", epochWeight))
 
 	// concat them into a single proposal message
 	m := ProposalMessage{
@@ -435,6 +448,10 @@ func (tb *TortoiseBeacon) proposalPassesEligibilityThreshold(proposal []byte, ep
 	if err != nil {
 		return false, fmt.Errorf("atxThreshold: %w", err)
 	}
+
+	tb.Log.With().Info("Checking proposal for ATX threshold",
+		log.String("proposal", proposalInt.String()),
+		log.String("threshold", threshold.String()))
 
 	return proposalInt.Cmp(threshold) == -1, nil
 }
@@ -701,7 +718,7 @@ func (tb *TortoiseBeacon) atxThresholdFraction(epochWeight uint64) *big.Float {
 
 // TODO: consider having a generic function for probabilities
 func (tb *TortoiseBeacon) atxThreshold(epochWeight uint64) (*big.Int, error) {
-	const signatureLength = 64
+	const signatureLength = 64 * 8
 
 	fraction := tb.atxThresholdFraction(epochWeight)
 

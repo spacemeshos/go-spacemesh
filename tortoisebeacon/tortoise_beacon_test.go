@@ -2,6 +2,7 @@ package tortoisebeacon
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -215,9 +216,6 @@ func TestTortoiseBeacon_atxThreshold(t *testing.T) {
 
 	r := require.New(t)
 
-	mockDB := &mockActivationDB{}
-	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(10), nil, nil)
-
 	edSgn := signing.NewEdSigner()
 	edPubkey := edSgn.PublicKey()
 
@@ -229,14 +227,28 @@ func TestTortoiseBeacon_atxThreshold(t *testing.T) {
 		kappa     uint64
 		q         string
 		w         uint64
-		threshold uint64
+		threshold string
 	}{
 		{
 			name:      "Case 1",
 			kappa:     40,
 			q:         "1/3",
 			w:         60,
-			threshold: 0x8000000000000000,
+			threshold: "0x80000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			name:      "Case 2",
+			kappa:     400000,
+			q:         "1/3",
+			w:         31744,
+			threshold: "0xffffddbb63fcd30f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			name:      "Case 3",
+			kappa:     40,
+			q:         "0.33",
+			w:         60,
+			threshold: "0x7f8ece00fe541f0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
 		},
 	}
 
@@ -255,14 +267,68 @@ func TestTortoiseBeacon_atxThreshold(t *testing.T) {
 				config: Config{
 					Kappa: tc.kappa,
 				},
-				atxDB:     mockDB,
 				vrfSigner: vrfSigner,
 				q:         q,
 			}
 
 			threshold, err := tb.atxThreshold(tc.w)
 			r.NoError(err)
-			r.EqualValues(tc.threshold, threshold.Uint64())
+			r.EqualValues(tc.threshold, fmt.Sprintf("%#x", threshold))
+		})
+	}
+}
+
+func TestTortoiseBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
+	t.Parallel()
+
+	r := require.New(t)
+
+	edSgn := signing.NewEdSigner()
+	edPubkey := edSgn.PublicKey()
+
+	vrfSigner, _, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
+	r.NoError(err)
+
+	tt := []struct {
+		name     string
+		kappa    uint64
+		q        string
+		w        uint64
+		proposal []byte
+		passes   bool
+	}{
+		{
+			name:     "Case 1",
+			kappa:    400000,
+			q:        "1/3",
+			w:        31744,
+			proposal: util.Hex2Bytes("cee191e87d83dc4fbd5e2d40679accf68237b1f09f73f16db5b05ae74b522def9d2ffee56eeb02070277be99a80666ffef9fd4514a51dc37419dd30a791e0f05"),
+			passes:   true,
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			q, ok := new(big.Rat).SetString(tc.q)
+			if !ok {
+				panic("bad q parameter")
+			}
+
+			tb := TortoiseBeacon{
+				Log: log.NewDefault("TortoiseBeacon"),
+				config: Config{
+					Kappa: tc.kappa,
+				},
+				vrfSigner: vrfSigner,
+				q:         q,
+			}
+
+			passes, err := tb.proposalPassesEligibilityThreshold(tc.proposal, tc.w)
+			r.NoError(err)
+			r.EqualValues(tc.passes, passes)
 		})
 	}
 }
