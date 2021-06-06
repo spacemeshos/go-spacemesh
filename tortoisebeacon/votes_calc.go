@@ -149,7 +149,12 @@ func (tb *TortoiseBeacon) calcOwnFirstRoundVotes(epoch types.EpochID, votesMargi
 		InvalidVotes: make(hashSet),
 	}
 
-	votingThreshold, err := tb.votingThreshold(epoch)
+	epochWeight, _, err := tb.atxDB.GetEpochWeight(epoch)
+	if err != nil {
+		return votesSetPair{}, fmt.Errorf("get epoch weight: %w", err)
+	}
+
+	votingThreshold, err := tb.votingThreshold(epochWeight)
 	if err != nil {
 		return votesSetPair{}, fmt.Errorf("voting threshold: %w", err)
 	}
@@ -221,7 +226,12 @@ func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, round ty
 		Round:   round,
 	}
 
-	votingThreshold, err := tb.votingThreshold(epoch)
+	epochWeight, _, err := tb.atxDB.GetEpochWeight(epoch)
+	if err != nil {
+		return votesSetPair{}, fmt.Errorf("get epoch weight: %w", err)
+	}
+
+	votingThreshold, err := tb.votingThreshold(epochWeight)
 	if err != nil {
 		return votesSetPair{}, fmt.Errorf("voting threshold: %w", err)
 	}

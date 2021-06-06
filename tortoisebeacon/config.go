@@ -41,7 +41,7 @@ func TestConfig() Config {
 		FirstVotingRoundDurationSec: 1,
 		VotingRoundDurationSec:      1,
 		WeakCoinRoundDuration:       1,
-		Theta:                       1,
+		Theta:                       0.00004,
 		VotesLimit:                  100,
 	}
 }

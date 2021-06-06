@@ -122,25 +122,28 @@ func TestTortoiseBeacon_votingThreshold(t *testing.T) {
 
 	r := require.New(t)
 
-	mockDB := &mockActivationDB{}
-	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(10), nil, nil)
-
 	tt := []struct {
 		name      string
 		theta     float64
-		tAve      int
+		weight    uint64
 		threshold int
 	}{
 		{
 			name:      "Case 1",
 			theta:     0.5,
-			tAve:      10,
+			weight:    10,
 			threshold: 5,
 		},
 		{
 			name:      "Case 2",
 			theta:     0.3,
-			tAve:      10,
+			weight:    10,
+			threshold: 3,
+		},
+		{
+			name:      "Case 3",
+			theta:     0.00004,
+			weight:    31744,
 			threshold: 3,
 		},
 	}
@@ -155,10 +158,9 @@ func TestTortoiseBeacon_votingThreshold(t *testing.T) {
 				config: Config{
 					Theta: tc.theta,
 				},
-				atxDB: mockDB,
 			}
 
-			threshold, err := tb.votingThreshold(1)
+			threshold, err := tb.votingThreshold(tc.weight)
 			r.NoError(err)
 			r.EqualValues(tc.threshold, threshold)
 		})

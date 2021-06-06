@@ -401,7 +401,7 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 	}
 
 	if !passes {
-		tb.Log.With().Info("Proposal doesn't pass threshold",
+		tb.Log.With().Info("Proposal to be sent doesn't pass threshold",
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.String("proposal", util.Bytes2Hex(proposedSignature)),
 			log.Uint64("weight", epochWeight))
@@ -409,7 +409,7 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 		return nil
 	}
 
-	tb.Log.With().Info("Proposal passes threshold",
+	tb.Log.With().Info("Proposal to be sent passes threshold",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.String("proposal", util.Bytes2Hex(proposedSignature)),
 		log.Uint64("weight", epochWeight))
@@ -681,12 +681,7 @@ func (tb *TortoiseBeacon) waitAfterLastRoundStarted() {
 	}
 }
 
-func (tb *TortoiseBeacon) votingThreshold(epochID types.EpochID) (int, error) {
-	epochWeight, _, err := tb.atxDB.GetEpochWeight(epochID)
-	if err != nil {
-		return 0, fmt.Errorf("get epoch weight: %w", err)
-	}
-
+func (tb *TortoiseBeacon) votingThreshold(epochWeight uint64) (int, error) {
 	return int(tb.config.Theta * float64(epochWeight)), nil
 }
 
