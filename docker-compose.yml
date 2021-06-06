@@ -23,7 +23,7 @@ services:
           "--hare-committee-size", "${SMESH_HARE_COMMITTEE_SIZE:-800}",
           "--hare-max-adversaries", "${SMESH_HARE_MAX_ADVERSARIES:-399}",
           "--tortoise-beacon-kappa", "${SMESH_TORTOISE_BEACON_KAPPA:-40}",
-          "--tortoise-beacon-q", "${SMESH_TORTOISE_BEACON_Q:-0.33333}",
+          "--tortoise-beacon-q", "${SMESH_TORTOISE_BEACON_Q:?1/3}",
           "--tortoise-beacon-rounds-number", "${SMESH_TORTOISE_BEACON_ROUNDS_NUMBER:-300}",
           "--tortoise-beacon-grace-period-duration-sec", "${SMESH_TORTOISE_BEACON_GRACE_PERIOD_DURATION_SEC:-120}",
           "--tortoise-beacon-proposal-duration-sec", "${SMESH_TORTOISE_BEACON_PROPOSAL_DURATION_SEC:-120}",

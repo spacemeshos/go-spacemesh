@@ -33,7 +33,7 @@ func DefaultConfig() Config {
 // TestConfig returns the test configuration for the tortoise beacon.
 func TestConfig() Config {
 	return Config{
-		Kappa:                       40,
+		Kappa:                       400000,
 		Q:                           "1/3",
 		RoundsNumber:                2,
 		GracePeriodDurationSec:      1,
