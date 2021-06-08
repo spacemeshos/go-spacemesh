@@ -236,11 +236,6 @@ func (proc *consensusProcess) Start(ctx context.Context) error {
 		return startInstanceError(errors.New("instance already started"))
 	}
 
-	if proc.s.Size() == 0 { // empty set is not valid
-		logger.Error("consensusProcess cannot be started with an empty set")
-		return startInstanceError(errors.New("instance started with an empty set"))
-	}
-
 	if proc.inbox == nil { // no inbox
 		logger.Error("consensusProcess cannot be started with nil inbox")
 		return startInstanceError(errors.New("instance started with nil inbox"))
@@ -326,11 +321,7 @@ PreRound:
 		types.LayerID(proc.instanceID),
 		log.Int("set_size", proc.s.Size()))
 	if proc.s.Size() == 0 {
-		logger.Event().Error("preround ended with empty set",
-			types.LayerID(proc.instanceID),
-			log.String("tracked_values", proc.preRoundTracker.tracker.String()),
-			log.Uint32("threshold", proc.preRoundTracker.threshold),
-		)
+		logger.Event().Warning("preround ended with empty set", types.LayerID(proc.instanceID))
 	} else {
 		logger.With().Info("preround ended",
 			log.Int("set_size", proc.s.Size()),
@@ -775,6 +766,9 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 
 	if proc.notifyTracker.NotificationsCount(s) < proc.cfg.F+1 { // not enough
 		proc.WithContext(ctx).With().Debug("not enough notifications for termination",
+			log.String("current_set", proc.s.String()),
+			log.Int32("current_k", proc.k),
+			types.LayerID(proc.instanceID),
 			log.Int("expected", proc.cfg.F+1),
 			log.Int("actual", proc.notifyTracker.NotificationsCount(s)))
 		return
@@ -788,8 +782,8 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 		types.LayerID(proc.instanceID),
 		log.Int("set_size", proc.s.Size()), log.Int32("K", proc.k))
 	proc.report(completed)
-	close(proc.CloseChannel())
 	proc.terminating = true
+	close(proc.CloseChannel())
 }
 
 func (proc *consensusProcess) currentRound() int {
