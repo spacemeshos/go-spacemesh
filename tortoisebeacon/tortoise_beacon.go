@@ -88,6 +88,9 @@ type TortoiseBeacon struct {
 	layerMu   sync.RWMutex
 	lastLayer types.LayerID
 
+	seenEpochsMu sync.Mutex
+	seenEpochs   map[types.EpochID]struct{}
+
 	clock                    layerClock
 	layerTicker              chan types.LayerID
 	q                        *big.Rat
@@ -184,6 +187,7 @@ func New(
 		incomingVotes:                   map[epochRoundPair]votesPerPK{},
 		firstRoundIncomingVotes:         map[types.EpochID]firstRoundVotesPerPK{},
 		firstRoundOutcomingVotes:        map[types.EpochID]firstRoundVotes{},
+		seenEpochs:                      map[types.EpochID]struct{}{},
 	}
 }
 
@@ -337,6 +341,20 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 
 		return
 	}
+
+	tb.seenEpochsMu.Lock()
+	if _, ok := tb.seenEpochs[epoch]; ok {
+		tb.Log.With().Error("already seen this epoch",
+			log.Uint64("epoch_id", uint64(epoch)),
+			log.Uint64("layer_id", uint64(layer)))
+
+		tb.seenEpochs[epoch] = struct{}{}
+		tb.seenEpochsMu.Unlock()
+
+		return
+	}
+
+	tb.seenEpochsMu.Unlock()
 
 	tb.Log.With().Info("tortoise beacon got tick",
 		log.Uint64("layer", uint64(layer)),
