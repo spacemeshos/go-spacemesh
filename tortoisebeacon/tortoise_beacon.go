@@ -765,9 +765,11 @@ func (tb *TortoiseBeacon) lastPossibleRound() types.RoundID {
 
 func (tb *TortoiseBeacon) waitAfterLastRoundStarted() {
 	// Last round + next round for timely messages + next round for delayed messages (late messages may be ignored).
-	const roundsToWait = 3
+	const roundsToWait = 1
 	timeToWait := roundsToWait * (tb.votingRoundDuration + tb.weakCoinRoundDuration)
+
 	timer := time.NewTimer(timeToWait)
+	defer timer.Stop()
 
 	select {
 	case <-tb.CloseChannel():
