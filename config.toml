@@ -70,11 +70,11 @@ hare-wakeup-delta = 5
 tortoise-beacon-kappa = 40
 tortoise-beacon-q = "1/3"
 tortoise-beacon-rounds-number = 300
-tortoise-beacon-grace-period-duration-sec = 120000 # 2 minutes
-tortoise-beacon-proposal-duration-sec = 120000 # 2 minutes
-tortoise-beacon-first-voting-round-duration-sec = 3600000 # 1 hour
-tortoise-beacon-voting-round-duration-sec = 1200000 # 30 minutes
-tortoise-beacon-weak-coin-round-duration-sec = 60000 # 1 minute
+tortoise-beacon-grace-period-duration-ms = 120000 # 2 minutes
+tortoise-beacon-proposal-duration-ms = 120000 # 2 minutes
+tortoise-beacon-first-voting-round-duration-ms = 3600000 # 1 hour
+tortoise-beacon-voting-round-duration-ms = 1200000 # 30 minutes
+tortoise-beacon-weak-coin-round-duration-ms = 60000 # 1 minute
 tortoise-beacon-theta = 0.25
 tortoise-beacon-votes-limit = 100
 
