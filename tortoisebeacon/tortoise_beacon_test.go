@@ -178,6 +178,7 @@ func TestTortoiseBeacon_atxThresholdFraction(t *testing.T) {
 		q         string
 		w         uint64
 		threshold *big.Float
+		err       error
 	}{
 		{
 			name:      "Case 1",
@@ -185,6 +186,15 @@ func TestTortoiseBeacon_atxThresholdFraction(t *testing.T) {
 			q:         "1/3",
 			w:         60,
 			threshold: big.NewFloat(0.5),
+			err:       nil,
+		},
+		{
+			name:      "Case 2",
+			kappa:     40,
+			q:         "1/3",
+			w:         0,
+			threshold: big.NewFloat(0),
+			err:       ErrZeroEpochWeight,
 		},
 	}
 
@@ -207,7 +217,8 @@ func TestTortoiseBeacon_atxThresholdFraction(t *testing.T) {
 				q: q,
 			}
 
-			threshold := tb.atxThresholdFraction(tc.w)
+			threshold, err := tb.atxThresholdFraction(tc.w)
+			r.Equal(tc.err, err)
 			r.Zero(tc.threshold.Cmp(threshold))
 		})
 	}

@@ -35,6 +35,7 @@ var (
 	ErrBeaconNotCalculated = errors.New("beacon is not calculated for this epoch")
 	ErrEmptyProposalList   = errors.New("proposal list is empty")
 	ErrTimeout             = errors.New("waited for tortoise beacon calculation too long")
+	ErrZeroEpochWeight     = errors.New("zero epoch weight provided")
 )
 
 type broadcaster interface {
@@ -800,11 +801,15 @@ func (tb *TortoiseBeacon) votingThreshold(epochWeight uint64) (int, error) {
 	return int(tb.config.Theta * float64(epochWeight)), nil
 }
 
-func (tb *TortoiseBeacon) atxThresholdFraction(epochWeight uint64) *big.Float {
+func (tb *TortoiseBeacon) atxThresholdFraction(epochWeight uint64) (*big.Float, error) {
+	if epochWeight == 0 {
+		return big.NewFloat(0), ErrZeroEpochWeight
+	}
+
 	// threshold(k, q, W) = 1 - (2 ^ (- (k/((1-q)*W))
 	// Floating point: 1 - math.Pow(2.0, -(float64(tb.config.Kappa)/((1.0-tb.config.Q)*float64(epochWeight))))
 	// Fixed point:
-	return new(big.Float).Sub(
+	v := new(big.Float).Sub(
 		new(big.Float).SetInt64(1),
 		bigfloat.Pow(
 			new(big.Float).SetInt64(2),
@@ -824,13 +829,17 @@ func (tb *TortoiseBeacon) atxThresholdFraction(epochWeight uint64) *big.Float {
 			),
 		),
 	)
+	return v, nil
 }
 
 // TODO: consider having a generic function for probabilities
 func (tb *TortoiseBeacon) atxThreshold(epochWeight uint64) (*big.Int, error) {
 	const signatureLength = 64 * 8
 
-	fraction := tb.atxThresholdFraction(epochWeight)
+	fraction, err := tb.atxThresholdFraction(epochWeight)
+	if err != nil {
+		return nil, err
+	}
 
 	two := big.NewInt(2)
 	signatureLengthBigInt := big.NewInt(signatureLength)
