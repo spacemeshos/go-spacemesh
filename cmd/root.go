@@ -183,16 +183,16 @@ func AddCommands(cmd *cobra.Command) {
 		config.TortoiseBeacon.Q, "Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.")
 	cmd.PersistentFlags().Uint64Var(&config.TortoiseBeacon.RoundsNumber, "tortoise-beacon-rounds-number",
 		config.TortoiseBeacon.RoundsNumber, "Amount of rounds in every epoch")
-	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.GracePeriodDurationSec, "tortoise-beacon-grace-period-duration-sec",
-		config.TortoiseBeacon.GracePeriodDurationSec, "Grace period duration in seconds")
-	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.ProposalDurationSec, "tortoise-beacon-proposal-duration-sec",
-		config.TortoiseBeacon.ProposalDurationSec, "Proposal duration in seconds")
-	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.FirstVotingRoundDurationSec, "tortoise-beacon-first-voting-round-duration-sec",
-		config.TortoiseBeacon.FirstVotingRoundDurationSec, "First voting round duration in seconds")
-	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.VotingRoundDurationSec, "tortoise-beacon-voting-round-duration-sec",
-		config.TortoiseBeacon.VotingRoundDurationSec, "Voting round duration in seconds")
-	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.WeakCoinRoundDuration, "tortoise-beacon-weak-coin-round-duration-sec",
-		config.TortoiseBeacon.WeakCoinRoundDuration, "Weak coin round duration in seconds")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.GracePeriodDurationMs, "tortoise-beacon-grace-period-duration-ms",
+		config.TortoiseBeacon.GracePeriodDurationMs, "Grace period duration in milliseconds")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.ProposalDurationMs, "tortoise-beacon-proposal-duration-ms",
+		config.TortoiseBeacon.ProposalDurationMs, "Proposal duration in milliseconds")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.FirstVotingRoundDurationMs, "tortoise-beacon-first-voting-round-duration-ms",
+		config.TortoiseBeacon.FirstVotingRoundDurationMs, "First voting round duration in milliseconds")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.VotingRoundDurationMs, "tortoise-beacon-voting-round-duration-ms",
+		config.TortoiseBeacon.VotingRoundDurationMs, "Voting round duration in milliseconds")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.WeakCoinRoundDurationMs, "tortoise-beacon-weak-coin-round-duration-ms",
+		config.TortoiseBeacon.WeakCoinRoundDurationMs, "Weak coin round duration in milliseconds")
 	cmd.PersistentFlags().Float64Var(&config.TortoiseBeacon.Theta, "tortoise-beacon-theta",
 		config.TortoiseBeacon.Theta, "Ratio of votes for reaching consensus")
 	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.VotesLimit, "tortoise-beacon-votes-limit",
