@@ -309,6 +309,8 @@ func (tb *TortoiseBeacon) epochIsOutdated(epoch types.EpochID) bool {
 
 // listens to new layers.
 func (tb *TortoiseBeacon) listenLayers(ctx context.Context) {
+	tb.Log.With().Info("Starting listening layers")
+
 	for {
 		select {
 		case <-tb.CloseChannel():
@@ -327,6 +329,10 @@ func (tb *TortoiseBeacon) listenLayers(ctx context.Context) {
 func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) {
 	tb.layerMu.Lock()
 	if layer > tb.lastLayer {
+		tb.Log.With().Info("Updating layer",
+			log.Uint64("old_value", uint64(tb.lastLayer)),
+			log.Uint64("new_value", uint64(layer)))
+
 		tb.lastLayer = layer
 	}
 
@@ -341,6 +347,9 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 
 		return
 	}
+
+	tb.Log.With().Info("Layer is first in epoch, proceeding",
+		log.Uint64("layer", uint64(layer)))
 
 	tb.seenEpochsMu.Lock()
 	if _, ok := tb.seenEpochs[epoch]; ok {
@@ -397,6 +406,9 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.Err(err))
 	}
+
+	tb.Log.With().Info("Finished handling epoch",
+		log.Uint64("epoch_id", uint64(epoch)))
 }
 
 func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.EpochID) error {
@@ -486,6 +498,10 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 		return fmt.Errorf("broadcast proposal message: %w", err)
 	}
 
+	tb.Log.With().Info("Sent proposal",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.String("message", m.String()))
+
 	tb.validProposalsMu.Lock()
 
 	if _, ok := tb.validProposals[epoch]; !ok {
@@ -557,6 +573,9 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 
 	tb.waitAfterLastRoundStarted()
 	tb.weakCoin.OnRoundFinished(epoch, tb.lastPossibleRound())
+
+	tb.Log.With().Info("Consensus phase finished",
+		log.Uint64("epoch_id", uint64(epoch)))
 
 	return nil
 }

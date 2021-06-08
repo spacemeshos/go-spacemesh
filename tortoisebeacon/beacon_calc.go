@@ -35,6 +35,10 @@ func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID) error {
 	tb.beacons[epoch] = beacon
 	tb.beaconsMu.Unlock()
 
+	tb.Log.With().Info("Beacon updated for this epoch",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.String("beacon", beacon.String()))
+
 	return nil
 }
 
