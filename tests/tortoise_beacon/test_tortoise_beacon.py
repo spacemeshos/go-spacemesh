@@ -36,6 +36,9 @@ def test_tortoise_beacon(init_session, setup_network):
     print(f"wait until layer {last_layer}")
     _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch, num_miners + 1)
 
+    print(f"wait extra 10 minutes")
+    time.sleep(10 * 60)
+
     # ========================== epoch i+6 ==========================
     curr_epoch += 4
     print("\n\n-------- current epoch", curr_epoch, "--------")
