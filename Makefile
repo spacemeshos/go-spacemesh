@@ -382,7 +382,7 @@ ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
 
-	$(DOCKERRUN) pytest -s -v tortoise_beacon/test_tortoise_beacon.py --tc-file=tortoise_beacon/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v tortoise_beacon/test_tortoise_beacon.py --tc-file=tortoise_beacon/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 
 .PHONY: dockerrun-tortoise-beacon-elk
 
