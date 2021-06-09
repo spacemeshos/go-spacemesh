@@ -178,7 +178,7 @@ func (p *MessageServer) handleMessage(ctx context.Context, msg Message) {
 
 func (p *MessageServer) handleRequestMessage(ctx context.Context, msg Message, data *service.DataMsgWrapper) {
 	logger := p.WithContext(ctx)
-	logger.Debug("handleRequestMessage start")
+	logger.Debug("handleRequestMessage")
 
 	foo, okFoo := p.msgRequestHandlers[MessageType(data.MsgType)]
 	if !okFoo {
@@ -189,7 +189,7 @@ func (p *MessageServer) handleRequestMessage(ctx context.Context, msg Message, d
 		return
 	}
 
-	logger.With().Debug("handle request", log.Uint32("p2p_msg_type", data.MsgType))
+	logger.With().Info("handle request", log.Uint32("p2p_msg_type", data.MsgType))
 	rmsg := &service.DataMsgWrapper{MsgType: data.MsgType, ReqID: data.ReqID, Payload: foo(ctx, msg)}
 	if sendErr := p.network.SendWrappedMessage(ctx, msg.Sender(), p.name, rmsg); sendErr != nil {
 		logger.With().Error("error sending response message", log.Err(sendErr))
@@ -201,7 +201,7 @@ func (p *MessageServer) handleResponseMessage(ctx context.Context, headers *serv
 	logger := p.WithContext(ctx)
 
 	// get and remove from pendingMap
-	logger.With().Debug("handleResponseMessage", log.Uint64("p2p_request_id", headers.ReqID))
+	logger.With().Info("handleResponseMessage", log.Uint64("p2p_request_id", headers.ReqID))
 	p.pendMutex.RLock()
 	foo, okFoo := p.resHandlers[headers.ReqID]
 	p.pendMutex.RUnlock()

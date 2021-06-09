@@ -45,7 +45,7 @@ func newAtxHashRequestHandler(s *Syncer, logger log.Log) func(context.Context, [
 func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(context.Context, []byte) []byte {
 	return func(ctx context.Context, msg []byte) []byte {
 		lgr := logger.WithContext(ctx)
-		lgr.Debug("handle blockIds request")
+		lgr.Info("handle blockIds request")
 		lyrid := types.LayerID(util.BytesToUint64(msg))
 		layer, err := layers.GetLayer(lyrid)
 		if err != nil {
@@ -78,7 +78,7 @@ func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(cont
 func newEpochAtxsRequestHandler(s *Syncer, logger log.Log) func(context.Context, []byte) []byte {
 	return func(ctx context.Context, msg []byte) []byte {
 		lgr := logger.WithContext(ctx)
-		lgr.Debug("handle atxid request")
+		lgr.Info("handle atxid request")
 		ep := types.EpochID(util.BytesToUint64(msg))
 		atxs := s.atxDb.GetEpochAtxs(ep)
 

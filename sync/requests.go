@@ -35,7 +35,10 @@ func layerIdsReqFactory(lyr types.LayerID) requestFactory {
 			}
 			ch <- ids
 		}
-		if err := s.SendRequest(ctx, layerIdsMsg, lyr.Bytes(), peer, foo, func(err error) {}); err != nil {
+		errHandler := func(err error) {
+			s.WithContext(ctx).With().Error("request timed out", log.Err(err))
+		}
+		if err := s.SendRequest(ctx, layerIdsMsg, lyr.Bytes(), peer, foo, errHandler); err != nil {
 			return nil, err
 		}
 		return ch, nil
@@ -60,7 +63,10 @@ func getEpochAtxIds(ctx context.Context, epoch types.EpochID, s networker, peer 
 		}
 		ch <- atxIDs
 	}
-	if err := s.SendRequest(ctx, atxIdsMsg, epoch.ToBytes(), peer, foo, func(err error) {}); err != nil {
+	errHandler := func(err error) {
+		s.WithContext(ctx).With().Error("request timed out", log.Err(err))
+	}
+	if err := s.SendRequest(ctx, atxIdsMsg, epoch.ToBytes(), peer, foo, errHandler); err != nil {
 		return nil, err
 	}
 	return ch, nil
@@ -83,13 +89,15 @@ func hashReqFactory(lyr types.LayerID) requestFactory {
 			h.SetBytes(msg)
 			ch <- &peerHashPair{peer: peer, hash: h}
 		}
-		if err := s.SendRequest(ctx, layerHashMsg, lyr.Bytes(), peer, foo, func(err error) {}); err != nil {
+		errHandler := func(err error) {
+			s.WithContext(ctx).With().Error("request timed out", log.Err(err))
+		}
+		if err := s.SendRequest(ctx, layerHashMsg, lyr.Bytes(), peer, foo, errHandler); err != nil {
 			return nil, err
 		}
 
 		return ch, nil
 	}
-
 }
 
 func atxHashReqFactory(ep types.EpochID) requestFactory {
@@ -109,13 +117,15 @@ func atxHashReqFactory(ep types.EpochID) requestFactory {
 			h.SetBytes(msg)
 			ch <- &peerHashPair{peer: peer, hash: h}
 		}
-		if err := s.SendRequest(ctx, atxIdrHashMsg, ep.ToBytes(), peer, foo, func(err error) {}); err != nil {
+		errHandler := func(err error) {
+			s.WithContext(ctx).With().Error("request timed out", log.Err(err))
+		}
+		if err := s.SendRequest(ctx, atxIdrHashMsg, ep.ToBytes(), peer, foo, errHandler); err != nil {
 			return nil, err
 		}
 
 		return ch, nil
 	}
-
 }
 
 func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]item, error)) batchRequestFactory {
@@ -235,7 +245,10 @@ func poetReqFactory(poetProofRef []byte) requestFactory {
 			ch <- proofMessage
 		}
 
-		if err := s.SendRequest(ctx, poetMsg, poetProofRef, peer, resHandler, func(err error) {}); err != nil {
+		errHandler := func(err error) {
+			s.WithContext(ctx).With().Error("request timed out", log.Err(err))
+		}
+		if err := s.SendRequest(ctx, poetMsg, poetProofRef, peer, resHandler, errHandler); err != nil {
 			return nil, err
 		}
 
@@ -283,7 +296,10 @@ func encodeAndSendRequest(ctx context.Context, req server.MessageType, ids []typ
 	if err != nil {
 		return err
 	}
-	if err := s.SendRequest(ctx, req, bts, peer, foo, func(err error) {}); err != nil {
+	errHandler := func(err error) {
+		s.WithContext(ctx).With().Error("request timed out", log.Err(err))
+	}
+	if err := s.SendRequest(ctx, req, bts, peer, foo, errHandler); err != nil {
 		return err
 	}
 	return nil
