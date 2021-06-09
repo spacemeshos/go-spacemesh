@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/spacemeshos/go-spacemesh/cmd/node"
 	"testing"
+
+	"github.com/spacemeshos/go-spacemesh/cmd/node"
 )
 
 func TestMultiNode(t *testing.T) {
