@@ -89,13 +89,24 @@ const sendTickThreshold = 500 * time.Millisecond
 // notify may be skipped also for non-monotonic tick
 // if some of the subscribers where not listening, they are skipped. In that case, errMissedTicks is returned along the number of subscribers not listening
 func (t *Ticker) Notify() (int, error) {
+	t.log.With().Info("global clock notify started")
+
 	t.m.Lock()
-	defer t.m.Unlock()
+
+	defer func() {
+		t.m.Unlock()
+		t.log.With().Info("global clock notify mutex unlocked")
+	}()
+
 	if !t.started {
 		return 0, errNotStarted
 	}
 
+	t.log.With().Info("global clock notify calculating layer")
 	layer := t.TimeToLayer(t.clock.Now())
+	t.log.With().Info("global clock notify calculated layer",
+		log.Uint64("layer", uint64(layer)))
+
 	// close prev layers
 	for l := t.lastTickedLayer + 1; l <= layer; l++ {
 		if layerChan, found := t.layerChannels[l]; found {
@@ -103,6 +114,9 @@ func (t *Ticker) Notify() (int, error) {
 			delete(t.layerChannels, l)
 		}
 	}
+
+	t.log.With().Info("global clock notify closed prev layers",
+		log.Uint64("layer", uint64(layer)))
 
 	// the tick was delayed by more than the threshold
 	if t.timeSinceLastTick() > sendTickThreshold {
@@ -112,6 +126,9 @@ func (t *Ticker) Notify() (int, error) {
 		return 0, errMissedTickTime
 	}
 
+	t.log.With().Info("global clock notify checked time since last tick",
+		log.Uint64("layer", uint64(layer)))
+
 	// already ticked
 	if layer <= t.lastTickedLayer {
 		t.log.With().Warning("skipping tick to avoid double ticking the same layer (time was not monotonic)",
@@ -119,18 +136,38 @@ func (t *Ticker) Notify() (int, error) {
 			log.FieldNamed("last_ticked_layer", t.lastTickedLayer))
 		return 0, errNotMonotonic
 	}
+
+	t.log.With().Info("global clock notify checked if already ticked",
+		log.Uint64("layer", uint64(layer)))
+
 	missedTicks := 0
 	t.log.Event().Info("release tick", layer)
+
+	t.log.With().Info("global clock notify going to notify subscribers",
+		log.Uint64("layer", uint64(layer)))
+
 	for ch := range t.subscribers { // notify all subscribers
 		// non-blocking notify
+		t.log.With().Info("global clock notify notifying subscriber",
+			log.Uint64("layer", uint64(layer)))
+
 		select {
 		case ch <- layer:
+			t.log.With().Info("global clock notify notified subscriber",
+				log.Uint64("layer", uint64(layer)))
+
 			continue
 		default:
+			t.log.With().Info("global clock notify caught missing tick",
+				log.Uint64("layer", uint64(layer)))
+
 			missedTicks++ // count subscriber that missed tick
 			continue
 		}
 	}
+
+	t.log.With().Info("global clock notify finished notifying subscribers",
+		log.Uint64("layer", uint64(layer)))
 
 	t.lastTickedLayer = layer // update last ticked layer
 
@@ -138,6 +175,9 @@ func (t *Ticker) Notify() (int, error) {
 		t.log.With().Error("missed ticks for layer", layer, log.Int("missed_count", missedTicks))
 		return missedTicks, errMissedTicks
 	}
+
+	t.log.With().Info("global clock notify going to finish",
+		log.Uint64("layer", uint64(layer)))
 
 	return 0, nil
 }

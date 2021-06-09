@@ -1,9 +1,10 @@
 package timesync
 
 import (
-	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // Clock defines the functionality needed from any clock type
@@ -51,23 +52,51 @@ func (t *TimeClock) startClock() {
 	t.log.Info("starting global clock now=%v genesis=%v %p", t.clock.Now(), t.startEpoch, t)
 
 	for {
-		currLayer := t.Ticker.TimeToLayer(t.clock.Now())    // get current layer
+		t.log.With().Info("global clock next loop")
+
+		currLayer := t.Ticker.TimeToLayer(t.clock.Now()) // get current layer
+		t.log.With().Info("global clock calculated currLayer",
+			log.Uint64("currLayer", uint64(currLayer)))
+
 		nextTickTime := t.Ticker.LayerToTime(currLayer + 1) // get next tick time for the next layer
+		t.log.With().Info("global clock calculated nextTickTime",
+			log.String("nextTickTime", nextTickTime.String()))
+
 		diff := nextTickTime.Sub(t.clock.Now())
+		t.log.With().Info("global clock calculated diff",
+			log.String("diff", diff.String()))
+
 		tmr := time.NewTimer(diff)
 		t.log.With().Info("global clock going to sleep before next layer",
 			log.String("diff", diff.String()),
 			log.FieldNamed("curr_layer", currLayer))
 		select {
 		case <-tmr.C:
+			t.log.With().Info("global clock going to notify in this layer",
+				log.String("diff", diff.String()),
+				log.FieldNamed("curr_layer", currLayer))
+
 			// notify subscribers
 			if missed, err := t.Notify(); err != nil {
 				t.log.With().Error("could not notify subscribers",
 					log.Err(err),
 					log.Int("missed", missed))
 			}
+
+			t.log.With().Info("global clock finished notifying in this layer",
+				log.String("diff", diff.String()),
+				log.FieldNamed("curr_layer", currLayer))
 		case <-t.stop:
+			t.log.With().Info("global clock stopping timer",
+				log.String("diff", diff.String()),
+				log.FieldNamed("curr_layer", currLayer))
+
 			tmr.Stop()
+
+			t.log.With().Info("global clock stopped timer",
+				log.String("diff", diff.String()),
+				log.FieldNamed("curr_layer", currLayer))
+
 			return
 		}
 	}
