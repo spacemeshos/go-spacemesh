@@ -1139,26 +1139,28 @@ func (s *Syncer) fetchLayerHashes(ctx context.Context, lyr types.LayerID) (map[t
 	wrk := newPeersWorker(ctx, s, s.GetPeers(), &sync.Once{}, hashReqFactory(lyr))
 	go wrk.Work(ctx)
 	m := make(map[types.Hash32][]p2ppeers.Peer)
-	layerHasBlocks := false
+	gotResponse := false
+
+	// note: this will block if any one peer connection hangs (e.g., msg send hangs), since the channel isn't closed
+	// until all workers have finished (or timed out)
 	for out := range wrk.output {
 		pair, ok := out.(*peerHashPair)
 		if pair != nil && ok { // do nothing on close channel
+			gotResponse = true
 			if pair.hash != emptyLayer {
-				layerHasBlocks = true
 				m[pair.hash] = append(m[pair.hash], pair.peer)
 			}
 		}
 	}
 
-	if !layerHasBlocks {
+	if !gotResponse {
+		return nil, errors.New("could not get layer hashes from any peer")
+	}
+	if len(m) == 0 {
 		s.With().Info("layer has no blocks", lyr)
 		return nil, errNoBlocksInLayer
 	}
-
-	if len(m) == 0 {
-		return nil, errors.New("could not get layer hashes from any peer")
-	}
-	s.With().Info("layer has blocks", lyr, log.Int("count", len(m)))
+	s.With().Info("got layer hashes from peers for non-empty layer", lyr, log.Int("count", len(m)))
 	return m, nil
 }
 
@@ -1175,7 +1177,6 @@ func (s *Syncer) fetchEpochAtxHashes(ctx context.Context, ep types.EpochID) (map
 				layerHasBlocks = true
 				m[pair.hash] = append(m[pair.hash], pair.peer)
 			}
-
 		}
 	}
 
