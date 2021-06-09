@@ -19,9 +19,9 @@ func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID) error {
 		return fmt.Errorf("calc tortoise beacon hash list: %w", err)
 	}
 
-	//tb.Log.With().Debug("Going to calculate tortoise beacon from this hash list",
-	//	log.Uint64("epoch_id", uint64(epoch)),
-	//	log.String("hashes", strings.Join(allHashes, ", ")))
+	tb.Log.With().Debug("Going to calculate tortoise beacon from this hash list",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.String("hashes", strings.Join(allHashes, ", ")))
 
 	beacon := allHashes.Hash()
 
@@ -35,9 +35,9 @@ func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID) error {
 	tb.beacons[epoch] = beacon
 	tb.beaconsMu.Unlock()
 
-	//tb.Log.With().Debug("Beacon updated for this epoch",
-	//	log.Uint64("epoch_id", uint64(epoch)),
-	//	log.String("beacon", beacon.String()))
+	tb.Log.With().Debug("Beacon updated for this epoch",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.String("beacon", beacon.String()))
 
 	return nil
 }
@@ -53,9 +53,9 @@ func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID) (propo
 	votes, ok := tb.ownVotes[lastRound]
 	if !ok {
 		// re-calculate votes
-		//tb.Log.With().Debug("Own votes not found, re-calculating",
-		//	log.Uint64("epoch_id", uint64(epoch)),
-		//	log.Uint64("round", uint64(lastRound.Round)))
+		tb.Log.With().Debug("Own votes not found, re-calculating",
+			log.Uint64("epoch_id", uint64(epoch)),
+			log.Uint64("round", uint64(lastRound.Round)))
 
 		v, err := tb.calcVotes(epoch, lastRound.Round)
 		if err != nil {
@@ -70,10 +70,10 @@ func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID) (propo
 		allHashes = append(allHashes, vote)
 	}
 
-	//tb.Log.With().Debug("Tortoise beacon last round votes",
-	//	log.Uint64("epoch_id", uint64(epoch)),
-	//	log.Uint64("round", uint64(lastRound.Round)),
-	//	log.String("votes", fmt.Sprint(votes)))
+	tb.Log.With().Debug("Tortoise beacon last round votes",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint64("round", uint64(lastRound.Round)),
+		log.String("votes", fmt.Sprint(votes)))
 
 	sort.Slice(allHashes, func(i, j int) bool {
 		return strings.Compare(allHashes[i], allHashes[j]) == -1
