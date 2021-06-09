@@ -83,16 +83,9 @@ func (t *TimeClock) startClock() {
 					log.Int("missed", missed))
 			}
 
-			t.log.With().Info("global clock finished notifying in this layer, stopping timer",
+			t.log.With().Info("global clock finished notifying in this layer",
 				log.String("diff", diff.String()),
 				log.FieldNamed("curr_layer", currLayer))
-
-			tmr.Stop()
-
-			t.log.With().Info("global clock finished notifying in this layer, stopped timer",
-				log.String("diff", diff.String()),
-				log.FieldNamed("curr_layer", currLayer))
-
 		case <-t.stop:
 			t.log.With().Info("global clock stopping timer",
 				log.String("diff", diff.String()),
