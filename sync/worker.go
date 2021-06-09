@@ -63,7 +63,9 @@ func newPeersWorker(ctx context.Context, s networker, peers []p2ppeers.Peer, mu 
 	lg := s.WithName("peersWrkr")
 	for _, p := range peers {
 		peer := p
-		lg := lg.WithFields(log.FieldNamed("peer_id", peer))
+		lg := lg.WithFields(
+			log.FieldNamed("peer_id", peer),
+			log.FieldNamed("recipient_peer_id", peer))
 		peerFunc := func() {
 			defer wg.Done()
 			lg.Debug("send request")

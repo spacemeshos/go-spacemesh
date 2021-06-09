@@ -239,7 +239,7 @@ func (p *MessageServer) SendRequest(ctx context.Context, msgType MessageType, pa
 	ctx = log.WithNewRequestID(ctx,
 		log.Uint64("p2p_request_id", reqID),
 		log.Uint32("p2p_msg_type", uint32(msgType)),
-		log.FieldNamed("recipient", address))
+		log.FieldNamed("recipient_peer_id", address))
 	p.pendMutex.Lock()
 	p.resHandlers[reqID] = ResponseHandlers{resHandler, timeoutHandler}
 	p.pendingQueue.PushBack(Item{id: reqID, timestamp: time.Now()})
