@@ -110,7 +110,7 @@ func atxHashReqFactory(ep types.EpochID) requestFactory {
 				return
 			}
 			if len(msg) != types.Hash32Length {
-				s.WithContext(ctx).With().Error("received layer hash of wrong length", log.Int("len", len(msg)))
+				s.WithContext(ctx).With().Error("received atx hash of wrong length", log.Int("len", len(msg)))
 				return
 			}
 			var h types.Hash32
@@ -148,7 +148,7 @@ func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]
 			}
 
 			if valid, err := validateItemIds(logger, ids, items); !valid {
-				logger.With().Error("fetch failed, bad response", log.Err(err))
+				logger.With().Error("fetch validation failed, bad response", log.Err(err))
 				return
 			}
 
@@ -274,12 +274,12 @@ func validateItemIds(logger log.Log, ids []types.Hash32, items []item) (bool, er
 	for _, id := range ids {
 		mp[id] = struct{}{}
 	}
-	for _, tx := range items {
-		txid := tx.Hash32()
-		if _, ok := mp[txid]; !ok {
-			return false, fmt.Errorf("received item that was not requested %v type %v", tx.ShortString(), reflect.TypeOf(tx))
+	for _, itm := range items {
+		itmid := itm.Hash32()
+		if _, ok := mp[itmid]; !ok {
+			return false, fmt.Errorf("received item that was not requested %v type %v", itm.ShortString(), reflect.TypeOf(itm))
 		}
-		delete(mp, txid)
+		delete(mp, itmid)
 	}
 
 	if len(mp) > 0 {
