@@ -21,7 +21,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -1544,8 +1543,8 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	//setup mocks
 
 	layerHashesMock := func(context.Context, []byte) []byte {
-		t.Log("return fake atx")
-		return util.Uint32ToBytes(11)
+		t.Log("return fake layerhash")
+		return types.HexToHash32("foobar").Bytes()
 	}
 
 	blockHandlerMock := func(context.Context, []byte) []byte {
@@ -1588,10 +1587,11 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 
 	// ugly hack, just to see if this fixed CI failure
 	time.Sleep(3 * time.Second)
+
 	// layer hash
 	_, err1 := syncs[0].getLayerFromNeighbors(context.TODO(), types.LayerID(1))
-
-	assert.Nil(t, err1)
+	assert.Error(t, err1)
+	assert.Contains(t, err1.Error(), errmsgNoBlocks)
 
 	// Block
 	ch := make(chan fetchRequest, 1)

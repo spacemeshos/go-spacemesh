@@ -95,6 +95,8 @@ var (
 	errZeroActiveSet   = errors.New("block declares empty active set")
 	errInvalidATXID    = errors.New("invalid ATXID")
 
+	errmsgNoBlocks = "could not get blocks for layer"
+
 	emptyLayer = types.Layer{}.Hash()
 )
 
@@ -591,7 +593,7 @@ func (s *Syncer) waitLayer(ch timesync.LayerTimer) bool {
 
 func (s *Syncer) getLayerFromNeighbors(ctx context.Context, currentSyncLayer types.LayerID) (*types.Layer, error) {
 	if len(s.peers.GetPeers()) == 0 {
-		return nil, fmt.Errorf("no peers ")
+		return nil, fmt.Errorf("no peers")
 	}
 
 	// fetch layer hash from each peer
@@ -621,7 +623,7 @@ func (s *Syncer) getLayerFromNeighbors(ctx context.Context, currentSyncLayer typ
 
 	blocksArr, err := s.syncLayer(ctx, currentSyncLayer, blockIds)
 	if len(blocksArr) == 0 || err != nil {
-		return nil, fmt.Errorf("could not get blocks for layer %v: %v", currentSyncLayer, err)
+		return nil, fmt.Errorf("%s %v: %v", errmsgNoBlocks, currentSyncLayer, err)
 	}
 
 	return types.NewExistingLayer(currentSyncLayer, blocksArr), nil
