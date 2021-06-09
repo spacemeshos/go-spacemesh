@@ -22,11 +22,14 @@ func (p ProposalMessage) String() string {
 	return string(bytes)
 }
 
+// FirstVotingMessageBody is FirstVotingMessage without a signature.
 type FirstVotingMessageBody struct {
 	MinerID                   types.NodeID
 	ValidProposals            [][]byte
 	PotentiallyValidProposals [][]byte
 }
+
+// FirstVotingMessage is a message type which is used when sending first voting messages.
 type FirstVotingMessage struct {
 	FirstVotingMessageBody
 	Signature []byte // TODO: implement extracting pk from signature
@@ -42,6 +45,7 @@ func (v FirstVotingMessage) String() string {
 	return string(bytes)
 }
 
+// FollowingVotingMessageBody is FollowingVotingMessage without a signature.
 type FollowingVotingMessageBody struct {
 	MinerID        types.NodeID
 	EpochID        types.EpochID
@@ -49,6 +53,7 @@ type FollowingVotingMessageBody struct {
 	VotesBitVector []uint64
 }
 
+// FollowingVotingMessage is a message type which is used when sending following voting messages.
 type FollowingVotingMessage struct {
 	FollowingVotingMessageBody
 	Signature []byte

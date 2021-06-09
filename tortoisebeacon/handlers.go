@@ -13,9 +13,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-// TBProposalProtocol is Tortoise Beacon proposal Gossip protocol name.
+// TBProposalProtocol is a protocol for sending Tortoise Beacon proposal messages through Gossip.
 const TBProposalProtocol = "TBProposalGossip"
+
+// TBFirstVotingProtocol is a protocol for sending Tortoise Beacon first voting messages through Gossip.
 const TBFirstVotingProtocol = "TBFirstVotingGossip"
+
+// TBFollowingVotingProtocol is a protocol for sending Tortoise Beacon following voting messages through Gossip.
 const TBFollowingVotingProtocol = "TBFollowingVotingGossip"
 
 var (
