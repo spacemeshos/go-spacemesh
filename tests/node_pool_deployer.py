@@ -6,9 +6,9 @@ import tests.utils as ut
 
 class NodePoolDep:
     resources = ["bootstrap", "client"]
-    gcloud_delete = 'yes | gcloud container --project="{project_name}" node-pools delete {pool_name} ' \
+    gcloud_delete = 'gcloud --quiet container --project="{project_name}" node-pools delete {pool_name} ' \
                     '--cluster={cluster_name} --zone={zone}'
-    gcloud_cmd = 'yes | gcloud beta container --project "{project_name}" node-pools create "{pool_name}" ' \
+    gcloud_cmd = 'gcloud --quiet beta container --project "{project_name}" node-pools create "{pool_name}" ' \
                  '--cluster "{cluster_name}" --zone "{zone}" --node-version "{node_version}" ' \
                  '--machine-type "custom-{cpu}-{mem}" --image-type "COS" --disk-type "{disk_type}" ' \
                  '--disk-size "{disk_size}" --node-labels {labels} --metadata disable-legacy-endpoints=true ' \

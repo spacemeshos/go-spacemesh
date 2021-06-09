@@ -34,9 +34,10 @@ var value10 = genBlockID(10)
 func BuildPreRoundMsg(signing Signer, s *Set) *Msg {
 	builder := newMessageBuilder()
 	builder.SetType(pre).SetInstanceID(instanceID1).SetRoundCounter(k).SetKi(ki).SetValues(s)
-	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
+	builder.SetPubKey(signing.PublicKey())
+	builder.SetEligibilityCount(1)
 
-	return builder.Build()
+	return builder.Sign(signing).Build()
 }
 
 func TestPreRoundTracker_OnPreRound(t *testing.T) {
@@ -52,9 +53,10 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	assert.Equal(t, 2, len(tracker.tracker.table)) // two Values
 	g, _ := tracker.preRound[verifier.PublicKey().String()]
 	assert.True(t, s.Equals(g))
-	assert.Equal(t, uint32(1), tracker.tracker.CountStatus(value1))
+	assert.EqualValues(t, 1, tracker.tracker.CountStatus(value1))
 	nSet := NewSetFromValues(value3, value4)
 	m2 := BuildPreRoundMsg(verifier, nSet)
+	m2.InnerMsg.EligibilityCount = 2
 	tracker.OnPreRound(context.TODO(), m2)
 	h, _ := tracker.preRound[verifier.PublicKey().String()]
 	assert.True(t, h.Equals(s.Union(nSet)))
@@ -64,9 +66,11 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	tracker.OnPreRound(context.TODO(), m3)
 	h, _ = tracker.preRound[verifier.PublicKey().String()]
 	assert.True(t, h.Equals(s.Union(nSet).Union(interSet)))
-	assert.Equal(t, uint32(1), tracker.tracker.CountStatus(value1))
-	assert.Equal(t, uint32(1), tracker.tracker.CountStatus(value2))
-	assert.Equal(t, uint32(1), tracker.tracker.CountStatus(value3))
+	assert.EqualValues(t, 1, tracker.tracker.CountStatus(value1))
+	assert.EqualValues(t, 1, tracker.tracker.CountStatus(value2))
+	assert.EqualValues(t, 2, tracker.tracker.CountStatus(value3))
+	assert.EqualValues(t, 2, tracker.tracker.CountStatus(value4))
+	assert.EqualValues(t, 1, tracker.tracker.CountStatus(value5))
 }
 
 func TestPreRoundTracker_CanProveValueAndSet(t *testing.T) {
