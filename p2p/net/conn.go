@@ -263,10 +263,21 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 	reqID, _ := log.ExtractRequestID(ctx)
 	peerID, _ := ctx.Value(log.PeerIDKey).(string)
 
-	//todo: re insert when log loss is fixed
-	//c.logger.WithContext(ctx).Debug("connection: enqueuing outgoing message")
-	c.messages <- msgToSend{m, reqID, peerID}
-	return nil
+	c.logger.WithContext(ctx).With().Debug("connection: enqueuing outgoing message",
+		log.Int("queue_length", len(c.messages)))
+	if len(c.messages) > 10 {
+		c.logger.WithContext(ctx).With().Warning("connection: outbound send queue backlog",
+			log.Int("queue_length", len(c.messages)))
+	}
+
+	// perform a non-blocking send and start dropping messages if the channel is full
+	// otherwise, the entire gossip stack will get blocked
+	select {
+	case c.messages <- msgToSend{m, reqID, peerID}:
+		return nil
+	default:
+		return fmt.Errorf("connection: dropping outbound message, send queue full")
+	}
 }
 
 // SendSock sends a message directly on the socket without waiting for the queue.
