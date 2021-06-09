@@ -60,7 +60,7 @@ func newPeersWorker(ctx context.Context, s networker, peers []p2ppeers.Peer, mu 
 	peerfuncs := []func(){}
 	wg := sync.WaitGroup{}
 	wg.Add(len(peers))
-	lg := s.WithName("peersWrkr")
+	lg := s.WithContext(ctx).WithName("peersWrkr")
 	for _, p := range peers {
 		peer := p
 		lg := lg.WithFields(
