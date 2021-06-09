@@ -128,17 +128,20 @@ func (s *server) stop() error {
 	return nil
 }
 
+// IOChannelWriter writes buffers into channel
 type IOChannelWriter struct {
 	data chan *bytes.Buffer
 	stop chan struct{}
 }
 
+// NewIOChannelWriter initializes new channel writer
 func NewIOChannelWriter() *IOChannelWriter {
 	return &IOChannelWriter{
 		data: make(chan *bytes.Buffer, 100),
 	}
 }
 
+// Write writes buf into channel
 func (w *IOChannelWriter) Write(buf []byte) (int, error) {
 	select {
 	case w.data <- bytes.NewBuffer(buf):
@@ -148,6 +151,7 @@ func (w *IOChannelWriter) Write(buf []byte) (int, error) {
 	}
 }
 
+// Stop stops writing buffer into channel
 func (w *IOChannelWriter) Stop() {
 	close(w.stop)
 }
