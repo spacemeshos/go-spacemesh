@@ -1,0 +1,5 @@
+Flask==2.0.0
+google-cloud-container
+google-cloud-tasks
+kubernetes
+requests

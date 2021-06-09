@@ -33,12 +33,15 @@ func (m mockAtxDB) GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error) 
 	return m.atxH, m.err
 }
 
+func (m mockAtxDB) GetEpochWeight(types.EpochID) (uint64, []types.ATXID, error) {
+	return 0, nil, nil
+}
+
 func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 	types.SetLayersPerEpoch(5)
 	r := require.New(t)
 	atxdb := &mockAtxDB{err: errFoo}
-	genActiveSetSize := uint32(5)
-	v := NewBlockEligibilityValidator(10, genActiveSetSize, 5, atxdb, &EpochBeaconProvider{}, validateVRF, nil, log.NewDefault(t.Name()))
+	v := NewBlockEligibilityValidator(10, 5, 5, atxdb, &EpochBeaconProvider{}, validateVRF, nil, log.NewDefault(t.Name()))
 
 	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: 20}}} // non-genesis
 	block.Signature = edSigner.Sign(block.Bytes())

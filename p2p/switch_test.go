@@ -113,7 +113,7 @@ func TestSwarm_Shutdown(t *testing.T) {
 	s.Shutdown()
 
 	select {
-	case _, ok := <-s.shutdown:
+	case _, ok := <-s.shutdownCtx.Done():
 		assert.False(t, ok)
 	case <-time.After(1 * time.Second):
 		t.Error("Failed to shutdown")

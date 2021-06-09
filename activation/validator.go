@@ -25,7 +25,7 @@ func NewValidator(postCfg *config.Config, poetDb poetDbAPI) *Validator {
 
 // Validate validates a NIPST, given a miner id and expected challenge. It returns an error if an issue is found or nil
 // if the NIPST is valid.
-func (v *Validator) Validate(minerID signing.PublicKey, nipst *types.NIPST, expectedChallenge types.Hash32) error {
+func (v *Validator) Validate(minerID signing.PublicKey, nipst *types.NIPST, space uint64, expectedChallenge types.Hash32) error {
 	if !bytes.Equal(nipst.NipstChallenge[:], expectedChallenge[:]) {
 		return errors.New("NIPST challenge is not equal to expected challenge")
 	}
@@ -34,11 +34,12 @@ func (v *Validator) Validate(minerID signing.PublicKey, nipst *types.NIPST, expe
 		return fmt.Errorf("PoET proof chain invalid: %v", err)
 	}
 
-	if nipst.Space < v.postCfg.SpacePerUnit {
-		return fmt.Errorf("PoST space (%d) is less than a single space unit (%d)", nipst.Space, v.postCfg.SpacePerUnit)
+	// TODO: This validation should be in SyntacticallyValidateAtx and SpacePerUnit should not be in the postCfg.
+	if space < v.postCfg.SpacePerUnit {
+		return fmt.Errorf("PoST space (%d) is less than a single space unit (%d)", space, v.postCfg.SpacePerUnit)
 	}
 
-	if err := v.VerifyPost(minerID, nipst.PostProof, nipst.Space); err != nil {
+	if err := v.VerifyPost(minerID, nipst.PostProof, space); err != nil {
 		return fmt.Errorf("PoST proof invalid: %v", err)
 	}
 
