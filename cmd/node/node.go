@@ -970,6 +970,15 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	// we use the main app context
 	ctx := cmdp.Ctx
 
+	// Create a large heap allocation of 2 GiB
+	ballast := make([]byte,  2* 1<<30)
+	log.Info("allocated 2 GiB %p", ballast)
+
+	// set gc to run when 50% of heap is allocated
+	debug.SetGCPercent(50)
+
+	runtime.GOMAXPROCS(2)
+
 	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
 	// using context passed down to them)
 	logger := log.AppLog.WithContext(ctx)

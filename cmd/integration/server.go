@@ -22,12 +22,10 @@ type ServerConfig struct {
 }
 
 // DefaultConfig returns a newConfig with all default values.
-func DefaultConfig(execPath string, enableGcTrace bool) (*ServerConfig, error) {
+func DefaultConfig() (*ServerConfig, error) {
 	cfg := &ServerConfig{
 		logLevel:  "debug",
 		rpcListen: "127.0.0.1:" + harnessPort,
-		exe:       execPath,
-		gcTrace:   enableGcTrace,
 	}
 
 	return cfg, nil

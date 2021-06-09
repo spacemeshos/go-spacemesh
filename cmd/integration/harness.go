@@ -53,10 +53,12 @@ func newHarnessDefaultServerConfig(args []string) (*Harness, error) {
 	}
 	args = append(args, "--acquire-port=false")
 	// set servers' configuration
-	cfg, errCfg := DefaultConfig(execPath, enableGcTrace)
+	cfg, errCfg := DefaultConfig()
 	if errCfg != nil {
 		return nil, fmt.Errorf("failed to build mock node: %v", errCfg)
 	}
+	cfg.exe = execPath
+	cfg.gcTrace= enableGcTrace
 	return NewHarness(cfg, args)
 }
 
