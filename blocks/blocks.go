@@ -92,7 +92,6 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, sync s
 
 	// set the block id when received
 	blk.Initialize()
-	logger.With().Info("got new block", blk.Fields()...)
 	logger = logger.WithFields(blk.ID(), blk.Layer())
 
 	// check if known
