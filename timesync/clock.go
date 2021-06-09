@@ -66,46 +66,49 @@ func (t *TimeClock) startClock() {
 		t.log.With().Info("global clock calculated diff",
 			log.String("diff", diff.String()))
 
-		tmr := time.NewTimer(diff)
+		//tmr := time.NewTimer(diff)
 		t.log.With().Info("global clock going to sleep before next layer",
 			log.String("diff", diff.String()),
 			log.FieldNamed("curr_layer", currLayer))
-		select {
-		case <-tmr.C:
-			t.log.With().Info("global clock going to notify in this layer",
-				log.String("diff", diff.String()),
-				log.FieldNamed("curr_layer", currLayer))
 
-			// notify subscribers
-			if missed, err := t.Notify(); err != nil {
-				t.log.With().Error("could not notify subscribers",
-					log.Err(err),
-					log.Int("missed", missed))
-			}
+		time.Sleep(diff)
 
-			t.log.With().Info("global clock finished notifying in this layer, stopping timer",
-				log.String("diff", diff.String()),
-				log.FieldNamed("curr_layer", currLayer))
+		//select {
+		//case <-tmr.C:
+		t.log.With().Info("global clock going to notify in this layer",
+			log.String("diff", diff.String()),
+			log.FieldNamed("curr_layer", currLayer))
 
-			tmr.Stop()
-
-			t.log.With().Info("global clock finished notifying in this layer, stopped timer",
-				log.String("diff", diff.String()),
-				log.FieldNamed("curr_layer", currLayer))
-
-		case <-t.stop:
-			t.log.With().Info("global clock stopping timer",
-				log.String("diff", diff.String()),
-				log.FieldNamed("curr_layer", currLayer))
-
-			tmr.Stop()
-
-			t.log.With().Info("global clock stopped timer",
-				log.String("diff", diff.String()),
-				log.FieldNamed("curr_layer", currLayer))
-
-			return
+		// notify subscribers
+		if missed, err := t.Notify(); err != nil {
+			t.log.With().Error("could not notify subscribers",
+				log.Err(err),
+				log.Int("missed", missed))
 		}
+
+		t.log.With().Info("global clock finished notifying in this layer, stopping timer",
+			log.String("diff", diff.String()),
+			log.FieldNamed("curr_layer", currLayer))
+
+		//tmr.Stop()
+
+		t.log.With().Info("global clock finished notifying in this layer, stopped timer",
+			log.String("diff", diff.String()),
+			log.FieldNamed("curr_layer", currLayer))
+
+		//case <-t.stop:
+		//	t.log.With().Info("global clock stopping timer",
+		//		log.String("diff", diff.String()),
+		//		log.FieldNamed("curr_layer", currLayer))
+		//
+		//	tmr.Stop()
+		//
+		//	t.log.With().Info("global clock stopped timer",
+		//		log.String("diff", diff.String()),
+		//		log.FieldNamed("curr_layer", currLayer))
+		//
+		//	return
+		//}
 	}
 }
 
