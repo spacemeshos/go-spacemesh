@@ -47,7 +47,7 @@ func newHarnessDefaultServerConfig(args []string) (*Harness, error) {
 	args = append(args[:execPathInd], args[execPathInd+2:]...)
 	// do the same for enable gc as it is a harness param
 	enableGcInd := Contains(args, setGcTrace)
-	enableGcTrace :=  enableGcInd != -1
+	enableGcTrace := enableGcInd != -1
 	if enableGcTrace {
 		args = append(args[:enableGcInd], args[enableGcInd+2:]...)
 	}
@@ -58,7 +58,7 @@ func newHarnessDefaultServerConfig(args []string) (*Harness, error) {
 		return nil, fmt.Errorf("failed to build mock node: %v", errCfg)
 	}
 	cfg.exe = execPath
-	cfg.gcTrace= enableGcTrace
+	cfg.gcTrace = enableGcTrace
 	return NewHarness(cfg, args)
 }
 
@@ -107,7 +107,7 @@ func main() {
 			case <-h.server.quit:
 				log.With().Info("harness: got a quit signal from subprocess")
 				break
-			case data := <- h.server.errStreamWriter.data:
+			case data := <-h.server.errStreamWriter.data:
 				log.Warning("%s", data.String())
 			}
 		}

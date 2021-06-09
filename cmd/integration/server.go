@@ -59,9 +59,9 @@ type server struct {
 // newServer creates a new node server instance according to the passed cfg.
 func newServer(cfg *ServerConfig) (*server, error) {
 	return &server{
-		cfg:     cfg,
-		errChan: make(chan error, 5),
-		buff:    &bytes.Buffer{},
+		cfg:             cfg,
+		errChan:         make(chan error, 5),
+		buff:            &bytes.Buffer{},
 		errStreamWriter: NewIOChannelWriter(),
 	}, nil
 }
@@ -139,7 +139,7 @@ func NewIOChannelWriter() *IOChannelWriter {
 	}
 }
 
-func (w *IOChannelWriter) Write(buf []byte) (int, error){
+func (w *IOChannelWriter) Write(buf []byte) (int, error) {
 	select {
 	case w.data <- bytes.NewBuffer(buf):
 		return len(buf), nil

@@ -971,7 +971,7 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	ctx := cmdp.Ctx
 
 	// Create a large heap allocation of 2 GiB
-	ballast := make([]byte,  2* 1<<30)
+	ballast := make([]byte, 2*1<<30)
 	log.Info("allocated 2 GiB %p", ballast)
 
 	// set gc to run when 50% of heap is allocated
