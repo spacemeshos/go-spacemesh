@@ -70,7 +70,7 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 	epochNumber := layerID.GetEpoch()
 	var cachedEpochDescription log.Field
 	if bo.proofsEpoch == DefaultProofsEpoch {
-		cachedEpochDescription = log.String("cached_epoch_id", "(none)")
+		cachedEpochDescription = log.Int("cached_epoch_id", -1)
 	} else {
 		cachedEpochDescription = log.FieldNamed("cached_epoch_id", bo.proofsEpoch.Field())
 	}
