@@ -102,14 +102,10 @@ type Configuration struct {
 }
 
 var (
-	errDupTx           = errors.New("duplicate TransactionID in block")
-	errDupAtx          = errors.New("duplicate ATXID in block")
-	errNoBlocksInLayer = errors.New("layer has no blocks")
-	errNoActiveSet     = errors.New("block does not declare active set")
-	errZeroActiveSet   = errors.New("block declares empty active set")
-	errInvalidATXID    = errors.New("invalid ATXID")
-
-	emptyLayer = types.Layer{}.Hash()
+	errDupTx         = errors.New("duplicate TransactionID in block")
+	errDupAtx        = errors.New("duplicate ATXID in block")
+	errNoActiveSet   = errors.New("block does not declare active set")
+	errZeroActiveSet = errors.New("block declares empty active set")
 )
 
 type status int
@@ -367,7 +363,7 @@ func (s *Syncer) synchronise(ctx context.Context) {
 	if s.weaklySynced(curr) {
 		if len(s.net.GetPeers()) != 0 {
 			s.Log.Info("start syncing epoch atxs")
-			err := s.fetcher.GetEpochATXs(ctx, curr.GetEpoch()) //syncEpochActivations(curr.GetEpoch())
+			err := s.fetcher.GetEpochATXs(ctx, curr.GetEpoch())
 			if err != nil {
 				if curr.GetEpoch().IsGenesis() {
 					s.WithContext(ctx).With().Info("cannot fetch epoch atxs (expected during genesis)", curr, log.Err(err))
@@ -635,7 +631,7 @@ func (s *Syncer) syncSingleLayer(ctx context.Context, currentSyncLayer types.Lay
 
 	if len(lyr.Blocks()) == 0 {
 		if err := s.SetZeroBlockLayer(currentSyncLayer); err != nil {
-			logger.With().Error("handleNotSynced failed ", currentSyncLayer, log.Err(err))
+			logger.With().Error("handleNotSynced failed", currentSyncLayer, log.Err(err))
 			return err
 		}
 	}
