@@ -73,6 +73,7 @@ func TestSendMutex(t *testing.T) {
 		case <-timeout:
 			assert.Fail(t, "timed out waiting for sendSock to call Write")
 		case <-time.After(100 * time.Millisecond):
+			continue
 		}
 	}
 
@@ -94,11 +95,12 @@ func TestSendMutex(t *testing.T) {
 	// make sure we can read both messages
 	for i := 0; i < 2; i++ {
 		select {
+		// both messages should already be queued, so we should be able to read them immediately
 		case <-rwcam.writeWaitChan:
 			rcvmsg := <-rwcam.writeWaitChan
 			assert.Equal(t, rcvmsg, []byte(msg))
-		case <-time.After(2 * time.Second):
-			assert.Fail(t, "timed out waiting for message to be received")
+		default:
+			assert.Fail(t, "failed to receive expected message")
 		}
 	}
 }

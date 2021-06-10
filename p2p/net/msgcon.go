@@ -193,33 +193,16 @@ func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
 
 // sendSock sends a message directly on the socket
 func (c *MsgConnection) sendSock(m []byte) error {
-	c.wmtx.Lock()
-	if c.closed {
-		c.wmtx.Unlock()
-		return fmt.Errorf("connection was closed")
-	}
-	c.wmtx.Unlock()
-
 	if err := c.deadliner.SetWriteDeadline(time.Now().Add(c.deadline)); err != nil {
 		return err
 	}
 	if _, err := c.w.Write(m); err != nil {
-		c.wmtx.Lock()
-		if err := c.closeUnlocked(); err != ErrAlreadyClosed {
+		if err := c.Close(); err != ErrAlreadyClosed {
 			c.networker.publishClosingConnection(ConnectionWithErr{c, err}) // todo: reconsider
 		}
-		c.wmtx.Unlock()
 		return err
 	}
 	metrics.PeerRecv.With(metrics.PeerIDLabel, c.remotePub.String()).Add(float64(len(m)))
-	return nil
-}
-
-func (c *MsgConnection) closeUnlocked() error {
-	if c.closed {
-		return ErrAlreadyClosed
-	}
-	c.closed = true
 	return nil
 }
 
@@ -227,9 +210,10 @@ func (c *MsgConnection) closeUnlocked() error {
 func (c *MsgConnection) Close() error {
 	c.wmtx.Lock()
 	defer c.wmtx.Unlock()
-	if err := c.closeUnlocked(); err != nil {
-		return err
+	if c.closed {
+		return ErrAlreadyClosed
 	}
+	c.closed = true
 	close(c.stopSending)
 	return nil
 }

@@ -271,22 +271,13 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 
 // sendSock sends a message directly on the socket without waiting for the queue.
 func (c *FormattedConnection) sendSock(m []byte) error {
-	c.wmtx.Lock()
-	if c.closed {
-		c.wmtx.Unlock()
-		return fmt.Errorf("connection was closed")
-	}
-	c.wmtx.Unlock()
-
 	if err := c.deadliner.SetWriteDeadline(time.Now().Add(c.deadline)); err != nil {
 		return err
 	}
 	if _, err := c.w.WriteRecord(m); err != nil {
-		c.wmtx.Lock()
-		if err := c.closeUnlocked(); err != ErrAlreadyClosed {
+		if err := c.Close(); err != ErrAlreadyClosed {
 			c.networker.publishClosingConnection(ConnectionWithErr{c, err}) // todo: reconsider
 		}
-		c.wmtx.Unlock()
 		return err
 	}
 	metrics.PeerRecv.With(metrics.PeerIDLabel, c.remotePub.String()).Add(float64(len(m)))
@@ -296,28 +287,17 @@ func (c *FormattedConnection) sendSock(m []byte) error {
 // ErrAlreadyClosed is an error for when `Close` is called on a closed connection.
 var ErrAlreadyClosed = errors.New("connection is already closed")
 
-func (c *FormattedConnection) closeUnlocked() error {
+// Close closes the connection (implements io.Closer). It is go safe.
+func (c *FormattedConnection) Close() error {
+	c.wmtx.Lock()
+	defer c.wmtx.Unlock()
 	if c.closed {
 		return ErrAlreadyClosed
 	}
 	err := c.close.Close()
 	c.closed = true
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// Close closes the connection (implements io.Closer). It is go safe.
-func (c *FormattedConnection) Close() error {
-	c.wmtx.Lock()
-	defer c.wmtx.Unlock()
-	err := c.closeUnlocked()
-	if err != nil {
-		return err
-	}
 	close(c.stopSending)
-	return nil
+	return err
 }
 
 // Closed returns whether the connection is closed
