@@ -23,7 +23,7 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 	r.NoError(err)
 
 	mockDB := &mockActivationDB{}
-	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(10), nil, nil)
+	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(1), nil, nil)
 
 	mwc := &weakcoin.MockWeakCoin{}
 	mwc.On("OnRoundStarted",
@@ -40,7 +40,7 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 	mwc.On("Get",
 		mock.AnythingOfType("types.EpochID"),
 		mock.AnythingOfType("types.RoundID")).
-		Return(true)
+		Return(false)
 
 	const epoch = 5
 	const rounds = 3
@@ -72,7 +72,7 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 					},
 				},
 			},
-			hash: types.HexToHash32("0xd04dd0faf9b5d3baf04dd99152971b5db67b0b3c79e5cc59f8f7b03ab20673f8"),
+			hash: types.HexToHash32("0x6d148de54cc5ac334cdf4537018209b0e9f5ea94c049417103065eac777ddb5c"),
 		},
 		{
 			name:  "Without Cache",
@@ -119,9 +119,7 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 						ValidVotes: hashSet{
 							"0x3": {},
 						},
-						InvalidVotes: hashSet{
-							"0x2": {},
-						},
+						InvalidVotes: hashSet{},
 					},
 					pk2.String(): votesSetPair{
 						ValidVotes:   hashSet{},
@@ -137,14 +135,12 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 						ValidVotes: hashSet{
 							"0x6": {},
 						},
-						InvalidVotes: hashSet{
-							"0x5": {},
-						},
+						InvalidVotes: hashSet{},
 					},
 				},
 			},
 			ownVotes: map[epochRoundPair]votesSetPair{},
-			hash:     types.HexToHash32("0xd04dd0faf9b5d3baf04dd99152971b5db67b0b3c79e5cc59f8f7b03ab20673f8"),
+			hash:     types.HexToHash32("0x6d148de54cc5ac334cdf4537018209b0e9f5ea94c049417103065eac777ddb5c"),
 		},
 	}
 
@@ -172,7 +168,7 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 
 			err := tb.calcBeacon(tc.epoch)
 			r.NoError(err)
-			r.EqualValues(tc.hash, tb.beacons[epoch])
+			r.EqualValues(tc.hash.String(), tb.beacons[epoch].String())
 		})
 	}
 }
@@ -189,7 +185,7 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 	r.NoError(err)
 
 	mockDB := &mockActivationDB{}
-	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(10), nil, nil)
+	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(1), nil, nil)
 
 	mwc := &weakcoin.MockWeakCoin{}
 	mwc.On("OnRoundStarted",
@@ -206,7 +202,7 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 	mwc.On("Get",
 		mock.AnythingOfType("types.EpochID"),
 		mock.AnythingOfType("types.RoundID")).
-		Return(true)
+		Return(false)
 
 	const epoch = 5
 	const rounds = 3
@@ -290,9 +286,7 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 						ValidVotes: hashSet{
 							"0x3": {},
 						},
-						InvalidVotes: hashSet{
-							"0x2": {},
-						},
+						InvalidVotes: hashSet{},
 					},
 					pk2.String(): votesSetPair{
 						ValidVotes:   hashSet{},
@@ -308,9 +302,7 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 						ValidVotes: hashSet{
 							"0x6": {},
 						},
-						InvalidVotes: hashSet{
-							"0x5": {},
-						},
+						InvalidVotes: hashSet{},
 					},
 				},
 			},
@@ -332,6 +324,7 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 			tb := TortoiseBeacon{
 				config: Config{
 					RoundsNumber: rounds,
+					Theta:        1,
 				},
 				Log:                       log.NewDefault("TortoiseBeacon"),
 				validProposals:            tc.validProposals,

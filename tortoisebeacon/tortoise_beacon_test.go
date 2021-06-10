@@ -144,7 +144,7 @@ func TestTortoiseBeacon_votingThreshold(t *testing.T) {
 			name:      "Case 3",
 			theta:     0.00004,
 			weight:    31744,
-			threshold: 3,
+			threshold: 1,
 		},
 	}
 

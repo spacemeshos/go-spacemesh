@@ -84,7 +84,7 @@ func TestTortoiseBeacon_calcVotesFromProposals(t *testing.T) {
 	}
 }
 
-func TestTortoiseBeacon_calcVotesDelta(t *testing.T) {
+func TestTortoiseBeacon_calcVotes(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
@@ -98,7 +98,7 @@ func TestTortoiseBeacon_calcVotesDelta(t *testing.T) {
 	mockDB := &mockActivationDB{}
 	mockDB.On("GetEpochWeight",
 		mock.AnythingOfType("types.EpochID")).
-		Return(uint64(10), nil, nil)
+		Return(uint64(1), nil, nil)
 
 	mwc := &weakcoin.MockWeakCoin{}
 	mwc.On("OnRoundStarted",
@@ -115,7 +115,7 @@ func TestTortoiseBeacon_calcVotesDelta(t *testing.T) {
 	mwc.On("Get",
 		mock.AnythingOfType("types.EpochID"),
 		mock.AnythingOfType("types.RoundID")).
-		Return(true)
+		Return(false)
 
 	const epoch = 5
 	const round = 3
@@ -125,8 +125,7 @@ func TestTortoiseBeacon_calcVotesDelta(t *testing.T) {
 		epoch         types.EpochID
 		round         types.RoundID
 		incomingVotes map[epochRoundPair]votesPerPK
-		forDiff       proposalList
-		againstDiff   proposalList
+		expected      votesSetPair
 	}{
 		{
 			name:  "Case 1",
@@ -183,8 +182,18 @@ func TestTortoiseBeacon_calcVotesDelta(t *testing.T) {
 					},
 				},
 			},
-			forDiff:     proposalList{},
-			againstDiff: proposalList{},
+			expected: votesSetPair{
+				ValidVotes: hashSet{
+					"0x1": struct{}{},
+					"0x4": struct{}{},
+				},
+				InvalidVotes: hashSet{
+					"0x2": struct{}{},
+					"0x3": struct{}{},
+					"0x5": struct{}{},
+					"0x6": struct{}{},
+				},
+			},
 		},
 	}
 
@@ -204,9 +213,9 @@ func TestTortoiseBeacon_calcVotesDelta(t *testing.T) {
 				weakCoin:      mwc,
 			}
 
-			forDiff, againstDiff := tb.calcVotes(tc.epoch, tc.round)
-			r.EqualValues(tc.forDiff.Sort(), forDiff)
-			r.EqualValues(tc.againstDiff.Sort(), againstDiff)
+			result, err := tb.calcVotes(tc.epoch, tc.round)
+			r.NoError(err)
+			r.EqualValues(tc.expected, result)
 		})
 	}
 }
@@ -300,10 +309,12 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 	_, pk2, err := p2pcrypto.GenerateKeyPair()
 	r.NoError(err)
 
+	const threshold = 2
+
 	mockDB := &mockActivationDB{}
 	mockDB.On("GetEpochWeight",
 		mock.AnythingOfType("types.EpochID")).
-		Return(uint64(10), nil, nil)
+		Return(uint64(threshold), nil, nil)
 
 	mwc := &weakcoin.MockWeakCoin{}
 	mwc.On("OnRoundStarted",
@@ -324,7 +335,6 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 
 	const epoch = 5
 	const round = 3
-	const threshold = 2
 
 	tt := []struct {
 		name          string
@@ -523,12 +533,12 @@ func TestTortoiseBeacon_calcVotesMargin(t *testing.T) {
 				},
 			},
 			result: votesMarginMap{
-				"0x1": 6,
-				"0x2": 1,
-				"0x3": -1,
-				"0x4": 3,
-				"0x5": 1,
-				"0x6": -1,
+				"0x1": 2,
+				"0x2": 0,
+				"0x3": 0,
+				"0x4": 1,
+				"0x5": 0,
+				"0x6": 0,
 			},
 		},
 	}
@@ -559,12 +569,12 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 
 	r := require.New(t)
 
+	const threshold = 3
+
 	mockDB := &mockActivationDB{}
 	mockDB.On("GetEpochWeight",
 		mock.AnythingOfType("types.EpochID")).
-		Return(uint64(10), nil, nil)
-
-	const threshold = 3
+		Return(uint64(threshold), nil, nil)
 
 	tt := []struct {
 		name               string
