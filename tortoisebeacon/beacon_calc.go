@@ -63,6 +63,7 @@ func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID) (propo
 		}
 
 		votes = v
+		tb.ownVotes[lastRound] = v
 	}
 
 	// output from VRF
