@@ -378,10 +378,10 @@ func (m *DB) SaveLayerHashInputVector(h types.Hash32, data []byte) error {
 func (m *DB) writeBlock(bl *types.Block) error {
 	if bytes, err := types.InterfaceToBytes(bl); err != nil {
 		return fmt.Errorf("could not encode block: %w", err)
-	} else if err := m.blocks.Put(bl.ID().Bytes(), bytes); err != nil {
-		return fmt.Errorf("could not add block %v to database: %w", bl.ID(), err)
 	} else if err := m.blocks.Put(bl.ID().AsHash32().Bytes(), bytes); err != nil {
-		return fmt.Errorf("could not add bl %v to database %v", bl.ID(), err)
+		return fmt.Errorf("could not add block %v to database: %w", bl.ID(), err)
+	} else if err := m.updateLayerWithBlock(bl); err != nil {
+		return fmt.Errorf("could not update layer with block %v: %w", bl.ID(), err)
 	}
 
 	m.blockCache.put(bl)
