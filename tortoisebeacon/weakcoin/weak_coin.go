@@ -35,8 +35,9 @@ type broadcaster interface {
 	Broadcast(ctx context.Context, channel string, data []byte) error
 }
 
-//go:generate mockery -name WeakCoin -case underscore -inpkg
 // WeakCoin defines weak coin interface.
+// The line below generates mocks for it.
+//go:generate mockery -name WeakCoin -case underscore -inpkg
 type WeakCoin interface {
 	Get(epoch types.EpochID, round types.RoundID) bool
 	PublishProposal(ctx context.Context, epoch types.EpochID, round types.RoundID) error
