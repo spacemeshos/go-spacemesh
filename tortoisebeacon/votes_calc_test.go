@@ -78,8 +78,8 @@ func TestTortoiseBeacon_calcVotesFromProposals(t *testing.T) {
 			}
 
 			frv := tb.calcVotesFromProposals(tc.epoch)
-			r.EqualValues(tc.votesFor.Sort(), frv.ValidVotes)
-			r.EqualValues(tc.votesAgainst.Sort(), frv.PotentiallyValidVotes)
+			r.EqualValues(tc.votesFor.Sort(), frv.ValidVotes.Sort())
+			r.EqualValues(tc.votesAgainst.Sort(), frv.PotentiallyValidVotes.Sort())
 		})
 	}
 }

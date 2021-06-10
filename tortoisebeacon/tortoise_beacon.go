@@ -57,8 +57,8 @@ type (
 	proposal        = string
 	hashSet         = map[proposal]struct{}
 	firstRoundVotes = struct {
-		ValidVotes            []proposal
-		PotentiallyValidVotes []proposal
+		ValidVotes            proposalList
+		PotentiallyValidVotes proposalList
 	}
 	firstRoundVotesPerPK    = map[nodeID]firstRoundVotes
 	votesPerPK              = map[nodeID]votesSetPair
