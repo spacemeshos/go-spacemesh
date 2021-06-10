@@ -381,7 +381,7 @@ func (m *DB) writeBlock(bl *types.Block) error {
 	} else if err := m.blocks.Put(bl.ID().AsHash32().Bytes(), bytes); err != nil {
 		return fmt.Errorf("could not add block %v to database: %w", bl.ID(), err)
 	} else if err := m.updateLayerWithBlock(bl); err != nil {
-		return fmt.Errorf("could not update layer with block %v: %w", bl.ID(), err)
+		return fmt.Errorf("could not update layer %v with new block %v: %w", bl.Layer(), bl.ID(), err)
 	}
 
 	m.blockCache.put(bl)
