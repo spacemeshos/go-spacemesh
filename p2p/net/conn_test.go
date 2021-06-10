@@ -99,8 +99,8 @@ func TestSendMutex(t *testing.T) {
 		case <-rwcam.writeWaitChan:
 			rcvmsg := <-rwcam.writeWaitChan
 			assert.Equal(t, rcvmsg, []byte(msg))
-		default:
-			assert.Fail(t, "failed to receive expected message")
+		case <-time.After(time.Second):
+			assert.Fail(t, "timed out waiting for message")
 		}
 	}
 }
