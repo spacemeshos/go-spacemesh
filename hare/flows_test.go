@@ -142,8 +142,12 @@ func (trueOracle) Register(bool, string) {
 func (trueOracle) Unregister(bool, string) {
 }
 
-func (trueOracle) Eligible(context.Context, types.LayerID, int32, int, types.NodeID, []byte) (bool, error) {
+func (trueOracle) Validate(context.Context, types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
 	return true, nil
+}
+
+func (trueOracle) CalcEligibility(context.Context, types.LayerID, int32, int, types.NodeID, []byte) (uint16, error) {
+	return 1, nil
 }
 
 func (trueOracle) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
@@ -269,7 +273,7 @@ func Test_multipleCPs(t *testing.T) {
 		}
 	}()
 
-	test.WaitForTimedTermination(t, 30*time.Second)
+	test.WaitForTimedTermination(t, 60*time.Second)
 }
 
 // Test - run multiple CPs where one of them runs more than one iteration

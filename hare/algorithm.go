@@ -29,7 +29,8 @@ const ( // constants of the different roles
 
 // Rolacle is the roles oracle provider.
 type Rolacle interface {
-	Eligible(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error)
+	Validate(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error)
+	CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error)
 	Proof(ctx context.Context, layer types.LayerID, round int32) ([]byte, error)
 	IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error)
 }
@@ -190,6 +191,7 @@ type consensusProcess struct {
 	notifySent        bool            // flag to set in case a notification had already been sent by this instance
 	mTracker          *msgsTracker    // tracks valid messages
 	terminating       bool
+	eligibilityCount  uint16
 }
 
 // newConsensusProcess creates a new consensus process instance.
@@ -232,11 +234,6 @@ func (proc *consensusProcess) Start(ctx context.Context) error {
 	if proc.isStarted { // called twice on same instance
 		logger.Error("consensusProcess has already been started")
 		return startInstanceError(errors.New("instance already started"))
-	}
-
-	if proc.s.Size() == 0 { // empty set is not valid
-		logger.Error("consensusProcess cannot be started with an empty set")
-		return startInstanceError(errors.New("instance started with an empty set"))
 	}
 
 	if proc.inbox == nil { // no inbox
@@ -324,7 +321,7 @@ PreRound:
 		types.LayerID(proc.instanceID),
 		log.Int("set_size", proc.s.Size()))
 	if proc.s.Size() == 0 {
-		logger.Event().Error("preround ended with empty set", types.LayerID(proc.instanceID))
+		logger.Event().Warning("preround ended with empty set", types.LayerID(proc.instanceID))
 	} else {
 		logger.With().Info("preround ended",
 			log.Int("set_size", proc.s.Size()),
@@ -491,10 +488,13 @@ func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
 
 	// generate a new requestID for this message
 	ctx = log.WithNewRequestID(ctx,
-		log.String("current_set", proc.s.String()),
+		types.LayerID(proc.instanceID),
+		log.Int32("msg_k", msg.InnerMsg.K),
 		log.String("msg_type", msg.InnerMsg.Type.String()),
+		log.Int("eligibility_count", int(msg.InnerMsg.EligibilityCount)),
+		log.String("current_set", proc.s.String()),
 		log.Int32("current_k", proc.k),
-		types.LayerID(proc.instanceID))
+	)
 	logger := proc.WithContext(ctx)
 
 	if err := proc.network.Broadcast(ctx, protoName, msg.Bytes()); err != nil {
@@ -713,6 +713,7 @@ func (proc *consensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error
 		return nil, err
 	}
 	builder.SetRoleProof(proof)
+	builder.SetEligibilityCount(proc.eligibilityCount)
 
 	return builder, nil
 }
@@ -765,6 +766,9 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 
 	if proc.notifyTracker.NotificationsCount(s) < proc.cfg.F+1 { // not enough
 		proc.WithContext(ctx).With().Debug("not enough notifications for termination",
+			log.String("current_set", proc.s.String()),
+			log.Int32("current_k", proc.k),
+			types.LayerID(proc.instanceID),
 			log.Int("expected", proc.cfg.F+1),
 			log.Int("actual", proc.notifyTracker.NotificationsCount(s)))
 		return
@@ -776,10 +780,10 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 		log.String("current_set", proc.s.String()),
 		log.Int32("current_k", proc.k),
 		types.LayerID(proc.instanceID),
-		log.Int("set_size", proc.s.Size()))
+		log.Int("set_size", proc.s.Size()), log.Int32("K", proc.k))
 	proc.report(completed)
-	close(proc.CloseChannel())
 	proc.terminating = true
+	close(proc.CloseChannel())
 }
 
 func (proc *consensusProcess) currentRound() int {
@@ -846,7 +850,8 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 		return false
 	}
 
-	if role := proc.currentRole(ctx); role == passive {
+	currentRole := proc.currentRole(ctx)
+	if currentRole == passive {
 		logger.With().Info("should not participate: passive",
 			log.Int32("current_k", proc.k), types.LayerID(proc.instanceID))
 		return false
@@ -854,8 +859,10 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 
 	// should participate
 	logger.With().Info("should participate",
-		log.Int32("current_k", proc.k),
-		types.LayerID(proc.instanceID))
+		log.Int32("current_k", proc.k), types.LayerID(proc.instanceID),
+		log.Bool("leader", currentRole == leader),
+		log.Uint32("eligibility_count", uint32(proc.eligibilityCount)),
+	)
 	return true
 }
 
@@ -868,14 +875,15 @@ func (proc *consensusProcess) currentRole(ctx context.Context) role {
 		return passive
 	}
 
-	res, err := proc.oracle.Eligible(ctx, types.LayerID(proc.instanceID),
+	eligibilityCount, err := proc.oracle.CalcEligibility(ctx, types.LayerID(proc.instanceID),
 		proc.k, expectedCommitteeSize(proc.k, proc.cfg.N, proc.cfg.ExpectedLeaders), proc.nid, proof)
 	if err != nil {
-		logger.With().Error("failed to check eligibility", log.Err(err))
+		logger.With().Error("failed to check eligibility", log.Err(err), types.LayerID(proc.instanceID))
 		return passive
 	}
 
-	if res { // eligible
+	proc.eligibilityCount = eligibilityCount
+	if eligibilityCount > 0 { // eligible
 		if proc.currentRound() == proposalRound {
 			return leader
 		}

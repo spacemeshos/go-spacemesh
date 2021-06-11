@@ -297,6 +297,14 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 }
 
 func (msh *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerID) {
+	if oldPbase < 2 {
+		msh.With().Warning("tried to push layer < 2",
+			log.FieldNamed("old_pbase", oldPbase), log.FieldNamed("new_pbase", newPbase))
+		if newPbase < 3 {
+			return
+		}
+		oldPbase = 2
+	}
 	for layerID := oldPbase; layerID < newPbase; layerID++ {
 		l, err := msh.GetLayer(layerID)
 		// TODO: propagate/handle error
@@ -396,7 +404,7 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 func (msh *Mesh) getInvalidBlocksByHare(ctx context.Context, hareLayer *types.Layer) (invalid []*types.Block) {
 	dbLayer, err := msh.GetLayer(hareLayer.Index())
 	if err != nil {
-		msh.WithContext(ctx).With().Panic("failed to get layer", log.Err(err))
+		msh.WithContext(ctx).With().Error("failed to get layer", log.Err(err))
 		return
 	}
 	exists := make(map[types.BlockID]struct{})
@@ -448,7 +456,9 @@ func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) {
 	// update validated layer only after applying transactions since loading of state depends on processedLayer param.
 	msh.pMutex.Lock()
 	if err := msh.general.Put(VERIFIED, lyr.Bytes()); err != nil {
-		msh.Panic("could not persist validated layer index %d", lyr)
+		// can happen if database already closed
+		msh.Error("could not persist validated layer index %d: %v", lyr, err.Error())
+		// TODO: return here without setting latestLayerInState ?
 	}
 	msh.latestLayerInState = lyr
 	msh.pMutex.Unlock()
@@ -859,7 +869,8 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 		for smesherString, cnt := range smesherAccountEntry {
 			smesherEntry, err := types.StringToNodeID(smesherString)
 			if err != nil {
-				log.With().Error("unable to convert bytes to nodeid", log.Err(err))
+				log.With().Error("unable to convert bytes to nodeid", log.Err(err),
+					log.String("smesher_string", smesherString))
 				return
 			}
 			events.ReportRewardReceived(events.Reward{

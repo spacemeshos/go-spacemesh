@@ -177,8 +177,22 @@ func hashLayerAndRound(instanceID types.LayerID, round int32) uint32 {
 	return h.Sum32()
 }
 
-// Eligible returns whether the specific NodeID is eligible for layer in roudn and committee size.
-func (fo *FixedRolacle) Eligible(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
+// Validate is required to conform to the Rolacle interface, but should never be called.
+func (fo *FixedRolacle) Validate(context.Context, types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
+	panic("implement me!")
+}
+
+// CalcEligibility returns 1 if the miner is eligible in given layer, and 0 otherwise.
+func (fo *FixedRolacle) CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+	eligible, err := fo.eligible(ctx, layer, round, committeeSize, id, sig)
+	if eligible {
+		return 1, nil
+	}
+	return 0, err
+}
+
+// eligible returns whether the specific NodeID is eligible for layer in round and committee size.
+func (fo *FixedRolacle) eligible(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	fo.mapRW.RLock()
 	total := len(fo.honest) + len(fo.faulty) // safe since len >= 0
 	fo.mapRW.RUnlock()
@@ -216,7 +230,7 @@ func (fo *FixedRolacle) Proof(ctx context.Context, layer types.LayerID, round in
 	}
 
 	hashBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(hashBytes, uint32(hash.Sum32()))
+	binary.LittleEndian.PutUint32(hashBytes, hash.Sum32())
 
 	return hashBytes, nil
 }

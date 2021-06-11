@@ -76,6 +76,10 @@ def assert_all(curr_idx, ns, layer):
     assert validate(lst)
 
 
+def total_eligibilities(hits):
+    return sum(hit.eligibility_count for hit in hits)
+
+
 def expect_consensus_process(curr_idx, ns, layer, total, f):
     msg = 'layer=%s expected=%s actual=%s'
     # assert no node ended up with an empty set at the end of the pre-round
@@ -92,7 +96,8 @@ def expect_consensus_process(curr_idx, ns, layer, total, f):
 
     # assert at least f+1 has committed at the end of round 3
     lst = query_round_3(curr_idx, ns, layer)
-    expect(len(lst) >= f + 1, 'layer=%s len=%d f=%d' % (layer, len(lst), f))
+    expect(total_eligibilities(lst) >= f + 1,
+           'layer=%s total_eligibilities=%d f=%d' % (layer, total_eligibilities(lst), f))
 
     # assert termination output set
     lst = query_hare_output_set(curr_idx, ns, layer)
