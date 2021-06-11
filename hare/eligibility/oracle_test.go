@@ -451,10 +451,6 @@ func Test_safeLayer(t *testing.T) {
 	assert.Equal(t, types.LayerID(100-safety), safeLayer(100, safety))
 }
 
-type mockBufferedActiveSetProvider struct {
-	size map[types.EpochID]int
-}
-
 func (m *mockBufferedActiveSetProvider) ActiveSet(epoch types.EpochID, _ map[types.BlockID]struct{}) (map[string]uint64, error) {
 	v, ok := m.size[epoch]
 	if !ok {
