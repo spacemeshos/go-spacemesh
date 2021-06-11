@@ -93,7 +93,7 @@ type mockBufferedActiveSetProvider struct {
 	size map[types.EpochID]int
 }
 
-func (m *mockBufferedActiveSetProvider) GetMinerWeightsInEpochFromView(targetEpoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error) {
+func (m *mockBufferedActiveSetProvider) GetMinerWeightsInEpochFromView(targetEpoch types.EpochID, _ map[types.BlockID]struct{}) (map[string]uint64, error) {
 	v, ok := m.size[targetEpoch]
 	if !ok {
 		return createMapWithSize(0), fmt.Errorf("no size for epoch %v", targetEpoch)
@@ -102,7 +102,7 @@ func (m *mockBufferedActiveSetProvider) GetMinerWeightsInEpochFromView(targetEpo
 	return createMapWithSize(v), nil
 }
 
-func (m *mockBufferedActiveSetProvider) GetEpochAtxs(epoch types.EpochID) []types.ATXID {
+func (m *mockBufferedActiveSetProvider) GetEpochAtxs(types.EpochID) []types.ATXID {
 	panic("not implemented")
 }
 
@@ -215,39 +215,44 @@ func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	r.Equal(10, mCache.numAdd)
 }
 
-//func TestOracle_IsEligible(t *testing.T) {
-//	types.SetLayersPerEpoch(defLayersPerEpoch)
-//	atxdb := &mockActiveSetProvider{size: 10}
-//	nid := types.NodeID{Key: "fake_node_id"}
-//	o := New(&mockValueProvider{1, nil}, atxdb, &mockBlocksProvider{}, nil, nil, 0, 1, 5, 1, cfg, log.NewDefault(t.Name()))
-//	o.layersPerEpoch = 10
-//
-//	// VRF is ineligible
-//	o.vrfVerifier = buildVerifier(false)
-//	res, err := o.Eligible(context.TODO(), types.LayerID(1), 0, 1, nid, []byte{})
-//	require.NoError(t, err)
-//	require.False(t, res)
-//
-//	// VRF eligible but committee size zero
-//	o.vrfVerifier = buildVerifier(true)
-//	res, err = o.Eligible(context.TODO(), types.LayerID(50), 1, 0, nid, []byte{})
-//	require.NoError(t, err)
-//	require.False(t, res)
-//
-//	// VRF eligible but empty active set
-//	o.atxdb = &mockActiveSetProvider{size: 0}
-//	// need to run on a layerID in a different epoch to avoid the cached value
-//	res, err = o.Eligible(context.TODO(), types.LayerID(cfg.ConfidenceParam*2+11), 1, 1, nid, []byte{})
-//	require.Error(t, err)
-//	require.Contains(t, err.Error(), "empty active set")
-//	require.False(t, res)
-//
-//	// eligible
-//	o.atxdb = atxdb
-//	res, err = o.Eligible(context.TODO(), types.LayerID(50), 1, 10, nid, []byte{})
-//	require.NoError(t, err)
-//	require.True(t, res)
-//}
+func TestOracle_IsEligible(t *testing.T) {
+	nid := types.NodeID{Key: "fake_node_id"}
+	o := defaultOracle(t)
+	o.layersPerEpoch = 10
+
+	// VRF is ineligible
+	o.vrfVerifier = buildVerifier(false)
+	res, err := o.CalcEligibility(context.TODO(), types.LayerID(1), 0, 1, nid, []byte{})
+	require.NoError(t, err)
+	require.Equal(t, 0, int(res))
+
+	// VRF eligible but committee size zero
+	o.vrfVerifier = buildVerifier(true)
+	res, err = o.CalcEligibility(context.TODO(), types.LayerID(50), 1, 0, nid, []byte{})
+	require.NoError(t, err)
+	require.Equal(t, 0, int(res))
+
+	// VRF eligible but empty active set
+	o.atxdb = &mockActiveSetProvider{size: 0}
+	// need to run on a layerID in a different epoch to avoid the cached value
+	res, err = o.CalcEligibility(context.TODO(), types.LayerID(cfg.ConfidenceParam*2+11), 1, 1, nid, []byte{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "empty active set")
+	require.Equal(t, 0, int(res))
+
+	// eligible
+	o.atxdb = &mockActiveSetProvider{size: 5}
+	sig := make([]byte, 64)
+	for pubkey := range createMapWithSize(1) {
+		n, err := rand.Read(sig)
+		require.NoError(t, err)
+		require.Equal(t, 64, n)
+		nid := types.NodeID{Key: pubkey}
+		res, err = o.CalcEligibility(context.TODO(), types.LayerID(50), 1, 10, nid, sig)
+		require.NoError(t, err)
+		require.Greater(t, int(res), 0)
+	}
+}
 
 func Test_SafeLayerRange(t *testing.T) {
 	types.SetLayersPerEpoch(defLayersPerEpoch)
@@ -290,20 +295,6 @@ func Test_SafeLayerRange(t *testing.T) {
 	}
 }
 
-//func Test_ZeroParticipants(t *testing.T) {
-//	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 5}, &mockBlocksProvider{}, buildVerifier(true), &mockSigner{}, defLayersPerEpoch, genActive, hDist, cfg, log.NewDefault(t.Name()))
-//	res, err := o.Eligible(context.TODO(), 1, 0, 0, types.NodeID{Key: ""}, []byte{1})
-//	assert.Nil(t, err)
-//	assert.False(t, res)
-//}
-//
-//func Test_AllParticipants(t *testing.T) {
-//	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 5}, &mockBlocksProvider{}, buildVerifier(true), &mockSigner{}, 10, genActive, hDist, cfg, log.NewDefault(t.Name()))
-//	res, err := o.Eligible(context.TODO(), 0, 0, 5, types.NodeID{Key: ""}, []byte{1})
-//	assert.Nil(t, err)
-//	assert.True(t, res)
-//}
-//
 func defaultOracle(t testing.TB) *Oracle {
 	layersPerEpoch := uint16(defLayersPerEpoch)
 	return mockOracle(t, layersPerEpoch)
@@ -621,7 +612,6 @@ func TestOracle_MultipleLayerBlocks(t *testing.T) {
 	r := require.New(t)
 	confidenceParam := 25
 	epochOffset := 5
-	//types.SetLayersPerEpoch(int32(defLayersPerEpoch))
 
 	// a block provider that returns one distinct block per layer
 	lyr := types.LayerID(100)
@@ -724,16 +714,9 @@ func TestOracle_HareToTortoiseFlow(t *testing.T) {
 	// blocksProvider that makes sure hare active set was read
 	bp := &mockBlocksProvider{layerContextuallyValidBlocksFn: func(types.LayerID) (map[types.BlockID]struct{}, error) {
 		called1 = true
-		// return blocks
-		//o := defaultOracle(t)
-		//mp := make(map[string]uint64)
-		//edid := "11111"
-		//mp[edid] = 11
-		//o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error) {
 		return mp, nil
 	}}
 	o := defaultOracle(t)
-	//o := New(&mockValueProvider{1, nil}, asp, bp, nil, nil, 2, genActive, hDist, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
 	o.atxdb = asp
 	o.meshdb = bp
 	o.activesCache = newMockCacher()
@@ -757,7 +740,6 @@ func TestOracle_HareToTortoiseFlow(t *testing.T) {
 	o = defaultOracle(t)
 	o.atxdb = asp
 	o.meshdb = &mockBlocksProvider{mp: mp2}
-	//o = New(&mockValueProvider{1, nil}, asp, &mockBlocksProvider{mp: mp2}, nil, nil, 2, genActive, hDist, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
 	o.activesCache = newMockCacher()
 	res, err = o.actives(context.TODO(), lyr)
 	r.True(called2, "tortoise active set wasn't read")
@@ -782,7 +764,6 @@ func TestOracle_HareToTortoiseFlow(t *testing.T) {
 	o = defaultOracle(t)
 	o.atxdb = asp
 	o.meshdb = bp
-	//o = New(&mockValueProvider{1, nil}, asp, bp, nil, nil, 2, genActive, hDist, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
 	o.activesCache = newMockCacher()
 	res, err = o.actives(context.TODO(), lyr)
 	r.Nil(res)
@@ -802,19 +783,9 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	o := mockOracle(t, uint16(5))
 	o.atxdb = atxdb
 	o.meshdb = &mockBlocksProvider{}
-	//o := New(&mockValueProvider{1, nil}, atxdb, &mockBlocksProvider{}, nil, nil, 5, genActive, hDist, cfg, log.NewDefault(t.Name()))
 	v, err := o.IsIdentityActiveOnConsensusView(context.TODO(), "22222", 1)
 	r.NoError(err)
 	r.True(v)
-	//o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error) {
-	//	return mp, errFoo
-	//}
-	//_, err = o.IsIdentityActiveOnConsensusView("22222", 100)
-	//r.Equal(errFoo, err)
-	//
-	//o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error) {
-	//	return mp, nil
-	//}
 
 	o.atxdb = &mockActiveSetProvider{size: 1, getActiveSetFn: func(types.EpochID, map[types.BlockID]struct{}) (map[string]uint64, error) {
 		return nil, errFoo
@@ -846,7 +817,6 @@ func TestOracle_CalcEligibility_withSpaceUnits(t *testing.T) {
 	o := defaultOracle(t)
 	o.meshdb = &mockBlocksProvider{}
 	o.atxdb = &mockActiveSetProvider{size: numOfMiners}
-	//o := New(&mockValueProvider{1, nil}, nil, buildVerifier(true), nil, 10, 1, genWeight, 1, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 
 	var eligibilityCount uint16
 	sig := make([]byte, 64)
