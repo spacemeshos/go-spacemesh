@@ -83,8 +83,11 @@ func (h *testHare) HandleValidatedLayer(ctx context.Context, layer types.LayerID
 func (h *testHare) LayerBlockIds(layer types.LayerID) ([]types.BlockID, error) {
 	return h.layers(layer, h)
 }
+func (h *testHare) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {
+	panic("implement me")
+}
 
-func createTestHare(tcfg config.Config, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string, bp layers) *Hare {
+func createTestHare(tcfg config.Config, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string, bp meshProvider) *Hare {
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: pub.Bytes()}
