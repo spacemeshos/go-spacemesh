@@ -46,7 +46,7 @@ var cmd = &cobra.Command{
 			syncApp.Cleanup()
 			signal.Stop(signals)
 
-			fmt.Println("Received interrupt signal. Exits")
+			fmt.Println("received interrupt signal, exiting")
 			os.Exit(1)
 
 		}()
