@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
-	"github.com/spacemeshos/go-spacemesh/monitoring"
 	"sync"
 	"time"
 
@@ -322,8 +321,6 @@ func (s *Syncer) Start(ctx context.Context) {
 
 // fires a sync every sm.SyncInterval or on force sync from outside
 func (s *Syncer) run(ctx context.Context) {
-	// memory profiler has nothing to do with sync but this is a convenient place to run it
-	memlogger := monitoring.MemLogger{Logger: log.AppLog.WithName("memlogger").WithContext(ctx)}
 	s.WithContext(ctx).Debug("syncer running")
 	for {
 		select {
@@ -333,7 +330,6 @@ func (s *Syncer) run(ctx context.Context) {
 		case <-s.forceSync:
 			go s.synchronise(ctx)
 		case <-s.syncTimer.C:
-			memlogger.LogMemoryUsage()
 			go s.synchronise(ctx)
 		}
 	}
