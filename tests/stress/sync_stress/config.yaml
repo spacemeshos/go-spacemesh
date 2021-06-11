@@ -16,8 +16,8 @@ bootstrap:
   replicas: 1
   args:
     randcon: '8'
-    hare-committee-size: '20'
-    hare-max-adversaries: '9'
+    hare-committee-size: '800'
+    hare-max-adversaries: '399'
     hare-round-duration-sec: '10'
     layer-duration-sec: '10'
     layer-average-size: '20'
@@ -34,8 +34,8 @@ client:
   replicas: 9
   args:
     randcon: '8'
-    hare-committee-size: '20'
-    hare-max-adversaries: '9'
+    hare-committee-size: '800'
+    hare-max-adversaries: '399'
     hare-round-duration-sec: '10'
     layer-duration-sec: '10'
     layer-average-size: '20'

@@ -9,6 +9,7 @@ import (
 func buildStatusMsg(signing Signer, s *Set, ki int32) *Msg {
 	builder := newMessageBuilder()
 	builder.SetType(status).SetInstanceID(instanceID1).SetRoundCounter(statusRound).SetKi(ki).SetValues(s)
+	builder.SetEligibilityCount(1)
 	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 
 	return builder.Build()
@@ -104,5 +105,5 @@ func TestStatusTracker_AnalyzeStatuses(t *testing.T) {
 	tracker.RecordStatus(context.TODO(), buildStatusMsg(generateSigning(t), s2, 1))
 	tracker.RecordStatus(context.TODO(), buildStatusMsg(generateSigning(t), s2, 2))
 	tracker.AnalyzeStatuses(validate)
-	assert.Equal(t, 2, len(tracker.statuses))
+	assert.Equal(t, 3, int(tracker.count))
 }

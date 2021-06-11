@@ -6,6 +6,7 @@ import (
 	"fmt"
 	fetch2 "github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -192,6 +193,11 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 	timer := timesync.RealClock{}
 	ticker = timesync.NewClock(timer, tick, timer.Now().Add(tick*-4), log.NewDefault("clock"))
 	syncs, p2ps = SyncMockFactoryManClock(number, conf, name, dbType, poetDb, ticker)
+	for _, syncer := range syncs {
+		if waitForPeers(syncer, number-1) == false {
+			panic("peers did not load")
+		}
+	}
 	ticker.StartNotifying()
 	return syncs, p2ps, ticker
 }
@@ -219,6 +225,7 @@ func SyncMockFactoryManClock(number int, conf Configuration, name string, dbType
 		poet := activation.NewPoetDb(poetDB, log.NewDefault("poetDb"))
 		//poet := poetDb()
 		layerFetcher.AddDBs(msh.Blocks(), atxDB, msh.Transactions(), poetDB, msh.InputVector())
+		// note: layer fetcher startup happens asynchronously, so it may not be fully running when this method returns
 		layerFetcher.Start()
 
 		sync := NewSync(context.TODO(), net, msh, txpool, atxpool, blockValidator, poet, conf, ticker, layerFetcher, l)
@@ -230,6 +237,16 @@ func SyncMockFactoryManClock(number int, conf Configuration, name string, dbType
 
 type mockBlocksProvider struct {
 	mp map[types.BlockID]struct{}
+}
+
+type stupidPeersMock struct {
+}
+
+func (s stupidPeersMock) GetPeers() []p2ppeers.Peer {
+	return []p2ppeers.Peer{p2pcrypto.NewRandomPubkey(), p2pcrypto.NewRandomPubkey()}
+}
+
+func (s stupidPeersMock) Close() {
 }
 
 func (mbp mockBlocksProvider) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
@@ -279,6 +296,9 @@ func addTxsToPool(pool txMemPool, txs []*types.Transaction) {
 func TestSyncer_Start(t *testing.T) {
 	syncs, _, clock := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	defer clock.Close()
+	n := &stupidPeersMock{}
+	syncs[0].net.peers = n
+	syncs[1].net.peers = n
 	syn := syncs[0]
 
 	syn.Start(context.TODO())
@@ -1125,6 +1145,7 @@ func TestSyncer_Txs(t *testing.T) {
 func TestFetchLayerBlockIds(t *testing.T) {
 	// check tx validation
 	syncs, nodes, clock := SyncMockFactory(3, conf, t.Name(), memoryDB, newMockPoetDb)
+	time.Sleep(time.Second)
 
 	defer clock.Close()
 
@@ -1347,9 +1368,13 @@ func (m *mockLayerValidator) ValidateLayer(lyr *types.Layer) {
 
 func TestSyncer_Synchronise(t *testing.T) {
 	r := require.New(t)
+	types.SetLayersPerEpoch(1)
 	syncs, _, clock := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
-	defer clock.Close()
+	clock.Close()
 	sync := syncs[0]
+	sync.ticker = &mockClock{Layer: 1}
+	defer sync.Close()
+	defer syncs[1].Close()
 	lv := &mockLayerValidator{0, 0, 0, nil, nil}
 	sync.Mesh.Validator = lv
 
@@ -1382,6 +1407,7 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	defer clock.Close()
 	sync := syncs[0]
 	defer sync.Close()
+	defer syncs[1].Close()
 	gen := types.GetEffectiveGenesis()
 	sync.AddBlockWithTxs(types.NewExistingBlock(1+gen, []byte(rand.String(8)), nil))
 	sync.AddBlockWithTxs(types.NewExistingBlock(2+gen, []byte(rand.String(8)), nil))
@@ -1448,6 +1474,19 @@ func TestSyncer_ListenToGossip(t *testing.T) {
 	assert.True(t, sync.ListenToGossip())
 }
 
+func waitForPeers(sync *Syncer, expectedNumOfPeers int) bool {
+	retries := 20
+	for len(sync.net.peers.GetPeers()) != expectedNumOfPeers {
+		retries--
+		if retries == 0 {
+			return false
+		}
+		log.Warning("sync doesn't have enough peers e: %v a: %v %p", expectedNumOfPeers, len(sync.net.peers.GetPeers()), sync)
+		time.Sleep(200 * time.Millisecond)
+	}
+	return true
+}
+
 func TestSyncer_handleNotSyncedFlow(t *testing.T) {
 	r := require.New(t)
 	txpool := state.NewTxMemPool()
@@ -1479,6 +1518,7 @@ func TestSyncer_handleNotSyncedZeroBlocksLayer(t *testing.T) {
 	r.NoError(sync.SetZeroBlockLayer(1))
 	r.Equal(0, lv.countValidated)
 	r.Equal(types.LayerID(0), lv.processedLayer)
+	time.Sleep(time.Second) // give layer fetcher a chance to start
 	go sync.handleNotSynced(context.TODO(), 1)
 	select {
 	case <-time.After(10 * time.Second):
@@ -1533,7 +1573,7 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	//atxdb := activation.NewDB(atxDb, &mockIStore{}, syncedMsh.DB, layersPerEpoch, goldenATXID, &validatorMock{}, l.WithName("atxDB"))
 	layerFetcher.AddDBs(syncedMsh.Blocks(), atxDb, syncedMsh.Transactions(), poetDB, syncedMsh.InputVector())
 	_ = NewSync(context.TODO(), syncedMiner, syncedMsh, state.NewTxMemPool(), synecdAtxPool, blockEligibilityValidatorMock{}, newMockPoetDb(), conf, timer, layerFetcher, l.WithName("synced"))
-	atx := types.NewActivationTx(types.NIPSTChallenge{}, types.Address{}, &types.NIPST{}, &types.PostProof{})
+	atx := types.NewActivationTx(types.NIPSTChallenge{}, types.Address{}, &types.NIPST{}, 0, &types.PostProof{})
 	atx.CalcAndSetID()
 	fmt.Println("ATX ID ", atx.ShortString())
 
@@ -1675,9 +1715,10 @@ func TestSyncer_ConcurrentSynchronise(t *testing.T) {
 	sync.ticker = &mockClock{Layer: 3}
 	lv := &mockTimedValidator{1 * time.Second, 0}
 	sync.Validator = lv
-	sync.AddBlock(types.NewExistingBlock(1, []byte(rand.String(8)), nil))
-	sync.AddBlock(types.NewExistingBlock(2, []byte(rand.String(8)), nil))
-	sync.AddBlock(types.NewExistingBlock(3, []byte(rand.String(8)), nil))
+	r.NoError(sync.AddBlock(types.NewExistingBlock(1, []byte(rand.String(8)), nil)))
+	r.NoError(sync.AddBlock(types.NewExistingBlock(2, []byte(rand.String(8)), nil)))
+	r.NoError(sync.AddBlock(types.NewExistingBlock(3, []byte(rand.String(8)), nil)))
+	time.Sleep(100 * time.Millisecond)
 	go sync.synchronise(context.TODO())
 	time.Sleep(100 * time.Millisecond)
 	sync.synchronise(context.TODO())
@@ -2068,13 +2109,13 @@ func TestSyncer_Await(t *testing.T) {
 	defer clock.Close()
 	syncer := syncs[0]
 	defer syncer.Close()
+	defer syncs[1].Close()
 	err := syncer.AddBlockWithTxs(types.NewExistingBlock(1, []byte(rand.String(8)), nil))
 	r.NoError(err)
 	lv := &mockLayerValidator{0, 0, 0, nil, nil}
 	syncer.Mesh.Validator = lv
 	syncer.ticker = &mockClock{Layer: 1}
 	syncer.SetLatestLayer(1)
-
 	ch := syncer.Await()
 	r.False(closed(ch))
 

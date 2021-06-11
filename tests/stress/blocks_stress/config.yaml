@@ -22,8 +22,8 @@ bootstrap:
       cpu: '2'
   args:
     randcon: '8'
-    hare-committee-size: '50'
-    hare-max-adversaries: '24'
+    hare-committee-size: '800'
+    hare-max-adversaries: '399'
     hare-round-duration-sec: '10'
     hare-exp-leaders: '10'
     layer-duration-sec: '60'
@@ -33,7 +33,9 @@ bootstrap:
     coinbase: '0x4321'
     eligibility-confidence-param: '5'
     eligibility-epoch-offset: '0'
-    genesis-active-size: '100'
+    post-space: '512'
+    space-to-commit: '512'
+    genesis-total-weight: '51200'
     executable-path: '/bin/go-spacemesh'
   deployment_type: deployment
 client:
@@ -49,8 +51,8 @@ client:
       cpu: '2'
   args:
     randcon: '8'
-    hare-committee-size: '50'
-    hare-max-adversaries: '24'
+    hare-committee-size: '800'
+    hare-max-adversaries: '399'
     hare-round-duration-sec: '10'
     hare-exp-leaders: '10'
     layer-duration-sec: '60'
@@ -60,7 +62,9 @@ client:
     coinbase: '0x1234'
     eligibility-confidence-param: '5'
     eligibility-epoch-offset: '0'
-    genesis-active-size: '100'
+    post-space: '512'
+    space-to-commit: '512'
+    genesis-total-weight: '51200'
     executable-path: '/bin/go-spacemesh'
   deployment_type: deployment
 elastic:

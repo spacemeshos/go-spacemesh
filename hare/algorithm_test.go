@@ -42,8 +42,15 @@ type mockRolacle struct {
 	MockStateQuerier
 }
 
-func (mr *mockRolacle) Eligible(context.Context, types.LayerID, int32, int, types.NodeID, []byte) (bool, error) {
+func (mr *mockRolacle) Validate(context.Context, types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
 	return mr.isEligible, mr.err
+}
+
+func (mr *mockRolacle) CalcEligibility(context.Context, types.LayerID, int32, int, types.NodeID, []byte) (uint16, error) {
+	if mr.isEligible {
+		return 1, nil
+	}
+	return 0, mr.err
 }
 
 func (mr *mockRolacle) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
@@ -179,13 +186,10 @@ func TestConsensusProcess_Start(t *testing.T) {
 	broker := buildBroker(n1, t.Name())
 	broker.Start(context.TODO())
 	proc := generateConsensusProcess(t)
-	proc.s = NewDefaultEmptySet()
 	inbox, _ := broker.Register(context.TODO(), proc.ID())
 	proc.SetInbox(inbox)
-	err := proc.Start(context.TODO())
-	assert.Equal(t, "instance started with an empty set", err.Error())
 	proc.s = NewSetFromValues(value1)
-	err = proc.Start(context.TODO())
+	err := proc.Start(context.TODO())
 	assert.Equal(t, nil, err)
 	err = proc.Start(context.TODO())
 	assert.Equal(t, "instance already started", err.Error())
@@ -534,7 +538,7 @@ func TestConsensusProcess_beginRound2(t *testing.T) {
 	statusTracker := newStatusTracker(1, 1)
 	s := NewSetFromValues(value1)
 	statusTracker.RecordStatus(context.TODO(), BuildStatusMsg(generateSigning(t), s))
-	statusTracker.analyzed = true
+	statusTracker.AnalyzeStatuses(validate)
 	proc.statusesTracker = statusTracker
 
 	proc.k = 1
