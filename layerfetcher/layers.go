@@ -236,6 +236,9 @@ func (l *Logic) PollLayer(ctx context.Context, layer types.LayerID) chan LayerPr
 	l.layerResM.Unlock()
 
 	peers := l.net.GetPeers()
+	if len(peers) == 0 {
+		l.receiveLayerHash(ctx, layer, nil, len(peers), nil, fmt.Errorf("no peers"))
+	}
 	// request layers from all peers since different peers can have different layer structures (in extreme cases)
 	// we ask for all blocks so that we know
 	for _, p := range peers {
@@ -261,7 +264,14 @@ func (l *Logic) PollLayer(ctx context.Context, layer types.LayerID) chan LayerPr
 // and then unifies them. it also fails if a threshold of failed calls to peers have been reached
 func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppeers.Peer, peers int, data []byte, err error) {
 	// log result for peer
+	if peers == 0 {
+		l.log.Error("cannot sync layer %v", id)
+		l.notifyLayerPromiseResult(id, 0, fmt.Errorf("no peers"))
+		return
+	}
+
 	l.layerHashResM.Lock()
+
 	if _, ok := l.layerHashResults[id]; !ok {
 		l.layerHashResults[id] = make(map[p2ppeers.Peer]*types.Hash32)
 	}
@@ -272,7 +282,7 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 		l.log.Info("received hash %v for layer id %v from peer %v", l.layerHashResults[id][p].Hex(), id, p.String())
 	} else {
 		l.layerHashResults[id][p] = nil
-		l.log.Info("received zero hash for layer id %v from peer %v", id, p.String())
+		l.log.Error("received nil (error) for layer id %v from peer %v err:%v", id, p.String(), err)
 	}
 	// not enough results
 	if len(l.layerHashResults[id]) < peers {
@@ -287,7 +297,7 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 	hashes := make(map[types.Hash32][]p2ppeers.Peer)
 	l.layerHashResM.RLock()
 	for peer, hash := range l.layerHashResults[id] {
-		//count zero hashes - mark errors.
+		//count nil hashes - mark errors.
 		if hash == nil {
 			errors++
 		} else {
@@ -371,12 +381,11 @@ func (l *Logic) notifyLayerPromiseResult(id types.LayerID, expectedResults int, 
 	}
 	l.layerResM.Lock()
 	for _, ch := range l.layerResultsChannels[id] {
-		l.log.Info("writing res for layer %v err %v", id, err)
+		//l.log.Info("writing res for layer %v err %v", id, err)
 		ch <- res
 	}
 	delete(l.layerResultsChannels, id)
 	l.layerResM.Unlock()
-	l.log.Info("writing error for layer %v done %v", id, err)
 }
 
 // receiveBlockHashes is called when receiving block hashes for specified layer layer from remote peer

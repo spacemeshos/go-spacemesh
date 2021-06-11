@@ -44,6 +44,10 @@ ifdef delns
     EXTRA_PARAMS:=$(EXTRA_PARAMS) --delns=$(delns)
 endif
 
+ifdef dump
+    EXTRA_PARAMS:=$(EXTRA_PARAMS) --dump=$(dump)
+endif
+
 
 # This prevents "the input device is not a TTY" error from docker in CI
 DOCKERRUNARGS := --rm -e ES_PASSWD="$(ES_PASSWD)" \
@@ -53,7 +57,11 @@ DOCKERRUNARGS := --rm -e ES_PASSWD="$(ES_PASSWD)" \
 	-e PROJECT_NAME=$(PROJECT_NAME) \
 	-e ES_USER=$(ES_USER) \
 	-e ES_PASS=$(ES_PASS) \
-	-e MAIN_ES_IP=$(MAIN_ES_IP)
+	-e MAIN_ES_IP=$(MAIN_ES_IP) \
+	-e TD_QUEUE_NAME=$(TD_QUEUE_NAME) \
+	-e TD_QUEUE_ZONE=$(TD_QUEUE_ZONE) \
+	-e DUMP_QUEUE_NAME=$(DUMP_QUEUE_NAME) \
+	-e DUMP_QUEUE_ZONE=$(DUMP_QUEUE_ZONE)
 
 DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(BRANCH)
 
@@ -164,12 +172,12 @@ test:
 
 
 test-no-app-test:
-	ulimit -n 9999; go test -timeout 0 -p 1 -v -tags exclude_app_test ./...
+	ulimit -n 9999; go test -timeout 0 -p 1 -tags exclude_app_test ./...
 .PHONY: test
 
 
 test-only-app-test:
-	ulimit -n 9999; go test -timeout 0 -p 1 -v -tags !exclude_app_test ./cmd/node
+	ulimit -n 9999; go test -timeout 0 -p 1 -tags !exclude_app_test ./cmd/node
 .PHONY: test
 
 

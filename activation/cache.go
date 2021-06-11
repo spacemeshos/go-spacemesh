@@ -6,33 +6,33 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-// ActivesetCache holds an lru cache of the active set size for a view hash.
-type ActivesetCache struct {
+// TotalWeightCache holds an lru cache of the total weight per view hash.
+type TotalWeightCache struct {
 	*lru.Cache
 }
 
-// NewActivesetCache creates a cache for Active set size
-func NewActivesetCache(size int) ActivesetCache {
+// NewTotalWeightCache creates a cache for total weight per view hash.
+func NewTotalWeightCache(size int) TotalWeightCache {
 	cache, err := lru.New(size)
 	if err != nil {
 		log.Fatal("could not initialize cache ", err)
 	}
-	return ActivesetCache{Cache: cache}
+	return TotalWeightCache{Cache: cache}
 }
 
-// Add adds a view hash and a set size that was calculated for this view
-func (bc *ActivesetCache) Add(view types.Hash12, setSize uint32) {
-	bc.Cache.Add(view, setSize)
+// Add adds a viewHash and a totalWeight that was calculated for this viewHash.
+func (bc *TotalWeightCache) Add(viewHash types.Hash12, totalWeight uint64) {
+	bc.Cache.Add(viewHash, totalWeight)
 }
 
-// Get returns the stored active set size for the provided view hash
-func (bc ActivesetCache) Get(view types.Hash12) (uint32, bool) {
-	item, found := bc.Cache.Get(view)
+// Get returns the stored totalWeight for the provided viewHash.
+func (bc TotalWeightCache) Get(viewHash types.Hash12) (uint64, bool) {
+	item, found := bc.Cache.Get(viewHash)
 	if !found {
 		return 0, false
 	}
-	blk := item.(uint32)
-	return blk, true
+	totalWeight := item.(uint64)
+	return totalWeight, true
 }
 
 // AtxCache holds an lru cache of ActivationTxHeader structs of recent atx used to calculate active set size
