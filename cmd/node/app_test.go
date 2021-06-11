@@ -95,8 +95,11 @@ var tests = []TestScenario{txWithRunningNonceGenerator([]int{}), sameRootTester(
 
 func (suite *AppTestSuite) TestMultipleNodes() {
 	net := service.NewSimulator()
-	const numberOfEpochs = 5 // first 2 epochs are genesis
-	cfg := getTestDefaultConfig()
+	const (
+		numberOfEpochs = 5 // first 2 epochs are genesis
+		numOfInstances = 5
+	)
+	cfg := getTestDefaultConfig(numOfInstances)
 	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
 	path, err := ioutil.TempDir("", "state_")
 	require.NoError(suite.T(), err, "failed to create tempdir")
@@ -134,7 +137,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}
 	ld := time.Duration(20) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
-	suite.initMultipleInstances(cfg, rolacle, 5, path, genesisTime, poetHarness.HTTPPoetClient, clock, net)
+	suite.initMultipleInstances(cfg, rolacle, numOfInstances, path, genesisTime, poetHarness.HTTPPoetClient, clock, net)
 
 	// We must shut down before running the rest of the tests or we'll get an error about resource unavailable
 	// when we try to allocate more database files. Wrap this context neatly in an inline func.
@@ -149,7 +152,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 
 		ActivateGrpcServer(suite.apps[0])
 
-		if err := poetHarness.Start([]string{"127.0.0.1:9092"}); err != nil {
+		if err := poetHarness.Start([]string{"127.0.0.1:9094"}); err != nil {
 			suite.T().Fatalf("failed to start poet server: %v", err)
 		}
 
@@ -310,19 +313,25 @@ func reachedEpochTester(dependencies []int) TestScenario {
 	setup := func(suite *AppTestSuite, t *testing.T) {}
 
 	test := func(suite *AppTestSuite, t *testing.T) bool {
-		ok := true
+		expectedTotalWeight := configuredTotalWeight(suite.apps)
 		for _, app := range suite.apps {
-			ok = ok && uint32(app.mesh.LatestLayer()) >= numberOfEpochs*uint32(app.Config.LayersPerEpoch)
-			if ok {
-				suite.validateLastATXActiveSetSize(app, numberOfEpochs)
+			if uint32(app.mesh.LatestLayer()) < numberOfEpochs*uint32(app.Config.LayersPerEpoch) {
+				return false
 			}
+			suite.validateLastATXTotalWeight(app, numberOfEpochs, expectedTotalWeight)
 		}
-		if ok {
-			log.Info("epoch ok")
-		}
-		return ok
+		log.Info("epoch ok")
+		return true
 	}
 	return TestScenario{setup, test, dependencies}
+}
+
+func configuredTotalWeight(apps []*SpacemeshApp) uint64 {
+	expectedTotalWeight := uint64(0)
+	for _, app := range apps {
+		expectedTotalWeight += app.Config.SpaceToCommit
+	}
+	return expectedTotalWeight
 }
 
 func sameRootTester(dependencies []int) TestScenario {
@@ -462,30 +471,73 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 		log.Info("patient %v layer %v, blocks %v", suite.apps[0].nodeID.ShortString(), id, len(l))
 	}
 
-	firstEpochBlocks := 0
+	genesisBlocks := 0
 	for i := 0; i < layersPerEpoch*2; i++ {
 		if l, ok := patient.layertoblocks[types.LayerID(i)]; ok {
-			firstEpochBlocks += len(l)
+			genesisBlocks += len(l)
 		}
 	}
 
 	// assert number of blocks
 	totalEpochs := int(untilLayer.GetEpoch()) + 1
-	allMiners := len(suite.apps)
-	exp := (layerAvgSize * layersPerEpoch) / allMiners * allMiners * (totalEpochs - 2)
-	act := totalBlocks - firstEpochBlocks
-	assert.Equal(suite.T(), exp, act,
-		fmt.Sprintf("not good num of blocks got: %v, want: %v. totalBlocks: %v, firstEpochBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v datamap: %v",
-			act, exp, totalBlocks, firstEpochBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, datamap))
+	expectedEpochWeight := configuredTotalWeight(suite.apps)
+	blocksPerEpochTarget := layerAvgSize * layersPerEpoch
+	expectedBlocksPerEpoch := 0
+	for _, app := range suite.apps {
+		expectedBlocksPerEpoch += max(blocksPerEpochTarget*int(app.Config.SpaceToCommit)/int(expectedEpochWeight), 1)
+	}
 
-	firstAp := suite.apps[0]
-	_, err := firstAp.atxDb.GetNodeLastAtxID(firstAp.nodeID)
-	assert.NoError(suite.T(), err)
+	expectedTotalBlocks := (totalEpochs - 2) * expectedBlocksPerEpoch
+	actualTotalBlocks := totalBlocks - genesisBlocks
+	assert.Equal(suite.T(), expectedTotalBlocks, actualTotalBlocks,
+		fmt.Sprintf("not good num of blocks got: %v, want: %v. totalBlocks: %v, genesisBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v datamap: %v",
+			actualTotalBlocks, expectedTotalBlocks, totalBlocks, genesisBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, datamap))
+
+	totalWeightAllEpochs := calcTotalWeight(assert.New(suite.T()), suite.apps)
+
+	// assert number of ATXs
+	allMiners := len(suite.apps)
+	expectedTotalWeight := uint64(totalEpochs) * expectedEpochWeight
+	assert.Equal(suite.T(), expectedTotalWeight, totalWeightAllEpochs, fmt.Sprintf("not good total atx weight. got: %v, want: %v.\ntotalEpochs: %v, allMiners: %v", totalWeightAllEpochs, expectedTotalWeight, totalEpochs, allMiners))
 }
 
-func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp, numberOfEpochs int) {
+func max(i, j int) int {
+	if i > j {
+		return i
+	}
+	return j
+}
+
+func calcTotalWeight(assert *assert.Assertions, apps []*SpacemeshApp) (totalWeightAllEpochs uint64) {
+	app := apps[0]
+	atxDb := app.atxDb
+
+	for _, app := range apps {
+		atxID, err := atxDb.GetNodeLastAtxID(app.nodeID)
+		assert.NoError(err)
+
+		for atxID != *types.EmptyATXID {
+			atx, err := atxDb.GetAtxHeader(atxID)
+			assert.NoError(err)
+			totalWeightAllEpochs += atx.GetWeight()
+			log.Info("added atx. pub layer: %v, target epoch: %v, weight: %v",
+				atx.PubLayerID, atx.TargetEpoch(), atx.GetWeight())
+			atxID = atx.PrevATXID
+		}
+	}
+	return totalWeightAllEpochs
+}
+
+func (suite *AppTestSuite) validateLastATXTotalWeight(app *SpacemeshApp, numberOfEpochs int, expectedTotalWeight uint64) {
 	atxs := app.atxDb.GetEpochAtxs(types.EpochID(numberOfEpochs - 1))
-	suite.True(len(atxs) == len(suite.apps), "atxs: %v node: %v", len(atxs), app.nodeID.Key[:5])
+	suite.Len(atxs, len(suite.apps), "node: %v", app.nodeID.ShortString())
+
+	totalWeight := uint64(0)
+	for _, atxID := range atxs {
+		atx, _ := app.atxDb.GetAtxHeader(atxID)
+		totalWeight += atx.GetWeight()
+	}
+	suite.Equal(expectedTotalWeight, totalWeight, "node: %v", app.nodeID.ShortString())
 }
 
 // CI has a 10 minute timeout
@@ -507,7 +559,7 @@ func TestAppTestSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	//defer leaktest.Check(t)()
+	// defer leaktest.Check(t)()
 	term := make(chan struct{})
 	go patchCITimeout(term)
 	suite.Run(t, new(AppTestSuite))
@@ -523,7 +575,7 @@ func TestShutdown(t *testing.T) {
 	time.Sleep(3 * time.Second)
 	gCount := runtime.NumGoroutine()
 	net := service.NewSimulator()
-	//defer leaktest.Check(t)()
+	// defer leaktest.Check(t)()
 	r := require.New(t)
 
 	smApp := NewSpacemeshApp()

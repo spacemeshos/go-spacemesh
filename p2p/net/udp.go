@@ -70,18 +70,18 @@ type UDPNet struct {
 
 	incomingConn map[string]connWrapper
 
-	shutdown chan struct{}
+	shutdownCtx context.Context
 }
 
 // NewUDPNet creates a UDPNet
-func NewUDPNet(config config.Config, localEntity node.LocalNode, log log.Log) (*UDPNet, error) {
+func NewUDPNet(ctx context.Context, config config.Config, localEntity node.LocalNode, log log.Log) (*UDPNet, error) {
 	n := &UDPNet{
 		local:        localEntity,
 		logger:       log,
 		config:       config,
 		msgChan:      make(chan IncomingMessageEvent, config.BufferSize),
 		incomingConn: make(map[string]connWrapper, maxUDPConn),
-		shutdown:     make(chan struct{}),
+		shutdownCtx:  ctx,
 	}
 
 	n.cache = newSessionCache(n.initSession)
@@ -134,7 +134,6 @@ func (n *UDPNet) LocalAddr() net.Addr {
 
 // Shutdown stops listening and closes the connection
 func (n *UDPNet) Shutdown() {
-	close(n.shutdown)
 	if n.conn != nil {
 		n.conn.Close()
 	}
@@ -201,7 +200,7 @@ func (n *UDPNet) EnqueueMessage(ctx context.Context, ime IncomingMessageEvent) {
 			log.String("from", ime.Conn.RemotePublicKey().String()),
 			log.String("fromaddr", ime.Conn.RemoteAddr().String()),
 			log.Int("len", len(ime.Message)))
-	case <-n.shutdown:
+	case <-n.shutdownCtx.Done():
 		return
 	}
 }

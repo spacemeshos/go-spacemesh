@@ -11,23 +11,27 @@ import (
 // GossipDataHandler is the function type that will be called when data is
 type GossipDataHandler func(ctx context.Context, data GossipMessage, syncer Fetcher)
 
+type enableGossipFunc func() bool
+
 // Listener represents the main struct that reqisters delegates to gossip function
 type Listener struct {
 	*log.Log
-	net      Service
-	channels []chan GossipMessage
-	stoppers []chan struct{}
-	syncer   Fetcher
-	wg       sync.WaitGroup
+	net                  Service
+	channels             []chan GossipMessage
+	stoppers             []chan struct{}
+	syncer               Fetcher
+	wg                   sync.WaitGroup
+	shouldListenToGossip enableGossipFunc
 }
 
 // NewListener creates a new listener struct
-func NewListener(net Service, syncer Fetcher, log log.Log) *Listener {
+func NewListener(net Service, syncer Fetcher, shouldListenToGossip enableGossipFunc, log log.Log) *Listener {
 	return &Listener{
-		Log:    &log,
-		net:    net,
-		syncer: syncer,
-		wg:     sync.WaitGroup{},
+		Log:                  &log,
+		net:                  net,
+		syncer:               syncer,
+		shouldListenToGossip: shouldListenToGossip,
+		wg:                   sync.WaitGroup{},
 	}
 }
 
@@ -82,7 +86,7 @@ func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHan
 			l.wg.Done()
 			return
 		case data := <-gossipChannel:
-			if !l.syncer.ListenToGossip() {
+			if !l.shouldListenToGossip() {
 				// not accepting data
 				continue
 			}

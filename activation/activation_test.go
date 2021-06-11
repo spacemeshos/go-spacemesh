@@ -27,7 +27,7 @@ import (
 // ========== Vars / Consts ==========
 
 const (
-	defaultActiveSetSize  = uint32(10)
+	defaultTotalWeight    = uint64(100000)
 	layersPerEpoch        = 10
 	postGenesisEpoch      = 2
 	postGenesisEpochLayer = 22
@@ -156,7 +156,7 @@ func (*MockIDStore) GetIdentity(string) (types.NodeID, error) {
 
 type ValidatorMock struct{}
 
-func (*ValidatorMock) Validate(signing.PublicKey, *types.NIPST, types.Hash32) error {
+func (*ValidatorMock) Validate(signing.PublicKey, *types.NIPST, uint64, types.Hash32) error {
 	return nil
 }
 
@@ -214,6 +214,8 @@ func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID type
 		Sequence:       sequence,
 		PrevATXID:      prevAtxID,
 		PubLayerID:     pubLayerID,
+		StartTick:      100 * sequence,
+		EndTick:        100 * (sequence + 1),
 		PositioningATX: posAtxID,
 	}
 	return challenge
@@ -224,6 +226,7 @@ func newAtx(challenge types.NIPSTChallenge, View []types.BlockID, nipst *types.N
 		InnerActivationTx: &types.InnerActivationTx{
 			ActivationTxHeader: &types.ActivationTxHeader{
 				NIPSTChallenge: challenge,
+				Space:          100,
 				Coinbase:       coinbase,
 			},
 			Nipst: nipst,
@@ -261,19 +264,19 @@ func newBuilder(activationDb atxDBProvider) *Builder {
 		GoldenATXID:     goldenATXID,
 		LayersPerEpoch:  layersPerEpoch,
 	}
-	b := NewBuilder(bc, nodeID, &MockSigning{}, activationDb, net, meshProviderMock, nipstBuilderMock, postProver, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
+	b := NewBuilder(bc, nodeID, 0, &MockSigning{}, activationDb, net, meshProviderMock, layersPerEpoch, nipstBuilderMock, postProver, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
 	b.commitment = commitment
 	return b
 }
 
-func setActivesetSizeInCache(t *testing.T, activesetSize uint32) {
+func setTotalWeightInCache(t *testing.T, totalWeight uint64) {
 	view, err := meshProviderMock.GetOrphanBlocksBefore(meshProviderMock.LatestLayer())
 	assert.NoError(t, err)
 	sort.Slice(view, func(i, j int) bool {
 		return bytes.Compare(view[i].Bytes(), view[j].Bytes()) < 0
 	})
 	h := types.CalcBlocksHash12(view)
-	activesetCache.Add(h, activesetSize)
+	totalWeightCache.Add(h, totalWeight)
 }
 
 func lastTransmittedAtx(t *testing.T) types.ActivationTx {
@@ -336,8 +339,8 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	// setup
 	activationDb := newActivationDb()
 	b := newBuilder(activationDb)
-	setActivesetSizeInCache(t, defaultActiveSetSize)
-	defer activesetCache.Purge()
+	setTotalWeightInCache(t, defaultTotalWeight)
+	defer totalWeightCache.Purge()
 
 	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	prevAtx := newAtx(challenge, defaultView, npst)
@@ -363,8 +366,8 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	r := require.New(t)
 
 	// setup
-	setActivesetSizeInCache(t, defaultActiveSetSize)
-	defer activesetCache.Purge()
+	setTotalWeightInCache(t, defaultTotalWeight)
+	defer totalWeightCache.Purge()
 	activationDb := newActivationDb()
 	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	prevAtx := newAtx(challenge, defaultView, npst)
@@ -378,14 +381,14 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 
 	// create and attempt to publish ATX
 	faultyNet := &FaultyNetMock{retErr: true}
-	b := NewBuilder(bc, nodeID, &MockSigning{}, activationDb, faultyNet, meshProviderMock, nipstBuilderMock, postProver, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
+	b := NewBuilder(bc, nodeID, 0, &MockSigning{}, activationDb, faultyNet, meshProviderMock, layersPerEpoch, nipstBuilderMock, postProver, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
 	published, _, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
 	r.EqualError(err, "failed to broadcast ATX: faulty")
 	r.False(published)
 
 	// create and attempt to publish ATX
 	faultyNet.retErr = false
-	b = NewBuilder(bc, nodeID, &MockSigning{}, activationDb, faultyNet, meshProviderMock, nipstBuilderMock, postProver, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
+	b = NewBuilder(bc, nodeID, 0, &MockSigning{}, activationDb, faultyNet, meshProviderMock, layersPerEpoch, nipstBuilderMock, postProver, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
 	published, builtNipst, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
 	r.EqualError(err, "target epoch has passed")
 	r.False(published)
@@ -406,8 +409,8 @@ func TestBuilder_PublishActivationTx_RebuildNipstWhenTargetEpochPassed(t *testin
 	r := require.New(t)
 
 	// setup
-	setActivesetSizeInCache(t, defaultActiveSetSize)
-	defer activesetCache.Purge()
+	setTotalWeightInCache(t, defaultTotalWeight)
+	defer totalWeightCache.Purge()
 	activationDb := newActivationDb()
 	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	prevAtx := newAtx(challenge, defaultView, npst)
@@ -421,7 +424,7 @@ func TestBuilder_PublishActivationTx_RebuildNipstWhenTargetEpochPassed(t *testin
 
 	// create and attempt to publish ATX
 	faultyNet := &FaultyNetMock{retErr: true}
-	b := NewBuilder(bc, nodeID, &MockSigning{}, activationDb, faultyNet, meshProviderMock, nipstBuilderMock, postProver, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
+	b := NewBuilder(bc, nodeID, 0, &MockSigning{}, activationDb, faultyNet, meshProviderMock, layersPerEpoch, nipstBuilderMock, postProver, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
 	published, builtNipst, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
 	r.EqualError(err, "failed to broadcast ATX: faulty")
 	r.False(published)
@@ -449,8 +452,8 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	// setup
 	activationDb := newActivationDb()
 	b := newBuilder(activationDb)
-	setActivesetSizeInCache(t, defaultActiveSetSize)
-	defer activesetCache.Purge()
+	setTotalWeightInCache(t, defaultTotalWeight)
+	defer totalWeightCache.Purge()
 
 	challenge := newChallenge(otherNodeID /*👀*/, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	posAtx := newAtx(challenge, defaultView, npst)
@@ -470,8 +473,8 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	// setup
 	activationDb := newActivationDb()
 	b := newBuilder(activationDb)
-	setActivesetSizeInCache(t, defaultActiveSetSize)
-	defer activesetCache.Purge()
+	setTotalWeightInCache(t, defaultTotalWeight)
+	defer totalWeightCache.Purge()
 
 	challenge := newChallenge(otherNodeID /*👀*/, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	posAtx := newAtx(challenge, defaultView, npst)
@@ -497,8 +500,8 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	// setup
 	activationDb := newActivationDb()
 	b := newBuilder(activationDb)
-	setActivesetSizeInCache(t, defaultActiveSetSize)
-	defer activesetCache.Purge()
+	setTotalWeightInCache(t, defaultTotalWeight)
+	defer totalWeightCache.Purge()
 
 	challenge := newChallenge(otherNodeID /*👀*/, 1, prevAtxID, prevAtxID, postGenesisEpochLayer-layersPerEpoch /*👀*/)
 	posAtx := newAtx(challenge, defaultView, npst)
@@ -512,14 +515,14 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T) {
-	types.SetLayersPerEpoch(int32(defaultActiveSetSize))
+	types.SetLayersPerEpoch(layersPerEpoch)
 	r := require.New(t)
 
 	// setup
 	activationDb := newActivationDb()
 	b := newBuilder(activationDb)
-	setActivesetSizeInCache(t, defaultActiveSetSize)
-	defer activesetCache.Purge()
+	setTotalWeightInCache(t, defaultTotalWeight)
+	defer totalWeightCache.Purge()
 
 	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	prevAtx := newAtx(challenge, defaultView, npst)
@@ -558,7 +561,7 @@ func TestBuilder_PublishActivationTx_FailsWhenNipstBuilderFails(t *testing.T) {
 
 	activationDb := newActivationDb()
 	nipstBuilder := &NipstErrBuilderMock{} // 👀 mock that returns error from BuildNipst()
-	b := NewBuilder(bc, nodeID, &MockSigning{}, activationDb, net, meshProviderMock, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
+	b := NewBuilder(bc, nodeID, 0, &MockSigning{}, activationDb, net, meshProviderMock, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
 	b.commitment = commitment
 
 	challenge := newChallenge(otherNodeID /*👀*/, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
@@ -576,12 +579,10 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 	activationDb := newActivationDb()
 	b := newBuilder(activationDb)
 
-	atx := newActivationTx(nodeID, 1, prevAtxID, 5, 1, prevAtxID, coinbase, defaultActiveSetSize, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, npst)
+	atx := newActivationTx(nodeID, 1, prevAtxID, prevAtxID, 5, 1, 100, 100, coinbase, npst)
 	storeAtx(r, activationDb, atx, log.NewDefault("storeAtx"))
 
-	view, err := b.mesh.GetOrphanBlocksBefore(meshProviderMock.LatestLayer())
-	assert.NoError(t, err)
-	act := newActivationTx(b.nodeID, 2, atx.ID(), atx.PubLayerID+10, 0, atx.ID(), coinbase, defaultActiveSetSize, view, npst)
+	act := newActivationTx(b.nodeID, 2, atx.ID(), atx.ID(), atx.PubLayerID+10, 0, 100, 100, coinbase, npst)
 
 	bt, err := types.InterfaceToBytes(act)
 	assert.NoError(t, err)
@@ -594,11 +595,11 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 	r := require.New(t)
 
-	types.SetLayersPerEpoch(int32(defaultActiveSetSize))
+	types.SetLayersPerEpoch(layersPerEpoch)
 	activationDb := newActivationDb()
 	b := newBuilder(activationDb)
-	setActivesetSizeInCache(t, 10)
-	defer activesetCache.Purge()
+	setTotalWeightInCache(t, defaultTotalWeight)
+	defer totalWeightCache.Purge()
 
 	lg := log.NewDefault("storeAtx")
 	for i := postGenesisEpochLayer; i < postGenesisEpochLayer+3; i++ {
@@ -638,10 +639,10 @@ func TestBuilder_SignAtx(t *testing.T) {
 	ed := signing.NewEdSigner()
 	nodeID := types.NodeID{Key: ed.PublicKey().String(), VRFPublicKey: []byte("bbbbb")}
 	activationDb := NewDB(database.NewMemDatabase(), &MockIDStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB1"))
-	b := NewBuilder(bc, nodeID, ed, activationDb, net, meshProviderMock, nipstBuilderMock, postProver, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
+	b := NewBuilder(bc, nodeID, 0, ed, activationDb, net, meshProviderMock, layersPerEpoch, nipstBuilderMock, postProver, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
 
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
-	atx := newActivationTx(nodeID, 1, prevAtx, 15, 1, prevAtx, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, npst)
+	atx := newActivationTx(nodeID, 1, prevAtx, prevAtx, 15, 1, 100, 100, coinbase, npst)
 	atxBytes, err := types.InterfaceToBytes(atx.InnerActivationTx)
 	assert.NoError(t, err)
 	err = b.SignAtx(atx)
@@ -675,7 +676,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 		LayersPerEpoch:  layersPerEpoch,
 	}
 
-	b := NewBuilder(bc, id, sig, activationDb, &FaultyNetMock{}, layers, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
+	b := NewBuilder(bc, id, 0, sig, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
 
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
 	chlng := types.HexToHash32("0x3333")
@@ -683,7 +684,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	nipstBuilder.poetRef = poetRef
 	npst := NewNIPSTWithChallenge(&chlng, poetRef)
 
-	atx := newActivationTx(types.NodeID{Key: "aaaaaa", VRFPublicKey: []byte("bbbbb")}, 1, prevAtx, 15, 1, prevAtx, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, npst)
+	atx := newActivationTx(types.NodeID{Key: "aaaaaa", VRFPublicKey: []byte("bbbbb")}, 1, prevAtx, prevAtx, 15, 1, 100, 100, coinbase, npst)
 
 	err := activationDb.StoreAtx(atx.PubLayerID.GetEpoch(), atx)
 	assert.NoError(t, err)
@@ -694,7 +695,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 		PrevATXID:      atx.ID(),
 		PubLayerID:     atx.PubLayerID.Add(b.layersPerEpoch),
 		StartTick:      atx.EndTick,
-		EndTick:        b.tickProvider.NumOfTicks(), // todo: add tick provider (#827)
+		EndTick:        atx.EndTick + b.tickProvider.NumOfTicks(), // todo: add tick provider (#827)
 		PositioningATX: atx.ID(),
 	}
 
@@ -702,32 +703,32 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	assert.NoError(t, err)
 	npst2 := NewNIPSTWithChallenge(challengeHash, poetRef)
 
-	setActivesetSizeInCache(t, defaultActiveSetSize)
+	setTotalWeightInCache(t, defaultTotalWeight)
 
 	layerClockMock.currentLayer = types.EpochID(1).FirstLayer() + 3
 	err = b.PublishActivationTx(context.TODO())
 	assert.EqualError(t, err, "target epoch has passed")
 
 	// test load in correct epoch
-	b = NewBuilder(bc, id, &MockSigning{}, activationDb, net, layers, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
+	b = NewBuilder(bc, id, 0, &MockSigning{}, activationDb, net, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
 	err = b.loadChallenge()
 	assert.NoError(t, err)
 	layers.latestLayer = 22
 	err = b.PublishActivationTx(context.TODO())
 	assert.NoError(t, err)
-	act := newActivationTx(b.nodeID, 2, atx.ID(), atx.PubLayerID+10, 0, atx.ID(), coinbase, 0, defaultView, npst2)
+	act := newActivationTx(b.nodeID, 2, atx.ID(), atx.ID(), atx.PubLayerID+10, 101, 1, 0, coinbase, npst2)
 	err = b.SignAtx(act)
 	assert.NoError(t, err)
 	bts, err := types.InterfaceToBytes(act)
 	assert.NoError(t, err)
 	assert.Equal(t, bts, net.lastTransmission)
 
-	b = NewBuilder(bc, id, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
-	err = b.buildNipstChallenge(0)
+	b = NewBuilder(bc, id, 0, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
+	err = b.buildNipstChallenge()
 	assert.NoError(t, err)
 	db.hadNone = false
 	// test load challenge in later epoch - Nipst should be truncated
-	b = NewBuilder(bc, id, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
+	b = NewBuilder(bc, id, 0, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
 	err = b.loadChallenge()
 	assert.NoError(t, err)
 	layerClockMock.currentLayer = types.EpochID(4).FirstLayer() + 3
@@ -769,7 +770,7 @@ func TestStartPost(t *testing.T) {
 	}
 
 	activationDb := NewDB(database.NewMemDatabase(), &MockIDStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB1"))
-	builder := NewBuilder(bc, id, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
+	builder := NewBuilder(bc, id, 0, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
 
 	// Attempt to initialize with invalid space.
 	// This test verifies that the params are being set in the post client.
@@ -786,7 +787,7 @@ func TestStartPost(t *testing.T) {
 	assert.Nil(t, builder.commitment)
 
 	// Reinitialize.
-	builder = NewBuilder(bc, id, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder2"))
+	builder = NewBuilder(bc, id, 0, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder2"))
 	assert.Nil(t, builder.commitment)
 	err = builder.StartPost(context.TODO(), coinbase2, drive, 1024)
 	assert.NoError(t, err)
@@ -802,7 +803,7 @@ func TestStartPost(t *testing.T) {
 	// Instantiate a new builder and call StartPost on the same datadir, which is already initialized,
 	// and so will result in running the execution phase instead of the initialization phase.
 	// This test verifies that a call to StartPost with a different space param will return an error.
-	execBuilder := NewBuilder(bc, id, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
+	execBuilder := NewBuilder(bc, id, 0, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
 	err = execBuilder.StartPost(context.TODO(), coinbase2, drive, 2048)
 	assert.EqualError(t, err, "config mismatch")
 
@@ -829,7 +830,7 @@ func genView() []types.BlockID {
 }
 
 func TestActivationDb_CalcActiveSetFromViewHighConcurrency(t *testing.T) {
-	activesetCache = NewActivesetCache(10) // small cache for collisions
+	totalWeightCache = NewTotalWeightCache(10) // small cache for collisions
 	atxdb, layers, _ := getAtxDb("t6")
 
 	id1 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
@@ -839,9 +840,9 @@ func TestActivationDb_CalcActiveSetFromViewHighConcurrency(t *testing.T) {
 	coinbase2 := types.HexToAddress("bbbb")
 	coinbase3 := types.HexToAddress("cccc")
 	atxs := []*types.ActivationTx{
-		newActivationTx(id1, 0, *types.EmptyATXID, 12, 0, goldenATXID, coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
-		newActivationTx(id2, 0, *types.EmptyATXID, 300, 0, goldenATXID, coinbase2, 0, []types.BlockID{}, &types.NIPST{}),
-		newActivationTx(id3, 0, *types.EmptyATXID, 435, 0, goldenATXID, coinbase3, 0, []types.BlockID{}, &types.NIPST{}),
+		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, 12, 0, 100, 100, coinbase1, &types.NIPST{}),
+		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, 300, 0, 100, 100, coinbase2, &types.NIPST{}),
+		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, 435, 0, 100, 100, coinbase3, &types.NIPST{}),
 	}
 
 	poetRef := []byte{0xba, 0xb0}
@@ -856,18 +857,18 @@ func TestActivationDb_CalcActiveSetFromViewHighConcurrency(t *testing.T) {
 	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
 	mck := &ATXDBMock{}
-	atx := newActivationTx(id1, 1, atxs[0].ID(), 1000, 0, atxs[0].ID(), coinbase1, 3, blocks, &types.NIPST{})
+	atx := newActivationTx(id1, 1, atxs[0].ID(), atxs[0].ID(), 1000, 0, 100, 100, coinbase1, &types.NIPST{})
 
-	atxdb.calcActiveSetFunc = mck.CalcActiveSetSize
+	atxdb.calcTotalWeightFunc = mck.CalcMinerWeights
 	wg := sync.WaitGroup{}
 	ff := 5000
 	wg.Add(ff)
 	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < ff; i++ {
 		go func() {
-			num, err := atxdb.CalcActiveSetFromView(genView(), atx.PubLayerID.GetEpoch())
+			num, err := atxdb.CalcTotalWeightFromView(genView(), atx.PubLayerID.GetEpoch())
 			assert.NoError(t, err)
-			assert.Equal(t, 3, int(num))
+			assert.Equal(t, 6, int(num))
 			assert.NoError(t, err)
 			wg.Done()
 		}()
@@ -918,8 +919,8 @@ func TestActivationDB_FetchAtxReferences(t *testing.T) {
 	r.EqualValues(expected, fetcher.atxCalled)
 }
 
-func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
-	startTick uint64, positioningATX types.ATXID, coinbase types.Address, activeSetSize uint32, view []types.BlockID,
+func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX, positioningATX types.ATXID,
+	pubLayerID types.LayerID, startTick, numTicks, space uint64, coinbase types.Address,
 	nipst *types.NIPST) *types.ActivationTx {
 
 	nipstChallenge := types.NIPSTChallenge{
@@ -928,7 +929,8 @@ func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, 
 		PrevATXID:      prevATX,
 		PubLayerID:     pubLayerID,
 		StartTick:      startTick,
+		EndTick:        startTick + numTicks,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipstChallenge, coinbase, nipst, nil)
+	return types.NewActivationTx(nipstChallenge, coinbase, nipst, space, nil)
 }
