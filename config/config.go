@@ -3,6 +3,8 @@ package config
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"path/filepath"
 	"time"
 
@@ -42,6 +44,8 @@ type Config struct {
 	REWARD          mesh.Config           `mapstructure:"reward"`
 	POST            postConfig.Config     `mapstructure:"post"`
 	LOGGING         LoggerConfig          `mapstructure:"logging"`
+	LAYERS          layerfetcher.Config   `mapstructure:"layer-fetch"`
+	FETCH           fetch.Config          `mapstructure:"fetch"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -61,6 +65,9 @@ type BaseConfig struct {
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`
 
+	ProfilerName string `mapstructure:"profiler-name"`
+	ProfilerURL  string `mapstructure:"profiler-url"`
+
 	OracleServer        string `mapstructure:"oracle_server"`
 	OracleServerWorldID int    `mapstructure:"oracle_server_worldid"`
 
@@ -72,15 +79,15 @@ type BaseConfig struct {
 
 	PoETServer string `mapstructure:"poet-server"`
 
-	MemProfile string `mapstructure:"mem-profile"`
-
-	CPUProfile string `mapstructure:"cpu-profile"`
-
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
 
 	GenesisConfPath string `mapstructure:"genesis-conf"`
 
+	GenesisTotalWeight uint64 `mapstructure:"genesis-total-weight"` // the total weight for genesis
+
 	CoinbaseAccount string `mapstructure:"coinbase"`
+
+	SpaceToCommit uint64 `mapstructure:"space-to-commit"` // Number of bytes to commit to mining
 
 	GoldenATXID string `mapstructure:"golden-atx"`
 
@@ -103,8 +110,6 @@ type BaseConfig struct {
 	BlockCacheSize int `mapstructure:"block-cache-size"`
 
 	AlwaysListen bool `mapstructure:"always-listen"` // force gossip to always be on (for testing)
-
-	Profiler bool `mapstructure:"profiler"`
 }
 
 // LoggerConfig holds the logging level for each module.
@@ -146,7 +151,18 @@ func DefaultConfig() Config {
 		TIME:            timeConfig.DefaultConfig(),
 		REWARD:          mesh.DefaultMeshConfig(),
 		POST:            activation.DefaultConfig(),
+		FETCH:           fetch.DefaultConfig(),
+		LAYERS:          layerfetcher.DefaultConfig(),
 	}
+}
+
+// DefaultTestConfig returns the default config for tests.
+func DefaultTestConfig() Config {
+	conf := DefaultConfig()
+	conf.BaseConfig = defaultTestConfig()
+	conf.P2P = p2pConfig.DefaultTestConfig()
+	conf.API = apiConfig.DefaultTestConfig()
+	return conf
 }
 
 // DefaultBaseConfig returns a default configuration for spacemesh
@@ -157,6 +173,8 @@ func defaultBaseConfig() BaseConfig {
 		TestMode:            defaultTestMode,
 		CollectMetrics:      false,
 		MetricsPort:         1010,
+		ProfilerURL:         "",
+		ProfilerName:        "gp-spacemesh",
 		OracleServer:        "http://localhost:3030",
 		OracleServerWorldID: 0,
 		GenesisTime:         time.Now().Format(time.RFC3339),
@@ -165,15 +183,20 @@ func defaultBaseConfig() BaseConfig {
 		PoETServer:          "127.0.0.1",
 		GoldenATXID:         "0x5678", // TODO: Change the value
 		Hdist:               5,
-		GenesisActiveSet:    5,
+		GenesisTotalWeight:  5 * 1024 * 1, // 5 miners * 1024 byte PoST * 1 PoET ticks
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,
-		SyncValidationDelta: 30,
+		SyncValidationDelta: 300,
 		AtxsPerBlock:        100,
 		TxsPerBlock:         100,
-		Profiler:            false,
 	}
+}
+
+func defaultTestConfig() BaseConfig {
+	conf := defaultBaseConfig()
+	conf.MetricsPort += 10000
+	return conf
 }
 
 // LoadConfig load the config file

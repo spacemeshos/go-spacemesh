@@ -17,11 +17,11 @@ type mockDisc struct {
 	findnoderr  error
 }
 
-func (md *mockDisc) Ping(key p2pcrypto.PublicKey) error {
+func (md *mockDisc) Ping(ctx context.Context, key p2pcrypto.PublicKey) error {
 	return md.pingres
 }
 
-func (md *mockDisc) GetAddresses(key p2pcrypto.PublicKey) ([]*node.Info, error) {
+func (md *mockDisc) GetAddresses(context.Context, p2pcrypto.PublicKey) ([]*node.Info, error) {
 	return md.findnoderes, md.findnoderr
 }
 
@@ -70,14 +70,14 @@ func Test_pingThenFindNode(t *testing.T) {
 	p := &mockDisc{pingErr, nil, findnodeErr}
 
 	c := make(chan queryResult, 1)
-	pingThenGetAddresses(p, n, c)
+	pingThenGetAddresses(context.TODO(), p, n, c)
 
 	require.Equal(t, len(c), 1)
 	res := <-c
 	require.Equal(t, res.err, pingErr)
 
 	p.pingres = nil
-	pingThenGetAddresses(p, n, c)
+	pingThenGetAddresses(context.TODO(), p, n, c)
 	require.Equal(t, len(c), 1)
 	res = <-c
 	require.Equal(t, res.err, findnodeErr)
@@ -85,7 +85,7 @@ func Test_pingThenFindNode(t *testing.T) {
 	p.findnoderr = nil
 	p.findnoderes = []*node.Info{generateDiscNode()}
 
-	pingThenGetAddresses(p, n, c)
+	pingThenGetAddresses(context.TODO(), p, n, c)
 
 	require.Equal(t, len(c), 1)
 	res = <-c

@@ -1,6 +1,8 @@
 package grpcserver
 
 import (
+	"context"
+
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
@@ -9,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"go.uber.org/zap/zapcore"
-	"golang.org/x/net/context"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
@@ -69,14 +70,14 @@ func (s NodeService) Build(context.Context, *empty.Empty) (*pb.BuildResponse, er
 
 // Status returns a status object providing information about the connected peers, sync status,
 // current and verified layer
-func (s NodeService) Status(context.Context, *pb.StatusRequest) (*pb.StatusResponse, error) {
+func (s NodeService) Status(ctx context.Context, _ *pb.StatusRequest) (*pb.StatusResponse, error) {
 	log.Info("GRPC NodeService.Status")
 
 	curLayer, latestLayer, verifiedLayer := s.getLayers()
 	return &pb.StatusResponse{
 		Status: &pb.NodeStatus{
 			ConnectedPeers: s.PeerCounter.PeerCount(),              // number of connected peers
-			IsSynced:       s.Syncer.IsSynced(),                    // whether the node is synced
+			IsSynced:       s.Syncer.IsSynced(ctx),                 // whether the node is synced
 			SyncedLayer:    &pb.LayerNumber{Number: latestLayer},   // latest layer we saw from the network
 			TopLayer:       &pb.LayerNumber{Number: curLayer},      // current layer, based on time
 			VerifiedLayer:  &pb.LayerNumber{Number: verifiedLayer}, // latest verified layer
@@ -100,9 +101,9 @@ func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
 }
 
 // SyncStart requests that the node start syncing the mesh (if it isn't already syncing)
-func (s NodeService) SyncStart(context.Context, *pb.SyncStartRequest) (*pb.SyncStartResponse, error) {
+func (s NodeService) SyncStart(ctx context.Context, _ *pb.SyncStartRequest) (*pb.SyncStartResponse, error) {
 	log.Info("GRPC NodeService.SyncStart")
-	s.Syncer.Start()
+	s.Syncer.Start(ctx)
 	return &pb.SyncStartResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
@@ -137,7 +138,7 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 			if err := stream.Send(&pb.StatusStreamResponse{
 				Status: &pb.NodeStatus{
 					ConnectedPeers: s.PeerCounter.PeerCount(),              // number of connected peers
-					IsSynced:       s.Syncer.IsSynced(),                    // whether the node is synced
+					IsSynced:       s.Syncer.IsSynced(stream.Context()),    // whether the node is synced
 					SyncedLayer:    &pb.LayerNumber{Number: latestLayer},   // latest layer we saw from the network
 					TopLayer:       &pb.LayerNumber{Number: curLayer},      // current layer, based on time
 					VerifiedLayer:  &pb.LayerNumber{Number: verifiedLayer}, // latest verified layer

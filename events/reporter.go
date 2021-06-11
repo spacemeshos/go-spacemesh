@@ -369,7 +369,7 @@ func InitializeEventReporterWithOptions(url string, bufsize int, blocking bool) 
 	}
 	reporter = newEventReporter(bufsize, blocking)
 	if url != "" {
-		InitializeEventPubsub(url)
+		return InitializeEventPubsub(url)
 	}
 	return nil
 }

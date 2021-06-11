@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -74,7 +75,7 @@ const testMsg = "TEST"
 func TestUDPNet_Sanity(t *testing.T) {
 	local, localinfo := node.GenerateTestNode(t)
 	udpAddr := &net.UDPAddr{IP: net.IPv4zero, Port: int(localinfo.DiscoveryPort)}
-	udpnet, err := NewUDPNet(config.DefaultConfig(), local, log.NewDefault("TEST_"+t.Name()))
+	udpnet, err := NewUDPNet(context.TODO(), config.DefaultConfig(), local, log.NewDefault("TEST_"+t.Name()))
 	require.NoError(t, err)
 	require.NotNil(t, udpnet)
 
@@ -96,7 +97,7 @@ func TestUDPNet_Sanity(t *testing.T) {
 		err  error
 	}{buf: []byte(testMsg), n: len([]byte(testMsg)), addr: addr2, err: nil}
 
-	go udpnet.listenToUDPNetworkMessages(mockconn)
+	go udpnet.listenToUDPNetworkMessages(context.TODO(), mockconn)
 
 	mockconn.releaseCount <- struct{}{}
 
@@ -123,10 +124,64 @@ func TestUDPNet_Sanity(t *testing.T) {
 			return
 		}
 	}
+	udpnet.Shutdown()
 }
 
-func TestUDPNet_Dial(t *testing.T) {
+func TestUDPNet_Dial(t *testing.T) {}
 
+type msgConnMock struct {
+	CloseFunc func() error
+}
+
+func (mcm msgConnMock) beginEventProcessing(context.Context) {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) String() string {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) ID() string {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) RemotePublicKey() p2pcrypto.PublicKey {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) SetRemotePublicKey(p2pcrypto.PublicKey) {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) Created() time.Time {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) RemoteAddr() net.Addr {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) Session() NetworkSession {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) SetSession(NetworkSession) {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) Send(context.Context, []byte) error {
+	panic("not implemented")
+}
+
+func (mcm msgConnMock) Close() error {
+	if mcm.CloseFunc != nil {
+		return mcm.CloseFunc()
+	}
+	return nil
+}
+
+func (mcm msgConnMock) Closed() bool {
+	panic("not implemented")
 }
 
 type udpConnMock struct {
@@ -231,13 +286,13 @@ func (ucw *udpConnMock) Close() error {
 
 func TestUDPNet_Cache(t *testing.T) {
 	localnode, _ := node.NewNodeIdentity()
-	n, err := NewUDPNet(config.DefaultConfig(), localnode, log.NewDefault(t.Name()))
+	n, err := NewUDPNet(context.TODO(), config.DefaultConfig(), localnode, log.NewDefault(t.Name()))
 	require.NoError(t, err)
 	require.NotNil(t, n)
 	addr2 := testUDPAddr()
 	n.addConn(addr2, &udpConnMock{CreatedFunc: func() time.Time {
 		return time.Now()
-	}})
+	}}, &MsgConnection{stopSending: make(chan struct{})})
 	require.Len(t, n.incomingConn, 1)
 
 	for i := 1; i < maxUDPConn-1; i++ {
@@ -249,7 +304,7 @@ func TestUDPNet_Cache(t *testing.T) {
 		}
 		n.addConn(addrx, &udpConnMock{CreatedFunc: func() time.Time {
 			return time.Now()
-		}})
+		}}, &MsgConnection{stopSending: make(chan struct{})})
 	}
 
 	require.Len(t, n.incomingConn, maxUDPConn-1)
@@ -263,7 +318,7 @@ func TestUDPNet_Cache(t *testing.T) {
 
 	n.addConn(addrx, &udpConnMock{CreatedFunc: func() time.Time {
 		return time.Now().Add(-maxUDPLife - 1*time.Second)
-	}})
+	}}, &MsgConnection{stopSending: make(chan struct{})})
 
 	require.Len(t, n.incomingConn, maxUDPConn)
 
@@ -271,11 +326,11 @@ func TestUDPNet_Cache(t *testing.T) {
 	_, ok2 := n.incomingConn[addrx2.String()]
 	for ok2 {
 		addrx2 = testUDPAddr()
-		_, ok = n.incomingConn[addrx2.String()]
+		_, ok2 = n.incomingConn[addrx2.String()]
 	}
 	n.addConn(addrx2, &udpConnMock{CreatedFunc: func() time.Time {
 		return time.Now()
-	}})
+	}}, &MsgConnection{stopSending: make(chan struct{})})
 
 	require.Len(t, n.incomingConn, maxUDPConn)
 
@@ -304,21 +359,21 @@ func TestUDPNet_Cache(t *testing.T) {
 		_, okk = n.incomingConn[addrxx.String()]
 	}
 
-	n.addConn(addrxx, somecon)
+	n.addConn(addrxx, somecon, &MsgConnection{stopSending: make(chan struct{})})
 
 	c, err := n.getConn(addrxx)
 	require.Error(t, err)
 	require.Nil(t, c)
 	require.True(t, closed)
-
+	n.Shutdown()
 }
 
 func TestUDPNet_Cache2(t *testing.T) {
 	// This test fails by panic before latest fix to udp.go. it crashed the testnet.
 	// instead we now give up on "Closing" from within the "connection" when there's an error since
-	// we provide the errors from the level above anyway, so closing should be preformed there.
+	// we provide the errors from the level above anyway, so closing should be performed there.
 	localnode, _ := node.NewNodeIdentity()
-	n, err := NewUDPNet(config.DefaultConfig(), localnode, log.NewDefault(t.Name()))
+	n, err := NewUDPNet(context.TODO(), config.DefaultConfig(), localnode, log.NewDefault(t.Name()))
 	require.NoError(t, err)
 	require.NotNil(t, n)
 
@@ -346,12 +401,10 @@ func TestUDPNet_Cache2(t *testing.T) {
 		return ucm
 	}
 
-	createAndRunConn := func(fs ...func(mock *udpConnMock)) {
-		pk := p2pcrypto.NewRandomPubkey()
-		ns := NewSessionMock(pk)
+	createAndRunConn := func(fs func(mock *udpConnMock), ft func(mock *msgConnMock)) {
 		conn := newCon()
-		for _, f := range fs {
-			f(conn)
+		if fs != nil {
+			fs(conn)
 		}
 		addr := testUDPAddr()
 		_, ok := n.incomingConn[addr.String()]
@@ -362,24 +415,29 @@ func TestUDPNet_Cache2(t *testing.T) {
 		conn.RemoteAddrFunc = func() net.Addr {
 			return addr
 		}
-		mconn := newMsgConnection(conn, n, pk, ns, n.config.MsgSizeLimit, n.config.DialTimeout, n.logger)
-		n.addConn(addr, conn)
-		go mconn.beginEventProcessing()
+		mconn := &msgConnMock{}
+		if ft != nil {
+			ft(mconn)
+		}
+		n.addConn(addr, conn, mconn)
 	}
 
 	for i := 0; i < maxUDPConn; i++ {
-		createAndRunConn()
+		createAndRunConn(nil, nil)
 	}
 
 	require.Len(t, n.incomingConn, maxUDPConn)
-	createAndRunConn()
+	createAndRunConn(nil, nil)
 
 	// Make sure one connection was evicted and replaced
 	require.Len(t, n.incomingConn, maxUDPConn)
 
-	createAndRunConn() // This gets into the closing code path and panics if Close is called twice
+	// This gets into the closing code path and panics if Close is called twice
+	createAndRunConn(nil, nil)
 
+	// Make sure close is called on both conn objects at eviction
 	closed := 0
+	closed2 := 0
 	createAndRunConn(func(mock *udpConnMock) {
 		mock.CreatedFunc = func() time.Time {
 			return time.Now().Add(-maxUDPLife * 2)
@@ -391,21 +449,28 @@ func TestUDPNet_Cache2(t *testing.T) {
 			closed++
 			return nil
 		}
+	}, func(mock *msgConnMock) {
+		mock.CloseFunc = func() error {
+			closed2++
+			return nil
+		}
 	})
 
-	createAndRunConn() // this gets into the closing code path of older than 24 hours.
-	require.Equal(t, closed, 1)
-
+	// this gets into the closing code path of older than 24 hours
+	createAndRunConn(nil, nil)
+	require.Equal(t, 1, closed)
+	require.Equal(t, 1, closed2)
+	n.Shutdown()
 }
 
 func Test_UDPIncomingConnClose(t *testing.T) {
 	localnode, _ := node.NewNodeIdentity()
 	remotenode, _ := node.NewNodeIdentity()
-	n, err := NewUDPNet(config.DefaultConfig(), localnode, log.NewDefault(t.Name()+"_local"))
+	n, err := NewUDPNet(context.TODO(), config.DefaultConfig(), localnode, log.NewDefault(t.Name()+"_local"))
 	require.NoError(t, err)
 	require.NotNil(t, n)
 
-	remoten, rerr := NewUDPNet(config.DefaultConfig(), remotenode, log.NewDefault(t.Name()+"_remote"))
+	remoten, rerr := NewUDPNet(context.TODO(), config.DefaultConfig(), remotenode, log.NewDefault(t.Name()+"_remote"))
 	require.NoError(t, rerr)
 	require.NotNil(t, remoten)
 
@@ -431,7 +496,7 @@ func Test_UDPIncomingConnClose(t *testing.T) {
 	}
 	n.conn = lis
 
-	go n.listenToUDPNetworkMessages(lis)
+	go n.listenToUDPNetworkMessages(context.TODO(), lis)
 	<-donech
 	<-donech
 	conn := n.incomingConn[addr.String()]

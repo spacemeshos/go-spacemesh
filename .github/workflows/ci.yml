@@ -15,6 +15,10 @@ env:
   ES_USER: ${{ secrets.ES_USER }}
   ES_PASS: ${{ secrets.ES_PASS }}
   MAIN_ES_IP: ${{ secrets.MAIN_ES_IP }}
+  TD_QUEUE_NAME: ${{ secrets.TD_QUEUE_NAME }}
+  TD_QUEUE_ZONE: ${{ secrets.TD_QUEUE_ZONE }}
+  DUMP_QUEUE_NAME: ${{ secrets.DUMP_QUEUE_NAME }}
+  DUMP_QUEUE_ZONE: ${{ secrets.DUMP_QUEUE_ZONE }}
 
 # Trigger the workflow on all pull requests, and on push to specific branches
 on:
@@ -238,7 +242,7 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v2
-      - name: hare system test
+      - name: sync system test
         run: make dockertest-sync-elk
 
 

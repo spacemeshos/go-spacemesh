@@ -2,15 +2,13 @@ package node
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
 	"sync"
 	"time"
-
-	"github.com/spacemeshos/amcl"
-	"github.com/spacemeshos/amcl/BLS381"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
@@ -127,7 +125,7 @@ func (clk *ManualClock) GetGenesisTime() time.Time {
 // Close does nothing because this clock is manual
 func (clk *ManualClock) Close() {}
 
-func getTestDefaultConfig() *config.Config {
+func getTestDefaultConfig(numOfInstances int) *config.Config {
 	cfg, err := LoadConfigFromFile()
 	if err != nil {
 		log.Error("cannot load config from file")
@@ -139,6 +137,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.POST.NumProvenLabels = 10
 	cfg.POST.SpacePerUnit = 1 << 10 // 1KB.
 	cfg.POST.NumFiles = 1
+	cfg.GenesisTotalWeight = cfg.POST.SpacePerUnit * uint64(numOfInstances) // * 1 PoET ticks
 
 	cfg.HARE.N = 5
 	cfg.HARE.F = 2
@@ -158,6 +157,13 @@ func getTestDefaultConfig() *config.Config {
 	cfg.SyncRequestTimeout = 500
 	cfg.SyncInterval = 2
 	cfg.SyncValidationDelta = 5
+
+	cfg.FETCH.RequestTimeout = 10
+	cfg.FETCH.MaxRetiresForPeer = 5
+	cfg.FETCH.BatchSize = 5
+	cfg.FETCH.BatchTimeout = 5
+
+	cfg.LAYERS.RequestTimeout = 10
 	cfg.GoldenATXID = "0x5678"
 
 	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
@@ -171,6 +177,7 @@ func ActivateGrpcServer(smApp *SpacemeshApp) {
 	smApp.Config.API.StartGatewayService = true
 	smApp.Config.API.StartGlobalStateService = true
 	smApp.Config.API.StartTransactionService = true
+	smApp.Config.API.GrpcServerPort = 9094
 	smApp.grpcAPIService = grpcserver.NewServerWithInterface(smApp.Config.API.GrpcServerPort, smApp.Config.API.GrpcServerInterface)
 	smApp.gatewaySvc = grpcserver.NewGatewayService(smApp.P2P)
 	smApp.globalstateSvc = grpcserver.NewGlobalStateService(smApp.mesh, smApp.txPool)
@@ -207,17 +214,19 @@ type network interface {
 
 // InitSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
-func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network) (*SpacemeshApp, error) {
-
+func InitSingleInstance(cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network) (*SpacemeshApp, error) {
 	smApp := NewSpacemeshApp()
 	smApp.Config = &cfg
+	smApp.Config.SpaceToCommit = smApp.Config.POST.SpacePerUnit << (i % 5)
 	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
 	smApp.Config.GenesisTime = genesisTime
 	edSgn := signing.NewEdSigner()
 	pub := edSgn.PublicKey()
 
-	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
-	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
+	vrfSigner, vrfPub, err := signing.NewVRFSigner(pub.Bytes())
+	if err != nil {
+		return nil, err
+	}
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
 
 	swarm := net.NewNode()
@@ -231,7 +240,7 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.
 		return nil, err
 	}
 
-	err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
+	err = smApp.initServices(context.TODO(), log.AppLog, nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
 	if err != nil {
 		return nil, err
 	}
@@ -241,10 +250,9 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.
 
 // StartMultiNode Starts the run of a number of nodes, running in process consensus between them.
 // this also runs a single transaction between the nodes.
-func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPath string) {
-	cfg := getTestDefaultConfig()
+func StartMultiNode(numOfInstances, layerAvgSize int, runTillLayer uint32, dbPath string) {
+	cfg := getTestDefaultConfig(numOfInstances)
 	cfg.LayerAvgSize = layerAvgSize
-	numOfInstances := numOfinstances
 	net := service.NewSimulator()
 	path := dbPath + time.Now().Format(time.RFC3339)
 
@@ -262,11 +270,11 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	}()
 
 	rolacle := eligibility.New()
-	rng := BLS381.DefaultSeed()
 	gTime, err := time.Parse(time.RFC3339, genesisTime)
 	if err != nil {
 		log.Error("cannot parse genesis time %v", err)
 	}
+	events.CloseEventPubSub()
 	pubsubAddr := "tcp://localhost:55666"
 	if err := events.InitializeEventReporter(pubsubAddr); err != nil {
 		log.With().Error("error initializing event reporter", log.Err(err))
@@ -278,7 +286,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := path + string(name)
 		database.SwitchCreationContext(dbStorepath, string(name))
-		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net)
+		smApp, err := InitSingleInstance(*cfg, i, genesisTime, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net)
 		if err != nil {
 			log.Error("cannot run multi node %v", err)
 			return
@@ -290,7 +298,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	eventDb := collector.NewMemoryCollector()
 	collect := collector.NewCollector(eventDb, pubsubAddr)
 	for _, a := range apps {
-		a.startServices()
+		a.startServices(context.TODO(), log.AppLog)
 	}
 	collect.Start(false)
 	ActivateGrpcServer(apps[0])
@@ -326,7 +334,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 		}
 	}()
 
-	if err := poetHarness.Start([]string{"127.0.0.1:9092"}); err != nil {
+	if err := poetHarness.Start([]string{"127.0.0.1:9094"}); err != nil {
 		log.Panic("failed to start poet server: %v", err)
 	}
 
@@ -360,14 +368,14 @@ loop:
 			}
 
 			if eventDb.GetBlockCreationDone(layer) < numOfInstances {
-				log.Info("blocks done in layer %v: %v", layer, eventDb.GetBlockCreationDone(layer))
+				log.Warning("blocks done in layer %v: %v", layer, eventDb.GetBlockCreationDone(layer))
 				time.Sleep(500 * time.Millisecond)
 				errors++
 				continue
 			}
 			log.Info("all miners tried to create block in %v", layer)
 			if eventDb.GetNumOfCreatedBlocks(layer)*numOfInstances != eventDb.GetReceivedBlocks(layer) {
-				log.Info("finished: %v, block received %v layer %v", eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer), layer)
+				log.Warning("finished: %v, block received %v layer %v", eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer), layer)
 				time.Sleep(500 * time.Millisecond)
 				errors++
 				continue
@@ -375,7 +383,7 @@ loop:
 			log.Info("all miners got blocks for layer: %v created: %v received: %v", layer, eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer))
 			epoch := layer.GetEpoch()
 			if !(eventDb.GetAtxCreationDone(epoch) >= numOfInstances && eventDb.GetAtxCreationDone(epoch)%numOfInstances == 0) {
-				log.Info("atx not created %v in epoch %v, created only %v atxs", numOfInstances-eventDb.GetAtxCreationDone(epoch), epoch, eventDb.GetAtxCreationDone(epoch))
+				log.Warning("atx not created %v in epoch %v, created only %v atxs", numOfInstances-eventDb.GetAtxCreationDone(epoch), epoch, eventDb.GetAtxCreationDone(epoch))
 				time.Sleep(500 * time.Millisecond)
 				errors++
 				continue
@@ -383,7 +391,7 @@ loop:
 			log.Info("all miners finished reading %v atxs, layer %v done in %v", eventDb.GetAtxCreationDone(epoch), layer, time.Since(startLayer))
 			for _, atxID := range eventDb.GetCreatedAtx(epoch) {
 				if !eventDb.AtxIDExists(atxID) {
-					log.Info("atx %v not propagated", atxID)
+					log.Warning("atx %v not propagated", atxID)
 					errors++
 					continue
 				}

@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -45,8 +46,8 @@ const PingPong = 0
 const GetAddresses = 1
 
 // newProtocol is a constructor for a protocol protocol provider.
-func newProtocol(local p2pcrypto.PublicKey, rt protocolRoutingTable, svc server.Service, log log.Log) *protocol {
-	s := server.NewMsgServer(svc, Name, MessageTimeout, make(chan service.DirectMessage, MessageBufSize), log)
+func newProtocol(ctx context.Context, local p2pcrypto.PublicKey, rt protocolRoutingTable, svc server.Service, log log.Log) *protocol {
+	s := server.NewMsgServer(ctx, svc, Name, MessageTimeout, make(chan service.DirectMessage, MessageBufSize), log)
 	d := &protocol{
 		local:     &node.Info{ID: local.Array(), IP: net.IPv4zero, ProtocolPort: 7513, DiscoveryPort: 7513},
 		table:     rt,
