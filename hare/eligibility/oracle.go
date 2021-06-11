@@ -355,7 +355,6 @@ func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round int32,
 // the role proof and assuming commSize as the expected committee size.
 func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int,
 	id types.NodeID, vrfSig []byte) (uint16, error) {
-
 	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, vrfSig)
 	if done {
 		return 0, err
@@ -429,9 +428,11 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 	// we first try to get the hare active set for a range of safe layers: start with the set of active blocks
 	safeLayerStart, safeLayerEnd := safeLayerRange(
 		targetLayer, types.LayerID(o.cfg.ConfidenceParam), types.LayerID(o.layersPerEpoch), types.LayerID(o.cfg.EpochOffset))
-	logger.With().Debug("got safe layer range",
+	logger.With().Debug("safe layer range",
 		log.FieldNamed("safe_layer_start", safeLayerStart),
 		log.FieldNamed("safe_layer_end", safeLayerEnd),
+		log.FieldNamed("safe_layer_start_epoch", safeLayerStart.GetEpoch()),
+		log.FieldNamed("safe_layer_end_epoch", safeLayerEnd.GetEpoch()),
 		log.Uint64("confidence_param", o.cfg.ConfidenceParam),
 		log.Int("epoch_offset", o.cfg.EpochOffset),
 		log.Uint64("layers_per_epoch", uint64(o.layersPerEpoch)),

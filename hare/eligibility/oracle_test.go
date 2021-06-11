@@ -25,9 +25,11 @@ var errFoo = errors.New("some error")
 var errMy = errors.New("my error")
 var cfg = eCfg.Config{ConfidenceParam: 25, EpochOffset: 30}
 
-//var genActive = 5
-//var hDist = 10
-var genWeight = uint64(5)
+var (
+	genWeight          = 5
+	spacePerUnit       = 1
+	genesisMinerWeight = 1
+)
 
 type mockBlocksProvider struct {
 	mp                             map[types.BlockID]struct{}
@@ -101,20 +103,11 @@ func (m *mockBufferedActiveSetProvider) GetMinerWeightsInEpochFromView(targetEpo
 }
 
 func (m *mockBufferedActiveSetProvider) GetEpochAtxs(epoch types.EpochID) []types.ATXID {
-	v, ok := m.size[epoch]
-	if !ok {
-		return []types.ATXID{}
-	}
-
-	atxList := make([]types.ATXID, v)
-	for i := 0; i < v; i++ {
-		atxList[i] = types.ATXID{}
-	}
-	return atxList
+	panic("not implemented")
 }
 
 func (m *mockBufferedActiveSetProvider) GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error) {
-	return &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: "fakekey"}}}, nil
+	panic("not implemented")
 }
 
 func createMapWithSize(n int) map[string]uint64 {
@@ -318,7 +311,7 @@ func defaultOracle(t testing.TB) *Oracle {
 
 func mockOracle(t testing.TB, layersPerEpoch uint16) *Oracle {
 	types.SetLayersPerEpoch(int32(layersPerEpoch))
-	o := New(&mockValueProvider{1, nil}, nil, nil, buildVerifier(true), nil, layersPerEpoch, 1, genWeight, 1, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{}, &mockBlocksProvider{}, buildVerifier(true), nil, layersPerEpoch, uint64(spacePerUnit), uint64(genWeight), uint64(genesisMinerWeight), cfg, log.NewDefault(t.Name()))
 	return o
 }
 
@@ -353,14 +346,22 @@ func TestOracle_CalcEligibility_ErrorFromActiveSet(t *testing.T) {
 
 	res, err := o.CalcEligibility(context.TODO(), types.LayerID(50), 0, 1, types.NodeID{}, []byte{})
 
-	r.EqualError(err, errFoo.Error())
+	r.Error(err)
+	r.Contains(err.Error(), errFoo.Error())
 	r.Equal(uint16(0), res)
 }
 
 func TestOracle_CalcEligibility_ZeroTotalWeight(t *testing.T) {
 	r := require.New(t)
 	o := defaultOracle(t)
-	o.atxdb = &mockActiveSetProvider{size: 0}
+	o.atxdb = &mockActiveSetProvider{getActiveSetFn: func(epoch types.EpochID, view map[types.BlockID]struct{}) (map[string]uint64, error) {
+		for bid := range view {
+			return map[string]uint64{
+				bid.String(): 0,
+			}, nil
+		}
+		return nil, nil
+	}}
 
 	res, err := o.CalcEligibility(context.TODO(), types.LayerID(cfg.ConfidenceParam*2+11), 0, 1, types.NodeID{}, []byte{})
 
@@ -458,7 +459,7 @@ func Test_ActiveSetSize(t *testing.T) {
 	m[types.EpochID(5)] = 5
 	o := defaultOracle(t)
 	o.atxdb = &mockBufferedActiveSetProvider{size: m}
-	l := 19 + defSafety
+	l := 39 + defSafety
 	assertActiveSetSize(t, o, epochWeight(2), l)
 	assertActiveSetSize(t, o, epochWeight(3), l+10)
 	assertActiveSetSize(t, o, epochWeight(5), l+20)
@@ -469,7 +470,8 @@ func Test_ActiveSetSize(t *testing.T) {
 		return createMapWithSize(5), errors.New("fake err")
 	}}
 	activeSetSize, err := o.totalWeight(context.TODO(), l+19)
-	assert.EqualError(t, err, "fake err")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "fake err")
 	assert.Equal(t, uint64(0), activeSetSize)
 }
 
@@ -536,7 +538,7 @@ func TestOracle_Proof(t *testing.T) {
 
 func TestOracle_activeSetSizeCache(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, nil, nil, nil, nil, 5, 1, genWeight, 1, cfg, log.NewDefault(t.Name()))
+	o := defaultOracle(t)
 	o.atxdb = &mockActiveSetProvider{getActiveSetFn: func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error) {
 		return createMapWithSize(17), nil
 	}}
@@ -553,24 +555,24 @@ func TestOracle_activeSetSizeCache(t *testing.T) {
 
 func TestOracle_actives(t *testing.T) {
 	r := require.New(t)
-	//types.SetLayersPerEpoch(defLayersPerEpoch)
 	n := 9
-	//atxdb := &mockActiveSetProvider{
-	//	getEpochAtxsFn: func(types.EpochID) []types.ATXID {
-	//		atxids := make([]types.ATXID, n)
-	//		for i := 0; i < n; i++ {
-	//			atxids[i] = types.ATXID(types.BytesToHash([]byte{byte(i)}))
-	//		}
-	//		return atxids
-	//	},
-	//	getAtxHeaderFn: func(atxid types.ATXID) (*types.ActivationTxHeader, error) {
-	//		return &types.ActivationTxHeader{
-	//			NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: atxid.Hash32().String()}},
-	//		}, nil
-	//	},
-	//}
+	atxdb := &mockActiveSetProvider{
+		getEpochAtxsFn: func(types.EpochID) []types.ATXID {
+			atxids := make([]types.ATXID, n)
+			for i := 0; i < n; i++ {
+				atxids[i] = types.ATXID(types.BytesToHash([]byte{byte(i)}))
+			}
+			return atxids
+		},
+		getAtxHeaderFn: func(atxid types.ATXID) (*types.ActivationTxHeader, error) {
+			return &types.ActivationTxHeader{
+				NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: atxid.Hash32().String()}},
+			}, nil
+		},
+	}
 
 	o := defaultOracle(t)
+	o.atxdb = atxdb
 	_, err := o.actives(context.TODO(), 1)
 	r.EqualError(err, errGenesis.Error())
 
@@ -592,18 +594,24 @@ func TestOracle_actives(t *testing.T) {
 func TestOracle_concurrentActives(t *testing.T) {
 	r := require.New(t)
 	o := defaultOracle(t)
+	o.atxdb = &mockActiveSetProvider{size: 1}
 
 	mc := newMockCacher()
 	o.activesCache = mc
 
+	runFn := func() {
+		_, err := o.actives(context.TODO(), 100)
+		r.NoError(err)
+	}
+
 	// outstanding probability for concurrent access to calc active set size
 	for i := 0; i < 100; i++ {
-		go o.actives(context.TODO(), 100)
+		go runFn()
 	}
 
 	// make sure we wait at least two calls duration
-	o.actives(context.TODO(), 100)
-	o.actives(context.TODO(), 100)
+	runFn()
+	runFn()
 
 	r.Equal(1, mc.numAdd)
 }
@@ -611,16 +619,15 @@ func TestOracle_concurrentActives(t *testing.T) {
 // make sure the oracle collects blocks from all layers in the safe layer range
 func TestOracle_MultipleLayerBlocks(t *testing.T) {
 	r := require.New(t)
-	layersPerEpoch := 10
 	confidenceParam := 25
 	epochOffset := 5
-	types.SetLayersPerEpoch(int32(layersPerEpoch))
+	//types.SetLayersPerEpoch(int32(defLayersPerEpoch))
 
 	// a block provider that returns one distinct block per layer
 	lyr := types.LayerID(100)
 	o := defaultOracle(t)
-	//o := New(&mockValueProvider{1, nil}, nil, nil, nil, nil, uint16(layersPerEpoch), genActive, eCfg.Config{ConfidenceParam: uint64(confidenceParam), EpochOffset: epochOffset}, log.NewDefault(t.Name()))
-	sls, sle := safeLayerRange(lyr, types.LayerID(confidenceParam), types.LayerID(layersPerEpoch), types.LayerID(epochOffset))
+	o.cfg = eCfg.Config{ConfidenceParam: uint64(confidenceParam), EpochOffset: epochOffset}
+	sls, sle := safeLayerRange(lyr, types.LayerID(confidenceParam), types.LayerID(defLayersPerEpoch), types.LayerID(epochOffset))
 	numLayers := int(sle - sls + 1) // +1 because inclusive of endpoints
 	log.With().Info("layer range", log.FieldNamed("start", sls), log.FieldNamed("end", sle), log.Int("count", numLayers))
 	allBlocks := make(map[types.BlockID]bool, numLayers)
@@ -655,15 +662,18 @@ func TestOracle_MultipleLayerBlocks(t *testing.T) {
 
 func TestOracle_activesSafeLayer(t *testing.T) {
 	r := require.New(t)
-	types.SetLayersPerEpoch(2)
+	confidenceParam := 25
+	epochOffset := 5
+	layersPerEpoch := 2
 
 	// an activeSetProvider that returns an active set from blocks but no epoch ATXs: in this test we want to make sure
 	// that hare active set succeeds and tortoise active set fails
 	asp := &mockActiveSetProvider{size: 1, getEpochAtxsFn: func(types.EpochID) []types.ATXID { return nil }}
 
-	o := defaultOracle(t)
+	o := mockOracle(t, uint16(layersPerEpoch))
 	o.atxdb = asp
-	//o := New(&mockValueProvider{1, nil}, asp, nil, nil, nil, 2, genActive, hDist, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
+	o.cfg = eCfg.Config{ConfidenceParam: uint64(confidenceParam), EpochOffset: epochOffset}
+	o.layersPerEpoch = uint16(layersPerEpoch)
 	o.activesCache = newMockCacher()
 	lyr := types.LayerID(10)
 	sls, sle := safeLayerRange(lyr, types.LayerID(o.cfg.ConfidenceParam), types.LayerID(o.layersPerEpoch), types.LayerID(o.cfg.EpochOffset))
@@ -677,16 +687,6 @@ func TestOracle_activesSafeLayer(t *testing.T) {
 		r.LessOrEqual(uint64(layerID), uint64(sle), "LayerContextuallyValidBlocks called on layer after safeLayerEnd")
 		r.Equal(lastLayer, layerID, "LayerContextuallyValidBlocks called on layer out of order")
 		lastLayer++
-		//o := mockOracle(t, 2)
-		//o.layersPerEpoch = 2
-		//o.cfg = eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}
-		//mp := createMapWithSize(9)
-		//o.activesCache = newMockCacher()
-		//lyr := 19 + defSafety
-		//rsl := roundedSafeLayer(lyr, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
-		//o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error) {
-		//	ep := rsl.GetEpoch()
-		//	r.Equal(ep-1, epoch)
 		return mp, nil
 	}}
 	o.meshdb = mbp
