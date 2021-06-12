@@ -40,23 +40,23 @@ type UDPMux struct {
 	lookuper Lookuper
 	network  udpNetwork
 
-	messages map[string]chan service.DirectMessage
-	shutdown chan struct{}
+	messages    map[string]chan service.DirectMessage
+	shutdownCtx context.Context
 }
 
 // NewUDPMux creates a new udp protocol server
-func NewUDPMux(ctx context.Context, localNode node.LocalNode, lookuper Lookuper, udpNet udpNetwork, networkid int8, logger log.Log) *UDPMux {
-	cpool := connectionpool.NewConnectionPool(udpNet.Dial, localNode.PublicKey(), logger.WithName("udp_cpool"))
+func NewUDPMux(ctx, shutdownCtx context.Context, localNode node.LocalNode, lookuper Lookuper, udpNet udpNetwork, networkid int8, logger log.Log) *UDPMux {
+	cpool := connectionpool.NewConnectionPool(shutdownCtx, udpNet.Dial, localNode.PublicKey(), logger.WithName("udp_cpool"))
 
 	um := &UDPMux{
-		logger:    logger,
-		local:     localNode,
-		networkid: networkid,
-		lookuper:  lookuper,
-		network:   udpNet,
-		cpool:     cpool,
-		messages:  make(map[string]chan service.DirectMessage),
-		shutdown:  make(chan struct{}, 1),
+		logger:      logger,
+		local:       localNode,
+		networkid:   networkid,
+		lookuper:    lookuper,
+		network:     udpNet,
+		cpool:       cpool,
+		messages:    make(map[string]chan service.DirectMessage),
+		shutdownCtx: shutdownCtx,
 	}
 
 	udpNet.SubscribeOnNewRemoteConnections(func(event inet.NewConnectionEvent) {
@@ -81,9 +81,17 @@ func (mux *UDPMux) Start() error {
 
 // Shutdown closes the server
 func (mux *UDPMux) Shutdown() {
-	close(mux.shutdown)
 	mux.network.Shutdown()
 	mux.cpool.Shutdown()
+}
+
+func (mux *UDPMux) isShuttingDown() bool {
+	select {
+	case <-mux.shutdownCtx.Done():
+		return true
+	default:
+	}
+	return false
 }
 
 // listens to messages from the network layer and handles them.
@@ -96,6 +104,9 @@ func (mux *UDPMux) listenToNetworkMessage() {
 				// closed
 				return
 			}
+			if mux.isShuttingDown() {
+				return
+			}
 			go func(event inet.IncomingMessageEvent) {
 				err := mux.processUDPMessage(event)
 				if err != nil {
@@ -103,7 +114,7 @@ func (mux *UDPMux) listenToNetworkMessage() {
 					// todo: blacklist ?
 				}
 			}(msg)
-		case <-mux.shutdown:
+		case <-mux.shutdownCtx.Done():
 			return
 		}
 	}
