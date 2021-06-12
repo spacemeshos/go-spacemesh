@@ -23,12 +23,12 @@ type ThreadSafeVerifyingTortoise struct {
 type Config struct {
 	LayerSize       int
 	Database        blockDataProvider
-	Hdist           int // hare lookback distance: the distance over which we use the input vector/hare results
-	Zdist           int // hare result wait distance: the distance over which we're willing to wait for hare results
-	ConfidenceParam int // confidence wait distance: how long we wait for global consensus to be established
+	Hdist           int   // hare lookback distance: the distance over which we use the input vector/hare results
+	Zdist           int   // hare result wait distance: the distance over which we're willing to wait for hare results
+	ConfidenceParam int   // confidence wait distance: how long we wait for global consensus to be established
 	GlobalThreshold uint8 // threshold required to finalize blocks and layers (0-100)
 	LocalThreshold  uint8 // threshold that determines whether a node votes based on local or global opinion (0-100)
-	WindowSize      int // tortoise sliding window: how many layers we store data for
+	WindowSize      int   // tortoise sliding window: how many layers we store data for
 	Log             log.Log
 	Recovered       bool
 	RerunInterval   time.Duration // how often to rerun from genesis
