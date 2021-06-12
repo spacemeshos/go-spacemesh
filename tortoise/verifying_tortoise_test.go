@@ -1190,6 +1190,8 @@ func TestVerifyLayers(t *testing.T) {
 		// test self-healing: self-healing can verify layers that are stuck for specific reasons, i.e., where local and
 		// global opinion differ (or local opinion is missing).
 		alg.trtl.Hdist = 1
+		alg.trtl.Zdist = 1
+		alg.trtl.ConfidenceParam = 1
 
 		// add more votes in favor of l3 blocks
 		alg.trtl.BlockOpinionsByLayer[l4ID][l4Blocks[1].ID()] = l4Votes
@@ -1230,12 +1232,17 @@ func TestVerifyLayers(t *testing.T) {
 			l6Blocks[2].ID(): l6Votes,
 		}
 
-		// simulate a layer that's before the oldLayerCutoff, but past Verified, that has no contextually valid blocks
-		// in the database. this should trigger self-healing.
+		// simulate a layer that's older than the LayerCutoff, and older than Zdist+ConfidenceParam, but not verified,
+		// that has no contextually valid blocks in the database. this should trigger self-healing.
 
-		// erase all good blocks data so the ordinary verifying tortoise can't count any votes. this should trigger
-		// self-healing which ignores local data, including the set of good blocks.
-		alg.trtl.GoodBlocksIndex = make(map[types.BlockID]struct{}, 0)
+		// perform some surgery: erase just enough good blocks data so that ordinary tortoise verification fails for
+		// one layer, triggering self-healing, but leave enough good blocks data so that ordinary tortoise can
+		// subsequently verify a later layer after self-healing has finished. this works because self-healing does not
+		// rely on local data, including the set of good blocks.
+		delete(alg.trtl.GoodBlocksIndex, l4Blocks[0].ID())
+		delete(alg.trtl.GoodBlocksIndex, l4Blocks[1].ID())
+		delete(alg.trtl.GoodBlocksIndex, l4Blocks[2].ID())
+		delete(alg.trtl.GoodBlocksIndex, l5Blocks[0].ID())
 
 		// self-healing should advance verification two steps, over the
 		// previously stuck layer (l3) and the following layer (l4) since it's old enough, then hand control back to the

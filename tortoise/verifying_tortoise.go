@@ -790,20 +790,30 @@ candidateLayerLoop:
 				logger.With().Panic("candidate layer is higher than last layer received",
 					log.FieldNamed("last_layer", t.Last))
 			}
+			logger.With().Debug("considering attempting to heal layer",
+				log.FieldNamed("layer_cutoff", t.layerCutoff()),
+				log.FieldNamed("zdist", t.Zdist),
+				log.FieldNamed("last_layer", t.Last),
+				log.FieldNamed("confidence_param", t.ConfidenceParam))
 			if candidateLayerID < t.layerCutoff() && t.Last-candidateLayerID > t.Zdist+t.ConfidenceParam {
 				lastLayer := t.Last
 				// don't attempt to heal layers newer than Hdist
 				if lastLayer > t.layerCutoff() {
 					lastLayer = t.layerCutoff()
 				}
+				lastVerified := t.Verified
 				t.selfHealing(ctx, lastLayer)
 
-				// short-circuit processing of this layer, but allow verification of later layers to continue after
-				// self-healing has finished
-				continue candidateLayerLoop
+				// if self-healing made progress, short-circuit processing of this layer, but allow verification of
+				// later layers to continue
+				if t.Verified > lastVerified {
+					continue candidateLayerLoop
+				}
+				// otherwise, if self-healing didn't make any progress, there's no point in continuing to attempt
+				// verification
 			}
 
-			// Otherwise, give up trying to verify layers and keep waiting
+			// give up trying to verify layers and keep waiting
 			// TODO: continue to verify later layers, even after failing to verify a layer.
 			//   See https://github.com/spacemeshos/go-spacemesh/issues/2403.
 			logger.With().Info("failed to verify candidate layer, will reattempt later")
