@@ -3,16 +3,16 @@ package tortoise
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"strconv"
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -188,6 +188,14 @@ func turtleSanity(t *testing.T, layers types.LayerID, blocksPerLayer, voteNegati
 	for l = mesh.GenesisLayer().Index() + 1; l <= layers; l++ {
 		turtleMakeAndProcessLayer(t, l, trtl, blocksPerLayer, msh, hm)
 		fmt.Println("Handled ", l, "========================================================================")
+		lastlyr := trtl.BlockOpinionsByLayer[l]
+		for _, v := range lastlyr {
+			fmt.Println("Block opinoin map size")
+			if (len(v.BlocksOpinion)) > int(blocksPerLayer*int(trtl.Hdist)) {
+				t.Errorf("layer opinion table exceeded max size, LEAK! size:%v, maxsize:%v", len(v.BlocksOpinion), int(blocksPerLayer*int(trtl.Hdist)))
+			}
+			break
+		}
 	}
 
 	return
@@ -324,21 +332,42 @@ func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp
 	return lyr
 }
 
+//func size(m map[types.LayerID]map[types.BlockID]Opinion) int {
+//	count := 0
+//	for i, v := range m {
+//		count += len(i.Bytes())
+//		for ii, vv := range v {
+//			count += len(ii.Bytes())
+//			count += len(ii.Bytes()) * len(vv.BlocksOpinion)
+//		}
+//	}
+//	return count
+//}
+
 func TestTurtle_Eviction(t *testing.T) {
-	layers := types.LayerID(defaultTestHdist * 10)
-	avgPerLayer := 10
+	defaultTestHdist = 12
+	layers := types.LayerID(defaultTestHdist * 5)
+	avgPerLayer := 20 // more blocks = longer test
 	voteNegative := 0
 	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
 	require.Equal(t, len(trtl.BlockOpinionsByLayer),
 		(defaultTestHdist + 2))
+
 	count := 0
 	for _, blks := range trtl.BlockOpinionsByLayer {
 		count += len(blks)
 	}
 	require.Equal(t, count,
 		(defaultTestHdist+2)*avgPerLayer)
+	fmt.Println("=======================================================================")
+	fmt.Println("=======================================================================")
+	fmt.Println("=======================================================================")
+	fmt.Println("Count blocks on blocks layers ", len(trtl.BlockOpinionsByLayer))
+	fmt.Println("Count blocks on blocks blocks ", count)
+	//fmt.Println("mem Size: ", size(trtl.BlockOpinionsByLayer))
 	require.Equal(t, len(trtl.GoodBlocksIndex),
 		(defaultTestHdist+2)*avgPerLayer) // all blocks should be good
+	fmt.Println("Count good blocks ", len(trtl.GoodBlocksIndex))
 }
 
 //func TestTurtle_Eviction2(t *testing.T) {
