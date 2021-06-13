@@ -54,6 +54,14 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 		sum := abstain
 		blk, _ := trtl.bdp.GetBlock(i)
 
+		wind := types.LayerID(0)
+		if blk.LayerIndex > trtl.Hdist {
+			wind = trtl.Last - trtl.Hdist
+		}
+		if blk.LayerIndex < wind {
+			continue
+		}
+
 		for l := trtl.Last; l > blk.LayerIndex; l-- {
 
 			trtl.logger.Info("Counting votes of blocks in layer %v on %v (lyr: %v)", l, i.String(), blk.LayerIndex)
