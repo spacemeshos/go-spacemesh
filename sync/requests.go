@@ -78,11 +78,18 @@ func hashReqFactory(lyr types.LayerID) requestFactory {
 		foo := func(msg []byte) {
 			defer close(ch)
 			if len(msg) == 0 || msg == nil {
-				s.WithContext(ctx).With().Warning("peer responded with nil to layer hash request", log.FieldNamed("peer", peer), lyr)
+				s.WithContext(ctx).With().Warning("peer responded with nil to layer hash request",
+					log.FieldNamed("peer", peer),
+					lyr)
+
+				// return something here on the channel in order to distinguish between total failure to reach peers and
+				// empty layers
+				ch <- &peerHashPair{peer: peer}
 				return
 			}
 			if len(msg) != types.Hash32Length {
-				s.WithContext(ctx).With().Error("received layer hash of wrong length", log.Int("len", len(msg)))
+				s.WithContext(ctx).With().Error("received layer hash of wrong length",
+					log.Int("len", len(msg)))
 				return
 			}
 			var h types.Hash32

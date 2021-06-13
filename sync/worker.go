@@ -61,7 +61,9 @@ func newPeersWorker(ctx context.Context, s networker, peers []p2ppeers.Peer, mu 
 	wg := sync.WaitGroup{}
 	wg.Add(len(peers))
 	lg := s.WithContext(ctx).WithName("peersWrkr")
-	for _, peer := range peers {
+	for _, p := range peers {
+		peer := p
+		ctx := log.WithNewRequestID(ctx)
 		lg := lg.WithFields(
 			log.FieldNamed("peer_id", peer),
 			log.FieldNamed("recipient_peer_id", peer))
@@ -110,7 +112,8 @@ func newNeighborhoodWorker(ctx context.Context, s networker, count int, reqFacto
 	lg := s.WithName("HoodWrker").WithContext(ctx)
 	workFunc := func() {
 		peers := s.GetPeers()
-		for _, peer := range peers {
+		for _, p := range peers {
+			peer := p
 			lg := lg.WithFields(log.FieldNamed("peer_id", peer))
 			lg.Info("send request to peer")
 			ch, _ := reqFactory(ctx, s, peer)
@@ -148,7 +151,8 @@ func newFetchWorker(ctx context.Context, s networker, count int, reqFactory batc
 			leftToFetch := toMap(fr.ids)
 			var fetched []item
 		next:
-			for _, peer := range s.GetPeers() {
+			for _, p := range s.GetPeers() {
+				peer := p
 				lg := lg.WithFields(log.FieldNamed("peer_id", peer))
 				remainingItems := toSlice(leftToFetch)
 				idsStr := concatShortIds(remainingItems)

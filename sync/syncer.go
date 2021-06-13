@@ -601,6 +601,10 @@ func (s *Syncer) getLayerFromNeighbors(ctx context.Context, currentSyncLayer typ
 	m, err := s.fetchLayerHashes(ctx, currentSyncLayer)
 	if err != nil {
 		if err == errNoBlocksInLayer {
+			if !currentSyncLayer.GetEpoch().IsGenesis() {
+				s.WithContext(ctx).With().Warning("got empty layer from peers for non-genesis layer",
+					currentSyncLayer)
+			}
 			return types.NewLayer(currentSyncLayer), nil
 		}
 		return nil, err
@@ -1147,11 +1151,10 @@ func (s *Syncer) fetchLayerHashes(ctx context.Context, lyr types.LayerID) (map[t
 	// until all workers have finished (or timed out)
 	for out := range wrk.output {
 		pair, ok := out.(*peerHashPair)
-		if pair != nil && ok { // do nothing on close channel
-			gotResponse = true
-			if pair.hash != emptyLayer {
-				m[pair.hash] = append(m[pair.hash], pair.peer)
-			}
+		gotResponse = true
+		// make sure a non-nil, non-empty layer hash was provided
+		if pair != nil && ok && pair.hash != (peerHashPair{}).hash && pair.hash != emptyLayer { // do nothing on close channel
+			m[pair.hash] = append(m[pair.hash], pair.peer)
 		}
 	}
 
