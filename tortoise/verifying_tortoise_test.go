@@ -386,6 +386,24 @@ func TestTurtle_Eviction(t *testing.T) {
 //		(defaultTestHdist+2)*avgPerLayer)
 //}
 
+func TestLayerCutoff(t *testing.T) {
+	r := require.New(t)
+	mdb := getPersistentMesh(t)
+	alg := defaultAlgorithm(t, mdb)
+
+	// cutoff should be zero if we haven't seen at least Hdist layers yet
+	alg.trtl.Last = alg.trtl.Hdist - 1
+	r.Equal(0, int(alg.trtl.layerCutoff()))
+	alg.trtl.Last = alg.trtl.Hdist
+	r.Equal(0, int(alg.trtl.layerCutoff()))
+
+	// otherwise, cutoff should be Hdist layers before Last
+	alg.trtl.Last = alg.trtl.Hdist + 1
+	r.Equal(1, int(alg.trtl.layerCutoff()))
+	alg.trtl.Last = alg.trtl.Hdist + 100
+	r.Equal(100, int(alg.trtl.layerCutoff()))
+}
+
 func TestAddToMesh(t *testing.T) {
 	mdb := getPersistentMesh(t)
 
@@ -547,6 +565,7 @@ func TestLayerOpinionVector(t *testing.T) {
 	}
 	alg.trtl.Last = types.LayerID(defaultTestHdist) + l2ID.Add(1)
 	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
+	r.Error(err)
 	r.Contains(err.Error(), errstrNoCoinflip)
 	r.Nil(opinionVec)
 
@@ -1000,7 +1019,6 @@ func TestProcessNewBlocks(t *testing.T) {
 }
 
 func TestVerifyLayers(t *testing.T) {
-	log.DebugMode(true)
 	r := require.New(t)
 
 	mdb := getPersistentMesh(t)
@@ -1186,7 +1204,7 @@ func TestVerifyLayers(t *testing.T) {
 		r.Equal(int(l2ID), int(alg.trtl.Verified))
 	})
 
-	t.Run("self-healing", func(t *testing.T) {
+	t.Run("healing handoff", func(t *testing.T) {
 		// test self-healing: self-healing can verify layers that are stuck for specific reasons, i.e., where local and
 		// global opinion differ (or local opinion is missing).
 		alg.trtl.Hdist = 1
@@ -1367,13 +1385,12 @@ func TestHealing(t *testing.T) {
 	mdb := getPersistentMesh(t)
 	alg := defaultAlgorithm(t, mdb)
 
-	// store a bunch of votes against a block
 	l0ID := types.GetEffectiveGenesis()
 	l1ID := l0ID.Add(1)
-	l1 := makeLayer(t, l1ID, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
-	alg.trtl.Last = l1ID
+	//l1 := makeLayer(t, l1ID, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
+	//alg.trtl.Last = l1ID
 	l2ID := l1ID.Add(1)
-	makeLayer(t, l2ID, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
+	//makeLayer(t, l2ID, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
 
 	checkVerifiedLayer := func(layerID types.LayerID) {
 		r.Equal(int(layerID), int(alg.trtl.Verified), "got unexpected value for last verified layer")
@@ -1393,78 +1410,174 @@ func TestHealing(t *testing.T) {
 		checkVerifiedLayer(l0ID)
 	})
 
-	// next, initiate healing without block votes, using the weak coin toss
+	alg.trtl.Last = l0ID
+	l1 := makeLayer(t, l1ID, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
+	l2 := makeLayer(t, l2ID, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
 
-	// missing coinflip
-	t.Run("healing fails when layer coinflip is missing", func(t *testing.T) {
+	// healing should work even when there is no local opinion on a layer (i.e., no output vector, while waiting
+	// for hare results)
+	t.Run("does not depend on local opinion", func(t *testing.T) {
 		checkVerifiedLayer(l0ID)
-		alg.trtl.Last = alg.trtl.Hdist + l2ID
-		alg.trtl.selfHealing(context.TODO(), l2ID)
-		checkVerifiedLayer(l0ID)
-	})
+		r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), l1ID))
+		r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), l2ID))
+		//
+		//// delete good blocks data
+		//alg.trtl.GoodBlocksIndex = make(map[types.BlockID]struct{}, 0)
 
-	// coinflip true
-	t.Run("healing confirms blocks when coinflip is true", func(t *testing.T) {
-		checkVerifiedLayer(l0ID)
-		mdb.RecordCoinflip(context.TODO(), l1ID, true)
+		//// advance further so we can heal this layer
+		//topLayer := alg.trtl.Hdist + l3ID
+		//
+		//// fill in the interim layer data
+		//alg.trtl.Last = l2ID
+		//for i := l2ID.Add(1); i <= topLayer; i++ {
+		//	makeLayer(t, i, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
+		//
+		//	// process votes of layer blocks but don't attempt to verify a layer
+		//	r.NoError(alg.trtl.handleLayerBlocks(context.TODO(), i))
+		//}
+
+		// reducing hdist will allow verification to start happening
+		alg.trtl.Hdist = 1
+		//alg.trtl.Last = l2ID
 		alg.trtl.selfHealing(context.TODO(), l2ID)
 		checkVerifiedLayer(l1ID)
-		validBlocks, err := mdb.ContextuallyValidBlock(l1ID)
-		r.NoError(err)
-		l1BlockIDs := make(map[types.BlockID]struct{}, len(l1.Blocks()))
-		for _, block := range l1.Blocks() {
-			l1BlockIDs[block.ID()] = struct{}{}
-		}
-		r.Equal(l1BlockIDs, validBlocks)
 	})
 
-	// coinflip false
+	// can heal when global and local opinion differ
 	l3ID := l2ID.Add(1)
-	t.Run("healing does not confirm blocks when coinflip is false", func(t *testing.T) {
+	t.Run("local and global opinions differ", func(t *testing.T) {
+		//alg.trtl.Last = l0ID
 		checkVerifiedLayer(l1ID)
-		mdb.RecordCoinflip(context.TODO(), l2ID, false)
+
+		// store input vector for already-processed layers
+		var l1BlockIDs, l2BlockIDs []types.BlockID
+		for _, block := range l1.Blocks() {
+			l1BlockIDs = append(l1BlockIDs, block.ID())
+		}
+		for _, block := range l2.Blocks() {
+			l2BlockIDs = append(l2BlockIDs, block.ID())
+		}
+		require.NoError(t, mdb.SaveLayerInputVectorByID(l1ID, l1BlockIDs))
+		require.NoError(t, mdb.SaveLayerInputVectorByID(l2ID, l2BlockIDs))
+
+		// then create and process one more new layer
+		// prevent base block from referencing earlier (approved) layers
+		alg.trtl.Last = l0ID
+		makeLayer(t, l3ID, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
+		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l3ID))
+
+		// make sure local opinion supports L2
+		layerInputVector, err := alg.trtl.layerOpinionVector(context.TODO(), l2ID)
+		r.NoError(err)
+		localOpinionVec := alg.trtl.voteVectorForLayer(l2BlockIDs, layerInputVector)
+		for _, bid := range l2BlockIDs {
+			r.Contains(localOpinionVec, bid)
+			r.Equal(support, localOpinionVec[bid])
+		}
+
+		//l1Blocks := generateBlocks(l1ID, defaultTestLayerSize, alg.BaseBlock)
+		//l2Blocks := generateBlocks(l2ID, defaultTestLayerSize, alg.BaseBlock)
+		////var l1BlockIDs []types.BlockID
+		//for _, block := range l1Blocks {
+		//	r.NoError(mdb.AddBlock(block))
+		//	//l1BlockIDs = append(l1BlockIDs, block.ID())
+		//}
+		//for _, block := range l2Blocks {
+		//	r.NoError(mdb.AddBlock(block))
+		//	//l1BlockIDs = append(l1BlockIDs, block.ID())
+		//}
+		//r.NoError(mdb.SaveLayerInputVectorByID(l1ID, l1BlockIDs))
+
+		// delete good blocks data
+		//alg.trtl.GoodBlocksIndex = make(map[types.BlockID]struct{}, 0)
+
+		//// advance further so we can heal this layer
+		//topLayer := alg.trtl.Hdist + l3ID
+		//
+		//// fill in the interim layer data
+		//alg.trtl.Last = l2ID
+		//for i := l2ID.Add(1); i <= topLayer; i++ {
+		//	makeLayer(t, i, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
+		//
+		//	// process votes of layer blocks but don't attempt to verify a layer
+		//	r.NoError(alg.trtl.handleLayerBlocks(context.TODO(), i))
+		//}
+
+		// reducing hdist will allow verification to start happening
+		//alg.trtl.Hdist = 1
 		alg.trtl.selfHealing(context.TODO(), l3ID)
 		checkVerifiedLayer(l2ID)
-		validBlocks, err := mdb.ContextuallyValidBlock(l2ID)
-		r.NoError(err)
-		r.Equal(make(map[types.BlockID]struct{}, 0), validBlocks)
+
+		// make sure contextual validity is updated
+		for _, bid := range l2BlockIDs {
+			valid, err := mdb.ContextualValidity(bid)
+			r.NoError(err)
+			// global opinion should be against all of the blocks in this layer since blocks in subsequent
+			// layers don't vote for them
+			r.False(valid)
+		}
 	})
 
-	// next, attempt healing by counting block votes (global opinion)
-
-	// make sure vote of non-good blocks are counted
+	// healing should count votes of non-good blocks
 	l4ID := l3ID.Add(1)
-	t.Run("count vote of non-good blocks", func(t *testing.T) {
+	//l5ID := l4ID.Add(1)
+	//l6ID := l5ID.Add(1)
+	t.Run("counts votes of non-good blocks", func(t *testing.T) {
+		//alg.trtl.Last = l0ID
 		checkVerifiedLayer(l2ID)
 
-		// advance further so we can heal this layer
-		topLayer := alg.trtl.Hdist + l3ID
+		// create and process several more layers
+		// but don't save layer input vectors, so local opinion is abstain
 
-		// fill in the interim layer data
-		alg.trtl.Last = l2ID
-		for i := l2ID.Add(1); i <= topLayer; i++ {
-			makeLayer(t, i, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
+		// prevent base block from referencing earlier (approved) layers
+		//alg.trtl.Last = l0ID
+		makeLayer(t, l4ID, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
+		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l4ID))
+		//makeLayer(t, l5ID, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
+		//makeLayer(t, l6ID, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
+		//l1Blocks := generateBlocks(l1ID, defaultTestLayerSize, alg.BaseBlock)
+		//l2Blocks := generateBlocks(l2ID, defaultTestLayerSize, alg.BaseBlock)
+		////var l1BlockIDs []types.BlockID
+		//for _, block := range l1Blocks {
+		//	r.NoError(mdb.AddBlock(block))
+		//	//l1BlockIDs = append(l1BlockIDs, block.ID())
+		//}
+		//for _, block := range l2Blocks {
+		//	r.NoError(mdb.AddBlock(block))
+		//	//l1BlockIDs = append(l1BlockIDs, block.ID())
+		//}
+		//r.NoError(mdb.SaveLayerInputVectorByID(l1ID, l1BlockIDs))
 
-			// process votes of layer blocks but don't attempt to verify a layer
-			r.NoError(alg.trtl.handleLayerBlocks(context.TODO(), i))
-		}
+		// delete good blocks data
+		alg.trtl.GoodBlocksIndex = make(map[types.BlockID]struct{}, 0)
 
+		//// advance further so we can heal this layer
+		//topLayer := alg.trtl.Hdist + l3ID
+		//
+		//// fill in the interim layer data
+		//alg.trtl.Last = l2ID
+		//for i := l2ID.Add(1); i <= topLayer; i++ {
+		//	makeLayer(t, i, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
+		//
+		//	// process votes of layer blocks but don't attempt to verify a layer
+		//	r.NoError(alg.trtl.handleLayerBlocks(context.TODO(), i))
+		//}
+
+		// reducing hdist will allow verification to start happening
+		//alg.trtl.Hdist = 1
 		alg.trtl.selfHealing(context.TODO(), l4ID)
 		checkVerifiedLayer(l3ID)
 	})
 
 	// can heal when half of votes are missing (doesn't meet threshold)
-	l5ID := l4ID.Add(1)
-	t.Run("can heal when lots of votes are missing", func(t *testing.T) {
-		checkVerifiedLayer(l3ID)
-		alg.trtl.Last = alg.trtl.Hdist + l4ID
-		mdb.RecordCoinflip(context.TODO(), l4ID, true)
-		alg.trtl.selfHealing(context.TODO(), l5ID)
-		checkVerifiedLayer(l4ID)
-	})
-
-	// can heal when global and local opinion differ
-	// make sure contextual validity is updated
+	//l5ID := l4ID.Add(1)
+	//t.Run("can heal when lots of votes are missing", func(t *testing.T) {
+	//	checkVerifiedLayer(l3ID)
+	//	alg.trtl.Last = alg.trtl.Hdist + l4ID
+	//	mdb.RecordCoinflip(context.TODO(), l4ID, true)
+	//	alg.trtl.selfHealing(context.TODO(), l5ID)
+	//	checkVerifiedLayer(l4ID)
+	//})
 
 	// can heal when global opinion is undecided (split 50/50)
 

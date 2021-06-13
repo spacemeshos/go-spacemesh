@@ -793,7 +793,7 @@ candidateLayerLoop:
 			logger.With().Debug("considering attempting to heal layer",
 				log.FieldNamed("layer_cutoff", t.layerCutoff()),
 				log.FieldNamed("zdist", t.Zdist),
-				log.FieldNamed("last_layer", t.Last),
+				log.FieldNamed("last_layer_received", t.Last),
 				log.FieldNamed("confidence_param", t.ConfidenceParam))
 			if candidateLayerID < t.layerCutoff() && t.Last-candidateLayerID > t.Zdist+t.ConfidenceParam {
 				lastLayer := t.Last
@@ -851,8 +851,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 	voteAgainstAll = make([]types.BlockID, 0, 0)
 
 	// for layers older than hdist, we vote according to global opinion
-	oldLayerCutoff := t.layerCutoff()
-	if layerID < oldLayerCutoff {
+	if layerID < t.layerCutoff() {
 		if layerID > t.Verified {
 			// this layer has not yet been verified
 			// we must have an opinion about older layers at this point. if the layer hasn't been verified yet, count votes
@@ -878,12 +877,14 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 				} else if localOpinionOnBlock == abstain {
 					// abstain means the votes for and against this block did not cross the local threshold.
 					// if any block in this layer doesn't cross the local threshold, rescore the entire layer using the
-					// weak coin
-					// TODO: finalize which layer we read the coinflip for
-					if coin, exists := t.bdp.GetCoinflip(ctx, t.Last); exists {
+					// weak coin. note: we use the weak coin for the previous layer since we expect to receive blocks
+					// for a layer before hare finishes for that layer, i.e., before the weak coin value is ready for
+					// the layer.
+					if coin, exists := t.bdp.GetCoinflip(ctx, t.Last-1); exists {
 						logger.With().Info("rescoring all blocks in old layer using weak coin",
 							log.Int("count", len(layerBlockIds)),
-							log.Bool("coinflip", coin))
+							log.Bool("coinflip", coin),
+							log.FieldNamed("coinflip_layer", t.Last-1))
 						if coin {
 							// heads on the weak coin means vote for all blocks in the layer
 							return layerBlockIds, nil
