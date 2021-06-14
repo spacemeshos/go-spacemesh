@@ -35,7 +35,7 @@ app = Flask(__name__)
 
 @app.route('/', methods=['POST'])
 def teardown():
-    print(f"starting teardown")
+    print("starting teardown")
     remove_security_warning()
     payload = request.get_data(as_text=True) or '(empty payload)'
     try:

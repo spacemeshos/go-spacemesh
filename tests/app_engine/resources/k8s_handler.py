@@ -68,9 +68,9 @@ def list_namespace_deployments(project_id, cluster_id, zone, namespace, keywords
 def remove_deployments_in_namespace(project_id, cluster_id, zone, namespace, deps=None, keywords=None):
     """
     remove deployments in namespace
-    :param project_id:
-    :param cluster_id:
-    :param zone:
+    :param project_id: string, google project name
+    :param cluster_id: string, cluster ID
+    :param zone: string, project zone
     :param namespace: string, namespace name
     :param deps: list, a list of all deployments to be deleted under the given namespace
     :param keywords: list, in case deps wasn't supplied, all deployments who's in their name one of the items in keyword
