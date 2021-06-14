@@ -180,7 +180,7 @@ func (p *Protocol) handlePQ(ctx context.Context) {
 		}
 		p.WithContext(msgCtx).With().Info("new_gossip_message_relay",
 			log.Int("priority_queue_length", p.pq.Length()))
-		if p.pq.Length() > 20 {
+		if p.pq.Length() > 50 {
 			p.WithContext(msgCtx).With().Warning("outbound gossip message queue backlog",
 				log.Int("priority_queue_length", p.pq.Length()))
 		}
