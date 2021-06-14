@@ -254,20 +254,14 @@ func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 	tb.beaconsMu.RLock()
 	defer tb.beaconsMu.RUnlock()
 
-	var beacon types.Hash32
-	var ok bool
-	// TODO: remove
-	for i := 0; i < 50; i++ {
-		beacon, ok = tb.beacons[epochID-1]
-		if !ok {
-			tb.Log.Warning("beacon not calculated yet, waiting")
-			time.Sleep(1 * time.Second)
-			continue
-			//return nil, ErrBeaconNotCalculated
-		}
-		break
+	beacon, ok := tb.beacons[epochID-1]
+	if !ok {
+		tb.Log.Error("Beacon is not calculated",
+			log.Uint64("target_epoch", uint64(epochID)),
+			log.Uint64("beacon_epoch", uint64(epochID-1)))
+
+		return nil, ErrBeaconNotCalculated
 	}
-	tb.Log.Error("beacon not calculated after all attempts")
 
 	if tb.tortoiseBeaconDB != nil {
 		if err := tb.tortoiseBeaconDB.SetTortoiseBeacon(epochID, beacon); err != nil {
