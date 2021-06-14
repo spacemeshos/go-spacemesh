@@ -401,7 +401,7 @@ func (t *turtle) processBlock(block *types.Block) error {
 	for blk, vote := range baseBlockOpinion.BlocksOpinion {
 		fblk, err := t.bdp.GetBlock(blk)
 		if err != nil {
-			return fmt.Errorf("voted block not in db")
+			return fmt.Errorf("voted block not in db voting_block_id: %v, voting_block_layer_id: %v, voted_block_id: %v", block.ID().String(), block.LayerIndex, blk.String())
 		}
 		window := types.LayerID(0)
 		if block.LayerIndex > t.Hdist {

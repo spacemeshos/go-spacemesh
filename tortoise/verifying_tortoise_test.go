@@ -198,7 +198,7 @@ func turtleSanity(t *testing.T, layers types.LayerID, blocksPerLayer, voteNegati
 		fmt.Println("Handled ", l, "========================================================================")
 		lastlyr := trtl.BlockOpinionsByLayer[l]
 		for _, v := range lastlyr {
-			fmt.Println("Block opinoin map size")
+			fmt.Println("block opinion map size", len(v.BlocksOpinion))
 			if (len(v.BlocksOpinion)) > int(blocksPerLayer*int(trtl.Hdist)) {
 				t.Errorf("layer opinion table exceeded max size, LEAK! size:%v, maxsize:%v", len(v.BlocksOpinion), int(blocksPerLayer*int(trtl.Hdist)))
 			}
@@ -340,18 +340,6 @@ func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp
 	return lyr
 }
 
-//func size(m map[types.LayerID]map[types.BlockID]Opinion) int {
-//	count := 0
-//	for i, v := range m {
-//		count += len(i.Bytes())
-//		for ii, vv := range v {
-//			count += len(ii.Bytes())
-//			count += len(ii.Bytes()) * len(vv.BlocksOpinion)
-//		}
-//	}
-//	return count
-//}
-
 func TestTurtle_Eviction(t *testing.T) {
 	defaultTestHdist = 12
 	layers := types.LayerID(defaultTestHdist * 5)
@@ -377,15 +365,6 @@ func TestTurtle_Eviction(t *testing.T) {
 		(defaultTestHdist+2)*avgPerLayer) // all blocks should be good
 	fmt.Println("Count good blocks ", len(trtl.GoodBlocksIndex))
 }
-
-//func TestTurtle_Eviction2(t *testing.T) {
-//	layers := types.LayerID(defaultTestHdist * 14)
-//	avgPerLayer := 30
-//	voteNegative := 5
-//	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
-//	require.Equal(t, len(trtl.BlockOpinionsByLayer),
-//		(defaultTestHdist+2)*avgPerLayer)
-//}
 
 func TestTurtle_Recovery(t *testing.T) {
 	log.DebugMode(true)
