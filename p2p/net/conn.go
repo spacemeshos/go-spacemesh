@@ -260,7 +260,7 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 
 	c.logger.WithContext(ctx).With().Debug("enqueuing outgoing message",
 		log.Int("queue_length", len(c.messages)))
-	if len(c.messages) > 10 {
+	if len(c.messages) > 30 {
 		c.logger.WithContext(ctx).With().Warning("outbound send queue backlog",
 			log.Int("queue_length", len(c.messages)))
 	}
