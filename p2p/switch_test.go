@@ -289,8 +289,8 @@ func sendDirectMessage(t *testing.T, sender *Switch, recvPub p2pcrypto.PublicKey
 		}
 		assert.Equal(t, msg.Sender().String(), sender.lNode.PublicKey().String())
 		break
-	case <-time.After(5 * time.Second):
-		t.Error("Took too much time to receive")
+	case <-time.After(time.Second):
+		t.Error("timed out waiting for message")
 	}
 }
 
@@ -329,13 +329,13 @@ func TestSwarm_MultipleMessages(t *testing.T) {
 	require.NoError(t, p2.Start(context.TODO()))
 
 	err := p2.SendMessage(context.TODO(), p1.lNode.PublicKey(), exampleProtocol, []byte(examplePayload))
-	require.Error(t, err, "ERR") // should'nt be in routing table
+	require.Error(t, err) // shouldn't be in routing table
 
 	_, err = p2.cPool.GetConnection(context.TODO(), p1.network.LocalAddr(), p1.lNode.PublicKey())
 	require.NoError(t, err)
 
 	var wg sync.WaitGroup
-	for i := 0; i < 500; i++ {
+	for i := 0; i < 250; i++ {
 		wg.Add(1)
 		go func() { sendDirectMessage(t, p2, p1.lNode.PublicKey(), exchan1, false); wg.Done() }()
 	}
