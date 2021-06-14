@@ -1453,7 +1453,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	}
 
 	if len(syncs[0].GetPeers()) == 0 {
-		t.Error("syncer has no peers ")
+		t.Error("syncer has no peers")
 		t.Fail()
 	}
 
@@ -1464,7 +1464,10 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	select {
 	case out := <-wrk.output:
-		assert.Nil(t, out)
+		assert.NotNil(t, out)
+		pair, ok := out.(*peerHashPair)
+		assert.True(t, ok)
+		assert.Equal(t, peerHashPair{}.hash, pair.hash)
 	case <-time.After(timeout):
 		assert.Fail(t, timeoutErrMsg)
 	}
@@ -1589,9 +1592,11 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	// layer hash
-	_, err1 := syncs[0].getLayerFromNeighbors(context.TODO(), types.LayerID(1))
-	assert.Error(t, err1)
-	assert.Contains(t, err1.Error(), errmsgNoBlocks)
+	lyr, err1 := syncs[0].getLayerFromNeighbors(context.TODO(), types.LayerID(1))
+	assert.NoError(t, err1)
+	assert.NotNil(t, lyr)
+	assert.Equal(t, 1, int(lyr.Index()))
+	assert.Len(t, lyr.Blocks(), 0)
 
 	// Block
 	ch := make(chan fetchRequest, 1)
