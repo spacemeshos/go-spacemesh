@@ -1,14 +1,22 @@
 from flask import Flask, request
 import json
+import os
+import urllib3
 
 from gcloud_tasks.add_task_to_queue import create_google_cloud_task
 from resources import nodepool_handler
 from resources.convenience import str2bool, validate_params_in_dict
 from resources.es_dump import es_reindex
-from resources.k8s_handler import delete_namespace, remove_clusterrole_binding
+from resources.k8s_handler import delete_namespace, remove_clusterrole_binding, remove_client_deployments
 
 
 DUMP_APP_ROUTE = "/namespace-teardown"
+
+
+def remove_security_warning():
+    # remove InsecureRequestWarnings when querying, these warnings happen since we're not using SSL verification
+    os.environ["PYTHONWARNINGS"] = "ignore:Unverified HTTPS request"
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def validate_params(request_json):
@@ -27,7 +35,8 @@ app = Flask(__name__)
 
 @app.route('/', methods=['POST'])
 def teardown():
-    print(f"teardown")
+    print("starting teardown")
+    remove_security_warning()
     payload = request.get_data(as_text=True) or '(empty payload)'
     try:
         payload_dict = json.loads(payload)
@@ -43,6 +52,15 @@ def teardown():
     namespace = payload_dict['namespace']
     project_id = payload_dict["project_id"]
     print(f"starting teardown process for {namespace}")
+    # delete client and bootstrap deployments
+    try:
+        remove_client_deployments(
+            payload_dict["project_id"], payload_dict["cluster_name"], payload_dict["node_pool_zone"], namespace)
+    except Exception as e:
+        print(f"got an exception while trying to delete deployments under {namespace}:\n{e}")
+    # delete clusterrolebinding
+    remove_clusterrole_binding(project_id, payload_dict["cluster_name"], payload_dict["node_pool_zone"], "fluent-bit",
+                               f"fluent-bit-clusterrole-binding-{namespace}")
     # delete node pool
     try:
         nodepool_handler.remove_node_pool(project_id, payload_dict["pool_name"], payload_dict["cluster_name"],
@@ -50,9 +68,6 @@ def teardown():
         print(f"node pool {payload_dict['pool_name']} was deleted successfully")
     except Exception as e:
         print(f"could not delete node pool {payload_dict['pool_name']}:\n{e}")
-    # remove clusterrolebinding
-    remove_clusterrole_binding(project_id, payload_dict["cluster_name"], payload_dict["node_pool_zone"], "fluent-bit",
-                               f"fluent-bit-clusterrole-binding-{namespace}")
     if str2bool(payload_dict["is_dump"]):
         dump_queue_name = payload_dict["dump_params"]["dump_queue_name"]
         dump_queue_zone = payload_dict["dump_params"]["dump_queue_zone"]
