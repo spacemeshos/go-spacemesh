@@ -61,7 +61,7 @@ func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 		broker := newBroker(s, newEligibilityValidator(eligibility.New(logtest.New(t)), 10, &mockIDProvider{}, cfg.N, cfg.ExpectedLeaders, lg), NewMockStateQuerier(), (&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, util.Closer{}, lg)
 		output := make(chan TerminationOutput, 1)
 		oracle.Register(true, signing.PublicKey().String())
-		proc := newConsensusProcess(cfg, instanceID1, his.initialSets[idx], oracle, NewMockStateQuerier(), 10, signing, types.NodeID{}, s, output, truer{}, lg)
+		proc := newConsensusProcess(cfg, instanceID1, his.initialSets[idx], oracle, NewMockStateQuerier(), 10, signing, types.NodeID{}, s, output, truer{}, newRoundClockFromCfg(cfg), lg)
 		c, _ := broker.Register(context.TODO(), proc.ID())
 		proc.SetInbox(c)
 		broker.Start(context.TODO())
@@ -69,6 +69,14 @@ func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 		i++
 	}
 	suite.Run(t, his)
+}
+
+func newRoundClockFromCfg(cfg config.Config) *RoundClockWithCache {
+	log.Info("creating clock at %v wakeup: %v round duration: %v", time.Now(), cfg.WakeupDelta, cfg.RoundDuration)
+	return NewRoundClockWithCache(time.Now(),
+		time.Duration(cfg.WakeupDelta)*time.Second,
+		time.Duration(cfg.RoundDuration)*time.Second,
+	)
 }
 
 func (his *hareIntegrationThreeNodes) Test_16Nodes_AllHonest() {
@@ -114,7 +122,7 @@ func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 		broker := newBroker(s, newEligibilityValidator(eligibility.New(logtest.New(t)), 10, &mockIDProvider{}, cfg.N, cfg.ExpectedLeaders, lg), NewMockStateQuerier(), (&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, util.Closer{}, lg)
 		output := make(chan TerminationOutput, 1)
 		oracle.Register(true, signing.PublicKey().String())
-		proc := newConsensusProcess(cfg, instanceID1, his.initialSets[idx], oracle, NewMockStateQuerier(), 10, signing, types.NodeID{}, s, output, truer{},
+		proc := newConsensusProcess(cfg, instanceID1, his.initialSets[idx], oracle, NewMockStateQuerier(), 10, signing, types.NodeID{}, s, output, truer{}, newRoundClockFromCfg(cfg),
 			logtest.New(t).WithName(signing.PublicKey().String()))
 		c, _ := broker.Register(context.TODO(), proc.ID())
 		proc.SetInbox(c)
