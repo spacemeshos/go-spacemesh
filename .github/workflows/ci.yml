@@ -175,6 +175,8 @@ jobs:
       - dockerpush
     timeout-minutes: 80
     steps:
+      - name: sleep
+        run: sleep 30
       - name: checkout
         uses: actions/checkout@v2
       - name: blocks add node test
@@ -188,6 +190,8 @@ jobs:
       - dockerpush
     timeout-minutes: 80
     steps:
+      - name: sleep
+        run: sleep 90
       - name: checkout
         uses: actions/checkout@v2
       - name: remove node test
@@ -201,6 +205,8 @@ jobs:
       - dockerpush
     timeout-minutes: 80
     steps:
+      - name: sleep
+        run: sleep 150
       - name: checkout
         uses: actions/checkout@v2
       - name: mining system test
@@ -214,6 +220,8 @@ jobs:
       - dockerpush
     timeout-minutes: 80
     steps:
+      - name: sleep
+        run: sleep 210
       - name: checkout
         uses: actions/checkout@v2
       - name: p2p system test
@@ -227,6 +235,8 @@ jobs:
       - dockerpush
     timeout-minutes: 80
     steps:
+      - name: sleep
+        run: sleep 270
       - name: checkout
         uses: actions/checkout@v2
       - name: hare system test
@@ -240,6 +250,8 @@ jobs:
       - dockerpush
     timeout-minutes: 80
     steps:
+      - name: sleep
+        run: sleep 330
       - name: checkout
         uses: actions/checkout@v2
       - name: sync system test
