@@ -166,7 +166,7 @@ jobs:
         uses: actions/checkout@v2
       - name: late nodes system test
         run: make dockertest-late-nodes-elk
-  systemtest-blocks-add-node:
+  systemtest-mining:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
@@ -181,8 +181,8 @@ jobs:
           time: '30s'
       - name: checkout
         uses: actions/checkout@v2
-      - name: blocks add node test
-        run: make dockertest-blocks-add-node-elk
+      - name: mining system test
+        run: make dockertest-mining-elk
   systemtest-blocks-remove-node:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
@@ -200,7 +200,7 @@ jobs:
         uses: actions/checkout@v2
       - name: remove node test
         run: make dockertest-blocks-remove-node-elk
-  systemtest-mining:
+  systemtest-blocks-add-node:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
@@ -215,8 +215,8 @@ jobs:
           time: '150s'
       - name: checkout
         uses: actions/checkout@v2
-      - name: mining system test
-        run: make dockertest-mining-elk
+      - name: blocks add node test
+        run: make dockertest-blocks-add-node-elk
   systemtest-p2p:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
@@ -234,7 +234,7 @@ jobs:
         uses: actions/checkout@v2
       - name: p2p system test
         run: make dockertest-p2p-elk
-  systemtest-hare:
+  systemtest-sync:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
@@ -249,9 +249,9 @@ jobs:
           time: '270s'
       - name: checkout
         uses: actions/checkout@v2
-      - name: hare system test
-        run: make dockertest-hare-elk
-  systemtest-sync:
+      - name: sync system test
+        run: make dockertest-sync-elk
+  systemtest-hare:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
@@ -266,8 +266,8 @@ jobs:
           time: '330s'
       - name: checkout
         uses: actions/checkout@v2
-      - name: sync system test
-        run: make dockertest-sync-elk
+      - name: hare system test
+        run: make dockertest-hare-elk
 
 
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
