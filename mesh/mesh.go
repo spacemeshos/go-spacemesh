@@ -546,7 +546,7 @@ func uniqueTxIds(blocks []*types.Block, seenTxIds map[types.TransactionID]struct
 func (msh *Mesh) getTxs(txIds []types.TransactionID, l types.LayerID) []*types.Transaction {
 	txs, missing := msh.GetTransactions(txIds)
 	if len(missing) != 0 {
-		msh.Panic("could not find transactions %v from layer %v", missing, l)
+		msh.Error("could not find transactions %v from layer %v", missing, l)
 	}
 	return txs
 }
