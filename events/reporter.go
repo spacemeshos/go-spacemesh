@@ -25,7 +25,7 @@ func init() {
 }
 
 // ReportNewTx dispatches incoming events to the reporter singleton
-func ReportNewTx(tx *types.Transaction) {
+func ReportNewTx(tx *types.Transaction, valid bool) {
 	Publish(NewTx{
 		ID:          tx.ID().String(),
 		Origin:      tx.Origin().String(),
@@ -33,7 +33,7 @@ func ReportNewTx(tx *types.Transaction) {
 		Amount:      tx.Amount,
 		Fee:         tx.Fee,
 	})
-	ReportTxWithValidity(tx, true)
+	ReportTxWithValidity(tx, valid)
 }
 
 // ReportTxWithValidity reports a tx along with whether it was just invalidated

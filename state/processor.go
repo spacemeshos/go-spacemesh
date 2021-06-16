@@ -244,8 +244,7 @@ func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerID types.
 			tp.With().Warning("failed to apply transaction", tx.ID(), log.Err(err))
 			remaining = append(remaining, tx)
 		}
-		events.ReportValidTx(tx, err == nil)
-		events.ReportNewTx(tx)
+		events.ReportNewTx(tx, err == nil)
 	}
 	return
 }

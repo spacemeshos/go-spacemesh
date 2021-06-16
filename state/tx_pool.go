@@ -96,12 +96,13 @@ func getRandIdxs(numOfTxs, spaceSize int) map[uint64]struct{} {
 // Put inserts a transaction into the mem pool. It indexes it by source and dest addresses as well
 func (t *TxMempool) Put(id types.TransactionID, tx *types.Transaction) {
 	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.txs[id] = tx
 	t.getOrCreate(tx.Origin()).Add(0, tx)
 	t.addToAddr(tx.Origin(), id)
 	t.addToAddr(tx.Recipient, id)
-	t.mu.Unlock()
-	events.ReportNewTx(tx)
+	// TODO: report tx with state of "in mempool" (validity not yet established).
+	//events.ReportNewTx(tx, true)
 }
 
 // Invalidate removes transaction from pool
