@@ -176,8 +176,9 @@ jobs:
     timeout-minutes: 80
     steps:
       - name: Sleep for 30 seconds
-        run: sleep 30s
-        shell: bash
+        uses: jakejarvis/wait-action@master
+        with:
+          time: '30s'
       - name: checkout
         uses: actions/checkout@v2
       - name: blocks add node test
@@ -192,8 +193,9 @@ jobs:
     timeout-minutes: 80
     steps:
       - name: Sleep for 90 seconds
-        run: sleep 90s
-        shell: bash
+        uses: jakejarvis/wait-action@master
+        with:
+          time: '90s'
       - name: checkout
         uses: actions/checkout@v2
       - name: remove node test
@@ -208,8 +210,9 @@ jobs:
     timeout-minutes: 80
     steps:
       - name: Sleep for 150 seconds
-        run: sleep 150s
-        shell: bash
+        uses: jakejarvis/wait-action@master
+        with:
+          time: '150s'
       - name: checkout
         uses: actions/checkout@v2
       - name: mining system test
@@ -224,8 +227,9 @@ jobs:
     timeout-minutes: 80
     steps:
       - name: Sleep for 210 seconds
-        run: sleep 210s
-        shell: bash
+        uses: jakejarvis/wait-action@master
+        with:
+          time: '210s'
       - name: checkout
         uses: actions/checkout@v2
       - name: p2p system test
@@ -240,8 +244,9 @@ jobs:
     timeout-minutes: 80
     steps:
       - name: Sleep for 270 seconds
-        run: sleep 270s
-        shell: bash
+        uses: jakejarvis/wait-action@master
+        with:
+          time: '270s'
       - name: checkout
         uses: actions/checkout@v2
       - name: hare system test
@@ -256,8 +261,9 @@ jobs:
     timeout-minutes: 80
     steps:
       - name: Sleep for 330 seconds
-        run: sleep 330s
-        shell: bash
+        uses: jakejarvis/wait-action@master
+        with:
+          time: '330s'
       - name: checkout
         uses: actions/checkout@v2
       - name: sync system test
