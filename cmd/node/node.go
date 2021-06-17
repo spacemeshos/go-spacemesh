@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -540,18 +541,16 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	}
 
 	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
-	//tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
+	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
 
 	// TODO(nkryuchkov): Enable weak coin when finished.
 	//wc := weakcoin.NewWeakCoin(weakcoin.DefaultThreshold, swarm, BLS381.Verify2, vrfSigner, app.addLogger(WeakCoinLogger, lg))
-	//wc := weakcoin.ValueMock{Value: false}
-	//ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	//tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, nodeID, ld, swarm, atxdb, tBeaconDB, sgn, signing.VRFVerify, vrfSigner, wc, clock, app.addLogger(TBeaconLogger, lg))
-	//if err := tBeacon.Start(ctx); err != nil {
-	//	app.log.Panic("Failed to start tortoise beacon: %v", err)
-	//}
-
-	tBeacon := &blocks.EpochBeaconProvider{}
+	wc := weakcoin.ValueMock{Value: false}
+	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
+	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, nodeID, ld, swarm, atxdb, tBeaconDB, sgn, signing.VRFVerify, vrfSigner, wc, clock, app.addLogger(TBeaconLogger, lg))
+	if err := tBeacon.Start(ctx); err != nil {
+		app.log.Panic("Failed to start tortoise beacon: %v", err)
+	}
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
@@ -666,9 +665,9 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	gossipListener.AddListener(ctx, state.IncomingTxProtocol, priorityq.Low, processor.HandleTxGossipData)
 	gossipListener.AddListener(ctx, activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
 	gossipListener.AddListener(ctx, blocks.NewBlockProtocol, priorityq.High, blockListener.HandleBlock)
-	//gossipListener.AddListener(ctx, tortoisebeacon.TBProposalProtocol, priorityq.Low, tBeacon.HandleSerializedProposalMessage)
-	//gossipListener.AddListener(ctx, tortoisebeacon.TBFirstVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFirstVotingMessage)
-	//gossipListener.AddListener(ctx, tortoisebeacon.TBFollowingVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFollowingVotingMessage)
+	gossipListener.AddListener(ctx, tortoisebeacon.TBProposalProtocol, priorityq.Low, tBeacon.HandleSerializedProposalMessage)
+	gossipListener.AddListener(ctx, tortoisebeacon.TBFirstVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFirstVotingMessage)
+	gossipListener.AddListener(ctx, tortoisebeacon.TBFollowingVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFollowingVotingMessage)
 	// TODO(nkryuchkov): Enable weak coin when finished.
 	//gossipListener.AddListener(ctx, weakcoin.GossipProtocol, priorityq.Low, wc.HandleSerializedMessage)
 
@@ -687,7 +686,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	app.txProcessor = processor
 	app.atxDb = atxdb
 	app.layerFetch = layerFetch
-	//app.tBeacon = tBeacon
+	app.tBeacon = tBeacon
 
 	return nil
 }
@@ -867,11 +866,11 @@ func (app *SpacemeshApp) stopServices() {
 		app.gossipListener.Stop()
 	}
 
-	//if app.tBeacon != nil {
-	//	log.Info("Stopping tortoise beacon...")
-	//	// does not return any errors
-	//	app.tBeacon.Close()
-	//}
+	if app.tBeacon != nil {
+		log.Info("Stopping tortoise beacon...")
+		// does not return any errors
+		app.tBeacon.Close()
+	}
 
 	if app.poetListener != nil {
 		app.log.Info("closing poet listener")
