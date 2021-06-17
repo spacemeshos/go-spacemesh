@@ -145,7 +145,7 @@ func (t *Ticker) Notify() (int, error) {
 // TimeSinceLastTick returns the duration passed since the last layer that we ticked
 // note: the call is not lock-protected
 func (t *Ticker) timeSinceLastTick() time.Duration {
-	timeOfLastTick := t.LayerToTime(t.TimeToLayer(t.clock.Now()))
+	timeOfLastTick := t.LayerToTime(t.lastTickedLayer)
 	return t.clock.Now().Sub(timeOfLastTick)
 }
 

@@ -1,11 +1,12 @@
 package timesync
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/stretchr/testify/require"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/stretchr/testify/require"
 )
 
 var conv = LayerConv{
@@ -75,7 +76,7 @@ func TestTicker_StartNotifying(t *testing.T) {
 	r.True(tr.started)
 	_, e = tr.Notify()
 	r.NoError(e)
-	r.Equal(3, mc.countToLayer)
+	r.Equal(2, mc.countToLayer)
 }
 
 func TestTicker_Notify(t *testing.T) {
@@ -143,7 +144,12 @@ func TestTicker_timeSinceLastTick(t *testing.T) {
 		duration: 100 * time.Millisecond,
 		genesis:  c.Now().Add(-320 * time.Millisecond),
 	})
-	r.True(tr.timeSinceLastTick() >= 20)
+	// 20ms is the diff between time.now() and start of the current layer i.e. t.LayerToTime(currentLayer)
+	sinceStartOfLayer := 20 * time.Millisecond
+	r.True(tr.timeSinceLastTick() == sinceStartOfLayer)
+	c.advance(sendTickThreshold)
+	r.True(tr.timeSinceLastTick() == sinceStartOfLayer+sendTickThreshold)
+
 }
 
 func TestTicker_AwaitLayer(t *testing.T) {
