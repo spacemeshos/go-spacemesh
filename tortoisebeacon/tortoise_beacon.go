@@ -26,7 +26,7 @@ const (
 )
 
 var (
-	genesisBeacon = types.HexToHash32("0x00")
+	genesisBeacon = types.HexToHash32("0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
 )
 
 // Tortoise Beacon errors.
