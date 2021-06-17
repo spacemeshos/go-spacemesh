@@ -733,6 +733,8 @@ func (s *Syncer) getBlocks(ctx context.Context, blockIds []types.BlockID) error 
 		if !result {
 			return nil
 		}
+	case <-time.After(s.GetTimeout()):
+		return fmt.Errorf("getBlocks timed out waiting for result")
 	}
 
 	tmr.ObserveDuration()

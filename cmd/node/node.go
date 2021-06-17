@@ -578,7 +578,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		hOracle = eligibility.New(beacon, atxdb.CalcActiveSetSize, signing.VRFVerify, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	}
 
-	gossipListener := service.NewListener(swarm, syncer, app.addLogger(GossipListener, lg))
+	gossipListener := service.NewListener(swarm, syncer, app.Config.P2P, app.addLogger(GossipListener, lg))
 	ha := app.HareFactory(ctx, mdb, swarm, sgn, nodeID, syncer, msh, hOracle, idStore, clock, lg)
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
