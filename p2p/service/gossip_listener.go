@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"sync"
 )
@@ -22,16 +23,18 @@ type Listener struct {
 	syncer               Fetcher
 	wg                   sync.WaitGroup
 	shouldListenToGossip enableGossipFunc
+	config               config.Config
 }
 
 // NewListener creates a new listener struct
-func NewListener(net Service, syncer Fetcher, shouldListenToGossip enableGossipFunc, log log.Log) *Listener {
+func NewListener(net Service, syncer Fetcher, shouldListenToGossip enableGossipFunc, config config.Config, log log.Log) *Listener {
 	return &Listener{
 		Log:                  &log,
 		net:                  net,
 		syncer:               syncer,
 		shouldListenToGossip: shouldListenToGossip,
 		wg:                   sync.WaitGroup{},
+		config:               config,
 	}
 }
 
@@ -41,9 +44,6 @@ type Syncer interface {
 	FetchPoetProof(ctx context.Context, poetProofRef []byte) error
 	ListenToGossip() bool
 	GetBlock(ID types.BlockID) (*types.Block, error)
-	//GetTxs(IDs []types.TransactionID) error
-	//GetBlocks(IDs []types.BlockID) error
-	//GetAtxs(IDs []types.ATXID) error
 	IsSynced(context.Context) bool
 }
 
@@ -67,7 +67,7 @@ func (l *Listener) AddListener(ctx context.Context, channel string, priority pri
 	l.channels = append(l.channels, ch)
 	l.stoppers = append(l.stoppers, stop)
 	l.wg.Add(1)
-	go l.listenToGossip(log.WithNewSessionID(ctx), dataHandler, ch, stop)
+	go l.listenToGossip(log.WithNewSessionID(ctx), dataHandler, ch, stop, channel)
 }
 
 // Stop stops listening to all gossip channels
@@ -78,8 +78,38 @@ func (l *Listener) Stop() {
 	l.wg.Wait()
 }
 
-func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHandler, gossipChannel chan GossipMessage, stop chan struct{}) {
-	l.WithContext(ctx).Info("start listening")
+func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHandler, gossipChannel chan GossipMessage, stop chan struct{}, channel string) {
+	l.WithContext(ctx).With().Info("start listening to gossip", log.String("protocol", channel))
+
+	// fill the channel with tokens to limit number of concurrent routines
+	tokenChan := make(chan struct{}, l.config.MaxGossipRoutines)
+	for i := 0; i < l.config.MaxGossipRoutines; i++ {
+		tokenChan <- struct{}{}
+	}
+
+	handleMsg := func(ctx context.Context, data GossipMessage) {
+		// get a token to create a new channel
+		l.WithContext(ctx).With().Info("waiting for available slot for gossip handler",
+			log.Int("available_slots", len(tokenChan)),
+			log.Int("total_slots", cap(tokenChan)))
+		<-tokenChan
+
+		l.WithContext(ctx).With().Info("got gossip message, forwarding to data handler",
+			log.String("protocol", channel),
+			log.Int("queue_length", len(gossipChannel)))
+		if !l.syncer.ListenToGossip() {
+			// not accepting data
+			l.WithContext(ctx).Info("not currently listening to gossip, dropping message")
+			return
+		}
+		go func() {
+			// TODO: these handlers should have an API that includes a cancel method. they should time out eventually.
+			dataHandler(ctx, data, l.syncer)
+			// replace token when done
+			tokenChan <- struct{}{}
+		}()
+	}
+
 	for {
 		select {
 		case <-stop:
@@ -90,7 +120,7 @@ func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHan
 				// not accepting data
 				continue
 			}
-			dataHandler(log.WithNewRequestID(ctx), data, l.syncer)
+			handleMsg(log.WithNewRequestID(ctx), data)
 		}
 	}
 }

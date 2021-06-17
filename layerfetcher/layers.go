@@ -252,8 +252,7 @@ func (l *Logic) PollLayer(ctx context.Context, layer types.LayerID) chan LayerPr
 		timeoutFunc := func(err error) {
 			l.receiveLayerHash(ctx, layer, peer, len(peers), nil, err)
 		}
-		err := l.net.SendRequest(ctx, LayerHashMsg, layer.Bytes(), p, receiveForPeerFunc, timeoutFunc)
-		if err != nil {
+		if err := l.net.SendRequest(ctx, LayerHashMsg, layer.Bytes(), p, receiveForPeerFunc, timeoutFunc); err != nil {
 			l.receiveLayerHash(ctx, layer, peer, len(peers), nil, err)
 		}
 	}
@@ -292,14 +291,14 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 	}
 	l.log.Info("got hashes for layer, now aggregating")
 	l.layerHashResM.Unlock()
-	errors := 0
+	errs := 0
 	//aggregate hashes so that same hash will not be requested several times
 	hashes := make(map[types.Hash32][]p2ppeers.Peer)
 	l.layerHashResM.RLock()
 	for peer, hash := range l.layerHashResults[id] {
 		//count nil hashes - mark errors.
 		if hash == nil {
-			errors++
+			errs++
 		} else {
 			// if there is a new hash - query for it
 			if _, ok := hashes[*hash]; !ok {
@@ -316,7 +315,7 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 
 	// if more than half the peers returned an error, fail the sync of the entire layer
 	// todo: think whether we should panic here
-	if errors > peers/2 {
+	if errs > peers/2 {
 		l.log.Error("cannot sync layer %v", id)
 		l.notifyLayerPromiseResult(id, 0, fmt.Errorf("too many peers returned error"))
 		return
@@ -345,12 +344,10 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 			l.receiveBlockHashes(ctx, id, nil, len(hashes), err)
 		}
 	}
-
 }
 
 // notifyLayerPromiseResult notifies that a layer result has been received or wasn't received
 func (l *Logic) notifyLayerPromiseResult(id types.LayerID, expectedResults int, err error) {
-
 	// count number of results - only after all results were received we can notify the caller
 	l.blockHashResM.Lock()
 	// put false if no blocks

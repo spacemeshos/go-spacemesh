@@ -653,14 +653,17 @@ func (s *Syncer) waitLayer(ch timesync.LayerTimer) (types.LayerID, bool) {
 
 func (s *Syncer) getLayerFromNeighbors(ctx context.Context, currentSyncLayer types.LayerID) (*types.Layer, error) {
 	ch := s.fetcher.PollLayer(ctx, currentSyncLayer)
-	res := <-ch
-	if res.Err != nil {
+	select {
+	case res := <-ch:
 		if res.Err == layerfetcher.ErrZeroLayer {
 			return types.NewLayer(currentSyncLayer), nil
+		} else if res.Err != nil {
+			return nil, res.Err
 		}
-		return nil, res.Err
+		return s.GetLayer(currentSyncLayer)
+	case <-time.After(s.GetTimeout()):
+		return nil, fmt.Errorf("getLayerFromNeighbors timed out waiting for result")
 	}
-	return s.GetLayer(currentSyncLayer)
 }
 
 // GetBlocks fetches list of blocks from peers

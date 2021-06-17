@@ -20,6 +20,8 @@ const (
 	defaultTCPPort = 7513
 	// defaultTCPInterface is the inet interface that P2P listens on by default
 	defaultTCPInterface = "0.0.0.0"
+	// max number of parallel gossip goroutines per channel (protocol)
+	defaultMaxGossipRoutines = 50
 )
 
 // Values specifies default values for node config params.
@@ -56,6 +58,7 @@ type Config struct {
 	SwarmConfig           SwarmConfig   `mapstructure:"swarm"`
 	BufferSize            int           `mapstructure:"buffer-size"`
 	MsgSizeLimit          int           `mapstructure:"msg-size-limit"` // in bytes
+	MaxGossipRoutines     int           `mapstructure:"max-gossip-routines"`
 }
 
 // SwarmConfig specifies swarm config params.
@@ -71,7 +74,6 @@ type SwarmConfig struct {
 
 // DefaultConfig defines the default p2p configuration
 func DefaultConfig() Config {
-
 	// SwarmConfigValues defines default values for swarm config params.
 	var SwarmConfigValues = SwarmConfig{
 		Gossip:                 true,
@@ -99,6 +101,7 @@ func DefaultConfig() Config {
 		SwarmConfig:           SwarmConfigValues,
 		BufferSize:            10000,
 		MsgSizeLimit:          UnlimitedMsgSize,
+		MaxGossipRoutines:     defaultMaxGossipRoutines,
 	}
 }
 
