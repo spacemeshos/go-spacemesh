@@ -30,15 +30,15 @@ spec:
         fsGroup: 1000
         runAsUser: 1000
       affinity:
-        podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: app
-                    operator: In
-                    values:
-                      - "logstash"
-              topologyKey: kubernetes.io/hostname
+#        podAntiAffinity:
+#          requiredDuringSchedulingIgnoredDuringExecution:
+#            - labelSelector:
+#                matchExpressions:
+#                  - key: app
+#                    operator: In
+#                    values:
+#                      - "logstash"
+#              topologyKey: kubernetes.io/hostname
       terminationGracePeriodSeconds: 120
       volumes:
         - name: pipeline

@@ -14,7 +14,7 @@ import (
 )
 
 func TestNewBlockEvent(t *testing.T) {
-	url := "tcp://localhost:56565"
+	url := "tcp://localhost:12321"
 
 	eventPublisher, err := NewEventPublisher(url)
 	assert.NoError(t, err)

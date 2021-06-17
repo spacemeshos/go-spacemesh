@@ -87,15 +87,14 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, sync s
 
 	// set the block id when received
 	blk.Initialize()
-	logger := bh.WithContext(ctx)
-	logger.With().Info("got new block", blk.Fields()...)
-	logger = logger.WithFields(blk.ID(), blk.Layer())
+	logger := bh.WithContext(ctx).WithFields(blk.ID(), blk.Layer())
 
 	// check if known
 	if _, err := bh.mesh.GetBlock(blk.ID()); err == nil {
 		logger.Info("we already know this block")
 		return nil
 	}
+	logger.With().Info("got new block", blk.Fields()...)
 
 	if err := bh.blockSyntacticValidation(ctx, &blk, sync); err != nil {
 		logger.With().Error("failed to validate block", log.Err(err))
@@ -185,9 +184,10 @@ func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.B
 			return errNoActiveSet
 		}
 	}
-	err := syncer.GetAtxs(ctx, atxs)
-	bh.WithContext(ctx).With().Debug("block handler done fetching atxs referenced by block", blk.ID(), log.Err(err))
-	return err
+	if len(atxs) > 0 {
+		return syncer.GetAtxs(ctx, atxs)
+	}
+	return nil
 }
 
 func (bh *BlockHandler) fastValidation(block *types.Block) error {

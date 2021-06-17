@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -21,7 +22,7 @@ func RandomHash() types.Hash32 {
 	rand.Seed(time.Now().UnixNano())
 	b := make([]byte, 8)
 	_, err := rand.Read(b)
-	// Note that err == nil only if we read len(b) bytes.
+	// Note that Err == nil only if we read len(b) bytes.
 	if err != nil {
 		return types.Hash32{}
 	}
@@ -61,11 +62,29 @@ func (m *mockNet) SendRequest(ctx context.Context, msgType server.MessageType, p
 	return nil
 }
 
+func (mockNet) Close() {
+
+}
+
 type layerDBMock struct {
 	layers  map[types.Hash32][]types.BlockID
 	vectors map[types.Hash32][]types.BlockID
 	gossip  []types.BlockID
 	hashes  map[types.LayerID]types.Hash32
+}
+
+func (l *layerDBMock) GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error) {
+	return l.vectors[hash], nil
+}
+
+func (l *layerDBMock) SaveLayerHashInputVector(id types.Hash32, data []byte) error {
+	var blocks []types.BlockID
+	err := types.BytesToInterface(data, blocks)
+	if err != nil {
+		return err
+	}
+	l.vectors[id] = blocks
+	return nil
 }
 
 func newLayerDBMock() *layerDBMock {
@@ -96,12 +115,22 @@ func (l layerDBMock) Get() []types.BlockID {
 type mockFetcher struct {
 }
 
+func (m mockFetcher) Stop() {
+}
+
+func (m mockFetcher) Start() {
+}
+
+func (m mockFetcher) AddDB(hint fetch.Hint, db database.Store) {
+
+}
+
 func (m mockFetcher) GetHash(hash types.Hash32, h fetch.Hint, validateAndSubmit bool) chan fetch.HashDataPromiseResult {
-	panic("implement me")
+	return nil
 }
 
 func (m mockFetcher) GetHashes(hash []types.Hash32, hint fetch.Hint, validateAndSubmit bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
-	panic("implement me")
+	return nil
 }
 
 type mockBlocks struct {
@@ -114,23 +143,23 @@ func (m mockBlocks) HandleBlockData(ctx context.Context, date []byte, fetcher se
 type mockAtx struct {
 }
 
-func (m mockAtx) HandleAtxData(data []byte, syncer service.Fetcher) error {
+func (m mockAtx) HandleAtxData(ctx context.Context, data []byte, syncer service.Fetcher) error {
 	panic("implement me")
 }
 
 func NewMockLogic(net *mockNet, layers layerDB, blocksDB gossipBlocks, blocks blockHandler, atxs atxHandler, fetcher fetch.Fetcher, log log.Log) *Logic {
 	var l = &Logic{
-		log:              log,
-		fetcher:          fetcher,
-		net:              net,
-		layerHashResults: make(map[types.LayerID]map[p2ppeers.Peer]types.Hash32),
-		blockHashErrors:  make(map[types.LayerID]int),
-		layerResults:     make(map[types.LayerID][]chan LayerPromiseResult),
-		atxs:             atxs,
-		blockHandler:     blocks,
-		layerDB:          layers,
-		gossipBlocks:     blocksDB,
-		layerResM:        sync.RWMutex{},
+		log:                  log,
+		fetcher:              fetcher,
+		net:                  net,
+		layerHashResults:     make(map[types.LayerID]map[p2ppeers.Peer]*types.Hash32),
+		blockHashResults:     make(map[types.LayerID][]bool),
+		layerResultsChannels: make(map[types.LayerID][]chan LayerPromiseResult),
+		atxs:                 atxs,
+		blockHandler:         blocks,
+		layerDB:              layers,
+		gossipBlocks:         blocksDB,
+		layerResM:            sync.RWMutex{},
 	}
 	return l
 }
@@ -141,7 +170,7 @@ func Test_LayerHashReceiver(t *testing.T) {
 	l := NewMockLogic(&mockNet{}, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerHash"))
 	h := RandomHash()
 	db.hashes[layerID] = h
-	l.LayerHashBlocksReceiver(layerID.Bytes())
+	l.LayerHashBlocksReceiver(context.TODO(), layerID.Bytes())
 }
 
 func TestLogic_LayerHashBlocksReceiver(t *testing.T) {
@@ -150,7 +179,7 @@ func TestLogic_LayerHashBlocksReceiver(t *testing.T) {
 	h := RandomHash()
 	db.layers[h] = []types.BlockID{types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID()}
 
-	outB := l.LayerHashBlocksReceiver(h.Bytes())
+	outB := l.LayerHashBlocksReceiver(context.TODO(), h.Bytes())
 	var act []types.BlockID
 	err := types.BytesToInterface(outB, &act)
 	assert.NoError(t, err)

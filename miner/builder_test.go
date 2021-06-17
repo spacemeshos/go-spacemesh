@@ -84,7 +84,7 @@ func (mockSyncer) ListenToGossip() bool {
 	return true
 }
 
-func (mockSyncer) FetchPoetProof(context.Context, []byte) error { return nil }
+func (mockSyncer) GetPoetProof(ctx context.Context, h types.Hash32) error { return nil }
 
 func (m mockSyncer) IsSynced(context.Context) bool { return !m.notSynced }
 
@@ -857,5 +857,5 @@ func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, 
 		StartTick:      startTick,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipstChallenge, coinbase, nipst, nil)
+	return types.NewActivationTx(nipstChallenge, coinbase, nipst, 0, nil)
 }

@@ -52,12 +52,12 @@ type Switch struct {
 	gossipC   chan struct{}
 	config    config.Config
 	logger    log.Log
+
 	// Context for cancel
-	ctx        context.Context
-	cancelFunc context.CancelFunc
+	shutdownCtx context.Context // this context will be shared with all sub components in p2p
+	cancelFunc  context.CancelFunc
 
 	shutdownOnce sync.Once
-	shutdown     chan struct{} // local request to kill the Switch from outside. e.g when local node is shutting down
 
 	// p2p identity with private key for signing
 	lNode node.LocalNode
@@ -104,19 +104,13 @@ type Switch struct {
 }
 
 func (s *Switch) waitForBoot() error {
-	_, ok := <-s.bootChan
-	if !ok {
-		return s.bootErr
-	}
-	return nil
+	<-s.bootChan
+	return s.bootErr
 }
 
 func (s *Switch) waitForGossip() error {
-	_, ok := <-s.gossipC
-	if !ok {
-		return s.gossipErr
-	}
-	return nil
+	<-s.gossipC
+	return s.gossipErr
 }
 
 // GossipReady is a chan which is closed when we established initial min connections with peers.
@@ -162,22 +156,24 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 		}
 	}
 
+	shutdownCtx, cancel := context.WithCancel(ctx)
+
 	// Create networking
-	n, err := net.NewNet(config, l, logger.WithName("tcpnet"))
+	n, err := net.NewNet(shutdownCtx, config, l, logger.WithName("tcpnet"))
 	if err != nil {
+		cancel()
 		return nil, fmt.Errorf("can't create switch without a network, err: %v", err)
 	}
 
-	udpnet, err := net.NewUDPNet(config, l, logger.WithName("udpnet"))
+	udpnet, err := net.NewUDPNet(shutdownCtx, config, l, logger.WithName("udpnet"))
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 
-	localCtx, cancel := context.WithCancel(ctx)
-
 	s := &Switch{
-		ctx:        localCtx,
-		cancelFunc: cancel,
+		shutdownCtx: shutdownCtx,
+		cancelFunc:  cancel,
 
 		config: config,
 		logger: logger,
@@ -186,7 +182,6 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 
 		bootChan: make(chan struct{}),
 		gossipC:  make(chan struct{}),
-		shutdown: make(chan struct{}), // non-buffered so requests to shutdown block until Switch is shut down
 
 		initial:           make(chan struct{}),
 		morePeersReq:      make(chan struct{}, config.MaxInboundPeers+config.OutboundPeersTarget),
@@ -204,12 +199,12 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 	}
 
 	// Create the udp version of Switch
-	mux := NewUDPMux(ctx, s.lNode, s.lookupFunc, udpnet, s.config.NetworkID, s.logger)
+	mux := NewUDPMux(ctx, s.shutdownCtx, s.lNode, s.lookupFunc, udpnet, s.config.NetworkID, s.logger)
 	s.udpServer = mux
 
 	// todo : if discovery on
 	s.discover = discovery.New(ctx, l, config.SwarmConfig, s.udpServer, datadir, s.logger) // create table and discovery protocol
-	cpool := connectionpool.NewConnectionPool(s.network.Dial, l.PublicKey(), logger)
+	cpool := connectionpool.NewConnectionPool(s.shutdownCtx, s.network.Dial, l.PublicKey(), logger)
 	s.network.SubscribeOnNewRemoteConnections(func(nce net.NewConnectionEvent) {
 		ctx := log.WithNewSessionID(ctx)
 		if err := cpool.OnNewConnection(ctx, nce); err != nil {
@@ -222,7 +217,7 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 	s.network.SubscribeClosingConnections(cpool.OnClosedConnection)
 	s.network.SubscribeClosingConnections(s.onClosedConnection)
 	s.cPool = cpool
-	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, peers.NewPeers(s, s.logger), s.LocalNode().PublicKey(), s.logger)
+	s.gossip = gossip.NewProtocol(s.shutdownCtx, config.SwarmConfig, s, peers.NewPeers(s, s.logger), s.LocalNode().PublicKey(), s.logger)
 	s.logger.With().Debug("created new swarm", l.PublicKey())
 	return s, nil
 }
@@ -287,7 +282,7 @@ func (s *Switch) Start(ctx context.Context) error {
 	if s.config.SwarmConfig.Bootstrap {
 		go func() {
 			b := time.Now()
-			if err := s.discover.Bootstrap(s.ctx); err != nil {
+			if err := s.discover.Bootstrap(s.shutdownCtx); err != nil {
 				s.bootErr = err
 				close(s.bootChan)
 				s.Shutdown()
@@ -299,6 +294,7 @@ func (s *Switch) Start(ctx context.Context) error {
 				log.Bool("success", size >= s.config.SwarmConfig.RandomConnections && s.bootErr == nil),
 				log.Int("size", size),
 				log.Duration("time_elapsed", time.Since(b)))
+
 		}()
 	}
 
@@ -309,14 +305,14 @@ func (s *Switch) Start(ctx context.Context) error {
 		s.gossip.Start(log.WithNewSessionID(ctx))
 		go func() {
 			if s.config.SwarmConfig.Bootstrap {
-				if err := s.waitForBoot(); err != nil {
+				if s.waitForBoot() != nil {
 					return
 				}
 			}
-			err := s.startNeighborhood(ctx) // non blocking
 			//todo:maybe start listening only after we got enough outbound neighbors?
-			if err != nil {
-				s.gossipErr = err
+			s.gossipErr = s.startNeighborhood(ctx) // non blocking
+
+			if s.gossipErr != nil {
 				close(s.gossipC)
 				s.Shutdown()
 				return
@@ -432,8 +428,6 @@ func (s *Switch) RegisterGossipProtocol(protocol string, prio priorityq.Priority
 func (s *Switch) Shutdown() {
 	s.shutdownOnce.Do(func() {
 		s.cancelFunc()
-		close(s.shutdown)
-		s.gossip.Close()
 		s.discover.Shutdown()
 		s.cPool.Shutdown()
 		s.network.Shutdown()
@@ -503,6 +497,15 @@ func (s *Switch) RegisterDirectProtocolWithChannel(protocol string, ingressChann
 	return ingressChannel
 }
 
+func (s *Switch) isShuttingDown() bool {
+	select {
+	case <-s.shutdownCtx.Done():
+		return true
+	default:
+	}
+	return false
+}
+
 // listenToNetworkMessages is listening on new messages from the opened connections and processes them.
 func (s *Switch) listenToNetworkMessages(ctx context.Context) {
 	// We listen to each of the messages queues we get from `net`
@@ -516,9 +519,12 @@ func (s *Switch) listenToNetworkMessages(ctx context.Context) {
 			for {
 				select {
 				case msg := <-c:
+					if s.isShuttingDown() {
+						return
+					}
 					// requestID will be restored from the saved message, no need to generate one here
 					s.processMessage(ctx, msg)
-				case <-s.shutdown:
+				case <-s.shutdownCtx.Done():
 					return
 				}
 			}
@@ -718,16 +724,28 @@ func (s *Switch) startNeighborhood(ctx context.Context) error {
 
 // peersLoop executes one routine at a time to connect new peers.
 func (s *Switch) peersLoop(ctx context.Context) {
-loop:
 	for {
 		select {
 		case <-s.morePeersReq:
+			if s.isShuttingDown() {
+				return
+			}
 			s.logger.WithContext(ctx).Debug("loop: got morePeersReq")
 			s.askForMorePeers(ctx)
 		//todo: try getting the connections (heartbeat)
-		case <-s.shutdown:
-			break loop // maybe error ?
+		case <-s.shutdownCtx.Done():
+			return
 		}
+	}
+}
+
+func (s *Switch) closeInitial() {
+	select {
+	case <-s.initial:
+		// Nothing to do if channel is closed.
+	default:
+		// Close channel if it is not closed.
+		close(s.initial)
 	}
 }
 
@@ -768,7 +786,7 @@ func (s *Switch) askForMorePeers(ctx context.Context) {
 		s.initOnce.Do(func() {
 			s.logger.WithContext(ctx).With().Info("gossip connected to initial required neighbors",
 				log.Int("n", len(s.outpeers)))
-			close(s.initial)
+			s.closeInitial()
 			s.outpeersMutex.RLock()
 			var strs []string
 			for pk := range s.outpeers {
@@ -780,12 +798,15 @@ func (s *Switch) askForMorePeers(ctx context.Context) {
 		})
 		return
 	}
-	// if we could'nt get any maybe were initializing
+
+	s.logger.Warning("needs %d more peers", s.config.SwarmConfig.RandomConnections-numpeers)
+
+	// if we couldn't get any maybe we're initializing
 	// wait a little bit before trying again
 	tmr := time.NewTimer(NoResultsInterval)
 	defer tmr.Stop()
 	select {
-	case <-s.shutdown:
+	case <-s.shutdownCtx.Done():
 		return
 	case <-tmr.C:
 		s.morePeersReq <- struct{}{}
@@ -801,7 +822,7 @@ func (s *Switch) getMorePeers(ctx context.Context, numpeers int) int {
 	logger := s.logger.WithContext(ctx)
 
 	// discovery should provide us with random peers to connect to
-	nds := s.discover.SelectPeers(s.ctx, numpeers)
+	nds := s.discover.SelectPeers(s.shutdownCtx, numpeers)
 	ndsLen := len(nds)
 	if ndsLen == 0 {
 		logger.Debug("peer sampler returned nothing")
@@ -819,6 +840,9 @@ func (s *Switch) getMorePeers(ctx context.Context, numpeers int) int {
 	// Try a connection to each peer.
 	// TODO: try splitting the load and don't connect to more than X at a time
 	for i := 0; i < ndsLen; i++ {
+		if s.isShuttingDown() {
+			break
+		}
 		go func(nd *node.Info, reportChan chan cnErr) {
 			if nd.PublicKey() == s.lNode.PublicKey() {
 				reportChan <- cnErr{nd, errors.New("connection to self")}
@@ -878,7 +902,7 @@ loop:
 				log.FieldNamed("peer_id", cne.n.PublicKey()))
 		case <-tm.C:
 			break loop
-		case <-s.shutdown:
+		case <-s.shutdownCtx.Done():
 			break loop
 		}
 
@@ -937,6 +961,7 @@ func (s *Switch) addIncomingPeer(n p2pcrypto.PublicKey) error {
 	s.inpeersMutex.Unlock()
 	if !exist {
 		s.publishNewPeer(n)
+		s.discover.Attempt(n) // or good?
 		metrics.InboundPeers.Add(1)
 	}
 	return nil

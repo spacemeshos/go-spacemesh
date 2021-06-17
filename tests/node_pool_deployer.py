@@ -6,9 +6,9 @@ import tests.utils as ut
 
 class NodePoolDep:
     resources = ["bootstrap", "client"]
-    gcloud_delete = 'yes | gcloud container --project="{project_name}" node-pools delete {pool_name} ' \
+    gcloud_delete = 'gcloud --quiet container --project="{project_name}" node-pools delete {pool_name} ' \
                     '--cluster={cluster_name} --zone={zone}'
-    gcloud_cmd = 'yes | gcloud beta container --project "{project_name}" node-pools create "{pool_name}" ' \
+    gcloud_cmd = 'gcloud --quiet beta container --project "{project_name}" node-pools create "{pool_name}" ' \
                  '--cluster "{cluster_name}" --zone "{zone}" --node-version "{node_version}" ' \
                  '--machine-type "custom-{cpu}-{mem}" --image-type "COS" --disk-type "{disk_type}" ' \
                  '--disk-size "{disk_size}" --node-labels {labels} --metadata disable-legacy-endpoints=true ' \
@@ -95,7 +95,7 @@ class NodePoolDep:
         retry = 800
         interval = 10
         ut.exec_wait(
-            self.gcloud_delete.format(project_name=self.project_name , pool_name=self.pool_name,
+            self.gcloud_delete.format(project_name=self.project_name, pool_name=self.pool_name,
                                       cluster_name=self.cluster_name, zone=self.zone),
             retry=retry, interval=interval
         )
