@@ -1072,11 +1072,11 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	}
 
 	if app.Config.CollectMetrics {
-		metrics.StartCollectingMetrics(app.Config.MetricsPort)
+		metrics.StartMetricsServer(app.Config.MetricsPort)
 	}
 
 	if app.Config.MetricsPush != "" {
-		metrics.StartMetricsServer(app.Config.MetricsPush, app.Config.MetricsPushPeriod,
+		metrics.StartPushingMetrics(app.Config.MetricsPush, app.Config.MetricsPushPeriod,
 			swarm.LocalNode().PublicKey().String(), strconv.Itoa(int(app.Config.P2P.NetworkID)))
 
 	}
