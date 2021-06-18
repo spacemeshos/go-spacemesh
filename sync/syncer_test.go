@@ -44,48 +44,6 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-type fetchMock struct {
-}
-
-func (f fetchMock) PollLayer(layer types.LayerID) chan layerfetcher.LayerPromiseResult {
-	return nil
-}
-
-func (f fetchMock) GetAtxs(IDs []types.ATXID) error {
-	return nil
-}
-
-func (f fetchMock) GetEpochATXs(id types.EpochID) error {
-	return nil
-}
-
-func (f fetchMock) GetBlocks(IDs []types.BlockID) error {
-	return nil
-}
-
-func (f fetchMock) FetchBlock(ID types.BlockID) error {
-	return nil
-}
-
-func (f fetchMock) GetPoetProof(id types.Hash32) error {
-	return nil
-}
-
-type alwaysOkAtxDb struct {
-}
-
-func (alwaysOkAtxDb) ProcessAtx(atx *types.ActivationTx) error {
-	return nil
-}
-
-func (alwaysOkAtxDb) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
-	return &types.ActivationTx{}, nil
-}
-
-func (alwaysOkAtxDb) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
-	return []types.ATXID{*types.EmptyATXID}
-}
-
 type PeersMock struct {
 	getPeers func() []p2ppeers.Peer
 }
@@ -1335,7 +1293,7 @@ func TestSyncer_handleNotSyncedZeroBlocksLayer(t *testing.T) {
 	time.Sleep(time.Second) // give layer fetcher a chance to start
 	go sync.handleNotSynced(context.TODO(), 1)
 	select {
-	case <-time.After(10 * time.Second):
+	case <-time.After(3 * time.Second):
 		r.Fail("timed out")
 	case <-lv.validated:
 		break

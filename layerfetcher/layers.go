@@ -103,7 +103,6 @@ func DefaultConfig() Config {
 
 // NewLogic creates a new instance of layer fetching logic
 func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHandler, poet poetDb, atxIDs atxIDsDB, txs TxProcessor, network service.Service, fetcher fetch.Fetcher, layers layerDB, log log.Log) *Logic {
-
 	srv := fetch.NewMessageNetwork(ctx, cfg.RequestTimeout, network, layersProtocol, log)
 	l := &Logic{
 		log:                  log,

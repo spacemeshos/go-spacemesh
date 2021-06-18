@@ -55,10 +55,6 @@ func (m *mockNet) SendRequest(ctx context.Context, msgType server.MessageType, p
 		return nil
 	}
 
-	/*if m.callSuccessCallback {
-		return resHandler()
-	}*/
-
 	return nil
 }
 
@@ -122,7 +118,6 @@ func (m mockFetcher) Start() {
 }
 
 func (m mockFetcher) AddDB(hint fetch.Hint, db database.Store) {
-
 }
 
 func (m mockFetcher) GetHash(hash types.Hash32, h fetch.Hint, validateAndSubmit bool) chan fetch.HashDataPromiseResult {
