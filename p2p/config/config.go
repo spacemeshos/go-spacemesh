@@ -110,5 +110,6 @@ func DefaultTestConfig() Config {
 	conf := DefaultConfig()
 	conf.TCPPort += 10000
 	conf.TCPInterface = "127.0.0.1"
+	conf.MaxGossipRoutines = 2
 	return conf
 }

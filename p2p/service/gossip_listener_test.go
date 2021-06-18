@@ -10,49 +10,54 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 type syncMock struct {
-	Synced bool
+	Synced           bool
+	listenToGossipFn func() bool
 }
 
-func (m *syncMock) FetchBlock(ctx context.Context, ID types.BlockID) error {
+func (sm *syncMock) FetchBlock(context.Context, types.BlockID) error {
 	return nil
 }
 
-func (m *syncMock) FetchAtx(ctx context.Context, ID types.ATXID) error {
+func (sm *syncMock) FetchAtx(context.Context, types.ATXID) error {
 	return nil
 }
 
-func (m *syncMock) GetPoetProof(ctx context.Context, ID types.Hash32) error {
+func (sm *syncMock) GetPoetProof(context.Context, types.Hash32) error {
 	return nil
 }
 
-func (m *syncMock) GetBlock(ID types.BlockID) error {
+func (sm *syncMock) GetBlock(types.BlockID) error {
 	return nil
 }
 
-func (m *syncMock) GetTxs(ctx context.Context, IDs []types.TransactionID) error {
+func (sm *syncMock) GetTxs(context.Context, []types.TransactionID) error {
 	return nil
 }
 
-func (m *syncMock) GetBlocks(ctx context.Context, IDs []types.BlockID) error {
+func (sm *syncMock) GetBlocks(context.Context, []types.BlockID) error {
 	return nil
 }
 
-func (m *syncMock) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
+func (sm *syncMock) GetAtxs(context.Context, []types.ATXID) error {
 	return nil
 }
 
-func (*syncMock) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx) error {
+func (*syncMock) FetchAtxReferences(context.Context, *types.ActivationTx) error {
 	return nil
 }
 
-func (*syncMock) FetchPoetProof(ctx context.Context, poetProofRef []byte) error {
+func (*syncMock) FetchPoetProof(context.Context, []byte) error {
 	panic("implement me")
 }
 
-func (*syncMock) ListenToGossip() bool {
+func (sm *syncMock) ListenToGossip() bool {
+	if sm.listenToGossipFn != nil {
+		return sm.listenToGossipFn()
+	}
 	return true
 }
 
@@ -63,7 +68,8 @@ func (*syncMock) IsSynced(context.Context) bool {
 func Test_AddListener(t *testing.T) {
 	net := NewSimulator()
 	n1 := net.NewNode()
-	l := NewListener(n1, &syncMock{true}, func() bool { return true }, config.DefaultConfig(), log.NewDefault(n1.Info.ID.String()))
+	l := NewListener(n1, &syncMock{Synced: true}, func() bool { return true }, config.DefaultConfig(), log.NewDefault(n1.Info.ID.String()))
+	defer l.Stop()
 
 	var channelCount, secondChannel int32
 	wg := sync.WaitGroup{}
@@ -86,16 +92,15 @@ func Test_AddListener(t *testing.T) {
 	assert.NoError(t, n1.Broadcast(context.TODO(), "channel2", []byte{}))
 
 	wg.Wait()
-	assert.Equal(t, atomic.LoadInt32(&channelCount), int32(1))
-	assert.Equal(t, atomic.LoadInt32(&secondChannel), int32(1))
-
-	l.Stop()
+	assert.Equal(t, int32(1), atomic.LoadInt32(&channelCount))
+	assert.Equal(t, int32(1), atomic.LoadInt32(&secondChannel))
 }
 
 func Test_AddListener_notSynced(t *testing.T) {
 	net := NewSimulator()
 	n1 := net.NewNode()
-	l := NewListener(n1, &syncMock{false}, func() bool { return true }, config.DefaultConfig(), log.NewDefault(n1.Info.ID.String()))
+	l := NewListener(n1, &syncMock{Synced: false}, func() bool { return true }, config.DefaultConfig(), log.NewDefault(n1.Info.ID.String()))
+	defer l.Stop()
 
 	var channelCount, secondChannel int32
 
@@ -113,8 +118,54 @@ func Test_AddListener_notSynced(t *testing.T) {
 	assert.NoError(t, n1.Broadcast(context.TODO(), "channel1", []byte{}))
 	assert.NoError(t, n1.Broadcast(context.TODO(), "channel2", []byte{}))
 
-	assert.Equal(t, atomic.LoadInt32(&channelCount), int32(0))
-	assert.Equal(t, atomic.LoadInt32(&secondChannel), int32(0))
+	assert.Equal(t, int32(0), atomic.LoadInt32(&channelCount))
+	assert.Equal(t, int32(0), atomic.LoadInt32(&secondChannel))
+}
 
-	l.Stop()
+func TestListenerConcurrency(t *testing.T) {
+	net := NewSimulator()
+	n1 := net.NewNode()
+	var listenCount int32
+	listenFn := func() bool {
+		atomic.AddInt32(&listenCount, 1)
+		return true
+	}
+	conf := config.DefaultTestConfig()
+	l := NewListener(n1, &syncMock{true, listenFn}, func() bool { return true }, conf, log.NewDefault(n1.Info.ID.String()))
+	defer l.Stop()
+
+	var channelCount int32
+
+	releaseChan := make(chan struct{})
+	handlerFn := func(ctx context.Context, data GossipMessage, syncer Fetcher) {
+		<-releaseChan
+		atomic.AddInt32(&channelCount, 1)
+	}
+
+	l.AddListener(context.TODO(), "channel1", priorityq.Mid, handlerFn)
+
+	assert.Equal(t, 2, conf.MaxGossipRoutines)
+
+	// broadcast several messages. expect the first two to call a handler, then the rest should block.
+	assert.NoError(t, n1.Broadcast(context.TODO(), "channel1", []byte{}))
+	assert.NoError(t, n1.Broadcast(context.TODO(), "channel1", []byte{}))
+	assert.NoError(t, n1.Broadcast(context.TODO(), "channel1", []byte{}))
+	assert.NoError(t, n1.Broadcast(context.TODO(), "channel1", []byte{}))
+
+	checkVal := func(expectedVal int32) func() bool {
+		return func() bool {
+			return atomic.LoadInt32(&listenCount) == expectedVal
+		}
+	}
+	assert.Eventually(t, checkVal(2), time.Second, 10*time.Millisecond)
+
+	// release one handler
+	releaseChan <- struct{}{}
+	assert.Eventually(t, checkVal(3), time.Second, 10*time.Millisecond)
+	releaseChan <- struct{}{}
+	assert.Eventually(t, checkVal(4), time.Second, 10*time.Millisecond)
+	releaseChan <- struct{}{}
+	assert.Eventually(t, checkVal(4), time.Second, 10*time.Millisecond)
+	releaseChan <- struct{}{}
+	assert.Eventually(t, checkVal(4), time.Second, 10*time.Millisecond)
 }
