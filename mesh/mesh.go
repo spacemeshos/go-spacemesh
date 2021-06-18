@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"strings"
 
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -515,8 +516,22 @@ func (msh *Mesh) extractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs
 		validBlocks[i], validBlocks[j] = validBlocks[j], validBlocks[i]
 	})
 
-	// TODO: debug print ordered layer blocks and transactions
-	//blockIDs :=
+	var blockIDs []string
+	var txIDs []string
+	txcount := 0
+	for _, blk := range validBlocks {
+		blockIDs = append(blockIDs, blk.ID().String())
+		for _, txid := range blk.TxIDs {
+			txIDs = append(txIDs, txid.String())
+		}
+		txcount += len(blk.TxIDs)
+	}
+	msh.With().Info("final layer ordering",
+		l,
+		log.String("block_ordering", strings.Join(blockIDs, ", ")),
+		log.String("tx_ordering", strings.Join(txIDs, ", ")),
+		log.Int("block_count", len(blockIDs)),
+		log.Int("tx_count", txcount))
 
 	// Get and return unique transactions
 	seenTxIds := make(map[types.TransactionID]struct{})
