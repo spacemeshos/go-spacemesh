@@ -73,7 +73,7 @@ func MakeTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *ty
 
 func TestEventReporter(t *testing.T) {
 	// There should be no error reporting an event before initializing the reporter
-	ReportNewTx(globalTx)
+	ReportNewTx(globalTx, true)
 
 	// Stream is nil before we initialize it
 	txStream := SubscribeToTxChannel()
@@ -86,7 +86,7 @@ func TestEventReporter(t *testing.T) {
 
 	// This will not be received as no one is listening
 	// This also makes sure that this call is nonblocking.
-	ReportNewTx(globalTx)
+	ReportNewTx(globalTx, true)
 
 	// listen on the channel
 	wgListening := sync.WaitGroup{}
@@ -103,14 +103,14 @@ func TestEventReporter(t *testing.T) {
 
 	// Wait until goroutine is listening
 	wgListening.Wait()
-	ReportNewTx(globalTx)
+	ReportNewTx(globalTx, true)
 
 	// Wait for goroutine to finish
 	wgDone.Wait()
 
 	// This should also not cause an error
 	CloseEventReporter()
-	ReportNewTx(globalTx)
+	ReportNewTx(globalTx, true)
 }
 
 func TestReportError(t *testing.T) {
