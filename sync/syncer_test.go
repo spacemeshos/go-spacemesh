@@ -1586,3 +1586,60 @@ func closed(ch chan struct{}) bool {
 		return false
 	}
 }
+
+type mockFetcher struct {
+	LayerFetch
+	pollLayerCh chan layerfetcher.LayerPromiseResult
+}
+
+func (mf mockFetcher) PollLayer(ctx context.Context, layer types.LayerID) chan layerfetcher.LayerPromiseResult {
+	if mf.pollLayerCh != nil {
+		return mf.pollLayerCh
+	}
+	return make(chan layerfetcher.LayerPromiseResult)
+}
+
+func TestGetLayerFromNeighborsTimeout(t *testing.T) {
+	r := require.New(t)
+
+	net := &net{RequestTimeout: time.Second}
+	msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", t.Name(), time.Now()), nil)
+	r.NoError(msh.AddZeroBlockLayer(1))
+	syncer := &Syncer{
+		net:  net,
+		Mesh: msh,
+	}
+
+	// make sure we can get layer data
+	pollCh := make(chan layerfetcher.LayerPromiseResult, 1)
+	fetcher := mockFetcher{pollLayerCh: pollCh}
+	syncer.fetcher = fetcher
+	pollCh <- layerfetcher.LayerPromiseResult{}
+	doneChan := make(chan struct{})
+	go func() {
+		_, err := syncer.getLayerFromNeighbors(context.TODO(), 1)
+		r.NoError(err)
+		doneChan <- struct{}{}
+	}()
+	select {
+	case <-doneChan:
+		break
+	case <-time.After(time.Second):
+		r.Fail("timed out waiting for getLayerFromNeighbors")
+	}
+
+	// test timeout
+	doneChan2 := make(chan struct{})
+	go func() {
+		_, err := syncer.getLayerFromNeighbors(context.TODO(), 1)
+		r.NoError(err)
+		doneChan2 <- struct{}{}
+	}()
+
+	select {
+	case <-doneChan2:
+		r.Fail("expected getLayerFromNeighbors to block")
+	case <-time.After(100 * time.Millisecond):
+		break
+	}
+}
