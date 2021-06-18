@@ -448,8 +448,8 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 		if s.txChannel == nil {
 			txStream = events.SubscribeToTxChannel()
 			if txStream == nil {
-				log.Error("Reporter is not running")
-				return errors.New("Reporter is not running")
+				log.Error("reporter is not running")
+				return errors.New("reporter is not running")
 			}
 		} else {
 			txStream = s.txChannel
@@ -459,8 +459,8 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 		if s.activationChannel == nil {
 			activationsStream = events.SubscribeToActivations()
 			if activationsStream == nil {
-				log.Error("Reporter is not running")
-				return errors.New("Reporter is not running")
+				log.Error("reporter is not running")
+				return errors.New("reporter is not running")
 			}
 		} else {
 			activationsStream = s.activationChannel
@@ -506,7 +506,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 				return nil
 			}
 			// Apply address filter
-			if tx.Valid && (tx.Transaction.Origin() == addr || tx.Transaction.Recipient == addr) {
+			if tx.Valid != events.TxStatusInvalid && (tx.Transaction.Origin() == addr || tx.Transaction.Recipient == addr) {
 				if err := stream.Send(&pb.AccountMeshDataStreamResponse{
 					Datum: &pb.AccountMeshData{
 						Datum: &pb.AccountMeshData_Transaction{

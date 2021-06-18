@@ -24,8 +24,19 @@ func init() {
 	mu = sync.RWMutex{}
 }
 
+// TransactionStatus tracks the status of a transaction
+type TransactionStatus int
+
+// These tx statuses track the transaction journey from mempool (pending) to state processing or invalidity
+const (
+	TxStatusUnspecified TransactionStatus = iota
+	TxStatusPending
+	TxStatusInvalid
+	TxStatusValid
+)
+
 // ReportNewTx dispatches incoming events to the reporter singleton
-func ReportNewTx(tx *types.Transaction, valid bool) {
+func ReportNewTx(tx *types.Transaction, valid TransactionStatus) {
 	Publish(NewTx{
 		ID:          tx.ID().String(),
 		Origin:      tx.Origin().String(),
@@ -37,7 +48,7 @@ func ReportNewTx(tx *types.Transaction, valid bool) {
 }
 
 // ReportTxWithValidity reports a tx along with whether it was just invalidated
-func ReportTxWithValidity(tx *types.Transaction, valid bool) {
+func ReportTxWithValidity(tx *types.Transaction, valid TransactionStatus) {
 	mu.RLock()
 	defer mu.RUnlock()
 	txWithValidity := TransactionWithValidity{
@@ -46,18 +57,18 @@ func ReportTxWithValidity(tx *types.Transaction, valid bool) {
 	}
 	if reporter != nil {
 		log.With().Info("about to report tx validity updates", txWithValidity.Transaction.ID(),
-			log.Bool("validity", txWithValidity.Valid))
+			log.Int("validity", int(txWithValidity.Valid)))
 		for sub := range reporter.transactionSubs {
 			select {
 			case sub <- txWithValidity:
 				log.With().Debug("reported tx to subs", txWithValidity.Transaction.ID(),
-					log.Bool("validity", txWithValidity.Valid))
+					log.Int("validity", int(txWithValidity.Valid)))
 			default:
 				log.Debug("reporter would block on subscriber")
 			}
 		}
 		log.With().Debug("reported tx validity update to subscribers", txWithValidity.Transaction.ID(),
-			log.Bool("validity", txWithValidity.Valid))
+			log.Int("validity", int(txWithValidity.Valid)))
 	}
 }
 
@@ -590,7 +601,7 @@ func (r Reward) Field() log.Field {
 // TransactionWithValidity wraps a tx with its validity info
 type TransactionWithValidity struct {
 	Transaction *types.Transaction
-	Valid       bool
+	Valid       TransactionStatus
 }
 
 // EventReporter is the struct that receives incoming events and dispatches them

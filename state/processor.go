@@ -239,12 +239,13 @@ func (tp *TransactionProcessor) LoadState(layer types.LayerID) error {
 // Process applies transaction vector to current state, it returns the remaining transactions that failed
 func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerID types.LayerID) (remaining []*types.Transaction) {
 	for _, tx := range txs {
-		err := tp.ApplyTransaction(tx, layerID)
-		if err != nil {
+		if err := tp.ApplyTransaction(tx, layerID); err != nil {
 			tp.With().Warning("failed to apply transaction", tx.ID(), log.Err(err))
 			remaining = append(remaining, tx)
+			events.ReportNewTx(tx, events.TxStatusInvalid)
+		} else {
+			events.ReportNewTx(tx, events.TxStatusValid)
 		}
-		events.ReportNewTx(tx, err == nil)
 	}
 	return
 }
