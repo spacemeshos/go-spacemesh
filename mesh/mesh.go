@@ -544,9 +544,6 @@ func (msh *Mesh) extractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs
 		validBlocks[i], validBlocks[j] = validBlocks[j], validBlocks[i]
 	})
 
-	// TODO: debug print ordered layer blocks and transactions
-	//blockIDs :=
-
 	// Get and return unique transactions
 	seenTxIds := make(map[types.TransactionID]struct{})
 	return msh.getTxs(uniqueTxIds(validBlocks, seenTxIds), l.Index())
