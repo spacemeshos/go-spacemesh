@@ -88,6 +88,9 @@ func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHan
 		l.WithContext(ctx).With().Info("waiting for available slot for gossip handler",
 			log.Int("available_slots", len(tokenChan)),
 			log.Int("total_slots", cap(tokenChan)))
+		if len(tokenChan) == 0 {
+			l.WithContext(ctx).Error("no available slots for gossip handler, blocking")
+		}
 		<-tokenChan
 
 		l.WithContext(ctx).With().Info("got gossip message, forwarding to data handler",
