@@ -75,7 +75,7 @@ type Logic struct {
 	fetcher              fetch.Fetcher
 	net                  network
 	layerHashResults     map[types.LayerID]map[p2ppeers.Peer]*types.Hash32
-	blockHashResults     map[types.LayerID][]bool //list of results from peers - true if blocks were received
+	blockHashResults     map[types.LayerID][]error
 	layerResultsChannels map[types.LayerID][]chan LayerPromiseResult
 	poetProofs           poetDb
 	atxs                 atxHandler
@@ -110,7 +110,7 @@ func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHand
 		fetcher:              fetcher,
 		net:                  srv,
 		layerHashResults:     make(map[types.LayerID]map[p2ppeers.Peer]*types.Hash32),
-		blockHashResults:     make(map[types.LayerID][]bool),
+		blockHashResults:     make(map[types.LayerID][]error),
 		layerResultsChannels: make(map[types.LayerID][]chan LayerPromiseResult),
 		poetProofs:           poet,
 		atxs:                 atxs,
@@ -322,25 +322,24 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 		return
 	}
 
-	l.log.Info("got hashes %v for layer, now querying peers", len(hashes))
+	l.log.Info("got %v hashes for layer, now querying peers", len(hashes))
 
 	// send a request to get blocks from a single peer if multiple peers declare same hash per layer
 	// if the peers fails to respond request will be sen to next peer in line
 	//todo: think if we should aggregate or ask from multiple peers to have some redundancy in requests
-	for hash, peer := range hashes {
+	for hash, peers := range hashes {
 		if hash == emptyHash {
 			l.receiveBlockHashes(ctx, id, nil, len(hashes), ErrZeroLayer)
 			continue
 		}
-		//build receiver function
+		// build receiver function
 		receiveForPeerFunc := func(data []byte) {
 			l.receiveBlockHashes(ctx, id, data, len(hashes), nil)
 		}
-		remainingPeers := 0
 		errFunc := func(err error) {
 			l.receiveBlockHashes(ctx, id, nil, len(hashes), err)
 		}
-		err := l.net.SendRequest(ctx, LayerBlocksMsg, hash.Bytes(), peer[remainingPeers], receiveForPeerFunc, errFunc)
+		err := l.net.SendRequest(ctx, LayerBlocksMsg, hash.Bytes(), peers[0], receiveForPeerFunc, errFunc)
 		if err != nil {
 			l.receiveBlockHashes(ctx, id, nil, len(hashes), err)
 		}
@@ -348,41 +347,45 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 
 }
 
+func (l *Logic) determinePromiseResult(layer types.LayerID, errs []error) *LayerPromiseResult {
+	hasZeroBlockHash := false
+	for _, e := range errs {
+		if e == nil {
+			// at least one layer hash contains blocks. not a zero block layer
+			return &LayerPromiseResult{Layer: layer, Err: nil}
+		}
+		if e == ErrZeroLayer {
+			hasZeroBlockHash = true
+		}
+	}
+	if hasZeroBlockHash {
+		// all other non-empty layer hashes returned errors. use the best information we've got
+		return &LayerPromiseResult{Layer: layer, Err: ErrZeroLayer}
+	}
+	// no usable result. just return the first error we received
+	return &LayerPromiseResult{Layer: layer, Err: errs[0]}
+}
+
 // notifyLayerPromiseResult notifies that a layer result has been received or wasn't received
 func (l *Logic) notifyLayerPromiseResult(id types.LayerID, expectedResults int, err error) {
-
 	// count number of results - only after all results were received we can notify the caller
 	l.blockHashResM.Lock()
-	// put false if no blocks
-	l.blockHashResults[id] = append(l.blockHashResults[id], err == ErrZeroLayer)
+	// but remember the errors we received
+	l.blockHashResults[id] = append(l.blockHashResults[id], err)
 
 	// we are done with no block iteration errors
 	if len(l.blockHashResults[id]) < expectedResults {
 		l.blockHashResM.Unlock()
 		return
 	}
-	isZero := false
-	for _, hadBlocks := range l.blockHashResults[id] {
-		if hadBlocks {
-			isZero = false
-			break
-		}
-	}
+
+	res := l.determinePromiseResult(id, l.blockHashResults[id])
 	delete(l.blockHashResults, id)
 	l.blockHashResM.Unlock()
-
-	var er = err
-	if isZero {
-		er = ErrZeroLayer
-	}
-	res := LayerPromiseResult{
-		er,
-		id,
-	}
 	l.layerResM.Lock()
 	for _, ch := range l.layerResultsChannels[id] {
 		//l.log.Info("writing res for layer %v err %v", id, err)
-		ch <- res
+		ch <- *res
 	}
 	delete(l.layerResultsChannels, id)
 	l.layerResM.Unlock()
@@ -392,7 +395,7 @@ func (l *Logic) notifyLayerPromiseResult(id types.LayerID, expectedResults int, 
 func (l *Logic) receiveBlockHashes(ctx context.Context, layer types.LayerID, data []byte, expectedResults int, extErr error) {
 	//if we failed getting layer data - notify
 	if extErr != nil {
-		l.log.Error("received error for layer id %v", extErr)
+		l.log.Error("received error %v for layer id %v", extErr, layer)
 		l.notifyLayerPromiseResult(layer, expectedResults, extErr)
 		return
 	}

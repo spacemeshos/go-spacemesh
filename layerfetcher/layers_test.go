@@ -3,6 +3,10 @@ package layerfetcher
 import (
 	"context"
 	"fmt"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -13,9 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
-	"sync"
-	"testing"
-	"time"
 )
 
 func RandomHash() types.Hash32 {
@@ -153,7 +154,7 @@ func NewMockLogic(net *mockNet, layers layerDB, blocksDB gossipBlocks, blocks bl
 		fetcher:              fetcher,
 		net:                  net,
 		layerHashResults:     make(map[types.LayerID]map[p2ppeers.Peer]*types.Hash32),
-		blockHashResults:     make(map[types.LayerID][]bool),
+		blockHashResults:     make(map[types.LayerID][]error),
 		layerResultsChannels: make(map[types.LayerID][]chan LayerPromiseResult),
 		atxs:                 atxs,
 		blockHandler:         blocks,
@@ -198,24 +199,114 @@ func Test_receiveLayerHash(t *testing.T) {
 	hashRes := RandomHash()
 	// test happy flow - get 4 responses
 	l.receiveLayerHash(context.TODO(), 1, net.peers[0], numOfPeers, hashRes.Bytes(), nil)
-	assert.Equal(t, net.sendCalled, 0)
+	assert.Equal(t, 0, net.sendCalled)
 
 	// test aggregation by hash
 	hashRes2 := RandomHash()
 	for i := 1; i < numOfPeers; i++ {
 		l.receiveLayerHash(context.TODO(), 1, net.peers[i], numOfPeers, hashRes2.Bytes(), nil)
 	}
+	assert.Equal(t, 2, net.sendCalled)
 
-	assert.Equal(t, net.sendCalled, 2)
-
-	//test error flow
+	// test error flow
 	l.receiveLayerHash(context.TODO(), 1, net.peers[0], numOfPeers, hashRes.Bytes(), nil)
 
 	for i := 1; i < numOfPeers; i++ {
 		l.receiveLayerHash(context.TODO(), 1, net.peers[i], numOfPeers, nil, fmt.Errorf("error"))
 	}
 	// no additional sends should happen
-	assert.Equal(t, net.sendCalled, 2)
+	assert.Equal(t, 2, net.sendCalled)
+
+	// test partial empty layer response
+	l.receiveLayerHash(context.TODO(), 1, net.peers[0], numOfPeers, hashRes.Bytes(), nil)
+	l.receiveLayerHash(context.TODO(), 1, net.peers[1], numOfPeers, emptyHash.Bytes(), nil)
+	for i := 2; i < numOfPeers; i++ {
+		l.receiveLayerHash(context.TODO(), 1, net.peers[i], numOfPeers, hashRes2.Bytes(), nil)
+	}
+	// not considered zero-block layer because there are 2 known hashes
+	assert.Equal(t, 4, net.sendCalled)
+
+	// test empty layer response
+	l.receiveLayerHash(context.TODO(), 1, net.peers[0], numOfPeers, nil, fmt.Errorf("error"))
+	for i := 1; i < numOfPeers; i++ {
+		l.receiveLayerHash(context.TODO(), 1, net.peers[i], numOfPeers, emptyHash.Bytes(), nil)
+	}
+	// zero-block layer should not incur additional send
+	assert.Equal(t, 4, net.sendCalled)
+
+	// test two many errors
+	l.receiveLayerHash(context.TODO(), 1, net.peers[0], numOfPeers, hashRes.Bytes(), nil)
+	for i := 1; i < numOfPeers; i++ {
+		l.receiveLayerHash(context.TODO(), 1, net.peers[i], numOfPeers, nil, fmt.Errorf("error"))
+	}
+	// zero-block layer should not incur additional send
+	assert.Equal(t, 4, net.sendCalled)
+}
+
+func Test_notifyLayerPromiseResult_AllHaveData(t *testing.T) {
+	db := newLayerDBMock()
+	net := &mockNet{}
+	l := NewMockLogic(net, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerHash"))
+	layer := types.LayerID(1)
+	result := make(chan LayerPromiseResult, 1)
+	l.layerResM.Lock()
+	l.layerResultsChannels[layer] = append(l.layerResultsChannels[1], result)
+	l.layerResM.Unlock()
+	l.notifyLayerPromiseResult(layer, 3, nil)
+	l.notifyLayerPromiseResult(layer, 3, nil)
+	l.notifyLayerPromiseResult(layer, 3, nil)
+	res := <-result
+	assert.Equal(t, layer, res.Layer)
+	assert.Equal(t, nil, res.Err)
+}
+
+func Test_notifyLayerPromiseResult_OneHasBlockData(t *testing.T) {
+	db := newLayerDBMock()
+	net := &mockNet{}
+	l := NewMockLogic(net, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerHash"))
+	layer := types.LayerID(1)
+	result := make(chan LayerPromiseResult, 1)
+	l.layerResM.Lock()
+	l.layerResultsChannels[layer] = append(l.layerResultsChannels[1], result)
+	l.layerResM.Unlock()
+	l.notifyLayerPromiseResult(layer, 3, nil)
+	l.notifyLayerPromiseResult(layer, 3, fmt.Errorf("error"))
+	l.notifyLayerPromiseResult(layer, 3, ErrZeroLayer)
+	res := <-result
+	assert.Equal(t, layer, res.Layer)
+	assert.Equal(t, nil, res.Err)
+}
+
+func Test_notifyLayerPromiseResult_OneZeroLayerAmongstErrors(t *testing.T) {
+	db := newLayerDBMock()
+	net := &mockNet{}
+	l := NewMockLogic(net, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerHash"))
+	layer := types.LayerID(1)
+	result := make(chan LayerPromiseResult, 1)
+	l.layerResM.Lock()
+	l.layerResultsChannels[layer] = append(l.layerResultsChannels[1], result)
+	l.layerResM.Unlock()
+	l.notifyLayerPromiseResult(layer, 3, fmt.Errorf("error 1"))
+	l.notifyLayerPromiseResult(layer, 3, fmt.Errorf("error 2"))
+	l.notifyLayerPromiseResult(layer, 3, ErrZeroLayer)
+	res := <-result
+	assert.Equal(t, layer, res.Layer)
+	assert.Equal(t, ErrZeroLayer, res.Err)
+}
+
+func Test_notifyLayerPromiseResult_ZeroLayer(t *testing.T) {
+	db := newLayerDBMock()
+	net := &mockNet{}
+	l := NewMockLogic(net, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerHash"))
+	layer := types.LayerID(1)
+	result := make(chan LayerPromiseResult, 1)
+	l.layerResM.Lock()
+	l.layerResultsChannels[layer] = append(l.layerResultsChannels[1], result)
+	l.layerResM.Unlock()
+	l.notifyLayerPromiseResult(layer, 1, ErrZeroLayer)
+	res := <-result
+	assert.Equal(t, layer, res.Layer)
+	assert.Equal(t, ErrZeroLayer, res.Err)
 }
 
 func TestLogic_PollLayer(t *testing.T) {
