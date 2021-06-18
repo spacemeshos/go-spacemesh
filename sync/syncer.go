@@ -396,9 +396,8 @@ func (s *Syncer) handleWeaklySynced(ctx context.Context) {
 	}
 
 	// this is a special patch to when we are weakly synced but should still try and get input vector in case we've missed it
-	_, err := s.getLayerFromNeighbors(ctx, s.GetCurrentLayer())
-	// retry this next iteration - but dont set node as synced
-	if err != nil {
+	if _, err := s.getLayerFromNeighbors(ctx, s.GetCurrentLayer()); err != nil {
+		// retry this next iteration - but dont set node as synced
 		logger.With().Error("node is out of sync", log.Err(err))
 		s.setGossipBufferingStatus(pending)
 		return

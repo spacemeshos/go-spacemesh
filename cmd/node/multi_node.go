@@ -166,6 +166,9 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 	cfg.LAYERS.RequestTimeout = 10
 	cfg.GoldenATXID = "0x5678"
 
+	// increase from 2s to 10s: for some reason, the multi node test requires a long timeout
+	cfg.SyncRequestTimeout = 10000
+
 	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
 
 	return cfg
