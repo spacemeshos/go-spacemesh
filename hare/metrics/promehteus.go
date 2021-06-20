@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	// Subsystem is a subsystem shared by all metrics exposed by this package.
+	// MetricsSubsystem is a subsystem shared by all metrics exposed by this package.
 	MetricsSubsystem = "hare"
 )
 
