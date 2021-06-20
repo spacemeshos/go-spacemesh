@@ -107,7 +107,6 @@ func (n nopCounter) With(labelValues ...string) metrics.Counter {
 }
 
 func (n nopCounter) Add(value float64) {
-
 }
 
 type nopGauge struct {
@@ -118,11 +117,9 @@ func (n nopGauge) With(labelValues ...string) metrics.Gauge {
 }
 
 func (n nopGauge) Set(value float64) {
-
 }
 
 func (n nopGauge) Add(value float64) {
-
 }
 
 type nopHistogram struct {
@@ -133,5 +130,4 @@ func (n nopHistogram) With(labelValues ...string) metrics.Histogram {
 }
 
 func (n nopHistogram) Observe(value float64) {
-
 }
