@@ -10,6 +10,7 @@ import (
 
 // StartCollectingMetrics begins listening and supplying metrics on localhost:`metricsPort`/metrics
 func StartCollectingMetrics(metricsPort int) {
+	Enabled = true
 	http.Handle("/metrics", promhttp.Handler())
 	go func() {
 		err := http.ListenAndServe(fmt.Sprintf(":%v", metricsPort), nil)
