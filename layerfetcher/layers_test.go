@@ -234,7 +234,7 @@ func Test_receiveLayerHash(t *testing.T) {
 	// zero-block layer should not incur additional send
 	assert.Equal(t, 4, net.sendCalled)
 
-	// test two many errors
+	// test giving up on too many errors (numErrors > peers/2)
 	l.receiveLayerHash(context.TODO(), 1, net.peers[0], numOfPeers, hashRes.Bytes(), nil)
 	for i := 1; i < numOfPeers; i++ {
 		l.receiveLayerHash(context.TODO(), 1, net.peers[i], numOfPeers, nil, fmt.Errorf("error"))
@@ -257,7 +257,7 @@ func Test_notifyLayerPromiseResult_AllHaveData(t *testing.T) {
 	l.notifyLayerPromiseResult(layer, 3, nil)
 	res := <-result
 	assert.Equal(t, layer, res.Layer)
-	assert.Equal(t, nil, res.Err)
+	assert.Nil(t, res.Err)
 }
 
 func Test_notifyLayerPromiseResult_OneHasBlockData(t *testing.T) {
