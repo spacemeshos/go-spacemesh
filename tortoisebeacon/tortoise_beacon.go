@@ -256,10 +256,9 @@ func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 
 	beacon, ok := tb.beacons[epochID-1]
 	if !ok {
-		tb.Log.With().Warning("Beacon is not calculated for this epoch, returning genesis beacon",
+		tb.Log.With().Error("Beacon is not calculated",
 			log.Uint64("target_epoch", uint64(epochID)),
-			log.Uint64("beacon_epoch", uint64(epochID-1)),
-			log.String("genesis_beacon", genesisBeacon.String()))
+			log.Uint64("beacon_epoch", uint64(epochID-1)))
 
 		return nil, ErrBeaconNotCalculated
 	}
