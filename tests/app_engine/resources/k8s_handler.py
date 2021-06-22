@@ -2,6 +2,7 @@ from google.api_core.exceptions import NotFound
 from google.auth import compute_engine, transport
 from google.cloud.container_v1 import ClusterManagerClient
 from kubernetes import client
+from kubernetes.client.rest import ApiException
 
 
 class K8SApiClient(client.ApiClient):
@@ -55,14 +56,25 @@ def remove_clusterrole_binding(project_id, cluster_id, zone, shipper_name, crb_n
         print(f"kubectl delete clusterrolebinding {crb_name}")
 
 
+def list_namespace_objects(namespace, list_func, keywords=None):
+    """
+    list all objects in the given namespace that are listed from list_func function
+    :param namespace: string, namespace name
+    :param list_func: client.AppsV1Api, listing function for kube objects in namespace
+    :param keywords: list, all objects who their name contain one of the items in keyword will be listed
+    :return:
+    """
+    resp = list_func(namespace=namespace)
+    if keywords:
+        objs = [obj.metadata.name for obj in resp.items if any(ele in obj.metadata.name for ele in keywords)]
+    else:
+        objs = [dep.metadata.name for dep in resp.items]
+    return objs
+
+
 def list_namespace_deployments(project_id, cluster_id, zone, namespace, keywords=None):
     apis_api = client.AppsV1Api(api_client=K8SApiClient(project_id, zone, cluster_id))
-    resp = apis_api.list_namespaced_deployment(namespace=namespace)
-    if keywords:
-        deps = [dep.metadata.name for dep in resp.items if any(ele in dep.metadata.name for ele in keywords)]
-    else:
-        deps = [dep.metadata.name for dep in resp.items]
-    return deps
+    return list_namespace_objects(namespace, apis_api.list_namespaced_deployment, keywords)
 
 
 def remove_deployments_in_namespace(project_id, cluster_id, zone, namespace, deps=None, keywords=None):
@@ -83,12 +95,34 @@ def remove_deployments_in_namespace(project_id, cluster_id, zone, namespace, dep
     k8s_beta = client.AppsV1Api(api_client=K8SApiClient(project_id, zone, cluster_id))
     for dep in deps:
         print(f"removing {dep} deployment")
-        resp = k8s_beta.delete_namespaced_deployment(name=dep,
-                                                     namespace=namespace,
-                                                     body=client.V1DeleteOptions(propagation_policy='Foreground',
-                                                                                 grace_period_seconds=5))
+        try:
+            resp = k8s_beta.delete_namespaced_deployment(name=dep,
+                                                         namespace=namespace,
+                                                         body=client.V1DeleteOptions(propagation_policy='Foreground',
+                                                                                     grace_period_seconds=5))
+        except ApiException as e:
+            print(f"Exception when calling ExtensionsV1beta1Api->delete_namespaced_deployment: {e}\n")
 
 
 def remove_client_deployments(project_id, cluster_id, zone, namespace):
     print("remove_client_deployments")
     remove_deployments_in_namespace(project_id, cluster_id, zone, namespace, None, ["client", "bootstrap"])
+
+
+def list_namespace_daemonsets(project_id, cluster_id, zone, namespace, keywords=None):
+    apis_api = client.AppsV1Api(api_client=K8SApiClient(project_id, zone, cluster_id))
+    return list_namespace_objects(namespace, apis_api.list_namespaced_daemon_set, keywords)
+
+
+def remove_daemonset_in_namespace(project_id, cluster_id, zone, namespace, daemons=None, keywords=None):
+    print(f"removing daemon-sets in namespace {namespace}")
+    if not daemons:
+        daemons = list_namespace_daemonsets(project_id, cluster_id, zone, namespace, keywords)
+    print(f"daemons for deletion:\n{daemons}")
+    k8s_beta = client.AppsV1Api(api_client=K8SApiClient(project_id, zone, cluster_id))
+    for daemon in daemons:
+        print(f"removing {daemon} daemon-set")
+        try:
+            k8s_beta.delete_namespaced_daemon_set(name=daemon, namespace=namespace)
+        except ApiException as e:
+            print(f"Exception when calling ExtensionsV1beta1Api->delete_namespaced_daemon_set: {e}\n")
