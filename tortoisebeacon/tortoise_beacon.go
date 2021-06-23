@@ -52,6 +52,11 @@ type epochRoundPair struct {
 	Round   types.RoundID
 }
 
+type epochMinerPair struct {
+	EpochID types.EpochID
+	Miner   string
+}
+
 type (
 	nodeID          = string
 	proposal        = string
@@ -121,6 +126,11 @@ type TortoiseBeacon struct {
 	beaconsMu sync.RWMutex
 	beacons   map[types.EpochID]types.Hash32
 
+	beaconSyncMu           sync.RWMutex
+	seenMinersInBeaconSync map[epochMinerPair]struct{}
+	beaconSyncCount        map[types.EpochID]map[types.Hash32]int
+	beaconSync             map[types.EpochID]types.Hash32
+
 	backgroundWG sync.WaitGroup
 }
 
@@ -189,6 +199,9 @@ func New(
 		firstRoundIncomingVotes:         map[types.EpochID]firstRoundVotesPerPK{},
 		firstRoundOutcomingVotes:        map[types.EpochID]firstRoundVotes{},
 		seenEpochs:                      map[types.EpochID]struct{}{},
+		seenMinersInBeaconSync:          map[epochMinerPair]struct{}{},
+		beaconSyncCount:                 map[types.EpochID]map[types.Hash32]int{},
+		beaconSync:                      map[types.EpochID]types.Hash32{},
 	}
 }
 
@@ -247,20 +260,24 @@ func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 		}
 	}
 
-	if (epochID - 1).IsGenesis() {
+	prevEpochID := epochID - 1
+	if prevEpochID.IsGenesis() {
 		return genesisBeacon.Bytes(), nil
 	}
 
 	tb.beaconsMu.RLock()
 	defer tb.beaconsMu.RUnlock()
 
-	beacon, ok := tb.beacons[epochID-1]
+	beacon, ok := tb.getSyncedBeacon(prevEpochID)
 	if !ok {
-		tb.Log.With().Error("Beacon is not calculated",
-			log.Uint64("target_epoch", uint64(epochID)),
-			log.Uint64("beacon_epoch", uint64(epochID-1)))
+		beacon, ok = tb.beacons[prevEpochID]
+		if !ok {
+			tb.Log.With().Error("Beacon is not calculated",
+				log.Uint64("target_epoch", uint64(epochID)),
+				log.Uint64("beacon_epoch", uint64(prevEpochID)))
 
-		return nil, ErrBeaconNotCalculated
+			return nil, ErrBeaconNotCalculated
+		}
 	}
 
 	if tb.tortoiseBeaconDB != nil {
@@ -270,6 +287,34 @@ func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 	}
 
 	return beacon.Bytes(), nil
+}
+
+func (tb *TortoiseBeacon) getSyncedBeacon(epochID types.EpochID) (types.Hash32, bool) {
+	tb.beaconSyncMu.Lock()
+	defer tb.beaconSyncMu.Unlock()
+
+	if beacon, ok := tb.beaconSync[epochID]; ok {
+		return beacon, true
+	}
+
+	epochBeacons, ok := tb.beaconSyncCount[epochID]
+	if !ok || len(epochBeacons) == 0 {
+		return types.Hash32{}, false
+	}
+
+	syncedBeacon := types.Hash32{}
+	maxCount := 0
+
+	for beacon, count := range epochBeacons {
+		if count > maxCount {
+			syncedBeacon = beacon
+			maxCount = count
+		}
+	}
+
+	tb.beaconSync[epochID] = syncedBeacon
+
+	return syncedBeacon, true
 }
 
 func (tb *TortoiseBeacon) cleanupLoop() {
@@ -335,6 +380,15 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 
 	epoch := layer.GetEpoch()
 
+	tb.beaconsMu.RLock()
+	if _, ok := tb.beaconSync[epoch-1]; ok {
+		if err := tb.syncPrevBeacon(ctx, epoch-1, tb.beaconSync[epoch-1]); err != nil {
+			tb.Log.With().Error("Failed to sync prev beacon",
+				log.Uint64("epoch", uint64(epoch-1)))
+		}
+	}
+	tb.beaconsMu.RUnlock()
+
 	if !layer.FirstInEpoch() {
 		tb.Log.With().Debug("skipping layer because it's not first in this epoch",
 			log.Uint64("epoch_id", uint64(epoch)),
@@ -396,7 +450,7 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 
 	// K rounds passed
 	// After K rounds had passed, tally up votes for proposals using simple tortoise vote counting
-	if err := tb.calcBeacon(epoch); err != nil {
+	if err := tb.calcBeacon(ctx, epoch); err != nil {
 		tb.Log.With().Error("Failed to calculate beacon",
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.Err(err))

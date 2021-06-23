@@ -68,3 +68,26 @@ func (v FollowingVotingMessage) String() string {
 
 	return string(bytes)
 }
+
+// BeaconSyncMessageBody is BeaconSyncMessage without a signature.
+type BeaconSyncMessageBody struct {
+	MinerID types.NodeID
+	EpochID types.EpochID
+	Beacon  types.Hash32
+}
+
+// BeaconSyncMessage is a message type which is used for synchronizing tortoise beacon values.
+type BeaconSyncMessage struct {
+	BeaconSyncMessageBody
+	Signature []byte // TODO: implement extracting pk from signature
+}
+
+// String returns a string form of BeaconSyncMessage.
+func (v BeaconSyncMessage) String() string {
+	bytes, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+
+	return string(bytes)
+}

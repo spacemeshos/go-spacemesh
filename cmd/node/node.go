@@ -668,6 +668,8 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	gossipListener.AddListener(ctx, tortoisebeacon.TBProposalProtocol, priorityq.Low, tBeacon.HandleSerializedProposalMessage)
 	gossipListener.AddListener(ctx, tortoisebeacon.TBFirstVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFirstVotingMessage)
 	gossipListener.AddListener(ctx, tortoisebeacon.TBFollowingVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFollowingVotingMessage)
+	gossipListener.AddListener(ctx, tortoisebeacon.TBBeaconSyncProtocol, priorityq.Low, tBeacon.HandleBeaconSyncMessage)
+	gossipListener.AddListener(ctx, tortoisebeacon.TBBeaconSyncPrevProtocol, priorityq.Low, tBeacon.HandleBeaconSyncPrevMessage)
 	// TODO(nkryuchkov): Enable weak coin when finished.
 	//gossipListener.AddListener(ctx, weakcoin.GossipProtocol, priorityq.Low, wc.HandleSerializedMessage)
 

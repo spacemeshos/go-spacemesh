@@ -1,6 +1,7 @@
 package tortoisebeacon
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -10,7 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID) error {
+func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID) error {
 	tb.Log.With().Info("Calculating beacon",
 		log.Uint64("epoch_id", uint64(epoch)))
 
@@ -29,8 +30,6 @@ func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID) error {
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.String("beacon", beacon.String()))
 
-	events.ReportCalculatedTortoiseBeacon(epoch, beacon.String())
-
 	tb.beaconsMu.Lock()
 	tb.beacons[epoch] = beacon
 	tb.beaconsMu.Unlock()
@@ -38,6 +37,68 @@ func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID) error {
 	tb.Log.With().Debug("Beacon updated for this epoch",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.String("beacon", beacon.String()))
+
+	events.ReportCalculatedTortoiseBeacon(epoch, beacon.String())
+
+	if err := tb.syncBeacon(ctx, epoch, beacon); err != nil {
+		return fmt.Errorf("sync beacon: %w", err)
+	}
+
+	return nil
+}
+
+func (tb *TortoiseBeacon) syncBeacon(ctx context.Context, epoch types.EpochID, beacon types.Hash32) error {
+	mb := BeaconSyncMessageBody{
+		MinerID: tb.minerID,
+		EpochID: epoch,
+		Beacon:  beacon,
+	}
+
+	sig, err := tb.calcEligibilityProof(mb)
+	if err != nil {
+		return fmt.Errorf("calcEligibilityProof: %w", err)
+	}
+
+	m := BeaconSyncMessage{
+		BeaconSyncMessageBody: mb,
+		Signature:             sig,
+	}
+
+	tb.Log.With().Debug("Going to send beacon sync message",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.String("message", m.String()))
+
+	if err := tb.sendToGossip(ctx, TBBeaconSyncProtocol, m); err != nil {
+		return fmt.Errorf("sendToGossip: %w", err)
+	}
+
+	return nil
+}
+
+func (tb *TortoiseBeacon) syncPrevBeacon(ctx context.Context, epoch types.EpochID, beacon types.Hash32) error {
+	mb := BeaconSyncMessageBody{
+		MinerID: tb.minerID,
+		EpochID: epoch,
+		Beacon:  beacon,
+	}
+
+	sig, err := tb.calcEligibilityProof(mb)
+	if err != nil {
+		return fmt.Errorf("calcEligibilityProof: %w", err)
+	}
+
+	m := BeaconSyncMessage{
+		BeaconSyncMessageBody: mb,
+		Signature:             sig,
+	}
+
+	tb.Log.With().Debug("Going to send beacon prev sync message",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.String("message", m.String()))
+
+	if err := tb.sendToGossip(ctx, TBBeaconSyncPrevProtocol, m); err != nil {
+		return fmt.Errorf("sendToGossip: %w", err)
+	}
 
 	return nil
 }

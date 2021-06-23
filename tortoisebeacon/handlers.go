@@ -22,12 +22,18 @@ const TBFirstVotingProtocol = "TBFirstVotingGossip"
 // TBFollowingVotingProtocol is a protocol for sending Tortoise Beacon following voting messages through Gossip.
 const TBFollowingVotingProtocol = "TBFollowingVotingGossip"
 
+// TBBeaconSyncProtocol is a protocol for synchronizing Tortoise Beacon values.
+const TBBeaconSyncProtocol = "TBBeaconSyncProtocol"
+
+// TBBeaconSyncPrevProtocol is a protocol for synchronizing previous Tortoise Beacon values.
+const TBBeaconSyncPrevProtocol = "TBBeaconSyncPrevProtocol"
+
 var (
 	// ErrMalformedProposal is returned if proposal message is malformed.
 	ErrMalformedProposal = errors.New("malformed proposal message")
 )
 
-// HandleSerializedProposalMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
+// HandleSerializedProposalMessage defines method to handle Tortoise Beacon proposal messages from gossip.
 func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
 	tb.Log.With().Debug("New proposal message",
 		log.String("from", data.Sender().String()))
@@ -185,7 +191,7 @@ func (tb *TortoiseBeacon) HandleSerializedFirstVotingMessage(ctx context.Context
 	data.ReportValidation(TBFirstVotingProtocol)
 }
 
-// HandleSerializedFollowingVotingMessage defines method to handle Tortoise Beacon following voting Messages from gossip.
+// HandleSerializedFollowingVotingMessage defines method to handle Tortoise Beacon following voting messages from gossip.
 func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
 	from := data.Sender()
 
@@ -310,7 +316,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, message 
 
 func (tb *TortoiseBeacon) handleFollowingVotingMessage(ctx context.Context, message FollowingVotingMessage) error {
 	//currentEpoch := tb.currentEpoch()
-	currentEpoch := message.EpochID
+	currentEpoch := message.EpochID // TODO: remove
 	messageRound := message.RoundID
 	from := message.MinerID
 
@@ -364,6 +370,147 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(ctx context.Context, mess
 
 	firstRoundIncomingVotes := tb.firstRoundIncomingVotes[currentEpoch][from.Key]
 	tb.incomingVotes[thisRound][from.Key] = tb.decodeVotes(message.VotesBitVector, firstRoundIncomingVotes)
+
+	return nil
+}
+
+// HandleBeaconSyncMessage defines method to handle Tortoise Beacon beacon sync messages from gossip.
+func (tb *TortoiseBeacon) HandleBeaconSyncMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
+	from := data.Sender()
+
+	tb.Log.With().Debug("New beacon sync message",
+		log.String("from", from.String()))
+
+	var m BeaconSyncMessage
+	if err := types.BytesToInterface(data.Bytes(), &m); err != nil {
+		tb.Log.With().Error("Received invalid beacon sync message",
+			log.String("message", string(data.Bytes())),
+			log.Err(err))
+
+		return
+	}
+
+	if err := tb.handleBeaconSyncMessage(ctx, m); err != nil {
+		tb.Log.With().Error("Failed to handle beacon sync message",
+			log.Err(err))
+
+		return
+	}
+
+	data.ReportValidation(TBBeaconSyncProtocol)
+}
+
+func (tb *TortoiseBeacon) handleBeaconSyncMessage(ctx context.Context, message BeaconSyncMessage) error {
+	currentEpoch := tb.currentEpoch()
+	messageEpoch := message.EpochID
+	from := message.MinerID
+
+	if messageEpoch != currentEpoch {
+		tb.Log.With().Warning("Received malformed beacon sync message",
+			log.Uint64("current_epoch_id", uint64(currentEpoch)),
+			log.Uint64("message_epoch_id", uint64(messageEpoch)))
+
+		return nil
+	}
+
+	// Ensure that epoch is the same.
+	ok, err := tb.verifyEligibilityProof(message.BeaconSyncMessageBody, from, message.Signature)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		tb.Log.With().Warning("Received malformed beacon sync message, bad signature",
+			log.String("from", from.Key),
+			log.Uint64("current_epoch_id", uint64(currentEpoch)),
+			log.Uint64("message_epoch_id", uint64(messageEpoch)),
+			log.String("signature", util.Bytes2Hex(message.Signature)))
+
+		return nil
+	}
+
+	epochMiner := epochMinerPair{
+		EpochID: messageEpoch,
+		Miner:   from.Key,
+	}
+
+	tb.beaconSyncMu.Lock()
+	defer tb.beaconSyncMu.Unlock()
+
+	if _, ok := tb.seenMinersInBeaconSync[epochMiner]; !ok {
+		tb.seenMinersInBeaconSync[epochMiner] = struct{}{}
+	}
+
+	if _, ok := tb.beaconSyncCount[messageEpoch]; !ok {
+		tb.beaconSyncCount[messageEpoch] = make(map[types.Hash32]int)
+	}
+
+	tb.beaconSyncCount[messageEpoch][message.Beacon]++
+
+	return nil
+}
+
+// HandleBeaconSyncPrevMessage defines method to handle Tortoise Beacon beacon previous sync messages from gossip.
+func (tb *TortoiseBeacon) HandleBeaconSyncPrevMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
+	from := data.Sender()
+
+	tb.Log.With().Debug("New beacon prev sync message",
+		log.String("from", from.String()))
+
+	var m BeaconSyncMessage
+	if err := types.BytesToInterface(data.Bytes(), &m); err != nil {
+		tb.Log.With().Error("Received invalid beacon prev sync message",
+			log.String("message", string(data.Bytes())),
+			log.Err(err))
+
+		return
+	}
+
+	if err := tb.handleBeaconSyncPrevMessage(ctx, m); err != nil {
+		tb.Log.With().Error("Failed to handle beacon prev sync message",
+			log.Err(err))
+
+		return
+	}
+
+	data.ReportValidation(TBBeaconSyncPrevProtocol)
+}
+
+func (tb *TortoiseBeacon) handleBeaconSyncPrevMessage(ctx context.Context, message BeaconSyncMessage) error {
+	currentEpoch := tb.currentEpoch()
+	messageEpoch := message.EpochID
+	from := message.MinerID
+
+	if messageEpoch != currentEpoch {
+		tb.Log.With().Warning("Received malformed beacon prev sync message",
+			log.Uint64("current_epoch_id", uint64(currentEpoch)),
+			log.Uint64("message_epoch_id", uint64(messageEpoch)))
+
+		return nil
+	}
+
+	// Ensure that epoch is the same.
+	ok, err := tb.verifyEligibilityProof(message.BeaconSyncMessageBody, from, message.Signature)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		tb.Log.With().Warning("Received malformed beacon sync message, bad signature",
+			log.String("from", from.Key),
+			log.Uint64("current_epoch_id", uint64(currentEpoch)),
+			log.Uint64("message_epoch_id", uint64(messageEpoch)),
+			log.String("signature", util.Bytes2Hex(message.Signature)))
+
+		return nil
+	}
+
+	tb.beaconSyncMu.Lock()
+	defer tb.beaconSyncMu.Unlock()
+
+	// TODO: do that only after N received messages
+
+	if _, ok := tb.beaconSync[messageEpoch-1]; !ok {
+		tb.beaconSync[messageEpoch-1] = message.Beacon
+	}
 
 	return nil
 }
