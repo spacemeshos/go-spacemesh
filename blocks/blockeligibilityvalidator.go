@@ -5,7 +5,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 )
 
 // VRFValidationFunction is the VRF validation function.
@@ -105,12 +104,6 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	}
 
 	epochBeacon, err := v.beaconProvider.GetBeacon(epochNumber)
-
-	// TODO(nkryuchkov): remove
-	if err == tortoisebeacon.ErrBeaconNotCalculated {
-		return true, nil
-	}
-
 	if err != nil {
 		return false, fmt.Errorf("get beacon for epoch %v: %w", epochNumber, err)
 	}
