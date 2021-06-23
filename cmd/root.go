@@ -28,6 +28,10 @@ func AddCommands(cmd *cobra.Command) {
 		config.CollectMetrics, "collect node metrics")
 	cmd.PersistentFlags().IntVar(&config.MetricsPort, "metrics-port",
 		config.MetricsPort, "metric server port")
+	cmd.PersistentFlags().StringVar(&config.MetricsPush, "metrics-push",
+		config.MetricsPush, "Push metrics to url")
+	cmd.PersistentFlags().IntVar(&config.MetricsPushPeriod, "metrics-push-period",
+		config.MetricsPushPeriod, "Push period")
 	cmd.PersistentFlags().StringVar(&config.OracleServer, "oracle_server",
 		config.OracleServer, "The oracle server url. (temporary) ")
 	cmd.PersistentFlags().IntVar(&config.OracleServerWorldID, "oracle_server_worldid",
