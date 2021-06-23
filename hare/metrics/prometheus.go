@@ -1,31 +1,28 @@
 package metrics
 
 import (
-	"github.com/go-kit/kit/metrics/prometheus"
-	stdprometheus "github.com/prometheus/client_golang/prometheus"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
 const (
-	// Namespace is the metrics namespace //todo: figure out if this can be used better.
-	Namespace = "spacemesh"
-	// Subsystem is a subsystem shared by all metrics exposed by this package.
-	Subsystem = "hare"
+	// MetricsSubsystem is a subsystem shared by all metrics exposed by this package.
+	MetricsSubsystem = "hare"
 )
 
 var (
 	// MessageTypeCounter is the number of valid messages per type.
-	MessageTypeCounter = prometheus.NewCounterFrom(stdprometheus.CounterOpts{
-		Namespace: Namespace,
-		Subsystem: Subsystem,
-		Name:      "message_type_counter",
-		Help:      "Number of valid messages sent to processing for each type",
-	}, []string{"type_id", "layer", "reporter"})
+	MessageTypeCounter = metrics.NewCounter(
+		"message_type_counter",
+		MetricsSubsystem,
+		"Number of valid messages sent to processing for each type",
+		[]string{"type_id", "layer", "reporter"},
+	)
 
 	// TotalConsensusProcesses is the total number of current consensus processes.
-	TotalConsensusProcesses = prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
-		Namespace: Namespace,
-		Subsystem: Subsystem,
-		Name:      "total_consensus_processes",
-		Help:      "The total number of current consensus processes running",
-	}, []string{"layer"})
+	TotalConsensusProcesses = metrics.NewGauge(
+		"total_consensus_processes",
+		MetricsSubsystem,
+		"The total number of current consensus processes running",
+		[]string{"layer"},
+	)
 )
