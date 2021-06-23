@@ -12,7 +12,7 @@ from tests import config as conf
 from tests import pod
 from tests.context import Context, ES
 from tests.convenience import str2bool
-from tests.app_engine.gcloud_tasks.add_task_to_queue import create_google_cloud_task
+from tests.gcloud.app_engine.gcloud_tasks.add_task_to_queue import create_google_cloud_task
 from tests.k8s_handler import add_elastic_cluster, add_kibana_cluster, add_fluent_bit_cluster, \
     wait_for_daemonset_to_be_ready
 from tests.misc import CoreV1ApiClient

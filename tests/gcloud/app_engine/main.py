@@ -12,6 +12,8 @@ from resources.k8s_handler import delete_namespace, remove_clusterrole_binding, 
 
 
 DUMP_APP_ROUTE = "/namespace-teardown"
+SHIPPER_NAME = "fluent-bit"
+FLUENT_CRB_FMT = "fluent-bit-clusterrole-binding-{namespace}"
 
 
 def remove_security_warning():
@@ -52,23 +54,19 @@ def teardown():
         return str(e)
     namespace = payload_dict['namespace']
     project_id = payload_dict["project_id"]
+    cluster_name = payload_dict["cluster_name"]
+    node_pool_zone = payload_dict["node_pool_zone"]
     print(f"starting teardown process for {namespace}")
-    # delete all daemonsets in namespace
-    remove_daemonset_in_namespace(
-        payload_dict["project_id"], payload_dict["cluster_name"], payload_dict["node_pool_zone"], namespace)
     # delete client and bootstrap deployments
-    try:
-        remove_client_deployments(
-            payload_dict["project_id"], payload_dict["cluster_name"], payload_dict["node_pool_zone"], namespace)
-    except Exception as e:
-        print(f"got an exception while trying to delete deployments under {namespace}:\n{e}")
-    # delete clusterrolebinding
-    remove_clusterrole_binding(project_id, payload_dict["cluster_name"], payload_dict["node_pool_zone"], "fluent-bit",
-                               f"fluent-bit-clusterrole-binding-{namespace}")
+    remove_client_deployments(project_id, cluster_name, node_pool_zone, namespace)
+    # delete all daemon sets in namespace
+    remove_daemonset_in_namespace(project_id, cluster_name, node_pool_zone, namespace)
+    # delete cluster role binding
+    crb_name = FLUENT_CRB_FMT.format(namespace=namespace)
+    remove_clusterrole_binding(project_id, cluster_name, node_pool_zone, SHIPPER_NAME, crb_name)
     # delete node pool
     try:
-        nodepool_handler.remove_node_pool(project_id, payload_dict["pool_name"], payload_dict["cluster_name"],
-                                          payload_dict["node_pool_zone"])
+        nodepool_handler.remove_node_pool(project_id, payload_dict["pool_name"], cluster_name, node_pool_zone)
         print(f"node pool {payload_dict['pool_name']} was deleted successfully")
     except Exception as e:
         print(f"could not delete node pool {payload_dict['pool_name']}:\n{e}")
@@ -80,7 +78,7 @@ def teardown():
                                  **payload_dict["dump_params"])
     elif str2bool(payload_dict["is_delns"]):
         try:
-            delete_namespace(namespace, project_id, payload_dict["node_pool_zone"], payload_dict["cluster_name"])
+            delete_namespace(namespace, project_id, node_pool_zone, cluster_name)
             print(f"namespace {namespace} was deleted")
         except Exception as e:
             return f"failed deleting namespace {namespace}:\n{e}"
