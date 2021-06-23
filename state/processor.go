@@ -238,13 +238,13 @@ func (tp *TransactionProcessor) LoadState(layer types.LayerID) error {
 // Process applies transaction vector to current state, it returns the remaining transactions that failed
 func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerID types.LayerID) (remaining []*types.Transaction) {
 	for _, tx := range txs {
-		err := tp.ApplyTransaction(tx, layerID)
-		if err != nil {
+		if err := tp.ApplyTransaction(tx, layerID); err != nil {
 			tp.With().Warning("failed to apply transaction", tx.ID(), log.Err(err))
 			remaining = append(remaining, tx)
+			events.ReportNewTx(tx, events.TxStatusInvalid)
+		} else {
+			events.ReportNewTx(tx, events.TxStatusValid)
 		}
-		events.ReportValidTx(tx, err == nil)
-		events.ReportNewTx(tx)
 	}
 	return
 }
@@ -340,8 +340,8 @@ func (tp *TransactionProcessor) HandleTxData(ctx context.Context, data service.G
 		log.Uint64("amount", tx.Amount),
 		log.Uint64("fee", tx.Fee),
 		log.Uint64("gas", tx.GasLimit),
-		log.String("recipient", tx.Recipient.String()),
-		log.String("origin", tx.Origin().String()))
+		log.String("recipient_addr", tx.Recipient.String()),
+		log.String("origin_addr", tx.Origin().String()))
 	data.ReportValidation(ctx, IncomingTxProtocol)
 	tp.pool.Put(tx.ID(), tx)
 }

@@ -35,7 +35,10 @@ func layerIdsReqFactory(lyr types.LayerID) requestFactory {
 			}
 			ch <- ids
 		}
-		if err := s.SendRequest(ctx, layerIdsMsg, lyr.Bytes(), peer, foo, func(err error) {}); err != nil {
+		errHandler := func(err error) {
+			s.WithContext(ctx).With().Error("request timed out", log.Err(err))
+		}
+		if err := s.SendRequest(ctx, layerIdsMsg, lyr.Bytes(), peer, foo, errHandler); err != nil {
 			return nil, err
 		}
 		return ch, nil
@@ -60,7 +63,10 @@ func getEpochAtxIds(ctx context.Context, epoch types.EpochID, s networker, peer 
 		}
 		ch <- atxIDs
 	}
-	if err := s.SendRequest(ctx, atxIdsMsg, epoch.ToBytes(), peer, foo, func(err error) {}); err != nil {
+	errHandler := func(err error) {
+		s.WithContext(ctx).With().Error("request timed out", log.Err(err))
+	}
+	if err := s.SendRequest(ctx, atxIdsMsg, epoch.ToBytes(), peer, foo, errHandler); err != nil {
 		return nil, err
 	}
 	return ch, nil
@@ -72,24 +78,33 @@ func hashReqFactory(lyr types.LayerID) requestFactory {
 		foo := func(msg []byte) {
 			defer close(ch)
 			if len(msg) == 0 || msg == nil {
-				s.WithContext(ctx).With().Warning("peer responded with nil to layer hash request", log.FieldNamed("peer", peer), lyr)
+				s.WithContext(ctx).With().Warning("peer responded with nil to layer hash request",
+					log.FieldNamed("peer", peer),
+					lyr)
+
+				// return something here on the channel in order to distinguish between total failure to reach peers and
+				// empty layers
+				ch <- &peerHashPair{peer: peer}
 				return
 			}
 			if len(msg) != types.Hash32Length {
-				s.WithContext(ctx).With().Error("received layer hash of wrong length", log.Int("len", len(msg)))
+				s.WithContext(ctx).With().Error("received layer hash of wrong length",
+					log.Int("len", len(msg)))
 				return
 			}
 			var h types.Hash32
 			h.SetBytes(msg)
 			ch <- &peerHashPair{peer: peer, hash: h}
 		}
-		if err := s.SendRequest(ctx, layerHashMsg, lyr.Bytes(), peer, foo, func(err error) {}); err != nil {
+		errHandler := func(err error) {
+			s.WithContext(ctx).With().Error("request timed out", log.Err(err))
+		}
+		if err := s.SendRequest(ctx, layerHashMsg, lyr.Bytes(), peer, foo, errHandler); err != nil {
 			return nil, err
 		}
 
 		return ch, nil
 	}
-
 }
 
 func atxHashReqFactory(ep types.EpochID) requestFactory {
@@ -102,20 +117,22 @@ func atxHashReqFactory(ep types.EpochID) requestFactory {
 				return
 			}
 			if len(msg) != types.Hash32Length {
-				s.WithContext(ctx).With().Error("received layer hash of wrong length", log.Int("len", len(msg)))
+				s.WithContext(ctx).With().Error("received atx hash of wrong length", log.Int("len", len(msg)))
 				return
 			}
 			var h types.Hash32
 			h.SetBytes(msg)
 			ch <- &peerHashPair{peer: peer, hash: h}
 		}
-		if err := s.SendRequest(ctx, atxIdrHashMsg, ep.ToBytes(), peer, foo, func(err error) {}); err != nil {
+		errHandler := func(err error) {
+			s.WithContext(ctx).With().Error("request timed out", log.Err(err))
+		}
+		if err := s.SendRequest(ctx, atxIdrHashMsg, ep.ToBytes(), peer, foo, errHandler); err != nil {
 			return nil, err
 		}
 
 		return ch, nil
 	}
-
 }
 
 func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]item, error)) batchRequestFactory {
@@ -138,7 +155,7 @@ func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]
 			}
 
 			if valid, err := validateItemIds(logger, ids, items); !valid {
-				logger.With().Error("fetch failed, bad response", log.Err(err))
+				logger.With().Error("fetch validation failed, bad response", log.Err(err))
 				return
 			}
 
@@ -235,7 +252,10 @@ func poetReqFactory(poetProofRef []byte) requestFactory {
 			ch <- proofMessage
 		}
 
-		if err := s.SendRequest(ctx, poetMsg, poetProofRef, peer, resHandler, func(err error) {}); err != nil {
+		errHandler := func(err error) {
+			s.WithContext(ctx).With().Error("request timed out", log.Err(err))
+		}
+		if err := s.SendRequest(ctx, poetMsg, poetProofRef, peer, resHandler, errHandler); err != nil {
 			return nil, err
 		}
 
@@ -261,12 +281,12 @@ func validateItemIds(logger log.Log, ids []types.Hash32, items []item) (bool, er
 	for _, id := range ids {
 		mp[id] = struct{}{}
 	}
-	for _, tx := range items {
-		txid := tx.Hash32()
-		if _, ok := mp[txid]; !ok {
-			return false, fmt.Errorf("received item that was not requested %v type %v", tx.ShortString(), reflect.TypeOf(tx))
+	for _, itm := range items {
+		itmid := itm.Hash32()
+		if _, ok := mp[itmid]; !ok {
+			return false, fmt.Errorf("received item that was not requested %v type %v", itm.ShortString(), reflect.TypeOf(itm))
 		}
-		delete(mp, txid)
+		delete(mp, itmid)
 	}
 
 	if len(mp) > 0 {
@@ -283,7 +303,10 @@ func encodeAndSendRequest(ctx context.Context, req server.MessageType, ids []typ
 	if err != nil {
 		return err
 	}
-	if err := s.SendRequest(ctx, req, bts, peer, foo, func(err error) {}); err != nil {
+	errHandler := func(err error) {
+		s.WithContext(ctx).With().Error("request timed out", log.Err(err))
+	}
+	if err := s.SendRequest(ctx, req, bts, peer, foo, errHandler); err != nil {
 		return err
 	}
 	return nil

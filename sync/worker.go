@@ -60,13 +60,16 @@ func newPeersWorker(ctx context.Context, s networker, peers []p2ppeers.Peer, mu 
 	peerfuncs := []func(){}
 	wg := sync.WaitGroup{}
 	wg.Add(len(peers))
-	lg := s.WithName("peersWrkr")
+	lg := s.WithContext(ctx).WithName("peersWrkr")
 	for _, p := range peers {
 		peer := p
-		lg := lg.WithFields(log.FieldNamed("peer_id", peer))
+		ctx := log.WithNewRequestID(ctx)
+		lg := lg.WithFields(
+			log.FieldNamed("peer_id", peer),
+			log.FieldNamed("recipient_peer_id", peer))
 		peerFunc := func() {
 			defer wg.Done()
-			lg.Debug("send request")
+			lg.Info("worker sending request to peer")
 			ch, err := reqFactory(ctx, s, peer)
 			if err != nil {
 				lg.With().Error("request failed", log.Err(err))
@@ -79,7 +82,7 @@ func newPeersWorker(ctx context.Context, s networker, peers []p2ppeers.Peer, mu 
 				lg.Debug("worker received interrupt")
 				return
 			case <-timeout:
-				lg.Error("sync worker request timed out")
+				lg.Error("worker request timed out")
 				return
 			case v := <-ch:
 				if v != nil {

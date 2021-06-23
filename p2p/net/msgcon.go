@@ -184,12 +184,19 @@ func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
 
 	c.logger.WithContext(ctx).With().Debug("enqueuing outgoing message",
 		log.Int("queue_length", len(c.messages)))
-	if len(c.messages) > 10 {
+	if len(c.messages) > 30 {
 		c.logger.WithContext(ctx).With().Warning("outbound send queue backlog",
 			log.Int("queue_length", len(c.messages)))
 	}
-	c.messages <- msgToSend{m, reqID}
-	return nil
+
+	// perform a non-blocking send and start dropping messages if the channel is full
+	// otherwise, the entire gossip stack will get blocked
+	select {
+	case c.messages <- msgToSend{m, reqID}:
+		return nil
+	default:
+		return fmt.Errorf("dropping outbound message, send queue full")
+	}
 }
 
 // SendSock sends a message directly on the socket

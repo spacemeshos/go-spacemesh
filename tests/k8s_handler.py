@@ -16,7 +16,8 @@ def remove_clusterrole_binding(shipper_name, crb_name):
         k8s_client.delete_cluster_role_binding(crb_name)
         print(f"\nsuccessfully deleted: {crb_name}")
     except Exception as e:
-        print(f"\n{shipper_name} cluster role binding deletion has failed, manually delete {crb_name}")
+        print(f"\n{shipper_name} cluster role binding deletion has failed, please manually delete {crb_name}:")
+        print(f"kubectl delete clusterrolebinding {crb_name}")
 
 
 def filebeat_teardown(namespace):

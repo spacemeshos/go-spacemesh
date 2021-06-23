@@ -95,6 +95,8 @@ var (
 	errZeroActiveSet   = errors.New("block declares empty active set")
 	errInvalidATXID    = errors.New("invalid ATXID")
 
+	errmsgNoBlocks = "could not get blocks for layer"
+
 	emptyLayer = types.Layer{}.Hash()
 )
 
@@ -591,7 +593,7 @@ func (s *Syncer) waitLayer(ch timesync.LayerTimer) bool {
 
 func (s *Syncer) getLayerFromNeighbors(ctx context.Context, currentSyncLayer types.LayerID) (*types.Layer, error) {
 	if len(s.peers.GetPeers()) == 0 {
-		return nil, fmt.Errorf("no peers ")
+		return nil, fmt.Errorf("no peers")
 	}
 
 	// fetch layer hash from each peer
@@ -599,6 +601,10 @@ func (s *Syncer) getLayerFromNeighbors(ctx context.Context, currentSyncLayer typ
 	m, err := s.fetchLayerHashes(ctx, currentSyncLayer)
 	if err != nil {
 		if err == errNoBlocksInLayer {
+			if !currentSyncLayer.GetEpoch().IsGenesis() {
+				s.WithContext(ctx).With().Warning("got empty layer from peers for non-genesis layer",
+					currentSyncLayer)
+			}
 			return types.NewLayer(currentSyncLayer), nil
 		}
 		return nil, err
@@ -621,7 +627,7 @@ func (s *Syncer) getLayerFromNeighbors(ctx context.Context, currentSyncLayer typ
 
 	blocksArr, err := s.syncLayer(ctx, currentSyncLayer, blockIds)
 	if len(blocksArr) == 0 || err != nil {
-		return nil, fmt.Errorf("could not get blocks for layer %v: %v", currentSyncLayer, err)
+		return nil, fmt.Errorf("%s %v: %v", errmsgNoBlocks, currentSyncLayer, err)
 	}
 
 	return types.NewExistingLayer(currentSyncLayer, blocksArr), nil
@@ -727,6 +733,8 @@ func (s *Syncer) getBlocks(ctx context.Context, blockIds []types.BlockID) error 
 		if !result {
 			return nil
 		}
+	case <-time.After(s.GetTimeout()):
+		return fmt.Errorf("getBlocks timed out waiting for result")
 	}
 
 	tmr.ObserveDuration()
@@ -1139,26 +1147,27 @@ func (s *Syncer) fetchLayerHashes(ctx context.Context, lyr types.LayerID) (map[t
 	wrk := newPeersWorker(ctx, s, s.GetPeers(), &sync.Once{}, hashReqFactory(lyr))
 	go wrk.Work(ctx)
 	m := make(map[types.Hash32][]p2ppeers.Peer)
-	layerHasBlocks := false
+	gotResponse := false
+
+	// note: this will block if any one peer connection hangs (e.g., msg send hangs), since the channel isn't closed
+	// until all workers have finished (or timed out)
 	for out := range wrk.output {
 		pair, ok := out.(*peerHashPair)
-		if pair != nil && ok { // do nothing on close channel
-			if pair.hash != emptyLayer {
-				layerHasBlocks = true
-				m[pair.hash] = append(m[pair.hash], pair.peer)
-			}
+		gotResponse = true
+		// make sure a non-nil, non-empty layer hash was provided
+		if pair != nil && ok && pair.hash != (peerHashPair{}).hash && pair.hash != emptyLayer { // do nothing on close channel
+			m[pair.hash] = append(m[pair.hash], pair.peer)
 		}
 	}
 
-	if !layerHasBlocks {
+	if !gotResponse {
+		return nil, errors.New("could not get layer hashes from any peer")
+	}
+	if len(m) == 0 {
 		s.With().Info("layer has no blocks", lyr)
 		return nil, errNoBlocksInLayer
 	}
-
-	if len(m) == 0 {
-		return nil, errors.New("could not get layer hashes from any peer")
-	}
-	s.With().Info("layer has blocks", lyr, log.Int("count", len(m)))
+	s.With().Info("got layer hashes from peers for non-empty layer", lyr, log.Int("count", len(m)))
 	return m, nil
 }
 
@@ -1175,7 +1184,6 @@ func (s *Syncer) fetchEpochAtxHashes(ctx context.Context, ep types.EpochID) (map
 				layerHasBlocks = true
 				m[pair.hash] = append(m[pair.hash], pair.peer)
 			}
-
 		}
 	}
 

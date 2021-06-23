@@ -205,7 +205,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 					// If the tx was just invalidated, we already know its state.
 					// If not, read it from the database.
 					var txstate pb.TransactionState_TransactionState
-					if tx.Valid {
+					if tx.Valid != events.TxStatusInvalid {
 						_, txstate = s.getTransactionAndStatus(tx.Transaction.ID())
 					} else {
 						txstate = pb.TransactionState_TRANSACTION_STATE_CONFLICTING

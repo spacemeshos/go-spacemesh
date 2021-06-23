@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"strings"
 
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -515,6 +516,23 @@ func (msh *Mesh) extractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs
 		validBlocks[i], validBlocks[j] = validBlocks[j], validBlocks[i]
 	})
 
+	var blockIDs []string
+	var txIDs []string
+	txcount := 0
+	for _, blk := range validBlocks {
+		blockIDs = append(blockIDs, blk.ID().String())
+		for _, txid := range blk.TxIDs {
+			txIDs = append(txIDs, txid.String())
+		}
+		txcount += len(blk.TxIDs)
+	}
+	msh.With().Info("final layer ordering",
+		l,
+		log.String("block_ordering", strings.Join(blockIDs, ", ")),
+		log.String("tx_ordering", strings.Join(txIDs, ", ")),
+		log.Int("block_count", len(blockIDs)),
+		log.Int("tx_count", txcount))
+
 	// Get and return unique transactions
 	seenTxIds := make(map[types.TransactionID]struct{})
 	return msh.getTxs(uniqueTxIds(validBlocks, seenTxIds), l.Index())
@@ -546,7 +564,7 @@ func uniqueTxIds(blocks []*types.Block, seenTxIds map[types.TransactionID]struct
 func (msh *Mesh) getTxs(txIds []types.TransactionID, l types.LayerID) []*types.Transaction {
 	txs, missing := msh.GetTransactions(txIds)
 	if len(missing) != 0 {
-		msh.Panic("could not find transactions %v from layer %v", missing, l)
+		msh.Error("could not find transactions %v from layer %v", missing, l)
 	}
 	return txs
 }
@@ -599,7 +617,7 @@ func (msh *Mesh) AddBlock(blk *types.Block) error {
 
 // SetZeroBlockLayer tags lyr as a layer without blocks
 func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
-	msh.Info("setting zero block layer %v", lyr)
+	msh.With().Info("setting zero block layer", lyr)
 	// check database for layer
 	if l, err := msh.GetLayer(lyr); err != nil {
 		if err != database.ErrNotFound {

@@ -96,12 +96,12 @@ func getRandIdxs(numOfTxs, spaceSize int) map[uint64]struct{} {
 // Put inserts a transaction into the mem pool. It indexes it by source and dest addresses as well
 func (t *TxMempool) Put(id types.TransactionID, tx *types.Transaction) {
 	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.txs[id] = tx
 	t.getOrCreate(tx.Origin()).Add(0, tx)
 	t.addToAddr(tx.Origin(), id)
 	t.addToAddr(tx.Recipient, id)
-	t.mu.Unlock()
-	events.ReportNewTx(tx)
+	events.ReportNewTx(tx, events.TxStatusPending)
 }
 
 // Invalidate removes transaction from pool
@@ -120,7 +120,7 @@ func (t *TxMempool) Invalidate(id types.TransactionID) {
 			// We only report those transactions that are being dropped from the txpool here as
 			// conflicting since they won't be reported anywhere else. There is no need to report
 			// the initial tx here since it'll be reported as part of a new block/layer anyway.
-			events.ReportTxWithValidity(tx, false)
+			events.ReportTxWithValidity(tx, events.TxStatusInvalid)
 		}
 		t.removeFromAddr(tx.Origin(), id)
 		t.removeFromAddr(tx.Recipient, id)
