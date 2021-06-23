@@ -31,12 +31,6 @@ var (
 		"Block validity",
 		[]string{"validity"},
 	)
+	validBlocks   = blockVotes.With("validity", "valid")
 	invalidBlocks = blockVotes.With("validity", "invalid")
-
-	validBlocks = metrics.NewGauge(
-		"validity",
-		MetricsSubsystem,
-		"Valid",
-		nil,
-	)
 )
