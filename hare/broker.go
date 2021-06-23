@@ -266,7 +266,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 
 			// validation passed, report
 			msg.ReportValidation(ctx, protoName)
-			msgLogger.With().Debug("broker reported hare message as valid", hareMsg)
+			msgLogger.With().Info("broker reported hare message as valid", hareMsg)
 
 			if isEarly {
 				if _, exist := b.pending[msgInstID]; !exist { // create buffer if first msg
