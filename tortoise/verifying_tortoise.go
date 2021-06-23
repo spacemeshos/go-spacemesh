@@ -225,7 +225,11 @@ func (t *turtle) BaseBlock() (types.BlockID, [][]types.BlockID, error) {
 	// Try to find a block counting only good blocks
 	// TODO: could we do better than just grabbing the first non-error, good block, as below?
 	// e.g., trying to minimize the size of the exception list instead
-	for i := t.Last; i > t.Last-t.Hdist; i-- {
+	window := types.LayerID(0)
+	if t.Hdist < t.Last {
+		window = t.Last - t.Hdist
+	}
+	for i := t.Last; i > window; i-- {
 		for block, opinion := range t.BlockOpinionsByLayer[i] {
 			if _, ok := t.GoodBlocksIndex[block]; !ok {
 				t.logger.With().Debug("skipping block not marked good",
@@ -395,6 +399,18 @@ func (t *turtle) processBlock(block *types.Block) error {
 	// TODO: save and vote against blocks that exceed the max exception list size (DoS prevention)
 	opinion := make(map[types.BlockID]vec)
 	for blk, vote := range baseBlockOpinion.BlocksOpinion {
+		fblk, err := t.bdp.GetBlock(blk)
+		if err != nil {
+			return fmt.Errorf("voted block not in db voting_block_id: %v, voting_block_layer_id: %v, voted_block_id: %v", block.ID().String(), block.LayerIndex, blk.String())
+		}
+		window := types.LayerID(0)
+		if block.LayerIndex > t.Hdist {
+			window = block.LayerIndex - t.Hdist
+		}
+		if fblk.LayerIndex < window {
+			continue
+		}
+
 		opinion[blk] = vote
 	}
 

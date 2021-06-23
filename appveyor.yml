@@ -5,7 +5,7 @@ clone_folder: c:\gopath\src\github.com\spacemeshos\go-spacemesh\
 environment:
   GOPATH: c:\gopath
 
-stack: go 1.14
+stack: go 1.15
 
 before_build:
   - choco install make

@@ -9,7 +9,7 @@ errcho() {
 
 # Minimal Go version supported
 min_major=1
-min_minor=14
+min_minor=15
 
 # Ensure Go is installed
 if ! (hash go 2>/dev/null) ; then
