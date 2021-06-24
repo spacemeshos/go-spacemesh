@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -1071,7 +1072,13 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	}
 
 	if app.Config.CollectMetrics {
-		metrics.StartCollectingMetrics(app.Config.MetricsPort)
+		metrics.StartMetricsServer(app.Config.MetricsPort)
+	}
+
+	if app.Config.MetricsPush != "" {
+		metrics.StartPushingMetrics(app.Config.MetricsPush, app.Config.MetricsPushPeriod,
+			swarm.LocalNode().PublicKey().String(), strconv.Itoa(int(app.Config.P2P.NetworkID)))
+
 	}
 
 	app.startServices(ctx, logger)

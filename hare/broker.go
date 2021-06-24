@@ -3,9 +3,11 @@ package hare
 import (
 	"context"
 	"errors"
+	"strconv"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -233,9 +235,8 @@ func (b *Broker) eventLoop(ctx context.Context) {
 				hareMsg,
 				log.Int("queue_length", len(b.inbox)))
 
-			// TODO: fix metrics
-			// metrics.MessageTypeCounter.With("type_id", hareMsg.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(msgInstID), 10), "reporter", "brokerHandler").Add(1)
 			msgInstID := hareMsg.InnerMsg.InstanceID
+			metrics.MessageTypeCounter.With("type_id", hareMsg.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(msgInstID), 10), "reporter", "brokerHandler").Add(1)
 			msgLogger = msgLogger.WithFields(log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)))
 			isEarly := false
 			if err := b.validate(messageCtx, hareMsg); err != nil {

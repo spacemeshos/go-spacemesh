@@ -22,8 +22,11 @@ type Gauge metrics.Gauge
 // Counter is a metric type used to represent a monotonically increased/decreased numeric value.
 type Counter metrics.Counter
 
-// Histogram is a metric type used to sum up multiple observations over time.
+// Histogram is a metric type used to count multiple observations in buckets.
 type Histogram metrics.Histogram
+
+// Summary is a metric type used to sum up multiple observations over time.
+type Summary prmkit.Summary
 
 // NewCounter creates a Counter metrics under the global namespace returns nop if metrics are disabled.
 func NewCounter(name, subsystem, help string, labels []string) Counter {
@@ -47,6 +50,15 @@ func NewHistogram(name, subsystem, help string, labels []string) Histogram {
 		return nopHistogram{}
 	}
 	return prmkit.NewHistogramFrom(prometheus.HistogramOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help}, labels)
+}
+
+// NewSummary creates a Summary metrics under the global namespace returns nop if metrics are disabled.
+func NewSummary(name, subsystem, help string, labels []string, objectives map[float64]float64) Histogram {
+	if !Enabled {
+		return nopSummary{}
+	}
+	// TODO github.com/go-kit/kit use Histogram instead of Summary
+	return prmkit.NewSummaryFrom(prometheus.SummaryOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help, Objectives: objectives}, labels)
 }
 
 // Cache is a basic cache interface that we can wrap to meter.
@@ -107,7 +119,6 @@ func (n nopCounter) With(labelValues ...string) metrics.Counter {
 }
 
 func (n nopCounter) Add(value float64) {
-
 }
 
 type nopGauge struct {
@@ -118,11 +129,9 @@ func (n nopGauge) With(labelValues ...string) metrics.Gauge {
 }
 
 func (n nopGauge) Set(value float64) {
-
 }
 
 func (n nopGauge) Add(value float64) {
-
 }
 
 type nopHistogram struct {
@@ -133,5 +142,14 @@ func (n nopHistogram) With(labelValues ...string) metrics.Histogram {
 }
 
 func (n nopHistogram) Observe(value float64) {
+}
 
+type nopSummary struct {
+}
+
+func (n nopSummary) With(labelValues ...string) metrics.Histogram {
+	return n
+}
+
+func (n nopSummary) Observe(value float64) {
 }
