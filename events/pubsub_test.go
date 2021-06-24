@@ -2,13 +2,16 @@ package events
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/stretchr/testify/assert"
-	"nanomsg.org/go-mangos/transport/tcp"
+	"net"
 	"os"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"nanomsg.org/go-mangos/transport/tcp"
 
 	"nanomsg.org/go-mangos"
 	"nanomsg.org/go-mangos/protocol/pub"
@@ -23,6 +26,30 @@ func die(format string, v ...interface{}) {
 
 func date() string {
 	return time.Now().Format(time.ANSIC)
+}
+
+func findUnusedURL(tb testing.TB) string {
+	tb.Helper()
+
+	l, err := net.Listen("tcp", "127.0.0.1:")
+	require.NoError(tb, err)
+	require.NoError(tb, l.Close())
+	return fmt.Sprintf("tcp://%s", l.Addr())
+}
+
+func waitConnected(tb testing.TB, p *Publisher, topic ChannelID, receiver chan []byte) {
+	tb.Helper()
+
+	start := time.Now()
+	for time.Since(start) < 500*time.Millisecond {
+		require.NoError(tb, p.publish(topic, []byte{}))
+		select {
+		case <-receiver:
+			return
+		case <-time.After(time.Millisecond):
+		}
+	}
+	require.FailNow(tb, "timed out while trying to connect with publisher")
 }
 
 func server(url string) {
@@ -200,4 +227,31 @@ loop:
 	}
 	assert.True(t, allCounter == numOfMessages)
 	assert.True(t, counter == 0)
+}
+
+func TestPubSubEmptyPayload(t *testing.T) {
+	url := findUnusedURL(t)
+
+	p, err := newPublisher(url)
+	require.NoError(t, err)
+	defer p.Close()
+	s, err := NewSubscriber(url)
+	require.NoError(t, err)
+
+	s.StartListening()
+	defer s.Close()
+	receiver, err := s.SubscribeToAll()
+	require.NoError(t, err)
+	waitConnected(t, p, 1, receiver)
+
+	require.NoError(t, p.sock.Send([]byte{}))
+	expected := []byte{255, 255}
+	require.NoError(t, p.publish(ChannelID(expected[0]), expected[1:]))
+
+	select {
+	case received := <-receiver:
+		require.Equal(t, expected, received)
+	case <-time.After(time.Second):
+		require.FailNow(t, "timed out while waiting for payload")
+	}
 }
