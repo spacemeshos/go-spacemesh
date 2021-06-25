@@ -554,25 +554,25 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error) {
 		return mp, nil
 	}
-	v, err := o.IsIdentityActiveOnConsensusView("22222", 1)
+	v, err := o.IsIdentityActiveOnConsensusView(context.TODO(), "22222", 1)
 	r.NoError(err)
 	r.True(v)
 
 	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error) {
 		return mp, errFoo
 	}
-	_, err = o.IsIdentityActiveOnConsensusView("22222", 100)
+	_, err = o.IsIdentityActiveOnConsensusView(context.TODO(), "22222", 100)
 	r.Equal(errFoo, err)
 
 	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error) {
 		return mp, nil
 	}
 
-	v, err = o.IsIdentityActiveOnConsensusView("22222", 100)
+	v, err = o.IsIdentityActiveOnConsensusView(context.TODO(), "22222", 100)
 	r.NoError(err)
 	r.False(v)
 
-	v, err = o.IsIdentityActiveOnConsensusView(edid, 100)
+	v, err = o.IsIdentityActiveOnConsensusView(context.TODO(), edid, 100)
 	r.NoError(err)
 	r.True(v)
 }
