@@ -16,16 +16,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/layerfetcher"
-
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
-	"github.com/spacemeshos/post/shared"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
@@ -37,9 +28,11 @@ import (
 	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
@@ -55,6 +48,11 @@ import (
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
+	"github.com/spacemeshos/post/shared"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 const edKeyFileName = "key.bin"
@@ -970,16 +968,21 @@ func (app *SpacemeshApp) startSyncer(ctx context.Context) {
 func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	// we use the main app context
 	ctx := cmdp.Ctx
-
 	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
 	// using context passed down to them)
 	logger := log.AppLog.WithContext(ctx)
 
+	hostname, err := os.Hostname()
+	if err != nil {
+		logger.With().Error("error reading hostname", log.Err(err))
+	}
 	logger.With().Info("starting spacemesh",
 		log.String("data-dir", app.Config.DataDir()),
-		log.String("post-dir", app.Config.POST.DataDir))
+		log.String("post-dir", app.Config.POST.DataDir),
+		log.String("hostname", hostname),
+	)
 
-	err := filesystem.ExistOrCreate(app.Config.DataDir())
+	err = filesystem.ExistOrCreate(app.Config.DataDir())
 	if err != nil {
 		logger.With().Error("data-dir not found or could not be created", log.Err(err))
 	}
