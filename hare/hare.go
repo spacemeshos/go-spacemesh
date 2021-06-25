@@ -219,7 +219,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) {
 	// call to start the calculation of active set size beforehand
 	go func() {
 		// this is called only for its side effects, but at least print the error if it returns one
-		if isActive, err := h.rolacle.IsIdentityActiveOnConsensusView(h.nid.Key, id); err != nil {
+		if isActive, err := h.rolacle.IsIdentityActiveOnConsensusView(ctx, h.nid.Key, id); err != nil {
 			logger.With().Error("error checking if identity is active",
 				log.Bool("isActive", isActive), log.Err(err))
 		}

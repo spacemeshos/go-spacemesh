@@ -154,8 +154,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	// marshal message
 	var w bytes.Buffer
 	msg := vrfMessage{Beacon: v, Round: round, Layer: layer}
-	_, err = xdr.Marshal(&w, &msg)
-	if err != nil {
+	if _, err = xdr.Marshal(&w, &msg); err != nil {
 		o.WithContext(ctx).With().Error("could not marshal xdr", log.Err(err))
 		return nil, err
 	}
@@ -182,6 +181,10 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 
 // Eligible checks if ID is eligible on the given Layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
 func (o *Oracle) Eligible(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
+	o.WithContext(ctx).With().Debug("hare oracle checking eligibility")
+	defer func() {
+		o.WithContext(ctx).With().Debug("hare oracle eligibility check complete")
+	}()
 	msg, err := o.buildVRFMessage(ctx, layer, round)
 	if err != nil {
 		o.Error("eligibility: could not build vrf message")
@@ -295,7 +298,11 @@ func (o *Oracle) actives(layer types.LayerID) (activeMap map[string]struct{}, er
 
 // IsIdentityActiveOnConsensusView returns true if the provided identity is active on the consensus view derived
 // from the specified layer, false otherwise.
-func (o *Oracle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
+func (o *Oracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error) {
+	o.WithContext(ctx).With().Debug("hare oracle checking for active identity")
+	defer func() {
+		o.WithContext(ctx).With().Debug("hare oracle active identity check complete")
+	}()
 	actives, err := o.actives(layer)
 	if err != nil {
 		if err == errGenesis { // we are in genesis
@@ -307,6 +314,5 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerI
 		return false, err
 	}
 	_, exist := actives[edID]
-
 	return exist, nil
 }
