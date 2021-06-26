@@ -102,7 +102,7 @@ func (p *Protocol) processMessage(ctx context.Context, sender p2pcrypto.PublicKe
 		log.FieldNamed("msg_sender", sender),
 		log.String("protocol", protocol),
 		log.String("msghash", util.Bytes2Hex(h[:])))
-	logger.Info("checking gossip message newness")
+	logger.Debug("checking gossip message newness")
 	if p.markMessageAsOld(h) {
 		metrics.OldGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
 		// todo : - have some more metrics for termination
