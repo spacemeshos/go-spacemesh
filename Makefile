@@ -21,6 +21,15 @@ endif
 # Also allows BRANCH to be manually set
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
+# Add an indicator to the branch name if dirty and use commithash if running in detached mode
+ifeq ($(BRANCH),HEAD)
+    BRANCH = $(SHA)
+endif
+$(shell git diff --quiet)
+ifneq ($(.SHELLSTATUS),0)
+	BRANCH := $(BRANCH)-dirty
+endif
+
 # Setup the -ldflags option to pass vars defined here to app vars
 LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 
