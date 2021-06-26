@@ -200,6 +200,10 @@ func (l Log) WithOptions(opts ...zap.Option) Log {
 	return Log{logger: lgr, name: l.name}
 }
 
+// note: we construct the fieldset on the fly, below, rather than simply adding `name' as a field since it may change
+// if a child logger is created from a parent. once a field has been added to a logger it cannot be changed or removed.
+// see WithName, above.
+
 // Info prints message with fields
 func (fl FieldLogger) Info(msg string, fields ...LoggableField) {
 	fl.l.Info(msg, unpack(append(fields, String("name", fl.name)))...)
