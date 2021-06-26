@@ -226,7 +226,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	r := require.New(t)
 	net := &mockP2p{}
 	broker := buildBroker(net, t.Name())
-	_ = broker.Start(context.TODO())
+	r.NoError(broker.Start(context.TODO()))
 	proc := generateConsensusProcess(t)
 	proc.network = net
 	oracle := &mockRolacle{}

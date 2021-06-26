@@ -334,8 +334,8 @@ func (suite *AppTestSuite) healingWeakcoinTester() {
 				suite.Fail("no weak coin value", "node %v layer %v last layer %v", i, layerID, lastLayer)
 				continue
 			}
-			if _, layerExists := globalCoin[layerID]; layerExists {
-				suite.Equal(globalCoin[layerID], coinflip, "bad weak coin value on node %v layer %v last layer %v", i, layerID, lastLayer)
+			if gc, layerExists := globalCoin[layerID]; layerExists {
+				suite.Equal(gc, coinflip, "bad weak coin value on node %v layer %v last layer %v", i, layerID, lastLayer)
 			} else {
 				globalCoin[layerID] = coinflip
 			}
