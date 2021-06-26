@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	lg "log"
 	"os"
 	"path/filepath"
@@ -36,24 +35,16 @@ import (
 
 type AppTestSuite struct {
 	suite.Suite
-
 	apps        []*SpacemeshApp
-	dbs         []string
 	poetCleanup func(cleanup bool) error
 }
 
 func (suite *AppTestSuite) SetupTest() {
 	suite.apps = make([]*SpacemeshApp, 0, 0)
-	suite.dbs = make([]string, 0, 0)
 	suite.poetCleanup = func(bool) error { return nil }
 }
 
 func (suite *AppTestSuite) TearDownTest() {
-	for _, dbinst := range suite.dbs {
-		if err := os.RemoveAll(dbinst); err != nil {
-			panic(fmt.Sprintf("what happened : %v", err))
-		}
-	}
 	// poet should clean up after itself
 	if matches, err := filepath.Glob("*.bin"); err != nil {
 		log.With().Error("error while finding poet bin files", log.Err(err))
@@ -80,7 +71,6 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 		smApp, err := InitSingleInstance(*cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, network)
 		suite.NoError(err)
 		suite.apps = append(suite.apps, smApp)
-		suite.dbs = append(suite.dbs, dbStorepath)
 		name++
 	}
 }
@@ -106,9 +96,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	)
 	cfg := getTestDefaultConfig(numOfInstances)
 	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
-	path, err := ioutil.TempDir("", "state_")
-	require.NoError(suite.T(), err, "failed to create tempdir")
-	defer os.RemoveAll(path)
+	path := suite.T().TempDir()
 
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
@@ -451,10 +439,9 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 		}
 
 		for i := types.LayerID(5); i <= untilLayer; i++ {
+			assert.Fail(suite.T(), "test failure inside goroutine")
 			lyr, err := ap.mesh.GetLayer(i)
-			if err != nil {
-				log.With().Panic("couldn't get a validated layer from db", i, log.Err(err))
-			}
+			suite.NoError(err, "couldn't get validated layer from db", i)
 			for _, b := range lyr.Blocks() {
 				datamap[ap.nodeID.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeID.Key].layertoblocks[lyr.Index()], b.ID())
 			}
@@ -653,9 +640,7 @@ func TestShutdown(t *testing.T) {
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
 
 	swarm := net.NewNode()
-	dbStorepath, err := ioutil.TempDir("", pub.String())
-	r.NoError(err, "failed to create tempdir")
-	defer os.RemoveAll(dbStorepath)
+	dbStorepath := t.TempDir()
 
 	hareOracle := newLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())

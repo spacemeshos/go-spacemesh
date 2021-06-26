@@ -702,6 +702,7 @@ func (proc *consensusProcess) onRoundBegin(ctx context.Context) {
 	if len(proc.pending) == 0 { // no pending messages
 		return
 	}
+
 	// handle pending messages
 	pendingProcess := proc.pending
 	proc.pending = make(map[string]*Msg, proc.cfg.N)
