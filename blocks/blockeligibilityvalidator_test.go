@@ -17,28 +17,31 @@ type mockAtxDB struct {
 	err  error
 }
 
-func (m mockAtxDB) GetEpochAtxs(epochID types.EpochID) []types.ATXID {
+func (m mockAtxDB) GetEpochAtxs(types.EpochID) []types.ATXID {
 	return []types.ATXID{}
 }
 
 func (m mockAtxDB) GetIdentity(edID string) (types.NodeID, error) {
-	return types.NodeID{Key: edID, VRFPublicKey: vrfPubkey}, nil
+	return types.NodeID{Key: edID, VRFPublicKey: nodeID.VRFPublicKey}, nil
 }
 
 func (m mockAtxDB) GetNodeAtxIDForEpoch(types.NodeID, types.EpochID) (types.ATXID, error) {
 	return types.ATXID{}, m.err
 }
 
-func (m mockAtxDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
+func (m mockAtxDB) GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error) {
 	return m.atxH, m.err
+}
+
+func (m mockAtxDB) GetEpochWeight(types.EpochID) (uint64, []types.ATXID, error) {
+	return 0, nil, nil
 }
 
 func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 	types.SetLayersPerEpoch(5)
 	r := require.New(t)
 	atxdb := &mockAtxDB{err: errFoo}
-	genActiveSetSize := uint32(5)
-	v := NewBlockEligibilityValidator(10, genActiveSetSize, 5, atxdb, &EpochBeaconProvider{}, validateVRF, nil, log.NewDefault(t.Name()))
+	v := NewBlockEligibilityValidator(10, 5, 5, atxdb, &EpochBeaconProvider{}, validateVRF, nil, log.NewDefault(t.Name()))
 
 	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: 20}}} // non-genesis
 	block.Signature = edSigner.Sign(block.Bytes())

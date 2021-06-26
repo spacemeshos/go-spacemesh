@@ -16,7 +16,8 @@ def remove_clusterrole_binding(shipper_name, crb_name):
         k8s_client.delete_cluster_role_binding(crb_name)
         print(f"\nsuccessfully deleted: {crb_name}")
     except Exception as e:
-        print(f"\n{shipper_name} cluster role binding deletion has failed, manually delete {crb_name}")
+        print(f"\n{shipper_name} cluster role binding deletion has failed, please manually delete {crb_name}:")
+        print(f"kubectl delete clusterrolebinding {crb_name}")
 
 
 def filebeat_teardown(namespace):
@@ -121,7 +122,13 @@ def add_deployment_dir(namespace, dir_path, delete=False):
                 k8s_client.create_namespaced_role_binding(body=dep, namespace=namespace)
             elif dep["kind"] == 'ClusterRoleBinding':
                 k8s_client = client.RbacAuthorizationV1Api()
-                k8s_client.create_cluster_role_binding(body=dep)
+                try:
+                    k8s_client.create_cluster_role_binding(body=dep)
+                except ApiException as e:
+                    if e.status == 409:
+                        print(f"cluster role binding already exists")
+                        continue
+                    raise e
             elif dep["kind"] == 'ConfigMap':
                 k8s_client = client.CoreV1Api()
                 k8s_client.create_namespaced_config_map(body=dep, namespace=namespace)

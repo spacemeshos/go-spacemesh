@@ -21,6 +21,15 @@ endif
 # Also allows BRANCH to be manually set
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
+# Add an indicator to the branch name if dirty and use commithash if running in detached mode
+ifeq ($(BRANCH),HEAD)
+    BRANCH = $(SHA)
+endif
+$(shell git diff --quiet)
+ifneq ($(.SHELLSTATUS),0)
+	BRANCH := $(BRANCH)-dirty
+endif
+
 # Setup the -ldflags option to pass vars defined here to app vars
 LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 
@@ -35,6 +44,20 @@ else
         DOCKER_IMAGE_REPO := go-spacemesh-dev
 endif
 
+# setting extra command line params for the CI tests pytest commands
+ifdef namespace
+    EXTRA_PARAMS:=$(EXTRA_PARAMS) --namespace=$(namespace)
+endif
+
+ifdef delns
+    EXTRA_PARAMS:=$(EXTRA_PARAMS) --delns=$(delns)
+endif
+
+ifdef dump
+    EXTRA_PARAMS:=$(EXTRA_PARAMS) --dump=$(dump)
+endif
+
+
 # This prevents "the input device is not a TTY" error from docker in CI
 DOCKERRUNARGS := --rm -e ES_PASSWD="$(ES_PASSWD)" \
 	-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
@@ -43,7 +66,11 @@ DOCKERRUNARGS := --rm -e ES_PASSWD="$(ES_PASSWD)" \
 	-e PROJECT_NAME=$(PROJECT_NAME) \
 	-e ES_USER=$(ES_USER) \
 	-e ES_PASS=$(ES_PASS) \
-	-e MAIN_ES_IP=$(MAIN_ES_IP)
+	-e MAIN_ES_IP=$(MAIN_ES_IP) \
+	-e TD_QUEUE_NAME=$(TD_QUEUE_NAME) \
+	-e TD_QUEUE_ZONE=$(TD_QUEUE_ZONE) \
+	-e DUMP_QUEUE_NAME=$(DUMP_QUEUE_NAME) \
+	-e DUMP_QUEUE_ZONE=$(DUMP_QUEUE_ZONE)
 
 DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(BRANCH)
 
@@ -154,12 +181,12 @@ test:
 
 
 test-no-app-test:
-	ulimit -n 9999; go test -timeout 0 -p 1 -v -tags exclude_app_test ./...
+	ulimit -n 9999; go test -timeout 0 -p 1 -tags exclude_app_test ./...
 .PHONY: test
 
 
 test-only-app-test:
-	ulimit -n 9999; go test -timeout 0 -p 1 -v -tags !exclude_app_test ./cmd/node
+	ulimit -n 9999; go test -timeout 0 -p 1 -tags !exclude_app_test ./cmd/node
 .PHONY: test
 
 
@@ -264,7 +291,7 @@ dockerrun-p2p-elk:
 ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
-	$(DOCKERRUN) pytest -s -v p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 .PHONY: dockerrun-p2p-elk
 
 dockertest-p2p-elk: dockerbuild-test-elk dockerrun-p2p-elk
@@ -275,7 +302,7 @@ dockerrun-mining-elk:
 ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
-	$(DOCKERRUN) pytest -s -v test_bs.py --tc-file=config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v test_bs.py --tc-file=config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 .PHONY: dockerrun-mining-elk
 
 dockertest-mining-elk: dockerbuild-test-elk dockerrun-mining-elk
@@ -286,7 +313,7 @@ dockerrun-hare-elk:
 ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
-	$(DOCKERRUN) pytest -s -v hare/test_hare.py::test_hare_sanity --tc-file=hare/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v hare/test_hare.py::test_hare_sanity --tc-file=hare/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 .PHONY: dockerrun-hare-elk
 
 
@@ -299,7 +326,7 @@ ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
 
-	$(DOCKERRUN) pytest -s -v sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 
 .PHONY: dockerrun-sync-elk
 
@@ -312,7 +339,7 @@ ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
 
-	$(DOCKERRUN) pytest -s -v late_nodes/test_delayed.py --tc-file=late_nodes/delayed_config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v late_nodes/test_delayed.py --tc-file=late_nodes/delayed_config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 
 .PHONY: dockerrun-late-nodes-elk
 
@@ -325,7 +352,7 @@ ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
 
-	$(DOCKERRUN) pytest -s -v sync/genesis/test_genesis_voting.py --tc-file=sync/genesis/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v sync/genesis/test_genesis_voting.py --tc-file=sync/genesis/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 
 .PHONY: dockerrun-genesis-voting-elk
 
@@ -338,7 +365,7 @@ ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
 
-	$(DOCKERRUN) pytest -s -v block_atx/add_node/test_blocks_add_node.py --tc-file=block_atx/add_node/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v block_atx/add_node/test_blocks_add_node.py --tc-file=block_atx/add_node/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 
 .PHONY: dockerrun-blocks-add-node-elk
 
@@ -351,7 +378,7 @@ ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
 
-	$(DOCKERRUN) pytest -s -v block_atx/remove_node/test_blocks_remove_node.py --tc-file=block_atx/remove_node/config.yaml --tc-format=yaml
+	$(DOCKERRUN) pytest -s -v block_atx/remove_node/test_blocks_remove_node.py --tc-file=block_atx/remove_node/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 
 .PHONY: dockerrun-blocks-remove-node-elk
 

@@ -923,10 +923,13 @@ func (m *DB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]stru
 
 	validBlks := make(map[types.BlockID]struct{})
 
+	cvErrors := make(map[string][]types.BlockID)
+	cvErrorCount := 0
 	for _, b := range blockIds {
 		valid, err := m.ContextualValidity(b)
 		if err != nil {
-			m.With().Error("could not get contextual validity by layer", b, layer, log.Err(err))
+			cvErrors[err.Error()] = append(cvErrors[err.Error()], b)
+			cvErrorCount++
 		}
 
 		if !valid {
@@ -939,7 +942,12 @@ func (m *DB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]stru
 	m.With().Info("count of contextually valid blocks in layer",
 		layer,
 		log.Int("count_valid", len(validBlks)),
+		log.Int("count_error", cvErrorCount),
 		log.Int("count_total", len(blockIds)))
+	if cvErrorCount != 0 {
+		m.With().Error("errors occurred getting contextual validity", layer,
+			log.String("errors", fmt.Sprint(cvErrors)))
+	}
 	return validBlks, nil
 }
 

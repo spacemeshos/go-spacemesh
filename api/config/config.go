@@ -60,6 +60,15 @@ func DefaultConfig() Config {
 	}
 }
 
+// DefaultTestConfig returns the default config for tests.
+func DefaultTestConfig() Config {
+	testPortOffset := 10000
+	conf := DefaultConfig()
+	conf.GrpcServerPort += testPortOffset
+	conf.JSONServerPort += testPortOffset
+	return conf
+}
+
 // ParseServicesList enables the requested services
 func (s *Config) ParseServicesList() error {
 	// Make sure all enabled GRPC services are known

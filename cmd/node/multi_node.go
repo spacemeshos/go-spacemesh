@@ -10,9 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spacemeshos/amcl"
-	"github.com/spacemeshos/amcl/BLS381"
-
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/collector"
@@ -128,7 +125,7 @@ func (clk *ManualClock) GetGenesisTime() time.Time {
 // Close does nothing because this clock is manual
 func (clk *ManualClock) Close() {}
 
-func getTestDefaultConfig() *config.Config {
+func getTestDefaultConfig(numOfInstances int) *config.Config {
 	cfg, err := LoadConfigFromFile()
 	if err != nil {
 		log.Error("cannot load config from file")
@@ -140,6 +137,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.POST.NumProvenLabels = 10
 	cfg.POST.SpacePerUnit = 1 << 10 // 1KB.
 	cfg.POST.NumFiles = 1
+	cfg.GenesisTotalWeight = cfg.POST.SpacePerUnit * uint64(numOfInstances) // * 1 PoET ticks
 
 	cfg.HARE.N = 5
 	cfg.HARE.F = 2
@@ -179,6 +177,7 @@ func ActivateGrpcServer(smApp *SpacemeshApp) {
 	smApp.Config.API.StartGatewayService = true
 	smApp.Config.API.StartGlobalStateService = true
 	smApp.Config.API.StartTransactionService = true
+	smApp.Config.API.GrpcServerPort = 9094
 	smApp.grpcAPIService = grpcserver.NewServerWithInterface(smApp.Config.API.GrpcServerPort, smApp.Config.API.GrpcServerInterface)
 	smApp.gatewaySvc = grpcserver.NewGatewayService(smApp.P2P)
 	smApp.globalstateSvc = grpcserver.NewGlobalStateService(smApp.mesh, smApp.txPool)
@@ -215,16 +214,19 @@ type network interface {
 
 // InitSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
-func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network) (*SpacemeshApp, error) {
+func InitSingleInstance(cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network) (*SpacemeshApp, error) {
 	smApp := NewSpacemeshApp()
 	smApp.Config = &cfg
+	smApp.Config.SpaceToCommit = smApp.Config.POST.SpacePerUnit << (i % 5)
 	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
 	smApp.Config.GenesisTime = genesisTime
 	edSgn := signing.NewEdSigner()
 	pub := edSgn.PublicKey()
 
-	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
-	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
+	vrfSigner, vrfPub, err := signing.NewVRFSigner(pub.Bytes())
+	if err != nil {
+		return nil, err
+	}
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
 
 	swarm := net.NewNode()
@@ -248,10 +250,9 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.
 
 // StartMultiNode Starts the run of a number of nodes, running in process consensus between them.
 // this also runs a single transaction between the nodes.
-func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPath string) {
-	cfg := getTestDefaultConfig()
+func StartMultiNode(numOfInstances, layerAvgSize int, runTillLayer uint32, dbPath string) {
+	cfg := getTestDefaultConfig(numOfInstances)
 	cfg.LayerAvgSize = layerAvgSize
-	numOfInstances := numOfinstances
 	net := service.NewSimulator()
 	path := dbPath + time.Now().Format(time.RFC3339)
 
@@ -269,7 +270,6 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	}()
 
 	rolacle := eligibility.New()
-	rng := BLS381.DefaultSeed()
 	gTime, err := time.Parse(time.RFC3339, genesisTime)
 	if err != nil {
 		log.Error("cannot parse genesis time %v", err)
@@ -286,7 +286,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := path + string(name)
 		database.SwitchCreationContext(dbStorepath, string(name))
-		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net)
+		smApp, err := InitSingleInstance(*cfg, i, genesisTime, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net)
 		if err != nil {
 			log.Error("cannot run multi node %v", err)
 			return
@@ -334,7 +334,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 		}
 	}()
 
-	if err := poetHarness.Start([]string{"127.0.0.1:9092"}); err != nil {
+	if err := poetHarness.Start([]string{"127.0.0.1:9094"}); err != nil {
 		log.Panic("failed to start poet server: %v", err)
 	}
 

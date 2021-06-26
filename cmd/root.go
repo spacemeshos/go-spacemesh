@@ -28,6 +28,10 @@ func AddCommands(cmd *cobra.Command) {
 		config.CollectMetrics, "collect node metrics")
 	cmd.PersistentFlags().IntVar(&config.MetricsPort, "metrics-port",
 		config.MetricsPort, "metric server port")
+	cmd.PersistentFlags().StringVar(&config.MetricsPush, "metrics-push",
+		config.MetricsPush, "Push metrics to url")
+	cmd.PersistentFlags().IntVar(&config.MetricsPushPeriod, "metrics-push-period",
+		config.MetricsPushPeriod, "Push period")
 	cmd.PersistentFlags().StringVar(&config.OracleServer, "oracle_server",
 		config.OracleServer, "The oracle server url. (temporary) ")
 	cmd.PersistentFlags().IntVar(&config.OracleServerWorldID, "oracle_server_worldid",
@@ -44,10 +48,6 @@ func AddCommands(cmd *cobra.Command) {
 		config.Hdist, "hdist")
 	cmd.PersistentFlags().BoolVar(&config.StartMining, "start-mining",
 		config.StartMining, "start mining")
-	cmd.PersistentFlags().StringVar(&config.MemProfile, "mem-profile",
-		config.MemProfile, "output memory profiling stat to filename")
-	cmd.PersistentFlags().StringVar(&config.CPUProfile, "cpu-profile",
-		config.CPUProfile, "output cpu profiling stat to filename")
 	cmd.PersistentFlags().BoolVar(&config.PprofHTTPServer, "pprof-server",
 		config.PprofHTTPServer, "enable http pprof server")
 	cmd.PersistentFlags().StringVar(&config.GenesisConfPath, "genesis-conf",
@@ -56,14 +56,18 @@ func AddCommands(cmd *cobra.Command) {
 		config.CoinbaseAccount, "coinbase account to accumulate rewards")
 	cmd.PersistentFlags().StringVar(&config.GoldenATXID, "golden-atx",
 		config.GoldenATXID, "golden ATX hash")
-	cmd.PersistentFlags().IntVar(&config.GenesisActiveSet, "genesis-active-size",
-		config.GenesisActiveSet, "The active set size for the genesis flow")
+	cmd.PersistentFlags().Uint64Var(&config.SpaceToCommit, "space-to-commit",
+		config.SpaceToCommit, "number of bytes to commit to mining")
+	cmd.PersistentFlags().Uint64Var(&config.GenesisTotalWeight, "genesis-total-weight",
+		config.GenesisTotalWeight, "The active set size for the genesis flow")
 	cmd.PersistentFlags().IntVar(&config.BlockCacheSize, "block-cache-size",
 		config.BlockCacheSize, "size in layers of meshdb block cache")
 	cmd.PersistentFlags().StringVar(&config.PublishEventsURL, "events-url",
 		config.PublishEventsURL, "publish events to this url; if no url specified no events will be published")
-	cmd.PersistentFlags().BoolVar(&config.Profiler, "profiler",
-		config.Profiler, "enable profiler")
+	cmd.PersistentFlags().StringVar(&config.ProfilerURL, "profiler-url",
+		config.ProfilerURL, "send profiler data to certain url, if no url no profiling will be sent, format: http://<IP>:<PORT>")
+	cmd.PersistentFlags().StringVar(&config.ProfilerName, "profiler-name",
+		config.ProfilerURL, "the name to use when sending profiles")
 
 	cmd.PersistentFlags().IntVar(&config.SyncRequestTimeout, "sync-request-timeout",
 		config.SyncRequestTimeout, "the timeout in ms for direct requests in the sync")

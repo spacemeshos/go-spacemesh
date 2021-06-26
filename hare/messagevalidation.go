@@ -60,7 +60,7 @@ func (ev *eligibilityValidator) validateRole(ctx context.Context, m *Msg) (bool,
 	}
 
 	// validate role
-	res, err := ev.oracle.Eligible(ctx, layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nID, m.InnerMsg.RoleProof)
+	res, err := ev.oracle.Validate(ctx, layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nID, m.InnerMsg.RoleProof, m.InnerMsg.EligibilityCount)
 	if err != nil {
 		logger.With().Error("eligibility validator: could not retrieve eligibility result",
 			log.Err(err),
@@ -238,22 +238,6 @@ func (v *syntaxContextValidator) SyntacticallyValidateMessage(ctx context.Contex
 		return false
 	}
 
-	if m.InnerMsg.Values == nil {
-		logger.With().Warning("syntax validation failed: set is nil",
-			log.String("sender_id", m.PubKey.ShortString()),
-			types.LayerID(m.InnerMsg.InstanceID),
-			log.String("msg_type", m.InnerMsg.Type.String()))
-		return false
-	}
-
-	if len(m.InnerMsg.Values) == 0 {
-		logger.With().Warning("syntax validation failed: set is empty",
-			log.String("sender_id", m.PubKey.ShortString()),
-			types.LayerID(m.InnerMsg.InstanceID),
-			log.String("msg_type", m.InnerMsg.Type.String()))
-		return false
-	}
-
 	claimedRound := m.InnerMsg.K % 4
 	switch m.InnerMsg.Type {
 	case pre:
@@ -298,8 +282,13 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 		return errNilMsgsSlice
 	}
 
-	if len(aggMsg.Messages) != v.threshold { // must include exactly f+1 Messages
-		v.WithContext(ctx).With().Warning("aggregated validation failed: number of messages does not match",
+	var count int
+	for _, m := range aggMsg.Messages {
+		count += int(m.InnerMsg.EligibilityCount)
+	}
+
+	if count < v.threshold { // must fit eligibility threshold
+		v.WithContext(ctx).With().Warning("aggregated validation failed: total eligibility of messages does not match",
 			log.Int("expected", v.threshold),
 			log.Int("actual", len(aggMsg.Messages)))
 		return errMsgsCountMismatch

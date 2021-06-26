@@ -1,88 +1,61 @@
 import datetime
 import random
+from collections import defaultdict
+from typing import Dict, List
 
 from tests import queries
+from tests.queries import Atx, Block
 
 
-def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, total_pods):
-    """
-    Analyze mining assures some vital assertions such as:
-    none of the pods restarted (unintentionally) or wasn't deployed,
-    all nodes created blocks,
-    number of average blocks created match layer_avg_size,
-    number of total ATX match the number of pods * number of epochs until last layer,
-    average block creation per user
+class EpochSummary(object):
+    node_weights: Dict[str, int]
+    node_num_blocks: Dict[str, int]
 
-    :param deployment: string, namespace id
-    :param last_layer: int, layer number to validate from
-    :param layers_per_epoch: int, number of layers per epoch
-    :param layer_avg_size: int, average number of blocks per layer
-    :param total_pods: int, total number of active pods
+    def __init__(self):
+        self.node_weights = dict()
+        self.node_num_blocks = defaultdict(int)
 
-    """
+    def add_atx(self, atx: Atx):
+        self.node_weights[atx.node_id] = atx.weight
 
-    last_layer = int(last_layer)
-    layers_per_epoch = int(layers_per_epoch)
-    layer_avg_size = int(layer_avg_size)
-    total_pods = int(total_pods)
+    def add_block(self, block: Block):
+        self.node_num_blocks[block.node_id] += 1
 
-    # need to filter out blocks that have come from last layer
-    blockmap, layermap = queries.get_blocks_per_node_and_layer(deployment)
-    queries.print_node_stats(blockmap)
-    queries.print_layer_stat(layermap)
+    def total_weight(self):
+        return sum(self.node_weights.values())
 
-    xl = [len(layermap[layer]) for layer in range(layers_per_epoch)]
-    print(xl)
 
-    first_epoch_blocks = sum(xl)
+def get_epoch_summaries(atxs: List[Atx], blocks: List[Block]) -> Dict[int, EpochSummary]:
+    epoch_summaries: defaultdict[int, EpochSummary] = defaultdict(EpochSummary)
+    for atx in atxs:
+        target_epoch = atx.published_in_epoch + 1
+        epoch_summaries[target_epoch].add_atx(atx)
+    for block in blocks:
+        epoch_summaries[block.epoch_id].add_block(block)
+    return dict(epoch_summaries)
 
-    # count all blocks arrived in relevant layers
-    total_blocks = sum([len(layermap[layer]) for layer in range(last_layer)])
 
-    atxmap = queries.get_atx_per_node(deployment)
-    newmap = {}
-    for x in atxmap:
-        lst = []
-        for y in atxmap[x]:
-            if y.layer_id != last_layer:  # check layer
-                lst.append(y)  # append data
-        newmap[x] = lst  # remove last layer
-    atxmap = newmap
-    total_atxs = sum([len(atxmap[x]) for x in atxmap])
-
-    print("atx created " + str(total_atxs))
-    print("blocks created " + str(total_blocks) + " first epoch blocks " + str(first_epoch_blocks))
-
-    up_pods = queries.get_nodes_up(deployment)
-    # not enough pods deployed or pods restarted
-    assert up_pods == total_pods, f"up pods: {up_pods}, total: {total_pods}"
-    # not all nodes created blocks
-    assert total_pods == len(blockmap), f"total pods={total_pods}, number of nodes that created blocks{len(blockmap)}"
-    # remove blocks created in first epoch since first epoch starts with layer 1
-    print("total and first", total_blocks, first_epoch_blocks)
-    ass_err = f"all blocks but first epoch={int(total_blocks - first_epoch_blocks)}\n" \
-              f"total num of layers={last_layer - layers_per_epoch} layers avg size={layer_avg_size}"
-    assert int((total_blocks - first_epoch_blocks) / (last_layer - layers_per_epoch * 2)) / layer_avg_size == 1, ass_err
-    # not all nodes produces atx in all epochs
-    assert total_atxs == int((last_layer / layers_per_epoch)) * total_pods
-
-    # assert that a node has created one atx per epoch
-    for node in atxmap:
-        mp = set()
-        for blk in atxmap[node]:
-            mp.add(blk.published_in_epoch)
-        assert len(atxmap[node]) / int((last_layer / layers_per_epoch) + 0.5) == 1
-        if len(mp) != int((last_layer / layers_per_epoch)):
-            print("mp " + ','.join(mp) + " node " + node + " atxmap " + str(atxmap[node]))
-        assert len(mp) == int((last_layer / layers_per_epoch))
-
-    # assert that each node has created layer_avg/number_of_nodes
-    for node in blockmap.values():
-        blocks_in_relevant_layers = sum([len(node.layers[layer]) for layer in range(layers_per_epoch, last_layer)])
-        # need to deduct blocks created in first genesis epoch since it does not follow general mining rules by design
-        blocks_created_per_layer = blocks_in_relevant_layers / (last_layer - layers_per_epoch * 2)
-        wanted_avg_block_per_node = max(1, int(layer_avg_size / total_pods))
-        assert blocks_created_per_layer / wanted_avg_block_per_node == 1
+def analyze_mining(deployment: str, total_epochs: int, layers_per_epoch: int, blocks_per_layer: int, total_nodes: int):
+    last_full_epoch = total_epochs - 1
+    blocks_per_epoch = layers_per_epoch * blocks_per_layer
+    epoch_summaries = get_epoch_summaries(queries.get_atxs(deployment), queries.get_blocks(deployment))
+    epoch_summaries = {e: s for e, s in epoch_summaries.items() if e <= last_full_epoch}
+    assert max(epoch_summaries.keys()) == last_full_epoch, \
+        f"max(epoch_summaries.keys()): {max(epoch_summaries.keys())} last_epoch: {last_full_epoch}"
+    print(f"\nValidating {total_epochs - 2} epochs (2-{last_full_epoch}), {layers_per_epoch} layers each. "
+          f"Targeting {blocks_per_epoch} blocks per epoch (actual should be lower).\n")
+    for epoch_id in range(2, last_full_epoch + 1):
+        summary = epoch_summaries[epoch_id]
+        assert len(summary.node_weights) == total_nodes
+        for node_id, weight in summary.node_weights.items():
+            expected_blocks = max(1, blocks_per_epoch * weight // summary.total_weight())
+            assert summary.node_num_blocks[node_id] == expected_blocks, \
+                f"summary.node_num_blocks[{node_id}]: {summary.node_num_blocks[node_id]}\n" \
+                f"expected_blocks: {expected_blocks}\n" \
+                f"epoch_id: {epoch_id}"
+        print(f"✅  Validated epoch {epoch_id}: "
+              f"{len(summary.node_weights)} nodes produced {sum(summary.node_num_blocks.values())} blocks "
+              f"(min: {min(summary.node_num_blocks.values())}, max: {max(summary.node_num_blocks.values())}).")
 
 
 def analyze_propagation(deployment, last_layer, max_block_propagation, max_atx_propagation):
