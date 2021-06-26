@@ -799,9 +799,9 @@ func (s *Switch) askForMorePeers(ctx context.Context) {
 		return
 	}
 
-	s.logger.Warning("needs more %d peers", s.config.SwarmConfig.RandomConnections-numpeers)
+	s.logger.Warning("needs %d more peers", s.config.SwarmConfig.RandomConnections-numpeers)
 
-	// if we could'nt get any maybe were initializing
+	// if we couldn't get any maybe we're initializing
 	// wait a little bit before trying again
 	tmr := time.NewTimer(NoResultsInterval)
 	defer tmr.Stop()

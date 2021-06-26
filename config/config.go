@@ -65,6 +65,9 @@ type BaseConfig struct {
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`
 
+	MetricsPush       string `mapstructure:"metrics-push"`
+	MetricsPushPeriod int    `mapstructure:"metrics-push-period"`
+
 	ProfilerName string `mapstructure:"profiler-name"`
 	ProfilerURL  string `mapstructure:"profiler-url"`
 
@@ -173,6 +176,8 @@ func defaultBaseConfig() BaseConfig {
 		TestMode:            defaultTestMode,
 		CollectMetrics:      false,
 		MetricsPort:         1010,
+		MetricsPush:         "", // "" = doesn't push
+		MetricsPushPeriod:   60,
 		ProfilerURL:         "",
 		ProfilerName:        "gp-spacemesh",
 		OracleServer:        "http://localhost:3030",

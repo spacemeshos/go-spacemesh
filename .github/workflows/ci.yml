@@ -1,7 +1,7 @@
 name: CI
 
 env:
-  go-version: '1.14.6'
+  go-version: '1.15.13'
   GCLOUD_KEY: ${{ secrets.GCLOUD_KEY }}
   PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
   CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
@@ -166,32 +166,6 @@ jobs:
         uses: actions/checkout@v2
       - name: late nodes system test
         run: make dockertest-late-nodes-elk
-  systemtest-blocks-add-node:
-    runs-on: ubuntu-latest
-    # only run on push, not on pull_request
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
-    needs:
-      - filter-changes
-      - dockerpush
-    timeout-minutes: 80
-    steps:
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: blocks add node test
-        run: make dockertest-blocks-add-node-elk
-  systemtest-blocks-remove-node:
-    runs-on: ubuntu-latest
-    # only run on push, not on pull_request
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
-    needs:
-      - filter-changes
-      - dockerpush
-    timeout-minutes: 80
-    steps:
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: remove node test
-        run: make dockertest-blocks-remove-node-elk
   systemtest-mining:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
@@ -201,10 +175,48 @@ jobs:
       - dockerpush
     timeout-minutes: 80
     steps:
+      - name: Sleep for 30 seconds
+        uses: jakejarvis/wait-action@master
+        with:
+          time: '30s'
       - name: checkout
         uses: actions/checkout@v2
       - name: mining system test
         run: make dockertest-mining-elk
+  systemtest-blocks-remove-node:
+    runs-on: ubuntu-latest
+    # only run on push, not on pull_request
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
+    needs:
+      - filter-changes
+      - dockerpush
+    timeout-minutes: 80
+    steps:
+      - name: Sleep for 90 seconds
+        uses: jakejarvis/wait-action@master
+        with:
+          time: '90s'
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: remove node test
+        run: make dockertest-blocks-remove-node-elk
+  systemtest-blocks-add-node:
+    runs-on: ubuntu-latest
+    # only run on push, not on pull_request
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
+    needs:
+      - filter-changes
+      - dockerpush
+    timeout-minutes: 80
+    steps:
+      - name: Sleep for 150 seconds
+        uses: jakejarvis/wait-action@master
+        with:
+          time: '150s'
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: blocks add node test
+        run: make dockertest-blocks-add-node-elk
   systemtest-p2p:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
@@ -214,23 +226,14 @@ jobs:
       - dockerpush
     timeout-minutes: 80
     steps:
+      - name: Sleep for 210 seconds
+        uses: jakejarvis/wait-action@master
+        with:
+          time: '210s'
       - name: checkout
         uses: actions/checkout@v2
       - name: p2p system test
         run: make dockertest-p2p-elk
-  systemtest-hare:
-    runs-on: ubuntu-latest
-    # only run on push, not on pull_request
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
-    needs:
-      - filter-changes
-      - dockerpush
-    timeout-minutes: 80
-    steps:
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: hare system test
-        run: make dockertest-hare-elk
   systemtest-sync:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
@@ -240,10 +243,31 @@ jobs:
       - dockerpush
     timeout-minutes: 80
     steps:
+      - name: Sleep for 270 seconds
+        uses: jakejarvis/wait-action@master
+        with:
+          time: '270s'
       - name: checkout
         uses: actions/checkout@v2
       - name: sync system test
         run: make dockertest-sync-elk
+  systemtest-hare:
+    runs-on: ubuntu-latest
+    # only run on push, not on pull_request
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
+    needs:
+      - filter-changes
+      - dockerpush
+    timeout-minutes: 80
+    steps:
+      - name: Sleep for 330 seconds
+        uses: jakejarvis/wait-action@master
+        with:
+          time: '330s'
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: hare system test
+        run: make dockertest-hare-elk
 
 
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
