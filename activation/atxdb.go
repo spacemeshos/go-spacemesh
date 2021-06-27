@@ -734,11 +734,11 @@ func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.Activ
 }
 
 // HandleGossipAtx handles the atx gossip data channel
-func (db *DB) HandleGossipAtx(ctx context.Context, data service.GossipMessage, syncer service.Fetcher) {
+func (db *DB) HandleGossipAtx(ctx context.Context, data service.GossipMessage, fetcher service.Fetcher) {
 	if data == nil {
 		return
 	}
-	err := db.HandleAtxData(ctx, data.Bytes(), syncer)
+	err := db.HandleAtxData(ctx, data.Bytes(), fetcher)
 	if err != nil {
 		db.log.WithContext(ctx).With().Error("error handling atx data", log.Err(err))
 		return
@@ -747,7 +747,7 @@ func (db *DB) HandleGossipAtx(ctx context.Context, data service.GossipMessage, s
 }
 
 // HandleAtxData handles atxs received either by gossip or sync
-func (db *DB) HandleAtxData(ctx context.Context, data []byte, syncer service.Fetcher) error {
+func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fetcher) error {
 	atx, err := types.BytesToAtx(data)
 	if err != nil {
 		return fmt.Errorf("cannot parse incoming atx")
@@ -763,12 +763,12 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, syncer service.Fet
 		return fmt.Errorf("nil nipst in gossip")
 	}
 
-	if err := syncer.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
+	if err := fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
 		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
 			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err)
 	}
 
-	if err := db.FetchAtxReferences(ctx, atx, syncer); err != nil {
+	if err := db.FetchAtxReferences(ctx, atx, fetcher); err != nil {
 		return fmt.Errorf("received ATX with missing references of prev or pos id %v, %v, %v, %v",
 			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), log.Err(err))
 	}

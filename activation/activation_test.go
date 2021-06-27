@@ -255,7 +255,7 @@ func (l *LayerClockMock) AwaitLayer(types.LayerID) chan struct{} {
 
 type mockSyncer struct{}
 
-func (m *mockSyncer) Await() chan struct{} { return closedChan }
+func (m *mockSyncer) AwaitSynced() chan struct{} { return closedChan }
 
 func newBuilder(activationDb atxDBProvider) *Builder {
 	net.atxDb = activationDb
