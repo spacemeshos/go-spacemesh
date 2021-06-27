@@ -248,19 +248,10 @@ def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME,
         print("elasticsearch statefulset readiness check has failed with err:", e)
         raise Exception(f"elasticsearch took over than {es_timeout} to start")
 
-    ls_timeout = 240
-    try:
-        print("waiting for logstash to be ready")
-        logstash_sleep_time = statefulset.wait_to_statefulset_to_be_ready(logstash_ss_name, namespace,
-                                                                          time_out=ls_timeout)
-    except Exception as e:
-        print(f"got an exception while waiting for Logstash to be ready: {e}")
-        raise Exception(f"logstash took over than {ls_timeout} to start")
-
-    kb_timeout = 3600
+    kb_timeout = 240
     try:
         print("waiting for kibana to be ready")
-        kibana_sleep_time = statefulset.wait_to_statefulset_to_be_ready(kibana_dep_name, namespace, time_out=ls_timeout)
+        kibana_sleep_time = deployment.wait_to_deployment_to_be_ready(kibana_dep_name, namespace, time_out=kb_timeout)
     except Exception as e:
         print(f"got an exception while waiting for kibana to be ready: {e}")
         raise Exception(f"kibana took more than {kb_timeout} to start")
