@@ -33,12 +33,15 @@ type Consensus interface {
 type TerminationOutput interface {
 	ID() instanceID
 	Set() *Set
+	Coinflip() bool
 	Completed() bool
 }
 
-type layers interface {
+type meshProvider interface {
 	LayerBlockIds(layerID types.LayerID) ([]types.BlockID, error)
 	HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID)
+	// RecordCoinflip records the weak coinflip result for a layer
+	RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool)
 }
 
 // checks if the collected output is valid
@@ -57,7 +60,7 @@ type Hare struct {
 
 	sign Signer
 
-	msh     layers
+	msh     meshProvider
 	rolacle Rolacle
 
 	networkDelta time.Duration
@@ -82,43 +85,34 @@ type Hare struct {
 
 // New returns a new Hare struct.
 func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeID, validate outputValidationFunc,
-	syncState syncStateFunc, obp layers, rolacle Rolacle,
+	syncState syncStateFunc, obp meshProvider, rolacle Rolacle,
 	layersPerEpoch uint16, idProvider identityProvider, stateQ StateQuerier,
 	beginLayer chan types.LayerID, logger log.Log) *Hare {
 	h := new(Hare)
 
 	h.Closer = NewCloser()
-
 	h.Log = logger
-
 	h.config = conf
-
 	h.network = p2p
 	h.beginLayer = beginLayer
 
 	ev := newEligibilityValidator(rolacle, layersPerEpoch, idProvider, conf.N, conf.ExpectedLeaders, logger)
 	h.broker = newBroker(p2p, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, h.Closer, logger)
-
 	h.sign = sign
-
 	h.msh = obp
 	h.rolacle = rolacle
 
 	h.networkDelta = time.Duration(conf.WakeupDelta) * time.Second
 	// todo: this should be loaded from global config
 	h.bufferSize = LayerBuffer // XXX: must be at least the size of `hdist`
-
 	h.lastLayer = 0
-
 	h.outputChan = make(chan TerminationOutput, h.bufferSize)
-	h.outputs = make(map[types.LayerID][]types.BlockID, h.bufferSize) //  we keep results about LayerBuffer past layers
-
+	h.outputs = make(map[types.LayerID][]types.BlockID, h.bufferSize) // we keep results about LayerBuffer past layers
 	h.factory = func(conf config.Config, instanceId instanceID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
 		return newConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, ev, logger)
 	}
 
 	h.validate = validate
-
 	h.nid = nid
 
 	return h
@@ -160,7 +154,7 @@ func (h *Hare) oldestResultInBuffer() types.LayerID {
 // ErrTooLate means that the consensus was terminated too late
 var ErrTooLate = errors.New("consensus process finished too late")
 
-// records the provided output.
+// records the provided output
 func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) error {
 	set := output.Set()
 	blocks := make([]types.BlockID, len(set.values))
@@ -177,7 +171,6 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 
 	id := output.ID()
 	h.msh.HandleValidatedLayer(ctx, types.LayerID(id), blocks)
-
 	if h.outOfBufferRange(id) {
 		return ErrTooLate
 	}
@@ -217,7 +210,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		// it must not return without starting consensus process or mark result as fail
 		// except if it's genesis layer
 		if err != nil {
-			h.outputChan <- procReport{instanceID(id), &Set{}, notCompleted}
+			h.outputChan <- procReport{instanceID(id), &Set{}, false, notCompleted}
 		}
 	}()
 
@@ -313,11 +306,23 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 	for {
 		select {
 		case out := <-h.outputChan:
-			if err := h.collectOutput(ctx, out); err != nil {
-				h.WithContext(ctx).With().Warning("error collecting output from hare", log.Err(err))
+			layerID := types.LayerID(out.ID())
+			coin := out.Coinflip()
+			logger := h.WithContext(ctx).WithFields(layerID)
+
+			// collect coinflip, regardless of success
+			logger.With().Info("recording weak coinflip result for layer",
+				log.Bool("coinflip", coin))
+			h.msh.RecordCoinflip(ctx, layerID, coin)
+
+			if out.Completed() { // CP completed, collect the output
+				logger.With().Info("collecting results for completed hare instance", layerID)
+				if err := h.collectOutput(ctx, out); err != nil {
+					logger.With().Warning("error collecting output from hare", log.Err(err))
+				}
 			}
 			h.broker.Unregister(ctx, out.ID())
-			h.WithContext(ctx).With().Info("number of consensus processes (after -1)",
+			logger.With().Info("number of consensus processes (after -1)",
 				log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
 			metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(out.ID()), 10)).Add(-1)
 		case <-h.CloseChannel():
