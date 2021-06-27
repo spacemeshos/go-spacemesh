@@ -213,8 +213,8 @@ func getNumberOfEligibleBlocks(weight, totalWeight uint64, committeeSize uint32,
 	return uint32(numberOfEligibleBlocks), nil
 }
 
-func (bo *Oracle) getATXIDForEpoch(epoch types.EpochID) (types.ATXID, error) {
-	latestATXID, err := bo.atxDB.GetNodeAtxIDForEpoch(bo.nodeID, epoch)
+func (bo *Oracle) getATXIDForEpoch(targetEpoch types.EpochID) (types.ATXID, error) {
+	latestATXID, err := bo.atxDB.GetNodeAtxIDForEpoch(bo.nodeID, targetEpoch)
 	if err != nil {
 		bo.log.With().Warning("did not find atx ids for node",
 			log.FieldNamed("atx_node_id", bo.nodeID),

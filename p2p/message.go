@@ -65,7 +65,7 @@ func (pm gossipProtocolMessage) ValidationCompletedChan() chan service.MessageVa
 
 func (pm gossipProtocolMessage) ReportValidation(ctx context.Context, protocol string) {
 	if pm.validationChan != nil {
-		log.AppLog.WithContext(ctx).With().Info("reporting valid gossip message",
+		log.AppLog.WithContext(ctx).With().Debug("reporting valid gossip message",
 			log.String("protocol", protocol),
 			log.String("requestId", pm.requestID),
 			log.FieldNamed("sender", pm.sender),
