@@ -439,7 +439,6 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 		}
 
 		for i := types.LayerID(5); i <= untilLayer; i++ {
-			assert.Fail(suite.T(), "test failure inside goroutine")
 			lyr, err := ap.mesh.GetLayer(i)
 			suite.NoError(err, "couldn't get validated layer from db", i)
 			for _, b := range lyr.Blocks() {
