@@ -67,6 +67,11 @@ func String(name, val string) Field {
 	return Field(zap.String(name, val))
 }
 
+// Binary will encode binary content in base64 when logged.
+func Binary(name string, val []byte) Field {
+	return Field(zap.Binary(name, val))
+}
+
 // Int returns an int Field
 func Int(name string, val int) Field {
 	return Field(zap.Int(name, val))
