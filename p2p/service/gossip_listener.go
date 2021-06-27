@@ -41,9 +41,6 @@ type Syncer interface {
 	FetchPoetProof(ctx context.Context, poetProofRef []byte) error
 	ListenToGossip() bool
 	GetBlock(ID types.BlockID) (*types.Block, error)
-	//GetTxs(IDs []types.TransactionID) error
-	//GetBlocks(IDs []types.BlockID) error
-	//GetAtxs(IDs []types.ATXID) error
 	IsSynced(context.Context) bool
 }
 

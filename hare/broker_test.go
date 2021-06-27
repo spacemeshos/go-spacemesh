@@ -384,7 +384,7 @@ func TestBroker_Send(t *testing.T) {
 	m := newMockGossipMsg(nil)
 	broker.inbox <- m
 
-	msg := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).Message
+	msg := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
 	msg.InnerMsg.InstanceID = 2
 	m = newMockGossipMsg(msg)
 	broker.inbox <- m
@@ -407,7 +407,7 @@ func TestBroker_Register(t *testing.T) {
 	n1 := sim.NewNode()
 	broker := buildBroker(n1, t.Name())
 	broker.Start(context.TODO())
-	msg := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1))
+	msg := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil)
 	broker.pending[instanceID1] = []*Msg{msg, msg}
 	broker.Register(context.TODO(), instanceID1)
 	assert.Equal(t, 2, len(broker.outbox[instanceID1]))
@@ -431,7 +431,7 @@ func TestBroker_Register2(t *testing.T) {
 	broker := buildBroker(n1, t.Name())
 	broker.Start(context.TODO())
 	broker.Register(context.TODO(), instanceID1)
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).Message
+	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
 	m.InnerMsg.InstanceID = instanceID1
 	msg := newMockGossipMsg(m)
 	broker.inbox <- msg
@@ -448,7 +448,7 @@ func TestBroker_Register3(t *testing.T) {
 	broker := buildBroker(n1, t.Name())
 	broker.Start(context.TODO())
 
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).Message
+	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
 	m.InnerMsg.InstanceID = instanceID1
 	msg := newMockGossipMsg(m)
 	broker.inbox <- msg
@@ -473,7 +473,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 	broker.Start(context.TODO())
 	inbox, _ := broker.Register(context.TODO(), instanceID1)
 	sgn := signing.NewEdSigner()
-	m := BuildPreRoundMsg(sgn, NewSetFromValues(value1)).Message
+	m := BuildPreRoundMsg(sgn, NewSetFromValues(value1), nil).Message
 	m.InnerMsg.InstanceID = instanceID1
 	msg := newMockGossipMsg(m)
 	broker.inbox <- msg
@@ -492,7 +492,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 }
 
 func Test_newMsg(t *testing.T) {
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).Message
+	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
 	// TODO: remove this comment when ready
 	//_, e := newMsg(m, MockStateQuerier{false, errors.New("my err")})
 	//assert.NotNil(t, e)
@@ -556,7 +556,7 @@ func TestBroker_eventLoop(t *testing.T) {
 
 	// unknown-->invalid, ignore
 	b.isNodeSynced = falseFunc
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).Message
+	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
 	m.InnerMsg.InstanceID = instanceID1
 	msg := newMockGossipMsg(m)
 	b.inbox <- msg
@@ -595,7 +595,7 @@ func TestBroker_eventLoop2(t *testing.T) {
 	b.isNodeSynced = falseFunc
 	_, e := b.Register(context.TODO(), instanceID4)
 	r.NotNil(e)
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).Message
+	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
 	m.InnerMsg.InstanceID = instanceID4
 	msg := newMockGossipMsg(m)
 	b.inbox <- msg
