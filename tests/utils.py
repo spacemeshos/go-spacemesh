@@ -259,7 +259,7 @@ def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME,
         kibana_ip = get_kibana_ip(kibana_dep_name, namespace)
         print(f"kibana started successfully. ip: {kibana_ip}")
 
-    return es_sleep_time + logstash_sleep_time + kibana_sleep_time
+    return es_sleep_time + kibana_sleep_time
 
 
 def get_kibana_ip(kibana_dep_name, namespace, retries=30, sleep_interval=1):
