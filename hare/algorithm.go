@@ -54,12 +54,12 @@ const (
 	notCompleted = false
 )
 
-// procReport is the termination report of the CP.
-// It consists of the layer id, the set we agreed on (if available) and a flag to indicate if the CP completed.
+// procReport is the termination report of the CP
 type procReport struct {
-	id        instanceID
-	set       *Set
-	completed bool
+	id        instanceID // layer id
+	set       *Set       // agreed-upon set
+	coinflip  bool       // weak coin value
+	completed bool       // whether the CP completed
 }
 
 func (cpo procReport) ID() instanceID {
@@ -70,12 +70,16 @@ func (cpo procReport) Set() *Set {
 	return cpo.set
 }
 
+func (cpo procReport) Coinflip() bool {
+	return cpo.coinflip
+}
+
 func (cpo procReport) Completed() bool {
 	return cpo.completed
 }
 
 func (proc *consensusProcess) report(completed bool) {
-	proc.terminationReport <- procReport{proc.instanceID, proc.s, completed}
+	proc.terminationReport <- procReport{proc.instanceID, proc.s, proc.preRoundTracker.coinflip, completed}
 }
 
 var _ TerminationOutput = (*procReport)(nil)
@@ -303,7 +307,7 @@ func (proc *consensusProcess) eventLoop(ctx context.Context) {
 PreRound:
 	for {
 		select {
-		// listen to pre-round Messages
+		// listen to pre-round messages
 		case msg := <-proc.inbox:
 			proc.handleMessage(ctx, msg)
 		case <-timer.C:
@@ -698,6 +702,7 @@ func (proc *consensusProcess) onRoundBegin(ctx context.Context) {
 	if len(proc.pending) == 0 { // no pending messages
 		return
 	}
+
 	// handle pending messages
 	pendingProcess := proc.pending
 	proc.pending = make(map[string]*Msg, proc.cfg.N)
