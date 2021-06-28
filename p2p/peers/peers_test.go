@@ -1,8 +1,6 @@
 package peers
 
 import (
-	"bytes"
-	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -93,37 +91,4 @@ func TestPeers_RemovePeer(t *testing.T) {
 	time.Sleep(10 * time.Millisecond) //allow context switch
 	peers = pi.GetPeers()
 	assert.True(t, len(peers) == 1, "number of peers incorrect, length was ", len(peers))
-}
-
-func TestPeers_RandomPeers(t *testing.T) {
-	pi, n, _ := getPeers(service.NewSimulator().NewNode())
-	pi.rand.Seed(0)
-	a := p2pcrypto.NewRandomPubkey()
-	b := p2pcrypto.NewRandomPubkey()
-	c := p2pcrypto.NewRandomPubkey()
-	d := p2pcrypto.NewRandomPubkey()
-	e := p2pcrypto.NewRandomPubkey()
-	n <- a
-	time.Sleep(10 * time.Millisecond) //allow context switch
-	peers := pi.GetPeers()
-	assert.True(t, len(peers) == 1, "number of peers incorrect, length was ", len(peers))
-	n <- b
-	n <- c
-	n <- d
-	n <- e
-	defer pi.Close()
-	time.Sleep(10 * time.Millisecond) //allow context switch
-	peers1 := pi.GetPeers()
-	peers2 := pi.GetPeers()
-	assert.True(t, len(peers1) == 5, "number of peers incorrect, length was ", len(peers1))
-
-	for p := range peers1 {
-		if !bytes.Equal(peers1[p].Bytes(), peers2[p].Bytes()) {
-			t.Log("test done")
-			return
-		}
-		t.Log(fmt.Sprintf("index %d same element %s %s", p, peers1[p].String(), peers2[p].String()))
-	}
-
-	t.Fail()
 }

@@ -1,10 +1,9 @@
 package peers
 
 import (
-	"github.com/spacemeshos/go-spacemesh/events"
-	"math/rand"
 	"sync/atomic"
-	"time"
+
+	"github.com/spacemeshos/go-spacemesh/events"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -18,8 +17,6 @@ type Peers struct {
 	log.Log
 	snapshot *atomic.Value
 	exit     chan struct{}
-
-	rand *rand.Rand
 }
 
 // PeerSubscriptionProvider is the interface that provides us with peer events channels.
@@ -44,7 +41,6 @@ func NewPeersImpl(snapshot *atomic.Value, exit chan struct{}, lg log.Log) *Peers
 		snapshot: snapshot,
 		Log:      lg,
 		exit:     exit,
-		rand:     rand.New(rand.NewSource(time.Now().UnixNano()).(rand.Source64)),
 	}
 }
 
@@ -54,14 +50,9 @@ func (p *Peers) Close() {
 }
 
 // GetPeers returns a snapshot of the connected peers shuffled.
-// Method is not concurrent-safe.
 func (p *Peers) GetPeers() []Peer {
 	peers := p.snapshot.Load().([]Peer)
-	cpy := make([]Peer, len(peers))
-	copy(cpy, peers) // if we dont copy we will shuffle orig array
-	p.With().Debug("now connected", log.Int("n_peers", len(cpy)))
-	p.rand.Shuffle(len(cpy), func(i, j int) { cpy[i], cpy[j] = cpy[j], cpy[i] }) // shuffle peers order
-	return cpy
+	return peers
 }
 
 // PeerCount returns the number of connected peers.
