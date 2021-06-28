@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "7f151442552d8c3bf7ed1eff151d94cf979dba516aa6bd0455d0809d86d6ff89"
+            "sha256": "bfafde9a8cb8cdab9c39ea8c00cfcd6db1e69b733ae45a244876bbd867a8a8bb"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -197,11 +197,11 @@
         },
         "kubernetes": {
             "hashes": [
-                "sha256:225a95a0aadbd5b645ab389d941a7980db8cdad2a776fde64d1b43fc3299bde9",
-                "sha256:c69b318696ba797dcf63eb928a8d4370c52319f4140023c502d7dfdf2080eb79"
+                "sha256:eb95331512c2e9206c85b62788f82cc2d51cfb96420d4ef18f007ec1b9d87f0a",
+                "sha256:ec360d9bae6ac67081f81bca23870822a5ff1508dffad6f20a5a2a03f20032c5"
             ],
             "index": "pypi",
-            "version": "==17.17.0"
+            "version": "==9.0.1"
         },
         "libcst": {
             "hashes": [
