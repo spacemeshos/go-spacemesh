@@ -285,9 +285,9 @@ func (proofMessage PoetProofMessage) Ref() ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %v",
 			proofMessage.PoetServiceID, proofMessage.RoundID, err)
 	}
-
 	ref := sha256.Sum256(poetProofBytes)
-	return ref[:], nil
+	h := CalcHash32(ref[:])
+	return h.Bytes(), nil
 }
 
 // PoetRound includes the PoET's round ID.

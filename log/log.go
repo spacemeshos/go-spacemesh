@@ -3,6 +3,7 @@
 package log
 
 import (
+	"context"
 	"io"
 	"os"
 
@@ -39,7 +40,8 @@ type Logger interface {
 	Error(format string, args ...interface{})
 	Warning(format string, args ...interface{})
 	With() FieldLogger
-	WithName(prefix string) Log
+	WithContext(context.Context) Log
+	WithName(string) Log
 }
 
 func encoder() zapcore.Encoder {
@@ -83,7 +85,7 @@ func NewWithLevel(module string, level zap.AtomicLevel, hooks ...func(zapcore.En
 	consoleCore := zapcore.NewCore(enc, consoleSyncer, level)
 	core := zapcore.RegisterHooks(consoleCore, hooks...)
 	log := zap.New(core).Named(module)
-	return Log{log}
+	return NewFromLog(log)
 }
 
 // NewDefault creates a Log with the default log level

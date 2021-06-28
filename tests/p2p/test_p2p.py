@@ -21,7 +21,7 @@ current_index = get_curr_ind()
 timeout_factor = 1
 
 # For purposes of these tests, we override the PoetProof protocol
-gossip_message_query_fields = {'M': 'gossip message is new', 'protocol': 'PoetProof'}
+gossip_message_query_fields = {'M': 'gossip message is new, processing', 'protocol': 'PoetProof'}
 
 
 def query_bootstrap_es(namespace, bootstrap_po_name):
@@ -110,7 +110,7 @@ def test_bootstrap(init_session, add_elk, add_node_pool, add_curl, setup_bootstr
 def test_client(init_session, add_elk, add_node_pool, add_curl, setup_clients, save_log_on_exit):
     fields = {'M': 'discovery_bootstrap'}
     timetowait = len(setup_clients.pods) * timeout_factor
-    print(f"Sleeping {str(timetowait)} before checking out bootstrap results")
+    print(f"Sleeping {str(timetowait)} before checking bootstrap results")
     time.sleep(timetowait)
 
     peers = poll_query_message(indx=current_index,
@@ -251,11 +251,12 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
     """
     # in our case each pod contains one node
     pods_num = len(setup_clients.pods)
+    print("Sending {0} gossip messages".format(num_of_msg))
     for i in range(num_of_msg):
         rnd = random.randint(0, pods_num - 1)
         client_ip = setup_clients.pods[rnd]['pod_ip']
         pod_name = setup_clients.pods[rnd]['name']
-        print("Sending gossip from client ip: {0}/{1}".format(pod_name, client_ip))
+        print("Sending gossip {0} from client ip: {1}/{2}".format(i+1, pod_name, client_ip))
 
         # todo: take out broadcast and rpcs to helper methods.
         msg = "".join(choice(ascii_lowercase) for _ in range(msg_size))
@@ -265,21 +266,30 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
         ass_err = f"test_invalid_msg: expected \"{expected_ret}\" and got \"{out}\""
         assert expected_ret in out, ass_err
 
-    # currently we expect short propagation times.
+    # we expect short propagation times
     gossip_propagation_sleep = (num_of_msg + prop_sleep_time) * timeout_factor
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
-    after = poll_query_message(indx=current_index,
+    # run one global query (for results from all pods), then run one query per pod to figure out which ones failed
+    results = poll_query_message(indx=current_index,
                                namespace=testconfig['namespace'],
                                client_po_name=setup_clients.deployment_name,
                                fields=headers,
                                findFails=False,
                                expected=total_expected_gossip)
 
+    # run some additional queries to make debugging easier
+    if total_expected_gossip != len(results):
+        for pod in setup_clients.pods:
+            # query_fields = headers.copy()
+            # query_fields['kubernetes.pod_name'] = pod['name']
+            results_pod = query_message(current_index, testconfig['namespace'], pod['name'], headers)
+            print("Count of results for pod {0}: {1}".format(pod['name'], len(results_pod)))
+
     err_msg = "msg_testing: Total gossip messages in ES is not as expected"
-    err_msg += f"\nexpected {total_expected_gossip}, got {len(after)}"
-    assert total_expected_gossip == len(after), err_msg
+    err_msg += f"\nexpected {total_expected_gossip}, got {len(results)}"
+    assert total_expected_gossip == len(results), err_msg
 
 
 # Deploy X peers

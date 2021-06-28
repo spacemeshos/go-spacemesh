@@ -3,14 +3,12 @@ package blocks
 import (
 	"fmt"
 
-	"github.com/spacemeshos/sha256-simd"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // VRFValidationFunction is the VRF validation function.
-type VRFValidationFunction func(message, signature, publicKey []byte) (bool, error)
+type VRFValidationFunction func(publicKey, message, signature []byte) bool
 
 type blockDB interface {
 	GetBlock(ID types.BlockID) (*types.Block, error)
@@ -52,7 +50,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 
 	epochNumber := block.LayerIndex.GetEpoch()
 	if epochNumber == 0 {
-		v.log.With().Warning("skipping epoch 0 block validation.",
+		v.log.With().Warning("skipping epoch 0 block validation",
 			block.ID(), block.LayerIndex)
 		return true, nil
 	}
@@ -106,19 +104,17 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	}
 
 	epochBeacon := v.beaconProvider.GetBeacon(epochNumber)
-	message := serializeVRFMessage(epochBeacon, epochNumber, counter)
+	message, err := serializeVRFMessage(epochBeacon, epochNumber, counter)
+	if err != nil {
+		return false, err
+	}
 	vrfSig := block.EligibilityProof.Sig
 
-	res, err := v.validateVRF(message, vrfSig, vrfPubkey)
-	if err != nil {
-		return false, fmt.Errorf("eligibility VRF validation failed: %v", err)
-	}
-
-	if !res {
+	if !v.validateVRF(vrfPubkey, message, vrfSig) {
 		return false, fmt.Errorf("eligibility VRF validation failed")
 	}
 
-	eligibleLayer := calcEligibleLayer(epochNumber, v.layersPerEpoch, sha256.Sum256(vrfSig))
+	eligibleLayer := calcEligibleLayer(epochNumber, v.layersPerEpoch, vrfSig)
 
 	if block.LayerIndex != eligibleLayer {
 		return false, fmt.Errorf("block layer (%v) does not match eligibility layer (%v)",

@@ -93,7 +93,7 @@ type messageBuilder struct {
 // newMessageBuilder returns a new, empty message builder.
 // One should not assume any values are pre-set.
 func newMessageBuilder() *messageBuilder {
-	m := &messageBuilder{&Msg{&Message{}, nil}, &innerMessage{}}
+	m := &messageBuilder{&Msg{Message: &Message{}, PubKey: nil}, &innerMessage{}}
 	m.msg.InnerMsg = m.inner
 
 	return m
@@ -105,7 +105,7 @@ func (builder *messageBuilder) Build() *Msg {
 }
 
 func (builder *messageBuilder) SetCertificate(certificate *certificate) *messageBuilder {
-	builder.msg.InnerMsg.Cert = certificate
+	builder.inner.Cert = certificate
 	return builder
 }
 

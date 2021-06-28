@@ -2,6 +2,7 @@ package activation
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"sort"
 	"sync"
@@ -10,6 +11,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/spacemeshos/ed25519"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/post/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -88,7 +93,7 @@ type NetMock struct {
 	atxDb            atxDBProvider
 }
 
-func (n *NetMock) Broadcast(_ string, d []byte) error {
+func (n *NetMock) Broadcast(_ context.Context, _ string, d []byte) error {
 	n.lastTransmission = d
 	go n.hookToAtxPool(d)
 	return nil
@@ -148,7 +153,7 @@ func (*MockIDStore) GetIdentity(string) (types.NodeID, error) {
 
 type ValidatorMock struct{}
 
-func (*ValidatorMock) Validate(signing.PublicKey, *types.NIPoST, uint64, types.Hash32) error {
+func (*ValidatorMock) Validate(signing.PublicKey, *types.NIPoST, uint64, uint64, types.Hash32) error {
 	return nil
 }
 
@@ -185,7 +190,7 @@ type FaultyNetMock struct {
 	retErr bool
 }
 
-func (n *FaultyNetMock) Broadcast(_ string, d []byte) error {
+func (n *FaultyNetMock) Broadcast(_ context.Context, _ string, d []byte) error {
 	n.bt = d
 	if n.retErr {
 		return fmt.Errorf("faulty")
@@ -317,7 +322,7 @@ func publishAtx(b *Builder, meshLayer types.LayerID, clockEpoch types.EpochID, b
 		return NewNIPoSTWithChallenge(challenge, poetBytes), nil
 	}
 	layerClockMock.currentLayer = clockEpoch.FirstLayer() + 3
-	err = b.PublishActivationTx()
+	err = b.PublishActivationTx(context.TODO())
 	nipostBuilderMock.buildNipostFunc = nil
 	return net.lastTransmission != nil, builtNipost, err
 }
@@ -700,7 +705,7 @@ func TestBuilder_NIPoSTPublishRecovery(t *testing.T) {
 	setTotalWeightInCache(t, defaultTotalWeight)
 
 	layerClockMock.currentLayer = types.EpochID(1).FirstLayer() + 3
-	err = b.PublishActivationTx()
+	err = b.PublishActivationTx(context.TODO())
 	assert.EqualError(t, err, "target epoch has passed")
 
 	// test load in correct epoch
@@ -708,7 +713,7 @@ func TestBuilder_NIPoSTPublishRecovery(t *testing.T) {
 	err = b.loadChallenge()
 	assert.NoError(t, err)
 	layers.latestLayer = 22
-	err = b.PublishActivationTx()
+	err = b.PublishActivationTx(context.TODO())
 	assert.NoError(t, err)
 	act := newActivationTx(b.nodeID, 2, atx.ID(), atx.ID(), atx.PubLayerID+10, 101, 1, coinbase, 0, npst2)
 	err = b.SignAtx(act)
@@ -726,7 +731,7 @@ func TestBuilder_NIPoSTPublishRecovery(t *testing.T) {
 	err = b.loadChallenge()
 	assert.NoError(t, err)
 	layerClockMock.currentLayer = types.EpochID(4).FirstLayer() + 3
-	err = b.PublishActivationTx()
+	err = b.PublishActivationTx(context.TODO())
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
 	assert.EqualError(t, err, "target epoch has passed")
 	assert.True(t, db.hadNone)
@@ -852,5 +857,5 @@ func newActivationTx(
 		EndTick:        startTick + numTicks,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipostChallenge, coinbase, nipost, space, nil)
+	return types.NewActivationTx(nipostChallenge, coinbase, nipost, space, space, nil)
 }

@@ -32,13 +32,17 @@ func Publish(event Event) {
 }
 
 // InitializeEventPubsub initializes the global pubsub broadcaster server
-func InitializeEventPubsub(ur string) {
+func InitializeEventPubsub(ur string) error {
 	var err error
 	publisher, err = NewEventPublisher(ur)
-	if err != nil {
-		log.Panic("cannot init pubsub: %v", err)
-	} else {
-		log.Info("pubsub created")
+	return err
+}
+
+// CloseEventPubSub closes events pubsub and destroys it
+func CloseEventPubSub() {
+	if publisher != nil {
+		publisher.Close()
+		publisher = nil
 	}
 }
 

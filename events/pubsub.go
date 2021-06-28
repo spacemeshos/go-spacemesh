@@ -2,14 +2,15 @@ package events
 
 import (
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"nanomsg.org/go-mangos"
 	"nanomsg.org/go-mangos/protocol/pub"
 	"nanomsg.org/go-mangos/protocol/sub"
 	"nanomsg.org/go-mangos/transport/ipc"
 	"nanomsg.org/go-mangos/transport/tcp"
-	"sync"
-	"time"
 )
 
 // channelBuffer defines the listening channel buffer size.
@@ -20,10 +21,12 @@ type ChannelID byte
 
 // Subscriber defines the struct of the receiving end of the pubsub messages.
 type Subscriber struct {
-	sock      mangos.Socket
+	sock   mangos.Socket
+	closer chan struct{}
+
+	chanLock  sync.RWMutex
 	output    map[ChannelID]chan []byte
 	allOutput chan []byte
-	chanLock  sync.RWMutex
 }
 
 // NewSubscriber received url string as input on which it will register to receive messages passed by server.
@@ -43,10 +46,9 @@ func NewSubscriber(url string) (*Subscriber, error) {
 	}
 
 	return &Subscriber{
-		socket,
-		make(map[ChannelID]chan []byte, 100),
-		nil,
-		sync.RWMutex{},
+		sock:   socket,
+		output: make(map[ChannelID]chan []byte, 100),
+		closer: make(chan struct{}),
 	}, nil
 }
 
@@ -55,8 +57,8 @@ func NewSubscriber(url string) (*Subscriber, error) {
 func (sub *Subscriber) StartListening() {
 	go func() {
 		for {
-			data, err := sub.sock.Recv()
-			log.Debug("got msg %v", string(data))
+			payload, err := sub.sock.Recv()
+			log.With().Debug("got message", log.Binary("payload", payload))
 			if err != nil {
 				if err.Error() == "connection closed" {
 					log.Warning("connection closed on pubsub reader")
@@ -65,31 +67,54 @@ func (sub *Subscriber) StartListening() {
 				}
 				return
 			}
-			// cannot route empty message
-			if len(data) < 1 {
-				log.Error("got empty message")
-			}
-			sub.chanLock.RLock()
-			if sub.allOutput != nil {
-				sub.allOutput <- data
-			}
-			if c, ok := sub.output[ChannelID(data[0])]; ok {
-				c <- data
-			}
-			sub.chanLock.RUnlock()
+			sub.route(payload)
 		}
 	}()
 }
 
+func (sub *Subscriber) route(payload []byte) {
+	// cannot route empty message
+	if len(payload) < 1 {
+		log.Error("got empty message")
+		return
+	}
+
+	sub.chanLock.RLock()
+	defer sub.chanLock.RUnlock()
+
+	var receiver chan []byte
+	if sub.allOutput != nil {
+		receiver = sub.allOutput
+	} else {
+		if c, ok := sub.output[ChannelID(payload[0])]; ok {
+			receiver = c
+		}
+	}
+	if receiver == nil {
+		return
+	}
+	select {
+	case receiver <- payload:
+	case <-sub.closer:
+	}
+}
+
 // Close closes the socket which in turn will Close the listener func
 func (sub *Subscriber) Close() error {
-	return sub.sock.Close()
+	select {
+	case <-sub.closer:
+	default:
+		close(sub.closer)
+		return sub.sock.Close()
+	}
+	return nil
 }
 
 // Subscribe subscribes to the given topic, returns a channel on which data from the topic is received.
 func (sub *Subscriber) Subscribe(topic ChannelID) (chan []byte, error) {
 	sub.chanLock.Lock()
 	defer sub.chanLock.Unlock()
+
 	if _, ok := sub.output[topic]; !ok {
 		sub.output[topic] = make(chan []byte, channelBuffer)
 	}
@@ -97,19 +122,22 @@ func (sub *Subscriber) Subscribe(topic ChannelID) (chan []byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return sub.output[topic], err
+	return sub.output[topic], nil
 }
 
 // SubscribeToAll subscribes to all available topics.
 func (sub *Subscriber) SubscribeToAll() (chan []byte, error) {
-	err := sub.sock.SetOption(mangos.OptionSubscribe, []byte(""))
-	if err != nil {
-		return nil, err
-	}
 	sub.chanLock.Lock()
-	sub.allOutput = make(chan []byte)
-	sub.chanLock.Unlock()
-	return sub.allOutput, err
+	defer sub.chanLock.Unlock()
+	if sub.allOutput == nil {
+		allOutput := make(chan []byte, channelBuffer)
+		err := sub.sock.SetOption(mangos.OptionSubscribe, []byte(""))
+		if err != nil {
+			return nil, err
+		}
+		sub.allOutput = allOutput
+	}
+	return sub.allOutput, nil
 }
 
 // Publisher is a wrapper for mangos pubsub publisher socket
@@ -118,9 +146,8 @@ type Publisher struct {
 }
 
 func newPublisher(url string) (*Publisher, error) {
-	var sock mangos.Socket
-	var err error
-	if sock, err = pub.NewSocket(); err != nil {
+	sock, err := pub.NewSocket()
+	if err != nil {
 		return nil, fmt.Errorf("can't get NewEventPublisher pub socket: %s", err)
 	}
 	sock.AddTransport(ipc.NewTransport())
@@ -137,7 +164,7 @@ func newPublisher(url string) (*Publisher, error) {
 
 func (p *Publisher) publish(topic ChannelID, payload []byte) error {
 	msg := append([]byte{byte(topic)}, payload...)
-	log.Debug("sending message %v", string(msg))
+	log.With().Debug("sending msg", log.Binary("payload", payload))
 	err := p.sock.Send(msg)
 	return err
 }

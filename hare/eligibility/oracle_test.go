@@ -1,21 +1,21 @@
 package eligibility
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/fixed"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math/rand"
 	"strconv"
 	"sync"
 	"testing"
-	"time"
 )
 
 const defSafety = types.LayerID(35)
@@ -44,7 +44,7 @@ type mockValueProvider struct {
 	err error
 }
 
-func (mvp *mockValueProvider) Value(types.LayerID) (uint32, error) {
+func (mvp *mockValueProvider) Value(context.Context, types.EpochID) (uint32, error) {
 	return mvp.val, mvp.err
 }
 
@@ -56,19 +56,18 @@ func (m *mockActiveSetProvider) ActiveSet(types.EpochID, map[types.BlockID]struc
 	return createMapWithSize(m.size), nil
 }
 
-func buildVerifier(result bool, err error) verifierFunc {
-	return func(msg, sig []byte, pub []byte) (bool, error) {
-		return result, err
+func buildVerifier(result bool) verifierFunc {
+	return func(pub, msg, sig []byte) bool {
+		return result
 	}
 }
 
 type mockSigner struct {
 	sig []byte
-	err error
 }
 
-func (s *mockSigner) Sign([]byte) ([]byte, error) {
-	return s.sig, s.err
+func (s *mockSigner) Sign([]byte) []byte {
+	return s.sig
 }
 
 type mockCacher struct {
@@ -103,37 +102,38 @@ func (mc *mockCacher) Get(key interface{}) (value interface{}, ok bool) {
 
 func TestOracle_BuildVRFMessage(t *testing.T) {
 	r := require.New(t)
+	types.SetLayersPerEpoch(defLayersPerEpoch)
 	o := Oracle{vrfMsgCache: newMockCacher(), Log: log.NewDefault(t.Name())}
 	o.beacon = &mockValueProvider{1, errFoo}
-	_, err := o.buildVRFMessage(types.LayerID(1), 1)
+	_, err := o.buildVRFMessage(context.TODO(), types.LayerID(1), 1)
 	r.Equal(errFoo, err)
 
 	o.beacon = &mockValueProvider{1, nil}
-	m, err := o.buildVRFMessage(1, 2)
+	m, err := o.buildVRFMessage(context.TODO(), 1, 2)
 	r.NoError(err)
 	m2, ok := o.vrfMsgCache.Get(buildKey(1, 2))
 	r.True(ok)
 	r.Equal(m, m2) // check same as in cache
 
 	// check not same for different round
-	m4, err := o.buildVRFMessage(1, 3)
+	m4, err := o.buildVRFMessage(context.TODO(), 1, 3)
 	r.NoError(err)
 	r.NotEqual(m, m4)
 
 	// check not same for different layer
-	m5, err := o.buildVRFMessage(2, 2)
+	m5, err := o.buildVRFMessage(context.TODO(), 2, 2)
 	r.NoError(err)
 	r.NotEqual(m, m5)
 
 	o.beacon = &mockValueProvider{5, nil} // set different value
-	m3, err := o.buildVRFMessage(1, 2)
+	m3, err := o.buildVRFMessage(context.TODO(), 1, 2)
 	r.NoError(err)
 	r.Equal(m, m3) // check same result (from cache)
 }
 
 func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &mockSigner{[]byte{1, 2, 3}, nil}, 5, 1, 5, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true), &mockSigner{[]byte{1, 2, 3}}, 5, 1, 5, 1, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	mCache := newMockCacher()
 	o.vrfMsgCache = mCache
 
@@ -142,7 +142,7 @@ func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	for i := 0; i < total; i++ {
 		wg.Add(1)
 		go func(x int) {
-			_, err := o.buildVRFMessage(1, int32(x%10))
+			_, err := o.buildVRFMessage(context.TODO(), 1, int32(x%10))
 			r.NoError(err)
 			wg.Done()
 		}(i)
@@ -159,18 +159,18 @@ func defaultOracle(t testing.TB) *Oracle {
 
 func mockOracle(t testing.TB, layersPerEpoch uint16) *Oracle {
 	types.SetLayersPerEpoch(int32(layersPerEpoch))
-	o := New(&mockValueProvider{1, nil}, nil, buildVerifier(true, nil), nil, layersPerEpoch, 1024, genWeight, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, nil, buildVerifier(true), nil, layersPerEpoch, 1, genWeight, 1, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	return o
 }
 
 func TestOracle_CalcEligibility_ErrorFromVerifier(t *testing.T) {
 	r := require.New(t)
 	o := defaultOracle(t)
-	o.vrfVerifier = buildVerifier(false, errFoo)
+	o.vrfVerifier = buildVerifier(false)
 
-	res, err := o.CalcEligibility(types.LayerID(1), 0, 1, types.NodeID{}, []byte{})
+	res, err := o.CalcEligibility(context.TODO(), types.LayerID(1), 0, 1, types.NodeID{}, []byte{})
 
-	r.EqualError(err, errFoo.Error())
+	r.NoError(err)
 	r.Equal(uint16(0), res)
 }
 
@@ -179,7 +179,7 @@ func TestOracle_CalcEligibility_ErrorFromBeacon(t *testing.T) {
 	o := defaultOracle(t)
 	o.beacon = &mockValueProvider{0, errFoo}
 
-	res, err := o.CalcEligibility(types.LayerID(1), 0, 1, types.NodeID{}, []byte{})
+	res, err := o.CalcEligibility(context.TODO(), types.LayerID(1), 0, 1, types.NodeID{}, []byte{})
 
 	r.EqualError(err, errFoo.Error())
 	r.Equal(uint16(0), res)
@@ -192,7 +192,7 @@ func TestOracle_CalcEligibility_ErrorFromActiveSet(t *testing.T) {
 		return nil, errFoo
 	}
 
-	res, err := o.CalcEligibility(types.LayerID(50), 0, 1, types.NodeID{}, []byte{})
+	res, err := o.CalcEligibility(context.TODO(), types.LayerID(50), 0, 1, types.NodeID{}, []byte{})
 
 	r.EqualError(err, errFoo.Error())
 	r.Equal(uint16(0), res)
@@ -203,7 +203,7 @@ func TestOracle_CalcEligibility_ZeroTotalWeight(t *testing.T) {
 	o := defaultOracle(t)
 	o.getActiveSet = (&mockActiveSetProvider{0}).ActiveSet
 
-	res, err := o.CalcEligibility(types.LayerID(cfg.ConfidenceParam*2+11), 0, 1, types.NodeID{}, []byte{})
+	res, err := o.CalcEligibility(context.TODO(), types.LayerID(cfg.ConfidenceParam*2+11), 0, 1, types.NodeID{}, []byte{})
 
 	r.EqualError(err, "total weight is zero")
 	r.Equal(uint16(0), res)
@@ -221,29 +221,10 @@ func TestOracle_CalcEligibility_ZeroCommitteeSize(t *testing.T) {
 		r.NoError(err)
 		r.Equal(64, n)
 
-		res, err := o.CalcEligibility(types.LayerID(cfg.ConfidenceParam+11), 0, 0, nodeID, sig)
+		res, err := o.CalcEligibility(context.TODO(), types.LayerID(cfg.ConfidenceParam+11), 0, 0, nodeID, sig)
 
 		r.NoError(err)
 		r.Equal(uint16(0), res)
-	}
-}
-
-func TestOracle_CalcEligibility_AllEligible(t *testing.T) {
-	r := require.New(t)
-	o := defaultOracle(t)
-	o.getActiveSet = (&mockActiveSetProvider{1}).ActiveSet
-
-	nodeID := types.NodeID{Key: strconv.Itoa(0)}
-	sig := make([]byte, 64)
-	for i := 0; i < 1000; i++ {
-		n, err := rand.Read(sig)
-		r.NoError(err)
-		r.Equal(64, n)
-
-		res, err := o.CalcEligibility(types.LayerID(cfg.ConfidenceParam+21), 0, 1, nodeID, sig)
-
-		r.NoError(err)
-		r.Equal(uint16(1), res)
 	}
 }
 
@@ -262,10 +243,10 @@ func TestOracle_CalcEligibility(t *testing.T) {
 		r.Equal(64, n)
 		nodeID := types.NodeID{Key: pubkey}
 
-		res, err := o.CalcEligibility(types.LayerID(50), 1, committeeSize, nodeID, sig)
+		res, err := o.CalcEligibility(context.TODO(), types.LayerID(50), 1, committeeSize, nodeID, sig)
 		r.NoError(err)
 
-		valid, err := o.Validate(types.LayerID(50), 1, committeeSize, nodeID, sig, res)
+		valid, err := o.Validate(context.TODO(), types.LayerID(50), 1, committeeSize, nodeID, sig, res)
 		r.NoError(err)
 		r.True(valid)
 
@@ -299,10 +280,10 @@ func BenchmarkOracle_CalcEligibility(b *testing.B) {
 	}
 	b.ResetTimer()
 	for _, nodeID := range nodeIDs {
-		res, err := o.CalcEligibility(types.LayerID(50), 1, committeeSize, nodeID, sig)
+		res, err := o.CalcEligibility(context.TODO(), types.LayerID(50), 1, committeeSize, nodeID, sig)
 
 		if err == nil {
-			valid, err := o.Validate(types.LayerID(50), 1, committeeSize, nodeID, sig, res)
+			valid, err := o.Validate(context.TODO(), types.LayerID(50), 1, committeeSize, nodeID, sig, res)
 			r.NoError(err)
 			r.True(valid)
 		}
@@ -315,14 +296,6 @@ func Test_safeLayer(t *testing.T) {
 	const safety = 25
 	assert.Equal(t, types.GetEffectiveGenesis(), safeLayer(1, safety))
 	assert.Equal(t, types.LayerID(100-safety), safeLayer(100, safety))
-}
-
-func genBytes() []byte {
-	rnd := make([]byte, 1000)
-	rand.Seed(time.Now().UnixNano())
-	rand.Read(rnd)
-
-	return rnd
 }
 
 type mockBufferedActiveSetProvider struct {
@@ -341,7 +314,7 @@ func (m *mockBufferedActiveSetProvider) ActiveSet(epoch types.EpochID, _ map[typ
 func createMapWithSize(n int) map[string]uint64 {
 	m := make(map[string]uint64)
 	for i := 0; i < n; i++ {
-		m[strconv.Itoa(i)] = uint64(i+1) * 1024
+		m[strconv.Itoa(i)] = uint64(i + 1)
 	}
 
 	return m
@@ -384,8 +357,7 @@ func assertActiveSetSize(t *testing.T, o *Oracle, expected uint64, l types.Layer
 	assert.Equal(t, expected, activeSetSize)
 }
 
-func Test_BlsSignVerify(t *testing.T) {
-	pr, pu := BLS381.GenKeyPair(BLS381.DefaultSeed())
+func Test_VrfSignVerify(t *testing.T) {
 	o := defaultOracle(t)
 	getActiveSet := func(types.EpochID, map[types.BlockID]struct{}) (map[string]uint64, error) {
 		return map[string]uint64{
@@ -394,17 +366,21 @@ func Test_BlsSignVerify(t *testing.T) {
 		}, nil
 	}
 	o.getActiveSet = getActiveSet
-	o.vrfVerifier = BLS381.Verify2
-	o.vrfSigner = BLS381.NewBlsSigner(pr)
-	id := types.NodeID{Key: "my_key", VRFPublicKey: pu}
-	proof, err := o.Proof(50, 1)
+	o.vrfVerifier = signing.VRFVerify
+	seed := make([]byte, 32)
+	//rand.Read(seed)
+	vrfSigner, vrfPubkey, err := signing.NewVRFSigner(seed)
+	assert.NoError(t, err)
+	o.vrfSigner = vrfSigner
+	id := types.NodeID{Key: "my_key", VRFPublicKey: vrfPubkey}
+	proof, err := o.Proof(context.TODO(), 50, 1)
 	assert.NoError(t, err)
 
-	res, err := o.CalcEligibility(50, 1, 10, id, proof)
+	res, err := o.CalcEligibility(context.TODO(), 50, 1, 10, id, proof)
 	assert.NoError(t, err)
 	assert.Equal(t, uint16(1), res)
 
-	valid, err := o.Validate(50, 1, 10, id, proof, 1)
+	valid, err := o.Validate(context.TODO(), 50, 1, 10, id, proof, 1)
 	assert.NoError(t, err)
 	assert.True(t, valid)
 }
@@ -412,26 +388,25 @@ func Test_BlsSignVerify(t *testing.T) {
 func TestOracle_Proof(t *testing.T) {
 	o := defaultOracle(t)
 	o.beacon = &mockValueProvider{0, errMy}
-	sig, err := o.Proof(2, 3)
+	sig, err := o.Proof(context.TODO(), 2, 3)
 	assert.Nil(t, sig)
 	assert.EqualError(t, err, errMy.Error())
 
 	o.beacon = &mockValueProvider{0, nil}
-	o.vrfSigner = &mockSigner{nil, errMy}
-	sig, err = o.Proof(2, 3)
+	o.vrfSigner = &mockSigner{nil}
+	sig, err = o.Proof(context.TODO(), 2, 3)
 	assert.Nil(t, sig)
-	assert.EqualError(t, err, errMy.Error())
-
+	assert.NoError(t, err)
 	mySig := []byte{1, 2}
-	o.vrfSigner = &mockSigner{mySig, nil}
-	sig, err = o.Proof(2, 3)
+	o.vrfSigner = &mockSigner{mySig}
+	sig, err = o.Proof(context.TODO(), 2, 3)
 	assert.Nil(t, err)
 	assert.Equal(t, mySig, sig)
 }
 
 func TestOracle_activeSetSizeCache(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, 1, genWeight, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, 1, genWeight, 1, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error) {
 		return createMapWithSize(17), nil
 	}
@@ -607,7 +582,7 @@ func TestOracle_CalcEligibility_withSpaceUnits(t *testing.T) {
 	numOfMiners := 50
 	committeeSize := 800
 	types.SetLayersPerEpoch(10)
-	o := New(&mockValueProvider{1, nil}, nil, buildVerifier(true, nil), nil, 10, 1024, genWeight, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, nil, buildVerifier(true), nil, 10, 1, genWeight, 1, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	o.getActiveSet = (&mockActiveSetProvider{numOfMiners}).ActiveSet
 
 	var eligibilityCount uint16
@@ -618,10 +593,10 @@ func TestOracle_CalcEligibility_withSpaceUnits(t *testing.T) {
 		r.Equal(64, n)
 		nodeID := types.NodeID{Key: pubkey}
 
-		res, err := o.CalcEligibility(types.LayerID(50), 1, committeeSize, nodeID, sig)
+		res, err := o.CalcEligibility(context.TODO(), types.LayerID(50), 1, committeeSize, nodeID, sig)
 		r.NoError(err)
 
-		valid, err := o.Validate(types.LayerID(50), 1, committeeSize, nodeID, sig, res)
+		valid, err := o.Validate(context.TODO(), types.LayerID(50), 1, committeeSize, nodeID, sig, res)
 		r.NoError(err)
 		r.True(valid)
 

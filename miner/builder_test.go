@@ -2,6 +2,7 @@ package miner
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -24,13 +25,6 @@ import (
 )
 
 const selectCount = 100
-const layersPerEpoch = 10
-
-type MockCoin struct{}
-
-func (m MockCoin) GetResult() bool {
-	return rand.Int()%2 == 0
-}
 
 type MockHare struct {
 	res map[types.LayerID][]types.BlockID
@@ -83,9 +77,9 @@ func (mockSyncer) ListenToGossip() bool {
 	return true
 }
 
-func (mockSyncer) FetchPoetProof([]byte) error { return nil }
+func (mockSyncer) GetPoetProof(ctx context.Context, h types.Hash32) error { return nil }
 
-func (m mockSyncer) IsSynced() bool { return !m.notSynced }
+func (m mockSyncer) IsSynced(context.Context) bool { return !m.notSynced }
 
 type mockSyncerP struct {
 	synced bool
@@ -95,9 +89,9 @@ func (m mockSyncerP) ListenToGossip() bool {
 	return m.synced
 }
 
-func (mockSyncerP) FetchPoetProof([]byte) error { return nil }
+func (mockSyncerP) FetchPoetProof(context.Context, []byte) error { return nil }
 
-func (m mockSyncerP) IsSynced() bool { return m.synced }
+func (m mockSyncerP) IsSynced(context.Context) bool { return m.synced }
 
 type atxDbMock struct {
 }
@@ -146,10 +140,10 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	builder.TransactionPool = txMempool
 	//builder := NewBlockBuilder(types.NodeID{}, signing.NewEdSigner(), n, beginRound, 5, MockCoin{}, orphans, hare, &mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, selectCount, layersPerEpoch, mockProjector, log.New(n.String(), "", ""))
 
-	err := builder.Start()
+	err := builder.Start(context.TODO())
 	assert.NoError(t, err)
 
-	err = builder.Start()
+	err = builder.Start(context.TODO())
 	assert.Error(t, err)
 
 	err = builder.Close()
@@ -206,9 +200,9 @@ var (
 
 	poetRef = []byte{0xba, 0x38}
 	atxs    = []*types.ActivationTx{
-		newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{1}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPoSTWithChallenge(&types.Hash32{}, poetRef)),
-		newActivationTx(types.NodeID{Key: "bbbb", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{2}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPoSTWithChallenge(&types.Hash32{}, poetRef)),
-		newActivationTx(types.NodeID{Key: "cccc", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{3}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPoSTWithChallenge(&types.Hash32{}, poetRef)),
+		newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{1}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
+		newActivationTx(types.NodeID{Key: "bbbb", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{2}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
+		newActivationTx(types.NodeID{Key: "cccc", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{3}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
 	}
 
 	atxIDs = []types.ATXID{atxs[0].ID(), atxs[1].ID(), atxs[2].ID()}
@@ -239,7 +233,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	//builder := NewBlockBuilder(types.NodeID{Key: "anton", VRFPublicKey: []byte("anton")}, signing.NewEdSigner(), n, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: st}, hare, &mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, selectCount, layersPerEpoch, mockProjector, log.New(n.String(), "", ""))
 
 	gossipMessages := receiver.RegisterGossipProtocol(blocks.NewBlockProtocol, priorityq.High)
-	err := builder.Start()
+	err := builder.Start(context.TODO())
 	assert.NoError(t, err)
 
 	recipient := types.BytesToAddress([]byte{0x01})
@@ -414,7 +408,7 @@ func TestBlockBuilder_Validation(t *testing.T) {
 
 	poetRef := []byte{0xba, 0x38}
 	coinbase := types.HexToAddress("aaaa")
-	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 0, types.ATXID(types.Hash32{1}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPoSTWithChallenge(&types.Hash32{}, poetRef))
+	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 0, types.ATXID(types.Hash32{1}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef))
 
 	atxBytes, err := types.InterfaceToBytes(&atx)
 	assert.NoError(t, err)
@@ -457,7 +451,7 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 
 	poetRef := []byte{0xba, 0x38}
 	coinbase := types.HexToAddress("aaaa")
-	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{1}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPoSTWithChallenge(&types.Hash32{}, poetRef))
+	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{1}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef))
 
 	atxBytes, err := types.InterfaceToBytes(&atx)
 	assert.NoError(t, err)
@@ -756,7 +750,7 @@ func TestBlockBuilder_notSynced(t *testing.T) {
 	builder.blockOracle = mbo
 	builder.beginRoundEvent = beginRound
 	//builder := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: bs}, hare, mbo, mockTxProcessor{true}, &mockAtxValidator{}, ms, selectCount, selectCount, layersPerEpoch, mockProjector, log.NewDefault(t.Name()))
-	go builder.createBlockLoop()
+	go builder.createBlockLoop(context.TODO())
 	beginRound <- 1
 	beginRound <- 2
 	r.Equal(0, mbo.calls)
@@ -818,7 +812,7 @@ func createBlockBuilder(ID string, n *service.Node, meshBlocks []*types.Block) *
 		LayersPerEpoch: 3,
 		TxsPerBlock:    selectCount,
 	}
-	bb := NewBlockBuilder(cfg, signing.NewEdSigner(), n, beginRound, MockCoin{}, &mockMesh{b: meshBlocks}, &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
+	bb := NewBlockBuilder(cfg, signing.NewEdSigner(), n, beginRound, &mockMesh{b: meshBlocks}, &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{}, [][]types.BlockID{[]types.BlockID{}, []types.BlockID{}, []types.BlockID{}}, nil
 	}}, &mockResult{}, &mockBlockOracle{}, &mockSyncer{}, mockProjector, nil, atxDbMock{}, log.NewDefault("mock_builder_"+"a"))
 	return bb
@@ -846,9 +840,9 @@ func Test_getVotesFiltered(t *testing.T) {
 
 func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
 	startTick uint64, positioningATX types.ATXID, coinbase types.Address, activeSetSize uint32, view []types.BlockID,
-	nipost *types.NIPoST) *types.ActivationTx {
+	nipst *types.NIPST) *types.ActivationTx {
 
-	nipostChallenge := types.NIPoSTChallenge{
+	nipstChallenge := types.NIPSTChallenge{
 		NodeID:         nodeID,
 		Sequence:       sequence,
 		PrevATXID:      prevATX,
@@ -856,5 +850,5 @@ func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, 
 		StartTick:      startTick,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipostChallenge, coinbase, nipost, 0, nil)
+	return types.NewActivationTx(nipstChallenge, coinbase, nipst, 0, nil)
 }

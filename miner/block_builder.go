@@ -2,6 +2,7 @@
 package miner
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/binary"
 	"errors"
@@ -29,9 +30,9 @@ type signer interface {
 }
 
 type syncer interface {
-	FetchPoetProof(poetProofRef []byte) error
+	GetPoetProof(ctx context.Context, poetProofRef types.Hash32) error
 	ListenToGossip() bool
-	IsSynced() bool
+	IsSynced(context.Context) bool
 }
 
 type txPool interface {
@@ -54,10 +55,6 @@ type atxDb interface {
 	GetEpochAtxs(epochID types.EpochID) []types.ATXID
 }
 
-type atxPool interface {
-	GetAllItems() []*types.ActivationTx
-}
-
 // BlockBuilder is the struct that orchestrates the building of blocks, it is responsible for receiving hare results.
 // referencing txs and atxs from mem pool and referencing them in the created block
 // it is also responsible for listening to the clock and querying when a block should be created according to the block oracle
@@ -74,7 +71,6 @@ type BlockBuilder struct {
 	TransactionPool txPool
 	mu              sync.Mutex
 	network         p2p.Service
-	weakCoinToss    weakCoinProvider
 	meshProvider    meshProvider
 	baseBlockP      baseBlockProvider
 	blockOracle     blockOracle
@@ -98,7 +94,21 @@ type Config struct {
 }
 
 // NewBlockBuilder creates a struct of block builder type.
-func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin weakCoinProvider, orph meshProvider, bbp baseBlockProvider, hare hareResultProvider, blockOracle blockOracle, syncer syncer, projector projector, txPool txPool, atxDB atxDb, lg log.Log) *BlockBuilder {
+func NewBlockBuilder(
+	config Config,
+	sgn signer,
+	net p2p.Service,
+	beginRoundEvent chan types.LayerID,
+	orph meshProvider,
+	bbp baseBlockProvider,
+	hare hareResultProvider,
+	blockOracle blockOracle,
+	syncer syncer,
+	projector projector,
+	txPool txPool,
+	atxDB atxDb,
+	lg log.Log,
+) *BlockBuilder {
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(config.MinerID.Key)))
 
 	db, err := database.Create("builder", 16, 16, lg)
@@ -117,7 +127,6 @@ func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent
 		hareResult:      hare,
 		mu:              sync.Mutex{},
 		network:         net,
-		weakCoinToss:    weakCoin,
 		meshProvider:    orph,
 		baseBlockP:      bbp,
 		blockOracle:     blockOracle,
@@ -135,7 +144,7 @@ func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent
 
 // Start starts the process of creating a block, it listens for txs and atxs received by gossip, and starts querying
 // block oracle when it should create a block. This function returns an error if Start was already called once
-func (t *BlockBuilder) Start() error {
+func (t *BlockBuilder) Start(ctx context.Context) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.started {
@@ -143,7 +152,7 @@ func (t *BlockBuilder) Start() error {
 	}
 
 	t.started = true
-	go t.createBlockLoop()
+	go t.createBlockLoop(log.WithNewSessionID(ctx))
 	return nil
 }
 
@@ -161,18 +170,14 @@ func (t *BlockBuilder) Close() error {
 }
 
 type hareResultProvider interface {
-	GetResult(lid types.LayerID) ([]types.BlockID, error)
-}
-
-type weakCoinProvider interface {
-	GetResult() bool
+	GetResult(types.LayerID) ([]types.BlockID, error)
 }
 
 type meshProvider interface {
-	LayerBlockIds(index types.LayerID) ([]types.BlockID, error)
-	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
-	GetBlock(id types.BlockID) (*types.Block, error)
-	AddBlockWithTxs(blk *types.Block) error
+	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
+	GetOrphanBlocksBefore(types.LayerID) ([]types.BlockID, error)
+	GetBlock(types.BlockID) (*types.Block, error)
+	AddBlockWithTxs(*types.Block) error
 }
 
 func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID, top types.LayerID) {
@@ -204,6 +209,7 @@ func filterUnknownBlocks(blocks []types.BlockID, validate func(id types.BlockID)
 	return filtered
 }
 
+// TODO: currently unused, other than in tests
 func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	var votes []types.BlockID
 
@@ -277,23 +283,20 @@ func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, 
 	return
 }
 
-func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID, activeSet []types.ATXID) (*types.Block, error) {
+// stopped returns if we should stop
+func (t *BlockBuilder) stopped() bool {
+	select {
+	case <-t.stopChan:
+		return true
+	default:
+		return false
+	}
+}
 
+func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID, activeSet []types.ATXID) (*types.Block, error) {
 	if id <= types.GetEffectiveGenesis() {
 		return nil, errors.New("cannot create blockBytes in genesis layer")
 	}
-
-	// TODO: use this instead have logic inside trtl
-	/*votes, err := t.getVotes(id)
-	votes, err := t.getVotes(id)
-	if err != nil {
-		return nil, err
-	}
-
-	viewEdges, err := t.meshProvider.GetOrphanBlocksBefore(id)
-	if err != nil {
-		return nil, err
-	}*/
 
 	base, diffs, err := t.baseBlockP.BaseBlock()
 	if err != nil {
@@ -306,7 +309,6 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 			ATXID:            atxID,
 			EligibilityProof: eligibilityProof,
 			Data:             nil,
-			Coin:             t.weakCoinToss.GetResult(),
 			BaseBlock:        base,
 			AgainstDiff:      diffs[0],
 			ForDiff:          diffs[1],
@@ -341,8 +343,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 
 	if b.ActiveSet != nil {
 		t.With().Info("storing ref block", epoch, bl.ID())
-		err := t.storeRefBlock(epoch, bl.ID())
-		if err != nil {
+		if err := t.storeRefBlock(epoch, bl.ID()); err != nil {
 			t.With().Error("cannot store ref block", epoch, log.Err(err))
 			//todo: panic?
 		}
@@ -372,7 +373,8 @@ func selectAtxs(atxs []types.ATXID, atxsPerBlock int) []types.ATXID {
 	return selected
 }
 
-func (t *BlockBuilder) createBlockLoop() {
+func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
+	logger := t.WithContext(ctx)
 	for {
 		select {
 
@@ -380,54 +382,66 @@ func (t *BlockBuilder) createBlockLoop() {
 			return
 
 		case layerID := <-t.beginRoundEvent:
-			t.With().Debug("builder got layer", layerID)
-			if !t.syncer.IsSynced() {
-				t.Debug("not synced yet, not building a block in this round")
+			logger.With().Debug("builder got layer", layerID)
+			if !t.syncer.IsSynced(ctx) {
+				logger.Debug("not synced yet, not building a block in this round")
+				continue
+			}
+			if layerID.GetEpoch().IsGenesis() {
 				continue
 			}
 
 			atxID, proofs, atxs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
 				events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to check for block eligibility")
-				t.With().Error("failed to check for block eligibility", layerID, log.Err(err))
+				logger.With().Error("failed to check for block eligibility", layerID, log.Err(err))
 				continue
 			}
 			if len(proofs) == 0 {
 				events.ReportDoneCreatingBlock(false, uint64(layerID), "")
-				t.With().Info("not eligible for blocks in layer", layerID, layerID.GetEpoch())
+				logger.With().Info("not eligible for blocks in layer", layerID, layerID.GetEpoch())
 				continue
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
-			//reducedAtxList := selectAtxs(atxList, t.atxsPerBlock)
+			logger.With().Info("eligible for one or more blocks in layer",
+				log.Int("count", len(proofs)),
+				layerID)
 			for _, eligibilityProof := range proofs {
 				txList, _, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to get txs for block")
-					t.With().Error("failed to get txs for block", layerID, log.Err(err))
+					logger.With().Error("failed to get txs for block", layerID, log.Err(err))
 					continue
 				}
 				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList, atxs)
+
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot create new block")
-					t.With().Error("failed to create new block", log.Err(err))
+					logger.With().Error("failed to create new block", log.Err(err))
 					continue
+				}
+				if t.stopped() {
+					return
 				}
 				err = t.meshProvider.AddBlockWithTxs(blk)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to store block")
-					t.With().Error("failed to store block", blk.ID(), log.Err(err))
+					logger.With().Error("failed to store block", blk.ID(), log.Err(err))
 					continue
 				}
 				go func() {
 					bytes, err := types.InterfaceToBytes(blk)
 					if err != nil {
-						t.With().Error("failed to serialize block", log.Err(err))
+						logger.With().Error("failed to serialize block", log.Err(err))
 						events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot serialize block")
 						return
 					}
-					if err = t.network.Broadcast(blocks.NewBlockProtocol, bytes); err != nil {
-						t.With().Error("failed to send block", log.Err(err))
+
+					// generate a new requestID for the new block message
+					blockCtx := log.WithNewRequestID(ctx, layerID, blk.ID())
+					if err = t.network.Broadcast(blockCtx, blocks.NewBlockProtocol, bytes); err != nil {
+						logger.WithContext(blockCtx).With().Error("failed to send block", log.Err(err))
 					}
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "")
 				}()

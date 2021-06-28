@@ -42,27 +42,28 @@ import (
 )
 
 func tempDir() (dir string, cleanup func() error, err error) {
-	path, err := ioutil.TempDir("", "datadir_")
+	path, err := ioutil.TempDir("/tmp", "datadir_")
 	if err != nil {
 		return "", nil, err
 	}
 	cleanup = func() error {
 		return os.RemoveAll(path)
 	}
-	return
+	return path, cleanup, err
 }
 
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r := require.New(t)
-	tempdir, _ := ioutil.TempDir("", "sm-id-test")
 
 	defer func() {
-		err := os.RemoveAll(tempdir)
+		// cleanup
+		err := os.RemoveAll("tmp")
 		r.NoError(err)
 	}()
 
+	// setup spacemesh app
 	app := NewSpacemeshApp()
-	app.Config.POST.DataDir = tempdir
+	app.Config.Smeshing.Opts.DataDir = "tmp"
 	app.log = log.NewDefault("logger")
 
 	// Create new identity.
@@ -387,7 +388,7 @@ type NetMock struct {
 func (NetMock) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey) {
 	return nil, nil
 }
-func (NetMock) Broadcast(string, []byte) error {
+func (NetMock) Broadcast(context.Context, string, []byte) error {
 	return nil
 }
 
@@ -427,11 +428,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 		r.NoError(app.Initialize(cmd, args))
 		app.Config.API.GrpcServerPort = port
 		app.Config.DataDirParent = path
-		app.startAPIServices(NetMock{})
-
-		// MERGE FIX
-		//app.Config.API.NewGrpcServerPort = port
-		//app.startAPIServices(NetMock{})
+		app.startAPIServices(context.TODO(), NetMock{})
 	}
 	defer app.stopServices()
 
@@ -503,7 +500,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
 		app.Config.DataDirParent = path
-		app.startAPIServices(NetMock{})
+		app.startAPIServices(context.TODO(), NetMock{})
 	}
 	defer app.stopServices()
 	str, err := testArgs()
@@ -563,13 +560,18 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	// Use a unique port
 	port := 1240
 
-	app := NewSpacemeshApp()
-	cfg := config.DefaultTestConfig()
-	app.Config = &cfg
-
 	path, cleanup, err := tempDir()
 	require.NoError(t, err)
 	defer cleanup()
+
+	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), log.NewDefault("clock"))
+	net := service.NewSimulator()
+	cfg := getTestDefaultConfig(1)
+	poetHarness, err := activation.NewHTTPPoetHarness(false)
+	assert.NoError(t, err)
+	app, err := InitSingleInstance(*cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(), poetHarness.HTTPPoetClient, clock, net)
+
+	//app := NewSpacemeshApp()
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		defer app.Cleanup(cmd, args)
@@ -776,6 +778,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// Force gossip to always listen, even when not synced
 		app.Config.AlwaysListen = true
 
+		app.Config.GenesisTime = time.Now().Add(20 * time.Second).Format(time.RFC3339)
+
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
@@ -900,12 +904,12 @@ func TestSpacemeshApp_P2PInterface(t *testing.T) {
 	// Initialize the network: we don't want to listen but this lets us dial out
 	l, err := node.NewNodeIdentity()
 	r.NoError(err)
-	p2pnet, err := net.NewNet(app.Config.P2P, l, log.AppLog)
+	p2pnet, err := net.NewNet(context.TODO(), app.Config.P2P, l, log.AppLog)
 	r.NoError(err)
 	// We need to listen on a different port
 	listener, err := inet.Listen("tcp", fmt.Sprintf("%s:%d", addr, 9270))
 	r.NoError(err)
-	p2pnet.Start(listener)
+	p2pnet.Start(context.TODO(), listener)
 	defer p2pnet.Shutdown()
 
 	// Try to connect before we start the P2P service: this should fail
@@ -919,7 +923,7 @@ func TestSpacemeshApp_P2PInterface(t *testing.T) {
 	app.Config.P2P.AcquirePort = false
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.AppLog, app.Config.DataDir())
 	r.NoError(err)
-	r.NoError(swarm.Start())
+	r.NoError(swarm.Start(context.TODO()))
 	defer swarm.Shutdown()
 
 	// Try to connect again: this should succeed

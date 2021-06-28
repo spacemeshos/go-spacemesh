@@ -24,7 +24,7 @@ spec:
       serviceAccountName: fluent-bit
       containers:
         - name: fluent-bit
-          image: "fluent/fluent-bit:1.6.10"
+          image: "fluent/fluent-bit:1.7.4"
           imagePullPolicy: "Always"
           env:
             []

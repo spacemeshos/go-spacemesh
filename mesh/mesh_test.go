@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -58,7 +59,7 @@ func (m *MeshValidatorMock) LatestComplete() types.LayerID {
 	panic("implement me")
 }
 
-func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer, inputVector []types.BlockID) (types.LayerID, types.LayerID) {
+func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
 	return layer.Index() - 1, layer.Index()
 }
 func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
@@ -132,20 +133,6 @@ func (m *MockTxMemPool) Put(ID types.TransactionID, t *types.Transaction) {
 }
 
 func (MockTxMemPool) Invalidate(types.TransactionID) {
-
-}
-
-type MockAtxMemPool struct{}
-
-func (MockAtxMemPool) Get(types.ATXID) (*types.ActivationTx, error) {
-	return &types.ActivationTx{}, nil
-}
-
-func (MockAtxMemPool) Put(*types.ActivationTx) {
-
-}
-
-func (MockAtxMemPool) Invalidate(types.ATXID) {
 
 }
 
@@ -237,11 +224,11 @@ func TestLayers_AddWrongLayer(t *testing.T) {
 	assert.NoError(t, err)
 	err = layers.SaveContextualValidity(block1.ID(), true)
 	assert.NoError(t, err)
-	layers.ValidateLayer(l1, nil)
+	layers.ValidateLayer(l1)
 	l2 := types.NewExistingLayer(2, []*types.Block{block2})
 	err = layers.AddBlock(block2)
 	assert.NoError(t, err)
-	layers.ValidateLayer(l2, nil)
+	layers.ValidateLayer(l2)
 	err = layers.AddBlock(block3)
 	assert.NoError(t, err)
 	_, err = layers.GetProcessedLayer(1)
@@ -261,7 +248,7 @@ func TestLayers_GetLayer(t *testing.T) {
 	l1 := types.NewExistingLayer(1, []*types.Block{block1})
 	err := layers.AddBlock(block1)
 	assert.NoError(t, err)
-	layers.ValidateLayer(l1, nil)
+	layers.ValidateLayer(l1)
 	l, err := layers.GetProcessedLayer(0)
 	err = layers.AddBlock(block2)
 	assert.NoError(t, err)
@@ -319,7 +306,6 @@ func TestLayers_WakeUp(t *testing.T) {
 	assert.True(t, len(rBlock1.TxIDs) == len(block1.TxIDs), "block content was wrong")
 	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
 	//assert.True(t, len(rBlock1.ATXIDs) == len(block1.ATXIDs))
-
 }
 
 func TestLayers_OrphanBlocks(t *testing.T) {
@@ -351,7 +337,6 @@ func TestLayers_OrphanBlocks(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	arr3, _ := layers.GetOrphanBlocksBefore(4)
 	assert.True(t, len(arr3) == 1, "wrong layer")
-
 }
 
 func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
@@ -439,7 +424,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_getInvalidBlocksByHare(t *testing
 	blocks = append(blocks, addBlockWithTxs(r, msh, layerID, true, tx2, tx3, tx4))
 	blocks = append(blocks, addBlockWithTxs(r, msh, layerID, true, tx4, tx5))
 	hareBlocks := blocks[:2]
-	invalid := msh.getInvalidBlocksByHare(types.NewExistingLayer(layerID, hareBlocks))
+	invalid := msh.getInvalidBlocksByHare(context.TODO(), types.NewExistingLayer(layerID, hareBlocks))
 	r.ElementsMatch(blocks[2:], invalid)
 
 	msh.reInsertTxsToPool(hareBlocks, invalid, layerID)
@@ -541,6 +526,6 @@ func TestMesh_AddBlockWithTxs(t *testing.T) {
 
 	err := mesh.AddBlockWithTxs(blk)
 	//r.EqualError(err, "failed to process ATXs: 💥")
-	_, err = meshDB.blocks.Get(blk.ID().Bytes())
+	_, err = meshDB.blocks.Get(blk.ID().AsHash32().Bytes())
 	r.NoError(err)
 }

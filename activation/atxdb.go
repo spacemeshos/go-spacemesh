@@ -2,6 +2,7 @@ package activation
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -41,7 +42,7 @@ func getAtxHeaderKey(atxID types.ATXID) []byte {
 }
 
 func getAtxBodyKey(atxID types.ATXID) []byte {
-	return []byte(fmt.Sprintf("b_%v", atxID.Bytes()))
+	return atxID.Bytes()
 }
 
 var errInvalidSig = fmt.Errorf("identity not found when validating signature, invalid atx")
@@ -398,6 +399,8 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		initialPoSTMetadata.Challenge = shared.ZeroChallenge
 		if err := db.nipostValidator.ValidatePoST(pub.Bytes(), atx.InitialPoST, &initialPoSTMetadata, atx.NumUnits); err != nil {
 			return fmt.Errorf("invalid initial PoST: %v", err)
+		if err := db.nipstValidator.VerifyPost(*pub, atx.Commitment, atx.Space); err != nil {
+			return fmt.Errorf("invalid commitment proof: %v", err)
 		}
 	}
 
@@ -513,11 +516,12 @@ func (db *DB) storeAtxUnlocked(atx *types.ActivationTx) error {
 		return err
 	}
 
-	atxBodyBytes, err := types.InterfaceToBytes(getAtxBody(atx))
+	// todo: this changed so that a full atx will be written - inherently there will be double data with atx header
+	atxBytes, err := types.InterfaceToBytes(atx)
 	if err != nil {
 		return err
 	}
-	err = db.atxs.Put(getAtxBodyKey(atx.ID()), atxBodyBytes)
+	err = db.atxs.Put(getAtxBodyKey(atx.ID()), atxBytes)
 	if err != nil {
 		return err
 	}
@@ -577,7 +581,13 @@ func (db *DB) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 func (db *DB) getTopAtx() (atxIDAndLayer, error) {
 	topAtxBytes, err := db.atxs.Get([]byte(topAtxKey))
 	if err != nil {
-		return atxIDAndLayer{}, err
+		if err == database.ErrNotFound {
+			return atxIDAndLayer{
+				AtxID:   db.goldenATXID,
+				LayerID: 0,
+			}, nil
+		}
+		return atxIDAndLayer{}, fmt.Errorf("failed to get top atx: %v", err)
 	}
 	var topAtx atxIDAndLayer
 	err = types.BytesToInterface(topAtxBytes, &topAtx)
@@ -646,13 +656,13 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 	return
 }
 
-// GetNodeAtxIDForEpoch returns an atx published by the provided nodeID for the specified targetEpoch. meaning the atx
+// GetNodeAtxIDForEpoch returns an atx published by the provided nodeID for the specified publication epoch. meaning the atx
 // that the requested nodeID has published. it returns an error if no atx was found for provided nodeID
-func (db *DB) GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error) {
-	id, err := db.atxs.Get(getNodeAtxKey(nodeID, targetEpoch))
+func (db *DB) GetNodeAtxIDForEpoch(nodeID types.NodeID, publicationEpoch types.EpochID) (types.ATXID, error) {
+	id, err := db.atxs.Get(getNodeAtxKey(nodeID, publicationEpoch))
 	if err != nil {
-		return *types.EmptyATXID, fmt.Errorf("atx for node %v targeting epoch %v: %v",
-			nodeID.ShortString(), targetEpoch, err)
+		return *types.EmptyATXID, fmt.Errorf("atx for node %v with publication epoch %v: %v",
+			nodeID.ShortString(), publicationEpoch, err)
 	}
 	return types.ATXID(types.BytesToHash(id)), nil
 }
@@ -723,11 +733,9 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	if err != nil {
 		return nil, err
 	}
-	header, err := db.GetAtxHeader(id)
-	if err != nil {
-		return nil, err
-	}
-	atx.ActivationTxHeader = header
+	atx.ActivationTxHeader.SetID(&id)
+	db.atxHeaderCache.Add(id, atx.ActivationTxHeader)
+
 	return atx, nil
 }
 
@@ -749,43 +757,43 @@ func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.Activ
 }
 
 // HandleGossipAtx handles the atx gossip data channel
-func (db *DB) HandleGossipAtx(data service.GossipMessage, syncer service.Fetcher) {
+func (db *DB) HandleGossipAtx(ctx context.Context, data service.GossipMessage, syncer service.Fetcher) {
 	if data == nil {
 		return
 	}
-	err := db.HandleAtxData(data.Bytes(), syncer)
+	err := db.HandleAtxData(ctx, data.Bytes(), syncer)
 	if err != nil {
-		db.log.With().Error("error handling atx data", log.Err(err))
+		db.log.WithContext(ctx).With().Error("error handling atx data", log.Err(err))
 		return
 	}
 	data.ReportValidation(AtxProtocol)
 }
 
 // HandleAtxData handles atxs received either by gossip or sync
-func (db *DB) HandleAtxData(data []byte, syncer service.Fetcher) error {
+func (db *DB) HandleAtxData(ctx context.Context, data []byte, syncer service.Fetcher) error {
 	atx, err := types.BytesToAtx(data)
 	if err != nil {
 		return fmt.Errorf("cannot parse incoming atx")
 	}
 	atx.CalcAndSetID()
+	logger := db.log.WithContext(ctx).WithFields(atx.ID())
 
-	db.log.With().Info("got new atx", atx.Fields(len(data))...)
+	logger.With().Info("got new atx", atx.Fields(len(data))...)
 
 	// todo fetch from neighbour (#1925)
 	if atx.NIPoST == nil {
-		db.log.Panic("nil nipst in gossip")
+		logger.Panic("nil nipst in gossip")
 		return fmt.Errorf("nil nipst in gossip")
 	}
 
-	if err := syncer.GetPoetProof(atx.GetPoetProofRef()); err != nil {
+	if err := syncer.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
 		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
-			atx.ShortString(), atx.GetShortPoetProofRef(), err)
-
+			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err)
 	}
 
-	if err := db.FetchAtxReferences(atx, syncer); err != nil {
+	if err := db.FetchAtxReferences(ctx, atx, syncer); err != nil {
 		return fmt.Errorf("received atx with missing references of prev or pos id %v, %v, %v, %v",
-			atx.ID(), atx.PrevATXID, atx.PositioningATX, log.Err(err))
+			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), log.Err(err))
 	}
 
 	err = db.SyntacticallyValidateAtx(atx)
@@ -800,28 +808,27 @@ func (db *DB) HandleAtxData(data []byte, syncer service.Fetcher) error {
 		// TODO: blacklist peer
 	}
 
-	db.log.With().Info("stored and propagated new syntactically valid atx", atx.ID())
+	logger.With().Info("stored and propagated new syntactically valid atx", atx.ID())
 	return nil
 }
 
 // FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db
-func (db *DB) FetchAtxReferences(atx *types.ActivationTx, f service.Fetcher) error {
+func (db *DB) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx, f service.Fetcher) error {
+	logger := db.log.WithContext(ctx)
 	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != db.goldenATXID {
-		db.log.With().Info("going to fetch pos atx", atx.PositioningATX, atx.ID())
-		err := f.FetchAtx(atx.PositioningATX)
-		if err != nil {
+		logger.With().Info("going to fetch pos atx", atx.PositioningATX, atx.ID())
+		if err := f.FetchAtx(ctx, atx.PositioningATX); err != nil {
 			return err
 		}
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
-		db.log.With().Info("going to fetch prev atx", atx.PrevATXID, atx.ID())
-		err := f.FetchAtx(atx.PrevATXID)
-		if err != nil {
+		logger.With().Info("going to fetch prev atx", atx.PrevATXID, atx.ID())
+		if err := f.FetchAtx(ctx, atx.PrevATXID); err != nil {
 			return err
 		}
 	}
-	db.log.With().Info("done fetching references for atx", atx.ID())
+	logger.With().Info("done fetching references for atx", atx.ID())
 
 	return nil
 }

@@ -25,10 +25,10 @@ bootstrap:
     data-folder: '/usr/share/spacemesh/'
     hare-committee-size: '800'
     hare-max-adversaries: '399'
-    hare-round-duration-sec: '10'
+    hare-round-duration-sec: '7'
     layer-duration-sec: '60'
     layer-average-size: '20'
-    hare-wakeup-delta: '10'
+    hare-wakeup-delta: '20'
   deployment_type: statefulset
 elastic:
   host: elastic.spacemesh.io

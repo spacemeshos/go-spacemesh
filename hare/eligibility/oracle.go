@@ -2,7 +2,7 @@ package eligibility
 
 import (
 	"bytes"
-	"crypto/sha256"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/hashicorp/golang-lru"
@@ -24,7 +24,7 @@ var (
 )
 
 type valueProvider interface {
-	Value(layer types.LayerID) (uint32, error)
+	Value(context.Context, types.EpochID) (uint32, error)
 }
 
 // a func to retrieve the active set size for the provided layer
@@ -32,7 +32,7 @@ type valueProvider interface {
 type activeSetFunc func(epoch types.EpochID, view map[types.BlockID]struct{}) (map[string]uint64, error)
 
 type signer interface {
-	Sign(msg []byte) ([]byte, error)
+	Sign(msg []byte) []byte
 }
 
 type goodBlocksProvider interface {
@@ -40,7 +40,7 @@ type goodBlocksProvider interface {
 }
 
 // a function to verify the message with the signature and its public key.
-type verifierFunc = func(msg, sig, pub []byte) (bool, error)
+type verifierFunc = func(pub, msg, sig []byte) bool
 
 // Oracle is the hare eligibility oracle
 type Oracle struct {
@@ -54,6 +54,7 @@ type Oracle struct {
 	vrfMsgCache        addGet
 	activesCache       addGet
 	genesisTotalWeight uint64
+	genesisMinerWeight uint64
 	blocksProvider     goodBlocksProvider
 	cfg                eCfg.Config
 	log.Log
@@ -94,7 +95,7 @@ func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID,
 
 // New returns a new eligibility oracle instance.
 func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier verifierFunc, vrfSigner signer,
-	layersPerEpoch uint16, spacePerUnit uint64, genesisTotalWeight uint64, goodBlocksProvider goodBlocksProvider,
+	layersPerEpoch uint16, spacePerUnit, genesisTotalWeight, genesisMinerWeight uint64, goodBlocksProvider goodBlocksProvider,
 	cfg eCfg.Config, log log.Log) *Oracle {
 	vmc, e := lru.New(vrfMsgCacheSize)
 	if e != nil {
@@ -116,6 +117,7 @@ func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier verifier
 		vrfMsgCache:        vmc,
 		activesCache:       ac,
 		genesisTotalWeight: genesisTotalWeight,
+		genesisMinerWeight: genesisMinerWeight,
 		blocksProvider:     goodBlocksProvider,
 		cfg:                cfg,
 		Log:                log,
@@ -133,7 +135,7 @@ func buildKey(l types.LayerID, r int32) [2]uint64 {
 }
 
 // buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round)
-func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, error) {
+func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round int32) ([]byte, error) {
 	key := buildKey(layer, round)
 
 	o.lock.Lock()
@@ -144,19 +146,22 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 		return val.([]byte), nil
 	}
 
-	// get value from Beacon
-	v, err := o.beacon.Value(layer)
+	// get value from beacon
+	v, err := o.beacon.Value(ctx, layer.GetEpoch())
 	if err != nil {
-		o.With().Error("Could not get hare Beacon value", log.Err(err), layer, log.Int32("round", round))
+		o.WithContext(ctx).With().Error("could not get hare beacon value for epoch",
+			log.Err(err),
+			layer,
+			layer.GetEpoch(),
+			log.Int32("round", round))
 		return nil, err
 	}
 
 	// marshal message
 	var w bytes.Buffer
 	msg := vrfMessage{Beacon: v, Round: round, Layer: layer}
-	_, err = xdr.Marshal(&w, &msg)
-	if err != nil {
-		o.With().Error("Fatal: could not marshal xdr", log.Err(err))
+	if _, err := xdr.Marshal(&w, &msg); err != nil {
+		o.WithContext(ctx).With().Error("could not marshal xdr", log.Err(err))
 		return nil, err
 	}
 
@@ -188,7 +193,7 @@ func (o *Oracle) minerWeight(layer types.LayerID, id types.NodeID) (uint64, erro
 	actives, err := o.actives(layer)
 	if err != nil {
 		if err == errGenesis { // we are in genesis
-			return o.genesisTotalWeight / 50, nil
+			return o.genesisMinerWeight, nil
 		}
 
 		o.With().Error("minerWeight erred while calling actives func", log.Err(err), layer)
@@ -207,30 +212,26 @@ func (o *Oracle) minerWeight(layer types.LayerID, id types.NodeID) (uint64, erro
 	return w, nil
 }
 
-func calcVrfFrac(sig []byte) fixed.Fixed {
-	sha := sha256.Sum256(sig)
-	return fixed.FracFromBytes(sha[:8])
+func calcVrfFrac(vrfSig []byte) fixed.Fixed {
+	return fixed.FracFromBytes(vrfSig[:8])
 }
 
-func (o *Oracle) prepareEligibilityCheck(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (n int, p fixed.Fixed, vrfFrac fixed.Fixed, done bool, err error) {
+func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round int32, committeeSize int,
+	id types.NodeID, vrfSig []byte) (n int, p fixed.Fixed, vrfFrac fixed.Fixed, done bool, err error) {
+
 	if committeeSize < 1 {
 		o.Error("committee size must be positive (received %d)", committeeSize)
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, nil
 	}
 
-	msg, err := o.buildVRFMessage(layer, round)
+	msg, err := o.buildVRFMessage(ctx, layer, round)
 	if err != nil {
 		o.Error("eligibility: could not build VRF message")
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
 	// validate message
-	res, err := o.vrfVerifier(msg, sig, id.VRFPublicKey)
-	if err != nil {
-		o.Error("eligibility: VRF verification failed: %v", err)
-		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
-	}
-	if !res {
+	if !o.vrfVerifier(id.VRFPublicKey, msg, vrfSig) {
 		o.With().Info("eligibility: a node did not pass VRF signature verification",
 			id,
 			layer)
@@ -260,6 +261,11 @@ func (o *Oracle) prepareEligibilityCheck(layer types.LayerID, round int32, commi
 	totalUnits := totalWeight / o.spacePerUnit
 	// TODO: If space is not in round units, only consider the amount of space in round units for the total weight
 
+	o.With().Info("prep",
+		log.Uint64("minerWeight", minerWeight),
+		log.Uint64("totalWeight", totalWeight),
+		log.Uint64("o.spacePerUnit", o.spacePerUnit),
+	)
 	n = int(minerUnits)
 
 	// ensure miner weight fits in int
@@ -283,13 +289,13 @@ func (o *Oracle) prepareEligibilityCheck(layer types.LayerID, round int32, commi
 			fmt.Errorf("miner weight exceeds supported maximum (id: %v, weight: %d, units: %d, max: %d",
 				id, minerWeight, minerUnits, maxSupportedN)
 	}
-	return n, p, calcVrfFrac(sig), false, nil
+	return n, p, calcVrfFrac(vrfSig), false, nil
 }
 
 // Validate validates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is the role
 // proof and assuming commSize as the expected committee size.
-func (o *Oracle) Validate(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
-	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(layer, round, committeeSize, id, sig)
+func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
+	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, sig)
 	if done || err != nil {
 		return false, err
 	}
@@ -310,7 +316,7 @@ func (o *Oracle) Validate(layer types.LayerID, round int32, committeeSize int, i
 	if !fixed.BinCDF(n, p, x-1).GreaterThan(vrfFrac) && vrfFrac.LessThan(fixed.BinCDF(n, p, x)) {
 		return true, nil
 	}
-	o.With().Warning("eligibility: node did not pass VRF eligibility threshold",
+	o.With().Warning("eligibility: node did not pass vrf eligibility threshold",
 		layer,
 		log.Int32("round", round),
 		log.Int("committee_size", committeeSize),
@@ -326,8 +332,10 @@ func (o *Oracle) Validate(layer types.LayerID, round int32, committeeSize int, i
 
 // CalcEligibility calculates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is
 // the role proof and assuming commSize as the expected committee size.
-func (o *Oracle) CalcEligibility(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
-	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(layer, round, committeeSize, id, sig)
+func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int,
+	id types.NodeID, vrfSig []byte) (uint16, error) {
+
+	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, vrfSig)
 	if done {
 		return 0, err
 	}
@@ -335,14 +343,24 @@ func (o *Oracle) CalcEligibility(layer types.LayerID, round int32, committeeSize
 	defer func() {
 		if msg := recover(); msg != nil {
 			o.With().Error("panic in CalcEligibility",
+				layer, layer.GetEpoch(), log.Int32("round_id", round),
 				log.String("msg", fmt.Sprint(msg)),
+				log.Int("committeeSize", committeeSize),
 				log.Int("n", n),
-				log.String("p", p.String()),
-				log.String("vrfFrac", vrfFrac.String()),
+				log.String("p", fmt.Sprintf("%g", p.Float())),
+				log.String("vrfFrac", fmt.Sprintf("%g", vrfFrac.Float())),
 			)
 			o.Panic("%s", msg)
 		}
 	}()
+
+	o.With().Info("params",
+		layer, layer.GetEpoch(), log.Int32("round_id", round),
+		log.Int("committeeSize", committeeSize),
+		log.Int("n", n),
+		log.String("p", fmt.Sprintf("%g", p.Float())),
+		log.String("vrfFrac", fmt.Sprintf("%g", vrfFrac.Float())),
+	)
 
 	for x := 0; x < n; x++ {
 		if fixed.BinCDF(n, p, x).GreaterThan(vrfFrac) {
@@ -353,20 +371,14 @@ func (o *Oracle) CalcEligibility(layer types.LayerID, round int32, committeeSize
 }
 
 // Proof returns the role proof for the current Layer & Round
-func (o *Oracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
-	msg, err := o.buildVRFMessage(layer, round)
+func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round int32) ([]byte, error) {
+	msg, err := o.buildVRFMessage(ctx, layer, round)
 	if err != nil {
-		o.With().Error("proof: could not build VRF message", log.Err(err))
+		o.WithContext(ctx).With().Error("proof: could not build vrf message", log.Err(err))
 		return nil, err
 	}
 
-	sig, err := o.vrfSigner.Sign(msg)
-	if err != nil {
-		o.With().Error("proof: could not sign VRF message", log.Err(err))
-		return nil, err
-	}
-
-	return sig, nil
+	return o.vrfSigner.Sign(msg), nil
 }
 
 // Returns a map of all active nodes in the specified layer id

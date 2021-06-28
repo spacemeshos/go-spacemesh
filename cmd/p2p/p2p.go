@@ -48,8 +48,7 @@ func NewP2PApp() *P2PApp {
 // Cleanup closes all services
 func (app *P2PApp) Cleanup() {
 	for _, c := range app.closers {
-		err := c.Close()
-		if err != nil {
+		if err := c.Close(); err != nil {
 			log.With().Warning("error closing service", log.Err(err))
 		}
 	}
@@ -62,34 +61,34 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	log.JSONLog(true)
 	log.DebugMode(true)
 
-	log.Info("Initializing P2P services")
+	log.Info("initializing p2p services")
 
 	logger := log.NewDefault("P2P_Test")
 
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, logger, app.Config.DataDir())
 	if err != nil {
-		log.Panic("Error init p2p services, err: %v", err)
+		log.With().Panic("error init p2p services", log.Err(err))
 	}
 	app.p2p = swarm
 
 	// Testing stuff
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.p2p)
-	metrics.StartCollectingMetrics(app.Config.MetricsPort)
+	metrics.StartMetricsServer(app.Config.MetricsPort)
 
 	// start the node
 
-	err = app.p2p.Start()
+	err = app.p2p.Start(cmdp.Ctx)
 	defer app.p2p.Shutdown()
 
 	if err != nil {
-		log.Panic("Error starting p2p services, err: %v", err)
+		log.With().Panic("error starting p2p services", log.Err(err))
 	}
 
 	if app.Config.PprofHTTPServer {
 		pprof := &http.Server{}
 		pprof.Addr = ":6060"
 		pprof.Handler = nil
-		go func() { err := pprof.ListenAndServe(); log.Error("error running pprof server err=%v", err) }()
+		go func() { err := pprof.ListenAndServe(); log.With().Error("error running pprof server", log.Err(err)) }()
 		app.closers = append(app.closers, pprof)
 	}
 
@@ -113,7 +112,7 @@ func (app *P2PApp) startAPI() {
 	// Register the requested services one by one
 	// We only support a subset of API services: gateway, globalstate, transaction
 	if apiConf.StartMeshService || apiConf.StartNodeService || apiConf.StartSmesherService {
-		log.Panic("unsupported GRPC API service requested")
+		log.Panic("unsupported grpc api service requested")
 	}
 	if apiConf.StartGatewayService {
 		registerService(grpcserver.NewGatewayService(app.p2p))
@@ -136,10 +135,11 @@ func (app *P2PApp) startAPI() {
 		if grpcSvc == nil {
 			// This panics because it should not happen.
 			// It should be caught inside apiConf.
-			log.Panic("one or more new GRPC services must be enabled with new JSON gateway server.")
+			log.Panic("one or more new grpc services must be enabled with new json gateway server")
 		}
 		jsonSvc = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
 		jsonSvc.StartService(
+			cmdp.Ctx,
 			apiConf.StartDebugService,
 			apiConf.StartGatewayService,
 			apiConf.StartGlobalStateService,

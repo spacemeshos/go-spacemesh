@@ -47,7 +47,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	proofBytes, err := types.InterfaceToBytes(poetProof)
 	r.NoError(err)
 	expectedRef := sha256.Sum256(proofBytes)
-	r.Equal(expectedRef[:], ref)
+	r.Equal(types.CalcHash32(expectedRef[:]).Bytes(), ref)
 
 	membership, err := poetDb.GetMembershipMap(types.CalcHash32(ref).Bytes())
 	r.NoError(err)

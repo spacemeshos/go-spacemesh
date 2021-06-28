@@ -1,16 +1,16 @@
 package api
 
 import (
+	"context"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 // NetworkAPI is an API to nodes gossip network
 type NetworkAPI interface {
-	Broadcast(channel string, data []byte) error
+	Broadcast(ctx context.Context, channel string, data []byte) error
 	SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey)
 }
 
@@ -33,15 +33,15 @@ type LoggingAPI interface {
 
 // Syncer is the API to get sync status and to start sync
 type Syncer interface {
-	IsSynced() bool
-	Start()
+	IsSynced(context.Context) bool
+	Start(context.Context)
 }
 
 // TxAPI is an api for getting transaction status
 type TxAPI interface {
 	AddressExists(types.Address) bool
 	ValidateNonceAndBalance(*types.Transaction) error
-	GetATXs([]types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID)
+	GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID)
 	GetLayer(types.LayerID) (*types.Layer, error)
 	GetRewards(types.Address) ([]types.Reward, error)
 	GetTransactions([]types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{})

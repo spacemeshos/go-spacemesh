@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math"
 	"math/big"
@@ -45,7 +46,6 @@ func TestNewMeshDB(t *testing.T) {
 }
 
 func TestMeshDB_AddBlock(t *testing.T) {
-
 	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
 	defer mdb.Close()
 	coinbase := types.HexToAddress("aaaa")
@@ -55,14 +55,13 @@ func TestMeshDB_AddBlock(t *testing.T) {
 	addTransactionsWithFee(t, mdb, block1, 4, rand.Int63n(100))
 
 	poetRef := []byte{0xba, 0x05}
-	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID{}, 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{}, &types.NIPoST{
-		Challenge: nil,
-		PoST: &types.PoST{
-			Nonce:   0,
-			Indices: []byte(nil),
-		},
-		PoSTMetadata: &types.PoSTMetadata{
-			Challenge: poetRef,
+	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID{}, 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{}, &types.NIPST{
+		NipstChallenge: &types.Hash32{},
+		PostProof: &types.PostProof{
+			Challenge:    poetRef,
+			MerkleRoot:   []byte(nil),
+			ProofNodes:   [][]byte(nil),
+			ProvenLeaves: [][]byte(nil),
 		},
 	})
 	var atxs []types.ATXID
@@ -913,4 +912,31 @@ func TestMeshDB_testGetRewardsBySmesherMultipleSmeshersAndLayers(t *testing.T) {
 		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher4, Coinbase: addr1},
 		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher4, Coinbase: addr1},
 	}, rewards)
+}
+
+func TestMeshDB_RecordCoinFlip(t *testing.T) {
+	r := require.New(t)
+	layerID := types.LayerID(123)
+
+	testCoinflip := func(mdb *DB) {
+		_, exists := mdb.GetCoinflip(context.TODO(), layerID)
+		r.False(exists, "coin value should not exist before being inserted")
+		mdb.RecordCoinflip(context.TODO(), layerID, true)
+		coin, exists := mdb.GetCoinflip(context.TODO(), layerID)
+		r.True(exists, "expected coin value to exist")
+		r.True(coin, "expected true coin value")
+		mdb.RecordCoinflip(context.TODO(), layerID, false)
+		coin, exists = mdb.GetCoinflip(context.TODO(), layerID)
+		r.True(exists, "expected coin value to exist")
+		r.False(coin, "expected false coin value on overwrite")
+	}
+
+	mdb1 := NewMemMeshDB(log.NewDefault(t.Name()))
+	defer mdb1.Close()
+	testCoinflip(mdb1)
+	mdb2, err := NewPersistentMeshDB(Path+"/mesh_db/", 5, log.NewDefault(t.Name()))
+	require.NoError(t, err)
+	defer mdb2.Close()
+	defer teardown()
+	testCoinflip(mdb2)
 }

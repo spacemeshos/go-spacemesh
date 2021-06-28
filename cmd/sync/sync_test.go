@@ -8,6 +8,8 @@ import (
 )
 
 func TestSpacemeshApp_TestSyncCmd(t *testing.T) {
+	t.Skip("skipped until sync test cloud resources are updated")
+
 	if testing.Short() {
 		t.Skip()
 	}

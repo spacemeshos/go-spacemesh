@@ -34,9 +34,9 @@ var cmd = &cobra.Command{
 	Use:   "sync",
 	Short: "start sync",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Starting sync")
+		fmt.Println("starting sync")
 		syncApp := newSyncApp()
-		log.With().Info("Initializing NewSyncApp", log.String("DataDir", syncApp.Config.DataDir()))
+		log.With().Info("initializing new sync app", log.String("DataDir", syncApp.Config.DataDir()))
 		defer syncApp.Cleanup()
 		syncApp.Initialize(cmd)
 		syncApp.start(cmd, args)
@@ -79,7 +79,7 @@ func newSyncApp() *syncApp {
 func (app *syncApp) Cleanup() {
 	err := os.RemoveAll(app.Config.DataDir())
 	if err != nil {
-		app.sync.Error("failed to cleanup sync: %v", err)
+		app.sync.With().Error("failed to cleanup sync", log.Err(err))
 	}
 }
 
@@ -148,9 +148,9 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	txpool := state.NewTxMemPool()
 	atxpool := activation.NewAtxMemPool()
 
-	app.sync = sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, goldenATXID, types.LayerID(expectedLayers))
-	if err = swarm.Start(); err != nil {
-		log.Panic("error starting p2p err=%v", err)
+	app.sync = sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, goldenATXID, types.LayerID(expectedLayers), poetDbStore)
+	if err = swarm.Start(cmdp.Ctx); err != nil {
+		log.With().Panic("error starting p2p", log.Err(err))
 	}
 
 	i := conf.LayersPerEpoch * 2
@@ -158,7 +158,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		lg.With().Info("getting layer", types.LayerID(i))
 		if lyr, err2 := app.sync.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
 			l := types.LayerID(i)
-			if !l.GetEpoch().IsGenesis() {
+			if l > types.GetEffectiveGenesis() {
 				lg.With().Info("finished loading layers from disk",
 					log.FieldNamed("layers_loaded", types.LayerID(i-1)),
 					log.Err(err2),
@@ -167,13 +167,13 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 			}
 		} else {
 			lg.With().Info("loaded layer from disk", types.LayerID(i))
-			app.sync.ValidateLayer(lyr, types.BlockIDs(lyr.Blocks()))
+			app.sync.ValidateLayer(lyr)
 		}
 	}
 
 	sleep := time.Duration(10) * time.Second
 	lg.Info("wait %v sec", sleep)
-	app.sync.Start()
+	app.sync.Start(cmdp.Ctx)
 	for app.sync.ProcessedLayer() < types.LayerID(expectedLayers) {
 		app.sync.ForceSync()
 		lg.Info("sleep for %v sec", 30)
@@ -263,7 +263,7 @@ func ensureDirExists(path string) error {
 
 func main() {
 	if err := cmd.Execute(); err != nil {
-		log.Info("error ", err)
+		log.With().Info("error", log.Err(err))
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

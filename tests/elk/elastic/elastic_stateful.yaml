@@ -27,7 +27,7 @@ spec:
         storageClassName: ssd
         resources:
           requests:
-            storage: 30Gi
+            storage: 50Gi
   template:
     metadata:
       name: "elasticsearch-master"
@@ -44,6 +44,10 @@ spec:
         - key: "app"
           operator: "Equal"
           value: elasticsearch
+          effect: "NoSchedule"
+        - key: "cpu"
+          operator: "Equal"
+          value: "2"
           effect: "NoSchedule"
       securityContext:
         fsGroup: 1000
@@ -149,11 +153,11 @@ spec:
               containerPort: 9300
           resources:
             limits:
-              cpu: 1000m
-              memory: 2Gi
+              cpu: 2000m
+              memory: 4Gi
             requests:
-              cpu: 1000m
-              memory: 2Gi
+              cpu: 2000m
+              memory: 4Gi
           env:
             - name: node.name
               valueFrom:
@@ -170,7 +174,7 @@ spec:
             - name: network.host
               value: "0.0.0.0"
             - name: ES_JAVA_OPTS
-              value: "-Xmx1g -Xms1g"
+              value: "-Xmx2g -Xms2g"
             - name: node.data
               value: "true"
             - name: node.ingest

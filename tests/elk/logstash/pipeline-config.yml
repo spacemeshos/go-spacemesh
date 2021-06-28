@@ -26,14 +26,16 @@ data:
         }
       }
 
-      json{
-        source => "message"
-        skip_on_invalid_json => true
-      }
+      if [message] =~ "\A\{.+\}\z" {
+        json{
+          source => "message"
+          skip_on_invalid_json => false
+        }
 
-      mutate {
-        remove_field => ["log", "cloud", "ecs", "agent", "input", "tags", "docker", "container", "host", "message", "@version"]
-        remove_field => ["headers","host"]
+        mutate {
+          remove_field => ["log", "cloud", "ecs", "agent", "input", "tags", "docker", "container", "host", "message", "@version"]
+          remove_field => ["headers","host"]
+        }
       }
     }
 
@@ -41,7 +43,7 @@ data:
       elasticsearch {
         hosts => ["elasticsearch-master:9200"]
         manage_template => false
-        index => "fluent-bit-NAMESPACE-%{+YYYY.MM.dd}"
+        index => "fluent-bit-%{+YYYY.MM.dd}-NAMESPACE"
         user => "REP_ES_USER"
         password => "REP_ES_PASS"
       }

@@ -3,6 +3,8 @@ package config
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"path/filepath"
 	"time"
 
@@ -42,6 +44,8 @@ type Config struct {
 	POST            activation.PoSTConfig `mapstructure:"post"`
 	SMESHING        SmeshingConfig        `mapstructure:"smeshing"`
 	LOGGING         LoggerConfig          `mapstructure:"logging"`
+	LAYERS          layerfetcher.Config   `mapstructure:"layer-fetch"`
+	FETCH           fetch.Config          `mapstructure:"fetch"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -61,6 +65,12 @@ type BaseConfig struct {
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`
 
+	MetricsPush       string `mapstructure:"metrics-push"`
+	MetricsPushPeriod int    `mapstructure:"metrics-push-period"`
+
+	ProfilerName string `mapstructure:"profiler-name"`
+	ProfilerURL  string `mapstructure:"profiler-url"`
+
 	OracleServer        string `mapstructure:"oracle_server"`
 	OracleServerWorldID int    `mapstructure:"oracle_server_worldid"`
 
@@ -71,10 +81,6 @@ type BaseConfig struct {
 	Hdist            int    `mapstructure:"hdist"`
 
 	PoETServer string `mapstructure:"poet-server"`
-
-	MemProfile string `mapstructure:"mem-profile"`
-
-	CPUProfile string `mapstructure:"cpu-profile"`
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
 
@@ -155,6 +161,8 @@ func DefaultConfig() Config {
 		REWARD:          mesh.DefaultMeshConfig(),
 		POST:            activation.DefaultPoSTConfig(),
 		SMESHING:        DefaultSmeshingConfig(),
+		FETCH:           fetch.DefaultConfig(),
+		LAYERS:          layerfetcher.DefaultConfig(),
 	}
 }
 
@@ -175,6 +183,10 @@ func defaultBaseConfig() BaseConfig {
 		TestMode:            defaultTestMode,
 		CollectMetrics:      false,
 		MetricsPort:         1010,
+		MetricsPush:         "", // "" = doesn't push
+		MetricsPushPeriod:   60,
+		ProfilerURL:         "",
+		ProfilerName:        "gp-spacemesh",
 		OracleServer:        "http://localhost:3030",
 		OracleServerWorldID: 0,
 		GenesisTime:         time.Now().Format(time.RFC3339),
@@ -187,7 +199,7 @@ func defaultBaseConfig() BaseConfig {
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,
-		SyncValidationDelta: 30,
+		SyncValidationDelta: 300,
 		AtxsPerBlock:        100,
 		TxsPerBlock:         100,
 		Profiler:            false,
@@ -206,6 +218,12 @@ func DefaultSmeshingConfig() SmeshingConfig {
 		CoinbaseAccount: "",
 		Opts:            activation.DefaultPoSTSetupOpts(),
 	}
+}
+
+func defaultTestConfig() BaseConfig {
+	conf := defaultBaseConfig()
+	conf.MetricsPort += 10000
+	return conf
 }
 
 // LoadConfig load the config file

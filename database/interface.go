@@ -33,6 +33,11 @@ type Putter interface {
 	Put(key []byte, value []byte) error
 }
 
+// Getter wraps the database read operation.
+type Getter interface {
+	Get(key []byte) ([]byte, error)
+}
+
 // Deleter wraps the database delete operation supported by both batches and regular databases.
 type Deleter interface {
 	Delete(key []byte) error
@@ -47,6 +52,12 @@ type Database interface {
 	Close()
 	NewBatch() Batch
 	Find(key []byte) Iterator
+}
+
+// Store wraps basic get and put operations, All methods are safe for concurrent use.
+type Store interface {
+	Putter
+	Getter
 }
 
 // Batch is a write-only database that commits changes to its host database
