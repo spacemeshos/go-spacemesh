@@ -418,13 +418,6 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 	o.lock.Lock()
 	defer o.lock.Unlock()
 
-	// check cache first
-	if val, exist := o.activesCache.Get(targetLayer.GetEpoch()); exist {
-		activeMap := val.(map[string]uint64)
-		logger.With().Debug("found value in cache", log.Int("count", len(activeMap)))
-		return activeMap, nil
-	}
-
 	// we first try to get the hare active set for a range of safe layers: start with the set of active blocks
 	safeLayerStart, safeLayerEnd := safeLayerRange(
 		targetLayer, types.LayerID(o.cfg.ConfidenceParam), types.LayerID(o.layersPerEpoch), types.LayerID(o.cfg.EpochOffset))
@@ -437,6 +430,34 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 		log.Int("epoch_offset", o.cfg.EpochOffset),
 		log.Uint64("layers_per_epoch", uint64(o.layersPerEpoch)),
 		log.FieldNamed("effective_genesis", types.GetEffectiveGenesis()))
+
+	// check cache first
+	// as long as epochOffset < layersPerEpoch, we expect safeLayerStart and safeLayerEnd to be in the same epoch.
+	// if not, don't attempt to cache on the basis of a single epoch since the safe layer range will span multiple
+	// epochs.
+	if safeLayerStart.GetEpoch() == safeLayerEnd.GetEpoch() {
+		if val, exist := o.activesCache.Get(safeLayerStart.GetEpoch()); exist {
+			activeMap := val.(map[string]uint64)
+			logger.With().Debug("found value in cache for safe layer start epoch",
+				log.FieldNamed("safe_layer_start", safeLayerStart),
+				log.FieldNamed("safe_layer_start_epoch", safeLayerStart.GetEpoch()),
+				log.Int("count", len(activeMap)))
+			return activeMap, nil
+		} else {
+			logger.With().Debug("no value in cache for safe layer start epoch",
+				log.FieldNamed("safe_layer_start", safeLayerStart),
+				log.FieldNamed("safe_layer_start_epoch", safeLayerStart.GetEpoch()))
+		}
+	} else {
+		// this is an error because GetMinerWeightsInEpochFromView, below, will probably also fail if it's true
+		// TODO: should we panic or return an error instead?
+		logger.With().Error("safe layer range spans multiple epochs, not caching active set results",
+			log.FieldNamed("safe_layer_start", safeLayerStart),
+			log.FieldNamed("safe_layer_end", safeLayerEnd),
+			log.FieldNamed("safe_layer_start_epoch", safeLayerStart.GetEpoch()),
+			log.FieldNamed("safe_layer_end_epoch", safeLayerEnd.GetEpoch()))
+	}
+
 	activeBlockIDs := make(map[types.BlockID]struct{})
 	for layerID := safeLayerStart; layerID <= safeLayerEnd; layerID++ {
 		layerBlockIDs, err := o.meshdb.LayerContextuallyValidBlocks(layerID)
@@ -461,11 +482,12 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 	if len(hareActiveSet) > 0 {
 		logger.With().Debug("successfully got hare active set for layer range",
 			log.Int("count", len(hareActiveSet)))
-		o.activesCache.Add(targetLayer.GetEpoch(), hareActiveSet)
+		o.activesCache.Add(safeLayerStart.GetEpoch(), hareActiveSet)
 		return hareActiveSet, nil
 	}
 
 	// if we failed to get a Hare active set, we fall back on reading the Tortoise active set targeting this epoch
+	// TODO: do we want to cache tortoise active set too?
 	logger.With().Warning("no hare active set for layer range, reading tortoise set for epoch instead",
 		targetLayer.GetEpoch())
 	atxs := o.atxdb.GetEpochAtxs(targetLayer.GetEpoch() - 1)

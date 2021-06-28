@@ -23,7 +23,7 @@ const defLayersPerEpoch = 10
 
 var errFoo = errors.New("some error")
 var errMy = errors.New("my error")
-var cfg = eCfg.Config{ConfidenceParam: 25, EpochOffset: 30}
+var cfg = eCfg.Config{ConfidenceParam: 25, EpochOffset: 3}
 
 var (
 	genWeight          = 5
@@ -445,9 +445,10 @@ func BenchmarkOracle_CalcEligibility(b *testing.B) {
 
 func Test_ActiveSetSize(t *testing.T) {
 	m := make(map[types.EpochID]int)
-	m[types.EpochID(3)] = 2
-	m[types.EpochID(4)] = 3
-	m[types.EpochID(5)] = 5
+	// these epochs correspond to the safe layer start epochs for the input layers
+	m[types.EpochID(4)] = 2
+	m[types.EpochID(5)] = 3
+	m[types.EpochID(6)] = 5
 	o := defaultOracle(t)
 	o.atxdb = &mockBufferedActiveSetProvider{size: m}
 	l := 39 + defSafety
@@ -478,7 +479,7 @@ func epochWeight(numMiners int) uint64 {
 func assertActiveSetSize(t *testing.T, o *Oracle, expected uint64, l types.LayerID) {
 	activeSetSize, err := o.totalWeight(context.TODO(), l)
 	assert.NoError(t, err)
-	assert.Equal(t, expected, activeSetSize)
+	assert.Equal(t, int(expected), int(activeSetSize))
 }
 
 func Test_VrfSignVerify(t *testing.T) {
@@ -546,11 +547,12 @@ func TestOracle_activeSetSizeCache(t *testing.T) {
 
 func TestOracle_actives(t *testing.T) {
 	r := require.New(t)
-	n := 9
+	numAtxs := 9
 	atxdb := &mockActiveSetProvider{
+		size: 1,
 		getEpochAtxsFn: func(types.EpochID) []types.ATXID {
-			atxids := make([]types.ATXID, n)
-			for i := 0; i < n; i++ {
+			atxids := make([]types.ATXID, numAtxs)
+			for i := 0; i < numAtxs; i++ {
 				atxids[i] = types.ATXID(types.BytesToHash([]byte{byte(i)}))
 			}
 			return atxids
@@ -564,22 +566,75 @@ func TestOracle_actives(t *testing.T) {
 
 	o := defaultOracle(t)
 	o.atxdb = atxdb
-	_, err := o.actives(context.TODO(), 1)
-	r.EqualError(err, errGenesis.Error())
+	t.Run("test genesis", func(t *testing.T) {
+		_, err := o.actives(context.TODO(), 1)
+		r.EqualError(err, errGenesis.Error())
+	})
 
-	o.activesCache = newMockCacher()
-	v, err := o.actives(context.TODO(), 100)
-	r.NoError(err)
-	v2, err := o.actives(context.TODO(), 100)
-	r.NoError(err)
-	r.Equal(v, v2)
-	for i := 0; i < n; i++ {
-		// this works too:
-		//atxid := types.ATXID(types.BytesToHash([]byte{byte(i)}))
-		//_, exist := v[atxid.Hash32().String()]
-		_, exist := v[fmt.Sprintf("0x%064x", i)]
-		r.True(exist)
-	}
+	t.Run("test cache", func(t *testing.T) {
+		mc := newMockCacher()
+		o.activesCache = mc
+		v1, err := o.actives(context.TODO(), 100)
+		r.NoError(err)
+		v2, err := o.actives(context.TODO(), 100)
+		r.NoError(err)
+		r.Equal(v1, v2)
+		r.Equal(1, mc.numAdd)
+		r.Equal(2, mc.numGet) // one hit, one miss
+	})
+
+	t.Run("test tortoise active set", func(t *testing.T) {
+		// clear the cache
+		o.activesCache = newMockCacher()
+		// return no hare active set, forcing us to fall back on tortoise active set
+		atxdb.size = 0
+		v1, err := o.actives(context.TODO(), 100)
+		r.NoError(err)
+		for i := 0; i < numAtxs; i++ {
+			// this works too:
+			//atxid := types.ATXID(types.BytesToHash([]byte{byte(i)}))
+			//r.Contains(v1, atxid.Hash32().String())
+			r.Contains(v1, fmt.Sprintf("0x%064x", i))
+		}
+	})
+
+	t.Run("test cache key", func(t *testing.T) {
+		o.cfg = eCfg.Config{
+			ConfidenceParam: 13,
+			EpochOffset:     3,
+		}
+		mc := newMockCacher()
+		o.activesCache = mc
+
+		// two target layers should produce different safe epochs
+		// since the preliminary safe layers fall on either side of the epoch offset
+		targetLayer1 := types.LayerID(44)
+		targetLayer2 := types.LayerID(47)
+		sls1, sle1 := safeLayerRange(
+			targetLayer1,
+			types.LayerID(o.cfg.ConfidenceParam),
+			types.LayerID(o.layersPerEpoch),
+			types.LayerID(o.cfg.EpochOffset))
+		r.Equal(20, int(sls1))
+		r.Equal(23, int(sle1))
+		sls2, sle2 := safeLayerRange(
+			targetLayer2,
+			types.LayerID(o.cfg.ConfidenceParam),
+			types.LayerID(o.layersPerEpoch),
+			types.LayerID(o.cfg.EpochOffset))
+		r.Equal(30, int(sls2))
+		r.Equal(33, int(sle2))
+
+		// make sure the result of the first is not read from the cache for the second even though both target layers
+		// are in the same epoch
+		v1, err := o.actives(context.TODO(), targetLayer1)
+		r.NoError(err)
+		v2, err := o.actives(context.TODO(), targetLayer2)
+		r.NoError(err)
+		r.Equal(v1, v2)
+		r.Equal(2, mc.numAdd)
+		r.Equal(2, mc.numGet) // two misses
+	})
 }
 
 func TestOracle_concurrentActives(t *testing.T) {
