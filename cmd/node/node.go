@@ -167,7 +167,7 @@ type SpacemeshApp struct {
 	gossipListener *service.Listener
 	clock          TickProvider
 	hare           HareService
-	postMgr        *activation.PostManager
+	postSetupMgr   *activation.PoSTSetupManager
 	atxBuilder     *activation.Builder
 	atxDb          *activation.DB
 	poetListener   *activation.PoetListener
@@ -663,7 +663,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	app.P2P = swarm
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
-	app.postMgr = postMgr
+	app.postSetupMgr = postMgr
 	app.oracle = blockOracle
 	app.txProcessor = processor
 	app.atxDb = atxdb
@@ -736,10 +736,10 @@ func (app *SpacemeshApp) startServices() {
 
 	app.poetListener.Start()
 
-	if app.Config.StartSmeshing {
-		coinbaseAddr := types.HexToAddress(app.Config.CoinbaseAccount)
+	if app.Config.SMESHING.Start {
+		coinbaseAddr := types.HexToAddress(app.Config.SMESHING.CoinbaseAccount)
 		go func() {
-			if err := app.atxBuilder.StartSmeshing(coinbaseAddr, &app.Config.PostInitOpts); err != nil {
+			if err := app.atxBuilder.StartSmeshing(coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
 				log.Panic("Failed to start smeshing: %v", err)
 			}
 		}()
@@ -793,7 +793,7 @@ func (app *SpacemeshApp) startAPIServices(net api.NetworkAPI) {
 		registerService(grpcserver.NewNodeService(net, app.mesh, app.clock, app.syncer))
 	}
 	if apiConf.StartSmesherService {
-		registerService(grpcserver.NewSmesherService(app.postMgr, app.atxBuilder))
+		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder))
 	}
 	if apiConf.StartTransactionService {
 		registerService(grpcserver.NewTransactionService(net, app.mesh, app.txPool, app.syncer))
@@ -852,8 +852,8 @@ func (app *SpacemeshApp) stopServices() {
 	//	app.newgrpcAPIService.Close()
 	//}
 
-	if app.postMgr != nil {
-		_ = app.postMgr.StopPostDataCreationSession(false)
+	if app.postSetupMgr != nil {
+		_ = app.postSetupMgr.StopSession(false)
 	}
 
 	if app.blockProducer != nil {
@@ -919,7 +919,7 @@ func (app *SpacemeshApp) stopServices() {
 
 // LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists
 func (app *SpacemeshApp) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
-	filename := filepath.Join(app.Config.POST.DataDir, edKeyFileName)
+	filename := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
 	log.Info("Looking for identity file at `%v`", filename)
 
 	data, err := ioutil.ReadFile(filename)
@@ -969,7 +969,7 @@ func (identityFileFound) Error() string {
 
 func (app *SpacemeshApp) getIdentityFile() (string, error) {
 	var f string
-	err := filepath.Walk(app.Config.POST.DataDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(app.Config.SMESHING.Opts.DataDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -999,7 +999,7 @@ func (app *SpacemeshApp) startSyncer() {
 
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
 func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
-	log.With().Info("starting Spacemesh", log.String("data-dir", app.Config.DataDir()), log.String("post-dir", app.Config.POST.DataDir))
+	log.With().Info("starting Spacemesh", log.String("data-dir", app.Config.DataDir()), log.String("post-dir", app.Config.SMESHING.Opts.DataDir))
 
 	err := filesystem.ExistOrCreate(app.Config.DataDir())
 	if err != nil {

@@ -25,7 +25,7 @@ func TestPostManager(t *testing.T) {
 	mgr, err := NewPostManager(id, *cfg, postLog)
 	req.NoError(err)
 
-	opts := &PostInitOpts{
+	opts := &PoSTSetupOpts{
 		DataDir:           tempdir,
 		NumLabels:         1 << 15,
 		NumFiles:          1,
@@ -106,7 +106,7 @@ func TestPostManager_InitialStatus(t *testing.T) {
 	}()
 
 	// Create data.
-	doneChan, err := mgr.CreatePostData(&PostInitOpts{
+	doneChan, err := mgr.CreatePostData(&PoSTSetupOpts{
 		DataDir:           tempdir,
 		NumLabels:         1 << 10,
 		NumFiles:          cfg.NumFiles,
@@ -142,7 +142,7 @@ func TestPostManager_GenerateProof(t *testing.T) {
 	req.EqualError(err, errNotComplete.Error())
 
 	// Create data.
-	doneChan, err := mgr.CreatePostData(&PostInitOpts{
+	doneChan, err := mgr.CreatePostData(&PoSTSetupOpts{
 		DataDir:           tempdir,
 		NumLabels:         1 << 10,
 		NumFiles:          cfg.NumFiles,
@@ -170,7 +170,7 @@ func TestPostManager_Progress(t *testing.T) {
 	mgr, err := NewPostManager(id, *cfg, postLog)
 	req.NoError(err)
 
-	opts := &PostInitOpts{
+	opts := &PoSTSetupOpts{
 		DataDir:           tempdir,
 		NumLabels:         1 << 15,
 		NumFiles:          1,
@@ -228,7 +228,7 @@ func TestPostManager_Stop(t *testing.T) {
 	mgr, err := NewPostManager(id, *cfg, postLog)
 	req.NoError(err)
 
-	opts := &PostInitOpts{
+	opts := &PoSTSetupOpts{
 		DataDir:           tempdir,
 		NumLabels:         1 << 15,
 		NumFiles:          1,
@@ -276,7 +276,7 @@ func TestPostManager_StopInProgress(t *testing.T) {
 	mgr, err := NewPostManager(id, *cfg, postLog)
 	req.NoError(err)
 
-	opts := &PostInitOpts{
+	opts := &PoSTSetupOpts{
 		DataDir:           tempdir,
 		NumLabels:         1 << 15,
 		NumFiles:          1,

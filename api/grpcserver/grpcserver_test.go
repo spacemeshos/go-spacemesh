@@ -382,7 +382,7 @@ func (*PostAPIMock) PostComputeProviders() []initialization.ComputeProvider {
 	return nil
 }
 
-func (*PostAPIMock) CreatePostData(options *activation.PostInitOpts) (chan struct{}, error) {
+func (*PostAPIMock) CreatePostData(options *activation.PoSTSetupOpts) (chan struct{}, error) {
 	return nil, nil
 }
 
@@ -419,7 +419,7 @@ func (*SmeshingAPIMock) Smeshing() bool {
 	return false
 }
 
-func (*SmeshingAPIMock) StartSmeshing(*activation.PostInitOpts, types.Address) error {
+func (*SmeshingAPIMock) StartSmeshing(*activation.PoSTSetupOpts, types.Address) error {
 	return nil
 }
 

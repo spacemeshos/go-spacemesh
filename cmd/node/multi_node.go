@@ -135,16 +135,16 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 		return nil
 	}
 
-	cfg.POST = activation.DefaultConfig()
+	cfg.POST = activation.DefaultPoSTConfig()
 	cfg.POST.LabelsPerUnit = 1 << 10
 	cfg.POST.BitsPerLabel = 8
-	cfg.POST.NumFiles = 1
 
-	cfg.PostInitOpts = activation.DefaultPostInitOps()
-	cfg.PostInitOpts.NumUnits = cfg.POST.MinNumUnits + 1
-	cfg.PostInitOpts.ComputeProviderID = int(initialization.CPUProviderID())
+	cfg.SMESHING = config.DefaultSmeshingConfig()
+	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
+	cfg.SMESHING.Opts.NumFiles = 1
+	cfg.SMESHING.Opts.ComputeProviderID = int(initialization.CPUProviderID())
 
-	cfg.GenesisTotalWeight = uint64(cfg.PostInitOpts.NumUnits) * uint64(numOfInstances) // * 1 PoET ticks
+	cfg.GenesisTotalWeight = uint64(cfg.SMESHING.Opts.NumUnits) * uint64(numOfInstances) // * 1 PoET ticks
 
 	cfg.HARE.N = 5
 	cfg.HARE.F = 2
@@ -186,12 +186,6 @@ func ActivateGrpcServer(smApp *SpacemeshApp) {
 	smApp.globalstateSvc.RegisterService(smApp.grpcAPIService)
 	smApp.txService.RegisterService(smApp.grpcAPIService)
 	smApp.grpcAPIService.Start()
-
-	// MERGE FIX
-	//smApp.Config.API.StartGrpcServer = true
-	//layerDuration := smApp.Config.LayerDurationSec
-	//smApp.grpcAPIService = api.NewGrpcService(smApp.Config.API.GrpcServerPort, smApp.P2P, smApp.state, smApp.mesh, smApp.txPool, smApp.oracle, smApp.clock, layerDuration, nil, nil, nil)
-	//smApp.grpcAPIService.StartService()
 }
 
 // GracefulShutdown stops the current services running in apps
@@ -227,8 +221,7 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.
 	//smApp.Config.SpaceToCommit = smApp.Config.POST.SpacePerUnit << (i % 5)
 	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
 	smApp.Config.GenesisTime = genesisTime
-	smApp.Config.POST.DataDir, _ = ioutil.TempDir("", "sm-app-test-post-datadir")
-	smApp.Config.PostInitOpts.DataDir = smApp.Config.POST.DataDir
+	smApp.Config.SMESHING.Opts.DataDir, _ = ioutil.TempDir("", "sm-app-test-post-datadir")
 
 	smApp.edSgn = edSgn
 

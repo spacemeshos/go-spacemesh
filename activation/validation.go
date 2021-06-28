@@ -5,23 +5,22 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/verifying"
 )
 
 // Validator contains the dependencies required to validate NIPoSTs
 type Validator struct {
-	poetDb  poetDbAPI
-	postCfg config.Config
+	poetDb poetDbAPI
+	cfg    PoSTConfig
 }
 
 // A compile time check to ensure that Validator fully implements the NIPoSTValidator interface.
 var _ NIPoSTValidator = (*Validator)(nil)
 
 // NewValidator returns a new NIPoST validator
-func NewValidator(poetDb poetDbAPI, postCfg config.Config) *Validator {
-	return &Validator{poetDb, postCfg}
+func NewValidator(poetDb poetDbAPI, cfg PoSTConfig) *Validator {
+	return &Validator{poetDb, cfg}
 }
 
 // Validate validates a NIPoST, given a miner id and expected challenge. It returns an error if an issue is found or nil
@@ -34,28 +33,28 @@ func (v *Validator) Validate(minerID signing.PublicKey, nipost *types.NIPoST, ex
 		return fmt.Errorf("invalid `Challenge`; expected: %v, given: %v", expectedChallenge, nipost.Challenge)
 	}
 
-	if nipost.PoSTMetadata.BitsPerLabel < v.postCfg.BitsPerLabel {
-		return fmt.Errorf("invalid `BitsPerLabel`; expected: >=%d, given: %d", v.postCfg.BitsPerLabel, nipost.PoSTMetadata.BitsPerLabel)
+	if nipost.PoSTMetadata.BitsPerLabel < v.cfg.BitsPerLabel {
+		return fmt.Errorf("invalid `BitsPerLabel`; expected: >=%d, given: %d", v.cfg.BitsPerLabel, nipost.PoSTMetadata.BitsPerLabel)
 	}
 
-	if nipost.PoSTMetadata.LabelsPerUnit < v.postCfg.LabelsPerUnit {
-		return fmt.Errorf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", v.postCfg.LabelsPerUnit, nipost.PoSTMetadata.LabelsPerUnit)
+	if nipost.PoSTMetadata.LabelsPerUnit < v.cfg.LabelsPerUnit {
+		return fmt.Errorf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", v.cfg.LabelsPerUnit, nipost.PoSTMetadata.LabelsPerUnit)
 	}
 
-	if numUnits < v.postCfg.MinNumUnits {
-		return fmt.Errorf("invalid `numUnits`; expected: >=%d, given: %d", v.postCfg.MinNumUnits, numUnits)
+	if numUnits < v.cfg.MinNumUnits {
+		return fmt.Errorf("invalid `numUnits`; expected: >=%d, given: %d", v.cfg.MinNumUnits, numUnits)
 	}
 
-	if numUnits > v.postCfg.MaxNumUnits {
-		return fmt.Errorf("invalid `numUnits`; expected: <=%d, given: %d", v.postCfg.MaxNumUnits, numUnits)
+	if numUnits > v.cfg.MaxNumUnits {
+		return fmt.Errorf("invalid `numUnits`; expected: <=%d, given: %d", v.cfg.MaxNumUnits, numUnits)
 	}
 
-	if nipost.PoSTMetadata.K1 > v.postCfg.K1 {
-		return fmt.Errorf("invalid `K1`; expected: <=%d, given: %d", v.postCfg.K1, nipost.PoSTMetadata.K1)
+	if nipost.PoSTMetadata.K1 > v.cfg.K1 {
+		return fmt.Errorf("invalid `K1`; expected: <=%d, given: %d", v.cfg.K1, nipost.PoSTMetadata.K1)
 	}
 
-	if nipost.PoSTMetadata.K2 < v.postCfg.K2 {
-		return fmt.Errorf("invalid `K2`; expected: >=%d, given: %d", v.postCfg.K2, nipost.PoSTMetadata.K2)
+	if nipost.PoSTMetadata.K2 < v.cfg.K2 {
+		return fmt.Errorf("invalid `K2`; expected: >=%d, given: %d", v.cfg.K2, nipost.PoSTMetadata.K2)
 	}
 
 	// TODO: better error handling

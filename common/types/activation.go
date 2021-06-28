@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/spacemeshos/poet/shared"
-	"github.com/spacemeshos/post/proving"
+	poetShared "github.com/spacemeshos/poet/shared"
+	postShared "github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/sha256-simd"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -265,7 +265,7 @@ func (atx *ActivationTx) GetShortPoetProofRef() []byte {
 // PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration
 // and the actual PoET Merkle proof.
 type PoetProof struct {
-	shared.MerkleProof
+	poetShared.MerkleProof
 	Members   [][]byte
 	LeafCount uint64
 }
@@ -316,9 +316,9 @@ type NIPoST struct {
 }
 
 // PoST is an alias to proving.Proof.
-type PoST proving.Proof
+type PoST postShared.Proof
 
-// PoSTMetadata is similar proving.ProofMetadata, but without fields which can be derived elsewhere (ID, NumUnits).
+// PoSTMetadata is similar postShared.ProofMetadata, but without fields which can be derived elsewhere (ID, NumUnits).
 type PoSTMetadata struct {
 	//	ID            []byte
 	Challenge     []byte

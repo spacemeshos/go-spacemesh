@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	p2pConfig "github.com/spacemeshos/go-spacemesh/p2p/config"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
-	postConfig "github.com/spacemeshos/post/config"
 	"github.com/spf13/viper"
 )
 
@@ -34,15 +33,15 @@ var (
 // Config defines the top level configuration for a spacemesh node
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
-	P2P             p2pConfig.Config        `mapstructure:"p2p"`
-	API             apiConfig.Config        `mapstructure:"api"`
-	HARE            hareConfig.Config       `mapstructure:"hare"`
-	HareEligibility eligConfig.Config       `mapstructure:"hare-eligibility"`
-	TIME            timeConfig.TimeConfig   `mapstructure:"time"`
-	REWARD          mesh.Config             `mapstructure:"reward"`
-	POST            postConfig.Config       `mapstructure:"post"`
-	PostInitOpts    activation.PostInitOpts `mapstructure:"post-init"`
-	LOGGING         LoggerConfig            `mapstructure:"logging"`
+	P2P             p2pConfig.Config      `mapstructure:"p2p"`
+	API             apiConfig.Config      `mapstructure:"api"`
+	HARE            hareConfig.Config     `mapstructure:"hare"`
+	HareEligibility eligConfig.Config     `mapstructure:"hare-eligibility"`
+	TIME            timeConfig.TimeConfig `mapstructure:"time"`
+	REWARD          mesh.Config           `mapstructure:"reward"`
+	POST            activation.PoSTConfig `mapstructure:"post"`
+	SMESHING        SmeshingConfig        `mapstructure:"smeshing"`
+	LOGGING         LoggerConfig          `mapstructure:"logging"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -138,6 +137,12 @@ type LoggerConfig struct {
 	HareBeaconLoggerLevel     string `mapstructure:"hare-beacon"`
 }
 
+type SmeshingConfig struct {
+	CoinbaseAccount string                   `mapstructure:"smeshing-coinbase"`
+	Start           bool                     `mapstructure:"smeshing-start"`
+	Opts            activation.PoSTSetupOpts `mapstructure:"smeshing-opts"`
+}
+
 // DefaultConfig returns the default configuration for a spacemesh node
 func DefaultConfig() Config {
 	return Config{
@@ -148,8 +153,8 @@ func DefaultConfig() Config {
 		HareEligibility: eligConfig.DefaultConfig(),
 		TIME:            timeConfig.DefaultConfig(),
 		REWARD:          mesh.DefaultMeshConfig(),
-		POST:            activation.DefaultConfig(),
-		PostInitOpts:    activation.DefaultPostInitOps(),
+		POST:            activation.DefaultPoSTConfig(),
+		SMESHING:        DefaultSmeshingConfig(),
 	}
 }
 
@@ -193,6 +198,14 @@ func defaultTestConfig() BaseConfig {
 	conf := defaultBaseConfig()
 	conf.MetricsPort += 10000
 	return conf
+}
+
+func DefaultSmeshingConfig() SmeshingConfig {
+	return SmeshingConfig{
+		Start:           false,
+		CoinbaseAccount: "",
+		Opts:            activation.DefaultPoSTSetupOpts(),
+	}
 }
 
 // LoadConfig load the config file

@@ -80,7 +80,7 @@ type syncer interface {
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
 	Smeshing() bool
-	StartSmeshing(coinbase types.Address, opts *PostInitOpts) error
+	StartSmeshing(coinbase types.Address, opts PoSTSetupOpts) error
 	StopSmeshing(deleteFiles bool) error
 	SmesherID() types.NodeID
 	Coinbase() types.Address
@@ -112,48 +112,48 @@ const (
 // calculate total weight and providing relevant view as proof
 type Builder struct {
 	signer
-	accountLock     sync.RWMutex
-	nodeID          types.NodeID
-	coinbaseAccount types.Address
-	goldenATXID     types.ATXID
-	layersPerEpoch  uint16
-	db              atxDBProvider
-	net             broadcaster
-	mesh            meshProvider
-	tickProvider    poetNumberOfTickProvider
-	nipostBuilder   nipostBuilder
-	postProvider    PostProvider
-	challenge       *types.NIPoSTChallenge
-	initialPoST     *types.PoST
-	layerClock      layerClock
-	stop            chan struct{}
-	status          SmeshingStatus
-	mtx             sync.Mutex
-	store           bytesStore
-	syncer          syncer
-	log             log.Log
-	committedSpace  uint64
+	accountLock       sync.RWMutex
+	nodeID            types.NodeID
+	coinbaseAccount   types.Address
+	goldenATXID       types.ATXID
+	layersPerEpoch    uint16
+	db                atxDBProvider
+	net               broadcaster
+	mesh              meshProvider
+	tickProvider      poetNumberOfTickProvider
+	nipostBuilder     nipostBuilder
+	postSetupProvider PoSTSetupProvider
+	challenge         *types.NIPoSTChallenge
+	initialPoST       *types.PoST
+	layerClock        layerClock
+	stop              chan struct{}
+	status            SmeshingStatus
+	mtx               sync.Mutex
+	store             bytesStore
+	syncer            syncer
+	log               log.Log
+	committedSpace    uint64
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(cfg Config, nodeID types.NodeID, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipostBuilder nipostBuilder, post PostProvider, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
+func NewBuilder(cfg Config, nodeID types.NodeID, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipostBuilder nipostBuilder, postSetupProvider PoSTSetupProvider, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
 	return &Builder{
-		signer:          signer,
-		nodeID:          nodeID,
-		coinbaseAccount: cfg.CoinbaseAccount,
-		goldenATXID:     cfg.GoldenATXID,
-		layersPerEpoch:  cfg.LayersPerEpoch,
-		db:              db,
-		net:             net,
-		mesh:            mesh,
-		nipostBuilder:   nipostBuilder,
-		postProvider:    post,
-		layerClock:      layerClock,
-		stop:            make(chan struct{}),
-		syncer:          syncer,
-		store:           store,
-		log:             log,
-		status:          SmeshingStatusIdle,
+		signer:            signer,
+		nodeID:            nodeID,
+		coinbaseAccount:   cfg.CoinbaseAccount,
+		goldenATXID:       cfg.GoldenATXID,
+		layersPerEpoch:    cfg.LayersPerEpoch,
+		db:                db,
+		net:               net,
+		mesh:              mesh,
+		nipostBuilder:     nipostBuilder,
+		postSetupProvider: postSetupProvider,
+		layerClock:        layerClock,
+		stop:              make(chan struct{}),
+		syncer:            syncer,
+		store:             store,
+		log:               log,
+		status:            SmeshingStatusIdle,
 	}
 }
 
@@ -170,7 +170,7 @@ func (b *Builder) Smeshing() bool {
 // If the post data is incomplete or missing, data creation
 // session will be preceded. Changing of the post potions (e.g., number of labels),
 // after initial setup, is supported.
-func (b *Builder) StartSmeshing(coinbase types.Address, opts *PostInitOpts) error {
+func (b *Builder) StartSmeshing(coinbase types.Address, opts PoSTSetupOpts) error {
 	b.mtx.Lock()
 	if b.status != SmeshingStatusIdle {
 		b.mtx.Unlock()
@@ -180,17 +180,17 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts *PostInitOpts) erro
 	b.status = SmeshingStatusPendingPostInit
 	b.mtx.Unlock()
 
-	doneChan, err := b.postProvider.CreatePostData(opts)
+	doneChan, err := b.postSetupProvider.StartSession(opts)
 	if err != nil {
 		b.status = SmeshingStatusIdle
-		return fmt.Errorf("failed to start creating post data: %v", err)
+		return fmt.Errorf("failed to start PoST setup session: %v", err)
 	}
 
 	go func() {
 		<-doneChan
-		if initStatus := b.postProvider.InitStatus(); initStatus != InitStatusComplete {
+		if s := b.postSetupProvider.Status(); s.State != PoSTSetupStateComplete {
 			b.status = SmeshingStatusIdle
-			b.log.Error("failed to create post data: %v", b.postProvider.LastError())
+			b.log.Error("failed to complete PoST setup: %v", b.postSetupProvider.LastError())
 			return
 		}
 
@@ -210,7 +210,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 		return errors.New("not started")
 	}
 
-	if err := b.postProvider.StopPostDataCreationSession(deleteFiles); err != nil {
+	if err := b.postSetupProvider.StopSession(deleteFiles); err != nil {
 		return fmt.Errorf("failed to stop post data creation session: %v", err)
 	}
 
@@ -255,7 +255,7 @@ func (b *Builder) loop() {
 	// Once initialized, run the execution phase with zero-challenge,
 	// to create the initial proof (the commitment).
 	// TODO(moshababo): don't generate the commitment every time smeshing is starting, but once only.
-	b.initialPoST, _, err = b.postProvider.GenerateProof(shared.ZeroChallenge)
+	b.initialPoST, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
 	if err != nil {
 		b.log.Error("PoST execution failed: %v", err)
 		b.status = SmeshingStatusIdle
@@ -422,7 +422,7 @@ func (b *Builder) PublishActivationTx() error {
 		initialPoST = b.initialPoST
 	}
 
-	atx := types.NewActivationTx(*b.challenge, b.Coinbase(), nipost, b.postProvider.LastOpts().NumUnits, initialPoST)
+	atx := types.NewActivationTx(*b.challenge, b.Coinbase(), nipost, b.postSetupProvider.LastOpts().NumUnits, initialPoST)
 
 	atxReceived := b.db.AwaitAtx(atx.ID())
 	defer b.db.UnsubscribeAtx(atx.ID())

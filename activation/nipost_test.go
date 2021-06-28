@@ -40,7 +40,7 @@ func (p *postProviderMock) PostComputeProviders() []initialization.ComputeProvid
 	return nil
 }
 
-func (p *postProviderMock) CreatePostData(options *PostInitOpts) (chan struct{}, error) {
+func (p *postProviderMock) CreatePostData(options *PoSTSetupOpts) (chan struct{}, error) {
 	return nil, nil
 }
 
@@ -147,7 +147,7 @@ func TestInitializePost(t *testing.T) {
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 	datadir, _ := ioutil.TempDir("", "post-test")
 
-	done, err := postProvider.CreatePostData(&PostInitOpts{
+	done, err := postProvider.CreatePostData(&PoSTSetupOpts{
 		DataDir:           datadir,
 		NumLabels:         1 << 15,
 		NumFiles:          1,
@@ -199,7 +199,7 @@ func buildNIPoST(r *require.Assertions, postCfg config.Config, nipostChallenge t
 		r.NoError(err)
 	}()
 
-	done, err := postProvider.CreatePostData(&PostInitOpts{
+	done, err := postProvider.CreatePostData(&PoSTSetupOpts{
 		DataDir:           postCfg.DataDir,
 		NumLabels:         postCfg.NumLabels,
 		NumFiles:          postCfg.NumFiles,
@@ -248,7 +248,7 @@ func TestNewNIPoSTBuilderNotInitialized(t *testing.T) {
 	r.EqualError(err, "PoST init not completed")
 	r.Nil(npst)
 
-	done, err := postProvider.CreatePostData(&PostInitOpts{
+	done, err := postProvider.CreatePostData(&PoSTSetupOpts{
 		DataDir:           cfg.DataDir,
 		NumLabels:         1 << 15,
 		NumFiles:          1,

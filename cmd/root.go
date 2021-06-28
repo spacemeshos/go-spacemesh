@@ -179,29 +179,37 @@ func AddCommands(cmd *cobra.Command) {
 
 	// TODO(moshababo): add usage desc
 
-	cmd.PersistentFlags().UintVar(&config.POST.BitsPerLabel, "post-bitsperlabel",
+	cmd.PersistentFlags().UintVar(&config.POST.BitsPerLabel, "post-bits-per-label",
 		config.POST.BitsPerLabel, "")
 	cmd.PersistentFlags().UintVar(&config.POST.LabelsPerUnit, "post-labelsperunit",
 		config.POST.LabelsPerUnit, "")
+	cmd.PersistentFlags().UintVar(&config.POST.MinNumUnits, "post-numunits-min",
+		config.POST.MinNumUnits, "")
+	cmd.PersistentFlags().UintVar(&config.POST.MaxNumUnits, "post-numunits-max",
+		config.POST.MaxNumUnits, "")
 	cmd.PersistentFlags().UintVar(&config.POST.K1, "post-k1",
 		config.POST.K1, "")
 	cmd.PersistentFlags().UintVar(&config.POST.K2, "post-k2",
 		config.POST.K2, "")
 
-	/**======================== PoST init options Flags ========================== **/
+	/**======================== Smeshing Flags ========================== **/
 
 	// TODO(moshababo): add usage desc
 
-	cmd.PersistentFlags().StringVar(&config.PostInitOpts.DataDir, "post-init-datadir",
-		config.PostInitOpts.DataDir, "")
-	cmd.PersistentFlags().UintVar(&config.PostInitOpts.NumUnits, "post-init-numunits",
-		config.PostInitOpts.NumUnits, "")
-	cmd.PersistentFlags().UintVar(&config.PostInitOpts.NumFiles, "post-init-numfiles",
-		config.PostInitOpts.NumFiles, "")
-	cmd.PersistentFlags().IntVar(&config.PostInitOpts.ComputeProviderID, "post-init-provider",
-		config.PostInitOpts.ComputeProviderID, "")
-	cmd.PersistentFlags().BoolVar(&config.PostInitOpts.Throttle, "post-init-throttle",
-		config.PostInitOpts.Throttle, "")
+	cmd.PersistentFlags().BoolVar(&config.SMESHING.Start, "smeshing-start",
+		config.SMESHING.Start, "")
+	cmd.PersistentFlags().StringVar(&config.SMESHING.CoinbaseAccount, "smeshing-coinbase",
+		config.SMESHING.CoinbaseAccount, "")
+	cmd.PersistentFlags().StringVar(&config.SMESHING.Opts.DataDir, "smeshing-opts-datadir",
+		config.SMESHING.Opts.DataDir, "")
+	cmd.PersistentFlags().UintVar(&config.SMESHING.Opts.NumUnits, "smeshing-opts-numunits",
+		config.SMESHING.Opts.NumUnits, "")
+	cmd.PersistentFlags().UintVar(&config.SMESHING.Opts.NumFiles, "smeshing-opts-numfiles",
+		config.SMESHING.Opts.NumFiles, "")
+	cmd.PersistentFlags().IntVar(&config.SMESHING.Opts.ComputeProviderID, "smeshing-opts-provider",
+		config.SMESHING.Opts.ComputeProviderID, "")
+	cmd.PersistentFlags().BoolVar(&config.SMESHING.Opts.Throttle, "smeshing-opts-throttle",
+		config.SMESHING.Opts.Throttle, "")
 
 	/**========================Consensus Flags ========================== **/
 

@@ -18,8 +18,8 @@ import (
 
 // SmesherService exposes endpoints to manage smeshing
 type SmesherService struct {
-	post     api.PostAPI
-	smeshing api.SmeshingAPI
+	postSetupProvider api.PoSTSetupAPI
+	smeshingProvider  api.SmeshingAPI
 }
 
 // RegisterService registers this service with a grpc server instance
@@ -28,7 +28,7 @@ func (s SmesherService) RegisterService(server *Server) {
 }
 
 // NewSmesherService creates a new grpc service using config data.
-func NewSmesherService(post api.PostAPI, smeshing api.SmeshingAPI) *SmesherService {
+func NewSmesherService(post api.PoSTSetupAPI, smeshing api.SmeshingAPI) *SmesherService {
 	return &SmesherService{post, smeshing}
 }
 
@@ -36,7 +36,7 @@ func NewSmesherService(post api.PostAPI, smeshing api.SmeshingAPI) *SmesherServi
 func (s SmesherService) IsSmeshing(context.Context, *empty.Empty) (*pb.IsSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.IsSmeshing")
 
-	return &pb.IsSmeshingResponse{IsSmeshing: s.smeshing.Smeshing()}, nil
+	return &pb.IsSmeshingResponse{IsSmeshing: s.smeshingProvider.Smeshing()}, nil
 }
 
 // StartSmeshing requests that the node begin smeshing
@@ -64,7 +64,7 @@ func (s SmesherService) StartSmeshing(_ context.Context, in *pb.StartSmeshingReq
 	}
 
 	coinbaseAddr := types.BytesToAddress(in.Coinbase.Address)
-	opts := &activation.PostInitOpts{
+	opts := activation.PoSTSetupOpts{
 		DataDir:           in.Opts.DataDir,
 		NumUnits:          uint(in.Opts.NumUnits),
 		NumFiles:          uint(in.Opts.NumFiles),
@@ -72,7 +72,7 @@ func (s SmesherService) StartSmeshing(_ context.Context, in *pb.StartSmeshingReq
 		Throttle:          in.Opts.Throttle,
 	}
 
-	if err := s.smeshing.StartSmeshing(coinbaseAddr, opts); err != nil {
+	if err := s.smeshingProvider.StartSmeshing(coinbaseAddr, opts); err != nil {
 		err := fmt.Sprintf("failed to start smeshing: %v", err)
 		log.Error(err)
 		return nil, status.Error(codes.Internal, err)
@@ -87,7 +87,7 @@ func (s SmesherService) StartSmeshing(_ context.Context, in *pb.StartSmeshingReq
 func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingRequest) (*pb.StopSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.StopSmeshing")
 
-	if err := s.smeshing.StopSmeshing(in.DeleteFiles); err != nil {
+	if err := s.smeshingProvider.StopSmeshing(in.DeleteFiles); err != nil {
 		err := fmt.Sprintf("failed to stop smeshing: %v", err)
 		log.Error(err)
 		return nil, status.Error(codes.Internal, err)
@@ -98,69 +98,11 @@ func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingReq
 	}, nil
 }
 
-// PostStatus returns post data status
-func (s SmesherService) PostStatus(context.Context, *empty.Empty) (*pb.PostStatusResponse, error) {
-	log.Info("GRPC SmesherService.PostStatus")
-
-	postStatus := s.post.PostStatus()
-	return &pb.PostStatusResponse{Status: statusToPbStatus(postStatus)}, nil
-}
-
-// PostComputeProviders returns a list of available post compute providers
-func (s SmesherService) PostComputeProviders(ctx context.Context, in *pb.PostComputeProvidersRequest) (*pb.PostComputeProvidersResponse, error) {
-	log.Info("GRPC SmesherService.PostComputeProviders")
-
-	providers := s.post.PostComputeProviders()
-
-	res := &pb.PostComputeProvidersResponse{}
-	res.PostComputeProvider = make([]*pb.PostComputeProvider, len(providers))
-	for i, p := range providers {
-		var hashesPerSec int
-		if in.Benchmark {
-			var err error
-			hashesPerSec, err = p.Benchmark()
-			if err != nil {
-				log.Error("failed to benchmark provider: %v", err)
-				return nil, status.Error(codes.Internal, "failed to benchmark provider")
-			}
-		}
-
-		res.PostComputeProvider[i] = &pb.PostComputeProvider{
-			Id:          uint32(p.ID),
-			Model:       p.Model,
-			ComputeApi:  pb.ComputeApiClass(p.ComputeAPI), // assuming enum values match.
-			Performance: uint64(hashesPerSec),
-		}
-	}
-
-	return res, nil
-}
-
-// PostDataCreationProgressStream exposes a stream of updates during post init
-func (s SmesherService) PostDataCreationProgressStream(_ *empty.Empty, stream pb.SmesherService_PostDataCreationProgressStreamServer) error {
-	log.Info("GRPC SmesherService.PostDataCreationProgressStream")
-
-	statusChan := s.post.PostDataCreationProgressStream()
-	for {
-		select {
-		case status, more := <-statusChan:
-			if !more {
-				return nil
-			}
-			if err := stream.Send(&pb.PostDataCreationProgressStreamResponse{Status: statusToPbStatus(status)}); err != nil {
-				return err
-			}
-		case <-stream.Context().Done():
-			return nil
-		}
-	}
-}
-
 // SmesherID returns the smesher ID of this node
 func (s SmesherService) SmesherID(context.Context, *empty.Empty) (*pb.SmesherIDResponse, error) {
 	log.Info("GRPC SmesherService.SmesherID")
 
-	addr := util.Hex2Bytes(s.smeshing.SmesherID().Key)
+	addr := util.Hex2Bytes(s.smeshingProvider.SmesherID().Key)
 	return &pb.SmesherIDResponse{AccountId: &pb.AccountId{Address: addr}}, nil
 }
 
@@ -168,7 +110,7 @@ func (s SmesherService) SmesherID(context.Context, *empty.Empty) (*pb.SmesherIDR
 func (s SmesherService) Coinbase(context.Context, *empty.Empty) (*pb.CoinbaseResponse, error) {
 	log.Info("GRPC SmesherService.Coinbase")
 
-	addr := s.smeshing.Coinbase()
+	addr := s.smeshingProvider.Coinbase()
 	return &pb.CoinbaseResponse{AccountId: &pb.AccountId{Address: addr.Bytes()}}, nil
 }
 
@@ -181,7 +123,7 @@ func (s SmesherService) SetCoinbase(_ context.Context, in *pb.SetCoinbaseRequest
 	}
 
 	addr := types.BytesToAddress(in.Id.Address)
-	s.smeshing.SetCoinbase(addr)
+	s.smeshingProvider.SetCoinbase(addr)
 
 	return &pb.SetCoinbaseResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
@@ -206,13 +148,71 @@ func (s SmesherService) EstimatedRewards(context.Context, *pb.EstimatedRewardsRe
 	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
 }
 
+// PoSTSetupStatus returns post data status
+func (s SmesherService) PoSTSetupStatus(context.Context, *empty.Empty) (*pb.PoSTSetupStatusResponse, error) {
+	log.Info("GRPC SmesherService.PostStatus")
+
+	status := s.postSetupProvider.Status()
+	return &pb.PoSTSetupStatusResponse{Status: statusToPbStatus(status)}, nil
+}
+
+// PostDataCreationProgressStream exposes a stream of updates during post init
+func (s SmesherService) PoSTSetupStatusStream(_ *empty.Empty, stream pb.SmesherService_PoSTSetupStatusStreamServer) error {
+	log.Info("GRPC SmesherService.PostDataCreationProgressStream")
+
+	statusChan := s.postSetupProvider.StatusChan()
+	for {
+		select {
+		case status, more := <-statusChan:
+			if !more {
+				return nil
+			}
+			if err := stream.Send(&pb.PoSTSetupStatusStreamResponse{Status: statusToPbStatus(status)}); err != nil {
+				return err
+			}
+		case <-stream.Context().Done():
+			return nil
+		}
+	}
+}
+
+// PostComputeProviders returns a list of available post compute providers
+func (s SmesherService) PoSTSetupComputeProviders(ctx context.Context, in *pb.PoSTSetupComputeProvidersRequest) (*pb.PoSTSetupComputeProvidersResponse, error) {
+	log.Info("GRPC SmesherService.PostComputeProviders")
+
+	providers := s.postSetupProvider.ComputeProviders()
+
+	res := &pb.PoSTSetupComputeProvidersResponse{}
+	res.Providers = make([]*pb.PoSTSetupComputeProvider, len(providers))
+	for i, p := range providers {
+		var hashesPerSec int
+		if in.Benchmark {
+			var err error
+			hashesPerSec, err = s.postSetupProvider.Benchmark(p)
+			if err != nil {
+				log.Error("failed to benchmark provider: %v", err)
+				return nil, status.Error(codes.Internal, "failed to benchmark provider")
+			}
+		}
+
+		res.Providers[i] = &pb.PoSTSetupComputeProvider{
+			Id:          uint32(p.ID),
+			Model:       p.Model,
+			ComputeApi:  pb.PoSTSetupComputeProvider_ComputeApiClass(p.ComputeAPI), // assuming enum values match.
+			Performance: uint64(hashesPerSec),
+		}
+	}
+
+	return res, nil
+}
+
 // EstimatedRewards returns estimated smeshing rewards over the next epoch
-func (s SmesherService) Config(context.Context, *empty.Empty) (*pb.ConfigResponse, error) {
+func (s SmesherService) PoSTConfig(context.Context, *empty.Empty) (*pb.PoSTConfigResponse, error) {
 	log.Info("GRPC SmesherService.Config")
 
-	cfg := s.post.Config()
+	cfg := s.postSetupProvider.Config()
 
-	return &pb.ConfigResponse{
+	return &pb.PoSTConfigResponse{
 		BitsPerLabel:  uint32(cfg.BitsPerLabel),
 		LabelsPerUnit: uint64(cfg.LabelsPerUnit),
 		MinNumUnits:   uint32(cfg.MinNumUnits),
@@ -220,23 +220,23 @@ func (s SmesherService) Config(context.Context, *empty.Empty) (*pb.ConfigRespons
 	}, nil
 }
 
-func statusToPbStatus(status *activation.PostStatus) *pb.PostStatus {
-	pbStatus := &pb.PostStatus{}
+func statusToPbStatus(status *activation.PoSTSetupStatus) *pb.PoSTSetupStatus {
+	pbStatus := &pb.PoSTSetupStatus{}
 
-	pbStatus.InitStatus = pb.PostStatus_InitStatus(status.InitStatus) // assuming enum values match.
+	pbStatus.State = pb.PoSTSetupStatus_State(status.State) // assuming enum values match.
 	pbStatus.NumLabelsWritten = status.NumLabelsWritten
 
-	if status.Error != nil {
-		pbStatus.ErrorMessage = status.Error.Error()
+	if status.LastError != nil {
+		pbStatus.ErrorMessage = status.LastError.Error()
 	}
 
-	if status.InitOpts != nil {
-		pbStatus.InitOpts = &pb.PostInitOpts{
-			DataDir:           status.InitOpts.DataDir,
-			NumUnits:          uint32(status.InitOpts.NumUnits),
-			NumFiles:          uint32(status.InitOpts.NumFiles),
-			ComputeProviderId: uint32(status.InitOpts.ComputeProviderID),
-			Throttle:          status.InitOpts.Throttle,
+	if status.LastOpts != nil {
+		pbStatus.Opts = &pb.PoSTSetupOpts{
+			DataDir:           status.LastOpts.DataDir,
+			NumUnits:          uint32(status.LastOpts.NumUnits),
+			NumFiles:          uint32(status.LastOpts.NumFiles),
+			ComputeProviderId: uint32(status.LastOpts.ComputeProviderID),
+			Throttle:          status.LastOpts.Throttle,
 		}
 	}
 
