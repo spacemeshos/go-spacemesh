@@ -5,10 +5,7 @@ env:
   GCLOUD_KEY: ${{ secrets.GCLOUD_KEY }}
   PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
   CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
-  CLUSTER_NAME_ELK: ${{ secrets.CLUSTER_NAME_ELK }}
   CLUSTER_ZONE: ${{ secrets.CLUSTER_ZONE }}
-  CLUSTER_ZONE_ELK: ${{ secrets.CLUSTER_ZONE_ELK }}
-  ES_PASSWD: ${{ secrets.ES_PASSWD }}
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
   SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -165,7 +162,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: late nodes system test
-        run: make dockertest-late-nodes-elk
+        run: make dockertest-late-nodes
   systemtest-mining:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
@@ -182,7 +179,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: mining system test
-        run: make dockertest-mining-elk
+        run: make dockertest-mining
   systemtest-blocks-remove-node:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
@@ -199,7 +196,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: remove node test
-        run: make dockertest-blocks-remove-node-elk
+        run: make dockertest-blocks-remove-node
   systemtest-blocks-add-node:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
@@ -216,7 +213,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: blocks add node test
-        run: make dockertest-blocks-add-node-elk
+        run: make dockertest-blocks-add-node
   systemtest-p2p:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
@@ -233,7 +230,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: p2p system test
-        run: make dockertest-p2p-elk
+        run: make dockertest-p2p
   systemtest-sync:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
@@ -250,7 +247,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: sync system test
-        run: make dockertest-sync-elk
+        run: make dockertest-sync
   systemtest-hare:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
@@ -267,7 +264,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: hare system test
-        run: make dockertest-hare-elk
+        run: make dockertest-hare
 
 
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml

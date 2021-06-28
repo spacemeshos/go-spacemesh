@@ -25,8 +25,8 @@ class NodePoolDep:
         self.testconfig = testconfig
         self.namespace = testconfig["namespace"]
         self.pool_name = f"pool-{self.namespace}"
-        self.cluster_name = ut.get_env("CLUSTER_NAME_ELK")
-        self.zone = ut.get_env("CLUSTER_ZONE_ELK")
+        self.cluster_name = ut.get_env("CLUSTER_NAME")
+        self.zone = ut.get_env("CLUSTER_ZONE")
         self.project_name = ut.get_env("PROJECT_NAME")
         self.default_config = {
             "project_name": self.project_name,
