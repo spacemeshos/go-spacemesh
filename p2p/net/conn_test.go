@@ -4,15 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"net"
 	"runtime"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var msgSizeLimit = config.DefaultConfig().P2P.MsgSizeLimit

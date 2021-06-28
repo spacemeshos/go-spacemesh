@@ -49,7 +49,7 @@ type Config struct {
 	NodeID                string        `mapstructure:"node-id"`
 	DialTimeout           time.Duration `mapstructure:"dial-timeout"`
 	ConnKeepAlive         time.Duration `mapstructure:"conn-keepalive"`
-	NetworkID             int8          `mapstructure:"network-id"`
+	NetworkID             uint32        `mapstructure:"network-id"`
 	ResponseTimeout       time.Duration `mapstructure:"response-timeout"`
 	SessionTimeout        time.Duration `mapstructure:"session-timeout"`
 	MaxPendingConnections int           `mapstructure:"max-pending-connections"`

@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"net"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 // TODO: we should remove this const. Should  not depend on the number of addresses.
@@ -206,7 +207,7 @@ func (n *UDPNet) EnqueueMessage(ctx context.Context, ime IncomingMessageEvent) {
 }
 
 // NetworkID returns the network id given and used for creating a session.
-func (n *UDPNet) NetworkID() int8 {
+func (n *UDPNet) NetworkID() uint32 {
 	return 0
 }
 

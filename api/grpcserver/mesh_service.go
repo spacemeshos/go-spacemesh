@@ -19,7 +19,7 @@ type MeshService struct {
 	Mempool           api.MempoolAPI
 	GenTime           api.GenesisTimeAPI
 	LayersPerEpoch    int
-	NetworkID         int8
+	NetworkID         uint32
 	LayerDurationSec  int
 	LayerAvgSize      int
 	TxsPerBlock       int
@@ -36,7 +36,7 @@ func (s MeshService) RegisterService(server *Server) {
 // NewMeshService creates a new service using config data
 func NewMeshService(
 	tx api.TxAPI, mempool api.MempoolAPI, genTime api.GenesisTimeAPI,
-	layersPerEpoch int, networkID int8, layerDurationSec int,
+	layersPerEpoch int, networkID uint32, layerDurationSec int,
 	layerAvgSize int, txsPerBlock int) *MeshService {
 	return &MeshService{
 		Mesh:             tx,

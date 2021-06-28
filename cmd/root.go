@@ -82,7 +82,7 @@ func AddCommands(cmd *cobra.Command) {
 		config.P2P.DialTimeout, "Network dial timeout duration")
 	cmd.PersistentFlags().DurationVar(&config.P2P.ConnKeepAlive, "conn-keepalive",
 		config.P2P.ConnKeepAlive, "Network connection keep alive")
-	cmd.PersistentFlags().Int8Var(&config.P2P.NetworkID, "network-id",
+	cmd.PersistentFlags().Uint32Var(&config.P2P.NetworkID, "network-id",
 		config.P2P.NetworkID, "NetworkID to run on (0 - mainnet, 1 - testnet)")
 	cmd.PersistentFlags().DurationVar(&config.P2P.ResponseTimeout, "response-timeout",
 		config.P2P.ResponseTimeout, "Timeout for waiting on resposne message")
