@@ -255,7 +255,9 @@ func (l *LayerClockMock) AwaitLayer(types.LayerID) chan struct{} {
 
 type mockSyncer struct{}
 
-func (m *mockSyncer) AwaitSynced() chan struct{} { return closedChan }
+func (m *mockSyncer) RegisterChForSynced(_ context.Context, ch chan struct{}) {
+	close(ch)
+}
 
 func newBuilder(activationDb atxDBProvider) *Builder {
 	net.atxDb = activationDb
@@ -724,7 +726,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	assert.Equal(t, bts, net.lastTransmission)
 
 	b = NewBuilder(bc, id, 0, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
-	err = b.buildNipstChallenge()
+	err = b.buildNipstChallenge(context.TODO())
 	assert.NoError(t, err)
 	db.hadNone = false
 	// test load challenge in later epoch - Nipst should be truncated

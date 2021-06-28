@@ -134,6 +134,8 @@ func TestStartAndShutdown(t *testing.T) {
 	ticker := newMockLayerTicker()
 	ctx, cancel := context.WithCancel(context.TODO())
 	syncer := NewSyncer(ctx, conf, ticker, newMemMesh(lg), newMockFetcher(), lg)
+	syncedCh := make(chan struct{})
+	syncer.RegisterChForSynced(context.TODO(), syncedCh)
 
 	assert.False(t, syncer.IsSynced(context.TODO()))
 	assert.False(t, syncer.ListenToGossip())
@@ -145,7 +147,7 @@ func TestStartAndShutdown(t *testing.T) {
 		syncer.Start(context.TODO())
 		wg.Done()
 	}()
-	<-syncer.AwaitSynced()
+	<-syncedCh
 	assert.True(t, syncer.IsSynced(context.TODO()))
 	assert.True(t, syncer.ListenToGossip())
 
@@ -414,6 +416,8 @@ func TestFromSyncedToNotSynced(t *testing.T) {
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
 	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncedCh := make(chan struct{})
+	syncer.RegisterChForSynced(context.TODO(), syncedCh)
 
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
@@ -425,7 +429,7 @@ func TestFromSyncedToNotSynced(t *testing.T) {
 		assert.True(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
-	<-syncer.AwaitSynced()
+	<-syncedCh
 	assert.True(t, syncer.IsSynced(context.TODO()))
 	// wait for the first synchronize to finish
 	wg.Wait()
@@ -476,6 +480,8 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, syncer *Syncer, mlt 
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
 	// done one full layer of gossip sync, now it is synced
+	syncedCh := make(chan struct{})
+	syncer.RegisterChForSynced(context.TODO(), syncedCh)
 	current++
 	mlt.advanceToLayer(current)
 	wg.Add(1)
@@ -484,7 +490,7 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, syncer *Syncer, mlt 
 		wg.Done()
 	}()
 	mf.feedLayerResult(syncer.mesh.ProcessedLayer()+1, current)
-	<-syncer.AwaitSynced()
+	<-syncedCh
 	assert.True(t, syncer.ListenToGossip())
 	assert.True(t, syncer.IsSynced(context.TODO()))
 	wg.Wait()
@@ -493,12 +499,14 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, syncer *Syncer, mlt 
 func TestForceSync(t *testing.T) {
 	lg := log.NewDefault("syncer")
 	syncer := NewSyncer(context.TODO(), conf, newMockLayerTicker(), newMemMesh(lg), newMockFetcher(), lg)
+	syncedCh := make(chan struct{})
+	syncer.RegisterChForSynced(context.TODO(), syncedCh)
 
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
 	syncer.ForceSync(context.TODO())
-	<-syncer.AwaitSynced()
+	<-syncedCh
 	assert.True(t, syncer.ListenToGossip())
 	assert.True(t, syncer.IsSynced(context.TODO()))
 }

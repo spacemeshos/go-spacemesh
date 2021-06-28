@@ -80,8 +80,8 @@ type Syncer struct {
 	syncTimer *time.Ticker
 	// targetSyncedLayer is used to signal at which layer we can set this node to synced state
 	targetSyncedLayer types.LayerID
-	// awaitSyncedCh is used to notify subscribes that this node is synced
-	awaitSyncedCh chan struct{}
+	// awaitSyncedCh is the list of subscribers' channels to notify when this node is synced
+	awaitSyncedCh []chan struct{}
 	awaitSyncedMu sync.Mutex
 
 	shutdownCtx context.Context
@@ -102,7 +102,7 @@ func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, mesh
 		fetcher:       fetcher,
 		syncState:     notSynced,
 		syncTimer:     time.NewTicker(conf.SyncInterval),
-		awaitSyncedCh: make(chan struct{}),
+		awaitSyncedCh: make([]chan struct{}, 0),
 		shutdownCtx:   shutdownCtx,
 		cancelFunc:    cancel,
 	}
@@ -114,11 +114,15 @@ func (s *Syncer) Close() {
 	s.cancelFunc()
 }
 
-// AwaitSynced returns the channel that will be notified whenever the node enters synced state.
-func (s *Syncer) AwaitSynced() chan struct{} {
+// RegisterChForSynced registers ch for notification when the node becomes synced
+func (s *Syncer) RegisterChForSynced(ctx context.Context, ch chan struct{}) {
+	if s.IsSynced(ctx) {
+		close(ch)
+		return
+	}
 	s.awaitSyncedMu.Lock()
 	defer s.awaitSyncedMu.Unlock()
-	return s.awaitSyncedCh
+	s.awaitSyncedCh = append(s.awaitSyncedCh, ch)
 }
 
 // ListenToGossip returns true if the node is listening to gossip for blocks/TXs/ATXs data.
@@ -185,14 +189,16 @@ func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 			log.FieldNamed("latest", s.mesh.LatestLayer()),
 			log.FieldNamed("validated", s.mesh.ProcessedLayer()))
 		events.ReportNodeStatusUpdate()
+		if newState != synced {
+			return
+		}
 		// notify subscribes
 		s.awaitSyncedMu.Lock()
 		defer s.awaitSyncedMu.Unlock()
-		if newState == synced {
-			close(s.awaitSyncedCh)
-		} else if oldState == synced {
-			s.awaitSyncedCh = make(chan struct{})
+		for _, ch := range s.awaitSyncedCh {
+			close(ch)
 		}
+		s.awaitSyncedCh = make([]chan struct{}, 0)
 	}
 }
 
