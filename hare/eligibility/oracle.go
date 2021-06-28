@@ -443,11 +443,10 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 				log.FieldNamed("safe_layer_start_epoch", safeLayerStart.GetEpoch()),
 				log.Int("count", len(activeMap)))
 			return activeMap, nil
-		} else {
-			logger.With().Debug("no value in cache for safe layer start epoch",
-				log.FieldNamed("safe_layer_start", safeLayerStart),
-				log.FieldNamed("safe_layer_start_epoch", safeLayerStart.GetEpoch()))
 		}
+		logger.With().Debug("no value in cache for safe layer start epoch",
+			log.FieldNamed("safe_layer_start", safeLayerStart),
+			log.FieldNamed("safe_layer_start_epoch", safeLayerStart.GetEpoch()))
 	} else {
 		// this is an error because GetMinerWeightsInEpochFromView, below, will probably also fail if it's true
 		// TODO: should we panic or return an error instead?
