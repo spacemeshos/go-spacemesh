@@ -49,9 +49,10 @@ func (mlt *mockLayerTicker) LayerToTime(_ types.LayerID) time.Time {
 }
 
 type mockFetcher struct {
-	mu     sync.Mutex
-	polled map[types.LayerID]chan struct{}
-	result map[types.LayerID]chan layerfetcher.LayerPromiseResult
+	mu        sync.Mutex
+	polled    map[types.LayerID]chan struct{}
+	result    map[types.LayerID]chan layerfetcher.LayerPromiseResult
+	atxsError map[types.EpochID]error
 }
 
 func newMockFetcher() *mockFetcher {
@@ -62,7 +63,7 @@ func newMockFetcher() *mockFetcher {
 		polled[types.LayerID(i)] = make(chan struct{}, 10)
 		result[types.LayerID(i)] = make(chan layerfetcher.LayerPromiseResult, 10)
 	}
-	return &mockFetcher{result: result, polled: polled}
+	return &mockFetcher{result: result, polled: polled, atxsError: make(map[types.EpochID]error)}
 }
 func (mf *mockFetcher) PollLayer(_ context.Context, layerID types.LayerID) chan layerfetcher.LayerPromiseResult {
 	mf.mu.Lock()
@@ -70,7 +71,11 @@ func (mf *mockFetcher) PollLayer(_ context.Context, layerID types.LayerID) chan 
 	mf.polled[layerID] <- struct{}{}
 	return mf.result[layerID]
 }
-func (mf *mockFetcher) GetEpochATXs(_ context.Context, _ types.EpochID) error { return nil }
+func (mf *mockFetcher) GetEpochATXs(_ context.Context, epoch types.EpochID) error {
+	mf.mu.Lock()
+	defer mf.mu.Unlock()
+	return mf.atxsError[epoch]
+}
 func (mf *mockFetcher) getLayerPollChan(layerID types.LayerID) chan struct{} {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
@@ -92,6 +97,11 @@ func (mf *mockFetcher) feedLayerResult(from, to types.LayerID) {
 			Err:   err,
 		}
 	}
+}
+func (mf *mockFetcher) setATXsErrors(epoch types.EpochID, err error) {
+	mf.mu.Lock()
+	defer mf.mu.Unlock()
+	mf.atxsError[epoch] = err
 }
 
 type mockValidator struct{}
@@ -201,7 +211,7 @@ func TestSynchronize_AllGood(t *testing.T) {
 	assert.False(t, syncer.IsSynced(context.TODO()))
 }
 
-func TestSynchronize_SyncLayerFailed(t *testing.T) {
+func TestSynchronize_getLayerFromPeersFailed(t *testing.T) {
 	lg := log.NewDefault("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
@@ -216,11 +226,61 @@ func TestSynchronize_SyncLayerFailed(t *testing.T) {
 		wg.Done()
 	}()
 
-	// allow synchronize to finish
+	// this will cause getLayerFromPeers to return an error
 	mf.getLayerResultChan(1) <- layerfetcher.LayerPromiseResult{
 		Layer: 1,
 		Err:   errors.New("something baaahhhhhhd"),
 	}
+	wg.Wait()
+
+	assert.False(t, syncer.ListenToGossip())
+	assert.False(t, syncer.IsSynced(context.TODO()))
+}
+
+func TestSynchronize_getATXsFailedDuringGenesis(t *testing.T) {
+	lg := log.NewDefault("syncer")
+	ticker := newMockLayerTicker()
+	mf := newMockFetcher()
+	mm := newMemMesh(lg)
+	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	ticker.advanceToLayer(mm.LatestLayer())
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		assert.True(t, syncer.synchronize(context.TODO()))
+		wg.Done()
+	}()
+
+	epoch := mm.LatestLayer().GetEpoch()
+	assert.True(t, epoch.IsGenesis())
+	mf.setATXsErrors(epoch, errors.New("no ATXs. still in genesis. should be ignored"))
+	mf.feedLayerResult(0, mm.LatestLayer())
+	wg.Wait()
+
+	assert.True(t, syncer.ListenToGossip())
+	assert.False(t, syncer.IsSynced(context.TODO()))
+}
+
+func TestSynchronize_getATXsFailedOutsideGenesis(t *testing.T) {
+	lg := log.NewDefault("syncer")
+	ticker := newMockLayerTicker()
+	mf := newMockFetcher()
+	mm := newMemMesh(lg)
+	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	ticker.advanceToLayer(layersPerEpoch * 2)
+	epoch := ticker.GetCurrentLayer().GetEpoch()
+	assert.False(t, epoch.IsGenesis())
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		assert.False(t, syncer.synchronize(context.TODO()))
+		wg.Done()
+	}()
+
+	mf.setATXsErrors(epoch, errors.New("no ATXs. should fail sync"))
+	mf.feedLayerResult(0, ticker.GetCurrentLayer())
 	wg.Wait()
 
 	assert.False(t, syncer.ListenToGossip())
@@ -287,6 +347,63 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
 	waitOutGossipSync(t, current, syncer, ticker, mf)
+}
+
+// test the case where the node originally starts from notSynced, advances to gossipSync, but falls behind
+// to notSynced..
+func TestFromGossipSyncToNotSynced(t *testing.T) {
+	lg := log.NewDefault("syncer")
+	ticker := newMockLayerTicker()
+	mf := newMockFetcher()
+	mm := newMemMesh(lg)
+	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+
+	assert.False(t, syncer.ListenToGossip())
+	assert.False(t, syncer.IsSynced(context.TODO()))
+
+	current := mm.LatestLayer()
+	ticker.advanceToLayer(current)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		assert.True(t, syncer.synchronize(context.TODO()))
+		wg.Done()
+	}()
+	mf.feedLayerResult(1, 1)
+	// wait till layer 1's content is requested to check whether sync state has changed
+	<-mf.getLayerPollChan(1)
+	// the node should remain not synced and not gossiping
+	assert.False(t, syncer.ListenToGossip())
+	assert.False(t, syncer.IsSynced(context.TODO()))
+	mf.feedLayerResult(2, current)
+	wg.Wait()
+	// node should be in gossip sync state
+	assert.True(t, syncer.ListenToGossip())
+	assert.False(t, syncer.IsSynced(context.TODO()))
+
+	// cause the node to be out of sync again
+	newCurrent := current + 2
+	ticker.advanceToLayer(newCurrent)
+	wg.Add(1)
+	go func() {
+		assert.True(t, syncer.synchronize(context.TODO()))
+		wg.Done()
+	}()
+	mf.feedLayerResult(current+1, current+1)
+	<-mf.getLayerPollChan(current + 1)
+	// the node should falls to notSynced
+	assert.False(t, syncer.ListenToGossip())
+	assert.False(t, syncer.IsSynced(context.TODO()))
+
+	// allow for sync to complete
+	mf.feedLayerResult(newCurrent, newCurrent)
+	wg.Wait()
+
+	// the node should enter gossipSync again
+	assert.True(t, syncer.ListenToGossip())
+	assert.False(t, syncer.IsSynced(context.TODO()))
+
+	waitOutGossipSync(t, newCurrent, syncer, ticker, mf)
 }
 
 // test the case where the node was originally synced, and somehow gets out of sync, but
@@ -402,4 +519,20 @@ func TestShouldValidateLayer(t *testing.T) {
 	// but if current layer has elapsed ValidationDelta ms, we will validate
 	ticker.layerStartTime = time.Now().Add(-conf.ValidationDelta)
 	assert.True(t, syncer.shouldValidateLayer(3))
+}
+
+func TestGetATXs(t *testing.T) {
+	lg := log.NewDefault("syncer")
+	mf := newMockFetcher()
+	syncer := NewSyncer(context.TODO(), conf, newMockLayerTicker(), newMemMesh(lg), mf, lg)
+	mf.setATXsErrors(1, errors.New("no ATXs for epoch 1, still in genesis. should be ignored"))
+	mf.setATXsErrors(3, errors.New("no ATXs for epoch 2, error out"))
+	// epoch 0
+	assert.NoError(t, syncer.getATXs(context.TODO(), 1))
+	// epoch 1
+	assert.NoError(t, syncer.getATXs(context.TODO(), layersPerEpoch))
+	// epoch 2
+	assert.NoError(t, syncer.getATXs(context.TODO(), layersPerEpoch*2))
+	// epoch 3
+	assert.Error(t, syncer.getATXs(context.TODO(), layersPerEpoch*3))
 }

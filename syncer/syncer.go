@@ -196,15 +196,17 @@ func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 	}
 }
 
-// startNewSyncProcess returns true if syncer is not currently synchronizing.
-func (s *Syncer) startNewSyncProcess() bool {
+// setSyncerBusy returns false if syncer is currently synchronizing.
+// otherwise it sets syncer to be busy and returns true.
+func (s *Syncer) setSyncerBusy() bool {
 	return atomic.CompareAndSwapUint32(&s.isBusy, 0, 1)
 }
 
-func (s *Syncer) endSyncProcess() {
+func (s *Syncer) setSyncerIdle() {
 	atomic.StoreUint32(&s.isBusy, 0)
 }
 
+// targetSyncedLayer is used to signal at which layer we can set this node to synced state
 func (s *Syncer) setTargetSyncedLayer(ctx context.Context, layerID types.LayerID) {
 	newSyncLayer := uint64(layerID)
 	oldSyncLayer := atomic.SwapUint64((*uint64)(&s.targetSyncedLayer), newSyncLayer)
@@ -229,7 +231,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	}
 
 	// at most one synchronize process can run at any time
-	if !s.startNewSyncProcess() {
+	if !s.setSyncerBusy() {
 		logger.Info("sync is already running, giving up")
 		return false
 	}
@@ -244,6 +246,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	vQueue := make(chan *types.Layer, s.ticker.GetCurrentLayer())
 	vDone := make(chan struct{})
 	go s.startValidating(ctx, s.run, vQueue, vDone)
+	success := false
 	defer func() {
 		close(vQueue)
 		<-vDone
@@ -251,12 +254,13 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 			log.FieldNamed("latest", s.mesh.LatestLayer()),
 			log.FieldNamed("validated", s.mesh.ProcessedLayer()))
+		s.setStateAfterSync(ctx, success)
 		logger.Info("finished sync run #%v", s.run)
-		s.endSyncProcess()
+		s.setSyncerIdle()
 	}()
 
 	// using ProcessedLayer() instead of LatestLayer() so we can validate layers on a best-efforts basis.
-	// TODO: is it safe to skip layer 0
+	// our clock starts ticking from 1 so it is safe to skip layer 0
 	for layerID := s.mesh.ProcessedLayer() + 1; layerID <= s.ticker.GetCurrentLayer(); layerID++ {
 		var layer *types.Layer
 		var err error
@@ -278,11 +282,11 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		}
 		logger.Info("finished data sync for layer %v", layerID)
 	}
-	s.setStateAfterSync(ctx)
-	logger.With().Info("node is synced. waiting for validation",
+	logger.With().Info("data is synced. waiting for validation",
 		log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 		log.FieldNamed("latest", s.mesh.LatestLayer()),
 		log.FieldNamed("validated", s.mesh.ProcessedLayer()))
+	success = true
 	return true
 }
 
@@ -301,7 +305,11 @@ func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 	}
 }
 
-func (s *Syncer) setStateAfterSync(ctx context.Context) {
+func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
+	if !success {
+		s.setSyncState(ctx, notSynced)
+		return
+	}
 	currSyncState := s.getSyncState()
 	current := s.ticker.GetCurrentLayer()
 	// if we have gossip-synced to the target synced layer, we are ready to participate in the consensus
@@ -325,7 +333,9 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 		return nil, err
 	}
 
-	s.getATXs(ctx, layerID)
+	if err := s.getATXs(ctx, layerID); err != nil {
+		return nil, err
+	}
 	return layer, nil
 }
 
@@ -341,26 +351,27 @@ func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) (
 	return s.mesh.GetLayer(layerID)
 }
 
-func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) {
+func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 	if layerID.GetEpoch() == 0 {
 		s.logger.WithContext(ctx).Info("skip getting ATX in epoch 0")
-		return
+		return nil
 	}
-	lastLayerOfEpoch := (layerID.GetEpoch() + 1).FirstLayer() - 1
-	if layerID != lastLayerOfEpoch {
-		return
-	}
+	epoch := layerID.GetEpoch()
+	s.logger.WithContext(ctx).With().Info("getting ATXs", epoch, layerID)
 	ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
 	if err := s.fetcher.GetEpochATXs(ctx, layerID.GetEpoch()); err != nil {
 		// TODO: is this really expected? we should have ATXs in epoch 1
 		if layerID.GetEpoch().IsGenesis() {
 			s.logger.WithContext(ctx).With().Info("failed to fetch epoch ATXs (expected during genesis)",
 				layerID,
+				epoch,
 				log.Err(err))
 		} else {
-			s.logger.WithContext(ctx).With().Error("failed to fetch epoch ATXs", layerID, log.Err(err))
+			s.logger.WithContext(ctx).With().Error("failed to fetch epoch ATXs", layerID, epoch, log.Err(err))
+			return err
 		}
 	}
+	return nil
 }
 
 // always returns true if layerID is an old layer.
