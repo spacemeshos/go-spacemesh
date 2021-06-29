@@ -6,16 +6,14 @@ import (
 )
 
 type orphanMock struct {
-	f func() []types.BlockID
+	f                 func() []types.BlockID
+	recordCoinflipsFn func(context.Context, types.LayerID, bool)
 }
 
 func (op *orphanMock) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
 }
 
 func (op *orphanMock) InvalidateLayer(context.Context, types.LayerID) {
-}
-
-func (op *orphanMock) RecordCoinflip(context.Context, types.LayerID, bool) {
 }
 
 func (op *orphanMock) GetOrphanBlocks() []types.BlockID {
@@ -25,9 +23,15 @@ func (op *orphanMock) GetOrphanBlocks() []types.BlockID {
 	return []types.BlockID{}
 }
 
-func (op *orphanMock) LayerBlockIds(l types.LayerID) ([]types.BlockID, error) {
+func (op *orphanMock) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
 	if op.f != nil {
 		return op.f(), nil
 	}
 	return []types.BlockID{}, nil
+}
+
+func (op *orphanMock) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {
+	if op.recordCoinflipsFn != nil {
+		op.recordCoinflipsFn(ctx, layerID, coinflip)
+	}
 }

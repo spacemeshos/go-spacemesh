@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,6 +33,7 @@ type Consensus interface {
 type TerminationOutput interface {
 	ID() instanceID
 	Set() *Set
+	Coinflip() bool
 	Completed() bool
 }
 
@@ -97,17 +100,13 @@ func New(
 	h := new(Hare)
 
 	h.Closer = NewCloser()
-
 	h.Log = logger
-
 	h.config = conf
-
 	h.network = p2p
 	h.beginLayer = beginLayer
 
 	ev := newEligibilityValidator(rolacle, layersPerEpoch, idProvider, conf.N, conf.ExpectedLeaders, logger)
 	h.broker = newBroker(p2p, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, h.Closer, logger)
-
 	h.sign = sign
 
 	h.mesh = mesh
@@ -116,12 +115,9 @@ func New(
 	h.networkDelta = time.Duration(conf.WakeupDelta) * time.Second
 	// todo: this should be loaded from global config
 	h.bufferSize = LayerBuffer // XXX: must be at least the size of `hdist`
-
 	h.lastLayer = 0
-
 	h.outputChan = make(chan TerminationOutput, h.bufferSize)
-	h.outputs = make(map[types.LayerID][]types.BlockID, h.bufferSize) //  we keep results about LayerBuffer past layers
-
+	h.outputs = make(map[types.LayerID][]types.BlockID, h.bufferSize) // we keep results about LayerBuffer past layers
 	h.factory = func(conf config.Config, instanceId instanceID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
 		return newConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, ev, logger)
 	}
@@ -167,7 +163,7 @@ func (h *Hare) oldestResultInBuffer() types.LayerID {
 // ErrTooLate means that the consensus was terminated too late
 var ErrTooLate = errors.New("consensus process finished too late")
 
-// records the provided output.
+// records the provided output
 func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) error {
 	set := output.Set()
 	blocks := make([]types.BlockID, 0, len(set.values))
@@ -216,7 +212,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		// it must not return without starting consensus process or mark result as fail
 		// except if it's genesis layer
 		if err != nil {
-			h.outputChan <- procReport{instanceID(id), &Set{}, notCompleted}
+			h.outputChan <- procReport{instanceID(id), &Set{}, false, notCompleted}
 		}
 	}()
 
@@ -278,8 +274,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 	}
 	logger.With().Info("number of consensus processes (after register)",
 		log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
-	// TODO: fix metrics
-	//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(id), 10)).Add(1)
+	metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(id), 10)).Add(1)
 	return
 }
 
@@ -311,16 +306,19 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 		case out := <-h.outputChan:
 			layerID := types.LayerID(out.ID())
 
+			coin := out.Coinflip()
+			logger := h.WithContext(ctx).WithFields(layerID)
+
 			// collect coinflip, regardless of success
-			// TODO: this is a stub, to be replaced when https://github.com/spacemeshos/go-spacemesh/pull/2393 is merged
-			coin := layerID.Bytes()[0]^byte(1) == byte(1)
-			h.WithContext(ctx).With().Info("recording weak coinflip result for layer",
-				layerID,
+			logger.With().Info("recording weak coinflip result for layer",
 				log.Bool("coinflip", coin))
 			h.mesh.RecordCoinflip(ctx, layerID, coin)
 
-			if err := h.collectOutput(ctx, out); err != nil {
-				h.WithContext(ctx).With().Warning("error collecting output from hare", log.Err(err))
+			if out.Completed() { // CP completed, collect the output
+				logger.With().Info("collecting results for completed hare instance", layerID)
+				if err := h.collectOutput(ctx, out); err != nil {
+					logger.With().Warning("error collecting output from hare", log.Err(err))
+				}
 			}
 			if !out.Completed() {
 				// Notify the mesh that Hare failed
@@ -328,10 +326,9 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 				h.mesh.InvalidateLayer(ctx, layerID)
 			}
 			h.broker.Unregister(ctx, out.ID())
-			h.WithContext(ctx).With().Info("number of consensus processes (after unregister)",
+			logger.With().Info("number of consensus processes (after unregister)",
 				log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
-			// TODO: fix metrics
-			//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(out.ID()), 10)).Add(-1)
+			metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(out.ID()), 10)).Add(-1)
 		case <-h.CloseChannel():
 			return
 		}

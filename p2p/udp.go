@@ -4,18 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
-	"github.com/spacemeshos/go-spacemesh/p2p/version"
 	"net"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	inet "github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/p2p/version"
 )
 
 // Lookuper is a service used to lookup for nodes we know already
@@ -34,7 +34,7 @@ type UDPMux struct {
 	logger log.Log
 
 	local     node.LocalNode
-	networkid int8
+	networkid uint32
 
 	cpool    cPool
 	lookuper Lookuper
@@ -45,7 +45,7 @@ type UDPMux struct {
 }
 
 // NewUDPMux creates a new udp protocol server
-func NewUDPMux(ctx, shutdownCtx context.Context, localNode node.LocalNode, lookuper Lookuper, udpNet udpNetwork, networkid int8, logger log.Log) *UDPMux {
+func NewUDPMux(ctx, shutdownCtx context.Context, localNode node.LocalNode, lookuper Lookuper, udpNet udpNetwork, networkid uint32, logger log.Log) *UDPMux {
 	cpool := connectionpool.NewConnectionPool(shutdownCtx, udpNet.Dial, localNode.PublicKey(), logger.WithName("udp_cpool"))
 
 	um := &UDPMux{

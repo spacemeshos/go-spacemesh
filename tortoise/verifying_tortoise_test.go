@@ -4,16 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
 )
 
@@ -76,6 +76,14 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 	for _, i := range blocks {
 		sum := abstain
 		blk, _ := trtl.bdp.GetBlock(i)
+
+		wind := types.LayerID(0)
+		if blk.LayerIndex > trtl.Hdist {
+			wind = trtl.Last - trtl.Hdist
+		}
+		if blk.LayerIndex < wind {
+			continue
+		}
 
 		for l := trtl.Last; l > blk.LayerIndex; l-- {
 			trtl.logger.With().Debug("counting votes of blocks",
@@ -211,6 +219,15 @@ func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer, voteNeg
 	for l = mesh.GenesisLayer().Index() + 1; l <= numLayers; l++ {
 		makeAndProcessLayer(t, l, trtl, blocksPerLayer, msh, inputVectorFn)
 		fmt.Println("handled layer", l, "========================================================================")
+		lastlyr := trtl.BlockOpinionsByLayer[l]
+		for _, v := range lastlyr {
+			fmt.Println("block opinion map size", len(v.BlockOpinions))
+			if (len(v.BlockOpinions)) > blocksPerLayer*int(trtl.Hdist) {
+				t.Errorf("layer opinion table exceeded max size, LEAK! size:%v, maxsize:%v",
+					len(v.BlockOpinions), blocksPerLayer*int(trtl.Hdist))
+			}
+			break
+		}
 	}
 
 	return
@@ -364,6 +381,29 @@ func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp
 }
 
 func TestTurtle_Eviction(t *testing.T) {
+	defaultTestHdist = 12
+	layers := types.LayerID(defaultTestHdist * 5)
+	avgPerLayer := 20 // more blocks = longer test
+	voteNegative := 0
+	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
+	require.Equal(t, len(trtl.BlockOpinionsByLayer), defaultTestHdist+2)
+
+	count := 0
+	for _, blks := range trtl.BlockOpinionsByLayer {
+		count += len(blks)
+	}
+	require.Equal(t, count,
+		(defaultTestHdist+2)*avgPerLayer)
+	fmt.Println("=======================================================================")
+	fmt.Println("=======================================================================")
+	fmt.Println("=======================================================================")
+	fmt.Println("Count blocks on blocks layers ", len(trtl.BlockOpinionsByLayer))
+	fmt.Println("Count blocks on blocks blocks ", count)
+	require.Equal(t, len(trtl.GoodBlocksIndex), (defaultTestHdist+2)*avgPerLayer) // all blocks should be good
+	fmt.Println("Count good blocks ", len(trtl.GoodBlocksIndex))
+}
+
+func TestTurtle_Eviction2(t *testing.T) {
 	layers := types.LayerID(defaultTestWindowSize * 3)
 	avgPerLayer := 10
 	voteNegative := 0
@@ -376,15 +416,6 @@ func TestTurtle_Eviction(t *testing.T) {
 	require.Equal(t, (defaultTestWindowSize+2)*avgPerLayer, count)
 	require.Equal(t, (defaultTestWindowSize+2)*avgPerLayer, len(trtl.GoodBlocksIndex)) // all blocks should be good
 }
-
-//func TestTurtle_Eviction2(t *testing.T) {
-//	layers := types.LayerID(defaultTestHdist * 14)
-//	avgPerLayer := 30
-//	voteNegative := 5
-//	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
-//	require.Equal(t, len(trtl.BlockOpinionsByLayer),
-//		(defaultTestHdist+2)*avgPerLayer)
-//}
 
 func TestLayerCutoff(t *testing.T) {
 	r := require.New(t)

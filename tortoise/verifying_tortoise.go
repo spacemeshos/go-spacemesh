@@ -513,6 +513,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	// TODO: this logic would be simpler if For and Against were a single list
 	// TODO: save and vote against blocks that exceed the max exception list size (DoS prevention)
 	opinion := make(map[types.BlockID]vec)
+
 	for _, b := range block.ForDiff {
 		opinion[b] = support.Multiply(t.BlockWeight(block.ID(), b))
 	}
@@ -531,6 +532,17 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 		opinion[b] = abstain
 	}
 	for blk, vote := range baseBlockOpinion.BlockOpinions {
+		// ignore opinions of very old blocks
+		fblk, err := t.bdp.GetBlock(blk)
+		if err != nil {
+			return fmt.Errorf(
+				"voted block not in db voting_block_id: %v, voting_block_layer_id: %v, voted_block_id: %v",
+				block.ID().String(), block.LayerIndex, blk.String())
+		}
+		if fblk.LayerIndex < t.LastEvicted {
+			continue
+		}
+
 		// add base block vote only if there were no exceptions
 		if _, exists := opinion[blk]; !exists {
 			opinion[blk] = vote

@@ -157,7 +157,10 @@ func (t *BlockBuilder) Close() error {
 }
 
 type meshProvider interface {
-	AddBlockWithTxs(blk *types.Block) error
+	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
+	GetOrphanBlocksBefore(types.LayerID) ([]types.BlockID, error)
+	GetBlock(types.BlockID) (*types.Block, error)
+	AddBlockWithTxs(*types.Block) error
 }
 
 func getEpochKey(ID types.EpochID) []byte {
@@ -246,8 +249,7 @@ func (t *BlockBuilder) createBlock(
 
 	if b.ActiveSet != nil {
 		logger.With().Info("storing ref block", epoch, bl.ID())
-		err := t.storeRefBlock(epoch, bl.ID())
-		if err != nil {
+		if err := t.storeRefBlock(epoch, bl.ID()); err != nil {
 			logger.With().Error("cannot store ref block", epoch, log.Err(err))
 			//todo: panic?
 		}

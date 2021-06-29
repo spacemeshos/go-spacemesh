@@ -265,7 +265,7 @@ func Test_multipleCPs(t *testing.T) {
 	}
 
 	go func() {
-		for j := types.LayerID(types.GetEffectiveGenesis() + 1); j <= types.GetEffectiveGenesis()+types.LayerID(totalCp); j++ {
+		for j := types.GetEffectiveGenesis() + 1; j <= types.GetEffectiveGenesis()+types.LayerID(totalCp); j++ {
 			log.Info("sending for layer %v", j)
 			for i := 0; i < len(test.lCh); i++ {
 				log.Info("sending for instance %v", i)
