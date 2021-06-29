@@ -256,7 +256,7 @@ func makeLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, 
 	b, lists, err := trtl.BaseBlock(context.TODO())
 	require.NoError(t, err)
 	fmt.Println("base block for layer", l, "is", b)
-	fmt.Println("exception lists for layer", l, ":", lists)
+	fmt.Println("exception lists for layer", l, " (against, support, neutral):", lists)
 	lyr := types.NewLayer(l)
 
 	for i := 0; i < blocksPerLayer; i++ {
@@ -281,15 +281,16 @@ func makeLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, 
 }
 
 func Test_TurtleAbstainsInMiddle(t *testing.T) {
-	layers := types.LayerID(15)
+	layers := 15
+	initialNumGood := 5
 	blocksPerLayer := 10
 
 	msh := getInMemMesh()
 
-	layerfuncs := make([]func(id types.LayerID) (ids []types.BlockID, err error), 0, int(layers))
+	layerfuncs := make([]func(types.LayerID) ([]types.BlockID, error), 0, layers)
 
 	// first 5 layers incl genesis just work
-	for i := types.LayerID(0); i <= 5; i++ {
+	for i := 0; i <= initialNumGood; i++ {
 		layerfuncs = append(layerfuncs, func(id types.LayerID) (ids []types.BlockID, err error) {
 			fmt.Println("giving good results for layer", id)
 			return msh.LayerBlockIds(id)
@@ -297,17 +298,17 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 	}
 
 	// next up two layers that didn't finish
-	newlastlyr := types.LayerID(len(layerfuncs))
+	newlastlyr := len(layerfuncs)
 	for i := newlastlyr; i < newlastlyr+2; i++ {
 		layerfuncs = append(layerfuncs, func(id types.LayerID) (ids []types.BlockID, err error) {
 			fmt.Println("giving bad result for layer", id)
-			return nil, errors.New("idontknow")
+			return nil, errors.New("simulated hare failure")
 		})
 	}
 
 	// more good layers
-	newlastlyr = types.LayerID(len(layerfuncs))
-	for i := newlastlyr; i < newlastlyr+(layers-newlastlyr); i++ {
+	newlastlyr = len(layerfuncs)
+	for i := newlastlyr; i < layers; i++ {
 		layerfuncs = append(layerfuncs, func(id types.LayerID) (ids []types.BlockID, err error) {
 			return msh.LayerBlockIds(id)
 		})
@@ -320,12 +321,18 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 	trtl.init(context.TODO(), gen)
 
 	var l types.LayerID
-	for l = types.GetEffectiveGenesis() + 1; l < layers; l++ {
+	for l = types.GetEffectiveGenesis() + 1; l < types.GetEffectiveGenesis().Add(uint16(layers)); l++ {
 		makeAndProcessLayer(t, l, trtl, blocksPerLayer, msh, layerfuncs[l-types.GetEffectiveGenesis()-1])
-		fmt.Println("handled layer", l, "verified layer", trtl.Verified, "========================================================================")
+		fmt.Println("handled layer", l, "verified layer", trtl.Verified,
+			"========================================================================")
 	}
 
-	require.Equal(t, int(types.GetEffectiveGenesis()+5), int(trtl.Verified), "verification should advance after hare finishes")
+	// verification will get stuck as of the first layer with conflicting local and global opinions.
+	// block votes aren't counted because blocks aren't marked good, because they contain exceptions older
+	// than their base block.
+	// self-healing will not run because the layers aren't old enough.
+	require.Equal(t, int(types.GetEffectiveGenesis())+initialNumGood, int(trtl.Verified),
+		"verification should advance after hare finishes")
 	//todo: also check votes with requireVote
 }
 

@@ -255,7 +255,7 @@ func (t *turtle) checkBlockAndGetInputVector(
 				log.FieldNamed("exception_block_id", exceptionBlockID))
 			return false
 		} else if exceptionBlock.LayerIndex < baseBlockLayer {
-			logger.With().Error("good block candidate contains exception block older than its base block",
+			logger.With().Error("good block candidate contains exception vote for block older than its base block",
 				log.FieldNamed("older_block", exceptionBlockID),
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
 				log.FieldNamed("base_block_lyr", baseBlockLayer))
