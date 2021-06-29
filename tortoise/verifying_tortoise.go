@@ -184,7 +184,13 @@ func (t *turtle) evict(ctx context.Context) {
 	if windowStart <= t.LastEvicted {
 		return
 	}
-	logger.With().Info("tortoise window start", windowStart)
+	logger.With().Info("tortoise window start",
+		log.FieldNamed("effective_genesis", types.GetEffectiveGenesis()),
+		log.FieldNamed("hdist", t.Hdist),
+		log.FieldNamed("verified", t.Verified),
+		log.FieldNamed("window_size", t.WindowSize),
+		log.FieldNamed("last_evicted", t.LastEvicted),
+		log.FieldNamed("window_start", windowStart))
 
 	// evict from last evicted to the beginning of our window
 	for layerToEvict := t.LastEvicted + 1; layerToEvict < windowStart; layerToEvict++ {
@@ -840,7 +846,7 @@ candidateLayerLoop:
 			}
 		}
 		t.Verified = candidateLayerID
-		logger.With().Info("verified candidate layer")
+		logger.With().Info("verified candidate layer", log.FieldNamed("new_verified", t.Verified))
 	}
 
 	return nil

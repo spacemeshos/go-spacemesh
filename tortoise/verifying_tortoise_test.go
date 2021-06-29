@@ -222,9 +222,13 @@ func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer, voteNeg
 		lastlyr := trtl.BlockOpinionsByLayer[l]
 		for _, v := range lastlyr {
 			fmt.Println("block opinion map size", len(v.BlockOpinions))
-			if (len(v.BlockOpinions)) > blocksPerLayer*int(trtl.WindowSize) {
+			// the max. number of layers we store opinions for is the window size (since last evicted) + 3.
+			// eviction happens _after_ blocks for a new layer N have been processed, and that layer hasn't yet
+			// been verified. at this point in time,
+			// tortoise window := N - 1 (last verified) - windowSize - 1 (first layer to evict) - 1 (layer not yet evicted)
+			if (len(v.BlockOpinions)) > blocksPerLayer*int(trtl.WindowSize+3) {
 				t.Errorf("layer opinion table exceeded max size, LEAK! size: %v, maxsize: %v",
-					len(v.BlockOpinions), blocksPerLayer*int(trtl.WindowSize))
+					len(v.BlockOpinions), blocksPerLayer*int(trtl.WindowSize+3))
 			}
 			break
 		}
@@ -381,25 +385,23 @@ func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp
 }
 
 func TestTurtle_Eviction(t *testing.T) {
-	defaultTestHdist = 12
 	layers := types.LayerID(defaultTestHdist * 5)
 	avgPerLayer := 20 // more blocks = longer test
 	voteNegative := 0
 	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
-	require.Equal(t, len(trtl.BlockOpinionsByLayer), defaultTestHdist+2)
+	require.Equal(t, int(trtl.WindowSize+2), len(trtl.BlockOpinionsByLayer))
 
 	count := 0
 	for _, blks := range trtl.BlockOpinionsByLayer {
 		count += len(blks)
 	}
-	require.Equal(t, count,
-		(defaultTestHdist+2)*avgPerLayer)
+	require.Equal(t, (int(trtl.WindowSize)+2)*avgPerLayer, count)
 	fmt.Println("=======================================================================")
 	fmt.Println("=======================================================================")
 	fmt.Println("=======================================================================")
 	fmt.Println("Count blocks on blocks layers ", len(trtl.BlockOpinionsByLayer))
 	fmt.Println("Count blocks on blocks blocks ", count)
-	require.Equal(t, len(trtl.GoodBlocksIndex), (defaultTestHdist+2)*avgPerLayer) // all blocks should be good
+	require.Equal(t, int(trtl.WindowSize+2)*avgPerLayer, len(trtl.GoodBlocksIndex)) // all blocks should be good
 	fmt.Println("Count good blocks ", len(trtl.GoodBlocksIndex))
 }
 
