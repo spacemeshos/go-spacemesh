@@ -68,9 +68,22 @@ func GetEffectiveGenesis() LayerID {
 	return LayerID(atomic.LoadInt32(&EffectiveGenesis))
 }
 
-// Add returns the LayerID that's layers (the param passed into this method) after l (this LayerID).
+// Add layers to the layer. Panics on wraparound.
 func (l LayerID) Add(layers uint16) LayerID {
-	return LayerID(uint64(l) + uint64(layers))
+	nl := LayerID(uint64(l) + uint64(layers))
+	if nl < l {
+		panic("layer_id wraparound")
+	}
+	return nl
+}
+
+// Sub layers from the layer. Panics on wraparound.
+func (l LayerID) Sub(layers uint16) LayerID {
+	nl := LayerID(uint64(l) - uint64(layers))
+	if nl > l {
+		panic("layer_id wraparound")
+	}
+	return nl
 }
 
 // Uint64 returns the LayerID as a uint64.

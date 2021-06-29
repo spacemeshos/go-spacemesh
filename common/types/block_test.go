@@ -93,3 +93,18 @@ func TestBytesToNodeID(t *testing.T) {
 	_, err = BytesToNodeID(y[:])
 	r.Error(err, "Expected error converting too-long byte array to NodeID")
 }
+
+func TestLayerIDWraparound(t *testing.T) {
+	t.Run("Add", func(t *testing.T) {
+		require.EqualValues(t, 1, LayerID(0).Add(1))
+		require.Panics(t, func() {
+			LayerID(^uint64(0)).Add(1)
+		})
+	})
+	t.Run("Sub", func(t *testing.T) {
+		require.EqualValues(t, 0, LayerID(1).Sub(1))
+		require.Panics(t, func() {
+			LayerID(0).Sub(1)
+		})
+	})
+}
