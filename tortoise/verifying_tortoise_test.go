@@ -109,8 +109,8 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 func TestTurtle_HandleIncomingLayerHappyFlow(t *testing.T) {
 	topLayer := types.GetEffectiveGenesis() + 28
 	avgPerLayer := 10
-	voteNegative := 0
-	trtl, _, _ := turtleSanity(t, topLayer, avgPerLayer, voteNegative, 0)
+	// no negative votes, no abstain votes
+	trtl, _, _ := turtleSanity(t, topLayer, avgPerLayer, 0, 0)
 	require.Equal(t, int(topLayer-1), int(trtl.Verified))
 	blkids := make([]types.BlockID, 0, avgPerLayer*int(topLayer))
 	for l := types.LayerID(0); l < topLayer; l++ {
@@ -134,6 +134,7 @@ func TestTurtle_HandleIncomingLayer_VoteNegative(t *testing.T) {
 	layers := types.GetEffectiveGenesis() + lyrsAfterGenesis
 	avgPerLayer := 10
 	voteNegative := 2
+	// just a couple of negative votes
 	trtl, negs, abs := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
 	require.Equal(t, int(layers-1), int(trtl.Verified))
 	poblkids := make([]types.BlockID, 0, avgPerLayer*int(layers))
@@ -196,12 +197,6 @@ func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer, voteNeg
 			return blks, nil
 		}
 
-		//if voteNegative >= len(blks) {
-		//	if !exist {
-		//		negative = append(negative, blks...)
-		//	}
-		//	return []types.BlockID{}, nil
-		//}
 		sorted := types.SortBlockIDs(blks)
 
 		if !exist && l != numLayers {
@@ -387,8 +382,7 @@ func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp
 func TestTurtle_Eviction(t *testing.T) {
 	layers := types.LayerID(defaultTestHdist * 5)
 	avgPerLayer := 20 // more blocks = longer test
-	voteNegative := 0
-	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
+	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, 0, 0)
 	require.Equal(t, int(trtl.WindowSize+2), len(trtl.BlockOpinionsByLayer))
 
 	count := 0
@@ -408,8 +402,7 @@ func TestTurtle_Eviction(t *testing.T) {
 func TestTurtle_Eviction2(t *testing.T) {
 	layers := types.LayerID(defaultTestWindowSize * 3)
 	avgPerLayer := 10
-	voteNegative := 0
-	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
+	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, 0, 0)
 	require.Equal(t, defaultTestWindowSize+2, len(trtl.BlockOpinionsByLayer))
 	count := 0
 	for _, blks := range trtl.BlockOpinionsByLayer {
@@ -1465,7 +1458,6 @@ func TestHealing(t *testing.T) {
 
 	// can heal when global and local opinion differ
 	t.Run("local and global opinions differ", func(t *testing.T) {
-		//alg.trtl.Last = l0ID
 		checkVerifiedLayer(l1ID)
 
 		// store input vector for already-processed layers
@@ -1511,14 +1503,10 @@ func TestHealing(t *testing.T) {
 
 	// healing should count votes of non-good blocks
 	t.Run("counts votes of non-good blocks", func(t *testing.T) {
-		//alg.trtl.Last = l0ID
 		checkVerifiedLayer(l2ID)
 
 		// create and process several more layers
 		// but don't save layer input vectors, so local opinion is abstain
-
-		// prevent base block from referencing earlier (approved) layers
-		//alg.trtl.Last = l0ID
 		makeLayer(t, l4ID, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
 		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l4ID))
 
