@@ -49,7 +49,7 @@ const (
 	// blocks of layer N, it shouldn't vote or produce blocks in layer N+1. it instead listens to gossip for all of
 	// layer N+1 and starts producing blocks and participates in hare committee in layer N+2
 	gossipSync
-	// synced is the phase where we are 2 layers or more behind the current layer
+	// synced is the state where the node is in sync with its peers.
 	synced
 )
 
@@ -70,17 +70,20 @@ func (s *syncState) String() string {
 type Syncer struct {
 	logger log.Log
 
-	conf      Configuration
-	ticker    layerTicker
-	mesh      *mesh.Mesh
-	fetcher   layerFetcher
-	syncOnce  sync.Once
+	conf     Configuration
+	ticker   layerTicker
+	mesh     *mesh.Mesh
+	fetcher  layerFetcher
+	syncOnce sync.Once
+	// access via atomic.[Load|Store]Uint32
 	syncState syncState
+	// access via atomic.[Load|Store]Uint32
 	isBusy    uint32
 	syncTimer *time.Ticker
 	// targetSyncedLayer is used to signal at which layer we can set this node to synced state
+	// access via atomic.[Load|Store]Uint64
 	targetSyncedLayer types.LayerID
-	// awaitSyncedCh is the list of subscribers' channels to notify when this node is synced
+	// awaitSyncedCh is the list of subscribers' channels to notify when this node enters synced state
 	awaitSyncedCh []chan struct{}
 	awaitSyncedMu sync.Mutex
 
@@ -114,7 +117,7 @@ func (s *Syncer) Close() {
 	s.cancelFunc()
 }
 
-// RegisterChForSynced registers ch for notification when the node becomes synced
+// RegisterChForSynced registers ch for notification when the node enters synced state
 func (s *Syncer) RegisterChForSynced(ctx context.Context, ch chan struct{}) {
 	if s.IsSynced(ctx) {
 		close(ch)
@@ -130,7 +133,7 @@ func (s *Syncer) ListenToGossip() bool {
 	return s.conf.AlwaysListen || s.getSyncState() >= gossipSync
 }
 
-// IsSynced returns true if the nodes is fully in sync with the network.
+// IsSynced returns true if the nodes is in synced state.
 func (s *Syncer) IsSynced(ctx context.Context) bool {
 	res := s.getSyncState() == synced
 	s.logger.WithContext(ctx).With().Info("node sync state",
@@ -159,7 +162,7 @@ func (s *Syncer) Start(ctx context.Context) {
 	})
 }
 
-// ForceSync manually start a sync process outside the main sync loop. If the node is already running a sync process,
+// ForceSync manually starts a sync process outside the main sync loop. If the node is already running a sync process,
 // ForceSync will be ignored.
 func (s *Syncer) ForceSync(ctx context.Context) {
 	s.logger.WithContext(ctx).Debug("executing ForceSync")
@@ -202,7 +205,7 @@ func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 	}
 }
 
-// setSyncerBusy returns false if syncer is currently synchronizing.
+// setSyncerBusy returns false if the syncer is already running a sync process.
 // otherwise it sets syncer to be busy and returns true.
 func (s *Syncer) setSyncerBusy() bool {
 	return atomic.CompareAndSwapUint32(&s.isBusy, 0, 1)
@@ -318,7 +321,7 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	}
 	currSyncState := s.getSyncState()
 	current := s.ticker.GetCurrentLayer()
-	// if we have gossip-synced to the target synced layer, we are ready to participate in the consensus
+	// if we have gossip-synced to the target synced layer, we are ready to participate in consensus
 	if currSyncState == gossipSync && s.getTargetSyncedLayer() <= current {
 		s.setSyncState(ctx, synced)
 	} else if currSyncState == notSynced {
@@ -335,7 +338,7 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 
 	layer, err := s.getLayerFromPeers(ctx, layerID)
 	if err != nil {
-		s.logger.WithContext(ctx).With().Error("failed to get layer from neighbors", layerID, log.Err(err))
+		s.logger.WithContext(ctx).With().Error("failed to get layer from peers", layerID, log.Err(err))
 		return nil, err
 	}
 
@@ -371,7 +374,7 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 	if epoch == currentEpoch || layerID == (epoch+1).FirstLayer()-1 {
 		s.logger.WithContext(ctx).With().Info("getting ATXs", epoch, layerID)
 		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
-		if err := s.fetcher.GetEpochATXs(ctx, layerID.GetEpoch()); err != nil {
+		if err := s.fetcher.GetEpochATXs(ctx, epoch); err != nil {
 			s.logger.WithContext(ctx).With().Error("failed to fetch epoch ATXs", layerID, epoch, log.Err(err))
 			return err
 		}
@@ -395,7 +398,7 @@ func (s *Syncer) startValidating(ctx context.Context, run uint64, queue chan *ty
 	logger.Info("validation started for run #%v", run)
 	defer func() {
 		logger.Info("validation done for run #%v", run)
-		done <- struct{}{}
+		close(done)
 	}()
 	for layer := range queue {
 		if s.isClosed() {
