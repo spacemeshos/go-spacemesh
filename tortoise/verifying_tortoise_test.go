@@ -280,13 +280,50 @@ func makeLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, 
 	return lyr
 }
 
+func testLayerPattern(t *testing.T, db *mesh.DB, trtl *turtle, blocksPerLayer int, successPattern []bool) {
+	goodLayerFn := func(layerID types.LayerID) ([]types.BlockID, error) {
+		t.Log("giving good results for layer", layerID)
+		return db.LayerBlockIds(layerID)
+	}
+	badLayerFn := func(layerID types.LayerID) ([]types.BlockID, error) {
+		t.Log("giving bad results for layer", layerID)
+		return nil, errors.New("simulated hare failure")
+	}
+	for i, success := range successPattern {
+		thisLayerID := types.GetEffectiveGenesis().Add(uint16(i) + 1)
+		t.Log("processing layer", thisLayerID)
+		if success {
+			makeAndProcessLayer(t, thisLayerID, trtl, blocksPerLayer, db, goodLayerFn)
+		} else {
+			makeAndProcessLayer(t, thisLayerID, trtl, blocksPerLayer, db, badLayerFn)
+		}
+	}
+}
+
+func TestLayerPatterns(t *testing.T) {
+	blocksPerLayer := 10 // more blocks means a longer test
+	msh := getInMemMesh()
+	trtl := defaultTurtle(t)
+	trtl.AvgLayerSize = blocksPerLayer
+	trtl.bdp = msh
+	trtl.init(context.TODO(), mesh.GenesisLayer())
+	t.Run("many good layers", func(t *testing.T) {
+		numGood := 5
+		pattern := make([]bool, numGood)
+		for i := 0; i < numGood; i++ {
+			pattern[i] = true
+		}
+		testLayerPattern(t, msh, trtl, blocksPerLayer, pattern)
+		require.Equal(t, int(types.GetEffectiveGenesis().Add(uint16(numGood-1))), int(trtl.Verified))
+	})
+}
+
 func Test_TurtleAbstainsInMiddle(t *testing.T) {
 	layers := 15
 	initialNumGood := 5
 	blocksPerLayer := 10
 
 	msh := getInMemMesh()
-
 	layerfuncs := make([]func(types.LayerID) ([]types.BlockID, error), 0, layers)
 
 	// first 5 layers incl genesis just work
