@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/hare/metrics"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/hare/metrics"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // LayerBuffer is the number of layer results we keep at a given time.
@@ -133,7 +134,7 @@ func (h *Hare) outOfBufferRange(id instanceID) bool {
 		return false
 	}
 
-	if id < instanceID(lyr-types.LayerID(h.bufferSize)) { // bufferSize>=0
+	if id < instanceID(lyr.Sub(types.LayerID(h.bufferSize))) { // bufferSize>=0
 		return true
 	}
 	return false

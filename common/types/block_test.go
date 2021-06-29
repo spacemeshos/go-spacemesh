@@ -95,16 +95,29 @@ func TestBytesToNodeID(t *testing.T) {
 }
 
 func TestLayerIDWraparound(t *testing.T) {
+	max := LayerID(^uint64(0))
 	t.Run("Add", func(t *testing.T) {
 		require.EqualValues(t, 1, LayerID(0).Add(1))
 		require.Panics(t, func() {
-			LayerID(^uint64(0)).Add(1)
+			LayerID(max).Add(1)
+		})
+		require.Panics(t, func() {
+			LayerID(max - 2).Add(max - 1)
 		})
 	})
 	t.Run("Sub", func(t *testing.T) {
 		require.EqualValues(t, 0, LayerID(1).Sub(1))
 		require.Panics(t, func() {
 			LayerID(0).Sub(1)
+		})
+		require.Panics(t, func() {
+			LayerID(max - 2).Sub(max - 1)
+		})
+	})
+	t.Run("Mul", func(t *testing.T) {
+		require.EqualValues(t, 4, LayerID(2).Mul(LayerID(2)))
+		require.Panics(t, func() {
+			LayerID(max).Mul(2)
 		})
 	})
 }

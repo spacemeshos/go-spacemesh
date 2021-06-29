@@ -34,7 +34,7 @@ func (l EpochID) NeedsGoldenPositioningATX() bool {
 
 // FirstLayer returns the layer ID of the first layer in the epoch.
 func (l EpochID) FirstLayer() LayerID {
-	return LayerID(uint64(l) * uint64(getLayersPerEpoch()))
+	return LayerID(l).Mul(LayerID(getLayersPerEpoch()))
 }
 
 // Field returns a log field. Implements the LoggableField interface.

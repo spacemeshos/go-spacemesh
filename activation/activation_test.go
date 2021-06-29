@@ -306,7 +306,7 @@ func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTxHea
 		r.NotNil(atx.CommitmentMerkleRoot)
 	}
 	r.Equal(posAtx.ID(), atx.PositioningATX)
-	r.Equal(posAtx.PubLayerID.Add(layersPerEpoch), atx.PubLayerID)
+	r.Equal(posAtx.PubLayerID.Add(types.LayerID(layersPerEpoch)), atx.PubLayerID)
 	r.Equal(poetRef, atx.GetPoetProofRef())
 }
 
@@ -322,8 +322,8 @@ func publishAtx(b *Builder, meshLayer types.LayerID, clockEpoch types.EpochID, b
 	meshProviderMock.latestLayer = meshLayer
 	nipstBuilderMock.buildNipstFunc = func(challenge *types.Hash32) (*types.NIPST, error) {
 		builtNipst = true
-		meshProviderMock.latestLayer = meshLayer.Add(buildNipstLayerDuration)
-		layerClockMock.currentLayer = layerClockMock.currentLayer.Add(buildNipstLayerDuration)
+		meshProviderMock.latestLayer = meshLayer.Add(types.LayerID(buildNipstLayerDuration))
+		layerClockMock.currentLayer = layerClockMock.currentLayer.Add(types.LayerID(buildNipstLayerDuration))
 		return NewNIPSTWithChallenge(challenge, poetBytes), nil
 	}
 	layerClockMock.currentLayer = clockEpoch.FirstLayer() + 3
@@ -695,7 +695,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 		NodeID:         b.nodeID,
 		Sequence:       2,
 		PrevATXID:      atx.ID(),
-		PubLayerID:     atx.PubLayerID.Add(b.layersPerEpoch),
+		PubLayerID:     atx.PubLayerID.Add(types.LayerID(b.layersPerEpoch)),
 		StartTick:      atx.EndTick,
 		EndTick:        atx.EndTick + b.tickProvider.NumOfTicks(), // todo: add tick provider (#827)
 		PositioningATX: atx.ID(),

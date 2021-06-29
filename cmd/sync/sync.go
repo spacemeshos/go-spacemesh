@@ -166,7 +166,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 			l := types.LayerID(i)
 			if l > types.GetEffectiveGenesis() {
 				lg.With().Info("finished loading layers from disk",
-					log.FieldNamed("layers_loaded", types.LayerID(i-1)),
+					log.FieldNamed("layers_loaded", types.LayerID(i).Sub(1)),
 					log.Err(err2),
 				)
 				break

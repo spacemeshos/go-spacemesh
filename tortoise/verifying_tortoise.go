@@ -3,6 +3,7 @@ package tortoise
 import (
 	"errors"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -227,7 +228,7 @@ func (t *turtle) BaseBlock() (types.BlockID, [][]types.BlockID, error) {
 	// e.g., trying to minimize the size of the exception list instead
 	window := types.LayerID(0)
 	if t.Hdist < t.Last {
-		window = t.Last - t.Hdist
+		window = t.Last.Sub(t.Hdist)
 	}
 	for i := t.Last; i > window; i-- {
 		for block, opinion := range t.BlockOpinionsByLayer[i] {

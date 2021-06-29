@@ -3,10 +3,11 @@ package blocks
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/spacemeshos/go-spacemesh/common/util"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -199,7 +200,7 @@ func (bo *Oracle) getValidAtxForEpoch(validForEpoch types.EpochID) (*types.Activ
 func calcEligibleLayer(epochNumber types.EpochID, layersPerEpoch uint16, vrfSig []byte) types.LayerID {
 	vrfInteger := util.BytesToUint64(vrfSig)
 	eligibleLayerOffset := vrfInteger % uint64(layersPerEpoch)
-	return epochNumber.FirstLayer().Add(uint16(eligibleLayerOffset))
+	return epochNumber.FirstLayer().Add(types.LayerID(eligibleLayerOffset))
 }
 
 func getNumberOfEligibleBlocks(weight, totalWeight uint64, committeeSize uint32, layersPerEpoch uint16) (uint32, error) {

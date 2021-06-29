@@ -69,8 +69,8 @@ func GetEffectiveGenesis() LayerID {
 }
 
 // Add layers to the layer. Panics on wraparound.
-func (l LayerID) Add(layers uint16) LayerID {
-	nl := LayerID(uint64(l) + uint64(layers))
+func (l LayerID) Add(layers LayerID) LayerID {
+	nl := l + layers
 	if nl < l {
 		panic("layer_id wraparound")
 	}
@@ -78,9 +78,20 @@ func (l LayerID) Add(layers uint16) LayerID {
 }
 
 // Sub layers from the layer. Panics on wraparound.
-func (l LayerID) Sub(layers uint16) LayerID {
-	nl := LayerID(uint64(l) - uint64(layers))
-	if nl > l {
+func (l LayerID) Sub(layers LayerID) LayerID {
+	if layers > l {
+		panic("layer_id wraparound")
+	}
+	return l - layers
+}
+
+// Mul layer by the layers. Panics on wraparound.
+func (l LayerID) Mul(layers LayerID) LayerID {
+	if l == 0 {
+		return 0
+	}
+	nl := l * layers
+	if nl/l != layers {
 		panic("layer_id wraparound")
 	}
 	return nl

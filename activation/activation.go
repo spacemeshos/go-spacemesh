@@ -233,7 +233,7 @@ func (b *Builder) buildNipstChallenge(ctx context.Context) error {
 		return fmt.Errorf("failed to get positioning ATX: %v", err)
 	}
 	challenge.PositioningATX = atxID
-	challenge.PubLayerID = pubLayerID.Add(b.layersPerEpoch)
+	challenge.PubLayerID = pubLayerID.Add(types.LayerID(b.layersPerEpoch))
 	challenge.StartTick = endTick
 	challenge.EndTick = endTick + b.tickProvider.NumOfTicks()
 	if prevAtx, err := b.GetPrevAtx(b.nodeID); err != nil {
