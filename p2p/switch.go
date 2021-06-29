@@ -697,7 +697,7 @@ func (s *Switch) publishDelPeer(peer p2pcrypto.PublicKey) {
 
 // SubscribePeerEvents lets clients listen on events inside the Switch about peers. first chan is new peers, second is deleted peers.
 func (s *Switch) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey) {
-	in := make(chan p2pcrypto.PublicKey, s.config.MaxInboundPeers+s.config.OutboundPeersTarget) // todo : the size should be determined after #269
+	in := make(chan p2pcrypto.PublicKey, s.config.MaxInboundPeers+s.config.OutboundPeersTarget)
 	del := make(chan p2pcrypto.PublicKey, s.config.MaxInboundPeers+s.config.OutboundPeersTarget)
 	s.peerLock.Lock()
 	s.newPeerSub = append(s.newPeerSub, in)
