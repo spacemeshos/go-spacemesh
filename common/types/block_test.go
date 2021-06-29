@@ -115,6 +115,8 @@ func TestLayerIDWraparound(t *testing.T) {
 		})
 	})
 	t.Run("Mul", func(t *testing.T) {
+		require.EqualValues(t, 0, LayerID(0).Mul(1))
+		require.EqualValues(t, 0, LayerID(1).Mul(0))
 		require.EqualValues(t, 4, LayerID(2).Mul(LayerID(2)))
 		require.Panics(t, func() {
 			LayerID(max).Mul(2)
