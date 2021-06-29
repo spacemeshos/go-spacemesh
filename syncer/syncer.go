@@ -363,16 +363,15 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 		return nil
 	}
 	epoch := layerID.GetEpoch()
-	s.logger.WithContext(ctx).With().Info("getting ATXs", epoch, layerID)
-	ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
-	if err := s.fetcher.GetEpochATXs(ctx, layerID.GetEpoch()); err != nil {
-		// TODO: is this really expected? we should have ATXs in epoch 1
-		if layerID.GetEpoch().IsGenesis() {
-			s.logger.WithContext(ctx).With().Info("failed to fetch epoch ATXs (expected during genesis)",
-				layerID,
-				epoch,
-				log.Err(err))
-		} else {
+	currentEpoch := s.ticker.GetCurrentLayer().GetEpoch()
+	// only get ATXs if
+	// - layerID is in the current epoch
+	// - layerID is the last layer of a previous epoch
+	// i.e. for older epochs we sync ATXs once per epoch. for current epoch we sync ATXs in every layer
+	if epoch == currentEpoch || layerID == (epoch+1).FirstLayer()-1 {
+		s.logger.WithContext(ctx).With().Info("getting ATXs", epoch, layerID)
+		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
+		if err := s.fetcher.GetEpochATXs(ctx, layerID.GetEpoch()); err != nil {
 			s.logger.WithContext(ctx).With().Error("failed to fetch epoch ATXs", layerID, epoch, log.Err(err))
 			return err
 		}

@@ -53,6 +53,7 @@ type mockFetcher struct {
 	polled    map[types.LayerID]chan struct{}
 	result    map[types.LayerID]chan layerfetcher.LayerPromiseResult
 	atxsError map[types.EpochID]error
+	atxsCalls uint32
 }
 
 func newMockFetcher() *mockFetcher {
@@ -74,6 +75,7 @@ func (mf *mockFetcher) PollLayer(_ context.Context, layerID types.LayerID) chan 
 func (mf *mockFetcher) GetEpochATXs(_ context.Context, epoch types.EpochID) error {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
+	mf.atxsCalls++
 	return mf.atxsError[epoch]
 }
 func (mf *mockFetcher) getLayerPollChan(layerID types.LayerID) chan struct{} {
@@ -239,13 +241,13 @@ func TestSynchronize_getLayerFromPeersFailed(t *testing.T) {
 	assert.False(t, syncer.IsSynced(context.TODO()))
 }
 
-func TestSynchronize_getATXsFailedDuringGenesis(t *testing.T) {
+func TestSynchronize_getATXsFailedEpochZero(t *testing.T) {
 	lg := log.NewDefault("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
 	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
-	ticker.advanceToLayer(mm.LatestLayer())
+	ticker.advanceToLayer(layersPerEpoch * 2)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -254,25 +256,21 @@ func TestSynchronize_getATXsFailedDuringGenesis(t *testing.T) {
 		wg.Done()
 	}()
 
-	epoch := mm.LatestLayer().GetEpoch()
-	assert.True(t, epoch.IsGenesis())
-	mf.setATXsErrors(epoch, errors.New("no ATXs. still in genesis. should be ignored"))
-	mf.feedLayerResult(0, mm.LatestLayer())
+	mf.setATXsErrors(0, errors.New("no ATXs. in epoch 0. should be ignored"))
+	mf.feedLayerResult(0, ticker.GetCurrentLayer())
 	wg.Wait()
 
 	assert.True(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
 }
 
-func TestSynchronize_getATXsFailedOutsideGenesis(t *testing.T) {
+func TestSynchronize_getATXsFailed(t *testing.T) {
 	lg := log.NewDefault("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
 	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
 	ticker.advanceToLayer(layersPerEpoch * 2)
-	epoch := ticker.GetCurrentLayer().GetEpoch()
-	assert.False(t, epoch.IsGenesis())
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -281,7 +279,7 @@ func TestSynchronize_getATXsFailedOutsideGenesis(t *testing.T) {
 		wg.Done()
 	}()
 
-	mf.setATXsErrors(epoch, errors.New("no ATXs. should fail sync"))
+	mf.setATXsErrors(1, errors.New("no ATXs. should fail sync"))
 	mf.feedLayerResult(0, ticker.GetCurrentLayer())
 	wg.Wait()
 
@@ -529,18 +527,76 @@ func TestShouldValidateLayer(t *testing.T) {
 	assert.True(t, syncer.shouldValidateLayer(3))
 }
 
-func TestGetATXs(t *testing.T) {
+func TestGetATXsCurrentEpoch(t *testing.T) {
 	lg := log.NewDefault("syncer")
 	mf := newMockFetcher()
-	syncer := NewSyncer(context.TODO(), conf, newMockLayerTicker(), newMemMesh(lg), mf, lg)
-	mf.setATXsErrors(1, errors.New("no ATXs for epoch 1, still in genesis. should be ignored"))
-	mf.setATXsErrors(3, errors.New("no ATXs for epoch 2, error out"))
+	ticker := newMockLayerTicker()
+	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
+	assert.Equal(t, 3, layersPerEpoch)
+	mf.setATXsErrors(0, errors.New("no ATXs for epoch 0, expected for epoch 0"))
+	mf.setATXsErrors(1, errors.New("no ATXs for epoch 1, error out"))
+
 	// epoch 0
+	ticker.advanceToLayer(2)
+	// epoch 0, ATXs not requested at any layer
+	assert.NoError(t, syncer.getATXs(context.TODO(), 0))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.atxsCalls))
 	assert.NoError(t, syncer.getATXs(context.TODO(), 1))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.atxsCalls))
+	assert.NoError(t, syncer.getATXs(context.TODO(), 2))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.atxsCalls))
+
 	// epoch 1
-	assert.NoError(t, syncer.getATXs(context.TODO(), layersPerEpoch))
+	ticker.advanceToLayer(5)
+	assert.Error(t, syncer.getATXs(context.TODO(), 3))
+	assert.Equal(t, uint32(1), atomic.LoadUint32(&mf.atxsCalls))
+	assert.Error(t, syncer.getATXs(context.TODO(), 4))
+	assert.Equal(t, uint32(2), atomic.LoadUint32(&mf.atxsCalls))
+	assert.Error(t, syncer.getATXs(context.TODO(), 5))
+	assert.Equal(t, uint32(3), atomic.LoadUint32(&mf.atxsCalls))
+
 	// epoch 2
-	assert.NoError(t, syncer.getATXs(context.TODO(), layersPerEpoch*2))
-	// epoch 3
-	assert.Error(t, syncer.getATXs(context.TODO(), layersPerEpoch*3))
+	ticker.advanceToLayer(8)
+	assert.NoError(t, syncer.getATXs(context.TODO(), 6))
+	assert.Equal(t, uint32(4), atomic.LoadUint32(&mf.atxsCalls))
+	assert.NoError(t, syncer.getATXs(context.TODO(), 7))
+	assert.Equal(t, uint32(5), atomic.LoadUint32(&mf.atxsCalls))
+	assert.NoError(t, syncer.getATXs(context.TODO(), 8))
+	assert.Equal(t, uint32(6), atomic.LoadUint32(&mf.atxsCalls))
+}
+
+func TestGetATXsOldAndCurrentEpoch(t *testing.T) {
+	lg := log.NewDefault("syncer")
+	mf := newMockFetcher()
+	ticker := newMockLayerTicker()
+	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
+	assert.Equal(t, 3, layersPerEpoch)
+	mf.setATXsErrors(0, errors.New("no ATXs for epoch 0, expected for epoch 0"))
+	mf.setATXsErrors(1, errors.New("no ATXs for epoch 1"))
+
+	ticker.advanceToLayer(8) // epoch 2
+	// epoch 0, ATXs not requested at any layer
+	assert.NoError(t, syncer.getATXs(context.TODO(), 0))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.atxsCalls))
+	assert.NoError(t, syncer.getATXs(context.TODO(), 1))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.atxsCalls))
+	assert.NoError(t, syncer.getATXs(context.TODO(), 2))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.atxsCalls))
+
+	// epoch 1, has error but not requested at layer 3/4
+	assert.NoError(t, syncer.getATXs(context.TODO(), 3))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.atxsCalls))
+	assert.NoError(t, syncer.getATXs(context.TODO(), 4))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.atxsCalls))
+	// will be requested at layer 5
+	assert.Error(t, syncer.getATXs(context.TODO(), 5))
+	assert.Equal(t, uint32(1), atomic.LoadUint32(&mf.atxsCalls))
+
+	// epoch 2 is the current epoch. ATXs will be requested at every layer
+	assert.NoError(t, syncer.getATXs(context.TODO(), 6))
+	assert.Equal(t, uint32(2), atomic.LoadUint32(&mf.atxsCalls))
+	assert.NoError(t, syncer.getATXs(context.TODO(), 7))
+	assert.Equal(t, uint32(3), atomic.LoadUint32(&mf.atxsCalls))
+	assert.NoError(t, syncer.getATXs(context.TODO(), 8))
+	assert.Equal(t, uint32(4), atomic.LoadUint32(&mf.atxsCalls))
 }
