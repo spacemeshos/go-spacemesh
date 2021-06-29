@@ -302,12 +302,12 @@ func testLayerPattern(t *testing.T, db *mesh.DB, trtl *turtle, blocksPerLayer in
 
 func TestLayerPatterns(t *testing.T) {
 	blocksPerLayer := 10 // more blocks means a longer test
-	msh := getInMemMesh()
-	trtl := defaultTurtle(t)
-	trtl.AvgLayerSize = blocksPerLayer
-	trtl.bdp = msh
-	trtl.init(context.TODO(), mesh.GenesisLayer())
 	t.Run("many good layers", func(t *testing.T) {
+		msh := getInMemMesh()
+		trtl := defaultTurtle(t)
+		trtl.AvgLayerSize = blocksPerLayer
+		trtl.bdp = msh
+		trtl.init(context.TODO(), mesh.GenesisLayer())
 		numGood := 5
 		pattern := make([]bool, numGood)
 		for i := 0; i < numGood; i++ {
@@ -315,6 +315,41 @@ func TestLayerPatterns(t *testing.T) {
 		}
 		testLayerPattern(t, msh, trtl, blocksPerLayer, pattern)
 		require.Equal(t, int(types.GetEffectiveGenesis().Add(uint16(numGood-1))), int(trtl.Verified))
+	})
+
+	t.Run("heal after bad layers", func(t *testing.T) {
+		// five good layers, then two bad, then enough good to heal
+		pattern := []bool{
+			true,  // verified
+			true,  // verified
+			true,  // verified
+			true,  // verified
+			true,  // verification stalled: zdist
+			false, // verification stalled: zdist
+			false, // verification stalled: zdist
+			true,  // verification stalled: zdist
+			true,  // verification stalled: zdist
+			true,  // verification stalled: confidence interval
+			true,  // verification stalled: confidence interval
+			true,  // verification stalled: confidence interval
+			true,  // verification stalled: confidence interval
+			true,  // verification stalled: confidence interval
+			true,  // verification resumes zdist+confidence interval layers before
+			true,  // verification resumes zdist+confidence interval layers before
+			true,  // final candidate layer, not verified
+		}
+
+		msh := getInMemMesh()
+		trtl := defaultTurtle(t)
+		trtl.AvgLayerSize = blocksPerLayer
+		trtl.bdp = msh
+		trtl.init(context.TODO(), mesh.GenesisLayer())
+		testLayerPattern(t, msh, trtl, blocksPerLayer, pattern)
+		// final verified layer should lag by zdist+confidence interval
+		require.Equal(t, 5, int(trtl.Zdist))
+		require.Equal(t, 5, int(trtl.ConfidenceParam))
+		finalVerified := types.GetEffectiveGenesis().Add(uint16(len(pattern)) - 1 - uint16(trtl.Zdist+trtl.ConfidenceParam))
+		require.Equal(t, int(finalVerified), int(trtl.Verified))
 	})
 }
 
