@@ -572,9 +572,9 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	}
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
-	if app.Config.HareEligibility.EpochOffset >= app.Config.BaseConfig.LayersPerEpoch {
+	if app.Config.HareEligibility.EpochOffset >= uint16(app.Config.BaseConfig.LayersPerEpoch) {
 		logger.With().Panic("epoch offset cannot be greater than or equal to the number of layers per epoch",
-			log.Int("epoch_offset", app.Config.HareEligibility.EpochOffset),
+			log.Uint16("epoch_offset", app.Config.HareEligibility.EpochOffset),
 			log.Int("layers_per_epoch", app.Config.BaseConfig.LayersPerEpoch))
 	}
 

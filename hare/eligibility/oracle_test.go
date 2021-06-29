@@ -256,14 +256,14 @@ func TestOracle_IsEligible(t *testing.T) {
 
 func Test_SafeLayerRange(t *testing.T) {
 	types.SetLayersPerEpoch(defLayersPerEpoch)
-	safetyParam := types.LayerID(10)
+	safetyParam := uint16(10)
 	effGenesis := types.GetEffectiveGenesis()
 	testCases := []struct {
 		// input
 		targetLayer    types.LayerID
-		safetyParam    types.LayerID
-		layersPerEpoch types.LayerID
-		epochOffset    types.LayerID
+		safetyParam    uint16
+		layersPerEpoch uint16
+		epochOffset    uint16
 		// expected output
 		safeLayerStart types.LayerID
 		safeLayerEnd   types.LayerID
@@ -612,16 +612,16 @@ func TestOracle_actives(t *testing.T) {
 		targetLayer2 := types.LayerID(47)
 		sls1, sle1 := safeLayerRange(
 			targetLayer1,
-			types.LayerID(o.cfg.ConfidenceParam),
-			types.LayerID(o.layersPerEpoch),
-			types.LayerID(o.cfg.EpochOffset))
+			o.cfg.ConfidenceParam,
+			o.layersPerEpoch,
+			o.cfg.EpochOffset)
 		r.Equal(20, int(sls1))
 		r.Equal(23, int(sle1))
 		sls2, sle2 := safeLayerRange(
 			targetLayer2,
-			types.LayerID(o.cfg.ConfidenceParam),
-			types.LayerID(o.layersPerEpoch),
-			types.LayerID(o.cfg.EpochOffset))
+			o.cfg.ConfidenceParam,
+			o.layersPerEpoch,
+			o.cfg.EpochOffset)
 		r.Equal(30, int(sls2))
 		r.Equal(33, int(sle2))
 
@@ -665,14 +665,14 @@ func TestOracle_concurrentActives(t *testing.T) {
 // make sure the oracle collects blocks from all layers in the safe layer range
 func TestOracle_MultipleLayerBlocks(t *testing.T) {
 	r := require.New(t)
-	confidenceParam := 25
-	epochOffset := 5
+	confidenceParam := uint16(25)
+	epochOffset := uint16(5)
 
 	// a block provider that returns one distinct block per layer
 	lyr := types.LayerID(100)
 	o := defaultOracle(t)
-	o.cfg = eCfg.Config{ConfidenceParam: uint64(confidenceParam), EpochOffset: epochOffset}
-	sls, sle := safeLayerRange(lyr, types.LayerID(confidenceParam), types.LayerID(defLayersPerEpoch), types.LayerID(epochOffset))
+	o.cfg = eCfg.Config{ConfidenceParam: confidenceParam, EpochOffset: epochOffset}
+	sls, sle := safeLayerRange(lyr, confidenceParam, defLayersPerEpoch, epochOffset)
 	numLayers := int(sle - sls + 1) // +1 because inclusive of endpoints
 	log.With().Info("layer range", log.FieldNamed("start", sls), log.FieldNamed("end", sle), log.Int("count", numLayers))
 	allBlocks := make(map[types.BlockID]bool, numLayers)
@@ -707,21 +707,21 @@ func TestOracle_MultipleLayerBlocks(t *testing.T) {
 
 func TestOracle_activesSafeLayer(t *testing.T) {
 	r := require.New(t)
-	confidenceParam := 25
-	epochOffset := 5
-	layersPerEpoch := 2
+	confidenceParam := uint16(25)
+	epochOffset := uint16(5)
+	layersPerEpoch := uint16(2)
 
 	// an activeSetProvider that returns an active set from blocks but no epoch ATXs: in this test we want to make sure
 	// that hare active set succeeds and tortoise active set fails
 	asp := &mockActiveSetProvider{size: 1, getEpochAtxsFn: func(types.EpochID) []types.ATXID { return nil }}
 
-	o := mockOracle(t, uint16(layersPerEpoch))
+	o := mockOracle(t, layersPerEpoch)
 	o.atxdb = asp
-	o.cfg = eCfg.Config{ConfidenceParam: uint64(confidenceParam), EpochOffset: epochOffset}
-	o.layersPerEpoch = uint16(layersPerEpoch)
+	o.cfg = eCfg.Config{ConfidenceParam: confidenceParam, EpochOffset: epochOffset}
+	o.layersPerEpoch = layersPerEpoch
 	o.activesCache = newMockCacher()
 	lyr := types.LayerID(10)
-	sls, sle := safeLayerRange(lyr, types.LayerID(o.cfg.ConfidenceParam), types.LayerID(o.layersPerEpoch), types.LayerID(o.cfg.EpochOffset))
+	sls, sle := safeLayerRange(lyr, o.cfg.ConfidenceParam, o.layersPerEpoch, o.cfg.EpochOffset)
 	mp := make(map[types.BlockID]struct{})
 	block1 := types.NewExistingBlock(0, []byte("some data"), nil)
 	mp[block1.ID()] = struct{}{}

@@ -70,28 +70,28 @@ type Oracle struct {
 // blocks), defined to be confidence param number of layers prior to the input layer.
 func safeLayerRange(
 	targetLayer types.LayerID,
-	safetyParam types.LayerID,
-	layersPerEpoch types.LayerID,
-	epochOffset types.LayerID,
+	safetyParam uint16,
+	layersPerEpoch uint16,
+	epochOffset uint16,
 ) (safeLayerStart, safeLayerEnd types.LayerID) {
 	// prevent overflow
-	if targetLayer <= safetyParam {
+	if targetLayer <= types.LayerID(safetyParam) {
 		return types.GetEffectiveGenesis(), types.GetEffectiveGenesis()
 	}
-	safeLayer := targetLayer - safetyParam
+	safeLayer := targetLayer - types.LayerID(safetyParam)
 	safeEpoch := safeLayer.GetEpoch()
 	safeLayerStart = safeEpoch.FirstLayer()
-	safeLayerEnd = safeLayerStart + epochOffset
+	safeLayerEnd = safeLayerStart.Add(epochOffset)
 
 	// If the safe layer is in the first epochOffset layers of an epoch,
 	// return a range from the beginning of the previous epoch
 	if safeLayer < safeLayerEnd {
 		// prevent overflow
-		if safeLayerStart <= layersPerEpoch {
+		if safeLayerStart <= types.LayerID(layersPerEpoch) {
 			return types.GetEffectiveGenesis(), types.GetEffectiveGenesis()
 		}
-		safeLayerStart = safeLayerStart - layersPerEpoch
-		safeLayerEnd = safeLayerEnd - layersPerEpoch
+		safeLayerStart = safeLayerStart - types.LayerID(layersPerEpoch)
+		safeLayerEnd = safeLayerEnd - types.LayerID(layersPerEpoch)
 	}
 
 	// If any portion of the range is in the genesis layers, just return the effective genesis
@@ -420,14 +420,14 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 
 	// we first try to get the hare active set for a range of safe layers: start with the set of active blocks
 	safeLayerStart, safeLayerEnd := safeLayerRange(
-		targetLayer, types.LayerID(o.cfg.ConfidenceParam), types.LayerID(o.layersPerEpoch), types.LayerID(o.cfg.EpochOffset))
+		targetLayer, o.cfg.ConfidenceParam, o.layersPerEpoch, o.cfg.EpochOffset)
 	logger.With().Debug("safe layer range",
 		log.FieldNamed("safe_layer_start", safeLayerStart),
 		log.FieldNamed("safe_layer_end", safeLayerEnd),
 		log.FieldNamed("safe_layer_start_epoch", safeLayerStart.GetEpoch()),
 		log.FieldNamed("safe_layer_end_epoch", safeLayerEnd.GetEpoch()),
-		log.Uint64("confidence_param", o.cfg.ConfidenceParam),
-		log.Int("epoch_offset", o.cfg.EpochOffset),
+		log.Uint16("confidence_param", o.cfg.ConfidenceParam),
+		log.Uint16("epoch_offset", o.cfg.EpochOffset),
 		log.Uint64("layers_per_epoch", uint64(o.layersPerEpoch)),
 		log.FieldNamed("effective_genesis", types.GetEffectiveGenesis()))
 
