@@ -974,7 +974,7 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		logger.With().Error("error reading hostname", log.Err(err))
+		logger.With().Panic("error reading hostname", log.Err(err))
 	}
 	logger.With().Info("starting spacemesh",
 		log.String("data-dir", app.Config.DataDir()),
