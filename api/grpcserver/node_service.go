@@ -91,8 +91,8 @@ func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
 	curLayerObj := s.GenTime.GetCurrentLayer()
 	curLayer = uint32(curLayerObj)
 	if curLayerObj.GetEpoch().IsGenesis() {
-		latestLayer = curLayer
-		verifiedLayer = curLayer
+		latestLayer = uint32(s.Mesh.LatestLayer())
+		verifiedLayer = latestLayer
 	} else {
 		latestLayer = uint32(s.Mesh.LatestLayer())
 		verifiedLayer = uint32(s.Mesh.LatestLayerInState())
