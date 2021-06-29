@@ -222,9 +222,9 @@ func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer, voteNeg
 		lastlyr := trtl.BlockOpinionsByLayer[l]
 		for _, v := range lastlyr {
 			fmt.Println("block opinion map size", len(v.BlockOpinions))
-			if (len(v.BlockOpinions)) > blocksPerLayer*int(trtl.Hdist) {
-				t.Errorf("layer opinion table exceeded max size, LEAK! size:%v, maxsize:%v",
-					len(v.BlockOpinions), blocksPerLayer*int(trtl.Hdist))
+			if (len(v.BlockOpinions)) > blocksPerLayer*int(trtl.WindowSize) {
+				t.Errorf("layer opinion table exceeded max size, LEAK! size: %v, maxsize: %v",
+					len(v.BlockOpinions), blocksPerLayer*int(trtl.WindowSize))
 			}
 			break
 		}
