@@ -542,8 +542,9 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 		fblk, err := t.bdp.GetBlock(blk)
 		if err != nil {
 			return fmt.Errorf(
-				"voted block not in db voting_block_id: %v, voting_block_layer_id: %v, voted_block_id: %v",
-				block.ID().String(), block.LayerIndex, blk.String())
+				"block in base block opinion list not in db! "+
+					"voting_block_id: %v, voting_block_layer: %v, base_block_id: %v, base_block_layer: %v, block_id: %v",
+				block.ID().String(), block.LayerIndex, baseBlock.ID(), baseBlock.LayerIndex, blk.String())
 		}
 		if fblk.LayerIndex < t.LastEvicted {
 			continue

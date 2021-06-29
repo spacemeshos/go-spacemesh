@@ -603,13 +603,13 @@ func TestLayerOpinionVector(t *testing.T) {
 	r.Nil(opinionVec)
 
 	// coinflip true: expect support for all layer blocks
-	mdb.RecordCoinflip(context.TODO(), alg.trtl.Last, true)
+	mdb.RecordCoinflip(context.TODO(), alg.trtl.Last-1, true)
 	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
 	r.NoError(err)
 	r.Equal(l2.Hash(), types.CalcBlocksHash32(types.SortBlockIDs(opinionVec), nil))
 
 	// coinflip false: expect vote against all blocks in layer
-	mdb.RecordCoinflip(context.TODO(), alg.trtl.Last, false)
+	mdb.RecordCoinflip(context.TODO(), alg.trtl.Last-1, false)
 	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
 	r.NoError(err)
 	r.Equal(make([]types.BlockID, 0, 0), opinionVec)
@@ -976,8 +976,11 @@ func TestProcessBlock(t *testing.T) {
 		l1Blocks[0].ID(),
 	}
 	alg.trtl.BlockOpinionsByLayer[l3ID] = make(map[types.BlockID]Opinion, defaultTestLayerSize)
-	err = alg.trtl.processBlock(context.TODO(), l3Blocks[0])
-	r.NoError(err)
+	// these must be in the mesh or we'll get an error when processing a block (l3Blocks[0])
+	// with a base block (l2Blocks[0]) that contains an opinion on them
+	r.NoError(mdb.AddBlock(l1Blocks[1]))
+	r.NoError(mdb.AddBlock(l1Blocks[2]))
+	r.NoError(alg.trtl.processBlock(context.TODO(), l3Blocks[0]))
 	expectedOpinionVector := Opinion{BlockOpinions: map[types.BlockID]vec{
 		l1Blocks[0].ID(): abstain, // from exception
 		l1Blocks[1].ID(): against, // from exception
