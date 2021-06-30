@@ -677,7 +677,7 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, blockIds 
 	tmr := newMilliTimer(syncLayerTime)
 	defer tmr.ObserveDuration()
 	if res, err := s.blockQueue.addDependencies(ctx, layerID, blockIds, foo); err != nil {
-		return nil, fmt.Errorf("failed adding layer %v blocks to queue %v", layerID, err)
+		return nil, fmt.Errorf("failed adding layer %v blocks to queue: %w", layerID, err)
 	} else if res == false {
 		logger.Info("syncLayer: no missing blocks for layer")
 		return s.LayerBlocks(layerID)
@@ -719,7 +719,7 @@ func (s *Syncer) getBlocks(ctx context.Context, blockIds []types.BlockID) error 
 
 	tmr := newMilliTimer(syncLayerTime)
 	if res, err := s.blockQueue.addDependencies(ctx, jobID, blockIds, foo); err != nil {
-		return fmt.Errorf("failed adding layer %v blocks to queue %v", jobID, err)
+		return fmt.Errorf("failed adding layer %v blocks to queue: %w", jobID, err)
 	} else if res == false {
 		logger.Info("getBlocks: no missing blocks for layer")
 		return nil
