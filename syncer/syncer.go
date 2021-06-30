@@ -53,13 +53,13 @@ const (
 	synced
 )
 
-func (s *syncState) String() string {
-	switch *s {
-	case 0:
+func (s syncState) String() string {
+	switch s {
+	case notSynced:
 		return "notSynced"
-	case 1:
+	case gossipSync:
 		return "gossipSync"
-	case 2:
+	case synced:
 		return "synced"
 	default:
 		return "unknown"
@@ -259,7 +259,9 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	defer func() {
 		close(vQueue)
 		<-vDone
-		logger.With().Info("node is synced. validation done",
+		logger.With().Info("validation done",
+			log.Bool("success", success),
+			log.String("sync_state", s.getSyncState().String()),
 			log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 			log.FieldNamed("latest", s.mesh.LatestLayer()),
 			log.FieldNamed("validated", s.mesh.ProcessedLayer()))
