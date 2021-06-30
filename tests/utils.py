@@ -265,7 +265,6 @@ def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME,
 def get_kibana_ip(kibana_dep_name, namespace, retries=240, sleep_interval=1):
     def get_kibana_service(services_):
         for serv in services_.items:
-            print(serv.metadata.name)
             if serv.metadata.name == kibana_dep_name:
                 return serv
         return None
@@ -287,8 +286,6 @@ def get_kibana_ip(kibana_dep_name, namespace, retries=240, sleep_interval=1):
         kibana_service = get_kibana_service(services)
 
         if not kibana_service.status.load_balancer.ingress:
-            # Amit: sometimes service will be returned before being assigned with an IP address
-            print("KIBANA: service returned without ip address, retrying")
             time.sleep(sleep_interval)
             continue
 
