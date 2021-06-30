@@ -146,9 +146,9 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 		poetStorage: poetDbStore,
 		mshdb:       mshdb,
 	}
-	msh := createMockMesh(dbs, txpool, app.logger)
+	msh := createMeshWithMock(dbs, txpool, app.logger)
 	app.msh = msh
-	layerFetch := createMockFetcher(dbs, msh, swarm, app.logger)
+	layerFetch := createFetcherWithMock(dbs, msh, swarm, app.logger)
 	layerFetch.Start()
 	syncerConf := syncer.Configuration{
 		SyncInterval:    2 * 60 * time.Millisecond,

@@ -139,7 +139,7 @@ type allDbs struct {
 	mshdb       *mesh.DB
 }
 
-func createMockMesh(dbs *allDbs, txpool *state.TxMempool, lg log.Log) *mesh.Mesh {
+func createMeshWithMock(dbs *allDbs, txpool *state.TxMempool, lg log.Log) *mesh.Mesh {
 	var msh *mesh.Mesh
 	if dbs.mshdb.PersistentData() {
 		lg.Info("persistent data found")
@@ -151,7 +151,7 @@ func createMockMesh(dbs *allDbs, txpool *state.TxMempool, lg log.Log) *mesh.Mesh
 	return msh
 }
 
-func createMockFetcher(dbs *allDbs, msh *mesh.Mesh, swarm service.Service, lg log.Log) *layerfetcher.Logic {
+func createFetcherWithMock(dbs *allDbs, msh *mesh.Mesh, swarm service.Service, lg log.Log) *layerfetcher.Logic {
 	blockHandler := blocks.NewBlockHandler(blocks.Config{Depth: 10}, msh, blockEligibilityValidatorMock{}, lg)
 
 	fCfg := fetch.DefaultConfig()

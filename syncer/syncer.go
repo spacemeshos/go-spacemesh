@@ -147,7 +147,7 @@ func (s *Syncer) IsSynced(ctx context.Context) bool {
 // Start starts the main sync loop that tries to sync data for every SyncInterval.
 func (s *Syncer) Start(ctx context.Context) {
 	s.syncOnce.Do(func() {
-		if s.ticker.GetCurrentLayer() == 0 {
+		if s.ticker.GetCurrentLayer() <= 1 {
 			s.setSyncState(ctx, synced)
 		}
 		for {
@@ -186,8 +186,8 @@ func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 	oldState := syncState(atomic.SwapUint32((*uint32)(&s.syncState), uint32(newState)))
 	if oldState != newState {
 		s.logger.WithContext(ctx).With().Info("sync state change",
-			log.String("from", oldState.String()),
-			log.String("to", newState.String()),
+			log.String("from_state", oldState.String()),
+			log.String("to_state", newState.String()),
 			log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 			log.FieldNamed("latest", s.mesh.LatestLayer()),
 			log.FieldNamed("validated", s.mesh.ProcessedLayer()))
@@ -220,8 +220,8 @@ func (s *Syncer) setTargetSyncedLayer(ctx context.Context, layerID types.LayerID
 	newSyncLayer := uint64(layerID)
 	oldSyncLayer := atomic.SwapUint64((*uint64)(&s.targetSyncedLayer), newSyncLayer)
 	s.logger.WithContext(ctx).With().Info("target synced layer changed",
-		log.Uint64("from", oldSyncLayer),
-		log.Uint64("to", newSyncLayer),
+		log.Uint64("from_layer", oldSyncLayer),
+		log.Uint64("to_layer", newSyncLayer),
 		log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 		log.FieldNamed("latest", s.mesh.LatestLayer()),
 		log.FieldNamed("validated", s.mesh.ProcessedLayer()))
@@ -259,14 +259,13 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	defer func() {
 		close(vQueue)
 		<-vDone
-		logger.With().Info("validation done",
+		s.setStateAfterSync(ctx, success)
+		logger.With().Info(fmt.Sprintf("finished sync run #%v", s.run),
 			log.Bool("success", success),
 			log.String("sync_state", s.getSyncState().String()),
 			log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 			log.FieldNamed("latest", s.mesh.LatestLayer()),
 			log.FieldNamed("validated", s.mesh.ProcessedLayer()))
-		s.setStateAfterSync(ctx, success)
-		logger.Info("finished sync run #%v", s.run)
 		s.setSyncerIdle()
 	}()
 
@@ -303,7 +302,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 	current := s.ticker.GetCurrentLayer()
-	if current == 0 {
+	if current <= 1 {
 		s.setSyncState(ctx, synced)
 	}
 	latest := s.mesh.LatestLayer()
