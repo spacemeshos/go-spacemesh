@@ -876,7 +876,7 @@ func (s *Syncer) validateBlockView(ctx context.Context, blk *types.Block) bool {
 		return nil
 	}
 	if res, err := s.blockQueue.addDependencies(ctx, blk.ID(), blk.ViewEdges, foo); err != nil {
-		s.Error(fmt.Sprintf("block %v not syntactically valid", blk.ID()), err)
+		s.With().Error("block not syntactically valid", blk.ID(), log.Err(err))
 		return false
 	} else if res == false {
 		s.WithContext(ctx).With().Debug("no missing blocks in view",
@@ -942,7 +942,7 @@ func (s *Syncer) fetchBlock(ctx context.Context, ID types.BlockID) bool {
 	}
 	id := types.CalcHash32(append(ID.Bytes(), []byte(strconv.Itoa(rand.Int()))...))
 	if res, err := s.blockQueue.addDependencies(ctx, id, []types.BlockID{ID}, foo); err != nil {
-		s.Error(fmt.Sprintf("block %v not syntactically valid", ID), err)
+		s.With().Error("block not syntactically valid", ID, log.Err(err))
 		return false
 	} else if res == false {
 		// block already found
