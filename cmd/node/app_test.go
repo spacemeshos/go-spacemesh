@@ -186,7 +186,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 				time.Sleep(10 * time.Second)
 			}
 		}
-		suite.validateBlocksAndATXs(types.LayerIDFromUint32(numberOfEpochs * suite.apps[0].Config.LayersPerEpoch).Sub(1))
+		suite.validateBlocksAndATXs(types.NewLayerID(numberOfEpochs * suite.apps[0].Config.LayersPerEpoch).Sub(1))
 		oldRoot = suite.apps[0].state.GetStateRoot()
 	}()
 
@@ -306,7 +306,7 @@ func reachedEpochTester(dependencies []int) TestScenario {
 	test := func(suite *AppTestSuite, t *testing.T) bool {
 		expectedTotalWeight := configuredTotalWeight(suite.apps)
 		for _, app := range suite.apps {
-			if app.mesh.LatestLayer().Before(types.LayerIDFromUint32(numberOfEpochs * uint32(app.Config.LayersPerEpoch))) {
+			if app.mesh.LatestLayer().Before(types.NewLayerID(numberOfEpochs * uint32(app.Config.LayersPerEpoch))) {
 				return false
 			}
 			suite.validateLastATXTotalWeight(app, numberOfEpochs, expectedTotalWeight)
@@ -328,7 +328,7 @@ func (suite *AppTestSuite) healingWeakcoinTester() {
 		suite.Equal(globalLayer, lastLayer, "bad last layer on node %v", i)
 		// there will be no coin value for layer zero since ticker delivers only new layers
 		// and there will be no coin value for the last layer
-		for layerID := types.LayerIDFromUint32(1); layerID.Before(lastLayer); layerID = layerID.Add(1) {
+		for layerID := types.NewLayerID(1); layerID.Before(lastLayer); layerID = layerID.Add(1) {
 			coinflip, exists := app.mesh.DB.GetCoinflip(context.TODO(), layerID)
 			if !exists {
 				suite.Fail("no weak coin value", "node %v layer %v last layer %v", i, layerID, lastLayer)
@@ -438,7 +438,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 			datamap[ap.nodeID.Key].layertoblocks = make(map[types.LayerID][]types.BlockID)
 		}
 
-		for i := types.LayerIDFromUint32(5); !i.After(untilLayer); i = i.Add(1) {
+		for i := types.NewLayerID(5); !i.After(untilLayer); i = i.Add(1) {
 			lyr, err := ap.mesh.GetLayer(i)
 			suite.NoError(err, "couldn't get validated layer from db", i)
 			for _, b := range lyr.Blocks() {
@@ -490,7 +490,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 
 	genesisBlocks := 0
 	for i := uint32(0); i < layersPerEpoch*2; i++ {
-		if l, ok := patient.layertoblocks[types.LayerIDFromUint32(i)]; ok {
+		if l, ok := patient.layertoblocks[types.NewLayerID(i)]; ok {
 			genesisBlocks += len(l)
 		}
 	}

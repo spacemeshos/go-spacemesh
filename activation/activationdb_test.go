@@ -215,10 +215,10 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	coinbase3 := types.HexToAddress("cccc")
 	coinbase4 := types.HexToAddress("cccc")
 	atxs := []*types.ActivationTx{
-		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(1), 0, 100, 100, coinbase1, &types.NIPST{}),
-		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(2), 0, 100, 200, coinbase2, &types.NIPST{}),
-		newActivationTx(id4, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(2), 0, 100, 400, coinbase4, &types.NIPST{}),
-		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(11), 0, 100, 300, coinbase3, &types.NIPST{}),
+		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, 100, coinbase1, &types.NIPST{}),
+		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(2), 0, 100, 200, coinbase2, &types.NIPST{}),
+		newActivationTx(id4, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(2), 0, 100, 400, coinbase4, &types.NIPST{}),
+		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(11), 0, 100, 300, coinbase3, &types.NIPST{}),
 	}
 
 	poetRef := []byte{0xba, 0xb0}
@@ -227,14 +227,14 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 		assert.NoError(t, err)
 		atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
 	}
-	blocks := createLayerWithAtx(t, layers, types.LayerIDFromUint32(1), 4, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks := createLayerWithAtx(t, layers, types.NewLayerID(1), 4, atxs, []types.BlockID{}, []types.BlockID{})
 	before := blocks[:2]
 	two := blocks[2:3]
 	after := blocks[3:]
 	for i := uint32(2); i <= 10; i++ {
-		before = createLayerWithAtx(t, layers, types.LayerIDFromUint32(i), 1, []*types.ActivationTx{}, before, before)
-		two = createLayerWithAtx(t, layers, types.LayerIDFromUint32(i), 1, []*types.ActivationTx{}, two, two)
-		after = createLayerWithAtx(t, layers, types.LayerIDFromUint32(i), 1, []*types.ActivationTx{}, after, after)
+		before = createLayerWithAtx(t, layers, types.NewLayerID(i), 1, []*types.ActivationTx{}, before, before)
+		two = createLayerWithAtx(t, layers, types.NewLayerID(i), 1, []*types.ActivationTx{}, two, two)
+		after = createLayerWithAtx(t, layers, types.NewLayerID(i), 1, []*types.ActivationTx{}, after, after)
 	}
 	for _, x := range before {
 		blocksMap[x] = struct{}{}
@@ -244,7 +244,7 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 		blocksMap[x] = struct{}{}
 	}
 
-	layer := types.LayerIDFromUint32(10)
+	layer := types.NewLayerID(10)
 	layersPerEpoch := uint32(6)
 	types.SetLayersPerEpoch(6)
 	atxdb.LayersPerEpoch = layersPerEpoch
@@ -297,9 +297,9 @@ func Test_DBSanity(t *testing.T) {
 	coinbase2 := types.HexToAddress("bbbb")
 	coinbase3 := types.HexToAddress("cccc")
 
-	atx1 := newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(1), 0, 100, 100, coinbase1, &types.NIPST{})
-	atx2 := newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(1001), 0, 100, 100, coinbase2, &types.NIPST{})
-	atx3 := newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(2001), 0, 100, 100, coinbase3, &types.NIPST{})
+	atx1 := newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, 100, coinbase1, &types.NIPST{})
+	atx2 := newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1001), 0, 100, 100, coinbase2, &types.NIPST{})
+	atx3 := newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(2001), 0, 100, 100, coinbase3, &types.NIPST{})
 
 	err := atxdb.storeAtxUnlocked(atx1)
 	assert.NoError(t, err)
@@ -359,13 +359,13 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0x76, 0x45}
 	npst := NewNIPSTWithChallenge(&chlng, poetRef)
-	posATX := newActivationTx(types.NodeID{Key: "aaaaaa", VRFPublicKey: []byte("anton")}, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(1000), 0, 100, 100, coinbase1, npst)
+	posATX := newActivationTx(types.NodeID{Key: "aaaaaa", VRFPublicKey: []byte("anton")}, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1000), 0, 100, 100, coinbase1, npst)
 	err := atxdb.StoreAtx(0, posATX)
 	assert.NoError(t, err)
 	atxs := []*types.ActivationTx{
-		newActivationTx(id1, 0, *types.EmptyATXID, posATX.ID(), types.LayerIDFromUint32(1012), 0, 100, 100, coinbase1, &types.NIPST{}),
-		newActivationTx(id2, 0, *types.EmptyATXID, posATX.ID(), types.LayerIDFromUint32(1300), 0, 100, 100, coinbase2, &types.NIPST{}),
-		newActivationTx(id3, 0, *types.EmptyATXID, posATX.ID(), types.LayerIDFromUint32(1435), 0, 100, 100, coinbase3, &types.NIPST{}),
+		newActivationTx(id1, 0, *types.EmptyATXID, posATX.ID(), types.NewLayerID(1012), 0, 100, 100, coinbase1, &types.NIPST{}),
+		newActivationTx(id2, 0, *types.EmptyATXID, posATX.ID(), types.NewLayerID(1300), 0, 100, 100, coinbase2, &types.NIPST{}),
+		newActivationTx(id3, 0, *types.EmptyATXID, posATX.ID(), types.NewLayerID(1435), 0, 100, 100, coinbase3, &types.NIPST{}),
 	}
 	for _, atx := range atxs {
 		hash, err := atx.NIPSTChallenge.Hash()
@@ -378,9 +378,9 @@ func TestMesh_processBlockATXs(t *testing.T) {
 
 	// check that further atxs dont affect current epoch count
 	atxs2 := []*types.ActivationTx{
-		newActivationTx(id1, 1, atxs[0].ID(), atxs[0].ID(), types.LayerIDFromUint32(2012), 0, 100, 100, coinbase1, &types.NIPST{}),
-		newActivationTx(id2, 1, atxs[1].ID(), atxs[1].ID(), types.LayerIDFromUint32(2300), 0, 100, 100, coinbase2, &types.NIPST{}),
-		newActivationTx(id3, 1, atxs[2].ID(), atxs[2].ID(), types.LayerIDFromUint32(2435), 0, 100, 100, coinbase3, &types.NIPST{}),
+		newActivationTx(id1, 1, atxs[0].ID(), atxs[0].ID(), types.NewLayerID(2012), 0, 100, 100, coinbase1, &types.NIPST{}),
+		newActivationTx(id2, 1, atxs[1].ID(), atxs[1].ID(), types.NewLayerID(2300), 0, 100, 100, coinbase2, &types.NIPST{}),
+		newActivationTx(id3, 1, atxs[2].ID(), atxs[2].ID(), types.NewLayerID(2435), 0, 100, 100, coinbase3, &types.NIPST{}),
 	}
 	for _, atx := range atxs2 {
 		hash, err := atx.NIPSTChallenge.Hash()
@@ -414,9 +414,9 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 	coinbase2 := types.HexToAddress("bbbb")
 	coinbase3 := types.HexToAddress("cccc")
 	atxs := []*types.ActivationTx{
-		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(1), 0, 100, 100, coinbase1, &types.NIPST{}),
-		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(1), 0, 100, 100, coinbase2, &types.NIPST{}),
-		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(1), 0, 100, 100, coinbase3, &types.NIPST{}),
+		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, 100, coinbase1, &types.NIPST{}),
+		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, 100, coinbase2, &types.NIPST{}),
+		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, 100, coinbase3, &types.NIPST{}),
 	}
 	poetRef := []byte{0x12, 0x21}
 	for _, atx := range atxs {
@@ -425,16 +425,16 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 		atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
 	}
 
-	blocks := createLayerWithAtx(t, layers, types.LayerIDFromUint32(1), 10, atxs, []types.BlockID{}, []types.BlockID{})
-	blocks = createLayerWithAtx(t, layers, types.LayerIDFromUint32(10), 10, []*types.ActivationTx{}, blocks, blocks)
-	blocks = createLayerWithAtx(t, layers, types.LayerIDFromUint32(100), 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks := createLayerWithAtx(t, layers, types.NewLayerID(1), 10, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks = createLayerWithAtx(t, layers, types.NewLayerID(10), 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks = createLayerWithAtx(t, layers, types.NewLayerID(100), 10, []*types.ActivationTx{}, blocks, blocks)
 
-	prevAtx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(100), 0, 100, 100, coinbase1, &types.NIPST{})
+	prevAtx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, 100, coinbase1, &types.NIPST{})
 	hash, err := prevAtx.NIPSTChallenge.Hash()
 	assert.NoError(t, err)
 	prevAtx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
 
-	atx := newActivationTx(idx1, 1, prevAtx.ID(), prevAtx.ID(), types.LayerIDFromUint32(1012), 0, 100, 100, coinbase1, &types.NIPST{})
+	atx := newActivationTx(idx1, 1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), 0, 100, 100, coinbase1, &types.NIPST{})
 	hash, err = atx.NIPSTChallenge.Hash()
 	assert.NoError(t, err)
 	atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
@@ -465,20 +465,20 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	id2 := types.NodeID{Key: uuid.New().String()}
 	id3 := types.NodeID{Key: uuid.New().String()}
 	atxs := []*types.ActivationTx{
-		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(1), 0, 100, 100, coinbase, &types.NIPST{}),
-		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(1), 0, 100, 100, coinbase, &types.NIPST{}),
-		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(1), 0, 100, 100, coinbase, &types.NIPST{}),
+		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, 100, coinbase, &types.NIPST{}),
+		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, 100, coinbase, &types.NIPST{}),
+		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, 100, coinbase, &types.NIPST{}),
 	}
 
-	blocks := createLayerWithAtx(t, layers, types.LayerIDFromUint32(1), 10, atxs, []types.BlockID{}, []types.BlockID{})
-	blocks = createLayerWithAtx(t, layers, types.LayerIDFromUint32(10), 10, []*types.ActivationTx{}, blocks, blocks)
-	blocks = createLayerWithAtx(t, layers, types.LayerIDFromUint32(100), 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks := createLayerWithAtx(t, layers, types.NewLayerID(1), 10, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks = createLayerWithAtx(t, layers, types.NewLayerID(10), 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks = createLayerWithAtx(t, layers, types.NewLayerID(100), 10, []*types.ActivationTx{}, blocks, blocks)
 
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xba, 0xbe}
 	npst := NewNIPSTWithChallenge(&chlng, poetRef)
-	prevAtx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(100), 0, 100, 100, coinbase, npst)
-	posAtx := newActivationTx(idx2, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(100), 0, 100, 100, coinbase, npst)
+	prevAtx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, 100, coinbase, npst)
+	posAtx := newActivationTx(idx2, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, 100, coinbase, npst)
 	err := atxdb.StoreNodeIdentity(idx1)
 	assert.NoError(t, err)
 	err = atxdb.StoreAtx(1, prevAtx)
@@ -487,35 +487,35 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Wrong sequence.
-	atx := newActivationTx(idx1, 0, prevAtx.ID(), posAtx.ID(), types.LayerIDFromUint32(1012), 0, 100, 100, coinbase, &types.NIPST{})
+	atx := newActivationTx(idx1, 0, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012), 0, 100, 100, coinbase, &types.NIPST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "sequence number is not one more than prev sequence number")
 
 	// Wrong active set.
-	/*atx = newActivationTx(idx1, 1, prevAtx.ID(), posatx.ID(), types.LayerIDFromUint32(1012), 0, 100, 100, coinbase, 10, []types.BlockID{}, &types.NIPST{})
+	/*atx = newActivationTx(idx1, 1, prevAtx.ID(), posatx.ID(), types.NewLayerID(1012), 0, 100, 100, coinbase, 10, []types.BlockID{}, &types.NIPST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "atx contains view with unequal weight (10) than seen (0)")
 	*/
 	// Wrong positioning atx.
-	atx = newActivationTx(idx1, 1, prevAtx.ID(), atxs[0].ID(), types.LayerIDFromUint32(1012), 0, 100, 100, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx1, 1, prevAtx.ID(), atxs[0].ID(), types.NewLayerID(1012), 0, 100, 100, coinbase, &types.NIPST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "expected distance of one epoch (1000 layers) from pos atx but found 1011")
 
 	// Empty positioning atx.
-	atx = newActivationTx(idx1, 1, prevAtx.ID(), *types.EmptyATXID, types.LayerIDFromUint32(2000), 0, 1, 3, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx1, 1, prevAtx.ID(), *types.EmptyATXID, types.NewLayerID(2000), 0, 1, 3, coinbase, &types.NIPST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "empty positioning atx")
 
 	// Using Golden ATX in epochs other than 1 is not allowed. Testing epoch 0.
-	atx = newActivationTx(idx1, 0, *types.EmptyATXID, goldenATXID, types.LayerIDFromUint32(0), 0, 1, 3, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx1, 0, *types.EmptyATXID, goldenATXID, types.NewLayerID(0), 0, 1, 3, coinbase, &types.NIPST{})
 	atx.Commitment = &types.PostProof{}
 	atx.CommitmentMerkleRoot = []byte{}
 	err = SignAtx(signer, atx)
@@ -524,28 +524,28 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, "golden atx used for atx in epoch 0, but is only valid in epoch 1")
 
 	// Using Golden ATX in epochs other than 1 is not allowed. Testing epoch 2.
-	atx = newActivationTx(idx1, 1, prevAtx.ID(), goldenATXID, types.LayerIDFromUint32(2000), 0, 1, 3, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx1, 1, prevAtx.ID(), goldenATXID, types.NewLayerID(2000), 0, 1, 3, coinbase, &types.NIPST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "golden atx used for atx in epoch 2, but is only valid in epoch 1")
 
 	// Wrong prevATx.
-	atx = newActivationTx(idx1, 1, atxs[0].ID(), posAtx.ID(), types.LayerIDFromUint32(1012), 0, 100, 100, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx1, 1, atxs[0].ID(), posAtx.ID(), types.NewLayerID(1012), 0, 100, 100, coinbase, &types.NIPST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, fmt.Sprintf("previous atx belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v", atx.ShortString(), atx.NodeID.Key, atxs[0].NodeID.Key))
 
 	// Wrong layerId.
-	posAtx2 := newActivationTx(idx2, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(1020), 0, 100, 100, coinbase, npst)
+	posAtx2 := newActivationTx(idx2, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1020), 0, 100, 100, coinbase, npst)
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.StoreAtx(1, posAtx2)
 	assert.NoError(t, err)
 	err = atxdb.StoreNodeIdentity(idx1)
 	assert.NoError(t, err)
-	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx2.ID(), types.LayerIDFromUint32(1012), 0, 100, 100, coinbase, npst)
+	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx2.ID(), types.NewLayerID(1012), 0, 100, 100, coinbase, npst)
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
@@ -554,14 +554,14 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	// Atx already exists.
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
-	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), types.LayerIDFromUint32(12), 0, 100, 100, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12), 0, 100, 100, coinbase, &types.NIPST{})
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	// Prev atx declared but not found.
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
-	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), types.LayerIDFromUint32(12), 0, 100, 100, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12), 0, 100, 100, coinbase, &types.NIPST{})
 	iter := atxdb.atxs.Find(getNodeAtxPrefix(atx.NodeID))
 	for iter.Next() {
 		err = atxdb.atxs.Delete(iter.Key())
@@ -574,14 +574,14 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 		fmt.Sprintf("could not fetch node last atx: atx for node %v does not exist", atx.NodeID.ShortString()))
 
 	// Prev atx not declared but commitment not included.
-	atx = newActivationTx(idx1, 0, *types.EmptyATXID, posAtx.ID(), types.LayerIDFromUint32(1012), 0, 100, 100, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx1, 0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), 0, 100, 100, coinbase, &types.NIPST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "no prevATX declared, but commitment proof is not included")
 
 	// Prev atx not declared but commitment merkle root not included.
-	atx = newActivationTx(idx1, 0, *types.EmptyATXID, posAtx.ID(), types.LayerIDFromUint32(1012), 0, 100, 100, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx1, 0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), 0, 100, 100, coinbase, &types.NIPST{})
 	atx.Commitment = commitment
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
@@ -589,7 +589,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, "no prevATX declared, but commitment merkle root is not included in challenge")
 
 	// Challenge and commitment merkle root mismatch.
-	atx = newActivationTx(idx1, 0, *types.EmptyATXID, posAtx.ID(), types.LayerIDFromUint32(1012), 0, 100, 100, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx1, 0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), 0, 100, 100, coinbase, &types.NIPST{})
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = append([]byte{}, commitment.MerkleRoot...)
 	atx.CommitmentMerkleRoot[0]++
@@ -599,7 +599,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, "commitment merkle root included in challenge is not equal to the merkle root included in the proof")
 
 	// Prev atx declared but commitment is included.
-	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), types.LayerIDFromUint32(1012), 0, 100, 100, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012), 0, 100, 100, coinbase, &types.NIPST{})
 	atx.Commitment = commitment
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
@@ -607,7 +607,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, "prevATX declared, but commitment proof is included")
 
 	// Prev atx declared but commitment merkle root is included.
-	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), types.LayerIDFromUint32(1012), 0, 100, 100, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(1012), 0, 100, 100, coinbase, &types.NIPST{})
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
@@ -615,14 +615,14 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, "prevATX declared, but commitment merkle root is included in challenge")
 
 	// Prev atx has publication layer in the same epoch as the atx.
-	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), types.LayerIDFromUint32(100), 0, 100, 100, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(100), 0, 100, 100, coinbase, &types.NIPST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "prevAtx epoch (0, layer 100) isn't older than current atx epoch (0, layer 100)")
 
 	// NodeID and etracted pubkey dont match
-	atx = newActivationTx(idx2, 0, *types.EmptyATXID, posAtx.ID(), types.LayerIDFromUint32(1012), 0, 100, 100, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx2, 0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), 0, 100, 100, coinbase, &types.NIPST{})
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = append([]byte{}, commitment.MerkleRoot...)
 	err = SignAtx(signer, atx)
@@ -641,19 +641,19 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	id2 := types.NodeID{Key: uuid.New().String()}
 	id3 := types.NodeID{Key: uuid.New().String()}
 	atxs := []*types.ActivationTx{
-		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(1), 0, 100, 100, coinbase, &types.NIPST{}),
-		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(1), 0, 100, 100, coinbase, &types.NIPST{}),
-		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(1), 0, 100, 100, coinbase, &types.NIPST{}),
+		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, 100, coinbase, &types.NIPST{}),
+		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, 100, coinbase, &types.NIPST{}),
+		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, 100, coinbase, &types.NIPST{}),
 	}
 
-	blocks := createLayerWithAtx(t, layers, types.LayerIDFromUint32(1), 10, atxs, []types.BlockID{}, []types.BlockID{})
-	blocks = createLayerWithAtx(t, layers, types.LayerIDFromUint32(10), 10, []*types.ActivationTx{}, blocks, blocks)
-	blocks = createLayerWithAtx(t, layers, types.LayerIDFromUint32(100), 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks := createLayerWithAtx(t, layers, types.NewLayerID(1), 10, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks = createLayerWithAtx(t, layers, types.NewLayerID(10), 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks = createLayerWithAtx(t, layers, types.NewLayerID(100), 10, []*types.ActivationTx{}, blocks, blocks)
 
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0x56, 0xbe}
 	npst := NewNIPSTWithChallenge(&chlng, poetRef)
-	prevAtx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(100), 0, 100, 100, coinbase, npst)
+	prevAtx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, 100, coinbase, npst)
 
 	var nodeAtxIds []types.ATXID
 
@@ -662,12 +662,12 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	nodeAtxIds = append(nodeAtxIds, prevAtx.ID())
 
 	// wrong sequnce
-	atx := newActivationTx(idx1, 1, prevAtx.ID(), prevAtx.ID(), types.LayerIDFromUint32(1012), 0, 100, 100, coinbase, &types.NIPST{})
+	atx := newActivationTx(idx1, 1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), 0, 100, 100, coinbase, &types.NIPST{})
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
 	nodeAtxIds = append(nodeAtxIds, atx.ID())
 
-	atx = newActivationTx(idx1, 2, atx.ID(), atx.ID(), types.LayerIDFromUint32(1012), 0, 100, 100, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx1, 2, atx.ID(), atx.ID(), types.NewLayerID(1012), 0, 100, 100, coinbase, &types.NIPST{})
 	assert.NoError(t, err)
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
@@ -678,7 +678,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	nodeAtxIds = append(nodeAtxIds, atx.ID())
 	atx2id := atx.ID()
 
-	atx = newActivationTx(idx1, 4, prevAtx.ID(), prevAtx.ID(), types.LayerIDFromUint32(1012), 0, 100, 100, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx1, 4, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), 0, 100, 100, coinbase, &types.NIPST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.StoreNodeIdentity(idx1)
@@ -691,7 +691,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 	id4 := atx.ID()
 
-	atx = newActivationTx(idx1, 3, atx2id, prevAtx.ID(), types.LayerIDFromUint32(1012), 0, 100, 100, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx1, 3, atx2id, prevAtx.ID(), types.NewLayerID(1012), 0, 100, 100, coinbase, &types.NIPST{})
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
@@ -713,20 +713,20 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	// test same sequence
 	idx2 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("12345")}
 
-	prevAtx = newActivationTx(idx2, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(100), 0, 100, 100, coinbase, npst)
+	prevAtx = newActivationTx(idx2, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, 100, coinbase, npst)
 	err = atxdb.StoreAtx(1, prevAtx)
 	assert.NoError(t, err)
 
-	atx = newActivationTx(idx2, 1, prevAtx.ID(), prevAtx.ID(), types.LayerIDFromUint32(1012), 0, 100, 100, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx2, 1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), 0, 100, 100, coinbase, &types.NIPST{})
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
 	atxID := atx.ID()
 
-	atx = newActivationTx(idx2, 2, atxID, atx.ID(), types.LayerIDFromUint32(1012), 0, 100, 100, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx2, 2, atxID, atx.ID(), types.NewLayerID(1012), 0, 100, 100, coinbase, &types.NIPST{})
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
 
-	atx = newActivationTx(idx2, 2, atxID, atx.ID(), types.LayerIDFromUint32(1013), 0, 100, 100, coinbase, &types.NIPST{})
+	atx = newActivationTx(idx2, 2, atxID, atx.ID(), types.NewLayerID(1013), 0, 100, 100, coinbase, &types.NIPST{})
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
@@ -741,7 +741,7 @@ func TestActivationDb_ProcessAtx(t *testing.T) {
 	atxdb, _, _ := getAtxDb("t8")
 	idx1 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
 	coinbase := types.HexToAddress("aaaa")
-	atx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(100), 0, 100, 100, coinbase, &types.NIPST{})
+	atx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, 100, coinbase, &types.NIPST{})
 
 	err := atxdb.ProcessAtx(atx)
 	r.NoError(err)
@@ -769,7 +769,7 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	var atxs []*types.ActivationTx
 	for i := 0; i < activesetSize; i++ {
 		id := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("vrf")}
-		atxs = append(atxs, newActivationTx(id, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(1), 0, 100, 100, coinbase, &types.NIPST{}))
+		atxs = append(atxs, newActivationTx(id, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, 100, coinbase, &types.NIPST{}))
 	}
 
 	poetRef := []byte{0x12, 0x21}
@@ -781,7 +781,7 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 
 	blocks := createLayerWithAtx2(b, layers, types.LayerID{}, blocksPerLayer, atxs, []types.BlockID{}, []types.BlockID{})
 	for i := uint32(1); i < numberOfLayers; i++ {
-		blocks = createLayerWithAtx2(b, layers, types.LayerIDFromUint32(i), blocksPerLayer, []*types.ActivationTx{}, blocks, blocks)
+		blocks = createLayerWithAtx2(b, layers, types.NewLayerID(i), blocksPerLayer, []*types.ActivationTx{}, blocks, blocks)
 	}
 
 	idx1 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
@@ -966,7 +966,7 @@ func TestActivationDb_AwaitAtx(t *testing.T) {
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxdb := NewDB(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
 	id := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("vrf")}
-	atx := newActivationTx(id, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(1), 0, 100, 100, coinbase, &types.NIPST{})
+	atx := newActivationTx(id, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, 100, coinbase, &types.NIPST{})
 
 	ch := atxdb.AwaitAtx(atx.ID())
 	r.Len(atxdb.atxChannels, 1) // channel was created

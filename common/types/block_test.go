@@ -97,7 +97,7 @@ func TestBytesToNodeID(t *testing.T) {
 
 func TestLayerIDWraparound(t *testing.T) {
 	var (
-		max  = LayerIDFromUint32(math.MaxUint32)
+		max  = NewLayerID(math.MaxUint32)
 		zero LayerID
 	)
 	t.Run("Add", func(t *testing.T) {

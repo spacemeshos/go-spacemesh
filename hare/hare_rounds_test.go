@@ -110,7 +110,7 @@ func runNodesFor(t *testing.T, nodes, leaders, maxLayers, limitIterations, concu
 	sim := service.NewSimulator()
 	for i := 0; i < nodes; i++ {
 		s := sim.NewNode()
-		mp2p := &p2pManipulator{nd: s, stalledLayer: types.LayerIDFromUint32(1), err: errors.New("fake err")}
+		mp2p := &p2pManipulator{nd: s, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 		w.lCh = append(w.lCh, make(chan types.LayerID, 1))
 		h := &testHare{nil, oracle, bp, validate, i}
 		h.Hare = createTestHare(cfg, w.lCh[i], mp2p, h, t.Name(), h)

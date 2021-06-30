@@ -199,7 +199,7 @@ func (b *Builder) loop(ctx context.Context) {
 		return
 	}
 	// ensure layer 1 has arrived
-	if err := b.waitOrStop(b.layerClock.AwaitLayer(types.LayerIDFromUint32(1))); err != nil {
+	if err := b.waitOrStop(b.layerClock.AwaitLayer(types.NewLayerID(1))); err != nil {
 		return
 	}
 	for {

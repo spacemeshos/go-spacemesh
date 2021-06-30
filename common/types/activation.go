@@ -34,7 +34,7 @@ func (l EpochID) NeedsGoldenPositioningATX() bool {
 
 // FirstLayer returns the layer ID of the first layer in the epoch.
 func (l EpochID) FirstLayer() LayerID {
-	layer := LayerIDFromUint32(uint32(l))
+	layer := NewLayerID(uint32(l))
 	layer.Mul(getLayersPerEpoch())
 	return layer
 }

@@ -17,14 +17,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var instanceID0 = types.LayerIDFromUint32(0)
-var instanceID1 = types.LayerIDFromUint32(1)
-var instanceID2 = types.LayerIDFromUint32(2)
-var instanceID3 = types.LayerIDFromUint32(3)
-var instanceID4 = types.LayerIDFromUint32(4)
-var instanceID5 = types.LayerIDFromUint32(5)
-var instanceID6 = types.LayerIDFromUint32(6)
-var instanceID7 = types.LayerIDFromUint32(7)
+var instanceID0 = types.NewLayerID(0)
+var instanceID1 = types.NewLayerID(1)
+var instanceID2 = types.NewLayerID(2)
+var instanceID3 = types.NewLayerID(3)
+var instanceID4 = types.NewLayerID(4)
+var instanceID5 = types.NewLayerID(5)
+var instanceID6 = types.NewLayerID(6)
+var instanceID7 = types.NewLayerID(7)
 
 const reqID = "abracadabra"
 
@@ -385,11 +385,11 @@ func TestBroker_Send(t *testing.T) {
 	broker.inbox <- m
 
 	msg := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
-	msg.InnerMsg.InstanceID = types.LayerIDFromUint32(2)
+	msg.InnerMsg.InstanceID = types.NewLayerID(2)
 	m = newMockGossipMsg(msg)
 	broker.inbox <- m
 
-	msg.InnerMsg.InstanceID = types.LayerIDFromUint32(1)
+	msg.InnerMsg.InstanceID = types.NewLayerID(1)
 	m = newMockGossipMsg(msg)
 	broker.inbox <- m
 	// nothing happens since this is an invalid InnerMsg
@@ -503,36 +503,36 @@ func Test_newMsg(t *testing.T) {
 func TestBroker_updateInstance(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
-	r.Equal(types.LayerIDFromUint32(0), b.latestLayer)
-	b.updateLatestLayer(context.TODO(), types.LayerIDFromUint32(1))
-	r.Equal(types.LayerIDFromUint32(1), b.latestLayer)
-	b.updateLatestLayer(context.TODO(), types.LayerIDFromUint32(2))
-	r.Equal(types.LayerIDFromUint32(2), b.latestLayer)
+	r.Equal(types.NewLayerID(0), b.latestLayer)
+	b.updateLatestLayer(context.TODO(), types.NewLayerID(1))
+	r.Equal(types.NewLayerID(1), b.latestLayer)
+	b.updateLatestLayer(context.TODO(), types.NewLayerID(2))
+	r.Equal(types.NewLayerID(2), b.latestLayer)
 }
 
 func TestBroker_updateSynchronicity(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
 	b.isNodeSynced = trueFunc
-	b.updateSynchronicity(context.TODO(), types.LayerIDFromUint32(1))
-	r.True(b.isSynced(context.TODO(), types.LayerIDFromUint32(1)))
+	b.updateSynchronicity(context.TODO(), types.NewLayerID(1))
+	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
 	b.isNodeSynced = falseFunc
-	b.updateSynchronicity(context.TODO(), types.LayerIDFromUint32(1))
-	r.True(b.isSynced(context.TODO(), types.LayerIDFromUint32(1)))
-	b.updateSynchronicity(context.TODO(), types.LayerIDFromUint32(2))
-	r.False(b.isSynced(context.TODO(), types.LayerIDFromUint32(2)))
+	b.updateSynchronicity(context.TODO(), types.NewLayerID(1))
+	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
+	b.updateSynchronicity(context.TODO(), types.NewLayerID(2))
+	r.False(b.isSynced(context.TODO(), types.NewLayerID(2)))
 }
 
 func TestBroker_isSynced(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
 	b.isNodeSynced = trueFunc
-	r.True(b.isSynced(context.TODO(), types.LayerIDFromUint32(1)))
+	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
 	b.isNodeSynced = falseFunc
-	r.True(b.isSynced(context.TODO(), types.LayerIDFromUint32(1)))
-	r.False(b.isSynced(context.TODO(), types.LayerIDFromUint32(2)))
+	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
+	r.False(b.isSynced(context.TODO(), types.NewLayerID(2)))
 	b.isNodeSynced = trueFunc
-	r.False(b.isSynced(context.TODO(), types.LayerIDFromUint32(2)))
+	r.False(b.isSynced(context.TODO(), types.NewLayerID(2)))
 }
 
 func TestBroker_Register4(t *testing.T) {
@@ -540,12 +540,12 @@ func TestBroker_Register4(t *testing.T) {
 	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
 	b.Start(context.TODO())
 	b.isNodeSynced = trueFunc
-	c, e := b.Register(context.TODO(), types.LayerIDFromUint32(1))
+	c, e := b.Register(context.TODO(), types.NewLayerID(1))
 	r.Nil(e)
 	r.Equal(b.outbox[1], c)
 
 	b.isNodeSynced = falseFunc
-	_, e = b.Register(context.TODO(), types.LayerIDFromUint32(2))
+	_, e = b.Register(context.TODO(), types.NewLayerID(2))
 	r.NotNil(e)
 }
 
@@ -616,20 +616,20 @@ func Test_validate(t *testing.T) {
 	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
 
 	m := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
-	m.InnerMsg.InstanceID = types.LayerIDFromUint32(1)
-	b.latestLayer = types.LayerIDFromUint32(2)
+	m.InnerMsg.InstanceID = types.NewLayerID(1)
+	b.latestLayer = types.NewLayerID(2)
 	e := b.validate(context.TODO(), m.Message)
 	r.EqualError(e, errUnregistered.Error())
 
-	m.InnerMsg.InstanceID = types.LayerIDFromUint32(2)
+	m.InnerMsg.InstanceID = types.NewLayerID(2)
 	e = b.validate(context.TODO(), m.Message)
 	r.EqualError(e, errRegistration.Error())
 
-	m.InnerMsg.InstanceID = types.LayerIDFromUint32(3)
+	m.InnerMsg.InstanceID = types.NewLayerID(3)
 	e = b.validate(context.TODO(), m.Message)
 	r.EqualError(e, errEarlyMsg.Error())
 
-	m.InnerMsg.InstanceID = types.LayerIDFromUint32(2)
+	m.InnerMsg.InstanceID = types.NewLayerID(2)
 	b.outbox[2] = make(chan *Msg)
 	b.syncState[2] = false
 	e = b.validate(context.TODO(), m.Message)
@@ -644,15 +644,15 @@ func TestBroker_clean(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
 
-	ten := types.LayerIDFromUint32(10)
-	for i := types.LayerIDFromUint32(1); i.Before(ten); i = i.Add(1) {
+	ten := types.NewLayerID(10)
+	for i := types.NewLayerID(1); i.Before(ten); i = i.Add(1) {
 		b.syncState[i.Uint32()] = true
 	}
 
 	b.latestLayer = ten.Sub(1)
 	b.outbox[5] = make(chan *Msg)
 	b.cleanOldLayers()
-	r.Equal(types.LayerIDFromUint32(4), b.minDeleted)
+	r.Equal(types.NewLayerID(4), b.minDeleted)
 	r.Equal(5, len(b.syncState))
 
 	delete(b.outbox, 5)
@@ -667,15 +667,15 @@ func TestBroker_Flow(t *testing.T) {
 	b.Start(context.TODO())
 
 	m := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
-	m.InnerMsg.InstanceID = types.LayerIDFromUint32(1)
+	m.InnerMsg.InstanceID = types.NewLayerID(1)
 	b.inbox <- newMockGossipMsg(m.Message)
-	ch1, e := b.Register(context.TODO(), types.LayerIDFromUint32(1))
+	ch1, e := b.Register(context.TODO(), types.NewLayerID(1))
 	r.Nil(e)
 	<-ch1
 
 	m2 := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
-	m2.InnerMsg.InstanceID = types.LayerIDFromUint32(2)
-	ch2, e := b.Register(context.TODO(), types.LayerIDFromUint32(2))
+	m2.InnerMsg.InstanceID = types.NewLayerID(2)
+	ch2, e := b.Register(context.TODO(), types.NewLayerID(2))
 	r.Nil(e)
 
 	b.inbox <- newMockGossipMsg(m.Message)
@@ -684,16 +684,16 @@ func TestBroker_Flow(t *testing.T) {
 	<-ch2
 	<-ch1
 
-	b.Register(context.TODO(), types.LayerIDFromUint32(3))
-	b.Register(context.TODO(), types.LayerIDFromUint32(4))
-	b.Unregister(context.TODO(), types.LayerIDFromUint32(2))
+	b.Register(context.TODO(), types.NewLayerID(3))
+	b.Register(context.TODO(), types.NewLayerID(4))
+	b.Unregister(context.TODO(), types.NewLayerID(2))
 	r.Equal(instanceID0, b.minDeleted)
 
 	// check still receiving msgs on ch1
 	b.inbox <- newMockGossipMsg(m.Message)
 	<-ch1
 
-	b.Unregister(context.TODO(), types.LayerIDFromUint32(1))
+	b.Unregister(context.TODO(), types.NewLayerID(1))
 	r.Equal(instanceID2, b.minDeleted)
 }
 
@@ -705,7 +705,7 @@ func TestBroker_Synced(t *testing.T) {
 	for i := uint32(0); i < 1000; i++ {
 		wg.Add(1)
 		go func(j uint32) {
-			r.True(b.Synced(context.TODO(), types.LayerIDFromUint32(j)))
+			r.True(b.Synced(context.TODO(), types.NewLayerID(j)))
 			wg.Done()
 		}(i)
 	}

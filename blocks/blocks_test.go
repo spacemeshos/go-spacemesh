@@ -47,7 +47,7 @@ func atx(pubkey string) *types.ActivationTx {
 	poetRef := []byte{0xde, 0xad}
 	npst := activation.NewNIPSTWithChallenge(&chlng, poetRef)
 
-	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, types.LayerIDFromUint32(5), 1, goldenATXID, coinbase, npst)
+	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, types.NewLayerID(5), 1, goldenATXID, coinbase, npst)
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
 	atx.CalcAndSetID()
@@ -221,7 +221,7 @@ func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	atxpool.Put(a)
 	b := &types.Block{}
 	b.TxIDs = []types.TransactionID{}
-	block1 := types.NewExistingBlock(types.LayerIDFromUint32(1), []byte(rand.String(8)), nil)
+	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
 	block1.ActiveSet = &[]types.ATXID{a.ID()}
 	block1.ATXID = a.ID()
 	block1.Initialize()

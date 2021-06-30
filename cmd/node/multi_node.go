@@ -399,7 +399,7 @@ loop:
 			startLayer = time.Now()
 			clock.Tick()
 
-			if !apps[0].mesh.LatestLayer().Before(types.LayerIDFromUint32(runTillLayer)) {
+			if !apps[0].mesh.LatestLayer().Before(types.NewLayerID(runTillLayer)) {
 				break loop
 			}
 			time.Sleep(200 * time.Millisecond)

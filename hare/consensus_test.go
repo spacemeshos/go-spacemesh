@@ -166,7 +166,7 @@ func TestConsensusFixedOracle(t *testing.T) {
 	i := 0
 	creationFunc := func() {
 		s := sim.NewNode()
-		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], types.LayerIDFromUint32(1), t.Name())
+		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.procs = append(test.procs, proc)
 		i++
 	}
@@ -193,7 +193,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 	i := 0
 	creationFunc := func() {
 		s := sim.NewNode()
-		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], types.LayerIDFromUint32(1), t.Name())
+		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.procs = append(test.procs, proc)
 		i++
 	}
@@ -230,7 +230,7 @@ func TestAllDifferentSet(t *testing.T) {
 	i := 0
 	creationFunc := func() {
 		s := sim.NewNode()
-		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], types.LayerIDFromUint32(1), t.Name())
+		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.procs = append(test.procs, proc)
 		i++
 	}
@@ -261,7 +261,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 	i := 0
 	honestFunc := func() {
 		s := sim.NewNode()
-		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], types.LayerIDFromUint32(1), t.Name())
+		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.procs = append(test.procs, proc)
 		i++
 	}
@@ -272,7 +272,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 	// create dishonest
 	dishonestFunc := func() {
 		s := sim.NewFaulty(true, 5, 0) // only broadcast delay
-		proc := createConsensusProcess(false, cfg, oracle, s, test.initialSets[i], types.LayerIDFromUint32(1), t.Name())
+		proc := createConsensusProcess(false, cfg, oracle, s, test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.dishonest = append(test.dishonest, proc)
 		i++
 	}
@@ -304,7 +304,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 	i := 0
 	honestFunc := func() {
 		s := sim.NewNode()
-		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], types.LayerIDFromUint32(1), t.Name())
+		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.procs = append(test.procs, proc)
 		i++
 	}
@@ -315,7 +315,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 	// create dishonest
 	dishonestFunc := func() {
 		s := sim.NewFaulty(true, 0, 10) // delay rcv
-		proc := createConsensusProcess(false, cfg, oracle, s, test.initialSets[i], types.LayerIDFromUint32(1), t.Name())
+		proc := createConsensusProcess(false, cfg, oracle, s, test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.dishonest = append(test.dishonest, proc)
 		i++
 	}

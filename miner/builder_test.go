@@ -132,7 +132,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	txMempool := state.NewTxMemPool()
 
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
-	hare.res[types.LayerIDFromUint32(0)] = hareRes
+	hare.res[types.NewLayerID(0)] = hareRes
 
 	bs := []*types.Block{block1, block2, block3, block4}
 	builder := createBlockBuilder("a", n, bs)
@@ -168,7 +168,7 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	block4 := types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
 	hareRes := []types.BlockID{block1.ID(), block2.ID(), block3.ID(), block4.ID()}
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
-	hare.res[types.LayerIDFromUint32(0)] = hareRes
+	hare.res[types.NewLayerID(0)] = hareRes
 
 	st := []*types.Block{block2, block3, block4}
 	builder1 := createBlockBuilder("a", n1, st)
@@ -200,11 +200,11 @@ var (
 
 	poetRef = []byte{0xba, 0x38}
 	atxs    = []*types.ActivationTx{
-		newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{1}), types.LayerIDFromUint32(5),
+		newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{1}), types.NewLayerID(5),
 			1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
-		newActivationTx(types.NodeID{Key: "bbbb", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{2}), types.LayerIDFromUint32(5),
+		newActivationTx(types.NodeID{Key: "bbbb", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{2}), types.NewLayerID(5),
 			1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
-		newActivationTx(types.NodeID{Key: "cccc", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{3}), types.LayerIDFromUint32(5),
+		newActivationTx(types.NodeID{Key: "cccc", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{3}), types.NewLayerID(5),
 			1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
 	}
 
@@ -220,7 +220,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	blockset := []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
 
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
-	hare.res[types.LayerIDFromUint32(1)] = hareRes
+	hare.res[types.NewLayerID(1)] = hareRes
 
 	txPool := state.NewTxMemPool()
 
@@ -287,7 +287,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 
 	hareRes := []types.BlockID{block1.ID(), block2.ID(), block3.ID(), block4.ID()}
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
-	hare.res[types.LayerIDFromUint32(1)] = hareRes
+	hare.res[types.NewLayerID(1)] = hareRes
 
 	st := []*types.Block{block1, block2, block3}
 	builder := createBlockBuilder("a", n, st)
@@ -389,7 +389,7 @@ func TestBlockBuilder_Validation(t *testing.T) {
 	block4 := types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)))
 	hareRes := []types.BlockID{block1.ID(), block2.ID(), block3.ID(), block4.ID()}
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
-	hare.res[types.LayerIDFromUint32(0)]] = hareRes
+	hare.res[types.NewLayerID(0)]] = hareRes
 
 	st := []*types.Block{block1, block2, block3}
 	builder1 := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, state.NewTxMemPool(), activation.NewAtxMemPool(), MockCoin{}, &mockMesh{b: st}, hare, &mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, selectCount, layersPerEpoch, mockProjector, log.New(n1.Info.ID.String(), "", ""))
@@ -435,7 +435,7 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 	block4 := types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)))
 	hareRes := []types.BlockID{block1.ID(), block2.ID(), block3.ID(), block4.ID()}
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
-	hare.res[types.LayerIDFromUint32(0)]] = hareRes
+	hare.res[types.NewLayerID(0)]] = hareRes
 
 	st := []*types.Block{block2, block3, block4}
 	builder1 := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, state.NewTxMemPool(), activation.NewAtxMemPool(), MockCoin{}, &mockMesh{b: st}, hare, &mockBlockOracle{}, mockTxProcessor{false}, &mockAtxValidator{}, &mockSyncerP{false}, selectCount, selectCount, layersPerEpoch, mockProjector, log.New(n1.Info.ID.String(),
@@ -472,27 +472,27 @@ func Test_calcHdistRange(t *testing.T) {
 	types.SetLayersPerEpoch(3)
 
 	// id > hdist
-	from, to := calcHdistRange(types.LayerIDFromUint32(10), 3)
-	r.Equal(types.LayerIDFromUint32(7), from)
-	r.Equal(types.LayerIDFromUint32(9), to)
+	from, to := calcHdistRange(types.NewLayerID(10), 3)
+	r.Equal(types.NewLayerID(7), from)
+	r.Equal(types.NewLayerID(9), to)
 
 	// id < hdist + effectiveGenesis
-	from, to = calcHdistRange(types.LayerIDFromUint32(6), 5)
+	from, to = calcHdistRange(types.NewLayerID(6), 5)
 	r.Equal(types.GetEffectiveGenesis(), from)
-	r.Equal(types.LayerIDFromUint32(5), to)
+	r.Equal(types.NewLayerID(5), to)
 
 	// id = hdist
-	from, to = calcHdistRange(types.LayerIDFromUint32(6), 5)
+	from, to = calcHdistRange(types.NewLayerID(6), 5)
 	r.Equal(types.GetEffectiveGenesis(), from)
-	r.Equal(types.LayerIDFromUint32(4), to)
+	r.Equal(types.NewLayerID(4), to)
 
 	// hdist = 1
-	from, to = calcHdistRange(types.LayerIDFromUint32(6), 1)
-	r.Equal(types.LayerIDFromUint32(5), from)
-	r.Equal(types.LayerIDFromUint32(5), to)
+	from, to = calcHdistRange(types.NewLayerID(6), 1)
+	r.Equal(types.NewLayerID(5), from)
+	r.Equal(types.NewLayerID(5), to)
 
 	r.Panics(func() {
-		from, to = calcHdistRange(types.LayerIDFromUint32(5), 0)
+		from, to = calcHdistRange(types.NewLayerID(5), 0)
 	})
 
 }
@@ -556,13 +556,13 @@ func Test_selectAtxs(t *testing.T) {
 }
 
 var (
-	b1 = types.NewExistingBlock(types.LayerIDFromUint32(1), []byte{1}, nil)
-	b2 = types.NewExistingBlock(types.LayerIDFromUint32(1), []byte{2}, nil)
-	b3 = types.NewExistingBlock(types.LayerIDFromUint32(1), []byte{3}, nil)
-	b4 = types.NewExistingBlock(types.LayerIDFromUint32(1), []byte{4}, nil)
-	b5 = types.NewExistingBlock(types.LayerIDFromUint32(1), []byte{5}, nil)
-	b6 = types.NewExistingBlock(types.LayerIDFromUint32(1), []byte{6}, nil)
-	b7 = types.NewExistingBlock(types.LayerIDFromUint32(1), []byte{7}, nil)
+	b1 = types.NewExistingBlock(types.NewLayerID(1), []byte{1}, nil)
+	b2 = types.NewExistingBlock(types.NewLayerID(1), []byte{2}, nil)
+	b3 = types.NewExistingBlock(types.NewLayerID(1), []byte{3}, nil)
+	b4 = types.NewExistingBlock(types.NewLayerID(1), []byte{4}, nil)
+	b5 = types.NewExistingBlock(types.NewLayerID(1), []byte{5}, nil)
+	b6 = types.NewExistingBlock(types.NewLayerID(1), []byte{6}, nil)
+	b7 = types.NewExistingBlock(types.NewLayerID(1), []byte{7}, nil)
 )
 
 func genBlockIds() []types.BlockID {
@@ -666,7 +666,7 @@ func TestBlockBuilder_getVotes(t *testing.T) {
 	r.Nil(err)
 	r.Equal(1, len(b))
 
-	id := types.LayerIDFromUint32(100)
+	id := types.NewLayerID(100)
 	bb.hdist = 5
 	bottom, top := calcHdistRange(id, bb.hdist)
 
@@ -705,9 +705,9 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	r := require.New(t)
 	n1 := service.NewSimulator().NewNode()
 	types.SetLayersPerEpoch(3)
-	block1 := types.NewExistingBlock(types.LayerIDFromUint32(6), []byte(rand.String(8)), nil)
-	block2 := types.NewExistingBlock(types.LayerIDFromUint32(6), []byte(rand.String(8)), nil)
-	block3 := types.NewExistingBlock(types.LayerIDFromUint32(6), []byte(rand.String(8)), nil)
+	block1 := types.NewExistingBlock(types.NewLayerID(6), []byte(rand.String(8)), nil)
+	block2 := types.NewExistingBlock(types.NewLayerID(6), []byte(rand.String(8)), nil)
+	block3 := types.NewExistingBlock(types.NewLayerID(6), []byte(rand.String(8)), nil)
 	bs := []*types.Block{block1, block2, block3}
 	st := []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
 	builder1 := createBlockBuilder("a", n1, bs)
@@ -717,7 +717,7 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 
 	builder1.hareResult = &mockResult{err: errExample, ids: nil}
 	builder1.AtxDb = atxDbMock{}
-	b, err := builder1.createBlock(types.LayerIDFromUint32(7), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
+	b, err := builder1.createBlock(types.NewLayerID(7), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
 	r.Nil(err)
 	r.Equal(st, b.NeutralDiff)
 
@@ -726,13 +726,13 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	}}
 
 	builder1.hareResult = &mockResult{err: nil, ids: nil}
-	b, err = builder1.createBlock(types.LayerIDFromUint32(7), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
+	b, err = builder1.createBlock(types.NewLayerID(7), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
 	r.Nil(err)
 	r.Equal([]types.BlockID(nil), b.ForDiff)
 	emptyID := types.BlockID{}
 	r.NotEqual(b.ID(), emptyID)
 
-	b, err = builder1.createBlock(types.LayerIDFromUint32(5), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
+	b, err = builder1.createBlock(types.NewLayerID(5), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
 	r.EqualError(err, "cannot create blockBytes in genesis layer")
 }
 
@@ -752,16 +752,16 @@ func TestBlockBuilder_notSynced(t *testing.T) {
 	builder.beginRoundEvent = beginRound
 	//builder := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: bs}, hare, mbo, mockTxProcessor{true}, &mockAtxValidator{}, ms, selectCount, selectCount, layersPerEpoch, mockProjector, log.NewDefault(t.Name()))
 	go builder.createBlockLoop(context.TODO())
-	beginRound <- types.LayerIDFromUint32(1)
-	beginRound <- types.LayerIDFromUint32(2)
+	beginRound <- types.NewLayerID(1)
+	beginRound <- types.NewLayerID(2)
 	r.Equal(0, mbo.calls)
 }
 
 var (
-	block1ID = types.NewExistingBlock(types.LayerIDFromUint32(1), []byte{1}, nil).ID()
-	block2ID = types.NewExistingBlock(types.LayerIDFromUint32(1), []byte{2}, nil).ID()
-	block3ID = types.NewExistingBlock(types.LayerIDFromUint32(1), []byte{3}, nil).ID()
-	block4ID = types.NewExistingBlock(types.LayerIDFromUint32(1), []byte{4}, nil).ID()
+	block1ID = types.NewExistingBlock(types.NewLayerID(1), []byte{1}, nil).ID()
+	block2ID = types.NewExistingBlock(types.NewLayerID(1), []byte{2}, nil).ID()
+	block3ID = types.NewExistingBlock(types.NewLayerID(1), []byte{3}, nil).ID()
+	block4ID = types.NewExistingBlock(types.NewLayerID(1), []byte{4}, nil).ID()
 )
 
 func Test_filter(t *testing.T) {
@@ -829,11 +829,11 @@ func Test_getVotesFiltered(t *testing.T) {
 	bb := createBlockBuilder("a", n1, allblocks)
 	// has bottom
 	mh := newMockResult()
-	mh.set(types.LayerIDFromUint32(4))
-	mh.set(types.LayerIDFromUint32(5))
+	mh.set(types.NewLayerID(4))
+	mh.set(types.NewLayerID(5))
 	bb.hareResult = mh
 	bb.hdist = 2
-	b, err := bb.getVotes(types.LayerIDFromUint32(5))
+	b, err := bb.getVotes(types.NewLayerID(5))
 	r.Nil(err)
 	r.Equal(1, len(b))
 	r.Equal(b5.ID(), b[0])

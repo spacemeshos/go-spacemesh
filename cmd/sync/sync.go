@@ -154,14 +154,14 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 		SyncInterval:    2 * 60 * time.Millisecond,
 		ValidationDelta: 30 * time.Second,
 	}
-	app.sync = createSyncer(syncerConf, msh, layerFetch, types.LayerIDFromUint32(expectedLayers), app.logger)
+	app.sync = createSyncer(syncerConf, msh, layerFetch, types.NewLayerID(expectedLayers), app.logger)
 	if err = swarm.Start(cmdp.Ctx); err != nil {
 		log.With().Panic("error starting p2p", log.Err(err))
 	}
 
 	i := layersPerEpoch * 2
 	for ; ; i++ {
-		lid := types.LayerIDFromUint32(i)
+		lid := types.NewLayerID(i)
 		lg.With().Info("getting layer", lid)
 		if lyr, err2 := msh.GetLayer(lid); err2 != nil || lyr == nil {
 			if lid.After(types.GetEffectiveGenesis()) {
@@ -172,7 +172,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 				break
 			}
 		} else {
-			lg.With().Info("loaded layer from disk", types.LayerIDFromUint32(i))
+			lg.With().Info("loaded layer from disk", types.NewLayerID(i))
 			msh.ValidateLayer(lyr)
 		}
 	}
@@ -181,7 +181,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	lg.Info("wait %v sec", sleep)
 	time.Sleep(sleep)
 	go app.sync.Start(cmdp.Ctx)
-	for msh.ProcessedLayer().Before(types.LayerIDFromUint32(expectedLayers)) {
+	for msh.ProcessedLayer().Before(types.NewLayerID(expectedLayers)) {
 		lg.Info("sleep for %v sec", 30)
 		app.sync.ForceSync(context.TODO())
 		time.Sleep(30 * time.Second)

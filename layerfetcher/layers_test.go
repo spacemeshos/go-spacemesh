@@ -167,7 +167,7 @@ func NewMockLogic(net *mockNet, layers layerDB, blocksDB gossipBlocks, blocks bl
 
 func Test_LayerHashReceiver(t *testing.T) {
 	db := newLayerDBMock()
-	layerID := types.LayerIDFromUint32(1)
+	layerID := types.NewLayerID(1)
 	l := NewMockLogic(&mockNet{}, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerHash"))
 	h := RandomHash()
 	db.hashes[layerID] = h
@@ -198,39 +198,39 @@ func Test_receiveLayerHash(t *testing.T) {
 
 	hashRes := RandomHash()
 	// test happy flow - get 4 responses
-	l.receiveLayerHash(context.TODO(), types.LayerIDFromUint32(1), net.peers[0], numOfPeers, hashRes.Bytes(), nil)
+	l.receiveLayerHash(context.TODO(), types.NewLayerID(1), net.peers[0], numOfPeers, hashRes.Bytes(), nil)
 	assert.Equal(t, 0, net.sendCalled)
 
 	// test aggregation by hash
 	hashRes2 := RandomHash()
 	for i := 1; i < numOfPeers; i++ {
-		l.receiveLayerHash(context.TODO(), types.LayerIDFromUint32(1), net.peers[i], numOfPeers, hashRes2.Bytes(), nil)
+		l.receiveLayerHash(context.TODO(), types.NewLayerID(1), net.peers[i], numOfPeers, hashRes2.Bytes(), nil)
 	}
 	assert.Equal(t, 2, net.sendCalled)
 
-	l.receiveLayerHash(context.TODO(), types.LayerIDFromUint32(1), net.peers[0], numOfPeers, hashRes.Bytes(), nil)
+	l.receiveLayerHash(context.TODO(), types.NewLayerID(1), net.peers[0], numOfPeers, hashRes.Bytes(), nil)
 
 	// test partial empty layer response
-	l.receiveLayerHash(context.TODO(), types.LayerIDFromUint32(1), net.peers[0], numOfPeers, hashRes.Bytes(), nil)
-	l.receiveLayerHash(context.TODO(), types.LayerIDFromUint32(1), net.peers[1], numOfPeers, emptyHash.Bytes(), nil)
+	l.receiveLayerHash(context.TODO(), types.NewLayerID(1), net.peers[0], numOfPeers, hashRes.Bytes(), nil)
+	l.receiveLayerHash(context.TODO(), types.NewLayerID(1), net.peers[1], numOfPeers, emptyHash.Bytes(), nil)
 	for i := 2; i < numOfPeers; i++ {
-		l.receiveLayerHash(context.TODO(), types.LayerIDFromUint32(1), net.peers[i], numOfPeers, hashRes2.Bytes(), nil)
+		l.receiveLayerHash(context.TODO(), types.NewLayerID(1), net.peers[i], numOfPeers, hashRes2.Bytes(), nil)
 	}
 	// not considered zero-block layer because there are 2 known hashes
 	assert.Equal(t, 4, net.sendCalled)
 
 	// test empty layer response
-	l.receiveLayerHash(context.TODO(), types.LayerIDFromUint32(1), net.peers[0], numOfPeers, nil, fmt.Errorf("error"))
+	l.receiveLayerHash(context.TODO(), types.NewLayerID(1), net.peers[0], numOfPeers, nil, fmt.Errorf("error"))
 	for i := 1; i < numOfPeers; i++ {
-		l.receiveLayerHash(context.TODO(), types.LayerIDFromUint32(1), net.peers[i], numOfPeers, emptyHash.Bytes(), nil)
+		l.receiveLayerHash(context.TODO(), types.NewLayerID(1), net.peers[i], numOfPeers, emptyHash.Bytes(), nil)
 	}
 	// zero-block layer should not incur additional send
 	assert.Equal(t, 4, net.sendCalled)
 
 	// test giving up on too many errors (numErrors > peers/2)
-	l.receiveLayerHash(context.TODO(), types.LayerIDFromUint32(1), net.peers[0], numOfPeers, hashRes.Bytes(), nil)
+	l.receiveLayerHash(context.TODO(), types.NewLayerID(1), net.peers[0], numOfPeers, hashRes.Bytes(), nil)
 	for i := 1; i < numOfPeers; i++ {
-		l.receiveLayerHash(context.TODO(), types.LayerIDFromUint32(1), net.peers[i], numOfPeers, nil, fmt.Errorf("error"))
+		l.receiveLayerHash(context.TODO(), types.NewLayerID(1), net.peers[i], numOfPeers, nil, fmt.Errorf("error"))
 	}
 	// zero-block layer should not incur additional send
 	assert.Equal(t, 4, net.sendCalled)
@@ -240,7 +240,7 @@ func Test_notifyLayerPromiseResult_AllHaveData(t *testing.T) {
 	db := newLayerDBMock()
 	net := &mockNet{}
 	l := NewMockLogic(net, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerHash"))
-	layer := types.LayerIDFromUint32(1)
+	layer := types.NewLayerID(1)
 	result := make(chan LayerPromiseResult, 1)
 	l.layerResM.Lock()
 	l.layerResultsChannels[layer] = append(l.layerResultsChannels[layer], result)
@@ -257,7 +257,7 @@ func Test_notifyLayerPromiseResult_OneHasBlockData(t *testing.T) {
 	db := newLayerDBMock()
 	net := &mockNet{}
 	l := NewMockLogic(net, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerHash"))
-	layer := types.LayerIDFromUint32(1)
+	layer := types.NewLayerID(1)
 	result := make(chan LayerPromiseResult, 1)
 	l.layerResM.Lock()
 	l.layerResultsChannels[layer] = append(l.layerResultsChannels[layer], result)
@@ -274,7 +274,7 @@ func Test_notifyLayerPromiseResult_OneZeroLayerAmongstErrors(t *testing.T) {
 	db := newLayerDBMock()
 	net := &mockNet{}
 	l := NewMockLogic(net, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerHash"))
-	layer := types.LayerIDFromUint32(1)
+	layer := types.NewLayerID(1)
 	result := make(chan LayerPromiseResult, 1)
 	l.layerResM.Lock()
 	l.layerResultsChannels[layer] = append(l.layerResultsChannels[layer], result)
@@ -291,7 +291,7 @@ func Test_notifyLayerPromiseResult_ZeroLayer(t *testing.T) {
 	db := newLayerDBMock()
 	net := &mockNet{}
 	l := NewMockLogic(net, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerHash"))
-	layer := types.LayerIDFromUint32(1)
+	layer := types.NewLayerID(1)
 	result := make(chan LayerPromiseResult, 1)
 	l.layerResM.Lock()
 	l.layerResultsChannels[layer] = append(l.layerResultsChannels[layer], result)
@@ -311,7 +311,7 @@ func TestLogic_PollLayer(t *testing.T) {
 		net.peers = append(net.peers, p2pcrypto.NewRandomPubkey())
 	}
 
-	l.PollLayer(context.TODO(), types.LayerIDFromUint32(1))
+	l.PollLayer(context.TODO(), types.NewLayerID(1))
 
 	assert.Equal(t, numOfPeers, net.sendCalled)
 }

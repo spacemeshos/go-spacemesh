@@ -58,11 +58,11 @@ func getLayersPerEpoch() uint32 {
 
 // GetEffectiveGenesis returns when actual blocks would be created
 func GetEffectiveGenesis() LayerID {
-	return LayerIDFromUint32(atomic.LoadUint32(&effectiveGenesis))
+	return NewLayerID(atomic.LoadUint32(&effectiveGenesis))
 }
 
-// LayerIDFromUint32 creates LayerID from uint32.
-func LayerIDFromUint32(value uint32) LayerID {
+// NewLayerID creates LayerID from uint32.
+func NewLayerID(value uint32) LayerID {
 	return LayerID{value: value}
 }
 

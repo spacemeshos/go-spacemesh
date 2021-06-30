@@ -167,7 +167,7 @@ func TestOracle_Eligible2(t *testing.T) {
 	mr.SetResult(register, "myid", []byte(`{ "message": "ok" }"`))
 	o.client = mr
 	o.Register(true, "myid")
-	lid := types.LayerIDFromUint32(1)
+	lid := types.NewLayerID(1)
 	mr.SetResult(validate, validateQuery(o.world, hashInstanceAndK(lid, 2), 0),
 		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, "sheker")))
 	res, err := o.Eligible(lid, 2, 0, types.NodeID{}, []byte{})

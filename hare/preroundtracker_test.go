@@ -23,7 +23,7 @@ const (
 )
 
 func genBlockID(i int) types.BlockID {
-	return types.NewExistingBlock(types.LayerIDFromUint32(1), util.Uint32ToBytes(uint32(i)), nil).ID()
+	return types.NewExistingBlock(types.NewLayerID(1), util.Uint32ToBytes(uint32(i)), nil).ID()
 }
 
 var value1 = genBlockID(1)

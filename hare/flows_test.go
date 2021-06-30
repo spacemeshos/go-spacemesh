@@ -80,13 +80,13 @@ func (his *HareWrapper) waitForTermination() {
 func (his *HareWrapper) WaitForTimedTermination(t *testing.T, timeout time.Duration) {
 	timer := time.After(timeout)
 	go his.waitForTermination()
-	total := types.LayerIDFromUint32(his.totalCP)
+	total := types.NewLayerID(his.totalCP)
 	select {
 	case <-timer:
 		t.Fatal("Timeout")
 		return
 	case <-his.termination.CloseChannel():
-		for i := types.LayerIDFromUint32(1); i.After(total); i = i.Add(1) {
+		for i := types.NewLayerID(1); i.After(total); i = i.Add(1) {
 			his.checkResult(t, i)
 		}
 		return
@@ -175,8 +175,8 @@ func Test_consensusIterations(t *testing.T) {
 	i := 0
 	creationFunc := func() {
 		s := sim.NewNode()
-		p2pm := &p2pManipulator{nd: s, stalledLayer: types.LayerIDFromUint32(1), err: errors.New("fake err")}
-		proc := createConsensusProcess(true, cfg, oracle, p2pm, test.initialSets[i], types.LayerIDFromUint32(1), t.Name())
+		p2pm := &p2pManipulator{nd: s, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
+		proc := createConsensusProcess(true, cfg, oracle, p2pm, test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.procs = append(test.procs, proc)
 		i++
 	}
@@ -292,7 +292,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	oracle := &trueOracle{}
 	for i := 0; i < totalNodes; i++ {
 		s := sim.NewNode()
-		mp2p := &p2pManipulator{nd: s, stalledLayer: types.LayerIDFromUint32(1), err: errors.New("fake err")}
+		mp2p := &p2pManipulator{nd: s, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
 		h := createMaatuf(cfg, test.lCh[i], mp2p, oracle, t.Name())
 		test.hare = append(test.hare, h)

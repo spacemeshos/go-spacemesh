@@ -62,12 +62,12 @@ const (
 )
 
 var (
-	txReturnLayer         = types.LayerIDFromUint32(1)
-	layerFirst            = types.LayerIDFromUint32(0)
-	layerVerified         = types.LayerIDFromUint32(8)
-	layerLatest           = types.LayerIDFromUint32(10)
-	layerCurrent          = types.LayerIDFromUint32(12)
-	postGenesisEpochLayer = types.LayerIDFromUint32(22)
+	txReturnLayer         = types.NewLayerID(1)
+	layerFirst            = types.NewLayerID(0)
+	layerVerified         = types.NewLayerID(8)
+	layerLatest           = types.NewLayerID(10)
+	layerCurrent          = types.NewLayerID(12)
+	postGenesisEpochLayer = types.NewLayerID(22)
 
 	networkMock = NetworkMock{}
 	mempoolMock = MempoolMock{

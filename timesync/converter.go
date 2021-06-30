@@ -17,7 +17,7 @@ func (lc LayerConv) TimeToLayer(t time.Time) types.LayerID {
 	if t.Before(lc.genesis) { // the genesis is in the future
 		return types.LayerID{}
 	}
-	return types.LayerIDFromUint32(uint32(t.Sub(lc.genesis)/lc.duration) + 1)
+	return types.NewLayerID(uint32(t.Sub(lc.genesis)/lc.duration) + 1)
 }
 
 // LayerToTime returns the time of the provided layer

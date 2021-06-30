@@ -44,7 +44,7 @@ func TestSpacemeshApp_TestSyncCmd(t *testing.T) {
 			t.Error("timed out ")
 			return
 		default:
-			if syncApp.msh.ProcessedLayer().After(types.LayerIDFromUint32(20)) {
+			if syncApp.msh.ProcessedLayer().After(types.NewLayerID(20)) {
 				t.Log("done!")
 				return
 			}

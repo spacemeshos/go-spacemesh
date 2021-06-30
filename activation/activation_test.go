@@ -50,13 +50,13 @@ var (
 	block2      = types.NewExistingBlock(types.LayerID{}, []byte("22222"), nil)
 	block3      = types.NewExistingBlock(types.LayerID{}, []byte("33333"), nil)
 
-	postGenesisEpochLayer = types.LayerIDFromUint32(22)
-	defaultMeshLayer      = types.LayerIDFromUint32(12)
+	postGenesisEpochLayer = types.NewLayerID(22)
+	defaultMeshLayer      = types.NewLayerID(12)
 
 	defaultView      = []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
 	net              = &NetMock{}
 	layerClockMock   = &LayerClockMock{}
-	meshProviderMock = &MeshProviderMock{latestLayer: types.LayerIDFromUint32(12)}
+	meshProviderMock = &MeshProviderMock{latestLayer: types.NewLayerID(12)}
 	nipstBuilderMock = &NipstBuilderMock{}
 	postProver       = &postProverClientMock{}
 	npst             = NewNIPSTWithChallenge(&chlng, poetBytes)
@@ -582,7 +582,7 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 	activationDb := newActivationDb()
 	b := newBuilder(activationDb)
 
-	atx := newActivationTx(nodeID, 1, prevAtxID, prevAtxID, types.LayerIDFromUint32(5), 1, 100, 100, coinbase, npst)
+	atx := newActivationTx(nodeID, 1, prevAtxID, prevAtxID, types.NewLayerID(5), 1, 100, 100, coinbase, npst)
 	storeAtx(r, activationDb, atx, log.NewDefault("storeAtx"))
 
 	act := newActivationTx(b.nodeID, 2, atx.ID(), atx.ID(), atx.PubLayerID.Add(10), 0, 100, 100, coinbase, npst)
@@ -645,7 +645,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 	b := NewBuilder(bc, nodeID, 0, ed, activationDb, net, meshProviderMock, nipstBuilderMock, postProver, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
 
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
-	atx := newActivationTx(nodeID, 1, prevAtx, prevAtx, types.LayerIDFromUint32(15), 1, 100, 100, coinbase, npst)
+	atx := newActivationTx(nodeID, 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, 100, coinbase, npst)
 	atxBytes, err := types.InterfaceToBytes(atx.InnerActivationTx)
 	assert.NoError(t, err)
 	err = b.SignAtx(atx)
@@ -687,7 +687,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	nipstBuilder.poetRef = poetRef
 	npst := NewNIPSTWithChallenge(&chlng, poetRef)
 
-	atx := newActivationTx(types.NodeID{Key: "aaaaaa", VRFPublicKey: []byte("bbbbb")}, 1, prevAtx, prevAtx, types.LayerIDFromUint32(15), 1, 100, 100, coinbase, npst)
+	atx := newActivationTx(types.NodeID{Key: "aaaaaa", VRFPublicKey: []byte("bbbbb")}, 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, 100, coinbase, npst)
 
 	err := activationDb.StoreAtx(atx.PubLayerID.GetEpoch(), atx)
 	assert.NoError(t, err)
@@ -716,7 +716,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	b = NewBuilder(bc, id, 0, &MockSigning{}, activationDb, net, layers, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
 	err = b.loadChallenge()
 	assert.NoError(t, err)
-	layers.latestLayer = types.LayerIDFromUint32(22)
+	layers.latestLayer = types.NewLayerID(22)
 	err = b.PublishActivationTx(context.TODO())
 	assert.NoError(t, err)
 	act := newActivationTx(b.nodeID, 2, atx.ID(), atx.ID(), atx.PubLayerID.Add(10), 101, 1, 0, coinbase, npst2)
@@ -843,9 +843,9 @@ func TestActivationDb_CalcActiveSetFromViewHighConcurrency(t *testing.T) {
 	coinbase2 := types.HexToAddress("bbbb")
 	coinbase3 := types.HexToAddress("cccc")
 	atxs := []*types.ActivationTx{
-		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(12), 0, 100, 100, coinbase1, &types.NIPST{}),
-		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(300), 0, 100, 100, coinbase2, &types.NIPST{}),
-		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerIDFromUint32(435), 0, 100, 100, coinbase3, &types.NIPST{}),
+		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(12), 0, 100, 100, coinbase1, &types.NIPST{}),
+		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(300), 0, 100, 100, coinbase2, &types.NIPST{}),
+		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(435), 0, 100, 100, coinbase3, &types.NIPST{}),
 	}
 
 	poetRef := []byte{0xba, 0xb0}
@@ -855,12 +855,12 @@ func TestActivationDb_CalcActiveSetFromViewHighConcurrency(t *testing.T) {
 		atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
 	}
 
-	blocks := createLayerWithAtx(t, layers, types.LayerIDFromUint32(1), 10, atxs, []types.BlockID{}, []types.BlockID{})
-	blocks = createLayerWithAtx(t, layers, types.LayerIDFromUint32(10), 10, []*types.ActivationTx{}, blocks, blocks)
-	blocks = createLayerWithAtx(t, layers, types.LayerIDFromUint32(100), 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks := createLayerWithAtx(t, layers, types.NewLayerID(1), 10, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks = createLayerWithAtx(t, layers, types.NewLayerID(10), 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks = createLayerWithAtx(t, layers, types.NewLayerID(100), 10, []*types.ActivationTx{}, blocks, blocks)
 
 	mck := &ATXDBMock{}
-	atx := newActivationTx(id1, 1, atxs[0].ID(), atxs[0].ID(), types.LayerIDFromUint32(1000), 0, 100, 100, coinbase1, &types.NIPST{})
+	atx := newActivationTx(id1, 1, atxs[0].ID(), atxs[0].ID(), types.NewLayerID(1000), 0, 100, 100, coinbase1, &types.NIPST{})
 
 	atxdb.calcTotalWeightFunc = mck.CalcMinerWeights
 	wg := sync.WaitGroup{}

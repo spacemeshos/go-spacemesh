@@ -76,7 +76,7 @@ func TestEligibilityValidator_validateRole(t *testing.T) {
 	// TODO: remove comment after inceptions problem is addressed
 	//assert.False(t, res)
 
-	m.InnerMsg.InstanceID = types.LayerIDFromUint32(111)
+	m.InnerMsg.InstanceID = types.NewLayerID(111)
 	myErr := errors.New("my error")
 	ev.identityProvider = &mockIDProvider{myErr}
 	res, err = ev.validateRole(context.TODO(), m)
@@ -97,7 +97,7 @@ func TestEligibilityValidator_validateRole(t *testing.T) {
 	assert.False(t, res)
 
 	oracle.isEligible = true
-	m.InnerMsg.InstanceID = types.LayerIDFromUint32(111)
+	m.InnerMsg.InstanceID = types.NewLayerID(111)
 	res, err = ev.validateRole(context.TODO(), m)
 	assert.Nil(t, err)
 	assert.True(t, res)

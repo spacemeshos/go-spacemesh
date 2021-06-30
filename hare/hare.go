@@ -128,7 +128,7 @@ func (h *Hare) getLastLayer() types.LayerID {
 // checks if the provided id is too late/old to be requested.
 func (h *Hare) outOfBufferRange(id types.LayerID) bool {
 	last := h.getLastLayer()
-	if last.Before(types.LayerIDFromUint32(h.bufferSize)) {
+	if last.Before(types.NewLayerID(h.bufferSize)) {
 		return false
 	}
 	if !id.After(last.Sub(h.bufferSize)) { // bufferSize>=0

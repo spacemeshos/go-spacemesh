@@ -125,16 +125,16 @@ func TestHare_GetResult(t *testing.T) {
 
 	h := createHare(n1, log.NewDefault(t.Name()))
 
-	res, err := h.GetResult(types.LayerIDFromUint32(0))
+	res, err := h.GetResult(types.NewLayerID(0))
 	r.Equal(errNoResult, err)
 	r.Nil(res)
 
-	mockid := types.LayerIDFromUint32(0)
+	mockid := types.NewLayerID(0)
 	set := NewSetFromValues(value1)
 
 	_ = h.collectOutput(context.TODO(), mockReport{mockid, set, true, false})
 
-	res, err = h.GetResult(types.LayerIDFromUint32(0))
+	res, err = h.GetResult(types.NewLayerID(0))
 	r.NoError(err)
 	r.Equal(res[0].Bytes(), value1.Bytes())
 }
@@ -160,15 +160,15 @@ func TestHare_GetResult2(t *testing.T) {
 	_ = h.Start(context.TODO())
 
 	for i := uint32(1); i <= h.bufferSize; i++ {
-		h.beginLayer <- types.LayerIDFromUint32(i)
+		h.beginLayer <- types.NewLayerID(i)
 		time.Sleep(15 * time.Millisecond)
 	}
 	time.Sleep(100 * time.Millisecond)
 
-	_, err := h.GetResult(types.LayerIDFromUint32(h.bufferSize))
+	_, err := h.GetResult(types.NewLayerID(h.bufferSize))
 	require.NoError(t, err)
 
-	h.beginLayer <- types.LayerIDFromUint32(h.bufferSize + 1)
+	h.beginLayer <- types.NewLayerID(h.bufferSize + 1)
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -235,7 +235,7 @@ func TestHare_collectOutput2(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, output[0], value1)
 
-	h.lastLayer = types.LayerIDFromUint32(3)
+	h.lastLayer = types.NewLayerID(3)
 	newmockid := instanceID1
 	err := h.collectOutput(context.TODO(), mockReport{newmockid, set, true, false})
 	require.Equal(t, err, ErrTooLate)
@@ -256,7 +256,7 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 
 	h := createHare(n1, log.NewDefault(t.Name()))
 	h.Start(context.TODO())
-	mo := mockReport{types.LayerIDFromUint32(8), NewEmptySet(0), true, false}
+	mo := mockReport{types.NewLayerID(8), NewEmptySet(0), true, false}
 	h.broker.Register(context.TODO(), mo.ID())
 	time.Sleep(1 * time.Second)
 	h.outputChan <- mo
@@ -385,7 +385,7 @@ func TestHare_IsTooLate(t *testing.T) {
 
 	h := createHare(n1, log.NewDefault(t.Name()))
 
-	for i := (types.LayerID{}); i.Before(types.LayerIDFromUint32(h.bufferSize * 2)); i = i.Add(1) {
+	for i := (types.LayerID{}); i.Before(types.NewLayerID(h.bufferSize * 2)); i = i.Add(1) {
 		mockid := i
 		set := NewSetFromValues(value1)
 		h.lastLayer = i
@@ -400,7 +400,7 @@ func TestHare_IsTooLate(t *testing.T) {
 		require.EqualValues(t, exp, len(h.outputs))
 	}
 
-	require.True(t, h.outOfBufferRange(types.LayerIDFromUint32(1)))
+	require.True(t, h.outOfBufferRange(types.NewLayerID(1)))
 }
 
 func TestHare_oldestInBuffer(t *testing.T) {
@@ -449,7 +449,7 @@ func TestHare_oldestInBuffer(t *testing.T) {
 	require.Equal(t, h.bufferSize, len(h.outputs))
 
 	lyr = h.oldestResultInBuffer()
-	require.Equal(t, types.LayerIDFromUint32(2), lyr)
+	require.Equal(t, types.NewLayerID(2), lyr)
 }
 
 // make sure that Hare writes a weak coin value for a layer to the mesh after the CP completes,
@@ -459,7 +459,7 @@ func TestHare_WeakCoin(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerID := types.LayerIDFromUint32(10)
+	layerID := types.NewLayerID(10)
 
 	done := make(chan struct{})
 	layerTicker := make(chan types.LayerID)

@@ -43,7 +43,7 @@ func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 	atxdb := &mockAtxDB{err: errFoo}
 	v := NewBlockEligibilityValidator(10, 5, 5, atxdb, &EpochBeaconProvider{}, validateVRF, nil, log.NewDefault(t.Name()))
 
-	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: types.LayerIDFromUint32(20)}}} // non-genesis
+	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: types.NewLayerID(20)}}} // non-genesis
 	block.Signature = edSigner.Sign(block.Bytes())
 	block.Initialize()
 	_, err := v.getValidAtx(block)
@@ -55,7 +55,7 @@ func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 
 	atxHeader := &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{
 		NodeID:     types.NodeID{Key: edSigner.PublicKey().String()},
-		PubLayerID: types.LayerIDFromUint32(18),
+		PubLayerID: types.NewLayerID(18),
 	}}
 	v.activationDb = &mockAtxDB{atxH: atxHeader}
 	atx, err := v.getValidAtx(block)
