@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -43,7 +44,7 @@ func TestSpacemeshApp_TestSyncCmd(t *testing.T) {
 			t.Error("timed out ")
 			return
 		default:
-			if syncApp.msh.ProcessedLayer() > 20 {
+			if syncApp.msh.ProcessedLayer().After(types.LayerIDFromUint32(20)) {
 				t.Log("done!")
 				return
 			}

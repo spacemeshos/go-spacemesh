@@ -3,10 +3,11 @@ package config
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"path/filepath"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
@@ -77,8 +78,8 @@ type BaseConfig struct {
 	GenesisTime      string `mapstructure:"genesis-time"`
 	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
 	LayerAvgSize     int    `mapstructure:"layer-average-size"`
-	LayersPerEpoch   int    `mapstructure:"layers-per-epoch"`
-	Hdist            int    `mapstructure:"hdist"`
+	LayersPerEpoch   uint32 `mapstructure:"layers-per-epoch"`
+	Hdist            uint32 `mapstructure:"hdist"`
 
 	PoETServer string `mapstructure:"poet-server"`
 

@@ -1,6 +1,7 @@
 package types
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -95,31 +96,34 @@ func TestBytesToNodeID(t *testing.T) {
 }
 
 func TestLayerIDWraparound(t *testing.T) {
-	max := LayerID(^uint64(0))
+	var (
+		max  = LayerIDFromUint32(math.MaxUint32)
+		zero LayerID
+	)
 	t.Run("Add", func(t *testing.T) {
-		require.EqualValues(t, 1, LayerID(0).Add(1))
+		require.EqualValues(t, 1, zero.Add(1).Uint32())
 		require.Panics(t, func() {
-			LayerID(max).Add(1)
+			max.Add(1)
 		})
 		require.Panics(t, func() {
-			LayerID(max - 2).Add(max - 1)
+			LayerID{}.Add(math.MaxUint32 - 2).Add(math.MaxUint32 - 3)
 		})
 	})
 	t.Run("Sub", func(t *testing.T) {
-		require.EqualValues(t, 0, LayerID(1).Sub(1))
+		require.EqualValues(t, 0, zero.Add(1).Sub(1).Uint32())
 		require.Panics(t, func() {
-			LayerID(0).Sub(1)
+			zero.Sub(1)
 		})
 		require.Panics(t, func() {
-			LayerID(max - 2).Sub(max - 1)
+			LayerID{}.Add(math.MaxUint32 - 2).Sub(math.MaxUint32 - 1)
 		})
 	})
 	t.Run("Mul", func(t *testing.T) {
-		require.EqualValues(t, 0, LayerID(0).Mul(1))
-		require.EqualValues(t, 0, LayerID(1).Mul(0))
-		require.EqualValues(t, 4, LayerID(2).Mul(LayerID(2)))
+		require.EqualValues(t, 0, zero.Mul(1).Uint32())
+		require.EqualValues(t, 0, LayerID{}.Add(1).Mul(0).Uint32())
+		require.EqualValues(t, 4, LayerID{}.Add(2).Mul(2).Uint32())
 		require.Panics(t, func() {
-			LayerID(max).Mul(2)
+			max.Mul(2)
 		})
 	})
 }

@@ -95,7 +95,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		numOfInstances = 5
 	)
 	cfg := getTestDefaultConfig(numOfInstances)
-	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
+	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 	path := suite.T().TempDir()
 
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
@@ -186,7 +186,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 				time.Sleep(10 * time.Second)
 			}
 		}
-		suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch) - 1)
+		suite.validateBlocksAndATXs(types.LayerIDFromUint32(numberOfEpochs * suite.apps[0].Config.LayersPerEpoch).Sub(1))
 		oldRoot = suite.apps[0].state.GetStateRoot()
 	}()
 
@@ -306,7 +306,7 @@ func reachedEpochTester(dependencies []int) TestScenario {
 	test := func(suite *AppTestSuite, t *testing.T) bool {
 		expectedTotalWeight := configuredTotalWeight(suite.apps)
 		for _, app := range suite.apps {
-			if uint32(app.mesh.LatestLayer()) < numberOfEpochs*uint32(app.Config.LayersPerEpoch) {
+			if app.mesh.LatestLayer().Before(types.LayerIDFromUint32(numberOfEpochs * uint32(app.Config.LayersPerEpoch))) {
 				return false
 			}
 			suite.validateLastATXTotalWeight(app, numberOfEpochs, expectedTotalWeight)
@@ -328,7 +328,7 @@ func (suite *AppTestSuite) healingWeakcoinTester() {
 		suite.Equal(globalLayer, lastLayer, "bad last layer on node %v", i)
 		// there will be no coin value for layer zero since ticker delivers only new layers
 		// and there will be no coin value for the last layer
-		for layerID := types.LayerID(1); layerID < lastLayer; layerID++ {
+		for layerID := types.LayerIDFromUint32(1); layerID.Before(lastLayer); layerID = layerID.Add(1) {
 			coinflip, exists := app.mesh.DB.GetCoinflip(context.TODO(), layerID)
 			if !exists {
 				suite.Fail("no weak coin value", "node %v layer %v last layer %v", i, layerID, lastLayer)
@@ -428,7 +428,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	// assert all nodes validated untilLayer-1
 	for _, ap := range suite.apps {
 		curNodeLastLayer := ap.mesh.ProcessedLayer()
-		assert.True(suite.T(), int(untilLayer)-1 <= int(curNodeLastLayer))
+		assert.True(suite.T(), !untilLayer.Sub(1).After(curNodeLastLayer))
 	}
 
 	for _, ap := range suite.apps {
@@ -438,7 +438,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 			datamap[ap.nodeID.Key].layertoblocks = make(map[types.LayerID][]types.BlockID)
 		}
 
-		for i := types.LayerID(5); i <= untilLayer; i++ {
+		for i := types.LayerIDFromUint32(5); !i.After(untilLayer); i = i.Add(1) {
 			lyr, err := ap.mesh.GetLayer(i)
 			suite.NoError(err, "couldn't get validated layer from db", i)
 			for _, b := range lyr.Blocks() {
@@ -489,8 +489,8 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	}
 
 	genesisBlocks := 0
-	for i := 0; i < layersPerEpoch*2; i++ {
-		if l, ok := patient.layertoblocks[types.LayerID(i)]; ok {
+	for i := uint32(0); i < layersPerEpoch*2; i++ {
+		if l, ok := patient.layertoblocks[types.LayerIDFromUint32(i)]; ok {
 			genesisBlocks += len(l)
 		}
 	}
@@ -498,10 +498,10 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	// assert number of blocks
 	totalEpochs := int(untilLayer.GetEpoch()) + 1
 	expectedEpochWeight := configuredTotalWeight(suite.apps)
-	blocksPerEpochTarget := layerAvgSize * layersPerEpoch
+	blocksPerEpochTarget := uint32(layerAvgSize) * layersPerEpoch
 	expectedBlocksPerEpoch := 0
 	for _, app := range suite.apps {
-		expectedBlocksPerEpoch += max(blocksPerEpochTarget*int(app.Config.SpaceToCommit)/int(expectedEpochWeight), 1)
+		expectedBlocksPerEpoch += max(int(blocksPerEpochTarget)*int(app.Config.SpaceToCommit)/int(expectedEpochWeight), 1)
 	}
 
 	expectedTotalBlocks := (totalEpochs - 2) * expectedBlocksPerEpoch
@@ -626,7 +626,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.FETCH.MaxRetiresForPeer = 5
 
 	rolacle := eligibility.New()
-	types.SetLayersPerEpoch(int32(smApp.Config.LayersPerEpoch))
+	types.SetLayersPerEpoch(smApp.Config.LayersPerEpoch)
 
 	edSgn := signing.NewEdSigner()
 	pub := edSgn.PublicKey()
@@ -650,7 +650,8 @@ func TestShutdown(t *testing.T) {
 	gTime := genesisTime
 	ld := time.Duration(20) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
-	err = smApp.initServices(context.TODO(), log.AppLog, nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetHarness.HTTPPoetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
+	err = smApp.initServices(context.TODO(), log.AppLog, nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize),
+		postClient, poetHarness.HTTPPoetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock)
 
 	r.NoError(err)
 

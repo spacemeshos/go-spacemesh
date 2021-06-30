@@ -177,7 +177,7 @@ type LayerPromiseResult struct {
 
 // LayerHashReqReceiver returns the layer hash for the given layer ID
 func (l *Logic) LayerHashReqReceiver(ctx context.Context, msg []byte) []byte {
-	lyr := types.LayerID(util.BytesToUint64(msg))
+	lyr := types.BytesToLayerID(msg)
 	h := l.layerDB.GetLayerHash(lyr)
 	l.log.Info("got layer hash request %v, responding with %v", lyr, h.Hex())
 	return h.Bytes()

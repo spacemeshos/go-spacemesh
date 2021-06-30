@@ -3,6 +3,10 @@ package hare
 import (
 	"context"
 	"errors"
+	"math/rand"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -10,27 +14,24 @@ import (
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
-	"math/rand"
-	"testing"
-	"time"
 )
 
 type HareWrapper struct {
-	totalCP     int
+	totalCP     uint32
 	termination Closer
 	lCh         []chan types.LayerID
 	hare        []*Hare
 	initialSets []*Set // all initial sets
-	outputs     map[instanceID][]*Set
+	outputs     map[types.LayerID][]*Set
 	name        string
 }
 
-func newHareWrapper(totalCp int) *HareWrapper {
+func newHareWrapper(totalCp uint32) *HareWrapper {
 	hs := new(HareWrapper)
 	hs.lCh = make([]chan types.LayerID, 0)
 	hs.totalCP = totalCp
 	hs.termination = NewCloser()
-	hs.outputs = make(map[instanceID][]*Set, 0)
+	hs.outputs = make(map[types.LayerID][]*Set, 0)
 
 	return hs
 }
@@ -45,7 +46,7 @@ func (his *HareWrapper) waitForTermination() {
 	for {
 		count := 0
 		for _, p := range his.hare {
-			for i := types.LayerID(types.GetEffectiveGenesis() + 1); i <= types.GetEffectiveGenesis()+types.LayerID(his.totalCP); i++ {
+			for i := types.GetEffectiveGenesis().Add(1); !i.After(types.GetEffectiveGenesis().Add(his.totalCP)); i = i.Add(1) {
 				blks, _ := p.GetResult(i)
 				if len(blks) > 0 {
 					count++
@@ -53,8 +54,7 @@ func (his *HareWrapper) waitForTermination() {
 			}
 		}
 
-		// log.Info("count is %v", count)
-		if count == his.totalCP*len(his.hare) {
+		if count == int(his.totalCP)*len(his.hare) {
 			break
 		}
 
@@ -64,13 +64,13 @@ func (his *HareWrapper) waitForTermination() {
 	log.Info("Terminating. Validating outputs")
 
 	for _, p := range his.hare {
-		for i := types.LayerID(types.GetEffectiveGenesis() + 1); i <= types.GetEffectiveGenesis()+types.LayerID(his.totalCP); i++ {
+		for i := types.GetEffectiveGenesis().Add(1); !i.After(types.GetEffectiveGenesis().Add(his.totalCP)); i = i.Add(1) {
 			s := NewEmptySet(10)
 			blks, _ := p.GetResult(i)
 			for _, b := range blks {
 				s.Add(b)
 			}
-			his.outputs[instanceID(i)] = append(his.outputs[instanceID(i)], s)
+			his.outputs[i] = append(his.outputs[i], s)
 		}
 	}
 
@@ -80,19 +80,20 @@ func (his *HareWrapper) waitForTermination() {
 func (his *HareWrapper) WaitForTimedTermination(t *testing.T, timeout time.Duration) {
 	timer := time.After(timeout)
 	go his.waitForTermination()
+	total := types.LayerIDFromUint32(his.totalCP)
 	select {
 	case <-timer:
 		t.Fatal("Timeout")
 		return
 	case <-his.termination.CloseChannel():
-		for i := 1; i <= his.totalCP; i++ {
-			his.checkResult(t, instanceID(i))
+		for i := types.LayerIDFromUint32(1); i.After(total); i = i.Add(1) {
+			his.checkResult(t, i)
 		}
 		return
 	}
 }
 
-func (his *HareWrapper) checkResult(t *testing.T, id instanceID) {
+func (his *HareWrapper) checkResult(t *testing.T, id types.LayerID) {
 	// check consistency
 	out := his.outputs[id]
 	for i := 0; i < len(out)-1; i++ {
@@ -104,7 +105,7 @@ func (his *HareWrapper) checkResult(t *testing.T, id instanceID) {
 
 type p2pManipulator struct {
 	nd           *service.Node
-	stalledLayer instanceID
+	stalledLayer types.LayerID
 	err          error
 }
 
@@ -174,8 +175,8 @@ func Test_consensusIterations(t *testing.T) {
 	i := 0
 	creationFunc := func() {
 		s := sim.NewNode()
-		p2pm := &p2pManipulator{nd: s, stalledLayer: 1, err: errors.New("fake err")}
-		proc := createConsensusProcess(true, cfg, oracle, p2pm, test.initialSets[i], 1, t.Name())
+		p2pm := &p2pManipulator{nd: s, stalledLayer: types.LayerIDFromUint32(1), err: errors.New("fake err")}
+		proc := createConsensusProcess(true, cfg, oracle, p2pm, test.initialSets[i], types.LayerIDFromUint32(1), t.Name())
 		test.procs = append(test.procs, proc)
 		i++
 	}
@@ -248,7 +249,7 @@ func createMaatuf(tcfg config.Config, layersCh chan types.LayerID, p2p NetworkSe
 func Test_multipleCPs(t *testing.T) {
 	types.SetLayersPerEpoch(4)
 	r := require.New(t)
-	totalCp := 3
+	totalCp := uint32(3)
 	test := newHareWrapper(totalCp)
 	totalNodes := 20
 	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 5, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
@@ -266,7 +267,7 @@ func Test_multipleCPs(t *testing.T) {
 	}
 
 	go func() {
-		for j := types.LayerID(types.GetEffectiveGenesis() + 1); j <= types.GetEffectiveGenesis()+types.LayerID(totalCp); j++ {
+		for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
 			log.Info("sending for layer %v", j)
 			for i := 0; i < len(test.lCh); i++ {
 				log.Info("sending for instance %v", i)
@@ -282,7 +283,7 @@ func Test_multipleCPs(t *testing.T) {
 // Test - run multiple CPs where one of them runs more than one iteration
 func Test_multipleCPsAndIterations(t *testing.T) {
 	r := require.New(t)
-	totalCp := 4
+	totalCp := uint32(4)
 	test := newHareWrapper(totalCp)
 	totalNodes := 20
 	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 3, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
@@ -291,7 +292,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	oracle := &trueOracle{}
 	for i := 0; i < totalNodes; i++ {
 		s := sim.NewNode()
-		mp2p := &p2pManipulator{nd: s, stalledLayer: 1, err: errors.New("fake err")}
+		mp2p := &p2pManipulator{nd: s, stalledLayer: types.LayerIDFromUint32(1), err: errors.New("fake err")}
 		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
 		h := createMaatuf(cfg, test.lCh[i], mp2p, oracle, t.Name())
 		test.hare = append(test.hare, h)
@@ -300,7 +301,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	}
 
 	go func() {
-		for j := types.LayerID(types.GetEffectiveGenesis() + 1); j <= types.GetEffectiveGenesis()+types.LayerID(totalCp); j++ {
+		for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
 			log.Info("sending for layer %v", j)
 			for i := 0; i < len(test.lCh); i++ {
 				log.Info("sending for instance %v", i)

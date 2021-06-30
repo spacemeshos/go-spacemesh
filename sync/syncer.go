@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"sync"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -88,14 +89,14 @@ func (ms net) GetExit() chan struct{} {
 
 // Configuration represents all config params needed by syncer
 type Configuration struct {
-	LayersPerEpoch  uint16
+	LayersPerEpoch  uint32
 	Concurrency     int // number of workers for sync method
 	LayerSize       int
 	RequestTimeout  time.Duration
 	SyncInterval    time.Duration
 	ValidationDelta time.Duration
 	AtxsLimit       int
-	Hdist           int
+	Hdist           uint32
 	AlwaysListen    bool
 	GoldenATXID     types.ATXID
 }

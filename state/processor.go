@@ -9,7 +9,6 @@ import (
 
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -59,17 +58,16 @@ func NewTransactionProcessor(allStates, processorDb database.Database, projector
 	root := stateDb.IntermediateRoot(false)
 	log.Info("started processor with state root %x", root)
 	return &TransactionProcessor{
-		Log:          logger,
-		DB:           stateDb,
-		processorDb:  processorDb,
-		currentLayer: 0,
-		rootHash:     root,
-		stateQueue:   list.List{},
-		projector:    projector,
-		trie:         stateDb.TrieDB(),
-		pool:         txPool,
-		mu:           sync.Mutex{}, // sync between reset and apply mesh.Transactions
-		rootMu:       sync.RWMutex{},
+		Log:         logger,
+		DB:          stateDb,
+		processorDb: processorDb,
+		rootHash:    root,
+		stateQueue:  list.List{},
+		projector:   projector,
+		trie:        stateDb.TrieDB(),
+		pool:        txPool,
+		mu:          sync.Mutex{}, // sync between reset and apply mesh.Transactions
+		rootMu:      sync.RWMutex{},
 	}
 }
 
@@ -91,7 +89,7 @@ func (tp *TransactionProcessor) GetLayerApplied(txID types.TransactionID) *types
 	if err != nil {
 		return nil
 	}
-	layerID := types.LayerID(util.BytesToUint64(layerIDBytes))
+	layerID := types.BytesToLayerID(layerIDBytes)
 	return &layerID
 }
 

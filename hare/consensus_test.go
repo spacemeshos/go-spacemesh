@@ -2,14 +2,15 @@ package hare
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	signing2 "github.com/spacemeshos/go-spacemesh/signing"
-	"testing"
-	"time"
 )
 
 // Test the consensus process as a whole
@@ -134,7 +135,7 @@ func (test *ConsensusTest) Start() {
 	go startProcs(test.dishonest)
 }
 
-func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle, network NetworkService, initialSet *Set, layer instanceID, name string) *consensusProcess {
+func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle, network NetworkService, initialSet *Set, layer types.LayerID, name string) *consensusProcess {
 	broker := buildBroker(network, name)
 	broker.Start(context.TODO())
 	output := make(chan TerminationOutput, 1)
@@ -165,7 +166,7 @@ func TestConsensusFixedOracle(t *testing.T) {
 	i := 0
 	creationFunc := func() {
 		s := sim.NewNode()
-		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], 1, t.Name())
+		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], types.LayerIDFromUint32(1), t.Name())
 		test.procs = append(test.procs, proc)
 		i++
 	}
@@ -192,7 +193,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 	i := 0
 	creationFunc := func() {
 		s := sim.NewNode()
-		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], 1, t.Name())
+		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], types.LayerIDFromUint32(1), t.Name())
 		test.procs = append(test.procs, proc)
 		i++
 	}
@@ -229,7 +230,7 @@ func TestAllDifferentSet(t *testing.T) {
 	i := 0
 	creationFunc := func() {
 		s := sim.NewNode()
-		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], 1, t.Name())
+		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], types.LayerIDFromUint32(1), t.Name())
 		test.procs = append(test.procs, proc)
 		i++
 	}
@@ -260,7 +261,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 	i := 0
 	honestFunc := func() {
 		s := sim.NewNode()
-		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], 1, t.Name())
+		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], types.LayerIDFromUint32(1), t.Name())
 		test.procs = append(test.procs, proc)
 		i++
 	}
@@ -271,7 +272,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 	// create dishonest
 	dishonestFunc := func() {
 		s := sim.NewFaulty(true, 5, 0) // only broadcast delay
-		proc := createConsensusProcess(false, cfg, oracle, s, test.initialSets[i], 1, t.Name())
+		proc := createConsensusProcess(false, cfg, oracle, s, test.initialSets[i], types.LayerIDFromUint32(1), t.Name())
 		test.dishonest = append(test.dishonest, proc)
 		i++
 	}
@@ -303,7 +304,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 	i := 0
 	honestFunc := func() {
 		s := sim.NewNode()
-		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], 1, t.Name())
+		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i], types.LayerIDFromUint32(1), t.Name())
 		test.procs = append(test.procs, proc)
 		i++
 	}
@@ -314,7 +315,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 	// create dishonest
 	dishonestFunc := func() {
 		s := sim.NewFaulty(true, 0, 10) // delay rcv
-		proc := createConsensusProcess(false, cfg, oracle, s, test.initialSets[i], 1, t.Name())
+		proc := createConsensusProcess(false, cfg, oracle, s, test.initialSets[i], types.LayerIDFromUint32(1), t.Name())
 		test.dishonest = append(test.dishonest, proc)
 		i++
 	}

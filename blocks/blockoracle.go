@@ -30,7 +30,7 @@ const DefaultProofsEpoch = ^types.EpochID(0)
 type Oracle struct {
 	committeeSize      uint32
 	genesisTotalWeight uint64
-	layersPerEpoch     uint16
+	layersPerEpoch     uint32
 	atxDB              activationDB
 	beaconProvider     *EpochBeaconProvider
 	vrfSigner          vrfSigner
@@ -46,7 +46,7 @@ type Oracle struct {
 }
 
 // NewMinerBlockOracle returns a new Oracle.
-func NewMinerBlockOracle(committeeSize uint32, genesisTotalWeight uint64, layersPerEpoch uint16, atxDB activationDB, beaconProvider *EpochBeaconProvider, vrfSigner vrfSigner, nodeID types.NodeID, isSynced func() bool, log log.Log) *Oracle {
+func NewMinerBlockOracle(committeeSize uint32, genesisTotalWeight uint64, layersPerEpoch uint32, atxDB activationDB, beaconProvider *EpochBeaconProvider, vrfSigner vrfSigner, nodeID types.NodeID, isSynced func() bool, log log.Log) *Oracle {
 	return &Oracle{
 		committeeSize:      committeeSize,
 		genesisTotalWeight: genesisTotalWeight,
@@ -167,7 +167,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 		i++
 	}
 	sort.Slice(keys, func(i, j int) bool {
-		return uint64(keys[i]) < uint64(keys[j])
+		return keys[i].Before(keys[j])
 	})
 
 	// Pretty-print the number of blocks per eligible layer
@@ -197,13 +197,13 @@ func (bo *Oracle) getValidAtxForEpoch(validForEpoch types.EpochID) (*types.Activ
 	return atx, nil
 }
 
-func calcEligibleLayer(epochNumber types.EpochID, layersPerEpoch uint16, vrfSig []byte) types.LayerID {
+func calcEligibleLayer(epochNumber types.EpochID, layersPerEpoch uint32, vrfSig []byte) types.LayerID {
 	vrfInteger := util.BytesToUint64(vrfSig)
 	eligibleLayerOffset := vrfInteger % uint64(layersPerEpoch)
-	return epochNumber.FirstLayer().Add(types.LayerID(eligibleLayerOffset))
+	return epochNumber.FirstLayer().Add(uint32(eligibleLayerOffset))
 }
 
-func getNumberOfEligibleBlocks(weight, totalWeight uint64, committeeSize uint32, layersPerEpoch uint16) (uint32, error) {
+func getNumberOfEligibleBlocks(weight, totalWeight uint64, committeeSize uint32, layersPerEpoch uint32) (uint32, error) {
 	if totalWeight == 0 {
 		return 0, errors.New("zero total weight not allowed")
 	}

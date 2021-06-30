@@ -63,7 +63,7 @@ type DB struct {
 	atxs                database.Database
 	atxHeaderCache      AtxCache
 	meshDb              *mesh.DB
-	LayersPerEpoch      uint16
+	LayersPerEpoch      uint32
 	goldenATXID         types.ATXID
 	nipstValidator      nipstValidator
 	pendingTotalWeight  map[types.Hash12]*sync.Mutex
@@ -76,7 +76,7 @@ type DB struct {
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
 // their validity
-func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint16, goldenATXID types.ATXID, nipstValidator nipstValidator, log log.Log) *DB {
+func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint32, goldenATXID types.ATXID, nipstValidator nipstValidator, log log.Log) *DB {
 	db := &DB{
 		idStore:            idStore,
 		atxs:               dbStore,
@@ -399,13 +399,13 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		if err != nil {
 			return fmt.Errorf("positioning atx not found")
 		}
-		if atx.PubLayerID <= posAtx.PubLayerID {
+		if !atx.PubLayerID.After(posAtx.PubLayerID) {
 			return fmt.Errorf("atx layer (%v) must be after positioning atx layer (%v)",
 				atx.PubLayerID, posAtx.PubLayerID)
 		}
-		if uint64(atx.PubLayerID-posAtx.PubLayerID) > uint64(db.LayersPerEpoch) {
+		if d := atx.PubLayerID.Duration(posAtx.PubLayerID); d > db.LayersPerEpoch {
 			return fmt.Errorf("expected distance of one epoch (%v layers) from pos atx but found %v",
-				db.LayersPerEpoch, atx.PubLayerID-posAtx.PubLayerID)
+				db.LayersPerEpoch, d)
 		}
 	} else {
 		publicationEpoch := atx.PubLayerID.GetEpoch()
@@ -536,7 +536,7 @@ func (db *DB) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 	if err != nil && err != database.ErrNotFound {
 		return fmt.Errorf("failed to get current atx: %v", err)
 	}
-	if err == nil && currentTopAtx.LayerID >= atx.PubLayerID {
+	if err == nil && !currentTopAtx.LayerID.Before(atx.PubLayerID) {
 		return nil
 	}
 
@@ -561,8 +561,7 @@ func (db *DB) getTopAtx() (atxIDAndLayer, error) {
 	if err != nil {
 		if err == database.ErrNotFound {
 			return atxIDAndLayer{
-				AtxID:   db.goldenATXID,
-				LayerID: 0,
+				AtxID: db.goldenATXID,
 			}, nil
 		}
 		return atxIDAndLayer{}, fmt.Errorf("failed to get top atx: %v", err)

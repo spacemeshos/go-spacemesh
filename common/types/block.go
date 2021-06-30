@@ -39,71 +39,102 @@ func (id BlockID) AsHash32() Hash32 {
 	return Hash20(id).ToHash32()
 }
 
-var layersPerEpoch int32
-
-// EffectiveGenesis marks when actual blocks would start being crated in the network, this will take account the first
-// genesis epoch and the following epoch in which ATXs are published
-var EffectiveGenesis int32
-
-func getLayersPerEpoch() int32 {
-	return atomic.LoadInt32(&layersPerEpoch)
-}
+var (
+	layersPerEpoch uint32
+	// effectiveGenesis marks when actual blocks would start being crated in the network, this will take account the first
+	// genesis epoch and the following epoch in which ATXs are published
+	effectiveGenesis uint32
+)
 
 // SetLayersPerEpoch sets global parameter of layers per epoch, all conversion from layer to epoch use this param
-func SetLayersPerEpoch(layers int32) {
-	atomic.StoreInt32(&layersPerEpoch, layers)
-	atomic.StoreInt32(&EffectiveGenesis, layers*2-1)
+func SetLayersPerEpoch(layers uint32) {
+	atomic.StoreUint32(&layersPerEpoch, layers)
+	atomic.StoreUint32(&effectiveGenesis, layers*2-1)
 }
 
-// LayerID is a uint64 representing a layer number. It is zero-based.
-type LayerID uint64
-
-// GetEpoch returns the epoch number of this LayerID.
-func (l LayerID) GetEpoch() EpochID {
-	return EpochID(uint64(l) / uint64(getLayersPerEpoch()))
+func getLayersPerEpoch() uint32 {
+	return atomic.LoadUint32(&layersPerEpoch)
 }
 
 // GetEffectiveGenesis returns when actual blocks would be created
 func GetEffectiveGenesis() LayerID {
-	return LayerID(atomic.LoadInt32(&EffectiveGenesis))
+	return LayerIDFromUint32(atomic.LoadUint32(&effectiveGenesis))
+}
+
+// LayerIDFromUint32 creates LayerID from uint32.
+func LayerIDFromUint32(value uint32) LayerID {
+	return LayerID{value: value}
+}
+
+// LayerID is representing a layer number. Zero value is safe to use, and means 0.
+// Internally it is a simple wrapper over uint32 and should be considered immutable
+// the same way as any integer.
+type LayerID struct {
+	value uint32
+}
+
+// GetEpoch returns the epoch number of this LayerID.
+func (l LayerID) GetEpoch() EpochID {
+	return EpochID(l.value / getLayersPerEpoch())
 }
 
 // Add layers to the layer. Panics on wraparound.
-func (l LayerID) Add(layers LayerID) LayerID {
-	nl := l + layers
-	if nl < l {
+func (l LayerID) Add(layers uint32) LayerID {
+	nl := l.value + layers
+	if nl < l.value {
 		panic("layer_id wraparound")
 	}
-	return nl
+	l.value = nl
+	return l
 }
 
 // Sub layers from the layer. Panics on wraparound.
-func (l LayerID) Sub(layers LayerID) LayerID {
-	if layers > l {
+func (l LayerID) Sub(layers uint32) LayerID {
+	if layers > l.value {
 		panic("layer_id wraparound")
 	}
-	return l - layers
+	l.value -= layers
+	return l
 }
 
 // Mul layer by the layers. Panics on wraparound.
-func (l LayerID) Mul(layers LayerID) LayerID {
-	if l == 0 {
-		return 0
+func (l LayerID) Mul(layers uint32) LayerID {
+	if l.value == 0 {
+		return l
 	}
-	nl := l * layers
-	if nl/l != layers {
+	nl := l.value * layers
+	if nl/l.value != layers {
 		panic("layer_id wraparound")
 	}
-	return nl
+	l.value = nl
+	return l
 }
 
-// Uint64 returns the LayerID as a uint64.
-func (l LayerID) Uint64() uint64 {
-	return uint64(l)
+// Uint64 returns the LayerID as a uint32.
+func (l LayerID) Uint32() uint32 {
+	return l.value
+}
+
+// Before returns true if this layer is lower than the other.
+func (l LayerID) Before(other LayerID) bool {
+	return l.value < other.value
+}
+
+// After returns true if this layer is higher than the other.
+func (l LayerID) After(other LayerID) bool {
+	return l.value > other.value
+}
+
+// Duration returns different between current and other layer.
+func (l LayerID) Duration(other LayerID) uint32 {
+	if other.value > l.value {
+		panic(fmt.Sprintf("other (%d) must be before or equal to this layer (%d)", other.value, l.value))
+	}
+	return l.value - other.value
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (l LayerID) Field() log.Field { return log.Uint64("layer_id", uint64(l)) }
+func (l LayerID) Field() log.Field { return log.Uint32("layer_id", l.value) }
 
 // NodeID contains a miner's two public keys.
 type NodeID struct {

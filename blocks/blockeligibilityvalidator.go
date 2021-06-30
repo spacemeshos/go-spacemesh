@@ -18,7 +18,7 @@ type blockDB interface {
 type BlockEligibilityValidator struct {
 	committeeSize      uint32
 	genesisTotalWeight uint64
-	layersPerEpoch     uint16
+	layersPerEpoch     uint32
 	activationDb       activationDB
 	blocks             blockDB
 	beaconProvider     *EpochBeaconProvider
@@ -28,7 +28,7 @@ type BlockEligibilityValidator struct {
 
 // NewBlockEligibilityValidator returns a new BlockEligibilityValidator.
 func NewBlockEligibilityValidator(
-	committeeSize uint32, genesisTotalWeight uint64, layersPerEpoch uint16, activationDb activationDB,
+	committeeSize uint32, genesisTotalWeight uint64, layersPerEpoch uint32, activationDb activationDB,
 	beaconProvider *EpochBeaconProvider, validateVRF VRFValidationFunction, blockDB blockDB, log log.Log) *BlockEligibilityValidator {
 
 	return &BlockEligibilityValidator{

@@ -3,6 +3,9 @@ package hare
 import (
 	"context"
 	"errors"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
@@ -13,8 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000}
@@ -171,7 +172,7 @@ func (mev *mockEligibilityValidator) Validate(ctx context.Context, msg *Msg) boo
 type mockOracle struct {
 }
 
-func (mo *mockOracle) Eligible(instanceID, int32, string, []byte) bool {
+func (mo *mockOracle) Eligible(types.LayerID, int32, string, []byte) bool {
 	return true
 }
 
@@ -326,7 +327,7 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	assert.Nil(t, verifier)
 	assert.Equal(t, builder.inner.K, proc.k)
 	assert.Equal(t, builder.inner.Ki, proc.ki)
-	assert.Equal(t, instanceID(builder.inner.InstanceID), proc.instanceID)
+	assert.Equal(t, builder.inner.InstanceID, proc.instanceID)
 }
 
 func TestConsensusProcess_isEligible(t *testing.T) {
