@@ -5,16 +5,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"strconv"
+	"sync"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
-	"net"
-	"strconv"
-	"sync"
-	"time"
 )
 
 // DefaultQueueCount is the default number of messages queue we hold. messages queues are used to serialize message receiving
@@ -53,7 +54,7 @@ type ManagedConnection interface {
 // It provides full duplex messaging functionality over the same tcp/ip connection
 // Net has no channel events processing loops - clients are responsible for polling these channels and popping events from them
 type Net struct {
-	networkID int8
+	networkID uint32
 	localNode node.LocalNode
 	logger    log.Log
 
@@ -135,7 +136,7 @@ func (n *Net) Logger() log.Log {
 }
 
 // NetworkID retuers Net's network ID
-func (n *Net) NetworkID() int8 {
+func (n *Net) NetworkID() uint32 {
 	return n.networkID
 }
 
@@ -400,7 +401,7 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	return nil
 }
 
-func verifyNetworkIDAndClientVersion(networkID int8, handshakeData *HandshakeData) error {
+func verifyNetworkIDAndClientVersion(networkID uint32, handshakeData *HandshakeData) error {
 	// compare that version to the min client version in config
 	ok, err := version.CheckNodeVersion(handshakeData.ClientVersion, config.MinClientVersion)
 	if err == nil && !ok {
@@ -411,17 +412,17 @@ func verifyNetworkIDAndClientVersion(networkID int8, handshakeData *HandshakeDat
 	}
 
 	// make sure we're on the same network
-	if handshakeData.NetworkID != int32(networkID) {
+	if handshakeData.NetworkID != networkID {
 		return fmt.Errorf("request net id (%d) is different than local net id (%d)", handshakeData.NetworkID, networkID)
 		//TODO : drop and blacklist this sender
 	}
 	return nil
 }
 
-func generateHandshakeMessage(session NetworkSession, networkID int8, localIncomingPort int, localPubkey p2pcrypto.PublicKey) ([]byte, error) {
+func generateHandshakeMessage(session NetworkSession, networkID uint32, localIncomingPort int, localPubkey p2pcrypto.PublicKey) ([]byte, error) {
 	handshakeData := &HandshakeData{
 		ClientVersion: config.ClientVersion,
-		NetworkID:     int32(networkID),
+		NetworkID:     networkID,
 		Port:          uint16(localIncomingPort),
 	}
 	handshakeMessage, err := types.InterfaceToBytes(handshakeData)
