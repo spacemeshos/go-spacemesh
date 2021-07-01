@@ -12,7 +12,7 @@ import (
 )
 
 type blockDataProvider interface {
-	ContextuallyValidBlock(types.LayerID) (map[types.BlockID]struct{}, error)
+	LayerContextuallyValidBlocks(types.LayerID) (map[types.BlockID]struct{}, error)
 	GetBlock(types.BlockID) (*types.Block, error)
 	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
 	LayerBlocks(types.LayerID) ([]*types.Block, error)
@@ -920,7 +920,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 		}
 		// this layer has been verified, so we should be able to read the set of contextual blocks
 		logger.Debug("using contextually valid blocks as opinion on old, verified layer")
-		layerBlocks, err := t.bdp.ContextuallyValidBlock(layerID)
+		layerBlocks, err := t.bdp.LayerContextuallyValidBlocks(layerID)
 		if err != nil {
 			return nil, err
 		}
