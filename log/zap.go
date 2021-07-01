@@ -222,8 +222,3 @@ func (fl FieldLogger) Warning(msg string, fields ...LoggableField) {
 func (fl FieldLogger) Panic(msg string, fields ...LoggableField) {
 	fl.l.Panic(msg, unpack(fields)...)
 }
-
-// Fatal prints message and calls os.Exit(1)
-func (fl FieldLogger) Fatal(msg string, fields ...LoggableField) {
-	fl.l.Fatal(msg, unpack(fields)...)
-}
