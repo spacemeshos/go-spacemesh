@@ -126,4 +126,31 @@ func TestLayerIDWraparound(t *testing.T) {
 			max.Mul(2)
 		})
 	})
+	t.Run("Duration", func(t *testing.T) {
+		require.EqualValues(t, 1, NewLayerID(2).Duration(NewLayerID(1)))
+		require.Panics(t, func() {
+			NewLayerID(10).Duration(NewLayerID(20))
+		})
+	})
+}
+
+func TestLayerIDComparison(t *testing.T) {
+	t.Run("After", func(t *testing.T) {
+		require.True(t, NewLayerID(10).After(NewLayerID(5)))
+		require.True(t, !NewLayerID(10).After(NewLayerID(10)))
+		require.True(t, !NewLayerID(10).After(NewLayerID(20)))
+	})
+	t.Run("Before", func(t *testing.T) {
+		require.True(t, NewLayerID(5).Before(NewLayerID(10)))
+		require.True(t, !NewLayerID(5).Before(NewLayerID(5)))
+		require.True(t, !NewLayerID(5).Before(NewLayerID(3)))
+	})
+	t.Run("Equal", func(t *testing.T) {
+		require.True(t, NewLayerID(1) == NewLayerID(1))
+		require.True(t, NewLayerID(1) != NewLayerID(10))
+	})
+}
+
+func TestLayerIDString(t *testing.T) {
+	require.Equal(t, "10", NewLayerID(10).String())
 }
