@@ -337,8 +337,6 @@ func TestLayerPatterns(t *testing.T) {
 			true,  // verification resumes zdist+confidence interval layers before
 			true,  // verification resumes zdist+confidence interval layers before
 			true,  // final candidate layer, not verified
-			true,
-			true,
 		}
 
 		msh := getInMemMesh()
@@ -354,6 +352,50 @@ func TestLayerPatterns(t *testing.T) {
 
 		// final verified layer should lag by zdist+confidence interval
 		finalVerified := types.GetEffectiveGenesis().Add(uint16(len(pattern)) - 1 - uint16(trtl.Zdist+trtl.ConfidenceParam))
+		require.Equal(t, int(finalVerified), int(trtl.Verified))
+	})
+
+	t.Run("heal then exit healing", func(t *testing.T) {
+		// TODO: this test is currently failing since we cannot successfully heal and then exit the regime
+		//   due to blocks initially being marked not good and not updated later when the local opinion is updated
+
+		// five good layers, then two bad, then enough good to exit the healing regime entirely and return to
+		// ordinary verifying tortoise
+		pattern := []bool{
+			true,  // verified
+			true,  // verified
+			true,  // verified
+			true,  // verified
+			true,  // verification stalled: zdist
+			false, // verification stalled: zdist
+			false, // verification stalled: zdist
+			true,  // verification stalled: zdist
+			true,  // verification stalled: zdist
+			true,  // verification stalled: confidence interval
+			true,  // verification stalled: confidence interval
+			true,  // verification stalled: confidence interval
+			true,  // verification stalled: confidence interval
+			true,  // verification stalled: confidence interval
+			true,  // verification resumes zdist+confidence interval layers before
+			true,  // verification resumes zdist+confidence interval layers before
+			true,  // final candidate layer, not verified
+			true,
+			true,
+			true,
+		}
+
+		msh := getInMemMesh()
+		trtl := defaultTurtle(t)
+		trtl.AvgLayerSize = blocksPerLayer
+		trtl.bdp = msh
+		trtl.init(context.TODO(), mesh.GenesisLayer())
+		testLayerPattern(t, msh, trtl, blocksPerLayer, pattern)
+
+		// check our assumptions
+		require.Equal(t, 5, int(trtl.Zdist))
+		require.Equal(t, 5, int(trtl.ConfidenceParam))
+
+		finalVerified := types.GetEffectiveGenesis().Add(uint16(len(pattern)) - 1)
 		require.Equal(t, int(finalVerified), int(trtl.Verified))
 	})
 
