@@ -952,16 +952,21 @@ func (app *SpacemeshApp) startSyncer(ctx context.Context) {
 func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	// we use the main app context
 	ctx := cmdp.Ctx
-
 	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
 	// using context passed down to them)
 	logger := log.AppLog.WithContext(ctx)
 
+	hostname, err := os.Hostname()
+	if err != nil {
+		logger.With().Panic("error reading hostname", log.Err(err))
+	}
 	logger.With().Info("starting spacemesh",
 		log.String("data-dir", app.Config.DataDir()),
-		log.String("post-dir", app.Config.POST.DataDir))
+		log.String("post-dir", app.Config.POST.DataDir),
+		log.String("hostname", hostname),
+	)
 
-	err := filesystem.ExistOrCreate(app.Config.DataDir())
+	err = filesystem.ExistOrCreate(app.Config.DataDir())
 	if err != nil {
 		logger.With().Error("data-dir not found or could not be created", log.Err(err))
 	}
