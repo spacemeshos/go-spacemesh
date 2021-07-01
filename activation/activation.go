@@ -121,7 +121,7 @@ type layerClock interface {
 }
 
 type syncer interface {
-	Await() chan struct{}
+	RegisterChForSynced(context.Context, chan struct{})
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
@@ -227,8 +227,10 @@ func (b *Builder) loop(ctx context.Context) {
 	}
 }
 
-func (b *Builder) buildNipstChallenge() error {
-	<-b.syncer.Await()
+func (b *Builder) buildNipstChallenge(ctx context.Context) error {
+	syncedCh := make(chan struct{})
+	b.syncer.RegisterChForSynced(ctx, syncedCh)
+	<-syncedCh
 	challenge := &types.NIPSTChallenge{NodeID: b.nodeID}
 	atxID, pubLayerID, endTick, err := b.GetPositioningAtxInfo()
 	if err != nil {
@@ -388,7 +390,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		b.log.With().Info("using existing atx challenge", b.currentEpoch())
 	} else {
 		b.log.With().Info("building new atx challenge", b.currentEpoch())
-		err := b.buildNipstChallenge()
+		err := b.buildNipstChallenge(ctx)
 		if err != nil {
 			b.log.With().Error("failed to build new atx challenge", log.Err(err))
 			return err
@@ -438,7 +440,9 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	// we need to provide number of atx seen in the epoch of the positioning atx.
 
 	// ensure we are synced before generating the ATX's view
-	if err := b.waitOrStop(b.syncer.Await()); err != nil {
+	syncedCh := make(chan struct{})
+	b.syncer.RegisterChForSynced(ctx, syncedCh)
+	if err := b.waitOrStop(syncedCh); err != nil {
 		return err
 	}
 
@@ -464,10 +468,12 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	case <-atxReceived:
 		b.log.Info("atx received in db")
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer()):
+		syncedCh := make(chan struct{})
+		b.syncer.RegisterChForSynced(ctx, syncedCh)
 		select {
 		case <-atxReceived:
 			b.log.Info("atx received in db (in the last moment)")
-		case <-b.syncer.Await(): // ensure we've seen all blocks before concluding that the ATX was lost
+		case <-syncedCh: // ensure we've seen all blocks before concluding that the ATX was lost
 			b.log.With().Error("target epoch has passed before atx was added to database", atx.ID())
 			b.discardChallenge()
 			return fmt.Errorf("target epoch has passed")

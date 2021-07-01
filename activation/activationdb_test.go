@@ -261,7 +261,7 @@ func TestMesh_ActiveSetForLayerView2(t *testing.T) {
 	atxdb, _, _ := getAtxDb(t.Name())
 	actives, err := atxdb.GetMinerWeightsInEpochFromView(0, nil)
 	assert.Error(t, err)
-	assert.Equal(t, "tried to retrieve miner weights for targetEpoch 0", err.Error())
+	assert.Equal(t, errGenesisEpoch, err)
 	assert.Nil(t, actives)
 }
 

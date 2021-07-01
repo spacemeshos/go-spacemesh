@@ -84,6 +84,11 @@ func Int32(name string, val int32) Field {
 	return Field(zap.Int32(name, val))
 }
 
+// Uint16 returns an uint32 Field
+func Uint16(name string, val uint16) Field {
+	return Field(zap.Uint16(name, val))
+}
+
 // Uint32 returns an uint32 Field
 func Uint32(name string, val uint32) Field {
 	return Field(zap.Uint32(name, val))
