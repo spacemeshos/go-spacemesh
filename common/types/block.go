@@ -111,7 +111,7 @@ func (l LayerID) Mul(layers uint32) LayerID {
 	return l
 }
 
-// Uint64 returns the LayerID as a uint32.
+// Uint32 returns the LayerID as a uint32.
 func (l LayerID) Uint32() uint32 {
 	return l.value
 }
