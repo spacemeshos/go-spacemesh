@@ -385,14 +385,14 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 
 		// First check if the layer passed the Hare, then check if it passed the Tortoise.
 		// It may be either, or both, but Tortoise always takes precedence.
-		if !l.Before(lastLayerPassedHare) {
+		if !l.After(lastLayerPassedHare) {
 			layerStatus = pb.Layer_LAYER_STATUS_APPROVED
 		}
-		if !l.Before(lastLayerPassedTortoise) {
+		if !l.After(lastLayerPassedTortoise) {
 			layerStatus = pb.Layer_LAYER_STATUS_CONFIRMED
 		}
 
-		layer, err := s.Mesh.GetLayer(types.LayerID(l))
+		layer, err := s.Mesh.GetLayer(l)
 		// TODO: Be careful with how we handle missing layers here.
 		// A layer that's newer than the currentLayer (defined above)
 		// is clearly an input error. A missing layer that's older than

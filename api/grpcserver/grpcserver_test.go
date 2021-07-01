@@ -1548,7 +1548,7 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "end layer after last approved confirmed layer",
 					// expect difference + 1 return layers
-					run: generateRunFn(int(layerVerified.Add(2).Sub(layerFirst.Add(1).Uint32()).Uint32()), &pb.LayersQueryRequest{
+					run: generateRunFn(int(layerVerified.Add(2).Sub(layerFirst.Uint32()).Add(1).Uint32()), &pb.LayersQueryRequest{
 						StartLayer: &pb.LayerNumber{Number: layerFirst.Uint32()},
 						EndLayer:   &pb.LayerNumber{Number: layerVerified.Add(2).Uint32()},
 					}),
@@ -1567,8 +1567,8 @@ func TestMeshService(t *testing.T) {
 						require.NoError(t, err, "query returned unexpected error")
 
 						// endpoint inclusive so add one
-						numLayers := layerLatest.Uint32() - layerFirst.Uint32() + 1
-						require.Equal(t, numLayers, len(res.Layer))
+						numLayers := layerLatest.Duration(layerFirst) + 1
+						require.EqualValues(t, numLayers, len(res.Layer))
 						checkLayer(t, res.Layer[0])
 
 						resLayerNine := res.Layer[9]
