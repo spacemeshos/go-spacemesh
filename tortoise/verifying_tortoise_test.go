@@ -852,18 +852,18 @@ func TestGetSingleInputVector(t *testing.T) {
 	blocks := generateBlocks(l1ID, 2, alg.BaseBlock)
 
 	// no input vector for layer
-	vec, err := alg.trtl.getSingleInputVectorFromDB(context.TODO(), l1ID, blocks[0].ID())
+	vec, err := alg.trtl.getLocalBlockOpinion(context.TODO(), l1ID, blocks[0].ID())
 	r.Equal(database.ErrNotFound, err)
 	r.Equal(abstain, vec)
 
 	// block included in input vector
 	r.NoError(mdb.SaveLayerInputVectorByID(l1ID, []types.BlockID{blocks[0].ID()}))
-	vec, err = alg.trtl.getSingleInputVectorFromDB(context.TODO(), l1ID, blocks[0].ID())
+	vec, err = alg.trtl.getLocalBlockOpinion(context.TODO(), l1ID, blocks[0].ID())
 	r.NoError(err)
 	r.Equal(support, vec)
 
 	// block not included in input vector
-	vec, err = alg.trtl.getSingleInputVectorFromDB(context.TODO(), l1ID, blocks[1].ID())
+	vec, err = alg.trtl.getLocalBlockOpinion(context.TODO(), l1ID, blocks[1].ID())
 	r.NoError(err)
 	r.Equal(against, vec)
 }
@@ -878,26 +878,26 @@ func TestCheckBlockAndGetInputVector(t *testing.T) {
 	diffList := []types.BlockID{blocks[0].ID()}
 
 	// missing block
-	r.False(alg.trtl.checkBlockAndGetInputVector(context.TODO(), diffList, "foo", support, l1ID))
+	r.False(alg.trtl.checkBlockAndGetLocalOpinion(context.TODO(), diffList, "foo", support, l1ID))
 
 	// exception block older than base block
 	blocks[0].LayerIndex = mesh.GenesisLayer().Index()
 	r.NoError(mdb.AddBlock(blocks[0]))
-	r.False(alg.trtl.checkBlockAndGetInputVector(context.TODO(), diffList, "foo", support, l1ID))
+	r.False(alg.trtl.checkBlockAndGetLocalOpinion(context.TODO(), diffList, "foo", support, l1ID))
 
 	// missing input vector for layer
 	r.NoError(mdb.AddBlock(blocks[1]))
 	diffList[0] = blocks[1].ID()
-	r.False(alg.trtl.checkBlockAndGetInputVector(context.TODO(), diffList, "foo", support, l1ID))
+	r.False(alg.trtl.checkBlockAndGetLocalOpinion(context.TODO(), diffList, "foo", support, l1ID))
 
 	// good
 	r.NoError(mdb.SaveLayerInputVectorByID(l1ID, diffList))
-	r.True(alg.trtl.checkBlockAndGetInputVector(context.TODO(), diffList, "foo", support, l1ID))
+	r.True(alg.trtl.checkBlockAndGetLocalOpinion(context.TODO(), diffList, "foo", support, l1ID))
 
 	// vote differs from input vector
 	diffList[0] = blocks[2].ID()
 	r.NoError(mdb.AddBlock(blocks[2]))
-	r.False(alg.trtl.checkBlockAndGetInputVector(context.TODO(), diffList, "foo", support, l1ID))
+	r.False(alg.trtl.checkBlockAndGetLocalOpinion(context.TODO(), diffList, "foo", support, l1ID))
 }
 
 func TestCalculateExceptions(t *testing.T) {

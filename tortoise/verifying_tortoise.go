@@ -217,21 +217,22 @@ func blockIDsToString(input []types.BlockID) string {
 
 // returns the binary local opinion on the validity of a block in a layer (support or against)
 // TODO: cache but somehow check for changes (e.g., late-finishing Hare), maybe check hash?
-func (t *turtle) getSingleInputVectorFromDB(ctx context.Context, layerID types.LayerID, blockid types.BlockID) (vec, error) {
+func (t *turtle) getLocalBlockOpinion(ctx context.Context, layerID types.LayerID, blockid types.BlockID) (vec, error) {
 	if layerID <= types.GetEffectiveGenesis() {
 		return support, nil
 	}
 
-	input, err := t.bdp.GetLayerInputVectorByID(layerID)
+	input, err := t.layerOpinionVector(ctx, layerID)
 	if err != nil {
 		return abstain, err
 	}
 
-	t.logger.WithContext(ctx).With().Debug("got input vector from db",
+	t.logger.WithContext(ctx).With().Debug("got layer opinion vector",
 		layerID,
 		log.FieldNamed("query_block", blockid),
 		log.String("input", blockIDsToString(input)))
 
+	// TODO: what happens if the current opinion is abstain? that will be converted to against, here.
 	for _, bl := range input {
 		if bl == blockid {
 			return support, nil
@@ -241,7 +242,7 @@ func (t *turtle) getSingleInputVectorFromDB(ctx context.Context, layerID types.L
 	return against, nil
 }
 
-func (t *turtle) checkBlockAndGetInputVector(
+func (t *turtle) checkBlockAndGetLocalOpinion(
 	ctx context.Context,
 	diffList []types.BlockID,
 	className string,
@@ -260,15 +261,15 @@ func (t *turtle) checkBlockAndGetInputVector(
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
 				log.FieldNamed("base_block_layer", baseBlockLayer))
 			return false
-		} else if v, err := t.getSingleInputVectorFromDB(ctx, exceptionBlock.LayerIndex, exceptionBlockID); err != nil {
-			logger.With().Error("unable to get single input vector for block in exception list",
+		} else if v, err := t.getLocalBlockOpinion(ctx, exceptionBlock.LayerIndex, exceptionBlockID); err != nil {
+			logger.With().Error("unable to get single block opinion for block in exception list",
 				log.FieldNamed("older_block", exceptionBlockID),
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
 				log.FieldNamed("base_block_layer", baseBlockLayer),
 				log.Err(err))
 			return false
 		} else if v != voteVector {
-			logger.With().Debug("not adding block to good blocks because its vote differs from input vector",
+			logger.With().Debug("not adding block to good blocks because its vote differs from local opinion",
 				log.FieldNamed("older_block", exceptionBlock.ID()),
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
 				log.FieldNamed("input_vector_vote", v),
@@ -609,10 +610,10 @@ func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) error
 		} else if baseBlock, err := t.bdp.GetBlock(b.BaseBlock); err != nil {
 			logger.With().Error("inconsistent state: base block not found", log.Err(err))
 		} else if true &&
-			// (2) all diffs appear after the base block and are consistent with the input vote vector
-			t.checkBlockAndGetInputVector(ctx, b.ForDiff, "support", support, baseBlock.LayerIndex) &&
-			t.checkBlockAndGetInputVector(ctx, b.AgainstDiff, "against", against, baseBlock.LayerIndex) &&
-			t.checkBlockAndGetInputVector(ctx, b.NeutralDiff, "abstain", abstain, baseBlock.LayerIndex) {
+			// (2) all diffs appear after the base block and are consistent with the current local opinion
+			t.checkBlockAndGetLocalOpinion(ctx, b.ForDiff, "support", support, baseBlock.LayerIndex) &&
+			t.checkBlockAndGetLocalOpinion(ctx, b.AgainstDiff, "against", against, baseBlock.LayerIndex) &&
+			t.checkBlockAndGetLocalOpinion(ctx, b.NeutralDiff, "abstain", abstain, baseBlock.LayerIndex) {
 			logger.Debug("marking block good")
 			t.GoodBlocksIndex[b.ID()] = struct{}{}
 			numGood++
