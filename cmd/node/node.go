@@ -535,7 +535,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
 	trtlCfg := tortoise.Config{
-		LayerSyze: int(layerSize),
+		LayerSize: int(layerSize),
 		Database:  mdb,
 		Hdist:     app.Config.Hdist,
 		Log:       app.addLogger(TrtlLogger, lg),
@@ -572,9 +572,9 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	}
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
-	if app.Config.HareEligibility.EpochOffset >= app.Config.BaseConfig.LayersPerEpoch {
+	if app.Config.HareEligibility.EpochOffset >= uint16(app.Config.BaseConfig.LayersPerEpoch) {
 		logger.With().Panic("epoch offset cannot be greater than or equal to the number of layers per epoch",
-			log.Int("epoch_offset", app.Config.HareEligibility.EpochOffset),
+			log.Uint16("epoch_offset", app.Config.HareEligibility.EpochOffset),
 			log.Int("layers_per_epoch", app.Config.BaseConfig.LayersPerEpoch))
 	}
 
@@ -602,7 +602,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		// TODO: this mock will be replaced by the real Tortoise beacon once
 		//   https://github.com/spacemeshos/go-spacemesh/pull/2267 is complete
 		beacon := eligibility.NewBeacon(tortoiseBeaconMock{}, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
-		hOracle = eligibility.New(beacon, atxdb.GetMinerWeightsInEpochFromView, signing.VRFVerify, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.POST.SpacePerUnit, app.Config.GenesisTotalWeight, app.Config.SpaceToCommit, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+		hOracle = eligibility.New(beacon, atxdb, mdb, signing.VRFVerify, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.POST.SpacePerUnit, app.Config.GenesisTotalWeight, app.Config.SpaceToCommit, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
 
@@ -999,7 +999,6 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 		} else {
 			defer p.Stop()
 		}
-
 	}
 
 	/* Create or load miner identity */

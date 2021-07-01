@@ -74,7 +74,7 @@ func (testHare) Validate(context.Context, types.LayerID, int32, int, types.NodeI
 func (testHare) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
 	return []byte{}, nil
 }
-func (testHare) IsIdentityActiveOnConsensusView(string, types.LayerID) (bool, error) {
+func (testHare) IsIdentityActiveOnConsensusView(context.Context, string, types.LayerID) (bool, error) {
 	return true, nil
 }
 func (h *testHare) HandleValidatedLayer(ctx context.Context, layer types.LayerID, ids []types.BlockID) {
