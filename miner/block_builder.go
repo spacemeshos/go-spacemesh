@@ -30,8 +30,6 @@ type signer interface {
 }
 
 type syncer interface {
-	GetPoetProof(ctx context.Context, poetProofRef types.Hash32) error
-	ListenToGossip() bool
 	IsSynced(context.Context) bool
 }
 
