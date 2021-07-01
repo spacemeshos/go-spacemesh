@@ -37,7 +37,7 @@ func getMeshDB() *DB {
 
 func TestNewMeshDB(t *testing.T) {
 	mdb := getMeshDB()
-	bl := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
+	bl := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
 	err := mdb.AddBlock(bl)
 	assert.NoError(t, err)
 	block, err := mdb.GetBlock(bl.ID())
@@ -50,12 +50,12 @@ func TestMeshDB_AddBlock(t *testing.T) {
 	defer mdb.Close()
 	coinbase := types.HexToAddress("aaaa")
 
-	block1 := types.NewExistingBlock(1, []byte("data1"), nil)
+	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data1"), nil)
 
 	addTransactionsWithFee(t, mdb, block1, 4, rand.Int63n(100))
 
 	poetRef := []byte{0xba, 0x05}
-	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID{}, 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{}, &types.NIPST{
+	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID{}, types.NewLayerID(5), 1, types.ATXID{}, coinbase, 5, []types.BlockID{}, &types.NIPST{
 		NipstChallenge: &types.Hash32{},
 		PostProof: &types.PostProof{
 			Challenge:    poetRef,
@@ -98,7 +98,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 	}
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
+		bl := types.NewExistingBlock(types.NewLayerID(0), []byte(rand.String(8)), nil)
 		voted := make(map[types.BlockID]struct{})
 		layerBlocks = append(layerBlocks, bl.ID())
 		for idx, pat := range patterns {
@@ -144,7 +144,7 @@ func testForeachInView(mdb *DB, t *testing.T) {
 	}*/
 
 	for i := 0; i < 4; i++ {
-		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
+		lyr := createLayerWithRandVoting(l.Index().Add(1), []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
 		for _, b := range lyr.Blocks() {
 			blocks[b.ID()] = b
 			err := mdb.AddBlock(b)
@@ -162,7 +162,7 @@ func testForeachInView(mdb *DB, t *testing.T) {
 	for _, b := range l.Blocks() {
 		ids[b.ID()] = struct{}{}
 	}
-	err := mdb.ForBlockInView(ids, 0, foo)
+	err := mdb.ForBlockInView(ids, types.NewLayerID(0), foo)
 	assert.NoError(t, err)
 	for _, bl := range blocks {
 		_, found := mp[bl.ID()]
@@ -178,7 +178,7 @@ func TestForEachInView_InMem_WithStop(t *testing.T) {
 	blocks[gen.ID()] = gen
 
 	for i := 0; i < 4; i++ {
-		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
+		lyr := createLayerWithRandVoting(l.Index().Add(1), []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
 		for _, b := range lyr.Blocks() {
 			blocks[b.ID()] = b
 			err := mdb.AddBlock(b)
@@ -198,7 +198,7 @@ func TestForEachInView_InMem_WithStop(t *testing.T) {
 	for _, b := range l.Blocks() {
 		ids[b.ID()] = struct{}{}
 	}
-	err := mdb.ForBlockInView(ids, 0, foo)
+	err := mdb.ForBlockInView(ids, types.NewLayerID(0), foo)
 	assert.NoError(t, err)
 	assert.Equal(t, 5, i)
 }
@@ -209,7 +209,7 @@ func TestForEachInView_InMem_WithLimitedLayer(t *testing.T) {
 	l := GenesisLayer()
 
 	for i := 0; i < 4; i++ {
-		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
+		lyr := createLayerWithRandVoting(l.Index().Add(1), []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
 		for _, b := range lyr.Blocks() {
 			blocks[b.ID()] = b
 			err := mdb.AddBlock(b)
@@ -230,7 +230,7 @@ func TestForEachInView_InMem_WithLimitedLayer(t *testing.T) {
 		ids[b.ID()] = struct{}{}
 	}
 	// traverse until (and including) layer 2
-	err := mdb.ForBlockInView(ids, 2, foo)
+	err := mdb.ForBlockInView(ids, types.NewLayerID(2), foo)
 	assert.NoError(t, err)
 	assert.Equal(t, 9, i)
 }
@@ -254,7 +254,7 @@ func BenchmarkNewPersistentMeshDB(b *testing.B) {
 	start := time.Now()
 	lStart := time.Now()
 	for i := 0; i < 10*batchSize; i++ {
-		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 200, 20, log.NewDefault("msh").WithOptions(log.Nop))
+		lyr := createLayerWithRandVoting(l.Index().Add(1), []*types.Layer{l}, 200, 20, log.NewDefault("msh").WithOptions(log.Nop))
 		for _, b := range lyr.Blocks() {
 			err := mdb.AddBlock(b)
 			r.NoError(err)
@@ -322,7 +322,7 @@ func TestMeshDB_GetStateProjection(t *testing.T) {
 	err := mdb.addToUnappliedTxs([]*types.Transaction{
 		newTx(r, signer, 0, 10),
 		newTx(r, signer, 1, 20),
-	}, 1)
+	}, types.NewLayerID(1))
 	r.NoError(err)
 
 	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
@@ -339,7 +339,7 @@ func TestMeshDB_GetStateProjection_WrongNonce(t *testing.T) {
 	err := mdb.addToUnappliedTxs([]*types.Transaction{
 		newTx(r, signer, 1, 10),
 		newTx(r, signer, 2, 20),
-	}, 1)
+	}, types.NewLayerID(1))
 	r.NoError(err)
 
 	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
@@ -356,7 +356,7 @@ func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
 	err := mdb.addToUnappliedTxs([]*types.Transaction{
 		newTx(r, signer, 0, 10),
 		newTx(r, signer, 1, 95),
-	}, 1)
+	}, types.NewLayerID(1))
 	r.NoError(err)
 
 	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
@@ -388,7 +388,7 @@ func TestMeshDB_UnappliedTxs(t *testing.T) {
 		newTx(r, signer1, 421, 241),
 		newTx(r, signer2, 0, 100),
 		newTx(r, signer2, 1, 101),
-	}, 1)
+	}, types.NewLayerID(1))
 	r.NoError(err)
 
 	txns1 := getTxns(r, mdb, origin1)
@@ -430,7 +430,7 @@ func TestMeshDB_testGetTransactions(t *testing.T) {
 	signer1, addr1 := newSignerAndAddress(r, "thc")
 	signer2, _ := newSignerAndAddress(r, "cbd")
 	_, addr3 := newSignerAndAddress(r, "cbe")
-	err := mdb.writeTransactions(1, []*types.Transaction{
+	err := mdb.writeTransactions(types.NewLayerID(1), []*types.Transaction{
 		newTx(r, signer1, 420, 240),
 		newTx(r, signer1, 421, 241),
 		newTxWithDest(r, signer2, addr1, 0, 100),
@@ -438,17 +438,17 @@ func TestMeshDB_testGetTransactions(t *testing.T) {
 	})
 	r.NoError(err)
 
-	txs := mdb.GetTransactionsByOrigin(1, addr1)
+	txs := mdb.GetTransactionsByOrigin(types.NewLayerID(1), addr1)
 	r.Equal(2, len(txs))
 
-	txs = mdb.GetTransactionsByDestination(1, addr1)
+	txs = mdb.GetTransactionsByDestination(types.NewLayerID(1), addr1)
 	r.Equal(2, len(txs))
 
 	// test negative case
-	txs = mdb.GetTransactionsByOrigin(1, addr3)
+	txs = mdb.GetTransactionsByOrigin(types.NewLayerID(1), addr3)
 	r.Equal(0, len(txs))
 
-	txs = mdb.GetTransactionsByDestination(1, addr3)
+	txs = mdb.GetTransactionsByDestination(types.NewLayerID(1), addr3)
 	r.Equal(0, len(txs))
 }
 
@@ -531,28 +531,28 @@ func TestMeshDB_testGetRewards(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000))
+	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, big.NewInt(10000), big.NewInt(9000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(2, test2Map, big.NewInt(20000), big.NewInt(19000))
+	err = mdb.writeTransactionRewards(types.NewLayerID(2), test2Map, big.NewInt(20000), big.NewInt(19000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(3, test3Map, big.NewInt(15000), big.NewInt(14500))
+	err = mdb.writeTransactionRewards(types.NewLayerID(3), test3Map, big.NewInt(15000), big.NewInt(14500))
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewards(addr2)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr2},
-		{Layer: 3, TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(3), TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2, Coinbase: addr2},
 	}, rewards)
 
 	rewards, err = mdb.GetRewards(addr1)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewards(addr4)
@@ -616,28 +616,28 @@ func TestMeshDB_testGetRewardsBySmesher(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000))
+	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, big.NewInt(10000), big.NewInt(9000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(2, test2Map, big.NewInt(20000), big.NewInt(19000))
+	err = mdb.writeTransactionRewards(types.NewLayerID(2), test2Map, big.NewInt(20000), big.NewInt(19000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(3, test3Map, big.NewInt(15000), big.NewInt(14500))
+	err = mdb.writeTransactionRewards(types.NewLayerID(3), test3Map, big.NewInt(15000), big.NewInt(14500))
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr2},
-		{Layer: 3, TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(3), TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2, Coinbase: addr2},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher1)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher4)
@@ -701,34 +701,34 @@ func TestMeshDB_testGetRewardsBySmesherChangingLayer(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000))
+	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, big.NewInt(10000), big.NewInt(9000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(2, test2Map, big.NewInt(20000), big.NewInt(19000))
+	err = mdb.writeTransactionRewards(types.NewLayerID(2), test2Map, big.NewInt(20000), big.NewInt(19000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(3, test3Map, big.NewInt(15000), big.NewInt(14500))
+	err = mdb.writeTransactionRewards(types.NewLayerID(3), test3Map, big.NewInt(15000), big.NewInt(14500))
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
-		{Layer: 3, TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2, Coinbase: addr2},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(3), TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher1)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher3)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher3, Coinbase: addr2},
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher3, Coinbase: addr3},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher3, Coinbase: addr2},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher3, Coinbase: addr3},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher4)
@@ -779,38 +779,38 @@ func TestMeshDB_testGetRewardsBySmesherMultipleSmeshers(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000))
+	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, big.NewInt(10000), big.NewInt(9000))
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher1)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher3)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher3, Coinbase: addr3},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher3, Coinbase: addr3},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher4)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher4, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher4, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewards(addr1)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher4, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher4, Coinbase: addr1},
 	}, rewards)
 }
 
@@ -870,53 +870,53 @@ func TestMeshDB_testGetRewardsBySmesherMultipleSmeshersAndLayers(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000))
+	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, big.NewInt(10000), big.NewInt(9000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(2, test2Map, big.NewInt(20000), big.NewInt(19000))
+	err = mdb.writeTransactionRewards(types.NewLayerID(2), test2Map, big.NewInt(20000), big.NewInt(19000))
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr2},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher1)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher3)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher3, Coinbase: addr3},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher3, Coinbase: addr3},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher3, Coinbase: addr3},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher3, Coinbase: addr3},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher4)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher4, Coinbase: addr1},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher4, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher4, Coinbase: addr1},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher4, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewards(addr1)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1, Coinbase: addr1},
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher4, Coinbase: addr1},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher4, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher4, Coinbase: addr1},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher4, Coinbase: addr1},
 	}, rewards)
 }
 
 func TestMeshDB_RecordCoinFlip(t *testing.T) {
 	r := require.New(t)
-	layerID := types.LayerID(123)
+	layerID := types.NewLayerID(123)
 
 	testCoinflip := func(mdb *DB) {
 		_, exists := mdb.GetCoinflip(context.TODO(), layerID)

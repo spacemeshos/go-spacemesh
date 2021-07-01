@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -135,6 +136,11 @@ func (l LayerID) Duration(other LayerID) uint32 {
 
 // Field returns a log field. Implements the LoggableField interface.
 func (l LayerID) Field() log.Field { return log.Uint32("layer_id", l.value) }
+
+// String returns string representation of the layer id numeric value.
+func (l LayerID) String() string {
+	return strconv.FormatUint(uint64(l.value), 10)
+}
 
 // NodeID contains a miner's two public keys.
 type NodeID struct {

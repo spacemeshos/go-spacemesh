@@ -275,23 +275,23 @@ func Test_SafeLayerRange(t *testing.T) {
 		safeLayerEnd   types.LayerID
 	}{
 		// a target layer prior to effective genesis returns effective genesis
-		{0, safetyParam, defLayersPerEpoch, 1, effGenesis, effGenesis},
+		{types.NewLayerID(0), safetyParam, defLayersPerEpoch, 1, effGenesis, effGenesis},
 		// large safety param also returns effective genesis
-		{100, 100, defLayersPerEpoch, 1, effGenesis, effGenesis},
+		{types.NewLayerID(100), 100, defLayersPerEpoch, 1, effGenesis, effGenesis},
 		// safe layer in first safetyParam + epochOffset layers of epoch, rewinds one epoch further (two prior to target)
-		{100, safetyParam, defLayersPerEpoch, 1, 80, 81},
+		{types.NewLayerID(100), safetyParam, defLayersPerEpoch, 1, types.NewLayerID(80), types.NewLayerID(81)},
 		// zero offset
-		{100, safetyParam, defLayersPerEpoch, 0, 90, 90},
+		{types.NewLayerID(100), safetyParam, defLayersPerEpoch, 0, types.NewLayerID(90), types.NewLayerID(90)},
 		// safetyParam < layersPerEpoch means only look back one epoch
-		{100, safetyParam - 1, defLayersPerEpoch, 1, 90, 91},
+		{types.NewLayerID(100), safetyParam - 1, defLayersPerEpoch, 1, types.NewLayerID(90), types.NewLayerID(91)},
 		// larger epochOffset looks back further
-		{100, safetyParam, defLayersPerEpoch, 5, 80, 85},
+		{types.NewLayerID(100), safetyParam, defLayersPerEpoch, 5, types.NewLayerID(80), types.NewLayerID(85)},
 		// smaller safety param returns one epoch prior
-		{100, 5, defLayersPerEpoch, 5, 90, 95},
+		{types.NewLayerID(100), 5, defLayersPerEpoch, 5, types.NewLayerID(90), types.NewLayerID(95)},
 		// targetLayer within safetyParam returns one epoch prior
-		{105, 5, defLayersPerEpoch, 5, 90, 95},
+		{types.NewLayerID(105), 5, defLayersPerEpoch, 5, types.NewLayerID(90), types.NewLayerID(95)},
 		// targetLayer after safetyParam+epochOffset returns start of same epoch
-		{105, 2, defLayersPerEpoch, 2, 100, 102},
+		{types.NewLayerID(105), 2, defLayersPerEpoch, 2, types.NewLayerID(100), types.NewLayerID(102)},
 	}
 	for _, testCase := range testCases {
 		log.Info("testing safeLayerRange input: %v", testCase)
@@ -572,16 +572,16 @@ func TestOracle_actives(t *testing.T) {
 	o := defaultOracle(t)
 	o.atxdb = atxdb
 	t.Run("test genesis", func(t *testing.T) {
-		_, err := o.actives(context.TODO(), 1)
+		_, err := o.actives(context.TODO(), types.NewLayerID(1))
 		r.EqualError(err, errGenesis.Error())
 	})
 
 	t.Run("test cache", func(t *testing.T) {
 		mc := newMockCacher()
 		o.activesCache = mc
-		v1, err := o.actives(context.TODO(), 100)
+		v1, err := o.actives(context.TODO(), types.NewLayerID(100))
 		r.NoError(err)
-		v2, err := o.actives(context.TODO(), 100)
+		v2, err := o.actives(context.TODO(), types.NewLayerID(100))
 		r.NoError(err)
 		r.Equal(v1, v2)
 		r.Equal(1, mc.numAdd)
@@ -593,7 +593,7 @@ func TestOracle_actives(t *testing.T) {
 		o.activesCache = newMockCacher()
 		// return no hare active set, forcing us to fall back on tortoise active set
 		atxdb.size = 0
-		v1, err := o.actives(context.TODO(), 100)
+		v1, err := o.actives(context.TODO(), types.NewLayerID(100))
 		r.NoError(err)
 		for i := 0; i < numAtxs; i++ {
 			// this works too:
@@ -620,15 +620,15 @@ func TestOracle_actives(t *testing.T) {
 			o.cfg.ConfidenceParam,
 			o.layersPerEpoch,
 			o.cfg.EpochOffset)
-		r.Equal(20, int(sls1))
-		r.Equal(23, int(sle1))
+		r.Equal(20, int(sls1.Uint32()))
+		r.Equal(23, int(sle1.Uint32()))
 		sls2, sle2 := safeLayerRange(
 			targetLayer2,
 			o.cfg.ConfidenceParam,
 			o.layersPerEpoch,
 			o.cfg.EpochOffset)
-		r.Equal(30, int(sls2))
-		r.Equal(33, int(sle2))
+		r.Equal(30, int(sls2.Uint32()))
+		r.Equal(33, int(sle2.Uint32()))
 
 		// make sure the result of the first is not read from the cache for the second even though both target layers
 		// are in the same epoch
@@ -651,7 +651,7 @@ func TestOracle_concurrentActives(t *testing.T) {
 	o.activesCache = mc
 
 	runFn := func() {
-		_, err := o.actives(context.TODO(), 100)
+		_, err := o.actives(context.TODO(), types.NewLayerID(100))
 		r.NoError(err)
 	}
 
@@ -678,7 +678,7 @@ func TestOracle_MultipleLayerBlocks(t *testing.T) {
 	o := defaultOracle(t)
 	o.cfg = eCfg.Config{ConfidenceParam: confidenceParam, EpochOffset: epochOffset}
 	sls, sle := safeLayerRange(lyr, confidenceParam, defLayersPerEpoch, epochOffset)
-	numLayers := int(sle - sls + 1) // +1 because inclusive of endpoints
+	numLayers := int(sle.Duration(sls) + 1) // +1 because inclusive of endpoints
 	log.With().Info("layer range", log.FieldNamed("start", sls), log.FieldNamed("end", sle), log.Int("count", numLayers))
 	allBlocks := make(map[types.BlockID]bool, numLayers)
 	o.meshdb = &mockBlocksProvider{layerContextuallyValidBlocksFn: func(layerID types.LayerID) (map[types.BlockID]struct{}, error) {
@@ -728,15 +728,15 @@ func TestOracle_activesSafeLayer(t *testing.T) {
 	lyr := types.NewLayerID(10)
 	sls, sle := safeLayerRange(lyr, o.cfg.ConfidenceParam, o.layersPerEpoch, o.cfg.EpochOffset)
 	mp := make(map[types.BlockID]struct{})
-	block1 := types.NewExistingBlock(0, []byte("some data"), nil)
+	block1 := types.NewExistingBlock(types.NewLayerID(0), []byte("some data"), nil)
 	mp[block1.ID()] = struct{}{}
 	lastLayer := sls
 	mbp := &mockBlocksProvider{layerContextuallyValidBlocksFn: func(layerID types.LayerID) (map[types.BlockID]struct{}, error) {
 		// make sure it's called on each layer in the range, in turn
-		r.GreaterOrEqual(uint64(layerID), uint64(sls), "LayerContextuallyValidBlocks called on layer before safeLayerStart")
-		r.LessOrEqual(uint64(layerID), uint64(sle), "LayerContextuallyValidBlocks called on layer after safeLayerEnd")
+		r.GreaterOrEqual(layerID.Uint32(), sls.Uint32(), "LayerContextuallyValidBlocks called on layer before safeLayerStart")
+		r.LessOrEqual(layerID.Uint32(), sle.Uint32(), "LayerContextuallyValidBlocks called on layer after safeLayerEnd")
 		r.Equal(lastLayer, layerID, "LayerContextuallyValidBlocks called on layer out of order")
-		lastLayer++
+		lastLayer = lastLayer.Add(1)
 		return mp, nil
 	}}
 	o.meshdb = mbp
@@ -764,7 +764,7 @@ func TestOracle_HareToTortoiseFlow(t *testing.T) {
 	// an activeSetProvider that returns an active set from blocks but no epoch ATXs: in this test we want to make sure
 	// that hare active set succeeds and tortoise active set fails
 	mp := make(map[types.BlockID]struct{})
-	block1 := types.NewExistingBlock(0, []byte("some data"), nil)
+	block1 := types.NewExistingBlock(types.NewLayerID(0), []byte("some data"), nil)
 	mp[block1.ID()] = struct{}{}
 	asp := &mockActiveSetProvider{size: 1, getEpochAtxsFn: func(types.EpochID) []types.ATXID {
 		r.Fail("tortoise active set should not be read")
@@ -843,14 +843,14 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	o := mockOracle(t, 5)
 	o.atxdb = atxdb
 	o.meshdb = &mockBlocksProvider{}
-	v, err := o.IsIdentityActiveOnConsensusView(context.TODO(), "22222", 1)
+	v, err := o.IsIdentityActiveOnConsensusView(context.TODO(), "22222", types.NewLayerID(1))
 	r.NoError(err)
 	r.True(v)
 
 	o.atxdb = &mockActiveSetProvider{size: 1, getActiveSetFn: func(types.EpochID, map[types.BlockID]struct{}) (map[string]uint64, error) {
 		return nil, errFoo
 	}}
-	_, err = o.IsIdentityActiveOnConsensusView(context.TODO(), "22222", 100)
+	_, err = o.IsIdentityActiveOnConsensusView(context.TODO(), "22222", types.NewLayerID(100))
 	r.Error(err)
 	r.Equal(errFoo, errors.Unwrap(err))
 
@@ -860,11 +860,11 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	}, getAtxHeaderFn: func(types.ATXID) (*types.ActivationTxHeader, error) {
 		return &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: edid}}}, nil
 	}}
-	v, err = o.IsIdentityActiveOnConsensusView(context.TODO(), "22222", 100)
+	v, err = o.IsIdentityActiveOnConsensusView(context.TODO(), "22222", types.NewLayerID(100))
 	r.NoError(err)
 	r.False(v)
 
-	v, err = o.IsIdentityActiveOnConsensusView(context.TODO(), edid, 100)
+	v, err = o.IsIdentityActiveOnConsensusView(context.TODO(), edid, types.NewLayerID(100))
 	r.NoError(err)
 	r.True(v)
 }
