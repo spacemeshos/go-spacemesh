@@ -44,7 +44,10 @@ func getAtxBodyKey(atxID types.ATXID) []byte {
 	return atxID.Bytes()
 }
 
-var errInvalidSig = fmt.Errorf("identity not found when validating signature, invalid atx")
+var (
+	errInvalidSig   = errors.New("identity not found when validating signature, invalid atx")
+	errGenesisEpoch = errors.New("tried to retrieve miner weights for target epoch 0")
+)
 
 type atxChan struct {
 	ch        chan struct{}
@@ -194,7 +197,6 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 
 func (db *DB) createTraversalFuncForMinerWeights(minerWeight map[string]uint64, targetEpoch types.EpochID) func(b *types.Block) (bool, error) {
 	return func(b *types.Block) (stop bool, err error) {
-
 		// count unique ATXs
 		if b.ActiveSet == nil {
 			return false, nil
@@ -206,7 +208,7 @@ func (db *DB) createTraversalFuncForMinerWeights(minerWeight map[string]uint64, 
 				return false, fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortString())
 			}
 
-			// todo: should we accept only eopch -1 atxs?
+			// todo: should we accept only epoch -1 atxs?
 
 			// make sure the target epoch is our epoch
 			if atx.TargetEpoch() != targetEpoch {
@@ -228,7 +230,7 @@ func (db *DB) createTraversalFuncForMinerWeights(minerWeight map[string]uint64, 
 // the provided view.
 func (db *DB) GetMinerWeightsInEpochFromView(targetEpoch types.EpochID, view map[types.BlockID]struct{}) (map[string]uint64, error) {
 	if targetEpoch == 0 {
-		return nil, errors.New("tried to retrieve miner weights for targetEpoch 0")
+		return nil, errGenesisEpoch
 	}
 
 	firstLayerOfPrevEpoch := (targetEpoch - 1).FirstLayer()
@@ -522,17 +524,6 @@ func (db *DB) storeAtxUnlocked(atx *types.ActivationTx) error {
 	return nil
 }
 
-func getAtxBody(atx *types.ActivationTx) *types.ActivationTx {
-	return &types.ActivationTx{
-		InnerActivationTx: &types.InnerActivationTx{
-			ActivationTxHeader: nil,
-			Nipst:              atx.Nipst,
-			Commitment:         atx.Commitment,
-		},
-		Sig: atx.Sig,
-	}
-}
-
 type atxIDAndLayer struct {
 	AtxID   types.ATXID
 	LayerID types.LayerID
@@ -629,8 +620,7 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 			break
 		}
 		var a types.ATXID
-		err := types.BytesToInterface(atxIterator.Value(), &a)
-		if err != nil {
+		if err := types.BytesToInterface(atxIterator.Value(), &a); err != nil {
 			db.log.Panic("cannot parse atx from DB")
 			break
 		}

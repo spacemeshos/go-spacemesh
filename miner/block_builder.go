@@ -55,10 +55,6 @@ type atxDb interface {
 	GetEpochAtxs(epochID types.EpochID) []types.ATXID
 }
 
-type atxPool interface {
-	GetAllItems() []*types.ActivationTx
-}
-
 // BlockBuilder is the struct that orchestrates the building of blocks, it is responsible for receiving hare results.
 // referencing txs and atxs from mem pool and referencing them in the created block
 // it is also responsible for listening to the clock and querying when a block should be created according to the block oracle
@@ -75,7 +71,6 @@ type BlockBuilder struct {
 	TransactionPool txPool
 	mu              sync.Mutex
 	network         p2p.Service
-	weakCoinToss    weakCoinProvider
 	meshProvider    meshProvider
 	baseBlockP      baseBlockProvider
 	blockOracle     blockOracle
@@ -99,7 +94,21 @@ type Config struct {
 }
 
 // NewBlockBuilder creates a struct of block builder type.
-func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin weakCoinProvider, orph meshProvider, bbp baseBlockProvider, hare hareResultProvider, blockOracle blockOracle, syncer syncer, projector projector, txPool txPool, atxDB atxDb, lg log.Log) *BlockBuilder {
+func NewBlockBuilder(
+	config Config,
+	sgn signer,
+	net p2p.Service,
+	beginRoundEvent chan types.LayerID,
+	orph meshProvider,
+	bbp baseBlockProvider,
+	hare hareResultProvider,
+	blockOracle blockOracle,
+	syncer syncer,
+	projector projector,
+	txPool txPool,
+	atxDB atxDb,
+	lg log.Log,
+) *BlockBuilder {
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(config.MinerID.Key)))
 
 	db, err := database.Create("builder", 16, 16, lg)
@@ -118,7 +127,6 @@ func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent
 		hareResult:      hare,
 		mu:              sync.Mutex{},
 		network:         net,
-		weakCoinToss:    weakCoin,
 		meshProvider:    orph,
 		baseBlockP:      bbp,
 		blockOracle:     blockOracle,
@@ -162,18 +170,14 @@ func (t *BlockBuilder) Close() error {
 }
 
 type hareResultProvider interface {
-	GetResult(lid types.LayerID) ([]types.BlockID, error)
-}
-
-type weakCoinProvider interface {
-	GetResult() bool
+	GetResult(types.LayerID) ([]types.BlockID, error)
 }
 
 type meshProvider interface {
-	LayerBlockIds(index types.LayerID) ([]types.BlockID, error)
-	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
-	GetBlock(id types.BlockID) (*types.Block, error)
-	AddBlockWithTxs(blk *types.Block) error
+	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
+	GetOrphanBlocksBefore(types.LayerID) ([]types.BlockID, error)
+	GetBlock(types.BlockID) (*types.Block, error)
+	AddBlockWithTxs(*types.Block) error
 }
 
 func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID, top types.LayerID) {
@@ -205,6 +209,7 @@ func filterUnknownBlocks(blocks []types.BlockID, validate func(id types.BlockID)
 	return filtered
 }
 
+// TODO: currently unused, other than in tests
 func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	var votes []types.BlockID
 
@@ -289,22 +294,9 @@ func (t *BlockBuilder) stopped() bool {
 }
 
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID, activeSet []types.ATXID) (*types.Block, error) {
-
 	if id <= types.GetEffectiveGenesis() {
 		return nil, errors.New("cannot create blockBytes in genesis layer")
 	}
-
-	// TODO: use this instead have logic inside trtl
-	/*votes, err := t.getVotes(id)
-	votes, err := t.getVotes(id)
-	if err != nil {
-		return nil, err
-	}
-
-	viewEdges, err := t.meshProvider.GetOrphanBlocksBefore(id)
-	if err != nil {
-		return nil, err
-	}*/
 
 	base, diffs, err := t.baseBlockP.BaseBlock()
 	if err != nil {
@@ -317,7 +309,6 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 			ATXID:            atxID,
 			EligibilityProof: eligibilityProof,
 			Data:             nil,
-			Coin:             t.weakCoinToss.GetResult(),
 			BaseBlock:        base,
 			AgainstDiff:      diffs[0],
 			ForDiff:          diffs[1],
@@ -352,8 +343,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 
 	if b.ActiveSet != nil {
 		t.With().Info("storing ref block", epoch, bl.ID())
-		err := t.storeRefBlock(epoch, bl.ID())
-		if err != nil {
+		if err := t.storeRefBlock(epoch, bl.ID()); err != nil {
 			t.With().Error("cannot store ref block", epoch, log.Err(err))
 			//todo: panic?
 		}
