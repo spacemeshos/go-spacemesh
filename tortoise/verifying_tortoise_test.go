@@ -247,7 +247,7 @@ func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerL
 }
 
 func makeLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, msh *mesh.DB, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
-	fmt.Println("choosing base block for layer", l)
+	t.Log("choosing base block for layer", l)
 	oldInputVectorFn := msh.InputVectorBackupFunc
 	defer func() {
 		msh.InputVectorBackupFunc = oldInputVectorFn
@@ -255,8 +255,8 @@ func makeLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, 
 	msh.InputVectorBackupFunc = inputVectorFn
 	b, lists, err := trtl.BaseBlock(context.TODO())
 	require.NoError(t, err)
-	fmt.Println("base block for layer", l, "is", b)
-	fmt.Println("exception lists for layer", l, " (against, support, neutral):", lists)
+	t.Log("base block for layer", l, "is", b)
+	t.Log("exception lists for layer", l, " (against, support, neutral):", lists)
 	lyr := types.NewLayer(l)
 
 	for i := 0; i < blocksPerLayer; i++ {
@@ -291,7 +291,7 @@ func testLayerPattern(t *testing.T, db *mesh.DB, trtl *turtle, blocksPerLayer in
 	}
 	for i, success := range successPattern {
 		thisLayerID := types.GetEffectiveGenesis().Add(uint16(i) + 1)
-		t.Log("processing layer", thisLayerID)
+		t.Log("================================ processing layer", thisLayerID)
 		if success {
 			makeAndProcessLayer(t, thisLayerID, trtl, blocksPerLayer, db, goodLayerFn)
 		} else {
@@ -337,6 +337,52 @@ func TestLayerPatterns(t *testing.T) {
 			true,  // verification resumes zdist+confidence interval layers before
 			true,  // verification resumes zdist+confidence interval layers before
 			true,  // final candidate layer, not verified
+			true,
+			true,
+		}
+
+		msh := getInMemMesh()
+		trtl := defaultTurtle(t)
+		trtl.AvgLayerSize = blocksPerLayer
+		trtl.bdp = msh
+		trtl.init(context.TODO(), mesh.GenesisLayer())
+		testLayerPattern(t, msh, trtl, blocksPerLayer, pattern)
+
+		// check our assumptions
+		require.Equal(t, 5, int(trtl.Zdist))
+		require.Equal(t, 5, int(trtl.ConfidenceParam))
+
+		// final verified layer should lag by zdist+confidence interval
+		finalVerified := types.GetEffectiveGenesis().Add(uint16(len(pattern)) - 1 - uint16(trtl.Zdist+trtl.ConfidenceParam))
+		require.Equal(t, int(finalVerified), int(trtl.Verified))
+	})
+
+	t.Run("heal after good bad good bad good pattern", func(t *testing.T) {
+		pattern := []bool{
+			true,
+			true,
+			true,
+			true,
+			true,
+			false,
+			true,
+			true,
+			false,
+			false,
+			true,
+			true,
+			true,
+			true,
+			true,
+			true,
+			true,
+			true,
+			true,
+			true,
+			true,
+			true,
+			true,
+			true,
 		}
 
 		msh := getInMemMesh()

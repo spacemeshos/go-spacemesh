@@ -217,18 +217,18 @@ func blockIDsToString(input []types.BlockID) string {
 
 // returns the binary local opinion on the validity of a block in a layer (support or against)
 // TODO: cache but somehow check for changes (e.g., late-finishing Hare), maybe check hash?
-func (t *turtle) getSingleInputVectorFromDB(ctx context.Context, lyrid types.LayerID, blockid types.BlockID) (vec, error) {
-	if lyrid <= types.GetEffectiveGenesis() {
+func (t *turtle) getSingleInputVectorFromDB(ctx context.Context, layerID types.LayerID, blockid types.BlockID) (vec, error) {
+	if layerID <= types.GetEffectiveGenesis() {
 		return support, nil
 	}
 
-	input, err := t.bdp.GetLayerInputVectorByID(lyrid)
+	input, err := t.bdp.GetLayerInputVectorByID(layerID)
 	if err != nil {
 		return abstain, err
 	}
 
 	t.logger.WithContext(ctx).With().Debug("got input vector from db",
-		lyrid,
+		layerID,
 		log.FieldNamed("query_block", blockid),
 		log.String("input", blockIDsToString(input)))
 
@@ -255,23 +255,23 @@ func (t *turtle) checkBlockAndGetInputVector(
 				log.FieldNamed("exception_block_id", exceptionBlockID))
 			return false
 		} else if exceptionBlock.LayerIndex < baseBlockLayer {
-			logger.With().Error("good block candidate contains exception vote for block older than its base block",
+			logger.With().Error("good block candidate contains exception for block older than its base block",
 				log.FieldNamed("older_block", exceptionBlockID),
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
-				log.FieldNamed("base_block_lyr", baseBlockLayer))
+				log.FieldNamed("base_block_layer", baseBlockLayer))
 			return false
 		} else if v, err := t.getSingleInputVectorFromDB(ctx, exceptionBlock.LayerIndex, exceptionBlockID); err != nil {
-			logger.With().Error("unable to get single input vector for exception block",
+			logger.With().Error("unable to get single input vector for block in exception list",
 				log.FieldNamed("older_block", exceptionBlockID),
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
-				log.FieldNamed("base_block_lyr", baseBlockLayer),
+				log.FieldNamed("base_block_layer", baseBlockLayer),
 				log.Err(err))
 			return false
 		} else if v != voteVector {
 			logger.With().Debug("not adding block to good blocks because its vote differs from input vector",
 				log.FieldNamed("older_block", exceptionBlock.ID()),
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
-				log.FieldNamed("input_vote", v),
+				log.FieldNamed("input_vector_vote", v),
 				log.String("block_vote", className))
 			return false
 		}
@@ -602,7 +602,7 @@ func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) error
 
 	// Go over all blocks, in order. Mark block i "good" if:
 	for _, b := range blocks {
-		logger := logger.WithFields(b.ID(), log.FieldNamed("base_block_id", b.BaseBlock))
+		logger := logger.WithFields(b.ID(), b.LayerIndex, log.FieldNamed("base_block_id", b.BaseBlock))
 		// (1) the base block is marked as good
 		if _, good := t.GoodBlocksIndex[b.BaseBlock]; !good {
 			logger.Debug("not marking block as good because baseblock is not good")
@@ -694,9 +694,9 @@ candidateLayerLoop:
 	for candidateLayerID := t.Verified + 1; candidateLayerID < t.Last; candidateLayerID++ {
 		logger := logger.WithFields(log.FieldNamed("candidate_layer", candidateLayerID))
 
-		// it's possible that self-healing already validated a layer
+		// it's possible that self healing already validated a layer
 		if t.Verified >= candidateLayerID {
-			logger.Info("self-healing already validated this layer")
+			logger.Info("self healing already validated this layer")
 			continue
 		}
 
@@ -764,7 +764,7 @@ candidateLayerLoop:
 			// 1. record our opinion on this block and go on evaluating the rest of the blocks in this layer to see if
 			//    we can verify the layer (if local and global consensus match, and global consensus is decided)
 			// 2. keep waiting to verify the layer (if not, and the layer is relatively recent)
-			// 3. trigger self-healing (if not, and the layer is sufficiently old)
+			// 3. trigger self healing (if not, and the layer is sufficiently old)
 			consensusMatches := globalOpinionOnBlock == localOpinionOnBlock
 			globalOpinionDecided := globalOpinionOnBlock != abstain
 
@@ -791,7 +791,7 @@ candidateLayerLoop:
 			// not just of a single block. The latter could cause the global opinion of a single block to permanently
 			// be abstain. As long as the contextual validity of any block in a layer is unresolved, we cannot verify
 			// the layer (since the effectiveness of each transaction in the layer depends upon the contents of the
-			// entire layer and transaction ordering). Therefore we have to enter self-healing in this case.
+			// entire layer and transaction ordering). Therefore we have to enter self healing in this case.
 			// TODO: abstain only for entire layer at a time, not for individual blocks (optimization)
 			if !globalOpinionDecided {
 				logger.With().Warning("global opinion on block is abstain, cannot verify layer",
@@ -803,7 +803,7 @@ candidateLayerLoop:
 			// Verifying tortoise will wait `zdist' layers for consensus, then an additional `ConfidenceParam'
 			// layers until all other nodes achieve consensus. If it's still stuck after this point, i.e., if the gap
 			// between this unverified candidate layer and the latest layer is greater than this distance, then we trigger
-			// self-healing. But there's no point in trying to heal a layer that's not at least Hdist layers old since
+			// self healing. But there's no point in trying to heal a layer that's not at least Hdist layers old since
 			// we only consider the local opinion for recent layers.
 			if candidateLayerID > t.Last {
 				logger.With().Panic("candidate layer is higher than last layer received",
@@ -823,12 +823,12 @@ candidateLayerLoop:
 				lastVerified := t.Verified
 				t.selfHealing(ctx, lastLayer)
 
-				// if self-healing made progress, short-circuit processing of this layer, but allow verification of
+				// if self healing made progress, short-circuit processing of this layer, but allow verification of
 				// later layers to continue
 				if t.Verified > lastVerified {
 					continue candidateLayerLoop
 				}
-				// otherwise, if self-healing didn't make any progress, there's no point in continuing to attempt
+				// otherwise, if self healing didn't make any progress, there's no point in continuing to attempt
 				// verification
 			}
 
@@ -1007,7 +1007,7 @@ func (t *turtle) selfHealing(ctx context.Context, targetLayerID types.LayerID) {
 	for candidateLayerID := pbaseOld + 1; candidateLayerID < targetLayerID; candidateLayerID++ {
 		logger := t.logger.WithContext(ctx).WithFields(
 			log.FieldNamed("old_verified_layer", pbaseOld),
-			log.FieldNamed("new_verified_layer", pbaseNew),
+			log.FieldNamed("last_verified_layer", pbaseNew),
 			log.FieldNamed("target_layer", targetLayerID),
 			log.FieldNamed("candidate_layer", candidateLayerID),
 			log.FieldNamed("last_layer_received", t.Last),
@@ -1027,7 +1027,7 @@ func (t *turtle) selfHealing(ctx context.Context, targetLayerID types.LayerID) {
 
 		// Calculate the global opinion on all blocks in the layer
 		// Note: we look at ALL blocks we've seen for the layer, not just those we've previously marked contextually valid
-		logger.Info("self-healing attempting to verify candidate layer")
+		logger.Info("self healing attempting to verify candidate layer")
 
 		layerBlockIds, err := t.bdp.LayerBlockIds(candidateLayerID)
 		if err != nil {
@@ -1047,12 +1047,12 @@ func (t *turtle) selfHealing(ctx context.Context, targetLayerID types.LayerID) {
 
 			// check that the total weight exceeds the global threshold
 			globalOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, float64(t.Last-candidateLayerID))
-			logger.With().Debug("self-healing calculated global opinion on candidate block",
+			logger.With().Debug("self healing calculated global opinion on candidate block",
 				log.FieldNamed("global_opinion", globalOpinionOnBlock),
 				sum)
 
 			if globalOpinionOnBlock == abstain {
-				logger.With().Info("self-healing failed to verify candidate layer, will reattempt later")
+				logger.With().Info("self healing failed to verify candidate layer, will reattempt later")
 				return
 			}
 
