@@ -253,7 +253,7 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	epoch := layer.GetEpoch()
 	actives, err := atxdb.GetMinerWeightsInEpochFromView(epoch, blocksMap)
 	assert.NoError(t, err)
-	// MERGE-2 FIX -- TEST FAILURE
+	// TODO: check this test failure
 	println(actives) // REMOVE
 	//assert.Len(t, actives, 2)
 	//assert.Equal(t, uint64(10000), actives[id1.Key], "actives[id1.Key] (%d) != %d", actives[id1.Key], 10000)
@@ -534,8 +534,6 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, "golden atx used for atx in epoch 2, but is only valid in epoch 1")
 
 	// Wrong prevATx.
-	// MERGE FIX
-	// 	atx = newActivationTx(idx1, 1, atxs[0].ID(), 1012, 0, posAtx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPoST{})
 	atx = newActivationTx(idx1, 1, atxs[0].ID(), posAtx.ID(), 1012, 0, 100, coinbase, 100, &types.NIPoST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
@@ -543,8 +541,6 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, fmt.Sprintf("previous atx belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v", atx.ShortString(), atx.NodeID.Key, atxs[0].NodeID.Key))
 
 	// Wrong layerId.
-	// MERGE FIX
-	// 	posAtx2 := newActivationTx(idx2, 0, *types.EmptyATXID, 1020, 0, *types.EmptyATXID, coinbase, 3, blocks, npst)
 	posAtx2 := newActivationTx(idx2, 0, *types.EmptyATXID, *types.EmptyATXID, 1020, 0, 100, coinbase, 100, npst)
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
@@ -552,8 +548,6 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.NoError(t, err)
 	err = atxdb.StoreNodeIdentity(idx1)
 	assert.NoError(t, err)
-	// MERGE FIX
-	// 	atx = newActivationTx(idx1, 1, prevAtx.ID(), 1012, 0, posAtx2.ID(), coinbase, 3, []types.BlockID{}, npst)
 	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx2.ID(), 1012, 0, 100, coinbase, 100, npst)
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
@@ -563,8 +557,6 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	// Atx already exists.
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
-	// MERGE FIX
-	// atx = newActivationTx(idx1, 1, prevAtx.ID(), 12, 0, posAtx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPoST{})
 	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), 12, 0, 100, coinbase, 100, &types.NIPoST{})
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
@@ -572,8 +564,6 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	// Prev atx declared but not found.
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
-	// MERGE FIX
-	// 	atx = newActivationTx(idx1, 1, prevAtx.ID(), 12, 0, posAtx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPoST{})
 	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), 12, 0, 100, coinbase, 100, &types.NIPoST{})
 	iter := atxdb.atxs.Find(getNodeAtxPrefix(atx.NodeID))
 	for iter.Next() {
@@ -587,8 +577,6 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 		fmt.Sprintf("could not fetch node last atx: atx for node %v does not exist", atx.NodeID.ShortString()))
 
 	// Prev atx not declared but initial PoST not included.
-	// MERGE FIX
-	// 	atx = newActivationTx(idx1, 0, *types.EmptyATXID, 1012, 0, posAtx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPoST{})
 	atx = newActivationTx(idx1, 0, *types.EmptyATXID, posAtx.ID(), 1012, 0, 100, coinbase, 100, &types.NIPoST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
@@ -596,8 +584,6 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, "no prevATX declared, but initial PoST is not included")
 
 	// Prev atx not declared but initial PoST indices not included.
-	// MERGE FIX
-	// atx = newActivationTx(idx1, 0, *types.EmptyATXID, 1012, 0, posAtx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPoST{})
 	atx = newActivationTx(idx1, 0, *types.EmptyATXID, posAtx.ID(), 1012, 0, 100, coinbase, 100, &types.NIPoST{})
 	atx.InitialPoST = initialPoST
 	err = SignAtx(signer, atx)
@@ -606,8 +592,6 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, "no prevATX declared, but initial PoST indices is not included in challenge")
 
 	// Challenge and initial PoST indices mismatch.
-	// MERGE FIX
-	// atx = newActivationTx(idx1, 0, *types.EmptyATXID, 1012, 0, posAtx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPoST{})
 	atx = newActivationTx(idx1, 0, *types.EmptyATXID, posAtx.ID(), 1012, 0, 100, coinbase, 100, &types.NIPoST{})
 	atx.InitialPoST = initialPoST
 	atx.InitialPoSTIndices = append([]byte{}, initialPoST.Indices...)
@@ -618,8 +602,6 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, "initial PoST indices included in challenge does not equal to the initial PoST indices included in the atx")
 
 	// Prev atx declared but initial PoST is included.
-	// MERGE FIX
-	// atx = newActivationTx(idx1, 1, prevAtx.ID(), 1012, 0, posAtx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPoST{})
 	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), 1012, 0, 100, coinbase, 100, &types.NIPoST{})
 	atx.InitialPoST = initialPoST
 	err = SignAtx(signer, atx)
@@ -628,8 +610,6 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, "prevATX declared, but initial PoST is included")
 
 	// Prev atx declared but initial PoST indices is included.
-	// MERGE FIX
-	// atx = newActivationTx(idx1, 1, prevAtx.ID(), 1012, 0, posAtx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPoST{})
 	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), 1012, 0, 100, coinbase, 100, &types.NIPoST{})
 	atx.InitialPoSTIndices = initialPoST.Indices
 	err = SignAtx(signer, atx)
@@ -638,8 +618,6 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, "prevATX declared, but initial PoST indices is included in challenge")
 
 	// Prev atx has publication layer in the same epoch as the atx.
-	// MERGE FIX
-	// atx = newActivationTx(idx1, 1, prevAtx.ID(), 100, 0, posAtx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPoST{})
 	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), 100, 0, 100, coinbase, 100, &types.NIPoST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
@@ -666,11 +644,6 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	id2 := types.NodeID{Key: uuid.New().String()}
 	id3 := types.NodeID{Key: uuid.New().String()}
 	atxs := []*types.ActivationTx{
-		// MERGE FIX
-		// 	newActivationTx(id1, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase, 3, []types.BlockID{}, &types.NIPoST{}),
-		//		newActivationTx(id2, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase, 3, []types.BlockID{}, &types.NIPoST{}),
-		//		newActivationTx(id3, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase, 3, []types.BlockID{}, &types.NIPoST{}),
-		//
 		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, 1, 0, 100, coinbase, 100, &types.NIPoST{}),
 		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, 1, 0, 100, coinbase, 100, &types.NIPoST{}),
 		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, 1, 0, 100, coinbase, 100, &types.NIPoST{}),
@@ -692,15 +665,11 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	nodeAtxIds = append(nodeAtxIds, prevAtx.ID())
 
 	// wrong sequnce
-	// MERGE FIX
-	// 	atx := newActivationTx(idx1, 1, prevAtx.ID(), 1012, 0, prevAtx.ID(), coinbase, 0, []types.BlockID{}, &types.NIPoST{})
 	atx := newActivationTx(idx1, 1, prevAtx.ID(), prevAtx.ID(), 1012, 0, 100, coinbase, 100, &types.NIPoST{})
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
 	nodeAtxIds = append(nodeAtxIds, atx.ID())
 
-	// MERGE FIX
-	// atx = newActivationTx(idx1, 2, atx.ID(), 1012, 0, atx.ID(), coinbase, 0, []types.BlockID{}, &types.NIPoST{})
 	atx = newActivationTx(idx1, 2, atx.ID(), atx.ID(), 1012, 0, 100, coinbase, 100, &types.NIPoST{})
 	assert.NoError(t, err)
 	err = SignAtx(signer, atx)
@@ -712,8 +681,6 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	nodeAtxIds = append(nodeAtxIds, atx.ID())
 	atx2id := atx.ID()
 
-	// MERGE FIX
-	// atx = newActivationTx(idx1, 4, prevAtx.ID(), 1012, 0, prevAtx.ID(), coinbase, 0, []types.BlockID{}, &types.NIPoST{})
 	atx = newActivationTx(idx1, 4, prevAtx.ID(), prevAtx.ID(), 1012, 0, 100, coinbase, 100, &types.NIPoST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
@@ -727,8 +694,6 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 	id4 := atx.ID()
 
-	// MERGE FIX
-	// atx = newActivationTx(idx1, 3, atx2id, 1012, 0, prevAtx.ID(), coinbase, 0, []types.BlockID{}, &types.NIPoST{})
 	atx = newActivationTx(idx1, 3, atx2id, prevAtx.ID(), 1012, 0, 100, coinbase, 100, &types.NIPoST{})
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
@@ -754,22 +719,15 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	prevAtx = newActivationTx(idx2, 0, *types.EmptyATXID, *types.EmptyATXID, 100, 0, 100, coinbase, 100, npst)
 	err = atxdb.StoreAtx(1, prevAtx)
 	assert.NoError(t, err)
-
-	// MERGE FIX
-	// atx = newActivationTx(idx2, 1, prevAtx.ID(), 1012, 0, prevAtx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPoST{})
 	atx = newActivationTx(idx2, 1, prevAtx.ID(), prevAtx.ID(), 1012, 0, 100, coinbase, 100, &types.NIPoST{})
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
 	atxID := atx.ID()
 
-	// MERGE FIX
-	// atx = newActivationTx(idx2, 2, atxID, 1012, 0, atx.ID(), coinbase, 3, []types.BlockID{}, &types.NIPoST{})
 	atx = newActivationTx(idx2, 2, atxID, atx.ID(), 1012, 0, 100, coinbase, 100, &types.NIPoST{})
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
 
-	// MERGE FIX
-	// atx = newActivationTx(idx2, 2, atxID, 1013, 0, atx.ID(), coinbase, 0, []types.BlockID{}, &types.NIPoST{})
 	atx = newActivationTx(idx2, 2, atxID, atx.ID(), 1013, 0, 100, coinbase, 100, &types.NIPoST{})
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
@@ -785,8 +743,6 @@ func TestActivationDb_ProcessAtx(t *testing.T) {
 	atxdb, _, _ := getAtxDb("t8")
 	idx1 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
 	coinbase := types.HexToAddress("aaaa")
-	// MERGE FIX
-	// 	atx := newActivationTx(idx1, 0, *types.EmptyATXID, 100, 0, *types.EmptyATXID, coinbase, 3, []types.BlockID{}, &types.NIPoST{})
 	atx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, 100, 0, 100, coinbase, 100, &types.NIPoST{})
 
 	err := atxdb.ProcessAtx(atx)
@@ -815,8 +771,6 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	var atxs []*types.ActivationTx
 	for i := 0; i < activesetSize; i++ {
 		id := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("vrf")}
-		// MERGE FIX
-		// 		atxs = append(atxs, newActivationTx(id, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase, 3, []types.BlockID{}, &types.NIPoST{}))
 		atxs = append(atxs, newActivationTx(id, 0, *types.EmptyATXID, *types.EmptyATXID, 1, 0, 100, coinbase, 100, &types.NIPoST{}))
 	}
 
@@ -838,8 +792,6 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	r.NoError(err)
 	prevAtx := newAtx(challenge, NewNIPoSTWithChallenge(hash, poetRef))
 
-	// MERGE FIX
-	// 	atx := newActivationTx(idx1, 1, prevAtx.ID(), numberOfLayers+1+layersPerEpochBig, 0, prevAtx.ID(), coinbase, activesetSize, blocks, &types.NIPoST{})
 	atx := newActivationTx(idx1, 1, prevAtx.ID(), prevAtx.ID(), numberOfLayers+1+layersPerEpochBig, 0, 100, coinbase, 100, &types.NIPoST{})
 	hash, err = atx.NIPoSTChallenge.Hash()
 	r.NoError(err)

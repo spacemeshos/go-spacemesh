@@ -106,31 +106,16 @@ type PoSTSetupStatus struct {
 	LastError        error
 }
 
-// NewPostManager creates a new instance of PostManager.
-func NewPostManager(id []byte, cfg PoSTConfig, logger log.Log) (*PoSTSetupManager, error) {
+// NewPoSTSetupManager creates a new instance of PoSTSetupManager.
+func NewPoSTSetupManager(id []byte, cfg PoSTConfig, logger log.Log) (*PoSTSetupManager, error) {
 	mgr := &PoSTSetupManager{
 		id:                id,
-		cfg:               cfg, // LabelBatchSize, LabelSize, K1 & K2 will be used, others are to be overridden when calling to CreateDataSession.
+		cfg:               cfg,
 		logger:            logger,
 		state:             PoSTSetupStateNotStarted,
 		initCompletedChan: make(chan struct{}),
 		startedChan:       make(chan struct{}),
 	}
-
-	//var err error
-	//mgr.init, err = initialization.NewInitializer(&mgr.cfg, mgr.id)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//diskState, err := mgr.init.DiskState()
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//if diskState.InitState == initialization.InitStateCompleted {
-	//	mgr.PoSTSetupState = InitStatusComplete
-	//	close(mgr.initCompletedChan)
-	//}
 
 	return mgr, nil
 }

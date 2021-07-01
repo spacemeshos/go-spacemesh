@@ -46,14 +46,6 @@ func CloseEventPubSub() {
 	}
 }
 
-// CloseEventPubSub closes events pubsub and destroys it
-func CloseEventPubSub() {
-	if publisher != nil {
-		publisher.Close()
-		publisher = nil
-	}
-}
-
 // EventPublisher is the struct that publishes events to subscribers by topics.
 type EventPublisher struct {
 	*Publisher

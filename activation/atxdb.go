@@ -69,8 +69,7 @@ type DB struct {
 	log                 log.Log
 	calcTotalWeightFunc func(targetEpoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error)
 	processAtxMutex     sync.Mutex
-	//assLock           sync.Mutex MERGE FIX -- REMOVE?
-	atxChannels map[types.ATXID]*atxChan
+	atxChannels         map[types.ATXID]*atxChan
 }
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
@@ -399,8 +398,6 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		initialPoSTMetadata.Challenge = shared.ZeroChallenge
 		if err := db.nipostValidator.ValidatePoST(pub.Bytes(), atx.InitialPoST, &initialPoSTMetadata, atx.NumUnits); err != nil {
 			return fmt.Errorf("invalid initial PoST: %v", err)
-		if err := db.nipstValidator.VerifyPost(*pub, atx.Commitment, atx.Space); err != nil {
-			return fmt.Errorf("invalid commitment proof: %v", err)
 		}
 	}
 

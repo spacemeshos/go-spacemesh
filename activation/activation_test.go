@@ -153,6 +153,9 @@ func (*MockIDStore) GetIdentity(string) (types.NodeID, error) {
 
 type ValidatorMock struct{}
 
+// A compile time check to ensure that ValidatorMock fully implements the NIPoSTValidator interface.
+var _ NIPoSTValidator = (*ValidatorMock)(nil)
+
 func (*ValidatorMock) Validate(signing.PublicKey, *types.NIPoST, uint64, uint64, types.Hash32) error {
 	return nil
 }
@@ -639,8 +642,6 @@ func TestBuilder_SignAtx(t *testing.T) {
 	b := NewBuilder(cfg, nodeID, 0, ed, activationDb, net, meshProviderMock, layersPerEpoch, nipostBuilderMock, &postProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
 
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
-	// MERGE FIX
-	//	atx := newActivationTx(nodeID, 1, prevAtx, prevAtx, 15, 1, 100, 100, coinbase, npst)
 	atx := newActivationTx(nodeID, 1, prevAtx, prevAtx, 15, 1, 100, coinbase, 100, nipost)
 	atxBytes, err := types.InterfaceToBytes(atx.InnerActivationTx)
 	assert.NoError(t, err)

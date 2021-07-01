@@ -156,11 +156,11 @@ func (*mockIStore) GetIdentity(string) (types.NodeID, error) {
 
 type validatorMock struct{}
 
-func (*validatorMock) Validate(signing.PublicKey, *types.NIPST, uint64, types.Hash32) error {
+func (*validatorMock) Validate(id signing.PublicKey, NIPoST *types.NIPoST, expectedChallenge types.Hash32, numUnits uint) error {
 	return nil
 }
 
-func (*validatorMock) VerifyPost(signing.PublicKey, *types.PostProof, uint64) error {
+func (*validatorMock) ValidatePoST(id []byte, PoST *types.PoST, PoSTMetadata *types.PoSTMetadata, numUnits uint) error {
 	return nil
 }
 

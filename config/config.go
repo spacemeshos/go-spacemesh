@@ -88,8 +88,6 @@ type BaseConfig struct {
 
 	GenesisTotalWeight uint64 `mapstructure:"genesis-total-weight"` // the total weight for genesis
 
-	CoinbaseAccount string `mapstructure:"coinbase"`
-
 	GoldenATXID string `mapstructure:"golden-atx"`
 
 	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
@@ -101,8 +99,6 @@ type BaseConfig struct {
 	SyncValidationDelta int `mapstructure:"sync-validation-delta"` // sync interval in seconds
 
 	PublishEventsURL string `mapstructure:"events-url"`
-
-	StartSmeshing bool `mapstructure:"start-smeshing"`
 
 	AtxsPerBlock int `mapstructure:"atxs-per-block"`
 
@@ -144,8 +140,8 @@ type LoggerConfig struct {
 }
 
 type SmeshingConfig struct {
-	CoinbaseAccount string                   `mapstructure:"smeshing-coinbase"`
 	Start           bool                     `mapstructure:"smeshing-start"`
+	CoinbaseAccount string                   `mapstructure:"smeshing-coinbase"`
 	Opts            activation.PoSTSetupOpts `mapstructure:"smeshing-opts"`
 }
 
@@ -204,12 +200,6 @@ func defaultBaseConfig() BaseConfig {
 		TxsPerBlock:         100,
 		Profiler:            false,
 	}
-}
-
-func defaultTestConfig() BaseConfig {
-	conf := defaultBaseConfig()
-	conf.MetricsPort += 10000
-	return conf
 }
 
 func DefaultSmeshingConfig() SmeshingConfig {

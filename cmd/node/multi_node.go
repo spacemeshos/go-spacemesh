@@ -2,17 +2,14 @@ package node
 
 import (
 	"bufio"
-	"fmt"
 	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"strconv"
 	"sync"
 	"time"
-
-	"github.com/spacemeshos/amcl"
-	"github.com/spacemeshos/amcl/BLS381"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
@@ -141,6 +138,7 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 	cfg.POST.BitsPerLabel = 8
 
 	cfg.SMESHING = config.DefaultSmeshingConfig()
+	cfg.SMESHING.Start = true
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
 	cfg.SMESHING.Opts.NumFiles = 1
 	cfg.SMESHING.Opts.ComputeProviderID = int(initialization.CPUProviderID())
@@ -160,7 +158,6 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 	cfg.LayerDurationSec = 20
 	cfg.HareEligibility.ConfidenceParam = 4
 	cfg.HareEligibility.EpochOffset = 0
-	cfg.StartSmeshing = true
 	cfg.SyncRequestTimeout = 500
 	cfg.SyncInterval = 2
 	cfg.SyncValidationDelta = 5
@@ -224,11 +221,12 @@ type network interface {
 func InitSingleInstance(cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network, edSgn *signing.EdSigner) (*SpacemeshApp, error) {
 	smApp := NewSpacemeshApp()
 	smApp.Config = &cfg
-	// MERGE FIX
-	//smApp.Config.SpaceToCommit = smApp.Config.POST.SpacePerUnit << (i % 5)
-	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
+
 	smApp.Config.GenesisTime = genesisTime
+
+	smApp.Config.SMESHING.CoinbaseAccount = strconv.Itoa(i + 1)
 	smApp.Config.SMESHING.Opts.DataDir, _ = ioutil.TempDir("", "sm-app-test-post-datadir")
+	smApp.Config.SMESHING.Opts.NumUnits = smApp.Config.POST.MinNumUnits
 
 	smApp.edSgn = edSgn
 
@@ -245,7 +243,7 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, storePath 
 	hareOracle := newLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
-	err := smApp.initServices(context.TODO(), log.AppLog, nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
+	err = smApp.initServices(context.TODO(), log.AppLog, nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
 	if err != nil {
 		return nil, err
 	}

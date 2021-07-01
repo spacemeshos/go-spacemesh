@@ -3,13 +3,11 @@
 package activation
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"fmt"
-	"sync"
-	"sync/atomic"
-
 	"github.com/spacemeshos/ed25519"
+	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -83,7 +81,7 @@ type syncer interface {
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
 	Smeshing() bool
-	StartSmeshing(coinbase types.Address, opts PoSTSetupOpts) error
+	StartSmeshing(ctx context.Context, coinbase types.Address, opts PoSTSetupOpts) error
 	StopSmeshing(deleteFiles bool) error
 	SmesherID() types.NodeID
 	Coinbase() types.Address
@@ -109,13 +107,6 @@ const (
 	SmeshingStatusPendingPostInit
 	SmeshingStatusStarted
 )
-
-// Config defines configuration for Builder
-type Config struct {
-	CoinbaseAccount types.Address
-	GoldenATXID     types.ATXID
-	LayersPerEpoch  uint16
-}
 
 // Builder struct is the struct that orchestrates the creation of activation transactions
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
@@ -180,7 +171,7 @@ func (b *Builder) Smeshing() bool {
 // If the post data is incomplete or missing, data creation
 // session will be preceded. Changing of the post potions (e.g., number of labels),
 // after initial setup, is supported.
-func (b *Builder) StartSmeshing(coinbase types.Address, opts PoSTSetupOpts) error {
+func (b *Builder) StartSmeshing(ctx context.Context, coinbase types.Address, opts PoSTSetupOpts) error {
 	b.mtx.Lock()
 	if b.status != SmeshingStatusIdle {
 		b.mtx.Unlock()
@@ -205,7 +196,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PoSTSetupOpts) erro
 		}
 
 		b.status = SmeshingStatusStarted
-		go b.loop()
+		go b.loop(ctx)
 	}()
 
 	return nil
@@ -302,19 +293,6 @@ func (b *Builder) loop(ctx context.Context) {
 func (b *Builder) buildNIPoSTChallenge() error {
 	<-b.syncer.Await()
 	challenge := &types.NIPoSTChallenge{NodeID: b.nodeID}
-	if posAtx, err := b.GetPositioningAtx(); err != nil {
-		if b.currentEpoch() != 0 {
-			return fmt.Errorf("failed to get positioning ATX: %v", err)
-		}
-		challenge.EndTick = b.tickProvider.NumOfTicks()
-		challenge.PubLayerID = currentLayer.Add(b.layersPerEpoch)
-		challenge.PositioningATX = b.goldenATXID
-	} else {
-		challenge.PositioningATX = posAtx.ID()
-		challenge.PubLayerID = posAtx.PubLayerID.Add(b.layersPerEpoch)
-		challenge.StartTick = posAtx.EndTick
-		challenge.EndTick = posAtx.EndTick + b.tickProvider.NumOfTicks()
-	challenge := &types.NIPSTChallenge{NodeID: b.nodeID}
 	atxID, pubLayerID, endTick, err := b.GetPositioningAtxInfo()
 	if err != nil {
 		return fmt.Errorf("failed to get positioning ATX: %v", err)
@@ -331,7 +309,7 @@ func (b *Builder) buildNIPoSTChallenge() error {
 	}
 	b.challenge = challenge
 	if err := b.storeChallenge(b.challenge); err != nil {
-		return fmt.Errorf("failed to store NIPoST challenge: %v", err)
+		return fmt.Errorf("failed to store nipst challenge: %v", err)
 	}
 	return nil
 }
@@ -416,11 +394,10 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 
 	// ⏳ the following method waits for a PoET proof, which should take ~1 epoch
 	atxExpired := b.layerClock.AwaitLayer((pubEpoch + 2).FirstLayer()) // this fires when the target epoch is over
-	nipost, err := b.nipostBuilder.BuildNIPoST(hash, atxExpired, b.stop)
 
 	b.log.With().Info("build NIPST")
 
-	nipst, err := b.nipstBuilder.BuildNIPST(hash, atxExpired, b.stop)
+	nipost, err := b.nipostBuilder.BuildNIPoST(hash, atxExpired, b.stop)
 	if err != nil {
 		if _, stopRequested := err.(StopRequestedError); stopRequested {
 			return err

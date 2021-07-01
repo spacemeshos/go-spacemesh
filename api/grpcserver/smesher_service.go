@@ -40,7 +40,7 @@ func (s SmesherService) IsSmeshing(context.Context, *empty.Empty) (*pb.IsSmeshin
 }
 
 // StartSmeshing requests that the node begin smeshing
-func (s SmesherService) StartSmeshing(_ context.Context, in *pb.StartSmeshingRequest) (*pb.StartSmeshingResponse, error) {
+func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingRequest) (*pb.StartSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.StartSmeshing")
 
 	if in.Coinbase == nil {
@@ -72,7 +72,7 @@ func (s SmesherService) StartSmeshing(_ context.Context, in *pb.StartSmeshingReq
 		Throttle:          in.Opts.Throttle,
 	}
 
-	if err := s.smeshingProvider.StartSmeshing(coinbaseAddr, opts); err != nil {
+	if err := s.smeshingProvider.StartSmeshing(ctx, coinbaseAddr, opts); err != nil {
 		err := fmt.Sprintf("failed to start smeshing: %v", err)
 		log.Error(err)
 		return nil, status.Error(codes.Internal, err)

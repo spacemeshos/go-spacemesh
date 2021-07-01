@@ -45,7 +45,7 @@ func NewTransactionService(
 }
 
 // SubmitTransaction allows a new tx to be submitted
-func (s TransactionService) SubmitTransaction(_ context.Context, in *pb.SubmitTransactionRequest) (*pb.SubmitTransactionResponse, error) {
+func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.SubmitTransactionRequest) (*pb.SubmitTransactionResponse, error) {
 	log.Info("GRPC TransactionService.SubmitTransaction")
 
 	if len(in.Transaction) == 0 {

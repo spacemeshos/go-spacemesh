@@ -318,15 +318,13 @@ type NIPoST struct {
 // PoST is an alias to proving.Proof.
 type PoST postShared.Proof
 
-// PoSTMetadata is similar postShared.ProofMetadata, but without fields which can be derived elsewhere (ID, NumUnits).
+// PoSTMetadata is similar postShared.ProofMetadata, but without fields which can be derived elsewhere in a given ATX (ID, NumUnits).
 type PoSTMetadata struct {
-	//	ID            []byte
 	Challenge     []byte
 	BitsPerLabel  uint
 	LabelsPerUnit uint
-	//	NumUnits      uint
-	K1 uint
-	K2 uint
+	K1            uint
+	K2            uint
 }
 
 // String returns a string representation of the PostProof, for logging purposes.

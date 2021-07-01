@@ -46,17 +46,13 @@ func AddCommands(cmd *cobra.Command) {
 		config.LayerAvgSize, "Layer Avg size")
 	cmd.PersistentFlags().IntVar(&config.Hdist, "hdist",
 		config.Hdist, "hdist")
-	cmd.PersistentFlags().BoolVar(&config.StartSmeshing, "start-smeshing",
-		config.StartSmeshing, "start smeshing")
 	cmd.PersistentFlags().BoolVar(&config.PprofHTTPServer, "pprof-server",
 		config.PprofHTTPServer, "enable http pprof server")
 	cmd.PersistentFlags().StringVar(&config.GenesisConfPath, "genesis-conf",
 		config.GenesisConfPath, "add genesis configuration")
-	cmd.PersistentFlags().StringVar(&config.CoinbaseAccount, "coinbase",
-		config.CoinbaseAccount, "coinbase account to accumulate rewards")
 	cmd.PersistentFlags().StringVar(&config.GoldenATXID, "golden-atx",
 		config.GoldenATXID, "golden ATX hash")
-    cmd.PersistentFlags().Uint64Var(&config.GenesisTotalWeight, "genesis-total-weight",
+	cmd.PersistentFlags().Uint64Var(&config.GenesisTotalWeight, "genesis-total-weight",
 		config.GenesisTotalWeight, "The active set size for the genesis flow")
 	cmd.PersistentFlags().IntVar(&config.BlockCacheSize, "block-cache-size",
 		config.BlockCacheSize, "size in layers of meshdb block cache")
@@ -201,7 +197,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVar(&config.SMESHING.Start, "smeshing-start",
 		config.SMESHING.Start, "")
 	cmd.PersistentFlags().StringVar(&config.SMESHING.CoinbaseAccount, "smeshing-coinbase",
-		config.SMESHING.CoinbaseAccount, "")
+		config.SMESHING.CoinbaseAccount, "coinbase account to accumulate rewards")
 	cmd.PersistentFlags().StringVar(&config.SMESHING.Opts.DataDir, "smeshing-opts-datadir",
 		config.SMESHING.Opts.DataDir, "")
 	cmd.PersistentFlags().UintVar(&config.SMESHING.Opts.NumUnits, "smeshing-opts-numunits",

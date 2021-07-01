@@ -378,7 +378,6 @@ func TestValidator_Validate(t *testing.T) {
 
 func validateNIPoST(minerID []byte, nipost *types.NIPoST, challenge types.Hash32, poetDb poetDbAPI, postCfg config.Config) error {
 	v := &Validator{poetDb, postCfg}
-	// MERGE-2 FIX -- space param
 	return v.Validate(*signing.NewPublicKey(minerID), nipost, 100, challenge)
 }
 
