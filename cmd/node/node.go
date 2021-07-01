@@ -365,9 +365,9 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 
 	_, err := state.Commit()
 	if err != nil {
-		app.log.With().Error("cannot commit genesis state", log.Err(err))
+		return fmt.Errorf("cannot commit genesis state: %w", err)
 	}
-	return err
+	return nil
 }
 
 // Wrap the top-level logger to add context info and set the level for a
