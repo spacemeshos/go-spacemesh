@@ -90,7 +90,7 @@ func TestTurtle_HandleIncomingLayerHappyFlow(t *testing.T) {
 	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
 	require.Equal(t, layers.Sub(1), trtl.Verified)
 	blkids := make([]types.BlockID, 0, avgPerLayer*int(layers.Uint32()))
-	for l := types.NewLayerID(0); l.Before(layers); l.Add(1) {
+	for l := types.NewLayerID(0); l.Before(layers); l = l.Add(1) {
 		lids, _ := trtl.bdp.LayerBlockIds(l)
 		blkids = append(blkids, lids...)
 	}
@@ -346,7 +346,7 @@ func TestTurtle_Eviction(t *testing.T) {
 	avgPerLayer := 20 // more blocks = longer test
 	voteNegative := 0
 	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
-	require.Equal(t, len(trtl.BlockOpinionsByLayer),
+	require.EqualValues(t, len(trtl.BlockOpinionsByLayer),
 		(defaultTestHdist + 2))
 
 	count := 0
