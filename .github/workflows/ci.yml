@@ -162,7 +162,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: late nodes system test
-        run: make dockertest-late-nodes
+        run: make delns=false dump=true dockertest-late-nodes
   systemtest-mining:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
@@ -179,7 +179,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: mining system test
-        run: make dockertest-mining
+        run: make delns=false dump=true dockertest-mining
   systemtest-blocks-remove-node:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
@@ -196,7 +196,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: remove node test
-        run: make dockertest-blocks-remove-node
+        run: make delns=false dump=true dockertest-blocks-remove-node
   systemtest-blocks-add-node:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
@@ -213,7 +213,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: blocks add node test
-        run: make dockertest-blocks-add-node
+        run: make delns=false dump=true dockertest-blocks-add-node
   systemtest-p2p:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
@@ -230,7 +230,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: p2p system test
-        run: make dockertest-p2p
+        run: make delns=false dump=true dockertest-p2p
   systemtest-sync:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
@@ -247,7 +247,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: sync system test
-        run: make dockertest-sync
+        run: make delns=false dump=true dockertest-sync
   systemtest-hare:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
@@ -264,7 +264,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v2
       - name: hare system test
-        run: make dockertest-hare
+        run: make delns=false dump=true dockertest-hare
 
 
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
