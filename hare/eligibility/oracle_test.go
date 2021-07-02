@@ -205,7 +205,7 @@ func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	mCache := newMockCacher()
 	o.vrfMsgCache = mCache
 
-	total := 100
+	total := 1000
 	wg := sync.WaitGroup{}
 	firstLayer := types.NewLayerID(1)
 	for i := 0; i < total; i++ {
