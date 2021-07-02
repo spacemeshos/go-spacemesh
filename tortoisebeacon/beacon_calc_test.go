@@ -1,7 +1,6 @@
 package tortoisebeacon
 
 import (
-	"context"
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -167,7 +166,7 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 
 			tb.initGenesisBeacons()
 
-			err := tb.calcBeacon(context.TODO(), tc.epoch)
+			err := tb.calcBeacon(tc.epoch)
 			r.NoError(err)
 			r.EqualValues(tc.hash.String(), tb.beacons[epoch].String())
 		})
