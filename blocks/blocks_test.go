@@ -240,13 +240,11 @@ func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 
 func TestBlockHandler_AtxSetID(t *testing.T) {
 	a := atx("")
-	bbytes, _ := types.InterfaceToBytes(*a)
+	bbytes, err := types.InterfaceToBytes(*a)
+	require.NoError(t, err)
 	var b types.ActivationTx
-	types.BytesToInterface(bbytes, &b)
-	t.Log(fmt.Sprintf("%+v\n", *a))
-	t.Log("---------------------")
-	t.Log(fmt.Sprintf("%+v\n", b))
-	t.Log("---------------------")
+	require.NoError(t, types.BytesToInterface(bbytes, &b))
+
 	assert.Equal(t, b.Nipst, a.Nipst)
 	assert.Equal(t, b.Commitment, a.Commitment)
 

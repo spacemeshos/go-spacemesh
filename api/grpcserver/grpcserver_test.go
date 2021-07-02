@@ -562,7 +562,7 @@ func TestNodeService(t *testing.T) {
 			// First do a mock checking during a genesis layer
 			// During genesis all layers should be set to current layer
 			oldCurLayer := layerCurrent
-			layerCurrent = layerCurrent.Add(layersPerEpoch) // end of first epoch
+			layerCurrent = types.NewLayerID(layersPerEpoch) // end of first epoch
 			req := &pb.StatusRequest{}
 			res, err := c.Status(context.Background(), req)
 			require.NoError(t, err)

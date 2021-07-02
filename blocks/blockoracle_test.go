@@ -103,7 +103,7 @@ func testBlockOracleAndValidator(r *require.Assertions, totalWeight uint64, comm
 	validator := NewBlockEligibilityValidator(committeeSize, totalWeight, layersPerEpoch, activationDB, beaconProvider, validateVRF, nil, lg.WithName("blkElgValidator"))
 	numberOfEpochsToTest := uint32(2)
 	counterValuesSeen := map[uint32]int{}
-	for layer := layersPerEpoch * 2; layer < layersPerEpoch*numberOfEpochsToTest+2; layer++ {
+	for layer := layersPerEpoch * 2; layer < layersPerEpoch*(numberOfEpochsToTest+2); layer++ {
 		activationDB.atxPublicationLayer = types.NewLayerID((layer/layersPerEpoch)*layersPerEpoch - 1)
 		layerID := types.NewLayerID(layer)
 		_, proofs, _, err := blockOracle.BlockEligible(layerID)
@@ -123,7 +123,7 @@ func testBlockOracleAndValidator(r *require.Assertions, totalWeight uint64, comm
 		numberOfEligibleBlocks = 1
 	}
 	for c := uint32(0); c < numberOfEligibleBlocks; c++ {
-		r.Equal(numberOfEpochsToTest, counterValuesSeen[c],
+		r.EqualValues(numberOfEpochsToTest, counterValuesSeen[c],
 			"counter value %d expected %d times, but received %d times",
 			c, numberOfEpochsToTest, counterValuesSeen[c])
 	}
