@@ -38,19 +38,19 @@ type txPool interface {
 }
 
 type projector interface {
-	GetProjection(addr types.Address) (nonce, balance uint64, err error)
+	GetProjection(types.Address) (nonce, balance uint64, err error)
 }
 
 type blockOracle interface {
-	BlockEligible(layerID types.LayerID) (types.ATXID, []types.BlockEligibilityProof, []types.ATXID, error)
+	BlockEligible(types.LayerID) (types.ATXID, []types.BlockEligibilityProof, []types.ATXID, error)
 }
 
 type baseBlockProvider interface {
-	BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error)
+	BaseBlock(context.Context) (types.BlockID, [][]types.BlockID, error)
 }
 
 type atxDb interface {
-	GetEpochAtxs(epochID types.EpochID) []types.ATXID
+	GetEpochAtxs(types.EpochID) []types.ATXID
 }
 
 // BlockBuilder is the struct that orchestrates the building of blocks, it is responsible for receiving hare results.
@@ -291,12 +291,12 @@ func (t *BlockBuilder) stopped() bool {
 	}
 }
 
-func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID, activeSet []types.ATXID) (*types.Block, error) {
+func (t *BlockBuilder) createBlock(ctx context.Context, id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID, activeSet []types.ATXID) (*types.Block, error) {
 	if id <= types.GetEffectiveGenesis() {
 		return nil, errors.New("cannot create blockBytes in genesis layer")
 	}
 
-	base, diffs, err := t.baseBlockP.BaseBlock()
+	base, diffs, err := t.baseBlockP.BaseBlock(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -412,7 +412,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 					logger.With().Error("failed to get txs for block", layerID, log.Err(err))
 					continue
 				}
-				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList, atxs)
+				blk, err := t.createBlock(ctx, layerID, atxID, eligibilityProof, txList, atxs)
 
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot create new block")
