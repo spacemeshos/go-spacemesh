@@ -57,6 +57,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 func (pre *preRoundTracker) CanProveValue(value types.BlockID) bool {
 	// at least threshold occurrences of a given value
 	countStatus := pre.tracker.CountStatus(value)
+	// LANE TODO: why is this being called so often?
 	pre.logger.With().Debug("preround tracker count for blockid",
 		value,
 		log.Uint32("count", countStatus),

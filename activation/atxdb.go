@@ -193,7 +193,6 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 
 func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.ATXID, penalties map[string]struct{}, layersPerEpoch uint16, epoch types.EpochID) func(b *types.Block) (bool, error) {
 	traversalFunc := func(b *types.Block) (stop bool, err error) {
-
 		// count unique ATXs
 		if b.ActiveSet == nil {
 			return false, nil
@@ -245,6 +244,7 @@ func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.A
 }
 
 // CalcActiveSetSize - returns the active set size that matches the view of the contextually valid blocks in the provided layer
+// TODO: this is extremely IO intensive and can take > 1 min to run. Speed it up.
 func (db *DB) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 	if epoch == 0 {
 		return nil, errors.New("tried to retrieve active set for epoch 0")

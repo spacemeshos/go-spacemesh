@@ -252,6 +252,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 
 			// create msg
 			// LANE TODO: this can block on oracle lock
+			// LANE TODO: blocking is happening here
 			msgLogger.With().Info("creating message")
 			iMsg, err := newMsg(messageCtx, hareMsg, b.stateQuerier)
 			if err != nil {
