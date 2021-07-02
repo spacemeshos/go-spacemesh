@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -e
-./scripts/check-go-version.sh
+#./scripts/check-go-version.sh
 
 go mod download
 
