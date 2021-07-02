@@ -18,7 +18,6 @@ import (
 
 const defSafety = types.LayerID(25)
 const defLayersPerEpoch = 10
-const defNonGenesisLayer = defLayersPerEpoch*2 + 1
 
 var errFoo = errors.New("some error")
 var errMy = errors.New("my error")
@@ -29,7 +28,7 @@ type mockBlocksProvider struct {
 	mp map[types.BlockID]struct{}
 }
 
-func (mbp mockBlocksProvider) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+func (mbp mockBlocksProvider) ContextuallyValidBlock(types.LayerID) (map[types.BlockID]struct{}, error) {
 	if mbp.mp == nil {
 		mbp.mp = make(map[types.BlockID]struct{})
 		block1 := types.NewExistingBlock(0, []byte("some data"), nil)
@@ -43,7 +42,7 @@ type mockValueProvider struct {
 	err error
 }
 
-func (mvp *mockValueProvider) Value(layer types.LayerID) (uint32, error) {
+func (mvp *mockValueProvider) Value(types.LayerID) (uint32, error) {
 	return mvp.val, mvp.err
 }
 
@@ -51,7 +50,7 @@ type mockActiveSetProvider struct {
 	size int
 }
 
-func (m *mockActiveSetProvider) ActiveSet(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+func (m *mockActiveSetProvider) ActiveSet(context.Context, types.EpochID, map[types.BlockID]struct{}) (map[string]struct{}, error) {
 	return createMapWithSize(m.size), nil
 }
 
@@ -227,7 +226,7 @@ type mockBufferedActiveSetProvider struct {
 	size map[types.EpochID]int
 }
 
-func (m *mockBufferedActiveSetProvider) ActiveSet(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+func (m *mockBufferedActiveSetProvider) ActiveSet(ctx context.Context, epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 	v, ok := m.size[epoch]
 	if !ok {
 		return createMapWithSize(0), errors.New("no instance")
@@ -260,17 +259,16 @@ func Test_ActiveSetSize(t *testing.T) {
 	assertActiveSetSize(t, o, 5, l+20)
 
 	// create error
-	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
-
+	o.getActiveSet = func(ctx context.Context, epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return createMapWithSize(5), errors.New("fake err")
 	}
-	activeSetSize, err := o.activeSetSize(l + 19)
+	activeSetSize, err := o.activeSetSize(context.TODO(), l+19)
 	assert.Error(t, err)
 	assert.Equal(t, uint32(0), activeSetSize)
 }
 
 func assertActiveSetSize(t *testing.T, o *Oracle, expected uint32, l types.LayerID) {
-	activeSetSize, err := o.activeSetSize(l)
+	activeSetSize, err := o.activeSetSize(context.TODO(), l)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, activeSetSize)
 }
@@ -281,7 +279,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	vrfSigner, vrfPubkey, err := signing.NewVRFSigner(seed)
 	assert.NoError(t, err)
 	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, signing.VRFVerify, vrfSigner, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
-	getActiveSet := func(types.EpochID, map[types.BlockID]struct{}) (map[string]struct{}, error) {
+	getActiveSet := func(context.Context, types.EpochID, map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return map[string]struct{}{
 			"my_key": {},
 			"abc":    {},
@@ -332,16 +330,16 @@ func TestOracle_Eligible(t *testing.T) {
 func TestOracle_activeSetSizeCache(t *testing.T) {
 	r := require.New(t)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
-	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+	o.getActiveSet = func(ctx context.Context, epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return createMapWithSize(17), nil
 	}
-	v1, e := o.activeSetSize(defSafety + 100)
+	v1, e := o.activeSetSize(context.TODO(), defSafety+100)
 	r.NoError(e)
 
-	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+	o.getActiveSet = func(ctx context.Context, epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return createMapWithSize(19), nil
 	}
-	v2, e := o.activeSetSize(defSafety + 100)
+	v2, e := o.activeSetSize(context.TODO(), defSafety+100)
 	r.NoError(e)
 	r.Equal(v1, v2)
 }
@@ -379,22 +377,22 @@ func TestOracle_actives(t *testing.T) {
 	r := require.New(t)
 	types.SetLayersPerEpoch(10)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
-	_, err := o.actives(1)
+	_, err := o.actives(context.TODO(), 1)
 	r.EqualError(err, errGenesis.Error())
 
 	o.blocksProvider = mockBlocksProvider{mp: make(map[types.BlockID]struct{})}
-	_, err = o.actives(100)
+	_, err = o.actives(context.TODO(), 100)
 	r.NoError(err)
 
 	o.blocksProvider = mockBlocksProvider{}
 	mp := createMapWithSize(9)
-	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+	o.getActiveSet = func(ctx context.Context, epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return mp, nil
 	}
 	o.activesCache = newMockCacher()
-	v, err := o.actives(100)
+	v, err := o.actives(context.TODO(), 100)
 	r.NoError(err)
-	v2, err := o.actives(100)
+	v2, err := o.actives(context.TODO(), 100)
 	r.NoError(err)
 	r.Equal(v, v2)
 	for k := range mp {
@@ -402,10 +400,10 @@ func TestOracle_actives(t *testing.T) {
 		r.True(exist)
 	}
 
-	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+	o.getActiveSet = func(ctx context.Context, epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return createMapWithSize(9), errFoo
 	}
-	_, err = o.actives(200)
+	_, err = o.actives(context.TODO(), 200)
 	r.Equal(errFoo, err)
 }
 
@@ -416,18 +414,18 @@ func TestOracle_concurrentActives(t *testing.T) {
 	mc := newMockCacher()
 	o.activesCache = mc
 	mp := createMapWithSize(9)
-	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+	o.getActiveSet = func(ctx context.Context, epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return mp, nil
 	}
 
 	// outstanding probability for concurrent access to calc active set size
 	for i := 0; i < 100; i++ {
-		go o.actives(100)
+		go o.actives(context.TODO(), 100)
 	}
 
 	// make sure we wait at least two calls duration
-	o.actives(100)
-	o.actives(100)
+	o.actives(context.TODO(), 100)
+	o.actives(context.TODO(), 100)
 
 	r.Equal(1, mc.numAdd)
 }
@@ -452,7 +450,7 @@ func TestOracle_activesSafeLayer(t *testing.T) {
 	o.activesCache = newMockCacher()
 	lyr := types.LayerID(10)
 	rsl := roundedSafeLayer(lyr, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
-	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+	o.getActiveSet = func(ctx context.Context, epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		ep := rsl.GetEpoch()
 		r.Equal(ep-1, epoch)
 		return mp, nil
@@ -464,7 +462,7 @@ func TestOracle_activesSafeLayer(t *testing.T) {
 	mp2[block1.ID()] = struct{}{}
 	bmp[rsl] = mp2
 	o.blocksProvider = &bProvider{bmp}
-	mpRes, err := o.actives(lyr)
+	mpRes, err := o.actives(context.TODO(), lyr)
 	r.NotNil(mpRes)
 	r.NoError(err)
 }
@@ -482,7 +480,7 @@ func TestOracle_activesNoContextuallyValid(t *testing.T) {
 	o.activesCache = newMockCacher()
 	rsl := roundedSafeLayer(lyr, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	r.Equal(types.LayerID(80), rsl)
-	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+	o.getActiveSet = func(ctx context.Context, epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		ep := rsl.GetEpoch()
 		r.Equal(ep-1, epoch)
 		return mp, nil
@@ -492,7 +490,7 @@ func TestOracle_activesNoContextuallyValid(t *testing.T) {
 	mp1 := make(map[types.BlockID]struct{})
 	bmp[rsl] = mp1
 	o.blocksProvider = &bProvider{bmp}
-	mpRes, err := o.actives(lyr)
+	mpRes, err := o.actives(context.TODO(), lyr)
 
 	// This should not fail but it should return an empty set
 	r.NoError(err)
@@ -506,28 +504,28 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	mp := make(map[string]struct{})
 	edid := "11111"
 	mp[edid] = struct{}{}
-	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+	o.getActiveSet = func(ctx context.Context, epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return mp, nil
 	}
-	v, err := o.IsIdentityActiveOnConsensusView("22222", 1)
+	v, err := o.IsIdentityActiveOnConsensusView(context.TODO(), "22222", 1)
 	r.NoError(err)
 	r.True(v)
 
-	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+	o.getActiveSet = func(ctx context.Context, epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return mp, errFoo
 	}
-	_, err = o.IsIdentityActiveOnConsensusView("22222", 100)
+	_, err = o.IsIdentityActiveOnConsensusView(context.TODO(), "22222", 100)
 	r.Equal(errFoo, err)
 
-	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+	o.getActiveSet = func(ctx context.Context, epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return mp, nil
 	}
 
-	v, err = o.IsIdentityActiveOnConsensusView("22222", 100)
+	v, err = o.IsIdentityActiveOnConsensusView(context.TODO(), "22222", 100)
 	r.NoError(err)
 	r.False(v)
 
-	v, err = o.IsIdentityActiveOnConsensusView(edid, 100)
+	v, err = o.IsIdentityActiveOnConsensusView(context.TODO(), edid, 100)
 	r.NoError(err)
 	r.True(v)
 }
@@ -535,7 +533,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 func TestOracle_Eligible2(t *testing.T) {
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	types.SetLayersPerEpoch(10)
-	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+	o.getActiveSet = func(ctx context.Context, epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return createMapWithSize(9), errFoo
 	}
 	o.vrfVerifier = func(pub, msg, sig []byte) bool {

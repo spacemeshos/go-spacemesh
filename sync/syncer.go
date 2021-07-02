@@ -677,7 +677,7 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, blockIds 
 	tmr := newMilliTimer(syncLayerTime)
 	defer tmr.ObserveDuration()
 	if res, err := s.blockQueue.addDependencies(ctx, layerID, blockIds, foo); err != nil {
-		return nil, fmt.Errorf("failed adding layer %v blocks to queue %v", layerID, err)
+		return nil, fmt.Errorf("failed adding layer %v blocks to queue: %w", layerID, err)
 	} else if res == false {
 		logger.Info("syncLayer: no missing blocks for layer")
 		return s.LayerBlocks(layerID)
@@ -719,7 +719,7 @@ func (s *Syncer) getBlocks(ctx context.Context, blockIds []types.BlockID) error 
 
 	tmr := newMilliTimer(syncLayerTime)
 	if res, err := s.blockQueue.addDependencies(ctx, jobID, blockIds, foo); err != nil {
-		return fmt.Errorf("failed adding layer %v blocks to queue %v", jobID, err)
+		return fmt.Errorf("failed adding layer %v blocks to queue: %w", jobID, err)
 	} else if res == false {
 		logger.Info("getBlocks: no missing blocks for layer")
 		return nil
@@ -876,7 +876,7 @@ func (s *Syncer) validateBlockView(ctx context.Context, blk *types.Block) bool {
 		return nil
 	}
 	if res, err := s.blockQueue.addDependencies(ctx, blk.ID(), blk.ViewEdges, foo); err != nil {
-		s.Error(fmt.Sprintf("block %v not syntactically valid", blk.ID()), err)
+		s.With().Error("block not syntactically valid", blk.ID(), log.Err(err))
 		return false
 	} else if res == false {
 		s.WithContext(ctx).With().Debug("no missing blocks in view",
@@ -942,7 +942,7 @@ func (s *Syncer) fetchBlock(ctx context.Context, ID types.BlockID) bool {
 	}
 	id := types.CalcHash32(append(ID.Bytes(), []byte(strconv.Itoa(rand.Int()))...))
 	if res, err := s.blockQueue.addDependencies(ctx, id, []types.BlockID{ID}, foo); err != nil {
-		s.Error(fmt.Sprintf("block %v not syntactically valid", ID), err)
+		s.With().Error("block not syntactically valid", ID, log.Err(err))
 		return false
 	} else if res == false {
 		// block already found

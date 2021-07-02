@@ -99,8 +99,8 @@ func (b *Broker) Start(ctx context.Context) error {
 func (b *Broker) startWithInbox(ctx context.Context, inbox chan service.GossipMessage) error {
 	b.isStarted = true
 	b.inbox = inbox
-	go b.queueLoop(ctx)
-	go b.eventLoop(ctx)
+	go b.queueLoop(log.WithNewSessionID(ctx))
+	go b.eventLoop(log.WithNewSessionID(ctx))
 	return nil
 }
 
@@ -155,7 +155,8 @@ func (b *Broker) queueLoop(ctx context.Context) {
 		select {
 		case msg := <-b.inbox:
 			logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
-			logger.Debug("hare broker received inbound gossip message")
+			logger.Debug("hare broker received inbound gossip message",
+				log.Int("inbox_queue_len", len(b.inbox)))
 			if msg == nil {
 				logger.Error("broker message validation failed: called with nil")
 				continue
@@ -166,7 +167,8 @@ func (b *Broker) queueLoop(ctx context.Context) {
 			if msg.IsOwnMessage() {
 				priority = priorityq.High
 			}
-			logger.With().Debug("assigned message priority", log.Int("priority", int(priority)))
+			logger.With().Debug("assigned message priority, writing to priority queue",
+				log.Int("priority", int(priority)))
 
 			if err := b.queue.Write(priority, msg); err != nil {
 				logger.With().Error("error writing inbound message to priority queue, dropping", log.Err(err))
@@ -189,7 +191,7 @@ func (b *Broker) queueLoop(ctx context.Context) {
 // listens to incoming messages and incoming tasks
 func (b *Broker) eventLoop(ctx context.Context) {
 	for {
-		b.With().Debug("broker queue sizes",
+		b.WithContext(ctx).With().Debug("broker queue sizes",
 			log.Int("msg_queue_size", len(b.queueChannel)),
 			log.Int("task_queue_size", len(b.tasks)))
 		select {
@@ -229,7 +231,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 				msgLogger.With().Error("broker message validation failed", log.Err(errNilInner))
 				continue
 			}
-			msgLogger.With().Debug("broker received hare message", log.Int("queue_length", len(b.inbox)))
+			msgLogger.With().Info("broker received hare message")
 
 			// TODO: fix metrics
 			// metrics.MessageTypeCounter.With("type_id", hareMsg.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(msgInstID), 10), "reporter", "brokerHandler").Add(1)
@@ -248,9 +250,10 @@ func (b *Broker) eventLoop(ctx context.Context) {
 				isEarly = true
 			}
 
-			// the msg is either early or has instance
-
 			// create msg
+			// LANE TODO: this can block on oracle lock
+			// LANE TODO: blocking is happening here
+			msgLogger.With().Debug("creating message")
 			iMsg, err := newMsg(messageCtx, hareMsg, b.stateQuerier)
 			if err != nil {
 				msgLogger.With().Warning("message validation failed: could not construct msg", log.Err(err))
@@ -258,6 +261,8 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			}
 
 			// validate msg
+			// LANE TODO: this can block on oracle lock
+			msgLogger.With().Debug("validating message")
 			if !b.eValidator.Validate(messageCtx, iMsg) {
 				msgLogger.With().Warning("message validation failed: eligibility validator returned false",
 					log.String("hare_msg", hareMsg.String()))
@@ -294,7 +299,11 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			out <- iMsg
 
 		case task := <-b.tasks:
+			b.WithContext(ctx).With().Debug("broker received task, executing",
+				log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 			task()
+			b.WithContext(ctx).With().Debug("broker finished executing task",
+				log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 		}
 	}
 }
@@ -354,6 +363,11 @@ func (b *Broker) Register(ctx context.Context, id instanceID) (chan *Msg, error)
 	resErr := make(chan error, 1)
 	resCh := make(chan chan *Msg, 1)
 	regRequest := func() {
+		ctx := log.WithNewSessionID(ctx)
+		b.WithContext(ctx).With().Debug("beginning register task", types.LayerID(id))
+		defer func() {
+			b.WithContext(ctx).With().Debug("finished register task", types.LayerID(id))
+		}()
 		b.updateLatestLayer(ctx, id)
 
 		if len(b.outbox) >= b.limit {
@@ -382,11 +396,13 @@ func (b *Broker) Register(ctx context.Context, id instanceID) (chan *Msg, error)
 		resCh <- nil
 	}
 
+	b.WithContext(ctx).With().Debug("queueing register task", types.LayerID(id))
 	b.tasks <- regRequest // send synced task
 
 	// wait for result
 	err := <-resErr
 	result := <-resCh
+	b.WithContext(ctx).With().Debug("register task result received", types.LayerID(id), log.Err(err))
 	if err != nil { // reg failed
 		return nil, err
 	}

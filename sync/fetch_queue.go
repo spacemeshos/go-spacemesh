@@ -44,11 +44,15 @@ type fetchQueue struct {
 	handleFetch    func(context.Context, fetchJob)
 	checkLocal     checkLocalFunc
 	queue          chan fetchRequest //todo make buffered
+	closing        bool
 	name           string
 	requestTimeout time.Duration
 }
 
 func (fq *fetchQueue) Close() {
+	fq.Lock()
+	fq.closing = true
+	defer fq.Unlock()
 	close(fq.queue)
 	fq.Info("done")
 }
@@ -67,7 +71,7 @@ func concatShortIds(items []types.Hash32) string {
 func (fq *fetchQueue) shutdownRecover() {
 	r := recover()
 	if r != nil {
-		fq.Info("%s shut down ", fq.name)
+		fq.Info("%s shut down", fq.name)
 		fq.Error("stacktrace from panic: \n" + string(debug.Stack()))
 	}
 }
@@ -138,15 +142,18 @@ func (fq *fetchQueue) addToPending(ctx context.Context, ids []types.Hash32) []ch
 		fq.Log.WithContext(ctx).Warning("got fetch request without requestID, cannot pass to fetch worker")
 	}
 
-	//defer fq.shutdownRecover()
 	fq.Lock()
+	defer fq.Unlock()
+	if fq.closing {
+		fq.Log.WithContext(ctx).Warning("attempt to add to queue after close")
+		return nil
+	}
 	deps := make([]chan bool, 0, len(ids))
 	for _, id := range ids {
 		ch := make(chan bool, 1)
 		deps = append(deps, ch)
 		fq.pending[id] = append(fq.pending[id], ch)
 	}
-	fq.Unlock()
 	if len(ids) > 0 {
 		fq.queue <- fr
 	}

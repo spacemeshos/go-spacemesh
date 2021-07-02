@@ -587,7 +587,7 @@ func (s *Switch) onRemoteClientMessage(ctx context.Context, msg net.IncomingMess
 
 	s.logger.WithContext(ctx).With().Debug("handle incoming message",
 		log.String("protocol", pm.Metadata.NextProtocol),
-		log.FieldNamed("sender_id", msg.Conn.RemotePublicKey()),
+		log.FieldNamed("peer_id", msg.Conn.RemotePublicKey()),
 		log.Bool("is_gossip", ok))
 
 	if ok {

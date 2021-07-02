@@ -106,7 +106,7 @@ func (p *Protocol) processMessage(ctx context.Context, sender p2pcrypto.PublicKe
 	logger := p.WithContext(ctx).WithFields(
 		log.String("from", sender.String()),
 		log.String("protocol", protocol),
-		log.String("hash", util.Bytes2Hex(h[:])))
+		log.String("msghash", util.Bytes2Hex(h[:])))
 	logger.Debug("checking gossip message newness")
 	if p.markMessageAsOld(h) {
 		metrics.OldGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
