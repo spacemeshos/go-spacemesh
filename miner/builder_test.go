@@ -482,7 +482,7 @@ func Test_calcHdistRange(t *testing.T) {
 	r.Equal(types.NewLayerID(5), to)
 
 	// id = hdist
-	from, to = calcHdistRange(types.NewLayerID(6), 5)
+	from, to = calcHdistRange(types.NewLayerID(5), 5)
 	r.Equal(types.GetEffectiveGenesis(), from)
 	r.Equal(types.NewLayerID(4), to)
 
