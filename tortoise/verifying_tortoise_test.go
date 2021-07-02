@@ -1692,9 +1692,6 @@ func TestHealing(t *testing.T) {
 // this requires waiting an epoch or two before the active set size is reduced enough to cross the threshold
 // see https://github.com/spacemeshos/go-spacemesh/issues/2497 for an idea about making this faster
 func TestHealingAfterPartition(t *testing.T) {
-	log.DebugMode(true)
-	//r := require.New(t)
-
 	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
 	l0ID := types.GetEffectiveGenesis()
@@ -1719,18 +1716,23 @@ func TestHealingAfterPartition(t *testing.T) {
 	// verification should fail, global opinion should be abstain since not enough votes
 	checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
 
-	// once assumptions are restored and number of blocks increases again, healing should start
+	// once we start receiving full layers again, verification should restart immediately. this scenario doesn't
+	// actually require healing, since local and global opinions are the same, and the threshold is just > 1/2.
 	makeAndProcessLayer(t, l0ID.Add(9), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
-	//makeAndProcessLayer(t, l0ID.Add(10), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
-	//makeAndProcessLayer(t, l0ID.Add(11), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
-	//makeAndProcessLayer(t, l0ID.Add(12), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
-	//makeAndProcessLayer(t, l0ID.Add(13), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
-	//makeAndProcessLayer(t, l0ID.Add(14), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
-	//makeAndProcessLayer(t, l0ID.Add(15), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
-	//makeAndProcessLayer(t, l0ID.Add(16), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
-	checkVerifiedLayer(t, alg.trtl, l0ID.Add(5))
+	checkVerifiedLayer(t, alg.trtl, l0ID.Add(8))
 
-	// continue for two epochs until active set size is reduced
+	// then we start receiving fewer blocks again
+	for i := 0; types.LayerID(i) < alg.trtl.Zdist+alg.trtl.ConfidenceParam; i++ {
+		makeAndProcessLayer(t, l0ID.Add(10+uint16(i)), alg.trtl, goodLayerSize/2, mdb, mdb.LayerBlockIds)
+	}
+	checkVerifiedLayer(t, alg.trtl, l0ID.Add(8))
+
+	// healing would begin here, but without enough blocks to accumulate votes to cross the global threshold, we're
+	// effectively stuck (until, in practice, active set size would be reduced in a following epoch and the remaining
+	// miners would produce more blocks)
+	firstHealedLayer := l0ID.Add(10 + uint16(alg.trtl.Zdist+alg.trtl.ConfidenceParam))
+	makeAndProcessLayer(t, firstHealedLayer, alg.trtl, goodLayerSize/2, mdb, mdb.LayerBlockIds)
+	checkVerifiedLayer(t, alg.trtl, l0ID.Add(8))
 }
 
 func TestRerunAndRevert(t *testing.T) {
