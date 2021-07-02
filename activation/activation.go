@@ -54,7 +54,7 @@ type nipstValidator interface {
 
 type atxDBProvider interface {
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
-	CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochID) (uint32, error)
+	CalcActiveSetFromView(ctx context.Context, view []types.BlockID, pubEpoch types.EpochID) (uint32, error)
 	GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error)
 	GetPosAtxID() (types.ATXID, error)
 	AwaitAtx(id types.ATXID) chan struct{}

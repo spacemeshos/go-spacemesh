@@ -28,7 +28,7 @@ type valueProvider interface {
 
 // a func to retrieve the active set size for the provided layer
 // this func is assumed to be cpu intensive and hence we cache its results
-type activeSetFunc func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
+type activeSetFunc func(context.Context, types.EpochID, map[types.BlockID]struct{}) (map[string]struct{}, error)
 
 type signer interface {
 	Sign(msg []byte) []byte
@@ -281,7 +281,7 @@ func (o *Oracle) actives(ctx context.Context, layer types.LayerID) (activeMap ma
 		return
 	}
 
-	activeMap, err = o.getActiveSet(safeEp-1, mp)
+	activeMap, err = o.getActiveSet(ctx, safeEp-1, mp)
 	if err != nil {
 		logger.With().Error("could not retrieve active set size",
 			log.Err(err),
