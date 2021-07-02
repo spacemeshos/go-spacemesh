@@ -253,7 +253,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			// create msg
 			// LANE TODO: this can block on oracle lock
 			// LANE TODO: blocking is happening here
-			msgLogger.With().Info("creating message")
+			msgLogger.With().Debug("creating message")
 			iMsg, err := newMsg(messageCtx, hareMsg, b.stateQuerier)
 			if err != nil {
 				msgLogger.With().Warning("message validation failed: could not construct msg", log.Err(err))
@@ -262,7 +262,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 
 			// validate msg
 			// LANE TODO: this can block on oracle lock
-			msgLogger.With().Info("validating message")
+			msgLogger.With().Debug("validating message")
 			if !b.eValidator.Validate(messageCtx, iMsg) {
 				msgLogger.With().Warning("message validation failed: eligibility validator returned false",
 					log.String("hare_msg", hareMsg.String()))
@@ -271,7 +271,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 
 			// validation passed, report
 			msg.ReportValidation(ctx, protoName)
-			msgLogger.With().Info("broker reported hare message as valid", hareMsg)
+			msgLogger.With().Debug("broker reported hare message as valid", hareMsg)
 
 			if isEarly {
 				if _, exist := b.pending[msgInstID]; !exist { // create buffer if first msg
@@ -299,10 +299,10 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			out <- iMsg
 
 		case task := <-b.tasks:
-			b.WithContext(ctx).With().Info("broker received task, executing",
+			b.WithContext(ctx).With().Debug("broker received task, executing",
 				log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 			task()
-			b.WithContext(ctx).With().Info("broker finished executing task",
+			b.WithContext(ctx).With().Debug("broker finished executing task",
 				log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 		}
 	}
