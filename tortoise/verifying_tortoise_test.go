@@ -247,7 +247,7 @@ func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerL
 }
 
 func makeLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, msh *mesh.DB, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
-	t.Log("choosing base block for layer", l)
+	t.Log("======================== choosing base block for layer", l)
 	oldInputVectorFn := msh.InputVectorBackupFunc
 	defer func() {
 		msh.InputVectorBackupFunc = oldInputVectorFn
@@ -530,6 +530,10 @@ func generateBlocks(l types.LayerID, n int, bbp baseBlockProvider) (blocks []*ty
 }
 
 func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp inputVectorProvider, blocksPerLayer int) *types.Layer {
+	oldInputVectorFn := msh.InputVectorBackupFunc
+	defer func() {
+		msh.InputVectorBackupFunc = oldInputVectorFn
+	}()
 	msh.InputVectorBackupFunc = ivp
 	blocks, err := ivp(l - 1)
 	if err != nil {
@@ -1698,9 +1702,62 @@ func TestHealing(t *testing.T) {
 
 }
 
-//func TestRevert(t *testing.T) {
-//	r := require.New(t)
-//
-//  // test revert/reprocess state
-//
-//}
+func TestRerunAndRevert(t *testing.T) {
+	r := require.New(t)
+	mdb := getInMemMesh()
+	alg := defaultAlgorithm(t, mdb)
+	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
+
+	// process a couple of layers
+	l0ID := types.GetEffectiveGenesis()
+	l1ID := l0ID.Add(1)
+	l2ID := l1ID.Add(1)
+	makeLayer(t, l1ID, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
+	l1IDs, err := mdb.LayerBlockIds(l1ID)
+	r.NoError(err)
+	block1ID := l1IDs[0]
+	r.NoError(mdb.SaveLayerInputVectorByID(l1ID, l1IDs))
+	alg.HandleIncomingLayer(context.TODO(), l1ID)
+	makeLayer(t, l2ID, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
+	l2IDs, err := mdb.LayerBlockIds(l2ID)
+	r.NoError(err)
+	r.NoError(mdb.SaveLayerInputVectorByID(l2ID, l2IDs))
+	oldVerified, newVerified, reverted := alg.HandleIncomingLayer(context.TODO(), l2ID)
+	r.Equal(int(l0ID), int(oldVerified))
+	r.Equal(int(l1ID), int(newVerified))
+	r.False(reverted)
+	r.Equal(int(l1ID), int(alg.trtl.Verified))
+	isValid, err := mdb.ContextualValidity(block1ID)
+	r.NoError(err)
+	r.True(isValid)
+
+	// now change some state so that the opinion on layer/block validity changes
+
+	// local opinion
+	mdb.InputVectorBackupFunc = func(types.LayerID) ([]types.BlockID, error) {
+		// empty slice means vote against all
+		return []types.BlockID{}, nil
+	}
+
+	// global opinion: add a bunch of blocks that vote against l1 blocks
+	// for these blocks to be good, they must have an old base block, since they'll get exception votes on
+	// more recent blocks
+	baseBlockFn := func(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
+		return mesh.GenesisBlock().ID(), [][]types.BlockID{nil, nil, nil}, nil
+	}
+	l2 := createTurtleLayer(l2ID, mdb, baseBlockFn, mdb.LayerBlockIds, defaultTestLayerSize*3)
+	for _, block := range l2.Blocks() {
+		r.NoError(mdb.AddBlock(block))
+	}
+
+	// force a rerun and make sure there was a reversion
+	alg.lastRerun = time.Now().Add(-alg.trtl.RerunInterval)
+	oldVerified, newVerified, reverted = alg.HandleIncomingLayer(context.TODO(), l2ID)
+	r.Equal(int(l1ID), int(oldVerified))
+	r.Equal(int(l1ID), int(newVerified))
+	r.True(reverted)
+	r.Equal(int(l1ID), int(alg.trtl.Verified))
+	isValid, err = mdb.ContextualValidity(block1ID)
+	r.NoError(err)
+	r.False(isValid)
+}

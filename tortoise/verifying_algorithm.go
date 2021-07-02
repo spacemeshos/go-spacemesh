@@ -154,7 +154,8 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context
 	//   tortoise since we don't want to mess with the state of the main tortoise. We re-stream layer data from genesis
 	//   using the sliding window, simulating a full resync.
 	if time.Now().Sub(trtl.lastRerun) > trtl.trtl.RerunInterval {
-		if reverted, revertLayer := trtl.rerunFromGenesis(ctx); reverted {
+		var revertLayer types.LayerID
+		if reverted, revertLayer = trtl.rerunFromGenesis(ctx); reverted {
 			// make sure state is reapplied from far enough back if there was a state reversion
 			oldVerified = revertLayer
 		}
@@ -186,7 +187,7 @@ type bdpWrapper struct {
 }
 
 // SaveContextualValidity overrides the method in the embedded type to check if we've made changes
-func (bdp bdpWrapper) SaveContextualValidity(bid types.BlockID, lid types.LayerID, validityNew bool) error {
+func (bdp *bdpWrapper) SaveContextualValidity(bid types.BlockID, lid types.LayerID, validityNew bool) error {
 	// we only need to know about the first updated layer
 	if bdp.firstUpdatedLayer == nil {
 		// first, get current value
@@ -212,9 +213,9 @@ func (trtl *ThreadSafeVerifyingTortoise) rerunFromGenesis(ctx context.Context) (
 	trtlForRerun.SetLogger(logger.WithFields(log.String("tortoise_rerun", "true")))
 	trtlForRerun.init(ctx, mesh.GenesisLayer())
 	bdp := bdpWrapper{blockDataProvider: trtlForRerun.bdp}
-	trtlForRerun.bdp = bdp
+	trtlForRerun.bdp = &bdp
 
-	for layerID := types.GetEffectiveGenesis(); layerID < trtl.trtl.Last; layerID++ {
+	for layerID := types.GetEffectiveGenesis(); layerID <= trtl.trtl.Last; layerID++ {
 		logger.With().Debug("rerunning tortoise for layer", layerID)
 		if err := trtlForRerun.HandleIncomingLayer(ctx, layerID); err != nil {
 			logger.With().Error("tortoise rerun errored", log.Err(err))
