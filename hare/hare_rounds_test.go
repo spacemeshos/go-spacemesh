@@ -91,7 +91,7 @@ func createTestHare(tcfg config.Config, layersCh chan types.LayerID, p2p Network
 	pub := ed.PublicKey()
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: pub.Bytes()}
 	hare := New(tcfg, p2p, ed, nodeID, validateBlock, isSynced, bp, rolacle, 10, &mockIdentityP{nid: nodeID},
-		&MockStateQuerier{true, nil}, layersCh, log.NewDefault(name+"_"+ed.PublicKey().ShortString()))
+		&MockStateQuerier{true, nil}, layersCh, log.AppLog.WithName(name+"_"+ed.PublicKey().ShortString()))
 	return hare
 }
 

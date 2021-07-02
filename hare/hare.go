@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -128,10 +127,10 @@ func (h *Hare) getLastLayer() types.LayerID {
 // checks if the provided id is too late/old to be requested.
 func (h *Hare) outOfBufferRange(id types.LayerID) bool {
 	last := h.getLastLayer()
-	if last.Before(types.NewLayerID(h.bufferSize)) {
+	if !last.After(types.NewLayerID(h.bufferSize)) {
 		return false
 	}
-	if !id.After(last.Sub(h.bufferSize)) { // bufferSize>=0
+	if id.Before(last.Sub(h.bufferSize)) { // bufferSize>=0
 		return true
 	}
 	return false
@@ -142,7 +141,7 @@ func (h *Hare) oldestResultInBuffer() types.LayerID {
 	// TODO: if it gets bigger change `outputs` to array.
 	lyr := h.getLastLayer()
 	for k := range h.outputs {
-		if !k.After(lyr) {
+		if k.Before(lyr) {
 			lyr = k
 		}
 	}
@@ -189,7 +188,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 
 	logger := h.WithContext(ctx).WithFields(id)
 	h.layerLock.Lock()
-	if !id.Before(h.lastLayer) {
+	if id.After(h.lastLayer) {
 		h.lastLayer = id
 	} else {
 		logger.With().Error("received out of order layer tick",
@@ -273,7 +272,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 	}
 	logger.With().Info("number of consensus processes (after +1)",
 		log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
-	metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(id.Uint32()), 10)).Add(1)
+	metrics.TotalConsensusProcesses.With("layer", id.String()).Add(1)
 	return
 }
 
@@ -322,7 +321,7 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 			h.broker.Unregister(ctx, out.ID())
 			logger.With().Info("number of consensus processes (after -1)",
 				log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
-			metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(out.ID().Uint32()), 10)).Add(-1)
+			metrics.TotalConsensusProcesses.With("layer", out.ID().String()).Add(-1)
 		case <-h.CloseChannel():
 			return
 		}

@@ -86,7 +86,7 @@ func (his *HareWrapper) WaitForTimedTermination(t *testing.T, timeout time.Durat
 		t.Fatal("Timeout")
 		return
 	case <-his.termination.CloseChannel():
-		for i := types.NewLayerID(1); i.After(total); i = i.Add(1) {
+		for i := types.NewLayerID(1); !i.After(total); i = i.Add(1) {
 			his.checkResult(t, i)
 		}
 		return
@@ -240,7 +240,7 @@ func createMaatuf(tcfg config.Config, layersCh chan types.LayerID, p2p NetworkSe
 	}
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
 	hare := New(tcfg, p2p, ed, nodeID, validateBlock, isSynced, &mockBlockProvider{}, rolacle, 10, &mockIdentityP{nid: nodeID},
-		&MockStateQuerier{true, nil}, layersCh, log.NewDefault(name+"_"+ed.PublicKey().ShortString()))
+		&MockStateQuerier{true, nil}, layersCh, log.AppLog.WithName(name+"_"+ed.PublicKey().ShortString()))
 
 	return hare
 }

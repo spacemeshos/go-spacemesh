@@ -149,12 +149,12 @@ func buildMessage(msg *Message) *Msg {
 
 func buildBroker(net NetworkService, testName string) *Broker {
 	return newBroker(net, &mockEligibilityValidator{valid: true}, MockStateQuerier{true, nil},
-		(&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, Closer{make(chan struct{})}, log.NewDefault(testName))
+		(&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, Closer{make(chan struct{})}, log.AppLog.WithName(testName))
 }
 
 func buildBrokerLimit4(net NetworkService, testName string) *Broker {
 	return newBroker(net, &mockEligibilityValidator{valid: true}, MockStateQuerier{true, nil},
-		(&mockSyncer{true}).IsSynced, 10, 4, Closer{make(chan struct{})}, log.NewDefault(testName))
+		(&mockSyncer{true}).IsSynced, 10, 4, Closer{make(chan struct{})}, log.AppLog.WithName(testName))
 }
 
 type mockEligibilityValidator struct {
@@ -292,7 +292,7 @@ func generateConsensusProcess(t *testing.T) *consensusProcess {
 	oracle.Register(true, edPubkey.String())
 	output := make(chan TerminationOutput, 1)
 
-	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, edSigner, types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}, n1, output, truer{}, log.NewDefault(edPubkey.String()))
+	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, edSigner, types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}, n1, output, truer{}, log.AppLog.WithName(edPubkey.String()))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
