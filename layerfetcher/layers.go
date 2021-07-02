@@ -186,7 +186,7 @@ func (l *Logic) LayerHashReqReceiver(ctx context.Context, msg []byte) []byte {
 // epochATXsReceiver returns the layer hash for the given layer ID
 func (l *Logic) epochATXsReceiver(ctx context.Context, msg []byte) []byte {
 	l.log.Info("got epoch atxs request ")
-	lyr := types.EpochID(util.BytesToUint64(msg))
+	lyr := types.EpochID(util.BytesToUint32(msg))
 	atxs := l.atxIds.GetEpochAtxs(lyr)
 	bts, err := types.InterfaceToBytes(atxs)
 	if err != nil {
