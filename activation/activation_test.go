@@ -865,7 +865,7 @@ func TestActivationDb_CalcActiveSetFromViewHighConcurrency(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < ff; i++ {
 		go func() {
-			num, err := atxdb.CalcActiveSetFromView(genView(), atx.PubLayerID.GetEpoch())
+			num, err := atxdb.CalcActiveSetFromView(context.TODO(), genView(), atx.PubLayerID.GetEpoch())
 			assert.NoError(t, err)
 			assert.Equal(t, 3, int(num))
 			assert.NoError(t, err)
