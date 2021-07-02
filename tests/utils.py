@@ -277,7 +277,7 @@ def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME,
         print("elasticsearch statefulset readiness check has failed with err:", e)
         raise Exception(f"elasticsearch took over than {es_timeout} to start")
 
-    kb_timeout = 480
+    kb_timeout = 240
     try:
         print("waiting for kibana to be ready")
         kibana_sleep_time = deployment.wait_to_deployment_to_be_ready(kibana_dep_name, namespace, time_out=kb_timeout)

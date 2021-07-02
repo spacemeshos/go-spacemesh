@@ -37,7 +37,7 @@ def wait_to_deployment_to_be_ready(deployment_name, name_space, time_out=None):
                                                                                       ready_replicas,
                                                                                       total_sleep_time))
             break
-        print("\n                                          {0}/{1} pods ready {2} sec               ".format(resp.status.available_replicas, resp.status.replicas, total_sleep_time), end="\r")
+        print("\n{0}/{1} pods ready {2} sec               ".format(resp.status.available_replicas, resp.status.replicas, total_sleep_time), end="\r")
         time.sleep(1)
 
         if time_out and total_sleep_time > time_out:
