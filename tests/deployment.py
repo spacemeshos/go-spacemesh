@@ -30,6 +30,7 @@ def wait_to_deployment_to_be_ready(deployment_name, name_space, time_out=None):
     start = datetime.now()
     while True:
         resp = client.AppsV1Api().read_namespaced_deployment_status(name=deployment_name, namespace=name_space)
+        print("wait_to_deployment_to_be_ready: server response: {0}".format(resp))
         total_sleep_time = (datetime.now()-start).total_seconds()
         if resp.status.ready_replicas and resp.status.replicas == resp.status.ready_replicas:
             ready_replicas = resp.status.ready_replicas
