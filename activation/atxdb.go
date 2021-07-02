@@ -65,7 +65,7 @@ type DB struct {
 	nipstValidator    nipstValidator
 	pendingActiveSet  map[types.Hash12]*sync.Mutex
 	log               log.Log
-	calcActiveSetFunc func(context.Context, types.EpochID, map[types.BlockID]struct{}) (map[string]struct{}, error)
+	calcActiveSetFunc func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
 	processAtxMutex   sync.Mutex
 	assLock           sync.Mutex
 	atxChannels       map[types.ATXID]*atxChan
@@ -245,7 +245,7 @@ func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.A
 
 // CalcActiveSetSize - returns the active set size that matches the view of the contextually valid blocks in the provided layer
 // TODO: this is extremely IO intensive and can take > 1 min to run. Speed it up.
-func (db *DB) CalcActiveSetSize(ctx context.Context, epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+func (db *DB) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 	if epoch == 0 {
 		return nil, errors.New("tried to retrieve active set for epoch 0")
 	}
@@ -261,8 +261,7 @@ func (db *DB) CalcActiveSetSize(ctx context.Context, epoch types.EpochID, blocks
 	if err := db.meshDb.ForBlockInView(blocks, firstLayerOfPrevEpoch, traversalFunc); err != nil {
 		return nil, err
 	}
-	db.log.WithContext(ctx).With().Info("done calculating active set size",
-		epoch,
+	db.log.With().Info("done calculating active set size",
 		log.Int("size", len(countedAtxs)),
 		log.String("duration", time.Now().Sub(startTime).String()))
 
@@ -277,7 +276,7 @@ func (db *DB) CalcActiveSetSize(ctx context.Context, epoch types.EpochID, blocks
 // CalcActiveSetFromView traverses the view found in a - the activation tx and counts number of active ids published
 // in the epoch prior to the epoch that a was published at, this number is the number of active ids in the next epoch
 // the function returns error if the view is not found
-func (db *DB) CalcActiveSetFromView(ctx context.Context, view []types.BlockID, pubEpoch types.EpochID) (uint32, error) {
+func (db *DB) CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochID) (uint32, error) {
 	if pubEpoch < 1 {
 		return 0, fmt.Errorf("publication epoch cannot be less than 1, found %v", pubEpoch)
 	}
@@ -312,7 +311,7 @@ func (db *DB) CalcActiveSetFromView(ctx context.Context, view []types.BlockID, p
 		mp[blk] = struct{}{}
 	}
 
-	countedAtxs, err := db.calcActiveSetFunc(ctx, pubEpoch, mp)
+	countedAtxs, err := db.calcActiveSetFunc(pubEpoch, mp)
 	if err != nil {
 		mu.Unlock()
 		db.deleteLock(viewHash)
