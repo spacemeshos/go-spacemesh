@@ -80,7 +80,7 @@ func (mf *mockFetcher) GetEpochATXs(_ context.Context, epoch types.EpochID) erro
 	mf.atxsCalls++
 	return mf.atxsError[epoch]
 }
-func (mf *mockFetcher) GetTortoiseBeacons(_ context.Context, epoch types.EpochID) error {
+func (mf *mockFetcher) GetTortoiseBeacon(_ context.Context, epoch types.EpochID) error {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
 	mf.tbsCalls++
