@@ -32,7 +32,7 @@ func teardown() {
 }
 
 func getMeshDB() *DB {
-	return NewMemMeshDB(log.NewDefault("mdb"))
+	return NewMemMeshDB(log.AppLog.WithName("mdb"))
 }
 
 func TestNewMeshDB(t *testing.T) {
@@ -46,7 +46,7 @@ func TestNewMeshDB(t *testing.T) {
 }
 
 func TestMeshDB_AddBlock(t *testing.T) {
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(log.AppLog.WithName("TestForEachInView"))
 	defer mdb.Close()
 	coinbase := types.HexToAddress("aaaa")
 
@@ -121,7 +121,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 }
 
 func TestForEachInView_Persistent(t *testing.T) {
-	mdb, err := NewPersistentMeshDB(Path+"/mesh_db/", 5, log.NewDefault("TestForEachInView"))
+	mdb, err := NewPersistentMeshDB(Path+"/mesh_db/", 5, log.AppLog.WithName("TestForEachInView"))
 	require.NoError(t, err)
 	defer mdb.Close()
 	defer teardown()
@@ -129,7 +129,7 @@ func TestForEachInView_Persistent(t *testing.T) {
 }
 
 func TestForEachInView_InMem(t *testing.T) {
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(log.AppLog.WithName("TestForEachInView"))
 	testForeachInView(mdb, t)
 }
 
@@ -144,7 +144,7 @@ func testForeachInView(mdb *DB, t *testing.T) {
 	}*/
 
 	for i := 0; i < 4; i++ {
-		lyr := createLayerWithRandVoting(l.Index().Add(1), []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
+		lyr := createLayerWithRandVoting(l.Index().Add(1), []*types.Layer{l}, 2, 2, log.AppLog.WithName("msh"))
 		for _, b := range lyr.Blocks() {
 			blocks[b.ID()] = b
 			err := mdb.AddBlock(b)
@@ -171,14 +171,14 @@ func testForeachInView(mdb *DB, t *testing.T) {
 }
 
 func TestForEachInView_InMem_WithStop(t *testing.T) {
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(log.AppLog.WithName("TestForEachInView"))
 	blocks := make(map[types.BlockID]*types.Block)
 	l := GenesisLayer()
 	gen := l.Blocks()[0]
 	blocks[gen.ID()] = gen
 
 	for i := 0; i < 4; i++ {
-		lyr := createLayerWithRandVoting(l.Index().Add(1), []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
+		lyr := createLayerWithRandVoting(l.Index().Add(1), []*types.Layer{l}, 2, 2, log.AppLog.WithName("msh"))
 		for _, b := range lyr.Blocks() {
 			blocks[b.ID()] = b
 			err := mdb.AddBlock(b)
@@ -204,12 +204,12 @@ func TestForEachInView_InMem_WithStop(t *testing.T) {
 }
 
 func TestForEachInView_InMem_WithLimitedLayer(t *testing.T) {
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(log.AppLog.WithName("TestForEachInView"))
 	blocks := make(map[types.BlockID]*types.Block)
 	l := GenesisLayer()
 
 	for i := 0; i < 4; i++ {
-		lyr := createLayerWithRandVoting(l.Index().Add(1), []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
+		lyr := createLayerWithRandVoting(l.Index().Add(1), []*types.Layer{l}, 2, 2, log.AppLog.WithName("msh"))
 		for _, b := range lyr.Blocks() {
 			blocks[b.ID()] = b
 			err := mdb.AddBlock(b)
@@ -240,7 +240,7 @@ func BenchmarkNewPersistentMeshDB(b *testing.B) {
 
 	r := require.New(b)
 
-	mdb, err := NewPersistentMeshDB(path.Join(Path, "mesh_db"), 5, log.NewDefault("meshDb"))
+	mdb, err := NewPersistentMeshDB(path.Join(Path, "mesh_db"), 5, log.AppLog.WithName("meshDb"))
 	require.NoError(b, err)
 	defer mdb.Close()
 	defer teardown()
@@ -254,7 +254,7 @@ func BenchmarkNewPersistentMeshDB(b *testing.B) {
 	start := time.Now()
 	lStart := time.Now()
 	for i := 0; i < 10*batchSize; i++ {
-		lyr := createLayerWithRandVoting(l.Index().Add(1), []*types.Layer{l}, 200, 20, log.NewDefault("msh").WithOptions(log.Nop))
+		lyr := createLayerWithRandVoting(l.Index().Add(1), []*types.Layer{l}, 200, 20, log.AppLog.WithName("msh").WithOptions(log.Nop))
 		for _, b := range lyr.Blocks() {
 			err := mdb.AddBlock(b)
 			r.NoError(err)
@@ -317,7 +317,7 @@ func newSignerAndAddress(r *require.Assertions, seedStr string) (*signing.EdSign
 func TestMeshDB_GetStateProjection(t *testing.T) {
 	r := require.New(t)
 
-	mdb := NewMemMeshDB(log.NewDefault("DB.GetStateProjection"))
+	mdb := NewMemMeshDB(log.AppLog.WithName("DB.GetStateProjection"))
 	signer, origin := newSignerAndAddress(r, "123")
 	err := mdb.addToUnappliedTxs([]*types.Transaction{
 		newTx(r, signer, 0, 10),
@@ -334,7 +334,7 @@ func TestMeshDB_GetStateProjection(t *testing.T) {
 func TestMeshDB_GetStateProjection_WrongNonce(t *testing.T) {
 	r := require.New(t)
 
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(log.AppLog.WithName("TestForEachInView"))
 	signer, origin := newSignerAndAddress(r, "123")
 	err := mdb.addToUnappliedTxs([]*types.Transaction{
 		newTx(r, signer, 1, 10),
@@ -351,7 +351,7 @@ func TestMeshDB_GetStateProjection_WrongNonce(t *testing.T) {
 func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
 	r := require.New(t)
 
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(log.AppLog.WithName("TestForEachInView"))
 	signer, origin := newSignerAndAddress(r, "123")
 	err := mdb.addToUnappliedTxs([]*types.Transaction{
 		newTx(r, signer, 0, 10),
@@ -368,7 +368,7 @@ func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
 func TestMeshDB_GetStateProjection_NothingToApply(t *testing.T) {
 	r := require.New(t)
 
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(log.AppLog.WithName("TestForEachInView"))
 
 	nonce, balance, err := mdb.GetProjection(address(), initialNonce, initialBalance)
 	r.NoError(err)
@@ -379,7 +379,7 @@ func TestMeshDB_GetStateProjection_NothingToApply(t *testing.T) {
 func TestMeshDB_UnappliedTxs(t *testing.T) {
 	r := require.New(t)
 
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(log.AppLog.WithName("TestForEachInView"))
 
 	signer1, origin1 := newSignerAndAddress(r, "thc")
 	signer2, origin2 := newSignerAndAddress(r, "cbd")
@@ -425,7 +425,7 @@ func TestMeshDB_UnappliedTxs(t *testing.T) {
 func TestMeshDB_testGetTransactions(t *testing.T) {
 	r := require.New(t)
 
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(log.AppLog.WithName("TestForEachInView"))
 
 	signer1, addr1 := newSignerAndAddress(r, "thc")
 	signer2, _ := newSignerAndAddress(r, "cbd")
@@ -481,7 +481,7 @@ func getTxns(r *require.Assertions, mdb *DB, origin types.Address) []TinyTx {
 
 func TestMeshDB_testGetRewards(t *testing.T) {
 	r := require.New(t)
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(log.AppLog.WithName("TestForEachInView"))
 	signer1, addr1 := newSignerAndAddress(r, "123")
 	signer2, addr2 := newSignerAndAddress(r, "456")
 	signer3, addr3 := newSignerAndAddress(r, "789")
@@ -562,7 +562,7 @@ func TestMeshDB_testGetRewards(t *testing.T) {
 
 func TestMeshDB_testGetRewardsBySmesher(t *testing.T) {
 	r := require.New(t)
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(log.AppLog.WithName("TestForEachInView"))
 	signer1, addr1 := newSignerAndAddress(r, "123")
 	signer2, addr2 := newSignerAndAddress(r, "456")
 	signer3, addr3 := newSignerAndAddress(r, "789")
@@ -647,7 +647,7 @@ func TestMeshDB_testGetRewardsBySmesher(t *testing.T) {
 
 func TestMeshDB_testGetRewardsBySmesherChangingLayer(t *testing.T) {
 	r := require.New(t)
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(log.AppLog.WithName("TestForEachInView"))
 	signer1, addr1 := newSignerAndAddress(r, "123")
 	signer2, addr2 := newSignerAndAddress(r, "456")
 	signer3, addr3 := newSignerAndAddress(r, "789")
@@ -738,7 +738,7 @@ func TestMeshDB_testGetRewardsBySmesherChangingLayer(t *testing.T) {
 
 func TestMeshDB_testGetRewardsBySmesherMultipleSmeshers(t *testing.T) {
 	r := require.New(t)
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(log.AppLog.WithName("TestForEachInView"))
 	signer1, addr1 := newSignerAndAddress(r, "123")
 	signer2, addr2 := newSignerAndAddress(r, "456")
 	signer3, addr3 := newSignerAndAddress(r, "789")
@@ -816,7 +816,7 @@ func TestMeshDB_testGetRewardsBySmesherMultipleSmeshers(t *testing.T) {
 
 func TestMeshDB_testGetRewardsBySmesherMultipleSmeshersAndLayers(t *testing.T) {
 	r := require.New(t)
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(log.AppLog.WithName("TestForEachInView"))
 	signer1, addr1 := newSignerAndAddress(r, "123")
 	signer2, addr2 := newSignerAndAddress(r, "456")
 	signer3, addr3 := newSignerAndAddress(r, "789")
@@ -931,10 +931,10 @@ func TestMeshDB_RecordCoinFlip(t *testing.T) {
 		r.False(coin, "expected false coin value on overwrite")
 	}
 
-	mdb1 := NewMemMeshDB(log.NewDefault(t.Name()))
+	mdb1 := NewMemMeshDB(log.AppLog.WithName(t.Name()))
 	defer mdb1.Close()
 	testCoinflip(mdb1)
-	mdb2, err := NewPersistentMeshDB(Path+"/mesh_db/", 5, log.NewDefault(t.Name()))
+	mdb2, err := NewPersistentMeshDB(Path+"/mesh_db/", 5, log.AppLog.WithName(t.Name()))
 	require.NoError(t, err)
 	defer mdb2.Close()
 	defer teardown()

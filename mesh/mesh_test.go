@@ -138,7 +138,7 @@ func (MockTxMemPool) Invalidate(types.TransactionID) {
 }
 
 func getMesh(id string) *Mesh {
-	lg := log.NewDefault(id)
+	lg := log.AppLog.WithName(id)
 	mmdb := NewMemMeshDB(lg)
 	layers := NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: mmdb}, newMockTxMemPool(), &MockState{}, lg)
 	return layers
@@ -336,7 +336,7 @@ func TestLayers_OrphanBlocks(t *testing.T) {
 	err = layers.AddBlock(block5)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
-	arr3, _ := layers.GetOrphanBlocksBefore(types.NewLayerID(2))
+	arr3, _ := layers.GetOrphanBlocksBefore(types.NewLayerID(4))
 	assert.True(t, len(arr3) == 1, "wrong layer")
 }
 

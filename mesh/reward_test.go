@@ -64,7 +64,7 @@ func ConfigTst() Config {
 
 func getMeshWithMapState(id string, s txProcessor) (*Mesh, *AtxDbMock) {
 	atxDb := NewAtxDbMock()
-	lg := log.NewDefault(id)
+	lg := log.AppLog.WithName(id)
 	mshDb := NewMemMeshDB(lg)
 	mshDb.contextualValidity = &ContextualValidityMock{}
 	return NewMesh(mshDb, atxDb, ConfigTst(), &MeshValidatorMock{}, newMockTxMemPool(), s, lg), atxDb
@@ -180,7 +180,7 @@ func TestMesh_integration(t *testing.T) {
 	defer layers.Close()
 
 	var l3Rewards int64
-	for i := 0; i < numOfLayers; i++ {
+	for i := 1; i <= numOfLayers; i++ {
 		reward, _ := createLayer(t, layers, types.NewLayerID(uint32(i)), numOfBlocks, maxTxs, atxDB)
 		// rewards are applied to layers in the past according to the reward maturity param
 		if i == 3 {
@@ -212,7 +212,7 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	mesh, atxDB := getMeshWithMapState("t1", s)
 	defer mesh.Close()
 
-	for i := 0; i < numOfLayers; i++ {
+	for i := 1; i <= numOfLayers; i++ {
 		createLayer(t, mesh, types.NewLayerID(uint32(i)), numOfBlocks, maxTxs, atxDB)
 		l, err := mesh.GetLayer(types.NewLayerID(uint32(i)))
 		assert.NoError(t, err)
@@ -223,14 +223,14 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	mesh2, atxDB2 := getMeshWithMapState("t2", s2)
 
 	// this should be played until numOfLayers -1 if we want to compare states
-	for i := 0; i < numOfLayers-1; i++ {
+	for i := 1; i <= numOfLayers-1; i++ {
 		blockIds := copyLayer(t, mesh, mesh2, atxDB2, types.NewLayerID(uint32(i)))
 		mesh2.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(i)), blockIds)
 	}
 	// test states are the same when one input is from tortoise and the other from hare
 	assert.Equal(t, s.Txs, s2.Txs)
 
-	for i := 0; i < numOfLayers; i++ {
+	for i := 1; i <= numOfLayers; i++ {
 		l, err := mesh.GetLayer(types.NewLayerID(uint32(i)))
 		assert.NoError(t, err)
 		mesh2.ValidateLayer(l)
@@ -251,17 +251,17 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	mesh3, atxDB3 := getMeshWithMapState("t3", s3)
 
 	// this should be played until numOfLayers -1 if we want to compare states
-	for i := 0; i < numOfLayers-3; i++ {
+	for i := 1; i <= numOfLayers-3; i++ {
 		blockIds := copyLayer(t, mesh, mesh3, atxDB3, types.NewLayerID(uint32(i)))
 		mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(i)), blockIds)
 	}
 	s3Len := len(s3.Txs)
-	blockIds := copyLayer(t, mesh, mesh3, atxDB3, types.NewLayerID(uint32(numOfLayers)-2))
-	mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(numOfLayers)-2), blockIds)
+	blockIds := copyLayer(t, mesh, mesh3, atxDB3, types.NewLayerID(uint32(numOfLayers)-1))
+	mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(numOfLayers)-1), blockIds)
 	assert.Equal(t, s3Len, len(s3.Txs))
 
-	blockIds = copyLayer(t, mesh, mesh3, atxDB3, types.NewLayerID(uint32(numOfLayers)-3))
-	mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(numOfLayers)-3), blockIds)
+	blockIds = copyLayer(t, mesh, mesh3, atxDB3, types.NewLayerID(uint32(numOfLayers)-2))
+	mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(numOfLayers)-2), blockIds)
 	assert.Equal(t, s.Txs, s3.Txs)
 }
 
