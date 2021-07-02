@@ -64,82 +64,82 @@ func GetEffectiveGenesis() LayerID {
 
 // NewLayerID creates LayerID from uint32.
 func NewLayerID(value uint32) LayerID {
-	return LayerID{value: value}
+	return LayerID{Value: value}
 }
 
 // LayerID is representing a layer number. Zero value is safe to use, and means 0.
 // Internally it is a simple wrapper over uint32 and should be considered immutable
 // the same way as any integer.
 type LayerID struct {
-	value uint32
+	Value uint32
 }
 
 // GetEpoch returns the epoch number of this LayerID.
 func (l LayerID) GetEpoch() EpochID {
-	return EpochID(l.value / getLayersPerEpoch())
+	return EpochID(l.Value / getLayersPerEpoch())
 }
 
 // Add layers to the layer. Panics on wraparound.
 func (l LayerID) Add(layers uint32) LayerID {
-	nl := l.value + layers
-	if nl < l.value {
+	nl := l.Value + layers
+	if nl < l.Value {
 		panic("layer_id wraparound")
 	}
-	l.value = nl
+	l.Value = nl
 	return l
 }
 
 // Sub layers from the layer. Panics on wraparound.
 func (l LayerID) Sub(layers uint32) LayerID {
-	if layers > l.value {
+	if layers > l.Value {
 		panic("layer_id wraparound")
 	}
-	l.value -= layers
+	l.Value -= layers
 	return l
 }
 
 // Mul layer by the layers. Panics on wraparound.
 func (l LayerID) Mul(layers uint32) LayerID {
-	if l.value == 0 {
+	if l.Value == 0 {
 		return l
 	}
-	nl := l.value * layers
-	if nl/l.value != layers {
+	nl := l.Value * layers
+	if nl/l.Value != layers {
 		panic("layer_id wraparound")
 	}
-	l.value = nl
+	l.Value = nl
 	return l
 }
 
 // Uint32 returns the LayerID as a uint32.
 func (l LayerID) Uint32() uint32 {
-	return l.value
+	return l.Value
 }
 
 // Before returns true if this layer is lower than the other.
 func (l LayerID) Before(other LayerID) bool {
-	return l.value < other.value
+	return l.Value < other.Value
 }
 
 // After returns true if this layer is higher than the other.
 func (l LayerID) After(other LayerID) bool {
-	return l.value > other.value
+	return l.Value > other.Value
 }
 
 // Duration returns different between current and other layer.
 func (l LayerID) Duration(other LayerID) uint32 {
-	if other.value > l.value {
-		panic(fmt.Sprintf("other (%d) must be before or equal to this layer (%d)", other.value, l.value))
+	if other.Value > l.Value {
+		panic(fmt.Sprintf("other (%d) must be before or equal to this layer (%d)", other.Value, l.Value))
 	}
-	return l.value - other.value
+	return l.Value - other.Value
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (l LayerID) Field() log.Field { return log.Uint32("layer_id", l.value) }
+func (l LayerID) Field() log.Field { return log.Uint32("layer_id", l.Value) }
 
 // String returns string representation of the layer id numeric value.
 func (l LayerID) String() string {
-	return strconv.FormatUint(uint64(l.value), 10)
+	return strconv.FormatUint(uint64(l.Value), 10)
 }
 
 // NodeID contains a miner's two public keys.

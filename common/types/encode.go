@@ -13,7 +13,7 @@ import (
 func (id BlockID) Bytes() []byte { return id.AsHash32().Bytes() }
 
 // Bytes returns the byte representation of the LayerID, using little endian encoding.
-func (l LayerID) Bytes() []byte { return util.Uint32ToBytes(l.value) }
+func (l LayerID) Bytes() []byte { return util.Uint32ToBytes(l.Value) }
 
 // BlockIdsToBytes serializes a slice of BlockIDs.
 func BlockIdsToBytes(ids []BlockID) ([]byte, error) {
