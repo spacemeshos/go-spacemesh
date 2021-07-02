@@ -57,6 +57,12 @@ type poetDb interface {
 	ValidateAndStoreMsg(data []byte) error
 }
 
+// tortoiseBeaconDB is an interface for tortoise beacon database
+type tortoiseBeaconDB interface {
+	GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, bool)
+	SetTortoiseBeacon(epochID types.EpochID, beacon types.Hash32) error
+}
+
 // network defines network capabilities used
 type network interface {
 	GetPeers() []p2ppeers.Peer
@@ -83,6 +89,7 @@ type Logic struct {
 	txs                  TxProcessor
 	layerDB              layerDB
 	atxIds               atxIDsDB
+	tbDB                 tortoiseBeaconDB
 	gossipBlocks         gossipBlocks
 	layerResM            sync.RWMutex
 	layerHashResM        sync.RWMutex
@@ -102,7 +109,7 @@ func DefaultConfig() Config {
 }
 
 // NewLogic creates a new instance of layer fetching logic
-func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHandler, poet poetDb, atxIDs atxIDsDB, txs TxProcessor, network service.Service, fetcher fetch.Fetcher, layers layerDB, log log.Log) *Logic {
+func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHandler, poet poetDb, atxIDs atxIDsDB, txs TxProcessor, network service.Service, fetcher fetch.Fetcher, layers layerDB, tortoiseBeacons tortoiseBeaconDB, log log.Log) *Logic {
 
 	srv := fetch.NewMessageNetwork(ctx, cfg.RequestTimeout, network, layersProtocol, log)
 	l := &Logic{
@@ -115,6 +122,7 @@ func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHand
 		poetProofs:           poet,
 		atxs:                 atxs,
 		layerDB:              layers,
+		tbDB:                 tortoiseBeacons,
 		blockHandler:         blocks,
 		atxIds:               atxIDs,
 		txs:                  txs,
@@ -125,6 +133,7 @@ func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHand
 	srv.RegisterBytesMsgHandler(LayerHashMsg, l.LayerHashReqReceiver)
 	srv.RegisterBytesMsgHandler(LayerBlocksMsg, l.LayerHashBlocksReceiver)
 	srv.RegisterBytesMsgHandler(atxIDsMsg, l.epochATXsReceiver)
+	srv.RegisterBytesMsgHandler(tbMsg, l.tortoiseBeaconReceiver)
 
 	return l
 }
@@ -136,12 +145,14 @@ const (
 	TXDB    fetch.Hint = "TXDB"
 	POETDB  fetch.Hint = "POETDB"
 	IVDB    fetch.Hint = "IVDB"
+	TBDB    fetch.Hint = "TBDB"
 
 	layersProtocol = "/layers/2.0/"
 
 	LayerBlocksMsg = 1
 	LayerHashMsg   = 2
 	atxIDsMsg      = 3
+	tbMsg          = 4
 )
 
 // FetchFlow is the main syncing flow TBD
@@ -161,12 +172,13 @@ func (l *Logic) Close() {
 }
 
 // AddDBs adds dbs that will be queried when sync requests are received. these databases will be exposed to external callers
-func (l *Logic) AddDBs(blockDB, AtxDB, TxDB, poetDB, IvDB database.Store) {
+func (l *Logic) AddDBs(blockDB, AtxDB, TxDB, poetDB, IvDB, tbDB database.Store) {
 	l.fetcher.AddDB(BlockDB, blockDB)
 	l.fetcher.AddDB(ATXDB, AtxDB)
 	l.fetcher.AddDB(TXDB, TxDB)
 	l.fetcher.AddDB(POETDB, poetDB)
 	l.fetcher.AddDB(IVDB, IvDB)
+	l.fetcher.AddDB(TBDB, tbDB)
 }
 
 // LayerPromiseResult is the result of trying to fetch an entire layer- if this fails the error will be added to result
@@ -219,6 +231,23 @@ func (l *Logic) LayerHashBlocksReceiver(ctx context.Context, msg []byte) []byte 
 	}
 
 	return out
+}
+
+// tbReceiver returns the tortoise beacon for the given layer ID
+func (l *Logic) tortoiseBeaconReceiver(ctx context.Context, msg []byte) []byte {
+	l.log.Info("got tortoise beacon request ")
+
+	epoch := types.EpochID(util.BytesToUint64(msg))
+	beacon, ok := l.tbDB.GetTortoiseBeacon(epoch)
+	if !ok {
+		l.log.Warning("cannot find tortoise beacon for epoch %v", epoch)
+	}
+
+	bts, err := types.InterfaceToBytes(beacon)
+	if err != nil {
+		l.log.Warning("cannot find marshal tortoise beacon for epoch %v: %v", epoch, err)
+	}
+	return bts
 }
 
 // PollLayer performs the following
@@ -480,7 +509,7 @@ func (l *Logic) blockReceiveFunc(ctx context.Context, data []byte) error {
 	return l.blockHandler.HandleBlockData(ctx, data, l)
 }
 
-// IsSynced indocates if this node is synced
+// IsSynced indicates if this node is synced
 func (l *Logic) IsSynced(context.Context) bool {
 	//todo: add this logic
 	return true
@@ -638,4 +667,44 @@ func (l *Logic) GetInputVector(id types.LayerID) error {
 		return l.layerDB.SaveLayerHashInputVector(res.Hash, res.Data)
 	}
 	return nil
+}
+
+type tortoiseBeaconRes struct {
+	Error          error
+	TortoiseBeacon types.Hash32
+}
+
+// GetTortoiseBeacon gets tortoise beacon data from remote peer
+func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
+	resCh := make(chan tortoiseBeaconRes, 1)
+
+	//build receiver function
+	receiveForPeerFunc := func(data []byte) {
+		var tb types.Hash32
+		err := types.BytesToInterface(data, &tb)
+		resCh <- tortoiseBeaconRes{
+			Error:          err,
+			TortoiseBeacon: tb,
+		}
+	}
+
+	errFunc := func(err error) {
+		resCh <- tortoiseBeaconRes{
+			Error:          err,
+			TortoiseBeacon: types.Hash32{},
+		}
+	}
+
+	err := l.net.SendRequest(ctx, tbMsg, id.ToBytes(), fetch.GetRandomPeer(l.net.GetPeers()), receiveForPeerFunc, errFunc)
+	if err != nil {
+		return err
+	}
+
+	l.log.Info("waiting for tortoise beacon response")
+	res := <-resCh
+	if res.Error != nil {
+		return res.Error
+	}
+
+	return l.tbDB.SetTortoiseBeacon(id, res.TortoiseBeacon)
 }

@@ -2,11 +2,12 @@ package sync
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"time"
 
-	"fmt"
 	"github.com/golang/protobuf/ptypes/duration"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -259,7 +260,7 @@ func (m mockTxProcessor) HandleTxSyncData(data []byte) error {
 
 // NewSyncWithMocks returns a syncer instance that is backed by mocks of other modules
 // for use in testing
-func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *state.TxMempool, atxpool *activation.AtxMemDB, swarm service.Service, poetDb *activation.PoetDb, conf Configuration, goldenATXID types.ATXID, expectedLayers types.LayerID, poetStorage database.Database) *Syncer {
+func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *state.TxMempool, atxpool *activation.AtxMemDB, swarm service.Service, poetDb *activation.PoetDb, conf Configuration, goldenATXID types.ATXID, expectedLayers types.LayerID, poetStorage database.Database, tbStorage database.Database) *Syncer {
 	lg := log.NewDefault("sync_test")
 	lg.Info("new sync tester")
 	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, conf.LayersPerEpoch, goldenATXID, &validatorMock{}, lg.WithOptions(log.Nop))
@@ -272,6 +273,8 @@ func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *
 		msh = mesh.NewMesh(mshdb, atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
 	}
 
+	tbDb := tortoisebeacon.NewDB(tbStorage, lg.WithOptions(log.Nop))
+
 	clock := mockClock{Layer: expectedLayers + 1}
 	lg.Info("current layer %v", clock.GetCurrentLayer())
 
@@ -281,8 +284,8 @@ func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *
 	fetcher := fetch.NewFetch(context.TODO(), fCfg, swarm, lg)
 
 	lCfg := layerfetcher.Config{RequestTimeout: 20}
-	layerFetch := layerfetcher.NewLogic(context.TODO(), lCfg, blockHandler, atxdb, poetDb, atxdb, mockTxProcessor{}, swarm, fetcher, msh, lg)
-	layerFetch.AddDBs(mshdb.Blocks(), atxdbStore, mshdb.Transactions(), poetStorage, mshdb.InputVector())
+	layerFetch := layerfetcher.NewLogic(context.TODO(), lCfg, blockHandler, atxdb, poetDb, atxdb, mockTxProcessor{}, swarm, fetcher, msh, tbDb, lg)
+	layerFetch.AddDBs(mshdb.Blocks(), atxdbStore, mshdb.Transactions(), poetStorage, mshdb.InputVector(), tbStorage)
 	layerFetch.Start()
 	return NewSync(context.TODO(), swarm, msh, txpool, atxdb, blockEligibilityValidatorMock{}, poetDb, conf, &clock, layerFetch, lg)
 }

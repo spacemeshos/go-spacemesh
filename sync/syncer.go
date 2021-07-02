@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"sync"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -57,6 +58,7 @@ type LayerFetch interface {
 	FetchBlock(ctx context.Context, ID types.BlockID) error
 	GetPoetProof(ctx context.Context, id types.Hash32) error
 	GetInputVector(id types.LayerID) error
+	GetTortoiseBeacon(ctx context.Context, id types.EpochID) error
 	Start()
 	Close()
 }
@@ -516,6 +518,7 @@ func (s *Syncer) handleNotSynced(ctx context.Context, currentSyncLayer types.Lay
 			}
 		}
 		s.syncAtxs(ctx, currentSyncLayer)
+		s.syncTortoiseBeacons(ctx, currentSyncLayer)
 
 		// TODO: implement handling hare terminating with no valid blocks.
 		// 	currently hareForLayer is nil if hare hasn't terminated yet.
@@ -540,6 +543,26 @@ func (s *Syncer) syncAtxs(ctx context.Context, currentSyncLayer types.LayerID) {
 	if currentSyncLayer == lastLayerOfEpoch {
 		ctx = log.WithNewRequestID(ctx, currentSyncLayer.GetEpoch())
 		if err := s.fetcher.GetEpochATXs(ctx, currentSyncLayer.GetEpoch()); err != nil {
+			if currentSyncLayer.GetEpoch().IsGenesis() {
+				s.WithContext(ctx).With().Info("cannot fetch epoch atxs (expected during genesis)",
+					currentSyncLayer,
+					log.Err(err))
+			} else {
+				s.WithContext(ctx).With().Error("cannot fetch epoch atxs", currentSyncLayer, log.Err(err))
+			}
+		}
+	}
+}
+
+func (s *Syncer) syncTortoiseBeacons(ctx context.Context, currentSyncLayer types.LayerID) {
+	if currentSyncLayer.GetEpoch() == 0 {
+		s.With().Info("skipping ATX sync in epoch 0")
+		return
+	}
+	lastLayerOfEpoch := (currentSyncLayer.GetEpoch() + 1).FirstLayer() - 1
+	if currentSyncLayer == lastLayerOfEpoch {
+		ctx = log.WithNewRequestID(ctx, currentSyncLayer.GetEpoch())
+		if err := s.fetcher.GetTortoiseBeacon(ctx, currentSyncLayer.GetEpoch()); err != nil {
 			if currentSyncLayer.GetEpoch().IsGenesis() {
 				s.WithContext(ctx).With().Info("cannot fetch epoch atxs (expected during genesis)",
 					currentSyncLayer,
@@ -764,6 +787,11 @@ func (s *Syncer) GetPoetProof(ctx context.Context, hash types.Hash32) error {
 // GetInputVector fetches a inputvector for layer from network peers
 func (s *Syncer) GetInputVector(id types.LayerID) error {
 	return s.fetcher.GetInputVector(id)
+}
+
+// GetTortoiseBeacon fetches a tortoise beacon for layer from network peers
+func (s *Syncer) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
+	return s.fetcher.GetTortoiseBeacon(ctx, id)
 }
 
 func (s *Syncer) getAndValidateLayer(id types.LayerID) error {

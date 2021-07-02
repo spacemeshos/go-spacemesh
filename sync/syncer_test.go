@@ -4,9 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	fetch2 "github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/layerfetcher"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -14,6 +11,10 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	fetch2 "github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 
 	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/sha256-simd"
@@ -223,8 +224,9 @@ func SyncMockFactoryManClock(number int, conf Configuration, name string, dbType
 		layerFetcher := layerfetcher.NewLogic(context.TODO(), layerfetcher.Config{RequestTimeout: 3}, store, store, store, store, store, net, f, msh, l)
 		poetDB := database.NewMemDatabase()
 		poet := activation.NewPoetDb(poetDB, log.NewDefault("poetDb"))
+		tbDB := database.NewMemDatabase()
 		//poet := poetDb()
-		layerFetcher.AddDBs(msh.Blocks(), atxDB, msh.Transactions(), poetDB, msh.InputVector())
+		layerFetcher.AddDBs(msh.Blocks(), atxDB, msh.Transactions(), poetDB, msh.InputVector(), tbDB)
 		// note: layer fetcher startup happens asynchronously, so it may not be fully running when this method returns
 		layerFetcher.Start()
 
@@ -1568,10 +1570,11 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	layerFetcher.Start()
 	defer layerFetcher.Close()
 	poetDB := database.NewMemDatabase()
+	tbDB := database.NewMemDatabase()
 	//poet := activation.NewPoetDb(poetDB, log.NewDefault("poetDb"))
 	//poet := poetDb()
 	//atxdb := activation.NewDB(atxDb, &mockIStore{}, syncedMsh.DB, layersPerEpoch, goldenATXID, &validatorMock{}, l.WithName("atxDB"))
-	layerFetcher.AddDBs(syncedMsh.Blocks(), atxDb, syncedMsh.Transactions(), poetDB, syncedMsh.InputVector())
+	layerFetcher.AddDBs(syncedMsh.Blocks(), atxDb, syncedMsh.Transactions(), poetDB, syncedMsh.InputVector(), tbDB)
 	_ = NewSync(context.TODO(), syncedMiner, syncedMsh, state.NewTxMemPool(), synecdAtxPool, blockEligibilityValidatorMock{}, newMockPoetDb(), conf, timer, layerFetcher, l.WithName("synced"))
 	atx := types.NewActivationTx(types.NIPSTChallenge{}, types.Address{}, &types.NIPST{}, 0, &types.PostProof{})
 	atx.CalcAndSetID()
@@ -1608,10 +1611,11 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	nslayerFetcher.Start()
 	defer nslayerFetcher.Close()
 	nspoetDB := database.NewMemDatabase()
+	nsTBDB := database.NewMemDatabase()
 	//poet := activation.NewPoetDb(poetDB, log.NewDefault("poetDb"))
 	//poet := poetDb()
 	//atxdb := activation.NewDB(atxDb, &mockIStore{}, syncedMsh.DB, layersPerEpoch, goldenATXID, &validatorMock{}, l.WithName("atxDB"))
-	nslayerFetcher.AddDBs(nsMsh.Blocks(), nsatxDb, nsMsh.Transactions(), nspoetDB, nsMsh.InputVector())
+	nslayerFetcher.AddDBs(nsMsh.Blocks(), nsatxDb, nsMsh.Transactions(), nspoetDB, nsMsh.InputVector(), nsTBDB)
 	nssync := NewSync(context.TODO(), nsMiner, nsMsh, state.NewTxMemPool(), nsAtxPool, blockEligibilityValidatorMock{}, newMockPoetDb(), conf, timer, nslayerFetcher, l.WithName("synced"))
 	//atx := types.NewActivationTx(types.NIPSTChallenge{}, types.Address{}, &types.NIPST{}, &types.PostProof{})
 	//atx.CalcAndSetID()

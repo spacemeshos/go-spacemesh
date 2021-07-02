@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -26,7 +27,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"strings"
 )
 
 // Sync cmd
@@ -132,6 +132,12 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	tbDbStore, err := database.NewLDBDatabase(filepath.Join(path, "tb"), 0, 0, lg.WithName("tbDbStore"))
+	if err != nil {
+		lg.With().Error("error creating tortoise beacon database", log.Err(err))
+		return
+	}
+
 	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb").WithOptions(log.Nop))
 
 	mshdb, err := mesh.NewPersistentMeshDB(filepath.Join(path, "mesh"), 5, lg.WithOptions(log.Nop))
@@ -148,7 +154,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	txpool := state.NewTxMemPool()
 	atxpool := activation.NewAtxMemPool()
 
-	app.sync = sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, goldenATXID, types.LayerID(expectedLayers), poetDbStore)
+	app.sync = sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, goldenATXID, types.LayerID(expectedLayers), poetDbStore, tbDbStore)
 	if err = swarm.Start(cmdp.Ctx); err != nil {
 		log.With().Panic("error starting p2p", log.Err(err))
 	}
