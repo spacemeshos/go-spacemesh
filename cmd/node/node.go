@@ -3,7 +3,6 @@ package node
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"io/ioutil"
 	"net/http"

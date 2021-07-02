@@ -54,6 +54,8 @@ type mockFetcher struct {
 	result    map[types.LayerID]chan layerfetcher.LayerPromiseResult
 	atxsError map[types.EpochID]error
 	atxsCalls uint32
+	tbsError  map[types.EpochID]error
+	tbsCalls  uint32
 }
 
 func newMockFetcher() *mockFetcher {
@@ -77,6 +79,12 @@ func (mf *mockFetcher) GetEpochATXs(_ context.Context, epoch types.EpochID) erro
 	defer mf.mu.Unlock()
 	mf.atxsCalls++
 	return mf.atxsError[epoch]
+}
+func (mf *mockFetcher) GetTortoiseBeacons(_ context.Context, epoch types.EpochID) error {
+	mf.mu.Lock()
+	defer mf.mu.Unlock()
+	mf.tbsCalls++
+	return mf.tbsError[epoch]
 }
 func (mf *mockFetcher) getLayerPollChan(layerID types.LayerID) chan struct{} {
 	mf.mu.Lock()

@@ -677,8 +677,8 @@ type tortoiseBeaconRes struct {
 	TortoiseBeacon types.Hash32
 }
 
-// GetTortoiseBeacon gets tortoise beacon data from remote peer
-func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
+// GetTortoiseBeacons gets tortoise beacon data from remote peer
+func (l *Logic) GetTortoiseBeacons(ctx context.Context, id types.EpochID) error {
 	resCh := make(chan tortoiseBeaconRes, 1)
 
 	//build receiver function
