@@ -1,16 +1,12 @@
-package tortoisebeacon
+package types
 
-import (
-	"github.com/spacemeshos/sha256-simd"
-
-	"github.com/spacemeshos/go-spacemesh/common/types"
-)
+import "github.com/spacemeshos/sha256-simd"
 
 // ATXIDList defines ATX ID list.
-type ATXIDList []types.ATXID
+type ATXIDList []ATXID
 
 // Hash returns ATX ID list hash.
-func (atxList ATXIDList) Hash() types.Hash32 {
+func (atxList ATXIDList) Hash() Hash32 {
 	hasher := sha256.New()
 
 	for _, id := range atxList {
@@ -19,7 +15,7 @@ func (atxList ATXIDList) Hash() types.Hash32 {
 		}
 	}
 
-	var res types.Hash32
+	var res Hash32
 
 	hasher.Sum(res[:0])
 

@@ -630,7 +630,7 @@ func (db *DB) addAtxTimestamp(timestamp time.Time, atx *types.ActivationTx) erro
 
 	err := db.atxs.Put(getAtxTimestampKey(atx.ID()), b)
 	if err != nil {
-		return fmt.Errorf("failed to store atx ID for node: %v", err)
+		return fmt.Errorf("failed to store atx timestamp for node: %v", err)
 	}
 	return nil
 }

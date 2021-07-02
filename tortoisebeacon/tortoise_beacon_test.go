@@ -219,7 +219,7 @@ func TestTortoiseBeacon_atxThresholdFraction(t *testing.T) {
 
 			threshold, err := tb.atxThresholdFraction(tc.w)
 			r.Equal(tc.err, err)
-			r.Zero(tc.threshold.Cmp(threshold))
+			r.Equal(tc.threshold.String(), threshold.String())
 		})
 	}
 }

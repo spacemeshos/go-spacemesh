@@ -1,11 +1,9 @@
-package tortoisebeacon
+package types
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func TestATXIDList_Hash(t *testing.T) {
@@ -20,7 +18,7 @@ func TestATXIDList_Hash(t *testing.T) {
 	}{
 		{
 			name:     "Case 1",
-			atxList:  ATXIDList{types.ATXID(types.CalcHash32([]byte("1")))},
+			atxList:  ATXIDList{ATXID(CalcHash32([]byte("1")))},
 			expected: "0x9c2e4d8fe97d881430de4e754b4205b9c27ce96715231cffc4337340cb110280",
 		},
 	}
