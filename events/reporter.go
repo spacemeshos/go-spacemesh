@@ -18,10 +18,6 @@ var reporter *EventReporter
 // we use a mutex to ensure thread safety
 var mu sync.RWMutex
 
-func init() {
-	mu = sync.RWMutex{}
-}
-
 // ReportNewTx dispatches incoming events to the reporter singleton
 func ReportNewTx(tx *types.Transaction) {
 	Publish(NewTx{

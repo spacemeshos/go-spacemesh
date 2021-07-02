@@ -2,12 +2,13 @@ package net
 
 import (
 	"context"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"net"
 	"sync/atomic"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 // ReadWriteCloserMock is a mock of ReadWriteCloserMock
@@ -50,7 +51,7 @@ type NetworkMock struct {
 	preSessionErr    error
 	preSessionCount  int32
 	regNewRemoteConn []func(NewConnectionEvent)
-	networkID        int8
+	networkID        uint32
 	closingConn      []func(context.Context, ConnectionWithErr)
 	incomingMessages []chan IncomingMessageEvent
 	dialSessionID    []byte
@@ -140,7 +141,7 @@ func (n NetworkMock) PublishClosingConnection(con ConnectionWithErr) {
 }
 
 // NetworkID is netid
-func (n *NetworkMock) NetworkID() int8 {
+func (n *NetworkMock) NetworkID() uint32 {
 	return n.networkID
 }
 

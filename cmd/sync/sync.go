@@ -25,8 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/state"
-	"github.com/spacemeshos/go-spacemesh/sync"
-	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/syncer"
 )
 
 // Sync cmd
@@ -68,8 +67,9 @@ func init() {
 
 type syncApp struct {
 	*cmdp.BaseApp
-	sync  *sync.Syncer
-	clock *timesync.Ticker
+	sync   *syncer.Syncer
+	msh    *mesh.Mesh
+	logger log.Log
 }
 
 func newSyncApp() *syncApp {
@@ -79,11 +79,11 @@ func newSyncApp() *syncApp {
 func (app *syncApp) Cleanup() {
 	err := os.RemoveAll(app.Config.DataDir())
 	if err != nil {
-		app.sync.With().Error("failed to cleanup sync", log.Err(err))
+		app.logger.With().Error("failed to cleanup sync", log.Err(err))
 	}
 }
 
-func (app *syncApp) start(cmd *cobra.Command, args []string) {
+func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	// start p2p services
 	lg := log.NewDefault("sync_test")
 	lg.With().Info("------------ Start sync test -----------",
@@ -105,18 +105,6 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	}
 
 	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
-
-	conf := sync.Configuration{
-		Concurrency:     4,
-		AtxsLimit:       200,
-		LayerSize:       app.Config.LayerAvgSize,
-		RequestTimeout:  time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond,
-		SyncInterval:    2 * 60 * time.Millisecond,
-		Hdist:           app.Config.Hdist,
-		ValidationDelta: 30 * time.Second,
-		LayersPerEpoch:  uint16(app.Config.LayersPerEpoch),
-		GoldenATXID:     goldenATXID,
-	}
 	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
 	lg.Info("local db path: %v layers per epoch: %v", path, app.Config.LayersPerEpoch)
 
@@ -152,17 +140,36 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	}
 
 	txpool := state.NewTxMemPool()
-	atxpool := activation.NewAtxMemPool()
 
-	app.sync = sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, goldenATXID, types.LayerID(expectedLayers), poetDbStore, tbDbStore)
+	app.logger = log.NewDefault("sync_test")
+	app.logger.Info("new sync tester")
+
+	layersPerEpoch := app.Config.LayersPerEpoch
+	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, uint16(layersPerEpoch), goldenATXID, &validatorMock{}, lg.WithOptions(log.Nop))
+	dbs := &allDbs{
+		atxdb:       atxdb,
+		atxdbStore:  atxdbStore,
+		poetDb:      poetDb,
+		poetStorage: poetDbStore,
+		mshdb:       mshdb,
+	}
+	msh := createMeshWithMock(dbs, txpool, app.logger)
+	app.msh = msh
+	layerFetch := createFetcherWithMock(dbs, msh, swarm, app.logger)
+	layerFetch.Start()
+	syncerConf := syncer.Configuration{
+		SyncInterval:    2 * 60 * time.Millisecond,
+		ValidationDelta: 30 * time.Second,
+	}
+	app.sync = createSyncer(syncerConf, msh, layerFetch, types.LayerID(expectedLayers), app.logger)
 	if err = swarm.Start(cmdp.Ctx); err != nil {
 		log.With().Panic("error starting p2p", log.Err(err))
 	}
 
-	i := conf.LayersPerEpoch * 2
+	i := layersPerEpoch * 2
 	for ; ; i++ {
 		lg.With().Info("getting layer", types.LayerID(i))
-		if lyr, err2 := app.sync.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
+		if lyr, err2 := msh.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
 			l := types.LayerID(i)
 			if l > types.GetEffectiveGenesis() {
 				lg.With().Info("finished loading layers from disk",
@@ -173,24 +180,25 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 			}
 		} else {
 			lg.With().Info("loaded layer from disk", types.LayerID(i))
-			app.sync.ValidateLayer(lyr)
+			msh.ValidateLayer(lyr)
 		}
 	}
 
 	sleep := time.Duration(10) * time.Second
 	lg.Info("wait %v sec", sleep)
-	app.sync.Start(cmdp.Ctx)
-	for app.sync.ProcessedLayer() < types.LayerID(expectedLayers) {
-		app.sync.ForceSync()
+	time.Sleep(sleep)
+	go app.sync.Start(cmdp.Ctx)
+	for msh.ProcessedLayer() < types.LayerID(expectedLayers) {
 		lg.Info("sleep for %v sec", 30)
+		app.sync.ForceSync(context.TODO())
 		time.Sleep(30 * time.Second)
-
 	}
 
 	lg.Event().Info("sync done",
 		log.String("node_id", app.BaseApp.Config.P2P.NodeID),
-		log.FieldNamed("verified_layers", app.sync.ProcessedLayer()),
+		log.FieldNamed("verified_layers", msh.ProcessedLayer()),
 	)
+	app.sync.Close()
 	for {
 		lg.Info("keep busy sleep for %v sec", 60)
 		time.Sleep(60 * time.Second)
@@ -270,7 +278,7 @@ func ensureDirExists(path string) error {
 func main() {
 	if err := cmd.Execute(); err != nil {
 		log.With().Info("error", log.Err(err))
-		fmt.Fprintln(os.Stderr, err)
+		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }

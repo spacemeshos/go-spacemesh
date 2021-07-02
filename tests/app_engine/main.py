@@ -7,7 +7,8 @@ from gcloud_tasks.add_task_to_queue import create_google_cloud_task
 from resources import nodepool_handler
 from resources.convenience import str2bool, validate_params_in_dict
 from resources.es_dump import es_reindex
-from resources.k8s_handler import delete_namespace, remove_clusterrole_binding, remove_client_deployments
+from resources.k8s_handler import delete_namespace, remove_clusterrole_binding, remove_client_deployments, \
+    remove_daemonset_in_namespace
 
 
 DUMP_APP_ROUTE = "/namespace-teardown"
@@ -52,6 +53,9 @@ def teardown():
     namespace = payload_dict['namespace']
     project_id = payload_dict["project_id"]
     print(f"starting teardown process for {namespace}")
+    # delete all daemonsets in namespace
+    remove_daemonset_in_namespace(
+        payload_dict["project_id"], payload_dict["cluster_name"], payload_dict["node_pool_zone"], namespace)
     # delete client and bootstrap deployments
     try:
         remove_client_deployments(

@@ -3,6 +3,7 @@ package node
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -12,16 +13,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"time"
 
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
-	"github.com/spacemeshos/post/shared"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
@@ -48,12 +43,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/state"
-	"github.com/spacemeshos/go-spacemesh/sync"
+	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
+	"github.com/spacemeshos/post/shared"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 const edKeyFileName = "key.bin"
@@ -139,19 +140,19 @@ type Service interface {
 // HareService is basic definition of hare algorithm service, providing consensus results for a layer
 type HareService interface {
 	Service
-	GetResult(id types.LayerID) ([]types.BlockID, error)
+	GetResult(types.LayerID) ([]types.BlockID, error)
 }
 
 // TickProvider is an interface to a glopbal system clock that releases ticks on each layer
 type TickProvider interface {
 	Subscribe() timesync.LayerTimer
-	Unsubscribe(timer timesync.LayerTimer)
+	Unsubscribe(timesync.LayerTimer)
 	GetCurrentLayer() types.LayerID
 	StartNotifying()
 	GetGenesisTime() time.Time
-	LayerToTime(id types.LayerID) time.Time
+	LayerToTime(types.LayerID) time.Time
 	Close()
-	AwaitLayer(layerID types.LayerID) chan struct{}
+	AwaitLayer(types.LayerID) chan struct{}
 }
 
 // SpacemeshApp is the cli app singleton
@@ -165,7 +166,7 @@ type SpacemeshApp struct {
 	gatewaySvc     *grpcserver.GatewayService
 	globalstateSvc *grpcserver.GlobalStateService
 	txService      *grpcserver.TransactionService
-	syncer         *sync.Syncer
+	syncer         *syncer.Syncer
 	blockListener  *blocks.BlockHandler
 	state          *state.TransactionProcessor
 	blockProducer  *miner.BlockBuilder
@@ -359,14 +360,6 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 	}
 }
 
-type weakCoinStub struct {
-}
-
-// GetResult returns the weak coin toss result
-func (weakCoinStub) GetResult() bool {
-	return true
-}
-
 // Wrap the top-level logger to add context info and set the level for a
 // specific module.
 func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
@@ -485,8 +478,6 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	}
 	app.closers = append(app.closers, db)
 
-	coinToss := weakCoinStub{}
-
 	atxdbstore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "atx"), 0, 0, app.addLogger(AtxDbStoreLogger, lg))
 	if err != nil {
 		return err
@@ -555,7 +546,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
 	trtlCfg := tortoise.Config{
-		LayerSyze: int(layerSize),
+		LayerSize: int(layerSize),
 		Database:  mdb,
 		Hdist:     app.Config.Hdist,
 		Log:       app.addLogger(TrtlLogger, lg),
@@ -573,18 +564,6 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	eValidator := blocks.NewBlockEligibilityValidator(layerSize, app.Config.GenesisTotalWeight, layersPerEpoch, atxdb, tBeacon, signing.VRFVerify, msh, app.addLogger(BlkEligibilityLogger, lg))
 
-	syncConf := sync.Configuration{Concurrency: 4,
-		LayerSize:       int(layerSize),
-		LayersPerEpoch:  layersPerEpoch,
-		RequestTimeout:  time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond,
-		SyncInterval:    time.Duration(app.Config.SyncInterval) * time.Second,
-		ValidationDelta: time.Duration(app.Config.SyncValidationDelta) * time.Second,
-		Hdist:           app.Config.Hdist,
-		AtxsLimit:       app.Config.AtxsPerBlock,
-		AlwaysListen:    app.Config.AlwaysListen,
-		GoldenATXID:     goldenATXID,
-	}
-
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
 		logger.With().Panic("number of atxs per block required is bigger than the limit",
 			log.Int("atxs_per_block", app.Config.AtxsPerBlock),
@@ -592,9 +571,9 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	}
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
-	if app.Config.HareEligibility.EpochOffset >= app.Config.BaseConfig.LayersPerEpoch {
+	if app.Config.HareEligibility.EpochOffset >= uint16(app.Config.BaseConfig.LayersPerEpoch) {
 		logger.With().Panic("epoch offset cannot be greater than or equal to the number of layers per epoch",
-			log.Int("epoch_offset", app.Config.HareEligibility.EpochOffset),
+			log.Uint16("epoch_offset", app.Config.HareEligibility.EpochOffset),
 			log.Int("layers_per_epoch", app.Config.BaseConfig.LayersPerEpoch))
 	}
 
@@ -609,7 +588,13 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxdb, poetDb, atxdb, processor, swarm, remoteFetchService, msh, tBeaconDB, app.addLogger(Fetcher, lg))
 	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, mdb.InputVector(), tBeaconDBStore)
 
-	syncer := sync.NewSync(ctx, swarm, msh, app.txPool, atxdb, eValidator, poetDb, syncConf, clock, layerFetch, app.addLogger(SyncLogger, lg))
+	syncerConf := syncer.Configuration{
+		SyncInterval:    time.Duration(app.Config.SyncInterval) * time.Second,
+		ValidationDelta: time.Duration(app.Config.SyncValidationDelta) * time.Second,
+		AlwaysListen:    app.Config.AlwaysListen,
+	}
+	syncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, app.addLogger(SyncLogger, lg))
+
 	blockOracle := blocks.NewMinerBlockOracle(layerSize, app.Config.GenesisTotalWeight, layersPerEpoch, atxdb, tBeacon, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
@@ -622,12 +607,12 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		// TODO: this mock will be replaced by the real Tortoise beacon once
 		//   https://github.com/spacemeshos/go-spacemesh/pull/2267 is complete
 		beacon := eligibility.NewBeacon(tBeacon, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
-		hOracle = eligibility.New(beacon, atxdb.GetMinerWeightsInEpochFromView, signing.VRFVerify, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.POST.SpacePerUnit, app.Config.GenesisTotalWeight, app.Config.SpaceToCommit, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+		hOracle = eligibility.New(beacon, atxdb, mdb, signing.VRFVerify, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.POST.SpacePerUnit, app.Config.GenesisTotalWeight, app.Config.SpaceToCommit, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
 
 	gossipListener := service.NewListener(swarm, layerFetch, syncer.ListenToGossip, app.addLogger(GossipListener, lg))
-	ha := app.HareFactory(ctx, mdb, swarm, sgn, nodeID, syncer, msh, hOracle, idStore, clock, lg)
+	rabbit := app.HareFactory(ctx, mdb, swarm, sgn, nodeID, syncer, msh, hOracle, idStore, clock, lg)
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
 	minerCfg := miner.Config{
@@ -639,7 +624,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	}
 
 	database.SwitchCreationContext(dbStorepath, "") // currently only blockbuilder uses this mechanism
-	blockProducer := miner.NewBlockBuilder(minerCfg, sgn, swarm, clock.Subscribe(), coinToss, msh, trtl, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
+	blockProducer := miner.NewBlockBuilder(minerCfg, sgn, swarm, clock.Subscribe(), msh, trtl, rabbit, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))
 
@@ -680,7 +665,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	app.syncer = syncer
 	app.clock = clock
 	app.state = processor
-	app.hare = ha
+	app.hare = rabbit
 	app.P2P = swarm
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
@@ -715,9 +700,9 @@ func (app *SpacemeshApp) checkTimeDrifts() {
 }
 
 // HareFactory returns a hare consensus algorithm according to the parameters is app.Config.Hare.SuperHare
-func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm service.Service, sgn hare.Signer, nodeID types.NodeID, syncer *sync.Syncer, msh *mesh.Mesh, hOracle hare.Rolacle, idStore *activation.IdentityStore, clock TickProvider, lg log.Log) HareService {
+func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm service.Service, sgn hare.Signer, nodeID types.NodeID, syncer *syncer.Syncer, msh *mesh.Mesh, hOracle hare.Rolacle, idStore *activation.IdentityStore, clock TickProvider, lg log.Log) HareService {
 	if app.Config.HARE.SuperHare {
-		hr := turbohare.New(ctx, msh)
+		hr := turbohare.New(ctx, app.Config.HARE, msh, clock.Subscribe(), app.addLogger(HareLogger, lg))
 		mdb.InputVectorBackupFunc = hr.GetResult
 		return hr
 	}
@@ -738,7 +723,7 @@ func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm se
 
 		return true
 	}
-	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, validationFunc, syncer.IsHareSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, hOracle, clock.Subscribe(), app.addLogger(HareLogger, lg))
+	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, validationFunc, syncer.IsSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, hOracle, clock.Subscribe(), app.addLogger(HareLogger, lg))
 	return ha
 }
 
@@ -994,16 +979,21 @@ func (app *SpacemeshApp) startSyncer(ctx context.Context) {
 func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	// we use the main app context
 	ctx := cmdp.Ctx
-
 	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
 	// using context passed down to them)
 	logger := log.AppLog.WithContext(ctx)
 
+	hostname, err := os.Hostname()
+	if err != nil {
+		logger.With().Panic("error reading hostname", log.Err(err))
+	}
 	logger.With().Info("starting spacemesh",
 		log.String("data-dir", app.Config.DataDir()),
-		log.String("post-dir", app.Config.POST.DataDir))
+		log.String("post-dir", app.Config.POST.DataDir),
+		log.String("hostname", hostname),
+	)
 
-	err := filesystem.ExistOrCreate(app.Config.DataDir())
+	err = filesystem.ExistOrCreate(app.Config.DataDir())
 	if err != nil {
 		logger.With().Error("data-dir not found or could not be created", log.Err(err))
 	}
@@ -1033,7 +1023,6 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 		} else {
 			defer p.Stop()
 		}
-
 	}
 
 	/* Create or load miner identity */
@@ -1096,7 +1085,13 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	}
 
 	if app.Config.CollectMetrics {
-		metrics.StartCollectingMetrics(app.Config.MetricsPort)
+		metrics.StartMetricsServer(app.Config.MetricsPort)
+	}
+
+	if app.Config.MetricsPush != "" {
+		metrics.StartPushingMetrics(app.Config.MetricsPush, app.Config.MetricsPushPeriod,
+			swarm.LocalNode().PublicKey().String(), strconv.Itoa(int(app.Config.P2P.NetworkID)))
+
 	}
 
 	app.startServices(ctx, logger)

@@ -28,6 +28,10 @@ func AddCommands(cmd *cobra.Command) {
 		config.CollectMetrics, "collect node metrics")
 	cmd.PersistentFlags().IntVar(&config.MetricsPort, "metrics-port",
 		config.MetricsPort, "metric server port")
+	cmd.PersistentFlags().StringVar(&config.MetricsPush, "metrics-push",
+		config.MetricsPush, "Push metrics to url")
+	cmd.PersistentFlags().IntVar(&config.MetricsPushPeriod, "metrics-push-period",
+		config.MetricsPushPeriod, "Push period")
 	cmd.PersistentFlags().StringVar(&config.OracleServer, "oracle_server",
 		config.OracleServer, "The oracle server url. (temporary) ")
 	cmd.PersistentFlags().IntVar(&config.OracleServerWorldID, "oracle_server_worldid",
@@ -84,7 +88,7 @@ func AddCommands(cmd *cobra.Command) {
 		config.P2P.DialTimeout, "Network dial timeout duration")
 	cmd.PersistentFlags().DurationVar(&config.P2P.ConnKeepAlive, "conn-keepalive",
 		config.P2P.ConnKeepAlive, "Network connection keep alive")
-	cmd.PersistentFlags().Int8Var(&config.P2P.NetworkID, "network-id",
+	cmd.PersistentFlags().Uint32Var(&config.P2P.NetworkID, "network-id",
 		config.P2P.NetworkID, "NetworkID to run on (0 - mainnet, 1 - testnet)")
 	cmd.PersistentFlags().DurationVar(&config.P2P.ResponseTimeout, "response-timeout",
 		config.P2P.ResponseTimeout, "Timeout for waiting on response message")
@@ -170,10 +174,10 @@ func AddCommands(cmd *cobra.Command) {
 
 	/**======================== Hare Eligibility Oracle Flags ========================== **/
 
-	cmd.PersistentFlags().Uint64Var(&config.HareEligibility.ConfidenceParam, "eligibility-confidence-param",
-		config.HareEligibility.ConfidenceParam, "The relative layer (with respect to the current layer) we are confident to have consensus about")
-	cmd.PersistentFlags().IntVar(&config.HareEligibility.EpochOffset, "eligibility-epoch-offset",
-		config.HareEligibility.EpochOffset, "The constant layer (within an epoch) for which we traverse its view for the purpose of counting consensus active set")
+	cmd.PersistentFlags().Uint16Var(&config.HareEligibility.ConfidenceParam, "eligibility-confidence-param",
+		config.HareEligibility.ConfidenceParam, "The distance (in layers) we need to wait to have confidence about the contents of a layer")
+	cmd.PersistentFlags().Uint16Var(&config.HareEligibility.EpochOffset, "eligibility-epoch-offset",
+		config.HareEligibility.EpochOffset, "The number of layers we wait for blocks to arrive at the start of each epoch (for purposes of establishing eligibility)")
 
 	/**======================== Tortoise Beacon Flags ========================== **/
 

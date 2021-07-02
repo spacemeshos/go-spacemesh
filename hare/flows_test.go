@@ -157,7 +157,7 @@ func (trueOracle) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
 	return x, nil
 }
 
-func (trueOracle) IsIdentityActiveOnConsensusView(string, types.LayerID) (bool, error) {
+func (trueOracle) IsIdentityActiveOnConsensusView(context.Context, string, types.LayerID) (bool, error) {
 	return true, nil
 }
 
@@ -227,6 +227,9 @@ func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerI
 
 func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
 	return buildSet(), nil
+}
+
+func (mbp *mockBlockProvider) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {
 }
 
 func createMaatuf(tcfg config.Config, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string) *Hare {
