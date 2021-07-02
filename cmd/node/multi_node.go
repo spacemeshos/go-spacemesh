@@ -209,9 +209,6 @@ type network interface {
 	NewNode() *service.Node
 }
 
-// initialize a network mock object to simulate network between nodes.
-// var net = service.NewSimulator()
-
 // InitSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
 func InitSingleInstance(cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network) (*SpacemeshApp, error) {

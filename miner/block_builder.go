@@ -46,7 +46,7 @@ type blockOracle interface {
 }
 
 type baseBlockProvider interface {
-	BaseBlock() (types.BlockID, [][]types.BlockID, error)
+	BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error)
 }
 
 type atxDb interface {
