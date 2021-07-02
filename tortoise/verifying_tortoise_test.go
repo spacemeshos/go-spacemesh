@@ -1578,8 +1578,11 @@ func TestSumVotesForBlock(t *testing.T) {
 	r.Equal(against.Multiply(9), sum)
 }
 
+func checkVerifiedLayer(t *testing.T, trtl *turtle, layerID types.LayerID) {
+	require.Equal(t, int(layerID), int(trtl.Verified), "got unexpected value for last verified layer")
+}
+
 func TestHealing(t *testing.T) {
-	log.DebugMode(true)
 	r := require.New(t)
 
 	mdb := getPersistentMesh(t)
@@ -1589,22 +1592,18 @@ func TestHealing(t *testing.T) {
 	l1ID := l0ID.Add(1)
 	l2ID := l1ID.Add(1)
 
-	checkVerifiedLayer := func(layerID types.LayerID) {
-		r.Equal(int(layerID), int(alg.trtl.Verified), "got unexpected value for last verified layer")
-	}
-
 	// don't attempt to heal recent layers
 	t.Run("don't heal recent layers", func(t *testing.T) {
-		checkVerifiedLayer(l0ID)
+		checkVerifiedLayer(t, alg.trtl, l0ID)
 
 		// while bootstrapping there should be no healing
 		alg.trtl.selfHealing(context.TODO(), l2ID)
-		checkVerifiedLayer(l0ID)
+		checkVerifiedLayer(t, alg.trtl, l0ID)
 
 		// later, healing should not occur on layers not at least Hdist back
 		alg.trtl.Last = alg.trtl.Hdist.Add(1)
 		alg.trtl.selfHealing(context.TODO(), l2ID)
-		checkVerifiedLayer(l0ID)
+		checkVerifiedLayer(t, alg.trtl, l0ID)
 	})
 
 	alg.trtl.Last = l0ID
@@ -1614,7 +1613,7 @@ func TestHealing(t *testing.T) {
 	// healing should work even when there is no local opinion on a layer (i.e., no output vector, while waiting
 	// for hare results)
 	t.Run("does not depend on local opinion", func(t *testing.T) {
-		checkVerifiedLayer(l0ID)
+		checkVerifiedLayer(t, alg.trtl, l0ID)
 		r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), l1ID))
 		r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), l2ID))
 
@@ -1622,14 +1621,14 @@ func TestHealing(t *testing.T) {
 		alg.trtl.Hdist = 1
 		//alg.trtl.Last = l2ID
 		alg.trtl.selfHealing(context.TODO(), l2ID)
-		checkVerifiedLayer(l1ID)
+		checkVerifiedLayer(t, alg.trtl, l1ID)
 	})
 
 	l3ID := l2ID.Add(1)
 
 	// can heal when global and local opinion differ
 	t.Run("local and global opinions differ", func(t *testing.T) {
-		checkVerifiedLayer(l1ID)
+		checkVerifiedLayer(t, alg.trtl, l1ID)
 
 		// store input vector for already-processed layers
 		var l1BlockIDs, l2BlockIDs []types.BlockID
@@ -1658,7 +1657,7 @@ func TestHealing(t *testing.T) {
 		}
 
 		alg.trtl.selfHealing(context.TODO(), l3ID)
-		checkVerifiedLayer(l2ID)
+		checkVerifiedLayer(t, alg.trtl, l2ID)
 
 		// make sure contextual validity is updated
 		for _, bid := range l2BlockIDs {
@@ -1674,7 +1673,7 @@ func TestHealing(t *testing.T) {
 
 	// healing should count votes of non-good blocks
 	t.Run("counts votes of non-good blocks", func(t *testing.T) {
-		checkVerifiedLayer(l2ID)
+		checkVerifiedLayer(t, alg.trtl, l2ID)
 
 		// create and process several more layers
 		// but don't save layer input vectors, so local opinion is abstain
@@ -1685,21 +1684,53 @@ func TestHealing(t *testing.T) {
 		alg.trtl.GoodBlocksIndex = make(map[types.BlockID]struct{}, 0)
 
 		alg.trtl.selfHealing(context.TODO(), l4ID)
-		checkVerifiedLayer(l3ID)
+		checkVerifiedLayer(t, alg.trtl, l3ID)
 	})
+}
 
-	//l5ID := l4ID.Add(1)
+// can heal when half of votes are missing (doesn't meet threshold)
+// this requires waiting an epoch or two before the active set size is reduced enough to cross the threshold
+// see https://github.com/spacemeshos/go-spacemesh/issues/2497 for an idea about making this faster
+func TestHealingAfterPartition(t *testing.T) {
+	log.DebugMode(true)
+	//r := require.New(t)
 
-	// can heal when half of votes are missing (doesn't meet threshold)
-	//t.Run("can heal when lots of votes are missing", func(t *testing.T) {
-	//	checkVerifiedLayer(l3ID)
-	//	alg.trtl.Last = alg.trtl.Hdist + l4ID
-	//	alg.trtl.selfHealing(context.TODO(), l5ID)
-	//	checkVerifiedLayer(l4ID)
-	//})
+	mdb := getInMemMesh()
+	alg := defaultAlgorithm(t, mdb)
+	l0ID := types.GetEffectiveGenesis()
 
-	// can "re-heal" when new information arrives (simulate partition ending/reorg)
+	// use a larger number of blocks per layer to give us more scope for testing
+	goodLayerSize := defaultTestLayerSize * 10
+	alg.trtl.AvgLayerSize = goodLayerSize
 
+	// create several good layers
+	makeAndProcessLayer(t, l0ID.Add(1), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(2), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(3), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(4), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(5), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
+	checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
+
+	// create a few layers with half the number of blocks
+	makeAndProcessLayer(t, l0ID.Add(6), alg.trtl, goodLayerSize/2, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(7), alg.trtl, goodLayerSize/2, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(8), alg.trtl, goodLayerSize/2, mdb, mdb.LayerBlockIds)
+
+	// verification should fail, global opinion should be abstain since not enough votes
+	checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
+
+	// once assumptions are restored and number of blocks increases again, healing should start
+	makeAndProcessLayer(t, l0ID.Add(9), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
+	//makeAndProcessLayer(t, l0ID.Add(10), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
+	//makeAndProcessLayer(t, l0ID.Add(11), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
+	//makeAndProcessLayer(t, l0ID.Add(12), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
+	//makeAndProcessLayer(t, l0ID.Add(13), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
+	//makeAndProcessLayer(t, l0ID.Add(14), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
+	//makeAndProcessLayer(t, l0ID.Add(15), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
+	//makeAndProcessLayer(t, l0ID.Add(16), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
+	checkVerifiedLayer(t, alg.trtl, l0ID.Add(5))
+
+	// continue for two epochs until active set size is reduced
 }
 
 func TestRerunAndRevert(t *testing.T) {
