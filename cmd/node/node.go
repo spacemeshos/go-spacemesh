@@ -611,7 +611,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	}
 
 	database.SwitchCreationContext(dbStorepath, "") // currently only blockbuilder uses this mechanism
-	blockProducer := miner.NewBlockBuilder(minerCfg, sgn, swarm, clock.Subscribe(), msh, trtl, rabbit, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
+	blockProducer := miner.NewBlockBuilder(minerCfg, sgn, swarm, clock.Subscribe(), msh, trtl, blockOracle, syncer, stateAndMeshProjector, app.txPool, app.addLogger(BlockBuilderLogger, lg))
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))
 

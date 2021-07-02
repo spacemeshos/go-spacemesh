@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
@@ -49,10 +48,6 @@ type baseBlockProvider interface {
 	BaseBlock(context.Context) (types.BlockID, [][]types.BlockID, error)
 }
 
-type atxDb interface {
-	GetEpochAtxs(types.EpochID) []types.ATXID
-}
-
 // BlockBuilder is the struct that orchestrates the building of blocks, it is responsible for receiving hare results.
 // referencing txs and atxs from mem pool and referencing them in the created block
 // it is also responsible for listening to the clock and querying when a block should be created according to the block oracle
@@ -64,8 +59,6 @@ type BlockBuilder struct {
 	hdist           types.LayerID
 	beginRoundEvent chan types.LayerID
 	stopChan        chan struct{}
-	hareResult      hareResultProvider
-	AtxDb           atxDb
 	TransactionPool txPool
 	mu              sync.Mutex
 	network         p2p.Service
@@ -99,12 +92,10 @@ func NewBlockBuilder(
 	beginRoundEvent chan types.LayerID,
 	orph meshProvider,
 	bbp baseBlockProvider,
-	hare hareResultProvider,
 	blockOracle blockOracle,
 	syncer syncer,
 	projector projector,
 	txPool txPool,
-	atxDB atxDb,
 	lg log.Log,
 ) *BlockBuilder {
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(config.MinerID.Key)))
@@ -122,7 +113,6 @@ func NewBlockBuilder(
 		rnd:             rand.New(rand.NewSource(int64(seed))),
 		beginRoundEvent: beginRoundEvent,
 		stopChan:        make(chan struct{}),
-		hareResult:      hare,
 		mu:              sync.Mutex{},
 		network:         net,
 		meshProvider:    orph,
@@ -133,7 +123,6 @@ func NewBlockBuilder(
 		atxsPerBlock:    config.AtxsPerBlock,
 		txsPerBlock:     config.TxsPerBlock,
 		projector:       projector,
-		AtxDb:           atxDB,
 		TransactionPool: txPool,
 		db:              db,
 		layerPerEpoch:   config.LayersPerEpoch,
@@ -167,101 +156,8 @@ func (t *BlockBuilder) Close() error {
 	return nil
 }
 
-type hareResultProvider interface {
-	GetResult(types.LayerID) ([]types.BlockID, error)
-}
-
 type meshProvider interface {
-	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
-	GetOrphanBlocksBefore(types.LayerID) ([]types.BlockID, error)
-	GetBlock(types.BlockID) (*types.Block, error)
-	AddBlockWithTxs(*types.Block) error
-}
-
-func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID, top types.LayerID) {
-	if hdist == 0 {
-		log.Panic("hdist cannot be zero")
-	}
-
-	if id < types.GetEffectiveGenesis() {
-		log.Panic("cannot get range from before effective genesis %v g: %v", id, types.GetEffectiveGenesis())
-	}
-
-	bottom = types.GetEffectiveGenesis()
-	top = id - 1
-	if id > hdist+bottom {
-		bottom = id - hdist
-	}
-
-	return bottom, top
-}
-
-func filterUnknownBlocks(blocks []types.BlockID, validate func(id types.BlockID) (*types.Block, error)) []types.BlockID {
-	var filtered []types.BlockID
-	for _, b := range blocks {
-		if _, e := validate(b); e == nil {
-			filtered = append(filtered, b)
-		}
-	}
-
-	return filtered
-}
-
-// TODO: currently unused, other than in tests
-func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
-	var votes []types.BlockID
-
-	// if genesis
-	if id <= types.GetEffectiveGenesis() {
-		return nil, errors.New("cannot create blockBytes in genesis layer")
-	}
-
-	// if genesis+1
-	if id == types.GetEffectiveGenesis()+1 {
-		return append(votes, mesh.GenesisBlock().ID()), nil
-	}
-
-	// not genesis, get from hare
-	bottom, top := calcHdistRange(id, t.hdist)
-
-	// first try to get the hare result for this layer and use that as our vote. if that fails, we just vote for the
-	// whole layer (i.e., all of the blocks we received).
-	if res, err := t.hareResult.GetResult(bottom); err != nil { // no result for bottom, take the whole layer
-		t.With().Warning("could not get hare result for bottom layer, adding votes for the whole layer instead",
-			log.Err(err),
-			log.FieldNamed("bottom", bottom),
-			log.FieldNamed("top", top),
-			log.FieldNamed("hdist", t.hdist))
-		ids, e := t.meshProvider.LayerBlockIds(bottom)
-		if e != nil {
-			t.With().Error("could not get block ids for layer", bottom, log.Err(e))
-			return nil, e
-		}
-		t.With().Warning("adding votes for all blocks in layer", log.Int("num_blocks", len(ids)))
-
-		// set votes to whole layer
-		votes = ids
-	} else { // got result, just set
-		votes = res
-	}
-
-	// add rest of hdist range
-	for i := bottom + 1; i <= top; i++ {
-		res, err := t.hareResult.GetResult(i)
-		if err != nil {
-			t.With().Warning("could not get hare result for layer in hdist range, not adding votes for layer",
-				i,
-				log.Err(err),
-				log.FieldNamed("bottom", bottom),
-				log.FieldNamed("top", top),
-				log.FieldNamed("hdist", t.hdist))
-			continue
-		}
-		votes = append(votes, res...)
-	}
-
-	votes = filterUnknownBlocks(votes, t.meshProvider.GetBlock)
-	return votes, nil
+	AddBlockWithTxs(blk *types.Block) error
 }
 
 func getEpochKey(ID types.EpochID) []byte {
@@ -349,26 +245,6 @@ func (t *BlockBuilder) createBlock(ctx context.Context, id types.LayerID, atxID 
 
 	t.Event().Info("block created", bl.Fields()...)
 	return bl, nil
-}
-
-func selectAtxs(atxs []types.ATXID, atxsPerBlock int) []types.ATXID {
-	if len(atxs) == 0 { // no atxs to pick from
-		return atxs
-	}
-
-	if len(atxs) <= atxsPerBlock { // no need to choose
-		return atxs // take all
-	}
-
-	// we have more than atxsPerBlock, choose randomly
-	selected := make([]types.ATXID, 0)
-	for i := 0; i < atxsPerBlock; i++ {
-		idx := i + rand.Intn(len(atxs)-i)       // random index in [i, len(atxs))
-		selected = append(selected, atxs[idx])  // select atx at idx
-		atxs[i], atxs[idx] = atxs[idx], atxs[i] // swap selected with i so we don't choose it again
-	}
-
-	return selected
 }
 
 func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
