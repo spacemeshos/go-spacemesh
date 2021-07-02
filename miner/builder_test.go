@@ -77,7 +77,6 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	bs := []*types.Block{block1, block2, block3, block4}
 	builder := createBlockBuilder("a", n, bs)
 	builder.TransactionPool = txMempool
-	//builder := NewBlockBuilder(types.NodeID{}, signing.NewEdSigner(), n, beginRound, 5, MockCoin{}, orphans, hare, &mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, selectCount, layersPerEpoch, mockProjector, log.New(n.String(), "", ""))
 
 	err := builder.Start(context.TODO())
 	assert.NoError(t, err)
@@ -96,7 +95,6 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 }
 
 func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
-
 	net := service.NewSimulator()
 	n1 := net.NewNode()
 	n2 := net.NewNode()
@@ -151,7 +149,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	st := []*types.Block{block1, block2, block3}
 	builder := createBlockBuilder("a", n, st)
 	builder.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
-		return types.BlockID{0}, [][]types.BlockID{[]types.BlockID{}, blockset, []types.BlockID{}}, nil
+		return types.BlockID{0}, [][]types.BlockID{{}, blockset, {}}, nil
 	}}
 	builder.TransactionPool = txPool
 	builder.beginRoundEvent = beginRound
@@ -207,7 +205,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 	st := []*types.Block{block1, block2, block3}
 	builder := createBlockBuilder("a", n, st)
 	builder.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
-		return types.BlockID{0}, [][]types.BlockID{[]types.BlockID{block4.ID()}, hareRes, []types.BlockID{}}, nil
+		return types.BlockID{0}, [][]types.BlockID{{block4.ID()}, hareRes, {}}, nil
 	}}
 
 	recipient := types.BytesToAddress([]byte{0x01})
@@ -290,55 +288,6 @@ var (
 	atx4 = types.ATXID(four)
 	atx5 = types.ATXID(five)
 )
-
-var (
-	b1 = types.NewExistingBlock(1, []byte{1}, nil)
-	b2 = types.NewExistingBlock(1, []byte{2}, nil)
-	b3 = types.NewExistingBlock(1, []byte{3}, nil)
-	b4 = types.NewExistingBlock(1, []byte{4}, nil)
-	b5 = types.NewExistingBlock(1, []byte{5}, nil)
-	b6 = types.NewExistingBlock(1, []byte{6}, nil)
-	b7 = types.NewExistingBlock(1, []byte{7}, nil)
-)
-
-func genBlockIds() []types.BlockID {
-	bids := []types.BlockID{b1.ID(), b2.ID(), b3.ID(), b4.ID(), b5.ID(), b6.ID(), b7.ID()}
-	for i := 0; i < len(bids)*2; i++ {
-		l := rand.Int() % len(bids)
-		j := rand.Int() % len(bids)
-		bids[l], bids[j] = bids[j], bids[l]
-	}
-
-	return bids
-}
-
-type mockResult struct {
-	err error
-	ids map[types.LayerID][]types.BlockID
-}
-
-func newMockResult() *mockResult {
-	m := &mockResult{}
-	m.ids = make(map[types.LayerID][]types.BlockID)
-	return m
-}
-
-func (m *mockResult) set(id types.LayerID) []types.BlockID {
-	bids := genBlockIds()
-	m.ids[id] = bids
-
-	return bids
-}
-
-func (m *mockResult) GetResult(id types.LayerID) ([]types.BlockID, error) {
-	bl, ok := m.ids[id]
-	if ok {
-		return bl, nil
-	}
-	return nil, m.err
-}
-
-var errExample = errors.New("example errExample")
 
 type mockMesh struct {
 	b   []*types.Block
@@ -432,36 +381,22 @@ func TestBlockBuilder_notSynced(t *testing.T) {
 	builder.syncer = ms
 	builder.blockOracle = mbo
 	builder.beginRoundEvent = beginRound
-	//builder := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: bs}, hare, mbo, mockTxProcessor{true}, &mockAtxValidator{}, ms, selectCount, selectCount, layersPerEpoch, mockProjector, log.NewDefault(t.Name()))
 	go builder.createBlockLoop(context.TODO())
 	beginRound <- 1
 	beginRound <- 2
 	r.Equal(0, mbo.calls)
 }
 
-var (
-	block1ID = types.NewExistingBlock(1, []byte{1}, nil).ID()
-	block2ID = types.NewExistingBlock(1, []byte{2}, nil).ID()
-	block3ID = types.NewExistingBlock(1, []byte{3}, nil).ID()
-	block4ID = types.NewExistingBlock(1, []byte{4}, nil).ID()
-)
-
-// TODO: Test on bad baseblocks
-//
-//AgainstDiff:      diffs[0],
-//ForDiff:          diffs[1],
-//NeutralDiff:      diffs[2],
-
 type mockBBP struct {
 	f func() (types.BlockID, [][]types.BlockID, error)
 }
 
 func (b *mockBBP) BaseBlock(context.Context) (types.BlockID, [][]types.BlockID, error) {
-	// XXX: for now try to not brake all tests
+	// XXX: for now try to not break all tests
 	if b.f != nil {
 		return b.f()
 	}
-	return types.BlockID{0}, [][]types.BlockID{[]types.BlockID{}, []types.BlockID{}, []types.BlockID{}}, nil
+	return types.BlockID{0}, [][]types.BlockID{{}, {}, {}}, nil
 }
 
 func createBlockBuilder(ID string, n *service.Node, meshBlocks []*types.Block) *BlockBuilder {
@@ -474,7 +409,7 @@ func createBlockBuilder(ID string, n *service.Node, meshBlocks []*types.Block) *
 		TxsPerBlock:    selectCount,
 	}
 	bb := NewBlockBuilder(cfg, signing.NewEdSigner(), n, beginRound, &mockMesh{b: meshBlocks}, &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
-		return types.BlockID{}, [][]types.BlockID{[]types.BlockID{}, []types.BlockID{}, []types.BlockID{}}, nil
+		return types.BlockID{}, [][]types.BlockID{{}, {}, {}}, nil
 	}}, &mockBlockOracle{}, &mockSyncer{}, mockProjector, nil, log.NewDefault("mock_builder_"+"a"))
 	return bb
 }
