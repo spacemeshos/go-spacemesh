@@ -66,7 +66,7 @@ func (pre *preRoundTracker) CanProveValue(value types.BlockID) bool {
 }
 
 // CanProveSet returns true if the give set is provable, false otherwise.
-// a set is said to be provable if all his values are provable.
+// a set is said to be provable if all its values are provable.
 func (pre *preRoundTracker) CanProveSet(set *Set) bool {
 	// a set is provable iff all its Values are provable
 	for bid := range set.values {

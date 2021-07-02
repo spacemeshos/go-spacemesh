@@ -264,13 +264,13 @@ func Test_ActiveSetSize(t *testing.T) {
 
 		return createMapWithSize(5), errors.New("fake err")
 	}
-	activeSetSize, err := o.activeSetSize(l + 19)
+	activeSetSize, err := o.activeSetSize(context.TODO(), l+19)
 	assert.Error(t, err)
 	assert.Equal(t, uint32(0), activeSetSize)
 }
 
 func assertActiveSetSize(t *testing.T, o *Oracle, expected uint32, l types.LayerID) {
-	activeSetSize, err := o.activeSetSize(l)
+	activeSetSize, err := o.activeSetSize(context.TODO(), l)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, activeSetSize)
 }
@@ -335,13 +335,13 @@ func TestOracle_activeSetSizeCache(t *testing.T) {
 	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return createMapWithSize(17), nil
 	}
-	v1, e := o.activeSetSize(defSafety + 100)
+	v1, e := o.activeSetSize(context.TODO(), defSafety+100)
 	r.NoError(e)
 
 	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return createMapWithSize(19), nil
 	}
-	v2, e := o.activeSetSize(defSafety + 100)
+	v2, e := o.activeSetSize(context.TODO(), defSafety+100)
 	r.NoError(e)
 	r.Equal(v1, v2)
 }
@@ -379,11 +379,11 @@ func TestOracle_actives(t *testing.T) {
 	r := require.New(t)
 	types.SetLayersPerEpoch(10)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
-	_, err := o.actives(1)
+	_, err := o.actives(context.TODO(), 1)
 	r.EqualError(err, errGenesis.Error())
 
 	o.blocksProvider = mockBlocksProvider{mp: make(map[types.BlockID]struct{})}
-	_, err = o.actives(100)
+	_, err = o.actives(context.TODO(), 100)
 	r.NoError(err)
 
 	o.blocksProvider = mockBlocksProvider{}
@@ -392,9 +392,9 @@ func TestOracle_actives(t *testing.T) {
 		return mp, nil
 	}
 	o.activesCache = newMockCacher()
-	v, err := o.actives(100)
+	v, err := o.actives(context.TODO(), 100)
 	r.NoError(err)
-	v2, err := o.actives(100)
+	v2, err := o.actives(context.TODO(), 100)
 	r.NoError(err)
 	r.Equal(v, v2)
 	for k := range mp {
@@ -405,7 +405,7 @@ func TestOracle_actives(t *testing.T) {
 	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return createMapWithSize(9), errFoo
 	}
-	_, err = o.actives(200)
+	_, err = o.actives(context.TODO(), 200)
 	r.Equal(errFoo, err)
 }
 
@@ -422,12 +422,12 @@ func TestOracle_concurrentActives(t *testing.T) {
 
 	// outstanding probability for concurrent access to calc active set size
 	for i := 0; i < 100; i++ {
-		go o.actives(100)
+		go o.actives(context.TODO(), 100)
 	}
 
 	// make sure we wait at least two calls duration
-	o.actives(100)
-	o.actives(100)
+	o.actives(context.TODO(), 100)
+	o.actives(context.TODO(), 100)
 
 	r.Equal(1, mc.numAdd)
 }
@@ -464,7 +464,7 @@ func TestOracle_activesSafeLayer(t *testing.T) {
 	mp2[block1.ID()] = struct{}{}
 	bmp[rsl] = mp2
 	o.blocksProvider = &bProvider{bmp}
-	mpRes, err := o.actives(lyr)
+	mpRes, err := o.actives(context.TODO(), lyr)
 	r.NotNil(mpRes)
 	r.NoError(err)
 }
@@ -492,7 +492,7 @@ func TestOracle_activesNoContextuallyValid(t *testing.T) {
 	mp1 := make(map[types.BlockID]struct{})
 	bmp[rsl] = mp1
 	o.blocksProvider = &bProvider{bmp}
-	mpRes, err := o.actives(lyr)
+	mpRes, err := o.actives(context.TODO(), lyr)
 
 	// This should not fail but it should return an empty set
 	r.NoError(err)

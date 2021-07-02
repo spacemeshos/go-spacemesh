@@ -165,14 +165,14 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	return val, nil
 }
 
-func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
-	actives, err := o.actives(layer)
+func (o *Oracle) activeSetSize(ctx context.Context, layer types.LayerID) (uint32, error) {
+	actives, err := o.actives(ctx, layer)
 	if err != nil {
 		if err == errGenesis { // we are in genesis
 			return uint32(o.genesisActiveSetSize), nil
 		}
 
-		o.With().Error("activeSetSize erred while calling actives func", log.Err(err), layer)
+		o.WithContext(ctx).With().Error("activeSetSize erred while calling actives func", log.Err(err), layer)
 		return 0, err
 	}
 
@@ -200,7 +200,7 @@ func (o *Oracle) Eligible(ctx context.Context, layer types.LayerID, round int32,
 	}
 
 	// get active set size
-	activeSetSize, err := o.activeSetSize(layer)
+	activeSetSize, err := o.activeSetSize(ctx, layer)
 	if err != nil {
 		return false, err
 	}
@@ -242,11 +242,12 @@ func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round int32) ([
 }
 
 // Returns a map of all active nodes in the specified layer id
-func (o *Oracle) actives(layer types.LayerID) (activeMap map[string]struct{}, err error) {
+func (o *Oracle) actives(ctx context.Context, layer types.LayerID) (activeMap map[string]struct{}, err error) {
+	logger := o.WithContext(ctx)
 	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	safeEp := sl.GetEpoch()
 
-	o.With().Info("safe layer and epoch", sl, safeEp)
+	logger.With().Info("safe layer and epoch", sl, safeEp)
 	// check genesis
 	// genesis is for 3 epochs with hare since it can only count active identities found in blocks
 	if safeEp < 3 {
@@ -272,7 +273,7 @@ func (o *Oracle) actives(layer types.LayerID) (activeMap map[string]struct{}, er
 	// no contextually valid blocks: for now we just fall back on an empty active set. this will go away when we
 	// upgrade hare eligibility to use the tortoise beacon.
 	if len(mp) == 0 {
-		o.With().Warning("no contextually valid blocks in layer, using active set of size zero",
+		logger.With().Warning("no contextually valid blocks in layer, using active set of size zero",
 			layer,
 			layer.GetEpoch(),
 			log.FieldNamed("safe_layer_id", sl),
@@ -282,7 +283,7 @@ func (o *Oracle) actives(layer types.LayerID) (activeMap map[string]struct{}, er
 
 	activeMap, err = o.getActiveSet(safeEp-1, mp)
 	if err != nil {
-		o.With().Error("could not retrieve active set size",
+		logger.With().Error("could not retrieve active set size",
 			log.Err(err),
 			layer,
 			layer.GetEpoch(),
@@ -303,7 +304,7 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID strin
 	defer func() {
 		o.WithContext(ctx).With().Debug("hare oracle active identity check complete")
 	}()
-	actives, err := o.actives(layer)
+	actives, err := o.actives(ctx, layer)
 	if err != nil {
 		if err == errGenesis { // we are in genesis
 			return true, nil // all ids are active in genesis
