@@ -107,7 +107,7 @@ type responseBatch struct {
 // Config is the configuration file of the Fetch component
 type Config struct {
 	BatchTimeout         int // in seconds
-	MaxRetiresForPeer    int
+	MaxRetriesForPeer    int
 	BatchSize            int
 	RequestTimeout       int // in seconds
 	MaxRetriesForRequest int
@@ -117,7 +117,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		BatchTimeout:         1,
-		MaxRetiresForPeer:    2,
+		MaxRetriesForPeer:    2,
 		BatchSize:            20,
 		RequestTimeout:       10,
 		MaxRetriesForRequest: 20,
@@ -290,7 +290,7 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 	var requestBatch requestBatch
 	err := types.BytesToInterface(data, &requestBatch)
 	if err != nil {
-		f.log.Error("cannot parse request %v", err)
+		f.log.With().Error("cannot parse request", log.Err(err))
 		return []byte{}
 	}
 	resBatch := responseBatch{
@@ -304,12 +304,12 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 		db, ok := f.dbs[r.Hint]
 		f.dbLock.RUnlock()
 		if !ok {
-			f.log.Warning("db not found %v", r.Hint)
+			f.log.With().Warning("hint not found in database", log.String("hint", string(r.Hint)))
 			continue
 		}
 		res, err := db.Get(r.Hash.Bytes())
 		if err != nil {
-			f.log.With().Info("remote peer requested non existing hash", r.Hash, log.Err(err))
+			f.log.With().Debug("peer requested nonexistent hash", r.Hash, log.Err(err))
 			continue
 		} else {
 			f.log.With().Debug("responded to hash request", r.Hash, log.Int("bytes", len(res)))
@@ -385,20 +385,24 @@ func (f *Fetch) receiveResponse(data []byte) {
 		f.activeReqM.Unlock()
 	}
 
-	//iterate all requests that didn't return value from peer and notify - they will be retried for MaxRetriesForRequest
+	// iterate all requests that didn't return value from peer and notify
+	// they will be retried for MaxRetriesForRequest
 	err = fmt.Errorf("hash did not return")
 	for h := range batchMap {
 		if f.stopped() {
 			return
 		}
-		f.log.Info("%v hash was not found in response %v", batchMap[h].Hint, h.ShortString())
+		f.log.With().Debug("hash not found in response", log.String("hint", string(batchMap[h].Hint)), h)
 		f.activeReqM.Lock()
 		reqs := f.activeRequests[h]
 		invalidatedRequests := 0
 		for i, req := range reqs {
 			req.retries++
 			if req.retries > f.cfg.MaxRetriesForRequest {
-				f.log.Error("returning error to request %v %v %v %p", req.hash.ShortString(), len(req.returnChan), len(reqs), req)
+				f.log.With().Error("returning error to request",
+					req.hash,
+					log.Int("return_chan", len(req.returnChan)),
+					log.Int("count_reqs", len(reqs)))
 				req.returnChan <- HashDataPromiseResult{
 					Err:     err,
 					Hash:    req.hash,
@@ -475,7 +479,7 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 		// if call succeeded, continue to other requests
 		if err != nil {
 			retries++
-			if retries > f.cfg.MaxRetiresForPeer {
+			if retries > f.cfg.MaxRetriesForPeer {
 				f.handleHashError(batch.ID, ErrCouldNotSend(fmt.Errorf("could not send message")))
 				break
 			}

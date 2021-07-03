@@ -879,7 +879,7 @@ func (app *SpacemeshApp) stopServices() {
 	}
 
 	if app.layerFetch != nil {
-		app.log.Info("%v closing layerFetch", app.nodeID.Key)
+		app.log.Info("closing layerFetch")
 		app.layerFetch.Close()
 	}
 

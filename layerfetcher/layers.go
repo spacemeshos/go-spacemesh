@@ -179,7 +179,7 @@ type LayerPromiseResult struct {
 func (l *Logic) LayerHashReqReceiver(ctx context.Context, msg []byte) []byte {
 	lyr := types.LayerID(util.BytesToUint64(msg))
 	h := l.layerDB.GetLayerHash(lyr)
-	l.log.Info("got layer hash request %v, responding with %v", lyr, h.Hex())
+	l.log.WithContext(ctx).With().Info("responding to layer hash request", lyr, h)
 	return h.Bytes()
 }
 
@@ -190,7 +190,7 @@ func (l *Logic) epochATXsReceiver(ctx context.Context, msg []byte) []byte {
 	atxs := l.atxIds.GetEpochAtxs(lyr)
 	bts, err := types.InterfaceToBytes(atxs)
 	if err != nil {
-		l.log.Warning("cannot find epoch atxs for epoch %v", lyr)
+		l.log.With().Warning("cannot find epoch atxs", lyr)
 	}
 	return bts
 }

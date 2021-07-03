@@ -277,7 +277,7 @@ func TestFetch_GetHash_failNetwork(t *testing.T) {
 		priority:             0,
 		validateResponseHash: false,
 		hint:                 hint,
-		returnChan:           make(chan HashDataPromiseResult, f.cfg.MaxRetiresForPeer),
+		returnChan:           make(chan HashDataPromiseResult, f.cfg.MaxRetriesForPeer),
 	}
 	f.activeRequests[h1] = []*request{&request1, &request1, &request1}
 	f.requestHashBatchFromPeers()
@@ -293,7 +293,7 @@ func TestFetch_requestHashFromPeers_BatchRequestMax(t *testing.T) {
 	h3 := randomHash()
 	f, net := customFetch(Config{
 		BatchTimeout:      1,
-		MaxRetiresForPeer: 2,
+		MaxRetriesForPeer: 2,
 		BatchSize:         2,
 	})
 

@@ -145,6 +145,7 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 	cfg.HARE.WakeupDelta = 5
 	cfg.HARE.ExpectedLeaders = 5
 	cfg.HARE.SuperHare = true
+	//cfg.LayerAvgSize = 10
 	cfg.LayerAvgSize = 5
 	cfg.LayersPerEpoch = 3
 	cfg.TxsPerBlock = 100
@@ -159,7 +160,7 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 	cfg.SyncValidationDelta = 5
 
 	cfg.FETCH.RequestTimeout = 10
-	cfg.FETCH.MaxRetiresForPeer = 5
+	cfg.FETCH.MaxRetriesForPeer = 5
 	cfg.FETCH.BatchSize = 5
 	cfg.FETCH.BatchTimeout = 5
 
