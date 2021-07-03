@@ -423,7 +423,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		log.FieldNamed("current_layer", b.layerClock.GetCurrentLayer()),
 	)
 	if err := b.waitOrStop(b.layerClock.AwaitLayer(pubEpoch.FirstLayer())); err != nil {
-		b.log.With().Error("failed to wait of publication epoch", log.Err(err))
+		b.log.With().Error("failed to wait for publication epoch", log.Err(err))
 		return err
 	}
 	b.log.Info("publication epoch has arrived!")

@@ -138,7 +138,10 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	// when we try to allocate more database files. Wrap this context neatly in an inline func.
 	var oldRoot types.Hash32
 	func() {
-		defer GracefulShutdown(suite.apps)
+		// wrap so apps list is lazily evaluated
+		defer func() {
+			GracefulShutdown(suite.apps)
+		}()
 		defer suite.ClosePoet()
 
 		for _, a := range suite.apps {
@@ -362,12 +365,12 @@ func healingTester(dependencies []int) TestScenario {
 			// make sure we don't attempt to shut down the same apps twice
 			suite.apps = suite.apps[:firstAppToKill]
 
-			lastVerifiedLayer = suite.apps[0].mesh.ProcessedLayer()
+			lastVerifiedLayer = suite.apps[0].mesh.LatestLayerInState()
 		})
 
 		// now wait for healing to kick in and advance the verified layer
 		for i, app := range suite.apps {
-			lyr := app.mesh.ProcessedLayer()
+			lyr := app.mesh.LatestLayerInState()
 			log.Info("app %d last verified layer is %d", i, lyr)
 			if lyr <= lastVerifiedLayer {
 				return false
@@ -461,6 +464,8 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	layersPerEpoch := suite.apps[0].Config.LayersPerEpoch
 	datamap := make(map[string]*nodeData)
 
+	// LANE TODO: update to handle killed nodes
+
 	// assert all nodes validated untilLayer-1
 	for _, ap := range suite.apps {
 		curNodeLastLayer := ap.mesh.ProcessedLayer()
@@ -497,7 +502,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 				continue
 			}
 
-			assert.Equal(suite.T(), len(d.layertoblocks), len(d2.layertoblocks), "%v has not matching layer to %v. %v not %v", i, i2, len(d.layertoblocks), len(d2.layertoblocks))
+			assert.Equal(suite.T(), len(d.layertoblocks), len(d2.layertoblocks), "%v layer block count mismatch with %v: %v not %v", i, i2, len(d.layertoblocks), len(d2.layertoblocks))
 
 			for l, bl := range d.layertoblocks {
 				assert.Equal(suite.T(), len(bl), len(d2.layertoblocks[l]),
@@ -513,20 +518,20 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 
 	// assuming all nodes have the same results
 	layerAvgSize := suite.apps[0].Config.LayerAvgSize
-	patient := datamap[suite.apps[0].nodeID.Key]
+	nodedata := datamap[suite.apps[0].nodeID.Key]
 
-	lastLayer := len(patient.layertoblocks) + 5
-	log.Info("patient %v", suite.apps[0].nodeID.ShortString())
+	lastLayer := len(nodedata.layertoblocks) + 5
+	log.Info("node %v", suite.apps[0].nodeID.ShortString())
 
 	totalBlocks := 0
-	for id, l := range patient.layertoblocks {
+	for id, l := range nodedata.layertoblocks {
 		totalBlocks += len(l)
-		log.Info("patient %v layer %v, blocks %v", suite.apps[0].nodeID.ShortString(), id, len(l))
+		log.Info("node %v layer %v, blocks %v", suite.apps[0].nodeID.ShortString(), id, len(l))
 	}
 
 	genesisBlocks := 0
 	for i := 0; i < layersPerEpoch*2; i++ {
-		if l, ok := patient.layertoblocks[types.LayerID(i)]; ok {
+		if l, ok := nodedata.layertoblocks[types.LayerID(i)]; ok {
 			genesisBlocks += len(l)
 		}
 	}
@@ -543,7 +548,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	expectedTotalBlocks := (totalEpochs - 2) * expectedBlocksPerEpoch
 	actualTotalBlocks := totalBlocks - genesisBlocks
 	assert.Equal(suite.T(), expectedTotalBlocks, actualTotalBlocks,
-		fmt.Sprintf("not good num of blocks got: %v, want: %v. totalBlocks: %v, genesisBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v datamap: %v",
+		fmt.Sprintf("got unexpected block count! got: %v, want: %v. totalBlocks: %v, genesisBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v datamap: %v",
 			actualTotalBlocks, expectedTotalBlocks, totalBlocks, genesisBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, datamap))
 
 	totalWeightAllEpochs := calcTotalWeight(assert.New(suite.T()), suite.apps)
