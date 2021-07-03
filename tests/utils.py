@@ -262,7 +262,7 @@ def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME,
     return es_sleep_time + kibana_sleep_time
 
 
-def get_kibana_ip(kibana_dep_name, namespace, retries=240, sleep_interval=1):
+def get_kibana_ip(kibana_dep_name, namespace, retries=900, sleep_interval=1):
     def get_kibana_service(services_):
         for serv in services_.items:
             if serv.metadata.name == kibana_dep_name:
