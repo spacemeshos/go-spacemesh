@@ -417,9 +417,8 @@ func (l *Logic) receiveBlockHashes(ctx context.Context, layer types.LayerID, dat
 			l.log.With().Error("received error for layer id", log.Err(retErr))
 		}
 
-		ivErr := l.GetInputVector(layer)
-		if ivErr != nil {
-			l.log.With().Error("received error for inputvecor of layer", log.Err(ivErr))
+		if ivErr := l.GetInputVector(layer); ivErr != nil {
+			l.log.With().Error("received error for input vector of layer", log.Err(ivErr))
 		}
 	}
 
@@ -631,7 +630,7 @@ func (l *Logic) GetPoetProof(ctx context.Context, id types.Hash32) error {
 
 // GetInputVector gets input vector data from remote peer
 func (l *Logic) GetInputVector(id types.LayerID) error {
-	l.log.With().Info("getting inputvector for layer", id, types.CalcHash32(id.Bytes()))
+	l.log.With().Info("getting input vector for layer", id, types.CalcHash32(id.Bytes()))
 	res := <-l.fetcher.GetHash(types.CalcHash32(id.Bytes()), IVDB, false)
 	if res.Err != nil {
 		return res.Err
