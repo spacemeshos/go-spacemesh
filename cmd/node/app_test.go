@@ -168,7 +168,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 			suite.T().Fatalf("failed to start poet server: %v", err)
 		}
 
-		timeout := time.After(6 * time.Minute)
+		timeout := time.After(10 * time.Minute)
 
 		// Run setup first. We need to allow this to timeout, and monitor the failure channel too,
 		// as this can also loop forever.

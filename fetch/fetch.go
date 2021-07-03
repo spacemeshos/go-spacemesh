@@ -309,10 +309,10 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 		}
 		res, err := db.Get(r.Hash.Bytes())
 		if err != nil {
-			f.log.Warning("remote peer requested non existing hash %v %v", r.Hash.Hex(), err)
+			f.log.With().Info("remote peer requested non existing hash", r.Hash, log.Err(err))
 			continue
 		} else {
-			f.log.Info("responded to hash req %v bytes %v", r.Hash.ShortString(), len(res))
+			f.log.With().Debug("responded to hash request", r.Hash, log.Int("bytes", len(res)))
 		}
 		// add response to batch
 		m := responseMessage{
@@ -391,7 +391,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 		if f.stopped() {
 			return
 		}
-		f.log.Warning("%v hash was not found in response %v", batchMap[h].Hint, h.ShortString())
+		f.log.Info("%v hash was not found in response %v", batchMap[h].Hint, h.ShortString())
 		f.activeReqM.Lock()
 		reqs := f.activeRequests[h]
 		invalidatedRequests := 0
