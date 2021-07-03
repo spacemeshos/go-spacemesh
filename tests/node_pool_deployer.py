@@ -87,7 +87,7 @@ class NodePoolDep:
             cpu_per_node += 1
         # memory is equal to the number of CPUs in GB with adding additional 5GB of memory
         mem_per_node = (cpu_per_node + 5) * 1024
-        return dividor, cpu_per_node, mem_per_node
+        return dividor+4, cpu_per_node, mem_per_node
 
     @ut.timing
     def remove_node_pool(self):
