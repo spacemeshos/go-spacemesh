@@ -582,6 +582,8 @@ func TestOracleActiveSetCacheWarming(t *testing.T) {
 	r.Equal(1, int(atomic.LoadInt32(&callCount)))
 	r.Equal(1, mc.numAdd)
 	r.Equal(1, mc.numGet)
+	r.Contains(mc.data, sl1.GetEpoch())
+	r.NotContains(mc.data, sl4.GetEpoch())
 
 	// 2 layers before transition to new safe epoch: should warm cache concurrently
 	activeMap, err = o.actives(context.TODO(), firstLayer.Add(1))
@@ -589,10 +591,13 @@ func TestOracleActiveSetCacheWarming(t *testing.T) {
 	r.Len(activeMap, mapSize)
 	r.Equal(1, mc.numAdd)
 	r.Equal(2, mc.numGet)
+	r.Contains(mc.data, sl1.GetEpoch())
+	r.NotContains(mc.data, sl4.GetEpoch())
 
 	// this happens concurrently
 	r.Eventually(func() bool {
-		return atomic.LoadInt32(&callCount) == int32(2) && mc.numAdd == 2
+		_, contains := mc.data[sl4.GetEpoch()]
+		return contains && atomic.LoadInt32(&callCount) == int32(2) && mc.numAdd == 2
 	}, 2*time.Second, time.Millisecond*100)
 
 	// 1 layer before transition to new safe epoch: warming should've happened already
@@ -612,6 +617,8 @@ func TestOracleActiveSetCacheWarming(t *testing.T) {
 	r.NoError(err)
 	r.Equal(2, mc.numAdd)
 	r.Equal(3, mc.numGet)
+	r.Contains(mc.data, sl1.GetEpoch())
+	r.Contains(mc.data, sl4.GetEpoch())
 
 	// get active set first layer of new safe epoch: should be no delay
 	done2 := make(chan error)
@@ -630,4 +637,6 @@ func TestOracleActiveSetCacheWarming(t *testing.T) {
 	r.Equal(2, int(atomic.LoadInt32(&callCount)))
 	r.Equal(2, mc.numAdd)
 	r.Equal(4, mc.numGet)
+	r.Contains(mc.data, sl1.GetEpoch())
+	r.Contains(mc.data, sl4.GetEpoch())
 }

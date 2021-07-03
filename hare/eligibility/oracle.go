@@ -255,12 +255,17 @@ func (o *Oracle) actives(ctx context.Context, layer types.LayerID) (map[string]s
 	logger.With().Info("safe layer and epoch")
 
 	getBlocksAndActiveSet := func(ctx context.Context, safeLayer types.LayerID) (map[string]struct{}, error) {
-		logger := logger.WithContext(ctx)
+		safeEpoch := safeLayer.GetEpoch()
+		logger := o.WithContext(ctx).WithFields(
+			log.FieldNamed("safe_layer", safeLayer),
+			log.FieldNamed("safe_epoch", safeEpoch))
+
 		// build a map of all blocks in the safe layer
-		mp, err := o.blocksProvider.ContextuallyValidBlock(sl)
+		mp, err := o.blocksProvider.ContextuallyValidBlock(safeLayer)
 		if err != nil {
 			return nil, err
 		}
+		logger.Debug("contextually valid blocks in safe layer", log.Int("count", len(mp)))
 
 		// no contextually valid blocks: for now we just fall back on an empty active set. this will go away when we
 		// upgrade hare eligibility to use the tortoise beacon.
@@ -269,21 +274,16 @@ func (o *Oracle) actives(ctx context.Context, layer types.LayerID) (map[string]s
 				layer,
 				layer.GetEpoch(),
 				log.FieldNamed("safe_layer_id", sl),
-				log.FieldNamed("safe_epoch_id", safeEp))
+				log.FieldNamed("safe_epoch_id", safeEpoch))
 			return nil, nil
 		}
 
-		activeMap, err := o.getActiveSet(ctx, safeEp-1, mp)
+		// the active set targeting epoch N is the active set as epoch N-1
+		activeMap, err := o.getActiveSet(ctx, safeEpoch-1, mp)
 		if err != nil {
-			logger.With().Error("could not retrieve active set size",
-				log.Err(err),
-				layer,
-				layer.GetEpoch(),
-				log.FieldNamed("safe_layer_id", sl),
-				log.FieldNamed("safe_epoch_id", safeEp))
 			return nil, err
 		}
-
+		logger.With().Debug("active set for safe epoch", log.Int("count", len(activeMap)))
 		return activeMap, nil
 	}
 
@@ -293,6 +293,7 @@ func (o *Oracle) actives(ctx context.Context, layer types.LayerID) (map[string]s
 	defer o.lock.Unlock()
 
 	// check if we'll soon cross into a new safe epoch
+	// TODO: this won't trigger during sync/while not synced, nor if hare doesn't run for another reason.
 	slNext := roundedSafeLayer(layer.Add(cacheWarmingDistance), types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	if safeEp != slNext.GetEpoch() && o.lastSafeEpoch < slNext.GetEpoch() {
 		logger := logger.WithFields(log.FieldNamed("safe_epoch_next", slNext.GetEpoch()))
