@@ -365,22 +365,12 @@ func (sn *Node) RegisterDirectProtocolWithChannel(protocol string, ingressChanne
 	return ingressChannel
 }
 
-// Shutdown closes all node channels are remove it from the Simulator map
+// Shutdown closes all node channels and removes them from the Simulator map
 func (sn *Node) Shutdown() {
 	sn.sim.mutex.Lock()
-	// TODO: close all chans, but that makes us send on nil chan.
 	delete(sn.sim.protocolDirectHandler, sn.Info.PublicKey())
 	delete(sn.sim.protocolGossipHandler, sn.Info.PublicKey())
+	delete(sn.sim.nodes, sn.Info.PublicKey())
 	sn.sim.mutex.Unlock()
-
-	sn.sim.subLock.Lock()
-	for _, ch := range sn.sim.newPeersSubs {
-		close(ch)
-	}
-	sn.sim.newPeersSubs = nil
-	for _, ch := range sn.sim.delPeersSubs {
-		close(ch)
-	}
-	sn.sim.delPeersSubs = nil
-	sn.sim.subLock.Unlock()
+	sn.sim.publishDelPeer(sn.Info.PublicKey())
 }

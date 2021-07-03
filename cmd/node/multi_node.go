@@ -190,7 +190,7 @@ func ActivateGrpcServer(smApp *SpacemeshApp) {
 
 // GracefulShutdown stops the current services running in apps
 func GracefulShutdown(apps []*SpacemeshApp) {
-	log.Info("Graceful shutdown begin")
+	log.Info("graceful shutdown begin")
 
 	var wg sync.WaitGroup
 	for _, app := range apps {
@@ -202,7 +202,7 @@ func GracefulShutdown(apps []*SpacemeshApp) {
 	}
 	wg.Wait()
 
-	log.Info("Graceful shutdown end")
+	log.Info("graceful shutdown end")
 }
 
 type network interface {

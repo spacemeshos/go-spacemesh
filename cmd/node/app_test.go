@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -66,7 +67,7 @@ func Test_PoETHarnessSanity(t *testing.T) {
 func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.HTTPPoetClient, clock TickProvider, network network) {
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
-		dbStorepath := storeFormat + string(name)
+		dbStorepath := suite.T().TempDir()
 		database.SwitchCreationContext(dbStorepath, string(name))
 		smApp, err := InitSingleInstance(*cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, network)
 		suite.NoError(err)
@@ -86,6 +87,7 @@ var tests = []TestScenario{
 	sameRootTester([]int{0}),
 	reachedEpochTester([]int{}),
 	txWithUnorderedNonceGenerator([]int{1}),
+	healingTester([]int{}), // run last as it kills some of the running apps!
 }
 
 func (suite *AppTestSuite) TestMultipleNodes() {
@@ -145,7 +147,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 
 		ActivateGrpcServer(suite.apps[0])
 
-		if err := poetHarness.Start([]string{"127.0.0.1:9094"}); err != nil {
+		if err := poetHarness.Start([]string{fmt.Sprintf("127.0.0.1:%d", suite.apps[0].grpcAPIService.Port)}); err != nil {
 			suite.T().Fatalf("failed to start poet server: %v", err)
 		}
 
@@ -341,6 +343,40 @@ func (suite *AppTestSuite) healingWeakcoinTester() {
 			}
 		}
 	}
+}
+
+func healingTester(dependencies []int) TestScenario {
+	var lastVerifiedLayer types.LayerID
+	once := sync.Once{}
+	setup := func(suite *AppTestSuite, t *testing.T) {}
+
+	test := func(suite *AppTestSuite, t *testing.T) bool {
+		// we can't actually use setup() as it's destructive to other tests, so run setup here
+		once.Do(func() {
+			// immediately kill half of the participating nodes
+			// poet communicates with GRPC server on the first app, so leave first one alone
+			// we need to kill at least half, so round up
+			firstAppToKill := len(suite.apps) - (len(suite.apps)/2 + 1)
+			GracefulShutdown(suite.apps[firstAppToKill:])
+
+			// make sure we don't attempt to shut down the same apps twice
+			suite.apps = suite.apps[:firstAppToKill]
+
+			lastVerifiedLayer = suite.apps[0].mesh.ProcessedLayer()
+		})
+
+		// now wait for healing to kick in and advance the verified layer
+		for i, app := range suite.apps {
+			lyr := app.mesh.ProcessedLayer()
+			log.Info("app %d last verified layer is %d", i, lyr)
+			if lyr <= lastVerifiedLayer {
+				return false
+			}
+		}
+		log.Info("healing okay")
+		return true
+	}
+	return TestScenario{setup, test, dependencies}
 }
 
 func configuredTotalWeight(apps []*SpacemeshApp) uint64 {
