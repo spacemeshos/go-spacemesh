@@ -15,8 +15,11 @@ import (
 	"sync"
 )
 
-const vrfMsgCacheSize = 20 // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
-const activesCacheSize = 5 // we don't expect to handle more than two layers concurrently
+const (
+	vrfMsgCacheSize      = 20 // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
+	activesCacheSize     = 5  // we don't expect to handle more than two layers concurrently
+	cacheWarmingDistance = 2  // the number of layers before a safe epoch boundary that we warm the active set cache
+)
 
 var (
 	errGenesis = errors.New("no data about active nodes for genesis")
@@ -289,8 +292,8 @@ func (o *Oracle) actives(ctx context.Context, layer types.LayerID) (map[string]s
 	o.lock.Lock()
 	defer o.lock.Unlock()
 
-	// check if we'll cross into a new safe epoch as of the next layer
-	slNext := roundedSafeLayer(layer.Add(1), types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
+	// check if we'll soon cross into a new safe epoch
+	slNext := roundedSafeLayer(layer.Add(cacheWarmingDistance), types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	if safeEp != slNext.GetEpoch() && o.lastSafeEpoch < slNext.GetEpoch() {
 		logger := logger.WithFields(log.FieldNamed("safe_epoch_next", slNext.GetEpoch()))
 		logger.Info("next layer will cross safe epoch boundary, warming active set cache")
