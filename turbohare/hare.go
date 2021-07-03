@@ -45,7 +45,15 @@ func (h *SuperHare) Start(ctx context.Context) error {
 			case layerID := <-h.beginLayer:
 				go func() {
 					logger.With().Info("superhare got layer tick, simulating consensus process run", layerID)
-					time.Sleep(time.Second * time.Duration(h.conf.WakeupDelta+5*h.conf.RoundDuration))
+
+					// don't block here if Close was called
+					select {
+					case <-h.closeChannel:
+						logger.Info("superhare closing lingering goroutine")
+						return
+					case <-time.After(time.Second * time.Duration(h.conf.WakeupDelta+5*h.conf.RoundDuration)):
+					}
+
 					// use lowest-order bit
 					coinflip := layerID.Bytes()[0]&byte(1) == byte(1)
 					h.mesh.RecordCoinflip(ctx, layerID, coinflip)

@@ -793,19 +793,19 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 func (db *DB) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx, f service.Fetcher) error {
 	logger := db.log.WithContext(ctx)
 	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != db.goldenATXID {
-		logger.With().Info("going to fetch pos atx", atx.PositioningATX, atx.ID())
+		logger.With().Debug("going to fetch pos atx", atx.PositioningATX, atx.ID())
 		if err := f.FetchAtx(ctx, atx.PositioningATX); err != nil {
 			return err
 		}
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
-		logger.With().Info("going to fetch prev atx", atx.PrevATXID, atx.ID())
+		logger.With().Debug("going to fetch prev atx", atx.PrevATXID, atx.ID())
 		if err := f.FetchAtx(ctx, atx.PrevATXID); err != nil {
 			return err
 		}
 	}
-	logger.With().Info("done fetching references for atx", atx.ID())
+	logger.With().Debug("done fetching references for atx", atx.ID())
 
 	return nil
 }

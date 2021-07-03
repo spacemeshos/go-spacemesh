@@ -185,7 +185,7 @@ func (l *Logic) LayerHashReqReceiver(ctx context.Context, msg []byte) []byte {
 
 // epochATXsReceiver returns the layer hash for the given layer ID
 func (l *Logic) epochATXsReceiver(ctx context.Context, msg []byte) []byte {
-	l.log.Info("got epoch atxs request ")
+	l.log.Debug("got epoch atxs request")
 	lyr := types.EpochID(util.BytesToUint64(msg))
 	atxs := l.atxIds.GetEpochAtxs(lyr)
 	bts, err := types.InterfaceToBytes(atxs)
@@ -228,7 +228,7 @@ func (l *Logic) LayerHashBlocksReceiver(ctx context.Context, msg []byte) []byte 
 // fetch block ids from all peers
 // fetch ATXs and Txs per block
 func (l *Logic) PollLayer(ctx context.Context, layer types.LayerID) chan LayerPromiseResult {
-	l.log.Info("polling for layer %v", layer)
+	l.log.With().Debug("polling for layer", layer)
 	result := make(chan LayerPromiseResult, 1)
 
 	l.layerResM.Lock()
@@ -290,7 +290,7 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 		l.layerHashResM.Unlock()
 		return
 	}
-	l.log.Info("got hashes for layer, now aggregating")
+	l.log.Debug("got hashes for layer, now aggregating")
 	l.layerHashResM.Unlock()
 	errs := 0
 
@@ -323,7 +323,7 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 		return
 	}
 
-	l.log.Info("got %v hashes for layer, now querying peers", len(hashes))
+	l.log.Debug("got %v hashes for layer, now querying peers", len(hashes))
 
 	// send a request to get blocks from a single peer if multiple peers declare same hash per layer
 	// if the peers fails to respond request will be sen to next peer in line
@@ -455,7 +455,7 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 	if err != nil {
 		return err
 	}
-	l.log.Info("waiting for epoch atx response")
+	l.log.Debug("waiting for epoch atx response")
 	res := <-resCh
 	if res.Error != nil {
 		return res.Error
@@ -617,7 +617,7 @@ func (l *Logic) GetTxs(ctx context.Context, IDs []types.TransactionID) error {
 
 // GetPoetProof gets poet proof from remote peer
 func (l *Logic) GetPoetProof(ctx context.Context, id types.Hash32) error {
-	l.log.Info("getting proof %v", id.ShortString())
+	l.log.Debug("getting proof %v", id.ShortString())
 	res := <-l.fetcher.GetHash(id, POETDB, false)
 	if res.Err != nil {
 		return res.Err

@@ -248,7 +248,7 @@ func (t *BlockBuilder) createBlock(
 	bl.Initialize()
 
 	if b.ActiveSet != nil {
-		logger.With().Info("storing ref block", epoch, bl.ID())
+		logger.With().Debug("storing ref block", epoch, bl.ID())
 		if err := t.storeRefBlock(epoch, bl.ID()); err != nil {
 			logger.With().Error("cannot store ref block", epoch, log.Err(err))
 			//todo: panic?
@@ -268,9 +268,10 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 			return
 
 		case layerID := <-t.beginRoundEvent:
-			logger.With().Debug("builder got layer", layerID)
+			logger := logger.WithFields(layerID, layerID.GetEpoch())
+			logger.Info("builder got layer")
 			if !t.syncer.IsSynced(ctx) {
-				logger.Debug("not synced yet, not building a block in this round")
+				logger.Info("not synced yet, not building a block in this round")
 				continue
 			}
 			if layerID.GetEpoch().IsGenesis() {
@@ -280,24 +281,22 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 			atxID, proofs, atxs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
 				events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to check for block eligibility")
-				logger.With().Error("failed to check for block eligibility", layerID, log.Err(err))
+				logger.With().Error("failed to check for block eligibility", log.Err(err))
 				continue
 			}
 			if len(proofs) == 0 {
 				events.ReportDoneCreatingBlock(false, uint64(layerID), "")
-				logger.With().Info("not eligible for blocks in layer", layerID, layerID.GetEpoch())
+				logger.Info("not eligible for blocks in layer")
 				continue
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
-			logger.With().Info("eligible for one or more blocks in layer",
-				log.Int("count", len(proofs)),
-				layerID)
+			logger.With().Info("eligible for one or more blocks in layer", log.Int("count", len(proofs)))
 			for _, eligibilityProof := range proofs {
 				txList, _, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to get txs for block")
-					logger.With().Error("failed to get txs for block", layerID, log.Err(err))
+					logger.With().Error("failed to get txs for block", log.Err(err))
 					continue
 				}
 				blk, err := t.createBlock(ctx, layerID, atxID, eligibilityProof, txList, atxs)

@@ -323,7 +323,7 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 	}
 
 	bts, err := types.InterfaceToBytes(&resBatch)
-	f.log.Info("returning response batch Id %v responses %v total bytes %v", resBatch.ID.Hex(), len(resBatch.Responses), len(bts))
+	f.log.Debug("returning response batch id %v responses %v total bytes %v", resBatch.ID.Hex(), len(resBatch.Responses), len(bts))
 	if err != nil {
 		f.log.Error("cannot parse message")
 		return nil
@@ -470,7 +470,7 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 
 		// get random peer
 		p := GetRandomPeer(f.net.GetPeers())
-		f.log.Info("sending request batch %v items %v", batch.ID.Hex(), len(batch.Requests))
+		f.log.Debug("sending request batch %v items %v", batch.ID.Hex(), len(batch.Requests))
 		err := f.net.SendRequest(context.TODO(), fetch, bytes, p, f.receiveResponse, timeoutFunc)
 		// if call succeeded, continue to other requests
 		if err != nil {

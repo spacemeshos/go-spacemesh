@@ -64,7 +64,7 @@ func Test_PoETHarnessSanity(t *testing.T) {
 	require.NotNil(t, h)
 }
 
-func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.HTTPPoetClient, clock TickProvider, network network) {
+func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, numOfInstances int, genesisTime string, poetClient *activation.HTTPPoetClient, clock TickProvider, network network) {
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := suite.T().TempDir()
@@ -90,6 +90,20 @@ var tests = []TestScenario{
 	healingTester([]int{}), // run last as it kills some of the running apps!
 }
 
+type sharedClock struct {
+	*timesync.TimeClock
+}
+
+func (clock sharedClock) Close() {
+	// wrap the Close method so closing one app doesn't close the clock for other listeners
+	log.Info("simulating clock close")
+}
+
+func (clock sharedClock) RealClose() {
+	// actually close the underlying clock
+	clock.TimeClock.Close()
+}
+
 func (suite *AppTestSuite) TestMultipleNodes() {
 	net := service.NewSimulator()
 	const (
@@ -98,7 +112,6 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	)
 	cfg := getTestDefaultConfig(numOfInstances)
 	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
-	path := suite.T().TempDir()
 
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
@@ -130,9 +143,9 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	if err != nil {
 		log.With().Error("cannot parse genesis time", log.Err(err))
 	}
-	ld := time.Duration(20) * time.Second
-	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
-	suite.initMultipleInstances(cfg, rolacle, numOfInstances, path, genesisTime, poetHarness.HTTPPoetClient, clock, net)
+	ld := 20 * time.Second
+	clock := sharedClock{timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))}
+	suite.initMultipleInstances(cfg, rolacle, numOfInstances, genesisTime, poetHarness.HTTPPoetClient, clock, net)
 
 	// We must shut down before running the rest of the tests or we'll get an error about resource unavailable
 	// when we try to allocate more database files. Wrap this context neatly in an inline func.
@@ -143,6 +156,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 			GracefulShutdown(suite.apps)
 		}()
 		defer suite.ClosePoet()
+		defer clock.RealClose()
 
 		for _, a := range suite.apps {
 			a.startServices(context.TODO(), log.AppLog.WithName(suite.T().Name()))
@@ -196,7 +210,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}()
 
 	// this tests loading of previous state, maybe it's not the best place to put this here...
-	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, path+"a", rolacle, poetHarness.HTTPPoetClient, clock, net)
+	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, suite.T().TempDir(), rolacle, poetHarness.HTTPPoetClient, clock, net)
 	assert.NoError(suite.T(), err)
 	// test that loaded root is equal
 	assert.Equal(suite.T(), oldRoot, smApp.state.GetStateRoot())

@@ -246,7 +246,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	}
 	// no need to worry about race condition for s.run. only one instance of synchronize can run at a time
 	s.run++
-	logger.Info("staring sync run #%v", s.run)
+	logger.Debug("starting sync run #%v", s.run)
 
 	s.setStateBeforeSync(ctx)
 	// start a dedicated process for validation.
@@ -260,7 +260,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		close(vQueue)
 		<-vDone
 		s.setStateAfterSync(ctx, success)
-		logger.With().Info(fmt.Sprintf("finished sync run #%v", s.run),
+		logger.With().Debug(fmt.Sprintf("finished sync run #%v", s.run),
 			log.Bool("success", success),
 			log.String("sync_state", s.getSyncState().String()),
 			log.FieldNamed("current", s.ticker.GetCurrentLayer()),
@@ -292,7 +292,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		}
 		logger.Info("finished data sync for layer %v", layerID)
 	}
-	logger.With().Info("data is synced. waiting for validation",
+	logger.With().Info("data is synced, waiting for validation",
 		log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 		log.FieldNamed("latest", s.mesh.LatestLayer()),
 		log.FieldNamed("validated", s.mesh.ProcessedLayer()))
@@ -395,10 +395,10 @@ func (s *Syncer) shouldValidateLayer(layerID types.LayerID) bool {
 
 // start a dedicated process to validate layers one by one
 func (s *Syncer) startValidating(ctx context.Context, run uint64, queue chan *types.Layer, done chan struct{}) {
-	logger := s.logger.WithName("validation")
-	logger.Info("validation started for run #%v", run)
+	logger := s.logger.WithContext(ctx).WithName("validation")
+	logger.Debug("validation started for run #%v", run)
 	defer func() {
-		logger.Info("validation done for run #%v", run)
+		logger.Debug("validation done for run #%v", run)
 		close(done)
 	}()
 	for layer := range queue {
