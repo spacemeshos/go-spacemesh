@@ -42,7 +42,7 @@ class NodePoolDep:
             "taints": f'namespace={self.namespace}:NoSchedule',
             "num_nodes": 0,
             "min_nodes": 0,
-            "max_nodes": 10,
+            "max_nodes": 15,
         }
 
     @ut.timing
