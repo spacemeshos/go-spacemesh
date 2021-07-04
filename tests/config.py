@@ -18,8 +18,8 @@ MAIN_ES_IP = ut.get_env("MAIN_ES_IP")
 MAIN_ES_URL = f"{MAIN_ES_IP}:9200"
 
 PROJECT_ID = ut.get_env("PROJECT_NAME")
-CLUSTER_NAME = ut.get_env("CLUSTER_NAME_ELK")
-CLUSTER_ZONE = ut.get_env("CLUSTER_ZONE_ELK")
+CLUSTER_NAME = ut.get_env("CLUSTER_NAME")
+CLUSTER_ZONE = ut.get_env("CLUSTER_ZONE")
 
 TD_QUEUE_NAME = ut.get_env("TD_QUEUE_NAME")
 TD_QUEUE_ZONE = ut.get_env("TD_QUEUE_ZONE")

@@ -48,6 +48,6 @@ func TestNewBeacon(t *testing.T) {
 	p := &mockBeaconProvider{}
 	b := NewBeacon(p, 10, log.NewDefault(t.Name()))
 	r.Equal(p, b.beaconGetter)
-	r.Equal(uint64(10), b.confidenceParam)
+	r.Equal(10, int(b.confidenceParam))
 	r.NotNil(p, b.cache)
 }

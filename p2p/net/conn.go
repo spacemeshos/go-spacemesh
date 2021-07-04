@@ -3,12 +3,13 @@ package net
 import (
 	"context"
 	"errors"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/net/wire/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"time"
 
 	"fmt"
 	"io"
@@ -89,7 +90,7 @@ type networker interface {
 	EnqueueMessage(ctx context.Context, ime IncomingMessageEvent)
 	SubscribeClosingConnections(func(context.Context, ConnectionWithErr))
 	publishClosingConnection(c ConnectionWithErr)
-	NetworkID() int8
+	NetworkID() uint32
 }
 
 type readWriteCloseAddresser interface {

@@ -59,7 +59,7 @@ This will run the local python automation code with the compiled miners `develop
 ##### Using the `make` command
 For example:
 ```
-make dockertest-p2p-elk
+make dockertest-p2p
 ``` 
 When running a make command, a new compiled image of the local branch will be created and run by the automation code.
 

@@ -629,9 +629,9 @@ func TestNodeService(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, uint64(0), res.Status.ConnectedPeers)
 			require.Equal(t, false, res.Status.IsSynced)
-			require.Equal(t, uint32(layerCurrent), res.Status.SyncedLayer.Number)
+			require.Equal(t, uint32(layerLatest), res.Status.SyncedLayer.Number)
 			require.Equal(t, uint32(layerCurrent), res.Status.TopLayer.Number)
-			require.Equal(t, uint32(layerCurrent), res.Status.VerifiedLayer.Number)
+			require.Equal(t, uint32(layerLatest), res.Status.VerifiedLayer.Number)
 
 			// Now do a mock check post-genesis
 			layerCurrent = oldCurLayer

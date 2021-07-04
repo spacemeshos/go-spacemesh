@@ -34,7 +34,7 @@ type Rolacle interface {
 	Validate(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error)
 	CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error)
 	Proof(ctx context.Context, layer types.LayerID, round int32) ([]byte, error)
-	IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error)
+	IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error)
 }
 
 // NetworkService provides the registration and broadcast abilities in the network.
@@ -96,7 +96,7 @@ type State struct {
 // It returns true if the identity is active and false otherwise.
 // An error is set iff the identity could not be checked for activeness.
 type StateQuerier interface {
-	IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error)
+	IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error)
 }
 
 // Msg is the wrapper of the protocol's message.
@@ -139,7 +139,7 @@ func newMsg(ctx context.Context, hareMsg *Message, querier StateQuerier) (*Msg, 
 
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
-	res, err := querier.IsIdentityActiveOnConsensusView(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceID))
+	res, err := querier.IsIdentityActiveOnConsensusView(ctx, pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceID))
 	if err != nil {
 		logger.With().Error("error while checking if identity is active",
 			log.String("sender_id", pub.ShortString()),
@@ -843,7 +843,7 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 	logger := proc.WithContext(ctx)
 
 	// query if identity is active
-	res, err := proc.oracle.IsIdentityActiveOnConsensusView(proc.signing.PublicKey().String(), types.LayerID(proc.instanceID))
+	res, err := proc.oracle.IsIdentityActiveOnConsensusView(ctx, proc.signing.PublicKey().String(), types.LayerID(proc.instanceID))
 	if err != nil {
 		logger.With().Error("should not participate: error checking our identity for activeness",
 			log.Err(err), types.LayerID(proc.instanceID))

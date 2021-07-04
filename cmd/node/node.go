@@ -16,9 +16,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/layerfetcher"
-
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -36,9 +33,11 @@ import (
 	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
@@ -49,11 +48,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/state"
-	"github.com/spacemeshos/go-spacemesh/sync"
+	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
+	"github.com/spacemeshos/post/shared"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 const edKeyFileName = "key.bin"
@@ -170,7 +174,7 @@ type SpacemeshApp struct {
 	gatewaySvc     *grpcserver.GatewayService
 	globalstateSvc *grpcserver.GlobalStateService
 	txService      *grpcserver.TransactionService
-	syncer         *sync.Syncer
+	syncer         *syncer.Syncer
 	blockListener  *blocks.BlockHandler
 	state          *state.TransactionProcessor
 	blockProducer  *miner.BlockBuilder
@@ -532,7 +536,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
 	trtlCfg := tortoise.Config{
-		LayerSyze: int(layerSize),
+		LayerSize: int(layerSize),
 		Database:  mdb,
 		Hdist:     app.Config.Hdist,
 		Log:       app.addLogger(TrtlLogger, lg),
@@ -550,18 +554,6 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	eValidator := blocks.NewBlockEligibilityValidator(layerSize, app.Config.GenesisTotalWeight, layersPerEpoch, atxdb, beaconProvider, signing.VRFVerify, msh, app.addLogger(BlkEligibilityLogger, lg))
 
-	syncConf := sync.Configuration{Concurrency: 4,
-		LayerSize:       int(layerSize),
-		LayersPerEpoch:  layersPerEpoch,
-		RequestTimeout:  time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond,
-		SyncInterval:    time.Duration(app.Config.SyncInterval) * time.Second,
-		ValidationDelta: time.Duration(app.Config.SyncValidationDelta) * time.Second,
-		Hdist:           app.Config.Hdist,
-		AtxsLimit:       app.Config.AtxsPerBlock,
-		AlwaysListen:    app.Config.AlwaysListen,
-		GoldenATXID:     goldenATXID,
-	}
-
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
 		logger.With().Panic("number of atxs per block required is bigger than the limit",
 			log.Int("atxs_per_block", app.Config.AtxsPerBlock),
@@ -569,9 +561,9 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	}
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
-	if app.Config.HareEligibility.EpochOffset >= app.Config.BaseConfig.LayersPerEpoch {
+	if app.Config.HareEligibility.EpochOffset >= uint16(app.Config.BaseConfig.LayersPerEpoch) {
 		logger.With().Panic("epoch offset cannot be greater than or equal to the number of layers per epoch",
-			log.Int("epoch_offset", app.Config.HareEligibility.EpochOffset),
+			log.Uint16("epoch_offset", app.Config.HareEligibility.EpochOffset),
 			log.Int("layers_per_epoch", app.Config.BaseConfig.LayersPerEpoch))
 	}
 
@@ -586,7 +578,13 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxdb, poetDb, atxdb, processor, swarm, remoteFetchService, msh, app.addLogger(Fetcher, lg))
 	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, mdb.InputVector())
 
-	syncer := sync.NewSync(ctx, swarm, msh, app.txPool, atxdb, eValidator, poetDb, syncConf, clock, layerFetch, app.addLogger(SyncLogger, lg))
+	syncerConf := syncer.Configuration{
+		SyncInterval:    time.Duration(app.Config.SyncInterval) * time.Second,
+		ValidationDelta: time.Duration(app.Config.SyncValidationDelta) * time.Second,
+		AlwaysListen:    app.Config.AlwaysListen,
+	}
+	syncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, app.addLogger(SyncLogger, lg))
+
 	blockOracle := blocks.NewMinerBlockOracle(layerSize, app.Config.GenesisTotalWeight, layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
@@ -599,7 +597,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		// TODO: this mock will be replaced by the real Tortoise beacon once
 		//   https://github.com/spacemeshos/go-spacemesh/pull/2267 is complete
 		beacon := eligibility.NewBeacon(tortoiseBeaconMock{}, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
-		hOracle = eligibility.New(beacon, atxdb.GetMinerWeightsInEpochFromView, signing.VRFVerify, vrfSigner, uint16(app.Config.LayersPerEpoch), uint64(app.Config.POST.LabelsPerUnit), app.Config.GenesisTotalWeight, uint64(app.Config.SMESHING.Opts.NumUnits), mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+		hOracle = eligibility.New(beacon, atxdb, mdb, signing.VRFVerify, vrfSigner, uint16(app.Config.LayersPerEpoch), uint64(app.Config.POST.LabelsPerUnit), app.Config.GenesisTotalWeight, uint64(app.Config.SMESHING.Opts.NumUnits), app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 		// TODO(moshababo): re-think and adjust args for spacePerUnit and genesisMinerWeight. The current aren't expected to work
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
@@ -689,7 +687,7 @@ func (app *SpacemeshApp) checkTimeDrifts() {
 }
 
 // HareFactory returns a hare consensus algorithm according to the parameters is app.Config.Hare.SuperHare
-func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm service.Service, sgn hare.Signer, nodeID types.NodeID, syncer *sync.Syncer, msh *mesh.Mesh, hOracle hare.Rolacle, idStore *activation.IdentityStore, clock TickProvider, lg log.Log) HareService {
+func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm service.Service, sgn hare.Signer, nodeID types.NodeID, syncer *syncer.Syncer, msh *mesh.Mesh, hOracle hare.Rolacle, idStore *activation.IdentityStore, clock TickProvider, lg log.Log) HareService {
 	if app.Config.HARE.SuperHare {
 		hr := turbohare.New(ctx, app.Config.HARE, msh, clock.Subscribe(), app.addLogger(HareLogger, lg))
 		mdb.InputVectorBackupFunc = hr.GetResult
@@ -712,7 +710,7 @@ func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm se
 
 		return true
 	}
-	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, validationFunc, syncer.IsHareSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, hOracle, clock.Subscribe(), app.addLogger(HareLogger, lg))
+	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, validationFunc, syncer.IsSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, hOracle, clock.Subscribe(), app.addLogger(HareLogger, lg))
 	return ha
 }
 
@@ -966,16 +964,21 @@ func (app *SpacemeshApp) startSyncer(ctx context.Context) {
 func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	// we use the main app context
 	ctx := cmdp.Ctx
-
 	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
 	// using context passed down to them)
 	logger := log.AppLog.WithContext(ctx)
 
+	hostname, err := os.Hostname()
+	if err != nil {
+		logger.With().Panic("error reading hostname", log.Err(err))
+	}
 	logger.With().Info("starting spacemesh",
 		log.String("data-dir", app.Config.DataDir()),
 		log.String("post-dir", app.Config.SMESHING.Opts.DataDir))
+		log.String("hostname", hostname),
+	)
 
-	err := filesystem.ExistOrCreate(app.Config.DataDir())
+	err = filesystem.ExistOrCreate(app.Config.DataDir())
 	if err != nil {
 		logger.With().Error("data-dir not found or could not be created", log.Err(err))
 	}
@@ -1005,7 +1008,6 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 		} else {
 			defer p.Stop()
 		}
-
 	}
 
 	/* Create or load miner identity */
