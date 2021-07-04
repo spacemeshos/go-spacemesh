@@ -75,7 +75,7 @@ type layerClock interface {
 }
 
 type syncer interface {
-	Await() chan struct{}
+	RegisterChForSynced(context.Context, chan struct{})
 }
 
 // SmeshingProvider defines the functionality required for the node's Smesher API.

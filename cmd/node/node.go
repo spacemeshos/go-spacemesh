@@ -53,11 +53,6 @@ import (
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
-	"github.com/spacemeshos/post/shared"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 const edKeyFileName = "key.bin"
@@ -974,9 +969,8 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	}
 	logger.With().Info("starting spacemesh",
 		log.String("data-dir", app.Config.DataDir()),
-		log.String("post-dir", app.Config.SMESHING.Opts.DataDir))
-		log.String("hostname", hostname),
-	)
+		log.String("post-dir", app.Config.SMESHING.Opts.DataDir),
+		log.String("hostname", hostname))
 
 	err = filesystem.ExistOrCreate(app.Config.DataDir())
 	if err != nil {
