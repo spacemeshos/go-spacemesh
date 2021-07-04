@@ -19,7 +19,6 @@ require (
 	github.com/prometheus/common v0.18.0
 	github.com/pyroscope-io/pyroscope v0.0.30
 	github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361
-	github.com/spacemeshos/amcl v0.0.2
 	github.com/spacemeshos/api/release/go v0.0.0-20210627094032-5297d9918cf1
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/fixed v0.0.0-20210321020345-0ef1406dc23f
@@ -40,6 +39,7 @@ require (
 	google.golang.org/api v0.32.0
 	google.golang.org/genproto v0.0.0-20201007142714-5c0e72c5e71e
 	google.golang.org/grpc v1.32.0
+	google.golang.org/protobuf v1.26.0
 	nanomsg.org/go-mangos v1.4.0
 )
 
