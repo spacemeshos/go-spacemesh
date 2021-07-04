@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"os"
@@ -37,7 +38,7 @@ func createLayerWithAtx2(t require.TestingT, msh *mesh.Mesh, id types.LayerID, n
 			}
 			block1.AgainstDiff = append(block1.AgainstDiff, v)
 		}
-		err := msh.AddBlockWithTxs(block1)
+		err := msh.AddBlockWithTxs(context.TODO(), block1)
 		require.NoError(t, err)
 		created = append(created, block1.ID())
 	}
@@ -195,7 +196,7 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 		}
 		msh.ProcessAtxs(actualAtxs)
 		block1.Initialize()
-		err := msh.AddBlockWithTxs(block1)
+		err := msh.AddBlockWithTxs(context.TODO(), block1)
 		require.NoError(t, err)
 		created = append(created, block1.ID())
 	}
