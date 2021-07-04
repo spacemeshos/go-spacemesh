@@ -37,7 +37,7 @@ ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,display
 LABEL com.nvidia.volumes.needed="nvidia_driver"
 
 FROM linux as golang
-ENV GOLANG_VERSION 1.16.5
+ENV GOLANG_VERSION 1.15.3
 ENV GOPATH /go
 ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
 RUN set -ex \
