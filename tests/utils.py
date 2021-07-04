@@ -254,7 +254,6 @@ def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME,
         kibana_sleep_time = deployment.wait_to_deployment_to_be_ready(kibana_dep_name, namespace, time_out=kb_timeout)
     except Exception as e:
         print(f"got an exception while waiting for kibana to be ready: {e}")
-        raise Exception(f"kibana took more than {kb_timeout} to start")
     else:
         kibana_ip = get_kibana_ip(kibana_dep_name, namespace)
         print(f"kibana started successfully. ip: {kibana_ip}")
@@ -291,7 +290,7 @@ def get_kibana_ip(kibana_dep_name, namespace, retries=240, sleep_interval=1):
 
         return kibana_service.status.load_balancer.ingress[0].ip
 
-    raise Exception("KIBANA: max retries count expired")
+    print(f"KIBANA: max retries count expired")
 
 
 def exec_wait(cmd, retry=1, interval=1, is_print=True):
