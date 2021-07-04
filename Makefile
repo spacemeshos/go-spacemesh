@@ -1,25 +1,23 @@
-BINARY := go-spacemesh
-VERSION ?= $(shell cat version.txt)
+LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
+include Makefile.Inc
+
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
-CURR_DIR = $(shell pwd)
-CURR_DIR_WIN = $(shell cd)
-BIN_DIR = $(CURR_DIR)/build
-BIN_DIR_WIN ?= $(CURR_DIR_WIN)/build
-export GO111MODULE = on
+BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
+
+export GO111MODULE := on
+export CGO_ENABLED := 1
+PKGS = $(shell go list ./...)
 
 # These commands cause problems on Windows
 ifeq ($(OS),Windows_NT)
-       # Just assume we're in interactive mode on Windows
-       INTERACTIVE = 1
-       VERSION ?= $(shell type version.txt)
+  # Just assume we're in interactive mode on Windows
+  INTERACTIVE = 1
+  VERSION ?= $(shell type version.txt)
 else
-       INTERACTIVE := $(shell [ -t 0 ] && echo 1)
+  INTERACTIVE := $(shell [ -t 0 ] && echo 1)
+  VERSION ?= $(shell cat version.txt)
 endif
-
-# Read branch from git if running make manually
-# Also allows BRANCH to be manually set
-BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
 # Add an indicator to the branch name if dirty and use commithash if running in detached mode
 ifeq ($(BRANCH),HEAD)
@@ -30,18 +28,10 @@ ifneq ($(.SHELLSTATUS),0)
 	BRANCH := $(BRANCH)-dirty
 endif
 
-# Setup the -ldflags option to pass vars defined here to app vars
-LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
-
-PKGS = $(shell go list ./...)
-
-PLATFORMS := windows linux darwin freebsd
-os = $(word 1, $@)
-
 ifeq ($(BRANCH),develop)
-        DOCKER_IMAGE_REPO := go-spacemesh
+  DOCKER_IMAGE_REPO := go-spacemesh
 else
-        DOCKER_IMAGE_REPO := go-spacemesh-dev
+  DOCKER_IMAGE_REPO := go-spacemesh-dev
 endif
 
 # setting extra command line params for the CI tests pytest commands
@@ -77,15 +67,15 @@ DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(BRANCH)
 # We use a docker image corresponding to the commithash for staging and trying, to be safe
 # filter here is used as a logical OR operation
 ifeq ($(BRANCH),$(filter $(BRANCH),staging trying))
-	DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
+  DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
 endif
 
 DOCKERRUNARGS := $(DOCKERRUNARGS) -e CLIENT_DOCKER_IMAGE=spacemeshos/$(DOCKER_IMAGE)
 
 ifdef INTERACTIVE
-	DOCKERRUN := docker run -it $(DOCKERRUNARGS) go-spacemesh-python:$(BRANCH)
+  DOCKERRUN := docker run -it $(DOCKERRUNARGS) go-spacemesh-python:$(BRANCH)
 else
-	DOCKERRUN := docker run -i $(DOCKERRUNARGS) go-spacemesh-python:$(BRANCH)
+  DOCKERRUN := docker run -i $(DOCKERRUNARGS) go-spacemesh-python:$(BRANCH)
 endif
 
 all: install build
@@ -93,102 +83,59 @@ all: install build
 
 
 install:
-ifeq ($(OS),Windows_NT) 
-	setup_env.bat
-else
-	./setup_env.sh
-endif
+	# none yet
 .PHONY: install
 
-
-build:
-ifeq ($(OS),Windows_NT)
-	go build ${LDFLAGS} -o $(BIN_DIR_WIN)/$(BINARY).exe
-else
-	go build ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)
-endif
+build: go-spacemesh
 .PHONY: build
 
-
-hare:
-ifeq ($(OS),Windows_NT)
-	cd cmd/hare ; go build -o $(BIN_DIR_WIN)/go-hare.exe
-else
-	cd cmd/hare ; go build -o $(BIN_DIR)/go-hare
-endif
-.PHONY: hare
-
-
-p2p:
-ifeq ($(OS),WINDOWS_NT)
-	cd cmd/p2p ; go build -o $(BIN_DIR_WIN)/go-p2p.exe
-else
-	cd cmd/p2p ; go build -o $(BIN_DIR)/go-p2p
-endif
-.PHONY: p2p
-
-
-sync:
-ifeq ($(OS),WINDOWS_NT)
-	cd cmd/sync ; go build -o $(BIN_DIR_WIN)/go-sync.exe
-else
-	cd cmd/sync ; go build -o $(BIN_DIR)/go-sync
-endif
-.PHONY: sync
-
-
-harness:
-ifeq ($(OS),WINDOWS_NT)
-	cd cmd/integration ; go build -o $(BIN_DIR_WIN)/go-harness.exe
-else
-	cd cmd/integration ; go build -o $(BIN_DIR)/go-harness
-endif
-.PHONY: harness
-
+hare p2p sync: get-gpu-setup
+	cd cmd/$@ ; go build -o $(BIN_DIR)go-$@$(EXE)
+go-spacemesh: get-gpu-setup
+	cd cmd/node ; go build -o $(BIN_DIR)$@$(EXE)
+harness: get-gpu-setup
+	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE)
+.PHONY: hare p2p sync harness go-spacemesh
 
 tidy:
 	go mod tidy
 .PHONY: tidy
 
-
-$(PLATFORMS):
-ifeq ($(OS),Windows_NT)
-	set GOOS=$(os)&&set GOARCH=amd64&&go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY).exe
-else
-	GOOS=$(os) GOARCH=amd64 go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
-endif
-.PHONY: $(PLATFORMS)
-
-
-docker-local-build:
-	GOOS=linux GOARCH=amd64 go build ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)
-	cd cmd/hare ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-hare
-	cd cmd/p2p ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-p2p
-	cd cmd/sync ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-sync
-	cd cmd/integration ; GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/go-harness
-	cd build ; docker build -f ../DockerfilePrebuiltBinary -t $(DOCKER_IMAGE) .
-.PHONY: docker-local-build
-
-
+ifeq ($(HOST_OS),$(filter $(HOST_OS),linux darwin))
+windows:
+	CC=x86_64-w64-mingw32-gcc $(MAKE) GOOS=$@ GOARCH=amd64 BIN_DIR=$(PROJ_DIR)build/ go-spacemesh
+.PHONY: windows
 arm6:
-	GOOS=linux GOARCH=arm GOARM=6 go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
-.PHONY: pi
+	$(error gpu lib is  not available for arm6 yet)
+	#CC=x86_64-arm6-gcc $(MAKE) GOOS=$@ GOARCH=arm6 GOARM=6 BIN_DIR=$(PROJ_DIR)build/arm6/ go-spacemesh
+.PHONY: arm6
+$(HOST_OS): go-spacemesh
+.PHONY: $(HOST_OS)
+endif
 
+ifeq ($(HOST_OS),windows)
+windows: go-spacemesh
+.PHONY: windows
+endif
 
-test:
-	ulimit -n 9999; go test -timeout 0 -p 1 ./...
+# available only for linux host because CGO usage
+ifeq ($(HOST_OS),linux)
+docker-local-build: go-spacemesh hare p2p sync harness
+	cd build; docker build -f ../DockerfilePrebuiltBinary -t $(DOCKER_IMAGE) .
+.PHONY: docker-local-build
+endif
+
+test: get-gpu-setup
+	export CGO_LDFLAGS="-L$(BIN_DIR) -Wl,-rpath,$(BIN_DIR)"; ulimit -n 9999; go test -timeout 0 -p 1 ./...
 .PHONY: test
 
+test-no-app-test: get-gpu-setup
+	export CGO_LDFLAGS="-L$(BIN_DIR) -Wl,-rpath,$(BIN_DIR)"; ulimit -n 9999; go test -v -timeout 0 -p 1 -tags exclude_app_test ./...
+.PHONY: test-no-app-test
 
-test-no-app-test:
-	ulimit -n 9999; go test -timeout 0 -p 1 -tags exclude_app_test ./...
-.PHONY: test
-
-
-test-only-app-test:
-	ulimit -n 9999; go test -timeout 0 -p 1 -tags !exclude_app_test ./cmd/node
-.PHONY: test
-
+test-only-app-test: get-gpu-setup
+	export CGO_LDFLAGS="-L$(BIN_DIR) -Wl,-rpath,$(BIN_DIR)"; ulimit -n 9999; go test -timeout 0 -p 1 -v -tags !exclude_app_test ./cmd/node
+.PHONY: test-only-app-test
 
 test-tidy:
 	# Working directory must be clean, or this test would be destructive
@@ -197,7 +144,6 @@ test-tidy:
 	make tidy
 	git diff --exit-code || (git --no-pager diff && git checkout . && exit 1)
 .PHONY: test-tidy
-
 
 test-fmt:
 	git diff --quiet || (echo "\033[0;31mWorking directory not clean!\033[0m" && git --no-pager diff && exit 1)
@@ -211,15 +157,14 @@ lint:
 	go vet ./...
 .PHONY: lint
 
-
 cover:
 	@echo "mode: count" > cover-all.out
-	@$(foreach pkg,$(PKGS),\
+	@export CGO_LDFLAGS="-L$(BIN_DIR) -Wl,-rpath,$(BIN_DIR)";\
+	  $(foreach pkg,$(PKGS),\
 		go test -coverprofile=cover.out -covermode=count $(pkg);\
 		tail -n +2 cover.out >> cover-all.out;)
 	go tool cover -html=cover-all.out
 .PHONY: cover
-
 
 tag-and-build:
 	git diff --quiet || (echo "\033[0;31mWorking directory not clean!\033[0m" && git --no-pager diff && exit 1)
@@ -232,17 +177,14 @@ tag-and-build:
 	docker push spacemeshos/go-spacemesh:${VERSION}
 .PHONY: tag-and-build
 
-
 list-versions:
 	@echo "Latest 5 tagged versions:\n"
 	@git for-each-ref --sort=-creatordate --count=5 --format '%(creatordate:short): %(refname:short)' refs/tags
 .PHONY: list-versions
 
-
 dockerbuild-go:
 	docker build -t $(DOCKER_IMAGE) .
 .PHONY: dockerbuild-go
-
 
 dockerbuild-test:
 	docker build -f DockerFileTests --build-arg GCLOUD_KEY="$(GCLOUD_KEY)" \
@@ -252,7 +194,6 @@ dockerbuild-test:
 	             -t go-spacemesh-python:$(BRANCH) .
 .PHONY: dockerbuild-test
 
-
 dockerbuild-test-elk:
 	docker build -f DockerFileTests --build-arg GCLOUD_KEY="$(GCLOUD_KEY)" \
 	             --build-arg PROJECT_NAME="$(PROJECT_NAME)" \
@@ -260,7 +201,6 @@ dockerbuild-test-elk:
 	             --build-arg CLUSTER_ZONE="$(CLUSTER_ZONE_ELK)" \
 	             -t go-spacemesh-python:$(BRANCH) .
 .PHONY: dockerbuild-test-elk
-
 
 dockerpush: dockerbuild-go dockerpush-only
 .PHONY: dockerpush
@@ -277,15 +217,12 @@ ifeq ($(BRANCH),develop)
 endif
 .PHONY: dockerpush-only
 
-
 docker-local-push: docker-local-build dockerpush-only
 .PHONY: docker-local-push
-
 
 ifdef TEST
 DELIM=::
 endif
-
 
 dockerrun-p2p-elk:
 ifndef ES_PASS
@@ -296,7 +233,6 @@ endif
 
 dockertest-p2p-elk: dockerbuild-test-elk dockerrun-p2p-elk
 .PHONY: dockertest-p2p-elk
-
 
 dockerrun-mining-elk:
 ifndef ES_PASS
