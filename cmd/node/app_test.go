@@ -5,10 +5,8 @@ package node
 import (
 	"bufio"
 	"context"
-	"bufio"
 	"fmt"
-	"io"
-	lg "log"
+	"github.com/spacemeshos/amcl"
 	"github.com/spacemeshos/post/initialization"
 	"io"
 	"io/ioutil"
@@ -131,7 +129,6 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	rolacle := eligibility.New()
 	//MERGE FIX
 	//rng := BLS381.DefaultSeed()
-
 
 	gTime, err := time.Parse(time.RFC3339, genesisTime)
 	if err != nil {
