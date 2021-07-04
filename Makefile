@@ -1,3 +1,6 @@
+all: install build
+.PHONY: all
+
 LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 include Makefile.Inc
 
@@ -77,9 +80,6 @@ ifdef INTERACTIVE
 else
   DOCKERRUN := docker run -i $(DOCKERRUNARGS) go-spacemesh-python:$(BRANCH)
 endif
-
-all: install build
-.PHONY: all
 
 install:
 	go run scripts/check-go-version.go --major 1 --minor 15
