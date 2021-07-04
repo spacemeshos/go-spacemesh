@@ -265,7 +265,7 @@ func (o *Oracle) actives(ctx context.Context, layer types.LayerID) (map[string]s
 		if err != nil {
 			return nil, err
 		}
-		logger.Debug("contextually valid blocks in safe layer", log.Int("count", len(mp)))
+		logger.With().Debug("contextually valid blocks in safe layer", log.Int("count", len(mp)))
 
 		// no contextually valid blocks: for now we just fall back on an empty active set. this will go away when we
 		// upgrade hare eligibility to use the tortoise beacon.
@@ -283,7 +283,7 @@ func (o *Oracle) actives(ctx context.Context, layer types.LayerID) (map[string]s
 		if err != nil {
 			return nil, err
 		}
-		logger.With().Debug("active set for safe epoch", log.Int("count", len(activeMap)))
+		logger.With().Debug("active set for safe epoch", log.Int("active_set_size", len(activeMap)))
 		return activeMap, nil
 	}
 
@@ -297,23 +297,24 @@ func (o *Oracle) actives(ctx context.Context, layer types.LayerID) (map[string]s
 	slNext := roundedSafeLayer(layer.Add(cacheWarmingDistance), types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	if safeEp != slNext.GetEpoch() && o.lastSafeEpoch < slNext.GetEpoch() {
 		logger := logger.WithFields(log.FieldNamed("safe_epoch_next", slNext.GetEpoch()))
-		logger.Info("next layer will cross safe epoch boundary, warming active set cache")
+		logger.Info("warming active set cache before new safe epoch boundary")
 
 		// make sure we only run once for this epoch. this is thread safe since we are inside an exclusive lock.
 		o.lastSafeEpoch = slNext.GetEpoch()
 
 		go func(ctx context.Context) {
+			logger := o.WithContext(ctx).WithFields(log.FieldNamed("safe_epoch_next", slNext.GetEpoch()))
 			if activeMap, err := getBlocksAndActiveSet(ctx, slNext); err != nil {
 				logger.With().Error("error warming active set cache for next safe epoch", log.Err(err))
 			} else {
-				logger.With().Info("successfully warmed active set cache for next safe epoch",
-					log.Int("active_set_size", len(activeMap)))
-
 				// note: this may block on the outer method if that's still holding the lock, but there's no
 				// possibility of deadlock since it does not block on this goroutine.
 				o.lock.Lock()
 				defer o.lock.Unlock()
 				o.activesCache.Add(slNext.GetEpoch(), activeMap)
+
+				logger.With().Info("successfully warmed active set cache for next safe epoch",
+					log.Int("active_set_size", len(activeMap)))
 			}
 		}(log.WithNewSessionID(ctx))
 	}
@@ -326,6 +327,8 @@ func (o *Oracle) actives(ctx context.Context, layer types.LayerID) (map[string]s
 
 	// check cache
 	if val, exist := o.activesCache.Get(safeEp); exist {
+		logger.With().Debug("read active map from cache for safe epoch",
+			log.Int("active_set_size", len(val.(map[string]struct{}))))
 		return val.(map[string]struct{}), nil
 	}
 
@@ -333,6 +336,8 @@ func (o *Oracle) actives(ctx context.Context, layer types.LayerID) (map[string]s
 	if err != nil {
 		return nil, err
 	}
+	logger.With().Debug("active map for safe epoch not found in cache, finished reading",
+		log.Int("active_set_size", len(activeMap)))
 	o.activesCache.Add(safeEp, activeMap)
 	return activeMap, nil
 }
