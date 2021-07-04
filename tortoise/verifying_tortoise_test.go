@@ -1214,8 +1214,19 @@ func TestProcessNewBlocks(t *testing.T) {
 	r.Equal(int(mesh.GenesisLayer().Index())-1, int(alg.trtl.LastEvicted))
 	// move verified up a bunch to make sure eviction occurs
 	alg.trtl.Verified = types.GetEffectiveGenesis() + alg.trtl.Hdist + alg.trtl.WindowSize
+	r.Contains(alg.trtl.BlockOpinionsByLayer, l1ID)
+	r.Contains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
 	r.NoError(alg.trtl.ProcessNewBlocks(context.TODO(), []*types.Block{l2Blocks[0]}))
 	r.Equal(int(alg.trtl.Verified)-int(alg.trtl.WindowSize)-1, int(alg.trtl.LastEvicted))
+	r.NotContains(alg.trtl.BlockOpinionsByLayer, l1ID)
+	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
+
+	// make sure we don't add data on blocks older than the eviction window
+	lenBefore := len(alg.trtl.GoodBlocksIndex)
+	r.NoError(alg.trtl.ProcessNewBlocks(context.TODO(), []*types.Block{l1Blocks[0]}))
+	r.Equal(lenBefore, len(alg.trtl.GoodBlocksIndex))
+	r.NotContains(alg.trtl.BlockOpinionsByLayer, l1ID)
+	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
 }
 
 func TestVerifyLayers(t *testing.T) {
@@ -1597,12 +1608,12 @@ func TestHealing(t *testing.T) {
 		checkVerifiedLayer(t, alg.trtl, l0ID)
 
 		// while bootstrapping there should be no healing
-		alg.trtl.selfHealing(context.TODO(), l2ID)
+		alg.trtl.heal(context.TODO(), l2ID)
 		checkVerifiedLayer(t, alg.trtl, l0ID)
 
 		// later, healing should not occur on layers not at least Hdist back
 		alg.trtl.Last = alg.trtl.Hdist.Add(1)
-		alg.trtl.selfHealing(context.TODO(), l2ID)
+		alg.trtl.heal(context.TODO(), l2ID)
 		checkVerifiedLayer(t, alg.trtl, l0ID)
 	})
 
@@ -1620,7 +1631,7 @@ func TestHealing(t *testing.T) {
 		// reducing hdist will allow verification to start happening
 		alg.trtl.Hdist = 1
 		//alg.trtl.Last = l2ID
-		alg.trtl.selfHealing(context.TODO(), l2ID)
+		alg.trtl.heal(context.TODO(), l2ID)
 		checkVerifiedLayer(t, alg.trtl, l1ID)
 	})
 
@@ -1656,7 +1667,7 @@ func TestHealing(t *testing.T) {
 			r.Equal(support, localOpinionVec[bid])
 		}
 
-		alg.trtl.selfHealing(context.TODO(), l3ID)
+		alg.trtl.heal(context.TODO(), l3ID)
 		checkVerifiedLayer(t, alg.trtl, l2ID)
 
 		// make sure contextual validity is updated
@@ -1683,7 +1694,7 @@ func TestHealing(t *testing.T) {
 		// delete good blocks data
 		alg.trtl.GoodBlocksIndex = make(map[types.BlockID]struct{}, 0)
 
-		alg.trtl.selfHealing(context.TODO(), l4ID)
+		alg.trtl.heal(context.TODO(), l4ID)
 		checkVerifiedLayer(t, alg.trtl, l3ID)
 	})
 }

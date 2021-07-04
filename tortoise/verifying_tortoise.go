@@ -165,6 +165,14 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	t.Verified = genesisLayer.Index()
 }
 
+func (t *turtle) lookbackWindowStart() (types.LayerID, bool) {
+	// prevent overflow
+	if t.Verified < t.WindowSize {
+		return types.LayerID(0), false
+	}
+	return t.Verified - t.WindowSize, true
+}
+
 // evict makes sure we only keep a window of the last hdist layers.
 func (t *turtle) evict(ctx context.Context) {
 	logger := t.logger.WithContext(ctx)
@@ -176,15 +184,14 @@ func (t *turtle) evict(ctx context.Context) {
 
 	// TODO: fix potential leak when we can't verify but keep receiving layers
 
-	// prevent overflow
-	if t.Verified < t.WindowSize {
+	windowStart, ok := t.lookbackWindowStart()
+	if !ok {
 		return
 	}
-	windowStart := t.Verified - t.WindowSize
 	if windowStart <= t.LastEvicted {
 		return
 	}
-	logger.With().Info("tortoise window start",
+	logger.With().Info("attempting eviction",
 		log.FieldNamed("effective_genesis", types.GetEffectiveGenesis()),
 		log.FieldNamed("hdist", t.Hdist),
 		log.FieldNamed("verified", t.Verified),
@@ -339,7 +346,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 				continue
 			}
 
-			logger.With().Info("chose baseblock",
+			logger.With().Info("chose base block",
 				log.FieldNamed("last_layer", t.Last),
 				log.FieldNamed("base_block_layer", layerID),
 				block,
@@ -497,7 +504,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	// and add the corresponding vector (multiplied by the block weight) to our own vote-totals vector.
 	// We then add the vote difference vector and the explicit vote vector to our vote-totals vector.
 	logger.With().Debug("processing block", block.Fields()...)
-	logger.With().Debug("getting baseblock", log.FieldNamed("base_block_id", block.BaseBlock))
+	logger.With().Debug("getting base block", log.FieldNamed("base_block_id", block.BaseBlock))
 
 	baseBlock, err := t.bdp.GetBlock(block.BaseBlock)
 	if err != nil {
@@ -505,7 +512,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	}
 
 	logger.With().Debug("block supports", types.BlockIdsField(block.BlockHeader.ForDiff))
-	logger.With().Debug("checking baseblock", baseBlock.Fields()...)
+	logger.With().Debug("checking base block", baseBlock.Fields()...)
 
 	layerOpinions, ok := t.BlockOpinionsByLayer[baseBlock.LayerIndex]
 	if !ok {
@@ -557,7 +564,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 		}
 	}
 
-	logger.With().Debug("adding block to block opinions table")
+	logger.With().Debug("adding or updating block opinion")
 	t.BlockOpinionsByLayer[block.LayerIndex][block.ID()] = Opinion{BlockOpinions: opinion}
 	return nil
 }
@@ -585,7 +592,15 @@ func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) error
 	logger.With().Info("tortoise handling incoming block data", log.Int("num_blocks", len(blocks)))
 
 	// process the votes in all layer blocks and update tables
+	filteredBlocks := make([]*types.Block, 0, len(blocks))
 	for _, b := range blocks {
+		logger := logger.WithFields(b.ID(), b.LayerIndex)
+		// make sure we don't write data on old blocks whose layer has already been evicted
+		if b.LayerIndex < t.LastEvicted {
+			logger.With().Warning("not processing block from layer older than last evicted layer",
+				log.FieldNamed("last_evicted", t.LastEvicted))
+			continue
+		}
 		if b.LayerIndex < lastLayerID {
 			return errNotSorted
 		} else if b.LayerIndex > lastLayerID {
@@ -595,18 +610,19 @@ func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) error
 			t.BlockOpinionsByLayer[b.LayerIndex] = make(map[types.BlockID]Opinion, t.AvgLayerSize)
 		}
 		if err := t.processBlock(ctx, b); err != nil {
-			logger.With().Error("error processing block", b.ID(), log.Err(err))
+			logger.With().Error("error processing block", log.Err(err))
 		}
+		filteredBlocks = append(filteredBlocks, b)
 	}
 
 	numGood := 0
 
 	// Go over all blocks, in order. Mark block i "good" if:
-	for _, b := range blocks {
+	for _, b := range filteredBlocks {
 		logger := logger.WithFields(b.ID(), b.LayerIndex, log.FieldNamed("base_block_id", b.BaseBlock))
 		// (1) the base block is marked as good
 		if _, good := t.GoodBlocksIndex[b.BaseBlock]; !good {
-			logger.Debug("not marking block as good because baseblock is not good")
+			logger.Debug("not marking block as good because base block is not good")
 		} else if baseBlock, err := t.bdp.GetBlock(b.BaseBlock); err != nil {
 			logger.With().Error("inconsistent state: base block not found", log.Err(err))
 		} else if true &&
@@ -822,7 +838,7 @@ candidateLayerLoop:
 					lastLayer = t.layerCutoff()
 				}
 				lastVerified := t.Verified
-				t.selfHealing(ctx, lastLayer)
+				t.heal(ctx, lastLayer)
 
 				// if self healing made progress, short-circuit processing of this layer, but allow verification of
 				// later layers to continue
@@ -998,7 +1014,7 @@ func (t *turtle) sumVotesForBlock(
 // Manually count all votes for all layers since the last verified layer, up to the newly-arrived layer (there's no
 // point in going further since we have no new information about any newer layers). Self-healing does not take into
 // consideration local opinion, it relies solely on global opinion.
-func (t *turtle) selfHealing(ctx context.Context, targetLayerID types.LayerID) {
+func (t *turtle) heal(ctx context.Context, targetLayerID types.LayerID) {
 	// These are our starting values
 	pbaseOld := t.Verified
 	pbaseNew := t.Verified
@@ -1038,8 +1054,7 @@ func (t *turtle) selfHealing(ctx context.Context, targetLayerID types.LayerID) {
 			return
 		}
 
-		// This map keeps track of the contextual validity of all blocks in this layer
-		contextualValidity := make(map[types.BlockID]bool, len(layerBlockIds))
+		// record the contextual validity for all blocks in this layer
 		for _, blockID := range layerBlockIds {
 			logger := logger.WithFields(log.FieldNamed("candidate_block_id", blockID))
 
@@ -1057,18 +1072,14 @@ func (t *turtle) selfHealing(ctx context.Context, targetLayerID types.LayerID) {
 				return
 			}
 
-			contextualValidity[blockID] = globalOpinionOnBlock == support
+			isValid := globalOpinionOnBlock == support
+			if err := t.bdp.SaveContextualValidity(blockID, candidateLayerID, isValid); err != nil {
+				logger.With().Error("error saving block contextual validity", blockID, log.Err(err))
+			}
 		}
 
 		// TODO: do we overwrite the layer input vector in the database here?
-		// TODO: do we mark approved blocks good? do we update other blocks' opinions of them?
 
-		// record the contextual validity for all blocks in this layer
-		for blk, v := range contextualValidity {
-			if err := t.bdp.SaveContextualValidity(blk, candidateLayerID, v); err != nil {
-				logger.With().Error("error saving contextual validity on block", blk, log.Err(err))
-			}
-		}
 		t.Verified = candidateLayerID
 		pbaseNew = candidateLayerID
 		logger.With().Info("self healing verified candidate layer")
