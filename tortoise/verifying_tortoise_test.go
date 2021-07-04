@@ -275,6 +275,7 @@ func makeLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, 
 		blk.Initialize()
 		lyr.AddBlock(blk)
 		require.NoError(t, msh.AddBlock(blk))
+		fmt.Println("generated block", blk.ID(), "in layer", l)
 	}
 
 	return lyr
@@ -497,10 +498,10 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 }
 
 type baseBlockProvider func(context.Context) (types.BlockID, [][]types.BlockID, error)
-type inputVectorProvider func(l types.LayerID) ([]types.BlockID, error)
+type inputVectorProvider func(types.LayerID) ([]types.BlockID, error)
 
 func generateBlocks(l types.LayerID, n int, bbp baseBlockProvider) (blocks []*types.Block) {
-	fmt.Println("choosing base block for layer", l)
+	fmt.Println("======================== choosing base block for layer", l)
 	b, lists, err := bbp(context.TODO())
 	if err != nil {
 		panic(fmt.Sprint("no base block for layer: ", err))
@@ -525,6 +526,7 @@ func generateBlocks(l types.LayerID, n int, bbp baseBlockProvider) (blocks []*ty
 		blk.Signature = signing.NewEdSigner().Sign(b.Bytes())
 		blk.Initialize()
 		blocks = append(blocks, blk)
+		fmt.Println("generated block", blk.ID(), "in layer", l)
 	}
 	return
 }
@@ -1804,4 +1806,148 @@ func TestRerunAndRevert(t *testing.T) {
 	isValid, err = mdb.ContextualValidity(block1ID)
 	r.NoError(err)
 	r.False(isValid)
+}
+
+func TestHealBalanceAttack(t *testing.T) {
+	log.DebugMode(true)
+	r := require.New(t)
+	mdb := getInMemMesh()
+	alg := defaultAlgorithm(t, mdb)
+	l0ID := types.GetEffectiveGenesis()
+	layerSize := 4
+	l4ID := l0ID.Add(4)
+	l5ID := l4ID.Add(1)
+
+	// create several good layers and make sure verified layer advances
+	makeAndProcessLayer(t, l0ID.Add(1), alg.trtl, layerSize, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(2), alg.trtl, layerSize, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(3), alg.trtl, layerSize, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l4ID, alg.trtl, layerSize, mdb, mdb.LayerBlockIds)
+	makeLayer(t, l5ID, alg.trtl, layerSize, mdb, mdb.LayerBlockIds)
+	checkVerifiedLayer(t, alg.trtl, l0ID.Add(3))
+
+	// everyone will agree on the validity of these blocks
+	l5blockIDs, err := mdb.LayerBlockIds(l5ID)
+	r.NoError(err)
+	l5BaseBlock1 := l5blockIDs[0]
+	l5BaseBlock2 := l5blockIDs[1]
+
+	// opinions will differ about the validity of this block
+	// note: we are NOT adding it to the layer input vector, so this node thinks the block is invalid (late)
+	// this means that later blocks/layers with a base block or vote that supports this block will not be marked good
+	l4lateblock := generateBlocks(l4ID, 1, alg.BaseBlock)[0]
+	r.NoError(mdb.AddBlock(l4lateblock))
+
+	// this primes the block opinions for these blocks, without attempting to verify the previous layer
+	r.NoError(alg.trtl.handleLayerBlocks(context.TODO(), l5ID))
+
+	// make one of the base blocks support it, and make one vote against it. note: these base blocks have already been
+	// marked good. this means that blocks that use one of these as a base block will also be marked good (as long as
+	// they don't add explicit exception votes for or against the late block).
+	alg.trtl.BlockOpinionsByLayer[l5ID][l5BaseBlock1].BlockOpinions[l4lateblock.ID()] = support
+	alg.trtl.BlockOpinionsByLayer[l5ID][l5BaseBlock2].BlockOpinions[l4lateblock.ID()] = against
+	alg.trtl.BlockOpinionsByLayer[l5ID][l5blockIDs[2]].BlockOpinions[l4lateblock.ID()] = support
+	alg.trtl.BlockOpinionsByLayer[l5ID][l5blockIDs[3]].BlockOpinions[l4lateblock.ID()] = against
+
+	// now process l5
+	r.NoError(mdb.SaveLayerInputVectorByID(l5ID, l5blockIDs))
+	r.NoError(alg.trtl.verifyLayers(context.TODO()))
+	checkVerifiedLayer(t, alg.trtl, l0ID.Add(3))
+
+	// we can trick calculateExceptions into not adding explicit exception votes for or against this block by
+	// making it think we've already evicted its layer
+	// TODO: but, eventually, when it's old enough, we do need exceptions to be added so healing can happen
+	alg.trtl.LastEvicted = l4ID
+
+	counter := 0
+	bbp := func(context.Context) (types.BlockID, [][]types.BlockID, error) {
+		defer func() { counter++ }()
+
+		// half the time, return a base block that supports the late block
+		// half the time, return one that does not support it
+		var baseBlockID types.BlockID
+		if counter%2 == 0 {
+			baseBlockID = l5BaseBlock1
+		} else {
+			baseBlockID = l5BaseBlock2
+		}
+
+		evm, err := alg.trtl.calculateExceptions(context.TODO(), l5ID, alg.trtl.BlockOpinionsByLayer[l5ID][baseBlockID])
+		r.NoError(err)
+		return baseBlockID, [][]types.BlockID{
+			blockMapToArray(evm[0]),
+			blockMapToArray(evm[1]),
+			blockMapToArray(evm[2]),
+		}, nil
+	}
+
+	// create a series of layers, each with half of blocks supporting and half against this block
+	for i := 0; types.LayerID(i) < alg.trtl.Zdist+alg.trtl.ConfidenceParam-1; i++ {
+		layerID := l0ID.Add(6 + uint16(i))
+
+		// half of blocks use a base block that supports the late block
+		// half use a base block that doesn't support it
+		for j := 0; j < 2; j++ {
+			blocks := generateBlocks(layerID, layerSize/2, bbp)
+			for _, block := range blocks {
+				r.NoError(mdb.AddBlock(block))
+			}
+		}
+
+		blockIDs, err := mdb.LayerBlockIds(layerID)
+		r.NoError(err)
+		r.NoError(mdb.SaveLayerInputVectorByID(layerID, blockIDs))
+		r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), layerID))
+
+		// half are aware of it and explicitly support it
+		//makeAndProcessLayer(t, l0ID.Add(6+uint16(i)), alg.trtl, layerSize/2, mdb, mdb.LayerBlockIds)
+	}
+	checkVerifiedLayer(t, alg.trtl, l0ID.Add(3))
+
+	//// create half of the next layer (but don't process it yet) before the late block arrives
+	//l6blocks := generateBlocks(l0ID.Add(6), layerSize/2, alg.BaseBlock)
+	//
+	//// deliver the late block
+	//r.NoError(mdb.AddBlock(l5lateblock))
+	//r.NoError(alg.trtl.processBlocks(context.TODO(), []*types.Block{l5lateblock}))
+	//
+	//// now create the second half of the next layer
+	//
+	//// make sure these blocks vote FOR the late block
+	//mdb.InputVectorBackupFunc = mdb.LayerBlockIds
+	//l6blocks = append(l6blocks, generateBlocks(l0ID.Add(6), layerSize/2, alg.BaseBlock)...)
+	//l6blockIDs := make([]types.BlockID, 0, len(l6blocks))
+	//for _, block := range l6blocks {
+	//	l6blockIDs = append(l6blockIDs, block.ID())
+	//}
+	//r.NoError(mdb.SaveLayerInputVectorByID(l0ID.Add(6), l6blockIDs))
+	//
+	//// store and process the new layer
+	//for _, block := range l6blocks {
+	//	r.NoError(mdb.AddBlock(block))
+	//}
+	//r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), l0ID.Add(6)))
+	//
+	//// verification should get stuck
+	//checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
+	//
+	//// make sure future layers/blocks have no opinion about the late block
+	//mdb.InputVectorBackupFunc = nil
+	//
+	//// then assumptions are restored: the attack ends
+	//for i := 0; types.LayerID(i) < alg.trtl.Zdist+alg.trtl.ConfidenceParam-1; i++ {
+	//	makeAndProcessLayer(t, l0ID.Add(7+uint16(i)), alg.trtl, layerSize, mdb, mdb.LayerBlockIds)
+	//}
+	//checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
+
+	// healing should then confirm the layer
+	firstHealedLayer := l0ID.Add(6 + uint16(alg.trtl.Zdist+alg.trtl.ConfidenceParam-1))
+	mdb.RecordCoinflip(context.TODO(), firstHealedLayer-1, true)
+	makeAndProcessLayer(t, firstHealedLayer, alg.trtl, layerSize, mdb, mdb.LayerBlockIds)
+	checkVerifiedLayer(t, alg.trtl, firstHealedLayer-1)
+
+	// layer validity should match recent coinflip value
+	valid, err := mdb.ContextualValidity(l4lateblock.ID())
+	r.NoError(err)
+	r.Equal(true, valid)
 }
