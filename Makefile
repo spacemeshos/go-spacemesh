@@ -81,9 +81,10 @@ endif
 all: install build
 .PHONY: all
 
-
 install:
-	# none yet
+	go run scripts/check-go-version.go --major 1 --minor 15
+	go mod download
+	GO111MODULE=off go get golang.org/x/lint/golint
 .PHONY: install
 
 build: go-spacemesh

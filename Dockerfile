@@ -62,16 +62,11 @@ ENV GOPROXY=https://proxy.golang.org
 # We want to populate the module cache based on the go.{mod,sum} files.
 COPY go.mod .
 COPY go.sum .
-
-# Download dependencies
-RUN go mod download
-
-COPY setup_env.sh .
 COPY scripts/* scripts/
 
-RUN ./setup_env.sh
-
-RUN go get github.com/golang/snappy@v0.0.1
+RUN go run scripts/check-go-version.go --major 1 --minor 15
+RUN	go mod download
+RUN GO111MODULE=off go get golang.org/x/lint/golint
 
 # This image builds the go-spacemesh server
 FROM build_base AS server_builder
