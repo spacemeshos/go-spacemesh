@@ -412,8 +412,8 @@ func healingTester(dependencies []int) TestScenario {
 				log.Int("app", i),
 				log.FieldNamed("nodeid", app.nodeID))
 
-			// verified needs to nearly catch up to last received
-			if lyrVerified <= lastVerifiedLayer || lyrVerified.Add(2) < lyrReceived {
+			// verified needs to advance, and to nearly catch up to last received
+			if lyrVerified <= lastVerifiedLayer.Add(2) || lyrVerified.Add(2) < lyrReceived {
 				return false
 			}
 		}
@@ -536,19 +536,12 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 		}
 	}
 
-	//lateNodeKey := suite.apps[len(suite.apps)-1].nodeID.Key
 	for i, d := range datamap {
 		log.Info("node %v in len(layerstoblocks) %v", i, len(d.layertoblocks))
-		//if i == lateNodeKey { // skip late node
-		//	continue
-		//}
 		for i2, d2 := range datamap {
 			if i == i2 {
 				continue
 			}
-			//if i2 == lateNodeKey { // skip late node
-			//	continue
-			//}
 
 			assert.Equal(suite.T(), len(d.layertoblocks), len(d2.layertoblocks), "%v layer block count mismatch with %v: %v not %v", i, i2, len(d.layertoblocks), len(d2.layertoblocks))
 
@@ -589,14 +582,13 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	blocksPerEpochTarget := layerAvgSize * layersPerEpoch
 
 	allApps := append(suite.apps, suite.killedApps...)
-	expectedEpochWeightInitial := configuredTotalWeight(allApps)
-	expectedEpochWeightFinal := configuredTotalWeight(suite.apps)
+	expectedEpochWeight := configuredTotalWeight(allApps)
 
 	// note: expected no. blocks per epoch should remain the same even after some nodes are killed, since the
 	// remaining nodes will be eligible for proportionally more blocks per layer
 	expectedBlocksPerEpoch := 0
 	for _, app := range allApps {
-		expectedBlocksPerEpoch += max(blocksPerEpochTarget*int(app.Config.SpaceToCommit)/int(expectedEpochWeightInitial), 1)
+		expectedBlocksPerEpoch += max(blocksPerEpochTarget*int(app.Config.SpaceToCommit)/int(expectedEpochWeight), 1)
 	}
 
 	// note: we expect the number of blocks to be a bit less than the expected number since, after some apps were
@@ -608,16 +600,14 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 		fmt.Sprintf("got unexpected block count! got: %v, want: %v. totalBlocks: %v, genesisBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v datamap: %v",
 			actualTotalBlocks, expectedTotalBlocks, totalBlocks, genesisBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, datamap))
 
-	totalWeightAllEpochs := calcTotalWeight(assert.New(suite.T()), suite.apps[0].atxDb, allApps)
+	totalWeightAllEpochs := calcTotalWeight(assert.New(suite.T()), suite.apps[0].atxDb, allApps, types.EpochID(totalEpochs))
 
-	// assert number of ATXs
-	//allMiners := len(suite.apps)
-	expectedTotalWeight := uint64(suite.killEpoch)*expectedEpochWeightInitial + uint64(totalEpochs-int(suite.killEpoch))*expectedEpochWeightFinal
-	//expectedTotalWeight := uint64(totalEpochs) * expectedEpochWeight
-	assert.Equal(suite.T(), expectedTotalWeight, totalWeightAllEpochs,
-		fmt.Sprintf("total atx weight is wrong, got: %v, want: %v.\n"+
-			"totalEpochs: %v, numApps: %v, killEpoch: %v, killedApps: %v",
-			totalWeightAllEpochs, expectedTotalWeight, totalEpochs, len(allApps), suite.killEpoch, len(suite.killedApps)))
+	// assert total ATX weight
+	expectedTotalWeight := uint64(totalEpochs) * expectedEpochWeight
+	assert.Equal(suite.T(), int(expectedTotalWeight), int(totalWeightAllEpochs),
+		fmt.Sprintf("total atx weight is wrong, got: %v, want: %v\n"+
+			"totalEpochs: %v, numApps: %v, expectedWeight: %v",
+			totalWeightAllEpochs, expectedTotalWeight, totalEpochs, len(allApps), expectedEpochWeight))
 }
 
 func max(i, j int) int {
@@ -627,7 +617,11 @@ func max(i, j int) int {
 	return j
 }
 
-func calcTotalWeight(assert *assert.Assertions, atxDb *activation.DB, apps []*SpacemeshApp) (totalWeightAllEpochs uint64) {
+func calcTotalWeight(
+	assert *assert.Assertions,
+	atxDb *activation.DB,
+	apps []*SpacemeshApp,
+	untilEpoch types.EpochID) (totalWeightAllEpochs uint64) {
 	for _, app := range apps {
 		atxID, err := atxDb.GetNodeLastAtxID(app.nodeID)
 		assert.NoError(err)
@@ -635,9 +629,18 @@ func calcTotalWeight(assert *assert.Assertions, atxDb *activation.DB, apps []*Sp
 		for atxID != *types.EmptyATXID {
 			atx, err := atxDb.GetAtxHeader(atxID)
 			assert.NoError(err)
-			totalWeightAllEpochs += atx.GetWeight()
-			log.Info("added atx. pub layer: %v, target epoch: %v, weight: %v",
-				atx.PubLayerID, atx.TargetEpoch(), atx.GetWeight())
+			if atx.TargetEpoch() < untilEpoch {
+				totalWeightAllEpochs += atx.GetWeight()
+				log.With().Info("added atx weight",
+					log.FieldNamed("pub_layer", atx.PubLayerID),
+					log.FieldNamed("target_epoch", atx.TargetEpoch()),
+					log.Uint64("weight", atx.GetWeight()))
+			} else {
+				log.With().Info("ignoring atx after final epoch",
+					log.FieldNamed("pub_layer", atx.PubLayerID),
+					log.FieldNamed("target_epoch", atx.TargetEpoch()),
+					log.Uint64("weight", atx.GetWeight()))
+			}
 			atxID = atx.PrevATXID
 		}
 	}

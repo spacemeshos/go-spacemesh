@@ -215,7 +215,7 @@ type network interface {
 func InitSingleInstance(cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network) (*SpacemeshApp, error) {
 	smApp := NewSpacemeshApp()
 	smApp.Config = &cfg
-	smApp.Config.SpaceToCommit = smApp.Config.POST.SpacePerUnit << (i % 5)
+	smApp.Config.SpaceToCommit = smApp.Config.POST.SpacePerUnit << (4 - i%5)
 	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
 	smApp.Config.GenesisTime = genesisTime
 	edSgn := signing.NewEdSigner()
