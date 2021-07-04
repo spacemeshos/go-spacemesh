@@ -604,7 +604,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 
 	// assert total ATX weight
 	expectedTotalWeight := uint64(totalEpochs) * expectedEpochWeight
-	assert.Equal(suite.T(), int(expectedTotalWeight), int(totalWeightAllEpochs),
+	suite.Equal(int(expectedTotalWeight), int(totalWeightAllEpochs),
 		fmt.Sprintf("total atx weight is wrong, got: %v, want: %v\n"+
 			"totalEpochs: %v, numApps: %v, expectedWeight: %v",
 			totalWeightAllEpochs, expectedTotalWeight, totalEpochs, len(allApps), expectedEpochWeight))
@@ -629,7 +629,7 @@ func calcTotalWeight(
 		for atxID != *types.EmptyATXID {
 			atx, err := atxDb.GetAtxHeader(atxID)
 			assert.NoError(err)
-			if atx.TargetEpoch() < untilEpoch {
+			if atx.TargetEpoch() < untilEpoch+2 {
 				totalWeightAllEpochs += atx.GetWeight()
 				log.With().Info("added atx weight",
 					log.FieldNamed("pub_layer", atx.PubLayerID),

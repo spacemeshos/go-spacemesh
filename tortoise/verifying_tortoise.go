@@ -843,6 +843,8 @@ candidateLayerLoop:
 				// if self healing made progress, short-circuit processing of this layer, but allow verification of
 				// later layers to continue
 				if t.Verified > lastVerified {
+					// LANE TODO: re-score blocks as good in healed interval
+
 					continue candidateLayerLoop
 				}
 				// otherwise, if self healing didn't make any progress, there's no point in continuing to attempt

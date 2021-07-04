@@ -1740,7 +1740,7 @@ func TestHealingAfterPartition(t *testing.T) {
 
 	// healing would begin here, but without enough blocks to accumulate votes to cross the global threshold, we're
 	// effectively stuck (until, in practice, active set size would be reduced in a following epoch and the remaining
-	// miners would produce more blocks)
+	// miners would produce more blocks--this is tested in the app tests)
 	firstHealedLayer := l0ID.Add(10 + uint16(alg.trtl.Zdist+alg.trtl.ConfidenceParam))
 	makeAndProcessLayer(t, firstHealedLayer, alg.trtl, goodLayerSize/2, mdb, mdb.LayerBlockIds)
 	checkVerifiedLayer(t, alg.trtl, l0ID.Add(8))
