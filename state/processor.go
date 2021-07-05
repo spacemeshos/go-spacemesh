@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/trie"
 )
 
@@ -32,11 +31,6 @@ type PreImages struct {
 // mem pool
 type Projector interface {
 	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
-}
-
-// Gossip is the interface to Gossip network provider
-type Gossip interface {
-	AddListener(channel string, priority priorityq.Priority, dataHandler func(data service.GossipMessage, syncer service.Syncer))
 }
 
 // TransactionProcessor is the struct containing state db and is responsible for applying transactions into it

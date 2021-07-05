@@ -16,7 +16,7 @@ type ThreadSafeVerifyingTortoise struct {
 
 // Config holds the arguments and dependencies to create a verifying tortoise instance.
 type Config struct {
-	LayerSyze int
+	LayerSize int
 	Database  blockDataProvider
 	Hdist     int
 	Log       log.Log
@@ -28,7 +28,7 @@ func NewVerifyingTortoise(cfg Config) *ThreadSafeVerifyingTortoise {
 	if cfg.Recovered {
 		return recoveredVerifyingTortoise(cfg.Database, cfg.Log)
 	}
-	return verifyingTortoise(cfg.LayerSyze, cfg.Database, cfg.Hdist, cfg.Log)
+	return verifyingTortoise(cfg.LayerSize, cfg.Database, cfg.Hdist, cfg.Log)
 }
 
 // verifyingTortoise creates a new verifying tortoise wrapper

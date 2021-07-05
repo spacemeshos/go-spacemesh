@@ -245,7 +245,6 @@ endif
 dockertest-mining: dockerbuild-test dockerrun-mining
 .PHONY: dockertest-mining
 
-
 dockerrun-hare:
 ifndef ES_PASS
 	$(error ES_PASS is not set)
@@ -253,62 +252,49 @@ endif
 	$(DOCKERRUN) pytest -s -v hare/test_hare.py::test_hare_sanity --tc-file=hare/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 .PHONY: dockerrun-hare
 
-
 dockertest-hare: dockerbuild-test dockerrun-hare
 .PHONY: dockertest-hare
-
 
 dockerrun-sync:
 ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
-
 	$(DOCKERRUN) pytest -s -v sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 
 .PHONY: dockerrun-sync
 
-dockertest-sync-elk: dockerbuild-test dockerrun-sync
+dockertest-sync: dockerbuild-test dockerrun-sync
 .PHONY: dockertest-sync
 
-
-dockerrun-late-nodes-elk:
+dockerrun-late-nodes:
 ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
-
 	$(DOCKERRUN) pytest -s -v late_nodes/test_delayed.py --tc-file=late_nodes/delayed_config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-
 .PHONY: dockerrun-late-nodes
 
 dockertest-late-nodes: dockerbuild-test dockerrun-late-nodes
 .PHONY: dockertest-late-nodes
 
-
 dockerrun-genesis-voting:
 ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
-
 	$(DOCKERRUN) pytest -s -v sync/genesis/test_genesis_voting.py --tc-file=sync/genesis/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-
 .PHONY: dockerrun-genesis-voting
 
 dockertest-genesis-voting: dockerbuild-test dockerrun-genesis-voting
 .PHONY: dockertest-genesis-voting
 
-
 dockerrun-blocks-add-node:
 ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
-
 	$(DOCKERRUN) pytest -s -v block_atx/add_node/test_blocks_add_node.py --tc-file=block_atx/add_node/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-
 .PHONY: dockerrun-blocks-add-node
 
 dockertest-blocks-add-node: dockerbuild-test dockerrun-blocks-add-node
 .PHONY: dockertest-blocks-add-node
-
 
 dockerrun-blocks-remove-node:
 ifndef ES_PASS
@@ -319,64 +305,51 @@ endif
 
 .PHONY: dockerrun-blocks-remove-node
 
-dockertest-blocks-remove-node-elk: dockerbuild-test dockerrun-blocks-remove-node
+dockertest-blocks-remove-node: dockerbuild-test dockerrun-blocks-remove-node
 .PHONY: dockertest-blocks-remove-node
 
-
 dockerrun-blocks-stress:
-ifndef ES_PASSWD
-	$(error ES_PASSWD is not set)
+ifndef ES_PASS
+	$(error ES_PASS is not set)
 endif
-
-	$(DOCKERRUN) pytest -s -v stress/blocks_stress/test_stress_blocks.py --tc-file=stress/blocks_stress/config.yaml --tc-format=yaml
-
+	$(DOCKERRUN) pytest -s -v stress/blocks_stress/test_stress_blocks.py --tc-file=stress/blocks_stress/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 .PHONY: dockerrun-blocks-stress
 
 dockertest-blocks-stress: dockerbuild-test dockerrun-blocks-stress
 .PHONY: dockertest-blocks-stress
 
-
 dockerrun-grpc-stress:
-ifndef ES_PASSWD
-	$(error ES_PASSWD is not set)
+ifndef ES_PASS
+	$(error ES_PASS is not set)
 endif
-
-	$(DOCKERRUN) pytest -s -v stress/grpc_stress/test_stress_grpc.py --tc-file=stress/grpc_stress/config.yaml --tc-format=yaml
-
+	$(DOCKERRUN) pytest -s -v stress/grpc_stress/test_stress_grpc.py --tc-file=stress/grpc_stress/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 .PHONY: dockerrun-grpc-stress
 
 dockertest-grpc-stress: dockerbuild-test dockerrun-grpc-stress
 .PHONY: dockertest-grpc-stress
 
-
 dockerrun-sync-stress:
-ifndef ES_PASSWD
-	$(error ES_PASSWD is not set)
+ifndef ES_PASS
+	$(error ES_PASS is not set)
 endif
-
-	$(DOCKERRUN) pytest -s -v stress/sync_stress/test_sync.py --tc-file=stress/sync_stress/config.yaml --tc-format=yaml
-
+	$(DOCKERRUN) pytest -s -v stress/sync_stress/test_sync.py --tc-file=stress/sync_stress/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 .PHONY: dockerrun-sync-stress
 
 dockertest-sync-stress: dockerbuild-test dockerrun-sync-stress
 .PHONY: dockertest-sync-stress
 
-
 dockerrun-tx-stress:
-ifndef ES_PASSWD
-	$(error ES_PASSWD is not set)
+ifndef ES_PASS
+	$(error ES_PASS is not set)
 endif
-
-	$(DOCKERRUN) pytest -s -v stress/tx_stress/test_stress_txs.py --tc-file=stress/tx_stress/config.yaml --tc-format=yaml
-
+	$(DOCKERRUN) pytest -s -v stress/tx_stress/test_stress_txs.py --tc-file=stress/tx_stress/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
 .PHONY: dockerrun-tx-stress
 
 dockertest-tx-stress: dockerbuild-test dockerrun-tx-stress
 .PHONY: dockertest-tx-stress
 
-
 # The following is used to run tests one after the other locally
-dockerrun-test: dockerbuild-test-elk dockerrun-p2p-elk dockerrun-mining-elk dockerrun-hare-elk dockerrun-sync-elk dockerrun-late-nodes-elk dockerrun-blocks-add-node-elk dockerrun-blocks-remove-node-elk
+dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes dockerrun-blocks-add-node dockerrun-blocks-remove-node
 .PHONY: dockerrun-test
 
 dockerrun-all: dockerpush dockerrun-test

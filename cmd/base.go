@@ -116,14 +116,22 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 					val = viper.GetBool(name)
 				case "string":
 					val = viper.GetString(name)
-				case "int", "int8", "int16":
+				case "int":
 					val = viper.GetInt(name)
+				case "int8":
+					val = int8(viper.GetInt(name))
+				case "int16":
+					val = int16(viper.GetInt(name))
 				case "int32":
 					val = viper.GetInt32(name)
 				case "int64":
 					val = viper.GetInt64(name)
-				case "uint", "uint8", "uint16":
+				case "uint":
 					val = viper.GetUint(name)
+				case "uint8":
+					val = uint8(viper.GetUint(name))
+				case "uint16":
+					val = uint16(viper.GetUint(name))
 				case "uint32":
 					val = viper.GetUint32(name)
 				case "uint64":

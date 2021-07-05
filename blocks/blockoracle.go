@@ -14,8 +14,8 @@ import (
 
 type activationDB interface {
 	GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error)
-	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
-	GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID, error)
+	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
+	GetEpochWeight(types.EpochID) (uint64, []types.ATXID, error)
 }
 
 type vrfSigner interface {
