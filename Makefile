@@ -54,19 +54,19 @@ endif
 
 
 # This prevents "the input device is not a TTY" error from docker in CI
-DOCKERRUNARGS := --rm -e ES_PASSWD="$(ES_PASSWD)" \
+DOCKERRUNARGS := --rm \
 	-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
-	-e CLUSTER_NAME_ELK=$(CLUSTER_NAME_ELK) \
+ 	-e CLUSTER_NAME_ELK=$(CLUSTER_NAME_ELK) \
 	-e CLUSTER_ZONE_ELK=$(CLUSTER_ZONE_ELK) \
 	-e PROJECT_NAME=$(PROJECT_NAME) \
 	-e ES_USER=$(ES_USER) \
 	-e ES_PASS=$(ES_PASS) \
+	-e ES_PASSWD=$(ES_PASSWD) \
 	-e MAIN_ES_IP=$(MAIN_ES_IP) \
 	-e TD_QUEUE_NAME=$(TD_QUEUE_NAME) \
 	-e TD_QUEUE_ZONE=$(TD_QUEUE_ZONE) \
 	-e DUMP_QUEUE_NAME=$(DUMP_QUEUE_NAME) \
-	-e DUMP_QUEUE_ZONE=$(DUMP_QUEUE_ZONE) \
-	-e CLIENT_DOCKER_IMAGE="$(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(BRANCH)"
+	-e DUMP_QUEUE_ZONE=$(DUMP_QUEUE_ZONE)
 
 DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(BRANCH)
 
@@ -76,7 +76,7 @@ ifeq ($(BRANCH),$(filter $(BRANCH),staging trying))
   DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
 endif
 
-DOCKERRUNARGS := $(DOCKERRUNARGS) -e CLIENT_DOCKER_IMAGE=spacemeshos/$(DOCKER_IMAGE)
+DOCKERRUNARGS := $(DOCKERRUNARGS) -e CLIENT_DOCKER_IMAGE=$(DOCKER_HUB)/$(DOCKER_IMAGE)
 
 ifdef INTERACTIVE
   DOCKERRUN := docker run -it $(DOCKERRUNARGS) go-spacemesh-python:$(BRANCH)
@@ -94,11 +94,11 @@ build: go-spacemesh
 .PHONY: build
 
 hare p2p sync: get-gpu-setup
-	cd cmd/$@ ; go build -o $(BIN_DIR)go-$@$(EXE)
+	cd cmd/$@ ; go build -o $(BIN_DIR)go-$@$(EXE) .
 go-spacemesh: get-gpu-setup
-	cd cmd/node ; go build -o $(BIN_DIR)$@$(EXE)
+	go build -o $(BIN_DIR)$@$(EXE) .
 harness: get-gpu-setup
-	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE)
+	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE) .
 .PHONY: hare p2p sync harness go-spacemesh
 
 tidy:
@@ -190,16 +190,9 @@ dockerbuild-go:
 	docker build -t $(DOCKER_IMAGE) .
 .PHONY: dockerbuild-go
 
-dockerbuild-test:
-	docker build -f DockerFileTests --build-arg GCLOUD_KEY="$(GCLOUD_KEY)" \
-	             --build-arg PROJECT_NAME="$(PROJECT_NAME)" \
-	             --build-arg CLUSTER_NAME="$(CLUSTER_NAME)" \
-	             --build-arg CLUSTER_ZONE="$(CLUSTER_ZONE)" \
-	             -t go-spacemesh-python:$(BRANCH) .
-.PHONY: dockerbuild-test
-
 dockerbuild-test-elk:
-	docker build -f DockerFileTests --build-arg GCLOUD_KEY="$(GCLOUD_KEY)" \
+	docker build -f DockerFileTests \
+                 --build-arg GCLOUD_KEY="$(GCLOUD_KEY)" \
 	             --build-arg PROJECT_NAME="$(PROJECT_NAME)" \
 	             --build-arg CLUSTER_NAME="$(CLUSTER_NAME_ELK)" \
 	             --build-arg CLUSTER_ZONE="$(CLUSTER_ZONE_ELK)" \
@@ -210,7 +203,9 @@ dockerpush: dockerbuild-go dockerpush-only
 .PHONY: dockerpush
 
 dockerpush-only:
+ifneq ($(DOCKER_USERNAME):$(DOCKER_PASSWORD),:)
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
+endif
 	docker tag $(DOCKER_IMAGE) $(DOCKER_HUB)/$(DOCKER_IMAGE)
 	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE)
 

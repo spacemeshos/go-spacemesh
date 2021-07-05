@@ -21,8 +21,9 @@ RUN bash -c "for i in {1..9}; do mkdir -p /usr/share/man/man\$i; done" \
     procps \
     net-tools \
     apt-transport-https \
+    file \
     # -- it allows to start with nvidia-docker runtime --
-    libnvidia-compute-390 \
+    #libnvidia-compute-390 \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/* \
  && locale-gen en_US.UTF-8 \

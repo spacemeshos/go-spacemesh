@@ -179,11 +179,11 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().UintVar(&config.POST.BitsPerLabel, "post-bits-per-label",
 		config.POST.BitsPerLabel, "")
-	cmd.PersistentFlags().UintVar(&config.POST.LabelsPerUnit, "post-labelsperunit",
+	cmd.PersistentFlags().UintVar(&config.POST.LabelsPerUnit, "post-labels-per-unit",
 		config.POST.LabelsPerUnit, "")
-	cmd.PersistentFlags().UintVar(&config.POST.MinNumUnits, "post-numunits-min",
+	cmd.PersistentFlags().UintVar(&config.POST.MinNumUnits, "post-min-numunits",
 		config.POST.MinNumUnits, "")
-	cmd.PersistentFlags().UintVar(&config.POST.MaxNumUnits, "post-numunits-max",
+	cmd.PersistentFlags().UintVar(&config.POST.MaxNumUnits, "post-max-numunits",
 		config.POST.MaxNumUnits, "")
 	cmd.PersistentFlags().UintVar(&config.POST.K1, "post-k1",
 		config.POST.K1, "")

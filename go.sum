@@ -499,6 +499,10 @@ github.com/spacemeshos/poet v0.1.1-0.20201013202053-99eed195dc2d h1:S4vq8zxKOp1S
 github.com/spacemeshos/poet v0.1.1-0.20201013202053-99eed195dc2d/go.mod h1:Zcdq864a2sxmWjyI1/3gN1Xk1jVWerzFbFw7bjPRYN4=
 github.com/spacemeshos/post v0.0.0-20210701191815-9de0c436dab0 h1:8c9BHHQOyCXjsY7EpVmhuREf6SeQrc4Iuok5/Ko3WkQ=
 github.com/spacemeshos/post v0.0.0-20210701191815-9de0c436dab0/go.mod h1:DZlX4K5FyT0VUyj3AmzZQ9sBNOXx9kJJQK19mLIEH5k=
+github.com/spacemeshos/post v0.0.0-20210705174458-7ac15dd6a184 h1:Ys/gph7uLxJZGxZbdKINfsXxkth+p7jeqkmVyMYEVdw=
+github.com/spacemeshos/post v0.0.0-20210705174458-7ac15dd6a184/go.mod h1:DZlX4K5FyT0VUyj3AmzZQ9sBNOXx9kJJQK19mLIEH5k=
+github.com/spacemeshos/post v0.0.0-20210705200759-2b23a501b8cc h1:C98OqdrWWH65XyAqxX78fkKJGS+uV4kfOtQUEv0agyg=
+github.com/spacemeshos/post v0.0.0-20210705200759-2b23a501b8cc/go.mod h1:DZlX4K5FyT0VUyj3AmzZQ9sBNOXx9kJJQK19mLIEH5k=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9 h1:Cc+np6ORem5wrvO+YHQ1sdu71ItiQVRiYB4ugazpgxM=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9/go.mod h1:Pz5LyRghtiEuSixOVGO0da5AxKBZa6+Yq8ZJfjTAPI0=
 github.com/spacemeshos/smutil v0.0.0-20190604133034-b5189449f5c5 h1:a+uIX0wjwWdK2JpsQnNhSdp3KDkqGg6P7Jp3nMZP8BM=

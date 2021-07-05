@@ -1,7 +1,7 @@
 PROJ_DIR := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
 BIN_DIR ?= $(PROJ_DIR)build/
 
-export CGO_LDFLAGS := -L$(BIN_DIR) -Wl,-rpath,\$$ORIGIN $(CGO_LDFLAGS_EXT)
+export CGO_LDFLAGS := -L$(BIN_DIR) -Wl,-rpath,$$ORIGIN $(CGO_LDFLAGS_EXT)
 export GOOS
 export GOARCH
 export GOARM
@@ -32,9 +32,9 @@ endif
 
 $(info "OS: $(OS), HOST_OS: $(HOST_OS), GOOS: $(GOOS), GOARCH: $(GOARH), BIN_DIR: $(BIN_DIR), platform: $(platform)")
 
-GPU_SETUP_REV = 0.1.20
+GPU_SETUP_REV = 0.1.21
 GPU_SETUP_ZIP = libgpu-setup-$(platform)-$(GPU_SETUP_REV).zip
-GPU_SETUP_URL_ZIP = https://github.com/spacemeshos/gpu-post/releases/download/v$(GPU_SETUP_REV)/$(GPU_SETUP_ZIP)
+GPU_SETUP_URL_ZIP = https://github.com/spacemeshos/gpu-post/releases/download/v$(GPU_SETUP_REV)/$(platform).zip
 ifeq ($(platform), windows)
   GPU_SETUP_LIBS = gpu-setup.dll
 else
