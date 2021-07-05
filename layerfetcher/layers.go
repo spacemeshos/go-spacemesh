@@ -235,15 +235,16 @@ func (l *Logic) LayerHashBlocksReceiver(ctx context.Context, msg []byte) []byte 
 
 // tbReceiver returns the tortoise beacon for the given layer ID
 func (l *Logic) tortoiseBeaconReceiver(ctx context.Context, msg []byte) []byte {
-	l.log.Info("got tortoise beacon request ")
-
 	epoch := types.EpochID(util.BytesToUint64(msg))
+	l.log.Info("got tortoise beacon request for epoch %v", epoch)
+
 	beacon, ok := l.tbDB.GetTortoiseBeacon(epoch)
 	if !ok {
 		l.log.Warning("cannot find tortoise beacon for epoch %v", epoch)
 		return []byte{}
 	}
 
+	l.log.Info("replying to tortoise beacon request for epoch %v: %v", epoch, beacon.String())
 	return beacon.Bytes()
 }
 
@@ -694,6 +695,7 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 		}
 	}
 
+	l.log.Info("requesting tortoise beacon for epoch %v", id)
 	err := l.net.SendRequest(ctx, tbMsg, id.ToBytes(), fetch.GetRandomPeer(l.net.GetPeers()), receiveForPeerFunc, errFunc)
 	if err != nil {
 		return err
@@ -705,13 +707,19 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 		return res.Error
 	}
 
+	if len(res.TortoiseBeacon) == 0 {
+		l.log.Info("received empty tortoise beacon (peer does not have it): %v", res)
+		return nil
+	}
+
 	if len(res.TortoiseBeacon) != types.Hash32Length {
-		l.log.Debug("tortoise beacon response contains either empty or bad hash, ignoring: %v", res)
+		l.log.Warning("received tortoise beacon response contains either empty or bad hash, ignoring: %v", res)
 		return nil
 	}
 
 	var resHash types.Hash32
 	resHash.SetBytes(res.TortoiseBeacon)
 
+	l.log.Info("received tortoise beacon for epoch %v: %v", id, resHash.String())
 	return l.tbDB.SetTortoiseBeacon(id, resHash)
 }
