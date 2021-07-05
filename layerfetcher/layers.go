@@ -241,13 +241,10 @@ func (l *Logic) tortoiseBeaconReceiver(ctx context.Context, msg []byte) []byte {
 	beacon, ok := l.tbDB.GetTortoiseBeacon(epoch)
 	if !ok {
 		l.log.Warning("cannot find tortoise beacon for epoch %v", epoch)
+		return []byte{}
 	}
 
-	bts, err := types.InterfaceToBytes(beacon)
-	if err != nil {
-		l.log.Warning("cannot find marshal tortoise beacon for epoch %v: %v", epoch, err)
-	}
-	return bts
+	return beacon.Bytes()
 }
 
 // PollLayer performs the following
@@ -674,7 +671,7 @@ func (l *Logic) GetInputVector(id types.LayerID) error {
 
 type tortoiseBeaconRes struct {
 	Error          error
-	TortoiseBeacon types.Hash32
+	TortoiseBeacon []byte
 }
 
 // GetTortoiseBeacon gets tortoise beacon data from remote peer
@@ -683,10 +680,9 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 
 	//build receiver function
 	receiveForPeerFunc := func(data []byte) {
-		var tb types.Hash32
-		err := types.BytesToInterface(data, &tb)
+		var tb []byte
 		resCh <- tortoiseBeaconRes{
-			Error:          err,
+			Error:          nil,
 			TortoiseBeacon: tb,
 		}
 	}
@@ -694,7 +690,7 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 	errFunc := func(err error) {
 		resCh <- tortoiseBeaconRes{
 			Error:          err,
-			TortoiseBeacon: types.Hash32{},
+			TortoiseBeacon: nil,
 		}
 	}
 
@@ -709,5 +705,13 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 		return res.Error
 	}
 
-	return l.tbDB.SetTortoiseBeacon(id, res.TortoiseBeacon)
+	if len(res.TortoiseBeacon) != types.Hash32Length {
+		l.log.Debug("tortoise beacon response contains either empty or bad hash, ignoring: %v", res)
+		return nil
+	}
+
+	var resHash types.Hash32
+	resHash.SetBytes(res.TortoiseBeacon)
+
+	return l.tbDB.SetTortoiseBeacon(id, resHash)
 }
