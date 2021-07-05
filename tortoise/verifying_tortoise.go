@@ -30,7 +30,7 @@ var (
 	errNoBaseBlockFound                 = errors.New("no good base block within exception vector limit")
 	errBaseBlockNotInDatabase           = errors.New("inconsistent state: can't find base block in database")
 	errNotSorted                        = errors.New("input blocks are not sorted by layerID")
-	errstrNoCoinflip                    = "no weak coin value for current layer"
+	errstrNoCoinflip                    = "no weak coin value for layer"
 	errstrTooManyExceptions             = "too many exceptions to base block vote"
 	errstrBaseBlockLayerMissing         = "base block layer not found"
 	errstrBaseBlockNotFoundInLayer      = "base block opinions not found in layer"
@@ -881,8 +881,8 @@ func (t *turtle) layerCutoff() types.LayerID {
 	return t.Last - t.Hdist
 }
 
-// return the set of blocks we currently consider valid for the layer. factors in both local and global opinion,
-// depending how old the layer is, and also uses weak coin to break ties.
+// return the set of blocks we currently consider valid for the layer. it's based on both local and global opinion,
+// depending how old the layer is, and uses weak coin to break ties.
 func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) ([]types.BlockID, error) {
 	logger := t.logger.WithContext(ctx).WithFields(layerID)
 	var voteAbstain, voteAgainstAll []types.BlockID // nil slice, by default
@@ -906,6 +906,8 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 			for _, blockID := range layerBlockIds {
 				logger := logger.WithFields(log.FieldNamed("candidate_block_id", blockID))
 				sum := t.sumVotesForBlock(ctx, blockID, layerID+1, func(id types.BlockID) bool { return true })
+				// TODO: should delta here represent layer depth, or should it always be 1?
+				//   votes are counted for all layers!
 				localOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.AvgLayerSize, t.LocalThreshold, 1)
 				logger.With().Debug("local opinion on block in old layer",
 					sum,
@@ -918,6 +920,12 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 					// weak coin. note: we use the weak coin for the previous layer since we expect to receive blocks
 					// for a layer before hare finishes for that layer, i.e., before the weak coin value is ready for
 					// the layer.
+
+					// TODO: if we rescore old blocks, it's very likely that newly-created blocks will contain
+					//   exceptions for those blocks, and their opinion will differ from their base blocks for blocks
+					//   older than the base blocks, which will cause those blocks not to be marked good. is there
+					//   anything we can do about this? e.g., explicitly pick base blocks that agree with the new
+					//   opinion, or pick older base blocks.
 					if coin, exists := t.bdp.GetCoinflip(ctx, t.Last-1); exists {
 						logger.With().Info("rescoring all blocks in old layer using weak coin",
 							log.Int("count", len(layerBlockIds)),
@@ -930,7 +938,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 						// tails on the weak coin means vote against all blocks in the layer
 						return voteAgainstAll, nil
 					}
-					return nil, fmt.Errorf("%s %v", errstrNoCoinflip, t.Last)
+					return nil, fmt.Errorf("%s %v", errstrNoCoinflip, t.Last-1)
 				} // (nothing to do if local opinion is against, just don't include block in output)
 			}
 			logger.With().Debug("local opinion supports blocks in old, unverified layer",

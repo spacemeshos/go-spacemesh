@@ -1809,7 +1809,6 @@ func TestRerunAndRevert(t *testing.T) {
 }
 
 func TestHealBalanceAttack(t *testing.T) {
-	log.DebugMode(true)
 	r := require.New(t)
 	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
@@ -1856,6 +1855,10 @@ func TestHealBalanceAttack(t *testing.T) {
 
 	// we can trick calculateExceptions into not adding explicit exception votes for or against this block by
 	// making it think we've already evicted its layer
+	// basically, this is a shortcut: it lets us be lazy and just use our tortoise instance's calculateExceptions
+	// method to fill in the exceptions for later layers, but not make every new block vote for or against the
+	// late block (based on local opinion). without this, we'd need to override that method, too, and manually
+	// generate the exceptions list.
 	// TODO: but, eventually, when it's old enough, we do need exceptions to be added so healing can happen
 	alg.trtl.LastEvicted = l4ID
 
@@ -1882,8 +1885,27 @@ func TestHealBalanceAttack(t *testing.T) {
 	}
 
 	// create a series of layers, each with half of blocks supporting and half against this block
-	for i := 0; types.LayerID(i) < alg.trtl.Zdist+alg.trtl.ConfidenceParam-1; i++ {
-		layerID := l0ID.Add(6 + uint16(i))
+	healingDistance := alg.trtl.Zdist + alg.trtl.ConfidenceParam
+
+	// check our assumptions: local opinion will be disregarded after Hdist layers, which is also when healing
+	// should kick in
+	r.Equal(int(alg.trtl.Hdist), int(healingDistance))
+	lastUnhealedLayer := l0ID.Add(6 + uint16(healingDistance))
+
+	// note: a single coinflip will do it. it's only needed once, for one layer before the candidate layer that
+	// first counts votes in order to determine the local opinion on the layer with the late block. once the local
+	// opinion has been established, blocks will immediately begin explicitly voting for or against the block, and
+	// the local opinion will no longer be abstain.
+	mdb.RecordCoinflip(context.TODO(), lastUnhealedLayer-2, true)
+
+	// after healing begins, we need a few more layers until the global opinion of the block passes the threshold
+	finalLayer := lastUnhealedLayer.Add(9)
+
+	for layerID := l0ID.Add(6); layerID <= finalLayer; layerID++ {
+		// allow exceptions to be added again after this distance
+		if layerID == lastUnhealedLayer {
+			alg.trtl.LastEvicted = l0ID.Add(3)
+		}
 
 		// half of blocks use a base block that supports the late block
 		// half use a base block that doesn't support it
@@ -1898,53 +1920,8 @@ func TestHealBalanceAttack(t *testing.T) {
 		r.NoError(err)
 		r.NoError(mdb.SaveLayerInputVectorByID(layerID, blockIDs))
 		r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), layerID))
-
-		// half are aware of it and explicitly support it
-		//makeAndProcessLayer(t, l0ID.Add(6+uint16(i)), alg.trtl, layerSize/2, mdb, mdb.LayerBlockIds)
 	}
-	checkVerifiedLayer(t, alg.trtl, l0ID.Add(3))
-
-	//// create half of the next layer (but don't process it yet) before the late block arrives
-	//l6blocks := generateBlocks(l0ID.Add(6), layerSize/2, alg.BaseBlock)
-	//
-	//// deliver the late block
-	//r.NoError(mdb.AddBlock(l5lateblock))
-	//r.NoError(alg.trtl.processBlocks(context.TODO(), []*types.Block{l5lateblock}))
-	//
-	//// now create the second half of the next layer
-	//
-	//// make sure these blocks vote FOR the late block
-	//mdb.InputVectorBackupFunc = mdb.LayerBlockIds
-	//l6blocks = append(l6blocks, generateBlocks(l0ID.Add(6), layerSize/2, alg.BaseBlock)...)
-	//l6blockIDs := make([]types.BlockID, 0, len(l6blocks))
-	//for _, block := range l6blocks {
-	//	l6blockIDs = append(l6blockIDs, block.ID())
-	//}
-	//r.NoError(mdb.SaveLayerInputVectorByID(l0ID.Add(6), l6blockIDs))
-	//
-	//// store and process the new layer
-	//for _, block := range l6blocks {
-	//	r.NoError(mdb.AddBlock(block))
-	//}
-	//r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), l0ID.Add(6)))
-	//
-	//// verification should get stuck
-	//checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
-	//
-	//// make sure future layers/blocks have no opinion about the late block
-	//mdb.InputVectorBackupFunc = nil
-	//
-	//// then assumptions are restored: the attack ends
-	//for i := 0; types.LayerID(i) < alg.trtl.Zdist+alg.trtl.ConfidenceParam-1; i++ {
-	//	makeAndProcessLayer(t, l0ID.Add(7+uint16(i)), alg.trtl, layerSize, mdb, mdb.LayerBlockIds)
-	//}
-	//checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
-
-	// healing should then confirm the layer
-	firstHealedLayer := l0ID.Add(6 + uint16(alg.trtl.Zdist+alg.trtl.ConfidenceParam-1))
-	mdb.RecordCoinflip(context.TODO(), firstHealedLayer-1, true)
-	makeAndProcessLayer(t, firstHealedLayer, alg.trtl, layerSize, mdb, mdb.LayerBlockIds)
-	checkVerifiedLayer(t, alg.trtl, firstHealedLayer-1)
+	checkVerifiedLayer(t, alg.trtl, finalLayer-1)
 
 	// layer validity should match recent coinflip value
 	valid, err := mdb.ContextualValidity(l4lateblock.ID())
