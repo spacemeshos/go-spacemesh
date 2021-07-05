@@ -615,32 +615,7 @@ func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) error
 		filteredBlocks = append(filteredBlocks, b)
 	}
 
-	numGood := 0
-
-	// Go over all blocks, in order. Mark block i "good" if:
-	for _, b := range filteredBlocks {
-		logger := logger.WithFields(b.ID(), b.LayerIndex, log.FieldNamed("base_block_id", b.BaseBlock))
-		// (1) the base block is marked as good
-		if _, good := t.GoodBlocksIndex[b.BaseBlock]; !good {
-			logger.Debug("not marking block as good because base block is not good")
-		} else if baseBlock, err := t.bdp.GetBlock(b.BaseBlock); err != nil {
-			logger.With().Error("inconsistent state: base block not found", log.Err(err))
-		} else if true &&
-			// (2) all diffs appear after the base block and are consistent with the current local opinion
-			t.checkBlockAndGetLocalOpinion(ctx, b.ForDiff, "support", support, baseBlock.LayerIndex) &&
-			t.checkBlockAndGetLocalOpinion(ctx, b.AgainstDiff, "against", against, baseBlock.LayerIndex) &&
-			t.checkBlockAndGetLocalOpinion(ctx, b.NeutralDiff, "abstain", abstain, baseBlock.LayerIndex) {
-			logger.Debug("marking block good")
-			t.GoodBlocksIndex[b.ID()] = struct{}{}
-			numGood++
-		} else {
-			logger.Debug("not marking block good")
-		}
-	}
-
-	logger.With().Info("finished marking good blocks",
-		log.Int("total_blocks", len(blocks)),
-		log.Int("good_blocks", numGood))
+	t.markGoodBlocks(ctx, filteredBlocks)
 
 	if t.Last < lastLayerID {
 		logger.With().Warning("got blocks for new layer before receiving layer, updating highest layer seen",
@@ -650,6 +625,61 @@ func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) error
 	}
 
 	return nil
+}
+
+func (t *turtle) markGoodBlocksByLayerID(ctx context.Context, layerID types.LayerID) error {
+	blocks, err := t.bdp.LayerBlocks(layerID)
+	if err != nil {
+		return err
+	}
+	t.markGoodBlocks(ctx, blocks)
+	return nil
+}
+
+func (t *turtle) markGoodBlocks(ctx context.Context, blocks []*types.Block) {
+	logger := t.logger.WithContext(ctx)
+	numGood := 0
+	for _, b := range blocks {
+		if t.determineBlockGoodness(ctx, b) {
+			// note: we have no way of warning if a block was previously marked as not good
+			logger.With().Info("marking block good", b.ID())
+			t.GoodBlocksIndex[b.ID()] = struct{}{}
+			numGood++
+		} else {
+			logger.With().Info("not marking block good", b.ID())
+			if _, isGood := t.GoodBlocksIndex[b.ID()]; isGood {
+				logger.With().Warning("marking previously good block as not good", b.ID())
+				delete(t.GoodBlocksIndex, b.ID())
+			}
+		}
+	}
+
+	logger.With().Info("finished marking good blocks",
+		log.Int("total_blocks", len(blocks)),
+		log.Int("good_blocks", numGood))
+}
+
+func (t *turtle) determineBlockGoodness(ctx context.Context, block *types.Block) bool {
+	logger := t.logger.WithContext(ctx).WithFields(
+		block.ID(),
+		block.LayerIndex,
+		log.FieldNamed("base_block_id", block.BaseBlock))
+	// Go over all blocks, in order. Mark block i "good" if:
+	// (1) the base block is marked as good
+	if _, good := t.GoodBlocksIndex[block.BaseBlock]; !good {
+		logger.Debug("base block is not good")
+	} else if baseBlock, err := t.bdp.GetBlock(block.BaseBlock); err != nil {
+		logger.With().Error("inconsistent state: base block not found", log.Err(err))
+	} else if true &&
+		// (2) all diffs appear after the base block and are consistent with the current local opinion
+		t.checkBlockAndGetLocalOpinion(ctx, block.ForDiff, "support", support, baseBlock.LayerIndex) &&
+		t.checkBlockAndGetLocalOpinion(ctx, block.AgainstDiff, "against", against, baseBlock.LayerIndex) &&
+		t.checkBlockAndGetLocalOpinion(ctx, block.NeutralDiff, "abstain", abstain, baseBlock.LayerIndex) {
+		logger.Debug("block is good")
+		return true
+	}
+	logger.Debug("block is not good")
+	return false
 }
 
 // HandleIncomingLayer processes all layer block votes
@@ -843,7 +873,11 @@ candidateLayerLoop:
 				// if self healing made progress, short-circuit processing of this layer, but allow verification of
 				// later layers to continue
 				if t.Verified > lastVerified {
-					// LANE TODO: re-score blocks as good in healed interval
+					// rescore goodness of blocks in all intervening layers on the basis of new information
+					// TODO: this is inefficient and we can probably do better
+					for layerID := t.Verified.Add(1); layerID <= t.Last; layerID++ {
+						t.markGoodBlocksByLayerID(ctx, layerID)
+					}
 
 					continue candidateLayerLoop
 				}
@@ -1088,11 +1122,17 @@ func (t *turtle) heal(ctx context.Context, targetLayerID types.LayerID) {
 			}
 		}
 
+		// rescore goodness of blocks in the just-healed layer
+		// TODO: this is inefficient and we can probably do better
+		if err := t.markGoodBlocksByLayerID(ctx, candidateLayerID); err != nil {
+			logger.With().Error("error rescoring goodness of blocks in healed layer", log.Err(err))
+		}
+
 		// TODO: do we overwrite the layer input vector in the database here?
 
 		t.Verified = candidateLayerID
 		pbaseNew = candidateLayerID
-		logger.With().Info("self healing verified candidate layer")
+		logger.Info("self healing verified candidate layer")
 	}
 
 	return
