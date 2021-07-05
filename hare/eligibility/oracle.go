@@ -515,6 +515,10 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 // IsIdentityActiveOnConsensusView returns true if the provided identity is active on the consensus view derived
 // from the specified layer, false otherwise.
 func (o *Oracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error) {
+	o.WithContext(ctx).With().Debug("hare oracle checking for active identity")
+	defer func() {
+		o.WithContext(ctx).With().Debug("hare oracle active identity check complete")
+	}()
 	actives, err := o.actives(ctx, layer)
 	if err != nil {
 		if err == errGenesis { // we are in genesis

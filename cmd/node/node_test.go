@@ -124,7 +124,7 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	app.log = app.addLogger(mylogger, myLog)
 	msg1 := "hi there"
 	app.log.Info(msg1)
-	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\n", mylogger, msg1), buf1.String())
+	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg1, mylogger), buf1.String())
 	r.NoError(app.SetLogLevel(mylogger, "warn"))
 	r.Equal("warn", app.loggers[mylogger].String())
 	buf1.Reset()
@@ -137,7 +137,7 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	app.log.Info(msg2)
 	// This one should be printed
 	app.log.Warning(msg3)
-	r.Equal(fmt.Sprintf("WARN\t%-13s\t%s\n", mylogger, msg3), buf1.String())
+	r.Equal(fmt.Sprintf("WARN\t%-13s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg3, mylogger), buf1.String())
 	r.Equal(fmt.Sprintf("INFO\t%s\n", msg1), buf2.String())
 	buf1.Reset()
 
@@ -146,7 +146,7 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	msg4 := "nihao"
 	app.log.Info(msg4)
 	r.Equal("info", app.loggers[mylogger].String())
-	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\n", mylogger, msg4), buf1.String())
+	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg4, mylogger), buf1.String())
 
 	// test bad logger name
 	r.Error(app.SetLogLevel("anton3", "warn"))
@@ -168,7 +168,7 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	subLogger.Debug("should not get printed")
 	teststr := "should get printed"
 	subLogger.Info(teststr)
-	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\n", mylogger, teststr), buf.String())
+	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\t{\"module\": \"%s\"}\n", mylogger, teststr, mylogger), buf.String())
 }
 
 func testArgs(args ...string) (string, error) {
