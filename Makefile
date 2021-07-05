@@ -4,6 +4,8 @@ all: install build
 LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 include Makefile.Inc
 
+DOCKER_HUB ?= spacemeshos
+
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
@@ -63,7 +65,8 @@ DOCKERRUNARGS := --rm -e ES_PASSWD="$(ES_PASSWD)" \
 	-e TD_QUEUE_NAME=$(TD_QUEUE_NAME) \
 	-e TD_QUEUE_ZONE=$(TD_QUEUE_ZONE) \
 	-e DUMP_QUEUE_NAME=$(DUMP_QUEUE_NAME) \
-	-e DUMP_QUEUE_ZONE=$(DUMP_QUEUE_ZONE)
+	-e DUMP_QUEUE_ZONE=$(DUMP_QUEUE_ZONE) \
+	-e CLIENT_DOCKER_IMAGE="$(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(BRANCH)"
 
 DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(BRANCH)
 
@@ -174,8 +177,8 @@ tag-and-build:
 	git tag ${VERSION}
 	git push origin ${VERSION}
 	docker build -t go-spacemesh:${VERSION} .
-	docker tag go-spacemesh:${VERSION} spacemeshos/go-spacemesh:${VERSION}
-	docker push spacemeshos/go-spacemesh:${VERSION}
+	docker tag go-spacemesh:${VERSION} $(DOCKER_HUB)/go-spacemesh:${VERSION}
+	docker push $(DOCKER_HUB)/go-spacemesh:${VERSION}
 .PHONY: tag-and-build
 
 list-versions:
@@ -208,13 +211,13 @@ dockerpush: dockerbuild-go dockerpush-only
 
 dockerpush-only:
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
-	docker tag $(DOCKER_IMAGE) spacemeshos/$(DOCKER_IMAGE)
-	docker push spacemeshos/$(DOCKER_IMAGE)
+	docker tag $(DOCKER_IMAGE) $(DOCKER_HUB)/$(DOCKER_IMAGE)
+	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE)
 
 # for develop, we push an additional copy of the image using the commithash for archival
 ifeq ($(BRANCH),develop)
-	docker tag $(DOCKER_IMAGE) spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
-	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
+	docker tag $(DOCKER_IMAGE) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(SHA)
+	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(SHA)
 endif
 .PHONY: dockerpush-only
 
