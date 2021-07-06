@@ -263,12 +263,6 @@ func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 		return nil, ErrBeaconNotCalculated
 	}
 
-	if tb.tortoiseBeaconDB != nil {
-		if err := tb.tortoiseBeaconDB.SetTortoiseBeacon(epochID, beacon); err != nil {
-			return nil, fmt.Errorf("update beacon in DB: %w", err)
-		}
-	}
-
 	return beacon.Bytes(), nil
 }
 

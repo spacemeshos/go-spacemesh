@@ -695,12 +695,12 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 			l.log.Info("peer %v responded to tortoise beacon request with beacon %v", peer.String(), util.Bytes2Hex(data))
 
 			if len(data) == 0 {
-				l.log.Info("received empty tortoise beacon (peer does not have it): %v", data)
+				l.log.Info("received empty tortoise beacon (peer does not have it): %v", util.Bytes2Hex(data))
 				return
 			}
 
 			if len(data) != types.Hash32Length {
-				l.log.Warning("received tortoise beacon response contains either empty or bad hash, ignoring: %v", data)
+				l.log.Warning("received tortoise beacon response contains either empty or bad hash, ignoring: %v", util.Bytes2Hex(data))
 				return
 			}
 
