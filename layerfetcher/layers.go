@@ -137,29 +137,16 @@ func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHand
 		goldenATXID:          cfg.GoldenATXID,
 	}
 
-	srv.RegisterBytesMsgHandler(LayerHashMsg, l.LayerHashReqReceiver)
-	srv.RegisterBytesMsgHandler(LayerBlocksMsg, l.LayerHashBlocksReceiver)
-	srv.RegisterBytesMsgHandler(atxIDsMsg, l.epochATXsReceiver)
-	srv.RegisterBytesMsgHandler(tbMsg, l.tortoiseBeaconReceiver)
+	srv.RegisterBytesMsgHandler(server.LayerHashMsg, l.LayerHashReqReceiver)
+	srv.RegisterBytesMsgHandler(server.LayerBlocksMsg, l.LayerHashBlocksReceiver)
+	srv.RegisterBytesMsgHandler(server.AtxIDsMsg, l.epochATXsReceiver)
+	srv.RegisterBytesMsgHandler(server.TortoiseBeaconMsg, l.tortoiseBeaconReceiver)
 
 	return l
 }
 
-// DB hints per DB
 const (
-	BlockDB fetch.Hint = "blocksDB"
-	ATXDB   fetch.Hint = "ATXDB"
-	TXDB    fetch.Hint = "TXDB"
-	POETDB  fetch.Hint = "POETDB"
-	IVDB    fetch.Hint = "IVDB"
-	TBDB    fetch.Hint = "TBDB"
-
 	layersProtocol = "/layers/2.0/"
-
-	LayerBlocksMsg = 1
-	LayerHashMsg   = 2
-	atxIDsMsg      = 3
-	tbMsg          = 4
 )
 
 // FetchFlow is the main syncing flow TBD
@@ -180,12 +167,12 @@ func (l *Logic) Close() {
 
 // AddDBs adds dbs that will be queried when sync requests are received. these databases will be exposed to external callers
 func (l *Logic) AddDBs(blockDB, AtxDB, TxDB, poetDB, IvDB, tbDB database.Store) {
-	l.fetcher.AddDB(BlockDB, blockDB)
-	l.fetcher.AddDB(ATXDB, AtxDB)
-	l.fetcher.AddDB(TXDB, TxDB)
-	l.fetcher.AddDB(POETDB, poetDB)
-	l.fetcher.AddDB(IVDB, IvDB)
-	l.fetcher.AddDB(TBDB, tbDB)
+	l.fetcher.AddDB(fetch.BlockDB, blockDB)
+	l.fetcher.AddDB(fetch.ATXDB, AtxDB)
+	l.fetcher.AddDB(fetch.TXDB, TxDB)
+	l.fetcher.AddDB(fetch.POETDB, poetDB)
+	l.fetcher.AddDB(fetch.IVDB, IvDB)
+	l.fetcher.AddDB(fetch.TBDB, tbDB)
 }
 
 // LayerPromiseResult is the result of trying to fetch an entire layer- if this fails the error will be added to result
@@ -286,7 +273,7 @@ func (l *Logic) PollLayer(ctx context.Context, layer types.LayerID) chan LayerPr
 		timeoutFunc := func(err error) {
 			l.receiveLayerHash(ctx, layer, peer, len(peers), nil, err)
 		}
-		err := l.net.SendRequest(ctx, LayerHashMsg, layer.Bytes(), p, receiveForPeerFunc, timeoutFunc)
+		err := l.net.SendRequest(ctx, server.LayerHashMsg, layer.Bytes(), p, receiveForPeerFunc, timeoutFunc)
 		if err != nil {
 			l.receiveLayerHash(ctx, layer, peer, len(peers), nil, err)
 		}
@@ -373,7 +360,7 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 		errFunc := func(err error) {
 			l.receiveBlockHashes(ctx, id, nil, len(hashes), err)
 		}
-		err := l.net.SendRequest(ctx, LayerBlocksMsg, hash.Bytes(), peers[0], receiveForPeerFunc, errFunc)
+		err := l.net.SendRequest(ctx, server.LayerBlocksMsg, hash.Bytes(), peers[0], receiveForPeerFunc, errFunc)
 		if err != nil {
 			l.receiveBlockHashes(ctx, id, nil, len(hashes), err)
 		}
@@ -484,7 +471,7 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 			Atxs:  nil,
 		}
 	}
-	err := l.net.SendRequest(ctx, atxIDsMsg, id.ToBytes(), fetch.GetRandomPeer(l.net.GetPeers()), receiveForPeerFunc, errFunc)
+	err := l.net.SendRequest(ctx, server.AtxIDsMsg, id.ToBytes(), fetch.GetRandomPeer(l.net.GetPeers()), receiveForPeerFunc, errFunc)
 	if err != nil {
 		return err
 	}
@@ -547,7 +534,7 @@ func (f *Future) Result() fetch.HashDataPromiseResult {
 
 // FetchAtx returns error if ATX was not found
 func (l *Logic) FetchAtx(ctx context.Context, id types.ATXID) error {
-	f := Future{l.fetcher.GetHash(id.Hash32(), ATXDB, false), nil}
+	f := Future{l.fetcher.GetHash(id.Hash32(), fetch.ATXDB, false), nil}
 	if f.Result().Err != nil {
 		return f.Result().Err
 	}
@@ -559,7 +546,7 @@ func (l *Logic) FetchAtx(ctx context.Context, id types.ATXID) error {
 
 // FetchBlock gets data for a single block id and validates it
 func (l *Logic) FetchBlock(ctx context.Context, id types.BlockID) error {
-	res, open := <-l.fetcher.GetHash(id.AsHash32(), BlockDB, false)
+	res, open := <-l.fetcher.GetHash(id.AsHash32(), fetch.BlockDB, false)
 	if !open {
 		return fmt.Errorf("stopped on call for id %v", id.String())
 	}
@@ -579,7 +566,7 @@ func (l *Logic) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
 		hashes = append(hashes, atxID.Hash32())
 	}
 	//todo: atx Id is currently only the header bytes - should we change it?
-	results := l.fetcher.GetHashes(hashes, ATXDB, false)
+	results := l.fetcher.GetHashes(hashes, fetch.ATXDB, false)
 	for hash, resC := range results {
 		res := <-resC
 		if res.Err != nil {
@@ -604,7 +591,7 @@ func (l *Logic) GetBlocks(ctx context.Context, IDs []types.BlockID) error {
 	for _, blockID := range IDs {
 		hashes = append(hashes, blockID.AsHash32())
 	}
-	results := l.fetcher.GetHashes(hashes, BlockDB, false)
+	results := l.fetcher.GetHashes(hashes, fetch.BlockDB, false)
 	for hash, resC := range results {
 		res, open := <-resC
 		if !open {
@@ -631,7 +618,7 @@ func (l *Logic) GetTxs(ctx context.Context, IDs []types.TransactionID) error {
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.Hash32())
 	}
-	results := l.fetcher.GetHashes(hashes, TXDB, false)
+	results := l.fetcher.GetHashes(hashes, fetch.TXDB, false)
 	for hash, resC := range results {
 		res := <-resC
 		if res.Err != nil {
@@ -651,7 +638,7 @@ func (l *Logic) GetTxs(ctx context.Context, IDs []types.TransactionID) error {
 // GetPoetProof gets poet proof from remote peer
 func (l *Logic) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	l.log.Info("getting proof %v", id.ShortString())
-	res := <-l.fetcher.GetHash(id, POETDB, false)
+	res := <-l.fetcher.GetHash(id, fetch.POETDB, false)
 	if res.Err != nil {
 		return res.Err
 	}
@@ -665,7 +652,7 @@ func (l *Logic) GetPoetProof(ctx context.Context, id types.Hash32) error {
 // GetInputVector gets input vector data from remote peer
 func (l *Logic) GetInputVector(id types.LayerID) error {
 	l.log.With().Info("getting inputvector for layer", id, types.CalcHash32(id.Bytes()))
-	res := <-l.fetcher.GetHash(types.CalcHash32(id.Bytes()), IVDB, false)
+	res := <-l.fetcher.GetHash(types.CalcHash32(id.Bytes()), fetch.IVDB, false)
 	if res.Err != nil {
 		return res.Err
 	}
@@ -724,7 +711,7 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 			default:
 				l.log.Info("requesting tortoise beacon from for epoch %v, peer: %v", id, peer.String())
 
-				err := l.net.SendRequest(cancelCtx, tbMsg, id.ToBytes(), peer, makeReceiveFunc(peer), makeErrFunc(peer))
+				err := l.net.SendRequest(cancelCtx, server.TortoiseBeaconMsg, id.ToBytes(), peer, makeReceiveFunc(peer), makeErrFunc(peer))
 				if err != nil {
 					l.log.Warning("failed to send  tortoise beacon request to peer %v: %v", peer.String(), err)
 				}

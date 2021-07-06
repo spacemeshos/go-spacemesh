@@ -2,13 +2,14 @@ package discovery
 
 import (
 	"context"
+	"net"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"net"
-	"time"
 )
 
 type protocolRoutingTable interface {
@@ -39,12 +40,6 @@ const MessageBufSize = 1000
 // MessageTimeout is the timeout we tolerate when waiting for a message reply
 const MessageTimeout = time.Second * 5 // TODO: Parametrize
 
-// PingPong is the ping protocol ID
-const PingPong = 0
-
-// GetAddresses is the findnode protocol ID
-const GetAddresses = 1
-
 // newProtocol is a constructor for a protocol protocol provider.
 func newProtocol(ctx context.Context, local p2pcrypto.PublicKey, rt protocolRoutingTable, svc server.Service, log log.Log) *protocol {
 	s := server.NewMsgServer(ctx, svc, Name, MessageTimeout, make(chan service.DirectMessage, MessageBufSize), log)
@@ -57,8 +52,8 @@ func newProtocol(ctx context.Context, local p2pcrypto.PublicKey, rt protocolRout
 
 	// XXX Reminder: for discovery protocol to work you must call SetLocalAddresses with updated ports from the socket.
 
-	d.msgServer.RegisterMsgHandler(PingPong, d.newPingRequestHandler())
-	d.msgServer.RegisterMsgHandler(GetAddresses, d.newGetAddressesRequestHandler())
+	d.msgServer.RegisterMsgHandler(server.PingPong, d.newPingRequestHandler())
+	d.msgServer.RegisterMsgHandler(server.GetAddresses, d.newGetAddressesRequestHandler())
 	return d
 }
 

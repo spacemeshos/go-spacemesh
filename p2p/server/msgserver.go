@@ -5,17 +5,35 @@ import (
 	"container/list"
 	"context"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
 // MessageType is a uint32 used to distinguish between server messages inside a single protocol.
 type MessageType uint32
+
+const (
+	// PingPong is the ping protocol ID
+	PingPong MessageType = iota
+	// GetAddresses is the findnode protocol ID
+	GetAddresses
+	// LayerHashMsg is used to fetch layer hash for a given layer ID
+	LayerHashMsg
+	// LayerBlocksMsg is used to fetch block IDs for a given layer hash
+	LayerBlocksMsg
+	// AtxIDsMsg is used to fetch ATXs for a given epoch
+	AtxIDsMsg
+	// TortoiseBeaconMsg is used to fetch tortoise beacon messages for a given epoch
+	TortoiseBeaconMsg
+	// Fetch is used to fetch data for a given hash
+	Fetch
+)
 
 // Message is helper type for `MessegeServer` messages.
 type Message interface {
