@@ -32,7 +32,7 @@ func (wc *weakCoin) HandleSerializedMessage(ctx context.Context, data service.Go
 		return
 	}
 
-	data.ReportValidation(GossipProtocol)
+	data.ReportValidation(ctx, GossipProtocol)
 }
 
 // ErrMalformedMessage is returned when weak coin message is malformed.

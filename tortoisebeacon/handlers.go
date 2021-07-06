@@ -50,7 +50,7 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 		return
 	}
 
-	data.ReportValidation(TBProposalProtocol)
+	data.ReportValidation(ctx, TBProposalProtocol)
 }
 
 func (tb *TortoiseBeacon) handleProposalMessage(ctx context.Context, m ProposalMessage) error {
@@ -182,7 +182,7 @@ func (tb *TortoiseBeacon) HandleSerializedFirstVotingMessage(ctx context.Context
 		return
 	}
 
-	data.ReportValidation(TBFirstVotingProtocol)
+	data.ReportValidation(ctx, TBFirstVotingProtocol)
 }
 
 // HandleSerializedFollowingVotingMessage defines method to handle Tortoise Beacon following voting Messages from gossip.
@@ -208,7 +208,7 @@ func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Con
 		return
 	}
 
-	data.ReportValidation(TBFollowingVotingProtocol)
+	data.ReportValidation(ctx, TBFollowingVotingProtocol)
 }
 
 func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, message FirstVotingMessage) error {
