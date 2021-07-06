@@ -734,16 +734,20 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 
 	l.log.Info("waiting for tortoise beacon response")
 
-	const timeout = 5 * time.Minute // TODO(nkryuchkov): define in config or globally
+	const timeout = 10 * time.Second // TODO(nkryuchkov): define in config or globally
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 
 	select {
 	case <-cancelCtx.Done():
-		return ErrBeaconNotReceived
+		l.log.Info("receiving tortoise beacon for epoch canceled", id)
+		return nil
+		//return ErrBeaconNotReceived
 
 	case <-timer.C:
-		return ErrBeaconNotReceived
+		l.log.Info("receiving tortoise beacon for epoch timed out after %v", timeout)
+		return nil
+		//return ErrBeaconNotReceived
 
 	case res := <-resCh:
 		var resHash types.Hash32
