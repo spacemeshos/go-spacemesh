@@ -295,7 +295,7 @@ func (tb *TortoiseBeacon) cleanup() {
 	defer tb.beaconsMu.Unlock()
 
 	for e := range tb.beacons {
-		// TODO(nkryuchkov): https://github.com/spacemeshos/go-spacemesh/pull/2267/files#r662255874
+		// TODO(nkryuchkov): https://github.com/spacemeshos/go-spacemesh/pull/2267#discussion_r662255874
 		if tb.epochIsOutdated(e) {
 			delete(tb.beacons, e)
 		}
