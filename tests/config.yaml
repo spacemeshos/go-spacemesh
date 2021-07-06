@@ -41,11 +41,9 @@ bootstrap:
     post-max-numunits: '4'
     post-k1: '2000'
     post-k2: '1800'
-    #smeshing-start: 'true'
     smeshing-coinbase: '0x1234'
     smeshing-opts-numunits: '2'
     smeshing-opts-numfiles: '1'
-    #smeshing-opts-throttle: 'true'
     smeshing-opts-datadir: '/Users/x/dev/postdata'
   deployment_type: deployment
 client:
@@ -79,11 +77,9 @@ client:
     post-max-numunits: '4'
     post-k1: '2000'
     post-k2: '1800'
-    #smeshing-start: 'true'
     smeshing-coinbase: '0x1234'
     smeshing-opts-numunits: '2'
     smeshing-opts-numfiles: '1'
-    #smeshing-opts-throttle: 'true'
     smeshing-opts-datadir: '/Users/x/dev/postdata'
   deployment_type: deployment
 elastic:

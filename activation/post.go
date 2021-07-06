@@ -223,7 +223,6 @@ func (mgr *PoSTSetupManager) StartSession(opts PoSTSetupOpts) (chan struct{}, er
 	mgr.initStatusMtx.Unlock()
 
 	if opts.ComputeProviderID == config.BestProviderID {
-		fmt.Println("find the best provider")
 		p, err := mgr.BestProvider()
 		if err != nil {
 			return nil, err

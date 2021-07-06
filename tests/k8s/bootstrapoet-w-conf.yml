@@ -25,7 +25,7 @@ spec:
         - name: bootstrap
           image: spacemeshos/go-spacemesh:develop
           imagePullPolicy: Always
-          args: ['--config', '/etc/config/config.toml', '--oracle_server', 'http://10.40.5.12:3030', '--grpc', 'gateway,globalstate,transaction', '--test-mode', '--metrics', '--start-mining', '--metrics-port', '2020', '--pprof-server', '--poet-server', '127.0.0.1:80']
+          args: ['--config', '/etc/config/config.toml', '--oracle_server', 'http://10.40.5.12:3030', '--grpc', 'gateway,globalstate,transaction', '--test-mode', '--metrics', '--metrics-port', '2020', '--pprof-server', '--poet-server', '127.0.0.1:80', '--smeshing-start', '--smeshing-opts-throttle']
           resources:
             requests:
               memory: "512M"
