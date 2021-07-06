@@ -63,7 +63,7 @@ func (tb *TortoiseBeacon) handleProposalMessage(ctx context.Context, m ProposalM
 		return nil
 	}
 
-	currentEpochProposal, err := tb.calcProposal(currentEpoch)
+	currentEpochProposal, err := tb.buildProposal(currentEpoch)
 	if err != nil {
 		return fmt.Errorf("calculate proposal: %w", err)
 	}

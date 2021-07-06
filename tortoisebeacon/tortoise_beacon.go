@@ -448,7 +448,7 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 }
 
 func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.EpochID) error {
-	proposedSignature, err := tb.calcProposalSignature(epoch)
+	proposedSignature, err := tb.getSignedProposal(epoch)
 	if err != nil {
 		return fmt.Errorf("calculate signed proposal: %w", err)
 	}
@@ -682,9 +682,9 @@ func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 		PotentiallyValidProposals: potentiallyValid,
 	}
 
-	sig, err := tb.calcEligibilityProof(mb)
+	sig, err := tb.signMessage(mb)
 	if err != nil {
-		return fmt.Errorf("calcEligibilityProof: %w", err)
+		return fmt.Errorf("signMessage: %w", err)
 	}
 
 	m := FirstVotingMessage{
@@ -714,9 +714,9 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 		VotesBitVector: bitVector,
 	}
 
-	sig, err := tb.calcEligibilityProof(mb)
+	sig, err := tb.signMessage(mb)
 	if err != nil {
-		return fmt.Errorf("calcProposalSignature: %w", err)
+		return fmt.Errorf("getSignedProposal: %w", err)
 	}
 
 	m := FollowingVotingMessage{
@@ -849,8 +849,8 @@ func (tb *TortoiseBeacon) atxThreshold(epochWeight uint64) (*big.Int, error) {
 	return threshold, nil
 }
 
-func (tb *TortoiseBeacon) calcProposalSignature(epoch types.EpochID) ([]byte, error) {
-	p, err := tb.calcProposal(epoch)
+func (tb *TortoiseBeacon) getSignedProposal(epoch types.EpochID) ([]byte, error) {
+	p, err := tb.buildProposal(epoch)
 	if err != nil {
 		return nil, fmt.Errorf("calculate proposal: %w", err)
 	}
@@ -864,7 +864,7 @@ func (tb *TortoiseBeacon) calcProposalSignature(epoch types.EpochID) ([]byte, er
 	return signature, nil
 }
 
-func (tb *TortoiseBeacon) calcEligibilityProof(message interface{}) ([]byte, error) {
+func (tb *TortoiseBeacon) signMessage(message interface{}) ([]byte, error) {
 	encoded, err := types.InterfaceToBytes(message)
 	if err != nil {
 		return nil, err
@@ -873,7 +873,7 @@ func (tb *TortoiseBeacon) calcEligibilityProof(message interface{}) ([]byte, err
 	return tb.edSigner.Sign(encoded), nil
 }
 
-func (tb *TortoiseBeacon) calcProposal(epoch types.EpochID) ([]byte, error) {
+func (tb *TortoiseBeacon) buildProposal(epoch types.EpochID) ([]byte, error) {
 	message := &struct {
 		Prefix string
 		Epoch  uint64

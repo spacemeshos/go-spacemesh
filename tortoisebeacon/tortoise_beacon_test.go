@@ -382,7 +382,7 @@ func Test_ceilDuration(t *testing.T) {
 	}
 }
 
-func TestTortoiseBeacon_calcProposal(t *testing.T) {
+func TestTortoiseBeacon_buildProposal(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
@@ -408,14 +408,14 @@ func TestTortoiseBeacon_calcProposal(t *testing.T) {
 				Log: log.NewDefault("TortoiseBeacon"),
 			}
 
-			result, err := tb.calcProposal(tc.epoch)
+			result, err := tb.buildProposal(tc.epoch)
 			r.NoError(err)
 			r.Equal(tc.result, util.Bytes2Hex(result))
 		})
 	}
 }
 
-func TestTortoiseBeacon_calcEligibilityProof(t *testing.T) {
+func TestTortoiseBeacon_signMessage(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
@@ -449,14 +449,14 @@ func TestTortoiseBeacon_calcEligibilityProof(t *testing.T) {
 				edSigner: edSgn,
 			}
 
-			result, err := tb.calcEligibilityProof(tc.message)
+			result, err := tb.signMessage(tc.message)
 			r.NoError(err)
 			r.Equal(util.Bytes2Hex(tc.result), util.Bytes2Hex(result))
 		})
 	}
 }
 
-func TestTortoiseBeacon_calcProposalSignature(t *testing.T) {
+func TestTortoiseBeacon_getSignedProposal(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
@@ -494,7 +494,7 @@ func TestTortoiseBeacon_calcProposalSignature(t *testing.T) {
 				vrfSigner: vrfSigner,
 			}
 
-			result, err := tb.calcProposalSignature(tc.epoch)
+			result, err := tb.getSignedProposal(tc.epoch)
 			r.NoError(err)
 			r.Equal(util.Bytes2Hex(tc.result), util.Bytes2Hex(result))
 		})

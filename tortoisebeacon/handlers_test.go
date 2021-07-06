@@ -103,7 +103,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 
 			tb.q = q
 
-			sig, err := tb.calcProposalSignature(epoch)
+			sig, err := tb.getSignedProposal(epoch)
 			r.NoError(err)
 			tc.message.VRFSignature = sig
 
@@ -240,7 +240,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 				firstRoundIncomingVotes: map[types.EpochID]firstRoundVotesPerPK{},
 			}
 
-			sig, err := tb.calcEligibilityProof(tc.message.FirstVotingMessageBody)
+			sig, err := tb.signMessage(tc.message.FirstVotingMessageBody)
 			r.NoError(err)
 			tc.message.Signature = sig
 
@@ -380,7 +380,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 				lastLayer: epoch,
 			}
 
-			sig, err := tb.calcEligibilityProof(tc.message.FollowingVotingMessageBody)
+			sig, err := tb.signMessage(tc.message.FollowingVotingMessageBody)
 			r.NoError(err)
 			tc.message.Signature = sig
 
