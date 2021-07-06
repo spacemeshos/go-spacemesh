@@ -3,7 +3,11 @@ package hare
 import (
 	"context"
 	"errors"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -13,8 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000}
@@ -148,12 +150,12 @@ func buildMessage(msg *Message) *Msg {
 
 func buildBroker(net NetworkService, testName string) *Broker {
 	return newBroker(net, &mockEligibilityValidator{valid: true}, MockStateQuerier{true, nil},
-		(&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, Closer{make(chan struct{})}, log.NewDefault(testName))
+		(&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, util.NewCloser(), log.NewDefault(testName))
 }
 
 func buildBrokerLimit4(net NetworkService, testName string) *Broker {
 	return newBroker(net, &mockEligibilityValidator{valid: true}, MockStateQuerier{true, nil},
-		(&mockSyncer{true}).IsSynced, 10, 4, Closer{make(chan struct{})}, log.NewDefault(testName))
+		(&mockSyncer{true}).IsSynced, 10, 4, util.NewCloser(), log.NewDefault(testName))
 }
 
 type mockEligibilityValidator struct {

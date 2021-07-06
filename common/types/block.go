@@ -63,6 +63,16 @@ func (l LayerID) GetEpoch() EpochID {
 	return EpochID(uint64(l) / uint64(getLayersPerEpoch()))
 }
 
+// OrdinalInEpoch returns layer ordinal in epoch.
+func (l LayerID) OrdinalInEpoch() uint64 {
+	return uint64(l) % uint64(getLayersPerEpoch())
+}
+
+// FirstInEpoch returns whether this LayerID is first in epoch.
+func (l LayerID) FirstInEpoch() bool {
+	return l.OrdinalInEpoch() == 0
+}
+
 // GetEffectiveGenesis returns when actual blocks would be created
 func GetEffectiveGenesis() LayerID {
 	return LayerID(atomic.LoadInt32(&EffectiveGenesis))
@@ -86,7 +96,7 @@ type NodeID struct {
 	// Key is the miner's Edwards public key
 	Key string
 
-	// VRFPublicKey is the miner's public key used for VRF. The VRF scheme used is BLS.
+	// VRFPublicKey is the miner's public key used for VRF.
 	VRFPublicKey []byte
 }
 

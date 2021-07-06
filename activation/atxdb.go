@@ -3,6 +3,7 @@ package activation
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"sync"
@@ -42,6 +43,10 @@ func getAtxHeaderKey(atxID types.ATXID) []byte {
 
 func getAtxBodyKey(atxID types.ATXID) []byte {
 	return atxID.Bytes()
+}
+
+func getAtxTimestampKey(atxID types.ATXID) []byte {
+	return []byte(fmt.Sprintf("ts_%v", atxID.Bytes()))
 }
 
 var (
@@ -173,20 +178,19 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 		epoch,
 		log.FieldNamed("atx_node_id", atx.NodeID),
 		atx.PubLayerID)
-	err := db.ContextuallyValidateAtx(atx.ActivationTxHeader)
-	if err != nil {
-		db.log.With().Error("atx failed contextual validation", atx.ID(), log.Err(err))
+	if err := db.ContextuallyValidateAtx(atx.ActivationTxHeader); err != nil {
+		db.log.With().Error("atx failed contextual validation",
+			atx.ID(),
+			log.FieldNamed("atx_node_id", atx.NodeID),
+			log.Err(err))
 		// TODO: Blacklist this miner
 	} else {
 		db.log.With().Info("atx is valid", atx.ID())
 	}
-	err = db.StoreAtx(epoch, atx)
-	if err != nil {
+	if err := db.StoreAtx(epoch, atx); err != nil {
 		return fmt.Errorf("cannot store atx %s: %v", atx.ShortString(), err)
 	}
-
-	err = db.StoreNodeIdentity(atx.NodeID)
-	if err != nil {
+	if err := db.StoreNodeIdentity(atx.NodeID); err != nil {
 		db.log.With().Error("cannot store node identity",
 			log.FieldNamed("atx_node_id", atx.NodeID),
 			atx.ID(),
@@ -491,6 +495,11 @@ func (db *DB) StoreAtx(ech types.EpochID, atx *types.ActivationTx) error {
 		return err
 	}
 
+	err = db.addAtxTimestamp(time.Now(), atx)
+	if err != nil {
+		return err
+	}
+
 	db.log.With().Info("finished storing atx in epoch", atx.ID(), ech)
 	return nil
 }
@@ -575,6 +584,16 @@ func (db *DB) getTopAtx() (atxIDAndLayer, error) {
 	return topAtx, nil
 }
 
+func (db *DB) getAtxTimestamp(id types.ATXID) (time.Time, error) {
+	b, err := db.atxs.Get(getAtxTimestampKey(id))
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	ts := time.Unix(0, int64(binary.LittleEndian.Uint64(b)))
+	return ts, nil
+}
+
 // addAtxToNodeID inserts activation atx id by node
 func (db *DB) addAtxToNodeID(nodeID types.NodeID, atx *types.ActivationTx) error {
 	err := db.atxs.Put(getNodeAtxKey(nodeID, atx.PubLayerID.GetEpoch()), atx.ID().Bytes())
@@ -589,6 +608,19 @@ func (db *DB) addNodeAtxToEpoch(epoch types.EpochID, nodeID types.NodeID, atx *t
 	err := db.atxs.Put(getNodeAtxEpochKey(atx.PubLayerID.GetEpoch(), nodeID), atx.ID().Bytes())
 	if err != nil {
 		return fmt.Errorf("failed to store atx ID for node: %v", err)
+	}
+	return nil
+}
+
+func (db *DB) addAtxTimestamp(timestamp time.Time, atx *types.ActivationTx) error {
+	db.log.Info("added atx %v timestamp %v", atx.ID().ShortString(), timestamp)
+
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, uint64(timestamp.UnixNano()))
+
+	err := db.atxs.Put(getAtxTimestampKey(atx.ID()), b)
+	if err != nil {
+		return fmt.Errorf("failed to store atx timestamp for node: %v", err)
 	}
 	return nil
 }
@@ -651,6 +683,16 @@ func (db *DB) GetPosAtxID() (types.ATXID, error) {
 		return *types.EmptyATXID, err
 	}
 	return idAndLayer.AtxID, nil
+}
+
+// GetAtxTimestamp returns ATX timestamp.
+func (db *DB) GetAtxTimestamp(atxid types.ATXID) (time.Time, error) {
+	ts, err := db.getAtxTimestamp(atxid)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return ts, nil
 }
 
 // GetEpochWeight returns the total weight of ATXs targeting the given epochID.
@@ -743,7 +785,7 @@ func (db *DB) HandleGossipAtx(ctx context.Context, data service.GossipMessage, f
 		db.log.WithContext(ctx).With().Error("error handling atx data", log.Err(err))
 		return
 	}
-	data.ReportValidation(AtxProtocol)
+	data.ReportValidation(ctx, AtxProtocol)
 }
 
 // HandleAtxData handles atxs received either by gossip or sync
@@ -757,10 +799,8 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 
 	logger.With().Info("got new atx", atx.Fields(len(data))...)
 
-	// todo fetch from neighbour (#1925)
 	if atx.Nipst == nil {
-		logger.Panic("nil nipst in gossip")
-		return fmt.Errorf("nil nipst in gossip")
+		return fmt.Errorf("nil nipst in gossip for atx %s", atx.ShortString())
 	}
 
 	if err := fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
