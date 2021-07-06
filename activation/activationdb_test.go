@@ -1018,3 +1018,11 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 	r.EqualError(err,
 		fmt.Sprintf("could not fetch node last atx: atx for node %v does not exist", nodeID.ShortString()))
 }
+
+func TestActivateDB_HandleAtxNilNipst(t *testing.T) {
+	atxdb, _, _ := getAtxDb(t.Name())
+	atx := newActivationTx(nodeID, 0, *types.EmptyATXID, *types.EmptyATXID, 0, 0, 0, 0, coinbase, nil)
+	buf, err := types.InterfaceToBytes(atx)
+	require.NoError(t, err)
+	require.Error(t, atxdb.HandleAtxData(context.TODO(), buf, nil))
+}
