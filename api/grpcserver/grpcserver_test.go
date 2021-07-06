@@ -456,8 +456,8 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	}
 
 	// start gRPC and json servers
-	grpcService.Start()
-	jsonService.StartService(
+	grpcStarted := grpcService.Start()
+	jsonStarted := jsonService.StartService(
 		context.TODO(),
 		cfg.StartDebugService,
 		cfg.StartGatewayService,
@@ -466,7 +466,28 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 		cfg.StartNodeService,
 		cfg.StartSmesherService,
 		cfg.StartTransactionService)
-	time.Sleep(3 * time.Second) // wait for server to be ready (critical on CI)
+
+	timer := time.NewTimer(3 * time.Second)
+	defer timer.Stop()
+
+	// wait for server to be ready (critical on CI)
+	// 3 possible cases:
+	// - timed out
+	// - grpcStarted, then jsonStarted or timed out
+	// - jsonStarted, then grpcStarted or timed out
+	select {
+	case <-timer.C:
+	case <-grpcStarted:
+		select {
+		case <-timer.C:
+		case <-jsonStarted:
+		}
+	case <-jsonStarted:
+		select {
+		case <-timer.C:
+		case <-grpcStarted:
+		}
+	}
 
 	return func() {
 		require.NoError(t, jsonService.Close())
