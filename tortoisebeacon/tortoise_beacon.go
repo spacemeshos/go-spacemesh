@@ -29,6 +29,7 @@ var (
 	genesisBeacon = types.HexToHash32("0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
 )
 
+// TODO(nkryuchkov): remove unused errors
 // Tortoise Beacon errors.
 var (
 	ErrUnknownMessageType  = errors.New("unknown message type")
@@ -294,6 +295,7 @@ func (tb *TortoiseBeacon) cleanup() {
 	defer tb.beaconsMu.Unlock()
 
 	for e := range tb.beacons {
+		// TODO(nkryuchkov): https://github.com/spacemeshos/go-spacemesh/pull/2267/files#r662255874
 		if tb.epochIsOutdated(e) {
 			delete(tb.beacons, e)
 		}
@@ -394,6 +396,8 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 		tb.Log.With().Error("Failed to run consensus phase",
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.Err(err))
+
+		return
 	}
 
 	// K rounds passed
@@ -797,6 +801,7 @@ func (tb *TortoiseBeacon) votingThreshold(epochWeight uint64) (int, error) {
 	return int(tb.config.Theta * float64(epochWeight)), nil
 }
 
+// TODO(nkryuchkov): consider replacing github.com/ALTree/bigfloat
 func (tb *TortoiseBeacon) atxThresholdFraction(epochWeight uint64) (*big.Float, error) {
 	if epochWeight == 0 {
 		return big.NewFloat(0), ErrZeroEpochWeight

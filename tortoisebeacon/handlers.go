@@ -75,7 +75,8 @@ func (tb *TortoiseBeacon) handleProposalMessage(ctx context.Context, m ProposalM
 		tb.Log.With().Warning("Received malformed proposal message: VRF is not verified",
 			log.String("sender", m.MinerID.String()),
 			log.String("sender_short", m.MinerID.ShortString()))
-		return nil
+
+		return ErrMalformedProposal
 	}
 
 	epochWeight, _, err := tb.atxDB.GetEpochWeight(currentEpoch)
