@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"context"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -64,9 +65,9 @@ func (trtl *ThreadSafeVerifyingTortoise) LatestComplete() types.LayerID {
 }
 
 // BaseBlock chooses a base block and creates a differences list. needs the hare results for latest layers.
-func (trtl *ThreadSafeVerifyingTortoise) BaseBlock() (types.BlockID, [][]types.BlockID, error) {
+func (trtl *ThreadSafeVerifyingTortoise) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
 	trtl.mutex.Lock()
-	block, diffs, err := trtl.trtl.BaseBlock()
+	block, diffs, err := trtl.trtl.BaseBlock(ctx)
 	trtl.mutex.Unlock()
 	if err != nil {
 		return types.BlockID{}, nil, err
