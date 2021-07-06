@@ -62,7 +62,7 @@ type GossipMessage interface {
 	Bytes() []byte
 	RequestID() string
 	ValidationCompletedChan() chan MessageValidation
-	ReportValidation(protocol string)
+	ReportValidation(ctx context.Context, protocol string)
 }
 
 // Service is an interface that represents a networking service (ideally p2p) that we can use to send messages or listen to incoming messages

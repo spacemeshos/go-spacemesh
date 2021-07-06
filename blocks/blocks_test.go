@@ -144,7 +144,7 @@ func (m meshMock) GetBlock(ID types.BlockID) (*types.Block, error) {
 	panic("implement me")
 }
 
-func (m meshMock) AddBlockWithTxs(blk *types.Block) error {
+func (m meshMock) AddBlockWithTxs(context.Context, *types.Block) error {
 	panic("implement me")
 }
 

@@ -424,7 +424,7 @@ func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
 	}
 
 	app.loggers[name] = &lvl
-	return logger.SetLevel(&lvl).WithName(name)
+	return logger.SetLevel(&lvl).WithName(name).WithFields(log.String("module", name))
 }
 
 // SetLogLevel updates the log level of an existing logger

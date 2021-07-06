@@ -178,20 +178,19 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 		epoch,
 		log.FieldNamed("atx_node_id", atx.NodeID),
 		atx.PubLayerID)
-	err := db.ContextuallyValidateAtx(atx.ActivationTxHeader)
-	if err != nil {
-		db.log.With().Error("atx failed contextual validation", atx.ID(), log.Err(err))
+	if err := db.ContextuallyValidateAtx(atx.ActivationTxHeader); err != nil {
+		db.log.With().Error("atx failed contextual validation",
+			atx.ID(),
+			log.FieldNamed("atx_node_id", atx.NodeID),
+			log.Err(err))
 		// TODO: Blacklist this miner
 	} else {
 		db.log.With().Info("atx is valid", atx.ID())
 	}
-	err = db.StoreAtx(epoch, atx)
-	if err != nil {
+	if err := db.StoreAtx(epoch, atx); err != nil {
 		return fmt.Errorf("cannot store atx %s: %v", atx.ShortString(), err)
 	}
-
-	err = db.StoreNodeIdentity(atx.NodeID)
-	if err != nil {
+	if err := db.StoreNodeIdentity(atx.NodeID); err != nil {
 		db.log.With().Error("cannot store node identity",
 			log.FieldNamed("atx_node_id", atx.NodeID),
 			atx.ID(),
@@ -786,7 +785,7 @@ func (db *DB) HandleGossipAtx(ctx context.Context, data service.GossipMessage, f
 		db.log.WithContext(ctx).With().Error("error handling atx data", log.Err(err))
 		return
 	}
-	data.ReportValidation(AtxProtocol)
+	data.ReportValidation(ctx, AtxProtocol)
 }
 
 // HandleAtxData handles atxs received either by gossip or sync
@@ -800,10 +799,8 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 
 	logger.With().Info("got new atx", atx.Fields(len(data))...)
 
-	// todo fetch from neighbour (#1925)
 	if atx.Nipst == nil {
-		logger.Panic("nil nipst in gossip")
-		return fmt.Errorf("nil nipst in gossip")
+		return fmt.Errorf("nil nipst in gossip for atx %s", atx.ShortString())
 	}
 
 	if err := fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
