@@ -757,10 +757,8 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 
 	logger.With().Info("got new atx", atx.Fields(len(data))...)
 
-	// todo fetch from neighbour (#1925)
 	if atx.Nipst == nil {
-		logger.Panic("nil nipst in gossip")
-		return fmt.Errorf("nil nipst in gossip")
+		return fmt.Errorf("nil nipst in gossip for atx %s", atx.ShortString())
 	}
 
 	if err := fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
