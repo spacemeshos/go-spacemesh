@@ -226,6 +226,12 @@ func (tb *TortoiseBeacon) initGenesisBeacons() {
 	epoch := types.EpochID(0)
 	for ; epoch.IsGenesis(); epoch++ {
 		tb.beacons[epoch] = genesisBeacon
+
+		if err := tb.tortoiseBeaconDB.SetTortoiseBeacon(epoch, genesisBeacon); err != nil {
+			tb.Log.With().Error("Failed to write tortoise beacon to DB",
+				log.Uint64("epoch_id", uint64(epoch)),
+				log.String("beacon", genesisBeacon.String()))
+		}
 	}
 }
 
@@ -242,7 +248,7 @@ func (tb *TortoiseBeacon) Close() error {
 // GetBeacon returns a Tortoise Beacon value as []byte for a certain epoch or an error if it doesn't exist.
 func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 	if tb.tortoiseBeaconDB != nil {
-		if val, ok := tb.tortoiseBeaconDB.GetTortoiseBeacon(epochID); ok {
+		if val, ok := tb.tortoiseBeaconDB.GetTortoiseBeacon(epochID - 1); ok {
 			return val.Bytes(), nil
 		}
 	}

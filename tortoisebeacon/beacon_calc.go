@@ -36,10 +36,13 @@ func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID) error {
 	tb.beaconsMu.Unlock()
 
 	if tb.tortoiseBeaconDB != nil {
-		if err := tb.tortoiseBeaconDB.SetTortoiseBeacon(epoch+1, beacon); err != nil {
+		tb.Log.With().Info("Writing beacon to database",
+			log.Uint64("epoch_id", uint64(epoch)),
+			log.String("beacon", beacon.String()))
+
+		if err := tb.tortoiseBeaconDB.SetTortoiseBeacon(epoch, beacon); err != nil {
 			tb.Log.With().Error("Failed to write tortoise beacon to DB",
 				log.Uint64("epoch_id", uint64(epoch)),
-				log.Uint64("epoch_id+1", uint64(epoch+1)),
 				log.String("beacon", beacon.String()))
 		}
 	}

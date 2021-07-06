@@ -750,10 +750,9 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 		//return ErrBeaconNotReceived
 
 	case res := <-resCh:
-		var resHash types.Hash32
-		resHash.SetBytes(res)
-
+		resHash := types.BytesToHash(res)
 		l.log.Info("received tortoise beacon for epoch %v: %v", id, resHash.String())
+
 		return l.tbDB.SetTortoiseBeacon(id, resHash)
 	}
 }
