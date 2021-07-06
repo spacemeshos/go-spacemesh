@@ -227,10 +227,12 @@ func (tb *TortoiseBeacon) initGenesisBeacons() {
 	for ; epoch.IsGenesis(); epoch++ {
 		tb.beacons[epoch] = genesisBeacon
 
-		if err := tb.tortoiseBeaconDB.SetTortoiseBeacon(epoch, genesisBeacon); err != nil {
-			tb.Log.With().Error("Failed to write tortoise beacon to DB",
-				log.Uint64("epoch_id", uint64(epoch)),
-				log.String("beacon", genesisBeacon.String()))
+		if tb.tortoiseBeaconDB != nil {
+			if err := tb.tortoiseBeaconDB.SetTortoiseBeacon(epoch, genesisBeacon); err != nil {
+				tb.Log.With().Error("Failed to write tortoise beacon to DB",
+					log.Uint64("epoch_id", uint64(epoch)),
+					log.String("beacon", genesisBeacon.String()))
+			}
 		}
 	}
 }
