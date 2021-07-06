@@ -27,13 +27,12 @@ const DefaultProofsEpoch = ^types.EpochID(0)
 
 // Oracle is the oracle that provides block eligibility proofs for the miner.
 type Oracle struct {
-	committeeSize      uint32
-	genesisTotalWeight uint64
-	layersPerEpoch     uint16
-	atxDB              activationDB
-	beaconProvider     *EpochBeaconProvider
-	vrfSigner          vrfSigner
-	nodeID             types.NodeID
+	committeeSize  uint32
+	layersPerEpoch uint16
+	atxDB          activationDB
+	beaconProvider *EpochBeaconProvider
+	vrfSigner      vrfSigner
+	nodeID         types.NodeID
 
 	proofsEpoch       types.EpochID
 	epochAtxs         []types.ATXID
@@ -45,18 +44,17 @@ type Oracle struct {
 }
 
 // NewMinerBlockOracle returns a new Oracle.
-func NewMinerBlockOracle(committeeSize uint32, genesisTotalWeight uint64, layersPerEpoch uint16, atxDB activationDB, beaconProvider *EpochBeaconProvider, vrfSigner vrfSigner, nodeID types.NodeID, isSynced func() bool, log log.Log) *Oracle {
+func NewMinerBlockOracle(committeeSize uint32, layersPerEpoch uint16, atxDB activationDB, beaconProvider *EpochBeaconProvider, vrfSigner vrfSigner, nodeID types.NodeID, isSynced func() bool, log log.Log) *Oracle {
 	return &Oracle{
-		committeeSize:      committeeSize,
-		genesisTotalWeight: genesisTotalWeight,
-		layersPerEpoch:     layersPerEpoch,
-		atxDB:              atxDB,
-		beaconProvider:     beaconProvider,
-		vrfSigner:          vrfSigner,
-		nodeID:             nodeID,
-		proofsEpoch:        DefaultProofsEpoch,
-		isSynced:           isSynced,
-		log:                log,
+		committeeSize:  committeeSize,
+		layersPerEpoch: layersPerEpoch,
+		atxDB:          atxDB,
+		beaconProvider: beaconProvider,
+		vrfSigner:      vrfSigner,
+		nodeID:         nodeID,
+		proofsEpoch:    DefaultProofsEpoch,
+		isSynced:       isSynced,
+		log:            log,
 	}
 }
 
@@ -125,12 +123,6 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 	bo.log.With().Debug("calculating eligibility",
 		epochNumber,
 		log.String("epoch_beacon", fmt.Sprint(epochBeacon)))
-
-	if epochNumber.IsGenesis() { // TODO: This should never happen - should we panic or print an error maybe?
-		weight, totalWeight = 1024, bo.genesisTotalWeight // TODO: replace 1024 with configured weight
-		bo.log.With().Info("genesis epoch detected, using GenesisTotalWeight",
-			log.Uint64("total_weight", totalWeight))
-	}
 
 	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(weight, totalWeight, bo.committeeSize, bo.layersPerEpoch)
 	if err != nil {

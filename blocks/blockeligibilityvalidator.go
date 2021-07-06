@@ -16,30 +16,28 @@ type blockDB interface {
 
 // BlockEligibilityValidator holds all the dependencies for validating block eligibility.
 type BlockEligibilityValidator struct {
-	committeeSize      uint32
-	genesisTotalWeight uint64
-	layersPerEpoch     uint16
-	activationDb       activationDB
-	blocks             blockDB
-	beaconProvider     *EpochBeaconProvider
-	validateVRF        VRFValidationFunction
-	log                log.Log
+	committeeSize  uint32
+	layersPerEpoch uint16
+	activationDb   activationDB
+	blocks         blockDB
+	beaconProvider *EpochBeaconProvider
+	validateVRF    VRFValidationFunction
+	log            log.Log
 }
 
 // NewBlockEligibilityValidator returns a new BlockEligibilityValidator.
 func NewBlockEligibilityValidator(
-	committeeSize uint32, genesisTotalWeight uint64, layersPerEpoch uint16, activationDb activationDB,
-	beaconProvider *EpochBeaconProvider, validateVRF VRFValidationFunction, blockDB blockDB, log log.Log) *BlockEligibilityValidator {
+	committeeSize uint32, layersPerEpoch uint16, activationDb activationDB, beaconProvider *EpochBeaconProvider,
+	validateVRF VRFValidationFunction, blockDB blockDB, log log.Log) *BlockEligibilityValidator {
 
 	return &BlockEligibilityValidator{
-		committeeSize:      committeeSize,
-		genesisTotalWeight: genesisTotalWeight,
-		layersPerEpoch:     layersPerEpoch,
-		activationDb:       activationDb,
-		beaconProvider:     beaconProvider,
-		validateVRF:        validateVRF,
-		blocks:             blockDB,
-		log:                log,
+		committeeSize:  committeeSize,
+		layersPerEpoch: layersPerEpoch,
+		activationDb:   activationDb,
+		beaconProvider: beaconProvider,
+		validateVRF:    validateVRF,
+		blocks:         blockDB,
+		log:            log,
 	}
 }
 
@@ -49,11 +47,6 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	var weight, totalWeight uint64
 
 	epochNumber := block.LayerIndex.GetEpoch()
-	if epochNumber == 0 {
-		v.log.With().Warning("skipping epoch 0 block validation",
-			block.ID(), block.LayerIndex)
-		return true, nil
-	}
 	var err error
 	activeSetBlock := block
 	if block.RefBlock != nil {
@@ -75,7 +68,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 		}
 		totalWeight += atxHeader.GetWeight()
 	}
-	if block.ATXID == *types.EmptyATXID && !epochNumber.IsGenesis() {
+	if block.ATXID == *types.EmptyATXID {
 		return false, fmt.Errorf("no associated ATX in epoch %v", epochNumber)
 	}
 
@@ -85,12 +78,6 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	}
 	weight = atx.GetWeight()
 	vrfPubkey := atx.NodeID.VRFPublicKey
-
-	if epochNumber.IsGenesis() {
-		v.log.With().Info("using genesisTotalWeight",
-			block.ID(), log.Uint64("genesisTotalWeight", v.genesisTotalWeight))
-		weight, totalWeight = 131072, v.genesisTotalWeight // TODO: replace 131072 with configured weight
-	}
 
 	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(weight, totalWeight, v.committeeSize, v.layersPerEpoch)
 	if err != nil {

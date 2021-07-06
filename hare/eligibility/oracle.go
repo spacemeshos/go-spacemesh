@@ -49,19 +49,17 @@ type verifierFunc = func(pub, msg, sig []byte) bool
 
 // Oracle is the hare eligibility oracle
 type Oracle struct {
-	lock               sync.Mutex
-	beacon             valueProvider
-	atxdb              atxProvider
-	meshdb             meshProvider
-	vrfSigner          signer
-	vrfVerifier        verifierFunc
-	layersPerEpoch     uint16
-	spacePerUnit       uint64
-	vrfMsgCache        addGet
-	activesCache       addGet
-	genesisTotalWeight uint64
-	genesisMinerWeight uint64
-	cfg                eCfg.Config
+	lock           sync.Mutex
+	beacon         valueProvider
+	atxdb          atxProvider
+	meshdb         meshProvider
+	vrfSigner      signer
+	vrfVerifier    verifierFunc
+	layersPerEpoch uint16
+	spacePerUnit   uint64
+	vrfMsgCache    addGet
+	activesCache   addGet
+	cfg            eCfg.Config
 	log.Log
 }
 
@@ -110,7 +108,7 @@ func New(
 	vrfVerifier verifierFunc,
 	vrfSigner signer,
 	layersPerEpoch uint16,
-	spacePerUnit, genesisTotalWeight, genesisMinerWeight uint64,
+	spacePerUnit uint64,
 	cfg eCfg.Config,
 	logger log.Log) *Oracle {
 	vmc, err := lru.New(vrfMsgCacheSize)
@@ -124,19 +122,17 @@ func New(
 	}
 
 	return &Oracle{
-		beacon:             beacon,
-		atxdb:              atxdb,
-		meshdb:             meshdb,
-		vrfVerifier:        vrfVerifier,
-		vrfSigner:          vrfSigner,
-		layersPerEpoch:     layersPerEpoch,
-		spacePerUnit:       spacePerUnit,
-		vrfMsgCache:        vmc,
-		activesCache:       ac,
-		genesisTotalWeight: genesisTotalWeight,
-		genesisMinerWeight: genesisMinerWeight,
-		cfg:                cfg,
-		Log:                logger,
+		beacon:         beacon,
+		atxdb:          atxdb,
+		meshdb:         meshdb,
+		vrfVerifier:    vrfVerifier,
+		vrfSigner:      vrfSigner,
+		layersPerEpoch: layersPerEpoch,
+		spacePerUnit:   spacePerUnit,
+		vrfMsgCache:    vmc,
+		activesCache:   ac,
+		cfg:            cfg,
+		Log:            logger,
 	}
 }
 
@@ -190,10 +186,6 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 func (o *Oracle) totalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
 	actives, err := o.actives(ctx, layer)
 	if err != nil {
-		if err == errGenesis { // we are in genesis
-			return o.genesisTotalWeight, nil
-		}
-
 		o.WithContext(ctx).With().Error("totalWeight erred while calling actives func", log.Err(err), layer)
 		return 0, err
 	}
@@ -208,10 +200,6 @@ func (o *Oracle) totalWeight(ctx context.Context, layer types.LayerID) (uint64, 
 func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error) {
 	actives, err := o.actives(ctx, layer)
 	if err != nil {
-		if err == errGenesis { // we are in genesis
-			return o.genesisMinerWeight, nil
-		}
-
 		o.With().Error("minerWeight erred while calling actives func", log.Err(err), layer)
 		return 0, err
 	}
@@ -408,11 +396,6 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 		log.FieldNamed("target_layer_epoch", targetLayer.GetEpoch()))
 	logger.Debug("hare oracle getting active set")
 
-	// we can't read blocks during genesis epochs as there are none
-	if targetLayer.GetEpoch().IsGenesis() {
-		return nil, errGenesis
-	}
-
 	// lock until any return
 	// note: no need to lock per safeEp - we do not expect many concurrent requests per safeEp (max two)
 	o.lock.Lock()
@@ -521,10 +504,6 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID strin
 	}()
 	actives, err := o.actives(ctx, layer)
 	if err != nil {
-		if err == errGenesis { // we are in genesis
-			return true, nil // all ids are active in genesis
-		}
-
 		o.WithContext(ctx).With().Error("method IsIdentityActiveOnConsensusView erred while calling actives func",
 			layer, log.Err(err))
 		return false, err

@@ -36,7 +36,6 @@ bootstrap:
     eligibility-epoch-offset: '0'
     post-space: '1024'
     space-to-commit: '1024'
-    genesis-total-weight: '52224'
     executable-path: '/bin/go-spacemesh'
   deployment_type: deployment
 client:
@@ -65,7 +64,6 @@ client:
     eligibility-epoch-offset: '0'
     post-space: '1024'
     space-to-commit: '1024'
-    genesis-total-weight: '52224'
     executable-path: '/bin/go-spacemesh'
   deployment_type: deployment
 clientv2:
@@ -94,7 +92,6 @@ clientv2:
     eligibility-epoch-offset: '0'
     post-space: '1024'
     space-to-commit: '1024'
-    genesis-total-weight: '52224'
     executable-path: '/bin/go-spacemesh'
   deployment_type: deployment
 elastic:
