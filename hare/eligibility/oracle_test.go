@@ -196,7 +196,7 @@ func TestOracle_BuildVRFMessage(t *testing.T) {
 
 func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 10}, &mockBlocksProvider{}, buildVerifier(true), &mockSigner{[]byte{1, 2, 3}}, 5, 1, 5, 1, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 10}, &mockBlocksProvider{}, buildVerifier(true), &mockSigner{[]byte{1, 2, 3}}, 5, 5, 1, cfg, log.NewDefault(t.Name()))
 	mCache := newMockCacher()
 	o.vrfMsgCache = mCache
 
@@ -302,7 +302,7 @@ func defaultOracle(t testing.TB) *Oracle {
 
 func mockOracle(t testing.TB, layersPerEpoch uint16) *Oracle {
 	types.SetLayersPerEpoch(int32(layersPerEpoch))
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{}, &mockBlocksProvider{}, buildVerifier(true), nil, layersPerEpoch, uint64(spacePerUnit), uint64(genWeight), uint64(genesisMinerWeight), cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{}, &mockBlocksProvider{}, buildVerifier(true), nil, layersPerEpoch, uint64(genWeight), uint64(genesisMinerWeight), cfg, log.NewDefault(t.Name()))
 	return o
 }
 
