@@ -3,9 +3,10 @@ package service
 
 import (
 	"context"
+	"net"
+
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
-	"net"
 )
 
 // MessageValidation is a gossip message validation event.
