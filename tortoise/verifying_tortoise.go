@@ -876,6 +876,7 @@ candidateLayerLoop:
 				if t.Verified > lastVerified {
 					// rescore goodness of blocks in all intervening layers on the basis of new information
 					// TODO: this is inefficient and we can probably do better
+					// see https://github.com/spacemeshos/go-spacemesh/issues/2522
 					for layerID := lastVerified.Add(1); layerID <= t.Last; layerID++ {
 						if err := t.scoreBlocksByLayerID(ctx, layerID); err != nil {
 							// if we fail to process a layer, there's probably no point in trying to recore blocks
