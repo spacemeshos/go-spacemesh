@@ -18,10 +18,6 @@ const vrfMsgCacheSize = 20       // numRounds per layer is <= 2. numConcurrentLa
 const activesCacheSize = 5       // we don't expect to handle more than two layers concurrently
 const maxSupportedN = 1073741824 // higher values result in an overflow
 
-var (
-	errGenesis = errors.New("no data about active nodes for genesis")
-)
-
 type valueProvider interface {
 	Value(context.Context, types.EpochID) (uint32, error)
 }

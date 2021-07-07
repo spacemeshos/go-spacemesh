@@ -20,8 +20,6 @@ import (
 // AtxProtocol is the protocol id for broadcasting atxs over gossip
 const AtxProtocol = "AtxGossip"
 
-var totalWeightCache = NewTotalWeightCache(1000)
-
 type meshProvider interface {
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 	LatestLayer() types.LayerID
@@ -54,7 +52,6 @@ type nipstValidator interface {
 
 type atxDBProvider interface {
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
-	CalcTotalWeightFromView(view []types.BlockID, pubEpoch types.EpochID) (uint64, error)
 	GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error)
 	GetPosAtxID() (types.ATXID, error)
 	AwaitAtx(id types.ATXID) chan struct{}
