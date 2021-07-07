@@ -113,7 +113,7 @@ func (trtl *ThreadSafeVerifyingTortoise) LatestComplete() types.LayerID {
 	return verified
 }
 
-// BaseBlock chooses a base block and creates a differences list.
+// BaseBlock chooses a base block and creates a differences list. needs the hare results for latest layers.
 func (trtl *ThreadSafeVerifyingTortoise) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
 	trtl.mutex.Lock()
 	block, diffs, err := trtl.trtl.BaseBlock(ctx)

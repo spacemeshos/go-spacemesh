@@ -37,11 +37,11 @@ type txPool interface {
 }
 
 type projector interface {
-	GetProjection(addr types.Address) (nonce, balance uint64, err error)
+	GetProjection(types.Address) (nonce, balance uint64, err error)
 }
 
 type blockOracle interface {
-	BlockEligible(layerID types.LayerID) (types.ATXID, []types.BlockEligibilityProof, []types.ATXID, error)
+	BlockEligible(types.LayerID) (types.ATXID, []types.BlockEligibilityProof, []types.ATXID, error)
 }
 
 type baseBlockProvider interface {
@@ -157,9 +157,6 @@ func (t *BlockBuilder) Close() error {
 }
 
 type meshProvider interface {
-	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
-	GetOrphanBlocksBefore(types.LayerID) ([]types.BlockID, error)
-	GetBlock(types.BlockID) (*types.Block, error)
 	AddBlockWithTxs(context.Context, *types.Block) error
 }
 
