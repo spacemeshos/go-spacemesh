@@ -1115,14 +1115,39 @@ func TestDetermineBlockGoodness(t *testing.T) {
 }
 
 func TestScoreBlocks(t *testing.T) {
-	// adds a block not already marked good
+	r := require.New(t)
+	mdb := getPersistentMesh(t)
+	alg := defaultAlgorithm(t, mdb)
 
-	// no change if block already marked good
+	l1ID := types.GetEffectiveGenesis() + 1
+	l1Blocks := generateBlocks(l1ID, 3, alg.BaseBlock)
+
+	// adds a block not already marked good
+	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
+	alg.trtl.scoreBlocks(context.TODO(), []*types.Block{l1Blocks[0]})
+	r.Contains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
+
+	// no change if already marked good
+	alg.trtl.scoreBlocks(context.TODO(), []*types.Block{l1Blocks[0]})
+	r.Contains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
 
 	// removes a block previously marked good
+	// diff inconsistent with local opinion
+	l1Blocks[0].AgainstDiff = []types.BlockID{mesh.GenesisBlock().ID()}
+	alg.trtl.scoreBlocks(context.TODO(), []*types.Block{l1Blocks[0]})
+	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
 
-	// idempotency
+	// try a few blocks
+	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[1].ID())
+	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[2].ID())
+	alg.trtl.scoreBlocks(context.TODO(), l1Blocks)
 
+	// adds new blocks
+	r.Contains(alg.trtl.GoodBlocksIndex, l1Blocks[1].ID())
+	r.Contains(alg.trtl.GoodBlocksIndex, l1Blocks[2].ID())
+
+	// no change if already not marked good
+	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
 }
 
 func TestProcessBlock(t *testing.T) {
