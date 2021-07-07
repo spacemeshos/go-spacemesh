@@ -41,9 +41,14 @@ func (mw meshWrapper) GetLayerInputVectorByID(lid types.LayerID) ([]types.BlockI
 	return mw.blockDataProvider.GetLayerInputVectorByID(lid)
 }
 
-type mockAtxDataProvider struct{}
+type mockAtxDataProvider struct {
+	mockAtxHeader *types.ActivationTxHeader
+}
 
 func (madp mockAtxDataProvider) GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error) {
+	if madp.mockAtxHeader != nil {
+		return madp.mockAtxHeader, nil
+	}
 	return &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: "fakekey"}}}, nil
 }
 
@@ -596,7 +601,7 @@ func TestTurtle_Eviction2(t *testing.T) {
 
 func TestLayerCutoff(t *testing.T) {
 	r := require.New(t)
-	mdb := getPersistentMesh(t)
+	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
 
 	// cutoff should be zero if we haven't seen at least Hdist layers yet
@@ -613,7 +618,7 @@ func TestLayerCutoff(t *testing.T) {
 }
 
 func TestAddToMesh(t *testing.T) {
-	mdb := getPersistentMesh(t)
+	mdb := getInMemMesh()
 
 	getHareResults := mdb.LayerBlockIds
 
@@ -698,7 +703,7 @@ func TestPersistAndRecover(t *testing.T) {
 
 func TestRerunInterval(t *testing.T) {
 	r := require.New(t)
-	mdb := getPersistentMesh(t)
+	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
 	lastRerun := alg.lastRerun
 
@@ -722,7 +727,7 @@ func TestRerunInterval(t *testing.T) {
 
 func TestLayerOpinionVector(t *testing.T) {
 	r := require.New(t)
-	mdb := getPersistentMesh(t)
+	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
 
 	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
@@ -802,7 +807,7 @@ func TestLayerOpinionVector(t *testing.T) {
 
 func TestBaseBlock(t *testing.T) {
 	r := require.New(t)
-	mdb := getPersistentMesh(t)
+	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
 
 	getHareResults := mdb.LayerBlockIds
@@ -852,7 +857,7 @@ func TestBaseBlock(t *testing.T) {
 }
 
 func defaultTurtle(t *testing.T) *turtle {
-	mdb := getPersistentMesh(t)
+	mdb := getInMemMesh()
 	return newTurtle(
 		mdb,
 		mockAtxDataProvider{},
@@ -904,7 +909,7 @@ func defaultAlgorithm(t *testing.T, mdb *mesh.DB) *ThreadSafeVerifyingTortoise {
 
 func TestGetSingleInputVector(t *testing.T) {
 	r := require.New(t)
-	mdb := getPersistentMesh(t)
+	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
 
 	l1ID := types.GetEffectiveGenesis() + 1
@@ -929,7 +934,7 @@ func TestGetSingleInputVector(t *testing.T) {
 
 func TestCheckBlockAndGetInputVector(t *testing.T) {
 	r := require.New(t)
-	mdb := getPersistentMesh(t)
+	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
 
 	l1ID := types.GetEffectiveGenesis() + 1
@@ -961,7 +966,7 @@ func TestCheckBlockAndGetInputVector(t *testing.T) {
 
 func TestCalculateExceptions(t *testing.T) {
 	r := require.New(t)
-	mdb := getPersistentMesh(t)
+	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
 
 	// helper function for checking votes
@@ -1086,7 +1091,7 @@ func TestCalculateExceptions(t *testing.T) {
 }
 func TestDetermineBlockGoodness(t *testing.T) {
 	r := require.New(t)
-	mdb := getPersistentMesh(t)
+	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
 
 	l1ID := types.GetEffectiveGenesis() + 1
@@ -1116,7 +1121,7 @@ func TestDetermineBlockGoodness(t *testing.T) {
 
 func TestScoreBlocks(t *testing.T) {
 	r := require.New(t)
-	mdb := getPersistentMesh(t)
+	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
 
 	l1ID := types.GetEffectiveGenesis() + 1
@@ -1152,7 +1157,7 @@ func TestScoreBlocks(t *testing.T) {
 
 func TestProcessBlock(t *testing.T) {
 	r := require.New(t)
-	mdb := getPersistentMesh(t)
+	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
 
 	// blocks in this layer will use the genesis block as their base block
@@ -1231,10 +1236,14 @@ func TestProcessBlock(t *testing.T) {
 	r.Equal(expectedOpinionVector, alg.trtl.BlockOpinionsByLayer[l3ID][l3Blocks[0].ID()])
 }
 
+func TestVoteWeight(t *testing.T) {
+
+}
+
 func TestProcessNewBlocks(t *testing.T) {
 	r := require.New(t)
 
-	mdb := getPersistentMesh(t)
+	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
 	l1ID := types.GetEffectiveGenesis() + 1
 	l2ID := l1ID.Add(1)
@@ -1310,7 +1319,7 @@ func TestProcessNewBlocks(t *testing.T) {
 func TestVerifyLayers(t *testing.T) {
 	r := require.New(t)
 
-	mdb := getPersistentMesh(t)
+	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
 	l1ID := types.GetEffectiveGenesis() + 1
 	l2ID := l1ID.Add(1)
@@ -1564,7 +1573,7 @@ func TestVerifyLayers(t *testing.T) {
 func TestVoteVectorForLayer(t *testing.T) {
 	r := require.New(t)
 
-	mdb := getPersistentMesh(t)
+	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
 	l1ID := types.GetEffectiveGenesis() + 1
 	l1Blocks := generateBlocks(l1ID, 3, alg.BaseBlock)
@@ -1609,7 +1618,7 @@ func TestVoteVectorForLayer(t *testing.T) {
 func TestSumVotesForBlock(t *testing.T) {
 	r := require.New(t)
 
-	mdb := getPersistentMesh(t)
+	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
 
 	// store a bunch of votes against a block
@@ -1680,7 +1689,7 @@ func checkVerifiedLayer(t *testing.T, trtl *turtle, layerID types.LayerID) {
 func TestHealing(t *testing.T) {
 	r := require.New(t)
 
-	mdb := getPersistentMesh(t)
+	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
 
 	l0ID := types.GetEffectiveGenesis()
