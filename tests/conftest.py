@@ -35,7 +35,9 @@ class DeploymentInfo:
 
     def __str__(self):
         ret_str = f"DeploymentInfo:\n\tdeployment name: {self.deployment_name}\n\t"
-        ret_str += f"deployment id: {self.deployment_id}\n\tpods number: {len(self.pods)}"
+        ret_str += f"deployment id: {self.deployment_id}\n\tpods number: {len(self.pods)}\n"
+        for cl in self.pods:
+            ret_str += f"\t\tname: {cl['name']}, ip: {cl['pod_ip']}\n"
         return ret_str
 
 
