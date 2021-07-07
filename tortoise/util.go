@@ -6,7 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type vec [2]int
+type vec [2]uint64
 
 var ( //correction vectors type
 	// Opinion vectors
@@ -24,13 +24,7 @@ func (a vec) Add(v vec) vec {
 	return vec{a[0] + v[0], a[1] + v[1]}
 }
 
-func (a vec) Negate() vec {
-	a[0] = a[0] * -1
-	a[1] = a[1] * -1
-	return a
-}
-
-func (a vec) Multiply(x int) vec {
+func (a vec) Multiply(x uint64) vec {
 	a[0] = a[0] * x
 	a[1] = a[1] * x
 	return a

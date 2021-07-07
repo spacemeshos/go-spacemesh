@@ -41,6 +41,12 @@ func (mw meshWrapper) GetLayerInputVectorByID(lid types.LayerID) ([]types.BlockI
 	return mw.blockDataProvider.GetLayerInputVectorByID(lid)
 }
 
+type mockAtxDataProvider struct{}
+
+func (madp mockAtxDataProvider) GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error) {
+	return &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: "fakekey"}}}, nil
+}
+
 func getPersistentMesh(t *testing.T) *mesh.DB {
 	db, err := mesh.NewPersistentMeshDB(t.TempDir(), 10, log.NewDefault("ninja_tortoise").WithOptions(log.Nop))
 	require.NoError(t, err)
@@ -98,7 +104,9 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 				}
 
 				//t.logger.Info("block %v is good and voting vote %v", vopinion.id, opinionVote)
-				sum = sum.Add(opinionVote.Multiply(trtl.BlockWeight(bid, i)))
+				weight, err := trtl.voteWeightByID(bid, i)
+				require.NoError(t, err)
+				sum = sum.Add(opinionVote.Multiply(weight))
 			}
 		}
 		globalOpinion := calculateOpinionWithThreshold(trtl.logger, sum, trtl.AvgLayerSize, trtl.GlobalThreshold, 1)
@@ -847,6 +855,7 @@ func defaultTurtle(t *testing.T) *turtle {
 	mdb := getPersistentMesh(t)
 	return newTurtle(
 		mdb,
+		mockAtxDataProvider{},
 		defaultTestHdist,
 		defaultTestZdist,
 		defaultTestConfidenceParam,
@@ -881,6 +890,7 @@ func defaultAlgorithm(t *testing.T, mdb *mesh.DB) *ThreadSafeVerifyingTortoise {
 		context.TODO(),
 		defaultTestLayerSize,
 		mdb,
+		mockAtxDataProvider{},
 		defaultTestHdist,
 		defaultTestZdist,
 		defaultTestConfidenceParam,
@@ -1558,11 +1568,13 @@ func TestSumVotesForBlock(t *testing.T) {
 
 	// if we reject all blocks, we expect an abstain outcome
 	alg.trtl.Last = l2ID
-	sum := alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, filterRejectAll)
+	sum, err := alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, filterRejectAll)
+	r.NoError(err)
 	r.Equal(abstain, sum)
 
 	// if we allow all blocks to vote, we expect an against outcome
-	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, filterPassAll)
+	sum, err = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, filterPassAll)
+	r.NoError(err)
 	r.Equal(against.Multiply(3), sum)
 
 	// add more blocks
@@ -1578,17 +1590,21 @@ func TestSumVotesForBlock(t *testing.T) {
 		l2Blocks[8].ID(): {BlockOpinions: map[types.BlockID]vec{}},
 	}
 	// some blocks explicitly vote against, others have no opinion
-	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, filterPassAll)
+	sum, err = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, filterPassAll)
+	r.NoError(err)
 	r.Equal(against.Multiply(9), sum)
 	// some blocks vote for, others have no opinion
-	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyLike.ID(), l2ID, filterPassAll)
+	sum, err = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyLike.ID(), l2ID, filterPassAll)
+	r.NoError(err)
 	r.Equal(support.Multiply(2).Add(against.Multiply(7)), sum)
 	// one block votes neutral, others have no opinion
-	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDontCare.ID(), l2ID, filterPassAll)
+	sum, err = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDontCare.ID(), l2ID, filterPassAll)
+	r.NoError(err)
 	r.Equal(abstain.Multiply(1).Add(against.Multiply(8)), sum)
 
 	// vote missing: counts against
-	sum = alg.trtl.sumVotesForBlock(context.TODO(), blockWeNeverSaw.ID(), l2ID, filterPassAll)
+	sum, err = alg.trtl.sumVotesForBlock(context.TODO(), blockWeNeverSaw.ID(), l2ID, filterPassAll)
+	r.NoError(err)
 	r.Equal(against.Multiply(9), sum)
 }
 

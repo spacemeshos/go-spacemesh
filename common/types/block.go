@@ -200,8 +200,7 @@ func (b BlockHeader) Layer() LayerID {
 // produce the block signature.
 type MiniBlock struct {
 	BlockHeader
-	TxIDs []TransactionID
-	// ATXIDs    []ATXID
+	TxIDs     []TransactionID
 	ActiveSet *[]ATXID
 	RefBlock  *BlockID
 }

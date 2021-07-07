@@ -27,6 +27,10 @@ type blockDataProvider interface {
 	Retrieve(key []byte, v interface{}) (interface{}, error)
 }
 
+type atxDataProvider interface {
+	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
+}
+
 var (
 	errNoBaseBlockFound                 = errors.New("no good base block within exception vector limit")
 	errBaseBlockNotInDatabase           = errors.New("inconsistent state: can't find base block in database")
@@ -53,7 +57,8 @@ func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
 type turtle struct {
 	logger log.Log
 
-	bdp blockDataProvider
+	bdp   blockDataProvider
+	atxdb atxDataProvider
 
 	// last layer processed: note that tortoise does not have a concept of "current" layer (and it's not aware of the
 	// current time or latest tick). As far as Tortoise is concerned, Last is the current layer. This is a subjective
@@ -105,6 +110,7 @@ func (t *turtle) SetLogger(logger log.Log) {
 // newTurtle creates a new verifying tortoise algorithm instance
 func newTurtle(
 	bdp blockDataProvider,
+	atxdb atxDataProvider,
 	hdist,
 	zdist,
 	confidenceParam,
@@ -123,6 +129,7 @@ func newTurtle(
 		GlobalThreshold:      globalThreshold,
 		LocalThreshold:       localThreshold,
 		bdp:                  bdp,
+		atxdb:                atxdb,
 		Last:                 0,
 		AvgLayerSize:         avgLayerSize,
 		GoodBlocksIndex:      make(map[types.BlockID]struct{}),
@@ -136,6 +143,7 @@ func newTurtle(
 func (t *turtle) cloneTurtle() *turtle {
 	return newTurtle(
 		t.bdp,
+		t.atxdb,
 		int(t.Hdist),
 		int(t.Zdist),
 		int(t.ConfidenceParam),
@@ -477,13 +485,25 @@ func (t *turtle) calculateExceptions(
 	return []map[types.BlockID]struct{}{againstDiff, forDiff, neutralDiff}, nil
 }
 
-// BlockWeight returns the weight to assign to one block's vote for another.
+// voteWeight returns the weight to assign to one block's vote for another.
 // Note: weight depends on more than just the weight of the voting block. It also depends on contextual factors such as
 // whether or not the block's ATX was received on time, and on how old the layer is.
 // TODO: for now it's probably sufficient to adjust weight based on whether the ATX was received on time, or late, for
 //   the current epoch. Assign weight of zero to late ATXs for the current epoch?
-func (t *turtle) BlockWeight(votingBlock, blockVotedOn types.BlockID) int {
-	return 1
+func (t *turtle) voteWeight(votingBlock *types.Block, blockVotedOn types.BlockID) (uint64, error) {
+	atxid, err := t.atxdb.GetAtxHeader(votingBlock.ATXID)
+	if err != nil {
+		return 0, err
+	}
+	return atxid.GetWeight(), nil
+}
+
+func (t *turtle) voteWeightByID(votingBlockID, blockVotedOn types.BlockID) (uint64, error) {
+	block, err := t.bdp.GetBlock(votingBlockID)
+	if err != nil {
+		return 0, err
+	}
+	return t.voteWeight(block, blockVotedOn)
 }
 
 // Persist saves the current tortoise state to the database
@@ -525,26 +545,42 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 		return fmt.Errorf("%s: %v, %v", errstrBaseBlockNotFoundInLayer, block.BaseBlock, baseBlock.LayerIndex)
 	}
 
+	calcWeightedVote := func(block *types.Block, votedOn types.BlockID, baseVote vec) (vec, error) {
+		weight, err := t.voteWeight(block, votedOn)
+		if err != nil {
+			return baseVote, fmt.Errorf("error processing block %v in block %v for diff list: %w", votedOn, block.ID(), err)
+		}
+		return baseVote.Multiply(weight), nil
+	}
+
 	// TODO: this logic would be simpler if For and Against were a single list
 	// TODO: save and vote against blocks that exceed the max exception list size (DoS prevention)
 	opinion := make(map[types.BlockID]vec)
 
-	for _, b := range block.ForDiff {
-		opinion[b] = support.Multiply(t.BlockWeight(block.ID(), b))
+	for _, bid := range block.ForDiff {
+		weightedVote, err := calcWeightedVote(block, bid, support)
+		if err != nil {
+			return err
+		}
+		opinion[bid] = weightedVote
 	}
-	for _, b := range block.AgainstDiff {
+	for _, bid := range block.AgainstDiff {
 		// this could only happen in malicious blocks, and they should not pass a syntax check, but check here just
 		// to be extra safe
-		if _, alreadyVoted := opinion[b]; alreadyVoted {
+		if _, alreadyVoted := opinion[bid]; alreadyVoted {
 			return fmt.Errorf("%s %v", errstrConflictingVotes, block.ID())
 		}
-		opinion[b] = against.Multiply(t.BlockWeight(block.ID(), b))
+		weightedVote, err := calcWeightedVote(block, bid, against)
+		if err != nil {
+			return err
+		}
+		opinion[bid] = weightedVote
 	}
-	for _, b := range block.NeutralDiff {
-		if _, alreadyVoted := opinion[b]; alreadyVoted {
+	for _, bid := range block.NeutralDiff {
+		if _, alreadyVoted := opinion[bid]; alreadyVoted {
 			return fmt.Errorf("%s %v", errstrConflictingVotes, block.ID())
 		}
-		opinion[b] = abstain
+		opinion[bid] = abstain
 	}
 	for blk, vote := range baseBlockOpinion.BlockOpinions {
 		// ignore opinions of very old blocks
@@ -788,7 +824,7 @@ candidateLayerLoop:
 				blockID,
 				log.FieldNamed("layer_start", candidateLayerID+1),
 				log.FieldNamed("layer_end", t.Last))
-			sum := t.sumVotesForBlock(ctx, blockID, candidateLayerID+1, func(votingBlockID types.BlockID) bool {
+			sum, err := t.sumVotesForBlock(ctx, blockID, candidateLayerID+1, func(votingBlockID types.BlockID) bool {
 				if _, isgood := t.GoodBlocksIndex[votingBlockID]; !isgood {
 					logger.With().Debug("not counting vote of block not marked good",
 						log.FieldNamed("voting_block", votingBlockID))
@@ -796,6 +832,10 @@ candidateLayerLoop:
 				}
 				return true
 			})
+			if err != nil {
+				return fmt.Errorf("error summing votes for block %v in candidate layer %v: %w",
+					blockID, candidateLayerID, err)
+			}
 
 			// check that the total weight exceeds the global threshold
 			globalOpinionOnBlock := calculateOpinionWithThreshold(
@@ -949,7 +989,12 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 			layerBlocks := make(map[types.BlockID]struct{}, len(layerBlockIds))
 			for _, blockID := range layerBlockIds {
 				logger := logger.WithFields(log.FieldNamed("candidate_block_id", blockID))
-				sum := t.sumVotesForBlock(ctx, blockID, layerID+1, func(id types.BlockID) bool { return true })
+				sum, err := t.sumVotesForBlock(ctx, blockID, layerID+1, func(id types.BlockID) bool { return true })
+				if err != nil {
+					return nil, fmt.Errorf("error summing votes for block %v in old layer %v: %w",
+						blockID, layerID, err)
+				}
+
 				// TODO: should delta here represent layer depth, or should it always be 1?
 				//   votes are counted for all layers!
 				localOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.AvgLayerSize, t.LocalThreshold, 1)
@@ -1030,7 +1075,7 @@ func (t *turtle) sumVotesForBlock(
 	blockID types.BlockID, // the block we're summing votes for/against
 	startLayer types.LayerID,
 	filter func(types.BlockID) bool,
-) (sum vec) {
+) (sum vec, err error) {
 	sum = abstain
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.FieldNamed("start_layer", startLayer),
@@ -1049,16 +1094,22 @@ func (t *turtle) sumVotesForBlock(
 				continue
 			}
 
+			// get vote weight
+			weight, err := t.voteWeightByID(votingBlockID, blockID)
+			if err != nil {
+				return sum, fmt.Errorf("error getting vote weight for block %v: %w", votingBlockID, err)
+			}
+
 			// check if this block has an opinion on the block to vote on
 			// no opinion (on a block in an older layer) counts as an explicit vote against the block
 			if opinionVote, exists := votingBlockOpinion.BlockOpinions[blockID]; exists {
 				logger.With().Debug("adding block opinion to vote sum",
 					log.FieldNamed("vote", opinionVote),
 					sum)
-				sum = sum.Add(opinionVote.Multiply(t.BlockWeight(votingBlockID, blockID)))
+				sum = sum.Add(opinionVote.Multiply(weight))
 			} else {
 				logger.Debug("no opinion on older block, counting vote against")
-				sum = sum.Add(against.Multiply(t.BlockWeight(votingBlockID, blockID)))
+				sum = sum.Add(against.Multiply(weight))
 			}
 		}
 	}
@@ -1113,7 +1164,11 @@ func (t *turtle) heal(ctx context.Context, targetLayerID types.LayerID) {
 			logger := logger.WithFields(log.FieldNamed("candidate_block_id", blockID))
 
 			// count all votes for or against this block by all blocks in later layers: don't filter out any
-			sum := t.sumVotesForBlock(ctx, blockID, candidateLayerID+1, func(id types.BlockID) bool { return true })
+			sum, err := t.sumVotesForBlock(ctx, blockID, candidateLayerID+1, func(id types.BlockID) bool { return true })
+			if err != nil {
+				logger.Error("error summing votes for candidate block in candidate layer", log.Err(err))
+				return
+			}
 
 			// check that the total weight exceeds the global threshold
 			globalOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, float64(t.Last-candidateLayerID))

@@ -547,6 +547,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	trtlCfg := tortoise.Config{
 		LayerSize:       int(layerSize),
 		Database:        mdb,
+		ATXDB:           atxdb,
 		Hdist:           app.Config.Hdist,
 		Zdist:           app.Config.Zdist,
 		ConfidenceParam: app.Config.ConfidenceParam,
