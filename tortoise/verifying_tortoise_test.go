@@ -1084,6 +1084,46 @@ func TestCalculateExceptions(t *testing.T) {
 		expectVotes(votes, 0, 2*defaultTestLayerSize, 0)
 	})
 }
+func TestDetermineBlockGoodness(t *testing.T) {
+	r := require.New(t)
+	mdb := getPersistentMesh(t)
+	alg := defaultAlgorithm(t, mdb)
+
+	l1ID := types.GetEffectiveGenesis() + 1
+	l1Blocks := generateBlocks(l1ID, 3, alg.BaseBlock)
+
+	// block marked good
+	r.True(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[0]))
+
+	// base block not found
+	randBlockID := types.RandomBlockID()
+	alg.trtl.GoodBlocksIndex[randBlockID] = struct{}{}
+	l1Blocks[1].BaseBlock = randBlockID
+	r.False(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[1]))
+
+	// base block not good
+	l1Blocks[1].BaseBlock = l1Blocks[2].ID()
+	r.False(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[1]))
+
+	// diff inconsistent with local opinion
+	l1Blocks[2].AgainstDiff = []types.BlockID{mesh.GenesisBlock().ID()}
+	r.False(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[2]))
+
+	// can run again on the same block with no change (idempotency)
+	r.True(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[0]))
+	r.False(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[2]))
+}
+
+func TestScoreBlocks(t *testing.T) {
+	// adds a block not already marked good
+
+	// no change if block already marked good
+
+	// removes a block previously marked good
+
+	// idempotency
+
+}
 
 func TestProcessBlock(t *testing.T) {
 	r := require.New(t)
