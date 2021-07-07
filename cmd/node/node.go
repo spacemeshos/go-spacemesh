@@ -3,7 +3,6 @@ package node
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -47,6 +46,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spf13/cobra"
@@ -65,6 +66,10 @@ const (
 	StateDbLogger        = "stateDbStore"
 	StateLogger          = "state"
 	AtxDbStoreLogger     = "atxDbStore"
+	TBeaconDbStoreLogger = "tbDbStore"
+	TBeaconDbLogger      = "tbDb"
+	TBeaconLogger        = "tBeaconLogger"
+	WeakCoinLogger       = "wcLogger"
 	PoetDbStoreLogger    = "poetDbStore"
 	StoreLogger          = "store"
 	PoetDbLogger         = "poetDb"
@@ -149,15 +154,6 @@ type TickProvider interface {
 	AwaitLayer(types.LayerID) chan struct{}
 }
 
-// Tortoise beacon mock (waiting for #2267)
-type tortoiseBeaconMock struct{}
-
-// GetBeacon returns a very simple pseudo-random beacon value based on the input epoch ID
-func (tortoiseBeaconMock) GetBeacon(epochID types.EpochID) []byte {
-	sha := sha256.Sum256(epochID.ToBytes())
-	return sha[:4]
-}
-
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
 	*cobra.Command
@@ -183,6 +179,7 @@ type SpacemeshApp struct {
 	atxDb          *activation.DB
 	poetListener   *activation.PoetListener
 	edSgn          *signing.EdSigner
+	tBeacon        *tortoisebeacon.TortoiseBeacon
 	closers        []interface{ Close() }
 	log            log.Log
 	txPool         *state.TxMempool
@@ -452,7 +449,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	nodeID types.NodeID,
 	swarm service.Service,
 	dbStorepath string,
-	sgn hare.Signer,
+	sgn *signing.EdSigner,
 	isFixedOracle bool,
 	rolacle hare.Rolacle,
 	layerSize uint32,
@@ -485,6 +482,12 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		return err
 	}
 	app.closers = append(app.closers, atxdbstore)
+
+	tBeaconDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "tbeacon"), 0, 0, app.addLogger(TBeaconDbStoreLogger, lg))
+	if err != nil {
+		return err
+	}
+	app.closers = append(app.closers, tBeaconDBStore)
 
 	poetDbStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "poet"), 0, 0, app.addLogger(PoetDbStoreLogger, lg))
 	if err != nil {
@@ -528,7 +531,16 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	}
 
 	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
-	beaconProvider := &blocks.EpochBeaconProvider{}
+	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
+
+	// TODO(nkryuchkov): Enable weak coin when finished.
+	//wc := weakcoin.NewWeakCoin(weakcoin.DefaultThreshold, swarm, BLS381.Verify2, vrfSigner, app.addLogger(WeakCoinLogger, lg))
+	wc := weakcoin.ValueMock{Value: false}
+	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
+	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, nodeID, ld, swarm, atxdb, tBeaconDB, sgn, signing.VRFVerify, vrfSigner, wc, clock, app.addLogger(TBeaconLogger, lg))
+	if err := tBeacon.Start(ctx); err != nil {
+		app.log.Panic("Failed to start tortoise beacon: %v", err)
+	}
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
@@ -549,7 +561,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		app.setupGenesis(processor, msh)
 	}
 
-	eValidator := blocks.NewBlockEligibilityValidator(layerSize, layersPerEpoch, atxdb, beaconProvider,
+	eValidator := blocks.NewBlockEligibilityValidator(layerSize, layersPerEpoch, atxdb, tBeacon,
 		signing.VRFVerify, msh, app.addLogger(BlkEligibilityLogger, lg))
 
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
@@ -573,8 +585,8 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
 
-	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxdb, poetDb, atxdb, processor, swarm, remoteFetchService, msh, app.addLogger(Fetcher, lg))
-	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, mdb.InputVector())
+	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxdb, poetDb, atxdb, processor, swarm, remoteFetchService, msh, tBeaconDB, app.addLogger(Fetcher, lg))
+	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, mdb.InputVector(), tBeaconDBStore)
 
 	syncerConf := syncer.Configuration{
 		SyncInterval:    time.Duration(app.Config.SyncInterval) * time.Second,
@@ -583,7 +595,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	}
 	syncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, app.addLogger(SyncLogger, lg))
 
-	blockOracle := blocks.NewMinerBlockOracle(layerSize, layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
+	blockOracle := blocks.NewMinerBlockOracle(layerSize, layersPerEpoch, atxdb, tBeacon, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
 	var hOracle hare.Rolacle
@@ -594,7 +606,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		// regular oracle, build and use it
 		// TODO: this mock will be replaced by the real Tortoise beacon once
 		//   https://github.com/spacemeshos/go-spacemesh/pull/2267 is complete
-		beacon := eligibility.NewBeacon(tortoiseBeaconMock{}, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
+		beacon := eligibility.NewBeacon(tBeacon, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
 		hOracle = eligibility.New(beacon, atxdb, mdb, signing.VRFVerify, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.POST.SpacePerUnit, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
@@ -612,7 +624,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	}
 
 	database.SwitchCreationContext(dbStorepath, "") // currently only blockbuilder uses this mechanism
-	blockProducer := miner.NewBlockBuilder(minerCfg, sgn, swarm, clock.Subscribe(), msh, trtl, rabbit, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
+	blockProducer := miner.NewBlockBuilder(minerCfg, sgn, swarm, clock.Subscribe(), msh, trtl, blockOracle, syncer, stateAndMeshProjector, app.txPool, app.addLogger(BlockBuilderLogger, lg))
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))
 
@@ -638,6 +650,11 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	gossipListener.AddListener(ctx, state.IncomingTxProtocol, priorityq.Low, processor.HandleTxGossipData)
 	gossipListener.AddListener(ctx, activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
 	gossipListener.AddListener(ctx, blocks.NewBlockProtocol, priorityq.High, blockListener.HandleBlock)
+	gossipListener.AddListener(ctx, tortoisebeacon.TBProposalProtocol, priorityq.Low, tBeacon.HandleSerializedProposalMessage)
+	gossipListener.AddListener(ctx, tortoisebeacon.TBFirstVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFirstVotingMessage)
+	gossipListener.AddListener(ctx, tortoisebeacon.TBFollowingVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFollowingVotingMessage)
+	// TODO(nkryuchkov): Enable weak coin when finished.
+	//gossipListener.AddListener(ctx, weakcoin.GossipProtocol, priorityq.Low, wc.HandleSerializedMessage)
 
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener
@@ -654,6 +671,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	app.txProcessor = processor
 	app.atxDb = atxdb
 	app.layerFetch = layerFetch
+	app.tBeacon = tBeacon
 
 	return nil
 }
@@ -831,6 +849,12 @@ func (app *SpacemeshApp) stopServices() {
 
 	if app.gossipListener != nil {
 		app.gossipListener.Stop()
+	}
+
+	if app.tBeacon != nil {
+		log.Info("Stopping tortoise beacon...")
+		// does not return any errors
+		app.tBeacon.Close()
 	}
 
 	if app.poetListener != nil {

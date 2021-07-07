@@ -3,6 +3,7 @@ package activation
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"sync"
@@ -42,6 +43,10 @@ func getAtxHeaderKey(atxID types.ATXID) []byte {
 
 func getAtxBodyKey(atxID types.ATXID) []byte {
 	return atxID.Bytes()
+}
+
+func getAtxTimestampKey(atxID types.ATXID) []byte {
+	return []byte(fmt.Sprintf("ts_%v", atxID.Bytes()))
 }
 
 var (
@@ -420,6 +425,11 @@ func (db *DB) StoreAtx(ech types.EpochID, atx *types.ActivationTx) error {
 		return err
 	}
 
+	err = db.addAtxTimestamp(time.Now(), atx)
+	if err != nil {
+		return err
+	}
+
 	db.log.With().Info("finished storing atx in epoch", atx.ID(), ech)
 	return nil
 }
@@ -504,6 +514,16 @@ func (db *DB) getTopAtx() (atxIDAndLayer, error) {
 	return topAtx, nil
 }
 
+func (db *DB) getAtxTimestamp(id types.ATXID) (time.Time, error) {
+	b, err := db.atxs.Get(getAtxTimestampKey(id))
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	ts := time.Unix(0, int64(binary.LittleEndian.Uint64(b)))
+	return ts, nil
+}
+
 // addAtxToNodeID inserts activation atx id by node
 func (db *DB) addAtxToNodeID(nodeID types.NodeID, atx *types.ActivationTx) error {
 	err := db.atxs.Put(getNodeAtxKey(nodeID, atx.PubLayerID.GetEpoch()), atx.ID().Bytes())
@@ -518,6 +538,19 @@ func (db *DB) addNodeAtxToEpoch(epoch types.EpochID, nodeID types.NodeID, atx *t
 	err := db.atxs.Put(getNodeAtxEpochKey(atx.PubLayerID.GetEpoch(), nodeID), atx.ID().Bytes())
 	if err != nil {
 		return fmt.Errorf("failed to store atx ID for node: %v", err)
+	}
+	return nil
+}
+
+func (db *DB) addAtxTimestamp(timestamp time.Time, atx *types.ActivationTx) error {
+	db.log.Info("added atx %v timestamp %v", atx.ID().ShortString(), timestamp)
+
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, uint64(timestamp.UnixNano()))
+
+	err := db.atxs.Put(getAtxTimestampKey(atx.ID()), b)
+	if err != nil {
+		return fmt.Errorf("failed to store atx timestamp for node: %v", err)
 	}
 	return nil
 }
@@ -580,6 +613,16 @@ func (db *DB) GetPosAtxID() (types.ATXID, error) {
 		return *types.EmptyATXID, err
 	}
 	return idAndLayer.AtxID, nil
+}
+
+// GetAtxTimestamp returns ATX timestamp.
+func (db *DB) GetAtxTimestamp(atxid types.ATXID) (time.Time, error) {
+	ts, err := db.getAtxTimestamp(atxid)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return ts, nil
 }
 
 // GetEpochWeight returns the total weight of ATXs targeting the given epochID.

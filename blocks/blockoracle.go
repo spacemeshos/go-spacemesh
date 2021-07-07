@@ -3,12 +3,12 @@ package blocks
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -30,7 +30,7 @@ type Oracle struct {
 	committeeSize  uint32
 	layersPerEpoch uint16
 	atxDB          activationDB
-	beaconProvider *EpochBeaconProvider
+	beaconProvider BeaconGetter
 	vrfSigner      vrfSigner
 	nodeID         types.NodeID
 
@@ -44,7 +44,7 @@ type Oracle struct {
 }
 
 // NewMinerBlockOracle returns a new Oracle.
-func NewMinerBlockOracle(committeeSize uint32, layersPerEpoch uint16, atxDB activationDB, beaconProvider *EpochBeaconProvider, vrfSigner vrfSigner, nodeID types.NodeID, isSynced func() bool, log log.Log) *Oracle {
+func NewMinerBlockOracle(committeeSize uint32, layersPerEpoch uint16, atxDB activationDB, beaconProvider BeaconGetter, vrfSigner vrfSigner, nodeID types.NodeID, isSynced func() bool, log log.Log) *Oracle {
 	return &Oracle{
 		committeeSize:  committeeSize,
 		layersPerEpoch: layersPerEpoch,
@@ -100,7 +100,18 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 }
 
 func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.LayerID][]types.BlockEligibilityProof, error) {
-	epochBeacon := bo.beaconProvider.GetBeacon(epochNumber)
+	epochBeacon, err := bo.beaconProvider.GetBeacon(epochNumber)
+	if err != nil {
+		bo.log.With().Error("Failed to get beacon",
+			log.Uint64("epoch_id", uint64(epochNumber)),
+			log.Err(err))
+
+		return nil, err
+	}
+
+	bo.log.With().Info("Got beacon",
+		log.Uint64("epoch_id", uint64(epochNumber)),
+		log.Err(err))
 
 	var weight uint64
 	// get the previous epoch's total weight

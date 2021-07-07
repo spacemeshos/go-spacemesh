@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/post/shared"
@@ -54,6 +55,7 @@ type atxDBProvider interface {
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
 	GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error)
 	GetPosAtxID() (types.ATXID, error)
+	GetAtxTimestamp(id types.ATXID) (time.Time, error)
 	AwaitAtx(id types.ATXID) chan struct{}
 	UnsubscribeAtx(id types.ATXID)
 }

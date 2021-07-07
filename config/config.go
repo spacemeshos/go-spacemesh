@@ -17,6 +17,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	p2pConfig "github.com/spacemeshos/go-spacemesh/p2p/config"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
+
 	postConfig "github.com/spacemeshos/post/config"
 	"github.com/spf13/viper"
 )
@@ -40,6 +42,7 @@ type Config struct {
 	API             apiConfig.Config      `mapstructure:"api"`
 	HARE            hareConfig.Config     `mapstructure:"hare"`
 	HareEligibility eligConfig.Config     `mapstructure:"hare-eligibility"`
+	TortoiseBeacon  tortoisebeacon.Config `mapstructure:"tortoise-beacon"`
 	TIME            timeConfig.TimeConfig `mapstructure:"time"`
 	REWARD          mesh.Config           `mapstructure:"reward"`
 	POST            postConfig.Config     `mapstructure:"post"`
@@ -149,6 +152,7 @@ func DefaultConfig() Config {
 		API:             apiConfig.DefaultConfig(),
 		HARE:            hareConfig.DefaultConfig(),
 		HareEligibility: eligConfig.DefaultConfig(),
+		TortoiseBeacon:  tortoisebeacon.DefaultConfig(),
 		TIME:            timeConfig.DefaultConfig(),
 		REWARD:          mesh.DefaultMeshConfig(),
 		POST:            activation.DefaultConfig(),
