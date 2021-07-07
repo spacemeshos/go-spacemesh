@@ -119,18 +119,51 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 	}
 }
 
-func TestTurtle_HandleIncomingLayerHappyFlow(t *testing.T) {
-	topLayer := types.GetEffectiveGenesis() + 28
-	avgPerLayer := 10
-	// no negative votes, no abstain votes
-	trtl, _, _ := turtleSanity(t, topLayer, avgPerLayer, 0, 0)
-	require.Equal(t, int(topLayer-1), int(trtl.Verified))
-	blkids := make([]types.BlockID, 0, avgPerLayer*int(topLayer))
-	for l := types.LayerID(0); l < topLayer; l++ {
-		lids, _ := trtl.bdp.LayerBlockIds(l)
-		blkids = append(blkids, lids...)
-	}
-	requireVote(t, trtl, support, blkids...)
+func TestHandleIncomingLayer(t *testing.T) {
+	t.Run("HappyFlow", func(t *testing.T) {
+		topLayer := types.GetEffectiveGenesis() + 28
+		avgPerLayer := 10
+		// no negative votes, no abstain votes
+		trtl, _, _ := turtleSanity(t, topLayer, avgPerLayer, 0, 0)
+		require.Equal(t, int(topLayer-1), int(trtl.Verified))
+		blkids := make([]types.BlockID, 0, avgPerLayer*int(topLayer))
+		for l := types.LayerID(0); l < topLayer; l++ {
+			lids, _ := trtl.bdp.LayerBlockIds(l)
+			blkids = append(blkids, lids...)
+		}
+		requireVote(t, trtl, support, blkids...)
+	})
+
+	t.Run("VoteNegative", func(t *testing.T) {
+		lyrsAfterGenesis := types.LayerID(10)
+		layers := types.GetEffectiveGenesis() + lyrsAfterGenesis
+		avgPerLayer := 10
+		voteNegative := 2
+		// just a couple of negative votes
+		trtl, negs, abs := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
+		require.Equal(t, int(layers-1), int(trtl.Verified))
+		poblkids := make([]types.BlockID, 0, avgPerLayer*int(layers))
+		for l := types.LayerID(0); l < layers; l++ {
+			lids, _ := trtl.bdp.LayerBlockIds(l)
+			for _, lid := range lids {
+				if !inArr(lid, negs) {
+					poblkids = append(poblkids, lid)
+				}
+			}
+		}
+		require.Len(t, abs, 0)
+		require.Equal(t, len(negs), int(lyrsAfterGenesis-1)*voteNegative) // don't count last layer because no one is voting on it
+		requireVote(t, trtl, against, negs...)
+		requireVote(t, trtl, support, poblkids...)
+	})
+
+	t.Run("VoteAbstain", func(t *testing.T) {
+		layers := types.LayerID(10)
+		avgPerLayer := 10
+		trtl, _, abs := turtleSanity(t, layers, avgPerLayer, 0, 10)
+		require.Equal(t, int(types.GetEffectiveGenesis()), int(trtl.Verified), "when all votes abstain verification should stay at first layer")
+		requireVote(t, trtl, abstain, abs...)
+	})
 }
 
 func inArr(id types.BlockID, list []types.BlockID) bool {
@@ -140,37 +173,6 @@ func inArr(id types.BlockID, list []types.BlockID) bool {
 		}
 	}
 	return false
-}
-
-func TestTurtle_HandleIncomingLayer_VoteNegative(t *testing.T) {
-	lyrsAfterGenesis := types.LayerID(10)
-	layers := types.GetEffectiveGenesis() + lyrsAfterGenesis
-	avgPerLayer := 10
-	voteNegative := 2
-	// just a couple of negative votes
-	trtl, negs, abs := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
-	require.Equal(t, int(layers-1), int(trtl.Verified))
-	poblkids := make([]types.BlockID, 0, avgPerLayer*int(layers))
-	for l := types.LayerID(0); l < layers; l++ {
-		lids, _ := trtl.bdp.LayerBlockIds(l)
-		for _, lid := range lids {
-			if !inArr(lid, negs) {
-				poblkids = append(poblkids, lid)
-			}
-		}
-	}
-	require.Len(t, abs, 0)
-	require.Equal(t, len(negs), int(lyrsAfterGenesis-1)*voteNegative) // don't count last layer because no one is voting on it
-	requireVote(t, trtl, against, negs...)
-	requireVote(t, trtl, support, poblkids...)
-}
-
-func TestTurtle_HandleIncomingLayer_VoteAbstain(t *testing.T) {
-	layers := types.LayerID(10)
-	avgPerLayer := 10
-	trtl, _, abs := turtleSanity(t, layers, avgPerLayer, 0, 10)
-	require.Equal(t, int(types.GetEffectiveGenesis()), int(trtl.Verified), "when all votes abstain verification should stay at first layer")
-	requireVote(t, trtl, abstain, abs...)
 }
 
 // voteNegative - the number of blocks to vote negative per layer
@@ -456,7 +458,7 @@ func TestLayerPatterns(t *testing.T) {
 	})
 }
 
-func Test_TurtleAbstainsInMiddle(t *testing.T) {
+func TestAbstainsInMiddle(t *testing.T) {
 	layers := 15
 	initialNumGood := 5
 	blocksPerLayer := 10
@@ -566,7 +568,7 @@ func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp
 	return lyr
 }
 
-func TestTurtle_Eviction(t *testing.T) {
+func TestEviction(t *testing.T) {
 	layers := types.LayerID(defaultTestHdist * 5)
 	avgPerLayer := 20 // more blocks = longer test
 	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, 0, 0)
@@ -586,7 +588,7 @@ func TestTurtle_Eviction(t *testing.T) {
 	fmt.Println("Count good blocks ", len(trtl.GoodBlocksIndex))
 }
 
-func TestTurtle_Eviction2(t *testing.T) {
+func TestEviction2(t *testing.T) {
 	layers := types.LayerID(defaultTestWindowSize * 3)
 	avgPerLayer := 10
 	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, 0, 0)
