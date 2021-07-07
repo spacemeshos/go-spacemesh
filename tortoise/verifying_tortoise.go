@@ -616,7 +616,7 @@ func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) error
 		filteredBlocks = append(filteredBlocks, b)
 	}
 
-	t.markGoodBlocks(ctx, filteredBlocks)
+	t.scoreBlocks(ctx, filteredBlocks)
 
 	if t.Last < lastLayerID {
 		logger.With().Warning("got blocks for new layer before receiving layer, updating highest layer seen",
@@ -628,16 +628,16 @@ func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) error
 	return nil
 }
 
-func (t *turtle) markGoodBlocksByLayerID(ctx context.Context, layerID types.LayerID) error {
+func (t *turtle) scoreBlocksByLayerID(ctx context.Context, layerID types.LayerID) error {
 	blocks, err := t.bdp.LayerBlocks(layerID)
 	if err != nil {
 		return err
 	}
-	t.markGoodBlocks(ctx, blocks)
+	t.scoreBlocks(ctx, blocks)
 	return nil
 }
 
-func (t *turtle) markGoodBlocks(ctx context.Context, blocks []*types.Block) {
+func (t *turtle) scoreBlocks(ctx context.Context, blocks []*types.Block) {
 	logger := t.logger.WithContext(ctx)
 	numGood := 0
 	for _, b := range blocks {
@@ -876,8 +876,16 @@ candidateLayerLoop:
 				if t.Verified > lastVerified {
 					// rescore goodness of blocks in all intervening layers on the basis of new information
 					// TODO: this is inefficient and we can probably do better
-					for layerID := t.Verified.Add(1); layerID <= t.Last; layerID++ {
-						t.markGoodBlocksByLayerID(ctx, layerID)
+					for layerID := lastVerified.Add(1); layerID <= t.Last; layerID++ {
+						if err := t.scoreBlocksByLayerID(ctx, layerID); err != nil {
+							// if we fail to process a layer, there's probably no point in trying to recore blocks
+							// in later layers, so just print an error and bail
+							logger.With().Error("error trying to rescore good blocks in healed layers",
+								log.FieldNamed("layer_from", lastVerified),
+								log.FieldNamed("layer_to", t.Last),
+								log.Err(err))
+							break
+						}
 					}
 
 					continue candidateLayerLoop
@@ -1121,12 +1129,6 @@ func (t *turtle) heal(ctx context.Context, targetLayerID types.LayerID) {
 			if err := t.bdp.SaveContextualValidity(blockID, candidateLayerID, isValid); err != nil {
 				logger.With().Error("error saving block contextual validity", blockID, log.Err(err))
 			}
-		}
-
-		// rescore goodness of blocks in the just-healed layer
-		// TODO: this is inefficient and we can probably do better
-		if err := t.markGoodBlocksByLayerID(ctx, candidateLayerID); err != nil {
-			logger.With().Error("error rescoring goodness of blocks in healed layer", log.Err(err))
 		}
 
 		// TODO: do we overwrite the layer input vector in the database here?
