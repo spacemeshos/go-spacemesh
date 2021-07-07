@@ -1237,7 +1237,24 @@ func TestProcessBlock(t *testing.T) {
 }
 
 func TestVoteWeight(t *testing.T) {
+	r := require.New(t)
+	mdb := getInMemMesh()
+	alg := defaultAlgorithm(t, mdb)
+	totalSpace := 100
+	mockAtxHeader := &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: "fakekey"}}}
+	mockAtxHeader.StartTick = 0
+	mockAtxHeader.EndTick = 1
+	mockAtxHeader.Space = uint64(totalSpace)
+	alg.trtl.atxdb = mockAtxDataProvider{mockAtxHeader}
+	someBlocks := generateBlocks(types.GetEffectiveGenesis().Add(1), 1, alg.BaseBlock)
+	weight, err := alg.trtl.voteWeight(someBlocks[0], types.RandomBlockID())
+	r.NoError(err)
+	r.Equal(totalSpace, int(weight))
 
+	// voting for a different block should not change the weight
+	weight, err = alg.trtl.voteWeight(someBlocks[0], types.RandomBlockID())
+	r.NoError(err)
+	r.Equal(totalSpace, int(weight))
 }
 
 func TestProcessNewBlocks(t *testing.T) {
