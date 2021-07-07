@@ -471,21 +471,10 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	defer timer.Stop()
 
 	// wait for server to be ready (critical on CI)
-	// 3 possible cases:
-	// - timed out
-	// - grpcStarted, then jsonStarted or timed out
-	// - jsonStarted, then grpcStarted or timed out
-	select {
-	case <-timer.C:
-	case <-grpcStarted:
+	for _, ch := range []<-chan struct{}{grpcStarted, jsonStarted} {
 		select {
+		case <-ch:
 		case <-timer.C:
-		case <-jsonStarted:
-		}
-	case <-jsonStarted:
-		select {
-		case <-timer.C:
-		case <-grpcStarted:
 		}
 	}
 
