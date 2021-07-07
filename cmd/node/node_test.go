@@ -47,17 +47,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func tempDir() (dir string, cleanup func() error, err error) {
-	path, err := ioutil.TempDir("/tmp", "datadir_")
-	if err != nil {
-		return "", nil, err
-	}
-	cleanup = func() error {
-		return os.RemoveAll(path)
-	}
-	return path, cleanup, err
-}
-
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r := require.New(t)
 
@@ -427,9 +416,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r := require.New(t)
 	app := NewSpacemeshApp()
 
-	path, cleanup, err := tempDir()
-	r.NoError(err)
-	defer cleanup()
+	path := t.TempDir()
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
@@ -499,9 +486,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	r := require.New(t)
 	app := NewSpacemeshApp()
 
-	path, cleanup, err := tempDir()
-	r.NoError(err)
-	defer cleanup()
+	path := t.TempDir()
 
 	// Make sure the service is not running by default
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
@@ -567,16 +552,14 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	// Use a unique port
 	port := 1240
 
-	path, cleanup, err := tempDir()
-	require.NoError(t, err)
-	defer cleanup()
+	path := t.TempDir()
 
 	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), log.NewDefault("clock"))
-	net := service.NewSimulator()
+	localNet := service.NewSimulator()
 	cfg := getTestDefaultConfig(1)
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	assert.NoError(t, err)
-	app, err := InitSingleInstance(*cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(), poetHarness.HTTPPoetClient, clock, net)
+	app, err := InitSingleInstance(*cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(), poetHarness.HTTPPoetClient, clock, localNet)
 
 	//app := NewSpacemeshApp()
 
@@ -752,9 +735,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	port := 1236
 
 	// Use a unique dir for data so we don't read existing state
-	path, cleanup, err := tempDir()
-	r.NoError(err, "error creating tempdir")
-	defer cleanup()
+	path := t.TempDir()
 
 	app := NewSpacemeshApp()
 	cfg := config.DefaultTestConfig()
