@@ -21,7 +21,7 @@ type BlockEligibilityValidator struct {
 	layersPerEpoch     uint16
 	activationDb       activationDB
 	blocks             blockDB
-	beaconProvider     *EpochBeaconProvider
+	beaconProvider     BeaconGetter
 	validateVRF        VRFValidationFunction
 	log                log.Log
 }
@@ -29,7 +29,7 @@ type BlockEligibilityValidator struct {
 // NewBlockEligibilityValidator returns a new BlockEligibilityValidator.
 func NewBlockEligibilityValidator(
 	committeeSize uint32, genesisTotalWeight uint64, layersPerEpoch uint16, activationDb activationDB,
-	beaconProvider *EpochBeaconProvider, validateVRF VRFValidationFunction, blockDB blockDB, log log.Log) *BlockEligibilityValidator {
+	beaconProvider BeaconGetter, validateVRF VRFValidationFunction, blockDB blockDB, log log.Log) *BlockEligibilityValidator {
 
 	return &BlockEligibilityValidator{
 		committeeSize:      committeeSize,
@@ -103,7 +103,11 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 			numberOfEligibleBlocks, totalWeight)
 	}
 
-	epochBeacon := v.beaconProvider.GetBeacon(epochNumber)
+	epochBeacon, err := v.beaconProvider.GetBeacon(epochNumber)
+	if err != nil {
+		return false, fmt.Errorf("get beacon for epoch %v: %w", epochNumber, err)
+	}
+
 	message, err := serializeVRFMessage(epochBeacon, epochNumber, counter)
 	if err != nil {
 		return false, err

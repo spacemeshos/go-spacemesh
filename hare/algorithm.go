@@ -6,17 +6,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/nullstyle/go-xdr/xdr3"
+	"strconv"
+	"time"
+
+	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"strconv"
-	"time"
 )
 
 const protoName = "HARE_PROTOCOL"
@@ -177,7 +179,7 @@ func newMsg(ctx context.Context, hareMsg *Message, querier StateQuerier) (*Msg, 
 type consensusProcess struct {
 	log.Log
 	State
-	Closer
+	util.Closer
 	instanceID        instanceID // the layer id
 	oracle            Rolacle    // the roles oracle provider
 	signing           Signer
@@ -207,7 +209,7 @@ func newConsensusProcess(cfg config.Config, instanceID instanceID, s *Set, oracl
 	msgsTracker := newMsgsTracker()
 	proc := &consensusProcess{
 		State:             State{-1, -1, s.Clone(), nil},
-		Closer:            NewCloser(),
+		Closer:            util.NewCloser(),
 		instanceID:        instanceID,
 		oracle:            oracle,
 		signing:           signing,

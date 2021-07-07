@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -23,31 +24,10 @@ type validator interface {
 	Validate(context.Context, *Msg) bool
 }
 
-// Closer adds the ability to close objects.
-type Closer struct {
-	channel chan struct{} // closeable go routines listen to this channel
-}
-
-// NewCloser creates a new (not closed) closer.
-func NewCloser() Closer {
-	return Closer{make(chan struct{})}
-}
-
-// Close signals all listening instances to close.
-// Note: should be called only once.
-func (closer *Closer) Close() {
-	close(closer.channel)
-}
-
-// CloseChannel returns the channel to wait on for close signal.
-func (closer *Closer) CloseChannel() chan struct{} {
-	return closer.channel
-}
-
 // Broker is the dispatcher of incoming Hare messages.
 // The broker validates that the sender is eligible and active and forwards the message to the corresponding outbox.
 type Broker struct {
-	Closer
+	util.Closer
 	log.Log
 	network        NetworkService
 	eValidator     validator     // provides eligibility validation
@@ -67,7 +47,7 @@ type Broker struct {
 	limit          int // max number of simultaneous consensus processes
 }
 
-func newBroker(networkService NetworkService, eValidator validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, limit int, closer Closer, log log.Log) *Broker {
+func newBroker(networkService NetworkService, eValidator validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, limit int, closer util.Closer, log log.Log) *Broker {
 	return &Broker{
 		Closer:         closer,
 		Log:            log,
