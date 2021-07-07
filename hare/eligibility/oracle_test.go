@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -541,4 +542,101 @@ func TestOracle_Eligible2(t *testing.T) {
 	}
 	_, err := o.Eligible(context.TODO(), 100, 1, 1, types.NodeID{}, []byte{})
 	assert.Equal(t, errFoo, err)
+}
+
+func TestOracleActiveSetCacheWarming(t *testing.T) {
+	r := require.New(t)
+	types.SetLayersPerEpoch(defLayersPerEpoch)
+	o := New(&mockValueProvider{1, nil}, nil, nil, nil, defLayersPerEpoch, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	mc := newMockCacher()
+	o.activesCache = mc
+	mapSize := 9
+	mp := createMapWithSize(mapSize)
+	callCount := int32(0)
+	o.getActiveSet = func(ctx context.Context, epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+		// simulate slow IO
+		time.Sleep(time.Second)
+		atomic.AddInt32(&callCount, 1)
+		return mp, nil
+	}
+
+	// set firstLayer to two layers before a safe epoch boundary
+	r.Equal(2, cacheWarmingDistance)
+	firstLayer := types.LayerID(72)
+	sl1 := roundedSafeLayer(firstLayer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
+	r.Equal(60, int(sl1))
+	sl2 := roundedSafeLayer(firstLayer.Add(1), types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
+	r.Equal(60, int(sl2))
+	sl3 := roundedSafeLayer(firstLayer.Add(2), types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
+	r.Equal(60, int(sl3))
+	sl4 := roundedSafeLayer(firstLayer.Add(3), types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
+	r.Equal(70, int(sl4))
+	r.Equal(int(sl1.GetEpoch()), int(sl2.GetEpoch()))
+	r.Equal(int(sl2.GetEpoch()), int(sl3.GetEpoch()))
+	r.NotEqual(int(sl3.GetEpoch()), int(sl4.GetEpoch()))
+
+	// 3 layers before transition to new safe epoch: no cache warming
+	activeMap, err := o.actives(context.TODO(), firstLayer)
+	r.NoError(err)
+	r.Len(activeMap, mapSize)
+	r.Equal(1, int(atomic.LoadInt32(&callCount)))
+	r.Equal(1, mc.numAdd)
+	r.Equal(1, mc.numGet)
+	r.Contains(mc.data, sl1.GetEpoch())
+	r.NotContains(mc.data, sl4.GetEpoch())
+
+	// 2 layers before transition to new safe epoch: should warm cache concurrently
+	activeMap, err = o.actives(context.TODO(), firstLayer.Add(1))
+	r.NoError(err)
+	r.Len(activeMap, mapSize)
+	r.Equal(1, mc.numAdd)
+	r.Equal(2, mc.numGet)
+	r.Contains(mc.data, sl1.GetEpoch())
+	r.NotContains(mc.data, sl4.GetEpoch())
+
+	// this happens concurrently
+	r.Eventually(func() bool {
+		_, contains := mc.data[sl4.GetEpoch()]
+		return contains && atomic.LoadInt32(&callCount) == int32(2) && mc.numAdd == 2
+	}, 2*time.Second, time.Millisecond*100)
+
+	// 1 layer before transition to new safe epoch: warming should've happened already
+	done1 := make(chan error)
+	go func() {
+		// should not block on active set generation
+		_, err = o.actives(context.TODO(), firstLayer.Add(2))
+		done1 <- err
+	}()
+	select {
+	case err := <-done1:
+		t.Log("active set generation did not block")
+		r.NoError(err)
+	case <-time.After(500 * time.Millisecond):
+		r.Fail("timed out waiting for active set generation")
+	}
+	r.NoError(err)
+	r.Equal(2, mc.numAdd)
+	r.Equal(3, mc.numGet)
+	r.Contains(mc.data, sl1.GetEpoch())
+	r.Contains(mc.data, sl4.GetEpoch())
+
+	// get active set first layer of new safe epoch: should be no delay
+	done2 := make(chan error)
+	go func() {
+		// should not block on active set generation
+		_, err = o.actives(context.TODO(), firstLayer.Add(3))
+		done2 <- err
+	}()
+	select {
+	case err := <-done2:
+		t.Log("active set generation did not block")
+		r.NoError(err)
+	case <-time.After(500 * time.Millisecond):
+		r.Fail("timed out waiting for active set generation")
+	}
+	r.Equal(2, int(atomic.LoadInt32(&callCount)))
+	r.Equal(2, mc.numAdd)
+	r.Equal(4, mc.numGet)
+	r.Contains(mc.data, sl1.GetEpoch())
+	r.Contains(mc.data, sl4.GetEpoch())
 }

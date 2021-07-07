@@ -15,8 +15,11 @@ import (
 	"sync"
 )
 
-const vrfMsgCacheSize = 20 // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
-const activesCacheSize = 5 // we don't expect to handle more than two layers concurrently
+const (
+	vrfMsgCacheSize      = 20 // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
+	activesCacheSize     = 5  // we don't expect to handle more than two layers concurrently
+	cacheWarmingDistance = 2  // the number of layers before a safe epoch boundary that we warm the active set cache
+)
 
 var (
 	errGenesis = errors.New("no data about active nodes for genesis")
@@ -54,6 +57,7 @@ type Oracle struct {
 	genesisActiveSetSize int
 	blocksProvider       goodBlocksProvider
 	cfg                  eCfg.Config
+	lastSafeEpoch        types.EpochID
 	log.Log
 }
 
@@ -242,16 +246,45 @@ func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round int32) ([
 }
 
 // Returns a map of all active nodes in the specified layer id
-func (o *Oracle) actives(ctx context.Context, layer types.LayerID) (activeMap map[string]struct{}, err error) {
-	logger := o.WithContext(ctx)
+func (o *Oracle) actives(ctx context.Context, layer types.LayerID) (map[string]struct{}, error) {
 	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	safeEp := sl.GetEpoch()
+	logger := o.WithContext(ctx).WithFields(
+		log.FieldNamed("safe_layer", sl),
+		log.FieldNamed("safe_epoch", safeEp))
+	logger.With().Info("safe layer and epoch")
 
-	logger.With().Info("safe layer and epoch", sl, safeEp)
-	// check genesis
-	// genesis is for 3 epochs with hare since it can only count active identities found in blocks
-	if safeEp < 3 {
-		return nil, errGenesis
+	getBlocksAndActiveSet := func(ctx context.Context, safeLayer types.LayerID) (map[string]struct{}, error) {
+		safeEpoch := safeLayer.GetEpoch()
+		logger := o.WithContext(ctx).WithFields(
+			log.FieldNamed("safe_layer", safeLayer),
+			log.FieldNamed("safe_epoch", safeEpoch))
+
+		// build a map of all blocks in the safe layer
+		mp, err := o.blocksProvider.ContextuallyValidBlock(safeLayer)
+		if err != nil {
+			return nil, err
+		}
+		logger.With().Debug("contextually valid blocks in safe layer", log.Int("count", len(mp)))
+
+		// no contextually valid blocks: for now we just fall back on an empty active set. this will go away when we
+		// upgrade hare eligibility to use the tortoise beacon.
+		if len(mp) == 0 {
+			logger.With().Warning("no contextually valid blocks in layer, using active set of size zero",
+				layer,
+				layer.GetEpoch(),
+				log.FieldNamed("safe_layer_id", sl),
+				log.FieldNamed("safe_epoch_id", safeEpoch))
+			return nil, nil
+		}
+
+		// the active set targeting epoch N is the active set as epoch N-1
+		activeMap, err := o.getActiveSet(ctx, safeEpoch-1, mp)
+		if err != nil {
+			return nil, err
+		}
+		logger.With().Debug("active set for safe epoch", log.Int("active_set_size", len(activeMap)))
+		return activeMap, nil
 	}
 
 	// lock until any return
@@ -259,42 +292,54 @@ func (o *Oracle) actives(ctx context.Context, layer types.LayerID) (activeMap ma
 	o.lock.Lock()
 	defer o.lock.Unlock()
 
+	// check if we'll soon cross into a new safe epoch
+	// TODO: this won't trigger during sync/while not synced, nor if hare doesn't run for another reason.
+	slNext := roundedSafeLayer(layer.Add(cacheWarmingDistance), types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
+	if safeEp != slNext.GetEpoch() && o.lastSafeEpoch < slNext.GetEpoch() {
+		logger := logger.WithFields(log.FieldNamed("safe_epoch_next", slNext.GetEpoch()))
+		logger.Info("warming active set cache before new safe epoch boundary")
+
+		// make sure we only run once for this epoch. this is thread safe since we are inside an exclusive lock.
+		o.lastSafeEpoch = slNext.GetEpoch()
+
+		go func(ctx context.Context) {
+			logger := o.WithContext(ctx).WithFields(log.FieldNamed("safe_epoch_next", slNext.GetEpoch()))
+			if activeMap, err := getBlocksAndActiveSet(ctx, slNext); err != nil {
+				logger.With().Error("error warming active set cache for next safe epoch", log.Err(err))
+			} else {
+				// note: this may block on the outer method if that's still holding the lock, but there's no
+				// possibility of deadlock since it does not block on this goroutine.
+				o.lock.Lock()
+				defer o.lock.Unlock()
+				o.activesCache.Add(slNext.GetEpoch(), activeMap)
+
+				logger.With().Info("successfully warmed active set cache for next safe epoch",
+					log.Int("active_set_size", len(activeMap)))
+			}
+		}(log.WithNewSessionID(ctx))
+	}
+
+	// check genesis
+	// genesis is for 3 epochs with hare since it can only count active identities found in blocks
+	if safeEp < 3 {
+		return nil, errGenesis
+	}
+
 	// check cache
 	if val, exist := o.activesCache.Get(safeEp); exist {
+		logger.With().Debug("read active map from cache for safe epoch",
+			log.Int("active_set_size", len(val.(map[string]struct{}))))
 		return val.(map[string]struct{}), nil
 	}
 
-	// build a map of all blocks on the current layer
-	mp, err2 := o.blocksProvider.ContextuallyValidBlock(sl)
-	if err2 != nil {
-		return nil, err2
-	}
-
-	// no contextually valid blocks: for now we just fall back on an empty active set. this will go away when we
-	// upgrade hare eligibility to use the tortoise beacon.
-	if len(mp) == 0 {
-		logger.With().Warning("no contextually valid blocks in layer, using active set of size zero",
-			layer,
-			layer.GetEpoch(),
-			log.FieldNamed("safe_layer_id", sl),
-			log.FieldNamed("safe_epoch_id", safeEp))
-		return
-	}
-
-	activeMap, err = o.getActiveSet(ctx, safeEp-1, mp)
+	activeMap, err := getBlocksAndActiveSet(ctx, sl)
 	if err != nil {
-		logger.With().Error("could not retrieve active set size",
-			log.Err(err),
-			layer,
-			layer.GetEpoch(),
-			log.FieldNamed("safe_layer_id", sl),
-			log.FieldNamed("safe_epoch_id", safeEp))
 		return nil, err
 	}
-
-	// update cache
+	logger.With().Debug("active map for safe epoch not found in cache, finished reading",
+		log.Int("active_set_size", len(activeMap)))
 	o.activesCache.Add(safeEp, activeMap)
-	return
+	return activeMap, nil
 }
 
 // IsIdentityActiveOnConsensusView returns true if the provided identity is active on the consensus view derived
