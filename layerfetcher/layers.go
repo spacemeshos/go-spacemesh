@@ -429,7 +429,9 @@ func (l *Logic) notifyLayerPromiseResult(id types.LayerID, expectedResults int, 
 func (l *Logic) receiveBlockHashes(ctx context.Context, layer types.LayerID, data []byte, expectedResults int, extErr error) {
 	//if we failed getting layer data - notify
 	if extErr != nil {
+		//if !errors.Is(extErr, ErrZeroLayer) || layer.GetEpoch() != 1 {
 		l.log.With().Error("received error", log.Err(extErr), layer)
+		//}
 		l.notifyLayerPromiseResult(layer, expectedResults, extErr)
 		return
 	}
