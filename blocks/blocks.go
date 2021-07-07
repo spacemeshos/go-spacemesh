@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"time"
 )
 
 // NewBlockProtocol is the protocol indicator for gossip blocks
@@ -23,8 +24,8 @@ var (
 type forBlockInView func(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 
 type mesh interface {
-	GetBlock(ID types.BlockID) (*types.Block, error)
-	AddBlockWithTxs(blk *types.Block) error
+	GetBlock(types.BlockID) (*types.Block, error)
+	AddBlockWithTxs(context.Context, *types.Block) error
 	ProcessedLayer() types.LayerID
 	HandleLateBlock(context.Context, *types.Block)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
@@ -76,19 +77,23 @@ func (bh *BlockHandler) HandleBlock(ctx context.Context, data service.GossipMess
 		bh.WithContext(ctx).With().Error("error handling block data", log.Err(err))
 		return
 	}
-	data.ReportValidation(NewBlockProtocol)
+	data.ReportValidation(ctx, NewBlockProtocol)
 }
 
 // HandleBlockData handles blocks from gossip and sync
 func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, fetcher service.Fetcher) error {
+	logger := bh.WithContext(ctx)
+	logger.Info("handling data for new block")
+	start := time.Now()
+
 	var blk types.Block
 	if err := types.BytesToInterface(data, &blk); err != nil {
-		bh.WithContext(ctx).With().Error("received invalid block", log.Err(err))
+		logger.With().Error("received invalid block", log.Err(err))
 	}
 
 	// set the block id when received
 	blk.Initialize()
-	logger := bh.WithContext(ctx).WithFields(blk.ID(), blk.Layer())
+	logger = logger.WithFields(blk.ID(), blk.Layer())
 
 	// check if known
 	if _, err := bh.mesh.GetBlock(blk.ID()); err == nil {
@@ -102,7 +107,7 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, fetche
 		return fmt.Errorf("failed to validate block %v", err)
 	}
 
-	if err := bh.mesh.AddBlockWithTxs(&blk); err != nil {
+	if err := bh.mesh.AddBlockWithTxs(ctx, &blk); err != nil {
 		logger.With().Error("failed to add block to database", log.Err(err))
 		// we return nil here so that the block will still be propagated
 		return nil
@@ -110,11 +115,12 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, fetche
 
 	if blk.Layer() <= bh.mesh.ProcessedLayer() {
 		logger.With().Error("block is late",
-			log.FieldNamed("block_layer", blk.Layer()),
 			log.FieldNamed("processed_layer", bh.mesh.ProcessedLayer()),
 			log.FieldNamed("miner_id", blk.MinerID()))
 		bh.mesh.HandleLateBlock(ctx, &blk)
 	}
+
+	logger.With().Info("time to process block", log.Duration("duration", time.Since(start)))
 	return nil
 }
 

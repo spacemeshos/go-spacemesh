@@ -54,10 +54,10 @@ const newRootKey = "root"
 func NewTransactionProcessor(allStates, processorDb database.Database, projector Projector, txPool *TxMempool, logger log.Log) *TransactionProcessor {
 	stateDb, err := New(types.Hash32{}, NewDatabase(allStates))
 	if err != nil {
-		log.Panic("cannot load state db, %v", err)
+		log.With().Panic("cannot load state db", log.Err(err))
 	}
 	root := stateDb.IntermediateRoot(false)
-	log.Info("started processor with state root %x", root)
+	log.With().Info("started processor", log.FieldNamed("state_root", root))
 	return &TransactionProcessor{
 		Log:          logger,
 		DB:           stateDb,
@@ -154,7 +154,7 @@ func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash t
 	if err != nil {
 		return err
 	}
-	tp.Log.With().Info("new state root", layer, log.String("state_root", newHash.String()))
+	tp.Log.With().Info("new state root", layer, log.FieldNamed("state_root", newHash))
 	return nil
 }
 
@@ -220,8 +220,8 @@ func (tp *TransactionProcessor) LoadState(layer types.LayerID) error {
 		log.With().Panic("cannot revert, improper state", log.Err(err))
 	}
 
-	tp.Log.With().Info("reverted, new root", newState.IntermediateRoot(false))
-	tp.Log.With().Info("reverted", log.String("root_hash", newState.IntermediateRoot(false).String()))
+	tp.Log.With().Info("reverted",
+		log.String("root_hash", newState.IntermediateRoot(false).String()))
 
 	tp.DB = newState
 	tp.rootMu.Lock()
@@ -269,12 +269,16 @@ func (tp *TransactionProcessor) ApplyTransaction(tx *types.Transaction, layerID 
 
 	// todo: should we allow to spend all accounts balance?
 	if origin.Balance() <= amountWithFee {
-		tp.Log.Error(errFunds+" have: %v need: %v", origin.Balance(), amountWithFee)
+		tp.Log.With().Error(errFunds,
+			log.Uint64("balance_have", origin.Balance()),
+			log.Uint64("balance_need", amountWithFee))
 		return fmt.Errorf(errFunds)
 	}
 
 	if !tp.checkNonce(tx) {
-		tp.Log.Error(errNonce+" should be %v actual %v", tp.GetNonce(tx.Origin()), tx.AccountNonce)
+		tp.Log.With().Error(errNonce,
+			log.Uint64("nonce_correct", tp.GetNonce(tx.Origin())),
+			log.Uint64("nonce_actual", tx.AccountNonce))
 		return fmt.Errorf(errNonce)
 	}
 
@@ -309,14 +313,14 @@ func (tp *TransactionProcessor) HandleTxGossipData(ctx context.Context, data ser
 		tp.With().Error("invalid tx", log.Err(err))
 		return
 	}
-	data.ReportValidation(IncomingTxProtocol)
+	data.ReportValidation(ctx, IncomingTxProtocol)
 }
 
 // HandleTxData handles data received on TX gossip channel
 func (tp *TransactionProcessor) HandleTxData(data []byte) error {
 	tx, err := types.BytesToTransaction(data)
 	if err != nil {
-		tp.With().Error("cannot parse incoming TX", log.Err(err))
+		tp.With().Error("cannot parse incoming transaction", log.Err(err))
 		return err
 	}
 	return tp.handleTransaction(tx)
@@ -327,11 +331,10 @@ func (tp *TransactionProcessor) HandleTxSyncData(data []byte) error {
 	var tx mesh.DbTransaction
 	err := types.BytesToInterface(data, &tx)
 	if err != nil {
-		tp.With().Error("cannot parse incoming TX", log.Err(err))
+		tp.With().Error("cannot parse incoming transaction", log.Err(err))
 		return err
 	}
-	err = tx.CalcAndSetOrigin()
-	if err != nil {
+	if err = tx.CalcAndSetOrigin(); err != nil {
 		return err
 	}
 	// we don't validate the tx, todo: this is copied from old sync, unless I am wrong i think some validation is needed
@@ -341,7 +344,7 @@ func (tp *TransactionProcessor) HandleTxSyncData(data []byte) error {
 
 func (tp *TransactionProcessor) handleTransaction(tx *types.Transaction) error {
 	if err := tx.CalcAndSetOrigin(); err != nil {
-		tp.With().Error("failed to calc transaction origin", tx.ID(), log.Err(err))
+		tp.With().Error("failed to calculate transaction origin", tx.ID(), log.Err(err))
 		return err
 	}
 
@@ -355,8 +358,10 @@ func (tp *TransactionProcessor) handleTransaction(tx *types.Transaction) error {
 		log.String("origin", tx.Origin().String()))
 
 	if !tp.AddressExists(tx.Origin()) {
-		tp.With().Error("transaction origin does not exist", log.String("transaction", tx.String()),
-			tx.ID(), log.String("origin", tx.Origin().Short()))
+		tp.With().Error("transaction origin does not exist",
+			log.String("transaction", tx.String()),
+			tx.ID(),
+			log.String("origin", tx.Origin().Short()))
 		return fmt.Errorf("transaction origin does not exist")
 	}
 	if err := tp.ValidateNonceAndBalance(tx); err != nil {

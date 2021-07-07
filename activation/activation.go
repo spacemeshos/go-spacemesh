@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/post/shared"
@@ -57,6 +58,7 @@ type atxDBProvider interface {
 	CalcTotalWeightFromView(view []types.BlockID, pubEpoch types.EpochID) (uint64, error)
 	GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error)
 	GetPosAtxID() (types.ATXID, error)
+	GetAtxTimestamp(id types.ATXID) (time.Time, error)
 	AwaitAtx(id types.ATXID) chan struct{}
 	UnsubscribeAtx(id types.ATXID)
 }
@@ -207,6 +209,10 @@ func (b *Builder) loop(ctx context.Context) {
 		default:
 		}
 		if err := b.PublishActivationTx(ctx); err != nil {
+			b.log.WithContext(ctx).With().Error("error attempting to publish atx",
+				b.layerClock.GetCurrentLayer(),
+				b.currentEpoch(),
+				log.Err(err))
 			if _, stopRequested := err.(StopRequestedError); stopRequested {
 				return
 			}

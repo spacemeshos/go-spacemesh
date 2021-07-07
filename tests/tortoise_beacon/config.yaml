@@ -1,0 +1,94 @@
+namespace: ''
+
+config_map_name: conf
+
+script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
+
+total_pods: 51
+genesis_delta: 75
+single_pod_ready_time_out: 60
+deployment_ready_time_out: 180
+config_path: '../config.toml'
+
+bootstrap:
+  image: 'spacemeshos/go-spacemesh:develop'
+  command: '/bin/go-harness'
+  replicas: 1
+  resources:
+    requests:
+      memory: '2048M'
+      cpu: '2'
+    limits:
+      memory: '2048M'
+      cpu: '2'
+  args:
+    randcon: '8'
+    hare-committee-size: '50'
+    hare-max-adversaries: '24'
+    hare-round-duration-sec: '7'
+    hare-exp-leaders: '10'
+    layer-duration-sec: '40'
+    layer-average-size: '50'
+    hare-wakeup-delta: '7'
+    tortoise-beacon-kappa: '400000'
+    tortoise-beacon-q: '1/3'
+    tortoise-beacon-rounds-number: '6'
+    tortoise-beacon-grace-period-duration-ms: '10000'
+    tortoise-beacon-proposal-duration-ms: '30000'
+    tortoise-beacon-first-voting-round-duration-ms: '60000'
+    tortoise-beacon-voting-round-duration-ms: '50000'
+    tortoise-beacon-weak-coin-round-duration-ms: '1000'
+    tortoise-beacon-theta: '0.00004'
+    tortoise-beacon-votes-limit: '100'
+    layers-per-epoch: '5'
+    coinbase: '0x4321'
+    eligibility-confidence-param: '5'
+    eligibility-epoch-offset: '0'
+    post-space: '1024'
+    space-to-commit: '1024'
+    genesis-total-weight: '51200'
+    executable-path: '/bin/go-spacemesh'
+  deployment_type: deployment
+client:
+  image: 'spacemeshos/go-spacemesh:develop'
+  command: '/bin/go-harness'
+  replicas: 49
+  resources:
+    requests:
+      memory: '2048M'
+      cpu: '2'
+    limits:
+      memory: '2048M'
+      cpu: '2'
+  args:
+    randcon: '8'
+    hare-committee-size: '50'
+    hare-max-adversaries: '24'
+    hare-round-duration-sec: '7'
+    hare-exp-leaders: '10'
+    layer-duration-sec: '40'
+    layer-average-size: '50'
+    hare-wakeup-delta: '7'
+    tortoise-beacon-kappa: '400000'
+    tortoise-beacon-q: '1/3'
+    tortoise-beacon-rounds-number: '6'
+    tortoise-beacon-grace-period-duration-ms: '10000'
+    tortoise-beacon-proposal-duration-ms: '30000'
+    tortoise-beacon-first-voting-round-duration-ms: '60000'
+    tortoise-beacon-voting-round-duration-ms: '50000'
+    tortoise-beacon-weak-coin-round-duration-ms: '1000'
+    tortoise-beacon-theta: '0.00004'
+    tortoise-beacon-votes-limit: '100'
+    layers-per-epoch: '5'
+    coinbase: '0x1234'
+    eligibility-confidence-param: '5'
+    eligibility-epoch-offset: '0'
+    post-space: '1024'
+    space-to-commit: '1024'
+    genesis-total-weight: '51200'
+    executable-path: '/bin/go-spacemesh'
+  deployment_type: deployment
+elastic:
+  host: elastic.spacemesh.io
+  port: 9200
+  username: spacemesh

@@ -182,6 +182,7 @@ func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer, voteNeg
 
 		blks, err := msh.LayerBlockIds(l)
 		if err != nil {
+			t.Log(err)
 			panic("db err")
 		}
 

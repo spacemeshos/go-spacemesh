@@ -682,11 +682,14 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 }
 
 // AddBlockWithTxs adds a block to the database
-func (msh *Mesh) AddBlockWithTxs(blk *types.Block) error {
-	msh.With().Debug("adding block", blk.Fields()...)
+// blk - the block to add
+// txs - block txs that we dont have in our tx database yet
+func (msh *Mesh) AddBlockWithTxs(ctx context.Context, blk *types.Block) error {
+	logger := msh.WithContext(ctx).WithFields(blk.ID())
+	logger.With().Debug("adding block to mesh", blk.Fields()...)
 
 	if err := msh.StoreTransactionsFromPool(blk); err != nil {
-		msh.Log.With().Error("not all txs were processed", log.Err(err))
+		logger.With().Error("not all txs were processed", log.Err(err))
 	}
 
 	// Store block (delete if storing ATXs fails)
@@ -694,17 +697,15 @@ func (msh *Mesh) AddBlockWithTxs(blk *types.Block) error {
 		if err == ErrAlreadyExist {
 			return nil
 		}
-
-		msh.With().Error("failed to add block", blk.ID(), log.Err(err))
+		logger.With().Error("failed to add block", log.Err(err))
 		return err
 	}
 
 	msh.SetLatestLayer(blk.Layer())
-	// new block add to orphans
+	// add new block to orphans
 	msh.handleOrphanBlocks(blk)
-
 	events.ReportNewBlock(blk)
-	msh.With().Info("added block to database", blk.Fields()...)
+	logger.Info("added block to database")
 	return nil
 }
 

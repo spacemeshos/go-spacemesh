@@ -3,7 +3,13 @@ package hare
 import (
 	"bytes"
 	"context"
+	"sort"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -12,10 +18,6 @@ import (
 	signing2 "github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"sort"
-	"sync"
-	"testing"
-	"time"
 )
 
 type mockReport struct {
@@ -41,7 +43,7 @@ func (m mockReport) Coinflip() bool {
 }
 
 type mockConsensusProcess struct {
-	Closer
+	util.Closer
 	t    chan TerminationOutput
 	id   instanceID
 	term chan struct{}
@@ -74,7 +76,7 @@ func (mip *mockIDProvider) GetIdentity(edID string) (types.NodeID, error) {
 
 func newMockConsensusProcess(cfg config.Config, instanceID instanceID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, outputChan chan TerminationOutput) *mockConsensusProcess {
 	mcp := new(mockConsensusProcess)
-	mcp.Closer = NewCloser()
+	mcp.Closer = util.NewCloser()
 	mcp.id = instanceID
 	mcp.t = outputChan
 	mcp.set = s

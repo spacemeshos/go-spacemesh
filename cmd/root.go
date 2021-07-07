@@ -179,6 +179,29 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().Uint16Var(&config.HareEligibility.EpochOffset, "eligibility-epoch-offset",
 		config.HareEligibility.EpochOffset, "The number of layers we wait for blocks to arrive at the start of each epoch (for purposes of establishing eligibility)")
 
+	/**======================== Tortoise Beacon Flags ========================== **/
+
+	cmd.PersistentFlags().Uint64Var(&config.TortoiseBeacon.Kappa, "tortoise-beacon-kappa",
+		config.TortoiseBeacon.Kappa, "Security parameter (for calculating ATX threshold)")
+	cmd.PersistentFlags().StringVar(&config.TortoiseBeacon.Q, "tortoise-beacon-q",
+		config.TortoiseBeacon.Q, "Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.")
+	cmd.PersistentFlags().Uint64Var(&config.TortoiseBeacon.RoundsNumber, "tortoise-beacon-rounds-number",
+		config.TortoiseBeacon.RoundsNumber, "Amount of rounds in every epoch")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.GracePeriodDurationMs, "tortoise-beacon-grace-period-duration-ms",
+		config.TortoiseBeacon.GracePeriodDurationMs, "Grace period duration in milliseconds")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.ProposalDurationMs, "tortoise-beacon-proposal-duration-ms",
+		config.TortoiseBeacon.ProposalDurationMs, "Proposal duration in milliseconds")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.FirstVotingRoundDurationMs, "tortoise-beacon-first-voting-round-duration-ms",
+		config.TortoiseBeacon.FirstVotingRoundDurationMs, "First voting round duration in milliseconds")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.VotingRoundDurationMs, "tortoise-beacon-voting-round-duration-ms",
+		config.TortoiseBeacon.VotingRoundDurationMs, "Voting round duration in milliseconds")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.WeakCoinRoundDurationMs, "tortoise-beacon-weak-coin-round-duration-ms",
+		config.TortoiseBeacon.WeakCoinRoundDurationMs, "Weak coin round duration in milliseconds")
+	cmd.PersistentFlags().Float64Var(&config.TortoiseBeacon.Theta, "tortoise-beacon-theta",
+		config.TortoiseBeacon.Theta, "Ratio of votes for reaching consensus")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.VotesLimit, "tortoise-beacon-votes-limit",
+		config.TortoiseBeacon.VotesLimit, "Maximum allowed number of votes to be sent")
+
 	/**======================== PoST Flags ========================== **/
 
 	cmd.PersistentFlags().StringVar(&config.POST.DataDir, "post-datadir",

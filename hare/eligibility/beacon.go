@@ -3,6 +3,7 @@ package eligibility
 import (
 	"context"
 	"encoding/binary"
+
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -48,7 +49,11 @@ func (b *Beacon) Value(ctx context.Context, epochID types.EpochID) (uint32, erro
 	}
 
 	// TODO: do we need a lock here?
-	v := b.beaconGetter.GetBeacon(epochID)
+	v, err := b.beaconGetter.GetBeacon(epochID)
+	if err != nil {
+		return 0, err
+	}
+
 	value := binary.LittleEndian.Uint32(v)
 	b.WithContext(ctx).With().Debug("hare eligibility beacon value for epoch",
 		epochID,

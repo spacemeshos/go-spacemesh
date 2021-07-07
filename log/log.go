@@ -95,7 +95,7 @@ func NewDefault(module string) Log {
 
 // NewFromLog creates a Log from an existing zap-compatible log.
 func NewFromLog(l *zap.Logger) Log {
-	return Log{l}
+	return Log{logger: l}
 }
 
 // InitSpacemeshLoggingSystemWithHooks sets up a logging system with one or more
@@ -128,7 +128,7 @@ func Warning(msg string, args ...interface{}) {
 
 // With returns a FieldLogger which you can append fields to.
 func With() FieldLogger {
-	return FieldLogger{AppLog.logger}
+	return FieldLogger{AppLog.logger, AppLog.name}
 }
 
 // Event returns a field logger with the Event field set to true.

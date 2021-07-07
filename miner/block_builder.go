@@ -160,7 +160,7 @@ type meshProvider interface {
 	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
 	GetOrphanBlocksBefore(types.LayerID) ([]types.BlockID, error)
 	GetBlock(types.BlockID) (*types.Block, error)
-	AddBlockWithTxs(*types.Block) error
+	AddBlockWithTxs(context.Context, *types.Block) error
 }
 
 func getEpochKey(ID types.EpochID) []byte {
@@ -308,8 +308,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 				if t.stopped() {
 					return
 				}
-				err = t.meshProvider.AddBlockWithTxs(blk)
-				if err != nil {
+				if err := t.meshProvider.AddBlockWithTxs(ctx, blk); err != nil {
 					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to store block")
 					logger.With().Error("failed to store block", blk.ID(), log.Err(err))
 					continue
