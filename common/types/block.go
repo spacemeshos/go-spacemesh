@@ -324,6 +324,15 @@ func (l *Layer) Blocks() []*Block {
 	return l.blocks
 }
 
+// BlocksIDs returns the list of IDs of blocks in this layer.
+func (l *Layer) BlocksIDs() []BlockID {
+	blockIDs := make([]BlockID, len(l.blocks))
+	for i := range l.blocks {
+		blockIDs[i] = l.blocks[i].ID()
+	}
+	return blockIDs
+}
+
 // Hash returns the 32-byte sha256 sum of the block IDs in this layer, sorted in lexicographic order.
 func (l Layer) Hash() Hash32 {
 	return CalcBlocksHash32(SortBlockIDs(BlockIDs(l.blocks)), nil)

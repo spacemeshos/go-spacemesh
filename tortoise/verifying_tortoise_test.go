@@ -41,15 +41,31 @@ func (mw meshWrapper) GetLayerInputVectorByID(lid types.LayerID) ([]types.BlockI
 	return mw.blockDataProvider.GetLayerInputVectorByID(lid)
 }
 
-type mockAtxDataProvider struct {
-	mockAtxHeader *types.ActivationTxHeader
+func getAtxDB() *mockAtxDataProvider {
+	return &mockAtxDataProvider{atxDB: make(map[types.ATXID]*types.ActivationTxHeader)}
 }
 
-func (madp mockAtxDataProvider) GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error) {
+type mockAtxDataProvider struct {
+	mockAtxHeader *types.ActivationTxHeader
+	atxDB         map[types.ATXID]*types.ActivationTxHeader
+}
+
+func (madp mockAtxDataProvider) GetAtxHeader(atxID types.ATXID) (*types.ActivationTxHeader, error) {
 	if madp.mockAtxHeader != nil {
 		return madp.mockAtxHeader, nil
 	}
+	if atxHeader, ok := madp.atxDB[atxID]; ok {
+		return atxHeader, nil
+	}
+
+	// return a mocked value
 	return &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: "fakekey"}}}, nil
+}
+
+func (madp *mockAtxDataProvider) StoreAtx(_ types.EpochID, atx *types.ActivationTx) error {
+	// store only the header
+	madp.atxDB[atx.ID()] = atx.ActivationTxHeader
+	return nil
 }
 
 func getPersistentMesh(t *testing.T) *mesh.DB {
@@ -221,14 +237,15 @@ func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer, voteNeg
 		return sorted[voteNegative:], nil
 	}
 
-	trtl = defaultTurtle(t)
+	trtl = defaultTurtle()
 	trtl.AvgLayerSize = blocksPerLayer
 	trtl.bdp = msh
 	trtl.init(context.TODO(), mesh.GenesisLayer())
 
 	var l types.LayerID
+	atxdb := getAtxDB()
 	for l = mesh.GenesisLayer().Index() + 1; l <= numLayers; l++ {
-		makeAndProcessLayer(t, l, trtl, blocksPerLayer, msh, inputVectorFn)
+		makeAndProcessLayer(t, l, trtl, blocksPerLayer, atxdb, msh, inputVectorFn)
 		fmt.Println("handled layer", l, "========================================================================")
 		lastlyr := trtl.BlockOpinionsByLayer[l]
 		for _, v := range lastlyr {
@@ -248,8 +265,8 @@ func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer, voteNeg
 	return
 }
 
-func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, msh *mesh.DB, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) {
-	makeLayer(t, l, trtl, blocksPerLayer, msh, inputVectorFn)
+func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, atxdb atxDataProvider, msh *mesh.DB, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) {
+	makeLayer(t, l, trtl, blocksPerLayer, atxdb, msh, inputVectorFn)
 
 	// write blocks to database first; the verifying tortoise will subsequently read them
 	if blocks, err := inputVectorFn(l); err != nil {
@@ -262,7 +279,7 @@ func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerL
 	require.NoError(t, trtl.HandleIncomingLayer(context.TODO(), l))
 }
 
-func makeLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, msh *mesh.DB, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
+func makeLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, atxdb atxDataProvider, msh *mesh.DB, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
 	t.Log("======================== choosing base block for layer", l)
 	oldInputVectorFn := msh.InputVectorBackupFunc
 	defer func() {
@@ -275,10 +292,17 @@ func makeLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, 
 	t.Log("exception lists for layer", l, " (against, support, neutral):", lists)
 	lyr := types.NewLayer(l)
 
+	// for now just create a single ATX for all of the blocks with a weight of one
+	atxHeader := makeAtxHeaderWithWeight(1)
+	atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
+	atx.CalcAndSetID()
+	require.NoError(t, atxdb.StoreAtx(l.GetEpoch(), atx))
+
 	for i := 0; i < blocksPerLayer; i++ {
 		blk := &types.Block{
 			MiniBlock: types.MiniBlock{
 				BlockHeader: types.BlockHeader{
+					ATXID:      atxHeader.ID(),
 					LayerIndex: l,
 					Data:       []byte(strconv.Itoa(i))},
 				TxIDs: nil,
@@ -297,7 +321,7 @@ func makeLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, 
 	return lyr
 }
 
-func testLayerPattern(t *testing.T, db *mesh.DB, trtl *turtle, blocksPerLayer int, successPattern []bool) {
+func testLayerPattern(t *testing.T, atxdb atxDataProvider, db *mesh.DB, trtl *turtle, blocksPerLayer int, successPattern []bool) {
 	goodLayerFn := func(layerID types.LayerID) ([]types.BlockID, error) {
 		t.Log("giving good results for layer", layerID)
 		return db.LayerBlockIds(layerID)
@@ -310,18 +334,19 @@ func testLayerPattern(t *testing.T, db *mesh.DB, trtl *turtle, blocksPerLayer in
 		thisLayerID := types.GetEffectiveGenesis().Add(uint16(i) + 1)
 		t.Log("================================ processing layer", thisLayerID)
 		if success {
-			makeAndProcessLayer(t, thisLayerID, trtl, blocksPerLayer, db, goodLayerFn)
+			makeAndProcessLayer(t, thisLayerID, trtl, blocksPerLayer, atxdb, db, goodLayerFn)
 		} else {
-			makeAndProcessLayer(t, thisLayerID, trtl, blocksPerLayer, db, badLayerFn)
+			makeAndProcessLayer(t, thisLayerID, trtl, blocksPerLayer, atxdb, db, badLayerFn)
 		}
 	}
 }
 
 func TestLayerPatterns(t *testing.T) {
 	blocksPerLayer := 10 // more blocks means a longer test
+	atxdb := getAtxDB()
 	t.Run("many good layers", func(t *testing.T) {
 		msh := getInMemMesh()
-		trtl := defaultTurtle(t)
+		trtl := defaultTurtle()
 		trtl.AvgLayerSize = blocksPerLayer
 		trtl.bdp = msh
 		trtl.init(context.TODO(), mesh.GenesisLayer())
@@ -330,7 +355,7 @@ func TestLayerPatterns(t *testing.T) {
 		for i := 0; i < numGood; i++ {
 			pattern[i] = true
 		}
-		testLayerPattern(t, msh, trtl, blocksPerLayer, pattern)
+		testLayerPattern(t, atxdb, msh, trtl, blocksPerLayer, pattern)
 		require.Equal(t, int(types.GetEffectiveGenesis().Add(uint16(numGood-1))), int(trtl.Verified))
 	})
 
@@ -357,11 +382,11 @@ func TestLayerPatterns(t *testing.T) {
 		}
 
 		msh := getInMemMesh()
-		trtl := defaultTurtle(t)
+		trtl := defaultTurtle()
 		trtl.AvgLayerSize = blocksPerLayer
 		trtl.bdp = msh
 		trtl.init(context.TODO(), mesh.GenesisLayer())
-		testLayerPattern(t, msh, trtl, blocksPerLayer, pattern)
+		testLayerPattern(t, atxdb, msh, trtl, blocksPerLayer, pattern)
 
 		// check our assumptions
 		require.Equal(t, 5, int(trtl.Zdist))
@@ -402,11 +427,11 @@ func TestLayerPatterns(t *testing.T) {
 		}
 
 		msh := getInMemMesh()
-		trtl := defaultTurtle(t)
+		trtl := defaultTurtle()
 		trtl.AvgLayerSize = blocksPerLayer
 		trtl.bdp = msh
 		trtl.init(context.TODO(), mesh.GenesisLayer())
-		testLayerPattern(t, msh, trtl, blocksPerLayer, pattern)
+		testLayerPattern(t, atxdb, msh, trtl, blocksPerLayer, pattern)
 
 		// check our assumptions
 		require.Equal(t, 5, int(trtl.Zdist))
@@ -445,11 +470,11 @@ func TestLayerPatterns(t *testing.T) {
 		}
 
 		msh := getInMemMesh()
-		trtl := defaultTurtle(t)
+		trtl := defaultTurtle()
 		trtl.AvgLayerSize = blocksPerLayer
 		trtl.bdp = msh
 		trtl.init(context.TODO(), mesh.GenesisLayer())
-		testLayerPattern(t, msh, trtl, blocksPerLayer, pattern)
+		testLayerPattern(t, atxdb, msh, trtl, blocksPerLayer, pattern)
 		// final verified layer should lag by zdist+confidence interval
 		require.Equal(t, 5, int(trtl.Zdist))
 		require.Equal(t, 5, int(trtl.ConfidenceParam))
@@ -491,15 +516,16 @@ func TestAbstainsInMiddle(t *testing.T) {
 		})
 	}
 
-	trtl := defaultTurtle(t)
+	trtl := defaultTurtle()
 	trtl.AvgLayerSize = blocksPerLayer
 	trtl.bdp = msh
 	gen := mesh.GenesisLayer()
 	trtl.init(context.TODO(), gen)
 
 	var l types.LayerID
+	atxdb := getAtxDB()
 	for l = types.GetEffectiveGenesis() + 1; l < types.GetEffectiveGenesis().Add(uint16(layers)); l++ {
-		makeAndProcessLayer(t, l, trtl, blocksPerLayer, msh, layerfuncs[l-types.GetEffectiveGenesis()-1])
+		makeAndProcessLayer(t, l, trtl, blocksPerLayer, atxdb, msh, layerfuncs[l-types.GetEffectiveGenesis()-1])
 		fmt.Println("handled layer", l, "verified layer", trtl.Verified,
 			"========================================================================")
 	}
@@ -858,11 +884,11 @@ func TestBaseBlock(t *testing.T) {
 	r.Nil(exceptions)
 }
 
-func defaultTurtle(t *testing.T) *turtle {
+func defaultTurtle() *turtle {
 	mdb := getInMemMesh()
 	return newTurtle(
 		mdb,
-		mockAtxDataProvider{},
+		getAtxDB(),
 		defaultTestHdist,
 		defaultTestZdist,
 		defaultTestConfidenceParam,
@@ -876,7 +902,7 @@ func defaultTurtle(t *testing.T) *turtle {
 
 func TestCloneTurtle(t *testing.T) {
 	r := require.New(t)
-	trtl := defaultTurtle(t)
+	trtl := defaultTurtle()
 	trtl.AvgLayerSize++ // make sure defaults aren't being read
 	trtl.Last = 10      // state should not be cloned
 	trtl2 := trtl.cloneTurtle()
@@ -897,7 +923,7 @@ func defaultAlgorithm(t *testing.T, mdb *mesh.DB) *ThreadSafeVerifyingTortoise {
 		context.TODO(),
 		defaultTestLayerSize,
 		mdb,
-		mockAtxDataProvider{},
+		getAtxDB(),
 		defaultTestHdist,
 		defaultTestZdist,
 		defaultTestConfidenceParam,
@@ -1238,16 +1264,56 @@ func TestProcessBlock(t *testing.T) {
 	r.Equal(expectedOpinionVector, alg.trtl.BlockOpinionsByLayer[l3ID][l3Blocks[0].ID()])
 }
 
+func TestLateBlocks(t *testing.T) {
+	log.DebugMode(true)
+	r := require.New(t)
+	mdb := getInMemMesh()
+	alg := defaultAlgorithm(t, mdb)
+	atxdb := getAtxDB()
+	alg.trtl.atxdb = atxdb
+
+	// process a bunch of layers normally
+	l0ID := types.GetEffectiveGenesis()
+	makeAndProcessLayer(t, l0ID.Add(1), alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(2), alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(3), alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(4), alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(5), alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
+
+	// send some late blocks that are in the input vector
+	layerLate := l0ID.Add(2)
+	lyr := makeLayer(t, layerLate, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	r.NoError(mdb.SaveLayerInputVectorByID(layerLate, lyr.BlocksIDs()))
+	oldVerified, newVerified := alg.HandleLateBlocks(context.TODO(), lyr.Blocks())
+	r.Equal(oldVerified, newVerified)
+	checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
+
+	// send some late blocks that are not in the input vector
+	lyr = makeLayer(t, layerLate, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	oldVerified, newVerified = alg.HandleLateBlocks(context.TODO(), lyr.Blocks())
+	r.Equal(oldVerified, newVerified)
+	checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
+
+	// TODO: send enough valid late blocks to overwhelm verifying tortoise's opinion
+}
+
+func makeAtxHeaderWithWeight(weight uint64) (mockAtxHeader *types.ActivationTxHeader) {
+	mockAtxHeader = &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: "fakekey"}}}
+	mockAtxHeader.StartTick = 0
+	mockAtxHeader.EndTick = 1
+	mockAtxHeader.Space = weight
+	return
+}
+
 func TestVoteWeight(t *testing.T) {
 	r := require.New(t)
 	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
 	totalSpace := 100
-	mockAtxHeader := &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: "fakekey"}}}
-	mockAtxHeader.StartTick = 0
-	mockAtxHeader.EndTick = 1
-	mockAtxHeader.Space = uint64(totalSpace)
-	alg.trtl.atxdb = mockAtxDataProvider{mockAtxHeader}
+	atxdb := getAtxDB()
+	atxdb.mockAtxHeader = makeAtxHeaderWithWeight(uint64(totalSpace))
+	alg.trtl.atxdb = atxdb
 	someBlocks := generateBlocks(types.GetEffectiveGenesis().Add(1), 1, alg.BaseBlock)
 	weight, err := alg.trtl.voteWeight(someBlocks[0], types.RandomBlockID())
 	r.NoError(err)
@@ -1730,8 +1796,9 @@ func TestHealing(t *testing.T) {
 	})
 
 	alg.trtl.Last = l0ID
-	l1 := makeLayer(t, l1ID, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
-	l2 := makeLayer(t, l2ID, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
+	atxdb := getAtxDB()
+	l1 := makeLayer(t, l1ID, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	l2 := makeLayer(t, l2ID, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 
 	// healing should work even when there is no local opinion on a layer (i.e., no output vector, while waiting
 	// for hare results)
@@ -1767,7 +1834,7 @@ func TestHealing(t *testing.T) {
 		// then create and process one more new layer
 		// prevent base block from referencing earlier (approved) layers
 		alg.trtl.Last = l0ID
-		makeLayer(t, l3ID, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
+		makeLayer(t, l3ID, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l3ID))
 
 		// make sure local opinion supports L2
@@ -1800,7 +1867,7 @@ func TestHealing(t *testing.T) {
 
 		// create and process several more layers
 		// but don't save layer input vectors, so local opinion is abstain
-		makeLayer(t, l4ID, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
+		makeLayer(t, l4ID, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l4ID))
 
 		// delete good blocks data
@@ -1816,6 +1883,7 @@ func TestHealing(t *testing.T) {
 // see https://github.com/spacemeshos/go-spacemesh/issues/2497 for an idea about making this faster
 func TestHealingAfterPartition(t *testing.T) {
 	mdb := getInMemMesh()
+	atxdb := getAtxDB()
 	alg := defaultAlgorithm(t, mdb)
 	l0ID := types.GetEffectiveGenesis()
 
@@ -1824,29 +1892,29 @@ func TestHealingAfterPartition(t *testing.T) {
 	alg.trtl.AvgLayerSize = goodLayerSize
 
 	// create several good layers
-	makeAndProcessLayer(t, l0ID.Add(1), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(2), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(3), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(4), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(5), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(1), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(2), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(3), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(4), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(5), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 	checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
 
 	// create a few layers with half the number of blocks
-	makeAndProcessLayer(t, l0ID.Add(6), alg.trtl, goodLayerSize/2, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(7), alg.trtl, goodLayerSize/2, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(8), alg.trtl, goodLayerSize/2, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(6), alg.trtl, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(7), alg.trtl, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(8), alg.trtl, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
 
 	// verification should fail, global opinion should be abstain since not enough votes
 	checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
 
 	// once we start receiving full layers again, verification should restart immediately. this scenario doesn't
 	// actually require healing, since local and global opinions are the same, and the threshold is just > 1/2.
-	makeAndProcessLayer(t, l0ID.Add(9), alg.trtl, goodLayerSize, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(9), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 	checkVerifiedLayer(t, alg.trtl, l0ID.Add(8))
 
 	// then we start receiving fewer blocks again
 	for i := 0; types.LayerID(i) < alg.trtl.Zdist+alg.trtl.ConfidenceParam; i++ {
-		makeAndProcessLayer(t, l0ID.Add(10+uint16(i)), alg.trtl, goodLayerSize/2, mdb, mdb.LayerBlockIds)
+		makeAndProcessLayer(t, l0ID.Add(10+uint16(i)), alg.trtl, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
 	}
 	checkVerifiedLayer(t, alg.trtl, l0ID.Add(8))
 
@@ -1854,13 +1922,14 @@ func TestHealingAfterPartition(t *testing.T) {
 	// effectively stuck (until, in practice, active set size would be reduced in a following epoch and the remaining
 	// miners would produce more blocks--this is tested in the app tests)
 	firstHealedLayer := l0ID.Add(10 + uint16(alg.trtl.Zdist+alg.trtl.ConfidenceParam))
-	makeAndProcessLayer(t, firstHealedLayer, alg.trtl, goodLayerSize/2, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, firstHealedLayer, alg.trtl, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
 	checkVerifiedLayer(t, alg.trtl, l0ID.Add(8))
 }
 
 func TestRerunAndRevert(t *testing.T) {
 	r := require.New(t)
 	mdb := getInMemMesh()
+	atxdb := getAtxDB()
 	alg := defaultAlgorithm(t, mdb)
 	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
 
@@ -1868,13 +1937,13 @@ func TestRerunAndRevert(t *testing.T) {
 	l0ID := types.GetEffectiveGenesis()
 	l1ID := l0ID.Add(1)
 	l2ID := l1ID.Add(1)
-	makeLayer(t, l1ID, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
+	makeLayer(t, l1ID, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 	l1IDs, err := mdb.LayerBlockIds(l1ID)
 	r.NoError(err)
 	block1ID := l1IDs[0]
 	r.NoError(mdb.SaveLayerInputVectorByID(l1ID, l1IDs))
 	alg.HandleIncomingLayer(context.TODO(), l1ID)
-	makeLayer(t, l2ID, alg.trtl, defaultTestLayerSize, mdb, mdb.LayerBlockIds)
+	makeLayer(t, l2ID, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 	l2IDs, err := mdb.LayerBlockIds(l2ID)
 	r.NoError(err)
 	r.NoError(mdb.SaveLayerInputVectorByID(l2ID, l2IDs))
@@ -1921,6 +1990,7 @@ func TestRerunAndRevert(t *testing.T) {
 func TestHealBalanceAttack(t *testing.T) {
 	r := require.New(t)
 	mdb := getInMemMesh()
+	atxdb := getAtxDB()
 	alg := defaultAlgorithm(t, mdb)
 	l0ID := types.GetEffectiveGenesis()
 	layerSize := 4
@@ -1928,11 +1998,11 @@ func TestHealBalanceAttack(t *testing.T) {
 	l5ID := l4ID.Add(1)
 
 	// create several good layers and make sure verified layer advances
-	makeAndProcessLayer(t, l0ID.Add(1), alg.trtl, layerSize, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(2), alg.trtl, layerSize, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(3), alg.trtl, layerSize, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l4ID, alg.trtl, layerSize, mdb, mdb.LayerBlockIds)
-	makeLayer(t, l5ID, alg.trtl, layerSize, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(1), alg.trtl, layerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(2), alg.trtl, layerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(3), alg.trtl, layerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l4ID, alg.trtl, layerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeLayer(t, l5ID, alg.trtl, layerSize, atxdb, mdb, mdb.LayerBlockIds)
 	checkVerifiedLayer(t, alg.trtl, l0ID.Add(3))
 
 	// everyone will agree on the validity of these blocks

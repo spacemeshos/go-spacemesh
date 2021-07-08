@@ -29,6 +29,7 @@ type blockDataProvider interface {
 
 type atxDataProvider interface {
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
+	StoreAtx(types.EpochID, *types.ActivationTx) error
 }
 
 var (
