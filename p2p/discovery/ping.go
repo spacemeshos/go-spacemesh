@@ -65,7 +65,6 @@ func (p *protocol) verifyPinger(from net.Addr, pi *node.Info) error {
 // Ping notifies `peer` about our p2p identity.
 func (p *protocol) Ping(ctx context.Context, peer p2pcrypto.PublicKey) error {
 	plogger := p.logger.WithFields(log.String("type", "ping"), log.String("to", peer.String()))
-
 	plogger.Debug("send request")
 
 	data, err := types.InterfaceToBytes(p.local)

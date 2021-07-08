@@ -3,9 +3,10 @@ package service
 
 import (
 	"context"
+	"net"
+
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
-	"net"
 )
 
 // MessageValidation is a gossip message validation event.
@@ -61,7 +62,7 @@ type GossipMessage interface {
 	Bytes() []byte
 	RequestID() string
 	ValidationCompletedChan() chan MessageValidation
-	ReportValidation(protocol string)
+	ReportValidation(ctx context.Context, protocol string)
 }
 
 // Service is an interface that represents a networking service (ideally p2p) that we can use to send messages or listen to incoming messages
