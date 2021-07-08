@@ -47,6 +47,8 @@ type PostProverClient interface {
 	Cfg() *config.Config
 }
 
+//go:generate mockgen -package=activation -destination=./poet_client_mock_test.go -source=./nipst.go PoetProvingServiceClient
+
 // PoetProvingServiceClient provides a gateway to a trust-less public proving service, which may serve many PoET
 // proving clients, and thus enormously reduce the cost-per-proof for PoET since each additional proof adds only
 // a small number of hash evaluations to the total cost.

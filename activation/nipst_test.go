@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -75,21 +76,18 @@ func (p *postProverClientMock) Cfg() *config.Config {
 	return &config.Config{}
 }
 
-type poetProvingServiceClientMock struct {
-	called int
+func defaultPoetServiceMock(tb testing.TB) (*MockPoetProvingServiceClient, *gomock.Controller) {
+	poetClient, controller := newPoetServiceMock(tb)
+	poetClient.EXPECT().Submit(gomock.Any(), gomock.Any()).AnyTimes().Return(&types.PoetRound{}, nil)
+	poetClient.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return([]byte{}, nil)
+	return poetClient, controller
 }
 
-// A compile time check to ensure that poetProvingServiceClientMock fully implements PoetProvingServiceClient.
-var _ PoetProvingServiceClient = (*poetProvingServiceClientMock)(nil)
-
-func (p *poetProvingServiceClientMock) Submit(_ context.Context, challenge types.Hash32) (*types.PoetRound, error) {
-	p.called++
-	return &types.PoetRound{}, nil
-}
-
-func (p *poetProvingServiceClientMock) PoetServiceID(context.Context) ([]byte, error) {
-	p.called++
-	return []byte{}, nil
+func newPoetServiceMock(tb testing.TB) (*MockPoetProvingServiceClient, *gomock.Controller) {
+	tb.Helper()
+	controller := gomock.NewController(tb)
+	poetClient := NewMockPoetProvingServiceClient(controller)
+	return poetClient, controller
 }
 
 type poetDbMock struct {
@@ -123,7 +121,8 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 	assert := require.New(t)
 
 	postProver := &postProverClientMock{}
-	poetProver := &poetProvingServiceClientMock{}
+	poetProver, controller := defaultPoetServiceMock(t)
+	defer controller.Finish()
 
 	poetDb := &poetDbMock{}
 
@@ -142,7 +141,9 @@ func TestInitializePost(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(postProver)
 
-	poetProver := &poetProvingServiceClientMock{}
+	poetProver, controller := defaultPoetServiceMock(t)
+	defer controller.Finish()
+
 	poetDb := &poetDbMock{}
 
 	nb := NewNIPSTBuilder(minerID, postProver, poetProver,
@@ -259,7 +260,10 @@ func TestNIPSTBuilder_BuildNIPST(t *testing.T) {
 	assert := require.New(t)
 
 	postProver := &postProverClientMock{}
-	poetProver := &poetProvingServiceClientMock{}
+	poetProver, controller := newPoetServiceMock(t)
+	poetProver.EXPECT().PoetServiceID(gomock.Any()).Times(2).Return([]byte{}, nil)
+	poetProver.EXPECT().Submit(gomock.Any(), gomock.Any()).Times(2).Return(&types.PoetRound{}, nil)
+	defer controller.Finish()
 
 	poetDb := &poetDbMock{errOn: false}
 
@@ -282,7 +286,6 @@ func TestNIPSTBuilder_BuildNIPST(t *testing.T) {
 	//check that proof ref is not called again
 	nb = NewNIPSTBuilder(minerID, postProver, poetProver, poetDb, db, log.NewDefault(string(minerID)))
 	npst, err = nb.BuildNIPST(context.TODO(), &hash, nil)
-	assert.Equal(4, poetProver.called)
 	assert.Nil(npst)
 	assert.Error(err)
 
@@ -292,7 +295,7 @@ func TestNIPSTBuilder_BuildNIPST(t *testing.T) {
 	postProver.setError = true
 	//check that proof ref is not called again
 	npst, err = nb.BuildNIPST(context.TODO(), &hash, nil)
-	assert.Equal(4, poetProver.called)
+	//assert.Equal(4, poetProver.called)
 	assert.Nil(npst)
 	assert.Error(err)
 
@@ -302,15 +305,16 @@ func TestNIPSTBuilder_BuildNIPST(t *testing.T) {
 	postProver.setError = false
 	//check that proof ref is not called again
 	npst, err = nb.BuildNIPST(context.TODO(), &hash, nil)
-	assert.Equal(4, poetProver.called)
+	//assert.Equal(4, poetProver.called)
 	assert.NotNil(npst)
 	assert.NoError(err)
 
 	assert.Equal(3, postProver.called)
 	//test state not loading if other challenge provided
+	poetProver.EXPECT().PoetServiceID(gomock.Any()).Return([]byte{}, nil)
+	poetProver.EXPECT().Submit(gomock.Any(), gomock.Any()).Return(&types.PoetRound{}, nil)
 	hash2 := types.BytesToHash([]byte("anton1"))
 	npst, err = nb.BuildNIPST(context.TODO(), &hash2, nil)
-	assert.Equal(6, poetProver.called)
 	assert.Equal(4, postProver.called)
 
 	assert.NotNil(npst)
@@ -361,7 +365,8 @@ func TestNIPSTBuilder_TimeoutUnsubscribe(t *testing.T) {
 	r := require.New(t)
 
 	postProver := &postProverClientMock{}
-	poetProver := &poetProvingServiceClientMock{}
+	poetProver, controller := defaultPoetServiceMock(t)
+	defer controller.Finish()
 
 	poetDb := &poetDbMock{}
 
@@ -379,7 +384,8 @@ func TestNIPSTBuilder_Close(t *testing.T) {
 	r := require.New(t)
 
 	postProver := &postProverClientMock{}
-	poetProver := &poetProvingServiceClientMock{}
+	poetProver, controller := defaultPoetServiceMock(t)
+	defer controller.Finish()
 
 	poetDb := &poetDbMock{}
 
