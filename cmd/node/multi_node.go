@@ -334,7 +334,7 @@ func StartMultiNode(numOfInstances, layerAvgSize int, runTillLayer uint32, dbPat
 		}
 	}()
 
-	if err := poetHarness.Start([]string{"127.0.0.1:9094"}); err != nil {
+	if err := poetHarness.Start(context.TODO(), []string{"127.0.0.1:9094"}); err != nil {
 		log.Panic("failed to start poet server: %v", err)
 	}
 

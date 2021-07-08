@@ -1029,7 +1029,7 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 		logger.With().Panic("could not retrieve identity", log.Err(err))
 	}
 
-	poetClient := activation.NewHTTPPoetClient(ctx, app.Config.PoETServer)
+	poetClient := activation.NewHTTPPoetClient(app.Config.PoETServer)
 
 	edPubkey := app.edSgn.PublicKey()
 	vrfSigner, vrfPub, err := signing.NewVRFSigner(app.edSgn.Sign(edPubkey.Bytes()))
