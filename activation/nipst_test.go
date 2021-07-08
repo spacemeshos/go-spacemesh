@@ -1,7 +1,10 @@
 package activation
 
 import (
+	"context"
 	"fmt"
+	"testing"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -9,7 +12,6 @@ import (
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 var minerID = []byte("id")
@@ -80,12 +82,12 @@ type poetProvingServiceClientMock struct {
 // A compile time check to ensure that poetProvingServiceClientMock fully implements PoetProvingServiceClient.
 var _ PoetProvingServiceClient = (*poetProvingServiceClientMock)(nil)
 
-func (p *poetProvingServiceClientMock) Submit(challenge types.Hash32) (*types.PoetRound, error) {
+func (p *poetProvingServiceClientMock) Submit(_ context.Context, challenge types.Hash32) (*types.PoetRound, error) {
 	p.called++
 	return &types.PoetRound{}, nil
 }
 
-func (p *poetProvingServiceClientMock) PoetServiceID() ([]byte, error) {
+func (p *poetProvingServiceClientMock) PoetServiceID(context.Context) ([]byte, error) {
 	p.called++
 	return []byte{}, nil
 }
@@ -128,7 +130,7 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 	nb := NewNIPSTBuilder(minerID, postProver, poetProver,
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 	hash := types.BytesToHash([]byte("anton"))
-	npst, err := nb.BuildNIPST(&hash, nil, nil)
+	npst, err := nb.BuildNIPST(context.TODO(), &hash, nil)
 	assert.NoError(err)
 	assert.NotNil(npst)
 }
@@ -157,7 +159,7 @@ func TestInitializePost(t *testing.T) {
 	}()
 
 	hash := types.BytesToHash([]byte("anton"))
-	npst, err := nb.BuildNIPST(&hash, nil, nil)
+	npst, err := nb.BuildNIPST(context.TODO(), &hash, nil)
 	assert.NoError(err)
 	assert.NotNil(npst)
 }
@@ -203,7 +205,7 @@ func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge typ
 	nb := NewNIPSTBuilder(minerID, postProver, poetProver,
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 
-	npst, err := nb.BuildNIPST(&nipstChallenge, nil, nil)
+	npst, err := nb.BuildNIPST(context.TODO(), &nipstChallenge, nil)
 	r.NoError(err)
 	return npst
 }
@@ -233,7 +235,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	nb := NewNIPSTBuilder(minerIDNotInitialized, postProver, poetProver,
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 
-	npst, err := nb.BuildNIPST(&nipstChallenge, nil, nil)
+	npst, err := nb.BuildNIPST(context.TODO(), &nipstChallenge, nil)
 	r.EqualError(err, "PoST not initialized")
 	r.Nil(npst)
 
@@ -245,7 +247,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	r.NoError(err)
 	r.NotNil(commitment)
 
-	npst, err = nb.BuildNIPST(&nipstChallenge, nil, nil)
+	npst, err = nb.BuildNIPST(context.TODO(), &nipstChallenge, nil)
 	r.NoError(err)
 	r.NotNil(npst)
 
@@ -264,7 +266,7 @@ func TestNIPSTBuilder_BuildNIPST(t *testing.T) {
 	nb := NewNIPSTBuilder(minerID, postProver, poetProver,
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 	hash := types.BytesToHash([]byte("anton"))
-	npst, err := nb.BuildNIPST(&hash, nil, nil)
+	npst, err := nb.BuildNIPST(context.TODO(), &hash, nil)
 	assert.NoError(err)
 	assert.NotNil(npst)
 	db := database.NewMemDatabase()
@@ -273,13 +275,13 @@ func TestNIPSTBuilder_BuildNIPST(t *testing.T) {
 	//fail after getting proof ref
 	nb = NewNIPSTBuilder(minerID, postProver, poetProver, poetDb, db, log.NewDefault(string(minerID)))
 	poetDb.errOn = true
-	npst, err = nb.BuildNIPST(&hash, nil, nil)
+	npst, err = nb.BuildNIPST(context.TODO(), &hash, nil)
 	assert.Nil(npst)
 	assert.Error(err)
 
 	//check that proof ref is not called again
 	nb = NewNIPSTBuilder(minerID, postProver, poetProver, poetDb, db, log.NewDefault(string(minerID)))
-	npst, err = nb.BuildNIPST(&hash, nil, nil)
+	npst, err = nb.BuildNIPST(context.TODO(), &hash, nil)
 	assert.Equal(4, poetProver.called)
 	assert.Nil(npst)
 	assert.Error(err)
@@ -289,7 +291,7 @@ func TestNIPSTBuilder_BuildNIPST(t *testing.T) {
 	poetDb.errOn = false
 	postProver.setError = true
 	//check that proof ref is not called again
-	npst, err = nb.BuildNIPST(&hash, nil, nil)
+	npst, err = nb.BuildNIPST(context.TODO(), &hash, nil)
 	assert.Equal(4, poetProver.called)
 	assert.Nil(npst)
 	assert.Error(err)
@@ -299,7 +301,7 @@ func TestNIPSTBuilder_BuildNIPST(t *testing.T) {
 	poetDb.errOn = false
 	postProver.setError = false
 	//check that proof ref is not called again
-	npst, err = nb.BuildNIPST(&hash, nil, nil)
+	npst, err = nb.BuildNIPST(context.TODO(), &hash, nil)
 	assert.Equal(4, poetProver.called)
 	assert.NotNil(npst)
 	assert.NoError(err)
@@ -307,7 +309,7 @@ func TestNIPSTBuilder_BuildNIPST(t *testing.T) {
 	assert.Equal(3, postProver.called)
 	//test state not loading if other challenge provided
 	hash2 := types.BytesToHash([]byte("anton1"))
-	npst, err = nb.BuildNIPST(&hash2, nil, nil)
+	npst, err = nb.BuildNIPST(context.TODO(), &hash2, nil)
 	assert.Equal(6, poetProver.called)
 	assert.Equal(4, postProver.called)
 
@@ -367,8 +369,8 @@ func TestNIPSTBuilder_TimeoutUnsubscribe(t *testing.T) {
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 	hash := types.BytesToHash([]byte("anton"))
 	poetDb.unsubscribed = false
-	npst, err := nb.BuildNIPST(&hash, closedChan, nil) // closedChan will timeout immediately
-	r.EqualError(err, "atx expired while waiting for poet proof, target epoch ended")
+	npst, err := nb.BuildNIPST(context.TODO(), &hash, closedChan) // closedChan will timeout immediately
+	r.ErrorIs(err, ErrATXChallengeExpired)
 	r.Nil(npst)
 	r.True(poetDb.unsubscribed)
 }
@@ -384,7 +386,9 @@ func TestNIPSTBuilder_Close(t *testing.T) {
 	nb := NewNIPSTBuilder(minerID, postProver, poetProver,
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 	hash := types.BytesToHash([]byte("anton"))
-	npst, err := nb.BuildNIPST(&hash, nil, closedChan) // closedChan will timeout immediately
-	r.IsType(StopRequestedError{}, err)
+	ctx, close := context.WithCancel(context.Background())
+	close()
+	npst, err := nb.BuildNIPST(ctx, &hash, nil)
+	r.ErrorIs(err, ErrStopRequested)
 	r.Nil(npst)
 }

@@ -131,7 +131,7 @@ type NipstBuilderMock struct {
 	SleepTime      int
 }
 
-func (np *NipstBuilderMock) BuildNIPST(challenge *types.Hash32, _ chan struct{}, _ chan struct{}) (*types.NIPST, error) {
+func (np *NipstBuilderMock) BuildNIPST(_ context.Context, challenge *types.Hash32, _ chan struct{}) (*types.NIPST, error) {
 	if np.buildNipstFunc != nil {
 		return np.buildNipstFunc(challenge)
 	}
@@ -140,7 +140,7 @@ func (np *NipstBuilderMock) BuildNIPST(challenge *types.Hash32, _ chan struct{},
 
 type NipstErrBuilderMock struct{}
 
-func (np *NipstErrBuilderMock) BuildNIPST(*types.Hash32, chan struct{}, chan struct{}) (*types.NIPST, error) {
+func (np *NipstErrBuilderMock) BuildNIPST(context.Context, *types.Hash32, chan struct{}) (*types.NIPST, error) {
 	return nil, fmt.Errorf("nipst builder error")
 }
 
@@ -392,7 +392,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	faultyNet.retErr = false
 	b = NewBuilder(bc, nodeID, 0, &MockSigning{}, activationDb, faultyNet, meshProviderMock, layersPerEpoch, nipstBuilderMock, postProver, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
 	published, builtNipst, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
-	r.EqualError(err, "target epoch has passed")
+	r.ErrorIs(err, ErrATXChallengeExpired)
 	r.False(published)
 	r.True(builtNipst)
 
@@ -709,7 +709,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 
 	layerClockMock.currentLayer = types.EpochID(1).FirstLayer() + 3
 	err = b.PublishActivationTx(context.TODO())
-	assert.EqualError(t, err, "target epoch has passed")
+	assert.ErrorIs(t, err, ErrATXChallengeExpired)
 
 	// test load in correct epoch
 	b = NewBuilder(bc, id, 0, &MockSigning{}, activationDb, net, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
@@ -736,7 +736,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	layerClockMock.currentLayer = types.EpochID(4).FirstLayer() + 3
 	err = b.PublishActivationTx(context.TODO())
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
-	assert.EqualError(t, err, "target epoch has passed")
+	assert.ErrorIs(t, err, ErrATXChallengeExpired)
 	assert.True(t, db.hadNone)
 }
 
