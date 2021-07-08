@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/ed25519"
 	"sync"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"

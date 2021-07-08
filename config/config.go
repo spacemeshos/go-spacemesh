@@ -19,7 +19,6 @@ import (
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 
-	postConfig "github.com/spacemeshos/post/config"
 	"github.com/spf13/viper"
 )
 
