@@ -604,7 +604,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		// TODO: this mock will be replaced by the real Tortoise beacon once
 		//   https://github.com/spacemeshos/go-spacemesh/pull/2267 is complete
 		beacon := eligibility.NewBeacon(tBeacon, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
-		hOracle = eligibility.New(beacon, atxdb, mdb, signing.VRFVerify, vrfSigner, uint16(app.Config.LayersPerEpoch), uint64(app.Config.POST.LabelsPerUnit), app.Config.GenesisTotalWeight, uint64(app.Config.SMESHING.Opts.NumUnits), app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+		hOracle = eligibility.New(beacon, atxdb, mdb, signing.VRFVerify, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisTotalWeight, uint64(app.Config.SMESHING.Opts.NumUnits), app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 		// TODO(moshababo): re-think and adjust args for spacePerUnit and genesisMinerWeight. The current aren't expected to work
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}

@@ -60,7 +60,7 @@ func (a mockActivationDB) GetNodeAtxIDForEpoch(nID types.NodeID, targetEpoch typ
 func (a mockActivationDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
 	if id == atxID {
 		atxHeader := &types.ActivationTxHeader{
-			NIPSTChallenge: types.NIPSTChallenge{
+			NIPoSTChallenge: types.NIPoSTChallenge{
 				NodeID: types.NodeID{
 					Key:          edSigner.PublicKey().String(),
 					VRFPublicKey: nodeID.VRFPublicKey,
@@ -346,7 +346,7 @@ func newBlockWithEligibility(layerID types.LayerID, atxID types.ATXID, proof typ
 
 func TestBlockEligibility_calc(t *testing.T) {
 	r := require.New(t)
-	atxH := types.NewActivationTx(types.NIPSTChallenge{PubLayerID: 0}, types.Address{}, nil, 0, nil)
+	atxH := types.NewActivationTx(types.NIPoSTChallenge{PubLayerID: 0}, types.Address{}, nil, 0, nil)
 	atxDb := &mockAtxDB{atxH: atxH.ActivationTxHeader}
 	o := NewMinerBlockOracle(10, 0, 1, atxDb, &EpochBeaconProvider{}, vrfsgn, nodeID, func() bool { return true }, log.NewDefault(t.Name()))
 	_, err := o.calcEligibilityProofs(1)

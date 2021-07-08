@@ -467,7 +467,7 @@ func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, 
 	startTick uint64, positioningATX types.ATXID, coinbase types.Address, activeSetSize uint32, view []types.BlockID,
 	nipst *types.NIPST) *types.ActivationTx {
 
-	nipstChallenge := types.NIPSTChallenge{
+	nipstChallenge := types.NIPoSTChallenge{
 		NodeID:         nodeID,
 		Sequence:       sequence,
 		PrevATXID:      prevATX,
