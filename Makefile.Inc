@@ -52,8 +52,5 @@ $(BINDIR_GPU_SETUP_LIBS): $(PROJ_DIR)$(GPU_SETUP_ZIP)
 	touch $@
 $(PROJ_DIR)$(GPU_SETUP_ZIP):
 	curl -L $(GPU_SETUP_URL_ZIP) -o $(PROJ_DIR)$(GPU_SETUP_ZIP)
-$(BIN_DIR)$(BINARY):
-	mkdir -p $(dir $@)
-	go build ${LDFLAGS} -o $(BIN_DIR)$(BINARY)
 
 get-gpu-setup: $(PROJ_DIR)$(GPU_SETUP_ZIP) $(BINDIR_GPU_SETUP_LIBS)
