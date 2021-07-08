@@ -740,6 +740,63 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	assert.True(t, db.hadNone)
 }
 
+func TestBuilder_RetryPublishActivationTx(t *testing.T) {
+	r := require.New(t)
+	bc := Config{
+		CoinbaseAccount: coinbase,
+		GoldenATXID:     goldenATXID,
+		LayersPerEpoch:  layersPerEpoch,
+	}
+
+	retryInterval := 10 * time.Microsecond
+	expectedTries := 3
+
+	activationDb := newActivationDb()
+	nipstBuilder := &NipstBuilderMock{} // 👀 mock that returns error from BuildNipst()
+	b := NewBuilder(bc, nodeID, 0, &MockSigning{}, activationDb, net, meshProviderMock,
+		layersPerEpoch, nipstBuilder, postProver, layerClockMock,
+		&mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"),
+		WithPoetRetryInterval(retryInterval),
+	)
+	b.commitment = commitment
+
+	challenge := newChallenge(otherNodeID /*👀*/, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	posAtx := newAtx(challenge, defaultView, npst)
+	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
+
+	net.lastTransmission = nil
+	meshProviderMock.latestLayer = postGenesisEpochLayer + 1
+	tries := 0
+	builderConfirmation := make(chan struct{})
+	// TODO(dshulyak) maybe measure time difference between attempts. It should be no less than retryInterval
+	nipstBuilder.buildNipstFunc = func(challenge *types.Hash32) (*types.NIPST, error) {
+		tries++
+		if tries == expectedTries {
+			close(builderConfirmation)
+		} else if tries < expectedTries {
+			return nil, ErrPoetServiceUnstable
+		}
+		return NewNIPSTWithChallenge(challenge, poetBytes), nil
+	}
+	layerClockMock.currentLayer = types.EpochID(postGenesisEpoch).FirstLayer() + 3
+	ctx, cancel := context.WithCancel(context.Background())
+	runnerExit := make(chan struct{})
+	go func() {
+		b.run(ctx)
+		close(runnerExit)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-runnerExit
+	})
+
+	select {
+	case <-builderConfirmation:
+	case <-time.After(time.Second):
+		require.FailNow(t, "failed waiting for required number of tries to occur")
+	}
+}
+
 func TestStartPost(t *testing.T) {
 	id := types.NodeID{Key: "aaaaaa", VRFPublicKey: []byte("bbbbb")}
 	coinbase := types.HexToAddress("0xaaa")

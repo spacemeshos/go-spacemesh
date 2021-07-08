@@ -30,7 +30,7 @@ var (
 // AtxProtocol is the protocol id for broadcasting atxs over gossip
 const AtxProtocol = "AtxGossip"
 
-const poetRetryInterval = 5 * time.Second
+const defaultPoetRetryInterval = 5 * time.Second
 
 var totalWeightCache = NewTotalWeightCache(1000)
 
@@ -118,17 +118,18 @@ type Builder struct {
 	challenge       *types.NIPSTChallenge
 	commitment      *types.PostProof
 	// pendingATX is created with current commitment and nipst from current challenge.
-	pendingATX     *types.ActivationTx
-	layerClock     layerClock
-	started        uint32
-	store          bytesStore
-	syncer         syncer
-	initStatus     int32
-	initDone       chan struct{}
-	committedSpace uint64
-	log            log.Log
-	runCtx         context.Context
-	stop           func()
+	pendingATX        *types.ActivationTx
+	layerClock        layerClock
+	started           uint32
+	store             bytesStore
+	syncer            syncer
+	initStatus        int32
+	initDone          chan struct{}
+	committedSpace    uint64
+	log               log.Log
+	runCtx            context.Context
+	stop              func()
+	poetRetryInterval time.Duration
 }
 
 type layerClock interface {
@@ -140,29 +141,45 @@ type syncer interface {
 	RegisterChForSynced(context.Context, chan struct{})
 }
 
+// BuilderOption ...
+type BuilderOption func(*Builder)
+
+// WithPoetRetryInterval modifies time that builder will have to wait before retrying ATX build process
+// if it failed due to issues with PoET server.
+func WithPoetRetryInterval(interval time.Duration) BuilderOption {
+	return func(b *Builder) {
+		b.poetRetryInterval = interval
+	}
+}
+
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(conf Config, nodeID types.NodeID, spaceToCommit uint64, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider,
 	layersPerEpoch uint16, nipstBuilder nipstBuilder, postProver PostProverClient, layerClock layerClock,
-	syncer syncer, store bytesStore, log log.Log) *Builder {
-	return &Builder{
-		signer:          signer,
-		nodeID:          nodeID,
-		coinbaseAccount: conf.CoinbaseAccount,
-		goldenATXID:     conf.GoldenATXID,
-		layersPerEpoch:  conf.LayersPerEpoch,
-		db:              db,
-		net:             net,
-		mesh:            mesh,
-		nipstBuilder:    nipstBuilder,
-		postProver:      postProver,
-		layerClock:      layerClock,
-		store:           store,
-		syncer:          syncer,
-		initStatus:      InitIdle,
-		initDone:        make(chan struct{}),
-		committedSpace:  spaceToCommit,
-		log:             log,
+	syncer syncer, store bytesStore, log log.Log, opts ...BuilderOption) *Builder {
+	b := &Builder{
+		signer:            signer,
+		nodeID:            nodeID,
+		coinbaseAccount:   conf.CoinbaseAccount,
+		goldenATXID:       conf.GoldenATXID,
+		layersPerEpoch:    conf.LayersPerEpoch,
+		db:                db,
+		net:               net,
+		mesh:              mesh,
+		nipstBuilder:      nipstBuilder,
+		postProver:        postProver,
+		layerClock:        layerClock,
+		store:             store,
+		syncer:            syncer,
+		initStatus:        InitIdle,
+		initDone:          make(chan struct{}),
+		committedSpace:    spaceToCommit,
+		log:               log,
+		poetRetryInterval: defaultPoetRetryInterval,
 	}
+	for _, opt := range opts {
+		opt(b)
+	}
+	return b
 }
 
 // Start is the main entry point of the atx builder. it runs the main loop of the builder and shouldn't be called more than once
@@ -213,7 +230,10 @@ func (b *Builder) loop(ctx context.Context) {
 	if err := b.waitOrStop(ctx, b.layerClock.AwaitLayer(1)); err != nil {
 		return
 	}
+	b.run(ctx)
+}
 
+func (b *Builder) run(ctx context.Context) {
 	var poetRetryTimer *time.Timer
 	defer func() {
 		if poetRetryTimer != nil {
@@ -230,8 +250,6 @@ func (b *Builder) loop(ctx context.Context) {
 				b.layerClock.GetCurrentLayer(),
 				b.currentEpoch(),
 				log.Err(err))
-			currentLayer := b.layerClock.GetCurrentLayer()
-			b.log.With().Error("atx construction errored", log.Err(err), currentLayer, currentLayer.GetEpoch())
 			events.ReportAtxCreated(false, uint64(b.currentEpoch()), "")
 
 			switch {
@@ -239,9 +257,9 @@ func (b *Builder) loop(ctx context.Context) {
 				// can be retried immediatly with a new challenge
 			case errors.Is(err, ErrPoetServiceUnstable):
 				if poetRetryTimer == nil {
-					poetRetryTimer = time.NewTimer(poetRetryInterval)
+					poetRetryTimer = time.NewTimer(b.poetRetryInterval)
 				} else {
-					poetRetryTimer.Reset(poetRetryInterval)
+					poetRetryTimer.Reset(b.poetRetryInterval)
 				}
 				select {
 				case <-ctx.Done():
@@ -249,7 +267,8 @@ func (b *Builder) loop(ctx context.Context) {
 				case <-poetRetryTimer.C:
 				}
 			default:
-				// other failures are related to local software. we may as well panic here
+				// other failures are related to in-process software. we may as well panic here
+				currentLayer := b.layerClock.GetCurrentLayer()
 				select {
 				case <-ctx.Done():
 					return
