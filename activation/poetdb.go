@@ -101,9 +101,9 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
 	}
 	db.log.With().Info("stored PoET proof",
-		log.String("poet_proof_id", fmt.Sprintf("%x", ref)[:5]),
+		log.String("poet_proof_id", fmt.Sprintf("%x", ref[:5])),
 		log.String("round_id", proofMessage.RoundID),
-		log.String("poet_service_id", fmt.Sprintf("%x", proofMessage.PoetServiceID)[:5]),
+		log.String("poet_service_id", fmt.Sprintf("%x", proofMessage.PoetServiceID[:5])),
 	)
 	db.publishProofRef(key, ref)
 	return nil
@@ -168,7 +168,7 @@ func (db *PoetDb) GetProofMessage(proofRef []byte) ([]byte, error) {
 func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, error) {
 	proofMessageBytes, err := db.GetProofMessage(proofRef)
 	if err != nil {
-		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %v", proofRef[:3], err)
+		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %v", proofRef[:5], err)
 	}
 	var proofMessage types.PoetProofMessage
 	if err := types.BytesToInterface(proofMessageBytes, &proofMessage); err != nil {
