@@ -29,7 +29,7 @@ var (
 
 // HandleSerializedProposalMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
 func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
-	tb.Log.With().Debug("New proposal message",
+	tb.Log.With().Info("New proposal message",
 		log.String("from", data.Sender().String()))
 
 	var m ProposalMessage
@@ -108,7 +108,7 @@ func (tb *TortoiseBeacon) handleProposalMessage(ctx context.Context, m ProposalM
 
 	switch {
 	case tb.isValidProposalMessage(atxTimestamp, nextEpochStart, receivedTimestamp):
-		tb.Log.With().Debug("Received valid proposal message",
+		tb.Log.With().Info("Received valid proposal message",
 			log.Uint64("epoch_id", uint64(currentEpoch)),
 			log.String("message", m.String()))
 
@@ -123,7 +123,7 @@ func (tb *TortoiseBeacon) handleProposalMessage(ctx context.Context, m ProposalM
 		tb.validProposalsMu.Unlock()
 
 	case tb.isPotentiallyValidProposalMessage(atxTimestamp, nextEpochStart, receivedTimestamp):
-		tb.Log.With().Debug("Received potentially valid proposal message",
+		tb.Log.With().Info("Received potentially valid proposal message",
 			log.Uint64("epoch_id", uint64(currentEpoch)),
 			log.String("message", m.String()))
 
@@ -163,7 +163,7 @@ func (tb *TortoiseBeacon) isValidProposalMessage(atxTimestamp time.Time, nextEpo
 func (tb *TortoiseBeacon) HandleSerializedFirstVotingMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
 	from := data.Sender()
 
-	tb.Log.With().Debug("New voting message",
+	tb.Log.With().Info("New voting message",
 		log.String("from", from.String()))
 
 	var m FirstVotingMessage
@@ -189,7 +189,7 @@ func (tb *TortoiseBeacon) HandleSerializedFirstVotingMessage(ctx context.Context
 func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
 	from := data.Sender()
 
-	tb.Log.With().Debug("New voting message",
+	tb.Log.With().Info("New voting message",
 		log.String("from", from.String()))
 
 	var m FollowingVotingMessage
@@ -234,7 +234,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, message 
 		return nil
 	}
 
-	tb.Log.With().Debug("Received first round voting message, counting it",
+	tb.Log.With().Info("Received first round voting message, counting it",
 		log.String("message", message.String()))
 
 	thisRound := epochRoundPair{
@@ -271,7 +271,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, message 
 		return nil
 	}
 
-	tb.Log.With().Debug("Received first voting message, counting it",
+	tb.Log.With().Info("Received first voting message, counting it",
 		log.String("from", from.Key),
 		log.Uint64("epoch_id", uint64(currentEpoch)),
 		log.Uint64("round_id", uint64(firstRound)),
@@ -356,7 +356,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(ctx context.Context, mess
 		return nil
 	}
 
-	tb.Log.With().Debug("Received following voting message, counting it",
+	tb.Log.With().Info("Received following voting message, counting it",
 		log.String("from", from.Key),
 		log.Uint64("epoch_id", uint64(currentEpoch)),
 		log.Uint64("round_id", uint64(messageRound)),

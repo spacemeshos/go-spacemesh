@@ -19,7 +19,7 @@ func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID) error {
 		return fmt.Errorf("calc tortoise beacon hash list: %w", err)
 	}
 
-	tb.Log.With().Debug("Going to calculate tortoise beacon from this hash list",
+	tb.Log.With().Info("Going to calculate tortoise beacon from this hash list",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.String("hashes", strings.Join(allHashes, ", ")))
 
@@ -47,7 +47,7 @@ func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID) error {
 		}
 	}
 
-	tb.Log.With().Debug("Beacon updated for this epoch",
+	tb.Log.With().Info("Beacon updated for this epoch",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.String("beacon", beacon.String()))
 
@@ -65,7 +65,7 @@ func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID) (propo
 	votes, ok := tb.ownVotes[lastRound]
 	if !ok {
 		// re-calculate votes
-		tb.Log.With().Debug("Own votes not found, re-calculating",
+		tb.Log.With().Info("Own votes not found, re-calculating",
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.Uint64("round", uint64(lastRound.Round)))
 
@@ -83,7 +83,7 @@ func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID) (propo
 		allHashes = append(allHashes, vote)
 	}
 
-	tb.Log.With().Debug("Tortoise beacon last round votes",
+	tb.Log.With().Info("Tortoise beacon last round votes",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round", uint64(lastRound.Round)),
 		log.String("votes", fmt.Sprint(votes)))

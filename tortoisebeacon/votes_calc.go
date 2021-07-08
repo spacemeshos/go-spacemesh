@@ -30,7 +30,7 @@ func (tb *TortoiseBeacon) calcVotesFromProposals(epoch types.EpochID) firstRound
 
 	tb.potentiallyValidProposalsMu.Unlock()
 
-	tb.Log.With().Debug("Calculated votes from proposals",
+	tb.Log.With().Info("Calculated votes from proposals",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.String("for", fmt.Sprint(valid)),
 		log.String("against", fmt.Sprint(potentiallyValid)))
@@ -58,7 +58,7 @@ func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID) (v
 		return votesSetPair{}, fmt.Errorf("calc first round votes: %w", err)
 	}
 
-	tb.Log.With().Debug("Calculated first round votes",
+	tb.Log.With().Info("Calculated first round votes",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round", uint64(round)),
 		log.String("votesMargin", fmt.Sprint(votesMargin)))
@@ -68,7 +68,7 @@ func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID) (v
 		return votesSetPair{}, fmt.Errorf("calc own first round votes: %w", err)
 	}
 
-	tb.Log.With().Debug("Calculated own first round votes",
+	tb.Log.With().Info("Calculated own first round votes",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round", uint64(round)),
 		log.String("votesMargin", fmt.Sprint(votesMargin)),
@@ -78,7 +78,7 @@ func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID) (v
 		return votesSetPair{}, fmt.Errorf("calc votes count: %w", err)
 	}
 
-	tb.Log.With().Debug("Calculated votes count",
+	tb.Log.With().Info("Calculated votes count",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round", uint64(round)),
 		log.String("votesMargin", fmt.Sprint(votesMargin)))
@@ -88,7 +88,7 @@ func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID) (v
 		return votesSetPair{}, fmt.Errorf("calc own current round votes: %w", err)
 	}
 
-	tb.Log.With().Debug("Calculated votes for one round",
+	tb.Log.With().Info("Calculated votes for one round",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round", uint64(round)),
 		log.String("for", fmt.Sprint(ownCurrentRoundVotes.ValidVotes)),
@@ -106,7 +106,7 @@ func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) (votesMarginMap, 
 	// protected by tb.votesMu
 	firstRoundIncomingVotes := tb.incomingVotes[firstRoundInThisEpoch]
 
-	tb.Log.With().Debug("First round incoming votes",
+	tb.Log.With().Info("First round incoming votes",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round", uint64(1)),
 		log.String("votes", fmt.Sprint(firstRoundIncomingVotes)))
@@ -133,7 +133,7 @@ func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) (votesMarginMap, 
 		}
 	}
 
-	tb.Log.With().Debug("First round votes margin",
+	tb.Log.With().Info("First round votes margin",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round", uint64(1)),
 		log.String("votes_margin", fmt.Sprint(firstRoundVotesMargin)))
