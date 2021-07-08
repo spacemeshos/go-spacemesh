@@ -89,8 +89,6 @@ type BaseConfig struct {
 
 	GenesisConfPath string `mapstructure:"genesis-conf"`
 
-	GenesisTotalWeight uint64 `mapstructure:"genesis-total-weight"` // the total weight for genesis
-
 	GoldenATXID string `mapstructure:"golden-atx"`
 
 	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
@@ -195,7 +193,6 @@ func defaultBaseConfig() BaseConfig {
 		PoETServer:          "127.0.0.1",
 		GoldenATXID:         "0x5678", // TODO: Change the value
 		Hdist:               5,
-		GenesisTotalWeight:  5 * 1024 * 1, // 5 miners * 1024 byte PoST * 1 PoET ticks
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,

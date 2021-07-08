@@ -23,8 +23,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
+	"github.com/spacemeshos/post/initialization"
 )
 
 // ManualClock is a clock that releases ticks on demand and not according to a real world clock
@@ -144,7 +144,6 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 	cfg.SMESHING.Opts.NumFiles = 1
 	cfg.SMESHING.Opts.ComputeProviderID = int(initialization.CPUProviderID())
 
-	cfg.GenesisTotalWeight = uint64(cfg.SMESHING.Opts.NumUnits) * uint64(numOfInstances) // * 1 PoET ticks
 	cfg.HARE.N = 5
 	cfg.HARE.F = 2
 	cfg.HARE.RoundDuration = 3

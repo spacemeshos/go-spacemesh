@@ -352,7 +352,6 @@ func Test_DBSanity(t *testing.T) {
 
 func TestMesh_processBlockATXs(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpochBig)
-	totalWeightCache.Purge()
 	atxdb, _, _ := getAtxDb("t6")
 
 	id1 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
