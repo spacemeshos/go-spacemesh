@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -397,4 +398,41 @@ func TestNIPSTBuilder_Close(t *testing.T) {
 	npst, err := nb.BuildNIPST(ctx, &hash, nil)
 	r.ErrorIs(err, ErrStopRequested)
 	r.Nil(npst)
+}
+
+func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
+	postProver := &postProverClientMock{}
+	poetProver, controller := newPoetServiceMock(t)
+	defer controller.Finish()
+
+	poetDb := &poetDbMock{}
+
+	nb := NewNIPSTBuilder(minerID, postProver, poetProver,
+		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
+
+	t.Run("PoetServiceID", func(t *testing.T) {
+		poetProver.EXPECT().PoetServiceID(gomock.Any()).Return(nil, errors.New("test"))
+		hash := types.BytesToHash([]byte("test"))
+		nipst, err := nb.BuildNIPST(context.TODO(), &hash, nil)
+		require.ErrorIs(t, err, ErrPoetServiceUnstable)
+		require.Nil(t, nipst)
+	})
+
+	t.Run("Submit", func(t *testing.T) {
+		poetProver.EXPECT().PoetServiceID(gomock.Any()).Return([]byte{}, nil)
+		poetProver.EXPECT().Submit(gomock.Any(), gomock.Any()).Return(nil, errors.New("test"))
+		hash := types.BytesToHash([]byte("test"))
+		nipst, err := nb.BuildNIPST(context.TODO(), &hash, nil)
+		require.ErrorIs(t, err, ErrPoetServiceUnstable)
+		require.Nil(t, nipst)
+	})
+
+	t.Run("NotIncluded", func(t *testing.T) {
+		poetProver.EXPECT().PoetServiceID(gomock.Any()).Return([]byte{}, nil)
+		poetProver.EXPECT().Submit(gomock.Any(), gomock.Any()).Return(&types.PoetRound{}, nil)
+		hash := types.BytesToHash([]byte("test")) // see poetDbMock for included challenges
+		nipst, err := nb.BuildNIPST(context.TODO(), &hash, nil)
+		require.ErrorIs(t, err, ErrPoetServiceUnstable)
+		require.Nil(t, nipst)
+	})
 }
