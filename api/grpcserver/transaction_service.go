@@ -101,10 +101,10 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 // we just return all nils.
 func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (retTx *types.Transaction, state pb.TransactionState_TransactionState) {
 	tx, err := s.Mesh.GetTransaction(txID) // have we seen this transaction in a block?
-	retTx = tx
+	retTx = &tx.Transaction
 	if err != nil {
-		tx, err = s.Mempool.Get(txID) // do we have it in the mempool?
-		if err != nil {               // we don't know this transaction
+		retTx, err = s.Mempool.Get(txID) // do we have it in the mempool?
+		if err != nil {                  // we don't know this transaction
 			return
 		}
 		state = pb.TransactionState_TRANSACTION_STATE_MEMPOOL
@@ -268,7 +268,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 								return status.Error(codes.Internal, "error retrieving tx data")
 							}
 
-							res.Transaction = convertTransaction(tx)
+							res.Transaction = convertTransaction(&tx.Transaction)
 						}
 						if err := stream.Send(res); err != nil {
 							return err

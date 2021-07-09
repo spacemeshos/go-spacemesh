@@ -106,12 +106,12 @@ func (s MeshService) MaxTransactionsPerSecond(context.Context, *pb.MaxTransactio
 
 // QUERIES
 
-func (s MeshService) getFilteredTransactions(startLayer types.LayerID, addr types.Address) (txs []*types.Transaction, err error) {
+func (s MeshService) getFilteredTransactions(startLayer types.LayerID, addr types.Address) (txs []*types.MeshTransaction, err error) {
 	meshTxIds := s.getTxIdsFromMesh(startLayer, addr)
 	mempoolTxIds := s.Mempool.GetTxIdsByAddress(addr)
 
 	// Look up full data for all unique txids
-	txs, missing := s.Mesh.GetTransactions(append(meshTxIds, mempoolTxIds...))
+	txs, missing := s.Mesh.GetMeshTransactions(append(meshTxIds, mempoolTxIds...))
 
 	// TODO: Do we ever expect txs to be missing here?
 	// E.g., if this node has not synced/received them yet.
@@ -192,8 +192,11 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 		}
 		for _, t := range txs {
 			res.Data = append(res.Data, &pb.AccountMeshData{
-				Datum: &pb.AccountMeshData_Transaction{
-					Transaction: convertTransaction(t),
+				Datum: &pb.AccountMeshData_MeshTransaction{
+					MeshTransaction: &pb.MeshTransaction{
+						Transaction: convertTransaction(&t.Transaction),
+						LayerID:     &pb.LayerNumber{Number: uint32(t.LayerID)},
+					},
 				},
 			})
 		}
@@ -486,11 +489,12 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 				return nil
 			}
 			// Apply address filter
+			// TODO(dshulyak) include layerID when streamed too
 			if tx.Valid && (tx.Transaction.Origin() == addr || tx.Transaction.Recipient == addr) {
 				if err := stream.Send(&pb.AccountMeshDataStreamResponse{
 					Datum: &pb.AccountMeshData{
-						Datum: &pb.AccountMeshData_Transaction{
-							Transaction: convertTransaction(tx.Transaction),
+						Datum: &pb.AccountMeshData_MeshTransaction{
+							MeshTransaction: &pb.MeshTransaction{Transaction: convertTransaction(tx.Transaction)},
 						},
 					},
 				}); err != nil {

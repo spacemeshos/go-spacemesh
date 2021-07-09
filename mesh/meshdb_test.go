@@ -430,12 +430,14 @@ func TestMeshDB_testGetTransactions(t *testing.T) {
 	signer1, addr1 := newSignerAndAddress(r, "thc")
 	signer2, _ := newSignerAndAddress(r, "cbd")
 	_, addr3 := newSignerAndAddress(r, "cbe")
-	err := mdb.writeTransactions(1, []*types.Transaction{
+	blk := &types.Block{}
+	blk.LayerIndex = 1
+	err := mdb.WriteTransactions(blk,
 		newTx(r, signer1, 420, 240),
 		newTx(r, signer1, 421, 241),
 		newTxWithDest(r, signer2, addr1, 0, 100),
 		newTxWithDest(r, signer2, addr1, 1, 101),
-	})
+	)
 	r.NoError(err)
 
 	txs := mdb.GetTransactionsByOrigin(1, addr1)

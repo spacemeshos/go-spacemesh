@@ -118,6 +118,13 @@ func (t *Transaction) String() string {
 		t.ID().ShortString(), t.Origin().Short(), t.Recipient.Short(), t.Amount, t.AccountNonce, t.GasLimit, t.Fee)
 }
 
+// MeshTransaction is stored in the mesh and included in the block.
+type MeshTransaction struct {
+	Transaction
+	LayerID LayerID
+	BlockID BlockID
+}
+
 // InnerTransaction includes all of a transaction's fields, except the signature (origin and id aren't stored).
 type InnerTransaction struct {
 	AccountNonce uint64
