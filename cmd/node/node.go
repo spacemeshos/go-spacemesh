@@ -68,8 +68,8 @@ const (
 	AtxDbStoreLogger     = "atxDbStore"
 	TBeaconDbStoreLogger = "tbDbStore"
 	TBeaconDbLogger      = "tbDb"
-	TBeaconLogger        = "tBeaconLogger"
-	WeakCoinLogger       = "wcLogger"
+	TBeaconLogger        = "tBeacon"
+	WeakCoinLogger       = "weakCoin"
 	PoetDbStoreLogger    = "poetDbStore"
 	StoreLogger          = "store"
 	PoetDbLogger         = "poetDb"
@@ -378,6 +378,14 @@ func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.StateLoggerLevel))
 	case AtxDbStoreLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxDbStoreLoggerLevel))
+	case TBeaconDbStoreLogger:
+		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TBeaconDbStoreLoggerLevel))
+	case TBeaconDbLogger:
+		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TBeaconDbLoggerLevel))
+	case TBeaconLogger:
+		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TBeaconLoggerLevel))
+	case WeakCoinLogger:
+		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.WeakCoinLoggerLevel))
 	case PoetDbStoreLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.PoetDbStoreLoggerLevel))
 	case StoreLogger:

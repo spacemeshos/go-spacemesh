@@ -5,8 +5,6 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // VRFSigner is a signer for VRF purposes
@@ -16,15 +14,7 @@ type VRFSigner struct {
 
 // Sign signs a message for VRF purposes
 func (s VRFSigner) Sign(msg []byte) []byte {
-	signature := ed25519.Sign(s.privateKey, msg)
-
-	log.With().Info("Signed message",
-		log.String("pk", util.Bytes2Hex(s.privateKey)),
-		log.String("msg", util.Bytes2Hex(msg)),
-		log.String("sig", util.Bytes2Hex(signature)),
-	)
-
-	return signature
+	return ed25519.Sign(s.privateKey, msg)
 }
 
 // NewVRFSigner creates a new VRFSigner from a 32-byte seed
@@ -36,11 +26,6 @@ func NewVRFSigner(seed []byte) (*VRFSigner, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-
-	log.With().Info("New VRF signer",
-		log.String("pub", util.Bytes2Hex(vrfPub)),
-		log.String("priv", util.Bytes2Hex(vrfPriv)),
-	)
 
 	return &VRFSigner{privateKey: vrfPriv}, vrfPub, nil
 }
