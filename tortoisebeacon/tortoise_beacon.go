@@ -483,6 +483,7 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 
 	// concat them into a single proposal message
 	m := ProposalMessage{
+		EpochID:      epoch,
 		MinerID:      tb.minerID,
 		VRFSignature: proposedSignature,
 	}
