@@ -29,6 +29,7 @@ type blockDataProvider interface {
 
 type atxDataProvider interface {
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
+	GetAtxTimestamp(types.ATXID) (time.Time, error)
 }
 
 var (

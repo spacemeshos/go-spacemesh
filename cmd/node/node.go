@@ -545,9 +545,21 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	//wc := weakcoin.NewWeakCoin(weakcoin.DefaultThreshold, swarm, BLS381.Verify2, vrfSigner, app.addLogger(WeakCoinLogger, lg))
 	wc := weakcoin.ValueMock{Value: false}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, nodeID, ld, swarm, atxdb, tBeaconDB, sgn, signing.VRFVerify, vrfSigner, wc, clock, app.addLogger(TBeaconLogger, lg))
+	tBeacon := tortoisebeacon.New(
+		app.Config.TortoiseBeacon,
+		nodeID,
+		ld,
+		swarm,
+		atxdb,
+		tBeaconDB,
+		sgn,
+		signing.VRFVerify,
+		vrfSigner,
+		wc,
+		clock,
+		app.addLogger(TBeaconLogger, lg))
 	if err := tBeacon.Start(ctx); err != nil {
-		app.log.Panic("Failed to start tortoise beacon: %v", err)
+		app.log.Panic("failed to start tortoise beacon", log.Err(err))
 	}
 
 	var msh *mesh.Mesh
@@ -619,8 +631,6 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		hOracle = rolacle
 	} else {
 		// regular oracle, build and use it
-		// TODO: this mock will be replaced by the real Tortoise beacon once
-		//   https://github.com/spacemeshos/go-spacemesh/pull/2267 is complete
 		beacon := eligibility.NewBeacon(tBeacon, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
 		hOracle = eligibility.New(beacon, atxdb, mdb, signing.VRFVerify, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.POST.SpacePerUnit, app.Config.GenesisTotalWeight, app.Config.SpaceToCommit, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
