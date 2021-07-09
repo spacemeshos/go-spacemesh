@@ -147,6 +147,7 @@ type network interface {
 	GetRandomPeer() p2ppeers.Peer
 	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error
 	RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(context.Context, []byte) []byte)
+	Close()
 }
 
 // Fetch is the main struct that contains network peers and logic to batch and dispatch hash fetch requests
@@ -200,6 +201,7 @@ func (f *Fetch) Start(ctx context.Context) {
 func (f *Fetch) Stop() {
 	f.batchTimeout.Stop()
 	close(f.stop)
+	f.net.Close()
 	// wait for close to end
 	<-f.doneChan
 }

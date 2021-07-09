@@ -56,6 +56,7 @@ type MessageServer struct {
 	workerCount        sync.WaitGroup
 	workerLimiter      chan struct{}
 	exit               chan struct{}
+	closed             chan struct{}
 }
 
 // Service is the subset of method used by MessageServer for p2p communications.
@@ -76,6 +77,7 @@ func NewMsgServer(ctx context.Context, network Service, name string, requestLife
 		msgRequestHandlers: make(map[MessageType]func(context.Context, Message) []byte),
 		requestLifetime:    requestLifetime,
 		exit:               make(chan struct{}),
+		closed:             make(chan struct{}),
 		workerLimiter:      make(chan struct{}, runtime.NumCPU()),
 	}
 
@@ -85,29 +87,31 @@ func NewMsgServer(ctx context.Context, network Service, name string, requestLife
 
 // Close stops the MessageServer
 func (p *MessageServer) Close() {
-	p.exit <- struct{}{}
-	<-p.exit
+	close(p.exit)
+	<-p.closed
 	p.workerCount.Wait()
 }
 
 // readLoop reads incoming messages and matches them to requests or responses.
 func (p *MessageServer) readLoop(ctx context.Context) {
+	logger := p.WithContext(ctx)
+	logger.Info("new message server read loop")
 	timer := time.NewTicker(p.requestLifetime + time.Millisecond*100)
 	defer timer.Stop()
 	for {
 		select {
 		case <-p.exit:
-			p.With().Debug("shutting down protocol", log.String("protocol", p.name))
-			close(p.exit)
+			logger.With().Debug("shutting down protocol", log.String("protocol", p.name))
+			close(p.closed)
 			return
 		case <-timer.C:
-			go p.cleanStaleMessages()
+			go p.cleanStaleMessages(ctx)
 		case msg, ok := <-p.ingressChannel:
 			// generate new reqID for message
 			ctx := log.WithNewRequestID(ctx)
-			p.WithContext(ctx).Debug("new msg received from channel")
+			logger.Debug("new msg received from channel")
 			if !ok {
-				p.WithContext(ctx).Error("read loop channel was closed")
+				logger.Error("read loop channel was closed")
 				return
 			}
 			p.workerCount.Add(1)
@@ -122,17 +126,18 @@ func (p *MessageServer) readLoop(ctx context.Context) {
 }
 
 // clean stale messages after request life time expires
-func (p *MessageServer) cleanStaleMessages() {
+func (p *MessageServer) cleanStaleMessages(ctx context.Context) {
+	logger := p.WithContext(ctx)
 	for {
 		p.pendMutex.RLock()
-		p.With().Debug("checking for stale messages in msgserver queue",
+		logger.Debug("checking for stale messages in msgserver queue",
 			log.Int("queue_length", p.pendingQueue.Len()))
 		elem := p.pendingQueue.Front()
 		p.pendMutex.RUnlock()
 		if elem != nil {
 			item := elem.Value.(Item)
 			if time.Since(item.timestamp) > p.requestLifetime {
-				p.With().Debug("cleanStaleMessages remove request", log.Uint64("id", item.id))
+				logger.Debug("cleanStaleMessages remove request", log.Uint64("id", item.id))
 				p.pendMutex.RLock()
 				foo, okFoo := p.resHandlers[item.id]
 				p.pendMutex.RUnlock()
@@ -141,11 +146,11 @@ func (p *MessageServer) cleanStaleMessages() {
 				}
 				p.removeFromPending(item.id)
 			} else {
-				p.Debug("cleanStaleMessages no more stale messages")
+				logger.Debug("cleanStaleMessages no more stale messages")
 				return
 			}
 		} else {
-			p.Debug("cleanStaleMessages queue empty")
+			logger.Debug("cleanStaleMessages queue empty")
 			return
 		}
 	}

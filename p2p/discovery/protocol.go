@@ -45,7 +45,7 @@ const PingPong = 0
 // GetAddresses is the findnode protocol ID
 const GetAddresses = 1
 
-// newProtocol is a constructor for a protocol protocol provider.
+// newProtocol is a constructor for a protocol provider.
 func newProtocol(ctx context.Context, local p2pcrypto.PublicKey, rt protocolRoutingTable, svc server.Service, log log.Log) *protocol {
 	s := server.NewMsgServer(ctx, svc, Name, MessageTimeout, make(chan service.DirectMessage, MessageBufSize), log)
 	d := &protocol{
