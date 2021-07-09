@@ -40,7 +40,7 @@ const MessageBufSize = 1000
 // MessageTimeout is the timeout we tolerate when waiting for a message reply
 const MessageTimeout = time.Second * 5 // TODO: Parametrize
 
-// newProtocol is a constructor for a protocol protocol provider.
+// newProtocol is a constructor for a protocol provider.
 func newProtocol(ctx context.Context, local p2pcrypto.PublicKey, rt protocolRoutingTable, svc server.Service, log log.Log) *protocol {
 	s := server.NewMsgServer(ctx, svc, Name, MessageTimeout, make(chan service.DirectMessage, MessageBufSize), log)
 	d := &protocol{

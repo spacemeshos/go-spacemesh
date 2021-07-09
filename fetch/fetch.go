@@ -171,7 +171,7 @@ func (f MessageNetwork) GetPeers() []p2ppeers.Peer {
 type network interface {
 	GetPeers() []p2ppeers.Peer
 	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error
-	RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(ctx context.Context, b []byte) []byte)
+	RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(context.Context, []byte) []byte)
 	Close()
 }
 
@@ -231,7 +231,6 @@ func (f *Fetch) Stop() {
 	close(f.stop)
 	f.activeReqM.Lock()
 	for _, batch := range f.activeRequests {
-
 		for _, req := range batch {
 			close(req.returnChan)
 		}
