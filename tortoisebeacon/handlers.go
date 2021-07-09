@@ -71,12 +71,14 @@ func (tb *TortoiseBeacon) handleProposalMessage(ctx context.Context, m ProposalM
 	sender := m.MinerID.VRFPublicKey // hash of a miner PK
 	ok := tb.vrfVerifier(sender, currentEpochProposal, m.VRFSignature)
 	if !ok {
-		// TODO: attach telemetry
+		// TODO(nkryuchkov): attach telemetry
 		tb.Log.With().Warning("Received malformed proposal message: VRF is not verified",
 			log.String("sender", m.MinerID.Key),
 			log.Uint64("current_epoch", uint64(currentEpoch)),
 			log.Uint64("message_epoch", uint64(m.EpochID)))
-		return nil
+
+		// TODO(nkryuchkov): add a test for this case
+		return ErrMalformedProposal
 	}
 
 	epochWeight, _, err := tb.atxDB.GetEpochWeight(currentEpoch)
