@@ -75,6 +75,7 @@ func (tb *TortoiseBeacon) handleProposalMessage(ctx context.Context, m ProposalM
 		tb.Log.With().Warning("Received malformed proposal message: VRF is not verified",
 			log.String("sender", m.MinerID.Key))
 
+		// TODO(nkryuchkov): add a test for this case
 		return ErrMalformedProposal
 	}
 
