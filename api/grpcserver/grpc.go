@@ -2,12 +2,13 @@ package grpcserver
 
 import (
 	"fmt"
+	"net"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
-	"net"
-	"time"
 )
 
 // ServiceAPI allows individual grpc services to register the grpc server
@@ -32,14 +33,18 @@ func NewServerWithInterface(port int, intfce string) *Server {
 }
 
 // Start starts the server
-func (s *Server) Start() {
+func (s *Server) Start() <-chan struct{} {
 	numServices := len(s.GrpcServer.GetServiceInfo())
 	log.Info("starting new grpc server with %d registered service(s)", numServices)
-	go s.startInternal()
+
+	started := make(chan struct{})
+	go s.startInternal(started)
+
+	return started
 }
 
 // Blocking, should be called in a goroutine
-func (s *Server) startInternal() {
+func (s *Server) startInternal(started chan<- struct{}) {
 	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", s.Interface, s.Port))
 	if err != nil {
 		log.Error("error listening: %v", err)
@@ -51,6 +56,9 @@ func (s *Server) startInternal() {
 
 	// start serving - this blocks until err or server is stopped
 	log.Info("starting new grpc server on %s:%d", s.Interface, s.Port)
+
+	close(started)
+
 	if err := s.GrpcServer.Serve(lis); err != nil {
 		log.Error("error stopping grpc server: %v", err)
 	}
