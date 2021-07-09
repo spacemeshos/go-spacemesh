@@ -195,7 +195,7 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 				Datum: &pb.AccountMeshData_MeshTransaction{
 					MeshTransaction: &pb.MeshTransaction{
 						Transaction: convertTransaction(&t.Transaction),
-						LayerID:     &pb.LayerNumber{Number: uint32(t.LayerID)},
+						LayerId:     &pb.LayerNumber{Number: uint32(t.LayerID)},
 					},
 				},
 			})
