@@ -4,12 +4,10 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"sort"
-	"strings"
-
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/sha256-simd"
+	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -64,19 +62,6 @@ func (t ATXID) Field() log.Field { return log.FieldNamed("atx_id", t.Hash32()) }
 // Compare returns true if other (the given ATXID) is less than this ATXID, by lexicographic comparison.
 func (t ATXID) Compare(other ATXID) bool {
 	return bytes.Compare(t.Bytes(), other.Bytes()) < 0
-}
-
-// CalcAtxHash32Presorted returns the 32-byte sha256 sum of the Atx IDs, in the order given. The pre-image is
-// prefixed with additionalBytes.
-func CalcAtxHash32Presorted(sortedView []ATXID, additionalBytes []byte) Hash32 {
-	hash := sha256.New()
-	hash.Write(additionalBytes)
-	for _, id := range sortedView {
-		hash.Write(id.Bytes()) // this never returns an error: https://golang.org/pkg/hash/#Hash
-	}
-	var res Hash32
-	hash.Sum(res[:0])
-	return res
 }
 
 // EmptyATXID is a canonical empty ATXID.
@@ -236,15 +221,6 @@ func (atx *ActivationTx) Fields(size int) []log.LoggableField {
 	}
 }
 
-// AtxIdsField returns a list of loggable fields for a given list of ATXIDs
-func AtxIdsField(ids []ATXID) log.Field {
-	strs := []string{}
-	for _, a := range ids {
-		strs = append(strs, a.ShortString())
-	}
-	return log.String("atx_ids", strings.Join(strs, ", "))
-}
-
 // CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.
 func (atx *ActivationTx) CalcAndSetID() {
 	id := ATXID(CalcATXHash32(atx))
@@ -345,13 +321,4 @@ func IsProcessingError(err error) bool {
 func SortAtxIDs(ids []ATXID) []ATXID {
 	sort.Slice(ids, func(i, j int) bool { return ids[i].Compare(ids[j]) })
 	return ids
-}
-
-// CalcATXIdsHash32 returns the 32-byte sha256 sum of the atx IDs, sorted in lexicographic order. The pre-image is
-// prefixed with additionalBytes.
-func CalcATXIdsHash32(view []ATXID, additionalBytes []byte) Hash32 {
-	sortedView := make([]ATXID, len(view))
-	copy(sortedView, view)
-	SortAtxIDs(sortedView)
-	return CalcAtxHash32Presorted(sortedView, additionalBytes)
 }

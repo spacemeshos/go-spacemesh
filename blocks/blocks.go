@@ -210,7 +210,6 @@ func (bh *BlockHandler) fastValidation(block *types.Block) error {
 		return err
 	}
 	return nil
-
 }
 
 func validateUniqueTxAtx(b *types.Block) error {
