@@ -860,7 +860,7 @@ func TestBuilder_UpdatePoETProver(t *testing.T) {
 		require.FailNow(t, "timedout waiting for PoetServiceID to be called")
 	}
 	poetProver2.EXPECT().PoetServiceID(gomock.Any()).Return([]byte{}, nil)
-	require.NoError(t, b.UpdatePoETClient(context.TODO(), "update"))
+	require.NoError(t, b.UpdatePoETServer(context.TODO(), "update"))
 	poet2Called := make(chan struct{})
 	poetProver2.EXPECT().PoetServiceID(gomock.Any()).Do(func(context.Context) {
 		cancel()

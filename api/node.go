@@ -72,3 +72,8 @@ type MempoolAPI interface {
 	GetTxIdsByAddress(types.Address) []types.TransactionID
 	GetProjection(types.Address, uint64, uint64) (uint64, uint64)
 }
+
+// ActivationAPI is an API for activation module.
+type ActivationAPI interface {
+	UpdatePoETServer(context.Context, string) error
+}

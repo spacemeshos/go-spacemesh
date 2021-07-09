@@ -400,14 +400,14 @@ func (b *Builder) StartPost(ctx context.Context, rewardAddress types.Address, da
 	return nil
 }
 
-// UpdatePoETClient updates poet client. Context is used to verify that the target is responsive.
-func (b *Builder) UpdatePoETClient(ctx context.Context, target string) error {
+// UpdatePoETServer updates poet client. Context is used to verify that the target is responsive.
+func (b *Builder) UpdatePoETServer(ctx context.Context, target string) error {
 	client := b.poetClientInitializer(target)
 	// TODO(dshulyak) not enough information to verify that PoetServiceID matches with an expected one.
 	// Maybe it should be provided during update.
 	_, err := client.PoetServiceID(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %v", ErrPoetServiceUnstable, err)
 	}
 	atomic.StorePointer(&b.pendingPoetClient, unsafe.Pointer(&client))
 	return nil
