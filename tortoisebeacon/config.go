@@ -10,6 +10,7 @@ type Config struct {
 	FirstVotingRoundDurationMs int     `mapstructure:"tortoise-beacon-first-voting-round-duration-ms"` // First voting round duration in milliseconds
 	VotingRoundDurationMs      int     `mapstructure:"tortoise-beacon-voting-round-duration-ms"`       // Voting round duration in milliseconds
 	WeakCoinRoundDurationMs    int     `mapstructure:"tortoise-beacon-weak-coin-round-duration-ms"`    // Weak coin round duration in milliseconds
+	WaitAfterEpochStart        int     `mapstructure:"tortoise-beacon-wait-after-epoch-start-ms"`      // How many milliseconds to wait after a new epoch is started.
 	Theta                      float64 `mapstructure:"tortoise-beacon-theta"`                          // Ratio of votes for reaching consensus
 	VotesLimit                 int     `mapstructure:"tortoise-beacon-votes-limit"`                    // Maximum allowed number of votes to be sent
 }
@@ -25,6 +26,7 @@ func DefaultConfig() Config {
 		FirstVotingRoundDurationMs: 1 * 60 * 60 * 1000, // 1 hour
 		VotingRoundDurationMs:      30 * 60 * 1000,     // 30 minutes
 		WeakCoinRoundDurationMs:    1 * 60 * 1000,      // 1 minute
+		WaitAfterEpochStart:        10000,              // 10 seconds
 		Theta:                      0.25,
 		VotesLimit:                 100, // TODO: around 100, find the calculation in the forum
 	}
@@ -41,6 +43,7 @@ func TestConfig() Config {
 		FirstVotingRoundDurationMs: 40,
 		VotingRoundDurationMs:      20,
 		WeakCoinRoundDurationMs:    20,
+		WaitAfterEpochStart:        100,
 		Theta:                      0.00004,
 		VotesLimit:                 100,
 	}

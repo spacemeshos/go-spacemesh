@@ -197,6 +197,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.TortoiseBeacon.VotingRoundDurationMs, "Voting round duration in milliseconds")
 	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.WeakCoinRoundDurationMs, "tortoise-beacon-weak-coin-round-duration-ms",
 		config.TortoiseBeacon.WeakCoinRoundDurationMs, "Weak coin round duration in milliseconds")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.WaitAfterEpochStart, "tortoise-beacon-wait-after-epoch-start-ms",
+		config.TortoiseBeacon.WaitAfterEpochStart, "How many milliseconds to wait after a new epoch is started.")
 	cmd.PersistentFlags().Float64Var(&config.TortoiseBeacon.Theta, "tortoise-beacon-theta",
 		config.TortoiseBeacon.Theta, "Ratio of votes for reaching consensus")
 	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.VotesLimit, "tortoise-beacon-votes-limit",

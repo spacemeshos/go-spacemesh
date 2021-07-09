@@ -101,6 +101,7 @@ type TortoiseBeacon struct {
 	firstVotingRoundDuration time.Duration
 	votingRoundDuration      time.Duration
 	weakCoinRoundDuration    time.Duration
+	waitAfterEpochStart      time.Duration
 
 	currentRoundsMu sync.RWMutex
 	currentRounds   map[types.EpochID]types.RoundID
@@ -180,6 +181,7 @@ func New(
 		firstVotingRoundDuration:        time.Duration(conf.FirstVotingRoundDurationMs) * time.Millisecond,
 		votingRoundDuration:             time.Duration(conf.VotingRoundDurationMs) * time.Millisecond,
 		weakCoinRoundDuration:           time.Duration(conf.WeakCoinRoundDurationMs) * time.Millisecond,
+		waitAfterEpochStart:             time.Duration(conf.WaitAfterEpochStart) * time.Millisecond,
 		currentRounds:                   make(map[types.EpochID]types.RoundID),
 		validProposals:                  make(map[types.EpochID]hashSet),
 		potentiallyValidProposals:       make(map[types.EpochID]hashSet),
@@ -364,16 +366,22 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 
 	tb.seenEpochsMu.Unlock()
 
-	tb.Log.With().Info("tortoise beacon got tick",
+	tb.Log.With().Info("tortoise beacon got tick, waiting until other nodes have the same epoch",
 		log.Uint64("layer", uint64(layer)),
 		log.Uint64("epoch_id", uint64(epoch)))
 
-	tb.handleEpoch(ctx, epoch)
+	epochStartTimer := time.NewTimer(tb.proposalDuration + tb.gracePeriodDuration)
+	defer epochStartTimer.Stop()
+
+	select {
+	case <-tb.CloseChannel():
+	case <-epochStartTimer.C:
+		tb.handleEpoch(ctx, epoch)
+	}
 }
 
 func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) {
 	// TODO: check when epoch started, adjust waiting time for this timestamp
-
 	if epoch.IsGenesis() {
 		tb.Log.With().Info("not starting tortoise beacon since we are in genesis epoch",
 			log.Uint64("epoch_id", uint64(epoch)))
