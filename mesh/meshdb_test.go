@@ -942,3 +942,32 @@ func TestMeshDB_RecordCoinFlip(t *testing.T) {
 	defer teardown()
 	testCoinflip(mdb2)
 }
+
+func TestMeshDB_GetMeshTransactions(t *testing.T) {
+	r := require.New(t)
+
+	mdb := NewMemMeshDB(log.NewDefault(t.Name()))
+
+	signer1, _ := newSignerAndAddress(r, "thc")
+
+	blk := &types.Block{}
+	blk.LayerIndex = 1
+	var (
+		nonce  uint64
+		ids    []types.TransactionID
+		layers = 10
+	)
+	for i := 1; i <= layers; i++ {
+		nonce++
+		blk.LayerIndex = types.LayerID(i)
+		tx := newTx(r, signer1, nonce, 240)
+		ids = append(ids, tx.ID())
+		r.NoError(mdb.WriteTransactions(blk, tx))
+	}
+	txs, missing := mdb.GetMeshTransactions(ids)
+	r.Len(missing, 0)
+	for i := 1; i < layers; i++ {
+		r.Equal(ids[i-1], txs[i-1].ID())
+		r.EqualValues(i, txs[i-1].LayerID)
+	}
+}
