@@ -73,11 +73,8 @@ func (tb *TortoiseBeacon) handleProposalMessage(ctx context.Context, m ProposalM
 	if !ok {
 		// TODO(nkryuchkov): attach telemetry
 		tb.Log.With().Warning("Received malformed proposal message: VRF is not verified",
-			log.String("sender", m.MinerID.Key),
-			log.Uint64("current_epoch", uint64(currentEpoch)),
-			log.Uint64("message_epoch", uint64(m.EpochID)))
+			log.String("sender", m.MinerID.Key))
 
-		// TODO(nkryuchkov): add a test for this case
 		return ErrMalformedProposal
 	}
 
@@ -142,8 +139,7 @@ func (tb *TortoiseBeacon) handleProposalMessage(ctx context.Context, m ProposalM
 
 	default:
 		tb.Log.With().Warning("Received invalid proposal message",
-			log.Uint64("epoch_id", uint64(currentEpoch)),
-			log.String("message", m.String()))
+			log.Uint64("epoch_id", uint64(currentEpoch)))
 	}
 
 	return nil
