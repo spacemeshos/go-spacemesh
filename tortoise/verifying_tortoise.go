@@ -29,7 +29,6 @@ type blockDataProvider interface {
 
 type atxDataProvider interface {
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
-	StoreAtx(types.EpochID, *types.ActivationTx) error
 }
 
 var (
@@ -490,7 +489,8 @@ func (t *turtle) calculateExceptions(
 // Note: weight depends on more than just the weight of the voting block. It also depends on contextual factors such as
 // whether or not the block's ATX was received on time, and on how old the layer is.
 // TODO: for now it's probably sufficient to adjust weight based on whether the ATX was received on time, or late, for
-//   the current epoch. Assign weight of zero to late ATXs for the current epoch?
+//   the current epoch. See https://github.com/spacemeshos/go-spacemesh/issues/2540.
+// TODO: does blockVotedOn ever matter here? can we remove it?
 func (t *turtle) voteWeight(votingBlock *types.Block, blockVotedOn types.BlockID) (uint64, error) {
 	atxid, err := t.atxdb.GetAtxHeader(votingBlock.ATXID)
 	if err != nil {

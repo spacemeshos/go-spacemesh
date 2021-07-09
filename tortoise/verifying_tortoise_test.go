@@ -41,6 +41,11 @@ func (mw meshWrapper) GetLayerInputVectorByID(lid types.LayerID) ([]types.BlockI
 	return mw.blockDataProvider.GetLayerInputVectorByID(lid)
 }
 
+type atxDataWriter interface {
+	atxDataProvider
+	StoreAtx(types.EpochID, *types.ActivationTx) error
+}
+
 func getAtxDB() *mockAtxDataProvider {
 	return &mockAtxDataProvider{atxDB: make(map[types.ATXID]*types.ActivationTxHeader)}
 }
@@ -265,7 +270,7 @@ func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer, voteNeg
 	return
 }
 
-func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, atxdb atxDataProvider, msh *mesh.DB, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) {
+func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, atxdb atxDataWriter, msh *mesh.DB, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) {
 	makeLayer(t, l, trtl, blocksPerLayer, atxdb, msh, inputVectorFn)
 
 	// write blocks to database first; the verifying tortoise will subsequently read them
@@ -279,7 +284,7 @@ func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerL
 	require.NoError(t, trtl.HandleIncomingLayer(context.TODO(), l))
 }
 
-func makeLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, atxdb atxDataProvider, msh *mesh.DB, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
+func makeLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, atxdb atxDataWriter, msh *mesh.DB, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
 	t.Log("======================== choosing base block for layer", l)
 	oldInputVectorFn := msh.InputVectorBackupFunc
 	defer func() {
@@ -321,7 +326,7 @@ func makeLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, 
 	return lyr
 }
 
-func testLayerPattern(t *testing.T, atxdb atxDataProvider, db *mesh.DB, trtl *turtle, blocksPerLayer int, successPattern []bool) {
+func testLayerPattern(t *testing.T, atxdb atxDataWriter, db *mesh.DB, trtl *turtle, blocksPerLayer int, successPattern []bool) {
 	goodLayerFn := func(layerID types.LayerID) ([]types.BlockID, error) {
 		t.Log("giving good results for layer", layerID)
 		return db.LayerBlockIds(layerID)
