@@ -103,10 +103,10 @@ func (MockState) GetLayerStateRoot(types.LayerID) (types.Hash32, error) {
 	panic("implement me")
 }
 
-func (MockState) GetBalance(addr types.Address) uint64 {
+func (MockState) GetBalance(types.Address) uint64 {
 	panic("implement me")
 }
-func (MockState) GetNonce(addr types.Address) uint64 {
+func (MockState) GetNonce(types.Address) uint64 {
 	panic("implement me")
 }
 
@@ -136,15 +136,6 @@ func (MockTxMemPool) Get(types.TransactionID) (*types.Transaction, error) {
 func (MockTxMemPool) Put(types.TransactionID, *types.Transaction) {}
 func (MockTxMemPool) Invalidate(types.TransactionID)              {}
 
-type MockAtxMemPool struct{}
-
-func (MockAtxMemPool) Get(types.ATXID) (*types.ActivationTx, error) {
-	return &types.ActivationTx{}, nil
-}
-
-func (MockAtxMemPool) Put(*types.ActivationTx) {}
-func (MockAtxMemPool) Invalidate(types.ATXID)  {}
-
 func ConfigTst() mesh.Config {
 	return mesh.Config{
 		BaseReward: big.NewInt(5000),
@@ -168,14 +159,24 @@ func rndStr() string {
 	return string(a)
 }
 
-func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
+func processAtxs(db *DB, atxs []*types.ActivationTx) error {
+	for _, atx := range atxs {
+		err := db.ProcessAtx(atx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, atxdb *DB, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
 	if numOfBlocks < len(atxs) {
 		panic("not supported")
 	}
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := types.NewExistingBlock(id, []byte(rand.String(8)), nil)
 		block1.ForDiff = append(block1.ForDiff, votes...)
-		activeSet := []types.ATXID{}
+		var activeSet []types.ATXID
 		if i < len(atxs) {
 			activeSet = append(activeSet, atxs[i].ID())
 			fmt.Printf("adding i=%v bid=%v atxid=%v", i, block1.ID(), atxs[i].ShortString())
@@ -194,7 +195,7 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 		if i < len(atxs) {
 			actualAtxs = atxs[i : i+1]
 		}
-		msh.ProcessAtxs(actualAtxs)
+		require.NoError(t, processAtxs(atxdb, actualAtxs))
 		block1.Initialize()
 		err := msh.AddBlockWithTxs(context.TODO(), block1)
 		require.NoError(t, err)
@@ -228,14 +229,14 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 		assert.NoError(t, err)
 		atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
 	}
-	blocks := createLayerWithAtx(t, layers, 1, 4, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks := createLayerWithAtx(t, layers, atxdb, 1, 4, atxs, []types.BlockID{}, []types.BlockID{})
 	before := blocks[:2]
 	two := blocks[2:3]
 	after := blocks[3:]
 	for i := 2; i <= 10; i++ {
-		before = createLayerWithAtx(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, before, before)
-		two = createLayerWithAtx(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, two, two)
-		after = createLayerWithAtx(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, after, after)
+		before = createLayerWithAtx(t, layers, atxdb, types.LayerID(i), 1, []*types.ActivationTx{}, before, before)
+		two = createLayerWithAtx(t, layers, atxdb, types.LayerID(i), 1, []*types.ActivationTx{}, two, two)
+		after = createLayerWithAtx(t, layers, atxdb, types.LayerID(i), 1, []*types.ActivationTx{}, after, after)
 	}
 	for _, x := range before {
 		blocksMap[x] = struct{}{}
@@ -374,7 +375,7 @@ func TestMesh_processBlockATXs(t *testing.T) {
 		atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
 	}
 
-	err = atxdb.ProcessAtxs(atxs)
+	err = processAtxs(atxdb, atxs)
 	assert.NoError(t, err)
 
 	// check that further atxs dont affect current epoch count
@@ -388,7 +389,7 @@ func TestMesh_processBlockATXs(t *testing.T) {
 		assert.NoError(t, err)
 		atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
 	}
-	err = atxdb.ProcessAtxs(atxs2)
+	err = processAtxs(atxdb, atxs2)
 	assert.NoError(t, err)
 
 	assertEpochWeight(t, atxdb, 2, 100*100*4) // 1 posATX + 3 from `atxs`
@@ -426,9 +427,9 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 		atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
 	}
 
-	blocks := createLayerWithAtx(t, layers, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
-	blocks = createLayerWithAtx(t, layers, 10, 10, []*types.ActivationTx{}, blocks, blocks)
-	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks := createLayerWithAtx(t, layers, atxdb, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks = createLayerWithAtx(t, layers, atxdb, 10, 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks = createLayerWithAtx(t, layers, atxdb, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
 	prevAtx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, 100, 0, 100, 100, coinbase1, &types.NIPST{})
 	hash, err := prevAtx.NIPSTChallenge.Hash()
@@ -471,9 +472,9 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, 1, 0, 100, 100, coinbase, &types.NIPST{}),
 	}
 
-	blocks := createLayerWithAtx(t, layers, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
-	blocks = createLayerWithAtx(t, layers, 10, 10, []*types.ActivationTx{}, blocks, blocks)
-	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks := createLayerWithAtx(t, layers, atxdb, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks = createLayerWithAtx(t, layers, atxdb, 10, 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks = createLayerWithAtx(t, layers, atxdb, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xba, 0xbe}
@@ -647,9 +648,9 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, 1, 0, 100, 100, coinbase, &types.NIPST{}),
 	}
 
-	blocks := createLayerWithAtx(t, layers, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
-	blocks = createLayerWithAtx(t, layers, 10, 10, []*types.ActivationTx{}, blocks, blocks)
-	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks := createLayerWithAtx(t, layers, atxdb, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks = createLayerWithAtx(t, layers, atxdb, 10, 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks = createLayerWithAtx(t, layers, atxdb, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0x56, 0xbe}

@@ -75,7 +75,6 @@ type txMemPool interface {
 
 // AtxDB holds logic for working with atxs
 type AtxDB interface {
-	ProcessAtxs(atxs []*types.ActivationTx) error
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
 	GetFullAtx(id types.ATXID) (*types.ActivationTx, error)
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error

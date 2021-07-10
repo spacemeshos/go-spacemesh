@@ -140,26 +140,6 @@ func (db *DB) UnsubscribeAtx(id types.ATXID) {
 	}
 }
 
-// ProcessAtxs processes the list of given atxs using ProcessAtx method
-func (db *DB) ProcessAtxs(atxs []*types.ActivationTx) error {
-	// seenMinerIds := map[string]struct{}{}
-	for _, atx := range atxs {
-		/* minerID := atx.NodeID.Key
-		if _, found := seenMinerIds[minerID]; found {
-			// TODO: Blacklist this miner
-			// TODO: Ensure that these are two different, syntactically valid ATXs for the same epoch, otherwise the
-			//  miner did nothing wrong
-			db.log.With().Error("found miner with multiple ATXs published in same block",
-				log.FieldNamed("atx_node_id", atx.NodeID), atx.ID())
-		}*/
-		err := db.ProcessAtx(atx)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // ProcessAtx validates the active set size declared in the atx, and contextually validates the atx according to atx
 // validation rules it then stores the atx with flag set to validity of the atx.
 //
