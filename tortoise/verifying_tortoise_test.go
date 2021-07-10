@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"strconv"
 	"testing"
 	"time"
@@ -65,6 +66,10 @@ func (madp mockAtxDataProvider) GetAtxHeader(atxID types.ATXID) (*types.Activati
 
 	// return a mocked value
 	return &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: "fakekey"}}}, nil
+}
+
+func (madp mockAtxDataProvider) GetAtxTimestamp(atxID types.ATXID) (time.Time, error) {
+	return time.Now(), nil
 }
 
 func (madp *mockAtxDataProvider) StoreAtx(_ types.EpochID, atx *types.ActivationTx) error {
@@ -130,7 +135,7 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 				}
 
 				//t.logger.Info("block %v is good and voting vote %v", vopinion.id, opinionVote)
-				weight, err := trtl.voteWeightByID(bid, i)
+				weight, err := trtl.voteWeightByID(context.TODO(), bid, i)
 				require.NoError(t, err)
 				sum = sum.Add(opinionVote.Multiply(weight))
 			}
@@ -889,11 +894,18 @@ func TestBaseBlock(t *testing.T) {
 	r.Nil(exceptions)
 }
 
+func defaultClock() layerClock {
+	genesisTime := time.Now().Add(time.Second * 10)
+	ld := time.Duration(10) * time.Second
+	return timesync.NewClock(timesync.RealClock{}, ld, genesisTime, log.NewDefault("clock"))
+}
+
 func defaultTurtle() *turtle {
 	mdb := getInMemMesh()
 	return newTurtle(
 		mdb,
 		getAtxDB(),
+		defaultClock(),
 		defaultTestHdist,
 		defaultTestZdist,
 		defaultTestConfidenceParam,
@@ -929,6 +941,7 @@ func defaultAlgorithm(t *testing.T, mdb *mesh.DB) *ThreadSafeVerifyingTortoise {
 		defaultTestLayerSize,
 		mdb,
 		getAtxDB(),
+		defaultClock(),
 		defaultTestHdist,
 		defaultTestZdist,
 		defaultTestConfidenceParam,
@@ -1320,12 +1333,12 @@ func TestVoteWeight(t *testing.T) {
 	atxdb.mockAtxHeader = makeAtxHeaderWithWeight(uint64(totalSpace))
 	alg.trtl.atxdb = atxdb
 	someBlocks := generateBlocks(types.GetEffectiveGenesis().Add(1), 1, alg.BaseBlock)
-	weight, err := alg.trtl.voteWeight(someBlocks[0], types.RandomBlockID())
+	weight, err := alg.trtl.voteWeight(context.TODO(), someBlocks[0], types.RandomBlockID())
 	r.NoError(err)
 	r.Equal(totalSpace, int(weight))
 
 	// voting for a different block should not change the weight
-	weight, err = alg.trtl.voteWeight(someBlocks[0], types.RandomBlockID())
+	weight, err = alg.trtl.voteWeight(context.TODO(), someBlocks[0], types.RandomBlockID())
 	r.NoError(err)
 	r.Equal(totalSpace, int(weight))
 }

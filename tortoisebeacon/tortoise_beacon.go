@@ -134,10 +134,10 @@ type signer interface {
 
 type layerClock interface {
 	Subscribe() timesync.LayerTimer
-	Unsubscribe(timer timesync.LayerTimer)
-	AwaitLayer(layerID types.LayerID) chan struct{}
+	Unsubscribe(timesync.LayerTimer)
+	AwaitLayer(types.LayerID) chan struct{}
 	GetCurrentLayer() types.LayerID
-	LayerToTime(id types.LayerID) time.Time
+	LayerToTime(types.LayerID) time.Time
 }
 
 // New returns a new TortoiseBeacon.

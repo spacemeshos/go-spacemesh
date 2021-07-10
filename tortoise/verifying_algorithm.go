@@ -24,6 +24,7 @@ type Config struct {
 	LayerSize       int
 	Database        blockDataProvider
 	ATXDB           atxDataProvider
+	Clock           layerClock
 	Hdist           int   // hare lookback distance: the distance over which we use the input vector/hare results
 	Zdist           int   // hare result wait distance: the distance over which we're willing to wait for hare results
 	ConfidenceParam int   // confidence wait distance: how long we wait for global consensus to be established
@@ -45,6 +46,7 @@ func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingT
 		cfg.LayerSize,
 		cfg.Database,
 		cfg.ATXDB,
+		cfg.Clock,
 		cfg.Hdist,
 		cfg.Zdist,
 		cfg.ConfidenceParam,
@@ -61,6 +63,7 @@ func verifyingTortoise(
 	layerSize int,
 	mdb blockDataProvider,
 	atxdb atxDataProvider,
+	clock layerClock,
 	hdist,
 	zdist,
 	confidenceParam,
@@ -77,7 +80,7 @@ func verifyingTortoise(
 		logger.With().Panic("global and local threshold values must be in the interval [0, 100]")
 	}
 	alg := &ThreadSafeVerifyingTortoise{
-		trtl: newTurtle(mdb, atxdb, hdist, zdist, confidenceParam, windowSize, layerSize, globalThreshold, localThreshold, rerunInterval),
+		trtl: newTurtle(mdb, atxdb, clock, hdist, zdist, confidenceParam, windowSize, layerSize, globalThreshold, localThreshold, rerunInterval),
 	}
 	alg.logger = logger
 	alg.lastRerun = time.Now()

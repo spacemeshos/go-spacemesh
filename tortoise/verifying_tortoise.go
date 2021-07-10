@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -30,6 +29,10 @@ type blockDataProvider interface {
 type atxDataProvider interface {
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
 	GetAtxTimestamp(types.ATXID) (time.Time, error)
+}
+
+type layerClock interface {
+	LayerToTime(types.LayerID) time.Time
 }
 
 var (
@@ -58,8 +61,11 @@ func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
 type turtle struct {
 	logger log.Log
 
-	bdp   blockDataProvider
 	atxdb atxDataProvider
+	bdp   blockDataProvider
+	clock layerClock
+
+	// TODO: can some or all of these be unexported? is this an issue for serialization?
 
 	// last layer processed: note that tortoise does not have a concept of "current" layer (and it's not aware of the
 	// current time or latest tick). As far as Tortoise is concerned, Last is the current layer. This is a subjective
@@ -112,6 +118,7 @@ func (t *turtle) SetLogger(logger log.Log) {
 func newTurtle(
 	bdp blockDataProvider,
 	atxdb atxDataProvider,
+	clock layerClock,
 	hdist,
 	zdist,
 	confidenceParam,
@@ -131,6 +138,7 @@ func newTurtle(
 		LocalThreshold:       localThreshold,
 		bdp:                  bdp,
 		atxdb:                atxdb,
+		clock:                clock,
 		Last:                 0,
 		AvgLayerSize:         avgLayerSize,
 		GoodBlocksIndex:      make(map[types.BlockID]struct{}),
@@ -145,6 +153,7 @@ func (t *turtle) cloneTurtle() *turtle {
 	return newTurtle(
 		t.bdp,
 		t.atxdb,
+		t.clock,
 		int(t.Hdist),
 		int(t.Zdist),
 		int(t.ConfidenceParam),
@@ -492,20 +501,38 @@ func (t *turtle) calculateExceptions(
 // TODO: for now it's probably sufficient to adjust weight based on whether the ATX was received on time, or late, for
 //   the current epoch. See https://github.com/spacemeshos/go-spacemesh/issues/2540.
 // TODO: does blockVotedOn ever matter here? can we remove it?
-func (t *turtle) voteWeight(votingBlock *types.Block, blockVotedOn types.BlockID) (uint64, error) {
-	atxid, err := t.atxdb.GetAtxHeader(votingBlock.ATXID)
+func (t *turtle) voteWeight(ctx context.Context, votingBlock *types.Block, blockVotedOn types.BlockID) (uint64, error) {
+	logger := t.logger.WithContext(ctx)
+
+	atxHeader, err := t.atxdb.GetAtxHeader(votingBlock.ATXID)
 	if err != nil {
 		return 0, err
 	}
-	return atxid.GetWeight(), nil
+	atxTimestamp, err := t.atxdb.GetAtxTimestamp(votingBlock.ATXID)
+	if err != nil {
+		return 0, err
+	}
+	atxEpoch := atxHeader.PubLayerID.GetEpoch()
+	nextEpochStart := t.clock.LayerToTime((atxEpoch + 1).FirstLayer())
+
+	// check if the ATX was received on time
+	// TODO LANE: add an exception for sync, when we expect everything to be received late
+	if atxTimestamp.Before(nextEpochStart) {
+		logger.With().Debug("voting block atx was timely", votingBlock.ID(), votingBlock.ATXID)
+		return atxHeader.GetWeight(), nil
+	}
+	logger.With().Warning("voting block atx was untimely, zeroing block vote weight",
+		votingBlock.ID(),
+		votingBlock.ATXID)
+	return 0, nil
 }
 
-func (t *turtle) voteWeightByID(votingBlockID, blockVotedOn types.BlockID) (uint64, error) {
+func (t *turtle) voteWeightByID(ctx context.Context, votingBlockID, blockVotedOn types.BlockID) (uint64, error) {
 	block, err := t.bdp.GetBlock(votingBlockID)
 	if err != nil {
 		return 0, err
 	}
-	return t.voteWeight(block, blockVotedOn)
+	return t.voteWeight(ctx, block, blockVotedOn)
 }
 
 // Persist saves the current tortoise state to the database
@@ -548,7 +575,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	}
 
 	calcWeightedVote := func(block *types.Block, votedOn types.BlockID, baseVote vec) (vec, error) {
-		weight, err := t.voteWeight(block, votedOn)
+		weight, err := t.voteWeight(ctx, block, votedOn)
 		if err != nil {
 			return baseVote, fmt.Errorf("error processing block %v in block %v for diff list: %w", votedOn, block.ID(), err)
 		}
@@ -1097,7 +1124,7 @@ func (t *turtle) sumVotesForBlock(
 			}
 
 			// get vote weight
-			weight, err := t.voteWeightByID(votingBlockID, blockID)
+			weight, err := t.voteWeightByID(ctx, votingBlockID, blockID)
 			if err != nil {
 				return sum, fmt.Errorf("error getting vote weight for block %v: %w", votingBlockID, err)
 			}
