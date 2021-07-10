@@ -195,7 +195,7 @@ func New(
 
 // Start starts listening for layers and outputs.
 func (tb *TortoiseBeacon) Start(ctx context.Context) error {
-	tb.Log.Info("Starting %v with the following config: %+v", protoName, tb.config)
+	tb.Log.Info("starting %v with the following config: %+v", protoName, tb.config)
 
 	tb.initGenesisBeacons()
 
@@ -230,7 +230,7 @@ func (tb *TortoiseBeacon) initGenesisBeacons() {
 
 		if tb.tortoiseBeaconDB != nil {
 			if err := tb.tortoiseBeaconDB.SetTortoiseBeacon(epoch, genesisBeacon); err != nil {
-				tb.Log.With().Error("Failed to write tortoise beacon to DB",
+				tb.Log.With().Error("failed to write tortoise beacon to database",
 					log.Uint64("epoch_id", uint64(epoch)),
 					log.String("beacon", genesisBeacon.String()))
 			}
@@ -240,7 +240,7 @@ func (tb *TortoiseBeacon) initGenesisBeacons() {
 
 // Close closes TortoiseBeacon.
 func (tb *TortoiseBeacon) Close() error {
-	tb.Log.Info("Closing %v", protoName)
+	tb.Log.Info("closing %v", protoName)
 	tb.Closer.Close()
 	tb.backgroundWG.Wait() // Wait until background goroutines finish
 	tb.clock.Unsubscribe(tb.layerTicker)
@@ -308,14 +308,14 @@ func (tb *TortoiseBeacon) epochIsOutdated(epoch types.EpochID) bool {
 
 // listens to new layers.
 func (tb *TortoiseBeacon) listenLayers(ctx context.Context) {
-	tb.Log.With().Info("Starting listening layers")
+	tb.Log.With().Info("starting listening layers")
 
 	for {
 		select {
 		case <-tb.CloseChannel():
 			return
 		case layer := <-tb.layerTicker:
-			tb.Log.With().Debug("Received tick",
+			tb.Log.With().Debug("received tick",
 				log.Uint64("layer", uint64(layer)))
 
 			go tb.handleLayer(ctx, layer)
@@ -328,7 +328,7 @@ func (tb *TortoiseBeacon) listenLayers(ctx context.Context) {
 func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) {
 	tb.layerMu.Lock()
 	if layer > tb.lastLayer {
-		tb.Log.With().Debug("Updating layer",
+		tb.Log.With().Debug("updating layer",
 			log.Uint64("old_value", uint64(tb.lastLayer)),
 			log.Uint64("new_value", uint64(layer)))
 
@@ -347,7 +347,7 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 		return
 	}
 
-	tb.Log.With().Debug("Layer is first in epoch, proceeding",
+	tb.Log.With().Debug("layer is first in epoch, proceeding",
 		log.Uint64("layer", uint64(layer)))
 
 	tb.seenEpochsMu.Lock()
@@ -381,11 +381,11 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 		return
 	}
 
-	tb.Log.With().Info("Handling epoch",
+	tb.Log.With().Info("handling epoch",
 		log.Uint64("epoch_id", uint64(epoch)))
 
 	if err := tb.runProposalPhase(ctx, epoch); err != nil {
-		tb.Log.With().Error("Failed to send proposal",
+		tb.Log.With().Error("failed to send proposal",
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.Err(err))
 
@@ -393,7 +393,7 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	}
 
 	if err := tb.runConsensusPhase(ctx, epoch); err != nil {
-		tb.Log.With().Error("Failed to run consensus phase",
+		tb.Log.With().Error("failed to run consensus phase",
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.Err(err))
 
@@ -403,17 +403,17 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	// K rounds passed
 	// After K rounds had passed, tally up votes for proposals using simple tortoise vote counting
 	if err := tb.calcBeacon(epoch); err != nil {
-		tb.Log.With().Error("Failed to calculate beacon",
+		tb.Log.With().Error("failed to calculate beacon",
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.Err(err))
 	}
 
-	tb.Log.With().Debug("Finished handling epoch",
+	tb.Log.With().Debug("finished handling epoch",
 		log.Uint64("epoch_id", uint64(epoch)))
 }
 
 func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.EpochID) error {
-	tb.Log.With().Debug("Starting proposal phase",
+	tb.Log.With().Debug("starting proposal phase",
 		log.Uint64("epoch_id", uint64(epoch)))
 
 	proposalPhaseTimer := time.NewTimer(tb.proposalDuration + tb.gracePeriodDuration)
@@ -423,16 +423,16 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 		ctx, cancel := context.WithTimeout(ctx, tb.proposalDuration)
 		defer cancel()
 
-		tb.Log.With().Debug("Starting proposal message sender",
+		tb.Log.With().Debug("starting proposal message sender",
 			log.Uint64("epoch_id", uint64(epoch)))
 
 		if err := tb.proposalPhaseImpl(ctx, epoch); err != nil {
-			tb.Log.With().Error("Failed to send proposal message",
+			tb.Log.With().Error("failed to send proposal message",
 				log.Uint64("epoch_id", uint64(epoch)),
 				log.Err(err))
 		}
 
-		tb.Log.With().Debug("Proposal message sender finished",
+		tb.Log.With().Debug("proposal message sender finished",
 			log.Uint64("epoch_id", uint64(epoch)))
 	}()
 
@@ -444,7 +444,7 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 	case <-proposalPhaseTimer.C:
 		tb.markProposalPhaseFinished(epoch)
 
-		tb.Log.With().Debug("Proposal phase finished",
+		tb.Log.With().Debug("proposal phase finished",
 			log.Uint64("epoch_id", uint64(epoch)))
 
 		return nil
@@ -457,7 +457,7 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 		return fmt.Errorf("calculate signed proposal: %w", err)
 	}
 
-	tb.Log.With().Debug("Calculated proposal signature",
+	tb.Log.With().Debug("calculated proposal signature",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.String("signature", util.Bytes2Hex(proposedSignature)))
 
@@ -472,7 +472,7 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 	}
 
 	if !passes {
-		tb.Log.With().Debug("Proposal to be sent doesn't pass threshold",
+		tb.Log.With().Debug("proposal to be sent doesn't pass threshold",
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.String("proposal", util.Bytes2Hex(proposedSignature)),
 			log.Uint64("weight", epochWeight))
@@ -480,7 +480,7 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 		return nil
 	}
 
-	tb.Log.With().Debug("Proposal to be sent passes threshold",
+	tb.Log.With().Debug("proposal to be sent passes threshold",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.String("proposal", util.Bytes2Hex(proposedSignature)),
 		log.Uint64("weight", epochWeight))
@@ -491,7 +491,7 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 		VRFSignature: proposedSignature,
 	}
 
-	tb.Log.With().Debug("Going to send proposal",
+	tb.Log.With().Debug("sending proposal",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.String("message", m.String()))
 
@@ -499,7 +499,7 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 		return fmt.Errorf("broadcast proposal message: %w", err)
 	}
 
-	tb.Log.With().Info("Sent proposal",
+	tb.Log.With().Info("sent proposal",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.String("message", m.String()))
 
@@ -517,23 +517,23 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 }
 
 func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.EpochID) error {
-	tb.Log.With().Debug("Starting consensus phase",
+	tb.Log.With().Debug("starting consensus phase",
 		log.Uint64("epoch_id", uint64(epoch)))
 
 	firstVoteCtx, cancel := context.WithTimeout(ctx, tb.firstVotingRoundDuration)
 	defer cancel()
 
 	go func() {
-		tb.Log.With().Debug("Starting first voting message sender",
+		tb.Log.With().Debug("starting first voting message sender",
 			log.Uint64("epoch_id", uint64(epoch)))
 
 		if err := tb.sendVotes(firstVoteCtx, epoch, firstRound); err != nil {
-			tb.Log.With().Error("Failed to send first voting message",
+			tb.Log.With().Error("failed to send first voting message",
 				log.Uint64("epoch_id", uint64(epoch)),
 				log.Err(err))
 		}
 
-		tb.Log.With().Debug("First voting message sender finished",
+		tb.Log.With().Debug("first voting message sender finished",
 			log.Uint64("epoch_id", uint64(epoch)))
 	}()
 
@@ -546,7 +546,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		break
 	}
 
-	tb.Log.With().Debug("Starting following voting message sender",
+	tb.Log.With().Debug("starting following voting message sender",
 		log.Uint64("epoch_id", uint64(epoch)))
 
 	// For K rounds: In each round that lasts δ, wait for proposals to come in.
@@ -569,13 +569,13 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		}
 	}
 
-	tb.Log.With().Debug("Following voting message sender finished",
+	tb.Log.With().Debug("following voting message sender finished",
 		log.Uint64("epoch_id", uint64(epoch)))
 
 	tb.waitAfterLastRoundStarted()
 	tb.weakCoin.OnRoundFinished(epoch, tb.lastPossibleRound())
 
-	tb.Log.With().Debug("Consensus phase finished",
+	tb.Log.With().Debug("consensus phase finished",
 		log.Uint64("epoch_id", uint64(epoch)))
 
 	return nil
@@ -597,7 +597,7 @@ func (tb *TortoiseBeacon) receivedBeforeProposalPhaseFinished(epoch types.EpochI
 }
 
 func (tb *TortoiseBeacon) sendFollowingVotesLoopIteration(ctx context.Context, epoch types.EpochID, round types.RoundID) {
-	tb.Log.With().Debug("Going to handle voting round",
+	tb.Log.With().Debug("handling voting round",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round_id", uint64(round)))
 
@@ -607,7 +607,7 @@ func (tb *TortoiseBeacon) sendFollowingVotesLoopIteration(ctx context.Context, e
 		}
 
 		if err := tb.sendVotes(ctx, epoch, round); err != nil {
-			tb.Log.With().Error("Failed to send voting messages",
+			tb.Log.With().Error("failed to send voting messages",
 				log.Uint64("epoch_id", uint64(epoch)),
 				log.Uint64("round", uint64(round)),
 				log.Err(err))
@@ -632,7 +632,7 @@ func (tb *TortoiseBeacon) sendFollowingVotesLoopIteration(ctx context.Context, e
 		// TODO(nkryuchkov):
 		// should be published only after we should have received them
 		if err := tb.weakCoin.PublishProposal(ctx, epoch, round); err != nil {
-			tb.Log.With().Error("Failed to publish weak coin proposal",
+			tb.Log.With().Error("failed to publish weak coin proposal",
 				log.Uint64("epoch_id", uint64(epoch)),
 				log.Uint64("round", uint64(round)),
 				log.Err(err))
@@ -696,7 +696,7 @@ func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 		Signature:              sig,
 	}
 
-	tb.Log.With().Debug("Going to send first round vote",
+	tb.Log.With().Debug("sending first round vote",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round", uint64(1)),
 		log.String("message", m.String()))
@@ -728,7 +728,7 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 		Signature:                  sig,
 	}
 
-	tb.Log.With().Debug("Going to send following round vote",
+	tb.Log.With().Debug("sending following round vote",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round", uint64(round)),
 		log.String("message", m.String()))
@@ -861,7 +861,7 @@ func (tb *TortoiseBeacon) getSignedProposal(epoch types.EpochID) ([]byte, error)
 	}
 
 	signature := tb.vrfSigner.Sign(p)
-	tb.Log.With().Debug("Calculated signature",
+	tb.Log.With().Debug("calculated signature",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.String("proposal", util.Bytes2Hex(p)),
 		log.String("signature", util.Bytes2Hex(signature)))
@@ -916,7 +916,7 @@ func (tb *TortoiseBeacon) proposalPassesEligibilityThreshold(proposal []byte, ep
 		return false, fmt.Errorf("atxThreshold: %w", err)
 	}
 
-	tb.Log.With().Debug("Checking proposal for ATX threshold",
+	tb.Log.With().Debug("checking proposal for atx threshold",
 		log.String("proposal", proposalInt.String()),
 		log.String("threshold", threshold.String()))
 
