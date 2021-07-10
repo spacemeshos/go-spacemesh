@@ -105,9 +105,15 @@ func NewMsgServer(ctx context.Context, network Service, name string, requestLife
 
 // Close stops the MessageServer
 func (p *MessageServer) Close() {
-	close(p.exit)
-	<-p.closed
-	p.workerCount.Wait()
+	select {
+	case <-p.exit:
+		// channel already closed
+		// (since nothing is ever sent on this channel)
+	default:
+		close(p.exit)
+		<-p.closed
+		p.workerCount.Wait()
+	}
 }
 
 // readLoop reads incoming messages and matches them to requests or responses.
