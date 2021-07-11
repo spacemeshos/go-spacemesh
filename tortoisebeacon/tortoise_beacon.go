@@ -371,10 +371,12 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 		log.Uint64("epoch_id", uint64(epoch)))
 
 	epochStartTimer := time.NewTimer(tb.proposalDuration + tb.gracePeriodDuration)
-	defer epochStartTimer.Stop()
 
 	select {
 	case <-tb.CloseChannel():
+		if !epochStartTimer.Stop() {
+			<-epochStartTimer.C
+		}
 	case <-epochStartTimer.C:
 		tb.handleEpoch(ctx, epoch)
 	}

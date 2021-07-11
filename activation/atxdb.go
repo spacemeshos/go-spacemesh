@@ -636,11 +636,6 @@ func (db *DB) GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID, erro
 		}
 		weight += atxHeader.GetWeight()
 	}
-
-	if weight == 0 {
-		weight = 1
-	}
-
 	return weight, activeSet, nil
 }
 
