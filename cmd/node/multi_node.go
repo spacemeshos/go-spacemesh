@@ -134,7 +134,7 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 		return nil
 	}
 
-	cfg.POST = activation.DefaultPoSTConfig()
+	cfg.POST = activation.DefaultPostConfig()
 	cfg.POST.LabelsPerUnit = 1 << 10
 	cfg.POST.BitsPerLabel = 8
 

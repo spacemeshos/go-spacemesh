@@ -194,7 +194,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.VotesLimit, "tortoise-beacon-votes-limit",
 		config.TortoiseBeacon.VotesLimit, "Maximum allowed number of votes to be sent")
 
-	/**======================== PoST Flags ========================== **/
+	/**======================== Post Flags ========================== **/
 
 	// TODO(moshababo): add usage desc
 

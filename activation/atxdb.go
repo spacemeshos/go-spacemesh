@@ -71,7 +71,7 @@ type DB struct {
 	meshDb          *mesh.DB
 	LayersPerEpoch  uint16
 	goldenATXID     types.ATXID
-	nipostValidator NIPoSTValidator
+	nipostValidator NIPostValidator
 	log             log.Log
 	processAtxMutex sync.Mutex
 	atxChannels     map[types.ATXID]*atxChan
@@ -79,7 +79,7 @@ type DB struct {
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
 // their validity
-func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint16, goldenATXID types.ATXID, nipostValidator NIPoSTValidator, log log.Log) *DB {
+func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint16, goldenATXID types.ATXID, nipostValidator NIPostValidator, log log.Log) *DB {
 	db := &DB{
 		idStore:         idStore,
 		atxs:            dbStore,
@@ -257,10 +257,10 @@ func (db *DB) GetMinerWeightsInEpochFromView(targetEpoch types.EpochID, view map
 //   than the current ATX's sequence number.
 // - If the sequence number is zero: PrevATX is empty.
 // - Positioning ATX points to a syntactically valid ATX.
-// - NIPoST challenge is a hash of the serialization of the following fields:
+// - NIPost challenge is a hash of the serialization of the following fields:
 //   NodeID, SequenceNumber, PrevATXID, LayerID, StartTick, PositioningATX.
-// - The NIPoST is valid.
-// - ATX LayerID is NiPoSTLayerTime or less after the PositioningATX LayerID.
+// - The NIPost is valid.
+// - ATX LayerID is NIPostLayerTime or less after the PositioningATX LayerID.
 // - The ATX view of the previous epoch contains ActiveSetSize activations.
 func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	events.ReportNewActivation(atx)
@@ -304,36 +304,36 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 			return fmt.Errorf("sequence number is not one more than prev sequence number")
 		}
 
-		if atx.InitialPoST != nil {
-			return fmt.Errorf("prevATX declared, but initial PoST is included")
+		if atx.InitialPost != nil {
+			return fmt.Errorf("prevATX declared, but initial Post is included")
 		}
 
-		if atx.InitialPoSTIndices != nil {
-			return fmt.Errorf("prevATX declared, but initial PoST indices is included in challenge")
+		if atx.InitialPostIndices != nil {
+			return fmt.Errorf("prevATX declared, but initial Post indices is included in challenge")
 		}
 	} else {
 		if atx.Sequence != 0 {
 			return fmt.Errorf("no prevATX declared, but sequence number not zero")
 		}
 
-		if atx.InitialPoST == nil {
-			return fmt.Errorf("no prevATX declared, but initial PoST is not included")
+		if atx.InitialPost == nil {
+			return fmt.Errorf("no prevATX declared, but initial Post is not included")
 		}
 
-		if atx.InitialPoSTIndices == nil {
-			return fmt.Errorf("no prevATX declared, but initial PoST indices is not included in challenge")
+		if atx.InitialPostIndices == nil {
+			return fmt.Errorf("no prevATX declared, but initial Post indices is not included in challenge")
 		}
 
-		if !bytes.Equal(atx.InitialPoST.Indices, atx.InitialPoSTIndices) {
-			return errors.New("initial PoST indices included in challenge does not equal to the initial PoST indices included in the atx")
+		if !bytes.Equal(atx.InitialPost.Indices, atx.InitialPostIndices) {
+			return errors.New("initial Post indices included in challenge does not equal to the initial Post indices included in the atx")
 		}
 
-		// Use the NIPoST's PoST metadata, while overriding the challenge to a zero challenge,
-		// as expected from the initial PoST.
-		initialPoSTMetadata := *atx.NIPoST.PoSTMetadata
-		initialPoSTMetadata.Challenge = shared.ZeroChallenge
-		if err := db.nipostValidator.ValidatePoST(pub.Bytes(), atx.InitialPoST, &initialPoSTMetadata, atx.NumUnits); err != nil {
-			return fmt.Errorf("invalid initial PoST: %v", err)
+		// Use the NIPost's Post metadata, while overriding the challenge to a zero challenge,
+		// as expected from the initial Post.
+		initialPostMetadata := *atx.NIPost.PostMetadata
+		initialPostMetadata.Challenge = shared.ZeroChallenge
+		if err := db.nipostValidator.ValidatePost(pub.Bytes(), atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
+			return fmt.Errorf("invalid initial Post: %v", err)
 		}
 	}
 
@@ -357,16 +357,16 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		}
 	}
 
-	expectedChallengeHash, err := atx.NIPoSTChallenge.Hash()
+	expectedChallengeHash, err := atx.NIPostChallenge.Hash()
 	if err != nil {
-		return fmt.Errorf("failed to compute NIPoST's expected challenge hash: %v", err)
+		return fmt.Errorf("failed to compute NIPost's expected challenge hash: %v", err)
 	}
 
-	db.log.With().Info("Validating NIPoST", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
+	db.log.With().Info("Validating NIPost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
 	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeID.Key))
-	if err = db.nipostValidator.Validate(*pubKey, atx.NIPoST, *expectedChallengeHash, atx.NumUnits); err != nil {
-		return fmt.Errorf("invalid NIPoST: %v", err)
+	if err = db.nipostValidator.Validate(*pubKey, atx.NIPost, *expectedChallengeHash, atx.NumUnits); err != nil {
+		return fmt.Errorf("invalid NIPost: %v", err)
 	}
 
 	return nil
@@ -739,7 +739,7 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 
 	logger.With().Info("got new atx", atx.Fields(len(data))...)
 
-	if atx.NIPoST == nil {
+	if atx.NIPost == nil {
 		return fmt.Errorf("nil nipst in gossip for atx %s", atx.ShortString())
 	}
 

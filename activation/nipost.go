@@ -22,7 +22,7 @@ type PoetProvingServiceClient interface {
 type builderState struct {
 	Challenge types.Hash32
 
-	NIPoST *types.NIPoST
+	NIPost *types.NIPost
 
 	// PoetRound is the round of the PoET proving service in which the PoET challenge was included in.
 	PoetRound *types.PoetRound
@@ -38,42 +38,42 @@ func nipostBuildStateKey() []byte {
 	return []byte("nipstate")
 }
 
-func (nb *NIPoSTBuilder) load(challenge types.Hash32) {
+func (nb *NIPostBuilder) load(challenge types.Hash32) {
 	bts, err := nb.store.Get(nipostBuildStateKey())
 	if err != nil {
-		nb.log.Warning("cannot load NIPoST state %v", err)
+		nb.log.Warning("cannot load NIPost state %v", err)
 		return
 	}
 	if len(bts) > 0 {
 		var state builderState
 		err = types.BytesToInterface(bts, &state)
 		if err != nil {
-			nb.log.Error("cannot load NIPoST state %v", err)
+			nb.log.Error("cannot load NIPost state %v", err)
 		}
 		if state.Challenge == challenge {
 			nb.state = &state
 		} else {
-			nb.state = &builderState{Challenge: challenge, NIPoST: &types.NIPoST{}}
+			nb.state = &builderState{Challenge: challenge, NIPost: &types.NIPost{}}
 		}
 	}
 }
 
-func (nb *NIPoSTBuilder) persist() {
+func (nb *NIPostBuilder) persist() {
 	bts, err := types.InterfaceToBytes(&nb.state)
 	if err != nil {
-		nb.log.Warning("cannot store NIPoST state %v", err)
+		nb.log.Warning("cannot store NIPost state %v", err)
 		return
 	}
 	err = nb.store.Put(nipostBuildStateKey(), bts)
 	if err != nil {
-		nb.log.Warning("cannot store NIPoST state %v", err)
+		nb.log.Warning("cannot store NIPost state %v", err)
 	}
 }
 
-// NIPoSTBuilder holds the required state and dependencies to create Non-Interactive Proofs of Space-Time (NIPoST).
-type NIPoSTBuilder struct {
+// NIPostBuilder holds the required state and dependencies to create Non-Interactive Proofs of Space-Time (NIPost).
+type NIPostBuilder struct {
 	minerID           []byte
-	postSetupProvider PoSTSetupProvider
+	postSetupProvider PostSetupProvider
 	poetProver        PoetProvingServiceClient
 	poetDB            poetDbAPI
 	errChan           chan error
@@ -88,38 +88,38 @@ type poetDbAPI interface {
 	UnsubscribeFromProofRef(poetID []byte, roundID string)
 }
 
-// NewNIPoSTBuilder returns a NIPoSTBuilder.
-func NewNIPoSTBuilder(
+// NewNIPostBuilder returns a NIPostBuilder.
+func NewNIPostBuilder(
 	minerID []byte,
-	postSetupProvider PoSTSetupProvider,
+	postSetupProvider PostSetupProvider,
 	poetProver PoetProvingServiceClient,
 	poetDB poetDbAPI,
 	store bytesStore,
 	log log.Log,
-) *NIPoSTBuilder {
-	return &NIPoSTBuilder{
+) *NIPostBuilder {
+	return &NIPostBuilder{
 		minerID:           minerID,
 		postSetupProvider: postSetupProvider,
 		poetProver:        poetProver,
 		poetDB:            poetDB,
 		errChan:           make(chan error),
-		state:             &builderState{NIPoST: &types.NIPoST{}},
+		state:             &builderState{NIPost: &types.NIPost{}},
 		store:             store,
 		log:               log,
 	}
 }
 
-// BuildNIPoST uses the given challenge to build a NIPoST. "atxExpired" and "stop" are channels for early termination of
+// BuildNIPost uses the given challenge to build a NIPost. "atxExpired" and "stop" are channels for early termination of
 // the building process. The process can take considerable time, because it includes waiting for the poet service to
 // publish a proof - a process that takes about an epoch.
-func (nb *NIPoSTBuilder) BuildNIPoST(challenge *types.Hash32, atxExpired, stop chan struct{}) (*types.NIPoST, error) {
+func (nb *NIPostBuilder) BuildNIPost(challenge *types.Hash32, atxExpired, stop chan struct{}) (*types.NIPost, error) {
 	nb.load(*challenge)
 
-	if s := nb.postSetupProvider.Status(); s.State != PoSTSetupStateComplete {
-		return nil, errors.New("PoST setup not complete")
+	if s := nb.postSetupProvider.Status(); s.State != PostSetupStateComplete {
+		return nil, errors.New("Post setup not complete")
 	}
 
-	nipost := nb.state.NIPoST
+	nipost := nb.state.NIPost
 
 	// Phase 0: Submit challenge to PoET service.
 	if nb.state.PoetRound == nil {
@@ -173,44 +173,43 @@ func (nb *NIPoSTBuilder) BuildNIPoST(challenge *types.Hash32, atxExpired, stop c
 		nb.persist()
 	}
 
-	// Phase 2: PoST execution.
-	if nipost.PoST == nil {
-		nb.log.With().Info("starting PoST execution",
+	// Phase 2: Post execution.
+	if nipost.Post == nil {
+		nb.log.With().Info("starting Post execution",
 			log.String("challenge", fmt.Sprintf("%x", nb.state.PoetProofRef)))
 		startTime := time.Now()
 		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(nb.state.PoetProofRef)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute PoST: %v", err)
+			return nil, fmt.Errorf("failed to execute Post: %v", err)
 		}
 
-		nb.log.With().Info("finished PoST execution",
+		nb.log.With().Info("finished Post execution",
 			log.String("duration", time.Now().Sub(startTime).String()))
 
-		nipost.PoST = proof
+		nipost.Post = proof
+		nipost.PostMetadata = proofMetadata
 
-		//proofMetadata.ID = nil // ID doesn't need to be included when metadata is embedded inside ATX.
-		nipost.PoSTMetadata = proofMetadata
 		nb.persist()
 	}
 
-	nb.log.Info("finished NIPoST construction")
+	nb.log.Info("finished NIPost construction")
 
 	nb.state = &builderState{
-		NIPoST: &types.NIPoST{},
+		NIPost: &types.NIPost{},
 	}
 	nb.persist()
 	return nipost, nil
 }
 
-// NewNIPoSTWithChallenge is a convenience method FOR TESTS ONLY. TODO: move this out of production code.
-func NewNIPoSTWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPoST {
-	return &types.NIPoST{
+// NewNIPostWithChallenge is a convenience method FOR TESTS ONLY. TODO: move this out of production code.
+func NewNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
+	return &types.NIPost{
 		Challenge: challenge,
-		PoST: &types.PoST{
+		Post: &types.Post{
 			Nonce:   0,
 			Indices: []byte(nil),
 		},
-		PoSTMetadata: &types.PoSTMetadata{
+		PostMetadata: &types.PostMetadata{
 			Challenge: poetRef,
 		},
 	}

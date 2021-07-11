@@ -15,8 +15,8 @@ type NetworkAPI interface {
 	SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey)
 }
 
-// PoSTSetupAPI is an alias to PoSTSetupProvider.
-type PoSTSetupAPI = activation.PoSTSetupProvider
+// PostSetupAPI is an alias to PostSetupProvider.
+type PostSetupAPI = activation.PostSetupProvider
 
 // SmeshingAPI is an alias to SmeshingProvider.
 type SmeshingAPI = activation.SmeshingProvider

@@ -1,5 +1,5 @@
 // Package activation is responsible for creating activation transactions and running the mining flow, coordinating
-// PoST building, sending proofs to PoET and building NIPoST structs.
+// Post building, sending proofs to PoET and building NIPost structs.
 package activation
 
 import (
@@ -37,7 +37,7 @@ func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
 }
 
 type nipostBuilder interface {
-	BuildNIPoST(challenge *types.Hash32, timeout chan struct{}, stop chan struct{}) (*types.NIPoST, error)
+	BuildNIPost(challenge *types.Hash32, timeout chan struct{}, stop chan struct{}) (*types.NIPost, error)
 }
 
 type idStore interface {
@@ -45,9 +45,9 @@ type idStore interface {
 	GetIdentity(id string) (types.NodeID, error)
 }
 
-type NIPoSTValidator interface {
-	Validate(id signing.PublicKey, NIPoST *types.NIPoST, expectedChallenge types.Hash32, numUnits uint) error
-	ValidatePoST(id []byte, PoST *types.PoST, PoSTMetadata *types.PoSTMetadata, numUnits uint) error
+type NIPostValidator interface {
+	Validate(id signing.PublicKey, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint) error
+	ValidatePost(id []byte, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint) error
 }
 
 type atxDBProvider interface {
@@ -80,7 +80,7 @@ type syncer interface {
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
 	Smeshing() bool
-	StartSmeshing(ctx context.Context, coinbase types.Address, opts PoSTSetupOpts) error
+	StartSmeshing(ctx context.Context, coinbase types.Address, opts PostSetupOpts) error
 	StopSmeshing(deleteFiles bool) error
 	SmesherID() types.NodeID
 	Coinbase() types.Address
@@ -122,9 +122,9 @@ type Builder struct {
 	mesh              meshProvider
 	tickProvider      poetNumberOfTickProvider
 	nipostBuilder     nipostBuilder
-	postSetupProvider PoSTSetupProvider
-	challenge         *types.NIPoSTChallenge
-	initialPoST       *types.PoST
+	postSetupProvider PostSetupProvider
+	challenge         *types.NIPostChallenge
+	initialPost       *types.Post
 	layerClock        layerClock
 	stop              chan struct{}
 	status            SmeshingStatus
@@ -136,7 +136,7 @@ type Builder struct {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(cfg Config, nodeID types.NodeID, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipostBuilder nipostBuilder, postSetupProvider PoSTSetupProvider, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
+func NewBuilder(cfg Config, nodeID types.NodeID, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
 	return &Builder{
 		signer:            signer,
 		nodeID:            nodeID,
@@ -170,7 +170,7 @@ func (b *Builder) Smeshing() bool {
 // If the post data is incomplete or missing, data creation
 // session will be preceded. Changing of the post potions (e.g., number of labels),
 // after initial setup, is supported.
-func (b *Builder) StartSmeshing(ctx context.Context, coinbase types.Address, opts PoSTSetupOpts) error {
+func (b *Builder) StartSmeshing(ctx context.Context, coinbase types.Address, opts PostSetupOpts) error {
 	b.mtx.Lock()
 	if b.status != SmeshingStatusIdle {
 		b.mtx.Unlock()
@@ -183,14 +183,14 @@ func (b *Builder) StartSmeshing(ctx context.Context, coinbase types.Address, opt
 	doneChan, err := b.postSetupProvider.StartSession(opts)
 	if err != nil {
 		b.status = SmeshingStatusIdle
-		return fmt.Errorf("failed to start PoST setup session: %v", err)
+		return fmt.Errorf("failed to start Post setup session: %v", err)
 	}
 
 	go func() {
 		<-doneChan
-		if s := b.postSetupProvider.Status(); s.State != PoSTSetupStateComplete {
+		if s := b.postSetupProvider.Status(); s.State != PostSetupStateComplete {
 			b.status = SmeshingStatusIdle
-			b.log.Error("failed to complete PoST setup: %v", b.postSetupProvider.LastError())
+			b.log.Error("failed to complete Post setup: %v", b.postSetupProvider.LastError())
 			return
 		}
 
@@ -255,9 +255,9 @@ func (b *Builder) loop(ctx context.Context) {
 	// Once initialized, run the execution phase with zero-challenge,
 	// to create the initial proof (the commitment).
 	// TODO(moshababo): don't generate the commitment every time smeshing is starting, but once only.
-	b.initialPoST, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
+	b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
 	if err != nil {
-		b.log.Error("PoST execution failed: %v", err)
+		b.log.Error("Post execution failed: %v", err)
 		b.status = SmeshingStatusIdle
 		return
 	}
@@ -293,11 +293,11 @@ func (b *Builder) loop(ctx context.Context) {
 	}
 }
 
-func (b *Builder) buildNIPoSTChallenge(ctx context.Context) error {
+func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 	syncedCh := make(chan struct{})
 	b.syncer.RegisterChForSynced(ctx, syncedCh)
 	<-syncedCh
-	challenge := &types.NIPoSTChallenge{NodeID: b.nodeID}
+	challenge := &types.NIPostChallenge{NodeID: b.nodeID}
 	atxID, pubLayerID, endTick, err := b.GetPositioningAtxInfo()
 	if err != nil {
 		return fmt.Errorf("failed to get positioning ATX: %v", err)
@@ -307,7 +307,7 @@ func (b *Builder) buildNIPoSTChallenge(ctx context.Context) error {
 	challenge.StartTick = endTick
 	challenge.EndTick = endTick + b.tickProvider.NumOfTicks()
 	if prevAtx, err := b.GetPrevAtx(b.nodeID); err != nil {
-		challenge.InitialPoSTIndices = b.initialPoST.Indices
+		challenge.InitialPostIndices = b.initialPost.Indices
 	} else {
 		challenge.PrevATXID = prevAtx.ID()
 		challenge.Sequence = prevAtx.Sequence + 1
@@ -345,25 +345,25 @@ func (b *Builder) SetMinGas(value uint64) {
 	panic("not implemented")
 }
 
-func (b *Builder) getNIPoSTKey() []byte {
-	return []byte("NIPoST")
+func (b *Builder) getNIPostKey() []byte {
+	return []byte("NIPost")
 }
 
-func (b *Builder) storeChallenge(ch *types.NIPoSTChallenge) error {
+func (b *Builder) storeChallenge(ch *types.NIPostChallenge) error {
 	bts, err := types.InterfaceToBytes(ch)
 	if err != nil {
 		return err
 	}
-	return b.store.Put(b.getNIPoSTKey(), bts)
+	return b.store.Put(b.getNIPostKey(), bts)
 }
 
 func (b *Builder) loadChallenge() error {
-	bts, err := b.store.Get(b.getNIPoSTKey())
+	bts, err := b.store.Get(b.getNIPostKey())
 	if err != nil {
 		return err
 	}
 	if len(bts) > 0 {
-		tp := &types.NIPoSTChallenge{}
+		tp := &types.NIPostChallenge{}
 		err = types.BytesToInterface(bts, tp)
 		if err != nil {
 			return err
@@ -380,7 +380,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		b.log.With().Info("using existing atx challenge", b.currentEpoch())
 	} else {
 		b.log.With().Info("building new atx challenge", b.currentEpoch())
-		err := b.buildNIPoSTChallenge(ctx)
+		err := b.buildNIPostChallenge(ctx)
 		if err != nil {
 			b.log.With().Error("failed to build new atx challenge", log.Err(err))
 			return err
@@ -402,7 +402,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 
 	b.log.With().Info("build NIPST")
 
-	nipost, err := b.nipostBuilder.BuildNIPoST(hash, atxExpired, b.stop)
+	nipost, err := b.nipostBuilder.BuildNIPost(hash, atxExpired, b.stop)
 	if err != nil {
 		if _, stopRequested := err.(StopRequestedError); stopRequested {
 			return err
@@ -436,12 +436,12 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		return err
 	}
 
-	var initialPoST *types.PoST
+	var initialPost *types.Post
 	if b.challenge.PrevATXID == *types.EmptyATXID {
-		initialPoST = b.initialPoST
+		initialPost = b.initialPost
 	}
 
-	atx := types.NewActivationTx(*b.challenge, b.Coinbase(), nipost, b.postSetupProvider.LastOpts().NumUnits, initialPoST)
+	atx := types.NewActivationTx(*b.challenge, b.Coinbase(), nipost, b.postSetupProvider.LastOpts().NumUnits, initialPost)
 
 	atxReceived := b.db.AwaitAtx(atx.ID())
 	defer b.db.UnsubscribeAtx(atx.ID())
@@ -483,8 +483,8 @@ func (b *Builder) currentEpoch() types.EpochID {
 
 func (b *Builder) discardChallenge() {
 	b.challenge = nil
-	if err := b.store.Put(b.getNIPoSTKey(), []byte{}); err != nil {
-		b.log.Error("failed to discard NIPoST challenge: %v", err)
+	if err := b.store.Put(b.getNIPostKey(), []byte{}); err != nil {
+		b.log.Error("failed to discard NIPost challenge: %v", err)
 	}
 }
 

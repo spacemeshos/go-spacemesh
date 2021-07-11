@@ -175,7 +175,7 @@ type SpacemeshApp struct {
 	gossipListener *service.Listener
 	clock          TickProvider
 	hare           HareService
-	postSetupMgr   *activation.PoSTSetupManager
+	postSetupMgr   *activation.PostSetupManager
 	atxBuilder     *activation.Builder
 	atxDb          *activation.DB
 	poetListener   *activation.PoetListener
@@ -627,12 +627,12 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))
 
-	postSetupMgr, err := activation.NewPoSTSetupManager(util.Hex2Bytes(nodeID.Key), app.Config.POST, app.addLogger(PostLogger, lg))
+	postSetupMgr, err := activation.NewPostSetupManager(util.Hex2Bytes(nodeID.Key), app.Config.POST, app.addLogger(PostLogger, lg))
 	if err != nil {
-		app.log.Panic("failed to create PoST setup manager: %v", err)
+		app.log.Panic("failed to create Post setup manager: %v", err)
 	}
 
-	nipostBuilder := activation.NewNIPoSTBuilder(util.Hex2Bytes(nodeID.Key), postSetupMgr, poetClient, poetDb, store, app.addLogger(NipostBuilderLogger, lg))
+	nipostBuilder := activation.NewNIPostBuilder(util.Hex2Bytes(nodeID.Key), postSetupMgr, poetClient, poetDb, store, app.addLogger(NipostBuilderLogger, lg))
 
 	coinbaseAddr := types.HexToAddress(app.Config.SMESHING.CoinbaseAccount)
 	if app.Config.SMESHING.Start {
@@ -966,7 +966,7 @@ func (app *SpacemeshApp) getIdentityFile() (string, error) {
 		return f, nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("failed to traverse PoST data dir: %v", err)
+		return "", fmt.Errorf("failed to traverse Post data dir: %v", err)
 	}
 	return "", fmt.Errorf("not found")
 }

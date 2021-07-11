@@ -44,7 +44,7 @@ type Config struct {
 	TortoiseBeacon  tortoisebeacon.Config `mapstructure:"tortoise-beacon"`
 	TIME            timeConfig.TimeConfig `mapstructure:"time"`
 	REWARD          mesh.Config           `mapstructure:"reward"`
-	POST            activation.PoSTConfig `mapstructure:"post"`
+	POST            activation.PostConfig `mapstructure:"post"`
 	SMESHING        SmeshingConfig        `mapstructure:"smeshing"`
 	LOGGING         LoggerConfig          `mapstructure:"logging"`
 	LAYERS          layerfetcher.Config   `mapstructure:"layer-fetch"`
@@ -143,7 +143,7 @@ type LoggerConfig struct {
 type SmeshingConfig struct {
 	Start           bool                     `mapstructure:"smeshing-start"`
 	CoinbaseAccount string                   `mapstructure:"smeshing-coinbase"`
-	Opts            activation.PoSTSetupOpts `mapstructure:"smeshing-opts"`
+	Opts            activation.PostSetupOpts `mapstructure:"smeshing-opts"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
@@ -157,7 +157,7 @@ func DefaultConfig() Config {
 		TortoiseBeacon:  tortoisebeacon.DefaultConfig(),
 		TIME:            timeConfig.DefaultConfig(),
 		REWARD:          mesh.DefaultMeshConfig(),
-		POST:            activation.DefaultPoSTConfig(),
+		POST:            activation.DefaultPostConfig(),
 		SMESHING:        DefaultSmeshingConfig(),
 		FETCH:           fetch.DefaultConfig(),
 		LAYERS:          layerfetcher.DefaultConfig(),
@@ -207,7 +207,7 @@ func DefaultSmeshingConfig() SmeshingConfig {
 	return SmeshingConfig{
 		Start:           false,
 		CoinbaseAccount: "",
-		Opts:            activation.DefaultPoSTSetupOpts(),
+		Opts:            activation.DefaultPostSetupOpts(),
 	}
 }
 
