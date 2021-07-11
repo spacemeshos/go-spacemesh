@@ -3,19 +3,19 @@ package blocks
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type activationDB interface {
 	GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error)
-	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
-	GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID, error)
+	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
+	GetEpochWeight(types.EpochID) (uint64, []types.ATXID, error)
 }
 
 type vrfSigner interface {
@@ -27,13 +27,12 @@ const DefaultProofsEpoch = ^types.EpochID(0)
 
 // Oracle is the oracle that provides block eligibility proofs for the miner.
 type Oracle struct {
-	committeeSize      uint32
-	genesisTotalWeight uint64
-	layersPerEpoch     uint16
-	atxDB              activationDB
-	beaconProvider     *EpochBeaconProvider
-	vrfSigner          vrfSigner
-	nodeID             types.NodeID
+	committeeSize  uint32
+	layersPerEpoch uint16
+	atxDB          activationDB
+	beaconProvider BeaconGetter
+	vrfSigner      vrfSigner
+	nodeID         types.NodeID
 
 	proofsEpoch       types.EpochID
 	epochAtxs         []types.ATXID
@@ -45,18 +44,17 @@ type Oracle struct {
 }
 
 // NewMinerBlockOracle returns a new Oracle.
-func NewMinerBlockOracle(committeeSize uint32, genesisTotalWeight uint64, layersPerEpoch uint16, atxDB activationDB, beaconProvider *EpochBeaconProvider, vrfSigner vrfSigner, nodeID types.NodeID, isSynced func() bool, log log.Log) *Oracle {
+func NewMinerBlockOracle(committeeSize uint32, layersPerEpoch uint16, atxDB activationDB, beaconProvider BeaconGetter, vrfSigner vrfSigner, nodeID types.NodeID, isSynced func() bool, log log.Log) *Oracle {
 	return &Oracle{
-		committeeSize:      committeeSize,
-		genesisTotalWeight: genesisTotalWeight,
-		layersPerEpoch:     layersPerEpoch,
-		atxDB:              atxDB,
-		beaconProvider:     beaconProvider,
-		vrfSigner:          vrfSigner,
-		nodeID:             nodeID,
-		proofsEpoch:        DefaultProofsEpoch,
-		isSynced:           isSynced,
-		log:                log,
+		committeeSize:  committeeSize,
+		layersPerEpoch: layersPerEpoch,
+		atxDB:          atxDB,
+		beaconProvider: beaconProvider,
+		vrfSigner:      vrfSigner,
+		nodeID:         nodeID,
+		proofsEpoch:    DefaultProofsEpoch,
+		isSynced:       isSynced,
+		log:            log,
 	}
 }
 
@@ -102,7 +100,18 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 }
 
 func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.LayerID][]types.BlockEligibilityProof, error) {
-	epochBeacon := bo.beaconProvider.GetBeacon(epochNumber)
+	epochBeacon, err := bo.beaconProvider.GetBeacon(epochNumber)
+	if err != nil {
+		bo.log.With().Error("Failed to get beacon",
+			log.Uint64("epoch_id", uint64(epochNumber)),
+			log.Err(err))
+
+		return nil, err
+	}
+
+	bo.log.With().Info("Got beacon",
+		log.Uint64("epoch_id", uint64(epochNumber)),
+		log.Err(err))
 
 	var weight uint64
 	// get the previous epoch's total weight
@@ -125,12 +134,6 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 	bo.log.With().Debug("calculating eligibility",
 		epochNumber,
 		log.String("epoch_beacon", fmt.Sprint(epochBeacon)))
-
-	if epochNumber.IsGenesis() { // TODO: This should never happen - should we panic or print an error maybe?
-		weight, totalWeight = 1024, bo.genesisTotalWeight // TODO: replace 1024 with configured weight
-		bo.log.With().Info("genesis epoch detected, using GenesisTotalWeight",
-			log.Uint64("total_weight", totalWeight))
-	}
 
 	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(weight, totalWeight, bo.committeeSize, bo.layersPerEpoch)
 	if err != nil {
@@ -186,7 +189,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 func (bo *Oracle) getValidAtxForEpoch(validForEpoch types.EpochID) (*types.ActivationTxHeader, error) {
 	atxID, err := bo.getATXIDForEpoch(validForEpoch - 1)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get atx id for target epoch %v: %v", validForEpoch, err)
+		return nil, fmt.Errorf("failed to get atx id for target epoch %v: %w", validForEpoch, err)
 	}
 	atx, err := bo.atxDB.GetAtxHeader(atxID)
 	if err != nil {
@@ -216,7 +219,7 @@ func getNumberOfEligibleBlocks(weight, totalWeight uint64, committeeSize uint32,
 func (bo *Oracle) getATXIDForEpoch(targetEpoch types.EpochID) (types.ATXID, error) {
 	latestATXID, err := bo.atxDB.GetNodeAtxIDForEpoch(bo.nodeID, targetEpoch)
 	if err != nil {
-		bo.log.With().Info("did not find atx ids for node",
+		bo.log.With().Warning("did not find atx ids for node",
 			log.FieldNamed("atx_node_id", bo.nodeID),
 			log.Err(err))
 		return types.ATXID{}, err

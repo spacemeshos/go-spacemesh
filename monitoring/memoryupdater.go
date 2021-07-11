@@ -47,7 +47,7 @@ func (mu *MemoryUpdater) Update() {
 	// Read full mem stats
 	runtime.ReadMemStats(&rtm)
 
-	// Number of goroutines )
+	// Number of goroutines
 	mu.memTracker["NumGoroutine"].Track(uint64(runtime.NumGoroutine()))
 
 	// Misc memory stats

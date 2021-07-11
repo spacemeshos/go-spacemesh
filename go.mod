@@ -3,7 +3,9 @@ module github.com/spacemeshos/go-spacemesh
 require (
 	cloud.google.com/go v0.68.0 // indirect
 	cloud.google.com/go/storage v1.10.0
+	github.com/ALTree/bigfloat v0.0.0-20201218142103-4a33235224ec
 	github.com/Microsoft/go-winio v0.4.14 // indirect
+	github.com/bits-and-blooms/bitset v1.2.0
 	github.com/btcsuite/btcd v0.0.0-20190629003639-c26ffa870fd8
 	github.com/btcsuite/btcutil v0.0.0-20190425235716-9e5f4b9a998d
 	github.com/go-kit/kit v0.10.0

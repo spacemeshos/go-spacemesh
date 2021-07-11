@@ -35,7 +35,7 @@ bootstrap:
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-harness'
-  replicas: 40 #default 40
+  replicas: 30 #default 40
   resources:
     requests:
       memory: '512M'

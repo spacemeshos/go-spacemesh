@@ -49,7 +49,7 @@ func NewMockStateQuerier() MockStateQuerier {
 	return MockStateQuerier{true, nil}
 }
 
-func (msq MockStateQuerier) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
+func (msq MockStateQuerier) IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error) {
 	return msq.res, msq.err
 }
 
@@ -365,7 +365,7 @@ func (mgm *mockGossipMessage) RequestID() string {
 	return reqID
 }
 
-func (mgm *mockGossipMessage) ReportValidation(protocol string) {
+func (mgm *mockGossipMessage) ReportValidation(ctx context.Context, protocol string) {
 	mgm.vComp <- service.NewMessageValidation(mgm.sender, nil, "", reqID)
 }
 

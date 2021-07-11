@@ -3,6 +3,7 @@ package activation
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"sync"
@@ -44,7 +45,14 @@ func getAtxBodyKey(atxID types.ATXID) []byte {
 	return atxID.Bytes()
 }
 
-var errInvalidSig = fmt.Errorf("identity not found when validating signature, invalid atx")
+func getAtxTimestampKey(atxID types.ATXID) []byte {
+	return []byte(fmt.Sprintf("ts_%v", atxID.Bytes()))
+}
+
+var (
+	errInvalidSig   = errors.New("identity not found when validating signature, invalid atx")
+	errGenesisEpoch = errors.New("tried to retrieve miner weights for target epoch 0")
+)
 
 type atxChan struct {
 	ch        chan struct{}
@@ -57,36 +65,31 @@ type DB struct {
 	sync.RWMutex
 	// todo: think about whether we need one db or several(#1922)
 	idStore
-	atxs                database.Database
-	atxHeaderCache      AtxCache
-	meshDb              *mesh.DB
-	LayersPerEpoch      uint16
-	goldenATXID         types.ATXID
-	nipstValidator      nipstValidator
-	pendingTotalWeight  map[types.Hash12]*sync.Mutex
-	pTotalWeightLock    sync.Mutex
-	log                 log.Log
-	calcTotalWeightFunc func(targetEpoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error)
-	processAtxMutex     sync.Mutex
-	atxChannels         map[types.ATXID]*atxChan
+	atxs            database.Database
+	atxHeaderCache  AtxCache
+	meshDb          *mesh.DB
+	LayersPerEpoch  uint16
+	goldenATXID     types.ATXID
+	nipstValidator  nipstValidator
+	log             log.Log
+	processAtxMutex sync.Mutex
+	atxChannels     map[types.ATXID]*atxChan
 }
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
 // their validity
 func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint16, goldenATXID types.ATXID, nipstValidator nipstValidator, log log.Log) *DB {
 	db := &DB{
-		idStore:            idStore,
-		atxs:               dbStore,
-		atxHeaderCache:     NewAtxCache(600),
-		meshDb:             meshDb,
-		LayersPerEpoch:     layersPerEpoch,
-		goldenATXID:        goldenATXID,
-		nipstValidator:     nipstValidator,
-		pendingTotalWeight: make(map[types.Hash12]*sync.Mutex),
-		log:                log,
-		atxChannels:        make(map[types.ATXID]*atxChan),
+		idStore:        idStore,
+		atxs:           dbStore,
+		atxHeaderCache: NewAtxCache(600),
+		meshDb:         meshDb,
+		LayersPerEpoch: layersPerEpoch,
+		goldenATXID:    goldenATXID,
+		nipstValidator: nipstValidator,
+		log:            log,
+		atxChannels:    make(map[types.ATXID]*atxChan),
 	}
-	db.calcTotalWeightFunc = db.GetMinerWeightsInEpochFromView
 	return db
 }
 
@@ -170,20 +173,19 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 		epoch,
 		log.FieldNamed("atx_node_id", atx.NodeID),
 		atx.PubLayerID)
-	err := db.ContextuallyValidateAtx(atx.ActivationTxHeader)
-	if err != nil {
-		db.log.With().Error("atx failed contextual validation", atx.ID(), log.Err(err))
+	if err := db.ContextuallyValidateAtx(atx.ActivationTxHeader); err != nil {
+		db.log.With().Error("atx failed contextual validation",
+			atx.ID(),
+			log.FieldNamed("atx_node_id", atx.NodeID),
+			log.Err(err))
 		// TODO: Blacklist this miner
 	} else {
 		db.log.With().Info("atx is valid", atx.ID())
 	}
-	err = db.StoreAtx(epoch, atx)
-	if err != nil {
+	if err := db.StoreAtx(epoch, atx); err != nil {
 		return fmt.Errorf("cannot store atx %s: %v", atx.ShortString(), err)
 	}
-
-	err = db.StoreNodeIdentity(atx.NodeID)
-	if err != nil {
+	if err := db.StoreNodeIdentity(atx.NodeID); err != nil {
 		db.log.With().Error("cannot store node identity",
 			log.FieldNamed("atx_node_id", atx.NodeID),
 			atx.ID(),
@@ -194,7 +196,6 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 
 func (db *DB) createTraversalFuncForMinerWeights(minerWeight map[string]uint64, targetEpoch types.EpochID) func(b *types.Block) (bool, error) {
 	return func(b *types.Block) (stop bool, err error) {
-
 		// count unique ATXs
 		if b.ActiveSet == nil {
 			return false, nil
@@ -206,7 +207,7 @@ func (db *DB) createTraversalFuncForMinerWeights(minerWeight map[string]uint64, 
 				return false, fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortString())
 			}
 
-			// todo: should we accept only eopch -1 atxs?
+			// todo: should we accept only epoch -1 atxs?
 
 			// make sure the target epoch is our epoch
 			if atx.TargetEpoch() != targetEpoch {
@@ -228,7 +229,7 @@ func (db *DB) createTraversalFuncForMinerWeights(minerWeight map[string]uint64, 
 // the provided view.
 func (db *DB) GetMinerWeightsInEpochFromView(targetEpoch types.EpochID, view map[types.BlockID]struct{}) (map[string]uint64, error) {
 	if targetEpoch == 0 {
-		return nil, errors.New("tried to retrieve miner weights for targetEpoch 0")
+		return nil, errGenesisEpoch
 	}
 
 	firstLayerOfPrevEpoch := (targetEpoch - 1).FirstLayer()
@@ -247,71 +248,6 @@ func (db *DB) GetMinerWeightsInEpochFromView(targetEpoch types.EpochID, view map
 		log.String("duration", time.Now().Sub(startTime).String()))
 
 	return minerWeight, nil
-}
-
-// CalcTotalWeightFromView traverses the provided view and returns the total weight of the ATXs found targeting
-// targetEpoch. The function returns error if the view is not found.
-func (db *DB) CalcTotalWeightFromView(view []types.BlockID, targetEpoch types.EpochID) (uint64, error) {
-	if targetEpoch < 1 {
-		return 0, fmt.Errorf("targetEpoch cannot be less than 1, got %v", targetEpoch)
-	}
-	viewHash := types.CalcBlocksHash12(view)
-	totalWeight, found := totalWeightCache.Get(viewHash)
-	if found {
-		return totalWeight, nil
-	}
-	// check if we have a running calculation for this hash
-	db.pTotalWeightLock.Lock()
-	mu, alreadyRunning := db.pendingTotalWeight[viewHash]
-	if alreadyRunning {
-		db.pTotalWeightLock.Unlock()
-		// if there is a running calculation, wait for it to end and get the result
-		mu.Lock()
-		totalWeight, found = totalWeightCache.Get(viewHash)
-		if found {
-			mu.Unlock()
-			return totalWeight, nil
-		}
-		// if not found, keep running mutex, ensure it's still in the pending map and calculate total weight
-		db.pTotalWeightLock.Lock()
-		db.pendingTotalWeight[viewHash] = mu
-		db.pTotalWeightLock.Unlock()
-	} else {
-		// if no running calc, insert new one
-		mu = &sync.Mutex{}
-		mu.Lock()
-		db.pendingTotalWeight[viewHash] = mu
-		db.pTotalWeightLock.Unlock()
-	}
-
-	mp := map[types.BlockID]struct{}{}
-	for _, blk := range view {
-		mp[blk] = struct{}{}
-	}
-
-	atxWeights, err := db.calcTotalWeightFunc(targetEpoch, mp)
-	if err != nil {
-		db.deleteLock(viewHash)
-		mu.Unlock()
-		return 0, err
-	}
-	totalWeight = 0
-	for _, w := range atxWeights {
-		totalWeight += w
-	}
-	totalWeightCache.Add(viewHash, totalWeight)
-	db.deleteLock(viewHash)
-	mu.Unlock()
-
-	return totalWeight, nil
-}
-
-func (db *DB) deleteLock(viewHash types.Hash12) {
-	db.pTotalWeightLock.Lock()
-	if _, exist := db.pendingTotalWeight[viewHash]; exist {
-		delete(db.pendingTotalWeight, viewHash)
-	}
-	db.pTotalWeightLock.Unlock()
 }
 
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
@@ -489,6 +425,11 @@ func (db *DB) StoreAtx(ech types.EpochID, atx *types.ActivationTx) error {
 		return err
 	}
 
+	err = db.addAtxTimestamp(time.Now(), atx)
+	if err != nil {
+		return err
+	}
+
 	db.log.With().Info("finished storing atx in epoch", atx.ID(), ech)
 	return nil
 }
@@ -520,17 +461,6 @@ func (db *DB) storeAtxUnlocked(atx *types.ActivationTx) error {
 	}
 
 	return nil
-}
-
-func getAtxBody(atx *types.ActivationTx) *types.ActivationTx {
-	return &types.ActivationTx{
-		InnerActivationTx: &types.InnerActivationTx{
-			ActivationTxHeader: nil,
-			Nipst:              atx.Nipst,
-			Commitment:         atx.Commitment,
-		},
-		Sig: atx.Sig,
-	}
 }
 
 type atxIDAndLayer struct {
@@ -584,6 +514,16 @@ func (db *DB) getTopAtx() (atxIDAndLayer, error) {
 	return topAtx, nil
 }
 
+func (db *DB) getAtxTimestamp(id types.ATXID) (time.Time, error) {
+	b, err := db.atxs.Get(getAtxTimestampKey(id))
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	ts := time.Unix(0, int64(binary.LittleEndian.Uint64(b)))
+	return ts, nil
+}
+
 // addAtxToNodeID inserts activation atx id by node
 func (db *DB) addAtxToNodeID(nodeID types.NodeID, atx *types.ActivationTx) error {
 	err := db.atxs.Put(getNodeAtxKey(nodeID, atx.PubLayerID.GetEpoch()), atx.ID().Bytes())
@@ -598,6 +538,19 @@ func (db *DB) addNodeAtxToEpoch(epoch types.EpochID, nodeID types.NodeID, atx *t
 	err := db.atxs.Put(getNodeAtxEpochKey(atx.PubLayerID.GetEpoch(), nodeID), atx.ID().Bytes())
 	if err != nil {
 		return fmt.Errorf("failed to store atx ID for node: %v", err)
+	}
+	return nil
+}
+
+func (db *DB) addAtxTimestamp(timestamp time.Time, atx *types.ActivationTx) error {
+	db.log.Info("added atx %v timestamp %v", atx.ID().ShortString(), timestamp)
+
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, uint64(timestamp.UnixNano()))
+
+	err := db.atxs.Put(getAtxTimestampKey(atx.ID()), b)
+	if err != nil {
+		return fmt.Errorf("failed to store atx timestamp for node: %v", err)
 	}
 	return nil
 }
@@ -629,8 +582,7 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 			break
 		}
 		var a types.ATXID
-		err := types.BytesToInterface(atxIterator.Value(), &a)
-		if err != nil {
+		if err := types.BytesToInterface(atxIterator.Value(), &a); err != nil {
 			db.log.Panic("cannot parse atx from DB")
 			break
 		}
@@ -661,6 +613,16 @@ func (db *DB) GetPosAtxID() (types.ATXID, error) {
 		return *types.EmptyATXID, err
 	}
 	return idAndLayer.AtxID, nil
+}
+
+// GetAtxTimestamp returns ATX timestamp.
+func (db *DB) GetAtxTimestamp(atxid types.ATXID) (time.Time, error) {
+	ts, err := db.getAtxTimestamp(atxid)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return ts, nil
 }
 
 // GetEpochWeight returns the total weight of ATXs targeting the given epochID.
@@ -744,20 +706,20 @@ func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.Activ
 }
 
 // HandleGossipAtx handles the atx gossip data channel
-func (db *DB) HandleGossipAtx(ctx context.Context, data service.GossipMessage, syncer service.Fetcher) {
+func (db *DB) HandleGossipAtx(ctx context.Context, data service.GossipMessage, fetcher service.Fetcher) {
 	if data == nil {
 		return
 	}
-	err := db.HandleAtxData(ctx, data.Bytes(), syncer)
+	err := db.HandleAtxData(ctx, data.Bytes(), fetcher)
 	if err != nil {
 		db.log.WithContext(ctx).With().Error("error handling atx data", log.Err(err))
 		return
 	}
-	data.ReportValidation(AtxProtocol)
+	data.ReportValidation(ctx, AtxProtocol)
 }
 
 // HandleAtxData handles atxs received either by gossip or sync
-func (db *DB) HandleAtxData(ctx context.Context, data []byte, syncer service.Fetcher) error {
+func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fetcher) error {
 	atx, err := types.BytesToAtx(data)
 	if err != nil {
 		return fmt.Errorf("cannot parse incoming atx")
@@ -767,18 +729,16 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, syncer service.Fet
 
 	logger.With().Info("got new atx", atx.Fields(len(data))...)
 
-	// todo fetch from neighbour (#1925)
 	if atx.Nipst == nil {
-		logger.Panic("nil nipst in gossip")
-		return fmt.Errorf("nil nipst in gossip")
+		return fmt.Errorf("nil nipst in gossip for atx %s", atx.ShortString())
 	}
 
-	if err := syncer.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
+	if err := fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
 		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
 			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err)
 	}
 
-	if err := db.FetchAtxReferences(ctx, atx, syncer); err != nil {
+	if err := db.FetchAtxReferences(ctx, atx, fetcher); err != nil {
 		return fmt.Errorf("received ATX with missing references of prev or pos id %v, %v, %v, %v",
 			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), log.Err(err))
 	}

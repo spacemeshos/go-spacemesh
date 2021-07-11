@@ -23,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 )
 
 // ManualClock is a clock that releases ticks on demand and not according to a real world clock
@@ -137,7 +138,6 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 	cfg.POST.NumProvenLabels = 10
 	cfg.POST.SpacePerUnit = 1 << 10 // 1KB.
 	cfg.POST.NumFiles = 1
-	cfg.GenesisTotalWeight = cfg.POST.SpacePerUnit * uint64(numOfInstances) // * 1 PoET ticks
 
 	cfg.HARE.N = 5
 	cfg.HARE.F = 2
@@ -165,6 +165,8 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 
 	cfg.LAYERS.RequestTimeout = 10
 	cfg.GoldenATXID = "0x5678"
+
+	cfg.TortoiseBeacon = tortoisebeacon.TestConfig()
 
 	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
 
@@ -208,9 +210,6 @@ func GracefulShutdown(apps []*SpacemeshApp) {
 type network interface {
 	NewNode() *service.Node
 }
-
-// initialize a network mock object to simulate network between nodes.
-// var net = service.NewSimulator()
 
 // InitSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
@@ -394,6 +393,19 @@ loop:
 					continue
 				}
 			}
+			beacons := eventDb.GetTortoiseBeacon(epoch)
+			log.Info("all miners finished calculating %v tortoise beacons, epoch %v done in %v", len(beacons), epoch, time.Since(startLayer))
+			if len(beacons) != 0 {
+				first := beacons[0]
+				for _, beacon := range beacons {
+					if first != beacon {
+						log.Info("tortoise beacons %v and %v differ", first, beacon)
+						errors++
+						continue
+					}
+				}
+			}
+
 			errors = 0
 
 			startLayer = time.Now()

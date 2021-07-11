@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"context"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -16,7 +17,7 @@ type ThreadSafeVerifyingTortoise struct {
 
 // Config holds the arguments and dependencies to create a verifying tortoise instance.
 type Config struct {
-	LayerSyze int
+	LayerSize int
 	Database  blockDataProvider
 	Hdist     int
 	Log       log.Log
@@ -28,7 +29,7 @@ func NewVerifyingTortoise(cfg Config) *ThreadSafeVerifyingTortoise {
 	if cfg.Recovered {
 		return recoveredVerifyingTortoise(cfg.Database, cfg.Log)
 	}
-	return verifyingTortoise(cfg.LayerSyze, cfg.Database, cfg.Hdist, cfg.Log)
+	return verifyingTortoise(cfg.LayerSize, cfg.Database, cfg.Hdist, cfg.Log)
 }
 
 // verifyingTortoise creates a new verifying tortoise wrapper
@@ -64,9 +65,9 @@ func (trtl *ThreadSafeVerifyingTortoise) LatestComplete() types.LayerID {
 }
 
 // BaseBlock chooses a base block and creates a differences list. needs the hare results for latest layers.
-func (trtl *ThreadSafeVerifyingTortoise) BaseBlock() (types.BlockID, [][]types.BlockID, error) {
+func (trtl *ThreadSafeVerifyingTortoise) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
 	trtl.mutex.Lock()
-	block, diffs, err := trtl.trtl.BaseBlock()
+	block, diffs, err := trtl.trtl.BaseBlock(ctx)
 	trtl.mutex.Unlock()
 	if err != nil {
 		return types.BlockID{}, nil, err
