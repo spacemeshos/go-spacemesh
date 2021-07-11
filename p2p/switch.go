@@ -311,14 +311,12 @@ func (s *Switch) Start(ctx context.Context) error {
 			}
 			//todo:maybe start listening only after we got enough outbound neighbors?
 			s.gossipErr = s.startNeighborhood(ctx) // non blocking
-
+			close(s.gossipC)
 			if s.gossipErr != nil {
-				close(s.gossipC)
 				s.Shutdown()
 				return
 			}
 			<-s.initial
-			close(s.gossipC)
 		}() // todo handle error async
 	}
 
@@ -596,7 +594,7 @@ func (s *Switch) onRemoteClientMessage(ctx context.Context, msg net.IncomingMess
 
 	s.logger.WithContext(ctx).With().Debug("handle incoming message",
 		log.String("protocol", pm.Metadata.NextProtocol),
-		log.FieldNamed("sender_id", msg.Conn.RemotePublicKey()),
+		log.FieldNamed("peer_id", msg.Conn.RemotePublicKey()),
 		log.Bool("is_gossip", ok))
 
 	if ok {
@@ -626,8 +624,8 @@ func (s *Switch) ProcessDirectProtocolMessage(ctx context.Context, sender p2pcry
 	return nil
 }
 
-// ProcessGossipProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will send
-// the message syntactic validation result on the validationCompletedChan ASAP
+// ProcessGossipProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will
+// send the message syntactic validation result on the validationCompletedChan ASAP
 func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, ownMessage bool, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
 	h := types.CalcMessageHash12(data.Bytes(), protocol)
 
@@ -761,25 +759,19 @@ func (s *Switch) askForMorePeers(ctx context.Context) {
 		// If 0 connections are required, the condition above is always true,
 		// so gossip needs to be considered ready in this case.
 		if s.config.SwarmConfig.RandomConnections == 0 {
-			select {
-			case <-s.initial:
-				// Nothing to do if channel is closed.
-				break
-			default:
-				// Close channel if it is not closed.
-				close(s.initial)
-			}
+			s.closeInitial()
+			return
 		}
-		return
+		s.logger.Warning("already has %d peers fo %d required", numpeers, s.config.SwarmConfig.RandomConnections)
+	} else {
+		// try to connect eq peers
+		s.getMorePeers(ctx, req)
+		// check number of peers after
+		s.outpeersMutex.RLock()
+		numpeers = len(s.outpeers)
+		s.outpeersMutex.RUnlock()
 	}
 
-	// try to connect eq peers
-	s.getMorePeers(ctx, req)
-
-	// check number of peers after
-	s.outpeersMutex.RLock()
-	numpeers = len(s.outpeers)
-	s.outpeersMutex.RUnlock()
 	// announce if initial number of peers achieved
 	// todo: better way then going in this every time ?
 	if numpeers >= s.config.SwarmConfig.RandomConnections {

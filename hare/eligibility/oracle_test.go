@@ -86,7 +86,7 @@ func (m *mockActiveSetProvider) GetAtxHeader(id types.ATXID) (*types.ActivationT
 	if m.getAtxHeaderFn != nil {
 		return m.getAtxHeaderFn(id)
 	}
-	return &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: "fakekey"}}}, nil
+	return &types.ActivationTxHeader{NIPoSTChallenge: types.NIPoSTChallenge{NodeID: types.NodeID{Key: "fakekey"}}}, nil
 }
 
 type mockBufferedActiveSetProvider struct {
@@ -196,7 +196,7 @@ func TestOracle_BuildVRFMessage(t *testing.T) {
 
 func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 10}, &mockBlocksProvider{}, buildVerifier(true), &mockSigner{[]byte{1, 2, 3}}, 5, 1, 5, 1, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 10}, &mockBlocksProvider{}, buildVerifier(true), &mockSigner{[]byte{1, 2, 3}}, 5, cfg, log.NewDefault(t.Name()))
 	mCache := newMockCacher()
 	o.vrfMsgCache = mCache
 
@@ -302,7 +302,7 @@ func defaultOracle(t testing.TB) *Oracle {
 
 func mockOracle(t testing.TB, layersPerEpoch uint16) *Oracle {
 	types.SetLayersPerEpoch(int32(layersPerEpoch))
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{}, &mockBlocksProvider{}, buildVerifier(true), nil, layersPerEpoch, uint64(spacePerUnit), uint64(genWeight), uint64(genesisMinerWeight), cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{}, &mockBlocksProvider{}, buildVerifier(true), nil, layersPerEpoch, cfg, log.NewDefault(t.Name()))
 	return o
 }
 
@@ -559,18 +559,13 @@ func TestOracle_actives(t *testing.T) {
 		},
 		getAtxHeaderFn: func(atxid types.ATXID) (*types.ActivationTxHeader, error) {
 			return &types.ActivationTxHeader{
-				NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: atxid.Hash32().String()}},
+				NIPoSTChallenge: types.NIPoSTChallenge{NodeID: types.NodeID{Key: atxid.Hash32().String()}},
 			}, nil
 		},
 	}
 
 	o := defaultOracle(t)
 	o.atxdb = atxdb
-	t.Run("test genesis", func(t *testing.T) {
-		_, err := o.actives(context.TODO(), 1)
-		r.EqualError(err, errGenesis.Error())
-	})
-
 	t.Run("test cache", func(t *testing.T) {
 		mc := newMockCacher()
 		o.activesCache = mc
@@ -833,14 +828,14 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	types.SetLayersPerEpoch(10)
 	edid := "11111"
 	atxdb := &mockActiveSetProvider{size: 1, getAtxHeaderFn: func(types.ATXID) (*types.ActivationTxHeader, error) {
-		return &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: edid}}}, nil
+		return &types.ActivationTxHeader{NIPoSTChallenge: types.NIPoSTChallenge{NodeID: types.NodeID{Key: edid}}}, nil
 	}}
 	o := mockOracle(t, uint16(5))
 	o.atxdb = atxdb
 	o.meshdb = &mockBlocksProvider{}
 	v, err := o.IsIdentityActiveOnConsensusView(context.TODO(), "22222", 1)
 	r.NoError(err)
-	r.True(v)
+	r.False(v, "since no miners can be active in genesis this must be false")
 
 	o.atxdb = &mockActiveSetProvider{size: 1, getActiveSetFn: func(types.EpochID, map[types.BlockID]struct{}) (map[string]uint64, error) {
 		return nil, errFoo
@@ -853,7 +848,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 		// return empty hare active set, forcing tortoise active set
 		return nil, nil
 	}, getAtxHeaderFn: func(types.ATXID) (*types.ActivationTxHeader, error) {
-		return &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: edid}}}, nil
+		return &types.ActivationTxHeader{NIPoSTChallenge: types.NIPoSTChallenge{NodeID: types.NodeID{Key: edid}}}, nil
 	}}
 	v, err = o.IsIdentityActiveOnConsensusView(context.TODO(), "22222", 100)
 	r.NoError(err)

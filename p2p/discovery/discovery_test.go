@@ -100,7 +100,6 @@ func TestKadDHT_VerySmallBootstrap(t *testing.T) {
 	//require.Error(t, err2)
 	require.NotEqual(t, res2, bn)
 	//bootstrap nodes are removed at the end of bootstrap
-
 }
 
 func TestKadDHT_BootstrapSingleBoot(t *testing.T) {

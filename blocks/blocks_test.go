@@ -30,7 +30,7 @@ var goldenATXID = types.ATXID(types.HexToHash32("77777"))
 func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
 	startTick uint64, positioningATX types.ATXID, coinbase types.Address, nipst *types.NIPST) *types.ActivationTx {
 
-	nipstChallenge := types.NIPSTChallenge{
+	nipstChallenge := types.NIPoSTChallenge{
 		NodeID:         nodeID,
 		Sequence:       sequence,
 		PrevATXID:      prevATX,
@@ -144,7 +144,7 @@ func (m meshMock) GetBlock(ID types.BlockID) (*types.Block, error) {
 	panic("implement me")
 }
 
-func (m meshMock) AddBlockWithTxs(blk *types.Block) error {
+func (m meshMock) AddBlockWithTxs(context.Context, *types.Block) error {
 	panic("implement me")
 }
 
@@ -243,9 +243,9 @@ func TestBlockHandler_AtxSetID(t *testing.T) {
 	bbytes, _ := types.InterfaceToBytes(*a)
 	var b types.ActivationTx
 	types.BytesToInterface(bbytes, &b)
-	t.Log(fmt.Sprintf("%+v\n", *a))
+	t.Log(fmt.Sprintf("%+v", *a))
 	t.Log("---------------------")
-	t.Log(fmt.Sprintf("%+v\n", b))
+	t.Log(fmt.Sprintf("%+v", b))
 	t.Log("---------------------")
 	assert.Equal(t, b.Nipst, a.Nipst)
 	assert.Equal(t, b.Commitment, a.Commitment)
@@ -254,7 +254,7 @@ func TestBlockHandler_AtxSetID(t *testing.T) {
 	assert.Equal(t, b.ActivationTxHeader.PrevATXID, a.ActivationTxHeader.PrevATXID)
 	assert.Equal(t, b.ActivationTxHeader.Coinbase, a.ActivationTxHeader.Coinbase)
 	assert.Equal(t, b.ActivationTxHeader.CommitmentMerkleRoot, a.ActivationTxHeader.CommitmentMerkleRoot)
-	assert.Equal(t, b.ActivationTxHeader.NIPSTChallenge, a.ActivationTxHeader.NIPSTChallenge)
+	assert.Equal(t, b.ActivationTxHeader.NIPoSTChallenge, a.ActivationTxHeader.NIPoSTChallenge)
 	b.CalcAndSetID()
 	assert.Equal(t, a.ShortString(), b.ShortString())
 }

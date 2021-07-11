@@ -101,7 +101,7 @@ func (p *Protocol) processMessage(ctx context.Context, sender p2pcrypto.PublicKe
 	logger := p.WithContext(ctx).WithFields(
 		log.FieldNamed("msg_sender", sender),
 		log.String("protocol", protocol),
-		log.String("hash", util.Bytes2Hex(h[:])))
+		log.String("msghash", util.Bytes2Hex(h[:])))
 	logger.Debug("checking gossip message newness")
 	if p.markMessageAsOld(h) {
 		metrics.OldGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
@@ -135,9 +135,11 @@ peerLoop:
 			msgCtx := ctx
 			if reqID, ok := log.ExtractRequestID(ctx); ok {
 				// overwrite the existing reqID with the same and add the field
+				// (there is currently no easier way to add a field to log ctx)
 				msgCtx = log.WithRequestID(ctx, reqID, log.FieldNamed("to_id", pubkey))
 			}
 
+			p.WithContext(msgCtx).Debug("propagating gossip message to peer")
 			if err := p.net.SendMessage(msgCtx, pubkey, nextProt, payload); err != nil {
 				p.WithContext(msgCtx).With().Warning("failed sending", log.Err(err))
 			}
@@ -176,8 +178,14 @@ func (p *Protocol) handlePQ(ctx context.Context) {
 		} else {
 			msgCtx = log.WithRequestID(ctx, m.RequestID(), extraFields...)
 		}
-		p.WithContext(msgCtx).Debug("new_gossip_message_relay")
+		p.WithContext(msgCtx).With().Debug("new_gossip_message_relay",
+			log.Int("priority_queue_length", p.pq.Length()))
+		if p.pq.Length() > 50 {
+			p.WithContext(msgCtx).With().Warning("outbound gossip message queue backlog",
+				log.Int("priority_queue_length", p.pq.Length()))
+		}
 		p.propagateMessage(msgCtx, m.Message(), m.Protocol(), m.Sender())
+		p.WithContext(msgCtx).With().Debug("finished propagating gossip message")
 	}
 }
 
@@ -210,11 +218,16 @@ func (p *Protocol) propagationEventLoop(ctx context.Context) {
 			if p.isShuttingDown() {
 				return
 			}
+			// Note: this will block iff the priority queue is full
 			if err := p.pq.Write(p.getPriority(msgV.Protocol()), msgV); err != nil {
 				p.WithContext(ctx).With().Error("could not write to priority queue",
 					log.Err(err),
 					log.String("protocol", msgV.Protocol()))
 			}
+			p.WithContext(ctx).With().Debug("wrote inbound message to priority queue",
+				log.String("protocol", msgV.Protocol()),
+				log.Int("priority_queue_length", p.pq.Length()),
+				log.Int("propagation_queue_length", len(p.propagateQ)))
 			metrics.PropagationQueueLen.Set(float64(len(p.propagateQ)))
 
 		case <-p.shutdownCtx.Done():

@@ -306,6 +306,16 @@ endif
 dockertest-blocks-remove-node: dockerbuild-test dockerrun-blocks-remove-node
 .PHONY: dockertest-blocks-remove-node
 
+dockerrun-tortoise-beacon:
+ifndef ES_PASS
+	$(error ES_PASS is not set)
+endif
+	$(DOCKERRUN) pytest -s -v tortoise_beacon/test_tortoise_beacon.py --tc-file=tortoise_beacon/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
+.PHONY: dockerrun-tortoise-beacon
+
+dockertest-tortoise-beacon: dockerbuild-test dockerrun-tortoise-beacon
+.PHONY: dockertest-tortoise-beacon
+
 dockerrun-blocks-stress:
 ifndef ES_PASS
 	$(error ES_PASS is not set)
@@ -347,7 +357,7 @@ dockertest-tx-stress: dockerbuild-test dockerrun-tx-stress
 .PHONY: dockertest-tx-stress
 
 # The following is used to run tests one after the other locally
-dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes dockerrun-blocks-add-node dockerrun-blocks-remove-node
+dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes dockerrun-blocks-add-node dockerrun-blocks-remove-node dockerrun-tortoise-beacon
 .PHONY: dockerrun-test
 
 dockerrun-all: dockerpush dockerrun-test

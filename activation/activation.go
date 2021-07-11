@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/ed25519"
 	"sync"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -18,8 +19,6 @@ import (
 
 // AtxProtocol is the protocol id for broadcasting atxs over gossip
 const AtxProtocol = "AtxGossip"
-
-var totalWeightCache = NewTotalWeightCache(1000)
 
 type meshProvider interface {
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
@@ -53,9 +52,9 @@ type NIPoSTValidator interface {
 
 type atxDBProvider interface {
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
-	CalcTotalWeightFromView(view []types.BlockID, pubEpoch types.EpochID) (uint64, error)
 	GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error)
 	GetPosAtxID() (types.ATXID, error)
+	GetAtxTimestamp(id types.ATXID) (time.Time, error)
 	AwaitAtx(id types.ATXID) chan struct{}
 	UnsubscribeAtx(id types.ATXID)
 }
@@ -274,6 +273,10 @@ func (b *Builder) loop(ctx context.Context) {
 		default:
 		}
 		if err := b.PublishActivationTx(ctx); err != nil {
+			b.log.WithContext(ctx).With().Error("error attempting to publish atx",
+				b.layerClock.GetCurrentLayer(),
+				b.currentEpoch(),
+				log.Err(err))
 			if _, stopRequested := err.(StopRequestedError); stopRequested {
 				return
 			}

@@ -4,14 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/hare/metrics"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/hare/metrics"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // LayerBuffer is the number of layer results we keep at a given time.
@@ -49,7 +51,7 @@ type outputValidationFunc func(blocks []types.BlockID) bool
 
 // Hare is the orchestrator that starts new consensus processes and collects their output.
 type Hare struct {
-	Closer
+	util.Closer
 	log.Log
 	config config.Config
 
@@ -90,7 +92,8 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeID, 
 	beginLayer chan types.LayerID, logger log.Log) *Hare {
 	h := new(Hare)
 
-	h.Closer = NewCloser()
+	h.Closer = util.NewCloser()
+
 	h.Log = logger
 	h.config = conf
 	h.network = p2p
