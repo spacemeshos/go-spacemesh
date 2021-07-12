@@ -484,7 +484,7 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 }
 
 // getAtxResults is called when an ATX result is received
-func (l *Logic) getAtxResults(ctx context.Context, hash types.Hash32, data []byte) error {
+func (l *Logic) getAtxResults(ctx context.Context, data []byte) error {
 	return l.atxs.HandleAtxData(ctx, data, l)
 }
 
@@ -539,7 +539,7 @@ func (l *Logic) FetchAtx(ctx context.Context, id types.ATXID) error {
 		return f.Result().Err
 	}
 	if !f.Result().IsLocal {
-		return l.getAtxResults(nil, f.Result().Hash, f.Result().Data)
+		return l.getAtxResults(ctx, f.Result().Data)
 	}
 	return nil
 }
@@ -565,16 +565,16 @@ func (l *Logic) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.Hash32())
 	}
-	//todo: atx Id is currently only the header bytes - should we change it?
+	// TODO: atx Id is currently only the header bytes - should we change it?
 	results := l.fetcher.GetHashes(hashes, fetch.ATXDB, false)
 	for hash, resC := range results {
 		res := <-resC
 		if res.Err != nil {
-			l.log.Error("cannot fetch atx %v err %v", hash.ShortString(), res.Err)
+			l.log.WithContext(ctx).With().Error("cannot fetch atx", hash, log.Err(res.Err))
 			return res.Err
 		}
 		if !res.IsLocal {
-			err := l.getAtxResults(nil, hash, res.Data)
+			err := l.getAtxResults(ctx, res.Data)
 			if err != nil {
 				return err
 			}

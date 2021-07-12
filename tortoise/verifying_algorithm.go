@@ -159,6 +159,7 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context
 	//   Simplest Possible Thing (TM) and just rerun from genesis once in a while. This requires a different instance of
 	//   tortoise since we don't want to mess with the state of the main tortoise. We re-stream layer data from genesis
 	//   using the sliding window, simulating a full resync.
+	//   See https://github.com/spacemeshos/go-spacemesh/issues/2551
 	if time.Now().Sub(trtl.lastRerun) > trtl.trtl.RerunInterval {
 		var revertLayer types.LayerID
 		if reverted, revertLayer = trtl.rerunFromGenesis(ctx); reverted {

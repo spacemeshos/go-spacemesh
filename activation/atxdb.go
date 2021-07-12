@@ -789,7 +789,7 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 	}
 
 	if err := db.FetchAtxReferences(ctx, atx, fetcher); err != nil {
-		return fmt.Errorf("received ATX with missing references of prev or pos id %v, %v, %v, %v",
+		return fmt.Errorf("received atx with missing references of prev or pos id %v, %v, %v, %v",
 			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), log.Err(err))
 	}
 
