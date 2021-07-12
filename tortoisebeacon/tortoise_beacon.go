@@ -89,9 +89,6 @@ type TortoiseBeacon struct {
 
 	epoch types.EpochID
 
-	seenEpochsMu sync.Mutex
-	seenEpochs   map[types.EpochID]struct{}
-
 	clock                    layerClock
 	q                        *big.Rat
 	gracePeriodDuration      time.Duration
@@ -184,7 +181,6 @@ func New(
 		incomingVotes:                   map[epochRoundPair]votesPerPK{},
 		firstRoundIncomingVotes:         map[types.EpochID]firstRoundVotesPerPK{},
 		firstRoundOutcomingVotes:        map[types.EpochID]firstRoundVotes{},
-		seenEpochs:                      map[types.EpochID]struct{}{},
 	}
 }
 
