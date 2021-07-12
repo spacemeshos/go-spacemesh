@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ALTree/bigfloat"
@@ -13,16 +14,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
 
 const (
-	protoName       = "TORTOISE_BEACON_PROTOCOL"
-	proposalPrefix  = "TBP"
-	cleanupInterval = 30 * time.Second
-	cleanupEpochs   = 1000
-	firstRound      = types.RoundID(1)
+	protoName            = "TORTOISE_BEACON_PROTOCOL"
+	proposalPrefix       = "TBP"
+	cleanupInterval      = 30 * time.Second
+	cleanupEpochs        = 1000
+	firstRound           = types.RoundID(1)
+	windowStartTolerance = 200 * time.Millisecond // TODO: make this a config?
 )
 
 var (
@@ -75,9 +76,8 @@ type TortoiseBeacon struct {
 	util.Closer
 	log.Log
 
-	config        Config
-	minerID       types.NodeID
-	layerDuration time.Duration
+	config  Config
+	minerID types.NodeID
 
 	net              broadcaster
 	atxDB            activationDB
@@ -87,14 +87,12 @@ type TortoiseBeacon struct {
 	vrfSigner        signer
 	weakCoin         weakcoin.WeakCoin
 
-	layerMu   sync.RWMutex
-	lastLayer types.LayerID
+	epoch types.EpochID
 
 	seenEpochsMu sync.Mutex
 	seenEpochs   map[types.EpochID]struct{}
 
 	clock                    layerClock
-	layerTicker              chan types.LayerID
 	q                        *big.Rat
 	gracePeriodDuration      time.Duration
 	proposalDuration         time.Duration
@@ -134,9 +132,6 @@ type signer interface {
 }
 
 type layerClock interface {
-	Subscribe() timesync.LayerTimer
-	Unsubscribe(timer timesync.LayerTimer)
-	AwaitLayer(layerID types.LayerID) chan struct{}
 	GetCurrentLayer() types.LayerID
 	LayerToTime(id types.LayerID) time.Time
 }
@@ -145,7 +140,6 @@ type layerClock interface {
 func New(
 	conf Config,
 	minerID types.NodeID,
-	layerDuration time.Duration,
 	net broadcaster,
 	atxDB activationDB,
 	tortoiseBeaconDB tortoiseBeaconDB,
@@ -166,7 +160,6 @@ func New(
 		Closer:                          util.NewCloser(),
 		config:                          conf,
 		minerID:                         minerID,
-		layerDuration:                   layerDuration,
 		net:                             net,
 		atxDB:                           atxDB,
 		tortoiseBeaconDB:                tortoiseBeaconDB,
@@ -201,14 +194,12 @@ func (tb *TortoiseBeacon) Start(ctx context.Context) error {
 
 	tb.initGenesisBeacons()
 
-	tb.layerTicker = tb.clock.Subscribe()
-
 	tb.backgroundWG.Add(1)
 
 	go func() {
 		defer tb.backgroundWG.Done()
 
-		tb.listenLayers(ctx)
+		tb.eventLoop(ctx)
 	}()
 
 	tb.backgroundWG.Add(1)
@@ -245,7 +236,6 @@ func (tb *TortoiseBeacon) Close() error {
 	tb.Log.Info("Closing %v", protoName)
 	tb.Closer.Close()
 	tb.backgroundWG.Wait() // Wait until background goroutines finish
-	tb.clock.Unsubscribe(tb.layerTicker)
 
 	return nil
 }
@@ -308,104 +298,63 @@ func (tb *TortoiseBeacon) epochIsOutdated(epoch types.EpochID) bool {
 	return tb.currentEpoch()-epoch > cleanupEpochs
 }
 
-// listens to new layers.
-func (tb *TortoiseBeacon) listenLayers(ctx context.Context) {
-	tb.Log.With().Info("Starting listening layers")
+// Handle new epochs
+func (tb *TortoiseBeacon) eventLoop(ctx context.Context) {
+	tb.Log.With().Info("starting tortoise beacon event loop")
 
 	for {
+		epoch, windowStart := tb.nextWindowStart()
+		waitTime := windowStart.Sub(time.Now())
+		timer := time.NewTimer(waitTime)
+
+		tb.With().Info("tortoise beacon waiting for next window", epoch, log.Duration("wait_time", waitTime))
 		select {
 		case <-tb.CloseChannel():
+			if !timer.Stop() {
+				<-timer.C
+			}
 			return
-		case layer := <-tb.layerTicker:
-			tb.Log.With().Debug("Received tick",
-				log.Uint64("layer", uint64(layer)))
-
-			go tb.handleLayer(ctx, layer)
+		case <-timer.C:
+			// check for timeout (e.g. computer was sleeping)
+			if timeSinceWindowStart := time.Now().Sub(windowStart); timeSinceWindowStart > windowStartTolerance {
+				tb.With().Warning("tortoise beacon start window missed")
+				continue
+			}
+			go tb.handleEpoch(ctx, epoch)
 		}
 	}
 }
 
-// the logic that happens when a new layer arrives.
-// this function triggers the start of new CPs.
-func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) {
-	tb.layerMu.Lock()
-	if layer > tb.lastLayer {
-		tb.Log.With().Debug("Updating layer",
-			log.Uint64("old_value", uint64(tb.lastLayer)),
-			log.Uint64("new_value", uint64(layer)))
-
-		tb.lastLayer = layer
+func (tb *TortoiseBeacon) nextWindowStart() (types.EpochID, time.Time) {
+	epoch := tb.clock.GetCurrentLayer().GetEpoch()
+	if epoch < 2 {
+		tb.With().Info("tortoise beacon started in genesis, waiting for epoch 2")
+		epoch = 2
 	}
-
-	tb.layerMu.Unlock()
-
-	epoch := layer.GetEpoch()
-
-	if !layer.FirstInEpoch() {
-		tb.Log.With().Debug("skipping layer because it's not first in this epoch",
-			log.Uint64("epoch_id", uint64(epoch)),
-			log.Uint64("layer_id", uint64(layer)))
-
-		return
+	windowStart := tb.windowStart(epoch)
+	if windowStart.Before(time.Now()) {
+		return epoch + 1, tb.windowStart(epoch + 1)
 	}
+	return epoch, windowStart
+}
 
-	tb.Log.With().Debug("Layer is first in epoch, proceeding",
-		log.Uint64("layer", uint64(layer)))
-
-	tb.seenEpochsMu.Lock()
-	if _, ok := tb.seenEpochs[epoch]; ok {
-		tb.Log.With().Error("already seen this epoch",
-			log.Uint64("epoch_id", uint64(epoch)),
-			log.Uint64("layer_id", uint64(layer)))
-
-		tb.seenEpochs[epoch] = struct{}{}
-		tb.seenEpochsMu.Unlock()
-
-		return
-	}
-
-	tb.seenEpochsMu.Unlock()
-
-	tb.Log.With().Debug("tortoise beacon got tick, waiting until other nodes have the same epoch",
-		log.Uint64("layer", uint64(layer)),
-		log.Uint64("epoch_id", uint64(epoch)))
-
-	epochStartTimer := time.NewTimer(tb.proposalDuration + tb.gracePeriodDuration)
-
-	select {
-	case <-tb.CloseChannel():
-		if !epochStartTimer.Stop() {
-			<-epochStartTimer.C
-		}
-	case <-epochStartTimer.C:
-		tb.handleEpoch(ctx, epoch)
-	}
+func (tb *TortoiseBeacon) windowStart(epoch types.EpochID) time.Time {
+	return tb.clock.LayerToTime(epoch.FirstLayer()).Add(tb.waitAfterEpochStart)
 }
 
 func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) {
-	// TODO: check when epoch started, adjust waiting time for this timestamp
-	if epoch.IsGenesis() {
-		tb.Log.With().Debug("not starting tortoise beacon since we are in genesis epoch",
-			log.Uint64("epoch_id", uint64(epoch)))
+	atomic.StoreUint64((*uint64)(&tb.epoch), uint64(epoch))
 
-		return
-	}
-
-	tb.Log.With().Info("Handling epoch",
-		log.Uint64("epoch_id", uint64(epoch)))
+	tb.With().Info("handling epoch", epoch)
 
 	if err := tb.runProposalPhase(ctx, epoch); err != nil {
-		tb.Log.With().Error("Failed to send proposal",
-			log.Uint64("epoch_id", uint64(epoch)),
-			log.Err(err))
+		tb.With().Error("failed to send proposal", epoch, log.Err(err))
 
 		return
 	}
 
 	if err := tb.runConsensusPhase(ctx, epoch); err != nil {
-		tb.Log.With().Error("Failed to run consensus phase",
-			log.Uint64("epoch_id", uint64(epoch)),
-			log.Err(err))
+		tb.With().Error("failed to run consensus phase", epoch, log.Err(err))
 
 		return
 	}
@@ -413,13 +362,10 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	// K rounds passed
 	// After K rounds had passed, tally up votes for proposals using simple tortoise vote counting
 	if err := tb.calcBeacon(epoch); err != nil {
-		tb.Log.With().Error("Failed to calculate beacon",
-			log.Uint64("epoch_id", uint64(epoch)),
-			log.Err(err))
+		tb.With().Error("failed to calculate beacon", epoch, log.Err(err))
 	}
 
-	tb.Log.With().Debug("Finished handling epoch",
-		log.Uint64("epoch_id", uint64(epoch)))
+	tb.With().Debug("finished handling epoch", epoch)
 }
 
 func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.EpochID) error {

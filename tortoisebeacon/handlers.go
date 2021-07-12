@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -383,12 +384,5 @@ func (tb *TortoiseBeacon) verifyEligibilityProof(message interface{}, from types
 }
 
 func (tb *TortoiseBeacon) currentEpoch() types.EpochID {
-	return tb.currentLayer().GetEpoch()
-}
-
-func (tb *TortoiseBeacon) currentLayer() types.LayerID {
-	tb.layerMu.RLock()
-	defer tb.layerMu.RUnlock()
-
-	return tb.lastLayer
+	return types.EpochID(atomic.LoadUint64((*uint64)(&tb.epoch)))
 }

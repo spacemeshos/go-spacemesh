@@ -83,6 +83,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 	for _, tc := range tt {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			r := require.New(t)
 			t.Parallel()
 
 			tb := TortoiseBeacon{
@@ -93,7 +94,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 				vrfVerifier:    signing.VRFVerify,
 				vrfSigner:      vrfSigner,
 				clock:          clock,
-				lastLayer:      epoch,
+				epoch:          epoch,
 			}
 
 			q, ok := new(big.Rat).SetString(tb.config.Q)
@@ -377,7 +378,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 						},
 					},
 				},
-				lastLayer: epoch,
+				epoch: epoch,
 			}
 
 			sig, err := tb.signMessage(tc.message.FollowingVotingMessageBody)
