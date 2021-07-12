@@ -13,7 +13,7 @@ var testcases = map[string]interface{}{
 // accounts, all nodes wait for the next epoch and asserts
 // the accounts' balance
 func testTransaction(t *T) {
-	t.Log("Starting transaction test, %d is up", seq)
+	t.Log("Starting transaction test, %d is up", t.WhoAmI())
 	// TODO: ready should be replaced with starting the node and waiting for
 	// genesis
 	t.SetState("ready")
@@ -30,7 +30,7 @@ func testTransaction(t *T) {
 // send it 100 coins from a test account to it and asserts the
 // accounts' balance
 func testNewAccount(t *T) {
-	t.Log("Starting new account test, %d is up", seq)
+	t.Log("Starting new account test, %d is up", t.WhoAmI())
 	// TODO: ready should be replaced with starting the node and waiting for
 	// genesis
 	t.SetState("ready")
