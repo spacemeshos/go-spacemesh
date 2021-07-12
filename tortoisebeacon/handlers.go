@@ -54,6 +54,8 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 }
 
 func (tb *TortoiseBeacon) handleProposalMessage(ctx context.Context, m ProposalMessage) error {
+	// TODO(nkryuchkov): buffer messages that came from future epochs because of time drifts on different nodes (https://github.com/spacemeshos/go-spacemesh/pull/2529#issuecomment-877772213)
+
 	receivedTimestamp := time.Now()
 	currentEpoch := tb.currentEpoch()
 
