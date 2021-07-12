@@ -1,8 +1,10 @@
 package mesh
 
 import (
+	"bytes"
 	"container/list"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -518,24 +520,70 @@ func getSmesherRewardKeyPrefix(smesherID types.NodeID) []byte {
 	return []byte(str)
 }
 
+type keyBuilder struct {
+	buf bytes.Buffer
+}
+
+func (k *keyBuilder) WithLayerID(l types.LayerID) *keyBuilder {
+	buf := make([]byte, 8)
+	// NOTE(dshulyak) big endian produces lexicographically ordered bytes.
+	// some queries can be optimizaed by using range queries instead of point queries.
+	binary.BigEndian.PutUint64(buf, l.Uint64())
+	k.buf.Write(l.Bytes())
+	return k
+}
+
+func (k *keyBuilder) WithOriginPrefix() *keyBuilder {
+	k.buf.WriteString("a_o_")
+	return k
+}
+
+func (k *keyBuilder) WithDestPrefix() *keyBuilder {
+	k.buf.WriteString("a_d_")
+	return k
+}
+
+func (k *keyBuilder) WithBytes(buf []byte) *keyBuilder {
+	k.buf.Write(buf)
+	return k
+}
+
+func (k *keyBuilder) Bytes() []byte {
+	return k.buf.Bytes()
+}
+
 func getTransactionOriginKey(l types.LayerID, t *types.Transaction) []byte {
-	str := string(getTransactionOriginKeyPrefix(l, t.Origin())) + "_" + t.ID().String()
-	return []byte(str)
+	return new(keyBuilder).
+		WithOriginPrefix().
+		WithBytes(t.Origin().Bytes()).
+		WithLayerID(l).
+		WithBytes(t.ID().Bytes()).
+		Bytes()
 }
 
 func getTransactionDestKey(l types.LayerID, t *types.Transaction) []byte {
-	str := string(getTransactionDestKeyPrefix(l, t.Recipient)) + "_" + t.ID().String()
-	return []byte(str)
+	return new(keyBuilder).
+		WithDestPrefix().
+		WithBytes(t.Recipient.Bytes()).
+		WithLayerID(l).
+		WithBytes(t.ID().Bytes()).
+		Bytes()
 }
 
 func getTransactionOriginKeyPrefix(l types.LayerID, account types.Address) []byte {
-	str := "a_o_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
-	return []byte(str)
+	return new(keyBuilder).
+		WithOriginPrefix().
+		WithBytes(account.Bytes()).
+		WithLayerID(l).
+		Bytes()
 }
 
 func getTransactionDestKeyPrefix(l types.LayerID, account types.Address) []byte {
-	str := "a_d_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
-	return []byte(str)
+	return new(keyBuilder).
+		WithDestPrefix().
+		WithBytes(account.Bytes()).
+		WithLayerID(l).
+		Bytes()
 }
 
 // DbTransaction is the transaction type stored in DB
