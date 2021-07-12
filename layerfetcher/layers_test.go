@@ -12,7 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
+	peers "github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -31,18 +31,18 @@ func RandomHash() types.Hash32 {
 }
 
 type mockNet struct {
-	peers               []p2ppeers.Peer
+	peers               []peers.Peer
 	callCallback        bool
 	callSuccessCallback bool
 	errToSend           error
 	sendCalled          int
 }
 
-func (m *mockNet) GetPeers() []p2ppeers.Peer {
+func (m *mockNet) GetPeers() []peers.Peer {
 	return m.peers
 }
 
-func (m *mockNet) GetRandomPeer() p2ppeers.Peer {
+func (m *mockNet) GetRandomPeer() peers.Peer {
 	return m.peers[0]
 }
 
@@ -153,7 +153,7 @@ func NewMockLogic(net *mockNet, layers layerDB, blocksDB gossipBlocks, blocks bl
 		log:                  log,
 		fetcher:              fetcher,
 		net:                  net,
-		layerHashResults:     make(map[types.LayerID]map[p2ppeers.Peer]*types.Hash32),
+		layerHashResults:     make(map[types.LayerID]map[peers.Peer]*types.Hash32),
 		blockHashResults:     make(map[types.LayerID][]error),
 		layerResultsChannels: make(map[types.LayerID][]chan LayerPromiseResult),
 		atxs:                 atxs,

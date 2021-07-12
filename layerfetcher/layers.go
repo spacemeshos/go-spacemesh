@@ -14,7 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
+	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
@@ -66,7 +66,7 @@ type tortoiseBeaconDB interface {
 
 // network defines network capabilities used
 type network interface {
-	GetPeers() []p2ppeers.Peer
+	GetPeers() []peers.Peer
 	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), timeoutHandler func(err error)) error
 	Close()
 }
@@ -87,7 +87,7 @@ type Logic struct {
 	log                  log.Log
 	fetcher              fetch.Fetcher
 	net                  network
-	layerHashResults     map[types.LayerID]map[p2ppeers.Peer]*types.Hash32
+	layerHashResults     map[types.LayerID]map[peers.Peer]*types.Hash32
 	blockHashResults     map[types.LayerID][]error
 	layerResultsChannels map[types.LayerID][]chan LayerPromiseResult
 	poetProofs           poetDb
@@ -123,7 +123,7 @@ func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHand
 		log:                  log,
 		fetcher:              fetcher,
 		net:                  srv,
-		layerHashResults:     make(map[types.LayerID]map[p2ppeers.Peer]*types.Hash32),
+		layerHashResults:     make(map[types.LayerID]map[peers.Peer]*types.Hash32),
 		blockHashResults:     make(map[types.LayerID][]error),
 		layerResultsChannels: make(map[types.LayerID][]chan LayerPromiseResult),
 		poetProofs:           poet,
@@ -278,18 +278,18 @@ func (l *Logic) PollLayer(ctx context.Context, layer types.LayerID) chan LayerPr
 
 // receiver function for block hash result per layer, this function aggregates all responses from all peers
 // and then unifies them. it also fails if a threshold of failed calls to peers have been reached
-func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppeers.Peer, peers int, data []byte, err error) {
+func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p peers.Peer, numPeers int, data []byte, err error) {
 	// log result for peer
-	if peers == 0 {
+	if numPeers == 0 {
 		l.log.WithContext(ctx).Error("cannot sync layer %v", id)
-		l.notifyLayerPromiseResult(id, 0, fmt.Errorf("no peers"))
+		l.notifyLayerPromiseResult(id, 0, fmt.Errorf("no numPeers"))
 		return
 	}
 
 	l.layerHashResM.Lock()
 
 	if _, ok := l.layerHashResults[id]; !ok {
-		l.layerHashResults[id] = make(map[p2ppeers.Peer]*types.Hash32)
+		l.layerHashResults[id] = make(map[peers.Peer]*types.Hash32)
 	}
 	// if no error from peer, try to parse data
 	if err == nil {
@@ -301,8 +301,8 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 		l.log.WithContext(ctx).Error("received nil (error) for layer id %v from peer %v err:%v", id, p.String(), err)
 	}
 	// not enough results
-	if len(l.layerHashResults[id]) < peers {
-		l.log.WithContext(ctx).Debug("received %v results, not from all peers yet (%v)", len(l.layerHashResults[id]), peers)
+	if len(l.layerHashResults[id]) < numPeers {
+		l.log.WithContext(ctx).Debug("received %v results, not from all numPeers yet (%v)", len(l.layerHashResults[id]), numPeers)
 		l.layerHashResM.Unlock()
 		return
 	}
@@ -310,7 +310,7 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 	l.layerHashResM.Unlock()
 	errors := 0
 	//aggregate hashes so that same hash will not be requested several times
-	hashes := make(map[types.Hash32][]p2ppeers.Peer)
+	hashes := make(map[types.Hash32][]peers.Peer)
 	l.layerHashResM.RLock()
 	for peer, hash := range l.layerHashResults[id] {
 		//count nil hashes - mark errors.
@@ -332,7 +332,7 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 
 	// if more than half the peers returned an error, fail the sync of the entire layer
 	// todo: think whether we should panic here
-	if errors > peers/2 {
+	if errors > numPeers/2 {
 		l.log.WithContext(ctx).Error("cannot sync layer %v", id)
 		l.notifyLayerPromiseResult(id, 0, fmt.Errorf("too many peers returned error"))
 		return
@@ -660,15 +660,15 @@ func (l *Logic) GetInputVector(ctx context.Context, id types.LayerID) error {
 
 // GetTortoiseBeacon gets tortoise beacon data from remote peer
 func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
-	peers := l.net.GetPeers()
-	if len(peers) == 0 {
+	remotePeers := l.net.GetPeers()
+	if len(remotePeers) == 0 {
 		return ErrNoPeers
 	}
 
 	cancelCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	resCh := make(chan []byte, len(peers))
+	resCh := make(chan []byte, len(remotePeers))
 
 	//build receiver function
 	makeReceiveFunc := func(peer fmt.Stringer) func([]byte) {
@@ -697,8 +697,8 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 
 	l.log.WithContext(ctx).Info("requesting tortoise beacon from all peers for epoch %v", id)
 
-	for _, p := range peers {
-		go func(peer p2ppeers.Peer) {
+	for _, p := range remotePeers {
+		go func(peer peers.Peer) {
 			select {
 			case <-cancelCtx.Done():
 				return
