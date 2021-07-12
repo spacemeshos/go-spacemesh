@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
 // ProposalMessage is a message type which is used when sending proposals.
 type ProposalMessage struct {
+	EpochID      types.EpochID
 	MinerID      types.NodeID
 	VRFSignature []byte
 }
@@ -20,6 +22,11 @@ func (p ProposalMessage) String() string {
 	}
 
 	return string(bytes)
+}
+
+type extendedProposalMessage struct {
+	message ProposalMessage
+	gossip  service.GossipMessage
 }
 
 // FirstVotingMessageBody is FirstVotingMessage without a signature.

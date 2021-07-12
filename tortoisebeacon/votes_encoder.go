@@ -19,6 +19,7 @@ func (tb *TortoiseBeacon) encodeVotes(currentRound votesSetPair, firstRound firs
 	}
 
 	bs := bitset.New(length)
+
 	for i, v := range validVotes {
 		if _, ok := currentRound.ValidVotes[v]; ok {
 			bs.Set(uint(i))
@@ -29,6 +30,7 @@ func (tb *TortoiseBeacon) encodeVotes(currentRound votesSetPair, firstRound firs
 	}
 
 	offset := len(validVotes)
+
 	for i, v := range potentiallyValidVotes {
 		if _, ok := currentRound.ValidVotes[v]; ok {
 			bs.Set(uint(offset + i))

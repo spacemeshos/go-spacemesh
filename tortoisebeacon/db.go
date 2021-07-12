@@ -33,6 +33,7 @@ func (db *DB) GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, bool) {
 	id, err := db.store.Get(epochID.ToBytes())
 	if err != nil {
 		db.log.Error("failed to get tortoise beacon for epoch %v: %v", epochID, err)
+
 		return types.Hash32{}, false
 	}
 
@@ -49,6 +50,7 @@ func (db *DB) SetTortoiseBeacon(epochID types.EpochID, beacon types.Hash32) erro
 	err := db.store.Put(epochID.ToBytes(), beacon.Bytes())
 	if err != nil {
 		db.log.Error("failed to add tortoise beacon for epoch %v (%v): %v", epochID, beacon.String(), err)
+
 		return fmt.Errorf("failed to add tortoise beacon: %w", err)
 	}
 
