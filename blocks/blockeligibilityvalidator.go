@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -102,11 +101,12 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	}
 	vrfSig := block.EligibilityProof.Sig
 
+	beaconShortString := types.BytesToHash(epochBeacon).ShortString()
 	if !v.validateVRF(vrfPubkey, message, vrfSig) {
-		return false, fmt.Errorf("tortoise beacon eligibility VRF validation failed: beacon %v, epoch %v, counter: %v", util.Bytes2Hex(epochBeacon), epochNumber, counter)
+		return false, fmt.Errorf("tortoise beacon eligibility VRF validation failed: beacon %v, epoch %v, counter: %v", beaconShortString, epochNumber, counter)
 	}
 
-	v.log.Info("validated tortoise beacon eligibility VRF of beacon %v in epoch %v (counter: %v)", util.Bytes2Hex(epochBeacon), epochNumber, counter)
+	v.log.Info("validated tortoise beacon eligibility VRF of beacon %v in epoch %v (counter: %v)", beaconShortString, epochNumber, counter)
 
 	eligibleLayer := calcEligibleLayer(epochNumber, v.layersPerEpoch, vrfSig)
 
