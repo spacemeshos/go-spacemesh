@@ -10,8 +10,8 @@ var testcases = map[string]interface{}{
 }
 
 // test_transaction the first node transers 100 coins between the two tests
-//					accounts, all nodes wait for the next epoch and asserts
-//					the accounts' balance
+// accounts, all nodes wait for the next epoch and asserts
+// the accounts' balance
 func testTransaction(t *T) {
 	t.Log("Starting transaction test, %d is up", seq)
 	// TODO: ready should be replaced with starting the node and waiting for
@@ -27,7 +27,8 @@ func testTransaction(t *T) {
 }
 
 // test_new_account uses the firest node to creates a new account and
-// send it 100 coins from a test account to it and asserts the accounts' balance
+// send it 100 coins from a test account to it and asserts the
+// accounts' balance
 func testNewAccount(t *T) {
 	t.Log("Starting new account test, %d is up", seq)
 	// TODO: ready should be replaced with starting the node and waiting for
