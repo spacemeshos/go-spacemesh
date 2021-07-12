@@ -6,35 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-// TotalWeightCache holds an lru cache of the total weight per view hash.
-type TotalWeightCache struct {
-	*lru.Cache
-}
-
-// NewTotalWeightCache creates a cache for total weight per view hash.
-func NewTotalWeightCache(size int) TotalWeightCache {
-	cache, err := lru.New(size)
-	if err != nil {
-		log.Fatal("could not initialize cache ", err)
-	}
-	return TotalWeightCache{Cache: cache}
-}
-
-// Add adds a viewHash and a totalWeight that was calculated for this viewHash.
-func (bc *TotalWeightCache) Add(viewHash types.Hash12, totalWeight uint64) {
-	bc.Cache.Add(viewHash, totalWeight)
-}
-
-// Get returns the stored totalWeight for the provided viewHash.
-func (bc TotalWeightCache) Get(viewHash types.Hash12) (uint64, bool) {
-	item, found := bc.Cache.Get(viewHash)
-	if !found {
-		return 0, false
-	}
-	totalWeight := item.(uint64)
-	return totalWeight, true
-}
-
 // AtxCache holds an lru cache of ActivationTxHeader structs of recent atx used to calculate active set size
 // ideally this cache will hold the atxs created in latest epoch, on which most of active set size calculation will be
 // performed

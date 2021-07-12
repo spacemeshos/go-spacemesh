@@ -58,8 +58,6 @@ func AddCommands(cmd *cobra.Command) {
 		config.GoldenATXID, "golden ATX hash")
 	cmd.PersistentFlags().Uint64Var(&config.SpaceToCommit, "space-to-commit",
 		config.SpaceToCommit, "number of bytes to commit to mining")
-	cmd.PersistentFlags().Uint64Var(&config.GenesisTotalWeight, "genesis-total-weight",
-		config.GenesisTotalWeight, "The active set size for the genesis flow")
 	cmd.PersistentFlags().IntVar(&config.BlockCacheSize, "block-cache-size",
 		config.BlockCacheSize, "size in layers of meshdb block cache")
 	cmd.PersistentFlags().StringVar(&config.PublishEventsURL, "events-url",
@@ -197,6 +195,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.TortoiseBeacon.VotingRoundDurationMs, "Voting round duration in milliseconds")
 	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.WeakCoinRoundDurationMs, "tortoise-beacon-weak-coin-round-duration-ms",
 		config.TortoiseBeacon.WeakCoinRoundDurationMs, "Weak coin round duration in milliseconds")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.WaitAfterEpochStart, "tortoise-beacon-wait-after-epoch-start-ms",
+		config.TortoiseBeacon.WaitAfterEpochStart, "How many milliseconds to wait after a new epoch is started.")
 	cmd.PersistentFlags().Float64Var(&config.TortoiseBeacon.Theta, "tortoise-beacon-theta",
 		config.TortoiseBeacon.Theta, "Ratio of votes for reaching consensus")
 	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.VotesLimit, "tortoise-beacon-votes-limit",

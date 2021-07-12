@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"net"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -89,7 +89,7 @@ func (p *protocol) Ping(ctx context.Context, peer p2pcrypto.PublicKey) error {
 		ch <- sender.ID.Bytes()
 	}
 
-	err = p.msgServer.SendRequest(ctx, PingPong, data, peer, foo, func(err error) {})
+	err = p.msgServer.SendRequest(ctx, server.PingPong, data, peer, foo, func(err error) {})
 
 	if err != nil {
 		return err
