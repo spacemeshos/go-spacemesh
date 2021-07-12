@@ -358,19 +358,20 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.Uint64("layer_id", uint64(layer)))
 
-		tb.seenEpochs[epoch] = struct{}{}
 		tb.seenEpochsMu.Unlock()
 
 		return
 	}
 
+	tb.seenEpochs[epoch] = struct{}{}
 	tb.seenEpochsMu.Unlock()
 
 	tb.Log.With().Debug("tortoise beacon got tick, waiting until other nodes have the same epoch",
 		log.Uint64("layer", uint64(layer)),
-		log.Uint64("epoch_id", uint64(epoch)))
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.String("wait_time", tb.waitAfterEpochStart.String()))
 
-	epochStartTimer := time.NewTimer(tb.proposalDuration + tb.gracePeriodDuration)
+	epochStartTimer := time.NewTimer(tb.waitAfterEpochStart)
 
 	select {
 	case <-tb.CloseChannel():
