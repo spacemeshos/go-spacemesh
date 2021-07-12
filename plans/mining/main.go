@@ -21,7 +21,7 @@ func testTransaction(t *T) {
 	if t.WhoAmI() == 1 {
 		t.SendCoins(Account1, Account2, 100)
 	}
-	t.WaitForNextEpoch()
+	t.WaitTillEpoch()
 	t.RequireBalance(Account1, 100000000000000000-100)
 	t.RequireBalance(Account2, 100000000000000000+100)
 }
@@ -39,7 +39,7 @@ func testNewAccount(t *T) {
 		account := t.NewAccount()
 		t.SendCoins(Account1, account, 100)
 	}
-	t.WaitForNextEpoch()
+	t.WaitTillEpoch()
 	t.RequireBalance(Account1, 100000000000000000-100)
 	t.RequireBalance(account, 100)
 }
