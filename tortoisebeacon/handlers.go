@@ -23,8 +23,13 @@ const TBFirstVotingProtocol = "TBFirstVotingGossip"
 // TBFollowingVotingProtocol is a protocol for sending Tortoise Beacon following voting messages through Gossip.
 const TBFollowingVotingProtocol = "TBFollowingVotingGossip"
 
-// ErrMalformedProposal is returned if proposal message is malformed.
-var ErrMalformedProposal = errors.New("malformed proposal message")
+var (
+	// ErrMalformedProposal is returned if proposal message is malformed.
+	ErrMalformedProposal = errors.New("malformed proposal message")
+
+	// ErrProposalDoesntPassThreshold is returned if proposal message doesn't pass threshold.
+	ErrProposalDoesntPassThreshold = errors.New("proposal doesn't pass threshold")
+)
 
 // HandleSerializedProposalMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
 func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
@@ -52,7 +57,7 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 	}
 
 	tb.proposalChansMu.Lock()
-	ch := tb.ensureProposalChanExists(message.EpochID)
+	ch := tb.getOrCreateProposalChannel(message.EpochID)
 	tb.proposalChansMu.Unlock()
 
 	extendedMessage := extendedProposalMessage{
@@ -83,8 +88,14 @@ func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage, receivedTime 
 		return fmt.Errorf("get node ATXID for epoch: %w", err)
 	}
 
-	if done, err := tb.verifyProposalMessage(m, currentEpoch); done {
-		return fmt.Errorf("verify proposal message: %w", err)
+	err = tb.verifyProposalMessage(m, currentEpoch)
+	if errors.Is(err, ErrProposalDoesntPassThreshold) {
+		// not a handling error
+		return nil
+	}
+
+	if err != nil {
+		return err
 	}
 
 	if err := tb.classifyProposalMessage(m, atxID, currentEpoch, receivedTime); err != nil {
@@ -147,10 +158,10 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 	return nil
 }
 
-func (tb *TortoiseBeacon) verifyProposalMessage(m ProposalMessage, currentEpoch types.EpochID) (done bool, err error) {
+func (tb *TortoiseBeacon) verifyProposalMessage(m ProposalMessage, currentEpoch types.EpochID) error {
 	currentEpochProposal, err := tb.buildProposal(currentEpoch)
 	if err != nil {
-		return true, fmt.Errorf("calculate proposal: %w", err)
+		return fmt.Errorf("calculate proposal: %w", err)
 	}
 
 	ok := tb.vrfVerifier(m.MinerID.VRFPublicKey, currentEpochProposal, m.VRFSignature)
@@ -160,26 +171,26 @@ func (tb *TortoiseBeacon) verifyProposalMessage(m ProposalMessage, currentEpoch 
 			log.String("sender", m.MinerID.Key))
 
 		// TODO(nkryuchkov): add a test for this case
-		return true, ErrMalformedProposal
+		return ErrMalformedProposal
 	}
 
 	epochWeight, _, err := tb.atxDB.GetEpochWeight(currentEpoch)
 	if err != nil {
-		return true, fmt.Errorf("get epoch weight: %w", err)
+		return fmt.Errorf("get epoch weight: %w", err)
 	}
 
 	passes, err := tb.proposalPassesEligibilityThreshold(m.VRFSignature, epochWeight)
 	if err != nil {
-		return true, fmt.Errorf("proposalPassesEligibilityThreshold: %w", err)
+		return fmt.Errorf("proposalPassesEligibilityThreshold: %w", err)
 	}
 
 	if !passes {
 		tb.Log.With().Warning("Rejected proposal message which doesn't pass threshold")
 
-		return true, nil
+		return ErrProposalDoesntPassThreshold
 	}
 
-	return false, nil
+	return nil
 }
 
 func (tb *TortoiseBeacon) isPotentiallyValidProposalMessage(currentEpoch types.EpochID, atxTimestamp, nextEpochStart, receivedTimestamp time.Time) bool {

@@ -397,7 +397,7 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 
 	tb.proposalChansMu.Lock()
 	tb.closePrevChan(epoch)
-	ch := tb.ensureProposalChanExists(epoch)
+	ch := tb.getOrCreateProposalChannel(epoch)
 	tb.proposalChansMu.Unlock()
 
 	go tb.readProposalMessagesLoop(ctx, ch)
@@ -449,7 +449,7 @@ func (tb *TortoiseBeacon) closePrevChan(epoch types.EpochID) {
 	}
 }
 
-func (tb *TortoiseBeacon) ensureProposalChanExists(epoch types.EpochID) chan extendedProposalMessage {
+func (tb *TortoiseBeacon) getOrCreateProposalChannel(epoch types.EpochID) chan extendedProposalMessage {
 	ch, ok := tb.proposalChans[epoch]
 	if !ok {
 		ch = make(chan extendedProposalMessage, proposalChanCapacity)
