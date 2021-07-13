@@ -138,7 +138,7 @@ func (l LayerID) After(other LayerID) bool {
 	return l.Value > other.Value
 }
 
-// Duration returns the difference between current and other layer.
+// Difference returns the difference between current and other layer.
 func (l LayerID) Difference(other LayerID) uint32 {
 	if other.Value > l.Value {
 		panic(fmt.Sprintf("other (%d) must be before or equal to this layer (%d)", other.Value, l.Value))
