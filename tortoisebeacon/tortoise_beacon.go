@@ -954,7 +954,7 @@ func (tb *TortoiseBeacon) sendToGossip(ctx context.Context, channel string, data
 	}
 
 	if err := tb.net.Broadcast(ctx, channel, serialized); err != nil {
-		return fmt.Errorf("InterfaceToBytes: %w", err)
+		return fmt.Errorf("broadcast: %w", err)
 	}
 
 	return nil
