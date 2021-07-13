@@ -10,22 +10,13 @@ import (
 // MemoryCollector is an in memory database to store collected events
 type MemoryCollector struct {
 	events                 map[events.ChannelID][]Event
-<<<<<<< HEAD
 	doneCreatingBlockEvent map[uint32][]*events.DoneCreatingBlock
 	doneCreatingAtxEvent   map[uint32][]*events.AtxCreated
 	createdAtxs            map[uint32][]string
 	gotBlockEvent          map[uint32][]*events.NewBlock
 	gotAtxEvent            map[uint32][]*events.NewAtx
 	Atxs                   map[string]uint32
-=======
-	doneCreatingBlockEvent map[uint64][]*events.DoneCreatingBlock
-	doneCreatingAtxEvent   map[uint64][]*events.AtxCreated
-	createdAtxs            map[uint64][]string
-	gotBlockEvent          map[uint64][]*events.NewBlock
-	gotAtxEvent            map[uint64][]*events.NewAtx
-	Atxs                   map[string]uint64
 	tortoiseBeacons        map[types.EpochID][]string
->>>>>>> develop
 
 	lck sync.RWMutex
 }
@@ -34,22 +25,13 @@ type MemoryCollector struct {
 func NewMemoryCollector() *MemoryCollector {
 	return &MemoryCollector{
 		events:                 make(map[events.ChannelID][]Event),
-<<<<<<< HEAD
 		doneCreatingBlockEvent: make(map[uint32][]*events.DoneCreatingBlock),
 		doneCreatingAtxEvent:   make(map[uint32][]*events.AtxCreated),
 		gotBlockEvent:          make(map[uint32][]*events.NewBlock),
 		gotAtxEvent:            make(map[uint32][]*events.NewAtx),
 		Atxs:                   make(map[string]uint32),
 		createdAtxs:            make(map[uint32][]string),
-=======
-		doneCreatingBlockEvent: make(map[uint64][]*events.DoneCreatingBlock),
-		doneCreatingAtxEvent:   make(map[uint64][]*events.AtxCreated),
-		gotBlockEvent:          make(map[uint64][]*events.NewBlock),
-		gotAtxEvent:            make(map[uint64][]*events.NewAtx),
-		Atxs:                   make(map[string]uint64),
-		createdAtxs:            make(map[uint64][]string),
 		tortoiseBeacons:        make(map[types.EpochID][]string),
->>>>>>> develop
 	}
 }
 
@@ -95,7 +77,7 @@ func (c *MemoryCollector) StoreTxValid(event *events.ValidTx) error {
 func (c *MemoryCollector) StoreAtx(event *events.NewAtx) error {
 	c.lck.Lock()
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
-	c.gotAtxEvent[event.LayerID] = append(c.gotAtxEvent[event.LayerID], event)
+	c.gotAtxEvent[event.EpochID] = append(c.gotAtxEvent[event.EpochID], event)
 	c.Atxs[event.ID]++
 	c.lck.Unlock()
 	return nil
@@ -130,9 +112,9 @@ func (c *MemoryCollector) StoreBlockCreated(event *events.DoneCreatingBlock) err
 func (c *MemoryCollector) StoreAtxCreated(event *events.AtxCreated) error {
 	c.lck.Lock()
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
-	c.doneCreatingAtxEvent[event.Layer] = append(c.doneCreatingAtxEvent[event.Layer], event)
+	c.doneCreatingAtxEvent[event.Epoch] = append(c.doneCreatingAtxEvent[event.Epoch], event)
 	if event.Created {
-		c.createdAtxs[event.Layer] = append(c.createdAtxs[event.Layer], event.ID)
+		c.createdAtxs[event.Epoch] = append(c.createdAtxs[event.Epoch], event.ID)
 	}
 	c.lck.Unlock()
 	return nil

@@ -1020,7 +1020,7 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 
 func TestActivateDB_HandleAtxNilNipst(t *testing.T) {
 	atxdb, _, _ := getAtxDb(t.Name())
-	atx := newActivationTx(nodeID, 0, *types.EmptyATXID, *types.EmptyATXID, 0, 0, 0, 0, coinbase, nil)
+	atx := newActivationTx(nodeID, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerID{}, 0, 0, 0, coinbase, nil)
 	buf, err := types.InterfaceToBytes(atx)
 	require.NoError(t, err)
 	require.Error(t, atxdb.HandleAtxData(context.TODO(), buf, nil))

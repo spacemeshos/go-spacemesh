@@ -147,13 +147,9 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	app.logger.Info("new sync tester")
 
 	layersPerEpoch := app.Config.LayersPerEpoch
-<<<<<<< HEAD
 	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, layersPerEpoch, goldenATXID, &validatorMock{}, lg.WithOptions(log.Nop))
-=======
-	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, uint16(layersPerEpoch), goldenATXID, &validatorMock{}, lg.WithOptions(log.Nop))
 	tbDB := tortoisebeacon.NewDB(tbDBStore, lg.WithOptions(log.Nop))
 
->>>>>>> develop
 	dbs := &allDbs{
 		atxdb:       atxdb,
 		atxdbStore:  atxdbStore,

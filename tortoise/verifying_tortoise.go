@@ -569,7 +569,7 @@ layerLoop:
 			}
 
 			// check that the total weight exceeds the confidence threshold in all positions up
-			globalOpinion := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(i.Duration(pbaseOld)))
+			globalOpinion := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(i.Difference(pbaseOld)))
 			t.logger.With().Debug("calculated global opinion on block",
 				log.FieldNamed("voted_block", blk),
 				i,

@@ -676,13 +676,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	assert.NoError(t, err)
 	npst2 := NewNIPSTWithChallenge(challengeHash, poetRef)
 
-<<<<<<< HEAD
-	setTotalWeightInCache(t, defaultTotalWeight)
-
 	layerClockMock.currentLayer = types.EpochID(1).FirstLayer().Add(3)
-=======
-	layerClockMock.currentLayer = types.EpochID(1).FirstLayer() + 3
->>>>>>> develop
 	err = b.PublishActivationTx(context.TODO())
 	assert.EqualError(t, err, "target epoch has passed")
 
@@ -806,57 +800,6 @@ func genView() []types.BlockID {
 	return v
 }
 
-<<<<<<< HEAD
-func TestActivationDb_CalcActiveSetFromViewHighConcurrency(t *testing.T) {
-	totalWeightCache = NewTotalWeightCache(10) // small cache for collisions
-	atxdb, layers, _ := getAtxDb("t6")
-
-	id1 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
-	id2 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
-	id3 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
-	coinbase1 := types.HexToAddress("aaaa")
-	coinbase2 := types.HexToAddress("bbbb")
-	coinbase3 := types.HexToAddress("cccc")
-	atxs := []*types.ActivationTx{
-		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(12), 0, 100, 100, coinbase1, &types.NIPST{}),
-		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(300), 0, 100, 100, coinbase2, &types.NIPST{}),
-		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(435), 0, 100, 100, coinbase3, &types.NIPST{}),
-	}
-
-	poetRef := []byte{0xba, 0xb0}
-	for _, atx := range atxs {
-		hash, err := atx.NIPSTChallenge.Hash()
-		assert.NoError(t, err)
-		atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
-	}
-
-	blocks := createLayerWithAtx(t, layers, types.NewLayerID(1), 10, atxs, []types.BlockID{}, []types.BlockID{})
-	blocks = createLayerWithAtx(t, layers, types.NewLayerID(10), 10, []*types.ActivationTx{}, blocks, blocks)
-	blocks = createLayerWithAtx(t, layers, types.NewLayerID(100), 10, []*types.ActivationTx{}, blocks, blocks)
-
-	mck := &ATXDBMock{}
-	atx := newActivationTx(id1, 1, atxs[0].ID(), atxs[0].ID(), types.NewLayerID(1000), 0, 100, 100, coinbase1, &types.NIPST{})
-
-	atxdb.calcTotalWeightFunc = mck.CalcMinerWeights
-	wg := sync.WaitGroup{}
-	ff := 5000
-	wg.Add(ff)
-	rand.Seed(time.Now().UnixNano())
-	for i := 0; i < ff; i++ {
-		go func() {
-			num, err := atxdb.CalcTotalWeightFromView(genView(), atx.PubLayerID.GetEpoch())
-			assert.NoError(t, err)
-			assert.Equal(t, 6, int(num))
-			assert.NoError(t, err)
-			wg.Done()
-		}()
-	}
-
-	wg.Wait()
-}
-
-=======
->>>>>>> develop
 // Check that we're not trying to sync an ATX that references the golden ATX or an empty ATX (i.e. not adding it to the sync queue).
 func TestActivationDB_FetchAtxReferences(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)

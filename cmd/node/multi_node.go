@@ -165,13 +165,9 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 	cfg.LAYERS.RequestTimeout = 10
 	cfg.GoldenATXID = "0x5678"
 
-<<<<<<< HEAD
-	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
-=======
 	cfg.TortoiseBeacon = tortoisebeacon.TestConfig()
 
-	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
->>>>>>> develop
+	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
 	return cfg
 }

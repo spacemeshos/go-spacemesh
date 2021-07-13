@@ -337,7 +337,7 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 			return fmt.Errorf("atx layer (%v) must be after positioning atx layer (%v)",
 				atx.PubLayerID, posAtx.PubLayerID)
 		}
-		if d := atx.PubLayerID.Duration(posAtx.PubLayerID); d > db.LayersPerEpoch {
+		if d := atx.PubLayerID.Difference(posAtx.PubLayerID); d > db.LayersPerEpoch {
 			return fmt.Errorf("expected distance of one epoch (%v layers) from pos atx but found %v",
 				db.LayersPerEpoch, d)
 		}

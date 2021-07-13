@@ -308,7 +308,7 @@ func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 		s.setSyncState(ctx, synced)
 	}
 	latest := s.mesh.LatestLayer()
-	if current.After(latest) && current.Duration(latest) >= outOfSyncThreshold {
+	if current.After(latest) && current.Difference(latest) >= outOfSyncThreshold {
 		s.logger.WithContext(ctx).With().Info("node is too far behind",
 			log.FieldNamed("current", current),
 			log.FieldNamed("latest", latest),
@@ -401,7 +401,7 @@ func (s *Syncer) getTortoiseBeacon(ctx context.Context, layerID types.LayerID) e
 	// - layerID is in the current epoch
 	// - layerID is the last layer of a previous epoch
 	// i.e. for older epochs we sync tortoise beacons once per epoch. for current epoch we sync tortoise beacons in every layer
-	if epoch == currentEpoch || layerID == (epoch+1).FirstLayer()-1 {
+	if epoch == currentEpoch || layerID == (epoch+1).FirstLayer().Sub(1) {
 		s.logger.WithContext(ctx).With().Info("getting tortoise beacons", epoch, layerID)
 		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
 		if err := s.fetcher.GetTortoiseBeacon(ctx, epoch); err != nil {

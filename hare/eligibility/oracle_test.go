@@ -305,15 +305,9 @@ func defaultOracle(t testing.TB) *Oracle {
 	return mockOracle(t, defLayersPerEpoch)
 }
 
-<<<<<<< HEAD
 func mockOracle(t testing.TB, layersPerEpoch uint32) *Oracle {
 	types.SetLayersPerEpoch(layersPerEpoch)
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{}, &mockBlocksProvider{}, buildVerifier(true), nil, layersPerEpoch, uint64(spacePerUnit), uint64(genWeight), uint64(genesisMinerWeight), cfg, log.NewDefault(t.Name()))
-=======
-func mockOracle(t testing.TB, layersPerEpoch uint16) *Oracle {
-	types.SetLayersPerEpoch(int32(layersPerEpoch))
 	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{}, &mockBlocksProvider{}, buildVerifier(true), nil, layersPerEpoch, uint64(spacePerUnit), cfg, log.NewDefault(t.Name()))
->>>>>>> develop
 	return o
 }
 
@@ -579,14 +573,6 @@ func TestOracle_actives(t *testing.T) {
 
 	o := defaultOracle(t)
 	o.atxdb = atxdb
-<<<<<<< HEAD
-	t.Run("test genesis", func(t *testing.T) {
-		_, err := o.actives(context.TODO(), types.NewLayerID(1))
-		r.EqualError(err, errGenesis.Error())
-	})
-
-=======
->>>>>>> develop
 	t.Run("test cache", func(t *testing.T) {
 		mc := newMockCacher()
 		o.activesCache = mc
@@ -689,7 +675,7 @@ func TestOracle_MultipleLayerBlocks(t *testing.T) {
 	o := defaultOracle(t)
 	o.cfg = eCfg.Config{ConfidenceParam: confidenceParam, EpochOffset: epochOffset}
 	sls, sle := safeLayerRange(lyr, confidenceParam, defLayersPerEpoch, epochOffset)
-	numLayers := int(sle.Duration(sls) + 1) // +1 because inclusive of endpoints
+	numLayers := int(sle.Difference(sls) + 1) // +1 because inclusive of endpoints
 	log.With().Info("layer range", log.FieldNamed("start", sls), log.FieldNamed("end", sle), log.Int("count", numLayers))
 	allBlocks := make(map[types.BlockID]bool, numLayers)
 	o.meshdb = &mockBlocksProvider{layerContextuallyValidBlocksFn: func(layerID types.LayerID) (map[types.BlockID]struct{}, error) {

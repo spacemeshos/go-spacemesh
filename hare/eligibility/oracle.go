@@ -46,33 +46,17 @@ type verifierFunc = func(pub, msg, sig []byte) bool
 
 // Oracle is the hare eligibility oracle
 type Oracle struct {
-<<<<<<< HEAD
-	lock               sync.Mutex
-	beacon             valueProvider
-	atxdb              atxProvider
-	meshdb             meshProvider
-	vrfSigner          signer
-	vrfVerifier        verifierFunc
-	layersPerEpoch     uint32
-	spacePerUnit       uint64
-	vrfMsgCache        addGet
-	activesCache       addGet
-	genesisTotalWeight uint64
-	genesisMinerWeight uint64
-	cfg                eCfg.Config
-=======
 	lock           sync.Mutex
 	beacon         valueProvider
 	atxdb          atxProvider
 	meshdb         meshProvider
 	vrfSigner      signer
 	vrfVerifier    verifierFunc
-	layersPerEpoch uint16
+	layersPerEpoch uint32
 	spacePerUnit   uint64
 	vrfMsgCache    addGet
 	activesCache   addGet
 	cfg            eCfg.Config
->>>>>>> develop
 	log.Log
 }
 
@@ -120,13 +104,8 @@ func New(
 	meshdb meshProvider,
 	vrfVerifier verifierFunc,
 	vrfSigner signer,
-<<<<<<< HEAD
 	layersPerEpoch uint32,
-	spacePerUnit, genesisTotalWeight, genesisMinerWeight uint64,
-=======
-	layersPerEpoch uint16,
 	spacePerUnit uint64,
->>>>>>> develop
 	cfg eCfg.Config,
 	logger log.Log) *Oracle {
 	vmc, err := lru.New(vrfMsgCacheSize)

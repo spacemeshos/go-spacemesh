@@ -150,20 +150,12 @@ func buildMessage(msg *Message) *Msg {
 
 func buildBroker(net NetworkService, testName string) *Broker {
 	return newBroker(net, &mockEligibilityValidator{valid: true}, MockStateQuerier{true, nil},
-<<<<<<< HEAD
-		(&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, Closer{make(chan struct{})}, log.AppLog.WithName(testName))
-=======
 		(&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, util.NewCloser(), log.NewDefault(testName))
->>>>>>> develop
 }
 
 func buildBrokerLimit4(net NetworkService, testName string) *Broker {
 	return newBroker(net, &mockEligibilityValidator{valid: true}, MockStateQuerier{true, nil},
-<<<<<<< HEAD
-		(&mockSyncer{true}).IsSynced, 10, 4, Closer{make(chan struct{})}, log.AppLog.WithName(testName))
-=======
 		(&mockSyncer{true}).IsSynced, 10, 4, util.NewCloser(), log.NewDefault(testName))
->>>>>>> develop
 }
 
 type mockEligibilityValidator struct {

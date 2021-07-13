@@ -1577,7 +1577,7 @@ func TestMeshService(t *testing.T) {
 						require.NoError(t, err, "query returned unexpected error")
 
 						// endpoint inclusive so add one
-						numLayers := layerLatest.Duration(layerFirst) + 1
+						numLayers := layerLatest.Difference(layerFirst) + 1
 						require.EqualValues(t, numLayers, len(res.Layer))
 						checkLayer(t, res.Layer[0])
 
