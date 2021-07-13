@@ -2,19 +2,21 @@ package main
 
 import (
 	"github.com/testground/sdk-go/run"
+	"github.com/testground/sdk-go/runtime"
 )
 
 var testcases = map[string]interface{}{
-	"transaction": InitTestCase(testTransaction),
-	"new_account": InitTestCase(testNewAccount),
+	"transaction": InitializedTestCaseFn(testTransaction),
+	"new_account": InitializedTestCaseFn(testNewAccount),
 }
 
 // test_transaction in this test each node starts with getting the ballance
 // of the test account. Than the first node transers 100 coins between the
 // tests accounts.
 // Then all the nodes wait for the next epoch and assert the accounts' balance.
-func testTransaction(t *T) {
-	t.Log("Starting transaction test, %d is up", t.WhoAmI())
+func testTransaction(env *runtime.RunEnv, initCtx *InitContext) {
+	t := NewSystemTest(env, initCtx)
+	t.Logf("Starting transaction test, %d is up", t.WhoAmI())
 	// TODO: ready should be replaced with starting the node and waiting for
 	// genesis
 	t.SetState("ready")
@@ -34,8 +36,9 @@ func testTransaction(t *T) {
 // transers 100 coins between inb from a test account.
 // Then all the nodes wait for the next epoch and assert the accounts' balance.
 
-func testNewAccount(t *T) {
-	t.Log("Starting new account test, %d is up", t.WhoAmI())
+func testNewAccount(env *runtime.RunEnv, initCtx *InitContext) {
+	t := NewSystemTest(env, initCtx)
+	t.Logf("Starting new account test, %d is up", t.WhoAmI())
 	// TODO: ready should be replaced with starting the node and waiting for
 	// genesis
 	t.SetState("ready")
