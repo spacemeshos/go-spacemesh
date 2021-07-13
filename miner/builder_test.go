@@ -48,8 +48,7 @@ func (mockSyncer) GetPoetProof(context.Context, types.Hash32) error { return nil
 
 func (m mockSyncer) IsSynced(context.Context) bool { return !m.notSynced }
 
-type MockProjector struct {
-}
+type MockProjector struct{}
 
 func (p *MockProjector) GetProjection(types.Address) (nonce uint64, balance uint64, err error) {
 	return 1, 1000, nil
@@ -193,7 +192,6 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	case <-time.After(1 * time.Minute):
 		assert.Fail(t, "timeout on receiving block")
 	}
-
 }
 
 func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
@@ -231,7 +229,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 
 	assert.Equal(t, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, *b.ActiveSet)
 
-	//test create second block
+	// test create second block
 	bl, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis()+2, types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 1, Sig: []byte{1}}, transids, nil)
 	assert.NoError(t, err)
 
@@ -395,7 +393,7 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	st := []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
 	builder1 := createBlockBuilder("a", n1, bs)
 	builder1.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
-		return types.BlockID{0}, [][]types.BlockID{[]types.BlockID{}, []types.BlockID{}, st}, nil
+		return types.BlockID{0}, [][]types.BlockID{{}, {}, st}, nil
 	}}
 
 	b, err := builder1.createBlock(context.TODO(), 7, types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
@@ -403,7 +401,7 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	r.Equal(st, b.NeutralDiff)
 
 	builder1.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
-		return types.BlockID{0}, [][]types.BlockID{[]types.BlockID{}, nil, st}, nil
+		return types.BlockID{0}, [][]types.BlockID{{}, nil, st}, nil
 	}}
 
 	b, err = builder1.createBlock(context.TODO(), 7, types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
@@ -412,7 +410,7 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	emptyID := types.BlockID{}
 	r.NotEqual(b.ID(), emptyID)
 
-	b, err = builder1.createBlock(context.TODO(), 5, types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
+	_, err = builder1.createBlock(context.TODO(), 5, types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
 	r.EqualError(err, "cannot create blockBytes in genesis layer")
 }
 

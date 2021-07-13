@@ -121,7 +121,7 @@ func (c *HTTPPoetClient) req(ctx context.Context, method string, endURL string, 
 
 	ctx, cancel := c.ctxFactory(ctx)
 	defer cancel()
-	req.WithContext(ctx)
+	req = req.WithContext(ctx)
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {

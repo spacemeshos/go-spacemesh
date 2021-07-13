@@ -58,6 +58,7 @@ func (m *MeshValidatorMock) LatestComplete() types.LayerID {
 func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
 	return layer.Index() - 1, layer.Index()
 }
+
 func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
 	return bl.Layer() - 1, bl.Layer()
 }
@@ -106,6 +107,7 @@ func (MockState) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
 func (MockState) GetBalance(addr types.Address) uint64 {
 	panic("implement me")
 }
+
 func (MockState) GetNonce(addr types.Address) uint64 {
 	panic("implement me")
 }
@@ -655,17 +657,13 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	npst := NewNIPSTWithChallenge(&chlng, poetRef)
 	prevAtx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, 100, 0, 100, 100, coinbase, npst)
 
-	var nodeAtxIds []types.ATXID
-
 	err := atxdb.StoreAtx(1, prevAtx)
 	assert.NoError(t, err)
-	nodeAtxIds = append(nodeAtxIds, prevAtx.ID())
 
 	// wrong sequnce
 	atx := newActivationTx(idx1, 1, prevAtx.ID(), prevAtx.ID(), 1012, 0, 100, 100, coinbase, &types.NIPST{})
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
-	nodeAtxIds = append(nodeAtxIds, atx.ID())
 
 	atx = newActivationTx(idx1, 2, atx.ID(), atx.ID(), 1012, 0, 100, 100, coinbase, &types.NIPST{})
 	assert.NoError(t, err)
@@ -675,7 +673,6 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
-	nodeAtxIds = append(nodeAtxIds, atx.ID())
 	atx2id := atx.ID()
 
 	atx = newActivationTx(idx1, 4, prevAtx.ID(), prevAtx.ID(), 1012, 0, 100, 100, coinbase, &types.NIPST{})
@@ -689,7 +686,6 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
-	id4 := atx.ID()
 
 	atx = newActivationTx(idx1, 3, atx2id, prevAtx.ID(), 1012, 0, 100, 100, coinbase, &types.NIPST{})
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
@@ -697,8 +693,6 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
-	nodeAtxIds = append(nodeAtxIds, atx.ID())
-	nodeAtxIds = append(nodeAtxIds, id4)
 
 	id, err := atxdb.GetNodeLastAtxID(idx1)
 	assert.NoError(t, err)
@@ -732,7 +726,6 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
-
 }
 
 func TestActivationDb_ProcessAtx(t *testing.T) {
@@ -846,7 +839,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 			prevAtxs[miner] = atx.ID()
 			storeAtx(r, atxdb, atx, log.NewDefault("storeAtx").WithOptions(log.Nop))
 		}
-		//noinspection GoNilness
+		// noinspection GoNilness
 		posAtx = atx.ID()
 		layer += layersPerEpoch
 		if epoch%batchSize == batchSize-1 {
@@ -945,7 +938,6 @@ func TestActivationDb_ValidateSignedAtx(t *testing.T) {
 	signedAtx.Sig = []byte("anton")
 	_, err = ExtractPublicKey(signedAtx)
 	r.Error(err)
-
 }
 
 func createAndStoreAtx(atxdb *DB, layer types.LayerID) (*types.ActivationTx, error) {

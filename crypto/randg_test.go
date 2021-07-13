@@ -23,23 +23,22 @@ func TestGetRandomBytesToBuffer(t *testing.T) {
 	err = GetRandomBytesToBuffer(n, tb)
 	assert.Equal(t, err, nil, fmt.Sprintf("unexpected error %v", err))
 	assert.False(t, bytes.Equal(tb, eb), "null data from GetRandomBytes")
-
 }
 
 func TestGetRandomBytes(t *testing.T) {
 	n := 32
 	eb := make([]byte, n)
 	// pass in a zero
-	tb, err := GetRandomBytes(0)
+	_, err := GetRandomBytes(0)
 	assert.Error(t, err, "zero parameter should give error")
 	// call with good parameters
-	tb, err = GetRandomBytes(n)
+	tb, err := GetRandomBytes(n)
 	assert.Equal(t, err, nil, fmt.Sprintf("unexpected error %v", err))
 	assert.False(t, bytes.Equal(tb, eb), "null data from GetRandomBytes")
 }
 
 func TestGetRandomUInt32(t *testing.T) {
-	var max = uint32(16384)
-	x := GetRandomUInt32(max)
+	max := uint32(16384)
+	x := GetRandomUInt32(max) // nolint:staticcheck // due to unsafe
 	assert.True(t, unsafe.Sizeof(x) == 4, "unexpected GetRandomUInt32 failure")
 }

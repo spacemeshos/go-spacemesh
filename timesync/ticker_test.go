@@ -1,11 +1,12 @@
 package timesync
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/stretchr/testify/require"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/stretchr/testify/require"
 )
 
 var conv = LayerConv{

@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/monitoring"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/monitoring"
 )
 
 func work(term chan struct{}) {
