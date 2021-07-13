@@ -1049,7 +1049,7 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) error {
 		return fmt.Errorf("could not retrieve identity: %w", err)
 	}
 
-	poetClient := activation.NewHTTPPoetClient(ctx, app.Config.PoETServer)
+	poetClient := activation.NewHTTPPoetClient(app.Config.PoETServer)
 
 	edPubkey := app.edSgn.PublicKey()
 	vrfSigner, vrfPub, err := signing.NewVRFSigner(app.edSgn.Sign(edPubkey.Bytes()))
