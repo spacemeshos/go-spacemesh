@@ -1,18 +1,21 @@
 package net
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
+	"net"
+	"sync/atomic"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/require"
-	"net"
-	"sync/atomic"
-	"testing"
-	"time"
 )
 
 var testUDPAddr = func() *net.UDPAddr {
@@ -292,7 +295,7 @@ func TestUDPNet_Cache(t *testing.T) {
 	addr2 := testUDPAddr()
 	n.addConn(addr2, &udpConnMock{CreatedFunc: func() time.Time {
 		return time.Now()
-	}}, &MsgConnection{stopSending: make(chan struct{})})
+	}}, &MsgConnection{stopSending: make(chan struct{}), closer: io.NopCloser(&bytes.Buffer{})})
 	require.Len(t, n.incomingConn, 1)
 
 	for i := 1; i < maxUDPConn-1; i++ {
@@ -304,7 +307,7 @@ func TestUDPNet_Cache(t *testing.T) {
 		}
 		n.addConn(addrx, &udpConnMock{CreatedFunc: func() time.Time {
 			return time.Now()
-		}}, &MsgConnection{stopSending: make(chan struct{})})
+		}}, &MsgConnection{stopSending: make(chan struct{}), closer: io.NopCloser(&bytes.Buffer{})})
 	}
 
 	require.Len(t, n.incomingConn, maxUDPConn-1)
@@ -318,7 +321,7 @@ func TestUDPNet_Cache(t *testing.T) {
 
 	n.addConn(addrx, &udpConnMock{CreatedFunc: func() time.Time {
 		return time.Now().Add(-maxUDPLife - 1*time.Second)
-	}}, &MsgConnection{stopSending: make(chan struct{})})
+	}}, &MsgConnection{stopSending: make(chan struct{}), closer: io.NopCloser(&bytes.Buffer{})})
 
 	require.Len(t, n.incomingConn, maxUDPConn)
 
@@ -330,7 +333,7 @@ func TestUDPNet_Cache(t *testing.T) {
 	}
 	n.addConn(addrx2, &udpConnMock{CreatedFunc: func() time.Time {
 		return time.Now()
-	}}, &MsgConnection{stopSending: make(chan struct{})})
+	}}, &MsgConnection{stopSending: make(chan struct{}), closer: io.NopCloser(&bytes.Buffer{})})
 
 	require.Len(t, n.incomingConn, maxUDPConn)
 
@@ -359,7 +362,8 @@ func TestUDPNet_Cache(t *testing.T) {
 		_, okk = n.incomingConn[addrxx.String()]
 	}
 
-	n.addConn(addrxx, somecon, &MsgConnection{stopSending: make(chan struct{})})
+	n.addConn(addrxx, somecon,
+		&MsgConnection{stopSending: make(chan struct{}), closer: io.NopCloser(&bytes.Buffer{})})
 
 	c, err := n.getConn(addrxx)
 	require.Error(t, err)

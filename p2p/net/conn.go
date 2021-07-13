@@ -20,8 +20,10 @@ import (
 )
 
 var (
-	// ErrConnectionClosed is sent when the connection is closed after Close was called
-	ErrConnectionClosed = errors.New("connections was intentionally closed")
+	// ErrAlreadyClosed is an error for when `Close` is called on a closed connection.
+	ErrAlreadyClosed = errors.New("p2p: connection is already closed")
+	// ErrClosed is returned when connection already closed.
+	ErrClosed = errors.New("p2p: connection closed")
 )
 
 // ConnectionSource specifies the connection originator - local or remote node.
@@ -244,6 +246,7 @@ func (c *FormattedConnection) sendListener() {
 					log.String("peer_id", m.peerID),
 					log.String("requestId", m.reqID),
 					log.Err(err))
+				return
 			}
 		case <-c.stopSending:
 			return
@@ -257,7 +260,7 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 	c.wmtx.Lock()
 	if c.closed {
 		c.wmtx.Unlock()
-		return fmt.Errorf("connection was closed")
+		return ErrClosed
 	}
 	c.wmtx.Unlock()
 
@@ -280,11 +283,12 @@ func (c *FormattedConnection) SendSock(m []byte) error {
 	c.wmtx.Lock()
 	if c.closed {
 		c.wmtx.Unlock()
-		return fmt.Errorf("connection was closed")
+		return ErrClosed
 	}
 
 	err := c.deadliner.SetWriteDeadline(time.Now().Add(c.deadline))
 	if err != nil {
+		c.wmtx.Unlock()
 		return err
 	}
 	_, err = c.w.WriteRecord(m)
@@ -301,31 +305,20 @@ func (c *FormattedConnection) SendSock(m []byte) error {
 	return nil
 }
 
-// ErrAlreadyClosed is an error for when `Close` is called on a closed connection.
-var ErrAlreadyClosed = errors.New("connection is already closed")
-
 func (c *FormattedConnection) closeUnlocked() error {
 	if c.closed {
 		return ErrAlreadyClosed
 	}
-	err := c.close.Close()
 	c.closed = true
-	if err != nil {
-		return err
-	}
-	return nil
+	close(c.stopSending)
+	return c.close.Close()
 }
 
 // Close closes the connection (implements io.Closer). It is go safe.
 func (c *FormattedConnection) Close() error {
 	c.wmtx.Lock()
 	defer c.wmtx.Unlock()
-	err := c.closeUnlocked()
-	if err != nil {
-		return err
-	}
-	close(c.stopSending)
-	return nil
+	return c.closeUnlocked()
 }
 
 // Closed returns whether the connection is closed
@@ -401,11 +394,13 @@ func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Du
 // Read from the incoming new messages and send down the connection
 func (c *FormattedConnection) beginEventProcessing(ctx context.Context) {
 	//TODO: use a buffer pool
-	var err error
-	var buf []byte
+	var (
+		err error
+		buf []byte
+	)
 	for {
 		buf, err = c.r.Next()
-		if err != nil && err != io.EOF {
+		if err != nil {
 			break
 		}
 
@@ -415,9 +410,7 @@ func (c *FormattedConnection) beginEventProcessing(ctx context.Context) {
 		}
 
 		if len(buf) > 0 {
-			newbuf := make([]byte, len(buf))
-			copy(newbuf, buf)
-			c.publish(log.WithNewRequestID(ctx), newbuf)
+			c.publish(log.WithNewRequestID(ctx), buf)
 		}
 
 		if err != nil {
