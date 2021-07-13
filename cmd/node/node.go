@@ -1125,15 +1125,16 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) error {
 	// this can be used by, e.g., app tests.
 	close(app.started)
 
+	defer events.ReportError(events.NodeError{
+		Msg:   "node is shutting down",
+		Level: zapcore.InfoLevel,
+	})
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	select {
 	case <-ctx.Done():
-	case err = <-pprofErr:
+		return nil
+	case err := <-pprofErr:
+		return err
 	}
-	events.ReportError(events.NodeError{
-		Msg:   "node is shutting down",
-		Level: zapcore.InfoLevel,
-	})
-	return err
 }
