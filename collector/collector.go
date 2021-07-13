@@ -2,10 +2,11 @@
 package collector
 
 import (
+	"unsafe"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"unsafe"
 )
 
 // EventsCollector collects events from node and writes them to DB
@@ -31,6 +32,7 @@ type DB interface {
 	StoreReward(event *events.RewardReceived) error
 	StoreBlockCreated(event *events.DoneCreatingBlock) error
 	StoreAtxCreated(event *events.AtxCreated) error
+	StoreTortoiseBeaconCalculated(event *events.TortoiseBeaconCalculated) error
 }
 
 // Start starts collecting events
@@ -98,6 +100,11 @@ func (c *EventsCollector) collectEvents(url string) {
 	createdAtx, err := sub.Subscribe(events.EventCreatedAtx)
 	if err != nil {
 		log.Error("cannot start subscriber %v", events.EventCreatedAtx)
+		return
+	}
+	tortoiseBeacons, err := sub.Subscribe(events.EventCalculatedTortoiseBeacon)
+	if err != nil {
+		log.Error("cannot start subscriber %v", events.EventCalculatedTortoiseBeacon)
 		return
 	}
 	sub.StartListening()
@@ -203,6 +210,17 @@ loop:
 			}
 			log.Debug("got new atx created %v", e)
 			err = c.db.StoreAtxCreated(&e)
+			if err != nil {
+				log.Error("cannot write message %v", err)
+			}
+		case data := <-tortoiseBeacons:
+			var e events.TortoiseBeaconCalculated
+			err := types.BytesToInterface(data[size:], &e)
+			if err != nil {
+				log.Error("cannot parse received message %v", err)
+			}
+			log.Debug("got new tortoise beacon calculated %v", e)
+			err = c.db.StoreTortoiseBeaconCalculated(&e)
 			if err != nil {
 				log.Error("cannot write message %v", err)
 			}

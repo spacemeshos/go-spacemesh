@@ -142,6 +142,7 @@ func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
 
 func TestSwarm_processMessage(t *testing.T) {
 	s := Switch{
+		shutdownCtx:  context.TODO(),
 		inpeers:      make(map[p2pcrypto.PublicKey]struct{}),
 		outpeers:     make(map[p2pcrypto.PublicKey]struct{}),
 		delPeerSub:   make([]chan p2pcrypto.PublicKey, 0),

@@ -90,7 +90,6 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 			assert.EqualValues(t, 0, fnd2.pendingQueue.Len(), "value received did not match correct value2")
 		}
 	}
-
 }
 
 func TestProtocol_Close(t *testing.T) {

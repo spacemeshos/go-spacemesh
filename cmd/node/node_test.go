@@ -47,17 +47,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func tempDir() (dir string, cleanup func() error, err error) {
-	path, err := ioutil.TempDir("/tmp", "datadir_")
-	if err != nil {
-		return "", nil, err
-	}
-	cleanup = func() error {
-		return os.RemoveAll(path)
-	}
-	return path, cleanup, err
-}
-
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r := require.New(t)
 
@@ -125,7 +114,7 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	app.log = app.addLogger(mylogger, myLog)
 	msg1 := "hi there"
 	app.log.Info(msg1)
-	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\n", mylogger, msg1), buf1.String())
+	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg1, mylogger), buf1.String())
 	r.NoError(app.SetLogLevel(mylogger, "warn"))
 	r.Equal("warn", app.loggers[mylogger].String())
 	buf1.Reset()
@@ -138,7 +127,7 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	app.log.Info(msg2)
 	// This one should be printed
 	app.log.Warning(msg3)
-	r.Equal(fmt.Sprintf("WARN\t%-13s\t%s\n", mylogger, msg3), buf1.String())
+	r.Equal(fmt.Sprintf("WARN\t%-13s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg3, mylogger), buf1.String())
 	r.Equal(fmt.Sprintf("INFO\t%s\n", msg1), buf2.String())
 	buf1.Reset()
 
@@ -147,7 +136,7 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	msg4 := "nihao"
 	app.log.Info(msg4)
 	r.Equal("info", app.loggers[mylogger].String())
-	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\n", mylogger, msg4), buf1.String())
+	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg4, mylogger), buf1.String())
 
 	// test bad logger name
 	r.Error(app.SetLogLevel("anton3", "warn"))
@@ -169,7 +158,7 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	subLogger.Debug("should not get printed")
 	teststr := "should get printed"
 	subLogger.Info(teststr)
-	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\n", mylogger, teststr), buf.String())
+	r.Equal(fmt.Sprintf("INFO\t%-13s\t%s\t{\"module\": \"%s\"}\n", mylogger, teststr, mylogger), buf.String())
 }
 
 func testArgs(args ...string) (string, error) {
@@ -427,9 +416,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r := require.New(t)
 	app := NewSpacemeshApp()
 
-	path, cleanup, err := tempDir()
-	r.NoError(err)
-	defer cleanup()
+	path := t.TempDir()
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
@@ -499,9 +486,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	r := require.New(t)
 	app := NewSpacemeshApp()
 
-	path, cleanup, err := tempDir()
-	r.NoError(err)
-	defer cleanup()
+	path := t.TempDir()
 
 	// Make sure the service is not running by default
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
@@ -567,16 +552,14 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	// Use a unique port
 	port := 1240
 
-	path, cleanup, err := tempDir()
-	require.NoError(t, err)
-	defer cleanup()
+	path := t.TempDir()
 
 	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), log.NewDefault("clock"))
-	net := service.NewSimulator()
+	localNet := service.NewSimulator()
 	cfg := getTestDefaultConfig(1)
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	assert.NoError(t, err)
-	app, err := InitSingleInstance(*cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(), poetHarness.HTTPPoetClient, clock, net)
+	app, err := InitSingleInstance(*cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(), poetHarness.HTTPPoetClient, clock, localNet)
 
 	//app := NewSpacemeshApp()
 
@@ -752,9 +735,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	port := 1236
 
 	// Use a unique dir for data so we don't read existing state
-	path, cleanup, err := tempDir()
-	r.NoError(err, "error creating tempdir")
-	defer cleanup()
+	path := t.TempDir()
 
 	app := NewSpacemeshApp()
 	cfg := config.DefaultTestConfig()
