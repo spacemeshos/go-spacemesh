@@ -1,10 +1,12 @@
 package activation
 
 import (
+	"context"
 	"crypto/rand"
+	"testing"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 type rpcPoetTestCase struct {
@@ -46,7 +48,7 @@ func testHTTPPoetClient(c *HTTPPoetHarness, assert *require.Assertions) {
 	_, err := rand.Read(ch[:])
 	assert.NoError(err)
 
-	poetRound, err := c.Submit(ch)
+	poetRound, err := c.Submit(context.TODO(), ch)
 	assert.NoError(err)
 	assert.NotNil(poetRound)
 }
