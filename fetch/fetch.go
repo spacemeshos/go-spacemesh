@@ -486,7 +486,7 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 		if err != nil {
 			retries++
 			if retries > f.cfg.MaxRetiresForPeer {
-				f.handleHashError(batch.ID, ErrCouldNotSend(fmt.Errorf("could not send message")))
+				f.handleHashError(batch.ID, ErrCouldNotSend(fmt.Errorf("could not send message: %w", err)))
 				break
 			}
 			//todo: mark number of fails per peer to make it low priority
@@ -512,7 +512,7 @@ func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
 	f.activeReqM.Lock()
 	for _, h := range batch.Requests {
 		for _, callback := range f.activeRequests[h.Hash] {
-			f.log.Error("hash error to request %v %v %v %p", h.Hash.ShortString(), len(callback.returnChan), len(f.activeRequests[h.Hash]), callback)
+			f.log.Error("hash error to request %v %v %v %p: %v", h.Hash.ShortString(), len(callback.returnChan), len(f.activeRequests[h.Hash]), callback, err)
 			callback.returnChan <- HashDataPromiseResult{
 				Err:     err,
 				Hash:    h.Hash,

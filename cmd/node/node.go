@@ -3,6 +3,7 @@ package node
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -99,15 +100,23 @@ var Cmd = &cobra.Command{
 	Short: "start node",
 	Run: func(cmd *cobra.Command, args []string) {
 		app := NewSpacemeshApp()
-		defer app.Cleanup(cmd, args)
-
-		err := app.Initialize(cmd, args)
-		if err != nil {
-			log.With().Error("Failed to initialize node.", log.Err(err))
-			return
+		starter := func() error {
+			if err := app.Initialize(cmd, args); err != nil {
+				log.With().Error("Failed to initialize node.", log.Err(err))
+				return err
+			}
+			// This blocks until the context is finished or until an error is produced
+			err := app.Start(cmd, args)
+			if err != nil {
+				log.With().Error("Failed to start the node. See logs for details.", log.Err(err))
+			}
+			return err
 		}
-		// This blocks until the context is finished
-		app.Start(cmd, args)
+		err := starter()
+		app.Cleanup(cmd, args)
+		if err != nil {
+			os.Exit(1)
+		}
 	},
 }
 
@@ -325,13 +334,13 @@ func (app *SpacemeshApp) Cleanup(*cobra.Command, []string) {
 	log.Info("app cleanup completed\n\n")
 }
 
-func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) {
+func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) error {
 	var conf *apiCfg.GenesisConfig
 	if app.Config.GenesisConfPath != "" {
 		var err error
 		conf, err = apiCfg.LoadGenesisConfig(app.Config.GenesisConfPath)
 		if err != nil {
-			app.log.Error("cannot load genesis config from file")
+			return fmt.Errorf("cannot load genesis config from file %s: %w", app.Config.GenesisConfPath, err)
 		}
 	} else {
 		conf = apiCfg.DefaultGenesisConfig()
@@ -339,9 +348,7 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 	for id, acc := range conf.InitialAccounts {
 		bytes := util.FromHex(id)
 		if len(bytes) == 0 {
-			// todo: should we panic here?
-			app.log.With().Error("cannot read config entry for genesis account", log.String("acct_id", id))
-			continue
+			return fmt.Errorf("cannot read config entry for genesis account %s", id)
 		}
 
 		addr := types.BytesToAddress(bytes)
@@ -355,8 +362,9 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 
 	_, err := state.Commit()
 	if err != nil {
-		log.Panic("cannot commit genesis state")
+		return fmt.Errorf("cannot commit genesis state: %w", err)
 	}
+	return nil
 }
 
 // Wrap the top-level logger to add context info and set the level for a
@@ -535,7 +543,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
 	if goldenATXID == *types.EmptyATXID {
-		logger.Panic("invalid golden atx id")
+		return errors.New("invalid golden atx id")
 	}
 
 	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
@@ -566,23 +574,25 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
 		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
-		app.setupGenesis(processor, msh)
+		if err := app.setupGenesis(processor, msh); err != nil {
+			return err
+		}
 	}
 
 	eValidator := blocks.NewBlockEligibilityValidator(layerSize, layersPerEpoch, atxdb, tBeacon,
 		signing.VRFVerify, msh, app.addLogger(BlkEligibilityLogger, lg))
 
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
-		logger.With().Panic("number of atxs per block required is bigger than the limit",
-			log.Int("atxs_per_block", app.Config.AtxsPerBlock),
-			log.Int("limit", miner.AtxsPerBlockLimit))
+		return fmt.Errorf("number of atxs per block required is bigger than the limit. atxs_per_block: %d. limit: %d",
+			app.Config.AtxsPerBlock, miner.AtxsPerBlockLimit,
+		)
 	}
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
+
 	if app.Config.HareEligibility.EpochOffset >= uint16(app.Config.BaseConfig.LayersPerEpoch) {
-		logger.With().Panic("epoch offset cannot be greater than or equal to the number of layers per epoch",
-			log.Uint16("epoch_offset", app.Config.HareEligibility.EpochOffset),
-			log.Int("layers_per_epoch", app.Config.BaseConfig.LayersPerEpoch))
+		return fmt.Errorf("epoch offset cannot be greater than or equal to the number of layers per epoch. epoch_offset: %d. layers_per_epoch: %d",
+			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
 	bCfg := blocks.Config{
@@ -641,7 +651,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	coinBase := types.HexToAddress(app.Config.CoinbaseAccount)
 
 	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
-		logger.Panic("invalid coinbase account")
+		return errors.New("invalid coinbase account")
 	}
 	if app.Config.SpaceToCommit == 0 {
 		app.Config.SpaceToCommit = app.Config.POST.SpacePerUnit
@@ -733,15 +743,15 @@ func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm se
 	return ha
 }
 
-func (app *SpacemeshApp) startServices(ctx context.Context, logger log.Log) {
+func (app *SpacemeshApp) startServices(ctx context.Context, logger log.Log) error {
 	app.layerFetch.Start()
 	go app.startSyncer(ctx)
 
 	if err := app.hare.Start(ctx); err != nil {
-		logger.Panic("cannot start hare")
+		return fmt.Errorf("cannot start hare: %w", err)
 	}
 	if err := app.blockProducer.Start(ctx); err != nil {
-		logger.Panic("cannot start block producer")
+		return fmt.Errorf("cannot start block producer: %w", err)
 	}
 
 	app.poetListener.Start(ctx)
@@ -749,7 +759,7 @@ func (app *SpacemeshApp) startServices(ctx context.Context, logger log.Log) {
 	if app.Config.StartMining {
 		coinBase := types.HexToAddress(app.Config.CoinbaseAccount)
 		if err := app.atxBuilder.StartPost(ctx, coinBase, app.Config.POST.DataDir, app.Config.SpaceToCommit); err != nil {
-			logger.With().Panic("error initializing post", log.Err(err))
+			return fmt.Errorf("error initializing post: %w", err)
 		}
 	} else {
 		logger.Info("manual post init")
@@ -757,6 +767,7 @@ func (app *SpacemeshApp) startServices(ctx context.Context, logger log.Log) {
 	app.atxBuilder.Start(ctx)
 	app.clock.StartNotifying()
 	go app.checkTimeDrifts()
+	return nil
 }
 
 func (app *SpacemeshApp) startAPIServices(ctx context.Context, net api.NetworkAPI) {
@@ -982,7 +993,7 @@ func (app *SpacemeshApp) startSyncer(ctx context.Context) {
 }
 
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
-func (app *SpacemeshApp) Start(*cobra.Command, []string) {
+func (app *SpacemeshApp) Start(*cobra.Command, []string) error {
 	// we use the main app context
 	ctx := cmdp.Ctx
 	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
@@ -991,7 +1002,7 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		logger.With().Panic("error reading hostname", log.Err(err))
+		return fmt.Errorf("error reading hostname: %w", err)
 	}
 	logger.With().Info("starting spacemesh",
 		log.String("data-dir", app.Config.DataDir()),
@@ -1001,17 +1012,18 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 
 	err = filesystem.ExistOrCreate(app.Config.DataDir())
 	if err != nil {
-		logger.With().Error("data-dir not found or could not be created", log.Err(err))
+		return fmt.Errorf("data-dir %s not found or could not be created: %w", app.Config.DataDir(), err)
 	}
 
 	/* Setup monitoring */
+	pprofErr := make(chan error, 1)
 	if app.Config.PprofHTTPServer {
 		logger.Info("starting pprof server")
 		srv := &http.Server{Addr: ":6060"}
 		defer srv.Shutdown(ctx)
 		go func() {
 			if err := srv.ListenAndServe(); err != nil {
-				logger.With().Error("cannot start pprof http server", log.Err(err))
+				pprofErr <- fmt.Errorf("cannot start pprof http server: %w", err)
 			}
 		}()
 	}
@@ -1025,17 +1037,16 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 			// by default all profilers are enabled,
 		})
 		if err != nil {
-			logger.With().Error("cannot start profiling client")
-		} else {
-			defer p.Stop()
+			return fmt.Errorf("cannot start profiling client: %w", err)
 		}
+		defer p.Stop()
 	}
 
 	/* Create or load miner identity */
 
 	app.edSgn, err = app.LoadOrCreateEdSigner()
 	if err != nil {
-		logger.With().Panic("could not retrieve identity", log.Err(err))
+		return fmt.Errorf("could not retrieve identity: %w", err)
 	}
 
 	poetClient := activation.NewHTTPPoetClient(ctx, app.Config.PoETServer)
@@ -1043,14 +1054,14 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	edPubkey := app.edSgn.PublicKey()
 	vrfSigner, vrfPub, err := signing.NewVRFSigner(app.edSgn.Sign(edPubkey.Bytes()))
 	if err != nil {
-		logger.With().Panic("failed to create vrf signer", log.Err(err))
+		return fmt.Errorf("failed to create vrf signer: %w", err)
 	}
 
 	nodeID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 
 	postClient, err := activation.NewPostClient(&app.Config.POST, util.Hex2Bytes(nodeID.Key))
 	if err != nil {
-		logger.With().Error("failed to create post client", log.Err(err))
+		return fmt.Errorf("failed to create post client: %w", err)
 	}
 
 	// This base logger must be debug level so that other, derived loggers are not a lower level.
@@ -1061,7 +1072,7 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	dbStorepath := app.Config.DataDir()
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {
-		logger.With().Error("cannot parse genesis time", log.Err(err))
+		return fmt.Errorf("cannot parse genesis time %s: %d", app.Config.GenesisTime, err)
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
@@ -1069,7 +1080,7 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	logger.Info("initializing p2p services")
 	swarm, err := p2p.New(ctx, app.Config.P2P, app.addLogger(P2PLogger, lg), dbStorepath)
 	if err != nil {
-		logger.With().Panic("error starting p2p services", log.Err(err))
+		return fmt.Errorf("error starting p2p services: %w", err)
 	}
 
 	if err = app.initServices(ctx,
@@ -1086,8 +1097,7 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 		vrfSigner,
 		uint16(app.Config.LayersPerEpoch),
 		clock); err != nil {
-		logger.With().Error("cannot start services", log.Err(err))
-		return
+		return fmt.Errorf("cannot start services: %w", err)
 	}
 
 	if app.Config.CollectMetrics {
@@ -1104,7 +1114,7 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 
 	// P2P must start last to not block when sending messages to protocols
 	if err = app.P2P.Start(ctx); err != nil {
-		logger.With().Panic("error starting p2p services", log.Err(err))
+		return fmt.Errorf("error starting p2p services: %w", err)
 	}
 
 	app.startAPIServices(ctx, app.P2P)
@@ -1115,11 +1125,16 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) {
 	// this can be used by, e.g., app tests.
 	close(app.started)
 
-	// app blocks until it receives a signal to exit
-	// this signal may come from the node or from sig-abort (ctrl-c)
-	<-ctx.Done()
-	events.ReportError(events.NodeError{
+	defer events.ReportError(events.NodeError{
 		Msg:   "node is shutting down",
 		Level: zapcore.InfoLevel,
 	})
+	// app blocks until it receives a signal to exit
+	// this signal may come from the node or from sig-abort (ctrl-c)
+	select {
+	case <-ctx.Done():
+		return nil
+	case err := <-pprofErr:
+		return err
+	}
 }

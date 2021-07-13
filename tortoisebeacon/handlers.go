@@ -156,8 +156,7 @@ func (tb *TortoiseBeacon) verifyProposalMessage(m ProposalMessage, currentEpoch 
 	if !ok {
 		// TODO(nkryuchkov): attach telemetry
 		tb.Log.With().Warning("Received malformed proposal message: VRF is not verified",
-			log.String("sender", m.MinerID.String()),
-			log.String("sender_short", m.MinerID.ShortString()))
+			log.String("sender", m.MinerID.Key))
 
 		// TODO(nkryuchkov): add a test for this case
 		return true, ErrMalformedProposal
