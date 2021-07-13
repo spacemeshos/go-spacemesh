@@ -38,6 +38,7 @@ bootstrap:
     tortoise-beacon-first-voting-round-duration-ms: '20000'
     tortoise-beacon-voting-round-duration-ms: '10000'
     tortoise-beacon-weak-coin-round-duration-ms: '1000'
+    tortoise-beacon-wait-after-epoch-start-ms: '1000'
     tortoise-beacon-theta: '0.00004'
     tortoise-beacon-votes-limit: '100'
     layers-per-epoch: '3'
@@ -46,7 +47,6 @@ bootstrap:
     eligibility-epoch-offset: '0'
     post-space: '1024'
     space-to-commit: '1024'
-    genesis-total-weight: '52224'
     executable-path: '/bin/go-spacemesh'
   deployment_type: deployment
 client:
@@ -77,6 +77,7 @@ client:
     tortoise-beacon-first-voting-round-duration-ms: '20000'
     tortoise-beacon-voting-round-duration-ms: '10000'
     tortoise-beacon-weak-coin-round-duration-ms: '1000'
+    tortoise-beacon-wait-after-epoch-start-ms: '1000'
     tortoise-beacon-theta: '0.00004'
     tortoise-beacon-votes-limit: '100'
     layers-per-epoch: '3'
@@ -85,7 +86,6 @@ client:
     eligibility-epoch-offset: '0'
     post-space: '1024'
     space-to-commit: '1024'
-    genesis-total-weight: '52224'
     executable-path: '/bin/go-spacemesh'
   deployment_type: deployment
 clientv2:
@@ -114,7 +114,6 @@ clientv2:
     eligibility-epoch-offset: '0'
     post-space: '1024'
     space-to-commit: '1024'
-    genesis-total-weight: '52224'
     executable-path: '/bin/go-spacemesh'
   deployment_type: deployment
 elastic:

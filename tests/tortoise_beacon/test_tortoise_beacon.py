@@ -1,3 +1,4 @@
+# TODO(nkryuchkov): consider merging it in another test and then removing
 from pytest_testconfig import config as testconfig
 
 from tests import queries as q

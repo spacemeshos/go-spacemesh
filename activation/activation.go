@@ -32,8 +32,6 @@ const AtxProtocol = "AtxGossip"
 
 const defaultPoetRetryInterval = 5 * time.Second
 
-var totalWeightCache = NewTotalWeightCache(1000)
-
 type meshProvider interface {
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 	LatestLayer() types.LayerID
@@ -66,7 +64,6 @@ type nipstValidator interface {
 
 type atxDBProvider interface {
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
-	CalcTotalWeightFromView(view []types.BlockID, pubEpoch types.EpochID) (uint64, error)
 	GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error)
 	GetPosAtxID() (types.ATXID, error)
 	GetAtxTimestamp(id types.ATXID) (time.Time, error)

@@ -3,10 +3,11 @@ package config
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"path/filepath"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
@@ -89,8 +90,6 @@ type BaseConfig struct {
 
 	GenesisConfPath string `mapstructure:"genesis-conf"`
 
-	GenesisTotalWeight uint64 `mapstructure:"genesis-total-weight"` // the total weight for genesis
-
 	CoinbaseAccount string `mapstructure:"coinbase"`
 
 	SpaceToCommit uint64 `mapstructure:"space-to-commit"` // Number of bytes to commit to mining
@@ -126,6 +125,10 @@ type LoggerConfig struct {
 	StateDbLoggerLevel        string `mapstructure:"stateDb"`
 	StateLoggerLevel          string `mapstructure:"state"`
 	AtxDbStoreLoggerLevel     string `mapstructure:"atxDbStore"`
+	TBeaconDbStoreLoggerLevel string `mapstructure:"tbDbStore"`
+	TBeaconDbLoggerLevel      string `mapstructure:"tbDb"`
+	TBeaconLoggerLevel        string `mapstructure:"tBeacon"`
+	WeakCoinLoggerLevel       string `mapstructure:"weakCoin"`
 	PoetDbStoreLoggerLevel    string `mapstructure:"poetDbStore"`
 	StoreLoggerLevel          string `mapstructure:"store"`
 	PoetDbLoggerLevel         string `mapstructure:"poetDb"`
@@ -192,7 +195,6 @@ func defaultBaseConfig() BaseConfig {
 		PoETServer:          "127.0.0.1",
 		GoldenATXID:         "0x5678", // TODO: Change the value
 		Hdist:               5,
-		GenesisTotalWeight:  5 * 1024 * 1, // 5 miners * 1024 byte PoST * 1 PoET ticks
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,

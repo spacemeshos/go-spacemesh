@@ -3,12 +3,13 @@ package discovery
 import (
 	"context"
 	"errors"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"time"
 )
 
 // todo : calculate real udp max message size
@@ -50,12 +51,12 @@ func (p *protocol) newGetAddressesRequestHandler() func(context.Context, server.
 }
 
 // GetAddresses Send a get address request to a remote node, it will block and return the results returned from the node.
-func (p *protocol) GetAddresses(ctx context.Context, server p2pcrypto.PublicKey) ([]*node.Info, error) {
+func (p *protocol) GetAddresses(ctx context.Context, remoteID p2pcrypto.PublicKey) ([]*node.Info, error) {
 	start := time.Now()
 	var err error
 
 	plogger := p.logger.WithContext(ctx).WithFields(log.String("type", "getaddresses"),
-		log.FieldNamed("to", server))
+		log.FieldNamed("to", remoteID))
 
 	plogger.Debug("sending request")
 
@@ -73,7 +74,7 @@ func (p *protocol) GetAddresses(ctx context.Context, server p2pcrypto.PublicKey)
 
 		if len(nodes) > getAddrMax {
 			plogger.With().Warning("addresses response too large, ignoring",
-				log.FieldNamed("from", server),
+				log.FieldNamed("from", remoteID),
 				log.Int("got", len(nodes)),
 				log.Int("expected", getAddrMax))
 			return
@@ -82,7 +83,7 @@ func (p *protocol) GetAddresses(ctx context.Context, server p2pcrypto.PublicKey)
 		ch <- nodes
 	}
 
-	err = p.msgServer.SendRequest(ctx, GetAddresses, []byte(""), server, resHandler, func(err error) {})
+	err = p.msgServer.SendRequest(ctx, server.GetAddresses, []byte(""), remoteID, resHandler, func(err error) {})
 
 	if err != nil {
 		return nil, err
