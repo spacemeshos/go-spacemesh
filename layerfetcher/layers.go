@@ -229,7 +229,7 @@ func (l *Logic) LayerHashBlocksReceiver(ctx context.Context, msg []byte) []byte 
 
 // tbReceiver returns the tortoise beacon for the given layer ID
 func (l *Logic) tortoiseBeaconReceiver(ctx context.Context, msg []byte) []byte {
-	epoch := types.EpochID(util.BytesToUint64(msg))
+	epoch := types.EpochID(util.BytesToUint32(msg))
 	l.log.Info("got tortoise beacon request for epoch %v", epoch)
 
 	beacon, ok := l.tbDB.GetTortoiseBeacon(epoch)
