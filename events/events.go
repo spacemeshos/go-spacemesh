@@ -17,6 +17,7 @@ const (
 	EventRewardReceived
 	EventCreatedBlock
 	EventCreatedAtx
+	EventCalculatedTortoiseBeacon
 )
 
 // publisher is the event publisher singleton.
@@ -32,14 +33,10 @@ func Publish(event Event) {
 }
 
 // InitializeEventPubsub initializes the global pubsub broadcaster server
-func InitializeEventPubsub(ur string) {
+func InitializeEventPubsub(ur string) error {
 	var err error
 	publisher, err = NewEventPublisher(ur)
-	if err != nil {
-		log.Panic("cannot init pubsub: %v", err)
-	} else {
-		log.Info("pubsub created")
-	}
+	return err
 }
 
 // CloseEventPubSub closes events pubsub and destroys it
@@ -190,4 +187,15 @@ type AtxCreated struct {
 // GetChannel gets the message type which means on which this message should be sent
 func (AtxCreated) GetChannel() ChannelID {
 	return EventCreatedAtx
+}
+
+// TortoiseBeaconCalculated signals this miner has calculated a tortoise beacon.
+type TortoiseBeaconCalculated struct {
+	Epoch  types.EpochID
+	Beacon string
+}
+
+// GetChannel gets the message type which means on which this message should be sent
+func (TortoiseBeaconCalculated) GetChannel() ChannelID {
+	return EventCalculatedTortoiseBeacon
 }

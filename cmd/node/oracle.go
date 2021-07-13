@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 )
@@ -13,7 +14,7 @@ type localOracle struct {
 	nodeID        types.NodeID
 }
 
-func (bo *localOracle) IsIdentityActiveOnConsensusView(string, types.LayerID) (bool, error) {
+func (bo *localOracle) IsIdentityActiveOnConsensusView(context.Context, string, types.LayerID) (bool, error) {
 	return true, nil
 }
 
@@ -21,12 +22,16 @@ func (bo *localOracle) Register(isHonest bool, pubkey string) {
 	bo.oc.Register(isHonest, pubkey)
 }
 
-func (bo *localOracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
-	return bo.oc.Eligible(layer, round, committeeSize, id, sig)
+func (bo *localOracle) Validate(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
+	return bo.oc.Validate(ctx, layer, round, committeeSize, id, sig, eligibilityCount)
 }
 
-func (bo *localOracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
-	return bo.oc.Proof(layer, round)
+func (bo *localOracle) CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+	return bo.oc.CalcEligibility(ctx, layer, round, committeeSize, id, sig)
+}
+
+func (bo *localOracle) Proof(ctx context.Context, layer types.LayerID, round int32) ([]byte, error) {
+	return bo.oc.Proof(ctx, layer, round)
 }
 
 func newLocalOracle(rolacle *eligibility.FixedRolacle, committeeSize int, nodeID types.NodeID) *localOracle {

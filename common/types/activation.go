@@ -83,10 +83,11 @@ func CalcAtxHash32Presorted(sortedView []ATXID, additionalBytes []byte) Hash32 {
 var EmptyATXID = &ATXID{}
 
 // ActivationTxHeader is the header of an activation transaction. It includes all fields from the NIPSTChallenge, as
-// well as the coinbase address and active set size.
+// well as the coinbase address and total weight.
 type ActivationTxHeader struct {
 	NIPSTChallenge
 	id       *ATXID // non-exported cache of the ATXID
+	Space    uint64
 	Coinbase Address
 }
 
@@ -117,6 +118,12 @@ func (atxh *ActivationTxHeader) TargetEpoch() EpochID {
 // SetID sets the ATXID in this ATX's cache.
 func (atxh *ActivationTxHeader) SetID(id *ATXID) {
 	atxh.id = id
+}
+
+// GetWeight returns the ATX's weight = space * ticks.
+func (atxh *ActivationTxHeader) GetWeight() uint64 {
+	// TODO: Limit the number of bits this can occupy
+	return atxh.Space * (atxh.EndTick - atxh.StartTick)
 }
 
 // NIPSTChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
@@ -150,7 +157,7 @@ func (challenge *NIPSTChallenge) String() string {
 	return fmt.Sprintf("<id: [vrf: %v ed: %v], seq: %v, prevATX: %v, PubLayer: %v, s tick: %v, e tick: %v, "+
 		"posATX: %v>",
 		util.Bytes2Hex(challenge.NodeID.VRFPublicKey)[:5],
-		challenge.NodeID.Key[:5],
+		challenge.NodeID.ShortString(),
 		challenge.Sequence,
 		challenge.PrevATXID.ShortString(),
 		challenge.PubLayerID,
@@ -176,11 +183,12 @@ type ActivationTx struct {
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
-func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, nipst *NIPST, commitment *PostProof) *ActivationTx {
+func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, nipst *NIPST, space uint64, commitment *PostProof) *ActivationTx {
 	atx := &ActivationTx{
 		InnerActivationTx: &InnerActivationTx{
 			ActivationTxHeader: &ActivationTxHeader{
 				NIPSTChallenge: nipstChallenge,
+				Space:          space,
 				Coinbase:       coinbase,
 			},
 			Nipst:      nipst,
@@ -217,6 +225,10 @@ func (atx *ActivationTx) Fields(size int) []log.LoggableField {
 		log.FieldNamed("coinbase", atx.Coinbase),
 		atx.PubLayerID,
 		atx.PubLayerID.GetEpoch(),
+		log.Uint64("space", atx.Space),
+		log.Uint64("start_tick", atx.StartTick),
+		log.Uint64("end_tick", atx.EndTick),
+		log.Uint64("weight", atx.GetWeight()),
 		log.Uint64("sequence_number", atx.Sequence),
 		log.String("NIPSTChallenge", challenge),
 		log.String("commitment", commitmentStr),
@@ -241,7 +253,7 @@ func (atx *ActivationTx) CalcAndSetID() {
 
 // GetPoetProofRef returns the reference to the PoET proof.
 func (atx *ActivationTx) GetPoetProofRef() Hash32 {
-	return CalcHash32(atx.Nipst.PostProof.Challenge)
+	return BytesToHash(atx.Nipst.PostProof.Challenge)
 }
 
 // GetShortPoetProofRef returns the first 5 characters of the PoET proof reference, for logging purposes.
@@ -272,9 +284,9 @@ func (proofMessage PoetProofMessage) Ref() ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %v",
 			proofMessage.PoetServiceID, proofMessage.RoundID, err)
 	}
-
 	ref := sha256.Sum256(poetProofBytes)
-	return ref[:], nil
+	h := CalcHash32(ref[:])
+	return h.Bytes(), nil
 }
 
 // PoetRound includes the PoET's round ID.
@@ -288,10 +300,6 @@ type PoetRound struct {
 // after learning the challenge C. (2) the prover did not know the NIPST until D time
 // after the prover learned C.
 type NIPST struct {
-	// space is the amount of storage which the prover
-	// requires to dedicate for generating the NIPST.
-	Space uint64
-
 	// nipstChallenge is the challenge for PoET which is
 	// constructed from fields in the activation transaction.
 	NipstChallenge *Hash32
@@ -307,8 +315,7 @@ type PostProof proving.Proof
 // String returns a string representation of the PostProof, for logging purposes.
 // It implements the Stringer interface.
 func (p PostProof) String() string {
-	return fmt.Sprintf("challenge: %v, root: %v",
-		bytesToShortString(p.Challenge), bytesToShortString(p.MerkleRoot))
+	return fmt.Sprintf("challenge: %v", bytesToShortString(p.Challenge))
 }
 
 func bytesToShortString(b []byte) string {

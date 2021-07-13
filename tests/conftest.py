@@ -9,12 +9,12 @@ import string
 import subprocess
 
 from tests import config as conf
-from tests import convenience as conv
 from tests import pod
-from tests.context import Context
-from tests.es_dump import es_reindex
-from tests.k8s_handler import add_elastic_cluster, add_kibana_cluster, add_logstash_cluster, add_fluent_bit_cluster, \
-    fluent_bit_teardown, wait_for_daemonset_to_be_ready
+from tests.context import Context, ES
+from tests.convenience import str2bool
+from tests.app_engine.gcloud_tasks.add_task_to_queue import create_google_cloud_task
+from tests.k8s_handler import add_elastic_cluster, add_kibana_cluster, add_fluent_bit_cluster, \
+    wait_for_daemonset_to_be_ready
 from tests.misc import CoreV1ApiClient
 from tests.node_pool_deployer import NodePoolDep
 from tests.setup_utils import setup_bootstrap_in_namespace, setup_clients_in_namespace
@@ -60,6 +60,37 @@ class NetworkDeploymentInfo:
         return ret_str
 
 
+def pytest_configure():
+    # set a global variable to share index date between fixtures
+    pytest.index_date = None
+
+
+def pytest_addoption(parser):
+    # add command line flags
+    # delns - whether or not to delete the namespace after test was done
+    parser.addoption(
+        "--delns", action="store", default=True, help="whether or not to delete the namespace at the end of the run"
+    )
+    # namespace - current namespace value, if None a namespace will be randomly created
+    parser.addoption("--namespace", action="store", default=None, help="namespace name")
+    parser.addoption("--dump", action="store", default=False, help="whether or not to dump ES when done")
+
+
+@pytest.fixture(scope='session')
+def delete_ns(request):
+    return str2bool(request.config.getoption("--delns"))
+
+
+@pytest.fixture(scope='session')
+def input_namespace(request):
+    return request.config.getoption("--namespace")
+
+
+@pytest.fixture(scope='session')
+def input_dump(request):
+    return str2bool(request.config.getoption("--dump"))
+
+
 @pytest.fixture(scope='session')
 def load_config():
     kube_config_var = os.getenv('KUBECONFIG', '~/.kube/config')
@@ -99,52 +130,30 @@ def set_docker_images():
 
 
 @pytest.fixture(scope='session')
-def session_id():
+def session_id(input_namespace):
+    if input_namespace:
+        return input_namespace
     return random_id(length=5)
 
 
 @pytest.fixture(scope='session')
-def set_namespace(request, session_id, load_config):
-
+def set_namespace(request, session_id, load_config, delete_ns):
     v1 = CoreV1ApiClient()
+    if testconfig['namespace'] == '':
+        testconfig['namespace'] = session_id
 
-    def _setup_namespace():
+    print("\nRun tests in namespace: {0}".format(testconfig['namespace']))
+    namespaces_list = [ns.metadata.name for ns in v1.list_namespace().items]
+    if testconfig['namespace'] in namespaces_list:
+        raise ValueError(f"namespace: {testconfig['namespace']} already exists!")
 
-        if testconfig['namespace'] == '':
-            testconfig['namespace'] = session_id
-
-        print("\nRun tests in namespace: {0}".format(testconfig['namespace']))
-        print("Kibana URL: http://kibana.spacemesh.io/app/kibana#/discover?_g=(refreshInterval:(pause:!t,value:0))&_a=("
-              "columns:!(M),filters:!(('$state':(store:appState),meta:(alias:!n,disabled:!f,index:'8a91d9d0-c24f-11e9-9"
-              "a59-a76b835079b3',key:kubernetes.namespace_name,negate:!f,params:(query:{0},type:phrase),type:phrase,val"
-              "ue:{0}),query:(match:(kubernetes.namespace_name:(query:{0},type:phrase))))))"
-              .format(testconfig['namespace']), "\n")
-        namespaces_list = [ns.metadata.name for ns in v1.list_namespace().items]
-        if testconfig['namespace'] in namespaces_list:
-            return
-
-        body = client.V1Namespace()
-        body.metadata = client.V1ObjectMeta(name=testconfig['namespace'])
-        v1.create_namespace(body)
-
-    def fin():
-        # On teardown we wish to report on pods that were restarted by k8s during the test
-        restarted_pods = pod.check_for_restarted_pods(testconfig['namespace'])
-        if restarted_pods:
-            print('\n\nAttention!!! The following pods were restarted during test: {0}\n\n'.format(restarted_pods))
-
-        if hasattr(request, 'param') and request.param == 'doNotDeleteNameSpace':
-            print("\nDo not delete namespace: {0}".format(testconfig['namespace']))
-        else:
-            print("\nDeleting test namespace: {0}".format(testconfig['namespace']))
-            v1.delete_namespace(name=testconfig['namespace'], body=client.V1DeleteOptions())
-
-    request.addfinalizer(fin)
-    return _setup_namespace()
+    body = client.V1Namespace()
+    body.metadata = client.V1ObjectMeta(name=testconfig['namespace'])
+    v1.create_namespace(body)
 
 
 @pytest.fixture(scope='session')
-def init_session(load_config, set_namespace, set_docker_images, session_id):
+def init_session(load_config, teardown, set_namespace, set_docker_images, session_id):
     """
     init_session sets up a new testing environment using k8s with
     the given yaml config file
@@ -239,6 +248,8 @@ def start_poet(init_session, add_curl, setup_bootstrap):
 
 @pytest.fixture(scope='module')
 def save_log_on_exit(request):
+    # pytest considers any code after `yield` to be teardown code
+    # see: https://docs.pytest.org/en/reorganize-docs/yieldfixture.html
     yield
     if testconfig['script_on_exit'] != '' and request.session.testsfailed == 1:
         p = subprocess.Popen([testconfig['script_on_exit'], testconfig['namespace']],
@@ -267,26 +278,49 @@ def add_node_pool(session_id):
     print(f"total time waiting for clients node pool creation: {time_elapsed}")
     # wait for fluent bit daemonset to be ready after node pool creation
     wait_for_daemonset_to_be_ready("fluent-bit", session_id, timeout=60)
-    yield time_elapsed
-    _, time_elapsed = deployer.remove_node_pool()
-    print(f"total time waiting for clients node pool deletion: {time_elapsed}")
+    return time_elapsed
 
 
 @pytest.fixture(scope='module')
 def add_elk(init_session, request):
     # get today's date for filebeat data index
-    index_date = datetime.utcnow().date().strftime("%Y.%m.%d")
+    pytest.index_date = datetime.utcnow().date().strftime("%Y.%m.%d")
     add_elastic_cluster(init_session)
-    add_logstash_cluster(init_session)
     add_fluent_bit_cluster(init_session)
     add_kibana_cluster(init_session)
     wait_for_minimal_elk_cluster_ready(init_session)
+
+
+@pytest.fixture(scope='session')
+def teardown(request, session_id, delete_ns, input_dump):
+    # pytest considers any code after `yield` to be teardown code
+    # see: https://docs.pytest.org/en/reorganize-docs/yieldfixture.html
     yield
-    fluent_bit_teardown(init_session)
-    dump_es_to_main_server(init_session, index_date, request.session.testsfailed)
-
-
-def dump_es_to_main_server(init_session, index_date, testsfailed):
-    not_dumped = es_reindex(init_session, index_date) if testsfailed else True
-    if not_dumped and "is_dump" in testconfig.keys() and conv.str2bool(testconfig["is_dump"]):
-        es_reindex(init_session, index_date)
+    # dump ES content either if tests has failed of whether is_dump param was set to True in the test config file
+    is_dump = request.session.testsfailed == 1 or input_dump
+    dump_params = {}
+    if is_dump:
+        dump_params = {
+            "index_date": pytest.index_date,
+            "es_ip": ES(session_id).get_elastic_ip(),
+            "es_user": conf.ES_USER_LOCAL,
+            "es_pass": conf.ES_PASS_LOCAL,
+            "main_es_ip": conf.MAIN_ES_IP,
+            "dump_queue_name": conf.DUMP_QUEUE_NAME,
+            "dump_queue_zone": conf.DUMP_QUEUE_ZONE,
+        }
+    queue_params = {
+        "project_id": conf.PROJECT_ID,
+        "queue_name": conf.TD_QUEUE_NAME,
+        "queue_zone": conf.TD_QUEUE_ZONE,
+    }
+    payload = {
+        "namespace": session_id,
+        "is_delns": delete_ns,
+        "is_dump": is_dump,
+        "project_id": conf.PROJECT_ID,
+        "pool_name": f"pool-{session_id}",
+        "cluster_name": conf.CLUSTER_NAME,
+        "node_pool_zone": conf.CLUSTER_ZONE,
+    }
+    create_google_cloud_task(queue_params, payload, **dump_params)

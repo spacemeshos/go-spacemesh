@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -132,20 +133,6 @@ func (m *MockTxMemPool) Put(ID types.TransactionID, t *types.Transaction) {
 }
 
 func (MockTxMemPool) Invalidate(types.TransactionID) {
-
-}
-
-type MockAtxMemPool struct{}
-
-func (MockAtxMemPool) Get(types.ATXID) (*types.ActivationTx, error) {
-	return &types.ActivationTx{}, nil
-}
-
-func (MockAtxMemPool) Put(*types.ActivationTx) {
-
-}
-
-func (MockAtxMemPool) Invalidate(types.ATXID) {
 
 }
 
@@ -319,7 +306,6 @@ func TestLayers_WakeUp(t *testing.T) {
 	assert.True(t, len(rBlock1.TxIDs) == len(block1.TxIDs), "block content was wrong")
 	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
 	//assert.True(t, len(rBlock1.ATXIDs) == len(block1.ATXIDs))
-
 }
 
 func TestLayers_OrphanBlocks(t *testing.T) {
@@ -330,10 +316,10 @@ func TestLayers_OrphanBlocks(t *testing.T) {
 	block3 := types.NewExistingBlock(2, []byte("data data data3"), nil)
 	block4 := types.NewExistingBlock(2, []byte("data data data4"), nil)
 	block5 := types.NewExistingBlock(3, []byte("data data data5"), nil)
-	block5.AddView(block1.ID())
-	block5.AddView(block2.ID())
-	block5.AddView(block3.ID())
-	block5.AddView(block4.ID())
+	block5.ForDiff = append(block5.ForDiff, block1.ID())
+	block5.ForDiff = append(block5.ForDiff, block2.ID())
+	block5.ForDiff = append(block5.ForDiff, block3.ID())
+	block5.ForDiff = append(block5.ForDiff, block4.ID())
 	err := layers.AddBlock(block1)
 	assert.NoError(t, err)
 	err = layers.AddBlock(block2)
@@ -351,7 +337,6 @@ func TestLayers_OrphanBlocks(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	arr3, _ := layers.GetOrphanBlocksBefore(4)
 	assert.True(t, len(arr3) == 1, "wrong layer")
-
 }
 
 func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
@@ -362,10 +347,10 @@ func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
 	block3 := types.NewExistingBlock(2, []byte("data data data3"), nil)
 	block4 := types.NewExistingBlock(2, []byte("data data data4"), nil)
 	block5 := types.NewExistingBlock(3, []byte("data data data5"), nil)
-	block5.AddView(block1.ID())
-	block5.AddView(block2.ID())
-	block5.AddView(block3.ID())
-	block5.AddView(block4.ID())
+	block5.ForDiff = append(block5.ForDiff, block1.ID())
+	block5.ForDiff = append(block5.ForDiff, block2.ID())
+	block5.ForDiff = append(block5.ForDiff, block3.ID())
+	block5.ForDiff = append(block5.ForDiff, block4.ID())
 	err := layers.AddBlock(block1)
 	assert.NoError(t, err)
 	err = layers.AddBlock(block2)
@@ -439,7 +424,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_getInvalidBlocksByHare(t *testing
 	blocks = append(blocks, addBlockWithTxs(r, msh, layerID, true, tx2, tx3, tx4))
 	blocks = append(blocks, addBlockWithTxs(r, msh, layerID, true, tx4, tx5))
 	hareBlocks := blocks[:2]
-	invalid := msh.getInvalidBlocksByHare(types.NewExistingLayer(layerID, hareBlocks))
+	invalid := msh.getInvalidBlocksByHare(context.TODO(), types.NewExistingLayer(layerID, hareBlocks))
 	r.ElementsMatch(blocks[2:], invalid)
 
 	msh.reInsertTxsToPool(hareBlocks, invalid, layerID)
@@ -514,7 +499,7 @@ func addBlockWithTxs(r *require.Assertions, msh *Mesh, id types.LayerID, valid b
 	err := msh.SaveContextualValidity(blk.ID(), valid)
 	r.NoError(err)
 
-	err = msh.AddBlockWithTxs(blk)
+	err = msh.AddBlockWithTxs(context.TODO(), blk)
 	r.NoError(err)
 	return blk
 }
@@ -539,8 +524,8 @@ func TestMesh_AddBlockWithTxs(t *testing.T) {
 
 	blk := types.NewExistingBlock(1, []byte("data"), nil)
 
-	err := mesh.AddBlockWithTxs(blk)
+	err := mesh.AddBlockWithTxs(context.TODO(), blk)
 	//r.EqualError(err, "failed to process ATXs: 💥")
-	_, err = meshDB.blocks.Get(blk.ID().Bytes())
+	_, err = meshDB.blocks.Get(blk.ID().AsHash32().Bytes())
 	r.NoError(err)
 }

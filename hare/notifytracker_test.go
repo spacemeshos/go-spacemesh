@@ -14,6 +14,7 @@ func BuildNotifyMsg(signing Signer, s *Set) *Msg {
 	cert.AggMsgs = &aggregatedMessages{}
 	cert.AggMsgs.Messages = []*Message{BuildCommitMsg(signing, s).Message}
 	builder.SetCertificate(cert)
+	builder.SetEligibilityCount(1)
 
 	return builder.Build()
 }

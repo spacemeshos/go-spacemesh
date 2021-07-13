@@ -2,9 +2,11 @@
 package service
 
 import (
+	"context"
+	"net"
+
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
-	"net"
 )
 
 // MessageValidation is a gossip message validation event.
@@ -12,6 +14,7 @@ type MessageValidation struct {
 	sender p2pcrypto.PublicKey
 	msg    []byte
 	prot   string
+	reqID  string
 }
 
 // Message returns the message as bytes
@@ -29,6 +32,11 @@ func (mv MessageValidation) Protocol() string {
 	return mv.prot
 }
 
+// RequestID is the originating request ID of the message
+func (mv MessageValidation) RequestID() string {
+	return mv.reqID
+}
+
 // P2PMetadata is a generic metadata interface
 type P2PMetadata struct {
 	FromAddress net.Addr
@@ -36,8 +44,8 @@ type P2PMetadata struct {
 }
 
 // NewMessageValidation creates a message validation struct to pass to the protocol.
-func NewMessageValidation(sender p2pcrypto.PublicKey, msg []byte, prot string) MessageValidation {
-	return MessageValidation{sender, msg, prot}
+func NewMessageValidation(sender p2pcrypto.PublicKey, msg []byte, prot string, reqID string) MessageValidation {
+	return MessageValidation{sender, msg, prot, reqID}
 }
 
 // DirectMessage is an interface that represents a simple direct message structure
@@ -50,19 +58,21 @@ type DirectMessage interface {
 // GossipMessage is an interface that represents a simple gossip message structure
 type GossipMessage interface {
 	Sender() p2pcrypto.PublicKey
+	IsOwnMessage() bool
 	Bytes() []byte
+	RequestID() string
 	ValidationCompletedChan() chan MessageValidation
-	ReportValidation(protocol string)
+	ReportValidation(ctx context.Context, protocol string)
 }
 
 // Service is an interface that represents a networking service (ideally p2p) that we can use to send messages or listen to incoming messages
 type Service interface {
-	Start() error
+	Start(ctx context.Context) error
 	RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan GossipMessage
 	RegisterDirectProtocol(protocol string) chan DirectMessage
 	SubscribePeerEvents() (new chan p2pcrypto.PublicKey, del chan p2pcrypto.PublicKey)
 	GossipReady() <-chan struct{}
-	Broadcast(protocol string, payload []byte) error
+	Broadcast(ctx context.Context, protocol string, payload []byte) error
 	Shutdown()
 }
 

@@ -10,6 +10,9 @@ var (
 
 	// ErrQueueClosed indicates an attempt to read from a closed priority queue instance
 	ErrQueueClosed = errors.New("the queue is closed")
+
+	// ErrUnexpected indicates an unexpected error attempting to read from the queue
+	ErrUnexpected = errors.New("unexpected error reading from queues")
 )
 
 // Priority is the type that indicates the priority of different queues
@@ -32,6 +35,14 @@ const (
 type Queue struct {
 	waitCh chan struct{}      // the channel that indicates if there is a message ready in the queue
 	queues []chan interface{} // the queues where the index is the priority
+}
+
+// PriorityQueue is the interface used to interact with the queue
+type PriorityQueue interface {
+	Write(prio Priority, m interface{}) error
+	Read() (interface{}, error)
+	Close()
+	Length() int
 }
 
 // New returns a new priority queue where each priority has a buffer of prioQueueLimit
@@ -63,11 +74,10 @@ func (pq *Queue) Write(prio Priority, m interface{}) error {
 }
 
 // Read returns the next message by priority
-// An error is set iff the priority queue has been closed
+// An error is returned iff the priority queue has been closed
 func (pq *Queue) Read() (interface{}, error) {
 	<-pq.waitCh // wait for m
 
-readLoop:
 	// pick by priority
 	for _, q := range pq.queues {
 		if q == nil { // if not set just continue
@@ -79,7 +89,7 @@ readLoop:
 		case m, ok := <-q:
 			if !ok {
 				// channels are starting to close
-				break readLoop
+				return nil, ErrQueueClosed
 			}
 			return m, nil
 		default: // empty, try next
@@ -88,7 +98,15 @@ readLoop:
 	}
 
 	// should be unreachable
-	return nil, ErrQueueClosed
+	return nil, ErrUnexpected
+}
+
+// Length returns the number of pending messages in all of the queues
+func (pq *Queue) Length() (length int) {
+	for _, q := range pq.queues {
+		length += len(q)
+	}
+	return
 }
 
 // Close the priority queue

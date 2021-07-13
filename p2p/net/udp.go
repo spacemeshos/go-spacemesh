@@ -3,14 +3,16 @@ package net
 import (
 	"context"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"fmt"
 	"net"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 // TODO: we should remove this const. Should  not depend on the number of addresses.
@@ -38,6 +40,20 @@ type UDPListener interface {
 	SetWriteDeadline(t time.Time) error
 }
 
+type connWrapper struct {
+	uConn udpConn
+	mConn msgConn
+}
+
+func (cw connWrapper) Close() error {
+	err1 := cw.mConn.Close()
+	err2 := cw.uConn.Close()
+	if err1 != nil || err2 != nil {
+		return fmt.Errorf("errors closing wrapped connections: %v %v", err1, err2)
+	}
+	return nil
+}
+
 // UDPNet is used to listen on or send udp messages
 type UDPNet struct {
 	local   node.LocalNode
@@ -51,22 +67,22 @@ type UDPNet struct {
 	regNewRemoteConn []func(NewConnectionEvent)
 
 	clsMutex           sync.RWMutex
-	closingConnections []func(ConnectionWithErr)
+	closingConnections []func(context.Context, ConnectionWithErr)
 
-	incomingConn map[string]udpConn
+	incomingConn map[string]connWrapper
 
-	shutdown chan struct{}
+	shutdownCtx context.Context
 }
 
 // NewUDPNet creates a UDPNet
-func NewUDPNet(config config.Config, localEntity node.LocalNode, log log.Log) (*UDPNet, error) {
+func NewUDPNet(ctx context.Context, config config.Config, localEntity node.LocalNode, log log.Log) (*UDPNet, error) {
 	n := &UDPNet{
 		local:        localEntity,
 		logger:       log,
 		config:       config,
 		msgChan:      make(chan IncomingMessageEvent, config.BufferSize),
-		incomingConn: make(map[string]udpConn, maxUDPConn),
-		shutdown:     make(chan struct{}),
+		incomingConn: make(map[string]connWrapper, maxUDPConn),
+		shutdownCtx:  ctx,
 	}
 
 	n.cache = newSessionCache(n.initSession)
@@ -75,7 +91,7 @@ func NewUDPNet(config config.Config, localEntity node.LocalNode, log log.Log) (*
 }
 
 // SubscribeClosingConnections registers a callback for a new connection event. all registered callbacks are called before moving.
-func (n *UDPNet) SubscribeClosingConnections(f func(connection ConnectionWithErr)) {
+func (n *UDPNet) SubscribeClosingConnections(f func(ctx context.Context, connection ConnectionWithErr)) {
 	n.clsMutex.Lock()
 	n.closingConnections = append(n.closingConnections, f)
 	n.clsMutex.Unlock()
@@ -84,7 +100,7 @@ func (n *UDPNet) SubscribeClosingConnections(f func(connection ConnectionWithErr
 func (n *UDPNet) publishClosingConnection(connection ConnectionWithErr) {
 	n.clsMutex.RLock()
 	for _, f := range n.closingConnections {
-		f(connection)
+		f(context.TODO(), connection)
 	}
 	n.clsMutex.RUnlock()
 }
@@ -105,10 +121,11 @@ func (n *UDPNet) publishNewRemoteConnectionEvent(conn Connection, node *node.Inf
 }
 
 // Start will start reading messages from the udp socket and pass them up the channels
-func (n *UDPNet) Start(listener UDPListener) {
+func (n *UDPNet) Start(ctx context.Context, listener UDPListener) {
 	n.conn = listener
-	n.logger.Info("Started UDP server listening for messages on udp:%v", listener.LocalAddr().String())
-	go n.listenToUDPNetworkMessages(listener)
+	n.logger.WithContext(ctx).With().Info("started udp server listening for messages",
+		log.String("udpaddr", listener.LocalAddr().String()))
+	go n.listenToUDPNetworkMessages(ctx, listener)
 }
 
 // LocalAddr returns the local listening addr, will panic before running Start. or if start errored
@@ -116,11 +133,13 @@ func (n *UDPNet) LocalAddr() net.Addr {
 	return n.conn.LocalAddr()
 }
 
-// Shutdown stops listening and closes the connection.
+// Shutdown stops listening and closes the connection
 func (n *UDPNet) Shutdown() {
-	close(n.shutdown)
 	if n.conn != nil {
 		n.conn.Close()
+	}
+	for _, conn := range n.incomingConn {
+		conn.Close()
 	}
 }
 
@@ -139,16 +158,11 @@ func NodeAddr(info *node.Info) *net.UDPAddr {
 
 // Send writes a udp packet to the target with the given data
 func (n *UDPNet) Send(to *node.Info, data []byte) error {
-
 	ns := n.cache.GetOrCreate(to.PublicKey())
-
 	sealed := ns.SealMessage(data)
 	final := p2pcrypto.PrependPubkey(sealed, n.local.PublicKey())
-
 	addr := NodeAddr(to)
-
 	_, err := n.conn.WriteToUDP(final, addr)
-
 	return err
 }
 
@@ -157,7 +171,7 @@ func (n *UDPNet) IncomingMessages() chan IncomingMessageEvent {
 	return n.msgChan
 }
 
-// Dial creates a Connection interface which is wrapped around a udp socket with a session and start listening on messages form it.
+// Dial creates a Connection interface which is wrapped around a udp socket with a session and start listening on messages from it.
 // it uses the `connect` syscall
 func (n *UDPNet) Dial(ctx context.Context, address net.Addr, remotePublicKey p2pcrypto.PublicKey) (Connection, error) {
 	udpcon, err := net.DialUDP("udp", nil, address.(*net.UDPAddr))
@@ -168,7 +182,9 @@ func (n *UDPNet) Dial(ctx context.Context, address net.Addr, remotePublicKey p2p
 	ns := n.cache.GetOrCreate(remotePublicKey)
 
 	conn := newMsgConnection(udpcon, n, remotePublicKey, ns, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger)
-	go conn.beginEventProcessing()
+
+	// The connection is automatically closed when there's nothing more to read, no need to close it here
+	go conn.beginEventProcessing(log.WithNewSessionID(ctx, log.String("netproto", "udp")))
 	return conn, nil
 }
 
@@ -178,22 +194,27 @@ func (n *UDPNet) HandlePreSessionIncomingMessage(c Connection, msg []byte) error
 }
 
 // EnqueueMessage pushes an incoming message event into the queue
-func (n *UDPNet) EnqueueMessage(ime IncomingMessageEvent) {
+func (n *UDPNet) EnqueueMessage(ctx context.Context, ime IncomingMessageEvent) {
 	select {
 	case n.msgChan <- ime:
-		n.logger.With().Debug("recv udp message", log.String("from", ime.Conn.RemotePublicKey().String()), log.String("fromaddr", ime.Conn.RemoteAddr().String()), log.Int("len", len(ime.Message)))
-	case <-n.shutdown:
+		n.logger.WithContext(ctx).With().Debug("recv udp message",
+			log.String("from", ime.Conn.RemotePublicKey().String()),
+			log.String("fromaddr", ime.Conn.RemoteAddr().String()),
+			log.Int("len", len(ime.Message)))
+	case <-n.shutdownCtx.Done():
 		return
 	}
 }
 
 // NetworkID returns the network id given and used for creating a session.
-func (n *UDPNet) NetworkID() int8 {
+func (n *UDPNet) NetworkID() uint32 {
 	return 0
 }
 
 // main listening loop
-func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
+func (n *UDPNet) listenToUDPNetworkMessages(ctx context.Context, listener net.PacketConn) {
+	n.logger.Info("listening for incoming udp connections")
+
 	buf := make([]byte, maxMessageSize) // todo: buffer pool ?
 	for {
 		size, addr, err := listener.ReadFrom(buf)
@@ -201,18 +222,18 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 			if temp, ok := err.(interface {
 				Temporary() bool
 			}); ok && temp.Temporary() {
-				n.logger.Warning("Temporary UDP error", err)
+				n.logger.With().Warning("temporary udp error", log.Err(err))
 				continue
 			} else {
-				n.logger.With().Error("Listen UDP error, stopping server", log.Err(err))
+				n.logger.With().Error("listen udp error, stopping server", log.Err(err))
 				return
 			}
-
 		}
 
 		if n.config.MsgSizeLimit != config.UnlimitedMsgSize && size > n.config.MsgSizeLimit {
 			n.logger.With().Error("listenToUDPNetworkMessages: message is too big",
-				log.Int("limit", n.config.MsgSizeLimit), log.Int("actual", size))
+				log.Int("limit", n.config.MsgSizeLimit),
+				log.Int("actual", size))
 			continue
 		}
 
@@ -221,30 +242,36 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 
 		conn, err := n.getConn(addr)
 		if err != nil {
-			n.logger.Debug("Creating new connection ")
+			n.logger.Debug("creating new connection")
 			_, pk, err := p2pcrypto.ExtractPubkey(copybuf)
 
 			if err != nil {
-				n.logger.Warning("error can't extract public key from udp message. (Addr=%v), err=%v", addr.String(), err)
+				n.logger.With().Warning("error can't extract public key from udp message",
+					log.String("addr", addr.String()),
+					log.Err(err))
 				continue
 			}
 
 			ns := n.cache.GetOrCreate(pk)
 
 			if ns == nil {
-				n.logger.Warning("could not create session with %v:%v skipping message..", addr.String(), pk.String())
+				n.logger.With().Warning("could not create session, skipping message",
+					log.String("addr", addr.String()),
+					log.String("pk", pk.String()))
 				continue
 			}
 
 			host, port, err := net.SplitHostPort(addr.String())
 			if err != nil {
-				n.logger.Warning("could not parse address skipping message from  %v %s", addr.String(), pk)
+				n.logger.With().Warning("could not parse address, skipping message",
+					log.String("addr", addr.String()),
+					log.String("pk", pk.String()))
 				continue
 			}
 
 			iport, err := strconv.Atoi(port)
 			if err != nil {
-				n.logger.Warning("failed converting port to int %v", port)
+				n.logger.With().Warning("failed converting port to int", log.String("port", port))
 				continue
 			}
 
@@ -258,29 +285,30 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 
 			mconn := newMsgConnection(conn, n, pk, ns, n.config.MsgSizeLimit, n.config.DialTimeout, n.logger)
 			n.publishNewRemoteConnectionEvent(mconn, node.NewNode(pk, net.ParseIP(host), 0, uint16(iport)))
-			n.addConn(addr, conn)
-			go mconn.beginEventProcessing()
+			n.addConn(addr, conn, mconn)
+
+			// mconn will be closed when the connection is evicted (or at shutdown)
+			go mconn.beginEventProcessing(context.TODO())
 		}
 
-		err = conn.PushIncoming(copybuf)
-		if err != nil {
-			n.logger.Warning("error pushing incoming message to conn with %v", conn.RemoteAddr())
+		if err := conn.PushIncoming(copybuf); err != nil {
+			n.logger.With().Warning("error pushing incoming message to connection",
+				log.String("remote_addr", conn.RemoteAddr().String()))
 		}
-
 	}
 }
 
-func (n *UDPNet) addConn(addr net.Addr, ucw udpConn) {
+func (n *UDPNet) addConn(addr net.Addr, ucw udpConn, conn msgConn) {
 	evicted := false
 	lastk := ""
 	if len(n.incomingConn) >= maxUDPConn {
-		n.logger.Debug("UDP connection cache is full, evicting one session")
+		n.logger.Debug("udp connection cache is full, evicting one session")
 		for k, c := range n.incomingConn {
 			lastk = k
-			if time.Since(c.Created()) > maxUDPLife {
+			if time.Since(c.uConn.Created()) > maxUDPLife {
 				delete(n.incomingConn, k)
 				if err := c.Close(); err != nil {
-					n.logger.With().Warning("Error closing udp socket", log.Err(err))
+					n.logger.With().Warning("error closing udp socket", log.Err(err))
 				}
 				evicted = true
 				break
@@ -289,24 +317,26 @@ func (n *UDPNet) addConn(addr net.Addr, ucw udpConn) {
 
 		if !evicted {
 			if err := n.incomingConn[lastk].Close(); err != nil {
-				n.logger.With().Warning("Error closing udp socket", log.Err(err))
+				n.logger.With().Warning("error closing udp socket", log.Err(err))
 			}
 			delete(n.incomingConn, lastk)
 		}
 	}
-	n.incomingConn[addr.String()] = ucw
+
+	// Wrap the connection objects together to make sure they're both closed
+	n.incomingConn[addr.String()] = connWrapper{ucw, conn}
 }
 
 func (n *UDPNet) getConn(addr net.Addr) (udpConn, error) {
 	if c, ok := n.incomingConn[addr.String()]; ok {
-		if time.Since(c.Created()) > maxUDPLife {
+		if time.Since(c.uConn.Created()) > maxUDPLife {
 			if err := c.Close(); err != nil {
-				n.logger.With().Warning("Error closing udp socket", log.Err(err))
+				n.logger.With().Warning("error closing udp socket", log.Err(err))
 			}
 			delete(n.incomingConn, addr.String())
 			return nil, errors.New("expired")
 		}
-		return c, nil
+		return c.uConn, nil
 	}
 	return nil, errors.New("does not exist")
 }
@@ -371,12 +401,13 @@ func (ucw *udpConnWrapper) Read(b []byte) (int, error) {
 	select {
 	case msg := <-ucw.incChan:
 		copy(b, msg)
-		log.Debug("passing message to conn ")
+		log.Debug("passing message to conn")
 		return len(msg), nil
 	case <-ucw.closeChan:
 		return 0, errors.New("closed")
 	}
 }
+
 func (ucw *udpConnWrapper) Write(b []byte) (int, error) {
 	return ucw.conn.WriteTo(b, ucw.remote)
 }

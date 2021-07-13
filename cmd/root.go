@@ -28,6 +28,10 @@ func AddCommands(cmd *cobra.Command) {
 		config.CollectMetrics, "collect node metrics")
 	cmd.PersistentFlags().IntVar(&config.MetricsPort, "metrics-port",
 		config.MetricsPort, "metric server port")
+	cmd.PersistentFlags().StringVar(&config.MetricsPush, "metrics-push",
+		config.MetricsPush, "Push metrics to url")
+	cmd.PersistentFlags().IntVar(&config.MetricsPushPeriod, "metrics-push-period",
+		config.MetricsPushPeriod, "Push period")
 	cmd.PersistentFlags().StringVar(&config.OracleServer, "oracle_server",
 		config.OracleServer, "The oracle server url. (temporary) ")
 	cmd.PersistentFlags().IntVar(&config.OracleServerWorldID, "oracle_server_worldid",
@@ -44,10 +48,6 @@ func AddCommands(cmd *cobra.Command) {
 		config.Hdist, "hdist")
 	cmd.PersistentFlags().BoolVar(&config.StartMining, "start-mining",
 		config.StartMining, "start mining")
-	cmd.PersistentFlags().StringVar(&config.MemProfile, "mem-profile",
-		config.MemProfile, "output memory profiling stat to filename")
-	cmd.PersistentFlags().StringVar(&config.CPUProfile, "cpu-profile",
-		config.CPUProfile, "output cpu profiling stat to filename")
 	cmd.PersistentFlags().BoolVar(&config.PprofHTTPServer, "pprof-server",
 		config.PprofHTTPServer, "enable http pprof server")
 	cmd.PersistentFlags().StringVar(&config.GenesisConfPath, "genesis-conf",
@@ -56,14 +56,16 @@ func AddCommands(cmd *cobra.Command) {
 		config.CoinbaseAccount, "coinbase account to accumulate rewards")
 	cmd.PersistentFlags().StringVar(&config.GoldenATXID, "golden-atx",
 		config.GoldenATXID, "golden ATX hash")
-	cmd.PersistentFlags().IntVar(&config.GenesisActiveSet, "genesis-active-size",
-		config.GenesisActiveSet, "The active set size for the genesis flow")
+	cmd.PersistentFlags().Uint64Var(&config.SpaceToCommit, "space-to-commit",
+		config.SpaceToCommit, "number of bytes to commit to mining")
 	cmd.PersistentFlags().IntVar(&config.BlockCacheSize, "block-cache-size",
 		config.BlockCacheSize, "size in layers of meshdb block cache")
 	cmd.PersistentFlags().StringVar(&config.PublishEventsURL, "events-url",
 		config.PublishEventsURL, "publish events to this url; if no url specified no events will be published")
-	cmd.PersistentFlags().BoolVar(&config.Profiler, "profiler",
-		config.Profiler, "enable profiler")
+	cmd.PersistentFlags().StringVar(&config.ProfilerURL, "profiler-url",
+		config.ProfilerURL, "send profiler data to certain url, if no url no profiling will be sent, format: http://<IP>:<PORT>")
+	cmd.PersistentFlags().StringVar(&config.ProfilerName, "profiler-name",
+		config.ProfilerURL, "the name to use when sending profiles")
 
 	cmd.PersistentFlags().IntVar(&config.SyncRequestTimeout, "sync-request-timeout",
 		config.SyncRequestTimeout, "the timeout in ms for direct requests in the sync")
@@ -84,7 +86,7 @@ func AddCommands(cmd *cobra.Command) {
 		config.P2P.DialTimeout, "Network dial timeout duration")
 	cmd.PersistentFlags().DurationVar(&config.P2P.ConnKeepAlive, "conn-keepalive",
 		config.P2P.ConnKeepAlive, "Network connection keep alive")
-	cmd.PersistentFlags().Int8Var(&config.P2P.NetworkID, "network-id",
+	cmd.PersistentFlags().Uint32Var(&config.P2P.NetworkID, "network-id",
 		config.P2P.NetworkID, "NetworkID to run on (0 - mainnet, 1 - testnet)")
 	cmd.PersistentFlags().DurationVar(&config.P2P.ResponseTimeout, "response-timeout",
 		config.P2P.ResponseTimeout, "Timeout for waiting on response message")
@@ -170,10 +172,35 @@ func AddCommands(cmd *cobra.Command) {
 
 	/**======================== Hare Eligibility Oracle Flags ========================== **/
 
-	cmd.PersistentFlags().Uint64Var(&config.HareEligibility.ConfidenceParam, "eligibility-confidence-param",
-		config.HareEligibility.ConfidenceParam, "The relative layer (with respect to the current layer) we are confident to have consensus about")
-	cmd.PersistentFlags().IntVar(&config.HareEligibility.EpochOffset, "eligibility-epoch-offset",
-		config.HareEligibility.EpochOffset, "The constant layer (within an epoch) for which we traverse its view for the purpose of counting consensus active set")
+	cmd.PersistentFlags().Uint16Var(&config.HareEligibility.ConfidenceParam, "eligibility-confidence-param",
+		config.HareEligibility.ConfidenceParam, "The distance (in layers) we need to wait to have confidence about the contents of a layer")
+	cmd.PersistentFlags().Uint16Var(&config.HareEligibility.EpochOffset, "eligibility-epoch-offset",
+		config.HareEligibility.EpochOffset, "The number of layers we wait for blocks to arrive at the start of each epoch (for purposes of establishing eligibility)")
+
+	/**======================== Tortoise Beacon Flags ========================== **/
+
+	cmd.PersistentFlags().Uint64Var(&config.TortoiseBeacon.Kappa, "tortoise-beacon-kappa",
+		config.TortoiseBeacon.Kappa, "Security parameter (for calculating ATX threshold)")
+	cmd.PersistentFlags().StringVar(&config.TortoiseBeacon.Q, "tortoise-beacon-q",
+		config.TortoiseBeacon.Q, "Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.")
+	cmd.PersistentFlags().Uint64Var(&config.TortoiseBeacon.RoundsNumber, "tortoise-beacon-rounds-number",
+		config.TortoiseBeacon.RoundsNumber, "Amount of rounds in every epoch")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.GracePeriodDurationMs, "tortoise-beacon-grace-period-duration-ms",
+		config.TortoiseBeacon.GracePeriodDurationMs, "Grace period duration in milliseconds")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.ProposalDurationMs, "tortoise-beacon-proposal-duration-ms",
+		config.TortoiseBeacon.ProposalDurationMs, "Proposal duration in milliseconds")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.FirstVotingRoundDurationMs, "tortoise-beacon-first-voting-round-duration-ms",
+		config.TortoiseBeacon.FirstVotingRoundDurationMs, "First voting round duration in milliseconds")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.VotingRoundDurationMs, "tortoise-beacon-voting-round-duration-ms",
+		config.TortoiseBeacon.VotingRoundDurationMs, "Voting round duration in milliseconds")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.WeakCoinRoundDurationMs, "tortoise-beacon-weak-coin-round-duration-ms",
+		config.TortoiseBeacon.WeakCoinRoundDurationMs, "Weak coin round duration in milliseconds")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.WaitAfterEpochStart, "tortoise-beacon-wait-after-epoch-start-ms",
+		config.TortoiseBeacon.WaitAfterEpochStart, "How many milliseconds to wait after a new epoch is started.")
+	cmd.PersistentFlags().Float64Var(&config.TortoiseBeacon.Theta, "tortoise-beacon-theta",
+		config.TortoiseBeacon.Theta, "Ratio of votes for reaching consensus")
+	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.VotesLimit, "tortoise-beacon-votes-limit",
+		config.TortoiseBeacon.VotesLimit, "Maximum allowed number of votes to be sent")
 
 	/**======================== PoST Flags ========================== **/
 

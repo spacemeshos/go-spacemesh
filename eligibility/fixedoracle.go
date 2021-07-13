@@ -2,6 +2,7 @@
 package eligibility
 
 import (
+	"context"
 	"encoding/binary"
 	"hash/fnv"
 	"sync"
@@ -30,7 +31,7 @@ func New() *FixedRolacle {
 }
 
 // IsIdentityActiveOnConsensusView is use to satisfy the API, currently always returns true.
-func (fo *FixedRolacle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
+func (fo *FixedRolacle) IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error) {
 	return true, nil
 }
 
@@ -43,14 +44,16 @@ func (fo *FixedRolacle) Export(id uint32, committeeSize int) map[string]struct{}
 	// normalize committee size
 	size := committeeSize
 	if committeeSize > total {
-		log.Warning("committee size bigger than the number of clients. Expected %v<=%v", committeeSize, total)
+		log.AppLog.With().Warning("committee size bigger than the number of clients",
+			log.Int("committee_size", committeeSize),
+			log.Int("num_clients", total))
 		size = total
 	}
 
 	fo.mapRW.Lock()
 	// generate if not exist for the requested K
 	if _, exist := fo.emaps[id]; !exist {
-		fo.emaps[id] = fo.generateEligibility(size)
+		fo.emaps[id] = fo.generateEligibility(context.TODO(), size)
 	}
 	m := fo.emaps[id]
 	fo.mapRW.Unlock()
@@ -114,7 +117,8 @@ func pickUnique(pickCount int, orig map[string]struct{}, dest map[string]struct{
 	}
 }
 
-func (fo *FixedRolacle) generateEligibility(expCom int) map[string]struct{} {
+func (fo *FixedRolacle) generateEligibility(ctx context.Context, expCom int) map[string]struct{} {
+	logger := log.AppLog.WithContext(ctx)
 	emap := make(map[string]struct{}, expCom)
 
 	if expCom == 0 {
@@ -123,7 +127,9 @@ func (fo *FixedRolacle) generateEligibility(expCom int) map[string]struct{} {
 
 	expHonest := expCom/2 + 1
 	if expHonest > len(fo.honest) {
-		log.Warning("Not enough registered honest. Expected %v<=%v", expHonest, len(fo.honest))
+		logger.With().Warning("not enough registered honest participants",
+			log.Int("expected", expHonest),
+			log.Int("actual", len(fo.honest)))
 		expHonest = len(fo.honest)
 	}
 
@@ -133,9 +139,11 @@ func (fo *FixedRolacle) generateEligibility(expCom int) map[string]struct{} {
 	expFaulty := expCom - expHonest
 	if expFaulty > len(fo.faulty) {
 		if len(fo.faulty) > 0 { // not enough
-			log.Debug("Not enough registered dishonest to pick from. Expected %v<=%v. Picking %v instead", expFaulty, len(fo.faulty), len(fo.faulty))
+			logger.With().Debug("not enough registered dishonest participants to pick from, picking all faulty",
+				log.Int("expected", expFaulty),
+				log.Int("actual", len(fo.faulty)))
 		} else { // no faulty at all - acceptable
-			log.Debug("No registered dishonest to pick from. Picking honest instead")
+			logger.Debug("no registered dishonest participants to pick from, picking honest instead")
 		}
 		expFaulty = len(fo.faulty)
 	}
@@ -161,14 +169,30 @@ func hashLayerAndRound(instanceID types.LayerID, round int32) uint32 {
 	_, err2 := h.Write(kInBytes)
 
 	if err != nil || err2 != nil {
-		log.Error("Errors trying to create a hash %v, %v", err, err2)
+		log.AppLog.With().Error("errors trying to create a hash",
+			log.FieldNamed("err1", log.Err(err)),
+			log.FieldNamed("err2", log.Err(err2)))
 	}
 
 	return h.Sum32()
 }
 
-// Eligible returns whether the specific NodeID is eligible for layer in roudn and committee size.
-func (fo *FixedRolacle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
+// Validate is required to conform to the Rolacle interface, but should never be called.
+func (fo *FixedRolacle) Validate(context.Context, types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
+	panic("implement me!")
+}
+
+// CalcEligibility returns 1 if the miner is eligible in given layer, and 0 otherwise.
+func (fo *FixedRolacle) CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+	eligible, err := fo.eligible(ctx, layer, round, committeeSize, id, sig)
+	if eligible {
+		return 1, nil
+	}
+	return 0, err
+}
+
+// eligible returns whether the specific NodeID is eligible for layer in round and committee size.
+func (fo *FixedRolacle) eligible(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	fo.mapRW.RLock()
 	total := len(fo.honest) + len(fo.faulty) // safe since len >= 0
 	fo.mapRW.RUnlock()
@@ -176,7 +200,9 @@ func (fo *FixedRolacle) Eligible(layer types.LayerID, round int32, committeeSize
 	// normalize committee size
 	size := committeeSize
 	if committeeSize > total {
-		log.Warning("committee size bigger than the number of clients. Expected %v<=%v", committeeSize, total)
+		log.AppLog.WithContext(ctx).With().Warning("committee size bigger than the number of clients",
+			log.Int("committee_size", committeeSize),
+			log.Int("num_clients", total))
 		size = total
 	}
 
@@ -185,7 +211,7 @@ func (fo *FixedRolacle) Eligible(layer types.LayerID, round int32, committeeSize
 	fo.mapRW.Lock()
 	// generate if not exist for the requested K
 	if _, exist := fo.emaps[instID]; !exist {
-		fo.emaps[instID] = fo.generateEligibility(size)
+		fo.emaps[instID] = fo.generateEligibility(ctx, size)
 	}
 	fo.mapRW.Unlock()
 	// get eligibility result
@@ -195,17 +221,16 @@ func (fo *FixedRolacle) Eligible(layer types.LayerID, round int32, committeeSize
 }
 
 // Proof generates a proof for the round. used to satisfy interface.
-func (fo *FixedRolacle) Proof(layer types.LayerID, round int32) ([]byte, error) {
+func (fo *FixedRolacle) Proof(ctx context.Context, layer types.LayerID, round int32) ([]byte, error) {
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, uint32(round))
 	hash := fnv.New32()
-	_, err := hash.Write(kInBytes)
-	if err != nil {
-		log.Error("Error writing hash err: %v", err)
+	if _, err := hash.Write(kInBytes); err != nil {
+		log.AppLog.WithContext(ctx).With().Error("error writing hash", log.Err(err))
 	}
 
 	hashBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(hashBytes, uint32(hash.Sum32()))
+	binary.LittleEndian.PutUint32(hashBytes, hash.Sum32())
 
 	return hashBytes, nil
 }

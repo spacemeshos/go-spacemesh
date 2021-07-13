@@ -106,7 +106,7 @@ func (t *Ticker) Notify() (int, error) {
 
 	// the tick was delayed by more than the threshold
 	if t.timeSinceLastTick() > sendTickThreshold {
-		t.log.With().Warning("skipping tick since we missed the time of the tick by more than the allowed threshold",
+		t.log.With().Error("skipping tick since we missed the time of the tick by more than the allowed threshold",
 			log.FieldNamed("current_layer", layer),
 			log.String("threshold", sendTickThreshold.String()))
 		return 0, errMissedTickTime

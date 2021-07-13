@@ -67,7 +67,7 @@ func TestCryptoApi(t *testing.T) {
 	msgData := []byte(msg)
 
 	// test signatures
-	signature, err := priv.Sign(msgData)
+	signature := priv.Sign(msgData)
 
 	assert.Nil(t, err, fmt.Sprintf("signing error: %v", err))
 	ok, err := pub.Verify(msgData, signature)
@@ -112,7 +112,7 @@ func BenchmarkVerify(b *testing.B) {
 	msgData := []byte(msg)
 
 	// test signatures
-	signature, err := priv.Sign(msgData)
+	signature := priv.Sign(msgData)
 
 	assert.Nil(b, err, fmt.Sprintf("signing error: %v", err))
 

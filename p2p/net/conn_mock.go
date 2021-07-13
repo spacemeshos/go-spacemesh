@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -24,6 +25,8 @@ type ConnectionMock struct {
 	sendCnt     int32
 
 	closed bool
+
+	eventProcessing func()
 }
 
 // NewConnectionMock creates a ConnectionMock.
@@ -97,7 +100,7 @@ func (cm ConnectionMock) SendCount() int32 {
 }
 
 // Send mocks the interface.
-func (cm *ConnectionMock) Send(m []byte) error {
+func (cm *ConnectionMock) Send(ctx context.Context, m []byte) error {
 	atomic.AddInt32(&cm.sendCnt, int32(1))
 	time.Sleep(time.Duration(cm.sendDelayMs) * time.Millisecond)
 	return cm.sendRes
@@ -117,11 +120,27 @@ func (cm *ConnectionMock) Close() error {
 	return nil
 }
 
-func (cm *ConnectionMock) beginEventProcessing() {
-
+func (cm *ConnectionMock) beginEventProcessing(context.Context) {
+	if cm.eventProcessing != nil {
+		cm.eventProcessing()
+	} else {
+		// pretend we're doing some complicated processing
+		time.Sleep(time.Second * 60)
+	}
 }
 
 // String mocks the interface
 func (cm ConnectionMock) String() string {
 	return cm.id
+}
+
+// SendSock mocks the interface
+func (cm *ConnectionMock) SendSock([]byte) error {
+	panic("not implemented")
+}
+
+func (cm *ConnectionMock) setupIncoming(context.Context, time.Duration) error {
+	// pretend we're negotiating a net connection
+	time.Sleep(time.Second * 1)
+	return nil
 }

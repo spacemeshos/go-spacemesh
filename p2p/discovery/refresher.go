@@ -16,8 +16,8 @@ import (
 const (
 
 	// minTimeBetweenQueries is a minimum time between attempts to query a peer.
-	minTimeBetweenQueries = 500 * time.Millisecond
-	// lastQueriesCacheSize is the maximum size of the query cache map
+	minTimeBetweenQueries = 5 * time.Second
+	// lastQueriesCacheSiz9e is the maximum size of the query cache map
 	lastQueriesCacheSize = 100
 
 	maxConcurrentRequests = 3
@@ -31,8 +31,8 @@ var defaultBackoffFunc = func(tries int) time.Duration { return time.Second * ti
 var ErrBootAbort = errors.New("bootstrap canceled by signal")
 
 type pingerGetAddresser interface {
-	Ping(p p2pcrypto.PublicKey) error
-	GetAddresses(server p2pcrypto.PublicKey) ([]*node.Info, error)
+	Ping(context.Context, p2pcrypto.PublicKey) error
+	GetAddresses(context.Context, p2pcrypto.PublicKey) ([]*node.Info, error)
 }
 
 // refresher is used to bootstrap and requestAddresses peers in the addrbook
@@ -93,10 +93,11 @@ loop:
 		servers = srv[:util.Min(numpeers, len(srv))]
 		res := r.requestAddresses(ctx, servers)
 		tries++
-		r.logger.Info("Bootstrap: try %d gave %v results", tries, len(res))
 
 		newsize := r.book.NumAddresses()
 		wanted := numpeers
+
+		r.logger.With().Info("bootstrap attempt finished", log.Int("tries", tries), log.Int("results", len(res)), log.Int("addbook_size", newsize))
 
 		if newsize-size >= wanted {
 			r.logger.Info("Achieved bootstrap objective, got %v needed %v", newsize-size, wanted)
@@ -149,15 +150,15 @@ type queryResult struct {
 }
 
 // pingThenGetAddresses is sending a ping, then getaddress, then return results on given chan.
-func pingThenGetAddresses(p pingerGetAddresser, addr *node.Info, qr chan queryResult) {
+func pingThenGetAddresses(ctx context.Context, p pingerGetAddresser, addr *node.Info, qr chan queryResult) {
 	// TODO: check whether we pinged recently and maybe skip pinging
-	err := p.Ping(addr.PublicKey())
+	err := p.Ping(ctx, addr.PublicKey())
 
 	if err != nil {
 		qr <- queryResult{src: addr, err: err}
 		return
 	}
-	res, err := p.GetAddresses(addr.PublicKey())
+	res, err := p.GetAddresses(ctx, addr.PublicKey())
 
 	if err != nil {
 		qr <- queryResult{src: addr, err: err}
@@ -168,7 +169,6 @@ func pingThenGetAddresses(p pingerGetAddresser, addr *node.Info, qr chan queryRe
 
 // requestAddresses will crawl the network looking for new peer addresses.
 func (r *refresher) requestAddresses(ctx context.Context, servers []*node.Info) []*node.Info {
-
 	// todo: here we stop only after we've tried querying or queried all addrs
 	// 	maybe we should stop after we've reached a certain amount ? (needMoreAddresses..)
 	// todo: revisit this area to think about if lastQueries is even needed, since we're going
@@ -200,7 +200,7 @@ func (r *refresher) requestAddresses(ctx context.Context, servers []*node.Info) 
 
 			r.lastQueries[addr.PublicKey()] = time.Now()
 
-			go pingThenGetAddresses(r.disc, addr, reschan)
+			go pingThenGetAddresses(ctx, r.disc, addr, reschan)
 		}
 
 		if pending == 0 {

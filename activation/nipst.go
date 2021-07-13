@@ -1,13 +1,15 @@
 package activation
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
-	"time"
 )
 
 // PostProverClient provides proving functionality for PoST.
@@ -45,15 +47,17 @@ type PostProverClient interface {
 	Cfg() *config.Config
 }
 
+//go:generate mockgen -package=activation -destination=./poet_client_mock_test.go -source=./nipst.go PoetProvingServiceClient
+
 // PoetProvingServiceClient provides a gateway to a trust-less public proving service, which may serve many PoET
 // proving clients, and thus enormously reduce the cost-per-proof for PoET since each additional proof adds only
 // a small number of hash evaluations to the total cost.
 type PoetProvingServiceClient interface {
 	// Submit registers a challenge in the proving service current open round.
-	Submit(challenge types.Hash32) (*types.PoetRound, error)
+	Submit(ctx context.Context, challenge types.Hash32) (*types.PoetRound, error)
 
 	// PoetServiceID returns the public key of the PoET proving service.
-	PoetServiceID() ([]byte, error)
+	PoetServiceID(context.Context) ([]byte, error)
 }
 
 type builderState struct {
@@ -113,7 +117,6 @@ type NIPSTBuilder struct {
 	postProver PostProverClient
 	poetProver PoetProvingServiceClient
 	poetDB     poetDbAPI
-	errChan    chan error
 	state      *builderState
 	store      bytesStore
 	log        log.Log
@@ -139,7 +142,6 @@ func NewNIPSTBuilder(
 		postProver: postProver,
 		poetProver: poetProver,
 		poetDB:     poetDB,
-		errChan:    make(chan error),
 		state:      &builderState{Nipst: &types.NIPST{}},
 		store:      store,
 		log:        log,
@@ -149,23 +151,19 @@ func NewNIPSTBuilder(
 // BuildNIPST uses the given challenge to build a NIPST. "atxExpired" and "stop" are channels for early termination of
 // the building process. The process can take considerable time, because it includes waiting for the poet service to
 // publish a proof - a process that takes about an epoch.
-func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired, stop chan struct{}) (*types.NIPST, error) {
+func (nb *NIPSTBuilder) BuildNIPST(ctx context.Context, challenge *types.Hash32, atxExpired chan struct{}) (*types.NIPST, error) {
 	nb.load(*challenge)
 
 	if initialized, _, err := nb.postProver.IsInitialized(); !initialized || err != nil {
 		return nil, errors.New("PoST not initialized")
 	}
-
-	cfg := nb.postProver.Cfg()
 	nipst := nb.state.Nipst
-
-	nipst.Space = cfg.SpacePerUnit
 
 	// Phase 0: Submit challenge to PoET service.
 	if nb.state.PoetRound == nil {
-		poetServiceID, err := nb.poetProver.PoetServiceID()
+		poetServiceID, err := nb.poetProver.PoetServiceID(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get PoET service ID: %v", err)
+			return nil, fmt.Errorf("%w: failed to get PoET service ID: %v", ErrPoetServiceUnstable, err)
 		}
 		nb.state.PoetServiceID = poetServiceID
 
@@ -175,9 +173,9 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired, stop cha
 		nb.log.Debug("submitting challenge to PoET proving service (PoET id: %x, challenge: %x)",
 			nb.state.PoetServiceID, poetChallenge)
 
-		round, err := nb.poetProver.Submit(*poetChallenge)
+		round, err := nb.poetProver.Submit(ctx, *poetChallenge)
 		if err != nil {
-			return nil, fmt.Errorf("failed to submit challenge to poet service: %v", err)
+			return nil, fmt.Errorf("%w: failed to submit challenge to poet service: %v", ErrPoetServiceUnstable, err)
 		}
 
 		nb.log.Info("challenge submitted to PoET proving service (PoET id: %x, round id: %v, challenge: %x)",
@@ -195,19 +193,21 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired, stop cha
 		case poetProofRef = <-nb.poetDB.SubscribeToProofRef(nb.state.PoetServiceID, nb.state.PoetRound.ID):
 		case <-atxExpired:
 			nb.poetDB.UnsubscribeFromProofRef(nb.state.PoetServiceID, nb.state.PoetRound.ID)
-			return nil, fmt.Errorf("atx expired while waiting for poet proof, target epoch ended")
-		case <-stop:
-			return nil, &StopRequestedError{}
+			return nil, fmt.Errorf("%w: while waiting for poet proof, target epoch ended", ErrATXChallengeExpired)
+		case <-ctx.Done():
+			return nil, ErrStopRequested
 		}
 
-		membership, err := nb.poetDB.GetMembershipMap(types.CalcHash32(poetProofRef).Bytes())
+		membership, err := nb.poetDB.GetMembershipMap(poetProofRef)
 		if err != nil {
-			log.Panic("failed to fetch membership for PoET proof")              // TODO: handle inconsistent state
-			return nil, fmt.Errorf("failed to fetch membership for PoET proof") // inconsistent state
+			nb.log.With().Panic("failed to fetch membership for PoET proof",
+				log.String("challenge", fmt.Sprintf("%x", nb.state.PoetProofRef))) // TODO: handle inconsistent state
 		}
 		if !membership[*nipst.NipstChallenge] {
-			return nil, fmt.Errorf("not a member of this round (poetId: %x, roundId: %s, challenge: %x, num of members: %d)",
-				nb.state.PoetServiceID, nb.state.PoetRound.ID, *nipst.NipstChallenge, len(membership)) // TODO(noamnelke): handle this case!
+			round := nb.state.PoetRound
+			nb.state.PoetRound = nil // no point in waiting in Phase 1 since we are already received a proof
+			return nil, fmt.Errorf("%w not a member of this round (poetId: %x, roundId: %s, challenge: %x, num of members: %d)", ErrPoetServiceUnstable,
+				nb.state.PoetServiceID, round.ID, *nipst.NipstChallenge, len(membership)) // TODO(noamnelke): handle this case!
 		}
 		nb.state.PoetProofRef = poetProofRef
 		nb.persist()
@@ -225,7 +225,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired, stop cha
 
 		nb.log.With().Info("finished PoST execution",
 			log.String("proof_merkle_root", fmt.Sprintf("%x", proof.MerkleRoot)),
-			log.String("duration", time.Now().Sub(startTime).String()))
+			log.Duration("duration", time.Now().Sub(startTime)))
 
 		nipst.PostProof = proof
 		nb.persist()
@@ -243,7 +243,6 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired, stop cha
 // NewNIPSTWithChallenge is a convenience method FOR TESTS ONLY. TODO: move this out of production code.
 func NewNIPSTWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPST {
 	return &types.NIPST{
-		Space:          0,
 		NipstChallenge: challenge,
 		PostProof: &types.PostProof{
 			Challenge:    poetRef,

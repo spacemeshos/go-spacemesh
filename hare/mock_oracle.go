@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -41,7 +42,7 @@ type mockHashOracle struct {
 	hasher  *hasherU32
 }
 
-func (mho *mockHashOracle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
+func (mho *mockHashOracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error) {
 	return true, nil
 }
 
@@ -91,8 +92,16 @@ func (mho *mockHashOracle) calcThreshold(committeeSize int) uint32 {
 	return uint32(uint64(committeeSize) * uint64(mho.hasher.MaxValue()) / uint64(numClients))
 }
 
-// Eligible if a proof is valid for a given committee size
-func (mho *mockHashOracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
+func (mho *mockHashOracle) Validate(context.Context, types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
+	panic("implement me!")
+}
+
+func (mho *mockHashOracle) CalcEligibility(context.Context, types.LayerID, int32, int, types.NodeID, []byte) (uint16, error) {
+	panic("implement me!")
+}
+
+// eligible if a proof is valid for a given committee size
+func (mho *mockHashOracle) eligible(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	if sig == nil {
 		log.Warning("Oracle query with proof=nil. Returning false")
 		return false, errors.New("sig is nil")
@@ -107,6 +116,6 @@ func (mho *mockHashOracle) Eligible(layer types.LayerID, round int32, committeeS
 	return false, nil
 }
 
-func (mho *mockHashOracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
+func (mho *mockHashOracle) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
 	return []byte{}, nil
 }

@@ -1,6 +1,7 @@
 package priorityq
 
 import (
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/require"
 	"sync"
 	"testing"
@@ -96,7 +97,7 @@ func TestPriorityQ_Read(t *testing.T) {
 			//fmt.Println("reading  ", m, e, i, len(pq.queues[0]), len(pq.queues[1]))
 			if !ok {
 				// should never happen
-				t.FailNow()
+				log.Panic("unable to read message priority")
 			}
 
 			r.False(prio < maxPrio)

@@ -23,8 +23,8 @@ bootstrap:
       cpu: '1'
   args:
     randcon: '8'
-    hare-committee-size: '20'
-    hare-max-adversaries: '9'
+    hare-committee-size: '800'
+    hare-max-adversaries: '399'
     hare-round-duration-sec: '10'
     layer-duration-sec: '60'
     layer-average-size: '20'
@@ -35,7 +35,7 @@ bootstrap:
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-harness'
-  replicas: 40 #default 40
+  replicas: 30 #default 40
   resources:
     requests:
       memory: '512M'
@@ -45,8 +45,8 @@ client:
       cpu: '1'
   args:
     randcon: '8'
-    hare-committee-size: '20'
-    hare-max-adversaries: '9'
+    hare-committee-size: '800'
+    hare-max-adversaries: '399'
     hare-round-duration-sec: '10'
     layer-duration-sec: '60'
     layer-average-size: '20'
@@ -69,8 +69,8 @@ clientv2:
       cpu: '1'
   args:
     randcon: '8'
-    hare-committee-size: '20'
-    hare-max-adversaries: '9'
+    hare-committee-size: '800'
+    hare-max-adversaries: '399'
     hare-round-duration-sec: '10'
     layer-duration-sec: '60'
     layer-average-size: '20'

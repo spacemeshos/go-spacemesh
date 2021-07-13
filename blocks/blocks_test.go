@@ -1,6 +1,7 @@
 package blocks
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -27,8 +28,7 @@ var commitment = &types.PostProof{
 var goldenATXID = types.ATXID(types.HexToHash32("77777"))
 
 func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
-	startTick uint64, positioningATX types.ATXID, coinbase types.Address, activeSetSize uint32, view []types.BlockID,
-	nipst *types.NIPST) *types.ActivationTx {
+	startTick uint64, positioningATX types.ATXID, coinbase types.Address, nipst *types.NIPST) *types.ActivationTx {
 
 	nipstChallenge := types.NIPSTChallenge{
 		NodeID:         nodeID,
@@ -38,7 +38,7 @@ func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, 
 		StartTick:      startTick,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipstChallenge, coinbase, nipst, nil)
+	return types.NewActivationTx(nipstChallenge, coinbase, nipst, 1024, nil)
 }
 
 func atx(pubkey string) *types.ActivationTx {
@@ -47,7 +47,7 @@ func atx(pubkey string) *types.ActivationTx {
 	poetRef := []byte{0xde, 0xad}
 	npst := activation.NewNIPSTWithChallenge(&chlng, poetRef)
 
-	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, 5, 1, goldenATXID, coinbase, 0, nil, npst)
+	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, 5, 1, goldenATXID, coinbase, npst)
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
 	atx.CalcAndSetID()
@@ -79,7 +79,7 @@ type fetchMock struct {
 	getTxsCalled   map[types.TransactionID]int
 }
 
-func (f fetchMock) FetchBlock(ID types.BlockID) error {
+func (f fetchMock) FetchBlock(ctx context.Context, ID types.BlockID) error {
 	f.getBlockCalled[ID]++
 	return f.returnError()
 }
@@ -88,7 +88,7 @@ func (f fetchMock) ListenToGossip() bool {
 	return true
 }
 
-func (f fetchMock) IsSynced() bool {
+func (f fetchMock) IsSynced(context.Context) bool {
 	return true
 }
 
@@ -113,23 +113,23 @@ func (f *fetchMock) GetBlock(ID types.BlockID) error {
 	return f.returnError()
 }
 
-func (f fetchMock) FetchAtx(ID types.ATXID) error {
+func (f fetchMock) FetchAtx(ctx context.Context, ID types.ATXID) error {
 	return f.returnError()
 }
 
-func (f fetchMock) GetPoetProof(ID types.Hash32) error {
+func (f fetchMock) GetPoetProof(ctx context.Context, ID types.Hash32) error {
 	return f.returnError()
 }
 
-func (f fetchMock) GetTxs(IDs []types.TransactionID) error {
+func (f fetchMock) GetTxs(ctx context.Context, IDs []types.TransactionID) error {
 	return f.returnError()
 }
 
-func (f fetchMock) GetBlocks(IDs []types.BlockID) error {
+func (f fetchMock) GetBlocks(ctx context.Context, IDs []types.BlockID) error {
 	return f.returnError()
 }
 
-func (f fetchMock) GetAtxs(IDs []types.ATXID) error {
+func (f fetchMock) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
 	return f.returnError()
 }
 
@@ -144,7 +144,7 @@ func (m meshMock) GetBlock(ID types.BlockID) (*types.Block, error) {
 	panic("implement me")
 }
 
-func (m meshMock) AddBlockWithTxs(blk *types.Block) error {
+func (m meshMock) AddBlockWithTxs(context.Context, *types.Block) error {
 	panic("implement me")
 }
 
@@ -191,16 +191,16 @@ func TestBlockHandler_BlockSyntacticValidation(t *testing.T) {
 	b := &types.Block{}
 
 	fetch := newFetchMock()
-	err := s.blockSyntacticValidation(b, fetch)
+	err := s.blockSyntacticValidation(context.TODO(), b, fetch)
 	r.EqualError(err, errNoActiveSet.Error())
 
 	b.ActiveSet = &[]types.ATXID{}
-	err = s.blockSyntacticValidation(b, fetch)
+	err = s.blockSyntacticValidation(context.TODO(), b, fetch)
 	r.EqualError(err, errZeroActiveSet.Error())
 
 	b.ActiveSet = &[]types.ATXID{atx1, atx2, atx3}
 	b.TxIDs = []types.TransactionID{txid1, txid2, txid1}
-	err = s.blockSyntacticValidation(b, fetch)
+	err = s.blockSyntacticValidation(context.TODO(), b, fetch)
 	r.EqualError(err, errDupTx.Error())
 }
 
@@ -229,11 +229,11 @@ func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	b.RefBlock = &block1ID
 	b.ATXID = a.ID()
 	fetch.retError = true
-	err := s.blockSyntacticValidation(b, fetch)
+	err := s.blockSyntacticValidation(context.TODO(), b, fetch)
 	r.Equal(err, fmt.Errorf("failed to fetch ref block %v e: error", *b.RefBlock))
 
 	fetch.retError = false
-	err = s.blockSyntacticValidation(b, fetch)
+	err = s.blockSyntacticValidation(context.TODO(), b, fetch)
 	r.NoError(err)
 	assert.Equal(t, 2, fetch.getBlockCalled[block1ID])
 }
@@ -243,9 +243,9 @@ func TestBlockHandler_AtxSetID(t *testing.T) {
 	bbytes, _ := types.InterfaceToBytes(*a)
 	var b types.ActivationTx
 	types.BytesToInterface(bbytes, &b)
-	t.Log(fmt.Sprintf("%+v\n", *a))
+	t.Log(fmt.Sprintf("%+v", *a))
 	t.Log("---------------------")
-	t.Log(fmt.Sprintf("%+v\n", b))
+	t.Log(fmt.Sprintf("%+v", b))
 	t.Log("---------------------")
 	assert.Equal(t, b.Nipst, a.Nipst)
 	assert.Equal(t, b.Commitment, a.Commitment)

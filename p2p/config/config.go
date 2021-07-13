@@ -47,7 +47,7 @@ type Config struct {
 	NodeID                string        `mapstructure:"node-id"`
 	DialTimeout           time.Duration `mapstructure:"dial-timeout"`
 	ConnKeepAlive         time.Duration `mapstructure:"conn-keepalive"`
-	NetworkID             int8          `mapstructure:"network-id"`
+	NetworkID             uint32        `mapstructure:"network-id"`
 	ResponseTimeout       time.Duration `mapstructure:"response-timeout"`
 	SessionTimeout        time.Duration `mapstructure:"session-timeout"`
 	MaxPendingConnections int           `mapstructure:"max-pending-connections"`
@@ -100,4 +100,12 @@ func DefaultConfig() Config {
 		BufferSize:            10000,
 		MsgSizeLimit:          UnlimitedMsgSize,
 	}
+}
+
+// DefaultTestConfig returns the default config for tests.
+func DefaultTestConfig() Config {
+	conf := DefaultConfig()
+	conf.TCPPort += 10000
+	conf.TCPInterface = "127.0.0.1"
+	return conf
 }

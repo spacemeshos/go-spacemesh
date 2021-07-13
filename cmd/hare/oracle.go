@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -12,17 +13,25 @@ func newHareOracleFromClient(oc *oracleClient) *hareOracle {
 	return &hareOracle{oc: oc}
 }
 
-func (bo *hareOracle) IsIdentityActiveOnConsensusView(string, types.LayerID) (bool, error) {
+func (bo *hareOracle) IsIdentityActiveOnConsensusView(context.Context, string, types.LayerID) (bool, error) {
 	return true, nil
 }
 
-// Eligible checks eligibility for an identity in a round
-func (bo *hareOracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
-	// note: we don't use the proof in the oracle server. we keep it just for the future syntax
-	// todo: maybe replace k to be uint32 like hare wants, and don't use -1 for blocks
+func (bo *hareOracle) Validate(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
+	if eligibilityCount != 1 {
+		return false, nil
+	}
 	return bo.oc.Eligible(layer, round, committeeSize, id, sig)
 }
 
-func (bo *hareOracle) Proof(types.LayerID, int32) ([]byte, error) {
+func (bo *hareOracle) CalcEligibility(_ context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+	eligible, err := bo.oc.Eligible(layer, round, committeeSize, id, sig)
+	if eligible {
+		return 1, nil
+	}
+	return 0, err
+}
+
+func (bo *hareOracle) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
 	return []byte{}, nil
 }

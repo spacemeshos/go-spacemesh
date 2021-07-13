@@ -106,7 +106,7 @@ func TestMeteredCache_Get(t *testing.T) {
 		GetFunc: nil,
 	}
 
-	mtrd := NewMeteredCache(mc, "testCache", "mytest", "cachefortest", nil)
+	mtrd := NewMeteredCache(mc, "testCache2", "mytest", "cachefortest", nil)
 
 	hits := float64(0)
 

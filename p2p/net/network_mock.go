@@ -2,12 +2,13 @@ package net
 
 import (
 	"context"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"net"
 	"sync/atomic"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 // ReadWriteCloserMock is a mock of ReadWriteCloserMock
@@ -50,8 +51,8 @@ type NetworkMock struct {
 	preSessionErr    error
 	preSessionCount  int32
 	regNewRemoteConn []func(NewConnectionEvent)
-	networkID        int8
-	closingConn      []func(ConnectionWithErr)
+	networkID        uint32
+	closingConn      []func(context.Context, ConnectionWithErr)
 	incomingMessages []chan IncomingMessageEvent
 	dialSessionID    []byte
 	logger           log.Log
@@ -61,7 +62,7 @@ type NetworkMock struct {
 func NewNetworkMock() *NetworkMock {
 	return &NetworkMock{
 		regNewRemoteConn: make([]func(NewConnectionEvent), 0, 3),
-		closingConn:      make([]func(ConnectionWithErr), 0, 3),
+		closingConn:      make([]func(context.Context, ConnectionWithErr), 0, 3),
 		logger:           getTestLogger("network mock"),
 		incomingMessages: []chan IncomingMessageEvent{make(chan IncomingMessageEvent, 256)},
 	}
@@ -123,14 +124,14 @@ func (n NetworkMock) PublishNewRemoteConnection(nce NewConnectionEvent) {
 }
 
 // SubscribeClosingConnections subscribes on new connections
-func (n *NetworkMock) SubscribeClosingConnections(f func(connection ConnectionWithErr)) {
+func (n *NetworkMock) SubscribeClosingConnections(f func(context.Context, ConnectionWithErr)) {
 	n.closingConn = append(n.closingConn, f)
 }
 
 // publishClosingConnection and stuff
 func (n NetworkMock) publishClosingConnection(con ConnectionWithErr) {
 	for _, f := range n.closingConn {
-		f(con)
+		f(context.TODO(), con)
 	}
 }
 
@@ -140,7 +141,7 @@ func (n NetworkMock) PublishClosingConnection(con ConnectionWithErr) {
 }
 
 // NetworkID is netid
-func (n *NetworkMock) NetworkID() int8 {
+func (n *NetworkMock) NetworkID() uint32 {
 	return n.networkID
 }
 
@@ -150,7 +151,7 @@ func (n *NetworkMock) IncomingMessages() []chan IncomingMessageEvent {
 }
 
 // EnqueueMessage return channel of IncomingMessages
-func (n *NetworkMock) EnqueueMessage(event IncomingMessageEvent) {
+func (n *NetworkMock) EnqueueMessage(ctx context.Context, event IncomingMessageEvent) {
 	n.incomingMessages[0] <- event
 }
 

@@ -4,15 +4,17 @@ package cmd
 import (
 	"context"
 	"fmt"
-	bc "github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"os"
 	"os/signal"
 	"reflect"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
+
+	bc "github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 var (
@@ -116,14 +118,22 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 					val = viper.GetBool(name)
 				case "string":
 					val = viper.GetString(name)
-				case "int", "int8", "int16":
+				case "int":
 					val = viper.GetInt(name)
+				case "int8":
+					val = int8(viper.GetInt(name))
+				case "int16":
+					val = int16(viper.GetInt(name))
 				case "int32":
 					val = viper.GetInt32(name)
 				case "int64":
 					val = viper.GetInt64(name)
-				case "uint", "uint8", "uint16":
+				case "uint":
 					val = viper.GetUint(name)
+				case "uint8":
+					val = uint8(viper.GetUint(name))
+				case "uint16":
+					val = uint16(viper.GetUint(name))
 				case "uint32":
 					val = viper.GetUint32(name)
 				case "uint64":
@@ -177,6 +187,10 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 
 			ff = reflect.TypeOf(appCFG.HareEligibility)
 			elem = reflect.ValueOf(&appCFG.HareEligibility).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(appCFG.TortoiseBeacon)
+			elem = reflect.ValueOf(&appCFG.TortoiseBeacon).Elem()
 			assignFields(ff, elem, name)
 
 			ff = reflect.TypeOf(appCFG.POST)

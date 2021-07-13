@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -62,6 +63,16 @@ func (l LayerID) GetEpoch() EpochID {
 	return EpochID(uint64(l) / uint64(getLayersPerEpoch()))
 }
 
+// OrdinalInEpoch returns layer ordinal in epoch.
+func (l LayerID) OrdinalInEpoch() uint64 {
+	return uint64(l) % uint64(getLayersPerEpoch())
+}
+
+// FirstInEpoch returns whether this LayerID is first in epoch.
+func (l LayerID) FirstInEpoch() bool {
+	return l.OrdinalInEpoch() == 0
+}
+
 // GetEffectiveGenesis returns when actual blocks would be created
 func GetEffectiveGenesis() LayerID {
 	return LayerID(atomic.LoadInt32(&EffectiveGenesis))
@@ -85,7 +96,7 @@ type NodeID struct {
 	// Key is the miner's Edwards public key
 	Key string
 
-	// VRFPublicKey is the miner's public key used for VRF. The VRF scheme used is BLS.
+	// VRFPublicKey is the miner's public key used for VRF.
 	VRFPublicKey []byte
 }
 
@@ -111,10 +122,10 @@ func (id NodeID) ShortString() string {
 // one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
 func BytesToNodeID(b []byte) (*NodeID, error) {
 	if len(b) < 32 {
-		return nil, fmt.Errorf("Invalid input length, input too short")
+		return nil, fmt.Errorf("invalid input length, input too short")
 	}
 	if len(b) > 64 {
-		return nil, fmt.Errorf("Invalid input length, input too long")
+		return nil, fmt.Errorf("invalid input length, input too long")
 	}
 
 	pubKey := b[0:32]
@@ -125,18 +136,18 @@ func BytesToNodeID(b []byte) (*NodeID, error) {
 	}, nil
 }
 
-//StringToNodeID deserializes a string into a NodeID
+// StringToNodeID deserializes a string into a NodeID
 // TODO: length of the input will be made exact when the NodeID is compressed into
 // one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
 func StringToNodeID(s string) (*NodeID, error) {
 	strLen := len(s)
 	if strLen < 64 {
-		return nil, fmt.Errorf("Invalid input length, input too short")
+		return nil, fmt.Errorf("invalid length, input too short")
 	}
 	if strLen > 128 {
-		return nil, fmt.Errorf("Invalid input length, input too long")
+		return nil, fmt.Errorf("invalid length, input too long")
 	}
-	//portion of the string corresponding to the Edwards public key
+	// portion of the string corresponding to the Edwards public key
 	pubKey := s[:64]
 	vrfKey := s[64:]
 	return &NodeID{
@@ -167,9 +178,12 @@ type BlockHeader struct {
 	EligibilityProof BlockEligibilityProof
 	Data             []byte
 	Coin             bool
-	Timestamp        int64
-	BlockVotes       []BlockID
-	ViewEdges        []BlockID
+
+	BaseBlock BlockID
+
+	AgainstDiff []BlockID
+	ForDiff     []BlockID
+	NeutralDiff []BlockID
 }
 
 // Layer returns the block's LayerID.
@@ -177,24 +191,12 @@ func (b BlockHeader) Layer() LayerID {
 	return b.LayerIndex
 }
 
-// AddVote adds a vote to the list of block votes.
-func (b *BlockHeader) AddVote(id BlockID) {
-	// todo: do this in a sorted manner
-	b.BlockVotes = append(b.BlockVotes, id)
-}
-
-// AddView adds a block to this block's view.
-func (b *BlockHeader) AddView(id BlockID) {
-	// todo: do this in a sorted manner
-	b.ViewEdges = append(b.ViewEdges, id)
-}
-
 // MiniBlock includes all of a block's fields, except for the signature. This structure is serialized and signed to
 // produce the block signature.
 type MiniBlock struct {
 	BlockHeader
 	TxIDs []TransactionID
-	//ATXIDs    []ATXID
+	// ATXIDs    []ATXID
 	ActiveSet *[]ATXID
 	RefBlock  *BlockID
 }
@@ -229,8 +231,10 @@ func (b *Block) Fields() []log.LoggableField {
 		b.LayerIndex,
 		b.LayerIndex.GetEpoch(),
 		log.FieldNamed("miner_id", b.MinerID()),
-		log.Int("view_edges", len(b.ViewEdges)),
-		log.Int("vote_count", len(b.BlockVotes)),
+		log.String("base_block", b.BaseBlock.String()),
+		log.Int("supports", len(b.ForDiff)),
+		log.Int("againsts", len(b.AgainstDiff)),
+		log.Int("abstains", len(b.NeutralDiff)),
 		b.ATXID,
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
 		log.FieldNamed("ref_block", b.RefBlock),
@@ -285,6 +289,15 @@ func BlockIDs(blocks []*Block) []BlockID {
 	return ids
 }
 
+// BlockIdsField returns a list of loggable fields for a given list of BlockIDs
+func BlockIdsField(ids []BlockID) log.Field {
+	strs := []string{}
+	for _, a := range ids {
+		strs = append(strs, a.String())
+	}
+	return log.String("block_ids", strings.Join(strs, ", "))
+}
+
 // Layer contains a list of blocks and their corresponding LayerID.
 type Layer struct {
 	blocks []*Block
@@ -309,7 +322,7 @@ func (l *Layer) Blocks() []*Block {
 
 // Hash returns the 32-byte sha256 sum of the block IDs in this layer, sorted in lexicographic order.
 func (l Layer) Hash() Hash32 {
-	return CalcBlocksHash32(BlockIDs(l.blocks), nil)
+	return CalcBlocksHash32(SortBlockIDs(BlockIDs(l.blocks)), nil)
 }
 
 // AddBlock adds a block to this layer. Panics if the block's index doesn't match the layer.
@@ -341,8 +354,6 @@ func NewExistingBlock(layerIndex LayerID, data []byte, txs []TransactionID) *Blo
 	b := Block{
 		MiniBlock: MiniBlock{
 			BlockHeader: BlockHeader{
-				BlockVotes: make([]BlockID, 0, 10),
-				ViewEdges:  make([]BlockID, 0, 10),
 				LayerIndex: layerIndex,
 				Data:       data},
 			TxIDs: txs,

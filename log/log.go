@@ -3,6 +3,7 @@
 package log
 
 import (
+	"context"
 	"io"
 	"os"
 
@@ -38,7 +39,9 @@ type Logger interface {
 	Debug(format string, args ...interface{})
 	Error(format string, args ...interface{})
 	Warning(format string, args ...interface{})
-	WithName(prefix string) Log
+	With() FieldLogger
+	WithContext(context.Context) Log
+	WithName(string) Log
 }
 
 func encoder() zapcore.Encoder {
@@ -82,7 +85,7 @@ func NewWithLevel(module string, level zap.AtomicLevel, hooks ...func(zapcore.En
 	consoleCore := zapcore.NewCore(enc, consoleSyncer, level)
 	core := zapcore.RegisterHooks(consoleCore, hooks...)
 	log := zap.New(core).Named(module)
-	return Log{log}
+	return NewFromLog(log)
 }
 
 // NewDefault creates a Log with the default log level
@@ -92,7 +95,7 @@ func NewDefault(module string) Log {
 
 // NewFromLog creates a Log from an existing zap-compatible log.
 func NewFromLog(l *zap.Logger) Log {
-	return Log{l}
+	return Log{logger: l}
 }
 
 // InitSpacemeshLoggingSystemWithHooks sets up a logging system with one or more
@@ -125,7 +128,7 @@ func Warning(msg string, args ...interface{}) {
 
 // With returns a FieldLogger which you can append fields to.
 func With() FieldLogger {
-	return FieldLogger{AppLog.logger}
+	return FieldLogger{AppLog.logger, AppLog.name}
 }
 
 // Event returns a field logger with the Event field set to true.

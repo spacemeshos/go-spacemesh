@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -30,15 +31,20 @@ type MsgConnection struct {
 	w           io.Writer
 	closed      bool
 	deadliner   deadliner
-	messages    chan []byte
+	messages    chan msgToSend
 	stopSending chan struct{}
 
 	msgSizeLimit int
 }
 
+type msgConn interface {
+	Connection
+	beginEventProcessing(context.Context)
+}
+
 // Create a new connection wrapping a net.Conn with a provided connection manager
 func newMsgConnection(conn readWriteCloseAddresser, netw networker,
-	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) *MsgConnection {
+	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) msgConn {
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &MsgConnection{
@@ -53,7 +59,7 @@ func newMsgConnection(conn readWriteCloseAddresser, netw networker,
 		deadliner:    conn,
 		networker:    netw,
 		session:      session,
-		messages:     make(chan []byte, MessageQueueSize),
+		messages:     make(chan msgToSend, MessageQueueSize),
 		stopSending:  make(chan struct{}),
 		msgSizeLimit: msgSizeLimit,
 	}
@@ -101,8 +107,19 @@ func (c *MsgConnection) Created() time.Time {
 	return c.created
 }
 
-func (c *MsgConnection) publish(message []byte) {
-	c.networker.EnqueueMessage(IncomingMessageEvent{c, message})
+func (c *MsgConnection) publish(ctx context.Context, message []byte) {
+	// Print a log line to establish a link between the originating sessionID and this requestID,
+	// before the sessionID disappears.
+	//todo: re insert when log loss is fixed
+	//c.logger.WithContext(ctx).Debug("msgconnection: enqueuing incoming message")
+
+	// Rather than store the context on the heap, which is an antipattern, we instead extract the relevant IDs and
+	// store those.
+	ime := IncomingMessageEvent{Conn: c, Message: message}
+	if requestID, ok := log.ExtractRequestID(ctx); ok {
+		ime.RequestID = requestID
+	}
+	c.networker.EnqueueMessage(ctx, ime)
 }
 
 // NOTE: this is left here intended to help debugging in the future.
@@ -136,28 +153,46 @@ func (c *MsgConnection) publish(message []byte) {
 func (c *MsgConnection) sendListener() {
 	for {
 		select {
-		case buf := <-c.messages:
+		case m := <-c.messages:
+			c.logger.With().Debug("msgconnection: sending outgoing message",
+				log.String("peer_id", m.peerID),
+				log.String("requestId", m.reqID),
+				log.Int("queue_length", len(c.messages)))
+
 			//todo: we are hiding the error here...
-			err := c.SendSock(buf)
-			if err != nil {
-				log.Error("cannot send message to peer %v", err)
+			if err := c.SendSock(m.payload); err != nil {
+				log.With().Error("msgconnection: cannot send message to peer",
+					log.String("peer_id", m.peerID),
+					log.String("requestId", m.reqID),
+					log.Err(err))
 			}
 		case <-c.stopSending:
 			return
-
 		}
 	}
 }
 
 // Send pushes a message to the messages queue
-func (c *MsgConnection) Send(m []byte) error {
+func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
+	c.logger.WithContext(ctx).Debug("waiting for send lock")
 	c.wmtx.Lock()
 	if c.closed {
 		c.wmtx.Unlock()
 		return fmt.Errorf("connection was closed")
 	}
 	c.wmtx.Unlock()
-	c.messages <- m
+
+	// extract some useful context
+	reqID, _ := log.ExtractRequestID(ctx)
+	peerID, _ := ctx.Value(log.PeerIDKey).(string)
+
+	c.logger.WithContext(ctx).With().Debug("msgconnection: enqueuing outgoing message",
+		log.Int("queue_length", len(c.messages)))
+	if len(c.messages) > 30 {
+		c.logger.WithContext(ctx).With().Warning("msgconnection: outbound send queue backlog",
+			log.Int("queue_length", len(c.messages)))
+	}
+	c.messages <- msgToSend{m, reqID, peerID}
 	return nil
 }
 
@@ -199,8 +234,7 @@ func (c *MsgConnection) closeUnlocked() error {
 func (c *MsgConnection) Close() error {
 	c.wmtx.Lock()
 	defer c.wmtx.Unlock()
-	err := c.closeUnlocked()
-	if err != nil {
+	if err := c.closeUnlocked(); err != nil {
 		return err
 	}
 	close(c.stopSending)
@@ -216,7 +250,7 @@ func (c *MsgConnection) Closed() bool {
 
 // Push outgoing message to the connections
 // Read from the incoming new messages and send down the connection
-func (c *MsgConnection) beginEventProcessing() {
+func (c *MsgConnection) beginEventProcessing(ctx context.Context) {
 	//TODO: use a buffer pool
 	var err error
 	for {
@@ -234,7 +268,9 @@ func (c *MsgConnection) beginEventProcessing() {
 		if len(buf) > 0 {
 			newbuf := make([]byte, size)
 			copy(newbuf, buf[:size])
-			c.publish(newbuf)
+
+			// Create a new requestId for context
+			c.publish(log.WithNewRequestID(ctx), newbuf)
 		}
 
 		if err != nil {
@@ -242,8 +278,7 @@ func (c *MsgConnection) beginEventProcessing() {
 		}
 	}
 
-	cerr := c.Close()
-	if cerr != ErrAlreadyClosed {
+	if cerr := c.Close(); cerr != ErrAlreadyClosed {
 		c.networker.publishClosingConnection(ConnectionWithErr{c, err})
 	}
 }
