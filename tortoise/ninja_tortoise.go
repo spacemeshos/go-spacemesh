@@ -157,6 +157,9 @@ func newNinjaTortoise(layerSize int, blocks database, hdist int, log log.Log) *n
 }
 
 func (ni *ninjaTortoise) saveOpinion() error {
+	ni.logger.With().Info("saving contextual validity for blocks at pbase",
+		ni.PBase,
+		log.Int("count", len(ni.TVote[ni.PBase])))
 	for b, vec := range ni.TVote[ni.PBase] {
 		valid := vec == support
 		ni.logger.With().Debug("saving block contextual validity",

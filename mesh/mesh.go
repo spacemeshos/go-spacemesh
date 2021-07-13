@@ -280,6 +280,7 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 		return
 	}
 
+	// TODO LANE: make sure we record validity for blocks in all intervening layers (not just new pbase)
 	oldPbase, newPbase := vl.trtl.HandleIncomingLayer(lyr)
 	vl.SetProcessedLayer(lyr.Index())
 

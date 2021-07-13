@@ -530,7 +530,9 @@ func (proc *consensusProcess) onRoundEnd(ctx context.Context) {
 			log.String("proposed_set", sStr),
 			log.Bool("is_conflicting", proc.proposalTracker.IsConflicting()))
 	case commitRound:
-		logger.With().Info("commit round ended", log.Int("set_size", proc.s.Size()))
+		logger.With().Info("commit round ended",
+			log.Int("set_size", proc.s.Size()),
+			log.Int("num_commits", proc.commitTracker.CommitCount()))
 	}
 }
 
