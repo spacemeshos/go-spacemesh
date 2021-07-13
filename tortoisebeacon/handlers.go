@@ -66,12 +66,10 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 		receivedTime: receivedTime,
 	}
 
-	go func() {
-		select {
-		case <-tb.CloseChannel():
-		case ch <- extendedMessage:
-		}
-	}()
+	select {
+	case <-tb.CloseChannel():
+	case ch <- extendedMessage:
+	}
 }
 
 func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage, receivedTime time.Time) error {
