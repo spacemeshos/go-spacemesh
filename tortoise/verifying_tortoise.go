@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -11,11 +12,11 @@ import (
 )
 
 type blockDataProvider interface {
-	GetBlock(id types.BlockID) (*types.Block, error)
-	LayerBlockIds(l types.LayerID) (ids []types.BlockID, err error)
+	GetBlock(types.BlockID) (*types.Block, error)
+	LayerBlockIds(types.LayerID) (ids []types.BlockID, err error)
 
-	GetLayerInputVectorByID(lyrid types.LayerID) ([]types.BlockID, error)
-	SaveLayerInputVectorByID(lyrid types.LayerID, vector []types.BlockID) error
+	GetLayerInputVectorByID(types.LayerID) ([]types.BlockID, error)
+	SaveLayerInputVectorByID(types.LayerID, []types.BlockID) error
 
 	SaveContextualValidity(id types.BlockID, valid bool) error
 
@@ -221,7 +222,7 @@ func (t *turtle) inputVectorForLayer(layerBlocks []types.BlockID, input []types.
 	return
 }
 
-func (t *turtle) BaseBlock() (types.BlockID, [][]types.BlockID, error) {
+func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
 	// Try to find a block counting only good blocks
 	// TODO: could we do better than just grabbing the first non-error, good block, as below?
 	// e.g., trying to minimize the size of the exception list instead

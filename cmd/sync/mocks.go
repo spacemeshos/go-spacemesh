@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 )
 
 type blockEligibilityValidatorMock struct{}
@@ -137,6 +138,8 @@ type allDbs struct {
 	poetDb      *activation.PoetDb
 	poetStorage database.Database
 	mshdb       *mesh.DB
+	tbDB        *tortoisebeacon.DB
+	tbDBStore   *database.LDBDatabase
 }
 
 func createMeshWithMock(dbs *allDbs, txpool *state.TxMempool, lg log.Log) *mesh.Mesh {
@@ -158,8 +161,8 @@ func createFetcherWithMock(dbs *allDbs, msh *mesh.Mesh, swarm service.Service, l
 	fetcher := fetch.NewFetch(context.TODO(), fCfg, swarm, lg)
 
 	lCfg := layerfetcher.Config{RequestTimeout: 20}
-	layerFetch := layerfetcher.NewLogic(context.TODO(), lCfg, blockHandler, dbs.atxdb, dbs.poetDb, dbs.atxdb, mockTxProcessor{}, swarm, fetcher, msh, lg)
-	layerFetch.AddDBs(dbs.mshdb.Blocks(), dbs.atxdbStore, dbs.mshdb.Transactions(), dbs.poetStorage, dbs.mshdb.InputVector())
+	layerFetch := layerfetcher.NewLogic(context.TODO(), lCfg, blockHandler, dbs.atxdb, dbs.poetDb, dbs.atxdb, mockTxProcessor{}, swarm, fetcher, msh, dbs.tbDB, lg)
+	layerFetch.AddDBs(dbs.mshdb.Blocks(), dbs.atxdbStore, dbs.mshdb.Transactions(), dbs.poetStorage, dbs.mshdb.InputVector(), dbs.tbDBStore)
 	return layerFetch
 }
 

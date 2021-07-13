@@ -100,6 +100,16 @@ func (l LayerID) Sub(layers uint32) LayerID {
 	return l
 }
 
+// OrdinalInEpoch returns layer ordinal in epoch.
+func (l LayerID) OrdinalInEpoch() uint32 {
+	return l.Value % getLayersPerEpoch()
+}
+
+// FirstInEpoch returns whether this LayerID is first in epoch.
+func (l LayerID) FirstInEpoch() bool {
+	return l.OrdinalInEpoch() == 0
+}
+
 // Mul layer by the layers. Panics on wraparound.
 func (l LayerID) Mul(layers uint32) LayerID {
 	if l.Value == 0 {
@@ -149,7 +159,7 @@ type NodeID struct {
 	// Key is the miner's Edwards public key
 	Key string
 
-	// VRFPublicKey is the miner's public key used for VRF. The VRF scheme used is BLS.
+	// VRFPublicKey is the miner's public key used for VRF.
 	VRFPublicKey []byte
 }
 

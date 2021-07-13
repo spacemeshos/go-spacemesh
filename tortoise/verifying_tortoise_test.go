@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -159,6 +160,7 @@ func turtleSanity(t *testing.T, layers types.LayerID, blocksPerLayer, voteNegati
 
 		blks, err := msh.LayerBlockIds(l)
 		if err != nil {
+			t.Log(err)
 			panic("db err")
 		}
 
@@ -212,7 +214,7 @@ func turtleSanity(t *testing.T, layers types.LayerID, blocksPerLayer, voteNegati
 func turtleMakeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, msh *mesh.DB, hm func(id types.LayerID) ([]types.BlockID, error)) {
 	fmt.Println("choosing base block layer ", l)
 	msh.InputVectorBackupFunc = hm
-	b, lists, err := trtl.BaseBlock()
+	b, lists, err := trtl.BaseBlock(context.TODO())
 	fmt.Println("the base block for ", l, "is ", b)
 	if err != nil {
 		panic(fmt.Sprint("no base - ", err))
@@ -297,13 +299,13 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 	//todo: also check votes with requireVote
 }
 
-type baseBlockProvider func() (types.BlockID, [][]types.BlockID, error)
+type baseBlockProvider func(ctx context.Context) (types.BlockID, [][]types.BlockID, error)
 type inputVectorProvider func(l types.LayerID) ([]types.BlockID, error)
 
-func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp inputVectorProvider, blocksPerLayer int) *types.Layer {
+func createTurtleLayer(ctx context.Context, l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp inputVectorProvider, blocksPerLayer int) *types.Layer {
 	fmt.Println("choosing base block layer ", l)
 	msh.InputVectorBackupFunc = ivp
-	b, lists, err := bbp()
+	b, lists, err := bbp(ctx)
 	fmt.Println("the base block for ", l, "is ", b)
 	fmt.Println("Against ", lists[0])
 	fmt.Println("For ", lists[1])
@@ -383,7 +385,11 @@ func TestTurtle_Recovery(t *testing.T) {
 	log.With().Info("The genesis is ", l.Index(), types.BlockIdsField(types.BlockIDs(l.Blocks())))
 	log.With().Info("The genesis is ", l.Blocks()[0].Fields()...)
 
+<<<<<<< HEAD
 	l1 := createTurtleLayer(types.GetEffectiveGenesis().Add(1), mdb, alg.BaseBlock, getHareResults, 3)
+=======
+	l1 := createTurtleLayer(context.TODO(), types.GetEffectiveGenesis()+1, mdb, alg.BaseBlock, getHareResults, 3)
+>>>>>>> develop
 	require.NoError(t, AddLayer(mdb, l1))
 
 	log.With().Info("The first is ", l1.Index(), types.BlockIdsField(types.BlockIDs(l1.Blocks())))
@@ -392,7 +398,11 @@ func TestTurtle_Recovery(t *testing.T) {
 	alg.HandleIncomingLayer(l1)
 	require.NoError(t, alg.Persist())
 
+<<<<<<< HEAD
 	l2 := createTurtleLayer(types.GetEffectiveGenesis().Add(2), mdb, alg.BaseBlock, getHareResults, 3)
+=======
+	l2 := createTurtleLayer(context.TODO(), types.GetEffectiveGenesis()+2, mdb, alg.BaseBlock, getHareResults, 3)
+>>>>>>> develop
 	require.NoError(t, AddLayer(mdb, l2))
 	alg.HandleIncomingLayer(l2)
 
@@ -400,9 +410,15 @@ func TestTurtle_Recovery(t *testing.T) {
 
 	require.Equal(t, types.GetEffectiveGenesis().Add(1), alg.LatestComplete())
 
+<<<<<<< HEAD
 	l31 := createTurtleLayer(types.GetEffectiveGenesis().Add(3), mdb, alg.BaseBlock, getHareResults, 4)
 
 	l32 := createTurtleLayer(types.GetEffectiveGenesis().Add(3), mdb, func() (types.BlockID, [][]types.BlockID, error) {
+=======
+	l31 := createTurtleLayer(context.TODO(), types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, 4)
+
+	l32 := createTurtleLayer(context.TODO(), types.GetEffectiveGenesis()+3, mdb, func(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
+>>>>>>> develop
 		diffs := make([][]types.BlockID, 3)
 		diffs[0] = make([]types.BlockID, 0)
 		diffs[1] = types.BlockIDs(l.Blocks())
@@ -422,12 +438,20 @@ func TestTurtle_Recovery(t *testing.T) {
 
 		alg.HandleIncomingLayer(l2)
 
+<<<<<<< HEAD
 		l3 := createTurtleLayer(types.GetEffectiveGenesis().Add(3), mdb, alg.BaseBlock, getHareResults, 3)
+=======
+		l3 := createTurtleLayer(context.TODO(), types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, 3)
+>>>>>>> develop
 		AddLayer(mdb, l3)
 		alg.HandleIncomingLayer(l3)
 		alg.Persist()
 
+<<<<<<< HEAD
 		l4 := createTurtleLayer(types.GetEffectiveGenesis().Add(4), mdb, alg.BaseBlock, getHareResults, 3)
+=======
+		l4 := createTurtleLayer(context.TODO(), types.GetEffectiveGenesis()+4, mdb, alg.BaseBlock, getHareResults, 3)
+>>>>>>> develop
 		AddLayer(mdb, l4)
 		alg.HandleIncomingLayer(l4)
 		alg.Persist()

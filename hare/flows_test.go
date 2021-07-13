@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -18,7 +19,7 @@ import (
 
 type HareWrapper struct {
 	totalCP     uint32
-	termination Closer
+	termination util.Closer
 	lCh         []chan types.LayerID
 	hare        []*Hare
 	initialSets []*Set // all initial sets
@@ -30,7 +31,7 @@ func newHareWrapper(totalCp uint32) *HareWrapper {
 	hs := new(HareWrapper)
 	hs.lCh = make([]chan types.LayerID, 0)
 	hs.totalCP = totalCp
-	hs.termination = NewCloser()
+	hs.termination = util.NewCloser()
 	hs.outputs = make(map[types.LayerID][]*Set, 0)
 
 	return hs

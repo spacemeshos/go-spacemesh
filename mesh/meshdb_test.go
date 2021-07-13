@@ -940,3 +940,38 @@ func TestMeshDB_RecordCoinFlip(t *testing.T) {
 	defer teardown()
 	testCoinflip(mdb2)
 }
+
+func TestMesh_FindOnce(t *testing.T) {
+	mdb := NewMemMeshDB(log.NewDefault(t.Name()))
+	defer mdb.Close()
+
+	r := require.New(t)
+	signer1, addr1 := newSignerAndAddress(r, "thc")
+	signer2, _ := newSignerAndAddress(r, "cbd")
+
+	blk := &types.Block{}
+	layers := []uint32{1, 10, 100}
+	nonce := uint64(0)
+	for _, layer := range layers {
+		blk.LayerIndex = types.NewLayerID(layer)
+		nonce++
+		err := mdb.writeTransactions(blk.LayerIndex,
+			[]*types.Transaction{
+				newTx(r, signer1, nonce, 100),
+				newTxWithDest(r, signer2, addr1, nonce, 100),
+			},
+		)
+		r.NoError(err)
+	}
+	t.Run("ByDestination", func(t *testing.T) {
+		for _, layer := range layers {
+			assert.Len(t, mdb.GetTransactionsByDestination(types.NewLayerID(layer), addr1), 1)
+		}
+	})
+
+	t.Run("ByOrigin", func(t *testing.T) {
+		for _, layer := range layers {
+			assert.Len(t, mdb.GetTransactionsByOrigin(types.NewLayerID(layer), addr1), 1)
+		}
+	})
+}

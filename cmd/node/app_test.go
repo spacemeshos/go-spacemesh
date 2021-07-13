@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apicfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -31,6 +32,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 )
 
 type AppTestSuite struct {
@@ -618,6 +620,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.LayerDurationSec = 20
 	smApp.Config.HareEligibility.ConfidenceParam = 3
 	smApp.Config.HareEligibility.EpochOffset = 0
+	smApp.Config.TortoiseBeacon = tortoisebeacon.TestConfig()
 	smApp.Config.StartMining = true
 
 	smApp.Config.FETCH.RequestTimeout = 1

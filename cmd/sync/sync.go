@@ -12,6 +12,11 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
+	"github.com/spf13/cobra"
+	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -22,9 +27,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/syncer"
-	"github.com/spf13/cobra"
-	"google.golang.org/api/iterator"
-	"google.golang.org/api/option"
 )
 
 // Sync cmd
@@ -119,6 +121,12 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 		return
 	}
 
+	tbDBStore, err := database.NewLDBDatabase(filepath.Join(path, "tb"), 0, 0, lg.WithName("tbDbStore"))
+	if err != nil {
+		lg.With().Error("error creating tortoise beacon database", log.Err(err))
+		return
+	}
+
 	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb").WithOptions(log.Nop))
 
 	mshdb, err := mesh.NewPersistentMeshDB(filepath.Join(path, "mesh"), 5, lg.WithOptions(log.Nop))
@@ -126,6 +134,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 		lg.With().Error("error creating mesh database", log.Err(err))
 		return
 	}
+
 	atxdbStore, err := database.NewLDBDatabase(filepath.Join(path, "atx"), 0, 0, lg)
 	if err != nil {
 		lg.With().Error("error creating atx database", log.Err(err))
@@ -138,14 +147,23 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	app.logger.Info("new sync tester")
 
 	layersPerEpoch := app.Config.LayersPerEpoch
+<<<<<<< HEAD
 	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, layersPerEpoch, goldenATXID, &validatorMock{}, lg.WithOptions(log.Nop))
+=======
+	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, uint16(layersPerEpoch), goldenATXID, &validatorMock{}, lg.WithOptions(log.Nop))
+	tbDB := tortoisebeacon.NewDB(tbDBStore, lg.WithOptions(log.Nop))
+
+>>>>>>> develop
 	dbs := &allDbs{
 		atxdb:       atxdb,
 		atxdbStore:  atxdbStore,
 		poetDb:      poetDb,
 		poetStorage: poetDbStore,
 		mshdb:       mshdb,
+		tbDBStore:   tbDBStore,
+		tbDB:        tbDB,
 	}
+
 	msh := createMeshWithMock(dbs, txpool, app.logger)
 	app.msh = msh
 	layerFetch := createFetcherWithMock(dbs, msh, swarm, app.logger)

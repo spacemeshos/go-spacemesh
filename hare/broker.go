@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -22,31 +23,10 @@ type validator interface {
 	Validate(context.Context, *Msg) bool
 }
 
-// Closer adds the ability to close objects.
-type Closer struct {
-	channel chan struct{} // closeable go routines listen to this channel
-}
-
-// NewCloser creates a new (not closed) closer.
-func NewCloser() Closer {
-	return Closer{make(chan struct{})}
-}
-
-// Close signals all listening instances to close.
-// Note: should be called only once.
-func (closer *Closer) Close() {
-	close(closer.channel)
-}
-
-// CloseChannel returns the channel to wait on for close signal.
-func (closer *Closer) CloseChannel() chan struct{} {
-	return closer.channel
-}
-
 // Broker is the dispatcher of incoming Hare messages.
 // The broker validates that the sender is eligible and active and forwards the message to the corresponding outbox.
 type Broker struct {
-	Closer
+	util.Closer
 	log.Log
 	network        NetworkService
 	eValidator     validator     // provides eligibility validation
@@ -66,7 +46,7 @@ type Broker struct {
 	limit          int // max number of simultaneous consensus processes
 }
 
-func newBroker(networkService NetworkService, eValidator validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, limit int, closer Closer, log log.Log) *Broker {
+func newBroker(networkService NetworkService, eValidator validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, limit int, closer util.Closer, log log.Log) *Broker {
 	return &Broker{
 		Closer:         closer,
 		Log:            log,
@@ -100,8 +80,8 @@ func (b *Broker) Start(ctx context.Context) error {
 func (b *Broker) startWithInbox(ctx context.Context, inbox chan service.GossipMessage) error {
 	b.isStarted = true
 	b.inbox = inbox
-	go b.queueLoop(ctx)
-	go b.eventLoop(ctx)
+	go b.queueLoop(log.WithNewSessionID(ctx))
+	go b.eventLoop(log.WithNewSessionID(ctx))
 	return nil
 }
 
@@ -155,7 +135,8 @@ func (b *Broker) queueLoop(ctx context.Context) {
 		select {
 		case msg := <-b.inbox:
 			logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
-			logger.Debug("hare broker received inbound gossip message")
+			logger.Debug("hare broker received inbound gossip message",
+				log.Int("inbox_queue_len", len(b.inbox)))
 			if msg == nil {
 				logger.Error("broker message validation failed: called with nil")
 				continue
@@ -166,7 +147,8 @@ func (b *Broker) queueLoop(ctx context.Context) {
 			if msg.IsOwnMessage() {
 				priority = priorityq.High
 			}
-			logger.With().Debug("assigned message priority", log.Int("priority", int(priority)))
+			logger.With().Debug("assigned message priority, writing to priority queue",
+				log.Int("priority", int(priority)))
 
 			if err := b.queue.Write(priority, msg); err != nil {
 				logger.With().Error("error writing inbound message to priority queue, dropping", log.Err(err))
@@ -189,7 +171,7 @@ func (b *Broker) queueLoop(ctx context.Context) {
 // listens to incoming messages and incoming tasks
 func (b *Broker) eventLoop(ctx context.Context) {
 	for {
-		b.With().Info("broker queue sizes",
+		b.WithContext(ctx).With().Debug("broker queue sizes",
 			log.Int("msg_queue_size", len(b.queueChannel)),
 			log.Int("task_queue_size", len(b.tasks)))
 		select {
@@ -229,9 +211,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 				msgLogger.With().Error("broker message validation failed", log.Err(errNilInner))
 				continue
 			}
-			msgLogger.With().Info("broker received hare message",
-				hareMsg,
-				log.Int("queue_length", len(b.inbox)))
+			msgLogger.With().Debug("broker received hare message")
 
 			msgInstID := hareMsg.InnerMsg.InstanceID
 			metrics.MessageTypeCounter.With(
@@ -252,8 +232,6 @@ func (b *Broker) eventLoop(ctx context.Context) {
 				isEarly = true
 			}
 
-			// the msg is either early or has instance
-
 			// create msg
 			iMsg, err := newMsg(messageCtx, hareMsg, b.stateQuerier)
 			if err != nil {
@@ -269,7 +247,8 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			}
 
 			// validation passed, report
-			msg.ReportValidation(protoName)
+			msg.ReportValidation(ctx, protoName)
+			msgLogger.With().Info("broker reported hare message as valid", hareMsg)
 
 			if isEarly {
 				if _, exist := b.pending[msgInstID.Uint32()]; !exist { // create buffer if first msg
@@ -297,7 +276,11 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			out <- iMsg
 
 		case task := <-b.tasks:
+			b.WithContext(ctx).With().Debug("broker received task, executing",
+				log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 			task()
+			b.WithContext(ctx).With().Debug("broker finished executing task",
+				log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 		}
 	}
 }
@@ -357,6 +340,7 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan *Msg, err
 	resErr := make(chan error, 1)
 	resCh := make(chan chan *Msg, 1)
 	regRequest := func() {
+		ctx := log.WithNewSessionID(ctx)
 		b.updateLatestLayer(ctx, id)
 
 		// first performing a check to see whether we are synced for this layer
@@ -394,11 +378,13 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan *Msg, err
 		resCh <- nil
 	}
 
+	b.WithContext(ctx).With().Debug("queueing register task", types.LayerID(id))
 	b.tasks <- regRequest // send synced task
 
 	// wait for result
 	err := <-resErr
 	result := <-resCh
+	b.WithContext(ctx).With().Debug("register task result received", types.LayerID(id), log.Err(err))
 	if err != nil { // reg failed
 		return nil, err
 	}

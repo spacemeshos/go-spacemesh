@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import datetime, timedelta
 from functools import wraps
 from kubernetes.client.rest import ApiException
@@ -28,7 +29,8 @@ def api_call(client_ip, data, api, namespace, port="9093", retry=3, interval=1):
     while True:
         try:
             res = stream(CoreV1ApiClient().connect_post_namespaced_pod_exec, name="curl", namespace=namespace,
-                         command=["curl", "-s", "--request", "POST", "--data", data, f"http://{client_ip}:{port}/{api}"],
+                         command=["curl", "-s", "--request", "POST", "--data", data,
+                                  f"http://{client_ip}:{port}/{api}"],
                          stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
         except ApiException as e:
             print(f"got an ApiException while streaming: {e}")
@@ -153,6 +155,33 @@ def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch,
     print("\nvalidation succeeded!\n")
 
 
+def validate_beacons(log_messages):
+    epoch_messages = defaultdict(dict)
+
+    assert len(log_messages) > 0, f"no log messages"
+
+    for log in log_messages:
+        if log.epoch_id not in epoch_messages:
+            epoch_messages[log.epoch_id] = dict()
+
+        if log.beacon not in epoch_messages[log.epoch_id]:
+            epoch_messages[log.epoch_id][log.beacon] = 0
+
+        epoch_messages[log.epoch_id][log.beacon] += 1
+
+        assert log.beacon != '0x0000000000000000000000000000000000000000000000000000000000000000', \
+            f"beacon in epoch {log.epoch_id} is 0x00...00: {log.beacon}"
+
+        assert log.beacon != '0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', \
+            f"beacon in epoch {log.epoch_id} is sha256(0x00...00): {log.beacon}"
+
+    for epoch, beacons in epoch_messages.items():
+        assert len(beacons) == 1, f"all beacons in epoch {epoch} were not same, saw: {beacons}"
+        print(f"all beacons in epoch {epoch} were same, saw: {beacons}")
+
+    print(f"successfully validated beacons")
+
+
 def get_pod_id(ns, pod_name):
     hits = q.query_protocol_started(ns, pod_name, "HARE_PROTOCOL")
     if not hits:
@@ -254,7 +283,6 @@ def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME,
         kibana_sleep_time = deployment.wait_to_deployment_to_be_ready(kibana_dep_name, namespace, time_out=kb_timeout)
     except Exception as e:
         print(f"got an exception while waiting for kibana to be ready: {e}")
-        raise Exception(f"kibana took more than {kb_timeout} to start")
     else:
         kibana_ip = get_kibana_ip(kibana_dep_name, namespace)
         print(f"kibana started successfully. ip: {kibana_ip}")
@@ -291,7 +319,7 @@ def get_kibana_ip(kibana_dep_name, namespace, retries=240, sleep_interval=1):
 
         return kibana_service.status.load_balancer.ingress[0].ip
 
-    raise Exception("KIBANA: max retries count expired")
+    print(f"KIBANA: max retries count expired")
 
 
 def exec_wait(cmd, retry=1, interval=1, is_print=True):
@@ -325,7 +353,7 @@ def exec_wait(cmd, retry=1, interval=1, is_print=True):
     if ret_code and ret_code != "0" and retry:
         print(f"return code: {ret_code}, failed, retrying in {interval} seconds (retries left: {retry})")
         time.sleep(interval)
-        ret_code = exec_wait(cmd, retry-1, interval, is_print=False)
+        ret_code = exec_wait(cmd, retry - 1, interval, is_print=False)
     else:
         print(f"return code: {ret_code}")
 
@@ -427,7 +455,8 @@ def timing(func):
         start = time.time()
         result = func(*args, **kwargs)
         end = time.time()
-        return result, end-start
+        return result, end - start
+
     return wrapper
 
 

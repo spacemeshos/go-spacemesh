@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -46,7 +47,7 @@ func (m mockReport) Coinflip() bool {
 }
 
 type mockConsensusProcess struct {
-	Closer
+	util.Closer
 	t    chan TerminationOutput
 	id   types.LayerID
 	term chan struct{}
@@ -79,7 +80,7 @@ func (mip *mockIDProvider) GetIdentity(edID string) (types.NodeID, error) {
 
 func newMockConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, outputChan chan TerminationOutput) *mockConsensusProcess {
 	mcp := new(mockConsensusProcess)
-	mcp.Closer = NewCloser()
+	mcp.Closer = util.NewCloser()
 	mcp.id = instanceID
 	mcp.t = outputChan
 	mcp.set = s

@@ -1,8 +1,10 @@
 package mesh
 
 import (
+	"bytes"
 	"container/list"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -45,38 +47,38 @@ type DB struct {
 }
 
 // NewPersistentMeshDB creates an instance of a mesh database
-func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, error) {
-	bdb, err := database.NewLDBDatabase(filepath.Join(path, "blocks"), 0, 0, log)
+func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, error) {
+	bdb, err := database.NewLDBDatabase(filepath.Join(path, "blocks"), 0, 0, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize blocks db: %v", err)
 	}
-	ldb, err := database.NewLDBDatabase(filepath.Join(path, "layers"), 0, 0, log)
+	ldb, err := database.NewLDBDatabase(filepath.Join(path, "layers"), 0, 0, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize layers db: %v", err)
 	}
-	vdb, err := database.NewLDBDatabase(filepath.Join(path, "validity"), 0, 0, log)
+	vdb, err := database.NewLDBDatabase(filepath.Join(path, "validity"), 0, 0, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize validity db: %v", err)
 	}
-	tdb, err := database.NewLDBDatabase(filepath.Join(path, "transactions"), 0, 0, log)
+	tdb, err := database.NewLDBDatabase(filepath.Join(path, "transactions"), 0, 0, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
 	}
-	gdb, err := database.NewLDBDatabase(filepath.Join(path, "general"), 0, 0, log)
+	gdb, err := database.NewLDBDatabase(filepath.Join(path, "general"), 0, 0, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize general db: %v", err)
 	}
-	utx, err := database.NewLDBDatabase(filepath.Join(path, "unappliedTxs"), 0, 0, log)
+	utx, err := database.NewLDBDatabase(filepath.Join(path, "unappliedTxs"), 0, 0, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize mesh unappliedTxs db: %v", err)
 	}
-	iv, err := database.NewLDBDatabase(filepath.Join(path, "inputvector"), 0, 0, log)
+	iv, err := database.NewLDBDatabase(filepath.Join(path, "inputvector"), 0, 0, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize mesh unappliedTxs db: %v", err)
 	}
 
 	ll := &DB{
-		Log:                log,
+		Log:                logger,
 		blockCache:         newBlockCache(blockCacheSize * layerSize),
 		blocks:             bdb,
 		layers:             ldb,
@@ -90,7 +92,6 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, err
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
 	}
-
 	for _, blk := range GenesisLayer().Blocks() {
 		ll.Log.With().Info("Adding genesis block ", blk.ID(), blk.LayerIndex)
 		if err := ll.AddBlock(blk); err != nil {
@@ -395,19 +396,15 @@ func (m *DB) SaveLayerHashInputVector(h types.Hash32, data []byte) error {
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {
-	bytes, err := types.InterfaceToBytes(bl)
-	if err != nil {
-		return fmt.Errorf("could not encode bl")
+	if bytes, err := types.InterfaceToBytes(bl); err != nil {
+		return fmt.Errorf("could not encode block: %w", err)
+	} else if err := m.blocks.Put(bl.ID().AsHash32().Bytes(), bytes); err != nil {
+		return fmt.Errorf("could not add block %v to database: %w", bl.ID(), err)
+	} else if err := m.updateLayerWithBlock(bl); err != nil {
+		return fmt.Errorf("could not update layer %v with new block %v: %w", bl.Layer(), bl.ID(), err)
 	}
-
-	if err := m.blocks.Put(bl.ID().AsHash32().Bytes(), bytes); err != nil {
-		return fmt.Errorf("could not add bl %v to database %v", bl.ID(), err)
-	}
-
-	m.updateLayerWithBlock(bl)
 
 	m.blockCache.put(bl)
-
 	return nil
 }
 
@@ -419,12 +416,12 @@ func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 	ids, err := m.layers.Get(blk.LayerIndex.Bytes())
 	var blockIds []types.BlockID
 	if err != nil {
-		// layer doesnt exist, need to insert new layer
+		// layer doesn't exist, need to insert new layer
 		blockIds = make([]types.BlockID, 0, 1)
 	} else {
 		blockIds, err = types.BytesToBlockIds(ids)
 		if err != nil {
-			return errors.New("could not get all blocks from database ")
+			return errors.New("could not get all blocks from database")
 		}
 	}
 	m.Debug("added block %v to layer %v", blk.ID(), blk.LayerIndex)
@@ -523,24 +520,70 @@ func getSmesherRewardKeyPrefix(smesherID types.NodeID) []byte {
 	return []byte(str)
 }
 
+type keyBuilder struct {
+	buf bytes.Buffer
+}
+
+func (k *keyBuilder) WithLayerID(l types.LayerID) *keyBuilder {
+	buf := make([]byte, 4)
+	// NOTE(dshulyak) big endian produces lexicographically ordered bytes.
+	// some queries can be optimizaed by using range queries instead of point queries.
+	binary.BigEndian.PutUint32(buf, l.Uint32())
+	k.buf.Write(l.Bytes())
+	return k
+}
+
+func (k *keyBuilder) WithOriginPrefix() *keyBuilder {
+	k.buf.WriteString("a_o_")
+	return k
+}
+
+func (k *keyBuilder) WithDestPrefix() *keyBuilder {
+	k.buf.WriteString("a_d_")
+	return k
+}
+
+func (k *keyBuilder) WithBytes(buf []byte) *keyBuilder {
+	k.buf.Write(buf)
+	return k
+}
+
+func (k *keyBuilder) Bytes() []byte {
+	return k.buf.Bytes()
+}
+
 func getTransactionOriginKey(l types.LayerID, t *types.Transaction) []byte {
-	str := string(getTransactionOriginKeyPrefix(l, t.Origin())) + "_" + t.ID().String()
-	return []byte(str)
+	return new(keyBuilder).
+		WithOriginPrefix().
+		WithBytes(t.Origin().Bytes()).
+		WithLayerID(l).
+		WithBytes(t.ID().Bytes()).
+		Bytes()
 }
 
 func getTransactionDestKey(l types.LayerID, t *types.Transaction) []byte {
-	str := string(getTransactionDestKeyPrefix(l, t.Recipient)) + "_" + t.ID().String()
-	return []byte(str)
+	return new(keyBuilder).
+		WithDestPrefix().
+		WithBytes(t.Recipient.Bytes()).
+		WithLayerID(l).
+		WithBytes(t.ID().Bytes()).
+		Bytes()
 }
 
 func getTransactionOriginKeyPrefix(l types.LayerID, account types.Address) []byte {
-	str := "a_o_" + account.String() + "_" + l.String()
-	return []byte(str)
+	return new(keyBuilder).
+		WithOriginPrefix().
+		WithBytes(account.Bytes()).
+		WithLayerID(l).
+		Bytes()
 }
 
 func getTransactionDestKeyPrefix(l types.LayerID, account types.Address) []byte {
-	str := "a_d_" + account.String() + "_" + l.String()
-	return []byte(str)
+	return new(keyBuilder).
+		WithDestPrefix().
+		WithBytes(account.Bytes()).
+		WithLayerID(l).
+		Bytes()
 }
 
 // DbTransaction is the transaction type stored in DB

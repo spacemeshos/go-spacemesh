@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"os"
@@ -37,7 +38,7 @@ func createLayerWithAtx2(t require.TestingT, msh *mesh.Mesh, id types.LayerID, n
 			}
 			block1.AgainstDiff = append(block1.AgainstDiff, v)
 		}
-		err := msh.AddBlockWithTxs(block1)
+		err := msh.AddBlockWithTxs(context.TODO(), block1)
 		require.NoError(t, err)
 		created = append(created, block1.ID())
 	}
@@ -195,7 +196,7 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 		}
 		msh.ProcessAtxs(actualAtxs)
 		block1.Initialize()
-		err := msh.AddBlockWithTxs(block1)
+		err := msh.AddBlockWithTxs(context.TODO(), block1)
 		require.NoError(t, err)
 		created = append(created, block1.ID())
 	}
@@ -347,7 +348,6 @@ func Test_DBSanity(t *testing.T) {
 
 func TestMesh_processBlockATXs(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpochBig)
-	totalWeightCache.Purge()
 	atxdb, _, _ := getAtxDb("t6")
 
 	id1 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
@@ -1016,4 +1016,12 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 	err = atxdb.ContextuallyValidateAtx(malformedAtx.ActivationTxHeader)
 	r.EqualError(err,
 		fmt.Sprintf("could not fetch node last atx: atx for node %v does not exist", nodeID.ShortString()))
+}
+
+func TestActivateDB_HandleAtxNilNipst(t *testing.T) {
+	atxdb, _, _ := getAtxDb(t.Name())
+	atx := newActivationTx(nodeID, 0, *types.EmptyATXID, *types.EmptyATXID, 0, 0, 0, 0, coinbase, nil)
+	buf, err := types.InterfaceToBytes(atx)
+	require.NoError(t, err)
+	require.Error(t, atxdb.HandleAtxData(context.TODO(), buf, nil))
 }

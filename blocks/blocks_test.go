@@ -144,7 +144,7 @@ func (m meshMock) GetBlock(ID types.BlockID) (*types.Block, error) {
 	panic("implement me")
 }
 
-func (m meshMock) AddBlockWithTxs(blk *types.Block) error {
+func (m meshMock) AddBlockWithTxs(context.Context, *types.Block) error {
 	panic("implement me")
 }
 
@@ -243,8 +243,11 @@ func TestBlockHandler_AtxSetID(t *testing.T) {
 	bbytes, err := types.InterfaceToBytes(*a)
 	require.NoError(t, err)
 	var b types.ActivationTx
-	require.NoError(t, types.BytesToInterface(bbytes, &b))
-
+	types.BytesToInterface(bbytes, &b)
+	t.Log(fmt.Sprintf("%+v", *a))
+	t.Log("---------------------")
+	t.Log(fmt.Sprintf("%+v", b))
+	t.Log("---------------------")
 	assert.Equal(t, b.Nipst, a.Nipst)
 	assert.Equal(t, b.Commitment, a.Commitment)
 

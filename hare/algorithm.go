@@ -11,6 +11,7 @@ import (
 	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -177,7 +178,7 @@ func newMsg(ctx context.Context, hareMsg *Message, querier StateQuerier) (*Msg, 
 type consensusProcess struct {
 	log.Log
 	State
-	Closer
+	util.Closer
 	instanceID        types.LayerID
 	oracle            Rolacle // the roles oracle provider
 	signing           Signer
@@ -207,7 +208,7 @@ func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, or
 	msgsTracker := newMsgsTracker()
 	proc := &consensusProcess{
 		State:             State{-1, -1, s.Clone(), nil},
-		Closer:            NewCloser(),
+		Closer:            util.NewCloser(),
 		instanceID:        instanceID,
 		oracle:            oracle,
 		signing:           signing,
