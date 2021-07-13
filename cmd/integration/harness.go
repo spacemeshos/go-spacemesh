@@ -55,6 +55,10 @@ func newHarnessDefaultServerConfig(args []string) (*Harness, error) {
 
 // NewHarness creates and initializes a new instance of Harness.
 func NewHarness(cfg *ServerConfig, args []string) (*Harness, error) {
+	if cfg.loadState != "" {
+		// TODO: load state
+	}
+
 	log.Info("Starting harness")
 	server, err := newServer(cfg)
 	if err != nil {

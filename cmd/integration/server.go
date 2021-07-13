@@ -18,6 +18,7 @@ type ServerConfig struct {
 	logLevel  string
 	rpcListen string
 	exe       string
+	loadState string
 }
 
 // DefaultConfig returns a newConfig with all default values.
@@ -26,6 +27,18 @@ func DefaultConfig(execPath string) (*ServerConfig, error) {
 		logLevel:  "debug",
 		rpcListen: "127.0.0.1:" + harnessPort,
 		exe:       execPath,
+	}
+
+	return cfg, nil
+}
+
+// TODO: do something about the name, maybe `restore`
+func LoadConfig(execPath string, loadState string) (*ServerConfig, error) {
+	cfg := &ServerConfig{
+		logLevel:  "debug",
+		rpcListen: "127.0.0.1:" + harnessPort,
+		exe:       execPath,
+		loadState: loadState,
 	}
 
 	return cfg, nil

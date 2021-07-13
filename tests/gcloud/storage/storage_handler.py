@@ -54,7 +54,7 @@ def upload_from_pod_to_gcloud_storage(namespace, pod_name, data_path=None, bucke
     # if pod contains more than one container each container data will be saved under a directory
     # with that container name
     if bucket_dir and container:
-        bucket_dir = os.path.join(bucket_dir, container) if container else bucket_dir
+        bucket_dir = os.path.join(bucket_dir, container)
     elif container:
         bucket_dir = container
     upload_data_to_google_storage(bucket_name, bucket_dir, file_name, base64.b64decode(resp))
