@@ -2,6 +2,7 @@ package tortoisebeacon
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -25,8 +26,9 @@ func (p ProposalMessage) String() string {
 }
 
 type extendedProposalMessage struct {
-	message ProposalMessage
-	gossip  service.GossipMessage
+	message      ProposalMessage
+	gossip       service.GossipMessage
+	receivedTime time.Time
 }
 
 // FirstVotingMessageBody is FirstVotingMessage without a signature.

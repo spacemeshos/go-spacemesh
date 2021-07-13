@@ -107,7 +107,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 			r.NoError(err)
 			tc.message.VRFSignature = sig
 
-			err = tb.handleProposalMessage(tc.message)
+			err = tb.handleProposalMessage(tc.message, time.Now())
 			r.NoError(err)
 
 			expected := proposalsMap{

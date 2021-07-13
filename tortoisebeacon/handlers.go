@@ -28,6 +28,8 @@ var ErrMalformedProposal = errors.New("malformed proposal message")
 
 // HandleSerializedProposalMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
 func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
+	receivedTime := time.Now()
+
 	tb.Log.With().Debug("New proposal message",
 		log.String("from", data.Sender().String()))
 
@@ -54,8 +56,9 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 	tb.proposalChansMu.Unlock()
 
 	extendedMessage := extendedProposalMessage{
-		message: message,
-		gossip:  data,
+		message:      message,
+		gossip:       data,
+		receivedTime: receivedTime,
 	}
 
 	go func() {
@@ -66,7 +69,7 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 	}()
 }
 
-func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage) error {
+func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage, receivedTime time.Time) error {
 	currentEpoch := tb.currentEpoch()
 
 	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(m.MinerID, currentEpoch-1)
@@ -84,16 +87,14 @@ func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage) error {
 		return fmt.Errorf("verify proposal message: %w", err)
 	}
 
-	if err := tb.classifyProposalMessage(m, atxID, currentEpoch); err != nil {
+	if err := tb.classifyProposalMessage(m, atxID, currentEpoch, receivedTime); err != nil {
 		return fmt.Errorf("classify proposal message: %w", err)
 	}
 
 	return nil
 }
 
-func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types.ATXID, currentEpoch types.EpochID) error {
-	receivedTimestamp := time.Now()
-
+func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types.ATXID, currentEpoch types.EpochID, receivedTime time.Time) error {
 	atxHeader, err := tb.atxDB.GetAtxHeader(atxID)
 	if err != nil {
 		return fmt.Errorf("failed to get ATX header: %w", err)
@@ -108,7 +109,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 	nextEpochStart := tb.clock.LayerToTime((atxEpoch + 1).FirstLayer())
 
 	switch {
-	case tb.isValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTimestamp):
+	case tb.isValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
 		tb.Log.With().Debug("Received valid proposal message",
 			log.Uint64("epoch_id", uint64(currentEpoch)),
 			log.String("message", m.String()))
@@ -123,7 +124,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 
 		tb.validProposalsMu.Unlock()
 
-	case tb.isPotentiallyValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTimestamp):
+	case tb.isPotentiallyValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
 		tb.Log.With().Debug("Received potentially valid proposal message",
 			log.Uint64("epoch_id", uint64(currentEpoch)),
 			log.String("message", m.String()))

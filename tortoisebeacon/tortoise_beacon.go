@@ -425,7 +425,7 @@ func (tb *TortoiseBeacon) readProposalMessagesLoop(ctx context.Context, ch chan 
 
 			return
 		case em := <-ch:
-			if err := tb.handleProposalMessage(em.message); err != nil {
+			if err := tb.handleProposalMessage(em.message, em.receivedTime); err != nil {
 				tb.Log.With().Error("Failed to handle proposal message",
 					log.String("sender", em.gossip.Sender().String()),
 					log.String("message", em.message.String()),
