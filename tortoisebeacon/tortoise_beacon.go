@@ -118,7 +118,7 @@ type TortoiseBeacon struct {
 	beaconsMu sync.RWMutex
 	beacons   map[types.EpochID]types.Hash32
 
-	proposalChansMu sync.RWMutex
+	proposalChansMu sync.Mutex
 	proposalChans   map[types.EpochID]chan extendedProposalMessage
 
 	backgroundWG sync.WaitGroup
