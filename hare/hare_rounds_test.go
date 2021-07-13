@@ -139,7 +139,7 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 			return []types.BlockID{}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
-			l := layer.Duration(types.GetEffectiveGenesis()) - 1
+			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = len(blocks) + 1
 		})
 
@@ -176,7 +176,7 @@ func Test_HareNotEnoughStatuses(t *testing.T) {
 			return []types.BlockID{}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
-			l := layer.Duration(types.GetEffectiveGenesis()) - 1
+			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = len(blocks) + 1
 		})
 
@@ -212,7 +212,7 @@ func Test_HareNotEnoughLeaders(t *testing.T) {
 			return []types.BlockID{}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
-			l := layer.Duration(types.GetEffectiveGenesis()) - 1
+			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = len(blocks) + 1
 		})
 
@@ -248,7 +248,7 @@ func Test_HareNotEnoughCommits(t *testing.T) {
 			return []types.BlockID{genBlockID(1)}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
-			l := layer.Duration(types.GetEffectiveGenesis()) - 1
+			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = len(blocks) + 1
 		})
 
@@ -284,7 +284,7 @@ func Test_HareNotEnoughNotifications(t *testing.T) {
 			return []types.BlockID{genBlockID(1)}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
-			l := layer.Duration(types.GetEffectiveGenesis()) - 1
+			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = len(blocks) + 1
 		})
 
@@ -317,7 +317,7 @@ func Test_HareComplete(t *testing.T) {
 			return []types.BlockID{genBlockID(int(layer.Uint32()))}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
-			l := layer.Duration(types.GetEffectiveGenesis()) - 1
+			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = len(blocks)
 		})
 

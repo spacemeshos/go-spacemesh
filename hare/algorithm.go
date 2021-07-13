@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	xdr "github.com/nullstyle/go-xdr/xdr3"
@@ -463,7 +462,7 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 	proc.WithContext(ctx).With().Debug("processing message",
 		log.String("msg_type", m.InnerMsg.Type.String()),
 		log.Int("num_values", len(m.InnerMsg.Values)))
-	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(m.InnerMsg.InstanceID.Uint32()), 10), "reporter", "processMsg").Add(1)
+	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", m.InnerMsg.InstanceID.String(), "reporter", "processMsg").Add(1)
 
 	switch m.InnerMsg.Type {
 	case pre:

@@ -42,7 +42,7 @@ func (id BlockID) AsHash32() Hash32 {
 
 var (
 	layersPerEpoch uint32
-	// effectiveGenesis marks when actual blocks would start being crated in the network, this will take account the first
+	// effectiveGenesis marks when actual blocks would start being created in the network, this will take into account the first
 	// genesis epoch and the following epoch in which ATXs are published
 	effectiveGenesis uint32
 )
@@ -71,6 +71,8 @@ func NewLayerID(value uint32) LayerID {
 // Internally it is a simple wrapper over uint32 and should be considered immutable
 // the same way as any integer.
 type LayerID struct {
+	// NOTE(dshulyak) it is made public for compatibility with encoding library (xdr).
+	// Don't modify it directly, as it will likely to be made private in the future.
 	Value uint32
 }
 
@@ -126,8 +128,8 @@ func (l LayerID) After(other LayerID) bool {
 	return l.Value > other.Value
 }
 
-// Duration returns different between current and other layer.
-func (l LayerID) Duration(other LayerID) uint32 {
+// Duration returns the difference between current and other layer.
+func (l LayerID) Difference(other LayerID) uint32 {
 	if other.Value > l.Value {
 		panic(fmt.Sprintf("other (%d) must be before or equal to this layer (%d)", other.Value, l.Value))
 	}

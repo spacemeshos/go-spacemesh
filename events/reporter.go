@@ -64,7 +64,7 @@ func ReportNewActivation(activation *types.ActivationTx) {
 
 	Publish(NewAtx{
 		ID:      activation.ShortString(),
-		LayerID: uint32(activation.PubLayerID.GetEpoch()),
+		EpochID: uint32(activation.PubLayerID.GetEpoch()),
 	})
 
 	if reporter != nil {
@@ -131,8 +131,8 @@ func ReportValidBlock(blockID types.BlockID, valid bool) {
 }
 
 // ReportAtxCreated reports a created activation
-func ReportAtxCreated(created bool, layer uint32, id string) {
-	Publish(AtxCreated{Created: created, Layer: layer, ID: id})
+func ReportAtxCreated(created bool, epoch uint32, id string) {
+	Publish(AtxCreated{Created: created, Epoch: epoch, ID: id})
 }
 
 // ReportValidActivation reports a valid activation

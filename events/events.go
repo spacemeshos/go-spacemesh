@@ -120,7 +120,7 @@ func (ValidBlock) GetChannel() ChannelID {
 // NewAtx signals that a new ATX has been received
 type NewAtx struct {
 	ID      string
-	LayerID uint32
+	EpochID uint32
 }
 
 // GetChannel gets the message type which means on which this message should be sent
@@ -180,7 +180,7 @@ func (RewardReceived) GetChannel() ChannelID {
 type AtxCreated struct {
 	Created bool
 	ID      string
-	Layer   uint32
+	Epoch   uint32
 }
 
 // GetChannel gets the message type which means on which this message should be sent

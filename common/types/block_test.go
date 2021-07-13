@@ -127,9 +127,9 @@ func TestLayerIDWraparound(t *testing.T) {
 		})
 	})
 	t.Run("Duration", func(t *testing.T) {
-		require.EqualValues(t, 1, NewLayerID(2).Duration(NewLayerID(1)))
+		require.EqualValues(t, 1, NewLayerID(2).Difference(NewLayerID(1)))
 		require.Panics(t, func() {
-			NewLayerID(10).Duration(NewLayerID(20))
+			NewLayerID(10).Difference(NewLayerID(20))
 		})
 	})
 }

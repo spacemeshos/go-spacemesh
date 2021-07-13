@@ -3,7 +3,6 @@ package hare
 import (
 	"context"
 	"errors"
-	"strconv"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -237,7 +236,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			msgInstID := hareMsg.InnerMsg.InstanceID
 			metrics.MessageTypeCounter.With(
 				"type_id", hareMsg.InnerMsg.Type.String(),
-				"layer", strconv.FormatUint(uint64(msgInstID.Uint32()), 10),
+				"layer", msgInstID.String(),
 				"reporter", "brokerHandler").Add(1)
 			msgLogger = msgLogger.WithFields(log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)))
 			isEarly := false
