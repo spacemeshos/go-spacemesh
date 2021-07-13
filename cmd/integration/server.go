@@ -15,33 +15,33 @@ const harnessPort = "9094"
 // ServerConfig contains all the args and data required to launch a node
 // server instance.
 type ServerConfig struct {
-	logLevel  string
-	rpcListen string
-	exe       string
-	loadState string
+	logLevel        string
+	rpcListen       string
+	exe             string
+	restoreFileName string
 }
 
 // DefaultConfig returns a newConfig with all default values.
-func DefaultConfig(execPath string) (*ServerConfig, error) {
+func DefaultConfig(execPath string) *ServerConfig {
 	cfg := &ServerConfig{
 		logLevel:  "debug",
 		rpcListen: "127.0.0.1:" + harnessPort,
 		exe:       execPath,
 	}
 
-	return cfg, nil
+	return cfg
 }
 
-// TODO: do something about the name, maybe `restore`
-func LoadConfig(execPath string, loadState string) (*ServerConfig, error) {
+// RestoreConfig returns a config
+func RestoreConfig(execPath string, filename string) *ServerConfig {
 	cfg := &ServerConfig{
-		logLevel:  "debug",
-		rpcListen: "127.0.0.1:" + harnessPort,
-		exe:       execPath,
-		loadState: loadState,
+		logLevel:        "debug",
+		rpcListen:       "127.0.0.1:" + harnessPort,
+		exe:             execPath,
+		restoreFileName: filename,
 	}
 
-	return cfg, nil
+	return cfg
 }
 
 // genArgs generates a slice of command line arguments from ServerConfig instance.
