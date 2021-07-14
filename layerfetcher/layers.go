@@ -390,46 +390,40 @@ func (l *Logic) PollLayerBlocks(ctx context.Context, layerID types.LayerID, hash
 	return resChannel
 }
 
-// parseBlockHashAndFetch parses the block IDs from a peer's response and fetch the corresponding blocks.
-// it returns a peerResult based on the response.
-func (l *Logic) parseBlockHashAndFetch(ctx context.Context, layerID types.LayerID, data []byte, err error) *peerResult {
-	if err != nil {
-		l.log.WithContext(ctx).With().Error("received error", log.Err(err), layerID)
-		return &peerResult{data: nil, err: err}
-	}
-	res := &peerResult{err: nil}
-	if data != nil {
-		var blocks layerBlocks
-		convertErr := types.BytesToInterface(data, &blocks)
-		if convertErr != nil {
-			l.log.WithContext(ctx).Error("received error converting bytes to layerBlocks", convertErr)
-			return &peerResult{data: nil, err: convertErr}
-		}
-		res.data = data
-		// fetch all blocks
-		retErr := l.GetBlocks(ctx, blocks.Blocks)
+// fetchLayerBlocks fetches the content of the block IDs in the specified layerBlocks
+func (l *Logic) fetchLayerBlocks(ctx context.Context, layerID types.LayerID, blocks *layerBlocks) {
+	if err := l.GetBlocks(ctx, blocks.Blocks); err != nil {
 		// if there is an error this means that the entire layerID cannot be validated and therefore sync should fail
 		// TODO: fail sync?
-		if retErr != nil {
-			l.log.WithContext(ctx).With().Error("received error for layerID id", log.Err(retErr))
-		}
-
-		ivErr := l.GetInputVector(ctx, layerID)
-		if ivErr != nil {
-			l.log.WithContext(ctx).With().Error("received error for input vector of layerID", log.Err(ivErr))
-		}
+		l.log.WithContext(ctx).With().Error("received error fetching layer blocks", layerID, log.Err(err))
 	}
-	return res
+
+	if err := l.GetInputVector(ctx, layerID); err != nil {
+		l.log.WithContext(ctx).With().Error("received error getting input vector", layerID, log.Err(err))
+	}
 }
 
 // receiveBlockHashes is called when response of block IDs for a layer hash is received from remote peer.
 // if enough responses are received, it notifies the channels waiting for the layer blocks result.
-func (l *Logic) receiveBlockHashes(ctx context.Context, layerID types.LayerID, peer peers.Peer, expectedResults int, data []byte, err error) {
-	peerResult := l.parseBlockHashAndFetch(ctx, layerID, data, err)
+func (l *Logic) receiveBlockHashes(ctx context.Context, layerID types.LayerID, peer peers.Peer, expectedResults int, data []byte, extErr error) {
+	pRes := &peerResult{err: extErr}
+	if extErr != nil {
+		l.log.WithContext(ctx).With().Error("received error from peer for block hashes", log.Err(extErr), layerID)
+	} else if data != nil {
+		var blocks layerBlocks
+		convertErr := types.BytesToInterface(data, &blocks)
+		if convertErr != nil {
+			l.log.WithContext(ctx).Error("received error converting bytes to layerBlocks", convertErr)
+			pRes.err = convertErr
+		} else {
+			pRes.data = data
+			l.fetchLayerBlocks(ctx, layerID, &blocks)
+		}
+	}
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	l.layerBlocksRes[layerID][peer] = peerResult
+	l.layerBlocksRes[layerID][peer] = pRes
 
 	// check if we have all responses from peers
 	result := l.layerBlocksRes[layerID]
