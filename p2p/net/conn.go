@@ -277,6 +277,7 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 	select {
 	case c.messages <- msgToSend{m, reqID, peerID}:
 	case <-c.stopSending:
+		return ErrClosed
 	}
 	return nil
 }
@@ -393,7 +394,9 @@ func (c *FormattedConnection) beginEventProcessing(ctx context.Context) {
 		}
 
 		if len(buf) > 0 {
-			c.publish(log.WithNewRequestID(ctx), buf)
+			newbuf := make([]byte, len(buf))
+			copy(newbuf, buf)
+			c.publish(log.WithNewRequestID(ctx), newbuf)
 		}
 
 		if err != nil {
