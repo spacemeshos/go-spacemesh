@@ -385,14 +385,16 @@ func (f *Fetch) receiveResponse(data []byte) {
 		f.activeReqM.Lock()
 		// for each hash, send Data on waiting channel
 		reqs := f.pendingRequests[resID.Hash]
+		var actualHash types.Hash32
 		for _, req := range reqs {
 			var err error
 			if req.validateResponseHash {
-				actual := types.CalcHash32(data)
-				if actual != resID.Hash {
-					err = fmt.Errorf("hash didnt match expected: %v, actual %v", resID.Hash.ShortString(), actual.ShortString())
+				if len(actualHash) == 0 {
+					actualHash = types.CalcHash32(data)
 				}
-
+				if actualHash != resID.Hash {
+					err = fmt.Errorf("hash didnt match expected: %v, actual %v", resID.Hash.ShortString(), actualHash.ShortString())
+				}
 			}
 			req.returnChan <- HashDataPromiseResult{
 				Err:     err,
