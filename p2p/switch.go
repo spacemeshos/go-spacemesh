@@ -311,12 +311,14 @@ func (s *Switch) Start(ctx context.Context) error {
 			}
 			//todo:maybe start listening only after we got enough outbound neighbors?
 			s.gossipErr = s.startNeighborhood(ctx) // non blocking
-			close(s.gossipC)
+
 			if s.gossipErr != nil {
+				close(s.gossipC)
 				s.Shutdown()
 				return
 			}
 			<-s.initial
+			close(s.gossipC)
 		}() // todo handle error async
 	}
 
@@ -675,7 +677,7 @@ func (s *Switch) publishNewPeer(peer p2pcrypto.PublicKey) {
 	for _, p := range s.newPeerSub {
 		select {
 		case p <- peer:
-		default:
+		case <-s.shutdownCtx.Done():
 		}
 	}
 	s.peerLock.RUnlock()
@@ -687,7 +689,7 @@ func (s *Switch) publishDelPeer(peer p2pcrypto.PublicKey) {
 	for _, p := range s.delPeerSub {
 		select {
 		case p <- peer:
-		default:
+		case <-s.shutdownCtx.Done():
 		}
 	}
 	s.peerLock.RUnlock()
@@ -695,8 +697,8 @@ func (s *Switch) publishDelPeer(peer p2pcrypto.PublicKey) {
 
 // SubscribePeerEvents lets clients listen on events inside the Switch about peers. first chan is new peers, second is deleted peers.
 func (s *Switch) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey) {
-	in := make(chan p2pcrypto.PublicKey, 30) // todo : the size should be determined after #269
-	del := make(chan p2pcrypto.PublicKey, 30)
+	in := make(chan p2pcrypto.PublicKey, s.config.MaxInboundPeers+s.config.OutboundPeersTarget)
+	del := make(chan p2pcrypto.PublicKey, s.config.MaxInboundPeers+s.config.OutboundPeersTarget)
 	s.peerLock.Lock()
 	s.newPeerSub = append(s.newPeerSub, in)
 	s.delPeerSub = append(s.delPeerSub, del)
@@ -759,19 +761,25 @@ func (s *Switch) askForMorePeers(ctx context.Context) {
 		// If 0 connections are required, the condition above is always true,
 		// so gossip needs to be considered ready in this case.
 		if s.config.SwarmConfig.RandomConnections == 0 {
-			s.closeInitial()
-			return
+			select {
+			case <-s.initial:
+				// Nothing to do if channel is closed.
+				break
+			default:
+				// Close channel if it is not closed.
+				close(s.initial)
+			}
 		}
-		s.logger.Warning("already has %d peers fo %d required", numpeers, s.config.SwarmConfig.RandomConnections)
-	} else {
-		// try to connect eq peers
-		s.getMorePeers(ctx, req)
-		// check number of peers after
-		s.outpeersMutex.RLock()
-		numpeers = len(s.outpeers)
-		s.outpeersMutex.RUnlock()
+		return
 	}
 
+	// try to connect eq peers
+	s.getMorePeers(ctx, req)
+
+	// check number of peers after
+	s.outpeersMutex.RLock()
+	numpeers = len(s.outpeers)
+	s.outpeersMutex.RUnlock()
 	// announce if initial number of peers achieved
 	// todo: better way then going in this every time ?
 	if numpeers >= s.config.SwarmConfig.RandomConnections {
@@ -932,7 +940,11 @@ func (s *Switch) Disconnect(peer p2pcrypto.PublicKey) {
 	// todo: don't remove if we know this is a valid peer for later
 	//s.discovery.Remove(peer) // address doesn't matter because we only check dhtid
 
-	s.morePeersReq <- struct{}{}
+	select {
+	case s.morePeersReq <- struct{}{}:
+	case <-s.shutdownCtx.Done():
+	}
+
 }
 
 // addIncomingPeer inserts a peer to the neighborhood as a remote peer.

@@ -29,6 +29,7 @@ var (
 	genesisBeacon = types.HexToHash32("0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
 )
 
+// TODO(nkryuchkov): remove unused errors
 // Tortoise Beacon errors.
 var (
 	ErrUnknownMessageType  = errors.New("unknown message type")
@@ -100,6 +101,7 @@ type TortoiseBeacon struct {
 	firstVotingRoundDuration time.Duration
 	votingRoundDuration      time.Duration
 	weakCoinRoundDuration    time.Duration
+	waitAfterEpochStart      time.Duration
 
 	currentRoundsMu sync.RWMutex
 	currentRounds   map[types.EpochID]types.RoundID
@@ -179,6 +181,7 @@ func New(
 		firstVotingRoundDuration:        time.Duration(conf.FirstVotingRoundDurationMs) * time.Millisecond,
 		votingRoundDuration:             time.Duration(conf.VotingRoundDurationMs) * time.Millisecond,
 		weakCoinRoundDuration:           time.Duration(conf.WeakCoinRoundDurationMs) * time.Millisecond,
+		waitAfterEpochStart:             time.Duration(conf.WaitAfterEpochStart) * time.Millisecond,
 		currentRounds:                   make(map[types.EpochID]types.RoundID),
 		validProposals:                  make(map[types.EpochID]hashSet),
 		potentiallyValidProposals:       make(map[types.EpochID]hashSet),
@@ -294,6 +297,7 @@ func (tb *TortoiseBeacon) cleanup() {
 	defer tb.beaconsMu.Unlock()
 
 	for e := range tb.beacons {
+		// TODO(nkryuchkov): https://github.com/spacemeshos/go-spacemesh/pull/2267#discussion_r662255874
 		if tb.epochIsOutdated(e) {
 			delete(tb.beacons, e)
 		}
@@ -362,16 +366,24 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 
 	tb.seenEpochsMu.Unlock()
 
-	tb.Log.With().Debug("tortoise beacon got tick",
+	tb.Log.With().Debug("tortoise beacon got tick, waiting until other nodes have the same epoch",
 		log.Uint64("layer", uint64(layer)),
 		log.Uint64("epoch_id", uint64(epoch)))
 
-	tb.handleEpoch(ctx, epoch)
+	epochStartTimer := time.NewTimer(tb.proposalDuration + tb.gracePeriodDuration)
+
+	select {
+	case <-tb.CloseChannel():
+		if !epochStartTimer.Stop() {
+			<-epochStartTimer.C
+		}
+	case <-epochStartTimer.C:
+		tb.handleEpoch(ctx, epoch)
+	}
 }
 
 func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) {
 	// TODO: check when epoch started, adjust waiting time for this timestamp
-
 	if epoch.IsGenesis() {
 		tb.Log.With().Debug("not starting tortoise beacon since we are in genesis epoch",
 			log.Uint64("epoch_id", uint64(epoch)))
@@ -394,6 +406,8 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 		tb.Log.With().Error("Failed to run consensus phase",
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.Err(err))
+
+		return
 	}
 
 	// K rounds passed
@@ -797,6 +811,7 @@ func (tb *TortoiseBeacon) votingThreshold(epochWeight uint64) (int, error) {
 	return int(tb.config.Theta * float64(epochWeight)), nil
 }
 
+// TODO(nkryuchkov): consider replacing github.com/ALTree/bigfloat
 func (tb *TortoiseBeacon) atxThresholdFraction(epochWeight uint64) (*big.Float, error) {
 	if epochWeight == 0 {
 		return big.NewFloat(0), ErrZeroEpochWeight

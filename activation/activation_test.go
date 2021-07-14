@@ -1,22 +1,14 @@
 package activation
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"sort"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/google/uuid"
 	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/post/config"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -24,6 +16,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/post/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ========== Vars / Consts ==========
@@ -278,16 +273,6 @@ func newBuilder(activationDb atxDBProvider) *Builder {
 	return b
 }
 
-func setTotalWeightInCache(t *testing.T, totalWeight uint64) {
-	view, err := meshProviderMock.GetOrphanBlocksBefore(meshProviderMock.LatestLayer())
-	assert.NoError(t, err)
-	sort.Slice(view, func(i, j int) bool {
-		return bytes.Compare(view[i].Bytes(), view[j].Bytes()) < 0
-	})
-	h := types.CalcBlocksHash12(view)
-	totalWeightCache.Add(h, totalWeight)
-}
-
 func lastTransmittedAtx(t *testing.T) types.ActivationTx {
 	var signedAtx types.ActivationTx
 	err := types.BytesToInterface(net.lastTransmission, &signedAtx)
@@ -348,8 +333,6 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	// setup
 	activationDb := newActivationDb()
 	b := newBuilder(activationDb)
-	setTotalWeightInCache(t, defaultTotalWeight)
-	defer totalWeightCache.Purge()
 
 	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	prevAtx := newAtx(challenge, defaultView, npst)
@@ -375,8 +358,6 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	r := require.New(t)
 
 	// setup
-	setTotalWeightInCache(t, defaultTotalWeight)
-	defer totalWeightCache.Purge()
 	activationDb := newActivationDb()
 	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	prevAtx := newAtx(challenge, defaultView, npst)
@@ -418,8 +399,6 @@ func TestBuilder_PublishActivationTx_RebuildNipstWhenTargetEpochPassed(t *testin
 	r := require.New(t)
 
 	// setup
-	setTotalWeightInCache(t, defaultTotalWeight)
-	defer totalWeightCache.Purge()
 	activationDb := newActivationDb()
 	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	prevAtx := newAtx(challenge, defaultView, npst)
@@ -461,8 +440,6 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	// setup
 	activationDb := newActivationDb()
 	b := newBuilder(activationDb)
-	setTotalWeightInCache(t, defaultTotalWeight)
-	defer totalWeightCache.Purge()
 
 	challenge := newChallenge(otherNodeID /*👀*/, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	posAtx := newAtx(challenge, defaultView, npst)
@@ -482,8 +459,6 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	// setup
 	activationDb := newActivationDb()
 	b := newBuilder(activationDb)
-	setTotalWeightInCache(t, defaultTotalWeight)
-	defer totalWeightCache.Purge()
 
 	challenge := newChallenge(otherNodeID /*👀*/, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	posAtx := newAtx(challenge, defaultView, npst)
@@ -509,8 +484,6 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	// setup
 	activationDb := newActivationDb()
 	b := newBuilder(activationDb)
-	setTotalWeightInCache(t, defaultTotalWeight)
-	defer totalWeightCache.Purge()
 
 	challenge := newChallenge(otherNodeID /*👀*/, 1, prevAtxID, prevAtxID, postGenesisEpochLayer-layersPerEpoch /*👀*/)
 	posAtx := newAtx(challenge, defaultView, npst)
@@ -530,8 +503,6 @@ func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T
 	// setup
 	activationDb := newActivationDb()
 	b := newBuilder(activationDb)
-	setTotalWeightInCache(t, defaultTotalWeight)
-	defer totalWeightCache.Purge()
 
 	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	prevAtx := newAtx(challenge, defaultView, npst)
@@ -607,8 +578,6 @@ func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	activationDb := newActivationDb()
 	b := newBuilder(activationDb)
-	setTotalWeightInCache(t, defaultTotalWeight)
-	defer totalWeightCache.Purge()
 
 	lg := log.NewDefault("storeAtx")
 	for i := postGenesisEpochLayer; i < postGenesisEpochLayer+3; i++ {
@@ -711,8 +680,6 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	challengeHash, err := challenge.Hash()
 	assert.NoError(t, err)
 	npst2 := NewNIPSTWithChallenge(challengeHash, poetRef)
-
-	setTotalWeightInCache(t, defaultTotalWeight)
 
 	layerClockMock.currentLayer = types.EpochID(1).FirstLayer() + 3
 	err = b.PublishActivationTx(context.TODO())
@@ -963,54 +930,6 @@ func genView() []types.BlockID {
 	}
 
 	return v
-}
-
-func TestActivationDb_CalcActiveSetFromViewHighConcurrency(t *testing.T) {
-	totalWeightCache = NewTotalWeightCache(10) // small cache for collisions
-	atxdb, layers, _ := getAtxDb("t6")
-
-	id1 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
-	id2 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
-	id3 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
-	coinbase1 := types.HexToAddress("aaaa")
-	coinbase2 := types.HexToAddress("bbbb")
-	coinbase3 := types.HexToAddress("cccc")
-	atxs := []*types.ActivationTx{
-		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, 12, 0, 100, 100, coinbase1, &types.NIPST{}),
-		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, 300, 0, 100, 100, coinbase2, &types.NIPST{}),
-		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, 435, 0, 100, 100, coinbase3, &types.NIPST{}),
-	}
-
-	poetRef := []byte{0xba, 0xb0}
-	for _, atx := range atxs {
-		hash, err := atx.NIPSTChallenge.Hash()
-		assert.NoError(t, err)
-		atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
-	}
-
-	blocks := createLayerWithAtx(t, layers, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
-	blocks = createLayerWithAtx(t, layers, 10, 10, []*types.ActivationTx{}, blocks, blocks)
-	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
-
-	mck := &ATXDBMock{}
-	atx := newActivationTx(id1, 1, atxs[0].ID(), atxs[0].ID(), 1000, 0, 100, 100, coinbase1, &types.NIPST{})
-
-	atxdb.calcTotalWeightFunc = mck.CalcMinerWeights
-	wg := sync.WaitGroup{}
-	ff := 5000
-	wg.Add(ff)
-	rand.Seed(time.Now().UnixNano())
-	for i := 0; i < ff; i++ {
-		go func() {
-			num, err := atxdb.CalcTotalWeightFromView(genView(), atx.PubLayerID.GetEpoch())
-			assert.NoError(t, err)
-			assert.Equal(t, 6, int(num))
-			assert.NoError(t, err)
-			wg.Done()
-		}()
-	}
-
-	wg.Wait()
 }
 
 // Check that we're not trying to sync an ATX that references the golden ATX or an empty ATX (i.e. not adding it to the sync queue).
