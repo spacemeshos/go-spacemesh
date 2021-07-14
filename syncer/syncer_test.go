@@ -304,7 +304,7 @@ func TestSynchronize_getTBFailed(t *testing.T) {
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
 	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
-	ticker.advanceToLayer(layersPerEpoch * 3)
+	ticker.advanceToLayer(types.NewLayerID(layersPerEpoch * 3))
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -314,7 +314,7 @@ func TestSynchronize_getTBFailed(t *testing.T) {
 	}()
 
 	mf.setTBErrors(3, errors.New("no tortoise beacon: should fail sync"))
-	mf.feedLayerResult(0, ticker.GetCurrentLayer())
+	mf.feedLayerResult(types.NewLayerID(0), ticker.GetCurrentLayer())
 	wg.Wait()
 
 	assert.False(t, syncer.ListenToGossip())
@@ -648,40 +648,40 @@ func TestGetTBCurrentEpoch(t *testing.T) {
 	mf.setTBErrors(1, errors.New("no tortoise beacon for epoch 1, expected for epoch 1"))
 	mf.setTBErrors(3, errors.New("no tortoise beacon for epoch 3, error out"))
 
-	ticker.advanceToLayer(2)
+	ticker.advanceToLayer(types.NewLayerID(2))
 	// epoch 0, tortoise beacon not requested at any layer
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 0))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(0)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 1))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(1)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 2))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(2)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
 
 	// epoch 1, still genesis, tortoise beacon not requested still
-	ticker.advanceToLayer(5)
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 3))
+	ticker.advanceToLayer(types.NewLayerID(5))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(3)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 4))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(4)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 5))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(5)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
 
 	// epoch 2, no error
-	ticker.advanceToLayer(8)
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 6))
+	ticker.advanceToLayer(types.NewLayerID(8))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(6)))
 	assert.Equal(t, uint32(1), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 7))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(7)))
 	assert.Equal(t, uint32(2), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 8))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(8)))
 	assert.Equal(t, uint32(3), atomic.LoadUint32(&mf.tbCalls))
 
 	// epoch 3
-	ticker.advanceToLayer(11)
-	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), 9))
+	ticker.advanceToLayer(types.NewLayerID(11))
+	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(9)))
 	assert.Equal(t, uint32(4), atomic.LoadUint32(&mf.tbCalls))
-	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), 10))
+	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(10)))
 	assert.Equal(t, uint32(5), atomic.LoadUint32(&mf.tbCalls))
-	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), 11))
+	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(11)))
 	assert.Equal(t, uint32(6), atomic.LoadUint32(&mf.tbCalls))
 }
 
@@ -695,36 +695,36 @@ func TestGetTBOldAndCurrentEpoch(t *testing.T) {
 	mf.setTBErrors(1, errors.New("no tortoise beacon for epoch 1, expected for epoch 1"))
 	mf.setTBErrors(3, errors.New("no tortoise beacon for epoch 3, error out"))
 
-	ticker.advanceToLayer(11) // epoch 3
+	ticker.advanceToLayer(types.NewLayerID(11)) // epoch 3
 	// epoch 0, tortoise beacon not requested
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 0))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(0)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 1))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(1)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 2))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(2)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
 
 	// epoch 1, tortoise beacon still not requested
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 3))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(3)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 4))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(4)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 5))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(5)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
 
 	// epoch 2, tortoise beacon will be requested at the last layer
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 6))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(6)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 7))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(7)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 8))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(8)))
 	assert.Equal(t, uint32(1), atomic.LoadUint32(&mf.tbCalls))
 
 	// epoch 3 is the current epoch. ATXs will be requested at every layer
-	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), 9))
+	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(9)))
 	assert.Equal(t, uint32(2), atomic.LoadUint32(&mf.tbCalls))
-	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), 10))
+	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(10)))
 	assert.Equal(t, uint32(3), atomic.LoadUint32(&mf.tbCalls))
-	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), 11))
+	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(11)))
 	assert.Equal(t, uint32(4), atomic.LoadUint32(&mf.tbCalls))
 }
