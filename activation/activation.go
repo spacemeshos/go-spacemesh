@@ -487,11 +487,11 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 	// the following method waits for a PoET proof, which should take ~1 epoch
 	atxExpired := b.layerClock.AwaitLayer((pubEpoch + 2).FirstLayer()) // this fires when the target epoch is over
 
-	b.log.With().Info("build NIPST")
+	b.log.With().Info("building NIPost")
 
 	nipost, err := b.nipostBuilder.BuildNIPost(ctx, hash, atxExpired)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build nipst: %w", err)
+		return nil, fmt.Errorf("failed to build NIPost: %v", err)
 	}
 
 	b.log.With().Info("awaiting atx publication epoch",

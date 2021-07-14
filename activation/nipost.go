@@ -118,7 +118,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 	nb.load(*challenge)
 
 	if s := nb.postSetupProvider.Status(); s.State != PostSetupStateComplete {
-		return nil, errors.New("Post setup not complete")
+		return nil, errors.New("post setup not complete")
 	}
 
 	nipost := nb.state.NIPost
@@ -162,7 +162,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 			return nil, ErrStopRequested
 		}
 
-		membership, err := nb.poetDB.GetMembershipMap(types.CalcHash32(poetProofRef).Bytes())
+		membership, err := nb.poetDB.GetMembershipMap(poetProofRef)
 		if err != nil {
 			nb.log.With().Panic("failed to fetch membership for PoET proof",
 				log.String("challenge", fmt.Sprintf("%x", nb.state.PoetProofRef))) // TODO: handle inconsistent state

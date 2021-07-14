@@ -30,7 +30,7 @@ func NewValidator(poetDb poetDbAPI, cfg PostConfig) *Validator {
 // while still syntactically-validate them here according to locally configured min/max values.
 func (v *Validator) Validate(minerID signing.PublicKey, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint) error {
 	if !bytes.Equal(nipost.Challenge[:], expectedChallenge[:]) {
-		return fmt.Errorf("invalid `Challenge`; expected: %v, given: %v", expectedChallenge, nipost.Challenge)
+		return fmt.Errorf("invalid `Challenge`; expected: %x, given: %x", expectedChallenge, nipost.Challenge)
 	}
 
 	if nipost.PostMetadata.BitsPerLabel < v.cfg.BitsPerLabel {
