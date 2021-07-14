@@ -60,8 +60,8 @@ func TestTortoiseBeacon(t *testing.T) {
 
 	logger := log.NewDefault("TortoiseBeacon")
 
-	genesisTime := time.Now().Add(time.Second * 10)
-	ld := time.Duration(10) * time.Second
+	genesisTime := time.Now().Add(100 * time.Millisecond)
+	ld := 100 * time.Millisecond
 
 	types.SetLayersPerEpoch(1)
 

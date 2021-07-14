@@ -113,8 +113,7 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 // proof is already available it will be sent immediately, otherwise it will be sent when available.
 func (db *PoetDb) SubscribeToProofRef(poetID []byte, roundID string) chan []byte {
 	key := makeKey(poetID, roundID)
-	ch := make(chan []byte)
-
+	ch := make(chan []byte, 1)
 	db.addSubscription(key, ch)
 
 	if poetProofRef, err := db.getProofRef(key); err == nil {
@@ -126,16 +125,16 @@ func (db *PoetDb) SubscribeToProofRef(poetID []byte, roundID string) chan []byte
 
 func (db *PoetDb) addSubscription(key poetProofKey, ch chan []byte) {
 	db.mu.Lock()
+	defer db.mu.Unlock()
 	db.poetProofRefSubscriptions[key] = append(db.poetProofRefSubscriptions[key], ch)
-	db.mu.Unlock()
 }
 
 // UnsubscribeFromProofRef removes all subscriptions from a given poetID and roundID. This method should be used with
 // caution since any subscribers still waiting will now hang forever. TODO: only cancel specific subscription.
 func (db *PoetDb) UnsubscribeFromProofRef(poetID []byte, roundID string) {
 	db.mu.Lock()
+	defer db.mu.Unlock()
 	delete(db.poetProofRefSubscriptions, makeKey(poetID, roundID))
-	db.mu.Unlock()
 }
 
 func (db *PoetDb) getProofRef(key poetProofKey) ([]byte, error) {
@@ -149,12 +148,9 @@ func (db *PoetDb) getProofRef(key poetProofKey) ([]byte, error) {
 func (db *PoetDb) publishProofRef(key poetProofKey, poetProofRef []byte) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-
 	for _, ch := range db.poetProofRefSubscriptions[key] {
-		go func(c chan []byte) {
-			c <- poetProofRef
-			close(c)
-		}(ch)
+		ch <- poetProofRef
+		close(ch)
 	}
 	delete(db.poetProofRefSubscriptions, key)
 }

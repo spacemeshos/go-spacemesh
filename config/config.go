@@ -3,10 +3,11 @@ package config
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"path/filepath"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
@@ -108,8 +109,6 @@ type BaseConfig struct {
 	BlockCacheSize int `mapstructure:"block-cache-size"`
 
 	AlwaysListen bool `mapstructure:"always-listen"` // force gossip to always be on (for testing)
-
-	Profiler bool `mapstructure:"profiler"`
 }
 
 // LoggerConfig holds the logging level for each module.
@@ -120,6 +119,10 @@ type LoggerConfig struct {
 	StateDbLoggerLevel        string `mapstructure:"stateDb"`
 	StateLoggerLevel          string `mapstructure:"state"`
 	AtxDbStoreLoggerLevel     string `mapstructure:"atxDbStore"`
+	TBeaconDbStoreLoggerLevel string `mapstructure:"tbDbStore"`
+	TBeaconDbLoggerLevel      string `mapstructure:"tbDb"`
+	TBeaconLoggerLevel        string `mapstructure:"tBeacon"`
+	WeakCoinLoggerLevel       string `mapstructure:"weakCoin"`
 	PoetDbStoreLoggerLevel    string `mapstructure:"poetDbStore"`
 	StoreLoggerLevel          string `mapstructure:"store"`
 	PoetDbLoggerLevel         string `mapstructure:"poetDb"`
@@ -199,7 +202,6 @@ func defaultBaseConfig() BaseConfig {
 		SyncValidationDelta: 300,
 		AtxsPerBlock:        100,
 		TxsPerBlock:         100,
-		Profiler:            false,
 	}
 }
 
