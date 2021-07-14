@@ -16,14 +16,14 @@ var testcases = map[string]interface{}{
 // Then all the nodes wait for the next epoch and assert the accounts' balance.
 func testTransaction(env *runtime.RunEnv, initCtx *InitContext) {
 	t := NewSystemTest(env, initCtx)
-	t.Logf("Starting transaction test, %d is up", t.WhoAmI())
+	t.Logf("Starting transaction test, %d is up", t.ID)
 	// TODO: ready should be replaced with starting the node and waiting for
 	// genesis
 	t.SetState("ready")
 	t.WaitAll("ready")
 	start1 := t.GetBalance(Account1)
 	start2 := t.GetBalance(Account2)
-	if t.WhoAmI() == 1 {
+	if t.ID == 1 {
 		t.SendCoins(Account1, Account2, 100)
 	}
 	t.WaitTillEpoch()
@@ -38,13 +38,13 @@ func testTransaction(env *runtime.RunEnv, initCtx *InitContext) {
 
 func testNewAccount(env *runtime.RunEnv, initCtx *InitContext) {
 	t := NewSystemTest(env, initCtx)
-	t.Logf("Starting new account test, %d is up", t.WhoAmI())
+	t.Logf("Starting new account test, %d is up", t.ID)
 	// TODO: ready should be replaced with starting the node and waiting for
 	// genesis
 	t.SetState("ready")
 	t.WaitAll("ready")
 	start1 := t.GetBalance(Account1)
-	if t.WhoAmI() == 1 {
+	if t.ID == 1 {
 		account := t.NewAccount()
 		t.SendCoins(Account1, account, 100)
 	}
