@@ -248,7 +248,11 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	}
 	// no need to worry about race condition for s.run. only one instance of synchronize can run at a time
 	s.run++
-	logger.Info("staring sync run #%v", s.run)
+	logger.With().Info(fmt.Sprintf("starting sync run #%v", s.run),
+		log.String("sync_state", s.getSyncState().String()),
+		log.FieldNamed("current", s.ticker.GetCurrentLayer()),
+		log.FieldNamed("latest", s.mesh.LatestLayer()),
+		log.FieldNamed("validated", s.mesh.ProcessedLayer()))
 
 	s.setStateBeforeSync(ctx)
 	// start a dedicated process for validation.
@@ -306,6 +310,7 @@ func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 	current := s.ticker.GetCurrentLayer()
 	if current.Uint32() <= 1 {
 		s.setSyncState(ctx, synced)
+		return
 	}
 	latest := s.mesh.LatestLayer()
 	if current.After(latest) && current.Difference(latest) >= outOfSyncThreshold {

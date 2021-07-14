@@ -128,7 +128,7 @@ type NipstBuilderMock struct {
 	SleepTime      int
 }
 
-func (np *NipstBuilderMock) BuildNIPST(challenge *types.Hash32, _ chan struct{}, _ chan struct{}) (*types.NIPST, error) {
+func (np *NipstBuilderMock) BuildNIPST(_ context.Context, challenge *types.Hash32, _ chan struct{}) (*types.NIPST, error) {
 	if np.buildNipstFunc != nil {
 		return np.buildNipstFunc(challenge)
 	}
@@ -137,7 +137,7 @@ func (np *NipstBuilderMock) BuildNIPST(challenge *types.Hash32, _ chan struct{},
 
 type NipstErrBuilderMock struct{}
 
-func (np *NipstErrBuilderMock) BuildNIPST(*types.Hash32, chan struct{}, chan struct{}) (*types.NIPST, error) {
+func (np *NipstErrBuilderMock) BuildNIPST(context.Context, *types.Hash32, chan struct{}) (*types.NIPST, error) {
 	return nil, fmt.Errorf("nipst builder error")
 }
 
@@ -375,7 +375,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	faultyNet.retErr = false
 	b = NewBuilder(bc, nodeID, 0, &MockSigning{}, activationDb, faultyNet, meshProviderMock, nipstBuilderMock, postProver, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
 	published, builtNipst, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
-	r.EqualError(err, "target epoch has passed")
+	r.ErrorIs(err, ErrATXChallengeExpired)
 	r.False(published)
 	r.True(builtNipst)
 
@@ -678,7 +678,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 
 	layerClockMock.currentLayer = types.EpochID(1).FirstLayer().Add(3)
 	err = b.PublishActivationTx(context.TODO())
-	assert.EqualError(t, err, "target epoch has passed")
+	assert.ErrorIs(t, err, ErrATXChallengeExpired)
 
 	// test load in correct epoch
 	b = NewBuilder(bc, id, 0, &MockSigning{}, activationDb, net, layers, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
@@ -705,8 +705,65 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	layerClockMock.currentLayer = types.EpochID(4).FirstLayer().Add(3)
 	err = b.PublishActivationTx(context.TODO())
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
-	assert.EqualError(t, err, "target epoch has passed")
+	assert.ErrorIs(t, err, ErrATXChallengeExpired)
 	assert.True(t, db.hadNone)
+}
+
+func TestBuilder_RetryPublishActivationTx(t *testing.T) {
+	r := require.New(t)
+	bc := Config{
+		CoinbaseAccount: coinbase,
+		GoldenATXID:     goldenATXID,
+		LayersPerEpoch:  layersPerEpoch,
+	}
+
+	retryInterval := 10 * time.Microsecond
+	expectedTries := 3
+
+	activationDb := newActivationDb()
+	nipstBuilder := &NipstBuilderMock{} // 👀 mock that returns error from BuildNipst()
+	b := NewBuilder(bc, nodeID, 0, &MockSigning{}, activationDb, net, meshProviderMock,
+		nipstBuilder, postProver, layerClockMock,
+		&mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"),
+		WithPoetRetryInterval(retryInterval),
+	)
+	b.commitment = commitment
+
+	challenge := newChallenge(otherNodeID /*👀*/, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	posAtx := newAtx(challenge, defaultView, npst)
+	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
+
+	net.lastTransmission = nil
+	meshProviderMock.latestLayer = postGenesisEpochLayer.Add(1)
+	tries := 0
+	builderConfirmation := make(chan struct{})
+	// TODO(dshulyak) maybe measure time difference between attempts. It should be no less than retryInterval
+	nipstBuilder.buildNipstFunc = func(challenge *types.Hash32) (*types.NIPST, error) {
+		tries++
+		if tries == expectedTries {
+			close(builderConfirmation)
+		} else if tries < expectedTries {
+			return nil, ErrPoetServiceUnstable
+		}
+		return NewNIPSTWithChallenge(challenge, poetBytes), nil
+	}
+	layerClockMock.currentLayer = types.EpochID(postGenesisEpoch).FirstLayer().Add(3)
+	ctx, cancel := context.WithCancel(context.Background())
+	runnerExit := make(chan struct{})
+	go func() {
+		b.run(ctx)
+		close(runnerExit)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-runnerExit
+	})
+
+	select {
+	case <-builderConfirmation:
+	case <-time.After(time.Second):
+		require.FailNow(t, "failed waiting for required number of tries to occur")
+	}
 }
 
 func TestStartPost(t *testing.T) {
