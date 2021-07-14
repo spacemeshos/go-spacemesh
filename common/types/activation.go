@@ -253,7 +253,7 @@ func (atx *ActivationTx) CalcAndSetID() {
 
 // GetPoetProofRef returns the reference to the PoET proof.
 func (atx *ActivationTx) GetPoetProofRef() Hash32 {
-	return CalcHash32(atx.NIPost.PostMetadata.Challenge)
+	return BytesToHash(atx.NIPost.PostMetadata.Challenge)
 }
 
 // GetShortPoetProofRef returns the first 5 characters of the PoET proof reference, for logging purposes.
