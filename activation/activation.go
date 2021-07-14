@@ -7,16 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/post/shared"
 	"sync"
 	"time"
 
-	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/post/shared"
-	"github.com/spacemeshos/post/shared"
 )
 
 var (
@@ -139,16 +137,16 @@ type Builder struct {
 	challenge         *types.NIPostChallenge
 	initialPost       *types.Post
 	// pendingATX is created with current commitment and nipst from current challenge.
-	pendingATX        *types.ActivationTxlayerClock        layerClock
-
+	pendingATX        *types.ActivationTx
+	layerClock        layerClock
 	status            SmeshingStatus
 	mtx               sync.Mutex
 	store             bytesStore
 	syncer            syncer
-	log               log.LogrunCtx            context.Context
+	log               log.Log
+	runCtx            context.Context
 	stop              func()
 	poetRetryInterval time.Duration
-	committedSpace    uint64
 }
 
 // BuilderOption ...
@@ -163,26 +161,8 @@ func WithPoetRetryInterval(interval time.Duration) BuilderOption {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(cfg Config, nodeID types.NodeID, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
-	return &Builder{
-		signer:            signer,
-		nodeID:            nodeID,
-		coinbaseAccount:   cfg.CoinbaseAccount,
-		goldenATXID:       cfg.GoldenATXID,
-		layersPerEpoch:    cfg.LayersPerEpoch,
-		db:                db,
-		net:               net,
-		mesh:              mesh,
-		nipostBuilder:     nipostBuilder,
-		postSetupProvider: postSetupProvider,
-		layerClock:        layerClock,
-		stop:              make(chan struct{}),
-		syncer:            syncer,
-		store:             store,
-		log:               log,
-		status:            SmeshingStatusIdle,
-func NewBuilder(conf Config, nodeID types.NodeID, spaceToCommit uint64, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider,
-	layersPerEpoch uint16, nipstBuilder nipstBuilder, postProver PostProverClient, layerClock layerClock,
+func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider,
+	layersPerEpoch uint16, nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
 	syncer syncer, store bytesStore, log log.Log, opts ...BuilderOption) *Builder {
 	b := &Builder{
 		signer:            signer,
@@ -193,16 +173,14 @@ func NewBuilder(conf Config, nodeID types.NodeID, spaceToCommit uint64, signer s
 		db:                db,
 		net:               net,
 		mesh:              mesh,
-		nipstBuilder:      nipstBuilder,
-		postProver:        postProver,
+		nipostBuilder:     nipostBuilder,
+		postSetupProvider: postSetupProvider,
 		layerClock:        layerClock,
 		store:             store,
 		syncer:            syncer,
-		initStatus:        InitIdle,
-		initDone:          make(chan struct{}),
-		committedSpace:    spaceToCommit,
 		log:               log,
 		poetRetryInterval: defaultPoetRetryInterval,
+		status:            SmeshingStatusIdle,
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -229,8 +207,8 @@ func (b *Builder) StartSmeshing(ctx context.Context, coinbase types.Address, opt
 		b.mtx.Unlock()
 		return errors.New("already started")
 	}
-	b.stop = make(chan struct{})
 	b.status = SmeshingStatusPendingPostInit
+	b.runCtx, b.stop = context.WithCancel(ctx)
 	b.mtx.Unlock()
 
 	doneChan, err := b.postSetupProvider.StartSession(opts)
@@ -248,7 +226,7 @@ func (b *Builder) StartSmeshing(ctx context.Context, coinbase types.Address, opt
 		}
 
 		b.status = SmeshingStatusStarted
-		go b.loop(ctx)
+		go b.loop(b.runCtx)
 	}()
 
 	return nil
@@ -267,7 +245,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 		return fmt.Errorf("failed to stop post data creation session: %v", err)
 	}
 
-	close(b.stop)
+	b.stop()
 	b.status = SmeshingStatusIdle
 
 	return nil
@@ -299,7 +277,6 @@ func (b *Builder) loop(ctx context.Context) {
 	if err != nil {
 		log.Info("challenge not loaded: %s", err)
 	}
-	if err := b.waitOrStop(ctx, b.initDone); err != nil {
 
 	// Once initialized, run the execution phase with zero-challenge,
 	// to create the initial proof (the commitment).
@@ -385,7 +362,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 	}
 	b.challenge = challenge
 	if err := b.storeChallenge(b.challenge); err != nil {
-		return fmt.Errorf("failed to store nipst challenge: %v", err)
+		return fmt.Errorf("failed to store nipost challenge: %v", err)
 	}
 	return nil
 }

@@ -71,7 +71,7 @@ type DB struct {
 	meshDb          *mesh.DB
 	LayersPerEpoch  uint16
 	goldenATXID     types.ATXID
-	nipostValidator  nipstValidator
+	nipostValidator NIPostValidator
 	log             log.Log
 	processAtxMutex sync.Mutex
 	atxChannels     map[types.ATXID]*atxChan
@@ -81,15 +81,15 @@ type DB struct {
 // their validity
 func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint16, goldenATXID types.ATXID, nipostValidator NIPostValidator, log log.Log) *DB {
 	db := &DB{
-		idStore:        idStore,
-		atxs:           dbStore,
-		atxHeaderCache: NewAtxCache(600),
-		meshDb:         meshDb,
-		LayersPerEpoch: layersPerEpoch,
-		goldenATXID:    goldenATXID,
+		idStore:         idStore,
+		atxs:            dbStore,
+		atxHeaderCache:  NewAtxCache(600),
+		meshDb:          meshDb,
+		LayersPerEpoch:  layersPerEpoch,
+		goldenATXID:     goldenATXID,
 		nipostValidator: nipostValidator,
-		log:            log,
-		atxChannels:    make(map[types.ATXID]*atxChan),
+		log:             log,
+		atxChannels:     make(map[types.ATXID]*atxChan),
 	}
 	return db
 }
