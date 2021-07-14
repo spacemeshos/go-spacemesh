@@ -342,6 +342,7 @@ var (
 func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Duration) error {
 	err := c.deadliner.SetReadDeadline(time.Now().Add(timeout))
 	if err != nil {
+		c.Close()
 		return err
 	}
 	msg, err := c.r.Next()
