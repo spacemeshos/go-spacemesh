@@ -50,7 +50,7 @@ func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
 }
 
 type nipstBuilder interface {
-	UpdatePoETProver(PoetProvingServiceClient)
+	updatePoETProver(PoetProvingServiceClient)
 	BuildNIPST(ctx context.Context, challenge *types.Hash32, timeout chan struct{}) (*types.NIPST, error)
 }
 
@@ -255,7 +255,7 @@ func (b *Builder) run(ctx context.Context) {
 	for {
 		client := atomic.LoadPointer(&b.pendingPoetClient)
 		if client != nil {
-			b.nipstBuilder.UpdatePoETProver(*(*PoetProvingServiceClient)(client))
+			b.nipstBuilder.updatePoETProver(*(*PoetProvingServiceClient)(client))
 			// CaS here will not lose concurrent update
 			atomic.CompareAndSwapPointer(&b.pendingPoetClient, client, nil)
 		}

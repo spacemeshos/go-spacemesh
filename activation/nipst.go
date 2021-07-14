@@ -148,8 +148,8 @@ func NewNIPSTBuilder(
 	}
 }
 
-// UpdatePoETProver updates poetProver reference. It should not be executed concurently with BuildNIPST.
-func (nb *NIPSTBuilder) UpdatePoETProver(poetProver PoetProvingServiceClient) {
+// updatePoETProver updates poetProver reference. It should not be executed concurently with BuildNIPST.
+func (nb *NIPSTBuilder) updatePoETProver(poetProver PoetProvingServiceClient) {
 	// reset the state for safety to avoid accidental erroneous wait in Phase 1.
 	nb.state = &builderState{
 		Nipst: &types.NIPST{},

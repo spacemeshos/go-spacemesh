@@ -129,7 +129,7 @@ type NipstBuilderMock struct {
 	SleepTime      int
 }
 
-func (np NipstBuilderMock) UpdatePoETProver(PoetProvingServiceClient) {}
+func (np NipstBuilderMock) updatePoETProver(PoetProvingServiceClient) {}
 
 func (np *NipstBuilderMock) BuildNIPST(_ context.Context, challenge *types.Hash32, _ chan struct{}) (*types.NIPST, error) {
 	if np.buildNipstFunc != nil {
@@ -140,7 +140,7 @@ func (np *NipstBuilderMock) BuildNIPST(_ context.Context, challenge *types.Hash3
 
 type NipstErrBuilderMock struct{}
 
-func (np *NipstErrBuilderMock) UpdatePoETProver(PoetProvingServiceClient) {}
+func (np *NipstErrBuilderMock) updatePoETProver(PoetProvingServiceClient) {}
 
 func (np *NipstErrBuilderMock) BuildNIPST(context.Context, *types.Hash32, chan struct{}) (*types.NIPST, error) {
 	return nil, fmt.Errorf("nipst builder error")
