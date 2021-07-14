@@ -274,7 +274,10 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 		c.logger.WithContext(ctx).With().Warning("connection: outbound send queue backlog",
 			log.Int("queue_length", len(c.messages)))
 	}
-	c.messages <- msgToSend{m, reqID, peerID}
+	select {
+	case c.messages <- msgToSend{m, reqID, peerID}:
+	case <-c.stopSending:
+	}
 	return nil
 }
 
@@ -336,39 +339,19 @@ var (
 )
 
 func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Duration) error {
-	be := make(chan struct {
-		b []byte
-		e error
-	})
-
-	go func() {
-		// TODO: some other way to make sure this groutine closes
-		err := c.deadliner.SetReadDeadline(time.Now().Add(timeout))
-		if err != nil {
-			be <- struct {
-				b []byte
-				e error
-			}{b: nil, e: err}
-			return
-		}
-		msg, err := c.r.Next()
-		be <- struct {
-			b []byte
-			e error
-		}{b: msg, e: err}
-		err = c.deadliner.SetReadDeadline(time.Time{}) // disable read deadline
-		if err != nil {
-			c.logger.With().Warning("could not set a read deadline", log.Err(err))
-		}
-	}()
-
-	msgbe := <-be
-	msg := msgbe.b
-	err := msgbe.e
-
+	err := c.deadliner.SetReadDeadline(time.Now().Add(timeout))
+	if err != nil {
+		return err
+	}
+	msg, err := c.r.Next()
 	if err != nil {
 		c.Close()
 		return err
+	}
+	err = c.deadliner.SetReadDeadline(time.Time{})
+	if err != nil {
+		c.Close()
+		return fmt.Errorf("failed to set read dealine: %w", err)
 	}
 
 	if c.msgSizeLimit != config.UnlimitedMsgSize && len(msg) > c.msgSizeLimit {
@@ -400,7 +383,7 @@ func (c *FormattedConnection) beginEventProcessing(ctx context.Context) {
 	)
 	for {
 		buf, err = c.r.Next()
-		if err != nil {
+		if err != nil && err != io.EOF {
 			break
 		}
 
