@@ -565,8 +565,8 @@ func (t DbTransaction) getTransaction() *types.MeshTransaction {
 	}
 }
 
-// WriteTransactions writes all transactions associated with a block atomically.
-func (m *DB) WriteTransactions(block *types.Block, txs ...*types.Transaction) error {
+// writeTransactions writes all transactions associated with a block atomically.
+func (m *DB) writeTransactions(block *types.Block, txs ...*types.Transaction) error {
 	batch := m.transactions.NewBatch()
 	for _, t := range txs {
 		bytes, err := types.InterfaceToBytes(newDbTransaction(t, block.ID(), block.Layer()))

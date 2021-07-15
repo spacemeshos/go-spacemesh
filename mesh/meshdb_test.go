@@ -432,7 +432,7 @@ func TestMeshDB_testGetTransactions(t *testing.T) {
 	_, addr3 := newSignerAndAddress(r, "cbe")
 	blk := &types.Block{}
 	blk.LayerIndex = 1
-	err := mdb.WriteTransactions(blk,
+	err := mdb.writeTransactions(blk,
 		newTx(r, signer1, 420, 240),
 		newTx(r, signer1, 421, 241),
 		newTxWithDest(r, signer2, addr1, 0, 100),
@@ -962,7 +962,7 @@ func TestMeshDB_GetMeshTransactions(t *testing.T) {
 		blk.LayerIndex = types.LayerID(i)
 		tx := newTx(r, signer1, nonce, 240)
 		ids = append(ids, tx.ID())
-		r.NoError(mdb.WriteTransactions(blk, tx))
+		r.NoError(mdb.writeTransactions(blk, tx))
 	}
 	txs, missing := mdb.GetMeshTransactions(ids)
 	r.Len(missing, 0)
