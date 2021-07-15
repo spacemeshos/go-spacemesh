@@ -753,36 +753,30 @@ func (s *Switch) closeInitial() {
 // if it failed it issues a one second timeout and then sends a request to try again.
 func (s *Switch) askForMorePeers(ctx context.Context) {
 	// check how much peers needed
-	s.outpeersMutex.RLock()
-	numpeers := len(s.outpeers)
-	s.outpeersMutex.RUnlock()
-	req := s.config.SwarmConfig.RandomConnections - numpeers
+	numpeers :=  func() int {
+		s.outpeersMutex.RLock()
+		numpeers := len(s.outpeers)
+		s.outpeersMutex.RUnlock()
+		// TODO: remove next if used in real test/main net
+		s.inpeersMutex.RLock()
+		numpeers += len(s.inpeers)
+		s.inpeersMutex.RUnlock()
+		return numpeers
+	}
+
+	req := s.config.SwarmConfig.RandomConnections - numpeers()
 	if req <= 0 {
 		// If 0 connections are required, the condition above is always true,
 		// so gossip needs to be considered ready in this case.
-		if s.config.SwarmConfig.RandomConnections == 0 {
-			select {
-			case <-s.initial:
-				// Nothing to do if channel is closed.
-				break
-			default:
-				// Close channel if it is not closed.
-				close(s.initial)
-			}
-		}
-		return
+	} else {
+		// try to connect eq peers
+		s.getMorePeers(ctx, req)
 	}
 
-	// try to connect eq peers
-	s.getMorePeers(ctx, req)
-
 	// check number of peers after
-	s.outpeersMutex.RLock()
-	numpeers = len(s.outpeers)
-	s.outpeersMutex.RUnlock()
 	// announce if initial number of peers achieved
 	// todo: better way then going in this every time ?
-	if numpeers >= s.config.SwarmConfig.RandomConnections {
+	if np := numpeers(); np >= s.config.SwarmConfig.RandomConnections {
 		s.initOnce.Do(func() {
 			s.logger.WithContext(ctx).With().Info("gossip connected to initial required neighbors",
 				log.Int("n", len(s.outpeers)))
@@ -797,9 +791,9 @@ func (s *Switch) askForMorePeers(ctx context.Context) {
 			s.outpeersMutex.RUnlock()
 		})
 		return
+	} else {
+		s.logger.Warning("needs %d more peers", s.config.SwarmConfig.RandomConnections-np)
 	}
-
-	s.logger.Warning("needs %d more peers", s.config.SwarmConfig.RandomConnections-numpeers)
 
 	// if we couldn't get any maybe we're initializing
 	// wait a little bit before trying again

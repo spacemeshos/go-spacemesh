@@ -222,25 +222,19 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 	mgr.state = PostSetupStateInProgress
 	mgr.initStatusMtx.Unlock()
 
-	newInit, err := initialization.NewInitializer(config.Config(mgr.cfg), config.InitOpts(opts), mgr.id)
-	if err != nil {
-		mgr.state = PostSetupStateError
-		mgr.lastErr = err
-		return nil, err
-	}
-
 	if opts.ComputeProviderID == config.BestProviderID {
 		p, err := mgr.BestProvider()
 		if err != nil {
 			return nil, err
 		}
+
 		mgr.logger.Info("Found best compute provider: id: %d, model: %v, computeAPI: %v", p.ID, p.Model, p.ComputeAPI)
 		opts.ComputeProviderID = int(p.ID)
 	}
 
 	newInit, err := initialization.NewInitializer(config.Config(mgr.cfg), config.InitOpts(opts), mgr.id)
 	if err != nil {
-		mgr.state = PoSTSetupStateError
+		mgr.state = PostSetupStateError
 		mgr.lastErr = err
 		return nil, err
 	}

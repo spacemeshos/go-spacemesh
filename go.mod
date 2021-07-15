@@ -10,7 +10,7 @@ require (
 	github.com/btcsuite/btcutil v0.0.0-20190425235716-9e5f4b9a998d
 	github.com/go-kit/kit v0.10.0
 	github.com/golang/mock v1.4.4
-	github.com/golang/protobuf v1.4.3
+	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.1.2
 	github.com/grpc-ecosystem/grpc-gateway v1.14.6
 	github.com/hashicorp/golang-lru v0.5.1
@@ -21,6 +21,7 @@ require (
 	github.com/prometheus/common v0.18.0
 	github.com/pyroscope-io/pyroscope v0.0.30
 	github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361
+	github.com/spacemeshos/amcl v0.0.2
 	github.com/spacemeshos/api/release/go v0.0.0-20210714203405-7e631f5a76d5
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/fixed v0.0.0-20210321020345-0ef1406dc23f
@@ -37,6 +38,7 @@ require (
 	github.com/syndtr/goleveldb v1.0.1-0.20190318030020-c3a204f8e965
 	go.uber.org/zap v1.15.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+	golang.org/x/net v0.0.0-20210428140749-89ef3d95e781
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 	google.golang.org/api v0.32.0
 	google.golang.org/genproto v0.0.0-20201007142714-5c0e72c5e71e

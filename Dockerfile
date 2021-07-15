@@ -12,12 +12,6 @@ RUN bash -c "for i in {1..9}; do mkdir -p /usr/share/man/man\$i; done" \
     ca-certificates \
     tzdata \
     locales \
-    git \
-    bash \
-    sudo \
-    unzip \
-    make \
-    curl \
     procps \
     net-tools \
     apt-transport-https \
@@ -38,7 +32,10 @@ ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,display
 LABEL com.nvidia.volumes.needed="nvidia_driver"
 
 FROM linux as golang
-ENV GOLANG_VERSION 1.15.3
+ENV GOLANG_MAJOR_VERSION 1
+ENV GOLANG_MINOR_VERSION 15
+ENV GOLANG_PATCH_VERSION 14
+ENV GOLANG_VERSION $GOLANG_MAJOR_VERSION.$GOLANG_MINOR_VERSION.$GOLANG_PATCH_VERSION
 ENV GOPATH /go
 ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
 RUN set -ex \
@@ -46,6 +43,12 @@ RUN set -ex \
  && apt-get install -qy --no-install-recommends \
     gcc \
 	libc6-dev \
+    git \
+    bash \
+    sudo \
+    unzip \
+    make \
+    curl \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/* \
  && curl -L https://golang.org/dl/go${GOLANG_VERSION}.linux-amd64.tar.gz | tar zx -C /usr/local \
@@ -65,7 +68,8 @@ COPY go.mod .
 COPY go.sum .
 COPY scripts/* scripts/
 
-RUN go run scripts/check-go-version.go --major 1 --minor 15
+# does not required yet
+# RUN go run scripts/check-go-version.go --major 1 --minor 15
 RUN	go mod download
 RUN GO111MODULE=off go get golang.org/x/lint/golint
 
