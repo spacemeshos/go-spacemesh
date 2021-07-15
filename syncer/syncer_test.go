@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,29 +48,37 @@ func (mlt *mockLayerTicker) LayerToTime(_ types.LayerID) time.Time {
 }
 
 type mockFetcher struct {
-	mu        sync.Mutex
-	polled    map[types.LayerID]chan struct{}
-	result    map[types.LayerID]chan layerfetcher.LayerPromiseResult
-	atxsError map[types.EpochID]error
-	atxsCalls uint32
-	tbError   map[types.EpochID]error
-	tbCalls   uint32
+	mu         sync.Mutex
+	polled     map[types.LayerID]chan struct{}
+	hashResult map[types.LayerID]chan layerfetcher.LayerHashResult
+	result     map[types.LayerID]chan layerfetcher.LayerPromiseResult
+	atxsError  map[types.EpochID]error
+	atxsCalls  uint32
+	tbError    map[types.EpochID]error
+	tbCalls    uint32
 }
 
 func newMockFetcher() *mockFetcher {
 	numLayers := layersPerEpoch * 5
 	polled := make(map[types.LayerID]chan struct{}, numLayers)
+	hashResult := make(map[types.LayerID]chan layerfetcher.LayerHashResult, numLayers)
 	result := make(map[types.LayerID]chan layerfetcher.LayerPromiseResult, numLayers)
-	for i := 0; i <= numLayers; i++ {
-		polled[types.NewLayerID(uint32(i))] = make(chan struct{}, 10)
-		result[types.NewLayerID(uint32(i))] = make(chan layerfetcher.LayerPromiseResult, 10)
+	for i := uint32(0); i <= uint32(numLayers); i++ {
+		polled[types.NewLayerID(i)] = make(chan struct{}, 10)
+		hashResult[types.NewLayerID(i)] = make(chan layerfetcher.LayerHashResult, 10)
+		result[types.NewLayerID(i)] = make(chan layerfetcher.LayerPromiseResult, 10)
 	}
-	return &mockFetcher{result: result, polled: polled, atxsError: make(map[types.EpochID]error), tbError: make(map[types.EpochID]error)}
+	return &mockFetcher{hashResult: hashResult, result: result, polled: polled, atxsError: make(map[types.EpochID]error), tbError: make(map[types.EpochID]error)}
 }
-func (mf *mockFetcher) PollLayer(_ context.Context, layerID types.LayerID) chan layerfetcher.LayerPromiseResult {
+func (mf *mockFetcher) PollLayerHash(_ context.Context, layerID types.LayerID) chan layerfetcher.LayerHashResult {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
 	mf.polled[layerID] <- struct{}{}
+	return mf.hashResult[layerID]
+}
+func (mf *mockFetcher) PollLayerBlocks(_ context.Context, layerID types.LayerID, _ map[types.Hash32][]peers.Peer) chan layerfetcher.LayerPromiseResult {
+	mf.mu.Lock()
+	defer mf.mu.Unlock()
 	return mf.result[layerID]
 }
 func (mf *mockFetcher) GetEpochATXs(_ context.Context, epoch types.EpochID) error {
@@ -89,6 +98,11 @@ func (mf *mockFetcher) getLayerPollChan(layerID types.LayerID) chan struct{} {
 	defer mf.mu.Unlock()
 	return mf.polled[layerID]
 }
+func (mf *mockFetcher) getLayerHashResultChan(layerID types.LayerID) chan layerfetcher.LayerHashResult {
+	mf.mu.Lock()
+	defer mf.mu.Unlock()
+	return mf.hashResult[layerID]
+}
 func (mf *mockFetcher) getLayerResultChan(layerID types.LayerID) chan layerfetcher.LayerPromiseResult {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
@@ -100,6 +114,7 @@ func (mf *mockFetcher) feedLayerResult(from, to types.LayerID) {
 		if i == types.GetEffectiveGenesis() {
 			err = nil
 		}
+		mf.getLayerHashResultChan(i) <- layerfetcher.LayerHashResult{}
 		mf.getLayerResultChan(i) <- layerfetcher.LayerPromiseResult{
 			Layer: i,
 			Err:   err,
@@ -242,6 +257,7 @@ func TestSynchronize_getLayerFromPeersFailed(t *testing.T) {
 	}()
 
 	// this will cause getLayerFromPeers to return an error
+	mf.getLayerHashResultChan(types.NewLayerID(1)) <- layerfetcher.LayerHashResult{}
 	mf.getLayerResultChan(types.NewLayerID(1)) <- layerfetcher.LayerPromiseResult{
 		Layer: types.NewLayerID(1),
 		Err:   errors.New("something baaahhhhhhd"),
@@ -339,6 +355,7 @@ func TestSynchronize_SyncZeroBlockFailed(t *testing.T) {
 	gLayer := types.GetEffectiveGenesis()
 	mf.feedLayerResult(types.NewLayerID(0), gLayer.Sub(1))
 	// genesis block has data. this LayerPromiseResult will cause SetZeroBlockLayer() to fail
+	mf.getLayerHashResultChan(gLayer) <- layerfetcher.LayerHashResult{}
 	mf.getLayerResultChan(gLayer) <- layerfetcher.LayerPromiseResult{
 		Layer: gLayer,
 		Err:   layerfetcher.ErrZeroLayer,

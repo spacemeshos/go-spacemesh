@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
+	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -23,39 +23,13 @@ func randomHash() (hash types.Hash32) {
 	return
 }
 
-func newRequestMock() *mockRequest {
-	return &mockRequest{
-		OkCalled:     make(map[types.Hash32][]byte),
-		OkCalledNum:  make(map[types.Hash32]int),
-		ErrCalled:    make(map[types.Hash32]error),
-		ErrCalledNum: make(map[types.Hash32]int),
-	}
-}
-
-type mockRequest struct {
-	OkCalled     map[types.Hash32][]byte
-	ErrCalled    map[types.Hash32]error
-	OkCalledNum  map[types.Hash32]int
-	ErrCalledNum map[types.Hash32]int
-}
-
-func (m *mockRequest) OkCallback(hash types.Hash32, buf []byte) error {
-	m.OkCalled[hash] = buf
-	m.OkCalledNum[hash]++
-	return nil
-}
-
-func (m *mockRequest) ErrCallback(hash types.Hash32, err error) {
-	m.ErrCalled[hash] = err
-	m.ErrCalledNum[hash]++
-}
-
 type mockNet struct {
-	SendCalled  map[types.Hash32]int
-	ReturnError bool
-	Responses   map[types.Hash32]responseMessage
-	SendAck     bool
-	AckChannel  chan struct{}
+	SendCalled   map[types.Hash32]int
+	ReturnError  bool
+	Responses    map[types.Hash32]responseMessage
+	SendAck      bool
+	AckChannel   chan struct{}
+	AsyncChannel chan struct{}
 }
 
 func (m mockNet) Close() {
@@ -64,7 +38,7 @@ func (m mockNet) Close() {
 func (m mockNet) RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(context.Context, []byte) []byte) {
 }
 
-func (m mockNet) GetRandomPeer() p2ppeers.Peer {
+func (m mockNet) GetRandomPeer() peers.Peer {
 	_, pub1, _ := p2pcrypto.GenerateKeyPair()
 	return pub1
 }
@@ -106,11 +80,10 @@ func (m mockNet) SendWrappedMessage(ctx context.Context, nodeID p2pcrypto.Public
 	return nil
 }
 
-func (m mockNet) GetPeers() []p2ppeers.Peer {
+func (m mockNet) GetPeers() []peers.Peer {
 	_, pub1, _ := p2pcrypto.GenerateKeyPair()
-	return []p2ppeers.Peer{pub1}
+	return []peers.Peer{pub1}
 }
-
 func (m *mockNet) SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error {
 	if m.ReturnError {
 		if m.SendAck {
@@ -133,7 +106,14 @@ func (m *mockNet) SendRequest(ctx context.Context, msgType server.MessageType, p
 	}
 	res.ID = r.ID
 	bts, _ := types.InterfaceToBytes(res)
-	resHandler(bts)
+	if m.AsyncChannel != nil {
+		go func(data []byte) {
+			<-m.AsyncChannel
+			resHandler(data)
+		}(bts)
+	} else {
+		resHandler(bts)
+	}
 
 	if m.SendAck {
 		m.AckChannel <- struct{}{}
@@ -157,6 +137,7 @@ func defaultFetch() (*Fetch, *mockNet) {
 		make(map[types.Hash32]responseMessage),
 		false,
 		make(chan struct{}),
+		nil,
 	}
 	lg := log.NewDefault("fetch")
 	f := NewFetch(context.TODO(), cfg, mckNet, lg)
@@ -173,6 +154,7 @@ func customFetch(cfg Config) (*Fetch, *mockNet) {
 		make(map[types.Hash32]responseMessage),
 		false,
 		make(chan struct{}),
+		nil,
 	}
 
 	lg := log.NewDefault("fetch")
@@ -249,6 +231,34 @@ func TestFetch_requestHashFromPeers_AggregateAndValidate(t *testing.T) {
 	assert.Equal(t, 2, net.SendCalled[h1])
 	assert.Equal(t, 3, notOk)
 	assert.Equal(t, 3, okCount)
+}
+
+func TestFetch_requestHashBatchFromPeers_NoDuplicates(t *testing.T) {
+	h1 := randomHash()
+	f, net := defaultFetch()
+
+	// set response mock
+	res := responseMessage{
+		Hash: h1,
+		Data: []byte("a"),
+	}
+	net.Responses[h1] = res
+	net.AsyncChannel = make(chan struct{})
+
+	hint := Hint("db")
+	request1 := request{
+		hash:                 h1,
+		priority:             0,
+		validateResponseHash: false,
+		hint:                 hint,
+		returnChan:           make(chan HashDataPromiseResult, 6),
+	}
+
+	f.activeRequests[h1] = []*request{&request1, &request1, &request1}
+	f.requestHashBatchFromPeers()
+	f.requestHashBatchFromPeers()
+	assert.Equal(t, 1, net.SendCalled[h1])
+	close(net.AsyncChannel)
 }
 
 func TestFetch_GetHash_StartStopSanity(t *testing.T) {
