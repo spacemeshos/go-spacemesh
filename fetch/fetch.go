@@ -21,6 +21,8 @@ import (
 // Hint marks which DB should be queried for a certain provided hash
 type Hint string
 
+var emptyHash = types.Hash32{}
+
 // DB hints per DB
 const (
 	BlockDB Hint = "blocksDB"
@@ -401,11 +403,11 @@ func (f *Fetch) receiveResponse(data []byte) {
 		f.activeReqM.Lock()
 		// for each hash, send Data on waiting channel
 		reqs := f.pendingRequests[resID.Hash]
-		var actualHash types.Hash32
+		actualHash := emptyHash
 		for _, req := range reqs {
 			var err error
 			if req.validateResponseHash {
-				if len(actualHash) == 0 {
+				if actualHash == emptyHash {
 					actualHash = types.CalcHash32(data)
 				}
 				if actualHash != resID.Hash {
