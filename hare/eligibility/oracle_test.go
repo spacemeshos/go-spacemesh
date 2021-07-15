@@ -435,12 +435,14 @@ type bProvider struct {
 	mp map[types.LayerID]map[types.BlockID]struct{}
 }
 
+var errDoesNotExist = errors.New("does not exist")
+
 func (p *bProvider) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error) {
 	if mp, exist := p.mp[layer]; exist {
 		return mp, nil
 	}
 
-	return nil, errors.New("does not exist")
+	return nil, errDoesNotExist
 }
 
 func TestOracle_activesSafeLayer(t *testing.T) {
@@ -493,8 +495,9 @@ func TestOracle_activesNoContextuallyValid(t *testing.T) {
 	o.blocksProvider = &bProvider{bmp}
 	mpRes, err := o.actives(context.TODO(), lyr)
 
-	// This should not fail but it should return an empty set
-	r.NoError(err)
+	// This should fail when it tries to read from the following layer
+	r.Error(err)
+	r.Equal(errDoesNotExist, err)
 	r.Len(mpRes, 0)
 }
 
