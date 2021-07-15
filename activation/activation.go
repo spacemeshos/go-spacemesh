@@ -154,9 +154,10 @@ func WithPoetRetryInterval(interval time.Duration) BuilderOption {
 	}
 }
 
+// PoETClientInitializer interfaces for creating PoetProvingServiceClient.
 type PoETClientInitializer func(string) PoetProvingServiceClient
 
-// WithPoetClientInitializer modifies initialization logic for PoET client. Used during client update.
+// WithPoETClientInitializer modifies initialization logic for PoET client. Used during client update.
 func WithPoETClientInitializer(initializer PoETClientInitializer) BuilderOption {
 	return func(b *Builder) {
 		b.poetClientInitializer = initializer

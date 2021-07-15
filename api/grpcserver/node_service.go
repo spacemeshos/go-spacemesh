@@ -122,6 +122,7 @@ func (s NodeService) Shutdown(context.Context, *pb.ShutdownRequest) (*pb.Shutdow
 	}, nil
 }
 
+// UpdatePoetServer update server that is used for generating PoETs.
 func (s NodeService) UpdatePoetServer(ctx context.Context, req *pb.UpdatePoetServerRequest) (*pb.UpdatePoetServerResponse, error) {
 	err := s.AtxAPI.UpdatePoETServer(ctx, req.Url)
 	if err == nil {
