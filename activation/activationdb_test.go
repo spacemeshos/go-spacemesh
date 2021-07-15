@@ -16,8 +16,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -1036,7 +1034,7 @@ func TestActivateDB_HandleAtxNilNipst(t *testing.T) {
 func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 	path := b.TempDir()
 
-	lg := log.NewWithLevel("remove_noise", zap.NewAtomicLevelAt(zapcore.FatalLevel))
+	lg := log.NewNop()
 	iddbstore, err := database.NewLDBDatabase(filepath.Join(path, "ids"), 0, 0, lg)
 	require.NoError(b, err)
 	mdb, err := mesh.NewPersistentMeshDB(filepath.Join(path, "mesh"), 20, lg)
