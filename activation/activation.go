@@ -162,7 +162,7 @@ func WithPoetRetryInterval(interval time.Duration) BuilderOption {
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider,
-	layersPerEpoch uint16, nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
+	layersPerEpoch uint32, nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
 	syncer syncer, store bytesStore, log log.Log, opts ...BuilderOption) *Builder {
 	b := &Builder{
 		signer:            signer,

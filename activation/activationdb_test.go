@@ -217,8 +217,8 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	coinbase4 := types.HexToAddress("cccc")
 	atxs := []*types.ActivationTx{
 		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase1, 100, &types.NIPost{}),
-		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, 2, 0, 100, coinbase1, 100, &types.NIPost{}),
-		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, 3, 0, 100, coinbase1, 100, &types.NIPost{}),
+		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(2), 0, 100, coinbase1, 100, &types.NIPost{}),
+		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(3), 0, 100, coinbase1, 100, &types.NIPost{}),
 		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(2), 0, 100, coinbase2, 200, &types.NIPost{}),
 		newActivationTx(id4, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(2), 0, 100, coinbase4, 400, &types.NIPost{}),
 		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(11), 0, 100, coinbase3, 300, &types.NIPost{}),
