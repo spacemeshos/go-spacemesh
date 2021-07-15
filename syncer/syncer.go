@@ -395,11 +395,12 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 }
 
 func (s *Syncer) getTortoiseBeacon(ctx context.Context, layerID types.LayerID) error {
-	if layerID.GetEpoch().IsGenesis() {
+	epoch := layerID.GetEpoch() - 1 // tortoise beacon for previous epoch is needed
+	if epoch.IsGenesis() {
 		s.logger.WithContext(ctx).Info("skip getting tortoise beacons in genesis epoch")
 		return nil
 	}
-	epoch := layerID.GetEpoch() - 1 // tortoise beacon for previous epoch is needed
+
 	currentEpoch := s.ticker.GetCurrentLayer().GetEpoch()
 	// only get tortoise beacon if
 	// - layerID is in the current epoch
