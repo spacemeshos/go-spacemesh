@@ -270,6 +270,40 @@ func (f *Fetch) AddDB(hint Hint, db database.Store) {
 	f.dbLock.Unlock()
 }
 
+// handleNewRequest batches low priority requests and sends a high priority request to peers right away.
+// if there are pending requests for the same hash, it will put the new request, regardless of the priority,
+// to the pending list and wait for notification when the earlier request gets response.
+// it returns true if a request is sent immediately, or false otherwise.
+func (f *Fetch) handleNewRequest(req *request) bool {
+	f.activeReqM.Lock()
+	if _, ok := f.pendingRequests[req.hash]; ok {
+		// hash already being requested. just add the req and wait for the notification
+		f.pendingRequests[req.hash] = append(f.pendingRequests[req.hash], req)
+		f.activeReqM.Unlock()
+		return false
+	}
+	sendNow := req.priority > Low
+	// group requests by hash
+	if sendNow {
+		f.pendingRequests[req.hash] = append(f.pendingRequests[req.hash], req)
+	} else {
+		f.activeRequests[req.hash] = append(f.activeRequests[req.hash], req)
+	}
+	rLen := len(f.activeRequests)
+	f.activeReqM.Unlock()
+	if sendNow {
+		f.sendBatch([]requestMessage{{req.hint, req.hash}})
+		f.log.Info("high priority request sent %v", req.hash.ShortString())
+		return true
+	}
+	f.log.Info("request added to queue %v", req.hash.ShortString())
+	if rLen > batchMaxSize {
+		go f.requestHashBatchFromPeers() // Process the batch.
+		return true
+	}
+	return false
+}
+
 // here we receive all requests for hashes for all DBs and batch them together before we send the request to peer
 // there can be a priority request that will not be batched
 func (f *Fetch) loop() {
@@ -277,25 +311,7 @@ func (f *Fetch) loop() {
 	for {
 		select {
 		case req := <-f.requestReceiver:
-			sendNow := req.priority > Low
-			f.activeReqM.Lock()
-			// group requests by hash
-			if sendNow {
-				f.pendingRequests[req.hash] = append(f.pendingRequests[req.hash], &req)
-			} else {
-				f.activeRequests[req.hash] = append(f.activeRequests[req.hash], &req)
-			}
-			rLen := len(f.activeRequests)
-			f.activeReqM.Unlock()
-			if sendNow {
-				f.log.Info("high priority request sent %v", req.hash.ShortString())
-				f.sendBatch([]requestMessage{{req.hint, req.hash}})
-				break
-			}
-			f.log.Info("request added to queue %v", req.hash.ShortString())
-			if rLen > batchMaxSize {
-				go f.requestHashBatchFromPeers() // Process the batch.
-			}
+			f.handleNewRequest(&req)
 		case <-f.batchTimeout.C:
 			go f.requestHashBatchFromPeers() // Process the batch.
 		case <-f.stop:
@@ -440,7 +456,6 @@ func (f *Fetch) receiveResponse(data []byte) {
 		}
 		// the remaining requests in pendingRequests is either invalid (exceed MaxRetriesForRequest) or
 		// put back to the active list.
-		// TODO should we notify channels of the invalid requests?
 		delete(f.pendingRequests, h)
 		f.activeReqM.Unlock()
 	}
