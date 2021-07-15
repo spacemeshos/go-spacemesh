@@ -202,10 +202,11 @@ func (m *DB) GetBlock(id types.BlockID) (*types.Block, error) {
 	if err != nil {
 		return nil, err
 	}
-	mbk := &types.Block{}
-	err = types.BytesToInterface(b, mbk)
-	mbk.Initialize()
-	return mbk, err
+	mbk := &types.DBBlock{}
+	if err := types.BytesToInterface(b, mbk); err != nil {
+		return nil, err
+	}
+	return mbk.ToBlock(), nil
 }
 
 // LayerBlocks retrieves all blocks from a layer by layer index
@@ -396,7 +397,13 @@ func (m *DB) SaveLayerHashInputVector(h types.Hash32, data []byte) error {
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {
-	if bytes, err := types.InterfaceToBytes(bl); err != nil {
+	block := &types.DBBlock{
+		MiniBlock: bl.MiniBlock,
+		ID:        bl.ID(),
+		Signature: bl.Signature,
+		MinerID:   bl.MinerID().Bytes(),
+	}
+	if bytes, err := types.InterfaceToBytes(block); err != nil {
 		return fmt.Errorf("could not encode block: %w", err)
 	} else if err := m.blocks.Put(bl.ID().AsHash32().Bytes(), bytes); err != nil {
 		return fmt.Errorf("could not add block %v to database: %w", bl.ID(), err)
