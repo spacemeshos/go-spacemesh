@@ -92,6 +92,7 @@ const (
 	AtxBuilderLogger     = "atxBuilder"
 	GossipListener       = "gossipListener"
 	Fetcher              = "fetcher"
+	LayerFetcher         = "layerFetcher"
 )
 
 // Cmd is the cobra wrapper for the node, that allows adding parameters to it
@@ -603,7 +604,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
 
-	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxdb, poetDb, atxdb, processor, swarm, remoteFetchService, msh, tBeaconDB, app.addLogger(Fetcher, lg))
+	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxdb, poetDb, atxdb, processor, swarm, remoteFetchService, msh, tBeaconDB, app.addLogger(LayerFetcher, lg))
 	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, mdb.InputVector(), tBeaconDBStore)
 
 	syncerConf := syncer.Configuration{
@@ -897,7 +898,7 @@ func (app *SpacemeshApp) stopServices() {
 	}
 
 	if app.layerFetch != nil {
-		app.log.Info("%v closing layerFetch", app.nodeID.Key)
+		app.log.Info("closing layerFetch")
 		app.layerFetch.Close()
 	}
 
@@ -1049,7 +1050,7 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) error {
 		return fmt.Errorf("could not retrieve identity: %w", err)
 	}
 
-	poetClient := activation.NewHTTPPoetClient(ctx, app.Config.PoETServer)
+	poetClient := activation.NewHTTPPoetClient(app.Config.PoETServer)
 
 	edPubkey := app.edSgn.PublicKey()
 	vrfSigner, vrfPub, err := signing.NewVRFSigner(app.edSgn.Sign(edPubkey.Bytes()))

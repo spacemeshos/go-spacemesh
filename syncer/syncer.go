@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 )
 
 type layerTicker interface {
@@ -21,7 +22,8 @@ type layerTicker interface {
 }
 
 type layerFetcher interface {
-	PollLayer(ctx context.Context, id types.LayerID) chan layerfetcher.LayerPromiseResult
+	PollLayerHash(ctx context.Context, layerID types.LayerID) chan layerfetcher.LayerHashResult
+	PollLayerBlocks(ctx context.Context, layerID types.LayerID, hashes map[types.Hash32][]peers.Peer) chan layerfetcher.LayerPromiseResult
 	GetEpochATXs(ctx context.Context, id types.EpochID) error
 	GetTortoiseBeacon(ctx context.Context, id types.EpochID) error
 }
@@ -247,7 +249,11 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	}
 	// no need to worry about race condition for s.run. only one instance of synchronize can run at a time
 	s.run++
-	logger.Info("staring sync run #%v", s.run)
+	logger.With().Info(fmt.Sprintf("starting sync run #%v", s.run),
+		log.String("sync_state", s.getSyncState().String()),
+		log.FieldNamed("current", s.ticker.GetCurrentLayer()),
+		log.FieldNamed("latest", s.mesh.LatestLayer()),
+		log.FieldNamed("validated", s.mesh.ProcessedLayer()))
 
 	s.setStateBeforeSync(ctx)
 	// start a dedicated process for validation.
@@ -305,6 +311,7 @@ func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 	current := s.ticker.GetCurrentLayer()
 	if current <= 1 {
 		s.setSyncState(ctx, synced)
+		return
 	}
 	latest := s.mesh.LatestLayer()
 	if current > latest && current-latest >= outOfSyncThreshold {
@@ -356,8 +363,14 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 }
 
 func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) (*types.Layer, error) {
-	ch := s.fetcher.PollLayer(ctx, layerID)
-	res := <-ch
+	ch := s.fetcher.PollLayerHash(ctx, layerID)
+	hashRes := <-ch
+	if hashRes.Err != nil {
+		return nil, hashRes.Err
+	}
+	// TODO: resolve hash with peers
+	bch := s.fetcher.PollLayerBlocks(ctx, layerID, hashRes.Hashes)
+	res := <-bch
 	if res.Err != nil {
 		if res.Err == layerfetcher.ErrZeroLayer {
 			return types.NewLayer(layerID), nil

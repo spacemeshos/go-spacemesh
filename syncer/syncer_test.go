@@ -8,17 +8,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
-	"github.com/spacemeshos/go-spacemesh/layerfetcher"
-
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/log"
-
-	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/mesh"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/p2p/peers"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -49,29 +47,37 @@ func (mlt *mockLayerTicker) LayerToTime(_ types.LayerID) time.Time {
 }
 
 type mockFetcher struct {
-	mu        sync.Mutex
-	polled    map[types.LayerID]chan struct{}
-	result    map[types.LayerID]chan layerfetcher.LayerPromiseResult
-	atxsError map[types.EpochID]error
-	atxsCalls uint32
-	tbsError  map[types.EpochID]error
-	tbsCalls  uint32
+	mu         sync.Mutex
+	polled     map[types.LayerID]chan struct{}
+	hashResult map[types.LayerID]chan layerfetcher.LayerHashResult
+	result     map[types.LayerID]chan layerfetcher.LayerPromiseResult
+	atxsError  map[types.EpochID]error
+	atxsCalls  uint32
+	tbError    map[types.EpochID]error
+	tbCalls    uint32
 }
 
 func newMockFetcher() *mockFetcher {
 	numLayers := layersPerEpoch * 5
 	polled := make(map[types.LayerID]chan struct{}, numLayers)
+	hashResult := make(map[types.LayerID]chan layerfetcher.LayerHashResult, numLayers)
 	result := make(map[types.LayerID]chan layerfetcher.LayerPromiseResult, numLayers)
 	for i := 0; i <= numLayers; i++ {
 		polled[types.LayerID(i)] = make(chan struct{}, 10)
+		hashResult[types.LayerID(i)] = make(chan layerfetcher.LayerHashResult, 10)
 		result[types.LayerID(i)] = make(chan layerfetcher.LayerPromiseResult, 10)
 	}
-	return &mockFetcher{result: result, polled: polled, atxsError: make(map[types.EpochID]error)}
+	return &mockFetcher{hashResult: hashResult, result: result, polled: polled, atxsError: make(map[types.EpochID]error), tbError: make(map[types.EpochID]error)}
 }
-func (mf *mockFetcher) PollLayer(_ context.Context, layerID types.LayerID) chan layerfetcher.LayerPromiseResult {
+func (mf *mockFetcher) PollLayerHash(_ context.Context, layerID types.LayerID) chan layerfetcher.LayerHashResult {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
 	mf.polled[layerID] <- struct{}{}
+	return mf.hashResult[layerID]
+}
+func (mf *mockFetcher) PollLayerBlocks(_ context.Context, layerID types.LayerID, _ map[types.Hash32][]peers.Peer) chan layerfetcher.LayerPromiseResult {
+	mf.mu.Lock()
+	defer mf.mu.Unlock()
 	return mf.result[layerID]
 }
 func (mf *mockFetcher) GetEpochATXs(_ context.Context, epoch types.EpochID) error {
@@ -83,13 +89,18 @@ func (mf *mockFetcher) GetEpochATXs(_ context.Context, epoch types.EpochID) erro
 func (mf *mockFetcher) GetTortoiseBeacon(_ context.Context, epoch types.EpochID) error {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
-	mf.tbsCalls++
-	return mf.tbsError[epoch]
+	mf.tbCalls++
+	return mf.tbError[epoch]
 }
 func (mf *mockFetcher) getLayerPollChan(layerID types.LayerID) chan struct{} {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
 	return mf.polled[layerID]
+}
+func (mf *mockFetcher) getLayerHashResultChan(layerID types.LayerID) chan layerfetcher.LayerHashResult {
+	mf.mu.Lock()
+	defer mf.mu.Unlock()
+	return mf.hashResult[layerID]
 }
 func (mf *mockFetcher) getLayerResultChan(layerID types.LayerID) chan layerfetcher.LayerPromiseResult {
 	mf.mu.Lock()
@@ -102,6 +113,7 @@ func (mf *mockFetcher) feedLayerResult(from, to types.LayerID) {
 		if i == types.GetEffectiveGenesis() {
 			err = nil
 		}
+		mf.getLayerHashResultChan(i) <- layerfetcher.LayerHashResult{}
 		mf.getLayerResultChan(i) <- layerfetcher.LayerPromiseResult{
 			Layer: i,
 			Err:   err,
@@ -112,6 +124,11 @@ func (mf *mockFetcher) setATXsErrors(epoch types.EpochID, err error) {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
 	mf.atxsError[epoch] = err
+}
+func (mf *mockFetcher) setTBErrors(epoch types.EpochID, err error) {
+	mf.mu.Lock()
+	defer mf.mu.Unlock()
+	mf.tbError[epoch] = err
 }
 
 type mockValidator struct{}
@@ -239,6 +256,7 @@ func TestSynchronize_getLayerFromPeersFailed(t *testing.T) {
 	}()
 
 	// this will cause getLayerFromPeers to return an error
+	mf.getLayerHashResultChan(1) <- layerfetcher.LayerHashResult{}
 	mf.getLayerResultChan(1) <- layerfetcher.LayerPromiseResult{
 		Layer: 1,
 		Err:   errors.New("something baaahhhhhhd"),
@@ -295,6 +313,29 @@ func TestSynchronize_getATXsFailed(t *testing.T) {
 	assert.False(t, syncer.IsSynced(context.TODO()))
 }
 
+func TestSynchronize_getTBFailed(t *testing.T) {
+	lg := log.NewDefault("syncer")
+	ticker := newMockLayerTicker()
+	mf := newMockFetcher()
+	mm := newMemMesh(lg)
+	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	ticker.advanceToLayer(layersPerEpoch * 3)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		assert.False(t, syncer.synchronize(context.TODO()))
+		wg.Done()
+	}()
+
+	mf.setTBErrors(3, errors.New("no tortoise beacon: should fail sync"))
+	mf.feedLayerResult(0, ticker.GetCurrentLayer())
+	wg.Wait()
+
+	assert.False(t, syncer.ListenToGossip())
+	assert.False(t, syncer.IsSynced(context.TODO()))
+}
+
 func TestSynchronize_SyncZeroBlockFailed(t *testing.T) {
 	lg := log.NewDefault("syncer")
 	ticker := newMockLayerTicker()
@@ -313,6 +354,7 @@ func TestSynchronize_SyncZeroBlockFailed(t *testing.T) {
 	gLayer := types.GetEffectiveGenesis()
 	mf.feedLayerResult(0, gLayer-1)
 	// genesis block has data. this LayerPromiseResult will cause SetZeroBlockLayer() to fail
+	mf.getLayerHashResultChan(gLayer) <- layerfetcher.LayerHashResult{}
 	mf.getLayerResultChan(gLayer) <- layerfetcher.LayerPromiseResult{
 		Layer: gLayer,
 		Err:   layerfetcher.ErrZeroLayer,
@@ -540,7 +582,7 @@ func TestGetATXsCurrentEpoch(t *testing.T) {
 	mf := newMockFetcher()
 	ticker := newMockLayerTicker()
 	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
-	assert.Equal(t, 3, layersPerEpoch)
+	require.Equal(t, 3, layersPerEpoch)
 	mf.setATXsErrors(0, errors.New("no ATXs for epoch 0, expected for epoch 0"))
 	mf.setATXsErrors(1, errors.New("no ATXs for epoch 1, error out"))
 
@@ -578,7 +620,7 @@ func TestGetATXsOldAndCurrentEpoch(t *testing.T) {
 	mf := newMockFetcher()
 	ticker := newMockLayerTicker()
 	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
-	assert.Equal(t, 3, layersPerEpoch)
+	require.Equal(t, 3, layersPerEpoch)
 	mf.setATXsErrors(0, errors.New("no ATXs for epoch 0, expected for epoch 0"))
 	mf.setATXsErrors(1, errors.New("no ATXs for epoch 1"))
 
@@ -607,4 +649,95 @@ func TestGetATXsOldAndCurrentEpoch(t *testing.T) {
 	assert.Equal(t, uint32(3), atomic.LoadUint32(&mf.atxsCalls))
 	assert.NoError(t, syncer.getATXs(context.TODO(), 8))
 	assert.Equal(t, uint32(4), atomic.LoadUint32(&mf.atxsCalls))
+}
+
+func TestGetTBCurrentEpoch(t *testing.T) {
+	lg := log.NewDefault("syncer")
+	mf := newMockFetcher()
+	ticker := newMockLayerTicker()
+	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
+	require.Equal(t, 3, layersPerEpoch)
+	mf.setTBErrors(0, errors.New("no tortoise beacon for epoch 0, expected for epoch 0"))
+	mf.setTBErrors(1, errors.New("no tortoise beacon for epoch 1, expected for epoch 1"))
+	mf.setTBErrors(3, errors.New("no tortoise beacon for epoch 3, error out"))
+
+	ticker.advanceToLayer(2)
+	// epoch 0, tortoise beacon not requested at any layer
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 0))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 1))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 2))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
+
+	// epoch 1, still genesis, tortoise beacon not requested still
+	ticker.advanceToLayer(5)
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 3))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 4))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 5))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
+
+	// epoch 2, no error
+	ticker.advanceToLayer(8)
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 6))
+	assert.Equal(t, uint32(1), atomic.LoadUint32(&mf.tbCalls))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 7))
+	assert.Equal(t, uint32(2), atomic.LoadUint32(&mf.tbCalls))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 8))
+	assert.Equal(t, uint32(3), atomic.LoadUint32(&mf.tbCalls))
+
+	// epoch 3
+	ticker.advanceToLayer(11)
+	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), 9))
+	assert.Equal(t, uint32(4), atomic.LoadUint32(&mf.tbCalls))
+	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), 10))
+	assert.Equal(t, uint32(5), atomic.LoadUint32(&mf.tbCalls))
+	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), 11))
+	assert.Equal(t, uint32(6), atomic.LoadUint32(&mf.tbCalls))
+}
+
+func TestGetTBOldAndCurrentEpoch(t *testing.T) {
+	lg := log.NewDefault("syncer")
+	mf := newMockFetcher()
+	ticker := newMockLayerTicker()
+	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
+	require.Equal(t, 3, layersPerEpoch)
+	mf.setTBErrors(0, errors.New("no tortoise beacon for epoch 0, expected for epoch 0"))
+	mf.setTBErrors(1, errors.New("no tortoise beacon for epoch 1, expected for epoch 1"))
+	mf.setTBErrors(3, errors.New("no tortoise beacon for epoch 3, error out"))
+
+	ticker.advanceToLayer(11) // epoch 3
+	// epoch 0, tortoise beacon not requested
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 0))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 1))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 2))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
+
+	// epoch 1, tortoise beacon still not requested
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 3))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 4))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 5))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
+
+	// epoch 2, tortoise beacon will be requested at the last layer
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 6))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 7))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 8))
+	assert.Equal(t, uint32(1), atomic.LoadUint32(&mf.tbCalls))
+
+	// epoch 3 is the current epoch. ATXs will be requested at every layer
+	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), 9))
+	assert.Equal(t, uint32(2), atomic.LoadUint32(&mf.tbCalls))
+	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), 10))
+	assert.Equal(t, uint32(3), atomic.LoadUint32(&mf.tbCalls))
+	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), 11))
+	assert.Equal(t, uint32(4), atomic.LoadUint32(&mf.tbCalls))
 }
