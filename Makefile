@@ -95,8 +95,8 @@ build: go-spacemesh
 
 hare p2p sync: get-gpu-setup
 	cd cmd/$@ ; go build -o $(BIN_DIR)go-$@$(EXE) .
-go-spacemesh: get-gpu-setup
-	go build -o $(BIN_DIR)$@$(EXE) .
+go-spacemesh: get-gpu-setup        
+	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS).
 harness: get-gpu-setup
 	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE) .
 .PHONY: hare p2p sync harness go-spacemesh

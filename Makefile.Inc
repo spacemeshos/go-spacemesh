@@ -1,7 +1,5 @@
 PROJ_DIR := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
 BIN_DIR ?= $(PROJ_DIR)build/
-
-export CGO_LDFLAGS := -L$(BIN_DIR) -Wl,-rpath,$$ORIGIN $(CGO_LDFLAGS_EXT)
 export GOOS
 export GOARCH
 export GOARM
@@ -24,9 +22,11 @@ ifeq ($(GOOS),windows)
 else
   TEMP := /tmp
   ifeq ($(GOOS),darwin)
-	  platform := macos
+    platform := macos
+    export CGO_LDFLAGS := -L$(BIN_DIR) -Wl,-rpath,@loader_path $(CGO_LDFLAGS_EXT)
   else
-      platform := linux
+    platform := linux
+    export CGO_LDFLAGS := -L$(BIN_DIR) -Wl,-rpath,$$ORIGIN $(CGO_LDFLAGS_EXT)
   endif
 endif
 
