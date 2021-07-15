@@ -10,7 +10,7 @@ export BIN_DIR
 ifeq ($(OS),Windows_NT)
   HOST_OS := windows
 else
-  HOST_OS := $(shell uname | tr [A-Z] [a-z])
+  HOST_OS := $(shell uname | tr "[A-Z]" "[a-z]")
 endif
 
 ifeq ($(GOOS),)
