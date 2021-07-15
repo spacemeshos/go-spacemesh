@@ -103,9 +103,11 @@ func NewMsgServer(ctx context.Context, network Service, name string, requestLife
 
 // Close stops the MessageServer
 func (p *MessageServer) Close() {
-	p.exit <- struct{}{}
-	<-p.exit
+	p.With().Info("closing MessageServer")
+	close(p.exit)
+	p.With().Info("waiting for message workers to finish...")
 	p.workerCount.Wait()
+	p.With().Info("message workers all done")
 }
 
 // readLoop reads incoming messages and matches them to requests or responses.
@@ -115,8 +117,7 @@ func (p *MessageServer) readLoop(ctx context.Context) {
 	for {
 		select {
 		case <-p.exit:
-			p.With().Debug("shutting down protocol", log.String("protocol", p.name))
-			close(p.exit)
+			p.With().Info("shutting down protocol", log.String("protocol", p.name))
 			return
 		case <-timer.C:
 			go p.cleanStaleMessages()
