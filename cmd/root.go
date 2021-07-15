@@ -44,7 +44,7 @@ func AddCommands(cmd *cobra.Command) {
 		config.LayerDurationSec, "Duration between layers in seconds")
 	cmd.PersistentFlags().IntVar(&config.LayerAvgSize, "layer-average-size",
 		config.LayerAvgSize, "Layer Avg size")
-	cmd.PersistentFlags().IntVar(&config.Hdist, "hdist",
+	cmd.PersistentFlags().Uint32Var(&config.Hdist, "hdist",
 		config.Hdist, "hdist")
 	cmd.PersistentFlags().BoolVar(&config.PprofHTTPServer, "pprof-server",
 		config.PprofHTTPServer, "enable http pprof server")
@@ -166,10 +166,10 @@ func AddCommands(cmd *cobra.Command) {
 
 	/**======================== Hare Eligibility Oracle Flags ========================== **/
 
-	cmd.PersistentFlags().Uint16Var(&config.HareEligibility.ConfidenceParam, "eligibility-confidence-param",
-		config.HareEligibility.ConfidenceParam, "The distance (in layers) we need to wait to have confidence about the contents of a layer")
-	cmd.PersistentFlags().Uint16Var(&config.HareEligibility.EpochOffset, "eligibility-epoch-offset",
-		config.HareEligibility.EpochOffset, "The number of layers we wait for blocks to arrive at the start of each epoch (for purposes of establishing eligibility)")
+	cmd.PersistentFlags().Uint32Var(&config.HareEligibility.ConfidenceParam, "eligibility-confidence-param",
+		config.HareEligibility.ConfidenceParam, "The relative layer (with respect to the current layer) we are confident to have consensus about")
+	cmd.PersistentFlags().Uint32Var(&config.HareEligibility.EpochOffset, "eligibility-epoch-offset",
+		config.HareEligibility.EpochOffset, "The constant layer (within an epoch) for which we traverse its view for the purpose of counting consensus active set")
 
 	/**======================== Tortoise Beacon Flags ========================== **/
 
@@ -234,7 +234,7 @@ func AddCommands(cmd *cobra.Command) {
 
 	/**========================Consensus Flags ========================== **/
 
-	cmd.PersistentFlags().IntVar(&config.LayersPerEpoch, "layers-per-epoch",
+	cmd.PersistentFlags().Uint32Var(&config.LayersPerEpoch, "layers-per-epoch",
 		config.LayersPerEpoch, "number of layers in epoch")
 
 	// Bind Flags to config

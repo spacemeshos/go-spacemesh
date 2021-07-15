@@ -107,7 +107,7 @@ var _ SmeshingProvider = (*Builder)(nil)
 type Config struct {
 	CoinbaseAccount types.Address
 	GoldenATXID     types.ATXID
-	LayersPerEpoch  uint16
+	LayersPerEpoch  uint32
 }
 
 type SmeshingStatus int32
@@ -127,7 +127,7 @@ type Builder struct {
 	nodeID            types.NodeID
 	coinbaseAccount   types.Address
 	goldenATXID       types.ATXID
-	layersPerEpoch    uint16
+	layersPerEpoch    uint32
 	db                atxDBProvider
 	net               broadcaster
 	mesh              meshProvider
@@ -162,7 +162,7 @@ func WithPoetRetryInterval(interval time.Duration) BuilderOption {
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider,
-	layersPerEpoch uint16, nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
+	layersPerEpoch uint32, nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
 	syncer syncer, store bytesStore, log log.Log, opts ...BuilderOption) *Builder {
 	b := &Builder{
 		signer:            signer,
@@ -289,7 +289,7 @@ func (b *Builder) loop(ctx context.Context) {
 	}
 
 	// ensure layer 1 has arrived
-	if err := b.waitOrStop(ctx, b.layerClock.AwaitLayer(1)); err != nil {
+	if err := b.waitOrStop(ctx, b.layerClock.AwaitLayer(types.NewLayerID(1))); err != nil {
 		return
 	}
 	b.run(ctx)
@@ -312,7 +312,7 @@ func (b *Builder) run(ctx context.Context) {
 				b.layerClock.GetCurrentLayer(),
 				b.currentEpoch(),
 				log.Err(err))
-			events.ReportAtxCreated(false, uint64(b.currentEpoch()), "")
+			events.ReportAtxCreated(false, uint32(b.currentEpoch()), "")
 
 			switch {
 			case errors.Is(err, ErrATXChallengeExpired):
@@ -455,7 +455,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	}
 
 	b.log.Event().Info("atx published", atx.Fields(size)...)
-	events.ReportAtxCreated(true, uint64(b.currentEpoch()), atx.ShortString())
+	events.ReportAtxCreated(true, uint32(b.currentEpoch()), atx.ShortString())
 
 	select {
 	case <-atxReceived:
@@ -496,7 +496,7 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 
 	nipost, err := b.nipostBuilder.BuildNIPost(ctx, hash, atxExpired)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build NIPost: %v", err)
+		return nil, fmt.Errorf("failed to build NIPost: %w", err)
 	}
 
 	b.log.With().Info("awaiting atx publication epoch",
@@ -561,12 +561,12 @@ func (b *Builder) signAndBroadcast(ctx context.Context, atx *types.ActivationTx)
 // 	atxID, pubLayerID, endTick
 func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, uint64, error) {
 	if id, err := b.db.GetPosAtxID(); err != nil {
-		return types.ATXID{}, 0, 0, fmt.Errorf("cannot find pos atx: %v", err)
+		return types.ATXID{}, types.LayerID{}, 0, fmt.Errorf("cannot find pos atx: %v", err)
 	} else if id == b.goldenATXID {
 		b.log.With().Info("using golden atx as positioning atx", id)
-		return id, 0, 0, nil
+		return id, types.LayerID{}, 0, nil
 	} else if atx, err := b.db.GetAtxHeader(id); err != nil {
-		return types.ATXID{}, 0, 0, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
+		return types.ATXID{}, types.LayerID{}, 0, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
 	} else {
 		return id, atx.PubLayerID, atx.EndTick, nil
 	}

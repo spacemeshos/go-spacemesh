@@ -191,7 +191,7 @@ func (l *Logic) AddDBs(blockDB, AtxDB, TxDB, poetDB, IvDB, tbDB database.Store) 
 
 // layerHashReqReceiver returns the layer hash for the specified layer.
 func (l *Logic) layerHashReqReceiver(ctx context.Context, msg []byte) []byte {
-	lyr := types.LayerID(util.BytesToUint64(msg))
+	lyr := types.NewLayerID(util.BytesToUint32(msg))
 	h := l.layerDB.GetLayerHash(lyr)
 	l.log.WithContext(ctx).Info("got layer hash request %v, responding with %v", lyr, h.Hex())
 	return h.Bytes()
@@ -200,7 +200,7 @@ func (l *Logic) layerHashReqReceiver(ctx context.Context, msg []byte) []byte {
 // epochATXsReqReceiver returns the ATXs for the specified epoch.
 func (l *Logic) epochATXsReqReceiver(ctx context.Context, msg []byte) []byte {
 	l.log.WithContext(ctx).Info("got epoch atxs request ")
-	lyr := types.EpochID(util.BytesToUint64(msg))
+	lyr := types.EpochID(util.BytesToUint32(msg))
 	atxs := l.atxIds.GetEpochAtxs(lyr)
 	bts, err := types.InterfaceToBytes(atxs)
 	if err != nil {
@@ -237,7 +237,7 @@ func (l *Logic) layerHashBlocksReqReceiver(ctx context.Context, msg []byte) []by
 
 // tortoiseBeaconReqReceiver returns the tortoise beacon for the given layer ID
 func (l *Logic) tortoiseBeaconReqReceiver(ctx context.Context, msg []byte) []byte {
-	epoch := types.EpochID(util.BytesToUint64(msg))
+	epoch := types.EpochID(util.BytesToUint32(msg))
 	l.log.WithContext(ctx).Info("got tortoise beacon request for epoch %v", epoch)
 
 	beacon, ok := l.tbDB.GetTortoiseBeacon(epoch)

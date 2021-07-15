@@ -92,6 +92,7 @@ const (
 	AtxBuilderLogger     = "atxBuilder"
 	GossipListener       = "gossipListener"
 	Fetcher              = "fetcher"
+	LayerFetcher         = "layerFetcher"
 )
 
 // Cmd is the cobra wrapper for the node, that allows adding parameters to it
@@ -472,7 +473,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	layerSize uint32,
 	poetClient activation.PoetProvingServiceClient,
 	vrfSigner vrfSigner,
-	layersPerEpoch uint16, clock TickProvider) error {
+	layersPerEpoch uint32, clock TickProvider) error {
 
 	app.nodeID = nodeID
 
@@ -481,7 +482,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	// This base logger must be debug level so that other, derived loggers are not a lower level.
 	lg := log.NewWithLevel(name, zap.NewAtomicLevelAt(zapcore.DebugLevel)).WithFields(nodeID)
 
-	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
+	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 
 	app.log = app.addLogger(AppLogger, lg)
 
@@ -588,7 +589,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 
-	if app.Config.HareEligibility.EpochOffset >= uint16(app.Config.BaseConfig.LayersPerEpoch) {
+	if app.Config.HareEligibility.EpochOffset >= app.Config.BaseConfig.LayersPerEpoch {
 		return fmt.Errorf("epoch offset cannot be greater than or equal to the number of layers per epoch. epoch_offset: %d. layers_per_epoch: %d",
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
@@ -601,7 +602,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
 
-	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxdb, poetDb, atxdb, processor, swarm, remoteFetchService, msh, tBeaconDB, app.addLogger(Fetcher, lg))
+	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxdb, poetDb, atxdb, processor, swarm, remoteFetchService, msh, tBeaconDB, app.addLogger(LayerFetcher, lg))
 	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, mdb.InputVector(), tBeaconDBStore)
 
 	syncerConf := syncer.Configuration{
@@ -623,8 +624,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		// TODO: this mock will be replaced by the real Tortoise beacon once
 		//   https://github.com/spacemeshos/go-spacemesh/pull/2267 is complete
 		beacon := eligibility.NewBeacon(tBeacon, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
-		hOracle = eligibility.New(beacon, atxdb, mdb, signing.VRFVerify, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
-		// TODO(moshababo): re-think and adjust args for spacePerUnit and genesisMinerWeight. The current aren't expected to work
+		hOracle = eligibility.New(beacon, atxdb, mdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
 
@@ -902,7 +902,7 @@ func (app *SpacemeshApp) stopServices() {
 	}
 
 	if app.layerFetch != nil {
-		app.log.Info("%v closing layerFetch", app.nodeID.Key)
+		app.log.Info("closing layerFetch")
 		app.layerFetch.Close()
 	}
 
@@ -1095,7 +1095,7 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) error {
 		uint32(app.Config.LayerAvgSize),
 		poetClient,
 		vrfSigner,
-		uint16(app.Config.LayersPerEpoch),
+		app.Config.LayersPerEpoch,
 		clock); err != nil {
 		return fmt.Errorf("cannot start services: %w", err)
 	}

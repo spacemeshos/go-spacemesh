@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -37,8 +38,8 @@ type Configuration struct {
 }
 
 const (
-	outOfSyncThreshold  types.LayerID = 2 // see notSynced
-	numGossipSyncLayers types.LayerID = 2 // see gossipSync
+	outOfSyncThreshold  uint32 = 2 // see notSynced
+	numGossipSyncLayers uint32 = 2 // see gossipSync
 )
 
 type syncState uint32
@@ -84,8 +85,8 @@ type Syncer struct {
 	isBusy    uint32
 	syncTimer *time.Ticker
 	// targetSyncedLayer is used to signal at which layer we can set this node to synced state
-	// access via atomic.[Load|Store]Uint64
-	targetSyncedLayer types.LayerID
+	targetSyncedLayer unsafe.Pointer
+
 	// awaitSyncedCh is the list of subscribers' channels to notify when this node enters synced state
 	awaitSyncedCh []chan struct{}
 	awaitSyncedMu sync.Mutex
@@ -101,16 +102,17 @@ type Syncer struct {
 func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, mesh *mesh.Mesh, fetcher layerFetcher, logger log.Log) *Syncer {
 	shutdownCtx, cancel := context.WithCancel(ctx)
 	return &Syncer{
-		logger:        logger,
-		conf:          conf,
-		ticker:        ticker,
-		mesh:          mesh,
-		fetcher:       fetcher,
-		syncState:     notSynced,
-		syncTimer:     time.NewTicker(conf.SyncInterval),
-		awaitSyncedCh: make([]chan struct{}, 0),
-		shutdownCtx:   shutdownCtx,
-		cancelFunc:    cancel,
+		logger:            logger,
+		conf:              conf,
+		ticker:            ticker,
+		mesh:              mesh,
+		fetcher:           fetcher,
+		syncState:         notSynced,
+		syncTimer:         time.NewTicker(conf.SyncInterval),
+		targetSyncedLayer: unsafe.Pointer(&types.LayerID{}),
+		awaitSyncedCh:     make([]chan struct{}, 0),
+		shutdownCtx:       shutdownCtx,
+		cancelFunc:        cancel,
 	}
 }
 
@@ -150,7 +152,7 @@ func (s *Syncer) IsSynced(ctx context.Context) bool {
 // Start starts the main sync loop that tries to sync data for every SyncInterval.
 func (s *Syncer) Start(ctx context.Context) {
 	s.syncOnce.Do(func() {
-		if s.ticker.GetCurrentLayer() <= 1 {
+		if s.ticker.GetCurrentLayer().Uint32() <= 1 {
 			s.setSyncState(ctx, synced)
 		}
 		for {
@@ -220,18 +222,17 @@ func (s *Syncer) setSyncerIdle() {
 
 // targetSyncedLayer is used to signal at which layer we can set this node to synced state
 func (s *Syncer) setTargetSyncedLayer(ctx context.Context, layerID types.LayerID) {
-	newSyncLayer := uint64(layerID)
-	oldSyncLayer := atomic.SwapUint64((*uint64)(&s.targetSyncedLayer), newSyncLayer)
+	oldSyncLayer := *(*types.LayerID)(atomic.SwapPointer(&s.targetSyncedLayer, unsafe.Pointer(&layerID)))
 	s.logger.WithContext(ctx).With().Info("target synced layer changed",
-		log.Uint64("from_layer", oldSyncLayer),
-		log.Uint64("to_layer", newSyncLayer),
+		log.Uint32("from_layer", oldSyncLayer.Uint32()),
+		log.Uint32("to_layer", layerID.Uint32()),
 		log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 		log.FieldNamed("latest", s.mesh.LatestLayer()),
 		log.FieldNamed("validated", s.mesh.ProcessedLayer()))
 }
 
 func (s *Syncer) getTargetSyncedLayer() types.LayerID {
-	return types.LayerID(atomic.LoadUint64((*uint64)(&s.targetSyncedLayer)))
+	return *(*types.LayerID)(atomic.LoadPointer(&s.targetSyncedLayer))
 }
 
 func (s *Syncer) synchronize(ctx context.Context) bool {
@@ -259,7 +260,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	// start a dedicated process for validation.
 	// do not use a unbuffered channel for vQueue. we don't want it to block if the receiver isn't ready. i.e.
 	// if validation for the last layer is still running
-	vQueue := make(chan *types.Layer, s.ticker.GetCurrentLayer())
+	vQueue := make(chan *types.Layer, s.ticker.GetCurrentLayer().Uint32())
 	vDone := make(chan struct{})
 	go s.startValidating(ctx, s.run, vQueue, vDone)
 	success := false
@@ -278,7 +279,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 	// using ProcessedLayer() instead of LatestLayer() so we can validate layers on a best-efforts basis.
 	// our clock starts ticking from 1 so it is safe to skip layer 0
-	for layerID := s.mesh.ProcessedLayer() + 1; layerID <= s.ticker.GetCurrentLayer(); layerID++ {
+	for layerID := s.mesh.ProcessedLayer().Add(1); !layerID.After(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {
 		var layer *types.Layer
 		var err error
 		if layer, err = s.syncLayer(ctx, layerID); err != nil {
@@ -309,16 +310,16 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 	current := s.ticker.GetCurrentLayer()
-	if current <= 1 {
+	if current.Uint32() <= 1 {
 		s.setSyncState(ctx, synced)
 		return
 	}
 	latest := s.mesh.LatestLayer()
-	if current > latest && current-latest >= outOfSyncThreshold {
+	if current.After(latest) && current.Difference(latest) >= outOfSyncThreshold {
 		s.logger.WithContext(ctx).With().Info("node is too far behind",
 			log.FieldNamed("current", current),
 			log.FieldNamed("latest", latest),
-			log.FieldNamed("behindThreshold", outOfSyncThreshold))
+			log.Uint32("behindThreshold", outOfSyncThreshold))
 		s.setSyncState(ctx, notSynced)
 	}
 }
@@ -331,12 +332,12 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	currSyncState := s.getSyncState()
 	current := s.ticker.GetCurrentLayer()
 	// if we have gossip-synced to the target synced layer, we are ready to participate in consensus
-	if currSyncState == gossipSync && s.getTargetSyncedLayer() <= current {
+	if currSyncState == gossipSync && !s.getTargetSyncedLayer().After(current) {
 		s.setSyncState(ctx, synced)
 	} else if currSyncState == notSynced {
 		// wait till s.ticker.GetCurrentLayer() + numGossipSyncLayers to participate in consensus
 		s.setSyncState(ctx, gossipSync)
-		s.setTargetSyncedLayer(ctx, current+numGossipSyncLayers)
+		s.setTargetSyncedLayer(ctx, current.Add(numGossipSyncLayers))
 	}
 }
 
@@ -391,7 +392,7 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 	// - layerID is in the current epoch
 	// - layerID is the last layer of a previous epoch
 	// i.e. for older epochs we sync ATXs once per epoch. for current epoch we sync ATXs in every layer
-	if epoch == currentEpoch || layerID == (epoch+1).FirstLayer()-1 {
+	if epoch == currentEpoch || layerID == (epoch+1).FirstLayer().Sub(1) {
 		s.logger.WithContext(ctx).With().Info("getting ATXs", epoch, layerID)
 		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
 		if err := s.fetcher.GetEpochATXs(ctx, epoch); err != nil {
@@ -413,7 +414,7 @@ func (s *Syncer) getTortoiseBeacon(ctx context.Context, layerID types.LayerID) e
 	// - layerID is in the current epoch
 	// - layerID is the last layer of a previous epoch
 	// i.e. for older epochs we sync tortoise beacons once per epoch. for current epoch we sync tortoise beacons in every layer
-	if epoch == currentEpoch || layerID == (epoch+1).FirstLayer()-1 {
+	if epoch == currentEpoch || layerID == (epoch+1).FirstLayer().Sub(1) {
 		s.logger.WithContext(ctx).With().Info("getting tortoise beacons", epoch, layerID)
 		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
 		if err := s.fetcher.GetTortoiseBeacon(ctx, epoch); err != nil {
@@ -427,11 +428,11 @@ func (s *Syncer) getTortoiseBeacon(ctx context.Context, layerID types.LayerID) e
 // always returns true if layerID is an old layer.
 // for current layer, only returns true if current layer already elapsed ValidationDelta
 func (s *Syncer) shouldValidateLayer(layerID types.LayerID) bool {
-	if layerID == 0 {
+	if layerID == types.NewLayerID(0) {
 		return false
 	}
 	current := s.ticker.GetCurrentLayer()
-	return layerID < current || time.Now().Sub(s.ticker.LayerToTime(current)) > s.conf.ValidationDelta
+	return layerID.Before(current) || time.Now().Sub(s.ticker.LayerToTime(current)) > s.conf.ValidationDelta
 }
 
 // start a dedicated process to validate layers one by one
