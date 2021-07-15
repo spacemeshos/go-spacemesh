@@ -243,7 +243,7 @@ func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID
 		}
 
 		// catch blocks that were referenced after more than one layer, and slipped through the stop condition
-		if block.LayerIndex < layer {
+		if block.LayerIndex.Before(layer) {
 			continue
 		}
 
@@ -498,7 +498,7 @@ func (m *DB) getLayerMutex(index types.LayerID) *layerMutex {
 
 // Schema: "r_<coinbase>_<smesherId>_<layerId> -> reward struct"
 func getRewardKey(l types.LayerID, account types.Address, smesherID types.NodeID) []byte {
-	str := string(getRewardKeyPrefix(account)) + "_" + smesherID.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
+	str := string(getRewardKeyPrefix(account)) + "_" + smesherID.String() + "_" + l.String()
 	return []byte(str)
 }
 
@@ -510,7 +510,7 @@ func getRewardKeyPrefix(account types.Address) []byte {
 // This function gets the reward key for a particular smesherID
 // format for the index "s_<smesherid>_<accountid>_<layerid> -> r_<accountid>_<smesherid>_<layerid> -> the actual reward"
 func getSmesherRewardKey(l types.LayerID, smesherID types.NodeID, account types.Address) []byte {
-	str := string(getSmesherRewardKeyPrefix(smesherID)) + "_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
+	str := string(getSmesherRewardKeyPrefix(smesherID)) + "_" + account.String() + "_" + l.String()
 	return []byte(str)
 }
 
@@ -525,10 +525,10 @@ type keyBuilder struct {
 }
 
 func (k *keyBuilder) WithLayerID(l types.LayerID) *keyBuilder {
-	buf := make([]byte, 8)
+	buf := make([]byte, 4)
 	// NOTE(dshulyak) big endian produces lexicographically ordered bytes.
 	// some queries can be optimizaed by using range queries instead of point queries.
-	binary.BigEndian.PutUint64(buf, l.Uint64())
+	binary.BigEndian.PutUint32(buf, l.Uint32())
 	k.buf.Write(l.Bytes())
 	return k
 }
@@ -688,7 +688,7 @@ func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err erro
 		}
 		str := string(it.Key())
 		strs := strings.Split(str, "_")
-		layer, err := strconv.ParseUint(strs[3], 10, 64)
+		layer, err := strconv.ParseUint(strs[3], 10, 32)
 		if err != nil {
 			return nil, fmt.Errorf("wrong key in db %s: %v", it.Key(), err)
 		}
@@ -698,7 +698,7 @@ func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err erro
 			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
 		}
 		rewards = append(rewards, types.Reward{
-			Layer:               types.LayerID(layer),
+			Layer:               types.NewLayerID(uint32(layer)),
 			TotalReward:         reward.TotalReward,
 			LayerRewardEstimate: reward.LayerRewardEstimate,
 			SmesherID:           reward.SmesherID,
@@ -717,7 +717,7 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 		}
 		str := string(it.Key())
 		strs := strings.Split(str, "_")
-		layer, err := strconv.ParseUint(strs[3], 10, 64)
+		layer, err := strconv.ParseUint(strs[3], 10, 32)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing db key %s: %v", it.Key(), err)
 		}
@@ -732,7 +732,7 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
 		}
 		rewards = append(rewards, types.Reward{
-			Layer:               types.LayerID(layer),
+			Layer:               types.NewLayerID(uint32(layer)),
 			TotalReward:         reward.TotalReward,
 			LayerRewardEstimate: reward.LayerRewardEstimate,
 			SmesherID:           reward.SmesherID,
@@ -962,7 +962,7 @@ func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks
 
 // LayerContextuallyValidBlocks returns the set of contextually valid block IDs for the provided layer
 func (m *DB) LayerContextuallyValidBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
-	if layer == 0 || layer == 1 {
+	if layer == types.NewLayerID(0) || layer == types.NewLayerID(1) {
 		v, err := m.LayerBlockIds(layer)
 		if err != nil {
 			m.With().Error("could not get layer block ids", layer, log.Err(err))
@@ -1042,7 +1042,7 @@ func (m *DB) Retrieve(key []byte, v interface{}) (interface{}, error) {
 
 func (m *DB) cacheWarmUpFromTo(from types.LayerID, to types.LayerID) error {
 	m.Info("warming up cache with layers %v to %v", from, to)
-	for i := from; i < to; i++ {
+	for i := from; i.Before(to); i = i.Add(1) {
 
 		select {
 		case <-m.exit:

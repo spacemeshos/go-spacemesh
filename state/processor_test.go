@@ -85,7 +85,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer),
 	}
 
-	failed, err := s.processor.ApplyTransactions(1, transactions)
+	failed, err := s.processor.ApplyTransactions(types.NewLayerID(1), transactions)
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), failed == 0)
 
@@ -179,26 +179,26 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer1),
 	}
 
-	failed, err := s.processor.ApplyTransactions(1, transactions)
+	failed, err := s.processor.ApplyTransactions(types.NewLayerID(1), transactions)
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), failed == 0)
 
-	err = s.processor.ApplyTransaction(createTransaction(s.T(), 0, obj2.address, 1, 5, signer1), 0)
+	err = s.processor.ApplyTransaction(createTransaction(s.T(), 0, obj2.address, 1, 5, signer1), types.LayerID{})
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), errNonce)
 
-	err = s.processor.ApplyTransaction(createTransaction(s.T(), obj1.Nonce(), obj2.address, 21, 5, signer1), 0)
+	err = s.processor.ApplyTransaction(createTransaction(s.T(), obj1.Nonce(), obj2.address, 21, 5, signer1), types.LayerID{})
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), errFunds)
 
 	//Test origin
-	err = s.processor.ApplyTransaction(createTransaction(s.T(), obj1.Nonce(), obj2.address, 21, 5, signing.NewEdSigner()), 0)
+	err = s.processor.ApplyTransaction(createTransaction(s.T(), obj1.Nonce(), obj2.address, 21, 5, signing.NewEdSigner()), types.LayerID{})
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), errOrigin)
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyRewards() {
-	s.processor.ApplyRewards(1, []types.Address{types.HexToAddress("aaa"),
+	s.processor.ApplyRewards(types.NewLayerID(1), []types.Address{types.HexToAddress("aaa"),
 		types.HexToAddress("bbb"),
 		types.HexToAddress("ccc"),
 		types.HexToAddress("ddd"),
@@ -233,7 +233,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer),
 	}
 
-	s.processor.ApplyTransactions(1, transactions)
+	s.processor.ApplyTransactions(types.NewLayerID(1), transactions)
 	//assert.Error(s.T(), err)
 
 	got := string(s.processor.Dump())
@@ -294,7 +294,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 		//createTransaction(obj2.Nonce(),obj2.address, obj1.address, 1),
 	}
 
-	failed, err := processor.ApplyTransactions(1, transactions)
+	failed, err := processor.ApplyTransactions(types.NewLayerID(1), transactions)
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), failed == 0)
 
@@ -303,7 +303,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 		createTransaction(s.T(), obj2.Nonce(), obj1.address, 10, 5, signer2),
 	}
 
-	failed, err = processor.ApplyTransactions(2, transactions)
+	failed, err = processor.ApplyTransactions(types.NewLayerID(2), transactions)
 	assert.True(s.T(), failed == 0)
 	assert.NoError(s.T(), err)
 
@@ -330,7 +330,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 		s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
 	}
 
-	err = processor.LoadState(1)
+	err = processor.LoadState(types.NewLayerID(1))
 	assert.NoError(s.T(), err)
 
 	got = string(processor.Dump())
@@ -413,7 +413,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 
 			log.Info("transaction %v nonce %v amount %v", t.Origin().Hex(), t.AccountNonce, t.Amount)
 		}
-		failed, err := processor.ApplyTransactions(types.LayerID(i), trns)
+		failed, err := processor.ApplyTransactions(types.NewLayerID(uint32(i)), trns)
 		assert.NoError(s.T(), err)
 		assert.True(s.T(), failed == 0)
 
@@ -423,7 +423,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 		}
 
 		if i == revertToLayer+revertAfterLayer {
-			err = processor.LoadState(types.LayerID(revertToLayer))
+			err = processor.LoadState(types.NewLayerID(uint32(revertToLayer)))
 			assert.NoError(s.T(), err)
 			got := string(processor.Dump())
 
@@ -528,7 +528,7 @@ func TestTransactionProcessor_GetStateRoot(t *testing.T) {
 	r.NotEqual(types.Hash32{}, proc.rootHash)
 
 	expectedRoot := types.Hash32{1, 2, 3}
-	r.NoError(proc.addState(expectedRoot, 1))
+	r.NoError(proc.addState(expectedRoot, types.NewLayerID(1)))
 
 	actualRoot := proc.GetStateRoot()
 	r.Equal(expectedRoot, actualRoot)
@@ -556,16 +556,16 @@ func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
 		createTransaction(t, obj1.Nonce(), obj2.address, 1, 5, signer),
 	}
 
-	_, err = processor.ApplyTransactions(1, transactions)
+	_, err = processor.ApplyTransactions(types.NewLayerID(1), transactions)
 	assert.NoError(t, err)
 
-	_, err = processor.ApplyTransactions(2, []*types.Transaction{})
+	_, err = processor.ApplyTransactions(types.NewLayerID(2), []*types.Transaction{})
 	assert.NoError(t, err)
 
-	_, err = processor.ApplyTransactions(3, []*types.Transaction{})
+	_, err = processor.ApplyTransactions(types.NewLayerID(3), []*types.Transaction{})
 	assert.NoError(t, err)
 
-	_, err = processor.GetLayerStateRoot(3)
+	_, err = processor.GetLayerStateRoot(types.NewLayerID(3))
 	assert.NoError(t, err)
 
 }

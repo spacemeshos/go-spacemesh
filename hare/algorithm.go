@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	xdr "github.com/nullstyle/go-xdr/xdr3"
@@ -58,13 +57,13 @@ const (
 
 // procReport is the termination report of the CP
 type procReport struct {
-	id        instanceID // layer id
-	set       *Set       // agreed-upon set
-	coinflip  bool       // weak coin value
-	completed bool       // whether the CP completed
+	id        types.LayerID // layer id
+	set       *Set          // agreed-upon set
+	coinflip  bool          // weak coin value
+	completed bool          // whether the CP completed
 }
 
-func (cpo procReport) ID() instanceID {
+func (cpo procReport) ID() types.LayerID {
 	return cpo.id
 }
 
@@ -180,8 +179,8 @@ type consensusProcess struct {
 	log.Log
 	State
 	util.Closer
-	instanceID        instanceID // the layer id
-	oracle            Rolacle    // the roles oracle provider
+	instanceID        types.LayerID
+	oracle            Rolacle // the roles oracle provider
 	signing           Signer
 	nid               types.NodeID
 	network           NetworkService
@@ -203,7 +202,7 @@ type consensusProcess struct {
 }
 
 // newConsensusProcess creates a new consensus process instance.
-func newConsensusProcess(cfg config.Config, instanceID instanceID, s *Set, oracle Rolacle, stateQuerier StateQuerier,
+func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, oracle Rolacle, stateQuerier StateQuerier,
 	layersPerEpoch uint16, signing Signer, nid types.NodeID, p2p NetworkService,
 	terminationReport chan TerminationOutput, ev roleValidator, logger log.Log) *consensusProcess {
 	msgsTracker := newMsgsTracker()
@@ -257,7 +256,7 @@ func (proc *consensusProcess) Start(ctx context.Context) error {
 }
 
 // ID returns the instance id.
-func (proc *consensusProcess) ID() instanceID {
+func (proc *consensusProcess) ID() types.LayerID {
 	return proc.instanceID
 }
 
@@ -464,7 +463,7 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 	proc.WithContext(ctx).With().Debug("processing message",
 		log.String("msg_type", m.InnerMsg.Type.String()),
 		log.Int("num_values", len(m.InnerMsg.Values)))
-	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(m.InnerMsg.InstanceID), 10), "reporter", "processMsg").Add(1)
+	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", m.InnerMsg.InstanceID.String(), "reporter", "processMsg").Add(1)
 
 	switch m.InnerMsg.Type {
 	case pre:

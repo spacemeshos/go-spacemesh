@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -29,18 +30,18 @@ func init() {
 
 type mockLayerTicker struct {
 	now            time.Time
-	current        types.LayerID
+	current        unsafe.Pointer
 	layerStartTime time.Time
 }
 
 func newMockLayerTicker() *mockLayerTicker {
-	return &mockLayerTicker{}
+	return &mockLayerTicker{current: unsafe.Pointer(&types.LayerID{})}
 }
 func (mlt *mockLayerTicker) advanceToLayer(layerID types.LayerID) {
-	atomic.StoreUint64((*uint64)(&mlt.current), uint64(layerID))
+	atomic.StorePointer(&mlt.current, unsafe.Pointer(&layerID))
 }
 func (mlt *mockLayerTicker) GetCurrentLayer() types.LayerID {
-	return types.LayerID(atomic.LoadUint64((*uint64)(&mlt.current)))
+	return *(*types.LayerID)(atomic.LoadPointer(&mlt.current))
 }
 func (mlt *mockLayerTicker) LayerToTime(_ types.LayerID) time.Time {
 	return mlt.layerStartTime
@@ -62,10 +63,10 @@ func newMockFetcher() *mockFetcher {
 	polled := make(map[types.LayerID]chan struct{}, numLayers)
 	hashResult := make(map[types.LayerID]chan layerfetcher.LayerHashResult, numLayers)
 	result := make(map[types.LayerID]chan layerfetcher.LayerPromiseResult, numLayers)
-	for i := 0; i <= numLayers; i++ {
-		polled[types.LayerID(i)] = make(chan struct{}, 10)
-		hashResult[types.LayerID(i)] = make(chan layerfetcher.LayerHashResult, 10)
-		result[types.LayerID(i)] = make(chan layerfetcher.LayerPromiseResult, 10)
+	for i := uint32(0); i <= uint32(numLayers); i++ {
+		polled[types.NewLayerID(i)] = make(chan struct{}, 10)
+		hashResult[types.NewLayerID(i)] = make(chan layerfetcher.LayerHashResult, 10)
+		result[types.NewLayerID(i)] = make(chan layerfetcher.LayerPromiseResult, 10)
 	}
 	return &mockFetcher{hashResult: hashResult, result: result, polled: polled, atxsError: make(map[types.EpochID]error), tbError: make(map[types.EpochID]error)}
 }
@@ -108,7 +109,7 @@ func (mf *mockFetcher) getLayerResultChan(layerID types.LayerID) chan layerfetch
 	return mf.result[layerID]
 }
 func (mf *mockFetcher) feedLayerResult(from, to types.LayerID) {
-	for i := from; i <= to; i++ {
+	for i := from; !i.After(to); i = i.Add(1) {
 		err := layerfetcher.ErrZeroLayer
 		if i == types.GetEffectiveGenesis() {
 			err = nil
@@ -133,13 +134,13 @@ func (mf *mockFetcher) setTBErrors(epoch types.EpochID, err error) {
 
 type mockValidator struct{}
 
-func (mv *mockValidator) LatestComplete() types.LayerID { return 0 }
+func (mv *mockValidator) LatestComplete() types.LayerID { return types.LayerID{} }
 func (mv *mockValidator) Persist() error                { return nil }
 func (mv *mockValidator) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
-	return layer.Index(), layer.Index() - 1
+	return layer.Index(), layer.Index().Sub(1)
 }
 func (mv *mockValidator) HandleLateBlock(block *types.Block) (types.LayerID, types.LayerID) {
-	return block.Layer(), block.Layer() - 1
+	return block.Layer(), block.Layer().Sub(1)
 }
 
 func newMemMesh(lg log.Log) *mesh.Mesh {
@@ -189,7 +190,7 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
-	ticker.advanceToLayer(1)
+	ticker.advanceToLayer(types.NewLayerID(1))
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -233,7 +234,7 @@ func TestSynchronize_AllGood(t *testing.T) {
 	}()
 
 	// allow synchronize to finish
-	mf.feedLayerResult(0, mm.LatestLayer())
+	mf.feedLayerResult(types.NewLayerID(0), mm.LatestLayer())
 	wg.Wait()
 
 	assert.True(t, syncer.ListenToGossip())
@@ -256,9 +257,9 @@ func TestSynchronize_getLayerFromPeersFailed(t *testing.T) {
 	}()
 
 	// this will cause getLayerFromPeers to return an error
-	mf.getLayerHashResultChan(1) <- layerfetcher.LayerHashResult{}
-	mf.getLayerResultChan(1) <- layerfetcher.LayerPromiseResult{
-		Layer: 1,
+	mf.getLayerHashResultChan(types.NewLayerID(1)) <- layerfetcher.LayerHashResult{}
+	mf.getLayerResultChan(types.NewLayerID(1)) <- layerfetcher.LayerPromiseResult{
+		Layer: types.NewLayerID(1),
 		Err:   errors.New("something baaahhhhhhd"),
 	}
 	wg.Wait()
@@ -273,7 +274,7 @@ func TestSynchronize_getATXsFailedEpochZero(t *testing.T) {
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
 	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
-	ticker.advanceToLayer(layersPerEpoch * 2)
+	ticker.advanceToLayer(types.NewLayerID(numGossipSyncLayers * 2))
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -283,7 +284,7 @@ func TestSynchronize_getATXsFailedEpochZero(t *testing.T) {
 	}()
 
 	mf.setATXsErrors(0, errors.New("no ATXs. in epoch 0. should be ignored"))
-	mf.feedLayerResult(0, ticker.GetCurrentLayer())
+	mf.feedLayerResult(types.NewLayerID(0), ticker.GetCurrentLayer())
 	wg.Wait()
 
 	assert.True(t, syncer.ListenToGossip())
@@ -296,7 +297,7 @@ func TestSynchronize_getATXsFailed(t *testing.T) {
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
 	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
-	ticker.advanceToLayer(layersPerEpoch * 2)
+	ticker.advanceToLayer(types.NewLayerID(layersPerEpoch * 2))
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -306,7 +307,7 @@ func TestSynchronize_getATXsFailed(t *testing.T) {
 	}()
 
 	mf.setATXsErrors(1, errors.New("no ATXs. should fail sync"))
-	mf.feedLayerResult(0, ticker.GetCurrentLayer())
+	mf.feedLayerResult(types.NewLayerID(0), ticker.GetCurrentLayer())
 	wg.Wait()
 
 	assert.False(t, syncer.ListenToGossip())
@@ -319,7 +320,7 @@ func TestSynchronize_getTBFailed(t *testing.T) {
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
 	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
-	ticker.advanceToLayer(layersPerEpoch * 3)
+	ticker.advanceToLayer(types.NewLayerID(layersPerEpoch * 3))
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -329,7 +330,7 @@ func TestSynchronize_getTBFailed(t *testing.T) {
 	}()
 
 	mf.setTBErrors(3, errors.New("no tortoise beacon: should fail sync"))
-	mf.feedLayerResult(0, ticker.GetCurrentLayer())
+	mf.feedLayerResult(types.NewLayerID(0), ticker.GetCurrentLayer())
 	wg.Wait()
 
 	assert.False(t, syncer.ListenToGossip())
@@ -352,7 +353,7 @@ func TestSynchronize_SyncZeroBlockFailed(t *testing.T) {
 	}()
 
 	gLayer := types.GetEffectiveGenesis()
-	mf.feedLayerResult(0, gLayer-1)
+	mf.feedLayerResult(types.NewLayerID(0), gLayer.Sub(1))
 	// genesis block has data. this LayerPromiseResult will cause SetZeroBlockLayer() to fail
 	mf.getLayerHashResultChan(gLayer) <- layerfetcher.LayerHashResult{}
 	mf.getLayerResultChan(gLayer) <- layerfetcher.LayerPromiseResult{
@@ -384,13 +385,14 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 		assert.True(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
-	mf.feedLayerResult(1, 1)
+	firstLayer := types.NewLayerID(1)
+	mf.feedLayerResult(firstLayer, firstLayer)
 	// wait till layer 1's content is requested to check whether sync state has changed
-	<-mf.getLayerPollChan(1)
+	<-mf.getLayerPollChan(firstLayer)
 	// the node should remain not synced and not gossiping
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
-	mf.feedLayerResult(2, current)
+	mf.feedLayerResult(types.NewLayerID(2), current)
 	wg.Wait()
 	// node should be in gossip sync state
 	assert.True(t, syncer.ListenToGossip())
@@ -419,28 +421,29 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 		assert.True(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
-	mf.feedLayerResult(1, 1)
+	firstLayer := types.NewLayerID(1)
+	mf.feedLayerResult(firstLayer, firstLayer)
 	// wait till layer 1's content is requested to check whether sync state has changed
-	<-mf.getLayerPollChan(1)
+	<-mf.getLayerPollChan(firstLayer)
 	// the node should remain not synced and not gossiping
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
-	mf.feedLayerResult(2, current)
+	mf.feedLayerResult(types.NewLayerID(2), current)
 	wg.Wait()
 	// node should be in gossip sync state
 	assert.True(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
 	// cause the node to be out of sync again
-	newCurrent := current + 2
+	newCurrent := current.Add(2)
 	ticker.advanceToLayer(newCurrent)
 	wg.Add(1)
 	go func() {
 		assert.True(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
-	mf.feedLayerResult(current+1, current+1)
-	<-mf.getLayerPollChan(current + 1)
+	mf.feedLayerResult(current.Add(1), current.Add(1))
+	<-mf.getLayerPollChan(current.Add(1))
 	// the node should falls to notSynced
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
@@ -483,21 +486,22 @@ func TestFromSyncedToNotSynced(t *testing.T) {
 	wg.Wait()
 
 	// cause the syncer to get out of synced and then wait again
-	current := mm.LatestLayer() + outOfSyncThreshold
+	current := mm.LatestLayer().Add(outOfSyncThreshold)
 	ticker.advanceToLayer(current)
 	wg.Add(1)
 	go func() {
 		assert.True(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
-	mf.feedLayerResult(1, 1)
+	firstLayer := types.NewLayerID(1)
+	mf.feedLayerResult(firstLayer, firstLayer)
 	// wait till layer 1's content is requested to check whether sync state has changed
-	<-mf.getLayerPollChan(1)
+	<-mf.getLayerPollChan(firstLayer)
 	// the node should realized it's behind now and set the node to be notSynced
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
-	mf.feedLayerResult(2, current)
+	mf.feedLayerResult(types.NewLayerID(2), current)
 	wg.Wait()
 	// node should be in gossip sync state
 	assert.True(t, syncer.ListenToGossip())
@@ -511,18 +515,18 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, syncer *Syncer, mlt 
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
 	// next layer will be still gossip syncing
-	assert.Equal(t, types.LayerID(2), numGossipSyncLayers)
-	assert.Equal(t, current+numGossipSyncLayers, syncer.getTargetSyncedLayer())
+	assert.Equal(t, types.NewLayerID(2).Uint32(), numGossipSyncLayers)
+	assert.Equal(t, current.Add(numGossipSyncLayers), syncer.getTargetSyncedLayer())
 
 	var wg sync.WaitGroup
-	current++
+	current = current.Add(1)
 	mlt.advanceToLayer(current)
 	wg.Add(1)
 	go func() {
 		assert.True(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
-	mf.feedLayerResult(syncer.mesh.ProcessedLayer()+1, current)
+	mf.feedLayerResult(syncer.mesh.ProcessedLayer().Add(1), current)
 	wg.Wait()
 	assert.True(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
@@ -530,14 +534,14 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, syncer *Syncer, mlt 
 	// done one full layer of gossip sync, now it is synced
 	syncedCh := make(chan struct{})
 	syncer.RegisterChForSynced(context.TODO(), syncedCh)
-	current++
+	current = current.Add(1)
 	mlt.advanceToLayer(current)
 	wg.Add(1)
 	go func() {
 		assert.True(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
-	mf.feedLayerResult(syncer.mesh.ProcessedLayer()+1, current)
+	mf.feedLayerResult(syncer.mesh.ProcessedLayer().Add(1), current)
 	<-syncedCh
 	assert.True(t, syncer.ListenToGossip())
 	assert.True(t, syncer.IsSynced(context.TODO()))
@@ -563,18 +567,18 @@ func TestShouldValidateLayer(t *testing.T) {
 	lg := log.NewDefault("syncer")
 	ticker := newMockLayerTicker()
 	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), newMockFetcher(), lg)
-	assert.False(t, syncer.shouldValidateLayer(0))
+	assert.False(t, syncer.shouldValidateLayer(types.NewLayerID(0)))
 
-	ticker.advanceToLayer(3)
-	assert.False(t, syncer.shouldValidateLayer(0))
-	assert.True(t, syncer.shouldValidateLayer(1))
-	assert.True(t, syncer.shouldValidateLayer(2))
+	ticker.advanceToLayer(types.NewLayerID(3))
+	assert.False(t, syncer.shouldValidateLayer(types.NewLayerID(0)))
+	assert.True(t, syncer.shouldValidateLayer(types.NewLayerID(1)))
+	assert.True(t, syncer.shouldValidateLayer(types.NewLayerID(2)))
 	// current layer
 	ticker.layerStartTime = time.Now()
-	assert.False(t, syncer.shouldValidateLayer(3))
+	assert.False(t, syncer.shouldValidateLayer(types.NewLayerID(3)))
 	// but if current layer has elapsed ValidationDelta ms, we will validate
 	ticker.layerStartTime = time.Now().Add(-conf.ValidationDelta)
-	assert.True(t, syncer.shouldValidateLayer(3))
+	assert.True(t, syncer.shouldValidateLayer(types.NewLayerID(3)))
 }
 
 func TestGetATXsCurrentEpoch(t *testing.T) {
@@ -587,31 +591,31 @@ func TestGetATXsCurrentEpoch(t *testing.T) {
 	mf.setATXsErrors(1, errors.New("no ATXs for epoch 1, error out"))
 
 	// epoch 0
-	ticker.advanceToLayer(2)
+	ticker.advanceToLayer(types.NewLayerID(2))
 	// epoch 0, ATXs not requested at any layer
-	assert.NoError(t, syncer.getATXs(context.TODO(), 0))
+	assert.NoError(t, syncer.getATXs(context.TODO(), types.NewLayerID(0)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.atxsCalls))
-	assert.NoError(t, syncer.getATXs(context.TODO(), 1))
+	assert.NoError(t, syncer.getATXs(context.TODO(), types.NewLayerID(1)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.atxsCalls))
-	assert.NoError(t, syncer.getATXs(context.TODO(), 2))
+	assert.NoError(t, syncer.getATXs(context.TODO(), types.NewLayerID(2)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.atxsCalls))
 
 	// epoch 1
-	ticker.advanceToLayer(5)
-	assert.Error(t, syncer.getATXs(context.TODO(), 3))
+	ticker.advanceToLayer(types.NewLayerID(5))
+	assert.Error(t, syncer.getATXs(context.TODO(), types.NewLayerID(3)))
 	assert.Equal(t, uint32(1), atomic.LoadUint32(&mf.atxsCalls))
-	assert.Error(t, syncer.getATXs(context.TODO(), 4))
+	assert.Error(t, syncer.getATXs(context.TODO(), types.NewLayerID(4)))
 	assert.Equal(t, uint32(2), atomic.LoadUint32(&mf.atxsCalls))
-	assert.Error(t, syncer.getATXs(context.TODO(), 5))
+	assert.Error(t, syncer.getATXs(context.TODO(), types.NewLayerID(5)))
 	assert.Equal(t, uint32(3), atomic.LoadUint32(&mf.atxsCalls))
 
 	// epoch 2
-	ticker.advanceToLayer(8)
-	assert.NoError(t, syncer.getATXs(context.TODO(), 6))
+	ticker.advanceToLayer(types.NewLayerID(8))
+	assert.NoError(t, syncer.getATXs(context.TODO(), types.NewLayerID(6)))
 	assert.Equal(t, uint32(4), atomic.LoadUint32(&mf.atxsCalls))
-	assert.NoError(t, syncer.getATXs(context.TODO(), 7))
+	assert.NoError(t, syncer.getATXs(context.TODO(), types.NewLayerID(7)))
 	assert.Equal(t, uint32(5), atomic.LoadUint32(&mf.atxsCalls))
-	assert.NoError(t, syncer.getATXs(context.TODO(), 8))
+	assert.NoError(t, syncer.getATXs(context.TODO(), types.NewLayerID(8)))
 	assert.Equal(t, uint32(6), atomic.LoadUint32(&mf.atxsCalls))
 }
 
@@ -624,30 +628,30 @@ func TestGetATXsOldAndCurrentEpoch(t *testing.T) {
 	mf.setATXsErrors(0, errors.New("no ATXs for epoch 0, expected for epoch 0"))
 	mf.setATXsErrors(1, errors.New("no ATXs for epoch 1"))
 
-	ticker.advanceToLayer(8) // epoch 2
+	ticker.advanceToLayer(types.NewLayerID(8)) // epoch 2
 	// epoch 0, ATXs not requested at any layer
-	assert.NoError(t, syncer.getATXs(context.TODO(), 0))
+	assert.NoError(t, syncer.getATXs(context.TODO(), types.NewLayerID(0)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.atxsCalls))
-	assert.NoError(t, syncer.getATXs(context.TODO(), 1))
+	assert.NoError(t, syncer.getATXs(context.TODO(), types.NewLayerID(1)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.atxsCalls))
-	assert.NoError(t, syncer.getATXs(context.TODO(), 2))
+	assert.NoError(t, syncer.getATXs(context.TODO(), types.NewLayerID(2)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.atxsCalls))
 
 	// epoch 1, has error but not requested at layer 3/4
-	assert.NoError(t, syncer.getATXs(context.TODO(), 3))
+	assert.NoError(t, syncer.getATXs(context.TODO(), types.NewLayerID(3)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.atxsCalls))
-	assert.NoError(t, syncer.getATXs(context.TODO(), 4))
+	assert.NoError(t, syncer.getATXs(context.TODO(), types.NewLayerID(4)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.atxsCalls))
 	// will be requested at layer 5
-	assert.Error(t, syncer.getATXs(context.TODO(), 5))
+	assert.Error(t, syncer.getATXs(context.TODO(), types.NewLayerID(5)))
 	assert.Equal(t, uint32(1), atomic.LoadUint32(&mf.atxsCalls))
 
 	// epoch 2 is the current epoch. ATXs will be requested at every layer
-	assert.NoError(t, syncer.getATXs(context.TODO(), 6))
+	assert.NoError(t, syncer.getATXs(context.TODO(), types.NewLayerID(6)))
 	assert.Equal(t, uint32(2), atomic.LoadUint32(&mf.atxsCalls))
-	assert.NoError(t, syncer.getATXs(context.TODO(), 7))
+	assert.NoError(t, syncer.getATXs(context.TODO(), types.NewLayerID(7)))
 	assert.Equal(t, uint32(3), atomic.LoadUint32(&mf.atxsCalls))
-	assert.NoError(t, syncer.getATXs(context.TODO(), 8))
+	assert.NoError(t, syncer.getATXs(context.TODO(), types.NewLayerID(8)))
 	assert.Equal(t, uint32(4), atomic.LoadUint32(&mf.atxsCalls))
 }
 
@@ -661,40 +665,40 @@ func TestGetTBCurrentEpoch(t *testing.T) {
 	mf.setTBErrors(1, errors.New("no tortoise beacon for epoch 1, expected for epoch 1"))
 	mf.setTBErrors(3, errors.New("no tortoise beacon for epoch 3, error out"))
 
-	ticker.advanceToLayer(2)
+	ticker.advanceToLayer(types.NewLayerID(2))
 	// epoch 0, tortoise beacon not requested at any layer
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 0))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(0)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 1))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(1)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 2))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(2)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
 
 	// epoch 1, still genesis, tortoise beacon not requested still
-	ticker.advanceToLayer(5)
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 3))
+	ticker.advanceToLayer(types.NewLayerID(5))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(3)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 4))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(4)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 5))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(5)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
 
 	// epoch 2, no error
-	ticker.advanceToLayer(8)
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 6))
+	ticker.advanceToLayer(types.NewLayerID(8))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(6)))
 	assert.Equal(t, uint32(1), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 7))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(7)))
 	assert.Equal(t, uint32(2), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 8))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(8)))
 	assert.Equal(t, uint32(3), atomic.LoadUint32(&mf.tbCalls))
 
 	// epoch 3
-	ticker.advanceToLayer(11)
-	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), 9))
+	ticker.advanceToLayer(types.NewLayerID(11))
+	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(9)))
 	assert.Equal(t, uint32(4), atomic.LoadUint32(&mf.tbCalls))
-	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), 10))
+	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(10)))
 	assert.Equal(t, uint32(5), atomic.LoadUint32(&mf.tbCalls))
-	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), 11))
+	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(11)))
 	assert.Equal(t, uint32(6), atomic.LoadUint32(&mf.tbCalls))
 }
 
@@ -708,36 +712,36 @@ func TestGetTBOldAndCurrentEpoch(t *testing.T) {
 	mf.setTBErrors(1, errors.New("no tortoise beacon for epoch 1, expected for epoch 1"))
 	mf.setTBErrors(3, errors.New("no tortoise beacon for epoch 3, error out"))
 
-	ticker.advanceToLayer(11) // epoch 3
+	ticker.advanceToLayer(types.NewLayerID(11)) // epoch 3
 	// epoch 0, tortoise beacon not requested
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 0))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(0)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 1))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(1)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 2))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(2)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
 
 	// epoch 1, tortoise beacon still not requested
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 3))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(3)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 4))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(4)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 5))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(5)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
 
 	// epoch 2, tortoise beacon will be requested at the last layer
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 6))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(6)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 7))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(7)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.tbCalls))
-	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), 8))
+	assert.NoError(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(8)))
 	assert.Equal(t, uint32(1), atomic.LoadUint32(&mf.tbCalls))
 
 	// epoch 3 is the current epoch. ATXs will be requested at every layer
-	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), 9))
+	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(9)))
 	assert.Equal(t, uint32(2), atomic.LoadUint32(&mf.tbCalls))
-	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), 10))
+	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(10)))
 	assert.Equal(t, uint32(3), atomic.LoadUint32(&mf.tbCalls))
-	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), 11))
+	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(11)))
 	assert.Equal(t, uint32(4), atomic.LoadUint32(&mf.tbCalls))
 }

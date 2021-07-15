@@ -3,11 +3,12 @@ package state
 import (
 	"errors"
 	"fmt"
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/rand"
-	"sync"
 )
 
 // TxMempool is a struct that holds txs received via gossip network
@@ -97,7 +98,7 @@ func getRandIdxs(numOfTxs, spaceSize int) map[uint64]struct{} {
 func (t *TxMempool) Put(id types.TransactionID, tx *types.Transaction) {
 	t.mu.Lock()
 	t.txs[id] = tx
-	t.getOrCreate(tx.Origin()).Add(0, tx)
+	t.getOrCreate(tx.Origin()).Add(types.LayerID{}, tx)
 	t.addToAddr(tx.Origin(), id)
 	t.addToAddr(tx.Recipient, id)
 	t.mu.Unlock()

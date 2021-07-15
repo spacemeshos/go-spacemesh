@@ -45,7 +45,6 @@ func NewManualClock(genesisTime time.Time) *ManualClock {
 	t := &ManualClock{
 		subs:          make(map[timesync.LayerTimer]struct{}),
 		layerChannels: make(map[types.LayerID]chan struct{}),
-		currentLayer:  0, // genesis
 		genesisTime:   genesisTime,
 	}
 	return t
@@ -73,7 +72,7 @@ func init() {
 func (clk *ManualClock) AwaitLayer(layerID types.LayerID) chan struct{} {
 	clk.m.Lock()
 	defer clk.m.Unlock()
-	if layerID <= clk.currentLayer {
+	if !layerID.After(clk.currentLayer) {
 		return closedChannel
 	}
 	if ch, found := clk.layerChannels[layerID]; found {
@@ -98,7 +97,7 @@ func (clk *ManualClock) Tick() {
 	clk.m.Lock()
 	defer clk.m.Unlock()
 
-	clk.currentLayer++
+	clk.currentLayer = clk.currentLayer.Add(1)
 	if ch, found := clk.layerChannels[clk.currentLayer]; found {
 		close(ch)
 		delete(clk.layerChannels, clk.currentLayer)
@@ -168,7 +167,7 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 
 	cfg.TortoiseBeacon = tortoisebeacon.TestConfig()
 
-	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
+	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
 	return cfg
 }
@@ -239,7 +238,8 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, storePath 
 		return nil, err
 	}
 
-	err = smApp.initServices(context.TODO(), log.AppLog, nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
+	err = smApp.initServices(context.TODO(), log.AppLog, nodeID, swarm, dbStorepath, edSgn, false, hareOracle,
+		uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock)
 	if err != nil {
 		return nil, err
 	}
@@ -411,7 +411,7 @@ loop:
 			startLayer = time.Now()
 			clock.Tick()
 
-			if apps[0].mesh.LatestLayer() >= types.LayerID(runTillLayer) {
+			if !apps[0].mesh.LatestLayer().Before(types.NewLayerID(runTillLayer)) {
 				break loop
 			}
 			time.Sleep(200 * time.Millisecond)

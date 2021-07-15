@@ -37,7 +37,7 @@ func (s GlobalStateService) GlobalStateHash(context.Context, *pb.GlobalStateHash
 	log.Info("GRPC GlobalStateService.GlobalStateHash")
 	return &pb.GlobalStateHashResponse{Response: &pb.GlobalStateHash{
 		RootHash: s.Mesh.GetStateRoot().Bytes(),
-		Layer:    &pb.LayerNumber{Number: uint32(s.Mesh.LatestLayerInState())},
+		Layer:    &pb.LayerNumber{Number: s.Mesh.LatestLayerInState().Uint32()},
 	}}, nil
 }
 
@@ -131,7 +131,7 @@ func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDa
 		for _, r := range dbRewards {
 			res.AccountItem = append(res.AccountItem, &pb.AccountData{Datum: &pb.AccountData_Reward{
 				Reward: &pb.Reward{
-					Layer:       &pb.LayerNumber{Number: uint32(r.Layer)},
+					Layer:       &pb.LayerNumber{Number: r.Layer.Uint32()},
 					Total:       &pb.Amount{Value: r.TotalReward},
 					LayerReward: &pb.Amount{Value: r.LayerRewardEstimate},
 					// Leave this out for now as this is changing
@@ -213,7 +213,7 @@ func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDa
 	res := &pb.SmesherDataQueryResponse{}
 	for _, r := range dbRewards {
 		res.Rewards = append(res.Rewards, &pb.Reward{
-			Layer:       &pb.LayerNumber{Number: uint32(r.Layer)},
+			Layer:       &pb.LayerNumber{Number: r.Layer.Uint32()},
 			Total:       &pb.Amount{Value: r.TotalReward},
 			LayerReward: &pb.Amount{Value: r.LayerRewardEstimate},
 			// Leave this out for now as this is changing
@@ -323,7 +323,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 			if reward.Coinbase == addr {
 				if err := stream.Send(&pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_Reward{
 					Reward: &pb.Reward{
-						Layer:       &pb.LayerNumber{Number: uint32(reward.Layer)},
+						Layer:       &pb.LayerNumber{Number: reward.Layer.Uint32()},
 						Total:       &pb.Amount{Value: reward.Total},
 						LayerReward: &pb.Amount{Value: reward.LayerReward},
 						// Leave this out for now as this is changing
@@ -353,7 +353,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 						//Result:      receipt.Result,
 						GasUsed: receipt.GasUsed,
 						Fee:     &pb.Amount{Value: receipt.Fee},
-						Layer:   &pb.LayerNumber{Number: uint32(receipt.Layer)},
+						Layer:   &pb.LayerNumber{Number: receipt.Layer.Uint32()},
 						Index:   receipt.Index,
 						//SvmData: nil,
 					},
@@ -398,7 +398,7 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 			if comp := bytes.Compare(reward.Smesher.ToBytes(), smesherIDBytes); comp == 0 {
 				if err := stream.Send(&pb.SmesherRewardStreamResponse{
 					Reward: &pb.Reward{
-						Layer:       &pb.LayerNumber{Number: uint32(reward.Layer)},
+						Layer:       &pb.LayerNumber{Number: reward.Layer.Uint32()},
 						Total:       &pb.Amount{Value: reward.Total},
 						LayerReward: &pb.Amount{Value: reward.LayerReward},
 						// Leave this out for now as this is changing
@@ -497,7 +497,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			}
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Reward{
 				Reward: &pb.Reward{
-					Layer:       &pb.LayerNumber{Number: uint32(reward.Layer)},
+					Layer:       &pb.LayerNumber{Number: reward.Layer.Uint32()},
 					Total:       &pb.Amount{Value: reward.Total},
 					LayerReward: &pb.Amount{Value: reward.LayerReward},
 					// Leave this out for now as this is changing
@@ -524,7 +524,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 					//Result:      receipt.Result,
 					GasUsed: receipt.GasUsed,
 					Fee:     &pb.Amount{Value: receipt.Fee},
-					Layer:   &pb.LayerNumber{Number: uint32(receipt.Layer)},
+					Layer:   &pb.LayerNumber{Number: receipt.Layer.Uint32()},
 					Index:   receipt.Index,
 					//SvmData: nil,
 				},
@@ -548,7 +548,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_GlobalState{
 				GlobalState: &pb.GlobalStateHash{
 					RootHash: root.Bytes(),
-					Layer:    &pb.LayerNumber{Number: uint32(layer.Layer.Index())},
+					Layer:    &pb.LayerNumber{Number: layer.Layer.Index().Uint32()},
 				},
 			}}}); err != nil {
 				return err
