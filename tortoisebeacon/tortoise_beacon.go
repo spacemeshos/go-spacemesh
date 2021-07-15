@@ -323,8 +323,7 @@ func (tb *TortoiseBeacon) listenLayers(ctx context.Context) {
 		case <-tb.CloseChannel():
 			return
 		case layer := <-tb.layerTicker:
-			tb.Log.With().Debug("Received tick",
-				log.Uint64("layer", uint64(layer)))
+			tb.Log.With().Debug("Received tick", layer)
 
 			go tb.handleLayer(ctx, layer)
 		}
@@ -335,10 +334,10 @@ func (tb *TortoiseBeacon) listenLayers(ctx context.Context) {
 // this function triggers the start of new CPs.
 func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) {
 	tb.layerMu.Lock()
-	if layer > tb.lastLayer {
+	if layer.After(tb.lastLayer) {
 		tb.Log.With().Debug("Updating layer",
-			log.Uint64("old_value", uint64(tb.lastLayer)),
-			log.Uint64("new_value", uint64(layer)))
+			log.Uint32("old_value", tb.lastLayer.Uint32()),
+			log.Uint32("new_value", layer.Uint32()))
 
 		tb.lastLayer = layer
 	}
@@ -349,20 +348,20 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 
 	if !layer.FirstInEpoch() {
 		tb.Log.With().Debug("skipping layer because it's not first in this epoch",
-			log.Uint64("epoch_id", uint64(epoch)),
-			log.Uint64("layer_id", uint64(layer)))
+			log.Uint32("epoch_id", uint32(epoch)),
+			log.Uint32("layer_id", layer.Uint32()))
 
 		return
 	}
 
 	tb.Log.With().Debug("Layer is first in epoch, proceeding",
-		log.Uint64("layer", uint64(layer)))
+		log.Uint32("layer", layer.Uint32()))
 
 	tb.seenEpochsMu.Lock()
 	if _, ok := tb.seenEpochs[epoch]; ok {
 		tb.Log.With().Error("already seen this epoch",
-			log.Uint64("epoch_id", uint64(epoch)),
-			log.Uint64("layer_id", uint64(layer)))
+			log.Uint32("epoch_id", uint32(epoch)),
+			log.Uint32("layer_id", layer.Uint32()))
 
 		tb.seenEpochsMu.Unlock()
 
@@ -373,8 +372,8 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 	tb.seenEpochsMu.Unlock()
 
 	tb.Log.With().Debug("tortoise beacon got tick, waiting until other nodes have the same epoch",
-		log.Uint64("layer", uint64(layer)),
-		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint32("layer", layer.Uint32()),
+		log.Uint32("epoch_id", uint32(epoch)),
 		log.String("wait_time", tb.waitAfterEpochStart.String()))
 
 	epochStartTimer := time.NewTimer(tb.waitAfterEpochStart)

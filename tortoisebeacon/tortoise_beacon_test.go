@@ -71,7 +71,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layer := types.LayerID(3)
+	layer := types.NewLayerID(3)
 
 	edSgn := signing.NewEdSigner()
 	edPubkey := edSgn.PublicKey()
@@ -111,7 +111,7 @@ func awaitLayer(clock *timesync.TimeClock, epoch types.LayerID) {
 
 	for layer := range layerTicker {
 		// Wait until required epoch passes.
-		if layer > epoch {
+		if layer.After(epoch) {
 			return
 		}
 	}

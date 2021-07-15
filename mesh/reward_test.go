@@ -64,7 +64,7 @@ func ConfigTst() Config {
 
 func getMeshWithMapState(id string, s txProcessor) (*Mesh, *AtxDbMock) {
 	atxDb := NewAtxDbMock()
-	lg := log.NewDefault(id)
+	lg := log.AppLog.WithName(id)
 	mshDb := NewMemMeshDB(lg)
 	mshDb.contextualValidity = &ContextualValidityMock{}
 	return NewMesh(mshDb, atxDb, ConfigTst(), &MeshValidatorMock{}, newMockTxMemPool(), s, lg), atxDb
@@ -81,7 +81,7 @@ func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs in
 		totalFee += fee
 		txs = append(txs, tx)
 	}
-	err := mesh.writeTransactions(0, txs)
+	err := mesh.writeTransactions(types.NewLayerID(0), txs)
 	assert.NoError(t, err)
 	return totalFee
 }
@@ -96,34 +96,34 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	defer layers.Close()
 
 	var totalFee int64
-	block1 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
+	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
 
 	coinbase1 := types.HexToAddress("0xaaa")
-	atx := newActivationTx(types.NodeID{Key: "1", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, goldenATXID, coinbase1, 10, []types.BlockID{}, &types.NIPST{})
+	atx := newActivationTx(types.NodeID{Key: "1", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, types.NewLayerID(1), 0, goldenATXID, coinbase1, 10, []types.BlockID{}, &types.NIPST{})
 	atxDB.AddAtx(atx.ID(), atx)
 	block1.ATXID = atx.ID()
 	totalFee += addTransactionsWithFee(t, layers.DB, block1, 15, 7)
 
-	block2 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
+	block2 := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
 
 	coinbase2 := types.HexToAddress("0xbbb")
-	atx = newActivationTx(types.NodeID{Key: "2", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, goldenATXID, coinbase2, 10, []types.BlockID{}, &types.NIPST{})
+	atx = newActivationTx(types.NodeID{Key: "2", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, types.NewLayerID(1), 0, goldenATXID, coinbase2, 10, []types.BlockID{}, &types.NIPST{})
 	atxDB.AddAtx(atx.ID(), atx)
 	block2.ATXID = atx.ID()
 	totalFee += addTransactionsWithFee(t, layers.DB, block2, 13, rand.Int63n(100))
 
-	block3 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
+	block3 := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
 
 	coinbase3 := types.HexToAddress("0xccc")
-	atx = newActivationTx(types.NodeID{Key: "3", VRFPublicKey: []byte("bbbbb")}, 0, goldenATXID, 1, 0, goldenATXID, coinbase3, 10, []types.BlockID{}, &types.NIPST{})
+	atx = newActivationTx(types.NodeID{Key: "3", VRFPublicKey: []byte("bbbbb")}, 0, goldenATXID, types.NewLayerID(1), 0, goldenATXID, coinbase3, 10, []types.BlockID{}, &types.NIPST{})
 	atxDB.AddAtx(atx.ID(), atx)
 	block3.ATXID = atx.ID()
 	totalFee += addTransactionsWithFee(t, layers.DB, block3, 17, rand.Int63n(100))
 
-	block4 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
+	block4 := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
 
 	coinbase4 := types.HexToAddress("0xddd")
-	atx = newActivationTx(types.NodeID{Key: "4", VRFPublicKey: []byte("bbbbb")}, 0, goldenATXID, 1, 0, goldenATXID, coinbase4, 10, []types.BlockID{}, &types.NIPST{})
+	atx = newActivationTx(types.NodeID{Key: "4", VRFPublicKey: []byte("bbbbb")}, 0, goldenATXID, types.NewLayerID(1), 0, goldenATXID, coinbase4, 10, []types.BlockID{}, &types.NIPST{})
 	atxDB.AddAtx(atx.ID(), atx)
 	block4.ATXID = atx.ID()
 	totalFee += addTransactionsWithFee(t, layers.DB, block4, 16, rand.Int63n(100))
@@ -136,7 +136,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 
 	params := NewTestRewardParams()
 
-	l, err := layers.GetLayer(1)
+	l, err := layers.GetLayer(types.NewLayerID(1))
 	assert.NoError(t, err)
 	layers.accumulateRewards(l, params)
 	totalRewardsCost := totalFee + params.BaseReward.Int64()
@@ -157,7 +157,7 @@ func createLayer(t testing.TB, mesh *Mesh, id types.LayerID, numOfBlocks, maxTra
 		block1 := types.NewExistingBlock(id, []byte(rand.String(8)), nil)
 		nodeID := types.NodeID{Key: strconv.Itoa(i), VRFPublicKey: []byte("bbbbb")}
 		coinbase := types.HexToAddress(nodeID.Key)
-		atx := newActivationTx(nodeID, 0, goldenATXID, 1, 0, goldenATXID, coinbase, 10, []types.BlockID{}, &types.NIPST{})
+		atx := newActivationTx(nodeID, 0, goldenATXID, types.NewLayerID(1), 0, goldenATXID, coinbase, 10, []types.BlockID{}, &types.NIPST{})
 		atxDB.AddAtx(atx.ID(), atx)
 		block1.ATXID = atx.ID()
 
@@ -180,15 +180,15 @@ func TestMesh_integration(t *testing.T) {
 	defer layers.Close()
 
 	var l3Rewards int64
-	for i := 0; i < numOfLayers; i++ {
-		reward, _ := createLayer(t, layers, types.LayerID(i), numOfBlocks, maxTxs, atxDB)
+	for i := 1; i <= numOfLayers; i++ {
+		reward, _ := createLayer(t, layers, types.NewLayerID(uint32(i)), numOfBlocks, maxTxs, atxDB)
 		// rewards are applied to layers in the past according to the reward maturity param
 		if i == 3 {
 			l3Rewards = reward
 			log.Info("reward %v", l3Rewards)
 		}
 
-		l, err := layers.GetLayer(types.LayerID(i))
+		l, err := layers.GetLayer(types.NewLayerID(uint32(i)))
 		assert.NoError(t, err)
 		layers.ValidateLayer(l)
 	}
@@ -212,9 +212,9 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	mesh, atxDB := getMeshWithMapState("t1", s)
 	defer mesh.Close()
 
-	for i := 0; i < numOfLayers; i++ {
-		createLayer(t, mesh, types.LayerID(i), numOfBlocks, maxTxs, atxDB)
-		l, err := mesh.GetLayer(types.LayerID(i))
+	for i := 1; i <= numOfLayers; i++ {
+		createLayer(t, mesh, types.NewLayerID(uint32(i)), numOfBlocks, maxTxs, atxDB)
+		l, err := mesh.GetLayer(types.NewLayerID(uint32(i)))
 		assert.NoError(t, err)
 		mesh.ValidateLayer(l)
 	}
@@ -223,15 +223,15 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	mesh2, atxDB2 := getMeshWithMapState("t2", s2)
 
 	// this should be played until numOfLayers -1 if we want to compare states
-	for i := 0; i < numOfLayers-1; i++ {
-		blockIds := copyLayer(t, mesh, mesh2, atxDB2, types.LayerID(i))
-		mesh2.HandleValidatedLayer(context.TODO(), types.LayerID(i), blockIds)
+	for i := 1; i <= numOfLayers-1; i++ {
+		blockIds := copyLayer(t, mesh, mesh2, atxDB2, types.NewLayerID(uint32(i)))
+		mesh2.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(i)), blockIds)
 	}
 	// test states are the same when one input is from tortoise and the other from hare
 	assert.Equal(t, s.Txs, s2.Txs)
 
-	for i := 0; i < numOfLayers; i++ {
-		l, err := mesh.GetLayer(types.LayerID(i))
+	for i := 1; i <= numOfLayers; i++ {
+		l, err := mesh.GetLayer(types.NewLayerID(uint32(i)))
 		assert.NoError(t, err)
 		mesh2.ValidateLayer(l)
 	}
@@ -239,7 +239,7 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	assert.ObjectsAreEqualValues(s.Txs, s2.Txs)
 
 	// test state is the same after late block
-	layer4, err := mesh.GetLayer(4)
+	layer4, err := mesh.GetLayer(types.NewLayerID(4))
 	assert.NoError(t, err)
 
 	blk := layer4.Blocks()[0]
@@ -251,17 +251,17 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	mesh3, atxDB3 := getMeshWithMapState("t3", s3)
 
 	// this should be played until numOfLayers -1 if we want to compare states
-	for i := 0; i < numOfLayers-3; i++ {
-		blockIds := copyLayer(t, mesh, mesh3, atxDB3, types.LayerID(i))
-		mesh3.HandleValidatedLayer(context.TODO(), types.LayerID(i), blockIds)
+	for i := 1; i <= numOfLayers-3; i++ {
+		blockIds := copyLayer(t, mesh, mesh3, atxDB3, types.NewLayerID(uint32(i)))
+		mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(i)), blockIds)
 	}
 	s3Len := len(s3.Txs)
-	blockIds := copyLayer(t, mesh, mesh3, atxDB3, types.LayerID(numOfLayers-2))
-	mesh3.HandleValidatedLayer(context.TODO(), types.LayerID(numOfLayers-2), blockIds)
+	blockIds := copyLayer(t, mesh, mesh3, atxDB3, types.NewLayerID(uint32(numOfLayers)-1))
+	mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(numOfLayers)-1), blockIds)
 	assert.Equal(t, s3Len, len(s3.Txs))
 
-	blockIds = copyLayer(t, mesh, mesh3, atxDB3, types.LayerID(numOfLayers-3))
-	mesh3.HandleValidatedLayer(context.TODO(), types.LayerID(numOfLayers-3), blockIds)
+	blockIds = copyLayer(t, mesh, mesh3, atxDB3, types.NewLayerID(uint32(numOfLayers)-2))
+	mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(numOfLayers)-2), blockIds)
 	assert.Equal(t, s.Txs, s3.Txs)
 }
 
@@ -289,21 +289,21 @@ func copyLayer(t *testing.T, srcMesh, dstMesh *Mesh, dstAtxDb *AtxDbMock, id typ
 
 type meshValidatorBatchMock struct {
 	mesh           *Mesh
-	batchSize      types.LayerID
+	batchSize      uint32
 	processedLayer types.LayerID
 }
 
 func (m *meshValidatorBatchMock) ValidateLayer(lyr *types.Layer) {
 	m.SetProcessedLayer(lyr.Index())
 	layerID := lyr.Index()
-	if layerID == 0 {
+	if layerID.Uint32() == 0 {
 		return
 	}
-	if layerID%m.batchSize == 0 {
-		m.mesh.pushLayersToState(layerID-m.batchSize, layerID)
+	if layerID.Uint32()%m.batchSize == 0 {
+		m.mesh.pushLayersToState(layerID.Sub(m.batchSize), layerID)
 		return
 	}
-	prevPBase := layerID - layerID%m.batchSize
+	prevPBase := layerID.Sub(layerID.Uint32() % m.batchSize)
 	m.mesh.pushLayersToState(prevPBase, prevPBase)
 }
 
@@ -323,11 +323,11 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 	mesh, atxDb := getMeshWithMapState("t1", s)
 	defer mesh.Close()
 
-	mesh.Validator = &meshValidatorBatchMock{mesh: mesh, batchSize: types.LayerID(batchSize)}
+	mesh.Validator = &meshValidatorBatchMock{mesh: mesh, batchSize: uint32(batchSize)}
 
 	var firstLayerRewards int64
 	for i := 0; i < numOfLayers; i++ {
-		reward, _ := createLayer(t, mesh, types.LayerID(i), numOfBlocks, maxTxs, atxDb)
+		reward, _ := createLayer(t, mesh, types.NewLayerID(uint32(i)), numOfBlocks, maxTxs, atxDb)
 		if i == 0 {
 			firstLayerRewards = reward
 			log.Info("reward %v", firstLayerRewards)
@@ -335,19 +335,19 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 	}
 
 	oldTotal := s.TotalReward
-	l4, err := mesh.GetLayer(4)
+	l4, err := mesh.GetLayer(types.NewLayerID(4))
 	assert.NoError(t, err)
 	// Test negative case
 	mesh.ValidateLayer(l4)
 	assert.Equal(t, oldTotal, s.TotalReward)
 
-	l5, err := mesh.GetLayer(5)
+	l5, err := mesh.GetLayer(types.NewLayerID(5))
 	assert.NoError(t, err)
 	// Since batch size is 6, rewards will not be applied yet at this point
 	mesh.ValidateLayer(l5)
 	assert.Equal(t, oldTotal, s.TotalReward)
 
-	l6, err := mesh.GetLayer(6)
+	l6, err := mesh.GetLayer(types.NewLayerID(6))
 	assert.NoError(t, err)
 	// Rewards will be applied at this point
 	mesh.ValidateLayer(l6)
@@ -360,7 +360,7 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 }
 
 func TestMesh_calcRewards(t *testing.T) {
-	reward, remainder := calculateActualRewards(1, big.NewInt(10000), big.NewInt(10))
+	reward, remainder := calculateActualRewards(types.NewLayerID(1), big.NewInt(10000), big.NewInt(10))
 	assert.Equal(t, int64(1000), reward.Int64())
 	assert.Equal(t, int64(0), remainder.Int64())
 }

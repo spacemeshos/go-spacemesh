@@ -89,13 +89,13 @@ func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
 	// We cannot get meaningful data from the mesh during the genesis epochs since there are no blocks in these
 	// epochs, so just return the current layer instead
 	curLayerObj := s.GenTime.GetCurrentLayer()
-	curLayer = uint32(curLayerObj)
+	curLayer = curLayerObj.Uint32()
 	if curLayerObj.GetEpoch().IsGenesis() {
-		latestLayer = uint32(s.Mesh.LatestLayer())
+		latestLayer = s.Mesh.LatestLayer().Uint32()
 		verifiedLayer = latestLayer
 	} else {
-		latestLayer = uint32(s.Mesh.LatestLayer())
-		verifiedLayer = uint32(s.Mesh.LatestLayerInState())
+		latestLayer = s.Mesh.LatestLayer().Uint32()
+		verifiedLayer = s.Mesh.LatestLayerInState().Uint32()
 	}
 	return
 }
