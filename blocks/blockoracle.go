@@ -111,7 +111,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 
 	bo.log.With().Info("Got beacon",
 		log.Uint64("epoch_id", uint64(epochNumber)),
-		log.Err(err))
+		log.String("epoch_beacon", fmt.Sprint(epochBeacon)))
 
 	var weight uint64
 	// get the previous epoch's total weight
