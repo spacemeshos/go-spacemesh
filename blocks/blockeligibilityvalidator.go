@@ -17,7 +17,7 @@ type blockDB interface {
 // BlockEligibilityValidator holds all the dependencies for validating block eligibility.
 type BlockEligibilityValidator struct {
 	committeeSize  uint32
-	layersPerEpoch uint16
+	layersPerEpoch uint32
 	activationDb   activationDB
 	blocks         blockDB
 	beaconProvider BeaconGetter
@@ -27,7 +27,7 @@ type BlockEligibilityValidator struct {
 
 // NewBlockEligibilityValidator returns a new BlockEligibilityValidator.
 func NewBlockEligibilityValidator(
-	committeeSize uint32, layersPerEpoch uint16, activationDb activationDB, beaconProvider BeaconGetter,
+	committeeSize uint32, layersPerEpoch uint32, activationDb activationDB, beaconProvider BeaconGetter,
 	validateVRF VRFValidationFunction, blockDB blockDB, log log.Log) *BlockEligibilityValidator {
 
 	return &BlockEligibilityValidator{

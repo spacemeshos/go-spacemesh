@@ -81,8 +81,8 @@ type BaseConfig struct {
 	GenesisTime      string `mapstructure:"genesis-time"`
 	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
 	LayerAvgSize     int    `mapstructure:"layer-average-size"`
-	LayersPerEpoch   int    `mapstructure:"layers-per-epoch"`
-	Hdist            int    `mapstructure:"hdist"`
+	LayersPerEpoch   uint32 `mapstructure:"layers-per-epoch"`
+	Hdist            uint32 `mapstructure:"hdist"`
 
 	PoETServer string `mapstructure:"poet-server"`
 
