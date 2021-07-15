@@ -810,21 +810,18 @@ func (m *DB) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (n
 }
 
 // GetTransactions retrieves a list of txs by their id's
-func (m *DB) GetTransactions(transactions []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
-	var (
-		missing = map[types.TransactionID]struct{}{}
-		txs     = make([]*types.Transaction, 0, len(transactions))
-	)
+func (m *DB) GetTransactions(transactions []types.TransactionID) (txs []*types.Transaction, missing map[types.TransactionID]struct{}) {
+	missing = make(map[types.TransactionID]struct{})
+	txs = make([]*types.Transaction, 0, len(transactions))
 	for _, id := range transactions {
-		tx, err := m.GetTransaction(id)
-		if err != nil {
+		if tx, err := m.GetMeshTransaction(id); err != nil {
 			m.With().Warning("could not fetch tx", id, log.Err(err))
 			missing[id] = struct{}{}
 		} else {
 			txs = append(txs, &tx.Transaction)
 		}
 	}
-	return txs, missing
+	return
 }
 
 // GetMeshTransactions retrieves list of txs with information in what blocks and layers they are included.
@@ -834,7 +831,7 @@ func (m *DB) GetMeshTransactions(transactions []types.TransactionID) ([]*types.M
 		txs     = make([]*types.MeshTransaction, 0, len(transactions))
 	)
 	for _, id := range transactions {
-		tx, err := m.GetTransaction(id)
+		tx, err := m.GetMeshTransaction(id)
 		if err != nil {
 			m.With().Warning("could not fetch tx", id, log.Err(err))
 			missing[id] = struct{}{}
@@ -845,8 +842,8 @@ func (m *DB) GetMeshTransactions(transactions []types.TransactionID) ([]*types.M
 	return txs, missing
 }
 
-// GetTransaction retrieves a tx by its id
-func (m *DB) GetTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
+// GetMeshTransaction retrieves a tx by its id
+func (m *DB) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
 	tBytes, err := m.transactions.Get(id[:])
 	if err != nil {
 		return nil, fmt.Errorf("could not find transaction in database %v err=%v", hex.EncodeToString(id[:]), err)
