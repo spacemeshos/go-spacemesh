@@ -260,17 +260,31 @@ func (o *Oracle) actives(ctx context.Context, layer types.LayerID) (map[string]s
 			log.FieldNamed("safe_layer", safeLayer),
 			log.FieldNamed("safe_epoch", safeEpoch))
 
-		// build a map of all blocks in the safe layer
-		mp, err := o.blocksProvider.ContextuallyValidBlock(safeLayer)
-		if err != nil {
-			return nil, err
+		// try a range of safe layers (in case there are no valid blocks for one layer)
+		var mp map[types.BlockID]struct{}
+		for candidateLayer := safeLayer; candidateLayer < safeLayer.Add(10); candidateLayer++ {
+			logger := logger.WithFields(log.FieldNamed("candidate_safe_layer", candidateLayer))
+			logger.Debug("trying candidate safe layer")
+
+			// build a map of all blocks in the safe layer
+			mpInner, err := o.blocksProvider.ContextuallyValidBlock(candidateLayer)
+			if err != nil {
+				return nil, err
+			}
+			mp = mpInner
+			logger.With().Debug("contextually valid blocks in candidate safe layer",
+				log.Int("count", len(mpInner)))
+			if len(mp) == 0 {
+				logger.Warning("no contextually valid blocks in candidate safe layer")
+			} else {
+				break
+			}
 		}
-		logger.With().Debug("contextually valid blocks in safe layer", log.Int("count", len(mp)))
 
 		// no contextually valid blocks: for now we just fall back on an empty active set. this will go away when we
 		// upgrade hare eligibility to use the tortoise beacon.
 		if len(mp) == 0 {
-			logger.With().Warning("no contextually valid blocks in layer, using active set of size zero",
+			logger.With().Error("no contextually valid blocks in any candidate safe layer, using active set of size zero",
 				layer,
 				layer.GetEpoch(),
 				log.FieldNamed("safe_layer_id", sl),
