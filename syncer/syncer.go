@@ -399,7 +399,7 @@ func (s *Syncer) getTortoiseBeacon(ctx context.Context, layerID types.LayerID) e
 		s.logger.WithContext(ctx).Info("skip getting tortoise beacons in genesis epoch")
 		return nil
 	}
-	epoch := layerID.GetEpoch()
+	epoch := layerID.GetEpoch() - 1 // tortoise beacon for previous epoch is needed
 	currentEpoch := s.ticker.GetCurrentLayer().GetEpoch()
 	// only get tortoise beacon if
 	// - layerID is in the current epoch

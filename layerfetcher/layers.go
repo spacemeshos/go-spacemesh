@@ -60,7 +60,7 @@ type poetDb interface {
 
 // tortoiseBeaconDB is an interface for tortoise beacon database
 type tortoiseBeaconDB interface {
-	GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, bool)
+	GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, error)
 	SetTortoiseBeacon(epochID types.EpochID, beacon types.Hash32) error
 }
 
@@ -117,7 +117,6 @@ func DefaultConfig() Config {
 
 // NewLogic creates a new instance of layer fetching logic
 func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHandler, poet poetDb, atxIDs atxIDsDB, txs TxProcessor, network service.Service, fetcher fetch.Fetcher, layers layerDB, tortoiseBeacons tortoiseBeaconDB, log log.Log) *Logic {
-
 	srv := fetch.NewMessageNetwork(ctx, cfg.RequestTimeout, network, layersProtocol, log)
 	l := &Logic{
 		log:                  log,
@@ -151,7 +150,6 @@ const (
 
 // FetchFlow is the main syncing flow TBD
 func (l *Logic) FetchFlow() {
-
 }
 
 // Start starts layerFetcher logic and fetch component
@@ -212,7 +210,7 @@ func (l *Logic) LayerHashBlocksReceiver(ctx context.Context, msg []byte) []byte 
 		// TODO: We need to diff empty set and no results in sync somehow.
 		l.log.Error("didn't have input vector for layer ")
 	}
-	//latest := l.gossipBlocks.Get() todo: implement this
+	// latest := l.gossipBlocks.Get() todo: implement this
 	b := layerBlocks{
 		blocks,
 		nil,
@@ -232,9 +230,14 @@ func (l *Logic) tortoiseBeaconReceiver(ctx context.Context, msg []byte) []byte {
 	epoch := types.EpochID(util.BytesToUint64(msg))
 	l.log.Info("got tortoise beacon request for epoch %v", epoch)
 
-	beacon, ok := l.tbDB.GetTortoiseBeacon(epoch)
-	if !ok {
-		l.log.Warning("cannot find tortoise beacon for epoch %v", epoch)
+	beacon, err := l.tbDB.GetTortoiseBeacon(epoch)
+	if errors.Is(err, database.ErrNotFound) {
+		l.log.Debug("still no tortoise beacon for epoch %v", epoch)
+		return []byte{}
+	}
+
+	if err != nil {
+		l.log.Error("cannot get tortoise beacon for epoch %v", epoch)
 		return []byte{}
 	}
 
@@ -314,11 +317,11 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 	l.log.Info("got hashes for layer, now aggregating")
 	l.layerHashResM.Unlock()
 	errors := 0
-	//aggregate hashes so that same hash will not be requested several times
+	// aggregate hashes so that same hash will not be requested several times
 	hashes := make(map[types.Hash32][]p2ppeers.Peer)
 	l.layerHashResM.RLock()
 	for peer, hash := range l.layerHashResults[id] {
-		//count nil hashes - mark errors.
+		// count nil hashes - mark errors.
 		if hash == nil {
 			errors++
 		} else {
@@ -330,7 +333,7 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 	}
 	l.layerHashResM.RUnlock()
 
-	//delete the receiver since we got all the needed messages
+	// delete the receiver since we got all the needed messages
 	l.layerHashResM.Lock()
 	delete(l.layerHashResults, id)
 	l.layerHashResM.Unlock()
@@ -347,7 +350,7 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 
 	// send a request to get blocks from a single peer if multiple peers declare same hash per layer
 	// if the peers fails to respond request will be sen to next peer in line
-	//todo: think if we should aggregate or ask from multiple peers to have some redundancy in requests
+	// todo: think if we should aggregate or ask from multiple peers to have some redundancy in requests
 	for hash, peers := range hashes {
 		if hash == emptyHash {
 			l.receiveBlockHashes(ctx, id, nil, len(hashes), ErrZeroLayer)
@@ -365,7 +368,6 @@ func (l *Logic) receiveLayerHash(ctx context.Context, id types.LayerID, p p2ppee
 			l.receiveBlockHashes(ctx, id, nil, len(hashes), err)
 		}
 	}
-
 }
 
 func (l *Logic) determinePromiseResult(layer types.LayerID, errs []error) *LayerPromiseResult {
@@ -405,7 +407,7 @@ func (l *Logic) notifyLayerPromiseResult(id types.LayerID, expectedResults int, 
 	l.blockHashResM.Unlock()
 	l.layerResM.Lock()
 	for _, ch := range l.layerResultsChannels[id] {
-		//l.log.Info("writing res for layer %v err %v", id, err)
+		// l.log.Info("writing res for layer %v err %v", id, err)
 		ch <- *res
 	}
 	delete(l.layerResultsChannels, id)
@@ -414,7 +416,7 @@ func (l *Logic) notifyLayerPromiseResult(id types.LayerID, expectedResults int, 
 
 // receiveBlockHashes is called when receiving block hashes for specified layer layer from remote peer
 func (l *Logic) receiveBlockHashes(ctx context.Context, layer types.LayerID, data []byte, expectedResults int, extErr error) {
-	//if we failed getting layer data - notify
+	// if we failed getting layer data - notify
 	if extErr != nil {
 		l.log.With().Error("received error", log.Err(extErr), layer)
 		l.notifyLayerPromiseResult(layer, expectedResults, extErr)
@@ -456,7 +458,7 @@ type epochAtxRes struct {
 func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 	resCh := make(chan epochAtxRes, 1)
 
-	//build receiver function
+	// build receiver function
 	receiveForPeerFunc := func(data []byte) {
 		var atxsIDs []types.ATXID
 		err := types.BytesToInterface(data, &atxsIDs)
@@ -506,13 +508,13 @@ func (l *Logic) blockReceiveFunc(ctx context.Context, data []byte) error {
 
 // IsSynced indicates if this node is synced
 func (l *Logic) IsSynced(context.Context) bool {
-	//todo: add this logic
+	// todo: add this logic
 	return true
 }
 
 // ListenToGossip indicates if node is currently accepting packets from gossip
 func (l *Logic) ListenToGossip() bool {
-	//todo: add this logic
+	// todo: add this logic
 	return true
 }
 
@@ -565,7 +567,7 @@ func (l *Logic) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.Hash32())
 	}
-	//todo: atx Id is currently only the header bytes - should we change it?
+	// todo: atx Id is currently only the header bytes - should we change it?
 	results := l.fetcher.GetHashes(hashes, fetch.ATXDB, false)
 	for hash, resC := range results {
 		res := <-resC
@@ -676,7 +678,7 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 
 	resCh := make(chan []byte, len(peers))
 
-	//build receiver function
+	// build receiver function
 	makeReceiveFunc := func(peer fmt.Stringer) func([]byte) {
 		return func(data []byte) {
 			l.log.Info("peer %v responded to tortoise beacon request with beacon %v", peer.String(), util.Bytes2Hex(data))

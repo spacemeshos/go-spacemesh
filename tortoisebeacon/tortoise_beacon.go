@@ -11,6 +11,7 @@ import (
 	"github.com/ALTree/bigfloat"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -39,7 +40,7 @@ type broadcaster interface {
 }
 
 type tortoiseBeaconDB interface {
-	GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, bool)
+	GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, error)
 	SetTortoiseBeacon(epochID types.EpochID, beacon types.Hash32) error
 }
 
@@ -234,8 +235,13 @@ func (tb *TortoiseBeacon) Close() error {
 // GetBeacon returns a Tortoise Beacon value as []byte for a certain epoch or an error if it doesn't exist.
 func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 	if tb.tortoiseBeaconDB != nil {
-		if val, ok := tb.tortoiseBeaconDB.GetTortoiseBeacon(epochID - 1); ok {
+		val, err := tb.tortoiseBeaconDB.GetTortoiseBeacon(epochID - 1)
+		if err == nil {
 			return val.Bytes(), nil
+		}
+
+		if !errors.Is(err, database.ErrNotFound) {
+			tb.Log.Error("Failed to get tortoise beacon for epoch %v from DB: %v", epochID-1, err)
 		}
 	}
 
