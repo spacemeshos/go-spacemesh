@@ -120,7 +120,7 @@ func (atxh *ActivationTxHeader) SetID(id *ATXID) {
 	atxh.id = id
 }
 
-// GetWeight returns the ATX's weight = space * ticks.
+// GetWeight returns the ATX's weight = numUnits * ticks.
 func (atxh *ActivationTxHeader) GetWeight() uint64 {
 	// TODO: Limit the number of bits this can occupy
 	return uint64(atxh.NumUnits) * (atxh.EndTick - atxh.StartTick)

@@ -5,15 +5,18 @@ import (
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
+	"sync"
 	"testing"
+	"time"
 )
 
 var (
 	id      = make([]byte, 32)
 	postLog = log.NewDefault("post-test")
 
-	cfg  PostConfig
-	opts PostSetupOpts
+	cfg             PostConfig
+	opts            PostSetupOpts
+	longerSetupOpts PostSetupOpts
 )
 
 func init() {
@@ -23,6 +26,9 @@ func init() {
 	opts.DataDir, _ = ioutil.TempDir("", "post-test")
 	opts.NumUnits = cfg.MinNumUnits
 	opts.ComputeProviderID = initialization.CPUProviderID()
+
+	longerSetupOpts = opts
+	longerSetupOpts.NumUnits = opts.NumUnits * 10
 }
 
 func TestPostSetupManager(t *testing.T) {
@@ -52,7 +58,7 @@ func TestPostSetupManager(t *testing.T) {
 		}
 	}()
 
-	// Start session.
+	// Create data.
 	doneChan, err := mgr.StartSession(opts)
 	req.NoError(err)
 	<-doneChan
@@ -61,7 +67,7 @@ func TestPostSetupManager(t *testing.T) {
 	// TODO(moshababo): fix the following failure. `status.State` changes to `PostSetupStateComplete` only after the channel event was triggered.
 	// req.Equal(lastStatus, mgr.Status())
 
-	// Start session again.
+	// Create data (same opts).
 	doneChan, err = mgr.StartSession(opts)
 	req.NoError(err)
 	<-doneChan
@@ -72,7 +78,7 @@ func TestPostSetupManager(t *testing.T) {
 	err = mgr.StopSession(true)
 	req.NoError(err)
 
-	// Start session again.
+	// Create data (same opts, after deletion).
 	doneChan, err = mgr.StartSession(opts)
 	req.NoError(err)
 	<-doneChan
@@ -88,7 +94,7 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	mgr, err := NewPostSetupManager(id, cfg, postLog)
 	req.NoError(err)
 
-	// Check the initial status.
+	// Verify the initial status.
 	status := mgr.Status()
 	req.Equal(PostSetupStateNotStarted, status.State)
 	req.Equal(uint64(0), status.NumLabelsWritten)
@@ -111,11 +117,11 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	// TODO(moshababo): fix the following failure. `status.State` changes to `PostSetupStateComplete` only after the channel event was triggered.
 	//req.Equal(lastStatus, mgr.Status())
 
-	// Re-instantiate PostManager.
+	// Re-instantiate `PostSetupManager`.
 	mgr, err = NewPostSetupManager(id, cfg, postLog)
 	req.NoError(err)
 
-	// Check the initial status.
+	// Verify the initial status.
 	status = mgr.Status()
 	req.Equal(PostSetupStateNotStarted, status.State)
 	req.Equal(uint64(0), status.NumLabelsWritten)
@@ -123,7 +129,7 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	req.Equal(nil, status.LastError)
 }
 
-func TestPostManager_GenerateProof(t *testing.T) {
+func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req := require.New(t)
 	ch := make([]byte, 32)
 
@@ -143,162 +149,185 @@ func TestPostManager_GenerateProof(t *testing.T) {
 	_, _, err = mgr.GenerateProof(make([]byte, 32))
 	req.NoError(err)
 
-	// Re-instantiate PostSetupManager.
+	// Re-instantiate `PostSetupManager`.
 	mgr, err = NewPostSetupManager(id, cfg, postLog)
 	req.NoError(err)
 
 	// Attempt to generate proof.
 	_, _, err = mgr.GenerateProof(ch)
-	req.EqualError(err, errNotComplete.Error())
+	req.ErrorIs(err, errNotComplete)
 }
 
-//func TestPostSetupManager_Progress(t *testing.T) {
-//	req := require.New(t)
-//	tempdir, _ := ioutil.TempDir("", "post-test")
-//
-//	mgr, err := NewPostSetupManager(id, cfg, postLog)
-//	req.NoError(err)
-//
-//	// Check that the progress stream works properly when called *before* session started.
-//	var wg sync.WaitGroup
-//	wg.Add(1)
-//	go func() {
-//		for {
-//			_, more := <-mgr.StatusChan()
-//			if !more {
-//				wg.Done()
-//				break
-//			}
-//		}
-//	}()
-//
-//	// Create data.
-//	time.Sleep(1 * time.Second) // Short delay.
-//	doneChan, err := mgr.StartSession(opts)
-//	req.NoError(err)
-//	<-doneChan
-//	wg.Wait()
-//
-//	// Cleanup.
-//	err = mgr.StopSession(true)
-//	req.NoError(err)
-//
-//	// Check that the progress stream works properly when called *after* session started.
-//	wg.Add(1)
-//	go func() {
-//		time.Sleep(1 * time.Second) // Short delay.
-//		for {
-//			_, more := <-mgr.StatusChan()
-//			if !more {
-//				wg.Done()
-//				break
-//			}
-//		}
-//	}()
-//
-//	// Create data.
-//	doneChan, err = mgr.StartSession(opts)
-//	req.NoError(err)
-//	<-doneChan
-//	wg.Wait()
-//}
-//
-//func TestPostManager_Stop(t *testing.T) {
-//	req := require.New(t)
-//	tempdir, _ := ioutil.TempDir("", "post-test")
-//
-//	mgr, err := NewPostManager(id, *cfg, postLog)
-//	req.NoError(err)
-//
-//	opts := &PoSTSetupOpts{
-//		DataDir:           tempdir,
-//		NumLabels:         1 << 15,
-//		NumFiles:          1,
-//		ComputeProviderID: int(initialization.CPUProviderID()),
-//	}
-//
-//	// Create data.
-//	doneChan, err := mgr.CreatePostData(opts)
-//	req.NoError(err)
-//	<-doneChan
-//
-//	// Try again.
-//	doneChan, err = mgr.CreatePostData(opts)
-//	req.EqualError(err, "already completed")
-//	req.Nil(doneChan)
-//
-//	// Stop without file deletion.
-//	err = mgr.StopPostDataCreationSession(false)
-//	req.NoError(err)
-//
-//	// Try again.
-//	doneChan, err = mgr.CreatePostData(opts)
-//	req.EqualError(err, "already completed")
-//	req.Nil(doneChan)
-//
-//	// Stop with file deletion.
-//	err = mgr.StopPostDataCreationSession(true)
-//	req.NoError(err)
-//
-//	// Try again.
-//	doneChan, err = mgr.CreatePostData(opts)
-//	req.NoError(err)
-//	<-doneChan
-//
-//	// Try again.
-//	doneChan, err = mgr.CreatePostData(opts)
-//	req.EqualError(err, "already completed")
-//	req.Nil(doneChan)
-//}
-//
-//func TestPostManager_StopInProgress(t *testing.T) {
-//	req := require.New(t)
-//	tempdir, _ := ioutil.TempDir("", "post-test")
-//
-//	mgr, err := NewPostManager(id, *cfg, postLog)
-//	req.NoError(err)
-//
-//	opts := &PoSTSetupOpts{
-//		DataDir:           tempdir,
-//		NumLabels:         1 << 15,
-//		NumFiles:          1,
-//		ComputeProviderID: int(initialization.CPUProviderID()),
-//	}
-//
-//	// Create data.
-//	doneChan, err := mgr.CreatePostData(opts)
-//	req.NoError(err)
-//
-//	// Wait a bit for the init to progress.
-//	time.Sleep(1 * time.Second)
-//
-//	// Check an intermediate status.
-//	status, err := mgr.PostStatus()
-//	req.NoError(err)
-//	req.Equal(opts, status.SessionOpts)
-//	req.True(status.InitInProgress)
-//	req.Equal(filesStatusPartial, status.FilesStatus)
-//
-//	// Stop without files deletion.
-//	err = mgr.StopPostDataCreationSession(false)
-//	req.NoError(err)
-//
-//	select {
-//	case <-doneChan:
-//	default:
-//		req.Fail("StopPostDataCreationSession is expected to block until CreatePostData is done")
-//	}
-//
-//	// Check status after stop.
-//	status, err = mgr.PostStatus()
-//	req.NoError(err)
-//	req.Equal(opts, status.SessionOpts)
-//	req.False(status.InitInProgress)
-//	req.Equal(filesStatusPartial, status.FilesStatus)
-//	req.True(status.NumLabelsWritten > 0 && status.NumLabelsWritten < shared.DataSize(opts.NumLabels, cfg.LabelSize))
-//
-//	// Continue creating PoST data.
-//	doneChan, err = mgr.CreatePostData(opts)
-//	req.NoError(err)
-//	<-doneChan
-//}
+func TestPostSetupManager_StatusChan_BeforeSessionStarted(t *testing.T) {
+	req := require.New(t)
+
+	mgr, err := NewPostSetupManager(id, cfg, postLog)
+	req.NoError(err)
+
+	// Verify that the status stream works properly when called *before* session started.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		ch := mgr.StatusChan()
+		var prevStatus = (*PostSetupStatus)(nil)
+		for {
+			status, more := <-ch
+			if more {
+				if prevStatus == nil {
+					// Verify initial status.
+					req.Equal(uint64(0), status.NumLabelsWritten)
+				}
+				prevStatus = status
+			} else {
+				// Verify last status.
+				req.Equal(opts.NumUnits*cfg.LabelsPerUnit, uint(prevStatus.NumLabelsWritten))
+				break
+			}
+		}
+		wg.Done()
+	}()
+
+	// Create data.
+	time.Sleep(1 * time.Second) // Short delay.
+	doneChan, err := mgr.StartSession(opts)
+	req.NoError(err)
+	<-doneChan
+	wg.Wait()
+
+	// Cleanup.
+	err = mgr.StopSession(true)
+	req.NoError(err)
+}
+
+func TestPostSetupManager_StatusChan_AfterSessionStarted(t *testing.T) {
+	req := require.New(t)
+
+	mgr, err := NewPostSetupManager(id, cfg, postLog)
+	req.NoError(err)
+
+	// Verify that the status stream works properly when called *after* session started (yet before it ended).
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		time.Sleep(100 * time.Millisecond) // Short delay.
+
+		ch := mgr.StatusChan()
+		var prevStatus = (*PostSetupStatus)(nil)
+		for {
+			status, more := <-ch
+			if more {
+				if prevStatus == nil {
+					// Verify initial status.
+					req.Equal(uint64(0), status.NumLabelsWritten)
+				}
+				prevStatus = status
+			} else {
+				// Verify last status.
+				req.Equal(longerSetupOpts.NumUnits*cfg.LabelsPerUnit, uint(prevStatus.NumLabelsWritten))
+				break
+			}
+		}
+		wg.Done()
+	}()
+
+	// Create data.
+	doneChan, err := mgr.StartSession(longerSetupOpts)
+	req.NoError(err)
+	<-doneChan
+	wg.Wait()
+
+	// Cleanup.
+	err = mgr.StopSession(true)
+	req.NoError(err)
+}
+
+func TestPostSetupManager_Stop(t *testing.T) {
+	req := require.New(t)
+
+	mgr, err := NewPostSetupManager(id, cfg, postLog)
+	req.NoError(err)
+
+	// Verify state.
+	status := mgr.Status()
+	req.Equal(PostSetupStateNotStarted, status.State)
+
+	// Create data.
+	doneChan, err := mgr.StartSession(opts)
+	req.NoError(err)
+	<-doneChan
+
+	// Verify state.
+	status = mgr.Status()
+	req.Equal(PostSetupStateComplete, status.State)
+
+	// Stop without file deletion.
+	err = mgr.StopSession(false)
+	req.NoError(err)
+
+	// Verify state.
+	status = mgr.Status()
+	req.Equal(PostSetupStateComplete, status.State)
+
+	// Stop with file deletion.
+	err = mgr.StopSession(true)
+	req.NoError(err)
+
+	// Verify state.
+	status = mgr.Status()
+	req.Equal(PostSetupStateNotStarted, status.State)
+
+	// Create data again.
+	doneChan, err = mgr.StartSession(opts)
+	req.NoError(err)
+	<-doneChan
+
+	// Verify state.
+	status = mgr.Status()
+	req.Equal(PostSetupStateComplete, status.State)
+}
+
+func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
+	req := require.New(t)
+
+	mgr, err := NewPostSetupManager(id, cfg, postLog)
+	req.NoError(err)
+
+	// Create data.
+	doneChan, err := mgr.StartSession(longerSetupOpts)
+	req.NoError(err)
+
+	// Wait a bit for the setup to proceed.
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify the intermediate status.
+	status := mgr.Status()
+	req.Equal(&longerSetupOpts, status.LastOpts)
+	req.Equal(PostSetupStateInProgress, status.State)
+
+	// Stop without files deletion.
+	err = mgr.StopSession(false)
+	req.NoError(err)
+
+	select {
+	case <-doneChan:
+	default:
+		req.Fail("`StopSession` is expected to block until `StartSession` is done")
+	}
+
+	// Verify status.
+	status = mgr.Status()
+	req.Equal((*PostSetupOpts)(nil), status.LastOpts)
+	req.Equal(PostSetupStateNotStarted, status.State)
+	req.Equal(uint64(0), status.NumLabelsWritten)
+
+	// Continue to create data.
+	doneChan, err = mgr.StartSession(longerSetupOpts)
+	req.NoError(err)
+	<-doneChan
+
+	// Verify status.
+	status = mgr.Status()
+	req.Equal(&longerSetupOpts, status.LastOpts)
+	req.Equal(PostSetupStateComplete, status.State)
+	req.Equal(longerSetupOpts.NumUnits*cfg.LabelsPerUnit, uint(status.NumLabelsWritten))
+}

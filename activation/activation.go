@@ -491,7 +491,7 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 
 	nipost, err := b.nipostBuilder.BuildNIPost(ctx, hash, atxExpired)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build NIPost: %v", err)
+		return nil, fmt.Errorf("failed to build NIPost: %w", err)
 	}
 
 	b.log.With().Info("awaiting atx publication epoch",

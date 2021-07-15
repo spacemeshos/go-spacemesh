@@ -22,7 +22,6 @@ import (
 // ========== Vars / Consts ==========
 
 const (
-	defaultTotalWeight    = uint64(100000)
 	layersPerEpoch        = 10
 	postGenesisEpoch      = 2
 	postGenesisEpochLayer = 22
@@ -705,8 +704,6 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 }
 
 func TestBuilder_RetryPublishActivationTx(t *testing.T) {
-	// FAILING
-
 	r := require.New(t)
 	bc := Config{
 		CoinbaseAccount: coinbase,
@@ -762,88 +759,6 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 		require.FailNow(t, "failed waiting for required number of tries to occur")
 	}
 }
-
-//
-//func TestStartPost(t *testing.T) {
-//	id := types.NodeID{Key: "aaaaaa", VRFPublicKey: []byte("bbbbb")}
-//	coinbase := types.HexToAddress("0xaaa")
-//	layers := &MeshProviderMock{}
-//	nipstBuilder := &NipstBuilderMock{}
-//	layersPerEpoch := uint16(10)
-//	lg := log.NewDefault(id.Key[:5])
-//
-//	drive := "/tmp/anton"
-//	coinbase2 := types.HexToAddress("0xabb")
-//	db := NewMockDB()
-//
-//	postCfg := *config.DefaultConfig()
-//	postCfg.Difficulty = 5
-//	postCfg.NumProvenLabels = 10
-//	postCfg.SpacePerUnit = 1 << 10 // 1KB.
-//	postCfg.NumFiles = 1
-//
-//	postProver, err := NewPostClient(&postCfg, util.Hex2Bytes(id.Key))
-//	assert.NoError(t, err)
-//	assert.NotNil(t, postProver)
-//	defer func() {
-//		assert.NoError(t, postProver.Reset())
-//	}()
-//
-//	bc := Config{
-//		CoinbaseAccount: coinbase,
-//		GoldenATXID:     goldenATXID,
-//		LayersPerEpoch:  layersPerEpoch,
-//	}
-//
-//	activationDb := NewDB(database.NewMemDatabase(), &MockIDStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB1"))
-//	builder := NewBuilder(bc, id, 0, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
-//
-//	// Attempt to initialize with invalid space.
-//	// This test verifies that the params are being set in the post client.
-//	assert.Nil(t, builder.commitment)
-//	err = builder.StartPost(context.TODO(), coinbase2, drive, 1000)
-//	assert.EqualError(t, err, "space (1000) must be a power of 2")
-//	assert.Nil(t, builder.commitment)
-//	assert.Equal(t, postProver.Cfg().SpacePerUnit, uint64(1000))
-//
-//	// Attempt to initialize again
-//	assert.Nil(t, builder.commitment)
-//	err = builder.StartPost(context.TODO(), coinbase2, drive, 1024)
-//	assert.EqualError(t, err, "already started")
-//	assert.Nil(t, builder.commitment)
-//
-//	// Reinitialize.
-//	builder = NewBuilder(bc, id, 0, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder2"))
-//	assert.Nil(t, builder.commitment)
-//	err = builder.StartPost(context.TODO(), coinbase2, drive, 1024)
-//	assert.NoError(t, err)
-//	time.Sleep(100 * time.Millisecond) // Introducing a small delay since the procedure is async.
-//	assert.NotNil(t, builder.commitment)
-//	assert.Equal(t, postProver.Cfg().SpacePerUnit, uint64(1024))
-//
-//	// Attempt to initialize again.
-//	err = builder.StartPost(context.TODO(), coinbase2, drive, 1024)
-//	assert.EqualError(t, err, "already initialized")
-//	assert.NotNil(t, builder.commitment)
-//
-//	// Instantiate a new builder and call StartPost on the same datadir, which is already initialized,
-//	// and so will result in running the execution phase instead of the initialization phase.
-//	// This test verifies that a call to StartPost with a different space param will return an error.
-//	execBuilder := NewBuilder(bc, id, 0, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
-//	err = execBuilder.StartPost(context.TODO(), coinbase2, drive, 2048)
-//	assert.EqualError(t, err, "config mismatch")
-//
-//	// Call StartPost with the correct space param.
-//	assert.Nil(t, execBuilder.commitment)
-//	err = execBuilder.StartPost(context.TODO(), coinbase2, drive, 1024)
-//	time.Sleep(100 * time.Millisecond)
-//	assert.NoError(t, err)
-//	assert.NotNil(t, execBuilder.commitment)
-//
-//	// Verify both builders produced the same commitment proof - one from the initialization phase,
-//	// the other from a zero-challenge execution phase.
-//	assert.Equal(t, builder.commitment, execBuilder.commitment)
-//}
 
 func genView() []types.BlockID {
 	l := rand.Int() % 100
