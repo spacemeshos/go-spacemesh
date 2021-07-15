@@ -1067,7 +1067,8 @@ func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		atxdb.GetAtxHeader(types.ATXID{1, 1, 1})
+		_, err := atxdb.GetAtxHeader(types.ATXID{1, 1, 1})
+		require.ErrorIs(b, err, database.ErrNotFound)
 	}
 	atomic.StoreUint64(&stop, 1)
 	wg.Wait()
