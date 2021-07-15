@@ -975,3 +975,24 @@ func TestMesh_FindOnce(t *testing.T) {
 		}
 	})
 }
+
+func BenchmarkGetBlockHeader(b *testing.B) {
+	// blocks is set to be twice as large as cache to avoid hitting the cache
+	cache := layerSize
+	blocks := make([]*types.Block, cache*2)
+	// 1 is passed as a cache size because it is actually multiplied by layerSize
+	db, err := NewPersistentMeshDB(b.TempDir(), 1, log.NewNop())
+	require.NoError(b, err)
+	for i := range blocks {
+		blocks[i] = types.NewExistingBlock(1, []byte(rand.String(8)), nil)
+		require.NoError(b, db.AddBlock(blocks[i]))
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		block := blocks[i%len(blocks)]
+		_, err = db.GetBlock(block.ID())
+		require.NoError(b, err)
+	}
+}

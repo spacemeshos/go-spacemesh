@@ -280,6 +280,26 @@ func (b *Block) MinerID() *signing.PublicKey {
 	return b.minerID
 }
 
+// DBBlock is a Block structure as it is stored in DB.
+type DBBlock struct {
+	MiniBlock
+	// NOTE(dshulyak) this is a bit redundant to store ID here as well but less likely
+	// to break if in future key for database will be changed
+	ID        BlockID
+	Signature []byte
+	MinerID   []byte // derived from signature when block is received
+}
+
+// ToBlock create Block instance from data that is stored locally.
+func (b *DBBlock) ToBlock() *Block {
+	return &Block{
+		id:        b.ID,
+		MiniBlock: b.MiniBlock,
+		Signature: b.Signature,
+		minerID:   signing.NewPublicKey(b.MinerID),
+	}
+}
+
 // BlockIDs returns a slice of BlockIDs corresponding to the given blocks.
 func BlockIDs(blocks []*Block) []BlockID {
 	ids := make([]BlockID, 0, len(blocks))
