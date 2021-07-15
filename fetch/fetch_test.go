@@ -70,6 +70,8 @@ func (m mockNet) Start(ctx context.Context) error {
 	return nil
 }
 
+func (m mockNet) Close() {}
+
 func (m mockNet) RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage {
 	return nil
 }
