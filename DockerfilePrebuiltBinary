@@ -12,12 +12,6 @@ RUN bash -c "for i in {1..9}; do mkdir -p /usr/share/man/man\$i; done" \
     ca-certificates \
     tzdata \
     locales \
-    git \
-    bash \
-    sudo \
-    unzip \
-    make \
-    curl \
     procps \
     net-tools \
     apt-transport-https \
