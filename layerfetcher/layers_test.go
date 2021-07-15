@@ -122,7 +122,7 @@ func (m mockFetcher) Stop() {
 func (m mockFetcher) Start() {
 }
 
-func (m mockFetcher) AddDB(hint fetch.Hint, db database.Store) {
+func (m mockFetcher) AddDB(hint fetch.Hint, db database.Getter) {
 
 }
 

@@ -159,19 +159,19 @@ func (m *DB) Close() {
 //todo: for now, these methods are used to export dbs to sync, think about merging the two packages
 
 // Blocks exports the block database
-func (m *DB) Blocks() database.Database {
+func (m *DB) Blocks() database.Getter {
 	m.blockMutex.RLock()
 	defer m.blockMutex.RUnlock()
-	return m.blocks
+	return NewBlockFetcherDB(m)
 }
 
 // Transactions exports the transactions DB
-func (m *DB) Transactions() database.Database {
+func (m *DB) Transactions() database.Getter {
 	return m.transactions
 }
 
 // InputVector exports the inputvector DB
-func (m *DB) InputVector() database.Database {
+func (m *DB) InputVector() database.Getter {
 	return m.inputVector
 }
 
@@ -1075,4 +1075,24 @@ func (m *DB) cacheWarmUpFromTo(from types.LayerID, to types.LayerID) error {
 	m.Info("done warming up cache")
 
 	return nil
+}
+
+// NewBlockFetcherDB returns reference to a BlockFetcherDB instance.
+func NewBlockFetcherDB(mdb *DB) *BlockFetcherDB {
+	return &BlockFetcherDB{mdb: mdb}
+}
+
+// BlockFetcherDB implements API that allows fetcher to get a block from a remote database.
+type BlockFetcherDB struct {
+	mdb *DB
+}
+
+// Get types.Block encoded in byte using hash.
+func (db *BlockFetcherDB) Get(hash []byte) ([]byte, error) {
+	id := types.BlockID(types.BytesToHash(hash).ToHash20())
+	blk, err := db.mdb.GetBlock(id)
+	if err != nil {
+		return nil, err
+	}
+	return types.InterfaceToBytes(blk)
 }
