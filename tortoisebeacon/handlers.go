@@ -54,6 +54,8 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 }
 
 func (tb *TortoiseBeacon) handleProposalMessage(ctx context.Context, m ProposalMessage) error {
+	// TODO(nkryuchkov): buffer messages that came from future epochs because of time drifts on different nodes (https://github.com/spacemeshos/go-spacemesh/pull/2529#issuecomment-877772213)
+
 	receivedTimestamp := time.Now()
 	currentEpoch := tb.currentEpoch()
 
@@ -71,11 +73,12 @@ func (tb *TortoiseBeacon) handleProposalMessage(ctx context.Context, m ProposalM
 	sender := m.MinerID.VRFPublicKey // hash of a miner PK
 	ok := tb.vrfVerifier(sender, currentEpochProposal, m.VRFSignature)
 	if !ok {
-		// TODO: attach telemetry
+		// TODO(nkryuchkov): attach telemetry
 		tb.Log.With().Warning("Received malformed proposal message: VRF is not verified",
-			log.String("sender", m.MinerID.String()),
-			log.String("sender_short", m.MinerID.ShortString()))
-		return nil
+			log.String("sender", m.MinerID.Key))
+
+		// TODO(nkryuchkov): add a test for this case
+		return ErrMalformedProposal
 	}
 
 	epochWeight, _, err := tb.atxDB.GetEpochWeight(currentEpoch)

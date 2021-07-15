@@ -4,6 +4,9 @@ package fetch
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -13,12 +16,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
-	"sync"
-	"time"
 )
 
 // Hint marks which DB should be queried for a certain provided hash
 type Hint string
+
+// DB hints per DB
+const (
+	BlockDB Hint = "blocksDB"
+	ATXDB   Hint = "ATXDB"
+	TXDB    Hint = "TXDB"
+	POETDB  Hint = "POETDB"
+	IVDB    Hint = "IVDB"
+	TBDB    Hint = "TBDB"
+)
 
 // priority defines whether Data will be fetched at once or batched and waited for up to "batchTimeout"
 // until fetched
@@ -33,9 +44,8 @@ const (
 )
 
 const (
-	fetch         server.MessageType = 1
-	fetchProtocol                    = "/sync/2.0/"
-	batchMaxSize                     = 20
+	fetchProtocol = "/sync/2.0/"
+	batchMaxSize  = 20
 )
 
 // ErrCouldNotSend is a special type of error indicating fetch could not be done because message could not be sent to peers
@@ -208,7 +218,7 @@ func NewFetch(ctx context.Context, cfg Config, network service.Service, logger l
 // Start starts handling fetch requests
 func (f *Fetch) Start() {
 	f.onlyOnce.Do(func() {
-		f.net.RegisterBytesMsgHandler(fetch, f.FetchRequestHandler)
+		f.net.RegisterBytesMsgHandler(server.Fetch, f.FetchRequestHandler)
 		go f.loop()
 	})
 }
@@ -471,12 +481,12 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 		// get random peer
 		p := GetRandomPeer(f.net.GetPeers())
 		f.log.Info("sending request batch %v items %v", batch.ID.Hex(), len(batch.Requests))
-		err := f.net.SendRequest(context.TODO(), fetch, bytes, p, f.receiveResponse, timeoutFunc)
+		err := f.net.SendRequest(context.TODO(), server.Fetch, bytes, p, f.receiveResponse, timeoutFunc)
 		// if call succeeded, continue to other requests
 		if err != nil {
 			retries++
 			if retries > f.cfg.MaxRetiresForPeer {
-				f.handleHashError(batch.ID, ErrCouldNotSend(fmt.Errorf("could not send message")))
+				f.handleHashError(batch.ID, ErrCouldNotSend(fmt.Errorf("could not send message: %w", err)))
 				break
 			}
 			//todo: mark number of fails per peer to make it low priority
@@ -502,7 +512,7 @@ func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
 	f.activeReqM.Lock()
 	for _, h := range batch.Requests {
 		for _, callback := range f.activeRequests[h.Hash] {
-			f.log.Error("hash error to request %v %v %v %p", h.Hash.ShortString(), len(callback.returnChan), len(f.activeRequests[h.Hash]), callback)
+			f.log.Error("hash error to request %v %v %v %p: %v", h.Hash.ShortString(), len(callback.returnChan), len(f.activeRequests[h.Hash]), callback, err)
 			callback.returnChan <- HashDataPromiseResult{
 				Err:     err,
 				Hash:    h.Hash,

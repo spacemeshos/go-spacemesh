@@ -238,7 +238,8 @@ func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 	validator := NewBlockEligibilityValidator(committeeSize, layersPerEpoch, activationDB, beaconProvider, validateVRF, nil, lg.WithName("blkElgValidator"))
 	block := newBlockWithEligibility(layerID, atxID, proof, activationDB)
 	eligible, err := validator.BlockSignedAndEligible(block)
-	r.EqualError(err, "eligibility VRF validation failed")
+	r.NotNil(err)
+	r.Contains(err.Error(), "tortoise beacon eligibility VRF validation failed")
 	r.False(eligible)
 }
 

@@ -8,7 +8,7 @@ import (
 // AtxDbMock is a mock of an activation DB
 type AtxDbMock struct {
 	db      map[types.ATXID]*types.ActivationTx
-	niposts map[types.ATXID]*types.NIPoST
+	niposts map[types.ATXID]*types.NIPost
 	ProcCnt int
 }
 
@@ -16,7 +16,7 @@ type AtxDbMock struct {
 func NewAtxDbMock() *AtxDbMock {
 	return &AtxDbMock{
 		db:      make(map[types.ATXID]*types.ActivationTx),
-		niposts: make(map[types.ATXID]*types.NIPoST),
+		niposts: make(map[types.ATXID]*types.NIPost),
 	}
 }
 
@@ -40,7 +40,7 @@ func (t *AtxDbMock) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 // AddAtx stores an ATX for later retrieval
 func (t *AtxDbMock) AddAtx(id types.ATXID, atx *types.ActivationTx) {
 	t.db[id] = atx
-	t.niposts[id] = atx.NIPoST
+	t.niposts[id] = atx.NIPost
 }
 
 // ProcessAtxs counts how many ATXs were processed

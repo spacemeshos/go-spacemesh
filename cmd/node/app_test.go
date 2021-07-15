@@ -153,7 +153,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 
 		ActivateGrpcServer(suite.apps[0])
 
-		if err := poetHarness.Start([]string{"127.0.0.1:9094"}); err != nil {
+		if err := poetHarness.Start(context.TODO(), []string{"127.0.0.1:9094"}); err != nil {
 			suite.T().Fatalf("failed to start poet server: %v", err)
 		}
 

@@ -16,6 +16,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/eligibility"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -572,7 +578,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		app.Start(cmd, args)
+		require.NoError(t, app.Start(cmd, args))
 	}
 
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
@@ -764,7 +770,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		app.Start(cmd, args)
+		require.NoError(t, app.Start(cmd, args))
 	}
 
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.

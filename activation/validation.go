@@ -9,36 +9,36 @@ import (
 	"github.com/spacemeshos/post/verifying"
 )
 
-// Validator contains the dependencies required to validate NIPoSTs
+// Validator contains the dependencies required to validate NIPosts
 type Validator struct {
 	poetDb poetDbAPI
-	cfg    PoSTConfig
+	cfg    PostConfig
 }
 
-// A compile time check to ensure that Validator fully implements the NIPoSTValidator interface.
-var _ NIPoSTValidator = (*Validator)(nil)
+// A compile time check to ensure that Validator fully implements the NIPostValidator interface.
+var _ NIPostValidator = (*Validator)(nil)
 
-// NewValidator returns a new NIPoST validator
-func NewValidator(poetDb poetDbAPI, cfg PoSTConfig) *Validator {
+// NewValidator returns a new NIPost validator
+func NewValidator(poetDb poetDbAPI, cfg PostConfig) *Validator {
 	return &Validator{poetDb, cfg}
 }
 
-// Validate validates a NIPoST, given a miner id and expected challenge. It returns an error if an issue is found or nil
-// if the NIPoST is valid.
-// Some of the PoST metadata fields validation values is ought to eventually be derived from
+// Validate validates a NIPost, given a miner id and expected challenge. It returns an error if an issue is found or nil
+// if the NIPost is valid.
+// Some of the Post metadata fields validation values is ought to eventually be derived from
 // consensus instead of local configuration. If so, their validation should be removed to contextual validation,
 // while still syntactically-validate them here according to locally configured min/max values.
-func (v *Validator) Validate(minerID signing.PublicKey, nipost *types.NIPoST, expectedChallenge types.Hash32, numUnits uint) error {
+func (v *Validator) Validate(minerID signing.PublicKey, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint) error {
 	if !bytes.Equal(nipost.Challenge[:], expectedChallenge[:]) {
-		return fmt.Errorf("invalid `Challenge`; expected: %v, given: %v", expectedChallenge, nipost.Challenge)
+		return fmt.Errorf("invalid `Challenge`; expected: %x, given: %x", expectedChallenge, nipost.Challenge)
 	}
 
-	if nipost.PoSTMetadata.BitsPerLabel < v.cfg.BitsPerLabel {
-		return fmt.Errorf("invalid `BitsPerLabel`; expected: >=%d, given: %d", v.cfg.BitsPerLabel, nipost.PoSTMetadata.BitsPerLabel)
+	if nipost.PostMetadata.BitsPerLabel < v.cfg.BitsPerLabel {
+		return fmt.Errorf("invalid `BitsPerLabel`; expected: >=%d, given: %d", v.cfg.BitsPerLabel, nipost.PostMetadata.BitsPerLabel)
 	}
 
-	if nipost.PoSTMetadata.LabelsPerUnit < v.cfg.LabelsPerUnit {
-		return fmt.Errorf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", v.cfg.LabelsPerUnit, nipost.PoSTMetadata.LabelsPerUnit)
+	if nipost.PostMetadata.LabelsPerUnit < v.cfg.LabelsPerUnit {
+		return fmt.Errorf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", v.cfg.LabelsPerUnit, nipost.PostMetadata.LabelsPerUnit)
 	}
 
 	if numUnits < v.cfg.MinNumUnits {
@@ -49,39 +49,39 @@ func (v *Validator) Validate(minerID signing.PublicKey, nipost *types.NIPoST, ex
 		return fmt.Errorf("invalid `numUnits`; expected: <=%d, given: %d", v.cfg.MaxNumUnits, numUnits)
 	}
 
-	if nipost.PoSTMetadata.K1 > v.cfg.K1 {
-		return fmt.Errorf("invalid `K1`; expected: <=%d, given: %d", v.cfg.K1, nipost.PoSTMetadata.K1)
+	if nipost.PostMetadata.K1 > v.cfg.K1 {
+		return fmt.Errorf("invalid `K1`; expected: <=%d, given: %d", v.cfg.K1, nipost.PostMetadata.K1)
 	}
 
-	if nipost.PoSTMetadata.K2 < v.cfg.K2 {
-		return fmt.Errorf("invalid `K2`; expected: >=%d, given: %d", v.cfg.K2, nipost.PoSTMetadata.K2)
+	if nipost.PostMetadata.K2 < v.cfg.K2 {
+		return fmt.Errorf("invalid `K2`; expected: >=%d, given: %d", v.cfg.K2, nipost.PostMetadata.K2)
 	}
 
 	// TODO: better error handling
-	if membership, err := v.poetDb.GetMembershipMap(nipost.PoSTMetadata.Challenge); err != nil || !membership[*nipost.Challenge] {
+	if membership, err := v.poetDb.GetMembershipMap(nipost.PostMetadata.Challenge); err != nil || !membership[*nipost.Challenge] {
 		return fmt.Errorf("invalid PoET chain: %v", err)
 	}
 
-	if err := v.ValidatePoST(minerID.Bytes(), nipost.PoST, nipost.PoSTMetadata, numUnits); err != nil {
-		return fmt.Errorf("invalid PoST: %v", err)
+	if err := v.ValidatePost(minerID.Bytes(), nipost.Post, nipost.PostMetadata, numUnits); err != nil {
+		return fmt.Errorf("invalid Post: %v", err)
 	}
 
 	return nil
 }
 
-// ValidatePoST validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
+// ValidatePost validates a Proof of Space-Time (Post). It returns nil if validation passed or an error indicating why
 // validation failed.
-func (v *Validator) ValidatePoST(id []byte, PoST *types.PoST, PoSTMetadata *types.PoSTMetadata, numUnits uint) error {
-	p := (*proving.Proof)(PoST)
+func (v *Validator) ValidatePost(id []byte, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint) error {
+	p := (*proving.Proof)(Post)
 
 	m := new(proving.ProofMetadata)
 	m.ID = id
 	m.NumUnits = numUnits
-	m.Challenge = PoSTMetadata.Challenge
-	m.BitsPerLabel = PoSTMetadata.BitsPerLabel
-	m.LabelsPerUnit = PoSTMetadata.LabelsPerUnit
-	m.K1 = PoSTMetadata.K1
-	m.K2 = PoSTMetadata.K2
+	m.Challenge = PostMetadata.Challenge
+	m.BitsPerLabel = PostMetadata.BitsPerLabel
+	m.LabelsPerUnit = PostMetadata.LabelsPerUnit
+	m.K1 = PostMetadata.K1
+	m.K2 = PostMetadata.K2
 
 	return verifying.Verify(p, m)
 }

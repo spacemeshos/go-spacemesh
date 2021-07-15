@@ -3,10 +3,11 @@ package config
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"path/filepath"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
@@ -44,7 +45,7 @@ type Config struct {
 	TortoiseBeacon  tortoisebeacon.Config `mapstructure:"tortoise-beacon"`
 	TIME            timeConfig.TimeConfig `mapstructure:"time"`
 	REWARD          mesh.Config           `mapstructure:"reward"`
-	POST            activation.PoSTConfig `mapstructure:"post"`
+	POST            activation.PostConfig `mapstructure:"post"`
 	SMESHING        SmeshingConfig        `mapstructure:"smeshing"`
 	LOGGING         LoggerConfig          `mapstructure:"logging"`
 	LAYERS          layerfetcher.Config   `mapstructure:"layer-fetch"`
@@ -108,8 +109,6 @@ type BaseConfig struct {
 	BlockCacheSize int `mapstructure:"block-cache-size"`
 
 	AlwaysListen bool `mapstructure:"always-listen"` // force gossip to always be on (for testing)
-
-	Profiler bool `mapstructure:"profiler"`
 }
 
 // LoggerConfig holds the logging level for each module.
@@ -120,6 +119,10 @@ type LoggerConfig struct {
 	StateDbLoggerLevel        string `mapstructure:"stateDb"`
 	StateLoggerLevel          string `mapstructure:"state"`
 	AtxDbStoreLoggerLevel     string `mapstructure:"atxDbStore"`
+	TBeaconDbStoreLoggerLevel string `mapstructure:"tbDbStore"`
+	TBeaconDbLoggerLevel      string `mapstructure:"tbDb"`
+	TBeaconLoggerLevel        string `mapstructure:"tBeacon"`
+	WeakCoinLoggerLevel       string `mapstructure:"weakCoin"`
 	PoetDbStoreLoggerLevel    string `mapstructure:"poetDbStore"`
 	StoreLoggerLevel          string `mapstructure:"store"`
 	PoetDbLoggerLevel         string `mapstructure:"poetDb"`
@@ -143,7 +146,7 @@ type LoggerConfig struct {
 type SmeshingConfig struct {
 	Start           bool                     `mapstructure:"smeshing-start"`
 	CoinbaseAccount string                   `mapstructure:"smeshing-coinbase"`
-	Opts            activation.PoSTSetupOpts `mapstructure:"smeshing-opts"`
+	Opts            activation.PostSetupOpts `mapstructure:"smeshing-opts"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
@@ -157,7 +160,7 @@ func DefaultConfig() Config {
 		TortoiseBeacon:  tortoisebeacon.DefaultConfig(),
 		TIME:            timeConfig.DefaultConfig(),
 		REWARD:          mesh.DefaultMeshConfig(),
-		POST:            activation.DefaultPoSTConfig(),
+		POST:            activation.DefaultPostConfig(),
 		SMESHING:        DefaultSmeshingConfig(),
 		FETCH:           fetch.DefaultConfig(),
 		LAYERS:          layerfetcher.DefaultConfig(),
@@ -199,7 +202,6 @@ func defaultBaseConfig() BaseConfig {
 		SyncValidationDelta: 300,
 		AtxsPerBlock:        100,
 		TxsPerBlock:         100,
-		Profiler:            false,
 	}
 }
 
@@ -207,7 +209,7 @@ func DefaultSmeshingConfig() SmeshingConfig {
 	return SmeshingConfig{
 		Start:           false,
 		CoinbaseAccount: "",
-		Opts:            activation.DefaultPoSTSetupOpts(),
+		Opts:            activation.DefaultPostSetupOpts(),
 	}
 }
 
