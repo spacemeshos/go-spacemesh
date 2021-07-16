@@ -2,9 +2,11 @@ package grpcserver
 
 import (
 	"context"
+	"errors"
 
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -25,6 +27,7 @@ type NodeService struct {
 	GenTime     api.GenesisTimeAPI
 	PeerCounter api.PeerCounter
 	Syncer      api.Syncer
+	AtxAPI      api.ActivationAPI
 }
 
 // RegisterService registers this service with a grpc server instance
@@ -34,12 +37,13 @@ func (s NodeService) RegisterService(server *Server) {
 
 // NewNodeService creates a new grpc service using config data.
 func NewNodeService(
-	net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI, syncer api.Syncer) *NodeService {
+	net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI, syncer api.Syncer, atxapi api.ActivationAPI) *NodeService {
 	return &NodeService{
 		Mesh:        tx,
 		GenTime:     genTime,
 		PeerCounter: peers.NewPeers(net, log.NewDefault("grpcserver.NodeService")),
 		Syncer:      syncer,
+		AtxAPI:      atxapi,
 	}
 }
 
@@ -116,6 +120,21 @@ func (s NodeService) Shutdown(context.Context, *pb.ShutdownRequest) (*pb.Shutdow
 	return &pb.ShutdownResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
+}
+
+// UpdatePoetServer update server that is used for generating PoETs.
+func (s NodeService) UpdatePoetServer(ctx context.Context, req *pb.UpdatePoetServerRequest) (*pb.UpdatePoetServerResponse, error) {
+	err := s.AtxAPI.UpdatePoETServer(ctx, req.Url)
+	if err == nil {
+		return &pb.UpdatePoetServerResponse{
+			Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
+		}, nil
+	}
+	switch {
+	case errors.Is(err, activation.ErrPoetServiceUnstable):
+		return nil, status.Errorf(codes.Unavailable, "can't reach server at %s. retry later", req.Url)
+	}
+	return nil, status.Errorf(codes.Internal, "failed to update poet server")
 }
 
 // STREAMS

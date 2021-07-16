@@ -148,6 +148,15 @@ func NewNIPSTBuilder(
 	}
 }
 
+// updatePoETProver updates poetProver reference. It should not be executed concurently with BuildNIPST.
+func (nb *NIPSTBuilder) updatePoETProver(poetProver PoetProvingServiceClient) {
+	// reset the state for safety to avoid accidental erroneous wait in Phase 1.
+	nb.state = &builderState{
+		Nipst: &types.NIPST{},
+	}
+	nb.poetProver = poetProver
+}
+
 // BuildNIPST uses the given challenge to build a NIPST. "atxExpired" and "stop" are channels for early termination of
 // the building process. The process can take considerable time, because it includes waiting for the poet service to
 // publish a proof - a process that takes about an epoch.
