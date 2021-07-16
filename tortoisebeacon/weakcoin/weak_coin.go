@@ -21,10 +21,8 @@ const (
 	GossipProtocol = "WeakCoinGossip"
 )
 
-var (
-	// DefaultThreshold defines default weak coin threshold.
-	DefaultThreshold = types.HexToHash32("0x80" + strings.Repeat("00", 31)) // 0x80...00
-)
+// DefaultThreshold defines default weak coin threshold.
+var DefaultThreshold = types.HexToHash32("0x80" + strings.Repeat("00", 31)) // 0x80...00
 
 type epochRoundPair struct {
 	EpochID types.EpochID
