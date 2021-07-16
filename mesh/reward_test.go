@@ -81,7 +81,9 @@ func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs in
 		totalFee += fee
 		txs = append(txs, tx)
 	}
-	err := mesh.writeTransactions(types.NewLayerID(0), txs)
+	blk := &types.Block{}
+	blk.LayerIndex = types.NewLayerID(0)
+	err := mesh.writeTransactions(blk, txs...)
 	assert.NoError(t, err)
 	return totalFee
 }

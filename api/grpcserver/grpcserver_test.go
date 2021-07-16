@@ -223,12 +223,12 @@ func (t *TxAPIMock) GetLayerApplied(txID types.TransactionID) *types.LayerID {
 	return t.layerApplied[txID]
 }
 
-func (t *TxAPIMock) GetTransaction(id types.TransactionID) (*types.Transaction, error) {
+func (t *TxAPIMock) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
 	tx, ok := t.returnTx[id]
 	if !ok {
 		return nil, errors.New("it ain't there")
 	}
-	return tx, nil
+	return &types.MeshTransaction{Transaction: *tx}, nil
 }
 
 func (t *TxAPIMock) GetRewards(types.Address) (rewards []types.Reward, err error) {
@@ -303,6 +303,17 @@ func (t *TxAPIMock) GetTransactions(txids []types.TransactionID) (txs []*types.T
 		for _, tx := range t.returnTx {
 			if tx.ID() == txid {
 				txs = append(txs, tx)
+			}
+		}
+	}
+	return
+}
+
+func (t *TxAPIMock) GetMeshTransactions(txids []types.TransactionID) (txs []*types.MeshTransaction, missing map[types.TransactionID]struct{}) {
+	for _, txid := range txids {
+		for _, tx := range t.returnTx {
+			if tx.ID() == txid {
+				txs = append(txs, &types.MeshTransaction{Transaction: *tx})
 			}
 		}
 	}
@@ -2389,17 +2400,17 @@ func checkAccountDataQueryItemReward(t *testing.T, dataItem interface{}) {
 
 func checkAccountMeshDataItemTx(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
-	case *pb.AccountMeshData_Transaction:
+	case *pb.AccountMeshData_MeshTransaction:
 		// Check the sender
-		require.Equal(t, globalTx.Origin().Bytes(), x.Transaction.Signature.PublicKey,
+		require.Equal(t, globalTx.Origin().Bytes(), x.MeshTransaction.Transaction.Signature.PublicKey,
 			"inner coin transfer tx has bad sender")
-		require.Equal(t, globalTx.Amount, x.Transaction.Amount.Value,
+		require.Equal(t, globalTx.Amount, x.MeshTransaction.Transaction.Amount.Value,
 			"inner coin transfer tx has bad amount")
-		require.Equal(t, globalTx.AccountNonce, x.Transaction.Counter,
+		require.Equal(t, globalTx.AccountNonce, x.MeshTransaction.Transaction.Counter,
 			"inner coin transfer tx has bad counter")
 
 		// Need to further check tx type
-		switch y := x.Transaction.Datum.(type) {
+		switch y := x.MeshTransaction.Transaction.Datum.(type) {
 		case *pb.Transaction_CoinTransfer:
 			require.Equal(t, globalTx.Recipient.Bytes(), y.CoinTransfer.Receiver.Address,
 				"inner coin transfer tx has bad recipient")

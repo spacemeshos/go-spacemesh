@@ -485,7 +485,9 @@ func GetTransactionIds(txs ...*types.Transaction) []types.TransactionID {
 
 func addTxToMesh(r *require.Assertions, msh *Mesh, signer *signing.EdSigner, nonce uint64) *types.Transaction {
 	tx1 := newTx(r, signer, nonce, 111)
-	err := msh.writeTransactions(types.NewLayerID(1), []*types.Transaction{tx1})
+	blk := &types.Block{}
+	blk.LayerIndex = types.NewLayerID(1)
+	err := msh.writeTransactions(blk, tx1)
 	r.NoError(err)
 	return tx1
 }
