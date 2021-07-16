@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -49,6 +50,7 @@ func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
 }
 
 type nipstBuilder interface {
+	updatePoETProver(PoetProvingServiceClient)
 	BuildNIPST(ctx context.Context, challenge *types.Hash32, timeout chan struct{}) (*types.NIPST, error)
 }
 
@@ -78,6 +80,15 @@ type bytesStore interface {
 
 type signer interface {
 	Sign(m []byte) []byte
+}
+
+type layerClock interface {
+	AwaitLayer(layerID types.LayerID) chan struct{}
+	GetCurrentLayer() types.LayerID
+}
+
+type syncer interface {
+	RegisterChForSynced(context.Context, chan struct{})
 }
 
 const (
@@ -115,27 +126,21 @@ type Builder struct {
 	challenge       *types.NIPSTChallenge
 	commitment      *types.PostProof
 	// pendingATX is created with current commitment and nipst from current challenge.
-	pendingATX        *types.ActivationTx
-	layerClock        layerClock
-	started           uint32
-	store             bytesStore
-	syncer            syncer
-	initStatus        int32
-	initDone          chan struct{}
-	committedSpace    uint64
-	log               log.Log
-	runCtx            context.Context
-	stop              func()
-	poetRetryInterval time.Duration
-}
-
-type layerClock interface {
-	AwaitLayer(layerID types.LayerID) chan struct{}
-	GetCurrentLayer() types.LayerID
-}
-
-type syncer interface {
-	RegisterChForSynced(context.Context, chan struct{})
+	pendingATX            *types.ActivationTx
+	layerClock            layerClock
+	started               uint32
+	store                 bytesStore
+	syncer                syncer
+	initStatus            int32
+	initDone              chan struct{}
+	committedSpace        uint64
+	log                   log.Log
+	runCtx                context.Context
+	stop                  func()
+	poetRetryInterval     time.Duration
+	poetClientInitializer PoETClientInitializer
+	// pendingPoetClient is modified using atomic operations on unsafe.Pointer
+	pendingPoetClient unsafe.Pointer
 }
 
 // BuilderOption ...
@@ -146,6 +151,16 @@ type BuilderOption func(*Builder)
 func WithPoetRetryInterval(interval time.Duration) BuilderOption {
 	return func(b *Builder) {
 		b.poetRetryInterval = interval
+	}
+}
+
+// PoETClientInitializer interfaces for creating PoetProvingServiceClient.
+type PoETClientInitializer func(string) PoetProvingServiceClient
+
+// WithPoETClientInitializer modifies initialization logic for PoET client. Used during client update.
+func WithPoETClientInitializer(initializer PoETClientInitializer) BuilderOption {
+	return func(b *Builder) {
+		b.poetClientInitializer = initializer
 	}
 }
 
@@ -239,6 +254,13 @@ func (b *Builder) run(ctx context.Context) {
 	}()
 	defer b.log.Info("atx builder is stopped")
 	for {
+		client := atomic.LoadPointer(&b.pendingPoetClient)
+		if client != nil {
+			b.nipstBuilder.updatePoETProver(*(*PoetProvingServiceClient)(client))
+			// CaS here will not lose concurrent update
+			atomic.CompareAndSwapPointer(&b.pendingPoetClient, client, nil)
+		}
+
 		if err := b.PublishActivationTx(ctx); err != nil {
 			if errors.Is(err, ErrStopRequested) {
 				return
@@ -370,6 +392,19 @@ func (b *Builder) StartPost(ctx context.Context, rewardAddress types.Address, da
 		close(b.initDone)
 	}()
 
+	return nil
+}
+
+// UpdatePoETServer updates poet client. Context is used to verify that the target is responsive.
+func (b *Builder) UpdatePoETServer(ctx context.Context, target string) error {
+	client := b.poetClientInitializer(target)
+	// TODO(dshulyak) not enough information to verify that PoetServiceID matches with an expected one.
+	// Maybe it should be provided during update.
+	_, err := client.PoetServiceID(ctx)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrPoetServiceUnstable, err)
+	}
+	atomic.StorePointer(&b.pendingPoetClient, unsafe.Pointer(&client))
 	return nil
 }
 
