@@ -413,7 +413,9 @@ func (l *Logic) fetchLayerBlocks(ctx context.Context, layerID types.LayerID, blo
 func (l *Logic) receiveBlockHashes(ctx context.Context, layerID types.LayerID, peer peers.Peer, expectedResults int, data []byte, extErr error) {
 	pRes := &peerResult{err: extErr}
 	if extErr != nil {
-		l.log.WithContext(ctx).With().Error("received error from peer for block hashes", log.Err(extErr), layerID)
+		if !errors.Is(extErr, ErrZeroLayer) || !layerID.GetEpoch().IsGenesis() {
+			l.log.WithContext(ctx).With().Error("received error from peer for block hashes", log.Err(extErr), layerID)
+		}
 	} else if data != nil {
 		var blocks layerBlocks
 		convertErr := types.BytesToInterface(data, &blocks)
