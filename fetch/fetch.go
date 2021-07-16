@@ -217,7 +217,7 @@ func NewFetch(ctx context.Context, cfg Config, network service.Service, logger l
 		pendingRequests: make(map[types.Hash32][]*request),
 		net:             srv,
 		requestReceiver: make(chan request),
-		batchTimeout:    time.NewTicker(time.Millisecond * 50),
+		batchTimeout:    time.NewTicker(time.Second * time.Duration(cfg.BatchTimeout)),
 		stop:            make(chan struct{}),
 		activeBatches:   make(map[types.Hash32]requestBatch),
 		doneChan:        make(chan struct{}),
