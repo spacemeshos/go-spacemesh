@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       nondocchanges: ${{ steps.filter.outputs.nondoc }}
-      unittests: 'true' # set 'true' to enable unittests
+      unittests: 'false' # set 'true' to enable unittests
     steps:
       - uses: actions/checkout@v2
       - uses: dorny/paths-filter@v2
