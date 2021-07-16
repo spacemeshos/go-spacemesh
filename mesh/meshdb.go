@@ -212,7 +212,7 @@ func (m *DB) GetBlock(id types.BlockID) (*types.Block, error) {
 func (m *DB) LayerBlocks(index types.LayerID) ([]*types.Block, error) {
 	ids, err := m.LayerBlockIds(index)
 	if err != nil {
-		return nil, fmt.Errorf("LayerBlockIds: %w", err)
+		return nil, err
 	}
 
 	blocks := make([]*types.Block, 0, len(ids))
@@ -278,7 +278,7 @@ func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID
 func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	idsBytes, err := m.layers.Get(index.Bytes())
 	if err != nil {
-		return nil, fmt.Errorf("get layers: %w", err)
+		return nil, err
 	}
 
 	if len(idsBytes) == 0 {

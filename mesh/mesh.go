@@ -230,7 +230,7 @@ func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
 func (msh *Mesh) GetLayer(i types.LayerID) (*types.Layer, error) {
 	mBlocks, err := msh.LayerBlocks(i)
 	if err != nil {
-		return nil, fmt.Errorf("LayerBlocks: %w", err)
+		return nil, err
 	}
 
 	l := types.NewLayer(i)
