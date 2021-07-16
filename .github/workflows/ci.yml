@@ -101,15 +101,16 @@ jobs:
       - name: app test
         run: make test-only-app-test
 
-  #
   ci-stage0:
-    if: false
+    if: github.event_name != 'push'
     needs:
       - filter-changes
       - quicktests
       - unittests
       - apptests
     runs-on: ubuntu-latest
+    steps:
+    run: exit 0
 
   # checkpoint and print a single, clean status message to slack
   ci-stage1:
