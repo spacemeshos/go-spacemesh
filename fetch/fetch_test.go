@@ -152,7 +152,6 @@ func customFetch(cfg Config) (*Fetch, *mockNet) {
 		Responses:  make(map[types.Hash32]responseMessage),
 	}
 	lg := log.NewDefault("fetch")
-
 	f := NewFetch(context.TODO(), cfg, mckNet, lg)
 	f.net = mckNet
 	f.AddDB("db", database.NewMemDatabase())
@@ -389,7 +388,7 @@ func TestFetch_handleNewRequest_MultipleReqsForSameHashHighPriority(t *testing.T
 		Data: []byte("a"),
 	}
 	resp3 := responseMessage{
-		Hash: req3.hash,
+		Hash: hash3,
 		Data: []byte("d"),
 	}
 	net.Responses[hash1] = resp1
@@ -399,7 +398,6 @@ func TestFetch_handleNewRequest_MultipleReqsForSameHashHighPriority(t *testing.T
 
 	// req1 is high priority and will cause a send right away
 	assert.True(t, f.handleNewRequest(req1))
-	log.Info("req1 sent")
 	select {
 	case <-net.AckChannel:
 		break
@@ -422,25 +420,6 @@ func TestFetch_handleNewRequest_MultipleReqsForSameHashHighPriority(t *testing.T
 	}
 	assert.Equal(t, 1, net.SendCalled[req3.hash])
 
-	net.AsyncChannel <- struct{}{} // req 1 gets response
-	// req1 receives response
-	select {
-	case resp := <-req1.returnChan:
-		assert.Equal(t, resp1.Data, resp.Data)
-		break
-	case <-time.After(2 * time.Second):
-		assert.Fail(t, "timeout getting resp1")
-	}
-
-	// req2 receives response
-	select {
-	case resp := <-req2.returnChan:
-		assert.Equal(t, resp1.Data, resp.Data)
-		break
-	case <-time.After(2 * time.Second):
-		assert.Fail(t, "timeout getting resp2")
-	}
-
 	// req4 is the same hash as req3. it won't cause a send
 	assert.False(t, f.handleNewRequest(req4))
 	assert.Equal(t, 1, net.SendCalled[req3.hash])
@@ -449,31 +428,23 @@ func TestFetch_handleNewRequest_MultipleReqsForSameHashHighPriority(t *testing.T
 	assert.False(t, f.handleNewRequest(req5))
 	assert.Equal(t, 1, net.SendCalled[req3.hash])
 
-	net.AsyncChannel <- struct{}{} // req 3 gets response
-	// req3 receives response
-	select {
-	case resp := <-req3.returnChan:
-		assert.Equal(t, resp3.Data, resp.Data)
-		break
-	case <-time.After(2 * time.Second):
-		assert.Fail(t, "timeout getting resp3")
-	}
-	// req4 receives response
-	select {
-	case resp := <-req4.returnChan:
-		assert.Equal(t, resp3.Data, resp.Data)
-		break
-	case <-time.After(2 * time.Second):
-		assert.Fail(t, "timeout getting resp4")
-	}
-	// req5 receives response
-	select {
-	case resp := <-req5.returnChan:
-		assert.Equal(t, resp3.Data, resp.Data)
-		break
-	case <-time.After(2 * time.Second):
-		assert.Fail(t, "timeout getting resp5")
-	}
+	// let both hashes receives response
+	net.AsyncChannel <- struct{}{}
+	net.AsyncChannel <- struct{}{}
 
+	for i, req := range []*request{req1, req2, req3, req4, req5} {
+		select {
+		case resp := <-req.returnChan:
+			if i < 2 {
+				assert.Equal(t, resp1.Data, resp.Data)
+			} else {
+				assert.Equal(t, resp3.Data, resp.Data)
+			}
+			break
+		case <-time.After(2 * time.Second):
+			assert.Fail(t, "timeout getting resp for %v", req)
+		}
+
+	}
 	assert.Equal(t, 2, net.TotalBatchCalls)
 }
