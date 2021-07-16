@@ -108,9 +108,8 @@ func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (r
 		}
 		state = pb.TransactionState_TRANSACTION_STATE_MEMPOOL
 		return
-	} else {
-		retTx = &tx.Transaction
 	}
+	retTx = &tx.Transaction
 
 	layer := s.Mesh.GetLayerApplied(txID)
 	if layer != nil {
