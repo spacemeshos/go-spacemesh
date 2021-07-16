@@ -51,7 +51,7 @@ jobs:
   quicktests:
     runs-on: ubuntu-latest
     needs: filter-changes
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }} && ${{ needs.filter-changes.outputs.runstage0 == 'true' }}
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && needs.filter-changes.outputs.runstage0 == 'true' }}
     # should not take more than 2-3 mins
     timeout-minutes: 5
     steps:
@@ -70,7 +70,7 @@ jobs:
   unittests:
     runs-on: ubuntu-latest
     needs: filter-changes
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }} && ${{ needs.filter-changes.outputs.runstage0 == 'true' }}
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && needs.filter-changes.outputs.runstage0 == 'true' }}
     # should take around 8-10 mins
     timeout-minutes: 15
     steps:
@@ -87,7 +87,7 @@ jobs:
   apptests:
     runs-on: ubuntu-latest
     needs: filter-changes
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }} && ${{ needs.filter-changes.outputs.runstage0 == 'true' }}
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && needs.filter-changes.outputs.runstage0 == 'true' }}
     # should take around 7-9 mins
     timeout-minutes: 15
     steps:
