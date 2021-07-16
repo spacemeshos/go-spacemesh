@@ -100,16 +100,24 @@ jobs:
         run: make
       - name: app test
         run: make test-only-app-test
+
+  #
+  ci-stage0:
+    if: false
+    needs:
+      - filter-changes
+      - quicktests
+      - unittests
+      - apptests
+    runs-on: ubuntu-latest
+
   # checkpoint and print a single, clean status message to slack
   ci-stage1:
     # run regardless of status of previous jobs but skip if the required secret is not accessible
     if: always()
     needs:
       - filter-changes
-      #- quicktests
-      #- unittests
-      #- apptests
-      #
+      #- ci-stage0
     runs-on: ubuntu-latest
     env:
       # short-circuit success if no non-doc files were modified
