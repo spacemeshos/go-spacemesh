@@ -122,7 +122,7 @@ type responseBatch struct {
 
 // Config is the configuration file of the Fetch component
 type Config struct {
-	BatchTimeout         int // in seconds
+	BatchTimeout         int // in milliseconds
 	MaxRetiresForPeer    int
 	BatchSize            int
 	RequestTimeout       int // in seconds
@@ -132,7 +132,7 @@ type Config struct {
 // DefaultConfig is the default config for the fetch component
 func DefaultConfig() Config {
 	return Config{
-		BatchTimeout:         1,
+		BatchTimeout:         50,
 		MaxRetiresForPeer:    2,
 		BatchSize:            20,
 		RequestTimeout:       10,
@@ -217,7 +217,7 @@ func NewFetch(ctx context.Context, cfg Config, network service.Service, logger l
 		pendingRequests: make(map[types.Hash32][]*request),
 		net:             srv,
 		requestReceiver: make(chan request),
-		batchTimeout:    time.NewTicker(time.Second * time.Duration(cfg.BatchTimeout)),
+		batchTimeout:    time.NewTicker(time.Millisecond * time.Duration(cfg.BatchTimeout)),
 		stop:            make(chan struct{}),
 		activeBatches:   make(map[types.Hash32]requestBatch),
 		doneChan:        make(chan struct{}),
