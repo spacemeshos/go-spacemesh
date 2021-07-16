@@ -419,7 +419,7 @@ func (s *Syncer) getTortoiseBeacon(ctx context.Context, layerID types.LayerID) e
 		s.logger.WithContext(ctx).With().Info("getting tortoise beacons", epoch, layerID)
 		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
 		// tortoise beacon for previous epoch is needed
-		if err := s.fetcher.GetTortoiseBeacon(ctx, epoch-1); err != nil {
+		if err := s.fetcher.GetTortoiseBeacon(ctx, epoch); err != nil {
 			s.logger.WithContext(ctx).With().Error("failed to fetch epoch tortoise beacons", layerID, epoch, log.Err(err))
 			return err
 		}

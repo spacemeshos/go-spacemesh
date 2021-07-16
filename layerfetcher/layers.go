@@ -240,7 +240,7 @@ func (l *Logic) tortoiseBeaconReqReceiver(ctx context.Context, msg []byte) []byt
 	epoch := types.EpochID(util.BytesToUint32(msg))
 	l.log.WithContext(ctx).Info("got tortoise beacon request for epoch %v", epoch)
 
-	beacon, err := l.tbDB.GetTortoiseBeacon(epoch)
+	beacon, err := l.tbDB.GetTortoiseBeacon(epoch - 1)
 	if errors.Is(err, database.ErrNotFound) {
 		l.log.WithContext(ctx).Debug("still no tortoise beacon for epoch %v", epoch)
 		return []byte{}
@@ -770,6 +770,6 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 		resHash := types.BytesToHash(res)
 		l.log.WithContext(ctx).Info("received tortoise beacon for epoch %v: %v", id, resHash.String())
 
-		return l.tbDB.SetTortoiseBeacon(id, resHash)
+		return l.tbDB.SetTortoiseBeacon(id-1, resHash)
 	}
 }
