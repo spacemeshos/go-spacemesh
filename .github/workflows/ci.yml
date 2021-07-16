@@ -102,27 +102,15 @@ jobs:
       - name: app test
         run: make test-only-app-test
 
-  #
-  #
-  ci-stage0:
-    needs:
-      - filter-changes
-      - quicktests
-      - unittests
-      - apptests
-    if: ${{ needs.filter-changes.outputs.runstage0 == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Mark the job as succeeded
-        run: exit 0
-
   # checkpoint and print a single, clean status message to slack
   ci-stage1:
     # run regardless of status of previous jobs but skip if the required secret is not accessible
     if: always()
     needs:
       - filter-changes
-      - ci-stage0
+      - quicktests
+      - unittests
+      - apptests
     runs-on: ubuntu-latest
     env:
       # short-circuit success if no non-doc files were modified
