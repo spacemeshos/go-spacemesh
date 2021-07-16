@@ -156,7 +156,7 @@ func (m *DB) Close() {
 	m.contextualValidity.Close()
 }
 
-//todo: for now, these methods are used to export dbs to sync, think about merging the two packages
+// todo: for now, these methods are used to export dbs to sync, think about merging the two packages
 
 // Blocks exports the block database
 func (m *DB) Blocks() database.Database {
@@ -212,7 +212,7 @@ func (m *DB) GetBlock(id types.BlockID) (*types.Block, error) {
 func (m *DB) LayerBlocks(index types.LayerID) ([]*types.Block, error) {
 	ids, err := m.LayerBlockIds(index)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("LayerBlockIds: %w", err)
 	}
 
 	blocks := make([]*types.Block, 0, len(ids))
@@ -278,11 +278,11 @@ func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID
 func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	idsBytes, err := m.layers.Get(index.Bytes())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get layers: %w", err)
 	}
 
 	if len(idsBytes) == 0 {
-		//zero block layer
+		// zero block layer
 		return []types.BlockID{}, nil
 	}
 
@@ -514,7 +514,7 @@ func getSmesherRewardKey(l types.LayerID, smesherID types.NodeID, account types.
 	return []byte(str)
 }
 
-//use r_ for one and s_ for the other so the namespaces can't collide
+// use r_ for one and s_ for the other so the namespaces can't collide
 func getSmesherRewardKeyPrefix(smesherID types.NodeID) []byte {
 	str := "s_" + smesherID.String()
 	return []byte(str)
@@ -649,7 +649,7 @@ func (m *DB) WriteTransaction(l types.LayerID, t *types.Transaction) error {
 	return nil
 }
 
-//We're not using the existing reward type because the layer is implicit in the key
+// We're not using the existing reward type because the layer is implicit in the key
 type dbReward struct {
 	TotalReward         uint64
 	LayerRewardEstimate uint64
@@ -721,10 +721,9 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 		if err != nil {
 			return nil, fmt.Errorf("error parsing db key %s: %v", it.Key(), err)
 		}
-		//find the key to the actual reward struct, which is in it.Value()
+		// find the key to the actual reward struct, which is in it.Value()
 		var reward dbReward
 		rewardBytes, err := m.transactions.Get(it.Value())
-
 		if err != nil {
 			return nil, fmt.Errorf("wrong key in db %s: %v", it.Value(), err)
 		}

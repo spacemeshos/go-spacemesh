@@ -378,11 +378,7 @@ func (l *Logic) PollLayerBlocks(ctx context.Context, layerID types.LayerID, hash
 	for hash, remotePeers := range hashes {
 		peer := remotePeers[0]
 		if hash == emptyHash {
-			err := ErrZeroLayer
-			if layerID.GetEpoch().IsGenesis() {
-				err = nil
-			}
-			l.receiveBlockHashes(ctx, layerID, peer, numHashes, nil, err)
+			l.receiveBlockHashes(ctx, layerID, peer, numHashes, nil, ErrZeroLayer)
 			continue
 		}
 		receiveForPeerFunc := func(data []byte) {

@@ -367,7 +367,7 @@ func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) (
 	ch := s.fetcher.PollLayerHash(ctx, layerID)
 	hashRes := <-ch
 	if hashRes.Err != nil {
-		return nil, hashRes.Err
+		return nil, fmt.Errorf("PollLayerHash: %w", hashRes.Err)
 	}
 	// TODO: resolve hash with peers
 	bch := s.fetcher.PollLayerBlocks(ctx, layerID, hashRes.Hashes)
@@ -376,9 +376,15 @@ func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) (
 		if res.Err == layerfetcher.ErrZeroLayer {
 			return types.NewLayer(layerID), nil
 		}
-		return nil, res.Err
+		return nil, fmt.Errorf("PollLayerBlocks: %w", res.Err)
 	}
-	return s.mesh.GetLayer(layerID)
+
+	layer, err := s.mesh.GetLayer(layerID)
+	if err != nil {
+		return nil, fmt.Errorf("GetLayer: %w", err)
+	}
+
+	return layer, nil
 }
 
 func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
