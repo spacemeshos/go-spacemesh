@@ -103,7 +103,7 @@ jobs:
 
   #
   ci-stage0:
-    if: github.event_name != 'push'
+    if: github.event_name == ''
     needs:
       - filter-changes
       - quicktests
