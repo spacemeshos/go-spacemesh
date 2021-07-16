@@ -796,7 +796,7 @@ func TestBuilder_UpdatePoETProver(t *testing.T) {
 	nb := NewNIPSTBuilder(minerID, postProver, poetProver,
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 	b := NewBuilder(bc, nodeID, 0, &MockSigning{}, activationDb, net, meshProviderMock,
-		layersPerEpoch, nb, postProver, layerClockMock,
+		nb, postProver, layerClockMock,
 		&mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"),
 		WithPoetRetryInterval(time.Millisecond),
 		WithPoETClientInitializer(mockInitializer),
