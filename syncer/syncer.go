@@ -404,7 +404,7 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 }
 
 func (s *Syncer) getTortoiseBeacon(ctx context.Context, layerID types.LayerID) error {
-	epoch := layerID.GetEpoch() - 1 // tortoise beacon for previous epoch is needed
+	epoch := layerID.GetEpoch()
 	if epoch.IsGenesis() {
 		s.logger.WithContext(ctx).Info("skip getting tortoise beacons in genesis epoch")
 		return nil
@@ -415,10 +415,11 @@ func (s *Syncer) getTortoiseBeacon(ctx context.Context, layerID types.LayerID) e
 	// - layerID is in the current epoch
 	// - layerID is the last layer of a previous epoch
 	// i.e. for older epochs we sync tortoise beacons once per epoch. for current epoch we sync tortoise beacons in every layer
-	if epoch == currentEpoch || layerID == (epoch+1).FirstLayer().Sub(1) {
+	if epoch == currentEpoch || ((epoch+1).FirstLayer().Value > 0 && layerID == (epoch+1).FirstLayer().Sub(1)) {
 		s.logger.WithContext(ctx).With().Info("getting tortoise beacons", epoch, layerID)
 		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
-		if err := s.fetcher.GetTortoiseBeacon(ctx, epoch); err != nil {
+		// tortoise beacon for previous epoch is needed
+		if err := s.fetcher.GetTortoiseBeacon(ctx, epoch-1); err != nil {
 			s.logger.WithContext(ctx).With().Error("failed to fetch epoch tortoise beacons", layerID, epoch, log.Err(err))
 			return err
 		}
