@@ -424,6 +424,14 @@ type SyncerMock struct {
 func (s *SyncerMock) IsSynced(context.Context) bool { return s.isSynced }
 func (s *SyncerMock) Start(context.Context)         { s.startCalled = true }
 
+type ActivationAPIMock struct {
+	UpdatePoETErr error
+}
+
+func (a *ActivationAPIMock) UpdatePoETServer(context.Context, string) error {
+	return a.UpdatePoETErr
+}
+
 type MempoolMock struct {
 	// In the real state.TxMempool struct, there are multiple data structures and they're more complex,
 	// but we just mock a very simple use case here and only store some of these data
@@ -525,7 +533,8 @@ func TestNewServersConfig(t *testing.T) {
 
 func TestNodeService(t *testing.T) {
 	syncer := SyncerMock{}
-	grpcService := NewNodeService(&networkMock, txAPI, &genTime, &syncer)
+	atxapi := &ActivationAPIMock{}
+	grpcService := NewNodeService(&networkMock, txAPI, &genTime, &syncer, atxapi)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -620,6 +629,19 @@ func TestNodeService(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, int32(code.Code_OK), res.Status.Code)
 			require.Equal(t, true, called, "cmd.Shutdown() was called")
+		}},
+		{"UpdatePoetServer", func(t *testing.T) {
+			atxapi.UpdatePoETErr = nil
+			res, err := c.UpdatePoetServer(context.TODO(), &pb.UpdatePoetServerRequest{Url: "test"})
+			require.NoError(t, err)
+			require.EqualValues(t, res.Status.Code, code.Code_OK)
+		}},
+		{"UpdatePoetServerUnavailable", func(t *testing.T) {
+			atxapi.UpdatePoETErr = activation.ErrPoetServiceUnstable
+			url := "test"
+			res, err := c.UpdatePoetServer(context.TODO(), &pb.UpdatePoetServerRequest{Url: url})
+			require.Nil(t, res)
+			require.ErrorIs(t, err, status.Errorf(codes.Unavailable, "can't reach server at %s. retry later", url))
 		}},
 		// NOTE: ErrorStream and StatusStream have comprehensive, E2E tests in cmd/node/node_test.go.
 	}
@@ -2503,7 +2525,7 @@ func checkGlobalStateDataGlobalState(t *testing.T, dataItem interface{}) {
 
 func TestMultiService(t *testing.T) {
 	cfg.GrpcServerPort = 9192
-	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
 	svc2 := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, svc1, svc2)
 	defer shutDown()
@@ -2563,7 +2585,7 @@ func TestJsonApi(t *testing.T) {
 	shutDown()
 
 	// enable services and try again
-	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
 	svc2 := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	cfg.StartNodeService = true
 	cfg.StartMeshService = true
