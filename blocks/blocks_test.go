@@ -47,7 +47,7 @@ func atx(pubkey string) *types.ActivationTx {
 	poetRef := []byte{0xde, 0xad}
 	npst := activation.NewNIPSTWithChallenge(&chlng, poetRef)
 
-	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, 5, 1, goldenATXID, coinbase, npst)
+	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, types.NewLayerID(5), 1, goldenATXID, coinbase, npst)
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
 	atx.CalcAndSetID()
@@ -221,7 +221,7 @@ func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	atxpool.Put(a)
 	b := &types.Block{}
 	b.TxIDs = []types.TransactionID{}
-	block1 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
+	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
 	block1.ActiveSet = &[]types.ATXID{a.ID()}
 	block1.ATXID = a.ID()
 	block1.Initialize()
@@ -240,12 +240,13 @@ func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 
 func TestBlockHandler_AtxSetID(t *testing.T) {
 	a := atx("")
-	bbytes, _ := types.InterfaceToBytes(*a)
+	bbytes, err := types.InterfaceToBytes(*a)
+	require.NoError(t, err)
 	var b types.ActivationTx
 	types.BytesToInterface(bbytes, &b)
-	t.Log(fmt.Sprintf("%+v\n", *a))
+	t.Log(fmt.Sprintf("%+v", *a))
 	t.Log("---------------------")
-	t.Log(fmt.Sprintf("%+v\n", b))
+	t.Log(fmt.Sprintf("%+v", b))
 	t.Log("---------------------")
 	assert.Equal(t, b.Nipst, a.Nipst)
 	assert.Equal(t, b.Commitment, a.Commitment)

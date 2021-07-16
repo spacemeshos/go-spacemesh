@@ -3,14 +3,15 @@ package hare
 import (
 	"context"
 	"errors"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 const skipMoreTests = true
@@ -21,7 +22,7 @@ type TestHareWrapper struct {
 
 func newTestHareWrapper(count int) *TestHareWrapper {
 	w := &TestHareWrapper{
-		HareWrapper: newHareWrapper(count),
+		HareWrapper: newHareWrapper(uint32(count)),
 	}
 	return w
 }
@@ -37,10 +38,10 @@ func (w *TestHareWrapper) LayerTicker(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	j := types.GetEffectiveGenesis() + 1
-	last := j + types.LayerID(w.totalCP)
+	j := types.GetEffectiveGenesis().Add(1)
+	last := j.Add(w.totalCP)
 
-	for ; j < last; j++ {
+	for ; j.Before(last); j = j.Add(1) {
 		w.Tick(j)
 		select {
 		case <-w.termination.CloseChannel():
@@ -90,7 +91,7 @@ func createTestHare(tcfg config.Config, layersCh chan types.LayerID, p2p Network
 	pub := ed.PublicKey()
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: pub.Bytes()}
 	hare := New(tcfg, p2p, ed, nodeID, validateBlock, isSynced, bp, rolacle, 10, &mockIdentityP{nid: nodeID},
-		&MockStateQuerier{true, nil}, layersCh, log.NewDefault(name+"_"+ed.PublicKey().ShortString()))
+		&MockStateQuerier{true, nil}, layersCh, log.AppLog.WithName(name+"_"+ed.PublicKey().ShortString()))
 	return hare
 }
 
@@ -109,7 +110,7 @@ func runNodesFor(t *testing.T, nodes, leaders, maxLayers, limitIterations, concu
 	sim := service.NewSimulator()
 	for i := 0; i < nodes; i++ {
 		s := sim.NewNode()
-		mp2p := &p2pManipulator{nd: s, stalledLayer: 1, err: errors.New("fake err")}
+		mp2p := &p2pManipulator{nd: s, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 		w.lCh = append(w.lCh, make(chan types.LayerID, 1))
 		h := &testHare{nil, oracle, bp, validate, i}
 		h.Hare = createTestHare(cfg, w.lCh[i], mp2p, h, t.Name(), h)
@@ -138,7 +139,7 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 			return []types.BlockID{}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
-			l := layer - types.GetEffectiveGenesis() - 1
+			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = len(blocks) + 1
 		})
 
@@ -175,7 +176,7 @@ func Test_HareNotEnoughStatuses(t *testing.T) {
 			return []types.BlockID{}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
-			l := layer - types.GetEffectiveGenesis() - 1
+			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = len(blocks) + 1
 		})
 
@@ -211,7 +212,7 @@ func Test_HareNotEnoughLeaders(t *testing.T) {
 			return []types.BlockID{}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
-			l := layer - types.GetEffectiveGenesis() - 1
+			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = len(blocks) + 1
 		})
 
@@ -247,7 +248,7 @@ func Test_HareNotEnoughCommits(t *testing.T) {
 			return []types.BlockID{genBlockID(1)}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
-			l := layer - types.GetEffectiveGenesis() - 1
+			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = len(blocks) + 1
 		})
 
@@ -283,7 +284,7 @@ func Test_HareNotEnoughNotifications(t *testing.T) {
 			return []types.BlockID{genBlockID(1)}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
-			l := layer - types.GetEffectiveGenesis() - 1
+			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = len(blocks) + 1
 		})
 
@@ -313,10 +314,10 @@ func Test_HareComplete(t *testing.T) {
 			return 1, nil
 		},
 		func(layer types.LayerID, hare *testHare) ([]types.BlockID, error) {
-			return []types.BlockID{genBlockID(int(layer))}, nil
+			return []types.BlockID{genBlockID(int(layer.Uint32()))}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
-			l := layer - types.GetEffectiveGenesis() - 1
+			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = len(blocks)
 		})
 

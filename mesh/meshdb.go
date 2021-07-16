@@ -1,8 +1,10 @@
 package mesh
 
 import (
+	"bytes"
 	"container/list"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -241,7 +243,7 @@ func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID
 		}
 
 		// catch blocks that were referenced after more than one layer, and slipped through the stop condition
-		if block.LayerIndex < layer {
+		if block.LayerIndex.Before(layer) {
 			continue
 		}
 
@@ -496,7 +498,7 @@ func (m *DB) getLayerMutex(index types.LayerID) *layerMutex {
 
 // Schema: "r_<coinbase>_<smesherId>_<layerId> -> reward struct"
 func getRewardKey(l types.LayerID, account types.Address, smesherID types.NodeID) []byte {
-	str := string(getRewardKeyPrefix(account)) + "_" + smesherID.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
+	str := string(getRewardKeyPrefix(account)) + "_" + smesherID.String() + "_" + l.String()
 	return []byte(str)
 }
 
@@ -508,7 +510,7 @@ func getRewardKeyPrefix(account types.Address) []byte {
 // This function gets the reward key for a particular smesherID
 // format for the index "s_<smesherid>_<accountid>_<layerid> -> r_<accountid>_<smesherid>_<layerid> -> the actual reward"
 func getSmesherRewardKey(l types.LayerID, smesherID types.NodeID, account types.Address) []byte {
-	str := string(getSmesherRewardKeyPrefix(smesherID)) + "_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
+	str := string(getSmesherRewardKeyPrefix(smesherID)) + "_" + account.String() + "_" + l.String()
 	return []byte(str)
 }
 
@@ -518,24 +520,70 @@ func getSmesherRewardKeyPrefix(smesherID types.NodeID) []byte {
 	return []byte(str)
 }
 
+type keyBuilder struct {
+	buf bytes.Buffer
+}
+
+func (k *keyBuilder) WithLayerID(l types.LayerID) *keyBuilder {
+	buf := make([]byte, 4)
+	// NOTE(dshulyak) big endian produces lexicographically ordered bytes.
+	// some queries can be optimizaed by using range queries instead of point queries.
+	binary.BigEndian.PutUint32(buf, l.Uint32())
+	k.buf.Write(l.Bytes())
+	return k
+}
+
+func (k *keyBuilder) WithOriginPrefix() *keyBuilder {
+	k.buf.WriteString("a_o_")
+	return k
+}
+
+func (k *keyBuilder) WithDestPrefix() *keyBuilder {
+	k.buf.WriteString("a_d_")
+	return k
+}
+
+func (k *keyBuilder) WithBytes(buf []byte) *keyBuilder {
+	k.buf.Write(buf)
+	return k
+}
+
+func (k *keyBuilder) Bytes() []byte {
+	return k.buf.Bytes()
+}
+
 func getTransactionOriginKey(l types.LayerID, t *types.Transaction) []byte {
-	str := string(getTransactionOriginKeyPrefix(l, t.Origin())) + "_" + t.ID().String()
-	return []byte(str)
+	return new(keyBuilder).
+		WithOriginPrefix().
+		WithBytes(t.Origin().Bytes()).
+		WithLayerID(l).
+		WithBytes(t.ID().Bytes()).
+		Bytes()
 }
 
 func getTransactionDestKey(l types.LayerID, t *types.Transaction) []byte {
-	str := string(getTransactionDestKeyPrefix(l, t.Recipient)) + "_" + t.ID().String()
-	return []byte(str)
+	return new(keyBuilder).
+		WithDestPrefix().
+		WithBytes(t.Recipient.Bytes()).
+		WithLayerID(l).
+		WithBytes(t.ID().Bytes()).
+		Bytes()
 }
 
 func getTransactionOriginKeyPrefix(l types.LayerID, account types.Address) []byte {
-	str := "a_o_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
-	return []byte(str)
+	return new(keyBuilder).
+		WithOriginPrefix().
+		WithBytes(account.Bytes()).
+		WithLayerID(l).
+		Bytes()
 }
 
 func getTransactionDestKeyPrefix(l types.LayerID, account types.Address) []byte {
-	str := "a_d_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
-	return []byte(str)
+	return new(keyBuilder).
+		WithDestPrefix().
+		WithBytes(account.Bytes()).
+		WithLayerID(l).
+		Bytes()
 }
 
 // DbTransaction is the transaction type stored in DB
@@ -632,7 +680,7 @@ func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err erro
 		}
 		str := string(it.Key())
 		strs := strings.Split(str, "_")
-		layer, err := strconv.ParseUint(strs[3], 10, 64)
+		layer, err := strconv.ParseUint(strs[3], 10, 32)
 		if err != nil {
 			return nil, fmt.Errorf("wrong key in db %s: %v", it.Key(), err)
 		}
@@ -642,7 +690,7 @@ func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err erro
 			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
 		}
 		rewards = append(rewards, types.Reward{
-			Layer:               types.LayerID(layer),
+			Layer:               types.NewLayerID(uint32(layer)),
 			TotalReward:         reward.TotalReward,
 			LayerRewardEstimate: reward.LayerRewardEstimate,
 			SmesherID:           reward.SmesherID,
@@ -661,7 +709,7 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 		}
 		str := string(it.Key())
 		strs := strings.Split(str, "_")
-		layer, err := strconv.ParseUint(strs[3], 10, 64)
+		layer, err := strconv.ParseUint(strs[3], 10, 32)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing db key %s: %v", it.Key(), err)
 		}
@@ -676,7 +724,7 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
 		}
 		rewards = append(rewards, types.Reward{
-			Layer:               types.LayerID(layer),
+			Layer:               types.NewLayerID(uint32(layer)),
 			TotalReward:         reward.TotalReward,
 			LayerRewardEstimate: reward.LayerRewardEstimate,
 			SmesherID:           reward.SmesherID,
@@ -910,7 +958,7 @@ func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks
 
 // LayerContextuallyValidBlocks returns the set of contextually valid block IDs for the provided layer
 func (m *DB) LayerContextuallyValidBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
-	if layer == 0 || layer == 1 {
+	if layer == types.NewLayerID(0) || layer == types.NewLayerID(1) {
 		v, err := m.LayerBlockIds(layer)
 		if err != nil {
 			m.With().Error("could not get layer block ids", layer, log.Err(err))
@@ -990,7 +1038,7 @@ func (m *DB) Retrieve(key []byte, v interface{}) (interface{}, error) {
 
 func (m *DB) cacheWarmUpFromTo(from types.LayerID, to types.LayerID) error {
 	m.Info("warming up cache with layers %v to %v", from, to)
-	for i := from; i < to; i++ {
+	for i := from; i.Before(to); i = i.Add(1) {
 
 		select {
 		case <-m.exit:

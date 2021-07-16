@@ -65,36 +65,31 @@ type DB struct {
 	sync.RWMutex
 	// todo: think about whether we need one db or several(#1922)
 	idStore
-	atxs                database.Database
-	atxHeaderCache      AtxCache
-	meshDb              *mesh.DB
-	LayersPerEpoch      uint16
-	goldenATXID         types.ATXID
-	nipstValidator      nipstValidator
-	pendingTotalWeight  map[types.Hash12]*sync.Mutex
-	pTotalWeightLock    sync.Mutex
-	log                 log.Log
-	calcTotalWeightFunc func(targetEpoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error)
-	processAtxMutex     sync.Mutex
-	atxChannels         map[types.ATXID]*atxChan
+	atxs            database.Database
+	atxHeaderCache  AtxCache
+	meshDb          *mesh.DB
+	LayersPerEpoch  uint32
+	goldenATXID     types.ATXID
+	nipstValidator  nipstValidator
+	log             log.Log
+	processAtxMutex sync.Mutex
+	atxChannels     map[types.ATXID]*atxChan
 }
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
 // their validity
-func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint16, goldenATXID types.ATXID, nipstValidator nipstValidator, log log.Log) *DB {
+func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint32, goldenATXID types.ATXID, nipstValidator nipstValidator, log log.Log) *DB {
 	db := &DB{
-		idStore:            idStore,
-		atxs:               dbStore,
-		atxHeaderCache:     NewAtxCache(600),
-		meshDb:             meshDb,
-		LayersPerEpoch:     layersPerEpoch,
-		goldenATXID:        goldenATXID,
-		nipstValidator:     nipstValidator,
-		pendingTotalWeight: make(map[types.Hash12]*sync.Mutex),
-		log:                log,
-		atxChannels:        make(map[types.ATXID]*atxChan),
+		idStore:        idStore,
+		atxs:           dbStore,
+		atxHeaderCache: NewAtxCache(600),
+		meshDb:         meshDb,
+		LayersPerEpoch: layersPerEpoch,
+		goldenATXID:    goldenATXID,
+		nipstValidator: nipstValidator,
+		log:            log,
+		atxChannels:    make(map[types.ATXID]*atxChan),
 	}
-	db.calcTotalWeightFunc = db.GetMinerWeightsInEpochFromView
 	return db
 }
 
@@ -255,71 +250,6 @@ func (db *DB) GetMinerWeightsInEpochFromView(targetEpoch types.EpochID, view map
 	return minerWeight, nil
 }
 
-// CalcTotalWeightFromView traverses the provided view and returns the total weight of the ATXs found targeting
-// targetEpoch. The function returns error if the view is not found.
-func (db *DB) CalcTotalWeightFromView(view []types.BlockID, targetEpoch types.EpochID) (uint64, error) {
-	if targetEpoch < 1 {
-		return 0, fmt.Errorf("targetEpoch cannot be less than 1, got %v", targetEpoch)
-	}
-	viewHash := types.CalcBlocksHash12(view)
-	totalWeight, found := totalWeightCache.Get(viewHash)
-	if found {
-		return totalWeight, nil
-	}
-	// check if we have a running calculation for this hash
-	db.pTotalWeightLock.Lock()
-	mu, alreadyRunning := db.pendingTotalWeight[viewHash]
-	if alreadyRunning {
-		db.pTotalWeightLock.Unlock()
-		// if there is a running calculation, wait for it to end and get the result
-		mu.Lock()
-		totalWeight, found = totalWeightCache.Get(viewHash)
-		if found {
-			mu.Unlock()
-			return totalWeight, nil
-		}
-		// if not found, keep running mutex, ensure it's still in the pending map and calculate total weight
-		db.pTotalWeightLock.Lock()
-		db.pendingTotalWeight[viewHash] = mu
-		db.pTotalWeightLock.Unlock()
-	} else {
-		// if no running calc, insert new one
-		mu = &sync.Mutex{}
-		mu.Lock()
-		db.pendingTotalWeight[viewHash] = mu
-		db.pTotalWeightLock.Unlock()
-	}
-
-	mp := map[types.BlockID]struct{}{}
-	for _, blk := range view {
-		mp[blk] = struct{}{}
-	}
-
-	atxWeights, err := db.calcTotalWeightFunc(targetEpoch, mp)
-	if err != nil {
-		db.deleteLock(viewHash)
-		mu.Unlock()
-		return 0, err
-	}
-	totalWeight = 0
-	for _, w := range atxWeights {
-		totalWeight += w
-	}
-	totalWeightCache.Add(viewHash, totalWeight)
-	db.deleteLock(viewHash)
-	mu.Unlock()
-
-	return totalWeight, nil
-}
-
-func (db *DB) deleteLock(viewHash types.Hash12) {
-	db.pTotalWeightLock.Lock()
-	if _, exist := db.pendingTotalWeight[viewHash]; exist {
-		delete(db.pendingTotalWeight, viewHash)
-	}
-	db.pTotalWeightLock.Unlock()
-}
-
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
 //
 // - If the sequence number is non-zero: PrevATX points to a syntactically valid ATX whose sequence number is one less
@@ -403,13 +333,13 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		if err != nil {
 			return fmt.Errorf("positioning atx not found")
 		}
-		if atx.PubLayerID <= posAtx.PubLayerID {
+		if !atx.PubLayerID.After(posAtx.PubLayerID) {
 			return fmt.Errorf("atx layer (%v) must be after positioning atx layer (%v)",
 				atx.PubLayerID, posAtx.PubLayerID)
 		}
-		if uint64(atx.PubLayerID-posAtx.PubLayerID) > uint64(db.LayersPerEpoch) {
+		if d := atx.PubLayerID.Difference(posAtx.PubLayerID); d > db.LayersPerEpoch {
 			return fmt.Errorf("expected distance of one epoch (%v layers) from pos atx but found %v",
-				db.LayersPerEpoch, atx.PubLayerID-posAtx.PubLayerID)
+				db.LayersPerEpoch, d)
 		}
 	} else {
 		publicationEpoch := atx.PubLayerID.GetEpoch()
@@ -545,7 +475,7 @@ func (db *DB) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 	if err != nil && err != database.ErrNotFound {
 		return fmt.Errorf("failed to get current atx: %v", err)
 	}
-	if err == nil && currentTopAtx.LayerID >= atx.PubLayerID {
+	if err == nil && !currentTopAtx.LayerID.Before(atx.PubLayerID) {
 		return nil
 	}
 
@@ -570,8 +500,7 @@ func (db *DB) getTopAtx() (atxIDAndLayer, error) {
 	if err != nil {
 		if err == database.ErrNotFound {
 			return atxIDAndLayer{
-				AtxID:   db.goldenATXID,
-				LayerID: 0,
+				AtxID: db.goldenATXID,
 			}, nil
 		}
 		return atxIDAndLayer{}, fmt.Errorf("failed to get top atx: %v", err)

@@ -18,7 +18,7 @@ type MeshService struct {
 	Mesh             api.TxAPI // Mesh
 	Mempool          api.MempoolAPI
 	GenTime          api.GenesisTimeAPI
-	LayersPerEpoch   int
+	LayersPerEpoch   uint32
 	NetworkID        uint32
 	LayerDurationSec int
 	LayerAvgSize     int
@@ -33,7 +33,7 @@ func (s MeshService) RegisterService(server *Server) {
 // NewMeshService creates a new service using config data
 func NewMeshService(
 	tx api.TxAPI, mempool api.MempoolAPI, genTime api.GenesisTimeAPI,
-	layersPerEpoch int, networkID uint32, layerDurationSec int,
+	layersPerEpoch uint32, networkID uint32, layerDurationSec int,
 	layerAvgSize int, txsPerBlock int) *MeshService {
 	return &MeshService{
 		Mesh:             tx,
@@ -59,7 +59,7 @@ func (s MeshService) GenesisTime(context.Context, *pb.GenesisTimeRequest) (*pb.G
 func (s MeshService) CurrentLayer(context.Context, *pb.CurrentLayerRequest) (*pb.CurrentLayerResponse, error) {
 	log.Info("GRPC MeshService.CurrentLayer")
 	return &pb.CurrentLayerResponse{Layernum: &pb.LayerNumber{
-		Number: uint32(s.GenTime.GetCurrentLayer()),
+		Number: uint32(s.GenTime.GetCurrentLayer().Uint32()),
 	}}, nil
 }
 
@@ -128,7 +128,7 @@ func (s MeshService) getFilteredActivations(ctx context.Context, startLayer type
 	// TODO: index activations by layer (and maybe by coinbase)
 	// See https://github.com/spacemeshos/go-spacemesh/issues/2064.
 	var atxids []types.ATXID
-	for l := startLayer; l <= s.Mesh.LatestLayer(); l++ {
+	for l := startLayer; !l.After(s.Mesh.LatestLayer()); l = l.Add(1) {
 		layer, err := s.Mesh.GetLayer(l)
 		if layer == nil || err != nil {
 			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
@@ -162,10 +162,10 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 
 	var startLayer types.LayerID
 	if in.MinLayer != nil {
-		startLayer = types.LayerID(in.MinLayer.Number)
+		startLayer = types.NewLayerID(in.MinLayer.Number)
 	}
 
-	if startLayer > s.Mesh.LatestLayer() {
+	if startLayer.After(s.Mesh.LatestLayer()) {
 		return nil, status.Errorf(codes.InvalidArgument, "`LatestLayer` must be less than or equal to latest layer")
 	}
 	if in.Filter == nil {
@@ -250,7 +250,7 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 
 func (s MeshService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address) []types.TransactionID {
 	var txIDs []types.TransactionID
-	for layerID := minLayer; layerID < s.Mesh.LatestLayer(); layerID++ {
+	for layerID := minLayer; layerID.Before(s.Mesh.LatestLayer()); layerID = layerID.Add(1) {
 		destTxIDs := s.Mesh.GetTransactionsByDestination(layerID, addr)
 		txIDs = append(txIDs, destTxIDs...)
 		originTxIds := s.Mesh.GetTransactionsByOrigin(layerID, addr)
@@ -289,7 +289,7 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 func convertActivation(a *types.ActivationTx) (*pb.Activation, error) {
 	return &pb.Activation{
 		Id:             &pb.ActivationId{Id: a.ID().Bytes()},
-		Layer:          &pb.LayerNumber{Number: uint32(a.PubLayerID)},
+		Layer:          &pb.LayerNumber{Number: a.PubLayerID.Uint32()},
 		SmesherId:      &pb.SmesherId{Id: a.NodeID.ToBytes()},
 		Coinbase:       &pb.AccountId{Address: a.Coinbase.Bytes()},
 		PrevAtx:        &pb.ActivationId{Id: a.PrevATXID.Bytes()},
@@ -357,7 +357,7 @@ func (s MeshService) readLayer(ctx context.Context, layer *types.Layer, layerSta
 			layer, log.String("status", layerStatus.String()), log.Err(err))
 	}
 	return &pb.Layer{
-		Number:        &pb.LayerNumber{Number: uint32(layer.Index())},
+		Number:        &pb.LayerNumber{Number: layer.Index().Uint32()},
 		Status:        layerStatus,
 		Hash:          layer.Hash().Bytes(),
 		Blocks:        blocks,
@@ -372,10 +372,10 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 
 	var startLayer, endLayer types.LayerID
 	if in.StartLayer != nil {
-		startLayer = types.LayerID(in.StartLayer.Number)
+		startLayer = types.NewLayerID(in.StartLayer.Number)
 	}
 	if in.EndLayer != nil {
-		endLayer = types.LayerID(in.EndLayer.Number)
+		endLayer = types.NewLayerID(in.EndLayer.Number)
 	}
 
 	// Get the latest layers that passed both consensus engines.
@@ -383,19 +383,19 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 	lastLayerPassedTortoise := s.Mesh.ProcessedLayer()
 
 	layers := []*pb.Layer{}
-	for l := uint64(startLayer); l <= uint64(endLayer); l++ {
+	for l := startLayer; !l.After(endLayer); l = l.Add(1) {
 		layerStatus := pb.Layer_LAYER_STATUS_UNSPECIFIED
 
 		// First check if the layer passed the Hare, then check if it passed the Tortoise.
 		// It may be either, or both, but Tortoise always takes precedence.
-		if l <= lastLayerPassedHare.Uint64() {
+		if !l.After(lastLayerPassedHare) {
 			layerStatus = pb.Layer_LAYER_STATUS_APPROVED
 		}
-		if l <= lastLayerPassedTortoise.Uint64() {
+		if !l.After(lastLayerPassedTortoise) {
 			layerStatus = pb.Layer_LAYER_STATUS_CONFIRMED
 		}
 
-		layer, err := s.Mesh.GetLayer(types.LayerID(l))
+		layer, err := s.Mesh.GetLayer(l)
 		// TODO: Be careful with how we handle missing layers here.
 		// A layer that's newer than the currentLayer (defined above)
 		// is clearly an input error. A missing layer that's older than

@@ -123,11 +123,13 @@ func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) (votesMarginMap, 
 		}
 
 		for vote := range votesList.ValidVotes {
+			// TODO(nkryuchkov): handle overflow
 			firstRoundVotesMargin[vote] += int(voteWeight)
 			firstRoundVotesFor[vote] = struct{}{}
 		}
 
 		for vote := range votesList.InvalidVotes {
+			// TODO(nkryuchkov): handle negative overflow
 			firstRoundVotesMargin[vote] -= int(voteWeight)
 			firstRoundVotesAgainst[vote] = struct{}{}
 		}
@@ -203,10 +205,12 @@ func (tb *TortoiseBeacon) calcVotesMargin(epoch types.EpochID, upToRound types.R
 			}
 
 			for vote := range votesList.ValidVotes {
+				// TODO(nkryuchkov): handle overflow
 				votesMargin[vote] += int(voteWeight)
 			}
 
 			for vote := range votesList.InvalidVotes {
+				// TODO(nkryuchkov): handle negative overflow
 				votesMargin[vote] -= int(voteWeight)
 			}
 		}

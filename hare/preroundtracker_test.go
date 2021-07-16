@@ -5,13 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
+	"math"
+	"testing"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"math"
-	"testing"
 )
 
 const (
@@ -22,7 +23,7 @@ const (
 )
 
 func genBlockID(i int) types.BlockID {
-	return types.NewExistingBlock(types.LayerID(1), util.Uint32ToBytes(uint32(i)), nil).ID()
+	return types.NewExistingBlock(types.NewLayerID(1), util.Uint32ToBytes(uint32(i)), nil).ID()
 }
 
 var value1 = genBlockID(1)
