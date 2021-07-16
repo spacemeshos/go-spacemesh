@@ -40,7 +40,7 @@ type turtle struct {
 	bdp blockDataProvider
 
 	Last  types.LayerID
-	Hdist types.LayerID
+	Hdist uint32
 	Evict types.LayerID
 
 	AvgLayerSize  int
@@ -64,16 +64,15 @@ func (t *turtle) SetLogger(log2 log.Log) {
 }
 
 // newTurtle creates a new verifying tortoise algorithm instance. XXX: maybe rename?
-func newTurtle(bdp blockDataProvider, hdist, avgLayerSize int) *turtle {
+func newTurtle(bdp blockDataProvider, hdist uint32, avgLayerSize int) *turtle {
 	t := &turtle{
 		logger:               log.NewDefault("trtl"),
-		Hdist:                types.LayerID(hdist),
+		Hdist:                hdist,
 		bdp:                  bdp,
-		Last:                 0,
 		AvgLayerSize:         avgLayerSize,
 		GoodBlocksIndex:      make(map[types.BlockID]struct{}),
 		BlockOpinionsByLayer: make(map[types.LayerID]map[types.BlockID]Opinion, hdist),
-		MaxExceptions:        hdist * avgLayerSize * 100,
+		MaxExceptions:        int(hdist) * avgLayerSize * 100,
 	}
 	return t
 }
@@ -101,14 +100,14 @@ func (t *turtle) evict() {
 	// Don't evict before we've verified more than hdist
 	// TODO: fix potential leak when we can't verify but keep receiving layers
 
-	if t.Verified <= types.GetEffectiveGenesis()+t.Hdist {
+	if !t.Verified.After(types.GetEffectiveGenesis().Add(t.Hdist)) {
 		return
 	}
 	// The window is the last [Verified - hdist] layers.
-	window := t.Verified - t.Hdist
+	window := t.Verified.Sub(t.Hdist)
 	t.logger.Info("window starts %v", window)
 	// evict from last evicted to the beginning of our window.
-	for lyr := t.Evict; lyr < window; lyr++ {
+	for lyr := t.Evict; lyr.Before(window); lyr = lyr.Add(1) {
 		t.logger.Info("removing layer %v", lyr)
 		for blk := range t.BlockOpinionsByLayer[lyr] {
 			delete(t.GoodBlocksIndex, blk)
@@ -134,7 +133,7 @@ func blockIDsToString(input []types.BlockID) string {
 
 // TODO: cache but somehow check for changes (hare that didn't finish finishes..) maybe check hash?
 func (t *turtle) getSingleInputVectorFromDB(lyrid types.LayerID, blockid types.BlockID) (vec, error) {
-	if lyrid <= types.GetEffectiveGenesis() {
+	if !lyrid.After(types.GetEffectiveGenesis()) {
 		return support, nil
 	}
 
@@ -167,7 +166,7 @@ func (t *turtle) checkBlockAndGetInputVector(
 	for _, exceptionBlockID := range diffList {
 		if exceptionBlock, err := t.bdp.GetBlock(exceptionBlockID); err != nil {
 			t.logger.Panic("can't find %v from block's %v diff ", exceptionBlockID, sourceBlockID)
-		} else if exceptionBlock.LayerIndex < layerIndex {
+		} else if exceptionBlock.LayerIndex.Before(layerIndex) {
 			t.logger.With().Debug("not marking block good because it points to block older than base block",
 				sourceBlockID,
 				log.FieldNamed("older_block", exceptionBlockID),
@@ -227,11 +226,11 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 	// Try to find a block counting only good blocks
 	// TODO: could we do better than just grabbing the first non-error, good block, as below?
 	// e.g., trying to minimize the size of the exception list instead
-	window := types.LayerID(0)
-	if t.Hdist < t.Last {
-		window = t.Last - t.Hdist
+	window := types.LayerID{}
+	if t.Hdist < t.Last.Uint32() {
+		window = t.Last.Sub(t.Hdist)
 	}
-	for i := t.Last; i > window; i-- {
+	for i := t.Last; i.After(window); i = i.Sub(1) {
 		for block, opinion := range t.BlockOpinionsByLayer[i] {
 			if _, ok := t.GoodBlocksIndex[block]; !ok {
 				t.logger.With().Debug("skipping block not marked good",
@@ -288,7 +287,7 @@ func (t *turtle) calculateExceptions(layerid types.LayerID, blockid types.BlockI
 	// TODO: maybe we should vote back hdist but drill down check the base blocks
 
 	// Add latest layers input vector results to the diff.
-	for i := layerid; i <= t.Last; i++ {
+	for i := layerid; !i.After(t.Last); i = i.Add(1) {
 		t.logger.With().Debug("checking input vector diffs", i)
 
 		layerBlockIds, err := t.bdp.LayerBlockIds(i)
@@ -405,11 +404,11 @@ func (t *turtle) processBlock(block *types.Block) error {
 		if err != nil {
 			return fmt.Errorf("voted block not in db voting_block_id: %v, voting_block_layer_id: %v, voted_block_id: %v", block.ID().String(), block.LayerIndex, blk.String())
 		}
-		window := types.LayerID(0)
-		if block.LayerIndex > t.Hdist {
-			window = block.LayerIndex - t.Hdist
+		window := types.LayerID{}
+		if block.LayerIndex.Uint32() > t.Hdist {
+			window = block.LayerIndex.Sub(t.Hdist)
 		}
-		if fblk.LayerIndex < window {
+		if fblk.LayerIndex.Before(window) {
 			continue
 		}
 
@@ -437,7 +436,7 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer) (pbaseOld, pbaseNew ty
 	pbaseOld = t.Verified
 	pbaseNew = t.Verified
 
-	if t.Last < newlyr.Index() {
+	if t.Last.Before(newlyr.Index()) {
 		t.Last = newlyr.Index()
 	}
 
@@ -447,7 +446,7 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer) (pbaseOld, pbaseNew ty
 		// todo: something else to do on empty layer?
 	}
 
-	if newlyr.Index() <= types.GetEffectiveGenesis() {
+	if !newlyr.Index().After(types.GetEffectiveGenesis()) {
 		t.logger.With().Debug("not attempting to handle genesis layer", newlyr)
 		return
 	}
@@ -502,7 +501,7 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer) (pbaseOld, pbaseNew ty
 		log.FieldNamed("target_verification", newlyr.Index()))
 
 layerLoop:
-	for i := pbaseOld + 1; i < idx; i++ {
+	for i := pbaseOld.Add(1); i.Before(idx); i = i.Add(1) {
 		t.logger.With().Info("verifying layer", i)
 
 		layerBlockIds, err := t.bdp.LayerBlockIds(i)
@@ -536,12 +535,12 @@ layerLoop:
 
 			// Step backwards from the latest received layer to i+1, but only count votes for the interval [i, i+Hdist]
 			var startLayer types.LayerID
-			if t.Last < i+t.Hdist {
+			if t.Last.Before(i.Add(t.Hdist)) {
 				startLayer = t.Last
 			} else {
-				startLayer = i + t.Hdist - 1
+				startLayer = i.Add(t.Hdist).Sub(1)
 			}
-			for j := startLayer; j > i; j-- {
+			for j := startLayer; j.After(i); j = j.Sub(1) {
 				// check if the block is good
 				for bid, op := range t.BlockOpinionsByLayer[j] {
 					if _, isgood := t.GoodBlocksIndex[bid]; !isgood {
@@ -570,7 +569,7 @@ layerLoop:
 			}
 
 			// check that the total weight exceeds the confidence threshold in all positions up
-			globalOpinion := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(i-pbaseOld))
+			globalOpinion := calculateGlobalOpinion(t.logger, sum, t.AvgLayerSize, float64(i.Difference(pbaseOld)))
 			t.logger.With().Debug("calculated global opinion on block",
 				log.FieldNamed("voted_block", blk),
 				i,

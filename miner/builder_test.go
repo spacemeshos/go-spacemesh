@@ -67,10 +67,10 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	net := service.NewSimulator()
 	n := net.NewNode()
 
-	block1 := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
-	block2 := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
-	block3 := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
-	block4 := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
+	block1 := types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
+	block2 := types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
+	block3 := types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
+	block4 := types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
 
 	txMempool := state.NewTxMemPool()
 
@@ -99,9 +99,9 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	n1 := net.NewNode()
 	n2 := net.NewNode()
 
-	block2 := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
-	block3 := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
-	block4 := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
+	block2 := types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
+	block3 := types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
+	block4 := types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
 
 	st := []*types.Block{block2, block3, block4}
 	builder1 := createBlockBuilder("a", n1, st)
@@ -110,27 +110,30 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	atxID1 := types.ATXID(types.HexToHash32("dead"))
 	atxID2 := types.ATXID(types.HexToHash32("beef"))
 
-	b1, err := builder1.createBlock(context.TODO(), types.GetEffectiveGenesis()+2, atxID1, types.BlockEligibilityProof{}, nil, nil)
+	b1, err := builder1.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(2), atxID1, types.BlockEligibilityProof{}, nil, nil)
 	assert.NoError(t, err)
-	b2, err := builder2.createBlock(context.TODO(), types.GetEffectiveGenesis()+2, atxID2, types.BlockEligibilityProof{}, nil, nil)
+	b2, err := builder2.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(2), atxID2, types.BlockEligibilityProof{}, nil, nil)
 	assert.NoError(t, err)
 
 	assert.NotEqual(t, b1.ID(), b2.ID(), "ids are identical")
 }
 
 var (
-	block1 = types.NewExistingBlock(0, []byte(rand.String(8)), nil)
-	block2 = types.NewExistingBlock(0, []byte(rand.String(8)), nil)
-	block3 = types.NewExistingBlock(0, []byte(rand.String(8)), nil)
-	block4 = types.NewExistingBlock(0, []byte(rand.String(8)), nil)
+	block1 = types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
+	block2 = types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
+	block3 = types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
+	block4 = types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
 
 	coinbase = types.HexToAddress("aaaa")
 
 	poetRef = []byte{0xba, 0x38}
 	atxs    = []*types.ActivationTx{
-		newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{1}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
-		newActivationTx(types.NodeID{Key: "bbbb", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{2}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
-		newActivationTx(types.NodeID{Key: "cccc", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{3}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
+		newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{1}), types.NewLayerID(5),
+			1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
+		newActivationTx(types.NodeID{Key: "bbbb", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{2}), types.NewLayerID(5),
+			1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
+		newActivationTx(types.NodeID{Key: "cccc", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{3}), types.NewLayerID(5),
+			1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
 	}
 )
 
@@ -177,7 +180,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	atxPool.Put(atxs[1])
 	atxPool.Put(atxs[2])
 
-	go func() { beginRound <- types.GetEffectiveGenesis() + 1 }()
+	go func() { beginRound <- types.GetEffectiveGenesis().Add(1) }()
 	select {
 	case output := <-gossipMessages:
 		b := types.MiniBlock{}
@@ -219,7 +222,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 
 	transids := []types.TransactionID{trans[0].ID(), trans[1].ID(), trans[2].ID()}
 
-	b, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis()+1, types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 0, Sig: []byte{1}}, transids, []types.ATXID{atx1, atx2, atx3, atx4, atx5})
+	b, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(1), types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 0, Sig: []byte{1}}, transids, []types.ATXID{atx1, atx2, atx3, atx4, atx5})
 	assert.NoError(t, err)
 
 	assert.Equal(t, hareRes, b.ForDiff)
@@ -232,7 +235,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 	assert.Equal(t, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, *b.ActiveSet)
 
 	//test create second block
-	bl, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis()+2, types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 1, Sig: []byte{1}}, transids, nil)
+	bl, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(2), types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 1, Sig: []byte{1}}, transids, nil)
 	assert.NoError(t, err)
 
 	assert.Equal(t, hareRes, bl.ForDiff)
@@ -290,13 +293,13 @@ var (
 )
 
 var (
-	b1 = types.NewExistingBlock(1, []byte{1}, nil)
-	b2 = types.NewExistingBlock(1, []byte{2}, nil)
-	b3 = types.NewExistingBlock(1, []byte{3}, nil)
-	b4 = types.NewExistingBlock(1, []byte{4}, nil)
-	b5 = types.NewExistingBlock(1, []byte{5}, nil)
-	b6 = types.NewExistingBlock(1, []byte{6}, nil)
-	b7 = types.NewExistingBlock(1, []byte{7}, nil)
+	b1 = types.NewExistingBlock(types.NewLayerID(1), []byte{1}, nil)
+	b2 = types.NewExistingBlock(types.NewLayerID(1), []byte{2}, nil)
+	b3 = types.NewExistingBlock(types.NewLayerID(1), []byte{3}, nil)
+	b4 = types.NewExistingBlock(types.NewLayerID(1), []byte{4}, nil)
+	b5 = types.NewExistingBlock(types.NewLayerID(1), []byte{5}, nil)
+	b6 = types.NewExistingBlock(types.NewLayerID(1), []byte{6}, nil)
+	b7 = types.NewExistingBlock(types.NewLayerID(1), []byte{7}, nil)
 )
 
 func genBlockIds() []types.BlockID {
@@ -387,10 +390,10 @@ func (m *mockMesh) GetOrphanBlocksBefore(types.LayerID) ([]types.BlockID, error)
 func TestBlockBuilder_createBlock(t *testing.T) {
 	r := require.New(t)
 	n1 := service.NewSimulator().NewNode()
-	types.SetLayersPerEpoch(int32(3))
-	block1 := types.NewExistingBlock(6, []byte(rand.String(8)), nil)
-	block2 := types.NewExistingBlock(6, []byte(rand.String(8)), nil)
-	block3 := types.NewExistingBlock(6, []byte(rand.String(8)), nil)
+	types.SetLayersPerEpoch(3)
+	block1 := types.NewExistingBlock(types.NewLayerID(6), []byte(rand.String(8)), nil)
+	block2 := types.NewExistingBlock(types.NewLayerID(6), []byte(rand.String(8)), nil)
+	block3 := types.NewExistingBlock(types.NewLayerID(6), []byte(rand.String(8)), nil)
 	bs := []*types.Block{block1, block2, block3}
 	st := []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
 	builder1 := createBlockBuilder("a", n1, bs)
@@ -398,7 +401,7 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 		return types.BlockID{0}, [][]types.BlockID{[]types.BlockID{}, []types.BlockID{}, st}, nil
 	}}
 
-	b, err := builder1.createBlock(context.TODO(), 7, types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
+	b, err := builder1.createBlock(context.TODO(), types.NewLayerID(7), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
 	r.Nil(err)
 	r.Equal(st, b.NeutralDiff)
 
@@ -406,13 +409,13 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 		return types.BlockID{0}, [][]types.BlockID{[]types.BlockID{}, nil, st}, nil
 	}}
 
-	b, err = builder1.createBlock(context.TODO(), 7, types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
+	b, err = builder1.createBlock(context.TODO(), types.NewLayerID(7), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
 	r.Nil(err)
 	r.Equal([]types.BlockID(nil), b.ForDiff)
 	emptyID := types.BlockID{}
 	r.NotEqual(b.ID(), emptyID)
 
-	b, err = builder1.createBlock(context.TODO(), 5, types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
+	b, err = builder1.createBlock(context.TODO(), types.NewLayerID(5), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
 	r.EqualError(err, "cannot create blockBytes in genesis layer")
 }
 
@@ -431,8 +434,8 @@ func TestBlockBuilder_notSynced(t *testing.T) {
 	builder.blockOracle = mbo
 	builder.beginRoundEvent = beginRound
 	go builder.createBlockLoop(context.TODO())
-	beginRound <- 1
-	beginRound <- 2
+	beginRound <- types.NewLayerID(1)
+	beginRound <- types.NewLayerID(2)
 	r.Equal(0, mbo.calls)
 }
 

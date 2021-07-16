@@ -5,8 +5,9 @@ package pendingtxs
 
 import (
 	"bytes"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"sync"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 type nanoTx struct {
@@ -39,7 +40,7 @@ func (apt *AccountPendingTxs) Add(layer types.LayerID, txs ...*types.Transaction
 			existing = make(map[types.TransactionID]nanoTx)
 			apt.PendingTxs[tx.AccountNonce] = existing
 		}
-		if existing[tx.ID()].HighestLayerIncludedIn > layer {
+		if existing[tx.ID()].HighestLayerIncludedIn.After(layer) {
 			layer = existing[tx.ID()].HighestLayerIncludedIn
 		}
 		existing[tx.ID()] = nanoTx{
@@ -69,7 +70,7 @@ func (apt *AccountPendingTxs) RemoveRejected(rejected []*types.Transaction, laye
 	for _, tx := range rejected {
 		existing, found := apt.PendingTxs[tx.AccountNonce]
 		if found {
-			if existing[tx.ID()].HighestLayerIncludedIn > layer {
+			if existing[tx.ID()].HighestLayerIncludedIn.After(layer) {
 				continue
 			}
 			delete(existing, tx.ID())

@@ -2,12 +2,13 @@ package timesync
 
 import (
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 const d50milli = 50 * time.Millisecond
@@ -51,13 +52,13 @@ func TestClock_StartClock_BeforeEpoch(t *testing.T) {
 func TestClock_TickFutureGenesis(t *testing.T) {
 	tmr := &RealClock{}
 	ticker := NewClock(tmr, d50milli, tmr.Now().Add(2*d50milli), log.NewDefault(t.Name()))
-	assert.Equal(t, types.LayerID(0), ticker.lastTickedLayer) // check assumption that we are on genesis = 0
+	assert.Equal(t, types.NewLayerID(0), ticker.lastTickedLayer) // check assumption that we are on genesis = 0
 	sub := ticker.Subscribe()
 	ticker.StartNotifying()
 	x := <-sub
-	assert.Equal(t, types.LayerID(1), x)
+	assert.Equal(t, types.NewLayerID(1), x)
 	x = <-sub
-	assert.Equal(t, types.LayerID(2), x)
+	assert.Equal(t, types.NewLayerID(2), x)
 }
 
 func TestClock_TickPastGenesis(t *testing.T) {
@@ -76,7 +77,7 @@ func TestClock_TickPastGenesis(t *testing.T) {
 	ticker.StartNotifying()
 	x := <-sub
 	duration := time.Since(start)
-	assert.Equal(t, types.LayerID(5), x)
+	assert.Equal(t, types.NewLayerID(5), x)
 	assert.True(t, duration >= expectedTimeToTick, "tick happened too soon (%v)", duration)
 	assert.True(t, duration < expectedTimeToTick+d50milli, "tick happened more than 50ms too late (%v)", duration)
 }
@@ -85,7 +86,7 @@ func TestClock_NewClock(t *testing.T) {
 	r := require.New(t)
 	tmr := &RealClock{}
 	ticker := NewClock(tmr, 100*time.Millisecond, tmr.Now().Add(-190*time.Millisecond), log.NewDefault(t.Name()))
-	r.Equal(types.LayerID(2), ticker.lastTickedLayer)
+	r.Equal(types.NewLayerID(2), ticker.lastTickedLayer)
 }
 
 func TestClock_CloseTwice(t *testing.T) {
