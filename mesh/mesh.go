@@ -5,7 +5,6 @@ package mesh
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -598,44 +597,6 @@ func (msh *Mesh) pushTransactions(l *types.Layer) {
 		l.Index(),
 		log.Int("num_failed_txs", numFailedTxs),
 	)
-}
-
-// GetProcessedLayer returns a layer only if it has already been processed
-func (msh *Mesh) GetProcessedLayer(i types.LayerID) (*types.Layer, error) {
-	msh.lMutex.RLock()
-	if i.After(msh.ProcessedLayer()) {
-		msh.lMutex.RUnlock()
-		msh.Debug("failed to get layer  ", i.String(), " layer not verified yet")
-		return nil, errors.New("layer not verified yet")
-	}
-	msh.lMutex.RUnlock()
-	return msh.GetLayer(i)
-}
-
-// AddBlock adds a block to the database ignoring the block txs/atxs
-// ***USED ONLY FOR TESTS***
-func (msh *Mesh) AddBlock(blk *types.Block) error {
-	msh.Debug("add block %d", blk.ID())
-	if err := msh.DB.AddBlock(blk); err != nil {
-		msh.Warning("failed to add block %v  %v", blk.ID(), err)
-
-		if blk.ID() != GenesisBlock().ID() {
-			return err
-		}
-	}
-
-	l, err := msh.GetLayer(blk.LayerIndex)
-	if err != nil {
-		return err
-	}
-	msh.persistLayerHashes(l)
-	msh.SetLatestLayer(blk.Layer())
-	// new block add to orphans
-	msh.handleOrphanBlocks(blk)
-
-	// invalidate txs and atxs from pool
-	msh.invalidateFromPools(&blk.MiniBlock)
-	return nil
 }
 
 // SetZeroBlockLayer tags lyr as a layer without blocks
