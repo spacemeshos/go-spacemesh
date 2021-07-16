@@ -222,7 +222,7 @@ func (t *TxAPIMock) GetLayerApplied(txID types.TransactionID) *types.LayerID {
 	return t.layerApplied[txID]
 }
 
-func (t *TxAPIMock) GetTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
+func (t *TxAPIMock) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
 	tx, ok := t.returnTx[id]
 	if !ok {
 		return nil, errors.New("it ain't there")

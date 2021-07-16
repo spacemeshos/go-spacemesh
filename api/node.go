@@ -49,7 +49,7 @@ type TxAPI interface {
 	GetTransactionsByOrigin(types.LayerID, types.Address) []types.TransactionID
 	LatestLayer() types.LayerID
 	GetLayerApplied(types.TransactionID) *types.LayerID
-	GetTransaction(types.TransactionID) (*types.MeshTransaction, error)
+	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
 	GetProjection(types.Address, uint64, uint64) (uint64, uint64, error)
 	LatestLayerInState() types.LayerID
 	ProcessedLayer() types.LayerID
