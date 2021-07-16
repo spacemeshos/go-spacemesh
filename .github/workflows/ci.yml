@@ -110,7 +110,8 @@ jobs:
       - apptests
     runs-on: ubuntu-latest
     steps:
-    run: exit 0
+      - name: Mark the job as succeeded
+        run: exit 0
 
   # checkpoint and print a single, clean status message to slack
   ci-stage1:
