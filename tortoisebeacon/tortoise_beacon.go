@@ -83,9 +83,6 @@ type TortoiseBeacon struct {
 	vrfSigner        signer
 	weakCoin         weakcoin.WeakCoin
 
-	layerMu   sync.RWMutex
-	lastLayer types.LayerID
-
 	seenEpochsMu sync.Mutex
 	seenEpochs   map[types.EpochID]struct{}
 
@@ -123,6 +120,9 @@ type TortoiseBeacon struct {
 	proposalChans   map[types.EpochID]chan extendedProposalMessage
 
 	backgroundWG sync.WaitGroup
+
+	layerMu   sync.RWMutex
+	lastLayer types.LayerID
 }
 
 // a function to verify the message with the signature and its public key.
