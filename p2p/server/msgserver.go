@@ -136,14 +136,14 @@ func (p *MessageServer) cleanStaleMessages(ctx context.Context) {
 	logger := p.WithContext(ctx)
 	for {
 		p.pendMutex.RLock()
-		logger.Debug("checking for stale messages in msgserver queue",
+		logger.With().Debug("checking for stale messages in msgserver queue",
 			log.Int("queue_length", p.pendingQueue.Len()))
 		elem := p.pendingQueue.Front()
 		p.pendMutex.RUnlock()
 		if elem != nil {
 			item := elem.Value.(Item)
 			if time.Since(item.timestamp) > p.requestLifetime {
-				logger.Debug("cleanStaleMessages remove request", log.Uint64("id", item.id))
+				logger.With().Debug("cleanStaleMessages remove request", log.Uint64("id", item.id))
 				p.pendMutex.RLock()
 				foo, okFoo := p.resHandlers[item.id]
 				p.pendMutex.RUnlock()
