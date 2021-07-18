@@ -57,10 +57,10 @@ def teardown():
     cluster_name = payload_dict["cluster_name"]
     node_pool_zone = payload_dict["node_pool_zone"]
     print(f"starting teardown process for {namespace}")
-    # delete client and bootstrap deployments
-    remove_client_deployments(project_id, cluster_name, node_pool_zone, namespace)
     # delete all daemon sets in namespace
     remove_daemonset_in_namespace(project_id, cluster_name, node_pool_zone, namespace)
+    # delete client and bootstrap deployments
+    remove_client_deployments(project_id, cluster_name, node_pool_zone, namespace)
     # delete cluster role binding
     crb_name = FLUENT_CRB_FMT.format(namespace=namespace)
     remove_clusterrole_binding(project_id, cluster_name, node_pool_zone, SHIPPER_NAME, crb_name)

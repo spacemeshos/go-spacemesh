@@ -51,11 +51,12 @@ func newHarnessConfig(args []string) (*Harness, error) {
 	args = append(args[:execPathInd], args[execPathInd+2:]...)
 	args = append(args, "--acquire-port=false")
 	// set servers' configuration
-	restoreFileNameI := Contains(args, "--restore-filename")
-	if restoreFileName == -1 {
+	// get filename index under args
+	restoreFileNameInd := Contains(args, "--restore-filename")
+	if restoreFileNameInd == -1 {
 		cfg = DefaultConfig(execPath)
 	} else {
-		cfg = RestoreConfig(execPath, args[restoreFileNameI+1])
+		cfg = RestoreConfig(execPath, args[restoreFileNameInd+1])
 	}
 	return NewHarness(cfg, args)
 }
@@ -94,13 +95,13 @@ func tarxzf(filename string) {
 
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		log.Panic("Failed to create client: %v", err)
 	}
 	defer client.Close()
 	// if load state from google storage
 	bucketName := os.Getenv("STATE_BUCKET")
 	if bucketName == "" {
-		log.Fatal("Missing STATE_BUCKET")
+		log.Panic("Missing STATE_BUCKET")
 		return
 	}
 	// Creates a Bucket instance.
@@ -109,13 +110,13 @@ func tarxzf(filename string) {
 	obj := bucket.Object(filename).ReadCompressed(true) // see https://developer.bestbuy.com/apis
 	rdr, err := obj.NewReader(ctx)
 	if err != nil {
-		log.Fatal(err)
+		log.Panic("err reading compressed file", err)
 	}
 	defer rdr.Close()
 
 	gzr, err := gzip.NewReader(rdr)
 	if err != nil {
-		log.Fatal(err)
+		log.Panic("err creating a new gzip reader", err)
 	}
 	defer gzr.Close()
 
@@ -127,10 +128,10 @@ func tarxzf(filename string) {
 		switch {
 		// if no more files are found return
 		case err == io.EOF:
-			return nil
+			return
 		// return any other error
 		case err != nil:
-			log.Fatalf("Failed to extract backup: %s", err)
+			log.Panic("Failed to extract backup: %s", err)
 			return
 		// if the header is nil, just skip it (not sure how this happens)
 		case header == nil:
@@ -151,7 +152,7 @@ func tarxzf(filename string) {
 		case tar.TypeDir:
 			if _, err := os.Stat(target); err != nil {
 				if err := os.MkdirAll(target, 0755); err != nil {
-					log.Fatalf("Failed to mkdir: %s", err)
+					log.Panic("Failed to mkdir: %s", err)
 					return
 				}
 			}
@@ -160,13 +161,13 @@ func tarxzf(filename string) {
 		case tar.TypeReg:
 			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
 			if err != nil {
-				log.Fatalf("Failed to create a file: %s", err)
+				log.Panic("Failed to create a file: %s", err)
 				return
 			}
 
 			// copy over contents
 			if _, err := io.Copy(f, tr); err != nil {
-				log.Fatalf("Failed to copy archive file to disk: %s", err)
+				log.Panic("Failed to copy archive file to disk: %s", err)
 				return
 			}
 
