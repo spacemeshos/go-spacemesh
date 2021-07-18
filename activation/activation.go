@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/post/shared"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -139,16 +140,16 @@ type Builder struct {
 	challenge         *types.NIPostChallenge
 	initialPost       *types.Post
 	// pendingATX is created with current commitment and nipst from current challenge.
-	pendingATX        *types.ActivationTx
-	layerClock        layerClock
-	status            SmeshingStatus
-	mtx               sync.Mutex
-	store             bytesStore
-	syncer            syncer
-	log               log.Log
-	runCtx            context.Context
-	stop              func()
-	poetRetryInterval time.Duration
+	pendingATX            *types.ActivationTx
+	layerClock            layerClock
+	status                SmeshingStatus
+	mtx                   sync.Mutex
+	store                 bytesStore
+	syncer                syncer
+	log                   log.Log
+	runCtx                context.Context
+	stop                  func()
+	poetRetryInterval     time.Duration
 	poetClientInitializer PoETClientInitializer
 	// pendingPoetClient is modified using atomic operations on unsafe.Pointer
 	pendingPoetClient unsafe.Pointer
@@ -321,7 +322,7 @@ func (b *Builder) run(ctx context.Context) {
 	for {
 		client := atomic.LoadPointer(&b.pendingPoetClient)
 		if client != nil {
-			b.nipstBuilder.updatePoETProver(*(*PoetProvingServiceClient)(client))
+			b.nipostBuilder.updatePoETProver(*(*PoetProvingServiceClient)(client))
 			// CaS here will not lose concurrent update
 			atomic.CompareAndSwapPointer(&b.pendingPoetClient, client, nil)
 		}
@@ -386,6 +387,19 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 	if err := b.storeChallenge(b.challenge); err != nil {
 		return fmt.Errorf("failed to store nipost challenge: %v", err)
 	}
+	return nil
+}
+
+// UpdatePoETServer updates poet client. Context is used to verify that the target is responsive.
+func (b *Builder) UpdatePoETServer(ctx context.Context, target string) error {
+	client := b.poetClientInitializer(target)
+	// TODO(dshulyak) not enough information to verify that PoetServiceID matches with an expected one.
+	// Maybe it should be provided during update.
+	_, err := client.PoetServiceID(ctx)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrPoetServiceUnstable, err)
+	}
+	atomic.StorePointer(&b.pendingPoetClient, unsafe.Pointer(&client))
 	return nil
 }
 
