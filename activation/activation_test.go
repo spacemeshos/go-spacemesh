@@ -2,10 +2,12 @@ package activation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,6 +19,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/post/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ========== Vars / Consts ==========
@@ -114,11 +119,14 @@ func (ms *MockSigning) Sign(m []byte) []byte {
 }
 
 type NIPostBuilderMock struct {
+	updatedPoETs   []PoetProvingServiceClient
 	poetRef         []byte
 	buildNIPostFunc func(challenge *types.Hash32) (*types.NIPost, error)
 	initPostFunc    func(logicalDrive string, commitmentSize uint64) (*types.Post, error)
 	SleepTime       int
 }
+
+func (np NipstBuilderMock) updatePoETProver(PoetProvingServiceClient) {}
 
 func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Hash32, _ chan struct{}) (*types.NIPost, error) {
 	if np.buildNIPostFunc != nil {
@@ -128,6 +136,8 @@ func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Has
 }
 
 type NIPostErrBuilderMock struct{}
+
+func (np *NipstErrBuilderMock) updatePoETProver(PoetProvingServiceClient) {}
 
 func (np *NIPostErrBuilderMock) BuildNIPost(context.Context, *types.Hash32, chan struct{}) (*types.NIPost, error) {
 	return nil, fmt.Errorf("NIPost builder error")
@@ -716,7 +726,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	expectedTries := 3
 
 	activationDb := newActivationDb()
-	nipostBuilder := &NIPostBuilderMock{} // 👀 mock that returns error from BuildNIPost()
+	nipostBuilder := &NIPostBuilderMock{}
 	b := NewBuilder(bc, nodeID, &MockSigning{}, activationDb, net, meshProviderMock,
 		layersPerEpoch, nipostBuilder, &postSetupProviderMock{}, layerClockMock,
 		&mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"),
@@ -724,7 +734,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	)
 	b.initialPost = initialPost
 
-	challenge := newChallenge(otherNodeID /*👀*/, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	challenge := newChallenge(otherNodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	posAtx := newAtx(challenge, nipost)
 	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
 
@@ -758,6 +768,76 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	case <-builderConfirmation:
 	case <-time.After(time.Second):
 		require.FailNow(t, "failed waiting for required number of tries to occur")
+	}
+}
+
+func TestBuilder_UpdatePoETProver(t *testing.T) {
+	// we test that poet client is not replaced in between PoetServiceID and Submit calls.
+	// but after Submit call fails with error it is replaced and called
+
+	bc := Config{
+		CoinbaseAccount: coinbase,
+		GoldenATXID:     goldenATXID,
+		LayersPerEpoch:  layersPerEpoch,
+	}
+
+	activationDb := newActivationDb()
+	poetProver, controller := newPoetServiceMock(t)
+	defer controller.Finish()
+
+	poetProver2, controller2 := newPoetServiceMock(t)
+	defer controller2.Finish()
+
+	mockInitializer := func(target string) PoetProvingServiceClient {
+		return poetProver2
+	}
+	poetDb := &poetDbMock{}
+	nb := NewNIPSTBuilder(minerID, postProver, poetProver,
+		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
+	b := NewBuilder(bc, nodeID, 0, &MockSigning{}, activationDb, net, meshProviderMock,
+		nb, postProver, layerClockMock,
+		&mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"),
+		WithPoetRetryInterval(time.Millisecond),
+		WithPoETClientInitializer(mockInitializer),
+	)
+	b.commitment = commitment
+	syncPoint := make(chan struct{}, 1)
+
+	poetProver.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Do(func(context.Context) {
+		syncPoint <- struct{}{}
+	}).Return([]byte{}, nil)
+	poetProver.EXPECT().Submit(gomock.Any(), gomock.Any()).Do(func(context.Context, types.Hash32) {
+		<-syncPoint
+	}).Return(nil, errors.New("test"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	closed := make(chan struct{})
+	go func() {
+		b.run(ctx)
+		close(closed)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-closed
+	})
+
+	select {
+	case <-syncPoint:
+	case <-time.After(time.Second):
+		require.FailNow(t, "timedout waiting for PoetServiceID to be called")
+	}
+	poetProver2.EXPECT().PoetServiceID(gomock.Any()).Return([]byte{}, nil)
+	require.NoError(t, b.UpdatePoETServer(context.TODO(), "update"))
+	poet2Called := make(chan struct{})
+	poetProver2.EXPECT().PoetServiceID(gomock.Any()).Do(func(context.Context) {
+		cancel()
+		close(poet2Called)
+	}).Return([]byte{}, errors.New("update"))
+	syncPoint <- struct{}{} // allow submit to run
+	select {
+	case <-poet2Called:
+	case <-time.After(time.Second):
+		require.FailNow(t, "timedout waiting for update poet to be called")
 	}
 }
 

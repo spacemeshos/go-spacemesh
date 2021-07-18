@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -48,6 +49,7 @@ func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
 }
 
 type nipostBuilder interface {
+	updatePoETProver(PoetProvingServiceClient)
 	BuildNIPost(ctx context.Context, challenge *types.Hash32, timeout chan struct{}) (*types.NIPost, error)
 }
 
@@ -147,6 +149,9 @@ type Builder struct {
 	runCtx            context.Context
 	stop              func()
 	poetRetryInterval time.Duration
+	poetClientInitializer PoETClientInitializer
+	// pendingPoetClient is modified using atomic operations on unsafe.Pointer
+	pendingPoetClient unsafe.Pointer
 }
 
 // BuilderOption ...
@@ -157,6 +162,16 @@ type BuilderOption func(*Builder)
 func WithPoetRetryInterval(interval time.Duration) BuilderOption {
 	return func(b *Builder) {
 		b.poetRetryInterval = interval
+	}
+}
+
+// PoETClientInitializer interfaces for creating PoetProvingServiceClient.
+type PoETClientInitializer func(string) PoetProvingServiceClient
+
+// WithPoETClientInitializer modifies initialization logic for PoET client. Used during client update.
+func WithPoETClientInitializer(initializer PoETClientInitializer) BuilderOption {
+	return func(b *Builder) {
+		b.poetClientInitializer = initializer
 	}
 }
 
@@ -304,6 +319,13 @@ func (b *Builder) run(ctx context.Context) {
 	}()
 	defer b.log.Info("atx builder is stopped")
 	for {
+		client := atomic.LoadPointer(&b.pendingPoetClient)
+		if client != nil {
+			b.nipstBuilder.updatePoETProver(*(*PoetProvingServiceClient)(client))
+			// CaS here will not lose concurrent update
+			atomic.CompareAndSwapPointer(&b.pendingPoetClient, client, nil)
+		}
+
 		if err := b.PublishActivationTx(ctx); err != nil {
 			if errors.Is(err, ErrStopRequested) {
 				return

@@ -46,11 +46,12 @@ type TxAPI interface {
 	GetLayer(types.LayerID) (*types.Layer, error)
 	GetRewards(types.Address) ([]types.Reward, error)
 	GetTransactions([]types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{})
+	GetMeshTransactions([]types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{})
 	GetTransactionsByDestination(types.LayerID, types.Address) []types.TransactionID
 	GetTransactionsByOrigin(types.LayerID, types.Address) []types.TransactionID
 	LatestLayer() types.LayerID
 	GetLayerApplied(types.TransactionID) *types.LayerID
-	GetTransaction(types.TransactionID) (*types.Transaction, error)
+	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
 	GetProjection(types.Address, uint64, uint64) (uint64, uint64, error)
 	LatestLayerInState() types.LayerID
 	ProcessedLayer() types.LayerID
@@ -73,4 +74,9 @@ type MempoolAPI interface {
 	Get(types.TransactionID) (*types.Transaction, error)
 	GetTxIdsByAddress(types.Address) []types.TransactionID
 	GetProjection(types.Address, uint64, uint64) (uint64, uint64)
+}
+
+// ActivationAPI is an API for activation module.
+type ActivationAPI interface {
+	UpdatePoETServer(context.Context, string) error
 }

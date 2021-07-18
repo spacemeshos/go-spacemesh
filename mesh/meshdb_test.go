@@ -430,12 +430,14 @@ func TestMeshDB_testGetTransactions(t *testing.T) {
 	signer1, addr1 := newSignerAndAddress(r, "thc")
 	signer2, _ := newSignerAndAddress(r, "cbd")
 	_, addr3 := newSignerAndAddress(r, "cbe")
-	err := mdb.writeTransactions(types.NewLayerID(1), []*types.Transaction{
+	blk := &types.Block{}
+	blk.LayerIndex = types.NewLayerID(1)
+	err := mdb.writeTransactions(blk,
 		newTx(r, signer1, 420, 240),
 		newTx(r, signer1, 421, 241),
 		newTxWithDest(r, signer2, addr1, 0, 100),
 		newTxWithDest(r, signer2, addr1, 1, 101),
-	})
+	)
 	r.NoError(err)
 
 	txs := mdb.GetTransactionsByOrigin(types.NewLayerID(1), addr1)
@@ -941,6 +943,35 @@ func TestMeshDB_RecordCoinFlip(t *testing.T) {
 	testCoinflip(mdb2)
 }
 
+func TestMeshDB_GetMeshTransactions(t *testing.T) {
+	r := require.New(t)
+
+	mdb := NewMemMeshDB(log.NewDefault(t.Name()))
+
+	signer1, _ := newSignerAndAddress(r, "thc")
+
+	blk := &types.Block{}
+	blk.LayerIndex = types.NewLayerID(1)
+	var (
+		nonce  uint64
+		ids    []types.TransactionID
+		layers = 10
+	)
+	for i := 1; i <= layers; i++ {
+		nonce++
+		blk.LayerIndex = types.NewLayerID(uint32(i))
+		tx := newTx(r, signer1, nonce, 240)
+		ids = append(ids, tx.ID())
+		r.NoError(mdb.writeTransactions(blk, tx))
+	}
+	txs, missing := mdb.GetMeshTransactions(ids)
+	r.Len(missing, 0)
+	for i := 1; i < layers; i++ {
+		r.Equal(ids[i-1], txs[i-1].ID())
+		r.EqualValues(types.NewLayerID(uint32(i)), txs[i-1].LayerID)
+	}
+}
+
 func TestMesh_FindOnce(t *testing.T) {
 	mdb := NewMemMeshDB(log.NewDefault(t.Name()))
 	defer mdb.Close()
@@ -955,11 +986,9 @@ func TestMesh_FindOnce(t *testing.T) {
 	for _, layer := range layers {
 		blk.LayerIndex = types.NewLayerID(layer)
 		nonce++
-		err := mdb.writeTransactions(blk.LayerIndex,
-			[]*types.Transaction{
-				newTx(r, signer1, nonce, 100),
-				newTxWithDest(r, signer2, addr1, nonce, 100),
-			},
+		err := mdb.writeTransactions(blk,
+			newTx(r, signer1, nonce, 100),
+			newTxWithDest(r, signer2, addr1, nonce, 100),
 		)
 		r.NoError(err)
 	}

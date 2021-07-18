@@ -298,7 +298,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		if s.shouldValidateLayer(layerID) {
 			vQueue <- layer
 		}
-		logger.Info("finished data sync for layer %v", layerID)
+		logger.Debug("finished data sync for layer %v", layerID)
 	}
 	logger.With().Info("data is synced. waiting for validation",
 		log.FieldNamed("current", s.ticker.GetCurrentLayer()),
@@ -348,7 +348,6 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 
 	layer, err := s.getLayerFromPeers(ctx, layerID)
 	if err != nil {
-		s.logger.WithContext(ctx).With().Error("failed to get layer from peers", layerID, log.Err(err))
 		return nil, err
 	}
 
@@ -393,7 +392,7 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 	// - layerID is the last layer of a previous epoch
 	// i.e. for older epochs we sync ATXs once per epoch. for current epoch we sync ATXs in every layer
 	if epoch == currentEpoch || layerID == (epoch+1).FirstLayer().Sub(1) {
-		s.logger.WithContext(ctx).With().Info("getting ATXs", epoch, layerID)
+		s.logger.WithContext(ctx).With().Debug("getting ATXs", epoch, layerID)
 		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
 		if err := s.fetcher.GetEpochATXs(ctx, epoch); err != nil {
 			s.logger.WithContext(ctx).With().Error("failed to fetch epoch ATXs", layerID, epoch, log.Err(err))
@@ -415,7 +414,7 @@ func (s *Syncer) getTortoiseBeacon(ctx context.Context, layerID types.LayerID) e
 	// - layerID is the last layer of a previous epoch
 	// i.e. for older epochs we sync tortoise beacons once per epoch. for current epoch we sync tortoise beacons in every layer
 	if epoch == currentEpoch || layerID == (epoch+1).FirstLayer().Sub(1) {
-		s.logger.WithContext(ctx).With().Info("getting tortoise beacons", epoch, layerID)
+		s.logger.WithContext(ctx).With().Debug("getting tortoise beacons", epoch, layerID)
 		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
 		if err := s.fetcher.GetTortoiseBeacon(ctx, epoch); err != nil {
 			s.logger.WithContext(ctx).With().Error("failed to fetch epoch tortoise beacons", layerID, epoch, log.Err(err))
@@ -438,9 +437,9 @@ func (s *Syncer) shouldValidateLayer(layerID types.LayerID) bool {
 // start a dedicated process to validate layers one by one
 func (s *Syncer) startValidating(ctx context.Context, run uint64, queue chan *types.Layer, done chan struct{}) {
 	logger := s.logger.WithName("validation")
-	logger.Info("validation started for run #%v", run)
+	logger.Debug("validation started for run #%v", run)
 	defer func() {
-		logger.Info("validation done for run #%v", run)
+		logger.Debug("validation done for run #%v", run)
 		close(done)
 	}()
 	for layer := range queue {
@@ -457,7 +456,7 @@ func (s *Syncer) validateLayer(ctx context.Context, layer *types.Layer) {
 		return
 	}
 
-	s.logger.WithContext(ctx).With().Info("validating layer",
+	s.logger.WithContext(ctx).With().Debug("validating layer",
 		layer.Index(),
 		log.String("blocks", fmt.Sprint(types.BlockIDs(layer.Blocks()))))
 	s.mesh.ValidateLayer(layer)

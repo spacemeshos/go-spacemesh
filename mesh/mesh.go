@@ -721,7 +721,7 @@ func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
 		}
 		txs = append(txs, tx)
 	}
-	if err := msh.writeTransactions(blk.LayerIndex, txs); err != nil {
+	if err := msh.writeTransactions(blk, txs...); err != nil {
 		return fmt.Errorf("could not write transactions of block %v database: %v", blk.ID(), err)
 	}
 

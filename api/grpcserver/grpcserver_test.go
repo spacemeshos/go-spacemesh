@@ -227,12 +227,12 @@ func (t *TxAPIMock) GetLayerApplied(txID types.TransactionID) *types.LayerID {
 	return t.layerApplied[txID]
 }
 
-func (t *TxAPIMock) GetTransaction(id types.TransactionID) (*types.Transaction, error) {
+func (t *TxAPIMock) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
 	tx, ok := t.returnTx[id]
 	if !ok {
 		return nil, errors.New("it ain't there")
 	}
-	return tx, nil
+	return &types.MeshTransaction{Transaction: *tx}, nil
 }
 
 func (t *TxAPIMock) GetRewards(types.Address) (rewards []types.Reward, err error) {
@@ -307,6 +307,17 @@ func (t *TxAPIMock) GetTransactions(txids []types.TransactionID) (txs []*types.T
 		for _, tx := range t.returnTx {
 			if tx.ID() == txid {
 				txs = append(txs, tx)
+			}
+		}
+	}
+	return
+}
+
+func (t *TxAPIMock) GetMeshTransactions(txids []types.TransactionID) (txs []*types.MeshTransaction, missing map[types.TransactionID]struct{}) {
+	for _, txid := range txids {
+		for _, tx := range t.returnTx {
+			if tx.ID() == txid {
+				txs = append(txs, &types.MeshTransaction{Transaction: *tx})
 			}
 		}
 	}
@@ -475,6 +486,14 @@ type SyncerMock struct {
 func (s *SyncerMock) IsSynced(context.Context) bool { return s.isSynced }
 func (s *SyncerMock) Start(context.Context)         { s.startCalled = true }
 
+type ActivationAPIMock struct {
+	UpdatePoETErr error
+}
+
+func (a *ActivationAPIMock) UpdatePoETServer(context.Context, string) error {
+	return a.UpdatePoETErr
+}
+
 type MempoolMock struct {
 	// In the real state.TxMempool struct, there are multiple data structures and they're more complex,
 	// but we just mock a very simple use case here and only store some of these data
@@ -576,7 +595,8 @@ func TestNewServersConfig(t *testing.T) {
 
 func TestNodeService(t *testing.T) {
 	syncer := SyncerMock{}
-	grpcService := NewNodeService(&networkMock, txAPI, &genTime, &syncer)
+	atxapi := &ActivationAPIMock{}
+	grpcService := NewNodeService(&networkMock, txAPI, &genTime, &syncer, atxapi)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -671,6 +691,19 @@ func TestNodeService(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, int32(code.Code_OK), res.Status.Code)
 			require.Equal(t, true, called, "cmd.Shutdown() was called")
+		}},
+		{"UpdatePoetServer", func(t *testing.T) {
+			atxapi.UpdatePoETErr = nil
+			res, err := c.UpdatePoetServer(context.TODO(), &pb.UpdatePoetServerRequest{Url: "test"})
+			require.NoError(t, err)
+			require.EqualValues(t, res.Status.Code, code.Code_OK)
+		}},
+		{"UpdatePoetServerUnavailable", func(t *testing.T) {
+			atxapi.UpdatePoETErr = activation.ErrPoetServiceUnstable
+			url := "test"
+			res, err := c.UpdatePoetServer(context.TODO(), &pb.UpdatePoetServerRequest{Url: url})
+			require.Nil(t, res)
+			require.ErrorIs(t, err, status.Errorf(codes.Unavailable, "can't reach server at %s. retry later", url))
 		}},
 		// NOTE: ErrorStream and StatusStream have comprehensive, E2E tests in cmd/node/node_test.go.
 	}
@@ -2414,17 +2447,17 @@ func checkAccountDataQueryItemReward(t *testing.T, dataItem interface{}) {
 
 func checkAccountMeshDataItemTx(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
-	case *pb.AccountMeshData_Transaction:
+	case *pb.AccountMeshData_MeshTransaction:
 		// Check the sender
-		require.Equal(t, globalTx.Origin().Bytes(), x.Transaction.Signature.PublicKey,
+		require.Equal(t, globalTx.Origin().Bytes(), x.MeshTransaction.Transaction.Signature.PublicKey,
 			"inner coin transfer tx has bad sender")
-		require.Equal(t, globalTx.Amount, x.Transaction.Amount.Value,
+		require.Equal(t, globalTx.Amount, x.MeshTransaction.Transaction.Amount.Value,
 			"inner coin transfer tx has bad amount")
-		require.Equal(t, globalTx.AccountNonce, x.Transaction.Counter,
+		require.Equal(t, globalTx.AccountNonce, x.MeshTransaction.Transaction.Counter,
 			"inner coin transfer tx has bad counter")
 
 		// Need to further check tx type
-		switch y := x.Transaction.Datum.(type) {
+		switch y := x.MeshTransaction.Transaction.Datum.(type) {
 		case *pb.Transaction_CoinTransfer:
 			require.Equal(t, globalTx.Recipient.Bytes(), y.CoinTransfer.Receiver.Address,
 				"inner coin transfer tx has bad recipient")
@@ -2540,7 +2573,7 @@ func checkGlobalStateDataGlobalState(t *testing.T, dataItem interface{}) {
 
 func TestMultiService(t *testing.T) {
 	cfg.GrpcServerPort = 9192
-	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
 	svc2 := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, svc1, svc2)
 	defer shutDown()
@@ -2600,7 +2633,7 @@ func TestJsonApi(t *testing.T) {
 	shutDown()
 
 	// enable services and try again
-	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
 	svc2 := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	cfg.StartNodeService = true
 	cfg.StartMeshService = true
