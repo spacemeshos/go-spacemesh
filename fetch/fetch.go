@@ -93,6 +93,7 @@ type responseMessage struct {
 type requestBatch struct {
 	ID       types.Hash32
 	Requests []requestMessage
+	Peer     peers.Peer
 }
 
 // SetID calculates the hash of all requests and sets it as this batches ID
@@ -440,7 +441,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 		if f.stopped() {
 			return
 		}
-		f.log.Warning("%v hash was not found in response %v", batchMap[h].Hint, h.ShortString())
+		f.log.Warning("%v hash %v was not found in response from peer %v", batchMap[h].Hint, h.ShortString(), batch.Peer)
 		f.activeReqM.Lock()
 		reqs := f.pendingRequests[h]
 		invalidatedRequests := 0
@@ -518,15 +519,20 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 	}
 	// try sending batch to some random peer
 	retries := 0
+	var peer peers.Peer
 	for {
 		if f.stopped() {
 			return
 		}
 
 		// get random peer
-		p := GetRandomPeer(f.net.GetPeers())
-		f.log.Debug("sending request batch %v items %v peer %v", batch.ID.Hex(), len(batch.Requests), p)
-		err := f.net.SendRequest(context.TODO(), server.Fetch, bytes, p, f.receiveResponse, timeoutFunc)
+		peer = GetRandomPeer(f.net.GetPeers())
+		f.log.Debug("sending request batch %v items %v peer %v", batch.ID.Hex(), len(batch.Requests), peer)
+		batch.Peer = peer
+		f.activeBatchM.Lock()
+		f.activeBatches[batch.ID] = batch
+		f.activeBatchM.Unlock()
+		err := f.net.SendRequest(context.TODO(), server.Fetch, bytes, peer, f.receiveResponse, timeoutFunc)
 		// if call succeeded, continue to other requests
 		if err != nil {
 			retries++
@@ -534,12 +540,11 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 				f.handleHashError(batch.ID, ErrCouldNotSend(fmt.Errorf("could not send message: %w", err)))
 				break
 			}
-			// todo: mark number of fails per peer to make it low priority
-			f.log.Warning("could not send message to peer %v, retrying, retries %v", p, retries)
+			//todo: mark number of fails per peer to make it low priority
+			f.log.Warning("could not send message to peer %v, retrying, retries %v", peer, retries)
 		} else {
 			break
 		}
-
 	}
 }
 
