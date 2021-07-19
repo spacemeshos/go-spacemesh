@@ -648,9 +648,7 @@ func (db *DB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
 	if atxHeader, gotIt := db.atxHeaderCache.Get(id); gotIt {
 		return atxHeader, nil
 	}
-	db.RLock()
 	atxHeaderBytes, err := db.atxs.Get(getAtxHeaderKey(id))
-	db.RUnlock()
 	if err != nil {
 		return nil, err
 	}
