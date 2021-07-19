@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
+	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -23,39 +23,13 @@ func randomHash() (hash types.Hash32) {
 	return
 }
 
-func newRequestMock() *mockRequest {
-	return &mockRequest{
-		OkCalled:     make(map[types.Hash32][]byte),
-		OkCalledNum:  make(map[types.Hash32]int),
-		ErrCalled:    make(map[types.Hash32]error),
-		ErrCalledNum: make(map[types.Hash32]int),
-	}
-}
-
-type mockRequest struct {
-	OkCalled     map[types.Hash32][]byte
-	ErrCalled    map[types.Hash32]error
-	OkCalledNum  map[types.Hash32]int
-	ErrCalledNum map[types.Hash32]int
-}
-
-func (m *mockRequest) OkCallback(hash types.Hash32, buf []byte) error {
-	m.OkCalled[hash] = buf
-	m.OkCalledNum[hash]++
-	return nil
-}
-
-func (m *mockRequest) ErrCallback(hash types.Hash32, err error) {
-	m.ErrCalled[hash] = err
-	m.ErrCalledNum[hash]++
-}
-
 type mockNet struct {
-	SendCalled  map[types.Hash32]int
-	ReturnError bool
-	Responses   map[types.Hash32]responseMessage
-	SendAck     bool
-	AckChannel  chan struct{}
+	SendCalled      map[types.Hash32]int
+	TotalBatchCalls int
+	ReturnError     bool
+	Responses       map[types.Hash32]responseMessage
+	AckChannel      chan struct{}
+	AsyncChannel    chan struct{}
 }
 
 func (m mockNet) Close() {
@@ -64,7 +38,7 @@ func (m mockNet) Close() {
 func (m mockNet) RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(context.Context, []byte) []byte) {
 }
 
-func (m mockNet) GetRandomPeer() p2ppeers.Peer {
+func (m mockNet) GetRandomPeer() peers.Peer {
 	_, pub1, _ := p2pcrypto.GenerateKeyPair()
 	return pub1
 }
@@ -106,14 +80,14 @@ func (m mockNet) SendWrappedMessage(ctx context.Context, nodeID p2pcrypto.Public
 	return nil
 }
 
-func (m mockNet) GetPeers() []p2ppeers.Peer {
+func (m mockNet) GetPeers() []peers.Peer {
 	_, pub1, _ := p2pcrypto.GenerateKeyPair()
-	return []p2ppeers.Peer{pub1}
+	return []peers.Peer{pub1}
 }
-
 func (m *mockNet) SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error {
+	m.TotalBatchCalls++
 	if m.ReturnError {
-		if m.SendAck {
+		if m.AckChannel != nil {
 			m.AckChannel <- struct{}{}
 		}
 		return fmt.Errorf("mock error")
@@ -133,9 +107,16 @@ func (m *mockNet) SendRequest(ctx context.Context, msgType server.MessageType, p
 	}
 	res.ID = r.ID
 	bts, _ := types.InterfaceToBytes(res)
-	resHandler(bts)
+	if m.AsyncChannel != nil {
+		go func(data []byte) {
+			<-m.AsyncChannel
+			resHandler(data)
+		}(bts)
+	} else {
+		resHandler(bts)
+	}
 
-	if m.SendAck {
+	if m.AckChannel != nil {
 		m.AckChannel <- struct{}{}
 	}
 	return nil
@@ -145,18 +126,16 @@ var _ service.Service = (*mockNet)(nil)
 
 func defaultFetch() (*Fetch, *mockNet) {
 	cfg := Config{
-		3,
+		2000, // make sure we never hit the batch timeout
 		3,
 		3,
 		3,
 		3,
 	}
 
-	mckNet := &mockNet{make(map[types.Hash32]int),
-		false,
-		make(map[types.Hash32]responseMessage),
-		false,
-		make(chan struct{}),
+	mckNet := &mockNet{
+		SendCalled: make(map[types.Hash32]int),
+		Responses:  make(map[types.Hash32]responseMessage),
 	}
 	lg := log.NewDefault("fetch")
 	f := NewFetch(context.TODO(), cfg, mckNet, lg)
@@ -168,15 +147,11 @@ func defaultFetch() (*Fetch, *mockNet) {
 }
 
 func customFetch(cfg Config) (*Fetch, *mockNet) {
-	mckNet := &mockNet{make(map[types.Hash32]int),
-		false,
-		make(map[types.Hash32]responseMessage),
-		false,
-		make(chan struct{}),
+	mckNet := &mockNet{
+		SendCalled: make(map[types.Hash32]int),
+		Responses:  make(map[types.Hash32]responseMessage),
 	}
-
 	lg := log.NewDefault("fetch")
-
 	f := NewFetch(context.TODO(), cfg, mckNet, lg)
 	f.net = mckNet
 	f.AddDB("db", database.NewMemDatabase())
@@ -187,7 +162,6 @@ func TestFetch_GetHash(t *testing.T) {
 	f, _ := defaultFetch()
 	defer f.Stop()
 	f.Start()
-	f.cfg.BatchTimeout = 2000 // make sure we never hit the batch timeout
 	h1 := randomHash()
 	hint := Hint("db")
 	hint2 := Hint("db2")
@@ -199,12 +173,13 @@ func TestFetch_GetHash(t *testing.T) {
 	h2 := randomHash()
 	f.GetHash(h2, hint2, false)
 
-	//test aggregation by hint
-
+	// test aggregation by hint
+	f.activeReqM.RLock()
 	assert.Equal(t, 2, len(f.activeRequests[h1]))
+	f.activeReqM.RUnlock()
 }
 
-func TestFetch_requestHashFromPeers_AggregateAndValidate(t *testing.T) {
+func TestFetch_requestHashBatchFromPeers_AggregateAndValidate(t *testing.T) {
 	h1 := randomHash()
 	f, net := defaultFetch()
 
@@ -217,7 +192,6 @@ func TestFetch_requestHashFromPeers_AggregateAndValidate(t *testing.T) {
 
 	hint := Hint("db")
 	request1 := request{
-		//successCallback:      req.OkCallback,
 		hash:                 h1,
 		priority:             0,
 		validateResponseHash: false,
@@ -229,7 +203,6 @@ func TestFetch_requestHashFromPeers_AggregateAndValidate(t *testing.T) {
 	f.requestHashBatchFromPeers()
 
 	// test aggregation of messages before calling fetch from peer
-	//assert.Equal(t, 3, req.OkCalledNum[h1])
 	assert.Equal(t, 1, net.SendCalled[h1])
 
 	// test incorrect hash fail
@@ -249,6 +222,34 @@ func TestFetch_requestHashFromPeers_AggregateAndValidate(t *testing.T) {
 	assert.Equal(t, 2, net.SendCalled[h1])
 	assert.Equal(t, 3, notOk)
 	assert.Equal(t, 3, okCount)
+}
+
+func TestFetch_requestHashBatchFromPeers_NoDuplicates(t *testing.T) {
+	h1 := randomHash()
+	f, net := defaultFetch()
+
+	// set response mock
+	res := responseMessage{
+		Hash: h1,
+		Data: []byte("a"),
+	}
+	net.Responses[h1] = res
+	net.AsyncChannel = make(chan struct{})
+
+	hint := Hint("db")
+	request1 := request{
+		hash:                 h1,
+		priority:             0,
+		validateResponseHash: false,
+		hint:                 hint,
+		returnChan:           make(chan HashDataPromiseResult, 3),
+	}
+
+	f.activeRequests[h1] = []*request{&request1, &request1, &request1}
+	f.requestHashBatchFromPeers()
+	f.requestHashBatchFromPeers()
+	assert.Equal(t, 1, net.SendCalled[h1])
+	close(net.AsyncChannel)
 }
 
 func TestFetch_GetHash_StartStopSanity(t *testing.T) {
@@ -272,7 +273,6 @@ func TestFetch_GetHash_failNetwork(t *testing.T) {
 
 	hint := Hint("db")
 	request1 := request{
-		//successCallback:      req.OkCallback,
 		hash:                 h1,
 		priority:             0,
 		validateResponseHash: false,
@@ -287,7 +287,7 @@ func TestFetch_GetHash_failNetwork(t *testing.T) {
 	assert.Equal(t, 0, net.SendCalled[h1])
 }
 
-func TestFetch_requestHashFromPeers_BatchRequestMax(t *testing.T) {
+func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 	h1 := randomHash()
 	h2 := randomHash()
 	h3 := randomHash()
@@ -313,7 +313,7 @@ func TestFetch_requestHashFromPeers_BatchRequestMax(t *testing.T) {
 	net.Responses[h1] = bts
 	net.Responses[h2] = bts2
 	net.Responses[h3] = bts3
-	net.SendAck = true
+	net.AckChannel = make(chan struct{})
 
 	hint := Hint("db")
 
@@ -352,5 +352,98 @@ func TestFetch_requestHashFromPeers_BatchRequestMax(t *testing.T) {
 	// test aggregation of messages before calling fetch from peer
 	assert.Equal(t, 1, net.SendCalled[h1])
 	assert.Equal(t, 1, net.SendCalled[h2])
-	assert.Equal(t, 1, net.SendCalled[h1])
+	assert.Equal(t, 1, net.SendCalled[h3])
+	assert.Equal(t, 2, net.TotalBatchCalls)
+}
+
+func makeRequest(h types.Hash32, p priority, hint Hint) *request {
+	return &request{
+		hash:                 h,
+		priority:             p,
+		validateResponseHash: false,
+		hint:                 hint,
+		returnChan:           make(chan HashDataPromiseResult, 1),
+	}
+}
+
+func TestFetch_handleNewRequest_MultipleReqsForSameHashHighPriority(t *testing.T) {
+	hint := Hint("db")
+	hash1 := randomHash()
+	req1 := makeRequest(hash1, High, hint)
+	req2 := makeRequest(hash1, High, hint)
+	hash3 := randomHash()
+	req3 := makeRequest(hash3, High, hint)
+	req4 := makeRequest(hash3, Low, hint)
+	req5 := makeRequest(hash3, High, hint)
+	f, net := customFetch(Config{
+		BatchTimeout:      1,
+		MaxRetiresForPeer: 2,
+		BatchSize:         2,
+	})
+
+	// set response
+	resp1 := responseMessage{
+		Hash: hash1,
+		Data: []byte("a"),
+	}
+	resp3 := responseMessage{
+		Hash: hash3,
+		Data: []byte("d"),
+	}
+	net.Responses[hash1] = resp1
+	net.Responses[req3.hash] = resp3
+	net.AckChannel = make(chan struct{}, 2)
+	net.AsyncChannel = make(chan struct{}, 2)
+
+	// req1 is high priority and will cause a send right away
+	assert.True(t, f.handleNewRequest(req1))
+	select {
+	case <-net.AckChannel:
+		break
+	case <-time.After(2 * time.Second):
+		assert.Fail(t, "timeout sending req1")
+	}
+	assert.Equal(t, 1, net.SendCalled[hash1])
+	// each high priority request should cause a send immediately, but because req1 has not received response yet
+	// req2 will not cause another send and will be notified after req1 receives a response.
+	assert.False(t, f.handleNewRequest(req2))
+	assert.Equal(t, 1, net.SendCalled[hash1])
+
+	// req3 is high priority and has a different hash. it causes a send right away
+	assert.True(t, f.handleNewRequest(req3))
+	select {
+	case <-net.AckChannel:
+		break
+	case <-time.After(2 * time.Second):
+		assert.Fail(t, "timeout sending req3")
+	}
+	assert.Equal(t, 1, net.SendCalled[req3.hash])
+
+	// req4 is the same hash as req3. it won't cause a send
+	assert.False(t, f.handleNewRequest(req4))
+	assert.Equal(t, 1, net.SendCalled[req3.hash])
+
+	// req5 is high priority, but has the same hash as req3h. it won't cause a send either
+	assert.False(t, f.handleNewRequest(req5))
+	assert.Equal(t, 1, net.SendCalled[req3.hash])
+
+	// let both hashes receives response
+	net.AsyncChannel <- struct{}{}
+	net.AsyncChannel <- struct{}{}
+
+	for i, req := range []*request{req1, req2, req3, req4, req5} {
+		select {
+		case resp := <-req.returnChan:
+			if i < 2 {
+				assert.Equal(t, resp1.Data, resp.Data)
+			} else {
+				assert.Equal(t, resp3.Data, resp.Data)
+			}
+			break
+		case <-time.After(2 * time.Second):
+			assert.Fail(t, "timeout getting resp for %v", req)
+		}
+
+	}
+	assert.Equal(t, 2, net.TotalBatchCalls)
 }

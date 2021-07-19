@@ -122,7 +122,7 @@ func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalida
 		latestLayerInState: types.GetEffectiveGenesis(),
 	}
 
-	ll.Validator = &validator{ll, 0}
+	ll.Validator = &validator{Mesh: ll}
 
 	return ll
 }
@@ -135,14 +135,14 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, t
 	if err != nil {
 		logger.Panic("could not recover latest layer: %v", err)
 	}
-	msh.latestLayer = types.LayerID(util.BytesToUint64(latest))
+	msh.latestLayer = types.BytesToLayerID(latest)
 
 	processed, err := db.general.Get(constPROCESSED)
 	if err != nil {
 		logger.Panic("could not recover processed layer: %v", err)
 	}
 
-	msh.SetProcessedLayer(types.LayerID(util.BytesToUint64(processed)))
+	msh.SetProcessedLayer(types.BytesToLayerID(processed))
 
 	if msh.layerHash, err = db.general.Get(constLAYERHASH); err != nil {
 		logger.With().Error("could not recover latest layer hash", log.Err(err))
@@ -152,17 +152,17 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, t
 	if err != nil {
 		logger.Panic("could not recover latest verified layer: %v", err)
 	}
-	msh.latestLayerInState = types.LayerID(util.BytesToUint64(verified))
+	msh.latestLayerInState = types.BytesToLayerID(verified)
 
 	err = pr.LoadState(msh.LatestLayerInState())
 	if err != nil {
 		logger.Panic("cannot load state for layer %v, message: %v", msh.LatestLayerInState(), err)
 	}
 	// in case we load a state that was not fully played
-	if msh.LatestLayerInState()+1 < msh.trtl.LatestComplete() {
+	if msh.LatestLayerInState().Add(1).Before(msh.trtl.LatestComplete()) {
 		// todo: add test for this case, or add random kill test on node
-		logger.Info("playing layers %v to %v to state", msh.LatestLayerInState()+1, msh.trtl.LatestComplete())
-		msh.pushLayersToState(msh.LatestLayerInState()+1, msh.trtl.LatestComplete())
+		logger.Info("playing layers %v to %v to state", msh.LatestLayerInState().Add(1), msh.trtl.LatestComplete())
+		msh.pushLayersToState(msh.LatestLayerInState().Add(1), msh.trtl.LatestComplete())
 	}
 
 	msh.With().Info("recovered mesh from disk",
@@ -176,9 +176,9 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, t
 
 // CacheWarmUp warms up cache with latest blocks
 func (msh *Mesh) CacheWarmUp(layerSize int) {
-	start := types.LayerID(0)
-	if msh.ProcessedLayer() > types.LayerID(msh.blockCache.Cap()/layerSize) {
-		start = msh.ProcessedLayer() - types.LayerID(msh.blockCache.Cap()/layerSize)
+	start := types.NewLayerID(0)
+	if msh.ProcessedLayer().Uint32() > uint32(msh.blockCache.Cap()/layerSize) {
+		start = msh.ProcessedLayer().Sub(uint32(msh.blockCache.Cap() / layerSize))
 	}
 
 	if err := msh.cacheWarmUpFromTo(start, msh.ProcessedLayer()); err != nil {
@@ -216,7 +216,7 @@ func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
 	}
 	defer msh.lkMutex.Unlock()
 	msh.lkMutex.Lock()
-	if idx > msh.latestLayer {
+	if idx.After(msh.latestLayer) {
 		events.ReportNodeStatusUpdate()
 		msh.With().Info("set latest known layer", idx)
 		msh.latestLayer = idx
@@ -297,15 +297,16 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 }
 
 func (msh *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerID) {
-	if oldPbase < 2 {
+	layerTwo := types.NewLayerID(2)
+	if oldPbase.Before(layerTwo) {
 		msh.With().Warning("tried to push layer < 2",
 			log.FieldNamed("old_pbase", oldPbase), log.FieldNamed("new_pbase", newPbase))
-		if newPbase < 3 {
+		if newPbase.Before(types.NewLayerID(3)) {
 			return
 		}
-		oldPbase = 2
+		oldPbase = layerTwo
 	}
-	for layerID := oldPbase; layerID < newPbase; layerID++ {
+	for layerID := oldPbase; layerID.Before(newPbase); layerID = layerID.Add(1) {
 		l, err := msh.GetLayer(layerID)
 		// TODO: propagate/handle error
 		if err != nil || l == nil {
@@ -330,10 +331,10 @@ func (msh *Mesh) persistLayerHashes(l *types.Layer) {
 	msh.persistLayerHash(l.Index(), hash)
 	prevHash := types.Hash32{}
 	var err error
-	if l.Index() > types.GetEffectiveGenesis() {
-		prevHash, err = msh.getRunningLayerHash(l.Index() - 1)
+	if l.Index().After(types.GetEffectiveGenesis()) {
+		prevHash, err = msh.getRunningLayerHash(l.Index().Sub(1))
 		if err != nil {
-			msh.With().Error("cannot get running layer hash", l.Index()-1)
+			msh.With().Error("cannot get running layer hash", l.Index().Sub(1))
 			return
 		}
 	}
@@ -424,16 +425,16 @@ func (msh *Mesh) updateStateWithLayer(validatedLayer types.LayerID, layer *types
 	msh.txMutex.Lock()
 	defer msh.txMutex.Unlock()
 	latest := msh.LatestLayerInState()
-	if validatedLayer <= latest {
+	if !validatedLayer.After(latest) {
 		msh.With().Warning("result received after state has advanced",
 			log.FieldNamed("validatedLayer", validatedLayer),
 			log.FieldNamed("latestLayer", latest))
 		return
 	}
-	if msh.maxValidatedLayer < validatedLayer {
+	if msh.maxValidatedLayer.Before(validatedLayer) {
 		msh.maxValidatedLayer = validatedLayer
 	}
-	if validatedLayer > latest+1 {
+	if validatedLayer.After(latest.Add(1)) {
 		msh.With().Warning("early layer result received",
 			log.FieldNamed("validatedLayer", validatedLayer),
 			log.FieldNamed("maxValidatedLayer", msh.maxValidatedLayer),
@@ -442,7 +443,7 @@ func (msh *Mesh) updateStateWithLayer(validatedLayer types.LayerID, layer *types
 		return
 	}
 	msh.applyState(layer)
-	for i := validatedLayer + 1; i <= msh.maxValidatedLayer; i++ {
+	for i := validatedLayer.Add(1); !i.After(msh.maxValidatedLayer); i = i.Add(1) {
 		nxtLayer, has := msh.nextValidLayers[i]
 		if !has {
 			break
@@ -600,9 +601,9 @@ func (msh *Mesh) pushTransactions(l *types.Layer) {
 // GetProcessedLayer returns a layer only if it has already been processed
 func (msh *Mesh) GetProcessedLayer(i types.LayerID) (*types.Layer, error) {
 	msh.lMutex.RLock()
-	if i > msh.ProcessedLayer() {
+	if i.After(msh.ProcessedLayer()) {
 		msh.lMutex.RUnlock()
-		msh.Debug("failed to get layer  ", i, " layer not verified yet")
+		msh.Debug("failed to get layer  ", i.String(), " layer not verified yet")
 		return nil, errors.New("layer not verified yet")
 	}
 	msh.lMutex.RUnlock()
@@ -720,7 +721,7 @@ func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
 		}
 		txs = append(txs, tx)
 	}
-	if err := msh.writeTransactions(blk.LayerIndex, txs); err != nil {
+	if err := msh.writeTransactions(blk, txs...); err != nil {
 		return fmt.Errorf("could not write transactions of block %v database: %v", blk.ID(), err)
 	}
 
@@ -763,16 +764,16 @@ func (msh *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 	defer msh.orphMutex.RUnlock()
 	ids := map[types.BlockID]struct{}{}
 	for key, val := range msh.orphanBlocks {
-		if key < l {
+		if key.Before(l) {
 			for bid := range val {
 				ids[bid] = struct{}{}
 			}
 		}
 	}
 
-	blocks, err := msh.LayerBlockIds(l - 1)
+	blocks, err := msh.LayerBlockIds(l.Sub(1))
 	if err != nil {
-		return nil, fmt.Errorf("failed getting latest layer %v err %v", l-1, err)
+		return nil, fmt.Errorf("failed getting latest layer %v err %v", l.Sub(1), err)
 	}
 
 	// add last layer blocks
