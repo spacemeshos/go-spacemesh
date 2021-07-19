@@ -50,8 +50,6 @@ func AddCommands(cmd *cobra.Command) {
 		config.StartMining, "start mining")
 	cmd.PersistentFlags().BoolVar(&config.PprofHTTPServer, "pprof-server",
 		config.PprofHTTPServer, "enable http pprof server")
-	cmd.PersistentFlags().StringVar(&config.GenesisConfPath, "genesis-conf",
-		config.GenesisConfPath, "add genesis configuration")
 	cmd.PersistentFlags().StringVar(&config.CoinbaseAccount, "coinbase",
 		config.CoinbaseAccount, "coinbase account to accumulate rewards")
 	cmd.PersistentFlags().StringVar(&config.GoldenATXID, "golden-atx",
