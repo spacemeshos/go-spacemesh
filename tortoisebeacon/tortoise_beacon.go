@@ -33,6 +33,7 @@ const (
 var (
 	ErrBeaconNotCalculated = errors.New("beacon is not calculated for this epoch")
 	ErrZeroEpochWeight     = errors.New("zero epoch weight provided")
+	ErrZeroEpoch           = errors.New("zero epoch provided")
 )
 
 type broadcaster interface {
@@ -117,7 +118,7 @@ type TortoiseBeacon struct {
 	beacons   map[types.EpochID]types.Hash32
 
 	proposalChansMu sync.Mutex
-	proposalChans   map[types.EpochID]chan extendedProposalMessage
+	proposalChans   map[types.EpochID]chan *proposalMessageWithReceiptData
 
 	backgroundWG sync.WaitGroup
 
@@ -191,7 +192,7 @@ func New(
 		firstRoundIncomingVotes:         make(map[types.EpochID]firstRoundVotesPerPK),
 		firstRoundOutcomingVotes:        make(map[types.EpochID]firstRoundVotes),
 		seenEpochs:                      make(map[types.EpochID]struct{}),
-		proposalChans:                   make(map[types.EpochID]chan extendedProposalMessage),
+		proposalChans:                   make(map[types.EpochID]chan *proposalMessageWithReceiptData),
 	}
 }
 
@@ -234,6 +235,10 @@ func (tb *TortoiseBeacon) Close() error {
 
 // GetBeacon returns a Tortoise Beacon value as []byte for a certain epoch or an error if it doesn't exist.
 func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
+	if epochID == 0 {
+		return nil, ErrZeroEpoch
+	}
+
 	if tb.tortoiseBeaconDB != nil {
 		val, err := tb.tortoiseBeaconDB.GetTortoiseBeacon(epochID - 1)
 		if err == nil {
@@ -401,7 +406,10 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 		log.Uint64("epoch_id", uint64(epoch)))
 
 	tb.proposalChansMu.Lock()
-	tb.closePrevChan(epoch)
+	if epoch > 0 {
+		// close channel for previous epoch
+		tb.closeProposalChannel(epoch - 1)
+	}
 	ch := tb.getOrCreateProposalChannel(epoch)
 	tb.proposalChansMu.Unlock()
 
@@ -422,14 +430,17 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 		log.Uint64("epoch_id", uint64(epoch)))
 }
 
-func (tb *TortoiseBeacon) readProposalMessagesLoop(ctx context.Context, ch chan extendedProposalMessage) {
+func (tb *TortoiseBeacon) readProposalMessagesLoop(ctx context.Context, ch chan *proposalMessageWithReceiptData) {
 	for {
 		select {
 		case <-tb.CloseChannel():
-			close(ch)
-
 			return
+
 		case em := <-ch:
+			if em == nil {
+				return
+			}
+
 			if err := tb.handleProposalMessage(em.message, em.receivedTime); err != nil {
 				tb.Log.With().Error("Failed to handle proposal message",
 					log.String("sender", em.gossip.Sender().String()),
@@ -444,20 +455,20 @@ func (tb *TortoiseBeacon) readProposalMessagesLoop(ctx context.Context, ch chan 
 	}
 }
 
-func (tb *TortoiseBeacon) closePrevChan(epoch types.EpochID) {
-	if prevCh, ok := tb.proposalChans[epoch]; ok {
+func (tb *TortoiseBeacon) closeProposalChannel(epoch types.EpochID) {
+	if ch, ok := tb.proposalChans[epoch]; ok {
 		select {
-		case <-prevCh:
+		case <-ch:
 		default:
-			close(prevCh)
+			close(ch)
 		}
 	}
 }
 
-func (tb *TortoiseBeacon) getOrCreateProposalChannel(epoch types.EpochID) chan extendedProposalMessage {
+func (tb *TortoiseBeacon) getOrCreateProposalChannel(epoch types.EpochID) chan *proposalMessageWithReceiptData {
 	ch, ok := tb.proposalChans[epoch]
 	if !ok {
-		ch = make(chan extendedProposalMessage, proposalChanCapacity)
+		ch = make(chan *proposalMessageWithReceiptData, proposalChanCapacity)
 		tb.proposalChans[epoch] = ch
 	}
 

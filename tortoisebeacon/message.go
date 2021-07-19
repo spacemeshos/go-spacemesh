@@ -25,7 +25,7 @@ func (p ProposalMessage) String() string {
 	return string(bytes)
 }
 
-type extendedProposalMessage struct {
+type proposalMessageWithReceiptData struct {
 	message      ProposalMessage
 	gossip       service.GossipMessage
 	receivedTime time.Time
