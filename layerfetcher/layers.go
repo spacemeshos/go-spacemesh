@@ -243,7 +243,7 @@ func (l *Logic) tortoiseBeaconReqReceiver(ctx context.Context, msg []byte) []byt
 
 	beacon, err := l.tbDB.GetTortoiseBeacon(epoch)
 	if errors.Is(err, database.ErrNotFound) {
-		l.log.WithContext(ctx).Debug("still no tortoise beacon for epoch %v", epoch)
+		l.log.WithContext(ctx).Warning("tortoise beacon for epoch %v was requested, but wasn't found in the DB", epoch)
 		return []byte{}
 	}
 
