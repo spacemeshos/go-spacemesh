@@ -1055,7 +1055,7 @@ func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 			pub, _, _ := ed25519.GenerateKey(nil)
 			id := types.NodeID{Key: util.Bytes2Hex(pub), VRFPublicKey: []byte("22222")}
 			for i := 0; ; i++ {
-				atx := types.NewActivationTx(newChallenge(id, uint64(i), *types.EmptyATXID, goldenATXID, 0), [20]byte{}, nil, 0, nil)
+				atx := types.NewActivationTx(newChallenge(id, uint64(i), *types.EmptyATXID, goldenATXID, types.NewLayerID(0)), [20]byte{}, nil, 0, nil)
 				if !assert.NoError(b, atxdb.StoreAtx(types.EpochID(1), atx)) {
 					return
 				}
