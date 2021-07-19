@@ -109,9 +109,10 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 		return nil, err
 	}
 
+	beaconDbgStr := types.BytesToHash(epochBeacon).ShortString()
 	bo.log.With().Info("Got beacon",
 		log.Uint64("epoch_id", uint64(epochNumber)),
-		log.String("epoch_beacon", fmt.Sprint(epochBeacon)))
+		log.String("epoch_beacon", beaconDbgStr))
 
 	var weight uint64
 	// get the previous epoch's total weight
@@ -133,7 +134,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 		log.Uint64("total_weight", totalWeight))
 	bo.log.With().Debug("calculating eligibility",
 		epochNumber,
-		log.String("epoch_beacon", fmt.Sprint(epochBeacon)))
+		log.String("epoch_beacon", beaconDbgStr))
 
 	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(weight, totalWeight, bo.committeeSize, bo.layersPerEpoch)
 	if err != nil {

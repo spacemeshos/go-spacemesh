@@ -126,7 +126,7 @@ var _ service.Service = (*mockNet)(nil)
 
 func defaultFetch() (*Fetch, *mockNet) {
 	cfg := Config{
-		3,
+		2000, // make sure we never hit the batch timeout
 		3,
 		3,
 		3,
@@ -162,7 +162,6 @@ func TestFetch_GetHash(t *testing.T) {
 	f, _ := defaultFetch()
 	defer f.Stop()
 	f.Start()
-	f.cfg.BatchTimeout = 2000 // make sure we never hit the batch timeout
 	h1 := randomHash()
 	hint := Hint("db")
 	hint2 := Hint("db2")
