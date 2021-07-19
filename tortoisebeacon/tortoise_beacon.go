@@ -247,6 +247,8 @@ func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 
 		if !errors.Is(err, database.ErrNotFound) {
 			tb.Log.Error("Failed to get tortoise beacon for epoch %v from DB: %v", epochID-1, err)
+
+			return nil, fmt.Errorf("get beacon from DB: %w", err)
 		}
 	}
 
