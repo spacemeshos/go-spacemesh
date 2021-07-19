@@ -93,7 +93,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 				vrfVerifier:    signing.VRFVerify,
 				vrfSigner:      vrfSigner,
 				clock:          clock,
-				lastLayer:      epoch,
+				lastLayer:      types.NewLayerID(epoch),
 			}
 
 			q, ok := new(big.Rat).SetString(tb.config.Q)
@@ -377,7 +377,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 						},
 					},
 				},
-				lastLayer: epoch,
+				lastLayer: types.NewLayerID(epoch),
 			}
 
 			sig, err := tb.signMessage(tc.message.FollowingVotingMessageBody)

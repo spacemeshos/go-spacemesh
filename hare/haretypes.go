@@ -2,14 +2,12 @@ package hare
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"hash/fnv"
 	"sort"
-)
 
-type instanceID types.LayerID
+	"github.com/spacemeshos/go-spacemesh/common/types"
+)
 
 type messageType byte
 
@@ -48,13 +46,6 @@ func (mType messageType) String() string {
 	default:
 		return "Unknown message type"
 	}
-}
-
-func (id instanceID) Bytes() []byte {
-	idInBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(idInBytes, uint32(id))
-
-	return idInBytes
 }
 
 // Set represents a unique set of values.

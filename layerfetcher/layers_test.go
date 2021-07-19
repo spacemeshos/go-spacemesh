@@ -145,7 +145,7 @@ func NewMockLogic(net *mockNet, layers layerDB, blocksDB gossipBlocks, blocks bl
 
 func TestLayerHashReqReceiver(t *testing.T) {
 	db := newLayerDBMock()
-	layerID := types.LayerID(1)
+	layerID := types.NewLayerID(1)
 	l := NewMockLogic(newMockNet(), db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerFetch"))
 	h := randomHash()
 	db.hashes[layerID] = h
@@ -173,7 +173,7 @@ func TestLayerHashBlocksReqReceiver(t *testing.T) {
 func TestPollLayerHash_NoPeers(t *testing.T) {
 	db := newLayerDBMock()
 	l := NewMockLogic(newMockNet(), db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerFetch"))
-	layerID := types.LayerID(10)
+	layerID := types.NewLayerID(10)
 	res := <-l.PollLayerHash(context.TODO(), layerID)
 	assert.Equal(t, ErrNoPeers, res.Err)
 	assert.Nil(t, res.Hashes)
@@ -194,7 +194,7 @@ func TestPollLayerHash_TooManyErrors(t *testing.T) {
 	}
 	l := NewMockLogic(net, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerFetch"))
 
-	layerID := types.LayerID(10)
+	layerID := types.NewLayerID(10)
 	res := <-l.PollLayerHash(context.TODO(), layerID)
 	assert.Equal(t, ErrTooManyPeerErrors, res.Err)
 	assert.Nil(t, res.Hashes)
@@ -215,7 +215,7 @@ func TestPollLayerHash_TooManyErrors_Timeout(t *testing.T) {
 	}
 	l := NewMockLogic(net, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerFetch"))
 
-	layerID := types.LayerID(10)
+	layerID := types.NewLayerID(10)
 	res := <-l.PollLayerHash(context.TODO(), layerID)
 	assert.Equal(t, ErrTooManyPeerErrors, res.Err)
 	assert.Nil(t, res.Hashes)
@@ -237,7 +237,7 @@ func TestPollLayerHash_SomeError(t *testing.T) {
 	}
 	l := NewMockLogic(net, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerFetch"))
 
-	layerID := types.LayerID(10)
+	layerID := types.NewLayerID(10)
 	res := <-l.PollLayerHash(context.TODO(), layerID)
 	assert.Nil(t, res.Err)
 	assert.Equal(t, 1, len(res.Hashes))
@@ -260,7 +260,7 @@ func TestPollLayerHash_SomeTimeout(t *testing.T) {
 	}
 	l := NewMockLogic(net, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerFetch"))
 
-	layerID := types.LayerID(10)
+	layerID := types.NewLayerID(10)
 	res := <-l.PollLayerHash(context.TODO(), layerID)
 	assert.Nil(t, res.Err)
 	assert.Equal(t, 1, len(res.Hashes))
@@ -284,7 +284,7 @@ func TestPollLayerHash_Aggregated(t *testing.T) {
 	}
 	l := NewMockLogic(net, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerFetch"))
 
-	layerID := types.LayerID(10)
+	layerID := types.NewLayerID(10)
 	res := <-l.PollLayerHash(context.TODO(), layerID)
 	assert.Nil(t, res.Err)
 	assert.Equal(t, numPeers/2, len(res.Hashes))
@@ -303,7 +303,7 @@ func TestPollLayerHash_AllDifferent(t *testing.T) {
 	}
 	l := NewMockLogic(net, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerFetch"))
 
-	layerID := types.LayerID(10)
+	layerID := types.NewLayerID(10)
 	res := <-l.PollLayerHash(context.TODO(), layerID)
 	assert.Nil(t, res.Err)
 	assert.Equal(t, numPeers, len(res.Hashes))
@@ -329,7 +329,7 @@ func TestPollLayerBlocks_AllHaveBlockData(t *testing.T) {
 	}
 	l := NewMockLogic(net, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerFetch"))
 
-	layerID := types.LayerID(10)
+	layerID := types.NewLayerID(10)
 	// currently first peer for each hash is queried
 	layerHashes := map[types.Hash32][]peers.Peer{
 		randomHash(): {net.peers[2]},
@@ -357,7 +357,7 @@ func TestPollLayerBlocks_OnlyOneHasBlockData(t *testing.T) {
 	}
 	l := NewMockLogic(net, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerFetch"))
 
-	layerID := types.LayerID(10)
+	layerID := types.NewLayerID(10)
 	// currently first peer for each hash is queried
 	layerHashes := map[types.Hash32][]peers.Peer{
 		randomHash(): {net.peers[2]},
@@ -381,7 +381,7 @@ func TestPollLayerBlocks_OneZeroLayerAmongstErrors(t *testing.T) {
 	}
 	l := NewMockLogic(net, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerFetch"))
 
-	layerID := types.LayerID(10)
+	layerID := types.NewLayerID(10)
 	// currently first peer for each hash is queried
 	layerHashes := map[types.Hash32][]peers.Peer{
 		emptyHash:    {net.peers[2]},
@@ -405,7 +405,7 @@ func TestPollLayerBlocks_ZeroLayer(t *testing.T) {
 	}
 	l := NewMockLogic(net, db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerFetch"))
 
-	layerID := types.LayerID(10)
+	layerID := types.NewLayerID(10)
 	// currently first peer for each hash is queried
 	layerHashes := map[types.Hash32][]peers.Peer{
 		emptyHash: {net.peers[2], net.peers[1], net.peers[0], net.peers[3]},

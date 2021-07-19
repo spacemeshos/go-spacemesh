@@ -19,7 +19,7 @@ type ThreadSafeVerifyingTortoise struct {
 type Config struct {
 	LayerSize int
 	Database  blockDataProvider
-	Hdist     int
+	Hdist     uint32
 	Log       log.Log
 	Recovered bool
 }
@@ -33,7 +33,7 @@ func NewVerifyingTortoise(cfg Config) *ThreadSafeVerifyingTortoise {
 }
 
 // verifyingTortoise creates a new verifying tortoise wrapper
-func verifyingTortoise(layerSize int, mdb blockDataProvider, hdist int, lg log.Log) *ThreadSafeVerifyingTortoise {
+func verifyingTortoise(layerSize int, mdb blockDataProvider, hdist uint32, lg log.Log) *ThreadSafeVerifyingTortoise {
 	alg := &ThreadSafeVerifyingTortoise{trtl: newTurtle(mdb, hdist, layerSize)}
 	alg.trtl.SetLogger(lg)
 	alg.trtl.init(mesh.GenesisLayer())
