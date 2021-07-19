@@ -42,7 +42,8 @@ func newMockNet() *mockNet {
 		layerHashes: make(map[peers.Peer][]byte),
 		layerBlocks: make(map[peers.Peer][]byte),
 		errors:      make(map[peers.Peer]error),
-		timeouts:    make(map[peers.Peer]struct{})}
+		timeouts:    make(map[peers.Peer]struct{}),
+	}
 }
 func (m *mockNet) GetPeers() []peers.Peer    { return m.peers }
 func (m *mockNet) GetRandomPeer() peers.Peer { return m.peers[0] }
@@ -82,9 +83,11 @@ func newLayerDBMock() *layerDBMock {
 		hashes:  make(map[types.LayerID]types.Hash32),
 	}
 }
+
 func (l *layerDBMock) GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error) {
 	return l.vectors[hash], nil
 }
+
 func (l *layerDBMock) SaveLayerHashInputVector(id types.Hash32, data []byte) error {
 	var blocks []types.BlockID
 	err := types.BytesToInterface(data, blocks)
@@ -110,6 +113,7 @@ func (m mockFetcher) GetHash(_ types.Hash32, _ fetch.Hint, _ bool) chan fetch.Ha
 	}
 	return ch
 }
+
 func (m mockFetcher) GetHashes(_ []types.Hash32, _ fetch.Hint, _ bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
 	return nil
 }
@@ -127,7 +131,7 @@ func (m mockAtx) HandleAtxData(_ context.Context, _ []byte, _ service.Fetcher) e
 }
 
 func NewMockLogic(net *mockNet, layers layerDB, blocksDB gossipBlocks, blocks blockHandler, atxs atxHandler, fetcher fetch.Fetcher, log log.Log) *Logic {
-	var l = &Logic{
+	l := &Logic{
 		log:            log,
 		fetcher:        fetcher,
 		net:            net,
@@ -371,6 +375,8 @@ func TestPollLayerBlocks_OnlyOneHasBlockData(t *testing.T) {
 }
 
 func TestPollLayerBlocks_OneZeroLayerAmongstErrors(t *testing.T) {
+	types.SetLayersPerEpoch(5)
+
 	db := newLayerDBMock()
 	net := newMockNet()
 	numPeers := 4

@@ -43,7 +43,7 @@ func TestConfig() Config {
 		FirstVotingRoundDurationMs: 40,
 		VotingRoundDurationMs:      20,
 		WeakCoinRoundDurationMs:    20,
-		WaitAfterEpochStart:        100,
+		WaitAfterEpochStart:        1,
 		Theta:                      0.00004,
 		VotesLimit:                 100,
 	}

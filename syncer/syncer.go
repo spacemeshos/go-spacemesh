@@ -366,7 +366,7 @@ func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) (
 	ch := s.fetcher.PollLayerHash(ctx, layerID)
 	hashRes := <-ch
 	if hashRes.Err != nil {
-		return nil, hashRes.Err
+		return nil, fmt.Errorf("PollLayerHash: %w", hashRes.Err)
 	}
 	// TODO: resolve hash with peers
 	bch := s.fetcher.PollLayerBlocks(ctx, layerID, hashRes.Hashes)
@@ -375,9 +375,15 @@ func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) (
 		if res.Err == layerfetcher.ErrZeroLayer {
 			return types.NewLayer(layerID), nil
 		}
-		return nil, res.Err
+		return nil, fmt.Errorf("PollLayerBlocks: %w", res.Err)
 	}
-	return s.mesh.GetLayer(layerID)
+
+	layer, err := s.mesh.GetLayer(layerID)
+	if err != nil {
+		return nil, fmt.Errorf("GetLayer: %w", err)
+	}
+
+	return layer, nil
 }
 
 func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
@@ -403,17 +409,18 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 }
 
 func (s *Syncer) getTortoiseBeacon(ctx context.Context, layerID types.LayerID) error {
-	if layerID.GetEpoch().IsGenesis() {
+	epoch := layerID.GetEpoch()
+	if epoch.IsGenesis() {
 		s.logger.WithContext(ctx).Info("skip getting tortoise beacons in genesis epoch")
 		return nil
 	}
-	epoch := layerID.GetEpoch()
+
 	currentEpoch := s.ticker.GetCurrentLayer().GetEpoch()
 	// only get tortoise beacon if
 	// - layerID is in the current epoch
 	// - layerID is the last layer of a previous epoch
 	// i.e. for older epochs we sync tortoise beacons once per epoch. for current epoch we sync tortoise beacons in every layer
-	if epoch == currentEpoch || layerID == (epoch+1).FirstLayer().Sub(1) {
+	if epoch == currentEpoch || ((epoch+1).FirstLayer().Value > 0 && layerID == (epoch+1).FirstLayer().Sub(1)) {
 		s.logger.WithContext(ctx).With().Debug("getting tortoise beacons", epoch, layerID)
 		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
 		if err := s.fetcher.GetTortoiseBeacon(ctx, epoch); err != nil {

@@ -143,8 +143,7 @@ func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) (votesMarginMap, 
 	return firstRoundVotesMargin, nil
 }
 
-// TODO: for every round excluding first round
-// TODO: consider having a vector of opinions
+// TODO: For every round excluding first round consider having a vector of opinions.
 func (tb *TortoiseBeacon) calcOwnFirstRoundVotes(epoch types.EpochID, votesMargin votesMarginMap) (votesSetPair, error) {
 	ownFirstRoundsVotes := votesSetPair{
 		ValidVotes:   make(hashSet),
@@ -156,11 +155,7 @@ func (tb *TortoiseBeacon) calcOwnFirstRoundVotes(epoch types.EpochID, votesMargi
 		return votesSetPair{}, fmt.Errorf("get epoch weight: %w", err)
 	}
 
-	votingThreshold, err := tb.votingThreshold(epochWeight)
-	if err != nil {
-		return votesSetPair{}, fmt.Errorf("voting threshold: %w", err)
-	}
-
+	votingThreshold := tb.votingThreshold(epochWeight)
 	coinToss := tb.weakCoin.Get(epoch, 1)
 
 	for vote, margin := range votesMargin {
@@ -188,7 +183,7 @@ func (tb *TortoiseBeacon) calcOwnFirstRoundVotes(epoch types.EpochID, votesMargi
 	return ownFirstRoundsVotes, nil
 }
 
-// TODO: same calculation, do incremental part on receiving (vector of margins)
+// TODO: Same calculation, do incremental part on receiving (vector of margins).
 func (tb *TortoiseBeacon) calcVotesMargin(epoch types.EpochID, upToRound types.RoundID, votesMargin votesMarginMap) error {
 	for round := firstRound + 1; round <= upToRound; round++ {
 		thisRound := epochRoundPair{
@@ -235,10 +230,7 @@ func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, round ty
 		return votesSetPair{}, fmt.Errorf("get epoch weight: %w", err)
 	}
 
-	votingThreshold, err := tb.votingThreshold(epochWeight)
-	if err != nil {
-		return votesSetPair{}, fmt.Errorf("voting threshold: %w", err)
-	}
+	votingThreshold := tb.votingThreshold(epochWeight)
 
 	// TODO(nkryuchkov): should happen after weak coin for this round is calculated; consider calculating in two steps
 	for vote, weightCount := range votesMargin {

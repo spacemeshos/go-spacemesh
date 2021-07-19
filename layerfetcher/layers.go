@@ -60,7 +60,7 @@ type poetDB interface {
 
 // tortoiseBeaconDB is an interface for tortoise beacon database
 type tortoiseBeaconDB interface {
-	GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, bool)
+	GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, error)
 	SetTortoiseBeacon(epochID types.EpochID, beacon types.Hash32) error
 }
 
@@ -221,7 +221,7 @@ func (l *Logic) layerHashBlocksReqReceiver(ctx context.Context, msg []byte) []by
 		// TODO: We need to diff empty set and no results in sync somehow.
 		l.log.WithContext(ctx).Debug("didn't have input vector for layer ")
 	}
-	//latest := l.gossipBlocks.Get() todo: implement this
+	// latest := l.gossipBlocks.Get() todo: implement this
 	b := layerBlocks{
 		blocks,
 		nil,
@@ -241,9 +241,14 @@ func (l *Logic) tortoiseBeaconReqReceiver(ctx context.Context, msg []byte) []byt
 	epoch := types.EpochID(util.BytesToUint32(msg))
 	l.log.WithContext(ctx).Debug("got tortoise beacon request for epoch %v", epoch)
 
-	beacon, ok := l.tbDB.GetTortoiseBeacon(epoch)
-	if !ok {
-		l.log.WithContext(ctx).Warning("cannot find tortoise beacon for epoch %v", epoch)
+	beacon, err := l.tbDB.GetTortoiseBeacon(epoch)
+	if errors.Is(err, database.ErrNotFound) {
+		l.log.WithContext(ctx).Warning("tortoise beacon for epoch %v was requested, but wasn't found in the DB", epoch)
+		return []byte{}
+	}
+
+	if err != nil {
+		l.log.WithContext(ctx).Error("cannot get tortoise beacon for epoch %v", epoch)
 		return []byte{}
 	}
 
@@ -409,7 +414,9 @@ func (l *Logic) fetchLayerBlocks(ctx context.Context, layerID types.LayerID, blo
 func (l *Logic) receiveBlockHashes(ctx context.Context, layerID types.LayerID, peer peers.Peer, expectedResults int, data []byte, extErr error) {
 	pRes := &peerResult{err: extErr}
 	if extErr != nil {
-		l.log.WithContext(ctx).With().Error("received error from peer for block hashes", log.Err(extErr), layerID)
+		if !errors.Is(extErr, ErrZeroLayer) || !layerID.GetEpoch().IsGenesis() {
+			l.log.WithContext(ctx).With().Error("received error from peer for block hashes", log.Err(extErr), layerID)
+		}
 	} else if data != nil {
 		var blocks layerBlocks
 		convertErr := types.BytesToInterface(data, &blocks)
@@ -483,7 +490,7 @@ type epochAtxRes struct {
 func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 	resCh := make(chan epochAtxRes, 1)
 
-	//build receiver function
+	// build receiver function
 	receiveForPeerFunc := func(data []byte) {
 		var atxsIDs []types.ATXID
 		err := types.BytesToInterface(data, &atxsIDs)
@@ -534,13 +541,13 @@ func (l *Logic) blockReceiveFunc(ctx context.Context, data []byte) error {
 
 // IsSynced indicates if this node is synced
 func (l *Logic) IsSynced(context.Context) bool {
-	//todo: add this logic
+	// todo: add this logic
 	return true
 }
 
 // ListenToGossip indicates if node is currently accepting packets from gossip
 func (l *Logic) ListenToGossip() bool {
-	//todo: add this logic
+	// todo: add this logic
 	return true
 }
 
@@ -593,7 +600,7 @@ func (l *Logic) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.Hash32())
 	}
-	//todo: atx Id is currently only the header bytes - should we change it?
+	// todo: atx Id is currently only the header bytes - should we change it?
 	results := l.fetcher.GetHashes(hashes, fetch.ATXDB, false)
 	for hash, resC := range results {
 		res := <-resC
@@ -705,7 +712,7 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 
 	resCh := make(chan []byte, len(remotePeers))
 
-	//build receiver function
+	// build receiver function
 	makeReceiveFunc := func(peer fmt.Stringer) func([]byte) {
 		return func(data []byte) {
 			if len(data) == 0 {
