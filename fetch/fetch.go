@@ -73,7 +73,7 @@ type request struct {
 	priority             priority                   // priority is for QoS
 	validateResponseHash bool                       // if true perform hash validation on received Data
 	hint                 Hint                       // the hint from which database to fetch this hash
-	returnChan           chan HashDataPromiseResult //channel that will signal if the call succeeded or not
+	returnChan           chan HashDataPromiseResult // channel that will signal if the call succeeded or not
 	retries              int
 }
 
@@ -104,7 +104,7 @@ func (b *requestBatch) SetID() {
 	b.ID = types.CalcHash32(bts)
 }
 
-//ToMap converts the array of requests to map so it can be easily invalidated
+// ToMap converts the array of requests to map so it can be easily invalidated
 func (b requestBatch) ToMap() map[types.Hash32]requestMessage {
 	m := make(map[types.Hash32]requestMessage)
 	for _, r := range b.Requests {
@@ -122,7 +122,7 @@ type responseBatch struct {
 
 // Config is the configuration file of the Fetch component
 type Config struct {
-	BatchTimeout         int // in seconds
+	BatchTimeout         int // in milliseconds
 	MaxRetiresForPeer    int
 	BatchSize            int
 	RequestTimeout       int // in seconds
@@ -132,11 +132,11 @@ type Config struct {
 // DefaultConfig is the default config for the fetch component
 func DefaultConfig() Config {
 	return Config{
-		BatchTimeout:         1,
+		BatchTimeout:         50,
 		MaxRetiresForPeer:    2,
 		BatchSize:            20,
 		RequestTimeout:       10,
-		MaxRetriesForRequest: 20,
+		MaxRetriesForRequest: 2000,
 	}
 }
 
@@ -217,7 +217,7 @@ func NewFetch(ctx context.Context, cfg Config, network service.Service, logger l
 		pendingRequests: make(map[types.Hash32][]*request),
 		net:             srv,
 		requestReceiver: make(chan request),
-		batchTimeout:    time.NewTicker(time.Millisecond * 50),
+		batchTimeout:    time.NewTicker(time.Millisecond * time.Duration(cfg.BatchTimeout)),
 		stop:            make(chan struct{}),
 		activeBatches:   make(map[types.Hash32]requestBatch),
 		doneChan:        make(chan struct{}),
@@ -403,7 +403,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 	batchMap := batch.ToMap()
 	// iterate all hash Responses
 	for _, resID := range response.Responses {
-		//take lock here to make handling of a single hash atomic
+		// take lock here to make handling of a single hash atomic
 		f.activeReqM.Lock()
 		// for each hash, send Data on waiting channel
 		reqs := f.pendingRequests[resID.Hash]
@@ -424,9 +424,9 @@ func (f *Fetch) receiveResponse(data []byte) {
 				Data:    resID.Data,
 				IsLocal: false,
 			}
-			//todo: mark peer as malicious
+			// todo: mark peer as malicious
 		}
-		//remove from map
+		// remove from map
 		delete(batchMap, resID.Hash)
 
 		// remove from pending list
@@ -466,7 +466,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 		f.activeReqM.Unlock()
 	}
 
-	//delete the hash of waiting batch
+	// delete the hash of waiting batch
 	f.activeBatchM.Lock()
 	delete(f.activeBatches, response.ID)
 	f.activeBatchM.Unlock()
@@ -534,7 +534,7 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 				f.handleHashError(batch.ID, ErrCouldNotSend(fmt.Errorf("could not send message: %w", err)))
 				break
 			}
-			//todo: mark number of fails per peer to make it low priority
+			// todo: mark number of fails per peer to make it low priority
 			f.log.Warning("could not send message to peer %v, retrying, retries %v", p, retries)
 		} else {
 			break
@@ -603,7 +603,7 @@ func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashD
 		return resChan
 	}
 
-	//check if we already have this hash locally
+	// check if we already have this hash locally
 	f.dbLock.RLock()
 	db, ok := f.dbs[h]
 	f.dbLock.RUnlock()

@@ -44,6 +44,8 @@ func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID) error {
 			tb.Log.With().Error("Failed to write tortoise beacon to DB",
 				log.Uint64("epoch_id", uint64(epoch)),
 				log.String("beacon", beacon.String()))
+
+			return fmt.Errorf("write tortoise beacon to DB: %w", err)
 		}
 	}
 

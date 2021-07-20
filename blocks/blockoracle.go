@@ -149,6 +149,10 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 			return nil, err
 		}
 		vrfSig := bo.vrfSigner.Sign(message)
+
+		bo.log.Debug("signed VRF message, beacon %v, epoch %v, counter: %v, vrfSig: %v",
+			types.BytesToHash(epochBeacon).ShortString(), epochNumber, counter, types.BytesToHash(vrfSig).ShortString())
+
 		eligibleLayer := calcEligibleLayer(epochNumber, bo.layersPerEpoch, vrfSig)
 		eligibilityProofs[eligibleLayer] = append(eligibilityProofs[eligibleLayer], types.BlockEligibilityProof{
 			J:   counter,

@@ -42,8 +42,10 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 		mock.AnythingOfType("types.RoundID")).
 		Return(false)
 
-	const epoch = 5
-	const rounds = 3
+	const (
+		epoch  = 5
+		rounds = 3
+	)
 
 	tt := []struct {
 		name                      string
@@ -93,7 +95,10 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 				},
 			},
 			incomingVotes: map[epochRoundPair]votesPerPK{
-				epochRoundPair{EpochID: epoch, Round: 1}: {
+				{
+					EpochID: epoch,
+					Round:   1,
+				}: {
 					pk1.String(): votesSetPair{
 						ValidVotes: hashSet{
 							"0x1": {},
@@ -114,7 +119,10 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 						},
 					},
 				},
-				epochRoundPair{EpochID: epoch, Round: 2}: {
+				{
+					EpochID: epoch,
+					Round:   2,
+				}: {
 					pk1.String(): votesSetPair{
 						ValidVotes: hashSet{
 							"0x3": {},
@@ -126,7 +134,10 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 						InvalidVotes: hashSet{},
 					},
 				},
-				epochRoundPair{EpochID: epoch, Round: 3}: {
+				{
+					EpochID: epoch,
+					Round:   3,
+				}: {
 					pk1.String(): votesSetPair{
 						ValidVotes:   hashSet{},
 						InvalidVotes: hashSet{},
@@ -204,8 +215,10 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 		mock.AnythingOfType("types.RoundID")).
 		Return(false)
 
-	const epoch = 5
-	const rounds = 3
+	const (
+		epoch  = 5
+		rounds = 3
+	)
 
 	tt := []struct {
 		name                      string
@@ -260,7 +273,7 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 				},
 			},
 			incomingVotes: map[epochRoundPair]votesPerPK{
-				epochRoundPair{EpochID: epoch, Round: 1}: {
+				{EpochID: epoch, Round: 1}: {
 					pk1.String(): votesSetPair{
 						ValidVotes: hashSet{
 							"0x1": {},
@@ -281,7 +294,7 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 						},
 					},
 				},
-				epochRoundPair{EpochID: epoch, Round: 2}: {
+				{EpochID: epoch, Round: 2}: {
 					pk1.String(): votesSetPair{
 						ValidVotes: hashSet{
 							"0x3": {},
@@ -293,7 +306,7 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 						InvalidVotes: hashSet{},
 					},
 				},
-				epochRoundPair{EpochID: epoch, Round: 3}: {
+				{EpochID: epoch, Round: 3}: {
 					pk1.String(): votesSetPair{
 						ValidVotes:   hashSet{},
 						InvalidVotes: hashSet{},

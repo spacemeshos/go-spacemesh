@@ -7,7 +7,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/big"
 	"math/rand"
+	"sync"
 
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -15,21 +17,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-
-	"math/big"
-
-	"sync"
 )
 
 const (
 	layerSize = 200
 )
 
-var constTrue = []byte{1}
-var constFalse = []byte{0}
-var constLATEST = []byte("latest")
-var constLAYERHASH = []byte("layer hash")
-var constPROCESSED = []byte("processed")
+var (
+	constTrue      = []byte{1}
+	constFalse     = []byte{0}
+	constLATEST    = []byte("latest")
+	constLAYERHASH = []byte("layer hash")
+	constPROCESSED = []byte("processed")
+)
 
 // TORTOISE key for tortoise persistence in database
 var TORTOISE = []byte("tortoise")
@@ -794,10 +794,10 @@ func (msh *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 
 func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 	coinbases := make([]types.Address, 0, len(l.Blocks()))
-	//the reason we are serializing the types.NodeID to a string instead of using it directly as a
-	//key in the map is due to Golang's restriction on only Comparable types used as map keys. Since
-	//the types.NodeID contains a slice, it is not comparable and hence cannot be used as a map key
-	//TODO: fix this when changing the types.NodeID struct, see https://github.com/spacemeshos/go-spacemesh/issues/2269
+	// the reason we are serializing the types.NodeID to a string instead of using it directly as a
+	// key in the map is due to Golang's restriction on only Comparable types used as map keys. Since
+	// the types.NodeID contains a slice, it is not comparable and hence cannot be used as a map key
+	// TODO: fix this when changing the types.NodeID struct, see https://github.com/spacemeshos/go-spacemesh/issues/2269
 	coinbasesAndSmeshers := make(map[types.Address]map[string]uint64)
 	for _, bl := range l.Blocks() {
 		if bl.ATXID == *types.EmptyATXID {
@@ -810,8 +810,8 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 			continue
 		}
 		coinbases = append(coinbases, atx.Coinbase)
-		//create a 2 dimensional map where the entries are
-		//coinbasesAndSmeshers[coinbase_id][smesher_id] = number of blocks this pair has created
+		// create a 2 dimensional map where the entries are
+		// coinbasesAndSmeshers[coinbase_id][smesher_id] = number of blocks this pair has created
 		if _, exists := coinbasesAndSmeshers[atx.Coinbase]; !exists {
 			coinbasesAndSmeshers[atx.Coinbase] = make(map[string]uint64)
 		}

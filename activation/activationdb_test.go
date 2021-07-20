@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"path/filepath"
+	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,7 +17,9 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -1027,4 +1032,47 @@ func TestActivateDB_HandleAtxNilNipst(t *testing.T) {
 	buf, err := types.InterfaceToBytes(atx)
 	require.NoError(t, err)
 	require.Error(t, atxdb.HandleAtxData(context.TODO(), buf, nil))
+}
+
+func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
+	path := b.TempDir()
+
+	lg := log.NewNop()
+	iddbstore, err := database.NewLDBDatabase(filepath.Join(path, "ids"), 0, 0, lg)
+	require.NoError(b, err)
+	mdb, err := mesh.NewPersistentMeshDB(filepath.Join(path, "mesh"), 20, lg)
+	require.NoError(b, err)
+	idStore := NewIdentityStore(iddbstore)
+	atxdbstore, err := database.NewLDBDatabase(filepath.Join(path, "atx"), 0, 0, lg)
+	require.NoError(b, err)
+	atxdb := NewDB(atxdbstore, idStore, mdb, 288, types.ATXID{}, &Validator{}, lg)
+
+	var (
+		stop uint64
+		wg   sync.WaitGroup
+	)
+	for i := 0; i < runtime.NumCPU()/2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pub, _, _ := ed25519.GenerateKey(nil)
+			id := types.NodeID{Key: util.Bytes2Hex(pub), VRFPublicKey: []byte("22222")}
+			for i := 0; ; i++ {
+				atx := types.NewActivationTx(newChallenge(id, uint64(i), *types.EmptyATXID, goldenATXID, types.NewLayerID(0)), [20]byte{}, nil, 0, nil)
+				if !assert.NoError(b, atxdb.StoreAtx(types.EpochID(1), atx)) {
+					return
+				}
+				if atomic.LoadUint64(&stop) == 1 {
+					return
+				}
+			}
+		}()
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := atxdb.GetAtxHeader(types.ATXID{1, 1, 1})
+		require.ErrorIs(b, err, database.ErrNotFound)
+	}
+	atomic.StoreUint64(&stop, 1)
+	wg.Wait()
 }

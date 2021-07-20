@@ -12,6 +12,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spacemeshos/fixed"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -248,15 +249,19 @@ func TestOracle_IsEligible(t *testing.T) {
 
 	// eligible
 	o.atxdb = &mockActiveSetProvider{size: 5}
-	sig := make([]byte, 64)
-	for pubkey := range createMapWithSize(1) {
-		n, err := rand.Read(sig)
-		require.NoError(t, err)
-		require.Equal(t, 64, n)
-		nid := types.NodeID{Key: pubkey}
+	sigs := map[string]uint16{
+		"0516a574aef37257d6811ea53ef55d4cbb0e14674900a0d5165bd6742513840d02442d979fdabc7059645d1e8f8a0f44d0db2aa90f23374dd74a3636d4ecdab7": 1,
+		"73929b4b69090bb6133e2f8cd73989b35228e7e6d8c6745e4100d9c5eb48ca2624ee2889e55124195a130f74ea56e53a73a1c4dee60baa13ad3b1c0ed4f80d9c": 0,
+		"e2c27ad65b752b763173b588518764b6c1e42896d57e0eabef9bcac68e07b87729a4ef9e5f17d8c1cb34ffd0d65ee9a7e63e63b77a7bcab1140a76fc04c271de": 0,
+		"384460966938c87644987fe00c0f9d4f9a5e2dcd4bdc08392ed94203895ba325036725a22346e35aa707993babef716aa1b6b3dfc653a44cb23ac8f743cbbc3d": 1,
+		"15c5f565a75888970059b070bfaed1998a9d423ddac9f6af83da51db02149044ea6aeb86294341c7a950ac5de2855bbebc11cc28b02c08bc903e4cf41439717d": 1,
+	}
+	for hex, exp := range sigs {
+		sig := util.Hex2Bytes(hex)
+		nid := types.NodeID{Key: "0"}
 		res, err = o.CalcEligibility(context.TODO(), types.NewLayerID(50), 1, 10, nid, sig)
-		require.NoError(t, err)
-		require.Greater(t, int(res), 0)
+		require.NoError(t, err, hex)
+		require.Equal(t, exp, res, hex)
 	}
 }
 
