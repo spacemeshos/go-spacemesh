@@ -90,7 +90,7 @@ func (m *mockActiveSetProvider) GetAtxHeader(id types.ATXID) (*types.ActivationT
 	if m.getAtxHeaderFn != nil {
 		return m.getAtxHeaderFn(id)
 	}
-	return &types.ActivationTxHeader{NIPoSTChallenge: types.NIPoSTChallenge{NodeID: types.NodeID{Key: "fakekey"}}}, nil
+	return &types.ActivationTxHeader{NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{Key: "fakekey"}}}, nil
 }
 
 type mockBufferedActiveSetProvider struct {
@@ -571,7 +571,7 @@ func TestOracle_actives(t *testing.T) {
 		},
 		getAtxHeaderFn: func(atxid types.ATXID) (*types.ActivationTxHeader, error) {
 			return &types.ActivationTxHeader{
-				NIPoSTChallenge: types.NIPoSTChallenge{NodeID: types.NodeID{Key: atxid.Hash32().String()}},
+				NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{Key: atxid.Hash32().String()}},
 			}, nil
 		},
 	}
@@ -840,7 +840,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	types.SetLayersPerEpoch(10)
 	edid := "11111"
 	atxdb := &mockActiveSetProvider{size: 1, getAtxHeaderFn: func(types.ATXID) (*types.ActivationTxHeader, error) {
-		return &types.ActivationTxHeader{NIPoSTChallenge: types.NIPoSTChallenge{NodeID: types.NodeID{Key: edid}}}, nil
+		return &types.ActivationTxHeader{NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{Key: edid}}}, nil
 	}}
 	o := mockOracle(t, 5)
 	o.atxdb = atxdb
@@ -860,7 +860,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 		// return empty hare active set, forcing tortoise active set
 		return nil, nil
 	}, getAtxHeaderFn: func(types.ATXID) (*types.ActivationTxHeader, error) {
-		return &types.ActivationTxHeader{NIPoSTChallenge: types.NIPoSTChallenge{NodeID: types.NodeID{Key: edid}}}, nil
+		return &types.ActivationTxHeader{NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{Key: edid}}}, nil
 	}}
 	v, err = o.IsIdentityActiveOnConsensusView(context.TODO(), "22222", types.NewLayerID(100))
 	r.NoError(err)

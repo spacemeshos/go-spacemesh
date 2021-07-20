@@ -44,8 +44,8 @@ import (
 )
 
 const (
-	numLabels             = 8826949
-	labelSize             = 8
+	numLabels        = 8826949
+	labelSize        = 8
 	defaultGasLimit  = 10
 	defaultFee       = 1
 	genTimeUnix      = 1000000
@@ -83,7 +83,7 @@ var (
 	prevAtxID  = types.ATXID(types.HexToHash32("44444"))
 	chlng      = types.HexToHash32("55555")
 	poetRef    = []byte("66666")
-	nipost     = NewNIPoSTWithChallenge(&chlng, poetRef)
+	nipost     = NewNIPostWithChallenge(&chlng, poetRef)
 	challenge  = newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	globalAtx  = newAtx(challenge, nipost, addr1)
 	globalAtx2 = newAtx(challenge, nipost, addr2)
@@ -117,8 +117,8 @@ func init() {
 	types.SetLayersPerEpoch(layersPerEpoch)
 }
 
-func NewNIPoSTWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPoST {
-	return &types.NIPoST{
+func NewNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
+	return &types.NIPost{
 		Challenge: challenge,
 		PoST: &types.PoST{
 			Nonce:   0,
@@ -354,8 +354,8 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 	return tx
 }
 
-func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPoSTChallenge {
-	challenge := types.NIPoSTChallenge{
+func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
+	challenge := types.NIPostChallenge{
 		NodeID:         nodeID,
 		Sequence:       sequence,
 		PrevATXID:      prevAtxID,
@@ -365,15 +365,15 @@ func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID type
 	return challenge
 }
 
-func newAtx(challenge types.NIPoSTChallenge, nipost *types.NIPoST, coinbase types.Address) *types.ActivationTx {
+func newAtx(challenge types.NIPostChallenge, nipost *types.NIPost, coinbase types.Address) *types.ActivationTx {
 	activationTx := &types.ActivationTx{
 		InnerActivationTx: &types.InnerActivationTx{
 			ActivationTxHeader: &types.ActivationTxHeader{
-				NIPoSTChallenge: challenge,
+				NIPostChallenge: challenge,
 				Coinbase:        coinbase,
 				Space:           100, //commitmentSize, // MERGE FIX
 			},
-			NIPoST: nipost,
+			NIPost: nipost,
 		},
 	}
 	activationTx.CalcAndSetID()
@@ -2032,7 +2032,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if bytes.Compare(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) != 0 {
 				continue
 			}
-			if a.CommitmentSize != shared.DataSize(globalAtx.NIPoST.PoSTMetadata.NumLabels, globalAtx.NIPoST.PoSTMetadata.LabelSize) { // MERGE FIX
+			if a.CommitmentSize != shared.DataSize(globalAtx.NIPost.PoSTMetadata.NumLabels, globalAtx.NIPost.PoSTMetadata.LabelSize) { // MERGE FIX
 				//	if a.CommitmentSize != globalAtx.Space {
 				// MERGE FIX
 				continue
@@ -2477,7 +2477,7 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
 		require.Equal(t, globalAtx.NodeID.ToBytes(), x.Activation.SmesherId.Id)
 		require.Equal(t, globalAtx.Coinbase.Bytes(), x.Activation.Coinbase.Address)
 		require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
-		size := shared.DataSize(globalAtx.NIPoST.PoSTMetadata.NumLabels, globalAtx.NIPoST.PoSTMetadata.LabelSize)
+		size := shared.DataSize(globalAtx.NIPost.PoSTMetadata.NumLabels, globalAtx.NIPost.PoSTMetadata.LabelSize)
 		require.Equal(t, size, x.Activation.CommitmentSize) // MERGE FIX
 	default:
 		require.Fail(t, "inner account data item has wrong tx data type")
