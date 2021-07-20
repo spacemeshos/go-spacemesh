@@ -18,7 +18,7 @@ const Account2Pub = "0x22a31a84ab876f82fcafba86e77910b4419a4ee0f1d5483d7dd3b5b6b
 const Account2Private = "0x9d411020d46d3f4e1214f7b51052219737669f461ac9c9ac6ac49753926d0af222a31a84ab876f82fcafba86e77910b4419a4ee0f1d5483d7dd3b5b6b6922ee9"
 
 // DefaultGenesisConfig is the default configuration for the node
-func DefaultGenesisConfig() GenesisConfig {
+func DefaultGenesisConfig() *GenesisConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
 	g := GenesisConfig{}
 
@@ -29,5 +29,5 @@ func DefaultGenesisConfig() GenesisConfig {
 		Account1Pub: 100000000000000000,
 		Account2Pub: 100000000000000000,
 	}
-	return g
+	return &g
 }

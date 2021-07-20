@@ -39,18 +39,18 @@ var (
 // Config defines the top level configuration for a spacemesh node
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
-	Genesis         apiConfig.GenesisConfig `mapstructure:"genesis"`
-	P2P             p2pConfig.Config        `mapstructure:"p2p"`
-	API             apiConfig.Config        `mapstructure:"api"`
-	HARE            hareConfig.Config       `mapstructure:"hare"`
-	HareEligibility eligConfig.Config       `mapstructure:"hare-eligibility"`
-	TortoiseBeacon  tortoisebeacon.Config   `mapstructure:"tortoise-beacon"`
-	TIME            timeConfig.TimeConfig   `mapstructure:"time"`
-	REWARD          mesh.Config             `mapstructure:"reward"`
-	POST            postConfig.Config       `mapstructure:"post"`
-	LOGGING         LoggerConfig            `mapstructure:"logging"`
-	LAYERS          layerfetcher.Config     `mapstructure:"layer-fetch"`
-	FETCH           fetch.Config            `mapstructure:"fetch"`
+	Genesis         *apiConfig.GenesisConfig `mapstructure:"genesis"`
+	P2P             p2pConfig.Config         `mapstructure:"p2p"`
+	API             apiConfig.Config         `mapstructure:"api"`
+	HARE            hareConfig.Config        `mapstructure:"hare"`
+	HareEligibility eligConfig.Config        `mapstructure:"hare-eligibility"`
+	TortoiseBeacon  tortoisebeacon.Config    `mapstructure:"tortoise-beacon"`
+	TIME            timeConfig.TimeConfig    `mapstructure:"time"`
+	REWARD          mesh.Config              `mapstructure:"reward"`
+	POST            postConfig.Config        `mapstructure:"post"`
+	LOGGING         LoggerConfig             `mapstructure:"logging"`
+	LAYERS          layerfetcher.Config      `mapstructure:"layer-fetch"`
+	FETCH           fetch.Config             `mapstructure:"fetch"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -152,7 +152,6 @@ type LoggerConfig struct {
 func DefaultConfig() Config {
 	return Config{
 		BaseConfig:      defaultBaseConfig(),
-		Genesis:         apiConfig.DefaultGenesisConfig(),
 		P2P:             p2pConfig.DefaultConfig(),
 		API:             apiConfig.DefaultConfig(),
 		HARE:            hareConfig.DefaultConfig(),
@@ -221,7 +220,7 @@ func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
 
 	if err != nil {
 		if fileLocation != defaultConfigFileName {
-			log.Warning("failed loading config from %v trying %v", fileLocation, defaultConfigFileName)
+			log.Warning("failed loading config from %v trying %v. error %v", fileLocation, defaultConfigFileName, err)
 			vip.SetConfigFile(defaultConfigFileName)
 			err = vip.ReadInConfig()
 		}

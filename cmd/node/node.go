@@ -19,6 +19,7 @@ import (
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
+	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
@@ -335,6 +336,9 @@ func (app *SpacemeshApp) Cleanup(*cobra.Command, []string) {
 }
 
 func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) error {
+	if app.Config.Genesis == nil {
+		app.Config.Genesis = apiCfg.DefaultGenesisConfig()
+	}
 	for id, balance := range app.Config.Genesis.Accounts {
 		bytes := util.FromHex(id)
 		if len(bytes) == 0 {
