@@ -52,7 +52,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	if block.RefBlock != nil {
 		activeSetBlock, err = v.blocks.GetBlock(*block.RefBlock)
 		if err != nil {
-			//block should be present because we've synced it in the calling function
+			// block should be present because we've synced it in the calling function
 			return false, fmt.Errorf("cannot get refrence block %v", *block.RefBlock)
 		}
 
@@ -103,7 +103,8 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 
 	beaconShortString := types.BytesToHash(epochBeacon).ShortString()
 	if !v.validateVRF(vrfPubkey, message, vrfSig) {
-		return false, fmt.Errorf("tortoise beacon eligibility VRF validation failed: beacon %v, epoch %v, counter: %v", beaconShortString, epochNumber, counter)
+		return false, fmt.Errorf("tortoise beacon eligibility VRF validation failed: beacon %v, epoch %v, counter: %v, vrfSig: %v",
+			beaconShortString, epochNumber, counter, types.BytesToHash(vrfSig).ShortString())
 	}
 
 	v.log.Info("validated tortoise beacon eligibility VRF of beacon %v in epoch %v (counter: %v)", beaconShortString, epochNumber, counter)

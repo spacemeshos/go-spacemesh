@@ -7,19 +7,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
-
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
 
 type validatorMock struct{}
@@ -160,8 +160,7 @@ func TestTortoiseBeacon_votingThreshold(t *testing.T) {
 				},
 			}
 
-			threshold, err := tb.votingThreshold(tc.weight)
-			r.NoError(err)
+			threshold := tb.votingThreshold(tc.weight)
 			r.EqualValues(tc.threshold, threshold)
 		})
 	}

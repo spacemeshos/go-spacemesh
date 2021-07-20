@@ -37,12 +37,15 @@ type mockLayerTicker struct {
 func newMockLayerTicker() *mockLayerTicker {
 	return &mockLayerTicker{current: unsafe.Pointer(&types.LayerID{})}
 }
+
 func (mlt *mockLayerTicker) advanceToLayer(layerID types.LayerID) {
 	atomic.StorePointer(&mlt.current, unsafe.Pointer(&layerID))
 }
+
 func (mlt *mockLayerTicker) GetCurrentLayer() types.LayerID {
 	return *(*types.LayerID)(atomic.LoadPointer(&mlt.current))
 }
+
 func (mlt *mockLayerTicker) LayerToTime(_ types.LayerID) time.Time {
 	return mlt.layerStartTime
 }
@@ -70,44 +73,52 @@ func newMockFetcher() *mockFetcher {
 	}
 	return &mockFetcher{hashResult: hashResult, result: result, polled: polled, atxsError: make(map[types.EpochID]error), tbError: make(map[types.EpochID]error)}
 }
+
 func (mf *mockFetcher) PollLayerHash(_ context.Context, layerID types.LayerID) chan layerfetcher.LayerHashResult {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
 	mf.polled[layerID] <- struct{}{}
 	return mf.hashResult[layerID]
 }
+
 func (mf *mockFetcher) PollLayerBlocks(_ context.Context, layerID types.LayerID, _ map[types.Hash32][]peers.Peer) chan layerfetcher.LayerPromiseResult {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
 	return mf.result[layerID]
 }
+
 func (mf *mockFetcher) GetEpochATXs(_ context.Context, epoch types.EpochID) error {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
 	mf.atxsCalls++
 	return mf.atxsError[epoch]
 }
+
 func (mf *mockFetcher) GetTortoiseBeacon(_ context.Context, epoch types.EpochID) error {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
 	mf.tbCalls++
 	return mf.tbError[epoch]
 }
+
 func (mf *mockFetcher) getLayerPollChan(layerID types.LayerID) chan struct{} {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
 	return mf.polled[layerID]
 }
+
 func (mf *mockFetcher) getLayerHashResultChan(layerID types.LayerID) chan layerfetcher.LayerHashResult {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
 	return mf.hashResult[layerID]
 }
+
 func (mf *mockFetcher) getLayerResultChan(layerID types.LayerID) chan layerfetcher.LayerPromiseResult {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
 	return mf.result[layerID]
 }
+
 func (mf *mockFetcher) feedLayerResult(from, to types.LayerID) {
 	for i := from; !i.After(to); i = i.Add(1) {
 		err := layerfetcher.ErrZeroLayer
@@ -121,11 +132,13 @@ func (mf *mockFetcher) feedLayerResult(from, to types.LayerID) {
 		}
 	}
 }
+
 func (mf *mockFetcher) setATXsErrors(epoch types.EpochID, err error) {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
 	mf.atxsError[epoch] = err
 }
+
 func (mf *mockFetcher) setTBErrors(epoch types.EpochID, err error) {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
@@ -139,6 +152,7 @@ func (mv *mockValidator) Persist() error                { return nil }
 func (mv *mockValidator) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
 	return layer.Index(), layer.Index().Sub(1)
 }
+
 func (mv *mockValidator) HandleLateBlock(block *types.Block) (types.LayerID, types.LayerID) {
 	return block.Layer(), block.Layer().Sub(1)
 }

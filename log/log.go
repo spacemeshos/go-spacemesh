@@ -88,6 +88,11 @@ func NewWithLevel(module string, level zap.AtomicLevel, hooks ...func(zapcore.En
 	return NewFromLog(log)
 }
 
+// NewNop creates silent logger.
+func NewNop() Log {
+	return NewFromLog(zap.NewNop())
+}
+
 // NewDefault creates a Log with the default log level
 func NewDefault(module string) Log {
 	return NewWithLevel(module, zap.NewAtomicLevelAt(Level()))
