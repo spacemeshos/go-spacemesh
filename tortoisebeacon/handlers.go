@@ -39,7 +39,7 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 
 	receivedTime := time.Now()
 
-	tb.Log.With().Debug("New proposal message",
+	tb.Log.With().Info("New proposal message",
 		log.String("from", data.Sender().String()))
 
 	var message ProposalMessage
@@ -53,7 +53,7 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 
 	currentEpoch := tb.currentEpoch()
 	if message.EpochID < currentEpoch {
-		tb.Log.With().Debug("Received proposal message from previous epoch, ignoring",
+		tb.Log.With().Info("Received proposal message from previous epoch, ignoring",
 			log.Uint64("message_epoch", uint64(message.EpochID)),
 			log.Uint64("current_epoch", uint64(currentEpoch)))
 
@@ -128,7 +128,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 
 	switch {
 	case tb.isValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
-		tb.Log.With().Debug("Received valid proposal message",
+		tb.Log.With().Info("Received valid proposal message",
 			log.Uint64("epoch_id", uint64(currentEpoch)),
 			log.String("message", m.String()))
 
@@ -143,7 +143,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 		tb.validProposalsMu.Unlock()
 
 	case tb.isPotentiallyValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
-		tb.Log.With().Debug("Received potentially valid proposal message",
+		tb.Log.With().Info("Received potentially valid proposal message",
 			log.Uint64("epoch_id", uint64(currentEpoch)),
 			log.String("message", m.String()))
 
@@ -226,7 +226,7 @@ func (tb *TortoiseBeacon) HandleSerializedFirstVotingMessage(ctx context.Context
 
 	minerID := data.Sender()
 
-	tb.Log.With().Debug("New voting message",
+	tb.Log.With().Info("New voting message",
 		log.String("miner_id", minerID.String()))
 
 	var m FirstVotingMessage
@@ -256,7 +256,7 @@ func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Con
 
 	minerID := data.Sender()
 
-	tb.Log.With().Debug("New voting message",
+	tb.Log.With().Info("New voting message",
 		log.String("miner_id", minerID.String()))
 
 	var m FollowingVotingMessage
@@ -308,7 +308,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 		return nil
 	}
 
-	tb.Log.With().Debug("Received first round voting message, counting it",
+	tb.Log.With().Info("Received first round voting message, counting it",
 		log.String("message", message.String()))
 
 	thisRound := epochRoundPair{
@@ -345,7 +345,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 		return nil
 	}
 
-	tb.Log.With().Debug("Received first voting message, counting it",
+	tb.Log.With().Info("Received first voting message, counting it",
 		log.String("miner_id", minerID.Key),
 		log.Uint64("epoch_id", uint64(currentEpoch)),
 		log.Uint64("round_id", uint64(firstRound)),
@@ -438,7 +438,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 		return nil
 	}
 
-	tb.Log.With().Debug("Received following voting message, counting it",
+	tb.Log.With().Info("Received following voting message, counting it",
 		log.String("miner_id", minerID.Key),
 		log.Uint64("epoch_id", uint64(currentEpoch)),
 		log.Uint64("round_id", uint64(messageRound)),
