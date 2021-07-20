@@ -38,11 +38,6 @@ func (m mockNet) Close() {
 func (m mockNet) RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(context.Context, []byte) []byte) {
 }
 
-func (m mockNet) GetRandomPeer() peers.Peer {
-	_, pub1, _ := p2pcrypto.GenerateKeyPair()
-	return pub1
-}
-
 func (m mockNet) Start(ctx context.Context) error {
 	return nil
 }
@@ -446,4 +441,19 @@ func TestFetch_handleNewRequest_MultipleReqsForSameHashHighPriority(t *testing.T
 
 	}
 	assert.Equal(t, 2, net.TotalBatchCalls)
+}
+
+func TestFetch_GetRandomPeer(t *testing.T) {
+	peers := make([]peers.Peer, 1000)
+	for i := 0; i < len(peers); i++ {
+		_, pub, _ := p2pcrypto.GenerateKeyPair()
+		peers[i] = pub
+	}
+	allTheSame := true
+	for i := 0; i < 20; i++ {
+		if GetRandomPeer(peers) != GetRandomPeer(peers) {
+			allTheSame = false
+		}
+	}
+	assert.False(t, allTheSame)
 }

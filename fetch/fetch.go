@@ -137,10 +137,11 @@ type Config struct {
 // DefaultConfig is the default config for the fetch component
 func DefaultConfig() Config {
 	return Config{
-		BatchTimeout:         50,
-		MaxRetiresForPeer:    2,
-		BatchSize:            20,
-		RequestTimeout:       10,
+		BatchTimeout:      50,
+		MaxRetiresForPeer: 2,
+		BatchSize:         20,
+		RequestTimeout:    10,
+		// TODO change it back to 20
 		MaxRetriesForRequest: 2000,
 	}
 }
@@ -170,7 +171,6 @@ func GetRandomPeer(peers []peers.Peer) peers.Peer {
 	if len(peers) == 0 {
 		log.Panic("cannot send fetch - no peers found")
 	}
-	rand.Seed(time.Now().Unix()) // initialize global pseudo random generator
 	return peers[rand.Intn(len(peers))]
 }
 
