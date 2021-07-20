@@ -125,7 +125,7 @@ jobs:
         with:
           status: ${{ env.status }}
       - name: Mark the job as succeeded
-        if: env.status == 'success'
+        if: env.status == 'success' || needs.filter-changes.outputs.unittests == 'false'
         run: exit 0
       - name: Mark the job as failed
         if: env.status != 'success'
