@@ -103,7 +103,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	expected := "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	requirer.Equal(expected, types.BytesToHash(v).String())
 
-	requirer.NoError(tb.Close())
+	tb.Close()
 }
 
 func awaitLayer(clock *timesync.TimeClock, epoch types.LayerID) {

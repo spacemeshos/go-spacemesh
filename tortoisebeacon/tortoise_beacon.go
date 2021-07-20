@@ -224,13 +224,13 @@ func (tb *TortoiseBeacon) Start(ctx context.Context) error {
 }
 
 // Close closes TortoiseBeacon.
-func (tb *TortoiseBeacon) Close() error {
+func (tb *TortoiseBeacon) Close() {
 	tb.Log.Info("Closing %v", protoName)
 	tb.Closer.Close()
 	tb.backgroundWG.Wait() // Wait until background goroutines finish
 	tb.clock.Unsubscribe(tb.layerTicker)
 
-	return nil
+	return
 }
 
 // GetBeacon returns a Tortoise Beacon value as []byte for a certain epoch or an error if it doesn't exist.
