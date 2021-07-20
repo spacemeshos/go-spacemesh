@@ -115,7 +115,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # short-circuit success if no non-doc files were modified
-      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.unittests.result == 'success' && needs.apptests.result == 'success')) && 'success' || 'failure' }}
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || needs.filter-changes.outputs.unittests == 'false' || (needs.quicktests.result == 'success' && needs.unittests.result == 'success' && needs.apptests.result == 'success')) && 'success' || 'failure' }}
     # this is the easiest way to access success/failure state of previous jobs in this workflow
     steps:
       - uses: act10ns/slack@v1
