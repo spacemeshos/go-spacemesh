@@ -130,7 +130,11 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 	case tb.isValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
 		tb.Log.With().Info("Received valid proposal message",
 			log.Uint64("epoch_id", uint64(currentEpoch)),
-			log.String("message", m.String()))
+			log.String("message", m.String()),
+			log.String("atx_timestamp", atxTimestamp.String()),
+			log.String("next_epoch_start", nextEpochStart.String()),
+			log.String("received_time", receivedTime.String()),
+			log.String("grace_period", tb.gracePeriodDuration.String()))
 
 		tb.validProposalsMu.Lock()
 
@@ -145,7 +149,11 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 	case tb.isPotentiallyValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
 		tb.Log.With().Info("Received potentially valid proposal message",
 			log.Uint64("epoch_id", uint64(currentEpoch)),
-			log.String("message", m.String()))
+			log.String("message", m.String()),
+			log.String("atx_timestamp", atxTimestamp.String()),
+			log.String("next_epoch_start", nextEpochStart.String()),
+			log.String("received_time", receivedTime.String()),
+			log.String("grace_period", tb.gracePeriodDuration.String()))
 
 		tb.potentiallyValidProposalsMu.Lock()
 
@@ -159,7 +167,11 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 
 	default:
 		tb.Log.With().Warning("Received invalid proposal message",
-			log.Uint64("epoch_id", uint64(currentEpoch)))
+			log.Uint64("epoch_id", uint64(currentEpoch)),
+			log.String("atx_timestamp", atxTimestamp.String()),
+			log.String("next_epoch_start", nextEpochStart.String()),
+			log.String("received_time", receivedTime.String()),
+			log.String("grace_period", tb.gracePeriodDuration.String()))
 	}
 
 	return nil
