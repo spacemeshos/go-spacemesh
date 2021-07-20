@@ -15,7 +15,7 @@ ifeq ($(GOOS),)
   GOOS := $(HOST_OS)
 endif
 
-GOTAGS = -tags no_ext_rpath
+GOTAGS = # -tags ...
 export CGO_LDFLAGS := -L$(BIN_DIR)
 
 CGO_TEST_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,$(BIN_DIR)
