@@ -194,8 +194,8 @@ dockerbuild-test:
 	docker build -f DockerFileTests \
 	             --build-arg GCLOUD_KEY="$(GCLOUD_KEY)" \
 	             --build-arg PROJECT_NAME="$(PROJECT_NAME)" \
-	             --build-arg CLUSTER_NAME="$(CLUSTER_NAME_ELK)" \
-	             --build-arg CLUSTER_ZONE="$(CLUSTER_ZONE_ELK)" \
+	             --build-arg CLUSTER_NAME="$(CLUSTER_NAME)" \
+	             --build-arg CLUSTER_ZONE="$(CLUSTER_ZONE)" \
 	             -t go-spacemesh-python:$(BRANCH) .
 .PHONY: dockerbuild-test
 
