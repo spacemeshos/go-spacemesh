@@ -94,11 +94,11 @@ build: go-spacemesh
 .PHONY: build
 
 hare p2p sync: get-gpu-setup
-	cd cmd/$@ ; go build -o $(BIN_DIR)go-$@$(EXE) .
+	cd cmd/$@ ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) .
 go-spacemesh: get-gpu-setup        
-	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS).
+	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) $(GOTAGS) .
 harness: get-gpu-setup
-	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE) .
+	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) .
 .PHONY: hare p2p sync harness go-spacemesh
 
 tidy:
@@ -130,15 +130,17 @@ docker-local-build: go-spacemesh hare p2p sync harness
 endif
 
 test: get-gpu-setup
-	export CGO_LDFLAGS="-L$(BIN_DIR) -Wl,-rpath,$(BIN_DIR)"; ulimit -n 9999; go test -timeout 0 -p 1 ./...
+	CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v -timeout 0 -p 1 ./...
 .PHONY: test
 
 test-no-app-test: get-gpu-setup
-	export CGO_LDFLAGS="-L$(BIN_DIR) -Wl,-rpath,$(BIN_DIR)"; ulimit -n 9999; go test -v -timeout 0 -p 1 -tags exclude_app_test ./...
+	ulimit -n 9999
+	CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)"  go test -v -timeout 0 -p 1 exclude_app_test ./...
 .PHONY: test-no-app-test
 
 test-only-app-test: get-gpu-setup
-	export CGO_LDFLAGS="-L$(BIN_DIR) -Wl,-rpath,$(BIN_DIR)"; ulimit -n 9999; go test -timeout 0 -p 1 -v -tags !exclude_app_test ./cmd/node
+	ulimit -n 9999;
+	CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -timeout 0 -p 1 -v ./cmd/node
 .PHONY: test-only-app-test
 
 test-tidy:
@@ -163,7 +165,7 @@ lint:
 
 cover:
 	@echo "mode: count" > cover-all.out
-	@export CGO_LDFLAGS="-L$(BIN_DIR) -Wl,-rpath,$(BIN_DIR)";\
+	@export CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)";\
 	  $(foreach pkg,$(PKGS),\
 		go test -coverprofile=cover.out -covermode=count $(pkg);\
 		tail -n +2 cover.out >> cover-all.out;)

@@ -15,6 +15,11 @@ ifeq ($(GOOS),)
   GOOS := $(HOST_OS)
 endif
 
+GOTAGS = -tags no_ext_rpath
+export CGO_LDFLAGS := -L$(BIN_DIR)
+
+CGO_TEST_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,$(BIN_DIR)
+
 ifeq ($(GOOS),windows)
   platform := windows
   export PATH := $(PATH):$(PROJ_DIR)build
@@ -23,10 +28,10 @@ else
   TEMP := /tmp
   ifeq ($(GOOS),darwin)
     platform := macos
-    export CGO_LDFLAGS := -L$(BIN_DIR) -Wl,-rpath,@loader_path $(CGO_LDFLAGS_EXT)
+    CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,@loader_path
   else
     platform := linux
-    export CGO_LDFLAGS := -L$(BIN_DIR) -Wl,-rpath,$$ORIGIN $(CGO_LDFLAGS_EXT)
+    CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,$$ORIGIN
   endif
 endif
 
@@ -54,3 +59,10 @@ $(PROJ_DIR)$(GPU_SETUP_ZIP):
 	curl -L $(GPU_SETUP_URL_ZIP) -o $(PROJ_DIR)$(GPU_SETUP_ZIP)
 
 get-gpu-setup: $(PROJ_DIR)$(GPU_SETUP_ZIP) $(BINDIR_GPU_SETUP_LIBS)
+
+SUBDIRS_LVL1 := $(foreach X,$(wildcard $(dir $(PROJ_DIR))/*/.), $(lastword $(subst /, ,$(dir $(X)))))
+SUBDIRS_LVL2 := $(foreach X,$(SUBDIRS_LVL1),$X $(foreach Y, $(wildcard $(X)/*/.), $(X)-$(lastword $(subst /, ,$(dir $(Y))))))
+# defines test-* tartets from subdirs level 1 and 2
+$(foreach X, $(SUBDIRS_LVL2), test-$(X)): get-gpu-setup
+	cd $(subst -,/,$(patsubst test-%,%,$@)) && CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v
+.PHONY: $(foreach X, $(SUBDIRS_LVL2), test-$(X))

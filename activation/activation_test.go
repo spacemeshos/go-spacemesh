@@ -2,12 +2,10 @@ package activation
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,9 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/post/config"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	//	"github.com/spacemeshos/post/config"
 )
 
 // ========== Vars / Consts ==========
@@ -126,7 +122,7 @@ type NIPostBuilderMock struct {
 	SleepTime       int
 }
 
-func (np NipstBuilderMock) updatePoETProver(PoetProvingServiceClient) {}
+func (np NIPostBuilderMock) updatePoETProver(PoetProvingServiceClient) {}
 
 func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Hash32, _ chan struct{}) (*types.NIPost, error) {
 	if np.buildNIPostFunc != nil {
@@ -137,7 +133,7 @@ func (np *NIPostBuilderMock) BuildNIPost(_ context.Context, challenge *types.Has
 
 type NIPostErrBuilderMock struct{}
 
-func (np *NipstErrBuilderMock) updatePoETProver(PoetProvingServiceClient) {}
+func (np *NIPostErrBuilderMock) updatePoETProver(PoetProvingServiceClient) {}
 
 func (np *NIPostErrBuilderMock) BuildNIPost(context.Context, *types.Hash32, chan struct{}) (*types.NIPost, error) {
 	return nil, fmt.Errorf("NIPost builder error")
@@ -771,6 +767,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	}
 }
 
+/*
 func TestBuilder_UpdatePoETProver(t *testing.T) {
 	// we test that poet client is not replaced in between PoetServiceID and Submit calls.
 	// but after Submit call fails with error it is replaced and called
@@ -840,6 +837,7 @@ func TestBuilder_UpdatePoETProver(t *testing.T) {
 		require.FailNow(t, "timedout waiting for update poet to be called")
 	}
 }
+*/
 
 func genView() []types.BlockID {
 	l := rand.Int() % 100
