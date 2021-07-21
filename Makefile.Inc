@@ -79,6 +79,6 @@ $(SUBDIRS_LVL2): get-gpu-setup
 $(SUBDIRS_ALL): get-gpu-setup
 	CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v ./$(patsubst test-%-all,%,$@)/...
 print-test-targets:
-	@for i in $(sort $(SUBDIRS_ALL) $(SUBDIRS_LVL2) $(SUBDIRS_ONLY)); do echo $$i; done
+	@for i in $(sort $(SUBDIRS_LVL2) $(foreach X,$(SUBDIRS_ONLY),$(X)[-all])); do echo $$i; done
 .PHONY: $(SUBDIRS_ALL) SUBDIRS_LVL2 $(SUBDIRS_ONLY) print-test-targets
 
