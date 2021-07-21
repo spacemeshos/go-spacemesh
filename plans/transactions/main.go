@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/spacemeshos/systest"
+	"github.com/spacemeshos/go-spacemesh/systest"
 	"github.com/testground/sdk-go/run"
 	"github.com/testground/sdk-go/runtime"
 	"github.com/testground/sdk-go/sync"
@@ -18,19 +18,20 @@ var testcases = map[string]interface{}{
 // Then all the nodes wait for the next epoch and assert the accounts' balance.
 func testTransaction(env *runtime.RunEnv, initCtx *run.InitContext) error {
 	t := systest.NewSystemTest(env, initCtx)
+	defer t.Close()
 	t.Logf("Starting transaction test, %d is up", t.ID)
 	// TODO: ready should be replaced with starting the node and waiting for
 	// genesis
 	t.SetState("ready")
 	t.WaitAll(sync.State("ready"))
-	start1 := t.GetBalance(Account1)
-	start2 := t.GetBalance(Account2)
+	start1 := t.GetBalance(t.Account1)
+	start2 := t.GetBalance(t.Account2)
 	if t.ID == 1 {
-		t.SendCoins(Account1, Account2, 100)
+		t.SendCoins(t.Account1, t.Account2, 100)
 	}
 	t.WaitTillEpoch()
-	t.RequireBalance(Account1, start1-100)
-	t.RequireBalance(Account2, start2+100)
+	t.RequireBalance(t.Account1, start1-100)
+	t.RequireBalance(t.Account2, start2+100)
 	return nil
 }
 
@@ -40,20 +41,24 @@ func testTransaction(env *runtime.RunEnv, initCtx *run.InitContext) error {
 // Then all the nodes wait for the next epoch and assert the accounts' balance.
 
 func testNewAccount(env *runtime.RunEnv, initCtx *run.InitContext) error {
-	t := NewSystemTest(env, initCtx)
+	var a string
+	t := systest.NewSystemTest(env, initCtx)
+	defer t.Close()
 	t.Logf("Starting new account test, %d is up", t.ID)
 	// TODO: ready should be replaced with starting the node and waiting for
 	// genesis
 	t.SetState("ready")
 	t.WaitAll(sync.State("ready"))
-	start1 := t.GetBalance(Account1)
+	start1 := t.GetBalance(t.Account1)
 	if t.ID == 1 {
-		account := t.NewAccount()
-		t.SendCoins(Account1, account, 100)
+		a = t.NewAccount()
+		t.SendCoins(t.Account1, a, 100)
 	}
 	t.WaitTillEpoch()
-	t.RequireBalance(Account1, start1-100)
-	t.RequireBalance(account, 100)
+	t.RequireBalance(t.Account1, start1-100)
+	if t.ID == 1 {
+		t.RequireBalance(a, 100)
+	}
 	return nil
 }
 
