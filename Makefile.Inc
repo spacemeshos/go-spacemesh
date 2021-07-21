@@ -70,6 +70,6 @@ TEST_TARGETS := $(foreach X, $(SUBDIRS_LVL2), test-$(X))
 $(TEST_TARGETS): get-gpu-setup
 	cd $(subst -,/,$(patsubst test-%,%,$@)) && CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v
 print-test-targets:
-	for i in $(TEST_TARGETS); do echo $$i; done
+	@for i in $(TEST_TARGETS); do echo $$i; done
 .PHONY: $(TEST_TARGETS) print-test-targets
 
