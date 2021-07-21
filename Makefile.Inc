@@ -29,6 +29,7 @@ else
   ifeq ($(GOOS),darwin)
     platform := macos
     CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,@loader_path
+    ULIMIT := ulimit -n 9999;
   else
     platform := linux
     CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,$$ORIGIN
@@ -72,13 +73,15 @@ SUBDIRS_LVL2 := $(sort \
 	$(foreach X,$(SUBDIRS_LVL1),\
 		$(foreach Y, $(wildcard $(X)/*/*_test.go), test-$(X)-$(lastword $(subst /, ,$(dir $(Y))) ))))
 
+ULIMIT_N_9999 := $(if $(eq $(HOST_OS),linux),ulimit -n 9999;,)
+
 # defines test-* targets from subdirs level 1 and 2
 $(SUBDIRS_ONLY): get-gpu-setup
-	CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v ./$(@:test-%=%)
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v ./$(@:test-%=%)
 $(SUBDIRS_LVL2): get-gpu-setup
-	CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v ./$(subst -,/,$(@:test-%=%))/...
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v ./$(subst -,/,$(@:test-%=%))/...
 $(SUBDIRS_ALL): get-gpu-setup
-	CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v ./$(@:test-%-all=%)/...
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v ./$(@:test-%-all=%)/...
 
 print-test-targets:
 	@for i in $(sort $(SUBDIRS_LVL2) \

@@ -134,13 +134,11 @@ test: get-gpu-setup
 .PHONY: test
 
 test-no-app-test: get-gpu-setup
-	ulimit -n 9999
-	CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)"  go test -v -timeout 0 -p 1 exclude_app_test ./...
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)"  go test -v -timeout 0 -p 1 exclude_app_test ./...
 .PHONY: test-no-app-test
 
 test-only-app-test: get-gpu-setup
-	ulimit -n 9999;
-	CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -timeout 0 -p 1 -v ./cmd/node
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -timeout 0 -p 1 -v ./cmd/node
 .PHONY: test-only-app-test
 
 test-tidy:
