@@ -21,7 +21,7 @@ require (
 	github.com/prometheus/common v0.18.0
 	github.com/pyroscope-io/pyroscope v0.0.30
 	github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361
-	github.com/spacemeshos/api/release/go v0.0.0-20201210094223-105249951c66
+	github.com/spacemeshos/api/release/go v0.0.0-20210716063128-3a1508b28f2c
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/fixed v0.0.0-20210321020345-0ef1406dc23f
 	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82
@@ -32,7 +32,8 @@ require (
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.4.0
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/objx v0.3.0 // indirect
+	github.com/stretchr/testify v1.7.0
 	github.com/syndtr/goleveldb v1.0.1-0.20190318030020-c3a204f8e965
 	github.com/testground/sdk-go v0.2.7 // indirect
 	go.uber.org/zap v1.15.0
@@ -41,6 +42,7 @@ require (
 	google.golang.org/api v0.32.0
 	google.golang.org/genproto v0.0.0-20201007142714-5c0e72c5e71e
 	google.golang.org/grpc v1.32.0
+	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	nanomsg.org/go-mangos v1.4.0
 )
 

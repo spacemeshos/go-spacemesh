@@ -41,35 +41,36 @@ import (
 )
 
 const (
-	miningStatus          = activation.InitDone
-	remainingBytes        = 321
-	commitmentSize        = 8826949
-	dataDir               = "/tmp"
-	defaultGasLimit       = 10
-	defaultFee            = 1
-	genTimeUnix           = 1000000
-	layerDurationSec      = 10
-	layerAvgSize          = 10
-	txsPerBlock           = 99
-	TxReturnLayer         = 1
-	layersPerEpoch        = 5
-	networkID             = 120
-	postGenesisEpochLayer = 22
-	atxPerLayer           = 2
-	blkPerLayer           = 3
-	accountBalance        = 8675301
-	accountCounter        = 0
-	layerFirst            = 0
-	layerVerified         = 8
-	layerLatest           = 10
-	rewardAmount          = 5551234
-	receiptIndex          = 42
+	miningStatus     = activation.InitDone
+	remainingBytes   = 321
+	commitmentSize   = 8826949
+	dataDir          = "/tmp"
+	defaultGasLimit  = 10
+	defaultFee       = 1
+	genTimeUnix      = 1000000
+	layerDurationSec = 10
+	layerAvgSize     = 10
+	txsPerBlock      = 99
+	layersPerEpoch   = uint32(5)
+	networkID        = 120
+	atxPerLayer      = 2
+	blkPerLayer      = 3
+	accountBalance   = 8675301
+	accountCounter   = 0
+	rewardAmount     = 5551234
+	receiptIndex     = 42
 )
 
 var (
-	layerCurrent = 12
-	networkMock  = NetworkMock{}
-	mempoolMock  = MempoolMock{
+	txReturnLayer         = types.NewLayerID(1)
+	layerFirst            = types.NewLayerID(0)
+	layerVerified         = types.NewLayerID(8)
+	layerLatest           = types.NewLayerID(10)
+	layerCurrent          = types.NewLayerID(12)
+	postGenesisEpochLayer = types.NewLayerID(22)
+
+	networkMock = NetworkMock{}
+	mempoolMock = MempoolMock{
 		poolByAddress: make(map[types.Address]types.TransactionID),
 		poolByTxid:    make(map[types.TransactionID]*types.Transaction),
 	}
@@ -87,9 +88,9 @@ var (
 	globalAtx2 = newAtx(challenge, npst, addr2)
 	globalTx   = NewTx(0, addr1, signing.NewEdSigner())
 	globalTx2  = NewTx(1, addr2, signing.NewEdSigner())
-	block1     = types.NewExistingBlock(0, []byte("11111"), nil)
-	block2     = types.NewExistingBlock(0, []byte("22222"), nil)
-	block3     = types.NewExistingBlock(0, []byte("33333"), nil)
+	block1     = types.NewExistingBlock(types.LayerID{}, []byte("11111"), nil)
+	block2     = types.NewExistingBlock(types.LayerID{}, []byte("22222"), nil)
+	block3     = types.NewExistingBlock(types.LayerID{}, []byte("33333"), nil)
 	txAPI      = &TxAPIMock{
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),
@@ -222,12 +223,12 @@ func (t *TxAPIMock) GetLayerApplied(txID types.TransactionID) *types.LayerID {
 	return t.layerApplied[txID]
 }
 
-func (t *TxAPIMock) GetTransaction(id types.TransactionID) (*types.Transaction, error) {
+func (t *TxAPIMock) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
 	tx, ok := t.returnTx[id]
 	if !ok {
 		return nil, errors.New("it ain't there")
 	}
-	return tx, nil
+	return &types.MeshTransaction{Transaction: *tx}, nil
 }
 
 func (t *TxAPIMock) GetRewards(types.Address) (rewards []types.Reward, err error) {
@@ -255,7 +256,7 @@ func (t *TxAPIMock) GetRewardsBySmesherID(types.NodeID) (rewards []types.Reward,
 }
 
 func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID) {
-	if l != TxReturnLayer {
+	if l != txReturnLayer {
 		return nil
 	}
 	for _, tx := range t.returnTx {
@@ -267,7 +268,7 @@ func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.
 }
 
 func (t *TxAPIMock) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID) {
-	if l != TxReturnLayer {
+	if l != txReturnLayer {
 		return nil
 	}
 	for _, tx := range t.returnTx {
@@ -279,9 +280,9 @@ func (t *TxAPIMock) GetTransactionsByOrigin(l types.LayerID, account types.Addre
 }
 
 func (t *TxAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
-	if tid > genTime.GetCurrentLayer() {
+	if tid.After(genTime.GetCurrentLayer()) {
 		return nil, errors.New("requested layer later than current layer")
-	} else if tid > t.LatestLayer() {
+	} else if tid.After(t.LatestLayer()) {
 		return nil, errors.New("haven't received that layer yet")
 	}
 
@@ -302,6 +303,17 @@ func (t *TxAPIMock) GetTransactions(txids []types.TransactionID) (txs []*types.T
 		for _, tx := range t.returnTx {
 			if tx.ID() == txid {
 				txs = append(txs, tx)
+			}
+		}
+	}
+	return
+}
+
+func (t *TxAPIMock) GetMeshTransactions(txids []types.TransactionID) (txs []*types.MeshTransaction, missing map[types.TransactionID]struct{}) {
+	for _, txid := range txids {
+		for _, tx := range t.returnTx {
+			if tx.ID() == txid {
+				txs = append(txs, &types.MeshTransaction{Transaction: *tx})
 			}
 		}
 	}
@@ -412,6 +424,14 @@ type SyncerMock struct {
 func (s *SyncerMock) IsSynced(context.Context) bool { return s.isSynced }
 func (s *SyncerMock) Start(context.Context)         { s.startCalled = true }
 
+type ActivationAPIMock struct {
+	UpdatePoETErr error
+}
+
+func (a *ActivationAPIMock) UpdatePoETServer(context.Context, string) error {
+	return a.UpdatePoETErr
+}
+
 type MempoolMock struct {
 	// In the real state.TxMempool struct, there are multiple data structures and they're more complex,
 	// but we just mock a very simple use case here and only store some of these data
@@ -513,7 +533,8 @@ func TestNewServersConfig(t *testing.T) {
 
 func TestNodeService(t *testing.T) {
 	syncer := SyncerMock{}
-	grpcService := NewNodeService(&networkMock, txAPI, &genTime, &syncer)
+	atxapi := &ActivationAPIMock{}
+	grpcService := NewNodeService(&networkMock, txAPI, &genTime, &syncer, atxapi)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -571,15 +592,15 @@ func TestNodeService(t *testing.T) {
 			// First do a mock checking during a genesis layer
 			// During genesis all layers should be set to current layer
 			oldCurLayer := layerCurrent
-			layerCurrent = layersPerEpoch // end of first epoch
+			layerCurrent = types.NewLayerID(layersPerEpoch) // end of first epoch
 			req := &pb.StatusRequest{}
 			res, err := c.Status(context.Background(), req)
 			require.NoError(t, err)
 			require.Equal(t, uint64(0), res.Status.ConnectedPeers)
 			require.Equal(t, false, res.Status.IsSynced)
-			require.Equal(t, uint32(layerLatest), res.Status.SyncedLayer.Number)
-			require.Equal(t, uint32(layerCurrent), res.Status.TopLayer.Number)
-			require.Equal(t, uint32(layerLatest), res.Status.VerifiedLayer.Number)
+			require.Equal(t, layerLatest.Uint32(), res.Status.SyncedLayer.Number)
+			require.Equal(t, layerCurrent.Uint32(), res.Status.TopLayer.Number)
+			require.Equal(t, layerLatest.Uint32(), res.Status.VerifiedLayer.Number)
 
 			// Now do a mock check post-genesis
 			layerCurrent = oldCurLayer
@@ -587,9 +608,9 @@ func TestNodeService(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, uint64(0), res.Status.ConnectedPeers)
 			require.Equal(t, false, res.Status.IsSynced)
-			require.Equal(t, uint32(layerLatest), res.Status.SyncedLayer.Number)
-			require.Equal(t, uint32(layerCurrent), res.Status.TopLayer.Number)
-			require.Equal(t, uint32(layerVerified), res.Status.VerifiedLayer.Number)
+			require.Equal(t, layerLatest.Uint32(), res.Status.SyncedLayer.Number)
+			require.Equal(t, layerCurrent.Uint32(), res.Status.TopLayer.Number)
+			require.Equal(t, layerVerified.Uint32(), res.Status.VerifiedLayer.Number)
 		}},
 		{"SyncStart", func(t *testing.T) {
 			require.Equal(t, false, syncer.startCalled, "Start() not yet called on syncer")
@@ -608,6 +629,19 @@ func TestNodeService(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, int32(code.Code_OK), res.Status.Code)
 			require.Equal(t, true, called, "cmd.Shutdown() was called")
+		}},
+		{"UpdatePoetServer", func(t *testing.T) {
+			atxapi.UpdatePoETErr = nil
+			res, err := c.UpdatePoetServer(context.TODO(), &pb.UpdatePoetServerRequest{Url: "test"})
+			require.NoError(t, err)
+			require.EqualValues(t, res.Status.Code, code.Code_OK)
+		}},
+		{"UpdatePoetServerUnavailable", func(t *testing.T) {
+			atxapi.UpdatePoETErr = activation.ErrPoetServiceUnstable
+			url := "test"
+			res, err := c.UpdatePoetServer(context.TODO(), &pb.UpdatePoetServerRequest{Url: url})
+			require.Nil(t, res)
+			require.ErrorIs(t, err, status.Errorf(codes.Unavailable, "can't reach server at %s. retry later", url))
 		}},
 		// NOTE: ErrorStream and StatusStream have comprehensive, E2E tests in cmd/node/node_test.go.
 	}
@@ -641,7 +675,7 @@ func TestGlobalStateService(t *testing.T) {
 		{"GlobalStateHash", func(t *testing.T) {
 			res, err := c.GlobalStateHash(context.Background(), &pb.GlobalStateHashRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint32(layerVerified), res.Response.Layer.Number)
+			require.Equal(t, layerVerified.Uint32(), res.Response.Layer.Number)
 			require.Equal(t, stateRoot.Bytes(), res.Response.RootHash)
 		}},
 		{"Account", func(t *testing.T) {
@@ -737,7 +771,7 @@ func TestGlobalStateService(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, uint32(1), res.TotalResults)
 			require.Equal(t, 1, len(res.Rewards))
-			require.Equal(t, uint32(layerFirst), res.Rewards[0].Layer.Number)
+			require.Equal(t, layerFirst.Uint32(), res.Rewards[0].Layer.Number)
 			require.Equal(t, uint64(rewardAmount), res.Rewards[0].Total.Value)
 			require.Equal(t, uint64(rewardAmount), res.Rewards[0].LayerReward.Value)
 			require.Equal(t, addr1.Bytes(), res.Rewards[0].Coinbase.Address)
@@ -1172,7 +1206,7 @@ func TestMeshService(t *testing.T) {
 					name: "MinLayer too high",
 					run: func(t *testing.T) {
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
-							MinLayer: &pb.LayerNumber{Number: uint32(layerCurrent + 1)},
+							MinLayer: &pb.LayerNumber{Number: layerCurrent.Add(1).Uint32()},
 						})
 						require.Error(t, err, "expected an error")
 						require.Contains(t, err.Error(), "`LatestLayer` must be less than")
@@ -1484,8 +1518,8 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "end layer after current layer",
 					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
-						StartLayer: &pb.LayerNumber{Number: uint32(layerCurrent)},
-						EndLayer:   &pb.LayerNumber{Number: uint32(layerCurrent + 2)},
+						StartLayer: &pb.LayerNumber{Number: layerCurrent.Uint32()},
+						EndLayer:   &pb.LayerNumber{Number: layerCurrent.Add(2).Uint32()},
 					}),
 				},
 
@@ -1493,8 +1527,8 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "start layer after current layer",
 					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
-						StartLayer: &pb.LayerNumber{Number: uint32(layerCurrent + 2)},
-						EndLayer:   &pb.LayerNumber{Number: uint32(layerCurrent + 3)},
+						StartLayer: &pb.LayerNumber{Number: layerCurrent.Add(2).Uint32()},
+						EndLayer:   &pb.LayerNumber{Number: layerCurrent.Add(3).Uint32()},
 					}),
 				},
 
@@ -1502,8 +1536,8 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "layer after last received",
 					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
-						StartLayer: &pb.LayerNumber{Number: uint32(layerLatest + 1)},
-						EndLayer:   &pb.LayerNumber{Number: uint32(layerLatest + 2)},
+						StartLayer: &pb.LayerNumber{Number: layerLatest.Add(1).Uint32()},
+						EndLayer:   &pb.LayerNumber{Number: layerLatest.Add(2).Uint32()},
 					}),
 				},
 
@@ -1530,8 +1564,8 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "start layer after end layer",
 					run: generateRunFn(0, &pb.LayersQueryRequest{
-						StartLayer: &pb.LayerNumber{Number: uint32(layerCurrent + 1)},
-						EndLayer:   &pb.LayerNumber{Number: uint32(layerCurrent)},
+						StartLayer: &pb.LayerNumber{Number: layerCurrent.Add(1).Uint32()},
+						EndLayer:   &pb.LayerNumber{Number: layerCurrent.Uint32()},
 					}),
 				},
 
@@ -1539,8 +1573,8 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "same start end layer",
 					run: generateRunFn(1, &pb.LayersQueryRequest{
-						StartLayer: &pb.LayerNumber{Number: uint32(layerVerified)},
-						EndLayer:   &pb.LayerNumber{Number: uint32(layerVerified)},
+						StartLayer: &pb.LayerNumber{Number: layerVerified.Uint32()},
+						EndLayer:   &pb.LayerNumber{Number: layerVerified.Uint32()},
 					}),
 				},
 
@@ -1548,8 +1582,8 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "start layer after last approved confirmed layer",
 					run: generateRunFn(2, &pb.LayersQueryRequest{
-						StartLayer: &pb.LayerNumber{Number: uint32(layerVerified + 1)},
-						EndLayer:   &pb.LayerNumber{Number: uint32(layerVerified + 2)},
+						StartLayer: &pb.LayerNumber{Number: layerVerified.Add(1).Uint32()},
+						EndLayer:   &pb.LayerNumber{Number: layerVerified.Add(2).Uint32()},
 					}),
 				},
 
@@ -1557,9 +1591,9 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "end layer after last approved confirmed layer",
 					// expect difference + 1 return layers
-					run: generateRunFn(layerVerified+2-layerFirst+1, &pb.LayersQueryRequest{
-						StartLayer: &pb.LayerNumber{Number: uint32(layerFirst)},
-						EndLayer:   &pb.LayerNumber{Number: uint32(layerVerified + 2)},
+					run: generateRunFn(int(layerVerified.Add(2).Sub(layerFirst.Uint32()).Add(1).Uint32()), &pb.LayersQueryRequest{
+						StartLayer: &pb.LayerNumber{Number: layerFirst.Uint32()},
+						EndLayer:   &pb.LayerNumber{Number: layerVerified.Add(2).Uint32()},
 					}),
 				},
 
@@ -1568,16 +1602,16 @@ func TestMeshService(t *testing.T) {
 					name: "comprehensive",
 					run: func(t *testing.T) {
 						req := &pb.LayersQueryRequest{
-							StartLayer: &pb.LayerNumber{Number: uint32(layerFirst)},
-							EndLayer:   &pb.LayerNumber{Number: uint32(layerLatest)},
+							StartLayer: &pb.LayerNumber{Number: layerFirst.Uint32()},
+							EndLayer:   &pb.LayerNumber{Number: layerLatest.Uint32()},
 						}
 
 						res, err := c.LayersQuery(context.Background(), req)
 						require.NoError(t, err, "query returned unexpected error")
 
 						// endpoint inclusive so add one
-						numLayers := layerLatest - layerFirst + 1
-						require.Equal(t, numLayers, len(res.Layer))
+						numLayers := layerLatest.Difference(layerFirst) + 1
+						require.EqualValues(t, numLayers, len(res.Layer))
 						checkLayer(t, res.Layer[0])
 
 						resLayerNine := res.Layer[9]
@@ -1938,7 +1972,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Condition(t, func() bool {
 		for _, a := range l.Activations {
 			// Compare the two element by element
-			if a.Layer.Number != uint32(globalAtx.PubLayerID) {
+			if a.Layer.Number != globalAtx.PubLayerID.Uint32() {
 				continue
 			}
 			if bytes.Compare(a.Id.Id, globalAtx.ID().Bytes()) != 0 {
@@ -2354,7 +2388,7 @@ func checkAccountDataQueryItemAccount(t *testing.T, dataItem interface{}) {
 func checkAccountDataQueryItemReward(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.AccountData_Reward:
-		require.Equal(t, uint32(layerFirst), x.Reward.Layer.Number)
+		require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
 		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
 		require.Equal(t, uint64(rewardAmount), x.Reward.LayerReward.Value)
 		require.Equal(t, addr1.Bytes(), x.Reward.Coinbase.Address)
@@ -2366,17 +2400,17 @@ func checkAccountDataQueryItemReward(t *testing.T, dataItem interface{}) {
 
 func checkAccountMeshDataItemTx(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
-	case *pb.AccountMeshData_Transaction:
+	case *pb.AccountMeshData_MeshTransaction:
 		// Check the sender
-		require.Equal(t, globalTx.Origin().Bytes(), x.Transaction.Signature.PublicKey,
+		require.Equal(t, globalTx.Origin().Bytes(), x.MeshTransaction.Transaction.Signature.PublicKey,
 			"inner coin transfer tx has bad sender")
-		require.Equal(t, globalTx.Amount, x.Transaction.Amount.Value,
+		require.Equal(t, globalTx.Amount, x.MeshTransaction.Transaction.Amount.Value,
 			"inner coin transfer tx has bad amount")
-		require.Equal(t, globalTx.AccountNonce, x.Transaction.Counter,
+		require.Equal(t, globalTx.AccountNonce, x.MeshTransaction.Transaction.Counter,
 			"inner coin transfer tx has bad counter")
 
 		// Need to further check tx type
-		switch y := x.Transaction.Datum.(type) {
+		switch y := x.MeshTransaction.Transaction.Datum.(type) {
 		case *pb.Transaction_CoinTransfer:
 			require.Equal(t, globalTx.Recipient.Bytes(), y.CoinTransfer.Receiver.Address,
 				"inner coin transfer tx has bad recipient")
@@ -2392,7 +2426,7 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.AccountMeshData_Activation:
 		require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
-		require.Equal(t, uint32(globalAtx.PubLayerID), x.Activation.Layer.Number)
+		require.Equal(t, globalAtx.PubLayerID.Uint32(), x.Activation.Layer.Number)
 		require.Equal(t, globalAtx.NodeID.ToBytes(), x.Activation.SmesherId.Id)
 		require.Equal(t, globalAtx.Coinbase.Bytes(), x.Activation.Coinbase.Address)
 		require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
@@ -2406,7 +2440,7 @@ func checkAccountDataItemReward(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.AccountData_Reward:
 		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
-		require.Equal(t, uint32(layerFirst), x.Reward.Layer.Number)
+		require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
 		require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
 		require.Equal(t, addr1.Bytes(), x.Reward.Coinbase.Address)
 
@@ -2445,7 +2479,7 @@ func checkGlobalStateDataReward(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.GlobalStateData_Reward:
 		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
-		require.Equal(t, uint32(layerFirst), x.Reward.Layer.Number)
+		require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
 		require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
 		require.Equal(t, addr1.Bytes(), x.Reward.Coinbase.Address)
 
@@ -2481,7 +2515,7 @@ func checkGlobalStateDataAccountWrapper(t *testing.T, dataItem interface{}) {
 func checkGlobalStateDataGlobalState(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.GlobalStateData_GlobalState:
-		require.Equal(t, uint32(layerFirst), x.GlobalState.Layer.Number)
+		require.Equal(t, layerFirst.Uint32(), x.GlobalState.Layer.Number)
 		require.Equal(t, stateRoot.Bytes(), x.GlobalState.RootHash)
 
 	default:
@@ -2491,7 +2525,7 @@ func checkGlobalStateDataGlobalState(t *testing.T, dataItem interface{}) {
 
 func TestMultiService(t *testing.T) {
 	cfg.GrpcServerPort = 9192
-	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
 	svc2 := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, svc1, svc2)
 	defer shutDown()
@@ -2551,7 +2585,7 @@ func TestJsonApi(t *testing.T) {
 	shutDown()
 
 	// enable services and try again
-	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
 	svc2 := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	cfg.StartNodeService = true
 	cfg.StartMeshService = true

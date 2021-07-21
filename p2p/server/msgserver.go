@@ -61,8 +61,7 @@ type ResponseHandlers struct {
 // MessageServer is a request-response multiplexer on top of the p2p layer. it provides a way to register
 // message types on top of a protocol and declare request and response handlers. it matches incoming responses to requests.
 type MessageServer struct {
-	log.Log
-	ReqID              uint64 //request id
+	ReqID              uint64 //request id (must be declared first to ensure 8 byte alignment on 32-bit systems, required by atomic operations)
 	name               string //server name
 	network            Service
 	pendMutex          sync.RWMutex
@@ -74,6 +73,7 @@ type MessageServer struct {
 	workerCount        sync.WaitGroup
 	workerLimiter      chan struct{}
 	exit               chan struct{}
+	log.Log
 }
 
 // Service is the subset of method used by MessageServer for p2p communications.
@@ -103,9 +103,11 @@ func NewMsgServer(ctx context.Context, network Service, name string, requestLife
 
 // Close stops the MessageServer
 func (p *MessageServer) Close() {
-	p.exit <- struct{}{}
-	<-p.exit
+	p.With().Info("closing MessageServer")
+	close(p.exit)
+	p.With().Info("waiting for message workers to finish...")
 	p.workerCount.Wait()
+	p.With().Info("message workers all done")
 }
 
 // readLoop reads incoming messages and matches them to requests or responses.
@@ -115,8 +117,7 @@ func (p *MessageServer) readLoop(ctx context.Context) {
 	for {
 		select {
 		case <-p.exit:
-			p.With().Debug("shutting down protocol", log.String("protocol", p.name))
-			close(p.exit)
+			p.With().Info("shutting down protocol", log.String("protocol", p.name))
 			return
 		case <-timer.C:
 			go p.cleanStaleMessages()

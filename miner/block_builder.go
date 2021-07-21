@@ -56,7 +56,7 @@ type BlockBuilder struct {
 	signer
 	minerID         types.NodeID
 	rnd             *rand.Rand
-	hdist           types.LayerID
+	hdist           uint32
 	beginRoundEvent chan types.LayerID
 	stopChan        chan struct{}
 	TransactionPool txPool
@@ -69,18 +69,17 @@ type BlockBuilder struct {
 	started         bool
 	atxsPerBlock    int // number of atxs to select per block
 	txsPerBlock     int // max number of tx to select per block
-	layersPerEpoch  uint16
 	projector       projector
 	db              database.Database
-	layerPerEpoch   uint16
+	layersPerEpoch  uint32
 }
 
 // Config is the block builders configuration struct
 type Config struct {
 	MinerID        types.NodeID
-	Hdist          int
+	Hdist          uint32
 	AtxsPerBlock   int
-	LayersPerEpoch uint16
+	LayersPerEpoch uint32
 	TxsPerBlock    int
 }
 
@@ -108,7 +107,7 @@ func NewBlockBuilder(
 	return &BlockBuilder{
 		minerID:         config.MinerID,
 		signer:          sgn,
-		hdist:           types.LayerID(config.Hdist),
+		hdist:           config.Hdist,
 		Log:             lg,
 		rnd:             rand.New(rand.NewSource(int64(seed))),
 		beginRoundEvent: beginRoundEvent,
@@ -125,7 +124,7 @@ func NewBlockBuilder(
 		projector:       projector,
 		TransactionPool: txPool,
 		db:              db,
-		layerPerEpoch:   config.LayersPerEpoch,
+		layersPerEpoch:  config.LayersPerEpoch,
 	}
 }
 
@@ -188,7 +187,7 @@ func (t *BlockBuilder) stopped() bool {
 }
 
 func (t *BlockBuilder) createBlock(ctx context.Context, id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID, activeSet []types.ATXID) (*types.Block, error) {
-	if id <= types.GetEffectiveGenesis() {
+	if !id.After(types.GetEffectiveGenesis()) {
 		return nil, errors.New("cannot create blockBytes in genesis layer")
 	}
 
@@ -267,12 +266,12 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 
 			atxID, proofs, atxs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
-				events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to check for block eligibility")
+				events.ReportDoneCreatingBlock(true, layerID.Uint32(), "failed to check for block eligibility")
 				logger.With().Error("failed to check for block eligibility", layerID, log.Err(err))
 				continue
 			}
 			if len(proofs) == 0 {
-				events.ReportDoneCreatingBlock(false, uint64(layerID), "")
+				events.ReportDoneCreatingBlock(false, layerID.Uint32(), "")
 				logger.With().Info("not eligible for blocks in layer", layerID, layerID.GetEpoch())
 				continue
 			}
@@ -284,14 +283,14 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 			for _, eligibilityProof := range proofs {
 				txList, _, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {
-					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to get txs for block")
+					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "failed to get txs for block")
 					logger.With().Error("failed to get txs for block", layerID, log.Err(err))
 					continue
 				}
 				blk, err := t.createBlock(ctx, layerID, atxID, eligibilityProof, txList, atxs)
 
 				if err != nil {
-					events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot create new block")
+					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "cannot create new block")
 					logger.With().Error("failed to create new block", log.Err(err))
 					continue
 				}
@@ -299,7 +298,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 					return
 				}
 				if err := t.meshProvider.AddBlockWithTxs(ctx, blk); err != nil {
-					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to store block")
+					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "failed to store block")
 					logger.With().Error("failed to store block", blk.ID(), log.Err(err))
 					continue
 				}
@@ -307,7 +306,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 					bytes, err := types.InterfaceToBytes(blk)
 					if err != nil {
 						logger.With().Error("failed to serialize block", log.Err(err))
-						events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot serialize block")
+						events.ReportDoneCreatingBlock(true, layerID.Uint32(), "cannot serialize block")
 						return
 					}
 
@@ -316,7 +315,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 					if err = t.network.Broadcast(blockCtx, blocks.NewBlockProtocol, bytes); err != nil {
 						logger.WithContext(blockCtx).With().Error("failed to send block", log.Err(err))
 					}
-					events.ReportDoneCreatingBlock(true, uint64(layerID), "")
+					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "")
 				}()
 			}
 		}
