@@ -93,12 +93,7 @@ type Mesh struct {
 	latestLayer        types.LayerID
 	latestLayerInState types.LayerID
 	layerHash          []byte
-	lMutex             sync.RWMutex
-	lkMutex            sync.RWMutex
-	lcMutex            sync.RWMutex
-	lvMutex            sync.RWMutex
-	orphMutex          sync.RWMutex
-	pMutex             sync.RWMutex
+	mutex              sync.RWMutex
 	done               chan struct{}
 	nextValidLayers    map[types.LayerID]*types.Layer
 	maxValidatedLayer  types.LayerID
@@ -134,7 +129,7 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, t
 	if err != nil {
 		logger.Panic("could not recover latest layer: %v", err)
 	}
-	msh.latestLayer = types.BytesToLayerID(latest)
+	msh.SetLatestLayer(types.BytesToLayerID(latest))
 
 	processed, err := db.general.Get(constPROCESSED)
 	if err != nil {
@@ -151,7 +146,7 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, t
 	if err != nil {
 		logger.Panic("could not recover latest verified layer: %v", err)
 	}
-	msh.latestLayerInState = types.BytesToLayerID(verified)
+	msh.setLatestLayerInState(types.BytesToLayerID(verified))
 
 	err = pr.LoadState(msh.LatestLayerInState())
 	if err != nil {
@@ -165,7 +160,7 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, t
 	}
 
 	msh.With().Info("recovered mesh from disk",
-		log.FieldNamed("latest_layer", msh.latestLayer),
+		log.FieldNamed("latest_layer", msh.LatestLayer()),
 		log.FieldNamed("validated_layer", msh.ProcessedLayer()),
 		log.String("layer_hash", util.Bytes2Hex(msh.layerHash)),
 		log.String("root_hash", pr.GetStateRoot().String()))
@@ -189,15 +184,15 @@ func (msh *Mesh) CacheWarmUp(layerSize int) {
 
 // LatestLayerInState returns the latest layer we applied to state
 func (msh *Mesh) LatestLayerInState() types.LayerID {
-	defer msh.pMutex.RUnlock()
-	msh.pMutex.RLock()
+	defer msh.mutex.RUnlock()
+	msh.mutex.RLock()
 	return msh.latestLayerInState
 }
 
 // LatestLayer - returns the latest layer we saw from the network
 func (msh *Mesh) LatestLayer() types.LayerID {
-	defer msh.lkMutex.RUnlock()
-	msh.lkMutex.RLock()
+	defer msh.mutex.RUnlock()
+	msh.mutex.RLock()
 	return msh.latestLayer
 }
 
@@ -215,8 +210,8 @@ func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
 			Status: events.LayerStatusTypeUnknown,
 		})
 	}
-	defer msh.lkMutex.Unlock()
-	msh.lkMutex.Lock()
+	defer msh.mutex.Unlock()
+	msh.mutex.Lock()
 	if idx.After(msh.latestLayer) {
 		events.ReportNodeStatusUpdate()
 		msh.With().Info("set latest known layer", idx)
@@ -246,16 +241,16 @@ type validator struct {
 }
 
 func (vl *validator) ProcessedLayer() types.LayerID {
-	defer vl.lvMutex.RUnlock()
-	vl.lvMutex.RLock()
+	defer vl.mutex.RUnlock()
+	vl.mutex.RLock()
 	return vl.processedLayer
 }
 
 func (vl *validator) SetProcessedLayer(lyr types.LayerID) {
 	vl.With().Info("set processed layer", lyr)
 	events.ReportNodeStatusUpdate()
-	defer vl.lvMutex.Unlock()
-	vl.lvMutex.Lock()
+	defer vl.mutex.Unlock()
+	vl.mutex.Lock()
 	vl.processedLayer = lyr
 }
 
@@ -456,14 +451,14 @@ func (msh *Mesh) updateStateWithLayer(validatedLayer types.LayerID, layer *types
 
 func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) {
 	// update validated layer only after applying transactions since loading of state depends on processedLayer param.
-	msh.pMutex.Lock()
+	msh.mutex.Lock()
 	if err := msh.general.Put(VERIFIED, lyr.Bytes()); err != nil {
 		// can happen if database already closed
 		msh.Error("could not persist validated layer index %d: %v", lyr, err.Error())
 		// TODO: return here without setting latestLayerInState ?
 	}
 	msh.latestLayerInState = lyr
-	msh.pMutex.Unlock()
+	msh.mutex.Unlock()
 }
 
 func (msh *Mesh) logStateRoot(layerID types.LayerID) {
@@ -702,8 +697,8 @@ func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
 
 // todo better thread safety
 func (msh *Mesh) handleOrphanBlocks(blk *types.Block) {
-	msh.orphMutex.Lock()
-	defer msh.orphMutex.Unlock()
+	msh.mutex.Lock()
+	defer msh.mutex.Unlock()
 	if _, ok := msh.orphanBlocks[blk.Layer()]; !ok {
 		msh.orphanBlocks[blk.Layer()] = make(map[types.BlockID]struct{})
 	}
@@ -725,8 +720,8 @@ func (msh *Mesh) handleOrphanBlocks(blk *types.Block) {
 
 // GetOrphanBlocksBefore returns all known orphan blocks with layerID < l
 func (msh *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error) {
-	msh.orphMutex.RLock()
-	defer msh.orphMutex.RUnlock()
+	msh.mutex.RLock()
+	defer msh.mutex.RUnlock()
 	ids := map[types.BlockID]struct{}{}
 	for key, val := range msh.orphanBlocks {
 		if key.Before(l) {
