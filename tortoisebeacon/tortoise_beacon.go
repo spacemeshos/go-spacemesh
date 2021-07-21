@@ -645,7 +645,9 @@ func (tb *TortoiseBeacon) markProposalPhaseFinished(epoch types.EpochID) {
 	tb.proposalPhaseFinishedTimestampsMu.Lock()
 	defer tb.proposalPhaseFinishedTimestampsMu.Unlock()
 
-	tb.proposalPhaseFinishedTimestamps[epoch] = time.Now()
+	now := time.Now()
+	tb.Info("marking proposal phase for epoch %v finished at %v", epoch, now.String())
+	tb.proposalPhaseFinishedTimestamps[epoch] = now
 }
 
 func (tb *TortoiseBeacon) receivedBeforeProposalPhaseFinished(epoch types.EpochID, ts time.Time) bool {
@@ -653,6 +655,8 @@ func (tb *TortoiseBeacon) receivedBeforeProposalPhaseFinished(epoch types.EpochI
 	defer tb.proposalPhaseFinishedTimestampsMu.RUnlock()
 
 	v, ok := tb.proposalPhaseFinishedTimestamps[epoch]
+
+	tb.Info("checking if timestamp %v was received before proposal phase finished in epoch %v, is phase finished: %v, finished at: %v", ts.String(), epoch, ok, v.String())
 
 	return !ok || ts.Before(v)
 }
