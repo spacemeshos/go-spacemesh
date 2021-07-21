@@ -229,8 +229,6 @@ func (tb *TortoiseBeacon) Close() {
 	tb.Closer.Close()
 	tb.backgroundWG.Wait() // Wait until background goroutines finish
 	tb.clock.Unsubscribe(tb.layerTicker)
-
-	return
 }
 
 // GetBeacon returns a Tortoise Beacon value as []byte for a certain epoch or an error if it doesn't exist.
