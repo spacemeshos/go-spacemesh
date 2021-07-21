@@ -640,23 +640,23 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 }
 
 func (tb *TortoiseBeacon) markProposalPhaseFinished(epoch types.EpochID) {
-	now := time.Now()
+	finishedAt := time.Now()
 
 	tb.proposalPhaseFinishedTimestampsMu.Lock()
-	tb.proposalPhaseFinishedTimestamps[epoch] = now
+	tb.proposalPhaseFinishedTimestamps[epoch] = finishedAt
 	tb.proposalPhaseFinishedTimestampsMu.Unlock()
 
-	tb.Debug("marked proposal phase for epoch %v finished at %v", epoch, now.String())
+	tb.Debug("marked proposal phase for epoch %v finished at %v", epoch, finishedAt.String())
 }
 
-func (tb *TortoiseBeacon) receivedBeforeProposalPhaseFinished(epoch types.EpochID, ts time.Time) bool {
+func (tb *TortoiseBeacon) receivedBeforeProposalPhaseFinished(epoch types.EpochID, receivedAt time.Time) bool {
 	tb.proposalPhaseFinishedTimestampsMu.RLock()
-	v, ok := tb.proposalPhaseFinishedTimestamps[epoch]
+	finishedAt, ok := tb.proposalPhaseFinishedTimestamps[epoch]
 	tb.proposalPhaseFinishedTimestampsMu.RUnlock()
 
-	tb.Debug("checking if timestamp %v was received before proposal phase finished in epoch %v, is phase finished: %v, finished at: %v", ts.String(), epoch, ok, v.String())
+	tb.Debug("checking if timestamp %v was received before proposal phase finished in epoch %v, is phase finished: %v, finished at: %v", receivedAt.String(), epoch, ok, finishedAt.String())
 
-	return !ok || ts.Before(v)
+	return !ok || receivedAt.Before(finishedAt)
 }
 
 func (tb *TortoiseBeacon) sendFollowingVotesLoopIteration(ctx context.Context, epoch types.EpochID, round types.RoundID) {
