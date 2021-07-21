@@ -479,10 +479,13 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 	tb.Log.With().Debug("Starting proposal phase",
 		log.Uint64("epoch_id", uint64(epoch)))
 
-	ctx, cancel := context.WithTimeout(ctx, tb.proposalDuration)
-	defer cancel()
+	proposalPhaseTimer := time.NewTimer(tb.proposalDuration)
+	defer proposalPhaseTimer.Stop()
 
 	go func() {
+		ctx, cancel := context.WithTimeout(ctx, tb.proposalDuration)
+		defer cancel()
+
 		tb.Log.With().Debug("Starting proposal message sender",
 			log.Uint64("epoch_id", uint64(epoch)))
 
@@ -499,6 +502,7 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 	select {
 	case <-tb.CloseChannel():
 	case <-ctx.Done():
+	case <-proposalPhaseTimer.C:
 		tb.markProposalPhaseFinished(epoch)
 
 		tb.Log.With().Debug("Proposal phase finished",
