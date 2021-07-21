@@ -176,6 +176,25 @@ func TestMesh_AddLayerGetLayer(t *testing.T) {
 	r.Equal(3, len(lyr.Blocks()))
 }
 
+func TestMesh_ProcessedLayer(t *testing.T) {
+	msh := getMesh("t6")
+	defer msh.Close()
+	msh.SetProcessedLayer(types.NewLayerID(1), types.Hash32{})
+	assert.Equal(t, types.NewLayerID(1), msh.ProcessedLayer())
+	msh.SetProcessedLayer(types.NewLayerID(2), types.Hash32{})
+	assert.Equal(t, types.NewLayerID(2), msh.ProcessedLayer())
+	msh.SetProcessedLayer(types.NewLayerID(3), types.Hash32{})
+	assert.Equal(t, types.NewLayerID(3), msh.ProcessedLayer())
+	msh.SetProcessedLayer(types.NewLayerID(5), types.Hash32{})
+	assert.Equal(t, types.NewLayerID(3), msh.ProcessedLayer())
+	msh.SetProcessedLayer(types.NewLayerID(4), types.Hash32{})
+	assert.Equal(t, types.NewLayerID(4), msh.ProcessedLayer())
+	msh.SetProcessedLayer(types.NewLayerID(3), types.Hash32{})
+	assert.Equal(t, types.NewLayerID(4), msh.ProcessedLayer())
+	msh.SetLatestLayer(types.NewLayerID(7))
+	assert.Equal(t, types.NewLayerID(4), msh.ProcessedLayer())
+}
+
 func TestMesh_LatestKnownLayer(t *testing.T) {
 	msh := getMesh("t6")
 	defer msh.Close()

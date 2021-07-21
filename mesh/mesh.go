@@ -258,9 +258,6 @@ func (vl *validator) SetProcessedLayer(layerID types.LayerID, hash types.Hash32)
 		layerHash: hash,
 	}
 	vl.setProcessedLayer(layer)
-	events.ReportNodeStatusUpdate()
-	vl.With().Info("processed layer set", layerID, log.String("layer_hash", hash.Hex()))
-	vl.Event().Info("processed layer set", layerID, log.String("layer_hash", hash.Hex()))
 }
 
 func (vl *validator) getProcessedLayer() internalLayer {
@@ -272,7 +269,15 @@ func (vl *validator) getProcessedLayer() internalLayer {
 func (vl *validator) setProcessedLayer(lyr *internalLayer) {
 	vl.mutex.Lock()
 	defer vl.mutex.Unlock()
+	if vl.processedLayer.layerID.Add(1) != lyr.layerID {
+		vl.With().Error("could not set processed layer",
+			log.FieldNamed("old_processed_layer", vl.processedLayer.layerID),
+			log.FieldNamed("new_processed_layer", lyr.layerID))
+		return
+	}
 	vl.processedLayer = *lyr
+	events.ReportNodeStatusUpdate()
+	vl.Event().Info("processed layer set", lyr.layerID, log.String("layer_hash", lyr.layerHash.Hex()))
 }
 
 func (vl *validator) persistProcessedLayer() {
