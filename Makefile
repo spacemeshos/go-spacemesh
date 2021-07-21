@@ -129,8 +129,8 @@ docker-local-build: go-spacemesh hare p2p sync harness
 .PHONY: docker-local-build
 endif
 
-test: get-gpu-setup
-	CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v -timeout 0 -p 1 ./...
+test test-all: get-gpu-setup
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v -timeout 0 -p 1 ./...
 .PHONY: test
 
 test-no-app-test: get-gpu-setup
@@ -298,9 +298,7 @@ dockerrun-blocks-remove-node:
 ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
-
 	$(DOCKERRUN) pytest -s -v block_atx/remove_node/test_blocks_remove_node.py --tc-file=block_atx/remove_node/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-
 .PHONY: dockerrun-blocks-remove-node
 
 dockertest-blocks-remove-node: dockerbuild-test dockerrun-blocks-remove-node
