@@ -26,7 +26,6 @@ var (
 	constTrue      = []byte{1}
 	constFalse     = []byte{0}
 	constLATEST    = []byte("latest")
-	constLAYERHASH = []byte("layer hash")
 	constPROCESSED = []byte("processed")
 )
 
@@ -48,7 +47,8 @@ type Validator interface {
 	ValidateLayer(layer *types.Layer)
 	HandleLateBlock(bl *types.Block)
 	ProcessedLayer() types.LayerID
-	SetProcessedLayer(lyr types.LayerID)
+	ProcessedLayerHash() types.Hash32
+	SetProcessedLayer(lyr types.LayerID, hash types.Hash32)
 }
 
 type txProcessor interface {
@@ -92,7 +92,6 @@ type Mesh struct {
 	config             Config
 	latestLayer        types.LayerID
 	latestLayerInState types.LayerID
-	layerHash          []byte
 	mutex              sync.RWMutex
 	done               chan struct{}
 	nextValidLayers    map[types.LayerID]*types.Layer
@@ -135,12 +134,12 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, t
 	if err != nil {
 		logger.Panic("could not recover processed layer: %v", err)
 	}
-
-	msh.SetProcessedLayer(types.BytesToLayerID(processed))
-
-	if msh.layerHash, err = db.general.Get(constLAYERHASH); err != nil {
-		logger.With().Error("could not recover latest layer hash", log.Err(err))
+	var data internalLayer
+	err = types.BytesToInterface(processed, &data)
+	if err != nil {
+		logger.Panic("could not parse processed layer", log.Err(err))
 	}
+	msh.SetProcessedLayer(data.layerID, data.layerHash)
 
 	verified, err := db.general.Get(VERIFIED)
 	if err != nil {
@@ -162,7 +161,7 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, t
 	msh.With().Info("recovered mesh from disk",
 		log.FieldNamed("latest_layer", msh.LatestLayer()),
 		log.FieldNamed("validated_layer", msh.ProcessedLayer()),
-		log.String("layer_hash", util.Bytes2Hex(msh.layerHash)),
+		log.String("layer_hash", msh.ProcessedLayerHash().Hex()),
 		log.String("root_hash", pr.GetStateRoot().String()))
 
 	return msh
@@ -235,23 +234,61 @@ func (msh *Mesh) GetLayer(i types.LayerID) (*types.Layer, error) {
 	return l, nil
 }
 
+type internalLayer struct {
+	layerID   types.LayerID
+	layerHash types.Hash32
+}
+
 type validator struct {
 	*Mesh
-	processedLayer types.LayerID
+	processedLayer internalLayer
 }
 
 func (vl *validator) ProcessedLayer() types.LayerID {
-	defer vl.mutex.RUnlock()
+	return vl.getProcessedLayer().layerID
+}
+
+func (vl *validator) ProcessedLayerHash() types.Hash32 {
+	return vl.getProcessedLayer().layerHash
+}
+
+func (vl *validator) SetProcessedLayer(layerID types.LayerID, hash types.Hash32) {
+	layer := &internalLayer{
+		layerID:   layerID,
+		layerHash: hash,
+	}
+	vl.setProcessedLayer(layer)
+	events.ReportNodeStatusUpdate()
+	vl.With().Info("processed layer set", layerID, log.String("layer_hash", hash.Hex()))
+	vl.Event().Info("processed layer set", layerID, log.String("layer_hash", hash.Hex()))
+}
+
+func (vl *validator) getProcessedLayer() internalLayer {
 	vl.mutex.RLock()
+	defer vl.mutex.RUnlock()
 	return vl.processedLayer
 }
 
-func (vl *validator) SetProcessedLayer(lyr types.LayerID) {
-	vl.With().Info("set processed layer", lyr)
-	events.ReportNodeStatusUpdate()
-	defer vl.mutex.Unlock()
+func (vl *validator) setProcessedLayer(lyr *internalLayer) {
 	vl.mutex.Lock()
-	vl.processedLayer = lyr
+	defer vl.mutex.Unlock()
+	vl.processedLayer = *lyr
+}
+
+func (vl *validator) persistProcessedLayer() {
+	lyr := vl.getProcessedLayer()
+	data, err := types.InterfaceToBytes(lyr)
+	if err != nil {
+		vl.With().Error("could not convert processed layer to bytes", log.Err(err))
+		return
+	}
+	if err := vl.general.Put(constPROCESSED, data); err != nil {
+		vl.With().Error("could not persist processed layer", lyr.layerID)
+		return
+	}
+	vl.With().Debug("persisted processed layer",
+		lyr.layerID,
+		log.String("layer_hash", lyr.layerHash.Hex()))
 }
 
 func (vl *validator) HandleLateBlock(b *types.Block) {
@@ -265,9 +302,10 @@ func (vl *validator) HandleLateBlock(b *types.Block) {
 
 func (vl *validator) ValidateLayer(lyr *types.Layer) {
 	vl.With().Info("validate layer", lyr)
+	hash := vl.calcValidLayerHash(lyr)
 	if len(lyr.Blocks()) == 0 {
 		vl.With().Info("skip validation of layer with no blocks", lyr)
-		vl.SetProcessedLayer(lyr.Index())
+		vl.SetProcessedLayer(lyr.Index(), hash)
 		events.ReportNewLayer(events.NewLayer{
 			Layer:  lyr,
 			Status: events.LayerStatusTypeConfirmed,
@@ -276,14 +314,12 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 	}
 
 	oldPbase, newPbase := vl.trtl.HandleIncomingLayer(lyr)
-	vl.SetProcessedLayer(lyr.Index())
+	vl.SetProcessedLayer(lyr.Index(), hash)
 
 	if err := vl.trtl.Persist(); err != nil {
 		vl.With().Error("could not persist tortoise", lyr)
 	}
-	if err := vl.general.Put(constPROCESSED, lyr.Index().Bytes()); err != nil {
-		vl.With().Error("could not persist validated layer", lyr)
-	}
+	vl.persistProcessedLayer()
 	vl.pushLayersToState(oldPbase, newPbase)
 	events.ReportNewLayer(events.NewLayer{
 		Layer:  lyr,
@@ -319,7 +355,6 @@ func (msh *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerI
 		msh.persistLayerHashes(l)
 		msh.reInsertTxsToPool(validBlocks, invalidBlocks, l.Index())
 	}
-	msh.persistLastLayerHash()
 }
 
 func (msh *Mesh) persistLayerHashes(l *types.Layer) {
@@ -335,7 +370,6 @@ func (msh *Mesh) persistLayerHashes(l *types.Layer) {
 		}
 	}
 	msh.persistRunningLayerHash(l.Index(), types.CalcAggregateHash32(prevHash, l.Hash().Bytes()))
-	msh.layerHash = hash.Bytes()
 }
 
 func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l types.LayerID) {
@@ -469,19 +503,7 @@ func (msh *Mesh) logStateRoot(layerID types.LayerID) {
 
 func (msh *Mesh) calcValidLayerHash(layer *types.Layer) types.Hash32 {
 	validBlocks, _ := msh.BlocksByValidity(layer.Blocks())
-	msh.layerHash = types.CalcBlocksHash32(types.BlockIDs(validBlocks), msh.layerHash).Bytes()
-
-	msh.Event().Info("new layer hash", layer.Index(),
-		log.String("layer_hash", util.Bytes2Hex(msh.layerHash)))
-
-	return types.CalcBlocksHash32(types.BlockIDs(validBlocks), msh.layerHash)
-}
-
-func (msh *Mesh) persistLastLayerHash() {
-	if err := msh.general.Put(constLAYERHASH, msh.layerHash); err != nil {
-		msh.With().Error("failed to persist last layer hash", log.Err(err), msh.ProcessedLayer(),
-			log.String("layer_hash", util.Bytes2Hex(msh.layerHash)))
-	}
+	return types.CalcBlocksHash32(types.BlockIDs(validBlocks), msh.ProcessedLayerHash().Bytes())
 }
 
 func (msh *Mesh) persistRunningLayerHash(layerID types.LayerID, hash types.Hash32) {
