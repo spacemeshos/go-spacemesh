@@ -2,161 +2,18 @@ package peersync
 
 import (
 	"context"
-	"sync/atomic"
+	"errors"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
-type Reactor struct {
-	round  uint64
-	offset int64
-
-	log log.Log
-
-	requiredResponseCount int
-	roundInterval         time.Duration
-	roundTimeout          time.Duration
-	retryInterval         time.Duration
-
-	ctx       context.Context
-	requests  chan []DirectRequest
-	responses chan Response // should be buffered with max number of peers
-	peers     chan []peers.Peer
-	completed chan time.Duration
-}
-
-func (r *Reactor) Responses() chan<- Response {
-	return r.responses
-}
-
-func (r *Reactor) Peers() chan<- []peers.Peer {
-	return r.peers
-}
-
-func (r *Reactor) Requests() <-chan []DirectRequest {
-	return r.requests
-}
-
-func (r *Reactor) Completed() <-chan time.Duration {
-	return r.completed
-}
-
-func (r *Reactor) Run() error {
-	var (
-		peers           []peers.Peer
-		round           uint64
-		state           *Round
-		timer           *time.Timer
-		timerChan       <-chan time.Time
-		pendingRequests []DirectRequest
-		activeRequests  chan []DirectRequest
-	)
-	for {
-		select {
-		case <-r.ctx.Done():
-			r.log.Debug("terminating reactor on closed context")
-			return r.ctx.Err()
-		case peers = <-r.peers:
-			r.log.Debug("received updated set of peers",
-				log.Int("peers_count", len(peers)),
-			)
-			if timer == nil {
-				timer = time.NewTimer(r.roundTimeout)
-				timerChan = timer.C
-			} else if state == nil {
-				timer.Reset(r.roundTimeout)
-			}
-			if state == nil {
-				r.log.Info("starting time synchronization round with peers",
-					log.Int("peers_count", len(peers)),
-					log.Uint64("round", round),
-				)
-				state = &Round{
-					ID:        round,
-					Timestamp: uint64(time.Now().UnixNano()),
-				}
-				round++
-				pendingRequests = make([]DirectRequest, 0, len(peers))
-				for _, peer := range peers {
-					pendingRequests = append(pendingRequests, DirectRequest{
-						Peer:    peer,
-						Request: Request{ID: state.ID},
-					})
-				}
-			}
-		case <-timerChan:
-			if state == nil {
-				timer.Reset(r.roundTimeout)
-				r.log.Info("starting time synchronization round with peers",
-					log.Int("peers_count", len(peers)),
-					log.Uint64("round", round),
-				)
-				state = &Round{
-					ID:        round,
-					Timestamp: uint64(time.Now().UnixNano()),
-				}
-				atomic.StoreUint64(&r.round, round)
-				round++
-				pendingRequests = make([]DirectRequest, 0, len(peers))
-				for _, peer := range peers {
-					pendingRequests = append(pendingRequests, DirectRequest{
-						Peer:    peer,
-						Request: Request{ID: state.ID},
-					})
-				}
-			} else if state != nil {
-				if state.Ready() {
-					offset := state.Offset()
-					atomic.StoreInt64(&r.offset, int64(offset))
-					timer.Reset(r.roundInterval)
-					r.log.Info("time synchronization round with peers finished",
-						log.Duration("offset", offset),
-						log.Uint64("round", state.ID),
-					)
-					select {
-					case r.completed <- offset:
-					case <-r.ctx.Done():
-					}
-				} else {
-					r.log.Info("time synchronization round with peers failed on timeout",
-						log.Uint64("round", state.ID),
-					)
-					timer.Reset(r.retryInterval)
-				}
-				state = nil
-			}
-		case response := <-r.responses:
-			if state == nil {
-				continue
-			}
-			state.AddResponse(response)
-		case activeRequests <- pendingRequests:
-			pendingRequests = nil
-			activeRequests = nil
-		}
-		if pendingRequests != nil {
-			activeRequests = r.requests
-		}
-
-		// when we got disconnected there is no sense in retrying a failed round or starting a new one.
-		// wait until peers are not nil, and start the round from scratch.
-		// FIXME(dshulyak) it is possible that the time will be wasted here
-		if peers == nil && state == nil {
-			timer.Stop()
-			<-timer.C
-		}
-	}
-}
-
-func (r *Reactor) Round() uint64 {
-	return atomic.LoadUint64(&r.round)
-}
-
-func (r *Reactor) Offset() time.Duration {
-	return time.Duration(atomic.LoadInt64(&r.offset))
-}
+var (
+	ErrTimesyncTimeout = errors.New("timesync: timeout")
+)
 
 type timedResponse struct {
 	response         Response
@@ -184,4 +41,71 @@ func (r *Round) Ready() bool {
 
 func (r *Round) Offset() time.Duration {
 	return 0
+}
+
+func GetOffset(ctx context.Context, srv MessageServer, prs []peers.Peer) (time.Duration, error) {
+	lg := log.NewNop()
+	responses := make(chan Response, len(prs))
+
+	for _, peer := range prs {
+		srv.SendRequest(ctx, server.RequestTimeSync, []byte{}, peer, func(buf []byte) {
+			var response Response
+			if err := types.BytesToInterface(buf, &response); err != nil {
+				lg.Debug("failed to decode timesync response", log.Binary("response", buf), log.Err(err))
+				return
+			}
+			select {
+			case <-ctx.Done():
+			case responses <- response:
+			}
+		}, func(error) {})
+	}
+
+	round := Round{}
+	for resp := range responses {
+		round.AddResponse(resp)
+	}
+	if round.Ready() {
+		return round.Offset(), nil
+	}
+	return 0, ErrTimesyncTimeout
+}
+
+func Run(ctx context.Context, srv MessageServer, peersCh <-chan []peers.Peer) {
+	lg := log.NewNop()
+	var (
+		prs   []peers.Peer
+		timer *time.Timer
+	)
+	// FIXME(dshulyak) save peers in some data structure and check using atomic operation
+	// if they became less then required, subscribe and let peers subscriber to notify you
+	select {
+	case <-ctx.Done():
+	case prs = <-peersCh:
+	}
+	for {
+		rctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		offset, err := GetOffset(rctx, srv, prs)
+		cancel()
+		var timeout time.Duration
+		if err == nil {
+			if offset > 10*time.Second {
+				lg.With().Error("offset is too far off")
+			}
+			timeout = 60 * time.Minute
+		} else {
+			lg.With().Error("failed to fetch offset from peers")
+			timeout = 5 * time.Second
+		}
+		if timer == nil {
+			timer = time.NewTimer(timeout)
+		} else {
+			timer.Reset(timeout)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+		}
+	}
 }

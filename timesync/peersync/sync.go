@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -92,14 +91,13 @@ type Sync struct {
 	log            log.Log
 	maxClockOffset time.Duration
 
-	wg      sync.WaitGroup
-	once    sync.Once
-	reactor Reactor
-	srv     MessageServer
-	ctx     context.Context
-	cancel  func()
-	errors  chan error
-	time    Time
+	wg     sync.WaitGroup
+	once   sync.Once
+	srv    MessageServer
+	ctx    context.Context
+	cancel func()
+	errors chan error
+	time   Time
 }
 
 func (s *Sync) requestHandler(ctx context.Context, buf []byte) []byte {
@@ -117,79 +115,4 @@ func (s *Sync) requestHandler(ctx context.Context, buf []byte) []byte {
 		s.log.Panic("failed to encode timesync response", log.Binary("response", buf), log.Err(err))
 	}
 	return buf
-}
-
-func (s *Sync) responseHandler(buf []byte) {
-	var response Response
-	if err := types.BytesToInterface(buf, &response); err != nil {
-		s.log.Debug("failed to decode timeync response", log.Binary("response", buf), log.Err(err))
-		return
-	}
-	select {
-	case <-s.ctx.Done():
-	case s.reactor.Responses() <- response:
-	}
-}
-
-func (s *Sync) Start() {
-	s.once.Do(func() {
-		s.wg.Add(1)
-		go func() {
-			s.errors <- s.run()
-			s.wg.Done()
-		}()
-		s.wg.Add(1)
-		go func() {
-			s.errors <- s.reactor.Run()
-			s.wg.Done()
-		}()
-		go func() {
-			s.wg.Wait()
-			close(s.errors)
-		}()
-	})
-}
-
-func (s *Sync) run() error {
-	for {
-		select {
-		case <-s.ctx.Done():
-			return s.ctx.Err()
-		case requests := <-s.reactor.Requests():
-			for _, req := range requests {
-				buf, err := types.InterfaceToBytes(&req.Request)
-				if err != nil {
-					panic(err)
-				}
-				if err := s.srv.SendRequest(s.ctx, server.RequestTimeSync, buf, req.Peer, s.responseHandler, func(error) {}); err != nil {
-					s.log.With().Error("can't send timesync request", req.Peer, log.Err(err))
-				}
-			}
-		case offset := <-s.reactor.Completed():
-			if offset > s.maxClockOffset || (offset < 0 && offset < s.maxClockOffset) {
-				s.log.With().Error("peers offset is larger than max allowed offset",
-					log.Duration("offset", offset), log.Duration("max_offset", s.maxClockOffset))
-				if atomic.AddUint32(&s.errCnt, 1) == s.maxErrCnt {
-					return ErrPeersNotSynced
-				}
-			} else {
-				atomic.StoreUint32(&s.errCnt, 0)
-			}
-		}
-	}
-}
-
-func (s *Sync) Stop() {
-	s.cancel()
-}
-
-func (s *Sync) Wait() error {
-	var rst error
-	for err := range s.errors {
-		if !errors.Is(err, context.Canceled) {
-			s.cancel()
-			rst = err
-		}
-	}
-	return rst
 }
