@@ -95,11 +95,9 @@ def remove_deployments_in_namespace(project_id, cluster_id, zone, namespace, dep
     k8s_beta = client.AppsV1Api(api_client=K8SApiClient(project_id, zone, cluster_id))
     for dep in deps:
         print(f"removing {dep} deployment")
+        body = client.V1DeleteOptions(propagation_policy='Foreground', grace_period_seconds=5)
         try:
-            resp = k8s_beta.delete_namespaced_deployment(name=dep,
-                                                         namespace=namespace,
-                                                         body=client.V1DeleteOptions(propagation_policy='Foreground',
-                                                                                     grace_period_seconds=5))
+            k8s_beta.delete_namespaced_deployment(name=dep, namespace=namespace, body=body)
         except ApiException as e:
             print(f"Exception when calling ExtensionsV1beta1Api->delete_namespaced_deployment: {e}\n")
 

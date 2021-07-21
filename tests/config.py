@@ -29,3 +29,7 @@ DUMP_QUEUE_ZONE = ut.get_env("DUMP_QUEUE_ZONE")
 BOOTSTRAP_PORT = 7513
 ORACLE_SERVER_PORT = 3030
 POET_SERVER_PORT = 80
+
+
+def get_state_bucket():
+    return ut.get_env("STATE_BUCKET")

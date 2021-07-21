@@ -1,11 +1,13 @@
 from datetime import datetime
 from kubernetes import client
 from kubernetes.client.rest import ApiException
+from kubernetes.stream import stream
 import os
 import time
 import yaml
 
 from tests import config as conf
+from tests.k8s_tool import load_config
 import tests.utils as ut
 
 
@@ -237,3 +239,39 @@ def wait_for_to_be_ready(obj_name, name, namespace, timeout=None):
         if timeout and total_sleep_time > timeout:
             raise Exception(f"Timeout waiting for {obj_name} to be ready")
 
+
+def get_stream_from_pod(pod_name, namespace, exec_command, container=None, retry=1):
+    print(f"streaming command: '{' '.join(exec_command)}' on pod: '{pod_name}'")
+    # create an instance of the API class
+    api_instance = client.CoreV1Api()
+    stream_args = {
+        "command": exec_command,
+        "name": pod_name,
+        "namespace": namespace,
+        "stderr": True,
+        "stdout": True,
+        "stdin": False,
+        "tty": False
+    }
+    if container:
+        stream_args["container"] = container
+    while True:
+        try:
+            resp = stream(api_instance.connect_get_namespaced_pod_exec, **stream_args)
+        except Exception as e:
+            print(f"got an exception while streaming:\n{e}")
+            if not retry:
+                print("stream has failed!")
+                raise e
+            retry -= 1
+        else:
+            break
+    print("stream ended successfully")
+    return resp
+
+
+def list_all_pods_names_in_namespace(namespace):
+    # create an instance of the API class
+    v1_api = client.CoreV1Api()
+    pod_list = v1_api.list_namespaced_pod(namespace)
+    return [pod.metadata.name for pod in pod_list.items]
