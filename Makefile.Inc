@@ -60,9 +60,16 @@ $(PROJ_DIR)$(GPU_SETUP_ZIP):
 
 get-gpu-setup: $(PROJ_DIR)$(GPU_SETUP_ZIP) $(BINDIR_GPU_SETUP_LIBS)
 
-SUBDIRS_LVL1 := $(foreach X,$(wildcard $(dir $(PROJ_DIR))/*/.), $(lastword $(subst /, ,$(dir $(X)))))
-SUBDIRS_LVL2 := $(foreach X,$(SUBDIRS_LVL1),$X $(foreach Y, $(wildcard $(X)/*/.), $(X)-$(lastword $(subst /, ,$(dir $(Y))))))
-# defines test-* tartets from subdirs level 1 and 2
-$(foreach X, $(SUBDIRS_LVL2), test-$(X)): get-gpu-setup
+SUBDIRS_LVL1 := $(foreach X,$(wildcard $(dir $(PROJ_DIR))*/.), $(lastword $(subst /, ,$(dir $(X)))))
+SUBDIRS_LVL2 := $(sort \
+	$(foreach X,$(SUBDIRS_LVL1),\
+		$(foreach Y, $(wildcard $(X)/*_test.go), $(X)) \
+		$(foreach Y, $(wildcard $(X)/*/*_test.go), $(X)-$(lastword $(subst /, ,$(dir $(Y)))))))
+# defines test-* targets from subdirs level 1 and 2
+TEST_TARGETS := $(foreach X, $(SUBDIRS_LVL2), test-$(X))
+$(TEST_TARGETS): get-gpu-setup
 	cd $(subst -,/,$(patsubst test-%,%,$@)) && CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v
-.PHONY: $(foreach X, $(SUBDIRS_LVL2), test-$(X))
+print-test-targets:
+	for i in $(TEST_TARGETS); do echo $$i; done
+.PHONY: $(TEST_TARGETS) print-test-targets
+
