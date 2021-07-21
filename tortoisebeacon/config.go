@@ -38,7 +38,7 @@ func TestConfig() Config {
 		Kappa:                      400000,
 		Q:                          "1/3",
 		RoundsNumber:               2,
-		GracePeriodDurationMs:      20,
+		GracePeriodDurationMs:      300,
 		ProposalDurationMs:         20,
 		FirstVotingRoundDurationMs: 40,
 		VotingRoundDurationMs:      20,
