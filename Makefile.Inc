@@ -61,24 +61,24 @@ $(PROJ_DIR)$(GPU_SETUP_ZIP):
 get-gpu-setup: $(PROJ_DIR)$(GPU_SETUP_ZIP) $(BINDIR_GPU_SETUP_LIBS)
 
 SUBDIRS_LVL1 := $(foreach X,$(wildcard $(dir $(PROJ_DIR))*/.), $(lastword $(subst /, ,$(dir $(X)))))
-SUBDIRS_LVL2 := $(sort \
+SUBDIRS_ONLY := $(sort \
 	$(foreach X,$(SUBDIRS_LVL1),\
 		$(foreach Y, $(wildcard $(X)/*_test.go), test-$(X)) ))
 SUBDIRS_ALL := $(sort \
 	$(foreach X,$(SUBDIRS_LVL1),\
 		$(foreach Y, $(wildcard $(X)/*/*_test.go), test-$(X)-all ) \
 		$(foreach Y, $(wildcard $(X)/*_test.go), test-$(X)-all ) ))
-SUBDIRS_RECURSIVE := $(sort \
+SUBDIRS_LVL2 := $(sort \
 	$(foreach X,$(SUBDIRS_LVL1),\
 		$(foreach Y, $(wildcard $(X)/*/*_test.go), test-$(X)-$(lastword $(subst /, ,$(dir $(Y))) ))))
 # defines test-* targets from subdirs level 1 and 2
+$(SUBDIRS_ONLY): get-gpu-setup
+	CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v ./$(patsubst test-%,%,$@)
 $(SUBDIRS_LVL2): get-gpu-setup
-	CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v ./$(subst -,/,$(patsubst test-%,%,$@))
-$(SUBDIRS_RECURSIVE): get-gpu-setup
 	CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v ./$(subst -,/,$(patsubst test-%,%,$@))/...
 $(SUBDIRS_ALL): get-gpu-setup
 	CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v ./$(patsubst test-%-all,%,$@)/...
 print-test-targets:
-	@for i in $(sort $(SUBDIRS_ALL) $(SUBDIRS_RECURSIVE) $(SUBDIRS_LVL2)); do echo $$i; done
-.PHONY: $(SUBDIRS_ALL) $(SUBDIRS_RECURSIVE) $(SUBDIRS_LVL2) print-test-targets
+	@for i in $(sort $(SUBDIRS_ALL) $(SUBDIRS_LVL2) $(SUBDIRS_ONLY)); do echo $$i; done
+.PHONY: $(SUBDIRS_ALL) SUBDIRS_LVL2 $(SUBDIRS_ONLY) print-test-targets
 
