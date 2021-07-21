@@ -33,6 +33,8 @@ const (
 	TortoiseBeaconMsg
 	// Fetch is used to fetch data for a given hash
 	Fetch
+	// RequestTimeSync is used for time synchronization with peers.
+	RequestTimeSync
 )
 
 // Message is helper type for `MessegeServer` messages.
