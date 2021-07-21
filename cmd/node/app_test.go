@@ -202,13 +202,15 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	smApp.stopServices()
 }
 
-type ScenarioSetup func(*AppTestSuite, *testing.T)
-type ScenarioTestCriteria func(*AppTestSuite, *testing.T) bool
-type TestScenario struct {
-	Setup        ScenarioSetup
-	Criteria     ScenarioTestCriteria
-	Dependencies []int
-}
+type (
+	ScenarioSetup        func(*AppTestSuite, *testing.T)
+	ScenarioTestCriteria func(*AppTestSuite, *testing.T) bool
+	TestScenario         struct {
+		Setup        ScenarioSetup
+		Criteria     ScenarioTestCriteria
+		Dependencies []int
+	}
+)
 
 func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apicfg.Account2Private))
@@ -620,7 +622,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.LayerDurationSec = 20
 	smApp.Config.HareEligibility.ConfidenceParam = 3
 	smApp.Config.HareEligibility.EpochOffset = 0
-	smApp.Config.TortoiseBeacon = tortoisebeacon.TestConfig()
+	smApp.Config.TortoiseBeacon = tortoisebeacon.NodeSimUnitTestConfig()
 	smApp.Config.StartMining = true
 
 	smApp.Config.FETCH.RequestTimeout = 1

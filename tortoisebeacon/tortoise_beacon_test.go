@@ -36,7 +36,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	t.Parallel()
 
 	requirer := require.New(t)
-	conf := TestConfig()
+	conf := UnitTestConfig()
 
 	mockDB := &mockActivationDB{}
 	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(10), nil, nil)

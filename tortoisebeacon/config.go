@@ -32,18 +32,35 @@ func DefaultConfig() Config {
 	}
 }
 
-// TestConfig returns the test configuration for the tortoise beacon.
-func TestConfig() Config {
+// UnitTestConfig returns the unit test configuration for the tortoise beacon.
+func UnitTestConfig() Config {
 	return Config{
 		Kappa:                      400000,
 		Q:                          "1/3",
 		RoundsNumber:               2,
-		GracePeriodDurationMs:      300,
-		ProposalDurationMs:         300,
-		FirstVotingRoundDurationMs: 300,
-		VotingRoundDurationMs:      300,
-		WeakCoinRoundDurationMs:    300,
-		WaitAfterEpochStart:        300,
+		GracePeriodDurationMs:      20,
+		ProposalDurationMs:         20,
+		FirstVotingRoundDurationMs: 40,
+		VotingRoundDurationMs:      20,
+		WeakCoinRoundDurationMs:    20,
+		WaitAfterEpochStart:        1,
+		Theta:                      0.00004,
+		VotesLimit:                 100,
+	}
+}
+
+// NodeSimUnitTestConfig returns configuration for the tortoise beacon the unit tests with node simulation .
+func NodeSimUnitTestConfig() Config {
+	return Config{
+		Kappa:                      400000,
+		Q:                          "1/3",
+		RoundsNumber:               2,
+		GracePeriodDurationMs:      20,
+		ProposalDurationMs:         20,
+		FirstVotingRoundDurationMs: 40,
+		VotingRoundDurationMs:      20,
+		WeakCoinRoundDurationMs:    20,
+		WaitAfterEpochStart:        1,
 		Theta:                      0.00004,
 		VotesLimit:                 100,
 	}
