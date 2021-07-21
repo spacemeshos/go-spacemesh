@@ -66,7 +66,8 @@ SUBDIRS_LVL2 := $(sort \
 		$(foreach Y, $(wildcard $(X)/*_test.go), test-$(X)) ))
 SUBDIRS_ALL := $(sort \
 	$(foreach X,$(SUBDIRS_LVL1),\
-		$(foreach Y, $(wildcard $(X)/*/*_test.go), test-$(X)-all )))
+		$(foreach Y, $(wildcard $(X)/*/*_test.go), test-$(X)-all ) \
+		$(foreach Y, $(wildcard $(X)/*_test.go), test-$(X)-all ) ))
 SUBDIRS_RECURSIVE := $(sort \
 	$(foreach X,$(SUBDIRS_LVL1),\
 		$(foreach Y, $(wildcard $(X)/*/*_test.go), test-$(X)-$(lastword $(subst /, ,$(dir $(Y))) ))))
