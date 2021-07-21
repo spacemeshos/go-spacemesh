@@ -65,7 +65,7 @@ const Account1Private = "0x81c90dd832e18d1cf9758254327cb3135961af6688ac9c2a8c5d7
 // Account2Pub is the public key for second test account
 const Account2Pub = "0x22a31a84ab876f82fcafba86e77910b4419a4ee0f1d5483d7dd3b5b6b6922ee9"
 
-// Account2Private is the private key for secode test account
+// Account2Private is the private key for second test account
 const Account2Private = "0x9d411020d46d3f4e1214f7b51052219737669f461ac9c9ac6ac49753926d0af222a31a84ab876f82fcafba86e77910b4419a4ee0f1d5483d7dd3b5b6b6922ee9"
 
 // DefaultGenesisConfig is the default configuration for the node
