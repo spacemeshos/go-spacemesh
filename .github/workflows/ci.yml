@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       nondocchanges: ${{ steps.filter.outputs.nondoc }}
-      unittests: 'false' # set 'true' to enable unittests
+      unittests: 'false'
     steps:
       - uses: actions/checkout@v2
       - uses: dorny/paths-filter@v2
@@ -125,10 +125,10 @@ jobs:
         with:
           status: ${{ env.status }}
       - name: Mark the job as succeeded
-        if: env.status == 'success' || needs.filter-changes.outputs.unittests == 'false'
+        if: env.status == 'success'
         run: exit 0
       - name: Mark the job as failed
-        if: env.status != 'success' && needs.filter-changes.outputs.unittests == 'true'
+        if: env.status != 'success'
         run: exit 1
 
 
