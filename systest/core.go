@@ -17,7 +17,7 @@ import (
 type SystemTest struct {
 	// ID holds the id number of the instance and is the range 1..max_instance
 	ID       int64
-	env      *runtime.RunEnv
+	re       *runtime.RunEnv
 	ic       *run.InitContext
 	Account1 string
 	Account2 string
@@ -27,9 +27,9 @@ type SystemTest struct {
 
 // NewSystemTest creates a new SystemTest object based on tesground enviornment
 // vars and init context
-func NewSystemTest(env *runtime.RunEnv, ic *run.InitContext) *SystemTest {
+func NewSystemTest(re *runtime.RunEnv, ic *run.InitContext) *SystemTest {
 	c := config.DefaultConfig()
-	t := SystemTest{env: env,
+	t := SystemTest{re: re,
 		ic:       ic,
 		Account1: config.Account1Pub,
 		Account2: config.Account2Pub,
@@ -65,28 +65,33 @@ func (t *SystemTest) SetState(state string) int64 {
 // Fail signals the test has failed
 func (t *SystemTest) Failf(msg string, a ...interface{}) {
 
-	t.env.RecordFailure(fmt.Errorf(msg, a...))
+	t.re.RecordFailure(fmt.Errorf(msg, a...))
 }
 
 // Error signals the test has returned an error
 func (t *SystemTest) Errorf(msg string, a ...interface{}) {
 
-	t.env.RecordCrash(fmt.Errorf(msg, a...))
+	t.re.RecordCrash(fmt.Errorf(msg, a...))
 }
 
 // Log adds a log messages
 func (t *SystemTest) Log(msg string) {
-	t.env.RecordMessage(msg)
+	t.re.RecordMessage(msg)
 }
 
 // Logf adds a formatted log message
 func (t *SystemTest) Logf(msg string, a ...interface{}) {
-	t.env.RecordMessage(msg, a...)
+	t.re.RecordMessage(msg, a...)
 }
 
 // WaitAll waits for all instances to report a state
 func (t *SystemTest) WaitAll(state sync.State) {
-	// TODO: code it
+	b, err := t.ic.SyncClient.Barrier(
+		context.Background(), state, t.re.TestInstanceCount)
+	if err != nil {
+		t.Errorf("failed while setting barrier for state %s: %w", state, err)
+	}
+	<-b.C
 }
 
 // GetAccountState returns an account's state
