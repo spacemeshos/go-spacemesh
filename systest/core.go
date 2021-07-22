@@ -65,7 +65,7 @@ func (t *SystemTest) SetState(state string) int64 {
 // Fail signals the test has failed
 func (t *SystemTest) Failf(msg string, a ...interface{}) {
 
-	t.env.RecordCrash(fmt.Errorf(msg, a...))
+	t.env.RecordFailure(fmt.Errorf(msg, a...))
 }
 
 // Error signals the test has returned an error
