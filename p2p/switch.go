@@ -753,7 +753,7 @@ func (s *Switch) closeInitial() {
 // if it failed it issues a one second timeout and then sends a request to try again.
 func (s *Switch) askForMorePeers(ctx context.Context) {
 	// check how much peers needed
-	numpeers :=  func() int {
+	numpeers := func() int {
 		s.outpeersMutex.RLock()
 		numpeers := len(s.outpeers)
 		s.outpeersMutex.RUnlock()
