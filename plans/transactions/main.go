@@ -24,8 +24,8 @@ func testTransaction(env *runtime.RunEnv, initCtx *run.InitContext) error {
 	// genesis
 	t.SetState("ready")
 	t.WaitAll(sync.State("ready"))
-	start1 := t.GetBalance(t.Account1)
-	start2 := t.GetBalance(t.Account2)
+	start1 := t.GetAccountState(t.Account1).Balance
+	start2 := t.GetAccountState(t.Account2).Balance
 	if t.ID == 1 {
 		t.SendCoins(t.Account1, t.Account2, 100)
 	}
@@ -49,7 +49,7 @@ func testNewAccount(env *runtime.RunEnv, initCtx *run.InitContext) error {
 	// genesis
 	t.SetState("ready")
 	t.WaitAll(sync.State("ready"))
-	start1 := t.GetBalance(t.Account1)
+	start1 := t.GetAccountState(t.Account1).Balance
 	if t.ID == 1 {
 		a = t.NewAccount()
 		t.SendCoins(t.Account1, a, 100)

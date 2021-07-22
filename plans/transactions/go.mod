@@ -1,4 +1,4 @@
-module github.com/spacemeshos/go-spacemesh/plans/mining
+module github.com/spacemeshos/go-spacemesh/plans/transactions
 
 go 1.16
 
