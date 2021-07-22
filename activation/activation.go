@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -49,6 +50,7 @@ func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
 }
 
 type nipstBuilder interface {
+	updatePoETProver(PoetProvingServiceClient)
 	BuildNIPST(ctx context.Context, challenge *types.Hash32, timeout chan struct{}) (*types.NIPST, error)
 }
 
@@ -80,6 +82,15 @@ type signer interface {
 	Sign(m []byte) []byte
 }
 
+type layerClock interface {
+	AwaitLayer(layerID types.LayerID) chan struct{}
+	GetCurrentLayer() types.LayerID
+}
+
+type syncer interface {
+	RegisterChForSynced(context.Context, chan struct{})
+}
+
 const (
 	// InitIdle status means that an init file does not exist and is not prepared
 	InitIdle = 1 + iota
@@ -93,7 +104,7 @@ const (
 type Config struct {
 	CoinbaseAccount types.Address
 	GoldenATXID     types.ATXID
-	LayersPerEpoch  uint16
+	LayersPerEpoch  uint32
 }
 
 // Builder struct is the struct that orchestrates the creation of activation transactions
@@ -105,7 +116,7 @@ type Builder struct {
 	nodeID          types.NodeID
 	coinbaseAccount types.Address
 	goldenATXID     types.ATXID
-	layersPerEpoch  uint16
+	layersPerEpoch  uint32
 	db              atxDBProvider
 	net             broadcaster
 	mesh            meshProvider
@@ -115,27 +126,21 @@ type Builder struct {
 	challenge       *types.NIPSTChallenge
 	commitment      *types.PostProof
 	// pendingATX is created with current commitment and nipst from current challenge.
-	pendingATX        *types.ActivationTx
-	layerClock        layerClock
-	started           uint32
-	store             bytesStore
-	syncer            syncer
-	initStatus        int32
-	initDone          chan struct{}
-	committedSpace    uint64
-	log               log.Log
-	runCtx            context.Context
-	stop              func()
-	poetRetryInterval time.Duration
-}
-
-type layerClock interface {
-	AwaitLayer(layerID types.LayerID) chan struct{}
-	GetCurrentLayer() types.LayerID
-}
-
-type syncer interface {
-	RegisterChForSynced(context.Context, chan struct{})
+	pendingATX            *types.ActivationTx
+	layerClock            layerClock
+	started               uint32
+	store                 bytesStore
+	syncer                syncer
+	initStatus            int32
+	initDone              chan struct{}
+	committedSpace        uint64
+	log                   log.Log
+	runCtx                context.Context
+	stop                  func()
+	poetRetryInterval     time.Duration
+	poetClientInitializer PoETClientInitializer
+	// pendingPoetClient is modified using atomic operations on unsafe.Pointer
+	pendingPoetClient unsafe.Pointer
 }
 
 // BuilderOption ...
@@ -149,9 +154,19 @@ func WithPoetRetryInterval(interval time.Duration) BuilderOption {
 	}
 }
 
+// PoETClientInitializer interfaces for creating PoetProvingServiceClient.
+type PoETClientInitializer func(string) PoetProvingServiceClient
+
+// WithPoETClientInitializer modifies initialization logic for PoET client. Used during client update.
+func WithPoETClientInitializer(initializer PoETClientInitializer) BuilderOption {
+	return func(b *Builder) {
+		b.poetClientInitializer = initializer
+	}
+}
+
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(conf Config, nodeID types.NodeID, spaceToCommit uint64, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider,
-	layersPerEpoch uint16, nipstBuilder nipstBuilder, postProver PostProverClient, layerClock layerClock,
+func NewBuilder(conf Config, nodeID types.NodeID, spaceToCommit uint64, signer signer, db atxDBProvider,
+	net broadcaster, mesh meshProvider, nipstBuilder nipstBuilder, postProver PostProverClient, layerClock layerClock,
 	syncer syncer, store bytesStore, log log.Log, opts ...BuilderOption) *Builder {
 	b := &Builder{
 		signer:            signer,
@@ -224,7 +239,7 @@ func (b *Builder) loop(ctx context.Context) {
 		return
 	}
 	// ensure layer 1 has arrived
-	if err := b.waitOrStop(ctx, b.layerClock.AwaitLayer(1)); err != nil {
+	if err := b.waitOrStop(ctx, b.layerClock.AwaitLayer(types.NewLayerID(1))); err != nil {
 		return
 	}
 	b.run(ctx)
@@ -239,6 +254,13 @@ func (b *Builder) run(ctx context.Context) {
 	}()
 	defer b.log.Info("atx builder is stopped")
 	for {
+		client := atomic.LoadPointer(&b.pendingPoetClient)
+		if client != nil {
+			b.nipstBuilder.updatePoETProver(*(*PoetProvingServiceClient)(client))
+			// CaS here will not lose concurrent update
+			atomic.CompareAndSwapPointer(&b.pendingPoetClient, client, nil)
+		}
+
 		if err := b.PublishActivationTx(ctx); err != nil {
 			if errors.Is(err, ErrStopRequested) {
 				return
@@ -247,7 +269,7 @@ func (b *Builder) run(ctx context.Context) {
 				b.layerClock.GetCurrentLayer(),
 				b.currentEpoch(),
 				log.Err(err))
-			events.ReportAtxCreated(false, uint64(b.currentEpoch()), "")
+			events.ReportAtxCreated(false, uint32(b.currentEpoch()), "")
 
 			switch {
 			case errors.Is(err, ErrATXChallengeExpired):
@@ -373,6 +395,19 @@ func (b *Builder) StartPost(ctx context.Context, rewardAddress types.Address, da
 	return nil
 }
 
+// UpdatePoETServer updates poet client. Context is used to verify that the target is responsive.
+func (b *Builder) UpdatePoETServer(ctx context.Context, target string) error {
+	client := b.poetClientInitializer(target)
+	// TODO(dshulyak) not enough information to verify that PoetServiceID matches with an expected one.
+	// Maybe it should be provided during update.
+	_, err := client.PoetServiceID(ctx)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrPoetServiceUnstable, err)
+	}
+	atomic.StorePointer(&b.pendingPoetClient, unsafe.Pointer(&client))
+	return nil
+}
+
 // MiningStats returns state of post init, coinbase reward account and data directory path for post commitment
 func (b *Builder) MiningStats() (int, uint64, string, string) {
 	acc := b.getCoinbaseAccount()
@@ -460,18 +495,18 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		return err
 	}
 
-	b.log.Event().Info("atx published", atx.Fields(size)...)
-	events.ReportAtxCreated(true, uint64(b.currentEpoch()), atx.ShortString())
+	b.log.Event().Info(fmt.Sprintf("atx published %v", atx.ID().ShortString()), atx.Fields(size)...)
+	events.ReportAtxCreated(true, uint32(b.currentEpoch()), atx.ShortString())
 
 	select {
 	case <-atxReceived:
-		b.log.With().Info("received atx in db", atx.ID())
+		b.log.With().Info(fmt.Sprintf("received atx in db %v", atx.ID().ShortString()), atx.ID())
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer()):
 		syncedCh := make(chan struct{})
 		b.syncer.RegisterChForSynced(ctx, syncedCh)
 		select {
 		case <-atxReceived:
-			b.log.With().Info("received atx in db (in the last moment)", atx.ID())
+			b.log.With().Info(fmt.Sprintf("received atx in db %v (in the last moment)", atx.ID().ShortString()), atx.ID())
 		case <-syncedCh: // ensure we've seen all blocks before concluding that the ATX was lost
 			b.discardChallenge()
 			return fmt.Errorf("%w: target epoch has passed", ErrATXChallengeExpired)
@@ -567,12 +602,12 @@ func (b *Builder) signAndBroadcast(ctx context.Context, atx *types.ActivationTx)
 // 	atxID, pubLayerID, endTick
 func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, uint64, error) {
 	if id, err := b.db.GetPosAtxID(); err != nil {
-		return types.ATXID{}, 0, 0, fmt.Errorf("cannot find pos atx: %v", err)
+		return types.ATXID{}, types.LayerID{}, 0, fmt.Errorf("cannot find pos atx: %v", err)
 	} else if id == b.goldenATXID {
 		b.log.With().Info("using golden atx as positioning atx", id)
-		return id, 0, 0, nil
+		return id, types.LayerID{}, 0, nil
 	} else if atx, err := b.db.GetAtxHeader(id); err != nil {
-		return types.ATXID{}, 0, 0, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
+		return types.ATXID{}, types.LayerID{}, 0, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
 	} else {
 		return id, atx.PubLayerID, atx.EndTick, nil
 	}

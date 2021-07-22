@@ -156,7 +156,7 @@ func (m *DB) Close() {
 	m.contextualValidity.Close()
 }
 
-//todo: for now, these methods are used to export dbs to sync, think about merging the two packages
+// todo: for now, these methods are used to export dbs to sync, think about merging the two packages
 
 // Blocks exports the block database
 func (m *DB) Blocks() database.Getter {
@@ -244,7 +244,7 @@ func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID
 		}
 
 		// catch blocks that were referenced after more than one layer, and slipped through the stop condition
-		if block.LayerIndex < layer {
+		if block.LayerIndex.Before(layer) {
 			continue
 		}
 
@@ -283,7 +283,7 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	}
 
 	if len(idsBytes) == 0 {
-		//zero block layer
+		// zero block layer
 		return []types.BlockID{}, nil
 	}
 
@@ -505,7 +505,7 @@ func (m *DB) getLayerMutex(index types.LayerID) *layerMutex {
 
 // Schema: "r_<coinbase>_<smesherId>_<layerId> -> reward struct"
 func getRewardKey(l types.LayerID, account types.Address, smesherID types.NodeID) []byte {
-	str := string(getRewardKeyPrefix(account)) + "_" + smesherID.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
+	str := string(getRewardKeyPrefix(account)) + "_" + smesherID.String() + "_" + l.String()
 	return []byte(str)
 }
 
@@ -517,11 +517,11 @@ func getRewardKeyPrefix(account types.Address) []byte {
 // This function gets the reward key for a particular smesherID
 // format for the index "s_<smesherid>_<accountid>_<layerid> -> r_<accountid>_<smesherid>_<layerid> -> the actual reward"
 func getSmesherRewardKey(l types.LayerID, smesherID types.NodeID, account types.Address) []byte {
-	str := string(getSmesherRewardKeyPrefix(smesherID)) + "_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
+	str := string(getSmesherRewardKeyPrefix(smesherID)) + "_" + account.String() + "_" + l.String()
 	return []byte(str)
 }
 
-//use r_ for one and s_ for the other so the namespaces can't collide
+// use r_ for one and s_ for the other so the namespaces can't collide
 func getSmesherRewardKeyPrefix(smesherID types.NodeID) []byte {
 	str := "s_" + smesherID.String()
 	return []byte(str)
@@ -532,10 +532,10 @@ type keyBuilder struct {
 }
 
 func (k *keyBuilder) WithLayerID(l types.LayerID) *keyBuilder {
-	buf := make([]byte, 8)
+	buf := make([]byte, 4)
 	// NOTE(dshulyak) big endian produces lexicographically ordered bytes.
 	// some queries can be optimizaed by using range queries instead of point queries.
-	binary.BigEndian.PutUint64(buf, l.Uint64())
+	binary.BigEndian.PutUint32(buf, l.Uint32())
 	k.buf.Write(l.Bytes())
 	return k
 }
@@ -596,22 +596,35 @@ func getTransactionDestKeyPrefix(l types.LayerID, account types.Address) []byte 
 // DbTransaction is the transaction type stored in DB
 type DbTransaction struct {
 	*types.Transaction
-	Origin types.Address
+	Origin  types.Address
+	BlockID types.BlockID
+	LayerID types.LayerID
 }
 
-func newDbTransaction(tx *types.Transaction) *DbTransaction {
-	return &DbTransaction{Transaction: tx, Origin: tx.Origin()}
+func newDbTransaction(tx *types.Transaction, blockID types.BlockID, layerID types.LayerID) *DbTransaction {
+	return &DbTransaction{
+		Transaction: tx,
+		Origin:      tx.Origin(),
+		BlockID:     blockID,
+		LayerID:     layerID,
+	}
 }
 
-func (t DbTransaction) getTransaction() *types.Transaction {
+func (t DbTransaction) getTransaction() *types.MeshTransaction {
 	t.Transaction.SetOrigin(t.Origin)
-	return t.Transaction
+
+	return &types.MeshTransaction{
+		Transaction: *t.Transaction,
+		LayerID:     t.LayerID,
+		BlockID:     t.BlockID,
+	}
 }
 
-func (m *DB) writeTransactions(l types.LayerID, txs []*types.Transaction) error {
+// writeTransactions writes all transactions associated with a block atomically.
+func (m *DB) writeTransactions(block *types.Block, txs ...*types.Transaction) error {
 	batch := m.transactions.NewBatch()
 	for _, t := range txs {
-		bytes, err := types.InterfaceToBytes(newDbTransaction(t))
+		bytes, err := types.InterfaceToBytes(newDbTransaction(t, block.ID(), block.Layer()))
 		if err != nil {
 			return fmt.Errorf("could not marshall tx %v to bytes: %v", t.ID().ShortString(), err)
 		}
@@ -620,10 +633,10 @@ func (m *DB) writeTransactions(l types.LayerID, txs []*types.Transaction) error 
 			return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
 		}
 		// write extra index for querying txs by account
-		if err := batch.Put(getTransactionOriginKey(l, t), t.ID().Bytes()); err != nil {
+		if err := batch.Put(getTransactionOriginKey(block.Layer(), t), t.ID().Bytes()); err != nil {
 			return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
 		}
-		if err := batch.Put(getTransactionDestKey(l, t), t.ID().Bytes()); err != nil {
+		if err := batch.Put(getTransactionDestKey(block.Layer(), t), t.ID().Bytes()); err != nil {
 			return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
 		}
 		m.Debug("wrote tx %v to db", t.ID().ShortString())
@@ -635,28 +648,7 @@ func (m *DB) writeTransactions(l types.LayerID, txs []*types.Transaction) error 
 	return nil
 }
 
-// WriteTransaction writes a single transaction to the db
-func (m *DB) WriteTransaction(l types.LayerID, t *types.Transaction) error {
-	bytes, err := types.InterfaceToBytes(newDbTransaction(t))
-	if err != nil {
-		return fmt.Errorf("could not marshall tx %v to bytes: %v", t.ID().ShortString(), err)
-	}
-	if err := m.transactions.Put(t.ID().Bytes(), bytes); err != nil {
-		return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
-	}
-	// write extra index for querying txs by account
-	if err := m.transactions.Put(getTransactionOriginKey(l, t), t.ID().Bytes()); err != nil {
-		return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
-	}
-	if err := m.transactions.Put(getTransactionDestKey(l, t), t.ID().Bytes()); err != nil {
-		return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
-	}
-	m.Debug("wrote tx %v to db", t.ID().ShortString())
-
-	return nil
-}
-
-//We're not using the existing reward type because the layer is implicit in the key
+// We're not using the existing reward type because the layer is implicit in the key
 type dbReward struct {
 	TotalReward         uint64
 	LayerRewardEstimate uint64
@@ -695,7 +687,7 @@ func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err erro
 		}
 		str := string(it.Key())
 		strs := strings.Split(str, "_")
-		layer, err := strconv.ParseUint(strs[3], 10, 64)
+		layer, err := strconv.ParseUint(strs[3], 10, 32)
 		if err != nil {
 			return nil, fmt.Errorf("wrong key in db %s: %v", it.Key(), err)
 		}
@@ -705,7 +697,7 @@ func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err erro
 			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
 		}
 		rewards = append(rewards, types.Reward{
-			Layer:               types.LayerID(layer),
+			Layer:               types.NewLayerID(uint32(layer)),
 			TotalReward:         reward.TotalReward,
 			LayerRewardEstimate: reward.LayerRewardEstimate,
 			SmesherID:           reward.SmesherID,
@@ -724,14 +716,13 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 		}
 		str := string(it.Key())
 		strs := strings.Split(str, "_")
-		layer, err := strconv.ParseUint(strs[3], 10, 64)
+		layer, err := strconv.ParseUint(strs[3], 10, 32)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing db key %s: %v", it.Key(), err)
 		}
-		//find the key to the actual reward struct, which is in it.Value()
+		// find the key to the actual reward struct, which is in it.Value()
 		var reward dbReward
 		rewardBytes, err := m.transactions.Get(it.Value())
-
 		if err != nil {
 			return nil, fmt.Errorf("wrong key in db %s: %v", it.Value(), err)
 		}
@@ -739,7 +730,7 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
 		}
 		rewards = append(rewards, types.Reward{
-			Layer:               types.LayerID(layer),
+			Layer:               types.NewLayerID(uint32(layer)),
 			TotalReward:         reward.TotalReward,
 			LayerRewardEstimate: reward.LayerRewardEstimate,
 			SmesherID:           reward.SmesherID,
@@ -872,37 +863,41 @@ func (m *DB) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (n
 	return nonce, balance, nil
 }
 
-type txGetter struct {
-	missingIds map[types.TransactionID]struct{}
-	txs        []*types.Transaction
-	mesh       *DB
-}
-
-func (g *txGetter) get(id types.TransactionID) {
-	t, err := g.mesh.GetTransaction(id)
-	if err != nil {
-		g.mesh.With().Warning("could not fetch tx", id, log.Err(err))
-		g.missingIds[id] = struct{}{}
-	} else {
-		g.txs = append(g.txs, t)
-	}
-}
-
-func newGetter(m *DB) *txGetter {
-	return &txGetter{mesh: m, missingIds: make(map[types.TransactionID]struct{})}
-}
-
 // GetTransactions retrieves a list of txs by their id's
-func (m *DB) GetTransactions(transactions []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
-	getter := newGetter(m)
+func (m *DB) GetTransactions(transactions []types.TransactionID) (txs []*types.Transaction, missing map[types.TransactionID]struct{}) {
+	missing = make(map[types.TransactionID]struct{})
+	txs = make([]*types.Transaction, 0, len(transactions))
 	for _, id := range transactions {
-		getter.get(id)
+		if tx, err := m.GetMeshTransaction(id); err != nil {
+			m.With().Warning("could not fetch tx", id, log.Err(err))
+			missing[id] = struct{}{}
+		} else {
+			txs = append(txs, &tx.Transaction)
+		}
 	}
-	return getter.txs, getter.missingIds
+	return
 }
 
-// GetTransaction retrieves a tx by its id
-func (m *DB) GetTransaction(id types.TransactionID) (*types.Transaction, error) {
+// GetMeshTransactions retrieves list of txs with information in what blocks and layers they are included.
+func (m *DB) GetMeshTransactions(transactions []types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{}) {
+	var (
+		missing = map[types.TransactionID]struct{}{}
+		txs     = make([]*types.MeshTransaction, 0, len(transactions))
+	)
+	for _, id := range transactions {
+		tx, err := m.GetMeshTransaction(id)
+		if err != nil {
+			m.With().Warning("could not fetch tx", id, log.Err(err))
+			missing[id] = struct{}{}
+		} else {
+			txs = append(txs, tx)
+		}
+	}
+	return txs, missing
+}
+
+// GetMeshTransaction retrieves a tx by its id
+func (m *DB) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
 	tBytes, err := m.transactions.Get(id[:])
 	if err != nil {
 		return nil, fmt.Errorf("could not find transaction in database %v err=%v", hex.EncodeToString(id[:]), err)
@@ -969,7 +964,7 @@ func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks
 
 // LayerContextuallyValidBlocks returns the set of contextually valid block IDs for the provided layer
 func (m *DB) LayerContextuallyValidBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
-	if layer == 0 || layer == 1 {
+	if layer == types.NewLayerID(0) || layer == types.NewLayerID(1) {
 		v, err := m.LayerBlockIds(layer)
 		if err != nil {
 			m.With().Error("could not get layer block ids", layer, log.Err(err))
@@ -1049,7 +1044,7 @@ func (m *DB) Retrieve(key []byte, v interface{}) (interface{}, error) {
 
 func (m *DB) cacheWarmUpFromTo(from types.LayerID, to types.LayerID) error {
 	m.Info("warming up cache with layers %v to %v", from, to)
-	for i := from; i < to; i++ {
+	for i := from; i.Before(to); i = i.Add(1) {
 
 		select {
 		case <-m.exit:

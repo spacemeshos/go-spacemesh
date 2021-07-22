@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/nullstyle/go-xdr/xdr3"
+
+	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -58,7 +59,7 @@ type aggregatedMessages struct {
 // innerMessage is the actual set of fields that describe a message in the Hare protocol.
 type innerMessage struct {
 	Type             messageType
-	InstanceID       instanceID
+	InstanceID       types.LayerID
 	K                int32 // the round counter
 	Ki               int32
 	Values           []types.BlockID     // the set S. optional for commit InnerMsg in a certificate
@@ -128,7 +129,7 @@ func (builder *messageBuilder) SetType(msgType messageType) *messageBuilder {
 	return builder
 }
 
-func (builder *messageBuilder) SetInstanceID(id instanceID) *messageBuilder {
+func (builder *messageBuilder) SetInstanceID(id types.LayerID) *messageBuilder {
 	builder.inner.InstanceID = id
 	return builder
 }
