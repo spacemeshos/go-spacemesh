@@ -19,14 +19,10 @@ var (
 	ErrTimesyncTimeout = errors.New("timesync: timeout")
 )
 
+//go:generate mockgen -package=mocks -destination=./mocks/message_server_mock.go -source=./sync.go MessageServer,Time
+
 type Time interface {
 	Now() time.Time
-}
-
-type systemTime struct{}
-
-func (s systemTime) Now() time.Time {
-	return time.Now()
 }
 
 type MessageServer interface {
@@ -35,7 +31,13 @@ type MessageServer interface {
 }
 
 type PeersProvider interface {
-	SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey)
+	SubscribePeerEvents() (added, expired chan p2pcrypto.PublicKey)
+}
+
+type systemTime struct{}
+
+func (s systemTime) Now() time.Time {
+	return time.Now()
 }
 
 type Request struct {
@@ -47,13 +49,15 @@ type Response struct {
 	Timestamp int64
 }
 
-var DefaultConfig = Config{
-	RoundRetryInterval: 5 * time.Second,
-	RoundInterval:      30 * time.Minute,
-	RoundTimeout:       5 * time.Second,
-	MaxClockOffset:     10 * time.Second,
-	MaxOffsetErrors:    10,
-	RequiredResponses:  3,
+func DefaultConfig() Config {
+	return Config{
+		RoundRetryInterval: 5 * time.Second,
+		RoundInterval:      30 * time.Minute,
+		RoundTimeout:       5 * time.Second,
+		MaxClockOffset:     10 * time.Second,
+		MaxOffsetErrors:    10,
+		RequiredResponses:  3,
+	}
 }
 
 type Config struct {
@@ -65,38 +69,39 @@ type Config struct {
 	RequiredResponses  int
 }
 
-type SyncOption func(*Sync)
+type Option func(*Sync)
 
-func WithTime(t Time) SyncOption {
+func WithTime(t Time) Option {
 	return func(s *Sync) {
 		s.time = t
 	}
 }
 
-func WithContext(ctx context.Context) SyncOption {
+func WithContext(ctx context.Context) Option {
 	return func(s *Sync) {
 		s.ctx = ctx
 	}
 }
 
-func WithLog(lg log.Log) SyncOption {
+func WithLog(lg log.Log) Option {
 	return func(s *Sync) {
 		s.log = lg
 	}
 }
 
-func WithConfig(config Config) SyncOption {
+func WithConfig(config Config) Option {
 	return func(s *Sync) {
 		s.config = config
 	}
 }
 
-func New(srv MessageServer, peers PeersProvider, opts ...SyncOption) *Sync {
+func New(srv MessageServer, peers PeersProvider, opts ...Option) *Sync {
 	sync := &Sync{
 		log:    log.NewNop(),
 		ctx:    context.Background(),
 		time:   systemTime{},
-		config: DefaultConfig,
+		config: DefaultConfig(),
+		srv:    srv,
 	}
 	for _, opt := range opts {
 		opt(sync)
@@ -159,14 +164,19 @@ func (s *Sync) Start() {
 	})
 }
 
-// Stop background workers.
+// Stop background workers. If Sync was created WithContext calling Stop to is not necessary.
+// Sync will exit if parent context will be cancelled.
 func (s *Sync) Stop() {
 	s.cancel()
 }
 
 // Wait will return first error that is returned by background workers.
 func (s *Sync) Wait() error {
-	return s.wg.Wait()
+	err := s.wg.Wait()
+	if errors.Is(err, context.Canceled) {
+		return nil
+	}
+	return err
 }
 
 func (s *Sync) run() error {
@@ -206,11 +216,12 @@ func (s *Sync) run() error {
 					log.Duration("offset", offset),
 					log.Duration("max_offset", s.config.MaxClockOffset),
 				)
+				atomic.StoreUint32(&s.errCnt, 0)
 			}
 			timeout = s.config.RoundInterval
 		} else {
 			s.log.With().Error("failed to fetch offset from peers", log.Err(err))
-			timeout = s.config.RoundTimeout
+			timeout = s.config.RoundRetryInterval
 		}
 		if timer == nil {
 			timer = time.NewTimer(timeout)
@@ -243,8 +254,9 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2pcrypto.PublicK
 	}
 	for _, peer := range prs {
 		wg.Add(1)
-		// TODO(dshulyak) double-check that only one handler can be executed
-		s.srv.SendRequest(ctx, server.RequestTimeSync, buf, peer, func(buf []byte) {
+		// TODO(dshulyak) double-check that only one handler can be executed.
+		// this should exit only if we weren't able to send request to required number of peers
+		if err := s.srv.SendRequest(ctx, server.RequestTimeSync, buf, peer, func(buf []byte) {
 			defer wg.Done()
 			var response Response
 			if err := types.BytesToInterface(buf, &response); err != nil {
@@ -252,7 +264,10 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2pcrypto.PublicK
 				return
 			}
 			responses <- response
-		}, func(error) { wg.Done() })
+		}, func(error) { wg.Done() }); err != nil {
+			return 0, err
+		}
+
 	}
 
 	wg.Wait()
