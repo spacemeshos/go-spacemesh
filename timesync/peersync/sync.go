@@ -126,9 +126,9 @@ func New(srv MessageServer, peers PeersProvider, opts ...Option) *Sync {
 	for _, opt := range opts {
 		opt(sync)
 	}
+	srv.RegisterBytesMsgHandler(server.RequestTimeSync, sync.requestHandler)
 
 	sync.ctx, sync.cancel = context.WithCancel(sync.ctx)
-	srv.RegisterBytesMsgHandler(server.RequestTimeSync, sync.requestHandler)
 	sync.wg, sync.ctx = errgroup.WithContext(sync.ctx)
 	return sync
 }
