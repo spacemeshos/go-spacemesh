@@ -55,7 +55,7 @@ func NodeSimUnitTestConfig() Config {
 		Kappa:                      400000,
 		Q:                          "1/3",
 		RoundsNumber:               2,
-		GracePeriodDurationMs:      100,
+		GracePeriodDurationMs:      150,
 		ProposalDurationMs:         100,
 		FirstVotingRoundDurationMs: 100,
 		VotingRoundDurationMs:      100,
