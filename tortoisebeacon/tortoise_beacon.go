@@ -328,7 +328,7 @@ func (tb *TortoiseBeacon) listenLayers(ctx context.Context) {
 		case <-tb.CloseChannel():
 			return
 		case layer := <-tb.layerTicker:
-			tb.Log.With().Debug("Received tick", layer)
+			tb.Log.With().Info("Received tick", layer)
 
 			go tb.handleLayer(ctx, layer)
 		}
@@ -359,7 +359,7 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 		return
 	}
 
-	tb.Log.With().Debug("Layer is first in epoch, proceeding",
+	tb.Log.With().Info("Layer is first in epoch, proceeding",
 		log.Uint32("layer", layer.Uint32()))
 
 	tb.seenEpochsMu.Lock()
