@@ -1,25 +1,24 @@
-package peersync_test
+package peersync
 
 import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
 	"github.com/stretchr/testify/require"
 )
 
 func TestRound(t *testing.T) {
 	for _, tc := range []struct {
 		desc      string
-		round     peersync.Round
-		responses []peersync.Response
+		round     round
+		responses []Response
 		received  []int64
 		notReady  bool
 		offset    time.Duration
 	}{
 		{
 			desc: "EvenMedian",
-			responses: []peersync.Response{
+			responses: []Response{
 				{Timestamp: 30},
 				{Timestamp: 10},
 				{Timestamp: 20},
@@ -29,7 +28,7 @@ func TestRound(t *testing.T) {
 		},
 		{
 			desc: "OddMedian",
-			responses: []peersync.Response{
+			responses: []Response{
 				{Timestamp: 30},
 				{Timestamp: 10},
 				{Timestamp: 20},
@@ -40,8 +39,8 @@ func TestRound(t *testing.T) {
 		},
 		{
 			desc:  "AdjustedByRTT",
-			round: peersync.Round{Timestamp: 50},
-			responses: []peersync.Response{
+			round: round{Timestamp: 50},
+			responses: []Response{
 				{Timestamp: 100},
 				{Timestamp: 100},
 				{Timestamp: 100},
@@ -51,7 +50,7 @@ func TestRound(t *testing.T) {
 		},
 		{
 			desc: "OneResponse",
-			responses: []peersync.Response{
+			responses: []Response{
 				{Timestamp: 100},
 			},
 			received: []int64{0},
@@ -59,7 +58,7 @@ func TestRound(t *testing.T) {
 		},
 		{
 			desc: "TwoResponses",
-			responses: []peersync.Response{
+			responses: []Response{
 				{Timestamp: 100},
 				{Timestamp: 120},
 			},
@@ -71,8 +70,8 @@ func TestRound(t *testing.T) {
 		},
 		{
 			desc:  "RoundMismatch",
-			round: peersync.Round{ID: 1, RequiredResponses: 2},
-			responses: []peersync.Response{
+			round: round{ID: 1, RequiredResponses: 2},
+			responses: []Response{
 				{Timestamp: 100, ID: 1},
 				{Timestamp: 100, ID: 2},
 			},

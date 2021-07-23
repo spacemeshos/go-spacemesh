@@ -15,21 +15,26 @@ import (
 )
 
 var (
-	ErrPeersNotSynced  = errors.New("timesync: peers are not time synced")
+	// ErrPeersNotSynced returned if system clock is out of sync with peers clock for configured period of time.
+	ErrPeersNotSynced = errors.New("timesync: peers are not time synced")
+	// ErrTimesyncTimeout returned if we weren't able to collect enough clock samples from peers in required time.
 	ErrTimesyncTimeout = errors.New("timesync: timeout")
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/message_server_mock.go -source=./sync.go MessageServer,Time
+//go:generate mockgen -package=mocks -destination=./mocks/message_server_mock.go -source=./sync.go MessageServer,Time,PeersProvider
 
+// Time ...
 type Time interface {
 	Now() time.Time
 }
 
+// MessageServer ...
 type MessageServer interface {
 	SendRequest(context.Context, server.MessageType, []byte, p2pcrypto.PublicKey, func([]byte), func(error)) error
 	RegisterBytesMsgHandler(server.MessageType, func(ctx context.Context, b []byte) []byte)
 }
 
+// PeersProvider ...
 type PeersProvider interface {
 	SubscribePeerEvents() (added, expired chan p2pcrypto.PublicKey)
 }
@@ -40,15 +45,18 @@ func (s systemTime) Now() time.Time {
 	return time.Now()
 }
 
+// Request for time from a peer.
 type Request struct {
 	ID uint64
 }
 
+// Response for time from a peer.
 type Response struct {
 	ID        uint64
 	Timestamp int64
 }
 
+// DefaultConfig for Sync.
 func DefaultConfig() Config {
 	return Config{
 		RoundRetryInterval: 5 * time.Second,
@@ -60,41 +68,48 @@ func DefaultConfig() Config {
 	}
 }
 
+// Config for Sync.
 type Config struct {
-	RoundRetryInterval time.Duration
-	RoundInterval      time.Duration
-	RoundTimeout       time.Duration
-	MaxClockOffset     time.Duration
-	MaxOffsetErrors    int
-	RequiredResponses  int
+	RoundRetryInterval time.Duration `mapstructure:"round-retry-interval"`
+	RoundInterval      time.Duration `mapstructure:"round-interval"`
+	RoundTimeout       time.Duration `mapstructure:"round-timeout"`
+	MaxClockOffset     time.Duration `mapstructure:"max-clock-offset"`
+	MaxOffsetErrors    int           `mapstructure:"max-offset-errors"`
+	RequiredResponses  int           `mapstructure:"required-responses"`
 }
 
+// Option to modify Sync behavior.
 type Option func(*Sync)
 
+// WithTime modifies source of time used in Sync.
 func WithTime(t Time) Option {
 	return func(s *Sync) {
 		s.time = t
 	}
 }
 
+// WithContext modifies parent context that is used for all operations in Sync.
 func WithContext(ctx context.Context) Option {
 	return func(s *Sync) {
 		s.ctx = ctx
 	}
 }
 
+// WithLog modifies Log used in Sync.
 func WithLog(lg log.Log) Option {
 	return func(s *Sync) {
 		s.log = lg
 	}
 }
 
+// WithConfig modifies config used in Sync.
 func WithConfig(config Config) Option {
 	return func(s *Sync) {
 		s.config = config
 	}
 }
 
+// New creates Sync instance and returns pointer.
 func New(srv MessageServer, peers PeersProvider, opts ...Option) *Sync {
 	sync := &Sync{
 		log:    log.NewNop(),
@@ -120,6 +135,7 @@ func New(srv MessageServer, peers PeersProvider, opts ...Option) *Sync {
 	return sync
 }
 
+// Sync manages background worker that compares peers time with system time.
 type Sync struct {
 	errCnt uint32
 
@@ -241,7 +257,7 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2pcrypto.PublicK
 	var (
 		responses = make(chan Response, len(prs))
 		wg        sync.WaitGroup
-		round     = Round{
+		round     = round{
 			ID:                id,
 			Timestamp:         s.time.Now().UnixNano(),
 			RequiredResponses: s.config.RequiredResponses,

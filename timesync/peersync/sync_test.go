@@ -1,4 +1,4 @@
-package peersync_test
+package peersync
 
 import (
 	"context"
@@ -10,18 +10,17 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-type testPeerProvider struct {
-	added, expired chan p2pcrypto.PublicKey
-}
-
-func (pp testPeerProvider) SubscribePeerEvents() (added, expired chan p2pcrypto.PublicKey) {
-	return pp.added, pp.expired
+func defaultPeersProvider(tb testing.TB, added, expired chan p2pcrypto.PublicKey) PeersProvider {
+	tb.Helper()
+	ctrl := gomock.NewController(tb)
+	pp := mocks.NewMockPeersProvider(ctrl)
+	pp.EXPECT().SubscribePeerEvents().AnyTimes().Return(added, expired)
+	return pp
 }
 
 func TestSyncGetOffset(t *testing.T) {
@@ -33,7 +32,7 @@ func TestSyncGetOffset(t *testing.T) {
 	)
 
 	peers := []p2pcrypto.PublicKey{p2pcrypto.NewRandomPubkey(), p2pcrypto.NewRandomPubkey(), p2pcrypto.NewRandomPubkey()}
-	resp := peersync.Response{
+	resp := Response{
 		Timestamp: peerResponse.UnixNano(),
 	}
 	respBuf, err := types.InterfaceToBytes(resp)
@@ -55,8 +54,8 @@ func TestSyncGetOffset(t *testing.T) {
 			).Return(nil)
 			tm.EXPECT().Now().Return(responseReceive)
 		}
-		sync := peersync.New(srv, testPeerProvider{},
-			peersync.WithTime(tm),
+		sync := New(srv, defaultPeersProvider(t, nil, nil),
+			WithTime(tm),
 		)
 		offset, err := sync.GetOffset(context.TODO(), 0, peers)
 		require.NoError(t, err)
@@ -78,11 +77,11 @@ func TestSyncGetOffset(t *testing.T) {
 				},
 			).Return(nil)
 		}
-		sync := peersync.New(srv, testPeerProvider{},
-			peersync.WithTime(tm),
+		sync := New(srv, defaultPeersProvider(t, nil, nil),
+			WithTime(tm),
 		)
 		offset, err := sync.GetOffset(context.TODO(), 0, peers)
-		require.ErrorIs(t, err, peersync.ErrTimesyncTimeout)
+		require.ErrorIs(t, err, ErrTimesyncTimeout)
 		require.Equal(t, time.Duration(0), offset)
 	})
 }
@@ -90,7 +89,7 @@ func TestSyncGetOffset(t *testing.T) {
 func TestSyncTerminateOnError(t *testing.T) {
 	// NOTE(dshulyak) -coverprofile doesn't seem to track code that is executed no in the main goroutine
 
-	config := peersync.DefaultConfig()
+	config := DefaultConfig()
 	config.MaxClockOffset = 1 * time.Second
 	config.MaxOffsetErrors = 1
 	config.RoundInterval = time.Duration(0)
@@ -108,14 +107,12 @@ func TestSyncTerminateOnError(t *testing.T) {
 	srv := mocks.NewMockMessageServer(ctrl)
 	tm := mocks.NewMockTime(ctrl)
 
-	peersProvider := testPeerProvider{
-		added: make(chan p2pcrypto.PublicKey, 3),
-	}
+	added := make(chan p2pcrypto.PublicKey, 3)
 
 	srv.EXPECT().RegisterBytesMsgHandler(gomock.Any(), gomock.Any())
-	sync := peersync.New(srv, peersProvider,
-		peersync.WithTime(tm),
-		peersync.WithConfig(config),
+	sync := New(srv, defaultPeersProvider(t, added, nil),
+		WithTime(tm),
+		WithConfig(config),
 	)
 	tm.EXPECT().Now().Return(roundStartTime)
 	sync.Start()
@@ -124,9 +121,9 @@ func TestSyncTerminateOnError(t *testing.T) {
 		peer := p2pcrypto.NewRandomPubkey()
 		srv.EXPECT().SendRequest(gomock.Any(), server.RequestTimeSync, gomock.Any(), peer, gomock.Any(), gomock.Any()).Do(
 			func(_ context.Context, _ server.MessageType, buf []byte, _ p2pcrypto.PublicKey, handler func([]byte), _ func(error)) {
-				var req peersync.Request
+				var req Request
 				assert.NoError(t, types.BytesToInterface(buf, &req))
-				resp := peersync.Response{
+				resp := Response{
 					ID:        req.ID,
 					Timestamp: peerResponse.UnixNano(),
 				}
@@ -136,7 +133,7 @@ func TestSyncTerminateOnError(t *testing.T) {
 			},
 		).Return(nil)
 		tm.EXPECT().Now().Return(responseReceive)
-		peersProvider.added <- peer
+		added <- peer
 	}
 	errors := make(chan error, 1)
 	go func() {
@@ -144,7 +141,7 @@ func TestSyncTerminateOnError(t *testing.T) {
 	}()
 	select {
 	case err := <-errors:
-		require.ErrorIs(t, err, peersync.ErrPeersNotSynced)
+		require.ErrorIs(t, err, ErrPeersNotSynced)
 	case <-time.After(100 * time.Millisecond):
 		require.FailNow(t, "timed out waiting for sync to fail")
 	}

@@ -10,14 +10,14 @@ type timedResponse struct {
 	receiveTimestamp int64
 }
 
-type Round struct {
+type round struct {
 	ID                uint64
 	Timestamp         int64
 	RequiredResponses int
 	responses         []timedResponse
 }
 
-func (r *Round) AddResponse(resp Response, timestamp int64) {
+func (r *round) AddResponse(resp Response, timestamp int64) {
 	if resp.ID != r.ID {
 		return
 	}
@@ -25,11 +25,11 @@ func (r *Round) AddResponse(resp Response, timestamp int64) {
 		timedResponse{Response: resp, receiveTimestamp: timestamp})
 }
 
-func (r *Round) Ready() bool {
+func (r *round) Ready() bool {
 	return len(r.responses) >= r.RequiredResponses
 }
 
-func (r *Round) Offset() time.Duration {
+func (r *round) Offset() time.Duration {
 	if len(r.responses) == 0 {
 		return 0
 	}
