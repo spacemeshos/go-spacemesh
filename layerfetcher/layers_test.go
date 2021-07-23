@@ -112,9 +112,9 @@ func (l layerDBMock) Get() []types.BlockID                                  { re
 
 type mockFetcher struct{}
 
-func (m mockFetcher) Stop()                                {}
-func (m mockFetcher) Start()                               {}
-func (m mockFetcher) AddDB(_ fetch.Hint, _ database.Store) {}
+func (m mockFetcher) Stop()                                 {}
+func (m mockFetcher) Start()                                {}
+func (m mockFetcher) AddDB(_ fetch.Hint, _ database.Getter) {}
 func (m mockFetcher) GetHash(_ types.Hash32, _ fetch.Hint, _ bool) chan fetch.HashDataPromiseResult {
 	ch := make(chan fetch.HashDataPromiseResult, 1)
 	ch <- fetch.HashDataPromiseResult{
