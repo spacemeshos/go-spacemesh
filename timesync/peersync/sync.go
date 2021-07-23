@@ -112,11 +112,15 @@ func WithConfig(config Config) Option {
 // New creates Sync instance and returns pointer.
 func New(srv MessageServer, peers PeersProvider, opts ...Option) *Sync {
 	sync := &Sync{
-		log:    log.NewNop(),
-		ctx:    context.Background(),
-		time:   systemTime{},
-		config: DefaultConfig(),
-		srv:    srv,
+		log:           log.NewNop(),
+		ctx:           context.Background(),
+		time:          systemTime{},
+		config:        DefaultConfig(),
+		srv:           srv,
+		peersProvider: peers,
+		peersWatcher: peersWatcher{
+			requests: make(chan *waitPeersReq),
+		},
 	}
 	for _, opt := range opts {
 		opt(sync)
@@ -125,13 +129,6 @@ func New(srv MessageServer, peers PeersProvider, opts ...Option) *Sync {
 	sync.ctx, sync.cancel = context.WithCancel(sync.ctx)
 	srv.RegisterBytesMsgHandler(server.RequestTimeSync, sync.requestHandler)
 	sync.wg, sync.ctx = errgroup.WithContext(sync.ctx)
-
-	added, expired := peers.SubscribePeerEvents()
-	sync.peersWatcher = peersWatcher{
-		added:    added,
-		expired:  expired,
-		requests: make(chan *waitPeersReq),
-	}
 	return sync
 }
 
@@ -139,11 +136,12 @@ func New(srv MessageServer, peers PeersProvider, opts ...Option) *Sync {
 type Sync struct {
 	errCnt uint32
 
-	config       Config
-	log          log.Log
-	srv          MessageServer
-	time         Time
-	peersWatcher peersWatcher
+	config        Config
+	log           log.Log
+	srv           MessageServer
+	time          Time
+	peersProvider PeersProvider
+	peersWatcher  peersWatcher
 
 	once   sync.Once
 	wg     *errgroup.Group
@@ -175,7 +173,8 @@ func (s *Sync) Start() {
 			return s.run()
 		})
 		s.wg.Go(func() error {
-			return s.peersWatcher.run(s.ctx)
+			added, expired := s.peersProvider.SubscribePeerEvents()
+			return s.peersWatcher.run(s.ctx, added, expired)
 		})
 	})
 }

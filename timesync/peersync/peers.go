@@ -12,8 +12,7 @@ type waitPeersReq struct {
 }
 
 type peersWatcher struct {
-	added, expired chan p2pcrypto.PublicKey
-	requests       chan *waitPeersReq
+	requests chan *waitPeersReq
 }
 
 func (p *peersWatcher) waitPeers(ctx context.Context, n int) ([]p2pcrypto.PublicKey, error) {
@@ -31,7 +30,7 @@ func (p *peersWatcher) waitPeers(ctx context.Context, n int) ([]p2pcrypto.Public
 	}
 }
 
-func (p *peersWatcher) run(ctx context.Context) error {
+func (p *peersWatcher) run(ctx context.Context, added, expired chan p2pcrypto.PublicKey) error {
 
 	var (
 		peersMap = map[p2pcrypto.PublicKey]struct{}{}
@@ -42,7 +41,7 @@ func (p *peersWatcher) run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case peer := <-p.added:
+		case peer := <-added:
 			peersMap[peer] = struct{}{}
 			for req := range requests {
 				if len(peersMap) >= req.min {
@@ -50,7 +49,7 @@ func (p *peersWatcher) run(ctx context.Context) error {
 					delete(requests, req)
 				}
 			}
-		case peer := <-p.expired:
+		case peer := <-expired:
 			delete(peersMap, peer)
 		case req := <-p.requests:
 			if len(peersMap) >= req.min {

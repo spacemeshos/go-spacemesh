@@ -704,10 +704,10 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 			"/peersync/1.0/",
 			app.Config.TIME.Peersync.RoundTimeout,
 			make(chan service.DirectMessage, app.Config.P2P.BufferSize),
-			app.addLogger("timesync", lg),
+			app.addLogger(TimeSyncLogger, lg),
 		),
 		swarm,
-		peersync.WithLog(app.addLogger("timesync", lg)),
+		peersync.WithLog(app.addLogger(TimeSyncLogger, lg)),
 		peersync.WithConfig(app.Config.TIME.Peersync),
 	)
 
