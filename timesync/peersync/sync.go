@@ -215,7 +215,6 @@ func (s *Sync) run() error {
 		rctx, cancel := context.WithTimeout(s.ctx, s.config.RoundTimeout)
 		offset, err := s.GetOffset(rctx, round, prs)
 		cancel()
-		round++
 
 		var timeout time.Duration
 		if err == nil {
@@ -241,6 +240,8 @@ func (s *Sync) run() error {
 			s.log.With().Error("failed to fetch offset from peers", log.Err(err))
 			timeout = s.config.RoundRetryInterval
 		}
+
+		round++
 		if timer == nil {
 			timer = time.NewTimer(timeout)
 		} else {
@@ -258,8 +259,9 @@ func (s *Sync) run() error {
 func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2pcrypto.PublicKey) (time.Duration, error) {
 	var (
 		responses = make(chan Response, len(prs))
-		wg        sync.WaitGroup
-		round     = round{
+		// TODO(dshulyak) consider replacing wg with a loop with select on ctx
+		wg    sync.WaitGroup
+		round = round{
 			ID:                id,
 			Timestamp:         s.time.Now().UnixNano(),
 			RequiredResponses: s.config.RequiredResponses,
