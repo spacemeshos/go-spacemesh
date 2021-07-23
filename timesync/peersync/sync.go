@@ -210,7 +210,6 @@ func (s *Sync) run() error {
 			log.Uint64("round", round),
 			log.Int("peers_count", len(prs)),
 			log.Uint32("errors_count", atomic.LoadUint32(&s.errCnt)),
-			log.Time("system_time", s.time.Now()),
 		)
 		rctx, cancel := context.WithTimeout(s.ctx, s.config.RoundTimeout)
 		offset, err := s.GetOffset(rctx, round, prs)
@@ -224,7 +223,6 @@ func (s *Sync) run() error {
 					log.Uint64("round", round),
 					log.Duration("offset", offset),
 					log.Duration("max_offset", s.config.MaxClockOffset),
-					log.Time("system_time", s.time.Now()),
 				)
 				if atomic.AddUint32(&s.errCnt, 1) == uint32(s.config.MaxOffsetErrors) {
 					return ErrPeersNotSynced
@@ -234,7 +232,6 @@ func (s *Sync) run() error {
 					log.Uint64("round", round),
 					log.Duration("offset", offset),
 					log.Duration("max_offset", s.config.MaxClockOffset),
-					log.Time("system_time", s.time.Now()),
 				)
 				atomic.StoreUint32(&s.errCnt, 0)
 			}
