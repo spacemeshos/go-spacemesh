@@ -209,7 +209,6 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 }
 
 func TestATX_ActiveSetForLayerView(t *testing.T) {
-	rand.Seed(1234573298579)
 	atxdb, layers, _ := getAtxDb(t.Name())
 	blocksMap := make(map[types.BlockID]struct{})
 	id1 := types.NodeID{Key: rndStr(), VRFPublicKey: []byte("anton")}

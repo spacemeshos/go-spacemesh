@@ -79,7 +79,6 @@ func TestMeshDB_AddBlock(t *testing.T) {
 }
 
 func chooseRandomPattern(blocksInLayer int, patternSize int) []int {
-	rand.Seed(time.Now().UnixNano())
 	p := rand.Perm(blocksInLayer)
 	indexes := make([]int, 0, patternSize)
 	for _, r := range p[:patternSize] {
