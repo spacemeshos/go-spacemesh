@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -19,7 +18,6 @@ import (
 )
 
 func randomHash() types.Hash32 {
-	rand.Seed(time.Now().UnixNano())
 	b := make([]byte, 8)
 	_, err := rand.Read(b)
 	// Note that Err == nil only if we read len(b) bytes.
@@ -27,6 +25,17 @@ func randomHash() types.Hash32 {
 		return types.Hash32{}
 	}
 	return types.CalcHash32(b)
+}
+
+// RandomBlockID generates random block id
+func randomBlockID() types.BlockID {
+	b := make([]byte, 8)
+	_, err := rand.Read(b)
+	// Note that err == nil only if we read len(b) bytes.
+	if err != nil {
+		return types.BlockID{}
+	}
+	return types.BlockID(types.CalcHash32(b).ToHash20())
 }
 
 type mockNet struct {
@@ -161,8 +170,8 @@ func TestLayerHashBlocksReqReceiver(t *testing.T) {
 	db := newLayerDBMock()
 	l := NewMockLogic(newMockNet(), db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, log.NewDefault("layerFetch"))
 	h := randomHash()
-	db.layers[h] = []types.BlockID{types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID()}
-	db.vectors[h] = []types.BlockID{types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID()}
+	db.layers[h] = []types.BlockID{randomBlockID(), randomBlockID(), randomBlockID(), randomBlockID()}
+	db.vectors[h] = []types.BlockID{randomBlockID(), randomBlockID(), randomBlockID()}
 
 	outB := l.layerHashBlocksReqReceiver(context.TODO(), h.Bytes())
 
@@ -315,8 +324,8 @@ func TestPollLayerHash_AllDifferent(t *testing.T) {
 
 func generateLayerBlocks() []byte {
 	lb := layerBlocks{
-		Blocks:          []types.BlockID{types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID()},
-		VerifyingVector: []types.BlockID{types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID()},
+		Blocks:          []types.BlockID{randomBlockID(), randomBlockID(), randomBlockID(), randomBlockID()},
+		VerifyingVector: []types.BlockID{randomBlockID(), randomBlockID(), randomBlockID()},
 	}
 	out, _ := types.InterfaceToBytes(lb)
 	return out

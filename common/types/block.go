@@ -8,12 +8,10 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"time"
 
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -444,16 +442,4 @@ func SortBlockIDs(ids []BlockID) []BlockID {
 func SortBlocks(ids []*Block) []*Block {
 	sort.Slice(ids, func(i, j int) bool { return ids[i].ID().Compare(ids[j].ID()) })
 	return ids
-}
-
-// RandomBlockID generates random block id
-func RandomBlockID() BlockID {
-	rand.Seed(time.Now().UnixNano())
-	b := make([]byte, 8)
-	_, err := rand.Read(b)
-	// Note that err == nil only if we read len(b) bytes.
-	if err != nil {
-		return BlockID{}
-	}
-	return BlockID(CalcHash32(b).ToHash20())
 }
