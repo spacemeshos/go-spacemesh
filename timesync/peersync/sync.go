@@ -3,6 +3,7 @@ package peersync
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -269,6 +270,7 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2pcrypto.PublicK
 	if err != nil {
 		s.log.With().Panic("can't encode request to bytes", log.Err(err))
 	}
+	var errCnt int
 	for _, peer := range prs {
 		wg.Add(1)
 		// TODO(dshulyak) double-check that only one handler can be executed.
@@ -282,9 +284,12 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2pcrypto.PublicK
 			}
 			responses <- response
 		}, func(error) { wg.Done() }); err != nil {
-			return 0, err
+			wg.Done()
+			errCnt++
 		}
-
+		if len(prs)-errCnt < s.config.RequiredResponses {
+			return 0, fmt.Errorf("failed to send requests to %d peers", errCnt)
+		}
 	}
 
 	wg.Wait()
