@@ -147,6 +147,7 @@ type LoggerConfig struct {
 	NipstBuilderLoggerLevel   string `mapstructure:"nipst"`
 	AtxBuilderLoggerLevel     string `mapstructure:"atx-builder"`
 	HareBeaconLoggerLevel     string `mapstructure:"hare-beacon"`
+	TimeSyncLoggerLevel       string `mapstructure:"timesync"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node

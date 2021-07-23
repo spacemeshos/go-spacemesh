@@ -38,6 +38,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -46,6 +47,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
+	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
@@ -93,6 +95,7 @@ const (
 	GossipListener       = "gossipListener"
 	Fetcher              = "fetcher"
 	LayerFetcher         = "layerFetcher"
+	TimeSyncLogger       = "timesync"
 )
 
 // Cmd is the cobra wrapper for the node, that allows adding parameters to it
@@ -194,6 +197,7 @@ type SpacemeshApp struct {
 	log            log.Log
 	txPool         *state.TxMempool
 	layerFetch     *layerfetcher.Logic
+	ptimesync      *peersync.Sync
 	loggers        map[string]*zap.AtomicLevel
 	term           chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
 	started        chan struct{} // this channel is closed once the app has finished starting
@@ -431,6 +435,8 @@ func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.NipstBuilderLoggerLevel))
 	case AtxBuilderLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxBuilderLoggerLevel))
+	case TimeSyncLogger:
+		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TimeSyncLoggerLevel))
 	default:
 		lvl.SetLevel(log.Level())
 	}
@@ -691,6 +697,19 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	app.atxDb = atxdb
 	app.layerFetch = layerFetch
 	app.tBeacon = tBeacon
+	app.ptimesync = peersync.New(
+		// TODO(dshulyak) move NewMsgServer initializer to peersync.New
+		server.NewMsgServer(ctx,
+			swarm.(server.Service), // FIXME service.Service should include server.Service interface
+			"/peersync/1.0/",
+			app.Config.TIME.Peersync.RoundTimeout,
+			make(chan service.DirectMessage, app.Config.P2P.BufferSize),
+			app.addLogger("timesync", lg),
+		),
+		swarm,
+		peersync.WithLog(app.addLogger("timesync", lg)),
+		peersync.WithConfig(app.Config.TIME.Peersync),
+	)
 
 	return nil
 }
@@ -767,6 +786,7 @@ func (app *SpacemeshApp) startServices(ctx context.Context, logger log.Log) erro
 	}
 	app.atxBuilder.Start(ctx)
 	app.clock.StartNotifying()
+	app.ptimesync.Start()
 	go app.checkTimeDrifts()
 	return nil
 }
@@ -911,6 +931,9 @@ func (app *SpacemeshApp) stopServices() {
 		app.log.Info("closing mesh")
 		app.mesh.Close()
 	}
+	app.ptimesync.Stop()
+	_ = app.ptimesync.Wait()
+	app.log.Debug("peer timesync stopped")
 
 	events.CloseEventReporter()
 	events.CloseEventPubSub()
@@ -1130,12 +1153,22 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) error {
 		Msg:   "node is shutting down",
 		Level: zapcore.InfoLevel,
 	})
+	syncErr := make(chan error, 1)
+	go func() {
+		syncErr <- app.ptimesync.Wait()
+		// if nil node was already stopped
+		if syncErr != nil {
+			cmdp.Cancel()
+		}
+	}()
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	select {
 	case <-ctx.Done():
 		return nil
 	case err := <-pprofErr:
+		return err
+	case err := <-syncErr:
 		return err
 	}
 }
