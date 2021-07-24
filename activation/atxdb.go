@@ -734,7 +734,7 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 	atx.CalcAndSetID()
 	logger := db.log.WithContext(ctx).WithFields(atx.ID())
 
-	logger.With().Info("got new atx", atx.Fields(len(data))...)
+	logger.With().Info(fmt.Sprintf("got new atx %v", atx.ID().ShortString()), atx.Fields(len(data))...)
 
 	if atx.NIPost == nil {
 		return fmt.Errorf("nil nipst in gossip for atx %s", atx.ShortString())

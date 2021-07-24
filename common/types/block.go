@@ -8,12 +8,10 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"time"
 
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -343,6 +341,26 @@ func (b *Block) MinerID() *signing.PublicKey {
 	return b.minerID
 }
 
+// DBBlock is a Block structure as it is stored in DB.
+type DBBlock struct {
+	MiniBlock
+	// NOTE(dshulyak) this is a bit redundant to store ID here as well but less likely
+	// to break if in future key for database will be changed
+	ID        BlockID
+	Signature []byte
+	MinerID   []byte // derived from signature when block is received
+}
+
+// ToBlock create Block instance from data that is stored locally.
+func (b *DBBlock) ToBlock() *Block {
+	return &Block{
+		id:        b.ID,
+		MiniBlock: b.MiniBlock,
+		Signature: b.Signature,
+		minerID:   signing.NewPublicKey(b.MinerID),
+	}
+}
+
 // BlockIDs returns a slice of BlockIDs corresponding to the given blocks.
 func BlockIDs(blocks []*Block) []BlockID {
 	ids := make([]BlockID, 0, len(blocks))
@@ -444,16 +462,4 @@ func SortBlockIDs(ids []BlockID) []BlockID {
 func SortBlocks(ids []*Block) []*Block {
 	sort.Slice(ids, func(i, j int) bool { return ids[i].ID().Compare(ids[j].ID()) })
 	return ids
-}
-
-// RandomBlockID generates random block id
-func RandomBlockID() BlockID {
-	rand.Seed(time.Now().UnixNano())
-	b := make([]byte, 8)
-	_, err := rand.Read(b)
-	// Note that err == nil only if we read len(b) bytes.
-	if err != nil {
-		return BlockID{}
-	}
-	return BlockID(CalcHash32(b).ToHash20())
 }

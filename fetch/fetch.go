@@ -62,7 +62,7 @@ var ErrExceedMaxRetries = errors.New("fetch failed after max retries for request
 type Fetcher interface {
 	GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashDataPromiseResult
 	GetHashes(hash []types.Hash32, hint Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult
-	AddDB(hint Hint, db database.Store)
+	AddDB(hint Hint, db database.Getter)
 	Stop()
 	Start()
 }
@@ -95,8 +95,13 @@ type requestBatch struct {
 	Requests []requestMessage
 }
 
+type batchInfo struct {
+	requestBatch
+	peer peers.Peer
+}
+
 // SetID calculates the hash of all requests and sets it as this batches ID
-func (b *requestBatch) SetID() {
+func (b *batchInfo) SetID() {
 	bts, err := types.InterfaceToBytes(b.Requests)
 	if err != nil {
 		return
@@ -104,8 +109,8 @@ func (b *requestBatch) SetID() {
 	b.ID = types.CalcHash32(bts)
 }
 
-// ToMap converts the array of requests to map so it can be easily invalidated
-func (b requestBatch) ToMap() map[types.Hash32]requestMessage {
+//ToMap converts the array of requests to map so it can be easily invalidated
+func (b batchInfo) ToMap() map[types.Hash32]requestMessage {
 	m := make(map[types.Hash32]requestMessage)
 	for _, r := range b.Requests {
 		m[r.Hash] = r
@@ -132,10 +137,11 @@ type Config struct {
 // DefaultConfig is the default config for the fetch component
 func DefaultConfig() Config {
 	return Config{
-		BatchTimeout:         50,
-		MaxRetiresForPeer:    2,
-		BatchSize:            20,
-		RequestTimeout:       10,
+		BatchTimeout:      50,
+		MaxRetiresForPeer: 2,
+		BatchSize:         20,
+		RequestTimeout:    10,
+		// TODO change it back to 20
 		MaxRetriesForRequest: 2000,
 	}
 }
@@ -165,7 +171,6 @@ func GetRandomPeer(peers []peers.Peer) peers.Peer {
 	if len(peers) == 0 {
 		log.Panic("cannot send fetch - no peers found")
 	}
-	rand.Seed(time.Now().Unix()) // initialize global pseudo random generator
 	return peers[rand.Intn(len(peers))]
 }
 
@@ -185,13 +190,13 @@ type network interface {
 type Fetch struct {
 	cfg Config
 	log log.Log
-	dbs map[Hint]database.Store
+	dbs map[Hint]database.Getter
 	// activeRequests contains requests that are not processed
 	activeRequests map[types.Hash32][]*request
 	// pendingRequests contains requests that have been processed and are waiting for responses
 	pendingRequests map[types.Hash32][]*request
 	// activeBatches contains batches of requests in pendingRequests.
-	activeBatches        map[types.Hash32]requestBatch
+	activeBatches        map[types.Hash32]batchInfo
 	net                  network
 	requestReceiver      chan request
 	batchRequestReceiver chan []request
@@ -212,14 +217,14 @@ func NewFetch(ctx context.Context, cfg Config, network service.Service, logger l
 	f := &Fetch{
 		cfg:             cfg,
 		log:             logger,
-		dbs:             make(map[Hint]database.Store),
+		dbs:             make(map[Hint]database.Getter),
 		activeRequests:  make(map[types.Hash32][]*request),
 		pendingRequests: make(map[types.Hash32][]*request),
 		net:             srv,
 		requestReceiver: make(chan request),
 		batchTimeout:    time.NewTicker(time.Millisecond * time.Duration(cfg.BatchTimeout)),
 		stop:            make(chan struct{}),
-		activeBatches:   make(map[types.Hash32]requestBatch),
+		activeBatches:   make(map[types.Hash32]batchInfo),
 		doneChan:        make(chan struct{}),
 	}
 
@@ -270,7 +275,7 @@ func (f *Fetch) stopped() bool {
 
 // AddDB adds a DB with corresponding hint
 // all network peersProvider will be able to query this DB
-func (f *Fetch) AddDB(hint Hint, db database.Store) {
+func (f *Fetch) AddDB(hint Hint, db database.Getter) {
 	f.dbLock.Lock()
 	f.dbs[hint] = db
 	f.dbLock.Unlock()
@@ -440,7 +445,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 		if f.stopped() {
 			return
 		}
-		f.log.Warning("%v hash was not found in response %v", batchMap[h].Hint, h.ShortString())
+		f.log.Warning("%v hash %v was not found in response from peer %v", batchMap[h].Hint, h.ShortString(), batch.peer)
 		f.activeReqM.Lock()
 		reqs := f.pendingRequests[h]
 		invalidatedRequests := 0
@@ -499,7 +504,7 @@ func (f *Fetch) requestHashBatchFromPeers() {
 // sendBatch dispatches batched request messages
 func (f *Fetch) sendBatch(requests []requestMessage) {
 	// build list of batch messages
-	var batch requestBatch
+	var batch batchInfo
 	batch.Requests = requests
 	batch.SetID()
 
@@ -512,20 +517,25 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 		f.handleHashError(batch.ID, err)
 	}
 
-	bytes, err := types.InterfaceToBytes(&batch)
+	bytes, err := types.InterfaceToBytes(&batch.requestBatch)
 	if err != nil {
 		f.handleHashError(batch.ID, err)
 	}
 	// try sending batch to some random peer
 	retries := 0
+	var p peers.Peer
 	for {
 		if f.stopped() {
 			return
 		}
 
 		// get random peer
-		p := GetRandomPeer(f.net.GetPeers())
+		p = GetRandomPeer(f.net.GetPeers())
 		f.log.Debug("sending request batch %v items %v peer %v", batch.ID.Hex(), len(batch.Requests), p)
+		batch.peer = p
+		f.activeBatchM.Lock()
+		f.activeBatches[batch.ID] = batch
+		f.activeBatchM.Unlock()
 		err := f.net.SendRequest(context.TODO(), server.Fetch, bytes, p, f.receiveResponse, timeoutFunc)
 		// if call succeeded, continue to other requests
 		if err != nil {
@@ -534,12 +544,11 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 				f.handleHashError(batch.ID, ErrCouldNotSend(fmt.Errorf("could not send message: %w", err)))
 				break
 			}
-			// todo: mark number of fails per peer to make it low priority
+			//todo: mark number of fails per peer to make it low priority
 			f.log.Warning("could not send message to peer %v, retrying, retries %v", p, retries)
 		} else {
 			break
 		}
-
 	}
 }
 

@@ -490,18 +490,18 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		return err
 	}
 
-	b.log.Event().Info("atx published", atx.Fields(size)...)
+	b.log.Event().Info(fmt.Sprintf("atx published %v", atx.ID().ShortString()), atx.Fields(size)...)
 	events.ReportAtxCreated(true, uint32(b.currentEpoch()), atx.ShortString())
 
 	select {
 	case <-atxReceived:
-		b.log.With().Info("received atx in db", atx.ID())
+		b.log.With().Info(fmt.Sprintf("received atx in db %v", atx.ID().ShortString()), atx.ID())
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer()):
 		syncedCh := make(chan struct{})
 		b.syncer.RegisterChForSynced(ctx, syncedCh)
 		select {
 		case <-atxReceived:
-			b.log.With().Info("received atx in db (in the last moment)", atx.ID())
+			b.log.With().Info(fmt.Sprintf("received atx in db %v (in the last moment)", atx.ID().ShortString()), atx.ID())
 		case <-syncedCh: // ensure we've seen all blocks before concluding that the ATX was lost
 			b.discardChallenge()
 			return fmt.Errorf("%w: target epoch has passed", ErrATXChallengeExpired)
