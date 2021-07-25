@@ -56,9 +56,11 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 		r.NoError(err)
 	}()
 
+	tempdir := t.TempDir()
+
 	// setup spacemesh app
 	app := NewSpacemeshApp()
-	app.Config.Smeshing.Opts.DataDir = "tmp"
+	app.Config.SMESHING.Opts.DataDir = tempdir
 	app.log = log.NewDefault("logger")
 
 	// Create new identity.
@@ -558,7 +560,8 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	cfg := getTestDefaultConfig(1)
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	assert.NoError(t, err)
-	app, err := InitSingleInstance(*cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(), poetHarness.HTTPPoetClient, clock, localNet)
+	edSgn := signing.NewEdSigner()
+	app, err := InitSingleInstance(*cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(), poetHarness.HTTPPoetClient, clock, localNet, edSgn)
 
 	//app := NewSpacemeshApp()
 

@@ -69,7 +69,7 @@ func (a mockActivationDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeade
 				StartTick:  0,
 				EndTick:    1,
 			},
-			Space: defaultAtxWeight,
+			NumUnits: defaultAtxWeight,
 		}
 		atxHeader.SetID(&id)
 		return atxHeader, nil

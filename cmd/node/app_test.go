@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/spacemeshos/amcl"
 	"github.com/spacemeshos/post/initialization"
 	"io"
 	"io/ioutil"
@@ -68,13 +67,13 @@ func Test_PoETHarnessSanity(t *testing.T) {
 	require.NotNil(t, h)
 }
 
-func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.HTTPPoetClient, clock TickProvider, network network) {
+func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.HTTPPoetClient, clock TickProvider, network network) {
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := storeFormat + string(name)
 		database.SwitchCreationContext(dbStorepath, string(name))
 		edSgn := signing.NewEdSigner()
-		smApp, err := InitSingleInstance(*cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, network)
+		smApp, err := InitSingleInstance(*cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, network, edSgn)
 		suite.NoError(err)
 		suite.apps = append(suite.apps, smApp)
 		name++
@@ -129,8 +128,6 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}()
 
 	rolacle := eligibility.New()
-	//MERGE FIX
-	//rng := BLS381.DefaultSeed()
 
 	gTime, err := time.Parse(time.RFC3339, genesisTime)
 	if err != nil {
@@ -196,13 +193,10 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		}
 		suite.validateBlocksAndATXs(types.NewLayerID(numberOfEpochs * suite.apps[0].Config.LayersPerEpoch).Sub(1))
 		oldRoot = suite.apps[0].state.GetStateRoot()
-		edSgn := *suite.apps[0].edSgn // MERGE FIX -- EDSIGN WASN'T PREVIOUSLY IN THE LOOP CLAUSE
 	}()
 
 	// this tests loading of previous state, maybe it's not the best place to put this here...
-	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, path+"a", rolacle, poetHarness.HTTPPoetClient, clock, net)
-	//MERGE FIX
-	//smApp, err := InitSingleInstance(*cfg, 0, genesisTime, rng, path+"a", rolacle, poetHarness.HTTPPoetClient, clock, net, &edSgn)
+	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, path+"a", rolacle, poetHarness.HTTPPoetClient, clock, net, signing.NewEdSigner())
 	assert.NoError(suite.T(), err)
 	// test that loaded root is equal
 	assert.Equal(suite.T(), oldRoot, smApp.state.GetStateRoot())
@@ -357,7 +351,7 @@ func (suite *AppTestSuite) healingWeakcoinTester() {
 func configuredTotalWeight(apps []*SpacemeshApp) uint64 {
 	expectedTotalWeight := uint64(0)
 	for _, app := range apps {
-		expectedTotalWeight += app.Config.SpaceToCommit
+		expectedTotalWeight += uint64(app.Config.SMESHING.Opts.NumUnits)
 	}
 	return expectedTotalWeight
 }
@@ -512,7 +506,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	blocksPerEpochTarget := uint32(layerAvgSize) * layersPerEpoch
 	expectedBlocksPerEpoch := 0
 	for _, app := range suite.apps {
-		expectedBlocksPerEpoch += max(int(blocksPerEpochTarget)*int(app.Config.SpaceToCommit)/int(expectedEpochWeight), 1)
+		expectedBlocksPerEpoch += max(int(blocksPerEpochTarget)*int(app.Config.SMESHING.Opts.NumUnits)/int(expectedEpochWeight), 1)
 	}
 
 	expectedTotalBlocks := (totalEpochs - 2) * expectedBlocksPerEpoch
@@ -609,21 +603,19 @@ func TestShutdown(t *testing.T) {
 	smApp := NewSpacemeshApp()
 	genesisTime := time.Now().Add(time.Second * 10)
 
-	tempdir, _ := ioutil.TempDir("", "sm-test-post")
-	smApp.Config.POST = activation.DefaultConfig()
-	smApp.Config.POST.DataDir = tempdir
 	smApp.Config.POST.BitsPerLabel = 8
 	smApp.Config.POST.LabelsPerUnit = 1 << 10
-	smApp.Config.PostInitOpts = activation.DefaultPostInitOps()
-	smApp.Config.PostInitOpts.DataDir = tempdir
-	smApp.Config.PostInitOpts.ComputeProviderID = int(initialization.CPUProviderID())
+
+	smApp.Config.SMESHING.Start = true
+	smApp.Config.SMESHING.CoinbaseAccount = "0x123"
+	smApp.Config.SMESHING.Opts.DataDir, _ = ioutil.TempDir("", "sm-test-post")
+	smApp.Config.SMESHING.Opts.ComputeProviderID = int(initialization.CPUProviderID())
 
 	smApp.Config.HARE.N = 5
 	smApp.Config.HARE.F = 2
 	smApp.Config.HARE.RoundDuration = 3
 	smApp.Config.HARE.WakeupDelta = 5
 	smApp.Config.HARE.ExpectedLeaders = 5
-	smApp.Config.CoinbaseAccount = "0x123"
 	smApp.Config.GoldenATXID = "0x5678"
 	smApp.Config.LayerAvgSize = 5
 	smApp.Config.LayersPerEpoch = 3
@@ -634,7 +626,6 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.HareEligibility.ConfidenceParam = 3
 	smApp.Config.HareEligibility.EpochOffset = 0
 	smApp.Config.TortoiseBeacon = tortoisebeacon.TestConfig()
-	smApp.Config.StartSmeshing = true
 
 	smApp.Config.FETCH.RequestTimeout = 1
 	smApp.Config.FETCH.BatchTimeout = 1

@@ -27,8 +27,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/post/initialization"
-	"github.com/spacemeshos/post/shared"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -44,8 +42,9 @@ import (
 )
 
 const (
-	numLabels        = 8826949
-	labelSize        = 8
+	labelsPerUnit    = 2048
+	bitsPerLabel     = 8
+	numUnits         = 2
 	defaultGasLimit  = 10
 	defaultFee       = 1
 	genTimeUnix      = 1000000
@@ -120,14 +119,14 @@ func init() {
 func NewNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
 	return &types.NIPost{
 		Challenge: challenge,
-		PoST: &types.PoST{
+		Post: &types.Post{
 			Nonce:   0,
 			Indices: []byte(nil),
 		},
-		PoSTMetadata: &types.PoSTMetadata{
-			Challenge: poetRef,
-			NumLabels: numLabels,
-			LabelSize: labelSize,
+		PostMetadata: &types.PostMetadata{
+			Challenge:     poetRef,
+			LabelsPerUnit: labelsPerUnit,
+			BitsPerLabel:  bitsPerLabel,
 		},
 	}
 }
@@ -371,7 +370,7 @@ func newAtx(challenge types.NIPostChallenge, nipost *types.NIPost, coinbase type
 			ActivationTxHeader: &types.ActivationTxHeader{
 				NIPostChallenge: challenge,
 				Coinbase:        coinbase,
-				Space:           100, //commitmentSize, // MERGE FIX
+				NumUnits:        numUnits,
 			},
 			NIPost: nipost,
 		},
@@ -384,41 +383,50 @@ func newAtx(challenge types.NIPostChallenge, nipost *types.NIPost, coinbase type
 type PostAPIMock struct{}
 
 // A compile time check to ensure that PostAPIMock fully implements the PostAPI interface.
-var _ api.PostAPI = (*PostAPIMock)(nil)
+var _ api.PostSetupAPI = (*PostAPIMock)(nil)
 
-func (*PostAPIMock) PostStatus() (*activation.SessionStatus, error) {
-	return &activation.SessionStatus{}, nil
+func (*PostAPIMock) Status() *activation.PostSetupStatus {
+	return &activation.PostSetupStatus{}
 }
 
-func (*PostAPIMock) PostComputeProviders() []initialization.ComputeProvider {
+func (p *PostAPIMock) StatusChan() <-chan *activation.PostSetupStatus {
+	ch := make(chan *activation.PostSetupStatus, 1)
+	ch <- p.Status()
+	close(ch)
+
+	return ch
+}
+
+func (p *PostAPIMock) ComputeProviders() []activation.PostSetupComputeProvider {
 	return nil
 }
 
-func (*PostAPIMock) CreatePostData(options *activation.PoSTSetupOpts) (chan struct{}, error) {
+func (p *PostAPIMock) Benchmark(activation.PostSetupComputeProvider) (int, error) {
+	return 0, nil
+}
+
+func (p *PostAPIMock) StartSession(opts activation.PostSetupOpts) (chan struct{}, error) {
 	return nil, nil
 }
 
-func (*PostAPIMock) StopPostDataCreationSession(bool) error {
+func (p *PostAPIMock) StopSession(deleteFiles bool) error {
 	return nil
 }
 
-func (*PostAPIMock) PostDataCreationProgressStream() <-chan *activation.SessionStatus {
-	c := make(chan *activation.SessionStatus, 1)
-	c <- &activation.SessionStatus{}
-	close(c)
-	return c
+func (p *PostAPIMock) GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error) {
+	return &types.Post{}, &types.PostMetadata{}, nil
 }
 
-func (*PostAPIMock) InitCompleted() (chan struct{}, bool) {
-	return nil, false
-}
-
-func (*PostAPIMock) GenerateProof(challenge []byte) (*types.PoST, *types.PoSTMetadata, error) {
-	return nil, nil, nil
-}
-
-func (*PostAPIMock) LastErr() error {
+func (p *PostAPIMock) LastError() error {
 	return nil
+}
+
+func (p *PostAPIMock) LastOpts() *activation.PostSetupOpts {
+	return &activation.PostSetupOpts{}
+}
+
+func (p *PostAPIMock) Config() activation.PostConfig {
+	return activation.PostConfig{}
 }
 
 // SmeshingAPIMock is a mock for Smeshing API.
@@ -431,16 +439,16 @@ func (*SmeshingAPIMock) Smeshing() bool {
 	return false
 }
 
-func (*SmeshingAPIMock) StartSmeshing(*activation.PoSTSetupOpts, types.Address) error {
+func (*SmeshingAPIMock) StartSmeshing(ctx context.Context, coinbase types.Address, opts activation.PostSetupOpts) error {
+	return nil
+}
+
+func (*SmeshingAPIMock) StopSmeshing(bool) error {
 	return nil
 }
 
 func (*SmeshingAPIMock) SmesherID() types.NodeID {
 	return nodeID
-}
-
-func (*SmeshingAPIMock) StopSmeshing(bool) error {
-	return nil
 }
 
 func (*SmeshingAPIMock) Coinbase() types.Address {
@@ -1097,17 +1105,20 @@ func TestSmesherService(t *testing.T) {
 		run  func(*testing.T)
 	}{
 		{"IsSmeshing", func(t *testing.T) {
-			//res, err := c.IsSmeshing(context.Background(), &empty.Empty{}) // MERGE FIX
-			_, err := c.IsSmeshing(context.Background(), &empty.Empty{})
+			res, err := c.IsSmeshing(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
-			//			require.True(t, res.IsSmeshing, "expected IsSmeshing to be true")
+			require.False(t, res.IsSmeshing, "expected IsSmeshing to be false")
 		}},
 		{"StartSmeshingMissingArgs", func(t *testing.T) {
 			_, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{})
 			require.Equal(t, codes.InvalidArgument, status.Code(err))
 		}},
 		{"StartSmeshing", func(t *testing.T) {
-			opts := &pb.PostInitOpts{}
+			opts := &pb.PostSetupOpts{}
+			opts.DataDir = t.TempDir()
+			opts.NumUnits = 1
+			opts.NumFiles = 1
+
 			coinbase := &pb.AccountId{Address: addr1.Bytes()}
 
 			res, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
@@ -1157,12 +1168,12 @@ func TestSmesherService(t *testing.T) {
 			statusCode := status.Code(err)
 			require.Equal(t, codes.Unimplemented, statusCode)
 		}},
-		{"PostComputeProviders", func(t *testing.T) {
-			_, err = c.PostComputeProviders(context.Background(), &empty.Empty{})
+		{"PostSetupComputeProviders", func(t *testing.T) {
+			_, err = c.PostSetupComputeProviders(context.Background(), &pb.PostSetupComputeProvidersRequest{Benchmark: false})
 			require.NoError(t, err)
 		}},
-		{"PostDataCreationProgressStream", func(t *testing.T) {
-			stream, err := c.PostDataCreationProgressStream(context.Background(), &empty.Empty{})
+		{"PostSetupStatusStream", func(t *testing.T) {
+			stream, err := c.PostSetupStatusStream(context.Background(), &empty.Empty{})
 
 			// Expecting the stream to return a single update before closing.
 			require.NoError(t, err)
@@ -2032,9 +2043,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if bytes.Compare(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) != 0 {
 				continue
 			}
-			if a.CommitmentSize != shared.DataSize(globalAtx.NIPost.PoSTMetadata.NumLabels, globalAtx.NIPost.PoSTMetadata.LabelSize) { // MERGE FIX
-				//	if a.CommitmentSize != globalAtx.Space {
-				// MERGE FIX
+			if a.NumUnits != uint32(globalAtx.NumUnits) {
 				continue
 			}
 			// found a match
@@ -2477,8 +2486,7 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
 		require.Equal(t, globalAtx.NodeID.ToBytes(), x.Activation.SmesherId.Id)
 		require.Equal(t, globalAtx.Coinbase.Bytes(), x.Activation.Coinbase.Address)
 		require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
-		size := shared.DataSize(globalAtx.NIPost.PoSTMetadata.NumLabels, globalAtx.NIPost.PoSTMetadata.LabelSize)
-		require.Equal(t, size, x.Activation.CommitmentSize) // MERGE FIX
+		require.Equal(t, globalAtx.NumUnits, uint(x.Activation.NumUnits))
 	default:
 		require.Fail(t, "inner account data item has wrong tx data type")
 	}

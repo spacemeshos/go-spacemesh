@@ -150,7 +150,7 @@ func (s SmesherService) EstimatedRewards(context.Context, *pb.EstimatedRewardsRe
 
 // PostSetupStatus returns post data status
 func (s SmesherService) PostSetupStatus(context.Context, *empty.Empty) (*pb.PostSetupStatusResponse, error) {
-	log.Info("GRPC SmesherService.PostStatus")
+	log.Info("GRPC SmesherService.PostSetupStatus")
 
 	status := s.postSetupProvider.Status()
 	return &pb.PostSetupStatusResponse{Status: statusToPbStatus(status)}, nil
@@ -158,7 +158,7 @@ func (s SmesherService) PostSetupStatus(context.Context, *empty.Empty) (*pb.Post
 
 // PostDataCreationProgressStream exposes a stream of updates during post init
 func (s SmesherService) PostSetupStatusStream(_ *empty.Empty, stream pb.SmesherService_PostSetupStatusStreamServer) error {
-	log.Info("GRPC SmesherService.PostDataCreationProgressStream")
+	log.Info("GRPC SmesherService.PostSetupStatusStream")
 
 	statusChan := s.postSetupProvider.StatusChan()
 	for {
@@ -178,7 +178,7 @@ func (s SmesherService) PostSetupStatusStream(_ *empty.Empty, stream pb.SmesherS
 
 // PostComputeProviders returns a list of available post compute providers
 func (s SmesherService) PostSetupComputeProviders(ctx context.Context, in *pb.PostSetupComputeProvidersRequest) (*pb.PostSetupComputeProvidersResponse, error) {
-	log.Info("GRPC SmesherService.PostComputeProviders")
+	log.Info("GRPC SmesherService.PostSetupComputeProviders")
 
 	providers := s.postSetupProvider.ComputeProviders()
 
@@ -208,7 +208,7 @@ func (s SmesherService) PostSetupComputeProviders(ctx context.Context, in *pb.Po
 
 // EstimatedRewards returns estimated smeshing rewards over the next epoch
 func (s SmesherService) PostConfig(context.Context, *empty.Empty) (*pb.PostConfigResponse, error) {
-	log.Info("GRPC SmesherService.Config")
+	log.Info("GRPC SmesherService.PostConfig")
 
 	cfg := s.postSetupProvider.Config()
 
