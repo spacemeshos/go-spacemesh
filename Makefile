@@ -95,7 +95,7 @@ build: go-spacemesh
 
 hare p2p sync: get-gpu-setup
 	cd cmd/$@ ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) .
-go-spacemesh: get-gpu-setup        
+go-spacemesh: get-gpu-setup
 	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) $(GOTAGS) .
 harness: get-gpu-setup
 	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) .
@@ -134,11 +134,11 @@ test test-all: get-gpu-setup
 .PHONY: test
 
 test-no-app-test: get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)"  go test -v -timeout 0 -p 1 exclude_app_test ./...
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)"  go test -v -timeout 0 -p 1 -tags exclude_app_test ./...
 .PHONY: test-no-app-test
 
 test-only-app-test: get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -timeout 0 -p 1 -v ./cmd/node
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -timeout 0 -p 1 -v -tags !exclude_app_test ./cmd/node
 .PHONY: test-only-app-test
 
 test-tidy:
