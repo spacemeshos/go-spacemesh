@@ -140,6 +140,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	// We must shut down before running the rest of the tests or we'll get an error about resource unavailable
 	// when we try to allocate more database files. Wrap this context neatly in an inline func.
 	var oldRoot types.Hash32
+	var edSgn *signing.EdSigner
 	func() {
 		defer GracefulShutdown(suite.apps)
 		defer suite.ClosePoet()
@@ -193,10 +194,11 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		}
 		suite.validateBlocksAndATXs(types.NewLayerID(numberOfEpochs * suite.apps[0].Config.LayersPerEpoch).Sub(1))
 		oldRoot = suite.apps[0].state.GetStateRoot()
+		edSgn = suite.apps[0].edSgn
 	}()
 
 	// this tests loading of previous state, maybe it's not the best place to put this here...
-	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, path+"a", rolacle, poetHarness.HTTPPoetClient, clock, net, signing.NewEdSigner())
+	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, path+"a", rolacle, poetHarness.HTTPPoetClient, clock, net, edSgn)
 	assert.NoError(suite.T(), err)
 	// test that loaded root is equal
 	assert.Equal(suite.T(), oldRoot, smApp.state.GetStateRoot())
