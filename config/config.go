@@ -143,6 +143,7 @@ type LoggerConfig struct {
 	HareBeaconLoggerLevel     string `mapstructure:"hare-beacon"`
 }
 
+// SmeshingConfig defines configuration for the node's smeshing (mining).
 type SmeshingConfig struct {
 	Start           bool                     `mapstructure:"smeshing-start"`
 	CoinbaseAccount string                   `mapstructure:"smeshing-coinbase"`
@@ -205,6 +206,7 @@ func defaultBaseConfig() BaseConfig {
 	}
 }
 
+// DefaultSmeshingConfig returns the node's default smeshing configuration.
 func DefaultSmeshingConfig() SmeshingConfig {
 	return SmeshingConfig{
 		Start:           false,

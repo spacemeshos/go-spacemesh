@@ -126,7 +126,7 @@ func (nb *NIPostBuilder) updatePoETProver(poetProver PoetProvingServiceClient) {
 func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash32, atxExpired chan struct{}) (*types.NIPost, error) {
 	nb.load(*challenge)
 
-	if s := nb.postSetupProvider.Status(); s.State != PostSetupStateComplete {
+	if s := nb.postSetupProvider.Status(); s.State != postSetupStateComplete {
 		return nil, errors.New("post setup not complete")
 	}
 

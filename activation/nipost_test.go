@@ -52,7 +52,7 @@ var _ PostSetupProvider = (*postSetupProviderMock)(nil)
 
 func (p *postSetupProviderMock) Status() *PostSetupStatus {
 	status := new(PostSetupStatus)
-	status.State = PostSetupStateComplete
+	status.State = postSetupStateComplete
 	status.LastOpts = p.LastOpts()
 	status.LastError = p.LastError()
 	return status

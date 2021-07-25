@@ -13,9 +13,11 @@ import (
 )
 
 type (
+	// PostSetupComputeProvider represent a compute provider for Post setup data creation.
 	PostSetupComputeProvider initialization.ComputeProvider
 )
 
+// PostConfig is the configuration of the Post protocol, used for data creation, proofs generation and validation.
 type PostConfig struct {
 	BitsPerLabel  uint `mapstructure:"post-bits-per-label"`
 	LabelsPerUnit uint `mapstructure:"post-labels-per-unit"`
@@ -62,7 +64,7 @@ type PostSetupProvider interface {
 // A compile time check to ensure that PostSetupManager fully implements the PostSetupProvider interface.
 var _ PostSetupProvider = (*PostSetupManager)(nil)
 
-// PostManager implements PostProvider.
+// PostSetupManager implements the PostProvider interface.
 type PostSetupManager struct {
 	id     []byte
 	cfg    PostConfig
@@ -71,7 +73,7 @@ type PostSetupManager struct {
 	stopMtx       sync.Mutex
 	initStatusMtx sync.Mutex
 
-	state             PostSetupState
+	state             postSetupState
 	initCompletedChan chan struct{}
 
 	// init is the current initializer instance. It is being
@@ -90,17 +92,18 @@ type PostSetupManager struct {
 	doneChan chan struct{}
 }
 
-type PostSetupState int32
+type postSetupState int32
 
 const (
-	PostSetupStateNotStarted PostSetupState = 1 + iota
-	PostSetupStateInProgress
-	PostSetupStateComplete
-	PostSetupStateError
+	postSetupStateNotStarted postSetupState = 1 + iota
+	postSetupStateInProgress
+	postSetupStateComplete
+	postSetupStateError
 )
 
+// PostSetupStatus represents a status snapshot of the Post setup.
 type PostSetupStatus struct {
-	State            PostSetupState
+	State            postSetupState
 	NumLabelsWritten uint64
 	LastOpts         *PostSetupOpts
 	LastError        error
@@ -112,7 +115,7 @@ func NewPostSetupManager(id []byte, cfg PostConfig, logger log.Log) (*PostSetupM
 		id:                id,
 		cfg:               cfg,
 		logger:            logger,
-		state:             PostSetupStateNotStarted,
+		state:             postSetupStateNotStarted,
 		initCompletedChan: make(chan struct{}),
 		startedChan:       make(chan struct{}),
 	}
@@ -127,7 +130,7 @@ func (mgr *PostSetupManager) Status() *PostSetupStatus {
 	status := &PostSetupStatus{}
 	status.State = mgr.state
 
-	if status.State == PostSetupStateNotStarted {
+	if status.State == postSetupStateNotStarted {
 		return status
 	}
 
@@ -194,20 +197,21 @@ func (mgr *PostSetupManager) BestProvider() (*PostSetupComputeProvider, error) {
 	return &bestProvider, nil
 }
 
+// Benchmark runs a short benchmarking session for a given provider to evaluate its performance.
 func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) {
 	return gpu.Benchmark(initialization.ComputeProvider(p))
 }
 
-// CreatePostData starts (or continues) a data creation session.
-// It supports resuming a previously started session, as well as changing post options (e.g., number of labels)
+// StartSession starts (or continues) a data creation session.
+// It supports resuming a previously started session, as well as changing the Post setup options (e.g., number of units)
 // after initial setup.
 func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, error) {
 	mgr.initStatusMtx.Lock()
-	if mgr.state == PostSetupStateInProgress {
+	if mgr.state == postSetupStateInProgress {
 		mgr.initStatusMtx.Unlock()
 		return nil, fmt.Errorf("Post setup session in-progress")
 	}
-	if mgr.state == PostSetupStateComplete {
+	if mgr.state == postSetupStateComplete {
 		// Check whether the new request invalidates the current status.
 		var invalidate = opts.DataDir != mgr.lastOpts.DataDir || opts.NumUnits != mgr.lastOpts.NumUnits
 		if !invalidate {
@@ -219,7 +223,7 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 		mgr.initCompletedChan = make(chan struct{})
 	}
 
-	mgr.state = PostSetupStateInProgress
+	mgr.state = postSetupStateInProgress
 	mgr.initStatusMtx.Unlock()
 
 	if opts.ComputeProviderID == config.BestProviderID {
@@ -234,7 +238,7 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 
 	newInit, err := initialization.NewInitializer(config.Config(mgr.cfg), config.InitOpts(opts), mgr.id)
 	if err != nil {
-		mgr.state = PostSetupStateError
+		mgr.state = postSetupStateError
 		mgr.lastErr = err
 		return nil, err
 	}
@@ -263,9 +267,9 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 		if err := newInit.Initialize(); err != nil {
 			if err == initialization.ErrStopped {
 				mgr.logger.Info("Post setup session stopped")
-				mgr.state = PostSetupStateNotStarted
+				mgr.state = postSetupStateNotStarted
 			} else {
-				mgr.state = PostSetupStateError
+				mgr.state = postSetupStateError
 				mgr.lastErr = err
 			}
 			return
@@ -278,20 +282,20 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 			log.String("bits_per_label", fmt.Sprintf("%d", mgr.cfg.BitsPerLabel)),
 		)
 
-		mgr.state = PostSetupStateComplete
+		mgr.state = postSetupStateComplete
 		close(mgr.initCompletedChan)
 	}()
 
 	return mgr.doneChan, nil
 }
 
-// StopPostDataCreationSession stops the current post data creation session
-// and optionally attempts to delete the post data file(s).
+// StopSession stops the current Post setup data creation session
+// and optionally attempts to delete the data file(s).
 func (mgr *PostSetupManager) StopSession(deleteFiles bool) error {
 	mgr.stopMtx.Lock()
 	defer mgr.stopMtx.Unlock()
 
-	if mgr.state == PostSetupStateInProgress {
+	if mgr.state == postSetupStateInProgress {
 		if err := mgr.init.Stop(); err != nil {
 			return err
 		}
@@ -306,7 +310,7 @@ func (mgr *PostSetupManager) StopSession(deleteFiles bool) error {
 		}
 
 		// Reset internal state.
-		mgr.state = PostSetupStateNotStarted
+		mgr.state = postSetupStateNotStarted
 		mgr.initCompletedChan = make(chan struct{})
 	}
 
@@ -315,7 +319,7 @@ func (mgr *PostSetupManager) StopSession(deleteFiles bool) error {
 
 // GenerateProof generates a new Post.
 func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error) {
-	if mgr.state != PostSetupStateComplete {
+	if mgr.state != postSetupStateComplete {
 		return nil, nil, errNotComplete
 	}
 
@@ -342,14 +346,17 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *type
 	return p, m, nil
 }
 
+// LastError returns the Post setup last error.
 func (mgr *PostSetupManager) LastError() error {
 	return mgr.lastErr
 }
 
+// LastOpts returns the Post setup last session options.
 func (mgr *PostSetupManager) LastOpts() *PostSetupOpts {
 	return mgr.lastOpts
 }
 
+// Config returns the Post protocol config.
 func (mgr *PostSetupManager) Config() PostConfig {
 	return mgr.cfg
 }

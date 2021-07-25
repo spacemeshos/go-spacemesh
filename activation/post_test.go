@@ -45,10 +45,10 @@ func TestPostSetupManager(t *testing.T) {
 			req.Nil(status.LastError)
 
 			if uint(status.NumLabelsWritten) == opts.NumUnits*cfg.LabelsPerUnit {
-				// TODO(moshababo): fix the following failure. `status.State` changes to `PostSetupStateComplete` only after the channel event was triggered.
-				//req.Equal(PostSetupStateComplete, status.State)
+				// TODO(moshababo): fix the following failure. `status.State` changes to `postSetupStateComplete` only after the channel event was triggered.
+				//req.Equal(postSetupStateComplete, status.State)
 			} else {
-				req.Equal(PostSetupStateInProgress, status.State)
+				req.Equal(postSetupStateInProgress, status.State)
 			}
 
 			// Compare the chan status to a status queried directly.
@@ -64,7 +64,7 @@ func TestPostSetupManager(t *testing.T) {
 	<-doneChan
 	req.Equal(opts, *mgr.LastOpts())
 	req.NoError(mgr.LastError())
-	// TODO(moshababo): fix the following failure. `status.State` changes to `PostSetupStateComplete` only after the channel event was triggered.
+	// TODO(moshababo): fix the following failure. `status.State` changes to `postSetupStateComplete` only after the channel event was triggered.
 	// req.Equal(lastStatus, mgr.Status())
 
 	// Create data (same opts).
@@ -84,7 +84,7 @@ func TestPostSetupManager(t *testing.T) {
 	<-doneChan
 	req.Equal(opts, *mgr.LastOpts())
 	req.NoError(mgr.LastError())
-	// TODO(moshababo): fix the following failure. `status.State` changes to `PostSetupStateComplete` only after the channel event was triggered.
+	// TODO(moshababo): fix the following failure. `status.State` changes to `postSetupStateComplete` only after the channel event was triggered.
 	// req.Equal(lastStatus, mgr.Status())
 }
 
@@ -96,7 +96,7 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 
 	// Verify the initial status.
 	status := mgr.Status()
-	req.Equal(PostSetupStateNotStarted, status.State)
+	req.Equal(postSetupStateNotStarted, status.State)
 	req.Equal(uint64(0), status.NumLabelsWritten)
 	req.Equal((*PostSetupOpts)(nil), status.LastOpts)
 	req.Equal(nil, status.LastError)
@@ -114,7 +114,7 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	<-doneChan
 
 	// Compare the last status update to the status queried directly.
-	// TODO(moshababo): fix the following failure. `status.State` changes to `PostSetupStateComplete` only after the channel event was triggered.
+	// TODO(moshababo): fix the following failure. `status.State` changes to `postSetupStateComplete` only after the channel event was triggered.
 	//req.Equal(lastStatus, mgr.Status())
 
 	// Re-instantiate `PostSetupManager`.
@@ -123,7 +123,7 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 
 	// Verify the initial status.
 	status = mgr.Status()
-	req.Equal(PostSetupStateNotStarted, status.State)
+	req.Equal(postSetupStateNotStarted, status.State)
 	req.Equal(uint64(0), status.NumLabelsWritten)
 	req.Equal((*PostSetupOpts)(nil), status.LastOpts)
 	req.Equal(nil, status.LastError)
@@ -249,7 +249,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 
 	// Verify state.
 	status := mgr.Status()
-	req.Equal(PostSetupStateNotStarted, status.State)
+	req.Equal(postSetupStateNotStarted, status.State)
 
 	// Create data.
 	doneChan, err := mgr.StartSession(opts)
@@ -258,7 +258,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 
 	// Verify state.
 	status = mgr.Status()
-	req.Equal(PostSetupStateComplete, status.State)
+	req.Equal(postSetupStateComplete, status.State)
 
 	// Stop without file deletion.
 	err = mgr.StopSession(false)
@@ -266,7 +266,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 
 	// Verify state.
 	status = mgr.Status()
-	req.Equal(PostSetupStateComplete, status.State)
+	req.Equal(postSetupStateComplete, status.State)
 
 	// Stop with file deletion.
 	err = mgr.StopSession(true)
@@ -274,7 +274,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 
 	// Verify state.
 	status = mgr.Status()
-	req.Equal(PostSetupStateNotStarted, status.State)
+	req.Equal(postSetupStateNotStarted, status.State)
 
 	// Create data again.
 	doneChan, err = mgr.StartSession(opts)
@@ -283,7 +283,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 
 	// Verify state.
 	status = mgr.Status()
-	req.Equal(PostSetupStateComplete, status.State)
+	req.Equal(postSetupStateComplete, status.State)
 }
 
 func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
@@ -302,7 +302,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	// Verify the intermediate status.
 	status := mgr.Status()
 	req.Equal(&longerSetupOpts, status.LastOpts)
-	req.Equal(PostSetupStateInProgress, status.State)
+	req.Equal(postSetupStateInProgress, status.State)
 
 	// Stop without files deletion.
 	err = mgr.StopSession(false)
@@ -317,7 +317,7 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	// Verify status.
 	status = mgr.Status()
 	req.Equal((*PostSetupOpts)(nil), status.LastOpts)
-	req.Equal(PostSetupStateNotStarted, status.State)
+	req.Equal(postSetupStateNotStarted, status.State)
 	req.Equal(uint64(0), status.NumLabelsWritten)
 
 	// Continue to create data.
@@ -328,6 +328,6 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	// Verify status.
 	status = mgr.Status()
 	req.Equal(&longerSetupOpts, status.LastOpts)
-	req.Equal(PostSetupStateComplete, status.State)
+	req.Equal(postSetupStateComplete, status.State)
 	req.Equal(longerSetupOpts.NumUnits*cfg.LabelsPerUnit, uint(status.NumLabelsWritten))
 }

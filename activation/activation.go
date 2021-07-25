@@ -59,7 +59,7 @@ type idStore interface {
 	GetIdentity(id string) (types.NodeID, error)
 }
 
-type NIPostValidator interface {
+type nipostValidator interface {
 	Validate(id signing.PublicKey, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint) error
 	ValidatePost(id []byte, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint) error
 }
@@ -113,12 +113,12 @@ type Config struct {
 	LayersPerEpoch  uint32
 }
 
-type SmeshingStatus int32
+type smeshingStatus int32
 
 const (
-	SmeshingStatusIdle SmeshingStatus = iota
-	SmeshingStatusPendingPostInit
-	SmeshingStatusStarted
+	smeshingStatusIdle smeshingStatus = iota
+	smeshingStatusPendingPostSetup
+	smeshingStatusStarted
 )
 
 // Builder struct is the struct that orchestrates the creation of activation transactions
@@ -142,7 +142,7 @@ type Builder struct {
 	// pendingATX is created with current commitment and nipst from current challenge.
 	pendingATX            *types.ActivationTx
 	layerClock            layerClock
-	status                SmeshingStatus
+	status                smeshingStatus
 	mtx                   sync.Mutex
 	store                 bytesStore
 	syncer                syncer
@@ -196,7 +196,7 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvide
 		syncer:            syncer,
 		log:               log,
 		poetRetryInterval: defaultPoetRetryInterval,
-		status:            SmeshingStatusIdle,
+		status:            smeshingStatusIdle,
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -209,7 +209,7 @@ func (b *Builder) Smeshing() bool {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 
-	return b.status == SmeshingStatusStarted
+	return b.status == smeshingStatusStarted
 }
 
 // StartSmeshing is the main entry point of the atx builder.
@@ -219,29 +219,29 @@ func (b *Builder) Smeshing() bool {
 // after initial setup, is supported.
 func (b *Builder) StartSmeshing(ctx context.Context, coinbase types.Address, opts PostSetupOpts) error {
 	b.mtx.Lock()
-	if b.status != SmeshingStatusIdle {
+	if b.status != smeshingStatusIdle {
 		b.mtx.Unlock()
 		return errors.New("already started")
 	}
-	b.status = SmeshingStatusPendingPostInit
+	b.status = smeshingStatusPendingPostSetup
 	b.runCtx, b.stop = context.WithCancel(ctx)
 	b.mtx.Unlock()
 
 	doneChan, err := b.postSetupProvider.StartSession(opts)
 	if err != nil {
-		b.status = SmeshingStatusIdle
+		b.status = smeshingStatusIdle
 		return fmt.Errorf("failed to start Post setup session: %v", err)
 	}
 
 	go func() {
 		<-doneChan
-		if s := b.postSetupProvider.Status(); s.State != PostSetupStateComplete {
-			b.status = SmeshingStatusIdle
+		if s := b.postSetupProvider.Status(); s.State != postSetupStateComplete {
+			b.status = smeshingStatusIdle
 			b.log.Error("failed to complete Post setup: %v", b.postSetupProvider.LastError())
 			return
 		}
 
-		b.status = SmeshingStatusStarted
+		b.status = smeshingStatusStarted
 		go b.loop(b.runCtx)
 	}()
 
@@ -253,7 +253,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 
-	if b.status == SmeshingStatusIdle {
+	if b.status == smeshingStatusIdle {
 		return errors.New("not started")
 	}
 
@@ -262,7 +262,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	}
 
 	b.stop()
-	b.status = SmeshingStatusIdle
+	b.status = smeshingStatusIdle
 
 	return nil
 }
@@ -300,7 +300,7 @@ func (b *Builder) loop(ctx context.Context) {
 	b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
 	if err != nil {
 		b.log.Error("Post execution failed: %v", err)
-		b.status = SmeshingStatusIdle
+		b.status = smeshingStatusIdle
 		return
 	}
 

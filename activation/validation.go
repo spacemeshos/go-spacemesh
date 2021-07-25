@@ -15,8 +15,8 @@ type Validator struct {
 	cfg    PostConfig
 }
 
-// A compile time check to ensure that Validator fully implements the NIPostValidator interface.
-var _ NIPostValidator = (*Validator)(nil)
+// A compile time check to ensure that Validator fully implements the nipostValidator interface.
+var _ nipostValidator = (*Validator)(nil)
 
 // NewValidator returns a new NIPost validator
 func NewValidator(poetDb poetDbAPI, cfg PostConfig) *Validator {

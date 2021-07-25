@@ -151,8 +151,8 @@ func (*MockIDStore) GetIdentity(string) (types.NodeID, error) {
 
 type ValidatorMock struct{}
 
-// A compile time check to ensure that ValidatorMock fully implements the NIPostValidator interface.
-var _ NIPostValidator = (*ValidatorMock)(nil)
+// A compile time check to ensure that ValidatorMock fully implements the nipostValidator interface.
+var _ nipostValidator = (*ValidatorMock)(nil)
 
 func (*ValidatorMock) Validate(id signing.PublicKey, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint) error {
 	return nil
