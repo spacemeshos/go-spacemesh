@@ -696,11 +696,15 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	app.atxDb = atxdb
 	app.layerFetch = layerFetch
 	app.tBeacon = tBeacon
-	app.ptimesync = peersync.New(
-		swarm.(peersync.Network),
-		peersync.WithLog(app.addLogger(TimeSyncLogger, lg)),
-		peersync.WithConfig(app.Config.TIME.Peersync),
-	)
+	if !app.Config.TIME.Peersync.Disable {
+		conf := app.Config.TIME.Peersync
+		conf.ResponsesBufferSize = app.Config.P2P.BufferSize
+		app.ptimesync = peersync.New(
+			swarm.(peersync.Network),
+			peersync.WithLog(app.addLogger(TimeSyncLogger, lg)),
+			peersync.WithConfig(conf),
+		)
+	}
 
 	return nil
 }
@@ -777,7 +781,9 @@ func (app *SpacemeshApp) startServices(ctx context.Context, logger log.Log) erro
 	}
 	app.atxBuilder.Start(ctx)
 	app.clock.StartNotifying()
-	app.ptimesync.Start()
+	if app.ptimesync != nil {
+		app.ptimesync.Start()
+	}
 	go app.checkTimeDrifts()
 	return nil
 }
@@ -1147,13 +1153,15 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) error {
 		Level: zapcore.InfoLevel,
 	})
 	syncErr := make(chan error, 1)
-	go func() {
-		syncErr <- app.ptimesync.Wait()
-		// if nil node was already stopped
-		if syncErr != nil {
-			cmdp.Cancel()
-		}
-	}()
+	if app.ptimesync != nil {
+		go func() {
+			syncErr <- app.ptimesync.Wait()
+			// if nil node was already stopped
+			if syncErr != nil {
+				cmdp.Cancel()
+			}
+		}()
+	}
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	select {

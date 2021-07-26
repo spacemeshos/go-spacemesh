@@ -73,13 +73,16 @@ func DefaultConfig() Config {
 
 // Config for Sync.
 type Config struct {
-	RoundRetryInterval  time.Duration `mapstructure:"round-retry-interval"`
-	RoundInterval       time.Duration `mapstructure:"round-interval"`
-	RoundTimeout        time.Duration `mapstructure:"round-timeout"`
-	MaxClockOffset      time.Duration `mapstructure:"max-clock-offset"`
-	MaxOffsetErrors     int           `mapstructure:"max-offset-errors"`
-	RequiredResponses   int           `mapstructure:"required-responses"`
-	ResponsesBufferSize int           `mapstructure:"responses-buffer-size"`
+	Disable            bool          `mapstructure:"disable"`
+	RoundRetryInterval time.Duration `mapstructure:"round-retry-interval"`
+	RoundInterval      time.Duration `mapstructure:"round-interval"`
+	RoundTimeout       time.Duration `mapstructure:"round-timeout"`
+	MaxClockOffset     time.Duration `mapstructure:"max-clock-offset"`
+	MaxOffsetErrors    int           `mapstructure:"max-offset-errors"`
+	RequiredResponses  int           `mapstructure:"required-responses"`
+	// TODO(dshulyak) this field always shouldn't be updated using cli or config file.
+	// it should be based on p2p settings.
+	ResponsesBufferSize int `mapstructure:"responses-buffer-size"`
 }
 
 // Option to modify Sync behavior.
