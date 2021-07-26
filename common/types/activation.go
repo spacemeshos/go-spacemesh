@@ -315,10 +315,10 @@ type NIPost struct {
 	PostMetadata *PostMetadata
 }
 
-// Post is an alias to proving.Proof.
+// Post is an alias to postShared.Proof.
 type Post postShared.Proof
 
-// PostMetadata is similar postShared.ProofMetadata, but without fields which can be derived elsewhere in a given ATX (ID, NumUnits).
+// PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere in a given ATX (ID, NumUnits).
 type PostMetadata struct {
 	Challenge     []byte
 	BitsPerLabel  uint

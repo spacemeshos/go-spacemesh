@@ -15,24 +15,10 @@ import (
 	"testing"
 )
 
-//
-//import (
-//	"fmt"
-//	"github.com/spacemeshos/go-spacemesh/common/types"
-//	"github.com/spacemeshos/go-spacemesh/database"
-//	"github.com/spacemeshos/go-spacemesh/log"
-//	"github.com/spacemeshos/go-spacemesh/signing"
-//	"github.com/spacemeshos/post/initialization"
-//	"github.com/stretchr/testify/require"
-//	"io/ioutil"
-//	"testing"
-//)
-//
 var minerID = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
 var postCfg PostConfig
 var postSetupOpts PostSetupOpts
 
-//
 func init() {
 	postCfg = DefaultPostConfig()
 

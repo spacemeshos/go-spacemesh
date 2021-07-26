@@ -606,7 +606,8 @@ func TestShutdown(t *testing.T) {
 	genesisTime := time.Now().Add(time.Second * 10)
 
 	smApp.Config.POST.BitsPerLabel = 8
-	smApp.Config.POST.LabelsPerUnit = 1 << 10
+	smApp.Config.POST.LabelsPerUnit = 32
+	smApp.Config.POST.K2 = 4
 
 	smApp.Config.SMESHING.Start = true
 	smApp.Config.SMESHING.CoinbaseAccount = "0x123"
