@@ -55,13 +55,14 @@ func TestMeshDB_AddBlock(t *testing.T) {
 	addTransactionsWithFee(t, mdb, block1, 4, rand.Int63n(100))
 
 	poetRef := []byte{0xba, 0x05}
-	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID{}, types.NewLayerID(5), 1, types.ATXID{}, coinbase, 5, []types.BlockID{}, &types.NIPST{
-		NipstChallenge: &types.Hash32{},
-		PostProof: &types.PostProof{
-			Challenge:    poetRef,
-			MerkleRoot:   []byte(nil),
-			ProofNodes:   [][]byte(nil),
-			ProvenLeaves: [][]byte(nil),
+	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID{}, types.NewLayerID(5), 1, types.ATXID{}, coinbase, 5, []types.BlockID{}, &types.NIPost{
+		Challenge: &types.Hash32{},
+		Post: &types.Post{
+			Nonce:   0,
+			Indices: []byte(nil),
+		},
+		PostMetadata: &types.PostMetadata{
+			Challenge: poetRef,
 		},
 	})
 	var atxs []types.ATXID

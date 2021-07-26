@@ -6,7 +6,9 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/spacemeshos/post/initialization"
 	"io"
+	"io/ioutil"
 	lg "log"
 	"os"
 	"path/filepath"
@@ -70,7 +72,8 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := storeFormat + string(name)
 		database.SwitchCreationContext(dbStorepath, string(name))
-		smApp, err := InitSingleInstance(*cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, network)
+		edSgn := signing.NewEdSigner()
+		smApp, err := InitSingleInstance(*cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, network, edSgn)
 		suite.NoError(err)
 		suite.apps = append(suite.apps, smApp)
 		name++
@@ -137,6 +140,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	// We must shut down before running the rest of the tests or we'll get an error about resource unavailable
 	// when we try to allocate more database files. Wrap this context neatly in an inline func.
 	var oldRoot types.Hash32
+	var edSgn *signing.EdSigner
 	func() {
 		defer GracefulShutdown(suite.apps)
 		defer suite.ClosePoet()
@@ -190,10 +194,11 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		}
 		suite.validateBlocksAndATXs(types.NewLayerID(numberOfEpochs * suite.apps[0].Config.LayersPerEpoch).Sub(1))
 		oldRoot = suite.apps[0].state.GetStateRoot()
+		edSgn = suite.apps[0].edSgn
 	}()
 
 	// this tests loading of previous state, maybe it's not the best place to put this here...
-	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, path+"a", rolacle, poetHarness.HTTPPoetClient, clock, net)
+	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, path+"a", rolacle, poetHarness.HTTPPoetClient, clock, net, edSgn)
 	assert.NoError(suite.T(), err)
 	// test that loaded root is equal
 	assert.Equal(suite.T(), oldRoot, smApp.state.GetStateRoot())
@@ -348,7 +353,7 @@ func (suite *AppTestSuite) healingWeakcoinTester() {
 func configuredTotalWeight(apps []*SpacemeshApp) uint64 {
 	expectedTotalWeight := uint64(0)
 	for _, app := range apps {
-		expectedTotalWeight += app.Config.SpaceToCommit
+		expectedTotalWeight += uint64(app.Config.SMESHING.Opts.NumUnits)
 	}
 	return expectedTotalWeight
 }
@@ -503,7 +508,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	blocksPerEpochTarget := uint32(layerAvgSize) * layersPerEpoch
 	expectedBlocksPerEpoch := 0
 	for _, app := range suite.apps {
-		expectedBlocksPerEpoch += max(int(blocksPerEpochTarget)*int(app.Config.SpaceToCommit)/int(expectedEpochWeight), 1)
+		expectedBlocksPerEpoch += max(int(blocksPerEpochTarget)*int(app.Config.SMESHING.Opts.NumUnits)/int(expectedEpochWeight), 1)
 	}
 
 	expectedTotalBlocks := (totalEpochs - 2) * expectedBlocksPerEpoch
@@ -599,18 +604,21 @@ func TestShutdown(t *testing.T) {
 
 	smApp := NewSpacemeshApp()
 	genesisTime := time.Now().Add(time.Second * 10)
-	smApp.Config.POST = activation.DefaultConfig()
-	smApp.Config.POST.Difficulty = 5
-	smApp.Config.POST.NumProvenLabels = 10
-	smApp.Config.POST.SpacePerUnit = 1 << 10 // 1KB.
-	smApp.Config.POST.NumFiles = 1
+
+	smApp.Config.POST.BitsPerLabel = 8
+	smApp.Config.POST.LabelsPerUnit = 32
+	smApp.Config.POST.K2 = 4
+
+	smApp.Config.SMESHING.Start = true
+	smApp.Config.SMESHING.CoinbaseAccount = "0x123"
+	smApp.Config.SMESHING.Opts.DataDir, _ = ioutil.TempDir("", "sm-test-post")
+	smApp.Config.SMESHING.Opts.ComputeProviderID = int(initialization.CPUProviderID())
 
 	smApp.Config.HARE.N = 5
 	smApp.Config.HARE.F = 2
 	smApp.Config.HARE.RoundDuration = 3
 	smApp.Config.HARE.WakeupDelta = 5
 	smApp.Config.HARE.ExpectedLeaders = 5
-	smApp.Config.CoinbaseAccount = "0x123"
 	smApp.Config.GoldenATXID = "0x5678"
 	smApp.Config.LayerAvgSize = 5
 	smApp.Config.LayersPerEpoch = 3
@@ -621,7 +629,6 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.HareEligibility.ConfidenceParam = 3
 	smApp.Config.HareEligibility.EpochOffset = 0
 	smApp.Config.TortoiseBeacon = tortoisebeacon.TestConfig()
-	smApp.Config.StartMining = true
 
 	smApp.Config.FETCH.RequestTimeout = 1
 	smApp.Config.FETCH.BatchTimeout = 1
@@ -647,14 +654,10 @@ func TestShutdown(t *testing.T) {
 	hareOracle := newLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
-	postClient, err := activation.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))
-	r.NoError(err)
-	r.NotNil(postClient)
 	gTime := genesisTime
 	ld := time.Duration(20) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
-	err = smApp.initServices(context.TODO(), log.AppLog, nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize),
-		postClient, poetHarness.HTTPPoetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock)
+	err = smApp.initServices(context.TODO(), log.AppLog, nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), poetHarness.HTTPPoetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock)
 
 	r.NoError(err)
 

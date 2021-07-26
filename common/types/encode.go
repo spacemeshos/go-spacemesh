@@ -45,11 +45,11 @@ func BytesToAtx(b []byte) (*ActivationTx, error) {
 	return &atx, nil
 }
 
-// NIPSTChallengeToBytes serializes a NIPSTChallenge.
-func NIPSTChallengeToBytes(challenge *NIPSTChallenge) ([]byte, error) {
+// NIPostChallengeToBytes serializes a NIPostChallenge.
+func NIPostChallengeToBytes(challenge *NIPostChallenge) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, challenge); err != nil {
-		return nil, fmt.Errorf("error marshalling NIPST Challenge: %v", err)
+		return nil, fmt.Errorf("error marshalling NIPost Challenge: %v", err)
 	}
 	return w.Bytes(), nil
 }

@@ -53,7 +53,7 @@ func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 	_, err = v.getValidAtx(block)
 	r.EqualError(err, "ATX target epoch (1) doesn't match block publication epoch (4)")
 
-	atxHeader := &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{
+	atxHeader := &types.ActivationTxHeader{NIPostChallenge: types.NIPostChallenge{
 		NodeID:     types.NodeID{Key: edSigner.PublicKey().String()},
 		PubLayerID: types.NewLayerID(18),
 	}}
