@@ -369,17 +369,13 @@ func InitializeEventReporter(url string) error {
 func InitializeEventReporterWithOptions(url string, bufsize int, blocking bool) error {
 	mu.Lock()
 	defer mu.Unlock()
-
 	if reporter != nil {
 		return errors.New("reporter is already initialized, call CloseEventReporter before reinitializing")
 	}
-
 	reporter = newEventReporter(bufsize, blocking)
-
 	if url != "" {
 		return InitializeEventPubsub(url)
 	}
-
 	return nil
 }
 
@@ -390,7 +386,6 @@ func SubscribeToLayers(newLayerCh timesync.LayerTimer) {
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		stopChan := reporter.stopChan
 		// This will block, so run in a goroutine
 		go func() {
 			for {
@@ -398,7 +393,7 @@ func SubscribeToLayers(newLayerCh timesync.LayerTimer) {
 				case layer := <-newLayerCh:
 					log.With().Debug("reporter got new layer", layer)
 					ReportNodeStatusUpdate()
-				case <-stopChan:
+				case <-reporter.stopChan:
 					return
 				}
 			}
@@ -453,7 +448,7 @@ type Reward struct {
 	Coinbase    types.Address
 	// TODO: We don't currently have a way to get the Layer Computed.
 	// See https://github.com/spacemeshos/go-spacemesh/issues/2275
-	// LayerComputed
+	//LayerComputed
 	Smesher types.NodeID
 }
 
