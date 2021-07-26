@@ -35,6 +35,12 @@ func (d *directMessage) Metadata() service.P2PMetadata {
 	return service.P2PMetadata{}
 }
 
+type adjustedTime time.Duration
+
+func (a adjustedTime) Now() time.Time {
+	return time.Now().Add((time.Duration)(a))
+}
+
 func TestSyncGetOffset(t *testing.T) {
 	var (
 		start           = time.Time{}
@@ -175,4 +181,47 @@ func TestSyncTerminateOnError(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 		require.FailNow(t, "timed out waiting for sync to fail")
 	}
+}
+
+func TestSyncSimulateMultiple(t *testing.T) {
+	sim := service.NewSimulator()
+
+	config := DefaultConfig()
+	config.MaxClockOffset = 1 * time.Second
+	config.MaxOffsetErrors = 2
+	config.RoundInterval = 0
+
+	delays := []time.Duration{0, 1100 * time.Millisecond, 1900 * time.Millisecond, 10 * time.Second}
+	instances := []*Sync{}
+	errors := []error{ErrPeersNotSynced, nil, nil, ErrPeersNotSynced}
+
+	for _, delay := range delays {
+		node := sim.NewNode()
+		sync := New(node,
+			WithConfig(config),
+			WithTime(adjustedTime(delay)),
+		)
+		sync.Start()
+		t.Cleanup(func() {
+			sync.Stop()
+			sync.Wait()
+		})
+		instances = append(instances, sync)
+	}
+	for i, inst := range instances {
+		if errors[i] == nil {
+			continue
+		}
+		wait := make(chan error, 1)
+		go func() {
+			wait <- inst.Wait()
+		}()
+		select {
+		case err := <-wait:
+			require.ErrorIs(t, err, errors[i])
+		case <-time.After(100 * time.Millisecond):
+			require.FailNow(t, "timed out waiting for an error")
+		}
+	}
+
 }
