@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ALTree/bigfloat"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -22,7 +23,15 @@ const (
 )
 
 // DefaultThreshold defines default weak coin threshold.
-var DefaultThreshold = types.HexToHash32("0x80" + strings.Repeat("00", 31)) // 0x80...00
+// It's equal to (2^256) / 2
+// (hex: 0x8000000000000000000000000000000000000000000000000000000000000000)
+var DefaultThreshold, _ = new(big.Float).Quo(
+	bigfloat.Pow(
+		new(big.Float).SetInt64(2),
+		new(big.Float).SetInt64(256),
+	),
+	new(big.Float).SetInt64(2),
+).Int(nil)
 
 type epochRoundPair struct {
 	EpochID types.EpochID
@@ -46,6 +55,7 @@ type WeakCoin interface {
 
 type weakCoin struct {
 	Log            log.Log
+	minerID        types.NodeID
 	verifier       verifierFunc
 	signer         signer
 	threshold      *big.Int
@@ -59,27 +69,27 @@ type weakCoin struct {
 }
 
 // a function to verify the message with the signature and its public key.
-type verifierFunc = func(msg, sig, pub []byte) (bool, error)
+type verifierFunc = func(pub, msg, sig []byte) bool
 
 type signer interface {
-	Sign(msg []byte) ([]byte, error)
+	Sign(msg []byte) []byte
 }
 
 // NewWeakCoin returns a new WeakCoin.
 func NewWeakCoin(
-	threshold types.Hash32,
+	threshold *big.Int,
+	minerID types.NodeID,
 	net broadcaster,
 	vrfVerifier verifierFunc,
 	vrfSigner signer,
 	logger log.Log,
 ) WeakCoin {
-	thresholdBigInt := new(big.Int).SetBytes(threshold[:])
-
 	wc := &weakCoin{
 		Log:          logger,
+		minerID:      minerID,
 		verifier:     vrfVerifier,
 		signer:       vrfSigner,
-		threshold:    thresholdBigInt,
+		threshold:    threshold,
 		net:          net,
 		proposals:    make(map[epochRoundPair][][]byte),
 		activeRounds: make(map[epochRoundPair]struct{}),
@@ -106,20 +116,27 @@ func (wc *weakCoin) Get(epoch types.EpochID, round types.RoundID) bool {
 }
 
 func (wc *weakCoin) PublishProposal(ctx context.Context, epoch types.EpochID, round types.RoundID) error {
-	p, err := wc.generateProposal(epoch, round)
+	wc.Log.With().Info("Publishing proposal",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint64("round", uint64(round)))
+
+	proposal, err := wc.generateProposal(epoch, round)
 	if err != nil {
 		return err
 	}
 
-	if wc.proposalExceedsThreshold(p) {
+	signedProposal := wc.signProposal(proposal)
+
+	if wc.proposalExceedsThreshold(proposal) {
 		// If a proposal exceeds the threshold, it is not sent.
 		return nil
 	}
 
 	message := Message{
-		Epoch:    epoch,
-		Round:    round,
-		Proposal: p,
+		Epoch:        epoch,
+		Round:        round,
+		MinerID:      wc.minerID,
+		VRFSignature: signedProposal,
 	}
 
 	serializedMessage, err := types.InterfaceToBytes(message)
@@ -131,41 +148,49 @@ func (wc *weakCoin) PublishProposal(ctx context.Context, epoch types.EpochID, ro
 		return fmt.Errorf("broadcast weak coin message: %w", err)
 	}
 
+	wc.Log.With().Info("Published proposal",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint64("round", uint64(round)),
+		log.String("proposal", types.BytesToHash(signedProposal).ShortString()))
+
 	return nil
 }
 
 func (wc *weakCoin) proposalExceedsThreshold(proposal []byte) bool {
-	proposalInt := new(big.Int).SetBytes(proposal[:])
+	proposalInt := new(big.Int).SetBytes(proposal)
 
 	return proposalInt.Cmp(wc.threshold) == 1
 }
 
 func (wc *weakCoin) generateProposal(epoch types.EpochID, round types.RoundID) ([]byte, error) {
-	msg := bytes.Buffer{}
+	proposal := bytes.Buffer{}
 
-	msg.WriteString(proposalPrefix)
+	proposal.WriteString(proposalPrefix)
 
 	epochBuf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(epochBuf, uint64(epoch))
-	if _, err := msg.Write(epochBuf); err != nil {
+	if _, err := proposal.Write(epochBuf); err != nil {
 		return nil, err
 	}
 
 	roundBuf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(roundBuf, uint64(round))
-	if _, err := msg.Write(roundBuf); err != nil {
+	if _, err := proposal.Write(roundBuf); err != nil {
 		return nil, err
 	}
 
-	vrfSig, err := wc.signer.Sign(msg.Bytes())
-	if err != nil {
-		return nil, fmt.Errorf("sign message: %w", err)
-	}
+	return proposal.Bytes(), nil
+}
 
-	return vrfSig, nil
+func (wc *weakCoin) signProposal(proposal []byte) []byte {
+	return wc.signer.Sign(proposal)
 }
 
 func (wc *weakCoin) OnRoundStarted(epoch types.EpochID, round types.RoundID) {
+	wc.Log.With().Info("Round started",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint64("round", uint64(round)))
+
 	wc.activeRoundsMu.Lock()
 	defer wc.activeRoundsMu.Unlock()
 
@@ -180,6 +205,10 @@ func (wc *weakCoin) OnRoundStarted(epoch types.EpochID, round types.RoundID) {
 }
 
 func (wc *weakCoin) OnRoundFinished(epoch types.EpochID, round types.RoundID) {
+	wc.Log.With().Info("Round finished",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint64("round", uint64(round)))
+
 	wc.activeRoundsMu.Lock()
 	defer wc.activeRoundsMu.Unlock()
 
@@ -206,8 +235,10 @@ func (wc *weakCoin) calculateWeakCoin(epoch types.EpochID, round types.RoundID) 
 	wc.weakCoinsMu.Lock()
 	defer wc.weakCoinsMu.Unlock()
 
-	if len(wc.proposals[pair]) == 0 {
-		wc.Log.Warning("No weak coin proposals were received",
+	proposals := wc.proposals[pair]
+
+	if len(proposals) == 0 {
+		wc.Log.With().Warning("No weak coin proposals were received",
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.Uint64("round", uint64(round)))
 
@@ -216,24 +247,43 @@ func (wc *weakCoin) calculateWeakCoin(epoch types.EpochID, round types.RoundID) 
 		return
 	}
 
-	smallest := new(big.Int).SetBytes(wc.proposals[pair][0][:])
+	smallest := new(big.Int).SetBytes(proposals[0])
+	stringProposals := []string{smallest.String()}
 
-	for i := 1; i < len(wc.proposals[pair]); i++ {
-		current := new(big.Int).SetBytes(wc.proposals[pair][i][:])
+	for i := 1; i < len(proposals); i++ {
+		current := new(big.Int).SetBytes(proposals[i])
+		stringProposals = append(stringProposals, current.String())
 
 		if current.Cmp(smallest) == -1 {
 			smallest = current
 		}
 	}
 
-	result := &big.Int{}
-	result.And(smallest, big.NewInt(1))
+	coinBit := new(big.Int).And(smallest, big.NewInt(1))
 
-	coin := result.Cmp(big.NewInt(1)) == 1
-	wc.weakCoins[pair] = coin
+	weakCoinValue := coinBitToBool(coinBit)
+	wc.weakCoins[pair] = weakCoinValue
+
+	wc.Log.With().Info("Weak coin calculation input",
+		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint64("round", uint64(round)),
+		log.String("smallest", smallest.String()),
+		log.String("coin_bit", coinBit.String()),
+		log.String("proposals", strings.Join(stringProposals, ", ")))
 
 	wc.Log.With().Info("Calculated weak coin",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round", uint64(round)),
-		log.Bool("weak_coin", coin))
+		log.Bool("weak_coin", weakCoinValue))
+}
+
+func coinBitToBool(coinBit *big.Int) bool {
+	switch coinBit.Int64() {
+	case 0:
+		return false
+	case 1:
+		return true
+	default:
+		panic("bad input")
+	}
 }

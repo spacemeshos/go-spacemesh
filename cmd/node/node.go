@@ -549,8 +549,8 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
 
 	// TODO(nkryuchkov): Enable weak coin when finished.
-	//wc := weakcoin.NewWeakCoin(weakcoin.DefaultThreshold, swarm, BLS381.Verify2, vrfSigner, app.addLogger(WeakCoinLogger, lg))
-	wc := weakcoin.ValueMock{Value: false}
+	wc := weakcoin.NewWeakCoin(weakcoin.DefaultThreshold, nodeID, swarm, signing.VRFVerify, vrfSigner, app.addLogger(WeakCoinLogger, lg))
+	// wc := weakcoin.ValueMock{Value: false}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, nodeID, ld, swarm, atxdb, tBeaconDB, sgn, signing.VRFVerify, vrfSigner, wc, clock, app.addLogger(TBeaconLogger, lg))
 	if err := tBeacon.Start(ctx); err != nil {
@@ -674,7 +674,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	gossipListener.AddListener(ctx, tortoisebeacon.TBFirstVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFirstVotingMessage)
 	gossipListener.AddListener(ctx, tortoisebeacon.TBFollowingVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFollowingVotingMessage)
 	// TODO(nkryuchkov): Enable weak coin when finished.
-	//gossipListener.AddListener(ctx, weakcoin.GossipProtocol, priorityq.Low, wc.HandleSerializedMessage)
+	gossipListener.AddListener(ctx, weakcoin.GossipProtocol, priorityq.Low, wc.HandleSerializedMessage)
 
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener
@@ -1107,7 +1107,6 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) error {
 	if app.Config.MetricsPush != "" {
 		metrics.StartPushingMetrics(app.Config.MetricsPush, app.Config.MetricsPushPeriod,
 			swarm.LocalNode().PublicKey().String(), strconv.Itoa(int(app.Config.P2P.NetworkID)))
-
 	}
 
 	app.startServices(ctx, logger)
