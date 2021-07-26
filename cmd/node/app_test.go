@@ -185,7 +185,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 				if runTests(suite, finished) {
 					break loop
 				}
-				time.Sleep(10 * time.Second)
+				time.Sleep(20 * time.Second)
 			}
 		}
 		suite.validateBlocksAndATXs(types.NewLayerID(numberOfEpochs * suite.apps[0].Config.LayersPerEpoch).Sub(1))
@@ -514,7 +514,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 		fmt.Sprintf("not good num of blocks got: %v, want: %v. totalBlocks: %v, genesisBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v datamap: %v",
 			actualTotalBlocks, expectedTotalBlocks, totalBlocks, genesisBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, datamap))
 
-	suite.T().Logf("good num of blocks got: %v, want: %v. totalBlocks: %v, genesisBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v datamap: %v",
+	suite.T().Logf("num of blocks got: %v, want: %v. totalBlocks: %v, genesisBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v datamap: %v",
 		actualTotalBlocks, expectedTotalBlocks, totalBlocks, genesisBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, datamap)
 
 	totalWeightAllEpochs := calcTotalWeight(assert.New(suite.T()), suite.apps)
