@@ -922,9 +922,12 @@ func (app *SpacemeshApp) stopServices() {
 		app.log.Info("closing mesh")
 		app.mesh.Close()
 	}
-	app.ptimesync.Stop()
-	_ = app.ptimesync.Wait()
-	app.log.Debug("peer timesync stopped")
+
+	if app.ptimesync != nil {
+		app.ptimesync.Stop()
+		_ = app.ptimesync.Wait()
+		app.log.Debug("peer timesync stopped")
+	}
 
 	events.CloseEventReporter()
 	events.CloseEventPubSub()
