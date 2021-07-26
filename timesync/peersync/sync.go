@@ -190,10 +190,11 @@ func (s *Sync) Start() {
 	})
 }
 
-// Stop background workers. If Sync was created WithContext calling Stop to is not necessary.
-// Sync will exit if parent context will be cancelled.
+// Stop background workers.
 func (s *Sync) Stop() {
 	s.cancel()
+	s.srv.Close()
+	s.Wait()
 }
 
 // Wait will return first error that is returned by background workers.
@@ -269,9 +270,7 @@ func (s *Sync) run() error {
 func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2pcrypto.PublicKey) (time.Duration, error) {
 	var (
 		responses = make(chan Response, len(prs))
-		// TODO(dshulyak) consider replacing wg with a loop with select on ctx
-		wg    sync.WaitGroup
-		round = round{
+		round     = round{
 			ID:                id,
 			Timestamp:         s.time.Now().UnixNano(),
 			RequiredResponses: s.config.RequiredResponses,
@@ -282,21 +281,23 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2pcrypto.PublicK
 	if err != nil {
 		s.log.With().Panic("can't encode request to bytes", log.Err(err))
 	}
-	var errCnt int
+	var (
+		errCnt    int
+		respCount int
+	)
 	for _, peer := range prs {
-		wg.Add(1)
-		// TODO(dshulyak) double-check that only one handler can be executed.
-		// this should exit only if we weren't able to send request to required number of peers
 		if err := s.srv.SendRequest(ctx, server.RequestTimeSync, buf, peer, func(buf []byte) {
-			defer wg.Done()
 			var response Response
 			if err := types.BytesToInterface(buf, &response); err != nil {
 				s.log.Debug("can't decode response", log.Binary("response", buf), log.Err(err))
 				return
 			}
-			responses <- response
-		}, func(error) { wg.Done() }); err != nil {
-			wg.Done()
+			select {
+			case <-ctx.Done():
+			case responses <- response:
+			}
+		}, func(error) {}); err != nil {
+			s.log.Debug("can't send request to peer", log.Err(err))
 			errCnt++
 		}
 		if d := len(prs) - errCnt; d < s.config.RequiredResponses || d == 0 {
@@ -304,11 +305,22 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2pcrypto.PublicK
 		}
 	}
 
-	wg.Wait()
-	close(responses)
-	for resp := range responses {
-		round.AddResponse(resp, s.time.Now().UnixNano())
+	wait := func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case resp := <-responses:
+				round.AddResponse(resp, s.time.Now().UnixNano())
+				respCount++
+				if respCount == len(prs)-errCnt {
+					return
+				}
+			}
+		}
 	}
+	wait()
+
 	if round.Ready() {
 		return round.Offset(), nil
 	}

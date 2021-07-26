@@ -196,15 +196,14 @@ func TestSyncSimulateMultiple(t *testing.T) {
 	errors := []error{ErrPeersNotSynced, nil, nil, ErrPeersNotSynced}
 
 	for _, delay := range delays {
-		node := sim.NewNode()
-		sync := New(node,
+		sync := New(
+			sim.NewNode(),
 			WithConfig(config),
 			WithTime(adjustedTime(delay)),
 		)
 		sync.Start()
 		t.Cleanup(func() {
 			sync.Stop()
-			sync.Wait()
 		})
 		instances = append(instances, sync)
 	}
@@ -223,5 +222,4 @@ func TestSyncSimulateMultiple(t *testing.T) {
 			require.FailNow(t, "timed out waiting for an error")
 		}
 	}
-
 }

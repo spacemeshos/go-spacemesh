@@ -925,7 +925,6 @@ func (app *SpacemeshApp) stopServices() {
 
 	if app.ptimesync != nil {
 		app.ptimesync.Stop()
-		_ = app.ptimesync.Wait()
 		app.log.Debug("peer timesync stopped")
 	}
 
