@@ -72,7 +72,7 @@ type MessageServer struct {
 	msgRequestHandlers map[MessageType]func(context.Context, Message) []byte //request handlers by request type
 	ingressChannel     chan service.DirectMessage                            //chan to relay messages into the server
 	requestLifetime    time.Duration                                         //time a request can stay in the pending queue until evicted
-	workerCount        sync.WaitGroup
+	workerLimit        int
 	workerLimiter      chan struct{}
 	exit               chan struct{}
 	log.Log
@@ -96,6 +96,7 @@ func NewMsgServer(ctx context.Context, network Service, name string, requestLife
 		msgRequestHandlers: make(map[MessageType]func(context.Context, Message) []byte),
 		requestLifetime:    requestLifetime,
 		exit:               make(chan struct{}),
+		workerLimit:        runtime.NumCPU(),
 		workerLimiter:      make(chan struct{}, runtime.NumCPU()),
 	}
 
@@ -108,7 +109,9 @@ func (p *MessageServer) Close() {
 	p.With().Info("closing MessageServer")
 	close(p.exit)
 	p.With().Info("waiting for message workers to finish...")
-	p.workerCount.Wait()
+	for i := 0; i < p.workerLimit; i++ {
+		p.workerLimiter <- struct{}{}
+	}
 	p.With().Info("message workers all done")
 }
 
@@ -116,10 +119,10 @@ func (p *MessageServer) Close() {
 func (p *MessageServer) readLoop(ctx context.Context) {
 	timer := time.NewTicker(p.requestLifetime + time.Millisecond*100)
 	defer timer.Stop()
+	defer p.With().Info("shutting down protocol", log.String("protocol", p.name))
 	for {
 		select {
 		case <-p.exit:
-			p.With().Info("shutting down protocol", log.String("protocol", p.name))
 			return
 		case <-timer.C:
 			go p.cleanStaleMessages()
@@ -131,12 +134,14 @@ func (p *MessageServer) readLoop(ctx context.Context) {
 				p.WithContext(ctx).Error("read loop channel was closed")
 				return
 			}
-			p.workerCount.Add(1)
-			p.workerLimiter <- struct{}{}
+			select {
+			case p.workerLimiter <- struct{}{}:
+			case <-p.exit:
+				return
+			}
 			go func(msg Message) {
 				p.handleMessage(ctx, msg)
 				<-p.workerLimiter
-				p.workerCount.Done()
 			}(msg.(Message))
 		}
 	}
