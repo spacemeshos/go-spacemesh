@@ -188,7 +188,7 @@ def validate_tortoise_beacon_weak_coins(log_messages):
     assert len(log_messages) > 0, f"no log messages"
 
     for log in log_messages:
-        epoch_round_pair = log.epoch_id + "/" + log.round_id
+        epoch_round_pair = str(log.epoch_id) + "/" + str(log.round_id)
 
         if epoch_round_pair  not in epoch_messages:
             epoch_messages[epoch_round_pair] = dict()
