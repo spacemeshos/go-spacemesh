@@ -21,7 +21,7 @@ require (
 	github.com/prometheus/common v0.18.0
 	github.com/pyroscope-io/pyroscope v0.0.30
 	github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361
-	github.com/spacemeshos/api/release/go v1.3.1-0.20210718081135-f54df33153c0
+	github.com/spacemeshos/api/release/go v1.3.1-0.20210726064428-9474f58a4ace
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/fixed v0.0.0-20210321020345-0ef1406dc23f
 	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82
