@@ -191,7 +191,7 @@ func TestSyncSimulateMultiple(t *testing.T) {
 	config.MaxOffsetErrors = 2
 	config.RoundInterval = 0
 
-	delays := []time.Duration{0, 1100 * time.Millisecond, 1900 * time.Millisecond, 10 * time.Second}
+	delays := []time.Duration{0, 1200 * time.Millisecond, 1900 * time.Millisecond, 10 * time.Second}
 	instances := []*Sync{}
 	errors := []error{ErrPeersNotSynced, nil, nil, ErrPeersNotSynced}
 
@@ -201,11 +201,11 @@ func TestSyncSimulateMultiple(t *testing.T) {
 			WithConfig(config),
 			WithTime(adjustedTime(delay)),
 		)
-		sync.Start()
-		t.Cleanup(func() {
-			sync.Stop()
-		})
 		instances = append(instances, sync)
+	}
+	for _, inst := range instances {
+		inst.Start()
+		t.Cleanup(inst.Stop)
 	}
 	for i, inst := range instances {
 		if errors[i] == nil {
@@ -219,7 +219,7 @@ func TestSyncSimulateMultiple(t *testing.T) {
 		case err := <-wait:
 			require.ErrorIs(t, err, errors[i])
 		case <-time.After(100 * time.Millisecond):
-			require.FailNow(t, "timed out waiting for an error")
+			require.FailNowf(t, "timed out waiting for an error", "node %d", i)
 		}
 	}
 }
