@@ -9,18 +9,30 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func defaultPeersProvider(tb testing.TB, added, expired chan p2pcrypto.PublicKey) PeersProvider {
-	tb.Helper()
-	ctrl := gomock.NewController(tb)
-	pp := mocks.NewMockPeersProvider(ctrl)
-	pp.EXPECT().SubscribePeerEvents().AnyTimes().Return(added, expired)
-	return pp
+var _ service.DirectMessage = (*directMessage)(nil)
+
+type directMessage service.DataMsgWrapper
+
+func (d *directMessage) Data() service.Data {
+	return (*service.DataMsgWrapper)(d)
+}
+
+func (d *directMessage) Bytes() []byte {
+	return (*service.DataMsgWrapper)(d).Bytes()
+}
+
+func (d *directMessage) Sender() p2pcrypto.PublicKey {
+	return nil
+}
+
+func (d *directMessage) Metadata() service.P2PMetadata {
+	return service.P2PMetadata{}
 }
 
 func TestSyncGetOffset(t *testing.T) {
@@ -31,30 +43,39 @@ func TestSyncGetOffset(t *testing.T) {
 		responseReceive = start.Add(40 * time.Second)
 	)
 
-	peers := []p2pcrypto.PublicKey{p2pcrypto.NewRandomPubkey(), p2pcrypto.NewRandomPubkey(), p2pcrypto.NewRandomPubkey()}
+	peers := []p2pcrypto.PublicKey{
+		p2pcrypto.NewRandomPubkey(),
+		p2pcrypto.NewRandomPubkey(),
+		p2pcrypto.NewRandomPubkey(),
+	}
 	resp := Response{
 		Timestamp: peerResponse.UnixNano(),
 	}
 	respBuf, err := types.InterfaceToBytes(resp)
 	require.NoError(t, err)
+	receive := make(chan service.DirectMessage, len(peers))
 
 	t.Run("Success", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		srv := mocks.NewMockMessageServer(ctrl)
+		network := mocks.NewMockNetwork(ctrl)
 		tm := mocks.NewMockTime(ctrl)
-		srv.EXPECT().RegisterBytesMsgHandler(gomock.Any(), gomock.Any())
+		network.EXPECT().RegisterDirectProtocolWithChannel(protocolName, gomock.Any()).Return(receive)
 
 		tm.EXPECT().Now().Return(roundStartTime)
 		for _, peer := range peers {
-			srv.EXPECT().SendRequest(gomock.Any(), server.RequestTimeSync, gomock.Any(), peer, gomock.Any(), gomock.Any()).Do(
-				func(_ context.Context, _ server.MessageType, _ []byte, _ p2pcrypto.PublicKey, handler func([]byte), _ func(error)) {
-					handler(respBuf)
+			network.EXPECT().SendWrappedMessage(gomock.Any(), peer, protocolName, gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ p2pcrypto.PublicKey, _ string, msg *service.DataMsgWrapper) error {
+					receive <- (*directMessage)(&service.DataMsgWrapper{
+						ReqID:   msg.ReqID,
+						Payload: respBuf,
+					})
+					return nil
 				},
-			).Return(nil)
+			)
 			tm.EXPECT().Now().Return(responseReceive)
 		}
-		sync := New(srv, defaultPeersProvider(t, nil, nil),
+		sync := New(network,
 			WithTime(tm),
 		)
 		offset, err := sync.GetOffset(context.TODO(), 0, peers)
@@ -65,23 +86,26 @@ func TestSyncGetOffset(t *testing.T) {
 	t.Run("Failure", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		srv := mocks.NewMockMessageServer(ctrl)
+		network := mocks.NewMockNetwork(ctrl)
 		tm := mocks.NewMockTime(ctrl)
-		srv.EXPECT().RegisterBytesMsgHandler(gomock.Any(), gomock.Any())
+		network.EXPECT().RegisterDirectProtocolWithChannel(protocolName, gomock.Any()).Return(receive)
 
 		tm.EXPECT().Now().Return(roundStartTime)
 		for _, peer := range peers {
-			srv.EXPECT().SendRequest(gomock.Any(), server.RequestTimeSync, gomock.Any(), peer, gomock.Any(), gomock.Any()).Do(
-				func(_ context.Context, _ server.MessageType, _ []byte, _ p2pcrypto.PublicKey, _ func([]byte), errhandler func(error)) {
-					errhandler(errors.New("test"))
+			network.EXPECT().SendWrappedMessage(gomock.Any(), peer, protocolName, gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ p2pcrypto.PublicKey, _ string, msg *service.DataMsgWrapper) error {
+					return errors.New("test")
 				},
-			).Return(nil)
+			)
 		}
-		sync := New(srv, defaultPeersProvider(t, nil, nil),
+		conf := DefaultConfig()
+		conf.RequiredResponses = 0
+		sync := New(network,
 			WithTime(tm),
+			WithConfig(conf),
 		)
 		offset, err := sync.GetOffset(context.TODO(), 0, peers)
-		require.ErrorIs(t, err, ErrTimesyncTimeout)
+		require.ErrorIs(t, err, ErrTimesyncFailed)
 		require.Equal(t, time.Duration(0), offset)
 	})
 }
@@ -104,13 +128,14 @@ func TestSyncTerminateOnError(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	srv := mocks.NewMockMessageServer(ctrl)
+	network := mocks.NewMockNetwork(ctrl)
 	tm := mocks.NewMockTime(ctrl)
+	receive := make(chan service.DirectMessage, peersCount)
+	network.EXPECT().RegisterDirectProtocolWithChannel(protocolName, gomock.Any()).Return(receive)
+	added := make(chan p2pcrypto.PublicKey, peersCount)
+	network.EXPECT().SubscribePeerEvents().Return(added, nil)
 
-	added := make(chan p2pcrypto.PublicKey, 3)
-
-	srv.EXPECT().RegisterBytesMsgHandler(gomock.Any(), gomock.Any())
-	sync := New(srv, defaultPeersProvider(t, added, nil),
+	sync := New(network,
 		WithTime(tm),
 		WithConfig(config),
 	)
@@ -119,19 +144,24 @@ func TestSyncTerminateOnError(t *testing.T) {
 	t.Cleanup(sync.Stop)
 	for i := 0; i < peersCount; i++ {
 		peer := p2pcrypto.NewRandomPubkey()
-		srv.EXPECT().SendRequest(gomock.Any(), server.RequestTimeSync, gomock.Any(), peer, gomock.Any(), gomock.Any()).Do(
-			func(_ context.Context, _ server.MessageType, buf []byte, _ p2pcrypto.PublicKey, handler func([]byte), _ func(error)) {
+		network.EXPECT().SendWrappedMessage(gomock.Any(), peer, protocolName, gomock.Any()).DoAndReturn(
+			func(_ context.Context, _ p2pcrypto.PublicKey, _ string, msg *service.DataMsgWrapper) error {
 				var req Request
-				assert.NoError(t, types.BytesToInterface(buf, &req))
+				assert.NoError(t, types.BytesToInterface(msg.Payload, &req))
 				resp := Response{
 					ID:        req.ID,
 					Timestamp: peerResponse.UnixNano(),
 				}
 				respBuf, err := types.InterfaceToBytes(resp)
 				assert.NoError(t, err)
-				handler(respBuf)
+
+				receive <- (*directMessage)(&service.DataMsgWrapper{
+					ReqID:   msg.ReqID,
+					Payload: respBuf,
+				})
+				return nil
 			},
-		).Return(nil)
+		)
 		tm.EXPECT().Now().Return(responseReceive)
 		added <- peer
 	}

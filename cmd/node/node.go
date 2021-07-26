@@ -38,7 +38,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -698,15 +697,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	app.layerFetch = layerFetch
 	app.tBeacon = tBeacon
 	app.ptimesync = peersync.New(
-		// TODO(dshulyak) move NewMsgServer initializer to peersync.New
-		server.NewMsgServer(ctx,
-			swarm.(server.Service), // FIXME service.Service should include server.Service interface
-			"/peersync/1.0/",
-			app.Config.TIME.Peersync.RoundTimeout,
-			make(chan service.DirectMessage, app.Config.P2P.BufferSize),
-			app.addLogger(TimeSyncLogger, lg),
-		),
-		swarm,
+		swarm.(peersync.Network),
 		peersync.WithLog(app.addLogger(TimeSyncLogger, lg)),
 		peersync.WithConfig(app.Config.TIME.Peersync),
 	)

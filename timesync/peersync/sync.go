@@ -12,17 +12,22 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"golang.org/x/sync/errgroup"
+)
+
+const (
+	protocolName = "/peersync/1.0/"
 )
 
 var (
 	// ErrPeersNotSynced returned if system clock is out of sync with peers clock for configured period of time.
 	ErrPeersNotSynced = errors.New("timesync: peers are not time synced")
-	// ErrTimesyncTimeout returned if we weren't able to collect enough clock samples from peers in required time.
-	ErrTimesyncTimeout = errors.New("timesync: timeout")
+	// ErrTimesyncFailed returned if we weren't able to collect enough clock samples from peers.
+	ErrTimesyncFailed = errors.New("timesync: failed request")
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/message_server_mock.go -source=./sync.go MessageServer,Time,PeersProvider
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./sync.go Time,Network
 
 // Time ...
 type Time interface {
@@ -30,13 +35,9 @@ type Time interface {
 }
 
 // MessageServer ...
-type MessageServer interface {
-	SendRequest(context.Context, server.MessageType, []byte, p2pcrypto.PublicKey, func([]byte), func(error)) error
-	RegisterBytesMsgHandler(server.MessageType, func(ctx context.Context, b []byte) []byte)
-}
-
-// PeersProvider ...
-type PeersProvider interface {
+type Network interface {
+	RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan service.DirectMessage) chan service.DirectMessage
+	SendWrappedMessage(ctx context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error
 	SubscribePeerEvents() (added, expired chan p2pcrypto.PublicKey)
 }
 
@@ -60,23 +61,25 @@ type Response struct {
 // DefaultConfig for Sync.
 func DefaultConfig() Config {
 	return Config{
-		RoundRetryInterval: 5 * time.Second,
-		RoundInterval:      30 * time.Minute,
-		RoundTimeout:       5 * time.Second,
-		MaxClockOffset:     10 * time.Second,
-		MaxOffsetErrors:    10,
-		RequiredResponses:  3,
+		RoundRetryInterval:  5 * time.Second,
+		RoundInterval:       30 * time.Minute,
+		RoundTimeout:        5 * time.Second,
+		MaxClockOffset:      10 * time.Second,
+		MaxOffsetErrors:     10,
+		RequiredResponses:   3,
+		ResponsesBufferSize: 20,
 	}
 }
 
 // Config for Sync.
 type Config struct {
-	RoundRetryInterval time.Duration `mapstructure:"round-retry-interval"`
-	RoundInterval      time.Duration `mapstructure:"round-interval"`
-	RoundTimeout       time.Duration `mapstructure:"round-timeout"`
-	MaxClockOffset     time.Duration `mapstructure:"max-clock-offset"`
-	MaxOffsetErrors    int           `mapstructure:"max-offset-errors"`
-	RequiredResponses  int           `mapstructure:"required-responses"`
+	RoundRetryInterval  time.Duration `mapstructure:"round-retry-interval"`
+	RoundInterval       time.Duration `mapstructure:"round-interval"`
+	RoundTimeout        time.Duration `mapstructure:"round-timeout"`
+	MaxClockOffset      time.Duration `mapstructure:"max-clock-offset"`
+	MaxOffsetErrors     int           `mapstructure:"max-offset-errors"`
+	RequiredResponses   int           `mapstructure:"required-responses"`
+	ResponsesBufferSize int           `mapstructure:"responses-buffer-size"`
 }
 
 // Option to modify Sync behavior.
@@ -111,14 +114,13 @@ func WithConfig(config Config) Option {
 }
 
 // New creates Sync instance and returns pointer.
-func New(srv MessageServer, peers PeersProvider, opts ...Option) *Sync {
+func New(network Network, opts ...Option) *Sync {
 	sync := &Sync{
-		log:           log.NewNop(),
-		ctx:           context.Background(),
-		time:          systemTime{},
-		config:        DefaultConfig(),
-		srv:           srv,
-		peersProvider: peers,
+		log:     log.NewNop(),
+		ctx:     context.Background(),
+		time:    systemTime{},
+		config:  DefaultConfig(),
+		network: network,
 		peersWatcher: peersWatcher{
 			requests: make(chan *waitPeersReq),
 		},
@@ -126,10 +128,18 @@ func New(srv MessageServer, peers PeersProvider, opts ...Option) *Sync {
 	for _, opt := range opts {
 		opt(sync)
 	}
-	srv.RegisterBytesMsgHandler(server.RequestTimeSync, sync.requestHandler)
 
 	sync.ctx, sync.cancel = context.WithCancel(sync.ctx)
 	sync.wg, sync.ctx = errgroup.WithContext(sync.ctx)
+
+	sync.srv = server.NewMsgServer(sync.ctx,
+		network,
+		protocolName,
+		sync.config.RoundTimeout,
+		make(chan service.DirectMessage, sync.config.ResponsesBufferSize),
+		sync.log,
+	)
+	sync.srv.RegisterBytesMsgHandler(server.RequestTimeSync, sync.requestHandler)
 	return sync
 }
 
@@ -137,12 +147,12 @@ func New(srv MessageServer, peers PeersProvider, opts ...Option) *Sync {
 type Sync struct {
 	errCnt uint32
 
-	config        Config
-	log           log.Log
-	srv           MessageServer
-	time          Time
-	peersProvider PeersProvider
-	peersWatcher  peersWatcher
+	config       Config
+	log          log.Log
+	srv          *server.MessageServer
+	time         Time
+	network      Network
+	peersWatcher peersWatcher
 
 	once   sync.Once
 	wg     *errgroup.Group
@@ -174,7 +184,7 @@ func (s *Sync) Start() {
 			return s.run()
 		})
 		s.wg.Go(func() error {
-			added, expired := s.peersProvider.SubscribePeerEvents()
+			added, expired := s.network.SubscribePeerEvents()
 			return s.peersWatcher.run(s.ctx, added, expired)
 		})
 	})
@@ -289,8 +299,8 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2pcrypto.PublicK
 			wg.Done()
 			errCnt++
 		}
-		if len(prs)-errCnt < s.config.RequiredResponses {
-			return 0, fmt.Errorf("failed to send requests to %d peers", errCnt)
+		if d := len(prs) - errCnt; d < s.config.RequiredResponses || d == 0 {
+			return 0, fmt.Errorf("%w: failed to send requests to %d peers from %d", ErrTimesyncFailed, errCnt, len(prs))
 		}
 	}
 
@@ -302,5 +312,5 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2pcrypto.PublicK
 	if round.Ready() {
 		return round.Offset(), nil
 	}
-	return 0, ErrTimesyncTimeout
+	return 0, fmt.Errorf("%w: failed on timeout", ErrTimesyncFailed)
 }
