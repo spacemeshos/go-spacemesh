@@ -209,6 +209,7 @@ test-fmt:
 lint:
 	golint --set_exit_status ./...
 	go vet ./...
+	golangci-lint run
 .PHONY: lint
 
 
