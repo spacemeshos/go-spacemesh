@@ -22,17 +22,6 @@ const (
 	GossipProtocol = "WeakCoinGossip"
 )
 
-// DefaultThreshold defines default weak coin threshold.
-// It's equal to (2^256) / 2
-// (hex: 0x8000000000000000000000000000000000000000000000000000000000000000)
-var DefaultThreshold, _ = new(big.Float).Quo(
-	bigfloat.Pow(
-		new(big.Float).SetInt64(2),
-		new(big.Float).SetInt64(256),
-	),
-	new(big.Float).SetInt64(2),
-).Int(nil)
-
 type epochRoundPair struct {
 	EpochID types.EpochID
 	Round   types.RoundID
@@ -73,6 +62,21 @@ type verifierFunc = func(pub, msg, sig []byte) bool
 
 type signer interface {
 	Sign(msg []byte) []byte
+}
+
+// DefaultThreshold defines default weak coin threshold.
+// It's equal to (2^256) / 2
+// (hex: 0x8000000000000000000000000000000000000000000000000000000000000000).
+func DefaultThreshold() *big.Int {
+	threshold, _ := new(big.Float).Quo(
+		bigfloat.Pow(
+			new(big.Float).SetInt64(2),
+			new(big.Float).SetInt64(256),
+		),
+		new(big.Float).SetInt64(2),
+	).Int(nil)
+
+	return threshold
 }
 
 // NewWeakCoin returns a new WeakCoin.
@@ -170,13 +174,13 @@ func (wc *weakCoin) generateProposal(epoch types.EpochID, round types.RoundID) (
 	epochBuf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(epochBuf, uint64(epoch))
 	if _, err := proposal.Write(epochBuf); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("write epoch to buffer: %w", err)
 	}
 
 	roundBuf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(roundBuf, uint64(round))
 	if _, err := proposal.Write(roundBuf); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("write round to buffer: %w", err)
 	}
 
 	return proposal.Bytes(), nil
