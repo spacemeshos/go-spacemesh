@@ -507,41 +507,6 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 	}
 }
 
-func (tb *TortoiseBeacon) runProposalPhase2(ctx context.Context, epoch types.EpochID) {
-	tb.Log.With().Debug("Starting proposal phase",
-		log.Uint64("epoch_id", uint64(epoch)))
-
-	proposalPhaseTimer := time.NewTimer(tb.proposalDuration)
-	defer proposalPhaseTimer.Stop()
-
-	go func() {
-		ctx, cancel := context.WithTimeout(ctx, tb.proposalDuration)
-		defer cancel()
-
-		tb.Log.With().Debug("Starting proposal message sender",
-			log.Uint64("epoch_id", uint64(epoch)))
-
-		if err := tb.proposalPhaseImpl(ctx, epoch); err != nil {
-			tb.Log.With().Error("Failed to send proposal message",
-				log.Uint64("epoch_id", uint64(epoch)),
-				log.Err(err))
-		}
-
-		tb.Log.With().Debug("Proposal message sender finished",
-			log.Uint64("epoch_id", uint64(epoch)))
-	}()
-
-	select {
-	case <-tb.CloseChannel():
-	case <-ctx.Done():
-	case <-proposalPhaseTimer.C:
-		tb.markProposalPhaseFinished(epoch)
-
-		tb.Log.With().Debug("Proposal phase finished",
-			log.Uint64("epoch_id", uint64(epoch)))
-	}
-}
-
 func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.EpochID) error {
 	proposedSignature, err := tb.getSignedProposal(epoch)
 	if err != nil {
