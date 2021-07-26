@@ -34,7 +34,7 @@ type Time interface {
 	Now() time.Time
 }
 
-// MessageServer ...
+// Network ...
 type Network interface {
 	RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan service.DirectMessage) chan service.DirectMessage
 	SendWrappedMessage(ctx context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error
