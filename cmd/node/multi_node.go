@@ -134,8 +134,9 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 	}
 
 	cfg.POST = activation.DefaultPostConfig()
-	cfg.POST.LabelsPerUnit = 1 << 11
+	cfg.POST.LabelsPerUnit = 32
 	cfg.POST.BitsPerLabel = 8
+	cfg.POST.K2 = 4
 
 	cfg.SMESHING = config.DefaultSmeshingConfig()
 	cfg.SMESHING.Start = true
