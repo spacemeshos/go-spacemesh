@@ -249,7 +249,7 @@ func (app *SpacemeshApp) introduction() {
 	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 }
 
-// Initialize does pre processing of flags and configuration files, it also initializes data dirs if they dont exist
+// InitializeCmd does pre processing of flags and configuration files, it also initializes data dirs if they dont exist
 func (app *SpacemeshApp) InitializeCmd(cmd *cobra.Command, args []string) (err error) {
 	// parse the config file based on flags et al
 	if err := app.ParseConfig(); err != nil {
@@ -272,7 +272,7 @@ func (app *SpacemeshApp) InitializeCmd(cmd *cobra.Command, args []string) (err e
 	return nil
 }
 
-// Initialize does pre processing of flags and configuration files, it also initializes data dirs if they dont exist
+// Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync
 func (app *SpacemeshApp) Initialize() (err error) {
 	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
 	signalChan := make(chan os.Signal, 1)

@@ -195,7 +195,7 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 
 	// Test a legal flag
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.Initialize(cmd, args))
+		r.NoError(app.Initialize())
 	}
 	str, err = testArgs("--test-mode")
 
@@ -237,7 +237,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 
 	// Try enabling an illegal service
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		err := app.Initialize(cmd, args)
+		err := app.Initialize()
 		r.Error(err)
 		r.Equal("unrecognized GRPC service requested: illegal", err.Error())
 	}
@@ -286,7 +286,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 
 	// This should work
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.Initialize(cmd, args))
+		r.NoError(app.Initialize())
 	}
 	str, err = testArgs("--grpc", "node")
 	r.Empty(str)
@@ -342,7 +342,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 
 	// Try enabling just the JSON service (without the GRPC service)
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		err := app.Initialize(cmd, args)
+		err := app.Initialize()
 		r.Error(err)
 		r.Equal("must enable at least one GRPC service along with JSON gateway service", err.Error())
 	}
@@ -357,7 +357,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 
 	// Try enabling both the JSON and the GRPC services
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.Initialize(cmd, args))
+		r.NoError(app.Initialize())
 	}
 	str, err = testArgs("--grpc", "node", "--json-server")
 	r.NoError(err)
@@ -419,7 +419,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	path := t.TempDir()
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.Initialize(cmd, args))
+		r.NoError(app.Initialize())
 		app.Config.API.GrpcServerPort = port
 		app.Config.DataDirParent = path
 		app.startAPIServices(context.TODO(), NetMock{})
@@ -490,7 +490,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 	// Make sure the service is not running by default
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.Initialize(cmd, args))
+		r.NoError(app.Initialize())
 		app.Config.DataDirParent = path
 		app.startAPIServices(context.TODO(), NetMock{})
 	}
@@ -564,8 +564,8 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	//app := NewSpacemeshApp()
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		defer app.Cleanup(cmd, args)
-		require.NoError(t, app.Initialize(cmd, args))
+		defer app.Cleanup()
+		require.NoError(t, app.Initialize())
 
 		// Give the error channel a buffer
 		events.CloseEventReporter()
@@ -579,7 +579,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		require.NoError(t, app.Start(cmd, args))
+		require.NoError(t, app.Start())
 	}
 
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
@@ -742,8 +742,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	app.Config = &cfg
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		defer app.Cleanup(cmd, args)
-		r.NoError(app.Initialize(cmd, args))
+		defer app.Cleanup()
+		r.NoError(app.Initialize())
 
 		app.Config.DataDirParent = path
 
@@ -771,7 +771,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		require.NoError(t, app.Start(cmd, args))
+		require.NoError(t, app.Start())
 	}
 
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
