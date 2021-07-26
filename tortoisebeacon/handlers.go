@@ -89,7 +89,7 @@ func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage, receivedTime 
 	}
 
 	if err != nil {
-		return fmt.Errorf("get node ATXID for epoch (miner ID %v): %w", m.MinerID, err)
+		return fmt.Errorf("get node ATXID for epoch (miner ID %v): %w", m.MinerID.Key, err)
 	}
 
 	err = tb.verifyProposalMessage(m, currentEpoch)
@@ -251,7 +251,7 @@ func (tb *TortoiseBeacon) HandleSerializedFirstVotingMessage(ctx context.Context
 	}
 
 	if err := tb.handleFirstVotingMessage(m); err != nil {
-		tb.Log.With().Error("Failed to handle voting message",
+		tb.Log.With().Error("Failed to handle first voting message",
 			log.Err(err))
 
 		return
@@ -281,7 +281,7 @@ func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Con
 	}
 
 	if err := tb.handleFollowingVotingMessage(m); err != nil {
-		tb.Log.With().Error("Failed to handle voting message",
+		tb.Log.With().Error("Failed to handle following voting message",
 			log.Err(err))
 
 		return
@@ -303,7 +303,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 	}
 
 	if err != nil {
-		return fmt.Errorf("get node ATXID for epoch (miner ID %v): %w", minerID, err)
+		return fmt.Errorf("get node ATXID for epoch (miner ID %v): %w", minerID.Key, err)
 	}
 
 	ok, err := tb.verifyEligibilityProof(message.FirstVotingMessageBody, minerID, message.Signature)
@@ -411,7 +411,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 	}
 
 	if err != nil {
-		return fmt.Errorf("get node ATXID for epoch (miner ID %v): %w", message.MinerID, err)
+		return fmt.Errorf("get node ATXID for epoch (miner ID %v): %w", minerID.Key, err)
 	}
 
 	// Ensure that epoch is the same.
