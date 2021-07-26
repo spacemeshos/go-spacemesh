@@ -64,7 +64,7 @@ func (wc *weakCoin) handleWeakCoinMessage(message Message) error {
 	if _, ok := wc.activeRounds[pair]; !ok {
 		wc.Log.Warning("Received malformed weak coin message",
 			log.Uint64("epoch_id", uint64(message.Epoch)),
-			log.Uint64("round", uint64(message.Round)))
+			log.Uint64("round_id", uint64(message.Round)))
 
 		return ErrMalformedMessage
 	}
@@ -74,7 +74,7 @@ func (wc *weakCoin) handleWeakCoinMessage(message Message) error {
 
 	wc.Log.Warning("Saving new proposal",
 		log.Uint64("epoch_id", uint64(message.Epoch)),
-		log.Uint64("round", uint64(message.Round)),
+		log.Uint64("round_id", uint64(message.Round)),
 		log.String("proposal", types.BytesToHash(message.VRFSignature).ShortString()))
 
 	wc.proposals[pair] = append(wc.proposals[pair], message.VRFSignature)

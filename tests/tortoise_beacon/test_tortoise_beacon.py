@@ -4,7 +4,7 @@ from pytest_testconfig import config as testconfig
 from tests import queries as q
 from tests.setup_utils import add_multi_clients
 from tests.setup_network import setup_network
-from tests.utils import validate_beacons, get_pod_id, get_conf
+from tests.utils import validate_tortoise_beacons, validate_tortoise_beacon_weak_coins, get_pod_id, get_conf
 
 
 def test_tortoise_beacon(init_session, setup_network):
@@ -42,7 +42,13 @@ def test_tortoise_beacon(init_session, setup_network):
     print("\n\n-------- current epoch", curr_epoch, "--------")
 
     print(f"-------- validating tortoise beacon --------")
-    beacon_messages = q.get_beacon_msgs(init_session, init_session)
+    beacon_messages = q.get_tortoise_beacon_msgs(init_session, init_session)
 
-    validate_beacons(beacon_messages)
+    validate_tortoise_beacons(beacon_messages)
     print("-------- tortoise beacon validation succeed --------")
+
+    print(f"-------- validating weak coin --------")
+    weak_coin_messages = q.get_tortoise_beacon_weak_coin_msgs(init_session, init_session)
+
+    validate_tortoise_beacon_weak_coins(weak_coin_messages)
+    print("-------- tortoise beacon weak coin validation succeed --------")
