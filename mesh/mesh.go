@@ -658,8 +658,10 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 	}
 
 	msh.SetLatestLayer(lyr)
+
 	lm := msh.getLayerMutex(lyr)
 	defer msh.endLayerWorker(lyr)
+
 	lm.m.Lock()
 	defer lm.m.Unlock()
 	// layer doesnt exist, need to insert new layer

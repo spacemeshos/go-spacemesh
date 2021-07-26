@@ -248,7 +248,7 @@ func (l *Logic) tortoiseBeaconReqReceiver(ctx context.Context, msg []byte) []byt
 	}
 
 	if err != nil {
-		l.log.WithContext(ctx).Error("cannot get tortoise beacon for epoch %v", epoch)
+		l.log.WithContext(ctx).Error("cannot get tortoise beacon for epoch %v: %v", epoch, err)
 		return []byte{}
 	}
 
