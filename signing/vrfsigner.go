@@ -7,6 +7,8 @@ import (
 	"github.com/spacemeshos/ed25519"
 )
 
+var _ Signer = VRFSigner{}
+
 // VRFSigner is a signer for VRF purposes
 type VRFSigner struct {
 	privateKey []byte
@@ -33,4 +35,20 @@ func NewVRFSigner(seed []byte) (*VRFSigner, []byte, error) {
 // VRFVerify verifies a message and signature, given a public key
 func VRFVerify(pub, msg, sig []byte) bool {
 	return ed25519.Verify(pub, msg, sig)
+}
+
+var _ Verifier = VRFVerifier{}
+
+type VRFVerifier struct{}
+
+func (VRFVerifier) Verify(pub *PublicKey, msg, sig []byte) bool {
+	return VRFVerify(ed25519.PublicKey(pub.Bytes()), msg, sig)
+}
+
+func (VRFVerifier) Extract(msg, sig []byte) (*PublicKey, error) {
+	pub, err := ed25519.ExtractPublicKey(msg, sig)
+	if err != nil {
+		return nil, err
+	}
+	return &PublicKey{pub: pub}, nil
 }

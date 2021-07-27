@@ -554,9 +554,11 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
 
-	// TODO(nkryuchkov): Enable weak coin when finished.
-	// wc := weakcoin.NewWeakCoin(weakcoin.DefaultThreshold(), nodeID, swarm, signing.VRFVerify, vrfSigner, app.addLogger(WeakCoinLogger, lg))
-	wc := weakcoin.ValueMock{Value: false}
+	wc := weakcoin.New(swarm,
+		vrfSigner, signing.VRFVerifier{},
+		weakcoin.WithLog(app.addLogger(WeakCoinLogger, lg)),
+	)
+
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, nodeID, ld, swarm, atxdb, tBeaconDB, sgn, signing.VRFVerify, vrfSigner, wc, clock, app.addLogger(TBeaconLogger, lg))
 

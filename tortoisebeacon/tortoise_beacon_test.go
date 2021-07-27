@@ -19,7 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin/mocks"
 )
 
 type validatorMock struct{}
@@ -41,18 +41,16 @@ func TestTortoiseBeacon(t *testing.T) {
 	mockDB := &mockActivationDB{}
 	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(10), nil, nil)
 
-	mwc := &weakcoin.MockWeakCoin{}
-	mwc.On("OnRoundStarted",
+	mwc := &mocks.Coin{}
+	mwc.On("StartRound",
+		mock.AnythingOfType("context.Context"),
+		mock.AnythingOfType("types.EpochID"),
+		mock.AnythingOfType("types.RoundID"),
+		mock.AnythingOfType("weakcoin.UnitAllowances"),
+	).Return(nil)
+	mwc.On("CompleteRound",
 		mock.AnythingOfType("types.EpochID"),
 		mock.AnythingOfType("types.RoundID"))
-	mwc.On("OnRoundFinished",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"))
-	mwc.On("PublishProposal",
-		mock.Anything,
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID")).
-		Return(nil)
 	mwc.On("Get",
 		mock.AnythingOfType("types.EpochID"),
 		mock.AnythingOfType("types.RoundID")).

@@ -6,7 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin/mocks"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -25,7 +25,7 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 	mockDB := &mockActivationDB{}
 	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(1), nil, nil)
 
-	mwc := &weakcoin.MockWeakCoin{}
+	mwc := &mocks.Coin{}
 	mwc.On("OnRoundStarted",
 		mock.AnythingOfType("types.EpochID"),
 		mock.AnythingOfType("types.RoundID"))
@@ -198,7 +198,7 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 	mockDB := &mockActivationDB{}
 	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(1), nil, nil)
 
-	mwc := &weakcoin.MockWeakCoin{}
+	mwc := &mocks.Coin{}
 	mwc.On("OnRoundStarted",
 		mock.AnythingOfType("types.EpochID"),
 		mock.AnythingOfType("types.RoundID"))

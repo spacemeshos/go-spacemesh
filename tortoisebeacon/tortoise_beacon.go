@@ -82,7 +82,7 @@ type TortoiseBeacon struct {
 	edSigner         *signing.EdSigner
 	vrfVerifier      verifierFunc
 	vrfSigner        signer
-	weakCoin         weakcoin.WeakCoin
+	weakCoin         weakcoin.Coin
 
 	seenEpochsMu sync.Mutex
 	seenEpochs   map[types.EpochID]struct{}
@@ -152,7 +152,7 @@ func New(
 	edSigner *signing.EdSigner,
 	vrfVerifier verifierFunc,
 	vrfSigner signer,
-	weakCoin weakcoin.WeakCoin,
+	weakCoin weakcoin.Coin,
 	clock layerClock,
 	logger log.Log,
 ) *TortoiseBeacon {
@@ -613,12 +613,10 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	ticker := time.NewTicker(tb.votingRoundDuration + tb.weakCoinRoundDuration)
 	defer ticker.Stop()
 
-	tb.sendFollowingVotesLoopIteration(ctx, epoch, firstRound+1)
-
-	for round := firstRound + 2; round <= tb.lastPossibleRound(); round++ {
+	for round := firstRound + 1; round <= tb.lastPossibleRound(); round++ {
+		tb.sendFollowingVotesLoopIteration(ctx, epoch, round)
 		select {
 		case <-ticker.C:
-			tb.sendFollowingVotesLoopIteration(ctx, epoch, round)
 		case <-tb.CloseChannel():
 			return
 		case <-ctx.Done():
@@ -630,7 +628,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		log.Uint64("epoch_id", uint64(epoch)))
 
 	tb.waitAfterLastRoundStarted()
-	tb.weakCoin.OnRoundFinished(epoch, tb.lastPossibleRound())
+	tb.weakCoin.CompleteEpoch()
 
 	tb.Log.With().Debug("Consensus phase finished",
 		log.Uint64("epoch_id", uint64(epoch)))
@@ -663,7 +661,7 @@ func (tb *TortoiseBeacon) sendFollowingVotesLoopIteration(ctx context.Context, e
 
 	go func(epoch types.EpochID, round types.RoundID) {
 		if round > firstRound+1 {
-			tb.weakCoin.OnRoundFinished(epoch, round-1)
+			tb.weakCoin.CompleteRound()
 		}
 
 		if err := tb.sendVotes(ctx, epoch, round); err != nil {
@@ -687,11 +685,9 @@ func (tb *TortoiseBeacon) sendFollowingVotesLoopIteration(ctx context.Context, e
 			return
 		}
 
-		tb.weakCoin.OnRoundStarted(epoch, round)
-
 		// TODO(nkryuchkov):
 		// should be published only after we should have received them
-		if err := tb.weakCoin.PublishProposal(ctx, epoch, round); err != nil {
+		if err := tb.weakCoin.StartRound(ctx, epoch, round); err != nil {
 			tb.Log.With().Error("Failed to publish weak coin proposal",
 				log.Uint64("epoch_id", uint64(epoch)),
 				log.Uint64("round_id", uint64(round)),

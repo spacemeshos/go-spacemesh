@@ -7,9 +7,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin/mocks"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
+
+func coinValueMock(value bool) weakcoin.Coin {
+	coin := &mocks.Coin{}
+	coin.On("Get",
+		mock.AnythingOfType("types.EpochID"),
+		mock.AnythingOfType("types.RoundID")).
+		Return(value)
+	return coin
+}
 
 func TestTortoiseBeacon_calcVotesFromProposals(t *testing.T) {
 	t.Parallel()
@@ -100,18 +110,16 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 		mock.AnythingOfType("types.EpochID")).
 		Return(uint64(1), nil, nil)
 
-	mwc := &weakcoin.MockWeakCoin{}
+	mwc := &mocks.Coin{}
 	mwc.On("OnRoundStarted",
+		mock.AnythingOfType("context.Context"),
+		mock.AnythingOfType("types.EpochID"),
+		mock.AnythingOfType("types.RoundID"),
+		mock.AnythingOfType("weakcoin.UnitAllowances"),
+	).Return(nil)
+	mwc.On("CompleteRound",
 		mock.AnythingOfType("types.EpochID"),
 		mock.AnythingOfType("types.RoundID"))
-	mwc.On("OnRoundFinished",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"))
-	mwc.On("PublishProposal",
-		mock.Anything,
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID")).
-		Return(nil)
 	mwc.On("Get",
 		mock.AnythingOfType("types.EpochID"),
 		mock.AnythingOfType("types.RoundID")).
@@ -319,18 +327,16 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 		mock.AnythingOfType("types.EpochID")).
 		Return(uint64(threshold), nil, nil)
 
-	mwc := &weakcoin.MockWeakCoin{}
+	mwc := &mocks.Coin{}
 	mwc.On("OnRoundStarted",
+		mock.AnythingOfType("context.Context"),
+		mock.AnythingOfType("types.EpochID"),
+		mock.AnythingOfType("types.RoundID"),
+		mock.AnythingOfType("weakcoin.UnitAllowances"),
+	).Return(nil)
+	mwc.On("CompleteRound",
 		mock.AnythingOfType("types.EpochID"),
 		mock.AnythingOfType("types.RoundID"))
-	mwc.On("OnRoundFinished",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"))
-	mwc.On("PublishProposal",
-		mock.Anything,
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID")).
-		Return(nil)
 	mwc.On("Get",
 		mock.AnythingOfType("types.EpochID"),
 		mock.AnythingOfType("types.RoundID")).
@@ -344,7 +350,7 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 		epoch         types.EpochID
 		upToRound     types.RoundID
 		incomingVotes map[epochRoundPair]votesPerPK
-		weakCoin      weakcoin.WeakCoin
+		weakCoin      weakcoin.Coin
 		result        votesSetPair
 	}{
 		{
@@ -375,7 +381,7 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 					},
 				},
 			},
-			weakCoin: weakcoin.ValueMock{Value: false},
+			weakCoin: coinValueMock(false),
 			result: votesSetPair{
 				ValidVotes: hashSet{
 					"0x1": {},
@@ -417,7 +423,7 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 					},
 				},
 			},
-			weakCoin: weakcoin.ValueMock{Value: true},
+			weakCoin: coinValueMock(true),
 			result: votesSetPair{
 				ValidVotes: hashSet{
 					"0x1": {},
@@ -585,7 +591,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 		round              types.RoundID
 		ownFirstRoundVotes votesSetPair
 		votesCount         votesMarginMap
-		weakCoin           weakcoin.WeakCoin
+		weakCoin           weakcoin.Coin
 		result             votesSetPair
 	}{
 		{
@@ -606,7 +612,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 				"0x2": -threshold * 3,
 				"0x3": threshold / 2,
 			},
-			weakCoin: weakcoin.ValueMock{Value: true},
+			weakCoin: coinValueMock(true),
 			result: votesSetPair{
 				ValidVotes: hashSet{
 					"0x1": {},
@@ -626,7 +632,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 				"0x2": -threshold * 3,
 				"0x3": threshold / 2,
 			},
-			weakCoin: weakcoin.ValueMock{Value: false},
+			weakCoin: coinValueMock(false),
 			result: votesSetPair{
 				ValidVotes: hashSet{
 					"0x1": {},

@@ -1,8 +1,8 @@
 package weakcoin
 
 import (
+	"bytes"
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -10,87 +10,54 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
-var (
-	// ErrMalformedMessage is returned when weak coin message is malformed.
-	ErrMalformedMessage = errors.New("malformed weak coin message")
-	// ErrMalformedProposal is returned if proposal message is malformed.
-	ErrMalformedProposal = errors.New("malformed proposal message")
-)
-
 // HandleSerializedMessage defines method to handle Tortoise Beacon Weak Coin Messages from gossip.
-func (wc *weakCoin) HandleSerializedMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
-	wc.Log.With().Info("New weak coin proposal message",
+func (wc *WeakCoin) HandleSerializedMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
+	wc.logger.With().Debug("weak coin proposal message",
 		log.String("from", data.Sender().String()))
 
 	var message Message
-
 	if err := types.BytesToInterface(data.Bytes(), &message); err != nil {
-		wc.Log.With().Error("Received invalid weak coin message",
-			log.String("message", string(data.Bytes())),
+		wc.logger.With().Error("received invalid weak coin message",
+			log.Binary("message", data.Bytes()),
 			log.Err(err))
-
 		return
 	}
 
 	if err := wc.handleWeakCoinMessage(message); err != nil {
-		if errors.Is(err, ErrMalformedProposal) {
-			wc.Log.With().Warning("Received malformed proposal",
-				log.String("sender", message.MinerID.Key))
-		} else {
-			wc.Log.With().Error("Failed to handle weak coin message",
-				log.String("sender", message.MinerID.Key),
-				log.Err(err))
-		}
-
+		wc.logger.With().Warning("received bad proposal",
+			log.Err(err), log.Uint32("epoch", uint32(message.Epoch)),
+			log.Uint64("round_id", uint64(message.Round)))
 		return
 	}
-
 	data.ReportValidation(ctx, GossipProtocol)
 }
 
-func (wc *weakCoin) handleWeakCoinMessage(message Message) error {
-	if err := wc.verifyProposal(message); err != nil {
-		return fmt.Errorf("verify proposal: %w", err)
+func (wc *WeakCoin) handleWeakCoinMessage(message Message) error {
+	if wc.exceedsThreshold(message.Signature) {
+		return fmt.Errorf("proposal %x exceeds threshold", message.Signature)
 	}
 
-	pair := epochRoundPair{
-		EpochID: message.Epoch,
-		Round:   message.Round,
+	msg := wc.encodeProposal(message.Epoch, message.Round, message.Unit)
+	miner, err := wc.verifier.Extract(msg, message.Signature)
+	if err != nil {
+		return fmt.Errorf("can't recover miner id from signature: %w", err)
 	}
 
-	wc.activeRoundsMu.RLock()
-	defer wc.activeRoundsMu.RUnlock()
-
-	if _, ok := wc.activeRounds[pair]; !ok {
-		wc.Log.Warning("Received malformed weak coin message",
-			log.Uint64("epoch_id", uint64(message.Epoch)),
-			log.Uint64("round_id", uint64(message.Round)))
-
-		return ErrMalformedMessage
+	wc.mu.Lock()
+	defer wc.mu.Unlock()
+	if wc.active.epoch != message.Epoch || wc.active.round != message.Round {
+		return fmt.Errorf("message for the wrong round %v/%v", message.Epoch, message.Round)
+	}
+	if !wc.allowances.Allowed(miner.Bytes(), message.Unit) {
+		return fmt.Errorf("miner %x is not allowed to submit proposal for unit %d", miner, message.Unit)
 	}
 
-	wc.proposalsMu.Lock()
-	defer wc.proposalsMu.Unlock()
-
-	wc.Log.Warning("Saving new proposal",
+	wc.logger.Debug("saving new proposal",
 		log.Uint64("epoch_id", uint64(message.Epoch)),
 		log.Uint64("round_id", uint64(message.Round)),
-		log.String("proposal", types.BytesToHash(message.VRFSignature).ShortString()))
-
-	wc.proposals[pair] = append(wc.proposals[pair], message.VRFSignature)
-
-	return nil
-}
-
-func (wc *weakCoin) verifyProposal(message Message) error {
-	expectedProposal, err := wc.generateProposal(message.Epoch, message.Round)
-	if err != nil {
-		return fmt.Errorf("calculate proposal: %w", err)
+		log.String("proposal", types.BytesToHash(message.Signature).ShortString()))
+	if bytes.Compare(message.Signature, wc.active.smallest) == -1 {
+		wc.active.smallest = message.Signature
 	}
-
-	if !wc.verifier(message.MinerID.VRFPublicKey, expectedProposal, message.VRFSignature) {
-		return ErrMalformedProposal
-	}
-
 	return nil
 }
