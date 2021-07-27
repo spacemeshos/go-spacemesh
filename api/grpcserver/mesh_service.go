@@ -288,12 +288,12 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 
 func convertActivation(a *types.ActivationTx) (*pb.Activation, error) {
 	return &pb.Activation{
-		Id:             &pb.ActivationId{Id: a.ID().Bytes()},
-		Layer:          &pb.LayerNumber{Number: a.PubLayerID.Uint32()},
-		SmesherId:      &pb.SmesherId{Id: a.NodeID.ToBytes()},
-		Coinbase:       &pb.AccountId{Address: a.Coinbase.Bytes()},
-		PrevAtx:        &pb.ActivationId{Id: a.PrevATXID.Bytes()},
-		CommitmentSize: a.Space,
+		Id:        &pb.ActivationId{Id: a.ID().Bytes()},
+		Layer:     &pb.LayerNumber{Number: a.PubLayerID.Uint32()},
+		SmesherId: &pb.SmesherId{Id: a.NodeID.ToBytes()},
+		Coinbase:  &pb.AccountId{Address: a.Coinbase.Bytes()},
+		PrevAtx:   &pb.ActivationId{Id: a.PrevATXID.Bytes()},
+		NumUnits:  uint32(a.NumUnits),
 	}, nil
 }
 

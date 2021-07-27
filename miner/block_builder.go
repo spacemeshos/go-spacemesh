@@ -257,7 +257,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 		case layerID := <-t.beginRoundEvent:
 			logger.With().Debug("builder got layer", layerID)
 			if !t.syncer.IsSynced(ctx) {
-				logger.Debug("not synced yet, not building a block in this round")
+				logger.Info("not synced yet, not building a block in this round")
 				continue
 			}
 			if layerID.GetEpoch().IsGenesis() {
