@@ -102,19 +102,19 @@ var Cmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		app := NewSpacemeshApp()
 		starter := func() error {
-			if err := app.Initialize(cmd, args); err != nil {
+			if err := app.InitializeCmd(cmd, args); err != nil {
 				log.With().Error("Failed to initialize node.", log.Err(err))
 				return err
 			}
 			// This blocks until the context is finished or until an error is produced
-			err := app.Start(cmd, args)
+			err := app.Start()
 			if err != nil {
 				log.With().Error("Failed to start the node. See logs for details.", log.Err(err))
 			}
 			return err
 		}
 		err := starter()
-		app.Cleanup(cmd, args)
+		app.Cleanup()
 		if err != nil {
 			os.Exit(1)
 		}
@@ -255,21 +255,8 @@ func (app *SpacemeshApp) introduction() {
 	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 }
 
-// Initialize does pre processing of flags and configuration files, it also initializes data dirs if they dont exist
-func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err error) {
-	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-
-	// Goroutine that listens for Ctrl ^ C command
-	// and triggers the quit app
-	go func() {
-		for range signalChan {
-			log.Info("Received an interrupt, stopping services...\n")
-			cmdp.Cancel()
-		}
-	}()
-
+// InitializeCmd does pre processing of flags and configuration files, it also initializes data dirs if they dont exist
+func (app *SpacemeshApp) InitializeCmd(cmd *cobra.Command, args []string) (err error) {
 	// parse the config file based on flags et al
 	if err := app.ParseConfig(); err != nil {
 		log.Error(fmt.Sprintf("couldn't parse the config err=%v", err))
@@ -287,6 +274,24 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 	if err != nil {
 		return err
 	}
+
+	return app.Initialize()
+}
+
+// Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync
+func (app *SpacemeshApp) Initialize() (err error) {
+	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt)
+
+	// Goroutine that listens for Ctrl ^ C command
+	// and triggers the quit app
+	go func() {
+		for range signalChan {
+			log.Info("Received an interrupt, stopping services...\n")
+			cmdp.Cancel()
+		}
+	}()
 
 	app.setupLogging()
 
@@ -338,7 +343,7 @@ func (app *SpacemeshApp) getAppInfo() string {
 }
 
 // Cleanup stops all app services
-func (app *SpacemeshApp) Cleanup(*cobra.Command, []string) {
+func (app *SpacemeshApp) Cleanup() {
 	log.Info("app cleanup starting...")
 	app.stopServices()
 	// add any other Cleanup tasks here....
@@ -1001,7 +1006,7 @@ func (app *SpacemeshApp) startSyncer(ctx context.Context) {
 }
 
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
-func (app *SpacemeshApp) Start(*cobra.Command, []string) error {
+func (app *SpacemeshApp) Start() error {
 	// we use the main app context
 	ctx := cmdp.Ctx
 	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
