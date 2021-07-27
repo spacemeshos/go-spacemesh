@@ -129,11 +129,11 @@ var (
 	poetRef = []byte{0xba, 0x38}
 	atxs    = []*types.ActivationTx{
 		newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{1}), types.NewLayerID(5),
-			1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
+			1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPostWithChallenge(&types.Hash32{}, poetRef)),
 		newActivationTx(types.NodeID{Key: "bbbb", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{2}), types.NewLayerID(5),
-			1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
+			1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPostWithChallenge(&types.Hash32{}, poetRef)),
 		newActivationTx(types.NodeID{Key: "cccc", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{3}), types.NewLayerID(5),
-			1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
+			1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPostWithChallenge(&types.Hash32{}, poetRef)),
 	}
 )
 
@@ -468,9 +468,9 @@ func createBlockBuilder(ID string, n *service.Node, meshBlocks []*types.Block) *
 
 func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
 	startTick uint64, positioningATX types.ATXID, coinbase types.Address, activeSetSize uint32, view []types.BlockID,
-	nipst *types.NIPST) *types.ActivationTx {
+	nipst *types.NIPost) *types.ActivationTx {
 
-	nipstChallenge := types.NIPSTChallenge{
+	nipstChallenge := types.NIPostChallenge{
 		NodeID:         nodeID,
 		Sequence:       sequence,
 		PrevATXID:      prevATX,

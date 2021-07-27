@@ -21,6 +21,7 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -41,10 +42,9 @@ import (
 )
 
 const (
-	miningStatus     = activation.InitDone
-	remainingBytes   = 321
-	commitmentSize   = 8826949
-	dataDir          = "/tmp"
+	labelsPerUnit    = 2048
+	bitsPerLabel     = 8
+	numUnits         = 2
 	defaultGasLimit  = 10
 	defaultFee       = 1
 	genTimeUnix      = 1000000
@@ -82,10 +82,10 @@ var (
 	prevAtxID  = types.ATXID(types.HexToHash32("44444"))
 	chlng      = types.HexToHash32("55555")
 	poetRef    = []byte("66666")
-	npst       = NewNIPSTWithChallenge(&chlng, poetRef)
+	nipost     = NewNIPostWithChallenge(&chlng, poetRef)
 	challenge  = newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-	globalAtx  = newAtx(challenge, npst, addr1)
-	globalAtx2 = newAtx(challenge, npst, addr2)
+	globalAtx  = newAtx(challenge, nipost, addr1)
+	globalAtx2 = newAtx(challenge, nipost, addr2)
 	globalTx   = NewTx(0, addr1, signing.NewEdSigner())
 	globalTx2  = NewTx(1, addr2, signing.NewEdSigner())
 	block1     = types.NewExistingBlock(types.LayerID{}, []byte("11111"), nil)
@@ -116,14 +116,17 @@ func init() {
 	types.SetLayersPerEpoch(layersPerEpoch)
 }
 
-func NewNIPSTWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPST {
-	return &types.NIPST{
-		NipstChallenge: challenge,
-		PostProof: &types.PostProof{
-			Challenge:    poetRef,
-			MerkleRoot:   []byte(nil),
-			ProofNodes:   [][]byte(nil),
-			ProvenLeaves: [][]byte(nil),
+func NewNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
+	return &types.NIPost{
+		Challenge: challenge,
+		Post: &types.Post{
+			Nonce:   0,
+			Indices: []byte(nil),
+		},
+		PostMetadata: &types.PostMetadata{
+			Challenge:     poetRef,
+			LabelsPerUnit: labelsPerUnit,
+			BitsPerLabel:  bitsPerLabel,
 		},
 	}
 }
@@ -350,8 +353,8 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 	return tx
 }
 
-func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPSTChallenge {
-	challenge := types.NIPSTChallenge{
+func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
+	challenge := types.NIPostChallenge{
 		NodeID:         nodeID,
 		Sequence:       sequence,
 		PrevATXID:      prevAtxID,
@@ -361,39 +364,106 @@ func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID type
 	return challenge
 }
 
-func newAtx(challenge types.NIPSTChallenge, nipst *types.NIPST, coinbase types.Address) *types.ActivationTx {
+func newAtx(challenge types.NIPostChallenge, nipost *types.NIPost, coinbase types.Address) *types.ActivationTx {
 	activationTx := &types.ActivationTx{
 		InnerActivationTx: &types.InnerActivationTx{
 			ActivationTxHeader: &types.ActivationTxHeader{
-				NIPSTChallenge: challenge,
-				Coinbase:       coinbase,
-				Space:          commitmentSize,
+				NIPostChallenge: challenge,
+				Coinbase:        coinbase,
+				NumUnits:        numUnits,
 			},
-			Nipst: nipst,
+			NIPost: nipost,
 		},
 	}
 	activationTx.CalcAndSetID()
 	return activationTx
 }
 
-// MiningAPIMock is a mock for mining API
-type MiningAPIMock struct{}
+// PostAPIMock is a mock for Post API.
+type PostAPIMock struct{}
 
-func (*MiningAPIMock) MiningStats() (int, uint64, string, string) {
-	return miningStatus, remainingBytes, addr1.String(), dataDir
+// A compile time check to ensure that PostAPIMock fully implements the PostAPI interface.
+var _ api.PostSetupAPI = (*PostAPIMock)(nil)
+
+func (*PostAPIMock) Status() *activation.PostSetupStatus {
+	return &activation.PostSetupStatus{}
 }
 
-func (*MiningAPIMock) StartPost(context.Context, types.Address, string, uint64) error {
+func (p *PostAPIMock) StatusChan() <-chan *activation.PostSetupStatus {
+	ch := make(chan *activation.PostSetupStatus, 1)
+	ch <- p.Status()
+	close(ch)
+
+	return ch
+}
+
+func (p *PostAPIMock) ComputeProviders() []activation.PostSetupComputeProvider {
 	return nil
 }
 
-func (*MiningAPIMock) SetCoinbaseAccount(types.Address) {}
+func (p *PostAPIMock) Benchmark(activation.PostSetupComputeProvider) (int, error) {
+	return 0, nil
+}
 
-func (*MiningAPIMock) GetSmesherID() types.NodeID {
+func (p *PostAPIMock) StartSession(opts activation.PostSetupOpts) (chan struct{}, error) {
+	return nil, nil
+}
+
+func (p *PostAPIMock) StopSession(deleteFiles bool) error {
+	return nil
+}
+
+func (p *PostAPIMock) GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error) {
+	return &types.Post{}, &types.PostMetadata{}, nil
+}
+
+func (p *PostAPIMock) LastError() error {
+	return nil
+}
+
+func (p *PostAPIMock) LastOpts() *activation.PostSetupOpts {
+	return &activation.PostSetupOpts{}
+}
+
+func (p *PostAPIMock) Config() activation.PostConfig {
+	return activation.PostConfig{}
+}
+
+// SmeshingAPIMock is a mock for Smeshing API.
+type SmeshingAPIMock struct{}
+
+// A compile time check to ensure that SmeshingAPIMock fully implements the SmeshingAPI interface.
+var _ api.SmeshingAPI = (*SmeshingAPIMock)(nil)
+
+func (*SmeshingAPIMock) Smeshing() bool {
+	return false
+}
+
+func (*SmeshingAPIMock) StartSmeshing(ctx context.Context, coinbase types.Address, opts activation.PostSetupOpts) error {
+	return nil
+}
+
+func (*SmeshingAPIMock) StopSmeshing(bool) error {
+	return nil
+}
+
+func (*SmeshingAPIMock) SmesherID() types.NodeID {
 	return nodeID
 }
 
-func (*MiningAPIMock) Stop() {}
+func (*SmeshingAPIMock) Coinbase() types.Address {
+	return addr1
+}
+
+func (*SmeshingAPIMock) SetCoinbase(coinbase types.Address) {
+}
+
+func (*SmeshingAPIMock) MinGas() uint64 {
+	return 0
+}
+
+func (*SmeshingAPIMock) SetMinGas(value uint64) {
+}
 
 type GenesisTimeMock struct {
 	t time.Time
@@ -1014,7 +1084,7 @@ func TestGlobalStateService(t *testing.T) {
 }
 
 func TestSmesherService(t *testing.T) {
-	svc := NewSmesherService(&MiningAPIMock{})
+	svc := NewSmesherService(&PostAPIMock{}, &SmeshingAPIMock{})
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -1037,19 +1107,23 @@ func TestSmesherService(t *testing.T) {
 		{"IsSmeshing", func(t *testing.T) {
 			res, err := c.IsSmeshing(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
-			require.True(t, res.IsSmeshing, "expected IsSmeshing to be true")
+			require.False(t, res.IsSmeshing, "expected IsSmeshing to be false")
 		}},
 		{"StartSmeshingMissingArgs", func(t *testing.T) {
 			_, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{})
-			require.Error(t, err)
-			statusCode := status.Code(err)
-			require.Equal(t, codes.InvalidArgument, statusCode)
+			require.Equal(t, codes.InvalidArgument, status.Code(err))
 		}},
 		{"StartSmeshing", func(t *testing.T) {
+			opts := &pb.PostSetupOpts{}
+			opts.DataDir = t.TempDir()
+			opts.NumUnits = 1
+			opts.NumFiles = 1
+
+			coinbase := &pb.AccountId{Address: addr1.Bytes()}
+
 			res, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
-				Coinbase:       &pb.AccountId{Address: addr1.Bytes()},
-				DataDir:        dataDir,
-				CommitmentSize: &pb.SimpleInt{Value: commitmentSize},
+				Opts:     opts,
+				Coinbase: coinbase,
 			})
 			require.NoError(t, err)
 			require.Equal(t, int32(code.Code_OK), res.Status.Code)
@@ -1062,7 +1136,7 @@ func TestSmesherService(t *testing.T) {
 		{"SmesherID", func(t *testing.T) {
 			res, err := c.SmesherID(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
-			require.Equal(t, nodeID.ToBytes(), res.AccountId.Address)
+			require.Equal(t, util.Hex2Bytes(nodeID.Key), res.AccountId.Address)
 		}},
 		{"SetCoinbaseMissingArgs", func(t *testing.T) {
 			_, err := c.SetCoinbase(context.Background(), &pb.SetCoinbaseRequest{})
@@ -1094,37 +1168,19 @@ func TestSmesherService(t *testing.T) {
 			statusCode := status.Code(err)
 			require.Equal(t, codes.Unimplemented, statusCode)
 		}},
-		{"PostStatus", func(t *testing.T) {
-			_, err := c.PostStatus(context.Background(), &empty.Empty{})
-			require.Error(t, err)
-			statusCode := status.Code(err)
-			require.Equal(t, codes.Unimplemented, statusCode)
+		{"PostSetupComputeProviders", func(t *testing.T) {
+			_, err = c.PostSetupComputeProviders(context.Background(), &pb.PostSetupComputeProvidersRequest{Benchmark: false})
+			require.NoError(t, err)
 		}},
-		{"PostComputeProviders", func(t *testing.T) {
-			_, err := c.PostComputeProviders(context.Background(), &empty.Empty{})
-			require.Error(t, err)
-			statusCode := status.Code(err)
-			require.Equal(t, codes.Unimplemented, statusCode)
-		}},
-		{"CreatePostData", func(t *testing.T) {
-			_, err := c.CreatePostData(context.Background(), &pb.CreatePostDataRequest{})
-			require.Error(t, err)
-			statusCode := status.Code(err)
-			require.Equal(t, codes.Unimplemented, statusCode)
-		}},
-		{"StopPostDataCreationSession", func(t *testing.T) {
-			_, err := c.StopPostDataCreationSession(context.Background(), &pb.StopPostDataCreationSessionRequest{})
-			require.Error(t, err)
-			statusCode := status.Code(err)
-			require.Equal(t, codes.Unimplemented, statusCode)
-		}},
-		{"PostDataCreationProgressStream", func(t *testing.T) {
-			stream, err := c.PostDataCreationProgressStream(context.Background(), &empty.Empty{})
-			// We expect to be able to open the stream but for it to fail upon the first request
+		{"PostSetupStatusStream", func(t *testing.T) {
+			stream, err := c.PostSetupStatusStream(context.Background(), &empty.Empty{})
+
+			// Expecting the stream to return a single update before closing.
 			require.NoError(t, err)
 			_, err = stream.Recv()
-			statusCode := status.Code(err)
-			require.Equal(t, codes.Unimplemented, statusCode)
+			require.NoError(t, err)
+			_, err = stream.Recv()
+			require.EqualError(t, err, io.EOF.Error())
 		}},
 	}
 
@@ -1987,7 +2043,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if bytes.Compare(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) != 0 {
 				continue
 			}
-			if a.CommitmentSize != globalAtx.Space {
+			if a.NumUnits != uint32(globalAtx.NumUnits) {
 				continue
 			}
 			// found a match
@@ -2430,7 +2486,7 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
 		require.Equal(t, globalAtx.NodeID.ToBytes(), x.Activation.SmesherId.Id)
 		require.Equal(t, globalAtx.Coinbase.Bytes(), x.Activation.Coinbase.Address)
 		require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
-		require.Equal(t, uint64(commitmentSize), x.Activation.CommitmentSize)
+		require.Equal(t, globalAtx.NumUnits, uint(x.Activation.NumUnits))
 	default:
 		require.Fail(t, "inner account data item has wrong tx data type")
 	}

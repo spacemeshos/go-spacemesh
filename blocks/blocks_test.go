@@ -18,19 +18,17 @@ func init() {
 	types.SetLayersPerEpoch(3)
 }
 
-var commitment = &types.PostProof{
-	Challenge:    []byte(nil),
-	MerkleRoot:   []byte("1"),
-	ProofNodes:   [][]byte(nil),
-	ProvenLeaves: [][]byte(nil),
+var initialPost = &types.Post{
+	Nonce:   0,
+	Indices: []byte(nil),
 }
 
 var goldenATXID = types.ATXID(types.HexToHash32("77777"))
 
 func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
-	startTick uint64, positioningATX types.ATXID, coinbase types.Address, nipst *types.NIPST) *types.ActivationTx {
+	startTick uint64, positioningATX types.ATXID, coinbase types.Address, nipost *types.NIPost) *types.ActivationTx {
 
-	nipstChallenge := types.NIPSTChallenge{
+	nipostChallenge := types.NIPostChallenge{
 		NodeID:         nodeID,
 		Sequence:       sequence,
 		PrevATXID:      prevATX,
@@ -38,18 +36,18 @@ func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, 
 		StartTick:      startTick,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipstChallenge, coinbase, nipst, 1024, nil)
+	return types.NewActivationTx(nipostChallenge, coinbase, nipost, 1024, nil)
 }
 
 func atx(pubkey string) *types.ActivationTx {
 	coinbase := types.HexToAddress("aaaa")
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xde, 0xad}
-	npst := activation.NewNIPSTWithChallenge(&chlng, poetRef)
+	npst := activation.NewNIPostWithChallenge(&chlng, poetRef)
 
 	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, types.NewLayerID(5), 1, goldenATXID, coinbase, npst)
-	atx.Commitment = commitment
-	atx.CommitmentMerkleRoot = commitment.MerkleRoot
+	atx.InitialPost = initialPost
+	atx.InitialPostIndices = initialPost.Indices
 	atx.CalcAndSetID()
 	return atx
 }
@@ -248,14 +246,14 @@ func TestBlockHandler_AtxSetID(t *testing.T) {
 	t.Log("---------------------")
 	t.Log(fmt.Sprintf("%+v", b))
 	t.Log("---------------------")
-	assert.Equal(t, b.Nipst, a.Nipst)
-	assert.Equal(t, b.Commitment, a.Commitment)
+	assert.Equal(t, b.NIPost, a.NIPost)
+	assert.Equal(t, b.InitialPost, a.InitialPost)
 
 	assert.Equal(t, b.ActivationTxHeader.NodeID, a.ActivationTxHeader.NodeID)
 	assert.Equal(t, b.ActivationTxHeader.PrevATXID, a.ActivationTxHeader.PrevATXID)
 	assert.Equal(t, b.ActivationTxHeader.Coinbase, a.ActivationTxHeader.Coinbase)
-	assert.Equal(t, b.ActivationTxHeader.CommitmentMerkleRoot, a.ActivationTxHeader.CommitmentMerkleRoot)
-	assert.Equal(t, b.ActivationTxHeader.NIPSTChallenge, a.ActivationTxHeader.NIPSTChallenge)
+	assert.Equal(t, b.ActivationTxHeader.InitialPostIndices, a.ActivationTxHeader.InitialPostIndices)
+	assert.Equal(t, b.ActivationTxHeader.NIPostChallenge, a.ActivationTxHeader.NIPostChallenge)
 	b.CalcAndSetID()
 	assert.Equal(t, a.ShortString(), b.ShortString())
 }

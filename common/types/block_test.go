@@ -3,17 +3,12 @@ package types
 import (
 	"math"
 	"testing"
-	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/require"
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 func genByte32() [32]byte {
 	var x [32]byte

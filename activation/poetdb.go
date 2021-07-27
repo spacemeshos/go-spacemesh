@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/hash"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/poet/verifier"
 	"github.com/spacemeshos/sha256-simd"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type poetProofKey [sha256.Size]byte
@@ -100,9 +101,9 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
 	}
 	db.log.With().Info("stored PoET proof",
-		log.String("poet_proof_id", fmt.Sprintf("%x", ref)[:5]),
+		log.String("poet_proof_id", fmt.Sprintf("%x", ref[:5])),
 		log.String("round_id", proofMessage.RoundID),
-		log.String("poet_service_id", fmt.Sprintf("%x", proofMessage.PoetServiceID)[:5]),
+		log.String("poet_service_id", fmt.Sprintf("%x", proofMessage.PoetServiceID[:5])),
 	)
 	db.publishProofRef(key, ref)
 	return nil
@@ -163,7 +164,7 @@ func (db *PoetDb) GetProofMessage(proofRef []byte) ([]byte, error) {
 func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, error) {
 	proofMessageBytes, err := db.GetProofMessage(proofRef)
 	if err != nil {
-		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %v", proofRef[:3], err)
+		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %v", proofRef[:5], err)
 	}
 	var proofMessage types.PoetProofMessage
 	if err := types.BytesToInterface(proofMessageBytes, &proofMessage); err != nil {

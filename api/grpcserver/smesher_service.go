@@ -1,14 +1,15 @@
 package grpcserver
 
 import (
-	"context"
-
+	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"golang.org/x/net/context"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
@@ -17,7 +18,8 @@ import (
 
 // SmesherService exposes endpoints to manage smeshing
 type SmesherService struct {
-	Mining api.MiningAPI
+	postSetupProvider api.PostSetupAPI
+	smeshingProvider  api.SmeshingAPI
 }
 
 // RegisterService registers this service with a grpc server instance
@@ -26,19 +28,15 @@ func (s SmesherService) RegisterService(server *Server) {
 }
 
 // NewSmesherService creates a new grpc service using config data.
-func NewSmesherService(miner api.MiningAPI) *SmesherService {
-	return &SmesherService{
-		Mining: miner,
-	}
+func NewSmesherService(post api.PostSetupAPI, smeshing api.SmeshingAPI) *SmesherService {
+	return &SmesherService{post, smeshing}
 }
 
 // IsSmeshing reports whether the node is smeshing
 func (s SmesherService) IsSmeshing(context.Context, *empty.Empty) (*pb.IsSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.IsSmeshing")
 
-	stat, _, _, _ := s.Mining.MiningStats()
-	isSmeshing := stat == activation.InitDone
-	return &pb.IsSmeshingResponse{IsSmeshing: isSmeshing}, nil
+	return &pb.IsSmeshingResponse{IsSmeshing: s.smeshingProvider.Smeshing()}, nil
 }
 
 // StartSmeshing requests that the node begin smeshing
@@ -48,28 +46,53 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 	if in.Coinbase == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "`Coinbase` must be provided")
 	}
-	if in.DataDir == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "`DataDir` must be provided")
-	}
-	if in.CommitmentSize == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "`CommitmentSize` must be provided")
+
+	if in.Opts == nil {
+		return nil, status.Error(codes.InvalidArgument, "`Opts` must be provided")
 	}
 
-	addr := types.BytesToAddress(in.Coinbase.Address)
-	if err := s.Mining.StartPost(ctx, addr, in.DataDir, in.CommitmentSize.Value); err != nil {
-		log.Error("error starting post: %s", err)
-		return nil, status.Errorf(codes.Internal, "error initializing smeshing")
+	if in.Opts.DataDir == "" {
+		return nil, status.Error(codes.InvalidArgument, "`Opts.DataDir` must be provided")
 	}
+
+	if in.Opts.NumUnits == 0 {
+		return nil, status.Error(codes.InvalidArgument, "`Opts.NumUnits` must be provided")
+	}
+
+	if in.Opts.NumFiles == 0 {
+		return nil, status.Error(codes.InvalidArgument, "`Opts.NumFiles` must be provided")
+	}
+
+	coinbaseAddr := types.BytesToAddress(in.Coinbase.Address)
+	opts := activation.PostSetupOpts{
+		DataDir:           in.Opts.DataDir,
+		NumUnits:          uint(in.Opts.NumUnits),
+		NumFiles:          uint(in.Opts.NumFiles),
+		ComputeProviderID: int(in.Opts.ComputeProviderId),
+		Throttle:          in.Opts.Throttle,
+	}
+
+	if err := s.smeshingProvider.StartSmeshing(ctx, coinbaseAddr, opts); err != nil {
+		err := fmt.Sprintf("failed to start smeshing: %v", err)
+		log.Error(err)
+		return nil, status.Error(codes.Internal, err)
+	}
+
 	return &pb.StartSmeshingResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
 }
 
 // StopSmeshing requests that the node stop smeshing
-func (s SmesherService) StopSmeshing(context.Context, *pb.StopSmeshingRequest) (*pb.StopSmeshingResponse, error) {
+func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingRequest) (*pb.StopSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.StopSmeshing")
 
-	s.Mining.Stop()
+	if err := s.smeshingProvider.StopSmeshing(in.DeleteFiles); err != nil {
+		err := fmt.Sprintf("failed to stop smeshing: %v", err)
+		log.Error(err)
+		return nil, status.Error(codes.Internal, err)
+	}
+
 	return &pb.StopSmeshingResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
@@ -79,20 +102,15 @@ func (s SmesherService) StopSmeshing(context.Context, *pb.StopSmeshingRequest) (
 func (s SmesherService) SmesherID(context.Context, *empty.Empty) (*pb.SmesherIDResponse, error) {
 	log.Info("GRPC SmesherService.SmesherID")
 
-	smesherID := s.Mining.GetSmesherID()
-	return &pb.SmesherIDResponse{AccountId: &pb.AccountId{Address: smesherID.ToBytes()}}, nil
+	addr := util.Hex2Bytes(s.smeshingProvider.SmesherID().Key)
+	return &pb.SmesherIDResponse{AccountId: &pb.AccountId{Address: addr}}, nil
 }
 
 // Coinbase returns the current coinbase setting of this node
 func (s SmesherService) Coinbase(context.Context, *empty.Empty) (*pb.CoinbaseResponse, error) {
 	log.Info("GRPC SmesherService.Coinbase")
 
-	_, _, coinbase, _ := s.Mining.MiningStats()
-	addr, err := types.StringToAddress(coinbase)
-	if err != nil {
-		log.Error("error converting coinbase: %s", err)
-		return nil, status.Errorf(codes.Internal, "error reading coinbase data")
-	}
+	addr := s.smeshingProvider.Coinbase()
 	return &pb.CoinbaseResponse{AccountId: &pb.AccountId{Address: addr.Bytes()}}, nil
 }
 
@@ -105,7 +123,8 @@ func (s SmesherService) SetCoinbase(_ context.Context, in *pb.SetCoinbaseRequest
 	}
 
 	addr := types.BytesToAddress(in.Id.Address)
-	s.Mining.SetCoinbaseAccount(addr)
+	s.smeshingProvider.SetCoinbase(addr)
+
 	return &pb.SetCoinbaseResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
@@ -129,34 +148,97 @@ func (s SmesherService) EstimatedRewards(context.Context, *pb.EstimatedRewardsRe
 	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
 }
 
-// PostStatus returns post data status
-func (s SmesherService) PostStatus(context.Context, *empty.Empty) (*pb.PostStatusResponse, error) {
-	log.Info("GRPC SmesherService.PostStatus")
-	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
+// PostSetupStatus returns post data status
+func (s SmesherService) PostSetupStatus(context.Context, *empty.Empty) (*pb.PostSetupStatusResponse, error) {
+	log.Info("GRPC SmesherService.PostSetupStatus")
+
+	status := s.postSetupProvider.Status()
+	return &pb.PostSetupStatusResponse{Status: statusToPbStatus(status)}, nil
 }
 
-// PostComputeProviders returns a list of available post compute providers
-func (s SmesherService) PostComputeProviders(context.Context, *empty.Empty) (*pb.PostComputeProvidersResponse, error) {
-	log.Info("GRPC SmesherService.PostComputeProviders")
-	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
+// PostSetupStatusStream exposes a stream of status updates during post setup
+func (s SmesherService) PostSetupStatusStream(_ *empty.Empty, stream pb.SmesherService_PostSetupStatusStreamServer) error {
+	log.Info("GRPC SmesherService.PostSetupStatusStream")
+
+	statusChan := s.postSetupProvider.StatusChan()
+	for {
+		select {
+		case status, more := <-statusChan:
+			if !more {
+				return nil
+			}
+			if err := stream.Send(&pb.PostSetupStatusStreamResponse{Status: statusToPbStatus(status)}); err != nil {
+				return err
+			}
+		case <-stream.Context().Done():
+			return nil
+		}
+	}
 }
 
-// CreatePostData requests that the node begin post init
-func (s SmesherService) CreatePostData(context.Context, *pb.CreatePostDataRequest) (*pb.CreatePostDataResponse, error) {
-	log.Info("GRPC SmesherService.CreatePostData")
-	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
+// PostSetupComputeProviders returns a list of available Post setup compute providers
+func (s SmesherService) PostSetupComputeProviders(ctx context.Context, in *pb.PostSetupComputeProvidersRequest) (*pb.PostSetupComputeProvidersResponse, error) {
+	log.Info("GRPC SmesherService.PostSetupComputeProviders")
+
+	providers := s.postSetupProvider.ComputeProviders()
+
+	res := &pb.PostSetupComputeProvidersResponse{}
+	res.Providers = make([]*pb.PostSetupComputeProvider, len(providers))
+	for i, p := range providers {
+		var hashesPerSec int
+		if in.Benchmark {
+			var err error
+			hashesPerSec, err = s.postSetupProvider.Benchmark(p)
+			if err != nil {
+				log.Error("failed to benchmark provider: %v", err)
+				return nil, status.Error(codes.Internal, "failed to benchmark provider")
+			}
+		}
+
+		res.Providers[i] = &pb.PostSetupComputeProvider{
+			Id:          uint32(p.ID),
+			Model:       p.Model,
+			ComputeApi:  pb.PostSetupComputeProvider_ComputeApiClass(p.ComputeAPI), // assuming enum values match.
+			Performance: uint64(hashesPerSec),
+		}
+	}
+
+	return res, nil
 }
 
-// StopPostDataCreationSession requests that the node stop ongoing post data creation
-func (s SmesherService) StopPostDataCreationSession(context.Context, *pb.StopPostDataCreationSessionRequest) (*pb.StopPostDataCreationSessionResponse, error) {
-	log.Info("GRPC SmesherService.StopPostDataCreationSession")
-	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
+// PostConfig returns the Post protocol config.
+func (s SmesherService) PostConfig(context.Context, *empty.Empty) (*pb.PostConfigResponse, error) {
+	log.Info("GRPC SmesherService.PostConfig")
+
+	cfg := s.postSetupProvider.Config()
+
+	return &pb.PostConfigResponse{
+		BitsPerLabel:  uint32(cfg.BitsPerLabel),
+		LabelsPerUnit: uint64(cfg.LabelsPerUnit),
+		MinNumUnits:   uint32(cfg.MinNumUnits),
+		MaxNumUnits:   uint32(cfg.MaxNumUnits),
+	}, nil
 }
 
-// STREAMS
+func statusToPbStatus(status *activation.PostSetupStatus) *pb.PostSetupStatus {
+	pbStatus := &pb.PostSetupStatus{}
 
-// PostDataCreationProgressStream exposes a stream of updates during post init
-func (s SmesherService) PostDataCreationProgressStream(*empty.Empty, pb.SmesherService_PostDataCreationProgressStreamServer) error {
-	log.Info("GRPC SmesherService.PostDataCreationProgressStream")
-	return status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
+	pbStatus.State = pb.PostSetupStatus_State(status.State) // assuming enum values match.
+	pbStatus.NumLabelsWritten = status.NumLabelsWritten
+
+	if status.LastError != nil {
+		pbStatus.ErrorMessage = status.LastError.Error()
+	}
+
+	if status.LastOpts != nil {
+		pbStatus.Opts = &pb.PostSetupOpts{
+			DataDir:           status.LastOpts.DataDir,
+			NumUnits:          uint32(status.LastOpts.NumUnits),
+			NumFiles:          uint32(status.LastOpts.NumFiles),
+			ComputeProviderId: uint32(status.LastOpts.ComputeProviderID),
+			Throttle:          status.LastOpts.Throttle,
+		}
+	}
+
+	return pbStatus
 }
