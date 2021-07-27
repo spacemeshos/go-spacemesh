@@ -36,7 +36,9 @@ else
   endif
 endif
 
-$(info "OS: $(OS), HOST_OS: $(HOST_OS), GOOS: $(GOOS), GOARCH: $(GOARH), BIN_DIR: $(BIN_DIR), platform: $(platform)")
+ifneq ($(VERBOSE),)
+  $(info "OS: $(OS), HOST_OS: $(HOST_OS), GOOS: $(GOOS), GOARCH: $(GOARH), BIN_DIR: $(BIN_DIR), platform: $(platform)")
+endif
 
 GPU_SETUP_REV = 0.1.21
 GPU_SETUP_ZIP = libgpu-setup-$(platform)-$(GPU_SETUP_REV).zip
@@ -92,3 +94,7 @@ print-test-targets:
 	done
 .PHONY: $(SUBDIRS_ALL) $(SUBDIRS_LVL2) $(SUBDIRS_ONLY) print-test-targets
 
+ldflags:
+	$(shell $(MAKE) -s get-gpu-setup 1>&2)
+	$(file >/tmp/.go-spacemesh.ldflags, export CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)")
+	@echo . /tmp/.go-spacemesh.ldflags
