@@ -55,7 +55,7 @@ client:
   deployment_type: deployment # default:deployment
 # IMPORTANT: all clients on the same suite should contain the same args (hare-committee-size, hare-max-adversaries etc)!
 clientv2:
-  image: 'spacemeshos/go-spacemesh-dev:api-cleanup-p2pv0.0.1'
+  image: 'spacemeshos/go-spacemesh-dev:smesher_api-p2p_v0.0.1-dirty'
   # do not replace this docker image when running locally
   noreplace: 1
   command: '/bin/go-p2p'

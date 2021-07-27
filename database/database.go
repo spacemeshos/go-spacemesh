@@ -19,6 +19,12 @@ package database
 
 import (
 	"fmt"
+	"runtime"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
@@ -26,11 +32,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"runtime"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 )
 
 const (
@@ -341,7 +342,7 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 	errc <- merr
 }
 
-//NewBatch creates a new batch write struct, able to add multiple values in a single operation
+// NewBatch creates a new batch write struct, able to add multiple values in a single operation
 func (db *LDBDatabase) NewBatch() Batch {
 	return &ldbBatch{db: db.db, b: new(leveldb.Batch)}
 }

@@ -5,13 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/hashicorp/golang-lru"
-	"github.com/nullstyle/go-xdr/xdr3"
+	"sync"
+
+	lru "github.com/hashicorp/golang-lru"
+	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/fixed"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"sync"
 )
 
 const vrfMsgCacheSize = 20       // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
@@ -51,8 +52,7 @@ type Oracle struct {
 	meshdb         meshProvider
 	vrfSigner      signer
 	vrfVerifier    verifierFunc
-	layersPerEpoch uint16
-	spacePerUnit   uint64
+	layersPerEpoch uint32
 	vrfMsgCache    addGet
 	activesCache   addGet
 	cfg            eCfg.Config
@@ -64,32 +64,32 @@ type Oracle struct {
 // blocks), defined to be confidence param number of layers prior to the input layer.
 func safeLayerRange(
 	targetLayer types.LayerID,
-	safetyParam uint16,
-	layersPerEpoch uint16,
-	epochOffset uint16,
+	safetyParam,
+	layersPerEpoch,
+	epochOffset uint32,
 ) (safeLayerStart, safeLayerEnd types.LayerID) {
 	// prevent overflow
-	if targetLayer <= types.LayerID(safetyParam) {
+	if targetLayer.Uint32() <= safetyParam {
 		return types.GetEffectiveGenesis(), types.GetEffectiveGenesis()
 	}
-	safeLayer := targetLayer - types.LayerID(safetyParam)
+	safeLayer := targetLayer.Sub(safetyParam)
 	safeEpoch := safeLayer.GetEpoch()
 	safeLayerStart = safeEpoch.FirstLayer()
 	safeLayerEnd = safeLayerStart.Add(epochOffset)
 
 	// If the safe layer is in the first epochOffset layers of an epoch,
 	// return a range from the beginning of the previous epoch
-	if safeLayer < safeLayerEnd {
+	if safeLayer.Before(safeLayerEnd) {
 		// prevent overflow
-		if safeLayerStart <= types.LayerID(layersPerEpoch) {
+		if safeLayerStart.Uint32() <= layersPerEpoch {
 			return types.GetEffectiveGenesis(), types.GetEffectiveGenesis()
 		}
-		safeLayerStart = safeLayerStart - types.LayerID(layersPerEpoch)
-		safeLayerEnd = safeLayerEnd - types.LayerID(layersPerEpoch)
+		safeLayerStart = safeLayerStart.Sub(layersPerEpoch)
+		safeLayerEnd = safeLayerEnd.Sub(layersPerEpoch)
 	}
 
 	// If any portion of the range is in the genesis layers, just return the effective genesis
-	if safeLayerStart <= types.GetEffectiveGenesis() {
+	if !safeLayerStart.After(types.GetEffectiveGenesis()) {
 		return types.GetEffectiveGenesis(), types.GetEffectiveGenesis()
 	}
 
@@ -103,8 +103,7 @@ func New(
 	meshdb meshProvider,
 	vrfVerifier verifierFunc,
 	vrfSigner signer,
-	layersPerEpoch uint16,
-	spacePerUnit uint64,
+	layersPerEpoch uint32,
 	cfg eCfg.Config,
 	logger log.Log) *Oracle {
 	vmc, err := lru.New(vrfMsgCacheSize)
@@ -124,7 +123,6 @@ func New(
 		vrfVerifier:    vrfVerifier,
 		vrfSigner:      vrfSigner,
 		layersPerEpoch: layersPerEpoch,
-		spacePerUnit:   spacePerUnit,
 		vrfMsgCache:    vmc,
 		activesCache:   ac,
 		cfg:            cfg,
@@ -139,7 +137,7 @@ type vrfMessage struct {
 }
 
 func buildKey(l types.LayerID, r int32) [2]uint64 {
-	return [2]uint64{uint64(l), uint64(r)}
+	return [2]uint64{uint64(l.Uint32()), uint64(r)}
 }
 
 // buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round)
@@ -261,38 +259,32 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
-	minerUnits := minerWeight / o.spacePerUnit
-	// TODO: Consider checking/disallowing space not in round units
-	totalUnits := totalWeight / o.spacePerUnit
-	// TODO: If space is not in round units, only consider the amount of space in round units for the total weight
-
 	logger.With().Info("prep",
 		log.Uint64("minerWeight", minerWeight),
 		log.Uint64("totalWeight", totalWeight),
-		log.Uint64("o.spacePerUnit", o.spacePerUnit),
 	)
-	n = int(minerUnits)
+	n = int(minerWeight)
 
 	// ensure miner weight fits in int
-	if uint64(n) != minerUnits {
-		logger.Panic(fmt.Sprintf("minerUnits overflows int (%d)", minerUnits))
+	if uint64(n) != minerWeight {
+		logger.Panic(fmt.Sprintf("minerWeight overflows int (%d)", minerWeight))
 	}
 
 	// calc p
-	if committeeSize > int(totalUnits) {
-		logger.With().Warning("committee size is greater than total units",
+	if committeeSize > int(totalWeight) {
+		logger.With().Warning("committee size is greater than total weight",
 			log.Int("committeeSize", committeeSize),
-			log.Uint64("totalUnits", totalUnits),
+			log.Uint64("totalWeight", totalWeight),
 		)
-		totalUnits *= uint64(committeeSize)
+		totalWeight *= uint64(committeeSize)
 		n *= committeeSize
 	}
-	p = fixed.DivUint64(uint64(committeeSize), totalUnits)
+	p = fixed.DivUint64(uint64(committeeSize), totalWeight)
 
-	if minerUnits > maxSupportedN {
+	if minerWeight > maxSupportedN {
 		return 0, fixed.Fixed{}, fixed.Fixed{}, false,
-			fmt.Errorf("miner weight exceeds supported maximum (id: %v, weight: %d, units: %d, max: %d",
-				id, minerWeight, minerUnits, maxSupportedN)
+			fmt.Errorf("miner weight exceeds supported maximum (id: %v, weight: %d, max: %d",
+				id, minerWeight, maxSupportedN)
 	}
 	return n, p, calcVrfFrac(vrfSig), false, nil
 }
@@ -405,8 +397,8 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 		log.FieldNamed("safe_layer_end", safeLayerEnd),
 		log.FieldNamed("safe_layer_start_epoch", safeLayerStart.GetEpoch()),
 		log.FieldNamed("safe_layer_end_epoch", safeLayerEnd.GetEpoch()),
-		log.Uint16("confidence_param", o.cfg.ConfidenceParam),
-		log.Uint16("epoch_offset", o.cfg.EpochOffset),
+		log.Uint32("confidence_param", o.cfg.ConfidenceParam),
+		log.Uint32("epoch_offset", o.cfg.EpochOffset),
 		log.Uint64("layers_per_epoch", uint64(o.layersPerEpoch)),
 		log.FieldNamed("effective_genesis", types.GetEffectiveGenesis()))
 
@@ -437,7 +429,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 	}
 
 	activeBlockIDs := make(map[types.BlockID]struct{})
-	for layerID := safeLayerStart; layerID <= safeLayerEnd; layerID++ {
+	for layerID := safeLayerStart; !layerID.After(safeLayerEnd); layerID = layerID.Add(1) {
 		layerBlockIDs, err := o.meshdb.LayerContextuallyValidBlocks(layerID)
 		if err != nil {
 			return nil, fmt.Errorf("error getting active blocks for layer %v for target layer %v: %w",
