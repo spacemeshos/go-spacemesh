@@ -68,8 +68,11 @@ jobs:
           make lint
 
   golangci-lint:
-    name: golangci-lint
     runs-on: ubuntu-latest
+    needs: filter-changes
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
+    # should not take more than 2-3 mins
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v2
       - name: golangci-lint
@@ -137,12 +140,13 @@ jobs:
     needs:
       - filter-changes
       - quicktests
+      - golangci-lint
       - unittests
       - apptests
     runs-on: ubuntu-latest
     env:
       # short-circuit success if no non-doc files were modified
-      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.unittests.result == 'success' && needs.apptests.result == 'success')) && 'success' || 'failure' }}
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.golangci-lint.result == 'success' && needs.unittests.result == 'success' && needs.apptests.result == 'success')) && 'success' || 'failure' }}
     # this is the easiest way to access success/failure state of previous jobs in this workflow
     steps:
       - uses: act10ns/slack@v1
