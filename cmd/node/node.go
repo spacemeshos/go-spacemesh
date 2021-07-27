@@ -337,17 +337,10 @@ func (app *SpacemeshApp) Cleanup(*cobra.Command, []string) {
 }
 
 func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) error {
-	var conf *apiCfg.GenesisConfig
-	if app.Config.GenesisConfPath != "" {
-		var err error
-		conf, err = apiCfg.LoadGenesisConfig(app.Config.GenesisConfPath)
-		if err != nil {
-			return fmt.Errorf("cannot load genesis config from file %s: %w", app.Config.GenesisConfPath, err)
-		}
-	} else {
-		conf = apiCfg.DefaultGenesisConfig()
+	if app.Config.Genesis == nil {
+		app.Config.Genesis = apiCfg.DefaultGenesisConfig()
 	}
-	for id, acc := range conf.InitialAccounts {
+	for id, balance := range app.Config.Genesis.Accounts {
 		bytes := util.FromHex(id)
 		if len(bytes) == 0 {
 			return fmt.Errorf("cannot read config entry for genesis account %s", id)
@@ -355,11 +348,10 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 
 		addr := types.BytesToAddress(bytes)
 		state.CreateAccount(addr)
-		state.AddBalance(addr, acc.Balance)
-		state.SetNonce(addr, acc.Nonce)
+		state.AddBalance(addr, balance)
 		app.log.With().Info("genesis account created",
 			log.String("acct_id", id),
-			log.Uint64("balance", acc.Balance))
+			log.Uint64("balance", balance))
 	}
 
 	_, err := state.Commit()
