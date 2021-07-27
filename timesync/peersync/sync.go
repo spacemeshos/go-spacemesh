@@ -80,9 +80,8 @@ type Config struct {
 	MaxClockOffset     time.Duration `mapstructure:"max-clock-offset"`
 	MaxOffsetErrors    int           `mapstructure:"max-offset-errors"`
 	RequiredResponses  int           `mapstructure:"required-responses"`
-	// TODO(dshulyak) this field always shouldn't be updated using cli or config file.
-	// it should be based on p2p settings.
-	ResponsesBufferSize int `mapstructure:"responses-buffer-size"`
+	// ResponsesBufferSize should be updated from p2pconfig.BufferSize
+	ResponsesBufferSize int
 }
 
 // Option to modify Sync behavior.
