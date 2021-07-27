@@ -79,6 +79,7 @@ func (m mockNet) GetPeers() []peers.Peer {
 	_, pub1, _ := p2pcrypto.GenerateKeyPair()
 	return []peers.Peer{pub1}
 }
+
 func (m *mockNet) SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error {
 	m.TotalBatchCalls++
 	if m.ReturnError {
@@ -161,7 +162,7 @@ func TestFetch_GetHash(t *testing.T) {
 	hint := Hint("db")
 	hint2 := Hint("db2")
 
-	//test hash aggregation
+	// test hash aggregation
 	f.GetHash(h1, hint, false)
 	f.GetHash(h1, hint, false)
 
@@ -314,12 +315,12 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 
 	defer f.Stop()
 	f.Start()
-	//test hash aggregation
+	// test hash aggregation
 	r1 := f.GetHash(h1, hint, false)
 	r2 := f.GetHash(h2, hint, false)
 	r3 := f.GetHash(h3, hint, false)
 
-	//since we have a batch of 2 we should call send twice - of not we should fail
+	// since we have a batch of 2 we should call send twice - of not we should fail
 	select {
 	case <-net.AckChannel:
 		break
@@ -434,11 +435,9 @@ func TestFetch_handleNewRequest_MultipleReqsForSameHashHighPriority(t *testing.T
 			} else {
 				assert.Equal(t, resp3.Data, resp.Data)
 			}
-			break
 		case <-time.After(2 * time.Second):
 			assert.Fail(t, "timeout getting resp for %v", req)
 		}
-
 	}
 	assert.Equal(t, 2, net.TotalBatchCalls)
 }
@@ -451,7 +450,9 @@ func TestFetch_GetRandomPeer(t *testing.T) {
 	}
 	allTheSame := true
 	for i := 0; i < 20; i++ {
-		if GetRandomPeer(peers) != GetRandomPeer(peers) {
+		peer1 := GetRandomPeer(peers)
+		peer2 := GetRandomPeer(peers)
+		if peer1 != peer2 {
 			allTheSame = false
 		}
 	}

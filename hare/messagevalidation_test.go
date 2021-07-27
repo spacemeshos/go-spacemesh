@@ -12,8 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type truer struct {
-}
+type truer struct{}
 
 func (truer) Validate(context.Context, *Msg) bool {
 	return true
@@ -59,22 +58,25 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 func TestEligibilityValidator_validateRole(t *testing.T) {
 	oracle := &mockRolacle{}
 	types.SetLayersPerEpoch(10)
+
 	ev := newEligibilityValidator(oracle, 10, &mockIDProvider{}, 1, 5, log.NewDefault(""))
 	ev.oracle = oracle
 	res, err := ev.validateRole(context.TODO(), nil)
 	assert.NotNil(t, err)
 	assert.False(t, res)
+
 	m := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet(), nil)
 	m.InnerMsg = nil
 	res, err = ev.validateRole(context.TODO(), m)
 	assert.NotNil(t, err)
 	assert.False(t, res)
+
 	m = BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet(), nil)
 	oracle.isEligible = false
-	res, err = ev.validateRole(context.TODO(), m)
+	/*res*/ _, err = ev.validateRole(context.TODO(), m)
 	assert.Nil(t, err)
 	// TODO: remove comment after inceptions problem is addressed
-	//assert.False(t, res)
+	// assert.False(t, res)
 
 	m.InnerMsg.InstanceID = types.NewLayerID(111)
 	myErr := errors.New("my error")

@@ -17,8 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type ContextualValidityMock struct {
-}
+type ContextualValidityMock struct{}
 
 func (m *ContextualValidityMock) Has([]byte) (bool, error) {
 	return true, nil
@@ -45,7 +44,6 @@ func (m *ContextualValidityMock) Delete([]byte) error {
 }
 
 func (m *ContextualValidityMock) Close() {
-
 }
 
 type MeshValidatorMock struct {
@@ -63,6 +61,7 @@ func (m *MeshValidatorMock) LatestComplete() types.LayerID {
 func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
 	return layer.Index().Sub(1), layer.Index()
 }
+
 func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
 	return bl.Layer().Sub(1), bl.Layer()
 }
@@ -111,6 +110,7 @@ func (MockState) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
 func (MockState) GetBalance(addr types.Address) uint64 {
 	panic("implement me")
 }
+
 func (MockState) GetNonce(addr types.Address) uint64 {
 	panic("implement me")
 }
@@ -134,7 +134,6 @@ func (m *MockTxMemPool) Put(ID types.TransactionID, t *types.Transaction) {
 }
 
 func (MockTxMemPool) Invalidate(types.TransactionID) {
-
 }
 
 func getMesh(id string) *Mesh {
@@ -145,7 +144,6 @@ func getMesh(id string) *Mesh {
 }
 
 func TestLayers_AddBlock(t *testing.T) {
-
 	layers := getMesh("t1")
 	defer layers.Close()
 
@@ -170,7 +168,7 @@ func TestLayers_AddBlock(t *testing.T) {
 
 	assert.True(t, len(rBlock1.TxIDs) == len(block1.TxIDs), "block content was wrong")
 	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
-	//assert.True(t, len(*rBlock1.ActiveSet) == len(*block1.ActiveSet))
+	// assert.True(t, len(*rBlock1.ActiveSet) == len(*block1.ActiveSet))
 }
 
 func addLayer(id types.LayerID, layerSize int, msh *Mesh) *types.Layer {
@@ -243,19 +241,26 @@ func TestLayers_AddWrongLayer(t *testing.T) {
 func TestLayers_GetLayer(t *testing.T) {
 	layers := getMesh("t4")
 	defer layers.Close()
+
 	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data1"), nil)
 	block2 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data2"), nil)
 	block3 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data3"), nil)
+
 	l1 := types.NewExistingLayer(types.NewLayerID(1), []*types.Block{block1})
 	err := layers.AddBlock(block1)
 	assert.NoError(t, err)
+
 	layers.ValidateLayer(l1)
-	l, err := layers.GetProcessedLayer(types.NewLayerID(0))
+	_, err = layers.GetProcessedLayer(types.NewLayerID(0))
+	assert.ErrorIs(t, err, database.ErrNotFound)
+
 	err = layers.AddBlock(block2)
 	assert.NoError(t, err)
+
 	err = layers.AddBlock(block3)
 	assert.NoError(t, err)
-	l, err = layers.GetProcessedLayer(types.NewLayerID(1))
+
+	l, err := layers.GetProcessedLayer(types.NewLayerID(1))
 	assert.True(t, err == nil, "error: ", err)
 	assert.True(t, l.Index() == types.NewLayerID(1), "wrong layer")
 }
@@ -294,7 +299,7 @@ func TestLayers_WakeUp(t *testing.T) {
 
 	assert.True(t, len(rBlock1.TxIDs) == len(block1.TxIDs), "block content was wrong")
 	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
-	//assert.True(t, len(*rBlock1.ActiveSet) == len(*block1.ActiveSet))
+	// assert.True(t, len(*rBlock1.ActiveSet) == len(*block1.ActiveSet))
 
 	recoveredMesh := NewMesh(layers.DB, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: layers.DB}, newMockTxMemPool(), &MockState{}, log.NewDefault(""))
 
@@ -306,7 +311,7 @@ func TestLayers_WakeUp(t *testing.T) {
 
 	assert.True(t, len(rBlock1.TxIDs) == len(block1.TxIDs), "block content was wrong")
 	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
-	//assert.True(t, len(rBlock1.ATXIDs) == len(block1.ATXIDs))
+	// assert.True(t, len(rBlock1.ATXIDs) == len(block1.ATXIDs))
 }
 
 func TestLayers_OrphanBlocks(t *testing.T) {
@@ -527,8 +532,9 @@ func TestMesh_AddBlockWithTxs(t *testing.T) {
 
 	blk := types.NewExistingBlock(types.NewLayerID(1), []byte("data"), nil)
 
-	err := mesh.AddBlockWithTxs(context.TODO(), blk)
-	//r.EqualError(err, "failed to process ATXs: 💥")
-	_, err = meshDB.blocks.Get(blk.ID().AsHash32().Bytes())
+	// err := mesh.AddBlockWithTxs(context.TODO(), blk)
+	mesh.AddBlockWithTxs(context.TODO(), blk)
+	// r.EqualError(err, "failed to process ATXs: 💥")
+	_, err := meshDB.blocks.Get(blk.ID().AsHash32().Bytes())
 	r.NoError(err)
 }

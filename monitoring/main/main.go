@@ -15,7 +15,7 @@ func work(term chan struct{}) {
 		a[0] = 5
 		time.Sleep(2 * time.Second)
 		fmt.Printf("Done %v\n", i)
-		go func() { time.Sleep(5) }()
+		go func() { time.Sleep(5 * time.Millisecond) }()
 	}
 	term <- struct{}{}
 	term <- struct{}{}

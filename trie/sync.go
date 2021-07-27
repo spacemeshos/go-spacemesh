@@ -19,6 +19,7 @@ package trie
 import (
 	"errors"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/prque"
@@ -119,6 +120,7 @@ func (s *Sync) AddSubTrie(root types.Hash32, depth int, parent types.Hash32, cal
 		ancestor := s.requests[parent]
 		if ancestor == nil {
 			log.Panic(fmt.Sprintf("sub-trie ancestor not found: %x", parent))
+			panic("unreachable")
 		}
 		ancestor.deps++
 		req.parents = append(req.parents, ancestor)
@@ -152,6 +154,7 @@ func (s *Sync) AddRawEntry(hash types.Hash32, depth int, parent types.Hash32) {
 		ancestor := s.requests[parent]
 		if ancestor == nil {
 			log.Panic(fmt.Sprintf("raw-entry ancestor not found: %x", parent))
+			panic("unreachable")
 		}
 		ancestor.deps++
 		req.parents = append(req.parents, ancestor)

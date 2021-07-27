@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/spacemeshos/post/initialization"
 	"io"
 	"io/ioutil"
 	lg "log"
@@ -17,11 +16,11 @@ import (
 	"testing"
 	"time"
 
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apicfg "github.com/spacemeshos/go-spacemesh/api/config"
@@ -108,6 +107,9 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	require.NoError(suite.T(), err, "failed creating poet client harness: %v", err)
 	suite.poetCleanup = poetHarness.Teardown
 
+	errorRegexp, err := regexp.Compile(`\bERROR\b`)
+	require.NoError(suite.T(), err)
+
 	// Scan and print the poet output, and catch errors early
 	l := lg.New(os.Stderr, "[poet]\t", 0)
 	failChan := make(chan struct{})
@@ -115,13 +117,12 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		scanner := bufio.NewScanner(io.MultiReader(poetHarness.Stdout, poetHarness.Stderr))
 		for scanner.Scan() {
 			line := scanner.Text()
-			matched, err := regexp.MatchString(`\bERROR\b`, line)
-			require.NoError(suite.T(), err)
+			matched := errorRegexp.MatchString(line)
 			// Fail fast if we encounter a poet error
 			// Must use a channel since we're running inside a goroutine
 			if matched {
+				suite.T().Errorf("got error from poet: %s", line)
 				close(failChan)
-				suite.T().Fatalf("got error from poet: %s", line)
 			}
 			l.Println(line)
 		}
@@ -207,13 +208,15 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	smApp.stopServices()
 }
 
-type ScenarioSetup func(*AppTestSuite, *testing.T)
-type ScenarioTestCriteria func(*AppTestSuite, *testing.T) bool
-type TestScenario struct {
-	Setup        ScenarioSetup
-	Criteria     ScenarioTestCriteria
-	Dependencies []int
-}
+type (
+	ScenarioSetup        func(*AppTestSuite, *testing.T)
+	ScenarioTestCriteria func(*AppTestSuite, *testing.T) bool
+	TestScenario         struct {
+		Setup        ScenarioSetup
+		Criteria     ScenarioTestCriteria
+		Dependencies []int
+	}
+)
 
 func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apicfg.Account2Private))
@@ -232,7 +235,7 @@ func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 			}
 			txbytes, _ := types.InterfaceToBytes(tx)
 			pbMsg := &pb.SubmitTransactionRequest{Transaction: txbytes}
-			_, err = suite.apps[0].txService.SubmitTransaction(nil, pbMsg)
+			_, err = suite.apps[0].txService.SubmitTransaction(context.TODO(), pbMsg)
 			assert.Error(suite.T(), err)
 		}
 	}
@@ -265,7 +268,7 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 	setup := func(suite *AppTestSuite, t *testing.T) {
 		accountRequest := &pb.AccountRequest{AccountId: &pb.AccountId{Address: addr.Bytes()}}
 		getNonce := func() int {
-			accountResponse, err := suite.apps[0].globalstateSvc.Account(nil, accountRequest)
+			accountResponse, err := suite.apps[0].globalstateSvc.Account(context.TODO(), accountRequest)
 			assert.NoError(suite.T(), err)
 			// Check the projected state. We just want to know that the tx has entered
 			// the mempool successfully.
@@ -286,7 +289,7 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 			suite.NoError(err, "failed to create signed tx: %s", err)
 			txbytes, _ := types.InterfaceToBytes(tx)
 			pbMsg := &pb.SubmitTransactionRequest{Transaction: txbytes}
-			_, err = suite.apps[0].txService.SubmitTransaction(nil, pbMsg)
+			_, err = suite.apps[0].txService.SubmitTransaction(context.TODO(), pbMsg)
 			suite.NoError(err, "error submitting transaction")
 		}
 	}

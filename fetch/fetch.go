@@ -109,7 +109,7 @@ func (b *batchInfo) SetID() {
 	b.ID = types.CalcHash32(bts)
 }
 
-//ToMap converts the array of requests to map so it can be easily invalidated
+// ToMap converts the array of requests to map so it can be easily invalidated
 func (b batchInfo) ToMap() map[types.Hash32]requestMessage {
 	m := make(map[types.Hash32]requestMessage)
 	for _, r := range b.Requests {
@@ -440,7 +440,6 @@ func (f *Fetch) receiveResponse(data []byte) {
 	}
 
 	// iterate all requests that didn't return value from peer and notify - they will be retried for MaxRetriesForRequest
-	err = fmt.Errorf("failed to fetch hash after max retries")
 	for h := range batchMap {
 		if f.stopped() {
 			return
@@ -544,7 +543,7 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 				f.handleHashError(batch.ID, ErrCouldNotSend(fmt.Errorf("could not send message: %w", err)))
 				break
 			}
-			//todo: mark number of fails per peer to make it low priority
+			// todo: mark number of fails per peer to make it low priority
 			f.log.Warning("could not send message to peer %v, retrying, retries %v", p, retries)
 		} else {
 			break

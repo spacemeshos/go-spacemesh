@@ -17,14 +17,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var instanceID0 = types.NewLayerID(0)
-var instanceID1 = types.NewLayerID(1)
-var instanceID2 = types.NewLayerID(2)
-var instanceID3 = types.NewLayerID(3)
-var instanceID4 = types.NewLayerID(4)
-var instanceID5 = types.NewLayerID(5)
-var instanceID6 = types.NewLayerID(6)
-var instanceID7 = types.NewLayerID(7)
+var (
+	instanceID0 = types.NewLayerID(0)
+	instanceID1 = types.NewLayerID(1)
+	instanceID2 = types.NewLayerID(2)
+	instanceID3 = types.NewLayerID(3)
+	instanceID4 = types.NewLayerID(4)
+	instanceID5 = types.NewLayerID(5)
+	instanceID6 = types.NewLayerID(6)
+	instanceID7 = types.NewLayerID(7)
+)
 
 const reqID = "abracadabra"
 
@@ -231,7 +233,7 @@ func TestBroker_MaxConcurrentProcesses(t *testing.T) {
 	broker.Register(context.TODO(), instanceID4)
 	assert.Equal(t, 4, len(broker.outbox))
 
-	//this statement should cause inbox1 to be unregistered
+	// this statement should cause inbox1 to be unregistered
 	inbox5, _ := broker.Register(context.TODO(), instanceID5)
 	assert.Equal(t, 4, len(broker.outbox))
 
@@ -452,7 +454,7 @@ func TestBroker_Register3(t *testing.T) {
 	m.InnerMsg.InstanceID = instanceID1
 	msg := newMockGossipMsg(m)
 	broker.inbox <- msg
-	time.Sleep(1)
+	time.Sleep(1 * time.Millisecond)
 	client := mockClient{instanceID1}
 	ch, _ := broker.Register(context.TODO(), client.id)
 	timer := time.NewTimer(2 * time.Second)

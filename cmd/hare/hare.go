@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"time"
 
@@ -20,8 +21,6 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-
-	_ "net/http/pprof"
 )
 
 // Cmd the command of the hare app
@@ -49,8 +48,7 @@ func init() {
 	cmdp.AddCommands(Cmd)
 }
 
-type mockBlockProvider struct {
-}
+type mockBlockProvider struct{}
 
 func (mbp *mockBlockProvider) HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID) {
 }
@@ -100,15 +98,13 @@ func buildSet() []types.BlockID {
 	return s
 }
 
-type mockIDProvider struct {
-}
+type mockIDProvider struct{}
 
 func (mip *mockIDProvider) GetIdentity(edID string) (types.NodeID, error) {
 	return types.NodeID{Key: edID, VRFPublicKey: []byte{}}, nil
 }
 
-type mockStateQuerier struct {
-}
+type mockStateQuerier struct{}
 
 func (msq mockStateQuerier) IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error) {
 	return true, nil
@@ -152,6 +148,11 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	hareOracle := newHareOracleFromClient(app.oracle)
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
+	if err != nil {
+		log.With().Error("Failed to parse genesis time as RFC3339",
+			log.String("genesis_time", app.Config.GenesisTime))
+	}
+	// TODO: consider uncommenting
 	/*if err != nil {
 		log.Panic("error parsing config err=%v", err)
 	}*/
