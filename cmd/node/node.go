@@ -106,10 +106,6 @@ var Cmd = &cobra.Command{
 				log.With().Error("Failed to initialize node.", log.Err(err))
 				return err
 			}
-			if err := app.Initialize(); err != nil {
-				log.With().Error("Failed to initialize node.", log.Err(err))
-				return err
-			}
 			// This blocks until the context is finished or until an error is produced
 			err := app.Start()
 			if err != nil {
@@ -269,7 +265,7 @@ func (app *SpacemeshApp) InitializeCmd(cmd *cobra.Command, args []string) (err e
 		return err
 	}
 
-	return nil
+	return app.Initialize()
 }
 
 // Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync
