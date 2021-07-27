@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/spacemeshos/post/initialization"
 	"io"
 	"io/ioutil"
 	lg "log"
@@ -17,11 +16,11 @@ import (
 	"testing"
 	"time"
 
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apicfg "github.com/spacemeshos/go-spacemesh/api/config"
@@ -189,7 +188,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 				if runTests(suite, finished) {
 					break loop
 				}
-				time.Sleep(10 * time.Second)
+				time.Sleep(20 * time.Second)
 			}
 		}
 		suite.validateBlocksAndATXs(types.NewLayerID(numberOfEpochs * suite.apps[0].Config.LayersPerEpoch).Sub(1))
@@ -207,13 +206,15 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	smApp.stopServices()
 }
 
-type ScenarioSetup func(*AppTestSuite, *testing.T)
-type ScenarioTestCriteria func(*AppTestSuite, *testing.T) bool
-type TestScenario struct {
-	Setup        ScenarioSetup
-	Criteria     ScenarioTestCriteria
-	Dependencies []int
-}
+type (
+	ScenarioSetup        func(*AppTestSuite, *testing.T)
+	ScenarioTestCriteria func(*AppTestSuite, *testing.T) bool
+	TestScenario         struct {
+		Setup        ScenarioSetup
+		Criteria     ScenarioTestCriteria
+		Dependencies []int
+	}
+)
 
 func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apicfg.Account2Private))
@@ -628,7 +629,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.LayerDurationSec = 20
 	smApp.Config.HareEligibility.ConfidenceParam = 3
 	smApp.Config.HareEligibility.EpochOffset = 0
-	smApp.Config.TortoiseBeacon = tortoisebeacon.TestConfig()
+	smApp.Config.TortoiseBeacon = tortoisebeacon.NodeSimUnitTestConfig()
 
 	smApp.Config.FETCH.RequestTimeout = 1
 	smApp.Config.FETCH.BatchTimeout = 1

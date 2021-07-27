@@ -86,7 +86,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				config:         TestConfig(),
+				config:         UnitTestConfig(),
 				Log:            log.NewDefault("TortoiseBeacon"),
 				validProposals: proposalsMap{},
 				atxDB:          mockDB,

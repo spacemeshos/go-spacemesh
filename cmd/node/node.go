@@ -152,6 +152,15 @@ type HareService interface {
 	GetResult(types.LayerID) ([]types.BlockID, error)
 }
 
+// TortoiseBeaconService is an interface that defines tortoise beacon functionality.
+type TortoiseBeaconService interface {
+	Service
+	GetBeacon(id types.EpochID) ([]byte, error)
+	HandleSerializedProposalMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher)
+	HandleSerializedFirstVotingMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher)
+	HandleSerializedFollowingVotingMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher)
+}
+
 // TickProvider is an interface to a glopbal system clock that releases ticks on each layer
 type TickProvider interface {
 	Subscribe() timesync.LayerTimer
@@ -190,7 +199,7 @@ type SpacemeshApp struct {
 	atxDb          *activation.DB
 	poetListener   *activation.PoetListener
 	edSgn          *signing.EdSigner
-	tBeacon        *tortoisebeacon.TortoiseBeacon
+	tortoiseBeacon TortoiseBeaconService
 	closers        []interface{ Close() }
 	log            log.Log
 	txPool         *state.TxMempool
@@ -541,13 +550,10 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
 
 	// TODO(nkryuchkov): Enable weak coin when finished.
-	//wc := weakcoin.NewWeakCoin(weakcoin.DefaultThreshold, swarm, BLS381.Verify2, vrfSigner, app.addLogger(WeakCoinLogger, lg))
+	// wc := weakcoin.NewWeakCoin(weakcoin.DefaultThreshold, swarm, BLS381.Verify2, vrfSigner, app.addLogger(WeakCoinLogger, lg))
 	wc := weakcoin.ValueMock{Value: false}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, nodeID, ld, swarm, atxdb, tBeaconDB, sgn, signing.VRFVerify, vrfSigner, wc, clock, app.addLogger(TBeaconLogger, lg))
-	if err := tBeacon.Start(ctx); err != nil {
-		app.log.Panic("Failed to start tortoise beacon: %v", err)
-	}
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
@@ -666,7 +672,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	gossipListener.AddListener(ctx, tortoisebeacon.TBFirstVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFirstVotingMessage)
 	gossipListener.AddListener(ctx, tortoisebeacon.TBFollowingVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFollowingVotingMessage)
 	// TODO(nkryuchkov): Enable weak coin when finished.
-	//gossipListener.AddListener(ctx, weakcoin.GossipProtocol, priorityq.Low, wc.HandleSerializedMessage)
+	// gossipListener.AddListener(ctx, weakcoin.GossipProtocol, priorityq.Low, wc.HandleSerializedMessage)
 
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener
@@ -684,7 +690,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	app.txProcessor = processor
 	app.atxDb = atxdb
 	app.layerFetch = layerFetch
-	app.tBeacon = tBeacon
+	app.tortoiseBeacon = tBeacon
 
 	return nil
 }
@@ -741,6 +747,10 @@ func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm se
 func (app *SpacemeshApp) startServices(ctx context.Context, logger log.Log) error {
 	app.layerFetch.Start()
 	go app.startSyncer(ctx)
+
+	if err := app.tortoiseBeacon.Start(ctx); err != nil {
+		return fmt.Errorf("cannot start tortoise beacon: %w", err)
+	}
 
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
@@ -867,10 +877,9 @@ func (app *SpacemeshApp) stopServices() {
 		app.gossipListener.Stop()
 	}
 
-	if app.tBeacon != nil {
-		log.Info("Stopping tortoise beacon...")
-		// does not return any errors
-		app.tBeacon.Close()
+	if app.tortoiseBeacon != nil {
+		app.log.Info("Stopping tortoise beacon...")
+		app.tortoiseBeacon.Close()
 	}
 
 	if app.poetListener != nil {
@@ -1099,7 +1108,6 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) error {
 	if app.Config.MetricsPush != "" {
 		metrics.StartPushingMetrics(app.Config.MetricsPush, app.Config.MetricsPushPeriod,
 			swarm.LocalNode().PublicKey().String(), strconv.Itoa(int(app.Config.P2P.NetworkID)))
-
 	}
 
 	app.startServices(ctx, logger)
