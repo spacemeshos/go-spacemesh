@@ -24,11 +24,11 @@ import (
 
 type validatorMock struct{}
 
-func (*validatorMock) Validate(signing.PublicKey, *types.NIPST, uint64, types.Hash32) error {
+func (*validatorMock) Validate(signing.PublicKey, *types.NIPost, types.Hash32, uint) error {
 	return nil
 }
 
-func (*validatorMock) VerifyPost(signing.PublicKey, *types.PostProof, uint64) error {
+func (*validatorMock) ValidatePost([]byte, *types.Post, *types.PostMetadata, uint) error {
 	return nil
 }
 

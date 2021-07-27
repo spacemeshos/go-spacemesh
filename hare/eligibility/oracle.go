@@ -53,7 +53,6 @@ type Oracle struct {
 	vrfSigner      signer
 	vrfVerifier    verifierFunc
 	layersPerEpoch uint32
-	spacePerUnit   uint64
 	vrfMsgCache    addGet
 	activesCache   addGet
 	cfg            eCfg.Config
@@ -105,7 +104,6 @@ func New(
 	vrfVerifier verifierFunc,
 	vrfSigner signer,
 	layersPerEpoch uint32,
-	spacePerUnit uint64,
 	cfg eCfg.Config,
 	logger log.Log) *Oracle {
 	vmc, err := lru.New(vrfMsgCacheSize)
@@ -125,7 +123,6 @@ func New(
 		vrfVerifier:    vrfVerifier,
 		vrfSigner:      vrfSigner,
 		layersPerEpoch: layersPerEpoch,
-		spacePerUnit:   spacePerUnit,
 		vrfMsgCache:    vmc,
 		activesCache:   ac,
 		cfg:            cfg,
@@ -262,38 +259,32 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
-	minerUnits := minerWeight / o.spacePerUnit
-	// TODO: Consider checking/disallowing space not in round units
-	totalUnits := totalWeight / o.spacePerUnit
-	// TODO: If space is not in round units, only consider the amount of space in round units for the total weight
-
 	logger.With().Info("prep",
 		log.Uint64("minerWeight", minerWeight),
 		log.Uint64("totalWeight", totalWeight),
-		log.Uint64("o.spacePerUnit", o.spacePerUnit),
 	)
-	n = int(minerUnits)
+	n = int(minerWeight)
 
 	// ensure miner weight fits in int
-	if uint64(n) != minerUnits {
-		logger.Panic(fmt.Sprintf("minerUnits overflows int (%d)", minerUnits))
+	if uint64(n) != minerWeight {
+		logger.Panic(fmt.Sprintf("minerWeight overflows int (%d)", minerWeight))
 	}
 
 	// calc p
-	if committeeSize > int(totalUnits) {
-		logger.With().Warning("committee size is greater than total units",
+	if committeeSize > int(totalWeight) {
+		logger.With().Warning("committee size is greater than total weight",
 			log.Int("committeeSize", committeeSize),
-			log.Uint64("totalUnits", totalUnits),
+			log.Uint64("totalWeight", totalWeight),
 		)
-		totalUnits *= uint64(committeeSize)
+		totalWeight *= uint64(committeeSize)
 		n *= committeeSize
 	}
-	p = fixed.DivUint64(uint64(committeeSize), totalUnits)
+	p = fixed.DivUint64(uint64(committeeSize), totalWeight)
 
-	if minerUnits > maxSupportedN {
+	if minerWeight > maxSupportedN {
 		return 0, fixed.Fixed{}, fixed.Fixed{}, false,
-			fmt.Errorf("miner weight exceeds supported maximum (id: %v, weight: %d, units: %d, max: %d",
-				id, minerWeight, minerUnits, maxSupportedN)
+			fmt.Errorf("miner weight exceeds supported maximum (id: %v, weight: %d, max: %d",
+				id, minerWeight, maxSupportedN)
 	}
 	return n, p, calcVrfFrac(vrfSig), false, nil
 }

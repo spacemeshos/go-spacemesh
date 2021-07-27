@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"strconv"
 	"sync"
@@ -14,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/collector"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
@@ -24,6 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
+	"github.com/spacemeshos/post/initialization"
 )
 
 // ManualClock is a clock that releases ticks on demand and not according to a real world clock
@@ -132,11 +133,16 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 		return nil
 	}
 
-	cfg.POST = activation.DefaultConfig()
-	cfg.POST.Difficulty = 5
-	cfg.POST.NumProvenLabels = 10
-	cfg.POST.SpacePerUnit = 1 << 10 // 1KB.
-	cfg.POST.NumFiles = 1
+	cfg.POST = activation.DefaultPostConfig()
+	cfg.POST.LabelsPerUnit = 32
+	cfg.POST.BitsPerLabel = 8
+	cfg.POST.K2 = 4
+
+	cfg.SMESHING = config.DefaultSmeshingConfig()
+	cfg.SMESHING.Start = true
+	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
+	cfg.SMESHING.Opts.NumFiles = 1
+	cfg.SMESHING.Opts.ComputeProviderID = int(initialization.CPUProviderID())
 
 	cfg.HARE.N = 5
 	cfg.HARE.F = 2
@@ -152,7 +158,6 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 	cfg.LayerDurationSec = 20
 	cfg.HareEligibility.ConfidenceParam = 4
 	cfg.HareEligibility.EpochOffset = 0
-	cfg.StartMining = true
 	cfg.SyncRequestTimeout = 500
 	cfg.SyncInterval = 2
 	cfg.SyncValidationDelta = 5
@@ -212,15 +217,18 @@ type network interface {
 
 // InitSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
-func InitSingleInstance(cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network) (*SpacemeshApp, error) {
+func InitSingleInstance(cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network, edSgn *signing.EdSigner) (*SpacemeshApp, error) {
 	smApp := NewSpacemeshApp()
 	smApp.Config = &cfg
-	smApp.Config.SpaceToCommit = smApp.Config.POST.SpacePerUnit << (i % 5)
-	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
-	smApp.Config.GenesisTime = genesisTime
-	edSgn := signing.NewEdSigner()
-	pub := edSgn.PublicKey()
 
+	smApp.Config.GenesisTime = genesisTime
+
+	smApp.Config.SMESHING.CoinbaseAccount = strconv.Itoa(i + 1)
+	smApp.Config.SMESHING.Opts.DataDir, _ = ioutil.TempDir("", "sm-app-test-post-datadir")
+
+	smApp.edSgn = edSgn
+
+	pub := edSgn.PublicKey()
 	vrfSigner, vrfPub, err := signing.NewVRFSigner(pub.Bytes())
 	if err != nil {
 		return nil, err
@@ -233,13 +241,8 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, storePath 
 	hareOracle := newLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
-	postClient, err := activation.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))
-	if err != nil {
-		return nil, err
-	}
-
 	err = smApp.initServices(context.TODO(), log.AppLog, nodeID, swarm, dbStorepath, edSgn, false, hareOracle,
-		uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock)
+		uint32(smApp.Config.LayerAvgSize), poetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock)
 	if err != nil {
 		return nil, err
 	}
@@ -285,7 +288,8 @@ func StartMultiNode(numOfInstances, layerAvgSize int, runTillLayer uint32, dbPat
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := path + string(name)
 		database.SwitchCreationContext(dbStorepath, string(name))
-		smApp, err := InitSingleInstance(*cfg, i, genesisTime, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net)
+		edSgn := signing.NewEdSigner()
+		smApp, err := InitSingleInstance(*cfg, i, genesisTime, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net, edSgn)
 		if err != nil {
 			log.Error("cannot run multi node %v", err)
 			return

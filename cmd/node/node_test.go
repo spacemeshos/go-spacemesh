@@ -56,39 +56,40 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 		r.NoError(err)
 	}()
 
+	tempdir := t.TempDir()
+
 	// setup spacemesh app
 	app := NewSpacemeshApp()
-	app.Config.POST.DataDir = "tmp"
+	app.Config.SMESHING.Opts.DataDir = tempdir
 	app.log = log.NewDefault("logger")
 
-	// get new identity
-	sgn, err := app.LoadOrCreateEdSigner()
+	// Create new identity.
+	signer1, err := app.LoadOrCreateEdSigner()
 	r.NoError(err)
-
-	// ensure we have a single subdirectory under tmp
-	infos, err := ioutil.ReadDir("tmp")
+	infos, err := ioutil.ReadDir(tempdir)
 	r.NoError(err)
 	r.Len(infos, 1)
 
-	// run the method again
-	sgn2, err := app.LoadOrCreateEdSigner()
+	// Load existing identity.
+	signer2, err := app.LoadOrCreateEdSigner()
 	r.NoError(err)
-
-	// ensure that we didn't create another identity
-	infos, err = ioutil.ReadDir("tmp")
+	infos, err = ioutil.ReadDir(tempdir)
 	r.NoError(err)
 	r.Len(infos, 1)
+	r.Equal(signer1.PublicKey(), signer2.PublicKey())
 
-	// ensure both signers are identical
-	r.Equal(sgn.PublicKey(), sgn2.PublicKey())
-
-	// mess with the directory name
-	err = os.Rename(filepath.Join("tmp", infos[0].Name()), filepath.Join("tmp", "wrong name"))
+	// Invalidate the identity by changing its file name.
+	filename := filepath.Join(tempdir, infos[0].Name())
+	err = os.Rename(filename, filename+"_")
 	r.NoError(err)
 
-	// run the method again
-	_, err = app.LoadOrCreateEdSigner()
-	r.EqualError(err, fmt.Sprintf("identity file path ('tmp/wrong name') does not match public key (%v)", sgn.PublicKey().String()))
+	// Create new identity.
+	signer3, err := app.LoadOrCreateEdSigner()
+	r.NoError(err)
+	infos, err = ioutil.ReadDir(tempdir)
+	r.NoError(err)
+	r.Len(infos, 2)
+	r.NotEqual(signer1.PublicKey(), signer3.PublicKey())
 }
 
 func newLogger(buf *bytes.Buffer) log.Log {
@@ -559,7 +560,8 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	cfg := getTestDefaultConfig(1)
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	assert.NoError(t, err)
-	app, err := InitSingleInstance(*cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(), poetHarness.HTTPPoetClient, clock, localNet)
+	edSgn := signing.NewEdSigner()
+	app, err := InitSingleInstance(*cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(), poetHarness.HTTPPoetClient, clock, localNet, edSgn)
 
 	//app := NewSpacemeshApp()
 

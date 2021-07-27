@@ -17,6 +17,11 @@ import (
 	"time"
 
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
@@ -50,11 +55,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
-	"github.com/spacemeshos/post/shared"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 const edKeyFileName = "key.bin"
@@ -88,7 +88,7 @@ const (
 	BlockListenerLogger  = "blockListener"
 	BlockHandlerLogger   = "blockHandler"
 	PoetListenerLogger   = "poetListener"
-	NipstBuilderLogger   = "nipstBuilder"
+	NipostBuilderLogger  = "nipostBuilder"
 	AtxBuilderLogger     = "atxBuilder"
 	GossipListener       = "gossipListener"
 	Fetcher              = "fetcher"
@@ -194,6 +194,7 @@ type SpacemeshApp struct {
 	gossipListener *service.Listener
 	clock          TickProvider
 	hare           HareService
+	postSetupMgr   *activation.PostSetupManager
 	atxBuilder     *activation.Builder
 	atxDb          *activation.DB
 	poetListener   *activation.PoetListener
@@ -436,8 +437,8 @@ func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.BlockListenerLoggerLevel))
 	case PoetListenerLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.PoetListenerLoggerLevel))
-	case NipstBuilderLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.NipstBuilderLoggerLevel))
+	case NipostBuilderLogger:
+		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.NipostBuilderLoggerLevel))
 	case AtxBuilderLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxBuilderLoggerLevel))
 	default:
@@ -479,7 +480,6 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	isFixedOracle bool,
 	rolacle hare.Rolacle,
 	layerSize uint32,
-	postClient activation.PostProverClient,
 	poetClient activation.PoetProvingServiceClient,
 	vrfSigner vrfSigner,
 	layersPerEpoch uint32, clock TickProvider) error {
@@ -494,8 +494,6 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 
 	app.log = app.addLogger(AppLogger, lg)
-
-	postClient.SetLogger(app.addLogger(PostLogger, lg))
 
 	db, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "state"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
@@ -535,7 +533,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	idStore := activation.NewIdentityStore(iddbstore)
 	poetDb := activation.NewPoetDb(poetDbStore, app.addLogger(PoetDbLogger, lg))
-	validator := activation.NewValidator(&app.Config.POST, poetDb)
+	validator := activation.NewValidator(poetDb, app.Config.POST)
 	mdb, err := mesh.NewPersistentMeshDB(filepath.Join(dbStorepath, "mesh"), app.Config.BlockCacheSize, app.addLogger(MeshDBLogger, lg))
 	if err != nil {
 		return err
@@ -632,7 +630,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		// TODO: this mock will be replaced by the real Tortoise beacon once
 		//   https://github.com/spacemeshos/go-spacemesh/pull/2267 is complete
 		beacon := eligibility.NewBeacon(tBeacon, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
-		hOracle = eligibility.New(beacon, atxdb, mdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.POST.SpacePerUnit, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+		hOracle = eligibility.New(beacon, atxdb, mdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
 
@@ -653,24 +651,27 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))
 
-	nipstBuilder := activation.NewNIPSTBuilder(util.Hex2Bytes(nodeID.Key), postClient, poetClient, poetDb, store, app.addLogger(NipstBuilderLogger, lg))
-
-	coinBase := types.HexToAddress(app.Config.CoinbaseAccount)
-
-	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
-		return errors.New("invalid coinbase account")
+	postSetupMgr, err := activation.NewPostSetupManager(util.Hex2Bytes(nodeID.Key), app.Config.POST, app.addLogger(PostLogger, lg))
+	if err != nil {
+		app.log.Panic("failed to create Post setup manager: %v", err)
 	}
-	if app.Config.SpaceToCommit == 0 {
-		app.Config.SpaceToCommit = app.Config.POST.SpacePerUnit
+
+	nipostBuilder := activation.NewNIPostBuilder(util.Hex2Bytes(nodeID.Key), postSetupMgr, poetClient, poetDb, store, app.addLogger(NipostBuilderLogger, lg))
+
+	coinbaseAddr := types.HexToAddress(app.Config.SMESHING.CoinbaseAccount)
+	if app.Config.SMESHING.Start {
+		if coinbaseAddr.Big().Uint64() == 0 {
+			app.log.Panic("invalid coinbase account")
+		}
 	}
 
 	builderConfig := activation.Config{
-		CoinbaseAccount: coinBase,
+		CoinbaseAccount: coinbaseAddr,
 		GoldenATXID:     goldenATXID,
 		LayersPerEpoch:  layersPerEpoch,
 	}
 
-	atxBuilder := activation.NewBuilder(builderConfig, nodeID, app.Config.SpaceToCommit, sgn, atxdb, swarm, msh, nipstBuilder, postClient, clock, syncer, store, app.addLogger("atxBuilder", lg))
+	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, atxdb, swarm, msh, layersPerEpoch, nipostBuilder, postSetupMgr, clock, syncer, store, app.addLogger("atxBuilder", lg))
 
 	gossipListener.AddListener(ctx, state.IncomingTxProtocol, priorityq.Low, processor.HandleTxGossipData)
 	gossipListener.AddListener(ctx, activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
@@ -692,6 +693,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	app.P2P = swarm
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
+	app.postSetupMgr = postSetupMgr
 	app.oracle = blockOracle
 	app.txProcessor = processor
 	app.atxDb = atxdb
@@ -767,15 +769,17 @@ func (app *SpacemeshApp) startServices(ctx context.Context, logger log.Log) erro
 
 	app.poetListener.Start(ctx)
 
-	if app.Config.StartMining {
-		coinBase := types.HexToAddress(app.Config.CoinbaseAccount)
-		if err := app.atxBuilder.StartPost(ctx, coinBase, app.Config.POST.DataDir, app.Config.SpaceToCommit); err != nil {
-			return fmt.Errorf("error initializing post: %w", err)
-		}
+	if app.Config.SMESHING.Start {
+		coinbaseAddr := types.HexToAddress(app.Config.SMESHING.CoinbaseAccount)
+		go func() {
+			if err := app.atxBuilder.StartSmeshing(ctx, coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
+				log.Panic("failed to start smeshing: %v", err)
+			}
+		}()
 	} else {
-		logger.Info("manual post init")
+		log.Info("Smeshing not started, waiting to be triggered via Smesher API")
 	}
-	app.atxBuilder.Start(ctx)
+
 	app.clock.StartNotifying()
 	go app.checkTimeDrifts()
 	return nil
@@ -816,7 +820,7 @@ func (app *SpacemeshApp) startAPIServices(ctx context.Context, net api.NetworkAP
 		registerService(grpcserver.NewNodeService(net, app.mesh, app.clock, app.syncer, app.atxBuilder))
 	}
 	if apiConf.StartSmesherService {
-		registerService(grpcserver.NewSmesherService(app.atxBuilder))
+		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder))
 	}
 	if apiConf.StartTransactionService {
 		registerService(grpcserver.NewTransactionService(net, app.mesh, app.txPool, app.syncer))
@@ -893,7 +897,7 @@ func (app *SpacemeshApp) stopServices() {
 
 	if app.atxBuilder != nil {
 		app.log.Info("closing atx builder")
-		app.atxBuilder.Stop()
+		_ = app.atxBuilder.StopSmeshing(false)
 	}
 
 	if app.hare != nil {
@@ -933,36 +937,38 @@ func (app *SpacemeshApp) stopServices() {
 
 // LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists
 func (app *SpacemeshApp) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
-	f, err := app.getIdentityFile()
+	filename := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
+	log.Info("Looking for identity file at `%v`", filename)
+
+	data, err := ioutil.ReadFile(filename)
 	if err != nil {
-		log.With().Warning("failed to find identity file", log.Err(err))
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("failed to read identity file: %v", err)
+		}
+
+		log.Info("Identity file not found. Creating new identity...")
 
 		edSgn := signing.NewEdSigner()
-		f = filepath.Join(shared.GetInitDir(app.Config.POST.DataDir, edSgn.PublicKey().Bytes()), edKeyFileName)
-		err := os.MkdirAll(filepath.Dir(f), filesystem.OwnerReadWriteExec)
+		err := os.MkdirAll(filepath.Dir(filename), filesystem.OwnerReadWriteExec)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create directory for identity file: %v", err)
 		}
-		err = ioutil.WriteFile(f, edSgn.ToBuffer(), filesystem.OwnerReadWrite)
+		err = ioutil.WriteFile(filename, edSgn.ToBuffer(), filesystem.OwnerReadWrite)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write identity file: %v", err)
 		}
+
 		log.With().Warning("created new identity", edSgn.PublicKey())
 		return edSgn, nil
 	}
 
-	buff, err := ioutil.ReadFile(f)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read identity from file: %v", err)
-	}
-	edSgn, err := signing.NewEdSignerFromBuffer(buff)
+	edSgn, err := signing.NewEdSignerFromBuffer(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct identity from data file: %v", err)
 	}
-	if edSgn.PublicKey().String() != filepath.Base(filepath.Dir(f)) {
-		return nil, fmt.Errorf("identity file path ('%s') does not match public key (%s)", filepath.Dir(f), edSgn.PublicKey().String())
-	}
-	log.With().Info("loaded identity from file", log.String("file", f))
+
+	log.Info("Loaded existing identity; public key: %v", edSgn.PublicKey())
+
 	return edSgn, nil
 }
 
@@ -974,7 +980,7 @@ func (identityFileFound) Error() string {
 
 func (app *SpacemeshApp) getIdentityFile() (string, error) {
 	var f string
-	err := filepath.Walk(app.Config.POST.DataDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(app.Config.SMESHING.Opts.DataDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -988,7 +994,7 @@ func (app *SpacemeshApp) getIdentityFile() (string, error) {
 		return f, nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("failed to traverse PoST data dir: %v", err)
+		return "", fmt.Errorf("failed to traverse Post data dir: %v", err)
 	}
 	return "", fmt.Errorf("not found")
 }
@@ -1016,9 +1022,8 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) error {
 	}
 	logger.With().Info("starting spacemesh",
 		log.String("data-dir", app.Config.DataDir()),
-		log.String("post-dir", app.Config.POST.DataDir),
-		log.String("hostname", hostname),
-	)
+		log.String("post-dir", app.Config.SMESHING.Opts.DataDir),
+		log.String("hostname", hostname))
 
 	err = filesystem.ExistOrCreate(app.Config.DataDir())
 	if err != nil {
@@ -1069,11 +1074,6 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) error {
 
 	nodeID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 
-	postClient, err := activation.NewPostClient(&app.Config.POST, util.Hex2Bytes(nodeID.Key))
-	if err != nil {
-		return fmt.Errorf("failed to create post client: %w", err)
-	}
-
 	// This base logger must be debug level so that other, derived loggers are not a lower level.
 	lg := log.NewWithLevel(nodeID.ShortString(), zap.NewAtomicLevelAt(zapcore.DebugLevel)).WithFields(nodeID)
 
@@ -1102,7 +1102,6 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) error {
 		false,
 		nil,
 		uint32(app.Config.LayerAvgSize),
-		postClient,
 		poetClient,
 		vrfSigner,
 		app.Config.LayersPerEpoch,

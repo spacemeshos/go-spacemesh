@@ -297,7 +297,7 @@ def teardown(request, session_id, delete_ns, input_dump):
     # see: https://docs.pytest.org/en/reorganize-docs/yieldfixture.html
     yield
     # dump ES content either if tests has failed of whether is_dump param was set to True in the test config file
-    is_dump = request.session.testsfailed == 1 or input_dump
+    is_dump = request.session.testsfailed > 0 or input_dump
     dump_params = {}
     if is_dump:
         dump_params = {

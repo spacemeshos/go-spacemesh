@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -14,20 +15,21 @@ type NetworkAPI interface {
 	SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey)
 }
 
-// MiningAPI is an API for controlling Post, setting coinbase account and getting mining stats
-type MiningAPI interface {
-	StartPost(ctx context.Context, address types.Address, datadir string, space uint64) error
-	SetCoinbaseAccount(rewardAddress types.Address)
-	// MiningStats returns state of post init, coinbase reward account and data directory path for post commitment
-	MiningStats() (postStatus int, remainingBytes uint64, coinbaseAccount string, postDatadir string)
-	GetSmesherID() types.NodeID
-	Stop()
-}
+// PostSetupAPI is an alias to PostSetupProvider.
+type PostSetupAPI = activation.PostSetupProvider
+
+// SmeshingAPI is an alias to SmeshingProvider.
+type SmeshingAPI = activation.SmeshingProvider
 
 // GenesisTimeAPI is an API to get genesis time and current layer of the system
 type GenesisTimeAPI interface {
 	GetGenesisTime() time.Time
 	GetCurrentLayer() types.LayerID
+}
+
+// LoggingAPI is an API to system loggers
+type LoggingAPI interface {
+	SetLogLevel(loggerName, severity string) error
 }
 
 // Syncer is the API to get sync status and to start sync
