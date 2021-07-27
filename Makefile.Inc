@@ -100,3 +100,8 @@ ldflags:
 	$(shell $(MAKE) -s get-gpu-setup 1>&2)
 	@echo 'export CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)"' > /tmp/.go-spacemesh.ldflags
 	@echo . /tmp/.go-spacemesh.ldflags
+.PHONY: ldflags
+
+print-ldflags: get-gpu-setup
+	@echo $(CGO_TEST_LDFLAGS)
+.PHONY: print-ldflags
