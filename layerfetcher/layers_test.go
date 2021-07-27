@@ -356,6 +356,8 @@ func TestPollLayerBlocks_AllHaveBlockData(t *testing.T) {
 }
 
 func TestPollLayerBlocks_OnlyOneHasBlockData(t *testing.T) {
+	types.SetLayersPerEpoch(5)
+
 	db := newLayerDBMock()
 	net := newMockNet()
 	numPeers := 4

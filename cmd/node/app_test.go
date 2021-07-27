@@ -190,7 +190,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 				if runTests(suite, finished) {
 					break loop
 				}
-				time.Sleep(10 * time.Second)
+				time.Sleep(20 * time.Second)
 			}
 		}
 		suite.validateBlocksAndATXs(types.NewLayerID(numberOfEpochs * suite.apps[0].Config.LayersPerEpoch).Sub(1))
@@ -631,7 +631,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.LayerDurationSec = 20
 	smApp.Config.HareEligibility.ConfidenceParam = 3
 	smApp.Config.HareEligibility.EpochOffset = 0
-	smApp.Config.TortoiseBeacon = tortoisebeacon.TestConfig()
+	smApp.Config.TortoiseBeacon = tortoisebeacon.NodeSimUnitTestConfig()
 
 	smApp.Config.FETCH.RequestTimeout = 1
 	smApp.Config.FETCH.BatchTimeout = 1

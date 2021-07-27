@@ -207,7 +207,9 @@ func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
 	// Report the status update, as well as the layer itself
 	layer, err := msh.GetLayer(idx)
 	if err != nil {
-		msh.With().Error("error reading layer data", idx, log.Err(err))
+		if !errors.Is(err, database.ErrNotFound) {
+			msh.With().Error("error reading layer data", idx, log.Err(err))
+		}
 	} else {
 		events.ReportNewLayer(events.NewLayer{
 			Layer:  layer,
@@ -656,8 +658,10 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 	}
 
 	msh.SetLatestLayer(lyr)
+
 	lm := msh.getLayerMutex(lyr)
 	defer msh.endLayerWorker(lyr)
+
 	lm.m.Lock()
 	defer lm.m.Unlock()
 	// layer doesnt exist, need to insert new layer
