@@ -159,8 +159,11 @@ test-fmt:
 lint:
 	golint --set_exit_status ./...
 	go vet ./...
-	golangci-lint run
 .PHONY: lint
+
+golangci-lint:
+	golangci-lint run
+.PHONY: golangci-lint
 
 cover:
 	@echo "mode: count" > cover-all.out
