@@ -297,7 +297,7 @@ type meshValidatorBatchMock struct {
 }
 
 func (m *meshValidatorBatchMock) ValidateLayer(lyr *types.Layer) {
-	m.SetProcessedLayer(lyr.Index(), types.Hash32{})
+	m.mesh.setProcessedLayer(lyr.Index(), types.Hash32{})
 	layerID := lyr.Index()
 	if layerID.Uint32() == 0 {
 		return
@@ -309,13 +309,6 @@ func (m *meshValidatorBatchMock) ValidateLayer(lyr *types.Layer) {
 	prevPBase := layerID.Sub(layerID.Uint32() % m.batchSize)
 	m.mesh.pushLayersToState(prevPBase, prevPBase)
 }
-
-func (m *meshValidatorBatchMock) ProcessedLayer() types.LayerID    { return m.processedLayer }
-func (m *meshValidatorBatchMock) ProcessedLayerHash() types.Hash32 { return m.layerHash }
-func (m *meshValidatorBatchMock) SetProcessedLayer(lyr types.LayerID, hash types.Hash32) {
-	m.processedLayer = lyr
-}
-func (m *meshValidatorBatchMock) HandleLateBlock(*types.Block) { panic("implement me") }
 
 func TestMesh_AccumulateRewards(t *testing.T) {
 	types.SetLayersPerEpoch(1)

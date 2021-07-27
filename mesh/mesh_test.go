@@ -140,6 +140,7 @@ func getMesh(id string) *Mesh {
 	mmdb := NewMemMeshDB(lg)
 	return NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: mmdb}, newMockTxMemPool(), &MockState{}, lg)
 }
+
 func addLayer(r *require.Assertions, id types.LayerID, layerSize int, msh *Mesh) *types.Layer {
 	for i := 0; i < layerSize; i++ {
 		txIDs, _ := addManyTXsToPool(r, msh, 4)
@@ -179,30 +180,39 @@ func TestMesh_AddLayerGetLayer(t *testing.T) {
 func TestMesh_ProcessedLayer(t *testing.T) {
 	msh := getMesh("t6")
 	defer msh.Close()
-	msh.SetProcessedLayer(types.NewLayerID(1), types.Hash32{})
-	assert.Equal(t, types.NewLayerID(1), msh.ProcessedLayer())
-	msh.SetProcessedLayer(types.NewLayerID(2), types.Hash32{})
+	msh.setProcessedLayer(types.NewLayerID(2), types.Hash32{})
 	assert.Equal(t, types.NewLayerID(2), msh.ProcessedLayer())
-	msh.SetProcessedLayer(types.NewLayerID(3), types.Hash32{})
+	msh.setProcessedLayer(types.NewLayerID(3), types.Hash32{})
 	assert.Equal(t, types.NewLayerID(3), msh.ProcessedLayer())
-	msh.SetProcessedLayer(types.NewLayerID(5), types.Hash32{})
+	msh.setProcessedLayer(types.NewLayerID(5), types.Hash32{})
 	assert.Equal(t, types.NewLayerID(3), msh.ProcessedLayer())
-	msh.SetProcessedLayer(types.NewLayerID(4), types.Hash32{})
+	msh.setProcessedLayer(types.NewLayerID(4), types.Hash32{})
 	assert.Equal(t, types.NewLayerID(4), msh.ProcessedLayer())
-	msh.SetProcessedLayer(types.NewLayerID(3), types.Hash32{})
+	msh.setProcessedLayer(types.NewLayerID(3), types.Hash32{})
 	assert.Equal(t, types.NewLayerID(4), msh.ProcessedLayer())
-	msh.SetLatestLayer(types.NewLayerID(7))
-	assert.Equal(t, types.NewLayerID(4), msh.ProcessedLayer())
+}
+
+func TestMesh_PersistProcessedLayer(t *testing.T) {
+	msh := getMesh("persist_processed_layer")
+	defer msh.Close()
+	lyr := &ProcessedLayer{
+		ID:   types.NewLayerID(3),
+		Hash: types.CalcHash32([]byte("layer 3 hash")),
+	}
+	assert.NoError(t, msh.persistProcessedLayer(lyr))
+	rLyr, err := msh.recoverProcessedLayer()
+	assert.NoError(t, err)
+	assert.Equal(t, lyr, rLyr)
 }
 
 func TestMesh_LatestKnownLayer(t *testing.T) {
 	msh := getMesh("t6")
 	defer msh.Close()
-	msh.SetLatestLayer(types.NewLayerID(3))
-	msh.SetLatestLayer(types.NewLayerID(7))
-	msh.SetLatestLayer(types.NewLayerID(10))
-	msh.SetLatestLayer(types.NewLayerID(1))
-	msh.SetLatestLayer(types.NewLayerID(2))
+	msh.setLatestLayer(types.NewLayerID(3))
+	msh.setLatestLayer(types.NewLayerID(7))
+	msh.setLatestLayer(types.NewLayerID(10))
+	msh.setLatestLayer(types.NewLayerID(1))
+	msh.setLatestLayer(types.NewLayerID(2))
 	assert.Equal(t, types.NewLayerID(10), msh.LatestLayer(), "wrong layer")
 }
 
