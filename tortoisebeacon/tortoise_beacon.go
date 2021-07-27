@@ -224,13 +224,11 @@ func (tb *TortoiseBeacon) Start(ctx context.Context) error {
 }
 
 // Close closes TortoiseBeacon.
-func (tb *TortoiseBeacon) Close() error {
+func (tb *TortoiseBeacon) Close() {
 	tb.Log.Info("Closing %v", protoName)
 	tb.Closer.Close()
 	tb.backgroundWG.Wait() // Wait until background goroutines finish
 	tb.clock.Unsubscribe(tb.layerTicker)
-
-	return nil
 }
 
 // GetBeacon returns a Tortoise Beacon value as []byte for a certain epoch or an error if it doesn't exist.
@@ -330,7 +328,7 @@ func (tb *TortoiseBeacon) listenLayers(ctx context.Context) {
 		case <-tb.CloseChannel():
 			return
 		case layer := <-tb.layerTicker:
-			tb.Log.With().Debug("Received tick", layer)
+			tb.Log.With().Info("Received tick", layer)
 
 			go tb.handleLayer(ctx, layer)
 		}
@@ -361,7 +359,7 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 		return
 	}
 
-	tb.Log.With().Debug("Layer is first in epoch, proceeding",
+	tb.Log.With().Info("Layer is first in epoch, proceeding",
 		log.Uint32("layer", layer.Uint32()))
 
 	tb.seenEpochsMu.Lock()
@@ -481,13 +479,11 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 	tb.Log.With().Debug("Starting proposal phase",
 		log.Uint64("epoch_id", uint64(epoch)))
 
-	proposalPhaseTimer := time.NewTimer(tb.proposalDuration + tb.gracePeriodDuration)
-	defer proposalPhaseTimer.Stop()
+	var cancel func()
+	ctx, cancel = context.WithTimeout(ctx, tb.proposalDuration)
+	defer cancel()
 
 	go func() {
-		ctx, cancel := context.WithTimeout(ctx, tb.proposalDuration)
-		defer cancel()
-
 		tb.Log.With().Debug("Starting proposal message sender",
 			log.Uint64("epoch_id", uint64(epoch)))
 
@@ -504,7 +500,6 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 	select {
 	case <-tb.CloseChannel():
 	case <-ctx.Done():
-	case <-proposalPhaseTimer.C:
 		tb.markProposalPhaseFinished(epoch)
 
 		tb.Log.With().Debug("Proposal phase finished",
@@ -642,19 +637,23 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 }
 
 func (tb *TortoiseBeacon) markProposalPhaseFinished(epoch types.EpochID) {
-	tb.proposalPhaseFinishedTimestampsMu.Lock()
-	defer tb.proposalPhaseFinishedTimestampsMu.Unlock()
+	finishedAt := time.Now()
 
-	tb.proposalPhaseFinishedTimestamps[epoch] = time.Now()
+	tb.proposalPhaseFinishedTimestampsMu.Lock()
+	tb.proposalPhaseFinishedTimestamps[epoch] = finishedAt
+	tb.proposalPhaseFinishedTimestampsMu.Unlock()
+
+	tb.Debug("marked proposal phase for epoch %v finished at %v", epoch, finishedAt.String())
 }
 
-func (tb *TortoiseBeacon) receivedBeforeProposalPhaseFinished(epoch types.EpochID, ts time.Time) bool {
+func (tb *TortoiseBeacon) receivedBeforeProposalPhaseFinished(epoch types.EpochID, receivedAt time.Time) bool {
 	tb.proposalPhaseFinishedTimestampsMu.RLock()
-	defer tb.proposalPhaseFinishedTimestampsMu.RUnlock()
+	finishedAt, ok := tb.proposalPhaseFinishedTimestamps[epoch]
+	tb.proposalPhaseFinishedTimestampsMu.RUnlock()
 
-	v, ok := tb.proposalPhaseFinishedTimestamps[epoch]
+	tb.Debug("checking if timestamp %v was received before proposal phase finished in epoch %v, is phase finished: %v, finished at: %v", receivedAt.String(), epoch, ok, finishedAt.String())
 
-	return !ok || ts.Before(v)
+	return !ok || receivedAt.Before(finishedAt)
 }
 
 func (tb *TortoiseBeacon) sendFollowingVotesLoopIteration(ctx context.Context, epoch types.EpochID, round types.RoundID) {

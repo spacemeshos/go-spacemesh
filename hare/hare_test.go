@@ -34,6 +34,7 @@ type mockReport struct {
 func (m mockReport) ID() types.LayerID {
 	return m.id
 }
+
 func (m mockReport) Set() *Set {
 	return m.set
 }
@@ -141,6 +142,8 @@ func TestHare_GetResult(t *testing.T) {
 }
 
 func TestHare_GetResult2(t *testing.T) {
+	types.SetLayersPerEpoch(1)
+
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
