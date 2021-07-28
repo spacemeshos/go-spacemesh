@@ -209,21 +209,23 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	first, second := true, true
-	atLeastOneStarted := make(chan struct{}, 2)
+	started := make(chan struct{}, 2)
 	go func() {
-		atLeastOneStarted <- struct{}{}
+		started <- struct{}{}
 		first = syncer.synchronize(context.TODO())
 		wg.Done()
 	}()
 	go func() {
-		atLeastOneStarted <- struct{}{}
+		started <- struct{}{}
 		second = syncer.synchronize(context.TODO())
 		wg.Done()
 	}()
 
-	// allow synchronize to finish
 	current := ticker.GetCurrentLayer()
-	<-atLeastOneStarted
+	// wait for both calls to start
+	<-started
+	<-started
+	// allow synchronize to finish
 	mf.feedLayerResult(current, current)
 	wg.Wait()
 
