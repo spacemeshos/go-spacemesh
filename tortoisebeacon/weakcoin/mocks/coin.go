@@ -28,13 +28,13 @@ func (_m *Coin) CompleteRound() {
 	_m.Called()
 }
 
-// Get provides a mock function with given fields: _a0, _a1
-func (_m *Coin) Get(_a0 types.EpochID, _a1 types.RoundID) bool {
-	ret := _m.Called(_a0, _a1)
+// Get provides a mock function with given fields: _a0
+func (_m *Coin) Get(_a0 types.RoundID) bool {
+	ret := _m.Called(_a0)
 
 	var r0 bool
-	if rf, ok := ret.Get(0).(func(types.EpochID, types.RoundID) bool); ok {
-		r0 = rf(_a0, _a1)
+	if rf, ok := ret.Get(0).(func(types.RoundID) bool); ok {
+		r0 = rf(_a0)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
@@ -52,13 +52,13 @@ func (_m *Coin) StartEpoch(_a0 types.EpochID, _a1 weakcoin.UnitAllowances) {
 	_m.Called(_a0, _a1)
 }
 
-// StartRound provides a mock function with given fields: _a0, _a1, _a2
-func (_m *Coin) StartRound(_a0 context.Context, _a1 types.EpochID, _a2 types.RoundID) error {
-	ret := _m.Called(_a0, _a1, _a2)
+// StartRound provides a mock function with given fields: _a0, _a1
+func (_m *Coin) StartRound(_a0 context.Context, _a1 types.RoundID) error {
+	ret := _m.Called(_a0, _a1)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, types.EpochID, types.RoundID) error); ok {
-		r0 = rf(_a0, _a1, _a2)
+	if rf, ok := ret.Get(0).(func(context.Context, types.RoundID) error); ok {
+		r0 = rf(_a0, _a1)
 	} else {
 		r0 = ret.Error(0)
 	}

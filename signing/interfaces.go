@@ -3,6 +3,7 @@ package signing
 // Signer ...
 type Signer interface {
 	Sign([]byte) []byte
+	PublicKey() *PublicKey
 }
 
 // Verifier ...

@@ -45,10 +45,10 @@ func (wc *WeakCoin) handleWeakCoinMessage(message Message) error {
 
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
-	if wc.active.epoch != message.Epoch || wc.active.round != message.Round {
+	if wc.epoch != message.Epoch || wc.round != message.Round {
 		return fmt.Errorf("message for the wrong round %v/%v", message.Epoch, message.Round)
 	}
-	if !wc.allowances.Allowed(miner.Bytes(), message.Unit) {
+	if wc.allowances[string(miner.Bytes())] < uint64(message.Unit) {
 		return fmt.Errorf("miner %x is not allowed to submit proposal for unit %d", miner, message.Unit)
 	}
 
@@ -56,8 +56,8 @@ func (wc *WeakCoin) handleWeakCoinMessage(message Message) error {
 		log.Uint64("epoch_id", uint64(message.Epoch)),
 		log.Uint64("round_id", uint64(message.Round)),
 		log.String("proposal", types.BytesToHash(message.Signature).ShortString()))
-	if bytes.Compare(message.Signature, wc.active.smallest) == -1 {
-		wc.active.smallest = message.Signature
+	if bytes.Compare(message.Signature, wc.vrf) == -1 {
+		wc.vrf = message.Signature
 	}
 	return nil
 }

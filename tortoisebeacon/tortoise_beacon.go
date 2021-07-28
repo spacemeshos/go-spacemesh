@@ -613,7 +613,13 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	ticker := time.NewTicker(tb.votingRoundDuration + tb.weakCoinRoundDuration)
 	defer ticker.Stop()
 
+	// we need to pass weak coin a map with spacetime unit allowances before any round are started
+	tb.weakCoin.StartEpoch(epoch, weakcoin.UnitAllowances{})
+
 	for round := firstRound + 1; round <= tb.lastPossibleRound(); round++ {
+		if round > firstRound+1 {
+			tb.weakCoin.CompleteRound()
+		}
 		tb.sendFollowingVotesLoopIteration(ctx, epoch, round)
 		select {
 		case <-ticker.C:
@@ -660,10 +666,6 @@ func (tb *TortoiseBeacon) sendFollowingVotesLoopIteration(ctx context.Context, e
 		log.Uint64("round_id", uint64(round)))
 
 	go func(epoch types.EpochID, round types.RoundID) {
-		if round > firstRound+1 {
-			tb.weakCoin.CompleteRound()
-		}
-
 		if err := tb.sendVotes(ctx, epoch, round); err != nil {
 			tb.Log.With().Error("Failed to send voting messages",
 				log.Uint64("epoch_id", uint64(epoch)),
@@ -687,7 +689,7 @@ func (tb *TortoiseBeacon) sendFollowingVotesLoopIteration(ctx context.Context, e
 
 		// TODO(nkryuchkov):
 		// should be published only after we should have received them
-		if err := tb.weakCoin.StartRound(ctx, epoch, round); err != nil {
+		if err := tb.weakCoin.StartRound(ctx, round); err != nil {
 			tb.Log.With().Error("Failed to publish weak coin proposal",
 				log.Uint64("epoch_id", uint64(epoch)),
 				log.Uint64("round_id", uint64(round)),

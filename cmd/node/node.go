@@ -464,10 +464,6 @@ func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
 	return nil
 }
 
-type vrfSigner interface {
-	Sign([]byte) []byte
-}
-
 func (app *SpacemeshApp) initServices(ctx context.Context,
 	logger log.Log,
 	nodeID types.NodeID,
@@ -478,7 +474,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	rolacle hare.Rolacle,
 	layerSize uint32,
 	poetClient activation.PoetProvingServiceClient,
-	vrfSigner vrfSigner,
+	vrfSigner signing.Signer,
 	layersPerEpoch uint32, clock TickProvider) error {
 
 	app.nodeID = nodeID

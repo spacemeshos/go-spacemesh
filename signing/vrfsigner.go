@@ -12,11 +12,16 @@ var _ Signer = VRFSigner{}
 // VRFSigner is a signer for VRF purposes
 type VRFSigner struct {
 	privateKey []byte
+	pub        *PublicKey
 }
 
 // Sign signs a message for VRF purposes
 func (s VRFSigner) Sign(msg []byte) []byte {
 	return ed25519.Sign(s.privateKey, msg)
+}
+
+func (s VRFSigner) PublicKey() *PublicKey {
+	return s.pub
 }
 
 // NewVRFSigner creates a new VRFSigner from a 32-byte seed
@@ -29,7 +34,7 @@ func NewVRFSigner(seed []byte) (*VRFSigner, []byte, error) {
 		return nil, nil, err
 	}
 
-	return &VRFSigner{privateKey: vrfPriv}, vrfPub, nil
+	return &VRFSigner{privateKey: vrfPriv, pub: &PublicKey{pub: vrfPub}}, vrfPub, nil
 }
 
 // VRFVerify verifies a message and signature, given a public key
