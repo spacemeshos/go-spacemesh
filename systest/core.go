@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api/config"
@@ -19,6 +20,7 @@ import (
 const (
 	defaultGasLimit = 10
 	defaultFee      = 1
+	pollingInterval = 3 * time.Second
 )
 
 type SystemTest struct {
@@ -30,16 +32,18 @@ type SystemTest struct {
 	Account2 *signing.EdSigner
 	Cfg      *config.Config
 	GRPC     *grpc.ClientConn
+	ctx      context.Context
 }
 
 // NewSystemTest creates a new SystemTest object based on tesground enviornment
 // vars and init context
-func NewSystemTest(re *runtime.RunEnv, ic *run.InitContext) *SystemTest {
+func NewSystemTest(ctx context.Context, re *runtime.RunEnv, ic *run.InitContext) *SystemTest {
 	c := config.DefaultConfig()
 
 	t := SystemTest{re: re,
 		ic:  ic,
 		Cfg: &c,
+		ctx: ctx,
 	}
 	// setup Acount1 & Account2
 	var err error
@@ -150,14 +154,32 @@ func (t *SystemTest) SendCoins(nonce uint64, recipient *signing.EdSigner,
 	// TODO: test _ == result
 }
 
-// WaitTillEpoch TODO: wait till the next epoch
+// WaitTillEpoch wait till the next epoch
 func (t *SystemTest) WaitTillEpoch() {
-	// TODO: code it
+	c := pb.NewMeshServiceClient(t.GRPC)
+	res, err := c.CurrentEpoch(t.ctx, &pb.CurrentEpochRequest{})
+	if err != nil {
+		t.Errorf("Failed to get CurrentEpoc %s", err)
+	}
+	start := res.Epochnum.Value
+	keepGoing := make(chan uint64)
+	for v := start; v == start; v = v {
+		time.Sleep(pollingInterval)
+		response, err := c.CurrentEpoch(t.ctx, &pb.CurrentEpochRequest{})
+		if err != nil {
+			t.Errorf("Failed to get CurrentEpoc %s", err)
+		}
+		v = response.Epochnum.Value
+		select {
+		case <-t.ctx.Done():
+			t.Errorf("Stopping test on done signal")
+		case keepGoing <- v:
+		}
+	}
 }
 
 // RequireBalance fail if an account is not of a given value
 func (t *SystemTest) RequireBalance(account *signing.EdSigner, balance uint64) {
-	// TODO: code it
 	s := t.GetAccountState(account)
 	if s.Balance != balance {
 		t.Failf("Account balance is %d expecting %d account: %v", s.Balance, balance, account)

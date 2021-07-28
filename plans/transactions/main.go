@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/systest"
 	"github.com/testground/sdk-go/run"
 	"github.com/testground/sdk-go/runtime"
@@ -16,7 +19,10 @@ var testcases = map[string]interface{}{
 // tests accounts.
 // Then all the nodes wait for the next epoch and assert the accounts' balance.
 func testTransaction(env *runtime.RunEnv, initCtx *run.InitContext) error {
-	t := systest.NewSystemTest(env, initCtx)
+	ctx, cancel := context.WithDeadline(context.Background(),
+		time.Now().Add(10*time.Minute))
+	defer cancel()
+	t := systest.NewSystemTest(ctx, env, initCtx)
 	defer t.Close()
 	t.Logf("Starting transaction test, %d is up", t.ID)
 	start1 := t.GetAccountState(t.Account1).Balance
@@ -36,7 +42,10 @@ func testTransaction(env *runtime.RunEnv, initCtx *run.InitContext) error {
 // Then all the nodes wait for the next epoch and assert the accounts' balance.
 
 func testNewAccount(env *runtime.RunEnv, initCtx *run.InitContext) error {
-	t := systest.NewSystemTest(env, initCtx)
+	ctx, cancel := context.WithDeadline(context.Background(),
+		time.Now().Add(10*time.Minute))
+	defer cancel()
+	t := systest.NewSystemTest(ctx, env, initCtx)
 	defer t.Close()
 	t.Logf("Starting new account test, %d is up", t.ID)
 	start1 := t.GetAccountState(t.Account1).Balance
