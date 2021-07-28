@@ -4,7 +4,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest"
 	"github.com/testground/sdk-go/run"
 	"github.com/testground/sdk-go/runtime"
-	"github.com/testground/sdk-go/sync"
 )
 
 var testcases = map[string]interface{}{
@@ -20,10 +19,6 @@ func testTransaction(env *runtime.RunEnv, initCtx *run.InitContext) error {
 	t := systest.NewSystemTest(env, initCtx)
 	defer t.Close()
 	t.Logf("Starting transaction test, %d is up", t.ID)
-	// TODO: ready should be replaced with starting the node and waiting for
-	// genesis
-	t.SetState("ready")
-	t.WaitAll(sync.State("ready"))
 	start1 := t.GetAccountState(t.Account1).Balance
 	start2 := t.GetAccountState(t.Account2).Balance
 	if t.ID == 1 {
@@ -44,10 +39,6 @@ func testNewAccount(env *runtime.RunEnv, initCtx *run.InitContext) error {
 	t := systest.NewSystemTest(env, initCtx)
 	defer t.Close()
 	t.Logf("Starting new account test, %d is up", t.ID)
-	// TODO: ready should be replaced with starting the node and waiting for
-	// genesis
-	t.SetState("ready")
-	t.WaitAll(sync.State("ready"))
 	start1 := t.GetAccountState(t.Account1).Balance
 	if t.ID == 1 {
 		// create an acocunt and make the transfer
