@@ -606,15 +606,27 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	tb.Log.With().Debug("Starting following voting message sender",
 		log.Uint64("epoch_id", uint64(epoch)))
 
+	// we need to pass a map with spacetime unit allowances before any round is started
+	_, atxs, err := tb.atxDB.GetEpochWeight(epoch)
+	if err != nil {
+		tb.Log.With().Panic("can't load list of atxs", log.Err(err))
+	}
+	ua := weakcoin.UnitAllowances{}
+	for _, id := range atxs {
+		header, err := tb.atxDB.GetAtxHeader(id)
+		if err != nil {
+			tb.Log.With().Panic("can't load atx header", log.Err(err))
+		}
+		ua[string(header.NodeID.VRFPublicKey)] += uint64(header.NumUnits)
+	}
+	tb.weakCoin.StartEpoch(epoch, ua)
+
 	// For K rounds: In each round that lasts δ, wait for proposals to come in.
 	// For next rounds,
 	// wait for δ time, and construct a message that points to all messages from previous round received by δ.
 	// rounds 1 to K
 	ticker := time.NewTicker(tb.votingRoundDuration + tb.weakCoinRoundDuration)
 	defer ticker.Stop()
-
-	// we need to pass weak coin a map with spacetime unit allowances before any round are started
-	tb.weakCoin.StartEpoch(epoch, weakcoin.UnitAllowances{})
 
 	for round := firstRound + 1; round <= tb.lastPossibleRound(); round++ {
 		if round > firstRound+1 {
