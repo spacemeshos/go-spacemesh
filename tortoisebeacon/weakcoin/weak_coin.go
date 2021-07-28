@@ -78,11 +78,11 @@ func New(
 	opts ...Option,
 ) *WeakCoin {
 	wc := &WeakCoin{
-		logger:    log.NewNop(),
-		signer:    signer,
-		verifier:  verifier,
-		net:       net,
-		weakCoins: make(map[types.RoundID]bool),
+		logger:   log.NewNop(),
+		signer:   signer,
+		verifier: verifier,
+		net:      net,
+		coins:    make(map[types.RoundID]bool),
 	}
 	for _, opt := range opts {
 		opt(wc)
@@ -104,8 +104,8 @@ type WeakCoin struct {
 	round      types.RoundID
 	vrf        []byte
 	allowances UnitAllowances
-	weakCoins  map[types.RoundID]bool
-	// nextRoundBuffer is used to to optimistically buffer messages in the next round.
+	coins      map[types.RoundID]bool
+	// nextRoundBuffer is used to optimistically buffer messages from the next round.
 	// we will avoid problems with some messages being lost simply because one node was slightly
 	// faster then the other.
 	// TODO(dshulyak) append to it in broadcast handler, and iterator over when StartRound is called
@@ -120,7 +120,7 @@ func (wc *WeakCoin) Get(round types.RoundID) bool {
 	if wc.epoch.IsGenesis() {
 		return false
 	}
-	return wc.weakCoins[round]
+	return wc.coins[round]
 }
 
 func (wc *WeakCoin) publishProposal(ctx context.Context) error {
@@ -176,17 +176,17 @@ func (wc *WeakCoin) encodeProposal(epoch types.EpochID, round types.RoundID, uni
 	proposal := bytes.Buffer{}
 	proposal.WriteString(proposalPrefix)
 	if _, err := proposal.Write(epoch.ToBytes()); err != nil {
-		wc.logger.Panic("can't write to a buffer epoch value", log.Err(err))
+		wc.logger.Panic("can't write epoch to a buffer", log.Err(err))
 	}
 	roundBuf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(roundBuf, uint64(round))
 	if _, err := proposal.Write(roundBuf); err != nil {
-		wc.logger.Panic("can't write to a buffer uint64", log.Err(err))
+		wc.logger.Panic("can't write uint64 to a buffer", log.Err(err))
 	}
 	buf := make([]byte, 2)
 	binary.LittleEndian.PutUint16(buf, unit)
 	if _, err := proposal.Write(buf); err != nil {
-		wc.logger.Panic("can't write to a buffer uint16", log.Err(err))
+		wc.logger.Panic("can't write uint16 to a buffer", log.Err(err))
 	}
 	return proposal.Bytes()
 }
@@ -203,7 +203,7 @@ func (wc *WeakCoin) CompleteEpoch() {
 	defer wc.mu.Unlock()
 	wc.epoch = 0
 	wc.allowances = nil
-	wc.weakCoins = map[types.RoundID]bool{}
+	wc.coins = map[types.RoundID]bool{}
 }
 
 func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
@@ -229,7 +229,7 @@ func (wc *WeakCoin) CompleteRound() {
 	}
 
 	coinflip := wc.vrf[0]&1 == 1
-	wc.weakCoins[wc.round] = coinflip
+	wc.coins[wc.round] = coinflip
 	wc.logger.With().Info("completed round",
 		log.Uint32("epoch_id", uint32(wc.epoch)),
 		log.Uint64("round_id", uint64(wc.round)),

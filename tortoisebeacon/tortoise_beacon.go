@@ -629,9 +629,6 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	defer ticker.Stop()
 
 	for round := firstRound + 1; round <= tb.lastPossibleRound(); round++ {
-		if round > firstRound+1 {
-			tb.weakCoin.CompleteRound()
-		}
 		tb.sendFollowingVotesLoopIteration(ctx, epoch, round)
 		select {
 		case <-ticker.C:
@@ -640,6 +637,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		case <-ctx.Done():
 			return
 		}
+		tb.weakCoin.CompleteRound()
 	}
 
 	tb.Log.With().Debug("Following voting message sender finished",
