@@ -69,9 +69,14 @@ def get_app_started_msgs(namespace, pod_name):
     return get_all_msg_containing(namespace, pod_name, app_started_msg)
 
 
-def get_beacon_msgs(namespace, pod_name):
+def get_tortoise_beacon_msgs(namespace, pod_name):
     beacon_msg = "Calculated beacon"
     return get_all_msg_containing(namespace, pod_name, beacon_msg)
+
+
+def get_tortoise_beacon_weak_coin_msgs(namespace, pod_name):
+    weak_coin_msg = "Calculated weak coin"
+    return get_all_msg_containing(namespace, pod_name, weak_coin_msg)
 
 
 def get_all_msg_containing(namespace, pod_name, msg_data, find_fails=False, from_ts=None, to_ts=None, is_print=True):

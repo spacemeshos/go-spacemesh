@@ -183,8 +183,7 @@ func (tb *TortoiseBeacon) verifyProposalMessage(m ProposalMessage, currentEpoch 
 		return fmt.Errorf("calculate proposal: %w", err)
 	}
 
-	ok := tb.vrfVerifier(m.MinerID.VRFPublicKey, currentEpochProposal, m.VRFSignature)
-	if !ok {
+	if !tb.vrfVerifier(m.MinerID.VRFPublicKey, currentEpochProposal, m.VRFSignature) {
 		// TODO(nkryuchkov): attach telemetry
 		tb.Log.With().Warning("Received malformed proposal message: VRF is not verified",
 			log.String("sender", m.MinerID.Key))

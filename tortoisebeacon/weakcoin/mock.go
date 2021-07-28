@@ -32,5 +32,4 @@ func (m ValueMock) Get(epoch types.EpochID, round types.RoundID) bool {
 
 // HandleSerializedMessage handles serialized message.
 func (m ValueMock) HandleSerializedMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
-	return
 }
