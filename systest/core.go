@@ -8,10 +8,17 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/testground/sdk-go/run"
 	"github.com/testground/sdk-go/runtime"
 	"github.com/testground/sdk-go/sync"
 	"google.golang.org/grpc"
+)
+
+const (
+	defaultGasLimit = 10
+	defaultFee      = 1
 )
 
 type SystemTest struct {
@@ -19,9 +26,9 @@ type SystemTest struct {
 	ID       int64
 	re       *runtime.RunEnv
 	ic       *run.InitContext
-	Account1 string
-	Account2 string
-	Cfg      config.Config
+	Account1 *signing.EdSigner
+	Account2 *signing.EdSigner
+	Cfg      *config.Config
 	GRPC     *grpc.ClientConn
 }
 
@@ -29,11 +36,22 @@ type SystemTest struct {
 // vars and init context
 func NewSystemTest(re *runtime.RunEnv, ic *run.InitContext) *SystemTest {
 	c := config.DefaultConfig()
+
 	t := SystemTest{re: re,
-		ic:       ic,
-		Account1: config.Account1Pub,
-		Account2: config.Account2Pub,
-		Cfg:      c,
+		ic:  ic,
+		Cfg: &c,
+	}
+	// setup Acount1 & Account2
+	var err error
+	t.Account1, err = signing.NewEdSignerFromBuffer(
+		util.FromHex(config.Account1Private))
+	if err != nil {
+		t.Errorf("Failed to create a ed signer for Account1: %s", err)
+	}
+	t.Account2, err = signing.NewEdSignerFromBuffer(
+		util.FromHex(config.Account2Private))
+	if err != nil {
+		t.Errorf("Failed to create a ed signer for Account2: %s", err)
 	}
 
 	t.ID = t.SetState("init")
@@ -95,11 +113,10 @@ func (t *SystemTest) WaitAll(state sync.State) {
 }
 
 // GetAccountState returns an account's state
-func (t *SystemTest) GetAccountState(account string) *types.AccountState {
-	// TODO: code it
+func (t *SystemTest) GetAccountState(account *signing.EdSigner) *types.AccountState {
 	c := pb.NewGlobalStateServiceClient(t.GRPC)
 	res, err := c.Account(context.Background(), &pb.AccountRequest{
-		AccountId: &pb.AccountId{Address: types.HexToAddress(account).Bytes()},
+		AccountId: &pb.AccountId{Address: account.PublicKey().Bytes()},
 	})
 	if err != nil {
 		t.Errorf("Failed to get account details: %s", err)
@@ -110,9 +127,27 @@ func (t *SystemTest) GetAccountState(account string) *types.AccountState {
 	}
 }
 
-// GetBalance TODO: send coins from one acounts to another
-func (t *SystemTest) SendCoins(from string, to string, amount uint64) {
-	// TODO: code it
+// GetBalance send coins from one acounts to another
+func (t *SystemTest) SendCoins(nonce uint64, recipient *signing.EdSigner,
+	amount uint64, signer *signing.EdSigner) {
+	to := types.BytesToAddress(recipient.PublicKey().Bytes())
+	tx, err := types.NewSignedTx(nonce, to, amount,
+		defaultGasLimit, defaultFee, signer)
+	if err != nil {
+		t.Errorf("Failed to create a new transaction: %s", err)
+	}
+	c := pb.NewTransactionServiceClient(t.GRPC)
+	serializedTx, err := types.InterfaceToBytes(tx)
+	if err != nil {
+		t.Errorf("Failed to create a new transaction client: %s", err)
+	}
+	// TODO: use a better context
+	_, err = c.SubmitTransaction(context.Background(),
+		&pb.SubmitTransactionRequest{Transaction: serializedTx})
+	if err != nil {
+		t.Errorf("Failed to create a new transaction client: %s", err)
+	}
+	// TODO: test _ == result
 }
 
 // WaitTillEpoch TODO: wait till the next epoch
@@ -121,18 +156,18 @@ func (t *SystemTest) WaitTillEpoch() {
 }
 
 // RequireBalance fail if an account is not of a given value
-func (t *SystemTest) RequireBalance(account string, balance uint64) {
+func (t *SystemTest) RequireBalance(account *signing.EdSigner, balance uint64) {
 	// TODO: code it
 	s := t.GetAccountState(account)
 	if s.Balance != balance {
-		t.Failf("Account %s balance is %d expecting %d", account[:6], s.Balance, balance)
+		t.Failf("Account balance is %d expecting %d account: %v", s.Balance, balance, account)
 	}
 }
 
 // NewAccount creates a new account and returns it's key
-func (t *SystemTest) NewAccount() string {
+func (t *SystemTest) NewAccount() *signing.EdSigner {
 	// TODO: code it
-	return "TODO"
+	return signing.NewEdSigner()
 }
 
 // Close cleans up after the test

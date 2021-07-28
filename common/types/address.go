@@ -3,10 +3,11 @@ package types
 import (
 	"encoding/hex"
 	"fmt"
+	"math/big"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"math/big"
 )
 
 const (

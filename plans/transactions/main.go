@@ -27,7 +27,7 @@ func testTransaction(env *runtime.RunEnv, initCtx *run.InitContext) error {
 	start1 := t.GetAccountState(t.Account1).Balance
 	start2 := t.GetAccountState(t.Account2).Balance
 	if t.ID == 1 {
-		t.SendCoins(t.Account1, t.Account2, 100)
+		t.SendCoins(0, t.Account1, 100, t.Account2)
 	}
 	t.WaitTillEpoch()
 	t.RequireBalance(t.Account1, start1-100)
@@ -41,7 +41,6 @@ func testTransaction(env *runtime.RunEnv, initCtx *run.InitContext) error {
 // Then all the nodes wait for the next epoch and assert the accounts' balance.
 
 func testNewAccount(env *runtime.RunEnv, initCtx *run.InitContext) error {
-	var a string
 	t := systest.NewSystemTest(env, initCtx)
 	defer t.Close()
 	t.Logf("Starting new account test, %d is up", t.ID)
@@ -51,14 +50,15 @@ func testNewAccount(env *runtime.RunEnv, initCtx *run.InitContext) error {
 	t.WaitAll(sync.State("ready"))
 	start1 := t.GetAccountState(t.Account1).Balance
 	if t.ID == 1 {
-		a = t.NewAccount()
-		t.SendCoins(t.Account1, a, 100)
+		// create an acocunt and make the transfer
+		a := t.NewAccount()
+		t.SendCoins(0, t.Account1, 100, a)
+		t.WaitTillEpoch()
+		t.RequireBalance(a, 100)
+		return nil
 	}
 	t.WaitTillEpoch()
 	t.RequireBalance(t.Account1, start1-100)
-	if t.ID == 1 {
-		t.RequireBalance(a, 100)
-	}
 	return nil
 }
 
