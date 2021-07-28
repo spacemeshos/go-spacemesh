@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"testing"
-	"time"
 
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -47,7 +46,6 @@ func GenerateTestNodeWithConfig(t *testing.T) (LocalNode, *Info) {
 
 // GenerateRandomNodeData generates a remote random node data for testing.
 func GenerateRandomNodeData() *Info {
-	rand.Seed(time.Now().UnixNano())
 	port := uint16(rand.Int31n(48127) + 1024)
 	pub := p2pcrypto.NewRandomPubkey()
 	return NewNode(pub, localhost, port, port)

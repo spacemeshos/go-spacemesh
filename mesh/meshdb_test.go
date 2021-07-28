@@ -55,13 +55,14 @@ func TestMeshDB_AddBlock(t *testing.T) {
 	addTransactionsWithFee(t, mdb, block1, 4, rand.Int63n(100))
 
 	poetRef := []byte{0xba, 0x05}
-	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID{}, types.NewLayerID(5), 1, types.ATXID{}, coinbase, 5, []types.BlockID{}, &types.NIPST{
-		NipstChallenge: &types.Hash32{},
-		PostProof: &types.PostProof{
-			Challenge:    poetRef,
-			MerkleRoot:   []byte(nil),
-			ProofNodes:   [][]byte(nil),
-			ProvenLeaves: [][]byte(nil),
+	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID{}, types.NewLayerID(5), 1, types.ATXID{}, coinbase, 5, []types.BlockID{}, &types.NIPost{
+		Challenge: &types.Hash32{},
+		Post: &types.Post{
+			Nonce:   0,
+			Indices: []byte(nil),
+		},
+		PostMetadata: &types.PostMetadata{
+			Challenge: poetRef,
 		},
 	})
 	var atxs []types.ATXID
@@ -73,13 +74,13 @@ func TestMeshDB_AddBlock(t *testing.T) {
 	rBlock1, err := mdb.GetBlock(block1.ID())
 	assert.NoError(t, err)
 
-	assert.True(t, len(rBlock1.TxIDs) == len(block1.TxIDs), "block content was wrong")
-	assert.True(t, len(*rBlock1.ActiveSet) == len(*block1.ActiveSet), "block content was wrong")
-	// assert.True(t, bytes.Compare(rBlock2.Data, []byte("data2")) == 0, "block content was wrong")
+	assert.Equal(t, block1.ID(), rBlock1.ID())
+	assert.Equal(t, block1.MinerID(), rBlock1.MinerID())
+	assert.Equal(t, len(rBlock1.TxIDs), len(block1.TxIDs), "block content was wrong")
+	assert.Equal(t, len(*rBlock1.ActiveSet), len(*block1.ActiveSet), "block content was wrong")
 }
 
 func chooseRandomPattern(blocksInLayer int, patternSize int) []int {
-	rand.Seed(time.Now().UnixNano())
 	p := rand.Perm(blocksInLayer)
 	indexes := make([]int, 0, patternSize)
 	for _, r := range p[:patternSize] {
@@ -1003,4 +1004,26 @@ func TestMesh_FindOnce(t *testing.T) {
 			assert.Len(t, mdb.GetTransactionsByOrigin(types.NewLayerID(layer), addr1), 1)
 		}
 	})
+}
+
+func BenchmarkGetBlockHeader(b *testing.B) {
+	// blocks is set to be twice as large as cache to avoid hitting the cache
+	cache := layerSize
+	blocks := make([]*types.Block, cache*2)
+	db, err := NewPersistentMeshDB(b.TempDir(),
+		1, /*size of the cache is multiplied by a constant (layerSize). for the benchmark it needs to be no more than layerSize*/
+		log.NewNop())
+	require.NoError(b, err)
+	for i := range blocks {
+		blocks[i] = types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
+		require.NoError(b, db.AddBlock(blocks[i]))
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		block := blocks[i%len(blocks)]
+		_, err = db.GetBlock(block.ID())
+		require.NoError(b, err)
+	}
 }

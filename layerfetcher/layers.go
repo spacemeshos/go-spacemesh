@@ -180,7 +180,7 @@ func (l *Logic) Close() {
 }
 
 // AddDBs adds dbs that will be queried when sync requests are received. these databases will be exposed to external callers
-func (l *Logic) AddDBs(blockDB, AtxDB, TxDB, poetDB, IvDB, tbDB database.Store) {
+func (l *Logic) AddDBs(blockDB, AtxDB, TxDB, poetDB, IvDB, tbDB database.Getter) {
 	l.fetcher.AddDB(fetch.BlockDB, blockDB)
 	l.fetcher.AddDB(fetch.ATXDB, AtxDB)
 	l.fetcher.AddDB(fetch.TXDB, TxDB)
@@ -248,7 +248,7 @@ func (l *Logic) tortoiseBeaconReqReceiver(ctx context.Context, msg []byte) []byt
 	}
 
 	if err != nil {
-		l.log.WithContext(ctx).Error("cannot get tortoise beacon for epoch %v", epoch)
+		l.log.WithContext(ctx).Error("cannot get tortoise beacon for epoch %v: %v", epoch, err)
 		return []byte{}
 	}
 
@@ -414,8 +414,8 @@ func (l *Logic) fetchLayerBlocks(ctx context.Context, layerID types.LayerID, blo
 func (l *Logic) receiveBlockHashes(ctx context.Context, layerID types.LayerID, peer peers.Peer, expectedResults int, data []byte, extErr error) {
 	pRes := &peerResult{err: extErr}
 	if extErr != nil {
-		if !errors.Is(extErr, ErrZeroLayer) || !layerID.GetEpoch().IsGenesis() {
-			l.log.WithContext(ctx).With().Error("received error from peer for block hashes", log.Err(extErr), layerID)
+		if !errors.Is(extErr, ErrZeroLayer) || !(layerID.GetEpoch()).IsGenesis() {
+			l.log.WithContext(ctx).With().Error("received error from peer for block hashes", log.Err(extErr), layerID, layerID.GetEpoch())
 		}
 	} else if data != nil {
 		var blocks layerBlocks

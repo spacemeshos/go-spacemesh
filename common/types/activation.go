@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/spacemeshos/poet/shared"
-	"github.com/spacemeshos/post/proving"
+	poetShared "github.com/spacemeshos/poet/shared"
+	postShared "github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/sha256-simd"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -82,13 +82,13 @@ func CalcAtxHash32Presorted(sortedView []ATXID, additionalBytes []byte) Hash32 {
 // EmptyATXID is a canonical empty ATXID.
 var EmptyATXID = &ATXID{}
 
-// ActivationTxHeader is the header of an activation transaction. It includes all fields from the NIPSTChallenge, as
+// ActivationTxHeader is the header of an activation transaction. It includes all fields from the NIPostChallenge, as
 // well as the coinbase address and total weight.
 type ActivationTxHeader struct {
-	NIPSTChallenge
+	NIPostChallenge
 	id       *ATXID // non-exported cache of the ATXID
-	Space    uint64
 	Coinbase Address
+	NumUnits uint
 }
 
 // ShortString returns the first 5 characters of the ID, for logging purposes.
@@ -120,30 +120,30 @@ func (atxh *ActivationTxHeader) SetID(id *ATXID) {
 	atxh.id = id
 }
 
-// GetWeight returns the ATX's weight = space * ticks.
+// GetWeight returns the ATX's weight = numUnits * ticks.
 func (atxh *ActivationTxHeader) GetWeight() uint64 {
 	// TODO: Limit the number of bits this can occupy
-	return atxh.Space * (atxh.EndTick - atxh.StartTick)
+	return uint64(atxh.NumUnits) * (atxh.EndTick - atxh.StartTick)
 }
 
-// NIPSTChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
+// NIPostChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
 // PoET membership proof. It includes the node ID, ATX sequence number, the previous ATX's ID (for all but the first in
 // the sequence), the intended publication layer ID, the PoET's start and end ticks, the positioning ATX's ID and for
 // the first ATX in the sequence also the commitment Merkle root.
-type NIPSTChallenge struct {
-	NodeID               NodeID
-	Sequence             uint64
-	PrevATXID            ATXID
-	PubLayerID           LayerID
-	StartTick            uint64
-	EndTick              uint64
-	PositioningATX       ATXID
-	CommitmentMerkleRoot []byte
+type NIPostChallenge struct {
+	NodeID             NodeID
+	Sequence           uint64
+	PrevATXID          ATXID
+	PubLayerID         LayerID
+	StartTick          uint64
+	EndTick            uint64
+	PositioningATX     ATXID
+	InitialPostIndices []byte
 }
 
-// Hash serializes the NIPSTChallenge and returns its hash.
-func (challenge *NIPSTChallenge) Hash() (*Hash32, error) {
-	ncBytes, err := NIPSTChallengeToBytes(challenge)
+// Hash serializes the NIPostChallenge and returns its hash.
+func (challenge *NIPostChallenge) Hash() (*Hash32, error) {
+	ncBytes, err := NIPostChallengeToBytes(challenge)
 	if err != nil {
 		return nil, err
 	}
@@ -151,9 +151,9 @@ func (challenge *NIPSTChallenge) Hash() (*Hash32, error) {
 	return &hash, nil
 }
 
-// String returns a string representation of the NIPSTChallenge, for logging purposes.
+// String returns a string representation of the NIPostChallenge, for logging purposes.
 // It implements the Stringer interface.
-func (challenge *NIPSTChallenge) String() string {
+func (challenge *NIPostChallenge) String() string {
 	return fmt.Sprintf("<id: [vrf: %v ed: %v], seq: %v, prevATX: %v, PubLayer: %v, s tick: %v, e tick: %v, "+
 		"posATX: %v>",
 		util.Bytes2Hex(challenge.NodeID.VRFPublicKey)[:5],
@@ -168,11 +168,11 @@ func (challenge *NIPSTChallenge) String() string {
 
 // InnerActivationTx is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
 // structure is serialized and signed. It includes the header fields, as well as the larger fields that are only used
-// for validation: the NIPST, view and PoST proof.
+// for validation: the NIPost and the initial Post.
 type InnerActivationTx struct {
 	*ActivationTxHeader
-	Nipst      *NIPST
-	Commitment *PostProof
+	NIPost      *NIPost
+	InitialPost *Post
 }
 
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
@@ -183,16 +183,16 @@ type ActivationTx struct {
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
-func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, nipst *NIPST, space uint64, commitment *PostProof) *ActivationTx {
+func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost, numUnits uint, initialPost *Post) *ActivationTx {
 	atx := &ActivationTx{
 		InnerActivationTx: &InnerActivationTx{
 			ActivationTxHeader: &ActivationTxHeader{
-				NIPSTChallenge: nipstChallenge,
-				Space:          space,
-				Coinbase:       coinbase,
+				NIPostChallenge: challenge,
+				Coinbase:        coinbase,
+				NumUnits:        numUnits,
 			},
-			Nipst:      nipst,
-			Commitment: commitment,
+			NIPost:      nipost,
+			InitialPost: initialPost,
 		},
 	}
 	atx.CalcAndSetID()
@@ -206,13 +206,13 @@ func (atx *ActivationTx) InnerBytes() ([]byte, error) {
 
 // Fields returns an array of LoggableFields for logging
 func (atx *ActivationTx) Fields(size int) []log.LoggableField {
-	commitmentStr := ""
-	if atx.Commitment != nil {
-		commitmentStr = atx.Commitment.String()
+	initialPost := ""
+	if atx.InitialPost != nil {
+		initialPost = atx.InitialPost.String()
 	}
 
 	challenge := ""
-	h, err := atx.NIPSTChallenge.Hash()
+	h, err := atx.NIPostChallenge.Hash()
 	if err == nil && h != nil {
 		challenge = h.String()
 	}
@@ -225,13 +225,13 @@ func (atx *ActivationTx) Fields(size int) []log.LoggableField {
 		log.FieldNamed("coinbase", atx.Coinbase),
 		atx.PubLayerID,
 		atx.PubLayerID.GetEpoch(),
-		log.Uint64("space", atx.Space),
+		log.Uint64("num_units", uint64(atx.NumUnits)),
 		log.Uint64("start_tick", atx.StartTick),
 		log.Uint64("end_tick", atx.EndTick),
 		log.Uint64("weight", atx.GetWeight()),
 		log.Uint64("sequence_number", atx.Sequence),
-		log.String("NIPSTChallenge", challenge),
-		log.String("commitment", commitmentStr),
+		log.String("NIPostChallenge", challenge),
+		log.String("initialPost", initialPost),
 		log.Int("atx_size", size),
 	}
 }
@@ -253,18 +253,19 @@ func (atx *ActivationTx) CalcAndSetID() {
 
 // GetPoetProofRef returns the reference to the PoET proof.
 func (atx *ActivationTx) GetPoetProofRef() Hash32 {
-	return BytesToHash(atx.Nipst.PostProof.Challenge)
+	return BytesToHash(atx.NIPost.PostMetadata.Challenge)
 }
 
 // GetShortPoetProofRef returns the first 5 characters of the PoET proof reference, for logging purposes.
 func (atx *ActivationTx) GetShortPoetProofRef() []byte {
-	return atx.Nipst.PostProof.Challenge[:util.Min(5, len(atx.Nipst.PostProof.Challenge))]
+	ref := atx.GetPoetProofRef()
+	return ref[:util.Min(5, len(ref))]
 }
 
 // PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration
 // and the actual PoET Merkle proof.
 type PoetProof struct {
-	shared.MerkleProof
+	poetShared.MerkleProof
 	Members   [][]byte
 	LeafCount uint64
 }
@@ -294,28 +295,43 @@ type PoetRound struct {
 	ID string
 }
 
-// NIPST is Non-Interactive Proof of Space-Time.
+// NIPost is Non-Interactive Proof of Space-Time.
 // Given an id, a space parameter S, a duration D and a challenge C,
 // it can convince a verifier that (1) the prover expended S * D space-time
-// after learning the challenge C. (2) the prover did not know the NIPST until D time
+// after learning the challenge C. (2) the prover did not know the NIPost until D time
 // after the prover learned C.
-type NIPST struct {
-	// nipstChallenge is the challenge for PoET which is
+type NIPost struct {
+	// Challenge is the challenge for the PoET which is
 	// constructed from fields in the activation transaction.
-	NipstChallenge *Hash32
+	Challenge *Hash32
 
-	// postProof is the proof that the prover data
-	// is still stored (or was recomputed).
-	PostProof *PostProof
+	// Post is the proof that the prover data is still stored (or was recomputed) at
+	// the time he learned the challenge constructed from the PoET.
+	Post *Post
+
+	// PostMetadata is the Post metadata, associated with the proof.
+	// The proof should be verified upon the metadata during the syntactic validation,
+	// while the metadata should be verified during the contextual validation.
+	PostMetadata *PostMetadata
 }
 
-// PostProof is an alias to the PoST proof.
-type PostProof proving.Proof
+// Post is an alias to postShared.Proof.
+type Post postShared.Proof
+
+// PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere in a given ATX (ID, NumUnits).
+type PostMetadata struct {
+	Challenge     []byte
+	BitsPerLabel  uint
+	LabelsPerUnit uint
+	K1            uint
+	K2            uint
+}
 
 // String returns a string representation of the PostProof, for logging purposes.
 // It implements the Stringer interface.
-func (p PostProof) String() string {
-	return fmt.Sprintf("challenge: %v", bytesToShortString(p.Challenge))
+func (p Post) String() string {
+	return fmt.Sprintf("nonce: %v, indices: %v",
+		p.Nonce, bytesToShortString(p.Indices))
 }
 
 func bytesToShortString(b []byte) string {

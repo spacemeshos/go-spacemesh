@@ -159,19 +159,19 @@ func (m *DB) Close() {
 // todo: for now, these methods are used to export dbs to sync, think about merging the two packages
 
 // Blocks exports the block database
-func (m *DB) Blocks() database.Database {
+func (m *DB) Blocks() database.Getter {
 	m.blockMutex.RLock()
 	defer m.blockMutex.RUnlock()
-	return m.blocks
+	return NewBlockFetcherDB(m)
 }
 
 // Transactions exports the transactions DB
-func (m *DB) Transactions() database.Database {
+func (m *DB) Transactions() database.Getter {
 	return m.transactions
 }
 
 // InputVector exports the inputvector DB
-func (m *DB) InputVector() database.Database {
+func (m *DB) InputVector() database.Getter {
 	return m.inputVector
 }
 
@@ -202,10 +202,11 @@ func (m *DB) GetBlock(id types.BlockID) (*types.Block, error) {
 	if err != nil {
 		return nil, err
 	}
-	mbk := &types.Block{}
-	err = types.BytesToInterface(b, mbk)
-	mbk.Initialize()
-	return mbk, err
+	mbk := &types.DBBlock{}
+	if err := types.BytesToInterface(b, mbk); err != nil {
+		return nil, err
+	}
+	return mbk.ToBlock(), nil
 }
 
 // LayerBlocks retrieves all blocks from a layer by layer index
@@ -396,7 +397,13 @@ func (m *DB) SaveLayerHashInputVector(h types.Hash32, data []byte) error {
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {
-	if bytes, err := types.InterfaceToBytes(bl); err != nil {
+	block := &types.DBBlock{
+		MiniBlock: bl.MiniBlock,
+		ID:        bl.ID(),
+		Signature: bl.Signature,
+		MinerID:   bl.MinerID().Bytes(),
+	}
+	if bytes, err := types.InterfaceToBytes(block); err != nil {
 		return fmt.Errorf("could not encode block: %w", err)
 	} else if err := m.blocks.Put(bl.ID().AsHash32().Bytes(), bytes); err != nil {
 		return fmt.Errorf("could not add block %v to database: %w", bl.ID(), err)
@@ -411,8 +418,10 @@ func (m *DB) writeBlock(bl *types.Block) error {
 func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 	lm := m.getLayerMutex(blk.LayerIndex)
 	defer m.endLayerWorker(blk.LayerIndex)
+
 	lm.m.Lock()
 	defer lm.m.Unlock()
+
 	ids, err := m.layers.Get(blk.LayerIndex.Bytes())
 	var blockIds []types.BlockID
 	if err != nil {
@@ -425,12 +434,14 @@ func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 		}
 	}
 	m.Debug("added block %v to layer %v", blk.ID(), blk.LayerIndex)
+
 	blockIds = append(blockIds, blk.ID())
 	types.SortBlockIDs(blockIds)
 	w, err := types.BlockIdsToBytes(blockIds)
 	if err != nil {
 		return errors.New("could not encode layer blk ids")
 	}
+
 	m.layers.Put(blk.LayerIndex.Bytes(), w)
 	hash := types.CalcBlocksHash32(blockIds, nil)
 	m.persistLayerHash(blk.LayerIndex, hash)
@@ -1063,4 +1074,24 @@ func (m *DB) cacheWarmUpFromTo(from types.LayerID, to types.LayerID) error {
 	m.Info("done warming up cache")
 
 	return nil
+}
+
+// NewBlockFetcherDB returns reference to a BlockFetcherDB instance.
+func NewBlockFetcherDB(mdb *DB) *BlockFetcherDB {
+	return &BlockFetcherDB{mdb: mdb}
+}
+
+// BlockFetcherDB implements API that allows fetcher to get a block from a remote database.
+type BlockFetcherDB struct {
+	mdb *DB
+}
+
+// Get types.Block encoded in byte using hash.
+func (db *BlockFetcherDB) Get(hash []byte) ([]byte, error) {
+	id := types.BlockID(types.BytesToHash(hash).ToHash20())
+	blk, err := db.mdb.GetBlock(id)
+	if err != nil {
+		return nil, err
+	}
+	return types.InterfaceToBytes(blk)
 }

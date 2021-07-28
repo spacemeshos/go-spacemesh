@@ -62,7 +62,7 @@ var ErrExceedMaxRetries = errors.New("fetch failed after max retries for request
 type Fetcher interface {
 	GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashDataPromiseResult
 	GetHashes(hash []types.Hash32, hint Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult
-	AddDB(hint Hint, db database.Store)
+	AddDB(hint Hint, db database.Getter)
 	Stop()
 	Start()
 }
@@ -190,7 +190,7 @@ type network interface {
 type Fetch struct {
 	cfg Config
 	log log.Log
-	dbs map[Hint]database.Store
+	dbs map[Hint]database.Getter
 	// activeRequests contains requests that are not processed
 	activeRequests map[types.Hash32][]*request
 	// pendingRequests contains requests that have been processed and are waiting for responses
@@ -217,7 +217,7 @@ func NewFetch(ctx context.Context, cfg Config, network service.Service, logger l
 	f := &Fetch{
 		cfg:             cfg,
 		log:             logger,
-		dbs:             make(map[Hint]database.Store),
+		dbs:             make(map[Hint]database.Getter),
 		activeRequests:  make(map[types.Hash32][]*request),
 		pendingRequests: make(map[types.Hash32][]*request),
 		net:             srv,
@@ -275,7 +275,7 @@ func (f *Fetch) stopped() bool {
 
 // AddDB adds a DB with corresponding hint
 // all network peersProvider will be able to query this DB
-func (f *Fetch) AddDB(hint Hint, db database.Store) {
+func (f *Fetch) AddDB(hint Hint, db database.Getter) {
 	f.dbLock.Lock()
 	f.dbs[hint] = db
 	f.dbLock.Unlock()

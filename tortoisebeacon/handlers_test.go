@@ -37,11 +37,11 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 	mockDB.On("GetAtxHeader",
 		mock.AnythingOfType("types.ATXID")).
 		Return(&types.ActivationTxHeader{
-			NIPSTChallenge: types.NIPSTChallenge{
+			NIPostChallenge: types.NIPostChallenge{
 				StartTick: 1,
 				EndTick:   3,
 			},
-			Space: 5,
+			NumUnits: 5,
 		}, nil)
 	mockDB.On("GetAtxTimestamp",
 		mock.AnythingOfType("types.ATXID")).
@@ -86,7 +86,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				config:         TestConfig(),
+				config:         UnitTestConfig(),
 				Log:            log.NewDefault("TortoiseBeacon"),
 				validProposals: proposalsMap{},
 				atxDB:          mockDB,
@@ -144,11 +144,11 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 	mockDB.On("GetAtxHeader",
 		mock.AnythingOfType("types.ATXID")).
 		Return(&types.ActivationTxHeader{
-			NIPSTChallenge: types.NIPSTChallenge{
+			NIPostChallenge: types.NIPostChallenge{
 				StartTick: 1,
 				EndTick:   3,
 			},
-			Space: 5,
+			NumUnits: 5,
 		}, nil)
 	mockDB.On("GetAtxTimestamp",
 		mock.AnythingOfType("types.ATXID")).
@@ -281,11 +281,11 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 	mockDB.On("GetAtxHeader",
 		mock.AnythingOfType("types.ATXID")).
 		Return(&types.ActivationTxHeader{
-			NIPSTChallenge: types.NIPSTChallenge{
+			NIPostChallenge: types.NIPostChallenge{
 				StartTick: 1,
 				EndTick:   3,
 			},
-			Space: 5,
+			NumUnits: 5,
 		}, nil)
 	mockDB.On("GetAtxTimestamp",
 		mock.AnythingOfType("types.ATXID")).
