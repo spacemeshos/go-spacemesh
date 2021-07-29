@@ -20,6 +20,7 @@ func (s VRFSigner) Sign(msg []byte) []byte {
 	return ed25519.Sign(s.privateKey, msg)
 }
 
+// PublicKey of the signer.
 func (s VRFSigner) PublicKey() *PublicKey {
 	return s.pub
 }
@@ -44,12 +45,15 @@ func VRFVerify(pub, msg, sig []byte) bool {
 
 var _ Verifier = VRFVerifier{}
 
+// VRFVerifier ...
 type VRFVerifier struct{}
 
+// Verify that signature matches public key.
 func (VRFVerifier) Verify(pub *PublicKey, msg, sig []byte) bool {
 	return VRFVerify(ed25519.PublicKey(pub.Bytes()), msg, sig)
 }
 
+// Extract public key from signature.
 func (VRFVerifier) Extract(msg, sig []byte) (*PublicKey, error) {
 	pub, err := ed25519.ExtractPublicKey(msg, sig)
 	if err != nil {

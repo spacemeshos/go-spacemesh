@@ -23,6 +23,7 @@ const (
 	defaultThreshold = "0x8000000000000000000000000000000000000000000000000000000000000000"
 )
 
+// DefaultConfig ...
 func DefaultConfig() Config {
 	return Config{
 		Threshold:           util.FromHex(defaultThreshold),
@@ -32,6 +33,7 @@ func DefaultConfig() Config {
 	}
 }
 
+// Config ...
 type Config struct {
 	Threshold           []byte
 	VRFPrefix           string
