@@ -555,7 +555,6 @@ func patchCITimeout(termchan chan struct{}) {
 	for {
 		select {
 		case <-ticker.C:
-			fmt.Printf("CI timeout patch\n")
 			ticker = time.NewTimer(5 * time.Minute)
 		case <-termchan:
 			return

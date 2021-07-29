@@ -799,17 +799,17 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 
 	start := time.Now()
 	err = atxdb.SyntacticallyValidateAtx(atx)
-	fmt.Printf("\nSyntactic validation took %v\n", time.Since(start))
+	b.Logf("\nSyntactic validation took %v\n", time.Since(start))
 	r.NoError(err)
 
 	start = time.Now()
 	err = atxdb.SyntacticallyValidateAtx(atx)
-	fmt.Printf("\nSecond syntactic validation took %v\n", time.Since(start))
+	b.Logf("\nSecond syntactic validation took %v\n", time.Since(start))
 	r.NoError(err)
 
 	start = time.Now()
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
-	fmt.Printf("\nContextual validation took %v\n\n", time.Since(start))
+	b.Logf("\nContextual validation took %v\n\n", time.Since(start))
 	r.NoError(err)
 }
 
@@ -850,7 +850,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 		posAtx = atx.ID()
 		layer = layer.Add(layersPerEpoch)
 		if epoch%batchSize == batchSize-1 {
-			fmt.Printf("epoch %3d-%3d took %v\t", epoch-(batchSize-1), epoch, time.Since(eStart))
+			b.Logf("epoch %3d-%3d took %v\t", epoch-(batchSize-1), epoch, time.Since(eStart))
 			eStart = time.Now()
 
 			for miner := 0; miner < numOfMiners; miner++ {
@@ -861,12 +861,12 @@ func BenchmarkNewActivationDb(b *testing.B) {
 				r.NoError(err)
 				r.NotNil(atx)
 			}
-			fmt.Printf("reading last and previous epoch 100 times took %v\n", time.Since(eStart))
+			b.Logf("reading last and previous epoch 100 times took %v\n", time.Since(eStart))
 			eStart = time.Now()
 		}
 		copy(pPrevAtxs, prevAtxs)
 	}
-	fmt.Printf("\n>>> Total time: %v\n\n", time.Since(start))
+	b.Logf("\n>>> Total time: %v\n\n", time.Since(start))
 	time.Sleep(1 * time.Second)
 
 	// cleanup

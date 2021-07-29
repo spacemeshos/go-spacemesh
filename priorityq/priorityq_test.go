@@ -94,7 +94,7 @@ func TestPriorityQ_Read(t *testing.T) {
 		m, e := pq.Read()
 		for e == nil {
 			prio, ok := m.(int)
-			//fmt.Println("reading  ", m, e, i, len(pq.queues[0]), len(pq.queues[1]))
+			//t.Logln("reading  ", m, e, i, len(pq.queues[0]), len(pq.queues[1]))
 			if !ok {
 				// should never happen
 				require.FailNow(t, "unable to read message priority")

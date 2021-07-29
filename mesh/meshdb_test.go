@@ -3,7 +3,6 @@ package mesh
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"math"
 	"math/big"
 	"os"
@@ -157,7 +156,6 @@ func testForeachInView(mdb *DB, t *testing.T) {
 	}
 	mp := map[types.BlockID]struct{}{}
 	foo := func(nb *types.Block) (bool, error) {
-		fmt.Println("process block", "layer", nb.ID(), nb.LayerIndex)
 		mp[nb.ID()] = struct{}{}
 		return false, nil
 	}
@@ -192,7 +190,6 @@ func TestForEachInView_InMem_WithStop(t *testing.T) {
 	mp := map[types.BlockID]struct{}{}
 	i := 0
 	foo := func(nb *types.Block) (bool, error) {
-		fmt.Println("process block", "layer", nb.ID(), nb.LayerIndex)
 		mp[nb.ID()] = struct{}{}
 		i++
 		return i == 5, nil
@@ -223,7 +220,6 @@ func TestForEachInView_InMem_WithLimitedLayer(t *testing.T) {
 	mp := map[types.BlockID]struct{}{}
 	i := 0
 	foo := func(nb *types.Block) (bool, error) {
-		fmt.Println("process block", "layer", nb.ID(), nb.LayerIndex)
 		mp[nb.ID()] = struct{}{}
 		i++
 		return false, nil
@@ -264,7 +260,7 @@ func BenchmarkNewPersistentMeshDB(b *testing.B) {
 		}
 		l = lyr
 		if i%batchSize == batchSize-1 {
-			fmt.Printf("layers %3d-%3d took %12v\t", i-(batchSize-1), i, time.Since(lStart))
+			b.Logf("layers %3d-%3d took %12v\t", i-(batchSize-1), i, time.Since(lStart))
 			lStart = time.Now()
 			for i := 0; i < 100; i++ {
 				for _, b := range lyr.Blocks() {
@@ -273,11 +269,11 @@ func BenchmarkNewPersistentMeshDB(b *testing.B) {
 					r.NotNil(block)
 				}
 			}
-			fmt.Printf("reading last layer 100 times took %v\n", time.Since(lStart))
+			b.Logf("reading last layer 100 times took %v\n", time.Since(lStart))
 			lStart = time.Now()
 		}
 	}
-	fmt.Printf("\n>>> Total time: %v\n\n", time.Since(start))
+	b.Logf("\n>>> Total time: %v\n\n", time.Since(start))
 }
 
 const (

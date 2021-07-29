@@ -64,8 +64,6 @@ func server(url string) {
 	}
 	for {
 		// Could also use sock.RecvMsg to get header
-		d := date()
-		fmt.Printf("SERVER: PUBLISHING DATE %s\n", d)
 		if err = sock.Send([]byte("topic1anton")); err != nil {
 			die("Failed publishing: %s", err.Error())
 		}
@@ -76,7 +74,6 @@ func server(url string) {
 func client(url string, name string) {
 	var sock mangos.Socket
 	var err error
-	var msg []byte
 
 	if sock, err = sub.NewSocket(); err != nil {
 		die("can't get NewEventPublisher sub socket: %s", err.Error())
@@ -92,10 +89,9 @@ func client(url string, name string) {
 		die("cannot Subscribe: %s", err.Error())
 	}
 	for {
-		if msg, err = sock.Recv(); err != nil {
+		if _, err = sock.Recv(); err != nil {
 			die("Cannot recv: %s", err.Error())
 		}
-		fmt.Printf("CLIENT(%s): RECEIVED %s\n", name, string(msg))
 	}
 }
 

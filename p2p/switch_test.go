@@ -1021,7 +1021,7 @@ func Test_NodeInfo(t *testing.T) {
 	if err != nil {
 		panic("LOL")
 	}
-	fmt.Println("GOT MSG ", raw)
+	t.Log("GOT MSG ", raw)
 	pinged2 := &node.Info{}
 	err = types.BytesToInterface(raw, pinged2)
 	if err != nil {
