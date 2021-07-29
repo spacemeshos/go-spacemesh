@@ -1,6 +1,7 @@
 package tortoisebeacon
 
 import (
+	"context"
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -111,15 +112,16 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 		Return(uint64(1), nil, nil)
 
 	mwc := &mocks.Coin{}
-	mwc.On("OnRoundStarted",
-		mock.AnythingOfType("context.Context"),
+	mwc.On("StartEpoch",
 		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"),
 		mock.AnythingOfType("weakcoin.UnitAllowances"),
+	)
+	mwc.On("CompleteEpoch")
+	mwc.On("StartRound",
+		mock.MatchedBy(func(_ context.Context) bool { return true }),
+		mock.AnythingOfType("types.RoundID"),
 	).Return(nil)
-	mwc.On("CompleteRound",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"))
+	mwc.On("CompleteRound")
 	mwc.On("Get",
 		mock.AnythingOfType("types.EpochID"),
 		mock.AnythingOfType("types.RoundID")).
@@ -328,15 +330,16 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 		Return(uint64(threshold), nil, nil)
 
 	mwc := &mocks.Coin{}
-	mwc.On("OnRoundStarted",
-		mock.AnythingOfType("context.Context"),
+	mwc.On("StartEpoch",
 		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"),
 		mock.AnythingOfType("weakcoin.UnitAllowances"),
+	)
+	mwc.On("CompleteEpoch")
+	mwc.On("StartRound",
+		mock.MatchedBy(func(_ context.Context) bool { return true }),
+		mock.AnythingOfType("types.RoundID"),
 	).Return(nil)
-	mwc.On("CompleteRound",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"))
+	mwc.On("CompleteRound")
 	mwc.On("Get",
 		mock.AnythingOfType("types.EpochID"),
 		mock.AnythingOfType("types.RoundID")).

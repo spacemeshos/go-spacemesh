@@ -42,15 +42,16 @@ func TestTortoiseBeacon(t *testing.T) {
 	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(10), nil, nil)
 
 	mwc := &mocks.Coin{}
-	mwc.On("StartRound",
-		mock.AnythingOfType("context.Context"),
+	mwc.On("StartEpoch",
 		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"),
 		mock.AnythingOfType("weakcoin.UnitAllowances"),
+	)
+	mwc.On("CompleteEpoch")
+	mwc.On("StartRound",
+		mock.MatchedBy(func(_ context.Context) bool { return true }),
+		mock.AnythingOfType("types.RoundID"),
 	).Return(nil)
-	mwc.On("CompleteRound",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"))
+	mwc.On("CompleteRound")
 	mwc.On("Get",
 		mock.AnythingOfType("types.EpochID"),
 		mock.AnythingOfType("types.RoundID")).
