@@ -648,12 +648,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		tb.weakCoin.CompleteRound()
 	}
 
-	tb.Log.With().Debug("Following voting message sender finished",
-		log.Uint64("epoch_id", uint64(epoch)))
-
-	tb.waitAfterLastRoundStarted()
 	tb.weakCoin.CompleteEpoch()
-
 	tb.Log.With().Debug("Consensus phase finished",
 		log.Uint64("epoch_id", uint64(epoch)))
 }
@@ -856,20 +851,6 @@ func (tb *TortoiseBeacon) voteWeight(pk nodeID, epochID types.EpochID) (uint64, 
 // it cannot be late for any honest user (and vice versa).
 func (tb *TortoiseBeacon) lastPossibleRound() types.RoundID {
 	return types.RoundID(tb.config.RoundsNumber)
-}
-
-func (tb *TortoiseBeacon) waitAfterLastRoundStarted() {
-	// Last round + next round for timely messages + next round for delayed messages (late messages may be ignored).
-	const roundsToWait = 1
-	timeToWait := roundsToWait * (tb.votingRoundDuration + tb.weakCoinRoundDuration)
-
-	timer := time.NewTimer(timeToWait)
-	defer timer.Stop()
-
-	select {
-	case <-tb.CloseChannel():
-	case <-timer.C:
-	}
 }
 
 func (tb *TortoiseBeacon) votingThreshold(epochWeight uint64) int {
