@@ -340,23 +340,23 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 	// TODO: optimize by, e.g., trying to minimize the size of the exception list (rather than first match)
 	// see https://github.com/spacemeshos/go-spacemesh/issues/2402
 	for layerID := t.Last; layerID.After(t.LastEvicted); layerID = layerID.Sub(1) {
-		for block, opinion := range t.BlockOpinionsByLayer[layerID] {
-			if _, ok := t.GoodBlocksIndex[block]; !ok {
+		for blockID, opinion := range t.BlockOpinionsByLayer[layerID] {
+			if _, ok := t.GoodBlocksIndex[blockID]; !ok {
 				logger.With().Debug("not considering block not marked good as base block candidate",
 					log.FieldNamed("last_layer", t.Last),
 					layerID,
-					block)
+					blockID)
 				continue
 			}
 
 			// Calculate the set of exceptions between the base block opinion and latest local opinion
-			logger.With().Debug("found candidate base block", block, layerID)
+			logger.With().Debug("found candidate base block", blockID, layerID)
 			exceptionVectorMap, err := t.calculateExceptions(ctx, layerID, opinion)
 			if err != nil {
 				logger.With().Warning("error calculating vote exceptions for block",
 					log.FieldNamed("last_layer", t.Last),
 					layerID,
-					block,
+					blockID,
 					log.Err(err))
 				continue
 			}
@@ -364,12 +364,12 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 			logger.With().Info("chose base block",
 				log.FieldNamed("last_layer", t.Last),
 				log.FieldNamed("base_block_layer", layerID),
-				block,
+				blockID,
 				log.Int("against_count", len(exceptionVectorMap[0])),
 				log.Int("support_count", len(exceptionVectorMap[1])),
 				log.Int("neutral_count", len(exceptionVectorMap[2])))
 
-			return block, [][]types.BlockID{
+			return blockID, [][]types.BlockID{
 				blockMapToArray(exceptionVectorMap[0]),
 				blockMapToArray(exceptionVectorMap[1]),
 				blockMapToArray(exceptionVectorMap[2]),
