@@ -57,7 +57,7 @@ type mockAtxDataProvider struct {
 	atxDB         map[types.ATXID]*types.ActivationTxHeader
 }
 
-func (madp mockAtxDataProvider) GetAtxHeader(atxID types.ATXID) (*types.ActivationTxHeader, error) {
+func (madp *mockAtxDataProvider) GetAtxHeader(atxID types.ATXID) (*types.ActivationTxHeader, error) {
 	if madp.mockAtxHeader != nil {
 		return madp.mockAtxHeader, nil
 	}
@@ -266,12 +266,13 @@ func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer, voteNeg
 
 	var l types.LayerID
 	atxdb := getAtxDB()
+	trtl.atxdb = atxdb
 	for l = mesh.GenesisLayer().Index().Add(1); !l.After(numLayers); l = l.Add(1) {
 		makeAndProcessLayer(t, l, trtl, blocksPerLayer, atxdb, msh, inputVectorFn)
-		fmt.Println("handled layer", l, "========================================================================")
+		t.Log("======================== handled layer", l)
 		lastlyr := trtl.BlockOpinionsByLayer[l]
 		for _, v := range lastlyr {
-			fmt.Println("block opinion map size", len(v.BlockOpinions))
+			t.Log("block opinion map size", len(v.BlockOpinions))
 			// the max. number of layers we store opinions for is the window size (since last evicted) + 3.
 			// eviction happens _after_ blocks for a new layer N have been processed, and that layer hasn't yet
 			// been verified. at this point in time,
@@ -301,43 +302,43 @@ func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerL
 	require.NoError(t, trtl.HandleIncomingLayer(context.TODO(), l))
 }
 
-func makeLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, atxdb atxDataWriter, msh *mesh.DB, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
-	t.Log("======================== choosing base block for layer", l)
+func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, blocksPerLayer int, atxdb atxDataWriter, msh *mesh.DB, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
+	t.Log("======================== choosing base block for layer", layerID)
 	oldInputVectorFn := msh.InputVectorBackupFunc
 	defer func() {
 		msh.InputVectorBackupFunc = oldInputVectorFn
 	}()
 	msh.InputVectorBackupFunc = inputVectorFn
-	b, lists, err := trtl.BaseBlock(context.TODO())
+	baseBlockID, lists, err := trtl.BaseBlock(context.TODO())
 	require.NoError(t, err)
-	t.Log("base block for layer", l, "is", b)
-	t.Log("exception lists for layer", l, " (against, support, neutral):", lists)
-	lyr := types.NewLayer(l)
+	t.Log("base block for layer", layerID, "is", baseBlockID)
+	t.Log("exception lists for layer", layerID, "(against, support, neutral):", lists)
+	lyr := types.NewLayer(layerID)
 
 	// for now just create a single ATX for all of the blocks with a weight of one
 	atxHeader := makeAtxHeaderWithWeight(1)
 	atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
 	atx.CalcAndSetID()
-	require.NoError(t, atxdb.StoreAtx(l.GetEpoch(), atx))
+	require.NoError(t, atxdb.StoreAtx(layerID.GetEpoch(), atx))
 
 	for i := 0; i < blocksPerLayer; i++ {
 		blk := &types.Block{
 			MiniBlock: types.MiniBlock{
 				BlockHeader: types.BlockHeader{
 					ATXID:      atxHeader.ID(),
-					LayerIndex: l,
+					LayerIndex: layerID,
 					Data:       []byte(strconv.Itoa(i))},
 				TxIDs: nil,
 			}}
-		blk.BaseBlock = b
+		blk.BaseBlock = baseBlockID
 		blk.AgainstDiff = lists[0]
 		blk.ForDiff = lists[1]
 		blk.NeutralDiff = lists[2]
-		blk.Signature = signing.NewEdSigner().Sign(b.Bytes())
+		blk.Signature = signing.NewEdSigner().Sign(baseBlockID.Bytes())
 		blk.Initialize()
 		lyr.AddBlock(blk)
 		require.NoError(t, msh.AddBlock(blk))
-		fmt.Println("generated block", blk.ID(), "in layer", l)
+		t.Log("generated block", blk.ID(), "in layer", layerID)
 	}
 
 	return lyr
@@ -365,12 +366,13 @@ func testLayerPattern(t *testing.T, atxdb atxDataWriter, db *mesh.DB, trtl *turt
 
 func TestLayerPatterns(t *testing.T) {
 	blocksPerLayer := 10 // more blocks means a longer test
-	atxdb := getAtxDB()
 	t.Run("many good layers", func(t *testing.T) {
 		msh := getInMemMesh()
+		atxdb := getAtxDB()
 		trtl := defaultTurtle()
 		trtl.AvgLayerSize = blocksPerLayer
 		trtl.bdp = msh
+		trtl.atxdb = atxdb
 		trtl.init(context.TODO(), mesh.GenesisLayer())
 		numGood := 5
 		pattern := make([]bool, numGood)
@@ -404,6 +406,7 @@ func TestLayerPatterns(t *testing.T) {
 		}
 
 		msh := getInMemMesh()
+		atxdb := getAtxDB()
 		trtl := defaultTurtle()
 		trtl.AvgLayerSize = blocksPerLayer
 		trtl.bdp = msh
@@ -449,6 +452,7 @@ func TestLayerPatterns(t *testing.T) {
 		}
 
 		msh := getInMemMesh()
+		atxdb := getAtxDB()
 		trtl := defaultTurtle()
 		trtl.AvgLayerSize = blocksPerLayer
 		trtl.bdp = msh
@@ -492,6 +496,7 @@ func TestLayerPatterns(t *testing.T) {
 		}
 
 		msh := getInMemMesh()
+		atxdb := getAtxDB()
 		trtl := defaultTurtle()
 		trtl.AvgLayerSize = blocksPerLayer
 		trtl.bdp = msh
@@ -546,6 +551,7 @@ func TestAbstainsInMiddle(t *testing.T) {
 
 	var l types.LayerID
 	atxdb := getAtxDB()
+	trtl.atxdb = atxdb
 	for l = types.GetEffectiveGenesis().Add(1); l.Before(types.GetEffectiveGenesis().Add(layers.Uint32())); l = l.Add(1) {
 		makeAndProcessLayer(t, l, trtl, blocksPerLayer, atxdb, msh, layerfuncs[l.Difference(types.GetEffectiveGenesis())-1])
 		fmt.Println("handled layer", l, "verified layer", trtl.Verified,
@@ -1827,6 +1833,7 @@ func TestHealing(t *testing.T) {
 
 	alg.trtl.Last = l0ID
 	atxdb := getAtxDB()
+	alg.trtl.atxdb = atxdb
 	l1 := makeLayer(t, l1ID, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 	l2 := makeLayer(t, l2ID, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 
@@ -1915,6 +1922,7 @@ func TestHealingAfterPartition(t *testing.T) {
 	mdb := getInMemMesh()
 	atxdb := getAtxDB()
 	alg := defaultAlgorithm(t, mdb)
+	alg.trtl.atxdb = atxdb
 	l0ID := types.GetEffectiveGenesis()
 
 	// use a larger number of blocks per layer to give us more scope for testing
@@ -1961,6 +1969,7 @@ func TestRerunAndRevert(t *testing.T) {
 	mdb := getInMemMesh()
 	atxdb := getAtxDB()
 	alg := defaultAlgorithm(t, mdb)
+	alg.trtl.atxdb = atxdb
 	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
 
 	// process a couple of layers
@@ -2022,6 +2031,7 @@ func TestHealBalanceAttack(t *testing.T) {
 	mdb := getInMemMesh()
 	atxdb := getAtxDB()
 	alg := defaultAlgorithm(t, mdb)
+	alg.trtl.atxdb = atxdb
 	l0ID := types.GetEffectiveGenesis()
 	layerSize := 4
 	l4ID := l0ID.Add(4)

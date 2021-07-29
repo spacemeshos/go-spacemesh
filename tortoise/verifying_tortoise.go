@@ -185,6 +185,10 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 }
 
 func (t *turtle) lookbackWindowStart() (types.LayerID, bool) {
+	// prevent overflow/wraparound
+	if t.Verified.Before(types.NewLayerID(t.WindowSize)) {
+		return types.NewLayerID(0), false
+	}
 	return t.Verified.Sub(t.WindowSize), true
 }
 
@@ -514,8 +518,12 @@ func (t *turtle) voteWeight(ctx context.Context, votingBlock *types.Block, block
 	// check if the ATX was received on time
 	// TODO LANE: add an exception for sync, when we expect everything to be received late
 	if atxTimestamp.Before(nextEpochStart) {
-		logger.With().Debug("voting block atx was timely", votingBlock.ID(), votingBlock.ATXID)
-		return atxHeader.GetWeight(), nil
+		blockWeight := atxHeader.GetWeight()
+		logger.With().Debug("voting block atx was timely",
+			votingBlock.ID(),
+			votingBlock.ATXID,
+			log.Uint64("block_weight", blockWeight))
+		return blockWeight, nil
 	}
 	logger.With().Warning("voting block atx was untimely, zeroing block vote weight",
 		votingBlock.ID(),
