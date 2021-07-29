@@ -8,6 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -113,6 +114,12 @@ func TestEventReporter(t *testing.T) {
 }
 
 func TestReportError(t *testing.T) {
+	tmp := log.AppLog
+	defer func() {
+		log.AppLog = tmp
+	}()
+	log.AppLog = logtest.New(t)
+
 	nodeErr := NodeError{
 		Msg:   "hi there",
 		Trace: "<trace goes here>",
@@ -140,6 +147,7 @@ func TestReportError(t *testing.T) {
 	wgListening.Add(1)
 	wgDone := sync.WaitGroup{}
 	wgDone.Add(1)
+	errMsg := "abracadabra"
 	go func() {
 		defer wgDone.Done()
 		// report that we're listening
@@ -152,7 +160,7 @@ func TestReportError(t *testing.T) {
 		// now check errors sent through logging
 		msg := <-stream
 		require.Equal(t, zapcore.ErrorLevel, msg.Level)
-		require.Equal(t, "abracadabra", msg.Msg)
+		require.Equal(t, errMsg, msg.Msg)
 	}()
 
 	// Wait until goroutine is listening
@@ -171,6 +179,7 @@ func TestReportError(t *testing.T) {
 		}
 		return nil
 	})
+	log.Error(errMsg)
 
 	// Wait for goroutine to finish
 	wgDone.Wait()
