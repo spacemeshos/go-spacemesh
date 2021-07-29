@@ -192,7 +192,7 @@ func TestWeakCoin(t *testing.T) {
 			}
 			wc.CompleteRound()
 
-			require.Equal(t, tc.coinflip, wc.Get(epoch, round))
+			require.Equal(t, tc.coinflip, wc.Get(tc.startedEpoch, tc.startedRound))
 		})
 	}
 
@@ -212,7 +212,7 @@ func TestWeakCoin(t *testing.T) {
 			require.NoError(t, wc.StartRound(context.TODO(), tc.startedRound))
 			wc.CompleteRound()
 
-			require.Equal(t, tc.coinflip, wc.Get(epoch, round))
+			require.Equal(t, tc.coinflip, wc.Get(tc.startedEpoch, tc.startedRound))
 		})
 	}
 

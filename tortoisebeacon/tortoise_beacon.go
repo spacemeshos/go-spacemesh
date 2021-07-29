@@ -628,6 +628,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		ua[string(header.NodeID.VRFPublicKey)] += uint64(header.NumUnits)
 	}
 	tb.weakCoin.StartEpoch(epoch, ua)
+	defer tb.weakCoin.CompleteEpoch()
 
 	// For K rounds: In each round that lasts δ, wait for proposals to come in.
 	// For next rounds,
@@ -648,7 +649,6 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		tb.weakCoin.CompleteRound()
 	}
 
-	tb.weakCoin.CompleteEpoch()
 	tb.Log.With().Debug("Consensus phase finished",
 		log.Uint64("epoch_id", uint64(epoch)))
 }
