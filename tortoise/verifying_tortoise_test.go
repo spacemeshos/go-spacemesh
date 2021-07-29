@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"strconv"
 	"testing"
@@ -65,10 +66,10 @@ func (madp mockAtxDataProvider) GetAtxHeader(atxID types.ATXID) (*types.Activati
 	}
 
 	// return a mocked value
-	return &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: "fakekey"}}}, nil
+	return &types.ActivationTxHeader{NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{Key: "fakekey"}}}, nil
 }
 
-func (madp mockAtxDataProvider) GetAtxTimestamp(atxID types.ATXID) (time.Time, error) {
+func (madp mockAtxDataProvider) GetAtxTimestamp(types.ATXID) (time.Time, error) {
 	return time.Now(), nil
 }
 
@@ -96,6 +97,17 @@ func addLayerToMesh(m *mesh.DB, layer *types.Layer) error {
 		}
 	}
 	return nil
+}
+
+func randomBlockID() types.BlockID {
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, 8)
+	_, err := rand.Read(b)
+	// Note that err == nil only if we read len(b) bytes.
+	if err != nil {
+		return types.BlockID{}
+	}
+	return types.BlockID(types.CalcHash32(b).ToHash20())
 }
 
 var (
@@ -403,7 +415,7 @@ func TestLayerPatterns(t *testing.T) {
 		require.Equal(t, 5, int(trtl.ConfidenceParam))
 
 		// final verified layer should lag by zdist+confidence interval
-		finalVerified := types.GetEffectiveGenesis().Add(uint32(len(pattern)) - 1 - uint32(trtl.Zdist+trtl.ConfidenceParam))
+		finalVerified := types.GetEffectiveGenesis().Add(uint32(len(pattern)) - 1 - trtl.Zdist + trtl.ConfidenceParam)
 		require.Equal(t, int(finalVerified.Uint32()), int(trtl.Verified.Uint32()))
 	})
 
@@ -1147,7 +1159,7 @@ func TestDetermineBlockGoodness(t *testing.T) {
 	r.True(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[0]))
 
 	// base block not found
-	randBlockID := types.RandomBlockID()
+	randBlockID := randomBlockID()
 	alg.trtl.GoodBlocksIndex[randBlockID] = struct{}{}
 	l1Blocks[1].BaseBlock = randBlockID
 	r.False(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[1]))
@@ -1316,11 +1328,11 @@ func TestLateBlocks(t *testing.T) {
 	// TODO: send enough valid late blocks to overwhelm verifying tortoise's opinion
 }
 
-func makeAtxHeaderWithWeight(weight uint64) (mockAtxHeader *types.ActivationTxHeader) {
-	mockAtxHeader = &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{NodeID: types.NodeID{Key: "fakekey"}}}
+func makeAtxHeaderWithWeight(weight uint) (mockAtxHeader *types.ActivationTxHeader) {
+	mockAtxHeader = &types.ActivationTxHeader{NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{Key: "fakekey"}}}
 	mockAtxHeader.StartTick = 0
 	mockAtxHeader.EndTick = 1
-	mockAtxHeader.Space = weight
+	mockAtxHeader.NumUnits = weight
 	return
 }
 
@@ -1330,15 +1342,15 @@ func TestVoteWeight(t *testing.T) {
 	alg := defaultAlgorithm(t, mdb)
 	totalSpace := 100
 	atxdb := getAtxDB()
-	atxdb.mockAtxHeader = makeAtxHeaderWithWeight(uint64(totalSpace))
+	atxdb.mockAtxHeader = makeAtxHeaderWithWeight(uint(totalSpace))
 	alg.trtl.atxdb = atxdb
 	someBlocks := generateBlocks(types.GetEffectiveGenesis().Add(1), 1, alg.BaseBlock)
-	weight, err := alg.trtl.voteWeight(context.TODO(), someBlocks[0], types.RandomBlockID())
+	weight, err := alg.trtl.voteWeight(context.TODO(), someBlocks[0], randomBlockID())
 	r.NoError(err)
 	r.Equal(totalSpace, int(weight))
 
 	// voting for a different block should not change the weight
-	weight, err = alg.trtl.voteWeight(context.TODO(), someBlocks[0], types.RandomBlockID())
+	weight, err = alg.trtl.voteWeight(context.TODO(), someBlocks[0], randomBlockID())
 	r.NoError(err)
 	r.Equal(totalSpace, int(weight))
 }
