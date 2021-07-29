@@ -28,6 +28,7 @@ func DefaultConfig() Config {
 		Threshold:           util.FromHex(defaultThreshold),
 		VRFPrefix:           proposalPrefix,
 		NextRoundBufferSize: 10000, // ~1mb given the size of Message is ~100b
+		MaxRound:            100,
 	}
 }
 
@@ -55,14 +56,17 @@ type Message struct {
 	Signature []byte
 }
 
+// Option for optional configuration adjustments.
 type Option func(*WeakCoin)
 
+// WithLog changes logger.
 func WithLog(logger log.Log) Option {
 	return func(wc *WeakCoin) {
 		wc.logger = logger
 	}
 }
 
+// WithConfig changes config from DefaultConfig.
 func WithConfig(config Config) Option {
 	return func(wc *WeakCoin) {
 		wc.config = config
@@ -91,6 +95,7 @@ func New(
 	return wc
 }
 
+// WeakCoin implementation of the protocol.
 type WeakCoin struct {
 	logger   log.Log
 	config   Config
@@ -126,6 +131,7 @@ func (wc *WeakCoin) Get(epoch types.EpochID, round types.RoundID) bool {
 	return wc.coins[round]
 }
 
+// StartEpoch notifies that epoch is started and we can accept messages for this epoch.
 func (wc *WeakCoin) StartEpoch(epoch types.EpochID, allowances UnitAllowances) {
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
@@ -133,6 +139,7 @@ func (wc *WeakCoin) StartEpoch(epoch types.EpochID, allowances UnitAllowances) {
 	wc.allowances = allowances
 }
 
+// CompleteEpoch completes epoch. After it is called Get for this epoch will panic.
 func (wc *WeakCoin) CompleteEpoch() {
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
@@ -141,6 +148,7 @@ func (wc *WeakCoin) CompleteEpoch() {
 	wc.round = 0
 }
 
+// StartRound process any buffered messages for this round and broadcast our proposal.
 func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 	wc.mu.Lock()
 	wc.logger.With().Info("started round",
@@ -239,6 +247,8 @@ func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, ro
 	return nil
 }
 
+// CompleteRound computes coinflip based on proposals received in this round.
+// After it is called new proposals for this round won't be accepted.
 func (wc *WeakCoin) CompleteRound() {
 	wc.mu.Lock()
 	defer wc.mu.Unlock()

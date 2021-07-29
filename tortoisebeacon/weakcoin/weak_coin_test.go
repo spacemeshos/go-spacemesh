@@ -12,6 +12,7 @@ import (
 	smocks "github.com/spacemeshos/go-spacemesh/signing/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin/mocks"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -268,4 +269,95 @@ func TestWeakCoinGetPanic(t *testing.T) {
 
 	wc.StartEpoch(epoch, nil)
 	require.False(t, wc.Get(epoch, round))
+}
+
+func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
+	var (
+		ctrl = gomock.NewController(t)
+
+		oneLSB  = []byte{0b0001}
+		zeroLSB = []byte{0b0000}
+
+		config = weakcoin.DefaultConfig()
+
+		epoch     types.EpochID = 10
+		round     types.RoundID = 2
+		nextRound               = round + 1
+	)
+	config.MaxRound = 10
+	config.NextRoundBufferSize = 10
+	defer ctrl.Finish()
+
+	wc := weakcoin.New(
+		noopBroadcaster(t, ctrl),
+		staticSigner(t, ctrl, oneLSB), pubkeyFromSigVerifier(t, ctrl),
+		weakcoin.WithConfig(config),
+	)
+
+	wc.StartEpoch(epoch, weakcoin.UnitAllowances{string(oneLSB): 1, string(zeroLSB): 1})
+	require.NoError(t, wc.StartRound(context.TODO(), round))
+	for i := 0; i < config.NextRoundBufferSize; i++ {
+		wc.HandleSerializedMessage(context.TODO(), broadcastedMessage(t, ctrl, weakcoin.Message{
+			Epoch:     epoch,
+			Round:     nextRound,
+			Unit:      1,
+			Signature: oneLSB,
+		}), nil)
+	}
+	wc.HandleSerializedMessage(context.TODO(), broadcastedMessage(t, ctrl, weakcoin.Message{
+		Epoch:     epoch,
+		Round:     nextRound,
+		Unit:      1,
+		Signature: zeroLSB,
+	}), nil)
+	wc.CompleteRound()
+	require.NoError(t, wc.StartRound(context.TODO(), nextRound))
+	wc.CompleteRound()
+	require.True(t, wc.Get(epoch, nextRound))
+}
+
+func TestWeakCoinExchangeProposals(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	var (
+		instances                = make([]*weakcoin.WeakCoin, 10)
+		verifier                 = signing.VRFVerifier{}
+		epoch      types.EpochID = 2
+		start, end types.RoundID = 2, 9
+		allowances               = weakcoin.UnitAllowances{}
+	)
+	for i := range instances {
+		i := i
+		broadcaster := mocks.NewMockbroadcaster(ctrl)
+		broadcaster.EXPECT().Broadcast(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, data []byte) {
+			msg := weakcoin.Message{}
+			require.NoError(t, types.BytesToInterface(data, &msg))
+			for j := range instances {
+				if i == j {
+					continue
+				}
+				instances[j].HandleSerializedMessage(context.TODO(), broadcastedMessage(t, ctrl, msg), nil)
+			}
+		}).AnyTimes()
+		signer := signing.NewEdSigner()
+		allowances[signer.PublicKey().String()] = 1
+		instances[i] = weakcoin.New(broadcaster, signer, verifier)
+	}
+
+	for _, instance := range instances {
+		instance.StartEpoch(epoch, allowances)
+	}
+	for current := start; current <= end; current++ {
+		for _, instance := range instances {
+			require.NoError(t, instance.StartRound(context.TODO(), current))
+		}
+		for _, instance := range instances {
+			instance.CompleteRound()
+		}
+		rst := instances[0].Get(epoch, current)
+		for _, instance := range instances[1:] {
+			assert.Equal(t, rst, instance.Get(epoch, current))
+		}
+	}
 }
