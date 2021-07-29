@@ -35,10 +35,10 @@ type mockNet struct {
 func (m mockNet) Close() {
 }
 
-func (m mockNet) RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(context.Context, []byte) []byte) {
+func (m mockNet) RegisterBytesMsgHandler(_ server.MessageType, reqHandler func(context.Context, []byte) []byte) {
 }
 
-func (m mockNet) Start(ctx context.Context) error {
+func (m mockNet) Start(context.Context) error {
 	return nil
 }
 
@@ -60,7 +60,7 @@ func (m mockNet) SubscribePeerEvents() (new chan p2pcrypto.PublicKey, del chan p
 	return nil, nil
 }
 
-func (m mockNet) Broadcast(ctx context.Context, protocol string, payload []byte) error {
+func (m mockNet) Broadcast(_ context.Context, protocol string, payload []byte) error {
 	return nil
 }
 
@@ -71,7 +71,7 @@ func (m mockNet) RegisterDirectProtocolWithChannel(protocol string, ingressChann
 	return nil
 }
 
-func (m mockNet) SendWrappedMessage(ctx context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
+func (m mockNet) SendWrappedMessage(_ context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
 	return nil
 }
 
@@ -79,7 +79,7 @@ func (m mockNet) GetPeers() []peers.Peer {
 	_, pub1, _ := p2pcrypto.GenerateKeyPair()
 	return []peers.Peer{pub1}
 }
-func (m *mockNet) SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error {
+func (m *mockNet) SendRequest(_ context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error {
 	m.TotalBatchCalls++
 	if m.ReturnError {
 		if m.AckChannel != nil {
@@ -372,7 +372,7 @@ func TestFetch_handleNewRequest_MultipleReqsForSameHashHighPriority(t *testing.T
 	req5 := makeRequest(hash3, High, hint)
 	f, net := customFetch(Config{
 		BatchTimeout:      1,
-		MaxRetiresForPeer: 2,
+		MaxRetriesForPeer: 2,
 		BatchSize:         2,
 	})
 
@@ -444,14 +444,14 @@ func TestFetch_handleNewRequest_MultipleReqsForSameHashHighPriority(t *testing.T
 }
 
 func TestFetch_GetRandomPeer(t *testing.T) {
-	peers := make([]peers.Peer, 1000)
-	for i := 0; i < len(peers); i++ {
+	myPeers := make([]peers.Peer, 1000)
+	for i := 0; i < len(myPeers); i++ {
 		_, pub, _ := p2pcrypto.GenerateKeyPair()
-		peers[i] = pub
+		myPeers[i] = pub
 	}
 	allTheSame := true
 	for i := 0; i < 20; i++ {
-		if GetRandomPeer(peers) != GetRandomPeer(peers) {
+		if GetRandomPeer(myPeers) != GetRandomPeer(myPeers) {
 			allTheSame = false
 		}
 	}

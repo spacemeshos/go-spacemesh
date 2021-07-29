@@ -38,9 +38,9 @@ type meshValidatorMock struct {
 	validatedLayers map[types.LayerID]struct{}
 }
 
-func (m *meshValidatorMock) LatestComplete() types.LayerID     { return m.vl }
-func (m *meshValidatorMock) Persist(ctx context.Context) error { return nil }
-func (m *meshValidatorMock) HandleIncomingLayer(ctx context.Context, lyr types.LayerID) (types.LayerID, types.LayerID, bool) {
+func (m *meshValidatorMock) LatestComplete() types.LayerID { return m.vl }
+func (m *meshValidatorMock) Persist(context.Context) error { return nil }
+func (m *meshValidatorMock) HandleIncomingLayer(_ context.Context, lyr types.LayerID) (types.LayerID, types.LayerID, bool) {
 	m.countValidate++
 	m.calls++
 	m.vl = lyr
@@ -52,8 +52,8 @@ func (m *meshValidatorMock) HandleIncomingLayer(ctx context.Context, lyr types.L
 	return lyr, lyr.Sub(1), false
 }
 
-func (m *meshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
-	return bl.Layer(), bl.Layer().Sub(1)
+func (m *meshValidatorMock) HandleLateBlocks(_ context.Context, blocks []*types.Block) (types.LayerID, types.LayerID) {
+	return blocks[0].Layer(), blocks[0].Layer().Sub(1)
 }
 
 type mockState struct{}

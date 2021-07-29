@@ -176,30 +176,6 @@ func TestHare_GetResult2(t *testing.T) {
 	require.Equal(t, err, errTooOld)
 }
 
-func TestHare_collectOutputCheckValidation(t *testing.T) {
-	sim := service.NewSimulator()
-	n1 := sim.NewNode()
-
-	h := createHare(n1, log.AppLog.WithName(t.Name()))
-
-	mockid := instanceID1
-	set := NewSetFromValues(value1)
-
-	// default validation is true
-	_ = h.collectOutput(context.TODO(), mockReport{mockid, set, true, false})
-	output, ok := h.outputs[types.LayerID(mockid)]
-	require.True(t, ok)
-	require.Equal(t, output[0], value1)
-
-	h.validate = func(blocks []types.BlockID) bool {
-		return false
-	}
-	err := h.collectOutput(context.TODO(), mockReport{mockid, set, true, false})
-	require.NoError(t, err)
-	_, ok = h.outputs[types.LayerID(mockid)]
-	require.True(t, ok, "failure to validate should only log an error and succeed")
-}
-
 func TestHare_collectOutput(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()

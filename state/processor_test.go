@@ -526,7 +526,7 @@ func TestTransactionProcessor_GetStateRoot(t *testing.T) {
 	r.NotEqual(types.Hash32{}, proc.rootHash)
 
 	expectedRoot := types.Hash32{1, 2, 3}
-	r.NoError(proc.addState(expectedRoot, types.NewLayerID(1)))
+	r.NoError(proc.saveStateRoot(expectedRoot, types.NewLayerID(1)))
 
 	actualRoot := proc.GetStateRoot()
 	r.Equal(expectedRoot, actualRoot)
@@ -548,7 +548,8 @@ func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
 	obj1 := createAccount(processor, SignerToAddr(signer), 21, 0)
 	obj2 := createAccount(processor, toAddr([]byte{0x01, 02}), 1, 10)
 	createAccount(processor, toAddr([]byte{0x02}), 44, 0)
-	processor.Commit()
+	_, err = processor.Commit()
+	assert.NoError(t, err)
 
 	transactions := []*types.Transaction{
 		createTransaction(t, obj1.Nonce(), obj2.address, 1, 5, signer),

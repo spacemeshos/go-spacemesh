@@ -123,7 +123,6 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	)
 	cfg := getTestDefaultConfig(numOfInstances)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
-	path := suite.T().TempDir()
 
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
@@ -172,7 +171,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		defer clock.RealClose()
 
 		for _, a := range suite.apps {
-			a.startServices(context.TODO(), log.AppLog.WithName(suite.T().Name()))
+			suite.NoError(a.startServices(context.TODO(), log.AppLog.WithName(suite.T().Name())))
 		}
 
 		ActivateGrpcServer(suite.apps[0])
@@ -423,7 +422,7 @@ func healingTester(dependencies []int) TestScenario {
 				log.FieldNamed("nodeid", app.nodeID))
 
 			// verified needs to advance, and to nearly catch up to last received
-			if lyrVerified <= lastVerifiedLayer.Add(2) || lyrVerified.Add(2) < lyrReceived {
+			if !lyrVerified.After(lastVerifiedLayer.Add(2)) || lyrVerified.Add(2).Before(lyrReceived) {
 				return false
 			}
 		}
@@ -509,7 +508,7 @@ func (suite *AppTestSuite) validateReloadStateRoot(app *SpacemeshApp, oldRoot ty
 	assert.Equal(suite.T(), oldRoot, app.state.GetStateRoot())
 
 	// start and stop and test for no panics
-	app.startServices(context.TODO(), log.AppLog)
+	suite.NoError(app.startServices(context.TODO(), log.AppLog))
 	app.stopServices()
 }
 
@@ -582,14 +581,14 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 
 	genesisBlocks := 0
 	for i := uint32(0); i < layersPerEpoch*2; i++ {
-		if l, ok := patient.layertoblocks[types.NewLayerID(i)]; ok {
+		if l, ok := nodedata.layertoblocks[types.NewLayerID(i)]; ok {
 			genesisBlocks += len(l)
 		}
 	}
 
 	// assert number of blocks
 	totalEpochs := int(untilLayer.GetEpoch()) + 1
-	blocksPerEpochTarget := layerAvgSize * layersPerEpoch
+	blocksPerEpochTarget := layerAvgSize * int(layersPerEpoch)
 
 	allApps := append(suite.apps, suite.killedApps...)
 	expectedEpochWeight := configuredTotalWeight(allApps)
@@ -699,7 +698,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.SMESHING.Start = true
 	smApp.Config.SMESHING.CoinbaseAccount = "0x123"
 	smApp.Config.SMESHING.Opts.DataDir, _ = ioutil.TempDir("", "sm-test-post")
-	smApp.Config.SMESHING.Opts.ComputeProviderID = int(initialization.CPUProviderID())
+	smApp.Config.SMESHING.Opts.ComputeProviderID = initialization.CPUProviderID()
 
 	smApp.Config.HARE.N = 5
 	smApp.Config.HARE.F = 2
@@ -748,7 +747,7 @@ func TestShutdown(t *testing.T) {
 
 	r.NoError(err)
 
-	smApp.startServices(context.TODO(), log.AppLog)
+	r.NoError(smApp.startServices(context.TODO(), log.AppLog))
 	ActivateGrpcServer(smApp)
 
 	r.NoError(poetHarness.Teardown(true))

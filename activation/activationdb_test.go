@@ -14,7 +14,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/ed25519"
@@ -63,8 +62,9 @@ func (m *MeshValidatorMock) LatestComplete() types.LayerID {
 func (m *MeshValidatorMock) HandleIncomingLayer(_ context.Context, layerID types.LayerID) (types.LayerID, types.LayerID, bool) {
 	return layerID.Sub(1), layerID, false
 }
-func (m *MeshValidatorMock) HandleLateBlock(_ context.Context, bl *types.Block) (types.LayerID, types.LayerID) {
-	return bl.Layer().Sub(1), bl.Layer()
+
+func (m *MeshValidatorMock) HandleLateBlocks(_ context.Context, blocks []*types.Block) (types.LayerID, types.LayerID) {
+	return blocks[0].Layer().Sub(1), blocks[0].Layer()
 }
 
 type MockState struct{}
@@ -113,23 +113,6 @@ func (MockState) GetBalance(types.Address) uint64 {
 }
 func (MockState) GetNonce(types.Address) uint64 {
 	panic("implement me")
-}
-
-type ATXDBMock struct {
-	mock.Mock
-	counter     int
-	workSymLock sync.Mutex
-	activeSet   uint32
-}
-
-func (mock *ATXDBMock) CalcMinerWeights(types.EpochID, map[types.BlockID]struct{}) (map[string]uint64, error) {
-	log.Debug("waiting lock")
-	mock.workSymLock.Lock()
-	defer mock.workSymLock.Unlock()
-	log.Debug("done wait")
-
-	mock.counter++
-	return map[string]uint64{"aaaaac": 1, "aaabddb": 2, "aaaccc": 3}, nil
 }
 
 type MockTxMemPool struct{}
@@ -841,7 +824,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	pPrevAtxs := make([]types.ATXID, numOfMiners)
 	posAtx := prevAtxID
 	var atx *types.ActivationTx
-	layer := types.LayerID(postGenesisEpochLayer)
+	layer := postGenesisEpochLayer
 
 	start := time.Now()
 	eStart := time.Now()

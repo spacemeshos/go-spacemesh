@@ -82,9 +82,6 @@ var ErrNoPeers = errors.New("no peers")
 // ErrTooManyPeerErrors is returned when too many (> 1/2) peers return error
 var ErrTooManyPeerErrors = errors.New("too many peers returned error")
 
-// ErrBeaconNotReceived is returned when no valid beacon was received.
-var ErrBeaconNotReceived = errors.New("no peer sent a valid beacon")
-
 // peerResult captures the response from each peer.
 type peerResult struct {
 	data []byte
@@ -199,12 +196,12 @@ func (l *Logic) layerHashReqReceiver(ctx context.Context, msg []byte) []byte {
 
 // epochATXsReqReceiver returns the ATXs for the specified epoch
 func (l *Logic) epochATXsReqReceiver(ctx context.Context, msg []byte) []byte {
-	l.log.Debug("got epoch atxs request")
+	l.log.WithContext(ctx).Debug("got epoch atxs request")
 	lyr := types.EpochID(util.BytesToUint32(msg))
 	atxs := l.atxIds.GetEpochAtxs(lyr)
 	bts, err := types.InterfaceToBytes(atxs)
 	if err != nil {
-		l.log.With().Warning("cannot find epoch atxs", lyr)
+		l.log.WithContext(ctx).With().Warning("cannot find epoch atxs", lyr)
 	}
 	return bts
 }
@@ -609,7 +606,7 @@ func (l *Logic) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
 			return res.Err
 		}
 		if !res.IsLocal {
-			err := l.getAtxResults(ctx, res.Data)
+			err := l.getAtxResults(ctx, res.Hash, res.Data)
 			if err != nil {
 				return err
 			}

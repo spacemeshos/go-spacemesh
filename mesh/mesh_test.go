@@ -63,6 +63,7 @@ func (m *MeshValidatorMock) LatestComplete() types.LayerID {
 func (m *MeshValidatorMock) HandleIncomingLayer(_ context.Context, layerID types.LayerID) (types.LayerID, types.LayerID, bool) {
 	return layerID.Sub(1), layerID, false
 }
+
 func (m *MeshValidatorMock) HandleLateBlocks(_ context.Context, bl []*types.Block) (types.LayerID, types.LayerID) {
 	return bl[0].Layer().Sub(1), bl[0].Layer()
 }

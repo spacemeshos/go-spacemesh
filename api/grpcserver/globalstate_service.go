@@ -548,7 +548,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_GlobalState{
 				GlobalState: &pb.GlobalStateHash{
 					RootHash: root.Bytes(),
-					Layer:    &pb.LayerNumber{Number: layer.Layer.Index().Uint32()},
+					Layer:    &pb.LayerNumber{Number: layer.LayerID.Uint32()},
 				},
 			}}}); err != nil {
 				return err
