@@ -77,18 +77,18 @@ type turtle struct {
 	LastEvicted types.LayerID
 
 	// hare lookback (distance): up to Hdist layers back, we only consider hare results/input vector
-	Hdist types.LayerID
+	Hdist uint32
 
 	// hare abort distance: we wait up to Zdist layers for hare results/input vector, before invalidating a layer
 	// without hare results.
-	Zdist types.LayerID
+	Zdist uint32
 
 	// the number of layers we wait until we have confidence that w.h.p. all honest nodes have reached consensus on the
 	// contents of a layer
-	ConfidenceParam types.LayerID
+	ConfidenceParam uint32
 
 	// the size of the tortoise sliding window which controls how far back the tortoise stores data
-	WindowSize types.LayerID
+	WindowSize uint32
 
 	// thresholds used for determining finality, and whether to use local or global results, respectively
 	GlobalThreshold uint8
@@ -122,7 +122,7 @@ func newTurtle(
 	hdist,
 	zdist,
 	confidenceParam,
-	windowSize,
+	windowSize uint32,
 	avgLayerSize int,
 	globalThreshold,
 	localThreshold uint8,
@@ -130,20 +130,20 @@ func newTurtle(
 ) *turtle {
 	return &turtle{
 		logger:               log.NewDefault("trtl"),
-		Hdist:                types.LayerID(hdist),
-		Zdist:                types.LayerID(zdist),
-		ConfidenceParam:      types.LayerID(confidenceParam),
-		WindowSize:           types.LayerID(windowSize),
+		Hdist:                hdist,
+		Zdist:                zdist,
+		ConfidenceParam:      confidenceParam,
+		WindowSize:           windowSize,
 		GlobalThreshold:      globalThreshold,
 		LocalThreshold:       localThreshold,
 		bdp:                  bdp,
 		atxdb:                atxdb,
 		clock:                clock,
-		Last:                 0,
+		Last:                 types.NewLayerID(0),
 		AvgLayerSize:         avgLayerSize,
 		GoodBlocksIndex:      make(map[types.BlockID]struct{}),
 		BlockOpinionsByLayer: make(map[types.LayerID]map[types.BlockID]Opinion, hdist),
-		MaxExceptions:        hdist * avgLayerSize * 100,
+		MaxExceptions:        int(hdist) * avgLayerSize * 100,
 		RerunInterval:        rerun,
 	}
 }
@@ -154,10 +154,10 @@ func (t *turtle) cloneTurtle() *turtle {
 		t.bdp,
 		t.atxdb,
 		t.clock,
-		int(t.Hdist),
-		int(t.Zdist),
-		int(t.ConfidenceParam),
-		int(t.WindowSize),
+		t.Hdist,
+		t.Zdist,
+		t.ConfidenceParam,
+		t.WindowSize,
 		t.AvgLayerSize,
 		t.GlobalThreshold,
 		t.LocalThreshold,
@@ -180,16 +180,12 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	}
 	t.Last = genesisLayer.Index()
 	// set last evicted one layer earlier since we look for things starting one layer after last evicted
-	t.LastEvicted = genesisLayer.Index() - 1
+	t.LastEvicted = genesisLayer.Index().Sub(1)
 	t.Verified = genesisLayer.Index()
 }
 
 func (t *turtle) lookbackWindowStart() (types.LayerID, bool) {
-	// prevent overflow
-	if t.Verified < t.WindowSize {
-		return types.LayerID(0), false
-	}
-	return t.Verified - t.WindowSize, true
+	return t.Verified.Sub(t.WindowSize), true
 }
 
 // evict makes sure we only keep a window of the last hdist layers.
@@ -197,7 +193,7 @@ func (t *turtle) evict(ctx context.Context) {
 	logger := t.logger.WithContext(ctx)
 
 	// Don't evict before we've verified at least hdist layers
-	if t.Verified <= types.GetEffectiveGenesis()+t.Hdist {
+	if !t.Verified.After(types.GetEffectiveGenesis().Add(t.Hdist)) {
 		return
 	}
 
@@ -207,26 +203,26 @@ func (t *turtle) evict(ctx context.Context) {
 	if !ok {
 		return
 	}
-	if windowStart <= t.LastEvicted {
+	if !windowStart.After(t.LastEvicted) {
 		return
 	}
 	logger.With().Info("attempting eviction",
 		log.FieldNamed("effective_genesis", types.GetEffectiveGenesis()),
-		log.FieldNamed("hdist", t.Hdist),
+		log.Uint32("hdist", t.Hdist),
 		log.FieldNamed("verified", t.Verified),
-		log.FieldNamed("window_size", t.WindowSize),
+		log.Uint32("window_size", t.WindowSize),
 		log.FieldNamed("last_evicted", t.LastEvicted),
 		log.FieldNamed("window_start", windowStart))
 
 	// evict from last evicted to the beginning of our window
-	for layerToEvict := t.LastEvicted + 1; layerToEvict < windowStart; layerToEvict++ {
+	for layerToEvict := t.LastEvicted.Add(1); layerToEvict.Before(windowStart); layerToEvict = layerToEvict.Add(1) {
 		logger.With().Debug("evicting layer", layerToEvict)
 		for blk := range t.BlockOpinionsByLayer[layerToEvict] {
 			delete(t.GoodBlocksIndex, blk)
 		}
 		delete(t.BlockOpinionsByLayer, layerToEvict)
 	}
-	t.LastEvicted = windowStart - 1
+	t.LastEvicted = windowStart.Sub(1)
 }
 
 func blockIDsToString(input []types.BlockID) string {
@@ -244,7 +240,7 @@ func blockIDsToString(input []types.BlockID) string {
 // returns the binary local opinion on the validity of a block in a layer (support or against)
 // TODO: cache but somehow check for changes (e.g., late-finishing Hare), maybe check hash?
 func (t *turtle) getLocalBlockOpinion(ctx context.Context, layerID types.LayerID, blockid types.BlockID) (vec, error) {
-	if layerID <= types.GetEffectiveGenesis() {
+	if !layerID.After(types.GetEffectiveGenesis()) {
 		return support, nil
 	}
 
@@ -281,7 +277,7 @@ func (t *turtle) checkBlockAndGetLocalOpinion(
 			logger.With().Error("inconsistent state: can't find block from diff list",
 				log.FieldNamed("exception_block_id", exceptionBlockID))
 			return false
-		} else if exceptionBlock.LayerIndex < baseBlockLayer {
+		} else if exceptionBlock.LayerIndex.Before(baseBlockLayer) {
 			logger.With().Error("good block candidate contains exception for block older than its base block",
 				log.FieldNamed("older_block", exceptionBlockID),
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
@@ -343,7 +339,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 	// look at good blocks backwards from most recent processed layer to find a suitable base block
 	// TODO: optimize by, e.g., trying to minimize the size of the exception list (rather than first match)
 	// see https://github.com/spacemeshos/go-spacemesh/issues/2402
-	for layerID := t.Last; layerID > t.LastEvicted; layerID-- {
+	for layerID := t.Last; layerID.After(t.LastEvicted); layerID = layerID.Sub(1) {
 		for block, opinion := range t.BlockOpinionsByLayer[layerID] {
 			if _, ok := t.GoodBlocksIndex[block]; !ok {
 				logger.With().Debug("not considering block not marked good as base block candidate",
@@ -411,11 +407,11 @@ func (t *turtle) calculateExceptions(
 	// "good" if its own base block is marked "good" and all exceptions it contains agree with our local opinion.
 	// We only look for and store exceptions within the sliding window set of layers as an optimization, but a block
 	// can contain exceptions from any layer, back to genesis.
-	startLayer := t.LastEvicted + 1
-	if startLayer < types.GetEffectiveGenesis() {
+	startLayer := t.LastEvicted.Add(1)
+	if startLayer.Before(types.GetEffectiveGenesis()) {
 		startLayer = types.GetEffectiveGenesis()
 	}
-	for layerID := startLayer; layerID <= t.Last; layerID++ {
+	for layerID := startLayer; !layerID.After(t.Last); layerID = layerID.Add(1) {
 		logger := logger.WithFields(log.FieldNamed("diff_layer_id", layerID))
 		logger.Debug("checking input vector diffs")
 
@@ -620,7 +616,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 					"voting_block_id: %v, voting_block_layer: %v, base_block_id: %v, base_block_layer: %v, block_id: %v",
 				block.ID().String(), block.LayerIndex, baseBlock.ID(), baseBlock.LayerIndex, blk.String())
 		}
-		if fblk.LayerIndex < t.LastEvicted {
+		if fblk.LayerIndex.Before(t.LastEvicted) {
 			continue
 		}
 
@@ -653,7 +649,7 @@ func (t *turtle) ProcessNewBlocks(ctx context.Context, blocks []*types.Block) er
 
 func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) error {
 	logger := t.logger.WithContext(ctx)
-	lastLayerID := types.LayerID(0)
+	lastLayerID := types.NewLayerID(0)
 
 	logger.With().Info("tortoise handling incoming block data", log.Int("num_blocks", len(blocks)))
 
@@ -662,14 +658,14 @@ func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) error
 	for _, b := range blocks {
 		logger := logger.WithFields(b.ID(), b.LayerIndex)
 		// make sure we don't write data on old blocks whose layer has already been evicted
-		if b.LayerIndex < t.LastEvicted {
+		if b.LayerIndex.Before(t.LastEvicted) {
 			logger.With().Warning("not processing block from layer older than last evicted layer",
 				log.FieldNamed("last_evicted", t.LastEvicted))
 			continue
 		}
-		if b.LayerIndex < lastLayerID {
+		if b.LayerIndex.Before(lastLayerID) {
 			return errNotSorted
-		} else if b.LayerIndex > lastLayerID {
+		} else if b.LayerIndex.After(lastLayerID) {
 			lastLayerID = b.LayerIndex
 		}
 		if _, ok := t.BlockOpinionsByLayer[b.LayerIndex]; !ok {
@@ -683,7 +679,7 @@ func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) error
 
 	t.scoreBlocks(ctx, filteredBlocks)
 
-	if t.Last < lastLayerID {
+	if t.Last.Before(lastLayerID) {
 		logger.With().Warning("got blocks for new layer before receiving layer, updating highest layer seen",
 			log.FieldNamed("previous_highest", t.Last),
 			log.FieldNamed("new_highest", lastLayerID))
@@ -762,7 +758,7 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, layerID types.LayerID)
 func (t *turtle) handleLayerBlocks(ctx context.Context, layerID types.LayerID) error {
 	logger := t.logger.WithContext(ctx).WithFields(layerID)
 
-	if layerID <= types.GetEffectiveGenesis() {
+	if !layerID.After(types.GetEffectiveGenesis()) {
 		logger.Debug("not attempting to handle genesis layer")
 		return nil
 	}
@@ -781,7 +777,7 @@ func (t *turtle) handleLayerBlocks(ctx context.Context, layerID types.LayerID) e
 		return nil
 	}
 
-	if t.Last < layerID {
+	if t.Last.Before(layerID) {
 		t.Last = layerID
 	}
 
@@ -804,11 +800,11 @@ func (t *turtle) verifyLayers(ctx context.Context) error {
 	// Note: t.Verified is initialized to the effective genesis layer, so the first candidate layer here necessarily
 	// follows and is post-genesis. There's no need for an additional check here.
 candidateLayerLoop:
-	for candidateLayerID := t.Verified + 1; candidateLayerID < t.Last; candidateLayerID++ {
+	for candidateLayerID := t.Verified.Add(1); candidateLayerID.Before(t.Last); candidateLayerID = candidateLayerID.Add(1) {
 		logger := logger.WithFields(log.FieldNamed("candidate_layer", candidateLayerID))
 
 		// it's possible that self healing already validated a layer
-		if t.Verified >= candidateLayerID {
+		if !t.Verified.Before(candidateLayerID) {
 			logger.Info("self healing already validated this layer")
 			continue
 		}
@@ -851,9 +847,9 @@ candidateLayerLoop:
 			// count the votes of the input vote vector by summing the voting weight of good blocks
 			logger.With().Debug("summing votes for candidate layer block",
 				blockID,
-				log.FieldNamed("layer_start", candidateLayerID+1),
+				log.FieldNamed("layer_start", candidateLayerID.Add(1)),
 				log.FieldNamed("layer_end", t.Last))
-			sum, err := t.sumVotesForBlock(ctx, blockID, candidateLayerID+1, func(votingBlockID types.BlockID) bool {
+			sum, err := t.sumVotesForBlock(ctx, blockID, candidateLayerID.Add(1), func(votingBlockID types.BlockID) bool {
 				if _, isgood := t.GoodBlocksIndex[votingBlockID]; !isgood {
 					logger.With().Debug("not counting vote of block not marked good",
 						log.FieldNamed("voting_block", votingBlockID))
@@ -868,7 +864,7 @@ candidateLayerLoop:
 
 			// check that the total weight exceeds the global threshold
 			globalOpinionOnBlock := calculateOpinionWithThreshold(
-				t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, float64(t.Last-candidateLayerID))
+				t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, float64(t.Last.Difference(candidateLayerID)))
 			logger.With().Debug("verifying tortoise calculated global opinion on block",
 				log.FieldNamed("block_voted_on", blockID),
 				candidateLayerID,
@@ -922,19 +918,19 @@ candidateLayerLoop:
 			// between this unverified candidate layer and the latest layer is greater than this distance, then we trigger
 			// self healing. But there's no point in trying to heal a layer that's not at least Hdist layers old since
 			// we only consider the local opinion for recent layers.
-			if candidateLayerID > t.Last {
+			if candidateLayerID.After(t.Last) {
 				logger.With().Panic("candidate layer is higher than last layer received",
 					log.FieldNamed("last_layer", t.Last))
 			}
 			logger.With().Debug("considering attempting to heal layer",
 				log.FieldNamed("layer_cutoff", t.layerCutoff()),
-				log.FieldNamed("zdist", t.Zdist),
+				log.Uint32("zdist", t.Zdist),
 				log.FieldNamed("last_layer_received", t.Last),
-				log.FieldNamed("confidence_param", t.ConfidenceParam))
-			if candidateLayerID < t.layerCutoff() && t.Last-candidateLayerID > t.Zdist+t.ConfidenceParam {
+				log.Uint32("confidence_param", t.ConfidenceParam))
+			if candidateLayerID.Before(t.layerCutoff()) && t.Last.Difference(candidateLayerID) > t.Zdist+t.ConfidenceParam {
 				lastLayer := t.Last
 				// don't attempt to heal layers newer than Hdist
-				if lastLayer > t.layerCutoff() {
+				if lastLayer.After(t.layerCutoff()) {
 					lastLayer = t.layerCutoff()
 				}
 				lastVerified := t.Verified
@@ -942,11 +938,11 @@ candidateLayerLoop:
 
 				// if self healing made progress, short-circuit processing of this layer, but allow verification of
 				// later layers to continue
-				if t.Verified > lastVerified {
+				if t.Verified.After(lastVerified) {
 					// rescore goodness of blocks in all intervening layers on the basis of new information
 					// TODO: this is inefficient and we can probably do better
 					// see https://github.com/spacemeshos/go-spacemesh/issues/2522
-					for layerID := lastVerified.Add(1); layerID <= t.Last; layerID++ {
+					for layerID := lastVerified.Add(1); !layerID.After(t.Last); layerID = layerID.Add(1) {
 						if err := t.scoreBlocksByLayerID(ctx, layerID); err != nil {
 							// if we fail to process a layer, there's probably no point in trying to recore blocks
 							// in later layers, so just print an error and bail
@@ -988,10 +984,10 @@ candidateLayerLoop:
 // for layers older than this point, we vote according to global opinion (rather than local opinion)
 func (t *turtle) layerCutoff() types.LayerID {
 	// if we haven't seen at least Hdist layers yet, we always rely on local opinion
-	if t.Last < t.Hdist {
-		return 0
+	if t.Last.Before(types.NewLayerID(t.Hdist)) {
+		return types.NewLayerID(0)
 	}
-	return t.Last - t.Hdist
+	return t.Last.Sub(t.Hdist)
 }
 
 // return the set of blocks we currently consider valid for the layer. it's based on both local and global opinion,
@@ -1002,8 +998,8 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 	voteAgainstAll = make([]types.BlockID, 0, 0)
 
 	// for layers older than hdist, we vote according to global opinion
-	if layerID < t.layerCutoff() {
-		if layerID > t.Verified {
+	if layerID.Before(t.layerCutoff()) {
+		if layerID.After(t.Verified) {
 			// this layer has not yet been verified
 			// we must have an opinion about older layers at this point. if the layer hasn't been verified yet, count votes
 			// and see if they pass the local threshold. if not, use the current weak coin instead to determine our vote for
@@ -1018,7 +1014,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 			layerBlocks := make(map[types.BlockID]struct{}, len(layerBlockIds))
 			for _, blockID := range layerBlockIds {
 				logger := logger.WithFields(log.FieldNamed("candidate_block_id", blockID))
-				sum, err := t.sumVotesForBlock(ctx, blockID, layerID+1, func(id types.BlockID) bool { return true })
+				sum, err := t.sumVotesForBlock(ctx, blockID, layerID.Add(1), func(id types.BlockID) bool { return true })
 				if err != nil {
 					return nil, fmt.Errorf("error summing votes for block %v in old layer %v: %w",
 						blockID, layerID, err)
@@ -1044,11 +1040,11 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 					//   older than the base blocks, which will cause those blocks not to be marked good. is there
 					//   anything we can do about this? e.g., explicitly pick base blocks that agree with the new
 					//   opinion, or pick older base blocks.
-					if coin, exists := t.bdp.GetCoinflip(ctx, t.Last-1); exists {
+					if coin, exists := t.bdp.GetCoinflip(ctx, t.Last.Sub(1)); exists {
 						logger.With().Info("rescoring all blocks in old layer using weak coin",
 							log.Int("count", len(layerBlockIds)),
 							log.Bool("coinflip", coin),
-							log.FieldNamed("coinflip_layer", t.Last-1))
+							log.FieldNamed("coinflip_layer", t.Last.Sub(1)))
 						if coin {
 							// heads on the weak coin means vote for all blocks in the layer
 							return layerBlockIds, nil
@@ -1056,7 +1052,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 						// tails on the weak coin means vote against all blocks in the layer
 						return voteAgainstAll, nil
 					}
-					return nil, fmt.Errorf("%s %v", errstrNoCoinflip, t.Last-1)
+					return nil, fmt.Errorf("%s %v", errstrNoCoinflip, t.Last.Sub(1))
 				} // (nothing to do if local opinion is against, just don't include block in output)
 			}
 			logger.With().Debug("local opinion supports blocks in old, unverified layer",
@@ -1082,7 +1078,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 			// empty list.
 			logger.Debug("local opinion is against all blocks in layer where hare failed")
 			return voteAgainstAll, nil
-		} else if t.Last > t.Zdist && layerID < t.Last-t.Zdist {
+		} else if t.Last.After(types.NewLayerID(t.Zdist)) && layerID.Before(t.Last.Sub(t.Zdist)) {
 			// Layer has passed the Hare abort distance threshold, so we give up waiting for Hare results. At this point
 			// our opinion on this layer is that we vote against blocks (i.e., we support an empty layer).
 			logger.With().Debug("local opinion on layer beyond hare abort window is against all blocks",
@@ -1110,9 +1106,9 @@ func (t *turtle) sumVotesForBlock(
 		log.FieldNamed("start_layer", startLayer),
 		log.FieldNamed("end_layer", t.Last),
 		log.FieldNamed("block_voting_on", blockID),
-		log.FieldNamed("layer_voting_on", startLayer-1))
+		log.FieldNamed("layer_voting_on", startLayer.Sub(1)))
 	// TODO LANE: need to factor in theta
-	for voteLayer := startLayer; voteLayer <= t.Last; voteLayer++ {
+	for voteLayer := startLayer; !voteLayer.After(t.Last); voteLayer = voteLayer.Add(1) {
 		logger := logger.WithFields(voteLayer)
 		logger.With().Debug("summing layer votes",
 			log.Int("count", len(t.BlockOpinionsByLayer[voteLayer])))
@@ -1155,22 +1151,22 @@ func (t *turtle) heal(ctx context.Context, targetLayerID types.LayerID) {
 
 	// TODO: optimize this algorithm using, e.g., a triangular matrix rather than nested loops
 
-	for candidateLayerID := pbaseOld + 1; candidateLayerID < targetLayerID; candidateLayerID++ {
+	for candidateLayerID := pbaseOld.Add(1); candidateLayerID.Before(targetLayerID); candidateLayerID = candidateLayerID.Add(1) {
 		logger := t.logger.WithContext(ctx).WithFields(
 			log.FieldNamed("old_verified_layer", pbaseOld),
 			log.FieldNamed("last_verified_layer", pbaseNew),
 			log.FieldNamed("target_layer", targetLayerID),
 			log.FieldNamed("candidate_layer", candidateLayerID),
 			log.FieldNamed("last_layer_received", t.Last),
-			log.FieldNamed("hdist", t.Hdist))
+			log.Uint32("hdist", t.Hdist))
 
 		// we should never run on layers newer than Hdist back (from last layer received)
 		// when bootstrapping, don't attempt any verification at all
-		latestLayerWeCanVerify := t.Last - t.Hdist
-		if t.Last < t.Hdist {
+		latestLayerWeCanVerify := t.Last.Sub(t.Hdist)
+		if t.Last.Before(types.NewLayerID(t.Hdist)) {
 			latestLayerWeCanVerify = mesh.GenesisLayer().Index()
 		}
-		if candidateLayerID > latestLayerWeCanVerify {
+		if candidateLayerID.After(latestLayerWeCanVerify) {
 			logger.With().Error("cannot heal layer that's not at least hdist layers old",
 				log.FieldNamed("highest_healable_layer", latestLayerWeCanVerify))
 			return
@@ -1193,14 +1189,14 @@ func (t *turtle) heal(ctx context.Context, targetLayerID types.LayerID) {
 			logger := logger.WithFields(log.FieldNamed("candidate_block_id", blockID))
 
 			// count all votes for or against this block by all blocks in later layers: don't filter out any
-			sum, err := t.sumVotesForBlock(ctx, blockID, candidateLayerID+1, func(id types.BlockID) bool { return true })
+			sum, err := t.sumVotesForBlock(ctx, blockID, candidateLayerID.Add(1), func(id types.BlockID) bool { return true })
 			if err != nil {
 				logger.Error("error summing votes for candidate block in candidate layer", log.Err(err))
 				return
 			}
 
 			// check that the total weight exceeds the global threshold
-			globalOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, float64(t.Last-candidateLayerID))
+			globalOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, float64(t.Last.Difference(candidateLayerID)))
 			logger.With().Debug("self healing calculated global opinion on candidate block",
 				log.FieldNamed("global_opinion", globalOpinionOnBlock),
 				sum)

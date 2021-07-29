@@ -7,7 +7,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/big"
 	"math/rand"
+	"sync"
 
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -15,21 +17,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-
-	"math/big"
-
-	"sync"
 )
 
 const (
 	layerSize = 200
 )
 
-var constTrue = []byte{1}
-var constFalse = []byte{0}
-var constLATEST = []byte("latest")
-var constLAYERHASH = []byte("layer hash")
-var constPROCESSED = []byte("processed")
+var (
+	constTrue      = []byte{1}
+	constFalse     = []byte{0}
+	constLATEST    = []byte("latest")
+	constLAYERHASH = []byte("layer hash")
+	constPROCESSED = []byte("processed")
+)
 
 // TORTOISE key for tortoise persistence in database
 var TORTOISE = []byte("tortoise")
@@ -121,7 +121,7 @@ func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txInvalida
 		latestLayerInState: types.GetEffectiveGenesis(),
 	}
 
-	ll.Validator = &validator{ll, 0}
+	ll.Validator = &validator{Mesh: ll}
 
 	return ll
 }
@@ -134,14 +134,14 @@ func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Con
 	if err != nil {
 		logger.Panic("could not recover latest layer: %v", err)
 	}
-	msh.latestLayer = types.LayerID(util.BytesToUint64(latest))
+	msh.latestLayer = types.BytesToLayerID(latest)
 
 	processed, err := db.general.Get(constPROCESSED)
 	if err != nil {
 		logger.Panic("could not recover processed layer: %v", err)
 	}
 
-	msh.SetProcessedLayer(types.LayerID(util.BytesToUint64(processed)))
+	msh.SetProcessedLayer(types.BytesToLayerID(processed))
 
 	if msh.layerHash, err = db.general.Get(constLAYERHASH); err != nil {
 		logger.With().Error("could not recover latest layer hash", log.Err(err))
@@ -151,17 +151,17 @@ func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Con
 	if err != nil {
 		logger.Panic("could not recover latest verified layer: %v", err)
 	}
-	msh.latestLayerInState = types.LayerID(util.BytesToUint64(verified))
+	msh.latestLayerInState = types.BytesToLayerID(verified)
 
 	err = pr.LoadState(msh.LatestLayerInState())
 	if err != nil {
 		logger.Panic("cannot load state for layer %v, message: %v", msh.LatestLayerInState(), err)
 	}
 	// in case we load a state that was not fully played
-	if msh.LatestLayerInState()+1 < msh.trtl.LatestComplete() {
+	if msh.LatestLayerInState().Add(1).Before(msh.trtl.LatestComplete()) {
 		// todo: add test for this case, or add random kill test on node
-		logger.Info("playing layers %v to %v to state", msh.LatestLayerInState()+1, msh.trtl.LatestComplete())
-		msh.pushLayersToState(ctx, msh.LatestLayerInState()+1, msh.trtl.LatestComplete())
+		logger.Info("playing layers %v to %v to state", msh.LatestLayerInState().Add(1), msh.trtl.LatestComplete())
+		msh.pushLayersToState(ctx, msh.LatestLayerInState().Add(1), msh.trtl.LatestComplete())
 	}
 
 	msh.With().Info("recovered mesh from disk",
@@ -175,9 +175,9 @@ func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Con
 
 // CacheWarmUp warms up cache with latest blocks
 func (msh *Mesh) CacheWarmUp(layerSize int) {
-	start := types.LayerID(0)
-	if msh.ProcessedLayer() > types.LayerID(msh.blockCache.Cap()/layerSize) {
-		start = msh.ProcessedLayer() - types.LayerID(msh.blockCache.Cap()/layerSize)
+	start := types.NewLayerID(0)
+	if msh.ProcessedLayer().Uint32() > uint32(msh.blockCache.Cap()/layerSize) {
+		start = msh.ProcessedLayer().Sub(uint32(msh.blockCache.Cap() / layerSize))
 	}
 
 	if err := msh.cacheWarmUpFromTo(start, msh.ProcessedLayer()); err != nil {
@@ -209,7 +209,7 @@ func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
 	})
 	defer msh.lkMutex.Unlock()
 	msh.lkMutex.Lock()
-	if idx > msh.latestLayer {
+	if idx.After(msh.latestLayer) {
 		events.ReportNodeStatusUpdate()
 		msh.With().Info("set latest known layer", idx)
 		msh.latestLayer = idx
@@ -293,7 +293,7 @@ func (vl *validator) ValidateLayer(ctx context.Context, layerID types.LayerID) {
 		logger.Error("could not persist processed layer")
 	}
 	vl.pushLayersToState(ctx, oldPbase, newPbase)
-	for newlyVerifiedLayer := oldPbase + 1; newlyVerifiedLayer <= newPbase; newlyVerifiedLayer++ {
+	for newlyVerifiedLayer := oldPbase.Add(1); !newlyVerifiedLayer.After(newPbase); newlyVerifiedLayer = newlyVerifiedLayer.Add(1) {
 		events.ReportLayerUpdate(events.LayerUpdate{
 			LayerID: newlyVerifiedLayer,
 			Status:  events.LayerStatusTypeConfirmed,
@@ -309,16 +309,17 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types
 		log.FieldNamed("new_pbase", newPbase))
 	logger.Info("pushing layers to state")
 
-	if oldPbase < 2 {
+	layerTwo := types.NewLayerID(2)
+	if oldPbase.Before(layerTwo) {
 		msh.With().Warning("tried to push layer < 2",
 			log.FieldNamed("old_pbase", oldPbase), log.FieldNamed("new_pbase", newPbase))
-		if newPbase < 3 {
+		if newPbase.Before(types.NewLayerID(3)) {
 			return
 		}
-		oldPbase = 2
+		oldPbase = layerTwo
 	}
 
-	for layerID := oldPbase; layerID < newPbase; layerID++ {
+	for layerID := oldPbase; layerID.Before(newPbase); layerID = layerID.Add(1) {
 		l, err := msh.GetLayer(layerID)
 		// TODO: propagate/handle error
 		if err != nil || l == nil {
@@ -353,10 +354,10 @@ func (msh *Mesh) persistLayerHashes(l *types.Layer) {
 	msh.persistLayerHash(l.Index(), hash)
 	prevHash := types.Hash32{}
 	var err error
-	if l.Index() > types.GetEffectiveGenesis() {
-		prevHash, err = msh.getRunningLayerHash(l.Index() - 1)
+	if l.Index().After(types.GetEffectiveGenesis()) {
+		prevHash, err = msh.getRunningLayerHash(l.Index().Sub(1))
 		if err != nil {
-			msh.With().Error("cannot get running layer hash", l.Index()-1)
+			msh.With().Error("cannot get running layer hash", l.Index().Sub(1))
 			return
 		}
 	}
@@ -440,16 +441,16 @@ func (msh *Mesh) updateStateWithLayer(layer *types.Layer) {
 	msh.txMutex.Lock()
 	defer msh.txMutex.Unlock()
 	latest := msh.LatestLayerInState()
-	if layer.Index() <= latest {
+	if !layer.Index().After(latest) {
 		msh.With().Warning("result received after state has advanced",
 			log.FieldNamed("validatedLayer", layer.Index()),
 			log.FieldNamed("latestLayer", latest))
 		return
 	}
-	if msh.maxValidatedLayer < layer.Index() {
+	if msh.maxValidatedLayer.Before(layer.Index()) {
 		msh.maxValidatedLayer = layer.Index()
 	}
-	if layer.Index() > latest+1 {
+	if layer.Index().After(latest.Add(1)) {
 		msh.With().Warning("early layer result received",
 			log.FieldNamed("validatedLayer", layer.Index()),
 			log.FieldNamed("maxValidatedLayer", msh.maxValidatedLayer),
@@ -458,7 +459,7 @@ func (msh *Mesh) updateStateWithLayer(layer *types.Layer) {
 		return
 	}
 	msh.applyState(layer)
-	for i := layer.Index() + 1; i <= msh.maxValidatedLayer; i++ {
+	for i := layer.Index().Add(1); !i.After(msh.maxValidatedLayer); i = i.Add(1) {
 		nxtLayer, has := msh.nextValidLayers[i]
 		if !has {
 			break
@@ -617,9 +618,9 @@ func (msh *Mesh) pushTransactions(l *types.Layer) {
 // GetProcessedLayer returns a layer only if it has already been processed
 func (msh *Mesh) GetProcessedLayer(i types.LayerID) (*types.Layer, error) {
 	msh.lMutex.RLock()
-	if i > msh.ProcessedLayer() {
+	if i.After(msh.ProcessedLayer()) {
 		msh.lMutex.RUnlock()
-		msh.Debug("failed to get layer  ", i, " layer not verified yet")
+		msh.Debug("failed to get layer  ", i.String(), " layer not verified yet")
 		return nil, errors.New("layer not verified yet")
 	}
 	msh.lMutex.RUnlock()
@@ -672,8 +673,10 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 	}
 
 	msh.SetLatestLayer(lyr)
+
 	lm := msh.getLayerMutex(lyr)
 	defer msh.endLayerWorker(lyr)
+
 	lm.m.Lock()
 	defer lm.m.Unlock()
 	// layer doesnt exist, need to insert new layer
@@ -737,7 +740,7 @@ func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
 		}
 		txs = append(txs, tx)
 	}
-	if err := msh.writeTransactions(blk.LayerIndex, txs); err != nil {
+	if err := msh.writeTransactions(blk, txs...); err != nil {
 		return fmt.Errorf("could not write transactions of block %v database: %v", blk.ID(), err)
 	}
 
@@ -780,16 +783,16 @@ func (msh *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 	defer msh.orphMutex.RUnlock()
 	ids := map[types.BlockID]struct{}{}
 	for key, val := range msh.orphanBlocks {
-		if key < l {
+		if key.Before(l) {
 			for bid := range val {
 				ids[bid] = struct{}{}
 			}
 		}
 	}
 
-	blocks, err := msh.LayerBlockIds(l - 1)
+	blocks, err := msh.LayerBlockIds(l.Sub(1))
 	if err != nil {
-		return nil, fmt.Errorf("failed getting latest layer %v err %v", l-1, err)
+		return nil, fmt.Errorf("failed getting latest layer %v err %v", l.Sub(1), err)
 	}
 
 	// add last layer blocks
@@ -810,10 +813,10 @@ func (msh *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 
 func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 	coinbases := make([]types.Address, 0, len(l.Blocks()))
-	//the reason we are serializing the types.NodeID to a string instead of using it directly as a
-	//key in the map is due to Golang's restriction on only Comparable types used as map keys. Since
-	//the types.NodeID contains a slice, it is not comparable and hence cannot be used as a map key
-	//TODO: fix this when changing the types.NodeID struct, see https://github.com/spacemeshos/go-spacemesh/issues/2269
+	// the reason we are serializing the types.NodeID to a string instead of using it directly as a
+	// key in the map is due to Golang's restriction on only Comparable types used as map keys. Since
+	// the types.NodeID contains a slice, it is not comparable and hence cannot be used as a map key
+	// TODO: fix this when changing the types.NodeID struct, see https://github.com/spacemeshos/go-spacemesh/issues/2269
 	coinbasesAndSmeshers := make(map[types.Address]map[string]uint64)
 	for _, bl := range l.Blocks() {
 		if bl.ATXID == *types.EmptyATXID {
@@ -826,8 +829,8 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 			continue
 		}
 		coinbases = append(coinbases, atx.Coinbase)
-		//create a 2 dimensional map where the entries are
-		//coinbasesAndSmeshers[coinbase_id][smesher_id] = number of blocks this pair has created
+		// create a 2 dimensional map where the entries are
+		// coinbasesAndSmeshers[coinbase_id][smesher_id] = number of blocks this pair has created
 		if _, exists := coinbasesAndSmeshers[atx.Coinbase]; !exists {
 			coinbasesAndSmeshers[atx.Coinbase] = make(map[string]uint64)
 		}

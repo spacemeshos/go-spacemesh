@@ -132,7 +132,10 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 			epoch: epoch,
 			round: round,
 			incomingVotes: map[epochRoundPair]votesPerPK{
-				epochRoundPair{EpochID: epoch, Round: 1}: {
+				{
+					EpochID: epoch,
+					Round:   1,
+				}: {
 					pk1.String(): votesSetPair{
 						ValidVotes: hashSet{
 							"0x1": {},
@@ -153,7 +156,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 						},
 					},
 				},
-				epochRoundPair{EpochID: epoch, Round: 2}: {
+				{EpochID: epoch, Round: 2}: {
 					pk1.String(): votesSetPair{
 						ValidVotes: hashSet{
 							"0x3": {},
@@ -167,7 +170,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 						InvalidVotes: hashSet{},
 					},
 				},
-				epochRoundPair{EpochID: epoch, Round: 3}: {
+				{EpochID: epoch, Round: 3}: {
 					pk1.String(): votesSetPair{
 						ValidVotes:   hashSet{},
 						InvalidVotes: hashSet{},
@@ -246,7 +249,7 @@ func TestTortoiseBeacon_firstRoundVotes(t *testing.T) {
 			epoch:     epoch,
 			upToRound: round,
 			incomingVotes: map[epochRoundPair]votesPerPK{
-				epochRoundPair{EpochID: epoch, Round: 1}: {
+				{EpochID: epoch, Round: 1}: {
 					pk1.String(): votesSetPair{
 						ValidVotes: hashSet{
 							"0x1": {},
@@ -349,7 +352,7 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 			epoch:     epoch,
 			upToRound: round,
 			incomingVotes: map[epochRoundPair]votesPerPK{
-				epochRoundPair{EpochID: epoch, Round: 1}: {
+				{EpochID: epoch, Round: 1}: {
 					pk1.String(): votesSetPair{
 						ValidVotes: hashSet{
 							"0x1": {},
@@ -391,7 +394,7 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 			epoch:     epoch,
 			upToRound: round,
 			incomingVotes: map[epochRoundPair]votesPerPK{
-				epochRoundPair{EpochID: epoch, Round: 1}: {
+				{EpochID: epoch, Round: 1}: {
 					pk1.String(): votesSetPair{
 						ValidVotes: hashSet{
 							"0x1": {},
@@ -482,7 +485,7 @@ func TestTortoiseBeacon_calcVotesMargin(t *testing.T) {
 			epoch:     epoch,
 			upToRound: round,
 			incomingVotes: map[epochRoundPair]votesPerPK{
-				epochRoundPair{EpochID: epoch, Round: 1}: {
+				{EpochID: epoch, Round: 1}: {
 					pk1.String(): votesSetPair{
 						ValidVotes: hashSet{
 							"0x1": {},
@@ -503,7 +506,7 @@ func TestTortoiseBeacon_calcVotesMargin(t *testing.T) {
 						},
 					},
 				},
-				epochRoundPair{EpochID: epoch, Round: 2}: {
+				{EpochID: epoch, Round: 2}: {
 					pk1.String(): votesSetPair{
 						ValidVotes: hashSet{
 							"0x3": {},
@@ -517,7 +520,7 @@ func TestTortoiseBeacon_calcVotesMargin(t *testing.T) {
 						InvalidVotes: hashSet{},
 					},
 				},
-				epochRoundPair{EpochID: epoch, Round: 3}: {
+				{EpochID: epoch, Round: 3}: {
 					pk1.String(): votesSetPair{
 						ValidVotes:   hashSet{},
 						InvalidVotes: hashSet{},

@@ -1,6 +1,7 @@
 package tortoisebeacon
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -27,19 +28,24 @@ func NewDB(dbStore database.Database, log log.Log) *DB {
 }
 
 // GetTortoiseBeacon gets a Tortoise Beacon value for an epoch.
-func (db *DB) GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, bool) {
+func (db *DB) GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, error) {
 	db.log.Debug("getting tortoise beacon for epoch %v", epochID)
 
 	id, err := db.store.Get(epochID.ToBytes())
 	if err != nil {
-		db.log.Error("failed to get tortoise beacon for epoch %v: %v", epochID, err)
-		return types.Hash32{}, false
+		if errors.Is(err, database.ErrNotFound) {
+			db.log.Debug("requested beacon for epoch %v was not found in DB", epochID)
+		} else {
+			db.log.Debug("failed to get tortoise beacon for epoch %v: %v", epochID, err)
+		}
+
+		return types.Hash32{}, fmt.Errorf("get tortoise beacon from store: %w", err)
 	}
 
 	beacon := types.BytesToHash(id)
 	db.log.Debug("got tortoise beacon for epoch %v: %v", epochID, beacon.String())
 
-	return beacon, true
+	return beacon, nil
 }
 
 // SetTortoiseBeacon sets a Tortoise Beacon value for an epoch.
@@ -49,6 +55,7 @@ func (db *DB) SetTortoiseBeacon(epochID types.EpochID, beacon types.Hash32) erro
 	err := db.store.Put(epochID.ToBytes(), beacon.Bytes())
 	if err != nil {
 		db.log.Error("failed to add tortoise beacon for epoch %v (%v): %v", epochID, beacon.String(), err)
+
 		return fmt.Errorf("failed to add tortoise beacon: %w", err)
 	}
 

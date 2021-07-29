@@ -39,7 +39,7 @@ type blockValidator interface {
 type BlockHandler struct {
 	log.Log
 	traverse    forBlockInView
-	depth       int
+	depth       uint32
 	mesh        mesh
 	validator   blockValidator
 	goldenATXID types.ATXID
@@ -47,7 +47,7 @@ type BlockHandler struct {
 
 // Config defines configuration for block handler
 type Config struct {
-	Depth       int
+	Depth       uint32
 	GoldenATXID types.ATXID
 }
 
@@ -113,7 +113,7 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, fetche
 		return nil
 	}
 
-	if blk.Layer() <= bh.mesh.ProcessedLayer() {
+	if !blk.Layer().After(bh.mesh.ProcessedLayer()) { //|| blk.Layer() == bh.mesh.getValidatingLayer() {
 		logger.With().Error("block is late",
 			log.FieldNamed("processed_layer", bh.mesh.ProcessedLayer()),
 			log.FieldNamed("miner_id", blk.MinerID()))

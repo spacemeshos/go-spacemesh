@@ -19,14 +19,14 @@ type addGet interface {
 // Beacon provides the value that is under consensus as defined by the hare.
 type Beacon struct {
 	beaconGetter    blocks.BeaconGetter
-	confidenceParam uint16
+	confidenceParam uint32
 	cache           addGet
 	log.Log
 }
 
 // NewBeacon returns a new beacon
 // confidenceParam is the number of layers that the Beacon assumes for consensus view.
-func NewBeacon(beaconGetter blocks.BeaconGetter, confidenceParam uint16, logger log.Log) *Beacon {
+func NewBeacon(beaconGetter blocks.BeaconGetter, confidenceParam uint32, logger log.Log) *Beacon {
 	c, err := lru.New(activesCacheSize)
 	if err != nil {
 		logger.With().Panic("could not create lru cache", log.Err(err))

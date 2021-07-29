@@ -45,7 +45,7 @@ var cmd = &cobra.Command{
 
 // ////////////////////////////
 
-var expectedLayers int
+var expectedLayers uint32
 var bucket string
 var version string
 var remote bool
@@ -55,7 +55,7 @@ func init() {
 	cmd.PersistentFlags().StringVarP(&bucket, "storage-path", "z", "spacemesh-sync-data", "Specify storage bucket name")
 
 	// expected layers
-	cmd.PersistentFlags().IntVar(&expectedLayers, "expected-layers", 101, "expected number of layers")
+	cmd.PersistentFlags().Uint32Var(&expectedLayers, "expected-layers", 101, "expected number of layers")
 
 	// fetch from remote
 	cmd.PersistentFlags().BoolVar(&remote, "remote-data", false, "fetch from remote")
@@ -91,11 +91,11 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 		log.String("data_folder", app.Config.DataDir()),
 		log.String("storage_path", bucket),
 		log.Bool("download_from_remote_storage", remote),
-		log.Int("expected_layers", expectedLayers),
+		log.Uint32("expected_layers", expectedLayers),
 		log.Int("request_timeout", app.Config.SyncRequestTimeout),
 		log.String("data_version", version),
-		log.Int("layers_per_epoch", app.Config.LayersPerEpoch),
-		log.Int("hdist", app.Config.Hdist),
+		log.Uint32("layers_per_epoch", app.Config.LayersPerEpoch),
+		log.Uint32("hdist", app.Config.Hdist),
 	)
 
 	path := app.Config.DataDir()
@@ -106,7 +106,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	}
 
 	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
-	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
+	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 	lg.Info("local db path: %v layers per epoch: %v", path, app.Config.LayersPerEpoch)
 
 	if remote {
@@ -147,7 +147,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	app.logger.Info("new sync tester")
 
 	layersPerEpoch := app.Config.LayersPerEpoch
-	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, uint16(layersPerEpoch), goldenATXID, &validatorMock{}, lg.WithOptions(log.Nop))
+	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, layersPerEpoch, goldenATXID, &validatorMock{}, lg.WithOptions(log.Nop))
 	tbDB := tortoisebeacon.NewDB(tbDBStore, lg.WithOptions(log.Nop))
 
 	dbs := &allDbs{
@@ -168,25 +168,25 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 		SyncInterval:    2 * 60 * time.Millisecond,
 		ValidationDelta: 30 * time.Second,
 	}
-	app.sync = createSyncer(syncerConf, msh, layerFetch, types.LayerID(expectedLayers), app.logger)
+	app.sync = createSyncer(syncerConf, msh, layerFetch, types.NewLayerID(expectedLayers), app.logger)
 	if err = swarm.Start(cmdp.Ctx); err != nil {
 		log.With().Panic("error starting p2p", log.Err(err))
 	}
 
 	i := layersPerEpoch * 2
 	for ; ; i++ {
-		lg.With().Info("getting layer", types.LayerID(i))
-		if lyr, err2 := msh.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
-			l := types.LayerID(i)
-			if l > types.GetEffectiveGenesis() {
+		lid := types.NewLayerID(i)
+		lg.With().Info("getting layer", lid)
+		if lyr, err2 := msh.GetLayer(lid); err2 != nil || lyr == nil {
+			if lid.After(types.GetEffectiveGenesis()) {
 				lg.With().Info("finished loading layers from disk",
-					log.FieldNamed("layers_loaded", types.LayerID(i-1)),
+					log.FieldNamed("layers_loaded", lid.Sub(1)),
 					log.Err(err2),
 				)
 				break
 			}
 		} else {
-			lg.With().Info("loaded layer from disk", types.LayerID(i))
+			lg.With().Info("loaded layer from disk", types.NewLayerID(i))
 			msh.ValidateLayer(cmdp.Ctx, lyr.Index())
 		}
 	}
@@ -195,7 +195,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	lg.Info("wait %v sec", sleep)
 	time.Sleep(sleep)
 	go app.sync.Start(cmdp.Ctx)
-	for msh.ProcessedLayer() < types.LayerID(expectedLayers) {
+	for msh.ProcessedLayer().Before(types.NewLayerID(expectedLayers)) {
 		lg.Info("sleep for %v sec", 30)
 		app.sync.ForceSync(context.TODO())
 		time.Sleep(30 * time.Second)

@@ -1,9 +1,10 @@
 package timesync
 
 import (
-	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // Clock defines the functionality needed from any clock type
@@ -51,8 +52,8 @@ func (t *TimeClock) startClock() {
 	t.log.Info("starting global clock now=%v genesis=%v %p", t.clock.Now(), t.startEpoch, t)
 
 	for {
-		currLayer := t.Ticker.TimeToLayer(t.clock.Now())    // get current layer
-		nextTickTime := t.Ticker.LayerToTime(currLayer + 1) // get next tick time for the next layer
+		currLayer := t.Ticker.TimeToLayer(t.clock.Now())       // get current layer
+		nextTickTime := t.Ticker.LayerToTime(currLayer.Add(1)) // get next tick time for the next layer
 		diff := nextTickTime.Sub(t.clock.Now())
 		tmr := time.NewTimer(diff)
 		t.log.With().Info("global clock going to sleep before next layer",

@@ -20,7 +20,6 @@ import (
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 
-	postConfig "github.com/spacemeshos/post/config"
 	"github.com/spf13/viper"
 )
 
@@ -38,17 +37,19 @@ var (
 // Config defines the top level configuration for a spacemesh node
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
-	P2P             p2pConfig.Config      `mapstructure:"p2p"`
-	API             apiConfig.Config      `mapstructure:"api"`
-	HARE            hareConfig.Config     `mapstructure:"hare"`
-	HareEligibility eligConfig.Config     `mapstructure:"hare-eligibility"`
-	TortoiseBeacon  tortoisebeacon.Config `mapstructure:"tortoise-beacon"`
-	TIME            timeConfig.TimeConfig `mapstructure:"time"`
-	REWARD          mesh.Config           `mapstructure:"reward"`
-	POST            postConfig.Config     `mapstructure:"post"`
-	LOGGING         LoggerConfig          `mapstructure:"logging"`
-	LAYERS          layerfetcher.Config   `mapstructure:"layer-fetch"`
-	FETCH           fetch.Config          `mapstructure:"fetch"`
+	Genesis         *apiConfig.GenesisConfig `mapstructure:"genesis"`
+	P2P             p2pConfig.Config         `mapstructure:"p2p"`
+	API             apiConfig.Config         `mapstructure:"api"`
+	HARE            hareConfig.Config        `mapstructure:"hare"`
+	HareEligibility eligConfig.Config        `mapstructure:"hare-eligibility"`
+	TortoiseBeacon  tortoisebeacon.Config    `mapstructure:"tortoise-beacon"`
+	TIME            timeConfig.TimeConfig    `mapstructure:"time"`
+	REWARD          mesh.Config              `mapstructure:"reward"`
+	POST            activation.PostConfig    `mapstructure:"post"`
+	SMESHING        SmeshingConfig           `mapstructure:"smeshing"`
+	LOGGING         LoggerConfig             `mapstructure:"logging"`
+	LAYERS          layerfetcher.Config      `mapstructure:"layer-fetch"`
+	FETCH           fetch.Config             `mapstructure:"fetch"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -80,25 +81,17 @@ type BaseConfig struct {
 	GenesisTime      string `mapstructure:"genesis-time"`
 	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
 	LayerAvgSize     int    `mapstructure:"layer-average-size"`
-	LayersPerEpoch   int    `mapstructure:"layers-per-epoch"`
-	Hdist            int    `mapstructure:"hdist"`                     // hare/input vector lookback distance
-	Zdist            int    `mapstructure:"zdist"`                     // hare result wait distance
-	ConfidenceParam  int    `mapstructure:"tortoise-confidence-param"` // layers to wait for global consensus
-	WindowSize       int    `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)
+	LayersPerEpoch   uint32 `mapstructure:"layers-per-epoch"`
+	Hdist            uint32 `mapstructure:"hdist"`                     // hare/input vector lookback distance
+	Zdist            uint32 `mapstructure:"zdist"`                     // hare result wait distance
+	ConfidenceParam  uint32 `mapstructure:"tortoise-confidence-param"` // layers to wait for global consensus
+	WindowSize       uint32 `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)
 	GlobalThreshold  uint8  `mapstructure:"tortoise-global-threshold"` // threshold for finalizing blocks and layers
 	LocalThreshold   uint8  `mapstructure:"tortoise-local-threshold"`  // threshold for choosing when to use weak coin
 
 	PoETServer string `mapstructure:"poet-server"`
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
-
-	GenesisConfPath string `mapstructure:"genesis-conf"`
-
-	GenesisTotalWeight uint64 `mapstructure:"genesis-total-weight"` // the total weight for genesis
-
-	CoinbaseAccount string `mapstructure:"coinbase"`
-
-	SpaceToCommit uint64 `mapstructure:"space-to-commit"` // Number of bytes to commit to mining
 
 	GoldenATXID string `mapstructure:"golden-atx"`
 
@@ -111,8 +104,6 @@ type BaseConfig struct {
 	SyncValidationDelta int `mapstructure:"sync-validation-delta"` // sync interval in seconds
 
 	PublishEventsURL string `mapstructure:"events-url"`
-
-	StartMining bool `mapstructure:"start-mining"`
 
 	AtxsPerBlock int `mapstructure:"atxs-per-block"`
 
@@ -150,9 +141,16 @@ type LoggerConfig struct {
 	BlockBuilderLoggerLevel   string `mapstructure:"block-builder"`
 	BlockListenerLoggerLevel  string `mapstructure:"block-listener"`
 	PoetListenerLoggerLevel   string `mapstructure:"poet"`
-	NipstBuilderLoggerLevel   string `mapstructure:"nipst"`
+	NipostBuilderLoggerLevel  string `mapstructure:"nipost"`
 	AtxBuilderLoggerLevel     string `mapstructure:"atx-builder"`
 	HareBeaconLoggerLevel     string `mapstructure:"hare-beacon"`
+}
+
+// SmeshingConfig defines configuration for the node's smeshing (mining).
+type SmeshingConfig struct {
+	Start           bool                     `mapstructure:"smeshing-start"`
+	CoinbaseAccount string                   `mapstructure:"smeshing-coinbase"`
+	Opts            activation.PostSetupOpts `mapstructure:"smeshing-opts"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
@@ -166,7 +164,8 @@ func DefaultConfig() Config {
 		TortoiseBeacon:  tortoisebeacon.DefaultConfig(),
 		TIME:            timeConfig.DefaultConfig(),
 		REWARD:          mesh.DefaultMeshConfig(),
-		POST:            activation.DefaultConfig(),
+		POST:            activation.DefaultPostConfig(),
+		SMESHING:        DefaultSmeshingConfig(),
 		FETCH:           fetch.DefaultConfig(),
 		LAYERS:          layerfetcher.DefaultConfig(),
 	}
@@ -206,14 +205,21 @@ func defaultBaseConfig() BaseConfig {
 		WindowSize:          100, // should be "a few thousand layers" in production
 		GlobalThreshold:     60,  // in percentage terms, must be in interval [0, 100]
 		LocalThreshold:      20,  // in percentage terms, must be in interval [0, 100]
-		GenesisActiveSet:    5,
-		GenesisTotalWeight:  5 * 1024 * 1, // 5 miners * 1024 byte PoST * 1 PoET ticks
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,
 		SyncValidationDelta: 300,
 		AtxsPerBlock:        100,
 		TxsPerBlock:         100,
+	}
+}
+
+// DefaultSmeshingConfig returns the node's default smeshing configuration.
+func DefaultSmeshingConfig() SmeshingConfig {
+	return SmeshingConfig{
+		Start:           false,
+		CoinbaseAccount: "",
+		Opts:            activation.DefaultPostSetupOpts(),
 	}
 }
 
@@ -234,7 +240,7 @@ func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
 
 	if err != nil {
 		if fileLocation != defaultConfigFileName {
-			log.Warning("failed loading config from %v trying %v", fileLocation, defaultConfigFileName)
+			log.Warning("failed loading config from %v trying %v. error %v", fileLocation, defaultConfigFileName, err)
 			vip.SetConfigFile(defaultConfigFileName)
 			err = vip.ReadInConfig()
 		}

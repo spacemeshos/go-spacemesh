@@ -25,12 +25,12 @@ type Config struct {
 	Database        blockDataProvider
 	ATXDB           atxDataProvider
 	Clock           layerClock
-	Hdist           int   // hare lookback distance: the distance over which we use the input vector/hare results
-	Zdist           int   // hare result wait distance: the distance over which we're willing to wait for hare results
-	ConfidenceParam int   // confidence wait distance: how long we wait for global consensus to be established
-	GlobalThreshold uint8 // threshold required to finalize blocks and layers (0-100)
-	LocalThreshold  uint8 // threshold that determines whether a node votes based on local or global opinion (0-100)
-	WindowSize      int   // tortoise sliding window: how many layers we store data for
+	Hdist           uint32 // hare lookback distance: the distance over which we use the input vector/hare results
+	Zdist           uint32 // hare result wait distance: the distance over which we're willing to wait for hare results
+	ConfidenceParam uint32 // confidence wait distance: how long we wait for global consensus to be established
+	GlobalThreshold uint8  // threshold required to finalize blocks and layers (0-100)
+	LocalThreshold  uint8  // threshold that determines whether a node votes based on local or global opinion (0-100)
+	WindowSize      uint32 // tortoise sliding window: how many layers we store data for
 	Log             log.Log
 	Recovered       bool
 	RerunInterval   time.Duration // how often to rerun from genesis
@@ -67,14 +67,14 @@ func verifyingTortoise(
 	hdist,
 	zdist,
 	confidenceParam,
-	windowSize int,
+	windowSize uint32,
 	globalThreshold,
 	localThreshold uint8,
 	rerunInterval time.Duration,
 	logger log.Log,
 ) *ThreadSafeVerifyingTortoise {
 	if hdist < zdist {
-		logger.With().Panic("hdist must be >= zdist", log.Int("hdist", hdist), log.Int("zdist", zdist))
+		logger.With().Panic("hdist must be >= zdist", log.Uint32("hdist", hdist), log.Uint32("zdist", zdist))
 	}
 	if globalThreshold > 100 || localThreshold > 100 {
 		logger.With().Panic("global and local threshold values must be in the interval [0, 100]")
@@ -222,7 +222,7 @@ func (trtl *ThreadSafeVerifyingTortoise) rerunFromGenesis(ctx context.Context) (
 	bdp := bdpWrapper{blockDataProvider: trtlForRerun.bdp}
 	trtlForRerun.bdp = &bdp
 
-	for layerID := types.GetEffectiveGenesis(); layerID <= trtl.trtl.Last; layerID++ {
+	for layerID := types.GetEffectiveGenesis(); !layerID.After(trtl.trtl.Last); layerID = layerID.Add(1) {
 		logger.With().Debug("rerunning tortoise for layer", layerID)
 		if err := trtlForRerun.HandleIncomingLayer(ctx, layerID); err != nil {
 			logger.With().Error("tortoise rerun errored", log.Err(err))

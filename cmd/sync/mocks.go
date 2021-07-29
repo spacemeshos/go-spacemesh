@@ -49,13 +49,11 @@ func (m *meshValidatorMock) HandleIncomingLayer(ctx context.Context, lyr types.L
 	}
 	m.validatedLayers[lyr] = struct{}{}
 	time.Sleep(m.delay)
-	return lyr, lyr - 1, false
+	return lyr, lyr.Sub(1), false
 }
-func (m *meshValidatorMock) HandleLateBlocks(ctx context.Context, bl []*types.Block) (types.LayerID, types.LayerID) {
-	if len(bl) != 1 {
-		panic("expected a single block as input")
-	}
-	return bl[0].Layer(), bl[0].Layer() - 1
+
+func (m *meshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
+	return bl.Layer(), bl.Layer().Sub(1)
 }
 
 type mockState struct{}
@@ -82,10 +80,10 @@ func (*mockIStore) GetIdentity(string) (types.NodeID, error) {
 
 type validatorMock struct{}
 
-func (*validatorMock) Validate(signing.PublicKey, *types.NIPST, uint64, types.Hash32) error {
+func (*validatorMock) Validate(signing.PublicKey, *types.NIPost, types.Hash32, uint) error {
 	return nil
 }
-func (*validatorMock) VerifyPost(signing.PublicKey, *types.PostProof, uint64) error { return nil }
+func (*validatorMock) ValidatePost([]byte, *types.Post, *types.PostMetadata, uint) error { return nil }
 
 type mockClock struct {
 	ch         map[timesync.LayerTimer]int
@@ -170,7 +168,7 @@ func createFetcherWithMock(dbs *allDbs, msh *mesh.Mesh, swarm service.Service, l
 }
 
 func createSyncer(conf syncer.Configuration, msh *mesh.Mesh, layerFetch *layerfetcher.Logic, expectedLayers types.LayerID, lg log.Log) *syncer.Syncer {
-	clock := mockClock{Layer: expectedLayers + 1}
+	clock := mockClock{Layer: expectedLayers.Add(1)}
 	lg.Info("current layer %v", clock.GetCurrentLayer())
 
 	layerFetch.Start()

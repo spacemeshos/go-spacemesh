@@ -173,7 +173,7 @@ func (mev *mockEligibilityValidator) Validate(ctx context.Context, msg *Msg) boo
 type mockOracle struct {
 }
 
-func (mo *mockOracle) Eligible(instanceID, int32, string, []byte) bool {
+func (mo *mockOracle) Eligible(types.LayerID, int32, string, []byte) bool {
 	return true
 }
 
@@ -293,7 +293,7 @@ func generateConsensusProcess(t *testing.T) *consensusProcess {
 	oracle.Register(true, edPubkey.String())
 	output := make(chan TerminationOutput, 1)
 
-	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, edSigner, types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}, n1, output, truer{}, log.NewDefault(edPubkey.String()))
+	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, edSigner, types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}, n1, output, truer{}, log.AppLog.WithName(edPubkey.String()))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
@@ -328,7 +328,7 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	assert.Nil(t, verifier)
 	assert.Equal(t, builder.inner.K, proc.k)
 	assert.Equal(t, builder.inner.Ki, proc.ki)
-	assert.Equal(t, instanceID(builder.inner.InstanceID), proc.instanceID)
+	assert.Equal(t, builder.inner.InstanceID, proc.instanceID)
 }
 
 func TestConsensusProcess_isEligible(t *testing.T) {

@@ -78,6 +78,11 @@ func JSONLog(b bool) {
 	initLogging()
 }
 
+// NewNop creates silent logger.
+func NewNop() Log {
+	return NewFromLog(zap.NewNop())
+}
+
 // NewWithLevel creates a logger with a fixed level and with a set of (optional) hooks
 func NewWithLevel(module string, level zap.AtomicLevel, hooks ...func(zapcore.Entry) error) Log {
 	consoleSyncer := zapcore.AddSync(logwriter)
