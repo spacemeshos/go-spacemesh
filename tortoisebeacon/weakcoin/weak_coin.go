@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -20,8 +21,22 @@ const (
 	// GossipProtocol is weak coin Gossip protocol name.
 	GossipProtocol = "WeakCoinGossip"
 
-	defaultThreshold = "8000000000000000000000000000000000000000000000000000000000000000"
+	defaultThreshold = "0x8000000000000000000000000000000000000000000000000000000000000000"
 )
+
+func DefaultConfig() Config {
+	return Config{
+		Threshold:           util.FromHex(defaultThreshold),
+		VRFPrefix:           proposalPrefix,
+		NextRoundBufferSize: 10000, // ~1mb given the size of Message is ~100b
+	}
+}
+
+type Config struct {
+	Threshold           []byte
+	VRFPrefix           string
+	NextRoundBufferSize int
+}
 
 type broadcaster interface {
 	Broadcast(ctx context.Context, channel string, data []byte) error
@@ -46,17 +61,11 @@ type UnitAllowances map[string]uint64
 type Message struct {
 	Epoch     types.EpochID
 	Round     types.RoundID
-	Unit      uint16
+	Unit      uint64
 	Signature []byte
 }
 
 type Option func(*WeakCoin)
-
-func WithThreshold(buf []byte) Option {
-	return func(wc *WeakCoin) {
-		wc.threshold = buf
-	}
-}
 
 func WithLog(logger log.Log) Option {
 	return func(wc *WeakCoin) {
@@ -64,9 +73,9 @@ func WithLog(logger log.Log) Option {
 	}
 }
 
-func WithNextRoundBufferSize(size int) Option {
+func WithConfig(config Config) Option {
 	return func(wc *WeakCoin) {
-		wc.nextRoundBufSize = size
+		wc.config = config
 	}
 }
 
@@ -79,6 +88,7 @@ func New(
 ) *WeakCoin {
 	wc := &WeakCoin{
 		logger:   log.NewNop(),
+		config:   DefaultConfig(),
 		signer:   signer,
 		verifier: verifier,
 		net:      net,
@@ -87,17 +97,16 @@ func New(
 	for _, opt := range opts {
 		opt(wc)
 	}
-	wc.nextRoundBuffer = make([]Message, 0, wc.nextRoundBufSize)
+	wc.nextRoundBuffer = make([]Message, 0, wc.config.NextRoundBufferSize)
 	return wc
 }
 
 type WeakCoin struct {
-	logger           log.Log
-	verifier         signing.Verifier
-	signer           signing.Signer
-	threshold        []byte
-	nextRoundBufSize int
-	net              broadcaster
+	logger   log.Log
+	config   Config
+	verifier signing.Verifier
+	signer   signing.Signer
+	net      broadcaster
 
 	mu         sync.RWMutex
 	epoch      types.EpochID
@@ -108,7 +117,7 @@ type WeakCoin struct {
 	// nextRoundBuffer is used to optimistically buffer messages from the next round.
 	// we will avoid problems with some messages being lost simply because one node was slightly
 	// faster then the other.
-	// TODO(dshulyak) append to it in broadcast handler, and iterator over when StartRound is called
+	// TODO(dshulyak) append to it in broadcast handler, and iterate over when StartRound is called
 	nextRoundBuffer []Message
 }
 
@@ -124,57 +133,73 @@ func (wc *WeakCoin) Get(round types.RoundID) bool {
 }
 
 func (wc *WeakCoin) publishProposal(ctx context.Context) error {
+	wc.mu.RLock()
 	wc.logger.With().Debug("publishing proposal",
 		log.Uint32("epoch_id", uint32(wc.epoch)),
 		log.Uint64("round_id", uint64(wc.round)))
 	var (
 		broadcast []byte
 		smallest  []byte
+		epoch     = wc.epoch
+		round     = wc.round
 	)
+	wc.mu.RUnlock()
+
 	for unit := uint64(1); unit <= wc.allowances[string(wc.signer.PublicKey().Bytes())]; unit++ {
-		proposal := wc.encodeProposal(wc.epoch, wc.round, uint16(unit))
+		proposal := wc.encodeProposal(epoch, round, unit)
 		signature := wc.signer.Sign(proposal)
 		if wc.exceedsThreshold(signature) {
-			// If a proposal exceeds the threshold, it is not sent.
 			continue
 		}
+		if smallest == nil || bytes.Compare(signature, smallest) == -1 {
+			message := Message{
+				Epoch:     epoch,
+				Round:     round,
+				Unit:      unit,
+				Signature: signature,
+			}
+			msg, err := types.InterfaceToBytes(message)
+			if err != nil {
+				wc.logger.Panic("can't serialize weak coin", log.Err(err))
+			}
 
-		message := Message{
-			Epoch:     wc.epoch,
-			Round:     wc.round,
-			Unit:      uint16(unit),
-			Signature: signature,
-		}
-		msg, err := types.InterfaceToBytes(message)
-		if err != nil {
-			wc.logger.Panic("can't serialize weak coin", log.Err(err))
-		}
-		if bytes.Compare(signature, smallest) == -1 {
 			broadcast = msg
 			smallest = signature
 		}
+
 	}
 	if err := wc.net.Broadcast(ctx, GossipProtocol, broadcast); err != nil {
 		return fmt.Errorf("failed to broadcast weak coin message: %w", err)
 	}
+
 	wc.logger.With().Info("published proposal",
-		log.Uint32("epoch_id", uint32(wc.epoch)),
-		log.Uint64("round_id", uint64(wc.round)),
+		log.Uint32("epoch_id", uint32(epoch)),
+		log.Uint64("round_id", uint64(round)),
 		log.String("proposal", types.BytesToHash(smallest).ShortString()))
 
-	if smallest != nil && bytes.Compare(smallest, wc.vrf) == -1 {
-		wc.vrf = smallest
+	wc.mu.Lock()
+	defer wc.mu.Unlock()
+	if wc.epoch != epoch || wc.round != round {
+		// another epoch/round was started concurrently
+		return nil
 	}
+	wc.updateVrf(smallest)
 	return nil
 }
 
-func (wc *WeakCoin) exceedsThreshold(proposal []byte) bool {
-	return bytes.Compare(proposal, wc.threshold) == 1
+func (wc *WeakCoin) updateVrf(proposal []byte) {
+	if len(proposal) > 0 && (bytes.Compare(proposal, wc.vrf) == -1 || wc.vrf == nil) {
+		wc.vrf = proposal
+	}
 }
 
-func (wc *WeakCoin) encodeProposal(epoch types.EpochID, round types.RoundID, unit uint16) []byte {
+func (wc *WeakCoin) exceedsThreshold(proposal []byte) bool {
+	return bytes.Compare(proposal, wc.config.Threshold) == 1
+}
+
+func (wc *WeakCoin) encodeProposal(epoch types.EpochID, round types.RoundID, unit uint64) []byte {
 	proposal := bytes.Buffer{}
-	proposal.WriteString(proposalPrefix)
+	proposal.WriteString(wc.config.VRFPrefix)
 	if _, err := proposal.Write(epoch.ToBytes()); err != nil {
 		wc.logger.Panic("can't write epoch to a buffer", log.Err(err))
 	}
@@ -183,8 +208,8 @@ func (wc *WeakCoin) encodeProposal(epoch types.EpochID, round types.RoundID, uni
 	if _, err := proposal.Write(roundBuf); err != nil {
 		wc.logger.Panic("can't write uint64 to a buffer", log.Err(err))
 	}
-	buf := make([]byte, 2)
-	binary.LittleEndian.PutUint16(buf, unit)
+	buf := make([]byte, 8)
+	binary.LittleEndian.PutUint64(buf, unit)
 	if _, err := proposal.Write(buf); err != nil {
 		wc.logger.Panic("can't write uint16 to a buffer", log.Err(err))
 	}
@@ -208,13 +233,12 @@ func (wc *WeakCoin) CompleteEpoch() {
 
 func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 	wc.mu.Lock()
-	defer wc.mu.Unlock()
 	wc.logger.With().Info("round started",
 		log.Uint32("epoch_id", uint32(wc.epoch)),
 		log.Uint64("round_id", uint64(round)))
-
 	wc.round = round
 	wc.vrf = nil
+	wc.mu.Unlock()
 	return wc.publishProposal(ctx)
 }
 

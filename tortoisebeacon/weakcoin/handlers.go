@@ -1,7 +1,6 @@
 package weakcoin
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
@@ -56,8 +55,6 @@ func (wc *WeakCoin) handleWeakCoinMessage(message Message) error {
 		log.Uint64("epoch_id", uint64(message.Epoch)),
 		log.Uint64("round_id", uint64(message.Round)),
 		log.String("proposal", types.BytesToHash(message.Signature).ShortString()))
-	if bytes.Compare(message.Signature, wc.vrf) == -1 {
-		wc.vrf = message.Signature
-	}
+	wc.updateVrf(message.Signature)
 	return nil
 }
