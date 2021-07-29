@@ -1,5 +1,7 @@
 package signing
 
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interfaces.go Signer,Verifier
+
 // Signer ...
 type Signer interface {
 	Sign([]byte) []byte

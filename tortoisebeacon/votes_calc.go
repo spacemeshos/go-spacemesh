@@ -156,7 +156,7 @@ func (tb *TortoiseBeacon) calcOwnFirstRoundVotes(epoch types.EpochID, votesMargi
 	}
 
 	votingThreshold := tb.votingThreshold(epochWeight)
-	coinToss := tb.weakCoin.Get(1)
+	coinToss := tb.weakCoin.Get(epoch, 1)
 
 	for vote, margin := range votesMargin {
 		switch {
@@ -239,9 +239,9 @@ func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, round ty
 			ownCurrentRoundVotes.ValidVotes[vote] = struct{}{}
 		case weightCount <= -votingThreshold:
 			ownCurrentRoundVotes.InvalidVotes[vote] = struct{}{}
-		case tb.weakCoin.Get(round):
+		case tb.weakCoin.Get(epoch, round):
 			ownCurrentRoundVotes.ValidVotes[vote] = struct{}{}
-		case !tb.weakCoin.Get(round):
+		case !tb.weakCoin.Get(epoch, round):
 			ownCurrentRoundVotes.InvalidVotes[vote] = struct{}{}
 		}
 	}

@@ -36,7 +36,10 @@ type Config struct {
 	Threshold           []byte
 	VRFPrefix           string
 	NextRoundBufferSize int
+	MaxRound            types.RoundID
 }
+
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./weak_coin.go
 
 type broadcaster interface {
 	Broadcast(ctx context.Context, channel string, data []byte) error
@@ -49,7 +52,7 @@ type Coin interface {
 	StartEpoch(types.EpochID, UnitAllowances)
 	StartRound(context.Context, types.RoundID) error
 	CompleteRound()
-	Get(types.RoundID) bool
+	Get(types.EpochID, types.RoundID) bool
 	CompleteEpoch()
 	HandleSerializedMessage(context.Context, service.GossipMessage, service.Fetcher)
 }
@@ -108,44 +111,102 @@ type WeakCoin struct {
 	signer   signing.Signer
 	net      broadcaster
 
-	mu         sync.RWMutex
-	epoch      types.EpochID
-	round      types.RoundID
-	vrf        []byte
-	allowances UnitAllowances
-	coins      map[types.RoundID]bool
+	mu               sync.RWMutex
+	epoch            types.EpochID
+	round            types.RoundID
+	smallestProposal []byte
+	allowances       UnitAllowances
 	// nextRoundBuffer is used to optimistically buffer messages from the next round.
-	// we will avoid problems with some messages being lost simply because one node was slightly
-	// faster then the other.
-	// TODO(dshulyak) append to it in broadcast handler, and iterate over when StartRound is called
 	nextRoundBuffer []Message
+	coins           map[types.RoundID]bool
 }
 
 // Get the result of the coinflip in this round. It is only valid inbetween StartEpoch/EndEpoch
 // and only after CompleteRound was called.
-func (wc *WeakCoin) Get(round types.RoundID) bool {
-	wc.mu.RLock()
-	defer wc.mu.RUnlock()
-	if wc.epoch.IsGenesis() {
+func (wc *WeakCoin) Get(epoch types.EpochID, round types.RoundID) bool {
+	if epoch.IsGenesis() {
 		return false
 	}
+
+	wc.mu.RLock()
+	defer wc.mu.RUnlock()
+	if wc.epoch != epoch {
+		wc.logger.Panic("requested epoch wasn't started or already completed",
+			log.Uint32("started_epoch", uint32(wc.epoch)),
+			log.Uint32("requested_epoch", uint32(epoch)))
+	}
+
 	return wc.coins[round]
 }
 
-func (wc *WeakCoin) publishProposal(ctx context.Context) error {
-	wc.mu.RLock()
-	wc.logger.With().Debug("publishing proposal",
+func (wc *WeakCoin) StartEpoch(epoch types.EpochID, allowances UnitAllowances) {
+	wc.mu.Lock()
+	defer wc.mu.Unlock()
+	wc.epoch = epoch
+	wc.allowances = allowances
+}
+
+func (wc *WeakCoin) CompleteEpoch() {
+	wc.mu.Lock()
+	defer wc.mu.Unlock()
+	wc.allowances = nil
+	wc.coins = map[types.RoundID]bool{}
+	wc.round = 0
+}
+
+func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
+	wc.mu.Lock()
+	wc.logger.With().Info("started round",
 		log.Uint32("epoch_id", uint32(wc.epoch)),
-		log.Uint64("round_id", uint64(wc.round)))
+		log.Uint64("round_id", uint64(round)))
+	wc.round = round
+	wc.smallestProposal = nil
+	epoch := wc.epoch
+	for i, msg := range wc.nextRoundBuffer {
+		if msg.Epoch != wc.epoch || msg.Round != wc.round {
+			continue
+		}
+		if err := wc.updateProposal(msg); err != nil {
+			wc.logger.With().Debug("received invalid proposal",
+				log.Err(err),
+				log.Uint32("epoch_id", uint32(msg.Epoch)),
+				log.Uint64("round_id", uint64(msg.Round)))
+		}
+		wc.nextRoundBuffer[i].Epoch = 0
+		wc.nextRoundBuffer[i].Round = 0
+		wc.nextRoundBuffer[i].Unit = 0
+		wc.nextRoundBuffer[i].Signature = nil
+	}
+	wc.nextRoundBuffer = wc.nextRoundBuffer[:0]
+	wc.mu.Unlock()
+	return wc.publishProposal(ctx, epoch, round)
+}
+
+func (wc *WeakCoin) updateProposal(message Message) error {
+	buf := wc.encodeProposal(message.Epoch, message.Round, message.Unit)
+	miner, err := wc.verifier.Extract(buf, message.Signature)
+	if err != nil {
+		return fmt.Errorf("can't recover miner id from signature: %w", err)
+	}
+	allowed, exists := wc.allowances[string(miner.Bytes())]
+	if !exists || allowed < message.Unit {
+		return fmt.Errorf("miner %x is not allowed to submit proposal for unit %d", miner, message.Unit)
+	}
+	wc.updateSmallest(message.Signature)
+	return nil
+}
+
+func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, round types.RoundID) error {
 	var (
 		broadcast []byte
 		smallest  []byte
-		epoch     = wc.epoch
-		round     = wc.round
+		// TODO(dshulyak) double check that 10 means that 10 units are allowed
+		allowed, exists = wc.allowances[string(wc.signer.PublicKey().Bytes())]
 	)
-	wc.mu.RUnlock()
-
-	for unit := uint64(1); unit <= wc.allowances[string(wc.signer.PublicKey().Bytes())]; unit++ {
+	if !exists {
+		return nil
+	}
+	for unit := uint64(0); unit < allowed; unit++ {
 		proposal := wc.encodeProposal(epoch, round, unit)
 		signature := wc.signer.Sign(proposal)
 		if wc.exceedsThreshold(signature) {
@@ -160,14 +221,18 @@ func (wc *WeakCoin) publishProposal(ctx context.Context) error {
 			}
 			msg, err := types.InterfaceToBytes(message)
 			if err != nil {
-				wc.logger.Panic("can't serialize weak coin", log.Err(err))
+				wc.logger.Panic("can't serialize weak coin message", log.Err(err))
 			}
 
 			broadcast = msg
 			smallest = signature
 		}
-
 	}
+	// nothing to send is valid if all proposals are exceeding threshold
+	if broadcast == nil {
+		return nil
+	}
+
 	if err := wc.net.Broadcast(ctx, GossipProtocol, broadcast); err != nil {
 		return fmt.Errorf("failed to broadcast weak coin message: %w", err)
 	}
@@ -183,13 +248,38 @@ func (wc *WeakCoin) publishProposal(ctx context.Context) error {
 		// another epoch/round was started concurrently
 		return nil
 	}
-	wc.updateVrf(smallest)
+	wc.updateSmallest(smallest)
 	return nil
 }
 
-func (wc *WeakCoin) updateVrf(proposal []byte) {
-	if len(proposal) > 0 && (bytes.Compare(proposal, wc.vrf) == -1 || wc.vrf == nil) {
-		wc.vrf = proposal
+func (wc *WeakCoin) CompleteRound() {
+	wc.mu.Lock()
+	defer wc.mu.Unlock()
+	if wc.smallestProposal == nil {
+		wc.logger.With().Error("completed round without valid proposals",
+			log.Uint32("epoch_id", uint32(wc.epoch)),
+			log.Uint64("round_id", uint64(wc.round)),
+		)
+		return
+	}
+	coinflip := wc.smallestProposal[0]&1 == 1
+
+	wc.coins[wc.round] = coinflip
+	wc.logger.With().Info("completed round",
+		log.Uint32("epoch_id", uint32(wc.epoch)),
+		log.Uint64("round_id", uint64(wc.round)),
+		log.String("smallest", hex.EncodeToString(wc.smallestProposal)),
+		log.Bool("coinflip", coinflip))
+	wc.smallestProposal = nil
+}
+
+func (wc *WeakCoin) updateSmallest(proposal []byte) {
+	if len(proposal) > 0 && (bytes.Compare(proposal, wc.smallestProposal) == -1 || wc.smallestProposal == nil) {
+		wc.logger.Debug("saving new proposal",
+			log.Uint32("epoch_id", uint32(wc.epoch)),
+			log.Uint64("round_id", uint64(wc.round)),
+			log.String("proposal", types.BytesToHash(proposal).ShortString()))
+		wc.smallestProposal = proposal
 	}
 }
 
@@ -214,51 +304,4 @@ func (wc *WeakCoin) encodeProposal(epoch types.EpochID, round types.RoundID, uni
 		wc.logger.Panic("can't write uint16 to a buffer", log.Err(err))
 	}
 	return proposal.Bytes()
-}
-
-func (wc *WeakCoin) StartEpoch(epoch types.EpochID, allowances UnitAllowances) {
-	wc.mu.Lock()
-	defer wc.mu.Unlock()
-	wc.epoch = epoch
-	wc.allowances = allowances
-}
-
-func (wc *WeakCoin) CompleteEpoch() {
-	wc.mu.Lock()
-	defer wc.mu.Unlock()
-	wc.epoch = 0
-	wc.allowances = nil
-	wc.coins = map[types.RoundID]bool{}
-}
-
-func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
-	wc.mu.Lock()
-	wc.logger.With().Info("round started",
-		log.Uint32("epoch_id", uint32(wc.epoch)),
-		log.Uint64("round_id", uint64(round)))
-	wc.round = round
-	wc.vrf = nil
-	wc.mu.Unlock()
-	return wc.publishProposal(ctx)
-}
-
-func (wc *WeakCoin) CompleteRound() {
-	wc.mu.Lock()
-	defer wc.mu.Unlock()
-	if wc.vrf == nil {
-		return
-		// TODO(dshulyak) consider to panic here. if used correctly this should never be called twice
-		// in the same round.
-		// wc.logger.Panic("round wasn't started")
-	}
-
-	coinflip := wc.vrf[0]&1 == 1
-	wc.coins[wc.round] = coinflip
-	wc.logger.With().Info("completed round",
-		log.Uint32("epoch_id", uint32(wc.epoch)),
-		log.Uint64("round_id", uint64(wc.round)),
-		log.String("smallest", hex.EncodeToString(wc.vrf)),
-		log.Bool("coinflip", coinflip))
-	wc.round = 0
-	wc.vrf = nil
 }
