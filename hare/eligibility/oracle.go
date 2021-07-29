@@ -5,22 +5,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/hashicorp/golang-lru"
-	"github.com/nullstyle/go-xdr/xdr3"
+	"sync"
+
+	lru "github.com/hashicorp/golang-lru"
+	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/fixed"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"sync"
 )
 
 const vrfMsgCacheSize = 20       // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
 const activesCacheSize = 5       // we don't expect to handle more than two layers concurrently
 const maxSupportedN = 1073741824 // higher values result in an overflow
-
-var (
-	errGenesis = errors.New("no data about active nodes for genesis")
-)
 
 type valueProvider interface {
 	Value(context.Context, types.EpochID) (uint32, error)
@@ -49,19 +46,16 @@ type verifierFunc = func(pub, msg, sig []byte) bool
 
 // Oracle is the hare eligibility oracle
 type Oracle struct {
-	lock               sync.Mutex
-	beacon             valueProvider
-	atxdb              atxProvider
-	meshdb             meshProvider
-	vrfSigner          signer
-	vrfVerifier        verifierFunc
-	layersPerEpoch     uint16
-	spacePerUnit       uint64
-	vrfMsgCache        addGet
-	activesCache       addGet
-	genesisTotalWeight uint64
-	genesisMinerWeight uint64
-	cfg                eCfg.Config
+	lock           sync.Mutex
+	beacon         valueProvider
+	atxdb          atxProvider
+	meshdb         meshProvider
+	vrfSigner      signer
+	vrfVerifier    verifierFunc
+	layersPerEpoch uint32
+	vrfMsgCache    addGet
+	activesCache   addGet
+	cfg            eCfg.Config
 	log.Log
 }
 
@@ -70,32 +64,32 @@ type Oracle struct {
 // blocks), defined to be confidence param number of layers prior to the input layer.
 func safeLayerRange(
 	targetLayer types.LayerID,
-	safetyParam uint16,
-	layersPerEpoch uint16,
-	epochOffset uint16,
+	safetyParam,
+	layersPerEpoch,
+	epochOffset uint32,
 ) (safeLayerStart, safeLayerEnd types.LayerID) {
 	// prevent overflow
-	if targetLayer <= types.LayerID(safetyParam) {
+	if targetLayer.Uint32() <= safetyParam {
 		return types.GetEffectiveGenesis(), types.GetEffectiveGenesis()
 	}
-	safeLayer := targetLayer - types.LayerID(safetyParam)
+	safeLayer := targetLayer.Sub(safetyParam)
 	safeEpoch := safeLayer.GetEpoch()
 	safeLayerStart = safeEpoch.FirstLayer()
 	safeLayerEnd = safeLayerStart.Add(epochOffset)
 
 	// If the safe layer is in the first epochOffset layers of an epoch,
 	// return a range from the beginning of the previous epoch
-	if safeLayer < safeLayerEnd {
+	if safeLayer.Before(safeLayerEnd) {
 		// prevent overflow
-		if safeLayerStart <= types.LayerID(layersPerEpoch) {
+		if safeLayerStart.Uint32() <= layersPerEpoch {
 			return types.GetEffectiveGenesis(), types.GetEffectiveGenesis()
 		}
-		safeLayerStart = safeLayerStart - types.LayerID(layersPerEpoch)
-		safeLayerEnd = safeLayerEnd - types.LayerID(layersPerEpoch)
+		safeLayerStart = safeLayerStart.Sub(layersPerEpoch)
+		safeLayerEnd = safeLayerEnd.Sub(layersPerEpoch)
 	}
 
 	// If any portion of the range is in the genesis layers, just return the effective genesis
-	if safeLayerStart <= types.GetEffectiveGenesis() {
+	if !safeLayerStart.After(types.GetEffectiveGenesis()) {
 		return types.GetEffectiveGenesis(), types.GetEffectiveGenesis()
 	}
 
@@ -109,8 +103,7 @@ func New(
 	meshdb meshProvider,
 	vrfVerifier verifierFunc,
 	vrfSigner signer,
-	layersPerEpoch uint16,
-	spacePerUnit, genesisTotalWeight, genesisMinerWeight uint64,
+	layersPerEpoch uint32,
 	cfg eCfg.Config,
 	logger log.Log) *Oracle {
 	vmc, err := lru.New(vrfMsgCacheSize)
@@ -124,19 +117,16 @@ func New(
 	}
 
 	return &Oracle{
-		beacon:             beacon,
-		atxdb:              atxdb,
-		meshdb:             meshdb,
-		vrfVerifier:        vrfVerifier,
-		vrfSigner:          vrfSigner,
-		layersPerEpoch:     layersPerEpoch,
-		spacePerUnit:       spacePerUnit,
-		vrfMsgCache:        vmc,
-		activesCache:       ac,
-		genesisTotalWeight: genesisTotalWeight,
-		genesisMinerWeight: genesisMinerWeight,
-		cfg:                cfg,
-		Log:                logger,
+		beacon:         beacon,
+		atxdb:          atxdb,
+		meshdb:         meshdb,
+		vrfVerifier:    vrfVerifier,
+		vrfSigner:      vrfSigner,
+		layersPerEpoch: layersPerEpoch,
+		vrfMsgCache:    vmc,
+		activesCache:   ac,
+		cfg:            cfg,
+		Log:            logger,
 	}
 }
 
@@ -147,7 +137,7 @@ type vrfMessage struct {
 }
 
 func buildKey(l types.LayerID, r int32) [2]uint64 {
-	return [2]uint64{uint64(l), uint64(r)}
+	return [2]uint64{uint64(l.Uint32()), uint64(r)}
 }
 
 // buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round)
@@ -190,10 +180,6 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 func (o *Oracle) totalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
 	actives, err := o.actives(ctx, layer)
 	if err != nil {
-		if err == errGenesis { // we are in genesis
-			return o.genesisTotalWeight, nil
-		}
-
 		o.WithContext(ctx).With().Error("totalWeight erred while calling actives func", log.Err(err), layer)
 		return 0, err
 	}
@@ -208,10 +194,6 @@ func (o *Oracle) totalWeight(ctx context.Context, layer types.LayerID) (uint64, 
 func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error) {
 	actives, err := o.actives(ctx, layer)
 	if err != nil {
-		if err == errGenesis { // we are in genesis
-			return o.genesisMinerWeight, nil
-		}
-
 		o.With().Error("minerWeight erred while calling actives func", log.Err(err), layer)
 		return 0, err
 	}
@@ -277,38 +259,32 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
-	minerUnits := minerWeight / o.spacePerUnit
-	// TODO: Consider checking/disallowing space not in round units
-	totalUnits := totalWeight / o.spacePerUnit
-	// TODO: If space is not in round units, only consider the amount of space in round units for the total weight
-
 	logger.With().Info("prep",
 		log.Uint64("minerWeight", minerWeight),
 		log.Uint64("totalWeight", totalWeight),
-		log.Uint64("o.spacePerUnit", o.spacePerUnit),
 	)
-	n = int(minerUnits)
+	n = int(minerWeight)
 
 	// ensure miner weight fits in int
-	if uint64(n) != minerUnits {
-		logger.Panic(fmt.Sprintf("minerUnits overflows int (%d)", minerUnits))
+	if uint64(n) != minerWeight {
+		logger.Panic(fmt.Sprintf("minerWeight overflows int (%d)", minerWeight))
 	}
 
 	// calc p
-	if committeeSize > int(totalUnits) {
-		logger.With().Warning("committee size is greater than total units",
+	if committeeSize > int(totalWeight) {
+		logger.With().Warning("committee size is greater than total weight",
 			log.Int("committeeSize", committeeSize),
-			log.Uint64("totalUnits", totalUnits),
+			log.Uint64("totalWeight", totalWeight),
 		)
-		totalUnits *= uint64(committeeSize)
+		totalWeight *= uint64(committeeSize)
 		n *= committeeSize
 	}
-	p = fixed.DivUint64(uint64(committeeSize), totalUnits)
+	p = fixed.DivUint64(uint64(committeeSize), totalWeight)
 
-	if minerUnits > maxSupportedN {
+	if minerWeight > maxSupportedN {
 		return 0, fixed.Fixed{}, fixed.Fixed{}, false,
-			fmt.Errorf("miner weight exceeds supported maximum (id: %v, weight: %d, units: %d, max: %d",
-				id, minerWeight, minerUnits, maxSupportedN)
+			fmt.Errorf("miner weight exceeds supported maximum (id: %v, weight: %d, max: %d",
+				id, minerWeight, maxSupportedN)
 	}
 	return n, p, calcVrfFrac(vrfSig), false, nil
 }
@@ -408,11 +384,6 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 		log.FieldNamed("target_layer_epoch", targetLayer.GetEpoch()))
 	logger.Debug("hare oracle getting active set")
 
-	// we can't read blocks during genesis epochs as there are none
-	if targetLayer.GetEpoch().IsGenesis() {
-		return nil, errGenesis
-	}
-
 	// lock until any return
 	// note: no need to lock per safeEp - we do not expect many concurrent requests per safeEp (max two)
 	o.lock.Lock()
@@ -426,8 +397,8 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 		log.FieldNamed("safe_layer_end", safeLayerEnd),
 		log.FieldNamed("safe_layer_start_epoch", safeLayerStart.GetEpoch()),
 		log.FieldNamed("safe_layer_end_epoch", safeLayerEnd.GetEpoch()),
-		log.Uint16("confidence_param", o.cfg.ConfidenceParam),
-		log.Uint16("epoch_offset", o.cfg.EpochOffset),
+		log.Uint32("confidence_param", o.cfg.ConfidenceParam),
+		log.Uint32("epoch_offset", o.cfg.EpochOffset),
 		log.Uint64("layers_per_epoch", uint64(o.layersPerEpoch)),
 		log.FieldNamed("effective_genesis", types.GetEffectiveGenesis()))
 
@@ -458,7 +429,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 	}
 
 	activeBlockIDs := make(map[types.BlockID]struct{})
-	for layerID := safeLayerStart; layerID <= safeLayerEnd; layerID++ {
+	for layerID := safeLayerStart; !layerID.After(safeLayerEnd); layerID = layerID.Add(1) {
 		layerBlockIDs, err := o.meshdb.LayerContextuallyValidBlocks(layerID)
 		if err != nil {
 			return nil, fmt.Errorf("error getting active blocks for layer %v for target layer %v: %w",
@@ -487,8 +458,13 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 
 	// if we failed to get a Hare active set, we fall back on reading the Tortoise active set targeting this epoch
 	// TODO: do we want to cache tortoise active set too?
-	logger.With().Warning("no hare active set for layer range, reading tortoise set for epoch instead",
-		targetLayer.GetEpoch())
+	if safeLayerStart.GetEpoch().IsGenesis() {
+		logger.With().Info("no hare active set for genesis layer range, reading tortoise set for epoch instead",
+			targetLayer.GetEpoch())
+	} else {
+		logger.With().Warning("no hare active set for layer range, reading tortoise set for epoch instead",
+			targetLayer.GetEpoch())
+	}
 	atxs := o.atxdb.GetEpochAtxs(targetLayer.GetEpoch() - 1)
 	logger.With().Debug("got tortoise atxs", log.Int("count", len(atxs)))
 	if len(atxs) == 0 {
@@ -521,10 +497,6 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID strin
 	}()
 	actives, err := o.actives(ctx, layer)
 	if err != nil {
-		if err == errGenesis { // we are in genesis
-			return true, nil // all ids are active in genesis
-		}
-
 		o.WithContext(ctx).With().Error("method IsIdentityActiveOnConsensusView erred while calling actives func",
 			layer, log.Err(err))
 		return false, err

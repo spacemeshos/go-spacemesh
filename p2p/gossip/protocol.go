@@ -122,15 +122,13 @@ func (p *Protocol) propagateMessage(ctx context.Context, payload []byte, nextPro
 	//TODO soon: don't wait for message to send and if we finished sending last message one of the peers send the next
 	// message. limit the number of simultaneous sends. consider other messages (mainly sync).
 	var wg sync.WaitGroup
-peerLoop:
 	for _, peer := range p.peers.GetPeers() {
 		if exclude == peer {
-			continue peerLoop
+			continue
 		}
 		wg.Add(1)
 		go func(pubkey p2pcrypto.PublicKey) {
-			// TODO: replace peer ?
-
+			defer wg.Done()
 			// Add recipient to context for logs
 			msgCtx := ctx
 			if reqID, ok := log.ExtractRequestID(ctx); ok {
@@ -143,7 +141,6 @@ peerLoop:
 			if err := p.net.SendMessage(msgCtx, pubkey, nextProt, payload); err != nil {
 				p.WithContext(msgCtx).With().Warning("failed sending", log.Err(err))
 			}
-			wg.Done()
 		}(peer)
 	}
 	wg.Wait()
@@ -178,14 +175,14 @@ func (p *Protocol) handlePQ(ctx context.Context) {
 		} else {
 			msgCtx = log.WithRequestID(ctx, m.RequestID(), extraFields...)
 		}
-		p.WithContext(msgCtx).With().Info("new_gossip_message_relay",
+		p.WithContext(msgCtx).With().Debug("new_gossip_message_relay",
 			log.Int("priority_queue_length", p.pq.Length()))
 		if p.pq.Length() > 50 {
 			p.WithContext(msgCtx).With().Warning("outbound gossip message queue backlog",
 				log.Int("priority_queue_length", p.pq.Length()))
 		}
 		p.propagateMessage(msgCtx, m.Message(), m.Protocol(), m.Sender())
-		p.WithContext(msgCtx).With().Info("finished propagating gossip message")
+		p.WithContext(msgCtx).With().Debug("finished propagating gossip message")
 	}
 }
 
@@ -224,7 +221,7 @@ func (p *Protocol) propagationEventLoop(ctx context.Context) {
 					log.Err(err),
 					log.String("protocol", msgV.Protocol()))
 			}
-			p.WithContext(ctx).With().Info("wrote inbound message to priority queue",
+			p.WithContext(ctx).With().Debug("wrote inbound message to priority queue",
 				log.String("protocol", msgV.Protocol()),
 				log.Int("priority_queue_length", p.pq.Length()),
 				log.Int("propagation_queue_length", len(p.propagateQ)))

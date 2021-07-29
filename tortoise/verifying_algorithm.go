@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"context"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -18,7 +19,7 @@ type ThreadSafeVerifyingTortoise struct {
 type Config struct {
 	LayerSize int
 	Database  blockDataProvider
-	Hdist     int
+	Hdist     uint32
 	Log       log.Log
 	Recovered bool
 }
@@ -32,7 +33,7 @@ func NewVerifyingTortoise(cfg Config) *ThreadSafeVerifyingTortoise {
 }
 
 // verifyingTortoise creates a new verifying tortoise wrapper
-func verifyingTortoise(layerSize int, mdb blockDataProvider, hdist int, lg log.Log) *ThreadSafeVerifyingTortoise {
+func verifyingTortoise(layerSize int, mdb blockDataProvider, hdist uint32, lg log.Log) *ThreadSafeVerifyingTortoise {
 	alg := &ThreadSafeVerifyingTortoise{trtl: newTurtle(mdb, hdist, layerSize)}
 	alg.trtl.SetLogger(lg)
 	alg.trtl.init(mesh.GenesisLayer())
@@ -64,9 +65,9 @@ func (trtl *ThreadSafeVerifyingTortoise) LatestComplete() types.LayerID {
 }
 
 // BaseBlock chooses a base block and creates a differences list. needs the hare results for latest layers.
-func (trtl *ThreadSafeVerifyingTortoise) BaseBlock() (types.BlockID, [][]types.BlockID, error) {
+func (trtl *ThreadSafeVerifyingTortoise) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
 	trtl.mutex.Lock()
-	block, diffs, err := trtl.trtl.BaseBlock()
+	block, diffs, err := trtl.trtl.BaseBlock(ctx)
 	trtl.mutex.Unlock()
 	if err != nil {
 		return types.BlockID{}, nil, err

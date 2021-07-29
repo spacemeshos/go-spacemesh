@@ -4,15 +4,17 @@ package cmd
 import (
 	"context"
 	"fmt"
-	bc "github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"os"
 	"os/signal"
 	"reflect"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
+
+	bc "github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 var (
@@ -187,8 +189,20 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 			elem = reflect.ValueOf(&appCFG.HareEligibility).Elem()
 			assignFields(ff, elem, name)
 
+			ff = reflect.TypeOf(appCFG.TortoiseBeacon)
+			elem = reflect.ValueOf(&appCFG.TortoiseBeacon).Elem()
+			assignFields(ff, elem, name)
+
 			ff = reflect.TypeOf(appCFG.POST)
 			elem = reflect.ValueOf(&appCFG.POST).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(appCFG.SMESHING)
+			elem = reflect.ValueOf(&appCFG.SMESHING).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(appCFG.SMESHING.Opts)
+			elem = reflect.ValueOf(&appCFG.SMESHING.Opts).Elem()
 			assignFields(ff, elem, name)
 
 			ff = reflect.TypeOf(appCFG.LOGGING)

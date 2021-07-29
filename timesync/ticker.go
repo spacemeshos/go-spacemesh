@@ -97,7 +97,7 @@ func (t *Ticker) Notify() (int, error) {
 
 	layer := t.TimeToLayer(t.clock.Now())
 	// close prev layers
-	for l := t.lastTickedLayer + 1; l <= layer; l++ {
+	for l := t.lastTickedLayer.Add(1); !l.After(layer); l = l.Add(1) {
 		if layerChan, found := t.layerChannels[l]; found {
 			close(layerChan)
 			delete(t.layerChannels, l)
@@ -113,7 +113,7 @@ func (t *Ticker) Notify() (int, error) {
 	}
 
 	// already ticked
-	if layer <= t.lastTickedLayer {
+	if !layer.After(t.lastTickedLayer) {
 		t.log.With().Warning("skipping tick to avoid double ticking the same layer (time was not monotonic)",
 			log.FieldNamed("current_layer", layer),
 			log.FieldNamed("last_ticked_layer", t.lastTickedLayer))

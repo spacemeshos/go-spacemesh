@@ -3,6 +3,7 @@ package signing
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/spacemeshos/ed25519"
 )
 
@@ -25,6 +26,7 @@ func NewVRFSigner(seed []byte) (*VRFSigner, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+
 	return &VRFSigner{privateKey: vrfPriv}, vrfPub, nil
 }
 

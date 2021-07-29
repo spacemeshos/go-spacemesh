@@ -73,7 +73,7 @@ func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHan
 			l.wg.Done()
 			return
 		case data := <-gossipChannel:
-			l.WithContext(ctx).With().Info("got gossip message, forwarding to data handler",
+			l.WithContext(ctx).With().Debug("got gossip message, forwarding to data handler",
 				log.String("protocol", channel),
 				log.Int("queue_length", len(gossipChannel)))
 			if !l.shouldListenToGossip() {

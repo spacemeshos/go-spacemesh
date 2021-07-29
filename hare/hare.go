@@ -4,24 +4,25 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/hare/metrics"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/hare/metrics"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // LayerBuffer is the number of layer results we keep at a given time.
 const LayerBuffer = 20
 
-type consensusFactory func(cfg config.Config, instanceId instanceID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus
+type consensusFactory func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus
 
 // Consensus represents an item that acts like a consensus process.
 type Consensus interface {
-	ID() instanceID
+	ID() types.LayerID
 	Close()
 	CloseChannel() chan struct{}
 
@@ -31,7 +32,7 @@ type Consensus interface {
 
 // TerminationOutput represents an output of a consensus process.
 type TerminationOutput interface {
-	ID() instanceID
+	ID() types.LayerID
 	Set() *Set
 	Coinflip() bool
 	Completed() bool
@@ -49,7 +50,7 @@ type outputValidationFunc func(blocks []types.BlockID) bool
 
 // Hare is the orchestrator that starts new consensus processes and collects their output.
 type Hare struct {
-	Closer
+	util.Closer
 	log.Log
 	config config.Config
 
@@ -68,7 +69,7 @@ type Hare struct {
 	layerLock sync.RWMutex
 	lastLayer types.LayerID
 
-	bufferSize int
+	bufferSize uint32
 
 	outputChan chan TerminationOutput
 	mu         sync.RWMutex
@@ -90,7 +91,8 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeID, 
 	beginLayer chan types.LayerID, logger log.Log) *Hare {
 	h := new(Hare)
 
-	h.Closer = NewCloser()
+	h.Closer = util.NewCloser()
+
 	h.Log = logger
 	h.config = conf
 	h.network = p2p
@@ -105,10 +107,9 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeID, 
 	h.networkDelta = time.Duration(conf.WakeupDelta) * time.Second
 	// todo: this should be loaded from global config
 	h.bufferSize = LayerBuffer // XXX: must be at least the size of `hdist`
-	h.lastLayer = 0
 	h.outputChan = make(chan TerminationOutput, h.bufferSize)
 	h.outputs = make(map[types.LayerID][]types.BlockID, h.bufferSize) // we keep results about LayerBuffer past layers
-	h.factory = func(conf config.Config, instanceId instanceID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
+	h.factory = func(conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
 		return newConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, ev, logger)
 	}
 
@@ -126,14 +127,12 @@ func (h *Hare) getLastLayer() types.LayerID {
 }
 
 // checks if the provided id is too late/old to be requested.
-func (h *Hare) outOfBufferRange(id instanceID) bool {
-	lyr := h.getLastLayer()
-
-	if lyr <= types.LayerID(h.bufferSize) {
+func (h *Hare) outOfBufferRange(id types.LayerID) bool {
+	last := h.getLastLayer()
+	if !last.After(types.NewLayerID(h.bufferSize)) {
 		return false
 	}
-
-	if id < instanceID(lyr-types.LayerID(h.bufferSize)) { // bufferSize>=0
+	if id.Before(last.Sub(h.bufferSize)) { // bufferSize>=0
 		return true
 	}
 	return false
@@ -144,7 +143,7 @@ func (h *Hare) oldestResultInBuffer() types.LayerID {
 	// TODO: if it gets bigger change `outputs` to array.
 	lyr := h.getLastLayer()
 	for k := range h.outputs {
-		if k < lyr {
+		if k.Before(lyr) {
 			lyr = k
 		}
 	}
@@ -177,7 +176,7 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if len(h.outputs) >= h.bufferSize {
+	if uint32(len(h.outputs)) >= h.bufferSize {
 		delete(h.outputs, h.oldestResultInBuffer())
 	}
 	h.outputs[types.LayerID(id)] = blocks
@@ -191,7 +190,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 
 	logger := h.WithContext(ctx).WithFields(id)
 	h.layerLock.Lock()
-	if id > h.lastLayer {
+	if id.After(h.lastLayer) {
 		h.lastLayer = id
 	} else {
 		logger.With().Error("received out of order layer tick",
@@ -210,7 +209,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		// it must not return without starting consensus process or mark result as fail
 		// except if it's genesis layer
 		if err != nil {
-			h.outputChan <- procReport{instanceID(id), &Set{}, false, notCompleted}
+			h.outputChan <- procReport{id, &Set{}, false, notCompleted}
 		}
 	}()
 
@@ -236,7 +235,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		return
 	}
 
-	if !h.broker.Synced(ctx, instanceID(id)) { // if not synced don't start consensus
+	if !h.broker.Synced(ctx, id) { // if not synced don't start consensus
 		err = errors.New("not starting hare since node is not synced")
 		logger.Error(err.Error())
 		return
@@ -260,7 +259,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		set.Add(b)
 	}
 
-	instID := instanceID(id)
+	instID := id
 	c, err := h.broker.Register(ctx, instID)
 	if err != nil {
 		logger.With().Error("could not register consensus process on broker", log.Err(err))
@@ -275,7 +274,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 	}
 	logger.With().Info("number of consensus processes (after +1)",
 		log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
-	metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(id), 10)).Add(1)
+	metrics.TotalConsensusProcesses.With("layer", id.String()).Add(1)
 	return
 }
 
@@ -287,7 +286,7 @@ var (
 // GetResult returns the hare output for the provided range.
 // Returns error iff the request for the upper is too old.
 func (h *Hare) GetResult(lid types.LayerID) ([]types.BlockID, error) {
-	if h.outOfBufferRange(instanceID(lid)) {
+	if h.outOfBufferRange(lid) {
 		return nil, errTooOld
 	}
 
@@ -324,7 +323,7 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 			h.broker.Unregister(ctx, out.ID())
 			logger.With().Info("number of consensus processes (after -1)",
 				log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
-			metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(out.ID()), 10)).Add(-1)
+			metrics.TotalConsensusProcesses.With("layer", out.ID().String()).Add(-1)
 		case <-h.CloseChannel():
 			return
 		}

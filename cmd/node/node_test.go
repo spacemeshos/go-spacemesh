@@ -4,11 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/eligibility"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"io/ioutil"
 	inet "net"
@@ -20,6 +15,12 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/eligibility"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
@@ -46,17 +47,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func tempDir() (dir string, cleanup func() error, err error) {
-	path, err := ioutil.TempDir("/tmp", "datadir_")
-	if err != nil {
-		return "", nil, err
-	}
-	cleanup = func() error {
-		return os.RemoveAll(path)
-	}
-	return path, cleanup, err
-}
-
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r := require.New(t)
 
@@ -66,39 +56,40 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 		r.NoError(err)
 	}()
 
+	tempdir := t.TempDir()
+
 	// setup spacemesh app
 	app := NewSpacemeshApp()
-	app.Config.POST.DataDir = "tmp"
+	app.Config.SMESHING.Opts.DataDir = tempdir
 	app.log = log.NewDefault("logger")
 
-	// get new identity
-	sgn, err := app.LoadOrCreateEdSigner()
+	// Create new identity.
+	signer1, err := app.LoadOrCreateEdSigner()
 	r.NoError(err)
-
-	// ensure we have a single subdirectory under tmp
-	infos, err := ioutil.ReadDir("tmp")
+	infos, err := ioutil.ReadDir(tempdir)
 	r.NoError(err)
 	r.Len(infos, 1)
 
-	// run the method again
-	sgn2, err := app.LoadOrCreateEdSigner()
+	// Load existing identity.
+	signer2, err := app.LoadOrCreateEdSigner()
 	r.NoError(err)
-
-	// ensure that we didn't create another identity
-	infos, err = ioutil.ReadDir("tmp")
+	infos, err = ioutil.ReadDir(tempdir)
 	r.NoError(err)
 	r.Len(infos, 1)
+	r.Equal(signer1.PublicKey(), signer2.PublicKey())
 
-	// ensure both signers are identical
-	r.Equal(sgn.PublicKey(), sgn2.PublicKey())
-
-	// mess with the directory name
-	err = os.Rename(filepath.Join("tmp", infos[0].Name()), filepath.Join("tmp", "wrong name"))
+	// Invalidate the identity by changing its file name.
+	filename := filepath.Join(tempdir, infos[0].Name())
+	err = os.Rename(filename, filename+"_")
 	r.NoError(err)
 
-	// run the method again
-	_, err = app.LoadOrCreateEdSigner()
-	r.EqualError(err, fmt.Sprintf("identity file path ('tmp/wrong name') does not match public key (%v)", sgn.PublicKey().String()))
+	// Create new identity.
+	signer3, err := app.LoadOrCreateEdSigner()
+	r.NoError(err)
+	infos, err = ioutil.ReadDir(tempdir)
+	r.NoError(err)
+	r.Len(infos, 2)
+	r.NotEqual(signer1.PublicKey(), signer3.PublicKey())
 }
 
 func newLogger(buf *bytes.Buffer) log.Log {
@@ -205,7 +196,7 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 
 	// Test a legal flag
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.Initialize(cmd, args))
+		r.NoError(app.InitializeCmd(cmd, args))
 	}
 	str, err = testArgs("--test-mode")
 
@@ -247,7 +238,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 
 	// Try enabling an illegal service
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		err := app.Initialize(cmd, args)
+		err := app.InitializeCmd(cmd, args)
 		r.Error(err)
 		r.Equal("unrecognized GRPC service requested: illegal", err.Error())
 	}
@@ -296,7 +287,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 
 	// This should work
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.Initialize(cmd, args))
+		r.NoError(app.InitializeCmd(cmd, args))
 	}
 	str, err = testArgs("--grpc", "node")
 	r.Empty(str)
@@ -352,7 +343,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 
 	// Try enabling just the JSON service (without the GRPC service)
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		err := app.Initialize(cmd, args)
+		err := app.InitializeCmd(cmd, args)
 		r.Error(err)
 		r.Equal("must enable at least one GRPC service along with JSON gateway service", err.Error())
 	}
@@ -367,7 +358,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 
 	// Try enabling both the JSON and the GRPC services
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.Initialize(cmd, args))
+		r.NoError(app.InitializeCmd(cmd, args))
 	}
 	str, err = testArgs("--grpc", "node", "--json-server")
 	r.NoError(err)
@@ -426,12 +417,10 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r := require.New(t)
 	app := NewSpacemeshApp()
 
-	path, cleanup, err := tempDir()
-	r.NoError(err)
-	defer cleanup()
+	path := t.TempDir()
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.Initialize(cmd, args))
+		r.NoError(app.InitializeCmd(cmd, args))
 		app.Config.API.GrpcServerPort = port
 		app.Config.DataDirParent = path
 		app.startAPIServices(context.TODO(), NetMock{})
@@ -498,13 +487,11 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	r := require.New(t)
 	app := NewSpacemeshApp()
 
-	path, cleanup, err := tempDir()
-	r.NoError(err)
-	defer cleanup()
+	path := t.TempDir()
 
 	// Make sure the service is not running by default
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.Initialize(cmd, args))
+		r.NoError(app.InitializeCmd(cmd, args))
 		app.Config.DataDirParent = path
 		app.startAPIServices(context.TODO(), NetMock{})
 	}
@@ -566,22 +553,22 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	// Use a unique port
 	port := 1240
 
-	path, cleanup, err := tempDir()
-	require.NoError(t, err)
-	defer cleanup()
+	path := t.TempDir()
 
 	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), log.NewDefault("clock"))
-	net := service.NewSimulator()
+	localNet := service.NewSimulator()
 	cfg := getTestDefaultConfig(1)
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	assert.NoError(t, err)
-	app, err := InitSingleInstance(*cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(), poetHarness.HTTPPoetClient, clock, net)
+	edSgn := signing.NewEdSigner()
+	app, err := InitSingleInstance(*cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(), poetHarness.HTTPPoetClient, clock, localNet, edSgn)
 
 	//app := NewSpacemeshApp()
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		defer app.Cleanup(cmd, args)
-		require.NoError(t, app.Initialize(cmd, args))
+		defer app.Cleanup()
+		require.NoError(t, app.InitializeCmd(cmd, args))
+		require.NoError(t, app.Initialize())
 
 		// Give the error channel a buffer
 		events.CloseEventReporter()
@@ -595,7 +582,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		app.Start(cmd, args)
+		require.NoError(t, app.Start())
 	}
 
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
@@ -751,17 +738,15 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	port := 1236
 
 	// Use a unique dir for data so we don't read existing state
-	path, cleanup, err := tempDir()
-	r.NoError(err, "error creating tempdir")
-	defer cleanup()
+	path := t.TempDir()
 
 	app := NewSpacemeshApp()
 	cfg := config.DefaultTestConfig()
 	app.Config = &cfg
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		defer app.Cleanup(cmd, args)
-		r.NoError(app.Initialize(cmd, args))
+		defer app.Cleanup()
+		r.NoError(app.Initialize())
 
 		app.Config.DataDirParent = path
 
@@ -789,7 +774,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		app.Start(cmd, args)
+		require.NoError(t, app.Start())
 	}
 
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.

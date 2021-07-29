@@ -1,8 +1,11 @@
 package p2p
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	inet "net"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -10,21 +13,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/nattraversal"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/discovery"
-	"github.com/stretchr/testify/require"
-
-	"context"
-	"errors"
-	"sync"
-
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type cpoolMock struct {
@@ -142,6 +140,7 @@ func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
 
 func TestSwarm_processMessage(t *testing.T) {
 	s := Switch{
+		shutdownCtx:  context.TODO(),
 		inpeers:      make(map[p2pcrypto.PublicKey]struct{}),
 		outpeers:     make(map[p2pcrypto.PublicKey]struct{}),
 		delPeerSub:   make([]chan p2pcrypto.PublicKey, 0),
@@ -281,16 +280,17 @@ func RandString(n int) string {
 func sendDirectMessage(t *testing.T, sender *Switch, recvPub p2pcrypto.PublicKey, inChan chan service.DirectMessage, checkpayload bool) {
 	payload := []byte(RandString(10))
 	err := sender.SendMessage(context.TODO(), recvPub, exampleProtocol, payload)
-	require.NoError(t, err)
+	if !assert.NoError(t, err) {
+		return
+	}
 	select {
 	case msg := <-inChan:
 		if checkpayload {
 			assert.Equal(t, msg.Bytes(), payload)
 		}
 		assert.Equal(t, msg.Sender().String(), sender.lNode.PublicKey().String())
-		break
-	case <-time.After(5 * time.Second):
-		t.Error("Took too much time to receive")
+	case <-time.After(time.Second):
+		assert.Fail(t, "Took too much time to receive")
 	}
 }
 
@@ -337,7 +337,10 @@ func TestSwarm_MultipleMessages(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 500; i++ {
 		wg.Add(1)
-		go func() { sendDirectMessage(t, p2, p1.lNode.PublicKey(), exchan1, false); wg.Done() }()
+		go func() {
+			sendDirectMessage(t, p2, p1.lNode.PublicKey(), exchan1, false)
+			wg.Done()
+		}()
 	}
 	wg.Wait()
 

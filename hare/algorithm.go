@@ -6,17 +6,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/nullstyle/go-xdr/xdr3"
+	"time"
+
+	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"strconv"
-	"time"
 )
 
 const protoName = "HARE_PROTOCOL"
@@ -56,13 +57,13 @@ const (
 
 // procReport is the termination report of the CP
 type procReport struct {
-	id        instanceID // layer id
-	set       *Set       // agreed-upon set
-	coinflip  bool       // weak coin value
-	completed bool       // whether the CP completed
+	id        types.LayerID // layer id
+	set       *Set          // agreed-upon set
+	coinflip  bool          // weak coin value
+	completed bool          // whether the CP completed
 }
 
-func (cpo procReport) ID() instanceID {
+func (cpo procReport) ID() types.LayerID {
 	return cpo.id
 }
 
@@ -177,9 +178,9 @@ func newMsg(ctx context.Context, hareMsg *Message, querier StateQuerier) (*Msg, 
 type consensusProcess struct {
 	log.Log
 	State
-	Closer
-	instanceID        instanceID // the layer id
-	oracle            Rolacle    // the roles oracle provider
+	util.Closer
+	instanceID        types.LayerID
+	oracle            Rolacle // the roles oracle provider
 	signing           Signer
 	nid               types.NodeID
 	network           NetworkService
@@ -201,13 +202,13 @@ type consensusProcess struct {
 }
 
 // newConsensusProcess creates a new consensus process instance.
-func newConsensusProcess(cfg config.Config, instanceID instanceID, s *Set, oracle Rolacle, stateQuerier StateQuerier,
+func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, oracle Rolacle, stateQuerier StateQuerier,
 	layersPerEpoch uint16, signing Signer, nid types.NodeID, p2p NetworkService,
 	terminationReport chan TerminationOutput, ev roleValidator, logger log.Log) *consensusProcess {
 	msgsTracker := newMsgsTracker()
 	proc := &consensusProcess{
 		State:             State{-1, -1, s.Clone(), nil},
-		Closer:            NewCloser(),
+		Closer:            util.NewCloser(),
 		instanceID:        instanceID,
 		oracle:            oracle,
 		signing:           signing,
@@ -255,7 +256,7 @@ func (proc *consensusProcess) Start(ctx context.Context) error {
 }
 
 // ID returns the instance id.
-func (proc *consensusProcess) ID() instanceID {
+func (proc *consensusProcess) ID() types.LayerID {
 	return proc.instanceID
 }
 
@@ -462,7 +463,7 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 	proc.WithContext(ctx).With().Debug("processing message",
 		log.String("msg_type", m.InnerMsg.Type.String()),
 		log.Int("num_values", len(m.InnerMsg.Values)))
-	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(m.InnerMsg.InstanceID), 10), "reporter", "processMsg").Add(1)
+	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", m.InnerMsg.InstanceID.String(), "reporter", "processMsg").Add(1)
 
 	switch m.InnerMsg.Type {
 	case pre:
