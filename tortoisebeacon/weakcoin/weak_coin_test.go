@@ -340,10 +340,11 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 		start, end types.RoundID = 2, 9
 		allowances               = weakcoin.UnitAllowances{}
 	)
+
 	for i := range instances {
 		i := i
 		broadcaster := mocks.NewMockbroadcaster(ctrl)
-		broadcaster.EXPECT().Broadcast(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, data []byte) {
+		broadcaster.EXPECT().Broadcast(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, data []byte) error {
 			msg := weakcoin.Message{}
 			require.NoError(t, types.BytesToInterface(data, &msg))
 			for j := range instances {
@@ -352,9 +353,10 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 				}
 				instances[j].HandleSerializedMessage(context.TODO(), broadcastedMessage(t, ctrl, msg), nil)
 			}
+			return nil
 		}).AnyTimes()
 		signer := signing.NewEdSigner()
-		allowances[signer.PublicKey().String()] = 1
+		allowances[string(signer.PublicKey().Bytes())] = 1
 		instances[i] = weakcoin.New(broadcaster, signer, verifier)
 	}
 
