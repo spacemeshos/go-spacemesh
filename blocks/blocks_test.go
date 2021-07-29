@@ -242,10 +242,7 @@ func TestBlockHandler_AtxSetID(t *testing.T) {
 	require.NoError(t, err)
 	var b types.ActivationTx
 	types.BytesToInterface(bbytes, &b)
-	t.Log(fmt.Sprintf("%+v", *a))
-	t.Log("---------------------")
-	t.Log(fmt.Sprintf("%+v", b))
-	t.Log("---------------------")
+
 	assert.Equal(t, b.NIPost, a.NIPost)
 	assert.Equal(t, b.InitialPost, a.InitialPost)
 
