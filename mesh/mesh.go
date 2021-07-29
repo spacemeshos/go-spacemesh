@@ -376,13 +376,13 @@ func (msh *Mesh) persistLayerHashes(l *types.Layer) {
 	prevHash := types.Hash32{}
 	var err error
 	if l.Index().After(types.GetEffectiveGenesis()) {
-		prevHash, err = msh.getRunningLayerHash(l.Index().Sub(1))
+		prevHash, err = msh.getAggregatedLayerHash(l.Index().Sub(1))
 		if err != nil {
 			msh.With().Error("cannot get running layer hash", l.Index().Sub(1))
 			return
 		}
 	}
-	msh.persistRunningLayerHash(l.Index(), types.CalcAggregateHash32(prevHash, l.Hash().Bytes()))
+	msh.persistAggregatedLayerHash(l.Index(), types.CalcAggregateHash32(prevHash, l.Hash().Bytes()))
 }
 
 func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l types.LayerID) {
@@ -520,15 +520,15 @@ func (msh *Mesh) calcValidLayerHash(layer *types.Layer) types.Hash32 {
 	return types.CalcBlocksHash32(types.BlockIDs(validBlocks), msh.ProcessedLayerHash().Bytes())
 }
 
-func (msh *Mesh) persistRunningLayerHash(layerID types.LayerID, hash types.Hash32) {
-	if err := msh.general.Put(msh.getRunningLayerHashKey(layerID), hash.Bytes()); err != nil {
+func (msh *Mesh) persistAggregatedLayerHash(layerID types.LayerID, hash types.Hash32) {
+	if err := msh.general.Put(msh.getAggregatedLayerHashKey(layerID), hash.Bytes()); err != nil {
 		msh.With().Error("failed to persist running layer hash", log.Err(err), msh.ProcessedLayer(),
 			log.String("layer_hash", hash.Hex()))
 	}
 }
 
-func (msh *Mesh) getRunningLayerHash(layerID types.LayerID) (types.Hash32, error) {
-	bts, err := msh.general.Get(msh.getRunningLayerHashKey(layerID))
+func (msh *Mesh) getAggregatedLayerHash(layerID types.LayerID) (types.Hash32, error) {
+	bts, err := msh.general.Get(msh.getAggregatedLayerHashKey(layerID))
 	if err != nil {
 		return [32]byte{}, err
 	}
@@ -556,7 +556,7 @@ func (msh *Mesh) getLayerBlockHashKey(layerID types.LayerID) []byte {
 	return []byte(fmt.Sprintf("layerBlockHash_%v", layerID.Bytes()))
 }
 
-func (msh *Mesh) getRunningLayerHashKey(layerID types.LayerID) []byte {
+func (msh *Mesh) getAggregatedLayerHashKey(layerID types.LayerID) []byte {
 	return []byte(fmt.Sprintf("rLayerHash_%v", layerID.Bytes()))
 }
 

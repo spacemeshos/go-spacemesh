@@ -409,7 +409,7 @@ func TestMesh_persistLayerHashes(t *testing.T) {
 	l := addLayer(r, types.GetEffectiveGenesis(), 5, msh)
 	msh.persistLayerHashes(l)
 	wantedHash := types.CalcAggregateHash32(types.Hash32{}, l.Hash().Bytes())
-	actualHash, err := msh.getRunningLayerHash(types.GetEffectiveGenesis())
+	actualHash, err := msh.getAggregatedLayerHash(types.GetEffectiveGenesis())
 	assert.NoError(t, err)
 
 	assert.Equal(t, wantedHash, actualHash)
@@ -417,7 +417,7 @@ func TestMesh_persistLayerHashes(t *testing.T) {
 	l2 := addLayer(r, types.GetEffectiveGenesis().Add(1), 5, msh)
 	msh.persistLayerHashes(l2)
 	secondWantedHash := types.CalcAggregateHash32(wantedHash, l2.Hash().Bytes())
-	actualHash2, err := msh.getRunningLayerHash(types.GetEffectiveGenesis().Add(1))
+	actualHash2, err := msh.getAggregatedLayerHash(types.GetEffectiveGenesis().Add(1))
 	assert.NoError(t, err)
 	assert.Equal(t, secondWantedHash, actualHash2)
 }
