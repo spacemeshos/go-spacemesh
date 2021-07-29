@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
@@ -43,6 +44,17 @@ type broadcaster interface {
 type tortoiseBeaconDB interface {
 	GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, error)
 	SetTortoiseBeacon(epochID types.EpochID, beacon types.Hash32) error
+}
+
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./weak_coin.go coin
+
+type coin interface {
+	StartEpoch(types.EpochID, weakcoin.UnitAllowances)
+	StartRound(context.Context, types.RoundID) error
+	CompleteRound()
+	Get(types.EpochID, types.RoundID) bool
+	CompleteEpoch()
+	HandleSerializedMessage(context.Context, service.GossipMessage, service.Fetcher)
 }
 
 type epochRoundPair struct {
@@ -79,10 +91,10 @@ type TortoiseBeacon struct {
 	net              broadcaster
 	atxDB            activationDB
 	tortoiseBeaconDB tortoiseBeaconDB
-	edSigner         *signing.EdSigner
-	vrfVerifier      verifierFunc
-	vrfSigner        signer
-	weakCoin         weakcoin.Coin
+	edSigner         signing.Signer
+	vrfVerifier      signing.Verifier
+	vrfSigner        signing.Signer
+	weakCoin         coin
 
 	seenEpochsMu sync.Mutex
 	seenEpochs   map[types.EpochID]struct{}
@@ -129,10 +141,6 @@ type TortoiseBeacon struct {
 // a function to verify the message with the signature and its public key.
 type verifierFunc = func(pub, msg, sig []byte) bool
 
-type signer interface {
-	Sign(msg []byte) []byte
-}
-
 type layerClock interface {
 	Subscribe() timesync.LayerTimer
 	Unsubscribe(timer timesync.LayerTimer)
@@ -149,10 +157,10 @@ func New(
 	net broadcaster,
 	atxDB activationDB,
 	tortoiseBeaconDB tortoiseBeaconDB,
-	edSigner *signing.EdSigner,
-	vrfVerifier verifierFunc,
-	vrfSigner signer,
-	weakCoin weakcoin.Coin,
+	edSigner signing.Signer,
+	vrfVerifier signing.Verifier,
+	vrfSigner signing.Signer,
+	weakCoin coin,
 	clock layerClock,
 	logger log.Log,
 ) *TortoiseBeacon {

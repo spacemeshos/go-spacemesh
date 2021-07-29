@@ -9,9 +9,6 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	types "github.com/spacemeshos/go-spacemesh/common/types"
-	service "github.com/spacemeshos/go-spacemesh/p2p/service"
-	weakcoin "github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
 
 // Mockbroadcaster is a mock of broadcaster interface.
@@ -49,103 +46,4 @@ func (m *Mockbroadcaster) Broadcast(ctx context.Context, channel string, data []
 func (mr *MockbroadcasterMockRecorder) Broadcast(ctx, channel, data interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Broadcast", reflect.TypeOf((*Mockbroadcaster)(nil).Broadcast), ctx, channel, data)
-}
-
-// MockCoin is a mock of Coin interface.
-type MockCoin struct {
-	ctrl     *gomock.Controller
-	recorder *MockCoinMockRecorder
-}
-
-// MockCoinMockRecorder is the mock recorder for MockCoin.
-type MockCoinMockRecorder struct {
-	mock *MockCoin
-}
-
-// NewMockCoin creates a new mock instance.
-func NewMockCoin(ctrl *gomock.Controller) *MockCoin {
-	mock := &MockCoin{ctrl: ctrl}
-	mock.recorder = &MockCoinMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockCoin) EXPECT() *MockCoinMockRecorder {
-	return m.recorder
-}
-
-// CompleteEpoch mocks base method.
-func (m *MockCoin) CompleteEpoch() {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "CompleteEpoch")
-}
-
-// CompleteEpoch indicates an expected call of CompleteEpoch.
-func (mr *MockCoinMockRecorder) CompleteEpoch() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompleteEpoch", reflect.TypeOf((*MockCoin)(nil).CompleteEpoch))
-}
-
-// CompleteRound mocks base method.
-func (m *MockCoin) CompleteRound() {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "CompleteRound")
-}
-
-// CompleteRound indicates an expected call of CompleteRound.
-func (mr *MockCoinMockRecorder) CompleteRound() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompleteRound", reflect.TypeOf((*MockCoin)(nil).CompleteRound))
-}
-
-// Get mocks base method.
-func (m *MockCoin) Get(arg0 types.EpochID, arg1 types.RoundID) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", arg0, arg1)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// Get indicates an expected call of Get.
-func (mr *MockCoinMockRecorder) Get(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockCoin)(nil).Get), arg0, arg1)
-}
-
-// HandleSerializedMessage mocks base method.
-func (m *MockCoin) HandleSerializedMessage(arg0 context.Context, arg1 service.GossipMessage, arg2 service.Fetcher) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "HandleSerializedMessage", arg0, arg1, arg2)
-}
-
-// HandleSerializedMessage indicates an expected call of HandleSerializedMessage.
-func (mr *MockCoinMockRecorder) HandleSerializedMessage(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSerializedMessage", reflect.TypeOf((*MockCoin)(nil).HandleSerializedMessage), arg0, arg1, arg2)
-}
-
-// StartEpoch mocks base method.
-func (m *MockCoin) StartEpoch(arg0 types.EpochID, arg1 weakcoin.UnitAllowances) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "StartEpoch", arg0, arg1)
-}
-
-// StartEpoch indicates an expected call of StartEpoch.
-func (mr *MockCoinMockRecorder) StartEpoch(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartEpoch", reflect.TypeOf((*MockCoin)(nil).StartEpoch), arg0, arg1)
-}
-
-// StartRound mocks base method.
-func (m *MockCoin) StartRound(arg0 context.Context, arg1 types.RoundID) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartRound", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// StartRound indicates an expected call of StartRound.
-func (mr *MockCoinMockRecorder) StartRound(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartRound", reflect.TypeOf((*MockCoin)(nil).StartRound), arg0, arg1)
 }

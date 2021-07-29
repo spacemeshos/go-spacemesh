@@ -1,25 +1,34 @@
 package tortoisebeacon
 
 import (
-	"context"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin/mocks"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
-func coinValueMock(value bool) weakcoin.Coin {
-	coin := &mocks.Coin{}
-	coin.On("Get",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID")).
-		Return(value)
-	return coin
+func coinValueMock(tb testing.TB, value bool) coin {
+	ctrl := gomock.NewController(tb)
+	coinMock := mocks.NewMockcoin(ctrl)
+	coinMock.EXPECT().StartEpoch(
+		gomock.AssignableToTypeOf(types.EpochID(0)),
+		gomock.AssignableToTypeOf(weakcoin.UnitAllowances{}),
+	).AnyTimes()
+	coinMock.EXPECT().CompleteEpoch().AnyTimes()
+	coinMock.EXPECT().StartRound(gomock.Any(), gomock.AssignableToTypeOf(types.RoundID(0))).
+		AnyTimes().Return(nil)
+	coinMock.EXPECT().CompleteRound().AnyTimes()
+	coinMock.EXPECT().Get(
+		gomock.AssignableToTypeOf(types.EpochID(0)),
+		gomock.AssignableToTypeOf(types.RoundID(0)),
+	).AnyTimes().Return(value)
+	return coinMock
 }
 
 func TestTortoiseBeacon_calcVotesFromProposals(t *testing.T) {
@@ -111,21 +120,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 		mock.AnythingOfType("types.EpochID")).
 		Return(uint64(1), nil, nil)
 
-	mwc := &mocks.Coin{}
-	mwc.On("StartEpoch",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("weakcoin.UnitAllowances"),
-	)
-	mwc.On("CompleteEpoch")
-	mwc.On("StartRound",
-		mock.MatchedBy(func(_ context.Context) bool { return true }),
-		mock.AnythingOfType("types.RoundID"),
-	).Return(nil)
-	mwc.On("CompleteRound")
-	mwc.On("Get",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID")).
-		Return(false)
+	mwc := coinValueMock(t, false)
 
 	const epoch = 5
 	const round = 3
@@ -329,22 +324,6 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 		mock.AnythingOfType("types.EpochID")).
 		Return(uint64(threshold), nil, nil)
 
-	mwc := &mocks.Coin{}
-	mwc.On("StartEpoch",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("weakcoin.UnitAllowances"),
-	)
-	mwc.On("CompleteEpoch")
-	mwc.On("StartRound",
-		mock.MatchedBy(func(_ context.Context) bool { return true }),
-		mock.AnythingOfType("types.RoundID"),
-	).Return(nil)
-	mwc.On("CompleteRound")
-	mwc.On("Get",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID")).
-		Return(true)
-
 	const epoch = 5
 	const round = 3
 
@@ -353,7 +332,7 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 		epoch         types.EpochID
 		upToRound     types.RoundID
 		incomingVotes map[epochRoundPair]votesPerPK
-		weakCoin      weakcoin.Coin
+		weakCoin      coin
 		result        votesSetPair
 	}{
 		{
@@ -384,7 +363,7 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 					},
 				},
 			},
-			weakCoin: coinValueMock(false),
+			weakCoin: coinValueMock(t, false),
 			result: votesSetPair{
 				ValidVotes: hashSet{
 					"0x1": {},
@@ -426,7 +405,7 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 					},
 				},
 			},
-			weakCoin: coinValueMock(true),
+			weakCoin: coinValueMock(t, true),
 			result: votesSetPair{
 				ValidVotes: hashSet{
 					"0x1": {},
@@ -594,7 +573,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 		round              types.RoundID
 		ownFirstRoundVotes votesSetPair
 		votesCount         votesMarginMap
-		weakCoin           weakcoin.Coin
+		weakCoin           coin
 		result             votesSetPair
 	}{
 		{
@@ -615,7 +594,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 				"0x2": -threshold * 3,
 				"0x3": threshold / 2,
 			},
-			weakCoin: coinValueMock(true),
+			weakCoin: coinValueMock(t, true),
 			result: votesSetPair{
 				ValidVotes: hashSet{
 					"0x1": {},
@@ -635,7 +614,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 				"0x2": -threshold * 3,
 				"0x3": threshold / 2,
 			},
-			weakCoin: coinValueMock(false),
+			weakCoin: coinValueMock(t, false),
 			result: votesSetPair{
 				ValidVotes: hashSet{
 					"0x1": {},

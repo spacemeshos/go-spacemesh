@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -43,18 +42,6 @@ type Config struct {
 
 type broadcaster interface {
 	Broadcast(ctx context.Context, channel string, data []byte) error
-}
-
-// Coin defines weak coin interface.
-// The line below generates mocks for it.
-//go:generate mockery --name Coin --case underscore --output ./mocks/
-type Coin interface {
-	StartEpoch(types.EpochID, UnitAllowances)
-	StartRound(context.Context, types.RoundID) error
-	CompleteRound()
-	Get(types.EpochID, types.RoundID) bool
-	CompleteEpoch()
-	HandleSerializedMessage(context.Context, service.GossipMessage, service.Fetcher)
 }
 
 // UnitAllowances is a map from miner identifier to the number of units of spacetime.

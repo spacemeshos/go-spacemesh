@@ -550,13 +550,16 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
 
+	wcConfig := weakcoin.DefaultConfig()
+	wcConfig.MaxRound = types.RoundID(app.Config.TortoiseBeacon.RoundsNumber)
 	wc := weakcoin.New(swarm,
 		vrfSigner, signing.VRFVerifier{},
 		weakcoin.WithLog(app.addLogger(WeakCoinLogger, lg)),
+		weakcoin.WithConfig(wcConfig),
 	)
 
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, nodeID, ld, swarm, atxdb, tBeaconDB, sgn, signing.VRFVerify, vrfSigner, wc, clock, app.addLogger(TBeaconLogger, lg))
+	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, nodeID, ld, swarm, atxdb, tBeaconDB, sgn, signing.VRFVerifier{}, vrfSigner, wc, clock, app.addLogger(TBeaconLogger, lg))
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise

@@ -19,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin/mocks"
 )
 
 type validatorMock struct{}
@@ -41,21 +40,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	mockDB := &mockActivationDB{}
 	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(10), nil, nil)
 
-	mwc := &mocks.Coin{}
-	mwc.On("StartEpoch",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("weakcoin.UnitAllowances"),
-	)
-	mwc.On("CompleteEpoch")
-	mwc.On("StartRound",
-		mock.MatchedBy(func(_ context.Context) bool { return true }),
-		mock.AnythingOfType("types.RoundID"),
-	).Return(nil)
-	mwc.On("CompleteRound")
-	mwc.On("Get",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID")).
-		Return(true)
+	mwc := coinValueMock(t, true)
 
 	logger := log.NewDefault("TortoiseBeacon")
 
@@ -87,7 +72,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	atxdb := activation.NewDB(database.NewMemDatabase(), idStore, memesh, 3, goldenATXID, &validatorMock{}, lg.WithName("atxDB"))
 	_ = atxdb
 
-	tb := New(conf, minerID, ld, n1, mockDB, nil, edSgn, signing.VRFVerify, vrfSigner, mwc, clock, logger)
+	tb := New(conf, minerID, ld, n1, mockDB, nil, edSgn, signing.VRFVerifier{}, vrfSigner, mwc, clock, logger)
 	requirer.NotNil(tb)
 
 	err = tb.Start(context.TODO())
