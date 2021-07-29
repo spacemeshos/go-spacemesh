@@ -38,7 +38,7 @@ type Configuration struct {
 }
 
 const (
-	outOfSyncThreshold  uint32 = 2 // see notSynced
+	outOfSyncThreshold  uint32 = 3 // see notSynced
 	numGossipSyncLayers uint32 = 2 // see gossipSync
 )
 
@@ -50,8 +50,8 @@ const (
 	// gossipSync is the state in which a node listens to at least one full layer of gossip before participating
 	// in the protocol. this is to protect the node from participating in the consensus without full information.
 	// for example, when a node wakes up in the middle of layer N, since it didn't receive all relevant messages and
-	// blocks of layer N, it shouldn't vote or produce blocks in layer N+1. it instead listens to gossip for all of
-	// layer N+1 and starts producing blocks and participates in hare committee in layer N+2
+	// blocks of layer N, it shouldn't vote or produce blocks in layer N+1. it instead listens to gossip for all
+	// through layer N+1 and starts producing blocks and participates in hare committee in layer N+2
 	gossipSync
 	// synced is the state where the node is in sync with its peers.
 	synced
@@ -279,7 +279,8 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 	// using ProcessedLayer() instead of LatestLayer() so we can validate layers on a best-efforts basis.
 	// our clock starts ticking from 1 so it is safe to skip layer 0
-	for layerID := s.mesh.ProcessedLayer().Add(1); !layerID.After(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {
+	// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
+	for layerID := s.mesh.ProcessedLayer().Add(1); layerID.Before(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {
 		var layer *types.Layer
 		var err error
 		if layer, err = s.syncLayer(ctx, layerID); err != nil {
