@@ -3,13 +3,14 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"testing"
+	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"time"
 )
 
 const protocol = "/protocol/test/1.0/"
@@ -17,7 +18,7 @@ const protocol = "/protocol/test/1.0/"
 func TestProtocol_SendRequest(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	fnd1 := NewMsgServer(context.TODO(), n1, protocol, 5*time.Second, make(chan service.DirectMessage, config.Values.BufferSize), log.NewDefault("t1"))
+	fnd1 := NewMsgServer(context.TODO(), n1, protocol, 5*time.Second, make(chan service.DirectMessage, config.Values.BufferSize), logtest.New(t).WithName("t1"))
 
 	//handler that returns some bytes on request
 
@@ -28,7 +29,7 @@ func TestProtocol_SendRequest(t *testing.T) {
 	fnd1.RegisterBytesMsgHandler(1, handler)
 
 	n2 := sim.NewNode()
-	fnd2 := NewMsgServer(context.TODO(), n2, protocol, 5*time.Second, make(chan service.DirectMessage, config.Values.BufferSize), log.NewDefault("t2"))
+	fnd2 := NewMsgServer(context.TODO(), n2, protocol, 5*time.Second, make(chan service.DirectMessage, config.Values.BufferSize), logtest.New(t).WithName("t2"))
 
 	//send request with handler that converts to string and sends via channel
 	strCh := make(chan string)
@@ -52,7 +53,7 @@ func TestProtocol_SendRequest(t *testing.T) {
 func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	fnd1 := NewMsgServer(context.TODO(), n1, protocol, 5*time.Second, make(chan service.DirectMessage, config.Values.BufferSize), log.NewDefault("t3"))
+	fnd1 := NewMsgServer(context.TODO(), n1, protocol, 5*time.Second, make(chan service.DirectMessage, config.Values.BufferSize), logtest.New(t).WithName("t3"))
 
 	//handler that returns some bytes on request
 
@@ -64,7 +65,7 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 	fnd1.RegisterBytesMsgHandler(1, handler)
 
 	n2 := sim.NewNode()
-	fnd2 := NewMsgServer(context.TODO(), n2, protocol, 10*time.Millisecond, make(chan service.DirectMessage, config.Values.BufferSize), log.NewDefault("t4"))
+	fnd2 := NewMsgServer(context.TODO(), n2, protocol, 10*time.Millisecond, make(chan service.DirectMessage, config.Values.BufferSize), logtest.New(t).WithName("t4"))
 
 	//send request with handler that converts to string and sends via channel
 	strCh := make(chan string)
@@ -95,7 +96,7 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 func TestProtocol_Close(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	fnd1 := NewMsgServer(context.TODO(), n1, protocol, 5*time.Second, make(chan service.DirectMessage, config.Values.BufferSize), log.NewDefault("t5"))
+	fnd1 := NewMsgServer(context.TODO(), n1, protocol, 5*time.Second, make(chan service.DirectMessage, config.Values.BufferSize), logtest.New(t).WithName("t5"))
 
 	//handler that returns some bytes on request
 
@@ -107,7 +108,7 @@ func TestProtocol_Close(t *testing.T) {
 	fnd1.RegisterBytesMsgHandler(1, handler)
 
 	n2 := sim.NewNode()
-	fnd2 := NewMsgServer(context.TODO(), n2, protocol, 10*time.Millisecond, make(chan service.DirectMessage, config.Values.BufferSize), log.NewDefault("t6"))
+	fnd2 := NewMsgServer(context.TODO(), n2, protocol, 10*time.Millisecond, make(chan service.DirectMessage, config.Values.BufferSize), logtest.New(t).WithName("t6"))
 
 	//send request with handler that converts to string and sends via channel
 	strCh := make(chan string)

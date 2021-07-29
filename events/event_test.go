@@ -1,16 +1,17 @@
 package events
 
 import (
+	"runtime/debug"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zapcore"
-	"runtime/debug"
-	"sync"
-	"testing"
-	"time"
 )
 
 func TestNewBlockEvent(t *testing.T) {
@@ -64,7 +65,6 @@ var (
 func MakeTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tx, err := types.NewSignedTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
 	if err != nil {
-		log.Error("error creating new signed tx: %v", err)
 		return nil
 	}
 	return tx
@@ -171,7 +171,6 @@ func TestReportError(t *testing.T) {
 		}
 		return nil
 	})
-	log.Error("abracadabra")
 
 	// Wait for goroutine to finish
 	wgDone.Wait()

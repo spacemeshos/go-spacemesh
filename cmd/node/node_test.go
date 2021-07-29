@@ -18,6 +18,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/stretchr/testify/assert"
@@ -61,7 +62,7 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	// setup spacemesh app
 	app := NewSpacemeshApp()
 	app.Config.SMESHING.Opts.DataDir = tempdir
-	app.log = log.NewDefault("logger")
+	app.log = logtest.New(t)
 
 	// Create new identity.
 	signer1, err := app.LoadOrCreateEdSigner()
@@ -537,7 +538,6 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 	// We expect this one to succeed
 	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload, app.Config.API.JSONServerPort)
-	log.Info("Got echo response: %v", respBody)
 	var msg pb.EchoResponse
 	r.NoError(jsonpb.UnmarshalString(respBody, &msg))
 	r.Equal(message, msg.Msg.Value)
@@ -555,7 +555,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	path := t.TempDir()
 
-	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), log.NewDefault("clock"))
+	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), logtest.New(t))
 	localNet := service.NewSimulator()
 	cfg := getTestDefaultConfig(1)
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
@@ -630,7 +630,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		nextError := func() *pb.NodeError {
 			in, err := streamErr.Recv()
 			require.NoError(t, err)
-			log.Info("Got streamed error: %v", in.Error)
 			return in.Error
 		}
 
@@ -895,7 +894,7 @@ func TestSpacemeshApp_P2PInterface(t *testing.T) {
 	// Initialize the network: we don't want to listen but this lets us dial out
 	l, err := node.NewNodeIdentity()
 	r.NoError(err)
-	p2pnet, err := net.NewNet(context.TODO(), app.Config.P2P, l, log.AppLog)
+	p2pnet, err := net.NewNet(context.TODO(), app.Config.P2P, l, logtest.New(t))
 	r.NoError(err)
 	// We need to listen on a different port
 	listener, err := inet.Listen("tcp", fmt.Sprintf("%s:%d", addr, 9270))
@@ -912,7 +911,7 @@ func TestSpacemeshApp_P2PInterface(t *testing.T) {
 	app.Config.P2P.TCPPort = port
 	app.Config.P2P.TCPInterface = addr
 	app.Config.P2P.AcquirePort = false
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.AppLog, app.Config.DataDir())
+	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, logtest.New(t), app.Config.DataDir())
 	r.NoError(err)
 	r.NoError(swarm.Start(context.TODO()))
 	defer swarm.Shutdown()

@@ -7,22 +7,22 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
-func getPeers(p service.Service) (*Peers, chan p2pcrypto.PublicKey, chan p2pcrypto.PublicKey) {
+func getPeers(tb testing.TB, p service.Service) (*Peers, chan p2pcrypto.PublicKey, chan p2pcrypto.PublicKey) {
 	value := atomic.Value{}
 	value.Store(make([]Peer, 0, 20))
-	peers := NewPeersImpl(&value, make(chan struct{}), log.NewDefault("peers"))
+	peers := NewPeersImpl(&value, make(chan struct{}), logtest.New(tb).WithName("peers"))
 	n, expired := p.SubscribePeerEvents()
 	go peers.listenToPeers(n, expired)
 	return peers, n, expired
 }
 
 func TestPeers_GetPeers(t *testing.T) {
-	pi, n, _ := getPeers(service.NewSimulator().NewNode())
+	pi, n, _ := getPeers(t, service.NewSimulator().NewNode())
 	a := p2pcrypto.NewRandomPubkey()
 	n <- a
 	time.Sleep(10 * time.Millisecond) //allow context switch
@@ -33,7 +33,7 @@ func TestPeers_GetPeers(t *testing.T) {
 }
 
 func TestPeers_Close(t *testing.T) {
-	pi, n, _ := getPeers(service.NewSimulator().NewNode())
+	pi, n, _ := getPeers(t, service.NewSimulator().NewNode())
 	a := p2pcrypto.NewRandomPubkey()
 	n <- a
 	time.Sleep(10 * time.Millisecond) //allow context switch
@@ -45,7 +45,7 @@ func TestPeers_Close(t *testing.T) {
 }
 
 func TestPeers_AddPeer(t *testing.T) {
-	pi, n, _ := getPeers(service.NewSimulator().NewNode())
+	pi, n, _ := getPeers(t, service.NewSimulator().NewNode())
 	a := p2pcrypto.NewRandomPubkey()
 	b := p2pcrypto.NewRandomPubkey()
 	c := p2pcrypto.NewRandomPubkey()
@@ -66,7 +66,7 @@ func TestPeers_AddPeer(t *testing.T) {
 }
 
 func TestPeers_RemovePeer(t *testing.T) {
-	pi, n, expierd := getPeers(service.NewSimulator().NewNode())
+	pi, n, expierd := getPeers(t, service.NewSimulator().NewNode())
 	a := p2pcrypto.NewRandomPubkey()
 	b := p2pcrypto.NewRandomPubkey()
 	c := p2pcrypto.NewRandomPubkey()

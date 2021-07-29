@@ -10,7 +10,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
@@ -185,7 +185,7 @@ func TestBlockHandler_BlockSyntacticValidation(t *testing.T) {
 	r := require.New(t)
 	cfg := Config{3, goldenATXID}
 	//yncs, _, _ := SyncMockFactory(2, conf, "TestSyncProtocol_NilResponse", memoryDB, newMemPoetDb)
-	s := NewBlockHandler(cfg, &meshMock{}, &verifierMock{}, log.NewDefault("BlockSyntacticValidation"))
+	s := NewBlockHandler(cfg, &meshMock{}, &verifierMock{}, logtest.New(t))
 	b := &types.Block{}
 
 	fetch := newFetchMock()
@@ -213,7 +213,7 @@ func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	cfg := Config{
 		3, goldenATXID,
 	}
-	s := NewBlockHandler(cfg, &meshMock{}, &verifierMock{}, log.NewDefault("syncRefBlock"))
+	s := NewBlockHandler(cfg, &meshMock{}, &verifierMock{}, logtest.New(t))
 	s.traverse = mockForBlockInView
 	a := atx("")
 	atxpool.Put(a)

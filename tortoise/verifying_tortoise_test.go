@@ -10,7 +10,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
@@ -23,19 +23,19 @@ func init() {
 
 const Path = "../tmp/tortoise/"
 
-func getPersistentMash() (*mesh.DB, func() error) {
+func getPersistentMash(tb testing.TB) (*mesh.DB, func() error) {
 	path := Path + "ninje_tortoise"
 	teardown := func() error { return os.RemoveAll(path) }
 	if err := teardown(); err != nil {
 		panic(err)
 	}
 	db, _ := mesh.NewPersistentMeshDB(fmt.Sprintf(path+
-		"/"), 10, log.NewDefault("ninje_tortoise").WithOptions(log.Nop))
+		"/"), 10, logtest.New(tb).WithName("ninje_tortoise"))
 	return db, teardown
 }
 
-func getInMemMesh() *mesh.DB {
-	return mesh.NewMemMeshDB(log.NewDefault(""))
+func getInMemMesh(tb testing.TB) *mesh.DB {
+	return mesh.NewMemMeshDB(logtest.New(tb))
 }
 
 func AddLayer(m *mesh.DB, layer *types.Layer) error {
@@ -140,7 +140,7 @@ func TestTurtle_HandleIncomingLayer_VoteAbstain(t *testing.T) {
 // voteNegative - the amoutn of blocks to vote negative per layer
 // voteAbstain - the amoutn of layers to vote abstain because we always abstain on a whole layer
 func turtleSanity(t *testing.T, layers types.LayerID, blocksPerLayer, voteNegative int, voteAbstain int) (trtl *turtle, negative []types.BlockID, abstains []types.BlockID) {
-	msh := getInMemMesh()
+	msh := getInMemMesh(t)
 
 	newlyrs := make(map[types.LayerID]struct{})
 
@@ -256,7 +256,7 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 	layers := types.NewLayerID(15)
 	blocksPerLayer := 10
 
-	msh := getInMemMesh()
+	msh := getInMemMesh(t)
 
 	layerfuncs := make([]func(id types.LayerID) (ids []types.BlockID, err error), 0, layers.Uint32())
 
@@ -369,8 +369,7 @@ func TestTurtle_Eviction(t *testing.T) {
 }
 
 func TestTurtle_Recovery(t *testing.T) {
-	log.DebugMode(true)
-	mdb, teardown := getPersistentMash()
+	mdb, teardown := getPersistentMash(t)
 
 	getHareResults := func(l types.LayerID) ([]types.BlockID, error) {
 		return mdb.LayerBlockIds(l)
@@ -378,18 +377,18 @@ func TestTurtle_Recovery(t *testing.T) {
 
 	mdb.InputVectorBackupFunc = getHareResults
 
-	lg := log.NewDefault(t.Name())
+	lg := logtest.New(t).WithName(t.Name())
 	alg := verifyingTortoise(3, mdb, 5, lg)
 	l := mesh.GenesisLayer()
 
-	log.With().Info("The genesis is ", l.Index(), types.BlockIdsField(types.BlockIDs(l.Blocks())))
-	log.With().Info("The genesis is ", l.Blocks()[0].Fields()...)
+	lg.With().Info("The genesis is ", l.Index(), types.BlockIdsField(types.BlockIDs(l.Blocks())))
+	lg.With().Info("The genesis is ", l.Blocks()[0].Fields()...)
 
 	l1 := createTurtleLayer(context.TODO(), types.GetEffectiveGenesis().Add(1), mdb, alg.BaseBlock, getHareResults, 3)
 	require.NoError(t, AddLayer(mdb, l1))
 
-	log.With().Info("The first is ", l1.Index(), types.BlockIdsField(types.BlockIDs(l1.Blocks())))
-	log.With().Info("The first bb is ", l1.Index(), l1.Blocks()[0].BaseBlock, types.BlockIdsField(l1.Blocks()[0].ForDiff))
+	lg.With().Info("The first is ", l1.Index(), types.BlockIdsField(types.BlockIDs(l1.Blocks())))
+	lg.With().Info("The first bb is ", l1.Index(), l1.Blocks()[0].BaseBlock, types.BlockIdsField(l1.Blocks()[0].ForDiff))
 
 	alg.HandleIncomingLayer(l1)
 	require.NoError(t, alg.Persist())
@@ -418,7 +417,7 @@ func TestTurtle_Recovery(t *testing.T) {
 			t.Log("Recovered from", r)
 		}
 
-		log.Info("I've recovered")
+		lg.Info("I've recovered")
 
 		alg := recoveredVerifyingTortoise(mdb, lg)
 

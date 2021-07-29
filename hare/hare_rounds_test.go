@@ -8,7 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
@@ -29,7 +29,6 @@ func newTestHareWrapper(count int) *TestHareWrapper {
 
 func (w *TestHareWrapper) Tick(layer types.LayerID) {
 	for i := 0; i < len(w.lCh); i++ {
-		log.Debug("tick layer %v for instance %v", layer, i)
 		w.lCh[i] <- layer
 	}
 }
@@ -86,12 +85,12 @@ func (h *testHare) LayerBlockIds(layer types.LayerID) ([]types.BlockID, error) {
 }
 func (h *testHare) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {}
 
-func createTestHare(tcfg config.Config, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string, bp meshProvider) *Hare {
+func createTestHare(tb testing.TB, tcfg config.Config, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string, bp meshProvider) *Hare {
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: pub.Bytes()}
 	hare := New(tcfg, p2p, ed, nodeID, validateBlock, isSynced, bp, rolacle, 10, &mockIdentityP{nid: nodeID},
-		&MockStateQuerier{true, nil}, layersCh, log.AppLog.WithName(name+"_"+ed.PublicKey().ShortString()))
+		&MockStateQuerier{true, nil}, layersCh, logtest.New(tb).WithName(name+"_"+ed.PublicKey().ShortString()))
 	return hare
 }
 
@@ -113,7 +112,7 @@ func runNodesFor(t *testing.T, nodes, leaders, maxLayers, limitIterations, concu
 		mp2p := &p2pManipulator{nd: s, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 		w.lCh = append(w.lCh, make(chan types.LayerID, 1))
 		h := &testHare{nil, oracle, bp, validate, i}
-		h.Hare = createTestHare(cfg, w.lCh[i], mp2p, h, t.Name(), h)
+		h.Hare = createTestHare(t, cfg, w.lCh[i], mp2p, h, t.Name(), h)
 		w.hare = append(w.hare, h.Hare)
 		e := h.Start(context.TODO())
 		r.NoError(e)

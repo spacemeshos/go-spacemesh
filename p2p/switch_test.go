@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/nattraversal"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
@@ -71,7 +71,7 @@ func p2pTestInstance(t testing.TB, config config.Config) *Switch {
 }
 
 func p2pTestNoStart(t testing.TB, config config.Config) *Switch {
-	p, err := newSwarm(context.TODO(), config, log.NewDefault(t.Name()), "")
+	p, err := newSwarm(context.TODO(), config, logtest.New(t).WithName(t.Name()), "")
 	if err != nil {
 		t.Fatal("err creating a Switch", err)
 	}
@@ -85,7 +85,7 @@ const exampleProtocol = "EX"
 const examplePayload = "Example"
 
 func TestNew(t *testing.T) {
-	s, err := New(context.TODO(), configWithPort(0), log.NewDefault(t.Name()), "")
+	s, err := New(context.TODO(), configWithPort(0), logtest.New(t).WithName(t.Name()), "")
 	require.NoError(t, err)
 	err = s.Start(context.TODO())
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func TestNew(t *testing.T) {
 }
 
 func Test_newSwarm(t *testing.T) {
-	s, err := newSwarm(context.TODO(), configWithPort(0), log.NewDefault(t.Name()), "")
+	s, err := newSwarm(context.TODO(), configWithPort(0), logtest.New(t).WithName(t.Name()), "")
 	assert.NoError(t, err)
 	err = s.Start(context.TODO())
 	assert.NoError(t, err)
@@ -103,7 +103,7 @@ func Test_newSwarm(t *testing.T) {
 }
 
 func TestSwarm_Shutdown(t *testing.T) {
-	s, err := newSwarm(context.TODO(), configWithPort(0), log.NewDefault(t.Name()), "")
+	s, err := newSwarm(context.TODO(), configWithPort(0), logtest.New(t).WithName(t.Name()), "")
 	assert.NoError(t, err)
 	err = s.Start(context.TODO())
 	assert.NoError(t, err)
@@ -132,7 +132,7 @@ func TestSwarm_Shutdown(t *testing.T) {
 }
 
 func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
-	s, err := newSwarm(context.TODO(), configWithPort(7513), log.NewDefault(t.Name()), "")
+	s, err := newSwarm(context.TODO(), configWithPort(7513), logtest.New(t).WithName(t.Name()), "")
 	assert.NoError(t, err)
 	msgs := s.RegisterDirectProtocol("Anton")
 	assert.NotNil(t, msgs)
@@ -149,7 +149,7 @@ func TestSwarm_processMessage(t *testing.T) {
 	cpmock := newCpoolMock()
 	s.cPool = cpmock
 	s.config = config.DefaultConfig()
-	s.logger = log.NewDefault(t.Name())
+	s.logger = logtest.New(t).WithName(t.Name())
 	s.lNode, _ = node.GenerateTestNode(t)
 	r := node.GenerateRandomNodeData()
 

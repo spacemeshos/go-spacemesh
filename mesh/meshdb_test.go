@@ -243,7 +243,7 @@ func BenchmarkNewPersistentMeshDB(b *testing.B) {
 
 	r := require.New(b)
 
-	mdb, err := NewPersistentMeshDB(path.Join(Path, "mesh_db"), 5, log.AppLog.WithName("meshDb"))
+	mdb, err := NewPersistentMeshDB(path.Join(Path, "mesh_db"), 5, logtest.New(b))
 	require.NoError(b, err)
 	defer mdb.Close()
 	defer teardown()
@@ -976,7 +976,7 @@ func TestMeshDB_GetMeshTransactions(t *testing.T) {
 }
 
 func TestMesh_FindOnce(t *testing.T) {
-	mdb := NewMemMeshDB(log.NewDefault(t.Name()))
+	mdb := NewMemMeshDB(logtest.New(t))
 	defer mdb.Close()
 
 	r := require.New(t)
@@ -1014,7 +1014,7 @@ func BenchmarkGetBlockHeader(b *testing.B) {
 	blocks := make([]*types.Block, cache*2)
 	db, err := NewPersistentMeshDB(b.TempDir(),
 		1, /*size of the cache is multiplied by a constant (layerSize). for the benchmark it needs to be no more than layerSize*/
-		log.NewNop())
+		logtest.New(b))
 	require.NoError(b, err)
 	for i := range blocks {
 		blocks[i] = types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)

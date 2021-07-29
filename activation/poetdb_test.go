@@ -2,22 +2,23 @@ package activation
 
 import (
 	"fmt"
-	"github.com/nullstyle/go-xdr/xdr3"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/sha256-simd"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	xdr "github.com/nullstyle/go-xdr/xdr3"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/sha256-simd"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPoetDbHappyFlow(t *testing.T) {
 	r := require.New(t)
 
-	poetDb := NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetdb_test"))
+	poetDb := NewPoetDb(database.NewMemDatabase(), logtest.New(t))
 
 	file, err := os.Open(filepath.Join("test_resources", "poet.proof"))
 	r.NoError(err)
@@ -58,7 +59,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 func TestPoetDbInvalidPoetProof(t *testing.T) {
 	r := require.New(t)
 
-	poetDb := NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetdb_test"))
+	poetDb := NewPoetDb(database.NewMemDatabase(), logtest.New(t))
 
 	file, err := os.Open(filepath.Join("test_resources", "poet.proof"))
 	r.NoError(err)
@@ -80,7 +81,7 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 func TestPoetDbNonExistingKeys(t *testing.T) {
 	r := require.New(t)
 
-	poetDb := NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetdb_test"))
+	poetDb := NewPoetDb(database.NewMemDatabase(), logtest.New(t))
 
 	poetID := []byte("poet_id_123456")
 
@@ -96,7 +97,7 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 	r := require.New(t)
 
-	poetDb := NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetdb_test"))
+	poetDb := NewPoetDb(database.NewMemDatabase(), logtest.New(t))
 
 	poetID := []byte("poet_id_123456")
 

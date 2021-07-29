@@ -3,7 +3,6 @@ package p2p
 import (
 	"context"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -91,7 +90,6 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 				case got := <-mc:
 					atomic.AddInt32(numgot, 1)
 					got.ReportValidation(context.TODO(), exampleGossipProto)
-					log.Info("got back message %v", numgot)
 					return nil
 				case <-ctx.Done():
 					return errors.New("timed out")

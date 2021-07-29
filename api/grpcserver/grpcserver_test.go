@@ -25,7 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc/codes"
@@ -347,7 +346,6 @@ func (t *TxAPIMock) ProcessedLayer() types.LayerID {
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tx, err := types.NewSignedTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
 	if err != nil {
-		log.Error("error creating new signed tx: ", err)
 		return nil
 	}
 	return tx
@@ -2137,7 +2135,6 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	}()
 
 	// initialize the streamer
-	log.Info("initializing event stream")
 	events.CloseEventReporter()
 	err = events.InitializeEventReporterWithOptions("", 0, true)
 	require.NoError(t, err)
@@ -2154,7 +2151,6 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	events.ReportNewActivation(globalAtx2)
 
 	// close the stream
-	log.Info("closing event stream")
 	events.CloseEventReporter()
 
 	// wait for the goroutine
@@ -2223,7 +2219,6 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	}()
 
 	// initialize the streamer
-	log.Info("initializing event stream")
 	events.CloseEventReporter()
 	err = events.InitializeEventReporterWithOptions("", 0, true)
 	require.NoError(t, err)
@@ -2251,7 +2246,6 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	events.ReportRewardReceived(events.Reward{Coinbase: addr2})
 
 	// close the stream
-	log.Info("closing event stream")
 	events.CloseEventReporter()
 
 	// wait for the goroutine to finish
@@ -2319,7 +2313,6 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	}()
 
 	// initialize the streamer
-	log.Info("initializing event stream")
 	events.CloseEventReporter()
 	err = events.InitializeEventReporterWithOptions("", 0, true)
 	require.NoError(t, err)
@@ -2350,7 +2343,6 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	})
 
 	// close the stream
-	log.Info("closing event stream")
 	events.CloseEventReporter()
 
 	// wait for the goroutine to finish
@@ -2369,7 +2361,6 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
-	log.Info("dialing %s", addr)
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	require.NoError(t, err)
 	defer func() {
@@ -2404,7 +2395,6 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	}()
 
 	// initialize the streamer
-	log.Info("initializing event stream")
 	require.NoError(t, events.InitializeEventReporterWithOptions("", 0, true))
 
 	layer, err := txAPI.GetLayer(layerFirst)
@@ -2415,7 +2405,6 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	})
 
 	// close the stream
-	log.Info("closing event stream")
 	events.CloseEventReporter()
 
 	// wait for the goroutine

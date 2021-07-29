@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"nanomsg.org/go-mangos/transport/tcp"
@@ -141,9 +140,6 @@ func TestPubSub(t *testing.T) {
 		for i := 0; i < numOfMessages; i++ {
 			err = p.publish(topics[0], payload)
 			assert.NoError(t, err)
-			if err != nil {
-				log.Error("wtf : %v", err)
-			}
 		}
 		wg.Done()
 	}()
@@ -161,10 +157,8 @@ loop:
 			break loop
 		case rec := <-s.output[topics[0]]:
 			counter--
-			log.Info("got msg: %v count %v", string(rec), counter)
 			if counter == 0 {
 				assert.Equal(t, rec, msg)
-				log.Info(string(msg))
 				break loop
 			}
 		case <-irrelevantTopic:

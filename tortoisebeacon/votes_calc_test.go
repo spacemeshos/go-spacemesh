@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 	"github.com/stretchr/testify/mock"
@@ -70,7 +70,7 @@ func TestTortoiseBeacon_calcVotesFromProposals(t *testing.T) {
 				config: Config{
 					Theta: 1,
 				},
-				Log:                       log.NewDefault("TortoiseBeacon"),
+				Log:                       logtest.New(t).WithName("TortoiseBeacon"),
 				validProposals:            tc.validProposals,
 				potentiallyValidProposals: tc.potentiallyValidProposals,
 				atxDB:                     mockDB,
@@ -209,7 +209,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 				config: Config{
 					Theta: 1,
 				},
-				Log:           log.NewDefault("TortoiseBeacon"),
+				Log:           logtest.New(t).WithName("TortoiseBeacon"),
 				incomingVotes: tc.incomingVotes,
 				ownVotes:      map[epochRoundPair]votesSetPair{},
 				atxDB:         mockDB,
@@ -290,7 +290,7 @@ func TestTortoiseBeacon_firstRoundVotes(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log:           log.NewDefault("TortoiseBeacon"),
+				Log:           logtest.New(t).WithName("TortoiseBeacon"),
 				incomingVotes: tc.incomingVotes,
 			}
 
@@ -442,7 +442,7 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 				config: Config{
 					Theta: 1,
 				},
-				Log:           log.NewDefault("TortoiseBeacon"),
+				Log:           logtest.New(t).WithName("TortoiseBeacon"),
 				weakCoin:      tc.weakCoin,
 				incomingVotes: tc.incomingVotes,
 				ownVotes:      map[epochRoundPair]votesSetPair{},
@@ -552,7 +552,7 @@ func TestTortoiseBeacon_calcVotesMargin(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log:                      log.NewDefault("TortoiseBeacon"),
+				Log:                      logtest.New(t).WithName("TortoiseBeacon"),
 				incomingVotes:            tc.incomingVotes,
 				firstRoundOutcomingVotes: map[types.EpochID]firstRoundVotes{},
 			}
@@ -648,7 +648,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 				config: Config{
 					Theta: 1,
 				},
-				Log:      log.NewDefault("TortoiseBeacon"),
+				Log:      logtest.New(t).WithName("TortoiseBeacon"),
 				ownVotes: map[epochRoundPair]votesSetPair{},
 				weakCoin: tc.weakCoin,
 				atxDB:    mockDB,

@@ -14,7 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -58,14 +58,14 @@ func TestTortoiseBeacon(t *testing.T) {
 		mock.AnythingOfType("types.RoundID")).
 		Return(true)
 
-	logger := log.NewDefault("TortoiseBeacon")
+	logger := logtest.New(t).WithName("TortoiseBeacon")
 
 	genesisTime := time.Now().Add(100 * time.Millisecond)
 	ld := 100 * time.Millisecond
 
 	types.SetLayersPerEpoch(1)
 
-	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, log.NewDefault("clock"))
+	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, logtest.New(t).WithName("clock"))
 	clock.StartNotifying()
 
 	sim := service.NewSimulator()
@@ -80,7 +80,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	requirer.NoError(err)
 
 	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
-	lg := log.NewDefault(minerID.Key[:5])
+	lg := logtest.New(t).WithName(minerID.Key[:5])
 	idStore := activation.NewIdentityStore(database.NewMemDatabase())
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	goldenATXID := types.ATXID(types.HexToHash32("11111"))
@@ -154,7 +154,7 @@ func TestTortoiseBeacon_votingThreshold(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log: log.NewDefault("TortoiseBeacon"),
+				Log: logtest.New(t).WithName("TortoiseBeacon"),
 				config: Config{
 					Theta: tc.theta,
 				},
@@ -208,7 +208,7 @@ func TestTortoiseBeacon_atxThresholdFraction(t *testing.T) {
 			}
 
 			tb := TortoiseBeacon{
-				Log: log.NewDefault("TortoiseBeacon"),
+				Log: logtest.New(t).WithName("TortoiseBeacon"),
 				config: Config{
 					Kappa: tc.kappa,
 					Q:     tc.q,
@@ -275,7 +275,7 @@ func TestTortoiseBeacon_atxThreshold(t *testing.T) {
 			}
 
 			tb := TortoiseBeacon{
-				Log: log.NewDefault("TortoiseBeacon"),
+				Log: logtest.New(t).WithName("TortoiseBeacon"),
 				config: Config{
 					Kappa: tc.kappa,
 				},
@@ -330,7 +330,7 @@ func TestTortoiseBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 			}
 
 			tb := TortoiseBeacon{
-				Log: log.NewDefault("TortoiseBeacon"),
+				Log: logtest.New(t).WithName("TortoiseBeacon"),
 				config: Config{
 					Kappa: tc.kappa,
 				},
@@ -404,7 +404,7 @@ func TestTortoiseBeacon_buildProposal(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log: log.NewDefault("TortoiseBeacon"),
+				Log: logtest.New(t).WithName("TortoiseBeacon"),
 			}
 
 			result, err := tb.buildProposal(tc.epoch)
@@ -444,7 +444,7 @@ func TestTortoiseBeacon_signMessage(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log:      log.NewDefault("TortoiseBeacon"),
+				Log:      logtest.New(t).WithName("TortoiseBeacon"),
 				edSigner: edSgn,
 			}
 
@@ -489,7 +489,7 @@ func TestTortoiseBeacon_getSignedProposal(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log:       log.NewDefault("TortoiseBeacon"),
+				Log:       logtest.New(t).WithName("TortoiseBeacon"),
 				vrfSigner: vrfSigner,
 			}
 

@@ -10,7 +10,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
@@ -137,8 +137,8 @@ func (MockTxMemPool) Invalidate(types.TransactionID) {
 
 }
 
-func getMesh(id string) *Mesh {
-	lg := log.AppLog.WithName(id)
+func getMesh(tb testing.TB, id string) *Mesh {
+	lg := logtest.New(tb)
 	mmdb := NewMemMeshDB(lg)
 	layers := NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: mmdb}, newMockTxMemPool(), &MockState{}, lg)
 	return layers
@@ -146,7 +146,7 @@ func getMesh(id string) *Mesh {
 
 func TestLayers_AddBlock(t *testing.T) {
 
-	layers := getMesh("t1")
+	layers := getMesh(t, "t1")
 	defer layers.Close()
 
 	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data1"), nil)
@@ -196,7 +196,7 @@ func addLayer(id types.LayerID, layerSize int, msh *Mesh) *types.Layer {
 func TestLayers_AddLayer(t *testing.T) {
 	r := require.New(t)
 
-	msh := getMesh("t2")
+	msh := getMesh(t, "t2")
 	defer msh.Close()
 
 	id := types.NewLayerID(1)
@@ -215,7 +215,7 @@ func TestLayers_AddLayer(t *testing.T) {
 }
 
 func TestLayers_AddWrongLayer(t *testing.T) {
-	layers := getMesh("t3")
+	layers := getMesh(t, "t3")
 	defer layers.Close()
 	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data1"), nil)
 	block2 := types.NewExistingBlock(types.NewLayerID(2), []byte("data data data2"), nil)
@@ -241,7 +241,7 @@ func TestLayers_AddWrongLayer(t *testing.T) {
 }
 
 func TestLayers_GetLayer(t *testing.T) {
-	layers := getMesh("t4")
+	layers := getMesh(t, "t4")
 	defer layers.Close()
 	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data1"), nil)
 	block2 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data2"), nil)
@@ -261,7 +261,7 @@ func TestLayers_GetLayer(t *testing.T) {
 }
 
 func TestLayers_LatestKnownLayer(t *testing.T) {
-	layers := getMesh("t6")
+	layers := getMesh(t, "t6")
 	defer layers.Close()
 	layers.SetLatestLayer(types.NewLayerID(3))
 	layers.SetLatestLayer(types.NewLayerID(7))
@@ -272,7 +272,7 @@ func TestLayers_LatestKnownLayer(t *testing.T) {
 }
 
 func TestLayers_WakeUp(t *testing.T) {
-	layers := getMesh("t1")
+	layers := getMesh(t, "t1")
 	defer layers.Close()
 
 	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data1"), nil)
@@ -296,7 +296,7 @@ func TestLayers_WakeUp(t *testing.T) {
 	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
 	//assert.True(t, len(*rBlock1.ActiveSet) == len(*block1.ActiveSet))
 
-	recoveredMesh := NewMesh(layers.DB, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: layers.DB}, newMockTxMemPool(), &MockState{}, log.NewDefault(""))
+	recoveredMesh := NewMesh(layers.DB, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: layers.DB}, newMockTxMemPool(), &MockState{}, logtest.New(t))
 
 	rBlock2, err = recoveredMesh.GetBlock(block2.ID())
 	assert.NoError(t, err)
@@ -310,7 +310,7 @@ func TestLayers_WakeUp(t *testing.T) {
 }
 
 func TestLayers_OrphanBlocks(t *testing.T) {
-	layers := getMesh("t6")
+	layers := getMesh(t, "t6")
 	defer layers.Close()
 	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data1"), nil)
 	block2 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data2"), nil)
@@ -341,7 +341,7 @@ func TestLayers_OrphanBlocks(t *testing.T) {
 }
 
 func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
-	layers := getMesh("t6")
+	layers := getMesh(t, "t6")
 	defer layers.Close()
 	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data1"), nil)
 	block2 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data2"), nil)
@@ -372,7 +372,7 @@ func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
 func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) {
 	r := require.New(t)
 
-	msh := getMesh("mesh")
+	msh := getMesh(t, "mesh")
 
 	state := &MockMapState{}
 	msh.txProcessor = state
@@ -408,7 +408,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 func TestMesh_AddBlockWithTxs_PushTransactions_getInvalidBlocksByHare(t *testing.T) {
 	r := require.New(t)
 
-	msh := getMesh("mesh")
+	msh := getMesh(t, "mesh")
 
 	state := &MockMapState{}
 	msh.txProcessor = state
@@ -435,7 +435,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_getInvalidBlocksByHare(t *testing
 func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
 	r := require.New(t)
 
-	msh := getMesh("t2")
+	msh := getMesh(t, "t2")
 	defer msh.Close()
 	layerID := types.NewLayerID(1)
 	signer, _ := newSignerAndAddress(r, "origin")
@@ -455,7 +455,7 @@ func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
 }
 
 func TestMesh_persistLayerHashes(t *testing.T) {
-	msh := getMesh("persistLayerHashes")
+	msh := getMesh(t, "persistLayerHashes")
 	defer msh.Close()
 
 	// test first layer hash
@@ -521,7 +521,7 @@ func (FailingAtxDbMock) SyntacticallyValidateAtx(*types.ActivationTx) error { pa
 
 func TestMesh_AddBlockWithTxs(t *testing.T) {
 	r := require.New(t)
-	lg := log.NewDefault("id")
+	lg := logtest.New(t)
 	meshDB := NewMemMeshDB(lg)
 	mesh := NewMesh(meshDB, &FailingAtxDbMock{}, ConfigTst(), &MeshValidatorMock{mdb: meshDB}, newMockTxMemPool(), &MockState{}, lg)
 

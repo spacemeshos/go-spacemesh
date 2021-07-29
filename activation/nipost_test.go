@@ -4,15 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"testing"
+
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/require"
-	"io/ioutil"
-	"testing"
 )
 
 var minerID = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
@@ -135,7 +136,7 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 	poetDb := &poetDbMock{}
 
 	nb := NewNIPostBuilder(minerID, postProvider, poetProvider,
-		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
+		poetDb, database.NewMemDatabase(), logtest.New(t))
 	hash := types.BytesToHash([]byte("anton"))
 	nipost, err := nb.BuildNIPost(context.TODO(), &hash, nil)
 	assert.NoError(err)
@@ -147,7 +148,7 @@ func TestPostSetup(t *testing.T) {
 
 	var postSetupProvider PostSetupProvider
 	var err error
-	postSetupProvider, err = NewPostSetupManager(minerID, postCfg, log.NewDefault(string(minerID)))
+	postSetupProvider, err = NewPostSetupManager(minerID, postCfg, logtest.New(t))
 	r.NoError(err)
 	r.NotNil(postSetupProvider)
 
@@ -157,7 +158,7 @@ func TestPostSetup(t *testing.T) {
 	poetDb := &poetDbMock{}
 
 	nb := NewNIPostBuilder(minerID, postSetupProvider, poetProvider,
-		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
+		poetDb, database.NewMemDatabase(), logtest.New(t))
 
 	done, err := postSetupProvider.StartSession(postSetupOpts)
 	r.NoError(err)
@@ -183,13 +184,13 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	poetDb := &poetDbMock{}
 
 	nipostChallenge := types.BytesToHash([]byte("anton"))
-	nipost := buildNIPost(r, postCfg, nipostChallenge, poetDb)
+	nipost := buildNIPost(t, r, postCfg, nipostChallenge, poetDb)
 
 	err := validateNIPost(minerID, nipost, nipostChallenge, poetDb, postCfg, postSetupOpts.NumUnits)
 	r.NoError(err)
 }
 
-func buildNIPost(r *require.Assertions, postCfg PostConfig, nipostChallenge types.Hash32, poetDb poetDbAPI) *types.NIPost {
+func buildNIPost(tb testing.TB, r *require.Assertions, postCfg PostConfig, nipostChallenge types.Hash32, poetDb poetDbAPI) *types.NIPost {
 	poetProver, err := NewHTTPPoetHarness(true)
 	r.NoError(err)
 	r.NotNil(poetProver)
@@ -199,7 +200,7 @@ func buildNIPost(r *require.Assertions, postCfg PostConfig, nipostChallenge type
 	}()
 
 	var postProvider PostSetupProvider
-	postProvider, err = NewPostSetupManager(minerID, postCfg, log.NewDefault("post"))
+	postProvider, err = NewPostSetupManager(minerID, postCfg, logtest.New(tb))
 	r.NoError(err)
 	r.NotNil(postProvider)
 	defer func() {
@@ -212,7 +213,7 @@ func buildNIPost(r *require.Assertions, postCfg PostConfig, nipostChallenge type
 	<-done
 
 	nb := NewNIPostBuilder(minerID, postProvider, poetProver,
-		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
+		poetDb, database.NewMemDatabase(), logtest.New(tb))
 
 	nipost, err := nb.BuildNIPost(context.TODO(), &nipostChallenge, nil)
 	r.NoError(err)
@@ -230,7 +231,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	copy(minerIDNotInitialized, []byte("not initialized"))
 	nipostChallenge := types.BytesToHash([]byte("anton"))
 
-	postProvider, err := NewPostSetupManager(minerIDNotInitialized, postCfg, log.NewDefault("post"))
+	postProvider, err := NewPostSetupManager(minerIDNotInitialized, postCfg, logtest.New(t))
 	r.NoError(err)
 	r.NotNil(postProvider)
 	defer func() {
@@ -247,7 +248,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	}()
 	poetDb := &poetDbMock{}
 	nb := NewNIPostBuilder(minerIDNotInitialized, postProvider, poetProver,
-		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
+		poetDb, database.NewMemDatabase(), logtest.New(t))
 
 	nipost, err := nb.BuildNIPost(context.TODO(), &nipostChallenge, nil)
 	r.EqualError(err, "post setup not complete")
@@ -278,7 +279,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	poetDb := &poetDbMock{errOn: false}
 
 	nb := NewNIPostBuilder(minerID, postProvider, poetProvider,
-		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
+		poetDb, database.NewMemDatabase(), logtest.New(t))
 	hash := types.BytesToHash([]byte("anton"))
 	nipost, err := nb.BuildNIPost(context.TODO(), &hash, nil)
 	assert.NoError(err)
@@ -287,20 +288,20 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	assert.Equal(builderState{NIPost: &types.NIPost{}}, *nb.state)
 
 	//fail after getting proof ref
-	nb = NewNIPostBuilder(minerID, postProvider, poetProvider, poetDb, db, log.NewDefault(string(minerID)))
+	nb = NewNIPostBuilder(minerID, postProvider, poetProvider, poetDb, db, logtest.New(t))
 	poetDb.errOn = true
 	nipost, err = nb.BuildNIPost(context.TODO(), &hash, nil)
 	assert.Nil(nipost)
 	assert.Error(err)
 
 	//check that proof ref is not called again
-	nb = NewNIPostBuilder(minerID, postProvider, poetProvider, poetDb, db, log.NewDefault(string(minerID)))
+	nb = NewNIPostBuilder(minerID, postProvider, poetProvider, poetDb, db, logtest.New(t))
 	nipost, err = nb.BuildNIPost(context.TODO(), &hash, nil)
 	assert.Nil(nipost)
 	assert.Error(err)
 
 	//fail post exec
-	nb = NewNIPostBuilder(minerID, postProvider, poetProvider, poetDb, db, log.NewDefault(string(minerID)))
+	nb = NewNIPostBuilder(minerID, postProvider, poetProvider, poetDb, db, logtest.New(t))
 	poetDb.errOn = false
 	postProvider.setError = true
 	//check that proof ref is not called again
@@ -309,7 +310,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	assert.Error(err)
 
 	//fail post exec
-	nb = NewNIPostBuilder(minerID, postProvider, poetProvider, poetDb, db, log.NewDefault(string(minerID)))
+	nb = NewNIPostBuilder(minerID, postProvider, poetProvider, poetDb, db, logtest.New(t))
 	poetDb.errOn = false
 	postProvider.setError = false
 	//check that proof ref is not called again
@@ -340,7 +341,7 @@ func TestValidator_Validate(t *testing.T) {
 	poetDb := &poetDbMock{}
 	nipostChallenge := types.BytesToHash([]byte("anton"))
 
-	nipost := buildNIPost(r, postCfg, nipostChallenge, poetDb)
+	nipost := buildNIPost(t, r, postCfg, nipostChallenge, poetDb)
 
 	err := validateNIPost(minerID, nipost, nipostChallenge, poetDb, postCfg, postSetupOpts.NumUnits)
 	r.NoError(err)
@@ -400,7 +401,7 @@ func TestNIPostBuilder_TimeoutUnsubscribe(t *testing.T) {
 	poetDb := &poetDbMock{}
 
 	nb := NewNIPostBuilder(minerID, postProvider, poetProvider,
-		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
+		poetDb, database.NewMemDatabase(), logtest.New(t))
 	hash := types.BytesToHash([]byte("anton"))
 	poetDb.unsubscribed = false
 	nipost, err := nb.BuildNIPost(context.TODO(), &hash, closedChan) // closedChan will timeout immediately
@@ -419,7 +420,7 @@ func TestNIPostBuilder_Close(t *testing.T) {
 	poetDb := &poetDbMock{}
 
 	nb := NewNIPostBuilder(minerID, postProvider, poetProvider,
-		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
+		poetDb, database.NewMemDatabase(), logtest.New(t))
 	hash := types.BytesToHash([]byte("anton"))
 	ctx, close := context.WithCancel(context.Background())
 	close()
@@ -436,7 +437,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 	poetDb := &poetDbMock{}
 
 	nb := NewNIPostBuilder(minerID, postProver, poetProver,
-		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
+		poetDb, database.NewMemDatabase(), logtest.New(t))
 
 	t.Run("PoetServiceID", func(t *testing.T) {
 		poetProver.EXPECT().PoetServiceID(gomock.Any()).Return(nil, errors.New("test"))

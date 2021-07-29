@@ -5,7 +5,7 @@ package weakcoin
 //
 //	r := require.New(t)
 //
-//	logger := log.NewDefault("WeakCoin")
+//	logger := logtest.New(t).WithName("WeakCoin")
 //	wcg := NewWeakCoin(DefaultPrefix, DefaultThreshold, nil, logger)
 //	epoch := types.EpochID(3)
 //	round := types.RoundID(1)
@@ -22,7 +22,7 @@ package weakcoin
 //
 //	r := require.New(t)
 //
-//	logger := log.NewDefault("WeakCoin")
+//	logger := logtest.New(t).WithName("WeakCoin")
 //
 //	tt := []struct {
 //		name      string
