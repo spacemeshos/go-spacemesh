@@ -1136,13 +1136,16 @@ func (t *turtle) sumVotesForBlock(
 			// check if this block has an opinion on the block to vote on
 			// no opinion (on a block in an older layer) counts as an explicit vote against the block
 			if opinionVote, exists := votingBlockOpinion.BlockOpinions[blockID]; exists {
-				logger.With().Debug("adding block opinion to vote sum",
-					log.FieldNamed("vote", opinionVote),
-					sum)
 				sum = sum.Add(opinionVote.Multiply(weight))
+				logger.With().Debug("added block opinion to vote sum",
+					log.FieldNamed("vote", opinionVote),
+					log.Uint64("weight", weight),
+					sum)
 			} else {
-				logger.Debug("no opinion on older block, counting vote against")
 				sum = sum.Add(against.Multiply(weight))
+				logger.With().Debug("no opinion on older block, counted vote against",
+					log.Uint64("weight", weight),
+					sum)
 			}
 		}
 	}
