@@ -124,6 +124,19 @@ func TestWeakCoin(t *testing.T) {
 			}},
 		},
 		{
+			desc:         "LocalProposalHigherThreshold",
+			local:        higherThreshold,
+			allowances:   weakcoin.UnitAllowances{string(higherThreshold): 1, string(zeroLSB): 1},
+			startedEpoch: epoch,
+			startedRound: round,
+			messages: []weakcoin.Message{{
+				Epoch:     epoch,
+				Round:     round,
+				Unit:      1,
+				Signature: zeroLSB,
+			}},
+		},
+		{
 			desc:         "LocalProposalNotAllowed",
 			local:        oneLSB,
 			allowances:   weakcoin.UnitAllowances{string(zeroLSB): 1},
