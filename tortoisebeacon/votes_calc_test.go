@@ -332,7 +332,6 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 		epoch         types.EpochID
 		upToRound     types.RoundID
 		incomingVotes map[epochRoundPair]votesPerPK
-		weakCoin      coin
 		result        votesSetPair
 	}{
 		{
@@ -363,7 +362,6 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 					},
 				},
 			},
-			weakCoin: coinValueMock(t, false),
 			result: votesSetPair{
 				ValidVotes: hashSet{
 					"0x1": {},
@@ -373,48 +371,6 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 					"0x3": {},
 					"0x4": {},
 					"0x5": {},
-					"0x6": {},
-				},
-			},
-		},
-		{
-			name:      "Weak Coin is true",
-			epoch:     epoch,
-			upToRound: round,
-			incomingVotes: map[epochRoundPair]votesPerPK{
-				{EpochID: epoch, Round: 1}: {
-					pk1.String(): votesSetPair{
-						ValidVotes: hashSet{
-							"0x1": {},
-							"0x2": {},
-						},
-						InvalidVotes: hashSet{
-							"0x3": {},
-							"0x6": {},
-						},
-					},
-					pk2.String(): votesSetPair{
-						ValidVotes: hashSet{
-							"0x1": {},
-							"0x4": {},
-							"0x5": {},
-						},
-						InvalidVotes: hashSet{
-							"0x6": {},
-						},
-					},
-				},
-			},
-			weakCoin: coinValueMock(t, true),
-			result: votesSetPair{
-				ValidVotes: hashSet{
-					"0x1": {},
-					"0x2": {},
-					"0x3": {},
-					"0x4": {},
-					"0x5": {},
-				},
-				InvalidVotes: hashSet{
 					"0x6": {},
 				},
 			},
@@ -431,7 +387,6 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 					Theta: 1,
 				},
 				Log:           log.NewDefault("TortoiseBeacon"),
-				weakCoin:      tc.weakCoin,
 				incomingVotes: tc.incomingVotes,
 				ownVotes:      map[epochRoundPair]votesSetPair{},
 				atxDB:         mockDB,
