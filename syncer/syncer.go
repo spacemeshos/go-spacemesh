@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
+	"gopkg.in/tomb.v2"
 )
 
 type layerTicker interface {
@@ -32,10 +33,12 @@ type layerFetcher interface {
 // Configuration is the config params for syncer
 type Configuration struct {
 	SyncInterval time.Duration
-	// the sync process will try validate the current layer if ValidationDelta has elapsed.
+	// the sync process will try to validate the current layer if ValidationDelta has elapsed.
 	ValidationDelta time.Duration
 	AlwaysListen    bool
 }
+
+var errShuttingDown = errors.New("shutting down")
 
 const (
 	outOfSyncThreshold  uint32 = 2 // see notSynced
@@ -91,16 +94,18 @@ type Syncer struct {
 	awaitSyncedCh []chan struct{}
 	awaitSyncedMu sync.Mutex
 
-	shutdownCtx context.Context
-	cancelFunc  context.CancelFunc
+	// tomb is used to manage goroutines for graceful shutdown.
+	// note that tomb kills itself after its last goroutine exits. syncer's loop is the long-living goroutine
+	// that keeps tomb alive before the node shuts down.
+	// see https://github.com/go-tomb/tomb/issues/28
+	tomb tomb.Tomb
 
 	// recording the run # since started. for logging/debugging only.
 	run uint64
 }
 
 // NewSyncer creates a new Syncer instance.
-func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, mesh *mesh.Mesh, fetcher layerFetcher, logger log.Log) *Syncer {
-	shutdownCtx, cancel := context.WithCancel(ctx)
+func NewSyncer(conf Configuration, ticker layerTicker, mesh *mesh.Mesh, fetcher layerFetcher, logger log.Log) *Syncer {
 	return &Syncer{
 		logger:            logger,
 		conf:              conf,
@@ -111,15 +116,16 @@ func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, mesh
 		syncTimer:         time.NewTicker(conf.SyncInterval),
 		targetSyncedLayer: unsafe.Pointer(&types.LayerID{}),
 		awaitSyncedCh:     make([]chan struct{}, 0),
-		shutdownCtx:       shutdownCtx,
-		cancelFunc:        cancel,
 	}
 }
 
 // Close stops the syncing process and the goroutines syncer spawns.
-func (s *Syncer) Close() {
-	// TODO: ensure goroutines are all terminated before shutting down
-	s.cancelFunc()
+func (s *Syncer) Close() error {
+	s.logger.Info("start terminating syncer goroutines")
+	s.tomb.Kill(errShuttingDown)
+	err := s.tomb.Wait()
+	s.logger.Info("all syncer goroutines terminated")
+	return err
 }
 
 // RegisterChForSynced registers ch for notification when the node enters synced state
@@ -151,36 +157,37 @@ func (s *Syncer) IsSynced(ctx context.Context) bool {
 
 // Start starts the main sync loop that tries to sync data for every SyncInterval.
 func (s *Syncer) Start(ctx context.Context) {
-	s.syncOnce.Do(func() {
-		if s.ticker.GetCurrentLayer().Uint32() <= 1 {
-			s.setSyncState(ctx, synced)
+	s.syncOnce.Do(
+		func() {
+			s.tomb.Go(s.loop)
+		})
+}
+
+func (s *Syncer) loop() error {
+	if s.ticker.GetCurrentLayer().Uint32() <= 1 {
+		s.setSyncState(s.tomb.Context(nil), synced)
+	}
+	ctx := s.tomb.Context(nil)
+	for {
+		select {
+		case <-s.tomb.Dying():
+			s.logger.WithContext(ctx).Info("stopping sync to shutdown")
+			return nil
+		case <-s.syncTimer.C:
+			s.synchronize(ctx)
 		}
-		for {
-			select {
-			case <-s.shutdownCtx.Done():
-				s.logger.WithContext(ctx).Info("stopping sync to shutdown")
-				return
-			case <-s.syncTimer.C:
-				s.synchronize(ctx)
-			}
-		}
-	})
+	}
 }
 
 // ForceSync manually starts a sync process outside the main sync loop. If the node is already running a sync process,
 // ForceSync will be ignored.
 func (s *Syncer) ForceSync(ctx context.Context) {
 	s.logger.WithContext(ctx).Debug("executing ForceSync")
-	go s.synchronize(ctx)
-}
-
-func (s *Syncer) isClosed() bool {
-	select {
-	case <-s.shutdownCtx.Done():
-		return true
-	default:
-		return false
-	}
+	// synchronize only allows one process to proceed so no need to worry about spawning too many goroutines
+	s.tomb.Go(func() error {
+		s.synchronize(ctx)
+		return nil
+	})
 }
 
 func (s *Syncer) getSyncState() syncState {
@@ -238,7 +245,7 @@ func (s *Syncer) getTargetSyncedLayer() types.LayerID {
 func (s *Syncer) synchronize(ctx context.Context) bool {
 	logger := s.logger.WithContext(ctx)
 
-	if s.isClosed() {
+	if !s.tomb.Alive() {
 		logger.Warning("attempting to sync while shutting down")
 		return false
 	}
@@ -262,7 +269,13 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	// if validation for the last layer is still running
 	vQueue := make(chan *types.Layer, s.ticker.GetCurrentLayer().Uint32())
 	vDone := make(chan struct{})
-	go s.startValidating(ctx, s.run, vQueue, vDone)
+	// there is only one synchronize goroutine working at any time. each synchronize only spawn one validation
+	// goroutine and makes sure it terminate before synchronize exits. therefore no need to worry about spawning
+	// too many goroutines here.
+	s.tomb.Go(func() error {
+		s.startValidating(ctx, s.run, vQueue, vDone)
+		return nil
+	})
 	success := false
 	defer func() {
 		close(vQueue)
@@ -342,8 +355,8 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 }
 
 func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.Layer, error) {
-	if s.isClosed() {
-		return nil, errors.New("shutdown")
+	if !s.tomb.Alive() {
+		return nil, errShuttingDown
 	}
 
 	layer, err := s.getLayerFromPeers(ctx, layerID)
@@ -450,7 +463,7 @@ func (s *Syncer) startValidating(ctx context.Context, run uint64, queue chan *ty
 		close(done)
 	}()
 	for layer := range queue {
-		if s.isClosed() {
+		if !s.tomb.Alive() {
 			return
 		}
 		s.validateLayer(ctx, layer)
@@ -458,7 +471,7 @@ func (s *Syncer) startValidating(ctx context.Context, run uint64, queue chan *ty
 }
 
 func (s *Syncer) validateLayer(ctx context.Context, layer *types.Layer) {
-	if s.isClosed() {
+	if !s.tomb.Alive() {
 		s.logger.WithContext(ctx).Error("shutting down")
 		return
 	}

@@ -613,7 +613,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		ValidationDelta: time.Duration(app.Config.SyncValidationDelta) * time.Second,
 		AlwaysListen:    app.Config.AlwaysListen,
 	}
-	syncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, app.addLogger(SyncLogger, lg))
+	syncer := syncer.NewSyncer(syncerConf, clock, msh, layerFetch, app.addLogger(SyncLogger, lg))
 
 	blockOracle := blocks.NewMinerBlockOracle(layerSize, layersPerEpoch, atxdb, tBeacon, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 

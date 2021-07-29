@@ -166,7 +166,7 @@ func newMemMesh(lg log.Log) *mesh.Mesh {
 }
 
 var conf = Configuration{
-	SyncInterval:    100 * time.Millisecond,
+	SyncInterval:    1 * time.Hour, // so long that ticker doesn't kick in
 	ValidationDelta: 30 * time.Millisecond,
 	AlwaysListen:    false,
 }
@@ -174,8 +174,9 @@ var conf = Configuration{
 func TestStartAndShutdown(t *testing.T) {
 	lg := log.NewDefault("syncer")
 	ticker := newMockLayerTicker()
-	ctx, cancel := context.WithCancel(context.TODO())
-	syncer := NewSyncer(ctx, conf, ticker, newMemMesh(lg), newMockFetcher(), lg)
+	syncer := NewSyncer(conf, ticker, newMemMesh(lg), newMockFetcher(), lg)
+	syncer.Start(context.TODO())
+	defer syncer.Close()
 	syncedCh := make(chan struct{})
 	syncer.RegisterChForSynced(context.TODO(), syncedCh)
 
@@ -193,8 +194,7 @@ func TestStartAndShutdown(t *testing.T) {
 	assert.True(t, syncer.IsSynced(context.TODO()))
 	assert.True(t, syncer.ListenToGossip())
 
-	cancel()
-	assert.True(t, syncer.isClosed())
+	assert.Equal(t, errShuttingDown, syncer.Close())
 	assert.False(t, syncer.synchronize(context.TODO()))
 	wg.Wait()
 }
@@ -203,7 +203,9 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	lg := log.NewDefault("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
-	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
+	syncer := NewSyncer(conf, ticker, newMemMesh(lg), mf, lg)
+	syncer.Start(context.TODO())
+	defer syncer.Close()
 	ticker.advanceToLayer(types.NewLayerID(1))
 
 	var wg sync.WaitGroup
@@ -239,7 +241,9 @@ func TestSynchronize_AllGood(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
-	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer := NewSyncer(conf, ticker, mm, mf, lg)
+	syncer.Start(context.TODO())
+	defer syncer.Close()
 	ticker.advanceToLayer(mm.LatestLayer())
 
 	var wg sync.WaitGroup
@@ -262,7 +266,9 @@ func TestSynchronize_getLayerFromPeersFailed(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
-	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer := NewSyncer(conf, ticker, mm, mf, lg)
+	syncer.Start(context.TODO())
+	defer syncer.Close()
 	ticker.advanceToLayer(mm.LatestLayer())
 
 	var wg sync.WaitGroup
@@ -289,7 +295,9 @@ func TestSynchronize_getATXsFailedEpochZero(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
-	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer := NewSyncer(conf, ticker, mm, mf, lg)
+	syncer.Start(context.TODO())
+	defer syncer.Close()
 	ticker.advanceToLayer(types.NewLayerID(numGossipSyncLayers * 2))
 
 	var wg sync.WaitGroup
@@ -312,7 +320,7 @@ func TestSynchronize_getATXsFailed(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
-	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer := NewSyncer(conf, ticker, mm, mf, lg)
 	ticker.advanceToLayer(types.NewLayerID(layersPerEpoch * 2))
 
 	var wg sync.WaitGroup
@@ -335,7 +343,9 @@ func TestSynchronize_getTBFailed(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
-	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer := NewSyncer(conf, ticker, mm, mf, lg)
+	syncer.Start(context.TODO())
+	defer syncer.Close()
 	ticker.advanceToLayer(types.NewLayerID(layersPerEpoch * 3))
 
 	var wg sync.WaitGroup
@@ -358,7 +368,9 @@ func TestSynchronize_SyncZeroBlockFailed(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
-	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer := NewSyncer(conf, ticker, mm, mf, lg)
+	syncer.Start(context.TODO())
+	defer syncer.Close()
 	ticker.advanceToLayer(mm.LatestLayer())
 
 	var wg sync.WaitGroup
@@ -388,7 +400,9 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
-	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer := NewSyncer(conf, ticker, mm, mf, lg)
+	syncer.Start(context.TODO())
+	defer syncer.Close()
 
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
@@ -424,7 +438,9 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
-	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer := NewSyncer(conf, ticker, mm, mf, lg)
+	syncer.Start(context.TODO())
+	defer syncer.Close()
 
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
@@ -482,7 +498,9 @@ func TestFromSyncedToNotSynced(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
-	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer := NewSyncer(conf, ticker, mm, mf, lg)
+	syncer.Start(context.TODO())
+	defer syncer.Close()
 	syncedCh := make(chan struct{})
 	syncer.RegisterChForSynced(context.TODO(), syncedCh)
 
@@ -566,7 +584,9 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, syncer *Syncer, mlt 
 
 func TestForceSync(t *testing.T) {
 	lg := log.NewDefault("syncer")
-	syncer := NewSyncer(context.TODO(), conf, newMockLayerTicker(), newMemMesh(lg), newMockFetcher(), lg)
+	syncer := NewSyncer(conf, newMockLayerTicker(), newMemMesh(lg), newMockFetcher(), lg)
+	syncer.Start(context.TODO())
+	defer syncer.Close()
 	syncedCh := make(chan struct{})
 	syncer.RegisterChForSynced(context.TODO(), syncedCh)
 
@@ -582,7 +602,9 @@ func TestForceSync(t *testing.T) {
 func TestShouldValidateLayer(t *testing.T) {
 	lg := log.NewDefault("syncer")
 	ticker := newMockLayerTicker()
-	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), newMockFetcher(), lg)
+	syncer := NewSyncer(conf, ticker, newMemMesh(lg), newMockFetcher(), lg)
+	syncer.Start(context.TODO())
+	defer syncer.Close()
 	assert.False(t, syncer.shouldValidateLayer(types.NewLayerID(0)))
 
 	ticker.advanceToLayer(types.NewLayerID(3))
@@ -601,7 +623,9 @@ func TestGetATXsCurrentEpoch(t *testing.T) {
 	lg := log.NewDefault("syncer")
 	mf := newMockFetcher()
 	ticker := newMockLayerTicker()
-	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
+	syncer := NewSyncer(conf, ticker, newMemMesh(lg), mf, lg)
+	syncer.Start(context.TODO())
+	defer syncer.Close()
 	require.Equal(t, 3, layersPerEpoch)
 	mf.setATXsErrors(0, errors.New("no ATXs for epoch 0, expected for epoch 0"))
 	mf.setATXsErrors(1, errors.New("no ATXs for epoch 1, error out"))
@@ -639,7 +663,9 @@ func TestGetATXsOldAndCurrentEpoch(t *testing.T) {
 	lg := log.NewDefault("syncer")
 	mf := newMockFetcher()
 	ticker := newMockLayerTicker()
-	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
+	syncer := NewSyncer(conf, ticker, newMemMesh(lg), mf, lg)
+	syncer.Start(context.TODO())
+	defer syncer.Close()
 	require.Equal(t, 3, layersPerEpoch)
 	mf.setATXsErrors(0, errors.New("no ATXs for epoch 0, expected for epoch 0"))
 	mf.setATXsErrors(1, errors.New("no ATXs for epoch 1"))
@@ -675,8 +701,9 @@ func TestGetTBCurrentEpoch(t *testing.T) {
 	lg := log.NewDefault("syncer")
 	mf := newMockFetcher()
 	ticker := newMockLayerTicker()
-	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
-	require.Equal(t, 3, layersPerEpoch)
+	syncer := NewSyncer(conf, ticker, newMemMesh(lg), mf, lg)
+	syncer.Start(context.TODO())
+	defer syncer.Close()
 	mf.setTBErrors(0, errors.New("no tortoise beacon for epoch 0, expected for epoch 0"))
 	mf.setTBErrors(1, errors.New("no tortoise beacon for epoch 1, expected for epoch 1"))
 	mf.setTBErrors(3, errors.New("no tortoise beacon for epoch 3, error out"))
@@ -722,7 +749,9 @@ func TestGetTBOldAndCurrentEpoch(t *testing.T) {
 	lg := log.NewDefault("syncer")
 	mf := newMockFetcher()
 	ticker := newMockLayerTicker()
-	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
+	syncer := NewSyncer(conf, ticker, newMemMesh(lg), mf, lg)
+	syncer.Start(context.TODO())
+	defer syncer.Close()
 	require.Equal(t, 3, layersPerEpoch)
 	mf.setTBErrors(0, errors.New("no tortoise beacon for epoch 0, expected for epoch 0"))
 	mf.setTBErrors(1, errors.New("no tortoise beacon for epoch 1, expected for epoch 1"))

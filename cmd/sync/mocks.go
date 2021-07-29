@@ -171,5 +171,5 @@ func createSyncer(conf syncer.Configuration, msh *mesh.Mesh, layerFetch *layerfe
 	lg.Info("current layer %v", clock.GetCurrentLayer())
 
 	layerFetch.Start()
-	return syncer.NewSyncer(context.TODO(), conf, &clock, msh, layerFetch, lg)
+	return syncer.NewSyncer(conf, &clock, msh, layerFetch, lg)
 }
