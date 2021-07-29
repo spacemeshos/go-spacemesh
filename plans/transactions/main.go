@@ -30,7 +30,7 @@ func testTransaction(env *runtime.RunEnv, initCtx *run.InitContext) error {
 	if t.ID == 1 {
 		t.SendCoins(0, t.Account1, 100, t.Account2)
 	}
-	t.WaitTillEpoch()
+	t.SleepTillEpoch()
 	t.RequireBalance(t.Account1, start1-100)
 	t.RequireBalance(t.Account2, start2+100)
 	return nil
@@ -53,11 +53,11 @@ func testNewAccount(env *runtime.RunEnv, initCtx *run.InitContext) error {
 		// create an acocunt and make the transfer
 		a := t.NewAccount()
 		t.SendCoins(0, t.Account1, 100, a)
-		t.WaitTillEpoch()
+		t.SleepTillEpoch()
 		t.RequireBalance(a, 100)
 		return nil
 	}
-	t.WaitTillEpoch()
+	t.SleepTillEpoch()
 	t.RequireBalance(t.Account1, start1-100)
 	return nil
 }

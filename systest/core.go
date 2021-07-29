@@ -3,8 +3,8 @@ package systest
 import (
 	"context"
 	"fmt"
+	"io"
 	"strconv"
-	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api/config"
@@ -20,19 +20,20 @@ import (
 const (
 	defaultGasLimit = 10
 	defaultFee      = 1
-	pollingInterval = 3 * time.Second
+	layersPerEpoch  = uint32(5)
 )
 
 type SystemTest struct {
 	// ID holds the id number of the instance and is the range 1..max_instance
-	ID       int64
-	re       *runtime.RunEnv
-	ic       *run.InitContext
-	Account1 *signing.EdSigner
-	Account2 *signing.EdSigner
-	Cfg      *config.Config
-	GRPC     *grpc.ClientConn
-	ctx      context.Context
+	ID             int64
+	re             *runtime.RunEnv
+	ic             *run.InitContext
+	Account1       *signing.EdSigner
+	Account2       *signing.EdSigner
+	Cfg            *config.Config
+	GRPC           *grpc.ClientConn
+	ctx            context.Context
+	LayersPerEpoch uint32
 }
 
 // NewSystemTest creates a new SystemTest object based on tesground enviornment
@@ -41,9 +42,10 @@ func NewSystemTest(ctx context.Context, re *runtime.RunEnv, ic *run.InitContext)
 	c := config.DefaultConfig()
 
 	t := SystemTest{re: re,
-		ic:  ic,
-		Cfg: &c,
-		ctx: ctx,
+		ic:             ic,
+		Cfg:            &c,
+		ctx:            ctx,
+		LayersPerEpoch: layersPerEpoch,
 	}
 	// setup Acount1 & Account2
 	var err error
@@ -154,28 +156,46 @@ func (t *SystemTest) SendCoins(nonce uint64, recipient *signing.EdSigner,
 	// TODO: test _ == result
 }
 
-// WaitTillEpoch wait till the next epoch
-func (t *SystemTest) WaitTillEpoch() {
-	c := pb.NewMeshServiceClient(t.GRPC)
-	res, err := c.CurrentEpoch(t.ctx, &pb.CurrentEpochRequest{})
-	if err != nil {
-		t.Errorf("Failed to get CurrentEpoc %s", err)
-	}
-	start := res.Epochnum.Value
-	keepGoing := make(chan uint64)
-	for v := start; v == start; v = v {
-		time.Sleep(pollingInterval)
-		response, err := c.CurrentEpoch(t.ctx, &pb.CurrentEpochRequest{})
+// SleepTillEpoch sleeps till the layer services reports of a new epoch
+func (t *SystemTest) SleepTillEpoch() {
+
+	wait := make(chan int)
+	// This will block so run it in a goroutine
+	go func() {
+		// set up the grpc listener stream
+		req := &pb.LayerStreamRequest{}
+		c := pb.NewMeshServiceClient(t.GRPC)
+		stream, err := c.LayerStream(t.ctx, req)
 		if err != nil {
-			t.Errorf("Failed to get CurrentEpoc %s", err)
+			t.Errorf("Failed to recieve from layer stream: %s", err)
 		}
-		v = response.Epochnum.Value
-		select {
-		case <-t.ctx.Done():
-			t.Errorf("Stopping test on done signal")
-		case keepGoing <- v:
+		res, err := stream.Recv()
+		if err != nil {
+			t.Errorf("Failed to recieve from layer stream: %s", err)
 		}
-	}
+		il := res.Layer.Number.Number
+		keepGoing := make(chan uint32)
+		for {
+			res, err = stream.Recv()
+			if err == io.EOF {
+				break
+			}
+			l := res.Layer.Number.Number
+			select {
+			case <-t.ctx.Done():
+				t.Errorf("Timed out while waiting for epoch")
+				wait <- 1
+				return
+			case keepGoing <- l:
+				if l != il && l%t.LayersPerEpoch == 0 {
+					break
+				}
+			}
+		}
+		wait <- 1
+
+	}()
+	<-wait
 }
 
 // RequireBalance fail if an account is not of a given value
