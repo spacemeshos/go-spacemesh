@@ -28,7 +28,7 @@ type PeerSubscriptionProvider interface {
 func NewPeers(s PeerSubscriptionProvider, lg log.Log) *Peers {
 	value := atomic.Value{}
 	value.Store(make([]Peer, 0, 20))
-	pi := NewPeersImpl(&value, make(chan struct{}), lg)
+	pi := NewPeersImpl(&value, make(chan struct{}, 1), lg)
 	newPeerC, expiredPeerC := s.SubscribePeerEvents()
 	go pi.listenToPeers(newPeerC, expiredPeerC)
 	events.ReportNodeStatusUpdate()
@@ -69,18 +69,24 @@ func (p *Peers) PeerCount() uint64 {
 
 func (p *Peers) listenToPeers(newPeerC, expiredPeerC chan p2pcrypto.PublicKey) {
 	peerSet := make(map[Peer]struct{}) // set of unique peers
+	defer close(p.exit)
 	for {
 		select {
 		case <-p.exit:
 			p.Debug("peers events listener is stopped")
-			close(p.exit)
 			return
-		case peer := <-newPeerC:
+		case peer, ok := <-newPeerC:
+			if !ok {
+				return
+			}
 			peerSet[peer] = struct{}{}
 			p.With().Debug("new peer", log.String("peer", peer.String()),
 				log.Int("total", len(peerSet)),
 			)
-		case peer := <-expiredPeerC:
+		case peer, ok := <-expiredPeerC:
+			if !ok {
+				return
+			}
 			delete(peerSet, peer)
 			p.With().Debug("expired peer", log.String("peer", peer.String()),
 				log.Int("total", len(peerSet)),
