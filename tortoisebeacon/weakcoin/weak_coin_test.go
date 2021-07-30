@@ -23,6 +23,7 @@ func noopBroadcaster(tb testing.TB, ctrl *gomock.Controller) *mocks.Mockbroadcas
 }
 
 func broadcastedMessage(tb testing.TB, ctrl *gomock.Controller, msg weakcoin.Message) *servicemocks.MockGossipMessage {
+	tb.Helper()
 	mm := servicemocks.NewMockGossipMessage(ctrl)
 	mm.EXPECT().Sender().Return(p2pcrypto.NewRandomPubkey()).AnyTimes()
 	buf, err := types.InterfaceToBytes(&msg)
@@ -33,6 +34,7 @@ func broadcastedMessage(tb testing.TB, ctrl *gomock.Controller, msg weakcoin.Mes
 }
 
 func staticSigner(tb testing.TB, ctrl *gomock.Controller, sig []byte) *smocks.MockSigner {
+	tb.Helper()
 	signer := smocks.NewMockSigner(ctrl)
 	signer.EXPECT().Sign(gomock.Any()).Return(sig).AnyTimes()
 	signer.EXPECT().PublicKey().Return(signing.NewPublicKey(sig)).AnyTimes()
@@ -40,6 +42,7 @@ func staticSigner(tb testing.TB, ctrl *gomock.Controller, sig []byte) *smocks.Mo
 }
 
 func pubkeyFromSigVerifier(tb testing.TB, ctrl *gomock.Controller) *smocks.MockVerifier {
+	tb.Helper()
 	verifier := smocks.NewMockVerifier(ctrl)
 	verifier.EXPECT().Extract(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(msg, sig []byte) (*signing.PublicKey, error) {
@@ -61,11 +64,7 @@ func TestWeakCoin(t *testing.T) {
 		higherThreshold = []byte{0xff}
 
 		verifier = pubkeyFromSigVerifier(t, ctrl)
-
-		config = weakcoin.DefaultConfig()
 	)
-	config.MaxRound = 10
-	config.Threshold = []byte{0xfe}
 
 	tcs := []struct {
 		desc         string
@@ -182,7 +181,8 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local), verifier,
-				weakcoin.WithConfig(config))
+				weakcoin.WithThreshold([]byte{0xfe}),
+			)
 
 			wc.StartEpoch(tc.startedEpoch, tc.allowances)
 			require.NoError(t, wc.StartRound(context.TODO(), tc.startedRound))
@@ -190,7 +190,7 @@ func TestWeakCoin(t *testing.T) {
 			for _, msg := range tc.messages {
 				wc.HandleSerializedMessage(context.TODO(), broadcastedMessage(t, ctrl, msg), nil)
 			}
-			wc.CompleteRound()
+			wc.FinishRound()
 
 			require.Equal(t, tc.coinflip, wc.Get(tc.startedEpoch, tc.startedRound))
 		})
@@ -202,7 +202,8 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local), verifier,
-				weakcoin.WithConfig(config))
+				weakcoin.WithThreshold([]byte{0xfe}),
+			)
 
 			wc.StartEpoch(tc.startedEpoch, tc.allowances)
 
@@ -210,7 +211,7 @@ func TestWeakCoin(t *testing.T) {
 				wc.HandleSerializedMessage(context.TODO(), broadcastedMessage(t, ctrl, msg), nil)
 			}
 			require.NoError(t, wc.StartRound(context.TODO(), tc.startedRound))
-			wc.CompleteRound()
+			wc.FinishRound()
 
 			require.Equal(t, tc.coinflip, wc.Get(tc.startedEpoch, tc.startedRound))
 		})
@@ -222,7 +223,8 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local), verifier,
-				weakcoin.WithConfig(config))
+				weakcoin.WithThreshold([]byte{0xfe}),
+			)
 
 			wc.StartEpoch(tc.startedEpoch, tc.allowances)
 			require.NoError(t, wc.StartRound(context.TODO(), tc.startedRound))
@@ -233,10 +235,10 @@ func TestWeakCoin(t *testing.T) {
 			}
 
 			require.NoError(t, wc.StartRound(context.TODO(), tc.startedRound+1))
-			wc.CompleteRound()
+			wc.FinishRound()
 
 			require.Equal(t, tc.coinflip, wc.Get(tc.startedEpoch, tc.startedRound+1))
-			wc.CompleteEpoch()
+			wc.FinishEpoch()
 		})
 	}
 	for _, tc := range tcs {
@@ -245,10 +247,11 @@ func TestWeakCoin(t *testing.T) {
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local), verifier,
-				weakcoin.WithConfig(config))
+				weakcoin.WithThreshold([]byte{0xfe}),
+			)
 
 			wc.StartEpoch(tc.startedEpoch, tc.allowances)
-			wc.CompleteEpoch()
+			wc.FinishEpoch()
 
 			wc.StartEpoch(tc.startedEpoch+1, tc.allowances)
 			for _, msg := range tc.messages {
@@ -257,10 +260,10 @@ func TestWeakCoin(t *testing.T) {
 			}
 
 			require.NoError(t, wc.StartRound(context.TODO(), tc.startedRound))
-			wc.CompleteRound()
+			wc.FinishRound()
 
 			require.Equal(t, tc.coinflip, wc.Get(tc.startedEpoch+1, tc.startedRound))
-			wc.CompleteEpoch()
+			wc.FinishEpoch()
 		})
 	}
 }
@@ -291,25 +294,22 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 		oneLSB  = []byte{0b0001}
 		zeroLSB = []byte{0b0000}
 
-		config = weakcoin.DefaultConfig()
-
 		epoch     types.EpochID = 10
 		round     types.RoundID = 2
 		nextRound               = round + 1
+		bufSize                 = 10
 	)
-	config.MaxRound = 10
-	config.NextRoundBufferSize = 10
 	defer ctrl.Finish()
 
 	wc := weakcoin.New(
 		noopBroadcaster(t, ctrl),
 		staticSigner(t, ctrl, oneLSB), pubkeyFromSigVerifier(t, ctrl),
-		weakcoin.WithConfig(config),
+		weakcoin.WithNextRoundBufferSize(bufSize),
 	)
 
 	wc.StartEpoch(epoch, weakcoin.UnitAllowances{string(oneLSB): 1, string(zeroLSB): 1})
 	require.NoError(t, wc.StartRound(context.TODO(), round))
-	for i := 0; i < config.NextRoundBufferSize; i++ {
+	for i := 0; i < bufSize; i++ {
 		wc.HandleSerializedMessage(context.TODO(), broadcastedMessage(t, ctrl, weakcoin.Message{
 			Epoch:     epoch,
 			Round:     nextRound,
@@ -323,9 +323,9 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 		Unit:      1,
 		Signature: zeroLSB,
 	}), nil)
-	wc.CompleteRound()
+	wc.FinishRound()
 	require.NoError(t, wc.StartRound(context.TODO(), nextRound))
-	wc.CompleteRound()
+	wc.FinishRound()
 	require.True(t, wc.Get(epoch, nextRound))
 }
 
@@ -368,7 +368,7 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 			require.NoError(t, instance.StartRound(context.TODO(), current))
 		}
 		for _, instance := range instances {
-			instance.CompleteRound()
+			instance.FinishRound()
 		}
 		rst := instances[0].Get(epoch, current)
 		for _, instance := range instances[1:] {

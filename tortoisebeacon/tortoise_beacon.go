@@ -51,9 +51,9 @@ type tortoiseBeaconDB interface {
 type coin interface {
 	StartEpoch(types.EpochID, weakcoin.UnitAllowances)
 	StartRound(context.Context, types.RoundID) error
-	CompleteRound()
+	FinishRound()
 	Get(types.EpochID, types.RoundID) bool
-	CompleteEpoch()
+	FinishEpoch()
 	HandleSerializedMessage(context.Context, service.GossipMessage, service.Fetcher)
 }
 
@@ -600,7 +600,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		ua[string(header.NodeID.VRFPublicKey)] += uint64(header.NumUnits)
 	}
 	tb.weakCoin.StartEpoch(epoch, ua)
-	defer tb.weakCoin.CompleteEpoch()
+	defer tb.weakCoin.FinishEpoch()
 
 	// For K rounds: In each round that lasts δ, wait for proposals to come in.
 	// For next rounds,
@@ -616,7 +616,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		go func(epoch types.EpochID, round types.RoundID, coinflip bool) {
 			if err := tb.sendVotes(ctx, epoch, round, coinflip); err != nil {
 				tb.Log.With().Error("Failed to send voting messages",
-					log.Uint64("epoch_id", uint64(epoch)),
+					log.Uint32("epoch_id", uint32(epoch)),
 					log.Uint64("round_id", uint64(round)),
 					log.Err(err))
 			}
@@ -629,7 +629,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		case <-ctx.Done():
 			return false
 		}
-		tb.weakCoin.CompleteRound()
+		tb.weakCoin.FinishRound()
 		coinflip = tb.weakCoin.Get(epoch, round)
 	}
 

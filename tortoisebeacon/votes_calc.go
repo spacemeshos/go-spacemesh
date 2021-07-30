@@ -161,8 +161,6 @@ func (tb *TortoiseBeacon) calcOwnFirstRoundVotes(epoch types.EpochID, votesMargi
 		switch {
 		case margin >= votingThreshold:
 			ownFirstRoundsVotes.ValidVotes[vote] = struct{}{}
-		case margin <= -votingThreshold:
-			ownFirstRoundsVotes.InvalidVotes[vote] = struct{}{}
 		default:
 			ownFirstRoundsVotes.InvalidVotes[vote] = struct{}{}
 		}

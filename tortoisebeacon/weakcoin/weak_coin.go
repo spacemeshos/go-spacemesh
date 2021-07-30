@@ -20,21 +20,20 @@ const (
 	// GossipProtocol is weak coin Gossip protocol name.
 	GossipProtocol = "WeakCoinGossip"
 
+	// equal to 2^256 / 2
 	defaultThreshold = "0x8000000000000000000000000000000000000000000000000000000000000000"
 )
 
-// DefaultConfig ...
-func DefaultConfig() Config {
-	return Config{
+func defaultConfig() config {
+	return config{
 		Threshold:           util.FromHex(defaultThreshold),
 		VRFPrefix:           proposalPrefix,
 		NextRoundBufferSize: 10000, // ~1mb given the size of Message is ~100b
-		MaxRound:            100,
+		MaxRound:            300,
 	}
 }
 
-// Config ...
-type Config struct {
+type config struct {
 	Threshold           []byte
 	VRFPrefix           string
 	NextRoundBufferSize int
@@ -68,10 +67,24 @@ func WithLog(logger log.Log) Option {
 	}
 }
 
-// WithConfig changes config from DefaultConfig.
-func WithConfig(config Config) Option {
+// WithMaxRound changes max round.
+func WithMaxRound(round types.RoundID) Option {
 	return func(wc *WeakCoin) {
-		wc.config = config
+		wc.config.MaxRound = round
+	}
+}
+
+// WithThreshold changes signature threshold.
+func WithThreshold(threshold []byte) Option {
+	return func(wc *WeakCoin) {
+		wc.config.Threshold = threshold
+	}
+}
+
+// WithNextRoundBufferSize changes size of the buffer for messages from future rounds.
+func WithNextRoundBufferSize(size int) Option {
+	return func(wc *WeakCoin) {
+		wc.config.NextRoundBufferSize = size
 	}
 }
 
@@ -84,7 +97,7 @@ func New(
 ) *WeakCoin {
 	wc := &WeakCoin{
 		logger:   log.NewNop(),
-		config:   DefaultConfig(),
+		config:   defaultConfig(),
 		signer:   signer,
 		verifier: verifier,
 		net:      net,
@@ -100,7 +113,7 @@ func New(
 // WeakCoin implementation of the protocol.
 type WeakCoin struct {
 	logger   log.Log
-	config   Config
+	config   config
 	verifier signing.Verifier
 	signer   signing.Signer
 	net      broadcaster
@@ -141,8 +154,8 @@ func (wc *WeakCoin) StartEpoch(epoch types.EpochID, allowances UnitAllowances) {
 	wc.allowances = allowances
 }
 
-// CompleteEpoch completes epoch. After it is called Get for this epoch will panic.
-func (wc *WeakCoin) CompleteEpoch() {
+// FinishEpoch completes epoch. After it is called Get for this epoch will panic.
+func (wc *WeakCoin) FinishEpoch() {
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
 	wc.allowances = nil
@@ -183,30 +196,30 @@ func (wc *WeakCoin) updateProposal(message Message) error {
 	buf := wc.encodeProposal(message.Epoch, message.Round, message.Unit)
 	miner, err := wc.verifier.Extract(buf, message.Signature)
 	if err != nil {
-		return fmt.Errorf("can't recover miner id from signature: %w", err)
+		return fmt.Errorf("can't recover miner id from signature %x: %w", message.Signature, err)
 	}
+
 	allowed, exists := wc.allowances[string(miner.Bytes())]
 	if !exists || allowed < message.Unit {
 		return fmt.Errorf("miner %x is not allowed to submit proposal for unit %d", miner, message.Unit)
 	}
+
 	wc.updateSmallest(message.Signature)
 	return nil
 }
 
-func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, round types.RoundID) error {
+func (wc WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) (broadcast, smallest []byte) {
 	var (
-		broadcast []byte
-		smallest  []byte
 		// TODO(dshulyak) double check that 10 means that 10 units are allowed
 		allowed, exists = wc.allowances[string(wc.signer.PublicKey().Bytes())]
 	)
 	if !exists {
-		return nil
+		return
 	}
 	for unit := uint64(0); unit < allowed; unit++ {
 		proposal := wc.encodeProposal(epoch, round, unit)
 		signature := wc.signer.Sign(proposal)
-		if wc.exceedsThreshold(signature) {
+		if wc.aboveThreshold(signature) {
 			continue
 		}
 		if smallest == nil || bytes.Compare(signature, smallest) == -1 {
@@ -225,6 +238,12 @@ func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, ro
 			smallest = signature
 		}
 	}
+	return
+}
+
+func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, round types.RoundID) error {
+	broadcast, smallest := wc.prepareProposal(epoch, round)
+
 	// nothing to send is valid if all proposals are exceeding threshold
 	if broadcast == nil {
 		return nil
@@ -249,9 +268,9 @@ func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, ro
 	return nil
 }
 
-// CompleteRound computes coinflip based on proposals received in this round.
+// FinishRound computes coinflip based on proposals received in this round.
 // After it is called new proposals for this round won't be accepted.
-func (wc *WeakCoin) CompleteRound() {
+func (wc *WeakCoin) FinishRound() {
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
 	if wc.smallestProposal == nil {
@@ -261,6 +280,9 @@ func (wc *WeakCoin) CompleteRound() {
 		)
 		return
 	}
+	// NOTE(dshulyak) we need to select good bit here. for ed25519 it means select LSB and never MSB.
+	// https://datatracker.ietf.org/doc/html/draft-josefsson-eddsa-ed25519-03#section-5.2
+	// For another signature algorithm this may change
 	coinflip := wc.smallestProposal[0]&1 == 1
 
 	wc.coins[wc.round] = coinflip
@@ -282,7 +304,7 @@ func (wc *WeakCoin) updateSmallest(proposal []byte) {
 	}
 }
 
-func (wc *WeakCoin) exceedsThreshold(proposal []byte) bool {
+func (wc *WeakCoin) aboveThreshold(proposal []byte) bool {
 	return bytes.Compare(proposal, wc.config.Threshold) == 1
 }
 
@@ -300,7 +322,7 @@ func (wc *WeakCoin) encodeProposal(epoch types.EpochID, round types.RoundID, uni
 	buf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(buf, unit)
 	if _, err := proposal.Write(buf); err != nil {
-		wc.logger.Panic("can't write uint16 to a buffer", log.Err(err))
+		wc.logger.Panic("can't write uint64 to a buffer", log.Err(err))
 	}
 	return proposal.Bytes()
 }

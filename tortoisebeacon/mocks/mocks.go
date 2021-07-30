@@ -128,28 +128,28 @@ func (m *Mockcoin) EXPECT() *MockcoinMockRecorder {
 	return m.recorder
 }
 
-// CompleteEpoch mocks base method.
-func (m *Mockcoin) CompleteEpoch() {
+// FinishEpoch mocks base method.
+func (m *Mockcoin) FinishEpoch() {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "CompleteEpoch")
+	m.ctrl.Call(m, "FinishEpoch")
 }
 
-// CompleteEpoch indicates an expected call of CompleteEpoch.
-func (mr *MockcoinMockRecorder) CompleteEpoch() *gomock.Call {
+// FinishEpoch indicates an expected call of FinishEpoch.
+func (mr *MockcoinMockRecorder) FinishEpoch() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompleteEpoch", reflect.TypeOf((*Mockcoin)(nil).CompleteEpoch))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishEpoch", reflect.TypeOf((*Mockcoin)(nil).FinishEpoch))
 }
 
-// CompleteRound mocks base method.
-func (m *Mockcoin) CompleteRound() {
+// FinishRound mocks base method.
+func (m *Mockcoin) FinishRound() {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "CompleteRound")
+	m.ctrl.Call(m, "FinishRound")
 }
 
-// CompleteRound indicates an expected call of CompleteRound.
-func (mr *MockcoinMockRecorder) CompleteRound() *gomock.Call {
+// FinishRound indicates an expected call of FinishRound.
+func (mr *MockcoinMockRecorder) FinishRound() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompleteRound", reflect.TypeOf((*Mockcoin)(nil).CompleteRound))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishRound", reflect.TypeOf((*Mockcoin)(nil).FinishRound))
 }
 
 // Get mocks base method.
@@ -202,43 +202,6 @@ func (m *Mockcoin) StartRound(arg0 context.Context, arg1 types.RoundID) error {
 func (mr *MockcoinMockRecorder) StartRound(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartRound", reflect.TypeOf((*Mockcoin)(nil).StartRound), arg0, arg1)
-}
-
-// Mocksigner is a mock of signer interface.
-type Mocksigner struct {
-	ctrl     *gomock.Controller
-	recorder *MocksignerMockRecorder
-}
-
-// MocksignerMockRecorder is the mock recorder for Mocksigner.
-type MocksignerMockRecorder struct {
-	mock *Mocksigner
-}
-
-// NewMocksigner creates a new mock instance.
-func NewMocksigner(ctrl *gomock.Controller) *Mocksigner {
-	mock := &Mocksigner{ctrl: ctrl}
-	mock.recorder = &MocksignerMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *Mocksigner) EXPECT() *MocksignerMockRecorder {
-	return m.recorder
-}
-
-// Sign mocks base method.
-func (m *Mocksigner) Sign(msg []byte) []byte {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Sign", msg)
-	ret0, _ := ret[0].([]byte)
-	return ret0
-}
-
-// Sign indicates an expected call of Sign.
-func (mr *MocksignerMockRecorder) Sign(msg interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sign", reflect.TypeOf((*Mocksigner)(nil).Sign), msg)
 }
 
 // MocklayerClock is a mock of layerClock interface.

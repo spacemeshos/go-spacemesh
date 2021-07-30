@@ -20,10 +20,10 @@ func coinValueMock(tb testing.TB, value bool) coin {
 		gomock.AssignableToTypeOf(types.EpochID(0)),
 		gomock.AssignableToTypeOf(weakcoin.UnitAllowances{}),
 	).AnyTimes()
-	coinMock.EXPECT().CompleteEpoch().AnyTimes()
+	coinMock.EXPECT().FinishEpoch().AnyTimes()
 	coinMock.EXPECT().StartRound(gomock.Any(), gomock.AssignableToTypeOf(types.RoundID(0))).
 		AnyTimes().Return(nil)
-	coinMock.EXPECT().CompleteRound().AnyTimes()
+	coinMock.EXPECT().FinishRound().AnyTimes()
 	coinMock.EXPECT().Get(
 		gomock.AssignableToTypeOf(types.EpochID(0)),
 		gomock.AssignableToTypeOf(types.RoundID(0)),

@@ -35,8 +35,8 @@ func (wc *WeakCoin) HandleSerializedMessage(ctx context.Context, data service.Go
 }
 
 func (wc *WeakCoin) receiveMessage(message Message) error {
-	if wc.exceedsThreshold(message.Signature) {
-		return fmt.Errorf("proposal %x exceeds threshold", message.Signature)
+	if wc.aboveThreshold(message.Signature) {
+		return fmt.Errorf("proposal %x is above threshold", message.Signature)
 	}
 
 	wc.mu.Lock()
