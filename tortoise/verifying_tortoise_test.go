@@ -1788,7 +1788,6 @@ func TestVoteVectorForLayer(t *testing.T) {
 }
 
 func TestSumVotesForBlock(t *testing.T) {
-	log.DebugMode(true)
 	r := require.New(t)
 
 	mdb := getInMemMesh()
@@ -2266,5 +2265,36 @@ func TestVectorArithmetic(t *testing.T) {
 }
 
 func TestCalculateOpinionWithThreshold(t *testing.T) {
+	r := require.New(t)
+	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, abstain, 1, 1, 1))
+	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, abstain, 10, 1, 1))
+	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, abstain, 1, 10, 1))
+	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, abstain, 1, 1, 10))
+	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, abstain, 1, 10, 10))
+	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, abstain, 10, 10, 1))
+	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, abstain, 10, 1, 10))
+	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, abstain, 10, 10, 10))
+	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, support.Multiply(10), 1, 1, 1))
+	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, support.Multiply(10), 10, 1, 1))
+	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, support.Multiply(10), 1, 10, 1))
+	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, support.Multiply(10), 1, 1, 10))
+	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, support.Multiply(10), 10, 1, 10))
+	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, support.Multiply(10), 10, 10, 1))
+	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, support.Multiply(10), 1, 10, 10))
+	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, support.Multiply(10), 10, 10, 10))
+	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, support.Multiply(11), 10, 10, 10))
+	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, against.Multiply(10), 1, 1, 1))
+	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, against.Multiply(10), 10, 1, 1))
+	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, against.Multiply(10), 1, 10, 1))
+	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, against.Multiply(10), 1, 1, 10))
+	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, against.Multiply(10), 10, 1, 10))
+	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, against.Multiply(10), 10, 10, 1))
+	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, against.Multiply(10), 1, 10, 10))
+	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, against.Multiply(10), 10, 10, 10))
+	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, against.Multiply(11), 10, 10, 10))
 
+	// a more realistic example
+	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, vec{72, 9}, defaultTestLayerSize, defaultTestGlobalThreshold, 3))
+	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, vec{12, 9}, defaultTestLayerSize, defaultTestGlobalThreshold, 3))
+	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, vec{9, 18}, defaultTestLayerSize, defaultTestGlobalThreshold, 3))
 }
