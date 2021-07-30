@@ -140,11 +140,11 @@ test test-all: get-gpu-setup
 .PHONY: test
 
 test-no-app-test: get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)"  go test -timeout 0 -p 1 -tags exclude_app_test -log=$(TEST_LOG_LEVEL) ./...
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)"  go test -timeout 0 -p 1 -tags exclude_app_test ./... -log=$(TEST_LOG_LEVEL)
 .PHONY: test-no-app-test
 
 test-only-app-test: get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -timeout 0 -p 1 -tags !exclude_app_test -log=$(TEST_LOG_LEVEL) ./cmd/node
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -timeout 0 -p 1 -tags !exclude_app_test ./cmd/node -log=$(TEST_LOG_LEVEL)
 .PHONY: test-only-app-test
 
 test-tidy:
