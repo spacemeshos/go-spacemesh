@@ -18,7 +18,9 @@ func TestProtocol_SendRequest(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	fnd1 := NewMsgServer(context.TODO(), n1, protocol, 5*time.Second, make(chan service.DirectMessage, config.Values.BufferSize), logtest.New(t).WithName("t1"))
-
+	t.Cleanup(func() {
+		fnd1.Close()
+	})
 	//handler that returns some bytes on request
 
 	handler := func(ctx context.Context, msg []byte) []byte {
@@ -29,7 +31,9 @@ func TestProtocol_SendRequest(t *testing.T) {
 
 	n2 := sim.NewNode()
 	fnd2 := NewMsgServer(context.TODO(), n2, protocol, 5*time.Second, make(chan service.DirectMessage, config.Values.BufferSize), logtest.New(t).WithName("t2"))
-
+	t.Cleanup(func() {
+		fnd2.Close()
+	})
 	//send request with handler that converts to string and sends via channel
 	strCh := make(chan string)
 	callback := func(msg []byte) {
@@ -52,7 +56,9 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	fnd1 := NewMsgServer(context.TODO(), n1, protocol, 5*time.Second, make(chan service.DirectMessage, config.Values.BufferSize), logtest.New(t).WithName("t3"))
-
+	t.Cleanup(func() {
+		fnd1.Close()
+	})
 	//handler that returns some bytes on request
 
 	handler := func(ctx context.Context, msg []byte) []byte {
@@ -64,7 +70,9 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 
 	n2 := sim.NewNode()
 	fnd2 := NewMsgServer(context.TODO(), n2, protocol, 10*time.Millisecond, make(chan service.DirectMessage, config.Values.BufferSize), logtest.New(t).WithName("t4"))
-
+	t.Cleanup(func() {
+		fnd2.Close()
+	})
 	//send request with handler that converts to string and sends via channel
 	strCh := make(chan string)
 	callback := func(msg []byte) {
@@ -95,6 +103,9 @@ func TestProtocol_Close(t *testing.T) {
 	n1 := sim.NewNode()
 	fnd1 := NewMsgServer(context.TODO(), n1, protocol, 5*time.Second, make(chan service.DirectMessage, config.Values.BufferSize), logtest.New(t).WithName("t5"))
 
+	t.Cleanup(func() {
+		fnd1.Close()
+	})
 	//handler that returns some bytes on request
 
 	handler := func(ctx context.Context, msg []byte) []byte {
@@ -106,7 +117,9 @@ func TestProtocol_Close(t *testing.T) {
 
 	n2 := sim.NewNode()
 	fnd2 := NewMsgServer(context.TODO(), n2, protocol, 10*time.Millisecond, make(chan service.DirectMessage, config.Values.BufferSize), logtest.New(t).WithName("t6"))
-
+	t.Cleanup(func() {
+		fnd2.Close()
+	})
 	//send request with handler that converts to string and sends via channel
 	strCh := make(chan string)
 	callback := func(msg []byte) {
@@ -116,5 +129,4 @@ func TestProtocol_Close(t *testing.T) {
 	err := fnd2.SendRequest(context.TODO(), 1, nil, n1.PublicKey(), callback, func(err error) {})
 	assert.NoError(t, err, "Should not return error")
 	assert.EqualValues(t, 1, fnd2.pendingQueue.Len(), "value received did not match correct value1")
-	fnd2.Close()
 }
