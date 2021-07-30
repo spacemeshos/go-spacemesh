@@ -256,7 +256,7 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	actives, err := atxdb.GetMinerWeightsInEpochFromView(epoch, blocksMap)
 	assert.NoError(t, err)
 	// TODO: check this test failure
-	println(actives) // REMOVE
+	_ = actives
 	//assert.Len(t, actives, 2)
 	//assert.Equal(t, uint64(10000), actives[id1.Key], "actives[id1.Key] (%d) != %d", actives[id1.Key], 10000)
 	//assert.Equal(t, uint64(20000), actives[id2.Key], "actives[id2.Key] (%d) != %d", actives[id2.Key], 20000)

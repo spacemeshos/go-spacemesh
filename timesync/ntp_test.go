@@ -2,18 +2,21 @@ package timesync
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCheckSystemClockDrift(t *testing.T) {
+	logger := logtest.New(t)
 	drift, err := CheckSystemClockDrift()
-	t.Log("Checking system clock drift from NTP")
+	logger.Debug("Checking system clock drift from NTP")
 	if drift < -config.TimeConfigValues.MaxAllowedDrift || drift > config.TimeConfigValues.MaxAllowedDrift {
 		assert.NotNil(t, err, fmt.Sprintf("Didn't get that drift exceedes. %s", err))
 	} else {

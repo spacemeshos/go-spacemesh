@@ -164,7 +164,7 @@ func TestConsensusFixedOracle(t *testing.T) {
 	set1 := NewSetFromValues(value1)
 	test.fill(set1, 0, totalNodes-1)
 	test.honestSets = []*Set{set1}
-	oracle := eligibility.New()
+	oracle := eligibility.New(logtest.New(t))
 	i := 0
 	creationFunc := func() {
 		s := sim.NewNode()
@@ -191,7 +191,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 	set1 := NewSetFromValues(value1)
 	test.fill(set1, 0, totalNodes-1)
 	test.honestSets = []*Set{set1}
-	oracle := eligibility.New()
+	oracle := eligibility.New(logtest.New(t))
 	i := 0
 	creationFunc := func() {
 		s := sim.NewNode()
@@ -228,7 +228,7 @@ func TestAllDifferentSet(t *testing.T) {
 	test.initialSets[8] = NewSetFromValues(value1, value2, value10)
 	test.initialSets[9] = NewSetFromValues(value1, value2, value3, value4)
 	test.honestSets = []*Set{base}
-	oracle := eligibility.New()
+	oracle := eligibility.New(logtest.New(t))
 	i := 0
 	creationFunc := func() {
 		s := sim.NewNode()
@@ -259,7 +259,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 	test.fill(honest2, 16, totalNodes/2)
 	test.fill(dishonest, totalNodes/2+1, totalNodes-1)
 	test.honestSets = []*Set{honest1, honest2}
-	oracle := eligibility.New()
+	oracle := eligibility.New(logtest.New(t))
 	i := 0
 	honestFunc := func() {
 		s := sim.NewNode()
@@ -302,7 +302,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 	test.fill(honest2, 16, totalNodes/2)
 	test.fill(dishonest, totalNodes/2+1, totalNodes-1)
 	test.honestSets = []*Set{honest1, honest2}
-	oracle := eligibility.New()
+	oracle := eligibility.New(logtest.New(t))
 	i := 0
 	honestFunc := func() {
 		s := sim.NewNode()

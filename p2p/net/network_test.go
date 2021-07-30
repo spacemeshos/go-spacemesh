@@ -2,8 +2,6 @@ package net
 
 import (
 	"context"
-	"encoding/hex"
-	"fmt"
 	"math/rand"
 	"net"
 	"sync"
@@ -52,18 +50,14 @@ func TestNet_EnqueueMessage(t *testing.T) {
 			sum := sumByteArray(rnode.PublicKey().Bytes())
 			msg := make([]byte, 10)
 			randmsg(msg)
-			fmt.Printf("pushing %v to %v \r\n", hex.EncodeToString(msg), sum%n.queuesCount)
 			n.EnqueueMessage(context.TODO(), IncomingMessageEvent{Conn: NewConnectionMock(rnode.PublicKey()), Message: msg})
-			fmt.Printf("pushed %v to %v \r\n", hex.EncodeToString(msg), sum%n.queuesCount)
 			tx := time.NewTimer(time.Second * 2)
 			defer wg.Done()
 			select {
 			case <-n.IncomingMessages()[sum%n.queuesCount]:
-				fmt.Printf("got %v \r\n", hex.EncodeToString(msg))
 				//assert.Equal(t, s.Message, msg)
 				//assert.Equal(t, s.Conn.RemotePublicKey(), rnode.PublicKey())
 			case <-tx.C:
-				fmt.Println("didn't get ", hex.EncodeToString(msg))
 				atomic.AddInt32(&timedout, 1)
 				return
 

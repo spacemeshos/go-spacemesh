@@ -561,7 +561,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	assert.NoError(t, err)
 	edSgn := signing.NewEdSigner()
-	app, err := InitSingleInstance(*cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(), poetHarness.HTTPPoetClient, clock, localNet, edSgn)
+	app, err := InitSingleInstance(*cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(logtest.New(t)), poetHarness.HTTPPoetClient, clock, localNet, edSgn)
 
 	//app := NewSpacemeshApp()
 

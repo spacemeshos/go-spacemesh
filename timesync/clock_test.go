@@ -43,7 +43,6 @@ func TestClock_StartClock_BeforeEpoch(t *testing.T) {
 	select {
 	case <-tk:
 		dur := time.Now().Sub(then)
-		fmt.Println(dur)
 		assert.True(t, waitTime < dur)
 	}
 	ts.Close()

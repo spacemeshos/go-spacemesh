@@ -3,7 +3,6 @@ package node
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -252,7 +251,7 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, storePath 
 
 // StartMultiNode Starts the run of a number of nodes, running in process consensus between them.
 // this also runs a single transaction between the nodes.
-func StartMultiNode(numOfInstances, layerAvgSize int, runTillLayer uint32, dbPath string) {
+func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLayer uint32, dbPath string) {
 	cfg := getTestDefaultConfig(numOfInstances)
 	cfg.LayerAvgSize = layerAvgSize
 	net := service.NewSimulator()
@@ -262,24 +261,24 @@ func StartMultiNode(numOfInstances, layerAvgSize int, runTillLayer uint32, dbPat
 
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	if err != nil {
-		log.Panic("failed creating poet client harness: %v", err)
+		logger.Panic("failed creating poet client harness: %v", err)
 	}
 	defer func() {
 		err := poetHarness.Teardown(true)
 		if err != nil {
-			log.With().Error("failed to tear down poet harness", log.Err(err))
+			logger.With().Error("failed to tear down poet harness", log.Err(err))
 		}
 	}()
 
-	rolacle := eligibility.New()
+	rolacle := eligibility.New(logger)
 	gTime, err := time.Parse(time.RFC3339, genesisTime)
 	if err != nil {
-		log.Error("cannot parse genesis time %v", err)
+		logger.Error("cannot parse genesis time %v", err)
 	}
 	events.CloseEventPubSub()
 	pubsubAddr := "tcp://localhost:55666"
 	if err := events.InitializeEventReporter(pubsubAddr); err != nil {
-		log.With().Error("error initializing event reporter", log.Err(err))
+		logger.With().Error("error initializing event reporter", log.Err(err))
 	}
 	clock := NewManualClock(gTime)
 
@@ -291,7 +290,7 @@ func StartMultiNode(numOfInstances, layerAvgSize int, runTillLayer uint32, dbPat
 		edSgn := signing.NewEdSigner()
 		smApp, err := InitSingleInstance(*cfg, i, genesisTime, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net, edSgn)
 		if err != nil {
-			log.Error("cannot run multi node %v", err)
+			logger.Error("cannot run multi node %v", err)
 			return
 		}
 		apps = append(apps, smApp)
@@ -314,11 +313,11 @@ func StartMultiNode(numOfInstances, layerAvgSize int, runTillLayer uint32, dbPat
 				return
 			}
 			if err != nil {
-				log.Error("Failed to read PoET stdout: %v", err)
+				logger.Error("Failed to read PoET stdout: %v", err)
 				return
 			}
 
-			fmt.Printf("[PoET stdout] %v\n", string(line))
+			logger.Info("[PoET stdout] %v\n", string(line))
 		}
 	}()
 	go func() {
@@ -329,16 +328,16 @@ func StartMultiNode(numOfInstances, layerAvgSize int, runTillLayer uint32, dbPat
 				return
 			}
 			if err != nil {
-				log.Error("Failed to read PoET stderr: %v", err)
+				logger.Error("Failed to read PoET stderr: %v", err)
 				return
 			}
 
-			fmt.Printf("[PoET stderr] %v\n", string(line))
+			logger.Info("[PoET stderr] %v", string(line))
 		}
 	}()
 
 	if err := poetHarness.Start(context.TODO(), []string{"127.0.0.1:9094"}); err != nil {
-		log.Panic("failed to start poet server: %v", err)
+		logger.Panic("failed to start poet server: %v", err)
 	}
 
 	defer GracefulShutdown(apps)
@@ -353,11 +352,11 @@ loop:
 		select {
 		// Got a timeout! fail with a timeout error
 		case <-timeout:
-			log.Panic("run timed out", err)
+			logger.Panic("run timed out", err)
 			return
 		default:
 			if errors > 100 {
-				log.Panic("too many errors and retries")
+				logger.Panic("too many errors and retries")
 				break loop
 			}
 			layer := clock.GetCurrentLayer()
@@ -369,41 +368,41 @@ loop:
 			}
 
 			if eventDb.GetBlockCreationDone(layer) < numOfInstances {
-				log.Warning("blocks done in layer %v: %v", layer, eventDb.GetBlockCreationDone(layer))
+				logger.Warning("blocks done in layer %v: %v", layer, eventDb.GetBlockCreationDone(layer))
 				time.Sleep(500 * time.Millisecond)
 				errors++
 				continue
 			}
 			log.Info("all miners tried to create block in %v", layer)
 			if eventDb.GetNumOfCreatedBlocks(layer)*numOfInstances != eventDb.GetReceivedBlocks(layer) {
-				log.Warning("finished: %v, block received %v layer %v", eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer), layer)
+				logger.Warning("finished: %v, block received %v layer %v", eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer), layer)
 				time.Sleep(500 * time.Millisecond)
 				errors++
 				continue
 			}
-			log.Info("all miners got blocks for layer: %v created: %v received: %v", layer, eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer))
+			logger.Info("all miners got blocks for layer: %v created: %v received: %v", layer, eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer))
 			epoch := layer.GetEpoch()
 			if !(eventDb.GetAtxCreationDone(epoch) >= numOfInstances && eventDb.GetAtxCreationDone(epoch)%numOfInstances == 0) {
-				log.Warning("atx not created %v in epoch %v, created only %v atxs", numOfInstances-eventDb.GetAtxCreationDone(epoch), epoch, eventDb.GetAtxCreationDone(epoch))
+				logger.Warning("atx not created %v in epoch %v, created only %v atxs", numOfInstances-eventDb.GetAtxCreationDone(epoch), epoch, eventDb.GetAtxCreationDone(epoch))
 				time.Sleep(500 * time.Millisecond)
 				errors++
 				continue
 			}
-			log.Info("all miners finished reading %v atxs, layer %v done in %v", eventDb.GetAtxCreationDone(epoch), layer, time.Since(startLayer))
+			logger.Info("all miners finished reading %v atxs, layer %v done in %v", eventDb.GetAtxCreationDone(epoch), layer, time.Since(startLayer))
 			for _, atxID := range eventDb.GetCreatedAtx(epoch) {
 				if !eventDb.AtxIDExists(atxID) {
-					log.Warning("atx %v not propagated", atxID)
+					logger.Warning("atx %v not propagated", atxID)
 					errors++
 					continue
 				}
 			}
 			beacons := eventDb.GetTortoiseBeacon(epoch)
-			log.Info("all miners finished calculating %v tortoise beacons, epoch %v done in %v", len(beacons), epoch, time.Since(startLayer))
+			logger.Info("all miners finished calculating %v tortoise beacons, epoch %v done in %v", len(beacons), epoch, time.Since(startLayer))
 			if len(beacons) != 0 {
 				first := beacons[0]
 				for _, beacon := range beacons {
 					if first != beacon {
-						log.Info("tortoise beacons %v and %v differ", first, beacon)
+						logger.Info("tortoise beacons %v and %v differ", first, beacon)
 						errors++
 						continue
 					}

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	lg "log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -104,6 +103,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	cfg := getTestDefaultConfig(numOfInstances)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 	path := suite.T().TempDir()
+	lg := logtest.New(suite.T())
 
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
@@ -111,9 +111,9 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	suite.poetCleanup = poetHarness.Teardown
 
 	// Scan and print the poet output, and catch errors early
-	l := lg.New(os.Stderr, "[poet]\t", 0)
 	failChan := make(chan struct{})
 	go func() {
+		poetLog := lg.WithName("poet")
 		scanner := bufio.NewScanner(io.MultiReader(poetHarness.Stdout, poetHarness.Stderr))
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -125,11 +125,11 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 				close(failChan)
 				suite.T().Fatalf("got error from poet: %s", line)
 			}
-			l.Println(line)
+			poetLog.Debug(line)
 		}
 	}()
 
-	rolacle := eligibility.New()
+	rolacle := eligibility.New(lg)
 
 	gTime, err := time.Parse(time.RFC3339, genesisTime)
 	if err != nil {
@@ -618,7 +618,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.FETCH.BatchSize = 5
 	smApp.Config.FETCH.MaxRetiresForPeer = 5
 
-	rolacle := eligibility.New()
+	rolacle := eligibility.New(logtest.New(t))
 	types.SetLayersPerEpoch(smApp.Config.LayersPerEpoch)
 
 	edSgn := signing.NewEdSigner()

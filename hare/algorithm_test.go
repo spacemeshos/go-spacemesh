@@ -285,7 +285,7 @@ func generateConsensusProcess(t *testing.T) *consensusProcess {
 	n1 := sim.NewNodeFrom(bninfo)
 
 	s := NewSetFromValues(value1)
-	oracle := eligibility.New()
+	oracle := eligibility.New(logtest.New(t))
 	edSigner := signing.NewEdSigner()
 	edPubkey := edSigner.PublicKey()
 	_, vrfPub, err := signing.NewVRFSigner(edSigner.Sign(edPubkey.Bytes()))

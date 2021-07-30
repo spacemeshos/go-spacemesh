@@ -90,7 +90,7 @@ func newMockConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set
 }
 
 func createHare(n1 p2p.Service, logger log.Log) *Hare {
-	return New(cfg, n1, signing2.NewEdSigner(), types.NodeID{}, validateBlocks, (&mockSyncer{true}).IsSynced, new(orphanMock), eligibility.New(), 10, &mockIDProvider{}, NewMockStateQuerier(), make(chan types.LayerID), logger)
+	return New(cfg, n1, signing2.NewEdSigner(), types.NodeID{}, validateBlocks, (&mockSyncer{true}).IsSynced, new(orphanMock), eligibility.New(logger), 10, &mockIDProvider{}, NewMockStateQuerier(), make(chan types.LayerID), logger)
 }
 
 var _ Consensus = (*mockConsensusProcess)(nil)

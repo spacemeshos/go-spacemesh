@@ -2,14 +2,14 @@ package state
 
 import (
 	"encoding/binary"
-	"fmt"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
-	"sync"
-	"testing"
-	"time"
 )
 
 func getState(types.Address) (uint64, uint64, error) {
@@ -79,7 +79,6 @@ func TestTxPoolWithAccounts_GetRandomTxs(t *testing.T) {
 	for i := uint64(0); i < numTxs; i++ {
 		tx := newTx(t, prevNonce+i, 50, signer)
 		ids[i] = tx.ID()
-		fmt.Printf("%d: %v\n", i, ids[i].ShortString())
 		pool.Put(ids[i], tx)
 	}
 

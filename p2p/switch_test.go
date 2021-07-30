@@ -1018,10 +1018,7 @@ func TestSwarm_AskPeersSerial(t *testing.T) {
 func Test_NodeInfo(t *testing.T) {
 	pinged := node.NewNode(p2pcrypto.NewRandomPubkey(), net.IPv4LoopbackAddress, 1010, 1020)
 	raw, err := types.InterfaceToBytes(&pinged)
-	if err != nil {
-		panic("LOL")
-	}
-	t.Log("GOT MSG ", raw)
+	require.NoError(t, err)
 	pinged2 := &node.Info{}
 	err = types.BytesToInterface(raw, pinged2)
 	if err != nil {

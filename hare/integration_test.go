@@ -54,11 +54,11 @@ func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 	his.fill(set1, 0, 10)
 	his.fill(set2, 11, totalNodes-1)
 	his.honestSets = []*Set{set1}
-	oracle := eligibility.New()
+	oracle := eligibility.New(logtest.New(t))
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		signing := signing2.NewEdSigner()
 		lg := logtest.New(t).WithName(signing.PublicKey().String())
-		broker := newBroker(s, newEligibilityValidator(eligibility.New(), 10, &mockIDProvider{}, cfg.N, cfg.ExpectedLeaders, lg), NewMockStateQuerier(), (&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, util.Closer{}, lg)
+		broker := newBroker(s, newEligibilityValidator(eligibility.New(logtest.New(t)), 10, &mockIDProvider{}, cfg.N, cfg.ExpectedLeaders, lg), NewMockStateQuerier(), (&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, util.Closer{}, lg)
 		output := make(chan TerminationOutput, 1)
 		oracle.Register(true, signing.PublicKey().String())
 		proc := newConsensusProcess(cfg, instanceID1, his.initialSets[idx], oracle, NewMockStateQuerier(), 10, signing, types.NodeID{}, s, output, truer{}, lg)
@@ -107,11 +107,11 @@ func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 	his.fill(set2, 6, 12)
 	his.fill(set3, 13, totalNodes-1)
 	his.honestSets = []*Set{set1, set2, set3}
-	oracle := eligibility.New()
+	oracle := eligibility.New(logtest.New(t))
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		signing := signing2.NewEdSigner()
 		lg := logtest.New(t).WithName(signing.PublicKey().String())
-		broker := newBroker(s, newEligibilityValidator(eligibility.New(), 10, &mockIDProvider{}, cfg.N, cfg.ExpectedLeaders, lg), NewMockStateQuerier(), (&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, util.Closer{}, lg)
+		broker := newBroker(s, newEligibilityValidator(eligibility.New(logtest.New(t)), 10, &mockIDProvider{}, cfg.N, cfg.ExpectedLeaders, lg), NewMockStateQuerier(), (&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, util.Closer{}, lg)
 		output := make(chan TerminationOutput, 1)
 		oracle.Register(true, signing.PublicKey().String())
 		proc := newConsensusProcess(cfg, instanceID1, his.initialSets[idx], oracle, NewMockStateQuerier(), 10, signing, types.NodeID{}, s, output, truer{},
