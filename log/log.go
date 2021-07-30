@@ -27,7 +27,10 @@ var defaultEncoder = zap.NewDevelopmentEncoderConfig()
 
 // Level returns the zapcore level of logging.
 func Level() zapcore.Level {
-	return zapcore.DebugLevel
+	if debugMode {
+		return zapcore.DebugLevel
+	}
+	return zapcore.InfoLevel
 }
 
 // Logger is an interface for our logging API.

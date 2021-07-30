@@ -725,7 +725,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				t.Log("Recovered", r)
+				log.Info("Recovered", r)
 			}
 		}()
 		log.Panic("testPANIC")
