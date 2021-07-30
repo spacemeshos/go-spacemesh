@@ -208,7 +208,7 @@ func (wc *WeakCoin) updateProposal(message Message) error {
 	return nil
 }
 
-func (wc WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) (broadcast, smallest []byte) {
+func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) (broadcast, smallest []byte) {
 	var (
 		// TODO(dshulyak) double check that 10 means that 10 units are allowed
 		allowed, exists = wc.allowances[string(wc.signer.PublicKey().Bytes())]
