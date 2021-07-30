@@ -2046,7 +2046,7 @@ func TestRerunAndRevert(t *testing.T) {
 	r.NoError(err)
 	r.NoError(mdb.SaveLayerInputVectorByID(l2ID, l2IDs))
 	oldVerified, newVerified, reverted := alg.HandleIncomingLayer(context.TODO(), l2ID)
-	r.Equal(int(l0ID.Uint32()), int(oldVerified.GetEpoch()))
+	r.Equal(int(l0ID.Uint32()), int(oldVerified.Uint32()))
 	r.Equal(int(l1ID.Uint32()), int(newVerified.Uint32()))
 	r.False(reverted)
 	r.Equal(int(l1ID.Uint32()), int(alg.trtl.Verified.Uint32()))

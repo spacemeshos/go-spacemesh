@@ -1175,9 +1175,11 @@ func (t *turtle) heal(ctx context.Context, targetLayerID types.LayerID) {
 
 		// we should never run on layers newer than Hdist back (from last layer received)
 		// when bootstrapping, don't attempt any verification at all
-		latestLayerWeCanVerify := t.Last.Sub(t.Hdist)
+		var latestLayerWeCanVerify types.LayerID
 		if t.Last.Before(types.NewLayerID(t.Hdist)) {
 			latestLayerWeCanVerify = mesh.GenesisLayer().Index()
+		} else {
+			latestLayerWeCanVerify = t.Last.Sub(t.Hdist)
 		}
 		if candidateLayerID.After(latestLayerWeCanVerify) {
 			logger.With().Error("cannot heal layer that's not at least hdist layers old",
