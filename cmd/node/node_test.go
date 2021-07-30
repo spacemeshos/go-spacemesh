@@ -560,7 +560,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 // E2E app test of the stream endpoints in the NodeService
 func TestSpacemeshApp_NodeService(t *testing.T) {
-	logtest.SetupGlobal(t)
+	logtest.SetupGlobal(t, zap.ErrorLevel)
 
 	setup()
 
@@ -572,12 +572,12 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), logtest.New(t))
 	localNet := service.NewSimulator()
 	cfg := getTestDefaultConfig(1)
+
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	assert.NoError(t, err)
 	edSgn := signing.NewEdSigner()
 	app, err := InitSingleInstance(logtest.New(t), *cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(logtest.New(t)), poetHarness.HTTPPoetClient, clock, localNet, edSgn)
 	require.NoError(t, err)
-	//app := NewSpacemeshApp()
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		defer app.Cleanup()
@@ -591,6 +591,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		app.Config.SyncInterval = 1
 		app.Config.LayerDurationSec = 2
 		app.Config.DataDirParent = path
+		app.Config.LOGGING = cfg.LOGGING
 
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
@@ -632,9 +633,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	go func() {
 		// Don't close the channel twice
-		var once sync.Once
-		oncebody := func() { close(end) }
-		defer once.Do(oncebody)
+		defer close(end)
 
 		// Open an error stream and a status stream
 		streamErr, err := c.ErrorStream(context.Background(), &pb.ErrorStreamRequest{})
@@ -649,32 +648,32 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		// We expect a specific series of errors in a specific order!
 		// Check each one
 		var myError *pb.NodeError
-
-		myError = nextError()
-
-		// Ignore this error which happens if you have a local database file
-		if strings.Contains(myError.Msg, "error adding genesis block, block already exists in database") {
-			myError = nextError()
+		expected := []string{
+			"test123",
+			"test456",
+			"Fatal: goroutine panicked.",
+			"testPANIC",
 		}
-
-		require.Equal(t, "test123", myError.Msg)
-		require.Equal(t, pb.LogLevel_LOG_LEVEL_ERROR, myError.Level)
-
+		// TODO(dshulyak) multiple modules were using incorrent loggers and notifications weren't made.
+		// this test is very problematic and must be completely rewritten.
+		// - ideally without using global state (logger and event publisher)
+		// - or atleast initialize only what is needed and not everything
+		ignored := map[string]struct{}{
+			"error adding genesis block, block already exists in database":            {},
+			"method IsIdentityActiveOnConsensusView erred while calling actives func": {},
+			"error checking if identity is active":                                    {},
+		}
 		myError = nextError()
-		require.Equal(t, "test456", myError.Msg)
-		require.Equal(t, pb.LogLevel_LOG_LEVEL_ERROR, myError.Level)
 
-		// The panic gets wrapped in an ERROR, and we get both, in this order
-		myError = nextError()
-		require.Contains(t, myError.Msg, "Fatal: goroutine panicked.")
-		require.Equal(t, pb.LogLevel_LOG_LEVEL_ERROR, myError.Level)
-
-		myError = nextError()
-		require.Equal(t, "testPANIC", myError.Msg)
-		require.Equal(t, pb.LogLevel_LOG_LEVEL_PANIC, myError.Level)
-
-		// Let the test end
-		once.Do(oncebody)
+		for i := 0; i < len(expected); {
+			current := nextError()
+			if _, ignore := ignored[current.Msg]; ignore {
+				continue
+			}
+			i++
+			require.Equal(t, "test123", myError.Msg)
+			require.Equal(t, pb.LogLevel_LOG_LEVEL_ERROR, myError.Level)
+		}
 	}()
 
 	wg.Add(1)
