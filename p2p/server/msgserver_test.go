@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -34,7 +33,6 @@ func TestProtocol_SendRequest(t *testing.T) {
 	//send request with handler that converts to string and sends via channel
 	strCh := make(chan string)
 	callback := func(msg []byte) {
-		fmt.Println("callback ...")
 		strCh <- string(msg)
 	}
 
@@ -70,7 +68,6 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 	//send request with handler that converts to string and sends via channel
 	strCh := make(chan string)
 	callback := func(msg []byte) {
-		fmt.Println("callback ...")
 		strCh <- string(msg)
 	}
 
@@ -113,7 +110,6 @@ func TestProtocol_Close(t *testing.T) {
 	//send request with handler that converts to string and sends via channel
 	strCh := make(chan string)
 	callback := func(msg []byte) {
-		fmt.Println("callback ...")
 		strCh <- string(msg)
 	}
 

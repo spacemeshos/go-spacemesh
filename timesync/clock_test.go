@@ -1,7 +1,6 @@
 package timesync
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -39,7 +38,6 @@ func TestClock_StartClock_BeforeEpoch(t *testing.T) {
 	tk := ts.Subscribe()
 	ts.StartNotifying()
 
-	fmt.Println(waitTime)
 	select {
 	case <-tk:
 		dur := time.Now().Sub(then)
