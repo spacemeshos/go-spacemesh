@@ -33,7 +33,7 @@ func (a vec) Multiply(x uint64) vec {
 	one := a[0] * x
 	two := a[1] * x
 	// prevent overflow/wraparound
-	if x != 0 && one/x != a[0] || two/x != a[1] {
+	if x != 0 && (one/x != a[0] || two/x != a[1]) {
 		panic("vector arithmetic overflow")
 	}
 	return a

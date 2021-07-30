@@ -39,7 +39,7 @@ type Config struct {
 // NewVerifyingTortoise creates a new verifying tortoise wrapper
 func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingTortoise {
 	if cfg.Recovered {
-		return recoveredVerifyingTortoise(cfg.Database, cfg.Log)
+		return recoveredVerifyingTortoise(cfg.Database, cfg.ATXDB, cfg.Clock, cfg.Log)
 	}
 	return verifyingTortoise(
 		ctx,
@@ -90,7 +90,7 @@ func verifyingTortoise(
 }
 
 // NewRecoveredVerifyingTortoise recovers a previously persisted tortoise copy from mesh.DB
-func recoveredVerifyingTortoise(mdb blockDataProvider, logger log.Log) *ThreadSafeVerifyingTortoise {
+func recoveredVerifyingTortoise(mdb blockDataProvider, atxdb atxDataProvider, clock layerClock, logger log.Log) *ThreadSafeVerifyingTortoise {
 	tmp, err := RecoverVerifyingTortoise(mdb)
 	if err != nil {
 		logger.With().Panic("could not recover tortoise state from disk", log.Err(err))
@@ -103,6 +103,8 @@ func recoveredVerifyingTortoise(mdb blockDataProvider, logger log.Log) *ThreadSa
 
 	logger.Info("recovered tortoise from disk")
 	trtl.bdp = mdb
+	trtl.atxdb = atxdb
+	trtl.clock = clock
 	trtl.logger = logger
 
 	return &ThreadSafeVerifyingTortoise{trtl: trtl, lastRerun: time.Now(), logger: logger}

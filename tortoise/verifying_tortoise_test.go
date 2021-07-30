@@ -347,6 +347,17 @@ func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, blocksPerLayer
 func testLayerPattern(t *testing.T, atxdb atxDataWriter, db *mesh.DB, trtl *turtle, blocksPerLayer int, successPattern []bool) {
 	goodLayerFn := func(layerID types.LayerID) ([]types.BlockID, error) {
 		t.Log("giving good results for layer", layerID)
+
+		// TODO LANE: this is problematic because it continues to return blocks for old layers even when those
+		//   blocks are never saved as input vectors after a simulated hare failure. As a result, all new base
+		//   blocks are never marked good because they continue to vote for blocks in layers that the local opinion
+		//   thinks should be empty.
+		//oldFn := db.InputVectorBackupFunc
+		//db.InputVectorBackupFunc = nil
+		//defer func() {
+		//	db.InputVectorBackupFunc = oldFn
+		//}()
+		//return db.GetLayerInputVectorByID(layerID)
 		return db.LayerBlockIds(layerID)
 	}
 	badLayerFn := func(layerID types.LayerID) ([]types.BlockID, error) {
@@ -384,6 +395,7 @@ func TestLayerPatterns(t *testing.T) {
 	})
 
 	t.Run("heal after bad layers", func(t *testing.T) {
+		//log.DebugMode(true)
 		// five good layers, then two bad, then enough good to heal
 		pattern := []bool{
 			true,  // verified
@@ -410,6 +422,7 @@ func TestLayerPatterns(t *testing.T) {
 		trtl := defaultTurtle()
 		trtl.AvgLayerSize = blocksPerLayer
 		trtl.bdp = msh
+		trtl.atxdb = atxdb
 		trtl.init(context.TODO(), mesh.GenesisLayer())
 		testLayerPattern(t, atxdb, msh, trtl, blocksPerLayer, pattern)
 
@@ -456,6 +469,7 @@ func TestLayerPatterns(t *testing.T) {
 		trtl := defaultTurtle()
 		trtl.AvgLayerSize = blocksPerLayer
 		trtl.bdp = msh
+		trtl.atxdb = atxdb
 		trtl.init(context.TODO(), mesh.GenesisLayer())
 		testLayerPattern(t, atxdb, msh, trtl, blocksPerLayer, pattern)
 
@@ -500,6 +514,7 @@ func TestLayerPatterns(t *testing.T) {
 		trtl := defaultTurtle()
 		trtl.AvgLayerSize = blocksPerLayer
 		trtl.bdp = msh
+		trtl.atxdb = atxdb
 		trtl.init(context.TODO(), mesh.GenesisLayer())
 		testLayerPattern(t, atxdb, msh, trtl, blocksPerLayer, pattern)
 		// final verified layer should lag by zdist+confidence interval
@@ -646,7 +661,7 @@ func TestEviction2(t *testing.T) {
 	layers := types.NewLayerID(uint32(defaultTestWindowSize) * 3)
 	avgPerLayer := 10
 	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, 0, 0)
-	require.Equal(t, defaultTestWindowSize+2, len(trtl.BlockOpinionsByLayer))
+	require.Equal(t, int(defaultTestWindowSize)+2, len(trtl.BlockOpinionsByLayer))
 	count := 0
 	for _, blks := range trtl.BlockOpinionsByLayer {
 		count += len(blks)
@@ -735,7 +750,7 @@ func TestPersistAndRecover(t *testing.T) {
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
 
 	// now recover
-	alg2 := recoveredVerifyingTortoise(mdb, alg.logger)
+	alg2 := recoveredVerifyingTortoise(mdb, alg.trtl.atxdb, alg.trtl.clock, alg.logger)
 	require.Equal(t, alg.LatestComplete(), alg2.LatestComplete())
 	require.Equal(t, alg.trtl.bdp, alg2.trtl.bdp)
 	require.Equal(t, alg.trtl.LastEvicted, alg2.trtl.LastEvicted)
@@ -1301,7 +1316,6 @@ func TestProcessBlock(t *testing.T) {
 }
 
 func TestLateBlocks(t *testing.T) {
-	log.DebugMode(true)
 	r := require.New(t)
 	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
