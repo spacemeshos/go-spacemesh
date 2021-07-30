@@ -470,5 +470,5 @@ func (s *Syncer) validateLayer(ctx context.Context, layer *types.Layer) {
 	// TODO: re-architect this so the syncer does not need to actually wait for tortoise to finish running.
 	//   It should be sufficient to call GetLayer (above), and maybe, to queue a request to tortoise to analyze this
 	//   layer (without waiting for this to finish -- it should be able to run async).
-	s.mesh.ValidateLayer(ctx, layer.Index())
+	s.mesh.ValidateLayer(ctx, layer)
 }

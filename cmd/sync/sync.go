@@ -187,7 +187,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 			}
 		} else {
 			lg.With().Info("loaded layer from disk", types.NewLayerID(i))
-			msh.ValidateLayer(cmdp.Ctx, lyr.Index())
+			msh.ValidateLayer(cmdp.Ctx, lyr)
 		}
 	}
 
