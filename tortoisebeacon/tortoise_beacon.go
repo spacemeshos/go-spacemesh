@@ -337,8 +337,7 @@ func (tb *TortoiseBeacon) listenLayers(ctx context.Context) {
 			return
 		case layer := <-tb.layerTicker:
 			tb.Log.With().Info("Received tick", layer)
-			// FIXME(dshulyak) don't merge it
-			tb.handleLayer(ctx, layer)
+			go tb.handleLayer(ctx, layer)
 		}
 	}
 }
