@@ -608,17 +608,19 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	ticker := time.NewTicker(tb.votingRoundDuration + tb.weakCoinRoundDuration)
 	defer ticker.Stop()
 
+	var coinflip bool
 	for round := firstRound; round <= tb.lastPossibleRound(); round++ {
-		go tb.startWeakCoin(ctx, epoch, round)
-		go func(epoch types.EpochID, round types.RoundID) {
-			if err := tb.sendVotes(ctx, epoch, round); err != nil {
+		// always use coinflip from the previous round for current round.
+		// round 1 is running without coinflip (e.g. value is false) intentionally
+		go func(epoch types.EpochID, round types.RoundID, coinflip bool) {
+			if err := tb.sendVotes(ctx, epoch, round, coinflip); err != nil {
 				tb.Log.With().Error("Failed to send voting messages",
 					log.Uint64("epoch_id", uint64(epoch)),
 					log.Uint64("round_id", uint64(round)),
 					log.Err(err))
 			}
-		}(epoch, round)
-
+		}(epoch, round, coinflip)
+		go tb.startWeakCoin(ctx, epoch, round)
 		select {
 		case <-ticker.C:
 		case <-tb.CloseChannel():
@@ -627,6 +629,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 			return
 		}
 		tb.weakCoin.CompleteRound()
+		coinflip = tb.weakCoin.Get(epoch, round)
 	}
 
 	tb.Log.With().Debug("Consensus phase finished",
@@ -676,14 +679,14 @@ func (tb *TortoiseBeacon) startWeakCoin(ctx context.Context, epoch types.EpochID
 	}
 }
 
-func (tb *TortoiseBeacon) sendVotes(ctx context.Context, epoch types.EpochID, round types.RoundID) error {
+func (tb *TortoiseBeacon) sendVotes(ctx context.Context, epoch types.EpochID, round types.RoundID, coinflip bool) error {
 	tb.setCurrentRound(epoch, round)
 
 	if round == firstRound {
 		return tb.sendProposalVote(ctx, epoch)
 	}
 
-	return tb.sendVotesDifference(ctx, epoch, round)
+	return tb.sendVotesDifference(ctx, epoch, round, coinflip)
 }
 
 func (tb *TortoiseBeacon) sendProposalVote(ctx context.Context, epoch types.EpochID) error {
@@ -692,10 +695,10 @@ func (tb *TortoiseBeacon) sendProposalVote(ctx context.Context, epoch types.Epoc
 	return tb.sendFirstRoundVote(ctx, epoch, tb.calcVotesFromProposals(epoch))
 }
 
-func (tb *TortoiseBeacon) sendVotesDifference(ctx context.Context, epoch types.EpochID, round types.RoundID) error {
+func (tb *TortoiseBeacon) sendVotesDifference(ctx context.Context, epoch types.EpochID, round types.RoundID, coinflip bool) error {
 	// next rounds, send vote
 	// construct a message that points to all messages from previous round received by δ
-	ownCurrentRoundVotes, err := tb.calcVotes(epoch, round)
+	ownCurrentRoundVotes, err := tb.calcVotes(epoch, round, coinflip)
 	if err != nil {
 		return fmt.Errorf("calculate votes: %w", err)
 	}

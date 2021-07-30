@@ -48,7 +48,7 @@ func (tb *TortoiseBeacon) calcVotesFromProposals(epoch types.EpochID) firstRound
 	return votes
 }
 
-func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID) (votesSetPair, error) {
+func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID, coinflip bool) (votesSetPair, error) {
 	tb.votesMu.Lock()
 	defer tb.votesMu.Unlock()
 
@@ -83,7 +83,7 @@ func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID) (v
 		log.Uint64("round_id", uint64(round)),
 		log.String("votesMargin", fmt.Sprint(votesMargin)))
 
-	ownCurrentRoundVotes, err := tb.calcOwnCurrentRoundVotes(epoch, round, votesMargin)
+	ownCurrentRoundVotes, err := tb.calcOwnCurrentRoundVotes(epoch, round, votesMargin, coinflip)
 	if err != nil {
 		return votesSetPair{}, fmt.Errorf("calc own current round votes: %w", err)
 	}
@@ -209,7 +209,7 @@ func (tb *TortoiseBeacon) calcVotesMargin(epoch types.EpochID, upToRound types.R
 	return nil
 }
 
-func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, round types.RoundID, votesMargin votesMarginMap) (votesSetPair, error) {
+func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, round types.RoundID, votesMargin votesMarginMap, coinflip bool) (votesSetPair, error) {
 	ownCurrentRoundVotes := votesSetPair{
 		ValidVotes:   make(hashSet),
 		InvalidVotes: make(hashSet),
@@ -227,7 +227,6 @@ func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, round ty
 
 	votingThreshold := tb.votingThreshold(epochWeight)
 
-	coinflip := tb.weakCoin.Get(epoch, round-1)
 	// TODO(nkryuchkov): should happen after weak coin for this round is calculated; consider calculating in two steps
 	for vote, weightCount := range votesMargin {
 		switch {
