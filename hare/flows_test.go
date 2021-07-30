@@ -245,6 +245,8 @@ func createMaatuf(tb testing.TB, tcfg config.Config, layersCh chan types.LayerID
 
 // Test - run multiple CPs simultaneously
 func Test_multipleCPs(t *testing.T) {
+	logtest.SetupGlobal(t)
+
 	types.SetLayersPerEpoch(4)
 	r := require.New(t)
 	totalCp := uint32(3)

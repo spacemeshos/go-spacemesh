@@ -871,7 +871,7 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 		for smesherString, cnt := range smesherAccountEntry {
 			smesherEntry, err := types.StringToNodeID(smesherString)
 			if err != nil {
-				log.With().Error("unable to convert bytes to nodeid", log.Err(err),
+				msh.With().Error("unable to convert bytes to nodeid", log.Err(err),
 					log.String("smesher_string", smesherString))
 				return
 			}

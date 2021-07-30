@@ -74,7 +74,7 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 		dbStorepath := storeFormat + string(name)
 		database.SwitchCreationContext(dbStorepath, string(name))
 		edSgn := signing.NewEdSigner()
-		smApp, err := InitSingleInstance(*cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, network, edSgn)
+		smApp, err := InitSingleInstance(logtest.New(suite.T()), *cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, network, edSgn)
 		suite.NoError(err)
 		suite.apps = append(suite.apps, smApp)
 		name++
@@ -95,6 +95,7 @@ var tests = []TestScenario{
 }
 
 func (suite *AppTestSuite) TestMultipleNodes() {
+	logtest.SetupGlobal(suite.T())
 	net := service.NewSimulator()
 	const (
 		numberOfEpochs = 5 // first 2 epochs are genesis
@@ -200,7 +201,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}()
 
 	// this tests loading of previous state, maybe it's not the best place to put this here...
-	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, path+"a", rolacle, poetHarness.HTTPPoetClient, clock, net, edSgn)
+	smApp, err := InitSingleInstance(lg, *cfg, 0, genesisTime, path+"a", rolacle, poetHarness.HTTPPoetClient, clock, net, edSgn)
 	assert.NoError(suite.T(), err)
 	// test that loaded root is equal
 	assert.Equal(suite.T(), oldRoot, smApp.state.GetStateRoot())

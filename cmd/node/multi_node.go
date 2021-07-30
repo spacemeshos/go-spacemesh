@@ -216,7 +216,7 @@ type network interface {
 
 // InitSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
-func InitSingleInstance(cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network, edSgn *signing.EdSigner) (*SpacemeshApp, error) {
+func InitSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network, edSgn *signing.EdSigner) (*SpacemeshApp, error) {
 	smApp := NewSpacemeshApp()
 	smApp.Config = &cfg
 
@@ -240,7 +240,7 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, storePath 
 	hareOracle := newLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
-	err = smApp.initServices(context.TODO(), log.AppLog, nodeID, swarm, dbStorepath, edSgn, false, hareOracle,
+	err = smApp.initServices(context.TODO(), lg, nodeID, swarm, dbStorepath, edSgn, false, hareOracle,
 		uint32(smApp.Config.LayerAvgSize), poetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock)
 	if err != nil {
 		return nil, err
@@ -288,7 +288,7 @@ func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLay
 		dbStorepath := path + string(name)
 		database.SwitchCreationContext(dbStorepath, string(name))
 		edSgn := signing.NewEdSigner()
-		smApp, err := InitSingleInstance(*cfg, i, genesisTime, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net, edSgn)
+		smApp, err := InitSingleInstance(logger, *cfg, i, genesisTime, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net, edSgn)
 		if err != nil {
 			logger.Error("cannot run multi node %v", err)
 			return
@@ -300,7 +300,7 @@ func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLay
 	eventDb := collector.NewMemoryCollector()
 	collect := collector.NewCollector(eventDb, pubsubAddr)
 	for _, a := range apps {
-		a.startServices(context.TODO(), log.AppLog)
+		a.startServices(context.TODO(), logger)
 	}
 	collect.Start(false)
 	ActivateGrpcServer(apps[0])

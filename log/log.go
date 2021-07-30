@@ -27,10 +27,7 @@ var defaultEncoder = zap.NewDevelopmentEncoderConfig()
 
 // Level returns the zapcore level of logging.
 func Level() zapcore.Level {
-	if debugMode {
-		return zapcore.DebugLevel
-	}
-	return zapcore.InfoLevel
+	return zapcore.DebugLevel
 }
 
 // Logger is an interface for our logging API.
@@ -106,7 +103,8 @@ func NewFromLog(l *zap.Logger) Log {
 // InitSpacemeshLoggingSystemWithHooks sets up a logging system with one or more
 // registered hooks
 func InitSpacemeshLoggingSystemWithHooks(hooks ...func(zapcore.Entry) error) {
-	AppLog = NewWithLevel(mainLoggerName, zap.NewAtomicLevelAt(Level()), hooks...)
+	core := zapcore.RegisterHooks(AppLog.logger.Core(), hooks...)
+	AppLog = NewFromLog(zap.New(core))
 }
 
 // public wrappers abstracting away logging lib impl

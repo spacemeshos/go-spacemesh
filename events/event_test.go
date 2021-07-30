@@ -115,9 +115,9 @@ func TestEventReporter(t *testing.T) {
 
 func TestReportError(t *testing.T) {
 	tmp := log.AppLog
-	defer func() {
+	t.Cleanup(func() {
 		log.AppLog = tmp
-	}()
+	})
 	log.AppLog = logtest.New(t)
 
 	nodeErr := NodeError{

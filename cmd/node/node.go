@@ -448,7 +448,10 @@ func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
 	}
 
 	app.loggers[name] = &lvl
-	return logger.SetLevel(&lvl).WithName(name).WithFields(log.String("module", name))
+	if logger.Check(log.Level()) {
+		logger = logger.SetLevel(&lvl)
+	}
+	return logger.WithName(name).WithFields(log.String("module", name))
 }
 
 // SetLogLevel updates the log level of an existing logger
@@ -486,8 +489,8 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	name := nodeID.ShortString()
 
 	// This base logger must be debug level so that other, derived loggers are not a lower level.
-	lg := log.NewWithLevel(name, zap.NewAtomicLevelAt(zapcore.DebugLevel)).WithFields(nodeID)
 
+	lg := log.AppLog.WithName(name).WithFields(nodeID)
 	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 
 	app.log = app.addLogger(AppLogger, lg)
@@ -1072,7 +1075,7 @@ func (app *SpacemeshApp) Start() error {
 	nodeID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 
 	// This base logger must be debug level so that other, derived loggers are not a lower level.
-	lg := log.NewWithLevel(nodeID.ShortString(), zap.NewAtomicLevelAt(zapcore.DebugLevel)).WithFields(nodeID)
+	lg := log.AppLog.WithFields(nodeID)
 
 	/* Initialize all protocol services */
 
@@ -1082,7 +1085,7 @@ func (app *SpacemeshApp) Start() error {
 		return fmt.Errorf("cannot parse genesis time %s: %d", app.Config.GenesisTime, err)
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
+	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, lg.WithName("clock"))
 
 	logger.Info("initializing p2p services")
 	swarm, err := p2p.New(ctx, app.Config.P2P, app.addLogger(P2PLogger, lg), dbStorepath)

@@ -27,7 +27,7 @@ func generateIPAddress() string {
 }
 
 func TestGetConnectionWithNoConnection(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	n.SetDialDelayMs(50)
 	n.SetDialResult(nil)
 	cPool := NewConnectionPool(context.TODO(), n.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
@@ -40,7 +40,7 @@ func TestGetConnectionWithNoConnection(t *testing.T) {
 }
 
 func TestGetConnectionWithConnection(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	n.SetDialDelayMs(50)
 	n.SetDialResult(nil)
 	cPool := NewConnectionPool(context.TODO(), n.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
@@ -53,7 +53,7 @@ func TestGetConnectionWithConnection(t *testing.T) {
 }
 
 func TestGetConnectionWithError(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	n.SetDialDelayMs(50)
 	eErr := errors.New("err")
 	n.SetDialResult(eErr)
@@ -67,7 +67,7 @@ func TestGetConnectionWithError(t *testing.T) {
 }
 
 func TestGetConnectionDuringDial(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	remotePub := generatePublicKey()
 	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 	n.SetDialDelayMs(100)
@@ -106,7 +106,7 @@ Loop:
 }
 
 func TestRemoteConnectionWithNoConnection(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	remotePub := generatePublicKey()
 	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 	n.SetDialDelayMs(50)
@@ -127,7 +127,7 @@ func TestRemoteConnectionWithNoConnection(t *testing.T) {
 }
 
 func TestRemoteConnectionWithExistingConnection(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 	cPool := NewConnectionPool(context.TODO(), n.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
 
@@ -172,7 +172,7 @@ func TestRemoteConnectionWithExistingConnection(t *testing.T) {
 }
 
 func TestShutdown(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	n.SetDialDelayMs(100)
 	n.SetDialResult(nil)
 	remotePub := generatePublicKey()
@@ -193,7 +193,7 @@ func TestShutdown(t *testing.T) {
 }
 
 func TestGetConnectionAfterShutdown(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	n.SetDialDelayMs(100)
 	n.SetDialResult(nil)
 	remotePub := generatePublicKey()
@@ -209,7 +209,7 @@ func TestGetConnectionAfterShutdown(t *testing.T) {
 }
 
 func TestShutdownWithMultipleDials(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	n.SetDialDelayMs(100)
 	n.SetDialResult(nil)
 
@@ -239,7 +239,7 @@ func TestShutdownWithMultipleDials(t *testing.T) {
 }
 
 func TestClosedConnection(t *testing.T) {
-	nMock := net.NewNetworkMock()
+	nMock := net.NewNetworkMock(t)
 	nMock.SetDialDelayMs(50)
 	nMock.SetDialResult(nil)
 	cPool := NewConnectionPool(context.TODO(), nMock.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
@@ -272,7 +272,7 @@ func TestRandom(t *testing.T) {
 		peers = append(peers, Peer{generatePublicKey(), generateIPAddress()})
 	}
 
-	nMock := net.NewNetworkMock()
+	nMock := net.NewNetworkMock(t)
 	nMock.SetDialDelayMs(50)
 	nMock.SetDialResult(nil)
 	cPool := NewConnectionPool(context.TODO(), nMock.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
@@ -321,7 +321,7 @@ func TestRandom(t *testing.T) {
 }
 
 func TestConnectionPool_GetConnectionIfExists(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	addr := "1.1.1.1"
 	cPool := NewConnectionPool(context.TODO(), n.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
 
@@ -344,7 +344,7 @@ func TestConnectionPool_GetConnectionIfExists(t *testing.T) {
 }
 
 func TestConnectionPool_GetConnectionIfExists_Concurrency(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	addr := "1.1.1.1"
 	cPool := NewConnectionPool(context.TODO(), n.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
 
@@ -381,7 +381,7 @@ func TestConnectionPool_GetConnectionIfExists_Concurrency(t *testing.T) {
 }
 
 func TestConnectionPool_CloseConnection(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	addr := "1.1.1.1"
 	cPool := NewConnectionPool(context.TODO(), n.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
 

@@ -49,6 +49,8 @@ import (
 )
 
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
+	logtest.SetupGlobal(t)
+
 	r := require.New(t)
 
 	defer func() {
@@ -178,6 +180,8 @@ func testArgs(args ...string) (string, error) {
 }
 
 func TestSpacemeshApp_Cmd(t *testing.T) {
+	logtest.SetupGlobal(t)
+
 	r := require.New(t)
 	app := NewSpacemeshApp()
 
@@ -227,6 +231,8 @@ func setup() {
 }
 
 func TestSpacemeshApp_GrpcFlags(t *testing.T) {
+	logtest.SetupGlobal(t)
+
 	setup()
 
 	// Use a unique port
@@ -334,6 +340,8 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 }
 
 func TestSpacemeshApp_JsonFlags(t *testing.T) {
+	logtest.SetupGlobal(t)
+
 	setup()
 
 	r := require.New(t)
@@ -410,6 +418,8 @@ func callEndpoint(t *testing.T, endpoint, payload string, port int) (string, int
 }
 
 func TestSpacemeshApp_GrpcService(t *testing.T) {
+	logtest.SetupGlobal(t)
+
 	setup()
 
 	// Use a unique port
@@ -483,6 +493,8 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 }
 
 func TestSpacemeshApp_JsonService(t *testing.T) {
+	logtest.SetupGlobal(t)
+
 	setup()
 
 	r := require.New(t)
@@ -548,6 +560,8 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 // E2E app test of the stream endpoints in the NodeService
 func TestSpacemeshApp_NodeService(t *testing.T) {
+	logtest.SetupGlobal(t)
+
 	setup()
 
 	// Use a unique port
@@ -561,14 +575,13 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	assert.NoError(t, err)
 	edSgn := signing.NewEdSigner()
-	app, err := InitSingleInstance(*cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(logtest.New(t)), poetHarness.HTTPPoetClient, clock, localNet, edSgn)
-
+	app, err := InitSingleInstance(logtest.New(t), *cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(logtest.New(t)), poetHarness.HTTPPoetClient, clock, localNet, edSgn)
+	require.NoError(t, err)
 	//app := NewSpacemeshApp()
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		defer app.Cleanup()
 		require.NoError(t, app.InitializeCmd(cmd, args))
-		require.NoError(t, app.Initialize())
 
 		// Give the error channel a buffer
 		events.CloseEventReporter()
@@ -730,6 +743,8 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 // E2E app test of the transaction service
 func TestSpacemeshApp_TransactionService(t *testing.T) {
+	logtest.SetupGlobal(t)
+
 	setup()
 	r := require.New(t)
 
@@ -882,6 +897,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 }
 
 func TestSpacemeshApp_P2PInterface(t *testing.T) {
+	logtest.SetupGlobal(t)
+
 	setup()
 
 	// Use a unique port

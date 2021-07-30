@@ -154,6 +154,11 @@ func (l Log) SetLevel(level *zap.AtomicLevel) Log {
 	return Log{logger: lgr, name: l.name}
 }
 
+// Check if following level is supported by the logger.
+func (l Log) Check(level zapcore.Level) bool {
+	return l.logger.Check(level, "") != nil
+}
+
 // WithName returns a logger with the given name
 func (l Log) WithName(prefix string) Log {
 	lgr := l.logger.Named(fmt.Sprintf("%-13s", prefix))
