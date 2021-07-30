@@ -46,7 +46,13 @@ func NewPeersImpl(snapshot *atomic.Value, exit chan struct{}, lg log.Log) *Peers
 
 // Close stops listening for events.
 func (p *Peers) Close() {
-	close(p.exit)
+	select {
+	case <-p.exit:
+		return
+	default:
+		p.exit <- struct{}{}
+		<-p.exit
+	}
 }
 
 // GetPeers returns a snapshot of the connected peers shuffled.
@@ -67,19 +73,14 @@ func (p *Peers) listenToPeers(newPeerC, expiredPeerC chan p2pcrypto.PublicKey) {
 		select {
 		case <-p.exit:
 			p.Debug("peers events listener is stopped")
+			close(p.exit)
 			return
-		case peer, ok := <-newPeerC:
-			if !ok {
-				return
-			}
+		case peer := <-newPeerC:
 			peerSet[peer] = struct{}{}
 			p.With().Debug("new peer", log.String("peer", peer.String()),
 				log.Int("total", len(peerSet)),
 			)
-		case peer, ok := <-expiredPeerC:
-			if !ok {
-				return
-			}
+		case peer := <-expiredPeerC:
 			delete(peerSet, peer)
 			p.With().Debug("expired peer", log.String("peer", peer.String()),
 				log.Int("total", len(peerSet)),

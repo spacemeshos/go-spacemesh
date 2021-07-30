@@ -15,7 +15,7 @@ import (
 func getPeers(tb testing.TB, p service.Service) (*Peers, chan p2pcrypto.PublicKey, chan p2pcrypto.PublicKey) {
 	value := atomic.Value{}
 	value.Store(make([]Peer, 0, 20))
-	peers := NewPeersImpl(&value, make(chan struct{}), logtest.New(tb).WithName("peers"))
+	peers := NewPeersImpl(&value, make(chan struct{}), logtest.New(tb))
 	n, expired := p.SubscribePeerEvents()
 	go peers.listenToPeers(n, expired)
 	return peers, n, expired

@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -114,11 +115,7 @@ func TestEventReporter(t *testing.T) {
 }
 
 func TestReportError(t *testing.T) {
-	tmp := log.AppLog
-	t.Cleanup(func() {
-		log.AppLog = tmp
-	})
-	log.AppLog = logtest.New(t)
+	logtest.SetupGlobal(t, zap.ErrorLevel)
 
 	nodeErr := NodeError{
 		Msg:   "hi there",
