@@ -241,7 +241,10 @@ func blockIDsToString(input []types.BlockID) string {
 	return str
 }
 
-// returns the binary local opinion on the validity of a block in a layer (support or against)
+// returns the binary local opinion on the validity of a block in a layer (support or against).
+// abstain is not an option here: if the current opinion on a layer is abstain, an opinion on
+// a block in that layer will be against.
+// TODO: does this ever need to return abstain?
 // TODO: cache but somehow check for changes (e.g., late-finishing Hare), maybe check hash?
 func (t *turtle) getLocalBlockOpinion(ctx context.Context, layerID types.LayerID, blockid types.BlockID) (vec, error) {
 	if !layerID.After(types.GetEffectiveGenesis()) {
@@ -258,7 +261,6 @@ func (t *turtle) getLocalBlockOpinion(ctx context.Context, layerID types.LayerID
 		log.FieldNamed("query_block", blockid),
 		log.String("input", blockIDsToString(input)))
 
-	// TODO: what happens if the current opinion is abstain? that will be converted to against, here.
 	for _, bl := range input {
 		if bl == blockid {
 			return support, nil

@@ -986,7 +986,7 @@ func defaultAlgorithm(t *testing.T, mdb *mesh.DB) *ThreadSafeVerifyingTortoise {
 	)
 }
 
-func TestGetSingleInputVector(t *testing.T) {
+func TestGetLocalBlockOpinion(t *testing.T) {
 	r := require.New(t)
 	mdb := getInMemMesh()
 	alg := defaultAlgorithm(t, mdb)
@@ -994,10 +994,10 @@ func TestGetSingleInputVector(t *testing.T) {
 	l1ID := types.GetEffectiveGenesis().Add(1)
 	blocks := generateBlocks(l1ID, 2, alg.BaseBlock)
 
-	// no input vector for layer
+	// no input vector for recent layer: expect a vote against
 	vec, err := alg.trtl.getLocalBlockOpinion(context.TODO(), l1ID, blocks[0].ID())
-	r.Equal(database.ErrNotFound, err)
-	r.Equal(abstain, vec)
+	r.NoError(err)
+	r.Equal(against, vec)
 
 	// block included in input vector
 	r.NoError(mdb.SaveLayerInputVectorByID(l1ID, []types.BlockID{blocks[0].ID()}))
