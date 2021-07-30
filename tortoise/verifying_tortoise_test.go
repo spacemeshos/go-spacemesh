@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"math"
 	"strconv"
 	"testing"
 	"time"
@@ -2206,4 +2207,64 @@ func TestHealBalanceAttack(t *testing.T) {
 	valid, err := mdb.ContextualValidity(l4lateblock.ID())
 	r.NoError(err)
 	r.Equal(true, valid)
+}
+
+func TestVectorArithmetic(t *testing.T) {
+	r := require.New(t)
+	r.Equal(abstain, abstain.Add(abstain))
+	r.Equal(support, abstain.Add(support))
+	r.Equal(support, support.Add(abstain))
+	r.Equal(against, abstain.Add(against))
+	r.Equal(against, against.Add(abstain))
+	r.Equal(vec{1, 1}, against.Add(support))
+	r.Equal(abstain, simplifyVote(against.Add(support)))
+	r.Equal(vec{1, 1}, support.Add(against))
+	r.Equal(abstain, simplifyVote(support.Add(against)))
+	r.Equal(support, simplifyVote(support.Add(support)))
+	r.Equal(against, simplifyVote(against.Add(against)))
+	r.Equal(support, simplifyVote(vec{100, 10}))
+	r.Equal(against, simplifyVote(vec{10, 100}))
+	r.Equal(abstain, simplifyVote(abstain))
+	r.Equal(abstain, abstain.Multiply(1))
+	r.Equal(support, support.Multiply(1))
+	r.Equal(against, against.Multiply(1))
+	r.Equal(abstain, abstain.Multiply(0))
+	r.Equal(abstain, support.Multiply(0))
+	r.Equal(abstain, against.Multiply(0))
+	r.Equal(support.Add(abstain), abstain.Add(support))
+	r.Equal(against.Add(abstain), abstain.Add(against))
+	r.Equal(support.Multiply(2), support.Add(support))
+	r.Equal(against.Multiply(2), against.Add(against))
+
+	// test wraparound
+	bigVec := vec{math.MaxUint64, math.MaxUint64}
+	r.NotPanics(func() { bigVec.Add(abstain) })
+	r.NotPanics(func() { abstain.Add(bigVec) })
+	r.PanicsWithError(errOverflow.Error(), func() { bigVec.Add(support) })
+	r.PanicsWithError(errOverflow.Error(), func() { support.Add(bigVec) })
+	r.NotPanics(func() { bigVec.Multiply(0) })
+	r.NotPanics(func() { bigVec.Multiply(1) })
+	r.PanicsWithError(errOverflow.Error(), func() { bigVec.Multiply(2) })
+	r.NotPanics(func() { support.Multiply(math.MaxUint64) })
+	r.PanicsWithError(errOverflow.Error(), func() { support.Add(support).Multiply(math.MaxUint64) })
+
+	// test netvote
+	r.Equal(int64(0), abstain.netVote())
+	r.Equal(int64(1), support.netVote())
+	r.Equal(int64(-1), against.netVote())
+	r.Equal(int64(0), support.Add(against).netVote())
+	r.Equal(int64(10), vec{25, 15}.netVote())
+	r.Equal(int64(-10), vec{15, 25}.netVote())
+	r.NotPanics(func() { vec{math.MaxInt64, 0}.netVote() })
+	r.NotPanics(func() { vec{0, math.MaxInt64}.netVote() })
+	r.PanicsWithError(errOverflow.Error(), func() { bigVec.netVote() })
+	r.PanicsWithError(errOverflow.Error(), func() { vec{0, math.MaxUint64}.netVote() })
+	r.PanicsWithError(errOverflow.Error(), func() { vec{0, math.MaxInt64 + 1}.netVote() })
+	r.PanicsWithError(errOverflow.Error(), func() { vec{math.MaxInt64 + 1, 0}.netVote() })
+	r.Equal(int64(math.MaxInt64), vec{math.MaxInt64, 0}.netVote())
+	r.Equal(int64(-math.MaxInt64), vec{0, math.MaxInt64}.netVote())
+}
+
+func TestCalculateOpinionWithThreshold(t *testing.T) {
+
 }

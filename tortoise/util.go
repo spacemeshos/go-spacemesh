@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -9,9 +10,10 @@ import (
 type vec [2]uint64
 
 var (
-	support = vec{1, 0}
-	against = vec{0, 1}
-	abstain = vec{0, 0}
+	support     = vec{1, 0}
+	against     = vec{0, 1}
+	abstain     = vec{0, 0}
+	errOverflow = errors.New("vector arithmetic overflow")
 )
 
 // Field returns a log field. Implements the LoggableField interface.
@@ -24,7 +26,7 @@ func (a vec) Add(v vec) vec {
 	a[1] += v[1]
 	// prevent overflow/wraparound
 	if a[0] < v[0] || a[1] < v[1] {
-		panic("vector arithmetic overflow")
+		panic(errOverflow)
 	}
 	return a
 }
@@ -34,7 +36,7 @@ func (a vec) Multiply(x uint64) vec {
 	two := a[1] * x
 	// prevent overflow/wraparound
 	if x != 0 && (one/x != a[0] || two/x != a[1]) {
-		panic("vector arithmetic overflow")
+		panic(errOverflow)
 	}
 	return vec{one, two}
 }
@@ -43,11 +45,10 @@ func (a vec) netVote() int64 {
 	// prevent overflow/wraparound
 	one := int64(a[0])
 	two := int64(a[1])
-	diff := one - two
-	if diff > one {
-		panic("vector arithmetic overflow")
+	if one < 0 || two < 0 {
+		panic(errOverflow)
 	}
-	return diff
+	return one - two
 }
 
 func simplifyVote(v vec) vec {
