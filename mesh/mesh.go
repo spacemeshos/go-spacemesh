@@ -91,33 +91,36 @@ type Mesh struct {
 	AtxDB
 	txProcessor
 	Validator
-	trtl               tortoise
-	txPool             txMemPool
-	config             Config
-	latestLayer        types.LayerID
-	latestLayerInState types.LayerID
-	processedLayer     ProcessedLayer
-	mutex              sync.RWMutex
-	done               chan struct{}
-	nextValidLayers    map[types.LayerID]*types.Layer
-	maxValidatedLayer  types.LayerID
-	txMutex            sync.Mutex
+	trtl                tortoise
+	txPool              txMemPool
+	config              Config
+	latestLayer         types.LayerID
+	latestLayerInState  types.LayerID
+	processedLayer      ProcessedLayer
+	nextProcessedLayers map[types.LayerID]*types.Layer
+	maxProcessedLayer   types.LayerID
+	mutex               sync.RWMutex
+	done                chan struct{}
+	nextValidLayers     map[types.LayerID]*types.Layer
+	maxValidatedLayer   types.LayerID
+	txMutex             sync.Mutex
 }
 
 // NewMesh creates a new instant of a mesh
 func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, pr txProcessor, logger log.Log) *Mesh {
 	msh := &Mesh{
-		Log:                logger,
-		trtl:               trtl,
-		txPool:             txPool,
-		txProcessor:        pr,
-		done:               make(chan struct{}),
-		DB:                 db,
-		config:             rewardConfig,
-		AtxDB:              atxDb,
-		nextValidLayers:    make(map[types.LayerID]*types.Layer),
-		latestLayer:        types.GetEffectiveGenesis(),
-		latestLayerInState: types.GetEffectiveGenesis(),
+		Log:                 logger,
+		trtl:                trtl,
+		txPool:              txPool,
+		txProcessor:         pr,
+		done:                make(chan struct{}),
+		DB:                  db,
+		config:              rewardConfig,
+		AtxDB:               atxDb,
+		nextProcessedLayers: make(map[types.LayerID]*types.Layer),
+		nextValidLayers:     make(map[types.LayerID]*types.Layer),
+		latestLayer:         types.GetEffectiveGenesis(),
+		latestLayerInState:  types.GetEffectiveGenesis(),
 	}
 
 	msh.Validator = &validator{Mesh: msh}
@@ -138,7 +141,7 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, t
 	if err != nil {
 		logger.Panic("could not recover processed layer: %v", err)
 	}
-	msh.setProcessedLayer(lyr.ID, lyr.Hash)
+	msh.setProcessedLayerFromRecoveredData(lyr)
 
 	verified, err := db.general.Get(VERIFIED)
 	if err != nil {
@@ -249,21 +252,51 @@ func (msh *Mesh) getProcessedLayer() ProcessedLayer {
 	return msh.processedLayer
 }
 
-func (msh *Mesh) setProcessedLayer(layerID types.LayerID, hash types.Hash32) {
+func (msh *Mesh) setProcessedLayerFromRecoveredData(pLayer *ProcessedLayer) {
 	msh.mutex.Lock()
 	defer msh.mutex.Unlock()
-	if msh.processedLayer.ID.After(types.NewLayerID(0)) && msh.processedLayer.ID.Add(1) != layerID {
-		msh.With().Error("could not set processed layer",
-			log.FieldNamed("old_processed_layer", msh.processedLayer.ID),
-			log.FieldNamed("new_processed_layer", layerID))
+	msh.processedLayer = *pLayer
+	msh.Event().Info("processed layer set from recovered data", pLayer.ID, log.String("layer_hash", pLayer.Hash.Hex()))
+}
+
+func (msh *Mesh) setProcessedLayer(layer *types.Layer) {
+	msh.mutex.Lock()
+	defer msh.mutex.Unlock()
+	if !layer.Index().After(msh.processedLayer.ID) {
+		msh.With().Warning("attempt to set processed layer to an older layer",
+			log.FieldNamed("processed_layer", msh.processedLayer.ID),
+			log.FieldNamed("new_layer", layer.Index()))
 		return
 	}
-	msh.processedLayer = ProcessedLayer{
-		ID:   layerID,
-		Hash: hash,
+
+	if layer.Index().After(msh.maxProcessedLayer) {
+		msh.maxProcessedLayer = layer.Index()
 	}
+
+	if layer.Index() != msh.processedLayer.ID.Add(1) {
+		msh.With().Info("trying to set processed layer out of order",
+			log.FieldNamed("processed_layer", msh.processedLayer.ID),
+			log.FieldNamed("new_layer", layer.Index()))
+		msh.nextProcessedLayers[layer.Index()] = layer
+		return
+	}
+
+	msh.nextProcessedLayers[layer.Index()] = layer
+	// first persist all aggregated hashes
+	lastProcessed := msh.processedLayer
+	for i := layer.Index(); !i.After(msh.maxProcessedLayer); i = i.Add(1) {
+		lyr, ok := msh.nextProcessedLayers[i]
+		if !ok {
+			break
+		}
+		aggHash := msh.calcAggregatedLayerHash(lyr, lastProcessed.Hash)
+		msh.persistAggregatedLayerHash(i, aggHash)
+		lastProcessed = ProcessedLayer{ID: i, Hash: aggHash}
+		delete(msh.nextProcessedLayers, i)
+	}
+	msh.processedLayer = lastProcessed
 	events.ReportNodeStatusUpdate()
-	msh.Event().Info("processed layer set", layerID, log.String("layer_hash", hash.Hex()))
+	msh.Event().Info("processed layer set", msh.processedLayer.ID, log.String("layer_hash", msh.processedLayer.Hash.Hex()))
 }
 
 func (msh *Mesh) persistProcessedLayer(lyr *ProcessedLayer) error {
@@ -309,10 +342,9 @@ type validator struct {
 
 func (vl *validator) ValidateLayer(lyr *types.Layer) {
 	vl.With().Info("validate layer", lyr)
-	hash := vl.calcValidLayerHash(lyr)
 	if len(lyr.Blocks()) == 0 {
 		vl.With().Info("skip validation of layer with no blocks", lyr)
-		vl.setProcessedLayer(lyr.Index(), hash)
+		vl.setProcessedLayer(lyr)
 		events.ReportNewLayer(events.NewLayer{
 			Layer:  lyr,
 			Status: events.LayerStatusTypeConfirmed,
@@ -321,7 +353,7 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 	}
 
 	oldPbase, newPbase := vl.trtl.HandleIncomingLayer(lyr)
-	vl.setProcessedLayer(lyr.Index(), hash)
+	vl.setProcessedLayer(lyr)
 
 	if err := vl.trtl.Persist(); err != nil {
 		vl.With().Error("could not persist tortoise", lyr, log.Err(err))
@@ -365,24 +397,9 @@ func (msh *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerI
 		validBlocks, invalidBlocks := msh.BlocksByValidity(l.Blocks())
 		msh.updateStateWithLayer(layerID, types.NewExistingLayer(layerID, validBlocks))
 		msh.logStateRoot(l.Index())
-		msh.persistLayerHashes(l)
+		msh.persistLayerHash(l.Index(), msh.calcSimpleLayerHash(l))
 		msh.reInsertTxsToPool(validBlocks, invalidBlocks, l.Index())
 	}
-}
-
-func (msh *Mesh) persistLayerHashes(l *types.Layer) {
-	hash := msh.calcValidLayerHash(l)
-	msh.persistLayerHash(l.Index(), hash)
-	prevHash := types.Hash32{}
-	var err error
-	if l.Index().After(types.GetEffectiveGenesis()) {
-		prevHash, err = msh.getAggregatedLayerHash(l.Index().Sub(1))
-		if err != nil {
-			msh.With().Error("cannot get running layer hash", l.Index().Sub(1))
-			return
-		}
-	}
-	msh.persistAggregatedLayerHash(l.Index(), types.CalcAggregateHash32(prevHash, l.Hash().Bytes()))
 }
 
 func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l types.LayerID) {
@@ -514,10 +531,15 @@ func (msh *Mesh) logStateRoot(layerID types.LayerID) {
 	)
 }
 
-// calcValidLayerHash calculates the aggregated hash up to the specified layer
-func (msh *Mesh) calcValidLayerHash(layer *types.Layer) types.Hash32 {
+// calcAggregatedLayerHash calculates the aggregated hash up to the specified layer
+func (msh *Mesh) calcAggregatedLayerHash(layer *types.Layer, prevHash types.Hash32) types.Hash32 {
 	validBlocks, _ := msh.BlocksByValidity(layer.Blocks())
-	return types.CalcBlocksHash32(types.BlockIDs(validBlocks), msh.ProcessedLayerHash().Bytes())
+	return types.CalcBlocksHash32(types.BlockIDs(validBlocks), prevHash.Bytes())
+}
+
+func (msh *Mesh) calcSimpleLayerHash(layer *types.Layer) types.Hash32 {
+	validBlocks, _ := msh.BlocksByValidity(layer.Blocks())
+	return types.CalcBlocksHash32(types.BlockIDs(validBlocks), nil)
 }
 
 func (msh *Mesh) persistAggregatedLayerHash(layerID types.LayerID, hash types.Hash32) {
