@@ -533,12 +533,12 @@ func (msh *Mesh) logStateRoot(layerID types.LayerID) {
 // calcAggregatedLayerHash calculates the aggregated hash up to the specified layer
 func (msh *Mesh) calcAggregatedLayerHash(layer *types.Layer, prevHash types.Hash32) types.Hash32 {
 	validBlocks, _ := msh.BlocksByValidity(layer.Blocks())
-	return types.CalcBlocksHash32(types.BlockIDs(validBlocks), prevHash.Bytes())
+	return types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(validBlocks)), prevHash.Bytes())
 }
 
 func (msh *Mesh) calcSimpleLayerHash(layer *types.Layer) types.Hash32 {
 	validBlocks, _ := msh.BlocksByValidity(layer.Blocks())
-	return types.CalcBlocksHash32(types.BlockIDs(validBlocks), nil)
+	return types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(validBlocks)), nil)
 }
 
 func (msh *Mesh) persistAggregatedLayerHash(layerID types.LayerID, hash types.Hash32) {

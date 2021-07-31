@@ -216,7 +216,7 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 	lyr, err := msh.GetLayer(gLyr)
 	assert.NoError(t, err)
 	msh.setProcessedLayer(lyr)
-	expectedHash := types.CalcBlocksHash32(types.BlockIDs(lyr.Blocks()), prevHash.Bytes())
+	expectedHash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(lyr.Blocks())), prevHash.Bytes())
 	assert.Equal(t, lyr.Index(), msh.ProcessedLayer())
 	assert.Equal(t, expectedHash, msh.ProcessedLayerHash())
 	// make sure processed layer is persisted
@@ -233,7 +233,7 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 	gPlus5 := addLayer(r, gLyr.Add(5), 5, msh)
 
 	msh.setProcessedLayer(gPlus1)
-	expectedHash = types.CalcBlocksHash32(types.BlockIDs(gPlus1.Blocks()), prevHash.Bytes())
+	expectedHash = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(gPlus1.Blocks())), prevHash.Bytes())
 	assert.Equal(t, gPlus1.Index(), msh.ProcessedLayer())
 	assert.Equal(t, expectedHash, msh.ProcessedLayerHash())
 	// make sure processed layer is persisted
@@ -263,8 +263,8 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 
 	// setting gPlus2 will bring the processed layer to gPlus3
 	msh.setProcessedLayer(gPlus2)
-	gPlus2Hash := types.CalcBlocksHash32(types.BlockIDs(gPlus2.Blocks()), prevHash.Bytes())
-	expectedHash = types.CalcBlocksHash32(types.BlockIDs(gPlus3.Blocks()), gPlus2Hash.Bytes())
+	gPlus2Hash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(gPlus2.Blocks())), prevHash.Bytes())
+	expectedHash = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(gPlus3.Blocks())), gPlus2Hash.Bytes())
 	assert.Equal(t, gPlus3.Index(), msh.ProcessedLayer())
 	assert.Equal(t, expectedHash, msh.ProcessedLayerHash())
 	// make sure processed layer is persisted
@@ -276,8 +276,8 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 
 	// setting gPlus4 will bring the processed layer to gPlus5
 	msh.setProcessedLayer(gPlus4)
-	gPlus4Hash := types.CalcBlocksHash32(types.BlockIDs(gPlus4.Blocks()), prevHash.Bytes())
-	expectedHash = types.CalcBlocksHash32(types.BlockIDs(gPlus5.Blocks()), gPlus4Hash.Bytes())
+	gPlus4Hash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(gPlus4.Blocks())), prevHash.Bytes())
+	expectedHash = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(gPlus5.Blocks())), gPlus4Hash.Bytes())
 	assert.Equal(t, gPlus5.Index(), msh.ProcessedLayer())
 	assert.Equal(t, expectedHash, msh.ProcessedLayerHash())
 	// make sure processed layer is persisted
