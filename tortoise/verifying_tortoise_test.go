@@ -56,6 +56,7 @@ func getAtxDB() *mockAtxDataProvider {
 type mockAtxDataProvider struct {
 	mockAtxHeader *types.ActivationTxHeader
 	atxDB         map[types.ATXID]*types.ActivationTxHeader
+	firstTime     time.Time
 }
 
 func (madp *mockAtxDataProvider) GetAtxHeader(atxID types.ATXID) (*types.ActivationTxHeader, error) {
@@ -71,12 +72,15 @@ func (madp *mockAtxDataProvider) GetAtxHeader(atxID types.ATXID) (*types.Activat
 }
 
 func (madp mockAtxDataProvider) GetAtxTimestamp(types.ATXID) (time.Time, error) {
-	return time.Now(), nil
+	return madp.firstTime, nil
 }
 
 func (madp *mockAtxDataProvider) StoreAtx(_ types.EpochID, atx *types.ActivationTx) error {
 	// store only the header
 	madp.atxDB[atx.ID()] = atx.ActivationTxHeader
+	if madp.firstTime.IsZero() {
+		madp.firstTime = time.Now()
+	}
 	return nil
 }
 
@@ -290,10 +294,13 @@ func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer, voteNeg
 }
 
 func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, atxdb atxDataWriter, msh *mesh.DB, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) {
-	makeLayer(t, l, trtl, blocksPerLayer, atxdb, msh, inputVectorFn)
+	lyr := makeLayer(t, l, trtl, blocksPerLayer, atxdb, msh, inputVectorFn)
 
 	// write blocks to database first; the verifying tortoise will subsequently read them
-	if blocks, err := inputVectorFn(l); err != nil {
+	if inputVectorFn == nil {
+		// just save the layer contents as the input layer vector (the default behavior)
+		require.NoError(t, msh.SaveLayerInputVectorByID(lyr.Index(), lyr.BlocksIDs()))
+	} else if blocks, err := inputVectorFn(l); err != nil {
 		trtl.logger.With().Warning("error from input vector fn", log.Err(err))
 	} else {
 		// save blocks to db for this layer
@@ -303,13 +310,20 @@ func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerL
 	require.NoError(t, trtl.HandleIncomingLayer(context.TODO(), l))
 }
 
+var (
+	atxHeader = makeAtxHeaderWithWeight(1)
+	atx       = &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
+)
+
 func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, blocksPerLayer int, atxdb atxDataWriter, msh *mesh.DB, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
 	t.Log("======================== choosing base block for layer", layerID)
-	oldInputVectorFn := msh.InputVectorBackupFunc
-	defer func() {
-		msh.InputVectorBackupFunc = oldInputVectorFn
-	}()
-	msh.InputVectorBackupFunc = inputVectorFn
+	if inputVectorFn != nil {
+		oldInputVectorFn := msh.InputVectorBackupFunc
+		defer func() {
+			msh.InputVectorBackupFunc = oldInputVectorFn
+		}()
+		msh.InputVectorBackupFunc = inputVectorFn
+	}
 	baseBlockID, lists, err := trtl.BaseBlock(context.TODO())
 	require.NoError(t, err)
 	t.Log("base block for layer", layerID, "is", baseBlockID)
@@ -317,8 +331,6 @@ func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, blocksPerLayer
 	lyr := types.NewLayer(layerID)
 
 	// for now just create a single ATX for all of the blocks with a weight of one
-	atxHeader := makeAtxHeaderWithWeight(1)
-	atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
 	atx.CalcAndSetID()
 	require.NoError(t, atxdb.StoreAtx(layerID.GetEpoch(), atx))
 
@@ -346,30 +358,15 @@ func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, blocksPerLayer
 }
 
 func testLayerPattern(t *testing.T, atxdb atxDataWriter, db *mesh.DB, trtl *turtle, blocksPerLayer int, successPattern []bool) {
-	goodLayerFn := func(layerID types.LayerID) ([]types.BlockID, error) {
-		t.Log("giving good results for layer", layerID)
-
-		// TODO LANE: this is problematic because it continues to return blocks for old layers even when those
-		//   blocks are never saved as input vectors after a simulated hare failure. As a result, all new base
-		//   blocks are never marked good because they continue to vote for blocks in layers that the local opinion
-		//   thinks should be empty.
-		//oldFn := db.InputVectorBackupFunc
-		//db.InputVectorBackupFunc = nil
-		//defer func() {
-		//	db.InputVectorBackupFunc = oldFn
-		//}()
-		//return db.GetLayerInputVectorByID(layerID)
-		return db.LayerBlockIds(layerID)
-	}
 	badLayerFn := func(layerID types.LayerID) ([]types.BlockID, error) {
 		t.Log("giving bad results for layer", layerID)
 		return nil, errors.New("simulated hare failure")
 	}
 	for i, success := range successPattern {
 		thisLayerID := types.GetEffectiveGenesis().Add(uint32(i) + 1)
-		t.Log("================================ processing layer", thisLayerID)
+		t.Log("======================== processing layer", thisLayerID)
 		if success {
-			makeAndProcessLayer(t, thisLayerID, trtl, blocksPerLayer, atxdb, db, goodLayerFn)
+			makeAndProcessLayer(t, thisLayerID, trtl, blocksPerLayer, atxdb, db, nil)
 		} else {
 			makeAndProcessLayer(t, thisLayerID, trtl, blocksPerLayer, atxdb, db, badLayerFn)
 		}
@@ -396,7 +393,6 @@ func TestLayerPatterns(t *testing.T) {
 	})
 
 	t.Run("heal after bad layers", func(t *testing.T) {
-		//log.DebugMode(true)
 		// five good layers, then two bad, then enough good to heal
 		pattern := []bool{
 			true,  // verified
@@ -415,6 +411,12 @@ func TestLayerPatterns(t *testing.T) {
 			true,  // verification stalled: confidence interval
 			true,  // verification resumes zdist+confidence interval layers before
 			true,  // verification resumes zdist+confidence interval layers before
+			true,  // need a few layers to accumulate enough votes
+			true,  // need a few layers to accumulate enough votes
+			true,  // need a few layers to accumulate enough votes
+			true,  // need a few layers to accumulate enough votes
+			true,  // need a few layers to accumulate enough votes
+			true,  // need a few layers to accumulate enough votes
 			true,  // final candidate layer, not verified
 		}
 

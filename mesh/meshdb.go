@@ -1035,7 +1035,7 @@ func (m *DB) LayerContextuallyValidBlocks(layer types.LayerID) (map[types.BlockI
 		validBlks[b] = struct{}{}
 	}
 
-	m.With().Info("count of contextually valid blocks in layer",
+	m.With().Debug("count of contextually valid blocks in layer",
 		layer,
 		log.Int("count_valid", len(validBlks)),
 		log.Int("count_error", cvErrorCount),

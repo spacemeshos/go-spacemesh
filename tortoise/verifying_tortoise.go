@@ -522,12 +522,18 @@ func (t *turtle) voteWeight(ctx context.Context, votingBlock *types.Block, block
 	if atxTimestamp.Before(nextEpochStart) {
 		blockWeight := atxHeader.GetWeight()
 		logger.With().Debug("voting block atx was timely",
+			log.FieldNamed("next_epoch", atxEpoch+1),
+			log.Time("next_epoch_start", nextEpochStart),
+			log.Time("atx_timestamp", atxTimestamp),
 			votingBlock.ID(),
 			votingBlock.ATXID,
 			log.Uint64("block_weight", blockWeight))
 		return blockWeight, nil
 	}
 	logger.With().Warning("voting block atx was untimely, zeroing block vote weight",
+		log.FieldNamed("next_epoch", atxEpoch+1),
+		log.Time("next_epoch_start", nextEpochStart),
+		log.Time("atx_timestamp", atxTimestamp),
 		votingBlock.ID(),
 		votingBlock.ATXID)
 	return 0, nil
@@ -710,17 +716,18 @@ func (t *turtle) scoreBlocksByLayerID(ctx context.Context, layerID types.LayerID
 
 func (t *turtle) scoreBlocks(ctx context.Context, blocks []*types.Block) {
 	logger := t.logger.WithContext(ctx)
+	logger.Debug("marking good blocks", log.Int("count", len(blocks)))
 	numGood := 0
 	for _, b := range blocks {
 		if t.determineBlockGoodness(ctx, b) {
 			// note: we have no way of warning if a block was previously marked as not good
-			logger.With().Info("marking block good", b.ID())
+			logger.With().Info("marking block good", b.ID(), b.LayerIndex)
 			t.GoodBlocksIndex[b.ID()] = struct{}{}
 			numGood++
 		} else {
-			logger.With().Info("not marking block good", b.ID())
+			logger.With().Info("not marking block good", b.ID(), b.LayerIndex)
 			if _, isGood := t.GoodBlocksIndex[b.ID()]; isGood {
-				logger.With().Warning("marking previously good block as not good", b.ID())
+				logger.With().Warning("marking previously good block as not good", b.ID(), b.LayerIndex)
 				delete(t.GoodBlocksIndex, b.ID())
 			}
 		}
@@ -953,6 +960,8 @@ candidateLayerLoop:
 					// TODO: this is inefficient and we can probably do better
 					// see https://github.com/spacemeshos/go-spacemesh/issues/2522
 					for layerID := lastVerified.Add(1); !layerID.After(t.Last); layerID = layerID.Add(1) {
+						// TODO LANE: this operation can be very expensive and very slow after a few layers,
+						//   since no caching is currently performed. it needs to be optimized and cached.
 						if err := t.scoreBlocksByLayerID(ctx, layerID); err != nil {
 							// if we fail to process a layer, there's probably no point in trying to recore blocks
 							// in later layers, so just print an error and bail
@@ -1016,7 +1025,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 			// the blocks in the layer.
 			// TODO: do we need to/can we somehow cache this?
 			layerBlockIds, err := t.bdp.LayerBlockIds(layerID)
-			logger.With().Info("counting votes for and against blocks in old, unverified layer",
+			logger.With().Debug("counting votes for and against blocks in old, unverified layer",
 				log.Int("num_blocks", len(layerBlockIds)))
 			if err != nil {
 				return nil, err
@@ -1024,6 +1033,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 			layerBlocks := make(map[types.BlockID]struct{}, len(layerBlockIds))
 			for _, blockID := range layerBlockIds {
 				logger := logger.WithFields(log.FieldNamed("candidate_block_id", blockID))
+				// TODO LANE: this operation can be expensive, it needs to be cached
 				sum, err := t.sumVotesForBlock(ctx, blockID, layerID.Add(1), func(id types.BlockID) bool { return true })
 				if err != nil {
 					return nil, fmt.Errorf("error summing votes for block %v in old layer %v: %w",
