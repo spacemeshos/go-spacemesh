@@ -204,16 +204,26 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 		expectedHash := types.CalcBlocksHash32([]types.BlockID{}, prevHash.Bytes())
 		assert.Equal(t, lyr.Index(), msh.ProcessedLayer())
 		assert.Equal(t, expectedHash, msh.ProcessedLayerHash())
+		// make sure processed layer is persisted
+		pLyr, err := msh.recoverProcessedLayer()
+		assert.NoError(t, err)
+		assert.Equal(t, lyr.Index(), pLyr.ID)
+		assert.Equal(t, expectedHash, pLyr.Hash)
 		prevHash = expectedHash
 	}
 
-	// effective gensis layer
+	// effective genesis layer
 	lyr, err := msh.GetLayer(gLyr)
 	assert.NoError(t, err)
 	msh.setProcessedLayer(lyr)
 	expectedHash := types.CalcBlocksHash32(types.BlockIDs(lyr.Blocks()), prevHash.Bytes())
 	assert.Equal(t, lyr.Index(), msh.ProcessedLayer())
 	assert.Equal(t, expectedHash, msh.ProcessedLayerHash())
+	// make sure processed layer is persisted
+	pLyr, err := msh.recoverProcessedLayer()
+	assert.NoError(t, err)
+	assert.Equal(t, lyr.Index(), pLyr.ID)
+	assert.Equal(t, expectedHash, pLyr.Hash)
 	prevHash = expectedHash
 
 	gPlus1 := addLayer(r, gLyr.Add(1), 1, msh)
@@ -226,6 +236,11 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 	expectedHash = types.CalcBlocksHash32(types.BlockIDs(gPlus1.Blocks()), prevHash.Bytes())
 	assert.Equal(t, gPlus1.Index(), msh.ProcessedLayer())
 	assert.Equal(t, expectedHash, msh.ProcessedLayerHash())
+	// make sure processed layer is persisted
+	pLyr, err = msh.recoverProcessedLayer()
+	assert.NoError(t, err)
+	assert.Equal(t, gPlus1.Index(), pLyr.ID)
+	assert.Equal(t, expectedHash, pLyr.Hash)
 	prevHash = expectedHash
 
 	// set gPlus3 and gPlus5 out of order
@@ -233,10 +248,18 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 	// processed layer should not advance
 	assert.Equal(t, gPlus1.Index(), msh.ProcessedLayer())
 	assert.Equal(t, prevHash, msh.ProcessedLayerHash())
+	pLyr, err = msh.recoverProcessedLayer()
+	assert.NoError(t, err)
+	assert.Equal(t, gPlus1.Index(), pLyr.ID)
+	assert.Equal(t, expectedHash, pLyr.Hash)
 	msh.setProcessedLayer(gPlus5)
 	// processed layer should not advance
 	assert.Equal(t, gPlus1.Index(), msh.ProcessedLayer())
 	assert.Equal(t, prevHash, msh.ProcessedLayerHash())
+	pLyr, err = msh.recoverProcessedLayer()
+	assert.NoError(t, err)
+	assert.Equal(t, gPlus1.Index(), pLyr.ID)
+	assert.Equal(t, expectedHash, pLyr.Hash)
 
 	// setting gPlus2 will bring the processed layer to gPlus3
 	msh.setProcessedLayer(gPlus2)
@@ -244,6 +267,11 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 	expectedHash = types.CalcBlocksHash32(types.BlockIDs(gPlus3.Blocks()), gPlus2Hash.Bytes())
 	assert.Equal(t, gPlus3.Index(), msh.ProcessedLayer())
 	assert.Equal(t, expectedHash, msh.ProcessedLayerHash())
+	// make sure processed layer is persisted
+	pLyr, err = msh.recoverProcessedLayer()
+	assert.NoError(t, err)
+	assert.Equal(t, gPlus3.Index(), pLyr.ID)
+	assert.Equal(t, expectedHash, pLyr.Hash)
 	prevHash = expectedHash
 
 	// setting gPlus4 will bring the processed layer to gPlus5
@@ -252,12 +280,22 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 	expectedHash = types.CalcBlocksHash32(types.BlockIDs(gPlus5.Blocks()), gPlus4Hash.Bytes())
 	assert.Equal(t, gPlus5.Index(), msh.ProcessedLayer())
 	assert.Equal(t, expectedHash, msh.ProcessedLayerHash())
+	// make sure processed layer is persisted
+	pLyr, err = msh.recoverProcessedLayer()
+	assert.NoError(t, err)
+	assert.Equal(t, gPlus5.Index(), pLyr.ID)
+	assert.Equal(t, expectedHash, pLyr.Hash)
 	prevHash = expectedHash
 
 	// setting it to an older layer should have no effect
 	msh.setProcessedLayer(gPlus2)
 	assert.Equal(t, gPlus5.Index(), msh.ProcessedLayer())
 	assert.Equal(t, prevHash, msh.ProcessedLayerHash())
+	// make sure processed layer is persisted
+	pLyr, err = msh.recoverProcessedLayer()
+	assert.NoError(t, err)
+	assert.Equal(t, gPlus5.Index(), pLyr.ID)
+	assert.Equal(t, expectedHash, pLyr.Hash)
 }
 
 func TestMesh_PersistProcessedLayer(t *testing.T) {

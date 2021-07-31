@@ -297,6 +297,13 @@ func (msh *Mesh) setProcessedLayer(layer *types.Layer) {
 	msh.processedLayer = lastProcessed
 	events.ReportNodeStatusUpdate()
 	msh.Event().Info("processed layer set", msh.processedLayer.ID, log.String("layer_hash", msh.processedLayer.Hash.Hex()))
+
+	if err := msh.persistProcessedLayer(&lastProcessed); err != nil {
+		msh.With().Error("failed to persist processed layer",
+			log.FieldNamed("processed_layer", lastProcessed.ID),
+			log.String("processed_layer_hash", lastProcessed.Hash.Hex()),
+			log.Err(err))
+	}
 }
 
 func (msh *Mesh) persistProcessedLayer(lyr *ProcessedLayer) error {
@@ -353,19 +360,11 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 	}
 
 	oldPbase, newPbase := vl.trtl.HandleIncomingLayer(lyr)
-	vl.setProcessedLayer(lyr)
-
 	if err := vl.trtl.Persist(); err != nil {
 		vl.With().Error("could not persist tortoise", lyr, log.Err(err))
 	}
-	processed := vl.getProcessedLayer()
-	if err := vl.persistProcessedLayer(&processed); err != nil {
-		vl.With().Error("could not persist processed layer",
-			log.FieldNamed("processed_layer", processed.ID),
-			log.String("processed_layer_hash", processed.Hash.Hex()),
-			log.Err(err))
-	}
 	vl.pushLayersToState(oldPbase, newPbase)
+	vl.setProcessedLayer(lyr)
 	events.ReportNewLayer(events.NewLayer{
 		Layer:  lyr,
 		Status: events.LayerStatusTypeConfirmed,
