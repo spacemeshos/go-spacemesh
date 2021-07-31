@@ -292,7 +292,6 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			logger.Info("setting layer %v to zero-block", layerID)
 			if err := s.mesh.SetZeroBlockLayer(layerID); err != nil {
 				logger.With().Error("failed to set zero-block for layer", layerID, log.Err(err))
-				return false
 			}
 		}
 

@@ -412,7 +412,7 @@ func TestSynchronize_SyncZeroBlockFailed(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		assert.False(t, syncer.synchronize(context.TODO()))
+		assert.True(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
 
@@ -425,8 +425,10 @@ func TestSynchronize_SyncZeroBlockFailed(t *testing.T) {
 	}
 	wg.Wait()
 
-	assert.False(t, syncer.ListenToGossip())
+	assert.True(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
+
+	waitOutGossipSync(t, ticker.GetCurrentLayer(), syncer, ticker, mf)
 }
 
 // test the case where the node originally starts from notSynced and eventually becomes synced
