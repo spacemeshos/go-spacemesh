@@ -28,14 +28,19 @@ type DialFunc func(ctx context.Context, address inet.Addr, remotePublicKey p2pcr
 // - Local connections that were created by local node (by calling GetConnection)
 // - Remote connections that were provided by a networker impl. in a pub-sub manner
 type ConnectionPool struct {
-	localPub    p2pcrypto.PublicKey
-	dialFunc    DialFunc
+	localPub p2pcrypto.PublicKey
+	dialFunc DialFunc
+
 	connections map[p2pcrypto.PublicKey]net.Connection
 	connMutex   sync.RWMutex
-	pending     map[p2pcrypto.PublicKey][]chan dialResult
-	pendMutex   sync.Mutex
-	dialWait    sync.WaitGroup
-	logger      log.Log
+
+	pending   map[p2pcrypto.PublicKey][]chan dialResult
+	pendMutex sync.Mutex
+
+	dialWaitMu sync.Mutex
+	dialWait   sync.WaitGroup
+
+	logger log.Log
 
 	shutdownCtx  context.Context
 	shutdownOnce sync.Once
@@ -88,7 +93,10 @@ func (cp *ConnectionPool) isShuttingDown() bool {
 // - Waits for all Dial routines to complete and unblock any routines waiting for GetConnection
 func (cp *ConnectionPool) Shutdown() {
 	cp.shutdownOnce.Do(func() {
+		cp.dialWaitMu.Lock()
 		cp.dialWait.Wait()
+		cp.dialWaitMu.Unlock()
+
 		// we won't handle the closing connection events for these connections since we exit the loop once the teardown is done
 		cp.closeConnections()
 	})
@@ -224,7 +232,10 @@ func (cp *ConnectionPool) GetConnection(ctx context.Context, address inet.Addr, 
 	cp.pending[remotePub] = append(cp.pending[remotePub], pendChan)
 	if !found {
 		// No one is waiting for a connection with the remote peer, need to call Dial
-		cp.dialWait.Add(1)
+		cp.dialWaitMu.Lock()
+		cp.dialWait.Add(1) //  The first increment must be synchronized with Wait.
+		cp.dialWaitMu.Unlock()
+
 		go func() {
 			if conn, err := cp.dialFunc(cp.shutdownCtx, address, remotePub); err != nil {
 				cp.handleDialResult(remotePub, dialResult{nil, err})

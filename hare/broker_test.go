@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,14 +18,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var instanceID0 = types.NewLayerID(0)
-var instanceID1 = types.NewLayerID(1)
-var instanceID2 = types.NewLayerID(2)
-var instanceID3 = types.NewLayerID(3)
-var instanceID4 = types.NewLayerID(4)
-var instanceID5 = types.NewLayerID(5)
-var instanceID6 = types.NewLayerID(6)
-var instanceID7 = types.NewLayerID(7)
+var (
+	instanceID0 = types.NewLayerID(0)
+	instanceID1 = types.NewLayerID(1)
+	instanceID2 = types.NewLayerID(2)
+	instanceID3 = types.NewLayerID(3)
+	instanceID4 = types.NewLayerID(4)
+	instanceID5 = types.NewLayerID(5)
+	instanceID6 = types.NewLayerID(6)
+	instanceID7 = types.NewLayerID(7)
+)
 
 const reqID = "abracadabra"
 
@@ -231,7 +234,7 @@ func TestBroker_MaxConcurrentProcesses(t *testing.T) {
 	broker.Register(context.TODO(), instanceID4)
 	assert.Equal(t, 4, len(broker.outbox))
 
-	//this statement should cause inbox1 to be unregistered
+	// this statement should cause inbox1 to be unregistered
 	inbox5, _ := broker.Register(context.TODO(), instanceID5)
 	assert.Equal(t, 4, len(broker.outbox))
 
@@ -334,6 +337,7 @@ func TestBroker_RegisterUnregister(t *testing.T) {
 }
 
 type mockGossipMessage struct {
+	mu     sync.RWMutex
 	msg    *Msg
 	sender p2pcrypto.PublicKey
 	vComp  chan service.MessageValidation
@@ -341,7 +345,12 @@ type mockGossipMessage struct {
 
 func (mgm *mockGossipMessage) Bytes() []byte {
 	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, mgm.msg.Message); err != nil {
+
+	mgm.mu.RLock()
+	message := mgm.msg.Message
+	mgm.mu.RUnlock()
+
+	if _, err := xdr.Marshal(&w, message); err != nil {
 		log.With().Error("could not marshal message", log.Err(err))
 		return nil
 	}
@@ -370,14 +379,14 @@ func (mgm *mockGossipMessage) ReportValidation(ctx context.Context, protocol str
 }
 
 func newMockGossipMsg(msg *Message) *mockGossipMessage {
-	return &mockGossipMessage{&Msg{msg, nil, ""}, p2pcrypto.NewRandomPubkey(), make(chan service.MessageValidation, 10)}
+	return &mockGossipMessage{sync.RWMutex{}, &Msg{msg, nil, ""}, p2pcrypto.NewRandomPubkey(), make(chan service.MessageValidation, 10)}
 }
 
 func TestBroker_Send(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	broker := buildBroker(n1, t.Name())
-	mev := &mockEligibilityValidator{valid: false}
+	mev := &mockEligibilityValidator{valid: 0}
 	broker.eValidator = mev
 	broker.Start(context.TODO())
 
@@ -394,7 +403,7 @@ func TestBroker_Send(t *testing.T) {
 	broker.inbox <- m
 	// nothing happens since this is an invalid InnerMsg
 
-	mev.valid = true
+	atomic.StoreInt32(&mev.valid, 1)
 	broker.inbox <- m
 	mv := assertMsg(t, m)
 
@@ -502,23 +511,29 @@ func Test_newMsg(t *testing.T) {
 
 func TestBroker_updateInstance(t *testing.T) {
 	r := require.New(t)
+
 	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
-	r.Equal(types.NewLayerID(0), b.latestLayer)
+	r.Equal(types.NewLayerID(0), b.getLatestLayer())
+
 	b.updateLatestLayer(context.TODO(), types.NewLayerID(1))
-	r.Equal(types.NewLayerID(1), b.latestLayer)
+	r.Equal(types.NewLayerID(1), b.getLatestLayer())
+
 	b.updateLatestLayer(context.TODO(), types.NewLayerID(2))
-	r.Equal(types.NewLayerID(2), b.latestLayer)
+	r.Equal(types.NewLayerID(2), b.getLatestLayer())
 }
 
 func TestBroker_updateSynchronicity(t *testing.T) {
 	r := require.New(t)
+
 	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
 	b.isNodeSynced = trueFunc
 	b.updateSynchronicity(context.TODO(), types.NewLayerID(1))
 	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
+
 	b.isNodeSynced = falseFunc
 	b.updateSynchronicity(context.TODO(), types.NewLayerID(1))
 	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
+
 	b.updateSynchronicity(context.TODO(), types.NewLayerID(2))
 	r.False(b.isSynced(context.TODO(), types.NewLayerID(2)))
 }
@@ -528,9 +543,11 @@ func TestBroker_isSynced(t *testing.T) {
 	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
 	b.isNodeSynced = trueFunc
 	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
+
 	b.isNodeSynced = falseFunc
 	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
 	r.False(b.isSynced(context.TODO(), types.NewLayerID(2)))
+
 	b.isNodeSynced = trueFunc
 	r.False(b.isSynced(context.TODO(), types.NewLayerID(2)))
 }
@@ -571,7 +588,11 @@ func TestBroker_eventLoop(t *testing.T) {
 	b.isNodeSynced = trueFunc
 	c, e := b.Register(context.TODO(), instanceID2)
 	r.Nil(e)
+
+	msg.mu.Lock()
 	m.InnerMsg.InstanceID = instanceID2
+	msg.mu.Unlock()
+
 	msg = newMockGossipMsg(m)
 	b.inbox <- msg
 	recM := <-c
@@ -617,7 +638,7 @@ func Test_validate(t *testing.T) {
 
 	m := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
 	m.InnerMsg.InstanceID = types.NewLayerID(1)
-	b.latestLayer = types.NewLayerID(2)
+	b.setLatestLayer(types.NewLayerID(2))
 	e := b.validate(context.TODO(), m.Message)
 	r.EqualError(e, errUnregistered.Error())
 
@@ -649,7 +670,7 @@ func TestBroker_clean(t *testing.T) {
 		b.syncState[i.Uint32()] = true
 	}
 
-	b.latestLayer = ten.Sub(1)
+	b.setLatestLayer(ten.Sub(1))
 	b.outbox[5] = make(chan *Msg)
 	b.cleanOldLayers()
 	r.Equal(types.NewLayerID(4), b.minDeleted)

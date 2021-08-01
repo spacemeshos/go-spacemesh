@@ -7,6 +7,7 @@ import (
 	"net"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -72,7 +73,6 @@ func TestReceiveError(t *testing.T) {
 
 	rwcam.SetReadResult([]byte{}, fmt.Errorf("fail"))
 	wg.Wait()
-
 }
 
 func TestSendError(t *testing.T) {
@@ -97,7 +97,7 @@ func TestPreSessionMessage(t *testing.T) {
 	rwcam.SetReadResult([]byte{3, 1, 1, 1}, nil)
 	err := conn.setupIncoming(context.TODO(), time.Millisecond)
 	require.NoError(t, err)
-	assert.Equal(t, rwcam.CloseCount(), 0)
+	assert.EqualValues(t, rwcam.CloseCount(), 0)
 	require.Equal(t, int32(1), netw.PreSessionCount())
 }
 
@@ -109,7 +109,7 @@ func TestPreSessionMessageAfterSession(t *testing.T) {
 	rwcam.SetReadResult([]byte{3, 1, 1, 1}, nil)
 	go conn.beginEventProcessing(context.TODO())
 	time.Sleep(50 * time.Millisecond)
-	assert.Equal(t, rwcam.CloseCount(), 1)
+	assert.EqualValues(t, rwcam.CloseCount(), 1)
 }
 
 func TestConn_Limit(t *testing.T) {
@@ -149,8 +149,9 @@ func TestErrClose(t *testing.T) {
 	go conn.beginEventProcessing(context.TODO())
 	rwcam.SetReadResult(nil, errors.New("not working"))
 	wg.Wait()
-	assert.Equal(t, 1, rwcam.CloseCount())
+	assert.EqualValues(t, 1, rwcam.CloseCount())
 }
+
 func TestClose(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
@@ -164,13 +165,12 @@ func TestClose(t *testing.T) {
 	rwcam.SetWriteResult(errors.New("x"))
 	rwcam.SetReadResult(nil, errors.New("x"))
 	go conn.beginEventProcessing(context.TODO())
-	//conn.Close()
-	//err := conn.Send([]byte{3, 1,2,3})
-	//assert.NoError(t, err)
+	// conn.Close()
+	// err := conn.Send([]byte{3, 1,2,3})
+	// assert.NoError(t, err)
 	time.Sleep(time.Millisecond * 1000) // block a little bit
-	assert.Equal(t, 1, rwcam.CloseCount())
+	assert.EqualValues(t, 1, rwcam.CloseCount())
 	<-c
-
 }
 
 func TestDoubleClose(t *testing.T) {
@@ -182,10 +182,10 @@ func TestDoubleClose(t *testing.T) {
 	go conn.beginEventProcessing(context.TODO())
 	conn.Close()
 	time.Sleep(time.Millisecond * 10)
-	assert.Equal(t, 1, rwcam.CloseCount())
+	assert.EqualValues(t, 1, rwcam.CloseCount())
 	err := conn.Close()
 	assert.Equal(t, ErrAlreadyClosed, err)
-	assert.Equal(t, 1, rwcam.closeCnt)
+	assert.Equal(t, 1, atomic.LoadInt64(&rwcam.closeCnt))
 
 	time.Sleep(100 * time.Millisecond) // just check that we don't panic
 }
@@ -204,5 +204,4 @@ func TestGettersToBoostCoverage(t *testing.T) {
 	assert.Equal(t, rPub, conn.RemotePublicKey())
 	assert.NotNil(t, conn.Session())
 	assert.Equal(t, addr.String(), conn.RemoteAddr().String())
-
 }

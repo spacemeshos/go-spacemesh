@@ -2,6 +2,7 @@ package net
 
 import (
 	"net"
+	"sync/atomic"
 	"time"
 )
 
@@ -9,17 +10,17 @@ import (
 type ReadWriteCloseAddresserMock struct {
 	readIn   []byte
 	readErr  error
-	readCnt  int
+	readCnt  int64
 	readChan chan struct{}
 
 	writeWaitChan chan []byte
 
 	writeErr error
 	writeOut []byte
-	writeCnt int
+	writeCnt int64
 
 	closeRes error
-	closeCnt int
+	closeCnt int64
 
 	remoteAddrRes net.Addr
 	remoteAddrCnt int
@@ -41,8 +42,8 @@ func (rwcam *ReadWriteCloseAddresserMock) SetReadResult(p []byte, err error) {
 }
 
 // ReadCount is this
-func (rwcam *ReadWriteCloseAddresserMock) ReadCount() int {
-	return rwcam.readCnt
+func (rwcam *ReadWriteCloseAddresserMock) ReadCount() int64 {
+	return atomic.LoadInt64(&rwcam.readCnt)
 }
 
 func (rwcam *ReadWriteCloseAddresserMock) SetReadDeadline(t time.Time) error {
@@ -55,7 +56,7 @@ func (rwcam *ReadWriteCloseAddresserMock) SetWriteDeadline(t time.Time) error {
 
 // Read is this
 func (rwcam *ReadWriteCloseAddresserMock) Read(p []byte) (n int, err error) {
-	rwcam.readCnt++
+	atomic.AddInt64(&rwcam.readCnt, 1)
 	<-rwcam.readChan
 	err = rwcam.readErr
 	n = 0
@@ -77,13 +78,13 @@ func (rwcam *ReadWriteCloseAddresserMock) WriteOut() (p []byte) {
 }
 
 // WriteCount is a mock
-func (rwcam *ReadWriteCloseAddresserMock) WriteCount() int {
-	return rwcam.writeCnt
+func (rwcam *ReadWriteCloseAddresserMock) WriteCount() int64 {
+	return atomic.LoadInt64(&rwcam.writeCnt)
 }
 
 // Write is a mock
 func (rwcam *ReadWriteCloseAddresserMock) Write(p []byte) (n int, err error) {
-	rwcam.writeCnt++
+	atomic.AddInt64(&rwcam.writeCnt, 1)
 	n = 0
 	err = rwcam.writeErr
 	if rwcam.writeErr == nil {
@@ -96,13 +97,13 @@ func (rwcam *ReadWriteCloseAddresserMock) Write(p []byte) (n int, err error) {
 }
 
 // CloseCount oh yeah
-func (rwcam *ReadWriteCloseAddresserMock) CloseCount() int {
-	return rwcam.closeCnt
+func (rwcam *ReadWriteCloseAddresserMock) CloseCount() int64 {
+	return atomic.LoadInt64(&rwcam.closeCnt)
 }
 
 // Close is mock close
 func (rwcam *ReadWriteCloseAddresserMock) Close() error {
-	rwcam.closeCnt++
+	atomic.AddInt64(&rwcam.closeCnt, 1)
 	close(rwcam.readChan)
 	return rwcam.closeRes
 }

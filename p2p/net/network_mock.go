@@ -12,8 +12,7 @@ import (
 )
 
 // ReadWriteCloserMock is a mock of ReadWriteCloserMock
-type ReadWriteCloserMock struct {
-}
+type ReadWriteCloserMock struct{}
 
 // Read reads something
 func (m ReadWriteCloserMock) Read(p []byte) (n int, err error) {
@@ -30,7 +29,7 @@ func (m ReadWriteCloserMock) Close() error {
 	return nil
 }
 
-//RemoteAddr mocks remote addr return
+// RemoteAddr mocks remote addr return
 func (m ReadWriteCloserMock) RemoteAddr() net.Addr {
 	r, err := net.ResolveTCPAddr("tcp", "127.0.0.0")
 	if err != nil {
@@ -85,6 +84,7 @@ func (n *NetworkMock) SetDialDelayMs(delay int8) {
 
 // Dial dials
 func (n *NetworkMock) Dial(ctx context.Context, address net.Addr, remotePublicKey p2pcrypto.PublicKey) (Connection, error) {
+	// TODO(nkryuchkov): fix data race
 	atomic.AddInt32(&n.dialCount, 1)
 	select {
 	case <-time.After(time.Duration(n.dialDelayMs) * time.Millisecond):

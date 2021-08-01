@@ -768,7 +768,9 @@ func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 }
 
 func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes votesSetPair) error {
+	tb.votesMu.RLock()
 	bitVector := tb.encodeVotes(ownCurrentRoundVotes, tb.firstRoundOutcomingVotes[epoch])
+	tb.votesMu.RUnlock()
 
 	mb := FollowingVotingMessageBody{
 		MinerID:        tb.minerID,

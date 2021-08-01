@@ -5,9 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
+	"math"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"math"
 )
 
 // preRoundTracker tracks pre-round messages.
@@ -68,7 +69,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 	}
 
 	// record Values
-	for v := range sToTrack.values {
+	for _, v := range sToTrack.elements() {
 		pre.tracker.Track(v, eligibilityCount)
 	}
 
@@ -92,7 +93,7 @@ func (pre *preRoundTracker) CanProveValue(value types.BlockID) bool {
 // a set is said to be provable if all his values are provable.
 func (pre *preRoundTracker) CanProveSet(set *Set) bool {
 	// a set is provable iff all its Values are provable
-	for bid := range set.values {
+	for _, bid := range set.elements() {
 		if !pre.CanProveValue(bid) {
 			return false
 		}
@@ -103,7 +104,7 @@ func (pre *preRoundTracker) CanProveSet(set *Set) bool {
 
 // FilterSet filters out non-provable values from the given set
 func (pre *preRoundTracker) FilterSet(set *Set) {
-	for bid := range set.values {
+	for _, bid := range set.elements() {
 		if !pre.CanProveValue(bid) { // not enough witnesses
 			set.Remove(bid)
 		}

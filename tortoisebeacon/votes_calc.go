@@ -17,7 +17,7 @@ func (tb *TortoiseBeacon) calcVotesFromProposals(epoch types.EpochID) firstRound
 	tb.validProposalsMu.RLock()
 
 	for p := range tb.validProposals[epoch] {
-		valid = append(valid, p)
+		valid = append(valid, p) // TODO(nkryuchkov): fix data race
 	}
 
 	tb.validProposalsMu.RUnlock()
@@ -43,7 +43,9 @@ func (tb *TortoiseBeacon) calcVotesFromProposals(epoch types.EpochID) firstRound
 	// TODO: also send a bit vector
 	// TODO: initialize margin vector to initial votes
 	// TODO: use weight
+	tb.votesMu.Lock()
 	tb.firstRoundOutcomingVotes[epoch] = votes
+	tb.votesMu.Unlock()
 
 	return votes
 }

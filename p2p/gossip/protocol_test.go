@@ -2,12 +2,13 @@ package gossip
 
 import (
 	"context"
-	"github.com/golang/mock/gomock"
-	"github.com/spacemeshos/go-spacemesh/priorityq"
-	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -79,6 +80,7 @@ func TestPropagateMessage(t *testing.T) {
 }
 
 type mockPriorityQueue struct {
+	mu        sync.RWMutex
 	isWritten bool
 	isClosed  bool
 	bus       chan struct{}
@@ -86,23 +88,85 @@ type mockPriorityQueue struct {
 }
 
 func (mpq *mockPriorityQueue) Write(priorityq.Priority, interface{}) error {
-	mpq.isWritten = true
-	mpq.called <- struct{}{}
-	mpq.bus <- struct{}{}
+	mpq.setIsWritten(true)
+	called := mpq.getCalled()
+	bus := mpq.getBus()
+
+	called <- struct{}{}
+	bus <- struct{}{}
+
 	return nil
 }
 
-func (mpq mockPriorityQueue) Read() (interface{}, error) {
-	return <-mpq.bus, nil
+func (mpq *mockPriorityQueue) getIsWritten() bool {
+	mpq.mu.RLock()
+	defer mpq.mu.RUnlock()
+
+	return mpq.isWritten
+}
+
+func (mpq *mockPriorityQueue) setIsWritten(value bool) {
+	mpq.mu.Lock()
+	defer mpq.mu.Unlock()
+
+	mpq.isWritten = value
+}
+
+func (mpq *mockPriorityQueue) getIsClosed() bool {
+	mpq.mu.RLock()
+	defer mpq.mu.RUnlock()
+
+	return mpq.isClosed
+}
+
+func (mpq *mockPriorityQueue) setIsClosed(value bool) {
+	mpq.mu.Lock()
+	defer mpq.mu.Unlock()
+
+	mpq.isClosed = value
+}
+
+func (mpq *mockPriorityQueue) getCalled() chan struct{} {
+	mpq.mu.RLock()
+	defer mpq.mu.RUnlock()
+
+	return mpq.called
+}
+
+func (mpq *mockPriorityQueue) setCalled(value chan struct{}) {
+	mpq.mu.Lock()
+	defer mpq.mu.Unlock()
+
+	mpq.called = value
+}
+
+func (mpq *mockPriorityQueue) getBus() chan struct{} {
+	mpq.mu.RLock()
+	defer mpq.mu.RUnlock()
+
+	return mpq.bus
+}
+
+func (mpq *mockPriorityQueue) setBus(value chan struct{}) {
+	mpq.mu.Lock()
+	defer mpq.mu.Unlock()
+
+	mpq.bus = value
+}
+
+func (mpq *mockPriorityQueue) Read() (interface{}, error) {
+	bus := mpq.getBus()
+	return <-bus, nil
 }
 
 func (mpq *mockPriorityQueue) Close() {
-	mpq.isClosed = true
-	mpq.called <- struct{}{}
+	mpq.setIsClosed(true)
+	called := mpq.getCalled()
+	called <- struct{}{}
 }
 
 func (mpq *mockPriorityQueue) Length() int {
-	return len(mpq.bus)
+	return len(mpq.getBus())
 }
 
 func TestPropagationEventLoop(t *testing.T) {
@@ -116,14 +180,14 @@ func TestPropagationEventLoop(t *testing.T) {
 
 	protocol.propagateQ <- service.MessageValidation{}
 	<-called
-	assert.Equal(t, true, mpq.isWritten, "message should be written")
-	assert.Equal(t, false, mpq.isClosed, "listener should not be shut down yet")
+	assert.Equal(t, true, mpq.getIsWritten(), "message should be written")
+	assert.Equal(t, false, mpq.getIsClosed(), "listener should not be shut down yet")
 
-	mpq.isWritten = false
+	mpq.setIsWritten(false)
 	cancel()
 	<-called
-	assert.Equal(t, false, mpq.isWritten, "message should not be written")
-	assert.Equal(t, true, mpq.isClosed, "listener should be shut down")
+	assert.Equal(t, false, mpq.getIsWritten(), "message should not be written")
+	assert.Equal(t, true, mpq.getIsClosed(), "listener should be shut down")
 
 	protocol.propagateQ <- service.MessageValidation{}
 	timeout := time.NewTimer(time.Second)
@@ -131,7 +195,7 @@ func TestPropagationEventLoop(t *testing.T) {
 	case <-called:
 		assert.Fail(t, "queue should not be written to after shutdown")
 	case <-timeout.C:
-		assert.Equal(t, false, mpq.isWritten, "message should not be written")
-		assert.Equal(t, true, mpq.isClosed, "listener should be shut down")
+		assert.Equal(t, false, mpq.getIsWritten(), "message should not be written")
+		assert.Equal(t, true, mpq.getIsClosed(), "listener should be shut down")
 	}
 }

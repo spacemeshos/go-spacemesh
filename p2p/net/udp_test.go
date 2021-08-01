@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"net"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -24,8 +25,11 @@ var testUDPAddr = func() *net.UDPAddr {
 }
 
 type mockCon struct {
-	local      net.Addr
-	readCount  int32
+	mu sync.RWMutex
+
+	local     net.Addr
+	readCount int32
+
 	readResult struct {
 		buf  []byte
 		n    int
@@ -45,7 +49,12 @@ func (mc *mockCon) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 	if mc.releaseCount != nil {
 		<-mc.releaseCount
 	}
-	copy(p, mc.readResult.buf)
+
+	mc.mu.RLock()
+	readResult := mc.readResult
+	mc.mu.RUnlock()
+
+	copy(p, readResult.buf)
 	atomic.AddInt32(&mc.readCount, 1)
 	return mc.readResult.n, mc.readResult.addr, mc.readResult.err
 }
@@ -65,6 +74,7 @@ func (mc *mockCon) LocalAddr() net.Addr {
 func (mc *mockCon) SetDeadline(t time.Time) error {
 	return nil
 }
+
 func (mc *mockCon) SetReadDeadline(t time.Time) error {
 	return nil
 }
@@ -107,12 +117,16 @@ func TestUDPNet_Sanity(t *testing.T) {
 	sealed := session.SealMessage([]byte(testMsg))
 	final := p2pcrypto.PrependPubkey(sealed, other.PublicKey())
 
-	mockconn.readResult = struct {
+	readResult := struct {
 		buf  []byte
 		n    int
 		addr net.Addr
 		err  error
 	}{buf: final, n: len(final), addr: addr2, err: nil}
+
+	mockconn.mu.Lock()
+	mockconn.readResult = readResult
+	mockconn.mu.Unlock()
 
 	mockconn.releaseCount <- struct{}{}
 
@@ -273,6 +287,7 @@ func (ucw *udpConnMock) Read(b []byte) (int, error) {
 	}
 	return 0, errors.New("not impl")
 }
+
 func (ucw *udpConnMock) Write(b []byte) (int, error) {
 	if ucw.WriteFunc != nil {
 		return ucw.WriteFunc(b)

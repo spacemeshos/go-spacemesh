@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"sort"
+	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -50,6 +51,7 @@ func (mType messageType) String() string {
 
 // Set represents a unique set of values.
 type Set struct {
+	valuesMu  sync.RWMutex
 	values    map[types.BlockID]struct{}
 	id        uint32
 	isIDValid bool
@@ -63,7 +65,7 @@ func NewDefaultEmptySet() *Set {
 // NewEmptySet creates an empty set with the provided size.
 func NewEmptySet(size int) *Set {
 	s := &Set{}
-	s.values = make(map[types.BlockID]struct{}, size)
+	s.initWithSize(size)
 	s.id = 0
 	s.isIDValid = false
 
@@ -74,7 +76,7 @@ func NewEmptySet(size int) *Set {
 // Note: duplicated values are ignored.
 func NewSetFromValues(values ...types.BlockID) *Set {
 	s := &Set{}
-	s.values = make(map[types.BlockID]struct{}, len(values))
+	s.initWithSize(len(values))
 	for _, v := range values {
 		s.Add(v)
 	}
@@ -90,9 +92,9 @@ func NewSet(data []types.BlockID) *Set {
 	s := &Set{}
 	s.isIDValid = false
 
-	s.values = make(map[types.BlockID]struct{}, len(data))
+	s.initWithSize(len(data))
 	for _, bid := range data {
-		s.values[bid] = struct{}{}
+		s.add(bid)
 	}
 
 	return s
@@ -100,8 +102,8 @@ func NewSet(data []types.BlockID) *Set {
 
 // Clone creates a copy of the set.
 func (s *Set) Clone() *Set {
-	clone := NewEmptySet(len(s.values))
-	for bid := range s.values {
+	clone := NewEmptySet(s.len())
+	for _, bid := range s.elements() {
 		clone.Add(bid)
 	}
 
@@ -110,40 +112,39 @@ func (s *Set) Clone() *Set {
 
 // Contains returns true if the provided value is contained in the set, false otherwise.
 func (s *Set) Contains(id types.BlockID) bool {
-	_, exist := s.values[id]
-	return exist
+	return s.contains(id)
 }
 
 // Add a value to the set.
 // It has no effect if the value already exists in the set.
 func (s *Set) Add(id types.BlockID) {
-	if _, exist := s.values[id]; exist {
+	if s.contains(id) {
 		return
 	}
 
 	s.isIDValid = false
-	s.values[id] = struct{}{}
+	s.add(id)
 }
 
 // Remove a value from the set.
 // It has no effect if the value doesn't exist in the set.
 func (s *Set) Remove(id types.BlockID) {
-	if _, exist := s.values[id]; !exist {
+	if s.contains(id) {
 		return
 	}
 
 	s.isIDValid = false
-	delete(s.values, id)
+	s.remove(id)
 }
 
 // Equals returns true if the provided set represents this set, false otherwise.
 func (s *Set) Equals(g *Set) bool {
-	if len(s.values) != len(g.values) {
+	if s.len() != g.len() {
 		return false
 	}
 
-	for bid := range s.values {
-		if _, exist := g.values[bid]; !exist {
+	for _, bid := range s.elements() {
+		if g.contains(bid) {
 			return false
 		}
 	}
@@ -154,15 +155,15 @@ func (s *Set) Equals(g *Set) bool {
 // ToSlice returns the array representation of the set.
 func (s *Set) ToSlice() []types.BlockID {
 	// order keys
-	keys := make([]types.BlockID, len(s.values))
+	keys := make([]types.BlockID, s.len())
 	i := 0
-	for k := range s.values {
+	for _, k := range s.elements() {
 		keys[i] = k
 		i++
 	}
 	sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i].Bytes(), keys[j].Bytes()) == -1 })
 
-	l := make([]types.BlockID, 0, len(s.values))
+	l := make([]types.BlockID, 0, s.len())
 	for i := range keys {
 		l = append(l, keys[i])
 	}
@@ -171,9 +172,9 @@ func (s *Set) ToSlice() []types.BlockID {
 
 func (s *Set) updateID() {
 	// order keys
-	keys := make([]types.BlockID, len(s.values))
+	keys := make([]types.BlockID, s.len())
 	i := 0
-	for k := range s.values {
+	for _, k := range s.elements() {
 		keys[i] = k
 		i++
 	}
@@ -202,7 +203,7 @@ func (s *Set) ID() uint32 {
 func (s *Set) String() string {
 	// TODO: should improve
 	b := new(bytes.Buffer)
-	for v := range s.values {
+	for _, v := range s.elements() {
 		fmt.Fprintf(b, "%v,", v.String())
 	}
 	if b.Len() >= 1 {
@@ -213,7 +214,7 @@ func (s *Set) String() string {
 
 // IsSubSetOf returns true if s is a subset of g, false otherwise.
 func (s *Set) IsSubSetOf(g *Set) bool {
-	for v := range s.values {
+	for _, v := range s.elements() {
 		if !g.Contains(v) {
 			return false
 		}
@@ -224,8 +225,8 @@ func (s *Set) IsSubSetOf(g *Set) bool {
 
 // Intersection returns the intersection a new set which represents the intersection of s and g.
 func (s *Set) Intersection(g *Set) *Set {
-	both := NewEmptySet(len(s.values))
-	for v := range s.values {
+	both := NewEmptySet(s.len())
+	for _, v := range s.elements() {
 		if g.Contains(v) {
 			both.Add(v)
 		}
@@ -236,13 +237,13 @@ func (s *Set) Intersection(g *Set) *Set {
 
 // Union returns a new set which represents the union set of s and g.
 func (s *Set) Union(g *Set) *Set {
-	union := NewEmptySet(len(s.values) + len(g.values))
+	union := NewEmptySet(s.len() + g.len())
 
-	for v := range s.values {
+	for _, v := range s.elements() {
 		union.Add(v)
 	}
 
-	for v := range g.values {
+	for _, v := range g.elements() {
 		union.Add(v)
 	}
 
@@ -251,8 +252,8 @@ func (s *Set) Union(g *Set) *Set {
 
 // Complement returns a new set that represents the complement of s relatively to the world u.
 func (s *Set) Complement(u *Set) *Set {
-	comp := NewEmptySet(len(u.values))
-	for v := range u.values {
+	comp := NewEmptySet(u.len())
+	for _, v := range u.elements() {
 		if !s.Contains(v) {
 			comp.Add(v)
 		}
@@ -263,12 +264,68 @@ func (s *Set) Complement(u *Set) *Set {
 
 // Subtract g from s.
 func (s *Set) Subtract(g *Set) {
-	for v := range g.values {
+	for _, v := range g.elements() {
 		s.Remove(v)
 	}
 }
 
 // Size returns the number of elements in the set.
 func (s *Set) Size() int {
+	return s.len()
+}
+
+func (s *Set) init() {
+	s.valuesMu.Lock()
+	defer s.valuesMu.Unlock()
+
+	s.values = make(map[types.BlockID]struct{})
+}
+
+func (s *Set) initWithSize(size int) {
+	s.valuesMu.Lock()
+	defer s.valuesMu.Unlock()
+
+	s.values = make(map[types.BlockID]struct{}, size)
+}
+
+func (s *Set) len() int {
+	s.valuesMu.RLock()
+	defer s.valuesMu.RUnlock()
+
 	return len(s.values)
+}
+
+func (s *Set) contains(id types.BlockID) bool {
+	s.valuesMu.RLock()
+	defer s.valuesMu.RUnlock()
+
+	_, ok := s.values[id]
+	return ok
+}
+
+func (s *Set) add(id types.BlockID) {
+	s.valuesMu.Lock()
+	defer s.valuesMu.Unlock()
+
+	s.values[id] = struct{}{}
+}
+
+func (s *Set) remove(id types.BlockID) {
+	s.valuesMu.Lock()
+	defer s.valuesMu.Unlock()
+
+	delete(s.values, id)
+}
+
+func (s *Set) elements() []types.BlockID {
+	s.valuesMu.RLock()
+	defer s.valuesMu.RUnlock()
+
+	result := make([]types.BlockID, 0, len(s.values))
+
+	for id := range s.values {
+		result = append(result, id)
+	}
+
+	return result
 }

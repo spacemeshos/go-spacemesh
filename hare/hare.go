@@ -156,9 +156,9 @@ var ErrTooLate = errors.New("consensus process finished too late")
 // records the provided output
 func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) error {
 	set := output.Set()
-	blocks := make([]types.BlockID, len(set.values))
+	blocks := make([]types.BlockID, set.len())
 	i := 0
-	for v := range set.values {
+	for _, v := range set.elements() {
 		blocks[i] = v
 		i++
 	}
@@ -187,7 +187,6 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 // the logic that happens when a new layer arrives.
 // this function triggers the start of new consensus processes.
 func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
-
 	logger := h.WithContext(ctx).WithFields(id)
 	h.layerLock.Lock()
 	if id.After(h.lastLayer) {

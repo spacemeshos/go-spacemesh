@@ -20,6 +20,7 @@ func (tb *TortoiseBeacon) encodeVotes(currentRound votesSetPair, firstRound firs
 
 	bs := bitset.New(length)
 
+	// TODO(nkryuchkov): fix data race
 	for i, v := range validVotes {
 		if _, ok := currentRound.ValidVotes[v]; ok {
 			bs.Set(uint(i))

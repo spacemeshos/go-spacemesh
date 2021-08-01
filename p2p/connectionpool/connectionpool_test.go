@@ -4,6 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	net2 "net"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
@@ -11,10 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	net2 "net"
-	"sync"
-	"testing"
-	"time"
 )
 
 func generatePublicKey() p2pcrypto.PublicKey {
@@ -295,6 +296,7 @@ func TestRandom(t *testing.T) {
 				if err != nil {
 					require.Equal(t, context.Canceled, err)
 				}
+				// TODO(nkryuchkov): fix data race
 				nMock.PublishClosingConnection(net.ConnectionWithErr{Conn: conn, Err: errors.New("testerr")})
 			}()
 		} else {
@@ -362,7 +364,6 @@ func TestConnectionPool_GetConnectionIfExists_Concurrency(t *testing.T) {
 	done := make(chan struct{}, i)
 
 	for j := 0; j < i; j++ {
-
 		go func() {
 			getcon, err := cPool.GetConnectionIfExists(pk)
 			require.NoError(t, err)
@@ -370,13 +371,11 @@ func TestConnectionPool_GetConnectionIfExists_Concurrency(t *testing.T) {
 			require.Equal(t, int(n.DialCount()), 0)
 			done <- struct{}{}
 		}()
-
 	}
 
 	for ; i > 0; i-- {
 		<-done
 	}
-
 }
 
 func TestConnectionPool_CloseConnection(t *testing.T) {

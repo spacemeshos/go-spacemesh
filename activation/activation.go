@@ -6,13 +6,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/post/shared"
 	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
+
+	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/post/shared"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -42,8 +43,7 @@ type broadcaster interface {
 	Broadcast(ctx context.Context, channel string, data []byte) error
 }
 
-type poetNumberOfTickProvider struct {
-}
+type poetNumberOfTickProvider struct{}
 
 func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
 	return 1
@@ -143,7 +143,7 @@ type Builder struct {
 	pendingATX            *types.ActivationTx
 	layerClock            layerClock
 	status                smeshingStatus
-	mtx                   sync.Mutex
+	mu                    sync.RWMutex
 	store                 bytesStore
 	syncer                syncer
 	log                   log.Log
@@ -206,10 +206,7 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvide
 
 // Smeshing returns true iff atx builder started.
 func (b *Builder) Smeshing() bool {
-	b.mtx.Lock()
-	defer b.mtx.Unlock()
-
-	return b.status == smeshingStatusStarted
+	return b.getStatus() == smeshingStatusStarted
 }
 
 // StartSmeshing is the main entry point of the atx builder.
@@ -218,30 +215,27 @@ func (b *Builder) Smeshing() bool {
 // session will be preceded. Changing of the post potions (e.g., number of labels),
 // after initial setup, is supported.
 func (b *Builder) StartSmeshing(ctx context.Context, coinbase types.Address, opts PostSetupOpts) error {
-	b.mtx.Lock()
-	if b.status != smeshingStatusIdle {
-		b.mtx.Unlock()
+	if b.getStatus() != smeshingStatusIdle {
 		return errors.New("already started")
 	}
-	b.status = smeshingStatusPendingPostSetup
+	b.setStatus(smeshingStatusPendingPostSetup)
 	b.runCtx, b.stop = context.WithCancel(ctx)
-	b.mtx.Unlock()
 
 	doneChan, err := b.postSetupProvider.StartSession(opts)
 	if err != nil {
-		b.status = smeshingStatusIdle
+		b.setStatus(smeshingStatusIdle)
 		return fmt.Errorf("failed to start Post setup session: %v", err)
 	}
 
 	go func() {
 		<-doneChan
 		if s := b.postSetupProvider.Status(); s.State != postSetupStateComplete {
-			b.status = smeshingStatusIdle
+			b.setStatus(smeshingStatusIdle)
 			b.log.Error("failed to complete Post setup: %v", b.postSetupProvider.LastError())
 			return
 		}
 
-		b.status = smeshingStatusStarted
+		b.setStatus(smeshingStatusStarted)
 		go b.loop(b.runCtx)
 	}()
 
@@ -250,10 +244,7 @@ func (b *Builder) StartSmeshing(ctx context.Context, coinbase types.Address, opt
 
 // StopSmeshing stops the atx builder.
 func (b *Builder) StopSmeshing(deleteFiles bool) error {
-	b.mtx.Lock()
-	defer b.mtx.Unlock()
-
-	if b.status == smeshingStatusIdle {
+	if b.getStatus() == smeshingStatusIdle {
 		return errors.New("not started")
 	}
 
@@ -262,7 +253,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	}
 
 	b.stop()
-	b.status = smeshingStatusIdle
+	b.setStatus(smeshingStatusIdle)
 
 	return nil
 }
@@ -300,7 +291,7 @@ func (b *Builder) loop(ctx context.Context) {
 	b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
 	if err != nil {
 		b.log.Error("Post execution failed: %v", err)
-		b.status = smeshingStatusIdle
+		b.setStatus(smeshingStatusIdle)
 		return
 	}
 
@@ -630,6 +621,20 @@ func (b *Builder) discardChallengeIfStale() bool {
 		return true
 	}
 	return false
+}
+
+func (b *Builder) getStatus() smeshingStatus {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	return b.status
+}
+
+func (b *Builder) setStatus(status smeshingStatus) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.status = status
 }
 
 // ExtractPublicKey extracts public key from message and verifies public key exists in idStore, this is how we validate

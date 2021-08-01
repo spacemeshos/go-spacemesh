@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	gw "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -15,6 +16,7 @@ import (
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.
 // It is implemented using a grpc-gateway. See https://github.com/grpc-ecosystem/grpc-gateway .
 type JSONHTTPServer struct {
+	mu       sync.RWMutex
 	Port     int
 	GrpcPort int
 	server   *http.Server
@@ -28,8 +30,9 @@ func NewJSONHTTPServer(port int, grpcPort int) *JSONHTTPServer {
 // Close stops the server.
 func (s *JSONHTTPServer) Close() error {
 	log.Debug("stopping new json-http service...")
-	if s.server != nil {
-		if err := s.server.Shutdown(cmdp.Ctx); err != nil {
+	server := s.getServer()
+	if server != nil {
+		if err := server.Shutdown(cmdp.Ctx); err != nil {
 			return err
 		}
 	}
@@ -153,11 +156,25 @@ func (s *JSONHTTPServer) startInternal(
 	}
 
 	log.Info("starting grpc gateway server on port %d connected to grpc service at %s", s.Port, jsonEndpoint)
-	s.server = &http.Server{
+	s.setServer(&http.Server{
 		Addr:    fmt.Sprintf(":%d", s.Port),
 		Handler: mux,
-	}
+	})
 
 	// This will block
-	log.Error("error from grpc http listener: %v", s.server.ListenAndServe())
+	log.Error("error from grpc http listener: %v", s.getServer().ListenAndServe())
+}
+
+func (s *JSONHTTPServer) getServer() *http.Server {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.server
+}
+
+func (s *JSONHTTPServer) setServer(server *http.Server) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.server = server
 }

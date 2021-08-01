@@ -3,10 +3,11 @@ package hare
 import (
 	"context"
 	"errors"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"time"
 )
 
 type messageValidator interface {
@@ -309,7 +310,7 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 		}
 
 		// extract public key
-		var iMsg, err = newMsg(ctx, innerMsg, v.stateQuerier)
+		iMsg, err := newMsg(ctx, innerMsg, v.stateQuerier)
 		if err != nil {
 			return err
 		}
@@ -457,7 +458,7 @@ func (v *syntaxContextValidator) validateSVPTypeA(ctx context.Context, m *Msg) b
 	for _, status := range m.InnerMsg.Svp.Messages {
 		statusSet := NewSet(status.InnerMsg.Values)
 		// build union
-		for bid := range statusSet.values {
+		for _, bid := range statusSet.elements() {
 			unionSet.Add(bid) // assuming add is unique
 		}
 	}

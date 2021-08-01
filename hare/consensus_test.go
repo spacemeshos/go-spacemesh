@@ -101,7 +101,7 @@ func (his *HareSuite) checkResult(t *testing.T) {
 	}
 
 	// check that the output has no intersection with the complement of the union of honest
-	for v := range his.outputs[0].values {
+	for _, v := range his.outputs[0].elements() {
 		if union.Complement(u).Contains(v) {
 			t.Error("Validity 2 failed: unexpected value encountered: ", v)
 		}
@@ -149,6 +149,7 @@ func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle
 	return proc
 }
 
+// TODO(nkryuchkov): fix data race
 func TestConsensusFixedOracle(t *testing.T) {
 	if skipBlackBox {
 		t.Skip()

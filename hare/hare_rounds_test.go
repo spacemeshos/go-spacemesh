@@ -3,6 +3,7 @@ package hare
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -52,16 +53,18 @@ func (w *TestHareWrapper) LayerTicker(interval time.Duration) {
 	}
 }
 
-type funcOracle func(types.LayerID, int32, int, types.NodeID, []byte, *testHare) (uint16, error)
-type funcLayers func(types.LayerID, *testHare) ([]types.BlockID, error)
-type funcValidate func(types.LayerID, []types.BlockID, *testHare)
-type testHare struct {
-	*Hare
-	oracle   funcOracle
-	layers   funcLayers
-	validate funcValidate
-	N        int
-}
+type (
+	funcOracle   func(types.LayerID, int32, int, types.NodeID, []byte, *testHare) (uint16, error)
+	funcLayers   func(types.LayerID, *testHare) ([]types.BlockID, error)
+	funcValidate func(types.LayerID, []types.BlockID, *testHare)
+	testHare     struct {
+		*Hare
+		oracle   funcOracle
+		layers   funcLayers
+		validate funcValidate
+		N        int
+	}
+)
 
 func (h *testHare) CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committee int, id types.NodeID, sig []byte) (uint16, error) {
 	return h.oracle(layer, round, committee, id, sig, h)
@@ -72,15 +75,19 @@ func (testHare) Unregister(bool, string) {}
 func (testHare) Validate(context.Context, types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
 	return true, nil
 }
+
 func (testHare) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
 	return []byte{}, nil
 }
+
 func (testHare) IsIdentityActiveOnConsensusView(context.Context, string, types.LayerID) (bool, error) {
 	return true, nil
 }
+
 func (h *testHare) HandleValidatedLayer(ctx context.Context, layer types.LayerID, ids []types.BlockID) {
 	h.validate(layer, ids, h)
 }
+
 func (h *testHare) LayerBlockIds(layer types.LayerID) ([]types.BlockID, error) {
 	return h.layers(layer, h)
 }
@@ -126,6 +133,8 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 	types.SetLayersPerEpoch(1)
 	const nodes = 5
 	const layers = 2
+
+	var mu sync.RWMutex
 	m := [layers][nodes]int{}
 
 	w := runNodesFor(t, nodes, 2, layers, 2, 5,
@@ -140,11 +149,17 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
+
+			mu.Lock()
 			m[l][hare.N] = len(blocks) + 1
+			mu.Unlock()
 		})
 
 	w.LayerTicker(100 * time.Millisecond)
 	time.Sleep(time.Second * 6)
+
+	mu.RLock()
+	defer mu.Unlock()
 
 	for x := range m {
 		for y := range m[x] {

@@ -40,7 +40,8 @@ type Broker struct {
 	outbox         map[uint32]chan *Msg
 	pending        map[uint32][]*Msg // the buffer of pending early messages for the next layer
 	tasks          chan func()       // a channel to synchronize tasks (register/unregister) with incoming messages handling
-	latestLayer    types.LayerID     // the latest layer to attempt register (successfully or unsuccessfully)
+	latestLayerMu  sync.RWMutex
+	latestLayer    types.LayerID // the latest layer to attempt register (successfully or unsuccessfully)
 	isStarted      bool
 	minDeleted     types.LayerID
 	limit          int // max number of simultaneous consensus processes
@@ -102,17 +103,19 @@ func (b *Broker) validate(ctx context.Context, m *Message) error {
 
 	if !exist {
 		// prev layer, must be unregistered
-		if msgInstID.Before(b.latestLayer) {
+		latestLayer := b.getLatestLayer()
+
+		if msgInstID.Before(latestLayer) {
 			return errUnregistered
 		}
 
 		// current layer
-		if msgInstID == b.latestLayer {
+		if msgInstID == latestLayer {
 			return errRegistration
 		}
 
 		// early msg
-		if msgInstID == b.latestLayer.Add(1) {
+		if msgInstID == latestLayer.Add(1) {
 			return errEarlyMsg
 		}
 
@@ -134,7 +137,7 @@ func (b *Broker) queueLoop(ctx context.Context) {
 	for {
 		select {
 		case msg := <-b.inbox:
-			logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
+			logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", b.getLatestLayer()))
 			logger.Debug("hare broker received inbound gossip message",
 				log.Int("inbox_queue_len", len(b.inbox)))
 			if msg == nil {
@@ -176,7 +179,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			log.Int("task_queue_size", len(b.tasks)))
 		select {
 		case <-b.queueChannel:
-			logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
+			logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", b.getLatestLayer()))
 			rawMsg, err := b.queue.Read()
 			if err != nil {
 				logger.With().Info("priority queue was closed, exiting", log.Err(err))
@@ -276,28 +279,30 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			out <- iMsg
 
 		case task := <-b.tasks:
+			latestLayer := b.getLatestLayer()
+
 			b.WithContext(ctx).With().Debug("broker received task, executing",
-				log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
+				log.FieldNamed("latest_layer", latestLayer))
 			task()
 			b.WithContext(ctx).With().Debug("broker finished executing task",
-				log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
+				log.FieldNamed("latest_layer", latestLayer))
 		}
 	}
 }
 
 func (b *Broker) updateLatestLayer(ctx context.Context, id types.LayerID) {
-	if !id.After(b.latestLayer) { // should expect to update only newer layers
+	if !id.After(b.getLatestLayer()) { // should expect to update only newer layers
 		b.WithContext(ctx).With().Panic("tried to update a previous layer",
 			log.FieldNamed("this_layer", id),
-			log.FieldNamed("prev_layer", b.latestLayer))
+			log.FieldNamed("prev_layer", b.getLatestLayer()))
 		return
 	}
 
-	b.latestLayer = id
+	b.setLatestLayer(id)
 }
 
 func (b *Broker) cleanOldLayers() {
-	for i := b.minDeleted.Add(1); i.Before(b.latestLayer); i = i.Add(1) {
+	for i := b.minDeleted.Add(1); i.Before(b.getLatestLayer()); i = i.Add(1) {
 		if _, exist := b.outbox[i.Uint32()]; !exist { // unregistered
 			delete(b.syncState, i.Uint32()) // clean sync state
 			b.minDeleted = b.minDeleted.Add(1)
@@ -351,8 +356,8 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan *Msg, err
 			// calls to Register will be executed out of order, but Register is only called
 			// on a new layer tick, and anyway updateLatestLayer would panic in this case.
 			if len(b.outbox) >= b.limit {
-				//unregister the earliest layer to make space for the new layer
-				//cannot call unregister here because unregister blocks and this would cause a deadlock
+				// unregister the earliest layer to make space for the new layer
+				// cannot call unregister here because unregister blocks and this would cause a deadlock
 				instance := b.minDeleted.Add(1)
 				b.cleanState(instance)
 				b.With().Info("unregistered layer due to maximum concurrent processes", types.LayerID(instance))
@@ -419,4 +424,18 @@ func (b *Broker) Synced(ctx context.Context, id types.LayerID) bool {
 	}
 
 	return <-res
+}
+
+func (b *Broker) getLatestLayer() types.LayerID {
+	b.latestLayerMu.RLock()
+	defer b.latestLayerMu.RUnlock()
+
+	return b.latestLayer
+}
+
+func (b *Broker) setLatestLayer(layer types.LayerID) {
+	b.latestLayerMu.Lock()
+	defer b.latestLayerMu.Unlock()
+
+	b.latestLayer = layer
 }
