@@ -436,11 +436,11 @@ func (s *Switch) Shutdown() {
 
 		for i := range s.directProtocolHandlers {
 			delete(s.directProtocolHandlers, i)
-			//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
+			//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan.)
 		}
 		for i := range s.gossipProtocolHandlers {
 			delete(s.gossipProtocolHandlers, i)
-			//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
+			//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan.)
 		}
 
 		s.peerLock.Lock()

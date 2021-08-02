@@ -120,7 +120,7 @@ func (wc *weakCoin) Get(epoch types.EpochID, round types.RoundID) bool {
 }
 
 func (wc *weakCoin) PublishProposal(ctx context.Context, epoch types.EpochID, round types.RoundID) error {
-	wc.Log.With().Info("Publishing proposal",
+	wc.Log.With().Info("publishing proposal",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round_id", uint64(round)))
 
@@ -152,7 +152,7 @@ func (wc *weakCoin) PublishProposal(ctx context.Context, epoch types.EpochID, ro
 		return fmt.Errorf("broadcast weak coin message: %w", err)
 	}
 
-	wc.Log.With().Info("Published proposal",
+	wc.Log.With().Info("published proposal",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round_id", uint64(round)),
 		log.String("proposal", types.BytesToHash(signedProposal).ShortString()))
@@ -191,7 +191,7 @@ func (wc *weakCoin) signProposal(proposal []byte) []byte {
 }
 
 func (wc *weakCoin) OnRoundStarted(epoch types.EpochID, round types.RoundID) {
-	wc.Log.With().Info("Round started",
+	wc.Log.With().Info("round started",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round_id", uint64(round)))
 
@@ -209,7 +209,7 @@ func (wc *weakCoin) OnRoundStarted(epoch types.EpochID, round types.RoundID) {
 }
 
 func (wc *weakCoin) OnRoundFinished(epoch types.EpochID, round types.RoundID) {
-	wc.Log.With().Info("Round finished",
+	wc.Log.With().Info("round finished",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round_id", uint64(round)))
 
@@ -242,7 +242,7 @@ func (wc *weakCoin) calculateWeakCoin(epoch types.EpochID, round types.RoundID) 
 	proposals := wc.proposals[pair]
 
 	if len(proposals) == 0 {
-		wc.Log.With().Warning("No weak coin proposals were received",
+		wc.Log.With().Warning("no weak coin proposals were received",
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.Uint64("round_id", uint64(round)))
 
@@ -268,14 +268,14 @@ func (wc *weakCoin) calculateWeakCoin(epoch types.EpochID, round types.RoundID) 
 	weakCoinValue := coinBitToBool(coinBit)
 	wc.weakCoins[pair] = weakCoinValue
 
-	wc.Log.With().Info("Weak coin calculation input",
+	wc.Log.With().Info("weak coin calculation input",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round_id", uint64(round)),
 		log.String("smallest", smallest.String()),
 		log.String("coin_bit", coinBit.String()),
 		log.String("proposals", strings.Join(stringProposals, ", ")))
 
-	wc.Log.With().Info("Calculated weak coin",
+	wc.Log.With().Info("calculated weak coin",
 		log.Uint64("epoch_id", uint64(epoch)),
 		log.Uint64("round_id", uint64(round)),
 		log.Bool("weak_coin", weakCoinValue))
