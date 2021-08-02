@@ -79,7 +79,11 @@ func (s *Simulator) publishNewPeer(peer p2pcrypto.PublicKey) {
 	s.subLock.Lock()
 	for _, ch := range s.newPeersSubs {
 		log.Info("publish new peer on chan with len %v, cap %v", len(ch), cap(ch))
-		ch <- peer
+		select {
+		case ch <- peer:
+		default:
+			log.Warning("unable to publish new peer event to subscriber")
+		}
 	}
 	s.subLock.Unlock()
 }
@@ -88,7 +92,11 @@ func (s *Simulator) publishNewPeer(peer p2pcrypto.PublicKey) {
 func (s *Simulator) publishDelPeer(peer p2pcrypto.PublicKey) {
 	s.subLock.Lock()
 	for _, ch := range s.delPeersSubs {
-		ch <- peer
+		select {
+		case ch <- peer:
+		default:
+			log.Warning("unable to publish delete peer event to subscriber")
+		}
 	}
 	s.subLock.Unlock()
 }
