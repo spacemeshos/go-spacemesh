@@ -393,7 +393,37 @@ func TestLayerPatterns(t *testing.T) {
 	})
 
 	t.Run("heal after bad layers", func(t *testing.T) {
+		msh := getInMemMesh()
+		atxdb := getAtxDB()
+		trtl := defaultTurtle()
+		trtl.AvgLayerSize = blocksPerLayer
+		trtl.bdp = msh
+		trtl.atxdb = atxdb
+		trtl.init(context.TODO(), mesh.GenesisLayer())
+
+		// calculate the number of layers needed to accumulate enough votes to cross the global threshold and
+		// invalidate earlier bad blocks
+		// run a quick simulation to check how many layers it will take to accumulate enough votes against the
+		// bad blocks
+		vote := abstain
+		numLayersToFullyHeal := 0
+		for i := 0; vote == abstain; i++ {
+			// fast-forward to the point where Zdist is past, we've stopped waiting for hare results for the bad
+			// layers and started voting against them, and we've accumulated votes for ConfidenceParam layers
+			netVote := vec{0, uint64((i + int(trtl.ConfidenceParam)) * blocksPerLayer)}
+			// Zdist + ConfidenceParam (+ a margin of one due to the math) layers have already passed, so that's our
+			// delta
+			vote = calculateOpinionWithThreshold(trtl.logger, netVote, blocksPerLayer, trtl.GlobalThreshold, float64(uint32(i+1)+trtl.Zdist+trtl.ConfidenceParam))
+			// safety cutoff
+			if i > 100 {
+				panic("failed to accumulate enough votes")
+			}
+			numLayersToFullyHeal++
+		}
+		t.Log("layers to fully heal:", numLayersToFullyHeal)
+
 		// five good layers, then two bad, then enough good to heal
+		// after healing, verifying tortoise should be able to start verifying again
 		pattern := []bool{
 			true,  // verified
 			true,  // verified
@@ -411,77 +441,45 @@ func TestLayerPatterns(t *testing.T) {
 			true,  // verification stalled: confidence interval
 			true,  // verification resumes zdist+confidence interval layers before
 			true,  // verification resumes zdist+confidence interval layers before
-			true,  // need a few layers to accumulate enough votes
-			true,  // need a few layers to accumulate enough votes
-			true,  // need a few layers to accumulate enough votes
-			true,  // need a few layers to accumulate enough votes
-			true,  // need a few layers to accumulate enough votes
-			true,  // need a few layers to accumulate enough votes
-			true,  // final candidate layer, not verified
+		}
+		testLayerPattern(t, atxdb, msh, trtl, blocksPerLayer, pattern)
+		lastProcessed := types.GetEffectiveGenesis().Add(uint32(len(pattern)))
+
+		// at this point, verified layer should still be stuck before the bad layers
+		lastVerified := types.GetEffectiveGenesis().Add(5)
+		require.Equal(t, int(lastVerified.Uint32()), int(trtl.Verified.Uint32()))
+
+		// now, we need a few layers to accumulate enough votes to heal
+		for i := 1; i < numLayersToFullyHeal; i++ {
+			lastProcessed = lastProcessed.Add(uint32(1))
+			makeAndProcessLayer(t, lastProcessed, trtl, blocksPerLayer, atxdb, msh, nil)
 		}
 
-		msh := getInMemMesh()
-		atxdb := getAtxDB()
-		trtl := defaultTurtle()
-		trtl.AvgLayerSize = blocksPerLayer
-		trtl.bdp = msh
-		trtl.atxdb = atxdb
-		trtl.init(context.TODO(), mesh.GenesisLayer())
-		testLayerPattern(t, atxdb, msh, trtl, blocksPerLayer, pattern)
+		// still no progress
+		require.Equal(t, int(lastVerified.Uint32()), int(trtl.Verified.Uint32()))
 
-		// check our assumptions
-		require.Equal(t, 5, int(trtl.Zdist))
-		require.Equal(t, 5, int(trtl.ConfidenceParam))
+		// after one more layer, self healing should have verified a single layer
+		lastProcessed = lastProcessed.Add(1)
+		makeAndProcessLayer(t, lastProcessed, trtl, blocksPerLayer, atxdb, msh, nil)
+		lastVerified = lastVerified.Add(1)
+		require.Equal(t, int(lastVerified.Uint32()), int(trtl.Verified.Uint32()))
 
-		// final verified layer should lag by zdist+confidence interval
-		finalVerified := types.GetEffectiveGenesis().Add(uint32(len(pattern)) - 1 - trtl.Zdist + trtl.ConfidenceParam)
-		require.Equal(t, int(finalVerified.Uint32()), int(trtl.Verified.Uint32()))
-	})
+		// verified layer should now lag by zdist+confidence interval+layers to heal
+		require.Equal(t, lastVerified, types.GetEffectiveGenesis().Add(uint32(len(pattern))-trtl.Zdist-trtl.ConfidenceParam))
 
-	t.Run("heal then exit healing", func(t *testing.T) {
-		// TODO: this test is currently failing since we cannot successfully heal and then exit the regime
-		//   due to blocks initially being marked not good and not updated later when the local opinion is updated
+		// after one more good layer, verifying tortoise should catch up and start verifying again
+		lastProcessed = lastProcessed.Add(1)
+		lastVerified = lastVerified.Add(trtl.Zdist + trtl.ConfidenceParam + uint32(numLayersToFullyHeal))
+		makeAndProcessLayer(t, lastProcessed, trtl, blocksPerLayer, atxdb, msh, nil)
+		require.Equal(t, int(lastVerified.Uint32()), int(trtl.Verified.Uint32()))
+		require.Equal(t, int(lastVerified.Uint32()), int(lastProcessed.Uint32()-1))
 
-		// five good layers, then two bad, then enough good to exit the healing regime entirely and return to
-		// ordinary verifying tortoise
-		pattern := []bool{
-			true,  // verified
-			true,  // verified
-			true,  // verified
-			true,  // verified
-			true,  // verification stalled: zdist
-			false, // verification stalled: zdist
-			false, // verification stalled: zdist
-			true,  // verification stalled: zdist
-			true,  // verification stalled: zdist
-			true,  // verification stalled: confidence interval
-			true,  // verification stalled: confidence interval
-			true,  // verification stalled: confidence interval
-			true,  // verification stalled: confidence interval
-			true,  // verification stalled: confidence interval
-			true,  // verification resumes zdist+confidence interval layers before
-			true,  // verification resumes zdist+confidence interval layers before
-			true,  // final candidate layer, not verified
-			true,
-			true,
-			true,
-		}
-
-		msh := getInMemMesh()
-		atxdb := getAtxDB()
-		trtl := defaultTurtle()
-		trtl.AvgLayerSize = blocksPerLayer
-		trtl.bdp = msh
-		trtl.atxdb = atxdb
-		trtl.init(context.TODO(), mesh.GenesisLayer())
-		testLayerPattern(t, atxdb, msh, trtl, blocksPerLayer, pattern)
-
-		// check our assumptions
-		require.Equal(t, 5, int(trtl.Zdist))
-		require.Equal(t, 5, int(trtl.ConfidenceParam))
-
-		finalVerified := types.GetEffectiveGenesis().Add(uint32(len(pattern)) - 1)
-		require.Equal(t, int(finalVerified.Uint32()), int(trtl.Verified.Uint32()))
+		// make sure verifying tortoise is working again, without healing
+		// (healing wouldn't kick in again until zdist+confidence interval have passed)
+		lastProcessed = lastProcessed.Add(1)
+		lastVerified = lastVerified.Add(1)
+		makeAndProcessLayer(t, lastProcessed, trtl, blocksPerLayer, atxdb, msh, nil)
+		require.Equal(t, int(lastVerified.Uint32()), int(trtl.Verified.Uint32()))
 	})
 
 	t.Run("heal after good bad good bad good pattern", func(t *testing.T) {
@@ -510,6 +508,8 @@ func TestLayerPatterns(t *testing.T) {
 			true,
 			true,
 			true,
+			true,
+			true,
 		}
 
 		msh := getInMemMesh()
@@ -520,10 +520,7 @@ func TestLayerPatterns(t *testing.T) {
 		trtl.atxdb = atxdb
 		trtl.init(context.TODO(), mesh.GenesisLayer())
 		testLayerPattern(t, atxdb, msh, trtl, blocksPerLayer, pattern)
-		// final verified layer should lag by zdist+confidence interval
-		require.Equal(t, 5, int(trtl.Zdist))
-		require.Equal(t, 5, int(trtl.ConfidenceParam))
-		finalVerified := types.GetEffectiveGenesis().Add(uint32(len(pattern)) - 1 - trtl.Zdist + trtl.ConfidenceParam)
+		finalVerified := types.GetEffectiveGenesis().Add(uint32(len(pattern)) - 1)
 		require.Equal(t, int(finalVerified.Uint32()), int(trtl.Verified.Uint32()))
 	})
 }

@@ -716,7 +716,7 @@ func (t *turtle) scoreBlocksByLayerID(ctx context.Context, layerID types.LayerID
 
 func (t *turtle) scoreBlocks(ctx context.Context, blocks []*types.Block) {
 	logger := t.logger.WithContext(ctx)
-	logger.Debug("marking good blocks", log.Int("count", len(blocks)))
+	logger.With().Debug("marking good blocks", log.Int("count", len(blocks)))
 	numGood := 0
 	for _, b := range blocks {
 		if t.determineBlockGoodness(ctx, b) {
