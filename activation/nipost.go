@@ -173,7 +173,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 
 		membership, err := nb.poetDB.GetMembershipMap(poetProofRef)
 		if err != nil {
-			nb.log.With().Panic("failed to fetch membership for PoET proof",
+			nb.log.With().Panic("failed to fetch membership for poet proof",
 				log.String("challenge", fmt.Sprintf("%x", nb.state.PoetProofRef))) // TODO: handle inconsistent state
 		}
 		if !membership[*nipost.Challenge] {
