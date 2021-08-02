@@ -230,14 +230,14 @@ func (b *Builder) StartSmeshing(ctx context.Context, coinbase types.Address, opt
 	doneChan, err := b.postSetupProvider.StartSession(opts)
 	if err != nil {
 		b.status = smeshingStatusIdle
-		return fmt.Errorf("failed to start Post setup session: %v", err)
+		return fmt.Errorf("failed to start post setup session: %v", err)
 	}
 
 	go func() {
 		<-doneChan
 		if s := b.postSetupProvider.Status(); s.State != postSetupStateComplete {
 			b.status = smeshingStatusIdle
-			b.log.Error("failed to complete Post setup: %v", b.postSetupProvider.LastError())
+			b.log.Error("failed to complete post setup: %v", b.postSetupProvider.LastError())
 			return
 		}
 
@@ -299,7 +299,7 @@ func (b *Builder) loop(ctx context.Context) {
 	// TODO(moshababo): don't generate the commitment every time smeshing is starting, but once only.
 	b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
 	if err != nil {
-		b.log.Error("Post execution failed: %v", err)
+		b.log.Error("post execution failed: %v", err)
 		b.status = smeshingStatusIdle
 		return
 	}

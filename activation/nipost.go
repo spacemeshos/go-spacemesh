@@ -188,7 +188,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 
 	// Phase 2: Post execution.
 	if nipost.Post == nil {
-		nb.log.With().Info("starting Post execution",
+		nb.log.With().Info("starting post execution",
 			log.String("challenge", fmt.Sprintf("%x", nb.state.PoetProofRef)))
 		startTime := time.Now()
 		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(nb.state.PoetProofRef)
@@ -196,7 +196,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 			return nil, fmt.Errorf("failed to execute Post: %v", err)
 		}
 
-		nb.log.With().Info("finished Post execution",
+		nb.log.With().Info("finished post execution",
 			log.Duration("duration", time.Now().Sub(startTime)))
 
 		nipost.Post = proof

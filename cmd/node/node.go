@@ -680,7 +680,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	postSetupMgr, err := activation.NewPostSetupManager(util.Hex2Bytes(nodeID.Key), app.Config.POST, app.addLogger(PostLogger, lg))
 	if err != nil {
-		app.log.Panic("failed to create Post setup manager: %v", err)
+		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
 	nipostBuilder := activation.NewNIPostBuilder(util.Hex2Bytes(nodeID.Key), postSetupMgr, poetClient, poetDb, store, app.addLogger(NipostBuilderLogger, lg))
@@ -920,7 +920,7 @@ func (app *SpacemeshApp) stopServices() {
 	}
 
 	if app.tortoiseBeacon != nil {
-		app.log.Info("Stopping tortoise beacon...")
+		app.log.Info("stopping tortoise beacon")
 		app.tortoiseBeacon.Close()
 	}
 
