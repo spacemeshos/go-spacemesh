@@ -1,9 +1,7 @@
 package mesh
 
 import (
-	"bytes"
 	"context"
-	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -140,233 +138,180 @@ func (MockTxMemPool) Invalidate(types.TransactionID) {
 func getMesh(id string) *Mesh {
 	lg := log.AppLog.WithName(id)
 	mmdb := NewMemMeshDB(lg)
-	layers := NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: mmdb}, newMockTxMemPool(), &MockState{}, lg)
-	return layers
+	return NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: mmdb}, newMockTxMemPool(), &MockState{}, lg)
 }
 
-func TestLayers_AddBlock(t *testing.T) {
-
-	layers := getMesh("t1")
-	defer layers.Close()
-
-	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data1"), nil)
-	block2 := types.NewExistingBlock(types.NewLayerID(2), []byte("data2"), nil)
-	block3 := types.NewExistingBlock(types.NewLayerID(3), []byte("data3"), nil)
-
-	addTransactionsWithFee(t, layers.DB, block1, 4, rand.Int63n(100))
-
-	err := layers.AddBlock(block1)
-	assert.NoError(t, err)
-	err = layers.AddBlock(block2)
-	assert.NoError(t, err)
-	err = layers.AddBlock(block3)
-	assert.NoError(t, err)
-
-	rBlock2, err := layers.GetBlock(block2.ID())
-	assert.NoError(t, err)
-
-	rBlock1, err := layers.GetBlock(block1.ID())
-	assert.NoError(t, err)
-
-	assert.True(t, len(rBlock1.TxIDs) == len(block1.TxIDs), "block content was wrong")
-	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
-	//assert.True(t, len(*rBlock1.ActiveSet) == len(*block1.ActiveSet))
-}
-
-func addLayer(id types.LayerID, layerSize int, msh *Mesh) *types.Layer {
+func addLayer(r *require.Assertions, id types.LayerID, layerSize int, msh *Mesh) *types.Layer {
 	for i := 0; i < layerSize; i++ {
-
-		block1 := types.NewExistingBlock(id, []byte(rand.String(8)), nil)
-		block1.Initialize()
-
-		err := msh.AddBlock(block1)
-		msh.contextualValidity.Put(block1.ID().Bytes(), []byte{1})
-		if err != nil {
-			panic("cannot add data to test")
-		}
+		txIDs, _ := addManyTXsToPool(r, msh, 4)
+		block := types.NewExistingBlock(id, []byte(rand.String(8)), txIDs)
+		block.Initialize()
+		err := msh.AddBlockWithTxs(context.TODO(), block)
+		r.NoError(err, "cannot add data to test")
+		msh.contextualValidity.Put(block.ID().Bytes(), []byte{1})
 	}
 	l, err := msh.GetLayer(id)
-	if err != nil {
-		panic("cant get a layer we've just created")
-	}
-
+	r.NoError(err, "cant get a layer we've just created")
 	return l
 }
 
-func TestLayers_AddLayer(t *testing.T) {
+func TestMesh_AddLayerGetLayer(t *testing.T) {
 	r := require.New(t)
-
 	msh := getMesh("t2")
 	defer msh.Close()
 
 	id := types.NewLayerID(1)
-
 	_, err := msh.GetLayer(id)
 	r.EqualError(err, database.ErrNotFound.Error())
 
-	err = msh.AddBlock(types.NewExistingBlock(id, []byte("data1"), nil))
+	txIDs1, _ := addManyTXsToPool(r, msh, 4)
+	txIDs2, _ := addManyTXsToPool(r, msh, 3)
+	txIDs3, _ := addManyTXsToPool(r, msh, 6)
+	r.NoError(msh.AddBlockWithTxs(context.TODO(), types.NewExistingBlock(id, []byte("data1"), txIDs1)))
+	r.NoError(msh.AddBlockWithTxs(context.TODO(), types.NewExistingBlock(id, []byte("data2"), txIDs2)))
+	r.NoError(msh.AddBlockWithTxs(context.TODO(), types.NewExistingBlock(id, []byte("data3"), txIDs3)))
+
+	lyr, err := msh.GetLayer(id)
 	r.NoError(err)
-	err = msh.AddBlock(types.NewExistingBlock(id, []byte("data2"), nil))
-	r.NoError(err)
-	err = msh.AddBlock(types.NewExistingBlock(id, []byte("data3"), nil))
-	r.NoError(err)
-	_, err = msh.GetLayer(id)
-	r.NoError(err)
+	r.Equal(id, lyr.Index())
+	r.Equal(3, len(lyr.Blocks()))
 }
 
-func TestLayers_AddWrongLayer(t *testing.T) {
-	layers := getMesh("t3")
-	defer layers.Close()
-	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data1"), nil)
-	block2 := types.NewExistingBlock(types.NewLayerID(2), []byte("data data data2"), nil)
-	block3 := types.NewExistingBlock(types.NewLayerID(4), []byte("data data data3"), nil)
-	l1 := types.NewExistingLayer(types.NewLayerID(1), []*types.Block{block1})
-	err := layers.AddBlock(block1)
-	assert.NoError(t, err)
-	err = layers.SaveContextualValidity(block1.ID(), true)
-	assert.NoError(t, err)
-	layers.ValidateLayer(l1)
-	l2 := types.NewExistingLayer(types.NewLayerID(2), []*types.Block{block2})
-	err = layers.AddBlock(block2)
-	assert.NoError(t, err)
-	layers.ValidateLayer(l2)
-	err = layers.AddBlock(block3)
-	assert.NoError(t, err)
-	_, err = layers.GetProcessedLayer(types.NewLayerID(1))
-	assert.NoError(t, err)
-	_, err = layers.GetProcessedLayer(types.NewLayerID(2))
-	assert.NoError(t, err)
-	_, err = layers.GetProcessedLayer(types.NewLayerID(4))
-	assert.EqualError(t, err, "layer not verified yet")
+func TestMesh_ProcessedLayer(t *testing.T) {
+	msh := getMesh("t6")
+	defer msh.Close()
+	msh.setProcessedLayer(types.NewLayerID(2), types.Hash32{})
+	assert.Equal(t, types.NewLayerID(2), msh.ProcessedLayer())
+	msh.setProcessedLayer(types.NewLayerID(3), types.Hash32{})
+	assert.Equal(t, types.NewLayerID(3), msh.ProcessedLayer())
+	msh.setProcessedLayer(types.NewLayerID(5), types.Hash32{})
+	assert.Equal(t, types.NewLayerID(3), msh.ProcessedLayer())
+	msh.setProcessedLayer(types.NewLayerID(4), types.Hash32{})
+	assert.Equal(t, types.NewLayerID(4), msh.ProcessedLayer())
+	msh.setProcessedLayer(types.NewLayerID(3), types.Hash32{})
+	assert.Equal(t, types.NewLayerID(4), msh.ProcessedLayer())
 }
 
-func TestLayers_GetLayer(t *testing.T) {
-	layers := getMesh("t4")
-	defer layers.Close()
-	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data1"), nil)
-	block2 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data2"), nil)
-	block3 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data3"), nil)
-	l1 := types.NewExistingLayer(types.NewLayerID(1), []*types.Block{block1})
-	err := layers.AddBlock(block1)
+func TestMesh_PersistProcessedLayer(t *testing.T) {
+	msh := getMesh("persist_processed_layer")
+	defer msh.Close()
+	lyr := &ProcessedLayer{
+		ID:   types.NewLayerID(3),
+		Hash: types.CalcHash32([]byte("layer 3 hash")),
+	}
+	assert.NoError(t, msh.persistProcessedLayer(lyr))
+	rLyr, err := msh.recoverProcessedLayer()
 	assert.NoError(t, err)
-	layers.ValidateLayer(l1)
-	l, err := layers.GetProcessedLayer(types.NewLayerID(0))
-	err = layers.AddBlock(block2)
-	assert.NoError(t, err)
-	err = layers.AddBlock(block3)
-	assert.NoError(t, err)
-	l, err = layers.GetProcessedLayer(types.NewLayerID(1))
-	assert.True(t, err == nil, "error: ", err)
-	assert.True(t, l.Index() == types.NewLayerID(1), "wrong layer")
+	assert.Equal(t, lyr, rLyr)
 }
 
-func TestLayers_LatestKnownLayer(t *testing.T) {
-	layers := getMesh("t6")
-	defer layers.Close()
-	layers.SetLatestLayer(types.NewLayerID(3))
-	layers.SetLatestLayer(types.NewLayerID(7))
-	layers.SetLatestLayer(types.NewLayerID(10))
-	layers.SetLatestLayer(types.NewLayerID(1))
-	layers.SetLatestLayer(types.NewLayerID(2))
-	assert.True(t, layers.LatestLayer() == types.NewLayerID(10), "wrong layer")
+func TestMesh_LatestKnownLayer(t *testing.T) {
+	msh := getMesh("t6")
+	defer msh.Close()
+	msh.setLatestLayer(types.NewLayerID(3))
+	msh.setLatestLayer(types.NewLayerID(7))
+	msh.setLatestLayer(types.NewLayerID(10))
+	msh.setLatestLayer(types.NewLayerID(1))
+	msh.setLatestLayer(types.NewLayerID(2))
+	assert.Equal(t, types.NewLayerID(10), msh.LatestLayer(), "wrong layer")
 }
 
-func TestLayers_WakeUp(t *testing.T) {
-	layers := getMesh("t1")
-	defer layers.Close()
+func TestMesh_WakeUp(t *testing.T) {
+	msh := getMesh("t1")
+	defer msh.Close()
 
-	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data1"), nil)
-	block2 := types.NewExistingBlock(types.NewLayerID(2), []byte("data2"), nil)
-	block3 := types.NewExistingBlock(types.NewLayerID(3), []byte("data3"), nil)
+	r := require.New(t)
+	txIDs1, _ := addManyTXsToPool(r, msh, 4)
+	txIDs2, _ := addManyTXsToPool(r, msh, 3)
+	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data1"), txIDs1)
+	block2 := types.NewExistingBlock(types.NewLayerID(2), []byte("data2"), txIDs2)
 
-	err := layers.AddBlock(block1)
+	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block1))
+	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block2))
+
+	rBlock2, err := msh.GetBlock(block2.ID())
 	assert.NoError(t, err)
-	err = layers.AddBlock(block2)
-	assert.NoError(t, err)
-	err = layers.AddBlock(block3)
-	assert.NoError(t, err)
+	assert.Equal(t, len(txIDs2), len(rBlock2.TxIDs), "block TX size was wrong")
+	assert.Equal(t, block2.Data, rBlock2.MiniBlock.Data, "block content was wrong")
 
-	rBlock2, err := layers.GetBlock(block2.ID())
+	rBlock1, err := msh.GetBlock(block1.ID())
 	assert.NoError(t, err)
+	assert.Equal(t, len(txIDs1), len(rBlock1.TxIDs), "block TX size was wrong")
+	assert.Equal(t, block1.Data, rBlock1.MiniBlock.Data, "block content was wrong")
 
-	rBlock1, err := layers.GetBlock(block1.ID())
-	assert.NoError(t, err)
-
-	assert.True(t, len(rBlock1.TxIDs) == len(block1.TxIDs), "block content was wrong")
-	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
-	//assert.True(t, len(*rBlock1.ActiveSet) == len(*block1.ActiveSet))
-
-	recoveredMesh := NewMesh(layers.DB, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: layers.DB}, newMockTxMemPool(), &MockState{}, log.NewDefault(""))
+	recoveredMesh := NewMesh(msh.DB, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: msh.DB}, newMockTxMemPool(), &MockState{}, log.NewDefault(""))
 
 	rBlock2, err = recoveredMesh.GetBlock(block2.ID())
 	assert.NoError(t, err)
+	assert.Equal(t, len(txIDs2), len(rBlock2.TxIDs), "block TX size was wrong")
+	assert.Equal(t, block2.Data, rBlock2.MiniBlock.Data, "block content was wrong")
 
 	rBlock1, err = recoveredMesh.GetBlock(block1.ID())
 	assert.NoError(t, err)
-
-	assert.True(t, len(rBlock1.TxIDs) == len(block1.TxIDs), "block content was wrong")
-	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
-	//assert.True(t, len(rBlock1.ATXIDs) == len(block1.ATXIDs))
+	assert.Equal(t, len(txIDs1), len(rBlock1.TxIDs), "block TX size was wrong")
+	assert.Equal(t, block1.Data, rBlock1.MiniBlock.Data, "block content was wrong")
 }
 
-func TestLayers_OrphanBlocks(t *testing.T) {
-	layers := getMesh("t6")
-	defer layers.Close()
-	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data1"), nil)
-	block2 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data2"), nil)
-	block3 := types.NewExistingBlock(types.NewLayerID(2), []byte("data data data3"), nil)
-	block4 := types.NewExistingBlock(types.NewLayerID(2), []byte("data data data4"), nil)
-	block5 := types.NewExistingBlock(types.NewLayerID(3), []byte("data data data5"), nil)
+func TestMesh_OrphanBlocks(t *testing.T) {
+	msh := getMesh("t6")
+	defer msh.Close()
+	r := require.New(t)
+	txIDs1, _ := addManyTXsToPool(r, msh, 4)
+	txIDs2, _ := addManyTXsToPool(r, msh, 3)
+	txIDs3, _ := addManyTXsToPool(r, msh, 6)
+	txIDs4, _ := addManyTXsToPool(r, msh, 7)
+	txIDs5, _ := addManyTXsToPool(r, msh, 3)
+	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data1"), txIDs1)
+	block2 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data2"), txIDs2)
+	block3 := types.NewExistingBlock(types.NewLayerID(2), []byte("data data data3"), txIDs3)
+	block4 := types.NewExistingBlock(types.NewLayerID(2), []byte("data data data4"), txIDs4)
+	block5 := types.NewExistingBlock(types.NewLayerID(3), []byte("data data data5"), txIDs5)
 	block5.ForDiff = append(block5.ForDiff, block1.ID())
 	block5.ForDiff = append(block5.ForDiff, block2.ID())
 	block5.ForDiff = append(block5.ForDiff, block3.ID())
 	block5.ForDiff = append(block5.ForDiff, block4.ID())
-	err := layers.AddBlock(block1)
-	assert.NoError(t, err)
-	err = layers.AddBlock(block2)
-	assert.NoError(t, err)
-	err = layers.AddBlock(block3)
-	assert.NoError(t, err)
-	err = layers.AddBlock(block4)
-	assert.NoError(t, err)
-	arr, _ := layers.GetOrphanBlocksBefore(types.NewLayerID(3))
-	assert.True(t, len(arr) == 4, "wrong layer")
-	arr2, _ := layers.GetOrphanBlocksBefore(types.NewLayerID(2))
-	assert.Equal(t, len(arr2), 2)
-	err = layers.AddBlock(block5)
-	assert.NoError(t, err)
+	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block1))
+	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block2))
+	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block3))
+	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block4))
+	arr, _ := msh.GetOrphanBlocksBefore(types.NewLayerID(3))
+	assert.Equal(t, 4, len(arr), "wrong number of orphaned blocks")
+	arr2, _ := msh.GetOrphanBlocksBefore(types.NewLayerID(2))
+	assert.Equal(t, 2, len(arr2), "wrong number of orphaned blocks")
+	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block5))
 	time.Sleep(1 * time.Second)
-	arr3, _ := layers.GetOrphanBlocksBefore(types.NewLayerID(4))
-	assert.True(t, len(arr3) == 1, "wrong layer")
+	arr3, _ := msh.GetOrphanBlocksBefore(types.NewLayerID(4))
+	assert.Equal(t, 1, len(arr3), "wrong number of orphaned blocks")
 }
 
-func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
-	layers := getMesh("t6")
-	defer layers.Close()
-	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data1"), nil)
-	block2 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data2"), nil)
-	block3 := types.NewExistingBlock(types.NewLayerID(2), []byte("data data data3"), nil)
-	block4 := types.NewExistingBlock(types.NewLayerID(2), []byte("data data data4"), nil)
-	block5 := types.NewExistingBlock(types.NewLayerID(3), []byte("data data data5"), nil)
+func TestMesh_OrphanBlocksClearEmptyLayers(t *testing.T) {
+	msh := getMesh("t6")
+	defer msh.Close()
+	r := require.New(t)
+	txIDs1, _ := addManyTXsToPool(r, msh, 4)
+	txIDs2, _ := addManyTXsToPool(r, msh, 3)
+	txIDs3, _ := addManyTXsToPool(r, msh, 6)
+	txIDs4, _ := addManyTXsToPool(r, msh, 7)
+	txIDs5, _ := addManyTXsToPool(r, msh, 3)
+	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data1"), txIDs1)
+	block2 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data2"), txIDs2)
+	block3 := types.NewExistingBlock(types.NewLayerID(2), []byte("data data data3"), txIDs3)
+	block4 := types.NewExistingBlock(types.NewLayerID(2), []byte("data data data4"), txIDs4)
+	block5 := types.NewExistingBlock(types.NewLayerID(3), []byte("data data data5"), txIDs5)
 	block5.ForDiff = append(block5.ForDiff, block1.ID())
 	block5.ForDiff = append(block5.ForDiff, block2.ID())
 	block5.ForDiff = append(block5.ForDiff, block3.ID())
 	block5.ForDiff = append(block5.ForDiff, block4.ID())
-	err := layers.AddBlock(block1)
-	assert.NoError(t, err)
-	err = layers.AddBlock(block2)
-	assert.NoError(t, err)
-	err = layers.AddBlock(block3)
-	assert.NoError(t, err)
-	err = layers.AddBlock(block4)
-	assert.NoError(t, err)
-	arr, _ := layers.GetOrphanBlocksBefore(types.NewLayerID(3))
-	assert.True(t, len(arr) == 4, "wrong layer")
-	arr2, _ := layers.GetOrphanBlocksBefore(types.NewLayerID(2))
-	assert.Equal(t, len(arr2), 2)
-	err = layers.AddBlock(block5)
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(layers.orphanBlocks))
+	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block1))
+	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block2))
+	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block3))
+	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block4))
+	arr, _ := msh.GetOrphanBlocksBefore(types.NewLayerID(3))
+	assert.Equal(t, 4, len(arr), "wrong number of orphaned blocks")
+	arr2, _ := msh.GetOrphanBlocksBefore(types.NewLayerID(2))
+	assert.Equal(t, 2, len(arr2), "wrong number of orphaned blocks")
+	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block5))
+	assert.Equal(t, 1, len(msh.orphanBlocks))
 }
 
 func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) {
@@ -455,11 +400,12 @@ func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
 }
 
 func TestMesh_persistLayerHashes(t *testing.T) {
+	r := require.New(t)
 	msh := getMesh("persistLayerHashes")
 	defer msh.Close()
 
 	// test first layer hash
-	l := addLayer(types.GetEffectiveGenesis(), 5, msh)
+	l := addLayer(r, types.GetEffectiveGenesis(), 5, msh)
 	msh.persistLayerHashes(l)
 	wantedHash := types.CalcAggregateHash32(types.Hash32{}, l.Hash().Bytes())
 	actualHash, err := msh.getRunningLayerHash(types.GetEffectiveGenesis())
@@ -467,7 +413,7 @@ func TestMesh_persistLayerHashes(t *testing.T) {
 
 	assert.Equal(t, wantedHash, actualHash)
 
-	l2 := addLayer(types.GetEffectiveGenesis().Add(1), 5, msh)
+	l2 := addLayer(r, types.GetEffectiveGenesis().Add(1), 5, msh)
 	msh.persistLayerHashes(l2)
 	secondWantedHash := types.CalcAggregateHash32(wantedHash, l2.Hash().Bytes())
 	actualHash2, err := msh.getRunningLayerHash(types.GetEffectiveGenesis().Add(1))
@@ -507,28 +453,31 @@ func addBlockWithTxs(r *require.Assertions, msh *Mesh, id types.LayerID, valid b
 	return blk
 }
 
-type FailingAtxDbMock struct{}
-
-func (FailingAtxDbMock) ProcessAtxs([]*types.ActivationTx) error { return fmt.Errorf("💥") }
-
-func (FailingAtxDbMock) GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error) {
-	panic("implement me")
+func addManyTXsToPool(r *require.Assertions, msh *Mesh, numOfTxs int) ([]types.TransactionID, []*types.Transaction) {
+	txs := make([]*types.Transaction, numOfTxs)
+	txIDs := make([]types.TransactionID, numOfTxs)
+	for i := 0; i < numOfTxs; i++ {
+		tx, err := types.NewSignedTx(1, types.HexToAddress("1"), 10, 100, rand.Uint64(), signing.NewEdSigner())
+		r.NoError(err)
+		txs[i] = tx
+		txIDs[i] = tx.ID()
+		msh.txPool.Put(tx.ID(), tx)
+	}
+	return txIDs, txs
 }
-
-func (FailingAtxDbMock) GetFullAtx(types.ATXID) (*types.ActivationTx, error) { panic("implement me") }
-
-func (FailingAtxDbMock) SyntacticallyValidateAtx(*types.ActivationTx) error { panic("implement me") }
 
 func TestMesh_AddBlockWithTxs(t *testing.T) {
 	r := require.New(t)
-	lg := log.NewDefault("id")
-	meshDB := NewMemMeshDB(lg)
-	mesh := NewMesh(meshDB, &FailingAtxDbMock{}, ConfigTst(), &MeshValidatorMock{mdb: meshDB}, newMockTxMemPool(), &MockState{}, lg)
+	mesh := getMesh("AddBlockWithTxs")
 
-	blk := types.NewExistingBlock(types.NewLayerID(1), []byte("data"), nil)
+	numTXs := 6
+	txIDs, _ := addManyTXsToPool(r, mesh, numTXs)
 
-	err := mesh.AddBlockWithTxs(context.TODO(), blk)
-	//r.EqualError(err, "failed to process ATXs: 💥")
-	_, err = meshDB.blocks.Get(blk.ID().AsHash32().Bytes())
-	r.NoError(err)
+	block := types.NewExistingBlock(types.NewLayerID(1), []byte("data"), txIDs)
+	r.NoError(mesh.AddBlockWithTxs(context.TODO(), block))
+
+	res, err := mesh.GetBlock(block.ID())
+	assert.NoError(t, err)
+	assert.Equal(t, numTXs, len(res.TxIDs), "block TX size was wrong")
+	assert.Equal(t, block.Data, res.MiniBlock.Data, "block content was wrong")
 }
