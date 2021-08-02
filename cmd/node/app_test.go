@@ -171,7 +171,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		defer clock.RealClose()
 
 		for _, a := range suite.apps {
-			suite.NoError(a.startServices(context.TODO(), log.AppLog.WithName(suite.T().Name())))
+			suite.NoError(a.startServices(context.TODO()))
 		}
 
 		ActivateGrpcServer(suite.apps[0])
@@ -508,7 +508,7 @@ func (suite *AppTestSuite) validateReloadStateRoot(app *SpacemeshApp, oldRoot ty
 	assert.Equal(suite.T(), oldRoot, app.state.GetStateRoot())
 
 	// start and stop and test for no panics
-	suite.NoError(app.startServices(context.TODO(), log.AppLog))
+	suite.NoError(app.startServices(context.TODO()))
 	app.stopServices()
 }
 
@@ -682,7 +682,7 @@ func TestShutdown(t *testing.T) {
 		t.Skip()
 	}
 
-	// make sure previous goroutines has stopped
+	// make sure previous goroutines have stopped
 	time.Sleep(3 * time.Second)
 	gCount := runtime.NumGoroutine()
 	net := service.NewSimulator()
@@ -743,11 +743,8 @@ func TestShutdown(t *testing.T) {
 	gTime := genesisTime
 	ld := time.Duration(20) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
-	err = smApp.initServices(context.TODO(), log.AppLog, nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), poetHarness.HTTPPoetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock)
-
-	r.NoError(err)
-
-	r.NoError(smApp.startServices(context.TODO(), log.AppLog))
+	r.NoError(smApp.initServices(context.TODO(), log.AppLog, nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), poetHarness.HTTPPoetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock))
+	r.NoError(smApp.startServices(context.TODO()))
 	ActivateGrpcServer(smApp)
 
 	r.NoError(poetHarness.Teardown(true))

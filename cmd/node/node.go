@@ -787,14 +787,13 @@ func (app *SpacemeshApp) HareFactory(
 	return ha
 }
 
-func (app *SpacemeshApp) startServices(ctx context.Context, logger log.Log) error {
+func (app *SpacemeshApp) startServices(ctx context.Context) error {
 	app.layerFetch.Start()
 	go app.startSyncer(ctx)
 
 	if err := app.tortoiseBeacon.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start tortoise beacon: %w", err)
 	}
-
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
 	}
@@ -1128,7 +1127,7 @@ func (app *SpacemeshApp) Start() error {
 		return fmt.Errorf("error starting p2p services: %w", err)
 	}
 
-	if err = app.initServices(ctx,
+	if err := app.initServices(ctx,
 		logger,
 		nodeID,
 		swarm,
@@ -1153,10 +1152,12 @@ func (app *SpacemeshApp) Start() error {
 			swarm.LocalNode().PublicKey().String(), strconv.Itoa(int(app.Config.P2P.NetworkID)))
 	}
 
-	app.startServices(ctx, logger)
+	if err := app.startServices(ctx); err != nil {
+		return fmt.Errorf("error starting services: %w", err)
+	}
 
 	// P2P must start last to not block when sending messages to protocols
-	if err = app.P2P.Start(ctx); err != nil {
+	if err := app.P2P.Start(ctx); err != nil {
 		return fmt.Errorf("error starting p2p services: %w", err)
 	}
 
