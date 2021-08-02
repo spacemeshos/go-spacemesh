@@ -158,6 +158,7 @@ type MessageNetwork struct {
 	log.Log
 }
 
+// Close closes the message network
 func (mn MessageNetwork) Close() {
 	mn.MessageServer.Close()
 	mn.peersProvider.Close()
@@ -384,10 +385,10 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 
 	bts, err := types.InterfaceToBytes(&resBatch)
 	if err != nil {
-		f.log.WithContext(ctx).Error("cannot parse message for batch ID %v", resBatch.ID.Hex())
+		f.log.WithContext(ctx).Error("cannot parse message for batch id %v", resBatch.ID.Hex())
 		return nil
 	}
-	f.log.WithContext(ctx).Debug("returning response batch Id %v responses %v total bytes %v", resBatch.ID.Hex(), len(resBatch.Responses), len(bts))
+	f.log.WithContext(ctx).Debug("returning response batch id %v responses %v total bytes %v", resBatch.ID.Hex(), len(resBatch.Responses), len(bts))
 	return bts
 }
 
@@ -635,7 +636,7 @@ func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashD
 	db, ok := f.dbs[h]
 	f.dbLock.RUnlock()
 	if !ok {
-		f.log.Panic("tried to fetch Data from DB that doesn't exist locally: %v", h)
+		f.log.Panic("tried to fetch data from database that doesn't exist locally: %v", h)
 	}
 
 	if b, err := db.Get(hash.Bytes()); err == nil {
