@@ -392,17 +392,22 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 		return nil
 	}
 	epoch := layerID.GetEpoch()
-	currentEpoch := s.ticker.GetCurrentLayer().GetEpoch()
+	atCurrentEpoch := epoch == s.ticker.GetCurrentLayer().GetEpoch()
+	atLastLayerOfEpoch := layerID == (epoch + 1).FirstLayer().Sub(1)
 	// only get ATXs if
 	// - layerID is in the current epoch
 	// - layerID is the last layer of a previous epoch
 	// i.e. for older epochs we sync ATXs once per epoch. for current epoch we sync ATXs in every layer
-	if epoch == currentEpoch || layerID == (epoch+1).FirstLayer().Sub(1) {
+	if atCurrentEpoch || atLastLayerOfEpoch {
 		s.logger.WithContext(ctx).With().Debug("getting ATXs", epoch, layerID)
 		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
 		if err := s.fetcher.GetEpochATXs(ctx, epoch); err != nil {
-			s.logger.WithContext(ctx).With().Error("failed to fetch epoch ATXs", layerID, epoch, log.Err(err))
-			return err
+			// dont fail sync if we cannot fetch ATXs for the current epoch before the last layer
+			if !atCurrentEpoch || atLastLayerOfEpoch {
+				s.logger.WithContext(ctx).With().Error("failed to fetch epoch ATXs", layerID, epoch, log.Err(err))
+				return err
+			}
+			s.logger.WithContext(ctx).With().Warning("failed to fetch epoch ATXs", layerID, epoch, log.Err(err))
 		}
 	}
 	return nil

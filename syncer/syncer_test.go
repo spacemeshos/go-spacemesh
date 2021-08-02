@@ -307,7 +307,7 @@ func TestSynchronize_getATXsFailedEpochZero(t *testing.T) {
 	assert.False(t, syncer.IsSynced(context.TODO()))
 }
 
-func TestSynchronize_getATXsFailed(t *testing.T) {
+func TestSynchronize_getATXsFailedPastEpoch(t *testing.T) {
 	lg := log.NewDefault("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
@@ -323,6 +323,55 @@ func TestSynchronize_getATXsFailed(t *testing.T) {
 	}()
 
 	mf.setATXsErrors(1, errors.New("no ATXs. should fail sync"))
+	mf.feedLayerResult(types.NewLayerID(0), ticker.GetCurrentLayer())
+	wg.Wait()
+
+	assert.False(t, syncer.ListenToGossip())
+	assert.False(t, syncer.IsSynced(context.TODO()))
+}
+
+func TestSynchronize_getATXsFailedCurrentEpoch(t *testing.T) {
+	lg := log.NewDefault("syncer")
+	ticker := newMockLayerTicker()
+	mf := newMockFetcher()
+	mm := newMemMesh(lg)
+	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+
+	// brings the node to synced state
+	ticker.advanceToLayer(types.NewLayerID(1))
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		assert.True(t, syncer.synchronize(context.TODO()))
+		wg.Done()
+	}()
+	mf.feedLayerResult(types.NewLayerID(0), ticker.GetCurrentLayer())
+	wg.Wait()
+
+	assert.True(t, syncer.ListenToGossip())
+	assert.True(t, syncer.IsSynced(context.TODO()))
+
+	mf.setATXsErrors(1, errors.New("no ATXs for current epoch. should fail sync at last layer"))
+	for i := uint32(0); i < layersPerEpoch-1; i++ {
+		ticker.advanceToLayer(types.NewLayerID(layersPerEpoch).Add(i))
+		wg.Add(1)
+		go func() {
+			assert.True(t, syncer.synchronize(context.TODO()))
+			wg.Done()
+		}()
+		mf.feedLayerResult(types.NewLayerID(0), ticker.GetCurrentLayer())
+		wg.Wait()
+
+		assert.True(t, syncer.ListenToGossip())
+		assert.True(t, syncer.IsSynced(context.TODO()))
+	}
+
+	ticker.advanceToLayer(types.NewLayerID(2*layersPerEpoch - 1))
+	wg.Add(1)
+	go func() {
+		assert.False(t, syncer.synchronize(context.TODO()))
+		wg.Done()
+	}()
 	mf.feedLayerResult(types.NewLayerID(0), ticker.GetCurrentLayer())
 	wg.Wait()
 
@@ -616,11 +665,11 @@ func TestGetATXsCurrentEpoch(t *testing.T) {
 	assert.NoError(t, syncer.getATXs(context.TODO(), types.NewLayerID(2)))
 	assert.Equal(t, uint32(0), atomic.LoadUint32(&mf.atxsCalls))
 
-	// epoch 1
+	// epoch 1. expect error at last layer
 	ticker.advanceToLayer(types.NewLayerID(5))
-	assert.Error(t, syncer.getATXs(context.TODO(), types.NewLayerID(3)))
+	assert.NoError(t, syncer.getATXs(context.TODO(), types.NewLayerID(3)))
 	assert.Equal(t, uint32(1), atomic.LoadUint32(&mf.atxsCalls))
-	assert.Error(t, syncer.getATXs(context.TODO(), types.NewLayerID(4)))
+	assert.NoError(t, syncer.getATXs(context.TODO(), types.NewLayerID(4)))
 	assert.Equal(t, uint32(2), atomic.LoadUint32(&mf.atxsCalls))
 	assert.Error(t, syncer.getATXs(context.TODO(), types.NewLayerID(5)))
 	assert.Equal(t, uint32(3), atomic.LoadUint32(&mf.atxsCalls))
