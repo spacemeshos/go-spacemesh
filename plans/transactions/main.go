@@ -19,8 +19,7 @@ var testcases = map[string]interface{}{
 // tests accounts.
 // Then all the nodes wait for the next epoch and assert the accounts' balance.
 func testTransaction(env *runtime.RunEnv, initCtx *run.InitContext) error {
-	ctx, cancel := context.WithDeadline(context.Background(),
-		time.Now().Add(10*time.Minute))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	t := systest.NewSystemTest(ctx, env, initCtx)
 	defer t.Close()
@@ -42,8 +41,7 @@ func testTransaction(env *runtime.RunEnv, initCtx *run.InitContext) error {
 // Then all the nodes wait for the next epoch and assert the accounts' balance.
 
 func testNewAccount(env *runtime.RunEnv, initCtx *run.InitContext) error {
-	ctx, cancel := context.WithDeadline(context.Background(),
-		time.Now().Add(10*time.Minute))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	t := systest.NewSystemTest(ctx, env, initCtx)
 	defer t.Close()
