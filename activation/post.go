@@ -275,7 +275,7 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 			return
 		}
 
-		mgr.logger.With().Info("Post setup completed",
+		mgr.logger.With().Info("post setup completed",
 			log.String("datadir", opts.DataDir),
 			log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
 			log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
