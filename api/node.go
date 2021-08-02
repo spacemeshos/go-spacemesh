@@ -66,6 +66,7 @@ type TxAPI interface {
 
 // PeerCounter is an api to get amount of connected peers
 type PeerCounter interface {
+	Close()
 	PeerCount() uint64
 }
 

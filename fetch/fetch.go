@@ -148,6 +148,7 @@ func DefaultConfig() Config {
 
 type peersProvider interface {
 	GetPeers() []peers.Peer
+	Close()
 }
 
 // MessageNetwork is a network interface that allows fetch to communicate with other nodes with 'fetch servers'
@@ -155,6 +156,11 @@ type MessageNetwork struct {
 	*server.MessageServer
 	peersProvider
 	log.Log
+}
+
+func (mn MessageNetwork) Close() {
+	mn.MessageServer.Close()
+	mn.peersProvider.Close()
 }
 
 // NewMessageNetwork creates a new instance of the fetch network server
@@ -175,8 +181,8 @@ func GetRandomPeer(peers []peers.Peer) peers.Peer {
 }
 
 // GetPeers return active peers
-func (f MessageNetwork) GetPeers() []peers.Peer {
-	return f.peersProvider.GetPeers()
+func (mn MessageNetwork) GetPeers() []peers.Peer {
+	return mn.peersProvider.GetPeers()
 }
 
 type network interface {
