@@ -175,7 +175,7 @@ func NewMessageNetwork(ctx context.Context, requestTimeOut int, net service.Serv
 // GetRandomPeer returns a random peer from current peer list
 func GetRandomPeer(peers []peers.Peer) peers.Peer {
 	if len(peers) == 0 {
-		log.Panic("cannot send fetch - no peers found")
+		log.Panic("cannot send fetch: no peers found")
 	}
 	return peers[rand.Intn(len(peers))]
 }
@@ -248,9 +248,11 @@ func (f *Fetch) Start() {
 // Stop stops handling fetch requests
 func (f *Fetch) Stop() {
 	f.log.Info("stopping fetch")
+	f.stopM.Lock()
+	defer f.stopM.Unlock()
 	f.batchTimeout.Stop()
-	f.net.Close()
 	close(f.stop)
+	f.net.Close()
 	f.activeReqM.Lock()
 	for _, batch := range f.activeRequests {
 		for _, req := range batch {
@@ -538,12 +540,15 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 	retries := 0
 	var p peers.Peer
 	for {
+		f.stopM.Lock()
 		if f.stopped() {
+			f.stopM.Unlock()
 			return
 		}
 
 		// get random peer
 		p = GetRandomPeer(f.net.GetPeers())
+		f.stopM.Unlock()
 		f.log.Debug("sending request batch %v items %v peer %v", batch.ID.Hex(), len(batch.Requests), p)
 		batch.peer = p
 		f.activeBatchM.Lock()
@@ -557,8 +562,8 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 				f.handleHashError(batch.ID, ErrCouldNotSend(fmt.Errorf("could not send message: %w", err)))
 				break
 			}
-			//todo: mark number of fails per peer to make it low priority
-			f.log.Warning("could not send message to peer %v, retrying, retries %v", p, retries)
+			// todo: mark number of fails per peer to make it low priority
+			f.log.With().Warning("could not send message to peer, retrying", p, log.Int("retries", retries))
 		} else {
 			break
 		}
