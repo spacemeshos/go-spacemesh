@@ -268,6 +268,22 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 
 	blockIds = copyLayer(t, mesh, mesh3, atxDB3, types.NewLayerID(uint32(numOfLayers)-2))
 	mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(numOfLayers)-2), blockIds)
+	assert.Greater(t, len(s3.Txs), s3Len) // expect txs from layer 6 to have been applied
+	s3Len = len(s3.Txs)
+
+	// re-validate layer 8 (applying layer 7 state)
+	mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(numOfLayers)-1), blockIds)
+	assert.Greater(t, len(s3.Txs), s3Len) // expect txs from layer 7 to have been applied
+	s3Len = len(s3.Txs)
+
+	// validate layer 9 (applying layer 8 state)
+	blockIds = copyLayer(t, mesh, mesh3, atxDB3, types.NewLayerID(uint32(numOfLayers)))
+	mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(numOfLayers)), blockIds)
+	assert.Greater(t, len(s3.Txs), s3Len) // expect txs from layer 9 to have been applied
+
+	// now everything should have been applied
+	blockIds = copyLayer(t, mesh, mesh3, atxDB3, types.NewLayerID(uint32(numOfLayers)-1))
+	mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(numOfLayers)-1), blockIds)
 	assert.Equal(t, s.Txs, s3.Txs)
 }
 

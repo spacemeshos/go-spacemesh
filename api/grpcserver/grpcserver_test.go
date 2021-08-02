@@ -1604,7 +1604,7 @@ func TestMeshService(t *testing.T) {
 				// very very large range
 				{
 					name: "very very large range",
-					run: generateRunFnError("error reading layer data", &pb.LayersQueryRequest{
+					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
 						StartLayer: &pb.LayerNumber{Number: 0},
 						EndLayer:   &pb.LayerNumber{Number: uint32(math.MaxUint32)},
 					}),

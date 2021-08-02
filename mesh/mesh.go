@@ -352,6 +352,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types
 		log.FieldNamed("new_pbase", newPbase))
 	logger.Info("pushing layers to state")
 
+	// TODO: does this need to be hardcoded? can we use types.GetEffectiveGenesis instead?
 	layerTwo := types.NewLayerID(2)
 	if oldPbase.Before(layerTwo) {
 		msh.With().Warning("tried to push layer < 2",
