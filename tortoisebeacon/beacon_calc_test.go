@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -24,23 +23,6 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 
 	mockDB := &mockActivationDB{}
 	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(1), nil, nil)
-
-	mwc := &weakcoin.MockWeakCoin{}
-	mwc.On("OnRoundStarted",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"))
-	mwc.On("OnRoundFinished",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"))
-	mwc.On("PublishProposal",
-		mock.Anything,
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID")).
-		Return(nil)
-	mwc.On("Get",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID")).
-		Return(false)
 
 	const (
 		epoch  = 5
@@ -172,12 +154,11 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 				ownVotes:                  tc.ownVotes,
 				beacons:                   make(map[types.EpochID]types.Hash32),
 				atxDB:                     mockDB,
-				weakCoin:                  mwc,
 			}
 
 			tb.initGenesisBeacons()
 
-			err := tb.calcBeacon(tc.epoch)
+			err := tb.calcBeacon(tc.epoch, false)
 			r.NoError(err)
 			r.EqualValues(tc.hash.String(), tb.beacons[epoch].String())
 		})
@@ -197,23 +178,6 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 
 	mockDB := &mockActivationDB{}
 	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(1), nil, nil)
-
-	mwc := &weakcoin.MockWeakCoin{}
-	mwc.On("OnRoundStarted",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"))
-	mwc.On("OnRoundFinished",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"))
-	mwc.On("PublishProposal",
-		mock.Anything,
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID")).
-		Return(nil)
-	mwc.On("Get",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID")).
-		Return(false)
 
 	const (
 		epoch  = 5
@@ -345,10 +309,9 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 				incomingVotes:             tc.incomingVotes,
 				ownVotes:                  tc.ownVotes,
 				atxDB:                     mockDB,
-				weakCoin:                  mwc,
 			}
 
-			hashes, err := tb.calcTortoiseBeaconHashList(tc.epoch)
+			hashes, err := tb.calcTortoiseBeaconHashList(tc.epoch, false)
 			r.NoError(err)
 			r.EqualValues(tc.hashes.Sort(), hashes.Sort())
 		})
