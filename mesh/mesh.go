@@ -163,7 +163,7 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, t
 	msh.With().Info("recovered mesh from disk",
 		log.FieldNamed("latest_layer", msh.LatestLayer()),
 		log.FieldNamed("validated_layer", msh.ProcessedLayer()),
-		log.String("layer_hash", msh.ProcessedLayerHash().Hex()),
+		log.String("layer_hash", msh.ProcessedLayerHash().ShortString()),
 		log.String("root_hash", pr.GetStateRoot().String()))
 
 	return msh
@@ -256,7 +256,7 @@ func (msh *Mesh) setProcessedLayerFromRecoveredData(pLayer *ProcessedLayer) {
 	msh.mutex.Lock()
 	defer msh.mutex.Unlock()
 	msh.processedLayer = *pLayer
-	msh.Event().Info("processed layer set from recovered data", pLayer.ID, log.String("layer_hash", pLayer.Hash.Hex()))
+	msh.Event().Info("processed layer set from recovered data", pLayer.ID, log.String("layer_hash", pLayer.Hash.ShortString()))
 }
 
 func (msh *Mesh) setProcessedLayer(layer *types.Layer) {
@@ -296,12 +296,12 @@ func (msh *Mesh) setProcessedLayer(layer *types.Layer) {
 	}
 	msh.processedLayer = lastProcessed
 	events.ReportNodeStatusUpdate()
-	msh.Event().Info("processed layer set", msh.processedLayer.ID, log.String("layer_hash", msh.processedLayer.Hash.Hex()))
+	msh.Event().Info("processed layer set", msh.processedLayer.ID, log.String("layer_hash", msh.processedLayer.Hash.ShortString()))
 
 	if err := msh.persistProcessedLayer(&lastProcessed); err != nil {
 		msh.With().Error("failed to persist processed layer",
 			log.FieldNamed("processed_layer", lastProcessed.ID),
-			log.String("processed_layer_hash", lastProcessed.Hash.Hex()),
+			log.String("processed_layer_hash", lastProcessed.Hash.ShortString()),
 			log.Err(err))
 	}
 }
@@ -316,7 +316,7 @@ func (msh *Mesh) persistProcessedLayer(lyr *ProcessedLayer) error {
 	}
 	msh.With().Debug("persisted processed layer",
 		lyr.ID,
-		log.String("layer_hash", lyr.Hash.Hex()))
+		log.String("layer_hash", lyr.Hash.ShortString()))
 	return nil
 }
 
@@ -544,7 +544,7 @@ func (msh *Mesh) calcSimpleLayerHash(layer *types.Layer) types.Hash32 {
 func (msh *Mesh) persistAggregatedLayerHash(layerID types.LayerID, hash types.Hash32) {
 	if err := msh.general.Put(msh.getAggregatedLayerHashKey(layerID), hash.Bytes()); err != nil {
 		msh.With().Error("failed to persist running layer hash", log.Err(err), msh.ProcessedLayer(),
-			log.String("layer_hash", hash.Hex()))
+			log.String("layer_hash", hash.ShortString()))
 	}
 }
 
@@ -562,7 +562,7 @@ func (msh *Mesh) getAggregatedLayerHash(layerID types.LayerID) (types.Hash32, er
 func (msh *Mesh) GetLayerHashBlocks(h types.Hash32) []types.BlockID {
 	layerIDBytes, err := msh.general.Get(h.Bytes())
 	if err != nil {
-		msh.Warning("requested unknown layer hash %v", h.Hex())
+		msh.Warning("requested unknown layer hash %v", h.ShortString())
 		return []types.BlockID{}
 	}
 	l := types.BytesToLayerID(layerIDBytes)
