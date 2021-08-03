@@ -75,10 +75,15 @@ func (m mockNet) SendWrappedMessage(_ context.Context, nodeID p2pcrypto.PublicKe
 	return nil
 }
 
+func (m mockNet) PeerCount() uint64 {
+	return 1
+}
+
 func (m mockNet) GetPeers() []peers.Peer {
 	_, pub1, _ := p2pcrypto.GenerateKeyPair()
 	return []peers.Peer{pub1}
 }
+
 func (m *mockNet) SendRequest(_ context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error {
 	m.TotalBatchCalls++
 	if m.ReturnError {
