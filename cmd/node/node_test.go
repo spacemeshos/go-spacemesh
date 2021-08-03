@@ -263,6 +263,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 
 	resetFlags()
 	events.CloseEventReporter()
+	app.Config.API = apiConfig.DefaultTestConfig()
 
 	// Try the same thing but change the order of the flags
 	// In this case, the node service will not be enabled because it comes second
@@ -369,6 +370,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 
 	resetFlags()
 	events.CloseEventReporter()
+	app.Config.API = apiConfig.DefaultTestConfig()
 
 	// Try changing the port
 	// Uses Cmd.Run as defined above
