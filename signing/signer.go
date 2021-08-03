@@ -3,6 +3,7 @@ package signing
 import (
 	"bytes"
 	"errors"
+
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -53,6 +54,8 @@ func (p *PublicKey) ShortString() string {
 func (p *PublicKey) Equals(o *PublicKey) bool {
 	return bytes.Equal(p.Bytes(), o.Bytes())
 }
+
+var _ Signer = (*EdSigner)(nil)
 
 // EdSigner represents an ED25519 signer
 type EdSigner struct {

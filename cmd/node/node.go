@@ -464,10 +464,6 @@ func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
 	return nil
 }
 
-type vrfSigner interface {
-	Sign([]byte) []byte
-}
-
 func (app *SpacemeshApp) initServices(ctx context.Context,
 	logger log.Log,
 	nodeID types.NodeID,
@@ -478,7 +474,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	rolacle hare.Rolacle,
 	layerSize uint32,
 	poetClient activation.PoetProvingServiceClient,
-	vrfSigner vrfSigner,
+	vrfSigner signing.Signer,
 	layersPerEpoch uint32, clock TickProvider) error {
 
 	app.nodeID = nodeID
@@ -554,9 +550,12 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
 
-	// TODO(nkryuchkov): Enable weak coin when finished.
-	// wc := weakcoin.NewWeakCoin(weakcoin.DefaultThreshold(), nodeID, swarm, signing.VRFVerify, vrfSigner, app.addLogger(WeakCoinLogger, lg))
-	wc := weakcoin.ValueMock{Value: false}
+	wc := weakcoin.New(swarm,
+		vrfSigner, signing.VRFVerifier{},
+		weakcoin.WithLog(app.addLogger(WeakCoinLogger, lg)),
+		weakcoin.WithMaxRound(types.RoundID(app.Config.TortoiseBeacon.RoundsNumber)),
+	)
+
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	tBeacon := tortoisebeacon.New(
 		app.Config.TortoiseBeacon,
@@ -566,7 +565,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 		atxdb,
 		tBeaconDB,
 		sgn,
-		signing.VRFVerify,
+		signing.VRFVerifier{},
 		vrfSigner,
 		wc,
 		clock,
@@ -706,8 +705,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	gossipListener.AddListener(ctx, tortoisebeacon.TBProposalProtocol, priorityq.Low, tBeacon.HandleSerializedProposalMessage)
 	gossipListener.AddListener(ctx, tortoisebeacon.TBFirstVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFirstVotingMessage)
 	gossipListener.AddListener(ctx, tortoisebeacon.TBFollowingVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFollowingVotingMessage)
-	// TODO(nkryuchkov): Enable weak coin when finished.
-	// gossipListener.AddListener(ctx, weakcoin.GossipProtocol, priorityq.Low, wc.HandleSerializedMessage)
+	gossipListener.AddListener(ctx, weakcoin.GossipProtocol, priorityq.Low, wc.HandleSerializedMessage)
 
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener
