@@ -234,6 +234,10 @@ def get_conf(bs_info, client_config, genesis_time, setup_oracle=None, setup_poet
     if setup_poet:
         client_args['poet_server'] = '{0}:{1}'.format(setup_poet, conf.POET_SERVER_PORT)
 
+    # append state bucket name for the harness
+    if "data-dir" in client_config["args"]:
+        cspec.append_args(state_bucket=conf.get_state_bucket())
+
     bootnodes = node_string(bs_info['key'], bs_info['pod_ip'], conf.BOOTSTRAP_PORT, conf.BOOTSTRAP_PORT)
     cspec.append_args(bootnodes=bootnodes, genesis_time=genesis_time_delta.isoformat('T', 'seconds'))
     # append client config to ContainerSpec
@@ -242,11 +246,15 @@ def get_conf(bs_info, client_config, genesis_time, setup_oracle=None, setup_poet
     return cspec
 
 
-def choose_k8s_object_create(config, deployment_file, statefulset_file):
+def choose_k8s_object_create(config, deployment_file, statefulset_file, is_async=False):
     dep_type = 'deployment' if 'deployment_type' not in config else config['deployment_type']
     if dep_type == 'deployment':
+        if is_async:
+            return deployment_file, deployment.async_create_deployment
         return deployment_file, deployment.create_deployment
     elif dep_type == 'statefulset':
+        if is_async:
+            raise ValueError("no stateful set async")
         # StatefulSets are intended to be used with stateful applications and distributed systems.
         # Pods in a StatefulSet have a unique ordinal index and a stable network identity.
         return statefulset_file, statefulset.create_statefulset

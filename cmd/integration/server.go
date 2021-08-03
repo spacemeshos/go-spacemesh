@@ -18,6 +18,7 @@ type ServerConfig struct {
 	logLevel        string
 	rpcListen       string
 	exe             string
+	bucketName		string
 	restoreFileName string
 }
 
@@ -33,11 +34,12 @@ func DefaultConfig(execPath string) *ServerConfig {
 }
 
 // RestoreConfig returns a config
-func RestoreConfig(execPath string, filename string) *ServerConfig {
+func RestoreConfig(execPath string, bucketName string, filename string) *ServerConfig {
 	cfg := &ServerConfig{
 		logLevel:        "debug",
 		rpcListen:       "127.0.0.1:" + harnessPort,
 		exe:             execPath,
+		bucketName: 	 bucketName,
 		restoreFileName: filename,
 	}
 

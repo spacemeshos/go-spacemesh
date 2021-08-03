@@ -76,6 +76,13 @@ def upload_whole_network(namespace):
         if 'client' in pod:
             upload_sm_from_pod_to_gcloud_storage(namespace, pod)
         if 'poet' in pod:
-            upload_sm_from_pod_to_gcloud_storage(namespace, pod, data_path=SM_NODE_DATA_PATH, container="poet")
+            upload_sm_from_pod_to_gcloud_storage(namespace, pod, data_path=POET_DATA_PATH, container="poet")
         if 'bootstrap' in pod:
             upload_sm_from_pod_to_gcloud_storage(namespace, pod, data_path=SM_NODE_DATA_PATH, container="bootstrap")
+
+
+def list_files_in_path(bucket_name, path=None):
+    """Lists all the blobs in the bucket."""
+    storage_client = storage.Client()
+    blobs = storage_client.list_blobs(bucket_name, prefix=path)
+    return [blob.name for blob in blobs]

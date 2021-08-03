@@ -2,6 +2,8 @@ from datetime import datetime
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 import os
+import random
+import string
 import time
 import yaml
 
@@ -61,9 +63,16 @@ def wait_for_service_to_be_ready(deployment_name, name_space, time_out=None):
             raise Exception("Timeout waiting to deployment to be ready")
 
 
+def async_create_deployment(file_name, name_space, ret_list: list, deployment_id=None, replica_size=1, container_specs=None,
+                            time_out=None):
+    resp = create_deployment(file_name, name_space, deployment_id, replica_size, container_specs, time_out)
+    ret_list.append(resp)
+
+
 def create_deployment(file_name, name_space, deployment_id=None, replica_size=1, container_specs=None, time_out=None):
     file_path, filename = ut.get_filename_and_path(file_name)
-    mod_file_path, is_changed = ut.duplicate_file_and_replace_phrases(file_path, filename, f"{name_space}_{filename}",
+    mod_file_path, is_changed = ut.duplicate_file_and_replace_phrases(file_path, filename,
+                                                                      f"{name_space}_{''.join((random.choice(string.ascii_lowercase)) for x in range(7))}_{filename}",
                                                                       ["(?<!_)NAMESPACE"], [name_space])
     with open(mod_file_path) as f:
         dep = yaml.safe_load(f)

@@ -22,7 +22,9 @@ RUN pip install pipenv
 COPY tests/Pipfile .
 COPY tests/Pipfile.lock .
 RUN pipenv install --system
+# TODO: move those two dependencies to pipenv file
 RUN pip install google-cloud-tasks
+RUN pip install google-cloud-storage
 
 FROM with_requirements AS tests_runner
 

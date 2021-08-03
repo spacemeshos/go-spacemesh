@@ -2,16 +2,15 @@ package main
 
 import (
 	"archive/tar"
+	"cloud.google.com/go/storage"
 	"compress/gzip"
 	"context"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"cloud.google.com/go/storage"
-	"github.com/spacemeshos/go-spacemesh/log"
 
 	"google.golang.org/grpc"
 )
@@ -52,11 +51,19 @@ func newHarnessConfig(args []string) (*Harness, error) {
 	args = append(args, "--acquire-port=false")
 	// set servers' configuration
 	// get filename index under args
-	restoreFileNameInd := Contains(args, "--restore-filename")
+	restoreFileNameInd := Contains(args, "--data-paths")
 	if restoreFileNameInd == -1 {
 		cfg = DefaultConfig(execPath)
 	} else {
-		cfg = RestoreConfig(execPath, args[restoreFileNameInd+1])
+		restoreFileName := args[restoreFileNameInd+1]
+		args = append(args[:restoreFileNameInd], args[restoreFileNameInd+2:]...)
+		stateBucketInd := Contains(args, "--state-bucket")
+		if stateBucketInd == -1 {
+			log.Panic("state bucket must be supplied")
+		}
+		stateBucket := args[stateBucketInd+1]
+		args = append(args[:stateBucketInd], args[stateBucketInd+2:]...)
+		cfg = RestoreConfig(execPath, stateBucket, restoreFileName)
 	}
 	return NewHarness(cfg, args)
 }
@@ -64,10 +71,13 @@ func newHarnessConfig(args []string) (*Harness, error) {
 // NewHarness creates and initializes a new instance of Harness.
 func NewHarness(cfg *ServerConfig, args []string) (*Harness, error) {
 	if cfg.restoreFileName != "" {
-		log.Info("Restoring backup from: %s", cfg.restoreFileName)
-		tarxzf(cfg.restoreFileName)
+		// TODO: remove white spaces
+		pathsList := strings.Split(cfg.restoreFileName, ",")
+		for i := 0; i < len(pathsList); i++ {
+			log.Info("Restoring backup from: %s", pathsList[i])
+			tarxzf(cfg.bucketName, pathsList[i])
+		}
 	}
-
 	log.Info("Starting harness")
 	server, err := newServer(cfg)
 	if err != nil {
@@ -90,7 +100,7 @@ func NewHarness(cfg *ServerConfig, args []string) (*Harness, error) {
 }
 
 // tarxzf downloads a tar.gz file from gcloud an extract it in root
-func tarxzf(filename string) {
+func tarxzf(bucketName string, filename string) {
 	ctx := context.Background()
 
 	client, err := storage.NewClient(ctx)
@@ -98,12 +108,6 @@ func tarxzf(filename string) {
 		log.Panic("Failed to create client: %v", err)
 	}
 	defer client.Close()
-	// if load state from google storage
-	bucketName := os.Getenv("STATE_BUCKET")
-	if bucketName == "" {
-		log.Panic("Missing STATE_BUCKET")
-		return
-	}
 	// Creates a Bucket instance.
 	bucket := client.Bucket(bucketName)
 
@@ -140,7 +144,6 @@ func tarxzf(filename string) {
 
 		// the target location where the dir/file should be created
 		target := filepath.Join("/", header.Name)
-
 		// the following switch could also be done using fi.Mode(), not sure if there
 		// a benefit of using one vs. the other.
 		// fi := header.FileInfo()

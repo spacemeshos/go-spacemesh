@@ -1,12 +1,17 @@
+import copy
+import multiprocessing as mp
 import time
 
 from tests import config as conf
+from tests.config import get_state_bucket
+from tests.conftest import DeploymentInfo
 from tests.pod import search_phrase_in_pod_log
 from tests.misc import CoreV1ApiClient, ContainerSpec
+from tests.gcloud.storage.storage_handler import list_files_in_path
 from tests.utils import get_conf, get_genesis_time_delta, choose_k8s_object_create
 
 
-def add_multi_clients(testconfig, deployment_id, container_specs, size=2, client_title='client', ret_dep=False):
+def add_multi_clients(testconfig, deployment_id, container_specs, size, client_title='client', ret_dep=False):
     """
     adds pods to a given namespace according to specification params
 
@@ -117,6 +122,16 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
     cspec.append_args(genesis_time=gen_delta.isoformat('T', 'seconds'),
                       **bootstrap_args)
 
+    if "data-dir" in cspec.args:
+        data_dir = cspec.args.pop("data-dir")
+        state_bucket = get_state_bucket()
+        cspec.args["state_bucket"] = state_bucket
+        all_files = list_files_in_path(state_bucket, data_dir)
+        for file in all_files:
+            if "bootstrap/" in file:
+                if "data-paths" not in cspec.args:
+                    cspec.args["data-paths"] = file
+                    break
     # choose k8s creation function (deployment/stateful) and the matching k8s file
     k8s_file, k8s_create_func = choose_k8s_object_create(bootstrap_config,
                                                          dep_file_path,
@@ -197,3 +212,74 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
     client_deployment_info.pods = [{'name': c.metadata.name, 'pod_ip': c.status.pod_ip} for c in client_pods
                                    if c.metadata.name.startswith(dep_name)]
     return client_deployment_info
+
+
+def setup_clients_preset_data_dir(namespace, bs_deployment_info, client_deployment_info, client_config, genesis_time,
+                                  name="client", file_path=None, oracle=None, poet=None, dep_time_out=120):
+    # setting stateful and deployment configuration files
+    # default deployment method is 'deployment'
+    dep_method = client_config.get("deployment_type", "deployment")
+    try:
+        dep_file_path, ss_file_path = _setup_dep_ss_file_path(file_path, dep_method, 'client')
+    except ValueError as e:
+        print(f"error setting up client specification file: {e}")
+        return None
+
+    # this function used to be the way to extract the client title
+    # in case we want a different title (clientv2 for example) we can specify it
+    # directly in "name" input
+    def _extract_label():
+        return client_deployment_info.deployment_name.split('-')[1]
+
+    cspec = get_conf(bs_deployment_info, client_config, genesis_time, setup_oracle=oracle,
+                     setup_poet=poet)
+
+    processes = []
+    if "data-dir" in cspec.args:
+        k8s_file, k8s_create_func = choose_k8s_object_create(client_config, dep_file_path, ss_file_path, True)
+        data_dir = cspec.args.pop("data-dir")
+        state_bucket = get_state_bucket()
+        all_files = list_files_in_path(state_bucket, data_dir)
+        manager = mp.Manager()
+        return_list = manager.list()
+        for file in all_files:
+            if "bootstrapoet" in file:
+                print(f"skipped {file}")
+                continue
+            cspec_copy = copy.deepcopy(cspec)
+            cspec_copy.args["data-paths"] = file
+            args = (k8s_file, namespace, return_list, None, 1, cspec_copy, dep_time_out)
+            processes.append(mp.Process(target=k8s_create_func, args=args))
+        if processes:
+            for p in processes:
+                p.start()
+            # Exit the completed processes
+            for p in processes:
+                p.join()
+        dep_names = [resp.metadata._name for resp in return_list]
+    else:
+        k8s_file, k8s_create_func = choose_k8s_object_create(client_config, dep_file_path, ss_file_path)
+        resp = k8s_create_func(k8s_file, namespace,
+                               deployment_id=client_deployment_info.deployment_id,
+                               replica_size=client_config['replicas'],
+                               container_specs=cspec,
+                               time_out=dep_time_out)
+
+        dep_names = [resp.metadata._name]
+
+    client_pods = (
+        CoreV1ApiClient().list_namespaced_pod(namespace,
+                                              include_uninitialized=True,
+                                              label_selector=("name={0}".format(name))
+                                              ).items
+    )
+
+    client_deployment_infos = []
+    for dep_name in dep_names:
+        client_deployment_info = DeploymentInfo()
+        client_deployment_info.deployment_name = dep_name
+        client_deployment_info.pods = [{'name': c.metadata.name, 'pod_ip': c.status.pod_ip} for c in client_pods
+                                       if c.metadata.name.startswith(dep_name)]
+        client_deployment_infos.append(client_deployment_info)
+
+    return client_deployment_infos
