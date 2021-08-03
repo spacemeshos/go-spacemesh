@@ -47,7 +47,7 @@ func TestGroupAfterWait(t *testing.T) {
 	require.ErrorIs(t, g.Wait(), testErr)
 	require.ErrorIs(t, g.Go(func(ctx context.Context) error {
 		return nil
-	}), Terminated)
+	}), ErrTerminated)
 }
 
 func TestGroupNested(t *testing.T) {

@@ -6,8 +6,8 @@ import (
 	"sync"
 )
 
-// Terminated returnedif Group was already terminated.
-var Terminated = errors.New("taskgroup: terminated")
+// ErrTerminated returned if Group was already terminated.
+var ErrTerminated = errors.New("taskgroup: terminated")
 
 // Option to modify Group.
 type Option func(g *Group)
@@ -19,7 +19,7 @@ func WithContext(ctx context.Context) Option {
 	}
 }
 
-// WithContext return instance of the Group.
+// New returns instance of the Group.
 func New(opts ...Option) *Group {
 	g := &Group{
 		waitErr: make(chan struct{}),
@@ -50,12 +50,12 @@ type Group struct {
 }
 
 // Go spawns new goroutine that will run f, unless Group was already terminated.
-// In the latter case Terminated error will be returned.
+// In the latter case ErrTerminated error will be returned.
 func (g *Group) Go(f func(ctx context.Context) error) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.err != nil {
-		return Terminated
+		return ErrTerminated
 	}
 	g.wg.Add(1)
 	go func() {

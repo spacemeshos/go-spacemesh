@@ -241,6 +241,7 @@ func (tb *TortoiseBeacon) Close() {
 	tb.clock.Unsubscribe(tb.layerTicker)
 }
 
+// IsClosed returns true if background workers are not running.
 func (tb *TortoiseBeacon) IsClosed() bool {
 	return atomic.LoadUint64(&tb.closed) == 0
 }
