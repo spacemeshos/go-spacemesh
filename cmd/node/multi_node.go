@@ -177,7 +177,7 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 }
 
 // ActivateGrpcServer starts a grpc server on the provided node
-func ActivateGrpcServer(smApp *SpacemeshApp) {
+func ActivateGrpcServer(smApp *App) {
 	// Activate the API services used by app_test
 	smApp.Config.API.StartGatewayService = true
 	smApp.Config.API.StartGlobalStateService = true
@@ -194,13 +194,13 @@ func ActivateGrpcServer(smApp *SpacemeshApp) {
 }
 
 // GracefulShutdown stops the current services running in apps
-func GracefulShutdown(apps []*SpacemeshApp) {
+func GracefulShutdown(apps []*App) {
 	log.Info("Graceful shutdown begin")
 
 	var wg sync.WaitGroup
 	for _, app := range apps {
 		wg.Add(1)
-		go func(app *SpacemeshApp) {
+		go func(app *App) {
 			app.stopServices()
 			wg.Done()
 		}(app)
@@ -216,8 +216,8 @@ type network interface {
 
 // InitSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
-func InitSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network, edSgn *signing.EdSigner) (*SpacemeshApp, error) {
-	smApp := NewSpacemeshApp()
+func InitSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network, edSgn *signing.EdSigner) (*App, error) {
+	smApp := New(WithLog(lg))
 	smApp.Config = &cfg
 
 	smApp.Config.GenesisTime = genesisTime
@@ -240,7 +240,7 @@ func InitSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	hareOracle := newLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
-	err = smApp.initServices(context.TODO(), lg, nodeID, swarm, dbStorepath, edSgn, false, hareOracle,
+	err = smApp.initServices(context.TODO(), nodeID, swarm, dbStorepath, edSgn, false, hareOracle,
 		uint32(smApp.Config.LayerAvgSize), poetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock)
 	if err != nil {
 		return nil, err
@@ -282,7 +282,7 @@ func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLay
 	}
 	clock := NewManualClock(gTime)
 
-	apps := make([]*SpacemeshApp, 0, numOfInstances)
+	apps := make([]*App, 0, numOfInstances)
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := path + string(name)

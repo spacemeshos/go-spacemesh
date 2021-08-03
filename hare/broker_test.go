@@ -9,6 +9,7 @@ import (
 
 	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -492,7 +493,7 @@ func Test_newMsg(t *testing.T) {
 	// TODO: remove this comment when ready
 	//_, e := newMsg(m, MockStateQuerier{false, errors.New("my err")})
 	//assert.NotNil(t, e)
-	_, e := newMsg(context.TODO(), m, MockStateQuerier{true, nil})
+	_, e := newMsg(logtest.New(t), context.TODO(), m, MockStateQuerier{true, nil})
 	assert.Nil(t, e)
 }
 

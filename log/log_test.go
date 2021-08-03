@@ -40,7 +40,7 @@ func TestLogLevel(t *testing.T) {
 	// Capture the log output
 	var buf bytes.Buffer
 	logwriter = &buf
-	AppLog = NewWithLevel(mainLoggerName, zap.NewAtomicLevelAt(zapcore.DebugLevel))
+	AppLog = NewWithLevel(MainLoggerName, zap.NewAtomicLevelAt(zapcore.DebugLevel))
 
 	// Instantiate a logger and a sublogger
 	nid := FakeNodeID{key: "abc123"}
@@ -58,7 +58,7 @@ func TestLogLevel(t *testing.T) {
 	// This is NOT hooked
 	teststr := "test001"
 	Info(teststr)
-	r.Equal(fmt.Sprintf("INFO\t%s\t%s\n", mainLoggerName, teststr), buf.String())
+	r.Equal(fmt.Sprintf("INFO\t%s\t%s\n", MainLoggerName, teststr), buf.String())
 	buf.Reset()
 
 	// Test the logger
@@ -109,12 +109,12 @@ func TestJsonLog(t *testing.T) {
 	// Capture the log output
 	var buf bytes.Buffer
 	logwriter = &buf
-	AppLog = NewDefault(mainLoggerName)
+	AppLog = NewDefault(MainLoggerName)
 
 	// Expect output not to be in JSON format
 	teststr := "test001"
 	Info(teststr)
-	r.Equal(fmt.Sprintf("INFO\t%s\t%s\n", mainLoggerName, teststr), buf.String())
+	r.Equal(fmt.Sprintf("INFO\t%s\t%s\n", MainLoggerName, teststr), buf.String())
 	buf.Reset()
 
 	// Enable JSON mode
@@ -128,7 +128,7 @@ func TestJsonLog(t *testing.T) {
 	expect := entry{
 		L: "INFO",
 		M: teststr,
-		N: mainLoggerName,
+		N: MainLoggerName,
 	}
 	Info(teststr)
 	got := entry{}
@@ -205,7 +205,7 @@ func TestContextualLogging(t *testing.T) {
 	// Capture the log output
 	var buf bytes.Buffer
 	logwriter = &buf
-	AppLog = NewDefault(mainLoggerName)
+	AppLog = NewDefault(MainLoggerName)
 
 	// make sure we can set and read context
 	ctx = WithRequestID(context.Background(), reqID)
@@ -217,7 +217,7 @@ func TestContextualLogging(t *testing.T) {
 	expect := entry{
 		L:         "INFO",
 		M:         teststr,
-		N:         mainLoggerName,
+		N:         MainLoggerName,
 		RequestID: reqID,
 	}
 	got := entry{}
@@ -232,7 +232,7 @@ func TestContextualLogging(t *testing.T) {
 	expect = entry{
 		L:         "INFO",
 		M:         teststr,
-		N:         mainLoggerName,
+		N:         MainLoggerName,
 		SessionID: sesID,
 		Foo:       "bar",
 	}

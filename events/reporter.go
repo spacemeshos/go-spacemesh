@@ -3,6 +3,7 @@ package events
 import (
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"sync"
 
 	"go.uber.org/zap/zapcore"
@@ -17,6 +18,20 @@ var reporter *EventReporter
 
 // we use a mutex to ensure thread safety
 var mu sync.RWMutex
+
+func EventHook() func(entry zapcore.Entry) error {
+	return func(entry zapcore.Entry) error {
+		// If we report anything less than this we'll end up in an infinite loop
+		if entry.Level >= zapcore.ErrorLevel {
+			ReportError(NodeError{
+				Msg:   entry.Message,
+				Trace: string(debug.Stack()),
+				Level: entry.Level,
+			})
+		}
+		return nil
+	}
+}
 
 // ReportNewTx dispatches incoming events to the reporter singleton
 func ReportNewTx(tx *types.Transaction) {

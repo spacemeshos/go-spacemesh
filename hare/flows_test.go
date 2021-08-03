@@ -245,6 +245,7 @@ func createMaatuf(tb testing.TB, tcfg config.Config, layersCh chan types.LayerID
 
 // Test - run multiple CPs simultaneously
 func Test_multipleCPs(t *testing.T) {
+	// NOTE(dshulyak) spams with overwriting sessionID in context
 	logtest.SetupGlobal(t)
 
 	types.SetLayersPerEpoch(4)

@@ -39,12 +39,12 @@ import (
 type AppTestSuite struct {
 	suite.Suite
 	log         log.Log
-	apps        []*SpacemeshApp
+	apps        []*App
 	poetCleanup func(cleanup bool) error
 }
 
 func (suite *AppTestSuite) SetupTest() {
-	suite.apps = make([]*SpacemeshApp, 0, 0)
+	suite.apps = make([]*App, 0, 0)
 	suite.log = logtest.New(suite.T())
 	suite.poetCleanup = func(bool) error { return nil }
 }
@@ -95,7 +95,6 @@ var tests = []TestScenario{
 }
 
 func (suite *AppTestSuite) TestMultipleNodes() {
-	logtest.SetupGlobal(suite.T())
 	net := service.NewSimulator()
 	const (
 		numberOfEpochs = 5 // first 2 epochs are genesis
@@ -345,7 +344,7 @@ func (suite *AppTestSuite) healingWeakcoinTester() {
 	}
 }
 
-func configuredTotalWeight(apps []*SpacemeshApp) uint64 {
+func configuredTotalWeight(apps []*App) uint64 {
 	expectedTotalWeight := uint64(0)
 	for _, app := range apps {
 		expectedTotalWeight += uint64(app.Config.SMESHING.Opts.NumUnits)
@@ -519,7 +518,7 @@ func max(i, j int) int {
 	return j
 }
 
-func calcTotalWeight(assert *assert.Assertions, apps []*SpacemeshApp) (totalWeightAllEpochs uint64) {
+func calcTotalWeight(assert *assert.Assertions, apps []*App) (totalWeightAllEpochs uint64) {
 	app := apps[0]
 	atxDb := app.atxDb
 
@@ -537,7 +536,7 @@ func calcTotalWeight(assert *assert.Assertions, apps []*SpacemeshApp) (totalWeig
 	return totalWeightAllEpochs
 }
 
-func (suite *AppTestSuite) validateLastATXTotalWeight(app *SpacemeshApp, numberOfEpochs int, expectedTotalWeight uint64) {
+func (suite *AppTestSuite) validateLastATXTotalWeight(app *App, numberOfEpochs int, expectedTotalWeight uint64) {
 	atxs := app.atxDb.GetEpochAtxs(types.EpochID(numberOfEpochs - 1))
 	suite.Len(atxs, len(suite.apps), "node: %v", app.nodeID.ShortString())
 
@@ -549,29 +548,11 @@ func (suite *AppTestSuite) validateLastATXTotalWeight(app *SpacemeshApp, numberO
 	suite.Equal(expectedTotalWeight, totalWeight, "node: %v", app.nodeID.ShortString())
 }
 
-// CI has a 10 minute timeout
-// this ensures we print something before the timeout
-func patchCITimeout(termchan chan struct{}) {
-	ticker := time.NewTimer(5 * time.Minute)
-	for {
-		select {
-		case <-ticker.C:
-			ticker = time.NewTimer(5 * time.Minute)
-		case <-termchan:
-			return
-		}
-	}
-}
-
 func TestAppTestSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	// defer leaktest.Check(t)()
-	term := make(chan struct{})
-	go patchCITimeout(term)
 	suite.Run(t, new(AppTestSuite))
-	close(term)
 }
 
 func TestShutdown(t *testing.T) {
@@ -583,10 +564,9 @@ func TestShutdown(t *testing.T) {
 	time.Sleep(3 * time.Second)
 	gCount := runtime.NumGoroutine()
 	net := service.NewSimulator()
-	// defer leaktest.Check(t)()
 	r := require.New(t)
 
-	smApp := NewSpacemeshApp()
+	smApp := New(WithLog(logtest.New(t)))
 	genesisTime := time.Now().Add(time.Second * 10)
 
 	smApp.Config.POST.BitsPerLabel = 8
@@ -641,7 +621,7 @@ func TestShutdown(t *testing.T) {
 	gTime := genesisTime
 	ld := time.Duration(20) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, logtest.New(t))
-	err = smApp.initServices(context.TODO(), logtest.New(t), nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), poetHarness.HTTPPoetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock)
+	err = smApp.initServices(context.TODO(), nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), poetHarness.HTTPPoetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock)
 
 	r.NoError(err)
 

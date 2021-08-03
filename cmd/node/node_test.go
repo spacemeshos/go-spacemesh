@@ -49,8 +49,6 @@ import (
 )
 
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
-	logtest.SetupGlobal(t)
-
 	r := require.New(t)
 
 	defer func() {
@@ -62,7 +60,7 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	tempdir := t.TempDir()
 
 	// setup spacemesh app
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 	app.Config.SMESHING.Opts.DataDir = tempdir
 	app.log = logtest.New(t)
 
@@ -110,7 +108,7 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 
 	var buf1, buf2 bytes.Buffer
 
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 	mylogger := "anton"
 	myLog := newLogger(&buf1)
 	myLog2 := newLogger(&buf2)
@@ -156,7 +154,7 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	var buf bytes.Buffer
 
 	lg := newLogger(&buf)
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 	mylogger := "anton"
 	subLogger := app.addLogger(mylogger, lg)
 	subLogger.Debug("should not get printed")
@@ -180,10 +178,8 @@ func testArgs(args ...string) (string, error) {
 }
 
 func TestSpacemeshApp_Cmd(t *testing.T) {
-	logtest.SetupGlobal(t)
-
 	r := require.New(t)
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 
 	expected := `unknown command "illegal" for "node"`
 	expected2 := "Error: " + expected + "\nRun 'node --help' for usage.\n"
@@ -201,7 +197,7 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 
 	// Test a legal flag
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.InitializeCmd(cmd, args))
+		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
 	}
 	str, err = testArgs("--test-mode")
 
@@ -231,21 +227,19 @@ func setup() {
 }
 
 func TestSpacemeshApp_GrpcFlags(t *testing.T) {
-	logtest.SetupGlobal(t)
-
 	setup()
 
 	// Use a unique port
 	port := 1244
 
 	r := require.New(t)
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 	r.Equal(9092, app.Config.API.GrpcServerPort)
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	// Try enabling an illegal service
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		err := app.InitializeCmd(cmd, args)
+		err := cmdp.EnsureCLIFlags(cmd, app.Config)
 		r.Error(err)
 		r.Equal("unrecognized GRPC service requested: illegal", err.Error())
 	}
@@ -294,7 +288,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 
 	// This should work
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.InitializeCmd(cmd, args))
+		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
 	}
 	str, err = testArgs("--grpc", "node")
 	r.Empty(str)
@@ -340,19 +334,17 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 }
 
 func TestSpacemeshApp_JsonFlags(t *testing.T) {
-	logtest.SetupGlobal(t)
-
 	setup()
 
 	r := require.New(t)
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 	r.Equal(9093, app.Config.API.JSONServerPort)
 	r.Equal(false, app.Config.API.StartJSONServer)
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	// Try enabling just the JSON service (without the GRPC service)
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		err := app.InitializeCmd(cmd, args)
+		err := cmdp.EnsureCLIFlags(cmd, app.Config)
 		r.Error(err)
 		r.Equal("must enable at least one GRPC service along with JSON gateway service", err.Error())
 	}
@@ -367,7 +359,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 
 	// Try enabling both the JSON and the GRPC services
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.InitializeCmd(cmd, args))
+		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
 	}
 	str, err = testArgs("--grpc", "node", "--json-server")
 	r.NoError(err)
@@ -418,20 +410,18 @@ func callEndpoint(t *testing.T, endpoint, payload string, port int) (string, int
 }
 
 func TestSpacemeshApp_GrpcService(t *testing.T) {
-	logtest.SetupGlobal(t)
-
 	setup()
 
 	// Use a unique port
 	port := 1242
 
 	r := require.New(t)
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 
 	path := t.TempDir()
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.InitializeCmd(cmd, args))
+		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
 		app.Config.API.GrpcServerPort = port
 		app.Config.DataDirParent = path
 		app.startAPIServices(context.TODO(), NetMock{})
@@ -493,18 +483,16 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 }
 
 func TestSpacemeshApp_JsonService(t *testing.T) {
-	logtest.SetupGlobal(t)
-
 	setup()
 
 	r := require.New(t)
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 
 	path := t.TempDir()
 
 	// Make sure the service is not running by default
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.InitializeCmd(cmd, args))
+		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
 		app.Config.DataDirParent = path
 		app.startAPIServices(context.TODO(), NetMock{})
 	}
@@ -560,8 +548,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 // E2E app test of the stream endpoints in the NodeService
 func TestSpacemeshApp_NodeService(t *testing.T) {
-	logtest.SetupGlobal(t, zap.ErrorLevel)
-
+	logger := logtest.New(t, zap.ErrorLevel)
 	setup()
 
 	// Use a unique port
@@ -576,12 +563,12 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	assert.NoError(t, err)
 	edSgn := signing.NewEdSigner()
-	app, err := InitSingleInstance(logtest.New(t), *cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(logtest.New(t)), poetHarness.HTTPPoetClient, clock, localNet, edSgn)
+	app, err := InitSingleInstance(logger, *cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(logtest.New(t)), poetHarness.HTTPPoetClient, clock, localNet, edSgn)
 	require.NoError(t, err)
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		defer app.Cleanup()
-		require.NoError(t, app.InitializeCmd(cmd, args))
+		require.NoError(t, cmdp.EnsureCLIFlags(cmd, app.Config))
 
 		// Give the error channel a buffer
 		events.CloseEventReporter()
@@ -742,8 +729,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 // E2E app test of the transaction service
 func TestSpacemeshApp_TransactionService(t *testing.T) {
-	logtest.SetupGlobal(t)
-
 	setup()
 	r := require.New(t)
 
@@ -753,7 +738,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	// Use a unique dir for data so we don't read existing state
 	path := t.TempDir()
 
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 	cfg := config.DefaultTestConfig()
 	app.Config = &cfg
 
@@ -896,8 +881,6 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 }
 
 func TestSpacemeshApp_P2PInterface(t *testing.T) {
-	logtest.SetupGlobal(t)
-
 	setup()
 
 	// Use a unique port
@@ -905,7 +888,7 @@ func TestSpacemeshApp_P2PInterface(t *testing.T) {
 	addr := "127.0.0.1"
 
 	r := require.New(t)
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 
 	// Initialize the network: we don't want to listen but this lets us dial out
 	l, err := node.NewNodeIdentity()

@@ -1,7 +1,6 @@
 package events
 
 import (
-	"runtime/debug"
 	"sync"
 	"testing"
 	"time"
@@ -115,7 +114,7 @@ func TestEventReporter(t *testing.T) {
 }
 
 func TestReportError(t *testing.T) {
-	logtest.SetupGlobal(t, zap.ErrorLevel)
+	logger := logtest.New(t, zap.ErrorLevel)
 
 	nodeErr := NodeError{
 		Msg:   "hi there",
@@ -165,18 +164,8 @@ func TestReportError(t *testing.T) {
 	ReportError(nodeErr)
 
 	// Try reporting using log
-	log.InitSpacemeshLoggingSystemWithHooks(func(entry zapcore.Entry) error {
-		// If we report anything less than this we'll end up in an infinite loop
-		if entry.Level >= zapcore.ErrorLevel {
-			ReportError(NodeError{
-				Msg:   entry.Message,
-				Trace: string(debug.Stack()),
-				Level: entry.Level,
-			})
-		}
-		return nil
-	})
-	log.Error(errMsg)
+	logger = log.RegisterHooks(logger, EventHook())
+	logger.Error(errMsg)
 
 	// Wait for goroutine to finish
 	wgDone.Wait()

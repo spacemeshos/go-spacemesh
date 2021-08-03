@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-const mainLoggerName = "00000.defaultLogger"
+const MainLoggerName = "00000.defaultLogger"
 
 // determine the level of messages we show.
 var debugMode = false
@@ -54,6 +54,11 @@ func encoder() zapcore.Encoder {
 // AppLog is the local app singleton logger.
 var AppLog Log
 
+// SetupGlobal overwrites global logger.
+func SetupGlobal(logger Log) {
+	AppLog = logger
+}
+
 func init() {
 	logwriter = os.Stdout
 
@@ -62,7 +67,7 @@ func init() {
 }
 
 func initLogging() {
-	AppLog = NewDefault(mainLoggerName)
+	AppLog = NewDefault(MainLoggerName)
 }
 
 // DebugMode sets log debug level
@@ -87,10 +92,15 @@ func NewNop() Log {
 func NewWithLevel(module string, level zap.AtomicLevel, hooks ...func(zapcore.Entry) error) Log {
 	consoleSyncer := zapcore.AddSync(logwriter)
 	enc := encoder()
-	consoleCore := zapcore.NewCore(enc, consoleSyncer, level)
-	core := zapcore.RegisterHooks(consoleCore, hooks...)
-	log := zap.New(core).Named(module)
+	core := zapcore.NewCore(enc, consoleSyncer, level)
+	log := zap.New(zapcore.RegisterHooks(core, hooks...)).Named(module)
 	return NewFromLog(log)
+}
+
+// RegisterHooks wraps provided loggers with hooks.
+func RegisterHooks(lg Log, hooks ...func(zapcore.Entry) error) Log {
+	core := zapcore.RegisterHooks(lg.logger.Core(), hooks...)
+	return NewFromLog(zap.New(core))
 }
 
 // NewDefault creates a Log with the default log level
@@ -101,13 +111,6 @@ func NewDefault(module string) Log {
 // NewFromLog creates a Log from an existing zap-compatible log.
 func NewFromLog(l *zap.Logger) Log {
 	return Log{logger: l}
-}
-
-// InitSpacemeshLoggingSystemWithHooks sets up a logging system with one or more
-// registered hooks
-func InitSpacemeshLoggingSystemWithHooks(hooks ...func(zapcore.Entry) error) {
-	core := zapcore.RegisterHooks(AppLog.logger.Core(), hooks...)
-	AppLog = NewFromLog(zap.New(core))
 }
 
 // public wrappers abstracting away logging lib impl
