@@ -38,7 +38,7 @@ type Configuration struct {
 }
 
 const (
-	outOfSyncThreshold  uint32 = 2 // see notSynced
+	outOfSyncThreshold  uint32 = 3 // see notSynced
 	numGossipSyncLayers uint32 = 2 // see gossipSync
 )
 
@@ -50,8 +50,8 @@ const (
 	// gossipSync is the state in which a node listens to at least one full layer of gossip before participating
 	// in the protocol. this is to protect the node from participating in the consensus without full information.
 	// for example, when a node wakes up in the middle of layer N, since it didn't receive all relevant messages and
-	// blocks of layer N, it shouldn't vote or produce blocks in layer N+1. it instead listens to gossip for all of
-	// layer N+1 and starts producing blocks and participates in hare committee in layer N+2
+	// blocks of layer N, it shouldn't vote or produce blocks in layer N+1. it instead listens to gossip for all
+	// through layer N+1 and starts producing blocks and participates in hare committee in layer N+2
 	gossipSync
 	// synced is the state where the node is in sync with its peers.
 	synced
@@ -279,7 +279,8 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 	// using ProcessedLayer() instead of LatestLayer() so we can validate layers on a best-efforts basis.
 	// our clock starts ticking from 1 so it is safe to skip layer 0
-	for layerID := s.mesh.ProcessedLayer().Add(1); !layerID.After(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {
+	// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
+	for layerID := s.mesh.ProcessedLayer().Add(1); layerID.Before(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {
 		var layer *types.Layer
 		var err error
 		if layer, err = s.syncLayer(ctx, layerID); err != nil {
@@ -291,7 +292,6 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			logger.Info("setting layer %v to zero-block", layerID)
 			if err := s.mesh.SetZeroBlockLayer(layerID); err != nil {
 				logger.With().Error("failed to set zero-block for layer", layerID, log.Err(err))
-				return false
 			}
 		}
 
@@ -392,17 +392,22 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 		return nil
 	}
 	epoch := layerID.GetEpoch()
-	currentEpoch := s.ticker.GetCurrentLayer().GetEpoch()
+	atCurrentEpoch := epoch == s.ticker.GetCurrentLayer().GetEpoch()
+	atLastLayerOfEpoch := layerID == (epoch + 1).FirstLayer().Sub(1)
 	// only get ATXs if
 	// - layerID is in the current epoch
 	// - layerID is the last layer of a previous epoch
 	// i.e. for older epochs we sync ATXs once per epoch. for current epoch we sync ATXs in every layer
-	if epoch == currentEpoch || layerID == (epoch+1).FirstLayer().Sub(1) {
+	if atCurrentEpoch || atLastLayerOfEpoch {
 		s.logger.WithContext(ctx).With().Debug("getting ATXs", epoch, layerID)
 		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
 		if err := s.fetcher.GetEpochATXs(ctx, epoch); err != nil {
-			s.logger.WithContext(ctx).With().Error("failed to fetch epoch ATXs", layerID, epoch, log.Err(err))
-			return err
+			// dont fail sync if we cannot fetch ATXs for the current epoch before the last layer
+			if !atCurrentEpoch || atLastLayerOfEpoch {
+				s.logger.WithContext(ctx).With().Error("failed to fetch epoch ATXs", layerID, epoch, log.Err(err))
+				return err
+			}
+			s.logger.WithContext(ctx).With().Warning("failed to fetch epoch ATXs", layerID, epoch, log.Err(err))
 		}
 	}
 	return nil

@@ -2707,8 +2707,8 @@ func TestJsonApi(t *testing.T) {
 	const message = "hello world!"
 
 	// we cannot start the gateway service without enabling at least one service
-	require.Equal(t, cfg.StartNodeService, false)
-	require.Equal(t, cfg.StartMeshService, false)
+	cfg.StartNodeService = false
+	cfg.StartMeshService = false
 	shutDown := launchServer(t)
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
 	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.JSONServerPort, "v1/node/echo")
@@ -2726,6 +2726,7 @@ func TestJsonApi(t *testing.T) {
 	cfg.StartMeshService = true
 	shutDown = launchServer(t, svc1, svc2)
 	defer shutDown()
+	time.Sleep(time.Second)
 
 	// generate request payload (api input params)
 	payload = marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
