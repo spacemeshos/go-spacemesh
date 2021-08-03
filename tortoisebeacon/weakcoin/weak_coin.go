@@ -182,10 +182,7 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 				log.Uint32("epoch_id", uint32(msg.Epoch)),
 				log.Uint64("round_id", uint64(msg.Round)))
 		}
-		wc.nextRoundBuffer[i].Epoch = 0
-		wc.nextRoundBuffer[i].Round = 0
-		wc.nextRoundBuffer[i].Unit = 0
-		wc.nextRoundBuffer[i].Signature = nil
+		wc.nextRoundBuffer[i] = Message{}
 	}
 	wc.nextRoundBuffer = wc.nextRoundBuffer[:0]
 	wc.mu.Unlock()

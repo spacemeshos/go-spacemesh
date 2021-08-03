@@ -2,10 +2,13 @@ package weakcoin_test
 
 import (
 	"context"
+	"crypto/ed25519"
+	"math/rand"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	servicemocks "github.com/spacemeshos/go-spacemesh/p2p/service/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -327,6 +330,38 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 	require.NoError(t, wc.StartRound(context.TODO(), nextRound))
 	wc.FinishRound()
 	require.True(t, wc.Get(epoch, nextRound))
+}
+
+func TestWeakCoinEncodingRegression(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	var (
+		sig   []byte
+		epoch types.EpochID = 1
+		round types.RoundID = 1
+	)
+	broadcaster := mocks.NewMockbroadcaster(ctrl)
+	broadcaster.EXPECT().Broadcast(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, data []byte) error {
+		msg := weakcoin.Message{}
+		require.NoError(t, types.BytesToInterface(data, &msg))
+		sig = msg.Signature
+		return nil
+	}).AnyTimes()
+	seed := make([]byte, ed25519.SeedSize)
+	r := rand.New(rand.NewSource(999))
+	r.Read(seed)
+	signer, _, err := signing.NewVRFSigner(seed)
+	require.NoError(t, err)
+
+	allowances := weakcoin.UnitAllowances{string(signer.PublicKey().Bytes()): 1}
+	instance := weakcoin.New(broadcaster, signer, signing.VRFVerifier{}, weakcoin.WithThreshold([]byte{0xff}))
+	instance.StartEpoch(epoch, allowances)
+	require.NoError(t, instance.StartRound(context.TODO(), round))
+
+	require.Equal(t,
+		"a1f2c99f9210b15b66197fbc6f0dd5a93bfb08da63eae81b84d550cf5a6daf7e0c8e79fe3fefeac839bdce2de4f3cc3d420a8f43a9275bfed0221e99e3a4b204",
+		util.Bytes2Hex(sig))
 }
 
 func TestWeakCoinExchangeProposals(t *testing.T) {

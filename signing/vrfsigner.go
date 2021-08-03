@@ -45,7 +45,7 @@ func VRFVerify(pub, msg, sig []byte) bool {
 
 var _ Verifier = VRFVerifier{}
 
-// VRFVerifier ...
+// VRFVerifier is a verifier for VRF purposes.
 type VRFVerifier struct{}
 
 // Verify that signature matches public key.
