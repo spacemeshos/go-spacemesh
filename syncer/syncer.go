@@ -289,7 +289,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		}
 
 		if len(layer.Blocks()) == 0 {
-			logger.Info("setting layer %v to zero-block", layerID)
+			logger.With().Info("setting layer to zero-block", layerID)
 			if err := s.mesh.SetZeroBlockLayer(layerID); err != nil {
 				logger.With().Error("failed to set zero-block for layer", layerID, log.Err(err))
 			}
@@ -298,7 +298,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		if s.shouldValidateLayer(layerID) {
 			vQueue <- layer
 		}
-		logger.Debug("finished data sync for layer %v", layerID)
+		logger.With().Debug("finished data sync", layerID)
 	}
 	logger.With().Info("data is synced, waiting for validation",
 		log.FieldNamed("current", s.ticker.GetCurrentLayer()),

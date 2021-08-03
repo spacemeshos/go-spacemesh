@@ -67,6 +67,7 @@ type tortoiseBeaconDB interface {
 // network defines network capabilities used
 type network interface {
 	GetPeers() []peers.Peer
+	PeerCount() uint64
 	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), timeoutHandler func(err error)) error
 	Close()
 }
@@ -502,6 +503,9 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 			Atxs:  nil,
 		}
 	}
+	if l.net.PeerCount() == 0 {
+		return errors.New("no peers")
+	}
 	err := l.net.SendRequest(ctx, server.AtxIDsMsg, id.ToBytes(), fetch.GetRandomPeer(l.net.GetPeers()), receiveForPeerFunc, errFunc)
 	if err != nil {
 		return err
@@ -713,27 +717,33 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 	makeReceiveFunc := func(peer fmt.Stringer) func([]byte) {
 		return func(data []byte) {
 			if len(data) == 0 {
-				l.log.WithContext(ctx).Info("received empty tortoise beacon (peer does not have it): %v", util.Bytes2Hex(data))
+				l.log.WithContext(ctx).With().Info("received empty tortoise beacon (peer does not have it)",
+					log.String("beacon", util.Bytes2Hex(data)))
 				return
 			}
 
 			if len(data) != types.Hash32Length {
-				l.log.WithContext(ctx).Warning("received tortoise beacon response contains either empty or bad data, ignoring: %v", util.Bytes2Hex(data))
+				l.log.WithContext(ctx).With().Warning("received tortoise beacon response contains either empty or bad data, ignoring",
+					log.String("beacon", util.Bytes2Hex(data)))
 				return
 			}
 
-			l.log.WithContext(ctx).Info("peer %v responded to tortoise beacon request with beacon %v", peer.String(), util.Bytes2Hex(data))
+			l.log.WithContext(ctx).With().Info("peer responded to tortoise beacon request",
+				log.String("peer", peer.String()),
+				log.String("beacon", util.Bytes2Hex(data)))
 			resCh <- data
 		}
 	}
 
 	makeErrFunc := func(peer fmt.Stringer) func(error) {
 		return func(err error) {
-			l.log.WithContext(ctx).Warning("peer %v responded to tortoise beacon request with error %v", peer.String(), err)
+			l.log.WithContext(ctx).With().Warning("peer responded to tortoise beacon request with error",
+				log.String("peer", peer.String()),
+				log.Err(err))
 		}
 	}
 
-	l.log.WithContext(ctx).Info("requesting tortoise beacon from all peers for epoch %v", id)
+	l.log.WithContext(ctx).With().Info("requesting tortoise beacon from all peers for epoch", id)
 
 	for _, p := range remotePeers {
 		go func(peer peers.Peer) {
@@ -741,11 +751,15 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 			case <-cancelCtx.Done():
 				return
 			default:
-				l.log.WithContext(ctx).Info("requesting tortoise beacon from for epoch %v, peer: %v", id, peer.String())
+				l.log.WithContext(ctx).With().Info("requesting tortoise beacon for epoch",
+					id,
+					log.String("peer", peer.String()))
 
 				err := l.net.SendRequest(cancelCtx, server.TortoiseBeaconMsg, id.ToBytes(), peer, makeReceiveFunc(peer), makeErrFunc(peer))
 				if err != nil {
-					l.log.WithContext(ctx).Warning("failed to send  tortoise beacon request to peer %v: %v", peer.String(), err)
+					l.log.WithContext(ctx).With().Warning("failed to send tortoise beacon request to peer",
+						log.String("peer", peer.String()),
+						log.Err(err))
 				}
 			}
 		}(p)
@@ -759,7 +773,7 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 
 	select {
 	case <-cancelCtx.Done():
-		l.log.WithContext(ctx).Debug("receiving tortoise beacon for epoch canceled", id)
+		l.log.WithContext(ctx).With().Debug("receiving tortoise beacon for epoch canceled", id)
 		return nil
 
 	case <-timer.C:
@@ -768,7 +782,9 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 
 	case res := <-resCh:
 		resHash := types.BytesToHash(res)
-		l.log.WithContext(ctx).Info("received tortoise beacon for epoch %v: %v", id, resHash.String())
+		l.log.WithContext(ctx).With().Info("received tortoise beacon for epoch",
+			id,
+			log.String("beacon", resHash.String()))
 
 		return l.tbDB.SetTortoiseBeacon(id, resHash)
 	}

@@ -983,7 +983,7 @@ func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks
 	for _, b := range blocks {
 		valid, err := m.ContextualValidity(b.ID())
 		if err != nil {
-			m.With().Error("could not get contextual validity by block", b.ID(), log.Err(err))
+			m.With().Warning("could not get contextual validity for block in list", b.ID(), log.Err(err))
 		}
 		if valid {
 			validBlocks = append(validBlocks, b)
@@ -1023,7 +1023,7 @@ func (m *DB) LayerContextuallyValidBlocks(layer types.LayerID) (map[types.BlockI
 	for _, b := range blockIds {
 		valid, err := m.ContextualValidity(b)
 		if err != nil {
-			m.With().Error("could not get contextual validity for block", b, layer, log.Err(err))
+			m.With().Warning("could not get contextual validity for block in layer", b, layer, log.Err(err))
 			cvErrors[err.Error()] = append(cvErrors[err.Error()], b)
 			cvErrorCount++
 		}

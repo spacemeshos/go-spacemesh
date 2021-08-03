@@ -148,6 +148,7 @@ func DefaultConfig() Config {
 
 type peersProvider interface {
 	GetPeers() []peers.Peer
+	PeerCount() uint64
 	Close()
 }
 
@@ -188,6 +189,7 @@ func (mn MessageNetwork) GetPeers() []peers.Peer {
 
 type network interface {
 	GetPeers() []peers.Peer
+	PeerCount() uint64
 	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error
 	RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(ctx context.Context, b []byte) []byte)
 	Close()
@@ -211,7 +213,6 @@ type Fetch struct {
 	stop                 chan struct{}
 	activeReqM           sync.RWMutex
 	activeBatchM         sync.RWMutex
-	stopM                sync.RWMutex
 	onlyOnce             sync.Once
 	doneChan             chan struct{}
 	dbLock               sync.RWMutex
@@ -249,8 +250,6 @@ func (f *Fetch) Start() {
 // Stop stops handling fetch requests
 func (f *Fetch) Stop() {
 	f.log.Info("stopping fetch")
-	f.stopM.Lock()
-	defer f.stopM.Unlock()
 	f.batchTimeout.Stop()
 	close(f.stop)
 	f.net.Close()
@@ -313,10 +312,10 @@ func (f *Fetch) handleNewRequest(req *request) bool {
 	f.activeReqM.Unlock()
 	if sendNow {
 		f.sendBatch([]requestMessage{{req.hint, req.hash}})
-		f.log.Debug("high priority request sent %v", req.hash.ShortString())
+		f.log.With().Debug("high priority request sent", req.hash)
 		return true
 	}
-	f.log.Debug("request added to queue %v", req.hash.ShortString())
+	f.log.With().Debug("request added to queue", req.hash)
 	if rLen > batchMaxSize {
 		go f.requestHashBatchFromPeers() // Process the batch.
 		return true
@@ -529,7 +528,7 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 	f.activeBatchM.Unlock()
 	// timeout function will be called if no response was received for the hashes sent
 	timeoutFunc := func(err error) {
-		f.log.Error("request %v timed out", batch.ID.Hex())
+		f.log.With().Error("request timed out", batch.ID)
 		f.handleHashError(batch.ID, err)
 	}
 
@@ -541,21 +540,29 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 	retries := 0
 	var p peers.Peer
 	for {
-		f.stopM.Lock()
 		if f.stopped() {
-			f.stopM.Unlock()
+			return
+		}
+
+		if f.net.PeerCount() == 0 {
+			f.log.With().Error("no peers found, unable to send request batch",
+				batch.ID,
+				log.Int("items", len(batch.Requests)))
 			return
 		}
 
 		// get random peer
 		p = GetRandomPeer(f.net.GetPeers())
-		f.stopM.Unlock()
-		f.log.Debug("sending request batch %v items %v peer %v", batch.ID.Hex(), len(batch.Requests), p)
+		f.log.With().Debug("sending request batch",
+			batch.ID,
+			log.Int("items", len(batch.Requests)),
+			log.FieldNamed("peer", p))
 		batch.peer = p
 		f.activeBatchM.Lock()
 		f.activeBatches[batch.ID] = batch
 		f.activeBatchM.Unlock()
 		err := f.net.SendRequest(context.TODO(), server.Fetch, bytes, p, f.receiveResponse, timeoutFunc)
+
 		// if call succeeded, continue to other requests
 		if err != nil {
 			retries++

@@ -263,6 +263,8 @@ func (vl *validator) ValidateLayer(ctx context.Context, lyr *types.Layer) {
 	layerID := lyr.Index()
 	logger := vl.WithContext(ctx).WithFields(layerID)
 	logger.Info("validate layer")
+	// TODO LANE: calcValidLayerHash depends upon layer validity, but this is not known until tortoise handles
+	//   the layer. this should happen after tortoise runs not before.
 	hash := vl.calcValidLayerHash(lyr)
 
 	// pass the layer to tortoise for processing
