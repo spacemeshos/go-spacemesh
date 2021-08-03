@@ -13,7 +13,7 @@ import (
 func (id BlockID) Bytes() []byte { return id.AsHash32().Bytes() }
 
 // Bytes returns the byte representation of the LayerID, using little endian encoding.
-func (l LayerID) Bytes() []byte { return util.Uint64ToBytes(uint64(l)) }
+func (l LayerID) Bytes() []byte { return util.Uint32ToBytes(l.Value) }
 
 // BlockIdsToBytes serializes a slice of BlockIDs.
 func BlockIdsToBytes(ids []BlockID) ([]byte, error) {
@@ -45,11 +45,11 @@ func BytesToAtx(b []byte) (*ActivationTx, error) {
 	return &atx, nil
 }
 
-// NIPSTChallengeToBytes serializes a NIPSTChallenge.
-func NIPSTChallengeToBytes(challenge *NIPSTChallenge) ([]byte, error) {
+// NIPostChallengeToBytes serializes a NIPostChallenge.
+func NIPostChallengeToBytes(challenge *NIPostChallenge) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, challenge); err != nil {
-		return nil, fmt.Errorf("error marshalling NIPST Challenge: %v", err)
+		return nil, fmt.Errorf("error marshalling NIPost Challenge: %v", err)
 	}
 	return w.Bytes(), nil
 }
@@ -96,5 +96,5 @@ func ATXIdsToBytes(ids []ATXID) ([]byte, error) {
 
 // BytesToLayerID return uint64 layer IO
 func BytesToLayerID(b []byte) LayerID {
-	return LayerID(util.BytesToUint64(b))
+	return NewLayerID(util.BytesToUint32(b))
 }

@@ -1,59 +1,8 @@
 package config
 
-import (
-	"encoding/json"
-	"fmt"
-	"os"
-
-	"github.com/spacemeshos/go-spacemesh/log"
-)
-
-// GenesisAccount is the json representation of an account
-type GenesisAccount struct {
-	Balance uint64 `json:"balance"`
-	Nonce   uint64 `json:"nonce"`
-}
-
 // GenesisConfig defines accounts that will exist in state at genesis
 type GenesisConfig struct {
-	InitialAccounts map[string]GenesisAccount
-}
-
-// SaveGenesisConfig stores account data
-func SaveGenesisConfig(path string, config GenesisConfig) error {
-	w, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	enc := json.NewEncoder(w)
-	defer w.Close()
-	if err := enc.Encode(&config); err != nil {
-		return err
-	}
-	return nil
-}
-
-// LoadGenesisConfig loads config from file if exists
-func LoadGenesisConfig(path string) (*GenesisConfig, error) {
-	_, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		log.Warning("genesis config not loaded since file does not exist. file=%v", path)
-		return nil, err
-	}
-	r, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("error opening file: %v", err)
-	}
-	defer r.Close()
-
-	dec := json.NewDecoder(r)
-	cfg := &GenesisConfig{}
-	err = dec.Decode(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
+	Accounts map[string]uint64 `mapstructure:"accounts"`
 }
 
 // Account1Pub is the public key for testing
@@ -70,15 +19,15 @@ const Account2Private = "0x9d411020d46d3f4e1214f7b51052219737669f461ac9c9ac6ac49
 
 // DefaultGenesisConfig is the default configuration for the node
 func DefaultGenesisConfig() *GenesisConfig {
+	// NOTE(dshulyak) keys in default config are used in some tests
 	g := GenesisConfig{}
 
 	// we default to 10^5 SMH per account which is 10^17 smidge
 	// each genesis account starts off with 10^17 smidge
-	g.InitialAccounts = map[string]GenesisAccount{
-		"0x1":       {Balance: 100000000000000000, Nonce: 0},
-		Account1Pub: {Balance: 100000000000000000, Nonce: 0},
-		Account2Pub: {Balance: 100000000000000000, Nonce: 0},
+	g.Accounts = map[string]uint64{
+		"0x1":       100000000000000000,
+		Account1Pub: 100000000000000000,
+		Account2Pub: 100000000000000000,
 	}
 	return &g
-	//todo: implement reading from file
 }

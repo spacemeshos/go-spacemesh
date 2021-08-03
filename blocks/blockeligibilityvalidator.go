@@ -17,7 +17,7 @@ type blockDB interface {
 // BlockEligibilityValidator holds all the dependencies for validating block eligibility.
 type BlockEligibilityValidator struct {
 	committeeSize  uint32
-	layersPerEpoch uint16
+	layersPerEpoch uint32
 	activationDb   activationDB
 	blocks         blockDB
 	beaconProvider BeaconGetter
@@ -27,7 +27,7 @@ type BlockEligibilityValidator struct {
 
 // NewBlockEligibilityValidator returns a new BlockEligibilityValidator.
 func NewBlockEligibilityValidator(
-	committeeSize uint32, layersPerEpoch uint16, activationDb activationDB, beaconProvider BeaconGetter,
+	committeeSize uint32, layersPerEpoch uint32, activationDb activationDB, beaconProvider BeaconGetter,
 	validateVRF VRFValidationFunction, blockDB blockDB, log log.Log) *BlockEligibilityValidator {
 
 	return &BlockEligibilityValidator{
@@ -52,7 +52,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	if block.RefBlock != nil {
 		activeSetBlock, err = v.blocks.GetBlock(*block.RefBlock)
 		if err != nil {
-			//block should be present because we've synced it in the calling function
+			// block should be present because we've synced it in the calling function
 			return false, fmt.Errorf("cannot get refrence block %v", *block.RefBlock)
 		}
 
@@ -101,9 +101,13 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	}
 	vrfSig := block.EligibilityProof.Sig
 
+	beaconShortString := types.BytesToHash(epochBeacon).ShortString()
 	if !v.validateVRF(vrfPubkey, message, vrfSig) {
-		return false, fmt.Errorf("eligibility VRF validation failed")
+		return false, fmt.Errorf("tortoise beacon eligibility VRF validation failed: beacon %v, epoch %v, counter: %v, vrfSig: %v",
+			beaconShortString, epochNumber, counter, types.BytesToHash(vrfSig).ShortString())
 	}
+
+	v.log.Info("validated tortoise beacon eligibility VRF of beacon %v in epoch %v (counter: %v)", beaconShortString, epochNumber, counter)
 
 	eligibleLayer := calcEligibleLayer(epochNumber, v.layersPerEpoch, vrfSig)
 

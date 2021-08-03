@@ -7,28 +7,27 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
-
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 type validatorMock struct{}
 
-func (*validatorMock) Validate(signing.PublicKey, *types.NIPST, uint64, types.Hash32) error {
+func (*validatorMock) Validate(signing.PublicKey, *types.NIPost, types.Hash32, uint) error {
 	return nil
 }
 
-func (*validatorMock) VerifyPost(signing.PublicKey, *types.PostProof, uint64) error {
+func (*validatorMock) ValidatePost([]byte, *types.Post, *types.PostMetadata, uint) error {
 	return nil
 }
 
@@ -36,27 +35,12 @@ func TestTortoiseBeacon(t *testing.T) {
 	t.Parallel()
 
 	requirer := require.New(t)
-	conf := TestConfig()
+	conf := UnitTestConfig()
 
 	mockDB := &mockActivationDB{}
 	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(10), nil, nil)
 
-	mwc := &weakcoin.MockWeakCoin{}
-	mwc.On("OnRoundStarted",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"))
-	mwc.On("OnRoundFinished",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"))
-	mwc.On("PublishProposal",
-		mock.Anything,
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID")).
-		Return(nil)
-	mwc.On("Get",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID")).
-		Return(true)
+	mwc := coinValueMock(t, true)
 
 	logger := log.NewDefault("TortoiseBeacon")
 
@@ -71,7 +55,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layer := types.LayerID(3)
+	layer := types.NewLayerID(3)
 
 	edSgn := signing.NewEdSigner()
 	edPubkey := edSgn.PublicKey()
@@ -88,7 +72,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	atxdb := activation.NewDB(database.NewMemDatabase(), idStore, memesh, 3, goldenATXID, &validatorMock{}, lg.WithName("atxDB"))
 	_ = atxdb
 
-	tb := New(conf, minerID, ld, n1, mockDB, nil, edSgn, signing.VRFVerify, vrfSigner, mwc, clock, logger)
+	tb := New(conf, minerID, ld, n1, mockDB, nil, edSgn, signing.VRFVerifier{}, vrfSigner, mwc, clock, logger)
 	requirer.NotNil(tb)
 
 	err = tb.Start(context.TODO())
@@ -103,7 +87,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	expected := "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	requirer.Equal(expected, types.BytesToHash(v).String())
 
-	requirer.NoError(tb.Close())
+	tb.Close()
 }
 
 func awaitLayer(clock *timesync.TimeClock, epoch types.LayerID) {
@@ -111,7 +95,7 @@ func awaitLayer(clock *timesync.TimeClock, epoch types.LayerID) {
 
 	for layer := range layerTicker {
 		// Wait until required epoch passes.
-		if layer > epoch {
+		if layer.After(epoch) {
 			return
 		}
 	}
@@ -160,8 +144,7 @@ func TestTortoiseBeacon_votingThreshold(t *testing.T) {
 				},
 			}
 
-			threshold, err := tb.votingThreshold(tc.weight)
-			r.NoError(err)
+			threshold := tb.votingThreshold(tc.weight)
 			r.EqualValues(tc.threshold, threshold)
 		})
 	}
