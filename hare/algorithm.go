@@ -126,7 +126,7 @@ func (m *Msg) Bytes() []byte {
 // Upon receiving a protocol's message, we try to build the full message.
 // The full message consists of the original message and the extracted public key.
 // An extracted public key is considered valid if it represents an active identity for a consensus view.
-func newMsg(logger log.Log, ctx context.Context, hareMsg *Message, querier StateQuerier) (*Msg, error) {
+func newMsg(ctx context.Context, logger log.Log, hareMsg *Message, querier StateQuerier) (*Msg, error) {
 	logger = logger.WithContext(ctx)
 
 	// extract pub key

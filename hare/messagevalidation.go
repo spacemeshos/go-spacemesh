@@ -310,7 +310,7 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 		}
 
 		// extract public key
-		var iMsg, err = newMsg(v.Log, ctx, innerMsg, v.stateQuerier)
+		var iMsg, err = newMsg(ctx, v.Log, innerMsg, v.stateQuerier)
 		if err != nil {
 			return err
 		}

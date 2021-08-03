@@ -19,6 +19,7 @@ var reporter *EventReporter
 // we use a mutex to ensure thread safety
 var mu sync.RWMutex
 
+// EventHook returns hook for logger.
 func EventHook() func(entry zapcore.Entry) error {
 	return func(entry zapcore.Entry) error {
 		// If we report anything less than this we'll end up in an infinite loop

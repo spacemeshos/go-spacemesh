@@ -233,7 +233,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			}
 
 			// create msg
-			iMsg, err := newMsg(b.Log, messageCtx, hareMsg, b.stateQuerier)
+			iMsg, err := newMsg(messageCtx, b.Log, hareMsg, b.stateQuerier)
 			if err != nil {
 				msgLogger.With().Warning("message validation failed: could not construct msg", log.Err(err))
 				continue

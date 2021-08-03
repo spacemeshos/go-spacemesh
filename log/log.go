@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+// MainLoggerName is a name of the global logger.
 const MainLoggerName = "00000.defaultLogger"
 
 // determine the level of messages we show.
