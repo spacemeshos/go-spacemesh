@@ -3,6 +3,7 @@ package net
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -66,6 +67,7 @@ type Connection interface {
 // FormattedConnection is an io.Writer and an io.Closer
 // A network connection supporting full-duplex messaging
 type FormattedConnection struct {
+	closed uint64
 	// metadata for logging / debugging
 	logger      log.Log
 	id          string // uuid for logging
@@ -78,7 +80,6 @@ type FormattedConnection struct {
 	r           formattedReader
 	wmtx        sync.Mutex
 	w           formattedWriter
-	closed      bool
 	deadliner   deadliner
 	messages    chan msgToSend
 	stopSending chan struct{}
@@ -262,12 +263,9 @@ func (c *FormattedConnection) sendListener() {
 // Send pushes a message into the queue if the connection is not closed.
 func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 	c.logger.WithContext(ctx).Debug("waiting for send lock")
-	c.wmtx.Lock()
-	if c.closed {
-		c.wmtx.Unlock()
+	if c.Closed() {
 		return ErrClosed
 	}
-	c.wmtx.Unlock()
 
 	// extract some useful context
 	reqID, _ := log.ExtractRequestID(ctx)
@@ -289,12 +287,10 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 
 // SendSock sends a message directly on the socket without waiting for the queue.
 func (c *FormattedConnection) SendSock(m []byte) error {
-	c.wmtx.Lock()
-	if c.closed {
-		c.wmtx.Unlock()
+	if c.Closed() {
 		return ErrClosed
 	}
-
+	c.wmtx.Lock()
 	err := c.deadliner.SetWriteDeadline(time.Now().Add(c.deadline))
 	if err != nil {
 		c.wmtx.Unlock()
@@ -302,7 +298,7 @@ func (c *FormattedConnection) SendSock(m []byte) error {
 	}
 	_, err = c.w.WriteRecord(m)
 	if err != nil {
-		cerr := c.closeUnlocked()
+		cerr := c.Close()
 		c.wmtx.Unlock()
 		if cerr != ErrAlreadyClosed {
 			c.networker.publishClosingConnection(ConnectionWithErr{c, err}) // todo: reconsider
@@ -314,29 +310,20 @@ func (c *FormattedConnection) SendSock(m []byte) error {
 	return nil
 }
 
-func (c *FormattedConnection) closeUnlocked() error {
-	if c.closed {
-		return ErrAlreadyClosed
-	}
-	c.closed = true
-	close(c.stopSending)
-	err := c.close.Close()
-	c.wg.Wait()
-	return err
+// Closed returns whether the connection is closed
+func (c *FormattedConnection) Closed() bool {
+	return atomic.LoadUint64(&c.closed) == 1
 }
 
 // Close closes the connection (implements io.Closer). It is go safe.
 func (c *FormattedConnection) Close() error {
-	c.wmtx.Lock()
-	defer c.wmtx.Unlock()
-	return c.closeUnlocked()
-}
-
-// Closed returns whether the connection is closed
-func (c *FormattedConnection) Closed() bool {
-	c.wmtx.Lock()
-	defer c.wmtx.Unlock()
-	return c.closed
+	if !atomic.CompareAndSwapUint64(&c.closed, 0, 1) {
+		return ErrAlreadyClosed
+	}
+	close(c.stopSending)
+	err := c.close.Close()
+	c.wg.Wait()
+	return err
 }
 
 var (
