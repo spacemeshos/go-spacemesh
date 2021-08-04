@@ -83,10 +83,13 @@ func (p *protocol) Ping(ctx context.Context, peer p2pcrypto.PublicKey) error {
 			return
 		}
 
-		// todo: if we pinged it we already have id so no need to update
-		// todo : but what if id or listen address has changed ?
-
-		ch <- sender.ID.Bytes()
+		// TODO: if we pinged it we already have id so no need to update,
+		//   but what if id or listen address has changed?
+		select {
+		case ch <- sender.ID.Bytes():
+		default:
+			plogger.With().Error("ping listener timed out, dropping response")
+		}
 	}
 
 	err = p.msgServer.SendRequest(ctx, server.PingPong, data, peer, foo, func(err error) {})
