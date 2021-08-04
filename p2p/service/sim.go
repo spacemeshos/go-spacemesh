@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -287,10 +288,14 @@ func (sn *Node) sendMessageImpl(_ context.Context, nodeID p2pcrypto.PublicKey, p
 	thec, ok := sn.sim.protocolDirectHandler[nodeID][protocol]
 	sn.sim.mutex.RUnlock()
 	if ok {
-		thec <- simDirectMessage{simulatorMetadata(), payload, sn.Info.PublicKey()}
+		select {
+		case thec <- simDirectMessage{simulatorMetadata(), payload, sn.Info.PublicKey()}:
+		default:
+			return fmt.Errorf("unable to send direct message for protocol %v node %v", protocol, nodeID.String())
+		}
 		return nil
 	}
-	return errors.New("could not find " + protocol + " handler for node: " + nodeID.String())
+	return fmt.Errorf("could not find %v handler for node %v", protocol, nodeID.String())
 }
 
 func (sn *Node) sleep(delay uint32) {
