@@ -126,6 +126,19 @@ make darwin | linux | freebsd | windows
 
 Platform-specific binaries are saved to the `/build` directory.
 
+### Using `go build` and `go test` without `make`
+To build code without using `make` the `CGO_LDFLAGS` environment variable must be set
+appropriately. The required value can be obtained by running `make print-ldflags` or
+`make print-test-ldflags`.
+
+This can be done in 3 ways:
+1. Setting the variable in the shell environment (e.g., in bash run `CGO_LDFLAGS=$(make print-ldflags)`).
+2. Prefixing the key and value to the `go` command (e.g., `CGO_LDFLAGS=$(make print-ldflags) go build`).
+3. Using `go env -w CGO_LDFLAGS=$(make print-ldflags)`, which persistently adds this value to Go's
+   environment for any future runs.
+
+There's a handy shortcut for the 3rd method: `make go-env` or `make go-env-test`.
+
 ---
 
 ### Running
