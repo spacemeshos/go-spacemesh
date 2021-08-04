@@ -633,7 +633,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 		// We expect a specific series of errors in a specific order!
 		// Check each one
-		var myError *pb.NodeError
 		expected := []string{
 			"test123",
 			"test456",
@@ -650,16 +649,14 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 			"error checking if identity is active":                                    {},
 			"could not notify subscribers":                                            {},
 		}
-		myError = nextError()
 
 		for i := 0; i < len(expected); {
 			current := nextError()
 			if _, ignore := ignored[current.Msg]; ignore {
 				continue
 			}
+			require.Contains(t, current.Msg, expected[i])
 			i++
-			require.Equal(t, "test123", myError.Msg)
-			require.Equal(t, pb.LogLevel_LOG_LEVEL_ERROR, myError.Level)
 		}
 	}()
 

@@ -242,9 +242,8 @@ func New(opts ...Option) *App {
 	for _, opt := range opts {
 		opt(app)
 	}
-	// NOTE(dshulyak) there are still several places where global logger is used in the app.
-	app.log = log.RegisterHooks(app.log, events.EventHook())
-	log.SetupGlobal(app.log)
+	// TODO(dshulyak) hooks must be registered for all loggers but system tests start to fail when we do that
+	log.SetupGlobal(log.RegisterHooks(app.log, events.EventHook()))
 	return app
 }
 
