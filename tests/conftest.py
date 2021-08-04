@@ -17,7 +17,7 @@ from tests.k8s_handler import add_elastic_cluster, add_kibana_cluster, add_fluen
     wait_for_daemonset_to_be_ready
 from tests.misc import CoreV1ApiClient
 from tests.node_pool_deployer import NodePoolDep
-from tests.setup_utils import setup_bootstrap_in_namespace, setup_clients_in_namespace
+from tests.setup_utils import setup_bootstrap_in_namespace, setup_clients_in_namespace, setup_clients_preset_data_dir
 from tests.utils import api_call, wait_for_minimal_elk_cluster_ready
 
 
@@ -46,6 +46,21 @@ class NetworkInfo:
         self.namespace = namespace
         self.bootstrap = bs_deployment_info
         self.clients = cl_deployment_info
+
+
+class NetworkInfoState:
+    def __init__(self, namespace, bs_deployment_info, cl_deployment_infos):
+        self.namespace = namespace
+        self.bootstrap = bs_deployment_info
+        self.clients = cl_deployment_infos
+
+    def get_pods_ips(self):
+        if all(isinstance(elem, list) for elem in self.clients):
+            return [po['pod_ip'] for dep_list in self.clients for cl in dep_list for po in cl.pods]
+
+    def get_clients_pods(self):
+        if all(isinstance(elem, list) for elem in self.clients):
+            return [po for dep_list in self.clients for cl in dep_list for po in cl.pods]
 
 
 class NetworkDeploymentInfo:
@@ -227,6 +242,32 @@ def setup_mul_clients(init_session, setup_bootstrap):
                                                      testconfig['genesis_delta'],
                                                      poet=setup_bootstrap.pods[0]['pod_ip'],
                                                      dep_time_out=testconfig['deployment_ready_time_out'])
+            clients_infos.append(client_info)
+
+    return clients_infos
+
+
+@pytest.fixture(scope='module')
+def setup_clients_with_state(init_session, setup_bootstrap):
+    """
+    setup_mul_clients adds all client nodes (those who have "client" in title)
+    using suite file specifications
+
+    :param init_session: setup a new k8s env
+    :param setup_bootstrap: adds a single bootstrap node
+    :return: list, client_infos a list of DeploymentInfo
+             contains the settings info of the new clients nodes
+    """
+    clients_infos = []
+
+    for key in testconfig:
+        if "client" in key:
+            client_info = setup_clients_preset_data_dir(testconfig['namespace'],
+                                                        setup_bootstrap.pods[0],
+                                                        testconfig[key],
+                                                        testconfig['genesis_delta'],
+                                                        poet=setup_bootstrap.pods[0]['pod_ip'],
+                                                        dep_time_out=testconfig['deployment_ready_time_out'])
             clients_infos.append(client_info)
 
     return clients_infos

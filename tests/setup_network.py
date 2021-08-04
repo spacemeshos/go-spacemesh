@@ -3,7 +3,7 @@ import pytest
 from pytest_testconfig import config as testconfig
 import pytz
 
-from tests.conftest import NetworkDeploymentInfo, NetworkInfo
+from tests.conftest import NetworkDeploymentInfo, NetworkInfo, NetworkInfoState
 from tests.utils import wait_genesis, get_genesis_time_delta
 
 
@@ -26,5 +26,17 @@ def setup_mul_network(init_session, add_elk, add_node_pool, add_curl, setup_boot
     network_deployment = NetworkInfo(namespace=init_session,
                                      bs_deployment_info=setup_bootstrap,
                                      cl_deployment_info=setup_mul_clients)
+    wait_genesis(get_genesis_time_delta(testconfig['genesis_delta']), testconfig['genesis_delta'])
+    return network_deployment
+
+
+@pytest.fixture(scope='module')
+def setup_network_with_state(init_session, add_elk, add_node_pool, add_curl, setup_bootstrap, start_poet,
+                             setup_clients_with_state):
+    # This fixture deploy a complete Spacemesh network and returns only after genesis time is over
+    _session_id = init_session
+    network_deployment = NetworkInfoState(namespace=init_session,
+                                          bs_deployment_info=setup_bootstrap,
+                                          cl_deployment_infos=setup_clients_with_state)
     wait_genesis(get_genesis_time_delta(testconfig['genesis_delta']), testconfig['genesis_delta'])
     return network_deployment

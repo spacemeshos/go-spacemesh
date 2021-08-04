@@ -249,6 +249,16 @@ endif
 dockertest-mining: dockerbuild-test dockerrun-mining
 .PHONY: dockertest-mining
 
+dockerrun-mining-preset-state:
+ifndef ES_PASS
+	$(error ES_PASS is not set)
+endif
+	$(DOCKERRUN) pytest -s -v test_mining_load/test_mining.py --tc-file=test_mining_load/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
+.PHONY: dockerrun-mining-preset-state
+
+dockertest-mining-preset: dockerbuild-test dockerrun-mining-preset-state
+.PHONY: dockertest-mining-preset
+
 dockerrun-hare:
 ifndef ES_PASS
 	$(error ES_PASS is not set)

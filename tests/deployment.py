@@ -80,8 +80,8 @@ def create_deployment(file_name, name_space, deployment_id=None, replica_size=1,
             ut.delete_file(mod_file_path)
 
         # Set unique deployment id
-        if deployment_id:
-            dep['metadata']['generateName'] += '{0}-'.format(deployment_id)
+        deployment_id = name_space if not deployment_id else deployment_id
+        dep['metadata']['generateName'] += '{0}-'.format(deployment_id)
 
         # Set replica size
         dep['spec']['replicas'] = replica_size
