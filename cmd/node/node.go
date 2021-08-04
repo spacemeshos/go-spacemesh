@@ -117,7 +117,7 @@ var Cmd = &cobra.Command{
 			WithConfig(conf),
 			// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
 			// otherwise it will fail later when child logger will try to increase level.
-			WithLog(log.NewWithLevel(log.MainLoggerName, zap.NewAtomicLevelAt(zapcore.DebugLevel))),
+			WithLog(log.NewWithLevel("", zap.NewAtomicLevelAt(zapcore.DebugLevel))),
 		)
 		starter := func() error {
 			if err := app.Initialize(); err != nil {
@@ -327,13 +327,13 @@ func (app *App) Initialize() (err error) {
 
 // setupLogging configured the app logging system.
 func (app *App) setupLogging() {
-	app.log.Info("%s", app.getAppInfo())
+	log.Info("%s", app.getAppInfo())
 
 	msg := "initializing event reporter"
 	if app.Config.PublishEventsURL != "" {
 		msg += fmt.Sprintf(" with pubsub URL: %s", app.Config.PublishEventsURL)
 	}
-	app.log.Info(msg)
+	log.Info(msg)
 	if err := events.InitializeEventReporter(app.Config.PublishEventsURL); err != nil {
 		log.With().Error("unable to initialize event reporter", log.Err(err))
 	}
@@ -349,7 +349,7 @@ func (app *App) Cleanup() {
 	log.Info("app cleanup starting...")
 	app.stopServices()
 	// add any other Cleanup tasks here....
-	log.Info("app cleanup completed\n\n")
+	log.Info("app cleanup completed")
 }
 
 func (app *App) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) error {
@@ -483,7 +483,7 @@ func (app *App) initServices(ctx context.Context,
 
 	app.nodeID = nodeID
 
-	lg := app.log.WithName(nodeID.ShortString()).WithFields(nodeID)
+	lg := app.log.Named(nodeID.ShortString()).WithFields(nodeID)
 	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 
 	app.log = app.addLogger(AppLogger, lg)
@@ -1069,7 +1069,7 @@ func (app *App) Start() error {
 
 	nodeID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 
-	lg := logger.WithName(nodeID.ShortString()).WithFields(nodeID)
+	lg := logger.Named(nodeID.ShortString()).WithFields(nodeID)
 
 	/* Initialize all protocol services */
 

@@ -11,8 +11,8 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// MainLoggerName is a name of the global logger.
-const MainLoggerName = "00000.defaultLogger"
+// mainLoggerName is a name of the global logger.
+const mainLoggerName = "00000.defaultLogger"
 
 // should we format out logs in json
 var jsonLog = false
@@ -51,7 +51,7 @@ var AppLog Log
 
 // SetupGlobal overwrites global logger.
 func SetupGlobal(logger Log) {
-	AppLog = logger
+	AppLog = NewFromLog(logger.logger.Named(mainLoggerName))
 }
 
 func init() {
@@ -62,7 +62,7 @@ func init() {
 }
 
 func initLogging() {
-	AppLog = NewDefault(MainLoggerName)
+	AppLog = NewDefault(mainLoggerName)
 }
 
 // JSONLog turns JSON format on or off
@@ -83,8 +83,8 @@ func NewWithLevel(module string, level zap.AtomicLevel, hooks ...func(zapcore.En
 	consoleSyncer := zapcore.AddSync(logwriter)
 	enc := encoder()
 	core := zapcore.NewCore(enc, consoleSyncer, level)
-	log := zap.New(zapcore.RegisterHooks(core, hooks...))
-	return NewFromLog(log).WithName(module)
+	log := zap.New(zapcore.RegisterHooks(core, hooks...)).Named(module)
+	return NewFromLog(log)
 }
 
 // RegisterHooks wraps provided loggers with hooks.
