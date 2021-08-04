@@ -83,8 +83,8 @@ func NewWithLevel(module string, level zap.AtomicLevel, hooks ...func(zapcore.En
 	consoleSyncer := zapcore.AddSync(logwriter)
 	enc := encoder()
 	core := zapcore.NewCore(enc, consoleSyncer, level)
-	log := zap.New(zapcore.RegisterHooks(core, hooks...)).Named(module)
-	return NewFromLog(log)
+	log := zap.New(zapcore.RegisterHooks(core, hooks...))
+	return NewFromLog(log).WithName(module)
 }
 
 // RegisterHooks wraps provided loggers with hooks.

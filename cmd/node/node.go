@@ -445,12 +445,12 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 	}
 
 	if err != nil {
-		log.Error("cannot parse logging for %v error %v", name, err)
+		app.log.Error("cannot parse logging for %v error %v", name, err)
 		lvl.SetLevel(log.Level())
 	}
 
-	app.loggers[name] = &lvl
 	if logger.Check(lvl.Level()) {
+		app.loggers[name] = &lvl
 		logger = logger.SetLevel(&lvl)
 	}
 	return logger.WithName(name).WithFields(log.String("module", name))
@@ -483,11 +483,7 @@ func (app *App) initServices(ctx context.Context,
 
 	app.nodeID = nodeID
 
-	name := nodeID.ShortString()
-
-	// This base logger must be debug level so that other, derived loggers are not a lower level.
-
-	lg := app.log.WithName(name).WithFields(nodeID)
+	lg := app.log.WithName(nodeID.ShortString()).WithFields(nodeID)
 	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 
 	app.log = app.addLogger(AppLogger, lg)
@@ -1073,7 +1069,7 @@ func (app *App) Start() error {
 
 	nodeID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 
-	lg := logger.WithFields(nodeID)
+	lg := logger.WithName(nodeID.ShortString()).WithFields(nodeID)
 
 	/* Initialize all protocol services */
 
