@@ -137,12 +137,11 @@ type Config struct {
 // DefaultConfig is the default config for the fetch component
 func DefaultConfig() Config {
 	return Config{
-		BatchTimeout:      50,
-		MaxRetiresForPeer: 2,
-		BatchSize:         20,
-		RequestTimeout:    10,
-		// TODO change it back to 20
-		MaxRetriesForRequest: 2000,
+		BatchTimeout:         50,
+		MaxRetiresForPeer:    2,
+		BatchSize:            20,
+		RequestTimeout:       10,
+		MaxRetriesForRequest: 20,
 	}
 }
 
