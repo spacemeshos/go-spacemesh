@@ -296,6 +296,33 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, gPlus5.Index(), pLyr.ID)
 	assert.Equal(t, expectedHash, pLyr.Hash)
+
+	// add a couple more blocks to gPlus3
+	aggHash1, _ := msh.getAggregatedLayerHash(gPlus1.Index())
+	aggHash2, _ := msh.getAggregatedLayerHash(gPlus2.Index())
+	aggHash3, _ := msh.getAggregatedLayerHash(gPlus3.Index())
+	aggHash4, _ := msh.getAggregatedLayerHash(gPlus4.Index())
+	aggHash5, _ := msh.getAggregatedLayerHash(gPlus5.Index())
+	gPlus3 = addLayer(r, gLyr.Add(3), 2, msh)
+	msh.setProcessedLayer(gPlus3)
+	assert.Equal(t, gPlus5.Index(), msh.ProcessedLayer())
+	for i, hash := range []types.Hash32{aggHash1, aggHash2, aggHash3, aggHash4, aggHash5} {
+		lyr := gLyr.Add(uint32(i + 1))
+		aggHash, _ := msh.getAggregatedLayerHash(lyr)
+		if i < 2 {
+			assert.Equal(t, hash, aggHash, i)
+		} else {
+			assert.NotEqual(t, hash, aggHash, i)
+			layer, err := msh.GetLayer(lyr)
+			assert.NoError(t, err)
+			expectedHash = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(layer.Blocks())), prevHash.Bytes())
+			assert.Equal(t, expectedHash, aggHash)
+		}
+		if i == 5 {
+			assert.Equal(t, hash, msh.ProcessedLayerHash())
+		}
+		prevHash = aggHash
+	}
 }
 
 func TestMesh_PersistProcessedLayer(t *testing.T) {
