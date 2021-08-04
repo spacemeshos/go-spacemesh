@@ -71,7 +71,6 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 	}
 
 	select {
-	case <-tb.CloseChannel():
 	case <-ctx.Done():
 	case ch <- proposalWithReceipt:
 	}
