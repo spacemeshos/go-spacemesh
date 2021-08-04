@@ -955,7 +955,7 @@ func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks
 	for _, b := range blocks {
 		valid, err := m.ContextualValidity(b.ID())
 		if err != nil {
-			m.With().Error("could not get contextual validity by block", b.ID(), log.Err(err))
+			m.With().Warning("could not get contextual validity by block", b.ID(), log.Err(err))
 		}
 		if valid {
 			validBlocks = append(validBlocks, b)
