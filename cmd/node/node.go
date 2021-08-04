@@ -1073,8 +1073,7 @@ func (app *App) Start() error {
 
 	nodeID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 
-	// This base logger must be debug level so that other, derived loggers are not a lower level.
-	lg := log.AppLog.WithFields(nodeID)
+	lg := logger.WithFields(nodeID)
 
 	/* Initialize all protocol services */
 
