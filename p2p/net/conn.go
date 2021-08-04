@@ -83,6 +83,7 @@ type FormattedConnection struct {
 	messages    chan msgToSend
 	stopSending chan struct{}
 	close       io.Closer
+	wg          sync.WaitGroup
 
 	msgSizeLimit int
 }
@@ -143,7 +144,11 @@ func newConnection(conn readWriteCloseAddresser, netw networker,
 		stopSending:  make(chan struct{}),
 		msgSizeLimit: msgSizeLimit,
 	}
-	go connection.sendListener()
+	connection.wg.Add(1)
+	go func() {
+		connection.sendListener()
+		connection.wg.Done()
+	}()
 	return connection
 }
 
@@ -315,7 +320,9 @@ func (c *FormattedConnection) closeUnlocked() error {
 	}
 	c.closed = true
 	close(c.stopSending)
-	return c.close.Close()
+	err := c.close.Close()
+	c.wg.Wait()
+	return err
 }
 
 // Close closes the connection (implements io.Closer). It is go safe.
