@@ -330,7 +330,7 @@ func TestSynchronize_getATXsFailedPastEpoch(t *testing.T) {
 }
 
 func TestSynchronize_getATXsFailedCurrentEpoch(t *testing.T) {
-	lg := log.NewDefault("syncer")
+	lg := logtest.New(t)
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)

@@ -651,6 +651,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 			"error adding genesis block, block already exists in database":            {},
 			"method IsIdentityActiveOnConsensusView erred while calling actives func": {},
 			"error checking if identity is active":                                    {},
+			"could not notify subscribers":                                            {},
 		}
 		myError = nextError()
 
