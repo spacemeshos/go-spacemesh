@@ -849,7 +849,9 @@ func (app *SpacemeshApp) startAPIServices(ctx context.Context, net api.NetworkAP
 		registerService(grpcserver.NewMeshService(app.mesh, app.txPool, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
 	}
 	if apiConf.StartNodeService {
-		registerService(grpcserver.NewNodeService(net, app.mesh, app.clock, app.syncer, app.atxBuilder))
+		nodeService := grpcserver.NewNodeService(net, app.mesh, app.clock, app.syncer, app.atxBuilder)
+		registerService(nodeService)
+		app.closers = append(app.closers, nodeService)
 	}
 	if apiConf.StartSmesherService {
 		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder))
@@ -959,6 +961,7 @@ func (app *SpacemeshApp) stopServices() {
 
 	events.CloseEventReporter()
 	events.CloseEventPubSub()
+
 	// Close all databases.
 	for _, closer := range app.closers {
 		if closer != nil {

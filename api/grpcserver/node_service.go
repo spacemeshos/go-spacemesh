@@ -116,7 +116,6 @@ func (s NodeService) SyncStart(ctx context.Context, _ *pb.SyncStartRequest) (*pb
 // Shutdown requests a graceful shutdown
 func (s NodeService) Shutdown(context.Context, *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
 	log.Info("GRPC NodeService.Shutdown")
-	s.PeerCounter.Close()
 	cmd.Cancel()
 	return &pb.ShutdownResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
@@ -201,6 +200,10 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 		// TODO: do we need an additional case here for a context to indicate
 		// that the service needs to shut down?
 	}
+}
+
+func (s NodeService) Close() {
+	s.PeerCounter.Close()
 }
 
 // Convert internal error level into level understood by the API
