@@ -39,7 +39,7 @@ type layerDB interface {
 	GetLayerHash(ID types.LayerID) types.Hash32
 	GetLayerHashBlocks(hash types.Hash32) []types.BlockID
 	GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error)
-	SaveLayerHashInputVector(id types.Hash32, data []byte) error
+	SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blks []types.BlockID) error
 }
 
 type atxIDsDB interface {
@@ -193,7 +193,7 @@ func (l *Logic) AddDBs(blockDB, AtxDB, TxDB, poetDB, IvDB, tbDB database.Getter)
 func (l *Logic) layerHashReqReceiver(ctx context.Context, msg []byte) []byte {
 	lyr := types.NewLayerID(util.BytesToUint32(msg))
 	h := l.layerDB.GetLayerHash(lyr)
-	l.log.WithContext(ctx).Debug("got layer hash request %v, responding with %v", lyr, h.Hex())
+	l.log.WithContext(ctx).Debug("got layer hash request %v, responding with %v", lyr, h.ShortString())
 	return h.Bytes()
 }
 
@@ -306,7 +306,7 @@ func (l *Logic) receiveLayerHash(ctx context.Context, layerID types.LayerID, pee
 	if err == nil {
 		hash := types.BytesToHash(data)
 		l.layerHashesRes[layerID][peer] = &peerResult{data: data, err: nil}
-		l.log.WithContext(ctx).Debug("received data %v for layer %v from peer %v", hash.Hex(), layerID, peer.String())
+		l.log.WithContext(ctx).Debug("received data %v for layer %v from peer %v", hash.ShortString(), layerID, peer.String())
 	} else {
 		l.layerHashesRes[layerID][peer] = &peerResult{data: nil, err: err}
 		l.log.WithContext(ctx).Debug("received error for layer %v from peer %v err: %v", layerID, peer.String(), err)
@@ -686,16 +686,19 @@ func (l *Logic) GetPoetProof(ctx context.Context, id types.Hash32) error {
 
 // GetInputVector gets input vector data from remote peer
 func (l *Logic) GetInputVector(ctx context.Context, id types.LayerID) error {
-	l.log.WithContext(ctx).With().Debug("getting inputvector for layer", id, types.CalcHash32(id.Bytes()))
 	res := <-l.fetcher.GetHash(types.CalcHash32(id.Bytes()), fetch.IVDB, false)
-	l.log.WithContext(ctx).Debug("done getting inputvector")
 	if res.Err != nil {
 		return res.Err
 	}
 	// if result is local we don't need to process it again
 	if !res.IsLocal {
-		l.log.WithContext(ctx).With().Debug("SaveLayerHashInputVector: Saving input vector", id, res.Hash)
-		return l.layerDB.SaveLayerHashInputVector(res.Hash, res.Data)
+		l.log.WithContext(ctx).With().Debug("saving input vector", id, res.Hash)
+		var blocks []types.BlockID
+		if err := types.BytesToInterface(res.Data, &blocks); err != nil {
+			l.log.WithContext(ctx).With().Error("got invalid input vector from peer", id)
+			return err
+		}
+		return l.layerDB.SaveLayerInputVectorByID(ctx, id, blocks)
 	}
 	return nil
 }

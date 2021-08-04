@@ -361,7 +361,10 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 		}
 		res, err := db.Get(r.Hash.Bytes())
 		if err != nil {
-			f.log.WithContext(ctx).Warning("remote peer requested non existing hash %v %v", r.Hash.Hex(), err)
+			f.log.WithContext(ctx).With().Warning("remote peer requested non existing hash",
+				log.String("hash", r.Hash.ShortString()),
+				log.String("hint", string(r.Hint)),
+				log.Err(err))
 			continue
 		} else {
 			f.log.WithContext(ctx).Debug("responded to hash req %v bytes %v", r.Hash.ShortString(), len(res))
@@ -554,12 +557,12 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 
 // handleHashError is called when an error occurred processing batches of the following hashes
 func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
-	f.log.Debug("cannot fetch message %v err %v", batchHash.Hex(), err)
+	f.log.Debug("cannot fetch message %v err %v", batchHash.ShortString(), err)
 	f.activeBatchM.RLock()
 	batch, ok := f.activeBatches[batchHash]
 	if !ok {
 		f.activeBatchM.RUnlock()
-		f.log.Error("batch invalidated twice %v", batchHash.Hex())
+		f.log.Error("batch invalidated twice %v", batchHash.ShortString())
 		return
 	}
 	f.activeBatchM.RUnlock()
