@@ -205,7 +205,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 		nb.persist()
 	}
 
-	nb.log.Info("finished NIPost construction")
+	nb.log.Info("finished nipost construction")
 
 	nb.state = &builderState{
 		NIPost: &types.NIPost{},

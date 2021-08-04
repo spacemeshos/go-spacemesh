@@ -342,11 +342,11 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		return fmt.Errorf("failed to compute NIPost's expected challenge hash: %v", err)
 	}
 
-	db.log.With().Info("Validating NIPost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
+	db.log.With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
 	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeID.Key))
 	if err = db.nipostValidator.Validate(*pubKey, atx.NIPost, *expectedChallengeHash, atx.NumUnits); err != nil {
-		return fmt.Errorf("invalid NIPost: %v", err)
+		return fmt.Errorf("invalid nipost: %v", err)
 	}
 
 	return nil

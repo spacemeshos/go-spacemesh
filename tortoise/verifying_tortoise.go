@@ -820,9 +820,9 @@ candidateLayerLoop:
 	for candidateLayerID := t.Verified.Add(1); candidateLayerID.Before(t.Last); candidateLayerID = candidateLayerID.Add(1) {
 		logger := logger.WithFields(log.FieldNamed("candidate_layer", candidateLayerID))
 
-		// it's possible that self healing already validated a layer
+		// it's possible that self healing already verified a layer
 		if !t.Verified.Before(candidateLayerID) {
-			logger.Info("self healing already validated this layer")
+			logger.Info("self healing already verified this layer")
 			continue
 		}
 

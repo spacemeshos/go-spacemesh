@@ -388,7 +388,7 @@ func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) (
 
 func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 	if layerID.GetEpoch() == 0 {
-		s.logger.WithContext(ctx).Info("skip getting ATX in epoch 0")
+		s.logger.WithContext(ctx).Info("skip getting atx in epoch 0")
 		return nil
 	}
 	epoch := layerID.GetEpoch()
