@@ -201,9 +201,6 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	}
 	str, err = testArgs("--test-mode")
 
-	// We must manually disable this, it's a global and simply removing the flag isn't sufficient
-	defer log.JSONLog(false)
-
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.TestMode)

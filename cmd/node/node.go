@@ -108,7 +108,7 @@ var Cmd = &cobra.Command{
 			log.With().Error("can't ensure that cli flags match config value types", log.Err(err))
 			return
 		}
-		// TODO(dshulyak) to remove it initialize required logger here.
+
 		if conf.TestMode {
 			log.JSONLog(true)
 		}
@@ -450,7 +450,7 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 	}
 
 	app.loggers[name] = &lvl
-	if logger.Check(log.Level()) {
+	if logger.Check(lvl.Level()) {
 		logger = logger.SetLevel(&lvl)
 	}
 	return logger.WithName(name).WithFields(log.String("module", name))

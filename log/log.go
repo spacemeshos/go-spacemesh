@@ -14,9 +14,6 @@ import (
 // MainLoggerName is a name of the global logger.
 const MainLoggerName = "00000.defaultLogger"
 
-// determine the level of messages we show.
-var debugMode = false
-
 // should we format out logs in json
 var jsonLog = false
 
@@ -28,9 +25,6 @@ var defaultEncoder = zap.NewDevelopmentEncoderConfig()
 
 // Level returns the zapcore level of logging.
 func Level() zapcore.Level {
-	if debugMode {
-		return zapcore.DebugLevel
-	}
 	return zapcore.InfoLevel
 }
 
@@ -69,11 +63,6 @@ func init() {
 
 func initLogging() {
 	AppLog = NewDefault(MainLoggerName)
-}
-
-// DebugMode sets log debug level
-func DebugMode(mode bool) {
-	debugMode = mode
 }
 
 // JSONLog turns JSON format on or off

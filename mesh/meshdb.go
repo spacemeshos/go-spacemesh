@@ -95,14 +95,14 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 	for _, blk := range GenesisLayer().Blocks() {
 		ll.Log.With().Info("Adding genesis block ", blk.ID(), blk.LayerIndex)
 		if err := ll.AddBlock(blk); err != nil {
-			log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
+			ll.Log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
 		}
 		if err := ll.SaveContextualValidity(blk.ID(), true); err != nil {
-			log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
+			ll.Log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
 		}
 	}
 	if err := ll.SaveLayerInputVectorByID(GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
-		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
+		ll.Log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
 	}
 	return ll, err
 }
