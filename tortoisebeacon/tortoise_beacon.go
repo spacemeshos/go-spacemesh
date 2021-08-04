@@ -208,6 +208,7 @@ type TortoiseBeacon struct {
 // Start starts listening for layers and outputs.
 func (tb *TortoiseBeacon) Start(ctx context.Context) error {
 	if !atomic.CompareAndSwapUint64(&tb.closed, 0, 1) {
+		tb.Log.Warning("attempt to start tortoise beacon more than once")
 		return nil
 	}
 	tb.Log.Info("Starting %v with the following config: %+v", protoName, tb.config)

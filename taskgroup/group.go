@@ -59,8 +59,8 @@ func (g *Group) Go(f func(ctx context.Context) error) error {
 	}
 	g.wg.Add(1)
 	go func() {
+		defer g.wg.Done()
 		err := f(g.ctx)
-		g.wg.Done()
 
 		g.mu.Lock()
 		defer g.mu.Unlock()
@@ -84,7 +84,7 @@ func (g *Group) Wait() error {
 
 	<-g.waitErr
 	// at this point the error is set to a non-nil value, won't be ever overwritten,
-	// and all Go calls will terminated immediatly, therefore re-locking here is not required.
+	// and all Go calls will be terminated immediatly, therefore re-locking here is not required.
 	g.wg.Wait()
 	return g.err
 }
