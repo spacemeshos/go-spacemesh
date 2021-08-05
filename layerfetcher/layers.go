@@ -404,6 +404,15 @@ func (l *Logic) fetchLayerBlocks(ctx context.Context, layerID types.LayerID, blo
 		l.log.WithContext(ctx).With().Debug("error fetching layer blocks", layerID, log.Err(err))
 	}
 
+	if len(blocks.VerifyingVector) > 0 {
+		l.log.WithContext(ctx).With().Debug("saving input vector from peer", layerID)
+		err := l.layerDB.SaveLayerInputVectorByID(ctx, layerID, blocks.VerifyingVector)
+		if err == nil {
+			return
+		}
+		l.log.WithContext(ctx).With().Error("failed to save input vector", layerID, log.Err(err))
+	}
+
 	if err := l.GetInputVector(ctx, layerID); err != nil {
 		l.log.WithContext(ctx).With().Debug("error getting input vector", layerID, log.Err(err))
 	}
