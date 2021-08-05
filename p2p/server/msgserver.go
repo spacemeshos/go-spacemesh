@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/taskgroup"
 )
 
 // MessageType is a uint32 used to distinguish between server messages inside a single protocol.
@@ -71,11 +72,10 @@ type MessageServer struct {
 	resHandlers        map[uint64]ResponseHandlers                           //response handlers by request ReqID
 	msgRequestHandlers map[MessageType]func(context.Context, Message) []byte //request handlers by request type
 	ingressChannel     chan service.DirectMessage                            //chan to relay messages into the server
-	requestLifetime    time.Duration                                         //time a request can stay in the pending queue until evicted
-	workerLimit        int
+	requestLifetime    time.Duration
 	workerLimiter      chan struct{}
-	exit               chan struct{} // request read loop to exit
-	exited             chan struct{} // notify that exited
+	tg                 *taskgroup.Group
+	cancel             context.CancelFunc
 	log.Log
 }
 
@@ -87,6 +87,7 @@ type Service interface {
 
 // NewMsgServer registers a protocol and returns a new server to declare request and response handlers on.
 func NewMsgServer(ctx context.Context, network Service, name string, requestLifetime time.Duration, c chan service.DirectMessage, logger log.Log) *MessageServer {
+	ctx, cancel := context.WithCancel(ctx)
 	p := &MessageServer{
 		Log:                logger,
 		name:               name,
@@ -96,64 +97,56 @@ func NewMsgServer(ctx context.Context, network Service, name string, requestLife
 		ingressChannel:     network.RegisterDirectProtocolWithChannel(name, c),
 		msgRequestHandlers: make(map[MessageType]func(context.Context, Message) []byte),
 		requestLifetime:    requestLifetime,
-		exit:               make(chan struct{}),
-		exited:             make(chan struct{}),
-		workerLimit:        runtime.NumCPU(),
+		tg:                 taskgroup.New(taskgroup.WithContext(ctx)),
+		cancel:             cancel,
 		workerLimiter:      make(chan struct{}, runtime.NumCPU()),
 	}
-
-	go func() {
-		p.readLoop(log.WithNewSessionID(ctx))
-		close(p.exited)
-	}()
+	p.tg.Go(p.readLoop)
 	return p
 }
 
 // Close stops the MessageServer
 func (p *MessageServer) Close() {
-	select {
-	case <-p.exit:
-	default:
-		return
-	}
 	p.With().Info("closing MessageServer")
-	close(p.exit)
-	<-p.exited
+	p.cancel()
 	p.With().Info("waiting for message workers to finish...")
-	for i := 0; i < p.workerLimit; i++ {
-		p.workerLimiter <- struct{}{}
-	}
+	p.tg.Wait()
 	p.With().Info("message workers all done")
 }
 
 // readLoop reads incoming messages and matches them to requests or responses.
-func (p *MessageServer) readLoop(ctx context.Context) {
+func (p *MessageServer) readLoop(ctx context.Context) error {
+	sctx := log.WithNewSessionID(ctx)
 	timer := time.NewTicker(p.requestLifetime + time.Millisecond*100)
 	defer timer.Stop()
 	defer p.With().Info("shutting down protocol", log.String("protocol", p.name))
 	for {
 		select {
-		case <-p.exit:
-			return
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-timer.C:
-			go p.cleanStaleMessages()
+			p.tg.Go(func(ctx context.Context) error {
+				p.cleanStaleMessages()
+				return nil
+			})
 		case msg, ok := <-p.ingressChannel:
 			// generate new reqID for message
 			ctx := log.WithNewRequestID(ctx)
 			p.WithContext(ctx).Debug("new msg received from channel")
 			if !ok {
 				p.WithContext(ctx).Error("read loop channel was closed")
-				return
+				return context.Canceled
 			}
 			select {
 			case p.workerLimiter <- struct{}{}:
-			case <-p.exit:
-				return
+				p.tg.Go(func(ctx context.Context) error {
+					p.handleMessage(sctx, msg.(Message)) // pass session ctx to log session id
+					<-p.workerLimiter
+					return nil
+				})
+			case <-ctx.Done():
+				return ctx.Err()
 			}
-			go func(msg Message) {
-				p.handleMessage(ctx, msg)
-				<-p.workerLimiter
-			}(msg.(Message))
 		}
 	}
 }
