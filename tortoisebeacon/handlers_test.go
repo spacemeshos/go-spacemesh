@@ -86,11 +86,11 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				config:         TestConfig(),
+				config:         UnitTestConfig(),
 				Log:            log.NewDefault("TortoiseBeacon"),
 				validProposals: proposalsMap{},
 				atxDB:          mockDB,
-				vrfVerifier:    signing.VRFVerify,
+				vrfVerifier:    signing.VRFVerifier{},
 				vrfSigner:      vrfSigner,
 				clock:          clock,
 				lastLayer:      types.NewLayerID(epoch),
@@ -237,7 +237,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 				Log:                     log.NewDefault("TortoiseBeacon"),
 				incomingVotes:           map[epochRoundPair]votesPerPK{},
 				atxDB:                   mockDB,
-				vrfVerifier:             signing.VRFVerify,
+				vrfVerifier:             signing.VRFVerifier{},
 				vrfSigner:               vrfSigner,
 				edSigner:                edSgn,
 				clock:                   clock,
@@ -368,7 +368,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 				Log:           log.NewDefault("TortoiseBeacon"),
 				incomingVotes: map[epochRoundPair]votesPerPK{},
 				atxDB:         mockDB,
-				vrfVerifier:   signing.VRFVerify,
+				vrfVerifier:   signing.VRFVerifier{},
 				vrfSigner:     vrfSigner,
 				edSigner:      edSgn,
 				clock:         clock,

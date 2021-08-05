@@ -27,7 +27,6 @@ var (
 	constTrue      = []byte{1}
 	constFalse     = []byte{0}
 	constLATEST    = []byte("latest")
-	constLAYERHASH = []byte("layer hash")
 	constPROCESSED = []byte("processed")
 )
 
@@ -47,9 +46,6 @@ type tortoise interface {
 // Validator interface to be used in tests to mock validation flow
 type Validator interface {
 	ValidateLayer(layer *types.Layer)
-	HandleLateBlock(bl *types.Block)
-	ProcessedLayer() types.LayerID
-	SetProcessedLayer(lyr types.LayerID)
 }
 
 type txProcessor interface {
@@ -81,6 +77,13 @@ type AtxDB interface {
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 
+// ProcessedLayer represents the last processed layer in mesh.
+// This struct is used to for data serialization.
+type ProcessedLayer struct {
+	ID   types.LayerID
+	Hash types.Hash32
+}
+
 // Mesh is the logic layer above our mesh.DB database
 type Mesh struct {
 	log.Log
@@ -93,13 +96,8 @@ type Mesh struct {
 	config             Config
 	latestLayer        types.LayerID
 	latestLayerInState types.LayerID
-	layerHash          []byte
-	lMutex             sync.RWMutex
-	lkMutex            sync.RWMutex
-	lcMutex            sync.RWMutex
-	lvMutex            sync.RWMutex
-	orphMutex          sync.RWMutex
-	pMutex             sync.RWMutex
+	processedLayer     ProcessedLayer
+	mutex              sync.RWMutex
 	done               chan struct{}
 	nextValidLayers    map[types.LayerID]*types.Layer
 	maxValidatedLayer  types.LayerID
@@ -107,11 +105,11 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh
-func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPool, pr txProcessor, logger log.Log) *Mesh {
-	ll := &Mesh{
+func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, pr txProcessor, logger log.Log) *Mesh {
+	msh := &Mesh{
 		Log:                logger,
-		trtl:               mesh,
-		txPool:             txInvalidator,
+		trtl:               trtl,
+		txPool:             txPool,
 		txProcessor:        pr,
 		done:               make(chan struct{}),
 		DB:                 db,
@@ -122,37 +120,31 @@ func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalida
 		latestLayerInState: types.GetEffectiveGenesis(),
 	}
 
-	ll.Validator = &validator{Mesh: ll}
-
-	return ll
+	msh.Validator = &validator{Mesh: msh}
+	return msh
 }
 
 // NewRecoveredMesh creates new instance of mesh with recovered mesh data fom database
-func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPool, pr txProcessor, logger log.Log) *Mesh {
-	msh := NewMesh(db, atxDb, rewardConfig, mesh, txInvalidator, pr, logger)
+func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, pr txProcessor, logger log.Log) *Mesh {
+	msh := NewMesh(db, atxDb, rewardConfig, trtl, txPool, pr, logger)
 
 	latest, err := db.general.Get(constLATEST)
 	if err != nil {
 		logger.Panic("could not recover latest layer: %v", err)
 	}
-	msh.latestLayer = types.BytesToLayerID(latest)
+	msh.setLatestLayer(types.BytesToLayerID(latest))
 
-	processed, err := db.general.Get(constPROCESSED)
+	lyr, err := msh.recoverProcessedLayer()
 	if err != nil {
 		logger.Panic("could not recover processed layer: %v", err)
 	}
-
-	msh.SetProcessedLayer(types.BytesToLayerID(processed))
-
-	if msh.layerHash, err = db.general.Get(constLAYERHASH); err != nil {
-		logger.With().Error("could not recover latest layer hash", log.Err(err))
-	}
+	msh.setProcessedLayer(lyr.ID, lyr.Hash)
 
 	verified, err := db.general.Get(VERIFIED)
 	if err != nil {
 		logger.Panic("could not recover latest verified layer: %v", err)
 	}
-	msh.latestLayerInState = types.BytesToLayerID(verified)
+	msh.setLatestLayerInState(types.BytesToLayerID(verified))
 
 	err = pr.LoadState(msh.LatestLayerInState())
 	if err != nil {
@@ -166,9 +158,9 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, t
 	}
 
 	msh.With().Info("recovered mesh from disk",
-		log.FieldNamed("latest_layer", msh.latestLayer),
+		log.FieldNamed("latest_layer", msh.LatestLayer()),
 		log.FieldNamed("validated_layer", msh.ProcessedLayer()),
-		log.String("layer_hash", util.Bytes2Hex(msh.layerHash)),
+		log.String("layer_hash", msh.ProcessedLayerHash().Hex()),
 		log.String("root_hash", pr.GetStateRoot().String()))
 
 	return msh
@@ -190,32 +182,34 @@ func (msh *Mesh) CacheWarmUp(layerSize int) {
 
 // LatestLayerInState returns the latest layer we applied to state
 func (msh *Mesh) LatestLayerInState() types.LayerID {
-	defer msh.pMutex.RUnlock()
-	msh.pMutex.RLock()
+	defer msh.mutex.RUnlock()
+	msh.mutex.RLock()
 	return msh.latestLayerInState
 }
 
 // LatestLayer - returns the latest layer we saw from the network
 func (msh *Mesh) LatestLayer() types.LayerID {
-	defer msh.lkMutex.RUnlock()
-	msh.lkMutex.RLock()
+	defer msh.mutex.RUnlock()
+	msh.mutex.RLock()
 	return msh.latestLayer
 }
 
-// SetLatestLayer sets the latest layer we saw from the network
-func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
+// setLatestLayer sets the latest layer we saw from the network
+func (msh *Mesh) setLatestLayer(idx types.LayerID) {
 	// Report the status update, as well as the layer itself
 	layer, err := msh.GetLayer(idx)
 	if err != nil {
-		msh.With().Error("error reading layer data", idx, log.Err(err))
+		if !errors.Is(err, database.ErrNotFound) {
+			msh.With().Error("error reading layer data", idx, log.Err(err))
+		}
 	} else {
 		events.ReportNewLayer(events.NewLayer{
 			Layer:  layer,
 			Status: events.LayerStatusTypeUnknown,
 		})
 	}
-	defer msh.lkMutex.Unlock()
-	msh.lkMutex.Lock()
+	defer msh.mutex.Unlock()
+	msh.mutex.Lock()
 	if idx.After(msh.latestLayer) {
 		events.ReportNodeStatusUpdate()
 		msh.With().Info("set latest known layer", idx)
@@ -239,39 +233,86 @@ func (msh *Mesh) GetLayer(i types.LayerID) (*types.Layer, error) {
 	return l, nil
 }
 
+// ProcessedLayer returns the last processed layer ID
+func (msh *Mesh) ProcessedLayer() types.LayerID {
+	return msh.getProcessedLayer().ID
+}
+
+// ProcessedLayerHash returns the aggregated hash of the last processed layer
+func (msh *Mesh) ProcessedLayerHash() types.Hash32 {
+	return msh.getProcessedLayer().Hash
+}
+
+func (msh *Mesh) getProcessedLayer() ProcessedLayer {
+	msh.mutex.RLock()
+	defer msh.mutex.RUnlock()
+	return msh.processedLayer
+}
+
+func (msh *Mesh) setProcessedLayer(layerID types.LayerID, hash types.Hash32) {
+	msh.mutex.Lock()
+	defer msh.mutex.Unlock()
+	if msh.processedLayer.ID.After(types.NewLayerID(0)) && msh.processedLayer.ID.Add(1) != layerID {
+		msh.With().Error("could not set processed layer",
+			log.FieldNamed("old_processed_layer", msh.processedLayer.ID),
+			log.FieldNamed("new_processed_layer", layerID))
+		return
+	}
+	msh.processedLayer = ProcessedLayer{
+		ID:   layerID,
+		Hash: hash,
+	}
+	events.ReportNodeStatusUpdate()
+	msh.Event().Info("processed layer set", layerID, log.String("layer_hash", hash.Hex()))
+}
+
+func (msh *Mesh) persistProcessedLayer(lyr *ProcessedLayer) error {
+	data, err := types.InterfaceToBytes(lyr)
+	if err != nil {
+		return err
+	}
+	if err := msh.general.Put(constPROCESSED, data); err != nil {
+		return err
+	}
+	msh.With().Debug("persisted processed layer",
+		lyr.ID,
+		log.String("layer_hash", lyr.Hash.Hex()))
+	return nil
+}
+
+func (msh *Mesh) recoverProcessedLayer() (*ProcessedLayer, error) {
+	processed, err := msh.general.Get(constPROCESSED)
+	if err != nil {
+		return nil, err
+	}
+	var data ProcessedLayer
+	err = types.BytesToInterface(processed, &data)
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
+// HandleLateBlock process a late (contextually invalid) block.
+func (msh *Mesh) HandleLateBlock(b *types.Block) {
+	msh.With().Info("validate late block", b.ID())
+	oldPbase, newPbase := msh.trtl.HandleLateBlock(b)
+	if err := msh.trtl.Persist(); err != nil {
+		msh.With().Error("could not persist tortoise on late block", b.ID(), b.Layer())
+	}
+	msh.pushLayersToState(oldPbase, newPbase)
+}
+
 type validator struct {
 	*Mesh
-	processedLayer types.LayerID
-}
-
-func (vl *validator) ProcessedLayer() types.LayerID {
-	defer vl.lvMutex.RUnlock()
-	vl.lvMutex.RLock()
-	return vl.processedLayer
-}
-
-func (vl *validator) SetProcessedLayer(lyr types.LayerID) {
-	vl.With().Info("set processed layer", lyr)
-	events.ReportNodeStatusUpdate()
-	defer vl.lvMutex.Unlock()
-	vl.lvMutex.Lock()
-	vl.processedLayer = lyr
-}
-
-func (vl *validator) HandleLateBlock(b *types.Block) {
-	vl.With().Info("validate late block", b.ID())
-	oldPbase, newPbase := vl.trtl.HandleLateBlock(b)
-	if err := vl.trtl.Persist(); err != nil {
-		vl.With().Error("could not persist tortoise on late block", b.ID(), b.Layer())
-	}
-	vl.pushLayersToState(oldPbase, newPbase)
 }
 
 func (vl *validator) ValidateLayer(lyr *types.Layer) {
 	vl.With().Info("validate layer", lyr)
+	hash := vl.calcValidLayerHash(lyr)
 	if len(lyr.Blocks()) == 0 {
 		vl.With().Info("skip validation of layer with no blocks", lyr)
-		vl.SetProcessedLayer(lyr.Index())
+		vl.setProcessedLayer(lyr.Index(), hash)
 		events.ReportNewLayer(events.NewLayer{
 			Layer:  lyr,
 			Status: events.LayerStatusTypeConfirmed,
@@ -280,13 +321,17 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 	}
 
 	oldPbase, newPbase := vl.trtl.HandleIncomingLayer(lyr)
-	vl.SetProcessedLayer(lyr.Index())
+	vl.setProcessedLayer(lyr.Index(), hash)
 
 	if err := vl.trtl.Persist(); err != nil {
-		vl.With().Error("could not persist tortoise", lyr)
+		vl.With().Error("could not persist tortoise", lyr, log.Err(err))
 	}
-	if err := vl.general.Put(constPROCESSED, lyr.Index().Bytes()); err != nil {
-		vl.With().Error("could not persist validated layer", lyr)
+	processed := vl.getProcessedLayer()
+	if err := vl.persistProcessedLayer(&processed); err != nil {
+		vl.With().Error("could not persist processed layer",
+			log.FieldNamed("processed_layer", processed.ID),
+			log.String("processed_layer_hash", processed.Hash.Hex()),
+			log.Err(err))
 	}
 	vl.pushLayersToState(oldPbase, newPbase)
 	events.ReportNewLayer(events.NewLayer{
@@ -323,7 +368,6 @@ func (msh *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerI
 		msh.persistLayerHashes(l)
 		msh.reInsertTxsToPool(validBlocks, invalidBlocks, l.Index())
 	}
-	msh.persistLastLayerHash()
 }
 
 func (msh *Mesh) persistLayerHashes(l *types.Layer) {
@@ -339,7 +383,6 @@ func (msh *Mesh) persistLayerHashes(l *types.Layer) {
 		}
 	}
 	msh.persistRunningLayerHash(l.Index(), types.CalcAggregateHash32(prevHash, l.Hash().Bytes()))
-	msh.layerHash = hash.Bytes()
 }
 
 func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l types.LayerID) {
@@ -455,14 +498,14 @@ func (msh *Mesh) updateStateWithLayer(validatedLayer types.LayerID, layer *types
 
 func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) {
 	// update validated layer only after applying transactions since loading of state depends on processedLayer param.
-	msh.pMutex.Lock()
+	msh.mutex.Lock()
 	if err := msh.general.Put(VERIFIED, lyr.Bytes()); err != nil {
 		// can happen if database already closed
 		msh.Error("could not persist validated layer index %d: %v", lyr, err.Error())
 		// TODO: return here without setting latestLayerInState ?
 	}
 	msh.latestLayerInState = lyr
-	msh.pMutex.Unlock()
+	msh.mutex.Unlock()
 }
 
 func (msh *Mesh) logStateRoot(layerID types.LayerID) {
@@ -471,21 +514,10 @@ func (msh *Mesh) logStateRoot(layerID types.LayerID) {
 	)
 }
 
+// calcValidLayerHash calculates the aggregated hash up to the specified layer
 func (msh *Mesh) calcValidLayerHash(layer *types.Layer) types.Hash32 {
 	validBlocks, _ := msh.BlocksByValidity(layer.Blocks())
-	msh.layerHash = types.CalcBlocksHash32(types.BlockIDs(validBlocks), msh.layerHash).Bytes()
-
-	msh.Event().Info("new layer hash", layer.Index(),
-		log.String("layer_hash", util.Bytes2Hex(msh.layerHash)))
-
-	return types.CalcBlocksHash32(types.BlockIDs(validBlocks), msh.layerHash)
-}
-
-func (msh *Mesh) persistLastLayerHash() {
-	if err := msh.general.Put(constLAYERHASH, msh.layerHash); err != nil {
-		msh.With().Error("failed to persist last layer hash", log.Err(err), msh.ProcessedLayer(),
-			log.String("layer_hash", util.Bytes2Hex(msh.layerHash)))
-	}
+	return types.CalcBlocksHash32(types.BlockIDs(validBlocks), msh.ProcessedLayerHash().Bytes())
 }
 
 func (msh *Mesh) persistRunningLayerHash(layerID types.LayerID, hash types.Hash32) {
@@ -598,44 +630,6 @@ func (msh *Mesh) pushTransactions(l *types.Layer) {
 	)
 }
 
-// GetProcessedLayer returns a layer only if it has already been processed
-func (msh *Mesh) GetProcessedLayer(i types.LayerID) (*types.Layer, error) {
-	msh.lMutex.RLock()
-	if i.After(msh.ProcessedLayer()) {
-		msh.lMutex.RUnlock()
-		msh.Debug("failed to get layer  ", i.String(), " layer not verified yet")
-		return nil, errors.New("layer not verified yet")
-	}
-	msh.lMutex.RUnlock()
-	return msh.GetLayer(i)
-}
-
-// AddBlock adds a block to the database ignoring the block txs/atxs
-// ***USED ONLY FOR TESTS***
-func (msh *Mesh) AddBlock(blk *types.Block) error {
-	msh.Debug("add block %d", blk.ID())
-	if err := msh.DB.AddBlock(blk); err != nil {
-		msh.Warning("failed to add block %v  %v", blk.ID(), err)
-
-		if blk.ID() != GenesisBlock().ID() {
-			return err
-		}
-	}
-
-	l, err := msh.GetLayer(blk.LayerIndex)
-	if err != nil {
-		return err
-	}
-	msh.persistLayerHashes(l)
-	msh.SetLatestLayer(blk.Layer())
-	// new block add to orphans
-	msh.handleOrphanBlocks(blk)
-
-	// invalidate txs and atxs from pool
-	msh.invalidateFromPools(&blk.MiniBlock)
-	return nil
-}
-
 // SetZeroBlockLayer tags lyr as a layer without blocks
 func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 	msh.With().Info("tagging zero block layer", lyr)
@@ -655,9 +649,11 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 		return fmt.Errorf("layer has blocks")
 	}
 
-	msh.SetLatestLayer(lyr)
+	msh.setLatestLayer(lyr)
+
 	lm := msh.getLayerMutex(lyr)
 	defer msh.endLayerWorker(lyr)
+
 	lm.m.Lock()
 	defer lm.m.Unlock()
 	// layer doesnt exist, need to insert new layer
@@ -684,7 +680,7 @@ func (msh *Mesh) AddBlockWithTxs(ctx context.Context, blk *types.Block) error {
 		return err
 	}
 
-	msh.SetLatestLayer(blk.Layer())
+	msh.setLatestLayer(blk.Layer())
 	// add new block to orphans
 	msh.handleOrphanBlocks(blk)
 	events.ReportNewBlock(blk)
@@ -737,8 +733,8 @@ func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
 
 // todo better thread safety
 func (msh *Mesh) handleOrphanBlocks(blk *types.Block) {
-	msh.orphMutex.Lock()
-	defer msh.orphMutex.Unlock()
+	msh.mutex.Lock()
+	defer msh.mutex.Unlock()
 	if _, ok := msh.orphanBlocks[blk.Layer()]; !ok {
 		msh.orphanBlocks[blk.Layer()] = make(map[types.BlockID]struct{})
 	}
@@ -760,8 +756,8 @@ func (msh *Mesh) handleOrphanBlocks(blk *types.Block) {
 
 // GetOrphanBlocksBefore returns all known orphan blocks with layerID < l
 func (msh *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error) {
-	msh.orphMutex.RLock()
-	defer msh.orphMutex.RUnlock()
+	msh.mutex.RLock()
+	defer msh.mutex.RUnlock()
 	ids := map[types.BlockID]struct{}{}
 	for key, val := range msh.orphanBlocks {
 		if key.Before(l) {

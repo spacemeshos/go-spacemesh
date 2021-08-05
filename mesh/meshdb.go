@@ -418,8 +418,10 @@ func (m *DB) writeBlock(bl *types.Block) error {
 func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 	lm := m.getLayerMutex(blk.LayerIndex)
 	defer m.endLayerWorker(blk.LayerIndex)
+
 	lm.m.Lock()
 	defer lm.m.Unlock()
+
 	ids, err := m.layers.Get(blk.LayerIndex.Bytes())
 	var blockIds []types.BlockID
 	if err != nil {
@@ -432,12 +434,14 @@ func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 		}
 	}
 	m.Debug("added block %v to layer %v", blk.ID(), blk.LayerIndex)
+
 	blockIds = append(blockIds, blk.ID())
 	types.SortBlockIDs(blockIds)
 	w, err := types.BlockIdsToBytes(blockIds)
 	if err != nil {
 		return errors.New("could not encode layer blk ids")
 	}
+
 	m.layers.Put(blk.LayerIndex.Bytes(), w)
 	hash := types.CalcBlocksHash32(blockIds, nil)
 	m.persistLayerHash(blk.LayerIndex, hash)

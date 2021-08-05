@@ -48,8 +48,6 @@ func AddCommands(cmd *cobra.Command) {
 		config.Hdist, "hdist")
 	cmd.PersistentFlags().BoolVar(&config.PprofHTTPServer, "pprof-server",
 		config.PprofHTTPServer, "enable http pprof server")
-	cmd.PersistentFlags().StringVar(&config.GenesisConfPath, "genesis-conf",
-		config.GenesisConfPath, "add genesis configuration")
 	cmd.PersistentFlags().StringVar(&config.GoldenATXID, "golden-atx",
 		config.GoldenATXID, "golden ATX hash")
 	cmd.PersistentFlags().IntVar(&config.BlockCacheSize, "block-cache-size",

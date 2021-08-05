@@ -104,19 +104,19 @@ var Cmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		app := NewSpacemeshApp()
 		starter := func() error {
-			if err := app.Initialize(cmd, args); err != nil {
+			if err := app.InitializeCmd(cmd, args); err != nil {
 				log.With().Error("Failed to initialize node.", log.Err(err))
 				return err
 			}
 			// This blocks until the context is finished or until an error is produced
-			err := app.Start(cmd, args)
+			err := app.Start()
 			if err != nil {
 				log.With().Error("Failed to start the node. See logs for details.", log.Err(err))
 			}
 			return err
 		}
 		err := starter()
-		app.Cleanup(cmd, args)
+		app.Cleanup()
 		if err != nil {
 			os.Exit(1)
 		}
@@ -152,6 +152,15 @@ type Service interface {
 type HareService interface {
 	Service
 	GetResult(types.LayerID) ([]types.BlockID, error)
+}
+
+// TortoiseBeaconService is an interface that defines tortoise beacon functionality.
+type TortoiseBeaconService interface {
+	Service
+	GetBeacon(id types.EpochID) ([]byte, error)
+	HandleSerializedProposalMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher)
+	HandleSerializedFirstVotingMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher)
+	HandleSerializedFollowingVotingMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher)
 }
 
 // TickProvider is an interface to a glopbal system clock that releases ticks on each layer
@@ -192,7 +201,7 @@ type SpacemeshApp struct {
 	atxDb          *activation.DB
 	poetListener   *activation.PoetListener
 	edSgn          *signing.EdSigner
-	tBeacon        *tortoisebeacon.TortoiseBeacon
+	tortoiseBeacon TortoiseBeaconService
 	closers        []interface{ Close() }
 	log            log.Log
 	txPool         *state.TxMempool
@@ -249,21 +258,8 @@ func (app *SpacemeshApp) introduction() {
 	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 }
 
-// Initialize does pre processing of flags and configuration files, it also initializes data dirs if they dont exist
-func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err error) {
-	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-
-	// Goroutine that listens for Ctrl ^ C command
-	// and triggers the quit app
-	go func() {
-		for range signalChan {
-			log.Info("Received an interrupt, stopping services...\n")
-			cmdp.Cancel()
-		}
-	}()
-
+// InitializeCmd does pre processing of flags and configuration files, it also initializes data dirs if they dont exist
+func (app *SpacemeshApp) InitializeCmd(cmd *cobra.Command, args []string) (err error) {
 	// parse the config file based on flags et al
 	if err := app.ParseConfig(); err != nil {
 		log.Error(fmt.Sprintf("couldn't parse the config err=%v", err))
@@ -281,6 +277,24 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 	if err != nil {
 		return err
 	}
+
+	return app.Initialize()
+}
+
+// Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync
+func (app *SpacemeshApp) Initialize() (err error) {
+	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt)
+
+	// Goroutine that listens for Ctrl ^ C command
+	// and triggers the quit app
+	go func() {
+		for range signalChan {
+			log.Info("Received an interrupt, stopping services...\n")
+			cmdp.Cancel()
+		}
+	}()
 
 	app.setupLogging()
 
@@ -332,7 +346,7 @@ func (app *SpacemeshApp) getAppInfo() string {
 }
 
 // Cleanup stops all app services
-func (app *SpacemeshApp) Cleanup(*cobra.Command, []string) {
+func (app *SpacemeshApp) Cleanup() {
 	log.Info("app cleanup starting...")
 	app.stopServices()
 	// add any other Cleanup tasks here....
@@ -340,17 +354,10 @@ func (app *SpacemeshApp) Cleanup(*cobra.Command, []string) {
 }
 
 func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) error {
-	var conf *apiCfg.GenesisConfig
-	if app.Config.GenesisConfPath != "" {
-		var err error
-		conf, err = apiCfg.LoadGenesisConfig(app.Config.GenesisConfPath)
-		if err != nil {
-			return fmt.Errorf("cannot load genesis config from file %s: %w", app.Config.GenesisConfPath, err)
-		}
-	} else {
-		conf = apiCfg.DefaultGenesisConfig()
+	if app.Config.Genesis == nil {
+		app.Config.Genesis = apiCfg.DefaultGenesisConfig()
 	}
-	for id, acc := range conf.InitialAccounts {
+	for id, balance := range app.Config.Genesis.Accounts {
 		bytes := util.FromHex(id)
 		if len(bytes) == 0 {
 			return fmt.Errorf("cannot read config entry for genesis account %s", id)
@@ -358,11 +365,10 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 
 		addr := types.BytesToAddress(bytes)
 		state.CreateAccount(addr)
-		state.AddBalance(addr, acc.Balance)
-		state.SetNonce(addr, acc.Nonce)
+		state.AddBalance(addr, balance)
 		app.log.With().Info("genesis account created",
 			log.String("acct_id", id),
-			log.Uint64("balance", acc.Balance))
+			log.Uint64("balance", balance))
 	}
 
 	_, err := state.Commit()
@@ -463,10 +469,6 @@ func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
 	return nil
 }
 
-type vrfSigner interface {
-	Sign([]byte) []byte
-}
-
 func (app *SpacemeshApp) initServices(ctx context.Context,
 	logger log.Log,
 	nodeID types.NodeID,
@@ -477,7 +479,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	rolacle hare.Rolacle,
 	layerSize uint32,
 	poetClient activation.PoetProvingServiceClient,
-	vrfSigner vrfSigner,
+	vrfSigner signing.Signer,
 	layersPerEpoch uint32, clock TickProvider) error {
 
 	app.nodeID = nodeID
@@ -553,14 +555,14 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
 
-	// TODO(nkryuchkov): Enable weak coin when finished.
-	//wc := weakcoin.NewWeakCoin(weakcoin.DefaultThreshold, swarm, BLS381.Verify2, vrfSigner, app.addLogger(WeakCoinLogger, lg))
-	wc := weakcoin.ValueMock{Value: false}
+	wc := weakcoin.New(swarm,
+		vrfSigner, signing.VRFVerifier{},
+		weakcoin.WithLog(app.addLogger(WeakCoinLogger, lg)),
+		weakcoin.WithMaxRound(types.RoundID(app.Config.TortoiseBeacon.RoundsNumber)),
+	)
+
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, nodeID, ld, swarm, atxdb, tBeaconDB, sgn, signing.VRFVerify, vrfSigner, wc, clock, app.addLogger(TBeaconLogger, lg))
-	if err := tBeacon.Start(ctx); err != nil {
-		app.log.Panic("Failed to start tortoise beacon: %v", err)
-	}
+	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, nodeID, ld, swarm, atxdb, tBeaconDB, sgn, signing.VRFVerifier{}, vrfSigner, wc, clock, app.addLogger(TBeaconLogger, lg))
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
@@ -678,8 +680,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	gossipListener.AddListener(ctx, tortoisebeacon.TBProposalProtocol, priorityq.Low, tBeacon.HandleSerializedProposalMessage)
 	gossipListener.AddListener(ctx, tortoisebeacon.TBFirstVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFirstVotingMessage)
 	gossipListener.AddListener(ctx, tortoisebeacon.TBFollowingVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFollowingVotingMessage)
-	// TODO(nkryuchkov): Enable weak coin when finished.
-	//gossipListener.AddListener(ctx, weakcoin.GossipProtocol, priorityq.Low, wc.HandleSerializedMessage)
+	gossipListener.AddListener(ctx, weakcoin.GossipProtocol, priorityq.Low, wc.HandleSerializedMessage)
 
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener
@@ -697,7 +698,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	app.txProcessor = processor
 	app.atxDb = atxdb
 	app.layerFetch = layerFetch
-	app.tBeacon = tBeacon
+	app.tortoiseBeacon = tBeacon
 	if !app.Config.TIME.Peersync.Disable {
 		conf := app.Config.TIME.Peersync
 		conf.ResponsesBufferSize = app.Config.P2P.BufferSize
@@ -763,6 +764,10 @@ func (app *SpacemeshApp) HareFactory(ctx context.Context, mdb *mesh.DB, swarm se
 func (app *SpacemeshApp) startServices(ctx context.Context, logger log.Log) error {
 	app.layerFetch.Start()
 	go app.startSyncer(ctx)
+
+	if err := app.tortoiseBeacon.Start(ctx); err != nil {
+		return fmt.Errorf("cannot start tortoise beacon: %w", err)
+	}
 
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
@@ -892,10 +897,9 @@ func (app *SpacemeshApp) stopServices() {
 		app.gossipListener.Stop()
 	}
 
-	if app.tBeacon != nil {
-		log.Info("Stopping tortoise beacon...")
-		// does not return any errors
-		app.tBeacon.Close()
+	if app.tortoiseBeacon != nil {
+		app.log.Info("Stopping tortoise beacon...")
+		app.tortoiseBeacon.Close()
 	}
 
 	if app.poetListener != nil {
@@ -1022,7 +1026,7 @@ func (app *SpacemeshApp) startSyncer(ctx context.Context) {
 }
 
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
-func (app *SpacemeshApp) Start(*cobra.Command, []string) error {
+func (app *SpacemeshApp) Start() error {
 	// we use the main app context
 	ctx := cmdp.Ctx
 	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
@@ -1129,7 +1133,6 @@ func (app *SpacemeshApp) Start(*cobra.Command, []string) error {
 	if app.Config.MetricsPush != "" {
 		metrics.StartPushingMetrics(app.Config.MetricsPush, app.Config.MetricsPushPeriod,
 			swarm.LocalNode().PublicKey().String(), strconv.Itoa(int(app.Config.P2P.NetworkID)))
-
 	}
 
 	app.startServices(ctx, logger)
