@@ -648,7 +648,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 			"method IsIdentityActiveOnConsensusView erred while calling actives func": {},
 			"error checking if identity is active":                                    {},
 			"could not notify subscribers":                                            {},
-			"Failed to send proposal messages":                                        {},
+			"Failed to send proposal message":                                         {},
 		}
 
 		for i := 0; i < len(expected); {
