@@ -13,7 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"golang.org/x/sync/errgroup"
+	"github.com/spacemeshos/go-spacemesh/taskgroup"
 )
 
 const (
@@ -132,7 +132,7 @@ func New(network Network, opts ...Option) *Sync {
 	}
 
 	sync.ctx, sync.cancel = context.WithCancel(sync.ctx)
-	sync.wg, sync.ctx = errgroup.WithContext(sync.ctx)
+	sync.tg = taskgroup.New(taskgroup.WithContext(sync.ctx))
 
 	sync.srv = server.NewMsgServer(sync.ctx,
 		network,
@@ -157,7 +157,7 @@ type Sync struct {
 	peersWatcher peersWatcher
 
 	once   sync.Once
-	wg     *errgroup.Group
+	tg     *taskgroup.Group
 	ctx    context.Context
 	cancel func()
 }
@@ -182,12 +182,12 @@ func (s *Sync) requestHandler(ctx context.Context, buf []byte) []byte {
 // Start background workers.
 func (s *Sync) Start() {
 	s.once.Do(func() {
-		s.wg.Go(func() error {
-			return s.run()
+		s.tg.Go(func(ctx context.Context) error {
+			return s.run(ctx)
 		})
-		s.wg.Go(func() error {
+		s.tg.Go(func(ctx context.Context) error {
 			added, expired := s.network.SubscribePeerEvents()
-			return s.peersWatcher.run(s.ctx, added, expired)
+			return s.peersWatcher.run(ctx, added, expired)
 		})
 	})
 }
@@ -201,14 +201,14 @@ func (s *Sync) Stop() {
 
 // Wait will return first error that is returned by background workers.
 func (s *Sync) Wait() error {
-	err := s.wg.Wait()
+	err := s.tg.Wait()
 	if errors.Is(err, context.Canceled) {
 		return nil
 	}
 	return err
 }
 
-func (s *Sync) run() error {
+func (s *Sync) run(ctx context.Context) error {
 	var (
 		timer *time.Timer
 		round uint64
@@ -216,7 +216,7 @@ func (s *Sync) run() error {
 	s.log.With().Debug("started sync background worker")
 	defer s.log.With().Debug("exiting sync background worker")
 	for {
-		prs, err := s.peersWatcher.waitPeers(s.ctx, s.config.RequiredResponses)
+		prs, err := s.peersWatcher.waitPeers(ctx, s.config.RequiredResponses)
 		if err != nil {
 			return err
 		}
@@ -225,7 +225,7 @@ func (s *Sync) run() error {
 			log.Int("peers_count", len(prs)),
 			log.Uint32("errors_count", atomic.LoadUint32(&s.errCnt)),
 		)
-		rctx, cancel := context.WithTimeout(s.ctx, s.config.RoundTimeout)
+		rctx, cancel := context.WithTimeout(ctx, s.config.RoundTimeout)
 		offset, err := s.GetOffset(rctx, round, prs)
 		cancel()
 
@@ -261,8 +261,8 @@ func (s *Sync) run() error {
 			timer.Reset(timeout)
 		}
 		select {
-		case <-s.ctx.Done():
-			return s.ctx.Err()
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-timer.C:
 		}
 	}

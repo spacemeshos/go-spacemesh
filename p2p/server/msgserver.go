@@ -74,7 +74,8 @@ type MessageServer struct {
 	requestLifetime    time.Duration                                         //time a request can stay in the pending queue until evicted
 	workerLimit        int
 	workerLimiter      chan struct{}
-	exit               chan struct{}
+	exit               chan struct{} // request read loop to exit
+	exited             chan struct{} // notify that exited
 	log.Log
 }
 
@@ -96,18 +97,28 @@ func NewMsgServer(ctx context.Context, network Service, name string, requestLife
 		msgRequestHandlers: make(map[MessageType]func(context.Context, Message) []byte),
 		requestLifetime:    requestLifetime,
 		exit:               make(chan struct{}),
+		exited:             make(chan struct{}),
 		workerLimit:        runtime.NumCPU(),
 		workerLimiter:      make(chan struct{}, runtime.NumCPU()),
 	}
 
-	go p.readLoop(log.WithNewSessionID(ctx))
+	go func() {
+		p.readLoop(log.WithNewSessionID(ctx))
+		close(p.exited)
+	}()
 	return p
 }
 
 // Close stops the MessageServer
 func (p *MessageServer) Close() {
+	select {
+	case <-p.exit:
+	default:
+		return
+	}
 	p.With().Info("closing MessageServer")
 	close(p.exit)
+	<-p.exited
 	p.With().Info("waiting for message workers to finish...")
 	for i := 0; i < p.workerLimit; i++ {
 		p.workerLimiter <- struct{}{}
