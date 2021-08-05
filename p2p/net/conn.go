@@ -298,7 +298,7 @@ func (c *FormattedConnection) SendSock(m []byte) error {
 	}
 	_, err = c.w.WriteRecord(m)
 	if err != nil {
-		cerr := c.Close()
+		cerr := c.closeNoWait()
 		c.wmtx.Unlock()
 		if cerr != ErrAlreadyClosed {
 			c.networker.publishClosingConnection(ConnectionWithErr{c, err}) // todo: reconsider
@@ -315,13 +315,17 @@ func (c *FormattedConnection) Closed() bool {
 	return atomic.LoadUint64(&c.closed) == 1
 }
 
-// Close closes the connection (implements io.Closer). It is go safe.
-func (c *FormattedConnection) Close() error {
+func (c *FormattedConnection) closeNoWait() error {
 	if !atomic.CompareAndSwapUint64(&c.closed, 0, 1) {
 		return ErrAlreadyClosed
 	}
 	close(c.stopSending)
-	err := c.close.Close()
+	return c.close.Close()
+}
+
+// Close closes the connection (implements io.Closer). It is go safe.
+func (c *FormattedConnection) Close() error {
+	err := c.closeNoWait()
 	c.wg.Wait()
 	return err
 }
@@ -336,17 +340,17 @@ var (
 func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Duration) error {
 	err := c.deadliner.SetReadDeadline(time.Now().Add(timeout))
 	if err != nil {
-		c.Close()
+		c.closeNoWait()
 		return err
 	}
 	msg, err := c.r.Next()
 	if err != nil {
-		c.Close()
+		c.closeNoWait()
 		return err
 	}
 	err = c.deadliner.SetReadDeadline(time.Time{})
 	if err != nil {
-		c.Close()
+		c.closeNoWait()
 		return fmt.Errorf("failed to set read dealine: %w", err)
 	}
 
@@ -357,13 +361,13 @@ func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Du
 	}
 
 	if c.session != nil {
-		c.Close()
+		c.closeNoWait()
 		return errors.New("setup connection twice")
 	}
 
 	err = c.networker.HandlePreSessionIncomingMessage(c, msg)
 	if err != nil {
-		c.Close()
+		c.closeNoWait()
 		return err
 	}
 
@@ -399,7 +403,7 @@ func (c *FormattedConnection) beginEventProcessing(ctx context.Context) {
 		}
 	}
 
-	if cerr := c.Close(); cerr != ErrAlreadyClosed {
+	if cerr := c.closeNoWait(); cerr != ErrAlreadyClosed {
 		c.networker.publishClosingConnection(ConnectionWithErr{c, err})
 	}
 }
