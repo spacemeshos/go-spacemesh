@@ -36,9 +36,27 @@ type SystemTest struct {
 	LayersPerEpoch uint32
 }
 
-// NewSystemTest creates a new SystemTest object based on tesground enviornment
-// vars and init context
-func NewSystemTest(ctx context.Context, re *runtime.RunEnv, ic *run.InitContext) *SystemTest {
+type MockedNodeTest struct {
+	SystemTest
+}
+
+// NewMockedNodeTest creates a new system test with mocked node
+func NewMockedNodeTest(ctx context.Context, re *runtime.RunEnv, ic *run.InitContext) *MockedNodeTest {
+	var t MockedNodeTest
+	st := NewSystemTest(ctx, re, ic)
+	t.ic = ic
+	t.ctx = ctx
+	t.re = re
+	t.LayersPerEpoch = layersPerEpoch
+	t.ID = st.ID
+	t.Cfg = st.Cfg
+	t.Account1 = st.Account1
+	t.Account2 = st.Account2
+	t.GRPC = st.GRPC
+	return &t
+}
+func NewSystemTest(ctx context.Context, re *runtime.RunEnv,
+	ic *run.InitContext) *SystemTest {
 	c := config.DefaultConfig()
 
 	t := SystemTest{re: re,
@@ -133,7 +151,7 @@ func (t *SystemTest) GetAccountState(account *signing.EdSigner) *types.AccountSt
 	}
 }
 
-// GetBalance send coins from one acounts to another
+// SendCoins send coins from one acounts to another
 func (t *SystemTest) SendCoins(nonce uint64, recipient *signing.EdSigner,
 	amount uint64, signer *signing.EdSigner) {
 	to := types.BytesToAddress(recipient.PublicKey().Bytes())
