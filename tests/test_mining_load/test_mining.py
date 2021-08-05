@@ -27,7 +27,6 @@ def test_transactions(init_session, setup_network_with_state):
 
     tts = layer_duration * tx_gen_conf.num_layers_until_process
     sleep_print_backwards(tts)
-    print(f"#@!#@!#@!\n\n{setup_network_with_state.get_clients_pods()}\n\n")
     wallet_api = WalletAPI(namespace, setup_network_with_state.get_clients_pods())
 
     tap_bal = wallet_api.get_balance_value(tx_gen_conf.acc_pub)
