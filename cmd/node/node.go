@@ -242,8 +242,9 @@ func New(opts ...Option) *App {
 	for _, opt := range opts {
 		opt(app)
 	}
-	// TODO(dshulyak) hooks must be registered for all loggers but system tests start to fail when we do that
-	log.SetupGlobal(log.RegisterHooks(app.log, events.EventHook()))
+	app.log = log.RegisterHooks(app.log, events.EventHook())
+	lvl := zap.NewAtomicLevelAt(zap.InfoLevel)
+	log.SetupGlobal(app.log.SetLevel(&lvl))
 	return app
 }
 
