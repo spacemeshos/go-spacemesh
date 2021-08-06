@@ -106,10 +106,13 @@ func AddCommands(cmd *cobra.Command) {
 		config.P2P.SwarmConfig.RoutingTableAlpha, "Number of random connections")
 	cmd.PersistentFlags().StringSliceVar(&config.P2P.SwarmConfig.BootstrapNodes, "bootnodes",
 		config.P2P.SwarmConfig.BootstrapNodes, "Number of random connections")
-	cmd.PersistentFlags().DurationVar(&config.TIME.MaxAllowedDrift, "max-allowed-time-drift",
-		config.TIME.MaxAllowedDrift, "When to close the app until user resolves time sync problems")
 	cmd.PersistentFlags().StringVar(&config.P2P.SwarmConfig.PeersFile, "peers-file",
 		config.P2P.SwarmConfig.PeersFile, "addrbook peers file. located under data-dir/<publickey>/<peer-file> not loaded or saved if empty string is given.")
+
+	/** ======================== TIME Flags ========================== **/
+
+	cmd.PersistentFlags().DurationVar(&config.TIME.MaxAllowedDrift, "max-allowed-time-drift",
+		config.TIME.MaxAllowedDrift, "When to close the app until user resolves time sync problems")
 	cmd.PersistentFlags().IntVar(&config.TIME.NtpQueries, "ntp-queries",
 		config.TIME.NtpQueries, "Number of ntp queries to do")
 	cmd.PersistentFlags().DurationVar(&config.TIME.DefaultTimeoutLatency, "default-timeout-latency",
@@ -120,7 +123,20 @@ func AddCommands(cmd *cobra.Command) {
 		"ntp-servers", config.TIME.NTPServers, "A list of NTP servers to query (e.g., 'time.google.com'). Overrides the list in config. Must contain more servers than the number of ntp-queries.")
 	cmd.PersistentFlags().IntVar(&config.P2P.MsgSizeLimit, "msg-size-limit",
 		config.P2P.MsgSizeLimit, "The message size limit in bytes for incoming messages")
-
+	cmd.PersistentFlags().BoolVar(&config.TIME.Peersync.Disable, "disable", config.TIME.Peersync.Disable,
+		"disable verification that local time is in sync with peers")
+	cmd.PersistentFlags().DurationVar(&config.TIME.Peersync.RoundRetryInterval, "peersync-round-retry-interval",
+		config.TIME.Peersync.RoundRetryInterval, "when to retry a sync round after a failure")
+	cmd.PersistentFlags().DurationVar(&config.TIME.Peersync.RoundInterval, "peersync-round-interval",
+		config.TIME.Peersync.RoundRetryInterval, "when to run a next sync round")
+	cmd.PersistentFlags().DurationVar(&config.TIME.Peersync.RoundTimeout, "peersync-round-timeout",
+		config.TIME.Peersync.RoundRetryInterval, "how long to wait for a round to complete")
+	cmd.PersistentFlags().DurationVar(&config.TIME.Peersync.MaxClockOffset, "peersync-max-clock-offset",
+		config.TIME.Peersync.MaxClockOffset, "max difference between local clock and peers clock")
+	cmd.PersistentFlags().IntVar(&config.TIME.Peersync.MaxOffsetErrors, "peersync-max-offset-errors",
+		config.TIME.Peersync.MaxOffsetErrors, "the node will exit when max number of consecutive offset errors will be reached")
+	cmd.PersistentFlags().IntVar(&config.TIME.Peersync.RequiredResponses, "peersync-required-responses",
+		config.TIME.Peersync.RequiredResponses, "min number of clock samples from other that need to be collected to verify time")
 	/** ======================== API Flags ========================== **/
 
 	// StartJSONServer determines if json api server should be started

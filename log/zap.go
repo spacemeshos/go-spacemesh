@@ -109,6 +109,11 @@ func Bool(name string, val bool) Field {
 	return Field(zap.Bool(name, val))
 }
 
+// Time returns a field for time.Time struct value.
+func Time(name string, val time.Time) Field {
+	return Field(zap.Time(name, val))
+}
+
 // Duration returns a duration field
 func Duration(name string, val time.Duration) Field {
 	return Field(zap.Duration(name, val))

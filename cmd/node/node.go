@@ -50,6 +50,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
+	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
@@ -92,6 +93,7 @@ const (
 	GossipListener       = "gossipListener"
 	Fetcher              = "fetcher"
 	LayerFetcher         = "layerFetcher"
+	TimeSyncLogger       = "timesync"
 )
 
 // Cmd is the cobra wrapper for the node, that allows adding parameters to it
@@ -279,6 +281,7 @@ type App struct {
 	log            log.Log
 	txPool         *state.TxMempool
 	layerFetch     *layerfetcher.Logic
+	ptimesync      *peersync.Sync
 	loggers        map[string]*zap.AtomicLevel
 	term           chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
 	started        chan struct{} // this channel is closed once the app has finished starting
@@ -440,6 +443,8 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.NipostBuilderLoggerLevel))
 	case AtxBuilderLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxBuilderLoggerLevel))
+	case TimeSyncLogger:
+		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TimeSyncLoggerLevel))
 	default:
 		lvl.SetLevel(log.Level())
 	}
@@ -694,6 +699,15 @@ func (app *App) initServices(ctx context.Context,
 	app.atxDb = atxdb
 	app.layerFetch = layerFetch
 	app.tortoiseBeacon = tBeacon
+	if !app.Config.TIME.Peersync.Disable {
+		conf := app.Config.TIME.Peersync
+		conf.ResponsesBufferSize = app.Config.P2P.BufferSize
+		app.ptimesync = peersync.New(
+			swarm.(peersync.Network),
+			peersync.WithLog(app.addLogger(TimeSyncLogger, lg)),
+			peersync.WithConfig(conf),
+		)
+	}
 
 	return nil
 }
@@ -776,6 +790,9 @@ func (app *App) startServices(ctx context.Context, logger log.Log) error {
 	}
 
 	app.clock.StartNotifying()
+	if app.ptimesync != nil {
+		app.ptimesync.Start()
+	}
 	go app.checkTimeDrifts()
 	return nil
 }
@@ -918,6 +935,11 @@ func (app *App) stopServices() {
 	if app.mesh != nil {
 		app.log.Info("closing mesh")
 		app.mesh.Close()
+	}
+
+	if app.ptimesync != nil {
+		app.ptimesync.Stop()
+		app.log.Debug("peer timesync stopped")
 	}
 
 	events.CloseEventReporter()
@@ -1130,12 +1152,24 @@ func (app *App) Start() error {
 		Msg:   "node is shutting down",
 		Level: zapcore.InfoLevel,
 	})
+	syncErr := make(chan error, 1)
+	if app.ptimesync != nil {
+		go func() {
+			syncErr <- app.ptimesync.Wait()
+			// if nil node was already stopped
+			if syncErr != nil {
+				cmdp.Cancel()
+			}
+		}()
+	}
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	select {
 	case <-ctx.Done():
 		return nil
 	case err := <-pprofErr:
+		return err
+	case err := <-syncErr:
 		return err
 	}
 }
