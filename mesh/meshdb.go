@@ -10,8 +10,6 @@ import (
 	"fmt"
 	"math/big"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -507,32 +505,49 @@ func (m *DB) getLayerMutex(index types.LayerID) *layerMutex {
 	return ll
 }
 
-// Schema: "r_<coinbase>_<smesherId>_<layerId> -> reward struct"
 func getRewardKey(l types.LayerID, account types.Address, smesherID types.NodeID) []byte {
-	str := string(getRewardKeyPrefix(account)) + "_" + smesherID.String() + "_" + l.String()
-	return []byte(str)
+	return new(keyBuilder).
+		WithAccountRewardsPrefix().
+		WithAddress(account).
+		WithNodeID(smesherID).
+		WithLayerID(l).
+		Bytes()
 }
 
 func getRewardKeyPrefix(account types.Address) []byte {
-	str := "r_" + account.String()
-	return []byte(str)
+	return new(keyBuilder).
+		WithAccountRewardsPrefix().
+		WithAddress(account).
+		Bytes()
 }
 
 // This function gets the reward key for a particular smesherID
 // format for the index "s_<smesherid>_<accountid>_<layerid> -> r_<accountid>_<smesherid>_<layerid> -> the actual reward"
 func getSmesherRewardKey(l types.LayerID, smesherID types.NodeID, account types.Address) []byte {
-	str := string(getSmesherRewardKeyPrefix(smesherID)) + "_" + account.String() + "_" + l.String()
-	return []byte(str)
+	return new(keyBuilder).
+		WithSmesherRewardsPrefix().
+		WithNodeID(smesherID).
+		WithAddress(account).
+		WithLayerID(l).
+		Bytes()
 }
 
 // use r_ for one and s_ for the other so the namespaces can't collide
 func getSmesherRewardKeyPrefix(smesherID types.NodeID) []byte {
-	str := "s_" + smesherID.String()
-	return []byte(str)
+	return new(keyBuilder).
+		WithSmesherRewardsPrefix().
+		WithNodeID(smesherID).Bytes()
 }
 
 type keyBuilder struct {
 	buf bytes.Buffer
+}
+
+func parseLayerIDFromRewardsKey(buf []byte) types.LayerID {
+	if len(buf) < 4 {
+		panic("key that contains layer id must be atleast 4 bytes")
+	}
+	return types.NewLayerID(binary.BigEndian.Uint32(buf[len(buf)-4:]))
 }
 
 func (k *keyBuilder) WithLayerID(l types.LayerID) *keyBuilder {
@@ -540,7 +555,7 @@ func (k *keyBuilder) WithLayerID(l types.LayerID) *keyBuilder {
 	// NOTE(dshulyak) big endian produces lexicographically ordered bytes.
 	// some queries can be optimizaed by using range queries instead of point queries.
 	binary.BigEndian.PutUint32(buf, l.Uint32())
-	k.buf.Write(l.Bytes())
+	k.buf.Write(buf)
 	return k
 }
 
@@ -551,6 +566,27 @@ func (k *keyBuilder) WithOriginPrefix() *keyBuilder {
 
 func (k *keyBuilder) WithDestPrefix() *keyBuilder {
 	k.buf.WriteString("a_d_")
+	return k
+}
+
+func (k *keyBuilder) WithAccountRewardsPrefix() *keyBuilder {
+	k.buf.WriteString("r_")
+	return k
+}
+
+func (k *keyBuilder) WithSmesherRewardsPrefix() *keyBuilder {
+	k.buf.WriteString("s_")
+	return k
+}
+
+func (k *keyBuilder) WithAddress(addr types.Address) *keyBuilder {
+	k.buf.Write(addr.Bytes())
+	return k
+}
+
+func (k *keyBuilder) WithNodeID(id types.NodeID) *keyBuilder {
+	k.buf.WriteString(id.Key)
+	k.buf.Write(id.VRFPublicKey)
 	return k
 }
 
@@ -689,19 +725,14 @@ func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err erro
 		if it.Key() == nil {
 			break
 		}
-		str := string(it.Key())
-		strs := strings.Split(str, "_")
-		layer, err := strconv.ParseUint(strs[3], 10, 32)
-		if err != nil {
-			return nil, fmt.Errorf("wrong key in db %s: %v", it.Key(), err)
-		}
+		layer := parseLayerIDFromRewardsKey(it.Key())
 		var reward dbReward
 		err = types.BytesToInterface(it.Value(), &reward)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
 		}
 		rewards = append(rewards, types.Reward{
-			Layer:               types.NewLayerID(uint32(layer)),
+			Layer:               layer,
 			TotalReward:         reward.TotalReward,
 			LayerRewardEstimate: reward.LayerRewardEstimate,
 			SmesherID:           reward.SmesherID,
@@ -718,9 +749,7 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 		if it.Key() == nil {
 			break
 		}
-		str := string(it.Key())
-		strs := strings.Split(str, "_")
-		layer, err := strconv.ParseUint(strs[3], 10, 32)
+		layer := parseLayerIDFromRewardsKey(it.Key())
 		if err != nil {
 			return nil, fmt.Errorf("error parsing db key %s: %v", it.Key(), err)
 		}
@@ -734,7 +763,7 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
 		}
 		rewards = append(rewards, types.Reward{
-			Layer:               types.NewLayerID(uint32(layer)),
+			Layer:               layer,
 			TotalReward:         reward.TotalReward,
 			LayerRewardEstimate: reward.LayerRewardEstimate,
 			SmesherID:           reward.SmesherID,
