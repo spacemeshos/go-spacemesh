@@ -439,8 +439,8 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 
 	msh.Log.With().Info("mesh validating layer", lyr.Index().Field(), log.Int("valid_blocks", len(blocks)), log.Int("invalid_blocks", len(invalidBlocks)))
 
-	if err := msh.SaveLayerInputVectorByID(lyr.Index(), types.BlockIDs(blocks)); err != nil {
-		msh.Log.With().Error("Saving layer input vector failed", lyr.Index().Field())
+	if err := msh.SaveLayerInputVectorByID(ctx, lyr.Index(), types.BlockIDs(blocks)); err != nil {
+		msh.Log.With().Error("failed to save input vector", lyr.Index())
 	}
 	msh.ValidateLayer(lyr)
 }
