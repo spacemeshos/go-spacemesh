@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/require"
 )
@@ -29,11 +28,11 @@ var atx3 = ATXID(three)
 
 // Make sure we can print out all the relevant log fields for a block
 func TestFields(t *testing.T) {
+	t.Skip("this is not a proper test")
 	SetLayersPerEpoch(3)
 	b := &Block{}
 	b.TxIDs = []TransactionID{txid1, txid2, txid1}
 	b.ActiveSet = &[]ATXID{atx1, atx2, atx3}
-	log.With().Info("got new block", b.Fields()...)
 }
 
 func TestStringToNodeID(t *testing.T) {

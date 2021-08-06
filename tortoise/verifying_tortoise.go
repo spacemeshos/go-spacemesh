@@ -66,7 +66,7 @@ func (t *turtle) SetLogger(log2 log.Log) {
 // newTurtle creates a new verifying tortoise algorithm instance. XXX: maybe rename?
 func newTurtle(bdp blockDataProvider, hdist uint32, avgLayerSize int) *turtle {
 	t := &turtle{
-		logger:               log.NewDefault("trtl"),
+		logger:               log.NewNop(),
 		Hdist:                hdist,
 		bdp:                  bdp,
 		AvgLayerSize:         avgLayerSize,
@@ -465,7 +465,7 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer) (pbaseOld, pbaseNew ty
 			t.BlockOpinionsByLayer[b.LayerIndex] = make(map[types.BlockID]Opinion, t.AvgLayerSize)
 		}
 		if err := t.processBlock(b); err != nil {
-			log.Panic(fmt.Sprintf("error processing block %v: %v", b.ID(), err))
+			t.logger.Panic(fmt.Sprintf("error processing block %v: %v", b.ID(), err))
 		}
 	}
 

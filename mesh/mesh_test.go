@@ -8,7 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
@@ -135,8 +135,8 @@ func (MockTxMemPool) Invalidate(types.TransactionID) {
 
 }
 
-func getMesh(id string) *Mesh {
-	lg := log.AppLog.WithName(id)
+func getMesh(tb testing.TB, id string) *Mesh {
+	lg := logtest.New(tb)
 	mmdb := NewMemMeshDB(lg)
 	return NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: mmdb}, newMockTxMemPool(), &MockState{}, lg)
 }
@@ -157,7 +157,8 @@ func addLayer(r *require.Assertions, id types.LayerID, layerSize int, msh *Mesh)
 
 func TestMesh_AddLayerGetLayer(t *testing.T) {
 	r := require.New(t)
-	msh := getMesh("t2")
+
+	msh := getMesh(t, "t2")
 	defer msh.Close()
 
 	id := types.NewLayerID(1)
@@ -178,7 +179,7 @@ func TestMesh_AddLayerGetLayer(t *testing.T) {
 }
 
 func TestMesh_ProcessedLayer(t *testing.T) {
-	msh := getMesh("t6")
+	msh := getMesh(t, "t6")
 	defer msh.Close()
 	msh.setProcessedLayer(types.NewLayerID(2), types.Hash32{})
 	assert.Equal(t, types.NewLayerID(2), msh.ProcessedLayer())
@@ -193,7 +194,7 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 }
 
 func TestMesh_PersistProcessedLayer(t *testing.T) {
-	msh := getMesh("persist_processed_layer")
+	msh := getMesh(t, "persist_processed_layer")
 	defer msh.Close()
 	lyr := &ProcessedLayer{
 		ID:   types.NewLayerID(3),
@@ -206,7 +207,7 @@ func TestMesh_PersistProcessedLayer(t *testing.T) {
 }
 
 func TestMesh_LatestKnownLayer(t *testing.T) {
-	msh := getMesh("t6")
+	msh := getMesh(t, "t6")
 	defer msh.Close()
 	msh.setLatestLayer(types.NewLayerID(3))
 	msh.setLatestLayer(types.NewLayerID(7))
@@ -217,7 +218,7 @@ func TestMesh_LatestKnownLayer(t *testing.T) {
 }
 
 func TestMesh_WakeUp(t *testing.T) {
-	msh := getMesh("t1")
+	msh := getMesh(t, "t1")
 	defer msh.Close()
 
 	r := require.New(t)
@@ -239,7 +240,7 @@ func TestMesh_WakeUp(t *testing.T) {
 	assert.Equal(t, len(txIDs1), len(rBlock1.TxIDs), "block TX size was wrong")
 	assert.Equal(t, block1.Data, rBlock1.MiniBlock.Data, "block content was wrong")
 
-	recoveredMesh := NewMesh(msh.DB, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: msh.DB}, newMockTxMemPool(), &MockState{}, log.NewDefault(""))
+	recoveredMesh := NewMesh(msh.DB, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: msh.DB}, newMockTxMemPool(), &MockState{}, logtest.New(t))
 
 	rBlock2, err = recoveredMesh.GetBlock(block2.ID())
 	assert.NoError(t, err)
@@ -253,7 +254,7 @@ func TestMesh_WakeUp(t *testing.T) {
 }
 
 func TestMesh_OrphanBlocks(t *testing.T) {
-	msh := getMesh("t6")
+	msh := getMesh(t, "t6")
 	defer msh.Close()
 	r := require.New(t)
 	txIDs1, _ := addManyTXsToPool(r, msh, 4)
@@ -285,7 +286,7 @@ func TestMesh_OrphanBlocks(t *testing.T) {
 }
 
 func TestMesh_OrphanBlocksClearEmptyLayers(t *testing.T) {
-	msh := getMesh("t6")
+	msh := getMesh(t, "t6")
 	defer msh.Close()
 	r := require.New(t)
 	txIDs1, _ := addManyTXsToPool(r, msh, 4)
@@ -317,7 +318,7 @@ func TestMesh_OrphanBlocksClearEmptyLayers(t *testing.T) {
 func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) {
 	r := require.New(t)
 
-	msh := getMesh("mesh")
+	msh := getMesh(t, "mesh")
 
 	state := &MockMapState{}
 	msh.txProcessor = state
@@ -353,7 +354,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 func TestMesh_AddBlockWithTxs_PushTransactions_getInvalidBlocksByHare(t *testing.T) {
 	r := require.New(t)
 
-	msh := getMesh("mesh")
+	msh := getMesh(t, "mesh")
 
 	state := &MockMapState{}
 	msh.txProcessor = state
@@ -380,7 +381,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_getInvalidBlocksByHare(t *testing
 func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
 	r := require.New(t)
 
-	msh := getMesh("t2")
+	msh := getMesh(t, "t2")
 	defer msh.Close()
 	layerID := types.NewLayerID(1)
 	signer, _ := newSignerAndAddress(r, "origin")
@@ -401,7 +402,7 @@ func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
 
 func TestMesh_persistLayerHashes(t *testing.T) {
 	r := require.New(t)
-	msh := getMesh("persistLayerHashes")
+	msh := getMesh(t, "persistLayerHashes")
 	defer msh.Close()
 
 	// test first layer hash
@@ -468,7 +469,7 @@ func addManyTXsToPool(r *require.Assertions, msh *Mesh, numOfTxs int) ([]types.T
 
 func TestMesh_AddBlockWithTxs(t *testing.T) {
 	r := require.New(t)
-	mesh := getMesh("AddBlockWithTxs")
+	mesh := getMesh(t, "AddBlockWithTxs")
 
 	numTXs := 6
 	txIDs, _ := addManyTXsToPool(r, mesh, numTXs)

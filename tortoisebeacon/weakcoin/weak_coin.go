@@ -271,7 +271,7 @@ func (wc *WeakCoin) FinishRound() {
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
 	if wc.smallestProposal == nil {
-		wc.logger.With().Error("completed round without valid proposals",
+		wc.logger.With().Warning("completed round without valid proposals",
 			log.Uint32("epoch_id", uint32(wc.epoch)),
 			log.Uint64("round_id", uint64(wc.round)),
 		)

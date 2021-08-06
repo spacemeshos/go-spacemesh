@@ -3,10 +3,11 @@ package hare
 import (
 	"context"
 	"errors"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"time"
 )
 
 type messageValidator interface {
@@ -309,7 +310,7 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 		}
 
 		// extract public key
-		var iMsg, err = newMsg(ctx, innerMsg, v.stateQuerier)
+		var iMsg, err = newMsg(ctx, v.Log, innerMsg, v.stateQuerier)
 		if err != nil {
 			return err
 		}

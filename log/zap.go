@@ -159,7 +159,12 @@ func (l Log) SetLevel(level *zap.AtomicLevel) Log {
 	return Log{logger: lgr, name: l.name}
 }
 
-// WithName returns a logger with the given name
+// Check if following level is supported by the logger.
+func (l Log) Check(level zapcore.Level) bool {
+	return l.logger.Check(level, "") != nil
+}
+
+// WithName appends a name to a current name.
 func (l Log) WithName(prefix string) Log {
 	lgr := l.logger.Named(fmt.Sprintf("%-13s", prefix))
 	var name string
@@ -169,6 +174,11 @@ func (l Log) WithName(prefix string) Log {
 		name = strings.Join([]string{l.name, prefix}, ".")
 	}
 	return Log{logger: lgr, name: name}
+}
+
+// Named overwrites name.
+func (l Log) Named(name string) Log {
+	return NewFromLog(l.logger.Named(name))
 }
 
 // WithFields returns a logger with fields permanently appended to it

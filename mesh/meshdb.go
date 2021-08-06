@@ -95,14 +95,14 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 	for _, blk := range GenesisLayer().Blocks() {
 		ll.Log.With().Info("Adding genesis block ", blk.ID(), blk.LayerIndex)
 		if err := ll.AddBlock(blk); err != nil {
-			log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
+			ll.Log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
 		}
 		if err := ll.SaveContextualValidity(blk.ID(), true); err != nil {
-			log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
+			ll.Log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
 		}
 	}
 	if err := ll.SaveLayerInputVectorByID(GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
-		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
+		ll.Log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
 	}
 	return ll, err
 }
@@ -955,7 +955,7 @@ func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks
 	for _, b := range blocks {
 		valid, err := m.ContextualValidity(b.ID())
 		if err != nil {
-			m.With().Error("could not get contextual validity by block", b.ID(), log.Err(err))
+			m.With().Warning("could not get contextual validity by block", b.ID(), log.Err(err))
 		}
 		if valid {
 			validBlocks = append(validBlocks, b)

@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -147,7 +147,7 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 					RoundsNumber: rounds,
 					Theta:        1,
 				},
-				Log:                       log.NewDefault("TortoiseBeacon"),
+				Log:                       logtest.New(t).WithName("TortoiseBeacon"),
 				validProposals:            tc.validProposals,
 				potentiallyValidProposals: tc.potentiallyValidProposals,
 				incomingVotes:             tc.incomingVotes,
@@ -303,7 +303,7 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 					RoundsNumber: rounds,
 					Theta:        1,
 				},
-				Log:                       log.NewDefault("TortoiseBeacon"),
+				Log:                       logtest.New(t).WithName("TortoiseBeacon"),
 				validProposals:            tc.validProposals,
 				potentiallyValidProposals: tc.potentiallyValidProposals,
 				incomingVotes:             tc.incomingVotes,
