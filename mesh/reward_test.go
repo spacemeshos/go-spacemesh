@@ -294,7 +294,7 @@ type meshValidatorBatchMock struct {
 }
 
 func (m *meshValidatorBatchMock) ValidateLayer(lyr *types.Layer) {
-	m.mesh.setProcessedLayer(lyr.Index(), types.Hash32{})
+	m.mesh.setProcessedLayer(lyr)
 	layerID := lyr.Index()
 	if layerID.Uint32() == 0 {
 		return

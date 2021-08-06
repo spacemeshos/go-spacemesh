@@ -401,7 +401,8 @@ func (l *Layer) Blocks() []*Block {
 	return l.blocks
 }
 
-// Hash returns the 32-byte sha256 sum of the block IDs in this layer, sorted in lexicographic order.
+// Hash returns the 32-byte sha256 sum of the block IDs of both contextually valid and invalid blocks in this layer,
+// sorted in lexicographic order.
 func (l Layer) Hash() Hash32 {
 	return CalcBlocksHash32(SortBlockIDs(BlockIDs(l.blocks)), nil)
 }
