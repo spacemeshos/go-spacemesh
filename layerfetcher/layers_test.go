@@ -98,13 +98,8 @@ func (l *layerDBMock) GetLayerInputVector(hash types.Hash32) ([]types.BlockID, e
 	return l.vectors[hash], nil
 }
 
-func (l *layerDBMock) SaveLayerHashInputVector(id types.Hash32, data []byte) error {
-	var blocks []types.BlockID
-	err := types.BytesToInterface(data, blocks)
-	if err != nil {
-		return err
-	}
-	l.vectors[id] = blocks
+func (l *layerDBMock) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blocks []types.BlockID) error {
+	l.vectors[types.CalcHash32(id.Bytes())] = blocks
 	return nil
 }
 func (l *layerDBMock) GetLayerHash(ID types.LayerID) types.Hash32           { return l.hashes[ID] }

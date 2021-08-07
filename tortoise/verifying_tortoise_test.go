@@ -246,7 +246,7 @@ func turtleMakeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, bloc
 	blocks, err := hm(l)
 	if err == nil {
 		// save blocks to db for this layer
-		require.NoError(t, msh.SaveLayerInputVectorByID(l, blocks))
+		require.NoError(t, msh.SaveLayerInputVectorByID(context.TODO(), l, blocks))
 	}
 
 	trtl.HandleIncomingLayer(lyr)
@@ -315,7 +315,7 @@ func createTurtleLayer(ctx context.Context, l types.LayerID, msh *mesh.DB, bbp b
 	if err != nil {
 		blocks = nil
 	}
-	if err := msh.SaveLayerInputVectorByID(l.Sub(1), blocks); err != nil {
+	if err := msh.SaveLayerInputVectorByID(context.TODO(), l.Sub(1), blocks); err != nil {
 		panic("can't save layuer input vector")
 	}
 
