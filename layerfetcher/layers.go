@@ -38,9 +38,11 @@ type TxProcessor interface {
 // layerDB is an interface that returns layer data and blocks
 type layerDB interface {
 	GetLayerHash(ID types.LayerID) types.Hash32
+	GetAggregatedLayerHash(ID types.LayerID) types.Hash32
 	GetLayerHashBlocks(hash types.Hash32) []types.BlockID
 	GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error)
 	SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blks []types.BlockID) error
+	ProcessedLayer() types.LayerID
 }
 
 type atxIDsDB interface {
@@ -92,7 +94,7 @@ type peerResult struct {
 
 // LayerHashResult is the result of fetching hashes for each layer from peers.
 type LayerHashResult struct {
-	Hashes map[types.Hash32][]peers.Peer
+	Hashes map[layerHash][]peers.Peer
 	Err    error
 }
 
@@ -191,11 +193,24 @@ func (l *Logic) AddDBs(blockDB, AtxDB, TxDB, poetDB, IvDB, tbDB database.Getter)
 // layerHashReqReceiver returns the layer hash for the specified layer.
 func (l *Logic) layerHashReqReceiver(ctx context.Context, msg []byte) []byte {
 	lyr := types.NewLayerID(util.BytesToUint32(msg))
-	h := l.layerDB.GetLayerHash(lyr)
-	l.log.WithContext(ctx).With().Debug("responded layer hash request",
-		lyr,
-		log.String("layerHash", h.ShortString()))
-	return h.Bytes()
+	lyrHash := &layerHash{
+		ProcessedLayer: l.layerDB.ProcessedLayer(),
+		SimpleHash:     l.layerDB.GetLayerHash(lyr),
+		AggHash:        l.layerDB.GetAggregatedLayerHash(lyr),
+	}
+	out, err := types.InterfaceToBytes(lyrHash)
+	if err != nil {
+		l.log.WithContext(ctx).With().Error("failed to serialize layer hash",
+			lyr,
+			log.String("simpleHash", lyrHash.SimpleHash.ShortString()),
+			log.String("aggHash", lyrHash.AggHash.ShortString()))
+	} else {
+		l.log.WithContext(ctx).With().Debug("responded layer hash request",
+			lyr,
+			log.String("simpleHash", lyrHash.SimpleHash.ShortString()),
+			log.String("aggHash", lyrHash.AggHash.ShortString()))
+	}
+	return out
 }
 
 // epochATXsReqReceiver returns the ATXs for the specified epoch.
@@ -341,13 +356,18 @@ func notifyLayerHashResult(layerID types.LayerID, channels []chan LayerHashResul
 	logger.With().Debug("got layer hashes. now aggregating", layerID)
 	numErrors := 0
 	// aggregate the peerResult by data
-	hashes := make(map[types.Hash32][]peers.Peer)
+	hashes := make(map[layerHash][]peers.Peer)
 	for peer, res := range peerResult {
 		if res.err != nil {
 			numErrors++
 		} else {
-			hash := types.BytesToHash(res.data)
-			hashes[hash] = append(hashes[hash], peer)
+			var lyrHash layerHash
+			convertErr := types.BytesToInterface(res.data, &lyrHash)
+			if convertErr != nil {
+				logger.Error("received error converting bytes to layerHash", convertErr)
+				numErrors++
+			}
+			hashes[lyrHash] = append(hashes[lyrHash], peer)
 		}
 	}
 	result := LayerHashResult{Hashes: hashes, Err: nil}
