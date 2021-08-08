@@ -568,6 +568,15 @@ func (msh *Mesh) persistAggregatedLayerHash(layerID types.LayerID, hash types.Ha
 	}
 }
 
+// GetAggregatedLayerHash returns the aggregated layer hash up to the specified layer
+func (msh *Mesh) GetAggregatedLayerHash(layerID types.LayerID) types.Hash32 {
+	h, err := msh.getAggregatedLayerHash(layerID)
+	if err != nil {
+		return EmptyLayerHash
+	}
+	return h
+}
+
 func (msh *Mesh) getAggregatedLayerHash(layerID types.LayerID) (types.Hash32, error) {
 	bts, err := msh.general.Get(msh.getAggregatedLayerHashKey(layerID))
 	if err != nil {

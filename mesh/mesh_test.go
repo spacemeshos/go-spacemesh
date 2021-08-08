@@ -238,6 +238,39 @@ func TestMesh_AddLayerGetLayer(t *testing.T) {
 	r.Equal(3, len(lyr.Blocks()))
 }
 
+func TestMesh_GetAggregatedLayerHash(t *testing.T) {
+	r := require.New(t)
+	msh := getMesh(t, "aggregated hash")
+	defer msh.Close()
+
+	gLyr := types.GetEffectiveGenesis()
+	prevHash := EmptyLayerHash
+	for i := types.NewLayerID(1); i.Before(gLyr); i = i.Add(1) {
+		lyr := addLayer(r, i, 0, msh)
+		msh.ValidateLayer(lyr)
+		aggHash := types.CalcBlocksHash32([]types.BlockID{}, prevHash.Bytes())
+		assert.Equal(t, aggHash, msh.GetAggregatedLayerHash(lyr.Index()))
+		prevHash = aggHash
+	}
+	lyr, err := msh.GetLayer(gLyr)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(lyr.Blocks()))
+	msh.ValidateLayer(lyr)
+	aggHash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(lyr.Blocks())), prevHash.Bytes())
+	assert.Equal(t, aggHash, msh.GetAggregatedLayerHash(lyr.Index()))
+	prevHash = aggHash
+
+	// add a layer with some invalid blocks
+	lyrID := gLyr.Add(1)
+	lyr = addLayer(r, lyrID, 5, msh)
+	r.Equal(5, len(lyr.Blocks()))
+	r.NoError(msh.SaveContextualValidity(lyr.Blocks()[0].ID(), false))
+	msh.ValidateLayer(lyr)
+	// aggregated layer hash only includes valid blocks
+	aggHash = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(lyr.Blocks()[1:])), prevHash.Bytes())
+	assert.Equal(t, aggHash, msh.GetAggregatedLayerHash(lyr.Index()))
+}
+
 func TestMesh_ProcessedLayer(t *testing.T) {
 	r := require.New(t)
 	msh := getMesh(t, "processed layer")
