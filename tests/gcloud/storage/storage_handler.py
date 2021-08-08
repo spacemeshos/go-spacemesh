@@ -70,8 +70,8 @@ def upload_sm_from_pod_to_gcloud_storage(namespace, pod_name, data_path=SM_NODE_
 
 
 def upload_whole_network(namespace):
+    print(f"uploading client poet and bootstrap data from namespace {namespace}")
     pods_names = list_all_pods_names_in_namespace(namespace)
-    print(f"\n\npods:\n{pods_names}\n\n")
     for pod in pods_names:
         if 'client' in pod:
             upload_sm_from_pod_to_gcloud_storage(namespace, pod)

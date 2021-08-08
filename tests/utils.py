@@ -24,6 +24,11 @@ LOGSTASH_SS_NAME = "logstash"
 KIBANA_DEP_NAME = "kibana"
 
 
+def api_call_async(client_ip, data, api, namespace, output_list, port="9093", retry=3, interval=1):
+    res = api_call(client_ip, data, api, namespace, port, retry, interval)
+    output_list.append(res)
+
+
 def api_call(client_ip, data, api, namespace, port="9093", retry=3, interval=1):
     res = None
     while True:
@@ -42,7 +47,6 @@ def api_call(client_ip, data, api, namespace, port="9093", retry=3, interval=1):
             continue
         else:
             break
-
     return res
 
 
@@ -297,9 +301,7 @@ def wait_genesis(genesis_time, genesis_delta):
         time.sleep(delta_from_genesis)
 
 
-def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME,
-                                                  logstash_ss_name=LOGSTASH_SS_NAME,
-                                                  kibana_dep_name=KIBANA_DEP_NAME):
+def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME, kibana_dep_name=KIBANA_DEP_NAME):
     es_timeout = 240
     try:
         print("waiting for ES to be ready")
