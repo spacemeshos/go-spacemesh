@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -70,8 +71,6 @@ type network interface {
 	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), timeoutHandler func(err error)) error
 	Close()
 }
-
-var emptyHash = types.Hash32{}
 
 // ErrZeroLayer is the error returned when an empty hash is received when polling for layer
 var ErrZeroLayer = errors.New("zero layer")
@@ -388,7 +387,7 @@ func (l *Logic) PollLayerBlocks(ctx context.Context, layerID types.LayerID, hash
 	numHashes := len(hashes)
 	for hash, remotePeers := range hashes {
 		peer := remotePeers[0]
-		if hash == emptyHash {
+		if hash == mesh.EmptyLayerHash {
 			l.receiveBlockHashes(ctx, layerID, peer, numHashes, nil, ErrZeroLayer)
 			continue
 		}
@@ -423,8 +422,10 @@ func (l *Logic) fetchLayerBlocks(ctx context.Context, layerID types.LayerID, blo
 		l.log.WithContext(ctx).With().Error("failed to save input vector", layerID, log.Err(err))
 	}
 
-	if err := l.GetInputVector(ctx, layerID); err != nil {
-		l.log.WithContext(ctx).With().Debug("error getting input vector", layerID, log.Err(err))
+	if !layerID.GetEpoch().IsGenesis() {
+		if err := l.GetInputVector(ctx, layerID); err != nil {
+			l.log.WithContext(ctx).With().Debug("error getting input vector", layerID, log.Err(err))
+		}
 	}
 }
 

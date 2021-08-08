@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/spacemeshos/go-spacemesh/mesh"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -397,9 +399,9 @@ func TestPollLayerBlocks_OneZeroLayerAmongstErrors(t *testing.T) {
 	layerID := types.NewLayerID(10)
 	// currently first peer for each hash is queried
 	layerHashes := map[types.Hash32][]peers.Peer{
-		emptyHash:    {net.peers[2]},
-		randomHash(): {net.peers[1], net.peers[0]},
-		randomHash(): {net.peers[3]},
+		mesh.EmptyLayerHash: {net.peers[2]},
+		randomHash():        {net.peers[1], net.peers[0]},
+		randomHash():        {net.peers[3]},
 	}
 
 	res := <-l.PollLayerBlocks(context.TODO(), layerID, layerHashes)
@@ -421,7 +423,7 @@ func TestPollLayerBlocks_ZeroLayer(t *testing.T) {
 	layerID := types.NewLayerID(10)
 	// currently first peer for each hash is queried
 	layerHashes := map[types.Hash32][]peers.Peer{
-		emptyHash: {net.peers[2], net.peers[1], net.peers[0], net.peers[3]},
+		mesh.EmptyLayerHash: {net.peers[2], net.peers[1], net.peers[0], net.peers[3]},
 	}
 
 	res := <-l.PollLayerBlocks(context.TODO(), layerID, layerHashes)

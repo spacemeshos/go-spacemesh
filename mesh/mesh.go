@@ -236,6 +236,22 @@ func (msh *Mesh) GetLayer(i types.LayerID) (*types.Layer, error) {
 	return l, nil
 }
 
+// GetLayerHash returns layer hash for received blocks
+func (msh *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
+	h, err := msh.recoverLayerHash(layerID)
+	if err == nil {
+		return h
+	}
+	if err == database.ErrNotFound {
+		// layer hash not persisted. i.e. contextual validity not yet determined
+		lyr, err := msh.GetLayer(layerID)
+		if err == nil {
+			return lyr.Hash()
+		}
+	}
+	return EmptyLayerHash
+}
+
 // ProcessedLayer returns the last processed layer ID
 func (msh *Mesh) ProcessedLayer() types.LayerID {
 	return msh.getProcessedLayer().ID
@@ -260,6 +276,7 @@ func (msh *Mesh) setProcessedLayerFromRecoveredData(pLayer *ProcessedLayer) {
 }
 
 func (msh *Mesh) setProcessedLayer(layer *types.Layer) {
+	msh.persistLayerHash(layer.Index(), msh.calcSimpleLayerHash(layer))
 	msh.mutex.Lock()
 	defer msh.mutex.Unlock()
 	if !layer.Index().After(msh.processedLayer.ID) {
@@ -331,33 +348,6 @@ func (msh *Mesh) setProcessedLayer(layer *types.Layer) {
 			log.String("processed_layer_hash", lastProcessed.Hash.ShortString()),
 			log.Err(err))
 	}
-}
-
-func (msh *Mesh) persistProcessedLayer(lyr *ProcessedLayer) error {
-	data, err := types.InterfaceToBytes(lyr)
-	if err != nil {
-		return err
-	}
-	if err := msh.general.Put(constPROCESSED, data); err != nil {
-		return err
-	}
-	msh.With().Debug("persisted processed layer",
-		lyr.ID,
-		log.String("layer_hash", lyr.Hash.ShortString()))
-	return nil
-}
-
-func (msh *Mesh) recoverProcessedLayer() (*ProcessedLayer, error) {
-	processed, err := msh.general.Get(constPROCESSED)
-	if err != nil {
-		return nil, err
-	}
-	var data ProcessedLayer
-	err = types.BytesToInterface(processed, &data)
-	if err != nil {
-		return nil, err
-	}
-	return &data, nil
 }
 
 // HandleLateBlock process a late (contextually invalid) block.
@@ -564,6 +554,9 @@ func (msh *Mesh) calcAggregatedLayerHash(layer *types.Layer, prevHash types.Hash
 }
 
 func (msh *Mesh) calcSimpleLayerHash(layer *types.Layer) types.Hash32 {
+	if len(layer.Blocks()) == 0 {
+		return EmptyLayerHash
+	}
 	validBlocks, _ := msh.BlocksByValidity(layer.Blocks())
 	return types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(validBlocks)), nil)
 }
@@ -678,6 +671,8 @@ func (msh *Mesh) pushTransactions(l *types.Layer) {
 	)
 }
 
+var errLayerHasBlock = errors.New("layer has block")
+
 // SetZeroBlockLayer tags lyr as a layer without blocks
 func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 	msh.With().Info("tagging zero block layer", lyr)
@@ -694,7 +689,7 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 			lyr,
 			l,
 			log.Int("num_blocks", len(l.Blocks())))
-		return fmt.Errorf("layer has blocks")
+		return errLayerHasBlock
 	}
 
 	msh.setLatestLayer(lyr)

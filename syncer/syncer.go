@@ -284,7 +284,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		var layer *types.Layer
 		var err error
 		if layer, err = s.syncLayer(ctx, layerID); err != nil {
-			logger.With().Error("failed to sync to layer", log.Err(err))
+			logger.With().Error("failed to sync to layer", layerID, log.Err(err))
 			return false
 		}
 
