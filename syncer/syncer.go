@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -26,15 +27,17 @@ type layerFetcher interface {
 	PollLayerHash(ctx context.Context, layerID types.LayerID) chan layerfetcher.LayerHashResult
 	PollLayerBlocks(ctx context.Context, layerID types.LayerID, hashes map[types.Hash32][]peers.Peer) chan layerfetcher.LayerPromiseResult
 	GetEpochATXs(ctx context.Context, id types.EpochID) error
-	GetTortoiseBeacon(ctx context.Context, id types.EpochID) error
+	GetTortoiseBeacon(ctx context.Context, id types.EpochID) error // TODO(nkryuchkov): remove
+	SetTortoiseBeacon(ctx context.Context, epochID types.EpochID, beacon types.Hash32) error
 }
 
 // Configuration is the config params for syncer
 type Configuration struct {
 	SyncInterval time.Duration
 	// the sync process will try validate the current layer if ValidationDelta has elapsed.
-	ValidationDelta time.Duration
-	AlwaysListen    bool
+	ValidationDelta     time.Duration
+	TBCalculationLayers uint32
+	AlwaysListen        bool
 }
 
 const (
@@ -87,6 +90,11 @@ type Syncer struct {
 	// targetSyncedLayer is used to signal at which layer we can set this node to synced state
 	targetSyncedLayer unsafe.Pointer
 
+	tbCount         map[string]int
+	seenTB          map[string]struct{}
+	mostUsedTBCount int
+	mostUsedTB      []byte
+
 	// awaitSyncedCh is the list of subscribers' channels to notify when this node enters synced state
 	awaitSyncedCh []chan struct{}
 	awaitSyncedMu sync.Mutex
@@ -110,6 +118,8 @@ func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, mesh
 		syncState:         notSynced,
 		syncTimer:         time.NewTicker(conf.SyncInterval),
 		targetSyncedLayer: unsafe.Pointer(&types.LayerID{}),
+		tbCount:           make(map[string]int),
+		seenTB:            make(map[string]struct{}),
 		awaitSyncedCh:     make([]chan struct{}, 0),
 		shutdownCtx:       shutdownCtx,
 		cancelFunc:        cancel,
@@ -263,6 +273,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	vQueue := make(chan *types.Layer, s.ticker.GetCurrentLayer().Uint32())
 	vDone := make(chan struct{})
 	go s.startValidating(ctx, s.run, vQueue, vDone)
+
 	success := false
 	defer func() {
 		close(vQueue)
@@ -281,11 +292,28 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	// our clock starts ticking from 1 so it is safe to skip layer 0
 	// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
 	for layerID := s.mesh.ProcessedLayer().Add(1); layerID.Before(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {
-		var layer *types.Layer
-		var err error
-		if layer, err = s.syncLayer(ctx, layerID); err != nil {
+		if layerID.FirstInEpoch() {
+			s.tbCount = make(map[string]int)
+			s.seenTB = make(map[string]struct{})
+			s.mostUsedTBCount = 0
+			s.mostUsedTB = nil
+		}
+
+		layer, err := s.syncLayer(ctx, layerID)
+		if err != nil {
 			logger.With().Error("failed to sync to layer", log.Err(err))
 			return false
+		}
+
+		if layerID.OrdinalInEpoch() < s.conf.TBCalculationLayers {
+			s.processTortoiseBeacons(ctx, layer)
+		} else {
+			epoch := layerID.GetEpoch()
+			if err := s.fetcher.SetTortoiseBeacon(ctx, epoch, types.BytesToHash(s.mostUsedTB)); err != nil {
+				logger.With().Error("failed to write synced tortoise beacon into DB",
+					log.Uint32("epoch", uint32(epoch)),
+					log.String("beacon", util.Bytes2Hex(s.mostUsedTB)))
+			}
 		}
 
 		if len(layer.Blocks()) == 0 {
@@ -300,11 +328,13 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		}
 		logger.Debug("finished data sync for layer %v", layerID)
 	}
+
 	logger.With().Info("data is synced. waiting for validation",
 		log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 		log.FieldNamed("latest", s.mesh.LatestLayer()),
 		log.FieldNamed("validated", s.mesh.ProcessedLayer()))
 	success = true
+
 	return true
 }
 
@@ -355,9 +385,10 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 		return nil, err
 	}
 
-	if err := s.getTortoiseBeacon(ctx, layerID); err != nil {
-		return nil, err
-	}
+	// TODO(nkryuchkov): remove
+	//if err := s.getTortoiseBeacon(ctx, layerID); err != nil {
+	//	return nil, err
+	//}
 
 	return layer, nil
 }
@@ -411,6 +442,25 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 		}
 	}
 	return nil
+}
+
+func (s *Syncer) processTortoiseBeacons(ctx context.Context, layer *types.Layer) {
+	for _, b := range layer.Blocks() {
+		if _, ok := s.seenTB[b.MinerID().String()]; ok {
+			// TODO(nkryuchkov): invalid block, miner attempted to include beacon in two blocks within the same epoch
+		}
+
+		s.seenTB[b.MinerID().String()] = struct{}{}
+
+		tb := b.EligibilityProof.TortoiseBeacon
+		tbString := string(tb)
+
+		s.tbCount[tbString]++
+		if s.tbCount[tbString] > s.mostUsedTBCount {
+			s.mostUsedTBCount = s.tbCount[tbString]
+			s.mostUsedTB = tb
+		}
+	}
 }
 
 func (s *Syncer) getTortoiseBeacon(ctx context.Context, layerID types.LayerID) error {

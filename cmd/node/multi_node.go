@@ -161,6 +161,7 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 	cfg.SyncRequestTimeout = 500
 	cfg.SyncInterval = 2
 	cfg.SyncValidationDelta = 5
+	cfg.SyncTBCalculationLayers = 1 // TODO(nkryuchkov): define
 
 	cfg.FETCH.RequestTimeout = 10
 	cfg.FETCH.MaxRetiresForPeer = 5

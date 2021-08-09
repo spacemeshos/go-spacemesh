@@ -155,8 +155,9 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 
 		eligibleLayer := calcEligibleLayer(epochNumber, bo.layersPerEpoch, vrfSig)
 		eligibilityProofs[eligibleLayer] = append(eligibilityProofs[eligibleLayer], types.BlockEligibilityProof{
-			J:   counter,
-			Sig: vrfSig,
+			J:              counter,
+			Sig:            vrfSig,
+			TortoiseBeacon: epochBeacon,
 		})
 	}
 

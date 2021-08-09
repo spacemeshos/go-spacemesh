@@ -776,3 +776,8 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 		return l.tbDB.SetTortoiseBeacon(id, resHash)
 	}
 }
+
+// SetTortoiseBeacon sets tortoise beacon data from remote peer
+func (l *Logic) SetTortoiseBeacon(ctx context.Context, epochID types.EpochID, beacon types.Hash32) error {
+	return l.tbDB.SetTortoiseBeacon(epochID, beacon)
+}

@@ -99,6 +99,8 @@ type BaseConfig struct {
 
 	SyncValidationDelta int `mapstructure:"sync-validation-delta"` // sync interval in seconds
 
+	SyncTBCalculationLayers uint32 `mapstructure:"sync-tb-calculation-layers"` // how many layers tortoise beacon calculation takes
+
 	PublishEventsURL string `mapstructure:"events-url"`
 
 	AtxsPerBlock int `mapstructure:"atxs-per-block"`
@@ -179,29 +181,30 @@ func DefaultTestConfig() Config {
 // DefaultBaseConfig returns a default configuration for spacemesh
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
-		DataDirParent:       defaultDataDir,
-		ConfigFile:          defaultConfigFileName,
-		TestMode:            defaultTestMode,
-		CollectMetrics:      false,
-		MetricsPort:         1010,
-		MetricsPush:         "", // "" = doesn't push
-		MetricsPushPeriod:   60,
-		ProfilerURL:         "",
-		ProfilerName:        "gp-spacemesh",
-		OracleServer:        "http://localhost:3030",
-		OracleServerWorldID: 0,
-		GenesisTime:         time.Now().Format(time.RFC3339),
-		LayerDurationSec:    30,
-		LayersPerEpoch:      3,
-		PoETServer:          "127.0.0.1",
-		GoldenATXID:         "0x5678", // TODO: Change the value
-		Hdist:               5,
-		BlockCacheSize:      20,
-		SyncRequestTimeout:  2000,
-		SyncInterval:        10,
-		SyncValidationDelta: 300,
-		AtxsPerBlock:        100,
-		TxsPerBlock:         100,
+		DataDirParent:           defaultDataDir,
+		ConfigFile:              defaultConfigFileName,
+		TestMode:                defaultTestMode,
+		CollectMetrics:          false,
+		MetricsPort:             1010,
+		MetricsPush:             "", // "" = doesn't push
+		MetricsPushPeriod:       60,
+		ProfilerURL:             "",
+		ProfilerName:            "gp-spacemesh",
+		OracleServer:            "http://localhost:3030",
+		OracleServerWorldID:     0,
+		GenesisTime:             time.Now().Format(time.RFC3339),
+		LayerDurationSec:        30,
+		LayersPerEpoch:          3,
+		PoETServer:              "127.0.0.1",
+		GoldenATXID:             "0x5678", // TODO: Change the value
+		Hdist:                   5,
+		BlockCacheSize:          20,
+		SyncRequestTimeout:      2000,
+		SyncInterval:            10,
+		SyncValidationDelta:     300,
+		SyncTBCalculationLayers: 1, // TODO(nkryuchkov): define
+		AtxsPerBlock:            100,
+		TxsPerBlock:             100,
 	}
 }
 

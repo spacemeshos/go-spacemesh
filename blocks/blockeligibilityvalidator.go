@@ -90,15 +90,13 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 			numberOfEligibleBlocks, totalWeight)
 	}
 
-	epochBeacon, err := v.beaconProvider.GetBeacon(epochNumber)
-	if err != nil {
-		return false, fmt.Errorf("get beacon for epoch %v: %w", epochNumber, err)
-	}
+	epochBeacon := block.EligibilityProof.TortoiseBeacon
 
 	message, err := serializeVRFMessage(epochBeacon, epochNumber, counter)
 	if err != nil {
 		return false, err
 	}
+
 	vrfSig := block.EligibilityProof.Sig
 
 	beaconShortString := types.BytesToHash(epochBeacon).ShortString()

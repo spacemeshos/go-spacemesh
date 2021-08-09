@@ -608,9 +608,10 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, mdb.InputVector(), tBeaconDBStore)
 
 	syncerConf := syncer.Configuration{
-		SyncInterval:    time.Duration(app.Config.SyncInterval) * time.Second,
-		ValidationDelta: time.Duration(app.Config.SyncValidationDelta) * time.Second,
-		AlwaysListen:    app.Config.AlwaysListen,
+		SyncInterval:        time.Duration(app.Config.SyncInterval) * time.Second,
+		ValidationDelta:     time.Duration(app.Config.SyncValidationDelta) * time.Second,
+		TBCalculationLayers: app.Config.SyncTBCalculationLayers,
+		AlwaysListen:        app.Config.AlwaysListen,
 	}
 	syncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, app.addLogger(SyncLogger, lg))
 

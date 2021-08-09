@@ -75,21 +75,23 @@ func (trtl *ThreadSafeVerifyingTortoise) BaseBlock(ctx context.Context) (types.B
 	return block, diffs, err
 }
 
-//HandleIncomingLayer processes all layer block votes
+// HandleIncomingLayer processes all layer block votes
 // returns the old verified layer and new verified layer after taking into account the blocks votes
 func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ll *types.Layer) (types.LayerID, types.LayerID) {
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()
+
 	oldVerified := trtl.trtl.Verified
 	trtl.trtl.HandleIncomingLayer(ll)
 	newVerified := trtl.trtl.Verified
+
 	return oldVerified, newVerified
 }
 
 // HandleLateBlock processes a late blocks votes (for late block definition see white paper)
 // returns the old verified layer and new verified layer after taking into account the blocks votes
 func (trtl *ThreadSafeVerifyingTortoise) HandleLateBlock(b *types.Block) (types.LayerID, types.LayerID) {
-	//todo feed all layers from b's layer to tortoise
+	// todo feed all layers from b's layer to tortoise
 	l := types.NewLayer(b.Layer())
 	l.AddBlock(b)
 	oldVerified, newVerified := trtl.HandleIncomingLayer(l) // block wasn't in input vector for sure.
