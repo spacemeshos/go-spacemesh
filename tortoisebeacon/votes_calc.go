@@ -98,13 +98,8 @@ func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID, co
 }
 
 func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) (votesMarginMap, error) {
-	firstRoundInThisEpoch := epochRoundPair{
-		EpochID: epoch,
-		Round:   1,
-	}
-
 	// protected by tb.votesMu
-	firstRoundIncomingVotes := tb.incomingVotes[firstRoundInThisEpoch]
+	firstRoundIncomingVotes := tb.incomingVotes[epoch][1]
 
 	tb.Log.With().Debug("First round incoming votes",
 		log.Uint64("epoch_id", uint64(epoch)),
@@ -166,12 +161,11 @@ func (tb *TortoiseBeacon) calcOwnFirstRoundVotes(epoch types.EpochID, votesMargi
 		}
 	}
 
-	firstRoundInThisEpoch := epochRoundPair{
-		EpochID: epoch,
-		Round:   1,
+	if _, ok := tb.ownVotes[epoch]; !ok {
+		tb.ownVotes[epoch] = make(map[types.RoundID]votesSetPair)
 	}
 
-	tb.ownVotes[firstRoundInThisEpoch] = ownFirstRoundsVotes
+	tb.ownVotes[epoch][1] = ownFirstRoundsVotes
 
 	return ownFirstRoundsVotes, nil
 }
@@ -179,12 +173,7 @@ func (tb *TortoiseBeacon) calcOwnFirstRoundVotes(epoch types.EpochID, votesMargi
 // TODO: Same calculation, do incremental part on receiving (vector of margins).
 func (tb *TortoiseBeacon) calcVotesMargin(epoch types.EpochID, upToRound types.RoundID, votesMargin votesMarginMap) error {
 	for round := firstRound + 1; round <= upToRound; round++ {
-		thisRound := epochRoundPair{
-			EpochID: epoch,
-			Round:   round,
-		}
-
-		thisRoundVotes := tb.incomingVotes[thisRound]
+		thisRoundVotes := tb.incomingVotes[epoch][round]
 
 		for pk, votesList := range thisRoundVotes {
 			voteWeight, err := tb.voteWeight(pk, epoch)
@@ -213,11 +202,6 @@ func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, round ty
 		InvalidVotes: make(hashSet),
 	}
 
-	currentRound := epochRoundPair{
-		EpochID: epoch,
-		Round:   round,
-	}
-
 	epochWeight, _, err := tb.atxDB.GetEpochWeight(epoch)
 	if err != nil {
 		return votesSetPair{}, fmt.Errorf("get epoch weight: %w", err)
@@ -239,7 +223,11 @@ func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, round ty
 		}
 	}
 
-	tb.ownVotes[currentRound] = ownCurrentRoundVotes
+	if _, ok := tb.ownVotes[epoch]; !ok {
+		tb.ownVotes[epoch] = make(map[types.RoundID]votesSetPair)
+	}
+
+	tb.ownVotes[epoch][round] = ownCurrentRoundVotes
 
 	return ownCurrentRoundVotes, nil
 }

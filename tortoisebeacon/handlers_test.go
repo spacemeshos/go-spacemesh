@@ -175,7 +175,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 		currentRounds map[types.EpochID]types.RoundID
 		from          string
 		message       FirstVotingMessage
-		expected      map[epochRoundPair]votesPerPK
+		expected      map[types.EpochID]map[types.RoundID]votesPerPK
 	}{
 		{
 			name:  "Current round and message round equal",
@@ -191,14 +191,13 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 					PotentiallyValidProposals: nil,
 				},
 			},
-			expected: map[epochRoundPair]votesPerPK{
-				{
-					EpochID: epoch,
-					Round:   round,
-				}: {
-					minerID.Key: votesSetPair{
-						ValidVotes:   hashSet{util.Bytes2Hex(hash[:]): {}},
-						InvalidVotes: hashSet{},
+			expected: map[types.EpochID]map[types.RoundID]votesPerPK{
+				epoch: {
+					round: {
+						minerID.Key: votesSetPair{
+							ValidVotes:   hashSet{util.Bytes2Hex(hash[:]): {}},
+							InvalidVotes: hashSet{},
+						},
 					},
 				},
 			},
@@ -217,11 +216,13 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 					PotentiallyValidProposals: nil,
 				},
 			},
-			expected: map[epochRoundPair]votesPerPK{
-				{EpochID: epoch, Round: round}: {
-					minerID.Key: votesSetPair{
-						ValidVotes:   hashSet{util.Bytes2Hex(hash[:]): {}},
-						InvalidVotes: hashSet{},
+			expected: map[types.EpochID]map[types.RoundID]votesPerPK{
+				epoch: {
+					round: {
+						minerID.Key: votesSetPair{
+							ValidVotes:   hashSet{util.Bytes2Hex(hash[:]): {}},
+							InvalidVotes: hashSet{},
+						},
 					},
 				},
 			},
@@ -235,7 +236,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 
 			tb := TortoiseBeacon{
 				Log:                     logtest.New(t).WithName("TortoiseBeacon"),
-				incomingVotes:           map[epochRoundPair]votesPerPK{},
+				incomingVotes:           map[types.EpochID]map[types.RoundID]votesPerPK{},
 				atxDB:                   mockDB,
 				vrfVerifier:             signing.VRFVerifier{},
 				vrfSigner:               vrfSigner,
@@ -309,7 +310,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 		epoch         types.EpochID
 		currentRounds map[types.EpochID]types.RoundID
 		message       FollowingVotingMessage
-		expected      map[epochRoundPair]votesPerPK
+		expected      map[types.EpochID]map[types.RoundID]votesPerPK
 	}{
 		{
 			name:  "Current round and message round equal",
@@ -325,11 +326,13 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 					VotesBitVector: []uint64{0b101},
 				},
 			},
-			expected: map[epochRoundPair]votesPerPK{
-				{EpochID: epoch, Round: round}: {
-					minerID.Key: votesSetPair{
-						ValidVotes:   hashSet{hash1.String(): {}, hash3.String(): {}},
-						InvalidVotes: hashSet{hash2.String(): {}},
+			expected: map[types.EpochID]map[types.RoundID]votesPerPK{
+				epoch: {
+					round: {
+						minerID.Key: votesSetPair{
+							ValidVotes:   hashSet{hash1.String(): {}, hash3.String(): {}},
+							InvalidVotes: hashSet{hash2.String(): {}},
+						},
 					},
 				},
 			},
@@ -348,11 +351,13 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 					VotesBitVector: []uint64{0b101},
 				},
 			},
-			expected: map[epochRoundPair]votesPerPK{
-				{EpochID: epoch, Round: round}: {
-					minerID.Key: votesSetPair{
-						ValidVotes:   hashSet{hash1.String(): {}, hash3.String(): {}},
-						InvalidVotes: hashSet{hash2.String(): {}},
+			expected: map[types.EpochID]map[types.RoundID]votesPerPK{
+				epoch: {
+					round: {
+						minerID.Key: votesSetPair{
+							ValidVotes:   hashSet{hash1.String(): {}, hash3.String(): {}},
+							InvalidVotes: hashSet{hash2.String(): {}},
+						},
 					},
 				},
 			},
@@ -366,7 +371,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 
 			tb := TortoiseBeacon{
 				Log:           logtest.New(t).WithName("TortoiseBeacon"),
-				incomingVotes: map[epochRoundPair]votesPerPK{},
+				incomingVotes: map[types.EpochID]map[types.RoundID]votesPerPK{},
 				atxDB:         mockDB,
 				vrfVerifier:   signing.VRFVerifier{},
 				vrfSigner:     vrfSigner,

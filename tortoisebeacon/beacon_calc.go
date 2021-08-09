@@ -59,25 +59,23 @@ func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID, coinflip bool) error {
 func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID, coinflip bool) (proposalList, error) {
 	allHashes := make(proposalList, 0)
 
-	lastRound := epochRoundPair{
-		EpochID: epoch,
-		Round:   tb.lastPossibleRound(),
-	}
+	lastRound := types.RoundID(tb.config.RoundsNumber)
 
-	votes, ok := tb.ownVotes[lastRound]
+	votes, ok := tb.ownVotes[epoch][lastRound]
+	// TODO(nkryuchkov): consider removing and panicking if not found
 	if !ok {
 		// re-calculate votes
 		tb.Log.With().Debug("Own votes not found, re-calculating",
 			log.Uint64("epoch_id", uint64(epoch)),
-			log.Uint64("round_id", uint64(lastRound.Round)))
+			log.Uint64("round_id", uint64(lastRound)))
 
-		v, err := tb.calcVotes(epoch, lastRound.Round, coinflip)
+		v, err := tb.calcVotes(epoch, lastRound, coinflip)
 		if err != nil {
 			return nil, fmt.Errorf("recalculate votes: %w", err)
 		}
 
 		votes = v
-		tb.ownVotes[lastRound] = v
+		tb.ownVotes[epoch][lastRound] = v
 	}
 
 	// output from VRF
@@ -87,7 +85,7 @@ func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID, coinfl
 
 	tb.Log.With().Debug("Tortoise beacon last round votes",
 		log.Uint64("epoch_id", uint64(epoch)),
-		log.Uint64("round_id", uint64(lastRound.Round)),
+		log.Uint64("round_id", uint64(lastRound)),
 		log.String("votes", fmt.Sprint(votes)))
 
 	sort.Slice(allHashes, func(i, j int) bool {

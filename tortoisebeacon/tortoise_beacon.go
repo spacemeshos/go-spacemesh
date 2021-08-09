@@ -58,11 +58,6 @@ type coin interface {
 	HandleSerializedMessage(context.Context, service.GossipMessage, service.Fetcher)
 }
 
-type epochRoundPair struct {
-	EpochID types.EpochID
-	Round   types.RoundID
-}
-
 type (
 	nodeID          = string
 	proposal        = string
@@ -74,14 +69,11 @@ type (
 	firstRoundVotesPerPK    = map[nodeID]firstRoundVotes
 	votesPerPK              = map[nodeID]votesSetPair
 	firstRoundVotesPerEpoch = map[types.EpochID]firstRoundVotesPerPK
-	votesPerRound           = map[epochRoundPair]votesPerPK
-	ownVotes                = map[epochRoundPair]votesSetPair
+	votesPerRound           = map[types.EpochID]map[types.RoundID]votesPerPK
+	ownVotes                = map[types.EpochID]map[types.RoundID]votesSetPair
 	votesMarginMap          = map[proposal]int
 	proposalsMap            = map[types.EpochID]hashSet
 )
-
-// a function to verify the message with the signature and its public key.
-type verifierFunc = func(pub, msg, sig []byte) bool
 
 type layerClock interface {
 	Subscribe() timesync.LayerTimer
@@ -136,7 +128,7 @@ func New(
 		ownVotes:                        make(ownVotes),
 		beacons:                         make(map[types.EpochID]types.Hash32),
 		proposalPhaseFinishedTimestamps: make(map[types.EpochID]time.Time),
-		incomingVotes:                   make(map[epochRoundPair]votesPerPK),
+		incomingVotes:                   make(map[types.EpochID]map[types.RoundID]votesPerPK),
 		firstRoundIncomingVotes:         make(map[types.EpochID]firstRoundVotesPerPK),
 		firstRoundOutcomingVotes:        make(map[types.EpochID]firstRoundVotes),
 		seenEpochs:                      make(map[types.EpochID]struct{}),
@@ -330,7 +322,8 @@ func (tb *TortoiseBeacon) cleanup() {
 			delete(tb.potentiallyValidProposals, e)
 			delete(tb.beacons, e)
 			delete(tb.proposalPhaseFinishedTimestamps, e)
-			// delete(tb.incomingVotes, e) // TODO(nkryuchkov): fix and uncomment
+			delete(tb.incomingVotes, e)
+			delete(tb.ownVotes, e)
 			delete(tb.firstRoundIncomingVotes, e)
 			delete(tb.firstRoundOutcomingVotes, e)
 		}

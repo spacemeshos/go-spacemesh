@@ -321,16 +321,17 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 	tb.Log.With().Debug("Received first round voting message, counting it",
 		log.String("message", message.String()))
 
-	thisRound := epochRoundPair{
-		EpochID: currentEpoch,
-		Round:   firstRound,
-	}
+	currentRound := firstRound
 
 	tb.votesMu.Lock()
 	defer tb.votesMu.Unlock()
 
-	if _, ok := tb.incomingVotes[thisRound]; !ok {
-		tb.incomingVotes[thisRound] = make(votesPerPK)
+	if _, ok := tb.incomingVotes[currentEpoch]; !ok {
+		tb.incomingVotes[currentEpoch] = make(map[types.RoundID]votesPerPK)
+	}
+
+	if _, ok := tb.incomingVotes[currentEpoch][currentRound]; !ok {
+		tb.incomingVotes[currentEpoch][currentRound] = make(votesPerPK)
 	}
 
 	if _, ok := tb.firstRoundIncomingVotes[currentEpoch]; !ok {
@@ -339,11 +340,11 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 
 	// TODO: no need to store each vote separately
 	// have a separate table for an epoch with one bit in it if atx/miner is voted already
-	if _, ok := tb.incomingVotes[thisRound][minerID.Key]; ok {
+	if _, ok := tb.incomingVotes[currentEpoch][currentRound][minerID.Key]; ok {
 		tb.Log.With().Warning("Received malformed first voting message, already received a voting message for these PK and round",
 			log.String("miner_id", minerID.Key),
 			log.Uint64("epoch_id", uint64(currentEpoch)),
-			log.Uint64("round_id", uint64(firstRound)))
+			log.Uint64("round_id", uint64(currentRound)))
 
 		// TODO: report this miner through gossip
 		// TODO: store evidence, generate malfeasance proof: union of two whole voting messages
@@ -358,8 +359,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 	tb.Log.With().Debug("Received first voting message, counting it",
 		log.String("miner_id", minerID.Key),
 		log.Uint64("epoch_id", uint64(currentEpoch)),
-		log.Uint64("round_id", uint64(firstRound)),
-		log.String("message", message.String()))
+		log.Uint64("round_id", uint64(currentRound)))
 
 	validVotesMap := make(hashSet)
 	invalidVotesMap := make(hashSet)
@@ -378,7 +378,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 		potentiallyValidVotesList = append(potentiallyValidVotesList, util.Bytes2Hex(vote))
 	}
 
-	tb.incomingVotes[thisRound][minerID.Key] = votesSetPair{
+	tb.incomingVotes[currentEpoch][currentRound][minerID.Key] = votesSetPair{
 		ValidVotes:   validVotesMap,
 		InvalidVotes: invalidVotesMap,
 	}
@@ -421,25 +421,23 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 	if !ok {
 		tb.Log.With().Warning("Received malformed following voting message, bad signature",
 			log.String("miner_id", minerID.Key),
-			log.Uint64("epoch_id", uint64(currentEpoch)),
-			log.String("signature", util.Bytes2Hex(message.Signature)))
+			log.Uint64("epoch_id", uint64(currentEpoch)))
 
 		return nil
-	}
-
-	thisRound := epochRoundPair{
-		EpochID: currentEpoch,
-		Round:   messageRound,
 	}
 
 	tb.votesMu.Lock()
 	defer tb.votesMu.Unlock()
 
-	if _, ok := tb.incomingVotes[thisRound]; !ok {
-		tb.incomingVotes[thisRound] = make(votesPerPK)
+	if _, ok := tb.incomingVotes[currentEpoch]; !ok {
+		tb.incomingVotes[currentEpoch] = make(map[types.RoundID]votesPerPK)
 	}
 
-	if _, ok := tb.incomingVotes[thisRound][minerID.Key]; ok {
+	if _, ok := tb.incomingVotes[currentEpoch][messageRound]; !ok {
+		tb.incomingVotes[currentEpoch][messageRound] = make(votesPerPK)
+	}
+
+	if _, ok := tb.incomingVotes[currentEpoch][messageRound][minerID.Key]; ok {
 		tb.Log.With().Warning("Received malformed following voting message, already received a voting message for these PK and round",
 			log.String("miner_id", minerID.Key),
 			log.Uint64("epoch_id", uint64(currentEpoch)),
@@ -455,7 +453,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 		log.String("message", message.String()))
 
 	firstRoundIncomingVotes := tb.firstRoundIncomingVotes[currentEpoch][minerID.Key]
-	tb.incomingVotes[thisRound][minerID.Key] = tb.decodeVotes(message.VotesBitVector, firstRoundIncomingVotes)
+	tb.incomingVotes[currentEpoch][messageRound][minerID.Key] = tb.decodeVotes(message.VotesBitVector, firstRoundIncomingVotes)
 
 	return nil
 }
