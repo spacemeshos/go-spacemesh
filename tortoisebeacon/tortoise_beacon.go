@@ -25,13 +25,12 @@ const (
 	protoName            = "TORTOISE_BEACON_PROTOCOL"
 	proposalPrefix       = "TBP"
 	cleanupInterval      = 30 * time.Second
-	cleanupEpochs        = 1000
+	cleanupEpochs        = 100
 	firstRound           = types.RoundID(1)
 	genesisBeacon        = "0xaeebad4a796fcc2e15dc4c6061b45ed9b373f26adfc798ca7d2d8cc58182718e" // sha256("genesis")
 	proposalChanCapacity = 1024
 )
 
-// TODO(nkryuchkov): remove unused errors
 // Tortoise Beacon errors.
 var (
 	ErrBeaconNotCalculated = errors.New("beacon is not calculated for this epoch")
@@ -248,6 +247,7 @@ func (tb *TortoiseBeacon) IsClosed() bool {
 }
 
 // GetBeacon returns a Tortoise Beacon value as []byte for a certain epoch or an error if it doesn't exist.
+// TODO(nkryuchkov): consider not using (using DB instead)
 func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 	if epochID == 0 {
 		return nil, ErrZeroEpoch
@@ -326,7 +326,13 @@ func (tb *TortoiseBeacon) cleanup() {
 	for e := range tb.beacons {
 		// TODO(nkryuchkov): https://github.com/spacemeshos/go-spacemesh/pull/2267#discussion_r662255874
 		if tb.epochIsOutdated(e) {
+			delete(tb.validProposals, e)
+			delete(tb.potentiallyValidProposals, e)
 			delete(tb.beacons, e)
+			delete(tb.proposalPhaseFinishedTimestamps, e)
+			// delete(tb.incomingVotes, e) // TODO(nkryuchkov): fix and uncomment
+			delete(tb.firstRoundIncomingVotes, e)
+			delete(tb.firstRoundOutcomingVotes, e)
 		}
 	}
 }
@@ -479,6 +485,7 @@ func (tb *TortoiseBeacon) closeProposalChannel(epoch types.EpochID) {
 		case <-ch:
 		default:
 			close(ch)
+			delete(tb.proposalChans, epoch)
 		}
 	}
 }

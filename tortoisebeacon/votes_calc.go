@@ -113,11 +113,11 @@ func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) (votesMarginMap, 
 
 	firstRoundVotesMargin := make(map[proposal]int)
 
-	for nodeID, votesList := range firstRoundIncomingVotes {
+	for id, votesList := range firstRoundIncomingVotes {
 		firstRoundVotesFor := make(hashSet)
 		firstRoundVotesAgainst := make(hashSet)
 
-		voteWeight, err := tb.voteWeight(nodeID, epoch)
+		voteWeight, err := tb.voteWeight(id, epoch)
 		if err != nil {
 			return nil, fmt.Errorf("get vote weight: %w", err)
 		}
