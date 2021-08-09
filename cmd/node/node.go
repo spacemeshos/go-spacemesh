@@ -6,15 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"net/http"
 	_ "net/http/pprof" // import for memory and network profiling
 	"os"
 	"os/signal"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"time"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -205,13 +208,46 @@ func LoadConfigFromFile() (*cfg.Config, error) {
 	}
 
 	conf := cfg.DefaultConfig()
+
+	hook := mapstructure.ComposeDecodeHookFunc(
+		mapstructure.StringToTimeDurationHookFunc(),
+		mapstructure.StringToSliceHookFunc(","),
+		bigRatDecodeFunc(),
+	)
+
 	// load config if it was loaded to our viper
-	err := vip.Unmarshal(&conf)
+	err := vip.Unmarshal(&conf, viper.DecodeHook(hook))
 	if err != nil {
 		log.With().Error("Failed to parse config", log.Err(err))
 		return nil, err
 	}
 	return &conf, nil
+}
+
+func bigRatDecodeFunc() mapstructure.DecodeHookFunc {
+	return func(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
+		if t != reflect.TypeOf(&big.Rat{}) {
+			return data, nil
+		}
+
+		switch f.Kind() {
+		case reflect.String:
+			v, ok := new(big.Rat).SetString(data.(string))
+			if !ok {
+				return nil, errors.New("malformed string representing big.Rat was provided")
+			}
+
+			return v, nil
+		case reflect.Float64:
+			return new(big.Rat).SetFloat64(data.(float64)), nil
+		case reflect.Int64:
+			return new(big.Rat).SetInt64(data.(int64)), nil
+		case reflect.Uint64:
+			return new(big.Rat).SetUint64(data.(uint64)), nil
+		default:
+			return data, nil
+		}
+	}
 }
 
 // Option to modify an App instance.
