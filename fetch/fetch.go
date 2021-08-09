@@ -137,12 +137,11 @@ type Config struct {
 // DefaultConfig is the default config for the fetch component
 func DefaultConfig() Config {
 	return Config{
-		BatchTimeout:      50,
-		MaxRetiresForPeer: 2,
-		BatchSize:         20,
-		RequestTimeout:    10,
-		// TODO change it back to 20
-		MaxRetriesForRequest: 2000,
+		BatchTimeout:         50,
+		MaxRetiresForPeer:    2,
+		BatchSize:            20,
+		RequestTimeout:       10,
+		MaxRetriesForRequest: 20,
 	}
 }
 
@@ -281,7 +280,7 @@ func (f *Fetch) AddDB(hint Hint, db database.Getter) {
 	f.dbLock.Unlock()
 }
 
-// handleNewRequest batches low priority requests and sends a high priority request to peers right away.
+// handleNewRequest batches low priority requests and sends a high priority request to the peers right away.
 // if there are pending requests for the same hash, it will put the new request, regardless of the priority,
 // to the pending list and wait for notification when the earlier request gets response.
 // it returns true if a request is sent immediately, or false otherwise.
@@ -304,10 +303,10 @@ func (f *Fetch) handleNewRequest(req *request) bool {
 	f.activeReqM.Unlock()
 	if sendNow {
 		f.sendBatch([]requestMessage{{req.hint, req.hash}})
-		f.log.Debug("high priority request sent %v", req.hash.ShortString())
+		f.log.With().Debug("high priority request sent", log.String("hash", req.hash.ShortString()))
 		return true
 	}
-	f.log.Debug("request added to queue %v", req.hash.ShortString())
+	f.log.With().Debug("request added to queue", log.String("hash", req.hash.ShortString()))
 	if rLen > batchMaxSize {
 		go f.requestHashBatchFromPeers() // Process the batch.
 		return true
@@ -342,7 +341,7 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 	var requestBatch requestBatch
 	err := types.BytesToInterface(data, &requestBatch)
 	if err != nil {
-		f.log.WithContext(ctx).Error("cannot parse request %v", err)
+		f.log.WithContext(ctx).With().Error("failed to parse request", log.Err(err))
 		return []byte{}
 	}
 	resBatch := responseBatch{
@@ -356,15 +355,20 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 		db, ok := f.dbs[r.Hint]
 		f.dbLock.RUnlock()
 		if !ok {
-			f.log.WithContext(ctx).Warning("db not found %v", r.Hint)
+			f.log.WithContext(ctx).With().Warning("db not found", log.String("hint", string(r.Hint)))
 			continue
 		}
 		res, err := db.Get(r.Hash.Bytes())
 		if err != nil {
-			f.log.WithContext(ctx).Warning("remote peer requested non existing hash %v %v", r.Hash.Hex(), err)
+			f.log.WithContext(ctx).With().Info("remote peer requested non existing hash",
+				log.String("hash", r.Hash.ShortString()),
+				log.String("hint", string(r.Hint)),
+				log.Err(err))
 			continue
 		} else {
-			f.log.WithContext(ctx).Debug("responded to hash req %v bytes %v", r.Hash.ShortString(), len(res))
+			f.log.WithContext(ctx).With().Debug("responded to hash request",
+				log.String("hash", r.Hash.ShortString()),
+				log.Int("dataSize", len(res)))
 		}
 		// add response to batch
 		m := responseMessage{
@@ -376,10 +380,14 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 
 	bts, err := types.InterfaceToBytes(&resBatch)
 	if err != nil {
-		f.log.WithContext(ctx).Error("cannot parse message for batch ID %v", resBatch.ID.Hex())
+		f.log.WithContext(ctx).With().Error("cannot parse message for batch ID",
+			log.String("batchHash", resBatch.ID.ShortString()))
 		return nil
 	}
-	f.log.WithContext(ctx).Debug("returning response batch Id %v responses %v total bytes %v", resBatch.ID.Hex(), len(resBatch.Responses), len(bts))
+	f.log.WithContext(ctx).With().Debug("returning response for batch",
+		log.String("batchHash", resBatch.ID.ShortString()),
+		log.Int("numResponse", len(resBatch.Responses)),
+		log.Int("dataSize", len(bts)))
 	return bts
 }
 
@@ -400,7 +408,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 	batch, has := f.activeBatches[response.ID]
 	f.activeBatchM.RUnlock()
 	if !has {
-		f.log.Warning("unknown batch response received, or already invalidated %v", response.ID.Hex())
+		f.log.With().Warning("unknown batch response received, or already invalidated", log.String("batchHash", response.ID.ShortString()))
 		return
 	}
 
@@ -445,14 +453,17 @@ func (f *Fetch) receiveResponse(data []byte) {
 		if f.stopped() {
 			return
 		}
-		f.log.Warning("%v hash %v was not found in response from peer %v", batchMap[h].Hint, h.ShortString(), batch.peer)
+		f.log.With().Warning("hash not found in response from peer",
+			log.String("hint", string(batchMap[h].Hint)),
+			log.String("hash", h.ShortString()),
+			log.String("peer", batch.peer.String()))
 		f.activeReqM.Lock()
 		reqs := f.pendingRequests[h]
 		invalidatedRequests := 0
 		for _, req := range reqs {
 			req.retries++
 			if req.retries > f.cfg.MaxRetriesForRequest {
-				f.log.Debug("returning error to request %v %v %v %p", req.hash.ShortString(), len(req.returnChan), len(reqs), req)
+				f.log.With().Debug("gave up on hash after max retries", log.String("hash", req.hash.ShortString()))
 				req.returnChan <- HashDataPromiseResult{
 					Err:     ErrExceedMaxRetries,
 					Hash:    req.hash,
@@ -483,7 +494,7 @@ func (f *Fetch) requestHashBatchFromPeers() {
 	f.activeReqM.Lock()
 	// only send one request per hash
 	for hash, reqs := range f.activeRequests {
-		f.log.Debug("batching %v", hash.ShortString())
+		f.log.With().Debug("batching hash request", log.String("hash", hash.ShortString()))
 		requestList = append(requestList, requestMessage{Hash: hash, Hint: reqs[0].hint})
 		// move the processed requests to pending
 		f.pendingRequests[hash] = append(f.pendingRequests[hash], reqs...)
@@ -513,7 +524,7 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 	f.activeBatchM.Unlock()
 	// timeout function will be called if no response was received for the hashes sent
 	timeoutFunc := func(err error) {
-		f.log.Error("request %v timed out", batch.ID.Hex())
+		f.log.With().Error("request timed out", log.String("batchHash", batch.ID.ShortString()))
 		f.handleHashError(batch.ID, err)
 	}
 
@@ -531,7 +542,10 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 
 		// get random peer
 		p = GetRandomPeer(f.net.GetPeers())
-		f.log.Debug("sending request batch %v items %v peer %v", batch.ID.Hex(), len(batch.Requests), p)
+		f.log.With().Debug("sending request batch to peer",
+			log.String("batchHash", batch.ID.ShortString()),
+			log.Int("numRequests", len(batch.Requests)),
+			log.String("peer", p.String()))
 		batch.peer = p
 		f.activeBatchM.Lock()
 		f.activeBatches[batch.ID] = batch
@@ -545,7 +559,9 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 				break
 			}
 			//todo: mark number of fails per peer to make it low priority
-			f.log.Warning("could not send message to peer %v, retrying, retries %v", p, retries)
+			f.log.With().Warning("could not send message to peer",
+				log.String("peer", p.String()),
+				log.Int("retries", retries))
 		} else {
 			break
 		}
@@ -554,19 +570,24 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 
 // handleHashError is called when an error occurred processing batches of the following hashes
 func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
-	f.log.Debug("cannot fetch message %v err %v", batchHash.Hex(), err)
+	f.log.With().Debug("cannot fetch message",
+		log.String("batchHash", batchHash.ShortString()),
+		log.Err(err))
 	f.activeBatchM.RLock()
 	batch, ok := f.activeBatches[batchHash]
 	if !ok {
 		f.activeBatchM.RUnlock()
-		f.log.Error("batch invalidated twice %v", batchHash.Hex())
+		f.log.With().Error("batch invalidated twice", log.String("batchHash", batchHash.ShortString()))
 		return
 	}
 	f.activeBatchM.RUnlock()
 	f.activeReqM.Lock()
 	for _, h := range batch.Requests {
+		f.log.With().Debug("error for hash requests",
+			log.String("hash", h.Hash.ShortString()),
+			log.Int("numSubscribers", len(f.pendingRequests[h.Hash])),
+			log.Err(err))
 		for _, callback := range f.pendingRequests[h.Hash] {
-			f.log.Debug("hash error to request %v %v %v %p: %v", h.Hash.ShortString(), len(callback.returnChan), len(f.pendingRequests[h.Hash]), callback, err)
 			callback.returnChan <- HashDataPromiseResult{
 				Err:     err,
 				Hash:    h.Hash,
@@ -617,7 +638,7 @@ func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashD
 	db, ok := f.dbs[h]
 	f.dbLock.RUnlock()
 	if !ok {
-		f.log.Panic("tried to fetch Data from DB that doesn't exist locally: %v", h)
+		f.log.With().Panic("tried to fetch Data from DB that doesn't exist locally", log.String("hint", string(h)))
 	}
 
 	if b, err := db.Get(hash.Bytes()); err == nil {

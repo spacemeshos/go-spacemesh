@@ -99,8 +99,8 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 			ll.Log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
 		}
 	}
-	if err := ll.SaveLayerInputVectorByID(GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
-		ll.Log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
+	if err := ll.SaveLayerInputVectorByID(context.Background(), GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
+		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
 	}
 	return ll, err
 }
@@ -136,7 +136,7 @@ func NewMemMeshDB(log log.Log) *DB {
 		ll.AddBlock(blk)
 		ll.SaveContextualValidity(blk.ID(), true)
 	}
-	if err := ll.SaveLayerInputVectorByID(GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
+	if err := ll.SaveLayerInputVectorByID(context.Background(), GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
 		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
 	}
 	return ll
@@ -342,16 +342,6 @@ func (m *DB) GetCoinflip(ctx context.Context, layerID types.LayerID) (bool, bool
 	return coin, exists
 }
 
-// SaveLayerInputVector saves the input vote vector for a layer (hare results)
-func (m *DB) SaveLayerInputVector(hash types.Hash32, vector []types.BlockID) error {
-	bytes, err := types.InterfaceToBytes(vector)
-	if err != nil {
-		return err
-	}
-
-	return m.inputVector.Put(hash.Bytes(), bytes)
-}
-
 func (m *DB) defaulGetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) {
 	by, err := m.inputVector.Get(types.CalcHash32(id.Bytes()).Bytes())
 	if err != nil {
@@ -382,16 +372,18 @@ func (m *DB) GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) 
 }
 
 // SaveLayerInputVectorByID gets the input vote vector for a layer (hare results)
-func (m *DB) SaveLayerInputVectorByID(id types.LayerID, blks []types.BlockID) error {
+func (m *DB) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blks []types.BlockID) error {
 	hash := types.CalcHash32(id.Bytes())
-	m.With().Info("SaveLayerInputVectorByID: Saving input vector", id, hash)
-	return m.SaveLayerInputVector(hash, blks)
-}
+	m.With().Info("saving input vector",
+		id,
+		log.String("iv_hash", hash.ShortString()))
 
-// SaveLayerHashInputVector saves the input vote vector for a layer (hare results) using its hash
-func (m *DB) SaveLayerHashInputVector(h types.Hash32, data []byte) error {
-	m.Info("saved input vector for hash %v", h.ShortString())
-	return m.inputVector.Put(h.Bytes(), data)
+	bytes, err := types.InterfaceToBytes(blks)
+	if err != nil {
+		return err
+	}
+
+	return m.inputVector.Put(hash.Bytes(), bytes)
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {
@@ -465,14 +457,14 @@ func (msh *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
 func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) {
 	if err := m.general.Put(m.getLayerHashKey(layerID), hash.Bytes()); err != nil {
 		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
-			log.String("layer_hash", hash.Hex()))
+			log.String("layer_hash", hash.ShortString()))
 	}
 
 	// we store a double index here because most of the code uses layer ID as key, currently only sync reads layer by hash
 	// when this changes we can simply point to the layes
 	if err := m.general.Put(hash.Bytes(), layerID.Bytes()); err != nil {
 		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
-			log.String("layer_hash", hash.Hex()))
+			log.String("layer_hash", hash.ShortString()))
 	}
 }
 

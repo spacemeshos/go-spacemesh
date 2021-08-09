@@ -16,7 +16,6 @@ type blockDataProvider interface {
 	LayerBlockIds(types.LayerID) (ids []types.BlockID, err error)
 
 	GetLayerInputVectorByID(types.LayerID) ([]types.BlockID, error)
-	SaveLayerInputVectorByID(types.LayerID, []types.BlockID) error
 
 	SaveContextualValidity(id types.BlockID, valid bool) error
 
