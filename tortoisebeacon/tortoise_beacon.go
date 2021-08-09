@@ -27,7 +27,7 @@ const (
 	cleanupInterval      = 30 * time.Second
 	cleanupEpochs        = 1000
 	firstRound           = types.RoundID(1)
-	genesisBeacon        = "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	genesisBeacon        = "0xaeebad4a796fcc2e15dc4c6061b45ed9b373f26adfc798ca7d2d8cc58182718e" // sha256("genesis")
 	proposalChanCapacity = 1024
 )
 
