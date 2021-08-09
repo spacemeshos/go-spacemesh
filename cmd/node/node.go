@@ -208,7 +208,7 @@ func LoadConfigFromFile() (*cfg.Config, error) {
 	// load config if it was loaded to our viper
 	err := vip.Unmarshal(&conf)
 	if err != nil {
-		log.Error("Failed to parse config", log.Err(err))
+		log.With().Error("Failed to parse config", log.Err(err))
 		return nil, err
 	}
 	return &conf, nil
