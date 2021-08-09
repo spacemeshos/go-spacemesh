@@ -558,7 +558,7 @@ func (app *App) initServices(ctx context.Context,
 	wc := weakcoin.New(swarm,
 		vrfSigner, signing.VRFVerifier{},
 		weakcoin.WithLog(app.addLogger(WeakCoinLogger, lg)),
-		weakcoin.WithMaxRound(types.RoundID(app.Config.TortoiseBeacon.RoundsNumber)),
+		weakcoin.WithMaxRound(app.Config.TortoiseBeacon.RoundsNumber),
 	)
 
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second

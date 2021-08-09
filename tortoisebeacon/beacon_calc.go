@@ -61,7 +61,7 @@ func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID, coinfl
 
 	lastRound := epochRoundPair{
 		EpochID: epoch,
-		Round:   tb.lastPossibleRound(),
+		Round:   tb.config.RoundsNumber,
 	}
 
 	votes, ok := tb.ownVotes[lastRound]
