@@ -814,7 +814,8 @@ func (tb *TortoiseBeacon) voteWeight(pk nodeID, epochID types.EpochID) (uint64, 
 		return 0, fmt.Errorf("atx header: %w", err)
 	}
 
-	return atx.GetWeight(), nil
+	weight := atx.GetWeight()
+	return weight, nil
 }
 
 // Each smesher partitions the valid proposals received in the previous epoch into three sets:

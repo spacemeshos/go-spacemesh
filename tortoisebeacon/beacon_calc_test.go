@@ -23,6 +23,15 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 
 	mockDB := &mockActivationDB{}
 	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(1), nil, nil)
+	mockDB.On("GetNodeAtxIDForEpoch", mock.AnythingOfType("types.NodeID"), mock.AnythingOfType("types.EpochID")).Return(types.ATXID{}, nil)
+	mockATXHeader := types.ActivationTxHeader{
+		NIPostChallenge: types.NIPostChallenge{
+			StartTick: 0,
+			EndTick:   1,
+		},
+		NumUnits: 1,
+	}
+	mockDB.On("GetAtxHeader", mock.AnythingOfType("types.ATXID")).Return(&mockATXHeader, nil)
 
 	const (
 		epoch  = 5
@@ -178,6 +187,15 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 
 	mockDB := &mockActivationDB{}
 	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(1), nil, nil)
+	mockDB.On("GetNodeAtxIDForEpoch", mock.AnythingOfType("types.NodeID"), mock.AnythingOfType("types.EpochID")).Return(types.ATXID{}, nil)
+	mockATXHeader := types.ActivationTxHeader{
+		NIPostChallenge: types.NIPostChallenge{
+			StartTick: 0,
+			EndTick:   1,
+		},
+		NumUnits: 1,
+	}
+	mockDB.On("GetAtxHeader", mock.AnythingOfType("types.ATXID")).Return(&mockATXHeader, nil)
 
 	const (
 		epoch  = 5
