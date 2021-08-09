@@ -381,7 +381,7 @@ func (m *DB) GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) 
 // SaveLayerInputVectorByID gets the input vote vector for a layer (hare results)
 func (m *DB) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blks []types.BlockID) error {
 	hash := types.CalcHash32(id.Bytes())
-	m.With().Info("saving input vector",
+	m.WithContext(ctx).With().Info("saving input vector",
 		id,
 		log.String("iv_hash", hash.ShortString()))
 

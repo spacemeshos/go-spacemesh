@@ -365,7 +365,7 @@ type validator struct {
 }
 
 func (vl *validator) ValidateLayer(lyr *types.Layer) {
-	vl.With().Info("validate layer", lyr)
+	vl.With().Info("validate layer", lyr.Index())
 	if len(lyr.Blocks()) == 0 {
 		vl.With().Info("skip validation of layer with no blocks", lyr)
 		vl.setProcessedLayer(lyr)
@@ -386,7 +386,7 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 		Layer:  lyr,
 		Status: events.LayerStatusTypeConfirmed,
 	})
-	vl.With().Info("done validating layer", lyr)
+	vl.With().Info("done validating layer", lyr.Index())
 }
 
 func (msh *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerID) {
