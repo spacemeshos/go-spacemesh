@@ -312,8 +312,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 	if !ok {
 		tb.Log.With().Warning("Received malformed first voting message, bad signature",
 			log.String("miner_id", minerID.Key),
-			log.Uint64("epoch_id", uint64(currentEpoch)),
-			log.String("signature", util.Bytes2Hex(message.Signature)))
+			log.Uint64("epoch_id", uint64(currentEpoch)))
 
 		return nil
 	}
@@ -449,8 +448,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 	tb.Log.With().Debug("Received following voting message, counting it",
 		log.String("miner_id", minerID.Key),
 		log.Uint64("epoch_id", uint64(currentEpoch)),
-		log.Uint64("round_id", uint64(messageRound)),
-		log.String("message", message.String()))
+		log.Uint64("round_id", uint64(messageRound)))
 
 	firstRoundIncomingVotes := tb.firstRoundIncomingVotes[currentEpoch][minerID.Key]
 	tb.incomingVotes[currentEpoch][messageRound][minerID.Key] = tb.decodeVotes(message.VotesBitVector, firstRoundIncomingVotes)
