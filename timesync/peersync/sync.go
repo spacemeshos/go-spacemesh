@@ -128,10 +128,8 @@ func New(network Network, opts ...Option) *Sync {
 	for _, opt := range opts {
 		opt(sync)
 	}
-	sync.peersWatcher = peers.Start(network, peers.WithLog(sync.log))
 	sync.ctx, sync.cancel = context.WithCancel(sync.ctx)
 	sync.tg = taskgroup.New(taskgroup.WithContext(sync.ctx))
-
 	sync.srv = server.NewMsgServer(sync.ctx,
 		network,
 		protocolName,
@@ -180,6 +178,9 @@ func (s *Sync) requestHandler(ctx context.Context, buf []byte) []byte {
 // Start background workers.
 func (s *Sync) Start() {
 	s.once.Do(func() {
+		// NOTE(dshulyal) we can't start listening for peers in New because Simular
+		// sometimes hangs in that case
+		s.peersWatcher = peers.Start(s.network, peers.WithLog(s.log))
 		s.tg.Go(func(ctx context.Context) error {
 			return s.run(ctx)
 		})
@@ -190,7 +191,9 @@ func (s *Sync) Start() {
 func (s *Sync) Stop() {
 	s.cancel()
 	s.srv.Close()
-	s.peersWatcher.Close()
+	if s.peersWatcher != nil {
+		s.peersWatcher.Close()
+	}
 	s.Wait()
 }
 

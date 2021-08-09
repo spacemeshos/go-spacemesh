@@ -67,7 +67,6 @@ func TestSyncGetOffset(t *testing.T) {
 		defer ctrl.Finish()
 		network := mocks.NewMockNetwork(ctrl)
 		tm := mocks.NewMockTime(ctrl)
-		network.EXPECT().SubscribePeerEvents().Return(nil, nil)
 		network.EXPECT().RegisterDirectProtocolWithChannel(protocolName, gomock.Any()).Return(receive)
 
 		tm.EXPECT().Now().Return(roundStartTime)
@@ -96,7 +95,6 @@ func TestSyncGetOffset(t *testing.T) {
 		defer ctrl.Finish()
 		network := mocks.NewMockNetwork(ctrl)
 		tm := mocks.NewMockTime(ctrl)
-		network.EXPECT().SubscribePeerEvents().Return(nil, nil)
 		network.EXPECT().RegisterDirectProtocolWithChannel(protocolName, gomock.Any()).Return(receive)
 
 		tm.EXPECT().Now().Return(roundStartTime)
