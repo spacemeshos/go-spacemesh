@@ -433,11 +433,11 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	})
 
 	tb.runProposalPhase(ctx, epoch)
-	coinflip := tb.runConsensusPhase(ctx, epoch)
+	tb.runConsensusPhase(ctx, epoch)
 
 	// K rounds passed
 	// After K rounds had passed, tally up votes for proposals using simple tortoise vote counting
-	if err := tb.calcBeacon(epoch, coinflip); err != nil {
+	if err := tb.calcBeacon(epoch); err != nil {
 		tb.Log.With().Error("Failed to calculate beacon",
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.Err(err))
@@ -592,7 +592,7 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 }
 
 // runConsensusPhase runs K voting rounds and returns result from last weak coin round.
-func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.EpochID) bool {
+func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.EpochID) {
 	tb.Log.With().Debug("Starting consensus phase",
 		log.Uint64("epoch_id", uint64(epoch)))
 
@@ -619,13 +619,13 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	ticker := time.NewTicker(tb.votingRoundDuration + tb.weakCoinRoundDuration)
 	defer ticker.Stop()
 
-	var coinflip bool
+	var coinFlip bool
 	for round := firstRound; round <= tb.lastPossibleRound(); round++ {
 		// always use coinflip from the previous round for current round.
 		// round 1 is running without coinflip (e.g. value is false) intentionally
 		round := round
 		tb.tg.Go(func(ctx context.Context) error {
-			if err := tb.sendVotes(ctx, epoch, round, coinflip); err != nil {
+			if err := tb.sendVotes(ctx, epoch, round, coinFlip); err != nil {
 				tb.Log.With().Error("Failed to send voting messages",
 					log.Uint32("epoch_id", uint32(epoch)),
 					log.Uint64("round_id", uint64(round)),
@@ -640,15 +640,14 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		select {
 		case <-ticker.C:
 		case <-ctx.Done():
-			return false
+			return
 		}
 		tb.weakCoin.FinishRound()
-		coinflip = tb.weakCoin.Get(epoch, round)
+		coinFlip = tb.weakCoin.Get(epoch, round)
 	}
 
 	tb.Log.With().Debug("Consensus phase finished",
 		log.Uint64("epoch_id", uint64(epoch)))
-	return coinflip
 }
 
 func (tb *TortoiseBeacon) markProposalPhaseFinished(epoch types.EpochID) {

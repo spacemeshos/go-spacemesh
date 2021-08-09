@@ -153,7 +153,7 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 
 			tb.initGenesisBeacons()
 
-			err := tb.calcBeacon(tc.epoch, false)
+			err := tb.calcBeacon(tc.epoch)
 			r.NoError(err)
 			r.EqualValues(tc.hash.String(), tb.beacons[epoch].String())
 		})
@@ -310,7 +310,7 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 				atxDB:                     mockDB,
 			}
 
-			hashes, err := tb.calcTortoiseBeaconHashList(tc.epoch, false)
+			hashes, err := tb.calcTortoiseBeaconHashList(tc.epoch)
 			r.NoError(err)
 			r.EqualValues(tc.hashes.Sort(), hashes.Sort())
 		})
