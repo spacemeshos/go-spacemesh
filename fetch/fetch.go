@@ -160,7 +160,7 @@ type MessageNetwork struct {
 func NewMessageNetwork(ctx context.Context, requestTimeOut int, net service.Service, protocol string, log log.Log) *MessageNetwork {
 	return &MessageNetwork{
 		server.NewMsgServer(ctx, net.(server.Service), protocol, time.Duration(requestTimeOut)*time.Second, make(chan service.DirectMessage, p2pconf.Values.BufferSize), log),
-		peers.NewPeers(net, log.WithName("peers")),
+		peers.Start(net, peers.WithLog(log.WithName("peers"))),
 		log,
 	}
 }
