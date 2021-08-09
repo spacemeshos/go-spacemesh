@@ -56,7 +56,7 @@ func NewTransactionProcessor(allStates, processorDb database.Database, projector
 		log.With().Panic("cannot load state db", log.Err(err))
 	}
 	root := stateDb.IntermediateRoot(false)
-	log.With().Info("started processor", log.FieldNamed("state_root", root))
+	logger.With().Info("started processor", log.FieldNamed("state_root", root))
 	return &TransactionProcessor{
 		Log:         logger,
 		DB:          stateDb,

@@ -18,6 +18,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/stretchr/testify/assert"
@@ -59,9 +60,9 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	tempdir := t.TempDir()
 
 	// setup spacemesh app
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 	app.Config.SMESHING.Opts.DataDir = tempdir
-	app.log = log.NewDefault("logger")
+	app.log = logtest.New(t)
 
 	// Create new identity.
 	signer1, err := app.LoadOrCreateEdSigner()
@@ -107,7 +108,7 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 
 	var buf1, buf2 bytes.Buffer
 
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 	mylogger := "anton"
 	myLog := newLogger(&buf1)
 	myLog2 := newLogger(&buf2)
@@ -153,7 +154,7 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	var buf bytes.Buffer
 
 	lg := newLogger(&buf)
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 	mylogger := "anton"
 	subLogger := app.addLogger(mylogger, lg)
 	subLogger.Debug("should not get printed")
@@ -178,7 +179,7 @@ func testArgs(args ...string) (string, error) {
 
 func TestSpacemeshApp_Cmd(t *testing.T) {
 	r := require.New(t)
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 
 	expected := `unknown command "illegal" for "node"`
 	expected2 := "Error: " + expected + "\nRun 'node --help' for usage.\n"
@@ -196,12 +197,9 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 
 	// Test a legal flag
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.InitializeCmd(cmd, args))
+		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
 	}
 	str, err = testArgs("--test-mode")
-
-	// We must manually disable this, it's a global and simply removing the flag isn't sufficient
-	defer log.JSONLog(false)
 
 	r.NoError(err)
 	r.Empty(str)
@@ -232,13 +230,13 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	port := 1244
 
 	r := require.New(t)
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 	r.Equal(9092, app.Config.API.GrpcServerPort)
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	// Try enabling an illegal service
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		err := app.InitializeCmd(cmd, args)
+		err := cmdp.EnsureCLIFlags(cmd, app.Config)
 		r.Error(err)
 		r.Equal("unrecognized GRPC service requested: illegal", err.Error())
 	}
@@ -262,6 +260,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 
 	resetFlags()
 	events.CloseEventReporter()
+	app.Config.API = apiConfig.DefaultTestConfig()
 
 	// Try the same thing but change the order of the flags
 	// In this case, the node service will not be enabled because it comes second
@@ -287,7 +286,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 
 	// This should work
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.InitializeCmd(cmd, args))
+		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
 	}
 	str, err = testArgs("--grpc", "node")
 	r.Empty(str)
@@ -336,14 +335,14 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	setup()
 
 	r := require.New(t)
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 	r.Equal(9093, app.Config.API.JSONServerPort)
 	r.Equal(false, app.Config.API.StartJSONServer)
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	// Try enabling just the JSON service (without the GRPC service)
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		err := app.InitializeCmd(cmd, args)
+		err := cmdp.EnsureCLIFlags(cmd, app.Config)
 		r.Error(err)
 		r.Equal("must enable at least one GRPC service along with JSON gateway service", err.Error())
 	}
@@ -358,7 +357,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 
 	// Try enabling both the JSON and the GRPC services
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.InitializeCmd(cmd, args))
+		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
 	}
 	str, err = testArgs("--grpc", "node", "--json-server")
 	r.NoError(err)
@@ -368,6 +367,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 
 	resetFlags()
 	events.CloseEventReporter()
+	app.Config.API = apiConfig.DefaultTestConfig()
 
 	// Try changing the port
 	// Uses Cmd.Run as defined above
@@ -415,12 +415,12 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	port := 1242
 
 	r := require.New(t)
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 
 	path := t.TempDir()
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.InitializeCmd(cmd, args))
+		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
 		app.Config.API.GrpcServerPort = port
 		app.Config.DataDirParent = path
 		app.startAPIServices(context.TODO(), NetMock{})
@@ -485,13 +485,13 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	setup()
 
 	r := require.New(t)
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 
 	path := t.TempDir()
 
 	// Make sure the service is not running by default
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.InitializeCmd(cmd, args))
+		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
 		app.Config.DataDirParent = path
 		app.startAPIServices(context.TODO(), NetMock{})
 	}
@@ -537,7 +537,6 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 	// We expect this one to succeed
 	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload, app.Config.API.JSONServerPort)
-	log.Info("Got echo response: %v", respBody)
 	var msg pb.EchoResponse
 	r.NoError(jsonpb.UnmarshalString(respBody, &msg))
 	r.Equal(message, msg.Msg.Value)
@@ -548,6 +547,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 // E2E app test of the stream endpoints in the NodeService
 func TestSpacemeshApp_NodeService(t *testing.T) {
+	logger := logtest.New(t, zap.ErrorLevel)
 	setup()
 
 	// Use a unique port
@@ -555,20 +555,19 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	path := t.TempDir()
 
-	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), log.NewDefault("clock"))
+	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), logtest.New(t))
 	localNet := service.NewSimulator()
 	cfg := getTestDefaultConfig(1)
+
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	assert.NoError(t, err)
 	edSgn := signing.NewEdSigner()
-	app, err := InitSingleInstance(*cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(), poetHarness.HTTPPoetClient, clock, localNet, edSgn)
-
-	//app := NewSpacemeshApp()
+	app, err := InitSingleInstance(logger, *cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(logtest.New(t)), poetHarness.HTTPPoetClient, clock, localNet, edSgn)
+	require.NoError(t, err)
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		defer app.Cleanup()
-		require.NoError(t, app.InitializeCmd(cmd, args))
-		require.NoError(t, app.Initialize())
+		require.NoError(t, cmdp.EnsureCLIFlags(cmd, app.Config))
 
 		// Give the error channel a buffer
 		events.CloseEventReporter()
@@ -578,6 +577,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		app.Config.SyncInterval = 1
 		app.Config.LayerDurationSec = 2
 		app.Config.DataDirParent = path
+		app.Config.LOGGING = cfg.LOGGING
 
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
@@ -619,9 +619,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	go func() {
 		// Don't close the channel twice
-		var once sync.Once
-		oncebody := func() { close(end) }
-		defer once.Do(oncebody)
+		defer close(end)
 
 		// Open an error stream and a status stream
 		streamErr, err := c.ErrorStream(context.Background(), &pb.ErrorStreamRequest{})
@@ -630,39 +628,37 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		nextError := func() *pb.NodeError {
 			in, err := streamErr.Recv()
 			require.NoError(t, err)
-			log.Info("Got streamed error: %v", in.Error)
 			return in.Error
 		}
 
 		// We expect a specific series of errors in a specific order!
 		// Check each one
-		var myError *pb.NodeError
-
-		myError = nextError()
-
-		// Ignore this error which happens if you have a local database file
-		if strings.Contains(myError.Msg, "error adding genesis block, block already exists in database") {
-			myError = nextError()
+		expected := []string{
+			"test123",
+			"test456",
+			"Fatal: goroutine panicked.",
+			"testPANIC",
+		}
+		// TODO(dshulyak) multiple modules were using incorrent loggers and notifications weren't made.
+		// this test is very problematic and must be completely rewritten.
+		// - ideally without using global state (logger and event publisher)
+		// - or atleast initialize only what is needed and not everything
+		ignored := map[string]struct{}{
+			"error adding genesis block, block already exists in database":            {},
+			"method IsIdentityActiveOnConsensusView erred while calling actives func": {},
+			"error checking if identity is active":                                    {},
+			"could not notify subscribers":                                            {},
+			"Failed to send proposal message":                                         {},
 		}
 
-		require.Equal(t, "test123", myError.Msg)
-		require.Equal(t, pb.LogLevel_LOG_LEVEL_ERROR, myError.Level)
-
-		myError = nextError()
-		require.Equal(t, "test456", myError.Msg)
-		require.Equal(t, pb.LogLevel_LOG_LEVEL_ERROR, myError.Level)
-
-		// The panic gets wrapped in an ERROR, and we get both, in this order
-		myError = nextError()
-		require.Contains(t, myError.Msg, "Fatal: goroutine panicked.")
-		require.Equal(t, pb.LogLevel_LOG_LEVEL_ERROR, myError.Level)
-
-		myError = nextError()
-		require.Equal(t, "testPANIC", myError.Msg)
-		require.Equal(t, pb.LogLevel_LOG_LEVEL_PANIC, myError.Level)
-
-		// Let the test end
-		once.Do(oncebody)
+		for i := 0; i < len(expected); {
+			current := nextError()
+			if _, ignore := ignored[current.Msg]; ignore {
+				continue
+			}
+			require.Contains(t, current.Msg, expected[i])
+			i++
+		}
 	}()
 
 	wg.Add(1)
@@ -713,7 +709,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				fmt.Println("Recovered", r)
+				log.Info("Recovered", r)
 			}
 		}()
 		log.Panic("testPANIC")
@@ -740,7 +736,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	// Use a unique dir for data so we don't read existing state
 	path := t.TempDir()
 
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 	cfg := config.DefaultTestConfig()
 	app.Config = &cfg
 
@@ -890,12 +886,12 @@ func TestSpacemeshApp_P2PInterface(t *testing.T) {
 	addr := "127.0.0.1"
 
 	r := require.New(t)
-	app := NewSpacemeshApp()
+	app := New(WithLog(logtest.New(t)))
 
 	// Initialize the network: we don't want to listen but this lets us dial out
 	l, err := node.NewNodeIdentity()
 	r.NoError(err)
-	p2pnet, err := net.NewNet(context.TODO(), app.Config.P2P, l, log.AppLog)
+	p2pnet, err := net.NewNet(context.TODO(), app.Config.P2P, l, logtest.New(t))
 	r.NoError(err)
 	// We need to listen on a different port
 	listener, err := inet.Listen("tcp", fmt.Sprintf("%s:%d", addr, 9270))
@@ -912,7 +908,7 @@ func TestSpacemeshApp_P2PInterface(t *testing.T) {
 	app.Config.P2P.TCPPort = port
 	app.Config.P2P.TCPInterface = addr
 	app.Config.P2P.AcquirePort = false
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.AppLog, app.Config.DataDir())
+	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, logtest.New(t), app.Config.DataDir())
 	r.NoError(err)
 	r.NoError(swarm.Start(context.TODO()))
 	defer swarm.Shutdown()

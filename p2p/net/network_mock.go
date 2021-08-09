@@ -4,9 +4,11 @@ import (
 	"context"
 	"net"
 	"sync/atomic"
+	"testing"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
@@ -39,10 +41,6 @@ func (m ReadWriteCloserMock) RemoteAddr() net.Addr {
 	return r
 }
 
-func getTestLogger(name string) log.Log {
-	return log.NewDefault(name)
-}
-
 // NetworkMock is a mock struct
 type NetworkMock struct {
 	dialErr          error
@@ -59,11 +57,11 @@ type NetworkMock struct {
 }
 
 // NewNetworkMock is a mock
-func NewNetworkMock() *NetworkMock {
+func NewNetworkMock(tb testing.TB) *NetworkMock {
 	return &NetworkMock{
 		regNewRemoteConn: make([]func(NewConnectionEvent), 0, 3),
 		closingConn:      make([]func(context.Context, ConnectionWithErr), 0, 3),
-		logger:           getTestLogger("network mock"),
+		logger:           logtest.New(tb).WithName("network mock"),
 		incomingMessages: []chan IncomingMessageEvent{make(chan IncomingMessageEvent, 256)},
 	}
 }

@@ -1,15 +1,16 @@
 package metrics
 
 import (
-	"github.com/go-kit/kit/metrics/prometheus"
-	stdprometheus "github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/push"
-	"github.com/prometheus/common/expfmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/go-kit/kit/metrics/prometheus"
+	stdprometheus "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/push"
+	"github.com/prometheus/common/expfmt"
 )
 
 func TestStartPushMetrics(t *testing.T) {
@@ -30,8 +31,6 @@ func TestStartPushMetrics(t *testing.T) {
 		}
 
 		res := string(resBytes)
-		t.Log(res)
-
 		if !strings.Contains(res, testMetricName+" 1") {
 			t.Fatal("r.Body doesn't contains out test metric!")
 		}

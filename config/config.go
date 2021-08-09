@@ -144,6 +144,7 @@ type LoggerConfig struct {
 	NipostBuilderLoggerLevel  string `mapstructure:"nipost"`
 	AtxBuilderLoggerLevel     string `mapstructure:"atx-builder"`
 	HareBeaconLoggerLevel     string `mapstructure:"hare-beacon"`
+	TimeSyncLoggerLevel       string `mapstructure:"timesync"`
 }
 
 // SmeshingConfig defines configuration for the node's smeshing (mining).

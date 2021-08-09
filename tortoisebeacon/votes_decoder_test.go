@@ -3,7 +3,7 @@ package tortoisebeacon
 import (
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -51,7 +51,7 @@ func TestTortoiseBeacon_decodeVotes(t *testing.T) {
 				config: Config{
 					VotesLimit: 100,
 				},
-				Log: log.NewDefault("TortoiseBeacon"),
+				Log: logtest.New(t).WithName("TortoiseBeacon"),
 			}
 
 			result := tb.decodeVotes(tc.bitVector, tc.firstRound)

@@ -10,8 +10,6 @@ import (
 	"fmt"
 	"math/big"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -100,13 +98,13 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 	for _, blk := range GenesisLayer().Blocks() {
 		ll.Log.With().Info("adding genesis block", blk.ID(), blk.LayerIndex)
 		if err := ll.AddBlock(blk); err != nil {
-			log.With().Error("error inserting genesis block to db", blk.ID(), blk.LayerIndex)
+			ll.Log.With().Error("error inserting genesis block to db", blk.ID(), blk.LayerIndex)
 		}
 		if err := ll.SaveContextualValidity(blk.ID(), blk.LayerIndex, true); err != nil {
-			log.With().Error("error inserting genesis block to db", blk.ID(), blk.LayerIndex)
+			ll.Log.With().Error("error inserting genesis block to db", blk.ID(), blk.LayerIndex)
 		}
 	}
-	if err := ll.SaveLayerInputVectorByID(GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
+	if err := ll.SaveLayerInputVectorByID(context.Background(), GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
 		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
 	}
 	return ll, err
@@ -145,7 +143,7 @@ func NewMemMeshDB(log log.Log) *DB {
 		_ = ll.AddBlock(blk)
 		_ = ll.SaveContextualValidity(blk.ID(), blk.LayerIndex, true)
 	}
-	if err := ll.SaveLayerInputVectorByID(GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
+	if err := ll.SaveLayerInputVectorByID(context.Background(), GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
 		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
 	}
 	return ll
@@ -407,16 +405,18 @@ func (m *DB) GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) 
 }
 
 // SaveLayerInputVectorByID gets the input vote vector for a layer (hare results)
-func (m *DB) SaveLayerInputVectorByID(id types.LayerID, blks []types.BlockID) error {
+func (m *DB) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blks []types.BlockID) error {
 	hash := types.CalcHash32(id.Bytes())
-	m.With().Info("saving input vector by layerid", id, hash, log.Int("num_blocks", len(blks)))
-	return m.SaveLayerInputVector(hash, blks)
-}
+	m.WithContext(ctx).With().Info("saving input vector",
+		id,
+		log.String("iv_hash", hash.ShortString()))
 
-// SaveLayerHashInputVector saves the input vote vector for a layer (hare results) using its hash
-func (m *DB) SaveLayerHashInputVector(h types.Hash32, data []byte) error {
-	m.With().Info("saved input vector for hash", log.String("layerhash", h.ShortString()))
-	return m.inputVector.Put(h.Bytes(), data)
+	ifBytes, err := types.InterfaceToBytes(blks)
+	if err != nil {
+		return err
+	}
+
+	return m.inputVector.Put(hash.Bytes(), ifBytes)
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {
@@ -426,9 +426,9 @@ func (m *DB) writeBlock(bl *types.Block) error {
 		Signature: bl.Signature,
 		MinerID:   bl.MinerID().Bytes(),
 	}
-	if bytes, err := types.InterfaceToBytes(block); err != nil {
+	if ifBytes, err := types.InterfaceToBytes(block); err != nil {
 		return fmt.Errorf("could not encode block: %w", err)
-	} else if err := m.blocks.Put(bl.ID().AsHash32().Bytes(), bytes); err != nil {
+	} else if err := m.blocks.Put(bl.ID().AsHash32().Bytes(), ifBytes); err != nil {
 		return fmt.Errorf("could not add block %v to database: %w", bl.ID(), err)
 	} else if err := m.updateLayerWithBlock(bl); err != nil {
 		return fmt.Errorf("could not update layer %v with new block %v: %w", bl.Layer(), bl.ID(), err)
@@ -495,14 +495,14 @@ func (msh *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
 func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) {
 	if err := m.general.Put(m.getLayerHashKey(layerID), hash.Bytes()); err != nil {
 		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
-			log.String("layer_hash", hash.Hex()))
+			log.String("layer_hash", hash.ShortString()))
 	}
 
 	// we store a double index here because most of the code uses layer ID as key, currently only sync reads layer by hash
 	// when this changes we can simply point to the layes
 	if err := m.general.Put(hash.Bytes(), layerID.Bytes()); err != nil {
 		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
-			log.String("layer_hash", hash.Hex()))
+			log.String("layer_hash", hash.ShortString()))
 	}
 }
 
@@ -535,32 +535,49 @@ func (m *DB) getLayerMutex(index types.LayerID) *layerMutex {
 	return ll
 }
 
-// Schema: "r_<coinbase>_<smesherId>_<layerId> -> reward struct"
 func getRewardKey(l types.LayerID, account types.Address, smesherID types.NodeID) []byte {
-	str := string(getRewardKeyPrefix(account)) + "_" + smesherID.String() + "_" + l.String()
-	return []byte(str)
+	return new(keyBuilder).
+		WithAccountRewardsPrefix().
+		WithAddress(account).
+		WithNodeID(smesherID).
+		WithLayerID(l).
+		Bytes()
 }
 
 func getRewardKeyPrefix(account types.Address) []byte {
-	str := "r_" + account.String()
-	return []byte(str)
+	return new(keyBuilder).
+		WithAccountRewardsPrefix().
+		WithAddress(account).
+		Bytes()
 }
 
 // This function gets the reward key for a particular smesherID
 // format for the index "s_<smesherid>_<accountid>_<layerid> -> r_<accountid>_<smesherid>_<layerid> -> the actual reward"
 func getSmesherRewardKey(l types.LayerID, smesherID types.NodeID, account types.Address) []byte {
-	str := string(getSmesherRewardKeyPrefix(smesherID)) + "_" + account.String() + "_" + l.String()
-	return []byte(str)
+	return new(keyBuilder).
+		WithSmesherRewardsPrefix().
+		WithNodeID(smesherID).
+		WithAddress(account).
+		WithLayerID(l).
+		Bytes()
 }
 
 // use r_ for one and s_ for the other so the namespaces can't collide
 func getSmesherRewardKeyPrefix(smesherID types.NodeID) []byte {
-	str := "s_" + smesherID.String()
-	return []byte(str)
+	return new(keyBuilder).
+		WithSmesherRewardsPrefix().
+		WithNodeID(smesherID).Bytes()
 }
 
 type keyBuilder struct {
 	buf bytes.Buffer
+}
+
+func parseLayerIDFromRewardsKey(buf []byte) types.LayerID {
+	if len(buf) < 4 {
+		panic("key that contains layer id must be atleast 4 bytes")
+	}
+	return types.NewLayerID(binary.BigEndian.Uint32(buf[len(buf)-4:]))
 }
 
 func (k *keyBuilder) WithLayerID(l types.LayerID) *keyBuilder {
@@ -568,7 +585,7 @@ func (k *keyBuilder) WithLayerID(l types.LayerID) *keyBuilder {
 	// NOTE(dshulyak) big endian produces lexicographically ordered bytes.
 	// some queries can be optimizaed by using range queries instead of point queries.
 	binary.BigEndian.PutUint32(buf, l.Uint32())
-	k.buf.Write(l.Bytes())
+	k.buf.Write(buf)
 	return k
 }
 
@@ -579,6 +596,27 @@ func (k *keyBuilder) WithOriginPrefix() *keyBuilder {
 
 func (k *keyBuilder) WithDestPrefix() *keyBuilder {
 	k.buf.WriteString("a_d_")
+	return k
+}
+
+func (k *keyBuilder) WithAccountRewardsPrefix() *keyBuilder {
+	k.buf.WriteString("r_")
+	return k
+}
+
+func (k *keyBuilder) WithSmesherRewardsPrefix() *keyBuilder {
+	k.buf.WriteString("s_")
+	return k
+}
+
+func (k *keyBuilder) WithAddress(addr types.Address) *keyBuilder {
+	k.buf.Write(addr.Bytes())
+	return k
+}
+
+func (k *keyBuilder) WithNodeID(id types.NodeID) *keyBuilder {
+	k.buf.WriteString(id.Key)
+	k.buf.Write(id.VRFPublicKey)
 	return k
 }
 
@@ -717,19 +755,14 @@ func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err erro
 		if it.Key() == nil {
 			break
 		}
-		str := string(it.Key())
-		strs := strings.Split(str, "_")
-		layer, err := strconv.ParseUint(strs[3], 10, 32)
-		if err != nil {
-			return nil, fmt.Errorf("wrong key in db %s: %v", it.Key(), err)
-		}
+		layer := parseLayerIDFromRewardsKey(it.Key())
 		var reward dbReward
 		err = types.BytesToInterface(it.Value(), &reward)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
 		}
 		rewards = append(rewards, types.Reward{
-			Layer:               types.NewLayerID(uint32(layer)),
+			Layer:               layer,
 			TotalReward:         reward.TotalReward,
 			LayerRewardEstimate: reward.LayerRewardEstimate,
 			SmesherID:           reward.SmesherID,
@@ -746,9 +779,7 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 		if it.Key() == nil {
 			break
 		}
-		str := string(it.Key())
-		strs := strings.Split(str, "_")
-		layer, err := strconv.ParseUint(strs[3], 10, 32)
+		layer := parseLayerIDFromRewardsKey(it.Key())
 		if err != nil {
 			return nil, fmt.Errorf("error parsing db key %s: %v", it.Key(), err)
 		}
@@ -762,7 +793,7 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
 		}
 		rewards = append(rewards, types.Reward{
-			Layer:               types.NewLayerID(uint32(layer)),
+			Layer:               layer,
 			TotalReward:         reward.TotalReward,
 			LayerRewardEstimate: reward.LayerRewardEstimate,
 			SmesherID:           reward.SmesherID,

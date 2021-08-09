@@ -245,7 +245,7 @@ func (trtl *ThreadSafeVerifyingTortoise) rerunFromGenesis(ctx context.Context) (
 
 	// swap out the turtle instances so its state is up to date
 	trtlForRerun.bdp = trtl.trtl.bdp
-	trtlForRerun.logger = trtl.trtl.logger
+	trtlForRerun.logger = trtl.logger
 	trtl.trtl = trtlForRerun
 	return
 }
@@ -254,6 +254,6 @@ func (trtl *ThreadSafeVerifyingTortoise) rerunFromGenesis(ctx context.Context) (
 func (trtl *ThreadSafeVerifyingTortoise) Persist(ctx context.Context) error {
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()
-	trtl.trtl.logger.WithContext(ctx).Info("persist tortoise")
+	trtl.logger.WithContext(ctx).Info("persist tortoise")
 	return trtl.trtl.persist()
 }

@@ -37,7 +37,7 @@ func NewClock(c Clock, tickInterval time.Duration, genesisTime time.Time, logger
 	}
 
 	t := &TimeClock{
-		Ticker:       NewTicker(c, LayerConv{duration: tickInterval, genesis: genesisTime}),
+		Ticker:       NewTicker(c, LayerConv{duration: tickInterval, genesis: genesisTime}, WithLog(logger)),
 		tickInterval: tickInterval,
 		startEpoch:   genesisTime,
 		stop:         make(chan struct{}),

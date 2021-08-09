@@ -12,7 +12,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"runtime/debug"
 	"strconv"
 	"time"
 
@@ -51,6 +50,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
+	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
@@ -93,6 +93,7 @@ const (
 	GossipListener       = "gossipListener"
 	Fetcher              = "fetcher"
 	LayerFetcher         = "layerFetcher"
+	TimeSyncLogger       = "timesync"
 )
 
 // Cmd is the cobra wrapper for the node, that allows adding parameters to it
@@ -100,9 +101,28 @@ var Cmd = &cobra.Command{
 	Use:   "node",
 	Short: "start node",
 	Run: func(cmd *cobra.Command, args []string) {
-		app := NewSpacemeshApp()
+		conf, err := LoadConfigFromFile()
+		if err != nil {
+			log.With().Error("can't load config file", log.Err(err))
+			return
+		}
+		if err := cmdp.EnsureCLIFlags(cmd, conf); err != nil {
+			log.With().Error("can't ensure that cli flags match config value types", log.Err(err))
+			return
+		}
+
+		if conf.TestMode {
+			log.JSONLog(true)
+		}
+
+		app := New(
+			WithConfig(conf),
+			// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
+			// otherwise it will fail later when child logger will try to increase level.
+			WithLog(log.NewWithLevel("", zap.NewAtomicLevelAt(zapcore.DebugLevel))),
+		)
 		starter := func() error {
-			if err := app.InitializeCmd(cmd, args); err != nil {
+			if err := app.Initialize(); err != nil {
 				log.With().Error("Failed to initialize node.", log.Err(err))
 				return err
 			}
@@ -113,7 +133,7 @@ var Cmd = &cobra.Command{
 			}
 			return err
 		}
-		err := starter()
+		err = starter()
 		app.Cleanup()
 		if err != nil {
 			os.Exit(1)
@@ -173,8 +193,65 @@ type TickProvider interface {
 	AwaitLayer(types.LayerID) chan struct{}
 }
 
-// SpacemeshApp is the cli app singleton
-type SpacemeshApp struct {
+// LoadConfigFromFile tries to load configuration file if the config parameter was specified
+func LoadConfigFromFile() (*cfg.Config, error) {
+	fileLocation := viper.GetString("config")
+	vip := viper.New()
+	// read in default config if passed as param using viper
+	if err := cfg.LoadConfig(fileLocation, vip); err != nil {
+		log.Error(fmt.Sprintf("couldn't load config file at location: %s switching to defaults \n error: %v.",
+			fileLocation, err))
+		// return err
+	}
+
+	conf := cfg.DefaultConfig()
+	// load config if it was loaded to our viper
+	err := vip.Unmarshal(&conf)
+	if err != nil {
+		log.Error("Failed to parse config", log.Err(err))
+		return nil, err
+	}
+	return &conf, nil
+}
+
+// Option to modify an App instance.
+type Option func(app *App)
+
+// WithLog enables logger for an App.
+func WithLog(logger log.Log) Option {
+	return func(app *App) {
+		app.log = logger
+	}
+}
+
+// WithConfig overvwrites default App config.
+func WithConfig(conf *cfg.Config) Option {
+	return func(app *App) {
+		app.Config = conf
+	}
+}
+
+// New creates an instance of the spacemesh app
+func New(opts ...Option) *App {
+	defaultConfig := cfg.DefaultConfig()
+	app := &App{
+		Config:  &defaultConfig,
+		log:     log.NewNop(),
+		loggers: make(map[string]*zap.AtomicLevel),
+		term:    make(chan struct{}),
+		started: make(chan struct{}),
+	}
+	for _, opt := range opts {
+		opt(app)
+	}
+	app.log = log.RegisterHooks(app.log, events.EventHook())
+	lvl := zap.NewAtomicLevelAt(zap.InfoLevel)
+	log.SetupGlobal(app.log.SetLevel(&lvl))
+	return app
+}
+
+// App is the cli app singleton
+type App struct {
 	*cobra.Command
 	nodeID         types.NodeID
 	P2P            p2p.Service
@@ -204,68 +281,18 @@ type SpacemeshApp struct {
 	log            log.Log
 	txPool         *state.TxMempool
 	layerFetch     *layerfetcher.Logic
+	ptimesync      *peersync.Sync
 	loggers        map[string]*zap.AtomicLevel
 	term           chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
 	started        chan struct{} // this channel is closed once the app has finished starting
 }
 
-// LoadConfigFromFile tries to load configuration file if the config parameter was specified
-func LoadConfigFromFile() (*cfg.Config, error) {
-	fileLocation := viper.GetString("config")
-	vip := viper.New()
-	// read in default config if passed as param using viper
-	if err := cfg.LoadConfig(fileLocation, vip); err != nil {
-		log.Error(fmt.Sprintf("couldn't load config file at location: %s switching to defaults \n error: %v.",
-			fileLocation, err))
-		// return err
-	}
-
-	conf := cfg.DefaultConfig()
-	// load config if it was loaded to our viper
-	err := vip.Unmarshal(&conf)
-	if err != nil {
-		log.Error("Failed to parse config\n")
-		return nil, err
-	}
-	return &conf, nil
-}
-
-// ParseConfig unmarshal config file into struct
-func (app *SpacemeshApp) ParseConfig() error {
-	conf, err := LoadConfigFromFile()
-	app.Config = conf
-
-	return err
-}
-
-// NewSpacemeshApp creates an instance of the spacemesh app
-func NewSpacemeshApp() *SpacemeshApp {
-	defaultConfig := cfg.DefaultConfig()
-	node := &SpacemeshApp{
-		Config:  &defaultConfig,
-		loggers: make(map[string]*zap.AtomicLevel),
-		term:    make(chan struct{}),
-		started: make(chan struct{}),
-	}
-
-	return node
-}
-
-func (app *SpacemeshApp) introduction() {
+func (app *App) introduction() {
 	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 }
 
-// InitializeCmd does pre processing of flags and configuration files, it also initializes data dirs if they dont exist
-func (app *SpacemeshApp) InitializeCmd(cmd *cobra.Command, args []string) (err error) {
-	// parse the config file based on flags et al
-	if err := app.ParseConfig(); err != nil {
-		log.Error(fmt.Sprintf("couldn't parse the config err=%v", err))
-	}
-
-	// ensure cli flags are higher priority than config file
-	if err := cmdp.EnsureCLIFlags(cmd, app.Config); err != nil {
-		return err
-	}
+// Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync
+func (app *App) Initialize() (err error) {
 	// override default config in timesync since timesync is using TimeCongigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
 
@@ -275,11 +302,6 @@ func (app *SpacemeshApp) InitializeCmd(cmd *cobra.Command, args []string) (err e
 		return err
 	}
 
-	return app.Initialize()
-}
-
-// Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync
-func (app *SpacemeshApp) Initialize() (err error) {
 	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
@@ -288,7 +310,7 @@ func (app *SpacemeshApp) Initialize() (err error) {
 	// and triggers the quit app
 	go func() {
 		for range signalChan {
-			log.Info("Received an interrupt, stopping services...\n")
+			app.log.Info("Received an interrupt, stopping services...\n")
 			cmdp.Cancel()
 		}
 	}()
@@ -307,24 +329,7 @@ func (app *SpacemeshApp) Initialize() (err error) {
 }
 
 // setupLogging configured the app logging system.
-func (app *SpacemeshApp) setupLogging() {
-	if app.Config.TestMode {
-		log.JSONLog(true)
-	}
-
-	// app-level logging
-	log.InitSpacemeshLoggingSystemWithHooks(func(entry zapcore.Entry) error {
-		// If we report anything less than this we'll end up in an infinite loop
-		if entry.Level >= zapcore.ErrorLevel {
-			events.ReportError(events.NodeError{
-				Msg:   entry.Message,
-				Trace: string(debug.Stack()),
-				Level: entry.Level,
-			})
-		}
-		return nil
-	})
-
+func (app *App) setupLogging() {
 	log.Info("%s", app.getAppInfo())
 
 	msg := "initializing event reporter"
@@ -337,20 +342,20 @@ func (app *SpacemeshApp) setupLogging() {
 	}
 }
 
-func (app *SpacemeshApp) getAppInfo() string {
+func (app *App) getAppInfo() string {
 	return fmt.Sprintf("App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s ",
 		cmdp.Version, cmdp.Branch, cmdp.Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
 // Cleanup stops all app services
-func (app *SpacemeshApp) Cleanup() {
+func (app *App) Cleanup() {
 	log.Info("app cleanup starting...")
 	app.stopServices()
 	// add any other Cleanup tasks here....
-	log.Info("app cleanup completed\n\n")
+	log.Info("app cleanup completed")
 }
 
-func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) error {
+func (app *App) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) error {
 	if app.Config.Genesis == nil {
 		app.Config.Genesis = apiCfg.DefaultGenesisConfig()
 	}
@@ -377,7 +382,7 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 
 // Wrap the top-level logger to add context info and set the level for a
 // specific module.
-func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
+func (app *App) addLogger(name string, logger log.Log) log.Log {
 	lvl := zap.NewAtomicLevel()
 	var err error
 
@@ -438,21 +443,26 @@ func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.NipostBuilderLoggerLevel))
 	case AtxBuilderLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxBuilderLoggerLevel))
+	case TimeSyncLogger:
+		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TimeSyncLoggerLevel))
 	default:
 		lvl.SetLevel(log.Level())
 	}
 
 	if err != nil {
-		log.Error("cannot parse logging for %v error %v", name, err)
+		app.log.Error("cannot parse logging for %v error %v", name, err)
 		lvl.SetLevel(log.Level())
 	}
 
-	app.loggers[name] = &lvl
-	return logger.SetLevel(&lvl).WithName(name).WithFields(log.String("module", name))
+	if logger.Check(lvl.Level()) {
+		app.loggers[name] = &lvl
+		logger = logger.SetLevel(&lvl)
+	}
+	return logger.WithName(name).WithFields(log.String("module", name))
 }
 
 // SetLogLevel updates the log level of an existing logger
-func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
+func (app *App) SetLogLevel(name, loglevel string) error {
 	if lvl, ok := app.loggers[name]; ok {
 		err := lvl.UnmarshalText([]byte(loglevel))
 		if err != nil {
@@ -464,8 +474,7 @@ func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
 	return nil
 }
 
-func (app *SpacemeshApp) initServices(ctx context.Context,
-	logger log.Log,
+func (app *App) initServices(ctx context.Context,
 	nodeID types.NodeID,
 	swarm service.Service,
 	dbStorepath string,
@@ -479,11 +488,7 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 
 	app.nodeID = nodeID
 
-	name := nodeID.ShortString()
-
-	// This base logger must be debug level so that other, derived loggers are not a lower level.
-	lg := log.NewWithLevel(name, zap.NewAtomicLevelAt(zapcore.DebugLevel)).WithFields(nodeID)
-
+	lg := app.log.Named(nodeID.ShortString()).WithFields(nodeID)
 	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 
 	app.log = app.addLogger(AppLogger, lg)
@@ -724,12 +729,21 @@ func (app *SpacemeshApp) initServices(ctx context.Context,
 	app.atxDb = atxdb
 	app.layerFetch = layerFetch
 	app.tortoiseBeacon = tBeacon
+	if !app.Config.TIME.Peersync.Disable {
+		conf := app.Config.TIME.Peersync
+		conf.ResponsesBufferSize = app.Config.P2P.BufferSize
+		app.ptimesync = peersync.New(
+			swarm.(peersync.Network),
+			peersync.WithLog(app.addLogger(TimeSyncLogger, lg)),
+			peersync.WithConfig(conf),
+		)
+	}
 
 	return nil
 }
 
 // periodically checks that our clock is sync
-func (app *SpacemeshApp) checkTimeDrifts() {
+func (app *App) checkTimeDrifts() {
 	checkTimeSync := time.NewTicker(app.Config.TIME.RefreshNtpInterval)
 	defer checkTimeSync.Stop() // close ticker
 
@@ -750,7 +764,7 @@ func (app *SpacemeshApp) checkTimeDrifts() {
 }
 
 // HareFactory returns a hare consensus algorithm according to the parameters in app.Config.Hare.SuperHare
-func (app *SpacemeshApp) HareFactory(
+func (app *App) HareFactory(
 	ctx context.Context,
 	mdb *mesh.DB,
 	swarm service.Service,
@@ -785,7 +799,7 @@ func (app *SpacemeshApp) HareFactory(
 	return ha
 }
 
-func (app *SpacemeshApp) startServices(ctx context.Context) error {
+func (app *App) startServices(ctx context.Context, logger log.Log) error {
 	app.layerFetch.Start()
 	go app.startSyncer(ctx)
 
@@ -813,11 +827,14 @@ func (app *SpacemeshApp) startServices(ctx context.Context) error {
 	}
 
 	app.clock.StartNotifying()
+	if app.ptimesync != nil {
+		app.ptimesync.Start()
+	}
 	go app.checkTimeDrifts()
 	return nil
 }
 
-func (app *SpacemeshApp) startAPIServices(ctx context.Context, net api.NetworkAPI) {
+func (app *App) startAPIServices(ctx context.Context, net api.NetworkAPI) {
 	apiConf := &app.Config.API
 	layerDuration := app.Config.LayerDurationSec
 
@@ -885,7 +902,7 @@ func (app *SpacemeshApp) startAPIServices(ctx context.Context, net api.NetworkAP
 	}
 }
 
-func (app *SpacemeshApp) stopServices() {
+func (app *App) stopServices() {
 	// all go-routines that listen to app.term will close
 	// note: there is no guarantee that a listening go-routine will close before stopServices exits
 	close(app.term)
@@ -959,6 +976,11 @@ func (app *SpacemeshApp) stopServices() {
 		app.mesh.Close()
 	}
 
+	if app.ptimesync != nil {
+		app.ptimesync.Stop()
+		app.log.Debug("peer timesync stopped")
+	}
+
 	events.CloseEventReporter()
 	events.CloseEventPubSub()
 
@@ -971,7 +993,7 @@ func (app *SpacemeshApp) stopServices() {
 }
 
 // LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists
-func (app *SpacemeshApp) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
+func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	filename := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
 	log.Info("Looking for identity file at `%v`", filename)
 
@@ -1013,7 +1035,7 @@ func (identityFileFound) Error() string {
 	return "identity file found"
 }
 
-func (app *SpacemeshApp) getIdentityFile() (string, error) {
+func (app *App) getIdentityFile() (string, error) {
 	var f string
 	err := filepath.Walk(app.Config.SMESHING.Opts.DataDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -1034,7 +1056,7 @@ func (app *SpacemeshApp) getIdentityFile() (string, error) {
 	return "", fmt.Errorf("not found")
 }
 
-func (app *SpacemeshApp) startSyncer(ctx context.Context) {
+func (app *App) startSyncer(ctx context.Context) {
 	if app.P2P == nil {
 		app.log.Error("syncer started before p2p is initialized")
 	} else {
@@ -1044,12 +1066,12 @@ func (app *SpacemeshApp) startSyncer(ctx context.Context) {
 }
 
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
-func (app *SpacemeshApp) Start() error {
+func (app *App) Start() error {
 	// we use the main app context
 	ctx := cmdp.Ctx
 	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
 	// using context passed down to them)
-	logger := log.AppLog.WithContext(ctx)
+	logger := app.log.WithContext(ctx)
 
 	hostname, err := os.Hostname()
 	if err != nil {
@@ -1109,8 +1131,7 @@ func (app *SpacemeshApp) Start() error {
 
 	nodeID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 
-	// This base logger must be debug level so that other, derived loggers are not a lower level.
-	lg := log.NewWithLevel(nodeID.ShortString(), zap.NewAtomicLevelAt(zapcore.DebugLevel)).WithFields(nodeID)
+	lg := logger.Named(nodeID.ShortString()).WithFields(nodeID)
 
 	/* Initialize all protocol services */
 
@@ -1120,7 +1141,7 @@ func (app *SpacemeshApp) Start() error {
 		return fmt.Errorf("cannot parse genesis time %s: %d", app.Config.GenesisTime, err)
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
+	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, lg.WithName("clock"))
 
 	logger.Info("initializing p2p services")
 	swarm, err := p2p.New(ctx, app.Config.P2P, app.addLogger(P2PLogger, lg), dbStorepath)
@@ -1128,8 +1149,7 @@ func (app *SpacemeshApp) Start() error {
 		return fmt.Errorf("error starting p2p services: %w", err)
 	}
 
-	if err := app.initServices(ctx,
-		logger,
+	if err = app.initServices(ctx,
 		nodeID,
 		swarm,
 		dbStorepath,
@@ -1174,12 +1194,24 @@ func (app *SpacemeshApp) Start() error {
 		Msg:   "node is shutting down",
 		Level: zapcore.InfoLevel,
 	})
+	syncErr := make(chan error, 1)
+	if app.ptimesync != nil {
+		go func() {
+			syncErr <- app.ptimesync.Wait()
+			// if nil node was already stopped
+			if syncErr != nil {
+				cmdp.Cancel()
+			}
+		}()
+	}
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	select {
 	case <-ctx.Done():
 		return nil
 	case err := <-pprofErr:
+		return err
+	case err := <-syncErr:
 		return err
 	}
 }

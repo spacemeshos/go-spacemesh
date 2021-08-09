@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	signing2 "github.com/spacemeshos/go-spacemesh/signing"
@@ -85,7 +86,7 @@ func newMockConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set
 }
 
 func createHare(n1 p2p.Service, logger log.Log) *Hare {
-	return New(cfg, n1, signing2.NewEdSigner(), types.NodeID{}, (&mockSyncer{true}).IsSynced, new(orphanMock), eligibility.New(), 10, &mockIDProvider{}, NewMockStateQuerier(), make(chan types.LayerID), logger)
+	return New(cfg, n1, signing2.NewEdSigner(), types.NodeID{}, (&mockSyncer{true}).IsSynced, new(orphanMock), eligibility.New(logger), 10, &mockIDProvider{}, NewMockStateQuerier(), make(chan types.LayerID), logger)
 }
 
 var _ Consensus = (*mockConsensusProcess)(nil)
@@ -94,7 +95,7 @@ func TestNew(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	h := createHare(n1, log.AppLog.WithName(t.Name()))
+	h := createHare(n1, logtest.New(t).WithName(t.Name()))
 
 	if h == nil {
 		t.Fatal()
@@ -105,14 +106,14 @@ func TestHare_Start(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	h := createHare(n1, log.AppLog.WithName(t.Name()))
+	h := createHare(n1, logtest.New(t).WithName(t.Name()))
 
 	require.NoError(t, h.broker.Start(context.TODO())) // todo: fix that hack. this will cause h.Start to return err
 
 	/*err := h.Start()
 	require.Error(t, err)*/
 
-	h2 := createHare(n1, log.AppLog.WithName(t.Name()))
+	h2 := createHare(n1, logtest.New(t).WithName(t.Name()))
 	require.NoError(t, h2.Start(context.TODO()))
 }
 
@@ -121,7 +122,7 @@ func TestHare_GetResult(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	h := createHare(n1, log.AppLog.WithName(t.Name()))
+	h := createHare(n1, logtest.New(t).WithName(t.Name()))
 
 	res, err := h.GetResult(types.NewLayerID(0))
 	r.Equal(errNoResult, err)
@@ -148,7 +149,7 @@ func TestHare_GetResult2(t *testing.T) {
 		return []types.BlockID{value1}
 	}
 
-	h := createHare(n1, log.AppLog.WithName(t.Name()))
+	h := createHare(n1, logtest.New(t).WithName(t.Name()))
 	h.mesh = om
 
 	h.networkDelta = 0
@@ -180,7 +181,7 @@ func TestHare_collectOutput(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	h := createHare(n1, log.AppLog.WithName(t.Name()))
+	h := createHare(n1, logtest.New(t).WithName(t.Name()))
 
 	mockid := instanceID1
 	set := NewSetFromValues(value1)
@@ -201,7 +202,7 @@ func TestHare_collectOutput2(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	h := createHare(n1, log.AppLog.WithName(t.Name()))
+	h := createHare(n1, logtest.New(t).WithName(t.Name()))
 	h.bufferSize = 1
 	h.lastLayer = types.NewLayerID(0)
 
@@ -232,7 +233,7 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	h := createHare(n1, log.AppLog.WithName(t.Name()))
+	h := createHare(n1, logtest.New(t).WithName(t.Name()))
 	h.Start(context.TODO())
 	mo := mockReport{types.NewLayerID(8), NewEmptySet(0), true, false}
 	h.broker.Register(context.TODO(), mo.ID())
@@ -332,7 +333,7 @@ func TestHare_outputBuffer(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	h := createHare(n1, log.AppLog.WithName(t.Name()))
+	h := createHare(n1, logtest.New(t).WithName(t.Name()))
 	lasti := types.LayerID{}
 
 	for i := lasti; i.Before(types.NewLayerID(h.bufferSize)); i = i.Add(1) {
@@ -361,7 +362,7 @@ func TestHare_IsTooLate(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	h := createHare(n1, log.AppLog.WithName(t.Name()))
+	h := createHare(n1, logtest.New(t).WithName(t.Name()))
 
 	for i := (types.LayerID{}); i.Before(types.NewLayerID(h.bufferSize * 2)); i = i.Add(1) {
 		mockid := i
@@ -385,7 +386,7 @@ func TestHare_oldestInBuffer(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	h := createHare(n1, log.AppLog.WithName(t.Name()))
+	h := createHare(n1, logtest.New(t).WithName(t.Name()))
 	lasti := types.LayerID{}
 
 	for i := lasti; i.Before(types.NewLayerID(h.bufferSize)); i = i.Add(1) {
@@ -448,7 +449,7 @@ func TestHare_WeakCoin(t *testing.T) {
 		r.True(b)
 		done <- struct{}{}
 	}}
-	h := New(cfg, n1, signing, types.NodeID{}, (&mockSyncer{true}).IsSynced, om, oracle, 10, &mockIDProvider{}, NewMockStateQuerier(), layerTicker, log.AppLog.WithName("Hare"))
+	h := New(cfg, n1, signing, types.NodeID{}, (&mockSyncer{true}).IsSynced, om, oracle, 10, &mockIDProvider{}, NewMockStateQuerier(), layerTicker, logtest.New(t).WithName("Hare"))
 	defer h.Close()
 	h.lastLayer = layerID
 	set := NewSetFromValues(value1)

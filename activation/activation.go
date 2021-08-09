@@ -6,13 +6,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/post/shared"
 	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
+
+	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/post/shared"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -291,7 +292,7 @@ func (b *Builder) waitOrStop(ctx context.Context, ch chan struct{}) error {
 func (b *Builder) loop(ctx context.Context) {
 	err := b.loadChallenge()
 	if err != nil {
-		log.Info("challenge not loaded: %s", err)
+		b.log.Info("challenge not loaded: %s", err)
 	}
 
 	// Once initialized, run the execution phase with zero-challenge,

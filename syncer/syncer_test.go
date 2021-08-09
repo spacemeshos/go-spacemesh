@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/stretchr/testify/assert"
@@ -161,7 +162,7 @@ func newMemMesh(lg log.Log) *mesh.Mesh {
 	memdb := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxStore := database.NewMemDatabase()
 	goldenATXID := types.ATXID(types.HexToHash32("77777"))
-	atxdb := activation.NewDB(atxStore, activation.NewIdentityStore(database.NewMemDatabase()), memdb, layersPerEpoch, goldenATXID, nil, log.NewDefault("storeAtx").WithName("atxDB"))
+	atxdb := activation.NewDB(atxStore, activation.NewIdentityStore(database.NewMemDatabase()), memdb, layersPerEpoch, goldenATXID, nil, lg.WithName("atxDB"))
 	return mesh.NewMesh(memdb, atxdb, mesh.Config{}, &mockValidator{}, nil, nil, lg.WithName("mesh"))
 }
 
@@ -172,7 +173,7 @@ var conf = Configuration{
 }
 
 func TestStartAndShutdown(t *testing.T) {
-	lg := log.NewDefault("syncer")
+	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	ctx, cancel := context.WithCancel(context.TODO())
 	syncer := NewSyncer(ctx, conf, ticker, newMemMesh(lg), newMockFetcher(), lg)
@@ -200,7 +201,7 @@ func TestStartAndShutdown(t *testing.T) {
 }
 
 func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
-	lg := log.NewDefault("syncer")
+	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
@@ -233,7 +234,7 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 }
 
 func TestSynchronize_AllGood(t *testing.T) {
-	lg := log.NewDefault("syncer")
+	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
@@ -256,7 +257,7 @@ func TestSynchronize_AllGood(t *testing.T) {
 }
 
 func TestSynchronize_getLayerFromPeersFailed(t *testing.T) {
-	lg := log.NewDefault("syncer")
+	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
@@ -283,7 +284,7 @@ func TestSynchronize_getLayerFromPeersFailed(t *testing.T) {
 }
 
 func TestSynchronize_getATXsFailedEpochZero(t *testing.T) {
-	lg := log.NewDefault("syncer")
+	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
@@ -306,7 +307,7 @@ func TestSynchronize_getATXsFailedEpochZero(t *testing.T) {
 }
 
 func TestSynchronize_getATXsFailedPastEpoch(t *testing.T) {
-	lg := log.NewDefault("syncer")
+	lg := logtest.New(t)
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
@@ -329,7 +330,7 @@ func TestSynchronize_getATXsFailedPastEpoch(t *testing.T) {
 }
 
 func TestSynchronize_getATXsFailedCurrentEpoch(t *testing.T) {
-	lg := log.NewDefault("syncer")
+	lg := logtest.New(t)
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
@@ -378,7 +379,7 @@ func TestSynchronize_getATXsFailedCurrentEpoch(t *testing.T) {
 }
 
 func TestSynchronize_getTBFailed(t *testing.T) {
-	lg := log.NewDefault("syncer")
+	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
@@ -401,7 +402,7 @@ func TestSynchronize_getTBFailed(t *testing.T) {
 }
 
 func TestSynchronize_SyncZeroBlockFailed(t *testing.T) {
-	lg := log.NewDefault("syncer")
+	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
@@ -433,7 +434,7 @@ func TestSynchronize_SyncZeroBlockFailed(t *testing.T) {
 
 // test the case where the node originally starts from notSynced and eventually becomes synced
 func TestFromNotSyncedToSynced(t *testing.T) {
-	lg := log.NewDefault("syncer")
+	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
@@ -469,7 +470,7 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 // test the case where the node originally starts from notSynced, advances to gossipSync, but falls behind
 // to notSynced.
 func TestFromGossipSyncToNotSynced(t *testing.T) {
-	lg := log.NewDefault("syncer")
+	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
@@ -527,7 +528,7 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 // test the case where the node was originally synced, and somehow gets out of sync, but
 // eventually become synced again
 func TestFromSyncedToNotSynced(t *testing.T) {
-	lg := log.NewDefault("syncer")
+	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
@@ -614,7 +615,7 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, syncer *Syncer, mlt 
 }
 
 func TestForceSync(t *testing.T) {
-	lg := log.NewDefault("syncer")
+	lg := logtest.New(t).WithName("syncer")
 	syncer := NewSyncer(context.TODO(), conf, newMockLayerTicker(), newMemMesh(lg), newMockFetcher(), lg)
 	syncedCh := make(chan struct{})
 	syncer.RegisterChForSynced(context.TODO(), syncedCh)
@@ -629,7 +630,7 @@ func TestForceSync(t *testing.T) {
 }
 
 func TestShouldValidateLayer(t *testing.T) {
-	lg := log.NewDefault("syncer")
+	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), newMockFetcher(), lg)
 	assert.False(t, syncer.shouldValidateLayer(types.NewLayerID(0)))
@@ -647,7 +648,7 @@ func TestShouldValidateLayer(t *testing.T) {
 }
 
 func TestGetATXsCurrentEpoch(t *testing.T) {
-	lg := log.NewDefault("syncer")
+	lg := logtest.New(t).WithName("syncer")
 	mf := newMockFetcher()
 	ticker := newMockLayerTicker()
 	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
@@ -685,7 +686,7 @@ func TestGetATXsCurrentEpoch(t *testing.T) {
 }
 
 func TestGetATXsOldAndCurrentEpoch(t *testing.T) {
-	lg := log.NewDefault("syncer")
+	lg := logtest.New(t).WithName("syncer")
 	mf := newMockFetcher()
 	ticker := newMockLayerTicker()
 	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
@@ -721,7 +722,7 @@ func TestGetATXsOldAndCurrentEpoch(t *testing.T) {
 }
 
 func TestGetTBCurrentEpoch(t *testing.T) {
-	lg := log.NewDefault("syncer")
+	lg := logtest.New(t).WithName("syncer")
 	mf := newMockFetcher()
 	ticker := newMockLayerTicker()
 	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
@@ -768,7 +769,7 @@ func TestGetTBCurrentEpoch(t *testing.T) {
 }
 
 func TestGetTBOldAndCurrentEpoch(t *testing.T) {
-	lg := log.NewDefault("syncer")
+	lg := logtest.New(t).WithName("syncer")
 	mf := newMockFetcher()
 	ticker := newMockLayerTicker()
 	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
