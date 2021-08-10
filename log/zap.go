@@ -119,11 +119,6 @@ func Duration(name string, val time.Duration) Field {
 	return Field(zap.Duration(name, val))
 }
 
-// Time returns a time field
-func Time(name string, val time.Time) Field {
-	return Field(zap.Time(name, val))
-}
-
 // Err returns an error field
 func Err(v error) Field {
 	return Field(zap.NamedError("errmsg", v))

@@ -202,6 +202,7 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 	}
 }
 
+// Close closes underlying services
 func (s NodeService) Close() {
 	s.PeerCounter.Close()
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"math"
@@ -85,7 +86,7 @@ func (madp *mockAtxDataProvider) StoreAtx(_ types.EpochID, atx *types.Activation
 }
 
 func getPersistentMesh(tb testing.TB) *mesh.DB {
-	db, err := mesh.NewPersistentMeshDB(tb.TempDir(), 10, log.NewDefault("ninja_tortoise").WithOptions(log.Nop))
+	db, err := mesh.NewPersistentMeshDB(tb.TempDir(), 10, log.NewNop())
 	require.NoError(tb, err)
 	return db
 }
@@ -301,12 +302,12 @@ func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerL
 	// write blocks to database first; the verifying tortoise will subsequently read them
 	if inputVectorFn == nil {
 		// just save the layer contents as the input layer vector (the default behavior)
-		require.NoError(t, msh.SaveLayerInputVectorByID(lyr.Index(), lyr.BlocksIDs()))
+		require.NoError(t, msh.SaveLayerInputVectorByID(context.TODO(), lyr.Index(), lyr.BlocksIDs()))
 	} else if blocks, err := inputVectorFn(l); err != nil {
 		logger.With().Warning("error from input vector fn", log.Err(err))
 	} else {
 		// save blocks to db for this layer
-		require.NoError(t, msh.SaveLayerInputVectorByID(l, blocks))
+		require.NoError(t, msh.SaveLayerInputVectorByID(context.TODO(), l, blocks))
 	}
 
 	require.NoError(t, trtl.HandleIncomingLayer(context.TODO(), l))
@@ -639,7 +640,7 @@ func createTurtleLayer(t *testing.T, l types.LayerID, msh *mesh.DB, atxdb atxDat
 	if err != nil {
 		blocks = nil
 	}
-	if err := msh.SaveLayerInputVectorByID(l.Sub(1), blocks); err != nil {
+	if err := msh.SaveLayerInputVectorByID(context.TODO(), l.Sub(1), blocks); err != nil {
 		panic("database error")
 	}
 	lyr := types.NewLayer(l)
@@ -1027,7 +1028,7 @@ func TestGetLocalBlockOpinion(t *testing.T) {
 	r.Equal(against, vec)
 
 	// block included in input vector
-	r.NoError(mdb.SaveLayerInputVectorByID(l1ID, []types.BlockID{blocks[0].ID()}))
+	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l1ID, []types.BlockID{blocks[0].ID()}))
 	vec, err = alg.trtl.getLocalBlockOpinion(context.TODO(), l1ID, blocks[0].ID())
 	r.NoError(err)
 	r.Equal(support, vec)
@@ -1063,7 +1064,7 @@ func TestCheckBlockAndGetInputVector(t *testing.T) {
 	r.False(alg.trtl.checkBlockAndGetLocalOpinion(context.TODO(), diffList, "foo", support, l1ID))
 
 	// good
-	r.NoError(mdb.SaveLayerInputVectorByID(l1ID, diffList))
+	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l1ID, diffList))
 	r.True(alg.trtl.checkBlockAndGetLocalOpinion(context.TODO(), diffList, "foo", support, l1ID))
 
 	// vote differs from input vector
@@ -1128,7 +1129,7 @@ func TestCalculateExceptions(t *testing.T) {
 	// adding diffs against: vote against all blocks in the layer
 	mdb.InputVectorBackupFunc = nil
 	// we cannot store an empty vector here (it comes back as nil), so just put another block ID in it
-	r.NoError(mdb.SaveLayerInputVectorByID(l1ID, []types.BlockID{mesh.GenesisBlock().ID()}))
+	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l1ID, []types.BlockID{mesh.GenesisBlock().ID()}))
 	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{})
 	r.NoError(err)
 	expectVotes(votes, defaultTestLayerSize, len(mesh.GenesisLayer().Blocks()), 0)
@@ -1371,7 +1372,7 @@ func TestLateBlocks(t *testing.T) {
 	// send some late blocks that are in the input vector
 	layerLate := l0ID.Add(2)
 	lyr := makeLayer(t, layerLate, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	r.NoError(mdb.SaveLayerInputVectorByID(layerLate, lyr.BlocksIDs()))
+	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), layerLate, lyr.BlocksIDs()))
 	oldVerified, newVerified := alg.HandleLateBlocks(context.TODO(), lyr.Blocks())
 	r.Equal(oldVerified, newVerified)
 	checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
@@ -1587,9 +1588,9 @@ func TestVerifyLayers(t *testing.T) {
 	for _, block := range l6Blocks {
 		r.NoError(mdb.AddBlock(block))
 	}
-	r.NoError(mdb.SaveLayerInputVectorByID(l3ID, l3BlockIDs))
-	r.NoError(mdb.SaveLayerInputVectorByID(l4ID, l4BlockIDs))
-	r.NoError(mdb.SaveLayerInputVectorByID(l5ID, l5BlockIDs))
+	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l3ID, l3BlockIDs))
+	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l4ID, l4BlockIDs))
+	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l5ID, l5BlockIDs))
 	l4Votes := Opinion{BlockOpinions: map[types.BlockID]vec{
 		// support these so global opinion is support
 		l2Blocks[0].ID(): support,
@@ -1930,8 +1931,8 @@ func TestHealing(t *testing.T) {
 		for _, block := range l2.Blocks() {
 			l2BlockIDs = append(l2BlockIDs, block.ID())
 		}
-		require.NoError(t, mdb.SaveLayerInputVectorByID(l1ID, l1BlockIDs))
-		require.NoError(t, mdb.SaveLayerInputVectorByID(l2ID, l2BlockIDs))
+		require.NoError(t, mdb.SaveLayerInputVectorByID(context.TODO(), l1ID, l1BlockIDs))
+		require.NoError(t, mdb.SaveLayerInputVectorByID(context.TODO(), l2ID, l2BlockIDs))
 
 		// then create and process one more new layer
 		// prevent base block from referencing earlier (approved) layers
@@ -2045,12 +2046,12 @@ func TestRerunAndRevert(t *testing.T) {
 	l1IDs, err := mdb.LayerBlockIds(l1ID)
 	r.NoError(err)
 	block1ID := l1IDs[0]
-	r.NoError(mdb.SaveLayerInputVectorByID(l1ID, l1IDs))
+	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l1ID, l1IDs))
 	alg.HandleIncomingLayer(context.TODO(), l1ID)
 	makeLayer(t, l2ID, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 	l2IDs, err := mdb.LayerBlockIds(l2ID)
 	r.NoError(err)
-	r.NoError(mdb.SaveLayerInputVectorByID(l2ID, l2IDs))
+	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l2ID, l2IDs))
 	oldVerified, newVerified, reverted := alg.HandleIncomingLayer(context.TODO(), l2ID)
 	r.Equal(int(l0ID.Uint32()), int(oldVerified.Uint32()))
 	r.Equal(int(l1ID.Uint32()), int(newVerified.Uint32()))
@@ -2134,7 +2135,7 @@ func TestHealBalanceAttack(t *testing.T) {
 	alg.trtl.BlockOpinionsByLayer[l5ID][l5blockIDs[3]].BlockOpinions[l4lateblock.ID()] = against
 
 	// now process l5
-	r.NoError(mdb.SaveLayerInputVectorByID(l5ID, l5blockIDs))
+	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l5ID, l5blockIDs))
 	r.NoError(alg.trtl.verifyLayers(context.TODO()))
 	checkVerifiedLayer(t, alg.trtl, l0ID.Add(3))
 
@@ -2203,7 +2204,7 @@ func TestHealBalanceAttack(t *testing.T) {
 
 		blockIDs, err := mdb.LayerBlockIds(layerID)
 		r.NoError(err)
-		r.NoError(mdb.SaveLayerInputVectorByID(layerID, blockIDs))
+		r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
 		r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), layerID))
 	}
 	checkVerifiedLayer(t, alg.trtl, finalLayer.Sub(1))

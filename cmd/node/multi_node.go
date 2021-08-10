@@ -300,7 +300,7 @@ func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLay
 	eventDb := collector.NewMemoryCollector()
 	collect := collector.NewCollector(eventDb, pubsubAddr)
 	for _, a := range apps {
-		a.startServices(context.TODO(), logger)
+		a.startServices(context.TODO())
 	}
 	collect.Start(false)
 	ActivateGrpcServer(apps[0])

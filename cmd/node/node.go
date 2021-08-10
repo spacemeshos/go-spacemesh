@@ -86,7 +86,6 @@ const (
 	HareLogger           = "hare"
 	BlockBuilderLogger   = "blockBuilder"
 	BlockListenerLogger  = "blockListener"
-	BlockHandlerLogger   = "blockHandler"
 	PoetListenerLogger   = "poetListener"
 	NipostBuilderLogger  = "nipostBuilder"
 	AtxBuilderLogger     = "atxBuilder"
@@ -799,7 +798,7 @@ func (app *App) HareFactory(
 	return ha
 }
 
-func (app *App) startServices(ctx context.Context, logger log.Log) error {
+func (app *App) startServices(ctx context.Context) error {
 	app.layerFetch.Start()
 	go app.startSyncer(ctx)
 
@@ -823,7 +822,7 @@ func (app *App) startServices(ctx context.Context, logger log.Log) error {
 			}
 		}()
 	} else {
-		log.Info("Smeshing not started, waiting to be triggered via Smesher API")
+		log.Info("smeshing not started, waiting to be triggered via smesher api")
 	}
 
 	app.clock.StartNotifying()

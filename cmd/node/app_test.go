@@ -158,7 +158,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		suite.log.With().Error("cannot parse genesis time", log.Err(err))
 	}
 	ld := 20 * time.Second
-	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, logtest.New(suite.T()))
+	clock := sharedClock{timesync.NewClock(timesync.RealClock{}, ld, gTime, logtest.New(suite.T()))}
 	firstDir := suite.initMultipleInstances(cfg, rolacle, numOfInstances, genesisTime, poetHarness.HTTPPoetClient, clock, net)
 
 	// We must shut down before running the rest of the tests or we'll get an error about resource unavailable
@@ -174,7 +174,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		defer clock.RealClose()
 
 		for _, a := range suite.apps {
-			suite.NoError(a.startServices(context.TODO(), logtest.New(suite.T())))
+			suite.NoError(a.startServices(context.TODO()))
 		}
 
 		ActivateGrpcServer(suite.apps[0])
@@ -495,7 +495,7 @@ func runTests(suite *AppTestSuite, finished map[int]bool) bool {
 	return true
 }
 
-func (suite *AppTestSuite) validateReloadStateRoot(app *SpacemeshApp, oldRoot types.Hash32) {
+func (suite *AppTestSuite) validateReloadStateRoot(app *App, oldRoot types.Hash32) {
 	// test that loaded root is equal
 	assert.Equal(suite.T(), oldRoot, app.state.GetStateRoot())
 
@@ -537,9 +537,6 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 
 	for i, d := range datamap {
 		log.Info("node %v in len(layerstoblocks) %v", i, len(d.layertoblocks))
-		if i == lateNodeKey { // skip late node
-			continue
-		}
 		for i2, d2 := range datamap {
 			if i == i2 {
 				continue
@@ -735,7 +732,7 @@ func TestShutdown(t *testing.T) {
 	ld := time.Duration(20) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, logtest.New(t))
 	r.NoError(smApp.initServices(context.TODO(), nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), poetHarness.HTTPPoetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock))
-	r.NoError(smApp.startServices(context.TODO(), logtest.New(t)))
+	r.NoError(smApp.startServices(context.TODO()))
 	ActivateGrpcServer(smApp)
 
 	r.NoError(poetHarness.Teardown(true))
