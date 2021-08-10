@@ -10,11 +10,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID, coinflip bool) error {
+func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID) error {
 	tb.Log.With().Info("Calculating beacon",
 		log.Uint64("epoch_id", uint64(epoch)))
 
-	allHashes, err := tb.calcTortoiseBeaconHashList(epoch, coinflip)
+	allHashes, err := tb.calcTortoiseBeaconHashList(epoch)
 	if err != nil {
 		return fmt.Errorf("calc tortoise beacon hash list: %w", err)
 	}
@@ -56,26 +56,14 @@ func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID, coinflip bool) error {
 	return nil
 }
 
-func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID, coinflip bool) (proposalList, error) {
+func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID) (proposalList, error) {
 	allHashes := make(proposalList, 0)
 
 	lastRound := types.RoundID(tb.config.RoundsNumber)
 
 	votes, ok := tb.ownVotes[epoch][lastRound]
-	// TODO(nkryuchkov): consider removing and panicking if not found
 	if !ok {
-		// re-calculate votes
-		tb.Log.With().Debug("Own votes not found, re-calculating",
-			log.Uint64("epoch_id", uint64(epoch)),
-			log.Uint64("round_id", uint64(lastRound)))
-
-		v, err := tb.calcVotes(epoch, lastRound, coinflip)
-		if err != nil {
-			return nil, fmt.Errorf("recalculate votes: %w", err)
-		}
-
-		votes = v
-		tb.ownVotes[epoch][lastRound] = v
+		tb.Log.With().Panic("own votes were not calculated before tortoise beacon calculation")
 	}
 
 	// output from VRF
