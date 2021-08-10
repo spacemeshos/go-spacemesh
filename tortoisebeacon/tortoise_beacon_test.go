@@ -378,7 +378,7 @@ func TestTortoiseBeacon_buildProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  0x12345678,
-			result: "00000003544250000000000012345678",
+			result: string(util.Hex2Bytes("00000003544250000000000012345678")),
 		},
 	}
 
