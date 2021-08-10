@@ -190,11 +190,11 @@ func (s *Sync) Start() {
 // Stop background workers.
 func (s *Sync) Stop() {
 	s.cancel()
-	s.srv.Close()
 	if s.peersWatcher != nil {
 		s.peersWatcher.Close()
 	}
 	s.Wait()
+	s.srv.Close()
 }
 
 // Wait will return first error that is returned by background workers.
