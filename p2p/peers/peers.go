@@ -1,6 +1,7 @@
 package peers
 
 import (
+	"sync"
 	"sync/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -17,6 +18,7 @@ type Peers struct {
 	log.Log
 	snapshot *atomic.Value
 	exit     chan struct{}
+	closed   sync.WaitGroup
 }
 
 // PeerSubscriptionProvider is the interface that provides us with peer events channels.
@@ -51,7 +53,7 @@ func (p *Peers) Close() {
 		return
 	default:
 		p.exit <- struct{}{}
-		<-p.exit
+		p.closed.Wait()
 	}
 }
 
@@ -69,7 +71,8 @@ func (p *Peers) PeerCount() uint64 {
 
 func (p *Peers) listenToPeers(newPeerC, expiredPeerC chan p2pcrypto.PublicKey) {
 	peerSet := make(map[Peer]struct{}) // set of unique peers
-	defer close(p.exit)
+	p.closed.Add(1)
+	defer p.closed.Done()
 	for {
 		select {
 		case <-p.exit:

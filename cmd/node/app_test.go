@@ -744,7 +744,7 @@ func TestShutdown(t *testing.T) {
 	if gCount != gCount2 {
 		buf := make([]byte, 1<<16)
 		numbytes := runtime.Stack(buf, true)
-		logtest.New(t).Error(string(buf[:numbytes]))
+		t.Log(string(buf[:numbytes]))
 	}
 	require.Equal(t, gCount, gCount2)
 }
