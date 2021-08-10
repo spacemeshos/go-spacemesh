@@ -106,7 +106,11 @@ func (mpq *mockPriorityQueue) Length() int {
 
 func TestPropagationEventLoop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	protocol := NewProtocol(ctx, config.SwarmConfig{}, nil, nil, nil, logtest.New(t))
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	peersManager := NewMockpeersManager(ctrl)
+	peersManager.EXPECT().Close()
+	protocol := NewProtocol(ctx, config.SwarmConfig{}, nil, peersManager, nil, logtest.New(t))
 	called := make(chan struct{})
 	mpq := mockPriorityQueue{called: called, bus: make(chan struct{}, 10)}
 	protocol.pq = &mpq
