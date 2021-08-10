@@ -118,7 +118,9 @@ var Cmd = &cobra.Command{
 			WithConfig(conf),
 			// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
 			// otherwise it will fail later when child logger will try to increase level.
-			WithLog(log.NewWithLevel("", zap.NewAtomicLevelAt(zapcore.DebugLevel))),
+			WithLog(log.RegisterHooks(
+				log.NewWithLevel("", zap.NewAtomicLevelAt(zapcore.DebugLevel)),
+				events.EventHook())),
 		)
 		starter := func() error {
 			if err := app.Initialize(); err != nil {
@@ -243,7 +245,6 @@ func New(opts ...Option) *App {
 	for _, opt := range opts {
 		opt(app)
 	}
-	app.log = log.RegisterHooks(app.log, events.EventHook())
 	lvl := zap.NewAtomicLevelAt(zap.InfoLevel)
 	log.SetupGlobal(app.log.SetLevel(&lvl))
 	return app
