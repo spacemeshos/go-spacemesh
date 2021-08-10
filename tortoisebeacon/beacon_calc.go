@@ -35,6 +35,8 @@ func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID) error {
 	tb.beacons[epoch] = beacon
 	tb.beaconsMu.Unlock()
 
+	tb.cleanupVotes(epoch)
+
 	if tb.tortoiseBeaconDB != nil {
 		tb.Log.With().Info("Writing beacon to database",
 			log.Uint64("epoch_id", uint64(epoch)),

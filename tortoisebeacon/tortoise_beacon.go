@@ -24,7 +24,6 @@ import (
 const (
 	protoName            = "TORTOISE_BEACON_PROTOCOL"
 	proposalPrefix       = "TBP"
-	cleanupEpochs        = 10
 	firstRound           = types.RoundID(1)
 	genesisBeacon        = "0xaeebad4a796fcc2e15dc4c6061b45ed9b373f26adfc798ca7d2d8cc58182718e" // sha256("genesis")
 	proposalChanCapacity = 1024
@@ -214,10 +213,7 @@ func (tb *TortoiseBeacon) Start(ctx context.Context) error {
 		tb.listenLayers(ctx)
 		return ctx.Err()
 	})
-	tb.tg.Go(func(ctx context.Context) error {
-		tb.cleanupLoop(ctx)
-		return ctx.Err()
-	})
+
 	return nil
 }
 
@@ -276,20 +272,6 @@ func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 	return beacon.Bytes(), nil
 }
 
-func (tb *TortoiseBeacon) cleanupLoop(ctx context.Context) {
-	ticker := time.NewTicker(tb.layerDuration)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			tb.cleanup()
-		}
-	}
-}
-
 func (tb *TortoiseBeacon) initGenesisBeacons() {
 	closedCh := make(chan struct{})
 	close(closedCh)
@@ -309,28 +291,18 @@ func (tb *TortoiseBeacon) initGenesisBeacons() {
 	}
 }
 
-func (tb *TortoiseBeacon) cleanup() {
-	// TODO(nkryuchkov): implement a better solution, consider https://github.com/golang/go/issues/20135
-	tb.beaconsMu.Lock()
-	defer tb.beaconsMu.Unlock()
-
-	for e := range tb.beacons {
-		// TODO(nkryuchkov): https://github.com/spacemeshos/go-spacemesh/pull/2267#discussion_r662255874
-		if tb.epochIsOutdated(e) {
-			delete(tb.validProposals, e)
-			delete(tb.potentiallyValidProposals, e)
-			delete(tb.beacons, e)
-			delete(tb.proposalPhaseFinishedTimestamps, e)
-			delete(tb.incomingVotes, e)
-			delete(tb.ownVotes, e)
-			delete(tb.firstRoundIncomingVotes, e)
-			delete(tb.firstRoundOutcomingVotes, e)
-		}
-	}
+func (tb *TortoiseBeacon) cleanupBeacons(epoch types.EpochID) {
+	delete(tb.beacons, epoch)
 }
 
-func (tb *TortoiseBeacon) epochIsOutdated(epoch types.EpochID) bool {
-	return tb.currentEpoch()-epoch > cleanupEpochs
+func (tb *TortoiseBeacon) cleanupVotes(epoch types.EpochID) {
+	delete(tb.validProposals, epoch)
+	delete(tb.potentiallyValidProposals, epoch)
+	delete(tb.proposalPhaseFinishedTimestamps, epoch)
+	delete(tb.incomingVotes, epoch)
+	delete(tb.ownVotes, epoch)
+	delete(tb.firstRoundIncomingVotes, epoch)
+	delete(tb.firstRoundOutcomingVotes, epoch)
 }
 
 // listens to new layers.
