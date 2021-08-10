@@ -393,7 +393,7 @@ func TestTortoiseBeacon_buildProposal(t *testing.T) {
 
 			result, err := tb.buildProposal(tc.epoch)
 			r.NoError(err)
-			r.Equal(tc.result, util.Bytes2Hex(result))
+			r.Equal(tc.result, string(result))
 		})
 	}
 }
@@ -434,7 +434,7 @@ func TestTortoiseBeacon_signMessage(t *testing.T) {
 
 			result, err := tb.signMessage(tc.message)
 			r.NoError(err)
-			r.Equal(util.Bytes2Hex(tc.result), util.Bytes2Hex(result))
+			r.Equal(string(tc.result), string(result))
 		})
 	}
 }
@@ -479,7 +479,7 @@ func TestTortoiseBeacon_getSignedProposal(t *testing.T) {
 
 			result, err := tb.getSignedProposal(tc.epoch)
 			r.NoError(err)
-			r.Equal(util.Bytes2Hex(tc.result), util.Bytes2Hex(result))
+			r.Equal(string(tc.result), string(result))
 		})
 	}
 }

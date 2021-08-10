@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -112,7 +111,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 
 			expected := proposalsMap{
 				epoch: hashSet{
-					util.Bytes2Hex(sig): {},
+					string(sig): {},
 				},
 			}
 
@@ -195,7 +194,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 				epoch: {
 					round: {
 						minerID.Key: votesSetPair{
-							ValidVotes:   hashSet{util.Bytes2Hex(hash[:]): {}},
+							ValidVotes:   hashSet{string(hash[:]): {}},
 							InvalidVotes: hashSet{},
 						},
 					},
@@ -220,7 +219,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 				epoch: {
 					round: {
 						minerID.Key: votesSetPair{
-							ValidVotes:   hashSet{util.Bytes2Hex(hash[:]): {}},
+							ValidVotes:   hashSet{string(hash[:]): {}},
 							InvalidVotes: hashSet{},
 						},
 					},

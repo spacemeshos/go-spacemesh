@@ -141,7 +141,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 			tb.validProposals[currentEpoch] = make(map[string]struct{})
 		}
 
-		tb.validProposals[currentEpoch][util.Bytes2Hex(m.VRFSignature)] = struct{}{}
+		tb.validProposals[currentEpoch][string(m.VRFSignature)] = struct{}{}
 
 		tb.validProposalsMu.Unlock()
 
@@ -160,7 +160,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 			tb.potentiallyValidProposals[currentEpoch] = make(map[string]struct{})
 		}
 
-		tb.potentiallyValidProposals[currentEpoch][util.Bytes2Hex(m.VRFSignature)] = struct{}{}
+		tb.potentiallyValidProposals[currentEpoch][string(m.VRFSignature)] = struct{}{}
 
 		tb.potentiallyValidProposalsMu.Unlock()
 
@@ -366,15 +366,15 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 	potentiallyValidVotesList := make([]proposal, 0)
 
 	for _, vote := range message.ValidProposals {
-		validVotesMap[util.Bytes2Hex(vote)] = struct{}{}
+		validVotesMap[string(vote)] = struct{}{}
 
-		validVotesList = append(validVotesList, util.Bytes2Hex(vote))
+		validVotesList = append(validVotesList, string(vote))
 	}
 
 	for _, vote := range message.PotentiallyValidProposals {
-		invalidVotesMap[util.Bytes2Hex(vote)] = struct{}{}
+		invalidVotesMap[string(vote)] = struct{}{}
 
-		potentiallyValidVotesList = append(potentiallyValidVotesList, util.Bytes2Hex(vote))
+		potentiallyValidVotesList = append(potentiallyValidVotesList, string(vote))
 	}
 
 	tb.incomingVotes[currentEpoch][currentRound][minerID.Key] = votesSetPair{

@@ -8,7 +8,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	servicemocks "github.com/spacemeshos/go-spacemesh/p2p/service/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -361,7 +360,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 
 	require.Equal(t,
 		"a1f2c99f9210b15b66197fbc6f0dd5a93bfb08da63eae81b84d550cf5a6daf7e0c8e79fe3fefeac839bdce2de4f3cc3d420a8f43a9275bfed0221e99e3a4b204",
-		util.Bytes2Hex(sig))
+		string(sig))
 }
 
 func TestWeakCoinExchangeProposals(t *testing.T) {

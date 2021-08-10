@@ -532,7 +532,7 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 
 	tb.Log.With().Debug("Calculated proposal signature",
 		log.Uint64("epoch_id", uint64(epoch)),
-		log.String("signature", util.Bytes2Hex(proposedSignature)))
+		log.String("signature", string(proposedSignature)))
 
 	epochWeight, _, err := tb.atxDB.GetEpochWeight(epoch)
 	if err != nil {
@@ -547,7 +547,7 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 	if !passes {
 		tb.Log.With().Debug("Proposal to be sent doesn't pass threshold",
 			log.Uint64("epoch_id", uint64(epoch)),
-			log.String("proposal", util.Bytes2Hex(proposedSignature)),
+			log.String("proposal", string(proposedSignature)),
 			log.Uint64("weight", epochWeight))
 		// proposal is not sent
 		return nil
@@ -555,7 +555,7 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 
 	tb.Log.With().Debug("Proposal to be sent passes threshold",
 		log.Uint64("epoch_id", uint64(epoch)),
-		log.String("proposal", util.Bytes2Hex(proposedSignature)),
+		log.String("proposal", string(proposedSignature)),
 		log.Uint64("weight", epochWeight))
 
 	// concat them into a single proposal message
@@ -585,7 +585,7 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 
 	// TODO(nkryuchkov): encode as string instead of hex
 	// (https://github.com/spacemeshos/go-spacemesh/pull/2649#pullrequestreview-725991785)
-	tb.validProposals[epoch][util.Bytes2Hex(proposedSignature)] = struct{}{}
+	tb.validProposals[epoch][string(proposedSignature)] = struct{}{}
 
 	tb.validProposalsMu.Unlock()
 
@@ -901,8 +901,8 @@ func (tb *TortoiseBeacon) getSignedProposal(epoch types.EpochID) ([]byte, error)
 	signature := tb.vrfSigner.Sign(p)
 	tb.Log.With().Debug("Calculated signature",
 		log.Uint64("epoch_id", uint64(epoch)),
-		log.String("proposal", util.Bytes2Hex(p)),
-		log.String("signature", util.Bytes2Hex(signature)))
+		log.String("proposal", string(p)),
+		log.String("signature", string(signature)))
 
 	return signature, nil
 }
