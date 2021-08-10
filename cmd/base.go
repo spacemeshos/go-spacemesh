@@ -4,6 +4,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"os"
 	"os/signal"
 	"reflect"
@@ -12,6 +13,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	bc "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -141,6 +143,16 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 					val = viper.GetFloat64(name)
 				case "[]string":
 					val = viper.GetStringSlice(name)
+				case "time.Duration":
+					val = viper.GetDuration(name)
+				case "*big.Rat":
+					v, ok := new(big.Rat).SetString(viper.GetString(name))
+					if !ok {
+						panic("bad string for *big.Rat provided")
+					}
+					val = v
+				case "types.RoundID":
+					val = types.RoundID(viper.GetUint64(name))
 				default:
 					val = viper.Get(name)
 				}

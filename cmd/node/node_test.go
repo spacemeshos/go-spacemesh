@@ -15,30 +15,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/cmd"
-	"github.com/spacemeshos/go-spacemesh/eligibility"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/stretchr/testify/assert"
-
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
-	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/net"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -46,6 +27,25 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/spacemeshos/go-spacemesh/activation"
+	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/cmd"
+	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/eligibility"
+	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/net"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
@@ -379,12 +379,12 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	r.Equal(1234, app.Config.API.JSONServerPort)
 }
 
-type NetMock struct {
-}
+type NetMock struct{}
 
 func (NetMock) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey) {
 	return nil, nil
 }
+
 func (NetMock) Broadcast(context.Context, string, []byte) error {
 	return nil
 }
@@ -446,7 +446,8 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 	// We expect this one to fail
 	response, err := c.Echo(context.Background(), &pb.EchoRequest{
-		Msg: &pb.SimpleString{Value: message}})
+		Msg: &pb.SimpleString{Value: message},
+	})
 	r.Error(err)
 	r.Contains(err.Error(), "rpc error: code = Unavailable desc = connection error: desc = \"transport: Error while dialing dial tcp")
 	r.NoError(conn.Close())
@@ -476,7 +477,8 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	// call echo and validate result
 	// We expect this one to succeed
 	response, err = c.Echo(context.Background(), &pb.EchoRequest{
-		Msg: &pb.SimpleString{Value: message}})
+		Msg: &pb.SimpleString{Value: message},
+	})
 	r.NoError(err)
 	r.Equal(message, response.Msg.Value)
 }
@@ -562,7 +564,8 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	cfg := getTestDefaultConfig(1)
 
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
+
 	edSgn := signing.NewEdSigner()
 	app, err := InitSingleInstance(logger, *cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(logtest.New(t)), poetHarness.HTTPPoetClient, clock, localNet, edSgn)
 	require.NoError(t, err)
