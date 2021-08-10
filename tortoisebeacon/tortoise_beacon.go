@@ -120,7 +120,6 @@ func New(
 		votingRoundDuration:             time.Duration(conf.VotingRoundDurationMs) * time.Millisecond,
 		weakCoinRoundDuration:           time.Duration(conf.WeakCoinRoundDurationMs) * time.Millisecond,
 		waitAfterEpochStart:             time.Duration(conf.WaitAfterEpochStart) * time.Millisecond,
-		currentRounds:                   make(map[types.EpochID]types.RoundID),
 		validProposals:                  make(map[types.EpochID]hashSet),
 		potentiallyValidProposals:       make(map[types.EpochID]hashSet),
 		ownVotes:                        make(ownVotes),
@@ -166,9 +165,6 @@ type TortoiseBeacon struct {
 	votingRoundDuration      time.Duration
 	weakCoinRoundDuration    time.Duration
 	waitAfterEpochStart      time.Duration
-
-	currentRoundsMu sync.RWMutex
-	currentRounds   map[types.EpochID]types.RoundID
 
 	validProposalsMu sync.RWMutex
 	validProposals   proposalsMap
@@ -665,8 +661,6 @@ func (tb *TortoiseBeacon) startWeakCoin(ctx context.Context, epoch types.EpochID
 }
 
 func (tb *TortoiseBeacon) sendVotes(ctx context.Context, epoch types.EpochID, round types.RoundID, coinflip bool) error {
-	tb.setCurrentRound(epoch, round)
-
 	if round == firstRound {
 		return tb.sendProposalVote(ctx, epoch)
 	}
@@ -761,13 +755,6 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 	}
 
 	return nil
-}
-
-func (tb *TortoiseBeacon) setCurrentRound(epoch types.EpochID, round types.RoundID) {
-	tb.currentRoundsMu.Lock()
-	defer tb.currentRoundsMu.Unlock()
-
-	tb.currentRounds[epoch] = round
 }
 
 func (tb *TortoiseBeacon) voteWeight(pk nodeID, epochID types.EpochID) (uint64, error) {
