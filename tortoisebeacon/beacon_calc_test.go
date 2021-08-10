@@ -23,6 +23,8 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 		rounds = 3
 	)
 
+	types.SetLayersPerEpoch(1)
+
 	tt := []struct {
 		name                      string
 		epoch                     types.EpochID
@@ -30,26 +32,22 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 		validProposals            proposalsMap
 		potentiallyValidProposals proposalsMap
 		incomingVotes             map[types.EpochID]map[types.RoundID]votesPerPK
-		ownVotes                  ownVotes
+		votes                     votesSetPair
 		hash                      types.Hash32
 	}{
 		{
 			name:  "With Cache",
 			epoch: epoch,
-			ownVotes: ownVotes{
-				epoch: {
-					rounds: {
-						ValidVotes: hashSet{
-							"0x1": {},
-							"0x2": {},
-							"0x4": {},
-							"0x5": {},
-						},
-						InvalidVotes: hashSet{
-							"0x3": {},
-							"0x6": {},
-						},
-					},
+			votes: votesSetPair{
+				ValidVotes: hashSet{
+					"0x1": {},
+					"0x2": {},
+					"0x4": {},
+					"0x5": {},
+				},
+				InvalidVotes: hashSet{
+					"0x3": {},
+					"0x6": {},
 				},
 			},
 			hash: types.HexToHash32("0x6d148de54cc5ac334cdf4537018209b0e9f5ea94c049417103065eac777ddb5c"),
@@ -66,18 +64,18 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 					RoundsNumber: rounds,
 					Theta:        1,
 				},
+				lastLayer:                 types.NewLayerID(epoch),
 				Log:                       logtest.New(t).WithName("TortoiseBeacon"),
 				validProposals:            tc.validProposals,
 				potentiallyValidProposals: tc.potentiallyValidProposals,
 				incomingVotes:             tc.incomingVotes,
-				ownVotes:                  tc.ownVotes,
 				beacons:                   make(map[types.EpochID]types.Hash32),
 				atxDB:                     mockDB,
 			}
 
 			tb.initGenesisBeacons()
 
-			err := tb.calcBeacon(tc.epoch)
+			err := tb.calcBeacon(epoch, tc.votes)
 			r.NoError(err)
 			r.EqualValues(tc.hash.String(), tb.beacons[epoch].String())
 		})
@@ -104,26 +102,22 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 		validProposals            proposalsMap
 		potentiallyValidProposals proposalsMap
 		incomingVotes             map[types.EpochID]map[types.RoundID]votesPerPK
-		ownVotes                  ownVotes
+		votes                     votesSetPair
 		hashes                    proposalList
 	}{
 		{
 			name:  "With Cache",
 			epoch: epoch,
-			ownVotes: ownVotes{
-				epoch: {
-					rounds: {
-						ValidVotes: hashSet{
-							"0x1": {},
-							"0x2": {},
-							"0x4": {},
-							"0x5": {},
-						},
-						InvalidVotes: hashSet{
-							"0x3": {},
-							"0x6": {},
-						},
-					},
+			votes: votesSetPair{
+				ValidVotes: hashSet{
+					"0x1": {},
+					"0x2": {},
+					"0x4": {},
+					"0x5": {},
+				},
+				InvalidVotes: hashSet{
+					"0x3": {},
+					"0x6": {},
 				},
 			},
 			hashes: proposalList{
@@ -149,11 +143,10 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 				validProposals:            tc.validProposals,
 				potentiallyValidProposals: tc.potentiallyValidProposals,
 				incomingVotes:             tc.incomingVotes,
-				ownVotes:                  tc.ownVotes,
 				atxDB:                     mockDB,
 			}
 
-			hashes, err := tb.calcTortoiseBeaconHashList(tc.epoch)
+			hashes, err := tb.calcTortoiseBeaconHashList(epoch, tc.votes)
 			r.NoError(err)
 			r.EqualValues(tc.hashes.Sort(), hashes.Sort())
 		})

@@ -400,11 +400,17 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	})
 
 	tb.runProposalPhase(ctx, epoch)
-	tb.runConsensusPhase(ctx, epoch)
+	lastRoundOwnVotes := tb.runConsensusPhase(ctx, epoch)
+
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
 
 	// K rounds passed
 	// After K rounds had passed, tally up votes for proposals using simple tortoise vote counting
-	if err := tb.calcBeacon(epoch); err != nil {
+	if err := tb.calcBeacon(epoch, lastRoundOwnVotes); err != nil {
 		tb.Log.With().Error("Failed to calculate beacon",
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.Err(err))
@@ -561,7 +567,7 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 }
 
 // runConsensusPhase runs K voting rounds and returns result from last weak coin round.
-func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.EpochID) {
+func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.EpochID) votesSetPair {
 	tb.Log.With().Debug("Starting consensus phase",
 		log.Uint64("epoch_id", uint64(epoch)))
 
@@ -609,7 +615,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		select {
 		case <-ticker.C:
 		case <-ctx.Done():
-			return
+			return votesSetPair{}
 		}
 		tb.weakCoin.FinishRound()
 		coinFlip = tb.weakCoin.Get(epoch, round)
@@ -617,6 +623,8 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 
 	tb.Log.With().Debug("Consensus phase finished",
 		log.Uint64("epoch_id", uint64(epoch)))
+
+	return tb.ownVotes[epoch][tb.lastPossibleRound()]
 }
 
 func (tb *TortoiseBeacon) markProposalPhaseFinished(epoch types.EpochID) {
