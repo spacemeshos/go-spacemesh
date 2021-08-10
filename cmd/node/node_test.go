@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"io/ioutil"
 	inet "net"
 	"net/http"
@@ -16,26 +15,29 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/eligibility"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -547,7 +549,9 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 // E2E app test of the stream endpoints in the NodeService
 func TestSpacemeshApp_NodeService(t *testing.T) {
-	logger := logtest.New(t, zap.ErrorLevel)
+	// errlog should be used only for testing.
+	logger := logtest.New(t)
+	errlog := log.RegisterHooks(logtest.New(t, zap.ErrorLevel), events.EventHook())
 	setup()
 
 	// Use a unique port
@@ -594,77 +598,29 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		// This makes sure the test doesn't end until this goroutine closes
 		defer wg.Done()
 		str, err := testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "node", "--acquire-port=false", "--tcp-interface", "127.0.0.1", "--grpc-interface", "localhost")
-		require.Empty(t, str)
-		require.NoError(t, err)
+		assert.Empty(t, str)
+		assert.NoError(t, err)
 	}()
-
-	// Wait for the app and services to start
-	// Strictly speaking, this does not indicate that all of the services
-	// have started, we could add separate channels for that.
-	<-app.started
-
-	// Unfortunately sometimes we need to wait even longer
-	time.Sleep(3 * time.Second)
 
 	// Set up a new connection to the server
-	addr := fmt.Sprintf("localhost:%d", port)
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
-	defer func() {
-		require.NoError(t, conn.Close())
-	}()
+	var (
+		conn *grpc.ClientConn
+	)
+	for start := time.Now(); time.Since(start) <= 10*time.Second; {
+		conn, err = grpc.Dial(fmt.Sprintf("localhost:%d", port), grpc.WithInsecure(), grpc.WithBlock())
+		if err == nil {
+			break
+		}
+	}
+	require.NotNil(t, conn)
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, conn.Close())
+	})
 	c := pb.NewNodeServiceClient(conn)
-
-	// Use a channel to coordinate ending the test
-	end := make(chan struct{})
-
-	go func() {
-		// Don't close the channel twice
-		defer close(end)
-
-		// Open an error stream and a status stream
-		streamErr, err := c.ErrorStream(context.Background(), &pb.ErrorStreamRequest{})
-		require.NoError(t, err)
-
-		nextError := func() *pb.NodeError {
-			in, err := streamErr.Recv()
-			require.NoError(t, err)
-			return in.Error
-		}
-
-		// We expect a specific series of errors in a specific order!
-		// Check each one
-		expected := []string{
-			"test123",
-			"test456",
-			"Fatal: goroutine panicked.",
-			"testPANIC",
-		}
-		// TODO(dshulyak) multiple modules were using incorrent loggers and notifications weren't made.
-		// this test is very problematic and must be completely rewritten.
-		// - ideally without using global state (logger and event publisher)
-		// - or atleast initialize only what is needed and not everything
-		ignored := map[string]struct{}{
-			"error adding genesis block, block already exists in database":            {},
-			"method IsIdentityActiveOnConsensusView erred while calling actives func": {},
-			"error checking if identity is active":                                    {},
-			"could not notify subscribers":                                            {},
-			"Failed to send proposal message":                                         {},
-		}
-
-		for i := 0; i < len(expected); {
-			current := nextError()
-			if _, ignore := ignored[current.Msg]; ignore {
-				continue
-			}
-			require.Contains(t, current.Msg, expected[i])
-			i++
-		}
-	}()
 
 	wg.Add(1)
 	go func() {
-		// This makes sure the test doesn't end until this goroutine closes
 		defer wg.Done()
 
 		streamStatus, err := c.StatusStream(context.Background(), &pb.StatusStreamRequest{})
@@ -675,53 +631,49 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		// app is running, and make sure there are no errors.
 		for {
 			in, err := streamStatus.Recv()
-			if err == io.EOF {
+			if err != nil {
+				code := status.Code(err)
+				if code == codes.Unavailable {
+					return
+				}
+				assert.NoError(t, err)
 				return
 			}
-			errCode := status.Code(err)
-			// We expect this to happen when the server disconnects
-			if errCode == codes.Unavailable {
-				return
-			}
-			require.NoError(t, err)
-
 			// Note that, for some reason, protobuf does not display fields
 			// that still have their default value, so the output here will
 			// only be partial.
-			log.Info("Got status message: %s", in.Status)
-
-			// Check if the test should end
-			select {
-			case <-end:
-				return
-			default:
-				continue
-			}
+			logger.Debug("Got status message: %s", in.Status)
 		}
 	}()
-	time.Sleep(4 * time.Second)
+
+	streamErr, err := c.ErrorStream(context.Background(), &pb.ErrorStreamRequest{})
+	require.NoError(t, err)
 
 	// Report two errors and make sure they're both received
-	log.Error("test123")
-	log.Error("test456")
-	time.Sleep(4 * time.Second)
-
-	// Trap a panic
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Info("Recovered", r)
-			}
-		}()
-		log.Panic("testPANIC")
+	go func() {
+		errlog.Error("test123")
+		errlog.Error("test456")
+		assert.Panics(t, func() {
+			errlog.Panic("testPANIC")
+		})
 	}()
 
-	// Wait for messages to be received
-	<-end
+	// We expect a specific series of errors in a specific order!
+	expected := []string{
+		"test123",
+		"test456",
+		"Fatal: goroutine panicked.",
+		"testPANIC",
+	}
+	for _, errmsg := range expected {
+		in, err := streamErr.Recv()
+		require.NoError(t, err)
+		current := in.Error
+		require.Contains(t, current.Msg, errmsg)
+	}
 
 	// This stops the app
-	cmdp.Cancel()
-
+	cmd.Cancel() // stop the app
 	// Wait for everything to stop cleanly before ending test
 	wg.Wait()
 }
