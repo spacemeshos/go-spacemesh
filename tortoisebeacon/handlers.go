@@ -141,7 +141,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 			log.String("atx_timestamp", atxTimestamp.String()),
 			log.String("next_epoch_start", nextEpochStart.String()),
 			log.String("received_time", receivedTime.String()),
-			log.String("grace_period", tb.config.GracePeriodDuration.String()))
+			log.Duration("grace_period", tb.config.GracePeriodDuration))
 
 		tb.validProposalsMu.Lock()
 
@@ -160,7 +160,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 			log.String("atx_timestamp", atxTimestamp.String()),
 			log.String("next_epoch_start", nextEpochStart.String()),
 			log.String("received_time", receivedTime.String()),
-			log.String("grace_period", tb.config.GracePeriodDuration.String()))
+			log.Duration("grace_period", tb.config.GracePeriodDuration))
 
 		tb.potentiallyValidProposalsMu.Lock()
 
@@ -178,7 +178,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 			log.String("atx_timestamp", atxTimestamp.String()),
 			log.String("next_epoch_start", nextEpochStart.String()),
 			log.String("received_time", receivedTime.String()),
-			log.String("grace_period", tb.config.GracePeriodDuration.String()))
+			log.Duration("grace_period", tb.config.GracePeriodDuration))
 	}
 
 	return nil
