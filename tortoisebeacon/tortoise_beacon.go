@@ -24,8 +24,7 @@ import (
 const (
 	protoName            = "TORTOISE_BEACON_PROTOCOL"
 	proposalPrefix       = "TBP"
-	cleanupInterval      = 30 * time.Second
-	cleanupEpochs        = 100
+	cleanupEpochs        = 10
 	firstRound           = types.RoundID(1)
 	genesisBeacon        = "0xaeebad4a796fcc2e15dc4c6061b45ed9b373f26adfc798ca7d2d8cc58182718e" // sha256("genesis")
 	proposalChanCapacity = 1024
@@ -278,7 +277,7 @@ func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 }
 
 func (tb *TortoiseBeacon) cleanupLoop(ctx context.Context) {
-	ticker := time.NewTicker(cleanupInterval)
+	ticker := time.NewTicker(tb.layerDuration)
 	defer ticker.Stop()
 
 	for {
