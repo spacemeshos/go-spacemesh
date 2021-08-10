@@ -557,8 +557,6 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 		tb.validProposals[epoch] = make(map[proposal]struct{})
 	}
 
-	// TODO(nkryuchkov): encode as string instead of hex
-	// (https://github.com/spacemeshos/go-spacemesh/pull/2649#pullrequestreview-725991785)
 	tb.validProposals[epoch][string(proposedSignature)] = struct{}{}
 
 	tb.validProposalsMu.Unlock()
