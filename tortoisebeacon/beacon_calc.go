@@ -1,6 +1,7 @@
 package tortoisebeacon
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -10,7 +11,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID, votes votesSetPair) error {
+func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, votes votesSetPair) error {
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+	}
+
 	tb.Log.With().Info("Calculating beacon",
 		log.Uint64("epoch_id", uint64(epoch)))
 

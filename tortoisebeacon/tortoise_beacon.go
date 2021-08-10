@@ -402,15 +402,9 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	tb.runProposalPhase(ctx, epoch)
 	lastRoundOwnVotes := tb.runConsensusPhase(ctx, epoch)
 
-	select {
-	case <-ctx.Done():
-		return
-	default:
-	}
-
 	// K rounds passed
 	// After K rounds had passed, tally up votes for proposals using simple tortoise vote counting
-	if err := tb.calcBeacon(epoch, lastRoundOwnVotes); err != nil {
+	if err := tb.calcBeacon(ctx, epoch, lastRoundOwnVotes); err != nil {
 		tb.Log.With().Error("Failed to calculate beacon",
 			log.Uint64("epoch_id", uint64(epoch)),
 			log.Err(err))
