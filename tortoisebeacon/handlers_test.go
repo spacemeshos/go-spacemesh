@@ -110,9 +110,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 			r.NoError(err)
 
 			expected := proposalsMap{
-				epoch: hashSet{
-					string(sig): {},
-				},
+				string(sig): {},
 			}
 
 			r.EqualValues(expected, tb.validProposals)

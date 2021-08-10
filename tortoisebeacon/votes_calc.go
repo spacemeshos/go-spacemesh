@@ -16,7 +16,7 @@ func (tb *TortoiseBeacon) calcVotesFromProposals(epoch types.EpochID) firstRound
 
 	tb.validProposalsMu.RLock()
 
-	for p := range tb.validProposals[epoch] {
+	for p := range tb.validProposals {
 		valid = append(valid, p)
 	}
 
@@ -24,7 +24,7 @@ func (tb *TortoiseBeacon) calcVotesFromProposals(epoch types.EpochID) firstRound
 
 	tb.potentiallyValidProposalsMu.Lock()
 
-	for p := range tb.potentiallyValidProposals[epoch] {
+	for p := range tb.potentiallyValidProposals {
 		potentiallyValid = append(potentiallyValid, p)
 	}
 

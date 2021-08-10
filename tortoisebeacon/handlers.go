@@ -136,13 +136,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 			log.String("grace_period", tb.gracePeriodDuration.String()))
 
 		tb.validProposalsMu.Lock()
-
-		if _, ok := tb.validProposals[currentEpoch]; !ok {
-			tb.validProposals[currentEpoch] = make(map[string]struct{})
-		}
-
-		tb.validProposals[currentEpoch][string(m.VRFSignature)] = struct{}{}
-
+		tb.validProposals[string(m.VRFSignature)] = struct{}{}
 		tb.validProposalsMu.Unlock()
 
 	case tb.isPotentiallyValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
@@ -155,13 +149,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 			log.String("grace_period", tb.gracePeriodDuration.String()))
 
 		tb.potentiallyValidProposalsMu.Lock()
-
-		if _, ok := tb.potentiallyValidProposals[currentEpoch]; !ok {
-			tb.potentiallyValidProposals[currentEpoch] = make(map[string]struct{})
-		}
-
-		tb.potentiallyValidProposals[currentEpoch][string(m.VRFSignature)] = struct{}{}
-
+		tb.potentiallyValidProposals[string(m.VRFSignature)] = struct{}{}
 		tb.potentiallyValidProposalsMu.Unlock()
 
 	default:

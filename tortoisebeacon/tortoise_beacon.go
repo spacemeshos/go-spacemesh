@@ -70,7 +70,7 @@ type (
 	votesPerRound           = map[types.EpochID]map[types.RoundID]votesPerPK
 	ownVotes                = map[types.EpochID]map[types.RoundID]votesSetPair
 	votesMarginMap          = map[proposal]int
-	proposalsMap            = map[types.EpochID]hashSet
+	proposalsMap            = hashSet
 )
 
 type layerClock interface {
@@ -120,8 +120,8 @@ func New(
 		votingRoundDuration:             time.Duration(conf.VotingRoundDurationMs) * time.Millisecond,
 		weakCoinRoundDuration:           time.Duration(conf.WeakCoinRoundDurationMs) * time.Millisecond,
 		waitAfterEpochStart:             time.Duration(conf.WaitAfterEpochStart) * time.Millisecond,
-		validProposals:                  make(map[types.EpochID]hashSet),
-		potentiallyValidProposals:       make(map[types.EpochID]hashSet),
+		validProposals:                  make(proposalsMap),
+		potentiallyValidProposals:       make(proposalsMap),
 		ownVotes:                        make(ownVotes),
 		beacons:                         make(map[types.EpochID]types.Hash32),
 		proposalPhaseFinishedTimestamps: make(map[types.EpochID]time.Time),
@@ -292,8 +292,9 @@ func (tb *TortoiseBeacon) cleanupBeacons(epoch types.EpochID) {
 }
 
 func (tb *TortoiseBeacon) cleanupVotes(epoch types.EpochID) {
-	delete(tb.validProposals, epoch)
-	delete(tb.potentiallyValidProposals, epoch)
+	tb.validProposals = make(map[proposal]struct{})
+	tb.potentiallyValidProposals = make(map[proposal]struct{})
+
 	delete(tb.proposalPhaseFinishedTimestamps, epoch)
 	delete(tb.incomingVotes, epoch)
 	delete(tb.ownVotes, epoch)
@@ -546,13 +547,7 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 		log.String("message", m.String()))
 
 	tb.validProposalsMu.Lock()
-
-	if _, ok := tb.validProposals[epoch]; !ok {
-		tb.validProposals[epoch] = make(map[proposal]struct{})
-	}
-
-	tb.validProposals[epoch][string(proposedSignature)] = struct{}{}
-
+	tb.validProposals[string(proposedSignature)] = struct{}{}
 	tb.validProposalsMu.Unlock()
 
 	return nil

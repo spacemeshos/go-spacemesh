@@ -55,18 +55,14 @@ func TestTortoiseBeacon_calcVotesFromProposals(t *testing.T) {
 			name:  "Case 1",
 			epoch: epoch,
 			validProposals: proposalsMap{
-				epoch: hashSet{
-					"0x1": {},
-					"0x2": {},
-					"0x3": {},
-				},
+				"0x1": {},
+				"0x2": {},
+				"0x3": {},
 			},
 			potentiallyValidProposals: proposalsMap{
-				epoch: hashSet{
-					"0x4": {},
-					"0x5": {},
-					"0x6": {},
-				},
+				"0x4": {},
+				"0x5": {},
+				"0x6": {},
 			},
 			votesFor: proposalList{
 				"0x1",
