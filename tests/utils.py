@@ -292,7 +292,7 @@ def wait_genesis(genesis_time, genesis_delta):
 def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME,
                                                   logstash_ss_name=LOGSTASH_SS_NAME,
                                                   kibana_dep_name=KIBANA_DEP_NAME):
-    es_timeout = 300
+    es_timeout = 600
     try:
         print("waiting for ES to be ready")
         es_sleep_time = statefulset.wait_to_statefulset_to_be_ready(es_ss_name, namespace, time_out=es_timeout)
