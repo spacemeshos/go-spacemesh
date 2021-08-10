@@ -125,6 +125,8 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 	atxEpoch := atxHeader.PubLayerID.GetEpoch()
 	nextEpochStart := tb.clock.LayerToTime((atxEpoch + 1).FirstLayer())
 
+	signature := string(m.VRFSignature)
+
 	switch {
 	case tb.isValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
 		tb.Log.With().Debug("Received valid proposal message",
@@ -135,9 +137,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 			log.String("received_time", receivedTime.String()),
 			log.String("grace_period", tb.gracePeriodDuration.String()))
 
-		tb.validProposalsMu.Lock()
-		tb.validProposals[string(m.VRFSignature)] = struct{}{}
-		tb.validProposalsMu.Unlock()
+		tb.incomingProposals.ValidProposals = append(tb.incomingProposals.ValidProposals, signature)
 
 	case tb.isPotentiallyValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
 		tb.Log.With().Debug("Received potentially valid proposal message",
@@ -148,9 +148,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 			log.String("received_time", receivedTime.String()),
 			log.String("grace_period", tb.gracePeriodDuration.String()))
 
-		tb.potentiallyValidProposalsMu.Lock()
-		tb.potentiallyValidProposals[string(m.VRFSignature)] = struct{}{}
-		tb.potentiallyValidProposalsMu.Unlock()
+		tb.incomingProposals.PotentiallyValidProposals = append(tb.incomingProposals.PotentiallyValidProposals, signature)
 
 	default:
 		tb.Log.With().Warning("Received invalid proposal message",
@@ -372,9 +370,9 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 
 	// this is used for bit vector calculation
 	// TODO: store sorted mixed valid+potentiallyValid
-	tb.firstRoundIncomingVotes[currentEpoch][minerID.Key] = firstRoundVotes{
-		ValidVotes:            validVotesList,
-		PotentiallyValidVotes: potentiallyValidVotesList,
+	tb.firstRoundIncomingVotes[currentEpoch][minerID.Key] = proposals{
+		ValidProposals:            validVotesList,
+		PotentiallyValidProposals: potentiallyValidVotesList,
 	}
 
 	return nil

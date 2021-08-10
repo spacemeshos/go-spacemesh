@@ -31,75 +31,6 @@ func coinValueMock(tb testing.TB, value bool) coin {
 	return coinMock
 }
 
-func TestTortoiseBeacon_calcVotesFromProposals(t *testing.T) {
-	t.Parallel()
-
-	r := require.New(t)
-
-	mockDB := &mockActivationDB{}
-	mockDB.On("GetEpochWeight",
-		mock.AnythingOfType("types.EpochID")).
-		Return(uint64(10), nil, nil)
-
-	const epoch = 1
-
-	tt := []struct {
-		name                      string
-		epoch                     types.EpochID
-		validProposals            proposalsMap
-		potentiallyValidProposals proposalsMap
-		votesFor                  proposalList
-		votesAgainst              proposalList
-	}{
-		{
-			name:  "Case 1",
-			epoch: epoch,
-			validProposals: proposalsMap{
-				"0x1": {},
-				"0x2": {},
-				"0x3": {},
-			},
-			potentiallyValidProposals: proposalsMap{
-				"0x4": {},
-				"0x5": {},
-				"0x6": {},
-			},
-			votesFor: proposalList{
-				"0x1",
-				"0x2",
-				"0x3",
-			},
-			votesAgainst: proposalList{
-				"0x4",
-				"0x5",
-				"0x6",
-			},
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			tb := TortoiseBeacon{
-				config: Config{
-					Theta: 1,
-				},
-				Log:                       logtest.New(t).WithName("TortoiseBeacon"),
-				validProposals:            tc.validProposals,
-				potentiallyValidProposals: tc.potentiallyValidProposals,
-				atxDB:                     mockDB,
-				firstRoundOutcomingVotes:  map[types.EpochID]firstRoundVotes{},
-			}
-
-			frv := tb.calcVotesFromProposals(tc.epoch)
-			r.EqualValues(tc.votesFor.Sort(), frv.ValidVotes.Sort())
-			r.EqualValues(tc.votesAgainst.Sort(), frv.PotentiallyValidVotes.Sort())
-		})
-	}
-}
-
 func TestTortoiseBeacon_calcVotes(t *testing.T) {
 	t.Parallel()
 
@@ -493,9 +424,8 @@ func TestTortoiseBeacon_calcVotesMargin(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log:                      logtest.New(t).WithName("TortoiseBeacon"),
-				incomingVotes:            tc.incomingVotes,
-				firstRoundOutcomingVotes: map[types.EpochID]firstRoundVotes{},
+				Log:           logtest.New(t).WithName("TortoiseBeacon"),
+				incomingVotes: tc.incomingVotes,
 			}
 
 			votesMargin, err := tb.firstRoundVotes(tc.epoch)

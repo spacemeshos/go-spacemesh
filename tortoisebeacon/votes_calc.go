@@ -7,47 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-func (tb *TortoiseBeacon) calcVotesFromProposals(epoch types.EpochID) firstRoundVotes {
-	valid := make(proposalList, 0)
-	potentiallyValid := make(proposalList, 0)
-
-	// TODO: have a mixed list of all sorted proposals
-	// have one bit vector: valid proposals
-
-	tb.validProposalsMu.RLock()
-
-	for p := range tb.validProposals {
-		valid = append(valid, p)
-	}
-
-	tb.validProposalsMu.RUnlock()
-
-	tb.potentiallyValidProposalsMu.Lock()
-
-	for p := range tb.potentiallyValidProposals {
-		potentiallyValid = append(potentiallyValid, p)
-	}
-
-	tb.potentiallyValidProposalsMu.Unlock()
-
-	tb.Log.With().Debug("Calculated votes from proposals",
-		log.Uint64("epoch_id", uint64(epoch)),
-		log.String("for", fmt.Sprint(valid)),
-		log.String("against", fmt.Sprint(potentiallyValid)))
-
-	votes := firstRoundVotes{
-		ValidVotes:            valid,
-		PotentiallyValidVotes: potentiallyValid,
-	}
-
-	// TODO: also send a bit vector
-	// TODO: initialize margin vector to initial votes
-	// TODO: use weight
-	tb.firstRoundOutcomingVotes[epoch] = votes
-
-	return votes
-}
-
 func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID, coinflip bool) (votesSetPair, error) {
 	tb.votesMu.Lock()
 	defer tb.votesMu.Unlock()

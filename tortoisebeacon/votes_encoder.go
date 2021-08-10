@@ -2,9 +2,9 @@ package tortoisebeacon
 
 import "github.com/bits-and-blooms/bitset"
 
-func (tb *TortoiseBeacon) encodeVotes(currentRound votesSetPair, firstRound firstRoundVotes) (votesBitVector []uint64) {
-	validVotes := firstRound.ValidVotes
-	potentiallyValidVotes := firstRound.PotentiallyValidVotes
+func (tb *TortoiseBeacon) encodeVotes(currentRound votesSetPair, firstRound proposals) (votesBitVector []uint64) {
+	validVotes := firstRound.ValidProposals
+	potentiallyValidVotes := firstRound.PotentiallyValidProposals
 	length := uint(len(validVotes) + len(potentiallyValidVotes))
 
 	if len(validVotes) > tb.config.VotesLimit {

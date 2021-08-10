@@ -14,18 +14,18 @@ func TestTortoiseBeacon_decodeVotes(t *testing.T) {
 
 	tt := []struct {
 		name       string
-		firstRound firstRoundVotes
+		firstRound proposals
 		bitVector  []uint64
 		result     votesSetPair
 	}{
 		{
 			name: "Case 1",
-			firstRound: firstRoundVotes{
-				ValidVotes: []proposal{
+			firstRound: proposals{
+				ValidProposals: []proposal{
 					"0x1",
 					"0x2",
 				},
-				PotentiallyValidVotes: []proposal{
+				PotentiallyValidProposals: []proposal{
 					"0x3",
 				},
 			},

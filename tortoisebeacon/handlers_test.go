@@ -85,14 +85,13 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				config:         UnitTestConfig(),
-				Log:            logtest.New(t).WithName("TortoiseBeacon"),
-				validProposals: proposalsMap{},
-				atxDB:          mockDB,
-				vrfVerifier:    signing.VRFVerifier{},
-				vrfSigner:      vrfSigner,
-				clock:          clock,
-				lastLayer:      types.NewLayerID(epoch),
+				config:      UnitTestConfig(),
+				Log:         logtest.New(t).WithName("TortoiseBeacon"),
+				atxDB:       mockDB,
+				vrfVerifier: signing.VRFVerifier{},
+				vrfSigner:   vrfSigner,
+				clock:       clock,
+				lastLayer:   types.NewLayerID(epoch),
 			}
 
 			q, ok := new(big.Rat).SetString(tb.config.Q)
@@ -109,11 +108,11 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 			err = tb.handleProposalMessage(tc.message, time.Now())
 			r.NoError(err)
 
-			expected := proposalsMap{
-				string(sig): {},
+			expected := proposals{
+				ValidProposals: []proposal{string(sig)},
 			}
 
-			r.EqualValues(expected, tb.validProposals)
+			r.EqualValues(expected, tb.incomingProposals)
 		})
 	}
 }
@@ -377,8 +376,8 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 				firstRoundIncomingVotes: map[types.EpochID]firstRoundVotesPerPK{
 					epoch: {
 						minerID.Key: {
-							ValidVotes:            []proposal{hash1.String(), hash2.String()},
-							PotentiallyValidVotes: []proposal{hash3.String()},
+							ValidProposals:            []proposal{hash1.String(), hash2.String()},
+							PotentiallyValidProposals: []proposal{hash3.String()},
 						},
 					},
 				},
