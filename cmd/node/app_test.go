@@ -103,12 +103,13 @@ var tests = []TestScenario{
 }
 
 type sharedClock struct {
+	logger log.Log
 	*timesync.TimeClock
 }
 
 func (clock sharedClock) Close() {
 	// wrap the Close method so closing one app doesn't close the clock for other listeners
-	log.Info("simulating clock close")
+	clock.logger.Info("simulating clock close")
 }
 
 func (clock sharedClock) RealClose() {
@@ -158,7 +159,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		suite.log.With().Error("cannot parse genesis time", log.Err(err))
 	}
 	ld := 20 * time.Second
-	clock := sharedClock{timesync.NewClock(timesync.RealClock{}, ld, gTime, logtest.New(suite.T()))}
+	clock := sharedClock{suite.log, timesync.NewClock(timesync.RealClock{}, ld, gTime, logtest.New(suite.T()))}
 	firstDir := suite.initMultipleInstances(cfg, rolacle, numOfInstances, genesisTime, poetHarness.HTTPPoetClient, clock, net)
 
 	// We must shut down before running the rest of the tests or we'll get an error about resource unavailable
@@ -245,7 +246,7 @@ type (
 func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apicfg.Account2Private))
 	if err != nil {
-		log.Panic("could not build ed signer", log.Err(err))
+		log.With().Panic("could not build ed signer", log.Err(err))
 	}
 	addr := types.Address{}
 	addr.SetBytes(acc1Signer.PublicKey().Bytes())
@@ -255,20 +256,20 @@ func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 		for i := 0; i < txsSent; i++ {
 			tx, err := types.NewSignedTx(uint64(txsSent-i), dst, 10, 1, 1, acc1Signer)
 			if err != nil {
-				log.Panic("panicked creating signed tx", log.Err(err))
+				suite.log.With().Panic("panicked creating signed tx", log.Err(err))
 			}
 			txbytes, _ := types.InterfaceToBytes(tx)
 			pbMsg := &pb.SubmitTransactionRequest{Transaction: txbytes}
 			_, err = suite.apps[0].txService.SubmitTransaction(nil, pbMsg)
 			suite.Error(err)
-			log.With().Info("got expected error submitting tx with out of order nonce", log.Err(err))
+			suite.log.With().Info("got expected error submitting tx with out of order nonce", log.Err(err))
 		}
 	}
 
 	test := func(suite *AppTestSuite, t *testing.T) bool {
 		ok := true
 		for _, app := range suite.apps {
-			log.With().Info("zero acc current balance",
+			suite.log.With().Info("zero acc current balance",
 				app.nodeID,
 				log.FieldNamed("sender", addr),
 				log.FieldNamed("dest", dst),
@@ -276,6 +277,9 @@ func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 				log.Uint64("sender_nonce", app.state.GetNonce(addr)),
 				log.Uint64("sender_balance", app.state.GetBalance(addr)))
 			ok = ok && 0 == app.state.GetBalance(dst) && app.state.GetNonce(addr) == 0
+		}
+		if ok {
+			suite.log.Info("zero addresses ok")
 		}
 		return ok
 	}
@@ -305,6 +309,7 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 
 		for i := 0; i < txsSent; i++ {
 			actNonce := getNonce()
+			suite.log.Info("waiting for nonce: %d, current projected nonce: %d", i, actNonce)
 
 			// Note: this may loop forever if the nonce is not advancing for some reason, but the entire
 			// setup process will timeout above if this happens
@@ -324,7 +329,7 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 	test := func(suite *AppTestSuite, t *testing.T) bool {
 		ok := true
 		for _, app := range suite.apps {
-			log.With().Info("valid tx recipient acc current balance",
+			suite.log.With().Info("valid tx recipient acc current balance",
 				app.nodeID,
 				log.FieldNamed("sender", addr),
 				log.FieldNamed("dest", dst),
@@ -332,6 +337,9 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 				log.Uint64("sender_nonce", app.state.GetNonce(addr)),
 				log.Uint64("sender_balance", app.state.GetBalance(addr)))
 			ok = ok && app.state.GetBalance(dst) >= 250 && app.state.GetNonce(addr) == uint64(txsSent)
+		}
+		if ok {
+			suite.log.Info("addresses ok")
 		}
 		return ok
 	}
@@ -351,6 +359,8 @@ func reachedEpochTester(dependencies []int) TestScenario {
 			}
 			suite.validateLastATXTotalWeight(app, numberOfEpochs, expectedTotalWeight)
 		}
+		suite.log.Info("epoch ok")
+
 		// weakcoin test runs once, after epoch has been reached
 		suite.healingWeakcoinTester()
 		return true
@@ -410,7 +420,7 @@ func healingTester(dependencies []int) TestScenario {
 		for i, app := range suite.apps {
 			lyrReceived := app.mesh.ProcessedLayer()
 			lyrVerified := app.mesh.LatestLayerInState()
-			log.With().Info("node latest layers",
+			suite.log.With().Info("node latest layers",
 				log.FieldNamed("last_received", lyrReceived),
 				log.FieldNamed("last_verified", lyrVerified),
 				log.Int("app", i),
@@ -421,7 +431,7 @@ func healingTester(dependencies []int) TestScenario {
 				return false
 			}
 		}
-		log.Info("healing okay")
+		suite.log.Info("healing okay")
 		return true
 	}
 	return TestScenario{setup, test, dependencies}
@@ -450,6 +460,7 @@ func sameRootTester(dependencies []int) TestScenario {
 					if r1 == r2 {
 						clientsDone++
 						if clientsDone == len(suite.apps)-1 {
+							suite.log.Info("%d roots confirmed out of %d return ok", clientsDone, len(suite.apps))
 							return true
 						}
 					}
@@ -462,6 +473,7 @@ func sameRootTester(dependencies []int) TestScenario {
 
 		if maxClientsDone != stickyClientsDone {
 			stickyClientsDone = maxClientsDone
+			suite.log.Info("%d roots confirmed out of %d", maxClientsDone, len(suite.apps))
 		}
 		return false
 	}
@@ -486,6 +498,7 @@ func runTests(suite *AppTestSuite, finished map[int]bool) bool {
 		}
 		if depsOk && !finished[i] {
 			finished[i] = test.Criteria(suite, suite.T())
+			suite.log.Info("test %d completion state: %v", i, finished[i])
 		}
 		if !finished[i] {
 			// at least one test isn't completed, pre-empt and return to keep looping
@@ -536,7 +549,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	}
 
 	for i, d := range datamap {
-		log.Info("node %v in len(layerstoblocks) %v", i, len(d.layertoblocks))
+		suite.log.Info("node %v in len(layerstoblocks) %v", i, len(d.layertoblocks))
 		for i2, d2 := range datamap {
 			if i == i2 {
 				continue
@@ -561,12 +574,12 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	nodedata := datamap[suite.apps[0].nodeID.Key]
 
 	lastLayer := len(nodedata.layertoblocks) + 5
-	log.Info("node %v", suite.apps[0].nodeID.ShortString())
+	suite.log.Info("node %v", suite.apps[0].nodeID.ShortString())
 
 	totalBlocks := 0
 	for id, l := range nodedata.layertoblocks {
 		totalBlocks += len(l)
-		log.Info("node %v layer %v, blocks %v", suite.apps[0].nodeID.ShortString(), id, len(l))
+		suite.log.Info("node %v layer %v, blocks %v", suite.apps[0].nodeID.ShortString(), id, len(l))
 	}
 
 	genesisBlocks := 0
@@ -599,7 +612,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 		fmt.Sprintf("got unexpected block count! got: %v, want: %v. totalBlocks: %v, genesisBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v datamap: %v",
 			actualTotalBlocks, expectedTotalBlocks, totalBlocks, genesisBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, datamap))
 
-	totalWeightAllEpochs := calcTotalWeight(assert.New(suite.T()), suite.apps[0].atxDb, allApps, types.EpochID(totalEpochs))
+	totalWeightAllEpochs := calcTotalWeight(suite, suite.apps[0].atxDb, allApps, types.EpochID(totalEpochs))
 
 	// assert total ATX weight
 	expectedTotalWeight := uint64(totalEpochs) * expectedEpochWeight
@@ -617,25 +630,26 @@ func max(i, j int) int {
 }
 
 func calcTotalWeight(
-	assert *assert.Assertions,
+	suite *AppTestSuite,
 	atxDb *activation.DB,
 	apps []*App,
 	untilEpoch types.EpochID) (totalWeightAllEpochs uint64) {
+	r := require.New(suite.T())
 	for _, app := range apps {
 		atxID, err := atxDb.GetNodeLastAtxID(app.nodeID)
-		assert.NoError(err)
+		r.NoError(err)
 
 		for atxID != *types.EmptyATXID {
 			atx, err := atxDb.GetAtxHeader(atxID)
-			assert.NoError(err)
+			r.NoError(err)
 			if atx.TargetEpoch() < untilEpoch+2 {
 				totalWeightAllEpochs += atx.GetWeight()
-				log.With().Info("added atx weight",
+				suite.log.With().Info("added atx weight",
 					log.FieldNamed("pub_layer", atx.PubLayerID),
 					log.FieldNamed("target_epoch", atx.TargetEpoch()),
 					log.Uint64("weight", atx.GetWeight()))
 			} else {
-				log.With().Info("ignoring atx after final epoch",
+				suite.log.With().Info("ignoring atx after final epoch",
 					log.FieldNamed("pub_layer", atx.PubLayerID),
 					log.FieldNamed("target_epoch", atx.TargetEpoch()),
 					log.Uint64("weight", atx.GetWeight()))
