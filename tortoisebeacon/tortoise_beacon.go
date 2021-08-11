@@ -141,8 +141,8 @@ type TortoiseBeacon struct {
 	seenEpochsMu sync.Mutex
 	seenEpochs   map[types.EpochID]struct{}
 
-	clock                    layerClock
-	layerTicker              chan types.LayerID
+	clock       layerClock
+	layerTicker chan types.LayerID
 	layerMu     sync.RWMutex
 	lastLayer   types.LayerID
 
@@ -551,7 +551,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	defer ticker.Stop()
 
 	var coinFlip bool
-	for round := firstRound; round <= tb.config.RoundsNumber; round++ {
+	for round := firstRound; round <= tb.lastRound(); round++ {
 		// always use coinflip from the previous round for current round.
 		// round 1 is running without coinflip (e.g. value is false) intentionally
 		round := round
@@ -580,7 +580,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	tb.Log.With().Debug("Consensus phase finished",
 		log.Uint64("epoch_id", uint64(epoch)))
 
-	return tb.ownVotes[epoch][tb.lastPossibleRound()]
+	return tb.ownVotes[epoch][tb.lastRound()]
 }
 
 func (tb *TortoiseBeacon) markProposalPhaseFinished(epoch types.EpochID) {

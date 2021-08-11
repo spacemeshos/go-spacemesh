@@ -67,7 +67,7 @@ func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, v
 
 func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID, votes votesSetPair) (proposalList, error) {
 	allHashes := make(proposalList, 0)
-	lastRound := types.RoundID(tb.config.RoundsNumber)
+	lastRound := tb.lastRound()
 
 	// output from VRF
 	for vote := range votes.ValidVotes {
@@ -84,4 +84,8 @@ func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID, votes 
 	})
 
 	return allHashes, nil
+}
+
+func (tb *TortoiseBeacon) lastRound() types.RoundID {
+	return tb.config.RoundsNumber - 1 + firstRound
 }
