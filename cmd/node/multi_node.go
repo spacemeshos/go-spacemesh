@@ -141,15 +141,15 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 	cfg.SMESHING.Start = true
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
 	cfg.SMESHING.Opts.NumFiles = 1
-	cfg.SMESHING.Opts.ComputeProviderID = int(initialization.CPUProviderID())
+	cfg.SMESHING.Opts.ComputeProviderID = initialization.CPUProviderID()
 
+	// note: these need to be set sufficiently low enough that turbohare finishes well before the LayerDurationSec
+	cfg.HARE.RoundDuration = 2
+	cfg.HARE.WakeupDelta = 1
 	cfg.HARE.N = 5
 	cfg.HARE.F = 2
-	cfg.HARE.RoundDuration = 3
-	cfg.HARE.WakeupDelta = 5
 	cfg.HARE.ExpectedLeaders = 5
 	cfg.HARE.SuperHare = true
-	//cfg.LayerAvgSize = 10
 	cfg.LayerAvgSize = 5
 	cfg.LayersPerEpoch = 3
 	cfg.TxsPerBlock = 100
