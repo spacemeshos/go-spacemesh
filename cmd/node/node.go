@@ -855,7 +855,7 @@ func (app *App) startServices(ctx context.Context) error {
 		coinbaseAddr := types.HexToAddress(app.Config.SMESHING.CoinbaseAccount)
 		go func() {
 			if err := app.atxBuilder.StartSmeshing(ctx, coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
-				log.Panic("failed to start smeshing: %v", err)
+				log.With().Panic("failed to start smeshing", log.Err(err))
 			}
 		}()
 	} else {

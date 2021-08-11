@@ -122,9 +122,8 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	const (
 		numberOfEpochs = 5 // first 2 epochs are genesis
 		numOfInstances = 5
-		//numOfInstances = 10
 	)
-	cfg := getTestDefaultConfig(numOfInstances)
+	cfg := getTestDefaultConfig()
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 	lg := logtest.New(suite.T())
 
@@ -394,15 +393,18 @@ func (suite *AppTestSuite) healingWeakcoinTester() {
 
 func healingTester(dependencies []int) TestScenario {
 	var lastVerifiedLayer types.LayerID
+	var ok1, ok2 map[int]bool
+	confidenceInterval := uint32(2)
 	once := sync.Once{}
 	setup := func(suite *AppTestSuite, t *testing.T) {}
 
 	test := func(suite *AppTestSuite, t *testing.T) bool {
 		// we can't actually use setup() as it's destructive to other tests, so run setup here
 		once.Do(func() {
-			// immediately kill half of the participating nodes
+			// immediately kill half of the participating nodes.
 			// poet communicates with GRPC server on the first app, so leave first one alone
-			// we need to kill at least half, so round up
+			// we need to kill at least half, so round up.
+			// the last apps in the list have the largest voting weight so we should remove them.
 			firstAppToKill := len(suite.apps) - (len(suite.apps)/2 + 1)
 
 			// save data on the nodes we're about to kill for posterity
