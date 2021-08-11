@@ -15,10 +15,9 @@ FROM ${build_image} AS builder
 
 # COPY extra/go-spacemesh/[a-z]* /go-spacemesh/
 COPY extra/go-spacemesh /go-spacemesh
-COPY plan /go-spacemesh/plans/plan
-RUN find /go-spacemesh -maxdepth 2
-
-RUN cd /go-spacemesh/plans/plan && go build -a -o /testplan
+# get only the plan's go.mod and get the plan's name from it
+COPY plan/go.mod /tmp/go.mod
+RUN cd /go-spacemesh/plans/`awk '/^module/ {split($0,a,"/"); print a[5]}' /tmp/go.mod` && go build -a -o /testplan
 
 ## The 'AS runtime' token is used to parse Docker stdout to extract the build image ID to cache.
 FROM ${run_image} AS runtime
