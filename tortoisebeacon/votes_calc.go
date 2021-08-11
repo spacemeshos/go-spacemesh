@@ -16,17 +16,6 @@ func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID, co
 		log.Uint32("round_id", uint32(round)),
 		log.String("votesMargin", fmt.Sprint(tb.votesMargin)))
 
-	ownFirstRoundVotes, err := tb.calcOwnFirstRoundVotes(epoch)
-	if err != nil {
-		return votesSetPair{}, fmt.Errorf("calc own first round votes: %w", err)
-	}
-
-	tb.Log.With().Debug("Calculated own first round votes",
-		log.Uint32("epoch_id", uint32(epoch)),
-		log.Uint32("round_id", uint32(round)),
-		log.String("votesMargin", fmt.Sprint(tb.votesMargin)),
-		log.String("ownFirstRoundVotes", fmt.Sprint(ownFirstRoundVotes)))
-
 	if err := tb.calcVotesMargin(epoch, round); err != nil {
 		return votesSetPair{}, fmt.Errorf("calc votes count: %w", err)
 	}
@@ -51,33 +40,6 @@ func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID, co
 }
 
 // TODO: For every round excluding first round consider having a vector of opinions.
-func (tb *TortoiseBeacon) calcOwnFirstRoundVotes(epoch types.EpochID) (votesSetPair, error) {
-	ownFirstRoundsVotes := votesSetPair{
-		ValidVotes:   make(hashSet),
-		InvalidVotes: make(hashSet),
-	}
-
-	epochWeight, _, err := tb.atxDB.GetEpochWeight(epoch)
-	if err != nil {
-		return votesSetPair{}, fmt.Errorf("get epoch weight: %w", err)
-	}
-
-	votingThreshold := tb.votingThreshold(epochWeight)
-
-	for vote, margin := range tb.votesMargin {
-		switch {
-		case int64(margin) >= votingThreshold:
-			ownFirstRoundsVotes.ValidVotes[vote] = struct{}{}
-		default:
-			ownFirstRoundsVotes.InvalidVotes[vote] = struct{}{}
-		}
-	}
-
-	tb.ownVotes[firstRound] = ownFirstRoundsVotes
-
-	return ownFirstRoundsVotes, nil
-}
-
 // TODO: Same calculation, do incremental part on receiving (vector of margins).
 func (tb *TortoiseBeacon) calcVotesMargin(epoch types.EpochID, upToRound types.RoundID) error {
 	for round := firstRound + 1; round < upToRound+firstRound; round++ {
@@ -137,7 +99,9 @@ func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, round ty
 		}
 	}
 
-	tb.ownVotes[round] = ownCurrentRoundVotes
+	if round == tb.lastRound() {
+		tb.ownLastRoundVotes = ownCurrentRoundVotes
+	}
 
 	return ownCurrentRoundVotes, nil
 }

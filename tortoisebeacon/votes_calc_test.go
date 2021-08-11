@@ -127,7 +127,6 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 				},
 				Log:           logtest.New(t).WithName("TortoiseBeacon"),
 				incomingVotes: tc.incomingVotes,
-				ownVotes:      map[types.RoundID]votesSetPair{},
 				atxDB:         mockDB,
 				votesMargin:   tc.votesMargin,
 			}
@@ -135,76 +134,6 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 			result, err := tb.calcVotes(tc.epoch, tc.round, false)
 			r.NoError(err)
 			r.EqualValues(tc.expected, result)
-		})
-	}
-}
-
-func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
-	t.Parallel()
-
-	r := require.New(t)
-
-	const threshold = 2
-	const epoch = 5
-	const round = 3
-
-	mockDB := &mockActivationDB{}
-	mockDB.On("GetEpochWeight",
-		mock.AnythingOfType("types.EpochID")).
-		Return(uint64(threshold), nil, nil)
-
-	tt := []struct {
-		name        string
-		epoch       types.EpochID
-		upToRound   types.RoundID
-		votesMargin votesMarginMap
-		result      votesSetPair
-	}{
-		{
-			name:      "Weak Coin is false",
-			epoch:     epoch,
-			upToRound: round,
-			votesMargin: map[proposal]int{
-				"0x1": 2,
-				"0x2": 1,
-				"0x3": -1,
-				"0x4": 1,
-				"0x5": 1,
-				"0x6": -2,
-			},
-			result: votesSetPair{
-				ValidVotes: hashSet{
-					"0x1": {},
-				},
-				InvalidVotes: hashSet{
-					"0x2": {},
-					"0x3": {},
-					"0x4": {},
-					"0x5": {},
-					"0x6": {},
-				},
-			},
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			tb := TortoiseBeacon{
-				config: Config{
-					Theta: big.NewRat(1, 1),
-				},
-				Log:         logtest.New(t).WithName("TortoiseBeacon"),
-				votesMargin: tc.votesMargin,
-				ownVotes:    map[types.RoundID]votesSetPair{},
-				atxDB:       mockDB,
-			}
-
-			result, err := tb.calcOwnFirstRoundVotes(tc.epoch)
-			r.NoError(err)
-			r.EqualValues(tc.result, result)
 		})
 	}
 }
@@ -384,7 +313,6 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 					Theta: big.NewRat(1, 1),
 				},
 				Log:         logtest.New(t).WithName("TortoiseBeacon"),
-				ownVotes:    map[types.RoundID]votesSetPair{},
 				atxDB:       mockDB,
 				votesMargin: tc.votesCount,
 			}

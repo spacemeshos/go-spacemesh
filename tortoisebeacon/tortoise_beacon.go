@@ -100,7 +100,6 @@ func New(
 		vrfSigner:                       vrfSigner,
 		weakCoin:                        weakCoin,
 		clock:                           clock,
-		ownVotes:                        make(map[types.RoundID]votesSetPair),
 		beacons:                         make(map[types.EpochID]types.Hash32),
 		proposalPhaseFinishedTimestamps: make(map[types.EpochID]time.Time),
 		hasVoted:                        make([]map[nodeID]struct{}, conf.RoundsNumber),
@@ -150,6 +149,7 @@ type TortoiseBeacon struct {
 	hasVoted                []map[nodeID]struct{}
 
 	incomingVotes                     []map[nodeID]votesSetPair
+	ownLastRoundVotes                 votesSetPair
 	ownVotes                          map[types.RoundID]votesSetPair
 	proposalPhaseFinishedTimestampsMu sync.RWMutex
 	proposalPhaseFinishedTimestamps   map[types.EpochID]time.Time
@@ -270,7 +270,7 @@ func (tb *TortoiseBeacon) cleanupVotes(epoch types.EpochID) {
 	tb.firstRoundIncomingVotes = map[nodeID]proposalsBytes{}
 	tb.votesMargin = map[proposal]int{}
 	tb.hasVoted = []map[nodeID]struct{}{}
-	tb.ownVotes = make(map[types.RoundID]votesSetPair)
+	tb.ownLastRoundVotes = votesSetPair{}
 
 	delete(tb.proposalPhaseFinishedTimestamps, epoch)
 }
@@ -582,7 +582,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	tb.Log.With().Debug("Consensus phase finished",
 		log.Uint32("epoch_id", uint32(epoch)))
 
-	return tb.ownVotes[tb.lastRound()]
+	return tb.ownLastRoundVotes
 }
 
 func (tb *TortoiseBeacon) markProposalPhaseFinished(epoch types.EpochID) {
