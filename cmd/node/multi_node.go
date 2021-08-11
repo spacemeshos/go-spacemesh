@@ -224,6 +224,8 @@ func InitSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 
 	smApp.Config.SMESHING.CoinbaseAccount = strconv.Itoa(i + 1)
 	smApp.Config.SMESHING.Opts.DataDir, _ = ioutil.TempDir("", "sm-app-test-post-datadir")
+	smApp.Config.POST.MaxNumUnits = smApp.Config.SMESHING.Opts.NumUnits << 5
+	smApp.Config.SMESHING.Opts.NumUnits = smApp.Config.SMESHING.Opts.NumUnits << (i % 5)
 
 	smApp.edSgn = edSgn
 
