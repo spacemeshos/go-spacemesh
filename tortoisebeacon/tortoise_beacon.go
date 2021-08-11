@@ -267,7 +267,7 @@ func (tb *TortoiseBeacon) cleanupVotes(epoch types.EpochID) {
 	tb.incomingProposals = proposals{}
 	tb.firstRoundIncomingVotes = map[nodeID]proposalsBytes{}
 	tb.votesMargin = map[proposal]*big.Int{}
-	tb.hasVoted = []map[nodeID]struct{}{}
+	tb.hasVoted = make([]map[nodeID]struct{}, tb.lastRound())
 	tb.ownLastRoundVotes = votesSetPair{}
 
 	delete(tb.proposalPhaseFinishedTimestamps, epoch)
@@ -357,6 +357,8 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 
 	tb.Log.With().Info("Handling epoch",
 		log.Uint32("epoch_id", uint32(epoch)))
+
+	defer tb.cleanupVotes(epoch)
 
 	tb.proposalChansMu.Lock()
 	if epoch > 0 {
