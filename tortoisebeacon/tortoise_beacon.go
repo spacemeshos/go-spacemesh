@@ -145,10 +145,10 @@ type TortoiseBeacon struct {
 
 	// TODO: have a mixed list of all sorted proposals
 	// have one bit vector: valid proposals
-	incomingProposals                 proposals                 // all rounds - votes (decoded votes)
-	firstRoundIncomingVotes           map[nodeID]proposals      // all rounds - votes (decoded votes)
-	incomingVotes                     []map[nodeID]votesSetPair // all rounds - votes (decoded votes)
-	ownVotes                          ownVotes                  // all rounds - own votes
+	incomingProposals                 proposals
+	firstRoundIncomingVotes           map[nodeID]proposals // sorted votes for bit vector decoding
+	incomingVotes                     []map[nodeID]votesSetPair
+	ownVotes                          ownVotes
 	proposalPhaseFinishedTimestampsMu sync.RWMutex
 	proposalPhaseFinishedTimestamps   map[types.EpochID]time.Time
 
