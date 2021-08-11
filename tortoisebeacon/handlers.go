@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -322,13 +323,19 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 		log.Uint32("round_id", uint32(currentRound)))
 
 	for _, vote := range message.ValidProposals {
-		// TODO(nkryuchkov): handle overflow
-		tb.votesMargin[string(vote)] += int(voteWeight)
+		if _, ok := tb.votesMargin[string(vote)]; !ok {
+			tb.votesMargin[string(vote)] = new(big.Int).Set(voteWeight)
+		} else {
+			tb.votesMargin[string(vote)].Add(tb.votesMargin[string(vote)], voteWeight)
+		}
 	}
 
 	for _, vote := range message.PotentiallyValidProposals {
-		// TODO(nkryuchkov): handle negative overflow
-		tb.votesMargin[string(vote)] -= int(voteWeight)
+		if _, ok := tb.votesMargin[string(vote)]; !ok {
+			tb.votesMargin[string(vote)] = new(big.Int).Neg(voteWeight)
+		} else {
+			tb.votesMargin[string(vote)].Sub(tb.votesMargin[string(vote)], voteWeight)
+		}
 	}
 
 	tb.hasVoted[currentRound-firstRound][minerID.Key] = struct{}{}
@@ -435,13 +442,19 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 	thisRoundVotes := tb.decodeVotes(message.VotesBitVector, tb.firstRoundIncomingVotes[minerID.Key])
 
 	for vote := range thisRoundVotes.ValidVotes {
-		// TODO(nkryuchkov): handle overflow
-		tb.votesMargin[vote] += int(voteWeight)
+		if _, ok := tb.votesMargin[vote]; !ok {
+			tb.votesMargin[vote] = new(big.Int).Set(voteWeight)
+		} else {
+			tb.votesMargin[vote].Add(tb.votesMargin[vote], voteWeight)
+		}
 	}
 
 	for vote := range thisRoundVotes.InvalidVotes {
-		// TODO(nkryuchkov): handle negative overflow
-		tb.votesMargin[vote] -= int(voteWeight)
+		if _, ok := tb.votesMargin[vote]; !ok {
+			tb.votesMargin[vote] = new(big.Int).Neg(voteWeight)
+		} else {
+			tb.votesMargin[vote].Sub(tb.votesMargin[vote], voteWeight)
+		}
 	}
 
 	tb.hasVoted[messageRound-firstRound][minerID.Key] = struct{}{}

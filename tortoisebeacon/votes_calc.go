@@ -2,6 +2,7 @@ package tortoisebeacon
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -41,16 +42,15 @@ func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, round ty
 		return votesSetPair{}, fmt.Errorf("get epoch weight: %w", err)
 	}
 
-	votingThreshold := tb.votingThreshold(epochWeight)
+	positiveVotingThreshold := tb.votingThreshold(epochWeight)
+	negativeThreshold := new(big.Int).Neg(positiveVotingThreshold)
 
 	// TODO(nkryuchkov): should happen after weak coin for this round is calculated; consider calculating in two steps
 	for vote, weightCount := range tb.votesMargin {
-		wc := int64(weightCount)
-
 		switch {
-		case wc >= votingThreshold:
+		case weightCount.Cmp(positiveVotingThreshold) >= 0:
 			ownCurrentRoundVotes.ValidVotes[vote] = struct{}{}
-		case wc <= -votingThreshold:
+		case weightCount.Cmp(negativeThreshold) <= 0:
 			ownCurrentRoundVotes.InvalidVotes[vote] = struct{}{}
 		case coinflip:
 			ownCurrentRoundVotes.ValidVotes[vote] = struct{}{}
@@ -59,6 +59,7 @@ func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, round ty
 		}
 	}
 
+	// TODO(nkryuchkov): better solution
 	if round == tb.lastRound() {
 		tb.ownLastRoundVotes = ownCurrentRoundVotes
 	}

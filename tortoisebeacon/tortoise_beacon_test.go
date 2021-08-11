@@ -110,25 +110,25 @@ func TestTortoiseBeacon_votingThreshold(t *testing.T) {
 		name      string
 		theta     *big.Rat
 		weight    uint64
-		threshold int
+		threshold *big.Int
 	}{
 		{
 			name:      "Case 1",
 			theta:     big.NewRat(1, 2),
 			weight:    10,
-			threshold: 5,
+			threshold: big.NewInt(5),
 		},
 		{
 			name:      "Case 2",
 			theta:     big.NewRat(3, 10),
 			weight:    10,
-			threshold: 3,
+			threshold: big.NewInt(3),
 		},
 		{
 			name:      "Case 3",
 			theta:     big.NewRat(1, 25000),
 			weight:    31744,
-			threshold: 1,
+			threshold: big.NewInt(1),
 		},
 	}
 

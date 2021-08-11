@@ -56,12 +56,12 @@ type coin interface {
 }
 
 type (
-	nodeID         = string
-	proposal       = string
-	hashSet        = map[proposal]struct{}
-	proposalsBytes = struct{ ValidProposals, PotentiallyValidProposals [][]byte } // TODO: remove this or below
+	nodeID   = string
+	proposal = string
+	hashSet  = map[proposal]struct{}
+	// TODO(nkryuchkov): remove either of two below
+	proposalsBytes = struct{ ValidProposals, PotentiallyValidProposals [][]byte }
 	proposals      = struct{ ValidProposals, PotentiallyValidProposals proposalList }
-	votesMarginMap = map[proposal]int
 )
 
 type layerClock interface {
@@ -106,7 +106,7 @@ func New(
 		firstRoundIncomingVotes:         make(map[nodeID]proposalsBytes),
 		seenEpochs:                      make(map[types.EpochID]struct{}),
 		proposalChans:                   make(map[types.EpochID]chan *proposalMessageWithReceiptData),
-		votesMargin:                     map[proposal]int{},
+		votesMargin:                     map[proposal]*big.Int{},
 	}
 }
 
@@ -145,7 +145,7 @@ type TortoiseBeacon struct {
 	incomingProposals       proposals
 	firstRoundIncomingVotes map[nodeID]proposalsBytes // sorted votes for bit vector decoding
 	// TODO: For every round excluding first round consider having a vector of opinions.
-	votesMargin map[proposal]int
+	votesMargin map[proposal]*big.Int
 	hasVoted    []map[nodeID]struct{}
 
 	ownLastRoundVotes                 votesSetPair
@@ -265,7 +265,7 @@ func (tb *TortoiseBeacon) cleanupVotes(epoch types.EpochID) {
 
 	tb.incomingProposals = proposals{}
 	tb.firstRoundIncomingVotes = map[nodeID]proposalsBytes{}
-	tb.votesMargin = map[proposal]int{}
+	tb.votesMargin = map[proposal]*big.Int{}
 	tb.hasVoted = []map[nodeID]struct{}{}
 	tb.ownLastRoundVotes = votesSetPair{}
 
@@ -724,11 +724,11 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 	return nil
 }
 
-func (tb *TortoiseBeacon) voteWeight(pk nodeID, epochID types.EpochID) (uint64, error) {
+func (tb *TortoiseBeacon) voteWeight(pk nodeID, epochID types.EpochID) (*big.Int, error) {
 	// TODO(nkryuchkov): enable
 	enabled := false
 	if !enabled {
-		return 1, nil
+		return big.NewInt(1), nil
 	}
 
 	nodeID := types.NodeID{
@@ -738,22 +738,22 @@ func (tb *TortoiseBeacon) voteWeight(pk nodeID, epochID types.EpochID) (uint64, 
 
 	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(nodeID, epochID-1)
 	if err != nil {
-		return 0, fmt.Errorf("atx ID for epoch: %w", err)
+		return nil, fmt.Errorf("atx ID for epoch: %w", err)
 	}
 
 	atx, err := tb.atxDB.GetAtxHeader(atxID)
 	if err != nil {
-		return 0, fmt.Errorf("atx header: %w", err)
+		return nil, fmt.Errorf("atx header: %w", err)
 	}
 
-	return atx.GetWeight(), nil
+	return new(big.Int).SetUint64(atx.GetWeight()), nil
 }
 
-func (tb *TortoiseBeacon) votingThreshold(epochWeight uint64) int64 {
+func (tb *TortoiseBeacon) votingThreshold(epochWeight uint64) *big.Int {
 	v, _ := new(big.Float).Mul(
 		new(big.Float).SetRat(tb.config.Theta),
 		new(big.Float).SetUint64(epochWeight),
-	).Int64()
+	).Int(nil)
 
 	return v
 }

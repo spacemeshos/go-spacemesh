@@ -48,7 +48,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 		name          string
 		epoch         types.EpochID
 		round         types.RoundID
-		votesMargin   votesMarginMap
+		votesMargin   map[proposal]*big.Int
 		incomingVotes []map[nodeID]votesSetPair
 		expected      votesSetPair
 	}{
@@ -56,13 +56,13 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 			name:  "Case 1",
 			epoch: epoch,
 			round: round,
-			votesMargin: map[proposal]int{
-				"0x1": 2,
-				"0x2": 0,
-				"0x3": 0,
-				"0x4": 1,
-				"0x5": 0,
-				"0x6": 0,
+			votesMargin: map[proposal]*big.Int{
+				"0x1": big.NewInt(2),
+				"0x2": big.NewInt(0),
+				"0x3": big.NewInt(0),
+				"0x4": big.NewInt(1),
+				"0x5": big.NewInt(0),
+				"0x6": big.NewInt(0),
 			},
 			expected: votesSetPair{
 				ValidVotes: hashSet{
@@ -117,7 +117,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 		epoch              types.EpochID
 		round              types.RoundID
 		ownFirstRoundVotes votesSetPair
-		votesCount         votesMarginMap
+		votesCount         map[proposal]*big.Int
 		weakCoin           bool
 		result             votesSetPair
 	}{
@@ -134,10 +134,10 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 					"0x3": {},
 				},
 			},
-			votesCount: votesMarginMap{
-				"0x1": threshold * 2,
-				"0x2": -threshold * 3,
-				"0x3": threshold / 2,
+			votesCount: map[proposal]*big.Int{
+				"0x1": big.NewInt(threshold * 2),
+				"0x2": big.NewInt(-threshold * 3),
+				"0x3": big.NewInt(threshold / 2),
 			},
 			weakCoin: true,
 			result: votesSetPair{
@@ -154,10 +154,10 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 			name:  "Case 2",
 			epoch: 5,
 			round: 5,
-			votesCount: votesMarginMap{
-				"0x1": threshold * 2,
-				"0x2": -threshold * 3,
-				"0x3": threshold / 2,
+			votesCount: map[proposal]*big.Int{
+				"0x1": big.NewInt(threshold * 2),
+				"0x2": big.NewInt(-threshold * 3),
+				"0x3": big.NewInt(threshold / 2),
 			},
 			weakCoin: false,
 			result: votesSetPair{

@@ -1,6 +1,7 @@
 package tortoisebeacon
 
 import (
+	"math/big"
 	"testing"
 	"time"
 
@@ -220,7 +221,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 				edSigner:                edSgn,
 				clock:                   clock,
 				firstRoundIncomingVotes: map[nodeID]proposalsBytes{},
-				votesMargin:             map[proposal]int{},
+				votesMargin:             map[proposal]*big.Int{},
 				hasVoted:                make([]map[nodeID]struct{}, round+1),
 			}
 
@@ -289,7 +290,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 		epoch         types.EpochID
 		currentRounds map[types.EpochID]types.RoundID
 		message       FollowingVotingMessage
-		expected      votesMarginMap
+		expected      map[proposal]*big.Int
 	}{
 		{
 			name:  "Current round and message round equal",
@@ -305,10 +306,10 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 					VotesBitVector: []uint64{0b101},
 				},
 			},
-			expected: votesMarginMap{
-				string(hash1.Bytes()): 1,
-				string(hash2.Bytes()): -1,
-				string(hash3.Bytes()): 1,
+			expected: map[proposal]*big.Int{
+				string(hash1.Bytes()): big.NewInt(1),
+				string(hash2.Bytes()): big.NewInt(-1),
+				string(hash3.Bytes()): big.NewInt(1),
 			},
 		},
 		{
@@ -325,10 +326,10 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 					VotesBitVector: []uint64{0b101},
 				},
 			},
-			expected: votesMarginMap{
-				string(hash1.Bytes()): 1,
-				string(hash2.Bytes()): -1,
-				string(hash3.Bytes()): 1,
+			expected: map[proposal]*big.Int{
+				string(hash1.Bytes()): big.NewInt(1),
+				string(hash2.Bytes()): big.NewInt(-1),
+				string(hash3.Bytes()): big.NewInt(1),
 			},
 		},
 	}
@@ -356,7 +357,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 				},
 				lastLayer:   types.NewLayerID(epoch),
 				hasVoted:    make([]map[nodeID]struct{}, round+1),
-				votesMargin: map[proposal]int{},
+				votesMargin: map[proposal]*big.Int{},
 			}
 
 			sig, err := tb.signMessage(tc.message.FollowingVotingMessageBody)
