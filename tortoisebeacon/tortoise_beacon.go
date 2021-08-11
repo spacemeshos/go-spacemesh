@@ -620,7 +620,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 
 		tb.weakCoin.FinishRound()
 
-		cf := tb.weakCoin.Get(epoch, round)
+		cf := tb.weakCoin.Get(epoch, round+1)
 		if cf {
 			atomic.StoreUint64(&coinFlip, 1)
 		} else {
@@ -671,7 +671,7 @@ func (tb *TortoiseBeacon) startWeakCoin(ctx context.Context, epoch types.EpochID
 
 	// TODO(nkryuchkov):
 	// should be published only after we should have received them
-	if err := tb.weakCoin.StartRound(ctx, round); err != nil {
+	if err := tb.weakCoin.StartRound(ctx, round+1); err != nil {
 		tb.Log.With().Error("Failed to publish weak coin proposal",
 			log.Uint32("epoch_id", uint32(epoch)),
 			log.Uint32("round_id", uint32(round)),
