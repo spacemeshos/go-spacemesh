@@ -418,16 +418,16 @@ func healingTester(dependencies []int) TestScenario {
 
 		// now wait for healing to kick in and advance the verified layer
 		for i, app := range suite.apps {
-			lyrReceived := app.mesh.ProcessedLayer()
+			lyrProcessed := app.mesh.ProcessedLayer()
 			lyrVerified := app.mesh.LatestLayerInState()
 			suite.log.With().Info("node latest layers",
-				log.FieldNamed("last_received", lyrReceived),
-				log.FieldNamed("last_verified", lyrVerified),
+				log.FieldNamed("processed", lyrProcessed),
+				log.FieldNamed("verified", lyrVerified),
 				log.Int("app", i),
 				log.FieldNamed("nodeid", app.nodeID))
 
 			// verified needs to advance, and to nearly catch up to last received
-			if !lyrVerified.After(lastVerifiedLayer.Add(2)) || lyrVerified.Add(2).Before(lyrReceived) {
+			if !lyrVerified.After(lastVerifiedLayer.Add(2)) || lyrVerified.Add(2).Before(lyrProcessed) {
 				return false
 			}
 		}
