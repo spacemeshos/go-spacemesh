@@ -11,6 +11,7 @@ import (
 
 	"github.com/ALTree/bigfloat"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -821,7 +822,7 @@ func (tb *TortoiseBeacon) getSignedProposal(epoch types.EpochID) ([]byte, error)
 	signature := tb.vrfSigner.Sign(p)
 	tb.Log.With().Debug("Calculated signature",
 		log.Uint32("epoch_id", uint32(epoch)),
-		log.String("proposal", string(p)),
+		log.String("proposal", util.Bytes2Hex(p)),
 		log.String("signature", string(signature)))
 
 	return signature, nil

@@ -46,7 +46,6 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 	var message ProposalMessage
 	if err := types.BytesToInterface(data.Bytes(), &message); err != nil {
 		tb.Log.With().Error("Received malformed proposal message",
-			log.String("message", string(data.Bytes())),
 			log.Err(err))
 
 		return
