@@ -360,7 +360,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	require.NoError(t, instance.StartRound(context.TODO(), round))
 
 	require.Equal(t,
-		"a1f2c99f9210b15b66197fbc6f0dd5a93bfb08da63eae81b84d550cf5a6daf7e0c8e79fe3fefeac839bdce2de4f3cc3d420a8f43a9275bfed0221e99e3a4b204",
+		"a1f2c99f9210b15b66197fbc6f0dd5a93bfb08da63eae81b84d550cf5a6daf7ecbe5047918a72c7dee9df299027b40b077fae1a208fbfbf3ad0a0074db72100f",
 		util.Bytes2Hex(sig))
 }
 
