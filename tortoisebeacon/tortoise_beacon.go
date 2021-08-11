@@ -335,7 +335,7 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 	tb.Log.With().Debug("tortoise beacon got tick, waiting until other nodes have the same epoch",
 		log.Uint32("layer", layer.Uint32()),
 		log.Uint32("epoch_id", uint32(epoch)),
-		log.String("wait_time", tb.config.WaitAfterEpochStart.String()))
+		log.Duration("wait_time", tb.config.WaitAfterEpochStart))
 
 	epochStartTimer := time.NewTimer(tb.config.WaitAfterEpochStart)
 	defer epochStartTimer.Stop()
