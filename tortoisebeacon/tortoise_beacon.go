@@ -148,7 +148,6 @@ type TortoiseBeacon struct {
 	votesMargin map[proposal]*big.Int
 	hasVoted    []map[nodeID]struct{}
 
-	ownLastRoundVotes           votesSetPair
 	proposalPhaseFinishedTimeMu sync.RWMutex
 	proposalPhaseFinishedTime   time.Time
 
