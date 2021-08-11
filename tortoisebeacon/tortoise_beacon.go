@@ -57,7 +57,7 @@ type coin interface {
 }
 
 type (
-	nodeID    = string // TODO(nkryuchkov): change to *signing.PublicKey and remove
+	nodeID    = string
 	proposal  = string
 	proposals = struct{ valid, potentiallyValid [][]byte }
 	allVotes  = struct{ valid, invalid proposalSet }
