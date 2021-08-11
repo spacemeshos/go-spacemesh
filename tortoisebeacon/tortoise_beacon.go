@@ -56,13 +56,11 @@ type coin interface {
 }
 
 type (
-	nodeID    = string
-	proposal  = string
-	hashSet   = map[proposal]struct{}
-	proposals = struct {
-		ValidProposals            proposalList
-		PotentiallyValidProposals proposalList
-	}
+	nodeID         = string
+	proposal       = string
+	hashSet        = map[proposal]struct{}
+	proposalsBytes = struct{ ValidProposals, PotentiallyValidProposals [][]byte } // TODO: remove this or below
+	proposals      = struct{ ValidProposals, PotentiallyValidProposals proposalList }
 	ownVotes       = map[types.EpochID]map[types.RoundID]votesSetPair
 	votesMarginMap = map[proposal]int
 )
@@ -106,10 +104,12 @@ func New(
 		ownVotes:                        make(ownVotes),
 		beacons:                         make(map[types.EpochID]types.Hash32),
 		proposalPhaseFinishedTimestamps: make(map[types.EpochID]time.Time),
+		hasVoted:                        make([]map[nodeID]struct{}, conf.RoundsNumber),
 		incomingVotes:                   make([]map[nodeID]votesSetPair, conf.RoundsNumber),
-		firstRoundIncomingVotes:         make(map[nodeID]proposals),
+		firstRoundIncomingVotes:         make(map[nodeID]proposalsBytes),
 		seenEpochs:                      make(map[types.EpochID]struct{}),
 		proposalChans:                   make(map[types.EpochID]chan *proposalMessageWithReceiptData),
+		votesMargin:                     map[proposal]int{},
 	}
 }
 
@@ -145,8 +145,11 @@ type TortoiseBeacon struct {
 
 	// TODO: have a mixed list of all sorted proposals
 	// have one bit vector: valid proposals
-	incomingProposals                 proposals
-	firstRoundIncomingVotes           map[nodeID]proposals // sorted votes for bit vector decoding
+	incomingProposals       proposals
+	firstRoundIncomingVotes map[nodeID]proposalsBytes // sorted votes for bit vector decoding
+	votesMargin             map[proposal]int
+	hasVoted                []map[nodeID]struct{}
+
 	incomingVotes                     []map[nodeID]votesSetPair
 	ownVotes                          ownVotes
 	proposalPhaseFinishedTimestampsMu sync.RWMutex
@@ -265,7 +268,9 @@ func (tb *TortoiseBeacon) cleanupVotes(epoch types.EpochID) {
 
 	tb.incomingProposals = proposals{}
 	tb.incomingVotes = make([]map[nodeID]votesSetPair, tb.config.RoundsNumber)
-	tb.firstRoundIncomingVotes = map[nodeID]proposals{}
+	tb.firstRoundIncomingVotes = map[nodeID]proposalsBytes{}
+	tb.votesMargin = map[proposal]int{}
+	tb.hasVoted = []map[nodeID]struct{}{}
 
 	delete(tb.proposalPhaseFinishedTimestamps, epoch)
 	delete(tb.ownVotes, epoch)

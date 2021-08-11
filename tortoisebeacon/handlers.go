@@ -281,6 +281,11 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 		return nil
 	}
 
+	voteWeight, err := tb.voteWeight(minerID.Key, currentEpoch)
+	if err != nil {
+		return fmt.Errorf("get vote weight for epoch %v (miner ID %v): %w", currentEpoch, minerID.Key, err)
+	}
+
 	tb.Log.With().Debug("Received first round voting message, counting it",
 		log.String("message", message.String()))
 
@@ -289,13 +294,13 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 	tb.votesMu.Lock()
 	defer tb.votesMu.Unlock()
 
-	if tb.incomingVotes[currentRound-firstRound] == nil {
-		tb.incomingVotes[currentRound-firstRound] = make(map[nodeID]votesSetPair)
+	if tb.hasVoted[currentRound-firstRound] == nil {
+		tb.hasVoted[currentRound-firstRound] = make(map[nodeID]struct{})
 	}
 
 	// TODO: no need to store each vote separately
 	// have a separate table for an epoch with one bit in it if atx/miner is voted already
-	if _, ok := tb.incomingVotes[currentRound-firstRound][minerID.Key]; ok {
+	if _, ok := tb.hasVoted[currentRound-firstRound][minerID.Key]; ok {
 		tb.Log.With().Warning("Received malformed first voting message, already received a voting message for these PK and round",
 			log.String("miner_id", minerID.Key),
 			log.Uint32("epoch_id", uint32(currentEpoch)),
@@ -316,33 +321,26 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 		log.Uint32("epoch_id", uint32(currentEpoch)),
 		log.Uint32("round_id", uint32(currentRound)))
 
-	validVotesMap := make(hashSet)
-	invalidVotesMap := make(hashSet)
-	validVotesList := make([]proposal, 0)
-	potentiallyValidVotesList := make([]proposal, 0)
-
 	for _, vote := range message.ValidProposals {
-		validVotesMap[string(vote)] = struct{}{}
-
-		validVotesList = append(validVotesList, string(vote))
+		// TODO(nkryuchkov): handle overflow
+		tb.votesMargin[string(vote)] += int(voteWeight)
 	}
 
 	for _, vote := range message.PotentiallyValidProposals {
-		invalidVotesMap[string(vote)] = struct{}{}
-
-		potentiallyValidVotesList = append(potentiallyValidVotesList, string(vote))
+		// TODO(nkryuchkov): handle negative overflow
+		tb.votesMargin[string(vote)] -= int(voteWeight)
 	}
 
-	tb.incomingVotes[currentRound-firstRound][minerID.Key] = votesSetPair{
-		ValidVotes:   validVotesMap,
-		InvalidVotes: invalidVotesMap,
-	}
+	//tb.incomingVotes[currentRound-firstRound][minerID.Key] = votesSetPair{
+	//	ValidVotes:   validVotesMap,
+	//	InvalidVotes: invalidVotesMap,
+	//}
 
 	// this is used for bit vector calculation
 	// TODO: store sorted mixed valid+potentiallyValid
-	tb.firstRoundIncomingVotes[minerID.Key] = proposals{
-		ValidProposals:            validVotesList,
-		PotentiallyValidProposals: potentiallyValidVotesList,
+	tb.firstRoundIncomingVotes[minerID.Key] = proposalsBytes{
+		ValidProposals:            message.ValidProposals,
+		PotentiallyValidProposals: message.PotentiallyValidProposals,
 	}
 
 	return nil

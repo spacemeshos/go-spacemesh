@@ -55,6 +55,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 		name          string
 		epoch         types.EpochID
 		round         types.RoundID
+		votesMargin   votesMarginMap
 		incomingVotes []map[nodeID]votesSetPair
 		expected      votesSetPair
 	}{
@@ -62,28 +63,15 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 			name:  "Case 1",
 			epoch: epoch,
 			round: round,
+			votesMargin: map[proposal]int{
+				"0x1": 2,
+				"0x2": 1,
+				"0x3": -1,
+				"0x4": 1,
+				"0x5": 1,
+				"0x6": -1,
+			},
 			incomingVotes: []map[nodeID]votesSetPair{
-				firstRound: {
-					pk1.String(): votesSetPair{
-						ValidVotes: hashSet{
-							"0x1": {},
-							"0x2": {},
-						},
-						InvalidVotes: hashSet{
-							"0x3": {},
-						},
-					},
-					pk2.String(): votesSetPair{
-						ValidVotes: hashSet{
-							"0x1": {},
-							"0x4": {},
-							"0x5": {},
-						},
-						InvalidVotes: hashSet{
-							"0x6": {},
-						},
-					},
-				},
 				firstRound + 1: {
 					pk1.String(): votesSetPair{
 						ValidVotes: hashSet{
@@ -141,6 +129,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 				incomingVotes: tc.incomingVotes,
 				ownVotes:      map[types.EpochID]map[types.RoundID]votesSetPair{},
 				atxDB:         mockDB,
+				votesMargin:   tc.votesMargin,
 			}
 
 			result, err := tb.calcVotes(tc.epoch, tc.round, false)
@@ -150,139 +139,38 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 	}
 }
 
-func TestTortoiseBeacon_firstRoundVotes(t *testing.T) {
-	t.Parallel()
-
-	r := require.New(t)
-
-	_, pk1, err := p2pcrypto.GenerateKeyPair()
-	r.NoError(err)
-
-	_, pk2, err := p2pcrypto.GenerateKeyPair()
-	r.NoError(err)
-
-	const epoch = 5
-	const round = 3
-
-	tt := []struct {
-		name          string
-		epoch         types.EpochID
-		upToRound     types.RoundID
-		incomingVotes []map[nodeID]votesSetPair
-		votesCount    votesMarginMap
-	}{
-		{
-			name:      "Case 1",
-			epoch:     epoch,
-			upToRound: round,
-			incomingVotes: []map[nodeID]votesSetPair{
-				firstRound: {
-					pk1.String(): votesSetPair{
-						ValidVotes: hashSet{
-							"0x1": {},
-							"0x2": {},
-						},
-						InvalidVotes: hashSet{
-							"0x3": {},
-							"0x5": {},
-							"0x6": {},
-						},
-					},
-					pk2.String(): votesSetPair{
-						ValidVotes: hashSet{
-							"0x1": {},
-							"0x4": {},
-							"0x5": {},
-						},
-						InvalidVotes: hashSet{
-							"0x6": {},
-						},
-					},
-				},
-			},
-			votesCount: votesMarginMap{
-				"0x1": 2,
-				"0x2": 1,
-				"0x3": -1,
-				"0x4": 1,
-				"0x5": 0,
-				"0x6": -2,
-			},
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			tb := TortoiseBeacon{
-				Log:           logtest.New(t).WithName("TortoiseBeacon"),
-				incomingVotes: tc.incomingVotes,
-			}
-
-			votesMargin, err := tb.firstRoundVotes(tc.epoch)
-			r.NoError(err)
-			r.EqualValues(tc.votesCount, votesMargin)
-		})
-	}
-}
-
 func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
 
-	_, pk1, err := p2pcrypto.GenerateKeyPair()
-	r.NoError(err)
-
-	_, pk2, err := p2pcrypto.GenerateKeyPair()
-	r.NoError(err)
-
 	const threshold = 2
+	const epoch = 5
+	const round = 3
 
 	mockDB := &mockActivationDB{}
 	mockDB.On("GetEpochWeight",
 		mock.AnythingOfType("types.EpochID")).
 		Return(uint64(threshold), nil, nil)
 
-	const epoch = 5
-	const round = 3
-
 	tt := []struct {
-		name          string
-		epoch         types.EpochID
-		upToRound     types.RoundID
-		incomingVotes []map[nodeID]votesSetPair
-		result        votesSetPair
+		name        string
+		epoch       types.EpochID
+		upToRound   types.RoundID
+		votesMargin votesMarginMap
+		result      votesSetPair
 	}{
 		{
 			name:      "Weak Coin is false",
 			epoch:     epoch,
 			upToRound: round,
-			incomingVotes: []map[nodeID]votesSetPair{
-				firstRound: {
-					pk1.String(): votesSetPair{
-						ValidVotes: hashSet{
-							"0x1": {},
-							"0x2": {},
-						},
-						InvalidVotes: hashSet{
-							"0x3": {},
-							"0x6": {},
-						},
-					},
-					pk2.String(): votesSetPair{
-						ValidVotes: hashSet{
-							"0x1": {},
-							"0x4": {},
-							"0x5": {},
-						},
-						InvalidVotes: hashSet{
-							"0x6": {},
-						},
-					},
-				},
+			votesMargin: map[proposal]int{
+				"0x1": 2,
+				"0x2": 1,
+				"0x3": -1,
+				"0x4": 1,
+				"0x5": 1,
+				"0x6": -2,
 			},
 			result: votesSetPair{
 				ValidVotes: hashSet{
@@ -308,16 +196,13 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 				config: Config{
 					Theta: big.NewRat(1, 1),
 				},
-				Log:           logtest.New(t).WithName("TortoiseBeacon"),
-				incomingVotes: tc.incomingVotes,
-				ownVotes:      map[types.EpochID]map[types.RoundID]votesSetPair{},
-				atxDB:         mockDB,
+				Log:         logtest.New(t).WithName("TortoiseBeacon"),
+				votesMargin: tc.votesMargin,
+				ownVotes:    map[types.EpochID]map[types.RoundID]votesSetPair{},
+				atxDB:       mockDB,
 			}
 
-			votesMargin, err := tb.firstRoundVotes(tc.epoch)
-			r.NoError(err)
-
-			result, err := tb.calcOwnFirstRoundVotes(tc.epoch, votesMargin)
+			result, err := tb.calcOwnFirstRoundVotes(tc.epoch)
 			r.NoError(err)
 			r.EqualValues(tc.result, result)
 		})
@@ -342,6 +227,7 @@ func TestTortoiseBeacon_calcVotesMargin(t *testing.T) {
 		name          string
 		epoch         types.EpochID
 		upToRound     types.RoundID
+		votesMargin   votesMarginMap
 		incomingVotes []map[nodeID]votesSetPair
 		result        votesMarginMap
 	}{
@@ -349,28 +235,15 @@ func TestTortoiseBeacon_calcVotesMargin(t *testing.T) {
 			name:      "Case 1",
 			epoch:     epoch,
 			upToRound: round,
+			votesMargin: map[proposal]int{
+				"0x1": 2,
+				"0x2": 1,
+				"0x3": -1,
+				"0x4": 1,
+				"0x5": 1,
+				"0x6": -1,
+			},
 			incomingVotes: []map[nodeID]votesSetPair{
-				firstRound: {
-					pk1.String(): votesSetPair{
-						ValidVotes: hashSet{
-							"0x1": {},
-							"0x2": {},
-						},
-						InvalidVotes: hashSet{
-							"0x3": {},
-						},
-					},
-					pk2.String(): votesSetPair{
-						ValidVotes: hashSet{
-							"0x1": {},
-							"0x4": {},
-							"0x5": {},
-						},
-						InvalidVotes: hashSet{
-							"0x6": {},
-						},
-					},
-				},
 				firstRound + 1: {
 					pk1.String(): votesSetPair{
 						ValidVotes: hashSet{
@@ -418,15 +291,13 @@ func TestTortoiseBeacon_calcVotesMargin(t *testing.T) {
 
 			tb := TortoiseBeacon{
 				Log:           logtest.New(t).WithName("TortoiseBeacon"),
+				votesMargin:   tc.votesMargin,
 				incomingVotes: tc.incomingVotes,
 			}
 
-			votesMargin, err := tb.firstRoundVotes(tc.epoch)
+			err := tb.calcVotesMargin(tc.epoch, tc.upToRound)
 			r.NoError(err)
-
-			err = tb.calcVotesMargin(tc.epoch, tc.upToRound, votesMargin)
-			r.NoError(err)
-			r.EqualValues(tc.result, votesMargin)
+			r.EqualValues(tc.result, tb.votesMargin)
 		})
 	}
 }
@@ -512,12 +383,13 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 				config: Config{
 					Theta: big.NewRat(1, 1),
 				},
-				Log:      logtest.New(t).WithName("TortoiseBeacon"),
-				ownVotes: map[types.EpochID]map[types.RoundID]votesSetPair{},
-				atxDB:    mockDB,
+				Log:         logtest.New(t).WithName("TortoiseBeacon"),
+				ownVotes:    map[types.EpochID]map[types.RoundID]votesSetPair{},
+				atxDB:       mockDB,
+				votesMargin: tc.votesCount,
 			}
 
-			result, err := tb.calcOwnCurrentRoundVotes(tc.epoch, tc.round, tc.votesCount, tc.weakCoin)
+			result, err := tb.calcOwnCurrentRoundVotes(tc.epoch, tc.round, tc.weakCoin)
 			r.NoError(err)
 			r.EqualValues(tc.result, result)
 		})

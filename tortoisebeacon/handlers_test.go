@@ -163,7 +163,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 		currentRounds map[types.EpochID]types.RoundID
 		from          string
 		message       FirstVotingMessage
-		expected      []map[nodeID]votesSetPair
+		expected      map[nodeID]proposalsBytes
 	}{
 		{
 			name:  "Current round and message round equal",
@@ -179,12 +179,9 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 					PotentiallyValidProposals: nil,
 				},
 			},
-			expected: []map[nodeID]votesSetPair{
-				round: {
-					minerID.Key: votesSetPair{
-						ValidVotes:   hashSet{string(hash[:]): {}},
-						InvalidVotes: hashSet{},
-					},
+			expected: map[nodeID]proposalsBytes{
+				minerID.Key: {
+					ValidProposals: [][]byte{hash.Bytes()},
 				},
 			},
 		},
@@ -202,12 +199,9 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 					PotentiallyValidProposals: nil,
 				},
 			},
-			expected: []map[nodeID]votesSetPair{
-				round: {
-					minerID.Key: votesSetPair{
-						ValidVotes:   hashSet{string(hash[:]): {}},
-						InvalidVotes: hashSet{},
-					},
+			expected: map[nodeID]proposalsBytes{
+				minerID.Key: {
+					ValidProposals: [][]byte{hash.Bytes()},
 				},
 			},
 		},
@@ -226,7 +220,9 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 				edSigner:                edSgn,
 				clock:                   clock,
 				incomingVotes:           make([]map[nodeID]votesSetPair, round+1),
-				firstRoundIncomingVotes: map[nodeID]proposals{},
+				firstRoundIncomingVotes: map[nodeID]proposalsBytes{},
+				votesMargin:             map[proposal]int{},
+				hasVoted:                make([]map[nodeID]struct{}, round+1),
 			}
 
 			sig, err := tb.signMessage(tc.message.FirstVotingMessageBody)
@@ -236,7 +232,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 			err = tb.handleFirstVotingMessage(tc.message)
 			r.NoError(err)
 
-			r.EqualValues(tc.expected, tb.incomingVotes)
+			r.EqualValues(tc.expected, tb.firstRoundIncomingVotes)
 		})
 	}
 }
@@ -313,8 +309,8 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 			expected: []map[nodeID]votesSetPair{
 				round: {
 					minerID.Key: votesSetPair{
-						ValidVotes:   hashSet{hash1.String(): {}, hash3.String(): {}},
-						InvalidVotes: hashSet{hash2.String(): {}},
+						ValidVotes:   hashSet{string(hash1.Bytes()): {}, string(hash3.Bytes()): {}},
+						InvalidVotes: hashSet{string(hash2.Bytes()): {}},
 					},
 				},
 			},
@@ -336,8 +332,8 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 			expected: []map[nodeID]votesSetPair{
 				round: {
 					minerID.Key: votesSetPair{
-						ValidVotes:   hashSet{hash1.String(): {}, hash3.String(): {}},
-						InvalidVotes: hashSet{hash2.String(): {}},
+						ValidVotes:   hashSet{string(hash1.Bytes()): {}, string(hash3.Bytes()): {}},
+						InvalidVotes: hashSet{string(hash2.Bytes()): {}},
 					},
 				},
 			},
@@ -359,10 +355,10 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 				vrfSigner:   vrfSigner,
 				edSigner:    edSgn,
 				clock:       clock,
-				firstRoundIncomingVotes: map[nodeID]proposals{
+				firstRoundIncomingVotes: map[nodeID]proposalsBytes{
 					minerID.Key: {
-						ValidProposals:            []proposal{hash1.String(), hash2.String()},
-						PotentiallyValidProposals: []proposal{hash3.String()},
+						ValidProposals:            [][]byte{hash1.Bytes(), hash2.Bytes()},
+						PotentiallyValidProposals: [][]byte{hash3.Bytes()},
 					},
 				},
 				lastLayer:     types.NewLayerID(epoch),

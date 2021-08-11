@@ -3,6 +3,7 @@ package tortoisebeacon
 import (
 	"testing"
 
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/stretchr/testify/require"
 )
@@ -14,28 +15,38 @@ func TestTortoiseBeacon_encodeVotes(t *testing.T) {
 
 	tt := []struct {
 		name         string
-		firstRound   proposals
+		proposals    proposals
+		firstRound   proposalsBytes
 		currentRound votesSetPair
 		result       []uint64
 	}{
 		{
 			name: "Case 1",
-			firstRound: proposals{
+			proposals: proposals{
 				ValidProposals: []proposal{
-					"0x1",
-					"0x2",
+					string(util.Hex2Bytes("11")),
+					string(util.Hex2Bytes("22")),
 				},
 				PotentiallyValidProposals: []proposal{
-					"0x3",
+					string(util.Hex2Bytes("33")),
+				},
+			},
+			firstRound: proposalsBytes{
+				ValidProposals: [][]byte{
+					util.Hex2Bytes("11"),
+					util.Hex2Bytes("22"),
+				},
+				PotentiallyValidProposals: [][]byte{
+					util.Hex2Bytes("33"),
 				},
 			},
 			currentRound: votesSetPair{
 				ValidVotes: hashSet{
-					"0x1": {},
-					"0x3": {},
+					string(util.Hex2Bytes("11")): {},
+					string(util.Hex2Bytes("33")): {},
 				},
 				InvalidVotes: hashSet{
-					"0x2": {},
+					string(util.Hex2Bytes("22")): {},
 				},
 			},
 
@@ -55,7 +66,7 @@ func TestTortoiseBeacon_encodeVotes(t *testing.T) {
 				Log: logtest.New(t).WithName("TortoiseBeacon"),
 			}
 
-			result := tb.encodeVotes(tc.currentRound, tc.firstRound)
+			result := tb.encodeVotes(tc.currentRound, tc.proposals)
 			r.EqualValues(tc.result, result)
 
 			original := tb.decodeVotes(result, tc.firstRound)
