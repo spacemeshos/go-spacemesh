@@ -763,18 +763,12 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 }
 
 func (tb *TortoiseBeacon) voteWeight(pk nodeID, epochID types.EpochID) (uint64, error) {
-	// TODO(nkryuchkov): enable
-	enabled := false
-	if !enabled {
-		return 1, nil
-	}
-
-	nodeID := types.NodeID{
+	id := types.NodeID{
 		Key:          pk,
 		VRFPublicKey: nil,
 	}
 
-	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(nodeID, epochID-1)
+	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(id, epochID-1)
 	if err != nil {
 		return 0, fmt.Errorf("atx ID for epoch: %w", err)
 	}
