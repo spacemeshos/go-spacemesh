@@ -290,8 +290,8 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 
 	currentRound := firstRound
 
-	tb.votesMu.Lock()
-	defer tb.votesMu.Unlock()
+	tb.consensusMu.Lock()
+	defer tb.consensusMu.Unlock()
 
 	if tb.hasVoted[currentRound-firstRound] == nil {
 		tb.hasVoted[currentRound-firstRound] = make(map[nodeID]struct{})
@@ -415,8 +415,8 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 		return fmt.Errorf("get vote weight for epoch %v (miner ID %v): %w", currentEpoch, minerID.Key, err)
 	}
 
-	tb.votesMu.Lock()
-	defer tb.votesMu.Unlock()
+	tb.consensusMu.Lock()
+	defer tb.consensusMu.Unlock()
 
 	if tb.hasVoted[messageRound-firstRound] == nil {
 		tb.hasVoted[messageRound-firstRound] = make(map[nodeID]struct{})

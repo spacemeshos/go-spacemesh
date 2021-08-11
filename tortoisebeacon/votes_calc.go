@@ -9,8 +9,8 @@ import (
 )
 
 func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID, coinFlip bool) (votesSetPair, error) {
-	tb.votesMu.Lock()
-	defer tb.votesMu.Unlock()
+	tb.consensusMu.Lock()
+	defer tb.consensusMu.Unlock()
 
 	tb.Log.With().Debug("Calculating votes",
 		log.Uint32("epoch_id", uint32(epoch)),

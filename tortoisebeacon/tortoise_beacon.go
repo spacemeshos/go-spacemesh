@@ -138,8 +138,7 @@ type TortoiseBeacon struct {
 	layerMu     sync.RWMutex
 	lastLayer   types.LayerID
 
-	votesMu sync.RWMutex
-
+	consensusMu sync.RWMutex
 	// TODO(nkryuchkov): have a mixed list of all sorted proposals
 	// have one bit vector: valid proposals
 	incomingProposals       proposals
@@ -258,14 +257,18 @@ func (tb *TortoiseBeacon) cleanupBeacons(epoch types.EpochID) {
 	delete(tb.beacons, epoch)
 }
 
-func (tb *TortoiseBeacon) cleanupVotes(epoch types.EpochID) {
-	tb.votesMu.Lock()
-	defer tb.votesMu.Unlock()
+func (tb *TortoiseBeacon) cleanupVotes() {
+	tb.consensusMu.Lock()
+	defer tb.consensusMu.Unlock()
 
 	tb.incomingProposals = proposals{}
 	tb.firstRoundIncomingVotes = map[nodeID]proposalsBytes{}
 	tb.votesMargin = map[proposal]*big.Int{}
 	tb.hasVoted = make([]map[nodeID]struct{}, tb.lastRound())
+
+	tb.proposalPhaseFinishedTimeMu.Lock()
+	defer tb.proposalPhaseFinishedTimeMu.Unlock()
+
 	tb.proposalPhaseFinishedTime = time.Time{}
 }
 
@@ -354,7 +357,7 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	tb.Log.With().Info("Handling epoch",
 		log.Uint32("epoch_id", uint32(epoch)))
 
-	defer tb.cleanupVotes(epoch)
+	defer tb.cleanupVotes()
 
 	tb.proposalChansMu.Lock()
 	if epoch > 0 {
@@ -515,6 +518,9 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 		log.Uint32("epoch_id", uint32(epoch)),
 		log.String("message", m.String()))
 
+	tb.consensusMu.Lock()
+	defer tb.consensusMu.Unlock()
+
 	tb.incomingProposals.ValidProposals = append(tb.incomingProposals.ValidProposals, string(proposedSignature))
 
 	return nil
@@ -549,8 +555,9 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	defer ticker.Stop()
 
 	var (
-		coinFlip          bool
-		ownLastRoundVotes votesSetPair
+		coinFlip            uint64
+		ownLastRoundVotesMu sync.RWMutex
+		ownLastRoundVotes   votesSetPair
 	)
 
 	for round := firstRound; round <= tb.lastRound(); round++ {
@@ -573,7 +580,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 
 			// next rounds, send vote
 			// construct a message that points to all messages from previous round received by δ
-			ownCurrentRoundVotes, err := tb.calcVotes(epoch, round, coinFlip)
+			ownCurrentRoundVotes, err := tb.calcVotes(epoch, round, atomic.LoadUint64(&coinFlip) != 0)
 			if err != nil {
 				tb.Log.With().Error("Failed to calculate votes",
 					log.Uint32("epoch_id", uint32(epoch)),
@@ -584,7 +591,9 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 			}
 
 			if round == tb.lastRound() {
+				ownLastRoundVotesMu.Lock()
 				ownLastRoundVotes = ownCurrentRoundVotes
+				ownLastRoundVotesMu.Unlock()
 			}
 
 			if err := tb.sendFollowingVote(ctx, epoch, round, ownCurrentRoundVotes); err != nil {
@@ -608,12 +617,22 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		case <-ctx.Done():
 			return votesSetPair{}
 		}
+
 		tb.weakCoin.FinishRound()
-		coinFlip = tb.weakCoin.Get(epoch, round)
+
+		cf := tb.weakCoin.Get(epoch, round)
+		if cf {
+			atomic.StoreUint64(&coinFlip, 1)
+		} else {
+			atomic.StoreUint64(&coinFlip, 0)
+		}
 	}
 
 	tb.Log.With().Debug("Consensus phase finished",
 		log.Uint32("epoch_id", uint32(epoch)))
+
+	ownLastRoundVotesMu.RLock()
+	defer ownLastRoundVotesMu.RUnlock()
 
 	return ownLastRoundVotes
 }
@@ -711,7 +730,9 @@ func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 }
 
 func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes votesSetPair) error {
+	tb.consensusMu.RLock()
 	bitVector := tb.encodeVotes(ownCurrentRoundVotes, tb.incomingProposals)
+	tb.consensusMu.RUnlock()
 
 	mb := FollowingVotingMessageBody{
 		MinerID:        tb.minerID,
