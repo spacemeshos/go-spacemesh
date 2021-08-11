@@ -167,7 +167,7 @@ func (t *turtle) cloneTurtle() *turtle {
 
 func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	// Mark the genesis layer as “good”
-	t.logger.WithContext(ctx).With().Debug("initializing genesis layer for verifying tortoise",
+	t.logger.WithContext(ctx).With().Info("initializing genesis layer for verifying tortoise",
 		genesisLayer.Index(),
 		genesisLayer.Hash().Field())
 	t.BlockOpinionsByLayer[genesisLayer.Index()] = make(map[types.BlockID]Opinion)
@@ -346,30 +346,25 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 	// TODO: optimize by, e.g., trying to minimize the size of the exception list (rather than first match)
 	// see https://github.com/spacemeshos/go-spacemesh/issues/2402
 	for layerID := t.Last; layerID.After(t.LastEvicted); layerID = layerID.Sub(1) {
+		logger := logger.WithFields(
+			log.FieldNamed("last_layer", t.Last),
+			log.FieldNamed("last_evicted", t.LastEvicted),
+			log.FieldNamed("base_block_candidate_layer", layerID))
 		for blockID, opinion := range t.BlockOpinionsByLayer[layerID] {
 			if _, ok := t.GoodBlocksIndex[blockID]; !ok {
-				logger.With().Debug("not considering block not marked good as base block candidate",
-					log.FieldNamed("last_layer", t.Last),
-					layerID,
-					blockID)
+				logger.With().Info("not considering block not marked good as base block candidate", blockID)
 				continue
 			}
 
 			// Calculate the set of exceptions between the base block opinion and latest local opinion
-			logger.With().Debug("found candidate base block", blockID, layerID)
+			logger.With().Debug("found candidate base block", blockID)
 			exceptionVectorMap, err := t.calculateExceptions(ctx, layerID, opinion)
 			if err != nil {
-				logger.With().Warning("error calculating vote exceptions for block",
-					log.FieldNamed("last_layer", t.Last),
-					layerID,
-					blockID,
-					log.Err(err))
+				logger.With().Warning("error calculating vote exceptions for block", blockID, log.Err(err))
 				continue
 			}
 
 			logger.With().Info("chose base block",
-				log.FieldNamed("last_layer", t.Last),
-				log.FieldNamed("base_block_layer", layerID),
 				blockID,
 				log.Int("against_count", len(exceptionVectorMap[0])),
 				log.Int("support_count", len(exceptionVectorMap[1])),
@@ -391,10 +386,10 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 // opinion
 func (t *turtle) calculateExceptions(
 	ctx context.Context,
-	blockLayerID types.LayerID,
+	baseBlockLayerID types.LayerID,
 	baseBlockOpinion Opinion, // candidate base block's opinion vector
 ) ([]map[types.BlockID]struct{}, error) {
-	logger := t.logger.WithContext(ctx).WithFields(log.FieldNamed("base_block_layer_id", blockLayerID))
+	logger := t.logger.WithContext(ctx).WithFields(log.FieldNamed("base_block_layer_id", baseBlockLayerID))
 
 	// using maps prevents duplicates
 	againstDiff := make(map[types.BlockID]struct{})
@@ -402,7 +397,7 @@ func (t *turtle) calculateExceptions(
 	neutralDiff := make(map[types.BlockID]struct{})
 
 	// we support all genesis blocks by default
-	if blockLayerID == types.GetEffectiveGenesis() {
+	if baseBlockLayerID == types.GetEffectiveGenesis() {
 		for _, i := range types.BlockIDs(mesh.GenesisLayer().Blocks()) {
 			forDiff[i] = struct{}{}
 		}
@@ -573,7 +568,9 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 		return errBaseBlockNotInDatabase
 	}
 
-	logger.With().Debug("block supports", types.BlockIdsField(block.BlockHeader.ForDiff))
+	logger.With().Debug("block adds support for",
+		log.Int("count", len(block.BlockHeader.ForDiff)),
+		types.BlockIdsField(block.BlockHeader.ForDiff))
 	logger.With().Debug("checking base block", baseBlock.Fields()...)
 
 	layerOpinions, ok := t.BlockOpinionsByLayer[baseBlock.LayerIndex]
@@ -636,7 +633,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 			continue
 		}
 
-		// add base block vote only if there were no exceptions
+		// add base block vote only if there weren't already exceptions support/against/abstain for this block
 		if _, exists := opinion[blk]; !exists {
 			opinion[blk] = vote
 		}
