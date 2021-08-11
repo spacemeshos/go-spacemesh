@@ -63,7 +63,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 			round: round,
 			incomingVotes: map[types.EpochID]map[types.RoundID]votesPerPK{
 				epoch: {
-					1: {
+					firstRound: {
 						pk1.String(): votesSetPair{
 							ValidVotes: hashSet{
 								"0x1": {},
@@ -84,7 +84,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 							},
 						},
 					},
-					2: {
+					firstRound + 1: {
 						pk1.String(): votesSetPair{
 							ValidVotes: hashSet{
 								"0x3": {},
@@ -98,7 +98,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 							InvalidVotes: hashSet{},
 						},
 					},
-					3: {
+					firstRound + 2: {
 						pk1.String(): votesSetPair{
 							ValidVotes:   hashSet{},
 							InvalidVotes: hashSet{},
@@ -178,7 +178,7 @@ func TestTortoiseBeacon_firstRoundVotes(t *testing.T) {
 			upToRound: round,
 			incomingVotes: map[types.EpochID]map[types.RoundID]votesPerPK{
 				epoch: {
-					1: {
+					firstRound: {
 						pk1.String(): votesSetPair{
 							ValidVotes: hashSet{
 								"0x1": {},
@@ -265,7 +265,7 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 			upToRound: round,
 			incomingVotes: map[types.EpochID]map[types.RoundID]votesPerPK{
 				epoch: {
-					1: {
+					firstRound: {
 						pk1.String(): votesSetPair{
 							ValidVotes: hashSet{
 								"0x1": {},
@@ -356,7 +356,7 @@ func TestTortoiseBeacon_calcVotesMargin(t *testing.T) {
 			upToRound: round,
 			incomingVotes: map[types.EpochID]map[types.RoundID]votesPerPK{
 				epoch: {
-					1: {
+					firstRound: {
 						pk1.String(): votesSetPair{
 							ValidVotes: hashSet{
 								"0x1": {},
@@ -377,7 +377,7 @@ func TestTortoiseBeacon_calcVotesMargin(t *testing.T) {
 							},
 						},
 					},
-					2: {
+					firstRound + 1: {
 						pk1.String(): votesSetPair{
 							ValidVotes: hashSet{
 								"0x3": {},
@@ -391,7 +391,7 @@ func TestTortoiseBeacon_calcVotesMargin(t *testing.T) {
 							InvalidVotes: hashSet{},
 						},
 					},
-					3: {
+					firstRound + 2: {
 						pk1.String(): votesSetPair{
 							ValidVotes:   hashSet{},
 							InvalidVotes: hashSet{},

@@ -152,7 +152,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 
 	const (
 		epoch = 0
-		round = 1
+		round = 0
 	)
 
 	types.SetLayersPerEpoch(1)

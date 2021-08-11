@@ -23,7 +23,7 @@ import (
 const (
 	protoName            = "TORTOISE_BEACON_PROTOCOL"
 	proposalPrefix       = "TBP"
-	firstRound           = types.RoundID(1)
+	firstRound           = types.RoundID(0)
 	genesisBeacon        = "0xaeebad4a796fcc2e15dc4c6061b45ed9b373f26adfc798ca7d2d8cc58182718e" // sha256("genesis")
 	proposalChanCapacity = 1024
 )

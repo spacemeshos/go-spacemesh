@@ -58,7 +58,7 @@ func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID, co
 
 func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) (votesMarginMap, error) {
 	// protected by tb.votesMu
-	firstRoundIncomingVotes := tb.incomingVotes[epoch][1]
+	firstRoundIncomingVotes := tb.incomingVotes[epoch][firstRound]
 
 	tb.Log.With().Debug("First round incoming votes",
 		log.Uint64("epoch_id", uint64(epoch)),
@@ -124,14 +124,14 @@ func (tb *TortoiseBeacon) calcOwnFirstRoundVotes(epoch types.EpochID, votesMargi
 		tb.ownVotes[epoch] = make(map[types.RoundID]votesSetPair)
 	}
 
-	tb.ownVotes[epoch][1] = ownFirstRoundsVotes
+	tb.ownVotes[epoch][firstRound] = ownFirstRoundsVotes
 
 	return ownFirstRoundsVotes, nil
 }
 
 // TODO: Same calculation, do incremental part on receiving (vector of margins).
 func (tb *TortoiseBeacon) calcVotesMargin(epoch types.EpochID, upToRound types.RoundID, votesMargin votesMarginMap) error {
-	for round := firstRound + 1; round <= upToRound; round++ {
+	for round := firstRound + 1; round < upToRound; round++ {
 		thisRoundVotes := tb.incomingVotes[epoch][round]
 
 		for pk, votesList := range thisRoundVotes {
