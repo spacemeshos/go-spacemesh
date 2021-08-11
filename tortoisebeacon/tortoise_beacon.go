@@ -538,21 +538,8 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	tb.Log.With().Debug("Starting consensus phase",
 		log.Uint32("epoch_id", uint32(epoch)))
 
-	// we need to pass a map with spacetime unit allowances before any round is started
-	_, atxs, err := tb.atxDB.GetEpochWeight(epoch)
-	if err != nil {
-		tb.Log.With().Panic("can't load list of atxs", log.Err(err))
-	}
-	ua := weakcoin.UnitAllowances{}
-	for _, id := range atxs {
-		header, err := tb.atxDB.GetAtxHeader(id)
-		if err != nil {
-			tb.Log.With().Panic("can't load atx header", log.Err(err))
-		}
-		ua[string(header.NodeID.VRFPublicKey)] += uint64(header.NumUnits)
-	}
-	tb.weakCoin.StartEpoch(epoch, ua)
-	defer tb.weakCoin.FinishEpoch()
+	tb.startWeakCoinEpoch(epoch)
+	defer tb.fininshWeakCoinEpoch()
 
 	// For K rounds: In each round that lasts δ, wait for proposals to come in.
 	// For next rounds,
@@ -620,7 +607,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		}
 
 		err = tb.tg.Go(func(ctx context.Context) error {
-			tb.startWeakCoin(ctx, epoch, round)
+			tb.startWeakCoinRound(ctx, epoch, round)
 			return nil
 		})
 		if err != nil {
@@ -653,6 +640,29 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	return ownLastRoundVotes
 }
 
+func (tb *TortoiseBeacon) startWeakCoinEpoch(epoch types.EpochID) {
+	// we need to pass a map with spacetime unit allowances before any round is started
+	_, atxs, err := tb.atxDB.GetEpochWeight(epoch)
+	if err != nil {
+		tb.Log.With().Panic("can't load list of atxs", log.Err(err))
+	}
+
+	ua := weakcoin.UnitAllowances{}
+	for _, id := range atxs {
+		header, err := tb.atxDB.GetAtxHeader(id)
+		if err != nil {
+			tb.Log.With().Panic("can't load atx header", log.Err(err))
+		}
+		ua[string(header.NodeID.VRFPublicKey)] += uint64(header.NumUnits)
+	}
+
+	tb.weakCoin.StartEpoch(epoch, ua)
+}
+
+func (tb *TortoiseBeacon) fininshWeakCoinEpoch() {
+	tb.weakCoin.FinishEpoch()
+}
+
 func (tb *TortoiseBeacon) markProposalPhaseFinished(epoch types.EpochID) {
 	finishedAt := time.Now()
 
@@ -674,7 +684,7 @@ func (tb *TortoiseBeacon) receivedBeforeProposalPhaseFinished(epoch types.EpochI
 	return !hasFinished || receivedAt.Before(finishedAt)
 }
 
-func (tb *TortoiseBeacon) startWeakCoin(ctx context.Context, epoch types.EpochID, round types.RoundID) {
+func (tb *TortoiseBeacon) startWeakCoinRound(ctx context.Context, epoch types.EpochID, round types.RoundID) {
 	t := time.NewTimer(tb.config.VotingRoundDuration)
 	defer t.Stop()
 
