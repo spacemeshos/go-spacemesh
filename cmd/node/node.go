@@ -999,7 +999,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("failed to read identity file: %v", err)
+			return nil, fmt.Errorf("failed to read identity file: %w", err)
 		}
 
 		log.Info("Identity file not found. Creating new identity...")
@@ -1007,11 +1007,11 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		edSgn := signing.NewEdSigner()
 		err := os.MkdirAll(filepath.Dir(filename), filesystem.OwnerReadWriteExec)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create directory for identity file: %v", err)
+			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
 		}
 		err = ioutil.WriteFile(filename, edSgn.ToBuffer(), filesystem.OwnerReadWrite)
 		if err != nil {
-			return nil, fmt.Errorf("failed to write identity file: %v", err)
+			return nil, fmt.Errorf("failed to write identity file: %w", err)
 		}
 
 		log.With().Warning("created new identity", edSgn.PublicKey())
@@ -1020,7 +1020,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 
 	edSgn, err := signing.NewEdSignerFromBuffer(data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to construct identity from data file: %v", err)
+		return nil, fmt.Errorf("failed to construct identity from data file: %w", err)
 	}
 
 	log.Info("Loaded existing identity; public key: %v", edSgn.PublicKey())
@@ -1050,7 +1050,7 @@ func (app *App) getIdentityFile() (string, error) {
 		return f, nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("failed to traverse Post data dir: %v", err)
+		return "", fmt.Errorf("failed to traverse Post data dir: %w", err)
 	}
 	return "", fmt.Errorf("not found")
 }

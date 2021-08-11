@@ -184,7 +184,7 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 		db.log.With().Info("atx is valid", atx.ID())
 	}
 	if err := db.StoreAtx(epoch, atx); err != nil {
-		return fmt.Errorf("cannot store atx %s: %v", atx.ShortString(), err)
+		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
 	if err := db.StoreNodeIdentity(atx.NodeID); err != nil {
 		db.log.With().Error("cannot store node identity",
@@ -609,8 +609,8 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 func (db *DB) GetNodeAtxIDForEpoch(nodePK string, publicationEpoch types.EpochID) (types.ATXID, error) {
 	id, err := db.atxs.Get(getNodeAtxKey(nodePK, publicationEpoch))
 	if err != nil {
-		return *types.EmptyATXID, fmt.Errorf("atx for node %v with publication epoch %v: %v",
-			nodePK, publicationEpoch, err)
+		return *types.EmptyATXID, fmt.Errorf("atx for node %v with publication epoch %v: %w",
+			util.Bytes2Hex([]byte(nodePK)), publicationEpoch, err)
 	}
 	return types.ATXID(types.BytesToHash(id)), nil
 }
