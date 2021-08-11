@@ -74,14 +74,13 @@ type layerClock interface {
 // New returns a new TortoiseBeacon.
 func New(
 	conf Config,
-	minerID types.NodeID,
 	layerDuration time.Duration,
 	net broadcaster,
 	atxDB activationDB,
 	tortoiseBeaconDB tortoiseBeaconDB,
 	edSigner signing.Signer,
-	vrfVerifier signing.Verifier,
 	vrfSigner signing.Signer,
+	vrfVerifier signing.Verifier,
 	weakCoin coin,
 	clock layerClock,
 	logger log.Log,
@@ -89,7 +88,6 @@ func New(
 	return &TortoiseBeacon{
 		Log:                     logger,
 		config:                  conf,
-		minerID:                 minerID,
 		layerDuration:           layerDuration,
 		net:                     net,
 		atxDB:                   atxDB,
@@ -117,7 +115,6 @@ type TortoiseBeacon struct {
 	log.Log
 
 	config        Config
-	minerID       types.NodeID
 	layerDuration time.Duration
 
 	net              broadcaster
@@ -500,7 +497,6 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 	// concat them into a single proposal message
 	m := ProposalMessage{
 		EpochID:      epoch,
-		MinerID:      tb.minerID,
 		VRFSignature: proposedSignature,
 	}
 
@@ -700,7 +696,6 @@ func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 	}
 
 	mb := FirstVotingMessageBody{
-		MinerID:                   tb.minerID,
 		ValidProposals:            valid,
 		PotentiallyValidProposals: potentiallyValid,
 	}
@@ -733,7 +728,6 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 	tb.consensusMu.RUnlock()
 
 	mb := FollowingVotingMessageBody{
-		MinerID:        tb.minerID,
 		EpochID:        epoch,
 		RoundID:        round,
 		VotesBitVector: bitVector,
@@ -759,25 +753,6 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 	}
 
 	return nil
-}
-
-func (tb *TortoiseBeacon) voteWeight(pk nodeID, epochID types.EpochID) (*big.Int, error) {
-	id := types.NodeID{
-		Key:          pk,
-		VRFPublicKey: nil,
-	}
-
-	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(id, epochID-1)
-	if err != nil {
-		return nil, fmt.Errorf("atx ID for epoch: %w", err)
-	}
-
-	atx, err := tb.atxDB.GetAtxHeader(atxID)
-	if err != nil {
-		return nil, fmt.Errorf("atx header: %w", err)
-	}
-
-	return new(big.Int).SetUint64(atx.GetWeight()), nil
 }
 
 func (tb *TortoiseBeacon) votingThreshold(epochWeight uint64) *big.Int {

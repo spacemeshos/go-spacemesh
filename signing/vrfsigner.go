@@ -50,7 +50,7 @@ type VRFVerifier struct{}
 
 // Verify that signature matches public key.
 func (VRFVerifier) Verify(pub *PublicKey, msg, sig []byte) bool {
-	return VRFVerify(ed25519.PublicKey(pub.Bytes()), msg, sig)
+	return VRFVerify(pub.Bytes(), msg, sig)
 }
 
 // Extract public key from signature.

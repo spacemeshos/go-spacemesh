@@ -72,7 +72,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	atxdb := activation.NewDB(database.NewMemDatabase(), idStore, memesh, 3, goldenATXID, &validatorMock{}, lg.WithName("atxDB"))
 	_ = atxdb
 
-	tb := New(conf, minerID, ld, n1, mockDB, nil, edSgn, signing.VRFVerifier{}, vrfSigner, mwc, clock, logger)
+	tb := New(conf, ld, n1, mockDB, nil, edSgn, vrfSigner, signing.VRFVerifier{}, mwc, clock, logger)
 	requirer.NotNil(tb)
 
 	err = tb.Start(context.TODO())

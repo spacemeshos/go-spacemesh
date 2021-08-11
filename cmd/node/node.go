@@ -589,17 +589,19 @@ func (app *App) initServices(ctx context.Context,
 		return errors.New("invalid golden atx id")
 	}
 
-	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
+	atxDB := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
 
+	vrfVerifier := signing.VRFVerifier{}
+
 	wc := weakcoin.New(swarm,
-		vrfSigner, signing.VRFVerifier{},
+		vrfSigner, vrfVerifier,
 		weakcoin.WithLog(app.addLogger(WeakCoinLogger, lg)),
 		weakcoin.WithMaxRound(app.Config.TortoiseBeacon.RoundsNumber),
 	)
 
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, nodeID, ld, swarm, atxdb, tBeaconDB, sgn, signing.VRFVerifier{}, vrfSigner, wc, clock, app.addLogger(TBeaconLogger, lg))
+	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, ld, swarm, atxDB, tBeaconDB, sgn, vrfSigner, vrfVerifier, wc, clock, app.addLogger(TBeaconLogger, lg))
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
@@ -613,16 +615,16 @@ func (app *App) initServices(ctx context.Context,
 
 	trtl = tortoise.NewVerifyingTortoise(trtlCfg)
 	if trtlCfg.Recovered {
-		msh = mesh.NewRecoveredMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
+		msh = mesh.NewRecoveredMesh(mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
-		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
+		msh = mesh.NewMesh(mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		if err := app.setupGenesis(processor, msh); err != nil {
 			return err
 		}
 	}
 
-	eValidator := blocks.NewBlockEligibilityValidator(layerSize, layersPerEpoch, atxdb, tBeacon,
+	eValidator := blocks.NewBlockEligibilityValidator(layerSize, layersPerEpoch, atxDB, tBeacon,
 		signing.VRFVerify, msh, app.addLogger(BlkEligibilityLogger, lg))
 
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
@@ -646,7 +648,7 @@ func (app *App) initServices(ctx context.Context,
 
 	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
 
-	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxdb, poetDb, atxdb, processor, swarm, remoteFetchService, msh, tBeaconDB, app.addLogger(LayerFetcher, lg))
+	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, processor, swarm, remoteFetchService, msh, tBeaconDB, app.addLogger(LayerFetcher, lg))
 	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, mdb.InputVector(), tBeaconDBStore)
 
 	syncerConf := syncer.Configuration{
@@ -656,7 +658,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 	syncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, app.addLogger(SyncLogger, lg))
 
-	blockOracle := blocks.NewMinerBlockOracle(layerSize, layersPerEpoch, atxdb, tBeacon, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
+	blockOracle := blocks.NewMinerBlockOracle(layerSize, layersPerEpoch, atxDB, tBeacon, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
 	var hOracle hare.Rolacle
@@ -668,7 +670,7 @@ func (app *App) initServices(ctx context.Context,
 		// TODO: this mock will be replaced by the real Tortoise beacon once
 		//   https://github.com/spacemeshos/go-spacemesh/pull/2267 is complete
 		beacon := eligibility.NewBeacon(tBeacon, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
-		hOracle = eligibility.New(beacon, atxdb, mdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+		hOracle = eligibility.New(beacon, atxDB, mdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
 
@@ -709,10 +711,10 @@ func (app *App) initServices(ctx context.Context,
 		LayersPerEpoch:  layersPerEpoch,
 	}
 
-	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, atxdb, swarm, msh, layersPerEpoch, nipostBuilder, postSetupMgr, clock, syncer, store, app.addLogger("atxBuilder", lg))
+	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, atxDB, swarm, msh, layersPerEpoch, nipostBuilder, postSetupMgr, clock, syncer, store, app.addLogger("atxBuilder", lg))
 
 	gossipListener.AddListener(ctx, state.IncomingTxProtocol, priorityq.Low, processor.HandleTxGossipData)
-	gossipListener.AddListener(ctx, activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
+	gossipListener.AddListener(ctx, activation.AtxProtocol, priorityq.Low, atxDB.HandleGossipAtx)
 	gossipListener.AddListener(ctx, blocks.NewBlockProtocol, priorityq.High, blockListener.HandleBlock)
 	gossipListener.AddListener(ctx, tortoisebeacon.TBProposalProtocol, priorityq.Low, tBeacon.HandleSerializedProposalMessage)
 	gossipListener.AddListener(ctx, tortoisebeacon.TBFirstVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFirstVotingMessage)
@@ -733,7 +735,7 @@ func (app *App) initServices(ctx context.Context,
 	app.postSetupMgr = postSetupMgr
 	app.oracle = blockOracle
 	app.txProcessor = processor
-	app.atxDb = atxdb
+	app.atxDb = atxDB
 	app.layerFetch = layerFetch
 	app.tortoiseBeacon = tBeacon
 	if !app.Config.TIME.Peersync.Disable {

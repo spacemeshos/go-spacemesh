@@ -175,7 +175,6 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 			from: minerID.Key,
 			message: FirstVotingMessage{
 				FirstVotingMessageBody: FirstVotingMessageBody{
-					MinerID:                   minerID,
 					ValidProposals:            [][]byte{hash.Bytes()},
 					PotentiallyValidProposals: nil,
 				},
@@ -195,7 +194,6 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 			from: minerID.Key,
 			message: FirstVotingMessage{
 				FirstVotingMessageBody: FirstVotingMessageBody{
-					MinerID:                   minerID,
 					ValidProposals:            [][]byte{hash.Bytes()},
 					PotentiallyValidProposals: nil,
 				},
@@ -300,8 +298,6 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 			},
 			message: FollowingVotingMessage{
 				FollowingVotingMessageBody: FollowingVotingMessageBody{
-					MinerID:        minerID,
-					EpochID:        epoch,
 					RoundID:        round,
 					VotesBitVector: []uint64{0b101},
 				},
@@ -320,7 +316,6 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 			},
 			message: FollowingVotingMessage{
 				FollowingVotingMessageBody: FollowingVotingMessageBody{
-					MinerID:        minerID,
 					EpochID:        epoch,
 					RoundID:        round,
 					VotesBitVector: []uint64{0b101},

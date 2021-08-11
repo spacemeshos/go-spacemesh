@@ -33,7 +33,6 @@ type proposalMessageWithReceiptData struct {
 
 // FirstVotingMessageBody is FirstVotingMessage without a signature.
 type FirstVotingMessageBody struct {
-	MinerID                   types.NodeID
 	ValidProposals            [][]byte
 	PotentiallyValidProposals [][]byte
 }
