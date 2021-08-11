@@ -7,7 +7,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 	"github.com/stretchr/testify/mock"
@@ -37,12 +36,6 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 
 	r := require.New(t)
 
-	_, pk1, err := p2pcrypto.GenerateKeyPair()
-	r.NoError(err)
-
-	_, pk2, err := p2pcrypto.GenerateKeyPair()
-	r.NoError(err)
-
 	mockDB := &mockActivationDB{}
 	mockDB.On("GetEpochWeight",
 		mock.AnythingOfType("types.EpochID")).
@@ -65,41 +58,11 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 			round: round,
 			votesMargin: map[proposal]int{
 				"0x1": 2,
-				"0x2": 1,
-				"0x3": -1,
+				"0x2": 0,
+				"0x3": 0,
 				"0x4": 1,
-				"0x5": 1,
-				"0x6": -1,
-			},
-			incomingVotes: []map[nodeID]votesSetPair{
-				firstRound + 1: {
-					pk1.String(): votesSetPair{
-						ValidVotes: hashSet{
-							"0x3": {},
-						},
-						InvalidVotes: hashSet{
-							"0x2": {},
-						},
-					},
-					pk2.String(): votesSetPair{
-						ValidVotes:   hashSet{},
-						InvalidVotes: hashSet{},
-					},
-				},
-				firstRound + 2: {
-					pk1.String(): votesSetPair{
-						ValidVotes:   hashSet{},
-						InvalidVotes: hashSet{},
-					},
-					pk2.String(): votesSetPair{
-						ValidVotes: hashSet{
-							"0x6": {},
-						},
-						InvalidVotes: hashSet{
-							"0x5": {},
-						},
-					},
-				},
+				"0x5": 0,
+				"0x6": 0,
 			},
 			expected: votesSetPair{
 				ValidVotes: hashSet{
@@ -125,108 +88,14 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 				config: Config{
 					Theta: big.NewRat(1, 1),
 				},
-				Log:           logtest.New(t).WithName("TortoiseBeacon"),
-				incomingVotes: tc.incomingVotes,
-				atxDB:         mockDB,
-				votesMargin:   tc.votesMargin,
+				Log:         logtest.New(t).WithName("TortoiseBeacon"),
+				atxDB:       mockDB,
+				votesMargin: tc.votesMargin,
 			}
 
 			result, err := tb.calcVotes(tc.epoch, tc.round, false)
 			r.NoError(err)
 			r.EqualValues(tc.expected, result)
-		})
-	}
-}
-
-func TestTortoiseBeacon_calcVotesMargin(t *testing.T) {
-	t.Parallel()
-
-	r := require.New(t)
-
-	_, pk1, err := p2pcrypto.GenerateKeyPair()
-	r.NoError(err)
-
-	_, pk2, err := p2pcrypto.GenerateKeyPair()
-	r.NoError(err)
-
-	const epoch = 5
-	const round = 3
-
-	tt := []struct {
-		name          string
-		epoch         types.EpochID
-		upToRound     types.RoundID
-		votesMargin   votesMarginMap
-		incomingVotes []map[nodeID]votesSetPair
-		result        votesMarginMap
-	}{
-		{
-			name:      "Case 1",
-			epoch:     epoch,
-			upToRound: round,
-			votesMargin: map[proposal]int{
-				"0x1": 2,
-				"0x2": 1,
-				"0x3": -1,
-				"0x4": 1,
-				"0x5": 1,
-				"0x6": -1,
-			},
-			incomingVotes: []map[nodeID]votesSetPair{
-				firstRound + 1: {
-					pk1.String(): votesSetPair{
-						ValidVotes: hashSet{
-							"0x3": {},
-						},
-						InvalidVotes: hashSet{
-							"0x2": {},
-						},
-					},
-					pk2.String(): votesSetPair{
-						ValidVotes:   hashSet{},
-						InvalidVotes: hashSet{},
-					},
-				},
-				firstRound + 2: {
-					pk1.String(): votesSetPair{
-						ValidVotes:   hashSet{},
-						InvalidVotes: hashSet{},
-					},
-					pk2.String(): votesSetPair{
-						ValidVotes: hashSet{
-							"0x6": {},
-						},
-						InvalidVotes: hashSet{
-							"0x5": {},
-						},
-					},
-				},
-			},
-			result: votesMarginMap{
-				"0x1": 2,
-				"0x2": 0,
-				"0x3": 0,
-				"0x4": 1,
-				"0x5": 0,
-				"0x6": 0,
-			},
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			tb := TortoiseBeacon{
-				Log:           logtest.New(t).WithName("TortoiseBeacon"),
-				votesMargin:   tc.votesMargin,
-				incomingVotes: tc.incomingVotes,
-			}
-
-			err := tb.calcVotesMargin(tc.epoch, tc.upToRound)
-			r.NoError(err)
-			r.EqualValues(tc.result, tb.votesMargin)
 		})
 	}
 }

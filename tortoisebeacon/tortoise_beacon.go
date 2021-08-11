@@ -103,7 +103,6 @@ func New(
 		beacons:                         make(map[types.EpochID]types.Hash32),
 		proposalPhaseFinishedTimestamps: make(map[types.EpochID]time.Time),
 		hasVoted:                        make([]map[nodeID]struct{}, conf.RoundsNumber),
-		incomingVotes:                   make([]map[nodeID]votesSetPair, conf.RoundsNumber),
 		firstRoundIncomingVotes:         make(map[nodeID]proposalsBytes),
 		seenEpochs:                      make(map[types.EpochID]struct{}),
 		proposalChans:                   make(map[types.EpochID]chan *proposalMessageWithReceiptData),
@@ -145,12 +144,11 @@ type TortoiseBeacon struct {
 	// have one bit vector: valid proposals
 	incomingProposals       proposals
 	firstRoundIncomingVotes map[nodeID]proposalsBytes // sorted votes for bit vector decoding
-	votesMargin             map[proposal]int
-	hasVoted                []map[nodeID]struct{}
+	// TODO: For every round excluding first round consider having a vector of opinions.
+	votesMargin map[proposal]int
+	hasVoted    []map[nodeID]struct{}
 
-	incomingVotes                     []map[nodeID]votesSetPair
 	ownLastRoundVotes                 votesSetPair
-	ownVotes                          map[types.RoundID]votesSetPair
 	proposalPhaseFinishedTimestampsMu sync.RWMutex
 	proposalPhaseFinishedTimestamps   map[types.EpochID]time.Time
 
@@ -266,7 +264,6 @@ func (tb *TortoiseBeacon) cleanupVotes(epoch types.EpochID) {
 	defer tb.votesMu.Unlock()
 
 	tb.incomingProposals = proposals{}
-	tb.incomingVotes = make([]map[nodeID]votesSetPair, tb.config.RoundsNumber)
 	tb.firstRoundIncomingVotes = map[nodeID]proposalsBytes{}
 	tb.votesMargin = map[proposal]int{}
 	tb.hasVoted = []map[nodeID]struct{}{}

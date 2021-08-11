@@ -219,7 +219,6 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 				vrfSigner:               vrfSigner,
 				edSigner:                edSgn,
 				clock:                   clock,
-				incomingVotes:           make([]map[nodeID]votesSetPair, round+1),
 				firstRoundIncomingVotes: map[nodeID]proposalsBytes{},
 				votesMargin:             map[proposal]int{},
 				hasVoted:                make([]map[nodeID]struct{}, round+1),
@@ -290,7 +289,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 		epoch         types.EpochID
 		currentRounds map[types.EpochID]types.RoundID
 		message       FollowingVotingMessage
-		expected      []map[nodeID]votesSetPair
+		expected      votesMarginMap
 	}{
 		{
 			name:  "Current round and message round equal",
@@ -306,13 +305,10 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 					VotesBitVector: []uint64{0b101},
 				},
 			},
-			expected: []map[nodeID]votesSetPair{
-				round: {
-					minerID.Key: votesSetPair{
-						ValidVotes:   hashSet{string(hash1.Bytes()): {}, string(hash3.Bytes()): {}},
-						InvalidVotes: hashSet{string(hash2.Bytes()): {}},
-					},
-				},
+			expected: votesMarginMap{
+				string(hash1.Bytes()): 1,
+				string(hash2.Bytes()): -1,
+				string(hash3.Bytes()): 1,
 			},
 		},
 		{
@@ -329,13 +325,10 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 					VotesBitVector: []uint64{0b101},
 				},
 			},
-			expected: []map[nodeID]votesSetPair{
-				round: {
-					minerID.Key: votesSetPair{
-						ValidVotes:   hashSet{string(hash1.Bytes()): {}, string(hash3.Bytes()): {}},
-						InvalidVotes: hashSet{string(hash2.Bytes()): {}},
-					},
-				},
+			expected: votesMarginMap{
+				string(hash1.Bytes()): 1,
+				string(hash2.Bytes()): -1,
+				string(hash3.Bytes()): 1,
 			},
 		},
 	}
@@ -361,8 +354,9 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 						PotentiallyValidProposals: [][]byte{hash3.Bytes()},
 					},
 				},
-				lastLayer:     types.NewLayerID(epoch),
-				incomingVotes: make([]map[nodeID]votesSetPair, round+1),
+				lastLayer:   types.NewLayerID(epoch),
+				hasVoted:    make([]map[nodeID]struct{}, round+1),
+				votesMargin: map[proposal]int{},
 			}
 
 			sig, err := tb.signMessage(tc.message.FollowingVotingMessageBody)
@@ -372,7 +366,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 			err = tb.handleFollowingVotingMessage(tc.message)
 			r.NoError(err)
 
-			r.EqualValues(tc.expected, tb.incomingVotes)
+			r.EqualValues(tc.expected, tb.votesMargin)
 		})
 	}
 }

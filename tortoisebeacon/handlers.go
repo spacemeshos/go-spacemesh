@@ -331,10 +331,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 		tb.votesMargin[string(vote)] -= int(voteWeight)
 	}
 
-	//tb.incomingVotes[currentRound-firstRound][minerID.Key] = votesSetPair{
-	//	ValidVotes:   validVotesMap,
-	//	InvalidVotes: invalidVotesMap,
-	//}
+	tb.hasVoted[currentRound-firstRound][minerID.Key] = struct{}{}
 
 	// this is used for bit vector calculation
 	// TODO: store sorted mixed valid+potentiallyValid
@@ -409,14 +406,19 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 		return nil
 	}
 
+	voteWeight, err := tb.voteWeight(minerID.Key, currentEpoch)
+	if err != nil {
+		return fmt.Errorf("get vote weight for epoch %v (miner ID %v): %w", currentEpoch, minerID.Key, err)
+	}
+
 	tb.votesMu.Lock()
 	defer tb.votesMu.Unlock()
 
-	if tb.incomingVotes[messageRound-firstRound] == nil {
-		tb.incomingVotes[messageRound-firstRound] = make(map[nodeID]votesSetPair)
+	if tb.hasVoted[messageRound-firstRound] == nil {
+		tb.hasVoted[messageRound-firstRound] = make(map[nodeID]struct{})
 	}
 
-	if _, ok := tb.incomingVotes[messageRound-firstRound][minerID.Key]; ok {
+	if _, ok := tb.hasVoted[messageRound-firstRound][minerID.Key]; ok {
 		tb.Log.With().Warning("Received malformed following voting message, already received a voting message for these PK and round",
 			log.String("miner_id", minerID.Key),
 			log.Uint32("epoch_id", uint32(currentEpoch)),
@@ -430,8 +432,19 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 		log.Uint32("epoch_id", uint32(currentEpoch)),
 		log.Uint32("round_id", uint32(messageRound)))
 
-	firstRoundIncomingVotes := tb.firstRoundIncomingVotes[minerID.Key]
-	tb.incomingVotes[messageRound-firstRound][minerID.Key] = tb.decodeVotes(message.VotesBitVector, firstRoundIncomingVotes)
+	thisRoundVotes := tb.decodeVotes(message.VotesBitVector, tb.firstRoundIncomingVotes[minerID.Key])
+
+	for vote := range thisRoundVotes.ValidVotes {
+		// TODO(nkryuchkov): handle overflow
+		tb.votesMargin[vote] += int(voteWeight)
+	}
+
+	for vote := range thisRoundVotes.InvalidVotes {
+		// TODO(nkryuchkov): handle negative overflow
+		tb.votesMargin[vote] -= int(voteWeight)
+	}
+
+	tb.hasVoted[messageRound-firstRound][minerID.Key] = struct{}{}
 
 	return nil
 }
