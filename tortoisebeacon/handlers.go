@@ -40,7 +40,7 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 	receivedTime := time.Now()
 
 	tb.Log.With().Debug("New proposal message",
-		log.String("from", data.Sender().String()))
+		log.String("sender", data.Sender().String()))
 
 	var message ProposalMessage
 	if err := types.BytesToInterface(data.Bytes(), &message); err != nil {
@@ -230,10 +230,8 @@ func (tb *TortoiseBeacon) HandleSerializedFirstVotingMessage(ctx context.Context
 		return
 	}
 
-	minerID := data.Sender()
-
 	tb.Log.With().Debug("New voting message",
-		log.String("miner_id", minerID.String()))
+		log.String("sender", data.Sender().String()))
 
 	var m FirstVotingMessage
 	if err := types.BytesToInterface(data.Bytes(), &m); err != nil {
@@ -364,10 +362,8 @@ func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Con
 		return
 	}
 
-	minerID := data.Sender()
-
 	tb.Log.With().Debug("New voting message",
-		log.String("miner_id", minerID.String()))
+		log.String("sender", data.Sender().String()))
 
 	var m FollowingVotingMessage
 	if err := types.BytesToInterface(data.Bytes(), &m); err != nil {
