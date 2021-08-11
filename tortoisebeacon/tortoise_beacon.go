@@ -89,25 +89,24 @@ func New(
 	logger log.Log,
 ) *TortoiseBeacon {
 	return &TortoiseBeacon{
-		Log:                             logger,
-		config:                          conf,
-		minerID:                         minerID,
-		layerDuration:                   layerDuration,
-		net:                             net,
-		atxDB:                           atxDB,
-		tortoiseBeaconDB:                tortoiseBeaconDB,
-		edSigner:                        edSigner,
-		vrfVerifier:                     vrfVerifier,
-		vrfSigner:                       vrfSigner,
-		weakCoin:                        weakCoin,
-		clock:                           clock,
-		beacons:                         make(map[types.EpochID]types.Hash32),
-		proposalPhaseFinishedTimestamps: make(map[types.EpochID]time.Time),
-		hasVoted:                        make([]map[nodeID]struct{}, conf.RoundsNumber),
-		firstRoundIncomingVotes:         make(map[nodeID]proposalsBytes),
-		seenEpochs:                      make(map[types.EpochID]struct{}),
-		proposalChans:                   make(map[types.EpochID]chan *proposalMessageWithReceiptData),
-		votesMargin:                     map[proposal]*big.Int{},
+		Log:                     logger,
+		config:                  conf,
+		minerID:                 minerID,
+		layerDuration:           layerDuration,
+		net:                     net,
+		atxDB:                   atxDB,
+		tortoiseBeaconDB:        tortoiseBeaconDB,
+		edSigner:                edSigner,
+		vrfVerifier:             vrfVerifier,
+		vrfSigner:               vrfSigner,
+		weakCoin:                weakCoin,
+		clock:                   clock,
+		beacons:                 make(map[types.EpochID]types.Hash32),
+		hasVoted:                make([]map[nodeID]struct{}, conf.RoundsNumber),
+		firstRoundIncomingVotes: make(map[nodeID]proposalsBytes),
+		seenEpochs:              make(map[types.EpochID]struct{}),
+		proposalChans:           make(map[types.EpochID]chan *proposalMessageWithReceiptData),
+		votesMargin:             map[proposal]*big.Int{},
 	}
 }
 
@@ -149,9 +148,9 @@ type TortoiseBeacon struct {
 	votesMargin map[proposal]*big.Int
 	hasVoted    []map[nodeID]struct{}
 
-	ownLastRoundVotes                 votesSetPair
-	proposalPhaseFinishedTimestampsMu sync.RWMutex
-	proposalPhaseFinishedTimestamps   map[types.EpochID]time.Time
+	ownLastRoundVotes           votesSetPair
+	proposalPhaseFinishedTimeMu sync.RWMutex
+	proposalPhaseFinishedTime   time.Time
 
 	beaconsMu sync.RWMutex
 	beacons   map[types.EpochID]types.Hash32
@@ -270,7 +269,7 @@ func (tb *TortoiseBeacon) cleanupVotes(epoch types.EpochID) {
 	tb.hasVoted = make([]map[nodeID]struct{}, tb.lastRound())
 	tb.ownLastRoundVotes = votesSetPair{}
 
-	delete(tb.proposalPhaseFinishedTimestamps, epoch)
+	tb.proposalPhaseFinishedTime = time.Time{}
 }
 
 // listens to new layers.
@@ -588,21 +587,22 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 func (tb *TortoiseBeacon) markProposalPhaseFinished(epoch types.EpochID) {
 	finishedAt := time.Now()
 
-	tb.proposalPhaseFinishedTimestampsMu.Lock()
-	tb.proposalPhaseFinishedTimestamps[epoch] = finishedAt
-	tb.proposalPhaseFinishedTimestampsMu.Unlock()
+	tb.proposalPhaseFinishedTimeMu.Lock()
+	tb.proposalPhaseFinishedTime = finishedAt
+	tb.proposalPhaseFinishedTimeMu.Unlock()
 
 	tb.Debug("marked proposal phase for epoch %v finished at %v", epoch, finishedAt.String())
 }
 
 func (tb *TortoiseBeacon) receivedBeforeProposalPhaseFinished(epoch types.EpochID, receivedAt time.Time) bool {
-	tb.proposalPhaseFinishedTimestampsMu.RLock()
-	finishedAt, ok := tb.proposalPhaseFinishedTimestamps[epoch]
-	tb.proposalPhaseFinishedTimestampsMu.RUnlock()
+	tb.proposalPhaseFinishedTimeMu.RLock()
+	finishedAt := tb.proposalPhaseFinishedTime
+	tb.proposalPhaseFinishedTimeMu.RUnlock()
+	hasFinished := !finishedAt.IsZero()
 
-	tb.Debug("checking if timestamp %v was received before proposal phase finished in epoch %v, is phase finished: %v, finished at: %v", receivedAt.String(), epoch, ok, finishedAt.String())
+	tb.Debug("checking if timestamp %v was received before proposal phase finished in epoch %v, is phase finished: %v, finished at: %v", receivedAt.String(), epoch, hasFinished, finishedAt.String())
 
-	return !ok || receivedAt.Before(finishedAt)
+	return !hasFinished || receivedAt.Before(finishedAt)
 }
 
 func (tb *TortoiseBeacon) startWeakCoin(ctx context.Context, epoch types.EpochID, round types.RoundID) {
