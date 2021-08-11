@@ -416,6 +416,10 @@ func healingTester(dependencies []int) TestScenario {
 
 			lastVerifiedLayer = suite.apps[0].mesh.LatestLayerInState()
 			suite.killEpoch = lastVerifiedLayer.GetEpoch()
+
+			// initialize maps
+			ok1 = make(map[int]bool, len(suite.apps))
+			ok2 = make(map[int]bool, len(suite.apps))
 		})
 
 		// now wait for healing to kick in and advance the verified layer
@@ -428,8 +432,15 @@ func healingTester(dependencies []int) TestScenario {
 				log.Int("app", i),
 				log.FieldNamed("nodeid", app.nodeID))
 
-			// verified needs to advance, and to nearly catch up to last received
-			if !lyrVerified.After(lastVerifiedLayer.Add(2)) || lyrVerified.Add(2).Before(lyrProcessed) {
+			// two success conditions:
+			//   1. make sure verified layer gets stuck (healing is needed)
+			ok1[i] = ok1[i] || lyrProcessed.After(lyrVerified.Add(confidenceInterval))
+
+			//   2. make sure healing actually kicks in
+			//   (verified needs to advance, and to nearly catch up to last received)
+			ok2[i] = ok1[i] && lyrVerified.After(lastVerifiedLayer.Add(confidenceInterval))
+			ok2[i] = ok2[i] && !lyrVerified.Add(confidenceInterval).Before(lyrProcessed)
+			if !ok2[i] {
 				return false
 			}
 		}
