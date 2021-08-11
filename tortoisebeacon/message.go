@@ -56,7 +56,6 @@ func (v FirstVotingMessage) String() string {
 // FollowingVotingMessageBody is FollowingVotingMessage without a signature.
 type FollowingVotingMessageBody struct {
 	MinerID        types.NodeID
-	EpochID        types.EpochID
 	RoundID        types.RoundID
 	VotesBitVector []uint64
 }

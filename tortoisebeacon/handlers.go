@@ -384,9 +384,7 @@ func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Con
 }
 
 func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMessage) error {
-	// TODO(nkryuchkov): use tb.currentEpoch()
-	// currentEpoch := tb.currentEpoch()
-	currentEpoch := message.EpochID
+	currentEpoch := tb.currentEpoch()
 	messageRound := message.RoundID
 
 	messageBytes, err := types.InterfaceToBytes(message.FollowingVotingMessageBody)

@@ -316,7 +316,6 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 			},
 			message: FollowingVotingMessage{
 				FollowingVotingMessageBody: FollowingVotingMessageBody{
-					EpochID:        epoch,
 					RoundID:        round,
 					VotesBitVector: []uint64{0b101},
 				},

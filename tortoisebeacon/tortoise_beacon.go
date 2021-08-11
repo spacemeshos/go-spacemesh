@@ -728,7 +728,6 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 	tb.consensusMu.RUnlock()
 
 	mb := FollowingVotingMessageBody{
-		EpochID:        epoch,
 		RoundID:        round,
 		VotesBitVector: bitVector,
 	}
