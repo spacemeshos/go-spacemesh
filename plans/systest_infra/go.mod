@@ -1,4 +1,4 @@
-module github.com/spacemeshos/go-spacemesh/plans/transactions
+module github.com/spacemeshos/go-spacemesh/plans/systest_infra
 
 go 1.16
 
