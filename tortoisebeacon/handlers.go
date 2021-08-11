@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -268,7 +267,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 		return fmt.Errorf("get node ATXID for epoch (miner ID %v): %w", minerID.Key, err)
 	}
 
-	ok, err := tb.verifyEligibilityProof(message.FirstVotingMessageBody, minerID, message.Signature)
+	ok, err := tb.verifyEligibilityProof(message.FirstVotingMessageBody, message.Signature)
 	if err != nil {
 		return err
 	}
@@ -399,7 +398,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 	}
 
 	// Ensure that epoch is the same.
-	ok, err := tb.verifyEligibilityProof(message.FollowingVotingMessageBody, minerID, message.Signature)
+	ok, err := tb.verifyEligibilityProof(message.FollowingVotingMessageBody, message.Signature)
 	if err != nil {
 		return err
 	}
@@ -461,7 +460,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 	return nil
 }
 
-func (tb *TortoiseBeacon) verifyEligibilityProof(message interface{}, from types.NodeID, signature []byte) (bool, error) {
+func (tb *TortoiseBeacon) verifyEligibilityProof(message interface{}, signature []byte) (bool, error) {
 	messageBytes, err := types.InterfaceToBytes(message)
 	if err != nil {
 		return false, fmt.Errorf("InterfaceToBytes: %w", err)
@@ -469,7 +468,12 @@ func (tb *TortoiseBeacon) verifyEligibilityProof(message interface{}, from types
 
 	// TODO: Ensure that epoch is the same.
 
-	ok := signing.Verify(signing.NewPublicKey(util.Hex2Bytes(from.Key)), messageBytes, signature)
+	minerPK, err := tb.vrfVerifier.Extract(messageBytes, signature)
+	if err != nil {
+		return false, fmt.Errorf("unable to recover ID from signature %x: %w", signature, err)
+	}
+
+	ok := signing.Verify(minerPK, messageBytes, signature)
 
 	return ok, nil
 }

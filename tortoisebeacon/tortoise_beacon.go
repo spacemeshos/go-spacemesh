@@ -268,7 +268,6 @@ func (tb *TortoiseBeacon) cleanupVotes(epoch types.EpochID) {
 	tb.votesMargin = map[proposal]*big.Int{}
 	tb.hasVoted = make([]map[nodeID]struct{}, tb.lastRound())
 	tb.ownLastRoundVotes = votesSetPair{}
-
 	tb.proposalPhaseFinishedTime = time.Time{}
 }
 

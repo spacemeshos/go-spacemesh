@@ -41,7 +41,7 @@ type FirstVotingMessageBody struct {
 // FirstVotingMessage is a message type which is used when sending first voting messages.
 type FirstVotingMessage struct {
 	FirstVotingMessageBody
-	Signature []byte // TODO: implement extracting pk from signature
+	Signature []byte
 }
 
 // String returns a string form of FirstVotingMessage.
