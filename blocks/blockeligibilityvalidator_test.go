@@ -25,7 +25,7 @@ func (m mockAtxDB) GetIdentity(edID string) (types.NodeID, error) {
 	return types.NodeID{Key: edID, VRFPublicKey: nodeID.VRFPublicKey}, nil
 }
 
-func (m mockAtxDB) GetNodeAtxIDForEpoch(types.NodeID, types.EpochID) (types.ATXID, error) {
+func (m mockAtxDB) GetNodeAtxIDForEpoch(string, types.EpochID) (types.ATXID, error) {
 	return types.ATXID{}, m.err
 }
 

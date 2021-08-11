@@ -40,7 +40,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 	mockDB.On("GetEpochWeight",
 		mock.AnythingOfType("types.EpochID")).
 		Return(uint64(1), nil, nil)
-	mockDB.On("GetNodeAtxIDForEpoch", mock.AnythingOfType("types.NodeID"), mock.AnythingOfType("types.EpochID")).Return(types.ATXID{}, nil)
+	mockDB.On("GetNodeAtxIDForEpoch", mock.AnythingOfType("string"), mock.AnythingOfType("types.EpochID")).Return(types.ATXID{}, nil)
 	mockATXHeader := types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
 			StartTick: 0,
@@ -120,7 +120,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 	mockDB.On("GetEpochWeight",
 		mock.AnythingOfType("types.EpochID")).
 		Return(uint64(threshold), nil, nil)
-	mockDB.On("GetNodeAtxIDForEpoch", mock.AnythingOfType("types.NodeID"), mock.AnythingOfType("types.EpochID")).Return(types.ATXID{}, nil)
+	mockDB.On("GetNodeAtxIDForEpoch", mock.AnythingOfType("string"), mock.AnythingOfType("types.EpochID")).Return(types.ATXID{}, nil)
 	mockATXHeader := types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
 			StartTick: 0,
