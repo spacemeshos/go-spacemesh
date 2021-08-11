@@ -2,18 +2,18 @@ package tortoisebeacon
 
 import "github.com/bits-and-blooms/bitset"
 
-func (tb *TortoiseBeacon) decodeVotes(votesBitVector []uint64, firstRound proposalsBytes) votesSetPair {
-	result := votesSetPair{
-		ValidVotes:   make(hashSet),
-		InvalidVotes: make(hashSet),
+func (tb *TortoiseBeacon) decodeVotes(votesBitVector []uint64, firstRound proposalsBytes) allVotes {
+	result := allVotes{
+		valid:   make(proposalSet),
+		invalid: make(proposalSet),
 	}
 
 	for _, vote := range firstRound.ValidProposals {
-		result.ValidVotes[string(vote)] = struct{}{}
+		result.valid[string(vote)] = struct{}{}
 	}
 
 	for _, vote := range firstRound.PotentiallyValidProposals {
-		result.InvalidVotes[string(vote)] = struct{}{}
+		result.invalid[string(vote)] = struct{}{}
 	}
 
 	bs := bitset.From(votesBitVector)
@@ -21,10 +21,10 @@ func (tb *TortoiseBeacon) decodeVotes(votesBitVector []uint64, firstRound propos
 	for i := 0; i < len(firstRound.ValidProposals); i++ {
 		if !bs.Test(uint(i)) {
 			key := string(firstRound.ValidProposals[i])
-			delete(result.ValidVotes, key)
+			delete(result.valid, key)
 
-			if _, ok := result.InvalidVotes[key]; !ok {
-				result.InvalidVotes[key] = struct{}{}
+			if _, ok := result.invalid[key]; !ok {
+				result.invalid[key] = struct{}{}
 			}
 		}
 	}
@@ -33,10 +33,10 @@ func (tb *TortoiseBeacon) decodeVotes(votesBitVector []uint64, firstRound propos
 	for i := 0; i < len(firstRound.PotentiallyValidProposals); i++ {
 		if bs.Test(uint(offset + i)) {
 			key := string(firstRound.PotentiallyValidProposals[i])
-			delete(result.InvalidVotes, key)
+			delete(result.invalid, key)
 
-			if _, ok := result.ValidVotes[key]; !ok {
-				result.ValidVotes[key] = struct{}{}
+			if _, ok := result.valid[key]; !ok {
+				result.valid[key] = struct{}{}
 			}
 		}
 	}

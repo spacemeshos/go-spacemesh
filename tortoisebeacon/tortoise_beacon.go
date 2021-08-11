@@ -59,10 +59,10 @@ type coin interface {
 type (
 	nodeID   = string
 	proposal = string
-	hashSet  = map[proposal]struct{}
 	// TODO(nkryuchkov): remove either of two below
 	proposalsBytes = struct{ ValidProposals, PotentiallyValidProposals [][]byte }
 	proposals      = struct{ ValidProposals, PotentiallyValidProposals proposalList }
+	allVotes       = struct{ valid, invalid proposalSet }
 )
 
 type layerClock interface {
@@ -527,7 +527,7 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 }
 
 // runConsensusPhase runs K voting rounds and returns result from last weak coin round.
-func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.EpochID) votesSetPair {
+func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.EpochID) allVotes {
 	tb.Log.With().Debug("Starting consensus phase",
 		log.Uint32("epoch_id", uint32(epoch)))
 
@@ -557,7 +557,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	var (
 		coinFlip            uint64
 		ownLastRoundVotesMu sync.RWMutex
-		ownLastRoundVotes   votesSetPair
+		ownLastRoundVotes   allVotes
 	)
 
 	for round := firstRound; round <= tb.lastRound(); round++ {
@@ -615,7 +615,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		select {
 		case <-ticker.C:
 		case <-ctx.Done():
-			return votesSetPair{}
+			return allVotes{}
 		}
 
 		tb.weakCoin.FinishRound()
@@ -729,7 +729,7 @@ func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 	return nil
 }
 
-func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes votesSetPair) error {
+func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes allVotes) error {
 	tb.consensusMu.RLock()
 	bitVector := tb.encodeVotes(ownCurrentRoundVotes, tb.incomingProposals)
 	tb.consensusMu.RUnlock()

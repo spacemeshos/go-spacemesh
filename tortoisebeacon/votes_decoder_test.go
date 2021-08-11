@@ -18,7 +18,7 @@ func TestTortoiseBeacon_decodeVotes(t *testing.T) {
 		proposals  proposals
 		firstRound proposalsBytes
 		bitVector  []uint64
-		result     votesSetPair
+		result     allVotes
 	}{
 		{
 			name: "Case 1",
@@ -41,12 +41,12 @@ func TestTortoiseBeacon_decodeVotes(t *testing.T) {
 				},
 			},
 			bitVector: []uint64{0b101},
-			result: votesSetPair{
-				ValidVotes: hashSet{
+			result: allVotes{
+				valid: proposalSet{
 					string(util.Hex2Bytes("11")): {},
 					string(util.Hex2Bytes("33")): {},
 				},
-				InvalidVotes: hashSet{
+				invalid: proposalSet{
 					string(util.Hex2Bytes("22")): {},
 				},
 			},

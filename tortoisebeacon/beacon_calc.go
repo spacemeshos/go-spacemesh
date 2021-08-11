@@ -3,7 +3,6 @@ package tortoisebeacon
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -11,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, votes votesSetPair) error {
+func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, lastRoundVotes allVotes) error {
 	select {
 	case <-ctx.Done():
 		return nil
@@ -21,16 +20,13 @@ func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, v
 	tb.Log.With().Info("Calculating beacon",
 		log.Uint32("epoch_id", uint32(epoch)))
 
-	allHashes, err := tb.calcTortoiseBeaconHashList(epoch, votes)
-	if err != nil {
-		return fmt.Errorf("calc tortoise beacon hash list: %w", err)
-	}
+	allHashes := lastRoundVotes.valid.sort()
 
 	tb.Log.With().Debug("Going to calculate tortoise beacon from this hash list",
 		log.Uint32("epoch_id", uint32(epoch)),
 		log.String("hashes", strings.Join(allHashes, ", ")))
 
-	beacon := allHashes.Hash()
+	beacon := allHashes.hash()
 
 	tb.Log.With().Info("Calculated beacon",
 		log.Uint32("epoch_id", uint32(epoch)),
@@ -61,27 +57,6 @@ func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, v
 		log.String("beacon", beacon.String()))
 
 	return nil
-}
-
-func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID, votes votesSetPair) (proposalList, error) {
-	allHashes := make(proposalList, 0)
-	lastRound := tb.lastRound()
-
-	// output from VRF
-	for vote := range votes.ValidVotes {
-		allHashes = append(allHashes, vote)
-	}
-
-	tb.Log.With().Debug("Tortoise beacon last round votes",
-		log.Uint32("epoch_id", uint32(epoch)),
-		log.Uint32("round_id", uint32(lastRound)),
-		log.String("votes", fmt.Sprint(votes)))
-
-	sort.Slice(allHashes, func(i, j int) bool {
-		return strings.Compare(allHashes[i], allHashes[j]) == -1
-	})
-
-	return allHashes, nil
 }
 
 func (tb *TortoiseBeacon) lastRound() types.RoundID {

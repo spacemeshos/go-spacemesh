@@ -438,7 +438,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 
 	thisRoundVotes := tb.decodeVotes(message.VotesBitVector, tb.firstRoundIncomingVotes[minerID.Key])
 
-	for vote := range thisRoundVotes.ValidVotes {
+	for vote := range thisRoundVotes.valid {
 		if _, ok := tb.votesMargin[vote]; !ok {
 			tb.votesMargin[vote] = new(big.Int).Set(voteWeight)
 		} else {
@@ -446,7 +446,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 		}
 	}
 
-	for vote := range thisRoundVotes.InvalidVotes {
+	for vote := range thisRoundVotes.invalid {
 		if _, ok := tb.votesMargin[vote]; !ok {
 			tb.votesMargin[vote] = new(big.Int).Neg(voteWeight)
 		} else {

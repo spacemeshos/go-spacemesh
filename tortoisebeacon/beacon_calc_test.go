@@ -40,20 +40,20 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 		name  string
 		epoch types.EpochID
 		round types.RoundID
-		votes votesSetPair
+		votes allVotes
 		hash  types.Hash32
 	}{
 		{
 			name:  "With Cache",
 			epoch: epoch,
-			votes: votesSetPair{
-				ValidVotes: hashSet{
+			votes: allVotes{
+				valid: proposalSet{
 					"0x1": {},
 					"0x2": {},
 					"0x4": {},
 					"0x5": {},
 				},
-				InvalidVotes: hashSet{
+				invalid: proposalSet{
 					"0x3": {},
 					"0x6": {},
 				},
@@ -83,80 +83,6 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 			err := tb.calcBeacon(context.TODO(), epoch, tc.votes)
 			r.NoError(err)
 			r.EqualValues(tc.hash.String(), tb.beacons[epoch].String())
-		})
-	}
-}
-
-func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
-	t.Parallel()
-
-	r := require.New(t)
-
-	mockDB := &mockActivationDB{}
-	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(1), nil, nil)
-	mockDB.On("GetNodeAtxIDForEpoch", mock.AnythingOfType("types.NodeID"), mock.AnythingOfType("types.EpochID")).Return(types.ATXID{}, nil)
-	mockATXHeader := types.ActivationTxHeader{
-		NIPostChallenge: types.NIPostChallenge{
-			StartTick: 0,
-			EndTick:   1,
-		},
-		NumUnits: 1,
-	}
-	mockDB.On("GetAtxHeader", mock.AnythingOfType("types.ATXID")).Return(&mockATXHeader, nil)
-
-	const (
-		epoch  = 5
-		rounds = 3
-	)
-
-	tt := []struct {
-		name   string
-		epoch  types.EpochID
-		round  types.RoundID
-		votes  votesSetPair
-		hashes proposalList
-	}{
-		{
-			name:  "With Cache",
-			epoch: epoch,
-			votes: votesSetPair{
-				ValidVotes: hashSet{
-					"0x1": {},
-					"0x2": {},
-					"0x4": {},
-					"0x5": {},
-				},
-				InvalidVotes: hashSet{
-					"0x3": {},
-					"0x6": {},
-				},
-			},
-			hashes: proposalList{
-				"0x1",
-				"0x2",
-				"0x4",
-				"0x5",
-			},
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			tb := TortoiseBeacon{
-				config: Config{
-					RoundsNumber: rounds,
-					Theta:        big.NewRat(1, 1),
-				},
-				Log:   logtest.New(t).WithName("TortoiseBeacon"),
-				atxDB: mockDB,
-			}
-
-			hashes, err := tb.calcTortoiseBeaconHashList(epoch, tc.votes)
-			r.NoError(err)
-			r.EqualValues(tc.hashes.Sort(), hashes.Sort())
 		})
 	}
 }

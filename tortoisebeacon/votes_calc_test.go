@@ -58,8 +58,8 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 		epoch         types.EpochID
 		round         types.RoundID
 		votesMargin   map[proposal]*big.Int
-		incomingVotes []map[nodeID]votesSetPair
-		expected      votesSetPair
+		incomingVotes []map[nodeID]allVotes
+		expected      allVotes
 	}{
 		{
 			name:  "Case 1",
@@ -73,16 +73,16 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 				"0x5": big.NewInt(0),
 				"0x6": big.NewInt(0),
 			},
-			expected: votesSetPair{
-				ValidVotes: hashSet{
-					"0x1": struct{}{},
-					"0x4": struct{}{},
+			expected: allVotes{
+				valid: proposalSet{
+					"0x1": {},
+					"0x4": {},
 				},
-				InvalidVotes: hashSet{
-					"0x2": struct{}{},
-					"0x3": struct{}{},
-					"0x5": struct{}{},
-					"0x6": struct{}{},
+				invalid: proposalSet{
+					"0x2": {},
+					"0x3": {},
+					"0x5": {},
+					"0x6": {},
 				},
 			},
 		},
@@ -134,21 +134,21 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 		name               string
 		epoch              types.EpochID
 		round              types.RoundID
-		ownFirstRoundVotes votesSetPair
+		ownFirstRoundVotes allVotes
 		votesCount         map[proposal]*big.Int
 		weakCoin           bool
-		result             votesSetPair
+		result             allVotes
 	}{
 		{
 			name:  "Case 1",
 			epoch: 5,
 			round: 5,
-			ownFirstRoundVotes: votesSetPair{
-				ValidVotes: hashSet{
+			ownFirstRoundVotes: allVotes{
+				valid: proposalSet{
 					"0x1": {},
 					"0x2": {},
 				},
-				InvalidVotes: hashSet{
+				invalid: proposalSet{
 					"0x3": {},
 				},
 			},
@@ -158,12 +158,12 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 				"0x3": big.NewInt(threshold / 2),
 			},
 			weakCoin: true,
-			result: votesSetPair{
-				ValidVotes: hashSet{
+			result: allVotes{
+				valid: proposalSet{
 					"0x1": {},
 					"0x3": {},
 				},
-				InvalidVotes: hashSet{
+				invalid: proposalSet{
 					"0x2": {},
 				},
 			},
@@ -178,11 +178,11 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 				"0x3": big.NewInt(threshold / 2),
 			},
 			weakCoin: false,
-			result: votesSetPair{
-				ValidVotes: hashSet{
+			result: allVotes{
+				valid: proposalSet{
 					"0x1": {},
 				},
-				InvalidVotes: hashSet{
+				invalid: proposalSet{
 					"0x2": {},
 					"0x3": {},
 				},
@@ -204,7 +204,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 				votesMargin: tc.votesCount,
 			}
 
-			result, err := tb.calcOwnCurrentRoundVotes(tc.epoch, tc.round, tc.weakCoin)
+			result, err := tb.calcOwnCurrentRoundVotes(tc.epoch, tc.weakCoin)
 			r.NoError(err)
 			r.EqualValues(tc.result, result)
 		})

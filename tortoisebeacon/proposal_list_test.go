@@ -39,7 +39,7 @@ func Test_proposalList_Hash(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := tc.hashes.Hash()
+			got := tc.hashes.hash()
 			r.EqualValues(tc.expected.String(), got.String())
 		})
 	}

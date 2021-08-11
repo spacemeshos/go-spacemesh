@@ -17,7 +17,7 @@ func TestTortoiseBeacon_encodeVotes(t *testing.T) {
 		name         string
 		proposals    proposals
 		firstRound   proposalsBytes
-		currentRound votesSetPair
+		currentRound allVotes
 		result       []uint64
 	}{
 		{
@@ -40,12 +40,12 @@ func TestTortoiseBeacon_encodeVotes(t *testing.T) {
 					util.Hex2Bytes("33"),
 				},
 			},
-			currentRound: votesSetPair{
-				ValidVotes: hashSet{
+			currentRound: allVotes{
+				valid: proposalSet{
 					string(util.Hex2Bytes("11")): {},
 					string(util.Hex2Bytes("33")): {},
 				},
-				InvalidVotes: hashSet{
+				invalid: proposalSet{
 					string(util.Hex2Bytes("22")): {},
 				},
 			},
