@@ -95,10 +95,6 @@ func New(
 	clock layerClock,
 	logger log.Log,
 ) *TortoiseBeacon {
-	q, ok := new(big.Rat).SetString(conf.Q)
-	if !ok {
-		panic("bad q parameter")
-	}
 	return &TortoiseBeacon{
 		Log:                             logger,
 		config:                          conf,
@@ -112,13 +108,6 @@ func New(
 		vrfSigner:                       vrfSigner,
 		weakCoin:                        weakCoin,
 		clock:                           clock,
-		q:                               q,
-		gracePeriodDuration:             time.Duration(conf.GracePeriodDurationMs) * time.Millisecond,
-		proposalDuration:                time.Duration(conf.ProposalDurationMs) * time.Millisecond,
-		firstVotingRoundDuration:        time.Duration(conf.FirstVotingRoundDurationMs) * time.Millisecond,
-		votingRoundDuration:             time.Duration(conf.VotingRoundDurationMs) * time.Millisecond,
-		weakCoinRoundDuration:           time.Duration(conf.WeakCoinRoundDurationMs) * time.Millisecond,
-		waitAfterEpochStart:             time.Duration(conf.WaitAfterEpochStart) * time.Millisecond,
 		ownVotes:                        make(ownVotes),
 		beacons:                         make(map[types.EpochID]types.Hash32),
 		proposalPhaseFinishedTimestamps: make(map[types.EpochID]time.Time),
@@ -145,8 +134,8 @@ type TortoiseBeacon struct {
 	atxDB            activationDB
 	tortoiseBeaconDB tortoiseBeaconDB
 	edSigner         signing.Signer
-	vrfVerifier      signing.Verifier
 	vrfSigner        signing.Signer
+	vrfVerifier      signing.Verifier
 	weakCoin         coin
 
 	seenEpochsMu sync.Mutex
@@ -154,13 +143,8 @@ type TortoiseBeacon struct {
 
 	clock                    layerClock
 	layerTicker              chan types.LayerID
-	q                        *big.Rat
-	gracePeriodDuration      time.Duration
-	proposalDuration         time.Duration
-	firstVotingRoundDuration time.Duration
-	votingRoundDuration      time.Duration
-	weakCoinRoundDuration    time.Duration
-	waitAfterEpochStart      time.Duration
+	layerMu     sync.RWMutex
+	lastLayer   types.LayerID
 
 	votesMu                 sync.RWMutex
 	firstRoundIncomingVotes firstRoundVotesPerEpoch // all rounds - votes (decoded votes)
@@ -178,9 +162,6 @@ type TortoiseBeacon struct {
 
 	proposalChansMu sync.Mutex
 	proposalChans   map[types.EpochID]chan *proposalMessageWithReceiptData
-
-	layerMu   sync.RWMutex
-	lastLayer types.LayerID
 }
 
 // Start starts listening for layers and outputs.
@@ -265,8 +246,7 @@ func (tb *TortoiseBeacon) initGenesisBeacons() {
 	closedCh := make(chan struct{})
 	close(closedCh)
 
-	epoch := types.EpochID(0)
-	for ; epoch.IsGenesis(); epoch++ {
+	for epoch := types.EpochID(0); epoch.IsGenesis(); epoch++ {
 		genesis := types.HexToHash32(genesisBeacon)
 		tb.beacons[epoch] = genesis
 
@@ -355,9 +335,9 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 	tb.Log.With().Debug("tortoise beacon got tick, waiting until other nodes have the same epoch",
 		log.Uint32("layer", layer.Uint32()),
 		log.Uint32("epoch_id", uint32(epoch)),
-		log.String("wait_time", tb.waitAfterEpochStart.String()))
+		log.String("wait_time", tb.config.WaitAfterEpochStart.String()))
 
-	epochStartTimer := time.NewTimer(tb.waitAfterEpochStart)
+	epochStartTimer := time.NewTimer(tb.config.WaitAfterEpochStart)
 	defer epochStartTimer.Stop()
 	select {
 	case <-ctx.Done():
@@ -457,7 +437,7 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 		log.Uint64("epoch_id", uint64(epoch)))
 
 	var cancel func()
-	ctx, cancel = context.WithTimeout(ctx, tb.proposalDuration)
+	ctx, cancel = context.WithTimeout(ctx, tb.config.ProposalDuration)
 	defer cancel()
 
 	tb.tg.Go(func(ctx context.Context) error {
@@ -567,11 +547,11 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	// For next rounds,
 	// wait for δ time, and construct a message that points to all messages from previous round received by δ.
 	// rounds 1 to K
-	ticker := time.NewTicker(tb.votingRoundDuration + tb.weakCoinRoundDuration)
+	ticker := time.NewTicker(tb.config.VotingRoundDuration + tb.config.WeakCoinRoundDuration)
 	defer ticker.Stop()
 
 	var coinFlip bool
-	for round := firstRound; round <= tb.lastPossibleRound(); round++ {
+	for round := firstRound; round <= tb.config.RoundsNumber; round++ {
 		// always use coinflip from the previous round for current round.
 		// round 1 is running without coinflip (e.g. value is false) intentionally
 		round := round
@@ -624,7 +604,7 @@ func (tb *TortoiseBeacon) receivedBeforeProposalPhaseFinished(epoch types.EpochI
 }
 
 func (tb *TortoiseBeacon) startWeakCoin(ctx context.Context, epoch types.EpochID, round types.RoundID) {
-	t := time.NewTimer(tb.votingRoundDuration)
+	t := time.NewTimer(tb.config.VotingRoundDuration)
 	defer t.Stop()
 
 	select {
@@ -770,19 +750,13 @@ func (tb *TortoiseBeacon) voteWeight(pk nodeID, epochID types.EpochID) (uint64, 
 	return atx.GetWeight(), nil
 }
 
-// Each smesher partitions the valid proposals received in the previous epoch into three sets:
-// - Timely proposals: received up to δ after the end of the previous epoch.
-// - Delayed proposals: received between δ and 2δ after the end of the previous epoch.
-// - Late proposals: more than 2δ after the end of the previous epoch.
-// Note that honest users cannot disagree on timing by more than δ,
-// so if a proposal is timely for any honest user,
-// it cannot be late for any honest user (and vice versa).
-func (tb *TortoiseBeacon) lastPossibleRound() types.RoundID {
-	return types.RoundID(tb.config.RoundsNumber)
-}
+func (tb *TortoiseBeacon) votingThreshold(epochWeight uint64) int64 {
+	v, _ := new(big.Float).Mul(
+		new(big.Float).SetRat(tb.config.Theta),
+		new(big.Float).SetUint64(epochWeight),
+	).Int64()
 
-func (tb *TortoiseBeacon) votingThreshold(epochWeight uint64) int {
-	return int(tb.config.Theta * float64(epochWeight))
+	return v
 }
 
 // TODO(nkryuchkov): Consider replacing github.com/ALTree/bigfloat.
@@ -805,7 +779,7 @@ func (tb *TortoiseBeacon) atxThresholdFraction(epochWeight uint64) (*big.Float, 
 						new(big.Rat).Mul(
 							new(big.Rat).Sub(
 								new(big.Rat).SetInt64(1.0),
-								tb.q,
+								tb.config.Q,
 							),
 							new(big.Rat).SetUint64(epochWeight),
 						),

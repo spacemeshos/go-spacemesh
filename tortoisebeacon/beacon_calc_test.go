@@ -2,6 +2,7 @@ package tortoisebeacon
 
 import (
 	"context"
+	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -61,7 +62,7 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 			tb := TortoiseBeacon{
 				config: Config{
 					RoundsNumber: rounds,
-					Theta:        1,
+					Theta:        big.NewRat(1, 1),
 				},
 				lastLayer:     types.NewLayerID(epoch),
 				Log:           logtest.New(t).WithName("TortoiseBeacon"),
@@ -132,7 +133,7 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 			tb := TortoiseBeacon{
 				config: Config{
 					RoundsNumber: rounds,
-					Theta:        1,
+					Theta:        big.NewRat(1, 1),
 				},
 				Log:           logtest.New(t).WithName("TortoiseBeacon"),
 				incomingVotes: tc.incomingVotes,

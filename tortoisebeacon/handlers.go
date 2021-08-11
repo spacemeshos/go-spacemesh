@@ -127,6 +127,14 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 
 	signature := string(m.VRFSignature)
 
+	// Each smesher partitions the valid proposals received in the previous epoch into three sets:
+	// - Timely proposals: received up to δ after the end of the previous epoch.
+	// - Delayed proposals: received between δ and 2δ after the end of the previous epoch.
+	// - Late proposals: more than 2δ after the end of the previous epoch.
+	// Note that honest users cannot disagree on timing by more than δ,
+	// so if a proposal is timely for any honest user,
+	// it cannot be late for any honest user (and vice versa).
+
 	switch {
 	case tb.isValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
 		tb.Log.With().Debug("Received valid proposal message",
@@ -135,7 +143,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 			log.String("atx_timestamp", atxTimestamp.String()),
 			log.String("next_epoch_start", nextEpochStart.String()),
 			log.String("received_time", receivedTime.String()),
-			log.String("grace_period", tb.gracePeriodDuration.String()))
+			log.Duration("grace_period", tb.config.GracePeriodDuration))
 
 		tb.incomingProposals.ValidProposals = append(tb.incomingProposals.ValidProposals, signature)
 
@@ -146,7 +154,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 			log.String("atx_timestamp", atxTimestamp.String()),
 			log.String("next_epoch_start", nextEpochStart.String()),
 			log.String("received_time", receivedTime.String()),
-			log.String("grace_period", tb.gracePeriodDuration.String()))
+			log.Duration("grace_period", tb.config.GracePeriodDuration))
 
 		tb.incomingProposals.PotentiallyValidProposals = append(tb.incomingProposals.PotentiallyValidProposals, signature)
 
@@ -156,7 +164,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 			log.String("atx_timestamp", atxTimestamp.String()),
 			log.String("next_epoch_start", nextEpochStart.String()),
 			log.String("received_time", receivedTime.String()),
-			log.String("grace_period", tb.gracePeriodDuration.String()))
+			log.Duration("grace_period", tb.config.GracePeriodDuration))
 	}
 
 	return nil
@@ -201,8 +209,8 @@ func (tb *TortoiseBeacon) verifyProposalMessage(m ProposalMessage, currentEpoch 
 }
 
 func (tb *TortoiseBeacon) isPotentiallyValidProposalMessage(currentEpoch types.EpochID, atxTimestamp, nextEpochStart, receivedTimestamp time.Time) bool {
-	delayedATX := atxTimestamp.Before(nextEpochStart.Add(tb.gracePeriodDuration))
-	delayedProposal := tb.receivedBeforeProposalPhaseFinished(currentEpoch, receivedTimestamp.Add(-tb.gracePeriodDuration))
+	delayedATX := atxTimestamp.Before(nextEpochStart.Add(tb.config.GracePeriodDuration))
+	delayedProposal := tb.receivedBeforeProposalPhaseFinished(currentEpoch, receivedTimestamp.Add(-tb.config.GracePeriodDuration))
 
 	return delayedATX && delayedProposal
 }

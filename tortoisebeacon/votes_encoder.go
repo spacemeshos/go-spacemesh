@@ -7,14 +7,14 @@ func (tb *TortoiseBeacon) encodeVotes(currentRound votesSetPair, firstRound prop
 	potentiallyValidVotes := firstRound.PotentiallyValidProposals
 	length := uint(len(validVotes) + len(potentiallyValidVotes))
 
-	if len(validVotes) > tb.config.VotesLimit {
+	if uint64(len(validVotes)) > tb.config.VotesLimit {
 		validVotes = validVotes[:tb.config.VotesLimit]
 		potentiallyValidVotes = potentiallyValidVotes[:0]
 		length = uint(tb.config.VotesLimit)
 	}
 
 	if length > uint(tb.config.VotesLimit) {
-		potentiallyValidVotes = potentiallyValidVotes[:tb.config.VotesLimit-len(validVotes)]
+		potentiallyValidVotes = potentiallyValidVotes[:tb.config.VotesLimit-uint64(len(validVotes))]
 		length = uint(tb.config.VotesLimit)
 	}
 
