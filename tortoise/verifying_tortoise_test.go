@@ -128,6 +128,7 @@ var (
 )
 
 func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) {
+	logger := logtest.New(t)
 	for _, i := range blocks {
 		sum := abstain
 		blk, _ := trtl.bdp.GetBlock(i)
@@ -141,7 +142,7 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 		}
 
 		for l := trtl.Last; l.After(blk.LayerIndex); l = l.Sub(1) {
-			trtl.logger.Info("counting votes of blocks in layer %v on %v (lyr: %v)",
+			logger.Info("counting votes of blocks in layer %v on %v (lyr: %v)",
 				l,
 				i.String(),
 				blk.LayerIndex)
@@ -152,7 +153,6 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 					continue
 				}
 
-				//t.logger.Info("block %v is good and voting vote %v", vopinion.id, opinionVote)
 				weight, err := trtl.voteWeightByID(context.TODO(), bid, i)
 				require.NoError(t, err)
 				sum = sum.Add(opinionVote.Multiply(weight))
@@ -1411,6 +1411,35 @@ func TestVoteWeight(t *testing.T) {
 	weight, err = alg.trtl.voteWeight(context.TODO(), someBlocks[0], randomBlockID())
 	r.NoError(err)
 	r.Equal(totalSpace, int(weight))
+}
+
+func TestVoteWeightInOpinion(t *testing.T) {
+	r := require.New(t)
+	mdb := getInMemMesh(t)
+	atxdb := getAtxDB()
+	alg := defaultAlgorithm(t, mdb)
+	alg.trtl.atxdb = atxdb
+	weight := uint(2)
+
+	// add one base block that votes for (genesis) base block with weight > 1
+	atxdb.mockAtxHeader = makeAtxHeaderWithWeight(weight)
+	genesisBlockID := mesh.GenesisBlock().ID()
+	l1ID := types.GetEffectiveGenesis().Add(1)
+	makeAndProcessLayer(t, l1ID, alg.trtl, 1, atxdb, mdb, mdb.LayerBlockIds)
+	layerBlockIDs, err := mdb.LayerBlockIds(l1ID)
+	r.NoError(err)
+	r.Len(layerBlockIDs, 1)
+	blockID := layerBlockIDs[0]
+
+	// make sure opinion is set correctly
+	r.Equal(support.Multiply(uint64(weight)), alg.trtl.BlockOpinionsByLayer[l1ID][blockID].BlockOpinions[genesisBlockID])
+
+	// make sure the only exception added was for the base block itself
+	l2 := makeLayer(t, l1ID, alg.trtl, 1, atxdb, mdb, mdb.LayerBlockIds)
+	r.Len(l2.BlocksIDs(), 1)
+	l2Block := l2.Blocks()[0]
+	r.Len(l2Block.ForDiff, 1)
+	r.Equal(blockID, l2Block.ForDiff[0])
 }
 
 func TestProcessNewBlocks(t *testing.T) {
