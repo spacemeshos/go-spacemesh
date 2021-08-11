@@ -120,7 +120,7 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, fetche
 		bh.mesh.HandleLateBlock(ctx, &blk)
 	}
 
-	logger.With().Info("time to process block", log.Duration("duration", time.Since(start)))
+	logger.With().Debug("time to process block", log.Duration("duration", time.Since(start)))
 	return nil
 }
 
