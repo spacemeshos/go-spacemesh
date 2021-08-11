@@ -59,10 +59,5 @@ func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, round ty
 		}
 	}
 
-	// TODO(nkryuchkov): better solution
-	if round == tb.lastRound() {
-		tb.ownLastRoundVotes = ownCurrentRoundVotes
-	}
-
 	return ownCurrentRoundVotes, nil
 }

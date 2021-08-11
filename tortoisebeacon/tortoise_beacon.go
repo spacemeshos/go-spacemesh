@@ -267,7 +267,6 @@ func (tb *TortoiseBeacon) cleanupVotes(epoch types.EpochID) {
 	tb.firstRoundIncomingVotes = map[nodeID]proposalsBytes{}
 	tb.votesMargin = map[proposal]*big.Int{}
 	tb.hasVoted = make([]map[nodeID]struct{}, tb.lastRound())
-	tb.ownLastRoundVotes = votesSetPair{}
 	tb.proposalPhaseFinishedTime = time.Time{}
 }
 
@@ -550,20 +549,57 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	ticker := time.NewTicker(tb.config.VotingRoundDuration + tb.config.WeakCoinRoundDuration)
 	defer ticker.Stop()
 
-	var coinFlip bool
+	var (
+		coinFlip          bool
+		ownLastRoundVotes votesSetPair
+	)
+
 	for round := firstRound; round <= tb.lastRound(); round++ {
 		// always use coinflip from the previous round for current round.
 		// round 1 is running without coinflip (e.g. value is false) intentionally
 		round := round
 		tb.tg.Go(func(ctx context.Context) error {
-			if err := tb.sendVotes(ctx, epoch, round, coinFlip); err != nil {
-				tb.Log.With().Error("Failed to send voting messages",
+			if round == firstRound {
+				if err := tb.sendProposalVote(ctx, epoch); err != nil {
+					tb.Log.With().Error("Failed to send proposal vote",
+						log.Uint32("epoch_id", uint32(epoch)),
+						log.Uint32("round_id", uint32(round)),
+						log.Err(err))
+
+					return fmt.Errorf("failed to send proposal vote: %w", err)
+				}
+
+				return nil
+			}
+
+			// next rounds, send vote
+			// construct a message that points to all messages from previous round received by δ
+			ownCurrentRoundVotes, err := tb.calcVotes(epoch, round, coinFlip)
+			if err != nil {
+				tb.Log.With().Error("Failed to calculate votes",
 					log.Uint32("epoch_id", uint32(epoch)),
 					log.Uint32("round_id", uint32(round)),
 					log.Err(err))
+
+				return fmt.Errorf("calculate votes: %w", err)
 			}
+
+			if round == tb.lastRound() {
+				ownLastRoundVotes = ownCurrentRoundVotes
+			}
+
+			if err := tb.sendFollowingVote(ctx, epoch, round, ownCurrentRoundVotes); err != nil {
+				tb.Log.With().Error("Failed to send following vote",
+					log.Uint32("epoch_id", uint32(epoch)),
+					log.Uint32("round_id", uint32(round)),
+					log.Err(err))
+
+				return fmt.Errorf("send following vote: %w", err)
+			}
+
 			return nil
 		})
+
 		tb.tg.Go(func(ctx context.Context) error {
 			tb.startWeakCoin(ctx, epoch, round)
 			return nil
@@ -580,7 +616,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	tb.Log.With().Debug("Consensus phase finished",
 		log.Uint32("epoch_id", uint32(epoch)))
 
-	return tb.ownLastRoundVotes
+	return ownLastRoundVotes
 }
 
 func (tb *TortoiseBeacon) markProposalPhaseFinished(epoch types.EpochID) {
@@ -625,14 +661,6 @@ func (tb *TortoiseBeacon) startWeakCoin(ctx context.Context, epoch types.EpochID
 	}
 }
 
-func (tb *TortoiseBeacon) sendVotes(ctx context.Context, epoch types.EpochID, round types.RoundID, coinflip bool) error {
-	if round == firstRound {
-		return tb.sendProposalVote(ctx, epoch)
-	}
-
-	return tb.sendVotesDifference(ctx, epoch, round, coinflip)
-}
-
 func (tb *TortoiseBeacon) sendProposalVote(ctx context.Context, epoch types.EpochID) error {
 	// round 1, send hashed proposal
 	// create a voting message that references all seen proposals within δ time frame and send it
@@ -641,17 +669,6 @@ func (tb *TortoiseBeacon) sendProposalVote(ctx context.Context, epoch types.Epoc
 	// TODO: initialize margin vector to initial votes
 	// TODO: use weight
 	return tb.sendFirstRoundVote(ctx, epoch, tb.incomingProposals)
-}
-
-func (tb *TortoiseBeacon) sendVotesDifference(ctx context.Context, epoch types.EpochID, round types.RoundID, coinflip bool) error {
-	// next rounds, send vote
-	// construct a message that points to all messages from previous round received by δ
-	ownCurrentRoundVotes, err := tb.calcVotes(epoch, round, coinflip)
-	if err != nil {
-		return fmt.Errorf("calculate votes: %w", err)
-	}
-
-	return tb.sendFollowingVote(ctx, epoch, round, ownCurrentRoundVotes)
 }
 
 func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.EpochID, proposals proposals) error {
