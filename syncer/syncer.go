@@ -34,7 +34,7 @@ type layerFetcher interface {
 // Configuration is the config params for syncer
 type Configuration struct {
 	SyncInterval time.Duration
-	// the sync process will try validate the current layer if ValidationDelta has elapsed.
+	// the sync process will try to validate the current layer if ValidationDelta has elapsed.
 	ValidationDelta     time.Duration
 	TBCalculationLayers uint32
 	AlwaysListen        bool
