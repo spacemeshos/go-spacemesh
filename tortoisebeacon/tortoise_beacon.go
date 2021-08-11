@@ -61,7 +61,6 @@ type (
 	hashSet        = map[proposal]struct{}
 	proposalsBytes = struct{ ValidProposals, PotentiallyValidProposals [][]byte } // TODO: remove this or below
 	proposals      = struct{ ValidProposals, PotentiallyValidProposals proposalList }
-	ownVotes       = map[types.EpochID]map[types.RoundID]votesSetPair
 	votesMarginMap = map[proposal]int
 )
 
@@ -101,7 +100,7 @@ func New(
 		vrfSigner:                       vrfSigner,
 		weakCoin:                        weakCoin,
 		clock:                           clock,
-		ownVotes:                        make(ownVotes),
+		ownVotes:                        make(map[types.RoundID]votesSetPair),
 		beacons:                         make(map[types.EpochID]types.Hash32),
 		proposalPhaseFinishedTimestamps: make(map[types.EpochID]time.Time),
 		hasVoted:                        make([]map[nodeID]struct{}, conf.RoundsNumber),
@@ -151,7 +150,7 @@ type TortoiseBeacon struct {
 	hasVoted                []map[nodeID]struct{}
 
 	incomingVotes                     []map[nodeID]votesSetPair
-	ownVotes                          ownVotes
+	ownVotes                          map[types.RoundID]votesSetPair
 	proposalPhaseFinishedTimestampsMu sync.RWMutex
 	proposalPhaseFinishedTimestamps   map[types.EpochID]time.Time
 
@@ -271,9 +270,9 @@ func (tb *TortoiseBeacon) cleanupVotes(epoch types.EpochID) {
 	tb.firstRoundIncomingVotes = map[nodeID]proposalsBytes{}
 	tb.votesMargin = map[proposal]int{}
 	tb.hasVoted = []map[nodeID]struct{}{}
+	tb.ownVotes = make(map[types.RoundID]votesSetPair)
 
 	delete(tb.proposalPhaseFinishedTimestamps, epoch)
-	delete(tb.ownVotes, epoch)
 }
 
 // listens to new layers.
@@ -583,7 +582,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	tb.Log.With().Debug("Consensus phase finished",
 		log.Uint32("epoch_id", uint32(epoch)))
 
-	return tb.ownVotes[epoch][tb.lastRound()]
+	return tb.ownVotes[tb.lastRound()]
 }
 
 func (tb *TortoiseBeacon) markProposalPhaseFinished(epoch types.EpochID) {

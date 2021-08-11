@@ -73,11 +73,7 @@ func (tb *TortoiseBeacon) calcOwnFirstRoundVotes(epoch types.EpochID) (votesSetP
 		}
 	}
 
-	if _, ok := tb.ownVotes[epoch]; !ok {
-		tb.ownVotes[epoch] = make(map[types.RoundID]votesSetPair)
-	}
-
-	tb.ownVotes[epoch][firstRound] = ownFirstRoundsVotes
+	tb.ownVotes[firstRound] = ownFirstRoundsVotes
 
 	return ownFirstRoundsVotes, nil
 }
@@ -141,11 +137,7 @@ func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, round ty
 		}
 	}
 
-	if _, ok := tb.ownVotes[epoch]; !ok {
-		tb.ownVotes[epoch] = make(map[types.RoundID]votesSetPair)
-	}
-
-	tb.ownVotes[epoch][round] = ownCurrentRoundVotes
+	tb.ownVotes[round] = ownCurrentRoundVotes
 
 	return ownCurrentRoundVotes, nil
 }

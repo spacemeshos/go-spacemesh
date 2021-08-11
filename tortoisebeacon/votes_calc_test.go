@@ -127,7 +127,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 				},
 				Log:           logtest.New(t).WithName("TortoiseBeacon"),
 				incomingVotes: tc.incomingVotes,
-				ownVotes:      map[types.EpochID]map[types.RoundID]votesSetPair{},
+				ownVotes:      map[types.RoundID]votesSetPair{},
 				atxDB:         mockDB,
 				votesMargin:   tc.votesMargin,
 			}
@@ -198,7 +198,7 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 				},
 				Log:         logtest.New(t).WithName("TortoiseBeacon"),
 				votesMargin: tc.votesMargin,
-				ownVotes:    map[types.EpochID]map[types.RoundID]votesSetPair{},
+				ownVotes:    map[types.RoundID]votesSetPair{},
 				atxDB:       mockDB,
 			}
 
@@ -384,7 +384,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 					Theta: big.NewRat(1, 1),
 				},
 				Log:         logtest.New(t).WithName("TortoiseBeacon"),
-				ownVotes:    map[types.EpochID]map[types.RoundID]votesSetPair{},
+				ownVotes:    map[types.RoundID]votesSetPair{},
 				atxDB:       mockDB,
 				votesMargin: tc.votesCount,
 			}
