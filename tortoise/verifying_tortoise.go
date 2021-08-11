@@ -428,10 +428,15 @@ func (t *turtle) calculateExceptions(
 
 		// helper function for adding diffs
 		addDiffs := func(bid types.BlockID, voteClass string, voteVec vec, diffMap map[types.BlockID]struct{}) {
-			if v, ok := baseBlockOpinion.BlockOpinions[bid]; !ok || v != voteVec {
+			if v, ok := baseBlockOpinion.BlockOpinions[bid]; !ok || simplifyVote(v) != voteVec {
 				logger.With().Debug("added vote diff",
 					log.FieldNamed("diff_block", bid),
 					log.String("diff_class", voteClass))
+				if layerID.Before(baseBlockLayerID) {
+					logger.With().Warning("added exception before base block layer, this block will not be marked good",
+						log.FieldNamed("diff_block", bid),
+						log.String("diff_class", voteClass))
+				}
 				diffMap[bid] = struct{}{}
 			}
 		}
