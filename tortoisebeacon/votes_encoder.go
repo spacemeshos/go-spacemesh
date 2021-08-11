@@ -3,8 +3,8 @@ package tortoisebeacon
 import "github.com/bits-and-blooms/bitset"
 
 func (tb *TortoiseBeacon) encodeVotes(currentRound allVotes, firstRound proposals) (votesBitVector []uint64) {
-	validVotes := firstRound.ValidProposals
-	potentiallyValidVotes := firstRound.PotentiallyValidProposals
+	validVotes := firstRound.valid
+	potentiallyValidVotes := firstRound.potentiallyValid
 	length := uint(len(validVotes) + len(potentiallyValidVotes))
 
 	if uint64(len(validVotes)) > tb.config.VotesLimit {
@@ -21,10 +21,10 @@ func (tb *TortoiseBeacon) encodeVotes(currentRound allVotes, firstRound proposal
 	bs := bitset.New(length)
 
 	for i, v := range validVotes {
-		if _, ok := currentRound.valid[v]; ok {
+		if _, ok := currentRound.valid[string(v)]; ok {
 			bs.Set(uint(i))
 		}
-		if _, ok := currentRound.invalid[v]; ok {
+		if _, ok := currentRound.invalid[string(v)]; ok {
 			bs.Clear(uint(i))
 		}
 	}
@@ -32,10 +32,10 @@ func (tb *TortoiseBeacon) encodeVotes(currentRound allVotes, firstRound proposal
 	offset := len(validVotes)
 
 	for i, v := range potentiallyValidVotes {
-		if _, ok := currentRound.valid[v]; ok {
+		if _, ok := currentRound.valid[string(v)]; ok {
 			bs.Set(uint(offset + i))
 		}
-		if _, ok := currentRound.invalid[v]; ok {
+		if _, ok := currentRound.invalid[string(v)]; ok {
 			bs.Clear(uint(offset + i))
 		}
 	}

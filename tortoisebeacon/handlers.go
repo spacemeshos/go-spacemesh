@@ -124,8 +124,6 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 	atxEpoch := atxHeader.PubLayerID.GetEpoch()
 	nextEpochStart := tb.clock.LayerToTime((atxEpoch + 1).FirstLayer())
 
-	signature := string(m.VRFSignature)
-
 	// Each smesher partitions the valid proposals received in the previous epoch into three sets:
 	// - Timely proposals: received up to δ after the end of the previous epoch.
 	// - Delayed proposals: received between δ and 2δ after the end of the previous epoch.
@@ -144,7 +142,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 			log.String("received_time", receivedTime.String()),
 			log.Duration("grace_period", tb.config.GracePeriodDuration))
 
-		tb.incomingProposals.ValidProposals = append(tb.incomingProposals.ValidProposals, signature)
+		tb.incomingProposals.valid = append(tb.incomingProposals.valid, m.VRFSignature)
 
 	case tb.isPotentiallyValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
 		tb.Log.With().Debug("Received potentially valid proposal message",
@@ -155,7 +153,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 			log.String("received_time", receivedTime.String()),
 			log.Duration("grace_period", tb.config.GracePeriodDuration))
 
-		tb.incomingProposals.PotentiallyValidProposals = append(tb.incomingProposals.PotentiallyValidProposals, signature)
+		tb.incomingProposals.potentiallyValid = append(tb.incomingProposals.potentiallyValid, m.VRFSignature)
 
 	default:
 		tb.Log.With().Warning("Received invalid proposal message",
@@ -339,9 +337,9 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 
 	// this is used for bit vector calculation
 	// TODO(nkryuchkov): store sorted mixed valid+potentiallyValid
-	tb.firstRoundIncomingVotes[minerID.Key] = proposalsBytes{
-		ValidProposals:            message.ValidProposals,
-		PotentiallyValidProposals: message.PotentiallyValidProposals,
+	tb.firstRoundIncomingVotes[minerID.Key] = proposals{
+		valid:            message.ValidProposals,
+		potentiallyValid: message.PotentiallyValidProposals,
 	}
 
 	return nil

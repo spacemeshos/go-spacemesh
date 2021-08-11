@@ -102,7 +102,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 			r.NoError(err)
 
 			expected := proposals{
-				ValidProposals: []proposal{string(sig)},
+				valid: [][]byte{sig},
 			}
 
 			r.EqualValues(expected, tb.incomingProposals)
@@ -164,7 +164,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 		currentRounds map[types.EpochID]types.RoundID
 		from          string
 		message       FirstVotingMessage
-		expected      map[nodeID]proposalsBytes
+		expected      map[nodeID]proposals
 	}{
 		{
 			name:  "Current round and message round equal",
@@ -180,9 +180,9 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 					PotentiallyValidProposals: nil,
 				},
 			},
-			expected: map[nodeID]proposalsBytes{
+			expected: map[nodeID]proposals{
 				minerID.Key: {
-					ValidProposals: [][]byte{hash.Bytes()},
+					valid: [][]byte{hash.Bytes()},
 				},
 			},
 		},
@@ -200,9 +200,9 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 					PotentiallyValidProposals: nil,
 				},
 			},
-			expected: map[nodeID]proposalsBytes{
+			expected: map[nodeID]proposals{
 				minerID.Key: {
-					ValidProposals: [][]byte{hash.Bytes()},
+					valid: [][]byte{hash.Bytes()},
 				},
 			},
 		},
@@ -220,7 +220,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 				vrfSigner:               vrfSigner,
 				edSigner:                edSgn,
 				clock:                   clock,
-				firstRoundIncomingVotes: map[nodeID]proposalsBytes{},
+				firstRoundIncomingVotes: map[nodeID]proposals{},
 				votesMargin:             map[proposal]*big.Int{},
 				hasVoted:                make([]map[nodeID]struct{}, round+1),
 			}
@@ -349,10 +349,10 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 				vrfSigner:   vrfSigner,
 				edSigner:    edSgn,
 				clock:       clock,
-				firstRoundIncomingVotes: map[nodeID]proposalsBytes{
+				firstRoundIncomingVotes: map[nodeID]proposals{
 					minerID.Key: {
-						ValidProposals:            [][]byte{hash1.Bytes(), hash2.Bytes()},
-						PotentiallyValidProposals: [][]byte{hash3.Bytes()},
+						valid:            [][]byte{hash1.Bytes(), hash2.Bytes()},
+						potentiallyValid: [][]byte{hash3.Bytes()},
 					},
 				},
 				lastLayer:   types.NewLayerID(epoch),

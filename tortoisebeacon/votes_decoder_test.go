@@ -16,27 +16,27 @@ func TestTortoiseBeacon_decodeVotes(t *testing.T) {
 	tt := []struct {
 		name       string
 		proposals  proposals
-		firstRound proposalsBytes
+		firstRound proposals
 		bitVector  []uint64
 		result     allVotes
 	}{
 		{
 			name: "Case 1",
 			proposals: proposals{
-				ValidProposals: []proposal{
-					string(util.Hex2Bytes("11")),
-					string(util.Hex2Bytes("22")),
-				},
-				PotentiallyValidProposals: []proposal{
-					string(util.Hex2Bytes("33")),
-				},
-			},
-			firstRound: proposalsBytes{
-				ValidProposals: [][]byte{
+				valid: [][]byte{
 					util.Hex2Bytes("11"),
 					util.Hex2Bytes("22"),
 				},
-				PotentiallyValidProposals: [][]byte{
+				potentiallyValid: [][]byte{
+					util.Hex2Bytes("33"),
+				},
+			},
+			firstRound: proposals{
+				valid: [][]byte{
+					util.Hex2Bytes("11"),
+					util.Hex2Bytes("22"),
+				},
+				potentiallyValid: [][]byte{
 					util.Hex2Bytes("33"),
 				},
 			},

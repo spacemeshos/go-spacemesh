@@ -57,12 +57,10 @@ type coin interface {
 }
 
 type (
-	nodeID   = string
-	proposal = string
-	// TODO(nkryuchkov): remove either of two below
-	proposalsBytes = struct{ ValidProposals, PotentiallyValidProposals [][]byte }
-	proposals      = struct{ ValidProposals, PotentiallyValidProposals proposalList }
-	allVotes       = struct{ valid, invalid proposalSet }
+	nodeID    = string
+	proposal  = string
+	proposals = struct{ valid, potentiallyValid [][]byte }
+	allVotes  = struct{ valid, invalid proposalSet }
 )
 
 type layerClock interface {
@@ -103,7 +101,7 @@ func New(
 		clock:                   clock,
 		beacons:                 make(map[types.EpochID]types.Hash32),
 		hasVoted:                make([]map[nodeID]struct{}, conf.RoundsNumber),
-		firstRoundIncomingVotes: make(map[nodeID]proposalsBytes),
+		firstRoundIncomingVotes: make(map[nodeID]proposals),
 		seenEpochs:              make(map[types.EpochID]struct{}),
 		proposalChans:           make(map[types.EpochID]chan *proposalMessageWithReceiptData),
 		votesMargin:             map[proposal]*big.Int{},
@@ -142,7 +140,7 @@ type TortoiseBeacon struct {
 	// TODO(nkryuchkov): have a mixed list of all sorted proposals
 	// have one bit vector: valid proposals
 	incomingProposals       proposals
-	firstRoundIncomingVotes map[nodeID]proposalsBytes // sorted votes for bit vector decoding
+	firstRoundIncomingVotes map[nodeID]proposals // sorted votes for bit vector decoding
 	// TODO(nkryuchkov): For every round excluding first round consider having a vector of opinions.
 	votesMargin map[proposal]*big.Int
 	hasVoted    []map[nodeID]struct{}
@@ -262,7 +260,7 @@ func (tb *TortoiseBeacon) cleanupVotes() {
 	defer tb.consensusMu.Unlock()
 
 	tb.incomingProposals = proposals{}
-	tb.firstRoundIncomingVotes = map[nodeID]proposalsBytes{}
+	tb.firstRoundIncomingVotes = map[nodeID]proposals{}
 	tb.votesMargin = map[proposal]*big.Int{}
 	tb.hasVoted = make([]map[nodeID]struct{}, tb.config.RoundsNumber)
 
@@ -521,7 +519,7 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 	tb.consensusMu.Lock()
 	defer tb.consensusMu.Unlock()
 
-	tb.incomingProposals.ValidProposals = append(tb.incomingProposals.ValidProposals, string(proposedSignature))
+	tb.incomingProposals.valid = append(tb.incomingProposals.valid, proposedSignature)
 
 	return nil
 }
@@ -693,12 +691,12 @@ func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 	valid := make([][]byte, 0)
 	potentiallyValid := make([][]byte, 0)
 
-	for _, v := range proposals.ValidProposals {
-		valid = append(valid, []byte(v))
+	for _, v := range proposals.valid {
+		valid = append(valid, v)
 	}
 
-	for _, v := range proposals.PotentiallyValidProposals {
-		potentiallyValid = append(potentiallyValid, []byte(v))
+	for _, v := range proposals.potentiallyValid {
+		potentiallyValid = append(potentiallyValid, v)
 	}
 
 	mb := FirstVotingMessageBody{
